@@ -1,0 +1,22 @@
+{
+  "name": "equipment-game",
+  "version": "0.1.0",
+  "description": "Discord + YouTube linked equipment chest game",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "discord:register": "node src/bot/registerOnly.js",
+    "discord:test": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.97",
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2"
+  }
+}
