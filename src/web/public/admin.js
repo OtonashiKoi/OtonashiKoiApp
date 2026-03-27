@@ -5,6 +5,8 @@ const state = {
   roles: [],
   players: [],
   selectedPlayerId: "",
+  selectedPlayerData: null,
+  playerSearchKeyword: "",
   channelKeywords: {}
 };
 
@@ -27,9 +29,36 @@ const elements = {
   navLinks: [...document.querySelectorAll(".nav-link")],
   sections: [...document.querySelectorAll(".panel-section")],
   refreshPlayersButton: document.getElementById("refresh-players-button"),
+  playerSearchInput: document.getElementById("player-search-input"),
+  playerListSummary: document.getElementById("player-list-summary"),
   playerList: document.getElementById("player-list"),
-  playerDetail: document.getElementById("player-detail")
+  playerDetail: document.getElementById("player-detail"),
+  playerDetailView: document.getElementById("player-detail-view"),
+  playerNameHeading: document.getElementById("player-name-heading"),
+  playerIdLine: document.getElementById("player-id-line"),
+  playerStatusBadge: document.getElementById("player-status-badge"),
+  playerLevelValue: document.getElementById("player-level-value"),
+  playerExpValue: document.getElementById("player-exp-value"),
+  playerGoldValue: document.getElementById("player-gold-value"),
+  playerDiamondValue: document.getElementById("player-diamond-value"),
+  playerCreatedAt: document.getElementById("player-created-at"),
+  playerUpdatedAt: document.getElementById("player-updated-at"),
+  playerWalletUpdatedAt: document.getElementById("player-wallet-updated-at"),
+  playerProgressUpdatedAt: document.getElementById("player-progress-updated-at"),
+  playerTransactionList: document.getElementById("player-transaction-list"),
+  currencyActionForm: document.getElementById("currency-action-form"),
+  currencyTypeInput: document.getElementById("currency-type-input"),
+  currencyOperationInput: document.getElementById("currency-operation-input"),
+  currencyAmountInput: document.getElementById("currency-amount-input"),
+  currencyReasonInput: document.getElementById("currency-reason-input"),
+  currencySubmitButton: document.getElementById("currency-submit-button"),
+  expActionForm: document.getElementById("exp-action-form"),
+  expAmountInput: document.getElementById("exp-amount-input"),
+  expReasonInput: document.getElementById("exp-reason-input"),
+  expSubmitButton: document.getElementById("exp-submit-button")
 };
+
+elements.topRefresh = document.getElementById("top-refresh");
 
 function getHeaders() {
   const headers = {
@@ -75,6 +104,77 @@ function splitLines(value) {
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("zh-TW", { hour12: false });
+}
+
+function togglePlayerDetail(hasSelection) {
+  elements.playerDetail.classList.toggle("hidden", hasSelection);
+  elements.playerDetailView.classList.toggle("hidden", !hasSelection);
+}
+
+function setPlayerActionEnabled(enabled) {
+  elements.currencyTypeInput.disabled = !enabled;
+  elements.currencyOperationInput.disabled = !enabled;
+  elements.currencyAmountInput.disabled = !enabled;
+  elements.currencyReasonInput.disabled = !enabled;
+  elements.currencySubmitButton.disabled = !enabled;
+  elements.expAmountInput.disabled = !enabled;
+  elements.expReasonInput.disabled = !enabled;
+  elements.expSubmitButton.disabled = !enabled;
+}
+
+function renderTransactions(items) {
+  if (!items || items.length === 0) {
+    elements.playerTransactionList.innerHTML = '<div class="transaction-row"><span>尚無交易</span><small>等待第一筆遊戲紀錄</small><span>-</span></div>';
+    return;
+  }
+
+  elements.playerTransactionList.innerHTML = items
+    .map((item) => {
+      const sign = item.direction === "debit" ? "-" : "+";
+      return `
+        <div class="transaction-row ${escapeHtml(item.direction)}">
+          <strong>${escapeHtml(item.currencyType)} ${sign}${Math.abs(item.amount)}</strong>
+          <small>${escapeHtml(item.source)}<br>${escapeHtml(formatDateTime(item.createdAt || item.occurredAt))}</small>
+          <span>餘額 ${escapeHtml(item.balanceAfter)}</span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderPlayerDetail(data) {
+  state.selectedPlayerData = data;
+  togglePlayerDetail(true);
+  setPlayerActionEnabled(true);
+
+  elements.playerNameHeading.textContent = data.player.displayName || "unknown";
+  elements.playerIdLine.textContent = `Discord ID: ${data.player.discordId}`;
+  elements.playerStatusBadge.textContent = data.player.status || "unknown";
+  elements.playerLevelValue.textContent = data.progress.level;
+  elements.playerExpValue.textContent = data.progress.exp;
+  elements.playerGoldValue.textContent = data.wallet.gold;
+  elements.playerDiamondValue.textContent = data.wallet.diamond;
+  elements.playerCreatedAt.textContent = formatDateTime(data.player.createdAt);
+  elements.playerUpdatedAt.textContent = formatDateTime(data.player.updatedAt);
+  elements.playerWalletUpdatedAt.textContent = formatDateTime(data.wallet.updatedAt);
+  elements.playerProgressUpdatedAt.textContent = formatDateTime(data.progress.updatedAt);
+  renderTransactions(data.transactions);
 }
 
 function createRoleChecklist(container, roles, selectedIds) {
@@ -273,23 +373,125 @@ function showSection(targetId) {
 function renderPlayerList() {
   elements.playerList.innerHTML = "";
 
-  if (state.players.length === 0) {
+  const keyword = state.playerSearchKeyword.trim().toLowerCase();
+  const visiblePlayers = state.players.filter((player) => {
+    if (!keyword) return true;
+    return `${player.displayName || ""} ${player.discordId}`.toLowerCase().includes(keyword);
+  });
+
+  elements.playerListSummary.textContent = `共 ${state.players.length} 位玩家，目前顯示 ${visiblePlayers.length} 位`;
+
+  if (visiblePlayers.length === 0) {
     elements.playerList.textContent = "目前還沒有玩家資料。";
     return;
   }
 
-  for (const player of state.players) {
+  for (const player of visiblePlayers) {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "player-row";
     row.dataset.discordId = player.discordId;
+    row.dataset.name = player.displayName || "-";
     if (player.discordId === state.selectedPlayerId) {
       row.classList.add("active");
     }
-    row.innerHTML = `<strong>${player.displayName || "unknown"}</strong><small>${player.discordId}</small>`;
+    const initial = escapeHtml((player.displayName || "?").trim().charAt(0).toUpperCase() || "?");
+    row.innerHTML = `
+      <span class="player-avatar">${initial}</span>
+      <div class="player-meta"><strong>${escapeHtml(player.displayName || "unknown")}</strong><small>${escapeHtml(player.discordId)}</small></div>
+    `;
     elements.playerList.appendChild(row);
   }
 }
+
+/* Resizable splitters for shell and player list */
+function initSplitters() {
+  // shell splitter (left sidebar width)
+  const shell = document.getElementById('app-shell');
+  const shellSplitter = document.getElementById('shell-splitter');
+  if (shell && shellSplitter) {
+    let dragging = false;
+    let startX = 0;
+    let startWidth = 0;
+    const min = 180;
+    const max = 520;
+    const saved = localStorage.getItem('shellLeftWidth');
+    if (saved) {
+      shell.style.gridTemplateColumns = `${parseInt(saved,10)} 1fr`;
+    }
+
+    // position splitter based on current left column width
+    const updateShellSplitter = () => {
+      try {
+        const leftPx = parseInt(getComputedStyle(shell).gridTemplateColumns.split(' ')[0], 10) || 280;
+        shellSplitter.style.left = `${leftPx}px`;
+        shellSplitter.style.height = `${shell.getBoundingClientRect().height}px`;
+      } catch (e) {}
+    };
+    updateShellSplitter();
+
+    shellSplitter.addEventListener('mousedown', (e) => {
+      dragging = true; startX = e.clientX; startWidth = shell.getBoundingClientRect().width;
+      document.body.style.userSelect = 'none';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const delta = e.clientX - startX;
+      const newLeft = Math.max(min, Math.min(max, (parseInt(getComputedStyle(shell).gridTemplateColumns.split(' ')[0],10) || 280) + delta));
+      shell.style.gridTemplateColumns = `${newLeft}px 1fr`;
+      localStorage.setItem('shellLeftWidth', String(newLeft));
+      updateShellSplitter();
+    });
+
+    window.addEventListener('mouseup', () => { dragging = false; document.body.style.userSelect = ''; });
+  }
+
+  // player-splitter (within player-grid)
+  const playerGrid = document.querySelector('.player-grid');
+  const playerSplitter = document.getElementById('player-splitter');
+  if (playerGrid && playerSplitter) {
+    let draggingP = false;
+    let startPX = 0;
+    let startLeft = 0;
+    const minP = 200;
+    const maxP = 520;
+    const savedP = localStorage.getItem('playerListWidth');
+    if (savedP) {
+      playerGrid.style.gridTemplateColumns = `${parseInt(savedP,10)} 1fr`;
+    }
+
+    const updatePlayerSplitter = () => {
+      try {
+        const first = parseInt(getComputedStyle(playerGrid).gridTemplateColumns.split(' ')[0],10) || 260;
+        playerSplitter.style.left = `${first}px`;
+        playerSplitter.style.height = `${playerGrid.getBoundingClientRect().height}px`;
+        playerSplitter.style.top = `0px`;
+      } catch (e) {}
+    };
+    updatePlayerSplitter();
+
+    playerSplitter.addEventListener('mousedown', (e) => {
+      draggingP = true; startPX = e.clientX; startLeft = playerGrid.getBoundingClientRect().width;
+      document.body.style.userSelect = 'none';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!draggingP) return;
+      const delta = e.clientX - startPX;
+      const computed = getComputedStyle(playerGrid).gridTemplateColumns.split(' ')[0];
+      const currentLeft = parseInt(computed,10) || 260;
+      const newLeft = Math.max(minP, Math.min(maxP, currentLeft + delta));
+      playerGrid.style.gridTemplateColumns = `${newLeft}px 1fr`;
+      localStorage.setItem('playerListWidth', String(newLeft));
+      updatePlayerSplitter();
+    });
+
+    window.addEventListener('mouseup', () => { draggingP = false; document.body.style.userSelect = ''; });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initSplitters);
 
 async function loadPlayers() {
   const rows = await request("/admin/console/players?limit=200");
@@ -304,6 +506,9 @@ async function loadPlayers() {
   if (state.selectedPlayerId) {
     await loadPlayerDetail(state.selectedPlayerId);
   } else {
+    state.selectedPlayerData = null;
+    togglePlayerDetail(false);
+    setPlayerActionEnabled(false);
     elements.playerDetail.textContent = "請先建立玩家資料後再查看。";
   }
 
@@ -319,23 +524,7 @@ async function loadPlayerDetail(discordId) {
   const data = await request(`/admin/console/players/${encodeURIComponent(discordId)}`);
   state.selectedPlayerId = discordId;
   renderPlayerList();
-
-  const lines = [
-    "玩家詳細資料",
-    "----------------------------",
-    `Discord ID: ${data.player.discordId}`,
-    `玩家名稱: ${data.player.displayName}`,
-    `狀態: ${data.player.status}`,
-    `等級: ${data.progress.level}`,
-    `經驗: ${data.progress.exp}`,
-    `金幣: ${data.wallet.gold}`,
-    `鑽石: ${data.wallet.diamond}`,
-    "",
-    "最近交易:",
-    ...(data.transactions.length > 0 ? data.transactions.map(formatTransaction) : ["無交易紀錄"])
-  ];
-
-  elements.playerDetail.textContent = lines.join("\n");
+  renderPlayerDetail(data);
 }
 
 async function saveAccessControl(url, body, successMessage) {
@@ -355,6 +544,62 @@ async function saveAccessControl(url, body, successMessage) {
       `玩家資料同步：處理 ${syncReport.ensured} 人，新增玩家 ${syncReport.createdPlayers}、錢包 ${syncReport.createdWallets}、進度 ${syncReport.createdProgress}，略過 ${syncReport.skipped}（${syncReport.reason}）`
     );
   }
+}
+
+async function submitCurrencyAction() {
+  if (!state.selectedPlayerData) {
+    throw new Error("請先選擇一位玩家");
+  }
+
+  const rawAmount = Number(elements.currencyAmountInput.value);
+  if (!Number.isInteger(rawAmount) || rawAmount <= 0) {
+    throw new Error("資源數量必須是正整數");
+  }
+
+  const amount = elements.currencyOperationInput.value === "deduct" ? -rawAmount : rawAmount;
+  const reason = elements.currencyReasonInput.value.trim() || "admin console currency adjustment";
+  const player = state.selectedPlayerData.player;
+
+  await request(`/admin/players/${encodeURIComponent(player.discordId)}/grant`, {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: player.displayName,
+      currencyType: elements.currencyTypeInput.value,
+      amount,
+      reason,
+      adminId: "admin-console"
+    })
+  });
+
+  await loadPlayerDetail(player.discordId);
+  log(`已對 ${player.displayName} ${amount > 0 ? "增加" : "扣除"} ${Math.abs(amount)} ${elements.currencyTypeInput.value}`);
+}
+
+async function submitExpAction() {
+  if (!state.selectedPlayerData) {
+    throw new Error("請先選擇一位玩家");
+  }
+
+  const amount = Number(elements.expAmountInput.value);
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("經驗值必須是正整數");
+  }
+
+  const player = state.selectedPlayerData.player;
+  const reason = elements.expReasonInput.value.trim() || "admin console exp adjustment";
+
+  await request(`/admin/players/${encodeURIComponent(player.discordId)}/grant-exp`, {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: player.displayName,
+      amount,
+      reason,
+      adminId: "admin-console"
+    })
+  });
+
+  await loadPlayerDetail(player.discordId);
+  log(`已對 ${player.displayName} 發放 ${amount} 經驗`);
 }
 
 function bindEvents() {
@@ -406,6 +651,11 @@ function bindEvents() {
     }
   });
 
+  elements.playerSearchInput.addEventListener("input", () => {
+    state.playerSearchKeyword = elements.playerSearchInput.value;
+    renderPlayerList();
+  });
+
   elements.playerList.addEventListener("click", async (event) => {
     const target = event.target.closest(".player-row");
     if (!target) return;
@@ -415,6 +665,24 @@ function bindEvents() {
       log(`已載入玩家 ${target.dataset.discordId} 詳細資料`);
     } catch (error) {
       log(`載入玩家詳細資料失敗：${error.message}`);
+    }
+  });
+
+  elements.currencyActionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await submitCurrencyAction();
+    } catch (error) {
+      log(`資源調整失敗：${error.message}`);
+    }
+  });
+
+  elements.expActionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await submitExpAction();
+    } catch (error) {
+      log(`經驗調整失敗：${error.message}`);
     }
   });
 
@@ -465,8 +733,25 @@ function bindEvents() {
       log(`儲存玩家使用者失敗：${error.message}`);
     }
   });
+
+  if (elements.topRefresh) {
+    elements.topRefresh.addEventListener("click", async () => {
+      try {
+        elements.refreshPlayersButton.disabled = true;
+        elements.topRefresh.disabled = true;
+        await loadPlayers();
+        log("頂欄：已重新載入玩家列表");
+      } catch (err) {
+        log(`重新載入玩家列表失敗：${err.message}`);
+      } finally {
+        elements.refreshPlayersButton.disabled = false;
+        elements.topRefresh.disabled = false;
+      }
+    });
+  }
 }
 
 loadAuth();
 bindEvents();
+setPlayerActionEnabled(false);
 showSection("section-auth");

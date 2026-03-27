@@ -4,10 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Equipment Game Admin</title>
-    <link rel="stylesheet" href="/static/admin.css" />
+    <link rel="stylesheet" href="/static/admin.css?v=2" />
   </head>
   <body>
-    <div class="shell">
+    <div class="game-window">
+      <div class="window-top">
+        <div class="window-title">Equipment Game — 管理後台</div>
+        <div class="window-controls">
+          <button class="control-btn" title="重新載入列表" id="top-refresh">⟳</button>
+        </div>
+      </div>
+      <div class="shell" id="app-shell">
+        <div class="splitter" id="shell-splitter" role="separator" aria-orientation="vertical" title="拖曳調整側欄寬度"></div>
       <aside class="hero">
         <p class="eyebrow">Equipment Game</p>
         <h1>管理後台</h1>
@@ -104,7 +112,7 @@
           <div class="section-head">
             <div>
               <p class="section-kicker">Players</p>
-              <h2>玩家列表與詳細資料</h2>
+              <h2>玩家資料管理</h2>
             </div>
             <div class="actions">
               <button id="refresh-players-button" class="button primary">重新載入玩家列表</button>
@@ -114,13 +122,110 @@
           <div class="player-grid">
             <div class="access-card">
               <h3>玩家列表</h3>
-              <p class="hint">點選玩家後，右側會顯示完整資料。</p>
+              <p class="hint">可依名稱或 Discord ID 搜尋，點選後在右側管理資料。</p>
+              <label>
+                <span>搜尋玩家</span>
+                <input id="player-search-input" type="text" placeholder="輸入玩家名稱或 Discord ID" />
+              </label>
+              <div id="player-list-summary" class="player-list-summary">尚未載入玩家資料</div>
               <div id="player-list" class="player-list"></div>
             </div>
 
+            <div class="splitter splitter-small" id="player-splitter" role="separator" aria-orientation="vertical" title="拖曳調整玩家列表寬度"></div>
+
             <div class="access-card">
               <h3>玩家詳細資料</h3>
-              <pre id="player-detail" class="activity-log player-detail">請先從左側玩家列表點選一位玩家。</pre>
+              <div id="player-detail" class="player-detail-empty">請先從左側玩家列表點選一位玩家。</div>
+              <div id="player-detail-view" class="player-detail-view hidden">
+                <div class="player-hero-card">
+                  <div>
+                    <p class="section-kicker">Player</p>
+                    <h3 id="player-name-heading">-</h3>
+                    <p id="player-id-line" class="hint">Discord ID: -</p>
+                  </div>
+                  <span id="player-status-badge" class="status-badge">active</span>
+                </div>
+
+                <div class="player-stats-grid">
+                  <article class="stat-card">
+                    <span>等級</span>
+                    <strong id="player-level-value">0</strong>
+                  </article>
+                  <article class="stat-card">
+                    <span>經驗</span>
+                    <strong id="player-exp-value">0</strong>
+                  </article>
+                  <article class="stat-card">
+                    <span>金幣</span>
+                    <strong id="player-gold-value">0</strong>
+                  </article>
+                  <article class="stat-card">
+                    <span>鑽石</span>
+                    <strong id="player-diamond-value">0</strong>
+                  </article>
+                </div>
+
+                <div class="player-management-grid">
+                  <article class="detail-card">
+                    <h4>帳號資訊</h4>
+                    <dl class="detail-list">
+                      <div><dt>建立時間</dt><dd id="player-created-at">-</dd></div>
+                      <div><dt>更新時間</dt><dd id="player-updated-at">-</dd></div>
+                      <div><dt>錢包更新</dt><dd id="player-wallet-updated-at">-</dd></div>
+                      <div><dt>進度更新</dt><dd id="player-progress-updated-at">-</dd></div>
+                    </dl>
+                  </article>
+
+                  <article class="detail-card">
+                    <h4>資源管理</h4>
+                    <form id="currency-action-form" class="admin-form">
+                      <label>
+                        <span>幣種</span>
+                        <select id="currency-type-input">
+                          <option value="gold">金幣</option>
+                          <option value="diamond">鑽石</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>操作</span>
+                        <select id="currency-operation-input">
+                          <option value="grant">增加</option>
+                          <option value="deduct">扣除</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>數量</span>
+                        <input id="currency-amount-input" type="number" min="1" step="1" value="100" />
+                      </label>
+                      <label>
+                        <span>原因</span>
+                        <input id="currency-reason-input" type="text" placeholder="例如：活動獎勵、手動校正" />
+                      </label>
+                      <button id="currency-submit-button" type="submit" class="button primary">套用資源變更</button>
+                    </form>
+                  </article>
+
+                  <article class="detail-card">
+                    <h4>經驗管理</h4>
+                    <form id="exp-action-form" class="admin-form">
+                      <label>
+                        <span>經驗值</span>
+                        <input id="exp-amount-input" type="number" min="1" step="1" value="100" />
+                      </label>
+                      <label>
+                        <span>原因</span>
+                        <input id="exp-reason-input" type="text" placeholder="例如：任務補發、活動補償" />
+                      </label>
+                      <button id="exp-submit-button" type="submit" class="button primary">發放經驗</button>
+                    </form>
+                  </article>
+
+                  <article class="detail-card detail-card-wide">
+                    <h4>最近交易</h4>
+                    <div id="player-transaction-list" class="transaction-list"></div>
+                  </article>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -135,6 +240,7 @@
           <pre id="activity-log" class="activity-log">等待操作...</pre>
         </section>
       </main>
+      </div>
     </div>
 
     <script src="/static/admin.js"></script>

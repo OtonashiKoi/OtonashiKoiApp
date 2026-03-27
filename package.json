@@ -5,11 +5,20 @@
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
+    "prepm2:start": "node scripts/free-port.js",
+    "prepm2:restart": "node scripts/free-port.js",
+    "prepm2:reset": "node scripts/free-port.js",
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "discord:register": "node src/bot/registerOnly.js",
     "discord:test": "node src/index.js",
-    "check": "node scripts/check-syntax.js ; node scripts/check-line-limit.js"
+    "check": "node scripts/check-syntax.js ; node scripts/check-line-limit.js",
+    "pm2:start": "npx pm2 start ecosystem.config.cjs --only equipmentGAME",
+    "pm2:restart": "npx pm2 restart equipmentGAME --update-env",
+    "pm2:reset": "node scripts/pm2-reset.js",
+    "pm2:stop": "npx pm2 stop equipmentGAME",
+    "pm2:logs": "npx pm2 logs equipmentGAME --lines 100",
+    "pm2:status": "npx pm2 status"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -19,5 +28,8 @@
     "dotenv": "^16.4.5",
     "express": "^4.22.1",
     "mongodb": "^6.21.0"
+  },
+  "devDependencies": {
+    "pm2": "^6.0.14"
   }
 }

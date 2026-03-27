@@ -53,15 +53,27 @@ class AccessControlService {
     const allowedRoleIds = new Set([...discord.adminRoleIds, ...discord.playerRoleIds]);
     const allowedUserIds = new Set([...discord.adminUserIds, ...discord.playerUserIds]);
     const targets = new Map();
+    const reasons = [];
 
     const guild = await client.guilds.fetch(config.discord.guildId);
-    await guild.members.fetch();
 
-    for (const member of guild.members.cache.values()) {
-      const byUser = allowedUserIds.has(member.user.id);
-      const byRole = [...allowedRoleIds].some((roleId) => member.roles.cache.has(roleId));
-      if (byUser || byRole) {
-        targets.set(member.user.id, member.displayName || member.user.username || member.user.id);
+    if (allowedRoleIds.size > 0) {
+      try {
+        await guild.members.fetch();
+
+        for (const member of guild.members.cache.values()) {
+          const byUser = allowedUserIds.has(member.user.id);
+          const byRole = [...allowedRoleIds].some((roleId) => member.roles.cache.has(roleId));
+          if (byUser || byRole) {
+            targets.set(member.user.id, member.displayName || member.user.username || member.user.id);
+          }
+        }
+      } catch (error) {
+        reasons.push(
+          error?.code === "GuildMembersTimeout"
+            ? "role sync skipped: guild members fetch timed out"
+            : "role sync skipped: enable Server Members Intent in Discord portal"
+        );
       }
     }
 
@@ -104,7 +116,7 @@ class AccessControlService {
       createdWallets,
       createdProgress,
       skipped,
-      reason: "ok"
+      reason: reasons.length > 0 ? reasons.join("; ") : "ok"
     };
   }
 
@@ -242,6 +254,25 @@ class AccessControlService {
     }
 
     return roleIds.some((roleId) => interaction.member.roles.cache?.has(roleId));
+  }
+
+  async isDiscordMemberWhitelisted(member) {
+    const access = await this.getAccessControl();
+    const adminRoleIds = access.discord.adminRoleIds;
+    const adminUserIds = access.discord.adminUserIds;
+    const playerRoleIds = access.discord.playerRoleIds;
+    const playerUserIds = access.discord.playerUserIds;
+
+    if (adminUserIds.includes(member.user.id) || playerUserIds.includes(member.user.id)) {
+      return true;
+    }
+
+    const roleIds = [...new Set([...adminRoleIds, ...playerRoleIds])];
+    if (roleIds.length === 0) {
+      return false;
+    }
+
+    return roleIds.some((roleId) => member.roles.cache?.has(roleId));
   }
 }
 

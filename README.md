@@ -43,6 +43,23 @@ This repository is now in Phase 1:
 4. Run checks:
    - `npm run check`
 
+## Run With PM2
+
+Use PM2 when you want the bot/API to stay alive and be easy to restart after config/data changes.
+
+1. First start with PM2:
+   - `npm run pm2:start`
+2. Restart with latest env/config:
+   - `npm run pm2:restart`
+3. Reset (delete + recreate process):
+   - `npm run pm2:reset`
+4. Check status:
+   - `npm run pm2:status`
+5. Check logs:
+   - `npm run pm2:logs`
+6. Stop process:
+   - `npm run pm2:stop`
+
 ## Discord Commands
 
 - `/連線測試`: show bot response latency

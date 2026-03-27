@@ -2,10 +2,31 @@ const { Client, GatewayIntentBits, Events, MessageFlags } = require("discord.js"
 const config = require("../config");
 const { isAppError } = require("../shared/errors");
 const { handleCommand, handleButton, handleModal } = require("./commands");
-const { setBotClient } = require("./runtimeContext");
+const { serviceContext, setBotClient } = require("./runtimeContext");
+
+async function ensureMemberPlayerProfile(member, reason) {
+  try {
+    const allowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(member);
+    if (!allowed) {
+      return;
+    }
+
+    const existing = await serviceContext.playerService.playerRepository.findByDiscordId(member.user.id);
+    await serviceContext.playerService.ensurePlayer(
+      member.user.id,
+      member.displayName || member.user.globalName || member.user.username || member.user.id
+    );
+
+    if (!existing) {
+      console.log(`[Discord] auto-provisioned player ${member.user.id} (${member.displayName}) via ${reason}`);
+    }
+  } catch (error) {
+    console.error(`[Discord] auto-provision failed for ${member?.user?.id || "unknown"}`, error);
+  }
+}
 
 function createBotClient() {
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
   setBotClient(client);
 
   client.once(Events.ClientReady, (readyClient) => {
@@ -42,6 +63,18 @@ function createBotClient() {
           flags: MessageFlags.Ephemeral 
         });
       }
+    }
+  });
+
+  client.on(Events.GuildMemberAdd, async (member) => {
+    await ensureMemberPlayerProfile(member, "guild-member-add");
+  });
+
+  client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+    const wasAllowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(oldMember);
+    const isAllowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(newMember);
+    if (!wasAllowed && isAllowed) {
+      await ensureMemberPlayerProfile(newMember, "guild-member-update");
     }
   });
 
