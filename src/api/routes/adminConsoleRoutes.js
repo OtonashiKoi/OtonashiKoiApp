@@ -79,6 +79,16 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
+  router.post("/admin/channel-layout/sync-permissions", async (_req, res, next) => {
+    try {
+      const accessControl = await serviceContext.accessControlService.getAccessControl();
+      const result = await serviceContext.adminConsoleService.syncChannelPermissions(accessControl);
+      res.json(ok(result, "channel permissions synced"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/admin/console/players", async (req, res, next) => {
     try {
       const limit = req.query.limit ? Number(req.query.limit) : 50;

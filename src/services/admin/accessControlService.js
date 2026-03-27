@@ -7,8 +7,105 @@ function uniq(items) {
 }
 
 class AccessControlService {
-  constructor(accessControlRepository) {
+  constructor(accessControlRepository, playerService) {
     this.accessControlRepository = accessControlRepository;
+    this.playerService = playerService;
+  }
+
+  async syncAllowedPlayers() {
+    if (!this.playerService) {
+      return {
+        ensured: 0,
+        createdPlayers: 0,
+        createdWallets: 0,
+        createdProgress: 0,
+        skipped: 0,
+        reason: "player service not configured"
+      };
+    }
+
+    const { getBotClient } = require("../../bot/runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady()) {
+      return {
+        ensured: 0,
+        createdPlayers: 0,
+        createdWallets: 0,
+        createdProgress: 0,
+        skipped: 0,
+        reason: "discord bot is not ready"
+      };
+    }
+
+    if (!config.discord.guildId) {
+      return {
+        ensured: 0,
+        createdPlayers: 0,
+        createdWallets: 0,
+        createdProgress: 0,
+        skipped: 0,
+        reason: "DISCORD_GUILD_ID is not configured"
+      };
+    }
+
+    const access = await this.getAccessControl();
+    const discord = access.discord;
+    const allowedRoleIds = new Set([...discord.adminRoleIds, ...discord.playerRoleIds]);
+    const allowedUserIds = new Set([...discord.adminUserIds, ...discord.playerUserIds]);
+    const targets = new Map();
+
+    const guild = await client.guilds.fetch(config.discord.guildId);
+    await guild.members.fetch();
+
+    for (const member of guild.members.cache.values()) {
+      const byUser = allowedUserIds.has(member.user.id);
+      const byRole = [...allowedRoleIds].some((roleId) => member.roles.cache.has(roleId));
+      if (byUser || byRole) {
+        targets.set(member.user.id, member.displayName || member.user.username || member.user.id);
+      }
+    }
+
+    // 若有手動指定 userId 但目前不在快取成員中，仍嘗試建立玩家資料
+    for (const userId of allowedUserIds) {
+      if (targets.has(userId)) continue;
+      try {
+        const user = await client.users.fetch(userId);
+        targets.set(userId, user?.username || userId);
+      } catch (_error) {
+        targets.set(userId, userId);
+      }
+    }
+
+    let ensured = 0;
+    let createdPlayers = 0;
+    let createdWallets = 0;
+    let createdProgress = 0;
+    let skipped = 0;
+
+    for (const [discordId, displayName] of targets.entries()) {
+      try {
+        const existingPlayer = await this.playerService.playerRepository.findByDiscordId(discordId);
+        const existingWallet = await this.playerService.walletRepository.findByPlayerId(discordId);
+        const existingProgress = await this.playerService.progressRepository.findByPlayerId(discordId);
+
+        await this.playerService.ensurePlayer(discordId, displayName);
+        ensured += 1;
+        if (!existingPlayer) createdPlayers += 1;
+        if (!existingWallet) createdWallets += 1;
+        if (!existingProgress) createdProgress += 1;
+      } catch (_error) {
+        skipped += 1;
+      }
+    }
+
+    return {
+      ensured,
+      createdPlayers,
+      createdWallets,
+      createdProgress,
+      skipped,
+      reason: "ok"
+    };
   }
 
   async getAccessControl() {

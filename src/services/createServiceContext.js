@@ -10,12 +10,12 @@ const { RewardService } = require("./reward/rewardService");
 
 function createServiceContext() {
   const repositories = createRepositories();
-  const accessControlService = new AccessControlService(repositories.accessControlRepository);
   const playerService = new PlayerService(
     repositories.playerRepository,
     repositories.walletRepository,
     repositories.progressRepository
   );
+  const accessControlService = new AccessControlService(repositories.accessControlRepository, playerService);
   const walletService = new WalletService(playerService, repositories.walletRepository);
   const rewardService = new RewardService(
     playerService,

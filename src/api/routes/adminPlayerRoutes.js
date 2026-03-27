@@ -44,8 +44,9 @@ function createAdminPlayerRoutes(serviceContext) {
   router.put("/admin/access-control/discord-roles", async (req, res, next) => {
     try {
       const { adminRoleIds } = req.body;
-      const result = await serviceContext.accessControlService.setDiscordRoleIds(adminRoleIds);
-      res.json(ok(result, "discord admin roles updated"));
+      const accessControl = await serviceContext.accessControlService.setDiscordRoleIds(adminRoleIds);
+      const syncReport = await serviceContext.accessControlService.syncAllowedPlayers();
+      res.json(ok({ accessControl, syncReport }, "discord admin roles updated"));
     } catch (error) {
       next(error);
     }
@@ -54,8 +55,9 @@ function createAdminPlayerRoutes(serviceContext) {
   router.put("/admin/access-control/discord-users", async (req, res, next) => {
     try {
       const { adminUserIds } = req.body;
-      const result = await serviceContext.accessControlService.setDiscordUserIds(adminUserIds);
-      res.json(ok(result, "discord admin users updated"));
+      const accessControl = await serviceContext.accessControlService.setDiscordUserIds(adminUserIds);
+      const syncReport = await serviceContext.accessControlService.syncAllowedPlayers();
+      res.json(ok({ accessControl, syncReport }, "discord admin users updated"));
     } catch (error) {
       next(error);
     }
@@ -64,8 +66,9 @@ function createAdminPlayerRoutes(serviceContext) {
   router.put("/admin/access-control/player-roles", async (req, res, next) => {
     try {
       const { playerRoleIds } = req.body;
-      const result = await serviceContext.accessControlService.setDiscordPlayerRoleIds(playerRoleIds);
-      res.json(ok(result, "discord player roles updated"));
+      const accessControl = await serviceContext.accessControlService.setDiscordPlayerRoleIds(playerRoleIds);
+      const syncReport = await serviceContext.accessControlService.syncAllowedPlayers();
+      res.json(ok({ accessControl, syncReport }, "discord player roles updated"));
     } catch (error) {
       next(error);
     }
@@ -74,8 +77,9 @@ function createAdminPlayerRoutes(serviceContext) {
   router.put("/admin/access-control/player-users", async (req, res, next) => {
     try {
       const { playerUserIds } = req.body;
-      const result = await serviceContext.accessControlService.setDiscordPlayerUserIds(playerUserIds);
-      res.json(ok(result, "discord player users updated"));
+      const accessControl = await serviceContext.accessControlService.setDiscordPlayerUserIds(playerUserIds);
+      const syncReport = await serviceContext.accessControlService.syncAllowedPlayers();
+      res.json(ok({ accessControl, syncReport }, "discord player users updated"));
     } catch (error) {
       next(error);
     }

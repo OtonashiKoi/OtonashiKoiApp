@@ -4,33 +4,44 @@ const config = require("../../config");
 
 const AVAILABLE_FEATURES = [
   {
-    key: "player_panel",
-    label: "玩家操作面板",
-    description: "提供玩家建立、查詢、測試互動的聊天室按鈕面板"
+    key: "park_announcement",
+    label: "樂園公告面板",
+    description: "遊戲公告與活動資訊"
   },
   {
-    key: "player_query",
-    label: "玩家資訊查詢",
-    description: "管理員用來查詢玩家列表與詳細資料的版位"
+    key: "town_chat",
+    label: "聊天大街面板",
+    description: "玩家聊天室與社群互動"
   },
   {
-    key: "admin_dashboard",
-    label: "管理後台通知",
-    description: "預留給管理後台同步與通知用頻道"
+    key: "daily_quest",
+    label: "每日挑戰任務面板",
+    description: "每日任務與挑戰入口"
   },
   {
-    key: "audit_log",
-    label: "審計紀錄版位",
-    description: "預留給管理審計或系統紀錄推送"
+    key: "coin_shop",
+    label: "金幣商店面板",
+    description: "商店與資源兌換功能"
+  },
+  {
+    key: "personal_room",
+    label: "個人房間面板",
+    description: "玩家個人化功能與私人操作"
   }
 ];
 
 function normalizeBinding(binding) {
+  const visibleTo = binding?.visibleTo && typeof binding.visibleTo === "object" ? binding.visibleTo : {};
+
   return {
     featureKey: String(binding.featureKey || "").trim(),
     channelId: String(binding.channelId || "").trim(),
     enabled: Boolean(binding.enabled),
-    note: String(binding.note || "").trim()
+    note: String(binding.note || "").trim(),
+    visibleTo: {
+      player: visibleTo.player !== false,
+      admin: visibleTo.admin !== false
+    }
   };
 }
 
@@ -176,6 +187,58 @@ class AdminConsoleService {
     }
 
     return this.adminService.getPlayerSnapshot(targetDiscordId);
+  }
+
+  async syncChannelPermissions(accessControl) {
+    const { getBotClient } = require("../../bot/runtimeContext");
+    const { PermissionsBitField } = require("discord.js");
+    const client = getBotClient();
+    if (!client?.isReady()) {
+      throw new AppError(ERROR_CODES.UNAUTHORIZED, "Discord bot is not ready", 503);
+    }
+
+    const layout = await this.getChannelLayout();
+    const enabledBindings = layout.discord.bindings.filter((b) => b.enabled && b.channelId);
+    const discord = accessControl?.discord || {};
+    const adminRoleIds = discord.adminRoleIds || [];
+    const playerRoleIds = discord.playerRoleIds || [];
+    const allManagedRoles = [...new Set([...adminRoleIds, ...playerRoleIds])];
+
+    const results = [];
+
+    for (const binding of enabledBindings) {
+      const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+      if (!channel || typeof channel.permissionOverwrites === "undefined") continue;
+
+      const grantRoles = new Set([
+        ...(binding.visibleTo?.player ? playerRoleIds : []),
+        ...(binding.visibleTo?.admin ? adminRoleIds : [])
+      ]);
+
+      let granted = 0;
+      let revoked = 0;
+
+      for (const roleId of allManagedRoles) {
+        try {
+          if (grantRoles.has(roleId)) {
+            await channel.permissionOverwrites.edit(roleId, { ViewChannel: true });
+            granted++;
+          } else {
+            const existing = channel.permissionOverwrites.cache.get(roleId);
+            if (existing) {
+              await channel.permissionOverwrites.delete(roleId);
+              revoked++;
+            }
+          }
+        } catch (_err) {
+          // skip roles that can't be modified
+        }
+      }
+
+      results.push({ featureKey: binding.featureKey, channelId: binding.channelId, granted, revoked });
+    }
+
+    return results;
   }
 
   async publishPlayerQueryPanel(channelId) {
