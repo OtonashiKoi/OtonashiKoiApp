@@ -1,180 +1,261 @@
-const {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  SlashCommandBuilder,
-  AttachmentBuilder,
-  ChannelType,
-  MessageFlags
-} = require("discord.js");
-const {
-  openChest,
-  getPanelData
-} = require("../core/userService");
-const { renderLoadoutCard } = require("./renderLoadoutCard");
-const { createGameSession } = require("../web/server");
-const config = require("../config");
-
-
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
+const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton } = require("./playerPanel");
+const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
+const { serviceContext } = require("./runtimeContext");
+const { isAppError } = require("../shared/errors");
 
 const definitions = [
-  new SlashCommandBuilder().setName("裝備啟動").setDescription("🎮 開啟角色裝備面板與操作功能")
+  new SlashCommandBuilder()
+    .setName("連線測試")
+    .setDescription("確認 Discord bot 是否已成功連線"),
+  new SlashCommandBuilder()
+    .setName("help")
+    .setDescription("查看目前可用的基礎功能指令"),
+  new SlashCommandBuilder()
+    .setName("發布玩家面板")
+    .setDescription("管理員在目前聊天室發布玩家按鈕面板"),
+  new SlashCommandBuilder()
+    .setName("發布玩家查詢")
+    .setDescription("管理員發布玩家資訊查詢面板"),
+  new SlashCommandBuilder()
+    .setName("管理員加金幣")
+    .setDescription("管理員對指定玩家發放金幣")
+    .addUserOption((opt) => opt.setName("玩家").setDescription("目標玩家").setRequired(true))
+    .addIntegerOption((opt) => opt.setName("數量").setDescription("金幣數量").setRequired(true))
+    .addStringOption((opt) => opt.setName("原因").setDescription("操作原因").setRequired(false)),
+  new SlashCommandBuilder()
+    .setName("管理員加鑽石")
+    .setDescription("管理員對指定玩家發放鑽石")
+    .addUserOption((opt) => opt.setName("玩家").setDescription("目標玩家").setRequired(true))
+    .addIntegerOption((opt) => opt.setName("數量").setDescription("鑽石數量").setRequired(true))
+    .addStringOption((opt) => opt.setName("原因").setDescription("操作原因").setRequired(false)),
+  new SlashCommandBuilder()
+    .setName("管理員扣金幣")
+    .setDescription("管理員對指定玩家扣除金幣")
+    .addUserOption((opt) => opt.setName("玩家").setDescription("目標玩家").setRequired(true))
+    .addIntegerOption((opt) => opt.setName("數量").setDescription("扣除金幣數量").setRequired(true).setMinValue(1))
+    .addStringOption((opt) => opt.setName("原因").setDescription("操作原因").setRequired(false)),
+  new SlashCommandBuilder()
+    .setName("管理員扣鑽石")
+    .setDescription("管理員對指定玩家扣除鑽石")
+    .addUserOption((opt) => opt.setName("玩家").setDescription("目標玩家").setRequired(true))
+    .addIntegerOption((opt) => opt.setName("數量").setDescription("扣除鑽石數量").setRequired(true).setMinValue(1))
+    .addStringOption((opt) => opt.setName("原因").setDescription("操作原因").setRequired(false)),
+  new SlashCommandBuilder()
+    .setName("管理員加經驗")
+    .setDescription("管理員對指定玩家發放經驗")
+    .addUserOption((opt) => opt.setName("玩家").setDescription("目標玩家").setRequired(true))
+    .addIntegerOption((opt) => opt.setName("數量").setDescription("經驗數量").setRequired(true).setMinValue(1))
+    .addStringOption((opt) => opt.setName("原因").setDescription("操作原因").setRequired(false))
 ].map((d) => d.toJSON());
 
-function getRarityEmoji(rarity) {
-  const rarityMap = {
-    "common": "⚪",
-    "uncommon": "🟢", 
-    "rare": "🔵",
-    "epic": "🟣",
-    "legendary": "🟡"
-  };
-  return rarityMap[rarity] || "⚪";
-}
-
-async function createPanelResponse(panelData, userId, discordUser, notice = null) {
-  // 生成圖片
-  const avatarURL = discordUser.displayAvatarURL({ format: 'png', size: 256 });
-  const imageBuffer = await renderLoadoutCard({
-    name: panelData.user.name,
-    level: panelData.user.level,
-    power: panelData.power,
-    bonus: panelData.bonus, // 直接使用 bonus 對象
-    equipped: panelData.user.equipped || {},
-    avatarURL: avatarURL
-  });
-
-  const attachment = new AttachmentBuilder(imageBuffer, { name: 'loadout.png' });
-  
-  const components = buildPanelComponents(userId);
-  
-  return {
-    content: notice || "🎮 **冒險面板** - 點擊按鈕進行操作",
-    files: [attachment],
-    components
-  };
-}
-
-function buildPanelComponents(ownerId) {
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`panel|open|${ownerId}`)
-      .setLabel("開寶箱")
-      .setEmoji("📦")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`panel|refresh|${ownerId}`)
-      .setLabel("重新載入")
-      .setEmoji("🔄")
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  return [row];
+async function isAdmin(interaction) {
+  return serviceContext.accessControlService.isDiscordAdmin(interaction);
 }
 
 async function handleCommand(interaction) {
-  const userId = interaction.user.id;
-  const username = interaction.user.username;
+  if (interaction.commandName === "連線測試") {
+    const latencyMs = Date.now() - interaction.createdTimestamp;
 
-  if (interaction.commandName === "裝備啟動") {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral }); // 私人回復，只有玩家能看到
-    
-    // 檢查頻道是否支援 threads
-    if (!interaction.channel || !interaction.channel.threads) {
-      await interaction.editReply({
-        content: `❌ **無法在此頻道創建私人遊戲室！**\n\n💡 **說明**：\n- 請在支援討論串的文字頻道中使用此指令\n- 私訊無法使用此功能\n- 請到伺服器的一般頻道重試`
-      });
-      return;
-    }
-    
-    // 檢查是否已經有該用戶的活躍遊戲線程
-    const existingThreads = await interaction.channel.threads.fetch({ archived: { fetchAll: false } });
-    const userActiveThread = existingThreads.threads.find(thread => 
-      thread.name.includes(`${username} 的私人遊戲室`) && !thread.archived
-    );
-    
-    if (userActiveThread) {
-      await interaction.editReply({
-        content: `❌ **你已經有一個活躍的遊戲室！**\n\n🎮 你的現有遊戲室：${userActiveThread}\n\n💡 **提示**：一個人最多只能開一個遊戲討論窗\n⏰ 等待60分鐘自動關閉或手動關閉後才能開新的`
-      });
-      return;
-    }
-    
-    // 創建 Web 遊戲 Session
-    const avatarURL = interaction.user.displayAvatarURL({ format: 'png', size: 256 });
-    const sessionId = createGameSession(userId, username, avatarURL);
-    const gameUrl = `http://localhost:${config.port}/game?session=${sessionId}`;
-    
-    // 創建私有遊戲線程（只有該玩家能看到）
-    const thread = await interaction.channel.threads.create({
-      name: `🔒 ${username} 的私人遊戲室`,
-      autoArchiveDuration: 60, // 60分鐘無活動後自動關閉
-      type: ChannelType.PrivateThread, // 設定為私有線程
-      invitable: false, // 禁止邀請其他人
-      reason: '開啟裝備遊戲面板'
+    await interaction.reply({
+      content: `✅ Discord bot 連線正常。延遲 ${latencyMs}ms。`,
+      flags: MessageFlags.Ephemeral
     });
-
-    // 將用戶加入線程
-    await thread.members.add(userId);
-    
-    // 私人回復（只有玩家看得到）
-    await interaction.editReply({
-      content: `🎉 **遊戲已啟動！** \n\n🎮 **Discord 遊戲室**: ${thread}\n� **Web 豪華版**: [**點擊進入特效遊戲**](${gameUrl})\n\n🔥 **Web版特色**:\n✨ 豐富的動畫特效\n✨ 粒子背景效果  \n✨ 即時數據更新\n✨ 更流暢的操作體驗\n\n🔒 **完全私人**: 只有你能看到\n⏰ **自動關閉**: 4小時無活動後清理`
-    });
-
-    // 在線程中發送遊戲面板
-    const panelData = await getPanelData(userId, username);
-    const response = await createPanelResponse(panelData, userId, interaction.user, 
-      `🎉 **歡迎來到你的私人遊戲室！**\n\n🔒 **完全私密**: 這個空間只有你能看到\n⚡ 沒有人能干擾你的遊戲體驗\n🎮 盡情享受你的冒險時光\n⏰ 60分鐘無活動將自動關閉`);
-    
-    await thread.send(response);
     return;
+  }
+
+  if (interaction.commandName === "help") {
+    await interaction.reply({
+      content:
+        `可發布玩家查詢\n` +
+        `/管理員加金幣\n` +
+        `/管理員加鑽石\n` +
+        `/管理員扣金幣\n` +
+        `/管理員扣鑽石\n` +
+        `/管理員加經驗\n\n` +
+        `玩家操作請直接點聊天室內的玩家面板按鈕。`,
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
+
+  if (interaction.commandName === "發布玩家查詢") {
+    if (!(await isAdmin(interaction))) {
+      await interaction.reply({
+        content: "❌ 你沒有管理員權限。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    if (!interaction.channel) {
+      await interaction.reply({
+        content: "❌ 目前找不到可發布面板的聊天室。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    await interaction.channel.send(createPlayerQueryPanelMessage());
+    await interaction.reply({
+      content: "✅ 玩家查詢面板已發布到目前聊天室。"
+        `/管理員扣鑽石\n` +
+        `/管理員加經驗\n\n` +
+        `玩家操作請直接點聊天室內的玩家面板按鈕。`,
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
+
+  if (interaction.commandName === "發布玩家面板") {
+    if (!(await isAdmin(interaction))) {
+      await interaction.reply({
+        content: "❌ 你沒有管理員權限。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    if (!interaction.channel) {
+      await interaction.reply({
+        content: "❌ 目前找不到可發布面板的聊天室。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    await interaction.channel.send(createPlayerPanelMessage());
+    await interaction.reply({
+      content: "✅ 玩家面板已發布到目前聊天室。",
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
+
+  if (["管理員加金幣", "管理員加鑽石", "管理員扣金幣", "管理員扣鑽石"].includes(interaction.commandName)) {
+    if (!(await isAdmin(interaction))) {
+      await interaction.reply({
+        content: "❌ 你沒有管理員權限。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    const targetUser = interaction.options.getUser("玩家", true);
+    let amount = interaction.options.getInteger("數量", true);
+    const reason = interaction.options.getString("原因") || "manual grant";
+    const isDiamond = interaction.commandName === "管理員加鑽石" || interaction.commandName === "管理員扣鑽石";
+    const isDeduct = interaction.commandName === "管理員扣金幣" || interaction.commandName === "管理員扣鑽石";
+    const currencyType = isDiamond ? "diamond" : "gold";
+    if (isDeduct) amount = -Math.abs(amount);
+
+    const result = await serviceContext.adminService.grantCurrencyByAdmin({
+      adminId: interaction.user.id,
+      targetDiscordId: targetUser.id,
+      displayName: targetUser.username,
+      currencyType,
+      amount,
+      reason
+    });
+
+    await interaction.reply({
+      content:
+        `✅ 管理員發放完成\n` +
+        `目標：${result.player.displayName}\n` +
+        `幣種：${currencyType}\n` +
+        `數量：${amount}\n` +
+        `新餘額：${currencyType === "diamond" ? result.wallet.diamond : result.wallet.gold}`,
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
+
+  if (interaction.commandName === "管理員加經驗") {
+    if (!(await isAdmin(interaction))) {
+      await interaction.reply({
+        content: "❌ 你沒有管理員權限。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    const targetUser = interaction.options.getUser("玩家", true);
+    const amount = interaction.options.getInteger("數量", true);
+    const reason = interaction.options.getString("原因") || "manual exp grant";
+
+    const result = await serviceContext.adminService.grantExpByAdmin({
+      adminId: interaction.user.id,
+      targetDiscordId: targetUser.id,
+      displayName: targetUser.username,
+      amount,
+      reason
+    });
+
+    await interaction.reply({
+      content:
+        `✅ 管理員發放經驗完成\n` +
+        `目標：${result.player.displayName}\n` +
+        `等級：${result.progress.level}\n` +
+        `經驗：${result.progress.exp}\n` +
+        `本次升級：${result.levelUps}`,
+      flags: MessageFlags.Ephemeral
+    });
   }
 }
 
 async function handleButton(interaction) {
-  if (!interaction.customId.startsWith("panel|")) return;
+  await handlePlayerPanelButton(interaction);
+  await handlePlayerQueryButton(interaction);
+}
 
-  const parts = interaction.customId.split("|");
-  const action = parts[1];
-  const ownerId = parts[2];
+async function handleModal(interaction) {
+  if (interaction.customId === "player-query-modal") {
+    const discordId = interaction.fields.getTextInputValue("player-discord-id").trim();
 
-  if (interaction.user.id !== ownerId) {
-    await interaction.reply({ 
-      content: "❌ **這不是你的面板！**\n\n使用 `/裝備啟動` 開啟自己的專屬遊戲室", 
-      flags: MessageFlags.Ephemeral 
-    });
-    return;
-  }
+    if (!discordId) {
+      await interaction.reply({
+        content: "❌ 請輸入玩家 Discord ID。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
 
-  await interaction.deferUpdate();
+    try {
+      const result = await serviceContext.adminConsoleService.getPlayerQueryInfo(discordId);
 
-  let notice = "🔄 **面板已更新**";
+      const transactionNames = result.transactions
+        .map((t) => {
+          const sign = t.direction === "debit" ? "-" : "+";
+          return `${t.currencyType} ${sign}${Math.abs(t.amount)} | ${t.source}`;
+        })
+        .join("\n");
 
-  if (action === "open") {
-    const out = await openChest(ownerId, interaction.user.username);
-    if (!out.ok) {
-      notice = "💰 **金幣不足！** 開箱需要 35 金幣，多參與互動賺燕幣吧！";
-    } else if (out.upgraded) {
-      const emoji = getRarityEmoji(out.item.rarity);
-      notice = `🎉 **裝備升級成功！** ${emoji} **${out.item.name}** 已自動裝備並提升戰力！`;
-    } else {
-      const emoji = getRarityEmoji(out.item.rarity);
-      notice = `📦 **開箱成功！** 獲得 ${emoji} **${out.item.name}**，但沒有超過現有裝備`;
+      await interaction.reply({
+        content:
+          `🔍 玩家查詢結果\n` +
+          `ID：${result.player.discordId}\n` +
+          `玩家：${result.player.displayName}\n` +
+          `狀態：${result.player.status}\n\n` +
+          `等級：${result.progress.level}\n` +
+          `經驗：${result.progress.exp}\n\n` +
+          `金幣：${result.wallet.gold}\n` +
+          `鑽石：${result.wallet.diamond}\n\n` +
+          `最近交易：\n${transactionNames || "無"}`,
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      const message = isAppError(error) ? `❌ ${error.message}` : "查詢玩家資訊失敗。";
+      await interaction.reply({
+        content: message,
+        flags: MessageFlags.Ephemeral
+      });
     }
   }
-
-  if (action === "refresh") {
-    notice = "🔄 **面板重新載入完成！** 數據已更新到最新狀態";
-  }
-
-  const panelData = await getPanelData(ownerId, interaction.user.username);
-  const response = await createPanelResponse(panelData, ownerId, interaction.user, notice);
-  await interaction.editReply(response);
 }
 
 module.exports = {
   definitions,
   handleCommand,
-  handleButton
+  handleButton,
+  handleModal
 };

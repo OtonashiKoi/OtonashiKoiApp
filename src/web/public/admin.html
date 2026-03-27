@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Equipment Game Admin</title>
+    <link rel="stylesheet" href="/static/admin.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="hero">
+        <p class="eyebrow">Equipment Game</p>
+        <h1>管理後台</h1>
+        <p class="lede">
+          集中設定 Discord 版位、玩家白名單與管理員白名單，不再依賴聊天室指令操作後台。
+        </p>
+        <div class="hero-card">
+          <div>
+            <span class="hero-label">當前目標</span>
+            <strong>版位對功能</strong>
+          </div>
+          <p>指定哪個頻道負責玩家面板、審計資訊與後續管理功能。</p>
+        </div>
+      </aside>
+
+      <main class="panel">
+        <section class="card auth-card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Step 1</p>
+              <h2>登入 API</h2>
+            </div>
+            <button id="connect-button" class="button primary">連線後台</button>
+          </div>
+          <div class="grid one-up">
+            <label>
+              <span>管理員密碼</span>
+              <input id="admin-password" type="password" placeholder="輸入後台密碼" />
+            </label>
+          </div>
+          <p id="connection-state" class="hint">尚未連線</p>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Step 2</p>
+              <h2>Discord 版位配置</h2>
+            </div>
+            <div class="actions">
+              <button id="save-layout-button" class="button primary">儲存版位設定</button>
+              <button id="publish-player-panel-button" class="button ghost">發布玩家面板</button>
+            </div>
+          </div>
+          <div id="binding-list" class="binding-list"></div>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Step 3</p>
+              <h2>權限設定</h2>
+            </div>
+          </div>
+
+          <div class="access-grid">
+            <div class="access-card">
+              <h3>管理員身分組</h3>
+              <div id="admin-role-list" class="role-list"></div>
+              <button id="save-admin-roles-button" class="button primary">儲存管理員身分組</button>
+            </div>
+
+            <div class="access-card">
+              <h3>玩家身分組</h3>
+              <div id="player-role-list" class="role-list"></div>
+              <button id="save-player-roles-button" class="button primary">儲存玩家身分組</button>
+            </div>
+
+            <div class="access-card">
+              <h3>管理員使用者 ID</h3>
+              <textarea id="admin-user-ids" rows="6" placeholder="每行一個 Discord User ID"></textarea>
+              <button id="save-admin-users-button" class="button primary">儲存管理員使用者</button>
+            </div>
+
+            <div class="access-card">
+              <h3>玩家使用者 ID</h3>
+              <textarea id="player-user-ids" rows="6" placeholder="每行一個 Discord User ID"></textarea>
+              <button id="save-player-users-button" class="button primary">儲存玩家使用者</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card log-card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">System</p>
+              <h2>操作記錄</h2>
+            </div>
+          </div>
+          <pre id="activity-log" class="activity-log">等待操作...</pre>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/admin.js"></script>
+  </body>
+  </html>

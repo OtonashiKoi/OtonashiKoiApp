@@ -1,88 +1,151 @@
-# equipmentGAME Implementation Plan
+# Mongo-Ready Game Platform Plan
 
-## Project Goal
-建立 Discord Bot + Web API 的開寶箱換裝備遊戲，後續串接 YouTube 直播互動與 Discord 社群玩法。
+更新日期：2026-03-27
 
-## Milestones
+## 1. 產品目標
 
-### M1 - 基礎骨架與核心玩法
-- [x] Node.js 專案初始化
-- [x] Discord slash commands 註冊流程
-- [x] 本機資料持久化 (JSON store)
-- [x] RPG核心: 稀有度、裝備屬性、背包、換裝
-- [x] 基本戰鬥: 怪物挑戰與獎勵
-- [x] Web API: 健康檢查、角色資料、排行榜
+本專案的第一原則是「資料庫優先」，Discord 只是第一個入口，不是唯一入口。
 
-### M2 - Discord體驗升級
-- [ ] 裝備分享圖片輸出 (Canvas)
-- [ ] 更完整背包分頁與篩選
-- [ ] 每日任務 / 每日獎勵
-- [ ] 經濟平衡參數化
+第一期要建立的是可長期擴充的遊戲資料平台：
+- 玩家可以先在 Discord 內遊玩
+- 玩家資料未來可以被後台 API、網頁、App 重用
+- 玩家資產以金幣與鑽石為核心
+- 所有獎勵與扣款都必須可追蹤
 
-### M3 - YouTube整合
-- [ ] YouTube Live 事件監聽器
-- [ ] 互動事件轉換為金幣獎勵
-- [ ] 會員與SC額外獎勵規則
-- [ ] YouTube帳號與Discord帳號綁定策略
+## 2. 第一階段範圍
 
-### M4 - 帳號連結與Web互動
-- [ ] Discord OAuth2
-- [ ] 玩家裝備展示頁
-- [ ] 可分享的角色頁面
-- [ ] WebSocket即時同步
+In scope：
+- Discord 作為玩家入口
+- Web 後台與管理 API
+- JSON 開發模式與 MongoDB 正式模式雙軌
+- 玩家主檔、錢包、交易紀錄、管理審計
+- Discord 版位與功能綁定設定
+- 檔案治理與模組拆分規範
 
-### M5 - 戰鬥系統深化
-- [ ] 怪物圖鑑與難度階層
-- [ ] 技能與被動效果
-- [ ] Boss活動與限時掉落
+Out of scope：
+- 第三方平台整合（YouTube、直播事件）
+- 複雜戰鬥與裝備系統
+- 多幣種配置化
+- 跨平台帳號體系重構
 
-## Execution Log
+## 3. 產品規則
 
-- 2026-03-25: 完成 M1 初版可執行系統。
-  - 建立 package.json、環境變數範本、README。
-  - 建立 Discord 指令: /open-chest, /inventory, /equip, /profile, /fight-monster。
-  - 完成 RPG 服務: 掉落表、裝備生成、經驗升級、戰力計算。
-  - 建立 web API: /health, /api/profile/:discordId, /api/leaderboard。
-- 2026-03-25: 完成本機啟動驗證。
-  - npm install 成功。
-  - npm run start 成功，Web 服務在 3000 Port 啟動。
-  - 未設定 Discord token 時會安全略過 Bot 登入與命令註冊。
-- 2026-03-25: 調整裝備規則為「無背包自動換裝」。
-  - 開箱後只比較同部位裝備，較強才自動替換。
-  - `/inventory` 改為顯示目前穿戴裝備，不再顯示裝備倉庫。
-  - 移除手動 `/equip` 流程。
-- 2026-03-25: 補齊 Discord 直接測試流程。
-  - 新增 `npm run discord:register` 供測試群組快速註冊 slash commands。
-  - 註冊流程改為回傳成功/失敗狀態，便於快速除錯。
-  - README 新增 Discord API 直接測試步驟。
-- 2026-03-25: 完成 Discord 端到端啟動驗證。
-  - Slash commands 註冊成功。
-  - Bot 登入成功。
-  - Web API 服務正常啟動於 Port 5566。
-- 2026-03-25: 新增 Discord 曬裝圖卡功能。
-  - 新增 `/share-loadout` 指令，直接輸出 PNG 裝備圖卡。
-  - 使用 `@napi-rs/canvas` 產生圖片，可在聊天頻道直接分享。
-- 2026-03-25: 圖卡改為復古 MMO 介面風格。
-  - 裝備區改為左右欄 + 中央角色框的面板式佈局。
-  - 新增 Status 區塊，統一顯示戰力與屬性資訊。
-- 2026-03-25: 圖卡第二版微調完成。
-  - 中央人物區改用 Discord 使用者頭像。
-  - 重新調整裝備欄位，左右欄位避開中央圖片區。
-  - 背景改為雪景藍白色系，加入細雪點綴。
-- 2026-03-26: 圖卡第三版版型校正完成。
-  - 對齊經典介面比例，修正 Status 區塊寬度溢出。
-  - 完成多欄位版型（左右各 5 格，共 10 格）。
-  - 增加上方分頁視覺，整體更接近參考圖。
-- 2026-03-26: 圖卡第四版（指定樣式）完成。
-  - 中央人物框改為更窄直式比例。
-  - 字體改為更接近舊遊戲 UI 的緊湊風格。
-  - 狀態欄改為指定順序：Str/Agi/Vit/Int/Dex/Luk 與 Atk/Def/Matk/Mdef/Hit/Flee/Aspd。
-- 2026-03-26: 改為 Discord 原生可操作面板。
-  - `/share-loadout` 由圖片改為按鈕面板訊息。
-  - 可直接在 Discord 內按按鈕開箱、打怪、重新整理，不需跳網頁。
+1. Discord ID 為第一期玩家主鍵
+2. 第一期固定雙幣種：金幣、鑽石
+3. 錢包餘額是快照，交易紀錄才是事實來源
+4. Discord 與 API 必須共用同一服務層規則
+5. 玩家操作以聊天室互動元件為主，不依賴玩家手打 slash command
+6. 任一檔案超過 400 行必須拆分
+7. 320 行即視為預警，應優先重構
 
-## Current Status
+## 4. 核心資料模型
 
-- 當前里程碑: M1
-- 狀態: Completed (M1完成，已可本機測試)
-- 下一步: 進入 M2，先做裝備分享圖片輸出 (Canvas) 與背包體驗優化
+### Player
+- discordId
+- displayName
+- status
+- schemaVersion
+- createdAt
+- updatedAt
+
+### Wallet
+- playerId
+- gold
+- diamond
+- updatedAt
+
+### TransactionLog
+- playerId
+- currencyType
+- amount
+- direction
+- source
+- sourceRef
+- balanceAfter
+- createdAt
+- operator
+
+### GameProgress
+- playerId
+- level
+- exp
+- flags
+- updatedAt
+
+### AdminActionLog
+- adminId
+- targetPlayerId
+- actionType
+- payload
+- createdAt
+
+## 5. 技術分層
+
+- src/domain：資料模型與領域規則
+- src/services：玩家、錢包、獎勵、進度等商業邏輯
+- src/repositories/interfaces：資料存取介面
+- src/adapters/json：JSON 儲存實作
+- src/adapters/mongo：MongoDB 儲存實作
+- src/bot：Discord 指令與互動入口
+- src/api：後台與共用 API
+- src/shared：錯誤格式、回應格式、檢查工具
+
+## 6. 7 天 MVP 計畫
+
+### Day 1 - 契約凍結
+- 定義資料模型、回傳格式、錯誤碼、目錄規則
+- 完成 config 契約與環境變數設計
+- 建立模組骨架
+
+### Day 2 - Repository 與 JSON 基線
+- 完成 repository interface
+- 完成 JSON adapter
+- 驗證玩家建立與錢包初始化流程
+
+### Day 3 - 服務層
+- 完成 PlayerService、WalletService、RewardService
+- 確保金幣/鑽石異動一定留下交易紀錄
+
+### Day 4 - Mongo Adapter
+- 連接 MongoDB 線上版
+- 完成與 JSON 相同的儲存行為
+- 驗證雙模式回傳一致
+
+### Day 5 - Discord MVP
+- 新增管理員發布玩家面板能力
+- 玩家透過聊天室按鈕完成建立、查詢、測試互動
+- 完成一般玩家與管理員權限分流
+
+### Day 6 - 後台 API / Web
+- 建立玩家查詢、錢包調整、獎勵發放、審計查詢 API
+- 建立 Web 後台設定頁，管理白名單與 Discord 版位
+- 統一 response envelope
+
+### Day 7 - 驗證與封板
+- JSON/Mongo 一致性驗證
+- Discord/API 交叉驗證
+- 文件更新與檢查腳本封板
+
+## 7. 驗收標準
+
+- Discord 可建立玩家並查詢錢包
+- 金幣與鑽石可透過服務層安全增減
+- 每次資產變動都有交易紀錄
+- 管理員高權限操作有審計紀錄
+- JSON 與 Mongo 模式可切換且回傳格式一致
+- 任一檔案超過 400 行時，檢查流程失敗
+
+## 8. 工程治理
+
+- 單檔 320 行預警，400 行阻擋
+- 指令層不可直接寫資料庫
+- API 層不可直接實作遊戲規則
+- 所有業務規則集中在 services
+- 所有儲存切換集中在 adapters
+
+## 9. 下一步
+
+1. 完成 config、env、scripts 改造
+2. 建立 domain / services / repositories / adapters / shared 骨架
+3. 先做 JSON adapter 與基本玩家/錢包服務
+4. 再接 MongoDB 正式儲存
