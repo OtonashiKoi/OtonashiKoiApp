@@ -16,7 +16,8 @@ module.exports = {
     adminRoleIds: parseCsv(process.env.ADMIN_ROLE_IDS),
     adminUserIds: parseCsv(process.env.ADMIN_USER_IDS),
     playerRoleIds: parseCsv(process.env.PLAYER_ROLE_IDS),
-    playerUserIds: parseCsv(process.env.PLAYER_USER_IDS)
+    playerUserIds: parseCsv(process.env.PLAYER_USER_IDS),
+    personalRoomChannelId: process.env.PERSONAL_ROOM_CHANNEL_ID || ""
   },
   api: {
     port: Number(process.env.API_PORT || 5566),

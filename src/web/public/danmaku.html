@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OneComme 彈幕顏色強化版</title>
+  <style>
+    html, body {
+      background: transparent;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #danmaku {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* 基礎樣式 */
+    .comment {
+      position: absolute;
+      left: 100vw;
+      white-space: nowrap;
+      font-size: 3.8vw; 
+      color: #ffffff !important; /* 預設白色 */
+      -webkit-text-stroke: 1.8px #000000; 
+      text-shadow: 0 0 10px #000, 0 0 3px #000, 4px 4px 6px rgba(0,0,0,0.8);
+      font-family: 'Helvetica Neue', 'Arial', 'Microsoft JhengHei', sans-serif;
+      font-weight: 900; 
+      animation: moveLeft 12s linear forwards; 
+      display: flex;
+      align-items: center;
+    }
+
+    /* --- 強制變色邏輯 --- */
+/* --- YouTube 會員：薄荷嫩綠 --- */
+/* 這種綠色比原生綠更有質感，看起來像薄荷糖，清新且清晰 */
+.comment.yt-member {
+  color: #50fa7b !important; 
+  text-shadow: 0 0 10px rgba(80, 250, 123, 0.5), 0 0 2px #000, 3px 3px 5px #000;
+}
+
+/* --- Twitch 訂閱者：暖陽金黃 --- */
+/* 帶一點橘色調的黃，避開死黃色，看起來更像高級訂閱的「金卡」感 */
+.comment.tw-sub {
+  color: #ffb86c !important; /* 或是使用 #f1fa8c (淡奶油黃) */
+  text-shadow: 0 0 10px rgba(255, 184, 108, 0.5), 0 0 2px #000, 3px 3px 5px #000;
+}
+
+/* --- 一般觀眾：珍珠白 --- */
+.comment {
+  color: #f8f8f2 !important; 
+  -webkit-text-stroke: 1.5px #000000;
+}
+
+    .comment img {
+      height: 1.3em;
+      width: auto;
+      vertical-align: middle;
+      margin: 0 6px;
+      display: inline-block;
+      filter: drop-shadow(0 0 2px black);
+    }
+
+    @keyframes moveLeft {
+      from { transform: translateX(0); }
+      to { transform: translateX(-350vw); } 
+    }
+  </style>
+</head>
+<body>
+  <div id="danmaku"></div>
+
+  <script>
+    const ws = new WebSocket('ws://127.0.0.1:11180/sub');
+    const danmakuContainer = document.getElementById('danmaku');
+    let currentRow = 0;
+    const maxRows = 10;
+
+// 請替換 HTML 檔案中 <script> 標籤內的 ws.onmessage 部分
+ws.onmessage = (event) => {
+  try {
+    const payload = JSON.parse(event.data);
+    if (payload.type === 'comments' && payload.data?.comments) {
+      payload.data.comments.forEach(c => {
+        const d = c.data;
+        if (d && d.comment) {
+          let statusClass = '';
+
+          // --- 核心修正：直接判定 ---
+          
+          // 1. 判定 YouTube 會員 (根據你提供的 Log，isMember 確定為 true)
+          if (d.isMember === true) {
+             statusClass = 'yt-member';
+          } 
+          
+          // 2. 判定 Twitch 訂閱 (Twitch 專屬欄位判定)
+          if (d.isSubscriber === true) {
+             statusClass = 'tw-sub';
+          }
+
+          // 3. 額外保險：從 badges 的文字內容判定 (防止欄位失效)
+          if (d.badges && d.badges.some(b => b.label && (b.label.includes('會員') || b.label.includes('Member')))) {
+             statusClass = 'yt-member';
+          }
+          if (d.badges && d.badges.some(b => b.label && (b.label.includes('訂閱') || b.label.includes('Subscriber')))) {
+             statusClass = 'tw-sub';
+          }
+
+          showDanmaku(d.comment, statusClass);
+        }
+      });
+    }
+  } catch (e) {
+    console.error('解析錯誤:', e);
+  }
+};
+    function showDanmaku(content, statusClass) {
+      const el = document.createElement('div');
+      // 組合 class
+      el.className = 'comment' + (statusClass ? ' ' + statusClass : '');
+      
+      const trackHeight = 100 / (maxRows + 1);
+      el.style.top = `${(currentRow % maxRows) * trackHeight + 5}vh`;
+      currentRow++;
+
+      el.innerHTML = content; 
+      danmakuContainer.appendChild(el);
+      el.addEventListener('animationend', () => el.remove());
+    }
+
+    ws.onclose = () => setTimeout(() => location.reload(), 5000);
+  </script>
+</body>
+</html>

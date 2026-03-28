@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton } = require("./playerPanel");
 const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
-const { serviceContext } = require("./runtimeContext");
+const { serviceContext, getBotClient } = require("./runtimeContext");
 const { isAppError } = require("../shared/errors");
 
 const definitions = [
@@ -14,6 +14,12 @@ const definitions = [
   new SlashCommandBuilder()
     .setName("發布玩家面板")
     .setDescription("管理員在目前聊天室發布玩家按鈕面板"),
+  new SlashCommandBuilder()
+    .setName("發布個人房間面板")
+    .setDescription("管理員在目前聊天室發布個人房間面板並鎖定頻道（僅顯示按鈕介面）"),
+  new SlashCommandBuilder()
+    .setName("解鎖個人房間面板")
+    .setDescription("管理員解除目前聊天室的個人房間鎖定並還原權限"),
   new SlashCommandBuilder()
     .setName("發布玩家查詢")
     .setDescription("管理員發布玩家資訊查詢面板"),
@@ -129,6 +135,144 @@ async function handleCommand(interaction) {
       content: "✅ 玩家面板已發布到目前聊天室。",
       flags: MessageFlags.Ephemeral
     });
+    return;
+  }
+
+  if (interaction.commandName === "發布個人房間面板") {
+    if (!(await isAdmin(interaction))) {
+      await interaction.reply({
+        content: "❌ 你沒有管理員權限。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    if (!interaction.channel || !interaction.guild) {
+      await interaction.reply({
+        content: "❌ 目前找不到可發布面板的聊天室。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    try {
+      const sent = await interaction.channel.send(createPlayerPanelMessage());
+      try {
+        await sent.pin().catch(() => {});
+      } catch (e) {
+        // ignore pin errors
+      }
+
+      // apply permission overwrites: deny send for @everyone, allow for admin roles and bot
+      const access = await serviceContext.accessControlService.getAccessControl();
+      const adminRoleIds = access.discord.adminRoleIds || [];
+      const guild = interaction.guild;
+
+      try {
+        await interaction.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
+      } catch (err) {
+        // permission failed
+        await interaction.reply({
+          content: "⚠️ 無法修改頻道權限：請確認機器人具有管理頻道的權限。",
+          flags: MessageFlags.Ephemeral
+        });
+        return;
+      }
+
+      for (const roleId of adminRoleIds) {
+        try {
+          await interaction.channel.permissionOverwrites.edit(roleId, { SendMessages: true });
+        } catch (e) {
+          // ignore per-role errors
+        }
+      }
+
+      const client = getBotClient();
+      if (client?.user?.id) {
+        try {
+          await interaction.channel.permissionOverwrites.edit(client.user.id, { SendMessages: true });
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      await interaction.reply({
+        content: "✅ 個人房間面板已發布並鎖定頻道。非管理員將無法發言，玩家請使用按鈕查看個人資訊（回覆為私人顯示）。",
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      await interaction.reply({
+        content: "❌ 發布失敗，請稍後再試。",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    return;
+  }
+
+  if (interaction.commandName === "解鎖個人房間面板") {
+    if (!(await isAdmin(interaction))) {
+      await interaction.reply({
+        content: "❌ 你沒有管理員權限。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    if (!interaction.channel || !interaction.guild) {
+      await interaction.reply({
+        content: "❌ 目前找不到要解鎖的聊天室。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    try {
+      const access = await serviceContext.accessControlService.getAccessControl();
+      const adminRoleIds = access.discord.adminRoleIds || [];
+      const guild = interaction.guild;
+
+      // remove @everyone overwrite
+      try {
+        await interaction.channel.permissionOverwrites.delete(guild.roles.everyone).catch(() => {});
+      } catch (e) {
+        // ignore
+      }
+
+      for (const roleId of adminRoleIds) {
+        try {
+          await interaction.channel.permissionOverwrites.delete(roleId).catch(() => {});
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // unpin bot-pinned messages in this channel
+      try {
+        const client = getBotClient();
+        if (client?.user?.id) {
+          const pinned = await interaction.channel.messages.fetchPinned();
+          for (const msg of pinned.values()) {
+            if (msg.author?.id === client.user.id) {
+              try { await msg.unpin().catch(() => {}); } catch (_) {}
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      await interaction.reply({
+        content: "✅ 已解除個人房間鎖定並盡可能還原權限。",
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      await interaction.reply({
+        content: "❌ 解鎖失敗，請稍後再試。",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
     return;
   }
 
