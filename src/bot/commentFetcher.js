@@ -1,50 +1,59 @@
-const WebSocket = require('ws');
+// OneComme WebSocket 連線器
+// 連接 OneComme 並將留言推播到外部 onComment 回呼
+// ------------------------------------------------
 
-const ONECOMME_WS_URL = 'ws://127.0.0.1:11180/sub'; // 嘗試使用 /sub
+const WebSocket = require("ws");
 
-function startFetcher() {
-  console.log('[OneComme] 正在嘗試連線至:', ONECOMME_WS_URL);
-  
+const ONECOMME_WS_URL = "ws://127.0.0.1:11180/sub";
+const RECONNECT_DELAY_MS = 5000;
+
+/**
+ * 啟動 OneComme WebSocket 監聽
+ * @param {(comment: {name: string, text: string, service: string, raw: object}) => void} onComment
+ */
+function startFetcher(onComment) {
+  console.log("[OneComme] 嘗試連線至：", ONECOMME_WS_URL);
+
   const ws = new WebSocket(ONECOMME_WS_URL);
 
-  ws.on('open', () => {
-    console.log('[OneComme] 🟢 連線成功！正在等待留言推播...');
+  ws.on("open", () => {
+    console.log("[OneComme] 🟢 連線成功，開始監聽留言...");
   });
 
-ws.on('message', (rawData) => {
+  ws.on("message", (rawData) => {
     try {
       const payload = JSON.parse(rawData);
-      
-      if (payload.type === 'comments' && payload.data && Array.isArray(payload.data.comments)) {
-        payload.data.comments.forEach(c => {
-          // 根據你提供的資料結構：c.data 直接包含了所有資訊
-          const d = c.data; 
-          
-          if (d) {
-            const name = d.displayName || d.name || '未知用戶';
-            const text = d.comment || ''; // 這裡 d.comment 直接就是字串
 
-            // 如果是 V-tuber 身份 (音無戀 / Kotona) 想要做特殊反應，可以在這加判斷
-            // if (text.includes('草')) console.log('>>> 偵測到笑聲');
+      if (payload.type === "comments" && Array.isArray(payload.data?.comments)) {
+        for (const c of payload.data.comments) {
+          const d = c.data;
+          if (!d) continue;
+
+          const comment = {
+            name: d.displayName || d.name || "未知用戶",
+            text: d.comment || "",
+            service: d.service || "unknown",
+            raw: d
+          };
+
+          if (typeof onComment === "function") {
+            onComment(comment);
           }
-        });
+        }
       }
-    } catch (err) {
+    } catch (_) {
       // 忽略心跳包或格式錯誤
     }
   });
 
-  ws.on('error', (err) => {
-    console.error('[OneComme] 🔴 連線錯誤:', err.message);
-    if (err.message.includes('404')) {
-        console.log('提示: 請檢查 OneComme 軟體內的 "WebSocket URL" 到底是什麼路徑。');
-    }
+  ws.on("error", (err) => {
+    console.error("[OneComme] 🔴 連線錯誤：", err.message);
   });
 
-  ws.on('close', () => {
-    console.log('[OneComme] 🟡 連線中斷，5 秒後嘗試重連...');
-    setTimeout(startFetcher, 5000);
+  ws.on("close", () => {
+    console.log(`[OneComme] 🟡 連線中斷，${RECONNECT_DELAY_MS / 1000} 秒後重連...`);
+    setTimeout(() => startFetcher(onComment), RECONNECT_DELAY_MS);
   });
 }
 
-startFetcher();
+module.exports = { startFetcher };
