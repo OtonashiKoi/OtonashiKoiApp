@@ -50,15 +50,23 @@ async function handleProfile(interaction) {
     interaction.user.username
   );
 
+  const p = result.progress;
+  const attrs = p.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+  
   await interaction.reply({
     content:
-      `🧾 玩家資料\n` +
-      `玩家：${result.player.displayName}\n` +
-      `狀態：${result.player.status}\n` +
-      `等級：${result.progress.level}\n` +
-      `經驗：${result.progress.exp}\n` +
-      `金幣：${result.wallet.gold}\n` +
-      `鑽石：${result.wallet.diamond}`,
+      `🧾 **${result.player.displayName} 的冒險者履歷**\n` +
+      `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})\n` +
+      `等級：Base ${p.level} (EXP: ${p.exp})\n` +
+      `==============\n` +
+      `【基本素質】\n` +
+      `STR: ${attrs.str} | AGI: ${attrs.agi} | VIT: ${attrs.vit}\n` +
+      `INT: ${attrs.int} | DEX: ${attrs.dex} | LUK: ${attrs.luk}\n` +
+      `剩餘點數 (Status Pt): ${p.statusPoints || 0}\n` +
+      `==============\n` +
+      `【資產】\n` +
+      `💰 金幣: ${result.wallet.gold}\n` +
+      `💎 鑽石: ${result.wallet.diamond}`,
     flags: MessageFlags.Ephemeral
   });
 }

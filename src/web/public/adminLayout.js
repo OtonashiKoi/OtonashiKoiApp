@@ -14,12 +14,15 @@ function createRoleChecklist(container, roles, selectedIds) {
 
     const swatch = document.createElement("span");
     swatch.className = "role-swatch";
-    swatch.style.background = role.color === "#000000" ? "#7c6f64" : role.color;
+    swatch.style.background = (role.color === "#000000" || !role.color) ? "#CBD5E1" : role.color;
 
-    const text = document.createElement("span");
-    text.textContent = `${role.name} (${role.id})`;
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = role.name;
 
-    item.append(checkbox, swatch, text);
+    const idSmall = document.createElement("small");
+    idSmall.textContent = role.id;
+
+    item.append(checkbox, swatch, nameSpan, idSmall);
     container.appendChild(item);
   }
 }

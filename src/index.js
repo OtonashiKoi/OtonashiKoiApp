@@ -29,6 +29,8 @@ async function bootstrap() {
   const app = createApiServer();
   app.listen(config.api.port, () => {
     console.log(`[API] listening on port ${config.api.port}`);
+    // 啟動時自動顯示管理後台網址
+    console.log(`[管理後台網址] http://localhost:${config.api.port}/admin`);
   });
 }
 

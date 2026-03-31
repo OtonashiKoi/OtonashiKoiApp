@@ -156,6 +156,20 @@ function createAdminPlayerRoutes(serviceContext) {
     }
   });
 
+  router.post("/admin/players/:discordId/allocate-attribute", async (req, res, next) => {
+    try {
+      const { attribute, amount = 1 } = req.body;
+      const result = await serviceContext.progressService.allocateAttribute({
+        discordId: req.params.discordId,
+        attribute,
+        amount
+      });
+      res.json(ok(result, "attribute allocated"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/admin/audit-logs", async (req, res, next) => {
     try {
       const limit = Number(req.query.limit || 20);

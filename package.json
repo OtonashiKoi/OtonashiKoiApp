@@ -13,7 +13,7 @@
     "discord:register": "node src/bot/registerOnly.js",
     "discord:test": "node src/index.js",
     "check": "node scripts/check-syntax.js ; node scripts/check-line-limit.js",
-    "pm2:start": "npx pm2 start ecosystem.config.cjs --only equipmentGAME",
+    "pm2:start": "npx pm2 start ecosystem.config.cjs",
     "pm2:restart": "npx pm2 restart equipmentGAME --update-env",
     "pm2:reset": "node scripts/pm2-reset.js",
     "pm2:stop": "npx pm2 stop equipmentGAME",

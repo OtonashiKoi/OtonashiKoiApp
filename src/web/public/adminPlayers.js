@@ -39,6 +39,54 @@ function togglePlayerDetail(hasSelection) {
   if (playerDetailView) playerDetailView.classList.toggle("hidden", !hasSelection);
 }
 
+function renderAttributes(progress, discordId, state) {
+  const container = document.getElementById("attributes-grid");
+  const pointsEl = document.getElementById("player-status-points");
+  if (!container || !pointsEl) return;
+
+  pointsEl.textContent = progress.statusPoints || 0;
+  container.innerHTML = "";
+
+  const attrs = [
+    { key: "str", label: "力量 (STR)" },
+    { key: "agi", label: "敏捷 (AGI)" },
+    { key: "vit", label: "體力 (VIT)" },
+    { key: "int", label: "智力 (INT)" },
+    { key: "dex", label: "靈巧 (DEX)" },
+    { key: "luk", label: "幸運 (LUK)" }
+  ];
+
+  for (const attr of attrs) {
+    const val = (progress.attributes && progress.attributes[attr.key]) || 1;
+    const row = document.createElement("div");
+    row.className = "attribute-row";
+    row.innerHTML = `
+      <div class="attr-info">
+        <span class="attr-label">${attr.label}</span>
+        <span class="attr-value">${val}</span>
+      </div>
+      <div class="attr-actions">
+        <button class="btn-attr plus" data-attr="${attr.key}" ${progress.statusPoints <= 0 ? "disabled" : ""}>+</button>
+      </div>
+    `;
+    
+    const plusBtn = row.querySelector(".plus");
+    plusBtn.addEventListener("click", async () => {
+      try {
+        await request(`/admin/players/${encodeURIComponent(discordId)}/allocate-attribute`, {
+          method: "POST",
+          body: JSON.stringify({ attribute: attr.key, amount: 1 })
+        });
+        await loadPlayerDetail(discordId, state);
+      } catch (err) {
+        log(`分配屬性失敗：${err.message}`);
+      }
+    });
+
+    container.appendChild(row);
+  }
+}
+
 function renderPlayerDetail(data, state) {
   state.selectedPlayerData = data;
   togglePlayerDetail(true);
@@ -47,14 +95,20 @@ function renderPlayerDetail(data, state) {
   document.getElementById("player-name-heading").textContent = data.player.displayName || "unknown";
   document.getElementById("player-id-line").textContent = `Discord ID: ${data.player.discordId}`;
   document.getElementById("player-status-badge").textContent = data.player.status || "unknown";
-  document.getElementById("player-level-value").textContent = data.progress.level;
-  document.getElementById("player-exp-value").textContent = data.progress.exp;
+  
+  document.getElementById("player-level-value").textContent = `${data.progress.level} / ${data.progress.jobLevel || 1}`;
+  document.getElementById("player-job-value").textContent = data.progress.job || "Novice";
+  document.getElementById("player-exp-value").textContent = `${data.progress.exp}`;
+  
   document.getElementById("player-gold-value").textContent = data.wallet.gold;
   document.getElementById("player-diamond-value").textContent = data.wallet.diamond;
+  
   document.getElementById("player-created-at").textContent = formatDateTime(data.player.createdAt);
   document.getElementById("player-updated-at").textContent = formatDateTime(data.player.updatedAt);
   document.getElementById("player-wallet-updated-at").textContent = formatDateTime(data.wallet.updatedAt);
   document.getElementById("player-progress-updated-at").textContent = formatDateTime(data.progress.updatedAt);
+  
+  renderAttributes(data.progress, data.player.discordId, state);
   renderTransactions(data.transactions);
 }
 

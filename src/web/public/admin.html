@@ -3,8 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#FFFFFF" />
     <title>Equipment Game Admin</title>
-    <link rel="stylesheet" href="/static/admin.css?v=2" />
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="/static/admin.css?v=3" />
   </head>
   <body>
     <div class="game-window">
@@ -22,13 +29,6 @@
         <p class="lede">
           集中設定 Discord 版位、玩家白名單與管理員白名單，不再依賴聊天室指令操作後台。
         </p>
-        <div class="hero-card">
-          <div>
-            <span class="hero-label">當前目標</span>
-            <strong>版位對功能</strong>
-          </div>
-          <p>指定哪個頻道負責玩家面板、審計資訊與後續管理功能。</p>
-        </div>
 
         <nav class="sidebar-nav" aria-label="後台功能導覽">
           <p class="nav-title">分類導覽</p>
@@ -38,6 +38,14 @@
           <button class="nav-link" data-target="section-players">玩家管理</button>
           <button class="nav-link" data-target="section-log">系統操作紀錄</button>
         </nav>
+
+        <div class="hero-card">
+          <div>
+            <span class="hero-label">當前目標</span>
+            <strong>版位對功能</strong>
+          </div>
+          <p>指定哪個頻道負責玩家面板、審計資訊與後續管理功能。</p>
+        </div>
       </aside>
 
       <main class="panel">
@@ -148,11 +156,12 @@
 
                 <div class="player-stats-grid">
                   <article class="stat-card">
-                    <span>等級</span>
+                    <span>等級 / 職業階級</span>
                     <strong id="player-level-value">0</strong>
+                    <small id="player-job-value">Novice</small>
                   </article>
                   <article class="stat-card">
-                    <span>經驗</span>
+                    <span>經驗 / 職業經驗</span>
                     <strong id="player-exp-value">0</strong>
                   </article>
                   <article class="stat-card">
@@ -166,6 +175,15 @@
                 </div>
 
                 <div class="player-management-grid">
+                  <article class="detail-card">
+                    <h4>屬性配點 (RO Status)</h4>
+                    <div class="status-points-info">
+                      <span>剩餘點數：<strong id="player-status-points">0</strong></span>
+                    </div>
+                    <div id="attributes-grid" class="attributes-grid">
+                      <!-- STR, AGI, VIT, INT, DEX, LUK will be rendered here -->
+                    </div>
+                  </article>
                   <article class="detail-card">
                     <h4>帳號資訊</h4>
                     <dl class="detail-list">
