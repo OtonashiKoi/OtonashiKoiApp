@@ -46,27 +46,25 @@ async function handleCheckin(comment) {
     // 取得 guild member 並檢查是否有玩家角色
     try {
       const client = getBotClient();
-      if (!client || !client.isReady()) {
-        console.log("[Stream] Bot 未就緒，無法檢查 Discord 角色，略過發獎。");
-        return;
-      }
+      // 如果 bot 與 guild 設定存在則檢查身分組；否則記錄警告並繼續發獎
+      let performRoleCheck = false;
+      if (client && client.isReady() && config.discord.guildId) performRoleCheck = true;
 
-      if (!config.discord.guildId) {
-        console.log("[Stream] 未設定 DISCORD_GUILD_ID，無法檢查成員角色，略過發獎。");
-        return;
-      }
+      if (performRoleCheck) {
+        const guild = await client.guilds.fetch(config.discord.guildId);
+        const member = await guild.members.fetch(discordId).catch(() => null);
+        if (!member) {
+          console.log(`[Stream] 找不到 guild member (id=${discordId})，略過發獎。`);
+          return;
+        }
 
-      const guild = await client.guilds.fetch(config.discord.guildId);
-      const member = await guild.members.fetch(discordId).catch(() => null);
-      if (!member) {
-        console.log(`[Stream] 找不到 guild member (id=${discordId})，略過發獎。`);
-        return;
-      }
-
-      const allowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(member);
-      if (!allowed) {
-        console.log(`[Stream] ${displayName} 並非設定的玩家身分組成員，略過發獎。`);
-        return;
+        const allowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(member);
+        if (!allowed) {
+          console.log(`[Stream] ${displayName} 並非設定的玩家身分組成員，略過發獎。`);
+          return;
+        }
+      } else {
+        console.log('[Stream] Bot 未就緒或未設定 guildId，跳過 Discord 身分組檢查，將繼續發獎（請留意風險）。');
       }
 
       const result = await serviceContext.checkinService.handleMessage({
@@ -83,7 +81,15 @@ async function handleCheckin(comment) {
         // 回覆到直播聊天室
         try {
           const { sendComment } = require("../onecommeSender");
-          const sendRes = await sendComment({ service: comment.service || "stream", displayName, comment: `${displayName} 打卡成功` });
+          // 決定回覆要用的 service（嘗試偵測 yt / twitch，fallback 為原始 service）
+          const svc = (comment.service || "").toLowerCase();
+          const nameTag = (comment.raw && comment.raw.name) || "";
+          const nt = String(nameTag).toLowerCase();
+          let targetService = comment.service || "stream";
+          if (svc.includes("youtube") || svc.includes("yt") || nt.includes("#yt")) targetService = "yt";
+          else if (svc.includes("twitch") || nt.includes("#twitch") || svc.includes("tw")) targetService = "twitch";
+
+          const sendRes = await sendComment({ service: targetService, displayName, comment: `${displayName} 打卡成功` });
           if (!sendRes.ok) console.warn(`[Stream] 回覆直播留言失敗：${sendRes.error}`);
         } catch (e) {
           console.warn("[Stream] 無法回覆直播留言：", e && e.message ? e.message : e);
@@ -119,15 +125,18 @@ async function handleStreamComment(comment) {
   console.log(`[Stream] 💬 ${comment.service} | ${comment.name}：${comment.text}`);
 
   // 指令偵測
-  const textLower = comment.text.trim().toLowerCase();
-  if (matchCommand(comment.text, STREAM_COMMANDS.CHECKIN)) {
+  const rawText = comment.text || "";
+  const text = rawText.trim();
+  const stripped = text.replace(/^!+/, "");
+  const textLower = stripped.toLowerCase();
+  if (matchCommand(stripped, STREAM_COMMANDS.CHECKIN) || textLower === "打卡") {
     await handleCheckin(comment).catch((err) =>
       console.error("[Stream] 打卡處理失敗：", err.message)
     );
     return;
   }
 
-  if (matchCommand(comment.text, STREAM_COMMANDS.QUERY)) {
+  if (matchCommand(stripped, STREAM_COMMANDS.QUERY)) {
     await handleQuery(comment).catch((err) =>
       console.error("[Stream] 查詢處理失敗：", err.message)
     );
