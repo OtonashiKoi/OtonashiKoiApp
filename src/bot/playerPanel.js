@@ -2,6 +2,7 @@ const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBu
 const path = require("path");
 const fs = require("fs");
 const { BUTTON_IDS, createPlayerPanelMessage } = require("./playerPanelView");
+const { createCode } = require("./bindingStore");
 
 const AUTO_DELETE_MS = 60_000;
 
@@ -168,6 +169,17 @@ function buildBackpackMessage(inventory, prefixMsg) {
   return { content: header + `🎒 **背包**\n\n${lines}`, components: rows };
 }
 
+async function handleBind(interaction) {
+  const code = createCode(interaction.user.id);
+  await replyAndAutoDelete(interaction,
+    `🔗 **直播帳號綁定**\n\n` +
+    `你的綁定碼是：\`\`\`${code}\`\`\`\n` +
+    `請在 **10 分鐘內**到直播聊天室（YT / Twitch）輸入：\n` +
+    `**!綁定 ${code}**\n\n` +
+    `綁定後，打卡就會自動識別你的直播帳號。`
+  );
+}
+
 async function handleBackpack(interaction) {
   const serviceContext = getServiceContext();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
@@ -271,6 +283,11 @@ async function handleButton(interaction) {
 
   if (id === BUTTON_IDS.backpack) {
     await handleBackpack(interaction);
+    return;
+  }
+
+  if (id === BUTTON_IDS.bindStream) {
+    await handleBind(interaction);
     return;
   }
 }

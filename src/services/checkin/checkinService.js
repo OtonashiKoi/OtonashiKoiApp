@@ -10,9 +10,13 @@ class CheckinService {
 
   async isSameDay(a, b) {
     if (!a || !b) return false;
-    const da = new Date(a).toISOString().slice(0, 10);
-    const db = new Date(b).toISOString().slice(0, 10);
-    return da === db;
+    // 以台灣時間（UTC+8）判定「同一天」
+    const toTWDate = (iso) => {
+      const d = new Date(iso);
+      d.setMinutes(d.getMinutes() + d.getTimezoneOffset() + 480); // +480 = UTC+8
+      return d.toISOString().slice(0, 10);
+    };
+    return toTWDate(a) === toTWDate(b);
   }
 
   async handleMessage({ discordId, displayName, channelId, messageId, content, occurredAt }) {

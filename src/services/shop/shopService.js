@@ -71,7 +71,7 @@ class ShopService {
       updated.imageUrl = libraryItem.imageUrl || null;
       updated.imageThumbnailUrl = libraryItem.imageThumbnailUrl || null;
     }
-    if (fields.price !== undefined) updated.price = Math.max(1, Number(fields.price) || 1);
+    if (fields.price !== undefined) updated.price = Math.max(0, Number(fields.price) || 0);
     if (fields.currency !== undefined && ["gold", "diamond"].includes(fields.currency)) updated.currency = fields.currency;
     if (fields.stock !== undefined) updated.stock = Number(fields.stock) === -1 ? -1 : Math.max(0, Number(fields.stock) || 0);
     if (fields.enabled !== undefined) updated.enabled = Boolean(fields.enabled);

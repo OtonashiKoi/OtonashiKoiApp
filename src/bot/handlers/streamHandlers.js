@@ -5,6 +5,7 @@
 const { serviceContext, getBotClient } = require("../runtimeContext");
 const config = require("../../config");
 const { sendComment } = require("../onecommeSender");
+const { consumeCode } = require("../bindingStore");
 
 // 可自訂偵測的指令關鍵字
 const STREAM_COMMANDS = {
@@ -54,13 +55,18 @@ async function handleCheckin(comment) {
       matched = await serviceContext.playerRepository.findByExternalId(platform, platformUserId);
     }
 
-    // 2. 找不到則退回 displayName 比對
+    // 2. 找不到則退回 displayName 或 streamAliases 比對
     if (!matched) {
       const players = await serviceContext.playerRepository.listAll();
-      matched = players.find((p) => p.displayName && p.displayName.toLowerCase() === displayName.toLowerCase()) || null;
+      const nameLower = displayName.toLowerCase();
+      matched = players.find((p) => {
+        if (p.displayName && p.displayName.toLowerCase() === nameLower) return true;
+        if (Array.isArray(p.streamAliases) && p.streamAliases.some((a) => a.toLowerCase() === nameLower)) return true;
+        return false;
+      }) || null;
 
       // 3. 找到後自動綁定 platformUserId（供下次直接比對）
-      if (matched && platformUserId) {
+      if (matched && platformUserId && platform !== "unknown") {
         const existing = matched.externalIds || {};
         if (!existing[platform]) {
           matched.externalIds = { ...existing, [platform]: platformUserId };
@@ -140,6 +146,51 @@ async function handleCheckin(comment) {
 }
 
 /**
+ * 處理 !綁定 CODE 指令
+ */
+async function handleStreamBind(comment) {
+  const rawCode = comment.text.replace(/^!+/, "").replace(/^綁定\s+/i, "").trim();
+  const displayName = comment.name;
+  const platformUserId = comment.userId || "";
+  const platform = normalizePlatform(comment.service, platformUserId);
+  console.log(`[Stream] 🔗 綁定請求 | ${comment.service} | ${displayName} | code:${rawCode}`);
+
+  const targetService = platform === "youtube" ? "yt" : platform === "twitch" ? "twitch" : comment.service;
+
+  const discordId = consumeCode(rawCode);
+  if (!discordId) {
+    try { await sendComment({ service: targetService, displayName, comment: `${displayName} 綁定碼無效或已過期，請重新在 Discord 取得綁定碼。` }); } catch { /* ignore */ }
+    return;
+  }
+
+  const player = await serviceContext.playerRepository.findByDiscordId(discordId);
+  if (!player) {
+    try { await sendComment({ service: targetService, displayName, comment: `${displayName} 找不到對應的玩家資料。` }); } catch { /* ignore */ }
+    return;
+  }
+
+  // 儲存 externalIds（有 userId 才存）
+  const externalIds = { ...player.externalIds || {} };
+  if (platformUserId && platform !== "unknown") {
+    externalIds[platform] = platformUserId;
+  }
+
+  // 儲存 streamAliases（displayName 別名，供 unknown 平台比對使用）
+  const aliases = new Set(player.streamAliases || []);
+  aliases.add(displayName);
+
+  player.externalIds = externalIds;
+  player.streamAliases = [...aliases];
+  player.updatedAt = new Date().toISOString();
+  await serviceContext.playerRepository.save(player);
+
+  console.log(`[Stream] ✅ 綁定成功 ${displayName} (${platform}:${platformUserId || "無userId"}) ↔ discordId:${discordId}`);
+  try {
+    await sendComment({ service: targetService, displayName, comment: `${displayName} 帳號綁定成功！之後打卡就能自動識別囉 🎉` });
+  } catch { /* ignore */ }
+}
+
+/**
  * 處理資料查詢指令（留言間接觸發）
  * @param {{ name: string, text: string, service: string }} comment
  */
@@ -163,6 +214,15 @@ async function handleStreamComment(comment) {
   const text = rawText.trim();
   const stripped = text.replace(/^!+/, "");
   const textLower = stripped.toLowerCase();
+
+  // 綁定指令：!綁定 CODE
+  if (textLower.startsWith("綁定 ") || textLower.startsWith("綁定\t")) {
+    await handleStreamBind(comment).catch((err) =>
+      console.error("[Stream] 綁定處理失敗：", err.message)
+    );
+    return;
+  }
+
   if (matchCommand(stripped, STREAM_COMMANDS.CHECKIN) || textLower === "打卡") {
     await handleCheckin(comment).catch((err) =>
       console.error("[Stream] 打卡處理失敗：", err.message)

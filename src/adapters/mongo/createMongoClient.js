@@ -13,7 +13,10 @@ async function ensureIndexes(db) {
     db.collection("wallets").createIndex({ playerId: 1 }, { unique: true }),
     db.collection("progress").createIndex({ playerId: 1 }, { unique: true }),
     db.collection("transactions").createIndex({ playerId: 1, createdAt: -1 }),
-    db.collection("adminActionLogs").createIndex({ createdAt: -1 })
+    db.collection("adminActionLogs").createIndex({ createdAt: -1 }),
+    db.collection("checkins").createIndex({ discordId: 1, occurredAt: -1 }),
+    db.collection("shopItems").createIndex({ id: 1 }, { unique: true }),
+    db.collection("items").createIndex({ id: 1 }, { unique: true })
   ]);
 
   indexReady = true;

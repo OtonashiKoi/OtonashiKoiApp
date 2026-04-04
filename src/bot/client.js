@@ -117,10 +117,10 @@ async function setupLockedChannels(client) {
     try {
       const channel = await client.channels.fetch(townBinding.channelId);
       if (channel && channel.isTextBased()) {
-        await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { SendMessages: false, ReadMessageHistory: true });
-        await channel.permissionOverwrites.edit(client.user.id, { SendMessages: true, ReadMessageHistory: true });
+        await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { ViewChannel: false, SendMessages: false, ReadMessageHistory: false });
+        await channel.permissionOverwrites.edit(client.user.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true });
         for (const roleId of [...new Set([...playerRoleIds, ...adminRoleIds])]) {
-          try { await channel.permissionOverwrites.edit(roleId, { SendMessages: true, ReadMessageHistory: true }); } catch (_) {}
+          try { await channel.permissionOverwrites.edit(roleId, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }); } catch (_) {}
         }
         console.log(`[Discord] 聊天大街 ${townBinding.channelId} 已設為玩家可發言`);
       }
