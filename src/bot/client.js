@@ -4,7 +4,7 @@
 const { Client, GatewayIntentBits, Events, MessageFlags } = require("discord.js");
 const config = require("../config");
 const { isAppError } = require("../shared/errors");
-const { handleCommand, handleButton, handleModal } = require("./commands");
+const { handleCommand, handleButton, handleSelectMenu, handleModal } = require("./commands");
 const { serviceContext, setBotClient, getBotClient } = require("./runtimeContext");
 const { startFetcher } = require("./commentFetcher");
 const { handleStreamComment } = require("./handlers/streamHandlers");
@@ -89,29 +89,43 @@ async function setupLockedChannels(client) {
   const layout = await serviceContext.adminConsoleService.getChannelLayout();
   const bindings = layout?.discord?.bindings || [];
 
-  // 只鎖定非聊天大街且有 channelId 的版位
-  const lockIds = bindings
-    .filter((b) => b.enabled && b.channelId && b.featureKey !== "town_chat")
-    .map((b) => b.channelId);
-
-  if (!lockIds.length) return;
-
   const access = await serviceContext.accessControlService.getAccessControl();
   const adminRoleIds = access.discord.adminRoleIds || [];
+  const playerRoleIds = access.discord.playerRoleIds || [];
 
-  for (const channelId of lockIds) {
+  // 鎖定非聊天大街的頻道（只有管理員與 bot 可發言，所有人可讀歷史）
+  const lockBindings = bindings.filter((b) => b.enabled && b.channelId && b.featureKey !== "town_chat");
+  for (const binding of lockBindings) {
     try {
-      const channel = await client.channels.fetch(channelId);
+      const channel = await client.channels.fetch(binding.channelId);
       if (!channel || !channel.isTextBased()) continue;
 
-      await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { SendMessages: false });
-      await channel.permissionOverwrites.edit(client.user.id, { SendMessages: true });
+      await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { SendMessages: false, ReadMessageHistory: true });
+      await channel.permissionOverwrites.edit(client.user.id, { SendMessages: true, ReadMessageHistory: true });
       for (const roleId of adminRoleIds) {
-        try { await channel.permissionOverwrites.edit(roleId, { SendMessages: true }); } catch (_) {}
+        try { await channel.permissionOverwrites.edit(roleId, { SendMessages: true, ReadMessageHistory: true }); } catch (_) {}
       }
-      console.log(`[Discord] 頻道 ${channelId} (${bindings.find(b=>b.channelId===channelId)?.featureKey}) 已設為唯讀`);
+      console.log(`[Discord] 頻道 ${binding.channelId} (${binding.featureKey}) 已設為唯讀`);
     } catch (err) {
-      console.warn(`[Discord] 無法鎖定頻道 ${channelId}：${err.message}`);
+      console.warn(`[Discord] 無法鎖定頻道 ${binding.channelId}：${err.message}`);
+    }
+  }
+
+  // 聊天大街：玩家身分組才能發言，@everyone 禁止發言但可讀歷史
+  const townBinding = bindings.find((b) => b.enabled && b.channelId && b.featureKey === "town_chat");
+  if (townBinding) {
+    try {
+      const channel = await client.channels.fetch(townBinding.channelId);
+      if (channel && channel.isTextBased()) {
+        await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { SendMessages: false, ReadMessageHistory: true });
+        await channel.permissionOverwrites.edit(client.user.id, { SendMessages: true, ReadMessageHistory: true });
+        for (const roleId of [...new Set([...playerRoleIds, ...adminRoleIds])]) {
+          try { await channel.permissionOverwrites.edit(roleId, { SendMessages: true, ReadMessageHistory: true }); } catch (_) {}
+        }
+        console.log(`[Discord] 聊天大街 ${townBinding.channelId} 已設為玩家可發言`);
+      }
+    } catch (err) {
+      console.warn(`[Discord] 無法設定聊天大街 ${townBinding.channelId}：${err.message}`);
     }
   }
 }
@@ -133,6 +147,7 @@ function createBotClient() {
     try {
       if (interaction.isChatInputCommand()) { await handleCommand(interaction); return; }
       if (interaction.isButton()) { await handleButton(interaction); return; }
+      if (interaction.isStringSelectMenu()) { await handleSelectMenu(interaction); return; }
       if (interaction.isModalSubmit()) { await handleModal(interaction); return; }
     } catch (error) {
       console.error("[Discord] command error", error);

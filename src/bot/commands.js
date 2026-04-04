@@ -11,7 +11,7 @@ const {
   handlePublishPersonalRoom,
   handleUnlockPersonalRoom
 } = require("./handlers/publishHandlers");
-const { handleCoinShopButton, isCoinShopButton } = require("./handlers/coinShopHandlers");
+const { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect } = require("./handlers/coinShopHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -134,6 +134,12 @@ async function handleButton(interaction) {
   await handlePlayerQueryButton(interaction);
 }
 
+async function handleSelectMenu(interaction) {
+  if (isCoinShopSelect(interaction.customId)) {
+    await handleShopSelect(interaction);
+  }
+}
+
 async function handleModal(interaction) {
   if (interaction.customId === "player-query-modal") {
     const discordId = interaction.fields.getTextInputValue("player-discord-id").trim();
@@ -183,5 +189,6 @@ module.exports = {
   definitions,
   handleCommand,
   handleButton,
+  handleSelectMenu,
   handleModal
 };

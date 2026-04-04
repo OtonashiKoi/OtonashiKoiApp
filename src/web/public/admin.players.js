@@ -198,7 +198,10 @@
   window.adminPlayers = {
     loadPlayers,
     renderPlayerList,
-    loadPlayerDetail
+    loadPlayerDetail,
+    saveAccessControl,
+    submitCurrencyAction,
+    submitExpAction
   };
 
   // initialize

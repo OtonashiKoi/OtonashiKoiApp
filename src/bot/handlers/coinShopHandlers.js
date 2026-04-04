@@ -4,6 +4,7 @@ const fs = require("fs");
 const {
   SHOP_OPEN_ID,
   SHOP_CANCEL_ID,
+  SHOP_SELECT_ID,
   createShopMainMessage,
   createConfirmMessage
 } = require("../coinShopView");
@@ -86,11 +87,19 @@ async function handleShopConfirm(interaction, itemId) {
   }
 }
 
+async function handleShopSelect(interaction) {
+  const itemId = interaction.values[0];
+  await handleShopBuy(interaction, itemId);
+}
+
 async function handleShopCancel(interaction) {
   // 回到商品列表
   const serviceContext = getServiceContext();
-  const items = await serviceContext.shopService.listItems();
-  const msg = createShopMainMessage(items);
+  const [items, progress] = await Promise.all([
+    serviceContext.shopService.listItems(),
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null)
+  ]);
+  const msg = createShopMainMessage(items, progress);
   await interaction.update({ ...msg, embeds: [], attachments: [] });
 }
 
@@ -111,5 +120,9 @@ function isCoinShopButton(customId) {
   );
 }
 
-module.exports = { handleCoinShopButton, isCoinShopButton };
+function isCoinShopSelect(customId) {
+  return customId === SHOP_SELECT_ID;
+}
+
+module.exports = { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect };
 
