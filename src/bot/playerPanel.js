@@ -170,6 +170,31 @@ function buildBackpackMessage(inventory, prefixMsg) {
 }
 
 async function handleBind(interaction) {
+  const serviceContext = getServiceContext();
+  const player = await serviceContext.playerRepository.findByDiscordId(interaction.user.id);
+
+  const externalIds = player?.externalIds || {};
+  const streamAliases = player?.streamAliases || [];
+
+  const boundLines = [];
+  for (const [platform, uid] of Object.entries(externalIds)) {
+    boundLines.push(`• ${platform}：\`${uid}\``);
+  }
+  for (const alias of streamAliases) {
+    boundLines.push(`• 顯示名稱：\`${alias}\``);
+  }
+
+  if (boundLines.length > 0) {
+    const code = createCode(interaction.user.id);
+    await replyAndAutoDelete(interaction,
+      `🔗 **直播帳號綁定狀態**\n\n` +
+      `✅ 已綁定以下帳號：\n${boundLines.join("\n")}\n\n` +
+      `如需重新綁定，請在直播聊天輸入以下指令：\n` +
+      `**!綁定 ${code}**（10 分鐘內有效）`
+    );
+    return;
+  }
+
   const code = createCode(interaction.user.id);
   await replyAndAutoDelete(interaction,
     `🔗 **直播帳號綁定**\n\n` +
