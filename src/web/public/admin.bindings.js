@@ -87,12 +87,25 @@
         selectedNotInFiltered +
         filteredChannels.map((ch) => `<option value="${ch.id}" ${ch.id === binding.channelId ? "selected" : ""}>#${ch.name}</option>`).join("");
 
+      const publishEndpoint = feature.key === "personal_room"
+        ? "/admin/channel-layout/publish-player-panel"
+        : feature.key === "player_query"
+          ? "/admin/channel-layout/publish-player-query"
+          : feature.key === "coin_shop"
+            ? "/admin/channel-layout/publish-coin-shop"
+            : null;
+
+      const publishBtn = publishEndpoint
+        ? `<button class="button publish-panel-btn" data-publish-endpoint="${publishEndpoint}" title="將按鈕面板發布到已選頻道">📨 發布面板</button>`
+        : "";
+
       wrapper.innerHTML = `
       <header>
         <div>
           <strong>${feature.label}</strong>
           <p>${feature.description}</p>
         </div>
+        <div class="actions">${publishBtn}</div>
       </header>
       <div class="binding-controls">
         <div class="channel-search-mini">
@@ -132,6 +145,25 @@
         state.channelKeywords[feature.key] = searchInput.value;
         updateChannelSelect(feature.key);
       });
+
+      if (publishEndpoint) {
+        const btn = wrapper.querySelector(".publish-panel-btn");
+        btn.addEventListener("click", async () => {
+          const channelId = wrapper.querySelector('[data-field="channelId"]').value;
+          if (!channelId) { log("請先選擇頻道再發布面板"); return; }
+          btn.disabled = true;
+          btn.textContent = "發布中…";
+          try {
+            await request(publishEndpoint, { method: "POST", body: JSON.stringify({ channelId }) });
+            log(`✅ 面板已發布到頻道 ${channelId}`);
+          } catch (err) {
+            log(`❌ 發布失敗：${err.message}`);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = "📨 發布面板";
+          }
+        });
+      }
     }
   }
 
@@ -170,6 +202,10 @@
     state.channelLayout = data.channelLayout;
     state.channels = data.discord.channels;
     state.roles = data.discord.roles;
+    // 同步存入 playerTiers，讓 shop.js 立即可用
+    if (data.playerTiers) {
+      window.playerTiers = data.playerTiers;
+    }
     renderAll();
     elements.connectionState.textContent = `已連線，載入 ${state.channels.length} 個頻道與 ${state.roles.length} 個身分組`;
     log("後台資料已成功載入");

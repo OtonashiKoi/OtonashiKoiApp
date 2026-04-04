@@ -36,6 +36,9 @@
           <button class="nav-link" data-target="section-layout">功能版位設定</button>
           <button class="nav-link" data-target="section-access">權限與白名單</button>
           <button class="nav-link" data-target="section-players">玩家管理</button>
+          <button class="nav-link" data-target="section-tiers">玩家等級設定</button>
+          <button class="nav-link" data-target="section-items">道具庫管理</button>
+          <button class="nav-link" data-target="section-shop">金幣商店管理</button>
           <button class="nav-link" data-target="section-log">系統操作紀錄</button>
         </nav>
 
@@ -160,8 +163,10 @@
                     <strong id="player-level-value">0</strong>
                     <small id="player-job-value">Novice</small>
                   </article>
-                  <article class="stat-card">
-                    <span>經驗 / 職業經驗</span>
+                  <article class="stat-card">                    <span>玄家等級</span>
+                    <strong id="player-tier-value" style="font-size:1.4em;">-</strong>
+                  </article>
+                  <article class="stat-card">                    <span>經驗 / 職業經驗</span>
                     <strong id="player-exp-value">0</strong>
                   </article>
                   <article class="stat-card">
@@ -257,6 +262,163 @@
           </div>
           <pre id="activity-log" class="activity-log">等待操作...</pre>
         </section>
+
+        <section id="section-shop" class="card panel-section">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Shop</p>
+              <h2>金幣商店管理</h2>
+            </div>
+            <button id="shop-btn-new" class="button primary">＋ 新增商品</button>
+          </div>
+          <p class="hint">管理金幣商店上架商品。玩家在 Discord 金幣商店頻道按「逛商店」即可看到已上架商品並消耗金幣/鑽石購買。</p>
+
+          <div id="shop-form-area" class="hidden" style="margin-bottom:1.5rem;">
+            <div class="access-card" style="max-width:560px;">
+              <h3 id="shop-form-title">新增商品</h3>
+              <form id="shop-item-form" class="admin-form">
+                <label>
+                  <span>從道具庫選擇道具 <span style="color:var(--danger)">*</span></span>
+                  <select id="shop-input-itemid" required>
+                    <option value="">— 請先前往「道具庫管理」新增道具 —</option>
+                  </select>
+                </label>
+                <div id="shop-item-preview" class="hidden" style="display:none;align-items:center;gap:12px;padding:10px 12px;background:var(--surface-hover);border-radius:8px;border:1px solid var(--line);margin-bottom:4px;">
+                  <img id="shop-preview-img" src="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0;display:none;" />
+                  <div style="min-width:0">
+                    <strong id="shop-preview-name" style="font-size:1em;"></strong>
+                    <p id="shop-preview-desc" style="margin:2px 0 4px;font-size:0.85em;color:var(--muted);"></p>
+                    <span id="shop-preview-effect" style="font-size:0.8em;"></span>
+                  </div>
+                </div>
+                <div class="grid two-up">
+                  <label><span>售價（0 = 免費領取）</span><input id="shop-input-price" type="number" min="0" value="100" required /></label>
+                  <label><span>幣種</span>
+                    <select id="shop-input-currency">
+                      <option value="gold">💰 金幣</option>
+                      <option value="diamond">💎 鑽石</option>
+                    </select>
+                  </label>
+                </div>
+                <label><span>庫存（-1 = 無限）</span><input id="shop-input-stock" type="number" min="-1" value="-1" /></label>
+                <label>
+                  <span>每月領取上限（0 = 無限）</span>
+                  <input id="shop-input-maxpermonth" type="number" min="0" value="0" />
+                </label>
+                <div id="shop-tier-area">
+                  <span style="font-size:0.9em;font-weight:600;display:block;margin-bottom:6px;">允許購買的等級（空選 = 所有人可買）</span>
+                  <div id="shop-tier-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:8px 0;"></div>
+                </div>
+                <label class="checkbox-label">
+                  <input id="shop-input-enabled" type="checkbox" checked />
+                  <span>立即上架</span>
+                </label>
+                <label class="checkbox-label">
+                  <input id="shop-input-issale" type="checkbox" />
+                  <span>🔥 優惠商品（顯示在優惠區）</span>
+                </label>
+                <div class="actions">
+                  <button id="shop-btn-submit" type="submit" class="button primary">新增</button>
+                  <button id="shop-btn-cancel" type="button" class="button">取消</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <table class="shop-table">
+            <thead>
+              <tr>
+                <th style="width:44px;"></th>
+                <th>商品名稱</th>
+                <th>說明</th>
+                <th>售價</th>
+                <th>幣種</th>
+                <th>庫存</th>
+                <th>效果</th>
+                <th>狀態</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="shop-item-tbody"></tbody>
+          </table>
+        </section>
+
+        <section id="section-items" class="card panel-section">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Items</p>
+              <h2>道具庫管理</h2>
+            </div>
+            <button id="items-btn-new" class="button primary">＋ 新增道具</button>
+          </div>
+          <p class="hint">道具庫是所有道具的原余資料，包含名稱、說明、和效果定義。上架到商店時可加入售價與庫存。</p>
+
+          <div id="items-form-area" class="hidden" style="margin-bottom:1.5rem;">
+            <div class="access-card" style="max-width:520px;">
+              <h3 id="items-form-title">新增道具</h3>
+              <form id="items-form" class="admin-form">
+                <label><span>道具名稱</span><input id="items-input-name" type="text" placeholder="例如：幸運符" required /></label>
+                <label><span>說明</span><input id="items-input-desc" type="text" placeholder="例如：下次打卡金幣 x2" /></label>
+                <label><span>道具類型</span>
+                  <select id="items-input-type">
+                    <option value="consumable">🧪 消耗品（使用後消失）</option>
+                    <option value="collectible">🖼️ 圖片（永久保留）</option>
+                    <option value="equipment">⚔️ 裝備（功能開發中）</option>
+                  </select>
+                </label>
+                <div class="grid two-up">
+                  <label><span>道具效果</span>
+                    <select id="items-input-effect-type">
+                      <option value="none">無效果（收藏用）</option>
+                      <option value="grant_gold">💰 給予金幣</option>
+                      <option value="grant_diamond">💎 給予鑽石</option>
+                      <option value="grant_exp">✨ 給予經驗值</option>
+                      <option value="grant_status_points">📊 給予屬性點</option>
+                      <option value="checkin_multiplier">🎯 打卡加倍符</option>
+                    </select>
+                  </label>
+                  <label><span>效果數値</span>
+                    <input id="items-input-effect-value" type="number" min="0" value="0" />
+                  </label>
+                </div>
+                <label>
+                  <span>道具圖片（PNG / JPG / GIF / WebP，上限 2MB）</span>
+                  <input id="items-input-image" type="file" accept="image/*" />
+                  <img id="items-image-preview" class="hidden" src="" style="max-height:120px;margin-top:8px;border-radius:8px;border:1px solid var(--line);" />
+                </label>
+                <div class="actions">
+                  <button id="items-btn-submit" type="submit" class="button primary">新增</button>
+                  <button id="items-btn-cancel" type="button" class="button">取消</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <table class="shop-table">
+            <thead>
+              <tr>
+                <th style="width:56px">圖片</th>
+                <th>道具名稱</th>
+                <th>類型</th>
+                <th>說明</th>
+                <th>效果</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="items-tbody"></tbody>
+          </table>
+        </section>
+        <section id="section-tiers" class="card panel-section">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Tiers</p>
+              <h2>玩家等級設定（E ～ SS）</h2>
+            </div>
+            <button id="tiers-save-btn" class="button primary">儲存等級設定</button>
+          </div>
+          <p class="hint">為每個等級輸入對應的 Discord 身分組 ID，各等級可綁定多組身分組（逗號分隔）。商店商品選擇允許購買的等級後，系統將自動比對玩家身分組。</p>
+          <div id="tiers-form-area" class="access-grid"></div>
+        </section>
       </main>
       </div>
     </div>
@@ -264,6 +426,12 @@
     <script src="/static/adminUtils.js"></script>
     <script src="/static/adminLayout.js"></script>
     <script src="/static/adminPlayers.js"></script>
-    <script src="/static/admin.js"></script>
+    <script src="/static/admin.core.js"></script>
+    <script src="/static/admin.bindings.js"></script>
+    <script src="/static/admin.players.js"></script>
+    <script src="/static/admin.players.init.js"></script>
+    <script src="/static/admin.tiers.js"></script>
+    <script src="/static/admin.shop.js"></script>
+    <script src="/static/admin.items.js"></script>
   </body>
   </html>

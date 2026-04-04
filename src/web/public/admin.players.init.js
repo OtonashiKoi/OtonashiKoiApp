@@ -93,6 +93,7 @@
         if (window.adminBindings && typeof window.adminBindings.bootstrapConsole === 'function') {
           await window.adminBindings.bootstrapConsole();
         }
+        document.dispatchEvent(new Event("adminConnected"));
       } catch (error) {
         elements.connectionState.textContent = error.message;
         log(`連線失敗：${error.message}`);

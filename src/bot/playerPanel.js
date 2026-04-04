@@ -1,6 +1,9 @@
-const { MessageFlags } = require("discord.js");
-const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
+const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require("discord.js");
+const path = require("path");
+const fs = require("fs");
 const { BUTTON_IDS, createPlayerPanelMessage } = require("./playerPanelView");
+
+const AUTO_DELETE_MS = 60_000;
 
 function getServiceContext() {
   return require("./runtimeContext").serviceContext;
@@ -19,29 +22,16 @@ function formatTransactions(rows) {
     .join("\n");
 }
 
+/** 回覆 ephemeral 訊息，並在 AUTO_DELETE_MS 後自動刪除 */
+async function replyAndAutoDelete(interaction, content) {
+  await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  setTimeout(() => interaction.deleteReply().catch(() => {}), AUTO_DELETE_MS);
+}
+
 async function replyPlayerBlocked(interaction) {
-  await interaction.reply({
-    content: "❌ 你目前不在可用玩家白名單中。",
-    flags: MessageFlags.Ephemeral
-  });
+  await replyAndAutoDelete(interaction, "❌ 你目前不在可用玩家白名單中。");
 }
 
-async function handleCreate(interaction) {
-  const serviceContext = getServiceContext();
-  const result = await serviceContext.playerService.ensurePlayer(
-    interaction.user.id,
-    interaction.user.username
-  );
-
-  await interaction.reply({
-    content:
-      `✅ 玩家初始化完成\n` +
-      `玩家：${result.player.displayName}\n` +
-      `金幣：${result.wallet.gold}\n` +
-      `鑽石：${result.wallet.diamond}`,
-    flags: MessageFlags.Ephemeral
-  });
-}
 
 async function handleProfile(interaction) {
   const serviceContext = getServiceContext();
@@ -49,26 +39,31 @@ async function handleProfile(interaction) {
     interaction.user.id,
     interaction.user.username
   );
-
-  const p = result.progress;
+  // 順帶更新等級（同步，確保展示的是最新等級）
+  const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
+  await serviceContext.shopService.updatePlayerTier(interaction.user.id, memberRoleIds);
+  // 重新讀取 progress 以拿到更新後的等級
+  const freshProgress = await serviceContext.progressRepository
+    ? await serviceContext.progressRepository.findByPlayerId(interaction.user.id)
+    : null;
+  const p = freshProgress || result.progress;
   const attrs = p.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+  const tierLine = p.playerTier ? `\n玄家等級：**${p.playerTier}級**` : "";
   
-  await interaction.reply({
-    content:
-      `🧾 **${result.player.displayName} 的冒險者履歷**\n` +
-      `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})\n` +
-      `等級：Base ${p.level} (EXP: ${p.exp})\n` +
-      `==============\n` +
-      `【基本素質】\n` +
-      `STR: ${attrs.str} | AGI: ${attrs.agi} | VIT: ${attrs.vit}\n` +
-      `INT: ${attrs.int} | DEX: ${attrs.dex} | LUK: ${attrs.luk}\n` +
-      `剩餘點數 (Status Pt): ${p.statusPoints || 0}\n` +
-      `==============\n` +
-      `【資產】\n` +
-      `💰 金幣: ${result.wallet.gold}\n` +
-      `💎 鑽石: ${result.wallet.diamond}`,
-    flags: MessageFlags.Ephemeral
-  });
+  await replyAndAutoDelete(interaction,
+    `🧧 **${result.player.displayName} 的冒險者履歷**\n` +
+    `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})\n` +
+    `等級：Base ${p.level} (EXP: ${p.exp})${tierLine}\n` +
+    `==============\n` +
+    `【基本素質】\n` +
+    `STR: ${attrs.str} | AGI: ${attrs.agi} | VIT: ${attrs.vit}\n` +
+    `INT: ${attrs.int} | DEX: ${attrs.dex} | LUK: ${attrs.luk}\n` +
+    `剩餘點數 (Status Pt): ${p.statusPoints || 0}\n` +
+    `==============\n` +
+    `【資產】\n` +
+    `💰 金幣: ${result.wallet.gold}\n` +
+    `💎 鑽石: ${result.wallet.diamond}`
+  );
 }
 
 async function handleWallet(interaction) {
@@ -78,13 +73,11 @@ async function handleWallet(interaction) {
     interaction.user.username
   );
 
-  await interaction.reply({
-    content:
-      `💰 ${result.player.displayName} 的錢包\n` +
-      `金幣：${result.wallet.gold}\n` +
-      `鑽石：${result.wallet.diamond}`,
-    flags: MessageFlags.Ephemeral
-  });
+  await replyAndAutoDelete(interaction,
+    `💰 ${result.player.displayName} 的錢包\n` +
+    `金幣：${result.wallet.gold}\n` +
+    `鑽石：${result.wallet.diamond}`
+  );
 }
 
 async function handleTransactions(interaction) {
@@ -95,55 +88,162 @@ async function handleTransactions(interaction) {
     8
   );
 
-  await interaction.reply({
-    content: `📘 最近交易\n${formatTransactions(result.transactions)}`,
-    flags: MessageFlags.Ephemeral
-  });
+  await replyAndAutoDelete(interaction, `📘 最近交易\n${formatTransactions(result.transactions)}`);
 }
 
-async function handleReward(interaction) {
+async function handleCheckinStatus(interaction) {
   const serviceContext = getServiceContext();
-  const result = await serviceContext.rewardService.grantCurrency({
-    discordId: interaction.user.id,
-    displayName: interaction.user.username,
-    currencyType: "gold",
-    amount: 100,
-    source: CURRENCY_SOURCES.DISCORD_TEST_REWARD,
-    operator: interaction.user.id
-  });
+  const checkins = await serviceContext.checkinService.listRecentByDiscordId(
+    interaction.user.id,
+    7
+  );
 
-  await interaction.reply({
-    content:
-      `🎁 已發送測試獎勵\n` +
-      `玩家：${result.player.displayName}\n` +
-      `金幣：${result.wallet.gold}\n` +
-      `來源：${result.transaction.source}`,
-    flags: MessageFlags.Ephemeral
-  });
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCheckin = checkins.find((c) => (c.occurredAt || "").slice(0, 10) === today);
+
+  const statusLine = todayCheckin
+    ? `✅ 今日已打卡！（${new Date(todayCheckin.occurredAt).toLocaleTimeString("zh-TW")} 獲得 ${todayCheckin.rewardDetail?.amount ?? 0} 金幣）`
+    : `❌ 今日尚未打卡，在直播輸入 **!打卡** 可獲得 100 金幣！`;
+
+  const historyLines = checkins.length
+    ? checkins.map((c) => `${(c.occurredAt || "").slice(0, 10)}  +${c.rewardDetail?.amount ?? 0} 金幣`).join("\n")
+    : "尚無打卡紀錄";
+
+  await replyAndAutoDelete(interaction,
+    `📅 **打卡狀態**\n${statusLine}\n\n` +
+    `🗓️ **最近 7 天紀錄**\n${historyLines}`
+  );
 }
 
-async function handleExp(interaction) {
-  const serviceContext = getServiceContext();
-  const result = await serviceContext.progressService.grantExp({
-    discordId: interaction.user.id,
-    displayName: interaction.user.username,
-    amount: 120,
-    source: EXP_SOURCES.DISCORD_TEST_EXP
-  });
+/** 根據 itemType 產生背包 ActionRow，idx 為顯示編號（0-based） */
+function buildInventoryRow(e, idx) {
+  const itemType = e.itemType || "consumable";
+  const prefix = ["①","②","③","④","⑤"][idx] ?? `${idx+1}.`;
+  const btns = [];
+  if (itemType === "consumable") {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_use:${e.uuid}`)
+        .setLabel(`${prefix} 使用`)
+        .setStyle(ButtonStyle.Success)
+    );
+  } else {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_discard:${e.uuid}`)
+        .setLabel(`${prefix} 丟棄`)
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
+  if (itemType === "consumable") {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_discard:${e.uuid}`)
+        .setLabel("丟棄")
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
+  if (e.imageUrl) {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_view:${e.uuid}`)
+        .setLabel("🖼️ 查看圖片")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+  return new ActionRowBuilder().addComponents(btns);
+}
 
-  await interaction.reply({
-    content:
-      `⭐ 已發送測試經驗\n` +
-      `玩家：${result.player.displayName}\n` +
-      `等級：${result.progress.level}\n` +
-      `經驗：${result.progress.exp}\n` +
-      `升級次數：${result.levelUps}`,
-    flags: MessageFlags.Ephemeral
-  });
+/** 組成背包訊息（可附帶前置訊息行） */
+function buildBackpackMessage(inventory, prefixMsg) {
+  const header = prefixMsg ? prefixMsg + "\n\n" : "";
+  if (!inventory.length) {
+    return { content: header + "🎒 **背包**\n\n背包是空的，去商店購物吧！", components: [] };
+  }
+  const lines = inventory.map((e, i) => {
+    const tag = e.itemType === "collectible" ? " 🖼️" : e.itemType === "equipment" ? " ⚔️" : "";
+    return `${i + 1}. **${e.itemName}**${tag}　購於 ${(e.purchasedAt || "").slice(0, 10)}`;
+  }).join("\n");
+  const rows = inventory.slice(0, 5).map((e, i) => buildInventoryRow(e, i));
+  return { content: header + `🎒 **背包**\n\n${lines}`, components: rows };
+}
+
+async function handleBackpack(interaction) {
+  const serviceContext = getServiceContext();
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const inventory = progress?.inventory || [];
+  const msg = buildBackpackMessage(inventory);
+  await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
+  setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);
+}
+
+async function handleBackpackView(interaction, uuid) {
+  const serviceContext = getServiceContext();
+  // 先 defer，給後續 I/O 最多 15 分鐘
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const entry = (progress?.inventory || []).find((e) => e.uuid === uuid);
+  if (!entry || !entry.imageUrl) {
+    await interaction.editReply({ content: "此道具沒有圖片。" });
+    return;
+  }
+  try {
+    const imagePath = path.resolve(__dirname, "../web/public", entry.imageUrl.replace(/^\//, ""));
+    if (!fs.existsSync(imagePath)) {
+      await interaction.reply({ content: "❌ 圖片檔案不存在。", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const fileName = path.basename(imagePath);
+    const attachment = new AttachmentBuilder(imagePath, { name: fileName });
+    await interaction.editReply({
+      content: `🖼️ **${entry.itemName}**\n購於 ${(entry.purchasedAt || "").slice(0, 10)}\n\n你可以右鍵點擊圖片 → 另存圖片。`,
+      files: [attachment]
+    });
+  } catch (err) {
+    await interaction.editReply({ content: `❌ 無法載入圖片：${err.message}` });
+  }
+}
+
+async function handleBackpackAction(interaction, action, uuid) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const isUse = action === "use";
+    const result = isUse
+      ? await serviceContext.shopService.useItem(interaction.user.id, uuid, interaction.user.displayName || interaction.user.username)
+      : await serviceContext.shopService.discardItem(interaction.user.id, uuid);
+    const verb = isUse ? "使用" : "丟棄";
+    const extra = isUse && result.effectDesc ? `\n${result.effectDesc}` : "";
+    // 重新讀取背包，更新訊息
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const inventory = progress?.inventory || [];
+    const msg = buildBackpackMessage(inventory, `✅ 已${verb} **${result.itemName}**。${extra}`);
+    await interaction.editReply(msg);
+    if (!inventory.length) {
+      setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+    }
+  } catch (err) {
+    await interaction.editReply({ content: `❌ 操作失敗：${err.message}`, components: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
 }
 
 async function handleButton(interaction) {
-  if (!Object.values(BUTTON_IDS).includes(interaction.customId)) {
+  const id = interaction.customId;
+
+  // 背包動作
+  if (id.startsWith("backpack_view:")) {
+    await handleBackpackView(interaction, id.slice("backpack_view:".length));
+    return;
+  }
+  if (id.startsWith("backpack_use:") || id.startsWith("backpack_discard:")) {
+    const action = id.startsWith("backpack_use:") ? "use" : "discard";
+    const uuid = id.slice(id.indexOf(":") + 1);
+    await handleBackpackAction(interaction, action, uuid);
+    return;
+  }
+
+  if (!Object.values(BUTTON_IDS).includes(id)) {
     return;
   }
 
@@ -154,33 +254,24 @@ async function handleButton(interaction) {
     return;
   }
 
-  if (interaction.customId === BUTTON_IDS.create) {
-    await handleCreate(interaction);
-    return;
-  }
-
-  if (interaction.customId === BUTTON_IDS.profile) {
+  if (id === BUTTON_IDS.profile) {
     await handleProfile(interaction);
     return;
   }
 
-  if (interaction.customId === BUTTON_IDS.wallet) {
-    await handleWallet(interaction);
-    return;
-  }
-
-  if (interaction.customId === BUTTON_IDS.transactions) {
+  if (id === BUTTON_IDS.transactions) {
     await handleTransactions(interaction);
     return;
   }
 
-  if (interaction.customId === BUTTON_IDS.reward) {
-    await handleReward(interaction);
+  if (id === BUTTON_IDS.checkinStatus) {
+    await handleCheckinStatus(interaction);
     return;
   }
 
-  if (interaction.customId === BUTTON_IDS.exp) {
-    await handleExp(interaction);
+  if (id === BUTTON_IDS.backpack) {
+    await handleBackpack(interaction);
+    return;
   }
 }
 

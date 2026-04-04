@@ -84,6 +84,38 @@ async function setupPersonalRoomChannel(client) {
   }
 }
 
+// 鎖定版位設定中非 town_chat 的頻道：@everyone 不能發言
+async function setupLockedChannels(client) {
+  const layout = await serviceContext.adminConsoleService.getChannelLayout();
+  const bindings = layout?.discord?.bindings || [];
+
+  // 只鎖定非聊天大街且有 channelId 的版位
+  const lockIds = bindings
+    .filter((b) => b.enabled && b.channelId && b.featureKey !== "town_chat")
+    .map((b) => b.channelId);
+
+  if (!lockIds.length) return;
+
+  const access = await serviceContext.accessControlService.getAccessControl();
+  const adminRoleIds = access.discord.adminRoleIds || [];
+
+  for (const channelId of lockIds) {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !channel.isTextBased()) continue;
+
+      await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { SendMessages: false });
+      await channel.permissionOverwrites.edit(client.user.id, { SendMessages: true });
+      for (const roleId of adminRoleIds) {
+        try { await channel.permissionOverwrites.edit(roleId, { SendMessages: true }); } catch (_) {}
+      }
+      console.log(`[Discord] 頻道 ${channelId} (${bindings.find(b=>b.channelId===channelId)?.featureKey}) 已設為唯讀`);
+    } catch (err) {
+      console.warn(`[Discord] 無法鎖定頻道 ${channelId}：${err.message}`);
+    }
+  }
+}
+
 function createBotClient() {
   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
   setBotClient(client);
@@ -91,6 +123,7 @@ function createBotClient() {
   client.once(Events.ClientReady, async (readyClient) => {
     console.log(`[Discord] Logged in as ${readyClient.user.tag}`);
     await setupPersonalRoomChannel(readyClient);
+    await setupLockedChannels(readyClient);
     
     // 啟動 OneComme 直播留言監聽
     startFetcher(handleStreamComment);

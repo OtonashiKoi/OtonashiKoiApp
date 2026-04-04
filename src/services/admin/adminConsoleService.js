@@ -38,6 +38,7 @@ function normalizeBinding(binding) {
     channelId: String(binding.channelId || "").trim(),
     enabled: Boolean(binding.enabled),
     note: String(binding.note || "").trim(),
+    panelMessageId: String(binding.panelMessageId || "").trim(),
     visibleTo: {
       player: visibleTo.player !== false,
       admin: visibleTo.admin !== false
@@ -168,7 +169,29 @@ class AdminConsoleService {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
     }
 
+    // 刪除舊面板訊息（如果有記錄的話）
+    const stored = await this.channelLayoutRepository.get();
+    const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
+    const existingBinding = bindings.find((b) => b.featureKey === "personal_room");
+    if (existingBinding?.panelMessageId) {
+      await channel.messages.fetch(existingBinding.panelMessageId)
+        .then((msg) => msg.delete())
+        .catch(() => {}); // 訊息已被刪除或不存在時忽略
+    }
+
+    // 發送新面板
     const message = await channel.send(createPlayerPanelMessage());
+
+    // 把新 messageId 寫回 binding
+    const updatedBindings = bindings.map((b) =>
+      b.featureKey === "personal_room" ? { ...b, panelMessageId: message.id } : b
+    );
+    // 若 personal_room binding 不存在則新增
+    if (!updatedBindings.some((b) => b.featureKey === "personal_room")) {
+      updatedBindings.push(normalizeBinding({ featureKey: "personal_room", channelId: targetChannelId, panelMessageId: message.id }));
+    }
+    await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
+
     return {
       channelId: targetChannelId,
       messageId: message.id
@@ -265,6 +288,48 @@ class AdminConsoleService {
       channelId: targetChannelId,
       messageId: message.id
     };
+  }
+
+  async publishCoinShopPanel(channelId) {
+    const { getBotClient } = require("../../bot/runtimeContext");
+    const { createCoinShopPanelMessage } = require("../../bot/coinShopView");
+
+    const client = getBotClient();
+    if (!client?.isReady()) {
+      throw new AppError(ERROR_CODES.UNAUTHORIZED, "Discord bot is not ready", 503);
+    }
+
+    const targetChannelId = String(channelId || "").trim();
+    if (!targetChannelId) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "channelId is required", 400);
+    }
+
+    const channel = await client.channels.fetch(targetChannelId);
+    if (!channel || !channel.isTextBased || !channel.isTextBased()) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
+    }
+
+    // 刪除舊面板（如果記錄了 panelMessageId）
+    const stored = await this.channelLayoutRepository.get();
+    const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
+    const existingBinding = bindings.find((b) => b.featureKey === "coin_shop");
+    if (existingBinding?.panelMessageId) {
+      await channel.messages.fetch(existingBinding.panelMessageId)
+        .then((msg) => msg.delete())
+        .catch(() => {});
+    }
+
+    const message = await channel.send(createCoinShopPanelMessage());
+
+    const updatedBindings = bindings.map((b) =>
+      b.featureKey === "coin_shop" ? { ...b, panelMessageId: message.id } : b
+    );
+    if (!updatedBindings.some((b) => b.featureKey === "coin_shop")) {
+      updatedBindings.push(normalizeBinding({ featureKey: "coin_shop", channelId: targetChannelId, panelMessageId: message.id }));
+    }
+    await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
+
+    return { channelId: targetChannelId, messageId: message.id };
   }
 }
 

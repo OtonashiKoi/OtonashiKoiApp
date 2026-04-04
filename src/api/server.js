@@ -22,6 +22,8 @@ function createApiServer() {
   app.use(express.json());
   // 提供靜態檔案（如前端網頁）
   app.use("/static", express.static(path.resolve(__dirname, "../web/public")));
+  // 玩家上傳圖片（道具圖片等）
+  app.use("/uploads", express.static(path.resolve(__dirname, "../web/public/uploads")));
   // 健康檢查路由
   app.use(createHealthRoutes());
   // 管理後台路由

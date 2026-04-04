@@ -22,20 +22,55 @@ function matchCommand(text, keywords) {
   return keywords.some((kw) => t === kw.toLowerCase() || t.startsWith(kw.toLowerCase()));
 }
 
+/** 將 OneComme service 字串正規化為統一平台 key */
+function normalizePlatform(service, userId) {
+  const s = (service || "").toLowerCase();
+  const u = (userId || "").toLowerCase();
+  if (s.includes("youtube") || s === "yt") return "youtube";
+  if (s.includes("twitch") || s === "tw") return "twitch";
+  // service 為 unknown 時改從 userId 前綴推斷
+  if (u.startsWith("tw-") || u.startsWith("twitch-")) return "twitch";
+  if (u.startsWith("yt-") || u.startsWith("uc") || u.startsWith("youtube-")) return "youtube";
+  return s;
+}
+
 /**
  * 處理打卡指令
- * 若玩家有資料則 log，否則略過（不強制建立）
- * @param {{ name: string, text: string, service: string, raw: object }} comment
+ * 先以平台 userId 查玩家；找不到則退而求其次用 displayName，並自動綁定 userId
+ * @param {{ id: string, name: string, userId: string, text: string, service: string, raw: object }} comment
  */
 async function handleCheckin(comment) {
   const displayName = comment.name;
   const service = comment.service;
-  // 嘗試以留言暱稱對應已註冊玩家（比對 displayName），若找到對應 Discord ID 則呼叫 checkinService 發放獎勵
+  const platformUserId = comment.userId || "";
+  const platform = normalizePlatform(service, platformUserId);
   console.log(`[Stream] ⭐ 打卡 | ${service} | ${displayName} | "${comment.text}"`);
 
   try {
-    const players = await serviceContext.playerRepository.listAll();
-    const matched = players.find((p) => p.displayName && p.displayName.toLowerCase() === displayName.toLowerCase());
+    let matched = null;
+
+    // 1. 優先以平台 userId 精確比對（已綁定過的玩家）
+    if (platformUserId) {
+      matched = await serviceContext.playerRepository.findByExternalId(platform, platformUserId);
+    }
+
+    // 2. 找不到則退回 displayName 比對
+    if (!matched) {
+      const players = await serviceContext.playerRepository.listAll();
+      matched = players.find((p) => p.displayName && p.displayName.toLowerCase() === displayName.toLowerCase()) || null;
+
+      // 3. 找到後自動綁定 platformUserId（供下次直接比對）
+      if (matched && platformUserId) {
+        const existing = matched.externalIds || {};
+        if (!existing[platform]) {
+          matched.externalIds = { ...existing, [platform]: platformUserId };
+          matched.updatedAt = new Date().toISOString();
+          await serviceContext.playerRepository.save(matched);
+          console.log(`[Stream] 🔗 自動綁定 ${displayName} ↔ ${platform}:${platformUserId}`);
+        }
+      }
+    }
+
     if (!matched) {
       console.log(`[Stream] 未找到連結的玩家（displayName=${displayName}），無法自動發獎。`);
       return;
@@ -81,14 +116,7 @@ async function handleCheckin(comment) {
         // 回覆到直播聊天室
         try {
           const { sendComment } = require("../onecommeSender");
-          // 決定回覆要用的 service（嘗試偵測 yt / twitch，fallback 為原始 service）
-          const svc = (comment.service || "").toLowerCase();
-          const nameTag = (comment.raw && comment.raw.name) || "";
-          const nt = String(nameTag).toLowerCase();
-          let targetService = comment.service || "stream";
-          if (svc.includes("youtube") || svc.includes("yt") || nt.includes("#yt")) targetService = "yt";
-          else if (svc.includes("twitch") || nt.includes("#twitch") || svc.includes("tw")) targetService = "twitch";
-
+          const targetService = (platform === "youtube") ? "yt" : (platform === "twitch") ? "twitch" : comment.service || "stream";
           const sendRes = await sendComment({ service: targetService, displayName, comment: `${displayName} 打卡成功` });
           if (!sendRes.ok) console.warn(`[Stream] 回覆直播留言失敗：${sendRes.error}`);
         } catch (e) {
@@ -96,6 +124,12 @@ async function handleCheckin(comment) {
         }
       } else if (result.reason === "already_checked_in") {
         console.log(`[Stream] ${displayName} 今日已打卡，略過發獎。`);
+        try {
+          const targetService = (platform === "youtube") ? "yt" : (platform === "twitch") ? "twitch" : comment.service || "stream";
+          await sendComment({ service: targetService, displayName, comment: `${displayName} 今天打卡過囉` });
+        } catch (e) {
+          console.warn("[Stream] 無法回覆已打卡訊息：", e && e.message ? e.message : e);
+        }
       }
     } catch (err) {
       console.error("[Stream] 打卡流程發生錯誤：", err && err.message ? err.message : err);

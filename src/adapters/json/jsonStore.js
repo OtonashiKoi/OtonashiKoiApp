@@ -22,7 +22,10 @@ const INITIAL_DATA = {
   progress: {},
   transactions: [],
   adminActionLogs: [],
-  checkins: []
+  checkins: [],
+  shopItems: [],
+  items: [],
+  playerTiers: {}
 };
 
 function normalizeStore(data) {
@@ -47,6 +50,9 @@ function normalizeStore(data) {
   if (!Array.isArray(next.transactions)) next.transactions = [];
   if (!Array.isArray(next.adminActionLogs)) next.adminActionLogs = [];
   if (!Array.isArray(next.checkins)) next.checkins = [];
+  if (!Array.isArray(next.shopItems)) next.shopItems = [];
+  if (!Array.isArray(next.items)) next.items = [];
+  if (!next.playerTiers || typeof next.playerTiers !== "object" || Array.isArray(next.playerTiers)) next.playerTiers = {};
   return next;
 }
 

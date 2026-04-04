@@ -10,6 +10,10 @@ class PlayerRepository {
   async listAll() {
     throw new Error("listAll must be implemented");
   }
+
+  async findByExternalId() {
+    throw new Error("findByExternalId must be implemented");
+  }
 }
 
 module.exports = {

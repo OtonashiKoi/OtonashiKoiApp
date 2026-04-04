@@ -5,6 +5,7 @@ function createPlayer(discordId, displayName) {
     discordId,
     displayName,
     status: "active",
+    externalIds: {},
     schemaVersion: 1,
     createdAt: now,
     updatedAt: now

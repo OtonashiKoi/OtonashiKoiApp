@@ -163,3 +163,6 @@ window.adminCore = {
   setPlayerActionEnabled,
   showSection
 };
+
+window.getAdminToken = () => window.elements.adminPassword.value.trim();
+window.logActivity = (msg) => log(msg);

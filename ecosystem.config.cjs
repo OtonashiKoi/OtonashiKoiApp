@@ -8,6 +8,7 @@ module.exports = {
       watch: false,
       max_restarts: 10,
       min_uptime: "10s",
+      env_file: ".env",
       env: {
         NODE_ENV: "production"
       }
@@ -20,6 +21,7 @@ module.exports = {
       watch: false,
       max_restarts: 10,
       min_uptime: "10s",
+      env_file: ".env",
       env: {
         NODE_ENV: "production"
       }

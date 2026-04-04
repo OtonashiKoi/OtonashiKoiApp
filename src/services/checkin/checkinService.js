@@ -1,10 +1,11 @@
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 
 class CheckinService {
-  constructor(playerService, checkinRepository, rewardService) {
+  constructor(playerService, checkinRepository, rewardService, progressRepository) {
     this.playerService = playerService;
     this.checkinRepository = checkinRepository;
     this.rewardService = rewardService;
+    this.progressRepository = progressRepository;
   }
 
   async isSameDay(a, b) {
@@ -26,8 +27,20 @@ class CheckinService {
       return { ok: false, reason: "already_checked_in", last };
     }
 
-    // grant 100 gold by default
-    const grantAmount = 100;
+    // grant 100 gold by default, check for checkin multiplier item
+    let grantAmount = 100;
+    let appliedMultiplier = 1;
+    if (this.progressRepository) {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      const multiplier = progress?.flags?.checkinMultiplier;
+      if (multiplier && multiplier > 1) {
+        grantAmount = Math.round(grantAmount * multiplier);
+        appliedMultiplier = multiplier;
+        progress.flags.checkinMultiplier = null;
+        progress.updatedAt = new Date().toISOString();
+        await this.progressRepository.save(progress);
+      }
+    }
     const rewardResult = await this.rewardService.grantCurrency({
       discordId,
       displayName,
@@ -49,6 +62,7 @@ class CheckinService {
       rewardDetail: {
         currencyType: "gold",
         amount: grantAmount,
+        multiplier: appliedMultiplier,
         txId: rewardResult.transaction && rewardResult.transaction.id ? rewardResult.transaction.id : ""
       },
       createdAt: new Date().toISOString()

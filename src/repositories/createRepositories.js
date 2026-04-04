@@ -7,6 +7,9 @@ const { JsonProgressRepository } = require("../adapters/json/progressRepository"
 const { JsonWalletRepository } = require("../adapters/json/walletRepository");
 const { JsonTransactionRepository } = require("../adapters/json/transactionRepository");
 const { JsonCheckinRepository } = require("../adapters/json/checkinRepository");
+const { JsonShopRepository } = require("../adapters/json/shopRepository");
+const { JsonItemRepository } = require("../adapters/json/itemRepository");
+const { JsonPlayerTierRepository } = require("../adapters/json/playerTierRepository");
 const { createMongoRepositories } = require("../adapters/mongo/createMongoRepositories");
 
 function createRepositories() {
@@ -21,8 +24,11 @@ function createRepositories() {
     playerRepository: new JsonPlayerRepository(),
     progressRepository: new JsonProgressRepository(),
     walletRepository: new JsonWalletRepository(),
-    transactionRepository: new JsonTransactionRepository()
-    , checkinRepository: new JsonCheckinRepository()
+    transactionRepository: new JsonTransactionRepository(),
+    checkinRepository: new JsonCheckinRepository(),
+    shopRepository: new JsonShopRepository(),
+    itemRepository: new JsonItemRepository(),
+    playerTierRepository: new JsonPlayerTierRepository()
   };
 }
 

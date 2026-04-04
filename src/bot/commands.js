@@ -11,6 +11,7 @@ const {
   handlePublishPersonalRoom,
   handleUnlockPersonalRoom
 } = require("./handlers/publishHandlers");
+const { handleCoinShopButton, isCoinShopButton } = require("./handlers/coinShopHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -125,6 +126,10 @@ async function handleCommand(interaction) {
 }
 
 async function handleButton(interaction) {
+  if (isCoinShopButton(interaction.customId)) {
+    await handleCoinShopButton(interaction);
+    return;
+  }
   await handlePlayerPanelButton(interaction);
   await handlePlayerQueryButton(interaction);
 }

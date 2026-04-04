@@ -18,6 +18,14 @@ class JsonPlayerRepository extends PlayerRepository {
     const data = await readStore();
     return Object.values(data.players || {});
   }
+
+  /** 依外部平台 ID 查找玩家，platform 如 'youtube'/'twitch' */
+  async findByExternalId(platform, platformUserId) {
+    const data = await readStore();
+    return Object.values(data.players || {}).find(
+      (p) => p.externalIds && p.externalIds[platform] === platformUserId
+    ) || null;
+  }
 }
 
 module.exports = {

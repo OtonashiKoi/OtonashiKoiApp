@@ -30,7 +30,9 @@ function startFetcher(onComment) {
           if (!d) continue;
 
           const comment = {
+            id: d.id || "",
             name: d.displayName || d.name || "未知用戶",
+            userId: d.userId || "",
             text: d.comment || "",
             service: d.service || "unknown",
             raw: d

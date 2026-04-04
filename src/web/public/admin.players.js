@@ -34,6 +34,8 @@
     elements.playerStatusBadge.textContent = data.player.status || "unknown";
     elements.playerLevelValue.textContent = data.progress.level;
     elements.playerExpValue.textContent = data.progress.exp;
+    const tierEl = document.getElementById("player-tier-value");
+    if (tierEl) tierEl.textContent = data.progress.playerTier || "-";
     elements.playerGoldValue.textContent = data.wallet.gold;
     elements.playerDiamondValue.textContent = data.wallet.diamond;
     elements.playerCreatedAt.textContent = formatDateTime(data.player.createdAt);
