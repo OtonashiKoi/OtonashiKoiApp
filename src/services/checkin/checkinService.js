@@ -1,0 +1,71 @@
+const { CURRENCY_SOURCES } = require("../../shared/sources");
+
+class CheckinService {
+  constructor(playerService, checkinRepository, rewardService) {
+    this.playerService = playerService;
+    this.checkinRepository = checkinRepository;
+    this.rewardService = rewardService;
+  }
+
+  async isSameDay(a, b) {
+    if (!a || !b) return false;
+    const da = new Date(a).toISOString().slice(0, 10);
+    const db = new Date(b).toISOString().slice(0, 10);
+    return da === db;
+  }
+
+  async handleMessage({ discordId, displayName, channelId, messageId, content, occurredAt }) {
+    if (!discordId) {
+      throw new Error("discordId required");
+    }
+
+    const now = occurredAt ? new Date(occurredAt).toISOString() : new Date().toISOString();
+
+    const last = await this.checkinRepository.findLastByDiscordId(discordId);
+    if (last && (await this.isSameDay(last.occurredAt, now))) {
+      return { ok: false, reason: "already_checked_in", last };
+    }
+
+    // grant 100 gold by default
+    const grantAmount = 100;
+    const rewardResult = await this.rewardService.grantCurrency({
+      discordId,
+      displayName,
+      currencyType: "gold",
+      amount: grantAmount,
+      source: CURRENCY_SOURCES.DISCORD_TEST_REWARD,
+      operator: "system:checkin"
+    });
+
+    const checkin = {
+      id: `${discordId}:${Date.now()}`,
+      playerId: discordId,
+      discordId,
+      channelId: channelId || "stream",
+      messageId: messageId || "",
+      content: content || "",
+      occurredAt: now,
+      rewardGranted: true,
+      rewardDetail: {
+        currencyType: "gold",
+        amount: grantAmount,
+        txId: rewardResult.transaction && rewardResult.transaction.id ? rewardResult.transaction.id : ""
+      },
+      createdAt: new Date().toISOString()
+    };
+
+    await this.checkinRepository.save(checkin);
+
+    return { ok: true, checkin, transaction: rewardResult.transaction };
+  }
+
+  async listRecentByDiscordId(discordId, limit = 20) {
+    const items = await this.checkinRepository.listByDiscordId(discordId);
+    items.sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
+    return items.slice(0, limit);
+  }
+}
+
+module.exports = {
+  CheckinService
+};

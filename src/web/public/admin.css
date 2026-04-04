@@ -472,6 +472,9 @@ input:focus, select:focus, textarea:focus {
   grid-template-columns: 320px 1fr;
   gap: 24px;
   height: calc(100vh - 160px);
+  overflow-x: auto;
+  /* 讓內容超出時可橫向捲動 */
+  min-width: 0;
 }
 
 .player-list-summary {
@@ -741,5 +744,11 @@ input:focus, select:focus, textarea:focus {
   .hero {
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+  .player-grid {
+    display: block;
+    overflow-x: auto;
+    width: 100vw;
+    min-width: 0;
   }
 }

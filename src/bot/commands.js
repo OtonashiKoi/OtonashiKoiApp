@@ -1,13 +1,16 @@
-// Discord 指令定義與主要派發器
-// ------------------------------------------------
-
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton } = require("./playerPanel");
 const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
-const { serviceContext } = require("./runtimeContext");
+const { serviceContext, getBotClient } = require("./runtimeContext");
 const { isAppError } = require("../shared/errors");
-const { handleAdminCurrency, handleAdminExp } = require("./handlers/adminGrantHandlers");
-const { handlePublishPersonalRoom, handleUnlockPersonalRoom } = require("./handlers/personalRoomHandlers");
+const { handleAdminCurrencyCommand } = require("./handlers/adminCurrencyHandlers");
+const { handleAdminExpCommand } = require("./handlers/adminExpHandler");
+const {
+  handlePublishPlayerQuery,
+  handlePublishPlayerPanel,
+  handlePublishPersonalRoom,
+  handleUnlockPersonalRoom
+} = require("./handlers/publishHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -67,6 +70,7 @@ async function isAdmin(interaction) {
 async function handleCommand(interaction) {
   if (interaction.commandName === "連線測試") {
     const latencyMs = Date.now() - interaction.createdTimestamp;
+
     await interaction.reply({
       content: `✅ Discord bot 連線正常。延遲 ${latencyMs}ms。`,
       flags: MessageFlags.Ephemeral
@@ -77,6 +81,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === "help") {
     await interaction.reply({
       content:
+        `可發布玩家查詢\n` +
         `/管理員加金幣\n` +
         `/管理員加鑽石\n` +
         `/管理員扣金幣\n` +
@@ -89,41 +94,34 @@ async function handleCommand(interaction) {
   }
 
   if (interaction.commandName === "發布玩家查詢") {
-    if (!(await isAdmin(interaction))) {
-      await interaction.reply({ content: "❌ 你沒有管理員權限。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    if (!interaction.channel) {
-      await interaction.reply({ content: "❌ 目前找不到可發布面板的聊天室。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    await interaction.channel.send(createPlayerQueryPanelMessage());
-    await interaction.reply({ content: "✅ 玩家查詢面板已發布到目前聊天室。", flags: MessageFlags.Ephemeral });
+    await handlePublishPlayerQuery(interaction);
     return;
   }
 
   if (interaction.commandName === "發布玩家面板") {
-    if (!(await isAdmin(interaction))) {
-      await interaction.reply({ content: "❌ 你沒有管理員權限。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    if (!interaction.channel) {
-      await interaction.reply({ content: "❌ 目前找不到可發布面板的聊天室。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    await interaction.channel.send(createPlayerPanelMessage());
-    await interaction.reply({ content: "✅ 玩家面板已發布到目前聊天室。", flags: MessageFlags.Ephemeral });
+    await handlePublishPlayerPanel(interaction);
     return;
   }
 
-  if (await handlePublishPersonalRoom(interaction)) return;
-  if (await handleUnlockPersonalRoom(interaction)) return;
-  if (await handleAdminCurrency(interaction)) return;
-  await handleAdminExp(interaction);
+  if (interaction.commandName === "發布個人房間面板") {
+    await handlePublishPersonalRoom(interaction);
+    return;
+  }
+
+  if (interaction.commandName === "解鎖個人房間面板") {
+    await handleUnlockPersonalRoom(interaction);
+    return;
+  }
+
+  if (["管理員加金幣", "管理員加鑽石", "管理員扣金幣", "管理員扣鑽石"].includes(interaction.commandName)) {
+    await handleAdminCurrencyCommand(interaction);
+    return;
+  }
+
+  if (interaction.commandName === "管理員加經驗") {
+    await handleAdminExpCommand(interaction);
+    return;
+  }
 }
 
 async function handleButton(interaction) {
@@ -132,41 +130,47 @@ async function handleButton(interaction) {
 }
 
 async function handleModal(interaction) {
-  if (interaction.customId !== "player-query-modal") return;
+  if (interaction.customId === "player-query-modal") {
+    const discordId = interaction.fields.getTextInputValue("player-discord-id").trim();
 
-  const discordId = interaction.fields.getTextInputValue("player-discord-id").trim();
+    if (!discordId) {
+      await interaction.reply({
+        content: "❌ 請輸入玩家 Discord ID。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
 
-  if (!discordId) {
-    await interaction.reply({ content: "❌ 請輸入玩家 Discord ID。", flags: MessageFlags.Ephemeral });
-    return;
-  }
+    try {
+      const result = await serviceContext.adminConsoleService.getPlayerQueryInfo(discordId);
 
-  try {
-    const result = await serviceContext.adminConsoleService.getPlayerQueryInfo(discordId);
+      const transactionNames = result.transactions
+        .map((t) => {
+          const sign = t.direction === "debit" ? "-" : "+";
+          return `${t.currencyType} ${sign}${Math.abs(t.amount)} | ${t.source}`;
+        })
+        .join("\n");
 
-    const transactionNames = result.transactions
-      .map((t) => {
-        const sign = t.direction === "debit" ? "-" : "+";
-        return `${t.currencyType} ${sign}${Math.abs(t.amount)} | ${t.source}`;
-      })
-      .join("\n");
-
-    await interaction.reply({
-      content:
-        `🔍 玩家查詢結果\n` +
-        `ID：${result.player.discordId}\n` +
-        `玩家：${result.player.displayName}\n` +
-        `狀態：${result.player.status}\n\n` +
-        `等級：${result.progress.level}\n` +
-        `經驗：${result.progress.exp}\n\n` +
-        `金幣：${result.wallet.gold}\n` +
-        `鑽石：${result.wallet.diamond}\n\n` +
-        `最近交易：\n${transactionNames || "無"}`,
-      flags: MessageFlags.Ephemeral
-    });
-  } catch (error) {
-    const message = isAppError(error) ? `❌ ${error.message}` : "查詢玩家資訊失敗。";
-    await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        content:
+          `🔍 玩家查詢結果\n` +
+          `ID：${result.player.discordId}\n` +
+          `玩家：${result.player.displayName}\n` +
+          `狀態：${result.player.status}\n\n` +
+          `等級：${result.progress.level}\n` +
+          `經驗：${result.progress.exp}\n\n` +
+          `金幣：${result.wallet.gold}\n` +
+          `鑽石：${result.wallet.diamond}\n\n` +
+          `最近交易：\n${transactionNames || "無"}`,
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      const message = isAppError(error) ? `❌ ${error.message}` : "查詢玩家資訊失敗。";
+      await interaction.reply({
+        content: message,
+        flags: MessageFlags.Ephemeral
+      });
+    }
   }
 }
 

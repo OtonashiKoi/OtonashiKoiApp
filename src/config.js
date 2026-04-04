@@ -23,7 +23,8 @@ module.exports = {
     adminUserIds: parseCsv(process.env.ADMIN_USER_IDS), // 管理員用戶 ID 陣列
     playerRoleIds: parseCsv(process.env.PLAYER_ROLE_IDS), // 玩家角色 ID 陣列
     playerUserIds: parseCsv(process.env.PLAYER_USER_IDS), // 玩家用戶 ID 陣列
-    personalRoomChannelId: process.env.PERSONAL_ROOM_CHANNEL_ID || "" // 個人房間頻道 ID
+    personalRoomChannelId: process.env.PERSONAL_ROOM_CHANNEL_ID || "", // 個人房間頻道 ID
+    inviteUrl: process.env.DISCORD_INVITE_URL || "https://discord.gg/your-invite" // 預設 Discord 邀請連結
   },
   // API 伺服器設定
   api: {

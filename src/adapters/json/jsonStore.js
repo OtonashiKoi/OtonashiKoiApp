@@ -21,7 +21,8 @@ const INITIAL_DATA = {
   wallets: {},
   progress: {},
   transactions: [],
-  adminActionLogs: []
+  adminActionLogs: [],
+  checkins: []
 };
 
 function normalizeStore(data) {
@@ -45,6 +46,7 @@ function normalizeStore(data) {
   if (!next.progress || typeof next.progress !== "object") next.progress = {};
   if (!Array.isArray(next.transactions)) next.transactions = [];
   if (!Array.isArray(next.adminActionLogs)) next.adminActionLogs = [];
+  if (!Array.isArray(next.checkins)) next.checkins = [];
   return next;
 }
 

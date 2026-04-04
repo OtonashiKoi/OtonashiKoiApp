@@ -7,6 +7,7 @@ const { ProgressService } = require("./progress/progressService");
 const { TransactionService } = require("./transaction/transactionService");
 const { WalletService } = require("./wallet/walletService");
 const { RewardService } = require("./reward/rewardService");
+const { CheckinService } = require("./checkin/checkinService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -22,6 +23,7 @@ function createServiceContext() {
     repositories.walletRepository,
     repositories.transactionRepository
   );
+  const checkinService = new CheckinService(playerService, repositories.checkinRepository, rewardService);
   const progressService = new ProgressService(playerService, repositories.progressRepository);
   const transactionService = new TransactionService(playerService, repositories.transactionRepository);
   const adminService = new AdminService(
@@ -47,6 +49,7 @@ function createServiceContext() {
     rewardService,
     transactionService,
     walletService
+    , checkinService
   };
 }
 

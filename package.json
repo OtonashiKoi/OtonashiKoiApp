@@ -6,6 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "prepm2:start": "node scripts/free-port.js",
+    "prestart": "node scripts/free-port.js",
+    "predev": "node scripts/free-port.js",
     "prepm2:restart": "node scripts/free-port.js",
     "prepm2:reset": "node scripts/free-port.js",
     "start": "node src/index.js",
