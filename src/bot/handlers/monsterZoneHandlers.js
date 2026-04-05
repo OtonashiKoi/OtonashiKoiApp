@@ -70,7 +70,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     maxHp: V * 15 + 50,
     atk: Math.round(baseStat * mult),
     attackCount,
-    def: V * 2,
+    def: bonus.vit, // 只算裝備加成，基礎 VIT 管血量
     dodge: Math.min(50, A * 0.5),
     hit: Math.min(100, 80 + D),
     crit: Math.min(100, L * 0.3)

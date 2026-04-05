@@ -4,8 +4,7 @@ function calcStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1 }) {
   return {
     maxHp: vit * 15 + 50,
     atk: str * 3,
-    def: vit * 2,
-    mdef: INT * 2,
+    def: 0,
     dodge: Math.min(50, Math.round(agi * 0.5 * 10) / 10),
     hit: Math.min(100, 80 + dex)
   };
