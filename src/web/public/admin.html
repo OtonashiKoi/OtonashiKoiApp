@@ -39,6 +39,7 @@
           <button class="nav-link" data-target="section-tiers">玩家等級設定</button>
           <button class="nav-link" data-target="section-items">道具庫管理</button>
           <button class="nav-link" data-target="section-shop">金幣商店管理</button>
+          <button class="nav-link" data-target="section-monsters">怪物庫管理</button>
           <button class="nav-link" data-target="section-log">系統操作紀錄</button>
         </nav>
 
@@ -179,75 +180,108 @@
                   </article>
                 </div>
 
-                <div class="player-management-grid">
-                  <article class="detail-card">
-                    <h4>屬性配點 (RO Status)</h4>
-                    <div class="status-points-info">
-                      <span>剩餘點數：<strong id="player-status-points">0</strong></span>
+                <div class="player-body-grid">
+                  <!-- 左欄：角色數據 -->
+                  <div class="player-left">
+                    <div class="player-sub-grid">
+                      <article class="detail-card">
+                        <h4>屬性配點</h4>
+                        <div class="status-points-info">
+                          <span>剩餘點數：<strong id="player-status-points">0</strong></span>
+                        </div>
+                        <div id="attributes-grid" class="attributes-grid"></div>
+                      </article>
+                      <article class="detail-card">
+                        <h4>戰鬥數值</h4>
+                        <div id="combat-stats-grid" class="combat-stats-grid"></div>
+                      </article>
                     </div>
-                    <div id="attributes-grid" class="attributes-grid">
-                      <!-- STR, AGI, VIT, INT, DEX, LUK will be rendered here -->
-                    </div>
-                  </article>
-                  <article class="detail-card">
-                    <h4>帳號資訊</h4>
-                    <dl class="detail-list">
-                      <div><dt>建立時間</dt><dd id="player-created-at">-</dd></div>
-                      <div><dt>更新時間</dt><dd id="player-updated-at">-</dd></div>
-                      <div><dt>錢包更新</dt><dd id="player-wallet-updated-at">-</dd></div>
-                      <div><dt>進度更新</dt><dd id="player-progress-updated-at">-</dd></div>
-                    </dl>
-                  </article>
 
-                  <article class="detail-card">
-                    <h4>資源管理</h4>
-                    <form id="currency-action-form" class="admin-form">
-                      <label>
-                        <span>幣種</span>
-                        <select id="currency-type-input">
-                          <option value="gold">金幣</option>
-                          <option value="diamond">鑽石</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>操作</span>
-                        <select id="currency-operation-input">
-                          <option value="grant">增加</option>
-                          <option value="deduct">扣除</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>數量</span>
-                        <input id="currency-amount-input" type="number" min="1" step="1" value="100" />
-                      </label>
-                      <label>
-                        <span>原因</span>
-                        <input id="currency-reason-input" type="text" placeholder="例如：活動獎勵、手動校正" />
-                      </label>
-                      <button id="currency-submit-button" type="submit" class="button primary">套用資源變更</button>
-                    </form>
-                  </article>
+                    <article class="detail-card">
+                      <h4>裝備中</h4>
+                      <div id="equipment-slots-grid" class="equipment-slots-grid"></div>
+                    </article>
 
-                  <article class="detail-card">
-                    <h4>經驗管理</h4>
-                    <form id="exp-action-form" class="admin-form">
-                      <label>
-                        <span>經驗值</span>
-                        <input id="exp-amount-input" type="number" min="1" step="1" value="100" />
-                      </label>
-                      <label>
-                        <span>原因</span>
-                        <input id="exp-reason-input" type="text" placeholder="例如：任務補發、活動補償" />
-                      </label>
-                      <button id="exp-submit-button" type="submit" class="button primary">發放經驗</button>
-                    </form>
-                  </article>
+                    <article class="detail-card">
+                      <h4>持有道具 <span class="inventory-badge" id="inventory-count">0</span></h4>
+                      <div id="inventory-list" class="inventory-list"></div>
+                    </article>
+                  </div>
 
-                  <article class="detail-card detail-card-wide">
-                    <h4>最近交易</h4>
-                    <div id="player-transaction-list" class="transaction-list"></div>
-                  </article>
+                  <!-- 右欄：管理工具 -->
+                  <div class="player-right">
+                    <article class="detail-card">
+                      <h4>帳號資訊</h4>
+                      <dl class="detail-list">
+                        <div><dt>建立時間</dt><dd id="player-created-at">-</dd></div>
+                        <div><dt>更新時間</dt><dd id="player-updated-at">-</dd></div>
+                        <div><dt>錢包更新</dt><dd id="player-wallet-updated-at">-</dd></div>
+                        <div><dt>進度更新</dt><dd id="player-progress-updated-at">-</dd></div>
+                      </dl>
+                    </article>
+
+                    <article class="detail-card">
+                      <h4>資源管理</h4>
+                      <form id="currency-action-form" class="admin-form">
+                        <label>
+                          <span>幣種</span>
+                          <select id="currency-type-input">
+                            <option value="gold">金幣</option>
+                            <option value="diamond">鑽石</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>操作</span>
+                          <select id="currency-operation-input">
+                            <option value="grant">增加</option>
+                            <option value="deduct">扣除</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>數量</span>
+                          <input id="currency-amount-input" type="number" min="1" step="1" value="100" />
+                        </label>
+                        <label>
+                          <span>原因</span>
+                          <input id="currency-reason-input" type="text" placeholder="例如：活動獎勵、手動校正" />
+                        </label>
+                        <button id="currency-submit-button" type="submit" class="button primary">套用資源變更</button>
+                      </form>
+                    </article>
+
+                    <article class="detail-card">
+                      <h4>經驗管理</h4>
+                      <form id="exp-action-form" class="admin-form">
+                        <label>
+                          <span>經驗值</span>
+                          <input id="exp-amount-input" type="number" min="1" step="1" value="100" />
+                        </label>
+                        <label>
+                          <span>原因</span>
+                          <input id="exp-reason-input" type="text" placeholder="例如：任務補發、活動補償" />
+                        </label>
+                        <button id="exp-submit-button" type="submit" class="button primary">發放經驗</button>
+                      </form>
+                    </article>
+                    <article class="detail-card">
+                      <h4>發放道具</h4>
+                      <form id="grant-item-form" class="admin-form">
+                        <label>
+                          <span>選擇道具</span>
+                          <select id="grant-item-select">
+                            <option value="">— 載入中 —</option>
+                          </select>
+                        </label>
+                        <button id="grant-item-submit" type="submit" class="button primary">發放到背包</button>
+                      </form>
+                    </article>
+                  </div>
                 </div>
+
+                <article class="detail-card" style="margin-top:20px">
+                  <h4>最近交易</h4>
+                  <div id="player-transaction-list" class="transaction-list"></div>
+                </article>
               </div>
             </div>
           </div>
@@ -269,78 +303,45 @@
               <p class="section-kicker">Shop</p>
               <h2>金幣商店管理</h2>
             </div>
-            <button id="shop-btn-new" class="button primary">＋ 新增商品</button>
+            <button id="shop-btn-new" class="button primary">＋ 新增一行</button>
           </div>
-          <p class="hint">管理金幣商店上架商品。玩家在 Discord 金幣商店頻道按「逛商店」即可看到已上架商品並消耗金幣/鑽石購買。</p>
+          <p class="hint">管理金幣商店上架商品。玩家在 Discord 金幣商店頻道按「逛商店」即可看到已上架商品。限定等級欄以逗號分隔等級代號，例如 A,S,SS，空白表示全部可買。</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
+            <button class="button shop-tab-btn active" data-shop-tab="all">📦 全部</button>
+            <button class="button shop-tab-btn" data-shop-tab="consumable">🧪 消耗品</button>
+            <button class="button shop-tab-btn" data-shop-tab="collectible">🖼️ 圖片</button>
+            <button class="button shop-tab-btn" data-shop-tab="equipment">⚔️ 裝備</button>
+            <button class="button shop-tab-btn" data-shop-tab="special">✨ 特殊</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="shop-table" id="shop-sheet-table" style="min-width:100%;">
+              <thead id="shop-sheet-head"></thead>
+              <tbody id="shop-tbody"></tbody>
+            </table>
+          </div>
+        </section>
 
-          <div id="shop-form-area" class="hidden" style="margin-bottom:1.5rem;">
-            <div class="access-card" style="max-width:560px;">
-              <h3 id="shop-form-title">新增商品</h3>
-              <form id="shop-item-form" class="admin-form">
-                <label>
-                  <span>從道具庫選擇道具 <span style="color:var(--danger)">*</span></span>
-                  <select id="shop-input-itemid" required>
-                    <option value="">— 請先前往「道具庫管理」新增道具 —</option>
-                  </select>
-                </label>
-                <div id="shop-item-preview" class="hidden" style="display:none;align-items:center;gap:12px;padding:10px 12px;background:var(--surface-hover);border-radius:8px;border:1px solid var(--line);margin-bottom:4px;">
-                  <img id="shop-preview-img" src="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0;display:none;" />
-                  <div style="min-width:0">
-                    <strong id="shop-preview-name" style="font-size:1em;"></strong>
-                    <p id="shop-preview-desc" style="margin:2px 0 4px;font-size:0.85em;color:var(--muted);"></p>
-                    <span id="shop-preview-effect" style="font-size:0.8em;"></span>
-                  </div>
-                </div>
-                <div class="grid two-up">
-                  <label><span>售價（0 = 免費領取）</span><input id="shop-input-price" type="number" min="0" value="100" required /></label>
-                  <label><span>幣種</span>
-                    <select id="shop-input-currency">
-                      <option value="gold">💰 金幣</option>
-                      <option value="diamond">💎 鑽石</option>
-                    </select>
-                  </label>
-                </div>
-                <label><span>庫存（-1 = 無限）</span><input id="shop-input-stock" type="number" min="-1" value="-1" /></label>
-                <label>
-                  <span>每月領取上限（0 = 無限）</span>
-                  <input id="shop-input-maxpermonth" type="number" min="0" value="0" />
-                </label>
-                <div id="shop-tier-area">
-                  <span style="font-size:0.9em;font-weight:600;display:block;margin-bottom:6px;">允許購買的等級（空選 = 所有人可買）</span>
-                  <div id="shop-tier-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:8px 0;"></div>
-                </div>
-                <label class="checkbox-label">
-                  <input id="shop-input-enabled" type="checkbox" checked />
-                  <span>立即上架</span>
-                </label>
-                <label class="checkbox-label">
-                  <input id="shop-input-issale" type="checkbox" />
-                  <span>🔥 優惠商品（顯示在優惠區）</span>
-                </label>
-                <div class="actions">
-                  <button id="shop-btn-submit" type="submit" class="button primary">新增</button>
-                  <button id="shop-btn-cancel" type="button" class="button">取消</button>
-                </div>
-              </form>
+        <section id="section-monsters" class="card panel-section">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Monsters</p>
+              <h2>怪物庫管理</h2>
             </div>
+            <button id="monsters-btn-new" class="button primary">＋ 新增怪物</button>
           </div>
-
-          <table class="shop-table">
-            <thead>
-              <tr>
-                <th style="width:44px;"></th>
-                <th>商品名稱</th>
-                <th>說明</th>
-                <th>售價</th>
-                <th>幣種</th>
-                <th>庫存</th>
-                <th>效果</th>
-                <th>狀態</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="shop-item-tbody"></tbody>
-          </table>
+          <p class="hint">管理放怪區輪換清單。<strong>出場順序</strong>欄決定怪物出場的先後（數字小的先出場），打死後自動換下一隻。可在下方「目前放怪區狀態」強制指定目前上場的怪物。</p>
+          <!-- 放怪區狀態卡片 -->
+          <div id="monsters-state-area" class="access-card" style="margin-bottom:1.5rem;padding:1rem 1.25rem;">
+            <p class="hint">登入後自動載入...</p>
+          </div>
+          <!-- 隱藏圖片 input -->
+          <input type="file" id="monsters-img-input" accept="image/*" style="display:none;" />
+          <div style="overflow-x:auto;">
+            <table class="shop-table" id="monsters-sheet-table" style="min-width:100%;">
+              <thead id="monsters-sheet-head"></thead>
+              <tbody id="monsters-tbody"></tbody>
+            </table>
+          </div>
         </section>
 
         <section id="section-items" class="card panel-section">
@@ -351,16 +352,20 @@
             #items-sheet-table th { padding:6px 8px; }
             .img-cell { text-align:center; cursor:pointer; width:56px; }
             .img-cell:hover { background:rgba(255,255,255,0.05); }
+            .tier-chip { display:inline-block; padding:1px 6px; margin:1px 2px; border-radius:4px; font-size:0.78em; font-weight:600; cursor:pointer; border:1px solid var(--line,#444); color:var(--muted,#888); user-select:none; transition:background 0.1s,color 0.1s; }
+            .tier-chip:hover { border-color:var(--accent,#4ade80); color:var(--accent,#4ade80); }
+            .tier-chip.active { background:var(--accent,#4ade80); border-color:var(--accent,#4ade80); color:#111; }
           </style>
           <div class="section-head">
             <div>
               <p class="section-kicker">Items</p>
               <h2>道具庫管理</h2>
             </div>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
               <button id="items-btn-new" class="button primary">＋ 新增一行</button>
               <button id="items-btn-export" class="button">📥 匯出 CSV</button>
               <button id="items-btn-import" class="button">📤 匯入 CSV</button>
+              <input id="items-search-input" type="text" placeholder="🔍 搜尋名稱…" style="padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:var(--surface-hover);color:inherit;font-size:0.88em;width:180px;" />
             </div>
           </div>
           <p class="hint">每一行為一個道具，直接在表格中編輯後按「儲存」，點圖片欄可上傳圖片。匯入 CSV 會新增道具（不覆蓋現有）。</p>
@@ -374,6 +379,9 @@
             <button class="button items-tab-btn" data-items-tab="equipment">⚔️ 裝備</button>
             <button class="button items-tab-btn" data-items-tab="special">✨ 特殊</button>
           </div>
+
+          <!-- 裝備子分類篩選 -->
+          <div id="items-equip-sub-filter" style="display:none;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:12px;"></div>
 
           <!-- 隱藏圖片 input（共用） -->
           <input type="file" id="items-img-input" accept="image/*" style="display:none;" />
@@ -409,6 +417,7 @@
     <script src="/static/admin.players.init.js"></script>
     <script src="/static/admin.tiers.js"></script>
     <script src="/static/admin.shop.js"></script>
+    <script src="/static/admin.monsters.js"></script>
     <script src="/static/admin.items.js"></script>
   </body>
   </html>

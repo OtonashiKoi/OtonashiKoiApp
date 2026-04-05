@@ -2,6 +2,7 @@ const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBu
 const path = require("path");
 const fs = require("fs");
 const { BUTTON_IDS, createPlayerPanelMessage } = require("./playerPanelView");
+const { expToNextLevel, MAX_LEVEL } = require("../shared/progression");
 const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
 
@@ -51,11 +52,16 @@ async function handleProfile(interaction) {
   const p = freshProgress || result.progress;
   const attrs = p.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
   const tierLine = p.playerTier ? `\n玄家等級：**${p.playerTier}級**` : "";
-  
+  const isMaxLevel = p.level >= MAX_LEVEL;
+  const expNeeded = isMaxLevel ? 0 : expToNextLevel(p.level);
+  const expLine = isMaxLevel
+    ? `等級：Base ${p.level} ⭐ 已達最高等級${tierLine}`
+    : `等級：Base ${p.level} (EXP: ${p.exp} / ${expNeeded}，還差 ${expNeeded - p.exp})${tierLine}`;
+
   await replyAndAutoDelete(interaction,
     `🧧 **${result.player.displayName} 的冒險者履歷**\n` +
     `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})\n` +
-    `等級：Base ${p.level} (EXP: ${p.exp})${tierLine}\n` +
+    expLine + "\n" +
     `==============\n` +
     `【基本素質】\n` +
     `STR: ${attrs.str} | AGI: ${attrs.agi} | VIT: ${attrs.vit}\n` +

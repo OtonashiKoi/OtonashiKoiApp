@@ -93,7 +93,9 @@
           ? "/admin/channel-layout/publish-player-query"
           : feature.key === "coin_shop"
             ? "/admin/channel-layout/publish-coin-shop"
-            : null;
+            : feature.key === "monster_zone"
+              ? "/admin/channel-layout/publish-monster-zone"
+              : null;
 
       const publishBtn = publishEndpoint
         ? `<button class="button publish-panel-btn" data-publish-endpoint="${publishEndpoint}" title="將按鈕面板發布到已選頻道">📨 發布面板</button>`

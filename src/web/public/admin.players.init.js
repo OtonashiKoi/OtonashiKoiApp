@@ -178,6 +178,22 @@
       }
     });
 
+    const grantItemForm = document.getElementById("grant-item-form");
+    if (grantItemForm) {
+      grantItemForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const btn = document.getElementById("grant-item-submit");
+        try {
+          if (btn) { btn.disabled = true; btn.textContent = "發放中…"; }
+          await window.adminPlayers.submitGrantItem?.();
+        } catch (error) {
+          log(`發放道具失敗：${error.message}`);
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = "發放到背包"; }
+        }
+      });
+    }
+
     elements.saveAdminRolesButton.addEventListener("click", async () => {
       try {
         if (window.adminBindings && typeof window.adminBindings.getSelectedRoleIds === 'function') {

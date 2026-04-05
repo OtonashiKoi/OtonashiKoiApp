@@ -25,7 +25,9 @@ const INITIAL_DATA = {
   checkins: [],
   shopItems: [],
   items: [],
-  playerTiers: {}
+  playerTiers: {},
+  monsters: [],
+  monsterState: { activeMonsterSeq: 1, currentHp: null, killCount: {}, participants: [] }
 };
 
 function normalizeStore(data) {
@@ -53,6 +55,10 @@ function normalizeStore(data) {
   if (!Array.isArray(next.shopItems)) next.shopItems = [];
   if (!Array.isArray(next.items)) next.items = [];
   if (!next.playerTiers || typeof next.playerTiers !== "object" || Array.isArray(next.playerTiers)) next.playerTiers = {};
+  if (!Array.isArray(next.monsters)) next.monsters = [];
+  if (!next.monsterState || typeof next.monsterState !== "object") next.monsterState = { activeMonsterSeq: 1, currentHp: null, killCount: {} };
+  if (!next.monsterState.killCount || typeof next.monsterState.killCount !== "object") next.monsterState.killCount = {};
+  if (!Array.isArray(next.monsterState.participants)) next.monsterState.participants = [];
   return next;
 }
 

@@ -252,6 +252,25 @@ class ShopService {
     const slot = entry.equipSlot;
     if (!slot) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備未指定槽位", 400);
     if (!progress.equipment) progress.equipment = {};
+
+    // 雙手武器限制
+    if (slot === "weapon" && entry.isTwoHanded) {
+      // 換上雙手武器：自動卸下副手
+      const shieldItem = progress.equipment["shield"] || null;
+      if (shieldItem) {
+        if (!Array.isArray(progress.inventory)) progress.inventory = [];
+        progress.inventory.push(shieldItem);
+        progress.equipment["shield"] = null;
+      }
+    }
+    if (slot === "shield") {
+      // 嘗試裝副手：主手若是雙手武器則拒絕
+      const mainWeapon = progress.equipment["weapon"] || null;
+      if (mainWeapon?.isTwoHanded) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "主手裝備了雙手武器，無法使用副手槽！", 400);
+      }
+    }
+
     const current = progress.equipment[slot] || null;
     // 從背包移除
     progress.inventory.splice(idx, 1);

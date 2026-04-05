@@ -10,7 +10,8 @@ module.exports = {
       min_uptime: "10s",
       env_file: ".env",
       env: {
-        NODE_ENV: "production"
+        NODE_ENV: "production",
+        STORAGE_DRIVER: "mongo"
       }
     },
     {

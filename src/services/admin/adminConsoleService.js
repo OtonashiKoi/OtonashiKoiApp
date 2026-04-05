@@ -27,6 +27,11 @@ const AVAILABLE_FEATURES = [
     key: "personal_room",
     label: "個人房間面板",
     description: "玩家個人化功能與私人操作"
+  },
+  {
+    key: "monster_zone",
+    label: "放怪區面板",
+    description: "玩家在此頻道選擇出戰並進行回合制戰鬥"
   }
 ];
 
@@ -199,7 +204,7 @@ class AdminConsoleService {
   }
 
   async listAllPlayers(limit = 50) {
-    const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+    const safeLimit = Math.max(1, Math.min(1000, Number(limit) || 50));
     const players = await this.playerRepository.listAll();
     return players.slice(0, safeLimit);
   }
@@ -326,6 +331,48 @@ class AdminConsoleService {
     );
     if (!updatedBindings.some((b) => b.featureKey === "coin_shop")) {
       updatedBindings.push(normalizeBinding({ featureKey: "coin_shop", channelId: targetChannelId, panelMessageId: message.id }));
+    }
+    await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
+
+    return { channelId: targetChannelId, messageId: message.id };
+  }
+
+  async publishMonsterZonePanel(channelId, monster, currentHp, options = {}) {
+    const { getBotClient } = require("../../bot/runtimeContext");
+    const { createMonsterZonePanelMessage } = require("../../bot/monsterZoneView");
+
+    const client = getBotClient();
+    if (!client?.isReady()) {
+      throw new AppError(ERROR_CODES.UNAUTHORIZED, "Discord bot is not ready", 503);
+    }
+
+    const targetChannelId = String(channelId || "").trim();
+    if (!targetChannelId) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "channelId is required", 400);
+    }
+
+    const channel = await client.channels.fetch(targetChannelId);
+    if (!channel || !channel.isTextBased || !channel.isTextBased()) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
+    }
+
+    const stored = await this.channelLayoutRepository.get();
+    const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
+    const existingBinding = bindings.find((b) => b.featureKey === "monster_zone");
+    if (existingBinding?.panelMessageId) {
+      await channel.messages.fetch(existingBinding.panelMessageId)
+        .then((msg) => msg.delete())
+        .catch(() => {});
+    }
+
+    const panelMsg = createMonsterZonePanelMessage(monster || null, currentHp ?? null, options?.participantCount ?? 0);
+    const message = await channel.send(panelMsg);
+
+    const updatedBindings = bindings.map((b) =>
+      b.featureKey === "monster_zone" ? { ...b, panelMessageId: message.id } : b
+    );
+    if (!updatedBindings.some((b) => b.featureKey === "monster_zone")) {
+      updatedBindings.push(normalizeBinding({ featureKey: "monster_zone", channelId: targetChannelId, panelMessageId: message.id }));
     }
     await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
 

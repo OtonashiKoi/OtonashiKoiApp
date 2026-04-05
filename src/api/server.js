@@ -10,6 +10,7 @@ const { fail } = require("../shared/response");
 // 匯入各種路由模組
 const { createAdminConsoleRoutes } = require("./routes/adminConsoleRoutes");
 const { createAdminPlayerRoutes } = require("./routes/adminPlayerRoutes");
+const { createAdminMonsterRoutes } = require("./routes/adminMonsterRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 
 // 建立 Express API 伺服器
@@ -24,12 +25,16 @@ function createApiServer() {
   app.use("/static", express.static(path.resolve(__dirname, "../web/public")));
   // 玩家上傳圖片（道具圖片等）
   app.use("/uploads", express.static(path.resolve(__dirname, "../web/public/uploads")));
+  // 怪物圖片
+  app.use("/uploads/monsters", express.static(path.resolve(__dirname, "../web/public/uploads/monsters")));
   // 健康檢查路由
   app.use(createHealthRoutes());
   // 管理後台路由
   app.use(createAdminConsoleRoutes(serviceContext));
   // 玩家管理路由
   app.use(createAdminPlayerRoutes(serviceContext));
+  // 怪物管理路由
+  app.use(createAdminMonsterRoutes(serviceContext));
 
   // 全域錯誤處理（捕捉所有未處理例外）
   app.use((error, _req, res, _next) => {

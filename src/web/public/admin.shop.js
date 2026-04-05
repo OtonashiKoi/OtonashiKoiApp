@@ -1,331 +1,110 @@
-/* admin.shop.js — 金幣商店商品管理 */
-(function () {
-  let shopItems = [];
-  let libraryItems = [];
-  let editingId = null;
-
-  const currencyLabels = { gold: "💰 金幣", diamond: "💎 鑽石" };
-  const effectLabels = {
-    none: "無效果",
-    grant_gold: "💰 給予金幣",
-    grant_diamond: "💎 給予鑽石",
-    grant_exp: "✨ 給予經驗值",
-    grant_status_points: "📊 給予屬性點",
-    checkin_multiplier: "🎯 打卡加倍符"
-  };
-
-  // ── DOM refs ──────────────────────────────────────────────
-  const tableBody    = document.getElementById("shop-item-tbody");
-  const form         = document.getElementById("shop-item-form");
-  const formTitle    = document.getElementById("shop-form-title");
-  const selectItemId = document.getElementById("shop-input-itemid");
-  const previewCard  = document.getElementById("shop-item-preview");
-  const previewImg   = document.getElementById("shop-preview-img");
-  const previewName  = document.getElementById("shop-preview-name");
-  const previewDesc  = document.getElementById("shop-preview-desc");
-  const previewEff   = document.getElementById("shop-preview-effect");
-  const inputPrice   = document.getElementById("shop-input-price");
-  const inputCurrency = document.getElementById("shop-input-currency");
-  const inputStock   = document.getElementById("shop-input-stock");
-  const inputMaxPerMonth = document.getElementById("shop-input-maxpermonth");
-  const tierCheckboxArea  = document.getElementById("shop-tier-checkboxes");
-  const inputEnabled = document.getElementById("shop-input-enabled");
-  const inputIsSale  = document.getElementById("shop-input-issale");
-  const btnSubmit    = document.getElementById("shop-btn-submit");
-  const btnCancel    = document.getElementById("shop-btn-cancel");
-  const btnNew       = document.getElementById("shop-btn-new");
-  const formArea     = document.getElementById("shop-form-area");
-
-  // ── Tier checkboxes ───────────────────────────────────────
-  const TIER_RANKS = ["E", "D", "C", "B", "A", "S", "SS"];
-
-  function renderTierCheckboxes(selectedTiers) {
-    if (!tierCheckboxArea) return;
-    const tiers = window.playerTiers || {};
-    tierCheckboxArea.innerHTML = TIER_RANKS.map((rank) => {
-      const tier = tiers[rank] || {};
-      const label = tier.label || `${rank}級`;
-      const checked = (selectedTiers || []).includes(rank);
-      const hasRoles = Array.isArray(tier.roleIds) && tier.roleIds.length > 0;
-      const hint = hasRoles ? `(${tier.roleIds.length} 組)` : `<span style="color:var(--danger);font-size:0.8em">尚未設定 Role ID</span>`;
-      return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-        <input type="checkbox" class="tier-cb" value="${rank}" ${checked ? "checked" : ""} />
-        <span>${escHtml(label)}</span>
-        <span style="color:var(--muted);font-size:0.8em">${hint}</span>
-      </label>`;
-    }).join("");
+/* admin.shop.js */
+(function(){
+  let shopItems=[],libraryItems=[],activeTab='all';
+  const STANDARD_SLOTS=new Set(['head_top','head_mid','head_low','armor','weapon','shield','garment','shoes','accessory_l','accessory_r']);
+  const SPECIAL_SLOTS=new Set(['title_eq','job_eq','special_1','special_2','special_3']);
+  function getLibItem(id){return libraryItems.find(i=>i.id===id)||null;}
+  function matchesTab(shopItem,tab){
+    if(tab==='all')return true;
+    const lib=getLibItem(shopItem.itemLibraryId);
+    if(!lib)return tab==='all';
+    if(tab==='consumable')return lib.itemType==='consumable';
+    if(tab==='collectible')return lib.itemType==='collectible';
+    if(tab==='equipment')return lib.itemType==='equipment'&&STANDARD_SLOTS.has(lib.equipSlot);
+    if(tab==='special')return lib.itemType==='equipment'&&SPECIAL_SLOTS.has(lib.equipSlot);
+    return true;
   }
-
-  function getSelectedTiers() {
-    if (!tierCheckboxArea) return [];
-    return [...tierCheckboxArea.querySelectorAll(".tier-cb:checked")].map((cb) => cb.value);
-  }
-
-  // ── API helpers ───────────────────────────────────────────
-  function apiHeaders() {
-    return {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${window.getAdminToken ? window.getAdminToken() : ""}`
+  const TIER_RANKS=["E","D","C","B","A","S","SS"];
+  const COLS=["seq","img","item","price","currency","stock","monthLimit","tiers","sale","enabled","actions"];
+  const COL_HEADERS={seq:"#",img:"圖片",item:"道具名稱",price:"售價",currency:"幣種",stock:"庫存(-1=無限)",monthLimit:"月上限(0=無限)",tiers:"限定等級(空=全部)",sale:"優惠",enabled:"上架",actions:"操作"};
+  const COL_WIDTHS={seq:"36px",img:"52px",item:"180px",price:"72px",currency:"90px",stock:"90px",monthLimit:"100px",tiers:"210px",sale:"48px",enabled:"52px",actions:"100px"};
+  function auth(){return{Authorization:`Bearer ${window.getAdminToken?window.getAdminToken():""}` };}
+  function jsonH(){return{"Content-Type":"application/json",...auth()};}
+  async function loadShop(){const res=await fetch("/admin/shop/items",{headers:auth()});const json=await res.json();if(json.status==="ok"){shopItems=json.data||[];renderAll();}else{window.logActivity&&window.logActivity("❌ 無法載入商品："+(json.message||""));}}
+  async function loadLib(){const res=await fetch("/admin/items",{headers:auth()});const json=await res.json();if(json.status==="ok")libraryItems=json.data||[];}
+  function renderAll(){renderHead();renderBody();}
+  function renderHead(){const h=document.getElementById("shop-sheet-head");if(!h)return;h.innerHTML=`<tr>${COLS.map(c=>`<th style="min-width:${COL_WIDTHS[c]};white-space:nowrap;">${COL_HEADERS[c]}</th>`).join("")}</tr>`;}
+  function esc(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+  function itemOpts(selId){return`<option value="">— 請選擇道具 —</option>`+libraryItems.map(it=>`<option value="${esc(it.id)}"${it.id===selId?" selected":""}>${esc(it.name)}</option>`).join("");}
+  function buildRow(item,isNew=false,seq=0){
+    const id=item.id||"__new__";
+    const tiers=(item.allowedTiers||[]).join(",");
+    const imgHtml=item.imageUrl?`<img src="${esc(item.imageUrl)}" style="height:36px;width:36px;object-fit:cover;border-radius:4px;">`:"—";
+    const cells={
+      seq:`<td style="text-align:center;color:var(--muted);font-size:0.8em;user-select:none;">${isNew?"":seq}</td>`,
+      img:`<td style="text-align:center;width:52px;">${imgHtml}</td>`,
+      item:`<td><select class="sheet-input" data-field="item" style="width:100%;">${itemOpts(item.itemLibraryId)}</select></td>`,
+      price:`<td><input class="sheet-input" data-field="price" type="number" min="0" value="${esc(String(item.price??100))}" style="width:100%;text-align:right;"></td>`,
+      currency:`<td><select class="sheet-input" data-field="currency" style="width:100%;"><option value="gold"${(item.currency||"gold")==="gold"?" selected":""}>💰 金幣</option><option value="diamond"${item.currency==="diamond"?" selected":""}>💎 鑽石</option></select></td>`,
+      stock:`<td><input class="sheet-input" data-field="stock" type="number" value="${esc(String(item.stock??-1))}" style="width:100%;text-align:right;"></td>`,
+      monthLimit:`<td><input class="sheet-input" data-field="monthLimit" type="number" min="0" value="${esc(String(item.maxPerMonth??0))}" style="width:100%;text-align:right;"></td>`,
+      tiers:`<td style="white-space:nowrap;">${TIER_RANKS.map(r=>`<span class="tier-chip${(item.allowedTiers||[]).includes(r)?" active":""}" data-tier="${r}">${r}</span>`).join("")}</td>`,
+      sale:`<td style="text-align:center;"><input type="checkbox" data-field="sale"${item.isSale?" checked":""}></td>`,
+      enabled:`<td style="text-align:center;"><input type="checkbox" data-field="enabled"${item.enabled!==false?" checked":""}></td>`,
+      actions:`<td style="white-space:nowrap;"><button class="button small shop-save-btn">儲存</button>${!isNew?`<button class="button small danger shop-del-btn" data-name="${esc(item.name||"")}">刪除</button>`:""}</td>`
     };
+    return `<tr data-shop-id="${esc(id)}">${COLS.map(c=>cells[c]||"<td></td>").join("")}</tr>`;
   }
-
-  async function loadItems() {
-    const res = await fetch("/admin/shop/items", { headers: apiHeaders() });
-    const json = await res.json();
-    if (json.status === "ok") {
-      shopItems = json.data || [];
-      renderTable();
-    } else {
-      window.logActivity && window.logActivity("❌ 無法載入商品：" + (json.message || ""));
-    }
+  function bindEvents(tbody){
+    tbody.querySelectorAll(".shop-save-btn").forEach(btn=>btn.addEventListener("click",()=>saveRow(btn.closest("tr"))));
+    tbody.querySelectorAll(".shop-del-btn").forEach(btn=>btn.addEventListener("click",()=>{const tr=btn.closest("tr");deleteItem(tr.dataset.shopId,btn.dataset.name);}));
+    tbody.querySelectorAll(".tier-chip").forEach(chip=>chip.addEventListener("click",()=>chip.classList.toggle("active")));
+    tbody.querySelectorAll('[data-field="item"]').forEach(sel=>sel.addEventListener("change",()=>{
+      const lib=libraryItems.find(it=>it.id===sel.value);
+      const imgTd=sel.closest("tr").querySelector("td:nth-child(2)");
+      if(imgTd)imgTd.innerHTML=lib?.imageUrl?`<img src="${esc(lib.imageUrl)}" style="height:36px;width:36px;object-fit:cover;border-radius:4px;">`:"—";
+    }));
   }
-
-  async function loadLibraryItems() {
-    const res = await fetch("/admin/items", { headers: apiHeaders() });
-    const json = await res.json();
-    if (json.status === "ok") {
-      libraryItems = json.data || [];
-      populateItemSelect();
-    }
+  function renderBody(){
+    const tbody=document.getElementById("shop-tbody");
+    if(!tbody)return;
+    const filtered=shopItems.filter(i=>matchesTab(i,activeTab));
+    if(!filtered.length){tbody.innerHTML=`<tr><td colspan="${COLS.length}" style="text-align:center;color:var(--muted);padding:2rem;">${shopItems.length?'此分類尚無商品。':'尚無商品，按「＋ 新增一行」開始上架。'}</td></tr>`;return;}
+    tbody.innerHTML=filtered.map((item,i)=>buildRow(item,false,i+1)).join("");
+    bindEvents(tbody);
   }
-
-  function populateItemSelect() {
-    if (!selectItemId) return;
-    const current = selectItemId.value;
-    selectItemId.innerHTML = `<option value="">— 請選擇道具 —</option>` +
-      libraryItems.map(it =>
-        `<option value="${escAttr(it.id)}">${escHtml(it.name)}</option>`
-      ).join("");
-    if (current) selectItemId.value = current;
+  function getPayload(tr){
+    const get=f=>tr.querySelector(`[data-field="${f}"]`)?.value??"";
+    const chk=f=>tr.querySelector(`[data-field="${f}"]`)?.checked??false;
+    const allowedTiers=[...tr.querySelectorAll(".tier-chip.active")].map(c=>c.dataset.tier);
+    return{itemLibraryId:get("item"),price:Number(get("price"))||0,currency:get("currency")||"gold",stock:Number(get("stock"))||-1,maxPerMonth:Number(get("monthLimit"))||0,allowedTiers,isSale:chk("sale"),enabled:chk("enabled")};
   }
-
-  async function saveItem(payload) {
-    const url = editingId ? `/admin/shop/items/${editingId}` : "/admin/shop/items";
-    const method = editingId ? "PUT" : "POST";
-    const res = await fetch(url, { method, headers: apiHeaders(), body: JSON.stringify(payload) });
-    const json = await res.json();
-    if (json.status === "ok") {
-      window.logActivity && window.logActivity(`✅ 商品已${editingId ? "更新" : "新增"}：${json.data.name}`);
-      await loadItems();
-      resetForm();
-    } else {
-      window.logActivity && window.logActivity("❌ 儲存失敗：" + (json.message || ""));
-    }
+  async function saveRow(tr){
+    const id=tr.dataset.shopId,payload=getPayload(tr);
+    if(!payload.itemLibraryId){alert("請選擇道具");return;}
+    const isNew=id==="__new__";
+    const res=await fetch(isNew?"/admin/shop/items":`/admin/shop/items/${id}`,{method:isNew?"POST":"PUT",headers:jsonH(),body:JSON.stringify(payload)});
+    const json=await res.json();
+    if(json.status==="ok"){window.logActivity&&window.logActivity(`✅ 商品已${isNew?"新增":"更新"}：${json.data.name}`);await loadShop();}
+    else{window.logActivity&&window.logActivity("❌ 儲存失敗："+(json.message||""));}
   }
-
-  async function deleteItem(id, name) {
-    if (!confirm(`確定要刪除「${name}」？`)) return;
-    const res = await fetch(`/admin/shop/items/${id}`, { method: "DELETE", headers: apiHeaders() });
-    const json = await res.json();
-    if (json.status === "ok") {
-      window.logActivity && window.logActivity(`🗑️ 商品已刪除：${name}`);
-      await loadItems();
-    } else {
-      window.logActivity && window.logActivity("❌ 刪除失敗：" + (json.message || ""));
-    }
+  async function deleteItem(id,name){
+    if(!confirm(`確定要刪除「${name}」？`))return;
+    const res=await fetch(`/admin/shop/items/${id}`,{method:"DELETE",headers:auth()});
+    const json=await res.json();
+    if(json.status==="ok"){window.logActivity&&window.logActivity(`✅ 商品已刪除：${name}`);await loadShop();}
+    else{window.logActivity&&window.logActivity("❌ 刪除失敗："+(json.message||""));}
   }
-
-  async function toggleEnabled(item) {
-    const res = await fetch(`/admin/shop/items/${item.id}`, {
-      method: "PUT",
-      headers: apiHeaders(),
-      body: JSON.stringify({ enabled: !item.enabled })
-    });
-    const json = await res.json();
-    if (json.status === "ok") {
-      await loadItems();
-    }
+  function addNewRow(){
+    const tbody=document.getElementById("shop-tbody");
+    if(!tbody)return;
+    const ph=tbody.querySelector("td[colspan]");
+    if(ph)ph.closest("tr").remove();
+    const ei={id:"__new__",itemLibraryId:"",price:100,currency:"gold",stock:-1,maxPerMonth:0,allowedTiers:[],isSale:false,enabled:true};
+    const tmp=document.createElement("tbody");
+    tmp.innerHTML=buildRow(ei,true);
+    const nr=tmp.firstElementChild;
+    tbody.prepend(nr);
+    bindEvents(tbody);
+    nr.querySelector('[data-field="item"]')?.focus();
   }
-
-  // ── Render ────────────────────────────────────────────────
-  function renderTable() {
-    if (!tableBody) return;
-    if (!shopItems.length) {
-      tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted)">尚無商品，點右上「新增商品」開始上架。</td></tr>`;
-      return;
-    }
-    tableBody.innerHTML = shopItems.map((item) => {
-      const stockDisplay = item.stock === -1 ? "無限" : item.stock;
-      const eff = item.effect || { type: "none", value: 0 };
-      const effLabel = eff.type === "none"
-        ? `<span style="color:var(--muted);font-size:0.8em">無效果</span>`
-        : `<span class="badge badge-orange">${effectLabels[eff.type] || eff.type}${eff.value > 0 ? " " + eff.value : ""}</span>`;
-      const enabledBadge = item.enabled
-        ? `<span class="badge badge-green">上架</span>`
-        : `<span class="badge badge-grey">下架</span>`;
-      const saleBadge = item.isSale ? `<span class="badge badge-orange">優惠</span>` : "";
-      const roleBadge = (item.allowedTiers || []).length
-        ? `<span class="badge badge-orange" title="${escAttr((item.allowedTiers || []).join(", "))}">🔒 ${item.allowedTiers.join("/")}級</span>`
-        : "";
-      const monthBadge = item.maxPerMonth > 0
-        ? `<span style="font-size:0.8em;color:var(--muted)">每月限 ${item.maxPerMonth}</span>`
-        : "";
-      const priceLabel = item.price === 0 ? `<span class="badge badge-green">免費</span>` : item.price;
-      const thumb = item.imageUrl
-        ? `<img src="${escAttr(item.imageUrl)}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;vertical-align:middle;" />`
-        : `<span style="display:inline-block;width:36px;height:36px;background:var(--surface-hover);border-radius:4px;vertical-align:middle;"></span>`;
-      return `
-        <tr>
-          <td>${thumb}</td>
-          <td>${escHtml(item.name)}${saleBadge}</td>
-          <td style="max-width:200px;font-size:0.85em;">${escHtml(item.description)}</td>
-          <td>${priceLabel} ${roleBadge} ${monthBadge}</td>
-          <td>${currencyLabels[item.currency] || item.currency}</td>
-          <td>${stockDisplay}</td>
-          <td>${effLabel}</td>
-          <td>${enabledBadge}</td>
-          <td>
-            <button class="button small" onclick="shopUI.edit('${item.id}')">編輯</button>
-            <button class="button small" onclick="shopUI.toggleEnabled('${item.id}')">${item.enabled ? "下架" : "上架"}</button>
-            <button class="button small danger" onclick="shopUI.delete('${item.id}','${escAttr(item.name)}')">刪除</button>
-          </td>
-        </tr>`;
-    }).join("");
-  }
-
-  function escHtml(s) {
-    return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  }
-  function escAttr(s) {
-    return String(s || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
-
-  // ── Item preview card ─────────────────────────────────────
-  function showPreview(item) {
-    if (!previewCard || !item) { hidePreview(); return; }
-    previewName.textContent = item.name || "";
-    previewDesc.textContent = item.description || "";
-    const eff = item.effect || { type: "none", value: 0 };
-    if (eff.type && eff.type !== "none") {
-      previewEff.textContent = `${effectLabels[eff.type] || eff.type}${eff.value > 0 ? " " + eff.value : ""}`;
-      previewEff.style.display = "inline";
-    } else {
-      previewEff.style.display = "none";
-    }
-    if (item.imageUrl) {
-      previewImg.src = item.imageUrl;
-      previewImg.style.display = "block";
-    } else {
-      previewImg.src = "";
-      previewImg.style.display = "none";
-    }
-    previewCard.style.display = "flex";
-  }
-
-  function hidePreview() {
-    if (previewCard) previewCard.style.display = "none";
-  }
-
-  // ── Form ──────────────────────────────────────────────────
-  function showForm() {
-    formArea.classList.remove("hidden");
-    formArea.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-
-  function resetForm() {
-    editingId = null;
-    if (formTitle) formTitle.textContent = "新增商品";
-    if (btnSubmit) btnSubmit.textContent = "新增";
-    if (selectItemId) selectItemId.value = "";
-    hidePreview();
-    if (inputPrice) inputPrice.value = "100";
-    if (inputCurrency) inputCurrency.value = "gold";
-    if (inputStock) inputStock.value = "-1";
-    if (inputMaxPerMonth) inputMaxPerMonth.value = "0";
-    renderTierCheckboxes([]);
-    if (inputEnabled) inputEnabled.checked = true;
-    if (inputIsSale) inputIsSale.checked = false;
-    formArea.classList.add("hidden");
-  }
-
-  function fillForm(item) {
-    editingId = item.id;
-    if (formTitle) formTitle.textContent = "編輯商品";
-    if (btnSubmit) btnSubmit.textContent = "儲存";
-    if (selectItemId) {
-      selectItemId.value = item.itemLibraryId || "";
-    }
-    // 顯示 preview（使用 shopItem 現有資料，不必重新 fetch）
-    showPreview({ name: item.name, description: item.description, effect: item.effect, imageUrl: item.imageUrl });
-    if (inputPrice) inputPrice.value = item.price;
-    if (inputCurrency) inputCurrency.value = item.currency;
-    if (inputStock) inputStock.value = item.stock;
-    if (inputMaxPerMonth) inputMaxPerMonth.value = item.maxPerMonth || 0;
-    // 等級框需先確保資料，再繪
-    ensureTiersLoaded().then(() => renderTierCheckboxes(item.allowedTiers || []));
-    if (inputEnabled) inputEnabled.checked = item.enabled;
-    if (inputIsSale) inputIsSale.checked = Boolean(item.isSale);
-    showForm();
-  }
-
-  async function ensureTiersLoaded() {
-    // 如果 playerTiers 還是空的，主動乾一次
-    if (!window.playerTiers || Object.keys(window.playerTiers).length === 0) {
-      try {
-        const res = await fetch("/admin/player-tiers", { headers: apiHeaders() });
-        const json = await res.json();
-        if (json.status === "ok") window.playerTiers = json.data || {};
-      } catch { /* ignore */ }
-    }
-  }
-
-  // ── Events ──────────────────────────────────────────────────
-  if (btnNew) {
-    btnNew.addEventListener("click", async () => {
-      resetForm();
-      await Promise.all([loadLibraryItems(), ensureTiersLoaded()]);
-      renderTierCheckboxes([]);  // 載入完再繪一次
-      showForm();
-    });
-  }
-
-  if (btnCancel) btnCancel.addEventListener("click", () => resetForm());
-
-  if (selectItemId) {
-    selectItemId.addEventListener("change", () => {
-      const chosen = libraryItems.find(it => it.id === selectItemId.value);
-      if (chosen) showPreview(chosen);
-      else hidePreview();
-    });
-  }
-
-  if (form) {
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const itemLibraryId = selectItemId ? selectItemId.value : "";
-      if (!itemLibraryId) { alert("請從道具庫選擇道具"); return; }
-      const payload = {
-        itemLibraryId,
-        price: Number(inputPrice.value),
-        currency: inputCurrency.value,
-        stock: Number(inputStock.value),
-        maxPerMonth: Number(inputMaxPerMonth ? inputMaxPerMonth.value : 0),
-        allowedTiers: getSelectedTiers(),
-        enabled: inputEnabled.checked,
-        isSale: inputIsSale ? inputIsSale.checked : false
-      };
-      await saveItem(payload);
-    });
-  }
-
-  // ── Public API ─────────────────────────────────────────────
-  window.shopUI = {
-    edit(id) { const item = shopItems.find((i) => i.id === id); if (item) fillForm(item); },
-    delete(id, name) { deleteItem(id, name); },
-    toggleEnabled(id) { const item = shopItems.find((i) => i.id === id); if (item) toggleEnabled(item); },
-    reload: loadItems
-  };
-
-  // ── Init ──────────────────────────────────────────────────
-  document.addEventListener("adminConnected", () => {
-    loadItems();
-    loadLibraryItems();
-    renderTierCheckboxes([]);
-  });
-
-  // tier 設定更新時，永遠重繪 checkboxes（保留已勾選狀態）
-  document.addEventListener("playerTiersLoaded", () => {
-    renderTierCheckboxes(getSelectedTiers());
-  });
+  window.shopUI={reload:loadShop};
+  document.getElementById("shop-btn-new")?.addEventListener("click",addNewRow);
+  document.querySelectorAll(".shop-tab-btn").forEach(btn=>btn.addEventListener("click",()=>{
+    document.querySelectorAll(".shop-tab-btn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    activeTab=btn.dataset.shopTab;
+    renderBody();
+  }));
+  document.addEventListener("adminConnected",async()=>{await loadLib();await loadShop();});
 })();
-

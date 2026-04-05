@@ -1,5 +1,5 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
-const { expToNextLevel } = require("../../shared/progression");
+const { expToNextLevel, MAX_LEVEL } = require("../../shared/progression");
 const { isValidExpSource } = require("../../shared/sources");
 
 class ProgressService {
@@ -21,14 +21,19 @@ class ProgressService {
     const next = { ...progress, updatedAt: new Date().toISOString() };
     next.exp += amount;
 
+    const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
     let levelUps = 0;
-    while (next.exp >= expToNextLevel(next.level)) {
+    while (next.level < MAX_LEVEL && next.exp >= expToNextLevel(next.level)) {
       next.exp -= expToNextLevel(next.level);
       next.level += 1;
       levelUps += 1;
-      // 升級獎勵屬性點 (RO 風格，通常隨等級增加，這裡簡單給予每級 5 點)
-      next.statusPoints = (next.statusPoints || 0) + 5;
+      // 升級自動隨機 +1 一項屬性
+      if (!next.attributes) next.attributes = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+      const randKey = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
+      next.attributes[randKey] = (next.attributes[randKey] || 1) + 1;
     }
+    // 達到最高等級後 EXP 不再累積
+    if (next.level >= MAX_LEVEL) next.exp = 0;
 
     await this.progressRepository.save(next);
     return { player, progress: next, levelUps };

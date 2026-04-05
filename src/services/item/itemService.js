@@ -2,6 +2,16 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier"];
 
+// 武器種類與對應的攻擊屬性
+const VALID_WEAPON_TYPES = ["sword_1h", "sword_2h", "dagger", "mace_1h", "axe_1h", "axe_2h", "staff_1h", "staff_2h", "bow"];
+const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "staff_2h", "bow"]);
+const WEAPON_ATK_STAT = {
+  sword_1h: "str", sword_2h: "str",
+  dagger:   "str", mace_1h: "str", axe_1h: "str", axe_2h: "str",
+  staff_1h: "int", staff_2h: "int",
+  bow:      "dex"
+};
+
 class ItemService {
   constructor(itemRepository) {
     this.itemRepository = itemRepository;
@@ -41,8 +51,14 @@ class ItemService {
     return VALID.includes(slot) ? slot : null;
   }
 
-  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats }) {
+  _normalizeWeaponType(t) {
+    return VALID_WEAPON_TYPES.includes(t) ? t : null;
+  }
+
+  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats, weaponType }) {
     const normalizedType = this._normalizeItemType(itemType);
+    const normalizedSlot = normalizedType === "equipment" ? (this._normalizeEquipSlot(equipSlot) || "head_top") : null;
+    const resolvedWeaponType = normalizedSlot === "weapon" ? (this._normalizeWeaponType(weaponType) || null) : null;
     const item = {
       id: crypto.randomUUID(),
       name: String(name || "").trim(),
@@ -51,8 +67,11 @@ class ItemService {
       imageUrl: imageUrl || null,
       imageThumbnailUrl: imageThumbnailUrl || null,
       effect: this._normalizeEffect(effect),
-      equipSlot: normalizedType === "equipment" ? (this._normalizeEquipSlot(equipSlot) || "head_top") : null,
+      equipSlot: normalizedSlot,
       equipStats: normalizedType === "equipment" ? (this._normalizeEquipStats(equipStats) || null) : null,
+      weaponType: resolvedWeaponType,
+      isTwoHanded: resolvedWeaponType ? TWO_HANDED_WEAPON_TYPES.has(resolvedWeaponType) : false,
+      atkStat: resolvedWeaponType ? (WEAPON_ATK_STAT[resolvedWeaponType] || "str") : null,
       createdAt: new Date().toISOString()
     };
     if (!item.name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具名稱不可空白", 400);
@@ -70,8 +89,14 @@ class ItemService {
     if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl;
     if (fields.equipSlot !== undefined) updated.equipSlot = updated.itemType === "equipment" ? (this._normalizeEquipSlot(fields.equipSlot) || "head_top") : null;
     if (fields.equipStats !== undefined) updated.equipStats = updated.itemType === "equipment" ? (this._normalizeEquipStats(fields.equipStats) || null) : null;
+    if (fields.weaponType !== undefined || fields.equipSlot !== undefined) {
+      const wt = updated.equipSlot === "weapon" ? (this._normalizeWeaponType(fields.weaponType ?? updated.weaponType) || null) : null;
+      updated.weaponType = wt;
+      updated.isTwoHanded = wt ? TWO_HANDED_WEAPON_TYPES.has(wt) : false;
+      updated.atkStat = wt ? (WEAPON_ATK_STAT[wt] || "str") : null;
+    }
     // 若更改類型為非裝備，清空裝備欄位
-    if (updated.itemType !== "equipment") { updated.equipSlot = null; updated.equipStats = null; }
+    if (updated.itemType !== "equipment") { updated.equipSlot = null; updated.equipStats = null; updated.weaponType = null; updated.isTwoHanded = false; updated.atkStat = null; }
     if (!updated.name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具名稱不可空白", 400);
     return this.itemRepository.save(updated);
   }

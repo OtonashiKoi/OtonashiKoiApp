@@ -11,6 +11,7 @@ const { CheckinService } = require("./checkin/checkinService");
 const { ShopService } = require("./shop/shopService");
 const { ItemService } = require("./item/itemService");
 const { PlayerTierService } = require("./playerTier/playerTierService");
+const { MonsterService } = require("./monster/monsterService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -30,6 +31,7 @@ function createServiceContext() {
   const progressService = new ProgressService(playerService, repositories.progressRepository);
   const itemService = new ItemService(repositories.itemRepository);
   const playerTierService = new PlayerTierService(repositories.playerTierRepository);
+  const monsterService = new MonsterService(repositories.monsterRepository, repositories.itemRepository);
   const shopService = new ShopService(repositories.shopRepository, playerService, rewardService, repositories.progressRepository, progressService, repositories.itemRepository, playerTierService);
   const transactionService = new TransactionService(playerService, repositories.transactionRepository);
   const adminService = new AdminService(
@@ -58,7 +60,8 @@ function createServiceContext() {
     checkinService,
     shopService,
     itemService,
-    playerTierService
+    playerTierService,
+    monsterService
   };
 }
 

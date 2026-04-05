@@ -43,14 +43,32 @@ function createShopMainMessage(items, progress) {
 
   const currencyLabel = (c) => c === "diamond" ? "💎 鑽石" : "💰 金幣";
 
+  function statusBadges(item) {
+    const badges = [];
+    // 庫存
+    if (item.stock === 0) badges.push("❌售完");
+    else if (item.stock > 0) badges.push(`📦${item.stock}`);
+    // 每月上限
+    if (item.maxPerMonth > 0) {
+      const used = (monthlyCount[item.id] || {})[ym] || 0;
+      if (used >= item.maxPerMonth) badges.push("⛔上限");
+      else if (used > 0) badges.push(`🔄${used}/${item.maxPerMonth}`);
+    }
+    // 已擁有
+    const owned = inventory.filter((e) => e.itemId === item.id).length;
+    if (owned > 0) badges.push(`✅×${owned}`);
+    return badges.length ? `  ${badges.join("  ")}` : "";
+  }
+
+  // purchaseNote still used by select menu description
   function purchaseNote(item) {
     if (item.maxPerMonth > 0) {
       const used = (monthlyCount[item.id] || {})[ym] || 0;
-      if (used >= item.maxPerMonth) return " ✅本月已達上限";
-      if (used > 0) return ` 🔄本月已購${used}/${item.maxPerMonth}`;
+      if (used >= item.maxPerMonth) return "⛔上限";
+      if (used > 0) return `🔄${used}/${item.maxPerMonth}`;
     }
     const owned = inventory.filter((e) => e.itemId === item.id).length;
-    if (owned > 0) return ` ✅已擁有${owned}個`;
+    if (owned > 0) return `✅×${owned}`;
     return "";
   }
 
@@ -58,18 +76,14 @@ function createShopMainMessage(items, progress) {
     return { content: "🏪 目前商店沒有可購買的商品，請稍後再來！", components: [] };
   }
 
-  const gold    = items.filter((i) => !i.isSale && i.currency === "gold");
-  const diamond = items.filter((i) => !i.isSale && i.currency === "diamond");
-  const sale    = items.filter((i) => i.isSale);
+  const gold    = items.filter((i) => !i.isSale && i.currency === "gold"    && canBuyTier(playerTier, i.allowedTiers));
+  const diamond = items.filter((i) => !i.isSale && i.currency === "diamond" && canBuyTier(playerTier, i.allowedTiers));
+  const sale    = items.filter((i) => i.isSale                               && canBuyTier(playerTier, i.allowedTiers));
   const ordered = [...gold, ...diamond, ...sale];
 
   function itemLine(item) {
-    const stockNote = item.stock === -1 ? "" : item.stock === 0 ? " ❌售完" : ` 庫存${item.stock}`;
-    const ok = canBuyTier(playerTier, item.allowedTiers);
-    const tierNote = !ok
-      ? ` 🚫不可購買（限 ${(item.allowedTiers || []).join("/")} 級）`
-      : "";
-    return `**${item.name}** ${item.price} ${currencyLabel(item.currency)}${stockNote}　${item.description}${tierNote}${purchaseNote(item)}`;
+    const price = item.price === 0 ? "免費" : `${item.price} ${currencyLabel(item.currency)}`;
+    return `**${item.name}** — ${price}${statusBadges(item)}`;
   }
 
   function sectionLines(label, arr) {

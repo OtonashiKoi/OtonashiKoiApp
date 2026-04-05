@@ -186,6 +186,38 @@ function createMongoRepositories() {
         );
         return normalized;
       }
+    },
+    monsterRepository: {
+      async findAll() {
+        const monsters = await (await collection("monsters")).find({}).toArray();
+        return monsters.sort((a, b) => a.seq - b.seq);
+      },
+      async findById(id) {
+        return (await collection("monsters")).findOne({ id }) || null;
+      },
+      async save(monster) {
+        await (await collection("monsters")).updateOne(
+          { id: monster.id },
+          { $set: monster },
+          { upsert: true }
+        );
+        return monster;
+      },
+      async delete(id) {
+        await (await collection("monsters")).deleteOne({ id });
+      },
+      async getState() {
+        const row = await (await collection("monsterState")).findOne({ _id: "default" });
+        return row?.value || { activeMonsterSeq: 1, currentHp: null, killCount: {} };
+      },
+      async saveState(state) {
+        await (await collection("monsterState")).updateOne(
+          { _id: "default" },
+          { $set: { value: state, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+        return state;
+      }
     }
   };
 }

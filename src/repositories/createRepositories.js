@@ -10,6 +10,7 @@ const { JsonCheckinRepository } = require("../adapters/json/checkinRepository");
 const { JsonShopRepository } = require("../adapters/json/shopRepository");
 const { JsonItemRepository } = require("../adapters/json/itemRepository");
 const { JsonPlayerTierRepository } = require("../adapters/json/playerTierRepository");
+const { JsonMonsterRepository } = require("../adapters/json/monsterRepository");
 const { createMongoRepositories } = require("../adapters/mongo/createMongoRepositories");
 
 function createRepositories() {
@@ -28,7 +29,8 @@ function createRepositories() {
     checkinRepository: new JsonCheckinRepository(),
     shopRepository: new JsonShopRepository(),
     itemRepository: new JsonItemRepository(),
-    playerTierRepository: new JsonPlayerTierRepository()
+    playerTierRepository: new JsonPlayerTierRepository(),
+    monsterRepository: new JsonMonsterRepository()
   };
 }
 

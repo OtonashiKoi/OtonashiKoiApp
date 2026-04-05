@@ -12,6 +12,7 @@ const {
   handleUnlockPersonalRoom
 } = require("./handlers/publishHandlers");
 const { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect } = require("./handlers/coinShopHandlers");
+const { handleMonsterZoneButton, isMonsterZoneButton } = require("./handlers/monsterZoneHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -126,6 +127,10 @@ async function handleCommand(interaction) {
 }
 
 async function handleButton(interaction) {
+  if (isMonsterZoneButton(interaction.customId)) {
+    await handleMonsterZoneButton(interaction);
+    return;
+  }
   if (isCoinShopButton(interaction.customId)) {
     await handleCoinShopButton(interaction);
     return;

@@ -151,6 +151,22 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
+  router.post("/admin/channel-layout/publish-monster-zone", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      // 查出當前上場怪物與血量
+      const state = await serviceContext.monsterService.getState();
+      const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true });
+      const activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq) || monsters[0] || null;
+      const currentHp = state.currentHp != null ? state.currentHp : (activeMonster?.calc?.maxHp ?? null);
+      const participantCount = Array.isArray(state.participants) ? state.participants.length : 0;
+      const result = await serviceContext.adminConsoleService.publishMonsterZonePanel(channelId, activeMonster, currentHp, { participantCount });
+      res.json(ok(result, "monster zone panel published"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/admin/console/players", async (req, res, next) => {
     try {
       const limit = req.query.limit ? Number(req.query.limit) : 50;
@@ -183,6 +199,44 @@ function createAdminConsoleRoutes(serviceContext) {
         }
       } catch { /* 非關鍵操作，非同步失敗不影響回傳 */ }
       res.json(ok(playerInfo, "player info fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/console/players/:discordId/grant-item", async (req, res, next) => {
+    try {
+      const { discordId } = req.params;
+      const { itemId } = req.body;
+      if (!itemId) {
+        res.status(400).json(fail("INVALID_ARGUMENT", "itemId is required"));
+        return;
+      }
+      const item = await serviceContext.itemService.getItemById(itemId);
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (!progress) {
+        res.status(404).json(fail("PLAYER_NOT_FOUND", "找不到玩家進度資料"));
+        return;
+      }
+      if (!Array.isArray(progress.inventory)) progress.inventory = [];
+      progress.inventory.push({
+        uuid: require("crypto").randomUUID(),
+        itemId: item.id,
+        itemName: item.name,
+        itemEffect: item.effect || { type: "none", value: 0 },
+        itemType: item.itemType || "consumable",
+        imageUrl: item.imageUrl || null,
+        imageThumbnailUrl: item.imageThumbnailUrl || null,
+        equipSlot: item.equipSlot || null,
+        equipStats: item.equipStats || null,
+        weaponType: item.weaponType || null,
+        isTwoHanded: item.isTwoHanded || false,
+        atkStat: item.atkStat || null,
+        purchasedAt: new Date().toISOString()
+      });
+      progress.updatedAt = new Date().toISOString();
+      await serviceContext.progressRepository.save(progress);
+      res.json(ok({ itemName: item.name }, "item granted"));
     } catch (error) {
       next(error);
     }

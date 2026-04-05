@@ -533,8 +533,9 @@ input:focus, select:focus, textarea:focus {
 /* RO Attributes Grid */
 .attributes-grid {
   display: grid;
-  gap: 12px;
-  margin-top: 16px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .attribute-row {
@@ -678,10 +679,168 @@ input:focus, select:focus, textarea:focus {
   color: var(--text);
 }
 
-.player-management-grid {
+/* ── Player body layout ── */
+.player-body-grid {
   display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 24px;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  align-items: start;
+}
+
+.player-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.player-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.player-sub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* Combat stats */
+.combat-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.combat-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.combat-stat-row span {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.combat-stat-row strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+/* Equipment slots */
+.equipment-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.equip-slot {
+  background: var(--bg);
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  padding: 8px 6px;
+  text-align: center;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.equip-slot.has-item {
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+}
+
+.equip-slot-label {
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.equip-slot-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.2;
+}
+
+.equip-slot-empty {
+  font-size: 10px;
+  color: var(--line-strong);
+}
+
+/* Inventory */
+.inventory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.inventory-empty {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+.inventory-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.inventory-row .item-name {
+  font-weight: 600;
+}
+
+.inventory-row .item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.item-type-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.item-type-badge.consumable { background: rgba(16,185,129,.12); color: var(--success); }
+.item-type-badge.equipment  { background: var(--accent-light); color: var(--accent); }
+.item-type-badge.collectible { background: rgba(245,158,11,.12); color: var(--warn); }
+
+.inventory-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-left: 6px;
 }
 
 .detail-card h4 {

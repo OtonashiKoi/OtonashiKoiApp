@@ -147,7 +147,7 @@ function renderPlayerList(state) {
 }
 
 async function loadPlayers(state) {
-  const rows = await request("/admin/console/players?limit=200");
+  const rows = await request("/admin/console/players?limit=1000");
   state.players = rows;
 
   if (!state.selectedPlayerId && rows.length > 0) {
