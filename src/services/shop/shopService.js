@@ -89,6 +89,8 @@ class ShopService {
     // 保留直接更新 imageUrl 的能力（圖片上傳路由用）
     if (fields.imageUrl !== undefined) updated.imageUrl = fields.imageUrl || null;
     if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl || null;
+    if (fields.weaponType !== undefined) updated.weaponType = fields.weaponType || null;
+    if (fields.isTwoHanded !== undefined) updated.isTwoHanded = Boolean(fields.isTwoHanded);
     return this.shopRepository.save(updated);
   }
 
