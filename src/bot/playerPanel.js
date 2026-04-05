@@ -1,8 +1,9 @@
-const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require("discord.js");
+const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder } = require("discord.js");
 const path = require("path");
 const fs = require("fs");
 const { BUTTON_IDS, createPlayerPanelMessage } = require("./playerPanelView");
 const { createCode } = require("./bindingStore");
+const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
 
 const AUTO_DELETE_MS = 60_000;
 
@@ -155,18 +156,46 @@ function buildInventoryRow(e, idx) {
   return new ActionRowBuilder().addComponents(btns);
 }
 
-/** 組成背包訊息（可附帶前置訊息行） */
-function buildBackpackMessage(inventory, prefixMsg) {
+const EQ_SPECIAL_SLOTS = new Set(EQ_COL3_SLOTS);
+const EQ_STANDARD_SLOTS = new Set([...EQ_LEFT_SLOTS, ...EQ_RIGHT_SLOTS]);
+
+function filterByTab(inventory, tab) {
+  if (tab === "equip")   return inventory.filter(e => e.itemType === "equipment" && EQ_STANDARD_SLOTS.has(e.equipSlot));
+  if (tab === "special") return inventory.filter(e => e.itemType === "equipment" && EQ_SPECIAL_SLOTS.has(e.equipSlot));
+  return inventory.filter(e => e.itemType !== "equipment");
+}
+
+function buildTabRow(activeTab) {
+  const defs = [
+    { tab: "item",    label: "🎮 道具" },
+    { tab: "equip",   label: "⚔️ 裝備" },
+    { tab: "special", label: "✨ 特殊" },
+  ];
+  return new ActionRowBuilder().addComponents(
+    defs.map(d => new ButtonBuilder()
+      .setCustomId(`backpack_tab:${d.tab}`)
+      .setLabel(d.label)
+      .setStyle(d.tab === activeTab ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    )
+  );
+}
+
+function buildBackpackMessage(inventory, tab = "item", prefixMsg) {
+  const filtered = filterByTab(inventory, tab);
   const header = prefixMsg ? prefixMsg + "\n\n" : "";
-  if (!inventory.length) {
-    return { content: header + "🎒 **背包**\n\n背包是空的，去商店購物吧！", components: [] };
+  const tabRow = buildTabRow(tab);
+  const tabLabel = tab === "equip" ? "裝備" : tab === "special" ? "特殊" : "道具";
+  if (!filtered.length) {
+    return { content: header + `🎒 **背包 — ${tabLabel}**\n\n此分類目前為空。`, components: [tabRow] };
   }
-  const lines = inventory.map((e, i) => {
-    const tag = e.itemType === "collectible" ? " 🖼️" : e.itemType === "equipment" ? " ⚔️" : "";
-    return `${i + 1}. **${e.itemName}**${tag}　購於 ${(e.purchasedAt || "").slice(0, 10)}`;
-  }).join("\n");
-  const rows = inventory.slice(0, 5).map((e, i) => buildInventoryRow(e, i));
-  return { content: header + `🎒 **背包**\n\n${lines}`, components: rows };
+  const lines = filtered.slice(0, 4).map((e, i) => {
+    const slot = e.equipSlot ? ` (${EQ_SLOT_LABELS[e.equipSlot] || e.equipSlot})` : "";
+    return `${i + 1}. **${e.itemName}**${slot}　購於 ${(e.purchasedAt || "").slice(0, 10)}`;
+  });
+  if (filtered.length > 4) lines.push(`…還有 ${filtered.length - 4} 個`);
+  const rows = filtered.slice(0, 4).map((e, i) => buildInventoryRow(e, i));
+  rows.push(tabRow);
+  return { content: header + `🎒 **背包 — ${tabLabel}**\n\n${lines.join("\n")}`, components: rows };
 }
 
 async function handleBind(interaction) {
@@ -209,9 +238,83 @@ async function handleBackpack(interaction) {
   const serviceContext = getServiceContext();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
-  const msg = buildBackpackMessage(inventory);
+  const msg = buildBackpackMessage(inventory, "item");
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
   setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);
+}
+
+async function handleEquipmentView(interaction) {
+  const serviceContext = getServiceContext();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const [progress, player, wallet] = await Promise.all([
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id),
+    serviceContext.playerRepository.findByDiscordId(interaction.user.id),
+    serviceContext.walletRepository.findByPlayerId(interaction.user.id),
+  ]);
+  const equipped  = progress?.equipment || {};
+
+  // 生成裝備欄圖片
+  const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", forceStatic: true });
+  const publicDir = path.resolve(__dirname, "../web/public");
+  let imgBuffer = null;
+  try {
+    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress, player, wallet });
+  } catch { /* 圖片失敗退回文字 */ }
+
+  // ── 5 列 × 3 按鈕：[左槽] [右槽] [第三欄] ──────────────
+  const rows = EQ_LEFT_SLOTS.map((leftSlot, i) => {
+    const rightSlot = EQ_RIGHT_SLOTS[i];
+    const col3Slot  = EQ_COL3_SLOTS[i];
+    const makeSlotBtn = (slot) => {
+      const item = equipped[slot];
+      const label = item ? item.itemName.slice(0, 20) : EQ_SLOT_LABELS[slot];
+      return new ButtonBuilder()
+        .setCustomId(`eq_btn:${slot}`)
+        .setLabel(label)
+        .setStyle(item ? ButtonStyle.Success : ButtonStyle.Secondary);
+    };
+    return new ActionRowBuilder().addComponents(
+      makeSlotBtn(leftSlot), makeSlotBtn(rightSlot), makeSlotBtn(col3Slot)
+    );
+  });
+
+  const payload = { components: rows, flags: MessageFlags.Ephemeral };
+  if (imgBuffer) {
+    const attachment = new AttachmentBuilder(imgBuffer, { name: "equipment.png" });
+    payload.files = [attachment];
+    payload.content = "";
+  } else {
+    // 圖片失敗退回純文字
+    const SLOT_ORDER = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r"];
+    const lines = SLOT_ORDER.map(s => {
+      const item = equipped[s];
+      return `　${EQ_SLOT_LABELS[s]}：${item ? `**${item.itemName}**` : "空"}`;
+    });
+    payload.content = `⚔️ **裝備欄**\n\n${lines.join("\n")}`;
+  }
+
+  await interaction.editReply(payload);
+  setTimeout(() => interaction.deleteReply().catch(() => {}), 120_000);
+}
+
+async function handleEquipAction(interaction, action, value) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    let result;
+    if (action === "equip") {
+      result = await serviceContext.shopService.equipItem(interaction.user.id, value);
+      await interaction.editReply({ content: `\u2705 已裝備 **${result.itemName}**！`, components: [] });
+    } else {
+      result = await serviceContext.shopService.unequipItem(interaction.user.id, value);
+      await interaction.editReply({ content: `\u2705 已卸下 **${result.itemName}**，已放回背包。`, components: [] });
+    }
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
+  } catch (err) {
+    await interaction.editReply({ content: `\u274c 操作失敗\uff1a${err.message}`, components: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
 }
 
 async function handleBackpackView(interaction, uuid) {
@@ -236,9 +339,19 @@ async function handleBackpackView(interaction, uuid) {
       content: `🖼️ **${entry.itemName}**\n購於 ${(entry.purchasedAt || "").slice(0, 10)}\n\n你可以右鍵點擊圖片 → 另存圖片。`,
       files: [attachment]
     });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);
   } catch (err) {
     await interaction.editReply({ content: `❌ 無法載入圖片：${err.message}` });
   }
+}
+
+async function handleBackpackTab(interaction, tab) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const inventory = progress?.inventory || [];
+  const msg = buildBackpackMessage(inventory, tab);
+  await interaction.editReply(msg);
 }
 
 async function handleBackpackAction(interaction, action, uuid) {
@@ -251,10 +364,11 @@ async function handleBackpackAction(interaction, action, uuid) {
       : await serviceContext.shopService.discardItem(interaction.user.id, uuid);
     const verb = isUse ? "使用" : "丟棄";
     const extra = isUse && result.effectDesc ? `\n${result.effectDesc}` : "";
-    // 重新讀取背包，更新訊息
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const inventory = progress?.inventory || [];
-    const msg = buildBackpackMessage(inventory, `✅ 已${verb} **${result.itemName}**。${extra}`);
+    // 判斷原本在哪個 tab（根據被操作的道具欄位）
+    const tab = "item";
+    const msg = buildBackpackMessage(inventory, tab, `✅ 已${verb} **${result.itemName}**。${extra}`);
     await interaction.editReply(msg);
     if (!inventory.length) {
       setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
@@ -269,6 +383,10 @@ async function handleButton(interaction) {
   const id = interaction.customId;
 
   // 背包動作
+  if (id.startsWith("backpack_tab:")) {
+    await handleBackpackTab(interaction, id.slice("backpack_tab:".length));
+    return;
+  }
   if (id.startsWith("backpack_view:")) {
     await handleBackpackView(interaction, id.slice("backpack_view:".length));
     return;
@@ -277,6 +395,20 @@ async function handleButton(interaction) {
     const action = id.startsWith("backpack_use:") ? "use" : "discard";
     const uuid = id.slice(id.indexOf(":") + 1);
     await handleBackpackAction(interaction, action, uuid);
+    return;
+  }
+
+  // 裝備欄格按鈕
+  if (id.startsWith("eq_btn:")) {
+    await handleEquipSlotButton(interaction, id.slice("eq_btn:".length));
+    return;
+  }
+
+  // 裝備動作（舊版相容）
+  if (id.startsWith("equip_equip:") || id.startsWith("equip_unequip:")) {
+    const action = id.startsWith("equip_equip:") ? "equip" : "unequip";
+    const value = id.slice(id.indexOf(":") + 1);
+    await handleEquipAction(interaction, action, value);
     return;
   }
 
@@ -311,13 +443,88 @@ async function handleButton(interaction) {
     return;
   }
 
+  if (id === BUTTON_IDS.equipment) {
+    await handleEquipmentView(interaction);
+    return;
+  }
+
   if (id === BUTTON_IDS.bindStream) {
     await handleBind(interaction);
     return;
   }
 }
 
+async function handleEquipSlotButton(interaction, slot) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const equipped = progress?.equipment || {};
+  const inventory = (progress?.inventory || []).filter(e => e.itemType === "equipment" && e.equipSlot === slot);
+
+  const options = [];
+  if (equipped[slot]) {
+    const item = equipped[slot];
+    options.push({
+      label: `↩️ 卸下`.slice(0, 25),
+      description: item.itemName.slice(0, 50),
+      value: `unequip:${slot}`
+    });
+  }
+  inventory.slice(0, 24).forEach(e => {
+    const stats = e.equipStats || {};
+    const statStr = Object.entries(stats).filter(([,v])=>v).map(([k,v])=>`${k.toUpperCase()}${v>0?"+":""}${v}`).join(" ");
+    options.push({
+      label: e.itemName.slice(0, 25),
+      description: (statStr || "點此裝備").slice(0, 50),
+      value: `equip:${e.uuid}`
+    });
+  });
+
+  if (options.length === 0) {
+    await interaction.editReply({ content: `❌ 背包沒有可裝備在 **${EQ_SLOT_LABELS[slot]}** 的道具，且此槽位是空的。`, components: [], files: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+    return;
+  }
+
+  const picker = new StringSelectMenuBuilder()
+    .setCustomId(`eq_pick:${slot}`)
+    .setPlaceholder(`${EQ_SLOT_LABELS[slot]} — 選擇動作…`)
+    .addOptions(options);
+
+  await interaction.editReply({
+    content: `⚔️ **${EQ_SLOT_LABELS[slot]}** — 選擇裝備或卸下：`,
+    components: [new ActionRowBuilder().addComponents(picker)],
+    files: []
+  });
+}
+
+async function handleEquipmentSelect(interaction) {
+  const serviceContext = getServiceContext();
+  const customId = interaction.customId;
+  if (!customId.startsWith("eq_pick:")) return;
+
+  await interaction.deferUpdate();
+  const slot = customId.slice("eq_pick:".length);
+  const value = interaction.values[0];
+  try {
+    let result;
+    if (value.startsWith("unequip:")) {
+      result = await serviceContext.shopService.unequipItem(interaction.user.id, slot);
+      await interaction.editReply({ content: `✅ 已卸下 **${result.itemName}**，放回背包。`, components: [], files: [] });
+    } else {
+      const uuid = value.slice("equip:".length);
+      result = await serviceContext.shopService.equipItem(interaction.user.id, uuid);
+      await interaction.editReply({ content: `✅ 已裝備 **${result.itemName}**！`, components: [], files: [] });
+    }
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
+  } catch (err) {
+    await interaction.editReply({ content: `❌ 操作失敗：${err.message}`, components: [], files: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
+}
+
 module.exports = {
   createPlayerPanelMessage,
-  handleButton
+  handleButton,
+  handleEquipmentSelect
 };

@@ -344,69 +344,46 @@
         </section>
 
         <section id="section-items" class="card panel-section">
+          <style>
+            .sheet-input { background:transparent; border:1px solid transparent; border-radius:4px; padding:2px 6px; color:inherit; font-size:0.88em; width:100%; box-sizing:border-box; }
+            .sheet-input:hover, .sheet-input:focus { border-color:var(--accent,#4ade80); outline:none; background:rgba(255,255,255,0.06); }
+            #items-sheet-table td { padding:4px 6px; vertical-align:middle; }
+            #items-sheet-table th { padding:6px 8px; }
+            .img-cell { text-align:center; cursor:pointer; width:56px; }
+            .img-cell:hover { background:rgba(255,255,255,0.05); }
+          </style>
           <div class="section-head">
             <div>
               <p class="section-kicker">Items</p>
               <h2>道具庫管理</h2>
             </div>
-            <button id="items-btn-new" class="button primary">＋ 新增道具</button>
-          </div>
-          <p class="hint">道具庫是所有道具的原余資料，包含名稱、說明、和效果定義。上架到商店時可加入售價與庫存。</p>
-
-          <div id="items-form-area" class="hidden" style="margin-bottom:1.5rem;">
-            <div class="access-card" style="max-width:520px;">
-              <h3 id="items-form-title">新增道具</h3>
-              <form id="items-form" class="admin-form">
-                <label><span>道具名稱</span><input id="items-input-name" type="text" placeholder="例如：幸運符" required /></label>
-                <label><span>說明</span><input id="items-input-desc" type="text" placeholder="例如：下次打卡金幣 x2" /></label>
-                <label><span>道具類型</span>
-                  <select id="items-input-type">
-                    <option value="consumable">🧪 消耗品（使用後消失）</option>
-                    <option value="collectible">🖼️ 圖片（永久保留）</option>
-                    <option value="equipment">⚔️ 裝備（功能開發中）</option>
-                  </select>
-                </label>
-                <div class="grid two-up">
-                  <label><span>道具效果</span>
-                    <select id="items-input-effect-type">
-                      <option value="none">無效果（收藏用）</option>
-                      <option value="grant_gold">💰 給予金幣</option>
-                      <option value="grant_diamond">💎 給予鑽石</option>
-                      <option value="grant_exp">✨ 給予經驗值</option>
-                      <option value="grant_status_points">📊 給予屬性點</option>
-                      <option value="checkin_multiplier">🎯 打卡加倍符</option>
-                    </select>
-                  </label>
-                  <label><span>效果數値</span>
-                    <input id="items-input-effect-value" type="number" min="0" value="0" />
-                  </label>
-                </div>
-                <label>
-                  <span>道具圖片（PNG / JPG / GIF / WebP，上限 2MB）</span>
-                  <input id="items-input-image" type="file" accept="image/*" />
-                  <img id="items-image-preview" class="hidden" src="" style="max-height:120px;margin-top:8px;border-radius:8px;border:1px solid var(--line);" />
-                </label>
-                <div class="actions">
-                  <button id="items-btn-submit" type="submit" class="button primary">新增</button>
-                  <button id="items-btn-cancel" type="button" class="button">取消</button>
-                </div>
-              </form>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <button id="items-btn-new" class="button primary">＋ 新增一行</button>
+              <button id="items-btn-export" class="button">📥 匯出 CSV</button>
+              <button id="items-btn-import" class="button">📤 匯入 CSV</button>
             </div>
           </div>
+          <p class="hint">每一行為一個道具，直接在表格中編輯後按「儲存」，點圖片欄可上傳圖片。匯入 CSV 會新增道具（不覆蓋現有）。</p>
+          <!-- 隱藏 CSV input -->
+          <input type="file" id="items-csv-input" accept=".csv,text/csv" style="display:none;" />
 
-          <table class="shop-table">
-            <thead>
-              <tr>
-                <th style="width:56px">圖片</th>
-                <th>道具名稱</th>
-                <th>類型</th>
-                <th>說明</th>
-                <th>效果</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="items-tbody"></tbody>
-          </table>
+          <!-- Tab 切換列 -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+            <button class="button items-tab-btn active" data-items-tab="consumable">🧪 消耗品</button>
+            <button class="button items-tab-btn" data-items-tab="collectible">🖼️ 圖片</button>
+            <button class="button items-tab-btn" data-items-tab="equipment">⚔️ 裝備</button>
+            <button class="button items-tab-btn" data-items-tab="special">✨ 特殊</button>
+          </div>
+
+          <!-- 隱藏圖片 input（共用） -->
+          <input type="file" id="items-img-input" accept="image/*" style="display:none;" />
+
+          <div style="overflow-x:auto;">
+            <table class="shop-table" id="items-sheet-table" style="min-width:100%;">
+              <thead id="items-sheet-head"></thead>
+              <tbody id="items-tbody"></tbody>
+            </table>
+          </div>
         </section>
         <section id="section-tiers" class="card panel-section">
           <div class="section-head">

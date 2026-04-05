@@ -51,6 +51,8 @@ class ShopService {
       effect: libraryItem.effect || { type: "none", value: 0 },
       imageUrl: libraryItem.imageUrl || null,
       imageThumbnailUrl: libraryItem.imageThumbnailUrl || null,
+      equipSlot: libraryItem.itemType === "equipment" ? (libraryItem.equipSlot || null) : null,
+      equipStats: libraryItem.itemType === "equipment" ? (libraryItem.equipStats || null) : null,
       createdAt: new Date().toISOString()
     };
     return this.shopRepository.save(item);
@@ -70,6 +72,8 @@ class ShopService {
       updated.itemType = libraryItem.itemType || "consumable";
       updated.imageUrl = libraryItem.imageUrl || null;
       updated.imageThumbnailUrl = libraryItem.imageThumbnailUrl || null;
+      updated.equipSlot = libraryItem.itemType === "equipment" ? (libraryItem.equipSlot || null) : null;
+      updated.equipStats = libraryItem.itemType === "equipment" ? (libraryItem.equipStats || null) : null;
     }
     if (fields.price !== undefined) updated.price = Math.max(0, Number(fields.price) || 0);
     if (fields.currency !== undefined && ["gold", "diamond"].includes(fields.currency)) updated.currency = fields.currency;
@@ -173,6 +177,8 @@ class ShopService {
         itemType: item.itemType || "consumable",
         imageUrl: item.imageUrl || null,
         imageThumbnailUrl: item.imageThumbnailUrl || null,
+        equipSlot: item.equipSlot || null,
+        equipStats: item.equipStats || null,
         purchasedAt: new Date().toISOString()
       });
       progress.updatedAt = new Date().toISOString();
@@ -234,6 +240,42 @@ class ShopService {
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
     return { itemName: entry.itemName };
+  }
+
+  async equipItem(discordId, entryUuid) {
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);
+    const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
+    if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此裝備", 404);
+    const entry = progress.inventory[idx];
+    if (entry.itemType !== "equipment") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不是裝備", 400);
+    const slot = entry.equipSlot;
+    if (!slot) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備未指定槽位", 400);
+    if (!progress.equipment) progress.equipment = {};
+    const current = progress.equipment[slot] || null;
+    // 從背包移除
+    progress.inventory.splice(idx, 1);
+    // 從槽換下的裝回背包
+    if (current) progress.inventory.push(current);
+    progress.equipment[slot] = entry;
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+    return { itemName: entry.itemName, slot };
+  }
+
+  async unequipItem(discordId, slot) {
+    const VALID_SLOTS = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r","title_eq","job_eq","special_1","special_2","special_3"];
+    if (!VALID_SLOTS.includes(slot)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "無效槽位", 400);
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);
+    const equipped = progress.equipment?.[slot];
+    if (!equipped) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "此槽位沒有裝備", 404);
+    if (!Array.isArray(progress.inventory)) progress.inventory = [];
+    progress.inventory.push(equipped);
+    progress.equipment[slot] = null;
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+    return { itemName: equipped.itemName, slot };
   }
 }
 

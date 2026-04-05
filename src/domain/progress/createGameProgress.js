@@ -25,7 +25,12 @@ function createGameProgress(playerId) {
       garment: null,
       shoes: null,
       accessory_l: null,
-      accessory_r: null
+      accessory_r: null,
+      title_eq: null,
+      job_eq: null,
+      special_1: null,
+      special_2: null,
+      special_3: null
     },
     inventory: [],
     flags: {},

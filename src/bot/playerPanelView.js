@@ -5,6 +5,7 @@ const BUTTON_IDS = {
   transactions: "player-panel:transactions",
   checkinStatus: "player-panel:checkin-status",
   backpack: "player-panel:backpack",
+  equipment: "player-panel:equipment",
   bindStream: "player-panel:bind-stream"
 };
 
@@ -25,7 +26,11 @@ function createPlayerPanelMessage() {
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(BUTTON_IDS.backpack)
-        .setLabel("🎒 背包")
+        .setLabel("🎒 道具背包")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.equipment)
+        .setLabel("⚔️ 裝備欄")
         .setStyle(ButtonStyle.Secondary)
     ),
     new ActionRowBuilder().addComponents(

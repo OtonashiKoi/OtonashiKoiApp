@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
-const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton } = require("./playerPanel");
+const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect } = require("./playerPanel");
 const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
 const { serviceContext, getBotClient } = require("./runtimeContext");
 const { isAppError } = require("../shared/errors");
@@ -137,6 +137,11 @@ async function handleButton(interaction) {
 async function handleSelectMenu(interaction) {
   if (isCoinShopSelect(interaction.customId)) {
     await handleShopSelect(interaction);
+    return;
+  }
+  if (interaction.customId.startsWith("eq_pick:")) {
+    await handleEquipmentSelect(interaction);
+    return;
   }
 }
 

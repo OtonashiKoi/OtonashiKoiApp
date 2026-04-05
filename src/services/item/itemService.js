@@ -26,15 +26,33 @@ class ItemService {
     return ["consumable", "collectible", "equipment"].includes(t) ? t : "consumable";
   }
 
-  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl }) {
+  _normalizeEquipStats(stats) {
+    if (!stats || typeof stats !== "object") return null;
+    const s = {};
+    for (const k of ["str","agi","vit","int","dex","luk"]) {
+      const v = Number(stats[k]) || 0;
+      if (v !== 0) s[k] = v;
+    }
+    return Object.keys(s).length ? s : null;
+  }
+
+  _normalizeEquipSlot(slot) {
+    const VALID = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r","title_eq","job_eq","special_1","special_2","special_3"];
+    return VALID.includes(slot) ? slot : null;
+  }
+
+  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats }) {
+    const normalizedType = this._normalizeItemType(itemType);
     const item = {
       id: crypto.randomUUID(),
       name: String(name || "").trim(),
       description: String(description || "").trim(),
-      itemType: this._normalizeItemType(itemType),
+      itemType: normalizedType,
       imageUrl: imageUrl || null,
       imageThumbnailUrl: imageThumbnailUrl || null,
       effect: this._normalizeEffect(effect),
+      equipSlot: normalizedType === "equipment" ? (this._normalizeEquipSlot(equipSlot) || "head_top") : null,
+      equipStats: normalizedType === "equipment" ? (this._normalizeEquipStats(equipStats) || null) : null,
       createdAt: new Date().toISOString()
     };
     if (!item.name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具名稱不可空白", 400);
@@ -50,6 +68,10 @@ class ItemService {
     if (fields.effect !== undefined) updated.effect = this._normalizeEffect(fields.effect);
     if (fields.imageUrl !== undefined) updated.imageUrl = fields.imageUrl;
     if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl;
+    if (fields.equipSlot !== undefined) updated.equipSlot = updated.itemType === "equipment" ? (this._normalizeEquipSlot(fields.equipSlot) || "head_top") : null;
+    if (fields.equipStats !== undefined) updated.equipStats = updated.itemType === "equipment" ? (this._normalizeEquipStats(fields.equipStats) || null) : null;
+    // 若更改類型為非裝備，清空裝備欄位
+    if (updated.itemType !== "equipment") { updated.equipSlot = null; updated.equipStats = null; }
     if (!updated.name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具名稱不可空白", 400);
     return this.itemRepository.save(updated);
   }
