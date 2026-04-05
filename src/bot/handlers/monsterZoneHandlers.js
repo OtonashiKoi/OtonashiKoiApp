@@ -25,9 +25,9 @@ function isMonsterZoneButton(customId) {
   return customId.startsWith("monster-zone:");
 }
 
-// 攻擊倍率：單手 ×3（1次）；雙手 ×2 但攻擊兩次（每回合獨立命中/暴擊判定）
+// 攻擊倍率：單手 ×3（1次）；雙持（主手+副手各一武器）×2 打兩次
 const ATK_MULT_1H = 3;
-const ATK_MULT_2H = 2;
+const ATK_MULT_DUAL = 2;
 
 function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}) {
   // 加總所有已裝備物品的屬性加成
@@ -47,9 +47,12 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
 
   // 攻擊力依武器種類決定 scaling stat
   const weapon = equipped.weapon || null;
-  const isTwoHanded = weapon?.isTwoHanded ?? false;
-  const mult = isTwoHanded ? ATK_MULT_2H : ATK_MULT_1H;
-  const attackCount = isTwoHanded ? 2 : 1;
+  // 雙持：主手有武器 + 副手也是武器（非盾/空）且非雙手武器
+  const offhand = equipped.shield || null;
+  // 副手有 weaponType 代表裝了武器（非盾牌），才算雙持
+  const isDualWield = weapon && !weapon.isTwoHanded && offhand?.weaponType != null;
+  const mult = isDualWield ? ATK_MULT_DUAL : ATK_MULT_1H;
+  const attackCount = isDualWield ? 2 : 1;
 
   let baseStat;
   const wt = weapon?.weaponType;
@@ -253,7 +256,7 @@ async function handleStartFight(interaction) {
     while (round <= MAX_ROUNDS && outcome === null) {
       const log = [`**【第 ${round} 回合】**`];
 
-      // 玩家攻擊（雙手武器攻擊兩次，各自判定命中/暴擊）
+      // 玩家攻擊（雙持武器攻擊兩次，各自判定命中/暴擊）
       const attackCount = session.playerStats.attackCount || 1;
       for (let a = 0; a < attackCount && outcome === null; a++) {
         const hitChance = session.playerStats.hit - session.monsterStats.dodge;
