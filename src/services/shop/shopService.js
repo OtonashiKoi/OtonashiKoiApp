@@ -53,6 +53,8 @@ class ShopService {
       imageThumbnailUrl: libraryItem.imageThumbnailUrl || null,
       equipSlot: libraryItem.itemType === "equipment" ? (libraryItem.equipSlot || null) : null,
       equipStats: libraryItem.itemType === "equipment" ? (libraryItem.equipStats || null) : null,
+      weaponType: libraryItem.itemType === "equipment" ? (libraryItem.weaponType || null) : null,
+      isTwoHanded: libraryItem.itemType === "equipment" ? (libraryItem.isTwoHanded || false) : false,
       createdAt: new Date().toISOString()
     };
     return this.shopRepository.save(item);
@@ -74,6 +76,8 @@ class ShopService {
       updated.imageThumbnailUrl = libraryItem.imageThumbnailUrl || null;
       updated.equipSlot = libraryItem.itemType === "equipment" ? (libraryItem.equipSlot || null) : null;
       updated.equipStats = libraryItem.itemType === "equipment" ? (libraryItem.equipStats || null) : null;
+      updated.weaponType = libraryItem.itemType === "equipment" ? (libraryItem.weaponType || null) : null;
+      updated.isTwoHanded = libraryItem.itemType === "equipment" ? (libraryItem.isTwoHanded || false) : false;
     }
     if (fields.price !== undefined) updated.price = Math.max(0, Number(fields.price) || 0);
     if (fields.currency !== undefined && ["gold", "diamond"].includes(fields.currency)) updated.currency = fields.currency;
@@ -179,6 +183,8 @@ class ShopService {
         imageThumbnailUrl: item.imageThumbnailUrl || null,
         equipSlot: item.equipSlot || null,
         equipStats: item.equipStats || null,
+        weaponType: item.weaponType || null,
+        isTwoHanded: item.isTwoHanded || false,
         purchasedAt: new Date().toISOString()
       });
       progress.updatedAt = new Date().toISOString();
