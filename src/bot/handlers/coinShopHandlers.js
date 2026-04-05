@@ -5,6 +5,7 @@ const {
   SHOP_OPEN_ID,
   SHOP_CANCEL_ID,
   SHOP_SELECT_ID,
+  SHOP_CAT_PREFIX,
   createShopMainMessage,
   createConfirmMessage
 } = require("../coinShopView");
@@ -13,19 +14,29 @@ function getServiceContext() {
   return require("../runtimeContext").serviceContext;
 }
 
-async function handleShopOpen(interaction) {
+async function handleShopOpen(interaction, category = "all") {
   const serviceContext = getServiceContext();
   const [items, progress] = await Promise.all([
     serviceContext.shopService.listItems(),
     serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null)
   ]);
-  const msg = createShopMainMessage(items, progress);
+  const msg = createShopMainMessage(items, progress, category);
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
   // 3分鐘無操作自動刪除
   setTimeout(() => interaction.deleteReply().catch(() => {}), 3 * 60 * 1000);
   // 順帶更新玩家最高等級（非同步，不影響回應速度）
   const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
   serviceContext.shopService.updatePlayerTier(interaction.user.id, memberRoleIds);
+}
+
+async function handleShopCat(interaction, category) {
+  const serviceContext = getServiceContext();
+  const [items, progress] = await Promise.all([
+    serviceContext.shopService.listItems(),
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null)
+  ]);
+  const msg = createShopMainMessage(items, progress, category);
+  await interaction.update({ ...msg, embeds: [], attachments: [] });
 }
 
 /** 組成確認購買的 update payload（有縮圖時附帶） */
@@ -93,19 +104,20 @@ async function handleShopSelect(interaction) {
 }
 
 async function handleShopCancel(interaction) {
-  // 回到商品列表
+  // 回到商品列表（全部分類）
   const serviceContext = getServiceContext();
   const [items, progress] = await Promise.all([
     serviceContext.shopService.listItems(),
     serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null)
   ]);
-  const msg = createShopMainMessage(items, progress);
+  const msg = createShopMainMessage(items, progress, "all");
   await interaction.update({ ...msg, embeds: [], attachments: [] });
 }
 
 async function handleCoinShopButton(interaction) {
   const id = interaction.customId;
   if (id === SHOP_OPEN_ID) { await handleShopOpen(interaction); return; }
+  if (id.startsWith(SHOP_CAT_PREFIX)) { await handleShopCat(interaction, id.slice(SHOP_CAT_PREFIX.length)); return; }
   if (id.startsWith("shop_buy:")) { await handleShopBuy(interaction, id.slice("shop_buy:".length)); return; }
   if (id.startsWith("shop_confirm:")) { await handleShopConfirm(interaction, id.slice("shop_confirm:".length)); return; }
   if (id === SHOP_CANCEL_ID) { await handleShopCancel(interaction); return; }
@@ -115,6 +127,7 @@ function isCoinShopButton(customId) {
   return (
     customId === SHOP_OPEN_ID ||
     customId === SHOP_CANCEL_ID ||
+    customId.startsWith(SHOP_CAT_PREFIX) ||
     customId.startsWith("shop_buy:") ||
     customId.startsWith("shop_confirm:")
   );

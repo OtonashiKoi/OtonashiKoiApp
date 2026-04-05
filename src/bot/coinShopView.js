@@ -3,6 +3,15 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelect
 const SHOP_OPEN_ID = "shop_open";
 const SHOP_CANCEL_ID = "shop_cancel";
 const SHOP_SELECT_ID = "shop_select";
+const SHOP_CAT_PREFIX = "shop_cat:";
+
+const CAT_LABELS = {
+  all:         "📦 全部",
+  consumable:  "🧪 消耗品",
+  equipment:   "⚔️ 裝備",
+  collectible: "🖼️ 圖片",
+  special:     "✨ 特殊",
+};
 
 function shopBuyId(itemId) { return `shop_buy:${itemId}`; }
 function shopConfirmId(itemId) { return `shop_confirm:${itemId}`; }
@@ -33,9 +42,9 @@ function createCoinShopPanelMessage() {
 }
 
 /**
- * 商店主畫面：文字清單 + 下拉選單（最多 25 項，僅可購買商品）
+ * 商店主畫面：文字清單 + 分類按鈕 + 下拉選單（最多 25 項，僅可購買商品）
  */
-function createShopMainMessage(items, progress) {
+function createShopMainMessage(items, progress, activeCategory = "all") {
   const playerTier = progress?.playerTier || null;
   const ym = new Date().toISOString().slice(0, 7);
   const inventory = progress?.inventory || [];
@@ -76,9 +85,32 @@ function createShopMainMessage(items, progress) {
     return { content: "🏪 目前商店沒有可購買的商品，請稍後再來！", components: [] };
   }
 
-  const gold    = items.filter((i) => !i.isSale && i.currency === "gold"    && canBuyTier(playerTier, i.allowedTiers));
-  const diamond = items.filter((i) => !i.isSale && i.currency === "diamond" && canBuyTier(playerTier, i.allowedTiers));
-  const sale    = items.filter((i) => i.isSale                               && canBuyTier(playerTier, i.allowedTiers));
+  // 分類篩選
+  const catFiltered = activeCategory === "all"
+    ? items
+    : items.filter((i) => i.itemType === activeCategory);
+
+  if (!catFiltered.length) {
+    // 此分類無商品，仍顯示分類按鈕讓玩家切換
+    const catRow = new ActionRowBuilder().addComponents(
+      Object.entries(CAT_LABELS).map(([key, label]) =>
+        new ButtonBuilder()
+          .setCustomId(`${SHOP_CAT_PREFIX}${key}`)
+          .setLabel(label)
+          .setStyle(key === activeCategory ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      )
+    );
+    return {
+      content: `🏪 **商店商品列表**\n\n此分類目前沒有商品。`,
+      components: [catRow, new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(SHOP_CANCEL_ID).setLabel("❌ 關閉商店").setStyle(ButtonStyle.Secondary)
+      )]
+    };
+  }
+
+  const gold    = catFiltered.filter((i) => !i.isSale && i.currency === "gold"    && canBuyTier(playerTier, i.allowedTiers));
+  const diamond = catFiltered.filter((i) => !i.isSale && i.currency === "diamond" && canBuyTier(playerTier, i.allowedTiers));
+  const sale    = catFiltered.filter((i) => i.isSale                               && canBuyTier(playerTier, i.allowedTiers));
   const ordered = [...gold, ...diamond, ...sale];
 
   function itemLine(item) {
@@ -104,6 +136,17 @@ function createShopMainMessage(items, progress) {
   const menuItems = buyable.slice(0, 25);
 
   const components = [];
+
+  // 分類篩選按鈕列
+  const catRow = new ActionRowBuilder().addComponents(
+    Object.entries(CAT_LABELS).map(([key, label]) =>
+      new ButtonBuilder()
+        .setCustomId(`${SHOP_CAT_PREFIX}${key}`)
+        .setLabel(label)
+        .setStyle(key === activeCategory ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    )
+  );
+  components.push(catRow);
 
   if (menuItems.length > 0) {
     const selectMenu = new StringSelectMenuBuilder()
@@ -174,6 +217,7 @@ module.exports = {
   SHOP_OPEN_ID,
   SHOP_CANCEL_ID,
   SHOP_SELECT_ID,
+  SHOP_CAT_PREFIX,
   shopBuyId,
   shopConfirmId,
   createCoinShopPanelMessage,
