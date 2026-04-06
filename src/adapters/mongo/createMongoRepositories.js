@@ -38,6 +38,9 @@ function createMongoRepositories() {
       async findByDiscordId(discordId) {
         return (await collection("players")).findOne({ discordId });
       },
+      async findByExternalId(platform, platformUserId) {
+        return (await collection("players")).findOne({ [`externalIds.${platform}`]: platformUserId });
+      },
       async save(player) {
         await (await collection("players")).updateOne(
           { discordId: player.discordId },
