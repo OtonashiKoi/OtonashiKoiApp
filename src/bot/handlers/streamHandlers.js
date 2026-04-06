@@ -9,7 +9,7 @@ const { consumeCode } = require("../bindingStore");
 
 // 可自訂偵測的指令關鍵字
 const STREAM_COMMANDS = {
-  CHECKIN: ["打卡", "+1", "check-in", "checkin"],
+  CHECKIN: ["打卡", "簽到", "+1", "check-in", "checkin"],
   QUERY:   ["查詢", "我的資料", "我的錢包"]
 };
 
