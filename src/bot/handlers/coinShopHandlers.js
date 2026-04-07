@@ -14,27 +14,43 @@ function getServiceContext() {
   return require("../runtimeContext").serviceContext;
 }
 
+/** 取得即時玩家等級（ephemeral cache 可能為空，補 fetch） */
+async function fetchMemberTier(interaction) {
+  let roleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
+  if (roleIds.length === 0 && interaction.guild) {
+    try {
+      const m = await interaction.guild.members.fetch(interaction.user.id);
+      roleIds = m.roles.cache.map((r) => r.id);
+    } catch (_) {}
+  }
+  return getServiceContext().playerTierService.resolveHighestTier(roleIds).catch(() => null);
+}
+
 async function handleShopOpen(interaction, category = "all") {
   const serviceContext = getServiceContext();
-  const [items, progress] = await Promise.all([
+  const [items, progress, realTier] = await Promise.all([
     serviceContext.shopService.listItems(),
-    serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null)
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null),
+    fetchMemberTier(interaction)
   ]);
+  if (progress && realTier != null) progress.playerTier = realTier;
   const msg = createShopMainMessage(items, progress, category);
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
   // 3分鐘無操作自動刪除
   setTimeout(() => interaction.deleteReply().catch(() => {}), 3 * 60 * 1000);
-  // 順帶更新玩家最高等級（非同步，不影響回應速度）
+  // 非同步同步 DB 快取
   const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
   serviceContext.shopService.updatePlayerTier(interaction.user.id, memberRoleIds);
 }
 
 async function handleShopCat(interaction, category) {
   const serviceContext = getServiceContext();
-  const [items, progress] = await Promise.all([
+  const [items, progress, realTier] = await Promise.all([
     serviceContext.shopService.listItems(),
-    serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null)
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null),
+    fetchMemberTier(interaction)
   ]);
+  if (progress && realTier != null) progress.playerTier = realTier;
   const msg = createShopMainMessage(items, progress, category);
   await interaction.update({ ...msg, embeds: [], attachments: [] });
 }
@@ -112,10 +128,12 @@ async function handleShopSelect(interaction) {
 async function handleShopCancel(interaction) {
   // 回到商品列表（全部分類）
   const serviceContext = getServiceContext();
-  const [items, progress] = await Promise.all([
+  const [items, progress, realTier] = await Promise.all([
     serviceContext.shopService.listItems(),
-    serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null)
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null),
+    fetchMemberTier(interaction)
   ]);
+  if (progress && realTier != null) progress.playerTier = realTier;
   const msg = createShopMainMessage(items, progress, "all");
   await interaction.update({ ...msg, embeds: [], attachments: [] });
 }

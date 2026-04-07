@@ -126,14 +126,12 @@ class ShopService {
     if (!item.enabled) throw new AppError(ERROR_CODES.SHOP_ITEM_DISABLED, "此商品目前已下架", 400);
     if (item.stock === 0) throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, "此商品已售完", 400);
 
-    // 身分組限制（透過 playerTierService 解析等級 → roleId）
+    // 身分組限制：解析玩家最高等級，高等級可購買低等級商品
     const allowedTiers = item.allowedTiers || [];
     if (allowedTiers.length > 0 && this.playerTierService) {
-      const requiredRoleIds = await this.playerTierService.resolveRoleIds(allowedTiers);
-      if (requiredRoleIds.length > 0) {
-        const hasRole = requiredRoleIds.some((r) => memberRoleIds.includes(r));
-        if (!hasRole) throw new AppError(ERROR_CODES.FORBIDDEN, "你目前的等級無法購買此商品", 403);
-      }
+      const playerHighestTier = await this.playerTierService.resolveHighestTier(memberRoleIds);
+      const canBuy = allowedTiers.includes(playerHighestTier ?? "");
+      if (!canBuy) throw new AppError(ERROR_CODES.FORBIDDEN, "你目前的等級無法購買此商品", 403);
     }
 
     // 每月次數限制

@@ -16,7 +16,10 @@ const CAT_LABELS = {
 function shopBuyId(itemId) { return `shop_buy:${itemId}`; }
 function shopConfirmId(itemId) { return `shop_confirm:${itemId}`; }
 
-/** 玩家等級是否符合商品要求（空陣列 = 全員可買） */
+// 等級由低到高
+const TIER_ORDER = ["E", "D", "C", "B", "A", "S", "SS"];
+
+/** 玩家等級是否符合商品要求（空陣列 = 全員可買；等級必須完全符合 allowedTiers 之一） */
 function canBuyTier(playerTier, allowedTiers) {
   if (!allowedTiers || allowedTiers.length === 0) return true;
   if (!playerTier) return false;
