@@ -72,6 +72,7 @@ async function handleProfile(interaction) {
   const V = (attrs.vit || 1) + bonus.vit;
   const I = (attrs.int || 1) + bonus.int;
   const D = (attrs.dex || 1) + bonus.dex;
+  const L = (attrs.luk || 1) + bonus.luk;
   const weapon = equipped.weapon || null;
   const offhand = equipped.shield || null;
   const isDualWield = weapon && !weapon.isTwoHanded && offhand?.weaponType != null;
@@ -82,7 +83,9 @@ async function handleProfile(interaction) {
   else if (wt === "bow") baseStat = D;
   const calcHp  = V * 15 + 50;
   const calcAtk = Math.round(baseStat * mult);
-  const calcDef = bonus.vit;
+  const calcDef = V;
+  const calcCrit = Math.round(Math.min(100, L * 0.3) * 10) / 10;
+  const calcCrit = Math.round(Math.min(100, L * 0.3) * 10) / 10;
 
   // ── 裝備清單（只列有裝備的格子）──
   const SLOT_ICONS = {
@@ -112,7 +115,7 @@ async function handleProfile(interaction) {
     `剩餘點數 (Status Pt): ${p.statusPoints || 0}\n` +
     `==============\n` +
     `【戰鬥能力】\n` +
-    `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
+    `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}　🎯 CRIT: ${calcCrit}%\n` +
     equipLine + "\n" +
     `==============\n` +
     `【資產】\n` +
