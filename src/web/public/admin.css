@@ -352,6 +352,30 @@ input:focus, select:focus, textarea:focus {
   color: var(--text);
 }
 
+/* Items tab buttons */
+.items-tab-btn {
+  background: none !important;
+  border: none !important;
+  border-bottom: 3px solid transparent !important;
+  border-radius: 0 !important;
+  padding: 6px 18px 8px !important;
+  font-size: 0.9em;
+  font-weight: 400;
+  color: var(--muted, #888);
+  cursor: pointer;
+  transition: color 0.15s, border-bottom-color 0.15s;
+  white-space: nowrap;
+  margin-bottom: -2px;
+}
+.items-tab-btn:hover {
+  color: var(--text, #e8e8e8);
+}
+.items-tab-btn.active {
+  color: var(--text, #e8e8e8) !important;
+  border-bottom-color: var(--accent, #4ade80) !important;
+  font-weight: 600;
+}
+
 /* Specific Component: Role/Checkbox List */
 .role-list, .binding-list {
   display: grid;
