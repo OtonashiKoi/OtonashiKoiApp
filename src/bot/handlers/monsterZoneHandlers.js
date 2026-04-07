@@ -74,7 +74,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     dodge: Math.min(50, A * 0.5),
     hit: Math.min(100, 80 + D),
     crit: Math.min(100, L * 0.3),
-    combo: Math.min(80, A * 0.3), // AGI → 連擊率（上限 80%）
+    combo: Math.min(80, 3 + A * 0.3), // 基礎 3% + AGI*0.3（上限 80%）
     weaponType: wt || null
   };
 }

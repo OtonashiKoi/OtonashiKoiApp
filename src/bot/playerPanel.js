@@ -85,7 +85,7 @@ async function handleProfile(interaction) {
   const calcAtk = Math.round(baseStat * mult);
   const calcDef = V;
   const calcCrit  = Math.round(Math.min(100, L * 0.3) * 10) / 10;
-  const calcCombo = Math.round(Math.min(80, A * 0.3) * 10) / 10;
+  const calcCombo = Math.round(Math.min(80, 3 + A * 0.3) * 10) / 10;
 
   // ── 裝備清單（只列有裝備的格子）──
   const SLOT_ICONS = {
