@@ -3,6 +3,7 @@
   const BASE = "/admin";
   let monsters = [];
   let itemLib = [];
+  let activeZone = "normal";
 
   const STAT_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
   const ITEM_TYPE_LABEL = { consumable: "🧪 消耗品", collectible: "🖼️ 圖片", equipment: "⚔️ 裝備", special: "✨ 特殊" };
@@ -154,8 +155,8 @@
   function renderHead() {
     const head = document.getElementById("monsters-sheet-head");
     if (!head) return;
-    const cols = ["出場順", "圖", "名稱", "區域", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掘落道具", "啟用", "操作"];
-    const widths = ["74px","52px","114px","72px","62px","66px","66px","66px","66px","66px","66px","160px","86px","86px","86px","240px","44px","96px"];
+    const cols = ["出場順", "圖", "名稱", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掘落道具", "啟用", "操作"];
+    const widths = ["74px","52px","114px","62px","66px","66px","66px","66px","66px","66px","160px","86px","86px","86px","240px","44px","96px"];
     head.innerHTML = "<tr>" + cols.map((c,i) => `<th style="width:${widths[i]};white-space:nowrap;">${c}</th>`).join("") + "</tr>";
   }
 
@@ -186,12 +187,6 @@
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:62px;text-align:center;${!enabled ? 'opacity:0.35;pointer-events:none;' : ''}" ${!enabled ? 'disabled' : ''} /></td>
       <td style="padding:6px;" class="img-cell">${imgHtml}</td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:104px;" /></td>
-      <td style="padding:6px 4px;">
-        <select class="sheet-input" data-field="zone" style="width:64px;">
-          <option value="normal" ${(m.zone||"normal")==="normal"?"selected":""}>一般</option>
-          <option value="mid" ${m.zone==="mid"?"selected":""}>中級</option>
-        </select>
-      </td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="level" type="number" min="1" max="15" step="1" value="${m.level||1}" style="width:52px;text-align:center;" /></td>
       ${statsInputs}
       <td class="calc-cell" style="padding:6px 8px;">${buildCalcHtml(m)}</td>
@@ -213,7 +208,7 @@
     const tbody = document.getElementById("monsters-tbody");
     if (!tbody) return;
     tbody.innerHTML = "";
-    monsters.forEach(m => tbody.appendChild(buildRow(m, false)));
+    monsters.filter(m => (m.zone || "normal") === activeZone).forEach(m => tbody.appendChild(buildRow(m, false)));
     bindTableEvents(tbody);
   }
 
@@ -253,7 +248,7 @@
     return {
       seq: Number(tr.querySelector("[data-field=seq]")?.value) || 1,
       name: tr.querySelector("[data-field=name]")?.value || "",
-      zone: tr.querySelector("[data-field=zone]")?.value || "normal",
+      zone: activeZone,
       level: Number(tr.querySelector("[data-field=level]")?.value) || 1,
       ...stats,
       entryFee: Number(tr.querySelector("[data-field=entryFee]")?.value) || 0,
@@ -288,7 +283,7 @@
     const tbody = document.getElementById("monsters-tbody");
     if (!tbody) return;
     const nextSeq = monsters.length ? Math.max(...monsters.map(m => m.seq||1)) + 1 : 1;
-    const blank = { id: "", seq: nextSeq, name: "", zone: "normal", level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, entryFee:100, expReward:50, goldReward:30, drops:[], enabled:true };
+    const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, entryFee:100, expReward:50, goldReward:30, drops:[], enabled:true };
     const tr = buildRow(blank, true);
     tbody.appendChild(tr);
     bindTableEvents(tr.parentElement);
@@ -313,10 +308,32 @@
     });
   }
 
+  function initZoneTabs() {
+    const tabs = document.querySelectorAll(".monsters-zone-tab");
+    function updateTabStyles() {
+      tabs.forEach(btn => {
+        const isActive = btn.dataset.zone === activeZone;
+        btn.style.color = isActive ? "var(--text,#e8e8e8)" : "var(--muted,#888)";
+        btn.style.borderBottomColor = isActive ? "var(--accent,#4ade80)" : "transparent";
+        btn.style.fontWeight = isActive ? "600" : "400";
+      });
+    }
+    tabs.forEach(btn => {
+      btn.addEventListener("click", function () {
+        activeZone = this.dataset.zone;
+        updateTabStyles();
+        renderBody();
+        loadState();
+      });
+    });
+    updateTabStyles();
+  }
+
   document.addEventListener("adminConnected", async () => {
     await loadItemLib();
     await loadMonsters();
     initImageUpload();
+    initZoneTabs();
     document.getElementById("monsters-btn-new")?.addEventListener("click", addNewRow);
   });
 })();

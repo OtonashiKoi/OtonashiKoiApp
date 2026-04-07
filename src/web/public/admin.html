@@ -354,7 +354,11 @@
           </div>
           <!-- 隱藏圖片 input -->
           <input type="file" id="monsters-img-input" accept="image/*" style="display:none;" />
-          <div style="overflow-x:auto;">
+          <!-- 區域分頁 -->
+          <div id="monsters-zone-tabs" style="display:flex;gap:0;margin-bottom:1rem;border-bottom:2px solid var(--line,#333);">
+            <button data-zone="normal" class="monsters-zone-tab" style="padding:6px 22px;font-size:0.9em;border:none;border-bottom:3px solid transparent;background:none;color:var(--muted,#888);cursor:pointer;margin-bottom:-2px;">⚔️ 一般區</button>
+            <button data-zone="mid" class="monsters-zone-tab" style="padding:6px 22px;font-size:0.9em;border:none;border-bottom:3px solid transparent;background:none;color:var(--muted,#888);cursor:pointer;margin-bottom:-2px;">🔥 中級區</button>
+          </div>
             <table class="shop-table" id="monsters-sheet-table" style="min-width:100%;">
               <thead id="monsters-sheet-head"></thead>
               <tbody id="monsters-tbody"></tbody>
