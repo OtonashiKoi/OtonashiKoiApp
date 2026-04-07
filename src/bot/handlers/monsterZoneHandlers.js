@@ -143,9 +143,10 @@ async function handleEnterBattle(interaction) {
     }
 
     // 中級區等級限制
+    let cachedProgress = null;
     if (zoneKey === "mid") {
-      const prog = await sc.progressRepository.findByPlayerId(discordId);
-      const playerLevel = prog?.level ?? 1;
+      cachedProgress = await sc.progressRepository.findByPlayerId(discordId);
+      const playerLevel = cachedProgress?.level ?? 1;
       if (playerLevel < 10) {
         await interaction.editReply({ content: `🔒 **中級區**需要 **Lv.10** 以上才能進入！
 目前等級：**Lv.${playerLevel}**` });
@@ -153,8 +154,10 @@ async function handleEnterBattle(interaction) {
       }
     }
 
-    const state = await sc.monsterService.getState(zoneKey);
-    const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
+    const [state, monsters] = await Promise.all([
+      sc.monsterService.getState(zoneKey),
+      sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey })
+    ]);
     if (!monsters.length) {
       await interaction.editReply({ content: "❌ 目前沒有啟用中的怪物，請稍後再試。" });
       return;
@@ -162,7 +165,7 @@ async function handleEnterBattle(interaction) {
     const monster = monsters.find((m) => m.seq === state.activeMonsterSeq) || monsters[0];
     const monsterHp = state.currentHp != null ? state.currentHp : monster.calc.maxHp;
 
-    const progress = await sc.progressRepository.findByPlayerId(discordId);
+    const progress = cachedProgress ?? await sc.progressRepository.findByPlayerId(discordId);
     const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     const equipped = progress?.equipment || {};
     const pStats = calcPlayerStats(attrs, equipped);

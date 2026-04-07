@@ -226,8 +226,10 @@ function createAdminConsoleRoutes(serviceContext) {
         res.status(400).json(fail("INVALID_ARGUMENT", "itemId is required"));
         return;
       }
-      const item = await serviceContext.itemService.getItemById(itemId);
-      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      const [item, progress] = await Promise.all([
+        serviceContext.itemService.getItemById(itemId),
+        serviceContext.progressRepository.findByPlayerId(discordId)
+      ]);
       if (!progress) {
         res.status(404).json(fail("PLAYER_NOT_FOUND", "找不到玩家進度資料"));
         return;

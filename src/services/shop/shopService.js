@@ -136,8 +136,8 @@ class ShopService {
 
     // 每月次數限制
     const maxPerMonth = item.maxPerMonth || 0;
+    const progress = await this.progressRepository.findByPlayerId(discordId);
     if (maxPerMonth > 0) {
-      const progress = await this.progressRepository.findByPlayerId(discordId);
       const ym = this._currentYearMonth();
       const counts = (progress?.shopMonthlyCount || {});
       const used = (counts[itemId] || {})[ym] || 0;
@@ -163,7 +163,6 @@ class ShopService {
     }
 
     // 寫入背包 + 更新月次數
-    const progress = await this.progressRepository.findByPlayerId(discordId);
     if (progress) {
       if (!Array.isArray(progress.inventory)) progress.inventory = [];
       // 記錄月次數

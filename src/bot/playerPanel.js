@@ -39,13 +39,12 @@ async function replyPlayerBlocked(interaction) {
 
 async function handleProfile(interaction) {
   const serviceContext = getServiceContext();
-  const result = await serviceContext.playerService.getProfile(
-    interaction.user.id,
-    interaction.user.username
-  );
-  // 順帶更新等級（同步，確保展示的是最新等級）
   const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
-  await serviceContext.shopService.updatePlayerTier(interaction.user.id, memberRoleIds);
+  // getProfile 與 updatePlayerTier 互不相依，並行執行
+  const [result] = await Promise.all([
+    serviceContext.playerService.getProfile(interaction.user.id, interaction.user.username),
+    serviceContext.shopService.updatePlayerTier(interaction.user.id, memberRoleIds)
+  ]);
   // 重新讀取 progress 以拿到更新後的等級
   const freshProgress = await serviceContext.progressRepository
     ? await serviceContext.progressRepository.findByPlayerId(interaction.user.id)
