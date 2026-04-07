@@ -74,6 +74,9 @@ function validateBindings(bindings) {
   return normalized;
 }
 
+// 序列化 monster_zone 面板發布，防止並發競爭
+let _panelPublishMutex = null;
+
 class AdminConsoleService {
   constructor(channelLayoutRepository, playerRepository, adminService, walletRepository, progressRepository, checkinRepository) {
     this.channelLayoutRepository = channelLayoutRepository;
@@ -372,6 +375,22 @@ class AdminConsoleService {
   }
 
   async publishMonsterZonePanel(channelId, monster, currentHp, options = {}) {
+    // ── 並發保護：admin 強制發布等待中的操作完成；自動更新若正在發布則跳過 ──
+    if (_panelPublishMutex) {
+      if (!options.cleanChannel) return; // 自動更新：跳過，避免堆積
+      await _panelPublishMutex;          // 管理員手動：等待上一次完成後再執行
+    }
+    let _resolve;
+    _panelPublishMutex = new Promise((r) => { _resolve = r; });
+    try {
+      return await this._doPublishMonsterZonePanel(channelId, monster, currentHp, options);
+    } finally {
+      _panelPublishMutex = null;
+      _resolve();
+    }
+  }
+
+  async _doPublishMonsterZonePanel(channelId, monster, currentHp, options = {}) {
     const { getBotClient } = require("../../bot/runtimeContext");
     const { createMonsterZonePanelMessage } = require("../../bot/monsterZoneView");
 
@@ -396,16 +415,35 @@ class AdminConsoleService {
 
     const panelMsg = createMonsterZonePanelMessage(monster || null, currentHp ?? null, options?.participantCount ?? 0, options?.damageMap ?? {});
 
-    // 優先 edit 現有訊息，避免多人同時觸發時產生多個面板
     let message = null;
-    if (existingBinding?.panelMessageId) {
-      message = await channel.messages.fetch(existingBinding.panelMessageId)
-        .then((msg) => msg.edit(panelMsg))
-        .catch(() => null);
-    }
-    if (!message) {
-      // edit 失敗（訊息不存在）才發新訊息
+
+    if (options.cleanChannel) {
+      // 管理員重新發布：先清空頻道訊息再發新的
+      try {
+        const fetched = await channel.messages.fetch({ limit: 100 });
+        const toDelete = fetched.filter((m) => !m.pinned);
+        if (toDelete.size > 0) {
+          // bulkDelete 只支援 14 天內訊息；filterOld:true 自動略過舊訊息
+          await channel.bulkDelete(toDelete, true).catch(() => {});
+          // 對 14 天以上的訊息逐一刪除
+          for (const [, msg] of toDelete) {
+            if (!msg.bulkDeletable) await msg.delete().catch(() => {});
+          }
+        }
+      } catch (e) {
+        console.warn("[MonsterZone] channel cleanup failed:", e.message);
+      }
       message = await channel.send(panelMsg);
+    } else {
+      // 自動更新：優先 edit 現有訊息，避免多人同時觸發時產生多個面板
+      if (existingBinding?.panelMessageId) {
+        message = await channel.messages.fetch(existingBinding.panelMessageId)
+          .then((msg) => msg.edit(panelMsg))
+          .catch(() => null);
+      }
+      if (!message) {
+        message = await channel.send(panelMsg);
+      }
     }
 
     const updatedBindings = bindings.map((b) =>

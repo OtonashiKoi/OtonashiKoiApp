@@ -160,7 +160,7 @@ function createAdminConsoleRoutes(serviceContext) {
       const activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq) || monsters[0] || null;
       const currentHp = state.currentHp != null ? state.currentHp : (activeMonster?.calc?.maxHp ?? null);
       const participantCount = Array.isArray(state.participants) ? state.participants.length : 0;
-      const result = await serviceContext.adminConsoleService.publishMonsterZonePanel(channelId, activeMonster, currentHp, { participantCount });
+      const result = await serviceContext.adminConsoleService.publishMonsterZonePanel(channelId, activeMonster, currentHp, { participantCount, cleanChannel: true });
       res.json(ok(result, "monster zone panel published"));
     } catch (error) {
       next(error);
