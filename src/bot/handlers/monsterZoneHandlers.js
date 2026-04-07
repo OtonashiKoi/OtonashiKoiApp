@@ -384,43 +384,42 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const sc = getServiceContext();
   const rewardLines = [];
 
-  // ── 參戰獎勵：所有打過怪的人（含擊殺者）都拿 participantGoldReward ──
-  const participantBonus = monster.participantGoldReward || 0;
-  if (participantBonus > 0) {
-    const participants = Array.isArray(state.participants) ? state.participants : [];
-    const allIds = [...new Set([...participants, discordId])];
-    for (const pid of allIds) {
+  // 參戰名單（含擊殺者）
+  const participants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
+  const count = participants.length;
+
+  // ── 金幣平均分配給所有參戰玩家 ──
+  if (monster.goldReward > 0) {
+    const share = Math.max(1, Math.floor(monster.goldReward / count));
+    for (const pid of participants) {
       try {
-        // 擊殺者在下面另外顯示，這裡靜默發放
         await sc.rewardService.grantCurrency({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
-          currencyType: "gold", amount: participantBonus,
-          source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone:participant"
+          currencyType: "gold", amount: share,
+          source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone"
         });
-      } catch (e) { console.error("[MonsterZone] participantReward error", e); }
+      } catch (e) { console.error("[MonsterZone] grantCurrency error", e); }
     }
-    rewardLines.push(`🤝 參戰獎勵 +${participantBonus} 金幣（共 ${allIds.length} 人）`);
+    rewardLines.push(`💰 金幣 +${share}（${monster.goldReward} 由 ${count} 人平分）`);
   }
 
-  // ── 擊殺獎勵：只有擊殺者才拿 ──
-  if (monster.goldReward > 0) {
-    try {
-      await sc.rewardService.grantCurrency({
-        discordId, displayName, currencyType: "gold", amount: monster.goldReward,
-        source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone"
-      });
-      rewardLines.push(`💰 擊殺獎勵 +${monster.goldReward} 金幣`);
-    } catch (e) { console.error("[MonsterZone] grantCurrency error", e); }
-  }
-
+  // ── EXP 平均分配給所有參戰玩家 ──
   if (monster.expReward > 0) {
-    try {
-      const expResult = await sc.progressService.grantExp({
-        discordId, displayName, amount: monster.expReward, source: EXP_SOURCES.MONSTER_KILL
-      });
-      const lvLine = expResult.levelUps > 0 ? ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}` : "";
-      rewardLines.push(`⭐ EXP +${monster.expReward}${lvLine}`);
-    } catch (e) { console.error("[MonsterZone] grantExp error", e); }
+    const share = Math.max(1, Math.floor(monster.expReward / count));
+    // 擊殺者顯示升級訊息
+    let killerLvLine = "";
+    for (const pid of participants) {
+      try {
+        const expResult = await sc.progressService.grantExp({
+          discordId: pid, displayName: pid === discordId ? displayName : pid,
+          amount: share, source: EXP_SOURCES.MONSTER_KILL
+        });
+        if (pid === discordId && expResult.levelUps > 0) {
+          killerLvLine = ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}`;
+        }
+      } catch (e) { console.error("[MonsterZone] grantExp error", e); }
+    }
+    rewardLines.push(`⭐ EXP +${share}（${monster.expReward} 由 ${count} 人平分）${killerLvLine}`);
   }
 
   if (Array.isArray(monster.drops) && monster.drops.length > 0) {
