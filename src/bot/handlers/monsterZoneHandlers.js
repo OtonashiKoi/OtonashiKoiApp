@@ -456,11 +456,25 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const totalDmgAll = participants.reduce((s, pid) => s + (mergedDmg[pid]?.damage || 0), 0);
   const dmgRatio = (pid) => totalDmgAll > 0 ? (mergedDmg[pid]?.damage || 0) / totalDmgAll : 1 / participants.length;
 
-  // ── 金幣依比例分配 ──
+  // ── 預先取得所有參戰者等級，計算等級懲罰係數 ──
+  // 規則：玩家等級 > 怪物等級+2 時，每超一級扣 10%，最低保留 10%
+  const monsterLevel = Math.max(1, Number(monster.level) || 1);
+  const progressMap = {};
+  await Promise.all(participants.map(async (pid) => {
+    const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
+    progressMap[pid] = prog?.level ?? 1;
+  }));
+  const levelPenalty = (pid) => {
+    const overLevel = Math.max(0, progressMap[pid] - (monsterLevel + 2));
+    return Math.max(0.1, 1 - overLevel * 0.1);
+  };
+
+  // ── 金幣依比例分配（含等級懲罰）──
   if (monster.goldReward > 0) {
-    const myShare = Math.max(1, Math.round(monster.goldReward * dmgRatio(discordId)));
+    const myMultiplier = dmgRatio(discordId) * levelPenalty(discordId);
+    const myShare = Math.max(1, Math.round(monster.goldReward * myMultiplier));
     for (const pid of participants) {
-      const share = Math.max(1, Math.round(monster.goldReward * dmgRatio(pid)));
+      const share = Math.max(1, Math.round(monster.goldReward * dmgRatio(pid) * levelPenalty(pid)));
       try {
         await sc.rewardService.grantCurrency({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -470,15 +484,18 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       } catch (e) { console.error("[MonsterZone] grantCurrency error", e); }
     }
     const pct = Math.round(dmgRatio(discordId) * 100);
-    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}%，共 ${monster.goldReward}）`);
+    const pen = levelPenalty(discordId);
+    const penNote = pen < 1 ? `　⚠️ 等級懲罰 ${Math.round(pen * 100)}%` : "";
+    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}%，共 ${monster.goldReward}）${penNote}`);
   }
 
-  // ── EXP 依比例分配 ──
+  // ── EXP 依比例分配（含等級懲罰）──
   if (monster.expReward > 0) {
-    const myShare = Math.max(1, Math.round(monster.expReward * dmgRatio(discordId)));
+    const myMultiplier = dmgRatio(discordId) * levelPenalty(discordId);
+    const myShare = Math.max(1, Math.round(monster.expReward * myMultiplier));
     let killerLvLine = "";
     for (const pid of participants) {
-      const share = Math.max(1, Math.round(monster.expReward * dmgRatio(pid)));
+      const share = Math.max(1, Math.round(monster.expReward * dmgRatio(pid) * levelPenalty(pid)));
       try {
         const expResult = await sc.progressService.grantExp({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -490,7 +507,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       } catch (e) { console.error("[MonsterZone] grantExp error", e); }
     }
     const pct = Math.round(dmgRatio(discordId) * 100);
-    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${monster.expReward}）${killerLvLine}`);
+    const pen = levelPenalty(discordId);
+    const penNote = pen < 1 ? `　⚠️ 等級懲罰 ${Math.round(pen * 100)}%` : "";
+    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${monster.expReward}）${penNote}${killerLvLine}`);
   }
 
   if (Array.isArray(monster.drops) && monster.drops.length > 0) {

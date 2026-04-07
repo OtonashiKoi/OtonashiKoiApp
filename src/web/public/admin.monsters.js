@@ -154,8 +154,8 @@
   function renderHead() {
     const head = document.getElementById("monsters-sheet-head");
     if (!head) return;
-    const cols = ["出場順", "圖", "名稱", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掘落道具", "啟用", "操作"];
-    const widths = ["70px","52px","110px","60px","60px","60px","60px","60px","60px","160px","72px","72px","72px","230px","44px","88px"];
+    const cols = ["出場順", "圖", "名稱", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掘落道具", "啟用", "操作"];
+    const widths = ["70px","52px","110px","52px","60px","60px","60px","60px","60px","60px","160px","72px","72px","72px","230px","44px","88px"];
     head.innerHTML = "<tr>" + cols.map((c,i) => `<th style="width:${widths[i]};white-space:nowrap;">${c}</th>`).join("") + "</tr>";
   }
 
@@ -186,6 +186,7 @@
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:58px;text-align:center;${!enabled ? 'opacity:0.35;pointer-events:none;' : ''}" ${!enabled ? 'disabled' : ''} /></td>
       <td style="padding:6px;" class="img-cell">${imgHtml}</td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:100px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="level" type="number" min="1" max="15" step="1" value="${m.level||1}" style="width:44px;text-align:center;" /></td>
       ${statsInputs}
       <td class="calc-cell" style="padding:6px 8px;">${buildCalcHtml(m)}</td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:64px;" /></td>
@@ -246,6 +247,7 @@
     return {
       seq: Number(tr.querySelector("[data-field=seq]")?.value) || 1,
       name: tr.querySelector("[data-field=name]")?.value || "",
+      level: Number(tr.querySelector("[data-field=level]")?.value) || 1,
       ...stats,
       entryFee: Number(tr.querySelector("[data-field=entryFee]")?.value) || 0,
       expReward: Number(tr.querySelector("[data-field=expReward]")?.value) || 0,
@@ -279,7 +281,7 @@
     const tbody = document.getElementById("monsters-tbody");
     if (!tbody) return;
     const nextSeq = monsters.length ? Math.max(...monsters.map(m => m.seq||1)) + 1 : 1;
-    const blank = { id: "", seq: nextSeq, name: "", str:5, agi:5, vit:5, int:5, dex:5, luk:5, entryFee:100, expReward:50, goldReward:30, drops:[], enabled:true };
+    const blank = { id: "", seq: nextSeq, name: "", level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, entryFee:100, expReward:50, goldReward:30, drops:[], enabled:true };
     const tr = buildRow(blank, true);
     tbody.appendChild(tr);
     bindTableEvents(tr.parentElement);

@@ -42,6 +42,7 @@ class MonsterService {
       int: Math.max(0, Number(fields.int) || 0),
       dex: Math.max(0, Number(fields.dex) || 0),
       luk: Math.max(0, Number(fields.luk) || 0),
+      level: Math.max(1, Number(fields.level) || 1),
       entryFee: Math.max(0, Number(fields.entryFee) || 0),
       expReward: Math.max(0, Number(fields.expReward) || 0),
       goldReward: Math.max(0, Number(fields.goldReward) || 0),
@@ -63,6 +64,7 @@ class MonsterService {
     for (const stat of ["str", "agi", "vit", "int", "dex", "luk"]) {
       if (fields[stat] !== undefined) updated[stat] = Math.max(0, Number(fields[stat]) || 0);
     }
+    if (fields.level !== undefined) updated.level = Math.max(1, Number(fields.level) || 1);
     if (fields.entryFee !== undefined) updated.entryFee = Math.max(0, Number(fields.entryFee) || 0);
     if (fields.expReward !== undefined) updated.expReward = Math.max(0, Number(fields.expReward) || 0);
     if (fields.goldReward !== undefined) updated.goldReward = Math.max(0, Number(fields.goldReward) || 0);
