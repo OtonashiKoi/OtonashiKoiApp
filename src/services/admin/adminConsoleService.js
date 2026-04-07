@@ -394,7 +394,7 @@ class AdminConsoleService {
     const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
     const existingBinding = bindings.find((b) => b.featureKey === "monster_zone");
 
-    const panelMsg = createMonsterZonePanelMessage(monster || null, currentHp ?? null, options?.participantCount ?? 0);
+    const panelMsg = createMonsterZonePanelMessage(monster || null, currentHp ?? null, options?.participantCount ?? 0, options?.damageMap ?? {});
 
     // 優先 edit 現有訊息，避免多人同時觸發時產生多個面板
     let message = null;

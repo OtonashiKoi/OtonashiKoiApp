@@ -11,7 +11,7 @@ const BUTTON_IDS = {
  * @param {number|null} currentHp - 當前血量 (null 表示滿血)
  * @param {number} participantCount - 本場已參戰人數
  */
-function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0) {
+function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0, damageMap = {}) {
   const maxHp = monster?.calc?.maxHp ?? 0;
   const hp = currentHp != null ? currentHp : maxHp;
   const hpBar = maxHp > 0 ? buildHpBar(hp, maxHp) : "";
@@ -21,6 +21,11 @@ function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0)
   const expReward = monster?.expReward ?? 0;
   const goldReward = monster?.goldReward ?? 0;
 
+  const damageEntries = Object.values(damageMap).sort((a, b) => b.damage - a.damage);
+  const damageSection = damageEntries.length > 0
+    ? "💥 傷害紀錄：\n" + damageEntries.map((v) => `・${v.name}　${v.damage}`).join("\n")
+    : "";
+
   const desc = [
     `目前上場：**${monsterName}**`,
     maxHp > 0 ? `❤️ ${hp} / ${maxHp}  ${hpBar}` : "",
@@ -28,6 +33,7 @@ function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0)
     entryFee > 0 ? `入場費：${entryFee} 🪙` : "",
     expReward > 0 || goldReward > 0 ? `擊殺獎勵：EXP +${expReward}　金幣 +${goldReward}` : "",
     participantCount > 0 ? `⚔️ 目前參戰人數：${participantCount} 人` : "",
+    damageSection,
     "",
     "點擊下方按鈕出戰，進入回合制戰鬥！"
   ].filter((l) => l !== "").join("\n");

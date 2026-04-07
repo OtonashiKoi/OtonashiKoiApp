@@ -109,12 +109,12 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
 // ──────────────────────────────────────────────
 // 輔助：重發公開面板
 // ──────────────────────────────────────────────
-async function _republishPanel(sc, monster, monsterHp, participantCount) {
+async function _republishPanel(sc, monster, monsterHp, participantCount, damageMap = {}) {
   const layout = await sc.channelLayoutRepository.get();
   const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === "monster_zone");
   if (binding?.channelId) {
     await sc.adminConsoleService.publishMonsterZonePanel(
-      binding.channelId, monster, monsterHp, { participantCount }
+      binding.channelId, monster, monsterHp, { participantCount, damageMap }
     );
   }
 }
@@ -202,7 +202,7 @@ async function handleEnterBattle(interaction) {
       const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === "monster_zone");
       if (binding?.channelId) {
         sc.adminConsoleService
-          .publishMonsterZonePanel(binding.channelId, monster, monsterHp, { participantCount: newParticipants.length })
+          .publishMonsterZonePanel(binding.channelId, monster, monsterHp, { participantCount: newParticipants.length, damageMap: state.damageMap || {} })
           .catch((e) => console.error("[MonsterZone] update panel error", e));
       }
     }
@@ -276,6 +276,7 @@ async function handleStartFight(interaction) {
     const roundLogs = [];
     let round = 1;
     let outcome = null; // "win" | "lose" | "timeout"
+    let totalDamage = 0;
 
     while (round <= MAX_ROUNDS && outcome === null) {
       const log = [`**【第 ${round} 回合】**`];
@@ -289,6 +290,7 @@ async function handleStartFight(interaction) {
           const isCrit = Math.random() * 100 < session.playerStats.crit;
           if (isCrit) dmg = Math.round(dmg * 1.5);
           session.monsterHp -= dmg;
+          totalDamage += dmg;
           const atkLabel = attackCount > 1 ? `第${a + 1}擊` : "";
           log.push(isCrit
             ? `⚔️✨ 暴擊！${atkLabel}你對怪物造成 **${dmg}** 傷（怪物剩 ${Math.max(0, session.monsterHp)} HP）`
@@ -327,25 +329,39 @@ async function handleStartFight(interaction) {
 
     if (outcome === "win") {
       session.monsterHp = 0;
-      rewardLines = await handleMonsterKill({ discordId, displayName, session, monster, state });
+      rewardLines = await handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage });
       embedTitle = "🏆 勝利！";
       embedColor = 0xf1c40f;
     } else if (outcome === "lose") {
       session.monsterHp = Math.max(0, session.monsterHp);
-      await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp });
+      let damageMap = {};
+      try {
+        const freshState = await sc.monsterService.getState();
+        damageMap = { ...(freshState.damageMap || {}), [discordId]: { name: displayName, damage: totalDamage } };
+        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap });
+      } catch (e) {
+        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp });
+      }
       embedTitle = "💀 戰鬥失敗";
       embedColor = 0x555555;
       rewardLines = [
         `你被 **${session.monsterName}** 擊倒了！`,
         session.entryFee > 0 ? `入場費 **${session.entryFee}** 🪙 已損失，下次加油！` : "下次加油！"
       ];
-      _republishPanel(sc, monster, session.monsterHp, currentParticipants.length).catch(() => {});
+      _republishPanel(sc, monster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
     } else {
-      await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp });
+      let damageMap = {};
+      try {
+        const freshState = await sc.monsterService.getState();
+        damageMap = { ...(freshState.damageMap || {}), [discordId]: { name: displayName, damage: totalDamage } };
+        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap });
+      } catch (e) {
+        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp });
+      }
       embedTitle = "⏸️ 戰鬥超時";
       embedColor = 0x888888;
       rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
-      _republishPanel(sc, monster, session.monsterHp, currentParticipants.length).catch(() => {});
+      _republishPanel(sc, monster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
     }
 
     // 戰鬥已結算，但先保留 session 至顯示完畢才刪除，避免期間重複出戰
@@ -404,7 +420,7 @@ async function handleDeleteLog(interaction) {
 // ──────────────────────────────────────────────
 // 擊殺結算（發獎勵 + 推進怪物 + 重發面板）
 // ──────────────────────────────────────────────
-async function handleMonsterKill({ discordId, displayName, session, monster, state }) {
+async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0 }) {
   const sc = getServiceContext();
   const rewardLines = [];
 
@@ -490,7 +506,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     currentHp: nextMonster ? nextMonster.calc.maxHp : 0,
     activeMonsterSeq: nextMonster ? nextMonster.seq : state.activeMonsterSeq,
     killCount: newKillCount,
-    participants: [] // 新怪上場，參戰名單清零
+    participants: [], // 新怪上場，參戰名單清零
+    damageMap: {}    // 新怪上場，傷害紀錄清零
   };
   await sc.monsterService.saveState(newState);
 
