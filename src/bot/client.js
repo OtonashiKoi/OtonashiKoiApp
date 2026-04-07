@@ -95,25 +95,28 @@ async function setupLockedChannels(client) {
 
   // 鎖定非聊天大街的頻道（只有管理員與 bot 可發言，所有人可讀歷史）
   const lockBindings = bindings.filter((b) => b.enabled && b.channelId && b.featureKey !== "town_chat");
-  for (const binding of lockBindings) {
+  const isMonsterZone = (fk) => fk === "monster_zone" || fk === "monster_zone_mid";
+
+  await Promise.allSettled(lockBindings.map(async (binding) => {
     try {
       const channel = await client.channels.fetch(binding.channelId);
-      if (!channel || !channel.isTextBased()) continue;
+      if (!channel || !channel.isTextBased()) return;
 
-      await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { SendMessages: false, ReadMessageHistory: true });
-      await channel.permissionOverwrites.edit(client.user.id, { SendMessages: true, ReadMessageHistory: true });
-      for (const roleId of adminRoleIds) {
-        try { await channel.permissionOverwrites.edit(roleId, { SendMessages: true, ReadMessageHistory: true }); } catch (_) {}
+      const tasks = [
+        channel.permissionOverwrites.edit(channel.guild.roles.everyone, { SendMessages: false, ReadMessageHistory: true }),
+        channel.permissionOverwrites.edit(client.user.id, { SendMessages: true, ReadMessageHistory: true }),
+        ...adminRoleIds.map((id) => channel.permissionOverwrites.edit(id, { SendMessages: true, ReadMessageHistory: true }).catch(() => {})),
+      ];
+      // 只有戰鬥區才需要明確禁止玩家發言（其他頻道 @everyone 已封鎖，無需逐一設定）
+      if (isMonsterZone(binding.featureKey)) {
+        tasks.push(...playerRoleIds.map((id) => channel.permissionOverwrites.edit(id, { SendMessages: false, ReadMessageHistory: true }).catch(() => {})));
       }
-      // 明確覆蓋玩家身分組：只能看 + 按按鈕，不能發言（清除舊殘留 overwrite）
-      for (const roleId of playerRoleIds) {
-        try { await channel.permissionOverwrites.edit(roleId, { SendMessages: false, ReadMessageHistory: true }); } catch (_) {}
-      }
+      await Promise.allSettled(tasks);
       console.log(`[Discord] 頻道 ${binding.channelId} (${binding.featureKey}) 已設為唯讀`);
     } catch (err) {
       console.warn(`[Discord] 無法鎖定頻道 ${binding.channelId}：${err.message}`);
     }
-  }
+  }));
 
   // 聊天大街：玩家身分組才能發言，@everyone 禁止發言但可讀歷史
   const townBinding = bindings.find((b) => b.enabled && b.channelId && b.featureKey === "town_chat");
