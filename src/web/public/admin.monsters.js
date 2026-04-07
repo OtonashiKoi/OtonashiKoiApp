@@ -305,7 +305,8 @@
   }
 
   document.addEventListener("adminConnected", async () => {
-    await Promise.all([loadItemLib(), loadMonsters()]);
+    await loadItemLib();
+    await loadMonsters();
     initImageUpload();
     document.getElementById("monsters-btn-new")?.addEventListener("click", addNewRow);
   });
