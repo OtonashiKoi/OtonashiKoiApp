@@ -393,14 +393,20 @@ class AdminConsoleService {
     const stored = await this.channelLayoutRepository.get();
     const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
     const existingBinding = bindings.find((b) => b.featureKey === "monster_zone");
-    if (existingBinding?.panelMessageId) {
-      await channel.messages.fetch(existingBinding.panelMessageId)
-        .then((msg) => msg.delete())
-        .catch(() => {});
-    }
 
     const panelMsg = createMonsterZonePanelMessage(monster || null, currentHp ?? null, options?.participantCount ?? 0);
-    const message = await channel.send(panelMsg);
+
+    // 優先 edit 現有訊息，避免多人同時觸發時產生多個面板
+    let message = null;
+    if (existingBinding?.panelMessageId) {
+      message = await channel.messages.fetch(existingBinding.panelMessageId)
+        .then((msg) => msg.edit(panelMsg))
+        .catch(() => null);
+    }
+    if (!message) {
+      // edit 失敗（訊息不存在）才發新訊息
+      message = await channel.send(panelMsg);
+    }
 
     const updatedBindings = bindings.map((b) =>
       b.featureKey === "monster_zone" ? { ...b, panelMessageId: message.id } : b
