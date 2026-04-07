@@ -310,14 +310,21 @@
     if (!imgInput) return;
     imgInput.addEventListener("change", async function () {
       if (!this.files[0] || !pendingImgRowId) return;
+      const rowId = pendingImgRowId;
       const form = new FormData();
       form.append("image", this.files[0]);
-      const r = await fetch(BASE + "/monsters/" + pendingImgRowId + "/image", {
+      this.value = ""; pendingImgRowId = null;
+      const r = await fetch(BASE + "/monsters/" + rowId + "/image", {
         method: "POST", headers: { Authorization: "Bearer " + (window.getAdminToken ? window.getAdminToken() : "") }, body: form
       });
-      this.value = ""; pendingImgRowId = null;
       if (!r.ok) { alert("圖片上傳失敗"); return; }
-      await loadMonsters();
+      const json = await r.json();
+      const thumb = json.data?.imageThumbnailUrl || json.data?.imageUrl;
+      if (thumb) {
+        const tr = document.querySelector(`tr[data-id="${rowId}"]`);
+        const cell = tr?.querySelector(".img-cell");
+        if (cell) cell.innerHTML = `<img src="${thumb}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;cursor:pointer;" class="monster-img-preview" />`;
+      }
     });
   }
 
