@@ -45,6 +45,7 @@ class MonsterService {
       entryFee: Math.max(0, Number(fields.entryFee) || 0),
       expReward: Math.max(0, Number(fields.expReward) || 0),
       goldReward: Math.max(0, Number(fields.goldReward) || 0),
+      participantGoldReward: Math.max(0, Number(fields.participantGoldReward) || 0),
       drops,
       enabled: Boolean(fields.enabled),
       createdAt: new Date().toISOString()
@@ -66,6 +67,7 @@ class MonsterService {
     if (fields.entryFee !== undefined) updated.entryFee = Math.max(0, Number(fields.entryFee) || 0);
     if (fields.expReward !== undefined) updated.expReward = Math.max(0, Number(fields.expReward) || 0);
     if (fields.goldReward !== undefined) updated.goldReward = Math.max(0, Number(fields.goldReward) || 0);
+    if (fields.participantGoldReward !== undefined) updated.participantGoldReward = Math.max(0, Number(fields.participantGoldReward) || 0);
     if (fields.drops !== undefined) updated.drops = await this._resolveDrops(fields.drops);
     if (fields.enabled !== undefined) updated.enabled = Boolean(fields.enabled);
     const saved = await this.monsterRepository.save(updated);

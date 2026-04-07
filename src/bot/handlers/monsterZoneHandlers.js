@@ -384,13 +384,32 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const sc = getServiceContext();
   const rewardLines = [];
 
+  // ── 參戰獎勵：所有打過怪的人（含擊殺者）都拿 participantGoldReward ──
+  const participantBonus = monster.participantGoldReward || 0;
+  if (participantBonus > 0) {
+    const participants = Array.isArray(state.participants) ? state.participants : [];
+    const allIds = [...new Set([...participants, discordId])];
+    for (const pid of allIds) {
+      try {
+        // 擊殺者在下面另外顯示，這裡靜默發放
+        await sc.rewardService.grantCurrency({
+          discordId: pid, displayName: pid === discordId ? displayName : pid,
+          currencyType: "gold", amount: participantBonus,
+          source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone:participant"
+        });
+      } catch (e) { console.error("[MonsterZone] participantReward error", e); }
+    }
+    rewardLines.push(`🤝 參戰獎勵 +${participantBonus} 金幣（共 ${allIds.length} 人）`);
+  }
+
+  // ── 擊殺獎勵：只有擊殺者才拿 ──
   if (monster.goldReward > 0) {
     try {
       await sc.rewardService.grantCurrency({
         discordId, displayName, currencyType: "gold", amount: monster.goldReward,
         source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone"
       });
-      rewardLines.push(`💰 金幣 +${monster.goldReward}`);
+      rewardLines.push(`💰 擊殺獎勵 +${monster.goldReward} 金幣`);
     } catch (e) { console.error("[MonsterZone] grantCurrency error", e); }
   }
 
