@@ -112,7 +112,7 @@ async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
   }
 }
 
-async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems) {
+async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, isLucky = false) {
   try {
     const { getBotClient } = require("../runtimeContext");
     const client = getBotClient();
@@ -127,7 +127,11 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
     const itemList = droppedItems.join("、");
-    await channel.send(`🎉 **<@${discordId}>** 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
+    if (isLucky) {
+      await channel.send(`🍀 **<@${discordId}>** 在 ${timeStr} 參與戰鬥 **${monsterName}**，借着好運氣获得了 **${itemList}**！`);
+    } else {
+      await channel.send(`🎉 **<@${discordId}>** 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
+    }
   } catch (e) {
     console.error("[MonsterZone] drop announce error", e);
   }
@@ -585,16 +589,32 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${monster.expReward}）${penNote}${killerLvLine}`);
   }
 
+  // ── 承褒：所有參戰者各自決定是否掉落──
+  // 規則：5% 先决機率 → 中後再依每個道具的 chance 骸
   if (Array.isArray(monster.drops) && monster.drops.length > 0) {
-    const droppedItems = [];
-    const progress = await sc.progressRepository.findByPlayerId(discordId);
-    if (progress) {
-      if (!Array.isArray(progress.inventory)) progress.inventory = [];
+    const LUCKY_CHANCE = 5; // 先决 5%
+    // 預載全部參戰者的 progress
+    const progressCache = {};
+    await Promise.all(participants.map(async (pid) => {
+      const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
+      if (prog) progressCache[pid] = prog;
+    }));
+
+    for (const pid of participants) {
+      const isKiller = pid === discordId;
+      // 擊殺者必中先决，其他參戰者有 5% 機率
+      if (!isKiller && Math.random() * 100 >= LUCKY_CHANCE) continue;
+
+      const prog = progressCache[pid];
+      if (!prog) continue;
+      if (!Array.isArray(prog.inventory)) prog.inventory = [];
+
+      const droppedItems = [];
       for (const drop of monster.drops) {
         if (Math.random() * 100 < drop.chance) {
           const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
           if (item) {
-            progress.inventory.push({
+            prog.inventory.push({
               uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
               itemEffect: item.effect || { type: "none", value: 0 },
               itemType: item.itemType || "consumable",
@@ -608,13 +628,18 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           }
         }
       }
-      progress.updatedAt = new Date().toISOString();
-      await sc.progressRepository.save(progress);
-    }
-    if (droppedItems.length > 0) {
-      rewardLines.push(`🎁 道具掉落：${droppedItems.join("、")}`);
-      _announceDrops(sc, discordId, displayName, monster.name, droppedItems).catch(() => {});
-      if (perPidRewards[discordId]) perPidRewards[discordId].drops = [...droppedItems];
+      if (droppedItems.length > 0) {
+        prog.updatedAt = new Date().toISOString();
+        await sc.progressRepository.save(prog);
+        if (perPidRewards[pid]) perPidRewards[pid].drops = [...droppedItems];
+        const pidName = isKiller ? displayName : (mergedDmg[pid]?.name || pid);
+        if (isKiller) {
+          rewardLines.push(`🎁 道具掉落：${droppedItems.join("、")}`);
+          _announceDrops(sc, pid, pidName, monster.name, droppedItems, false).catch(() => {});
+        } else {
+          _announceDrops(sc, pid, pidName, monster.name, droppedItems, true).catch(() => {});
+        }
+      }
     }
   }
 
