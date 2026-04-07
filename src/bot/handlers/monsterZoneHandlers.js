@@ -83,6 +83,28 @@ function buildHpBar(hp, maxHp, fillEmoji = "🟥", emptyEmoji = "⬛", length = 
 }
 
 // ──────────────────────────────────────────────
+// 輔助：掉落裝備公告
+// ──────────────────────────────────────────────
+async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems) {
+  try {
+    const { getBotClient } = require("../runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady()) return;
+    const layout = await sc.channelLayoutRepository.get();
+    const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === "monster_zone");
+    if (!binding?.channelId) return;
+    const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+    if (!channel?.isTextBased?.()) return;
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+    const itemList = droppedItems.join("、");
+    await channel.send(`🎉 **<@${discordId}>** 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
+  } catch (e) {
+    console.error("[MonsterZone] drop announce error", e);
+  }
+}
+
+// ──────────────────────────────────────────────
 // 輔助：重發公開面板
 // ──────────────────────────────────────────────
 async function _republishPanel(sc, monster, monsterHp, participantCount) {
@@ -448,7 +470,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       progress.updatedAt = new Date().toISOString();
       await sc.progressRepository.save(progress);
     }
-    if (droppedItems.length > 0) rewardLines.push(`🎁 道具掉落：${droppedItems.join("、")}`);
+    if (droppedItems.length > 0) {
+      rewardLines.push(`🎁 道具掉落：${droppedItems.join("、")}`);
+      _announceDrops(sc, discordId, displayName, monster.name, droppedItems).catch(() => {});
+    }
   }
 
   // 擊殺數 + 推進下一隻怪物
