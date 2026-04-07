@@ -41,7 +41,7 @@
         <select class="sheet-input drop-item-sel" style="flex:1;min-width:0;">
           <option value="">-- 選道具 --</option>${opts}
         </select>
-        <input class="sheet-input drop-chance" type="number" min="0" max="100" step="0.1" value="${d.chance||0}" style="width:52px;text-align:right;" />
+        <input class="sheet-input drop-chance" type="number" min="0" max="100" step="0.1" value="${d.chance||0}" style="width:62px;text-align:right;" />
         <span style="font-size:0.8em;color:var(--muted,#888)">%</span>
         <button type="button" class="drop-del-btn" style="background:none;border:none;color:var(--muted,#888);cursor:pointer;font-size:1.1em;padding:0 2px;" title="移除">&times;</button>
       </div>
@@ -60,7 +60,7 @@
         <select class="sheet-input drop-item-sel" style="flex:1;min-width:0;">
           <option value="">-- 選道具 --</option>${buildItemSelectOptions()}
         </select>
-        <input class="sheet-input drop-chance" type="number" min="0" max="100" step="0.1" value="10" style="width:52px;text-align:right;" />
+        <input class="sheet-input drop-chance" type="number" min="0" max="100" step="0.1" value="10" style="width:62px;text-align:right;" />
         <span style="font-size:0.8em;color:var(--muted,#888)">%</span>
         <button type="button" class="drop-del-btn" style="background:none;border:none;color:var(--muted,#888);cursor:pointer;font-size:1.1em;padding:0 2px;" title="移除">&times;</button>
       `;
@@ -155,7 +155,7 @@
     const head = document.getElementById("monsters-sheet-head");
     if (!head) return;
     const cols = ["出場順", "圖", "名稱", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掘落道具", "啟用", "操作"];
-    const widths = ["60px","56px","120px","68px","68px","68px","68px","68px","68px","180px","80px","80px","80px","220px","44px","90px"];
+    const widths = ["54px","52px","110px","60px","60px","60px","60px","60px","60px","160px","72px","72px","72px","230px","44px","88px"];
     head.innerHTML = "<tr>" + cols.map((c,i) => `<th style="width:${widths[i]};white-space:nowrap;">${c}</th>`).join("") + "</tr>";
   }
 
@@ -176,21 +176,21 @@
       : `<span style="font-size:1.4em;cursor:pointer;line-height:40px;" class="monster-img-preview">➕</span>`;
 
     const statsInputs = STAT_KEYS.map(k =>
-      `<td style="padding:6px 4px;"><input class="sheet-input stat-input" data-stat="${k}" type="number" min="0" step="1" value="${m[k]??1}" style="width:62px;text-align:center;" /></td>`
+      `<td style="padding:6px 4px;"><input class="sheet-input stat-input" data-stat="${k}" type="number" min="0" step="1" value="${m[k]??1}" style="width:52px;text-align:center;" /></td>`
     ).join("");
 
     const enabled = m.enabled !== false;
     const seq = m.seq || 1;
 
     tr.innerHTML = `
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:50px;text-align:center;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:44px;text-align:center;" /></td>
       <td style="padding:6px;" class="img-cell">${imgHtml}</td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:110px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:100px;" /></td>
       ${statsInputs}
       <td class="calc-cell" style="padding:6px 8px;">${buildCalcHtml(m)}</td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:72px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" style="width:72px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" style="width:72px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:64px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" style="width:64px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" style="width:64px;" /></td>
       <td class="drops-td" style="padding:6px 4px;"></td>
       <td style="padding:8px 4px;text-align:center;"><input type="checkbox" data-field="enabled" ${enabled ? "checked" : ""} /></td>
       <td style="padding:6px 4px;white-space:nowrap;">
