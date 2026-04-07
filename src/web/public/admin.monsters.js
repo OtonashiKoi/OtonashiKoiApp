@@ -155,7 +155,7 @@
     const head = document.getElementById("monsters-sheet-head");
     if (!head) return;
     const cols = ["出場順", "圖", "名稱", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掘落道具", "啟用", "操作"];
-    const widths = ["54px","52px","110px","60px","60px","60px","60px","60px","60px","160px","72px","72px","72px","230px","44px","88px"];
+    const widths = ["70px","52px","110px","60px","60px","60px","60px","60px","60px","160px","72px","72px","72px","230px","44px","88px"];
     head.innerHTML = "<tr>" + cols.map((c,i) => `<th style="width:${widths[i]};white-space:nowrap;">${c}</th>`).join("") + "</tr>";
   }
 
@@ -183,7 +183,7 @@
     const seq = m.seq || 1;
 
     tr.innerHTML = `
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:44px;text-align:center;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:58px;text-align:center;" /></td>
       <td style="padding:6px;" class="img-cell">${imgHtml}</td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:100px;" /></td>
       ${statsInputs}
