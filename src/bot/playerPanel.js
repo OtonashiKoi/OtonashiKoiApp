@@ -196,7 +196,7 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg) {
   }
   const lines = filtered.slice(0, 4).map((e, i) => {
     const slot = e.equipSlot ? ` (${EQ_SLOT_LABELS[e.equipSlot] || e.equipSlot})` : "";
-    return `${i + 1}. **${e.itemName}**${slot}　購於 ${(e.purchasedAt || "").slice(0, 10)}`;
+    return `${i + 1}. **${e.itemName}**${slot}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`;
   });
   if (filtered.length > 4) lines.push(`…還有 ${filtered.length - 4} 個`);
   const rows = filtered.slice(0, 4).map((e, i) => buildInventoryRow(e, i));
@@ -342,7 +342,7 @@ async function handleBackpackView(interaction, uuid) {
     const fileName = path.basename(imagePath);
     const attachment = new AttachmentBuilder(imagePath, { name: fileName });
     await interaction.editReply({
-      content: `🖼️ **${entry.itemName}**\n購於 ${(entry.purchasedAt || "").slice(0, 10)}\n\n你可以右鍵點擊圖片 → 另存圖片。`,
+      content: `🖼️ **${entry.itemName}**\n${entry.source === "monster_drop" ? `掉落自 ${entry.sourceRef || "怪物"}` : `購於 ${(entry.purchasedAt || "").slice(0, 10)}`}\n\n你可以右鍵點擊圖片 → 另存圖片。`,
       files: [attachment]
     });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);

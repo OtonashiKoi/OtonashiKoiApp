@@ -437,6 +437,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               itemType: item.itemType || "consumable",
               imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
               equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
+              weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+              source: "monster_drop", sourceRef: monster.name,
               purchasedAt: new Date().toISOString()
             });
             droppedItems.push(item.name);
