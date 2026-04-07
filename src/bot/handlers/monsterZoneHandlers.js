@@ -86,6 +86,32 @@ function buildHpBar(hp, maxHp, fillEmoji = "🟥", emptyEmoji = "⬛", length = 
 // ──────────────────────────────────────────────
 // 輔助：掉落裝備公告
 // ──────────────────────────────────────────────
+async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
+  try {
+    const { getBotClient } = require("../runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady()) return;
+    for (const [pid, rewards] of Object.entries(perPidRewards)) {
+      if (pid === killerDiscordId) continue; // 擊殺者已在戰鬥結算 embed 看到
+      const lines = [];
+      if (rewards.gold > 0) lines.push(`💰 金幣 **+${rewards.gold}**`);
+      if (rewards.exp > 0) {
+        let expLine = `⭐ EXP **+${rewards.exp}**`;
+        if (rewards.levelUps > 0) expLine += `　✨ 升級 ${rewards.levelUps} 次！**Lv.${rewards.newLevel}**`;
+        lines.push(expLine);
+      }
+      if (rewards.drops.length > 0) lines.push(`🎁 道具：**${rewards.drops.join("、")}**`);
+      if (!lines.length) continue;
+      try {
+        const user = await client.users.fetch(pid);
+        await user.send(`⚔️ **${monsterName}** 已被擊倒，你的參戰獎勵：\n${lines.join("\n")}`);
+      } catch (_) { /* DM 關閉則跳過 */ }
+    }
+  } catch (e) {
+    console.error("[MonsterZone] notifyKillRewards error", e);
+  }
+}
+
 async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems) {
   try {
     const { getBotClient } = require("../runtimeContext");
@@ -504,6 +530,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     return Math.max(0.1, 1 - overLevel * 0.1);
   };
 
+  // 每位參戰者的獎勵紀錄（用來最後 DM 通知）
+  const perPidRewards = {};
+  participants.forEach(pid => { perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] }; });
+
   // ── 金幣依比例分配（含等級懲罰）──
   if (monster.goldReward > 0) {
     const myMultiplier = dmgRatio(discordId) * levelPenalty(discordId);
@@ -516,6 +546,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           currencyType: "gold", amount: share,
           source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone"
         });
+        if (perPidRewards[pid]) perPidRewards[pid].gold = share;
       } catch (e) { console.error("[MonsterZone] grantCurrency error", e); }
     }
     const pct = Math.round(dmgRatio(discordId) * 100);
@@ -536,6 +567,13 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           discordId: pid, displayName: pid === discordId ? displayName : pid,
           amount: share, source: EXP_SOURCES.MONSTER_KILL
         });
+        if (perPidRewards[pid]) {
+          perPidRewards[pid].exp = share;
+          if (expResult.levelUps > 0) {
+            perPidRewards[pid].levelUps = expResult.levelUps;
+            perPidRewards[pid].newLevel = expResult.progress?.level ?? 0;
+          }
+        }
         if (pid === discordId && expResult.levelUps > 0) {
           killerLvLine = ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}`;
         }
@@ -576,6 +614,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     if (droppedItems.length > 0) {
       rewardLines.push(`🎁 道具掉落：${droppedItems.join("、")}`);
       _announceDrops(sc, discordId, displayName, monster.name, droppedItems).catch(() => {});
+      if (perPidRewards[discordId]) perPidRewards[discordId].drops = [...droppedItems];
     }
   }
 
@@ -607,6 +646,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap)
       .catch((e) => console.error("[MonsterZone] republish panel error", e));
   }
+
+  // 通知非擊殺者參戰獎勵（DM，擊殺者已在戰鬥 embed 看到）
+  _notifyKillRewards(monster.name, perPidRewards, discordId).catch(() => {});
 
   return rewardLines;
 }
