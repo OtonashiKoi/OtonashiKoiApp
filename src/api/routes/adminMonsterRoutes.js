@@ -44,10 +44,11 @@ function createAdminMonsterRoutes(serviceContext) {
   });
 
   // 怪物區狀態 — 必須在 /:id 之前，否則 "state" 會被當成 id
-  router.get("/admin/monsters/state", async (_req, res, next) => {
+  router.get("/admin/monsters/state", async (req, res, next) => {
     try {
-      const state = await serviceContext.monsterService.getState();
-      const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true });
+      const zone = req.query.zone || "normal";
+      const state = await serviceContext.monsterService.getState(zone);
+      const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone });
       const active = monsters.find((m) => m.seq === state.activeMonsterSeq) || monsters[0] || null;
       res.json(ok({ state, active }, "monster state fetched"));
     } catch (error) {
@@ -57,16 +58,16 @@ function createAdminMonsterRoutes(serviceContext) {
 
   router.put("/admin/monsters/state", async (req, res, next) => {
     try {
-      const { activeMonsterSeq } = req.body;
-      const current = await serviceContext.monsterService.getState();
-      const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true });
+      const { activeMonsterSeq, zone = "normal" } = req.body;
+      const current = await serviceContext.monsterService.getState(zone);
+      const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone });
       const target = monsters.find((m) => m.seq === Number(activeMonsterSeq));
       if (!target) {
         res.status(400).json(fail("INVALID_ARGUMENT", "找不到該序號的怪物"));
         return;
       }
       const newState = { ...current, activeMonsterSeq: target.seq, currentHp: target.calc.maxHp, participants: [], damageMap: {} };
-      await serviceContext.monsterService.saveState(newState);
+      await serviceContext.monsterService.saveState(newState, zone);
       res.json(ok({ state: newState, active: target }, "monster state updated"));
     } catch (error) {
       next(error);
@@ -77,36 +78,6 @@ function createAdminMonsterRoutes(serviceContext) {
     try {
       const monster = await serviceContext.monsterService.updateMonster(req.params.id, req.body);
       res.json(ok(monster, "monster updated"));
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // 怪物區狀態（目前上場怪物、擊殺次數）
-  router.get("/admin/monsters/state", async (_req, res, next) => {
-    try {
-      const state = await serviceContext.monsterService.getState();
-      const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true });
-      const active = monsters.find((m) => m.seq === state.activeMonsterSeq) || monsters[0] || null;
-      res.json(ok({ state, active }, "monster state fetched"));
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.put("/admin/monsters/state", async (req, res, next) => {
-    try {
-      const { activeMonsterSeq } = req.body;
-      const current = await serviceContext.monsterService.getState();
-      const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true });
-      const target = monsters.find((m) => m.seq === Number(activeMonsterSeq));
-      if (!target) {
-        res.status(400).json(fail("INVALID_ARGUMENT", "找不到該序號的怪物"));
-        return;
-      }
-      const newState = { ...current, activeMonsterSeq: target.seq, currentHp: target.calc.maxHp, participants: [], damageMap: {} };
-      await serviceContext.monsterService.saveState(newState);
-      res.json(ok({ state: newState, active: target }, "monster state updated"));
     } catch (error) {
       next(error);
     }

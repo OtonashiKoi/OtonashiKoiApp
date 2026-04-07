@@ -223,13 +223,18 @@ function createMongoRepositories() {
       async delete(id) {
         await (await collection("monsters")).deleteOne({ id });
       },
-      async getState() {
-        const row = await (await collection("monsterState")).findOne({ _id: "default" });
+      async getState(zoneKey = "normal") {
+        const row = await (await collection("monsterState")).findOne({ _id: zoneKey });
+        if (!row && zoneKey === "normal") {
+          // 向下相容：讀取舊 _id:"default" 的資料
+          const legacy = await (await collection("monsterState")).findOne({ _id: "default" });
+          return legacy?.value || { activeMonsterSeq: 1, currentHp: null, killCount: {} };
+        }
         return row?.value || { activeMonsterSeq: 1, currentHp: null, killCount: {} };
       },
-      async saveState(state) {
+      async saveState(state, zoneKey = "normal") {
         await (await collection("monsterState")).updateOne(
-          { _id: "default" },
+          { _id: zoneKey },
           { $set: { value: state, updatedAt: new Date().toISOString() } },
           { upsert: true }
         );

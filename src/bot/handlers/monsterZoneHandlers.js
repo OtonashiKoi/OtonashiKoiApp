@@ -110,9 +110,23 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
 // ──────────────────────────────────────────────
 // 輔助：重發公開面板
 // ──────────────────────────────────────────────
-async function _republishPanel(sc, monster, monsterHp, participantCount, damageMap = {}) {
+// ─── Zone 輔助 ─────────────────────────────────
+function featureKeyToZone(featureKey) {
+  return featureKey === "monster_zone_mid" ? "mid" : "normal";
+}
+async function getZoneFromChannel(sc, channelId) {
   const layout = await sc.channelLayoutRepository.get();
-  const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === "monster_zone");
+  const binding = (layout?.discord?.bindings || []).find(
+    (b) => b.channelId === channelId && b.featureKey?.startsWith("monster_zone")
+  );
+  if (!binding) return null;
+  return featureKeyToZone(binding.featureKey);
+}
+
+async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap = {}) {
+  const featureKey = zoneKey === "mid" ? "monster_zone_mid" : "monster_zone";
+  const layout = await sc.channelLayoutRepository.get();
+  const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey);
   if (binding?.channelId) {
     await sc.adminConsoleService.publishMonsterZonePanel(
       binding.channelId, monster, monsterHp, { participantCount, damageMap }
@@ -140,8 +154,26 @@ async function handleEnterBattle(interaction) {
   }
 
   try {
-    const state = await sc.monsterService.getState();
-    const monsters = await sc.monsterService.listMonsters({ includeDisabled: false });
+    // 偵測頻道對應的區域
+    const zoneKey = await getZoneFromChannel(sc, interaction.channelId);
+    if (!zoneKey) {
+      await interaction.editReply({ content: "❌ 此頻道未設定為放怪區。" });
+      return;
+    }
+
+    // 中級區等級限制
+    if (zoneKey === "mid") {
+      const prog = await sc.progressRepository.findByPlayerId(discordId);
+      const playerLevel = prog?.level ?? 1;
+      if (playerLevel < 10) {
+        await interaction.editReply({ content: `🔒 **中級區**需要 **Lv.10** 以上才能進入！
+目前等級：**Lv.${playerLevel}**` });
+        return;
+      }
+    }
+
+    const state = await sc.monsterService.getState(zoneKey);
+    const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
     if (!monsters.length) {
       await interaction.editReply({ content: "❌ 目前沒有啟用中的怪物，請稍後再試。" });
       return;
@@ -173,6 +205,7 @@ async function handleEnterBattle(interaction) {
     // 建立 session（state: waiting）
     const session = {
       state: "waiting",
+      zoneKey,
       monsterId: monster.id, monsterSeq: monster.seq, monsterName: monster.name,
       monsterMaxHp: monster.calc.maxHp, monsterHp, monsterStats: monster.calc,
       playerMaxHp: pStats.maxHp, playerHp: pStats.maxHp, playerStats: pStats,
@@ -198,9 +231,10 @@ async function handleEnterBattle(interaction) {
     const participants = Array.isArray(state.participants) ? state.participants : [];
     if (!participants.includes(discordId)) {
       const newParticipants = [...participants, discordId];
-      await sc.monsterService.saveState({ ...state, currentHp: monsterHp, participants: newParticipants });
+      await sc.monsterService.saveState({ ...state, currentHp: monsterHp, participants: newParticipants }, zoneKey);
       const layout = await sc.channelLayoutRepository.get();
-      const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === "monster_zone");
+      const featureKey = zoneKey === "mid" ? "monster_zone_mid" : "monster_zone";
+      const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey);
       if (binding?.channelId) {
         sc.adminConsoleService
           .publishMonsterZonePanel(binding.channelId, monster, monsterHp, { participantCount: newParticipants.length, damageMap: state.damageMap || {} })
@@ -252,10 +286,11 @@ async function handleStartFight(interaction) {
 
   if (session.timeoutId) { clearTimeout(session.timeoutId); session.timeoutId = null; }
   session.state = "fighting";
+  const zoneKey = session.zoneKey || "normal";
 
   try {
-    const state = await sc.monsterService.getState();
-    const monsters = await sc.monsterService.listMonsters({ includeDisabled: false });
+    const state = await sc.monsterService.getState(zoneKey);
+    const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
     const monster = monsters.find((m) => m.id === session.monsterId);
 
     // 怪物已被別人打死
@@ -349,19 +384,19 @@ async function handleStartFight(interaction) {
 
     if (outcome === "win") {
       session.monsterHp = 0;
-      rewardLines = await handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage });
+      rewardLines = await handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage, zoneKey });
       embedTitle = "🏆 勝利！";
       embedColor = 0xf1c40f;
     } else if (outcome === "lose") {
       session.monsterHp = Math.max(0, session.monsterHp);
       let damageMap = {};
       try {
-        const freshState = await sc.monsterService.getState();
+        const freshState = await sc.monsterService.getState(zoneKey);
         const prev = freshState.damageMap || {};
         damageMap = { ...prev, [discordId]: { name: displayName, damage: (prev[discordId]?.damage || 0) + totalDamage } };
-        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap });
+        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap }, zoneKey);
       } catch (e) {
-        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp });
+        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp }, zoneKey);
       }
       embedTitle = "💀 戰鬥失敗";
       embedColor = 0x555555;
@@ -369,21 +404,21 @@ async function handleStartFight(interaction) {
         `你被 **${session.monsterName}** 擊倒了！`,
         session.entryFee > 0 ? `入場費 **${session.entryFee}** 🪙 已損失，下次加油！` : "下次加油！"
       ];
-      _republishPanel(sc, monster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
+      _republishPanel(sc, zoneKey, monster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
     } else {
       let damageMap = {};
       try {
-        const freshState = await sc.monsterService.getState();
+        const freshState = await sc.monsterService.getState(zoneKey);
         const prev = freshState.damageMap || {};
         damageMap = { ...prev, [discordId]: { name: displayName, damage: (prev[discordId]?.damage || 0) + totalDamage } };
-        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap });
+        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap }, zoneKey);
       } catch (e) {
-        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp });
+        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp }, zoneKey);
       }
       embedTitle = "⏸️ 戰鬥超時";
       embedColor = 0x888888;
       rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
-      _republishPanel(sc, monster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
+      _republishPanel(sc, zoneKey, monster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
     }
 
     // 戰鬥已結算，但先保留 session 至顯示完畢才刪除，避免期間重複出戰
@@ -442,7 +477,7 @@ async function handleDeleteLog(interaction) {
 // ──────────────────────────────────────────────
 // 擊殺結算（發獎勵 + 推進怪物 + 重發面板）
 // ──────────────────────────────────────────────
-async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0 }) {
+async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal" }) {
   const sc = getServiceContext();
   const rewardLines = [];
 
@@ -547,7 +582,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // 擊殺數 + 推進下一隻怪物
   const newKillCount = { ...(state.killCount || {}), [monster.id]: ((state.killCount?.[monster.id] || 0) + 1) };
   // 取最新 state 以免多人並發時覆蓋其他人的 damageMap
-  const freshState = await sc.monsterService.getState();
+  const freshState = await sc.monsterService.getState(zoneKey);
   const finalDamageMap = { ...(freshState.damageMap || {}), ...mergedDmg };
 
   const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false });
@@ -563,14 +598,13 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     participants: [], // 新怪上場，參戰名單清零
     damageMap: {}    // 新怪上場，傷害紀錄清零
   };
-  await sc.monsterService.saveState(newState);
+  await sc.monsterService.saveState(newState, zoneKey);
 
   if (nextMonster) {
-    _republishPanel(sc, nextMonster, nextMonster.calc.maxHp, 0, {})
+    _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {})
       .catch((e) => console.error("[MonsterZone] republish panel error", e));
   } else {
-    // 沒有下一隻怪，仍更新面板並顯示擊殺者傷害（不清零先展示）
-    _republishPanel(sc, null, 0, 0, finalDamageMap)
+    _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap)
       .catch((e) => console.error("[MonsterZone] republish panel error", e));
   }
 

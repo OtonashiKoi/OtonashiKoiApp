@@ -16,9 +16,10 @@ class MonsterService {
     this.itemRepository = itemRepository;
   }
 
-  async listMonsters({ includeDisabled = false } = {}) {
+  async listMonsters({ includeDisabled = false, zone = null } = {}) {
     const monsters = await this.monsterRepository.findAll();
-    const list = includeDisabled ? monsters : monsters.filter((m) => m.enabled);
+    let list = includeDisabled ? monsters : monsters.filter((m) => m.enabled);
+    if (zone) list = list.filter((m) => (m.zone || "normal") === zone);
     return list.map((m) => ({ ...m, calc: calcStats(m) }));
   }
 
@@ -43,6 +44,7 @@ class MonsterService {
       dex: Math.max(0, Number(fields.dex) || 0),
       luk: Math.max(0, Number(fields.luk) || 0),
       level: Math.max(1, Number(fields.level) || 1),
+      zone: fields.zone === "mid" ? "mid" : "normal",
       entryFee: Math.max(0, Number(fields.entryFee) || 0),
       expReward: Math.max(0, Number(fields.expReward) || 0),
       goldReward: Math.max(0, Number(fields.goldReward) || 0),
@@ -65,6 +67,7 @@ class MonsterService {
       if (fields[stat] !== undefined) updated[stat] = Math.max(0, Number(fields[stat]) || 0);
     }
     if (fields.level !== undefined) updated.level = Math.max(1, Number(fields.level) || 1);
+    if (fields.zone !== undefined) updated.zone = fields.zone === "mid" ? "mid" : "normal";
     if (fields.entryFee !== undefined) updated.entryFee = Math.max(0, Number(fields.entryFee) || 0);
     if (fields.expReward !== undefined) updated.expReward = Math.max(0, Number(fields.expReward) || 0);
     if (fields.goldReward !== undefined) updated.goldReward = Math.max(0, Number(fields.goldReward) || 0);
@@ -80,12 +83,12 @@ class MonsterService {
     await this.monsterRepository.delete(id);
   }
 
-  async getState() {
-    return this.monsterRepository.getState();
+  async getState(zoneKey = "normal") {
+    return this.monsterRepository.getState(zoneKey);
   }
 
-  async saveState(state) {
-    return this.monsterRepository.saveState(state);
+  async saveState(state, zoneKey = "normal") {
+    return this.monsterRepository.saveState(state, zoneKey);
   }
 
   async _resolveDrops(drops) {

@@ -154,9 +154,13 @@ function createAdminConsoleRoutes(serviceContext) {
   router.post("/admin/channel-layout/publish-monster-zone", async (req, res, next) => {
     try {
       const { channelId } = req.body;
-      // 查出當前上場怪物與血量
-      const state = await serviceContext.monsterService.getState();
-      const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true });
+      // 從 binding 推算 zone（monster_zone → normal, monster_zone_mid → mid）
+      const layout = await serviceContext.adminConsoleService.getChannelLayout();
+      const bindings = layout?.discord?.bindings || [];
+      const binding = bindings.find((b) => b.channelId === channelId && b.featureKey?.startsWith("monster_zone"));
+      const zone = (binding?.featureKey === "monster_zone_mid") ? "mid" : "normal";
+      const state = await serviceContext.monsterService.getState(zone);
+      const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone });
       const activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq) || monsters[0] || null;
       const currentHp = state.currentHp != null ? state.currentHp : (activeMonster?.calc?.maxHp ?? null);
       const participantCount = Array.isArray(state.participants) ? state.participants.length : 0;

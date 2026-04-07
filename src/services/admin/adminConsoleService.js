@@ -32,6 +32,11 @@ const AVAILABLE_FEATURES = [
     key: "monster_zone",
     label: "放怪區面板",
     description: "玩家在此頻道選擇出戰並進行回合制戰鬥"
+  },
+  {
+    key: "monster_zone_mid",
+    label: "放怪區面板（中級）",
+    description: "10 等以上玩家才能進入的中級戰鬥區"
   }
 ];
 
@@ -411,7 +416,8 @@ class AdminConsoleService {
 
     const stored = await this.channelLayoutRepository.get();
     const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
-    const existingBinding = bindings.find((b) => b.featureKey === "monster_zone");
+    const existingBinding = bindings.find((b) => b.channelId === targetChannelId && b.featureKey?.startsWith("monster_zone"));
+    const boundFeatureKey = existingBinding?.featureKey || "monster_zone";
 
     const panelMsg = createMonsterZonePanelMessage(monster || null, currentHp ?? null, options?.participantCount ?? 0, options?.damageMap ?? {});
 
@@ -423,9 +429,7 @@ class AdminConsoleService {
         const fetched = await channel.messages.fetch({ limit: 100 });
         const toDelete = fetched.filter((m) => !m.pinned);
         if (toDelete.size > 0) {
-          // bulkDelete 只支援 14 天內訊息；filterOld:true 自動略過舊訊息
           await channel.bulkDelete(toDelete, true).catch(() => {});
-          // 對 14 天以上的訊息逐一刪除
           for (const [, msg] of toDelete) {
             if (!msg.bulkDeletable) await msg.delete().catch(() => {});
           }
@@ -447,10 +451,10 @@ class AdminConsoleService {
     }
 
     const updatedBindings = bindings.map((b) =>
-      b.featureKey === "monster_zone" ? { ...b, panelMessageId: message.id } : b
+      b.channelId === targetChannelId && b.featureKey === boundFeatureKey ? { ...b, panelMessageId: message.id } : b
     );
-    if (!updatedBindings.some((b) => b.featureKey === "monster_zone")) {
-      updatedBindings.push(normalizeBinding({ featureKey: "monster_zone", channelId: targetChannelId, panelMessageId: message.id }));
+    if (!updatedBindings.some((b) => b.channelId === targetChannelId && b.featureKey === boundFeatureKey)) {
+      updatedBindings.push(normalizeBinding({ featureKey: boundFeatureKey, channelId: targetChannelId, panelMessageId: message.id }));
     }
     await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
 
