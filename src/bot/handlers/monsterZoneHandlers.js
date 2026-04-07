@@ -74,6 +74,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     dodge: Math.min(50, A * 0.5),
     hit: Math.min(100, 80 + D),
     crit: Math.min(100, L * 0.3),
+    combo: Math.min(80, A * 0.3), // AGI → 連擊率（上限 80%）
     weaponType: wt || null
   };
 }
@@ -356,6 +357,7 @@ async function handleStartFight(interaction) {
             ? ["快速刺出", "連環割砍", "偷襲突刺", "趁隙猛刺"]
             : ["揮劍斬擊", "猛力劈下", "側身橫掃", "架勢突刺"];
     const critPhrases = ["會心一擊", "致命一擊", "弱點命中", "完美命中"];
+    const comboPhrases = ["連擊！", "殘影連斬！", "急速追打！", "趁勢猛攻！"];
     const dodgePhrases = ["身形一閃", "靈巧側移", "緊急後退", "巧妙格開"];
     const mDodgePhrases = ["及時閃避", "往旁一跳", "後退一步", "以盾擋下"];
     const mAtkPhrases = ["猛力衝撞", "揮爪攻擊", "重擊落下", "怒吼突進"];
@@ -383,6 +385,14 @@ async function handleStartFight(interaction) {
             log.push(`⚔️ ${verb}，對 ${session.monsterName} 造成 **${dmg}** 點傷害。（怪物剩 ${Math.max(0, session.monsterHp)} HP）`);
           }
           if (session.monsterHp <= 0) { outcome = "win"; break; }
+          // 連擊判定（AGI → combo%，命中後額外一擊，不再判命中/閃避）
+          if (outcome === null && Math.random() * 100 < session.playerStats.combo) {
+            let cdmg = rollDmg(Math.max(1, session.playerStats.atk - session.monsterStats.def));
+            session.monsterHp -= cdmg;
+            totalDamage += cdmg;
+            log.push(`⚡ **${rand(comboPhrases)}** 追加攻擊造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, session.monsterHp)} HP）`);
+            if (session.monsterHp <= 0) { outcome = "win"; break; }
+          }
         } else {
           log.push(`💨 ${session.monsterName} ${rand(dodgePhrases)}，你的攻擊落空了！`);
         }

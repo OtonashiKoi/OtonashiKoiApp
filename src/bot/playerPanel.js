@@ -84,7 +84,8 @@ async function handleProfile(interaction) {
   const calcHp  = V * 15 + 50;
   const calcAtk = Math.round(baseStat * mult);
   const calcDef = V;
-  const calcCrit = Math.round(Math.min(100, L * 0.3) * 10) / 10;
+  const calcCrit  = Math.round(Math.min(100, L * 0.3) * 10) / 10;
+  const calcCombo = Math.round(Math.min(80, A * 0.3) * 10) / 10;
 
   // ── 裝備清單（只列有裝備的格子）──
   const SLOT_ICONS = {
@@ -114,7 +115,8 @@ async function handleProfile(interaction) {
     `剩餘點數 (Status Pt): ${p.statusPoints || 0}\n` +
     `==============\n` +
     `【戰鬥能力】\n` +
-    `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}　🎯 CRIT: ${calcCrit}%\n` +
+    `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
+    `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%\n` +
     equipLine + "\n" +
     `==============\n` +
     `【資產】\n` +
