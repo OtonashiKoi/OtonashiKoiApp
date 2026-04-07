@@ -13,6 +13,11 @@ class JsonWalletRepository extends WalletRepository {
     await writeStore(data);
     return wallet;
   }
+
+  async listAll() {
+    const data = await readStore();
+    return Object.values(data.wallets || {});
+  }
 }
 
 module.exports = {

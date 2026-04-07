@@ -64,6 +64,9 @@ function createMongoRepositories() {
           { upsert: true }
         );
         return wallet;
+      },
+      async listAll() {
+        return (await collection("wallets")).find({}).toArray();
       }
     },
     progressRepository: {
@@ -77,6 +80,9 @@ function createMongoRepositories() {
           { upsert: true }
         );
         return progress;
+      },
+      async listAll() {
+        return (await collection("progress")).find({}).toArray();
       }
     },
     transactionRepository: {
@@ -120,6 +126,14 @@ function createMongoRepositories() {
       },
       async listByDiscordId(discordId) {
         return (await collection("checkins")).find({ discordId }).toArray();
+      },
+      async countAllByPlayer() {
+        const agg = await (await collection("checkins")).aggregate([
+          { $group: { _id: "$discordId", count: { $sum: 1 } } }
+        ]).toArray();
+        const counts = {};
+        for (const row of agg) counts[row._id] = row.count;
+        return counts;
       }
     },
     shopRepository: {

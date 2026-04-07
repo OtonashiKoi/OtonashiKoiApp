@@ -75,10 +75,13 @@ function validateBindings(bindings) {
 }
 
 class AdminConsoleService {
-  constructor(channelLayoutRepository, playerRepository, adminService) {
+  constructor(channelLayoutRepository, playerRepository, adminService, walletRepository, progressRepository, checkinRepository) {
     this.channelLayoutRepository = channelLayoutRepository;
     this.playerRepository = playerRepository;
     this.adminService = adminService;
+    this.walletRepository = walletRepository;
+    this.progressRepository = progressRepository;
+    this.checkinRepository = checkinRepository;
   }
 
   async getChannelLayout() {
@@ -207,6 +210,37 @@ class AdminConsoleService {
     const safeLimit = Math.max(1, Math.min(1000, Number(limit) || 50));
     const players = await this.playerRepository.listAll();
     return players.slice(0, safeLimit);
+  }
+
+  async getLeaderboard(limit = 20) {
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 20));
+    const [players, wallets, progresses, checkinCounts] = await Promise.all([
+      this.playerRepository.listAll(),
+      this.walletRepository.listAll(),
+      this.progressRepository.listAll(),
+      this.checkinRepository.countAllByPlayer()
+    ]);
+
+    const walletMap = Object.fromEntries(wallets.map((w) => [w.playerId, w]));
+    const progressMap = Object.fromEntries(progresses.map((p) => [p.playerId, p]));
+
+    const rows = players
+      .filter((p) => p.status !== "disabled")
+      .map((p) => ({
+        discordId: p.discordId,
+        displayName: p.displayName,
+        gold: walletMap[p.discordId]?.gold ?? 0,
+        diamond: walletMap[p.discordId]?.diamond ?? 0,
+        level: progressMap[p.discordId]?.level ?? 1,
+        exp: progressMap[p.discordId]?.exp ?? 0,
+        checkinCount: checkinCounts[p.discordId] ?? 0
+      }));
+
+    return {
+      gold: [...rows].sort((a, b) => b.gold - a.gold).slice(0, safeLimit),
+      level: [...rows].sort((a, b) => b.level - a.level || b.exp - a.exp).slice(0, safeLimit),
+      checkin: [...rows].sort((a, b) => b.checkinCount - a.checkinCount).slice(0, safeLimit)
+    };
   }
 
   async getPlayerQueryInfo(targetDiscordId) {

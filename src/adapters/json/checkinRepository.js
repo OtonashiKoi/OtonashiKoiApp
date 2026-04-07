@@ -22,6 +22,15 @@ class JsonCheckinRepository extends CheckinRepository {
     const data = await readStore();
     return (data.checkins || []).filter((c) => c.discordId === discordId);
   }
+
+  async countAllByPlayer() {
+    const data = await readStore();
+    const counts = {};
+    for (const c of (data.checkins || [])) {
+      counts[c.discordId] = (counts[c.discordId] || 0) + 1;
+    }
+    return counts; // { discordId: count }
+  }
 }
 
 module.exports = {

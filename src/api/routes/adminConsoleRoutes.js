@@ -177,6 +177,16 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
+  router.get("/admin/console/leaderboard", async (req, res, next) => {
+    try {
+      const limit = req.query.limit ? Number(req.query.limit) : 20;
+      const data = await serviceContext.adminConsoleService.getLeaderboard(limit);
+      res.json(ok(data, "leaderboard fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/admin/console/players/:discordId", async (req, res, next) => {
     try {
       const { discordId } = req.params;

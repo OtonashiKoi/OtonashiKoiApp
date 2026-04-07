@@ -40,6 +40,7 @@
           <button class="nav-link" data-target="section-items">道具庫管理</button>
           <button class="nav-link" data-target="section-shop">金幣商店管理</button>
           <button class="nav-link" data-target="section-monsters">怪物庫管理</button>
+          <button class="nav-link" data-target="section-leaderboard">排行榜</button>
           <button class="nav-link" data-target="section-log">系統操作紀錄</button>
         </nav>
 
@@ -297,6 +298,23 @@
           <pre id="activity-log" class="activity-log">等待操作...</pre>
         </section>
 
+        <section id="section-leaderboard" class="card panel-section">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Ranking</p>
+              <h2>排行榜</h2>
+            </div>
+            <button id="leaderboard-refresh" class="button">🔄 重新載入</button>
+          </div>
+          <p class="hint">顯示前 20 名玩家。點「重新載入」取得最新資料。</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
+            <button class="button leaderboard-tab-btn active" data-lb-tab="gold">💰 金幣排行</button>
+            <button class="button leaderboard-tab-btn" data-lb-tab="level">⭐ 等級排行</button>
+            <button class="button leaderboard-tab-btn" data-lb-tab="checkin">📅 打卡排行</button>
+          </div>
+          <div id="leaderboard-content"><p class="hint">請先登入 API 後點「重新載入」。</p></div>
+        </section>
+
         <section id="section-shop" class="card panel-section">
           <div class="section-head">
             <div>
@@ -419,5 +437,6 @@
     <script src="/static/admin.shop.js"></script>
     <script src="/static/admin.monsters.js"></script>
     <script src="/static/admin.items.js"></script>
+    <script src="/static/admin.leaderboard.js"></script>
   </body>
   </html>

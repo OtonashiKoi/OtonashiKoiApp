@@ -44,7 +44,10 @@ function createServiceContext() {
   const adminConsoleService = new AdminConsoleService(
     repositories.channelLayoutRepository,
     repositories.playerRepository,
-    adminService
+    adminService,
+    repositories.walletRepository,
+    repositories.progressRepository,
+    repositories.checkinRepository
   );
 
   return {

@@ -13,6 +13,11 @@ class JsonProgressRepository extends ProgressRepository {
     await writeStore(data);
     return progress;
   }
+
+  async listAll() {
+    const data = await readStore();
+    return Object.values(data.progress || {});
+  }
 }
 
 module.exports = {
