@@ -58,6 +58,49 @@ async function handleProfile(interaction) {
     ? `等級：Base ${p.level} ⭐ 已達最高等級${tierLine}`
     : `等級：Base ${p.level} (EXP: ${p.exp} / ${expNeeded}，還差 ${expNeeded - p.exp})${tierLine}`;
 
+  // ── 計算戰鬥能力 ──
+  const equipped = p.equipped || {};
+  const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
+  for (const item of Object.values(equipped)) {
+    if (!item?.equipStats) continue;
+    for (const [k, v] of Object.entries(item.equipStats)) {
+      if (k in bonus) bonus[k] += (v || 0);
+    }
+  }
+  const S = (attrs.str || 1) + bonus.str;
+  const A = (attrs.agi || 1) + bonus.agi;
+  const V = (attrs.vit || 1) + bonus.vit;
+  const I = (attrs.int || 1) + bonus.int;
+  const D = (attrs.dex || 1) + bonus.dex;
+  const weapon = equipped.weapon || null;
+  const offhand = equipped.shield || null;
+  const isDualWield = weapon && !weapon.isTwoHanded && offhand?.weaponType != null;
+  const mult = isDualWield ? 2 : 3;
+  let baseStat = S;
+  const wt = weapon?.weaponType;
+  if (wt === "staff_1h" || wt === "staff_2h") baseStat = I;
+  else if (wt === "bow") baseStat = D;
+  const calcHp  = V * 15 + 50;
+  const calcAtk = Math.round(baseStat * mult);
+  const calcDef = bonus.vit;
+
+  // ── 裝備清單（只列有裝備的格子）──
+  const SLOT_ICONS = {
+    weapon: "⚔️", shield: "🛡️", armor: "🥋", head_top: "🪖", head_mid: "🎭",
+    head_low: "😷", garment: "🧣", shoes: "👟", accessory_l: "💍", accessory_r: "💍",
+    title_eq: "🏅", job_eq: "📖", special_1: "✨", special_2: "✨", special_3: "✨"
+  };
+  const ALL_SLOTS = [...EQ_LEFT_SLOTS, ...EQ_RIGHT_SLOTS, ...EQ_COL3_SLOTS];
+  const standardParts = ALL_SLOTS
+    .filter(s => !EQ_COL3_SLOTS.includes(s) && equipped[s])
+    .map(s => `${SLOT_ICONS[s] || "▪️"}${equipped[s].itemName}`);
+  const specialParts = EQ_COL3_SLOTS
+    .filter(s => equipped[s])
+    .map(s => `[${EQ_SLOT_LABELS[s]}] ${equipped[s].itemName}`);
+  const equipLine = standardParts.length || specialParts.length
+    ? [...standardParts, ...specialParts].join("　")
+    : "（尚未裝備）";
+
   await replyAndAutoDelete(interaction,
     `🧧 **${result.player.displayName} 的冒險者履歷**\n` +
     `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})\n` +
@@ -67,6 +110,10 @@ async function handleProfile(interaction) {
     `STR: ${attrs.str} | AGI: ${attrs.agi} | VIT: ${attrs.vit}\n` +
     `INT: ${attrs.int} | DEX: ${attrs.dex} | LUK: ${attrs.luk}\n` +
     `剩餘點數 (Status Pt): ${p.statusPoints || 0}\n` +
+    `==============\n` +
+    `【戰鬥能力】\n` +
+    `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
+    equipLine + "\n" +
     `==============\n` +
     `【資產】\n` +
     `💰 金幣: ${result.wallet.gold}\n` +
