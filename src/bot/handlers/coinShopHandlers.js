@@ -14,7 +14,7 @@ function getServiceContext() {
   return require("../runtimeContext").serviceContext;
 }
 
-/** 取得即時玩家等級（ephemeral cache 可能為空，補 fetch） */
+/** 取得即時玩家等級與身分組 ID（ephemeral cache 可能為空，補 fetch）*/
 async function fetchMemberTier(interaction) {
   let roleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
   if (roleIds.length === 0 && interaction.guild) {
@@ -23,12 +23,13 @@ async function fetchMemberTier(interaction) {
       roleIds = m.roles.cache.map((r) => r.id);
     } catch (_) {}
   }
-  return getServiceContext().playerTierService.resolveHighestTier(roleIds).catch(() => null);
+  const tier = await getServiceContext().playerTierService.resolveHighestTier(roleIds).catch(() => null);
+  return { tier, roleIds };
 }
 
 async function handleShopOpen(interaction, category = "all") {
   const serviceContext = getServiceContext();
-  const [items, progress, realTier] = await Promise.all([
+  const [items, progress, { tier: realTier, roleIds }] = await Promise.all([
     serviceContext.shopService.listItems(),
     serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null),
     fetchMemberTier(interaction)
@@ -38,14 +39,13 @@ async function handleShopOpen(interaction, category = "all") {
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
   // 3分鐘無操作自動刪除
   setTimeout(() => interaction.deleteReply().catch(() => {}), 3 * 60 * 1000);
-  // 非同步同步 DB 快取
-  const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
-  serviceContext.shopService.updatePlayerTier(interaction.user.id, memberRoleIds);
+  // 非同步將等級同步回 DB
+  serviceContext.shopService.updatePlayerTier(interaction.user.id, roleIds);
 }
 
 async function handleShopCat(interaction, category) {
   const serviceContext = getServiceContext();
-  const [items, progress, realTier] = await Promise.all([
+  const [items, progress, { tier: realTier }] = await Promise.all([
     serviceContext.shopService.listItems(),
     serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null),
     fetchMemberTier(interaction)
