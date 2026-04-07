@@ -105,6 +105,10 @@ async function setupLockedChannels(client) {
       for (const roleId of adminRoleIds) {
         try { await channel.permissionOverwrites.edit(roleId, { SendMessages: true, ReadMessageHistory: true }); } catch (_) {}
       }
+      // 明確覆蓋玩家身分組：只能看 + 按按鈕，不能發言（清除舊殘留 overwrite）
+      for (const roleId of playerRoleIds) {
+        try { await channel.permissionOverwrites.edit(roleId, { SendMessages: false, ReadMessageHistory: true }); } catch (_) {}
+      }
       console.log(`[Discord] 頻道 ${binding.channelId} (${binding.featureKey}) 已設為唯讀`);
     } catch (err) {
       console.warn(`[Discord] 無法鎖定頻道 ${binding.channelId}：${err.message}`);
