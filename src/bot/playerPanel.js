@@ -5,6 +5,7 @@ const { BUTTON_IDS, createPlayerPanelMessage } = require("./playerPanelView");
 const { expToNextLevel, MAX_LEVEL } = require("../shared/progression");
 const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
+const { calcPlayerStats } = require("../shared/combatStats");
 
 const AUTO_DELETE_MS = 60_000;
 
@@ -58,34 +59,14 @@ async function handleProfile(interaction) {
     ? `等級：Base ${p.level} ⭐ 已達最高等級${tierLine}`
     : `等級：Base ${p.level} (EXP: ${p.exp} / ${expNeeded}，還差 ${expNeeded - p.exp})${tierLine}`;
 
-  // ── 計算戰鬥能力 ──
+  // ── 計算戰鬥能力（使用 shared/combatStats 確保與戰鬥邏輯一致）──
   const equipped = p.equipment || {};
-  const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
-  for (const item of Object.values(equipped)) {
-    if (!item?.equipStats) continue;
-    for (const [k, v] of Object.entries(item.equipStats)) {
-      if (k in bonus) bonus[k] += (v || 0);
-    }
-  }
-  const S = (attrs.str || 1) + bonus.str;
-  const A = (attrs.agi || 1) + bonus.agi;
-  const V = (attrs.vit || 1) + bonus.vit;
-  const I = (attrs.int || 1) + bonus.int;
-  const D = (attrs.dex || 1) + bonus.dex;
-  const L = (attrs.luk || 1) + bonus.luk;
-  const weapon = equipped.weapon || null;
-  const offhand = equipped.shield || null;
-  const isDualWield = weapon && !weapon.isTwoHanded && offhand?.weaponType != null;
-  const mult = isDualWield ? 2 : 3;
-  let baseStat = S;
-  const wt = weapon?.weaponType;
-  if (wt === "staff_1h" || wt === "staff_2h") baseStat = I;
-  else if (wt === "bow") baseStat = D;
-  const calcHp  = V * 15 + 50;
-  const calcAtk = Math.round(baseStat * mult);
-  const calcDef = V;
-  const calcCrit  = Math.round(Math.min(100, L * 0.3) * 10) / 10;
-  const calcCombo = Math.round(Math.min(80, 3 + A * 0.3) * 10) / 10;
+  const cs = calcPlayerStats(attrs, equipped);
+  const calcHp    = cs.maxHp;
+  const calcAtk   = cs.atk;
+  const calcDef   = cs.def;
+  const calcCrit  = Math.round(cs.crit  * 10) / 10;
+  const calcCombo = Math.round(cs.combo * 10) / 10;
 
   // ── 裝備清單（只列有裝備的格子）──
   const SLOT_ICONS = {

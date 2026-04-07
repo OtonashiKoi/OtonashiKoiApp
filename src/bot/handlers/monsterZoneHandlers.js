@@ -2,6 +2,7 @@
 
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
+const { calcPlayerStats } = require("../../shared/combatStats");
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
 const activeSessions = new Map();
@@ -25,59 +26,8 @@ function isMonsterZoneButton(customId) {
   return customId.startsWith("monster-zone:");
 }
 
-// 攻擊倍率：單手 ×3（1次）；雙持（主手+副手各一武器）×2 打兩次
-const ATK_MULT_1H = 3;
-const ATK_MULT_DUAL = 2;
+// 攻擊倍率常數已移至 src/shared/combatStats.js
 
-function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}) {
-  // 加總所有已裝備物品的屬性加成
-  const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
-  for (const item of Object.values(equipped)) {
-    if (!item?.equipStats) continue;
-    for (const [k, v] of Object.entries(item.equipStats)) {
-      if (k in bonus) bonus[k] += (v || 0);
-    }
-  }
-  const S = str + bonus.str;
-  const A = agi + bonus.agi;
-  const V = vit + bonus.vit;
-  const I = INT + bonus.int;
-  const D = dex + bonus.dex;
-  const L = luk + bonus.luk;
-
-  // 攻擊力依武器種類決定 scaling stat
-  const weapon = equipped.weapon || null;
-  // 雙持：主手有武器 + 副手也是武器（非盾/空）且非雙手武器
-  const offhand = equipped.shield || null;
-  // 副手有 weaponType 代表裝了武器（非盾牌），才算雙持
-  const isDualWield = weapon && !weapon.isTwoHanded && offhand?.weaponType != null;
-  const mult = isDualWield ? ATK_MULT_DUAL : ATK_MULT_1H;
-  const attackCount = isDualWield ? 2 : 1;
-
-  let baseStat;
-  const wt = weapon?.weaponType;
-  if (!wt) {
-    baseStat = S; // 徒手 → STR
-  } else if (wt === "staff_1h" || wt === "staff_2h") {
-    baseStat = I; // 法杖 → INT
-  } else if (wt === "bow") {
-    baseStat = D; // 弓箭 → DEX
-  } else {
-    baseStat = S; // 劍/斧/錘/匕首 → STR
-  }
-
-  return {
-    maxHp: V * 15 + 50,
-    atk: Math.round(baseStat * mult),
-    attackCount,
-    def: V, // VIT（含裝備加成）直接等於防禦
-    dodge: Math.min(50, A * 0.5),
-    hit: Math.min(100, 80 + D),
-    crit: Math.min(100, L * 0.3),
-    combo: Math.min(80, 3 + A * 0.3), // 基礎 3% + AGI*0.3（上限 80%）
-    weaponType: wt || null
-  };
-}
 
 function buildHpBar(hp, maxHp, fillEmoji = "🟥", emptyEmoji = "⬛", length = 10) {
   const filled = Math.round((Math.max(0, hp) / Math.max(1, maxHp)) * length);
