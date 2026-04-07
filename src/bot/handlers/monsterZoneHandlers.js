@@ -91,7 +91,9 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const client = getBotClient();
     if (!client?.isReady()) return;
     const layout = await sc.channelLayoutRepository.get();
-    const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === "monster_zone");
+    const allBindings = layout?.discord?.bindings || [];
+    const binding = allBindings.find((b) => b.featureKey === "town_chat") ||
+                    allBindings.find((b) => b.featureKey === "monster_zone");
     if (!binding?.channelId) return;
     const channel = await client.channels.fetch(binding.channelId).catch(() => null);
     if (!channel?.isTextBased?.()) return;
