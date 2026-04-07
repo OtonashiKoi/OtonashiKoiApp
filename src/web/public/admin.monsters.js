@@ -155,7 +155,7 @@
     const head = document.getElementById("monsters-sheet-head");
     if (!head) return;
     const cols = ["出場順", "圖", "名稱", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掘落道具", "啟用", "操作"];
-    const widths = ["70px","52px","110px","52px","60px","60px","60px","60px","60px","60px","160px","72px","72px","72px","230px","44px","88px"];
+    const widths = ["74px","52px","114px","62px","66px","66px","66px","66px","66px","66px","160px","86px","86px","86px","240px","44px","96px"];
     head.innerHTML = "<tr>" + cols.map((c,i) => `<th style="width:${widths[i]};white-space:nowrap;">${c}</th>`).join("") + "</tr>";
   }
 
@@ -176,22 +176,22 @@
       : `<span style="font-size:1.4em;cursor:pointer;line-height:40px;" class="monster-img-preview">➕</span>`;
 
     const statsInputs = STAT_KEYS.map(k =>
-      `<td style="padding:6px 4px;"><input class="sheet-input stat-input" data-stat="${k}" type="number" min="0" step="1" value="${m[k]??1}" style="width:52px;text-align:center;" /></td>`
+      `<td style="padding:6px 4px;"><input class="sheet-input stat-input" data-stat="${k}" type="number" min="0" step="1" value="${m[k]??1}" style="width:58px;text-align:center;" /></td>`
     ).join("");
 
     const enabled = m.enabled !== false;
     const seq = m.seq || 1;
 
     tr.innerHTML = `
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:58px;text-align:center;${!enabled ? 'opacity:0.35;pointer-events:none;' : ''}" ${!enabled ? 'disabled' : ''} /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:62px;text-align:center;${!enabled ? 'opacity:0.35;pointer-events:none;' : ''}" ${!enabled ? 'disabled' : ''} /></td>
       <td style="padding:6px;" class="img-cell">${imgHtml}</td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:100px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="level" type="number" min="1" max="15" step="1" value="${m.level||1}" style="width:44px;text-align:center;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:104px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="level" type="number" min="1" max="15" step="1" value="${m.level||1}" style="width:52px;text-align:center;" /></td>
       ${statsInputs}
       <td class="calc-cell" style="padding:6px 8px;">${buildCalcHtml(m)}</td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:64px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" style="width:64px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" style="width:64px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:76px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" style="width:76px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" style="width:76px;" /></td>
       <td class="drops-td" style="padding:6px 4px;"></td>
       <td style="padding:8px 4px;text-align:center;"><input type="checkbox" data-field="enabled" ${enabled ? "checked" : ""} /></td>
       <td style="padding:6px 4px;white-space:nowrap;">
