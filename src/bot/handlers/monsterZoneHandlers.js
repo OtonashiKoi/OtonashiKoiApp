@@ -12,7 +12,7 @@ const BTN = {
   deleteLog:   "monster-zone:delete-log"
 };
 
-const MAX_ROUNDS = 60;
+const MAX_ROUNDS = 30;
 const BATTLE_TIMEOUT_MS = 60 * 1000; // 1 分鐘未按開始戰鬥 → 視為逃跑
 const ROUNDS_PER_TICK = 1;           // 每次更新顯示幾回合
 const TICK_DELAY_MS = 1500;          // 每次更新間隔（ms）
@@ -128,7 +128,7 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
     const itemList = droppedItems.join("、");
     if (isLucky) {
-      await channel.send(`🍀 **<@${discordId}>** 在 ${timeStr} 參與戰鬥 **${monsterName}**，借着好運氣获得了 **${itemList}**！`);
+      await channel.send(`🍀 **<@${discordId}>** 在 ${timeStr} 參與戰鬥 **${monsterName}**，狗到了 **${itemList}**！`);
     } else {
       await channel.send(`🎉 **<@${discordId}>** 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
     }

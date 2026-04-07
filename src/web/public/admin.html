@@ -3,433 +3,442 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="theme-color" content="#09090b" />
     <title>Equipment Game Admin</title>
     
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
-    
-    <link rel="stylesheet" href="/static/admin.css?v=3" />
+    <!-- Google Fonts included in CSS -->
+    <link rel="stylesheet" href="/static/admin.css?v=4" />
   </head>
   <body>
     <div class="game-window">
-      <div class="window-top">
-        <div class="window-title">Equipment Game — 管理後台</div>
+      <!-- Topbar -->
+      <header class="window-top">
+        <div class="window-title">Equipment Game <span style="color:var(--muted);font-weight:500;margin-left:8px;">Control Panel</span></div>
         <div class="window-controls">
-          <button class="control-btn" title="重新載入列表" id="top-refresh">⟳</button>
+          <button class="control-btn" title="Refresh Panel" id="top-refresh">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-10.74l3.25 3.17"/></svg>
+            <span style="margin-left:6px;">Reload</span>
+          </button>
         </div>
-      </div>
+      </header>
+
       <div class="shell" id="app-shell">
-        <div class="splitter" id="shell-splitter" role="separator" aria-orientation="vertical" title="拖曳調整側欄寬度"></div>
-      <aside class="hero">
-        <p class="eyebrow">Equipment Game</p>
-        <h1>管理後台</h1>
-        <p class="lede">
-          集中設定 Discord 版位、玩家白名單與管理員白名單，不再依賴聊天室指令操作後台。
-        </p>
-
-        <nav class="sidebar-nav" aria-label="後台功能導覽">
-          <p class="nav-title">分類導覽</p>
-          <button class="nav-link active" data-target="section-auth">系統設定 / 登入</button>
-          <button class="nav-link" data-target="section-layout">功能版位設定</button>
-          <button class="nav-link" data-target="section-access">權限與白名單</button>
-          <button class="nav-link" data-target="section-players">玩家管理</button>
-          <button class="nav-link" data-target="section-tiers">玩家等級設定</button>
-          <button class="nav-link" data-target="section-items">道具庫管理</button>
-          <button class="nav-link" data-target="section-shop">金幣商店管理</button>
-          <button class="nav-link" data-target="section-monsters">怪物庫管理</button>
-          <button class="nav-link" data-target="section-leaderboard">排行榜</button>
-          <button class="nav-link" data-target="section-log">系統操作紀錄</button>
-        </nav>
-
-        <div class="hero-card">
+        <div class="splitter" id="shell-splitter" style="display:none;" role="separator"></div>
+        
+        <!-- Sidebar Navigation -->
+        <aside class="hero">
           <div>
-            <span class="hero-label">當前目標</span>
-            <strong>版位對功能</strong>
+            <p class="eyebrow">Equipment Game</p>
+            <h1>管理後台</h1>
+            <p class="lede">集中設定版位、玩家與參數。</p>
           </div>
-          <p>指定哪個頻道負責玩家面板、審計資訊與後續管理功能。</p>
-        </div>
-      </aside>
 
-      <main class="panel">
-        <section id="section-auth" class="card panel-section active auth-card">
-          <div class="section-head">
+          <nav class="sidebar-nav" aria-label="後台功能導覽">
+            <p class="nav-title">System</p>
+            <button class="nav-link active" data-target="section-auth">登入連線</button>
+            <button class="nav-link" data-target="section-layout">功能版位設定</button>
+            <button class="nav-link" data-target="section-access">權限與白名單</button>
+            
+            <p class="nav-title">Management</p>
+            <button class="nav-link" data-target="section-players">玩家管理</button>
+            <button class="nav-link" data-target="section-tiers">玩家等級設定</button>
+            <button class="nav-link" data-target="section-items">道具庫管理</button>
+            <button class="nav-link" data-target="section-shop">金幣商店管理</button>
+            <button class="nav-link" data-target="section-monsters">怪物庫管理</button>
+            
+            <p class="nav-title">Insights</p>
+            <button class="nav-link" data-target="section-leaderboard">排行榜</button>
+            <button class="nav-link" data-target="section-log">操作紀錄</button>
+          </nav>
+
+          <div class="hero-card">
             <div>
-              <p class="section-kicker">Step 1</p>
-              <h2>登入 API</h2>
+              <span class="hero-label">狀態</span>
+              <strong>後台系統運行中</strong>
             </div>
-            <button id="connect-button" class="button primary">連線後台</button>
+            <p>點擊右上的 Reload 可隨時刷新頁面狀態。</p>
           </div>
-          <div class="grid one-up">
-            <label>
-              <span>管理員密碼</span>
-              <input id="admin-password" type="password" placeholder="輸入後台密碼" />
-            </label>
-          </div>
-          <p id="connection-state" class="hint">尚未連線</p>
-        </section>
+        </aside>
 
-        <section id="section-layout" class="card panel-section">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">Step 2</p>
-              <h2>Discord 版位配置（五種面板）</h2>
-            </div>
-            <div class="actions">
-              <button id="sync-permissions-button" class="button">同步頻道讀取權限到 Discord</button>
-              <button id="save-layout-button" class="button primary">儲存版位設定</button>
-            </div>
-          </div>
-          <p class="hint">每個面板都可以指定頻道，並勾選「玩家可見」或「管理員可見」。可在各面板搜尋框中過濾頻道。</p>
-          <div id="binding-list" class="binding-list"></div>
-        </section>
+        <!-- Main Content Area -->
+        <main class="panel">
 
-        <section id="section-access" class="card panel-section">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">Step 3</p>
-              <h2>權限設定</h2>
+          <!-- Section: Auth -->
+          <section id="section-auth" class="panel-section active">
+            <div class="card auth-card" style="max-width: 500px; margin: 40px auto;">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Auth</p>
+                  <h2>登入系統</h2>
+                </div>
+              </div>
+              <div class="grid one-up">
+                <label>
+                  <span>管理員驗證金鑰</span>
+                  <input id="admin-password" type="password" placeholder="輸入後台管理員密碼 / Token..." />
+                </label>
+              </div>
+              <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center;">
+                <p id="connection-state" class="hint" style="margin:0; font-weight:600;">尚未連線</p>
+                <button id="connect-button" class="button primary">連線驗證</button>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div class="access-grid">
-            <div class="access-card">
-              <h3>管理員身分組</h3>
-              <div id="admin-role-list" class="role-list"></div>
-              <button id="save-admin-roles-button" class="button primary">儲存管理員身分組</button>
+          <!-- Section: Layout -->
+          <section id="section-layout" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Features</p>
+                  <h2>Discord 版位配置</h2>
+                  <p class="hint">為每個面板指定對應負責的 Discord 頻道。</p>
+                </div>
+                <div class="actions" style="display:flex;gap:12px;">
+                  <button id="sync-permissions-button" class="button">同步頻道讀取權限</button>
+                  <button id="save-layout-button" class="button primary">儲存版位設定</button>
+                </div>
+              </div>
+              <div id="binding-list" class="binding-list"></div>
+            </div>
+          </section>
+
+          <!-- Section: Access -->
+          <section id="section-access" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Security</p>
+                  <h2>權限與白名單</h2>
+                </div>
+              </div>
+              <div class="access-grid">
+                <div class="access-card">
+                  <h3>管理員身分組</h3>
+                  <div id="admin-role-list" class="role-list"></div>
+                  <button id="save-admin-roles-button" class="button primary" style="margin-top:auto;">儲存管理員身分組</button>
+                </div>
+
+                <div class="access-card">
+                  <h3>玩家身分組</h3>
+                  <div id="player-role-list" class="role-list"></div>
+                  <button id="save-player-roles-button" class="button primary" style="margin-top:auto;">儲存玩家身分組</button>
+                </div>
+
+                <div class="access-card">
+                  <h3>管理員 ID 名單</h3>
+                  <textarea id="admin-user-ids" rows="5" placeholder="每行一個 Discord User ID"></textarea>
+                  <button id="save-admin-users-button" class="button primary">儲存名單</button>
+                </div>
+
+                <div class="access-card">
+                  <h3>玩家 ID 名單</h3>
+                  <textarea id="player-user-ids" rows="5" placeholder="每行一個 Discord User ID"></textarea>
+                  <button id="save-player-users-button" class="button primary">儲存名單</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Section: Players -->
+          <section id="section-players" class="panel-section">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">Users</p>
+                <h2>玩家資料管理</h2>
+              </div>
+              <div class="actions">
+                <button id="refresh-players-button" class="button primary">重新載入列表</button>
+              </div>
             </div>
 
-            <div class="access-card">
-              <h3>玩家身分組</h3>
-              <div id="player-role-list" class="role-list"></div>
-              <button id="save-player-roles-button" class="button primary">儲存玩家身分組</button>
-            </div>
+            <div class="player-grid">
+              
+              <div class="player-list-section">
+                <div class="access-card" style="flex:1; display:flex; flex-direction:column;">
+                  <h3>玩家列表</h3>
+                  <label>
+                    <input id="player-search-input" type="text" placeholder="🔍 搜尋玩家名稱或 Discord ID..." />
+                  </label>
+                  <div id="player-list-summary" class="player-list-summary">尚未載入資料</div>
+                  <div id="player-list" class="player-list"></div>
+                </div>
+              </div>
+              
+              <div class="splitter" id="player-splitter" style="display:none;" role="separator"></div>
 
-            <div class="access-card">
-              <h3>管理員使用者 ID</h3>
-              <textarea id="admin-user-ids" rows="6" placeholder="每行一個 Discord User ID"></textarea>
-              <button id="save-admin-users-button" class="button primary">儲存管理員使用者</button>
-            </div>
-
-            <div class="access-card">
-              <h3>玩家使用者 ID</h3>
-              <textarea id="player-user-ids" rows="6" placeholder="每行一個 Discord User ID"></textarea>
-              <button id="save-player-users-button" class="button primary">儲存玩家使用者</button>
-            </div>
-          </div>
-        </section>
-
-        <section id="section-players" class="card panel-section">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">Players</p>
-              <h2>玩家資料管理</h2>
-            </div>
-            <div class="actions">
-              <button id="refresh-players-button" class="button primary">重新載入玩家列表</button>
-            </div>
-          </div>
-
-          <div class="player-grid">
-            <div class="access-card">
-              <h3>玩家列表</h3>
-              <p class="hint">可依名稱或 Discord ID 搜尋，點選後在右側管理資料。</p>
-              <label>
-                <span>搜尋玩家</span>
-                <input id="player-search-input" type="text" placeholder="輸入玩家名稱或 Discord ID" />
-              </label>
-              <div id="player-list-summary" class="player-list-summary">尚未載入玩家資料</div>
-              <div id="player-list" class="player-list"></div>
-            </div>
-
-            <div class="splitter splitter-small" id="player-splitter" role="separator" aria-orientation="vertical" title="拖曳調整玩家列表寬度"></div>
-
-            <div class="access-card">
-              <h3>玩家詳細資料</h3>
-              <div id="player-detail" class="player-detail-empty">請先從左側玩家列表點選一位玩家。</div>
-              <div id="player-detail-view" class="player-detail-view hidden">
-                <div class="player-hero-card">
-                  <div>
-                    <p class="section-kicker">Player</p>
-                    <h3 id="player-name-heading">-</h3>
-                    <p id="player-id-line" class="hint">Discord ID: -</p>
+              <div class="player-detail-section">
+                <div id="player-detail" class="player-detail-empty">👈 請先從左側列表選擇一位玩家</div>
+                
+                <div id="player-detail-view" class="player-detail-view hidden">
+                  <div class="player-hero-card">
+                    <div>
+                      <p class="section-kicker" style="color:rgba(255,255,255,0.7);">Player Identity</p>
+                      <h3 id="player-name-heading">-</h3>
+                      <p id="player-id-line" class="player-id-line">ID: -</p>
+                    </div>
+                    <span id="player-status-badge" class="status-badge">active</span>
                   </div>
-                  <span id="player-status-badge" class="status-badge">active</span>
-                </div>
 
-                <div class="player-stats-grid">
-                  <article class="stat-card">
-                    <span>等級 / 職業階級</span>
-                    <strong id="player-level-value">0</strong>
-                    <small id="player-job-value">Novice</small>
-                  </article>
-                  <article class="stat-card">                    <span>玄家等級</span>
-                    <strong id="player-tier-value" style="font-size:1.4em;">-</strong>
-                  </article>
-                  <article class="stat-card">                    <span>經驗 / 職業經驗</span>
-                    <strong id="player-exp-value">0</strong>
-                  </article>
-                  <article class="stat-card">
-                    <span>金幣</span>
-                    <strong id="player-gold-value">0</strong>
-                  </article>
-                  <article class="stat-card">
-                    <span>鑽石</span>
-                    <strong id="player-diamond-value">0</strong>
-                  </article>
-                </div>
+                  <div class="player-stats-grid">
+                    <article class="stat-card">
+                      <span>Level / Job</span>
+                      <strong id="player-level-value">0</strong>
+                      <small id="player-job-value">Novice</small>
+                    </article>
+                    <article class="stat-card">
+                      <span>Tier</span>
+                      <strong id="player-tier-value">-</strong>
+                    </article>
+                    <article class="stat-card">
+                      <span>EXP</span>
+                      <strong id="player-exp-value">0</strong>
+                    </article>
+                    <article class="stat-card">
+                      <span>Gold</span>
+                      <strong id="player-gold-value">0</strong>
+                    </article>
+                    <article class="stat-card">
+                      <span>Diamond</span>
+                      <strong id="player-diamond-value">0</strong>
+                    </article>
+                  </div>
 
-                <div class="player-body-grid">
-                  <!-- 左欄：角色數據 -->
-                  <div class="player-left">
-                    <div class="player-sub-grid">
+                  <div class="player-body-grid">
+                    <!-- Left: Character Stats -->
+                    <div class="player-left">
+                      <div class="player-sub-grid">
+                        <article class="detail-card">
+                          <h4>屬性配點</h4>
+                          <div class="status-points-info">
+                            <span>剩餘可配點數</span>
+                            <span style="font-size:1.2em;"><strong id="player-status-points">0</strong> pts</span>
+                          </div>
+                          <div id="attributes-grid" class="attributes-grid"></div>
+                        </article>
+                        
+                        <article class="detail-card">
+                          <h4>戰鬥數值</h4>
+                          <div id="combat-stats-grid" class="combat-stats-grid"></div>
+                        </article>
+                      </div>
+
                       <article class="detail-card">
-                        <h4>屬性配點</h4>
-                        <div class="status-points-info">
-                          <span>剩餘點數：<strong id="player-status-points">0</strong></span>
-                        </div>
-                        <div id="attributes-grid" class="attributes-grid"></div>
+                        <h4>裝備欄位</h4>
+                        <div id="equipment-slots-grid" class="equipment-slots-grid"></div>
                       </article>
-                      <article class="detail-card">
-                        <h4>戰鬥數值</h4>
-                        <div id="combat-stats-grid" class="combat-stats-grid"></div>
+
+                      <article class="detail-card" style="flex:1;">
+                        <h4 style="margin-bottom:12px;">持有道具背包 <span class="inventory-badge" id="inventory-count">0</span></h4>
+                        <div id="inventory-list" class="inventory-list"></div>
                       </article>
                     </div>
 
-                    <article class="detail-card">
-                      <h4>裝備中</h4>
-                      <div id="equipment-slots-grid" class="equipment-slots-grid"></div>
-                    </article>
+                    <!-- Right: Admin Actions -->
+                    <div class="player-right">
+                      <article class="detail-card">
+                        <h4>帳號中繼資料</h4>
+                        <dl class="detail-list">
+                          <div><dt>建立時間</dt><dd id="player-created-at">-</dd></div>
+                          <div><dt>最後更新</dt><dd id="player-updated-at">-</dd></div>
+                          <div><dt>錢包更新</dt><dd id="player-wallet-updated-at">-</dd></div>
+                          <div><dt>進度更新</dt><dd id="player-progress-updated-at">-</dd></div>
+                        </dl>
+                      </article>
 
-                    <article class="detail-card">
-                      <h4>持有道具 <span class="inventory-badge" id="inventory-count">0</span></h4>
-                      <div id="inventory-list" class="inventory-list"></div>
-                    </article>
-                  </div>
-
-                  <!-- 右欄：管理工具 -->
-                  <div class="player-right">
-                    <article class="detail-card">
-                      <h4>帳號資訊</h4>
-                      <dl class="detail-list">
-                        <div><dt>建立時間</dt><dd id="player-created-at">-</dd></div>
-                        <div><dt>更新時間</dt><dd id="player-updated-at">-</dd></div>
-                        <div><dt>錢包更新</dt><dd id="player-wallet-updated-at">-</dd></div>
-                        <div><dt>進度更新</dt><dd id="player-progress-updated-at">-</dd></div>
-                      </dl>
-                    </article>
-
-                    <article class="detail-card">
-                      <h4>資源管理</h4>
-                      <form id="currency-action-form" class="admin-form">
-                        <label>
-                          <span>幣種</span>
-                          <select id="currency-type-input">
-                            <option value="gold">金幣</option>
-                            <option value="diamond">鑽石</option>
-                          </select>
-                        </label>
-                        <label>
-                          <span>操作</span>
-                          <select id="currency-operation-input">
-                            <option value="grant">增加</option>
-                            <option value="deduct">扣除</option>
-                          </select>
-                        </label>
-                        <label>
-                          <span>數量</span>
+                      <article class="detail-card">
+                        <h4>💰 發放 / 扣除資源</h4>
+                        <form id="currency-action-form" style="display:flex;flex-direction:column;gap:12px;">
+                          <div style="display:flex;gap:12px;">
+                            <select id="currency-type-input" style="flex:1;"><option value="gold">金幣</option><option value="diamond">鑽石</option></select>
+                            <select id="currency-operation-input" style="flex:1;"><option value="grant">增加</option><option value="deduct">扣除</option></select>
+                          </div>
                           <input id="currency-amount-input" type="number" min="1" step="1" value="100" />
-                        </label>
-                        <label>
-                          <span>原因</span>
-                          <input id="currency-reason-input" type="text" placeholder="例如：活動獎勵、手動校正" />
-                        </label>
-                        <button id="currency-submit-button" type="submit" class="button primary">套用資源變更</button>
-                      </form>
-                    </article>
+                          <input id="currency-reason-input" type="text" placeholder="操作原因 (選填)" />
+                          <button id="currency-submit-button" type="submit" class="button primary">執行變更</button>
+                        </form>
+                      </article>
 
-                    <article class="detail-card">
-                      <h4>經驗管理</h4>
-                      <form id="exp-action-form" class="admin-form">
-                        <label>
-                          <span>經驗值</span>
+                      <article class="detail-card">
+                        <h4>⭐ 經驗補償</h4>
+                        <form id="exp-action-form" style="display:flex;flex-direction:column;gap:12px;">
                           <input id="exp-amount-input" type="number" min="1" step="1" value="100" />
-                        </label>
-                        <label>
-                          <span>原因</span>
-                          <input id="exp-reason-input" type="text" placeholder="例如：任務補發、活動補償" />
-                        </label>
-                        <button id="exp-submit-button" type="submit" class="button primary">發放經驗</button>
-                      </form>
-                    </article>
-                    <article class="detail-card">
-                      <h4>發放道具</h4>
-                      <form id="grant-item-form" class="admin-form">
-                        <label>
-                          <span>選擇道具</span>
-                          <select id="grant-item-select">
-                            <option value="">— 載入中 —</option>
-                          </select>
-                        </label>
-                        <button id="grant-item-submit" type="submit" class="button primary">發放到背包</button>
-                      </form>
-                    </article>
-                  </div>
-                </div>
+                          <input id="exp-reason-input" type="text" placeholder="補發原因 (選填)" />
+                          <button id="exp-submit-button" type="submit" class="button primary">發放經驗值</button>
+                        </form>
+                      </article>
 
-                <article class="detail-card" style="margin-top:20px">
-                  <h4>最近交易</h4>
-                  <div id="player-transaction-list" class="transaction-list"></div>
-                </article>
+                      <article class="detail-card">
+                        <h4>🎁 直接發放道具</h4>
+                        <form id="grant-item-form" style="display:flex;flex-direction:column;gap:12px;">
+                          <select id="grant-item-select"><option value="">— 載入中 —</option></select>
+                          <button id="grant-item-submit" type="submit" class="button primary">發放到該玩家背包</button>
+                        </form>
+                      </article>
+                    </div>
+                  </div>
+
+                  <article class="detail-card" style="margin-top:24px">
+                    <h4>最近經濟紀錄 (Transactions)</h4>
+                    <div id="player-transaction-list" class="transaction-list"></div>
+                  </article>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section id="section-log" class="card panel-section log-card">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">System</p>
-              <h2>操作記錄</h2>
+          <!-- Section: Tiers -->
+          <section id="section-tiers" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Config</p>
+                  <h2>階級設定 (Tiers)</h2>
+                  <p class="hint">對應各階級所需要綁定的 Discord 身份組 ID。</p>
+                </div>
+                <button id="tiers-save-btn" class="button primary">儲存等級設定</button>
+              </div>
+              <div id="tiers-form-area" class="access-grid"></div>
             </div>
-          </div>
-          <pre id="activity-log" class="activity-log">等待操作...</pre>
-        </section>
+          </section>
 
-        <section id="section-leaderboard" class="card panel-section">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">Ranking</p>
-              <h2>排行榜</h2>
+          <!-- Section: Items -->
+          <section id="section-items" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Database</p>
+                  <h2>道具資料庫</h2>
+                </div>
+                <div style="display:flex;gap:12px;align-items:center;">
+                  <button id="items-btn-new" class="button primary">＋ 新增道具</button>
+                  <button id="items-btn-export" class="button">📥 匯出 CSV</button>
+                  <button id="items-btn-import" class="button">📤 匯入 CSV</button>
+                  <input id="items-search-input" type="text" placeholder="🔍 搜尋名稱…" style="width:200px;" />
+                </div>
+              </div>
+              
+              <input type="file" id="items-csv-input" accept=".csv,text/csv" style="display:none;" />
+              <input type="file" id="items-img-input" accept="image/*" style="display:none;" />
+
+              <div class="tab-container">
+                <button class="items-tab-btn active" data-items-tab="consumable">🧪 消耗品</button>
+                <button class="items-tab-btn" data-items-tab="collectible">🖼️ 收藏品</button>
+                <button class="items-tab-btn" data-items-tab="equipment">⚔️ 裝備</button>
+                <button class="items-tab-btn" data-items-tab="special">✨ 特殊</button>
+              </div>
+
+              <div id="items-equip-sub-filter" style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>
+
+              <div style="overflow-x:auto;">
+                <table class="shop-table" id="items-sheet-table">
+                  <thead id="items-sheet-head"></thead>
+                  <tbody id="items-tbody"></tbody>
+                </table>
+              </div>
             </div>
-            <button id="leaderboard-refresh" class="button">🔄 重新載入</button>
-          </div>
-          <p class="hint">顯示前 20 名玩家。點「重新載入」取得最新資料。</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
-            <button class="button leaderboard-tab-btn active" data-lb-tab="gold">💰 金幣排行</button>
-            <button class="button leaderboard-tab-btn" data-lb-tab="level">⭐ 等級排行</button>
-            <button class="button leaderboard-tab-btn" data-lb-tab="checkin">📅 打卡排行</button>
-          </div>
-          <div id="leaderboard-content"><p class="hint">請先登入 API 後點「重新載入」。</p></div>
-        </section>
+          </section>
 
-        <section id="section-shop" class="card panel-section">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">Shop</p>
-              <h2>金幣商店管理</h2>
+          <!-- Section: Shop -->
+          <section id="section-shop" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Economy</p>
+                  <h2>金幣虛擬商店</h2>
+                </div>
+                <button id="shop-btn-new" class="button primary">＋ 上架新商品</button>
+              </div>
+              
+              <div class="tab-container">
+                <button class="shop-tab-btn active" data-shop-tab="all">📦 全部</button>
+                <button class="shop-tab-btn" data-shop-tab="consumable">🧪 消耗品</button>
+                <button class="shop-tab-btn" data-shop-tab="collectible">🖼️ 收藏</button>
+                <button class="shop-tab-btn" data-shop-tab="equipment">⚔️ 裝備</button>
+                <button class="shop-tab-btn" data-shop-tab="special">✨ 特殊</button>
+              </div>
+
+              <div style="overflow-x:auto;">
+                <table class="shop-table" id="shop-sheet-table">
+                  <thead id="shop-sheet-head"></thead>
+                  <tbody id="shop-tbody"></tbody>
+                </table>
+              </div>
             </div>
-            <button id="shop-btn-new" class="button primary">＋ 新增一行</button>
-          </div>
-          <p class="hint">管理金幣商店上架商品。玩家在 Discord 金幣商店頻道按「逛商店」即可看到已上架商品。限定等級欄以逗號分隔等級代號，例如 A,S,SS，空白表示全部可買。</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">
-            <button class="button shop-tab-btn active" data-shop-tab="all">📦 全部</button>
-            <button class="button shop-tab-btn" data-shop-tab="consumable">🧪 消耗品</button>
-            <button class="button shop-tab-btn" data-shop-tab="collectible">🖼️ 圖片</button>
-            <button class="button shop-tab-btn" data-shop-tab="equipment">⚔️ 裝備</button>
-            <button class="button shop-tab-btn" data-shop-tab="special">✨ 特殊</button>
-          </div>
-          <div style="overflow-x:auto;">
-            <table class="shop-table" id="shop-sheet-table" style="min-width:100%;">
-              <thead id="shop-sheet-head"></thead>
-              <tbody id="shop-tbody"></tbody>
-            </table>
-          </div>
-        </section>
+          </section>
 
-        <section id="section-monsters" class="card panel-section">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">Monsters</p>
-              <h2>怪物庫管理</h2>
+          <!-- Section: Monsters -->
+          <section id="section-monsters" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Combat</p>
+                  <h2>怪物生態區管理</h2>
+                </div>
+                <button id="monsters-btn-new" class="button primary">＋ 新增怪物</button>
+              </div>
+
+              <div id="monsters-state-area" class="access-card" style="margin-bottom:24px;border-color:var(--accent);background:var(--accent-light);">
+                <p class="hint" style="color:var(--text);margin:0;font-weight:600;">載入即時狀態中...</p>
+              </div>
+
+              <input type="file" id="monsters-img-input" accept="image/*" style="display:none;" />
+
+              <div class="tab-container">
+                <button data-zone="normal" class="monsters-zone-tab active">⚔️ 一般區</button>
+                <button data-zone="mid" class="monsters-zone-tab">🔥 中級區</button>
+              </div>
+
+              <div style="overflow-x:auto;">
+                <table class="shop-table" id="monsters-sheet-table">
+                  <thead id="monsters-sheet-head"></thead>
+                  <tbody id="monsters-tbody"></tbody>
+                </table>
+              </div>
             </div>
-            <button id="monsters-btn-new" class="button primary">＋ 新增怪物</button>
-          </div>
-          <p class="hint">管理放怪區輪換清單。<strong>出場順序</strong>欄決定怪物出場的先後（數字小的先出場），打死後自動換下一隻。可在下方「目前放怪區狀態」強制指定目前上場的怪物。</p>
-          <!-- 放怪區狀態卡片 -->
-          <div id="monsters-state-area" class="access-card" style="margin-bottom:1.5rem;padding:1rem 1.25rem;">
-            <p class="hint">登入後自動載入...</p>
-          </div>
-          <!-- 隱藏圖片 input -->
-          <input type="file" id="monsters-img-input" accept="image/*" style="display:none;" />
-          <!-- 區域分頁 -->
-          <div id="monsters-zone-tabs" style="display:flex;gap:0;margin-bottom:1rem;border-bottom:2px solid var(--line,#333);">
-            <button data-zone="normal" class="monsters-zone-tab" style="padding:6px 22px;font-size:0.9em;border:none;border-bottom:3px solid transparent;background:none;color:var(--muted,#888);cursor:pointer;margin-bottom:-2px;">⚔️ 一般區</button>
-            <button data-zone="mid" class="monsters-zone-tab" style="padding:6px 22px;font-size:0.9em;border:none;border-bottom:3px solid transparent;background:none;color:var(--muted,#888);cursor:pointer;margin-bottom:-2px;">🔥 中級區</button>
-          </div>
-            <table class="shop-table" id="monsters-sheet-table" style="min-width:100%;">
-              <thead id="monsters-sheet-head"></thead>
-              <tbody id="monsters-tbody"></tbody>
-            </table>
-          </div>
-        </section>
+          </section>
 
-        <section id="section-items" class="card panel-section">
-          <style>
-            .sheet-input { background:transparent; border:1px solid transparent; border-radius:4px; padding:2px 6px; color:inherit; font-size:0.88em; width:100%; box-sizing:border-box; }
-            .sheet-input:hover, .sheet-input:focus { border-color:var(--accent,#4ade80); outline:none; background:rgba(255,255,255,0.06); }
-            #items-sheet-table td { padding:4px 6px; vertical-align:middle; }
-            #items-sheet-table th { padding:6px 8px; }
-            .img-cell { text-align:center; cursor:pointer; width:56px; }
-            .img-cell:hover { background:rgba(255,255,255,0.05); }
-            .tier-chip { display:inline-block; padding:1px 6px; margin:1px 2px; border-radius:4px; font-size:0.78em; font-weight:600; cursor:pointer; border:1px solid var(--line,#444); color:var(--muted,#888); user-select:none; transition:background 0.1s,color 0.1s; }
-            .tier-chip:hover { border-color:var(--accent,#4ade80); color:var(--accent,#4ade80); }
-            .tier-chip.active { background:var(--accent,#4ade80); border-color:var(--accent,#4ade80); color:#111; }
-          </style>
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">Items</p>
-              <h2>道具庫管理</h2>
+          <!-- Section: Leaderboard -->
+          <section id="section-leaderboard" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Stats</p>
+                  <h2>全服排行榜</h2>
+                </div>
+                <button id="leaderboard-refresh" class="button">🔄 即時刷新</button>
+              </div>
+              
+              <div class="tab-container">
+                <button class="leaderboard-tab-btn active" data-lb-tab="gold">💰 金幣排行</button>
+                <button class="leaderboard-tab-btn" data-lb-tab="level">⭐ 等級排行</button>
+                <button class="leaderboard-tab-btn" data-lb-tab="checkin">📅 活躍打卡</button>
+              </div>
+
+              <div id="leaderboard-content" style="min-height: 200px;">
+                <p class="hint">請先登入 API 後點「即時刷新」。</p>
+              </div>
             </div>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-              <button id="items-btn-new" class="button primary">＋ 新增一行</button>
-              <button id="items-btn-export" class="button">📥 匯出 CSV</button>
-              <button id="items-btn-import" class="button">📤 匯入 CSV</button>
-              <input id="items-search-input" type="text" placeholder="🔍 搜尋名稱…" style="padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:var(--surface-hover);color:inherit;font-size:0.88em;width:180px;" />
+          </section>
+
+          <!-- Section: Log -->
+          <section id="section-log" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">System Logs</p>
+                  <h2>操作活動紀錄</h2>
+                </div>
+              </div>
+              <pre id="activity-log" class="activity-log">系統準備就緒。等待操作指令...</pre>
             </div>
-          </div>
-          <p class="hint">每一行為一個道具，直接在表格中編輯後按「儲存」，點圖片欄可上傳圖片。匯入 CSV 會新增道具（不覆蓋現有）。</p>
-          <!-- 隱藏 CSV input -->
-          <input type="file" id="items-csv-input" accept=".csv,text/csv" style="display:none;" />
+          </section>
 
-          <!-- Tab 切換列 -->
-          <div style="display:flex;gap:0;margin-bottom:1rem;flex-wrap:nowrap;border-bottom:2px solid var(--line,#333);overflow-x:auto;">
-            <button class="button items-tab-btn active" data-items-tab="consumable">🧪 消耗品</button>
-            <button class="button items-tab-btn" data-items-tab="collectible">🖼️ 圖片</button>
-            <button class="button items-tab-btn" data-items-tab="equipment">⚔️ 裝備</button>
-            <button class="button items-tab-btn" data-items-tab="special">✨ 特殊</button>
-          </div>
-
-          <!-- 裝備子分類篩選 -->
-          <div id="items-equip-sub-filter" style="display:none;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:12px;"></div>
-
-          <!-- 隱藏圖片 input（共用） -->
-          <input type="file" id="items-img-input" accept="image/*" style="display:none;" />
-
-          <div style="overflow-x:auto;">
-            <table class="shop-table" id="items-sheet-table" style="min-width:100%;">
-              <thead id="items-sheet-head"></thead>
-              <tbody id="items-tbody"></tbody>
-            </table>
-          </div>
-        </section>
-        <section id="section-tiers" class="card panel-section">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">Tiers</p>
-              <h2>玩家等級設定（E ～ SS）</h2>
-            </div>
-            <button id="tiers-save-btn" class="button primary">儲存等級設定</button>
-          </div>
-          <p class="hint">為每個等級輸入對應的 Discord 身分組 ID，各等級可綁定多組身分組（逗號分隔）。商店商品選擇允許購買的等級後，系統將自動比對玩家身分組。</p>
-          <div id="tiers-form-area" class="access-grid"></div>
-        </section>
-      </main>
+        </main>
       </div>
     </div>
 
+    <!-- Scripts -->
     <script src="/static/adminUtils.js"></script>
     <script src="/static/adminLayout.js"></script>
     <script src="/static/adminPlayers.js"></script>
@@ -443,4 +452,4 @@
     <script src="/static/admin.items.js"></script>
     <script src="/static/admin.leaderboard.js"></script>
   </body>
-  </html>
+</html>

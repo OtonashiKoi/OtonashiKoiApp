@@ -89,25 +89,36 @@
   async function loadState() {
     const area = document.getElementById("monsters-state-area");
     if (!area) return;
-    const r = await fetch(BASE + "/monsters/state", { headers: apiHeaders() });
+
+    // 依分區切換狀態卡顏色
+    const isMid = activeZone === "mid";
+    area.style.borderColor = isMid ? "#f97316" : "var(--accent)";
+    area.style.background  = isMid ? "rgba(249,115,22,0.12)" : "var(--accent-light)";
+
+    const r = await fetch(BASE + "/monsters/state?zone=" + activeZone, { headers: apiHeaders() });
     if (!r.ok) { area.innerHTML = `<p class="hint">無法載入狀態</p>`; return; }
     const j = await r.json();
     const { state, active } = j.data || {};
     const killCount = state?.killCount || {};
 
-    // 建立怪物選區（依 seq 排序）
-    const enabledMonsters = monsters.filter(m => m.enabled !== false).sort((a,b)=>a.seq-b.seq);
+    // 建立怪物選區（依 seq 排序，只顯示當前分區）
+    const enabledMonsters = monsters
+      .filter(m => m.enabled !== false && (m.zone || "normal") === activeZone)
+      .sort((a,b) => a.seq - b.seq);
     const options = enabledMonsters.map(m => {
       const kills = killCount[m.id] || 0;
       const isActive = active && m.id === active.id;
-      return `<option value="${m.seq}" ${isActive?"selected":""}>${m.seq}. ${m.name}${kills > 0 ? " ?被打死 "+kills+"次?" : ""}</option>`;
+      return `<option value="${m.seq}" ${isActive?"selected":""}>${m.seq}. ${m.name}${kills > 0 ? ` （打死 ${kills} 次）` : ""}</option>`;
     }).join("");
+
+    const zoneLabel = isMid ? "🔥 中級區" : "⚔️ 一般區";
+    const accentColor = isMid ? "#f97316" : "var(--accent,#4ade80)";
 
     area.innerHTML = `
       <div class="player-hero-card" style="margin-bottom:1rem;">
         <div>
-          <p class="section-kicker">Zone Status</p>
-          <h3 style="margin:0;">${active ? active.name : "目前沒有活蹪怪物"}</h3>
+          <p class="section-kicker" style="color:${accentColor};">ZONE STATUS — ${zoneLabel}</p>
+          <h3 style="margin:0;">${active ? active.name : "目前沒有活躍怪物"}</h3>
           ${active ? `<p class="hint" style="margin:2px 0;">HP: ${state.currentHp ?? active.calc?.maxHp ?? "?"} / ${active.calc?.maxHp ?? "?"} &nbsp;|&nbsp; 被打死: ${killCount[active.id]||0} 次</p>` : ""}
         </div>
         ${active?.imageThumbnailUrl ? `<img src="${active.imageThumbnailUrl}" style="width:56px;height:56px;object-fit:contain;border-radius:6px;" />` : ""}
@@ -115,8 +126,8 @@
       <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
         <label style="font-size:0.88em;color:var(--muted,#aaa);">強制指定上場怪物：</label>
         <select id="monsters-zone-sel" class="sheet-input" style="width:200px;">${options.length ? options : `<option value="">請先新增怪物</option>`}</select>
-        <button id="monsters-zone-switch-btn" class="button primary" style="padding:4px 14px;">切換上場</button>
-        <span id="monsters-zone-msg" style="font-size:0.82em;color:var(--accent,#4ade80);"></span>
+        <button id="monsters-zone-switch-btn" class="button primary" style="padding:4px 14px;${isMid ? "background:#f97316;" : ""}">切換上場</button>
+        <span id="monsters-zone-msg" style="font-size:0.82em;color:${accentColor};"></span>
       </div>
     `;
 
@@ -124,7 +135,7 @@
       const seq = Number(document.getElementById("monsters-zone-sel")?.value);
       if (!seq) return;
       const r2 = await fetch(BASE + "/monsters/state", {
-        method: "PUT", headers: apiHeaders(), body: JSON.stringify({ activeMonsterSeq: seq })
+        method: "PUT", headers: apiHeaders(), body: JSON.stringify({ activeMonsterSeq: seq, zone: activeZone })
       });
       const j2 = await r2.json();
       if (!r2.ok || j2.status !== "ok") {
@@ -156,7 +167,7 @@
     const head = document.getElementById("monsters-sheet-head");
     if (!head) return;
     const cols = ["出場順", "圖", "名稱", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掘落道具", "啟用", "操作"];
-    const widths = ["74px","52px","114px","62px","66px","66px","66px","66px","66px","66px","160px","86px","86px","86px","240px","44px","96px"];
+    const widths = ["74px","52px","114px","82px","66px","66px","66px","66px","66px","66px","160px","86px","86px","86px","240px","44px","96px"];
     head.innerHTML = "<tr>" + cols.map((c,i) => `<th style="width:${widths[i]};white-space:nowrap;">${c}</th>`).join("") + "</tr>";
   }
 
@@ -187,7 +198,7 @@
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:62px;text-align:center;${!enabled ? 'opacity:0.35;pointer-events:none;' : ''}" ${!enabled ? 'disabled' : ''} /></td>
       <td style="padding:6px;" class="img-cell">${imgHtml}</td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:104px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="level" type="number" min="1" max="15" step="1" value="${m.level||1}" style="width:52px;text-align:center;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="level" type="number" min="0" max="15" step="1" value="${m.level ?? 1}" style="width:72px;text-align:center;" /></td>
       ${statsInputs}
       <td class="calc-cell" style="padding:6px 8px;">${buildCalcHtml(m)}</td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:76px;" /></td>
@@ -243,13 +254,13 @@
 
   function getPayload(tr) {
     const stats = {};
-    tr.querySelectorAll(".stat-input").forEach(inp => { stats[inp.dataset.stat] = Number(inp.value)||1; });
+    tr.querySelectorAll(".stat-input").forEach(inp => { stats[inp.dataset.stat] = inp.value === "" ? 0 : (Number(inp.value) ?? 0); });
     const dropsTd = tr.querySelector(".drops-td");
     return {
       seq: Number(tr.querySelector("[data-field=seq]")?.value) || 1,
       name: tr.querySelector("[data-field=name]")?.value || "",
       zone: activeZone,
-      level: Number(tr.querySelector("[data-field=level]")?.value) || 1,
+      level: Number(tr.querySelector("[data-field=level]")?.value) ?? 1,
       ...stats,
       entryFee: Number(tr.querySelector("[data-field=entryFee]")?.value) || 0,
       expReward: Number(tr.querySelector("[data-field=expReward]")?.value) || 0,

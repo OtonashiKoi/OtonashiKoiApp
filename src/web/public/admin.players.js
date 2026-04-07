@@ -357,7 +357,6 @@
   };
 
   // initialize
-  document.addEventListener('DOMContentLoaded', initSplitters);
   adminCore.loadAuth();
   bindEvents();
   setPlayerActionEnabled(false);
