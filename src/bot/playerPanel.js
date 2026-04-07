@@ -59,7 +59,7 @@ async function handleProfile(interaction) {
     : `等級：Base ${p.level} (EXP: ${p.exp} / ${expNeeded}，還差 ${expNeeded - p.exp})${tierLine}`;
 
   // ── 計算戰鬥能力 ──
-  const equipped = p.equipped || {};
+  const equipped = p.equipment || {};
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
   for (const item of Object.values(equipped)) {
     if (!item?.equipStats) continue;
