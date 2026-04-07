@@ -337,7 +337,8 @@ async function handleStartFight(interaction) {
       let damageMap = {};
       try {
         const freshState = await sc.monsterService.getState();
-        damageMap = { ...(freshState.damageMap || {}), [discordId]: { name: displayName, damage: totalDamage } };
+        const prev = freshState.damageMap || {};
+        damageMap = { ...prev, [discordId]: { name: displayName, damage: (prev[discordId]?.damage || 0) + totalDamage } };
         await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap });
       } catch (e) {
         await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp });
@@ -353,7 +354,8 @@ async function handleStartFight(interaction) {
       let damageMap = {};
       try {
         const freshState = await sc.monsterService.getState();
-        damageMap = { ...(freshState.damageMap || {}), [discordId]: { name: displayName, damage: totalDamage } };
+        const prev = freshState.damageMap || {};
+        damageMap = { ...prev, [discordId]: { name: displayName, damage: (prev[discordId]?.damage || 0) + totalDamage } };
         await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap });
       } catch (e) {
         await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp });
@@ -496,15 +498,20 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // 擊殺數 + 推進下一隻怪物
   const newKillCount = { ...(state.killCount || {}), [monster.id]: ((state.killCount?.[monster.id] || 0) + 1) };
+  // 擊殺者累加傷害（取最新 state 以免覆蓋其他人）
+  const freshState = await sc.monsterService.getState();
+  const prevDmg = freshState.damageMap || {};
+  const finalDamageMap = { ...prevDmg, [discordId]: { name: displayName, damage: (prevDmg[discordId]?.damage || 0) + totalDamage } };
+
   const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false });
   const sorted = [...allMonsters].sort((a, b) => a.seq - b.seq);
   const idx = sorted.findIndex((m) => m.id === monster.id);
   const nextMonster = sorted.length > 0 ? sorted[(idx + 1) % sorted.length] : null;
 
   const newState = {
-    ...state,
+    ...freshState,
     currentHp: nextMonster ? nextMonster.calc.maxHp : 0,
-    activeMonsterSeq: nextMonster ? nextMonster.seq : state.activeMonsterSeq,
+    activeMonsterSeq: nextMonster ? nextMonster.seq : freshState.activeMonsterSeq,
     killCount: newKillCount,
     participants: [], // 新怪上場，參戰名單清零
     damageMap: {}    // 新怪上場，傷害紀錄清零
@@ -512,7 +519,11 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   await sc.monsterService.saveState(newState);
 
   if (nextMonster) {
-    _republishPanel(sc, nextMonster, nextMonster.calc.maxHp, 0)
+    _republishPanel(sc, nextMonster, nextMonster.calc.maxHp, 0, {})
+      .catch((e) => console.error("[MonsterZone] republish panel error", e));
+  } else {
+    // 沒有下一隻怪，仍更新面板並顯示擊殺者傷害（不清零先展示）
+    _republishPanel(sc, null, 0, 0, finalDamageMap)
       .catch((e) => console.error("[MonsterZone] republish panel error", e));
   }
 
