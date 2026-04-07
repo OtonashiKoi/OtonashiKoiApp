@@ -448,12 +448,19 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // 參戰名單（含擊殺者）
   const participants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
-  const count = participants.length;
 
-  // ── 金幣平均分配給所有參戰玩家 ──
+  // ── 依傷害比例計算每人分配量 ──
+  const rawDmgMap = state.damageMap || {};
+  // 合入本次擊殺者的傷害
+  const mergedDmg = { ...rawDmgMap, [discordId]: { name: displayName, damage: (rawDmgMap[discordId]?.damage || 0) + totalDamage } };
+  const totalDmgAll = participants.reduce((s, pid) => s + (mergedDmg[pid]?.damage || 0), 0);
+  const dmgRatio = (pid) => totalDmgAll > 0 ? (mergedDmg[pid]?.damage || 0) / totalDmgAll : 1 / participants.length;
+
+  // ── 金幣依比例分配 ──
   if (monster.goldReward > 0) {
-    const share = Math.max(1, Math.floor(monster.goldReward / count));
+    const myShare = Math.max(1, Math.round(monster.goldReward * dmgRatio(discordId)));
     for (const pid of participants) {
+      const share = Math.max(1, Math.round(monster.goldReward * dmgRatio(pid)));
       try {
         await sc.rewardService.grantCurrency({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -462,15 +469,16 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         });
       } catch (e) { console.error("[MonsterZone] grantCurrency error", e); }
     }
-    rewardLines.push(`💰 金幣 +${share}（${monster.goldReward} 由 ${count} 人平分）`);
+    const pct = Math.round(dmgRatio(discordId) * 100);
+    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}%，共 ${monster.goldReward}）`);
   }
 
-  // ── EXP 平均分配給所有參戰玩家 ──
+  // ── EXP 依比例分配 ──
   if (monster.expReward > 0) {
-    const share = Math.max(1, Math.floor(monster.expReward / count));
-    // 擊殺者顯示升級訊息
+    const myShare = Math.max(1, Math.round(monster.expReward * dmgRatio(discordId)));
     let killerLvLine = "";
     for (const pid of participants) {
+      const share = Math.max(1, Math.round(monster.expReward * dmgRatio(pid)));
       try {
         const expResult = await sc.progressService.grantExp({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -481,7 +489,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         }
       } catch (e) { console.error("[MonsterZone] grantExp error", e); }
     }
-    rewardLines.push(`⭐ EXP +${share}（${monster.expReward} 由 ${count} 人平分）${killerLvLine}`);
+    const pct = Math.round(dmgRatio(discordId) * 100);
+    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${monster.expReward}）${killerLvLine}`);
   }
 
   if (Array.isArray(monster.drops) && monster.drops.length > 0) {
@@ -518,10 +527,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // 擊殺數 + 推進下一隻怪物
   const newKillCount = { ...(state.killCount || {}), [monster.id]: ((state.killCount?.[monster.id] || 0) + 1) };
-  // 擊殺者累加傷害（取最新 state 以免覆蓋其他人）
+  // 取最新 state 以免多人並發時覆蓋其他人的 damageMap
   const freshState = await sc.monsterService.getState();
-  const prevDmg = freshState.damageMap || {};
-  const finalDamageMap = { ...prevDmg, [discordId]: { name: displayName, damage: (prevDmg[discordId]?.damage || 0) + totalDamage } };
+  const finalDamageMap = { ...(freshState.damageMap || {}), ...mergedDmg };
 
   const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false });
   const sorted = [...allMonsters].sort((a, b) => a.seq - b.seq);
