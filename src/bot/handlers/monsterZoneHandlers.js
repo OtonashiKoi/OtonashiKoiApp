@@ -73,7 +73,8 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     def: bonus.vit, // 只算裝備加成，基礎 VIT 管血量
     dodge: Math.min(50, A * 0.5),
     hit: Math.min(100, 80 + D),
-    crit: Math.min(100, L * 0.3)
+    crit: Math.min(100, L * 0.3),
+    weaponType: wt || null
   };
 }
 
@@ -278,6 +279,25 @@ async function handleStartFight(interaction) {
     let outcome = null; // "win" | "lose" | "timeout"
     let totalDamage = 0;
 
+    // 武器描寫
+    const wt = session.playerStats.weaponType || null;
+    const atkVerbs = !wt
+      ? ["揮拳猛擊", "飛腿踢出", "怒拳轟擊", "突刺重擊"]
+      : (wt === "staff_1h" || wt === "staff_2h")
+        ? ["施展魔法", "吟唱咒語", "釋放法術", "引導魔力"]
+        : wt === "bow"
+          ? ["拉弓射擊", "瞄準射出", "急速連射", "精準放箭"]
+          : wt === "dagger"
+            ? ["快速刺出", "連環割砍", "偷襲突刺", "趁隙猛刺"]
+            : ["揮劍斬擊", "猛力劈下", "側身橫掃", "架勢突刺"];
+    const critPhrases = ["會心一擊", "致命一擊", "弱點命中", "完美命中"];
+    const dodgePhrases = ["身形一閃", "靈巧側移", "緊急後退", "巧妙格開"];
+    const mDodgePhrases = ["及時閃避", "往旁一跳", "後退一步", "以盾擋下"];
+    const mAtkPhrases = ["猛力衝撞", "揮爪攻擊", "重擊落下", "怒吼突進"];
+    const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    // 傷害浮動 ±20%
+    const rollDmg = (base) => Math.max(1, Math.round(base * (0.8 + Math.random() * 0.4)));
+
     while (round <= MAX_ROUNDS && outcome === null) {
       const log = [`**【第 ${round} 回合】**`];
 
@@ -286,20 +306,20 @@ async function handleStartFight(interaction) {
       for (let a = 0; a < attackCount && outcome === null; a++) {
         const hitChance = session.playerStats.hit - session.monsterStats.dodge;
         if (Math.random() * 100 < hitChance) {
-          let dmg = Math.max(1, session.playerStats.atk - session.monsterStats.def);
+          let dmg = rollDmg(Math.max(1, session.playerStats.atk - session.monsterStats.def));
           const isCrit = Math.random() * 100 < session.playerStats.crit;
           if (isCrit) dmg = Math.round(dmg * 1.5);
           session.monsterHp -= dmg;
           totalDamage += dmg;
-          const atkLabel = attackCount > 1 ? `第${a + 1}擊` : "";
-          log.push(isCrit
-            ? `⚔️✨ 暴擊！${atkLabel}你對怪物造成 **${dmg}** 傷（怪物剩 ${Math.max(0, session.monsterHp)} HP）`
-            : `⚔️ ${atkLabel}你對怪物造成 **${dmg}** 傷（怪物剩 ${Math.max(0, session.monsterHp)} HP）`
-          );
+          const verb = rand(atkVerbs);
+          if (isCrit) {
+            log.push(`⚔️✨ **${rand(critPhrases)}**！${verb}，對 ${session.monsterName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, session.monsterHp)} HP）`);
+          } else {
+            log.push(`⚔️ ${verb}，對 ${session.monsterName} 造成 **${dmg}** 點傷害。（怪物剩 ${Math.max(0, session.monsterHp)} HP）`);
+          }
           if (session.monsterHp <= 0) { outcome = "win"; break; }
         } else {
-          const atkLabel = attackCount > 1 ? `第${a + 1}擊` : "";
-          log.push(`💨 ${atkLabel}你的攻擊被閃過！`);
+          log.push(`💨 ${session.monsterName} ${rand(dodgePhrases)}，你的攻擊落空了！`);
         }
       }
 
@@ -308,11 +328,11 @@ async function handleStartFight(interaction) {
       // 怪物反擊
       const monsterHitChance = session.monsterStats.hit - session.playerStats.dodge;
       if (Math.random() * 100 < monsterHitChance) {
-        const dmg = Math.max(1, session.monsterStats.atk - session.playerStats.def);
+        const dmg = rollDmg(Math.max(1, session.monsterStats.atk - session.playerStats.def));
         session.playerHp -= dmg;
-        log.push(`💥 **${session.monsterName}** 反擊造成 **${dmg}** 傷（你剩 ${Math.max(0, session.playerHp)} HP）`);
+        log.push(`💥 ${session.monsterName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, session.playerHp)} HP）`);
       } else {
-        log.push(`🛡️ 你閃過了反擊！`);
+        log.push(`🛡️ ${session.monsterName} 猛撲而來，你${rand(mDodgePhrases)}，躲過了攻擊！`);
       }
 
       if (session.playerHp <= 0) { outcome = "lose"; roundLogs.push(log.join("\n")); break; }
