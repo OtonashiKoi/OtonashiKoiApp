@@ -76,8 +76,14 @@ async function handleShopBuy(interaction, itemId) {
 async function handleShopConfirm(interaction, itemId) {
   const serviceContext = getServiceContext();
   try {
-    // 取得成員身分組 ID 清單
-    const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
+    // 取得成員身分組 ID 清單（ephemeral 互動 cache 可能為空，補 fetch）
+    let memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
+    if (memberRoleIds.length === 0 && interaction.guild) {
+      try {
+        const member = await interaction.guild.members.fetch(interaction.user.id);
+        memberRoleIds = member.roles.cache.map((r) => r.id);
+      } catch (_) {}
+    }
     const { item } = await serviceContext.shopService.purchase(
       interaction.user.id,
       interaction.user.displayName || interaction.user.username,
