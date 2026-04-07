@@ -34,39 +34,51 @@
     ).join("");
   }
 
+  function getItemThumb(id) {
+    const item = itemLib.find(i => i.id === id);
+    return item ? (item.imageThumbnailUrl || item.imageUrl || "") : "";
+  }
+
+  function attachDropRowThumb(sel) {
+    const thumb = sel.previousElementSibling;
+    if (!thumb || !thumb.classList.contains("drop-thumb")) return;
+    const src = getItemThumb(sel.value);
+    if (src) { thumb.src = src; thumb.style.display = ""; }
+    else { thumb.src = ""; thumb.style.display = "none"; }
+  }
+
+  function makeDropRow(itemId = "", chance = 10) {
+    const div = document.createElement("div");
+    div.className = "drop-row";
+    div.style.cssText = "display:flex;gap:4px;align-items:center;margin-bottom:4px;";
+    const thumbSrc = getItemThumb(itemId);
+    div.innerHTML = `
+      <img class="drop-thumb" src="${thumbSrc}" style="width:22px;height:22px;object-fit:contain;border-radius:3px;flex-shrink:0;${thumbSrc ? "" : "display:none;"}" />
+      <select class="sheet-input drop-item-sel" style="flex:1;min-width:0;">
+        <option value="">-- 選道具 --</option>${buildItemSelectOptions()}
+      </select>
+      <input class="sheet-input drop-chance" type="number" min="0" max="100" step="0.1" value="${chance}" style="width:62px;text-align:right;" />
+      <span style="font-size:0.8em;color:var(--muted,#888)">%</span>
+      <button type="button" class="drop-del-btn" style="background:none;border:none;color:var(--muted,#888);cursor:pointer;font-size:1.1em;padding:0 2px;" title="移除">&times;</button>
+    `;
+    const sel = div.querySelector(".drop-item-sel");
+    if (itemId) sel.value = itemId;
+    sel.addEventListener("change", () => attachDropRowThumb(sel));
+    return div;
+  }
+
   function buildDropsEditor(drops) {
     const rows = Array.isArray(drops) && drops.length ? drops : [];
-    const opts = buildItemSelectOptions();
-    const rowsHtml = rows.map(d => `
-      <div class="drop-row" style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
-        <select class="sheet-input drop-item-sel" style="flex:1;min-width:0;">
-          <option value="">-- 選道具 --</option>${opts}
-        </select>
-        <input class="sheet-input drop-chance" type="number" min="0" max="100" step="0.1" value="${d.chance||0}" style="width:62px;text-align:right;" />
-        <span style="font-size:0.8em;color:var(--muted,#888)">%</span>
-        <button type="button" class="drop-del-btn" style="background:none;border:none;color:var(--muted,#888);cursor:pointer;font-size:1.1em;padding:0 2px;" title="移除">&times;</button>
-      </div>
-    `).join("");
     const editor = document.createElement("div");
     editor.className = "drops-editor";
-    editor.innerHTML = rowsHtml +
-      `<button type="button" class="drop-add-btn button" style="padding:2px 8px;font-size:0.78em;margin-top:2px;">➕ 新增掘落</button>`;
-    const sels = editor.querySelectorAll(".drop-item-sel");
-    rows.forEach((d, i) => { if (sels[i]) sels[i].value = d.itemId || ""; });
-    editor.querySelector(".drop-add-btn").addEventListener("click", () => {
-      const div = document.createElement("div");
-      div.className = "drop-row";
-      div.style.cssText = "display:flex;gap:4px;align-items:center;margin-bottom:4px;";
-      div.innerHTML = `
-        <select class="sheet-input drop-item-sel" style="flex:1;min-width:0;">
-          <option value="">-- 選道具 --</option>${buildItemSelectOptions()}
-        </select>
-        <input class="sheet-input drop-chance" type="number" min="0" max="100" step="0.1" value="10" style="width:62px;text-align:right;" />
-        <span style="font-size:0.8em;color:var(--muted,#888)">%</span>
-        <button type="button" class="drop-del-btn" style="background:none;border:none;color:var(--muted,#888);cursor:pointer;font-size:1.1em;padding:0 2px;" title="移除">&times;</button>
-      `;
-      editor.insertBefore(div, editor.querySelector(".drop-add-btn"));
-    });
+    rows.forEach(d => editor.appendChild(makeDropRow(d.itemId || "", d.chance || 0)));
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "drop-add-btn button";
+    addBtn.style.cssText = "padding:2px 8px;font-size:0.78em;margin-top:2px;";
+    addBtn.textContent = "➕ 新增掘落";
+    editor.appendChild(addBtn);
+    addBtn.addEventListener("click", () => editor.insertBefore(makeDropRow(), addBtn));
     editor.addEventListener("click", e => {
       if (e.target.classList.contains("drop-del-btn")) e.target.closest(".drop-row").remove();
     });
