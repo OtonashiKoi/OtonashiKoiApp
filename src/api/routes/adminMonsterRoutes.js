@@ -65,7 +65,7 @@ function createAdminMonsterRoutes(serviceContext) {
         res.status(400).json(fail("INVALID_ARGUMENT", "找不到該序號的怪物"));
         return;
       }
-      const newState = { ...current, activeMonsterSeq: target.seq, currentHp: target.calc.maxHp };
+      const newState = { ...current, activeMonsterSeq: target.seq, currentHp: target.calc.maxHp, participants: [], damageMap: {} };
       await serviceContext.monsterService.saveState(newState);
       res.json(ok({ state: newState, active: target }, "monster state updated"));
     } catch (error) {
@@ -104,7 +104,7 @@ function createAdminMonsterRoutes(serviceContext) {
         res.status(400).json(fail("INVALID_ARGUMENT", "找不到該序號的怪物"));
         return;
       }
-      const newState = { ...current, activeMonsterSeq: target.seq, currentHp: target.calc.maxHp };
+      const newState = { ...current, activeMonsterSeq: target.seq, currentHp: target.calc.maxHp, participants: [], damageMap: {} };
       await serviceContext.monsterService.saveState(newState);
       res.json(ok({ state: newState, active: target }, "monster state updated"));
     } catch (error) {
