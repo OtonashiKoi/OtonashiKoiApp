@@ -659,10 +659,13 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const freshState = await sc.monsterService.getState(zoneKey);
   const finalDamageMap = { ...(freshState.damageMap || {}), ...mergedDmg };
 
-  const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false });
-  const sorted = [...allMonsters].sort((a, b) => a.seq - b.seq);
-  const idx = sorted.findIndex((m) => m.id === monster.id);
-  const nextMonster = sorted.length > 0 ? sorted[(idx + 1) % sorted.length] : null;
+  const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
+  // 加權隨機選下一隻（spawnRate 越高越常出現，預設 10）
+  const pool = allMonsters.filter(m => m.id !== monster.id || allMonsters.length === 1);
+  const totalWeight = pool.reduce((s, m) => s + (m.spawnRate || 10), 0);
+  let r = Math.random() * totalWeight;
+  let nextMonster = pool[pool.length - 1];
+  for (const m of pool) { r -= (m.spawnRate || 10); if (r <= 0) { nextMonster = m; break; } }
 
   const newState = {
     ...freshState,
