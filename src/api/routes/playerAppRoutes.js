@@ -38,12 +38,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         if (!process.env.DISCORD_CLIENT_SECRET) {
           return res.status(500).json({ status: "error", message: "後端尚未設定 DISCORD_CLIENT_SECRET，無法驗證真實的 Discord 登入" });
         }
+        // redirect_uri 必須與前端發起 OAuth 時一致，由前端傳入
+        const { redirect_uri } = req.body;
+        if (!redirect_uri) {
+          return res.status(400).json({ status: "error", message: "缺少 redirect_uri 參數" });
+        }
         const params = new URLSearchParams({
           client_id: process.env.DISCORD_CLIENT_ID,
           client_secret: process.env.DISCORD_CLIENT_SECRET,
           grant_type: 'authorization_code',
           code,
-          redirect_uri: "http://localhost:5173/"
+          redirect_uri
         });
 
         const tokenRes = await fetch("https://discord.com/api/oauth2/token", {

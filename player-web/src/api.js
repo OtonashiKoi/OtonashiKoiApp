@@ -51,10 +51,13 @@ async function fetchWithAuth(endpoint, options = {}) {
 }
 
 export const api = {
-  // 驗證 Discord Code 取得 Token
+  // 驗證 Discord Code 取得 Token（redirect_uri 必須與 OAuth 發起時一致）
   loginWithDiscord: (code) => fetchWithAuth("/auth/discord", {
     method: "POST",
-    body: JSON.stringify({ code })
+    body: JSON.stringify({
+      code,
+      redirect_uri: `${window.location.origin}${window.location.pathname}`
+    })
   }),
 
   // 取得玩家個人資料、數值、錢包
