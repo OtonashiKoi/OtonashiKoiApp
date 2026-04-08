@@ -168,9 +168,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     for (const match of matches) {
       const userId = match[1];
       try {
+        // 先從 playerRepository 找
+        let playerName = null;
         const player = await serviceContext.playerRepository.findByPlayerId(userId);
         if (player) {
-          resolvedText = resolvedText.replace(match[0], `[@${player.displayName}]`);
+          playerName = player.displayName;
+        } else if (serviceContext.progressRepository) {
+          // 如果找不到，從 progressRepository (戰鬥系統常用) 找
+          const progress = await serviceContext.progressRepository.findByPlayerId(userId);
+          if (progress) playerName = progress.displayName;
+        }
+
+        if (playerName) {
+          resolvedText = resolvedText.replace(match[0], `[@${playerName}]`);
         }
       } catch (err) {
         // 找不到則維持原樣
