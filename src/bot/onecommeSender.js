@@ -1,4 +1,5 @@
-const ONECOMME_API = "http://127.0.0.1:11180/api/comments";
+const ONECOMME_API_URL = process.env.ONECOMME_API_URL || "http://127.0.0.1:11180";
+const ONECOMME_API = `${ONECOMME_API_URL}/api/comments`;
 
 function makeId(prefix = "id") {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
@@ -9,7 +10,7 @@ async function sendComment({ service = "postman", displayName = "系統", commen
   let serviceId = String(service);
   let serviceName = String(service);
   try {
-    const svcRes = await fetch("http://127.0.0.1:11180/api/services");
+    const svcRes = await fetch(`${ONECOMME_API_URL}/api/services`);
     if (svcRes.ok) {
       const services = await svcRes.json();
       const found = services.find((s) => {

@@ -4,7 +4,7 @@
 
 const WebSocket = require("ws");
 
-const ONECOMME_WS_URL = "ws://127.0.0.1:11180/sub";
+const ONECOMME_WS_URL = process.env.ONECOMME_WS_URL || "ws://127.0.0.1:11180/sub";
 const RECONNECT_DELAY_MS = 5000;
 
 /**

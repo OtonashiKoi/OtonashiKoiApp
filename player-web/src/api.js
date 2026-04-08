@@ -1,8 +1,8 @@
-// API Client for Web App
-// 負責處理所有的後端通訊，包含自動夾帶 JWT Token
+import remoteConfig from './config.json';
 
-// 自動偵測 API 來源：優先使用環境變數，其次嘗試當前主機，最後預設 localhost
+// 自動偵測 API 來源：1. 環境變數 2. config.json 3. 當前主機 4. 預設 localhost
 export const API_ORIGIN = import.meta.env.VITE_API_URL || 
+                   remoteConfig.remoteApiUrl ||
                    (window.location.hostname !== 'localhost' ? `https://${window.location.hostname}` : 'http://localhost:5566');
 const API_BASE = `${API_ORIGIN}/api`;
 
