@@ -11,8 +11,11 @@ const rootDir = path.join(__dirname, '..');
 
 console.log('🌐 [1/4] 正在啟動自動化隧道 (Localtunnel)...');
 
-// 啟動 localtunnel
-const lt = spawn('npx', ['lt', '--port', '5566'], { shell: true, cwd: rootDir });
+// 啟動 localtunnel (使用本地安裝的版本)
+const lt = spawn('npx', ['lt', '--port', '5566'], { 
+  shell: true, 
+  cwd: rootDir 
+});
 
 let urlFound = false;
 
