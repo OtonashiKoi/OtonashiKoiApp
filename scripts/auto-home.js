@@ -1,55 +1,42 @@
 /**
- * 終極懶人開服腳本 (Auto Home)
- * 作用：自動啟動隧道 -> 自動同步 GitHub -> 自動重啟 PM2
- * 使用方式：npm run auto-home
+ * 終極懶人開服腳本 (Auto Home) v2.0
+ * 作用：直接調用 localtunnel 庫，確保連線穩定不中斷
  */
 
+const localtunnel = require('localtunnel');
 const { spawn } = require('child_process');
 const path = require('path');
 
 const rootDir = path.join(__dirname, '..');
 
-console.log('🌐 [1/4] 正在啟動自動化隧道 (Localtunnel)...');
+(async () => {
+  console.log('🌐 [1/4] 正在啟動內嵌式隧道 (Localtunnel)...');
 
-// 啟動 localtunnel (使用本地安裝的版本)
-const lt = spawn('npx', ['lt', '--port', '5566'], { 
-  shell: true, 
-  cwd: rootDir 
-});
+  try {
+    // 直接調用 library 而不是 spawn 指令
+    const tunnel = await localtunnel({ port: 5566 });
 
-let urlFound = false;
-
-lt.stdout.on('data', (data) => {
-  const output = data.toString();
-  console.log(`   📡 [Tunnel]: ${output.trim()}`);
-
-  // 搜尋 https://xxxx.loca.lt 格式的網址
-  const match = output.match(/https:\/\/[^\s]+/);
-  if (match && !urlFound) {
-    const tunnelUrl = match[0];
-    urlFound = true;
-    console.log(`\n✅ 成功取得隧道網址: ${tunnelUrl}`);
+    console.log(`\n✅ 成功取得隧道網址: ${tunnel.url}`);
+    console.log(`📢 玩家連線網址: ${tunnel.url}`);
     
-    startSync(tunnelUrl);
+    // 監聽關閉事件
+    tunnel.on('close', () => {
+      console.log('\n🛑 隧道已關閉，請重啟腳本以恢復連線。');
+      process.exit(0);
+    });
+
+    // 啟動同步連鎖
+    startSync(tunnel.url);
+
+  } catch (err) {
+    console.error('❌ 啟動隧道失敗:', err.message);
+    process.exit(1);
   }
-});
+})();
 
-lt.stderr.on('data', (data) => {
-  console.error(`   ⚠️  [Tunnel Error]: ${data}`);
-});
-
-lt.on('close', (code) => {
-  console.log(`\n🛑 隧道已關閉 (Code: ${code})`);
-  process.exit(code);
-});
-
-/**
- * 執行同步與啟動
- */
 function startSync(url) {
   console.log('🚀 [2/4] 正在啟動自動化同步連鎖...');
   
-  // 呼叫我們之前寫好的 launch-home.js
   const sync = spawn('node', ['scripts/launch-home.js', url], { 
     stdio: 'inherit', 
     shell: true,
@@ -59,13 +46,10 @@ function startSync(url) {
   sync.on('close', (code) => {
     if (code === 0) {
       console.log('\n✨ [4/4] 全自動開服程序已圓滿完成！');
-      console.log('📢 玩家可以連線了。請維持此視窗開啟以保持連線。');
+      console.log('📢 伺服器運作中。請維持此視窗開啟以保持連線。');
       console.log('💡 若要停止服務，請按下 Ctrl+C。');
-      
-      // 保持程序運行，不讓它退出，這樣隧道才會持續開啟
-      setInterval(() => {}, 1000 * 60 * 60); 
     } else {
-      console.error(`\n❌ 同步程序出錯 (Code: ${code})，但隧道仍嘗試維持開啟。`);
+      console.error(`\n❌ 同步程序出錯 (Code: ${code})，但隧道仍維持開啟供您檢查。`);
     }
   });
 }
