@@ -88,6 +88,29 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
   }
 }
 
+async function _announceGroupBonus(sc, luckyDiscordId, luckyName, monsterName, bonusItems, participantCount) {
+  try {
+    const { getBotClient } = require("../runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady()) return;
+    const layout = await sc.channelLayoutRepository.get();
+    const allBindings = layout?.discord?.bindings || [];
+    const binding = allBindings.find((b) => b.featureKey === "town_chat") ||
+                    allBindings.find((b) => b.featureKey === "monster_zone");
+    if (!binding?.channelId) return;
+    const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+    if (!channel?.isTextBased?.()) return;
+    const itemList = bonusItems.join("、");
+    await channel.send(
+      `🌟🍀✨ **【${participantCount} 人加碼幸運獎】** ✨🍀🌟\n` +
+      `**<@${luckyDiscordId}>** 在這場 **${participantCount} 人** 的史詩戰鬥中被神秘力量選中！\n` +
+      `運氣好到不得了，額外獲得了 **${itemList}**！🎊`
+    );
+  } catch (e) {
+    console.error("[MonsterZone] group bonus announce error", e);
+  }
+}
+
 // ──────────────────────────────────────────────
 // 輔助：重發公開面板
 // ──────────────────────────────────────────────
@@ -611,6 +634,56 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           _announceDrops(sc, pid, pidName, monster.name, droppedItems, false).catch(() => {});
         } else {
           _announceDrops(sc, pid, pidName, monster.name, droppedItems, true).catch(() => {});
+        }
+      }
+    }
+
+    // 10 人加碼幸運獎：抽 1 人強制骰一次額外掉落（跳過先決機率）
+    if (participants.length >= 10) {
+      const luckyIdx = Math.floor(Math.random() * participants.length);
+      const luckyPid = participants[luckyIdx];
+      const luckyProg = progressCache[luckyPid];
+      if (luckyProg) {
+        if (!Array.isArray(luckyProg.inventory)) luckyProg.inventory = [];
+        const bonusItems = [];
+        for (const drop of monster.drops) {
+          if (Math.random() * 100 < drop.chance) {
+            const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
+            if (item) {
+              luckyProg.inventory.push({
+                uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
+                itemEffect: item.effect || { type: "none", value: 0 },
+                itemType: item.itemType || "consumable",
+                imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
+                equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
+                weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+                source: "group_bonus_drop", sourceRef: monster.name,
+                purchasedAt: new Date().toISOString()
+              });
+              bonusItems.push(item.name);
+            }
+          }
+        }
+        if (bonusItems.length > 0) {
+          luckyProg.updatedAt = new Date().toISOString();
+          await sc.progressRepository.save(luckyProg);
+          const luckyName = luckyPid === discordId ? displayName : (mergedDmg[luckyPid]?.name || luckyPid);
+          if (luckyPid === discordId) {
+            rewardLines.push(`🌟🍀 **【${participants.length} 人加碼幸運獎】** 你被神秘力量選中，運氣好到不得了！\n🎁 額外獲得：${bonusItems.join("、")}`);
+          } else {
+            try {
+              const { getBotClient } = require("../runtimeContext");
+              const client = getBotClient();
+              const user = await client.users.fetch(luckyPid);
+              await user.send(
+                `🌟🍀✨ **【${participants.length} 人加碼幸運獎】**\n` +
+                `**${monster.name}** 的戰鬥共有 **${participants.length} 人** 參戰！\n` +
+                `你被神秘力量選中，運氣好到不得了！\n` +
+                `🎁 額外獲得：**${bonusItems.join("、")}**`
+              );
+            } catch (_) { /* DM 關閉跳過 */ }
+          }
+          _announceGroupBonus(sc, luckyPid, luckyName, monster.name, bonusItems, participants.length).catch(() => {});
         }
       }
     }
