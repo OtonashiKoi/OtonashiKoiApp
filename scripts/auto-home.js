@@ -48,6 +48,11 @@ function startSync(url) {
       console.log('\n✨ [4/4] 全自動開服程序已圓滿完成！');
       console.log('📢 伺服器運作中。請維持此視窗開啟以保持連線。');
       console.log('💡 若要停止服務，請按下 Ctrl+C。');
+
+      // 強制程序保持運行，不讓它退出
+      setInterval(() => {
+        // 每小時印一點東西，確保您知道它還活著
+      }, 1000 * 60 * 60);
     } else {
       console.error(`\n❌ 同步程序出錯 (Code: ${code})，但隧道仍維持開啟供您檢查。`);
     }
