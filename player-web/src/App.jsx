@@ -264,19 +264,25 @@ function InventoryTab() {
         </div>
       )}
 
-      {/* 圖片大圖預覽 (點擊全螢幕關閉，長按可儲存) */}
+      {/* 圖片大圖預覽 (點擊背景關閉，長按可儲存) */}
       {previewImage && (
         <div 
           className="modal-overlay" 
           onClick={() => setPreviewImage(null)} 
-          style={{ background: 'rgba(0,0,0,0.9)', zIndex: 3000, cursor: 'zoom-out', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ background: 'rgba(0,0,0,0.92)', zIndex: 3000, cursor: 'zoom-out', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <img 
             src={previewImage} 
             alt="Preview" 
-            style={{ maxWidth: '95vw', maxHeight: '95vh', borderRadius: '4px', boxShadow: '0 0 40px rgba(0,0,0,0.8)', cursor: 'zoom-in' }} 
+            style={{ maxWidth: '95vw', maxHeight: '95vh', borderRadius: '4px', boxShadow: '0 0 50px rgba(0,0,0,0.9)', cursor: 'default' }} 
+            onClick={(e) => e.stopPropagation()} /* 防止點擊圖片本身時關閉，解決電腦模式衝突 */
           />
-          <div style={{ position: 'absolute', top: '20px', right: '20px', color: '#fff', fontSize: '30px', cursor: 'pointer' }}>&times;</div>
+          <div 
+            style={{ position: 'absolute', top: '20px', right: '20px', color: '#fff', fontSize: '36px', cursor: 'pointer', textShadow: '0 0 10px rgba(0,0,0,0.5)', zIndex: 10 }}
+            onClick={() => setPreviewImage(null)}
+          >
+            &times;
+          </div>
         </div>
       )}
     </div>
