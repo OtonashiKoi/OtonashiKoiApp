@@ -50,9 +50,10 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     atk:                Math.round(baseStat * mult),
     attackCount,
     monsterAttackCount: cfg.monsterAtk ?? 1,        // 法杖裝備者每回合受兩次攻擊
+    absoluteHit:        cfg.absoluteHit ?? false,    // 法杖：無視怪物閃避
     def:                V,                           // VIT（含裝備加成）= 防禦
     dodge:              Math.min(50,  A * 0.5),
-    hit:                cfg.absoluteHit ? 100 : Math.min(100, 80 + D), // 法杖絕對命中
+    hit:                Math.min(100, 80 + D),
     crit:               Math.min(100, L * 0.3),      // LUK → 爆擊%
     combo:              Math.min(80,  3 + A * 0.3 + (cfg.comboBonus ?? 0)), // 匕首+20%
     weaponType:         wt || null

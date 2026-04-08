@@ -360,9 +360,10 @@ async function handleStartFight(interaction) {
 
       // 玩家攻擊（雙持武器攻擊兩次，各自判定命中/暴擊）
       const attackCount = session.playerStats.attackCount || 1;
+      const absoluteHit = session.playerStats.absoluteHit || false;
       for (let a = 0; a < attackCount && outcome === null; a++) {
         const hitChance = session.playerStats.hit - session.monsterStats.dodge;
-        if (Math.random() * 100 < hitChance) {
+        if (absoluteHit || Math.random() * 100 < hitChance) {
           let dmg = rollDmg(Math.max(1, session.playerStats.atk - session.monsterStats.def));
           const isCrit = Math.random() * 100 < session.playerStats.crit;
           if (isCrit) dmg = Math.round(dmg * 1.5);
