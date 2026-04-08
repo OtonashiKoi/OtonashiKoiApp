@@ -3,6 +3,10 @@ const jwt = require("jsonwebtoken");
 const { ok } = require("../../shared/response");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 
+// 戰鬥冷卻鎖（記憶體，key: discordId, value: { zone, nextBattleAt }）
+// 冷卻時間 = 前端動畫播完所需時間（logs 數 × 700ms + 2s），防止重整繞過
+const playerBattleCooldowns = new Map();
+
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
 
@@ -117,17 +121,22 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       
-      // Calculate missing EXP
-      const isMaxLevel = (progress?.level || 1) >= 99; // Assume 99 or use consts if exported
+      const { expToNextLevel, MAX_LEVEL } = require("../../shared/progression");
+      const lv = progress?.level || 1;
+      const isMaxLevel = lv >= MAX_LEVEL;
+      const nextLevelExp = isMaxLevel ? null : expToNextLevel(lv);
 
       res.json(ok({
         player: profileResult.player,
         wallet: walletResult.wallet,
         progress: {
-          level: progress?.level || 1,
+          level: lv,
+          maxLevel: MAX_LEVEL,
           jobLevel: progress?.jobLevel || 1,
           job: progress?.job || "Novice",
           exp: progress?.exp || 0,
+          nextLevelExp,
+          isMaxLevel,
           statusPoints: progress?.statusPoints || 0,
           playerTier: progress?.playerTier || "E",
           attributes: attrs,
@@ -469,6 +478,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           .sort((a, b) => b.damage - a.damage)
           .slice(0, 10);
 
+        const cooldown = playerBattleCooldowns.get(req.playerRecord.discordId);
+        const nextBattleAt = (cooldown && cooldown.nextBattleAt > Date.now()) ? cooldown.nextBattleAt : null;
+
         return {
           zone: key,
           monsterName: activeMonster?.name || "未知",
@@ -482,6 +494,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
           activeMonsterSeq: state.activeMonsterSeq,
           damageLeaderboard,
+          nextBattleAt,
         };
       }));
       res.json(ok(results));
@@ -495,6 +508,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId, displayName } = req.playerRecord;
       const zoneKey = req.body.zone === "mid" ? "mid" : "normal";
+
+      // 冷卻鎖：上次戰鬥動畫未結束前不可再出戰
+      const cd = playerBattleCooldowns.get(discordId);
+      if (cd && cd.nextBattleAt > Date.now()) {
+        const secsLeft = Math.ceil((cd.nextBattleAt - Date.now()) / 1000);
+        return res.status(429).json({ status: "error", message: `戰鬥冷卻中，請等待 ${secsLeft} 秒後再出戰。` });
+      }
       
       const [stateRaw, monsters] = await Promise.all([
         serviceContext.monsterService.getState(zoneKey),
@@ -635,6 +655,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         _republishPanel(serviceContext, zoneKey, monster, mHp, currentParticipants.length, damageMap).catch(() => {});
       }
 
+      // 設定冷卻：動畫播放時間 = 回合日誌數 × 700ms + 2000ms 緩衝
+      const animDurationMs = roundLogs.length * 700 + 2000;
+      const nextBattleAt = Date.now() + animDurationMs;
+      playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
+      // 自動清理（避免 Map 無限增長）
+      setTimeout(() => {
+        const entry = playerBattleCooldowns.get(discordId);
+        if (entry && entry.nextBattleAt <= Date.now()) playerBattleCooldowns.delete(discordId);
+      }, animDurationMs + 5000);
+
       res.json(ok({
         outcome,
         monsterName: monster.name,
@@ -642,7 +672,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         rewardLines,
         totalDamage,
         finalPlayerHp: Math.max(0, pHp),
-        finalMonsterHp: Math.max(0, mHp)
+        finalMonsterHp: Math.max(0, mHp),
+        nextBattleAt,
       }));
 
     } catch (err) {

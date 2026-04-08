@@ -13,6 +13,7 @@ const Icons = {
   Discord: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"/></svg>,
   CheckCircle: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
   Settings: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
+  More: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>,
 };
 
 // ===== Discord 登入畫面 =====
@@ -472,7 +473,7 @@ const calcPlayerStats = (attrs = {}, equipped = {}) => {
   };
 };
 
-function ProfileTab() {
+function ProfileTab({ onOpenSettings }) {
   const [data, setData] = useState(null);
   const [inventory, setInventory] = useState(null);
   const [swappingSlot, setSwappingSlot] = useState(null); // { slotKey, label }
@@ -546,10 +547,57 @@ function ProfileTab() {
           <p style={{ margin: 0, fontSize: '13px', color: 'var(--muted)', fontWeight: 600 }}>冒險者檔案 Profile</p>
           <h2 style={{ fontSize: '1.8rem' }}>{player.displayName}</h2>
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+          <button onClick={onOpenSettings} style={{
+            background: 'transparent', border: '1px solid var(--glass-border)',
+            color: 'var(--muted)', borderRadius: '8px', padding: '5px 8px',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+            fontSize: '12px', transition: 'all 0.2s',
+          }}
+            onMouseOver={e => { e.currentTarget.style.color = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; }}
+            onMouseOut={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.borderColor = 'var(--glass-border)'; }}
+          >
+            <Icons.Settings />
+          </button>
           <span style={{ display: 'inline-block', background: 'var(--accent-light)', color: 'var(--accent-strong)', padding: '4px 12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{progress.playerTier} 級玩家</span>
         </div>
       </header>
+
+      {/* 等級 & EXP */}
+      <div className="card" style={{ padding: '14px 16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: '22px', color: 'var(--gold-bright)', fontWeight: 700 }}>
+              Lv. {progress.level}
+            </span>
+            {progress.isMaxLevel && (
+              <span style={{ fontSize: '11px', color: 'var(--gold)', background: 'var(--gold-dim)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--glass-border)' }}>MAX</span>
+            )}
+          </div>
+          <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
+            {progress.isMaxLevel
+              ? '已達最高等級'
+              : `${progress.exp} / ${progress.nextLevelExp} EXP`}
+          </span>
+        </div>
+        {!progress.isMaxLevel && (
+          <div style={{ height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${Math.min(100, Math.round((progress.exp / progress.nextLevelExp) * 100))}%`,
+              background: 'linear-gradient(to right, var(--gold), var(--gold-bright))',
+              borderRadius: '3px',
+              transition: 'width 0.6s ease',
+              boxShadow: '0 0 8px var(--gold-glow)',
+            }} />
+          </div>
+        )}
+        {!progress.isMaxLevel && (
+          <div style={{ marginTop: '4px', fontSize: '10px', color: 'var(--muted)', textAlign: 'right' }}>
+            還差 {progress.nextLevelExp - progress.exp} EXP 升級
+          </div>
+        )}
+      </div>
 
       {/* 錢包 */}
       <div className="stat-grid" style={{ marginBottom: '16px' }}>
@@ -928,6 +976,9 @@ function CombatTab() {
   const [battleState, setBattleState] = useState(null);
   const [isBattling, setIsBattling] = useState(false);
   const [zones, setZones] = useState([]);
+  // nextBattleAt: timestamp from server (ms). null = no cooldown.
+  const [nextBattleAt, setNextBattleAt] = useState(null);
+  const [cdSecs, setCdSecs] = useState(0);
   const logsEndRef = React.useRef(null);
 
   useEffect(() => {
@@ -938,8 +989,28 @@ function CombatTab() {
     return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
+  // Countdown ticker
+  useEffect(() => {
+    if (!nextBattleAt) return;
+    const tick = () => {
+      const left = Math.ceil((nextBattleAt - Date.now()) / 1000);
+      if (left <= 0) { setNextBattleAt(null); setCdSecs(0); }
+      else setCdSecs(left);
+    };
+    tick();
+    const t = setInterval(tick, 500);
+    return () => clearInterval(t);
+  }, [nextBattleAt]);
+
   const fetchZones = () => {
-    api.getCombatZones().then(setZones).catch(console.error);
+    api.getCombatZones().then(data => {
+      setZones(data);
+      // Sync cooldown from server (in case of page refresh)
+      const serverCd = data.find(z => z.nextBattleAt)?.nextBattleAt ?? null;
+      if (serverCd && serverCd > Date.now()) {
+        setNextBattleAt(prev => (!prev || serverCd > prev) ? serverCd : prev);
+      }
+    }).catch(console.error);
   };
 
   useEffect(() => {
@@ -948,16 +1019,22 @@ function CombatTab() {
     return () => clearInterval(timer);
   }, []);
 
+  const isOnCooldown = nextBattleAt && nextBattleAt > Date.now();
+
   const startBattle = async (zone) => {
+    if (isBattling || isOnCooldown) return;
     try {
       setIsBattling(true);
       setBattleState({ logs: ["⚔️ 正在前往戰區..."], visibleLogs: ["⚔️ 正在前往戰區..."] });
       const result = await api.quickBattle(zone);
-      
+
+      // Apply server cooldown immediately
+      if (result.nextBattleAt) setNextBattleAt(result.nextBattleAt);
+
       const logs = result.logs;
       setBattleState({ ...result, visibleLogs: [] });
       let currentIdx = 0;
-      
+
       const interval = setInterval(() => {
         try {
           if (currentIdx < logs.length) {
@@ -985,7 +1062,7 @@ function CombatTab() {
           setIsBattling(false);
         }
       }, 700);
-      
+
       fetchZones(); // Update zones immediately after start
     } catch (err) {
       console.error("Combat API Error:", err);
@@ -1153,14 +1230,14 @@ function CombatTab() {
               </div>
             )}
 
-            <button className="btn" disabled={isBattling} onClick={() => startBattle(z.key)} style={{
+            <button className="btn" disabled={isBattling || isOnCooldown} onClick={() => startBattle(z.key)} style={{
               borderColor: z.color,
-              color: z.color,
-              background: isBattling ? 'transparent' : `${z.color}10`,
+              color: isOnCooldown ? 'var(--muted)' : z.color,
+              background: (isBattling || isOnCooldown) ? 'transparent' : `${z.color}10`,
               fontWeight: 'bold',
               letterSpacing: '1px'
             }}>
-              {isBattling ? '戰鬥中...' : '⚔️ 進入該區域出戰'}
+              {isBattling ? '戰鬥中...' : isOnCooldown ? `⏳ 冷卻中 ${cdSecs}s` : '⚔️ 進入該區域出戰'}
             </button>
           </div>
         );
@@ -1592,7 +1669,7 @@ function ChatTab() {
       {/* 表情/貼圖選擇器 */}
       {showPicker && (
         <div style={{
-          position: 'absolute', bottom: 'calc(var(--nav-height) + 70px)', left: '12px', right: '12px',
+          position: 'absolute', bottom: '58px', left: '12px', right: '12px',
           background: 'rgba(6,8,15,0.97)', border: '1px solid var(--glass-border)',
           borderRadius: '12px', zIndex: 50, overflow: 'hidden',
           boxShadow: '0 -8px 32px rgba(0,0,0,0.6)',
@@ -1684,9 +1761,7 @@ function ChatTab() {
 // ===== 設定分頁 =====
 function SettingsTab({ audioRef, bgmMuted, onToggleBgm, volume, onVolumeChange, onLogout }) {
   return (
-    <div className="app-screen" style={{ gap: '16px' }}>
-      <h2 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>設定</h2>
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* 音樂區塊 */}
       <div className="card" style={{ marginBottom: 0 }}>
         <p style={{ margin: '0 0 14px', fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>背景音樂</p>
@@ -1733,6 +1808,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [isInitializing, setIsInitializing] = useState(true);
   const [loginError, setLoginError] = useState(null); // null | 'NOT_GUILD_MEMBER' | 'ERROR'
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showMoreDrawer, setShowMoreDrawer] = useState(false);
   const audioRef = useRef(null);
   const [bgmMuted, setBgmMuted] = useState(false);
   const [volume, setVolume] = useState(0.35);
@@ -1875,22 +1952,74 @@ export default function App() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
         {activeTab === 'home' && <HomeTab onNavigate={setActiveTab} />}
-        {activeTab === 'profile' && <ProfileTab />}
+        {activeTab === 'profile' && <ProfileTab onOpenSettings={() => setShowSettingsModal(true)} />}
         {activeTab === 'inventory' && <InventoryTab />}
         {activeTab === 'combat' && <CombatTab />}
         {activeTab === 'shop' && <ShopTab />}
         {activeTab === 'chat' && <ChatTab />}
-        {activeTab === 'settings' && (
-          <SettingsTab
-            audioRef={audioRef}
-            bgmMuted={bgmMuted}
-            onToggleBgm={toggleBgm}
-            volume={volume}
-            onVolumeChange={handleVolumeChange}
-            onLogout={handleLogout}
-          />
-        )}
       </div>
+
+      {/* 設定 Modal（A：從角色頁 ⚙️ 觸發）*/}
+      {showSettingsModal && (
+        <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxHeight: '70vh' }}>
+            <div className="modal-header">
+              <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: '14px', letterSpacing: '0.1em' }}>設定</span>
+              <button onClick={() => setShowSettingsModal(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>✕</button>
+            </div>
+            <div className="modal-body">
+              <SettingsTab
+                audioRef={audioRef}
+                bgmMuted={bgmMuted}
+                onToggleBgm={toggleBgm}
+                volume={volume}
+                onVolumeChange={handleVolumeChange}
+                onLogout={() => { setShowSettingsModal(false); handleLogout(); }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 更多抽屜（B：從導覽列 ··· 觸發）*/}
+      {showMoreDrawer && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={() => setShowMoreDrawer(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            position: 'absolute', bottom: 'var(--nav-height)', left: 0, right: 0,
+            background: 'rgba(8,10,22,0.98)', borderTop: '1px solid var(--glass-border)',
+            borderRadius: '16px 16px 0 0',
+            padding: '8px 0 4px',
+            boxShadow: '0 -8px 40px rgba(0,0,0,0.7)',
+            animation: 'modal-up 0.22s cubic-bezier(0.16,1,0.3,1)',
+          }}>
+            {/* 拖曳指示條 */}
+            <div style={{ width: '36px', height: '3px', background: 'rgba(200,169,110,0.25)', borderRadius: '2px', margin: '0 auto 12px' }} />
+            <p style={{ margin: '0 20px 8px', fontSize: '10px', color: 'var(--muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>更多功能</p>
+
+            {/* 設定入口 */}
+            <div onClick={() => { setShowMoreDrawer(false); setShowSettingsModal(true); }} style={{
+              display: 'flex', alignItems: 'center', gap: '14px',
+              padding: '14px 20px', cursor: 'pointer', transition: 'background 0.15s',
+            }}
+              onMouseOver={e => e.currentTarget.style.background = 'rgba(200,169,110,0.07)'}
+              onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ color: 'var(--gold)', display: 'flex' }}><Icons.Settings /></span>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>設定</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '1px' }}>音樂、音量、帳號</div>
+              </div>
+            </div>
+
+            <div style={{ height: '1px', background: 'var(--line)', margin: '0 20px' }} />
+
+            {/* 佔位：未來功能 */}
+            <div style={{ padding: '12px 20px', color: 'var(--muted)', fontSize: '12px', opacity: 0.4, letterSpacing: '0.05em' }}>
+              更多功能即將推出…
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="bottom-nav">
         <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
@@ -1917,9 +2046,9 @@ export default function App() {
           <Icons.Store />
           <span>商店</span>
         </div>
-        <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-          <Icons.Settings />
-          <span>設定</span>
+        <div className={`nav-item ${showMoreDrawer ? 'active' : ''}`} onClick={() => setShowMoreDrawer(d => !d)}>
+          <Icons.More />
+          <span>更多</span>
         </div>
       </nav>
     </div>
