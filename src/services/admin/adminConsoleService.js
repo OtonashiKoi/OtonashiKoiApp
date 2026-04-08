@@ -435,7 +435,7 @@ class AdminConsoleService {
           }
         }
       } catch (e) {
-        console.warn("[MonsterZone] channel cleanup failed:", e.message);
+        // suppressed
       }
       message = await channel.send(panelMsg);
     } else {

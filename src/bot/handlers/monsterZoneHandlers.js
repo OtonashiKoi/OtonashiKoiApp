@@ -63,7 +63,7 @@ async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
       } catch (_) { /* DM 關閉則跳過 */ }
     }
   } catch (e) {
-    console.error("[MonsterZone] notifyKillRewards error", e);
+    // suppressed
   }
 }
 
@@ -88,7 +88,7 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
       await channel.send(`🎉 ${displayName} (<@${discordId}>) 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
     }
   } catch (e) {
-    console.error("[MonsterZone] drop announce error", e);
+    // suppressed
   }
 }
 
@@ -111,7 +111,7 @@ async function _announceGroupBonus(sc, luckyDiscordId, luckyName, monsterName, b
       `運氣好到不得了，額外獲得了 **${itemList}**！🎊`
     );
   } catch (e) {
-    console.error("[MonsterZone] group bonus announce error", e);
+    // suppressed
   }
 }
 
@@ -259,7 +259,7 @@ async function handleEnterBattle(interaction) {
       if (binding?.channelId) {
         sc.adminConsoleService
           .publishMonsterZonePanel(binding.channelId, monster, monsterHp, { participantCount: newParticipants.length, damageMap: state.damageMap || {} })
-          .catch((e) => console.error("[MonsterZone] update panel error", e));
+          .catch(() => {});
       }
     }
 
@@ -285,7 +285,6 @@ async function handleEnterBattle(interaction) {
     );
     await interaction.editReply({ embeds: [embed], components: [row] });
   } catch (err) {
-    console.error("[MonsterZone] handleEnterBattle error", err);
     await interaction.editReply({ content: "❌ 出戰失敗，請稍後再試。" });
   }
 }
@@ -492,7 +491,6 @@ async function handleStartFight(interaction) {
     await interaction.editReply({ embeds: [embed], components: [row] });
     activeSessions.delete(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
   } catch (err) {
-    console.error("[MonsterZone] handleStartFight error", err);
     activeSessions.delete(discordId);
     await interaction.editReply({ content: "❌ 戰鬥發生錯誤，請稍後再試。", embeds: [], components: [] });
   }
@@ -518,24 +516,19 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // ── 並發雙殺防護：同一隻怪只允許一次結算 ──
   const killKey = `${zoneKey}:${monster.seq}`;
   try {
-    console.log(`[MonsterZone] handleMonsterKill ENTER ${killKey} by ${discordId}`);
     if (killInProgress.has(killKey)) {
-      console.log(`[MonsterZone] killInProgress already has ${killKey}, skipping`);
       // 另一位玩家已在結算中，此次擊殺視為無效，不重複發獎
       return rewardLines;
     }
     killInProgress.add(killKey);
   } catch (e) {
-    console.error('[MonsterZone] handleMonsterKill pre-lock error', e);
     return rewardLines;
   }
 
   try {
   // DB 層原子收付擊殺權（防止 PM2 雙進程重載期間雙重結算）
   const claimed = await sc.monsterRepository.claimKill(zoneKey, monster.seq);
-  console.log(`[MonsterZone] claimKill returned: ${claimed} for ${killKey}`);
   if (!claimed) {
-    console.log(`[MonsterZone] claimKill failed for ${killKey}, another process may have claimed it`);
     return rewardLines;
   }
 
@@ -579,7 +572,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone"
         });
         if (perPidRewards[pid]) perPidRewards[pid].gold = share;
-      } catch (e) { console.error("[MonsterZone] grantCurrency error", e); }
+      } catch (e) { /* suppressed */ }
     }
     const pct = Math.round(dmgRatio(discordId) * 100);
     const pen = levelPenalty(discordId);
@@ -609,7 +602,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         if (pid === discordId && expResult.levelUps > 0) {
           killerLvLine = ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}`;
         }
-      } catch (e) { console.error("[MonsterZone] grantExp error", e); }
+      } catch (e) { /* suppressed */ }
     }
     const pct = Math.round(dmgRatio(discordId) * 100);
     const pen = levelPenalty(discordId);
@@ -733,10 +726,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   if (nextMonster) {
     _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {})
-      .catch((e) => console.error("[MonsterZone] republish panel error", e));
+      .catch(() => {});
   } else {
     _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap)
-      .catch((e) => console.error("[MonsterZone] republish panel error", e));
+      .catch(() => {});
   }
 
   // 通知非擊殺者參戰獎勵（DM，擊殺者已在戰鬥 embed 看到）
