@@ -161,7 +161,17 @@ function createAdminConsoleRoutes(serviceContext) {
       const zone = (binding?.featureKey === "monster_zone_mid") ? "mid" : "normal";
       const state = await serviceContext.monsterService.getState(zone);
       const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone });
-      const activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq) || monsters[0] || null;
+      let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);
+      if (!activeMonster && monsters.length > 0) {
+        // activeMonsterSeq 與此 zone 怪物不符 → 修正並寫回 DB
+        activeMonster = monsters[0];
+        const correctedHp = activeMonster.calc.maxHp;
+        await serviceContext.monsterService.saveState(
+          { ...state, activeMonsterSeq: activeMonster.seq, currentHp: correctedHp, participants: [], damageMap: {} },
+          zone
+        );
+        state = { ...state, activeMonsterSeq: activeMonster.seq, currentHp: correctedHp };
+      }
       const currentHp = state.currentHp != null ? state.currentHp : (activeMonster?.calc?.maxHp ?? null);
       const participantCount = Array.isArray(state.participants) ? state.participants.length : 0;
       const result = await serviceContext.adminConsoleService.publishMonsterZonePanel(channelId, activeMonster, currentHp, { participantCount, cleanChannel: true });

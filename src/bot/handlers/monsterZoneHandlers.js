@@ -162,7 +162,17 @@ async function handleEnterBattle(interaction) {
       await interaction.editReply({ content: "❌ 目前沒有啟用中的怪物，請稍後再試。" });
       return;
     }
-    const monster = monsters.find((m) => m.seq === state.activeMonsterSeq) || monsters[0];
+    let monster = monsters.find((m) => m.seq === state.activeMonsterSeq);
+    if (!monster) {
+      // state.activeMonsterSeq 與現有區域怪物不符（首次或狀態過期）→ 同步到第一隻
+      monster = monsters[0];
+      const initHp = monster.calc.maxHp;
+      await sc.monsterService.saveState(
+        { ...state, activeMonsterSeq: monster.seq, currentHp: initHp },
+        zoneKey
+      );
+      state = { ...state, activeMonsterSeq: monster.seq, currentHp: initHp };
+    }
     const monsterHp = state.currentHp != null ? state.currentHp : monster.calc.maxHp;
 
     const progress = cachedProgress ?? await sc.progressRepository.findByPlayerId(discordId);
