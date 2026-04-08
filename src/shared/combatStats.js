@@ -24,7 +24,8 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
 
   const weapon      = equipped.weapon || null;
   const offhand     = equipped.shield || null;
-  const isDualWield = weapon && !weapon.isTwoHanded && offhand?.weaponType != null;
+  const OFFHAND_WEAPON_TYPES = new Set(["offhand_sword", "offhand_dagger", "offhand_mace"]);
+  const isDualWield = weapon && !weapon.isTwoHanded && offhand?.weaponType != null && OFFHAND_WEAPON_TYPES.has(offhand.weaponType);
   const mult        = isDualWield ? ATK_MULT_DUAL : ATK_MULT_1H;
   const attackCount = isDualWield ? 2 : 1;
 
