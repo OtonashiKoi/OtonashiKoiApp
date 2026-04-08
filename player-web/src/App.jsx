@@ -439,8 +439,8 @@ function CombatTab() {
       {battleState && (
         <div className="modal-overlay" onClick={(e) => {
           if (e.target === e.currentTarget && !isBattling) setBattleState(null);
-        }}>
-          <div className="modal-content">
+        }} style={{ alignItems: 'flex-start', paddingTop: 'env(safe-area-inset-top, 20px)', paddingBottom: '20px' }}>
+          <div className="modal-content" style={{ marginTop: '20px', maxHeight: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-header">
               <h3 style={{ fontSize: '1.1rem' }}>⚔️ 戰鬥紀錄</h3>
               <button 
