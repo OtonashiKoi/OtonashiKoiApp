@@ -750,4 +750,10 @@ async function handleMonsterZoneButton(interaction) {
   return true;
 }
 
-module.exports = { handleMonsterZoneButton, isMonsterZoneButton };
+module.exports = { 
+  handleMonsterZoneButton, 
+  isMonsterZoneButton,
+  handleMonsterKill,
+  _republishPanel,
+  activeSessions
+};

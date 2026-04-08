@@ -6,7 +6,7 @@ const { ok, fail } = require("../../shared/response");
 function createAdminPlayerRoutes(serviceContext) {
   const router = Router();
 
-  router.use((req, res, next) => {
+  router.use("/admin", (req, res, next) => {
     const authHeader = req.header("Authorization") || "";
     const token = authHeader.replace("Bearer ", "");
 

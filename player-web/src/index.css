@@ -1,0 +1,235 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap');
+
+:root {
+  --bg: #09090b; /* Zinc 950 */
+  --surface: #18181b; /* Zinc 900 */
+  --surface-hover: #27272a; /* Zinc 800 */
+  --line: #27272a;
+  --text: #f4f4f5; /* Zinc 50 */
+  --muted: #a1a1aa; /* Zinc 400 */
+  
+  --accent: #6366f1; /* Indigo 500 */
+  --accent-strong: #818cf8; /* Indigo 400 */
+  --accent-light: rgba(99, 102, 241, 0.15);
+  
+  --glass-bg: rgba(24, 24, 27, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  --nav-height: 70px;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--bg);
+  background-image: 
+    radial-gradient(circle at 50% -10%, rgba(99,102,241,0.1), transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(16,185,129,0.05), transparent 50%);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  display: flex;
+  justify-content: center;
+}
+
+/* App RWD Container (Simulate Phone on Web) */
+#root {
+  width: 100%;
+  max-width: 480px; /* Mobile constraints */
+  height: 100vh;
+  height: 100dvh; /* Modern browsers dynamic viewport */
+  position: relative;
+  background: var(--surface);
+  box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 防止整頁滾動 */
+}
+
+/* Base Styles */
+h1, h2, h3 { font-family: 'Outfit', sans-serif; margin: 0; }
+a { color: inherit; text-decoration: none; }
+
+/* Utilities */
+.btn {
+  background: var(--surface-hover);
+  color: var(--text);
+  border: 1px solid var(--glass-border);
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+.btn:hover { background: var(--line); }
+.btn:active { transform: translateY(2px); }
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.4);
+}
+.btn-primary:active { background: var(--accent-strong); }
+
+.app-screen {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  /* 不再需要底部 padding，因為主容器高度固定且導覽列是 flex item 或相對定位 */
+  animation: fade-in 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Bottom Nav */
+.bottom-nav {
+  height: var(--nav-height);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom);
+  flex-shrink: 0; /* 禁止導覽列縮小 */
+  z-index: 100;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s;
+  padding: 10px;
+  flex: 1;
+}
+
+.nav-item.active {
+  color: var(--accent-strong);
+}
+
+/* Modal System (For Combat etc.) */
+.modal-overlay {
+  position: absolute; /* 相對於 #root */
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-content {
+  background: var(--surface);
+  width: 100%;
+  max-width: 400px;
+  max-height: 80vh;
+  border-radius: 20px;
+  border: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  position: relative;
+  overflow: hidden;
+  animation: modal-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modal-up {
+  from { opacity: 0; transform: scale(0.9) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* Dashboard Elements */
+.card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.stat-box {
+  background: var(--surface-hover);
+  padding: 16px;
+  border-radius: 12px;
+}
+.stat-box small { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight:700;}
+.stat-box strong { display: block; font-size: 1.5rem; font-family: 'Outfit'; font-weight: 800; margin-top: 4px;}
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: var(--surface-hover);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+/* Resolved Mentions & Emojis */
+.mention {
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.chat-emoji {
+  height: 1.5rem;
+  vertical-align: middle;
+  margin: 0 2px;
+}
+
+.battle-emoji {
+  height: 1.2em;
+  vertical-align: middle;
+}
+

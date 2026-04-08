@@ -12,10 +12,16 @@ const { createAdminConsoleRoutes } = require("./routes/adminConsoleRoutes");
 const { createAdminPlayerRoutes } = require("./routes/adminPlayerRoutes");
 const { createAdminMonsterRoutes } = require("./routes/adminMonsterRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
+const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
+const cors = require("cors");
 
 // 建立 Express API 伺服器
-function createApiServer() {
+function createApiServer(discordClient) {
   const app = express();
+  
+  // 加上 CORS，允許 5173 (Vite 預設 port) 等前端存取
+  app.use(cors());
+  
   // 建立服務層上下文，供路由使用
   const serviceContext = createServiceContext();
 
@@ -35,6 +41,8 @@ function createApiServer() {
   app.use(createAdminPlayerRoutes(serviceContext));
   // 怪物管理路由
   app.use(createAdminMonsterRoutes(serviceContext));
+  // 玩家前端 WebApp 路由
+  app.use(createPlayerAppRoutes(serviceContext, discordClient));
 
   // 全域錯誤處理（捕捉所有未處理例外）
   app.use((error, _req, res, _next) => {

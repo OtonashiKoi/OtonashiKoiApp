@@ -26,7 +26,7 @@ async function bootstrap() {
   await loginBot(client);
 
   // 啟動 Express API 伺服器，監聽指定 port
-  const app = createApiServer();
+  const app = createApiServer(client);
   app.listen(config.api.port, () => {
     console.log(`[API] listening on port ${config.api.port}`);
     // 啟動時自動顯示管理後台網址
