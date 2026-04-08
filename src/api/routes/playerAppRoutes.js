@@ -170,7 +170,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       try {
         // 先從 playerRepository 找
         let playerName = null;
-        const player = await serviceContext.playerRepository.findByPlayerId(userId);
+        const player = await serviceContext.playerRepository.findByDiscordId(userId);
         if (player) {
           playerName = player.displayName;
         } else if (serviceContext.progressRepository) {
