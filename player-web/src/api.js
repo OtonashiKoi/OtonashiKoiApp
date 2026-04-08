@@ -1,7 +1,9 @@
 // API Client for Web App
 // 負責處理所有的後端通訊，包含自動夾帶 JWT Token
 
-export const API_ORIGIN = "http://localhost:5566";
+// 自動偵測 API 來源：優先使用環境變數，其次嘗試當前主機，最後預設 localhost
+export const API_ORIGIN = import.meta.env.VITE_API_URL || 
+                   (window.location.hostname !== 'localhost' ? `https://${window.location.hostname}` : 'http://localhost:5566');
 const API_BASE = `${API_ORIGIN}/api`;
 
 function getToken() {
@@ -15,7 +17,8 @@ export function setToken(token) {
 
 export function getDiscordLoginUrl() {
   const clientId = "1450019975031951370";
-  const redirectUri = encodeURIComponent("http://localhost:5173/");
+  // 自動適應當前網址作為 Redirect URI
+  const redirectUri = encodeURIComponent(`${window.location.protocol}//${window.location.host}/`);
   return `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify`;
 }
 

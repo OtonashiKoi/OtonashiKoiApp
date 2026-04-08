@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import { api, getDiscordLoginUrl, setToken, API_ORIGIN } from './api';
 import './index.css';
 
