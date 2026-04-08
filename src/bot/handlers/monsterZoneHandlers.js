@@ -668,21 +668,6 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           luckyProg.updatedAt = new Date().toISOString();
           await sc.progressRepository.save(luckyProg);
           const luckyName = luckyPid === discordId ? displayName : (mergedDmg[luckyPid]?.name || luckyPid);
-          if (luckyPid === discordId) {
-            rewardLines.push(`🌟🍀 **【${participants.length} 人加碼幸運獎】** 你被神秘力量選中，運氣好到不得了！\n🎁 額外獲得：${bonusItems.join("、")}`);
-          } else {
-            try {
-              const { getBotClient } = require("../runtimeContext");
-              const client = getBotClient();
-              const user = await client.users.fetch(luckyPid);
-              await user.send(
-                `🌟🍀✨ **【${participants.length} 人加碼幸運獎】**\n` +
-                `**${monster.name}** 的戰鬥共有 **${participants.length} 人** 參戰！\n` +
-                `你被神秘力量選中，運氣好到不得了！\n` +
-                `🎁 額外獲得：**${bonusItems.join("、")}**`
-              );
-            } catch (_) { /* DM 關閉跳過 */ }
-          }
           _announceGroupBonus(sc, luckyPid, luckyName, monster.name, bonusItems, participants.length).catch(() => {});
         }
       }
