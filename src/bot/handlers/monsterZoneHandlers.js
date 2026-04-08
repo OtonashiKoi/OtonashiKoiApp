@@ -83,9 +83,9 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
     const itemList = droppedItems.join("、");
     if (isLucky) {
-      await channel.send(`🍀 **<@${discordId}>** 在 ${timeStr} 參與戰鬥 **${monsterName}**，狗到了 **${itemList}**！`);
+      await channel.send(`🍀 **${displayName}** (<@${discordId}>) 在 ${timeStr} 參與戰鬥 **${monsterName}**，狗到了 **${itemList}**！`);
     } else {
-      await channel.send(`🎉 **<@${discordId}>** 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
+      await channel.send(`🎉 **${displayName}** (<@${discordId}>) 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
     }
   } catch (e) {
     console.error("[MonsterZone] drop announce error", e);
