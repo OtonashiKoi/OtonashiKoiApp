@@ -14,13 +14,24 @@ const { createAdminMonsterRoutes } = require("./routes/adminMonsterRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const cors = require("cors");
+const config = require("../config");
 
 // 建立 Express API 伺服器
 function createApiServer(discordClient) {
   const app = express();
-  
-  // 加上 CORS，允許 5173 (Vite 預設 port) 等前端存取
-  app.use(cors());
+
+  // CORS：只允許 .env 設定的來源 + localhost 開發用
+  // 設定方式：ALLOWED_ORIGINS=https://你的帳號.github.io
+  const devOrigins = ["http://localhost:5173", "http://localhost:4173"];
+  const allowedOrigins = [...devOrigins, ...(config.api.allowedOrigins || [])];
+  app.use(cors({
+    origin: (origin, callback) => {
+      // 無 origin（curl、Postman、server-to-server）或在白名單內才允許
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS blocked: ${origin}`));
+    },
+    credentials: true
+  }));
   
   // 建立服務層上下文，供路由使用
   const serviceContext = createServiceContext();

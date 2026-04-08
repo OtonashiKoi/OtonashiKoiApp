@@ -29,7 +29,8 @@ module.exports = {
   // API 伺服器設定
   api: {
     port: Number(process.env.API_PORT || 5566), // 監聽埠號
-    adminPassword: process.env.ADMIN_PASSWORD || "admin123" // 管理後台密碼
+    adminPassword: process.env.ADMIN_PASSWORD || "admin123", // 管理後台密碼
+    allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS) // CORS 允許的來源，逗號分隔
   },
   // 資料儲存設定
   storage: {

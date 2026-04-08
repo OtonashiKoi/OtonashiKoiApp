@@ -42,7 +42,7 @@ async function fetchWithAuth(endpoint, options = {}) {
   if (!response.ok || data.status !== "ok") {
     if (response.status === 401) {
       setToken(null);
-      window.location.href = "/";
+      window.location.href = import.meta.env.BASE_URL || '/';
     }
     throw new Error(data.message || "API 請求失敗");
   }
@@ -67,6 +67,7 @@ export const api = {
   useItem: (uuid) => fetchWithAuth(`/me/inventory/use/${uuid}`, { method: "POST" }),
   discardItem: (uuid) => fetchWithAuth(`/me/inventory/discard/${uuid}`, { method: "POST" }),
   equipItem: (uuid) => fetchWithAuth(`/me/inventory/equip/${uuid}`, { method: "POST" }),
+  unequipItem: (slotKey) => fetchWithAuth(`/me/inventory/unequip/${slotKey}`, { method: "POST" }),
 
   // ===== 商城系統 =====
   getShopItems: () => fetchWithAuth("/shop/items"),
@@ -86,9 +87,13 @@ export const api = {
   }),
   getChatHistory: () => fetchWithAuth("/chat/history"),
   
-  // 建立 Server-Sent Events 連線，不需要 token 因為是 GET，且後端未驗證
+  // 建立 Server-Sent Events 連線（EventSource 不支援 Header，以 query param 傳 token）
   createChatStream: (onMessage) => {
-    const eventSource = new EventSource(`${API_BASE}/chat/stream`);
+    const token = getToken();
+    const url = token
+      ? `${API_BASE}/chat/stream?token=${encodeURIComponent(token)}`
+      : `${API_BASE}/chat/stream`;
+    const eventSource = new EventSource(url);
     eventSource.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);

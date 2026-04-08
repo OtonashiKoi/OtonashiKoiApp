@@ -191,7 +191,7 @@ a { color: inherit; text-decoration: none; }
 
 /* Modal System (For Combat etc.) */
 .modal-overlay {
-  position: absolute; /* 相對於 #root */
+  position: fixed; /* 相對於 viewport，捲動後不跑位 */
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);

@@ -116,7 +116,8 @@ function createAdminConsoleRoutes(serviceContext) {
 
   router.post("/admin/shop/items", async (req, res, next) => {
     try {
-      const item = await serviceContext.shopService.createItem(req.body);
+      const { itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth } = req.body;
+      const item = await serviceContext.shopService.createItem({ itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth });
       res.json(ok(item, "shop item created"));
     } catch (error) {
       next(error);
@@ -125,7 +126,8 @@ function createAdminConsoleRoutes(serviceContext) {
 
   router.put("/admin/shop/items/:id", async (req, res, next) => {
     try {
-      const item = await serviceContext.shopService.updateItem(req.params.id, req.body);
+      const { itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, imageUrl, imageThumbnailUrl, weaponType, isTwoHanded } = req.body;
+      const item = await serviceContext.shopService.updateItem(req.params.id, { itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, imageUrl, imageThumbnailUrl, weaponType, isTwoHanded });
       res.json(ok(item, "shop item updated"));
     } catch (error) {
       next(error);

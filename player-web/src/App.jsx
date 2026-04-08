@@ -55,6 +55,16 @@ const getAssetUrl = (url) => {
   return `${API_ORIGIN}${path}`;
 };
 
+// HTML 特殊字元跳脫，防止 XSS
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const calcPlayerStats = (attrs = {}, equipped = {}) => {
   const { str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = attrs;
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
@@ -617,14 +627,16 @@ function CombatTab() {
     const parts = text.split('\n');
     return parts.map((line, idx) => {
       if (!line) return <br key={idx} />;
-      let formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      // 處理表情符號
-      formatted = formatted.replace(/<a?:(\w+):(\d+)>/g, (match, name, id) => {
-        return `<img src="https://cdn.discordapp.com/emojis/${id}.png" alt="${name}" class="battle-emoji" />`;
+      // 先跳脫 HTML，再套用允許的格式
+      let formatted = escapeHtml(line);
+      formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      // Discord 表情符號：跳脫後 <a:name:id> 變為 &lt;a:name:id&gt;
+      formatted = formatted.replace(/&lt;(a?):(\w+):(\d+)&gt;/g, (match, animated, name, id) => {
+        const ext = animated ? 'gif' : 'png';
+        return `<img src="https://cdn.discordapp.com/emojis/${id}.${ext}" alt=":${name}:" class="battle-emoji" />`;
       });
-      // 處理提到 (@)
+      // 提到 (@)
       formatted = formatted.replace(/\[@(.*?)\]/g, '<span class="mention">@$1</span>');
-      
       return <div key={idx} dangerouslySetInnerHTML={{ __html: formatted }} style={{ marginBottom: '4px' }} />;
     });
   };
@@ -793,7 +805,7 @@ function CombatTab() {
                       {Array.isArray(battleState.rewardLines) && battleState.rewardLines.map((line, i) => {
                         if (typeof line !== 'string') return null;
                         return (
-                          <div key={i} style={{ fontSize: '13px', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                          <div key={i} style={{ fontSize: '13px', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: escapeHtml(line).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
                         );
                       })}
                     </div>
@@ -1045,10 +1057,11 @@ function ChatTab() {
         {messages.map((m, idx) => {
           const isMe = m.author === myDisplayName || m.author === "Me";
           
-          // 解析 Discord 表情符號與提到
-          let parsedText = m.text.replace(/<a?:(\w+):(\d+)>/g, (match, name, id) => {
-             const isAnimated = match.startsWith('<a:');
-             return `<img src="https://cdn.discordapp.com/emojis/${id}.${isAnimated ? 'gif' : 'png'}" alt=":${name}:" class="chat-emoji" />`;
+          // 解析 Discord 表情符號與提到（先跳脫 HTML 防止 XSS）
+          let parsedText = escapeHtml(m.text);
+          parsedText = parsedText.replace(/&lt;(a?):(\w+):(\d+)&gt;/g, (match, animated, name, id) => {
+            const ext = animated ? 'gif' : 'png';
+            return `<img src="https://cdn.discordapp.com/emojis/${id}.${ext}" alt=":${name}:" class="chat-emoji" />`;
           });
           parsedText = parsedText.replace(/\[@(.*?)\]/g, '<span class="mention">@$1</span>');
 
@@ -1112,14 +1125,14 @@ export default function App() {
     if (authCode) {
       api.loginWithDiscord(authCode).then(data => {
         setToken(data.token);
-        // Clear url bar
-        window.history.replaceState({}, document.title, "/");
+        // Clear url bar，保留 GitHub Pages 的 base path
+        window.history.replaceState({}, document.title, import.meta.env.BASE_URL || '/');
         setIsAuthenticated(true);
         setIsInitializing(false);
       }).catch(err => {
         console.error("Login failed", err);
         alert("登入失敗！請確認有啟動後端 API 伺服器 (npm start)：\n" + err.message);
-        window.history.replaceState({}, document.title, "/");
+        window.history.replaceState({}, document.title, import.meta.env.BASE_URL || '/');
         setIsInitializing(false);
       });
     } else {

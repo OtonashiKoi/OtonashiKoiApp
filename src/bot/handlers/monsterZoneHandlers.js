@@ -572,7 +572,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone"
         });
         if (perPidRewards[pid]) perPidRewards[pid].gold = share;
-      } catch (e) { /* suppressed */ }
+      } catch (e) { console.error(`[MonsterZone] grantCurrency(gold) failed for ${pid}`, e); }
     }
     const pct = Math.round(dmgRatio(discordId) * 100);
     const pen = levelPenalty(discordId);
@@ -602,7 +602,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         if (pid === discordId && expResult.levelUps > 0) {
           killerLvLine = ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}`;
         }
-      } catch (e) { /* suppressed */ }
+      } catch (e) { console.error(`[MonsterZone] grantExp failed for ${pid}`, e); }
     }
     const pct = Math.round(dmgRatio(discordId) * 100);
     const pen = levelPenalty(discordId);
