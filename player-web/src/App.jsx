@@ -32,10 +32,11 @@ function LoginScreen() {
       <p style={{ color: 'var(--muted)', marginBottom: '48px' }}>Login to access your adventure</p>
       <button className="btn btn-primary" onClick={handleLogin} style={{ backgroundColor: '#5865F2' }}>
         <Icons.Discord />
-        使用 Discord ?�入
+        使用 Discord 登入
       </button>
       <p style={{ marginTop: '24px', fontSize: '12px', color: 'var(--muted)' }}>
-        ?�們�?使用 Discord OAuth2 安全?��?步您?��??�進度?��??��?      </p>
+        我們將使用 Discord OAuth2 安全地同步您的遊戲進度與背包。
+      </p>
     </div>
   );
 }
@@ -56,32 +57,32 @@ function ProfileTab() {
     <div className="app-screen">
       <header style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <p style={{ margin: 0, fontSize: '13px', color: 'var(--muted)', fontWeight: 600 }}>?�險?��?�?Profile</p>
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--muted)', fontWeight: 600 }}>冒險者檔案 Profile</p>
           <h2 style={{ fontSize: '1.8rem' }}>{player.displayName}</h2>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <span style={{ display: 'inline-block', background: 'var(--accent-light)', color: 'var(--accent-strong)', padding: '4px 12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{progress.playerTier} 級玩�?/span>
+          <span style={{ display: 'inline-block', background: 'var(--accent-light)', color: 'var(--accent-strong)', padding: '4px 12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{progress.playerTier} 級玩家</span>
         </div>
       </header>
 
       <div className="stat-grid" style={{ marginBottom: '20px' }}>
         <div className="stat-box">
-          <small>?�幣 Gold</small>
-          <strong>?�� {wallet.gold || 0}</strong>
+          <small>金幣 Gold</small>
+          <strong>💰 {wallet.gold || 0}</strong>
         </div>
         <div className="stat-box">
-          <small>?�石 Diamond</small>
-          <strong>?? {wallet.diamond || 0}</strong>
+          <small>鑽石 Diamond</small>
+          <strong>💎 {wallet.diamond || 0}</strong>
         </div>
       </div>
 
       <div className="card">
         <h3 style={{ marginBottom: '16px', fontSize: '1.2rem', display: 'flex', justifyContent: 'space-between' }}>
-          <span>角色?�??Status</span>
+          <span>角色狀態 Status</span>
         </h3>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--glass-border)' }}>
-          <span style={{ color: 'var(--muted)' }}>?�業 (Class)</span>
+          <span style={{ color: 'var(--muted)' }}>職業 (Class)</span>
           <strong>{progress.job || "Novice"}</strong>
         </div>
         
@@ -107,8 +108,8 @@ function ProfileTab() {
 
         <div style={{ background: 'var(--surface-hover)', padding: '16px', borderRadius: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h4 style={{ margin: 0, fontSize: '14px' }}>屬性�?�?(Attributes)</h4>
-            <span style={{ fontSize: '12px', background: 'var(--accent-strong)', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>?��?屬性�?: {progress.statusPoints}</span>
+            <h4 style={{ margin: 0, fontSize: '14px' }}>屬性配點 (Attributes)</h4>
+            <span style={{ fontSize: '12px', background: 'var(--accent-strong)', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>剩餘屬性點: {progress.statusPoints}</span>
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: '14px' }}>
@@ -139,15 +140,15 @@ function InventoryTab() {
   if (!inventory || inventory.length === 0) {
     return (
       <div className="app-screen">
-        <h2 style={{ marginBottom: '24px' }}>?��? Inventory</h2>
-        <div style={{ textAlign: 'center', color: 'var(--muted)', marginTop: '40px' }}>?��?空空如�?...</div>
+        <h2 style={{ marginBottom: '24px' }}>背包 Inventory</h2>
+        <div style={{ textAlign: 'center', color: 'var(--muted)', marginTop: '40px' }}>背包空空如也...</div>
       </div>
     );
   }
 
   return (
     <div className="app-screen">
-      <h2 style={{ marginBottom: '24px' }}>?��? Inventory</h2>
+      <h2 style={{ marginBottom: '24px' }}>背包 Inventory</h2>
       {inventory.map((item, idx) => (
         <div key={idx} className="list-item">
           <div>
@@ -157,7 +158,7 @@ function InventoryTab() {
             </h4>
             <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{item.itemType}</span>
           </div>
-          <button className="btn" style={{ width: 'auto', padding: '4px 12px', fontSize: '12px', marginLeft: '12px' }}>?��?</button>
+          <button className="btn" style={{ width: 'auto', padding: '4px 12px', fontSize: '12px', marginLeft: '12px' }}>操作</button>
         </div>
       ))}
     </div>
@@ -183,7 +184,7 @@ function CombatTab() {
   const startBattle = async (zone) => {
     try {
       setIsBattling(true);
-      setBattleState({ logs: ["?��? �?��?��??��?..."], visibleLogs: ["?��? �?��?��??��?..."] });
+      setBattleState({ logs: ["⚔️ 正在前往戰區..."], visibleLogs: ["⚔️ 正在前往戰區..."] });
       const result = await api.quickBattle(zone);
       
       const logs = result.logs;
@@ -225,7 +226,7 @@ function CombatTab() {
         ...(prev || {}),
         showResults: true,
         outcome: 'error',
-        rewardLines: ["?��? ?�戰?��??�誤�?, String(err.message || "?�知?��?")]
+        rewardLines: ["⚠️ 出戰發生錯誤：", String(err.message || "未知原因")]
       }));
       setIsBattling(false);
     }
@@ -237,11 +238,11 @@ function CombatTab() {
     return parts.map((line, idx) => {
       if (!line) return <br key={idx} />;
       let formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      // ?��?表�?符�?
+      // 處理表情符號
       formatted = formatted.replace(/<a?:(\w+):(\d+)>/g, (match, name, id) => {
         return `<img src="https://cdn.discordapp.com/emojis/${id}.png" alt="${name}" class="battle-emoji" />`;
       });
-      // ?��??�到 (@)
+      // 處理提到 (@)
       formatted = formatted.replace(/\[@(.*?)\]/g, '<span class="mention">@$1</span>');
       
       return <div key={idx} dangerouslySetInnerHTML={{ __html: formatted }} style={{ marginBottom: '4px' }} />;
@@ -252,13 +253,14 @@ function CombatTab() {
 
   return (
     <div className="app-screen" style={{ position: 'relative', height: '100%' }}>
-      <h2 style={{ marginBottom: '16px' }}>?�鬥?� Combat</h2>
+      <h2 style={{ marginBottom: '16px' }}>戰鬥區 Combat</h2>
       <p style={{ color: 'var(--muted)', fontSize: '13px', marginBottom: '20px', lineHeight: 1.5 }}>
-        ?��?你想?�戰?�地?��??�。隨?��?級�??��??�以�???�強大�??�?��?      </p>
+        選擇你想挑戰的地圖區域。隨著等級提升，可以解鎖更強大的區域。
+      </p>
 
       {[ 
-        { key: 'normal', name: '?��??�', lv: 'Lv.1 ~ 10', desc: '?��??�學?��??��?姆�?小�??�物?��??�?��?, color: 'var(--success)' },
-        { key: 'mid',    name: '次�??�', lv: 'Lv.11 ~ 30', desc: '?�危?��??�物巢穴，建議�??�好裝�??��?往??, color: 'var(--warn)' }
+        { key: 'normal', name: '新手區', lv: 'Lv.1 ~ 10', desc: '適合初學者的史萊姆與小型怪物出沒區域。', color: 'var(--success)' },
+        { key: 'mid',    name: '次級區', lv: 'Lv.11 ~ 30', desc: '更危險的怪物巢穴，建議準備好裝備再前往。', color: 'var(--warn)' }
       ].map(z => {
         const data = getZoneData(z.key);
         const hpPercent = data.maxHp > 0 ? (data.currentHp / data.maxHp) * 100 : 0;
@@ -279,36 +281,37 @@ function CombatTab() {
             {data.monsterName && (
               <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
-                  <span style={{ fontWeight: 'bold', color: '#fff' }}>?�� {data.monsterName}</span>
+                  <span style={{ fontWeight: 'bold', color: '#fff' }}>👾 {data.monsterName}</span>
                   <span style={{ color: 'var(--muted)' }}>{data.currentHp} / {data.maxHp} HP</span>
                 </div>
                 <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${hpPercent}%`, background: hpPercent > 30 ? z.color : '#e74c3c', transition: 'width 0.5s ease' }}></div>
                 </div>
                 <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '6px', textAlign: 'right' }}>
-                   {data.participantCount} 人正?��??�戰�?                </div>
+                   {data.participantCount} 人正在參與戰鬥
+                </div>
               </div>
             )}
 
             <button className="btn" disabled={isBattling} onClick={() => startBattle(z.key)} style={{ borderColor: z.color, color: z.color }}>
-              {isBattling ? '?�鬥準�?�?..' : '?�入該�??�出??}
+              {isBattling ? '戰鬥準備中...' : '進入該區域出戰'}
             </button>
           </div>
         );
       })}
 
-      {/* ?�鬥小�?彈出�?*/}
+      {/* 戰鬥小窗彈出層 */}
       {battleState && (
         <div className="modal-overlay" onClick={(e) => {
           if (e.target === e.currentTarget && !isBattling) setBattleState(null);
         }}>
           <div className="modal-content">
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem' }}>?��? ?�鬥紀??/h3>
+              <h3 style={{ fontSize: '1.1rem' }}>⚔️ 戰鬥紀錄</h3>
               <button 
                 onClick={() => setBattleState(null)}
                 style={{ background: 'var(--surface-hover)', border: 'none', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >??/button>
+              >✕</button>
             </div>
             
             <div className="modal-body">
@@ -330,9 +333,9 @@ function CombatTab() {
                     borderRadius: '16px', textAlign: 'center'
                   }}>
                     <h4 style={{ color: battleState.outcome === 'win' ? '#f1c40f' : '#e74c3c', margin: '0 0 12px 0', fontSize: '1.2rem' }}>
-                      {battleState.outcome === 'win' ? '?? ?�鬥?�利�? : 
-                       battleState.outcome === 'error' ? '??系統?�常' :
-                       battleState.outcome === 'lose' ? '?? ?�鬥失�?' : '?��? ?�略?�退'}
+                      {battleState.outcome === 'win' ? '🏆 戰鬥勝利！' : 
+                       battleState.outcome === 'error' ? '❌ 系統異常' :
+                       battleState.outcome === 'lose' ? '💀 戰鬥失敗' : '⏸️ 戰略撤退'}
                     </h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {Array.isArray(battleState.rewardLines) && battleState.rewardLines.map((line, i) => {
@@ -344,7 +347,8 @@ function CombatTab() {
                     </div>
                     {!isBattling && (
                       <button className="btn btn-primary" onClick={() => setBattleState(null)} style={{ marginTop: '20px', width: '100%', padding: '10px' }}>
-                        完�?並�???                      </button>
+                        完成並關閉
+                      </button>
                     )}
                   </div>
                 )}
@@ -378,17 +382,17 @@ function ShopTab() {
 
   const handleBuy = async (item) => {
     if (!wallet || wallet.gold < item.price) {
-      alert("?�幣不足�?);
+      alert("金幣不足！");
       return;
     }
     try {
-      if (confirm(`確�?要花�?${item.price} ?�幣購買 ${item.name} ?��?`)) {
+      if (confirm(`確定要花費 ${item.price} 金幣購買 ${item.name} 嗎？`)) {
         await api.buyShopItem(item.id);
-        alert(`?��?購買 ${item.name}!`);
+        alert(`成功購買 ${item.name}!`);
         loadData(); // Refresh list and wallet
       }
     } catch (err) {
-      alert("購買失�?: " + err.message);
+      alert("購買失敗: " + err.message);
     }
   };
 
@@ -397,33 +401,33 @@ function ShopTab() {
   return (
     <div className="app-screen" style={{ paddingBottom: 'calc(var(--nav-height) + 16px)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0 }}>?��? Market</h2>
-        {wallet && <div style={{ background: 'rgba(241, 196, 15, 0.2)', color: '#f1c40f', padding: '4px 12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>?�� {wallet.gold}</div>}
+        <h2 style={{ margin: 0 }}>商店 Market</h2>
+        {wallet && <div style={{ background: 'rgba(241, 196, 15, 0.2)', color: '#f1c40f', padding: '4px 12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>💰 {wallet.gold}</div>}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {items.length === 0 ? <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '40px 0' }}>?��?沒�?販售任�??��?，�?稍�??��???/p> : null}
+        {items.length === 0 ? <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '40px 0' }}>目前沒有販售任何商品，請稍後再來。</p> : null}
         
         {items.map(item => (
           <div key={item.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               <div style={{ width: '40px', height: '40px', background: 'var(--surface-hover)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', overflow: 'hidden' }}>
-                {item.imageUrl ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : '?��'}
+                {item.imageUrl ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : '📦'}
               </div>
               <div>
                 <h4 style={{ margin: 0, fontSize: '15px' }}>{item.name} <span style={{fontSize:'12px', color:'var(--muted)', fontWeight:'normal'}}>Lv.{item.reqLevel || 1}</span></h4>
                 <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--muted)' }}>
                   {item.itemType} {item.equipSlot ? `(${item.equipSlot})` : ''} 
-                  {item.rating > 0 ? ` - �?{item.rating}` : ''}
+                  {item.rating > 0 ? ` - ⭐${item.rating}` : ''}
                 </p>
                 <div style={{ fontSize: '11px', color: 'var(--success)', marginTop: '4px' }}>
-                  {item.effect?.type === 'heal' ? `?�復 ${item.effect.value} HP` : 
-                   item.equipStats ? `?��?額�?裝�?屬性�??�` : '?�戲消耗�?'}
+                  {item.effect?.type === 'heal' ? `恢復 ${item.effect.value} HP` : 
+                   item.equipStats ? `提供額外裝備屬性加成` : '遊戲消耗品'}
                 </div>
               </div>
             </div>
             <button className="btn" onClick={() => handleBuy(item)} style={{ width: 'auto', padding: '6px 16px', borderColor: '#f1c40f', color: '#f1c40f', fontWeight: 'bold' }}>
-              ?�� {item.price}
+              💰 {item.price}
             </button>
           </div>
         ))}
@@ -443,13 +447,15 @@ function ChatTab() {
   };
 
   useEffect(() => {
-    // 從第一?��??��??�候去??Profile，�??�這裡沒�??��??�?��??�們偷?��??��?�?    api.getProfile().then(data => {
+    // 從第一頁載入的時候去拿 Profile，因為這裡沒有全域狀態，我們偷懶再拿一次
+    api.getProfile().then(data => {
       setMyDisplayName(data.player.displayName);
     }).catch(() => {});
 
-    // 1. ?��?歷史紀??    api.getChatHistory().then(history => {
+    // 1. 取得歷史紀錄
+    api.getChatHistory().then(history => {
       const formatted = history.map(m => {
-        // 如�??��??�人轉發 Web ?��??��?檢查?�否?��??��?
+        // 如果是機器人轉發 Web 的訊息，檢查是否是我發的
         let isMe = false;
         let text = m.content;
         let author = m.author;
@@ -459,7 +465,7 @@ function ChatTab() {
           if (match) {
             author = match[1];
             text = match[2];
-            // ?�裡?��??��? myDisplayName，�?以�?點渲?��??�斷
+            // 這裡還不知道 myDisplayName，所以晚點渲染時判斷
           }
         }
         
@@ -476,10 +482,10 @@ function ChatTab() {
       setTimeout(scrollToBottom, 100);
     }).catch(console.error);
 
-    // 2. 建�? SSE ?�播???
+    // 2. 建立 SSE 直播連線
     const eventSource = api.createChatStream((newMsg) => {
       setMessages(prev => {
-        // ?��?
+        // 去重
         if (prev.some(m => m.id === newMsg.id)) return prev;
         
         let text = newMsg.content;
@@ -514,7 +520,7 @@ function ChatTab() {
     if (!message.trim()) return;
     try {
       await api.sendChatMessage(message);
-      // Optimistic upate (�?id ?�被下�?�?SSE ?��??�追?��??�裡?��??�入?��??��??�端，�??��?流暢?�們�???
+      // Optimistic upate (沒 id 會被下一次 SSE 蓋掉或追加，這裡先不推入去重靠服務端，但為了流暢我們先推)
       setMessages(prev => [...prev, {
         id: "temp-" + Date.now(),
         text: message,
@@ -524,24 +530,25 @@ function ChatTab() {
       setMessage('');
       setTimeout(scrollToBottom, 50);
     } catch (err) {
-      alert("?�送失?? " + err.message);
+      alert("發送失敗: " + err.message);
     }
   };
 
   return (
     <div className="app-screen" style={{ height: '100%', paddingBottom: '16px' }}>
       <header style={{ flexShrink: 0, marginBottom: '8px' }}>
-        <h2 style={{ margin: 0, fontSize: '1.4rem' }}>?�鎮大廳 Chat Lobby</h2>
-        <p style={{ color: 'var(--muted)', fontSize: '12px', margin: '4px 0' }}>?�送�?話至 Discord ?�鎮?��?</p>
+        <h2 style={{ margin: 0, fontSize: '1.4rem' }}>城鎮大廳 Chat Lobby</h2>
+        <p style={{ color: 'var(--muted)', fontSize: '12px', margin: '4px 0' }}>發送對話至 Discord 城鎮頻道</p>
       </header>
 
       <div style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: '16px', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)' }}>
-        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '11px', marginBottom: '8px' }}>--- 歷史紀??---</div>
+        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '11px', marginBottom: '8px' }}>--- 歷史紀錄 ---</div>
         
         {messages.map((m, idx) => {
           const isMe = m.author === myDisplayName || m.author === "Me";
           
-          // �?? Discord 表�?符�??��???          let parsedText = m.text.replace(/<a?:(\w+):(\d+)>/g, (match, name, id) => {
+          // 解析 Discord 表情符號與提到
+          let parsedText = m.text.replace(/<a?:(\w+):(\d+)>/g, (match, name, id) => {
              const isAnimated = match.startsWith('<a:');
              return `<img src="https://cdn.discordapp.com/emojis/${id}.${isAnimated ? 'gif' : 'png'}" alt=":${name}:" class="chat-emoji" />`;
           });
@@ -585,10 +592,10 @@ function ChatTab() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="?�送�??�至 Discord..." 
+          placeholder="發送訊息至 Discord..." 
           style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'var(--bg)', border: '1px solid var(--line)', color: '#fff' }} 
         />
-        <button className="btn btn-primary" onClick={handleSend} style={{ width: 'auto', padding: '0 20px' }}>?�出</button>
+        <button className="btn btn-primary" onClick={handleSend} style={{ width: 'auto', padding: '0 20px' }}>送出</button>
       </div>
     </div>
   );
@@ -613,7 +620,7 @@ export default function App() {
         setIsInitializing(false);
       }).catch(err => {
         console.error("Login failed", err);
-        alert("?�入失�?！�?確�??��??��?�?API 伺�???(npm start)：\n" + err.message);
+        alert("登入失敗！請確認有啟動後端 API 伺服器 (npm start)：\n" + err.message);
         window.history.replaceState({}, document.title, "/");
         setIsInitializing(false);
       });
@@ -646,7 +653,7 @@ export default function App() {
         </div>
         <div className={`nav-item ${activeTab === 'combat' ? 'active' : ''}`} onClick={() => setActiveTab('combat')}>
           <Icons.Swords />
-          <span>?�鬥</span>
+          <span>戰鬥</span>
         </div>
         <div className={`nav-item ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
           <Icons.Chat />
@@ -654,11 +661,11 @@ export default function App() {
         </div>
         <div className={`nav-item ${activeTab === 'inventory' ? 'active' : ''}`} onClick={() => setActiveTab('inventory')}>
           <Icons.Backpack />
-          <span>?��?</span>
+          <span>背包</span>
         </div>
         <div className={`nav-item ${activeTab === 'shop' ? 'active' : ''}`} onClick={() => setActiveTab('shop')}>
           <Icons.Store />
-          <span>?��?</span>
+          <span>商店</span>
         </div>
       </nav>
     </div>
