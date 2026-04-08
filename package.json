@@ -21,7 +21,8 @@
     "pm2:stop": "npx pm2 stop equipmentGAME",
     "pm2:logs": "npx pm2 logs equipmentGAME --lines 100",
     "pm2:status": "npx pm2 status",
-    "home": "node scripts/launch-home.js"
+    "home": "node scripts/launch-home.js",
+    "auto-home": "node scripts/auto-home.js"
   },
   "engines": {
     "node": ">=20.0.0"
