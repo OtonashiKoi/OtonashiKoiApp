@@ -264,12 +264,19 @@ function InventoryTab() {
         </div>
       )}
 
+      {/* 圖片大圖預覽 (點擊全螢幕關閉，長按可儲存) */}
       {previewImage && (
-        <div className="modal-overlay" onClick={() => setPreviewImage(null)} style={{ background: 'rgba(0,0,0,0.95)', zIndex: 3000 }}>
-          <div style={{ position: 'relative', width: '90vw', height: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-             <img src={previewImage} alt="Preview" style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '8px', boxShadow: '0 0 30px rgba(0,0,0,0.5)' }} />
-             <button onClick={() => setPreviewImage(null)} style={{ position: 'absolute', top: '-10px', right: '-10px', width: '40px', height: '40px', borderRadius: '50%', background: '#fff', color: '#000', border: 'none', fontSize: '24px', cursor: 'pointer', zIndex: 10 }}>&times;</button>
-          </div>
+        <div 
+          className="modal-overlay" 
+          onClick={() => setPreviewImage(null)} 
+          style={{ background: 'rgba(0,0,0,0.9)', zIndex: 3000, cursor: 'zoom-out', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <img 
+            src={previewImage} 
+            alt="Preview" 
+            style={{ maxWidth: '95vw', maxHeight: '95vh', borderRadius: '4px', boxShadow: '0 0 40px rgba(0,0,0,0.8)', cursor: 'zoom-in' }} 
+          />
+          <div style={{ position: 'absolute', top: '20px', right: '20px', color: '#fff', fontSize: '30px', cursor: 'pointer' }}>&times;</div>
         </div>
       )}
     </div>
