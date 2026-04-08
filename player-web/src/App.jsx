@@ -252,6 +252,7 @@ function InventoryTab() {
               <div style={{ padding: '20px 0' }}>
                 <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>{activeItem.itemDescription || '無詳細描述'}</div>
                 
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {activeItem.itemType === 'consumable' && (
                     <button className="btn" onClick={() => handleUse(activeItem)} style={{ background: 'var(--success)', borderColor: 'var(--success)' }}>使用</button>
                   )}
