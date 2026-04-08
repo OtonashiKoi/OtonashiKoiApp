@@ -377,17 +377,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/chat/expressions", requireAuth, async (req, res, next) => {
     try {
       const guildId = require("../../config").guildId;
+      console.log("[expressions] guildId:", guildId, "| discordClient ready:", !!discordClient?.isReady?.());
       if (!guildId || !discordClient) return res.json(ok({ stickers: [], emojis: [] }));
 
       const guild = discordClient.guilds.cache.get(guildId)
-        || await discordClient.guilds.fetch(guildId).catch(() => null);
+        || await discordClient.guilds.fetch(guildId).catch((e) => { console.error("[expressions] guild fetch error:", e.message); return null; });
+      console.log("[expressions] guild found:", !!guild, "| name:", guild?.name);
       if (!guild) return res.json(ok({ stickers: [], emojis: [] }));
 
-      // 主動 fetch 確保 cache 是最新的
       const [fetchedEmojis, fetchedStickers] = await Promise.all([
-        guild.emojis.fetch().catch(() => guild.emojis.cache),
-        guild.stickers.fetch().catch(() => guild.stickers.cache),
+        guild.emojis.fetch().catch((e) => { console.error("[expressions] emoji fetch error:", e.message); return guild.emojis.cache; }),
+        guild.stickers.fetch().catch((e) => { console.error("[expressions] sticker fetch error:", e.message); return guild.stickers.cache; }),
       ]);
+      console.log("[expressions] emojis:", fetchedEmojis.size, "| stickers:", fetchedStickers.size);
 
       const stickers = [...fetchedStickers.values()].map(s => ({
         id: s.id,
