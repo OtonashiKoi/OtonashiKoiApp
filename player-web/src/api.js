@@ -60,6 +60,11 @@ export const api = {
   // 取得玩家背包
   getInventory: () => fetchWithAuth("/me/inventory"),
 
+  // 道具操作
+  useItem: (uuid) => fetchWithAuth(`/me/inventory/use/${uuid}`, { method: "POST" }),
+  discardItem: (uuid) => fetchWithAuth(`/me/inventory/discard/${uuid}`, { method: "POST" }),
+  equipItem: (uuid) => fetchWithAuth(`/me/inventory/equip/${uuid}`, { method: "POST" }),
+
   // ===== 商城系統 =====
   getShopItems: () => fetchWithAuth("/shop/items"),
   buyShopItem: (itemId) => fetchWithAuth(`/shop/buy/${itemId}`, { method: "POST" }),

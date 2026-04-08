@@ -135,32 +135,149 @@ function InventoryTab() {
 
   if (!data) return <div className="app-screen">Loading Inventory...</div>;
 
-  const { inventory } = data;
+  const [inventory, setInventory] = useState([]);
+  const [category, setCategory] = useState('all');
+  const [activeItem, setActiveItem] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
 
-  if (!inventory || inventory.length === 0) {
-    return (
-      <div className="app-screen">
-        <h2 style={{ marginBottom: '24px' }}>背包 Inventory</h2>
-        <div style={{ textAlign: 'center', color: 'var(--muted)', marginTop: '40px' }}>背包空空如也...</div>
-      </div>
-    );
-  }
+  const loadInventory = () => {
+    api.getInventory().then(data => setInventory(data.inventory || [])).catch(console.error);
+  };
+
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  const handleUse = async (item) => {
+    try {
+      const res = await api.useItem(item.uuid);
+      alert(`使用了 ${res.itemName}！${res.effectDesc || ''}`);
+      setActiveItem(null);
+      loadInventory();
+    } catch (err) {
+      alert("使用失敗: " + err.message);
+    }
+  };
+
+  const handleDiscard = async (item) => {
+    if (!confirm(`確定要永久丟棄 ${item.itemName} 嗎？此操作不可恢復。`)) return;
+    try {
+      await api.discardItem(item.uuid);
+      alert(`已丟棄 ${item.itemName}`);
+      setActiveItem(null);
+      loadInventory();
+    } catch (err) {
+      alert("丟棄失敗: " + err.message);
+    }
+  };
+
+  const handleEquip = async (item) => {
+    try {
+      await api.equipItem(item.uuid);
+      alert(`已裝備 ${item.itemName}`);
+      setActiveItem(null);
+      loadInventory();
+    } catch (err) {
+      alert("裝備失敗: " + err.message);
+    }
+  };
+
+  const filtered = inventory.filter(item => {
+    if (category === 'all') return true;
+    return item.itemType === category;
+  });
+
+  const categories = [
+    { key: 'all', label: '全部' },
+    { key: 'equipment', label: '裝備' },
+    { key: 'consumable', label: '消耗品' },
+    { key: 'collectible', label: '收藏品' }
+  ];
 
   return (
-    <div className="app-screen">
-      <h2 style={{ marginBottom: '24px' }}>背包 Inventory</h2>
-      {inventory.map((item, idx) => (
-        <div key={idx} className="list-item">
-          <div>
-            <h4 style={{ margin: 0, fontSize: '15px', color: item.itemType === 'consumable' ? 'var(--success)' : 'inherit' }}>
-              {item.imageUrl && <img src={getAssetUrl(item.imageUrl)} alt="" style={{ height: '1.2em', verticalAlign: 'middle', marginRight: '6px' }} />}
-              {item.itemName}
-            </h4>
-            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{item.itemType}</span>
+    <div className="app-screen" style={{ position: 'relative' }}>
+      <h2 style={{ marginBottom: '16px' }}>背包 Inventory</h2>
+      
+      <div className="filter-bar" style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto' }}>
+        {categories.map(c => (
+          <div 
+            key={c.key} 
+            className={`filter-pill ${category === c.key ? 'active' : ''}`}
+            onClick={() => setCategory(c.key)}
+            style={{ padding: '6px 12px', borderRadius: '20px', background: category === c.key ? 'var(--accent)' : 'var(--surface-hover)', cursor: 'pointer', fontSize: '12px' }}
+          >
+            {c.label}
           </div>
-          <button className="btn" style={{ width: 'auto', padding: '4px 12px', fontSize: '12px', marginLeft: '12px' }}>操作</button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--muted)', marginTop: '40px' }}>此分類下暫無物品</div>
+        ) : (
+          filtered.map((item) => (
+            <div key={item.uuid} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setActiveItem(item)}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ width: '40px', height: '40px', background: 'var(--surface-hover)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', overflow: 'hidden' }}>
+                  {item.imageUrl ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : '📦'}
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '15px' }}>
+                    {item.isEquipped && <span style={{ color: 'var(--accent)', marginRight: '4px' }}>[已裝備]</span>}
+                    {item.itemName}
+                  </h4>
+                  <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--muted)' }}>
+                    {item.itemType === 'equipment' ? '裝備' : 
+                     item.itemType === 'consumable' ? '消耗品' : 
+                     item.itemType === 'collectible' ? '收藏品' : item.itemType}
+                  </p>
+                </div>
+              </div>
+              <button className="btn" style={{ width: 'auto', padding: '4px 12px', fontSize: '12px' }}>操作</button>
+            </div>
+          ))
+        )}
+      </div>
+
+      {activeItem && (
+        <div className="modal-overlay" onClick={() => setActiveItem(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '320px' }}>
+            <div className="modal-header">
+              <h3>{activeItem.itemName}</h3>
+              <button className="close-btn" onClick={() => setActiveItem(null)}>&times;</button>
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div style={{ padding: '20px 0' }}>
+                <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>{activeItem.itemDescription || '無詳細描述'}</div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {activeItem.itemType === 'consumable' && (
+                    <button className="btn" onClick={() => handleUse(activeItem)} style={{ background: 'var(--success)', borderColor: 'var(--success)' }}>使用</button>
+                  )}
+                  {activeItem.itemType === 'equipment' && (
+                    <button className="btn" onClick={() => handleEquip(activeItem)} style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }}>
+                      {activeItem.isEquipped ? '重新裝備' : '裝備'}
+                    </button>
+                  )}
+                  {activeItem.itemType === 'collectible' && activeItem.imageUrl && (
+                    <button className="btn" onClick={() => setPreviewImage(getAssetUrl(activeItem.imageUrl))}>檢視圖片</button>
+                  )}
+                  <button className="btn" onClick={() => handleDiscard(activeItem)} style={{ background: 'transparent', borderColor: '#ff4d4d', color: '#ff4d4d' }}>丟棄物品</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      ))}
+      )}
+
+      {previewImage && (
+        <div className="modal-overlay" onClick={() => setPreviewImage(null)} style={{ background: 'rgba(0,0,0,0.95)', zIndex: 3000 }}>
+          <div style={{ position: 'relative', width: '90vw', height: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+             <img src={previewImage} alt="Preview" style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '8px', boxShadow: '0 0 30px rgba(0,0,0,0.5)' }} />
+             <button onClick={() => setPreviewImage(null)} style={{ position: 'absolute', top: '-10px', right: '-10px', width: '40px', height: '40px', borderRadius: '50%', background: '#fff', color: '#000', border: 'none', fontSize: '24px', cursor: 'pointer', zIndex: 10 }}>&times;</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
