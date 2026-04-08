@@ -165,25 +165,45 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     const matches = [...text.matchAll(mentionRegex)];
     let resolvedText = text;
 
+    // 定義一個簡單的局部緩存，防止同一次解析中多次 fetch 同一個用戶
+    const localCache = {};
+
     for (const match of matches) {
       const userId = match[1];
+      if (localCache[userId]) {
+        resolvedText = resolvedText.replace(match[0], `[@${localCache[userId]}]`);
+        continue;
+      }
+
       try {
-        // 先從 playerRepository 找
         let playerName = null;
+        // 1. 先從資料庫找
         const player = await serviceContext.playerRepository.findByDiscordId(userId);
         if (player) {
           playerName = player.displayName;
         } else if (serviceContext.progressRepository) {
-          // 如果找不到，從 progressRepository (戰鬥系統常用) 找
           const progress = await serviceContext.progressRepository.findByPlayerId(userId);
           if (progress) playerName = progress.displayName;
         }
 
+        // 2. 如果資料庫找不到，透過 Discord Client 直接從官方 API 抓取
+        if (!playerName && discordClient) {
+          try {
+            const user = await discordClient.users.fetch(userId);
+            if (user) {
+              playerName = user.globalName || user.username;
+            }
+          } catch (discordErr) {
+            // Discord 抓不到則維持 null
+          }
+        }
+
         if (playerName) {
+          localCache[userId] = playerName;
           resolvedText = resolvedText.replace(match[0], `[@${playerName}]`);
         }
       } catch (err) {
-        // 找不到則維持原樣
+        // 錯誤則維持原樣
       }
     }
     return resolvedText;
