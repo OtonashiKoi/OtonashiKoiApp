@@ -517,16 +517,25 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // ── 並發雙殺防護：同一隻怪只允許一次結算 ──
   const killKey = `${zoneKey}:${monster.seq}`;
-  if (killInProgress.has(killKey)) {
-    // 另一位玩家已在結算中，此次擊殺視為無效，不重複發獎
+  try {
+    console.log(`[MonsterZone] handleMonsterKill ENTER ${killKey} by ${discordId}`);
+    if (killInProgress.has(killKey)) {
+      console.log(`[MonsterZone] killInProgress already has ${killKey}, skipping`);
+      // 另一位玩家已在結算中，此次擊殺視為無效，不重複發獎
+      return rewardLines;
+    }
+    killInProgress.add(killKey);
+  } catch (e) {
+    console.error('[MonsterZone] handleMonsterKill pre-lock error', e);
     return rewardLines;
   }
-  killInProgress.add(killKey);
 
   try {
   // DB 層原子收付擊殺權（防止 PM2 雙進程重載期間雙重結算）
   const claimed = await sc.monsterRepository.claimKill(zoneKey, monster.seq);
+  console.log(`[MonsterZone] claimKill returned: ${claimed} for ${killKey}`);
   if (!claimed) {
+    console.log(`[MonsterZone] claimKill failed for ${killKey}, another process may have claimed it`);
     return rewardLines;
   }
 
