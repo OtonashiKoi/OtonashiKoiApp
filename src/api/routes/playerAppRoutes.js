@@ -337,6 +337,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return {
           zone: key,
           monsterName: activeMonster?.name || "未知",
+          monsterImageUrl: activeMonster?.imageUrl || null,
+          monsterLevel: activeMonster?.level || 0,
+          expReward: activeMonster?.expReward || 0,
+          goldReward: activeMonster?.goldReward || 0,
+          drops: (activeMonster?.drops || []).map(d => d.itemName),
           currentHp: state.currentHp !== undefined ? state.currentHp : (activeMonster?.calc?.maxHp || 0),
           maxHp: activeMonster?.calc?.maxHp || 0,
           participantCount: Array.isArray(state.participants) ? state.participants.length : 0,

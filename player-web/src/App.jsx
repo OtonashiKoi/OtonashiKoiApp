@@ -414,22 +414,94 @@ function CombatTab() {
             </div>
 
             {data.monsterName && (
-              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
-                  <span style={{ fontWeight: 'bold', color: '#fff' }}>👾 {data.monsterName}</span>
-                  <span style={{ color: 'var(--muted)' }}>{data.currentHp} / {data.maxHp} HP</span>
+              <div style={{ 
+                background: 'rgba(0,0,0,0.3)', 
+                borderRadius: '12px', 
+                border: '1px solid var(--glass-border)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column'
+              }}>
+                <div style={{ display: 'flex', minHeight: '120px' }}>
+                  {/* 怪物圖片區 */}
+                  <div style={{ 
+                    width: '100px', 
+                    background: 'rgba(255,255,255,0.03)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    borderRight: '1px solid var(--glass-border)',
+                    position: 'relative'
+                  }}>
+                    {data.monsterImageUrl ? (
+                      <img src={getAssetUrl(data.monsterImageUrl)} alt="" style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5))' }} />
+                    ) : (
+                      <span style={{ fontSize: '40px', opacity: 0.3 }}>👾</span>
+                    )}
+                    <div style={{ 
+                      position: 'absolute', top: '4px', left: '4px', 
+                      background: 'var(--accent-strong)', color: '#fff', 
+                      padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' 
+                    }}>
+                      Lv.{data.monsterLevel}
+                    </div>
+                  </div>
+
+                  {/* 怪物首選資訊區 */}
+                  <div style={{ flex: 1, padding: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <h4 style={{ margin: 0, fontSize: '15px', color: '#fff' }}>{data.monsterName}</h4>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <span style={{ fontSize: '10px', background: 'rgba(241, 196, 15, 0.1)', color: '#f1c40f', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(241, 196, 15, 0.2)' }}>
+                            💰 {data.goldReward}
+                          </span>
+                          <span style={{ fontSize: '10px', background: 'rgba(52, 152, 219, 0.1)', color: '#3498db', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(52, 152, 219, 0.2)' }}>
+                            ⭐ {data.expReward}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--muted)' }}>HP 狀態</span>
+                        <span style={{ color: hpPercent < 20 ? '#e74c3c' : '#fff', fontWeight: 'bold' }}>{data.currentHp} / {data.maxHp}</span>
+                      </div>
+                      <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ 
+                          height: '100%', 
+                          width: `${hpPercent}%`, 
+                          background: `linear-gradient(to right, ${hpPercent > 30 ? z.color : '#e74c3c'}, ${hpPercent > 30 ? z.color : '#ff4d4d'})`, 
+                          transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                          boxShadow: hpPercent < 20 ? '0 0 10px rgba(231, 76, 60, 0.5)' : 'none'
+                        }}></div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${hpPercent}%`, background: hpPercent > 30 ? z.color : '#e74c3c', transition: 'width 0.5s ease' }}></div>
-                </div>
-                <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '6px', textAlign: 'right' }}>
-                   {data.participantCount} 人正在參與戰鬥
+                
+                <div style={{ 
+                  background: 'rgba(255,255,255,0.02)', 
+                  padding: '6px 12px', 
+                  fontSize: '10px', 
+                  color: 'var(--muted)', 
+                  textAlign: 'right',
+                  borderTop: '1px solid rgba(255,255,255,0.05)'
+                }}>
+                   ⚡ {data.participantCount} 人正在圍攻此怪物
                 </div>
               </div>
             )}
 
-            <button className="btn" disabled={isBattling} onClick={() => startBattle(z.key)} style={{ borderColor: z.color, color: z.color }}>
-              {isBattling ? '戰鬥準備中...' : '進入該區域出戰'}
+            <button className="btn" disabled={isBattling} onClick={() => startBattle(z.key)} style={{ 
+              borderColor: z.color, 
+              color: z.color,
+              background: isBattling ? 'transparent' : `${z.color}10`,
+              fontWeight: 'bold',
+              letterSpacing: '1px'
+            }}>
+              {isBattling ? '戰鬥準備中...' : '⚔️ 進入該區域出戰'}
             </button>
           </div>
         );
