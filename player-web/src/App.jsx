@@ -18,31 +18,138 @@ function LoginScreen() {
   return (
     <div className="app-screen" style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-      color: '#fff', textAlign: 'center', padding: '2rem'
+      height: '100vh',
+      background: 'linear-gradient(180deg, #0d0d1a 0%, #12102a 50%, #0a1628 100%)',
+      color: '#fff', textAlign: 'center', padding: '2.5rem 2rem',
+      gap: 0,
     }}>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '0.5rem',
-          background: 'linear-gradient(135deg, #ffd700, #ff8c00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          ⚔️ Equipment Game
-        </h1>
-        <p style={{ color: '#8892b0', fontSize: '0.95rem' }}>Discord RPG 裝備冒險平台</p>
+
+      {/* 裝飾符號 */}
+      <div style={{ fontSize: '3rem', marginBottom: '1.2rem', opacity: 0.85, letterSpacing: '0.1em' }}>
+        ䷁
       </div>
+
+      {/* 主標題 */}
+      <h1 style={{
+        fontSize: '1.85rem', fontWeight: 900, margin: '0 0 0.3rem',
+        letterSpacing: '0.08em', lineHeight: 1.25,
+        background: 'linear-gradient(135deg, #c9a84c, #f0d080, #c9a84c)',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+      }}>
+        音無玄學棋牌社
+      </h1>
+
+      {/* 副標語 */}
+      <p style={{
+        fontSize: '0.85rem', color: '#7a8bb0', letterSpacing: '0.15em',
+        margin: '0 0 0.6rem', fontWeight: 500,
+      }}>
+        請相信科學 🎏
+      </p>
+
+      {/* 分隔線 */}
+      <div style={{
+        width: '40px', height: '2px', margin: '1rem auto 1.8rem',
+        background: 'linear-gradient(90deg, transparent, #c9a84c, transparent)',
+        borderRadius: '2px',
+      }} />
+
+      {/* 登入按鈕 */}
       <a href={getDiscordLoginUrl()} style={{
-        display: 'inline-flex', alignItems: 'center', gap: '12px', padding: '14px 32px',
-        background: '#5865F2', color: '#fff', borderRadius: '12px', fontSize: '1.1rem',
+        display: 'inline-flex', alignItems: 'center', gap: '10px',
+        padding: '13px 32px',
+        background: 'linear-gradient(135deg, #5865F2, #4752c4)',
+        color: '#fff', borderRadius: '14px', fontSize: '1rem',
         fontWeight: 700, textDecoration: 'none', transition: 'all 0.2s ease',
-        boxShadow: '0 4px 20px rgba(88, 101, 242, 0.4)'
+        boxShadow: '0 4px 24px rgba(88, 101, 242, 0.45)',
+        letterSpacing: '0.04em',
       }}
-        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+        onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(88,101,242,0.55)'; }}
+        onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(88,101,242,0.45)'; }}
       >
         <Icons.Discord />
         使用 Discord 登入
       </a>
-      <p style={{ marginTop: '1.5rem', color: '#4a5568', fontSize: '0.8rem' }}>
-        登入後即可管理角色、裝備與商城
+
+      <p style={{ marginTop: '1.4rem', color: '#3a4560', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+        限社員使用
       </p>
+
+      {/* 社群規範 */}
+      <div style={{
+        marginTop: '2.5rem',
+        width: '100%', maxWidth: '420px',
+        textAlign: 'left',
+      }}>
+        {/* 標題 */}
+        <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
+          <p style={{ color: '#c9a84c', fontSize: '0.82rem', letterSpacing: '0.2em', margin: 0 }}>
+            — 歡迎來到 音無玄學棋牌社 —
+          </p>
+          <p style={{ color: '#6a7a9a', fontSize: '0.78rem', margin: '6px 0 0', letterSpacing: '0.05em' }}>
+            跟各位社友有幾個規範要約定𓂃 ഒ ָ࣪ ˖
+          </p>
+        </div>
+
+        {/* 規則卡片 */}
+        {[
+          {
+            title: '🗒️ 規則 1',
+            lines: [
+              '請相信科學，玄學雖有趣但就算再準不能盡信。',
+              '對世間的人來說永遠都只是參考。',
+              '重點還是在於自己做出的選擇。',
+            ],
+          },
+          {
+            title: '🗒️ 規則 2',
+            lines: [
+              '棋牌友之間要維持禮貌！',
+              '「請多指教」跟「謝謝指教」是基礎！',
+              '請勿做出有種族或仇恨言論的發言。',
+              '也「不要刷版」導致其他人無法正常閱讀。',
+              '討論政治可以，但吵起來音無就會開始 ban 人關禁閉。',
+              '標準暫時就是我自己說的算…',
+            ],
+          },
+        ].map((rule, i) => (
+          <div key={i} style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(201,168,76,0.15)',
+            borderRadius: '14px',
+            padding: '14px 16px',
+            marginBottom: '10px',
+          }}>
+            <p style={{ color: '#c9a84c', fontWeight: 700, fontSize: '0.82rem', margin: '0 0 8px', letterSpacing: '0.05em' }}>
+              {rule.title}
+            </p>
+            {rule.lines.map((line, j) => (
+              <p key={j} style={{ color: '#8a9ab8', fontSize: '0.78rem', margin: '0 0 4px', lineHeight: 1.6 }}>
+                {line}
+              </p>
+            ))}
+          </div>
+        ))}
+
+        {/* 結語 */}
+        <p style={{ color: '#6a7a9a', fontSize: '0.78rem', textAlign: 'center', margin: '12px 0', lineHeight: 1.7 }}>
+          請大家保持友善的態度，互相追求自己想追求的人事物。
+        </p>
+
+        {/* 底部提示 */}
+        <div style={{
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          paddingTop: '14px',
+          textAlign: 'center',
+        }}>
+          <p style={{ color: '#4a5568', fontSize: '0.72rem', margin: '0 0 6px', letterSpacing: '0.1em' }}>
+            — 以後有新增會再補充 —
+          </p>
+          <p style={{ color: '#7a8bb0', fontSize: '0.8rem', margin: 0, lineHeight: 1.6 }}>
+            「同意以上規範」的朋友再幫我按下身份組選擇～<br />就可以看到頻道內容囉 🎏
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
