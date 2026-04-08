@@ -138,7 +138,7 @@ async function setupLockedChannels(client) {
 }
 
 function createBotClient() {
-  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildWebhooks] });
   setBotClient(client);
 
   client.once(Events.ClientReady, async (readyClient) => {

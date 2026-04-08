@@ -193,10 +193,35 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (townChatBinding && townChatBinding.channelId && discordClient) {
         const channel = discordClient.channels.cache.get(townChatBinding.channelId);
         if (channel) {
-          // 在頻道中模擬發言：[Web] 玩家名: 訊息內容
-          await channel.send(`[Web] **${displayName}**: ${message}`);
+          // 取得玩家的 Discord 頭像
+          let avatarURL = null;
+          try {
+            const discordUser = await discordClient.users.fetch(discordId, { force: false });
+            avatarURL = discordUser.displayAvatarURL({ size: 128, extension: 'png' });
+          } catch (_) {}
+
+          // 取得或建立 Webhook，讓訊息以玩家名字和頭像發送
+          let webhook = null;
+          try {
+            const webhooks = await channel.fetchWebhooks();
+            webhook = webhooks.find(w => w.name === 'PlayerWebChat' && w.owner?.id === discordClient.user.id);
+            if (!webhook) {
+              webhook = await channel.createWebhook({ name: 'PlayerWebChat', reason: 'Player web chat proxy' });
+            }
+          } catch (_) {}
+
+          if (webhook) {
+            await webhook.send({
+              content: message,
+              username: displayName,
+              ...(avatarURL ? { avatarURL } : {}),
+            });
+          } else {
+            // Webhook 無法建立時回退到 Bot 發送
+            await channel.send(`**${displayName}**: ${message}`);
+          }
         } else {
-           console.warn(`[PlayerApp] 找不到 Town Chat 頻道 (ID: ${townChatBinding.channelId})，但設定已綁定`);
+          console.warn(`[PlayerApp] 找不到 Town Chat 頻道 (ID: ${townChatBinding.channelId})`);
         }
       }
 
