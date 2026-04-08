@@ -430,7 +430,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId, displayName } = req.playerRecord;
       const itemId = req.params.itemId;
-      const result = await serviceContext.shopService.purchase(discordId, displayName, itemId);
+
+      // 從 Bot 取得玩家在 Guild 的身分組，供 allowedTiers 驗證
+      let memberRoleIds = [];
+      try {
+        const guildId = require("../../config").discord.guildId;
+        if (guildId && discordClient) {
+          const guild = discordClient.guilds.cache.get(guildId) || await discordClient.guilds.fetch(guildId).catch(() => null);
+          if (guild) {
+            const member = await guild.members.fetch({ user: discordId, force: false }).catch(() => null);
+            if (member) memberRoleIds = [...member.roles.cache.keys()];
+          }
+        }
+      } catch (_) {}
+
+      const result = await serviceContext.shopService.purchase(discordId, displayName, itemId, memberRoleIds);
       res.json(ok(result));
     } catch (err) {
       next(err);

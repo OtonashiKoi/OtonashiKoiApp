@@ -1232,6 +1232,7 @@ function ShopTab() {
   const [items, setItems] = useState(null);
   const [wallet, setWallet] = useState(null);
   const [playerLevel, setPlayerLevel] = useState(1);
+  const [playerTier, setPlayerTier] = useState(null);
   const [category, setCategory] = useState('all');
 
   const loadData = () => {
@@ -1242,6 +1243,7 @@ function ShopTab() {
       setItems(shopItems);
       setWallet(profile.wallet);
       setPlayerLevel(profile.progress?.level || 1);
+      setPlayerTier(profile.progress?.playerTier || null);
     }).catch(console.error);
   };
 
@@ -1319,7 +1321,10 @@ function ShopTab() {
             {filteredItems.map(item => {
               const isDiamond = item.currency === 'diamond';
               const priceColor = isDiamond ? '#7ab4ff' : 'var(--gold)';
-              const locked = (item.reqLevel || 1) > playerLevel;
+              const levelLocked = (item.reqLevel || 1) > playerLevel;
+              const tierLocked = Array.isArray(item.allowedTiers) && item.allowedTiers.length > 0
+                && !item.allowedTiers.includes(playerTier);
+              const locked = levelLocked || tierLocked;
               return (
                 <div
                   key={item.id}
