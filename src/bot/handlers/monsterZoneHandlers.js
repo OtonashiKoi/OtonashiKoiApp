@@ -83,9 +83,9 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
     const itemList = droppedItems.join("、");
     if (isLucky) {
-      await channel.send(`🍀 **${displayName}** (<@${discordId}>) 在 ${timeStr} 參與戰鬥 **${monsterName}**，狗到了 **${itemList}**！`);
+      await channel.send(`🍀 ${displayName} (<@${discordId}>) 在 ${timeStr} 參與戰鬥 **${monsterName}**，狗到了 **${itemList}**！`);
     } else {
-      await channel.send(`🎉 **${displayName}** (<@${discordId}>) 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
+      await channel.send(`🎉 ${displayName} (<@${discordId}>) 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
     }
   } catch (e) {
     console.error("[MonsterZone] drop announce error", e);
@@ -107,7 +107,7 @@ async function _announceGroupBonus(sc, luckyDiscordId, luckyName, monsterName, b
     const itemList = bonusItems.join("、");
     await channel.send(
       `🌟🍀✨ **【${participantCount} 人加碼幸運獎】** ✨🍀🌟\n` +
-      `**<@${luckyDiscordId}>** 在這場 **${participantCount} 人** 的史詩戰鬥中被神秘力量選中！\n` +
+      `**${luckyName}** (<@${luckyDiscordId}>) 在這場 **${participantCount} 人** 的史詩戰鬥中被神秘力量選中！\n` +
       `運氣好到不得了，額外獲得了 **${itemList}**！🎊`
     );
   } catch (e) {

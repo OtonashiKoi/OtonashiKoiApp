@@ -183,7 +183,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           try {
             const member = await guild.members.fetch(userId);
             if (member) playerName = member.displayName;
-          } catch (e) { /* 抓不到 member 則繼續往下找 */ }
+          } catch (e) { /* 繼續往下找 */ }
         }
 
         // 2. 從資料庫找
@@ -197,24 +197,24 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           }
         }
 
-        // 3. 如果資料庫找不到，且沒傳入 Guild，才透過 Discord Client 直接從官方 API 抓取全局名稱
+        // 3. 全局 Discord API
         if (!playerName && discordClient) {
           try {
             const user = await discordClient.users.fetch(userId);
             if (user) {
               playerName = user.globalName || user.username;
             }
-          } catch (discordErr) {
-            // Discord 抓不到則維持 null
-          }
+          } catch (discordErr) { /* ignore */ }
         }
 
         if (playerName) {
           localCache[userId] = playerName;
           resolvedText = resolvedText.replace(match[0], `[@${playerName}]`);
+        } else {
+          console.warn(`[Chat] 無法解析 ID 為 ${userId} 的名稱`);
         }
       } catch (err) {
-        // 錯誤則維持原樣
+        console.error(`[Chat] 解析提及 ${userId} 時發生錯誤:`, err);
       }
     }
     return resolvedText;
