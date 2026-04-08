@@ -138,6 +138,14 @@ function InventoryTab() {
 
   useEffect(() => {
     loadInventory();
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        setActiveItem(null);
+        setPreviewImage(null);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
   if (inventory === null) return <div className="app-screen">Loading Inventory...</div>;
@@ -244,14 +252,8 @@ function InventoryTab() {
               <div style={{ padding: '20px 0' }}>
                 <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>{activeItem.itemDescription || '無詳細描述'}</div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {activeItem.itemType === 'consumable' && (
                     <button className="btn" onClick={() => handleUse(activeItem)} style={{ background: 'var(--success)', borderColor: 'var(--success)' }}>使用</button>
-                  )}
-                  {activeItem.itemType === 'equipment' && (
-                    <button className="btn" onClick={() => handleEquip(activeItem)} style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }}>
-                      {activeItem.isEquipped ? '重新裝備' : '裝備'}
-                    </button>
                   )}
                   {activeItem.itemType === 'collectible' && activeItem.imageUrl && (
                     <button className="btn" onClick={() => setPreviewImage(getAssetUrl(activeItem.imageUrl))}>檢視圖片</button>
@@ -294,6 +296,14 @@ function CombatTab() {
   const [isBattling, setIsBattling] = useState(false);
   const [zones, setZones] = useState([]);
   const logsEndRef = React.useRef(null);
+
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') setBattleState(null);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
 
   const fetchZones = () => {
     api.getCombatZones().then(setZones).catch(console.error);
