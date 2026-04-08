@@ -726,7 +726,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     activeMonsterSeq: nextMonster ? nextMonster.seq : freshState.activeMonsterSeq,
     killCount: newKillCount,
     participants: [], // 新怪上場，參戰名單清零
-    damageMap: {}    // 新怪上場，傷害紀錄清零
+    damageMap: {},   // 新怪上場，傷害紀錄清零
+    killClaimedSeq: null // 重置擊殺權，避免遺留造成未來結算失敗
   };
   await sc.monsterService.saveState(newState, zoneKey);
 
