@@ -20,14 +20,14 @@ const config = require("../config");
 function createApiServer(discordClient) {
   const app = express();
 
-  // CORS：只允許 .env 設定的來源 + localhost 開發用
-  // 設定方式：ALLOWED_ORIGINS=https://你的帳號.github.io
-  const devOrigins = ["http://localhost:5173", "http://localhost:4173"];
-  const allowedOrigins = [...devOrigins, ...(config.api.allowedOrigins || [])];
+  // CORS：localhost 全放行（開發用），正式環境只允許 ALLOWED_ORIGINS
+  const allowedOrigins = config.api.allowedOrigins || [];
   app.use(cors({
     origin: (origin, callback) => {
-      // 無 origin（curl、Postman、server-to-server）或在白名單內才允許
-      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      // 無 origin（curl、Postman）或 localhost 任意 port 全放行
+      if (!origin) return callback(null, true);
+      if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
       callback(new Error(`CORS blocked: ${origin}`));
     },
     credentials: true

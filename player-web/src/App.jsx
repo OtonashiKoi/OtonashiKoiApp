@@ -1,154 +1,405 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api, getDiscordLoginUrl, setToken, API_ORIGIN } from './api';
 import './index.css';
 
 // SVG Icons
 const Icons = {
+  Home: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
   User: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>,
   Backpack: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10h16M4 14h16M6 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
   Swords: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"></path><path d="M13 19l6-6"></path><path d="M16 16l4 4"></path><path d="M19 21l2-2"></path><path d="M14.5 6.5L18 3h3v3l-3.5 3.5"></path><path d="M5 14l4 4"></path><path d="M7 17l-3 3"></path><path d="M3 19l2 2"></path></svg>,
   Store: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>,
   Chat: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"></path></svg>,
   Discord: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"/></svg>,
-  CheckCircle: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+  CheckCircle: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
+  Settings: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
 };
 
 // ===== Discord 登入畫面 =====
 function LoginScreen() {
   return (
-    <div className="app-screen" style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      height: '100vh',
-      background: 'linear-gradient(180deg, #0d0d1a 0%, #12102a 50%, #0a1628 100%)',
-      color: '#fff', textAlign: 'center', padding: '2.5rem 2rem',
-      gap: 0,
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      height: '100%', overflowY: 'auto',
+      background: 'linear-gradient(175deg, #04060e 0%, #08091a 50%, #060c18 100%)',
+      color: '#f0e6d3', textAlign: 'center', padding: '0 0 2rem',
+      position: 'relative',
     }}>
+      {/* 頂部金線 */}
+      <div style={{ width: '100%', height: '1px', background: 'linear-gradient(to right, transparent, rgba(200,169,110,0.6), transparent)', flexShrink: 0 }} />
 
-      {/* 裝飾符號 */}
-      <div style={{ fontSize: '3rem', marginBottom: '1.2rem', opacity: 0.85, letterSpacing: '0.1em' }}>
-        ䷁
-      </div>
-
-      {/* 主標題 */}
-      <h1 style={{
-        fontSize: '1.85rem', fontWeight: 900, margin: '0 0 0.3rem',
-        letterSpacing: '0.08em', lineHeight: 1.25,
-        background: 'linear-gradient(135deg, #c9a84c, #f0d080, #c9a84c)',
-        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-      }}>
-        音無玄學棋牌社
-      </h1>
-
-      {/* 副標語 */}
-      <p style={{
-        fontSize: '0.85rem', color: '#7a8bb0', letterSpacing: '0.15em',
-        margin: '0 0 0.6rem', fontWeight: 500,
-      }}>
-        請相信科學 🎏
-      </p>
-
-      {/* 分隔線 */}
-      <div style={{
-        width: '40px', height: '2px', margin: '1rem auto 1.8rem',
-        background: 'linear-gradient(90deg, transparent, #c9a84c, transparent)',
-        borderRadius: '2px',
-      }} />
-
-      {/* 登入按鈕 */}
-      <a href={getDiscordLoginUrl()} style={{
-        display: 'inline-flex', alignItems: 'center', gap: '10px',
-        padding: '13px 32px',
-        background: 'linear-gradient(135deg, #5865F2, #4752c4)',
-        color: '#fff', borderRadius: '14px', fontSize: '1rem',
-        fontWeight: 700, textDecoration: 'none', transition: 'all 0.2s ease',
-        boxShadow: '0 4px 24px rgba(88, 101, 242, 0.45)',
-        letterSpacing: '0.04em',
-      }}
-        onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(88,101,242,0.55)'; }}
-        onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(88,101,242,0.45)'; }}
-      >
-        <Icons.Discord />
-        使用 Discord 登入
-      </a>
-
-      <p style={{ marginTop: '1.4rem', color: '#3a4560', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
-        限社員使用
-      </p>
-
-      {/* 社群規範 */}
-      <div style={{
-        marginTop: '2.5rem',
-        width: '100%', maxWidth: '420px',
-        textAlign: 'left',
-      }}>
-        {/* 標題 */}
-        <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
-          <p style={{ color: '#c9a84c', fontSize: '0.82rem', letterSpacing: '0.2em', margin: 0 }}>
-            — 歡迎來到 音無玄學棋牌社 —
-          </p>
-          <p style={{ color: '#6a7a9a', fontSize: '0.78rem', margin: '6px 0 0', letterSpacing: '0.05em' }}>
-            跟各位社友有幾個規範要約定𓂃 ഒ ָ࣪ ˖
-          </p>
+      {/* 上半：LOGO 區 */}
+      <div style={{ padding: '3rem 2rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        {/* 裝飾符 */}
+        <div style={{
+          fontSize: '2.4rem', marginBottom: '1rem', opacity: 0.6,
+          color: 'var(--gold)', fontFamily: 'var(--font-display)',
+        }}>
+          ◈
         </div>
 
-        {/* 規則卡片 */}
+        {/* 社名 */}
+        <h1 style={{
+          fontSize: '1.6rem', fontWeight: 700, margin: '0 0 0.2rem',
+          letterSpacing: '0.12em', lineHeight: 1.3,
+          fontFamily: 'var(--font-display)',
+          background: 'linear-gradient(135deg, #9a7a2c, #e8c97a, #c8a96e, #e8c97a, #9a7a2c)',
+          backgroundSize: '200% auto',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          animation: 'shimmer 4s linear infinite',
+        }}>
+          音無玄學棋牌社
+        </h1>
+
+        <p style={{ fontSize: '10px', color: 'rgba(200,169,110,0.5)', letterSpacing: '0.25em', margin: '0 0 0.5rem', fontFamily: 'var(--font-display)' }}>
+          OTONASHI KOI CLUB
+        </p>
+
+        {/* 分隔 */}
+        <div style={{ width: '80px', height: '1px', background: 'linear-gradient(to right, transparent, var(--gold), transparent)', margin: '1.2rem 0' }} />
+
+        <p style={{ fontSize: '11px', color: 'rgba(200,169,110,0.45)', letterSpacing: '0.2em', margin: '0 0 1.8rem', fontFamily: 'var(--font-display)' }}>
+          請相信科學
+        </p>
+
+        {/* Discord 登入 */}
+        <a href={getDiscordLoginUrl()} style={{
+          display: 'inline-flex', alignItems: 'center', gap: '10px',
+          padding: '12px 28px',
+          background: 'linear-gradient(135deg, #4752c4, #5865F2)',
+          color: '#fff', borderRadius: '2px', fontSize: '0.9rem',
+          fontWeight: 700, textDecoration: 'none', transition: 'all 0.22s ease',
+          boxShadow: '0 4px 20px rgba(88,101,242,0.4)',
+          letterSpacing: '0.06em', fontFamily: 'var(--font-display)',
+          border: '1px solid rgba(120,140,255,0.3)',
+        }}
+          onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(88,101,242,0.55)'; }}
+          onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(88,101,242,0.4)'; }}
+        >
+          <Icons.Discord />
+          DISCORD 登入
+        </a>
+
+        <p style={{ marginTop: '1rem', color: 'rgba(200,169,110,0.2)', fontSize: '10px', letterSpacing: '0.12em', fontFamily: 'var(--font-display)' }}>
+          LIMITED TO MEMBERS ONLY
+        </p>
+
+        {window.location.hostname === 'localhost' && (
+          <button
+            onClick={async () => {
+              const id = prompt('Dev mock login — 輸入你的 Discord ID：', '1450019975031951370');
+              if (!id) return;
+              try {
+                const data = await api.loginWithDiscord(`mock:${id}`);
+                setToken(data.token);
+                window.location.reload();
+              } catch (err) {
+                alert('Mock 登入失敗：' + err.message);
+              }
+            }}
+            style={{
+              marginTop: '10px', background: 'transparent',
+              border: '1px dashed rgba(200,169,110,0.15)', color: 'rgba(200,169,110,0.3)',
+              borderRadius: '2px', padding: '5px 14px',
+              fontSize: '10px', cursor: 'pointer', letterSpacing: '0.08em',
+            }}
+          >
+            DEV LOGIN
+          </button>
+        )}
+      </div>
+
+      {/* 分隔金線 */}
+      <div style={{ width: '100%', height: '1px', background: 'linear-gradient(to right, transparent, rgba(200,169,110,0.2), transparent)', margin: '0 0 1.5rem' }} />
+
+      {/* 社群規範 */}
+      <div style={{ width: '100%', padding: '0 1.5rem', textAlign: 'left' }}>
+        <p style={{ textAlign: 'center', fontSize: '9px', color: 'rgba(200,169,110,0.4)', letterSpacing: '0.25em', margin: '0 0 1.2rem', fontFamily: 'var(--font-display)' }}>
+          — COMMUNITY GUIDELINES —
+        </p>
+
         {[
           {
-            title: '🗒️ 規則 1',
+            num: '01', title: '請相信科學',
             lines: [
-              '請相信科學，玄學雖有趣但就算再準不能盡信。',
+              '玄學雖有趣但就算再準不能盡信。',
               '對世間的人來說永遠都只是參考。',
               '重點還是在於自己做出的選擇。',
             ],
           },
           {
-            title: '🗒️ 規則 2',
+            num: '02', title: '維持禮貌',
             lines: [
-              '棋牌友之間要維持禮貌！',
               '「請多指教」跟「謝謝指教」是基礎！',
-              '請勿做出有種族或仇恨言論的發言。',
-              '也「不要刷版」導致其他人無法正常閱讀。',
-              '討論政治可以，但吵起來音無就會開始 ban 人關禁閉。',
-              '標準暫時就是我自己說的算…',
+              '請勿做出種族或仇恨言論。',
+              '不要刷版導致其他人無法正常閱讀。',
+              '討論政治可以，但吵起來就會 ban 人。',
             ],
           },
-        ].map((rule, i) => (
-          <div key={i} style={{
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(201,168,76,0.15)',
-            borderRadius: '14px',
-            padding: '14px 16px',
+        ].map((rule) => (
+          <div key={rule.num} style={{
+            background: 'rgba(200,169,110,0.03)',
+            border: '1px solid rgba(200,169,110,0.1)',
+            borderLeft: '2px solid rgba(200,169,110,0.4)',
+            borderRadius: '0 4px 4px 0',
+            padding: '12px 14px',
             marginBottom: '10px',
           }}>
-            <p style={{ color: '#c9a84c', fontWeight: 700, fontSize: '0.82rem', margin: '0 0 8px', letterSpacing: '0.05em' }}>
-              {rule.title}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '8px' }}>
+              <span style={{ fontSize: '9px', color: 'var(--gold)', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', opacity: 0.6 }}>{rule.num}</span>
+              <span style={{ fontSize: '12px', color: 'var(--gold)', fontFamily: 'var(--font-display)', letterSpacing: '0.08em', fontWeight: 600 }}>{rule.title}</span>
+            </div>
             {rule.lines.map((line, j) => (
-              <p key={j} style={{ color: '#8a9ab8', fontSize: '0.78rem', margin: '0 0 4px', lineHeight: 1.6 }}>
-                {line}
-              </p>
+              <p key={j} style={{ color: 'rgba(200,169,110,0.5)', fontSize: '11px', margin: '0 0 3px', lineHeight: 1.7 }}>{line}</p>
             ))}
           </div>
         ))}
 
-        {/* 結語 */}
-        <p style={{ color: '#6a7a9a', fontSize: '0.78rem', textAlign: 'center', margin: '12px 0', lineHeight: 1.7 }}>
-          請大家保持友善的態度，互相追求自己想追求的人事物。
+        <p style={{ color: 'rgba(200,169,110,0.25)', fontSize: '10px', textAlign: 'center', margin: '1.2rem 0 0', letterSpacing: '0.08em', lineHeight: 1.8 }}>
+          請保持友善，互相追求自己想追求的人事物。
         </p>
+      </div>
+    </div>
+  );
+}
 
-        {/* 底部提示 */}
-        <div style={{
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          paddingTop: '14px',
-          textAlign: 'center',
-        }}>
-          <p style={{ color: '#4a5568', fontSize: '0.72rem', margin: '0 0 6px', letterSpacing: '0.1em' }}>
-            — 以後有新增會再補充 —
-          </p>
-          <p style={{ color: '#7a8bb0', fontSize: '0.8rem', margin: 0, lineHeight: 1.6 }}>
-            「同意以上規範」的朋友再幫我按下身份組選擇～<br />就可以看到頻道內容囉 🎏
-          </p>
+// ===== 首頁 =====
+const getDialogues = (name) => [
+  `${name||'嗨~'} 晚上好啊~`,
+  "你看起來好像有點累了？沒關係，這裡很安靜，我們可以一起休息一下。",
+  "獨角獸的角是拿來拔斷的喔www",
+];
+
+function useTypewriter(text, speed = 40) {
+  const [displayed, setDisplayed] = useState('');
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    setDisplayed('');
+    setDone(false);
+    if (!text) return;
+    let i = 0;
+    const timer = setInterval(() => {
+      i++;
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) { clearInterval(timer); setDone(true); }
+    }, speed);
+    return () => clearInterval(timer);
+  }, [text, speed]);
+  return { displayed, done };
+}
+
+function HomeTab({ onNavigate }) {
+  const [profile, setProfile] = useState(null);
+  const [dialogueIdx, setDialogueIdx] = useState(0);
+  const [cycleIdx, setCycleIdx] = useState(0);
+
+  useEffect(() => {
+    api.getProfile().then(setProfile).catch(() => {});
+  }, []);
+
+  const currentText = getDialogues(profile?.player?.displayName)[dialogueIdx];
+  const { displayed, done } = useTypewriter(currentText, 45);
+
+  const handleDialogueClick = () => {
+    if (!done) return;
+    if (dialogueIdx === 0) { setDialogueIdx(1); setCycleIdx(1); }
+    else { const next = cycleIdx === 1 ? 2 : 1; setDialogueIdx(next); setCycleIdx(next); }
+  };
+
+  const hour = new Date().getHours();
+  const greeting = hour < 6 ? 'LATE NIGHT' : hour < 12 ? 'GOOD MORNING' : hour < 18 ? 'GOOD AFTERNOON' : 'GOOD EVENING';
+  const name = profile?.player?.displayName || '旅行者';
+  const level = profile?.progress?.level || 1;
+  const gold = profile?.wallet?.gold || 0;
+  const diamond = profile?.wallet?.diamond || 0;
+
+  const sideButtons = [
+    { icon: '▶', label: '頻道', url: 'https://www.youtube.com/@音無恋' },
+    { icon: '⚔', label: '戰鬥', tab: 'combat' },
+    { icon: '⬡', label: '背包', tab: 'inventory' },
+    { icon: '◈', label: '商店', tab: 'shop' },
+    { icon: '✦', label: '大廳', tab: 'chat' },
+  ];
+
+  return (
+    <div style={{
+      position: 'relative', height: '100%', overflow: 'hidden',
+      background: 'linear-gradient(175deg, #04060e 0%, #080c1c 40%, #060e1a 100%)',
+    }}>
+
+      {/* ── 背景層 ── */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+        {/* 頂部藍紫光暈 */}
+        <div style={{ position: 'absolute', top: '-20%', left: '50%', transform: 'translateX(-50%)', width: '140%', height: '60%', background: 'radial-gradient(ellipse, rgba(60,40,160,0.25) 0%, transparent 70%)' }} />
+        {/* 右上金光 */}
+        <div style={{ position: 'absolute', top: '5%', right: '-10%', width: '50%', height: '40%', background: 'radial-gradient(ellipse, rgba(200,160,60,0.1) 0%, transparent 70%)' }} />
+        {/* 底部暗漸層 */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%', background: 'linear-gradient(to top, #04060e 0%, transparent 100%)' }} />
+        {/* 細線裝飾 */}
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(to right, transparent, rgba(200,169,110,0.4), transparent)' }} />
+      </div>
+
+      {/* ── 頂部 HUD ── */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+        padding: '14px 16px 0',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+      }}>
+        {/* 左：玩家 */}
+        <div>
+          <p style={{ margin: 0, fontSize: '9px', color: 'var(--gold)', letterSpacing: '0.2em', fontFamily: 'var(--font-display)', opacity: 0.8 }}>{greeting}</p>
+          <p style={{ margin: '3px 0 0', fontSize: '1.05rem', fontWeight: 700, color: '#f0e6d3', letterSpacing: '0.05em', fontFamily: 'var(--font-display)' }}>{name}</p>
+          <div style={{ marginTop: '5px' }}>
+            <span style={{
+              fontSize: '9px', letterSpacing: '0.12em', fontFamily: 'var(--font-display)',
+              color: 'var(--gold)', border: '1px solid rgba(200,169,110,0.4)',
+              padding: '2px 8px', borderRadius: '2px',
+            }}>LV. {level}</span>
+          </div>
         </div>
+
+        {/* 右：貨幣 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end' }}>
+          {[
+            { icon: '💰', val: gold, color: '#e8c97a', border: 'rgba(200,169,110,0.3)' },
+            { icon: '💎', val: diamond, color: '#7ab4ff', border: 'rgba(100,160,255,0.25)' },
+          ].map(c => (
+            <div key={c.icon} style={{
+              display: 'flex', alignItems: 'center', gap: '5px',
+              background: 'rgba(4,6,14,0.7)', backdropFilter: 'blur(8px)',
+              padding: '3px 10px 3px 8px', borderRadius: '2px',
+              border: `1px solid ${c.border}`,
+            }}>
+              <span style={{ fontSize: '0.72rem' }}>{c.icon}</span>
+              <span style={{ fontSize: '0.72rem', color: c.color, fontWeight: 700, letterSpacing: '0.04em', fontFamily: 'var(--font-display)' }}>{c.val.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 看板娘 ── */}
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 5 }}>
+        {/* 地面光暈 */}
+        <div style={{
+          position: 'absolute', bottom: 'calc(var(--nav-height) + 2%)',
+          left: '50%', transform: 'translateX(-50%)',
+          width: '220px', height: '20px', borderRadius: '50%',
+          background: 'radial-gradient(ellipse, rgba(200,169,110,0.45) 0%, transparent 70%)',
+          filter: 'blur(10px)',
+        }} />
+        <img
+          src={`${import.meta.env.BASE_URL}chara.png`}
+          alt="看板娘"
+          style={{
+            height: '80%',
+            maxHeight: 'calc(100% - var(--nav-height) - 100px)',
+            objectFit: 'contain',
+            objectPosition: 'center bottom',
+            marginBottom: 'calc(var(--nav-height) + 110px)',
+            filter: 'drop-shadow(0 0 40px rgba(200,169,110,0.3)) drop-shadow(0 0 80px rgba(60,40,160,0.3))',
+            userSelect: 'none', pointerEvents: 'none',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)',
+            maskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)',
+          }}
+        />
+      </div>
+
+      {/* ── 右側功能按鈕 ── */}
+      <div style={{
+        position: 'absolute', right: '10px',
+        top: '50%', transform: 'translateY(-50%)',
+        display: 'flex', flexDirection: 'column', gap: '8px',
+        zIndex: 20,
+      }}>
+        {sideButtons.map((btn) => (
+          <button
+            key={btn.tab ?? btn.label}
+            onClick={() => btn.url ? window.open(btn.url, '_blank', 'noopener,noreferrer') : onNavigate(btn.tab)}
+            style={{
+              width: '48px', height: '52px',
+              background: 'rgba(4,6,14,0.75)', backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(200,169,110,0.2)',
+              borderRadius: '2px', cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: '3px', transition: 'all 0.18s ease',
+              position: 'relative', overflow: 'hidden',
+            }}
+            onMouseOver={e => { e.currentTarget.style.borderColor = 'rgba(200,169,110,0.7)'; e.currentTarget.style.background = 'rgba(200,169,110,0.08)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(200,169,110,0.2)'; }}
+            onMouseOut={e => { e.currentTarget.style.borderColor = 'rgba(200,169,110,0.2)'; e.currentTarget.style.background = 'rgba(4,6,14,0.75)'; e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            <span style={{ fontSize: '1.1rem', color: 'var(--gold)', lineHeight: 1 }}>{btn.icon}</span>
+            <span style={{ fontSize: '9px', color: 'rgba(200,169,110,0.7)', letterSpacing: '0.08em', fontFamily: 'var(--font-display)' }}>{btn.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── 底部對話框（HSR VN 風格）── */}
+      <div
+        onClick={handleDialogueClick}
+        style={{
+          position: 'absolute',
+          bottom: 'calc(var(--nav-height) + 10px)',
+          left: '10px', right: '10px',
+          zIndex: 20, cursor: done ? 'pointer' : 'default',
+        }}
+      >
+        {/* 橫線裝飾 */}
+        <div style={{ height: '1px', background: 'linear-gradient(to right, transparent, rgba(200,169,110,0.5), transparent)', marginBottom: '0' }} />
+
+        <div style={{
+          background: 'rgba(4,6,14,0.88)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(200,169,110,0.25)',
+          borderTop: 'none',
+          borderRadius: '0 0 4px 4px',
+          padding: '10px 14px 12px',
+          position: 'relative',
+        }}>
+          {/* 角色名標籤 */}
+          <div style={{
+            position: 'absolute', top: '-14px', left: '0',
+            background: 'rgba(4,6,14,0.95)',
+            border: '1px solid rgba(200,169,110,0.4)',
+            borderBottom: 'none',
+            padding: '2px 14px',
+            borderRadius: '4px 4px 0 0',
+            fontSize: '10px', fontWeight: 700, color: 'var(--gold)',
+            letterSpacing: '0.15em', fontFamily: 'var(--font-display)',
+          }}>
+            音無恋
+          </div>
+
+          {/* 對話文字 */}
+          <p style={{
+            margin: 0, fontSize: '0.85rem', color: '#f0e6d3',
+            lineHeight: 1.75, letterSpacing: '0.04em', minHeight: '3em',
+            fontFamily: 'var(--font-body)',
+          }}>
+            {displayed}
+          </p>
+
+          {/* 點擊提示 */}
+          {done && (
+            <div style={{
+              position: 'absolute', bottom: '8px', right: '12px',
+              color: 'var(--gold)', fontSize: '9px', letterSpacing: '0.15em',
+              animation: 'pulse 1.4s ease-in-out infinite',
+              fontFamily: 'var(--font-display)',
+            }}>
+              ▼ TAP
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 左下角版本標記 ── */}
+      <div style={{
+        position: 'absolute', bottom: 'calc(var(--nav-height) + 12px)', left: '14px',
+        zIndex: 20, pointerEvents: 'none',
+      }}>
+        <p style={{ margin: 0, fontSize: '8px', color: 'rgba(200,169,110,0.3)', letterSpacing: '0.15em', fontFamily: 'var(--font-display)' }}>
+          音無玄學棋牌社
+        </p>
       </div>
     </div>
   );
@@ -399,9 +650,8 @@ function ProfileTab() {
 
       {/* 基礎屬性 */}
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <div style={{ marginBottom: '12px' }}>
           <h4 style={{ margin: 0, fontSize: '14px', color: 'var(--muted)' }}>屬性配點 (Attributes)</h4>
-          <span style={{ fontSize: '12px', background: 'var(--accent-strong)', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>剩餘點數: {progress.statusPoints}</span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px 16px', fontSize: '14px' }}>
@@ -759,7 +1009,7 @@ function CombatTab() {
 
       {[ 
         { key: 'normal', name: '新手區', lv: 'Lv.1 ~ 10', desc: '適合初學者的史萊姆與小型怪物出沒區域。', color: 'var(--success)' },
-        { key: 'mid',    name: '次級區', lv: 'Lv.11 ~ 30', desc: '更危險的怪物巢穴，建議準備好裝備再前往。', color: 'var(--warn)' }
+        { key: 'mid',    name: '次級區', lv: 'Lv.10 ~ 15', desc: '更危險的怪物巢穴，建議準備好裝備再前往。', color: 'var(--warn)' }
       ].map(z => {
         const data = getZoneData(z.key);
         const hpPercent = data.maxHp > 0 ? (data.currentHp / data.maxHp) * 100 : 0;
@@ -858,14 +1108,38 @@ function CombatTab() {
               </div>
             )}
 
-            <button className="btn" disabled={isBattling} onClick={() => startBattle(z.key)} style={{ 
-              borderColor: z.color, 
+            {/* 累計傷害排行 */}
+            {data.damageLeaderboard && data.damageLeaderboard.length > 0 && (
+              <div style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '10px', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                  ⚔️ 本輪累計傷害
+                </p>
+                {data.damageLeaderboard.map((entry, idx) => {
+                  const totalDmg = data.damageLeaderboard.reduce((s, e) => s + e.damage, 0);
+                  const pct = totalDmg > 0 ? (entry.damage / totalDmg) * 100 : 0;
+                  const medals = ['🥇', '🥈', '🥉'];
+                  return (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: idx < data.damageLeaderboard.length - 1 ? '6px' : 0 }}>
+                      <span style={{ fontSize: '12px', width: '20px', textAlign: 'center' }}>{medals[idx] || `${idx + 1}`}</span>
+                      <span style={{ flex: 1, fontSize: '12px', color: '#e8d8ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</span>
+                      <div style={{ width: '60px', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: z.color, borderRadius: '2px' }} />
+                      </div>
+                      <span style={{ fontSize: '11px', color: z.color, fontWeight: 700, minWidth: '40px', textAlign: 'right' }}>{entry.damage.toLocaleString()}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <button className="btn" disabled={isBattling} onClick={() => startBattle(z.key)} style={{
+              borderColor: z.color,
               color: z.color,
               background: isBattling ? 'transparent' : `${z.color}10`,
               fontWeight: 'bold',
               letterSpacing: '1px'
             }}>
-              {isBattling ? '戰鬥準備中...' : '⚔️ 進入該區域出戰'}
+              {isBattling ? '戰鬥中...' : '⚔️ 進入該區域出戰'}
             </button>
           </div>
         );
@@ -1219,10 +1493,102 @@ function ChatTab() {
   );
 }
 
+// ===== 設定分頁 =====
+function SettingsTab({ audioRef, bgmMuted, onToggleBgm, volume, onVolumeChange, onLogout }) {
+  return (
+    <div className="app-screen" style={{ gap: '16px' }}>
+      <h2 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>設定</h2>
+
+      {/* 音樂區塊 */}
+      <div className="card" style={{ marginBottom: 0 }}>
+        <p style={{ margin: '0 0 14px', fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>背景音樂</p>
+
+        {/* 開關 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+          <span style={{ fontSize: '0.95rem' }}>{bgmMuted ? '🔇 已靜音' : '🔈 播放中'}</span>
+          <button onClick={onToggleBgm} style={{
+            padding: '6px 18px', borderRadius: '20px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
+            background: bgmMuted ? 'var(--surface-hover)' : 'var(--accent)',
+            color: '#fff', border: 'none', transition: 'all 0.2s',
+          }}>
+            {bgmMuted ? '開啟' : '關閉'}
+          </button>
+        </div>
+
+        {/* 音量滑桿 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--muted)' }}>
+            <span>音量</span>
+            <span>{Math.round(volume * 100)}%</span>
+          </div>
+          <input type="range" min="0" max="1" step="0.01" value={volume}
+            onChange={e => onVolumeChange(parseFloat(e.target.value))}
+            style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
+          />
+        </div>
+      </div>
+
+      {/* 登出 */}
+      <div className="card" style={{ marginBottom: 0 }}>
+        <p style={{ margin: '0 0 14px', fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>帳號</p>
+        <button className="btn" onClick={onLogout}
+          style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#f87171' }}>
+          登出
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState('home');
   const [isInitializing, setIsInitializing] = useState(true);
+  const audioRef = useRef(null);
+  const [bgmMuted, setBgmMuted] = useState(false);
+  const [volume, setVolume] = useState(0.35);
+
+  const toggleBgm = () => {
+    if (!audioRef.current) return;
+    if (bgmMuted) {
+      audioRef.current.play().catch(() => {});
+    } else {
+      audioRef.current.pause();
+    }
+    setBgmMuted(m => !m);
+  };
+
+  const handleVolumeChange = (v) => {
+    setVolume(v);
+    if (audioRef.current) audioRef.current.volume = v;
+  };
+
+  const handleLogout = () => {
+    setToken(null);
+    setIsAuthenticated(false);
+  };
+
+  // 背景音樂：首次使用者互動後自動播放
+  useEffect(() => {
+    const audio = new Audio(`${import.meta.env.BASE_URL}op.ogg`);
+    audio.loop = true;
+    audio.volume = 0.35;
+    audioRef.current = audio;
+
+    const tryPlay = () => {
+      if (!audioRef.current) return;
+      audioRef.current.play().catch(() => {});
+    };
+    window.addEventListener('pointerdown', tryPlay, { once: true });
+    window.addEventListener('keydown', tryPlay, { once: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', tryPlay);
+      window.removeEventListener('keydown', tryPlay);
+      audio.pause();
+      audioRef.current = null;
+    };
+  }, []);
 
   // Check URL for ?code= (Discord OAuth Callback)
   useEffect(() => {
@@ -1257,14 +1623,29 @@ export default function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+        {activeTab === 'home' && <HomeTab onNavigate={setActiveTab} />}
         {activeTab === 'profile' && <ProfileTab />}
         {activeTab === 'inventory' && <InventoryTab />}
         {activeTab === 'combat' && <CombatTab />}
         {activeTab === 'shop' && <ShopTab />}
         {activeTab === 'chat' && <ChatTab />}
+        {activeTab === 'settings' && (
+          <SettingsTab
+            audioRef={audioRef}
+            bgmMuted={bgmMuted}
+            onToggleBgm={toggleBgm}
+            volume={volume}
+            onVolumeChange={handleVolumeChange}
+            onLogout={handleLogout}
+          />
+        )}
       </div>
 
       <nav className="bottom-nav">
+        <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+          <Icons.Home />
+          <span>首頁</span>
+        </div>
         <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
           <Icons.User />
           <span>角色</span>
@@ -1284,6 +1665,10 @@ export default function App() {
         <div className={`nav-item ${activeTab === 'shop' ? 'active' : ''}`} onClick={() => setActiveTab('shop')}>
           <Icons.Store />
           <span>商店</span>
+        </div>
+        <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+          <Icons.Settings />
+          <span>設定</span>
         </div>
       </nav>
     </div>

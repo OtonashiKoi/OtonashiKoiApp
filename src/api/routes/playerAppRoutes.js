@@ -364,6 +364,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         let activeMonster = monsters.find(m => m.seq === state.activeMonsterSeq);
         if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
 
+        const dmgMap = state.damageMap || {};
+        const damageLeaderboard = Object.values(dmgMap)
+          .sort((a, b) => b.damage - a.damage)
+          .slice(0, 10);
+
         return {
           zone: key,
           monsterName: activeMonster?.name || "未知",
@@ -375,7 +380,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           currentHp: state.currentHp !== undefined ? state.currentHp : (activeMonster?.calc?.maxHp || 0),
           maxHp: activeMonster?.calc?.maxHp || 0,
           participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
-          activeMonsterSeq: state.activeMonsterSeq
+          activeMonsterSeq: state.activeMonsterSeq,
+          damageLeaderboard,
         };
       }));
       res.json(ok(results));

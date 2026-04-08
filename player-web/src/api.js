@@ -1,9 +1,9 @@
 import remoteConfig from './config.json';
 
-// 自動偵測 API 來源：1. 環境變數 2. config.json 3. 當前主機 4. 預設 localhost
-export const API_ORIGIN = import.meta.env.VITE_API_URL || 
-                   remoteConfig.remoteApiUrl ||
-                   (window.location.hostname !== 'localhost' ? `https://${window.location.hostname}` : 'http://localhost:5566');
+// 自動偵測 API 來源：localhost 優先走本機，否則依序讀環境變數 / config.json
+export const API_ORIGIN = window.location.hostname === 'localhost'
+  ? 'http://localhost:5566'
+  : (import.meta.env.VITE_API_URL || remoteConfig.remoteApiUrl || `https://${window.location.hostname}`);
 const API_BASE = `${API_ORIGIN}/api`;
 
 function getToken() {
