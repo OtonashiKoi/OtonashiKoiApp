@@ -1021,7 +1021,7 @@ function CombatTab() {
   const getZoneData = (key) => zones.find(z => z.zone === key) || {};
 
   return (
-    <div className="app-screen" style={{ position: 'relative', height: '100%' }}>
+    <div className="app-screen" style={{ position: 'relative' }}>
       <h2 style={{ marginBottom: '16px' }}>戰鬥區 Combat</h2>
       <p style={{ color: 'var(--muted)', fontSize: '13px', marginBottom: '20px', lineHeight: 1.5 }}>
         選擇你想挑戰的地圖區域。隨著等級提升，可以解鎖更強大的區域。
