@@ -239,6 +239,15 @@ function createMongoRepositories() {
           { upsert: true }
         );
         return state;
+      },
+      // 原子收付擊殺權：成功回 true，已被其他進程收付回 false
+      async claimKill(zoneKey, monsterSeq) {
+        const col = await collection("monsterState");
+        const result = await col.findOneAndUpdate(
+          { _id: zoneKey, "value.activeMonsterSeq": monsterSeq, "value.killClaimedSeq": { $ne: monsterSeq } },
+          { $set: { "value.killClaimedSeq": monsterSeq, updatedAt: new Date().toISOString() } }
+        );
+        return result !== null;
       }
     }
   };

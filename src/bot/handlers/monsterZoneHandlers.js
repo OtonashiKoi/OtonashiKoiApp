@@ -520,6 +520,12 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   killInProgress.add(killKey);
 
   try {
+  // DB 層原子收付擊殺權（防止 PM2 雙進程重載期間雙重結算）
+  const claimed = await sc.monsterRepository.claimKill(zoneKey, monster.seq);
+  if (!claimed) {
+    return rewardLines;
+  }
+
   // 參戰名單（含擊殺者）
   const participants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
 

@@ -43,6 +43,11 @@ class JsonMonsterRepository {
     await writeStore(store);
     return state;
   }
+
+  // JSON 不會有多進程問題，永遠回傳 true
+  async claimKill(_zoneKey, _monsterSeq) {
+    return true;
+  }
 }
 
 module.exports = { JsonMonsterRepository };
