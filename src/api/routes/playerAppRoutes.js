@@ -74,7 +74,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       // ── 驗證是否為伺服器成員 ──
-      const guildId = require("../../config").guildId;
+      const guildId = require("../../config").discord.guildId;
       if (guildId && discordClient && !code.startsWith("mock:")) {
         try {
           const guild = discordClient.guilds.cache.get(guildId)
@@ -376,7 +376,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // 7b. Get guild stickers & emojis for chat picker
   router.get("/api/chat/expressions", requireAuth, async (req, res, next) => {
     try {
-      const guildId = require("../../config").guildId;
+      const guildId = require("../../config").discord.guildId;
       console.log("[expressions] guildId:", guildId, "| discordClient ready:", !!discordClient?.isReady?.());
       if (!guildId || !discordClient) return res.json(ok({ stickers: [], emojis: [] }));
 
