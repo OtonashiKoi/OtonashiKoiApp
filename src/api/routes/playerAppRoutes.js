@@ -128,6 +128,30 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 3.1 Equip Item
+  router.post("/api/me/inventory/equip/:uuid", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { uuid } = req.params;
+      const result = await serviceContext.shopService.equipItem(discordId, uuid);
+      res.json(ok(result));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 3.2 Unequip Item
+  router.post("/api/me/inventory/unequip/:slot", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { slot } = req.params;
+      const result = await serviceContext.shopService.unequipItem(discordId, slot);
+      res.json(ok(result));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // 4. Send Chat Lobby Message
   router.post("/api/chat/lobby", requireAuth, async (req, res, next) => {
     try {
