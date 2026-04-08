@@ -390,17 +390,20 @@ async function handleStartFight(interaction) {
 
       if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
 
-      // 怪物反擊
-      const monsterHitChance = session.monsterStats.hit - session.playerStats.dodge;
-      if (Math.random() * 100 < monsterHitChance) {
-        const dmg = rollDmg(Math.max(1, session.monsterStats.atk - session.playerStats.def));
-        session.playerHp -= dmg;
-        log.push(`💥 ${session.monsterName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, session.playerHp)} HP）`);
-      } else {
-        log.push(`🛡️ ${session.monsterName} 猛撲而來，你${rand(mDodgePhrases)}，躲過了攻擊！`);
+      // 怪物反擊（法杖裝備者每回合受兩次攻擊）
+      const monsterAttackCount = session.playerStats.monsterAttackCount || 1;
+      for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
+        const monsterHitChance = session.monsterStats.hit - session.playerStats.dodge;
+        if (Math.random() * 100 < monsterHitChance) {
+          const dmg = rollDmg(Math.max(1, session.monsterStats.atk - session.playerStats.def));
+          session.playerHp -= dmg;
+          log.push(`💥 ${session.monsterName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, session.playerHp)} HP）`);
+          if (session.playerHp <= 0) { outcome = "lose"; break; }
+        } else {
+          log.push(`🛡️ ${session.monsterName} 猛撲而來，你${rand(mDodgePhrases)}，躲過了攻擊！`);
+        }
       }
-
-      if (session.playerHp <= 0) { outcome = "lose"; roundLogs.push(log.join("\n")); break; }
+      if (outcome === "lose") { roundLogs.push(log.join("\n")); break; }
 
       roundLogs.push(log.join("\n"));
       round++;

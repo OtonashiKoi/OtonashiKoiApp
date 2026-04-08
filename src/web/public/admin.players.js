@@ -26,8 +26,9 @@
     if (weapon?.weaponType === "staff_1h" || weapon?.weaponType === "staff_2h") atkBase = tInt;
     else if (weapon?.weaponType === "bow") atkBase = tDex;
     else atkBase = tStr;
-    const isTwoHanded = weapon?.isTwoHanded || false;
-    const atkMult = isTwoHanded ? 2 : 3;
+    const wt = weapon?.weaponType;
+    const WEAPON_MULTS = { dagger: 2, axe_2h: 4, staff_1h: 4, staff_2h: 5 };
+    const atkMult = WEAPON_MULTS[wt] ?? 3;
     return {
       hp: tVit * 15 + 50,
       atk: Math.round(atkBase * atkMult) + eqAtk,
