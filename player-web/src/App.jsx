@@ -1056,13 +1056,14 @@ function CombatTab() {
                 display: 'flex',
                 flexDirection: 'column'
               }}>
-                <div style={{ display: 'flex', minHeight: '120px' }}>
+                <div style={{ display: 'flex', height: '120px', flexShrink: 0 }}>
                   {/* 怪物圖片區 */}
-                  <div style={{ 
-                    width: '100px', 
-                    background: 'rgba(255,255,255,0.03)', 
-                    display: 'flex', 
-                    alignItems: 'center', 
+                  <div style={{
+                    width: '100px',
+                    flexShrink: 0,
+                    background: 'rgba(255,255,255,0.03)',
+                    display: 'flex',
+                    alignItems: 'center',
                     justifyContent: 'center',
                     borderRight: '1px solid var(--glass-border)',
                     position: 'relative'
