@@ -159,7 +159,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
   // 5. SSE Client Management
   // 輔助函式：解析 Discord 提到的名稱
-  const resolveMentions = async (text) => {
+  const resolveMentions = async (text, guild = null) => {
     if (!text || typeof text !== "string") return text;
     const mentionRegex = /<@!?(\d+)>/g;
     const matches = [...text.matchAll(mentionRegex)];
@@ -177,16 +177,27 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       try {
         let playerName = null;
-        // 1. 先從資料庫找
-        const player = await serviceContext.playerRepository.findByDiscordId(userId);
-        if (player) {
-          playerName = player.displayName;
-        } else if (serviceContext.progressRepository) {
-          const progress = await serviceContext.progressRepository.findByPlayerId(userId);
-          if (progress) playerName = progress.displayName;
+        
+        // 1. 如果有傳入 Guild，優先從 Server Member 中抓取「伺服器暱稱」
+        if (guild) {
+          try {
+            const member = await guild.members.fetch(userId);
+            if (member) playerName = member.displayName;
+          } catch (e) { /* 抓不到 member 則繼續往下找 */ }
         }
 
-        // 2. 如果資料庫找不到，透過 Discord Client 直接從官方 API 抓取
+        // 2. 從資料庫找
+        if (!playerName) {
+          const player = await serviceContext.playerRepository.findByDiscordId(userId);
+          if (player) {
+            playerName = player.displayName;
+          } else if (serviceContext.progressRepository) {
+            const progress = await serviceContext.progressRepository.findByPlayerId(userId);
+            if (progress) playerName = progress.displayName;
+          }
+        }
+
+        // 3. 如果資料庫找不到，且沒傳入 Guild，才透過 Discord Client 直接從官方 API 抓取全局名稱
         if (!playerName && discordClient) {
           try {
             const user = await discordClient.users.fetch(userId);
@@ -225,7 +236,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           id: msg.id,
           author: msg.author.username,
           avatar: msg.author.displayAvatarURL(),
-          content: await resolveMentions(content),
+          content: await resolveMentions(content, msg.guild),
           timestamp: msg.createdTimestamp,
           isBot: msg.author.bot
         };
@@ -272,7 +283,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const history = await Promise.all([...messages.values()].map(async (msg) => {
         let content = msg.content;
         if (msg.embeds.length > 0 && !content) content = "傳送了一個面板";
-        const resolvedContent = await resolveMentions(content);
+        const resolvedContent = await resolveMentions(content, channel.guild);
         return {
           id: msg.id,
           author: msg.author.username,
