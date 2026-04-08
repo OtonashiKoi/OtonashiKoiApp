@@ -365,6 +365,7 @@ function CombatTab() {
 function ShopTab() {
   const [items, setItems] = useState(null);
   const [wallet, setWallet] = useState(null);
+  const [category, setCategory] = useState('all'); // 'all', 'equipment', 'consumable', 'collectible'
 
   const loadData = () => {
     Promise.all([
@@ -398,31 +399,67 @@ function ShopTab() {
 
   if (!items) return <div className="app-screen" style={{display:'flex',justifyContent:'center',alignItems:'center'}}>Loading Shop...</div>;
 
+  const filteredItems = items.filter(item => {
+    if (category === 'all') return true;
+    return item.itemType === category;
+  });
+
+  const categories = [
+    { key: 'all', label: '全部' },
+    { key: 'equipment', label: '裝備' },
+    { key: 'consumable', label: '消耗品' },
+    { key: 'collectible', label: '收藏品' }
+  ];
+
   return (
     <div className="app-screen" style={{ paddingBottom: 'calc(var(--nav-height) + 16px)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0 }}>商店 Market</h2>
-        {wallet && <div style={{ background: 'rgba(241, 196, 15, 0.2)', color: '#f1c40f', padding: '4px 12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>💰 {wallet.gold}</div>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', gap: '8px' }}>
+        <h2 style={{ margin: 0, fontSize: '1.6rem' }}>商店 Market</h2>
+        {wallet && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '6px' }}>
+            <div style={{ background: 'rgba(241, 196, 15, 0.15)', color: '#f1c40f', padding: '4px 10px', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', whiteSpace: 'nowrap', border: '1px solid rgba(241, 196, 15, 0.2)' }}>
+              💰 {wallet.gold}
+            </div>
+            <div style={{ background: 'rgba(52, 152, 219, 0.15)', color: '#3498db', padding: '4px 10px', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', whiteSpace: 'nowrap', border: '1px solid rgba(52, 152, 219, 0.2)' }}>
+              💎 {wallet.diamond}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 分類篩選列 */}
+      <div className="filter-bar">
+        {categories.map(c => (
+          <div 
+            key={c.key} 
+            className={`filter-pill ${category === c.key ? 'active' : ''}`}
+            onClick={() => setCategory(c.key)}
+          >
+            {c.label}
+          </div>
+        ))}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {items.length === 0 ? <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '40px 0' }}>目前沒有販售任何商品，請稍後再來。</p> : null}
+        {filteredItems.length === 0 ? <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '40px 0' }}>目前該分類下沒有商品。</p> : null}
         
-        {items.map(item => (
+        {filteredItems.map(item => (
           <div key={item.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               <div style={{ width: '40px', height: '40px', background: 'var(--surface-hover)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', overflow: 'hidden' }}>
                 {item.imageUrl ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : '📦'}
               </div>
-              <div>
+              <div style={{ flex: 1 }}>
                 <h4 style={{ margin: 0, fontSize: '15px' }}>{item.name} <span style={{fontSize:'12px', color:'var(--muted)', fontWeight:'normal'}}>Lv.{item.reqLevel || 1}</span></h4>
                 <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--muted)' }}>
-                  {item.itemType} {item.equipSlot ? `(${item.equipSlot})` : ''} 
-                  {item.rating > 0 ? ` - ⭐${item.rating}` : ''}
+                  {item.itemType === 'equipment' ? '裝備' : 
+                   item.itemType === 'consumable' ? '消耗品' : 
+                   item.itemType === 'collectible' ? '收藏品' : item.itemType} 
+                  {item.equipSlot ? ` (${item.equipSlot})` : ''} 
                 </p>
                 <div style={{ fontSize: '11px', color: 'var(--success)', marginTop: '4px' }}>
                   {item.effect?.type === 'heal' ? `恢復 ${item.effect.value} HP` : 
-                   item.equipStats ? `提供額外裝備屬性加成` : '遊戲消耗品'}
+                   item.itemType === 'equipment' ? `提供額外裝備屬性加成` : '點擊使用獲得效果'}
                 </div>
               </div>
             </div>

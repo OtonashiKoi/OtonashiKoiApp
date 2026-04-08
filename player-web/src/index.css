@@ -23,6 +23,62 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 篩選列 */
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 0 16px 0;
+  margin-bottom: 8px;
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.filter-bar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+.filter-pill {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 6px 18px;
+  border-radius: 20px;
+  background: var(--surface-hover);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid var(--glass-border);
+}
+
+.filter-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.filter-pill.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 0 15px rgba(108, 92, 231, 0.3);
+}
+
+/* 之前遺漏的滾動條美化 */
+.modal-body::-webkit-scrollbar,
+.app-screen::-webkit-scrollbar {
+  width: 5px;
+}
+.modal-body::-webkit-scrollbar-thumb,
+.app-screen::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+.modal-body::-webkit-scrollbar-track,
+.app-screen::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 body {
   margin: 0;
   padding: 0;
