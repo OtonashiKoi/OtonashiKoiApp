@@ -17,8 +17,8 @@ export function setToken(token) {
 
 export function getDiscordLoginUrl() {
   const clientId = "1450019975031951370";
-  // 自動適應當前網址作為 Redirect URI
-  const redirectUri = encodeURIComponent(`${window.location.protocol}//${window.location.host}/`);
+  // 自動適應當前網址作為 Redirect URI (支援 GitHub Pages 子路徑)
+  const redirectUri = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
   return `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify`;
 }
 

@@ -13,6 +13,40 @@ const Icons = {
   CheckCircle: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
 };
 
+// ===== Discord 登入畫面 =====
+function LoginScreen() {
+  return (
+    <div className="app-screen" style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      height: '100vh', background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+      color: '#fff', textAlign: 'center', padding: '2rem'
+    }}>
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '0.5rem',
+          background: 'linear-gradient(135deg, #ffd700, #ff8c00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          ⚔️ Equipment Game
+        </h1>
+        <p style={{ color: '#8892b0', fontSize: '0.95rem' }}>Discord RPG 裝備冒險平台</p>
+      </div>
+      <a href={getDiscordLoginUrl()} style={{
+        display: 'inline-flex', alignItems: 'center', gap: '12px', padding: '14px 32px',
+        background: '#5865F2', color: '#fff', borderRadius: '12px', fontSize: '1.1rem',
+        fontWeight: 700, textDecoration: 'none', transition: 'all 0.2s ease',
+        boxShadow: '0 4px 20px rgba(88, 101, 242, 0.4)'
+      }}
+        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+      >
+        <Icons.Discord />
+        使用 Discord 登入
+      </a>
+      <p style={{ marginTop: '1.5rem', color: '#4a5568', fontSize: '0.8rem' }}>
+        登入後即可管理角色、裝備與商城
+      </p>
+    </div>
+  );
+}
+
 const getAssetUrl = (url) => {
   if (!url) return null;
   if (url.startsWith('http')) return url;
