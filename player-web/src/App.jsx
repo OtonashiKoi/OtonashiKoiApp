@@ -1388,6 +1388,9 @@ function ChatTab() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [myDisplayName, setMyDisplayName] = useState('');
+  const [expressions, setExpressions] = useState({ stickers: [], emojis: [] });
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState('emoji'); // 'emoji' | 'sticker'
   const messagesEndRef = React.useRef(null);
 
   const scrollToBottom = () => {
@@ -1395,9 +1398,12 @@ function ChatTab() {
   };
 
   useEffect(() => {
-    // 從第一頁載入的時候去拿 Profile，因為這裡沒有全域狀態，我們偷懶再拿一次
     api.getProfile().then(data => {
       setMyDisplayName(data.player.displayName);
+    }).catch(() => {});
+
+    api.getChatExpressions().then(data => {
+      setExpressions(data);
     }).catch(() => {});
 
     // 1. 取得歷史紀錄
@@ -1464,26 +1470,40 @@ function ChatTab() {
     };
   }, []);
 
-  const handleSend = async () => {
-    if (!message.trim()) return;
+  const handleSend = async (overrideMsg) => {
+    const text = overrideMsg ?? message;
+    if (!text.trim()) return;
     try {
-      await api.sendChatMessage(message);
-      // Optimistic upate (沒 id 會被下一次 SSE 蓋掉或追加，這裡先不推入去重靠服務端，但為了流暢我們先推)
+      await api.sendChatMessage(text);
       setMessages(prev => [...prev, {
         id: "temp-" + Date.now(),
-        text: message,
+        text,
         author: myDisplayName || "Me",
         time: new Date().toLocaleTimeString()
       }]);
-      setMessage('');
+      if (!overrideMsg) setMessage('');
       setTimeout(scrollToBottom, 50);
     } catch (err) {
       alert("發送失敗: " + err.message);
     }
   };
 
+  const handleSendExpression = async (expr) => {
+    setShowPicker(false);
+    // emoji 用 code 插入文字；sticker 直接送圖片 URL
+    if (expr.code) {
+      // Discord emoji code，直接附加到目前訊息或單獨發送
+      const text = message ? `${message} ${expr.code}` : expr.code;
+      setMessage('');
+      await handleSend(text);
+    } else {
+      // Sticker — 傳圖片連結
+      await handleSend(expr.url);
+    }
+  };
+
   return (
-    <div className="app-screen" style={{ height: '100%', paddingBottom: '16px' }}>
+    <div className="app-screen" style={{ height: '100%', paddingBottom: '16px', position: 'relative' }}>
       <header style={{ flexShrink: 0, marginBottom: '8px' }}>
         <h2 style={{ margin: 0, fontSize: '1.4rem' }}>城鎮大廳 Chat Lobby</h2>
         <p style={{ color: 'var(--muted)', fontSize: '12px', margin: '4px 0' }}>發送對話至 Discord 城鎮頻道</p>
@@ -1535,16 +1555,93 @@ function ChatTab() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexShrink: 0 }}>
-        <input 
-          type="text" 
+      {/* 表情/貼圖選擇器 */}
+      {showPicker && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(var(--nav-height) + 70px)', left: '12px', right: '12px',
+          background: 'rgba(6,8,15,0.97)', border: '1px solid var(--glass-border)',
+          borderRadius: '12px', zIndex: 50, overflow: 'hidden',
+          boxShadow: '0 -8px 32px rgba(0,0,0,0.6)',
+        }}>
+          {/* Tab 列 */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--glass-border)' }}>
+            {[{ key: 'emoji', label: '表情' }, { key: 'sticker', label: '貼圖' }].map(t => (
+              <button key={t.key} onClick={() => setPickerTab(t.key)} style={{
+                flex: 1, padding: '8px', background: 'none', border: 'none',
+                color: pickerTab === t.key ? 'var(--gold)' : 'var(--muted)',
+                borderBottom: pickerTab === t.key ? '2px solid var(--gold)' : '2px solid transparent',
+                cursor: 'pointer', fontSize: '12px', fontFamily: 'var(--font-display)',
+                letterSpacing: '0.08em', transition: 'color 0.15s',
+              }}>{t.label}</button>
+            ))}
+            <button onClick={() => setShowPicker(false)} style={{
+              background: 'none', border: 'none', color: 'var(--muted)',
+              cursor: 'pointer', padding: '8px 12px', fontSize: '14px',
+            }}>✕</button>
+          </div>
+
+          {/* 內容 */}
+          <div style={{ maxHeight: '180px', overflowY: 'auto', padding: '8px' }}>
+            {pickerTab === 'emoji' && (
+              expressions.emojis.length === 0
+                ? <p style={{ color: 'var(--muted)', fontSize: '12px', textAlign: 'center', padding: '20px 0' }}>無伺服器表情</p>
+                : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+                    {expressions.emojis.map(e => (
+                      <button key={e.id} onClick={() => handleSendExpression(e)} title={`:${e.name}:`} style={{
+                        background: 'none', border: 'none', borderRadius: '6px', cursor: 'pointer',
+                        padding: '4px', transition: 'background 0.15s', aspectRatio: '1',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                        onMouseOver={e2 => e2.currentTarget.style.background = 'rgba(200,169,110,0.12)'}
+                        onMouseOut={e2 => e2.currentTarget.style.background = 'none'}
+                      >
+                        <img src={e.url} alt={e.name} style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+                      </button>
+                    ))}
+                  </div>
+            )}
+            {pickerTab === 'sticker' && (
+              expressions.stickers.length === 0
+                ? <p style={{ color: 'var(--muted)', fontSize: '12px', textAlign: 'center', padding: '20px 0' }}>無伺服器貼圖</p>
+                : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                    {expressions.stickers.filter(s => !s.isLottie).map(s => (
+                      <button key={s.id} onClick={() => handleSendExpression(s)} title={s.name} style={{
+                        background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)',
+                        borderRadius: '8px', cursor: 'pointer', padding: '6px',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
+                        transition: 'border-color 0.15s',
+                      }}
+                        onMouseOver={e2 => e2.currentTarget.style.borderColor = 'rgba(200,169,110,0.5)'}
+                        onMouseOut={e2 => e2.currentTarget.style.borderColor = 'var(--glass-border)'}
+                      >
+                        <img src={s.url} alt={s.name} style={{ width: '56px', height: '56px', objectFit: 'contain' }} />
+                        <span style={{ fontSize: '8px', color: 'var(--muted)', textAlign: 'center', wordBreak: 'break-all' }}>{s.name}</span>
+                      </button>
+                    ))}
+                  </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 輸入列 */}
+      <div style={{ marginTop: '12px', display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
+        {/* 表情按鈕 */}
+        <button onClick={() => setShowPicker(p => !p)} style={{
+          background: showPicker ? 'rgba(200,169,110,0.12)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${showPicker ? 'rgba(200,169,110,0.5)' : 'var(--glass-border)'}`,
+          borderRadius: '10px', cursor: 'pointer', padding: '0 10px', height: '44px',
+          fontSize: '18px', transition: 'all 0.15s', flexShrink: 0,
+        }}>🎭</button>
+        <input
+          type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="發送訊息至 Discord..." 
-          style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'var(--bg)', border: '1px solid var(--line)', color: '#fff' }} 
+          placeholder="發送訊息至 Discord..."
+          style={{ flex: 1, padding: '11px 14px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', color: '#f0e6d3', fontSize: '14px', outline: 'none' }}
         />
-        <button className="btn btn-primary" onClick={handleSend} style={{ width: 'auto', padding: '0 20px' }}>送出</button>
+        <button className="btn btn-primary" onClick={() => handleSend()} style={{ width: 'auto', padding: '0 16px', height: '44px', flexShrink: 0 }}>送</button>
       </div>
     </div>
   );

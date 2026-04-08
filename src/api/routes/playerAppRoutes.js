@@ -373,6 +373,37 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 7b. Get guild stickers & emojis for chat picker
+  router.get("/api/chat/expressions", requireAuth, async (req, res, next) => {
+    try {
+      const guildId = require("../../config").guildId;
+      if (!guildId || !discordClient) return res.json(ok({ stickers: [], emojis: [] }));
+
+      const guild = discordClient.guilds.cache.get(guildId)
+        || await discordClient.guilds.fetch(guildId).catch(() => null);
+      if (!guild) return res.json(ok({ stickers: [], emojis: [] }));
+
+      const stickers = guild.stickers.cache.map(s => ({
+        id: s.id,
+        name: s.name,
+        url: `https://media.discordapp.net/stickers/${s.id}.${s.format === 3 ? 'json' : s.format === 4 ? 'gif' : 'png'}`,
+        isLottie: s.format === 3,
+      }));
+
+      const emojis = guild.emojis.cache.map(e => ({
+        id: e.id,
+        name: e.name,
+        animated: e.animated,
+        url: `https://cdn.discordapp.com/emojis/${e.id}.${e.animated ? 'gif' : 'png'}`,
+        code: e.animated ? `<a:${e.name}:${e.id}>` : `<:${e.name}:${e.id}>`,
+      }));
+
+      res.json(ok({ stickers, emojis }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // 8. Get Shop Items
   router.get("/api/shop/items", requireAuth, async (req, res, next) => {
     try {

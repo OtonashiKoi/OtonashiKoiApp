@@ -91,6 +91,7 @@ export const api = {
     body: JSON.stringify({ message })
   }),
   getChatHistory: () => fetchWithAuth("/chat/history"),
+  getChatExpressions: () => fetchWithAuth("/chat/expressions"),
   
   // 建立 Server-Sent Events 連線（EventSource 不支援 Header，以 query param 傳 token）
   createChatStream: (onMessage) => {
