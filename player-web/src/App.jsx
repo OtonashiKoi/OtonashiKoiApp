@@ -215,6 +215,7 @@ function HomeTab({ onNavigate }) {
 
   const sideButtons = [
     { icon: '▶', label: '頻道', url: 'https://www.youtube.com/@音無恋' },
+    { icon: ' X ', label: '推特', url: 'https://twitter.com/音無恋' },
     { icon: '⚔', label: '戰鬥', tab: 'combat' },
     { icon: '⬡', label: '背包', tab: 'inventory' },
     { icon: '◈', label: '商店', tab: 'shop' },
@@ -521,16 +522,21 @@ function ProfileTab() {
   };
 
   const slots = [
-    { key: 'head_top', label: '頭上', icon: '👒' },
-    { key: 'head_mid', label: '頭中', icon: '🕶️' },
-    { key: 'head_low', label: '頭下', icon: '🧣' },
-    { key: 'armor', label: '衣服', icon: '👕' },
-    { key: 'weapon', label: '主武器', icon: '⚔️' },
-    { key: 'shield', label: '副手', icon: '🛡️' },
-    { key: 'garment', label: '披肩', icon: '🧥' },
-    { key: 'shoes', label: '鞋子', icon: '👞' },
+    { key: 'head_top',    label: '頭上',  icon: '👒' },
+    { key: 'head_mid',    label: '頭中',  icon: '🕶️' },
+    { key: 'head_low',    label: '頭下',  icon: '🧣' },
+    { key: 'armor',       label: '衣服',  icon: '👕' },
+    { key: 'weapon',      label: '主武器', icon: '⚔️' },
+    { key: 'shield',      label: '副手',  icon: '🛡️' },
+    { key: 'garment',     label: '披肩',  icon: '🧥' },
+    { key: 'shoes',       label: '鞋子',  icon: '👞' },
     { key: 'accessory_l', label: '左飾品', icon: '💍' },
     { key: 'accessory_r', label: '右飾品', icon: '💍' },
+    { key: 'title_eq',    label: '稱號',  icon: '🏅' },
+    { key: 'job_eq',      label: '職業',  icon: '📜' },
+    { key: 'special_1',   label: '特殊①', icon: '✦' },
+    { key: 'special_2',   label: '特殊②', icon: '✦' },
+    { key: 'special_3',   label: '特殊③', icon: '✦' },
   ];
 
   return (
@@ -557,60 +563,62 @@ function ProfileTab() {
         </div>
       </div>
 
-      {/* 裝備欄 (Grid 佈局) - 改為更緊湊的 2 列佈局 */}
+      {/* 裝備欄 */}
       <div className="card" style={{ padding: '16px', marginBottom: '16px' }}>
-        <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--muted)' }}>裝備欄位 (Equipment)</h4>
+        <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--gold)', fontFamily: 'var(--font-display)', letterSpacing: '0.06em' }}>裝備欄位 (Equipment)</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-          {slots.map(s => {
+          {slots.flatMap((s, idx) => {
             const item = equipment[s.key];
-            return (
-                <div 
-                  key={s.key} 
-                  onClick={() => setSwappingSlot(s)}
-                  style={{ 
-                    aspectRatio: '1', 
-                    background: item ? 'var(--surface-hover)' : 'rgba(255,255,255,0.03)', 
-                    borderRadius: '12px', 
-                    border: item ? '1.5px solid var(--accent)' : '1px dashed var(--glass-border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '2px',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    transition: 'all 0.2s ease',
-                    boxShadow: item ? '0 0 10px rgba(168, 85, 247, 0.2)' : 'none'
-                  }}
-                  className="equip-slot-card"
-                >
-                  {item ? (
-                    <>
-                      <div style={{ width: '100%', height: '100%', padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {item.imageUrl ? (
-                          <img src={getAssetUrl(item.imageUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                        ) : (
-                          <div style={{ fontSize: '11px', textAlign: 'center', color: '#fff', fontWeight: 'bold', padding: '4px', wordBreak: 'break-all' }}>
-                            {item.itemName}
-                          </div>
-                        )}
-                      </div>
-                      {item.imageUrl && (
-                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '8px', padding: '2px 4px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            const cell = (
+              <div
+                key={s.key}
+                onClick={() => setSwappingSlot(s)}
+                style={{
+                  aspectRatio: '1',
+                  background: item ? 'var(--surface-hover)' : 'rgba(255,255,255,0.03)',
+                  borderRadius: '12px',
+                  border: item ? '1.5px solid var(--accent)' : '1px dashed var(--glass-border)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: '2px', cursor: 'pointer', position: 'relative', overflow: 'hidden',
+                  transition: 'all 0.2s ease',
+                  boxShadow: item ? '0 0 10px rgba(168,85,247,0.2)' : 'none'
+                }}
+                className="equip-slot-card"
+              >
+                {item ? (
+                  <>
+                    <div style={{ width: '100%', height: '100%', padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.imageUrl ? (
+                        <img src={getAssetUrl(item.imageUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      ) : (
+                        <div style={{ fontSize: '11px', textAlign: 'center', color: '#fff', fontWeight: 'bold', padding: '4px', wordBreak: 'break-all' }}>
                           {item.itemName}
                         </div>
                       )}
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ fontSize: '18px', opacity: 0.2 }}>{s.icon}</span>
-                      <span style={{ fontSize: '9px', color: 'var(--muted)', textAlign: 'center', opacity: 0.6 }}>{s.label}</span>
-                    </>
-                  )}
-                </div>
-              );
-            })}
+                    </div>
+                    {item.imageUrl && (
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '8px', padding: '2px 4px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.itemName}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: '18px', opacity: 0.2 }}>{s.icon}</span>
+                    <span style={{ fontSize: '9px', color: 'var(--muted)', textAlign: 'center', opacity: 0.6 }}>{s.label}</span>
+                  </>
+                )}
+              </div>
+            );
+            // 在第 10 格前插入金色分隔線（跨整列）
+            if (idx === 10) {
+              return [
+                <div key="divider" style={{ gridColumn: '1 / -1', height: '1px', background: 'linear-gradient(to right, transparent, rgba(200,169,110,0.3), transparent)', margin: '2px 0' }} />,
+                cell,
+              ];
+            }
+            return cell;
+          })}
           </div>
         </div>
 
@@ -825,33 +833,45 @@ function InventoryTab() {
         ))}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--muted)', marginTop: '40px' }}>此分類下暫無物品</div>
-        ) : (
-          filtered.map((item) => (
-            <div key={item.uuid} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setActiveItem(item)}>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <div style={{ width: '40px', height: '40px', background: 'var(--surface-hover)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', overflow: 'hidden' }}>
-                  {item.imageUrl ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : '📦'}
-                </div>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '15px' }}>
-                    {item.isEquipped && <span style={{ color: 'var(--accent)', marginRight: '4px' }}>[已裝備]</span>}
-                    {item.itemName}
-                  </h4>
-                  <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--muted)' }}>
-                    {item.itemType === 'equipment' ? '裝備' : 
-                     item.itemType === 'consumable' ? '消耗品' : 
-                     item.itemType === 'collectible' ? '收藏品' : item.itemType}
-                  </p>
-                </div>
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', color: 'var(--muted)', marginTop: '60px', fontSize: '13px' }}>此分類下暫無物品</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+          {filtered.map((item) => (
+            <div
+              key={item.uuid}
+              onClick={() => setActiveItem(item)}
+              style={{
+                aspectRatio: '1',
+                background: item.isEquipped ? 'rgba(200,169,110,0.08)' : 'rgba(255,255,255,0.03)',
+                border: item.isEquipped ? '1.5px solid rgba(200,169,110,0.6)' : '1px solid var(--glass-border)',
+                borderRadius: '10px', cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: '4px', position: 'relative', overflow: 'hidden',
+                transition: 'all 0.18s ease',
+              }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = 'rgba(200,169,110,0.5)'; e.currentTarget.style.background = 'rgba(200,169,110,0.06)'; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = item.isEquipped ? 'rgba(200,169,110,0.6)' : 'var(--glass-border)'; e.currentTarget.style.background = item.isEquipped ? 'rgba(200,169,110,0.08)' : 'rgba(255,255,255,0.03)'; }}
+            >
+              {/* 已裝備標記 */}
+              {item.isEquipped && (
+                <div style={{ position: 'absolute', top: 3, right: 3, width: '7px', height: '7px', borderRadius: '50%', background: 'var(--gold)' }} />
+              )}
+              {/* 圖片或預設圖示 */}
+              <div style={{ width: '60%', aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {item.imageUrl
+                  ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  : <span style={{ fontSize: '1.6rem', opacity: 0.25 }}>📦</span>
+                }
               </div>
-              <button className="btn" style={{ width: 'auto', padding: '4px 12px', fontSize: '12px' }}>操作</button>
+              {/* 名稱 */}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.65)', padding: '2px 4px', textAlign: 'center' }}>
+                <span style={{ fontSize: '8px', color: '#f0e6d3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{item.itemName}</span>
+              </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {activeItem && (
         <div className="modal-overlay" onClick={() => setActiveItem(null)}>
@@ -1210,7 +1230,8 @@ function CombatTab() {
 function ShopTab() {
   const [items, setItems] = useState(null);
   const [wallet, setWallet] = useState(null);
-  const [category, setCategory] = useState('all'); // 'all', 'equipment', 'consumable', 'collectible'
+  const [playerLevel, setPlayerLevel] = useState(1);
+  const [category, setCategory] = useState('all');
 
   const loadData = () => {
     Promise.all([
@@ -1219,6 +1240,7 @@ function ShopTab() {
     ]).then(([shopItems, profile]) => {
       setItems(shopItems);
       setWallet(profile.wallet);
+      setPlayerLevel(profile.progress?.level || 1);
     }).catch(console.error);
   };
 
@@ -1289,40 +1311,75 @@ function ShopTab() {
         ))}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {filteredItems.length === 0 ? <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '40px 0' }}>目前該分類下沒有商品。</p> : null}
-        
-        {filteredItems.map(item => {
-          const isDiamond = item.currency === 'diamond';
-          const currencyColor = isDiamond ? '#3498db' : '#f1c40f';
-          
-          return (
-            <div key={item.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <div style={{ width: '40px', height: '40px', background: 'var(--surface-hover)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', overflow: 'hidden' }}>
-                  {item.imageUrl ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : '📦'}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h4 style={{ margin: 0, fontSize: '15px' }}>{item.name} <span style={{fontSize:'12px', color:'var(--muted)', fontWeight:'normal'}}>Lv.{item.reqLevel || 1}</span></h4>
-                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--muted)' }}>
-                    {item.itemType === 'equipment' ? '裝備' : 
-                     item.itemType === 'consumable' ? '消耗品' : 
-                     item.itemType === 'collectible' ? '收藏品' : item.itemType} 
-                    {item.equipSlot ? ` (${item.equipSlot})` : ''} 
-                  </p>
-                  <div style={{ fontSize: '11px', color: 'var(--success)', marginTop: '4px' }}>
-                    {item.effect?.type === 'heal' ? `恢復 ${item.effect.value} HP` : 
-                     item.itemType === 'equipment' ? `提供額外裝備屬性加成` : '點擊使用獲得效果'}
+      {filteredItems.length === 0
+        ? <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '40px 0', fontSize: '13px' }}>目前該分類下沒有商品。</p>
+        : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+            {filteredItems.map(item => {
+              const isDiamond = item.currency === 'diamond';
+              const priceColor = isDiamond ? '#7ab4ff' : 'var(--gold)';
+              const locked = (item.reqLevel || 1) > playerLevel;
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${locked ? 'rgba(255,255,255,0.04)' : 'var(--glass-border)'}`,
+                    borderRadius: '10px', overflow: 'hidden',
+                    display: 'flex', flexDirection: 'column',
+                    cursor: locked ? 'default' : 'pointer',
+                    transition: 'all 0.18s ease',
+                    opacity: locked ? 0.55 : 1,
+                  }}
+                  onMouseOver={e => { if (!locked) { e.currentTarget.style.borderColor = 'rgba(200,169,110,0.45)'; e.currentTarget.style.background = 'rgba(200,169,110,0.05)'; } }}
+                  onMouseOut={e => { e.currentTarget.style.borderColor = locked ? 'rgba(255,255,255,0.04)' : 'var(--glass-border)'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                >
+                  {/* 圖片區 */}
+                  <div style={{ aspectRatio: '1', background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+                    {item.imageUrl
+                      ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{ width: '70%', height: '70%', objectFit: 'contain', filter: locked ? 'grayscale(80%)' : 'none' }} />
+                      : <span style={{ fontSize: '2rem', opacity: 0.2 }}>📦</span>
+                    }
+                    {/* 等級標籤 / 鎖定遮罩 */}
+                    {locked ? (
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                        <span style={{ fontSize: '1.1rem' }}>🔒</span>
+                        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', letterSpacing: '0.08em' }}>Lv.{item.reqLevel}</span>
+                      </div>
+                    ) : item.reqLevel > 1 && (
+                      <div style={{ position: 'absolute', top: 4, left: 4, fontSize: '9px', color: 'var(--gold)', background: 'rgba(0,0,0,0.7)', padding: '1px 5px', borderRadius: '3px', fontFamily: 'var(--font-display)' }}>
+                        Lv.{item.reqLevel}
+                      </div>
+                    )}
+                  </div>
+                  {/* 資訊區 */}
+                  <div style={{ padding: '7px 8px 8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <p style={{ margin: 0, fontSize: '11px', color: locked ? 'var(--muted)' : '#f0e6d3', fontWeight: 600, lineHeight: 1.3, wordBreak: 'break-all' }}>{item.name}</p>
+                    <button
+                      onClick={() => !locked && handleBuy(item)}
+                      disabled={locked}
+                      style={{
+                        background: locked ? 'rgba(255,255,255,0.04)' : isDiamond ? 'rgba(100,160,255,0.1)' : 'rgba(200,169,110,0.1)',
+                        border: `1px solid ${locked ? 'rgba(255,255,255,0.08)' : isDiamond ? 'rgba(100,160,255,0.3)' : 'rgba(200,169,110,0.3)'}`,
+                        color: locked ? 'var(--muted)' : priceColor,
+                        borderRadius: '4px', padding: '4px 0',
+                        fontSize: '11px', fontWeight: 700,
+                        cursor: locked ? 'default' : 'pointer',
+                        width: '100%', fontFamily: 'var(--font-display)', letterSpacing: '0.05em',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseOver={e => { if (!locked) e.currentTarget.style.background = isDiamond ? 'rgba(100,160,255,0.2)' : 'rgba(200,169,110,0.2)'; }}
+                      onMouseOut={e => { if (!locked) e.currentTarget.style.background = isDiamond ? 'rgba(100,160,255,0.1)' : 'rgba(200,169,110,0.1)'; }}
+                    >
+                      {locked ? '未解鎖' : `${isDiamond ? '💎' : '💰'} ${item.price}`}
+                    </button>
                   </div>
                 </div>
-              </div>
-              <button className="btn" onClick={() => handleBuy(item)} style={{ width: 'auto', padding: '6px 16px', borderColor: currencyColor, color: currencyColor, fontWeight: 'bold' }}>
-                {isDiamond ? '💎' : '💰'} {item.price}
-              </button>
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        )
+      }
     </div>
   );
 }
@@ -1544,6 +1601,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [isInitializing, setIsInitializing] = useState(true);
+  const [loginError, setLoginError] = useState(null); // null | 'NOT_GUILD_MEMBER' | 'ERROR'
   const audioRef = useRef(null);
   const [bgmMuted, setBgmMuted] = useState(false);
   const [volume, setVolume] = useState(0.35);
@@ -1598,14 +1656,17 @@ export default function App() {
     if (authCode) {
       api.loginWithDiscord(authCode).then(data => {
         setToken(data.token);
-        // Clear url bar，保留 GitHub Pages 的 base path
         window.history.replaceState({}, document.title, import.meta.env.BASE_URL || '/');
         setIsAuthenticated(true);
         setIsInitializing(false);
       }).catch(err => {
         console.error("Login failed", err);
-        alert("登入失敗！請確認有啟動後端 API 伺服器 (npm start)：\n" + err.message);
         window.history.replaceState({}, document.title, import.meta.env.BASE_URL || '/');
+        if (err.code === 'NOT_GUILD_MEMBER') {
+          setLoginError('NOT_GUILD_MEMBER');
+        } else {
+          setLoginError('ERROR');
+        }
         setIsInitializing(false);
       });
     } else {
@@ -1617,6 +1678,65 @@ export default function App() {
   }, []);
 
   if (isInitializing) return <div className="app-screen">Loading...</div>;
+
+  if (loginError === 'NOT_GUILD_MEMBER') return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      height: '100%', padding: '2.5rem 2rem', textAlign: 'center',
+      background: 'linear-gradient(175deg, #04060e 0%, #08091a 50%, #060c18 100%)',
+      gap: 0,
+    }}>
+      <div style={{ width: '100%', height: '1px', position: 'absolute', top: 0, background: 'linear-gradient(to right, transparent, rgba(200,169,110,0.6), transparent)' }} />
+
+      <div style={{ fontSize: '3rem', marginBottom: '1.2rem', opacity: 0.7 }}>🚪</div>
+
+      <h2 style={{
+        fontFamily: 'var(--font-display)', fontSize: '1.3rem', letterSpacing: '0.1em',
+        background: 'linear-gradient(135deg, #c8a96e, #e8c97a)',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+        margin: '0 0 0.6rem',
+      }}>
+        尚未加入社群
+      </h2>
+
+      <div style={{ width: '60px', height: '1px', background: 'linear-gradient(to right, transparent, var(--gold), transparent)', margin: '0.8rem 0 1rem' }} />
+
+      <p style={{ fontSize: '13px', color: 'rgba(200,169,110,0.5)', lineHeight: 1.8, margin: '0 0 0.4rem', letterSpacing: '0.04em' }}>
+        這裡是限社員使用的空間。
+      </p>
+      <p style={{ fontSize: '13px', color: 'rgba(200,169,110,0.4)', lineHeight: 1.8, margin: '0 0 2rem', letterSpacing: '0.04em' }}>
+        加入 Discord 伺服器後就可以一起玩囉！
+      </p>
+
+      <a href="https://discord.gg/xnCSmQazfr" target="_blank" rel="noopener noreferrer" style={{
+        display: 'inline-flex', alignItems: 'center', gap: '10px',
+        padding: '13px 28px',
+        background: 'linear-gradient(135deg, #4752c4, #5865F2)',
+        color: '#fff', borderRadius: '2px', fontSize: '0.9rem',
+        fontWeight: 700, textDecoration: 'none',
+        boxShadow: '0 4px 20px rgba(88,101,242,0.4)',
+        letterSpacing: '0.08em', fontFamily: 'var(--font-display)',
+        border: '1px solid rgba(120,140,255,0.3)',
+        transition: 'all 0.2s',
+        marginBottom: '1rem',
+      }}
+        onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(88,101,242,0.55)'; }}
+        onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(88,101,242,0.4)'; }}
+      >
+        <Icons.Discord />
+        加入音無玄學棋牌社
+      </a>
+
+      <button onClick={() => setLoginError(null)} style={{
+        background: 'transparent', border: 'none',
+        color: 'rgba(200,169,110,0.3)', fontSize: '11px',
+        cursor: 'pointer', letterSpacing: '0.08em', fontFamily: 'var(--font-display)',
+        padding: '6px',
+      }}>
+        ← 返回登入頁
+      </button>
+    </div>
+  );
 
   if (!isAuthenticated) return <LoginScreen />;
 

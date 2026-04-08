@@ -73,6 +73,25 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         displayName = userData.global_name || userData.username;
       }
 
+      // ── 驗證是否為伺服器成員 ──
+      const guildId = require("../../config").guildId;
+      if (guildId && discordClient && !code.startsWith("mock:")) {
+        try {
+          const guild = discordClient.guilds.cache.get(guildId)
+            || await discordClient.guilds.fetch(guildId).catch(() => null);
+          if (guild) {
+            const member = await guild.members.fetch({ user: discordId, force: true }).catch(() => null);
+            if (!member) {
+              return res.status(403).json({ status: "error", code: "NOT_GUILD_MEMBER", message: "你還不是伺服器成員，請先加入社群！" });
+            }
+            // 使用伺服器內的暱稱
+            displayName = member.displayName || displayName;
+          }
+        } catch (err) {
+          console.warn("[PlayerApp] Guild membership check failed, skipping:", err.message);
+        }
+      }
+
       // 確保玩家資料存在 (與 Discord 面板創角邏輯一致)
       await serviceContext.playerService.ensurePlayer(discordId, displayName);
 

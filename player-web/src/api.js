@@ -44,7 +44,9 @@ async function fetchWithAuth(endpoint, options = {}) {
       setToken(null);
       window.location.href = import.meta.env.BASE_URL || '/';
     }
-    throw new Error(data.message || "API 請求失敗");
+    const err = new Error(data.message || "API 請求失敗");
+    err.code = data.code || null;
+    throw err;
   }
 
   return data.data;
