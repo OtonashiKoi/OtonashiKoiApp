@@ -106,7 +106,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           exp: progress?.exp || 0,
           statusPoints: progress?.statusPoints || 0,
           playerTier: progress?.playerTier || "E",
-          attributes: attrs
+          attributes: attrs,
+          equipment: progress?.equipment || {}
         }
       }));
     } catch (err) {

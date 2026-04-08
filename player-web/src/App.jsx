@@ -21,41 +21,119 @@ const getAssetUrl = (url) => {
   return `${API_ORIGIN}${path}`;
 };
 
-function LoginScreen() {
-  const handleLogin = () => {
-    window.location.href = getDiscordLoginUrl();
+const calcPlayerStats = (attrs = {}, equipped = {}) => {
+  const { str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = attrs;
+  const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
+  
+  Object.values(equipped).forEach(item => {
+    if (item?.equipStats) {
+      Object.entries(item.equipStats).forEach(([k, v]) => {
+        if (k in bonus) bonus[k] += (v || 0);
+      });
+    }
+  });
+
+  const S = str + bonus.str;
+  const A = agi + bonus.agi;
+  const V = vit + bonus.vit;
+  const I = INT + bonus.int;
+  const D = dex + bonus.dex;
+  const L = luk + bonus.luk;
+
+  const weapon = equipped.weapon || null;
+  const offhand = equipped.shield || null;
+  const OFFHAND_WEAPON_TYPES = new Set(["offhand_sword", "offhand_dagger", "offhand_mace"]);
+  const isDualWield = weapon && !weapon.isTwoHanded && offhand?.weaponType != null && OFFHAND_WEAPON_TYPES.has(offhand.weaponType);
+  
+  const WEAPON_CONFIG = {
+    dagger:   { mult: 2, comboBonus: 20 },
+    axe_2h:   { mult: 4 },
+    staff_1h: { mult: 4, monsterAtk: 2, absoluteHit: true },
+    staff_2h: { mult: 5, monsterAtk: 2, absoluteHit: true },
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '40px', textAlign: 'center' }}>
-      <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Equipment</h1>
-      <p style={{ color: 'var(--muted)', marginBottom: '48px' }}>Login to access your adventure</p>
-      <button className="btn btn-primary" onClick={handleLogin} style={{ backgroundColor: '#5865F2' }}>
-        <Icons.Discord />
-        使用 Discord 登入
-      </button>
-      <p style={{ marginTop: '24px', fontSize: '12px', color: 'var(--muted)' }}>
-        我們將使用 Discord OAuth2 安全地同步您的遊戲進度與背包。
-      </p>
-    </div>
-  );
-}
+  const wt = weapon?.weaponType;
+  const cfg = WEAPON_CONFIG[wt] || {};
+  const mult = isDualWield ? 2 : (cfg.mult ?? 3);
+  
+  const baseStat = (wt === "staff_1h" || wt === "staff_2h") ? I : (wt === "bow" ? D : S);
+
+  return {
+    maxHp: V * 15 + 50,
+    atk: Math.round(baseStat * mult),
+    def: V,
+    dodge: Math.min(50, A * 0.5),
+    hit: Math.min(100, 80 + D),
+    crit: Math.min(100, L * 0.3),
+    combo: Math.min(80, 3 + A * 0.3 + (cfg.comboBonus ?? 0))
+  };
+};
 
 function ProfileTab() {
   const [data, setData] = useState(null);
+  const [inventory, setInventory] = useState(null);
+  const [swappingSlot, setSwappingSlot] = useState(null); // { slotKey, label }
+
+  const loadAll = () => {
+    Promise.all([
+      api.getProfile(),
+      api.getInventory()
+    ]).then(([profile, inv]) => {
+      setData(profile);
+      setInventory(inv.inventory || []);
+    }).catch(console.error);
+  };
 
   useEffect(() => {
-    api.getProfile().then(setData).catch(console.error);
+    loadAll();
+    const handleEsc = (e) => e.key === 'Escape' && setSwappingSlot(null);
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
   if (!data) return <div className="app-screen" style={{display:'flex',justifyContent:'center',alignItems:'center'}}>Loading Profile...</div>;
 
   const { player, wallet, progress } = data;
-  const { attributes } = progress;
+  const { attributes, equipment = {} } = progress;
+  const stats = calcPlayerStats(attributes, equipment);
+
+  const handleEquip = async (itemUuid) => {
+    try {
+      await api.equipItem(itemUuid);
+      setSwappingSlot(null);
+      loadAll();
+    } catch (err) {
+      alert("更換裝備失敗: " + err.message);
+    }
+  };
+
+  const handleUnequip = async (slotKey) => {
+    const item = equipment[slotKey];
+    if (!item) return;
+    try {
+      await api.unequipItem(slotKey);
+      loadAll();
+    } catch (err) {
+      alert("脫下裝備失敗: " + err.message);
+    }
+  };
+
+  const slots = [
+    { key: 'head_top', label: '頭上', icon: '👒' },
+    { key: 'head_mid', label: '頭中', icon: '🕶️' },
+    { key: 'head_low', label: '頭下', icon: '🧣' },
+    { key: 'armor', label: '衣服', icon: '👕' },
+    { key: 'weapon', label: '主武器', icon: '⚔️' },
+    { key: 'shield', label: '副手', icon: '🛡️' },
+    { key: 'garment', label: '披肩', icon: '🧥' },
+    { key: 'shoes', label: '鞋子', icon: '👞' },
+    { key: 'accessory_l', label: '左飾品', icon: '💍' },
+    { key: 'accessory_r', label: '右飾品', icon: '💍' },
+  ];
 
   return (
-    <div className="app-screen">
-      <header style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div className="app-screen" style={{ position: 'relative' }}>
+      <header style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <p style={{ margin: 0, fontSize: '13px', color: 'var(--muted)', fontWeight: 600 }}>冒險者檔案 Profile</p>
           <h2 style={{ fontSize: '1.8rem' }}>{player.displayName}</h2>
@@ -65,63 +143,196 @@ function ProfileTab() {
         </div>
       </header>
 
-      <div className="stat-grid" style={{ marginBottom: '20px' }}>
+      {/* 錢包 */}
+      <div className="stat-grid" style={{ marginBottom: '16px' }}>
         <div className="stat-box">
-          <small>金幣 Gold</small>
+          <small>金幣 GOLD</small>
           <strong>💰 {wallet.gold || 0}</strong>
         </div>
         <div className="stat-box">
-          <small>鑽石 Diamond</small>
+          <small>鑽石 DIAMOND</small>
           <strong>💎 {wallet.diamond || 0}</strong>
         </div>
       </div>
 
-      <div className="card">
-        <h3 style={{ marginBottom: '16px', fontSize: '1.2rem', display: 'flex', justifyContent: 'space-between' }}>
-          <span>角色狀態 Status</span>
-        </h3>
-        
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--glass-border)' }}>
-          <span style={{ color: 'var(--muted)' }}>職業 (Class)</span>
-          <strong>{progress.job || "Novice"}</strong>
-        </div>
-        
-        <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--muted)', marginBottom: '4px' }}>
-              <span>Base Lv.{progress.level}</span>
-              <span>{progress.exp} EXP</span>
-            </div>
-            <div style={{ height: '6px', background: 'var(--surface-hover)', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `100%`, background: 'var(--accent)' }}></div>
-            </div>
+      {/* 裝備欄 (Grid 佈局) - 改為更緊湊的 2 列佈局 */}
+      <div className="card" style={{ padding: '16px', marginBottom: '16px' }}>
+        <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--muted)' }}>裝備欄位 (Equipment)</h4>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+          {slots.map(s => {
+            const item = equipment[s.key];
+            return (
+                <div 
+                  key={s.key} 
+                  onClick={() => setSwappingSlot(s)}
+                  style={{ 
+                    aspectRatio: '1', 
+                    background: item ? 'var(--surface-hover)' : 'rgba(255,255,255,0.03)', 
+                    borderRadius: '12px', 
+                    border: item ? '1.5px solid var(--accent)' : '1px dashed var(--glass-border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '2px',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'all 0.2s ease',
+                    boxShadow: item ? '0 0 10px rgba(168, 85, 247, 0.2)' : 'none'
+                  }}
+                  className="equip-slot-card"
+                >
+                  {item ? (
+                    <>
+                      <div style={{ width: '100%', height: '100%', padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {item.imageUrl ? (
+                          <img src={getAssetUrl(item.imageUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        ) : (
+                          <div style={{ fontSize: '11px', textAlign: 'center', color: '#fff', fontWeight: 'bold', padding: '4px', wordBreak: 'break-all' }}>
+                            {item.itemName}
+                          </div>
+                        )}
+                      </div>
+                      {item.imageUrl && (
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '8px', padding: '2px 4px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {item.itemName}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '18px', opacity: 0.2 }}>{s.icon}</span>
+                      <span style={{ fontSize: '9px', color: 'var(--muted)', textAlign: 'center', opacity: 0.6 }}>{s.label}</span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--muted)', marginBottom: '4px' }}>
-              <span>Job Lv.{progress.jobLevel}</span>
+        </div>
+
+        {/* 戰鬥數值 */}
+        <div className="card" style={{ padding: '16px' }}>
+          <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--muted)', display: 'flex', justifyContent: 'space-between' }}>
+            <span>戰鬥能力 (Combat)</span>
+            <span style={{ fontSize: '12px', color: 'var(--accent)' }}>{progress.job || "Novice"}</span>
+          </h4>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)', paddingBottom: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>HP</span>
+              <strong style={{ color: 'var(--success)' }}>{stats.maxHp}</strong>
             </div>
-            <div style={{ height: '6px', background: 'var(--surface-hover)', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `100%`, background: 'var(--accent)' }}></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)', paddingBottom: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>ATK</span>
+              <strong style={{ color: '#e67e22' }}>{stats.atk}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)', paddingBottom: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>DEF</span>
+              <strong style={{ color: '#3498db' }}>{stats.def}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)', paddingBottom: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>HIT</span>
+              <strong>{stats.hit}%</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)', paddingBottom: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>DODGE</span>
+              <strong>{stats.dodge}%</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)', paddingBottom: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>CRIT</span>
+              <strong>{stats.crit}%</strong>
             </div>
           </div>
         </div>
 
-        <div style={{ background: 'var(--surface-hover)', padding: '16px', borderRadius: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h4 style={{ margin: 0, fontSize: '14px' }}>屬性配點 (Attributes)</h4>
-            <span style={{ fontSize: '12px', background: 'var(--accent-strong)', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>剩餘屬性點: {progress.statusPoints}</span>
-          </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: '14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--muted)' }}>STR</span> <strong>{attributes.str}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--muted)' }}>INT</span> <strong>{attributes.int}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--muted)' }}>AGI</span> <strong>{attributes.agi}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--muted)' }}>DEX</span> <strong>{attributes.dex}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--muted)' }}>VIT</span> <strong>{attributes.vit}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--muted)' }}>LUK</span> <strong>{attributes.luk}</strong></div>
-          </div>
+      {/* 基礎屬性 */}
+      <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <h4 style={{ margin: 0, fontSize: '14px', color: 'var(--muted)' }}>屬性配點 (Attributes)</h4>
+          <span style={{ fontSize: '12px', background: 'var(--accent-strong)', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>剩餘點數: {progress.statusPoints}</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px 16px', fontSize: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>STR</span> <strong>{attributes.str}</strong></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>INT</span> <strong>{attributes.int}</strong></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>AGI</span> <strong>{attributes.agi}</strong></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>DEX</span> <strong>{attributes.dex}</strong></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>VIT</span> <strong>{attributes.vit}</strong></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>LUK</span> <strong>{attributes.luk}</strong></div>
         </div>
       </div>
+
+      {/* 快速更換裝備 Modal */}
+      {swappingSlot && (
+        <div className="modal-overlay" onClick={() => setSwappingSlot(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '360px', borderRadius: '24px', padding: '20px' }}>
+            <div className="modal-header" style={{ marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>部位操作：{swappingSlot.label}</h3>
+                {equipment[swappingSlot.key] && <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--accent)' }}>目前裝備: {equipment[swappingSlot.key].itemName}</p>}
+              </div>
+              <button className="close-btn" onClick={() => setSwappingSlot(null)}>&times;</button>
+            </div>
+
+            <div className="modal-body" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+              {/* 卸下按鈕區 */}
+              {equipment[swappingSlot.key] && (
+                <div style={{ marginBottom: '20px', padding: '16px', background: 'rgba(255,0,0,0.05)', borderRadius: '16px', border: '1px solid rgba(255,0,0,0.1)' }}>
+                  <p style={{ margin: '0 0 12px 0', fontSize: '13px', textAlign: 'center', color: 'var(--muted)' }}>想要卸下此裝備嗎？</p>
+                  <button 
+                    className="btn" 
+                    onClick={() => handleUnequip(swappingSlot.key)}
+                    style={{ borderColor: '#ff4d4f', color: '#ff4d4f', width: '100%', borderRadius: '12px', fontWeight: 'bold' }}
+                  >
+                    卸下目前裝備
+                  </button>
+                </div>
+              )}
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', color: 'var(--muted)' }}>可更換的裝備 (Inventory)</h4>
+                {inventory && inventory
+                  .filter(item => item.itemType === 'equipment' && item.equipSlot === swappingSlot.key && !item.isEquipped)
+                  .map(item => (
+                    <div 
+                      key={item.uuid} 
+                      className="card" 
+                      onClick={() => handleEquip(item.uuid)}
+                      style={{ cursor: 'pointer', display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', border: '1px solid var(--glass-border)', transition: 'transform 0.1s' }}
+                    >
+                      <div style={{ width: '48px', height: '48px', background: 'var(--surface-hover)', borderRadius: '10px', overflow: 'hidden', flexShrink: 0 }}>
+                        {item.imageUrl ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '📦'}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{item.itemName}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+                          {item.equipStats ? Object.entries(item.equipStats).map(([k, v]) => `${k.toUpperCase()}+${v}`).join(', ') : '無額外加成'}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                }
+                {( !inventory || inventory.filter(item => item.itemType === 'equipment' && item.equipSlot === swappingSlot.key && !item.isEquipped).length === 0) && (
+                  <div style={{ textAlign: 'center', padding: '20px 0', background: 'rgba(255,255,255,0.02)', borderRadius: '16px' }}>
+                    <p style={{ color: 'var(--muted)', fontSize: '13px' }}>📭 背包裡沒有其他可替換的道具</p>
+                    <button 
+                      className="btn" 
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('changeTab', { detail: 'inventory' }));
+                        setSwappingSlot(null);
+                      }} 
+                      style={{ marginTop: '12px', width: 'auto', padding: '6px 16px', fontSize: '12px' }}
+                    >
+                      前往背包查看全部
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
