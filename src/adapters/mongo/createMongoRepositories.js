@@ -241,13 +241,36 @@ function createMongoRepositories() {
         return state;
       },
       // 原子收付擊殺權：成功回 true，已被其他進程收付回 false
-      async claimKill(zoneKey, monsterSeq) {
+      // 若先前的 claim 超過 timeoutMs，允許重新 claim（回收無回應的鎖）
+      async claimKill(zoneKey, monsterSeq, timeoutMs = 30 * 1000) {
         const col = await collection("monsterState");
-        const result = await col.findOneAndUpdate(
-          { _id: zoneKey, "value.activeMonsterSeq": monsterSeq, "value.killClaimedSeq": { $ne: monsterSeq } },
-          { $set: { "value.killClaimedSeq": monsterSeq, updatedAt: new Date().toISOString() } }
-        );
-        return result !== null;
+        const now = new Date();
+        const cutoff = new Date(Date.now() - timeoutMs);
+
+        // 條件：同 zoneKey、activeMonsterSeq 相符，且 killClaimedSeq != monsterSeq
+        // 或 killClaimedAt 早於 cutoff（表示前一次 claim 超時），或 killClaimedAt 不存在
+        const q = {
+          _id: zoneKey,
+          "value.activeMonsterSeq": monsterSeq,
+          $or: [
+            { "value.killClaimedSeq": { $ne: monsterSeq } },
+            { "value.killClaimedAt": { $lt: cutoff } },
+            { "value.killClaimedAt": { $exists: false } }
+          ]
+        };
+
+        const update = {
+          $set: {
+            "value.killClaimedSeq": monsterSeq,
+            "value.killClaimedAt": now,
+            "value.killClaimedBy": process.pid,
+            updatedAt: now.toISOString()
+          }
+        };
+
+        const result = await col.findOneAndUpdate(q, update, { returnDocument: 'after' });
+        // 如果沒找到會回傳 { value: null }
+        return !!(result && result.value);
       }
     }
   };
