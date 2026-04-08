@@ -127,15 +127,7 @@ function ProfileTab() {
 }
 
 function InventoryTab() {
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    api.getInventory().then(setData).catch(console.error);
-  }, []);
-
-  if (!data) return <div className="app-screen">Loading Inventory...</div>;
-
-  const [inventory, setInventory] = useState([]);
+  const [inventory, setInventory] = useState(null);
   const [category, setCategory] = useState('all');
   const [activeItem, setActiveItem] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
@@ -147,6 +139,8 @@ function InventoryTab() {
   useEffect(() => {
     loadInventory();
   }, []);
+
+  if (inventory === null) return <div className="app-screen">Loading Inventory...</div>;
 
   const handleUse = async (item) => {
     try {
