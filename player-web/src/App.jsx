@@ -382,12 +382,16 @@ function ShopTab() {
   }, []);
 
   const handleBuy = async (item) => {
-    if (!wallet || wallet.gold < item.price) {
-      alert("金幣不足！");
+    const currency = item.currency || 'gold';
+    const currencyName = currency === 'gold' ? '金幣' : '鑽石';
+    const userBalance = wallet ? wallet[currency] : 0;
+
+    if (userBalance < item.price) {
+      alert(`${currencyName}不足！`);
       return;
     }
     try {
-      if (confirm(`確定要花費 ${item.price} 金幣購買 ${item.name} 嗎？`)) {
+      if (confirm(`確定要花費 ${item.price} ${currencyName} 購買 ${item.name} 嗎？`)) {
         await api.buyShopItem(item.id);
         alert(`成功購買 ${item.name}!`);
         loadData(); // Refresh list and wallet
@@ -443,31 +447,36 @@ function ShopTab() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {filteredItems.length === 0 ? <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '40px 0' }}>目前該分類下沒有商品。</p> : null}
         
-        {filteredItems.map(item => (
-          <div key={item.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <div style={{ width: '40px', height: '40px', background: 'var(--surface-hover)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', overflow: 'hidden' }}>
-                {item.imageUrl ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : '📦'}
-              </div>
-              <div style={{ flex: 1 }}>
-                <h4 style={{ margin: 0, fontSize: '15px' }}>{item.name} <span style={{fontSize:'12px', color:'var(--muted)', fontWeight:'normal'}}>Lv.{item.reqLevel || 1}</span></h4>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--muted)' }}>
-                  {item.itemType === 'equipment' ? '裝備' : 
-                   item.itemType === 'consumable' ? '消耗品' : 
-                   item.itemType === 'collectible' ? '收藏品' : item.itemType} 
-                  {item.equipSlot ? ` (${item.equipSlot})` : ''} 
-                </p>
-                <div style={{ fontSize: '11px', color: 'var(--success)', marginTop: '4px' }}>
-                  {item.effect?.type === 'heal' ? `恢復 ${item.effect.value} HP` : 
-                   item.itemType === 'equipment' ? `提供額外裝備屬性加成` : '點擊使用獲得效果'}
+        {filteredItems.map(item => {
+          const isDiamond = item.currency === 'diamond';
+          const currencyColor = isDiamond ? '#3498db' : '#f1c40f';
+          
+          return (
+            <div key={item.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ width: '40px', height: '40px', background: 'var(--surface-hover)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', overflow: 'hidden' }}>
+                  {item.imageUrl ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : '📦'}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ margin: 0, fontSize: '15px' }}>{item.name} <span style={{fontSize:'12px', color:'var(--muted)', fontWeight:'normal'}}>Lv.{item.reqLevel || 1}</span></h4>
+                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--muted)' }}>
+                    {item.itemType === 'equipment' ? '裝備' : 
+                     item.itemType === 'consumable' ? '消耗品' : 
+                     item.itemType === 'collectible' ? '收藏品' : item.itemType} 
+                    {item.equipSlot ? ` (${item.equipSlot})` : ''} 
+                  </p>
+                  <div style={{ fontSize: '11px', color: 'var(--success)', marginTop: '4px' }}>
+                    {item.effect?.type === 'heal' ? `恢復 ${item.effect.value} HP` : 
+                     item.itemType === 'equipment' ? `提供額外裝備屬性加成` : '點擊使用獲得效果'}
+                  </div>
                 </div>
               </div>
+              <button className="btn" onClick={() => handleBuy(item)} style={{ width: 'auto', padding: '6px 16px', borderColor: currencyColor, color: currencyColor, fontWeight: 'bold' }}>
+                {isDiamond ? '💎' : '💰'} {item.price}
+              </button>
             </div>
-            <button className="btn" onClick={() => handleBuy(item)} style={{ width: 'auto', padding: '6px 16px', borderColor: '#f1c40f', color: '#f1c40f', fontWeight: 'bold' }}>
-              💰 {item.price}
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
