@@ -26,10 +26,12 @@
 /* 篩選列 */
 .filter-bar {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
   overflow-x: auto;
-  padding: 4px 0 16px 0;
-  margin-bottom: 8px;
+  padding: 8px 4px;
+  margin-bottom: 20px;
+  min-height: 48px; /* 保留固定高度空間 */
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
 }
