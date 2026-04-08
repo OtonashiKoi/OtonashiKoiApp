@@ -7,6 +7,10 @@ const { calcPlayerStats } = require("../../shared/combatStats");
 // 戰鬥 session 依 discordId 儲存（記憶體）
 const activeSessions = new Map();
 
+// 擊殺結算互斥鎖（防止兩名玩家同時打死同一隻怪造成雙重結算）
+// key: `${zoneKey}:${monsterSeq}`
+const killInProgress = new Set();
+
 const BTN = {
   enterBattle: "monster-zone:enter-battle",
   startFight:  "monster-zone:start-fight",
@@ -507,6 +511,15 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const sc = getServiceContext();
   const rewardLines = [];
 
+  // ── 並發雙殺防護：同一隻怪只允許一次結算 ──
+  const killKey = `${zoneKey}:${monster.seq}`;
+  if (killInProgress.has(killKey)) {
+    // 另一位玩家已在結算中，此次擊殺視為無效，不重複發獎
+    return rewardLines;
+  }
+  killInProgress.add(killKey);
+
+  try {
   // 參戰名單（含擊殺者）
   const participants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
 
@@ -710,6 +723,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   _notifyKillRewards(monster.name, perPidRewards, discordId).catch(() => {});
 
   return rewardLines;
+  } finally {
+    killInProgress.delete(killKey);
+  }
 }
 
 // ──────────────────────────────────────────────
