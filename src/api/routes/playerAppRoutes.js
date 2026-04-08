@@ -383,14 +383,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         || await discordClient.guilds.fetch(guildId).catch(() => null);
       if (!guild) return res.json(ok({ stickers: [], emojis: [] }));
 
-      const stickers = guild.stickers.cache.map(s => ({
+      // 主動 fetch 確保 cache 是最新的
+      const [fetchedEmojis, fetchedStickers] = await Promise.all([
+        guild.emojis.fetch().catch(() => guild.emojis.cache),
+        guild.stickers.fetch().catch(() => guild.stickers.cache),
+      ]);
+
+      const stickers = [...fetchedStickers.values()].map(s => ({
         id: s.id,
         name: s.name,
-        url: `https://media.discordapp.net/stickers/${s.id}.${s.format === 3 ? 'json' : s.format === 4 ? 'gif' : 'png'}`,
+        // format: 1=PNG, 2=APNG, 3=Lottie, 4=GIF
+        url: s.format === 4
+          ? `https://media.discordapp.net/stickers/${s.id}.gif`
+          : `https://media.discordapp.net/stickers/${s.id}.png`,
         isLottie: s.format === 3,
       }));
 
-      const emojis = guild.emojis.cache.map(e => ({
+      const emojis = [...fetchedEmojis.values()].map(e => ({
         id: e.id,
         name: e.name,
         animated: e.animated,
