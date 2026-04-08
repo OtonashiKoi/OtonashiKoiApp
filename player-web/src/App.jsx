@@ -1514,37 +1514,65 @@ function ChatTab() {
         
         {messages.map((m, idx) => {
           const isMe = m.author === myDisplayName || m.author === "Me";
-          
-          // 解析 Discord 表情符號與提到（先跳脫 HTML 防止 XSS）
-          let parsedText = escapeHtml(m.text);
-          parsedText = parsedText.replace(/&lt;(a?):(\w+):(\d+)&gt;/g, (match, animated, name, id) => {
+          const isSystemBot = m.isBot && !m.text?.startsWith('[Web]');
+
+          // 解析文字內容（先跳脫 HTML 防止 XSS）
+          let parsedText = escapeHtml(m.text || '');
+          // Discord emoji
+          parsedText = parsedText.replace(/&lt;(a?):(\w+):(\d+)&gt;/g, (_, animated, name, id) => {
             const ext = animated ? 'gif' : 'png';
             return `<img src="https://cdn.discordapp.com/emojis/${id}.${ext}" alt=":${name}:" class="chat-emoji" />`;
           });
+          // Discord CDN / media 圖片連結（貼圖）→ 渲染成圖片
+          parsedText = parsedText.replace(
+            /(https:\/\/(?:media|cdn)\.discordapp\.(?:net|com)\/(?:stickers|attachments)\/[^\s"<>]+\.(?:png|gif|jpg|jpeg|webp)(?:\?[^\s"<>]*)?)/gi,
+            (url) => `<img src="${url}" alt="sticker" style="max-width:140px;max-height:140px;border-radius:8px;display:block;margin-top:4px;" />`
+          );
+          // **粗體** markdown
+          parsedText = parsedText.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#f0e6d3">$1</strong>');
+          // 提到
           parsedText = parsedText.replace(/\[@(.*?)\]/g, '<span class="mention">@$1</span>');
+
+          // ── 系統廣播（Bot 非 Web 轉發）→ 橫幅樣式 ──
+          if (isSystemBot) {
+            return (
+              <div key={m.id || idx} style={{
+                alignSelf: 'stretch',
+                background: 'rgba(200,169,110,0.06)',
+                border: '1px solid rgba(200,169,110,0.25)',
+                borderLeft: '3px solid rgba(200,169,110,0.7)',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '13px',
+                color: '#f0e6d3',
+                lineHeight: 1.6,
+              }}
+                dangerouslySetInnerHTML={{ __html: parsedText }}
+              />
+            );
+          }
 
           return (
             <div key={m.id || idx} style={{ display: 'flex', gap: '10px', alignSelf: isMe ? 'flex-end' : 'flex-start', flexDirection: isMe ? 'row-reverse' : 'row' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: isMe ? 'var(--accent)' : 'var(--surface-hover)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: isMe ? 'rgba(200,169,110,0.3)' : 'var(--surface-hover)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', overflow: 'hidden', border: `1px solid ${isMe ? 'rgba(200,169,110,0.5)' : 'var(--glass-border)'}` }}>
                 {m.avatar ? <img src={m.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : m.author.substring(0, 2).toUpperCase()}
               </div>
               <div style={{ alignItems: isMe ? 'flex-end' : 'flex-start', display: 'flex', flexDirection: 'column', maxWidth: '85%' }}>
                 <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  {!isMe && <span style={{ fontWeight: 'bold', color: 'var(--accent-light)' }}>{m.author}</span>}
+                  {!isMe && <span style={{ fontWeight: 'bold', color: 'var(--gold)' }}>{m.author}</span>}
                   <span>{m.time}</span>
                 </div>
-                <div 
-                  style={{ 
-                    background: isMe ? 'var(--accent-strong)' : 'var(--surface-hover)', 
-                    color: '#fff', 
-                    padding: '10px 14px', 
-                    borderRadius: isMe ? '16px 0 16px 16px' : '0 16px 16px 16px', 
-                    fontSize: '14px', 
-                    wordBreak: 'break-word', 
+                <div
+                  style={{
+                    background: isMe ? 'rgba(200,169,110,0.18)' : 'rgba(255,255,255,0.05)',
+                    color: '#f0e6d3',
+                    padding: '10px 14px',
+                    borderRadius: isMe ? '14px 0 14px 14px' : '0 14px 14px 14px',
+                    fontSize: '14px',
+                    wordBreak: 'break-word',
                     whiteSpace: 'pre-line',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                    lineHeight: 1.5,
-                    border: '1px solid var(--glass-border)'
+                    lineHeight: 1.6,
+                    border: `1px solid ${isMe ? 'rgba(200,169,110,0.3)' : 'var(--glass-border)'}`,
                   }}
                   dangerouslySetInnerHTML={{ __html: parsedText }}
                 />
