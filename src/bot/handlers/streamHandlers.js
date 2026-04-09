@@ -119,6 +119,12 @@ async function handleCheckin(comment) {
 
       if (result.ok) {
         console.log(`[Stream] 打卡成功並發放 ${result.checkin.rewardDetail.amount} gold 給 ${displayName}`);
+        // 每週任務：記錄打卡次數
+        try {
+          await serviceContext.weeklyQuestService.recordProgress(discordId, "checkin_count", 1);
+        } catch (e) {
+          console.error("[WeeklyQuest] checkin recordProgress error:", e.message);
+        }
         // 回覆到直播聊天室
         try {
           const { sendComment } = require("../onecommeSender");

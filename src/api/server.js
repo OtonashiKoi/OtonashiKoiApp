@@ -11,6 +11,7 @@ const { fail } = require("../shared/response");
 const { createAdminConsoleRoutes } = require("./routes/adminConsoleRoutes");
 const { createAdminPlayerRoutes } = require("./routes/adminPlayerRoutes");
 const { createAdminMonsterRoutes } = require("./routes/adminMonsterRoutes");
+const { createAdminWeeklyQuestRoutes } = require("./routes/adminWeeklyQuestRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const cors = require("cors");
@@ -52,6 +53,8 @@ function createApiServer(discordClient) {
   app.use(createAdminPlayerRoutes(serviceContext));
   // 怪物管理路由
   app.use(createAdminMonsterRoutes(serviceContext));
+  // 每週任務路由
+  app.use(createAdminWeeklyQuestRoutes(serviceContext));
   // 玩家前端 WebApp 路由
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
 

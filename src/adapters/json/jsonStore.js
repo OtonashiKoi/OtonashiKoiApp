@@ -33,6 +33,8 @@ const INITIAL_DATA = {
   checkins: [],
   shopItems: [],
   items: [],
+  weeklyQuests: [],          // 任務定義（管理員設定）
+  weeklyQuestProgress: {},   // 玩家進度 { [discordId]: { [weekLabel]: { [questId]: { current, claimed } } } }
   playerTiers: {},
   monsters: [],
   monsterState: { activeMonsterSeq: 1, currentHp: null, killCount: {}, participants: [] }
@@ -64,6 +66,8 @@ function normalizeStore(data) {
   if (!Array.isArray(next.items)) next.items = [];
   if (!next.playerTiers || typeof next.playerTiers !== "object" || Array.isArray(next.playerTiers)) next.playerTiers = {};
   if (!Array.isArray(next.monsters)) next.monsters = [];
+  if (!Array.isArray(next.weeklyQuests)) next.weeklyQuests = [];
+  if (!next.weeklyQuestProgress || typeof next.weeklyQuestProgress !== "object") next.weeklyQuestProgress = {};
   if (!next.monsterState || typeof next.monsterState !== "object") next.monsterState = { activeMonsterSeq: 1, currentHp: null, killCount: {} };
   if (!next.monsterState.killCount || typeof next.monsterState.killCount !== "object") next.monsterState.killCount = {};
   if (!Array.isArray(next.monsterState.participants)) next.monsterState.participants = [];

@@ -93,6 +93,10 @@ export const api = {
   getChatHistory: () => fetchWithAuth("/chat/history"),
   getChatExpressions: () => fetchWithAuth("/chat/expressions"),
   
+  // ===== 每週任務 =====
+  getWeeklyQuests: () => fetchWithAuth("/weekly-quests"),
+  claimWeeklyReward: (id) => fetchWithAuth(`/weekly-quests/${id}/claim`, { method: "POST" }),
+
   // 建立 Server-Sent Events 連線（EventSource 不支援 Header，以 query param 傳 token）
   createChatStream: (onMessage) => {
     const token = getToken();

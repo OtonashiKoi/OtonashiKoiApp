@@ -6,6 +6,7 @@ const BUTTON_IDS = {
   checkinStatus: "player-panel:checkin-status",
   backpack: "player-panel:backpack",
   equipment: "player-panel:equipment",
+  weeklyQuests: "player-panel:weekly-quests",
   bindStream: "player-panel:bind-stream"
 };
 
@@ -34,6 +35,10 @@ function createPlayerPanelMessage() {
         .setStyle(ButtonStyle.Secondary)
     ),
     new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.weeklyQuests)
+        .setLabel("📋 每週任務")
+        .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(BUTTON_IDS.bindStream)
         .setLabel("🔗 綁定直播帳號")

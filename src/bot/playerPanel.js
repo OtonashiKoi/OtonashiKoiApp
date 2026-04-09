@@ -437,6 +437,51 @@ async function handleBackpackAction(interaction, action, uuid) {
   }
 }
 
+async function handleWeeklyQuests(interaction) {
+  const serviceContext = getServiceContext();
+  const discordId = interaction.user.id;
+  const { WeeklyQuestService, currentWeekLabel } = require("../services/weeklyQuest/weeklyQuestService");
+  const wqs = serviceContext.weeklyQuestService || new WeeklyQuestService();
+
+  try {
+    const progressList = await wqs.getPlayerProgress(discordId);
+    const wl = currentWeekLabel();
+
+    if (!progressList.length) {
+      await replyAndAutoDelete(interaction, `📋 **每週任務**（${wl}）\n\n本週尚無任務，請稍後再試。`);
+      return;
+    }
+
+    const lines = progressList.map(({ quest, current, claimed, done }) => {
+      const bar = buildProgressBar(current, quest.target, 8);
+      const status = claimed ? "✅ 已領取" : done ? "🔔 可領取" : "🔲 進行中";
+      const rewards = [];
+      if (quest.rewardGold)    rewards.push(`${quest.rewardGold} 🪙`);
+      if (quest.rewardDiamond) rewards.push(`${quest.rewardDiamond} 💎`);
+      if (quest.rewardItemId)  rewards.push("＋道具");
+      const rewardStr = rewards.length ? ` ｜ 獎勵：${rewards.join(" ")}` : "";
+      return (
+        `**${quest.title}** ${status}\n` +
+        `${bar} ${current}／${quest.target}${rewardStr}`
+      );
+    });
+
+    const content =
+      `📋 **每週任務**（${wl}）\n\n` +
+      lines.join("\n\n") +
+      `\n\n> 前往網頁版「更多→每週任務」可以領取完成的獎勵。`;
+
+    await replyAndAutoDelete(interaction, content);
+  } catch (err) {
+    await replyAndAutoDelete(interaction, `❌ 讀取每週任務失敗：${err.message}`);
+  }
+}
+
+function buildProgressBar(current, target, width = 10) {
+  const filled = Math.round((Math.min(current, target) / Math.max(target, 1)) * width);
+  return "▓".repeat(filled) + "░".repeat(width - filled);
+}
+
 async function handleButton(interaction) {
   const id = interaction.customId;
 
@@ -503,6 +548,11 @@ async function handleButton(interaction) {
 
   if (id === BUTTON_IDS.equipment) {
     await handleEquipmentView(interaction);
+    return;
+  }
+
+  if (id === BUTTON_IDS.weeklyQuests) {
+    await handleWeeklyQuests(interaction);
     return;
   }
 

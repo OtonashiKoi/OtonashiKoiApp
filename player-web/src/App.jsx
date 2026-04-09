@@ -1861,6 +1861,128 @@ function SettingsTab({ audioRef, bgmMuted, onToggleBgm, volume, onVolumeChange, 
   );
 }
 
+// ── 每週任務分頁 ─────────────────────────────────────────────
+function WeeklyQuestTab() {
+  const [quests, setQuests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [claiming, setClaiming] = useState(null);
+  const [msg, setMsg] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getWeeklyQuests();
+      setQuests(data || []);
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const claim = async (questId) => {
+    setClaiming(questId);
+    setMsg(null);
+    try {
+      const reward = await api.claimWeeklyReward(questId);
+      const parts = [];
+      if (reward.gold)          parts.push(`${reward.gold} 🪙`);
+      if (reward.diamond)       parts.push(`${reward.diamond} 💎`);
+      if (reward.rewardItemName) parts.push(reward.rewardItemName);
+      setMsg({ type: 'ok', text: `✅ 已領取「${reward.questTitle}」獎勵：${parts.join('、') || '—'}` });
+      await load();
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message });
+    } finally {
+      setClaiming(null);
+    }
+  };
+
+  const weekLabel = (() => {
+    const now = new Date();
+    const jan1 = new Date(now.getFullYear(), 0, 1);
+    const week = Math.ceil(((now - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+    return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
+  })();
+
+  return (
+    <div className="app-screen" style={{ overflowY: 'auto', paddingBottom: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 6px' }}>
+        <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--gold)' }}>📋 每週任務</h2>
+        <span style={{ fontSize: '11px', color: 'var(--muted)' }}>{weekLabel}</span>
+      </div>
+
+      {msg && (
+        <div style={{
+          margin: '8px 16px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
+          background: msg.type === 'ok' ? 'rgba(74,222,128,0.12)' : 'rgba(239,68,68,0.12)',
+          color: msg.type === 'ok' ? '#4ade80' : '#f87171',
+          border: `1px solid ${msg.type === 'ok' ? 'rgba(74,222,128,0.25)' : 'rgba(239,68,68,0.25)'}`,
+        }}>{msg.text}</div>
+      )}
+
+      {loading ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>載入中…</div>
+      ) : quests.length === 0 ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>本週尚無任務</div>
+      ) : (
+        <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {quests.map(({ quest, current, claimed, done }) => {
+            const pct = Math.min(100, Math.round((current / Math.max(quest.target, 1)) * 100));
+            const rewards = [];
+            if (quest.rewardGold)    rewards.push(`${quest.rewardGold} 🪙`);
+            if (quest.rewardDiamond) rewards.push(`${quest.rewardDiamond} 💎`);
+            if (quest.rewardItemId)  rewards.push('道具');
+            return (
+              <div key={quest.id} className="card" style={{ padding: '14px 16px', marginBottom: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: claimed ? 'var(--muted)' : 'var(--text)' }}>
+                      {quest.title}
+                    </div>
+                    {quest.description && (
+                      <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{quest.description}</div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--muted)', textAlign: 'right', whiteSpace: 'nowrap', marginLeft: '8px' }}>
+                    {rewards.length ? rewards.join(' ') : '—'}
+                  </div>
+                </div>
+
+                {/* 進度條 */}
+                <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginBottom: '8px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', borderRadius: '3px', transition: 'width 0.4s',
+                    width: `${pct}%`,
+                    background: claimed ? 'rgba(200,169,110,0.3)' : done ? 'var(--gold)' : 'var(--accent)',
+                  }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
+                    {current} / {quest.target}
+                  </span>
+                  {claimed ? (
+                    <span style={{ fontSize: '12px', color: 'var(--muted)' }}>✅ 已領取</span>
+                  ) : done ? (
+                    <button className="btn" onClick={() => claim(quest.id)} disabled={claiming === quest.id}
+                      style={{ padding: '4px 14px', fontSize: '12px', opacity: claiming === quest.id ? 0.6 : 1 }}>
+                      {claiming === quest.id ? '領取中…' : '🎁 領取獎勵'}
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: 'var(--muted)' }}>🔲 進行中</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
@@ -1868,6 +1990,7 @@ export default function App() {
   const [loginError, setLoginError] = useState(null); // null | 'NOT_GUILD_MEMBER' | 'ERROR'
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showMoreDrawer, setShowMoreDrawer] = useState(false);
+  const [showWeeklyTab, setShowWeeklyTab] = useState(false);
   const audioRef = useRef(null);
   const [bgmMuted, setBgmMuted] = useState(false);
   const [volume, setVolume] = useState(0.35);
@@ -2039,6 +2162,19 @@ export default function App() {
         </div>
       )}
 
+      {/* 每週任務全螢幕覆蓋 */}
+      {showWeeklyTab && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 210, background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: '1px solid var(--glass-border)' }}>
+            <button onClick={() => setShowWeeklyTab(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: 0 }}>←</button>
+            <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: '14px', letterSpacing: '0.08em' }}>每週任務</span>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <WeeklyQuestTab />
+          </div>
+        </div>
+      )}
+
       {/* 更多抽屜（B：從導覽列 ··· 觸發）*/}
       {showMoreDrawer && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={() => setShowMoreDrawer(false)}>
@@ -2071,9 +2207,19 @@ export default function App() {
 
             <div style={{ height: '1px', background: 'var(--line)', margin: '0 20px' }} />
 
-            {/* 佔位：未來功能 */}
-            <div style={{ padding: '12px 20px', color: 'var(--muted)', fontSize: '12px', opacity: 0.4, letterSpacing: '0.05em' }}>
-              更多功能即將推出…
+            {/* 每週任務 */}
+            <div onClick={() => { setShowMoreDrawer(false); setShowWeeklyTab(true); }} style={{
+              display: 'flex', alignItems: 'center', gap: '14px',
+              padding: '14px 20px', cursor: 'pointer', transition: 'background 0.15s',
+            }}
+              onMouseOver={e => e.currentTarget.style.background = 'rgba(200,169,110,0.07)'}
+              onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ color: 'var(--gold)', display: 'flex', fontSize: '18px' }}>📋</span>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>每週任務</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '1px' }}>查看進度、領取獎勵</div>
+              </div>
             </div>
           </div>
         </div>

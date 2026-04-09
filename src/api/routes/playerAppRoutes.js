@@ -704,6 +704,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         _republishPanel(serviceContext, zoneKey, monster, mHp, currentParticipants.length, damageMap).catch(() => {});
       }
 
+      // 每週任務進度記錄（不阻塞回應）
+      try {
+        await serviceContext.weeklyQuestService.recordProgress(discordId, "battle_count", 1);
+        if (outcome === "win") {
+          await serviceContext.weeklyQuestService.recordProgress(discordId, "battle_win", 1);
+        }
+        await serviceContext.weeklyQuestService.recordProgress(discordId, "damage_total", totalDamage);
+      } catch (e) {
+        console.error("[WeeklyQuest] recordProgress error:", e.message);
+      }
+
       // 設定冷卻：動畫播放時間 = 回合日誌數 × 700ms + 2000ms 緩衝
       const animDurationMs = roundLogs.length * 700 + 2000;
       const nextBattleAt = Date.now() + animDurationMs;
