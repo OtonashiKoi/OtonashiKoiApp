@@ -68,6 +68,13 @@ function createAdminMonsterRoutes(serviceContext) {
       }
       const newState = { ...current, activeMonsterSeq: target.seq, currentHp: target.calc.maxHp, participants: [], damageMap: {} };
       await serviceContext.monsterService.saveState(newState, zone);
+
+      // 若手動切換到 BOSS，也發廣播
+      if (target.isBoss) {
+        const { _broadcastBossSpawn } = require("../../bot/handlers/monsterZoneHandlers");
+        _broadcastBossSpawn(serviceContext, zone, target).catch(() => {});
+      }
+
       res.json(ok({ state: newState, active: target }, "monster state updated"));
     } catch (error) {
       next(error);

@@ -783,10 +783,11 @@ async function handleMonsterZoneButton(interaction) {
   return true;
 }
 
-module.exports = { 
-  handleMonsterZoneButton, 
+module.exports = {
+  handleMonsterZoneButton,
   isMonsterZoneButton,
   handleMonsterKill,
   _republishPanel,
+  _broadcastBossSpawn,
   activeSessions
 };
