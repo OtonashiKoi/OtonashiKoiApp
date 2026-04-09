@@ -1,4 +1,4 @@
-const { readStore, writeStore } = require("./jsonStore");
+const { readStore, updateStore } = require("./jsonStore");
 
 class JsonMonsterRepository {
   async findAll() {
@@ -13,34 +13,35 @@ class JsonMonsterRepository {
   }
 
   async save(monster) {
-    const store = await readStore();
-    if (!Array.isArray(store.monsters)) store.monsters = [];
-    const idx = store.monsters.findIndex((m) => m.id === monster.id);
-    if (idx >= 0) {
-      store.monsters[idx] = monster;
-    } else {
-      store.monsters.push(monster);
-    }
-    await writeStore(store);
+    await updateStore((store) => {
+      if (!Array.isArray(store.monsters)) store.monsters = [];
+      const idx = store.monsters.findIndex((m) => m.id === monster.id);
+      if (idx >= 0) store.monsters[idx] = monster;
+      else store.monsters.push(monster);
+      return store;
+    });
     return monster;
   }
 
   async delete(id) {
-    const store = await readStore();
-    if (!Array.isArray(store.monsters)) store.monsters = [];
-    store.monsters = store.monsters.filter((m) => m.id !== id);
-    await writeStore(store);
+    await updateStore((store) => {
+      store.monsters = (store.monsters || []).filter((m) => m.id !== id);
+      return store;
+    });
   }
 
-  async getState() {
+  async getState(zoneKey = "normal") {
     const store = await readStore();
-    return store.monsterState || { activeMonsterSeq: 1, currentHp: null, killCount: {} };
+    const key = zoneKey === "mid" ? "monsterStateMid" : "monsterState";
+    return store[key] || { activeMonsterSeq: 1, currentHp: null, killCount: {}, participants: [] };
   }
 
-  async saveState(state) {
-    const store = await readStore();
-    store.monsterState = state;
-    await writeStore(store);
+  async saveState(state, zoneKey = "normal") {
+    const key = zoneKey === "mid" ? "monsterStateMid" : "monsterState";
+    await updateStore((store) => {
+      store[key] = state;
+      return store;
+    });
     return state;
   }
 

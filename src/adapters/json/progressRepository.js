@@ -1,5 +1,5 @@
 const { ProgressRepository } = require("../../repositories/interfaces/progressRepository");
-const { readStore, writeStore } = require("./jsonStore");
+const { readStore, updateStore } = require("./jsonStore");
 
 class JsonProgressRepository extends ProgressRepository {
   async findByPlayerId(playerId) {
@@ -8,9 +8,10 @@ class JsonProgressRepository extends ProgressRepository {
   }
 
   async save(progress) {
-    const data = await readStore();
-    data.progress[progress.playerId] = progress;
-    await writeStore(data);
+    await updateStore((store) => {
+      store.progress[progress.playerId] = progress;
+      return store;
+    });
     return progress;
   }
 

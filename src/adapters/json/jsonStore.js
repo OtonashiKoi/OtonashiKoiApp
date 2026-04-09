@@ -2,6 +2,14 @@ const fs = require("fs/promises");
 const path = require("path");
 const config = require("../../config");
 
+// ── 寫入互斥鎖：防止多個 async 操作同時讀-改-寫造成資料競態 ──
+let _writeLock = Promise.resolve();
+function withLock(fn) {
+  const next = _writeLock.then(() => fn()).catch(() => fn());
+  _writeLock = next.then(() => {}, () => {});
+  return next;
+}
+
 const INITIAL_DATA = {
   schemaVersion: 1,
   accessControl: {
@@ -59,6 +67,9 @@ function normalizeStore(data) {
   if (!next.monsterState || typeof next.monsterState !== "object") next.monsterState = { activeMonsterSeq: 1, currentHp: null, killCount: {} };
   if (!next.monsterState.killCount || typeof next.monsterState.killCount !== "object") next.monsterState.killCount = {};
   if (!Array.isArray(next.monsterState.participants)) next.monsterState.participants = [];
+  if (!next.monsterStateMid || typeof next.monsterStateMid !== "object") next.monsterStateMid = { activeMonsterSeq: 1, currentHp: null, killCount: {} };
+  if (!next.monsterStateMid.killCount || typeof next.monsterStateMid.killCount !== "object") next.monsterStateMid.killCount = {};
+  if (!Array.isArray(next.monsterStateMid.participants)) next.monsterStateMid.participants = [];
   return next;
 }
 
@@ -84,13 +95,33 @@ async function readStore() {
 }
 
 async function writeStore(data) {
-  const normalized = normalizeStore(data);
-  await fs.writeFile(config.storage.jsonDataPath, JSON.stringify(normalized, null, 2), "utf8");
+  return withLock(async () => {
+    const normalized = normalizeStore(data);
+    await fs.writeFile(config.storage.jsonDataPath, JSON.stringify(normalized, null, 2), "utf8");
+  });
+}
+
+/**
+ * 原子性 read-modify-write：在鎖內讀最新資料 → 修改 → 寫入，
+ * 避免多個並發操作互相覆蓋。
+ * fn(store) 應回傳修改後的 store。
+ */
+async function updateStore(fn) {
+  return withLock(async () => {
+    await ensureStoreFile();
+    const raw = await fs.readFile(config.storage.jsonDataPath, "utf8");
+    const store = normalizeStore(raw.trim() ? JSON.parse(raw) : { ...INITIAL_DATA });
+    const updated = await fn(store);
+    const normalized = normalizeStore(updated);
+    await fs.writeFile(config.storage.jsonDataPath, JSON.stringify(normalized, null, 2), "utf8");
+    return normalized;
+  });
 }
 
 module.exports = {
   INITIAL_DATA,
   normalizeStore,
   readStore,
-  writeStore
+  writeStore,
+  updateStore
 };
