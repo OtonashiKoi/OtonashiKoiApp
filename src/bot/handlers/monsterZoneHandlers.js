@@ -142,30 +142,46 @@ async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount
   }
 }
 
-// BOSS 出場廣播：發送到 town_chat 頻道
+// BOSS 出場廣播：優先 town_chat，fallback monster_zone
 async function _broadcastBossSpawn(sc, zoneKey, monster) {
-  const { getBotClient } = require("../runtimeContext");
-  const client = getBotClient();
-  if (!client?.isReady()) return;
+  try {
+    const { getBotClient } = require("../runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady()) {
+      console.warn("[BOSS] bot not ready, skip broadcast");
+      return;
+    }
 
-  const layout = await sc.channelLayoutRepository.get();
-  const townBinding = (layout?.discord?.bindings || []).find((b) => b.featureKey === "town_chat" && b.enabled && b.channelId);
-  if (!townBinding) return;
+    const layout = await sc.channelLayoutRepository.get();
+    const bindings = layout?.discord?.bindings || [];
+    const binding = bindings.find((b) => b.featureKey === "town_chat" && b.enabled && b.channelId)
+                 || bindings.find((b) => b.featureKey === "monster_zone" && b.enabled && b.channelId);
+    if (!binding) {
+      console.warn("[BOSS] no suitable channel binding found, skip broadcast");
+      return;
+    }
 
-  const channel = await client.channels.fetch(townBinding.channelId).catch(() => null);
-  if (!channel) return;
+    const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+    if (!channel) {
+      console.warn("[BOSS] channel fetch failed:", binding.channelId);
+      return;
+    }
 
-  const zoneName = zoneKey === "mid" ? "中級戰鬥區" : "一般戰鬥區";
-  const { EmbedBuilder } = require("discord.js");
-  const embed = new EmbedBuilder()
-    .setColor(0xff4444)
-    .setTitle(`⚠️ BOSS 登場！`)
-    .setDescription(`**${zoneName}** 出現了強大的 BOSS！\n\n👹 **${monster.name}** 降臨！\n快去挑戰吧！`)
-    .setThumbnail(monster.imageUrl || null)
-    .setFooter({ text: `Lv.${monster.level || "?"} · HP ${monster.calc?.maxHp || "?"}` })
-    .setTimestamp();
+    const zoneName = zoneKey === "mid" ? "中級戰鬥區" : "一般戰鬥區";
+    const { EmbedBuilder } = require("discord.js");
+    const embed = new EmbedBuilder()
+      .setColor(0xff4444)
+      .setTitle(`⚠️ BOSS 登場！`)
+      .setDescription(`**${zoneName}** 出現了強大的 BOSS！\n\n👹 **${monster.name}** 降臨！\n快去挑戰吧！`)
+      .setThumbnail(monster.imageUrl || null)
+      .setFooter({ text: `Lv.${monster.level || "?"} · HP ${monster.calc?.maxHp || "?"}` })
+      .setTimestamp();
 
-  await channel.send({ embeds: [embed] }).catch(() => {});
+    await channel.send({ embeds: [embed] });
+    console.log(`[BOSS] broadcast sent for ${monster.name} in ${zoneKey}`);
+  } catch (err) {
+    console.error("[BOSS] broadcast error:", err);
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -755,7 +771,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       .catch(() => {});
     // BOSS 出場廣播
     if (nextMonster.isBoss) {
-      _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
+      console.log(`[BOSS] next monster "${nextMonster.name}" is a boss, broadcasting...`);
+      _broadcastBossSpawn(sc, zoneKey, nextMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
     }
   } else {
     _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap)
