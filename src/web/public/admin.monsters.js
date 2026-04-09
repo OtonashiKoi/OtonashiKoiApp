@@ -289,15 +289,23 @@
   }
 
   async function saveRow(tr) {
-    const payload = getPayload(tr);
-    const id = tr.dataset.id;
-    const isNew = tr.dataset.isNew === "1";
-    const url = isNew ? BASE + "/monsters" : BASE + "/monsters/" + id;
-    const method = isNew ? "POST" : "PUT";
-    const r = await fetch(url, { method, headers: apiHeaders(), body: JSON.stringify(payload) });
-    const j = await r.json();
-    if (!r.ok || j.status !== "ok") { alert("儲存失敗: " + (j.message || r.status)); return; }
-    await loadMonsters();
+    if (tr.dataset.saving === "1") return;
+    tr.dataset.saving = "1";
+    try {
+      const payload = getPayload(tr);
+      const id = tr.dataset.id;
+      const isNew = tr.dataset.isNew === "1";
+      const url = isNew ? BASE + "/monsters" : BASE + "/monsters/" + id;
+      const method = isNew ? "POST" : "PUT";
+      const r = await fetch(url, { method, headers: apiHeaders(), body: JSON.stringify(payload) });
+      const j = await r.json();
+      if (!r.ok || j.status !== "ok") { alert("儲存失敗: " + (j.message || r.status)); return; }
+      await loadMonsters();
+    } catch (err) {
+      alert("儲存發生錯誤: " + err.message);
+    } finally {
+      tr.dataset.saving = "0";
+    }
   }
 
   async function deleteMonster(id) {
