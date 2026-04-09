@@ -169,13 +169,14 @@ async function _broadcastBossSpawn(sc, zoneKey, monster) {
 
     const zoneName = zoneKey === "mid" ? "中級戰鬥區" : "一般戰鬥區";
     const { EmbedBuilder } = require("discord.js");
+    const thumbUrl = monster.imageUrl?.startsWith("http") ? monster.imageUrl : null;
     const embed = new EmbedBuilder()
       .setColor(0xff4444)
       .setTitle(`⚠️ BOSS 登場！`)
       .setDescription(`**${zoneName}** 出現了強大的 BOSS！\n\n👹 **${monster.name}** 降臨！\n快去挑戰吧！`)
-      .setThumbnail(monster.imageUrl || null)
       .setFooter({ text: `Lv.${monster.level || "?"} · HP ${monster.calc?.maxHp || "?"}` })
       .setTimestamp();
+    if (thumbUrl) embed.setThumbnail(thumbUrl);
 
     await channel.send({ embeds: [embed] });
     console.log(`[BOSS] broadcast sent for ${monster.name} in ${zoneKey}`);
