@@ -230,9 +230,11 @@
   }
 
   function renderBody() {
-    const tbody = document.getElementById("monsters-tbody");
-    if (!tbody) return;
-    tbody.innerHTML = "";
+    const oldTbody = document.getElementById("monsters-tbody");
+    if (!oldTbody) return;
+    // 用 clone 替換，清除所有累積的 event listener，避免重複觸發
+    const tbody = oldTbody.cloneNode(false);
+    oldTbody.replaceWith(tbody);
     monsters.filter(m => (m.zone || "normal") === activeZone).forEach(m => tbody.appendChild(buildRow(m, false)));
     bindTableEvents(tbody);
   }
@@ -313,7 +315,7 @@
     const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, entryFee:100, expReward:50, goldReward:30, spawnRate:10, isBoss:false, drops:[], enabled:true };
     const tr = buildRow(blank, true);
     tbody.appendChild(tr);
-    bindTableEvents(tr.parentElement);
+    // 不重新 bind，新 row 的事件會 bubble 到已綁定的 tbody listener
     tr.querySelector("[data-field=name]")?.focus();
   }
 
