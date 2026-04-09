@@ -165,10 +165,7 @@ async function _broadcastBossSpawn(sc, zoneKey, monster) {
     .setFooter({ text: `Lv.${monster.level || "?"} · HP ${monster.calc?.maxHp || "?"}` })
     .setTimestamp();
 
-  await channel.send({ content: `@everyone`, embeds: [embed] }).catch(() => {
-    // 如果沒有 @everyone 權限就不 mention，只發 embed
-    channel.send({ embeds: [embed] }).catch(() => {});
-  });
+  await channel.send({ embeds: [embed] }).catch(() => {});
 }
 
 // ──────────────────────────────────────────────
