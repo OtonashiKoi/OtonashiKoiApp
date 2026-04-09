@@ -331,7 +331,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             const replied = await msg.channel.messages.fetch(msg.reference.messageId);
             replyTo = {
               id: replied.id,
-              author: replied.author.username,
+              author: replied.member?.displayName || replied.author.globalName || replied.author.username,
               content: (replied.content || "").slice(0, 80),
             };
           } catch (_) {}
@@ -339,7 +339,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
         const payload = {
           id: msg.id,
-          author: msg.author.username,
+          author: msg.member?.displayName || msg.author.globalName || msg.author.username,
           avatar: msg.author.displayAvatarURL(),
           content: await resolveMentions(content, msg.guild),
           timestamp: msg.createdTimestamp,
@@ -387,6 +387,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       
       const messages = await channel.messages.fetch({ limit: 50 });
       const history = await Promise.all([...messages.values()].map(async (msg) => {
+        // 確保 member 資料載入（cache miss 時才 fetch）
+        if (!msg.member && !msg.author.bot) {
+          try { await channel.guild.members.fetch(msg.author.id); } catch (_) {}
+        }
         let content = msg.content || "";
         if (msg.stickers.size > 0) {
           const stickerUrls = [...msg.stickers.values()].map(s => `https://media.discordapp.net/stickers/${s.id}.png`);
@@ -404,7 +408,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (replied) {
             replyTo = {
               id: replied.id,
-              author: replied.author.username,
+              author: replied.member?.displayName || replied.author.globalName || replied.author.username,
               content: (replied.content || "").slice(0, 80),
             };
           }
@@ -413,7 +417,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const resolvedContent = await resolveMentions(content, channel.guild);
         return {
           id: msg.id,
-          author: msg.author.username,
+          author: msg.member?.displayName || msg.author.globalName || msg.author.username,
           avatar: msg.author.displayAvatarURL(),
           content: resolvedContent,
           timestamp: msg.createdTimestamp,
