@@ -1512,7 +1512,8 @@ function ChatTab() {
             originalText: m.content,
             author: author,
             avatar: m.avatar,
-            time: new Date(m.timestamp).toLocaleTimeString()
+            time: new Date(m.timestamp).toLocaleTimeString(),
+            replyTo: m.replyTo || null,
           };
         });
       setMessages(formatted);
@@ -1542,7 +1543,8 @@ function ChatTab() {
           originalText: newMsg.content,
           author: author,
           avatar: newMsg.avatar,
-          time: new Date(newMsg.timestamp).toLocaleTimeString()
+          time: new Date(newMsg.timestamp).toLocaleTimeString(),
+          replyTo: newMsg.replyTo || null,
         }];
       });
       setTimeout(scrollToBottom, 100);
@@ -1645,6 +1647,24 @@ function ChatTab() {
                   {!isMe && <span style={{ fontWeight: 'bold', color: 'var(--gold)' }}>{m.author}</span>}
                   <span>{m.time}</span>
                 </div>
+                {m.replyTo && (
+                  <div style={{
+                    fontSize: '11px', color: 'var(--muted)',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid var(--glass-border)',
+                    borderLeft: '3px solid rgba(200,169,110,0.5)',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    marginBottom: '4px',
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    textOverflow: 'ellipsis',
+                  }}>
+                    <span style={{ color: 'var(--gold)', fontWeight: 600 }}>↩ {m.replyTo.author}</span>
+                    {m.replyTo.content && <span style={{ marginLeft: '6px', opacity: 0.7 }}>{m.replyTo.content.slice(0, 60)}{m.replyTo.content.length > 60 ? '…' : ''}</span>}
+                  </div>
+                )}
                 <div
                   style={{
                     background: isMe ? 'rgba(200,169,110,0.18)' : 'rgba(255,255,255,0.05)',

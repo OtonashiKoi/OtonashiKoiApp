@@ -306,22 +306,45 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   const sseClients = new Set();
   if (discordClient) {
     discordClient.on("messageCreate", async (msg) => {
-      if (!msg.content && msg.embeds.length === 0) return;
-      
+      const hasContent = msg.content || msg.embeds.length > 0 || msg.stickers.size > 0 || msg.attachments.size > 0;
+      if (!hasContent) return;
+
       const layout = await serviceContext.channelLayoutRepository.get();
       const townChatBinding = layout.discord.bindings.find(b => b.featureKey === "town_chat" && b.enabled);
-      
+
       if (townChatBinding && msg.channelId === townChatBinding.channelId) {
-        let content = msg.content;
+        let content = msg.content || "";
+        if (msg.stickers.size > 0) {
+          const stickerUrls = [...msg.stickers.values()].map(s => `https://media.discordapp.net/stickers/${s.id}.png`);
+          content = [content, ...stickerUrls].filter(Boolean).join(" ");
+        }
+        if (msg.attachments.size > 0) {
+          const attachUrls = [...msg.attachments.values()].map(a => a.url);
+          content = [content, ...attachUrls].filter(Boolean).join(" ");
+        }
         if (msg.embeds.length > 0 && !content) content = "傳送了一個面板";
-        
+
+        // 回覆資訊
+        let replyTo = null;
+        if (msg.reference?.messageId) {
+          try {
+            const replied = await msg.channel.messages.fetch(msg.reference.messageId);
+            replyTo = {
+              id: replied.id,
+              author: replied.author.username,
+              content: (replied.content || "").slice(0, 80),
+            };
+          } catch (_) {}
+        }
+
         const payload = {
           id: msg.id,
           author: msg.author.username,
           avatar: msg.author.displayAvatarURL(),
           content: await resolveMentions(content, msg.guild),
           timestamp: msg.createdTimestamp,
-          isBot: msg.author.bot
+          isBot: msg.author.bot,
+          replyTo,
         };
         const dataStr = `data: ${JSON.stringify(payload)}\n\n`;
         sseClients.forEach(client => client.res.write(dataStr));
@@ -364,8 +387,29 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       
       const messages = await channel.messages.fetch({ limit: 50 });
       const history = await Promise.all([...messages.values()].map(async (msg) => {
-        let content = msg.content;
+        let content = msg.content || "";
+        if (msg.stickers.size > 0) {
+          const stickerUrls = [...msg.stickers.values()].map(s => `https://media.discordapp.net/stickers/${s.id}.png`);
+          content = [content, ...stickerUrls].filter(Boolean).join(" ");
+        }
+        if (msg.attachments.size > 0) {
+          const attachUrls = [...msg.attachments.values()].map(a => a.url);
+          content = [content, ...attachUrls].filter(Boolean).join(" ");
+        }
         if (msg.embeds.length > 0 && !content) content = "傳送了一個面板";
+
+        let replyTo = null;
+        if (msg.reference?.messageId) {
+          const replied = messages.get(msg.reference.messageId);
+          if (replied) {
+            replyTo = {
+              id: replied.id,
+              author: replied.author.username,
+              content: (replied.content || "").slice(0, 80),
+            };
+          }
+        }
+
         const resolvedContent = await resolveMentions(content, channel.guild);
         return {
           id: msg.id,
@@ -373,7 +417,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           avatar: msg.author.displayAvatarURL(),
           content: resolvedContent,
           timestamp: msg.createdTimestamp,
-          isBot: msg.author.bot
+          isBot: msg.author.bot,
+          replyTo,
         };
       }));
       res.json(ok(history.reverse()));
