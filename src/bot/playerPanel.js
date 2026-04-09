@@ -67,6 +67,26 @@ async function handleProfile(interaction) {
   const calcCrit  = Math.round(cs.crit  * 10) / 10;
   const calcCombo = Math.round(cs.combo * 10) / 10;
 
+  // ── 裝備屬性加成 ──
+  const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
+  for (const item of Object.values(equipped)) {
+    if (!item?.equipStats) continue;
+    for (const [k, v] of Object.entries(item.equipStats)) {
+      if (k in bonus) bonus[k] += (v || 0);
+    }
+  }
+  const fmt = (base, key) => bonus[key] > 0 ? `${base} (+${bonus[key]})` : `${base}`;
+
+  // ── 武器特效說明 ──
+  const wt = cs.weaponType;
+  const specialEffects = [];
+  if (wt === "dagger")   specialEffects.push("🗡️ 匕首：連擊率 +20%");
+  if (wt === "axe_2h")   specialEffects.push("🪓 雙手斧：攻擊倍率 ×4");
+  if (wt === "staff_1h") specialEffects.push("🪄 法杖：絕對命中、怪物攻擊 ×2");
+  if (wt === "staff_2h") specialEffects.push("🪄 雙手法杖：絕對命中、怪物攻擊 ×2、倍率 ×5");
+  if (cs.attackCount === 2) specialEffects.push("⚔️ 雙持：每回合攻擊兩次");
+  const effectLine = specialEffects.length ? "\n" + specialEffects.join("\n") : "";
+
   // ── 裝備清單（只列有裝備的格子）──
   const SLOT_ICONS = {
     weapon: "⚔️", shield: "🛡️", armor: "🥋", head_top: "🪖", head_mid: "🎭",
@@ -90,13 +110,14 @@ async function handleProfile(interaction) {
     expLine + "\n" +
     `==============\n` +
     `【基本素質】\n` +
-    `STR: ${attrs.str} | AGI: ${attrs.agi} | VIT: ${attrs.vit}\n` +
-    `INT: ${attrs.int} | DEX: ${attrs.dex} | LUK: ${attrs.luk}\n` +
+    `STR: ${fmt(attrs.str,"str")} | AGI: ${fmt(attrs.agi,"agi")} | VIT: ${fmt(attrs.vit,"vit")}\n` +
+    `INT: ${fmt(attrs.int,"int")} | DEX: ${fmt(attrs.dex,"dex")} | LUK: ${fmt(attrs.luk,"luk")}\n` +
     `剩餘點數 (Status Pt): ${p.statusPoints || 0}\n` +
     `==============\n` +
     `【戰鬥能力】\n` +
     `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
-    `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%\n` +
+    `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%` +
+    effectLine + "\n" +
     equipLine + "\n" +
     `==============\n` +
     `【資產】\n` +

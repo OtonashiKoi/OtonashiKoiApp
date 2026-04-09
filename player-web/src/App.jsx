@@ -501,6 +501,15 @@ function ProfileTab({ onOpenSettings }) {
   const { attributes, equipment = {} } = progress;
   const stats = calcPlayerStats(attributes, equipment);
 
+  // 計算裝備加成（各屬性）
+  const equipBonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
+  for (const item of Object.values(equipment)) {
+    if (!item?.equipStats) continue;
+    for (const [k, v] of Object.entries(item.equipStats)) {
+      if (k in equipBonus) equipBonus[k] += (v || 0);
+    }
+  }
+
   const handleEquip = async (itemUuid) => {
     try {
       await api.equipItem(itemUuid);
@@ -702,6 +711,32 @@ function ProfileTab({ onOpenSettings }) {
               <strong>{stats.crit}%</strong>
             </div>
           </div>
+
+          {/* 武器特效標籤 */}
+          {(() => {
+            const effects = [];
+            const wt = stats.weaponType;
+            if (wt === 'dagger') effects.push('🗡️ 匕首：連擊率 +20%');
+            if (wt === 'axe_2h') effects.push('🪓 雙手斧：攻擊倍率 ×4');
+            if (wt === 'staff_1h') effects.push('🪄 法杖：絕對命中、受兩次攻擊');
+            if (wt === 'staff_2h') effects.push('🪄 雙手法杖：絕對命中、受兩次攻擊、攻擊倍率 ×5');
+            if (stats.attackCount === 2) effects.push('⚔️ 雙持：每回合攻擊兩次');
+            if (!effects.length) return null;
+            return (
+              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {effects.map((fx, i) => (
+                  <div key={i} style={{
+                    fontSize: '11px', color: 'var(--gold)',
+                    background: 'var(--gold-dim)',
+                    border: '1px solid rgba(200,169,110,0.25)',
+                    borderRadius: '4px',
+                    padding: '4px 10px',
+                    letterSpacing: '0.04em',
+                  }}>{fx}</div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
       {/* 基礎屬性 */}
@@ -711,12 +746,15 @@ function ProfileTab({ onOpenSettings }) {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px 16px', fontSize: '14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>STR</span> <strong>{attributes.str}</strong></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>INT</span> <strong>{attributes.int}</strong></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>AGI</span> <strong>{attributes.agi}</strong></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>DEX</span> <strong>{attributes.dex}</strong></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>VIT</span> <strong>{attributes.vit}</strong></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}><span style={{ color: 'var(--muted)' }}>LUK</span> <strong>{attributes.luk}</strong></div>
+          {[['STR','str'],['INT','int'],['AGI','agi'],['DEX','dex'],['VIT','vit'],['LUK','luk']].map(([label, key]) => (
+            <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px' }}>
+              <span style={{ color: 'var(--muted)' }}>{label}</span>
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: '3px' }}>
+                <strong>{attributes[key]}</strong>
+                {equipBonus[key] > 0 && <span style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700 }}>+{equipBonus[key]}</span>}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
