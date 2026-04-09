@@ -357,9 +357,4 @@
     submitGrantItem
   };
 
-  // initialize
-  adminCore.loadAuth();
-  bindEvents();
-  setPlayerActionEnabled(false);
-  showSection("section-auth");
 })();

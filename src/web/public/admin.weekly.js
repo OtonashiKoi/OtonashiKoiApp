@@ -272,8 +272,8 @@
   addBtn && addBtn.addEventListener("click", addNewQuest);
   summaryBtn && summaryBtn.addEventListener("click", loadSummary);
 
-  // 後台已登入後才加載（監聽 adminReady 事件）
-  document.addEventListener("adminReady", async () => {
+  // 後台已登入後才加載（監聽 adminConnected 事件）
+  document.addEventListener("adminConnected", async () => {
     await loadItems();
     await loadQuests();
   });

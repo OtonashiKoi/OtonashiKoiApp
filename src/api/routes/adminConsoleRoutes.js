@@ -183,6 +183,16 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
+  router.post("/admin/channel-layout/publish-weekly-quest", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      const result = await serviceContext.adminConsoleService.publishWeeklyQuestPanel(channelId);
+      res.json(ok(result, "weekly quest panel published"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/admin/console/players", async (req, res, next) => {
     try {
       const limit = req.query.limit ? Number(req.query.limit) : 50;

@@ -39,31 +39,191 @@
     return item ? (item.imageThumbnailUrl || item.imageUrl || "") : "";
   }
 
-  function attachDropRowThumb(sel) {
-    const thumb = sel.previousElementSibling;
-    if (!thumb || !thumb.classList.contains("drop-thumb")) return;
-    const src = getItemThumb(sel.value);
-    if (src) { thumb.src = src; thumb.style.display = ""; }
-    else { thumb.src = ""; thumb.style.display = "none"; }
+  /* ── 搜尋式 combobox（取代原生 select） ── */
+  function makeItemCombobox(selectedItemId = "") {
+    const selectedItem = itemLib.find(i => i.id === selectedItemId) || null;
+
+    const wrap = document.createElement("div");
+    wrap.className = "drop-combo-wrap";
+    wrap.style.cssText = "position:relative;flex:1;min-width:0;";
+
+    // 隱藏 value 欄
+    const hidden = document.createElement("input");
+    hidden.type = "hidden";
+    hidden.className = "drop-item-sel";
+    hidden.value = selectedItemId;
+
+    // 顯示用輸入框
+    const display = document.createElement("input");
+    display.type = "text";
+    display.className = "sheet-input drop-combo-display";
+    display.placeholder = "🔍 搜尋道具...";
+    display.autocomplete = "off";
+    display.spellcheck = false;
+    display.style.cssText = "width:100%;cursor:pointer;";
+    display.value = selectedItem ? `${ITEM_TYPE_LABEL[selectedItem.itemType] || ""} ${selectedItem.name}` : "";
+
+    // 下拉面板
+    const panel = document.createElement("div");
+    panel.className = "drop-combo-panel";
+    panel.style.cssText = [
+      "display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:999;",
+      "background:var(--surface);border:1px solid var(--accent);border-radius:6px;",
+      "max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.7),0 0 0 1px var(--accent-glow);",
+    ].join("");
+
+    function renderList(keyword) {
+      panel.innerHTML = "";
+      const kw = (keyword || "").trim().toLowerCase();
+      const filtered = kw
+        ? itemLib.filter(i => i.name.toLowerCase().includes(kw) || (i.itemType || "").toLowerCase().includes(kw))
+        : itemLib;
+
+      if (!filtered.length) {
+        panel.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12px;text-align:center;">找不到道具</div>`;
+        return;
+      }
+
+      // 依類型分組顯示
+      const groups = {};
+      filtered.forEach(i => {
+        const t = i.itemType || "special";
+        if (!groups[t]) groups[t] = [];
+        groups[t].push(i);
+      });
+
+      Object.entries(groups).forEach(([t, items]) => {
+        const header = document.createElement("div");
+        header.style.cssText = "padding:6px 10px 3px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-family:var(--font-display);border-top:1px solid var(--line);";
+        header.textContent = (ITEM_TYPE_LABEL[t] || t).replace(/^[^\s]+\s/, ""); // 去掉 emoji
+        panel.appendChild(header);
+
+        items.forEach(item => {
+          const row = document.createElement("div");
+          row.className = "drop-combo-item";
+          row.dataset.itemId = item.id;
+          row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;transition:background 0.1s;";
+
+          const thumb = item.imageThumbnailUrl || item.imageUrl || "";
+          const typeColor = {
+            consumable: "var(--success)", equipment: "var(--accent)",
+            collectible: "var(--gold)", special: "var(--pink)"
+          }[t] || "var(--muted)";
+
+          row.innerHTML = `
+            ${thumb ? `<img src="${thumb}" style="width:20px;height:20px;object-fit:contain;border-radius:3px;flex-shrink:0;" />` : `<span style="width:20px;height:20px;flex-shrink:0;"></span>`}
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.name}</span>
+            <span style="font-size:10px;color:${typeColor};flex-shrink:0;font-family:var(--font-display);letter-spacing:0.05em;">${t}</span>
+          `;
+
+          if (item.id === hidden.value) row.style.background = "var(--accent-light)";
+
+          row.addEventListener("mouseenter", () => row.style.background = "var(--surface-hover)");
+          row.addEventListener("mouseleave", () => row.style.background = item.id === hidden.value ? "var(--accent-light)" : "");
+          row.addEventListener("mousedown", e => {
+            e.preventDefault(); // 避免 display blur 先觸發
+            selectItem(item);
+          });
+          panel.appendChild(row);
+        });
+      });
+    }
+
+    function selectItem(item) {
+      hidden.value = item.id;
+      display.value = `${ITEM_TYPE_LABEL[item.itemType] || ""} ${item.name}`;
+      // 更新縮圖
+      const thumb = wrap.previousElementSibling;
+      if (thumb && thumb.classList.contains("drop-thumb")) {
+        const src = item.imageThumbnailUrl || item.imageUrl || "";
+        if (src) { thumb.src = src; thumb.style.display = ""; }
+        else { thumb.src = ""; thumb.style.display = "none"; }
+      }
+      closePanel();
+    }
+
+    function clearItem() {
+      hidden.value = "";
+      const thumb = wrap.previousElementSibling;
+      if (thumb && thumb.classList.contains("drop-thumb")) { thumb.src = ""; thumb.style.display = "none"; }
+    }
+
+    function openPanel() {
+      renderList(display.value === (itemLib.find(i => i.id === hidden.value)?.name || "") ? "" : display.value);
+      panel.style.display = "block";
+      display.select();
+    }
+
+    function closePanel() { panel.style.display = "none"; }
+
+    display.addEventListener("focus", () => {
+      // 點擊時清空 display 以進入搜尋模式
+      if (hidden.value) display.value = "";
+      openPanel();
+    });
+    display.addEventListener("blur", () => {
+      // 若沒選，還原為目前 value
+      setTimeout(() => {
+        if (panel.style.display === "block") return;
+        const cur = itemLib.find(i => i.id === hidden.value);
+        display.value = cur ? `${ITEM_TYPE_LABEL[cur.itemType] || ""} ${cur.name}` : "";
+        if (!hidden.value) clearItem();
+      }, 150);
+    });
+    display.addEventListener("input", () => {
+      renderList(display.value);
+      panel.style.display = "block";
+      if (!display.value) clearItem();
+    });
+    display.addEventListener("keydown", e => {
+      if (e.key === "Escape") {
+        closePanel();
+        const cur = itemLib.find(i => i.id === hidden.value);
+        display.value = cur ? `${ITEM_TYPE_LABEL[cur.itemType] || ""} ${cur.name}` : "";
+      }
+    });
+
+    // 點擊面板外關閉
+    document.addEventListener("click", e => {
+      if (!wrap.contains(e.target)) closePanel();
+    }, { capture: true });
+
+    wrap.append(hidden, display, panel);
+    return wrap;
   }
 
   function makeDropRow(itemId = "", chance = 10) {
     const div = document.createElement("div");
     div.className = "drop-row";
     div.style.cssText = "display:flex;gap:4px;align-items:center;margin-bottom:4px;";
+
     const thumbSrc = getItemThumb(itemId);
-    div.innerHTML = `
-      <img class="drop-thumb" src="${thumbSrc}" style="width:22px;height:22px;object-fit:contain;border-radius:3px;flex-shrink:0;${thumbSrc ? "" : "display:none;"}" />
-      <select class="sheet-input drop-item-sel" style="flex:1;min-width:0;">
-        <option value="">-- 選道具 --</option>${buildItemSelectOptions()}
-      </select>
-      <input class="sheet-input drop-chance" type="number" min="0" max="100" step="0.1" value="${chance}" style="width:62px;text-align:right;" />
-      <span style="font-size:0.8em;color:var(--muted,#888)">%</span>
-      <button type="button" class="drop-del-btn" style="background:none;border:none;color:var(--muted,#888);cursor:pointer;font-size:1.1em;padding:0 2px;" title="移除">&times;</button>
-    `;
-    const sel = div.querySelector(".drop-item-sel");
-    if (itemId) sel.value = itemId;
-    sel.addEventListener("change", () => attachDropRowThumb(sel));
+    const thumb = document.createElement("img");
+    thumb.className = "drop-thumb";
+    thumb.style.cssText = `width:22px;height:22px;object-fit:contain;border-radius:3px;flex-shrink:0;${thumbSrc ? "" : "display:none;"}`;
+    if (thumbSrc) thumb.src = thumbSrc;
+
+    const combo = makeItemCombobox(itemId);
+
+    const chanceInput = document.createElement("input");
+    chanceInput.type = "number";
+    chanceInput.className = "sheet-input drop-chance";
+    chanceInput.min = 0; chanceInput.max = 100; chanceInput.step = 0.1;
+    chanceInput.value = chance;
+    chanceInput.style.cssText = "width:62px;text-align:right;flex-shrink:0;";
+
+    const pct = document.createElement("span");
+    pct.style.cssText = "font-size:0.8em;color:var(--muted);flex-shrink:0;";
+    pct.textContent = "%";
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "drop-del-btn";
+    delBtn.style.cssText = "background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1em;padding:0 2px;flex-shrink:0;";
+    delBtn.title = "移除";
+    delBtn.textContent = "×";
+
+    div.append(thumb, combo, chanceInput, pct, delBtn);
     return div;
   }
 
@@ -88,10 +248,10 @@
   function readDropsFromEditor(td) {
     const drops = [];
     td.querySelectorAll(".drop-row").forEach(row => {
-      const sel = row.querySelector(".drop-item-sel");
+      const hidden = row.querySelector(".drop-item-sel");
       const chance = parseFloat(row.querySelector(".drop-chance")?.value) || 0;
-      if (!sel || !sel.value) return;
-      const found = itemLib.find(i => i.id === sel.value);
+      if (!hidden || !hidden.value) return;
+      const found = itemLib.find(i => i.id === hidden.value);
       if (found) drops.push({ itemId: found.id, itemName: found.name, chance });
     });
     return drops;

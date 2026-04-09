@@ -37,6 +37,11 @@ const AVAILABLE_FEATURES = [
     key: "monster_zone_mid",
     label: "放怪區面板（中級）",
     description: "10 等以上玩家才能進入的中級戰鬥區"
+  },
+  {
+    key: "weekly_quest",
+    label: "每週任務面板",
+    description: "每週任務查看與獎勵領取入口"
   }
 ];
 
@@ -455,6 +460,47 @@ class AdminConsoleService {
     );
     if (!updatedBindings.some((b) => b.channelId === targetChannelId && b.featureKey === boundFeatureKey)) {
       updatedBindings.push(normalizeBinding({ featureKey: boundFeatureKey, channelId: targetChannelId, panelMessageId: message.id }));
+    }
+    await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
+
+    return { channelId: targetChannelId, messageId: message.id };
+  }
+
+  async publishWeeklyQuestPanel(channelId) {
+    const { getBotClient } = require("../../bot/runtimeContext");
+    const { createWeeklyQuestPanelMessage } = require("../../bot/weeklyQuestView");
+
+    const client = getBotClient();
+    if (!client?.isReady()) {
+      throw new AppError(ERROR_CODES.UNAUTHORIZED, "Discord bot is not ready", 503);
+    }
+
+    const targetChannelId = String(channelId || "").trim();
+    if (!targetChannelId) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "channelId is required", 400);
+    }
+
+    const channel = await client.channels.fetch(targetChannelId);
+    if (!channel || !channel.isTextBased || !channel.isTextBased()) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
+    }
+
+    const stored = await this.channelLayoutRepository.get();
+    const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
+    const existingBinding = bindings.find((b) => b.featureKey === "weekly_quest");
+    if (existingBinding?.panelMessageId) {
+      await channel.messages.fetch(existingBinding.panelMessageId)
+        .then((msg) => msg.delete())
+        .catch(() => {});
+    }
+
+    const message = await channel.send(createWeeklyQuestPanelMessage());
+
+    const updatedBindings = bindings.map((b) =>
+      b.featureKey === "weekly_quest" ? { ...b, panelMessageId: message.id } : b
+    );
+    if (!updatedBindings.some((b) => b.featureKey === "weekly_quest")) {
+      updatedBindings.push(normalizeBinding({ featureKey: "weekly_quest", channelId: targetChannelId, panelMessageId: message.id }));
     }
     await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
 

@@ -1,6 +1,6 @@
 /* admin.players.init.js - initialization and event wiring separated to reduce file size */
 (function () {
-  const { request, log, splitLines, showSection } = window.adminCore;
+  const { request, log, splitLines, showSection, setPlayerActionEnabled } = window.adminCore;
   const state = window.state;
   const elements = window.elements;
 
