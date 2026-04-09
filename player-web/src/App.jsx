@@ -189,7 +189,7 @@ function useTypewriter(text, speed = 40) {
   return { displayed, done };
 }
 
-function HomeTab({ onNavigate }) {
+function HomeTab({ onNavigate, unreadCount = 0, onOpenNotif }) {
   const [profile, setProfile] = useState(null);
   const [dialogueIdx, setDialogueIdx] = useState(0);
   const [cycleIdx, setCycleIdx] = useState(0);
@@ -260,8 +260,23 @@ function HomeTab({ onNavigate }) {
           </div>
         </div>
 
-        {/* 右：貨幣 */}
+        {/* 右：貨幣 + 通知鈴鐺 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end' }}>
+          {/* 鈴鐺按鈕 */}
+          <button
+            onClick={onOpenNotif}
+            style={{
+              position: 'relative', background: 'rgba(4,6,14,0.7)', backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(200,169,110,0.25)', borderRadius: '2px',
+              padding: '3px 8px', cursor: 'pointer', lineHeight: 1,
+              display: 'flex', alignItems: 'center', gap: '4px',
+            }}
+          >
+            <span style={{ fontSize: '0.8rem' }}>🔔</span>
+            {unreadCount > 0 && (
+              <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+            )}
+          </button>
           {[
             { icon: '💰', val: gold, color: '#e8c97a', border: 'rgba(200,169,110,0.3)' },
             { icon: '💎', val: diamond, color: '#7ab4ff', border: 'rgba(100,160,255,0.25)' },
@@ -1017,6 +1032,7 @@ function CombatTab() {
   // nextBattleAt: timestamp from server (ms). null = no cooldown.
   const [nextBattleAt, setNextBattleAt] = useState(null);
   const [cdSecs, setCdSecs] = useState(0);
+  const [rewardModalOpen, setRewardModalOpen] = useState(false);
   const logsEndRef = React.useRef(null);
 
   useEffect(() => {
@@ -1306,35 +1322,123 @@ function CombatTab() {
                    </div>
                 ))}
                 
-                {battleState.showResults && (
-                  <div style={{ 
-                    padding: '20px', marginTop: '10px',
-                    background: battleState.outcome === 'win' ? 'rgba(241, 196, 15, 0.08)' : 'rgba(231, 76, 60, 0.08)', 
-                    border: `1px solid ${battleState.outcome === 'win' ? 'rgba(241, 196, 15, 0.3)' : 'rgba(231, 76, 60, 0.3)'}`, 
-                    borderRadius: '16px', textAlign: 'center'
-                  }}>
-                    <h4 style={{ color: battleState.outcome === 'win' ? '#f1c40f' : '#e74c3c', margin: '0 0 12px 0', fontSize: '1.2rem' }}>
-                      {battleState.outcome === 'win' ? '🏆 戰鬥勝利！' : 
-                       battleState.outcome === 'error' ? '❌ 系統異常' :
-                       battleState.outcome === 'lose' ? '💀 戰鬥失敗' : '⏸️ 戰略撤退'}
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {Array.isArray(battleState.rewardLines) && battleState.rewardLines.map((line, i) => {
-                        if (typeof line !== 'string') return null;
-                        return (
-                          <div key={i} style={{ fontSize: '13px', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: escapeHtml(line).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
-                        );
-                      })}
+                {battleState.showResults && (() => {
+                  const isWin = battleState.outcome === 'win';
+                  const s = battleState.rewardSummary;
+                  const hasReward = isWin && s && (s.gold > 0 || s.exp > 0 || (s.drops && s.drops.length > 0));
+                  return (
+                    <div style={{
+                      padding: '20px', marginTop: '10px',
+                      background: isWin ? 'rgba(241,196,15,0.08)' : 'rgba(231,76,60,0.08)',
+                      border: `1px solid ${isWin ? 'rgba(241,196,15,0.3)' : 'rgba(231,76,60,0.3)'}`,
+                      borderRadius: '16px', textAlign: 'center'
+                    }}>
+                      {/* 標題列：結果文字 + 燈泡按鈕 */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '12px' }}>
+                        <h4 style={{ color: isWin ? '#f1c40f' : '#e74c3c', margin: 0, fontSize: '1.2rem' }}>
+                          {isWin ? '🏆 戰鬥勝利！' :
+                           battleState.outcome === 'error' ? '❌ 系統異常' :
+                           battleState.outcome === 'lose' ? '💀 戰鬥失敗' : '⏸️ 戰略撤退'}
+                        </h4>
+                        {hasReward && (
+                          <button
+                            onClick={() => setRewardModalOpen(true)}
+                            title="查看獎勵詳情"
+                            style={{
+                              background: 'rgba(241,196,15,0.15)',
+                              border: '1px solid rgba(241,196,15,0.5)',
+                              borderRadius: '50%',
+                              width: '36px', height: '36px',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              cursor: 'pointer', fontSize: '18px',
+                              flexShrink: 0,
+                              animation: 'rewardPulse 1.5s ease-in-out infinite',
+                            }}
+                          >💡</button>
+                        )}
+                      </div>
+
+                      {/* 一般文字 rewardLines（非 win 時顯示） */}
+                      {!isWin && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {Array.isArray(battleState.rewardLines) && battleState.rewardLines.map((line, i) => {
+                            if (typeof line !== 'string') return null;
+                            return (
+                              <div key={i} style={{ fontSize: '13px', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: escapeHtml(line).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* win 時顯示簡短摘要 */}
+                      {isWin && s && (
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap', fontSize: '14px', marginBottom: hasReward ? '4px' : 0 }}>
+                          {s.exp > 0 && <span style={{ color: '#a8e063' }}>⭐ +{s.exp} EXP{s.levelUps > 0 ? ` ✨ Lv.${s.newLevel}` : ''}</span>}
+                          {s.gold > 0 && <span style={{ color: '#f1c40f' }}>💰 +{s.gold}</span>}
+                          {s.drops && s.drops.length > 0 && <span style={{ color: '#a78bfa' }}>🎁 {s.drops.join('、')}</span>}
+                        </div>
+                      )}
+                      {isWin && hasReward && (
+                        <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--muted)' }}>點 💡 查看獎勵詳情</p>
+                      )}
+
+                      {!isBattling && (
+                        <button className="btn btn-primary" onClick={() => setBattleState(null)} style={{ marginTop: '16px', width: '100%', padding: '10px' }}>
+                          完成並關閉
+                        </button>
+                      )}
                     </div>
-                    {!isBattling && (
-                      <button className="btn btn-primary" onClick={() => setBattleState(null)} style={{ marginTop: '20px', width: '100%', padding: '10px' }}>
-                        完成並關閉
-                      </button>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
                 <div ref={logsEndRef} style={{ height: '20px' }} />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 獎勵詳情彈窗 */}
+      {rewardModalOpen && battleState?.rewardSummary && (
+        <div className="modal-overlay" onClick={() => setRewardModalOpen(false)} style={{ zIndex: 1100 }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '340px', width: '90%' }}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '1rem', color: '#f1c40f' }}>🏆 戰鬥獎勵</h3>
+              <button onClick={() => setRewardModalOpen(false)} style={{ background: 'var(--surface-hover)', border: 'none', color: '#fff', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px' }}>
+              {(() => {
+                const s = battleState.rewardSummary;
+                const rows = [];
+                if (s.exp > 0) rows.push(
+                  <div key="exp" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--glass-border)' }}>
+                    <span style={{ color: 'var(--muted)', fontSize: '13px' }}>⭐ 經驗值</span>
+                    <span style={{ fontWeight: 700, color: '#a8e063', fontSize: '16px' }}>
+                      +{s.exp}
+                      {s.levelUps > 0 && <span style={{ marginLeft: '8px', fontSize: '12px', color: '#ffd700', background: 'rgba(255,215,0,0.15)', padding: '2px 8px', borderRadius: '4px' }}>✨ 升級！Lv.{s.newLevel}</span>}
+                    </span>
+                  </div>
+                );
+                if (s.gold > 0) rows.push(
+                  <div key="gold" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--glass-border)' }}>
+                    <span style={{ color: 'var(--muted)', fontSize: '13px' }}>💰 金幣</span>
+                    <span style={{ fontWeight: 700, color: '#f1c40f', fontSize: '16px' }}>+{s.gold}</span>
+                  </div>
+                );
+                if (s.drops && s.drops.length > 0) rows.push(
+                  <div key="drops" style={{ padding: '12px 0' }}>
+                    <div style={{ color: 'var(--muted)', fontSize: '13px', marginBottom: '8px' }}>🎁 掉落道具</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {s.drops.map((name, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '8px', padding: '8px 12px' }}>
+                          <span style={{ fontSize: '16px' }}>📦</span>
+                          <span style={{ fontWeight: 600, color: '#c4b5fd', fontSize: '13px' }}>{name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+                return rows.length > 0 ? rows : <p style={{ color: 'var(--muted)', textAlign: 'center' }}>無獎勵資料</p>;
+              })()}
             </div>
           </div>
         </div>
@@ -1991,6 +2095,11 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showMoreDrawer, setShowMoreDrawer] = useState(false);
   const [showWeeklyTab, setShowWeeklyTab] = useState(false);
+  const [rewardToast, setRewardToast] = useState(null); // { monsterName, gold, exp, drops }
+  const [rewardToastOpen, setRewardToastOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]); // 通知歷史紀錄
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const audioRef = useRef(null);
   const [bgmMuted, setBgmMuted] = useState(false);
   const [volume, setVolume] = useState(0.35);
@@ -2014,6 +2123,27 @@ export default function App() {
     setToken(null);
     setIsAuthenticated(false);
   };
+
+  // 全域 SSE：監聽其他玩家擊殺怪物後的獎勵通知
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const toastTimerRef = { current: null };
+    const es = api.createChatStream(() => {}, {
+      onReward: (summary) => {
+        const notif = { ...summary, id: Date.now(), time: new Date().toLocaleTimeString() };
+        setNotifications(prev => [notif, ...prev].slice(0, 50));
+        setUnreadCount(c => c + 1);
+        setRewardToast(notif);
+        setRewardToastOpen(true);
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setRewardToastOpen(false), 5000);
+      }
+    });
+    return () => {
+      es.close();
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, [isAuthenticated]);
 
   // 背景音樂：首次使用者互動後自動播放
   useEffect(() => {
@@ -2132,7 +2262,7 @@ export default function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-        {activeTab === 'home' && <HomeTab onNavigate={setActiveTab} />}
+        {activeTab === 'home' && <HomeTab onNavigate={setActiveTab} unreadCount={unreadCount} onOpenNotif={() => { setUnreadCount(0); setShowNotifModal(true); }} />}
         {activeTab === 'profile' && <ProfileTab onOpenSettings={() => setShowSettingsModal(true)} />}
         {activeTab === 'inventory' && <InventoryTab />}
         {activeTab === 'combat' && <CombatTab />}
@@ -2220,6 +2350,85 @@ export default function App() {
                 <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>每週任務</div>
                 <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '1px' }}>查看進度、領取獎勵</div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 其他玩家擊殺獎勵 Toast（LINE 風格從頂部滑入）*/}
+      {rewardToast && (
+        <div
+          className={`notif-toast ${rewardToastOpen ? 'entering' : 'leaving'}`}
+          onClick={() => setRewardToastOpen(false)}
+          style={{ display: rewardToast ? 'flex' : 'none' }}
+        >
+          {/* 左側 icon */}
+          <div style={{ fontSize: '22px', lineHeight: 1, flexShrink: 0, marginTop: '1px' }}>🔔</div>
+          {/* 內容 */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700, letterSpacing: '0.08em' }}>
+                獲得怪物討伐獎勵
+              </span>
+              {rewardToast.monsterName && (
+                <span style={{ fontSize: '11px', color: 'var(--muted)' }}>— {rewardToast.monsterName}</span>
+              )}
+              <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--muted)', flexShrink: 0 }}>{rewardToast.time}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {rewardToast.exp > 0 && (
+                <span style={{ fontSize: '12px', color: '#60c0ff' }}>
+                  ✨ +{rewardToast.exp.toLocaleString()} EXP
+                  {rewardToast.levelUps > 0 && <span style={{ color: '#ffd700', marginLeft: '4px' }}>▲LV+{rewardToast.levelUps}</span>}
+                </span>
+              )}
+              {rewardToast.gold > 0 && (
+                <span style={{ fontSize: '12px', color: 'var(--gold)' }}>💰 +{rewardToast.gold.toLocaleString()}</span>
+              )}
+              {rewardToast.drops && rewardToast.drops.length > 0 && (
+                <span style={{ fontSize: '12px', color: '#a88cff' }}>
+                  📦 {rewardToast.drops.map(d => d.name || d).join(', ')}
+                </span>
+              )}
+            </div>
+          </div>
+          <span style={{ fontSize: '14px', color: 'var(--muted)', flexShrink: 0, alignSelf: 'flex-start' }}>✕</span>
+        </div>
+      )}
+
+      {/* 通知歷史 Modal */}
+      {showNotifModal && (
+        <div className="modal-overlay" onClick={() => setShowNotifModal(false)} style={{ zIndex: 800 }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxHeight: '75vh' }}>
+            <div className="modal-header">
+              <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: '14px', letterSpacing: '0.1em' }}>
+                🔔 通知紀錄
+              </span>
+              <button onClick={() => setShowNotifModal(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: '12px' }}>
+              {notifications.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', padding: '24px 0' }}>尚無通知</p>
+              ) : notifications.map(n => (
+                <div key={n.id} style={{
+                  padding: '10px 12px', marginBottom: '8px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: '8px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700 }}>
+                      {n.monsterName || '怪物'} 討伐獎勵
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{n.time}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    {n.exp > 0 && <span style={{ fontSize: '12px', color: '#60c0ff' }}>✨ +{n.exp.toLocaleString()} EXP{n.levelUps > 0 ? ` ▲LV+${n.levelUps}` : ''}</span>}
+                    {n.gold > 0 && <span style={{ fontSize: '12px', color: 'var(--gold)' }}>💰 +{n.gold.toLocaleString()}</span>}
+                    {n.drops && n.drops.length > 0 && <span style={{ fontSize: '12px', color: '#a88cff' }}>📦 {n.drops.map(d => d.name || d).join(', ')}</span>}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

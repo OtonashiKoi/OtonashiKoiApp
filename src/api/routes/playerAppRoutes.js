@@ -303,7 +303,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     return resolvedText;
   };
 
-  const sseClients = new Set();
+  // sseClients: Map<discordId, Set<{res}>>  (同一帳號可多個 tab)
+  const sseClients = new Map();
+
+  // 供 monsterZoneHandlers 呼叫，推送參戰獎勵給指定玩家
+  function pushRewardToPlayer(discordId, summary) {
+    const clients = sseClients.get(discordId);
+    if (!clients || clients.size === 0) return;
+    const dataStr = `event: reward\ndata: ${JSON.stringify(summary)}\n\n`;
+    clients.forEach(c => { try { c.res.write(dataStr); } catch (_) {} });
+  }
+  // 掛載到 serviceContext 供 handlers 使用
+  serviceContext._pushRewardToPlayer = pushRewardToPlayer;
   if (discordClient) {
     discordClient.on("messageCreate", async (msg) => {
       const hasContent = msg.content || msg.embeds.length > 0 || msg.stickers.size > 0 || msg.attachments.size > 0;
@@ -347,7 +358,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           replyTo,
         };
         const dataStr = `data: ${JSON.stringify(payload)}\n\n`;
-        sseClients.forEach(client => client.res.write(dataStr));
+        sseClients.forEach(clients => clients.forEach(c => { try { c.res.write(dataStr); } catch (_) {} }));
       }
     });
   }
@@ -357,18 +368,34 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.flushHeaders(); 
+    res.flushHeaders();
+
+    // 嘗試從 query token 識別玩家身份
+    let discordId = null;
+    try {
+      const token = req.query.token || "";
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "super-secret-jwt-key");
+        discordId = decoded.discordId || null;
+      }
+    } catch (_) {}
 
     const client = { res };
-    sseClients.add(client);
-    
+    if (discordId) {
+      if (!sseClients.has(discordId)) sseClients.set(discordId, new Set());
+      sseClients.get(discordId).add(client);
+    }
+
     const timer = setInterval(() => {
       res.write(":\n\n"); // Heartbeat comment
     }, 15000);
 
     req.on("close", () => {
       clearInterval(timer);
-      sseClients.delete(client);
+      if (discordId) {
+        const s = sseClients.get(discordId);
+        if (s) { s.delete(client); if (s.size === 0) sseClients.delete(discordId); }
+      }
     });
   });
 
@@ -730,6 +757,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monsterName: monster.name,
         logs: roundLogs,
         rewardLines,
+        rewardSummary: rewardLines._summary || null,
         totalDamage,
         finalPlayerHp: Math.max(0, pHp),
         finalMonsterHp: Math.max(0, mHp),

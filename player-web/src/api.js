@@ -98,7 +98,7 @@ export const api = {
   claimWeeklyReward: (id) => fetchWithAuth(`/weekly-quests/${id}/claim`, { method: "POST" }),
 
   // 建立 Server-Sent Events 連線（EventSource 不支援 Header，以 query param 傳 token）
-  createChatStream: (onMessage) => {
+  createChatStream: (onMessage, { onReward } = {}) => {
     const token = getToken();
     const url = token
       ? `${API_BASE}/chat/stream?token=${encodeURIComponent(token)}`
@@ -112,6 +112,16 @@ export const api = {
         console.error("SSE parse error", err);
       }
     };
+    if (onReward) {
+      eventSource.addEventListener('reward', (event) => {
+        try {
+          const summary = JSON.parse(event.data);
+          onReward(summary);
+        } catch (err) {
+          console.error("SSE reward parse error", err);
+        }
+      });
+    }
     return eventSource;
   }
 };

@@ -437,6 +437,43 @@ async function handleBackpackAction(interaction, action, uuid) {
   }
 }
 
+function buildWeeklyQuestsMessage(progressList, wl) {
+  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+
+  const lines = [];
+  const claimButtons = [];
+
+  for (const { quest, current, claimed, done } of progressList) {
+    const bar = buildProgressBar(current, quest.target, 8);
+    const status = claimed ? "✅ 已領取" : done ? "🔔 可領取" : "🔲 進行中";
+    const rewards = [];
+    if (quest.rewardGold)    rewards.push(`${quest.rewardGold} 🪙`);
+    if (quest.rewardDiamond) rewards.push(`${quest.rewardDiamond} 💎`);
+    if (quest.rewardItemId)  rewards.push("＋道具");
+    const rewardStr = rewards.length ? ` ｜ 獎勵：${rewards.join(" ")}` : "";
+    lines.push(`**${quest.title}** ${status}\n${bar} ${current}／${quest.target}${rewardStr}`);
+
+    if (done && !claimed) {
+      claimButtons.push(
+        new ButtonBuilder()
+          .setCustomId(`wq_claim:${quest.id}`)
+          .setLabel(`🎁 領取「${quest.title.slice(0, 20)}」`)
+          .setStyle(ButtonStyle.Success)
+      );
+    }
+  }
+
+  const content = `📋 **每週任務**（${wl}）\n\n` + lines.join("\n\n");
+
+  // Discord 每個 ActionRow 最多 5 個按鈕，最多 5 行
+  const components = [];
+  for (let i = 0; i < claimButtons.length && i < 5; i += 5) {
+    components.push(new ActionRowBuilder().addComponents(claimButtons.slice(i, i + 5)));
+  }
+
+  return { content, components };
+}
+
 async function handleWeeklyQuests(interaction) {
   const serviceContext = getServiceContext();
   const discordId = interaction.user.id;
@@ -444,36 +481,93 @@ async function handleWeeklyQuests(interaction) {
   const wqs = serviceContext.weeklyQuestService || new WeeklyQuestService();
 
   try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const progressList = await wqs.getPlayerProgress(discordId);
     const wl = currentWeekLabel();
 
     if (!progressList.length) {
-      await replyAndAutoDelete(interaction, `📋 **每週任務**（${wl}）\n\n本週尚無任務，請稍後再試。`);
+      await interaction.editReply({ content: `📋 **每週任務**（${wl}）\n\n本週尚無任務，請稍後再試。` });
+      setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);
       return;
     }
 
-    const lines = progressList.map(({ quest, current, claimed, done }) => {
-      const bar = buildProgressBar(current, quest.target, 8);
-      const status = claimed ? "✅ 已領取" : done ? "🔔 可領取" : "🔲 進行中";
-      const rewards = [];
-      if (quest.rewardGold)    rewards.push(`${quest.rewardGold} 🪙`);
-      if (quest.rewardDiamond) rewards.push(`${quest.rewardDiamond} 💎`);
-      if (quest.rewardItemId)  rewards.push("＋道具");
-      const rewardStr = rewards.length ? ` ｜ 獎勵：${rewards.join(" ")}` : "";
-      return (
-        `**${quest.title}** ${status}\n` +
-        `${bar} ${current}／${quest.target}${rewardStr}`
-      );
-    });
-
-    const content =
-      `📋 **每週任務**（${wl}）\n\n` +
-      lines.join("\n\n") +
-      `\n\n> 前往網頁版「更多→每週任務」可以領取完成的獎勵。`;
-
-    await replyAndAutoDelete(interaction, content);
+    await interaction.editReply(buildWeeklyQuestsMessage(progressList, wl));
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 120_000);
   } catch (err) {
-    await replyAndAutoDelete(interaction, `❌ 讀取每週任務失敗：${err.message}`);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ content: `❌ 讀取每週任務失敗：${err.message}` });
+    } else {
+      await interaction.reply({ content: `❌ 讀取每週任務失敗：${err.message}`, flags: MessageFlags.Ephemeral });
+    }
+  }
+}
+
+async function handleWeeklyQuestClaim(interaction, questId) {
+  const serviceContext = getServiceContext();
+  const discordId = interaction.user.id;
+  const { WeeklyQuestService, currentWeekLabel } = require("../services/weeklyQuest/weeklyQuestService");
+  const wqs = serviceContext.weeklyQuestService || new WeeklyQuestService();
+
+  try {
+    await interaction.deferUpdate();
+
+    // 取得玩家 displayName
+    const player = await serviceContext.playerRepository.findByDiscordId(discordId);
+    const displayName = player?.displayName || interaction.user.username;
+
+    const reward = await wqs.claimReward(discordId, questId);
+
+    // 發放金幣 / 鑽石
+    if (reward.gold > 0) {
+      await serviceContext.rewardService.grantCurrency({
+        discordId, displayName,
+        currencyType: "gold",
+        amount: reward.gold,
+        source: "weekly_quest_reward",
+        operator: "weekly_quest"
+      });
+    }
+    if (reward.diamond > 0) {
+      await serviceContext.rewardService.grantCurrency({
+        discordId, displayName,
+        currencyType: "diamond",
+        amount: reward.diamond,
+        source: "weekly_quest_reward",
+        operator: "weekly_quest"
+      });
+    }
+    // 發放道具
+    if (reward.rewardItemId) {
+      try {
+        const item = await serviceContext.itemRepository.findById(reward.rewardItemId);
+        if (item) {
+          const { updateStore } = require("../adapters/json/jsonStore");
+          await updateStore((store) => {
+            if (!store.players[discordId]) store.players[discordId] = {};
+            if (!Array.isArray(store.players[discordId].inventory)) store.players[discordId].inventory = [];
+            store.players[discordId].inventory.push({ itemId: item.id, obtainedAt: new Date().toISOString() });
+            return store;
+          });
+          reward.rewardItemName = item.name;
+        }
+      } catch (_) {}
+    }
+
+    // 組成獎勵描述
+    const rewardParts = [];
+    if (reward.gold > 0)          rewardParts.push(`${reward.gold} 🪙`);
+    if (reward.diamond > 0)       rewardParts.push(`${reward.diamond} 💎`);
+    if (reward.rewardItemName)    rewardParts.push(`「${reward.rewardItemName}」`);
+    const rewardDesc = rewardParts.length ? rewardParts.join(" ＋ ") : "（無金幣 / 鑽石）";
+
+    // 重新讀取進度並更新訊息
+    const wl = currentWeekLabel();
+    const progressList = await wqs.getPlayerProgress(discordId);
+    const { content, components } = buildWeeklyQuestsMessage(progressList, wl);
+    await interaction.editReply({ content: `✅ 已領取「${reward.questTitle}」獎勵：${rewardDesc}\n\n` + content.replace(/^📋 \*\*每週任務\*\*（[^）]+）\n\n/, "📋 **每週任務**（" + wl + "）\n\n"), components });
+  } catch (err) {
+    const msg = err.message || "領取失敗";
+    await interaction.followUp({ content: `❌ ${msg}`, flags: MessageFlags.Ephemeral });
   }
 }
 
@@ -484,6 +578,12 @@ function buildProgressBar(current, target, width = 10) {
 
 async function handleButton(interaction) {
   const id = interaction.customId;
+
+  // 每週任務領取
+  if (id.startsWith("wq_claim:")) {
+    await handleWeeklyQuestClaim(interaction, id.slice("wq_claim:".length));
+    return;
+  }
 
   // 背包動作
   if (id.startsWith("backpack_tab:")) {
@@ -634,5 +734,7 @@ async function handleEquipmentSelect(interaction) {
 module.exports = {
   createPlayerPanelMessage,
   handleButton,
-  handleEquipmentSelect
+  handleEquipmentSelect,
+  handleWeeklyQuests,
+  handleWeeklyQuestClaim
 };

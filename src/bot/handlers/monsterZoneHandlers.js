@@ -783,6 +783,35 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // 通知非擊殺者參戰獎勵（DM，擊殺者已在戰鬥 embed 看到）
   _notifyKillRewards(monster.name, perPidRewards, discordId).catch(() => {});
 
+  // 推送 SSE reward 事件給所有非擊殺者參戰者（web 端）
+  try {
+    const pushReward = sc._pushRewardToPlayer;
+    if (typeof pushReward === "function") {
+      for (const [pid, rewards] of Object.entries(perPidRewards)) {
+        if (pid === discordId) continue; // 擊殺者自己在戰鬥結算看到
+        if (!rewards.gold && !rewards.exp && !rewards.drops?.length) continue;
+        pushReward(pid, {
+          monsterName: monster.name,
+          gold:     rewards.gold,
+          exp:      rewards.exp,
+          levelUps: rewards.levelUps,
+          newLevel: rewards.newLevel,
+          drops:    rewards.drops,
+        });
+      }
+    }
+  } catch (_) {}
+
+  // 回傳結構化摘要供 web API 使用
+  const myReward = perPidRewards[discordId] || { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] };
+  rewardLines._summary = {
+    gold:     myReward.gold,
+    exp:      myReward.exp,
+    levelUps: myReward.levelUps,
+    newLevel: myReward.newLevel,
+    drops:    myReward.drops,
+  };
+
   return rewardLines;
   } finally {
     killInProgress.delete(killKey);
