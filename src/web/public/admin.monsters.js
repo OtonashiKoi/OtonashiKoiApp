@@ -178,8 +178,8 @@
   function renderHead() {
     const head = document.getElementById("monsters-sheet-head");
     if (!head) return;
-    const cols = ["出場順", "圖", "名稱", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掌落道具", "出現率%", "啟用", "操作"];
-    const widths = ["74px","52px","114px","82px","66px","66px","66px","66px","66px","66px","160px","86px","86px","86px","240px","70px","44px","96px"];
+    const cols = ["出場順", "圖", "名稱", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掌落道具", "出現率%", "BOSS", "啟用", "操作"];
+    const widths = ["74px","52px","114px","82px","66px","66px","66px","66px","66px","66px","160px","86px","86px","86px","240px","70px","50px","44px","96px"];
     head.innerHTML = "<tr>" + cols.map((c,i) => `<th style="width:${widths[i]};white-space:nowrap;">${c}</th>`).join("") + "</tr>";
   }
 
@@ -218,6 +218,7 @@
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" style="width:76px;" /></td>
       <td class="drops-td" style="padding:6px 4px;"></td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="spawnRate" type="number" min="1" max="100" step="1" value="${m.spawnRate ?? 10}" style="width:60px;text-align:center;" /></td>
+      <td style="padding:8px 4px;text-align:center;"><input type="checkbox" data-field="isBoss" title="BOSS 出場時發送廣播" ${m.isBoss ? "checked" : ""} /></td>
       <td style="padding:8px 4px;text-align:center;"><input type="checkbox" data-field="enabled" ${enabled ? "checked" : ""} /></td>
       <td style="padding:6px 4px;white-space:nowrap;">
         <button class="button primary btn-save" style="padding:3px 10px;font-size:0.8em;">儲存</button>
@@ -280,6 +281,7 @@
       goldReward: Number(tr.querySelector("[data-field=goldReward]")?.value) || 0,
       drops: dropsTd ? readDropsFromEditor(dropsTd) : [],
       spawnRate: Number(tr.querySelector("[data-field=spawnRate]")?.value) || 10,
+      isBoss: tr.querySelector("[data-field=isBoss]")?.checked || false,
       enabled: tr.querySelector("[data-field=enabled]")?.checked || false
     };
   }
@@ -308,7 +310,7 @@
     const tbody = document.getElementById("monsters-tbody");
     if (!tbody) return;
     const nextSeq = monsters.length ? Math.max(...monsters.map(m => m.seq||1)) + 1 : 1;
-    const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, entryFee:100, expReward:50, goldReward:30, spawnRate:10, drops:[], enabled:true };
+    const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, entryFee:100, expReward:50, goldReward:30, spawnRate:10, isBoss:false, drops:[], enabled:true };
     const tr = buildRow(blank, true);
     tbody.appendChild(tr);
     bindTableEvents(tr.parentElement);

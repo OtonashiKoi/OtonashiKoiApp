@@ -142,6 +142,35 @@ async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount
   }
 }
 
+// BOSS 出場廣播：發送到 town_chat 頻道
+async function _broadcastBossSpawn(sc, zoneKey, monster) {
+  const { getBotClient } = require("../runtimeContext");
+  const client = getBotClient();
+  if (!client?.isReady()) return;
+
+  const layout = await sc.channelLayoutRepository.get();
+  const townBinding = (layout?.discord?.bindings || []).find((b) => b.featureKey === "town_chat" && b.enabled && b.channelId);
+  if (!townBinding) return;
+
+  const channel = await client.channels.fetch(townBinding.channelId).catch(() => null);
+  if (!channel) return;
+
+  const zoneName = zoneKey === "mid" ? "中級戰鬥區" : "一般戰鬥區";
+  const { EmbedBuilder } = require("discord.js");
+  const embed = new EmbedBuilder()
+    .setColor(0xff4444)
+    .setTitle(`⚠️ BOSS 登場！`)
+    .setDescription(`**${zoneName}** 出現了強大的 BOSS！\n\n👹 **${monster.name}** 降臨！\n快去挑戰吧！`)
+    .setThumbnail(monster.imageUrl || null)
+    .setFooter({ text: `Lv.${monster.level || "?"} · HP ${monster.calc?.maxHp || "?"}` })
+    .setTimestamp();
+
+  await channel.send({ content: `@everyone`, embeds: [embed] }).catch(() => {
+    // 如果沒有 @everyone 權限就不 mention，只發 embed
+    channel.send({ embeds: [embed] }).catch(() => {});
+  });
+}
+
 // ──────────────────────────────────────────────
 // 出戰（入場）— 顯示準備畫面 + 開始戰鬥按鈕
 // ──────────────────────────────────────────────
@@ -727,6 +756,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   if (nextMonster) {
     _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {})
       .catch(() => {});
+    // BOSS 出場廣播
+    if (nextMonster.isBoss) {
+      _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
+    }
   } else {
     _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap)
       .catch(() => {});

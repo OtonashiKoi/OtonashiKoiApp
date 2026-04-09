@@ -50,6 +50,7 @@ class MonsterService {
       goldReward: Math.max(0, Number(fields.goldReward) || 0),
       drops,
       spawnRate: Math.min(100, Math.max(1, Number(fields.spawnRate) || 10)),
+      isBoss: Boolean(fields.isBoss),
       enabled: Boolean(fields.enabled),
       createdAt: new Date().toISOString()
     };
@@ -74,6 +75,7 @@ class MonsterService {
     if (fields.goldReward !== undefined) updated.goldReward = Math.max(0, Number(fields.goldReward) || 0);
     if (fields.drops !== undefined) updated.drops = await this._resolveDrops(fields.drops);
     if (fields.spawnRate !== undefined) updated.spawnRate = Math.min(100, Math.max(1, Number(fields.spawnRate) || 10));
+    if (fields.isBoss !== undefined) updated.isBoss = Boolean(fields.isBoss);
     if (fields.enabled !== undefined) updated.enabled = Boolean(fields.enabled);
     const saved = await this.monsterRepository.save(updated);
     return { ...saved, calc: calcStats(saved) };
