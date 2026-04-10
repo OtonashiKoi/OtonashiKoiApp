@@ -133,22 +133,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
 
     if (outcome === "lose") { roundLogs.push(log.join("\n")); break; }
 
-    // ── 盾格擋反擊（單手劍+盾）──
+    // ── 盾格擋反擊（單手劍+盾，必中）──
     if (blockedThisRound && pStats.blockCounter && outcome === null) {
-      const hitChance = pStats.hit - mCalc.dodge;
-      if (monsterIsStunned || Math.random() * 100 < hitChance) {
-        const isBreak = Math.random() * 100 < pStats.armorBreakChance;
-        const finalDef = isBreak ? 0 : mCalc.def;
-        let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
-        const isCrit = Math.random() * 100 < pStats.crit;
-        if (isCrit) dmg = Math.round(dmg * 2.5);
-        mHp -= dmg;
-        totalDamage += dmg;
-        log.push(`⚔️✨ **格擋反擊**！${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
-        if (mHp <= 0) { outcome = "win"; }
-      } else {
-        log.push(`💨 格擋反擊出手，但 ${mName} ${rand(dodgePhrases)}！`);
-      }
+      const isBreak = Math.random() * 100 < pStats.armorBreakChance;
+      const finalDef = isBreak ? 0 : mCalc.def;
+      let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
+      const isCrit = Math.random() * 100 < pStats.crit;
+      if (isCrit) dmg = Math.round(dmg * 2.5);
+      mHp -= dmg;
+      totalDamage += dmg;
+      log.push(`⚔️✨ **格擋反擊**！${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+      if (mHp <= 0) { outcome = "win"; }
     }
 
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
