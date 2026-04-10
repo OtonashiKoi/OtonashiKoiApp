@@ -582,152 +582,181 @@
     itemLib = Array.isArray(j.data) ? j.data : [];
   }
 
-  function renderHead() {
-    const head = document.getElementById("monsters-sheet-head");
-    if (!head) return;
-    const cols = ["出場順", "圖", "名稱", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "MaxHP", "DEF", "衍生數值", "入場費", "EXP", "金幣", "掌落道具", "出現率%", "BOSS", "啟用", "操作"];
-    const widths = ["74px","52px","114px","82px","66px","66px","66px","66px","66px","66px","90px","90px","120px","86px","86px","86px","240px","70px","50px","44px","96px"];
-    head.innerHTML = "<tr>" + cols.map((c,i) => `<th style="width:${widths[i]};white-space:nowrap;">${c}</th>`).join("") + "</tr>";
-  }
+  function renderHead() {} // card 模式不需要 table head
 
   function buildCalcHtml(m) {
     const d = calcDerived(m);
     const defPct = Math.min(75, Number(m.def) || 0);
     const effAtk = Math.round(d.atk * (1 - defPct / 100));
-    return `<div style="line-height:1.7;font-size:0.8em;color:var(--muted,#aaa);white-space:nowrap;">ATK:${d.atk} DEF:${defPct}%<br>玩家實傷≈${effAtk} 閃:${d.dodge}%</div>`;
+    return `ATK:${d.atk} DEF:${defPct}% 實傷≈${effAtk} 閃:${d.dodge}%`;
   }
 
   function buildRow(m, isNew) {
-    const tr = document.createElement("tr");
-    tr.style.verticalAlign = "top";
-    tr.dataset.id = m.id || "";
-    tr.dataset.isNew = isNew ? "1" : "0";
-
-    const imgSrc = m.imageThumbnailUrl || m.imageUrl || "";
-    const imgHtml = imgSrc
-      ? `<img src="${imgSrc}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;cursor:pointer;" class="monster-img-preview" />`
-      : `<span style="font-size:1.4em;cursor:pointer;line-height:40px;" class="monster-img-preview">➕</span>`;
-
-    const statsInputs = STAT_KEYS.map(k =>
-      `<td style="padding:6px 4px;"><input class="sheet-input stat-input" data-stat="${k}" type="number" min="0" step="1" value="${m[k]??1}" style="width:58px;text-align:center;" /></td>`
-    ).join("");
+    const card = document.createElement("div");
+    card.className = "monster-card";
+    card.dataset.id = m.id || "";
+    card.dataset.isNew = isNew ? "1" : "0";
+    card.style.cssText = [
+      "border:1px solid var(--line);border-radius:10px;padding:14px 16px;",
+      "background:var(--surface);display:flex;flex-direction:column;gap:10px;",
+    ].join("");
 
     const enabled = m.enabled !== false;
     const seq = m.seq || 1;
-
-    // 計算 exp/gold 建議值作為 placeholder
     const maxHp = Number(m.maxHp) || 0;
     const level = Number(m.level) || 1;
     const atk = (Number(m.str) || 0) * 3;
     const sg = suggestRewards(maxHp, level, atk);
+    const imgSrc = m.imageThumbnailUrl || m.imageUrl || "";
 
-    tr.innerHTML = `
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:62px;text-align:center;${!enabled ? 'opacity:0.35;pointer-events:none;' : ''}" ${!enabled ? 'disabled' : ''} /></td>
-      <td style="padding:6px;" class="img-cell">${imgHtml}</td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:104px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="level" type="number" min="0" max="15" step="1" value="${m.level ?? 1}" style="width:72px;text-align:center;" /></td>
-      ${statsInputs}
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="maxHp" type="number" min="1" value="${m.maxHp||1}" style="width:82px;text-align:center;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="def" type="number" min="0" max="75" value="${m.def||0}" style="width:82px;text-align:center;" /></td>
-      <td class="calc-cell" style="padding:6px 8px;">${buildCalcHtml(m)}</td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:76px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" placeholder="建議:${sg.exp}" style="width:76px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" placeholder="建議:${sg.gold}" style="width:76px;" /></td>
-      <td class="drops-td" style="padding:6px 4px;"></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="spawnRate" type="number" min="1" max="100" step="1" value="${m.spawnRate ?? 10}" style="width:60px;text-align:center;" /></td>
-      <td style="padding:8px 4px;text-align:center;"><input type="checkbox" data-field="isBoss" title="BOSS 出場時發送廣播" ${m.isBoss ? "checked" : ""} /></td>
-      <td style="padding:8px 4px;text-align:center;"><input type="checkbox" data-field="enabled" ${enabled ? "checked" : ""} /></td>
-      <td style="padding:6px 4px;white-space:nowrap;">
-        <button class="button primary btn-save" style="padding:3px 10px;font-size:0.8em;">儲存</button>
-        <button class="button btn-delete" style="padding:3px 8px;font-size:0.8em;margin-left:4px;">刪除</button>
-      </td>
+    // ── Row 1：圖片 + 基本資訊 + 屬性 ──
+    const row1 = document.createElement("div");
+    row1.style.cssText = "display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;";
+    row1.innerHTML = `
+      <div class="img-cell" style="flex-shrink:0;width:56px;height:56px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;cursor:pointer;overflow:hidden;">
+        ${imgSrc ? `<img src="${imgSrc}" style="width:52px;height:52px;object-fit:contain;" class="monster-img-preview"/>` : `<span style="font-size:1.6em;" class="monster-img-preview">➕</span>`}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <label style="font-size:11px;color:var(--muted);">順</label>
+          <input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:50px;text-align:center;${!enabled?'opacity:0.4;pointer-events:none;':''}" ${!enabled?'disabled':''} />
+          <label style="font-size:11px;color:var(--muted);">名稱</label>
+          <input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:120px;" />
+          <label style="font-size:11px;color:var(--muted);">等級</label>
+          <input class="sheet-input" data-field="level" type="number" min="0" max="20" step="1" value="${m.level??1}" style="width:54px;text-align:center;" />
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <label style="font-size:11px;color:var(--muted);">MaxHP</label>
+          <input class="sheet-input" data-field="maxHp" type="number" min="1" value="${m.maxHp||1}" style="width:82px;text-align:center;" />
+          <label style="font-size:11px;color:var(--muted);">DEF%</label>
+          <input class="sheet-input" data-field="def" type="number" min="0" max="75" value="${m.def||0}" style="width:60px;text-align:center;" />
+        </div>
+        <div class="calc-cell" style="font-size:11px;color:var(--muted);line-height:1.6;">${buildCalcHtml(m)}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;flex-shrink:0;">
+        ${STAT_KEYS.map(k => `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <label style="font-size:10px;color:var(--muted);text-transform:uppercase;">${k}</label>
+            <input class="sheet-input stat-input" data-stat="${k}" type="number" min="0" step="1" value="${m[k]??1}" style="width:52px;text-align:center;" />
+          </div>`).join("")}
+      </div>
     `;
-    tr.querySelector(".drops-td").appendChild(buildDropsEditor(m.drops || []));
-    return tr;
+
+    // ── Row 2：獎勵 + 掉落 + 設定 + 操作 ──
+    const row2 = document.createElement("div");
+    row2.style.cssText = "display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;border-top:1px solid var(--line);padding-top:10px;";
+    row2.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <label style="font-size:11px;color:var(--muted);">入場費</label>
+          <input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:72px;text-align:center;" />
+          <label style="font-size:11px;color:var(--muted);">EXP</label>
+          <input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" placeholder="建議:${sg.exp}" style="width:80px;text-align:center;" />
+          <label style="font-size:11px;color:var(--muted);">金幣</label>
+          <input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" placeholder="建議:${sg.gold}" style="width:80px;text-align:center;" />
+          <label style="font-size:11px;color:var(--muted);">出現率%</label>
+          <input class="sheet-input" data-field="spawnRate" type="number" min="1" max="100" step="1" value="${m.spawnRate??10}" style="width:60px;text-align:center;" />
+        </div>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;">
+            <input type="checkbox" data-field="isBoss" ${m.isBoss?"checked":""} /> BOSS
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;">
+            <input type="checkbox" data-field="enabled" ${enabled?"checked":""} /> 啟用
+          </label>
+          <button class="button primary btn-save" style="padding:4px 14px;font-size:0.82em;">儲存</button>
+          <button class="button btn-delete" style="padding:4px 10px;font-size:0.82em;">刪除</button>
+        </div>
+      </div>
+      <div class="drops-td" style="flex:1;min-width:280px;"></div>
+    `;
+
+    card.appendChild(row1);
+    card.appendChild(row2);
+    card.querySelector(".drops-td").appendChild(buildDropsEditor(m.drops || []));
+    return card;
   }
 
   function renderBody() {
-    const oldTbody = document.getElementById("monsters-tbody");
-    if (!oldTbody) return;
-    // 用 clone 替換，清除所有累積的 event listener，避免重複觸發
-    const tbody = oldTbody.cloneNode(false);
-    oldTbody.replaceWith(tbody);
-    monsters.filter(m => (m.zone || "normal") === activeZone).forEach(m => tbody.appendChild(buildRow(m, false)));
-    bindTableEvents(tbody);
+    const container = document.getElementById("monsters-tbody");
+    if (!container) return;
+    const fresh = container.cloneNode(false);
+    container.replaceWith(fresh);
+    monsters.filter(m => (m.zone || "normal") === activeZone).forEach(m => fresh.appendChild(buildRow(m, false)));
+    bindTableEvents(fresh);
   }
 
-  function updateCalc(tr) {
+  function updateCalc(card) {
     const stats = {};
-    tr.querySelectorAll(".stat-input").forEach(inp => { stats[inp.dataset.stat] = Number(inp.value)||0; });
-    stats.def = Number(tr.querySelector("[data-field=def]")?.value) || 0;
-    const cell = tr.querySelector(".calc-cell");
-    if (cell) cell.innerHTML = buildCalcHtml(stats);
-    // 更新 exp/gold 的建議 placeholder
-    const maxHp  = Number(tr.querySelector("[data-field=maxHp]")?.value) || 0;
-    const level  = Number(tr.querySelector("[data-field=level]")?.value) || 1;
-    const atk    = (Number(stats.str) || 0) * 3;
+    card.querySelectorAll(".stat-input").forEach(inp => { stats[inp.dataset.stat] = Number(inp.value)||0; });
+    stats.def = Number(card.querySelector("[data-field=def]")?.value) || 0;
+    const cell = card.querySelector(".calc-cell");
+    if (cell) cell.textContent = buildCalcHtml(stats);
+    const maxHp = Number(card.querySelector("[data-field=maxHp]")?.value) || 0;
+    const level = Number(card.querySelector("[data-field=level]")?.value) || 1;
+    const atk = (Number(stats.str) || 0) * 3;
     const sg = suggestRewards(maxHp, level, atk);
-    const expInput  = tr.querySelector("[data-field=expReward]");
-    const goldInput = tr.querySelector("[data-field=goldReward]");
+    const expInput  = card.querySelector("[data-field=expReward]");
+    const goldInput = card.querySelector("[data-field=goldReward]");
     if (expInput)  expInput.placeholder  = `建議:${sg.exp}`;
     if (goldInput) goldInput.placeholder = `建議:${sg.gold}`;
   }
 
-  function bindTableEvents(tbody) {
-    tbody.addEventListener("input", function (e) {
-      const tr = e.target.closest("tr[data-id]");
-      if (!tr) return;
+  function bindTableEvents(container) {
+    container.addEventListener("input", function (e) {
+      const card = e.target.closest(".monster-card");
+      if (!card) return;
       if (e.target.classList.contains("stat-input") || ["maxHp","def","level"].includes(e.target.dataset.field)) {
-        updateCalc(tr);
+        updateCalc(card);
       }
     });
-    tbody.addEventListener("click", async function (e) {
-      const tr = e.target.closest("tr[data-id]");
-      if (!tr) return;
-      if (e.target.classList.contains("btn-save")) { await saveRow(tr); }
+    container.addEventListener("click", async function (e) {
+      const card = e.target.closest(".monster-card");
+      if (!card) return;
+      if (e.target.classList.contains("btn-save")) { await saveRow(card); }
       else if (e.target.classList.contains("btn-delete")) {
-        const id = tr.dataset.id;
-        const name = tr.querySelector("[data-field=name]")?.value || id;
-        if (!confirm(`刪除怎物「${name}」？`)) return;
+        const id = card.dataset.id;
+        const name = card.querySelector("[data-field=name]")?.value || id;
+        if (!confirm(`刪除怪物「${name}」？`)) return;
         await deleteMonster(id);
       } else if (e.target.closest(".monster-img-preview")) {
-        const id = tr.dataset.id;
-        if (!id || tr.dataset.isNew === "1") { alert("請先儲存怪物再上傳圖片"); return; }
+        const id = card.dataset.id;
+        if (!id || card.dataset.isNew === "1") { alert("請先儲存怪物再上傳圖片"); return; }
         pendingImgRowId = id;
         document.getElementById("monsters-img-input")?.click();
       }
     });
   }
 
-  function getPayload(tr) {
+  function getPayload(card) {
     const stats = {};
-    tr.querySelectorAll(".stat-input").forEach(inp => { stats[inp.dataset.stat] = inp.value === "" ? 0 : (Number(inp.value) ?? 0); });
-    const dropsTd = tr.querySelector(".drops-td");
+    card.querySelectorAll(".stat-input").forEach(inp => { stats[inp.dataset.stat] = inp.value === "" ? 0 : (Number(inp.value) ?? 0); });
+    const dropsTd = card.querySelector(".drops-td");
     return {
-      seq:        Number(tr.querySelector("[data-field=seq]")?.value)       || 1,
-      name:              tr.querySelector("[data-field=name]")?.value       || "",
+      seq:        Number(card.querySelector("[data-field=seq]")?.value)       || 1,
+      name:              card.querySelector("[data-field=name]")?.value       || "",
       zone:        activeZone,
-      level:      Number(tr.querySelector("[data-field=level]")?.value)     ?? 1,
+      level:      Number(card.querySelector("[data-field=level]")?.value)     ?? 1,
       ...stats,
-      maxHp:      Number(tr.querySelector("[data-field=maxHp]")?.value)     || 1,
-      def:        Number(tr.querySelector("[data-field=def]")?.value)       || 0,
-      entryFee:   Number(tr.querySelector("[data-field=entryFee]")?.value)  || 0,
-      expReward:  Number(tr.querySelector("[data-field=expReward]")?.value) || 0,
-      goldReward: Number(tr.querySelector("[data-field=goldReward]")?.value)|| 0,
+      maxHp:      Number(card.querySelector("[data-field=maxHp]")?.value)     || 1,
+      def:        Number(card.querySelector("[data-field=def]")?.value)       || 0,
+      entryFee:   Number(card.querySelector("[data-field=entryFee]")?.value)  || 0,
+      expReward:  Number(card.querySelector("[data-field=expReward]")?.value) || 0,
+      goldReward: Number(card.querySelector("[data-field=goldReward]")?.value)|| 0,
       drops:      dropsTd ? readDropsFromEditor(dropsTd) : [],
-      spawnRate:  Number(tr.querySelector("[data-field=spawnRate]")?.value) || 10,
-      isBoss:            tr.querySelector("[data-field=isBoss]")?.checked   || false,
-      enabled:           tr.querySelector("[data-field=enabled]")?.checked  || false
+      spawnRate:  Number(card.querySelector("[data-field=spawnRate]")?.value) || 10,
+      isBoss:            card.querySelector("[data-field=isBoss]")?.checked   || false,
+      enabled:           card.querySelector("[data-field=enabled]")?.checked  || false
     };
   }
 
-  async function saveRow(tr) {
-    if (tr.dataset.saving === "1") return;
-    tr.dataset.saving = "1";
+  async function saveRow(card) {
+    if (card.dataset.saving === "1") return;
+    card.dataset.saving = "1";
     try {
-      const payload = getPayload(tr);
-      const id = tr.dataset.id;
-      const isNew = tr.dataset.isNew === "1";
+      const payload = getPayload(card);
+      const id = card.dataset.id;
+      const isNew = card.dataset.isNew === "1";
       const url = isNew ? BASE + "/monsters" : BASE + "/monsters/" + id;
       const method = isNew ? "POST" : "PUT";
       const r = await fetch(url, { method, headers: apiHeaders(), body: JSON.stringify(payload) });
@@ -737,7 +766,7 @@
     } catch (err) {
       alert("儲存發生錯誤: " + err.message);
     } finally {
-      tr.dataset.saving = "0";
+      card.dataset.saving = "0";
     }
   }
 
@@ -750,14 +779,13 @@
   }
 
   function addNewRow() {
-    const tbody = document.getElementById("monsters-tbody");
-    if (!tbody) return;
+    const container = document.getElementById("monsters-tbody");
+    if (!container) return;
     const nextSeq = monsters.length ? Math.max(...monsters.map(m => m.seq||1)) + 1 : 1;
     const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, maxHp:1000, def:50, entryFee:0, expReward:0, goldReward:0, spawnRate:10, isBoss:false, drops:[], enabled:true };
-    const tr = buildRow(blank, true);
-    tbody.appendChild(tr);
-    // 不重新 bind，新 row 的事件會 bubble 到已綁定的 tbody listener
-    tr.querySelector("[data-field=name]")?.focus();
+    const card = buildRow(blank, true);
+    container.appendChild(card);
+    card.querySelector("[data-field=name]")?.focus();
   }
 
   let pendingImgRowId = null;
@@ -778,9 +806,9 @@
       const json = await r.json();
       const thumb = json.data?.imageThumbnailUrl || json.data?.imageUrl;
       if (thumb) {
-        const tr = document.querySelector(`tr[data-id="${rowId}"]`);
-        const cell = tr?.querySelector(".img-cell");
-        if (cell) cell.innerHTML = `<img src="${thumb}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;cursor:pointer;" class="monster-img-preview" />`;
+        const card = document.querySelector(`.monster-card[data-id="${rowId}"]`);
+        const cell = card?.querySelector(".img-cell");
+        if (cell) cell.innerHTML = `<img src="${thumb}" style="width:52px;height:52px;object-fit:contain;" class="monster-img-preview"/>`;
       }
     });
   }
