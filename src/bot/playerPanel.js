@@ -255,6 +255,8 @@ function filterByTab(inventory, tab) {
   return inventory.filter(e => e.itemType !== "equipment");
 }
 
+const PAGE_SIZE = 4;
+
 function buildTabRow(activeTab) {
   const defs = [
     { tab: "item",    label: "🎮 道具" },
@@ -263,29 +265,61 @@ function buildTabRow(activeTab) {
   ];
   return new ActionRowBuilder().addComponents(
     defs.map(d => new ButtonBuilder()
-      .setCustomId(`backpack_tab:${d.tab}`)
+      .setCustomId(`backpack_tab:${d.tab}:0`)
       .setLabel(d.label)
       .setStyle(d.tab === activeTab ? ButtonStyle.Primary : ButtonStyle.Secondary)
     )
   );
 }
 
-function buildBackpackMessage(inventory, tab = "item", prefixMsg) {
+function buildPageRow(tab, page, totalPages) {
+  const btns = [];
+  btns.push(new ButtonBuilder()
+    .setCustomId(`backpack_tab:${tab}:${page - 1}`)
+    .setLabel("◀ 上一頁")
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(page <= 0)
+  );
+  btns.push(new ButtonBuilder()
+    .setCustomId(`backpack_page_info`)
+    .setLabel(`${page + 1} / ${totalPages}`)
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(true)
+  );
+  btns.push(new ButtonBuilder()
+    .setCustomId(`backpack_tab:${tab}:${page + 1}`)
+    .setLabel("下一頁 ▶")
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(page >= totalPages - 1)
+  );
+  return new ActionRowBuilder().addComponents(btns);
+}
+
+function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
   const filtered = filterByTab(inventory, tab);
   const header = prefixMsg ? prefixMsg + "\n\n" : "";
-  const tabRow = buildTabRow(tab);
   const tabLabel = tab === "equip" ? "裝備" : tab === "special" ? "特殊" : "道具";
+  const tabRow = buildTabRow(tab, page);
+
   if (!filtered.length) {
     return { content: header + `🎒 **背包 — ${tabLabel}**\n\n此分類目前為空。`, components: [tabRow] };
   }
-  const lines = filtered.slice(0, 4).map((e, i) => {
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const safePage = Math.max(0, Math.min(page, totalPages - 1));
+  const pageItems = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  const offset = safePage * PAGE_SIZE;
+
+  const lines = pageItems.map((e, i) => {
     const slot = e.equipSlot ? ` (${EQ_SLOT_LABELS[e.equipSlot] || e.equipSlot})` : "";
-    return `${i + 1}. **${e.itemName}**${slot}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`;
+    return `${offset + i + 1}. **${e.itemName}**${slot}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`;
   });
-  if (filtered.length > 4) lines.push(`…還有 ${filtered.length - 4} 個`);
-  const rows = filtered.slice(0, 4).map((e, i) => buildInventoryRow(e, i));
+
+  const rows = pageItems.map((e, i) => buildInventoryRow(e, offset + i));
   rows.push(tabRow);
-  return { content: header + `🎒 **背包 — ${tabLabel}**\n\n${lines.join("\n")}`, components: rows };
+  if (totalPages > 1) rows.push(buildPageRow(tab, safePage, totalPages));
+
+  return { content: header + `🎒 **背包 — ${tabLabel}**（第 ${safePage + 1}/${totalPages} 頁，共 ${filtered.length} 項）\n\n${lines.join("\n")}`, components: rows };
 }
 
 async function handleBind(interaction) {
@@ -435,12 +469,12 @@ async function handleBackpackView(interaction, uuid) {
   }
 }
 
-async function handleBackpackTab(interaction, tab) {
+async function handleBackpackTab(interaction, tab, page = 0) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
-  const msg = buildBackpackMessage(inventory, tab);
+  const msg = buildBackpackMessage(inventory, tab, undefined, page);
   await safeEditReply(interaction, msg);
 }
 
@@ -794,7 +828,14 @@ async function handleButton(interaction) {
 
   // 背包動作
   if (id.startsWith("backpack_tab:")) {
-    await handleBackpackTab(interaction, id.slice("backpack_tab:".length));
+    const parts = id.slice("backpack_tab:".length).split(":");
+    const tab = parts[0];
+    const page = parseInt(parts[1] ?? "0", 10) || 0;
+    await handleBackpackTab(interaction, tab, page);
+    return;
+  }
+  if (id === "backpack_page_info") {
+    await interaction.deferUpdate().catch(() => {});
     return;
   }
   if (id.startsWith("backpack_view:")) {
