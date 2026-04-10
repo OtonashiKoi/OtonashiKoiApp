@@ -30,7 +30,7 @@ function createServiceContext() {
   );
   const checkinService = new CheckinService(playerService, repositories.checkinRepository, rewardService, repositories.progressRepository);
   const progressService = new ProgressService(playerService, repositories.progressRepository);
-  const itemService = new ItemService(repositories.itemRepository);
+  const itemService = new ItemService(repositories.itemRepository, repositories.progressRepository);
   const playerTierService = new PlayerTierService(repositories.playerTierRepository);
   const monsterService = new MonsterService(repositories.monsterRepository, repositories.itemRepository);
   const weeklyQuestService = new WeeklyQuestService();

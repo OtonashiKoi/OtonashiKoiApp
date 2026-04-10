@@ -14,8 +14,9 @@ const WEAPON_ATK_STAT = {
 };
 
 class ItemService {
-  constructor(itemRepository) {
+  constructor(itemRepository, progressRepository = null) {
     this.itemRepository = itemRepository;
+    this.progressRepository = progressRepository;
   }
 
   _normalizeEffect(effect) {
@@ -106,7 +107,78 @@ class ItemService {
     // 若更改類型為非裝備，清空裝備欄位
     if (updated.itemType !== "equipment") { updated.equipSlot = null; updated.equipStats = null; updated.weaponType = null; updated.isTwoHanded = false; updated.atkStat = null; updated.tier = null; }
     if (!updated.name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具名稱不可空白", 400);
-    return this.itemRepository.save(updated);
+    const saved = await this.itemRepository.save(updated);
+    // 背景同步玩家背包與裝備槽中相同 itemId 的道具
+    if (this.progressRepository) {
+      this._syncItemToPlayers(saved).catch(e => console.error("[ItemService] syncItemToPlayers error:", e));
+    }
+    return saved;
+  }
+
+  // 同步道具庫變更到所有持有該道具的玩家
+  async _syncItemToPlayers(libItem) {
+    const allProgress = await this.progressRepository.listAll();
+    const SYNC_FIELDS = ["imageUrl", "imageThumbnailUrl", "equipSlot", "equipStats",
+                         "weaponType", "isTwoHanded", "atkStat", "tier", "itemEffect", "itemType"];
+
+    for (const progress of allProgress) {
+      let dirty = false;
+
+      const syncEntry = (entry) => {
+        if (entry.itemId !== libItem.id) return entry;
+        const enhanceLevel = entry.enhanceLevel || 0;
+        const baseName = libItem.name;
+
+        // 重建 equipStats：道具庫基底 + 強化加成疊回主屬性
+        let newStats = libItem.equipStats ? { ...libItem.equipStats } : null;
+        if (newStats && enhanceLevel > 0) {
+          // 找主屬性（數值最大的 key）
+          const mainStat = Object.entries(newStats).sort((a, b) => b[1] - a[1])[0]?.[0];
+          if (mainStat) newStats[mainStat] = (newStats[mainStat] || 0) + enhanceLevel;
+        }
+
+        const updated = {
+          ...entry,
+          itemName: enhanceLevel > 0 ? `${baseName} +${enhanceLevel}` : baseName,
+          imageUrl: libItem.imageUrl ?? entry.imageUrl,
+          imageThumbnailUrl: libItem.imageThumbnailUrl ?? entry.imageThumbnailUrl,
+          equipSlot: libItem.equipSlot ?? entry.equipSlot,
+          equipStats: newStats ?? entry.equipStats,
+          weaponType: libItem.weaponType ?? entry.weaponType,
+          isTwoHanded: libItem.isTwoHanded ?? entry.isTwoHanded,
+          atkStat: libItem.atkStat ?? entry.atkStat,
+          tier: libItem.tier ?? entry.tier,
+          itemEffect: libItem.effect ?? entry.itemEffect,
+          itemType: libItem.itemType ?? entry.itemType,
+        };
+
+        // 檢查是否有任何欄位實際變動
+        const changed = SYNC_FIELDS.some(f => JSON.stringify(updated[f]) !== JSON.stringify(entry[f]))
+          || updated.itemName !== entry.itemName;
+        if (changed) dirty = true;
+        return updated;
+      };
+
+      // 同步背包
+      if (Array.isArray(progress.inventory)) {
+        progress.inventory = progress.inventory.map(syncEntry);
+      }
+
+      // 同步裝備槽
+      if (progress.equipment && typeof progress.equipment === "object") {
+        for (const slot of Object.keys(progress.equipment)) {
+          const entry = progress.equipment[slot];
+          if (entry?.itemId === libItem.id) {
+            progress.equipment[slot] = syncEntry(entry);
+          }
+        }
+      }
+
+      if (dirty) {
+        progress.updatedAt = new Date().toISOString();
+        await this.progressRepository.save(progress);
+      }
+    }
   }
 
   async deleteItem(id) {

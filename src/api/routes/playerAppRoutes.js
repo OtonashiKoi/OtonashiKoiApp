@@ -186,7 +186,31 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
-  // 3.3 Enhance Item
+  // 3.3 Use Item (consumable effect)
+  router.post("/api/me/inventory/use/:uuid", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const { uuid } = req.params;
+      const result = await serviceContext.shopService.useItem(discordId, uuid, displayName);
+      res.json(ok(result));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 3.4 Discard Item
+  router.post("/api/me/inventory/discard/:uuid", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { uuid } = req.params;
+      const result = await serviceContext.shopService.discardItem(discordId, uuid);
+      res.json(ok(result));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 3.5 Enhance Item
   router.post("/api/me/inventory/enhance", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
@@ -653,12 +677,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const pStats = calcPlayerStats(attrs, equipped);
 
       const { runCombatLoop } = require("../../shared/combatLoop");
-      const { outcome, roundLogs, totalDamage, finalMonsterHp: mHp } =
+      const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial);
 
       // 結算
       const { handleMonsterKill, _republishPanel } = require("../../bot/handlers/monsterZoneHandlers");
       let rewardLines = [];
+      let mHp = finalMonsterHp;
       const currentParticipants = Array.isArray(state.participants) ? state.participants : [];
 
       if (outcome === "win") {
@@ -714,7 +739,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         rewardLines,
         rewardSummary: rewardLines._summary || null,
         totalDamage,
-        finalPlayerHp: Math.max(0, pHp),
+        finalPlayerHp: Math.max(0, finalPlayerHp),
         finalMonsterHp: Math.max(0, mHp),
         nextBattleAt,
       }));

@@ -576,10 +576,36 @@ async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
       `✅ 強化成功！**${result.itemName}**（${result.statBoosted.toUpperCase()} → ${result.newStatValue}）`
     );
     await interaction.editReply(msg);
+
+    // 廣播強化成功到 town_chat
+    _announceEnhance(interaction, result).catch(() => {});
   } catch (err) {
     await interaction.editReply({ content: `❌ 強化失敗：${err.message}`, components: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
+}
+
+async function _announceEnhance(interaction, result) {
+  try {
+    const { getBotClient } = require("./runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady()) return;
+    const sc = getServiceContext();
+    const layout = await sc.channelLayoutRepository.get();
+    const bindings = layout?.discord?.bindings || [];
+    const binding = bindings.find(b => b.featureKey === "town_chat") ||
+                    bindings.find(b => b.featureKey === "monster_zone");
+    if (!binding?.channelId) return;
+    const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+    if (!channel?.isTextBased?.()) return;
+    const displayName = interaction.member?.displayName || interaction.user.username;
+    const discordId = interaction.user.id;
+    const statLabel = result.statBoosted.toUpperCase();
+    await channel.send(
+      `⚗️ **${displayName}** (<@${discordId}>) 強化成功！\n` +
+      `✨ **${result.itemName}** ${statLabel} 提升至 **${result.newStatValue}**！`
+    );
+  } catch (_) { /* suppressed */ }
 }
 
 function buildWeeklyQuestsMessage(progressList, wl) {
