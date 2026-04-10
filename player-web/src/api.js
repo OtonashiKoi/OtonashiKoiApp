@@ -109,6 +109,7 @@ export const api = {
     const url = token
       ? `${API_BASE}/chat/stream?token=${encodeURIComponent(token)}`
       : `${API_BASE}/chat/stream`;
+    console.log("[SSE] connecting to", url.replace(/token=[^&]+/, "token=***"));
     const eventSource = new EventSource(url);
     eventSource.onmessage = (event) => {
       try {
