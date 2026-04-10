@@ -54,9 +54,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
 
     // ── 玩家攻擊 ──
     const attackCount = pStats.isDualWield ? 2 : 1;
+    const monsterIsStunned = stunRoundsLeft > 0; // 擊暈中：怪物無法閃避
     for (let a = 0; a < attackCount && outcome === null; a++) {
       const hitChance = pStats.hit - mCalc.dodge;
-      if (Math.random() * 100 < hitChance) {
+      if (monsterIsStunned || Math.random() * 100 < hitChance) {
         // 破防判定（斧）
         const isBreak = Math.random() * 100 < pStats.armorBreakChance;
         const effectiveDef = isBreak ? 0 : mCalc.def;
@@ -135,7 +136,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
     // ── 盾格擋反擊（單手劍+盾）──
     if (blockedThisRound && pStats.blockCounter && outcome === null) {
       const hitChance = pStats.hit - mCalc.dodge;
-      if (Math.random() * 100 < hitChance) {
+      if (monsterIsStunned || Math.random() * 100 < hitChance) {
         const isBreak = Math.random() * 100 < pStats.armorBreakChance;
         const finalDef = isBreak ? 0 : mCalc.def;
         let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
@@ -156,7 +157,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
     if (pStats.isDualWield && monsterAttackCount > 0 && outcome === null) {
       if (Math.random() * 100 < pStats.counterChance) {
         const hitChance = pStats.hit - mCalc.dodge;
-        if (Math.random() * 100 < hitChance) {
+        if (monsterIsStunned || Math.random() * 100 < hitChance) {
           const isBreak = pStats.counterInheritBreak && Math.random() * 100 < pStats.armorBreakChance;
           const finalDef = isBreak ? 0 : mCalc.def;
           let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
