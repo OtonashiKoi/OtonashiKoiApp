@@ -15,8 +15,8 @@
 // counterBreak: 副手追擊是否繼承破防
 // ─────────────────────────────────────────────
 const WEAPON_CONFIG = {
-  sword_1h: { mult: 3 },
-  sword_2h: { mult: 6, isTwoHanded: true },
+  sword_1h: { mult: 4 },
+  sword_2h: { mult: 7, isTwoHanded: true },
   mace_1h:  { mult: 3, stunChance: 5 },
   mace_2h:  { mult: 4, isTwoHanded: true, stunChance: 10 },
   axe_1h:   { mult: 3, armorBreak: 15 },
