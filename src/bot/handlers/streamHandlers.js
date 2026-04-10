@@ -118,12 +118,25 @@ async function handleCheckin(comment) {
       });
 
       if (result.ok) {
-        console.log(`[Stream] 打卡成功並發放 ${result.checkin.rewardDetail.amount} gold 給 ${displayName}`);
+        const grantAmount = result.checkin.rewardDetail.amount;
+        console.log(`[Stream] 打卡成功並發放 ${grantAmount} gold 給 ${displayName}`);
         // 每週任務：記錄打卡次數
         try {
           await serviceContext.weeklyQuestService.recordProgress(discordId, "checkin_count", 1);
         } catch (e) {
           console.error("[WeeklyQuest] checkin recordProgress error:", e.message);
+        }
+        // DM 通知玩家打卡成功
+        try {
+          const client = getBotClient();
+          if (client?.isReady()) {
+            const user = await client.users.fetch(discordId).catch(() => null);
+            if (user) {
+              await user.send(`✅ 打卡成功！💰 金幣 **+${grantAmount}**`);
+            }
+          }
+        } catch (e) {
+          console.warn("[Stream] 無法 DM 打卡通知：", e?.message);
         }
         // 回覆到直播聊天室
         try {
