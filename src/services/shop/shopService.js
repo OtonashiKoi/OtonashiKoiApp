@@ -215,6 +215,20 @@ class ShopService {
       progress.flags = progress.flags || {};
       progress.flags.checkinMultiplier = effect.value || 2;
       effectDesc = `🎯 下次打卡 ×${effect.value} 倍`;
+    } else if (effect.type === "reroll_attributes") {
+      const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
+      const level = progress.level || 1;
+      const levelUpPoints = (level - 1) * 2; // 升等得到的點數
+      // 重置為各屬性基礎 1 點
+      const newAttrs = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+      // 重新隨機分配升等點數
+      for (let i = 0; i < levelUpPoints; i++) {
+        const key = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
+        newAttrs[key]++;
+      }
+      progress.attributes = newAttrs;
+      const attrLine = ATTR_KEYS.map(k => `${k.toUpperCase()}:${newAttrs[k]}`).join(" ");
+      effectDesc = `🔮 屬性已重製！新屬性：${attrLine}`;
     }
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);

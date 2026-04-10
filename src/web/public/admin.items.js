@@ -26,7 +26,8 @@
     grant_diamond:"💎 鑽石",
     grant_exp:"✨ 經驗",
     grant_status_points:"📊 屬性點",
-    checkin_multiplier:"🎯 打卡加倍"
+    checkin_multiplier:"🎯 打卡加倍",
+    reroll_attributes:"🔮 屬性重製"
   };
   const WEAPON_TYPE_LABELS={
     sword_1h:'劍(單)', sword_2h:'劍(雙)',

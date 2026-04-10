@@ -412,6 +412,31 @@ async function handleBackpackTab(interaction, tab) {
 
 async function handleBackpackAction(interaction, action, uuid) {
   const serviceContext = getServiceContext();
+
+  // reroll_attributes 需要確認
+  if (action === "use") {
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const entry = (progress?.inventory || []).find(e => e.uuid === uuid);
+    if (entry?.itemEffect?.type === "reroll_attributes") {
+      await interaction.deferUpdate();
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`reroll_confirm:${uuid}`)
+          .setLabel("確認重製屬性")
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`reroll_cancel`)
+          .setLabel("取消")
+          .setStyle(ButtonStyle.Secondary)
+      );
+      await interaction.editReply({
+        content: `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n你目前所有的升等屬性點將會**完全重新隨機分配**，此操作不可逆！`,
+        components: [row]
+      });
+      return;
+    }
+  }
+
   await interaction.deferUpdate();
   try {
     const isUse = action === "use";
@@ -431,6 +456,22 @@ async function handleBackpackAction(interaction, action, uuid) {
     }
   } catch (err) {
     await interaction.editReply({ content: `❌ 操作失敗：${err.message}`, components: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
+}
+
+/** 屬性重製確認 */
+async function handleRerollConfirm(interaction, uuid) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const result = await serviceContext.shopService.useItem(interaction.user.id, uuid, interaction.user.displayName || interaction.user.username);
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const inventory = progress?.inventory || [];
+    const msg = buildBackpackMessage(inventory, "item", `✅ 已使用 **${result.itemName}**。\n${result.effectDesc}`);
+    await interaction.editReply(msg);
+  } catch (err) {
+    await interaction.editReply({ content: `❌ 使用失敗：${err.message}`, components: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
@@ -706,6 +747,17 @@ async function handleButton(interaction) {
   }
   if (id === BUTTON_IDS.enhance) {
     await handleEnhanceEntry(interaction);
+    return;
+  }
+  if (id.startsWith("reroll_confirm:")) {
+    await handleRerollConfirm(interaction, id.slice("reroll_confirm:".length));
+    return;
+  }
+  if (id === "reroll_cancel") {
+    await interaction.deferUpdate();
+    const progress = await getServiceContext().progressRepository.findByPlayerId(interaction.user.id);
+    const msg = buildBackpackMessage(progress?.inventory || [], "item");
+    await interaction.editReply(msg);
     return;
   }
 
