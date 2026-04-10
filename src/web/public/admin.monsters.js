@@ -619,17 +619,17 @@
       <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <label style="font-size:11px;color:var(--muted);">順</label>
-          <input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:50px;text-align:center;${!enabled?'opacity:0.4;pointer-events:none;':''}" ${!enabled?'disabled':''} />
+          <input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:60px;text-align:center;${!enabled?'opacity:0.4;pointer-events:none;':''}" ${!enabled?'disabled':''} />
           <label style="font-size:11px;color:var(--muted);">名稱</label>
-          <input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:120px;" />
+          <input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:160px;" />
           <label style="font-size:11px;color:var(--muted);">等級</label>
-          <input class="sheet-input" data-field="level" type="number" min="0" max="20" step="1" value="${m.level??1}" style="width:54px;text-align:center;" />
+          <input class="sheet-input" data-field="level" type="number" min="0" max="20" step="1" value="${m.level??1}" style="width:64px;text-align:center;" />
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <label style="font-size:11px;color:var(--muted);">MaxHP</label>
-          <input class="sheet-input" data-field="maxHp" type="number" min="1" value="${m.maxHp||1}" style="width:82px;text-align:center;" />
+          <input class="sheet-input" data-field="maxHp" type="number" min="1" value="${m.maxHp||1}" style="width:100px;text-align:center;" />
           <label style="font-size:11px;color:var(--muted);">DEF%</label>
-          <input class="sheet-input" data-field="def" type="number" min="0" max="75" value="${m.def||0}" style="width:60px;text-align:center;" />
+          <input class="sheet-input" data-field="def" type="number" min="0" max="75" value="${m.def||0}" style="width:72px;text-align:center;" />
         </div>
         <div class="calc-cell" style="font-size:11px;color:var(--muted);line-height:1.6;">${buildCalcHtml(m)}</div>
       </div>
@@ -637,7 +637,7 @@
         ${STAT_KEYS.map(k => `
           <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
             <label style="font-size:10px;color:var(--muted);text-transform:uppercase;">${k}</label>
-            <input class="sheet-input stat-input" data-stat="${k}" type="number" min="0" step="1" value="${m[k]??1}" style="width:52px;text-align:center;" />
+            <input class="sheet-input stat-input" data-stat="${k}" type="number" min="0" step="1" value="${m[k]??1}" style="width:64px;text-align:center;" />
           </div>`).join("")}
       </div>
     `;
@@ -649,13 +649,13 @@
       <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <label style="font-size:11px;color:var(--muted);">入場費</label>
-          <input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:72px;text-align:center;" />
+          <input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:88px;text-align:center;" />
           <label style="font-size:11px;color:var(--muted);">EXP</label>
-          <input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" placeholder="建議:${sg.exp}" style="width:80px;text-align:center;" />
+          <input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" placeholder="建議:${sg.exp}" style="width:96px;text-align:center;" />
           <label style="font-size:11px;color:var(--muted);">金幣</label>
-          <input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" placeholder="建議:${sg.gold}" style="width:80px;text-align:center;" />
+          <input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" placeholder="建議:${sg.gold}" style="width:96px;text-align:center;" />
           <label style="font-size:11px;color:var(--muted);">出現率%</label>
-          <input class="sheet-input" data-field="spawnRate" type="number" min="1" max="100" step="1" value="${m.spawnRate??10}" style="width:60px;text-align:center;" />
+          <input class="sheet-input" data-field="spawnRate" type="number" min="1" max="100" step="1" value="${m.spawnRate??10}" style="width:72px;text-align:center;" />
         </div>
         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
           <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;">
