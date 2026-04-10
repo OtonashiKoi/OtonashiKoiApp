@@ -1,8 +1,8 @@
 const MAX_LEVEL = 15;
 
 function expToNextLevel(level) {
-  // 指數成長：早期約 100，後期約 4500（約 10x 幅度）
-  return Math.round(100 * Math.pow(level, 1.45));
+  // 指數成長：早期約 300，中期數千，後期數萬（每天打10~20隻，數天升一級）
+  return Math.round(300 * Math.pow(level, 1.6));
 }
 
 module.exports = {

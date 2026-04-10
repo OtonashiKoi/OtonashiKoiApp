@@ -92,28 +92,6 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
   }
 }
 
-async function _announceGroupBonus(sc, luckyDiscordId, luckyName, monsterName, bonusItems, participantCount) {
-  try {
-    const { getBotClient } = require("../runtimeContext");
-    const client = getBotClient();
-    if (!client?.isReady()) return;
-    const layout = await sc.channelLayoutRepository.get();
-    const allBindings = layout?.discord?.bindings || [];
-    const binding = allBindings.find((b) => b.featureKey === "town_chat") ||
-                    allBindings.find((b) => b.featureKey === "monster_zone");
-    if (!binding?.channelId) return;
-    const channel = await client.channels.fetch(binding.channelId).catch(() => null);
-    if (!channel?.isTextBased?.()) return;
-    const itemList = bonusItems.join("、");
-    await channel.send(
-      `🌟🍀✨ **【${participantCount} 人加碼幸運獎】** ✨🍀🌟\n` +
-      `**${luckyName}** (<@${luckyDiscordId}>) 在這場 **${participantCount} 人** 的史詩戰鬥中被神秘力量選中！\n` +
-      `運氣好到不得了，額外獲得了 **${itemList}**！🎊`
-    );
-  } catch (e) {
-    // suppressed
-  }
-}
 
 // ──────────────────────────────────────────────
 // 輔助：重發公開面板
@@ -578,10 +556,11 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${monster.expReward}）${penNote}${killerLvLine}`);
   }
 
-  // ── 承褒：所有參戰者各自決定是否掉落──
-  // 規則：5% 先决機率 → 中後再依每個道具的 chance 骸
-  if (Array.isArray(monster.drops) && monster.drops.length > 0) {
-    const LUCKY_CHANCE = 5; // 先决 5%
+  // ── 道具掉落：從所有參戰者中抽一人，再骰各道具掉落率 ──
+  // 規則：1. 從 participants 隨機抽出一位幸運者
+  //        2. 幸運者對每個掉落項目各自骰 chance%
+  //        3. 骰中的道具進入幸運者背包
+  if (Array.isArray(monster.drops) && monster.drops.length > 0 && participants.length > 0) {
     // 預載全部參戰者的 progress
     const progressCache = {};
     await Promise.all(participants.map(async (pid) => {
@@ -589,27 +568,27 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       if (prog) progressCache[pid] = prog;
     }));
 
-    for (const pid of participants) {
-      const isKiller = pid === discordId;
-      // 擊殺者必中先决，其他參戰者有 5% 機率
-      if (!isKiller && Math.random() * 100 >= LUCKY_CHANCE) continue;
+    // 抽幸運者
+    const luckyIdx = Math.floor(Math.random() * participants.length);
+    const luckyPid = participants[luckyIdx];
+    const luckyProg = progressCache[luckyPid];
 
-      const prog = progressCache[pid];
-      if (!prog) continue;
-      if (!Array.isArray(prog.inventory)) prog.inventory = [];
-
+    if (luckyProg) {
+      if (!Array.isArray(luckyProg.inventory)) luckyProg.inventory = [];
       const droppedItems = [];
+
       for (const drop of monster.drops) {
         if (Math.random() * 100 < drop.chance) {
           const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
           if (item) {
-            prog.inventory.push({
+            luckyProg.inventory.push({
               uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
               itemEffect: item.effect || { type: "none", value: 0 },
               itemType: item.itemType || "consumable",
               imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
               equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
               weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+              atkStat: item.atkStat || null, tier: item.tier || null, enhanceLevel: 0,
               source: "monster_drop", sourceRef: monster.name,
               purchasedAt: new Date().toISOString()
             });
@@ -617,40 +596,46 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           }
         }
       }
+
       if (droppedItems.length > 0) {
-        prog.updatedAt = new Date().toISOString();
-        await sc.progressRepository.save(prog);
-        if (perPidRewards[pid]) perPidRewards[pid].drops = [...droppedItems];
-        const pidName = isKiller ? displayName : (mergedDmg[pid]?.name || pid);
+        luckyProg.updatedAt = new Date().toISOString();
+        await sc.progressRepository.save(luckyProg);
+        if (perPidRewards[luckyPid]) perPidRewards[luckyPid].drops = [...droppedItems];
+        const luckyName = luckyPid === discordId ? displayName : (mergedDmg[luckyPid]?.name || luckyPid);
+        const isKiller = luckyPid === discordId;
         if (isKiller) {
           rewardLines.push(`🎁 道具掉落：${droppedItems.join("、")}`);
-          _announceDrops(sc, pid, pidName, monster.name, droppedItems, false).catch(() => {});
+          _announceDrops(sc, luckyPid, luckyName, monster.name, droppedItems, false).catch(() => {});
         } else {
-          _announceDrops(sc, pid, pidName, monster.name, droppedItems, true).catch(() => {});
+          _announceDrops(sc, luckyPid, luckyName, monster.name, droppedItems, true).catch(() => {});
         }
       }
     }
 
-    // 10 人加碼幸運獎：抽 1 人強制骰一次額外掉落（跳過先決機率）
+    // 10 人加碼：再額外抽一位（可與第一位不同），再骰一次掉落
     if (participants.length >= 10) {
-      const luckyIdx = Math.floor(Math.random() * participants.length);
-      const luckyPid = participants[luckyIdx];
-      const luckyProg = progressCache[luckyPid];
-      if (luckyProg) {
-        if (!Array.isArray(luckyProg.inventory)) luckyProg.inventory = [];
+      // 排除第一位幸運者，從剩餘參戰者中抽
+      const bonusPool = participants.filter(pid => pid !== luckyPid);
+      const bonusPid = bonusPool.length > 0
+        ? bonusPool[Math.floor(Math.random() * bonusPool.length)]
+        : luckyPid; // 只有一人時就還是他
+      const bonusProg = progressCache[bonusPid];
+      if (bonusProg) {
+        if (!Array.isArray(bonusProg.inventory)) bonusProg.inventory = [];
         const bonusItems = [];
         for (const drop of monster.drops) {
           if (Math.random() * 100 < drop.chance) {
             const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
             if (item) {
-              luckyProg.inventory.push({
+              bonusProg.inventory.push({
                 uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
                 itemEffect: item.effect || { type: "none", value: 0 },
                 itemType: item.itemType || "consumable",
                 imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
                 equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
                 weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
-                source: "group_bonus_drop", sourceRef: monster.name,
+                atkStat: item.atkStat || null, tier: item.tier || null, enhanceLevel: 0,
+                source: "monster_drop_bonus", sourceRef: monster.name,
                 purchasedAt: new Date().toISOString()
               });
               bonusItems.push(item.name);
@@ -658,10 +643,11 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           }
         }
         if (bonusItems.length > 0) {
-          luckyProg.updatedAt = new Date().toISOString();
-          await sc.progressRepository.save(luckyProg);
-          const luckyName = luckyPid === discordId ? displayName : (mergedDmg[luckyPid]?.name || luckyPid);
-          _announceGroupBonus(sc, luckyPid, luckyName, monster.name, bonusItems, participants.length).catch(() => {});
+          bonusProg.updatedAt = new Date().toISOString();
+          await sc.progressRepository.save(bonusProg);
+          if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...bonusItems];
+          const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
+          _announceDrops(sc, bonusPid, bonusName, monster.name, bonusItems, true).catch(() => {});
         }
       }
     }
