@@ -208,22 +208,19 @@
 
     modal = document.createElement("div");
     modal.id = "drop-item-modal";
-    modal.style.cssText = [
-      "display:none;position:fixed;inset:0;z-index:2000;",
-      "background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;",
-      "padding:24px;",
-    ].join("");
+    modal.style.cssText = "display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;";
 
     const panel = document.createElement("div");
     panel.style.cssText = [
-      "width:920px;max-width:100%;max-height:86vh;overflow:auto;border-radius:8px;",
-      "background:var(--surface);border:1px solid var(--accent);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,0.6);",
+      "width:1100px;max-width:98vw;height:88vh;display:flex;flex-direction:column;",
+      "border-radius:10px;background:var(--surface);border:1px solid var(--accent);",
+      "padding:16px;box-shadow:0 8px 40px rgba(0,0,0,0.7);overflow:hidden;",
     ].join("");
 
+    // ── Header ──
     const header = document.createElement("div");
-    header.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;";
-    header.innerHTML = `<strong style=\"font-size:1rem;\">選擇掉落道具</strong>`;
-
+    header.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0;";
+    header.innerHTML = `<strong style="font-size:1rem;">選擇掉落道具</strong>`;
     const rightControls = document.createElement("div");
     rightControls.style.cssText = "display:flex;gap:8px;align-items:center;";
     const chanceLabel = document.createElement("label");
@@ -231,122 +228,188 @@
     chanceLabel.textContent = "掉落機率：";
     const chanceInput = document.createElement("input");
     chanceInput.type = "number"; chanceInput.min = 0; chanceInput.max = 100; chanceInput.step = 0.1; chanceInput.value = 10;
-    chanceInput.style.cssText = "width:86px;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);";
+    chanceInput.style.cssText = "width:80px;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);";
     const closeBtn = document.createElement("button");
     closeBtn.className = "button"; closeBtn.textContent = "關閉";
     closeBtn.addEventListener("click", () => { modal.style.display = "none"; modal._cb = null; });
-
     rightControls.append(chanceLabel, chanceInput, closeBtn);
     header.appendChild(rightControls);
 
-    const content = document.createElement("div");
-    content.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;";
-
-    // 類別篩選器（All / consumable / collectible / equipment / special）
-    const categorySelect = document.createElement("select");
-    categorySelect.style.cssText = "margin-left:8px;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);";
-    const catOpts = [{v:"",t:"全部"}].concat(Object.keys(ITEM_TYPE_LABEL).map(k => ({ v: k, t: (ITEM_TYPE_LABEL[k]||k).replace(/^[^\s]+\s/, "") })));
-    catOpts.forEach(o => categorySelect.appendChild(new Option(o.t, o.v)));
-    // 裝備次分類（動態產生，僅在選擇 equipment 時顯示）
-    const equipmentSelect = document.createElement("select");
-    equipmentSelect.style.cssText = "margin-left:8px;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);display:none;";
-    equipmentSelect.addEventListener('change', () => renderItems(search.value));
-
-    function getEquipSubtype(it) {
-      return it.slot || it.subType || it.equipType || it.category || it.type || '其他';
-    }
-
-    function populateEquipSubtypes() {
-      const set = new Set();
-      itemLib.forEach(i => { if ((i.itemType||'') === 'equipment') set.add(getEquipSubtype(i)); });
-      const arr = Array.from(set).filter(Boolean).sort();
-      equipmentSelect.innerHTML = '';
-      equipmentSelect.appendChild(new Option('全部裝備', ''));
-      arr.forEach(v => equipmentSelect.appendChild(new Option(v, v)));
-    }
-
-    categorySelect.addEventListener("change", () => {
-      equipmentSelect.style.display = categorySelect.value === 'equipment' ? '' : 'none';
-      populateEquipSubtypes();
-      renderItems(search.value);
-    });
-
-    // 數值摘要：針對常見屬性顯示中文標籤（僅顯示有數值的欄位），若無則回傳 id
-    function formatItemStats(it) {
-      if (!it || typeof it !== 'object') return "";
-      const mapping = { atk: '攻', def: '防', mdef: '魔防', str: 'STR', agi: 'AGI', vit: 'VIT', int: 'INT', dex: 'DEX', luk: 'LUK' };
-      const parts = [];
-      Object.keys(mapping).forEach(k => {
-        if (typeof it[k] === 'number' && !isNaN(it[k])) parts.push(`${mapping[k]}:${it[k]}`);
-      });
-      if (parts.length) return parts.join(' ');
-      // fallback: show some id or short descriptor
-      return it.id || "";
-    }
-
-    // render function
-    function renderItems(filter) {
-      content.innerHTML = "";
-      const kw = (filter||"").trim().toLowerCase();
-      const selCat = categorySelect.value || "";
-      const filtered = kw ? itemLib.filter(i => i.name.toLowerCase().includes(kw) || (i.itemType||"").toLowerCase().includes(kw)) : itemLib;
-      // 若選了類別，先過濾
-      const filteredByCat = selCat ? filtered.filter(i => (i.itemType||'') === selCat) : filtered;
-      // 若為裝備並有次分類選擇，進一步過濾
-      const equipSub = (typeof equipmentSelect !== 'undefined') ? (equipmentSelect.value || '') : '';
-      const finalFiltered = (selCat === 'equipment' && equipSub) ? filteredByCat.filter(i => getEquipSubtype(i) === equipSub) : filteredByCat;
-      const groups = {};
-      finalFiltered.forEach(i => { const t = i.itemType||"special"; if (!groups[t]) groups[t]=[]; groups[t].push(i); });
-
-      Object.entries(groups).forEach(([t, items]) => {
-        const gwrap = document.createElement("div");
-        // 裝備類改用多欄 Grid 顯示以利快速瀏覽；其他類別維持直列
-        if (t === 'equipment') gwrap.style.cssText = "flex:1 1 280px;min-width:240px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;";
-        else gwrap.style.cssText = "flex:1 1 220px;min-width:200px;";
-        const ghead = document.createElement("div");
-        ghead.style.cssText = "font-size:0.8rem;color:var(--muted);font-weight:700;margin-bottom:6px;";
-        ghead.textContent = (ITEM_TYPE_LABEL[t]||t).replace(/^[^\s]+\s/, "");
-        gwrap.appendChild(ghead);
-
-        items.forEach(it => {
-          const card = document.createElement("div");
-          // 裝備卡片改小尺寸以適合 Grid
-          card.style.cssText = t === 'equipment' ? "display:flex;align-items:flex-start;gap:8px;padding:6px;border-radius:6px;cursor:pointer;" : "display:flex;align-items:center;gap:8px;padding:6px;border-radius:6px;cursor:pointer;margin-bottom:6px;";
-          card.addEventListener("mouseenter", () => card.style.background = "var(--surface-hover)");
-          card.addEventListener("mouseleave", () => card.style.background = "");
-          const thumb = it.imageThumbnailUrl || it.imageUrl || "";
-          // 裝備類顯示數值摘要（中文標籤）；其他類別顯示 id
-          const infoLine = (it.itemType === 'equipment') ? formatItemStats(it) : it.id;
-          card.innerHTML = `${thumb?`<img src=\"${thumb}\" style=\"width:36px;height:36px;object-fit:contain;border-radius:6px;\"/>`:`<span style=\"width:36px;height:36px;display:inline-block;\"></span>`}<div style=\"flex:1;overflow:hidden;\"><div style=\"font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;\">${it.name}</div><div style=\"font-size:0.8rem;color:var(--muted);\">${infoLine}</div></div>`;
-          card.addEventListener("click", () => {
-            if (typeof modal._cb === "function") {
-              const c = parseFloat(chanceInput.value) || 0;
-              modal._cb(it, c);
-            }
-            modal.style.display = "none";
-            modal._cb = null;
-          });
-          gwrap.appendChild(card);
-        });
-
-        content.appendChild(gwrap);
-      });
-    }
-
+    // ── 搜尋欄 ──
     const search = document.createElement("input");
     search.type = "text"; search.placeholder = "🔍 搜尋道具...";
-    search.style.cssText = "width:100%;margin-bottom:8px;padding:8px;border-radius:6px;border:1px solid var(--line);";
-    search.addEventListener("input", () => renderItems(search.value));
+    search.style.cssText = "width:100%;margin-bottom:8px;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);flex-shrink:0;box-sizing:border-box;";
 
-    panel.append(header, categorySelect, equipmentSelect, search, content);
+    // ── Tab 列 ──
+    const TABS = [
+      { key: "all",        label: "全部" },
+      { key: "weapon",     label: "⚔️ 武器" },
+      { key: "defense",    label: "🛡️ 防具/盾" },
+      { key: "head",       label: "🪖 頭部" },
+      { key: "accessory",  label: "💍 飾品" },
+      { key: "consumable", label: "🧪 消耗品" },
+      { key: "collectible",label: "📦 收藏品" },
+    ];
+    const WEAPON_TYPE_LABELS = {
+      sword_1h:'劍(單)', sword_2h:'劍(雙)',
+      mace_1h:'鎚(單)', mace_2h:'鎚(雙)',
+      axe_1h:'斧(單)',  axe_2h:'斧(雙)',
+      dagger:'匕首',
+      staff_1h:'杖(單)', staff_2h:'杖(雙)',
+      bow:'弓',
+    };
+    const TIER_COLORS = { D:'#8899aa', C:'#44cc88', B:'#6699ff', A:'#ffcc44' };
+
+    let activeTab = "all";
+    let activeTier = "all";
+
+    const tabBar = document.createElement("div");
+    tabBar.style.cssText = "display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;flex-shrink:0;";
+
+    const tierBar = document.createElement("div");
+    tierBar.style.cssText = "display:flex;gap:4px;margin-bottom:10px;flex-shrink:0;align-items:center;";
+    tierBar.innerHTML = `<span style="font-size:11px;color:var(--muted);margin-right:4px;">階級：</span>`;
+
+    function mkChip(label, active, onClick, color) {
+      const c = document.createElement("span");
+      c.textContent = label;
+      c.style.cssText = `padding:3px 10px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${color||'var(--line)'};transition:all 0.15s;`;
+      c.style.background = active ? (color||'var(--accent)') : 'transparent';
+      c.style.color = active ? '#111' : (color||'var(--text)');
+      c.addEventListener("click", onClick);
+      return c;
+    }
+
+    function renderTabBar() {
+      tabBar.innerHTML = "";
+      TABS.forEach(t => {
+        const c = mkChip(t.label, activeTab === t.key, () => { activeTab = t.key; renderTabBar(); renderTierBar(); renderItems(search.value); });
+        tabBar.appendChild(c);
+      });
+    }
+
+    function renderTierBar() {
+      // 只有裝備類顯示 tier 篩選
+      const showTier = ["all","weapon","defense","head","accessory"].includes(activeTab);
+      tierBar.style.display = showTier ? "flex" : "none";
+      // 重繪 tier chips（保留第一個 label span）
+      while (tierBar.children.length > 1) tierBar.removeChild(tierBar.lastChild);
+      [["all","全部","var(--muted)"],["D","D 級",TIER_COLORS.D],["C","C 級",TIER_COLORS.C],["B","B 級",TIER_COLORS.B],["A","A 級",TIER_COLORS.A]].forEach(([v,l,col]) => {
+        const c = mkChip(l, activeTier === v, () => { activeTier = v; renderTierBar(); renderItems(search.value); }, col);
+        tierBar.appendChild(c);
+      });
+    }
+
+    // ── 屬性摘要 ──
+    function formatStats(equipStats) {
+      if (!equipStats) return "";
+      return Object.entries(equipStats).map(([k,v]) => `${k.toUpperCase()}+${v}`).join(" ");
+    }
+
+    // ── 分類判定 ──
+    function getTab(it) {
+      if (it.itemType === "consumable") return "consumable";
+      if (it.itemType === "collectible") return "collectible";
+      if (it.itemType !== "equipment") return "other";
+      const slot = it.equipSlot || "";
+      if (slot === "weapon") return "weapon";
+      if (slot === "shield" || slot === "armor" || slot === "garment" || slot === "shoes") return "defense";
+      if (slot.startsWith("head")) return "head";
+      if (slot.startsWith("accessory")) return "accessory";
+      return "defense";
+    }
+
+    // ── Render ──
+    const content = document.createElement("div");
+    content.style.cssText = "flex:1;overflow-y:auto;overflow-x:hidden;";
+
+    function makeCard(it) {
+      const card = document.createElement("div");
+      card.style.cssText = "display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer;border:1px solid transparent;transition:background 0.12s;";
+      card.addEventListener("mouseenter", () => { card.style.background = "var(--surface-hover)"; card.style.borderColor = "var(--accent)"; });
+      card.addEventListener("mouseleave", () => { card.style.background = ""; card.style.borderColor = "transparent"; });
+      const thumb = it.imageThumbnailUrl || it.imageUrl || "";
+      const tierBadge = it.tier ? `<span style="font-size:10px;padding:1px 5px;border-radius:4px;background:${TIER_COLORS[it.tier]||'#888'};color:#111;font-weight:700;margin-left:4px;">${it.tier}</span>` : "";
+      const statsLine = it.itemType === "equipment" ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">${formatStats(it.equipStats)||'—'}</div>` : `<div style="font-size:10px;color:var(--muted);">${it.effect?.type !== 'none' ? it.effect?.type : ''}</div>`;
+      card.innerHTML = `${thumb ? `<img src="${thumb}" style="width:34px;height:34px;object-fit:contain;border-radius:5px;flex-shrink:0;"/>` : `<div style="width:34px;height:34px;background:rgba(255,255,255,0.05);border-radius:5px;flex-shrink:0;"></div>`}<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.name}${tierBadge}</div>${statsLine}</div>`;
+      card.addEventListener("click", () => {
+        if (typeof modal._cb === "function") modal._cb(it, parseFloat(chanceInput.value) || 0);
+        modal.style.display = "none"; modal._cb = null;
+      });
+      return card;
+    }
+
+    function renderItems(filter) {
+      content.innerHTML = "";
+      const kw = (filter || "").trim().toLowerCase();
+      let list = kw ? itemLib.filter(i => (i.name||"").toLowerCase().includes(kw)) : itemLib;
+      if (activeTab !== "all") list = list.filter(i => getTab(i) === activeTab);
+      if (activeTier !== "all") list = list.filter(i => i.tier === activeTier);
+
+      if (!list.length) {
+        content.innerHTML = `<div style="text-align:center;color:var(--muted);padding:40px;">沒有符合條件的道具</div>`;
+        return;
+      }
+
+      // 武器按 weaponType 分群，其他不分群
+      if (activeTab === "weapon" || (activeTab === "all" && !kw)) {
+        // 非裝備類直接列出
+        const nonEq = list.filter(i => i.itemType !== "equipment");
+        const weapons = list.filter(i => i.equipSlot === "weapon");
+        const nonWeaponEq = list.filter(i => i.itemType === "equipment" && i.equipSlot !== "weapon");
+
+        // 武器按 weaponType 分群
+        if (weapons.length) {
+          const wtGroups = {};
+          weapons.forEach(i => { const wt = i.weaponType || "other"; if (!wtGroups[wt]) wtGroups[wt] = []; wtGroups[wt].push(i); });
+          Object.entries(wtGroups).forEach(([wt, items]) => {
+            const section = document.createElement("div");
+            section.style.cssText = "margin-bottom:14px;";
+            const sh = document.createElement("div");
+            sh.style.cssText = "font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;border-bottom:1px solid var(--line);padding-bottom:4px;";
+            sh.textContent = WEAPON_TYPE_LABELS[wt] || wt;
+            section.appendChild(sh);
+            const grid = document.createElement("div");
+            grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;";
+            items.forEach(it => grid.appendChild(makeCard(it)));
+            section.appendChild(grid);
+            content.appendChild(section);
+          });
+        }
+
+        // 其他裝備 + 非裝備
+        const rest = [...nonWeaponEq, ...nonEq];
+        if (rest.length) {
+          const grid = document.createElement("div");
+          grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;";
+          rest.forEach(it => grid.appendChild(makeCard(it)));
+          content.appendChild(grid);
+        }
+      } else {
+        // 其他 tab：直接 grid
+        const grid = document.createElement("div");
+        grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;";
+        list.forEach(it => grid.appendChild(makeCard(it)));
+        content.appendChild(grid);
+      }
+    }
+
+    search.addEventListener("input", () => renderItems(search.value));
+    renderTabBar();
+    renderTierBar();
+
+    panel.append(header, search, tabBar, tierBar, content);
     modal.appendChild(panel);
     document.body.appendChild(modal);
 
-    // expose open API
     modal.open = function ({ currentItemId = "", currentChance = 10, cb = null } = {}) {
       modal._cb = cb;
       chanceInput.value = currentChance;
       search.value = "";
+      activeTab = "all";
+      activeTier = "all";
+      renderTabBar();
+      renderTierBar();
       renderItems("");
       modal.style.display = "flex";
     };
