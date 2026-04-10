@@ -835,12 +835,11 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // 通知非擊殺者參戰獎勵（DM，擊殺者已在戰鬥 embed 看到）
   _notifyKillRewards(monster.name, perPidRewards, discordId).catch(() => {});
 
-  // 推送 SSE reward 事件給所有非擊殺者參戰者（web 端）
+  // 推送 SSE reward 事件給所有參戰者（web 端通知紀錄）
   try {
     const pushReward = sc._pushRewardToPlayer;
     if (typeof pushReward === "function") {
       for (const [pid, rewards] of Object.entries(perPidRewards)) {
-        if (pid === discordId) continue; // 擊殺者自己在戰鬥結算看到
         if (!rewards.gold && !rewards.exp && !rewards.drops?.length) continue;
         pushReward(pid, {
           monsterName: monster.name,
