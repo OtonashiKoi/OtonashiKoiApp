@@ -60,14 +60,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
         // 破防判定（斧）
         const isBreak = Math.random() * 100 < pStats.armorBreakChance;
         const effectiveDef = isBreak ? 0 : mCalc.def;
-        // 法杖無視怪物 DEF
-        const finalDef = pStats.bypassMonsterDef ? 0 : effectiveDef;
+        // 法杖無視怪物 DEF 的 bypassMonsterDefPct%（預設0，法杖50）
+        const bypassPct = pStats.bypassMonsterDefPct ?? 0;
+        const finalDef = Math.max(0, effectiveDef * (1 - bypassPct / 100));
 
         let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
         const isCrit = Math.random() * 100 < pStats.crit;
         // LUK 爆擊：×2.5 且無視怪物 DEF
         if (isCrit) {
-          const critBase = pStats.bypassMonsterDef ? pStats.atk : Math.round(pStats.atk * (1 - 0 / 100));
+          const critBase = Math.round(pStats.atk * (1 - finalDef / 100));
           dmg = Math.round(rollDmg(Math.max(1, critBase)) * 2.5);
         }
 

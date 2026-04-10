@@ -26,6 +26,16 @@ function formatTransactions(rows) {
     .join("\n");
 }
 
+/** editReply wrapper：忽略 10008 Unknown Message（互動已過期或訊息被刪）*/
+async function safeEditReply(interaction, payload) {
+  try {
+    return await safeEditReply(interaction, payload);
+  } catch (err) {
+    if (err?.code === 10008) return; // interaction expired or message deleted — silently ignore
+    throw err;
+  }
+}
+
 /** 回覆 ephemeral 訊息，並在 AUTO_DELETE_MS 後自動刪除 */
 async function replyAndAutoDelete(interaction, content) {
   await interaction.reply({ content, flags: MessageFlags.Ephemeral });
@@ -66,6 +76,7 @@ async function handleProfile(interaction) {
   const calcDef   = cs.def;
   const calcCrit  = Math.round(cs.crit  * 10) / 10;
   const calcCombo = Math.round(cs.combo * 10) / 10;
+  const calcDodge = Math.round((cs.dodge || 0) * 10) / 10;
 
   // ── 裝備屬性加成 ──
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
@@ -77,15 +88,39 @@ async function handleProfile(interaction) {
   }
   const fmt = (base, key) => bonus[key] > 0 ? `${base} (+${bonus[key]})` : `${base}`;
 
-  // ── 武器特效說明 ──
+  // ── 武器特效說明（由 combatStats 推斷，並結合已裝備武器描述） ──
   const wt = cs.weaponType;
   const specialEffects = [];
-  if (wt === "dagger")   specialEffects.push("🗡️ 匕首：連擊率 +20%");
-  if (wt === "axe_2h")   specialEffects.push("🪓 雙手斧：攻擊倍率 ×4");
-  if (wt === "staff_1h") specialEffects.push("🪄 法杖：絕對命中、怪物攻擊 ×2");
-  if (wt === "staff_2h") specialEffects.push("🪄 雙手法杖：絕對命中、怪物攻擊 ×2、倍率 ×5");
-  if (cs.attackCount === 2) specialEffects.push("⚔️ 雙持：每回合攻擊兩次");
-  const effectLine = specialEffects.length ? "\n" + specialEffects.join("\n") : "";
+  if (wt === "dagger") specialEffects.push("🗡️ 匕首：連擊率 +20%");
+  if (wt === "axe_2h") specialEffects.push("🪓 雙手斧：攻擊倍率 ×4");
+  if (wt === "staff_1h") specialEffects.push("🪄 法杖：無視怪物 50% DEF、怪物攻擊 ×2");
+  if (wt === "staff_2h") specialEffects.push("🪄 雙手法杖：無視怪物 50% DEF、怪物攻擊 ×2、倍率 ↑");
+  if (cs.isDualWield) specialEffects.push("⚔️ 雙持：可觸發副手追擊");
+
+  // 使用 combatStats 提供的欄位顯示進一步特效
+  if (cs.stunChance && cs.stunChance > 0) specialEffects.push(`💥 擊暈機率 ${cs.stunChance}%`);
+  if (cs.armorBreakChance && cs.armorBreakChance > 0) specialEffects.push(`🛠️ 破防機率 ${cs.armorBreakChance}%`);
+  if (cs.bypassMonsterDefPct > 0) specialEffects.push(`🪄 無視怪物 ${cs.bypassMonsterDefPct}% DEF`);
+  if (cs.monsterAttackCount && cs.monsterAttackCount > 1) specialEffects.push(`⚠️ 觸發時怪物攻擊 ×${cs.monsterAttackCount}`);
+
+  // 若為弓類，嘗試計算武器帶來的額外閃避（從總閃避扣掉屬性基底）
+  try {
+    const agiTotal = (attrs.agi || 1) + (bonus.agi || 0);
+    const baseDodge = Math.min(50, agiTotal * 0.5);
+    const weaponDodge = Math.round(Math.max(0, (cs.dodge || 0) - baseDodge));
+    if (weaponDodge > 0) specialEffects.push(`🏹 閃避 +${weaponDodge}%`);
+  } catch (e) {}
+
+  // 顯示裝備特效（優先顯示已裝備武器的說明，否則使用推斷的武器特效）
+  let effectLineParts = [...specialEffects];
+    try {
+      const weaponItem = equipped.weapon || null;
+      if (weaponItem && weaponItem.weaponEffectDescription) {
+        // 放在最前面並換行顯示
+        effectLineParts.unshift(`🔸 裝備特效：${weaponItem.weaponEffectDescription}`);
+      }
+    } catch (e) { /* ignore */ }
+    const effectLine = effectLineParts.length ? "\n" + effectLineParts.join("\n") : "";
 
   // ── 裝備清單（只列有裝備的格子）──
   const SLOT_ICONS = {
@@ -112,11 +147,10 @@ async function handleProfile(interaction) {
     `【基本素質】\n` +
     `STR: ${fmt(attrs.str,"str")} | AGI: ${fmt(attrs.agi,"agi")} | VIT: ${fmt(attrs.vit,"vit")}\n` +
     `INT: ${fmt(attrs.int,"int")} | DEX: ${fmt(attrs.dex,"dex")} | LUK: ${fmt(attrs.luk,"luk")}\n` +
-    `剩餘點數 (Status Pt): ${p.statusPoints || 0}\n` +
     `==============\n` +
     `【戰鬥能力】\n` +
     `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
-    `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%` +
+    `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%　🟢 迴避: ${calcDodge}%` +
     effectLine + "\n" +
     equipLine + "\n" +
     `==============\n` +
@@ -350,7 +384,7 @@ async function handleEquipmentView(interaction) {
     payload.content = `⚔️ **裝備欄**\n\n${lines.join("\n")}`;
   }
 
-  await interaction.editReply(payload);
+  await safeEditReply(interaction, payload);
   setTimeout(() => interaction.deleteReply().catch(() => {}), 120_000);
 }
 
@@ -361,14 +395,14 @@ async function handleEquipAction(interaction, action, value) {
     let result;
     if (action === "equip") {
       result = await serviceContext.shopService.equipItem(interaction.user.id, value);
-      await interaction.editReply({ content: `\u2705 已裝備 **${result.itemName}**！`, components: [] });
+      await safeEditReply(interaction, { content: `\u2705 已裝備 **${result.itemName}**！`, components: [] });
     } else {
       result = await serviceContext.shopService.unequipItem(interaction.user.id, value);
-      await interaction.editReply({ content: `\u2705 已卸下 **${result.itemName}**，已放回背包。`, components: [] });
+      await safeEditReply(interaction, { content: `\u2705 已卸下 **${result.itemName}**，已放回背包。`, components: [] });
     }
     setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
   } catch (err) {
-    await interaction.editReply({ content: `\u274c 操作失敗\uff1a${err.message}`, components: [] });
+    await safeEditReply(interaction, { content: `\u274c 操作失敗\uff1a${err.message}`, components: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
@@ -380,7 +414,7 @@ async function handleBackpackView(interaction, uuid) {
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const entry = (progress?.inventory || []).find((e) => e.uuid === uuid);
   if (!entry || !entry.imageUrl) {
-    await interaction.editReply({ content: "此道具沒有圖片。" });
+    await safeEditReply(interaction, { content: "此道具沒有圖片。" });
     return;
   }
   try {
@@ -391,13 +425,13 @@ async function handleBackpackView(interaction, uuid) {
     }
     const fileName = path.basename(imagePath);
     const attachment = new AttachmentBuilder(imagePath, { name: fileName });
-    await interaction.editReply({
+    await safeEditReply(interaction, {
       content: `🖼️ **${entry.itemName}**\n${entry.source === "monster_drop" ? `掉落自 ${entry.sourceRef || "怪物"}` : `購於 ${(entry.purchasedAt || "").slice(0, 10)}`}\n\n你可以右鍵點擊圖片 → 另存圖片。`,
       files: [attachment]
     });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);
   } catch (err) {
-    await interaction.editReply({ content: `❌ 無法載入圖片：${err.message}` });
+    await safeEditReply(interaction, { content: `❌ 無法載入圖片：${err.message}` });
   }
 }
 
@@ -407,7 +441,7 @@ async function handleBackpackTab(interaction, tab) {
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
   const msg = buildBackpackMessage(inventory, tab);
-  await interaction.editReply(msg);
+  await safeEditReply(interaction, msg);
 }
 
 async function handleBackpackAction(interaction, action, uuid) {
@@ -429,7 +463,7 @@ async function handleBackpackAction(interaction, action, uuid) {
           .setLabel("取消")
           .setStyle(ButtonStyle.Secondary)
       );
-      await interaction.editReply({
+      await safeEditReply(interaction, {
         content: `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n你目前所有的升等屬性點將會**完全重新隨機分配**，此操作不可逆！`,
         components: [row]
       });
@@ -450,12 +484,12 @@ async function handleBackpackAction(interaction, action, uuid) {
     // 判斷原本在哪個 tab（根據被操作的道具欄位）
     const tab = "item";
     const msg = buildBackpackMessage(inventory, tab, `✅ 已${verb} **${result.itemName}**。${extra}`);
-    await interaction.editReply(msg);
+    await safeEditReply(interaction, msg);
     if (!inventory.length) {
       setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
     }
   } catch (err) {
-    await interaction.editReply({ content: `❌ 操作失敗：${err.message}`, components: [] });
+    await safeEditReply(interaction, { content: `❌ 操作失敗：${err.message}`, components: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
@@ -469,9 +503,9 @@ async function handleRerollConfirm(interaction, uuid) {
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const inventory = progress?.inventory || [];
     const msg = buildBackpackMessage(inventory, "item", `✅ 已使用 **${result.itemName}**。\n${result.effectDesc}`);
-    await interaction.editReply(msg);
+    await safeEditReply(interaction, msg);
   } catch (err) {
-    await interaction.editReply({ content: `❌ 使用失敗：${err.message}`, components: [] });
+    await safeEditReply(interaction, { content: `❌ 使用失敗：${err.message}`, components: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
@@ -487,10 +521,10 @@ async function handleEnhanceEntry(interaction) {
   const SLOT_ORDER = ["weapon","shield","head_top","head_mid","head_low","armor","garment","shoes","accessory_l","accessory_r"];
   const enhanceable = SLOT_ORDER
     .map(s => equipped[s])
-    .filter(e => e && e.tier && (e.enhanceLevel ?? 0) < 3);
+    .filter(e => e && ( (e.tier) || (e.equipStats && Object.keys(e.equipStats).length > 0) ) && (e.enhanceLevel ?? 0) < 3);
 
   if (!enhanceable.length) {
-    await interaction.editReply({ content: "⚗️ 目前裝備槽上沒有可強化的裝備（需有 tier 且未達 +3 上限）。" });
+    await safeEditReply(interaction, { content: "⚗️ 目前裝備槽上沒有可強化的裝備（需有 tier 且未達 +3 上限）。" });
     return;
   }
 
@@ -509,7 +543,7 @@ async function handleEnhanceEntry(interaction) {
     .setPlaceholder("選擇要強化的裝備")
     .addOptions(opts);
 
-  await interaction.editReply({
+  await safeEditReply(interaction, {
     content: "⚗️ **裝備強化**\n選擇裝備槽上的裝備作為強化目標：",
     components: [new ActionRowBuilder().addComponents(select)]
   });
@@ -528,19 +562,19 @@ async function handleEnhanceSelect(interaction, targetUuid) {
     if (v?.uuid === targetUuid) { target = v; break; }
   }
   if (!target) {
-    await interaction.editReply({ content: "❌ 找不到目標裝備，請確認裝備仍在裝備槽上。", components: [] });
+    await safeEditReply(interaction, { content: "❌ 找不到目標裝備，請確認裝備仍在裝備槽上。", components: [] });
     return;
   }
 
   const curLevel = target.enhanceLevel ?? 0;
   if (curLevel >= 3) {
-    await interaction.editReply({ content: `❌ **${target.itemName}** 已達強化上限（+3）。`, components: [] });
+    await safeEditReply(interaction, { content: `❌ **${target.itemName}** 已達強化上限（+3）。`, components: [] });
     return;
   }
 
   const materials = inv.filter(e => e.itemName === target.itemName && e.uuid !== targetUuid);
   if (!materials.length) {
-    await interaction.editReply({
+    await safeEditReply(interaction, {
       content: `⚗️ **${target.itemName}**（+${curLevel}）強化需要消耗一件同名裝備作為材料。\n目前背包中沒有可用的 **${target.itemName}**。`,
       components: []
     });
@@ -558,7 +592,7 @@ async function handleEnhanceSelect(interaction, targetUuid) {
     .setPlaceholder("選擇要消耗的材料裝備")
     .addOptions(opts);
 
-  await interaction.editReply({
+  await safeEditReply(interaction, {
     content: `⚗️ **${target.itemName}**（目前 +${curLevel}）→ 強化至 **+${curLevel + 1}**\n消耗一件同名裝備，主屬 +1，請選擇要消耗的材料：`,
     components: [new ActionRowBuilder().addComponents(select)]
   });
@@ -575,12 +609,14 @@ async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
     const msg = buildBackpackMessage(inventory, "equip",
       `✅ 強化成功！**${result.itemName}**（${result.statBoosted.toUpperCase()} → ${result.newStatValue}）`
     );
-    await interaction.editReply(msg);
+    await safeEditReply(interaction, msg);
 
-    // 廣播強化成功到 town_chat
-    _announceEnhance(interaction, result).catch(() => {});
+    // 廣播強化成功到 town_chat（只在 +2 或以上通知）
+    if ((result.enhanceLevel || 0) >= 2) {
+      _announceEnhance(interaction, result).catch(() => {});
+    }
   } catch (err) {
-    await interaction.editReply({ content: `❌ 強化失敗：${err.message}`, components: [] });
+    await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
@@ -657,16 +693,16 @@ async function handleWeeklyQuests(interaction) {
     const wl = currentWeekLabel();
 
     if (!progressList.length) {
-      await interaction.editReply({ content: `📋 **每週任務**（${wl}）\n\n本週尚無任務，請稍後再試。` });
+      await safeEditReply(interaction, { content: `📋 **每週任務**（${wl}）\n\n本週尚無任務，請稍後再試。` });
       setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);
       return;
     }
 
-    await interaction.editReply(buildWeeklyQuestsMessage(progressList, wl));
+    await safeEditReply(interaction, buildWeeklyQuestsMessage(progressList, wl));
     setTimeout(() => interaction.deleteReply().catch(() => {}), 120_000);
   } catch (err) {
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: `❌ 讀取每週任務失敗：${err.message}` });
+      await safeEditReply(interaction, { content: `❌ 讀取每週任務失敗：${err.message}` });
     } else {
       await interaction.reply({ content: `❌ 讀取每週任務失敗：${err.message}`, flags: MessageFlags.Ephemeral });
     }
@@ -735,7 +771,7 @@ async function handleWeeklyQuestClaim(interaction, questId) {
     const wl = currentWeekLabel();
     const progressList = await wqs.getPlayerProgress(discordId);
     const { content, components } = buildWeeklyQuestsMessage(progressList, wl);
-    await interaction.editReply({ content: `✅ 已領取「${reward.questTitle}」獎勵：${rewardDesc}\n\n` + content.replace(/^📋 \*\*每週任務\*\*（[^）]+）\n\n/, "📋 **每週任務**（" + wl + "）\n\n"), components });
+    await safeEditReply(interaction, { content: `✅ 已領取「${reward.questTitle}」獎勵：${rewardDesc}\n\n` + content.replace(/^📋 \*\*每週任務\*\*（[^）]+）\n\n/, "📋 **每週任務**（" + wl + "）\n\n"), components });
   } catch (err) {
     const msg = err.message || "領取失敗";
     await interaction.followUp({ content: `❌ ${msg}`, flags: MessageFlags.Ephemeral });
@@ -783,7 +819,7 @@ async function handleButton(interaction) {
     await interaction.deferUpdate();
     const progress = await getServiceContext().progressRepository.findByPlayerId(interaction.user.id);
     const msg = buildBackpackMessage(progress?.inventory || [], "item");
-    await interaction.editReply(msg);
+    await safeEditReply(interaction, msg);
     return;
   }
 
@@ -875,7 +911,7 @@ async function handleEquipSlotButton(interaction, slot) {
   });
 
   if (options.length === 0) {
-    await interaction.editReply({ content: `❌ 背包沒有可裝備在 **${EQ_SLOT_LABELS[slot]}** 的道具，且此槽位是空的。`, components: [], files: [] });
+    await safeEditReply(interaction, { content: `❌ 背包沒有可裝備在 **${EQ_SLOT_LABELS[slot]}** 的道具，且此槽位是空的。`, components: [], files: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
     return;
   }
@@ -885,7 +921,7 @@ async function handleEquipSlotButton(interaction, slot) {
     .setPlaceholder(`${EQ_SLOT_LABELS[slot]} — 選擇動作…`)
     .addOptions(options);
 
-  await interaction.editReply({
+  await safeEditReply(interaction, {
     content: `⚔️ **${EQ_SLOT_LABELS[slot]}** — 選擇裝備或卸下：`,
     components: [new ActionRowBuilder().addComponents(picker)],
     files: []
@@ -904,15 +940,15 @@ async function handleEquipmentSelect(interaction) {
     let result;
     if (value.startsWith("unequip:")) {
       result = await serviceContext.shopService.unequipItem(interaction.user.id, slot);
-      await interaction.editReply({ content: `✅ 已卸下 **${result.itemName}**，放回背包。`, components: [], files: [] });
+      await safeEditReply(interaction, { content: `✅ 已卸下 **${result.itemName}**，放回背包。`, components: [], files: [] });
     } else {
       const uuid = value.slice("equip:".length);
       result = await serviceContext.shopService.equipItem(interaction.user.id, uuid);
-      await interaction.editReply({ content: `✅ 已裝備 **${result.itemName}**！`, components: [], files: [] });
+      await safeEditReply(interaction, { content: `✅ 已裝備 **${result.itemName}**！`, components: [], files: [] });
     }
     setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
   } catch (err) {
-    await interaction.editReply({ content: `❌ 操作失敗：${err.message}`, components: [], files: [] });
+    await safeEditReply(interaction, { content: `❌ 操作失敗：${err.message}`, components: [], files: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }

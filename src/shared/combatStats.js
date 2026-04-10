@@ -9,7 +9,7 @@
 // stunChance  : 擊暈機率%（擊暈後怪物3回合無法攻擊）
 // armorBreak  : 破防%（此次攻擊無視怪物 DEF%）
 // monsterAtk  : 怪物每回合攻擊次數（倍數，預設1）
-// bypassDef   : 傷害無視怪物 DEF%（法杖專用）
+// bypassDefPct: 無視怪物 DEF 的百分比（0~100，法杖專用，50=無視一半）
 // counterChance: 雙持副手追擊機率%（怪物攻擊後觸發）
 // counterStun : 副手追擊是否繼承擊暈機率
 // counterBreak: 副手追擊是否繼承破防
@@ -22,9 +22,9 @@ const WEAPON_CONFIG = {
   axe_1h:   { mult: 3, armorBreak: 15 },
   axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15 },
   dagger:   { mult: 2, comboBonus: 20 },
-  staff_1h: { mult: 4, baseStat: "int", monsterAtk: 2, bypassDef: true },
-  staff_2h: { mult: 6, baseStat: "int", isTwoHanded: true, monsterAtk: 2, bypassDef: true },
-  bow:      { mult: 5, baseStat: "dex", isTwoHanded: true, dodgeBonus: 30 },
+  staff_1h: { mult: 4, baseStat: "int", monsterAtk: 2, bypassDefPct: 50 },
+  staff_2h: { mult: 6, baseStat: "int", isTwoHanded: true, monsterAtk: 2, bypassDefPct: 50 },
+  bow:      { mult: 5, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
 };
 
 // 副手武器種類（可雙持）
@@ -115,7 +115,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     weaponType:        wt,
     isTwoHanded:       cfg.isTwoHanded ?? false,
     isDualWield,
-    bypassMonsterDef:  cfg.bypassDef ?? false,   // 法杖：無視怪物DEF
+    bypassMonsterDefPct: cfg.bypassDefPct ?? 0,    // 法杖：無視怪物DEF的百分比（50=無視一半）
     monsterAttackCount:cfg.monsterAtk ?? 1,       // 法杖：怪物攻擊×2
     stunChance,                                    // 槌：擊暈機率%
     armorBreakChance,                              // 斧：破防機率%
