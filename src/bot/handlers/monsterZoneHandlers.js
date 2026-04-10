@@ -585,12 +585,17 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}，共 ${effectiveGoldReward}${poolNote}）${penNote}${bonusNote}`);
   }
 
-  // ── EXP 依比例分配（含等級懲罰，充公下放）──
-  if (monster.expReward > 0) {
+  // ── EXP 依比例分配（含組隊倍率、等級懲罰、充公下放）──
+  // 組隊倍率：人多共鬥獎勵更多，封頂 ×3.5
+  const PARTY_BONUS = [1.0, 1.0, 1.0, 1.5, 1.8, 2.1, 2.4, 2.7, 2.9, 3.2, 3.5, 3.8, 4.0];
+  const partyMult = PARTY_BONUS[Math.min(participants.length, PARTY_BONUS.length - 1)];
+  const effectiveExpReward = Math.round(monster.expReward * partyMult);
+
+  if (effectiveExpReward > 0) {
     const baseExpShares = {};
     let confiscatedExp = 0;
     for (const pid of participants) {
-      const base = monster.expReward * dmgRatio(pid);
+      const base = effectiveExpReward * dmgRatio(pid);
       const penalized = Math.round(base * levelPenalty(pid));
       baseExpShares[pid] = penalized;
       confiscatedExp += Math.round(base - base * levelPenalty(pid));
@@ -629,7 +634,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const pen = levelPenalty(discordId);
     const penNote = pen < 1 ? `　⚠️ 等級懲罰 ${Math.round(pen * 100)}%` : "";
     const bonusNote = pen >= 1 && confiscatedExp > 0 ? `　🎁 充公加成` : "";
-    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${monster.expReward}）${penNote}${bonusNote}${killerLvLine}`);
+    const partyNote = partyMult > 1 ? `　👥 ×${partyMult}（${participants.length}人）` : "";
+    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${effectiveExpReward}${partyMult > 1 ? ` 原${monster.expReward}` : ""}）${partyNote}${penNote}${bonusNote}${killerLvLine}`);
   }
 
   // ── 道具掉落：從所有參戰者中抽一人，再骰各道具掉落率 ──
