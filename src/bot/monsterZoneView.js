@@ -21,6 +21,13 @@ function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0,
   const expReward = monster?.expReward ?? 0;
   const goldReward = monster?.goldReward ?? 0;
 
+  // 累積獎池 = max(基礎金幣, 參戰人數 × 入場費 × 1.15)
+  const entryFeePool = Math.round(participantCount * entryFee * 1.15);
+  const effectivePool = Math.max(goldReward, entryFeePool);
+  const bonusNote = entryFeePool > goldReward && participantCount > 0
+    ? ` 🔺+${entryFeePool - goldReward}`
+    : "";
+
   const damageEntries = Object.values(damageMap).sort((a, b) => b.damage - a.damage);
   const damageSection = damageEntries.length > 0
     ? "💥 傷害紀錄：\n" + damageEntries.map((v) => `・${v.name}　${v.damage}`).join("\n")
@@ -31,7 +38,8 @@ function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0,
     maxHp > 0 ? `❤️ ${hp} / ${maxHp}  ${hpBar}` : "",
     "",
     entryFee > 0 ? `入場費：${entryFee} 🪙` : "",
-    expReward > 0 || goldReward > 0 ? `擊殺獎勵：EXP +${expReward}　金幣 +${goldReward}` : "",
+    expReward > 0 || effectivePool > 0
+      ? `擊殺獎勵：EXP +${expReward}　金幣 +${effectivePool}${bonusNote}` : "",
     participantCount > 0 ? `⚔️ 目前參戰人數：${participantCount} 人` : "",
     damageSection,
     "",
