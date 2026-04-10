@@ -69,6 +69,39 @@ async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
   }
 }
 
+const DROP_TAUNTS = {
+  kill: [
+    (n) => `${n} 表示：「我、我只是滑倒而已！」 😤`,
+    (n) => `${n} 表示：「這絕對不算輸！只是暫時的退場！」 😠`,
+    (n) => `${n} 表示：「嗚……下次一定會還回來的……」 😢`,
+  ],
+  group: [
+    (n) => `${n} 表示：「還好意思撿，沒骨氣！」 😒`,
+    (n) => `${n} 表示：「摸了我的東西！給我等著！」 😡`,
+    (n) => `${n} 表示：「這是我珍藏多年的……算了隨便。」 😮‍💨`,
+  ],
+  bonus_10: [
+    (n) => `${n} 表示：「我不是故意掉的……」 😤`,
+    (n) => `${n} 表示：「10個人一起欺負我算什麼英雄！」 😭`,
+    (n) => `${n} 表示：「人多了不起啊？！……確實。」 😔`,
+  ],
+  bonus_15: [
+    (n) => `${n} 表示：「這群人根本是來搶劫的！」 😭`,
+    (n) => `${n} 表示：「15個人……我連逃跑的路都沒有。」 😰`,
+    (n) => `${n} 表示：「算了，我認栽，下輩子再說！」 💔`,
+  ],
+  bonus_20: [
+    (n) => `${n} 表示：「我已經一無所有了……」 💀`,
+    (n) => `${n} 表示：「20個人……我媽都哭了。」 😭`,
+    (n) => `${n} 表示：「請善待我的遺物……嗚嗚。」 🪦`,
+  ],
+};
+
+function pickTaunt(kind, monsterName) {
+  const pool = DROP_TAUNTS[kind] || DROP_TAUNTS.kill;
+  return pool[Math.floor(Math.random() * pool.length)](monsterName);
+}
+
 async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, kind = "fight") {
   try {
     const { getBotClient } = require("../runtimeContext");
@@ -84,17 +117,17 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
     const itemList = droppedItems.join("、");
+    const taunt = pickTaunt(kind, monsterName);
     if (kind === "bonus_10") {
-      await channel.send(`🎊 **10人同慶加碼！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 獲得 **${monsterName}** 的加碼獎勵：**${itemList}**！\n${monsterName} 表示：「我不是故意掉的……」 😤`);
+      await channel.send(`🎊 **10人同慶加碼！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 獲得 **${monsterName}** 的加碼獎勵：**${itemList}**！\n${taunt}`);
     } else if (kind === "bonus_15") {
-      await channel.send(`🔥 **15人大集結加碼！** 哇！${displayName} (<@${discordId}>) 在 ${timeStr} 從 **${monsterName}** 身上搶到加碼：**${itemList}**！\n${monsterName} 表示：「這群人根本是來搶劫的！」 😭`);
+      await channel.send(`🔥 **15人大集結加碼！** 哇！${displayName} (<@${discordId}>) 在 ${timeStr} 從 **${monsterName}** 身上搶到加碼：**${itemList}**！\n${taunt}`);
     } else if (kind === "bonus_20") {
-      await channel.send(`🌟 **20人史詩加碼！** 不得了！${displayName} (<@${discordId}>) 在 ${timeStr} 讓 **${monsterName}** 吐出史詩獎勵：**${itemList}**！\n${monsterName} 表示：「我已經一無所有了……」 💀`);
+      await channel.send(`🌟 **20人史詩加碼！** 不得了！${displayName} (<@${discordId}>) 在 ${timeStr} 讓 **${monsterName}** 吐出史詩獎勵：**${itemList}**！\n${taunt}`);
     } else if (kind === "group") {
-      await channel.send(`🎁 **掉落獲得！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 從 **${monsterName}** 身上獲得 **${itemList}**！\n${monsterName} 表示：「還好意思撿……」 😒`);
+      await channel.send(`🎁 **掉落獲得！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 從 **${monsterName}** 身上獲得 **${itemList}**！\n${taunt}`);
     } else {
-      // default: kill
-      await channel.send(`⚔️ **擊殺掉落！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 擊倒 **${monsterName}**，搶走了 **${itemList}**！\n${monsterName} 表示：「我、我只是滑倒而已！」 😤`);
+      await channel.send(`⚔️ **擊殺掉落！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 擊倒 **${monsterName}**，搶走了 **${itemList}**！\n${taunt}`);
     }
   } catch (e) {
     // suppressed
