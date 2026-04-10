@@ -255,7 +255,7 @@ function filterByTab(inventory, tab) {
   return inventory.filter(e => e.itemType !== "equipment");
 }
 
-const PAGE_SIZE = 4;
+const PAGE_SIZE = 3;
 
 function buildTabRow(activeTab) {
   const defs = [
