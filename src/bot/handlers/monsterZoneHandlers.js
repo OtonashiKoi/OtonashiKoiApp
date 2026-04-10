@@ -85,16 +85,16 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
     const itemList = droppedItems.join("、");
     if (kind === "bonus_10") {
-      await channel.send(`🎊 **10人同慶加碼！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 獲得加碼獎勵：**${itemList}**！感謝所有 10 位勇者的參與 🎉`);
+      await channel.send(`🎊 **10人同慶加碼！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 獲得 **${monsterName}** 的加碼獎勵：**${itemList}**！\n${monsterName} 表示：「我不是故意掉的……」 😤`);
     } else if (kind === "bonus_15") {
-      await channel.send(`🔥 **15人大集結加碼！** 哇！${displayName} (<@${discordId}>) 在 ${timeStr} 幸運抽中加碼：**${itemList}**！這麼多人一起打真的太猛了 🏆`);
+      await channel.send(`🔥 **15人大集結加碼！** 哇！${displayName} (<@${discordId}>) 在 ${timeStr} 從 **${monsterName}** 身上搶到加碼：**${itemList}**！\n${monsterName} 表示：「這群人根本是來搶劫的！」 😭`);
     } else if (kind === "bonus_20") {
-      await channel.send(`🌟 **20人史詩加碼！** 不得了！${displayName} (<@${discordId}>) 在 ${timeStr} 獲得史詩級加碼獎勵：**${itemList}**！20人共鬥，傳說已留下 👑`);
+      await channel.send(`🌟 **20人史詩加碼！** 不得了！${displayName} (<@${discordId}>) 在 ${timeStr} 讓 **${monsterName}** 吐出史詩獎勵：**${itemList}**！\n${monsterName} 表示：「我已經一無所有了……」 💀`);
     } else if (kind === "group") {
-      await channel.send(`🎉 **努力戰鬥獲得** — 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr}（團隊努力）獲得 **${itemList}**！感謝所有參與者 🎊`);
+      await channel.send(`🎁 **掉落獲得！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 從 **${monsterName}** 身上獲得 **${itemList}**！\n${monsterName} 表示：「還好意思撿……」 😒`);
     } else {
       // default: kill
-      await channel.send(`🎉 **努力戰鬥獲得** — 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 英勇擊倒 **${monsterName}**，獲得 **${itemList}**！乾杯 🥳`);
+      await channel.send(`⚔️ **擊殺掉落！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 擊倒 **${monsterName}**，搶走了 **${itemList}**！\n${monsterName} 表示：「我、我只是滑倒而已！」 😤`);
     }
   } catch (e) {
     // suppressed
