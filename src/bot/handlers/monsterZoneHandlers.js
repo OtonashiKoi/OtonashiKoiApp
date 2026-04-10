@@ -587,8 +587,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // ── EXP 依比例分配（含組隊倍率、等級懲罰、充公下放）──
   // 組隊倍率：人多共鬥獎勵更多，封頂 ×3.5
-  const PARTY_BONUS = [1.0, 1.0, 1.0, 1.5, 1.8, 2.1, 2.4, 2.7, 2.9, 3.2, 3.5, 3.8, 4.0];
-  const partyMult = PARTY_BONUS[Math.min(participants.length, PARTY_BONUS.length - 1)];
+  // 組隊倍率公式：1~2人=×1.0，3人起平滑無上限增加
+  // mult = 1 + (n-2)^0.7 × 0.6，人越多總池越大但每人平均遞減，不會爆量
+  const n = participants.length;
+  const partyMult = n <= 2 ? 1.0 : +(1 + Math.pow(n - 2, 0.7) * 0.6).toFixed(2);
   const effectiveExpReward = Math.round(monster.expReward * partyMult);
 
   if (effectiveExpReward > 0) {
