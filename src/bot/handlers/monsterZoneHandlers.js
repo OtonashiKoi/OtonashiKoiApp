@@ -287,6 +287,22 @@ async function handleEnterBattle(interaction) {
         sc.adminConsoleService
           .publishMonsterZonePanel(binding.channelId, monster, monsterHp, { participantCount: newParticipants.length, damageMap: state.damageMap || {} })
           .catch(() => {});
+
+        // ── 人數里程碑歡慶公告 ──
+        const n = newParticipants.length;
+        const MILESTONE_MSGS = {
+          10: `🎉 **哇！已有 10 位勇者投入戰場！** 人多力量大，${monster.name} 快撐不住了吧？！`,
+          15: `🔥 **15 位勇者集結！這是要圍剿的節奏！** ${monster.name} 已陷入重重包圍，勝利在望！`,
+          20: `🏆 **驚！20 人大亂鬥！** 史詩級戰役正在上演，${monster.name} 今天必死無疑！`,
+        };
+        if (MILESTONE_MSGS[n]) {
+          const { getBotClient } = require("../runtimeContext");
+          const botClient = getBotClient();
+          if (botClient?.isReady()) {
+            const ch = await botClient.channels.fetch(binding.channelId).catch(() => null);
+            if (ch?.isTextBased()) ch.send(MILESTONE_MSGS[n]).catch(() => {});
+          }
+        }
       }
     }
 
