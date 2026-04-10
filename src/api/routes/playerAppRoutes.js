@@ -406,6 +406,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");  // 防止 Nginx/Cloudflare 緩衝 SSE
     res.flushHeaders();
 
     // 嘗試從 query token 識別玩家身份
