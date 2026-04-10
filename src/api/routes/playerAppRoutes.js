@@ -638,68 +638,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const equipped = progress?.equipment || {};
       const pStats = calcPlayerStats(attrs, equipped);
 
-      let mHp = monsterHpInitial;
-      let pHp = pStats.maxHp;
-      let outcome = null;
-      let totalDamage = 0;
-      let round = 1;
-      const MAX_ROUNDS = 30;
-      const roundLogs = [];
-
-      const wt = pStats.weaponType || null;
-      const atkVerbs = !wt ? ["揮拳猛擊", "飛腿踢出", "怒拳轟擊"] : 
-        (wt.startsWith("staff")) ? ["施展魔法", "釋放法術"] :
-        (wt === "bow") ? ["拉弓射擊", "急速連射"] : ["快速刺出", "連環割砍", "揮劍斬擊"];
-      const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
-      const rollDmg = (base) => Math.max(1, Math.round(base * (0.8 + Math.random() * 0.4)));
-
-      // Simulation Loop
-      while (round <= MAX_ROUNDS && outcome === null) {
-        const log = [`**【第 ${round} 回合】**`];
-        
-        for (let a = 0; a < (pStats.attackCount || 1) && outcome === null; a++) {
-          const hitChance = pStats.hit - monster.calc.dodge;
-          if (pStats.absoluteHit || Math.random() * 100 < hitChance) {
-            let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - monster.calc.def / 100))));
-            const isCrit = Math.random() * 100 < pStats.crit;
-            if (isCrit) dmg = Math.round(dmg * 1.5);
-            mHp -= dmg;
-            totalDamage += dmg;
-            log.push(`⚔️ ${isCrit ? "✨**會心一擊**！" : ""}${rand(atkVerbs)}，對 ${monster.name} 造成 **${dmg}** 傷害！(怪剩 ${Math.max(0, mHp)})`);
-
-            if (mHp <= 0) { outcome = "win"; break; }
-            if (outcome === null && Math.random() * 100 < pStats.combo) {
-              let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - monster.calc.def / 100))));
-              mHp -= cdmg;
-              totalDamage += cdmg;
-              log.push(`⚡ **連擊！** 追加造成 **${cdmg}** 傷害！(怪剩 ${Math.max(0, mHp)})`);
-              if (mHp <= 0) { outcome = "win"; break; }
-            }
-          } else {
-            log.push(`💨 ${monster.name} 身形一閃，你的攻擊落空了！`);
-          }
-        }
-
-        if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
-
-        for (let ma = 0; ma < (pStats.monsterAttackCount || 1) && outcome === null; ma++) {
-          const monsterHitChance = monster.calc.hit - pStats.dodge;
-          if (Math.random() * 100 < monsterHitChance) {
-            const dmg = rollDmg(Math.max(1, Math.round(monster.calc.atk * (1 - pStats.def / 100))));
-            pHp -= dmg;
-            log.push(`💥 ${monster.name} 猛力一擊，造成 **${dmg}** 傷害！(你剩 ${Math.max(0, pHp)})`);
-            if (pHp <= 0) { outcome = "lose"; break; }
-          } else {
-            log.push(`🛡️ ${monster.name} 猛撲而來，你及時迴避！`);
-          }
-        }
-        
-        roundLogs.push(log.join("\n"));
-        if (outcome === "lose") break;
-        round++;
-      }
-      
-      if (outcome === null) outcome = "timeout";
+      const { runCombatLoop } = require("../../shared/combatLoop");
+      const { outcome, roundLogs, totalDamage, finalMonsterHp: mHp } =
+        runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial);
 
       // 結算
       const { handleMonsterKill, _republishPanel } = require("../../bot/handlers/monsterZoneHandlers");

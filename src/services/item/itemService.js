@@ -3,11 +3,11 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier"];
 
 // 武器種類與對應的攻擊屬性
-const VALID_WEAPON_TYPES = ["sword_1h", "sword_2h", "dagger", "mace_1h", "axe_1h", "axe_2h", "staff_1h", "staff_2h", "bow"];
-const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "staff_2h", "bow"]);
+const VALID_WEAPON_TYPES = ["sword_1h", "sword_2h", "dagger", "mace_1h", "mace_2h", "axe_1h", "axe_2h", "staff_1h", "staff_2h", "bow"];
+const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "mace_2h", "axe_2h", "staff_2h", "bow"]);
 const WEAPON_ATK_STAT = {
   sword_1h: "str", sword_2h: "str",
-  dagger:   "str", mace_1h: "str", axe_1h: "str", axe_2h: "str",
+  dagger:   "str", mace_1h: "str", mace_2h: "str", axe_1h: "str", axe_2h: "str",
   staff_1h: "int", staff_2h: "int",
   bow:      "dex"
 };

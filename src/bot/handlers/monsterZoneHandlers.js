@@ -372,86 +372,11 @@ async function handleStartFight(interaction) {
     session.monsterHp = state.currentHp != null ? state.currentHp : session.monsterMaxHp;
 
     // ── 自動跑完所有回合 ──
-    const roundLogs = [];
-    let round = 1;
-    let outcome = null; // "win" | "lose" | "timeout"
-    let totalDamage = 0;
-
-    // 武器描寫
-    const wt = session.playerStats.weaponType || null;
-    const atkVerbs = !wt
-      ? ["揮拳猛擊", "飛腿踢出", "怒拳轟擊", "突刺重擊"]
-      : (wt === "staff_1h" || wt === "staff_2h")
-        ? ["施展魔法", "吟唱咒語", "釋放法術", "引導魔力"]
-        : wt === "bow"
-          ? ["拉弓射擊", "瞄準射出", "急速連射", "精準放箭"]
-          : wt === "dagger"
-            ? ["快速刺出", "連環割砍", "偷襲突刺", "趁隙猛刺"]
-            : ["揮劍斬擊", "猛力劈下", "側身橫掃", "架勢突刺"];
-    const critPhrases = ["會心一擊", "致命一擊", "弱點命中", "完美命中"];
-    const comboPhrases = ["連擊！", "殘影連斬！", "急速追打！", "趁勢猛攻！"];
-    const dodgePhrases = ["身形一閃", "靈巧側移", "緊急後退", "巧妙格開"];
-    const mDodgePhrases = ["及時閃避", "往旁一跳", "後退一步", "以盾擋下"];
-    const mAtkPhrases = ["猛力衝撞", "揮爪攻擊", "重擊落下", "怒吼突進"];
-    const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
-    // 傷害浮動 ±20%
-    const rollDmg = (base) => Math.max(1, Math.round(base * (0.8 + Math.random() * 0.4)));
-
-    while (round <= MAX_ROUNDS && outcome === null) {
-      const log = [`**【第 ${round} 回合】**`];
-
-      // 玩家攻擊（雙持武器攻擊兩次，各自判定命中/暴擊）
-      const attackCount = session.playerStats.attackCount || 1;
-      const absoluteHit = session.playerStats.absoluteHit || false;
-      for (let a = 0; a < attackCount && outcome === null; a++) {
-        const hitChance = session.playerStats.hit - session.monsterStats.dodge;
-        if (absoluteHit || Math.random() * 100 < hitChance) {
-          let dmg = rollDmg(Math.max(1, Math.round(session.playerStats.atk * (1 - session.monsterStats.def / 100))));
-          const isCrit = Math.random() * 100 < session.playerStats.crit;
-          if (isCrit) dmg = Math.round(dmg * 1.5);
-          session.monsterHp -= dmg;
-          totalDamage += dmg;
-          const verb = rand(atkVerbs);
-          if (isCrit) {
-            log.push(`⚔️✨ **${rand(critPhrases)}**！${verb}，對 ${session.monsterName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, session.monsterHp)} HP）`);
-          } else {
-            log.push(`⚔️ ${verb}，對 ${session.monsterName} 造成 **${dmg}** 點傷害。（怪物剩 ${Math.max(0, session.monsterHp)} HP）`);
-          }
-          if (session.monsterHp <= 0) { outcome = "win"; break; }
-          // 連擊判定（AGI → combo%，命中後額外一擊，不再判命中/閃避）
-          if (outcome === null && Math.random() * 100 < session.playerStats.combo) {
-            let cdmg = rollDmg(Math.max(1, Math.round(session.playerStats.atk * (1 - session.monsterStats.def / 100))));
-            session.monsterHp -= cdmg;
-            totalDamage += cdmg;
-            log.push(`⚡ **${rand(comboPhrases)}** 追加攻擊造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, session.monsterHp)} HP）`);
-            if (session.monsterHp <= 0) { outcome = "win"; break; }
-          }
-        } else {
-          log.push(`💨 ${session.monsterName} ${rand(dodgePhrases)}，你的攻擊落空了！`);
-        }
-      }
-
-      if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
-
-      // 怪物反擊（法杖裝備者每回合受兩次攻擊）
-      const monsterAttackCount = session.playerStats.monsterAttackCount || 1;
-      for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
-        const monsterHitChance = session.monsterStats.hit - session.playerStats.dodge;
-        if (Math.random() * 100 < monsterHitChance) {
-          const dmg = rollDmg(Math.max(1, Math.round(session.monsterStats.atk * (1 - session.playerStats.def / 100))));
-          session.playerHp -= dmg;
-          log.push(`💥 ${session.monsterName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, session.playerHp)} HP）`);
-          if (session.playerHp <= 0) { outcome = "lose"; break; }
-        } else {
-          log.push(`🛡️ ${session.monsterName} 猛撲而來，你${rand(mDodgePhrases)}，躲過了攻擊！`);
-        }
-      }
-      if (outcome === "lose") { roundLogs.push(log.join("\n")); break; }
-
-      roundLogs.push(log.join("\n"));
-      round++;
-    }
-    if (outcome === null) outcome = "timeout";
+    const { runCombatLoop } = require("../../shared/combatLoop");
+    const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
+      runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp);
+    session.monsterHp = finalMonsterHp;
+    session.playerHp  = finalPlayerHp;
 
     // ── 結算 ──
     let rewardLines = [];

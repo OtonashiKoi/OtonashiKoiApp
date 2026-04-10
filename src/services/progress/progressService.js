@@ -27,10 +27,12 @@ class ProgressService {
       next.exp -= expToNextLevel(next.level);
       next.level += 1;
       levelUps += 1;
-      // 升級自動隨機 +1 一項屬性
+      // 升級自動隨機 +1 兩次（各自獨立抽屬性）
       if (!next.attributes) next.attributes = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-      const randKey = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
-      next.attributes[randKey] = (next.attributes[randKey] || 1) + 1;
+      for (let i = 0; i < 2; i++) {
+        const randKey = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
+        next.attributes[randKey] = (next.attributes[randKey] || 1) + 1;
+      }
     }
     // 達到最高等級後 EXP 不再累積
     if (next.level >= MAX_LEVEL) next.exp = 0;
