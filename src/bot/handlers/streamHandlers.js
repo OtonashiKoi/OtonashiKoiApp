@@ -129,10 +129,15 @@ async function handleCheckin(comment) {
         // DM 通知玩家打卡成功
         try {
           const client = getBotClient();
-          if (client?.isReady()) {
-            const user = await client.users.fetch(discordId).catch(() => null);
+          if (!client?.isReady()) {
+            console.warn("[Stream] DM 跳過：bot 未就緒");
+          } else {
+            const user = await client.users.fetch(discordId).catch((e) => { console.warn("[Stream] DM fetch user 失敗:", e?.message); return null; });
             if (user) {
               await user.send(`✅ 打卡成功！💰 金幣 **+${grantAmount}**`);
+              console.log(`[Stream] DM 已發送給 ${displayName} (${discordId})`);
+            } else {
+              console.warn(`[Stream] DM 跳過：找不到 Discord user (${discordId})`);
             }
           }
         } catch (e) {
