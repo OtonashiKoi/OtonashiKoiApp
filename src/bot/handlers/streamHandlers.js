@@ -134,14 +134,18 @@ async function handleCheckin(comment) {
           } else {
             const user = await client.users.fetch(discordId).catch((e) => { console.warn("[Stream] DM fetch user 失敗:", e?.message); return null; });
             if (user) {
-              await user.send(`✅ 打卡成功！💰 金幣 **+${grantAmount}**`);
-              console.log(`[Stream] DM 已發送給 ${displayName} (${discordId})`);
+              try {
+                await user.send(`✅ 打卡成功！💰 金幣 **+${grantAmount}**`);
+                console.log(`[Stream] DM 已發送給 ${displayName} (${discordId})`);
+              } catch (sendErr) {
+                console.warn(`[Stream] DM send 失敗 (${discordId}):`, sendErr?.message, sendErr?.code);
+              }
             } else {
               console.warn(`[Stream] DM 跳過：找不到 Discord user (${discordId})`);
             }
           }
         } catch (e) {
-          console.warn("[Stream] 無法 DM 打卡通知：", e?.message);
+          console.warn("[Stream] 無法 DM 打卡通知：", e?.message, e?.code);
         }
         // 回覆到直播聊天室
         try {
