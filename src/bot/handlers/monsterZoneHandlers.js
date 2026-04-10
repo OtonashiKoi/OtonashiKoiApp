@@ -838,11 +838,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // 推送 SSE reward 事件給所有參戰者（web 端通知紀錄）
   try {
     const pushReward = sc._pushRewardToPlayer;
-    console.log(`[SSE] pushReward available: ${typeof pushReward === "function"}, participants: ${Object.keys(perPidRewards).length}`);
     if (typeof pushReward === "function") {
       for (const [pid, rewards] of Object.entries(perPidRewards)) {
         if (!rewards.gold && !rewards.exp && !rewards.drops?.length) continue;
-        console.log(`[SSE] pushing reward to ${pid}: gold=${rewards.gold} exp=${rewards.exp}`);
         pushReward(pid, {
           monsterName: monster.name,
           gold:     rewards.gold,
@@ -853,7 +851,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         });
       }
     }
-  } catch (e) { console.error("[SSE] pushReward error:", e.message); }
+  } catch (_) {}
 
   // 回傳結構化摘要供 web API 使用
   const myReward = perPidRewards[discordId] || { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] };
