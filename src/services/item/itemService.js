@@ -1,6 +1,7 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier"];
+const VALID_TIERS = ["D", "C", "B", "A"];
 
 // 武器種類與對應的攻擊屬性
 const VALID_WEAPON_TYPES = ["sword_1h", "sword_2h", "dagger", "mace_1h", "mace_2h", "axe_1h", "axe_2h", "staff_1h", "staff_2h", "bow"];
@@ -55,7 +56,11 @@ class ItemService {
     return VALID_WEAPON_TYPES.includes(t) ? t : null;
   }
 
-  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats, weaponType }) {
+  _normalizeTier(t) {
+    return VALID_TIERS.includes(t) ? t : null;
+  }
+
+  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats, weaponType, tier }) {
     const normalizedType = this._normalizeItemType(itemType);
     const normalizedSlot = normalizedType === "equipment" ? (this._normalizeEquipSlot(equipSlot) || "head_top") : null;
     const resolvedWeaponType = normalizedSlot === "weapon" ? (this._normalizeWeaponType(weaponType) || null) : null;
@@ -72,6 +77,8 @@ class ItemService {
       weaponType: resolvedWeaponType,
       isTwoHanded: resolvedWeaponType ? TWO_HANDED_WEAPON_TYPES.has(resolvedWeaponType) : false,
       atkStat: resolvedWeaponType ? (WEAPON_ATK_STAT[resolvedWeaponType] || "str") : null,
+      tier: this._normalizeTier(tier),
+      enhanceLevel: 0,
       createdAt: new Date().toISOString()
     };
     if (!item.name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具名稱不可空白", 400);
@@ -95,8 +102,9 @@ class ItemService {
       updated.isTwoHanded = wt ? TWO_HANDED_WEAPON_TYPES.has(wt) : false;
       updated.atkStat = wt ? (WEAPON_ATK_STAT[wt] || "str") : null;
     }
+    if (fields.tier !== undefined) updated.tier = this._normalizeTier(fields.tier);
     // 若更改類型為非裝備，清空裝備欄位
-    if (updated.itemType !== "equipment") { updated.equipSlot = null; updated.equipStats = null; updated.weaponType = null; updated.isTwoHanded = false; updated.atkStat = null; }
+    if (updated.itemType !== "equipment") { updated.equipSlot = null; updated.equipStats = null; updated.weaponType = null; updated.isTwoHanded = false; updated.atkStat = null; updated.tier = null; }
     if (!updated.name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具名稱不可空白", 400);
     return this.itemRepository.save(updated);
   }

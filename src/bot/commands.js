@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
-const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handleWeeklyQuests } = require("./playerPanel");
+const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handleWeeklyQuests, handleEnhanceConfirm } = require("./playerPanel");
 const { WEEKLY_QUEST_OPEN_ID } = require("./weeklyQuestView");
 const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
 const { serviceContext, getBotClient } = require("./runtimeContext");
@@ -151,6 +151,12 @@ async function handleSelectMenu(interaction) {
   }
   if (interaction.customId.startsWith("eq_pick:")) {
     await handleEquipmentSelect(interaction);
+    return;
+  }
+  if (interaction.customId.startsWith("enhance_confirm:")) {
+    const targetUuid = interaction.customId.slice("enhance_confirm:".length);
+    const materialUuid = interaction.values[0];
+    await handleEnhanceConfirm(interaction, targetUuid, materialUuid);
     return;
   }
 }

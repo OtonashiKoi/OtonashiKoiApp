@@ -301,6 +301,82 @@ class ShopService {
     await this.progressRepository.save(progress);
     return { itemName: equipped.itemName, slot };
   }
+
+  /**
+   * 強化裝備：消耗背包中一件同名裝備（材料），目標裝備主屬 +1，上限 +3
+   * targetUuid: 要強化的目標裝備 uuid（背包或已裝備）
+   * materialUuid: 要消耗的材料裝備 uuid（必須在背包中，且同名）
+   */
+  async enhanceItem(discordId, targetUuid, materialUuid) {
+    const ENHANCE_MAX = 3;
+
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+
+    // 找目標裝備（背包或裝備槽）
+    const inv = progress.inventory || [];
+    let target = inv.find(e => e.uuid === targetUuid);
+    let targetSlotKey = null;
+    if (!target) {
+      // 嘗試從裝備槽找
+      for (const [k, v] of Object.entries(progress.equipment || {})) {
+        if (v?.uuid === targetUuid) { target = v; targetSlotKey = k; break; }
+      }
+    }
+    if (!target) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到目標裝備", 404);
+    if (target.itemType !== "equipment") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標不是裝備", 400);
+
+    // 強化上限
+    const currentLevel = target.enhanceLevel || 0;
+    if (currentLevel >= ENHANCE_MAX) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${target.itemName} 已達強化上限（+${ENHANCE_MAX}）`, 400);
+    }
+
+    // 找材料（必須在背包，同名，不能是目標本身）
+    const matIdx = inv.findIndex(e => e.uuid === materialUuid);
+    if (matIdx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到材料裝備（需在背包中）", 404);
+    const material = inv[matIdx];
+    if (material.itemName !== target.itemName) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `材料必須與目標同名（需要：${target.itemName}）`, 400);
+    }
+    if (material.uuid === targetUuid) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標與材料不能是同一件裝備", 400);
+    }
+
+    // 決定強化屬性（主屬，即數值最大的那個）
+    const stats = target.equipStats || {};
+    const mainStat = Object.entries(stats).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (!mainStat) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備沒有可強化的屬性", 400);
+
+    // 執行強化
+    const newStats = { ...stats, [mainStat]: (stats[mainStat] || 0) + 1 };
+    const newLevel = currentLevel + 1;
+    const newName = target.itemName.replace(/\s*\+\d+$/, '') + ` +${newLevel}`;
+
+    // 更新目標
+    const updatedTarget = { ...target, equipStats: newStats, enhanceLevel: newLevel, itemName: newName };
+
+    // 消耗材料
+    progress.inventory.splice(matIdx, 1);
+
+    // 更新目標位置
+    if (targetSlotKey) {
+      progress.equipment[targetSlotKey] = updatedTarget;
+    } else {
+      const targetIdx = progress.inventory.findIndex(e => e.uuid === targetUuid);
+      if (targetIdx !== -1) progress.inventory[targetIdx] = updatedTarget;
+    }
+
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+
+    return {
+      itemName: newName,
+      enhanceLevel: newLevel,
+      statBoosted: mainStat,
+      newStatValue: newStats[mainStat],
+    };
+  }
 }
 
 module.exports = { ShopService };

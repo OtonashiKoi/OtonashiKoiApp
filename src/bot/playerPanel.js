@@ -187,6 +187,12 @@ function buildInventoryRow(e, idx) {
         .setLabel(`${prefix} 使用`)
         .setStyle(ButtonStyle.Success)
     );
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_discard:${e.uuid}`)
+        .setLabel("丟棄")
+        .setStyle(ButtonStyle.Danger)
+    );
   } else {
     btns.push(
       new ButtonBuilder()
@@ -194,20 +200,21 @@ function buildInventoryRow(e, idx) {
         .setLabel(`${prefix} 丟棄`)
         .setStyle(ButtonStyle.Danger)
     );
-  }
-  if (itemType === "consumable") {
-    btns.push(
-      new ButtonBuilder()
-        .setCustomId(`backpack_discard:${e.uuid}`)
-        .setLabel("丟棄")
-        .setStyle(ButtonStyle.Danger)
-    );
+    // 裝備才顯示強化按鈕（有 tier 且 enhanceLevel < 3）
+    if (e.tier && (e.enhanceLevel ?? 0) < 3) {
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`backpack_enhance:${e.uuid}`)
+          .setLabel(`⚗️ 強化 +${(e.enhanceLevel ?? 0) + 1}`)
+          .setStyle(ButtonStyle.Primary)
+      );
+    }
   }
   if (e.imageUrl) {
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_view:${e.uuid}`)
-        .setLabel("🖼️ 查看圖片")
+        .setLabel("🖼️")
         .setStyle(ButtonStyle.Secondary)
     );
   }
@@ -437,6 +444,76 @@ async function handleBackpackAction(interaction, action, uuid) {
   }
 }
 
+/** 強化步驟1：列出背包中同名裝備讓玩家選擇當材料 */
+async function handleEnhanceSelect(interaction, targetUuid) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const inv = progress?.inventory || [];
+
+  // 找目標（背包或裝備槽）
+  let target = inv.find(e => e.uuid === targetUuid);
+  if (!target) {
+    for (const v of Object.values(progress?.equipment || {})) {
+      if (v?.uuid === targetUuid) { target = v; break; }
+    }
+  }
+  if (!target) {
+    await interaction.editReply({ content: "❌ 找不到目標裝備。", components: [] });
+    return;
+  }
+
+  const curLevel = target.enhanceLevel ?? 0;
+  if (curLevel >= 3) {
+    await interaction.editReply({ content: `❌ **${target.itemName}** 已達強化上限（+3）。`, components: [] });
+    return;
+  }
+
+  // 找同名材料（背包中，不含目標本身）
+  const materials = inv.filter(e => e.itemName === target.itemName && e.uuid !== targetUuid);
+  if (!materials.length) {
+    await interaction.editReply({
+      content: `⚗️ **${target.itemName}** 強化需要消耗一件同名裝備作為材料。\n目前背包中沒有可用的 **${target.itemName}**。`,
+      components: []
+    });
+    return;
+  }
+
+  const opts = materials.slice(0, 25).map((m) => ({
+    label: `${m.itemName}（+${m.enhanceLevel ?? 0}）`,
+    description: m.source === "monster_drop" ? `掉落自 ${m.sourceRef || "怪物"}` : `購於 ${(m.purchasedAt || "").slice(0, 10)}`,
+    value: m.uuid,
+  }));
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`enhance_confirm:${targetUuid}`)
+    .setPlaceholder("選擇要消耗的材料裝備")
+    .addOptions(opts);
+
+  await interaction.editReply({
+    content: `⚗️ **${target.itemName}**（目前 +${curLevel}）→ 強化至 **+${curLevel + 1}**\n消耗一件同名裝備，主屬 +1，請選擇要消耗的材料：`,
+    components: [new ActionRowBuilder().addComponents(select)]
+  });
+}
+
+/** 強化步驟2：確認材料後執行強化 */
+async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const result = await serviceContext.shopService.enhanceItem(interaction.user.id, targetUuid, materialUuid);
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const inventory = progress?.inventory || [];
+    const msg = buildBackpackMessage(inventory, "equip",
+      `✅ 強化成功！**${result.itemName}**（${result.statBoosted.toUpperCase()} → ${result.newStatValue}）`
+    );
+    await interaction.editReply(msg);
+  } catch (err) {
+    await interaction.editReply({ content: `❌ 強化失敗：${err.message}`, components: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
+}
+
 function buildWeeklyQuestsMessage(progressList, wl) {
   const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 
@@ -600,6 +677,10 @@ async function handleButton(interaction) {
     await handleBackpackAction(interaction, action, uuid);
     return;
   }
+  if (id.startsWith("backpack_enhance:")) {
+    await handleEnhanceSelect(interaction, id.slice("backpack_enhance:".length));
+    return;
+  }
 
   // 裝備欄格按鈕
   if (id.startsWith("eq_btn:")) {
@@ -736,5 +817,7 @@ module.exports = {
   handleButton,
   handleEquipmentSelect,
   handleWeeklyQuests,
-  handleWeeklyQuestClaim
+  handleWeeklyQuestClaim,
+  handleEnhanceSelect,
+  handleEnhanceConfirm,
 };

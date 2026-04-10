@@ -2,6 +2,7 @@ const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 const { ok } = require("../../shared/response");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
+const { AppError, ERROR_CODES } = require("../../shared/errors");
 
 // 戰鬥冷卻鎖（記憶體，key: discordId, value: { zone, nextBattleAt }）
 // 冷卻時間 = 前端動畫播完所需時間（logs 數 × 700ms + 2s），防止重整繞過
@@ -179,6 +180,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId } = req.playerRecord;
       const { slot } = req.params;
       const result = await serviceContext.shopService.unequipItem(discordId, slot);
+      res.json(ok(result));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 3.3 Enhance Item
+  router.post("/api/me/inventory/enhance", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { targetUuid, materialUuid } = req.body;
+      if (!targetUuid || !materialUuid) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "需提供 targetUuid 與 materialUuid", 400);
+      const result = await serviceContext.shopService.enhanceItem(discordId, targetUuid, materialUuid);
       res.json(ok(result));
     } catch (err) {
       next(err);
