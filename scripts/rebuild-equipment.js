@@ -19,7 +19,7 @@ require("dotenv").config();
 
 const DATA_PATH  = path.join(__dirname, "../data/game.json");
 const MONGO_URI  = process.env.MONGODB_URI;
-const DB_NAME    = process.env.MONGODB_DB || "equipmentGame";
+const DB_NAME    = process.env.MONGODB_DB_NAME || process.env.MONGODB_DB || "equipment_game";
 const DRY_RUN    = !process.argv.includes("--yes");
 
 // ─── 武器設計 ──────────────────────────────────────────────────────────────
