@@ -315,7 +315,7 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
     return `${offset + i + 1}. **${e.itemName}**${slot}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`;
   });
 
-  const rows = pageItems.map((e, i) => buildInventoryRow(e, offset + i));
+  const rows = pageItems.map((e, i) => buildInventoryRow(e, i));
   rows.push(tabRow);
   if (totalPages > 1) rows.push(buildPageRow(tab, safePage, totalPages));
 
