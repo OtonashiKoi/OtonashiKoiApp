@@ -200,15 +200,6 @@ function buildInventoryRow(e, idx) {
         .setLabel(`${prefix} 丟棄`)
         .setStyle(ButtonStyle.Danger)
     );
-    // 裝備才顯示強化按鈕（有 tier 且 enhanceLevel < 3）
-    if (e.tier && (e.enhanceLevel ?? 0) < 3) {
-      btns.push(
-        new ButtonBuilder()
-          .setCustomId(`backpack_enhance:${e.uuid}`)
-          .setLabel(`⚗️ 強化 +${(e.enhanceLevel ?? 0) + 1}`)
-          .setStyle(ButtonStyle.Primary)
-      );
-    }
   }
   if (e.imageUrl) {
     btns.push(
@@ -444,22 +435,59 @@ async function handleBackpackAction(interaction, action, uuid) {
   }
 }
 
-/** 強化步驟1：列出背包中同名裝備讓玩家選擇當材料 */
+/** 強化入口：列出裝備槽上有 tier 的裝備讓玩家選擇目標 */
+async function handleEnhanceEntry(interaction) {
+  const serviceContext = getServiceContext();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const equipped = progress?.equipment || {};
+  const inv = progress?.inventory || [];
+
+  const SLOT_ORDER = ["weapon","shield","head_top","head_mid","head_low","armor","garment","shoes","accessory_l","accessory_r"];
+  const enhanceable = SLOT_ORDER
+    .map(s => equipped[s])
+    .filter(e => e && e.tier && (e.enhanceLevel ?? 0) < 3);
+
+  if (!enhanceable.length) {
+    await interaction.editReply({ content: "⚗️ 目前裝備槽上沒有可強化的裝備（需有 tier 且未達 +3 上限）。" });
+    return;
+  }
+
+  const opts = enhanceable.slice(0, 25).map(e => {
+    const slot = EQ_SLOT_LABELS[e.equipSlot] || e.equipSlot;
+    const matCount = inv.filter(m => m.itemName === e.itemName && m.uuid !== e.uuid).length;
+    return {
+      label: `${e.itemName}（+${e.enhanceLevel ?? 0}）`,
+      description: `${slot}　材料：${matCount} 件可用`,
+      value: e.uuid,
+    };
+  });
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId("enhance_pick_target")
+    .setPlaceholder("選擇要強化的裝備")
+    .addOptions(opts);
+
+  await interaction.editReply({
+    content: "⚗️ **裝備強化**\n選擇裝備槽上的裝備作為強化目標：",
+    components: [new ActionRowBuilder().addComponents(select)]
+  });
+}
+
+/** 強化步驟2：選定目標後，列出同名材料讓玩家選擇 */
 async function handleEnhanceSelect(interaction, targetUuid) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inv = progress?.inventory || [];
 
-  // 找目標（背包或裝備槽）
-  let target = inv.find(e => e.uuid === targetUuid);
-  if (!target) {
-    for (const v of Object.values(progress?.equipment || {})) {
-      if (v?.uuid === targetUuid) { target = v; break; }
-    }
+  // 目標一定在裝備槽
+  let target = null;
+  for (const v of Object.values(progress?.equipment || {})) {
+    if (v?.uuid === targetUuid) { target = v; break; }
   }
   if (!target) {
-    await interaction.editReply({ content: "❌ 找不到目標裝備。", components: [] });
+    await interaction.editReply({ content: "❌ 找不到目標裝備，請確認裝備仍在裝備槽上。", components: [] });
     return;
   }
 
@@ -469,11 +497,10 @@ async function handleEnhanceSelect(interaction, targetUuid) {
     return;
   }
 
-  // 找同名材料（背包中，不含目標本身）
   const materials = inv.filter(e => e.itemName === target.itemName && e.uuid !== targetUuid);
   if (!materials.length) {
     await interaction.editReply({
-      content: `⚗️ **${target.itemName}** 強化需要消耗一件同名裝備作為材料。\n目前背包中沒有可用的 **${target.itemName}**。`,
+      content: `⚗️ **${target.itemName}**（+${curLevel}）強化需要消耗一件同名裝備作為材料。\n目前背包中沒有可用的 **${target.itemName}**。`,
       components: []
     });
     return;
@@ -677,8 +704,8 @@ async function handleButton(interaction) {
     await handleBackpackAction(interaction, action, uuid);
     return;
   }
-  if (id.startsWith("backpack_enhance:")) {
-    await handleEnhanceSelect(interaction, id.slice("backpack_enhance:".length));
+  if (id === BUTTON_IDS.enhance) {
+    await handleEnhanceEntry(interaction);
     return;
   }
 
@@ -818,6 +845,7 @@ module.exports = {
   handleEquipmentSelect,
   handleWeeklyQuests,
   handleWeeklyQuestClaim,
+  handleEnhanceEntry,
   handleEnhanceSelect,
   handleEnhanceConfirm,
 };

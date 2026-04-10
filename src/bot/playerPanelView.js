@@ -6,6 +6,7 @@ const BUTTON_IDS = {
   checkinStatus: "player-panel:checkin-status",
   backpack: "player-panel:backpack",
   equipment: "player-panel:equipment",
+  enhance: "player-panel:enhance",
   weeklyQuests: "player-panel:weekly-quests",
   bindStream: "player-panel:bind-stream"
 };
@@ -35,6 +36,10 @@ function createPlayerPanelMessage() {
         .setStyle(ButtonStyle.Secondary)
     ),
     new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.enhance)
+        .setLabel("⚗️ 裝備強化")
+        .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(BUTTON_IDS.weeklyQuests)
         .setLabel("📋 每週任務")
