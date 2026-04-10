@@ -515,11 +515,35 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const entryFeePool = Math.round(participants.length * (monster.entryFee || 0) * 1.15);
   const effectiveGoldReward = Math.max(monster.goldReward || 0, entryFeePool);
 
+  // ── 等級懲罰充公值計算（充公的部分下放給未被壓制的玩家）──
+  // 未被壓制：levelPenalty = 1
+  const unpenalizedPids = participants.filter(pid => levelPenalty(pid) >= 1);
+  // 未被壓制玩家的傷害比例總和（用來按比例分配充公值）
+  const unpenalizedDmgTotal = unpenalizedPids.reduce((s, pid) => s + (mergedDmg[pid]?.damage || 0), 0);
+  const unpenalizedDmgRatio = (pid) =>
+    unpenalizedDmgTotal > 0 ? (mergedDmg[pid]?.damage || 0) / unpenalizedDmgTotal : 1 / (unpenalizedPids.length || 1);
+
   if (effectiveGoldReward > 0) {
-    const myMultiplier = dmgRatio(discordId) * levelPenalty(discordId);
-    const myShare = Math.max(1, Math.round(effectiveGoldReward * myMultiplier));
+    // 計算每人基本份額（不含充公下放）
+    const baseShares = {};
+    let confiscatedGold = 0;
     for (const pid of participants) {
-      const share = Math.max(1, Math.round(effectiveGoldReward * dmgRatio(pid) * levelPenalty(pid)));
+      const base = effectiveGoldReward * dmgRatio(pid);
+      const penalized = Math.round(base * levelPenalty(pid));
+      baseShares[pid] = penalized;
+      confiscatedGold += Math.round(base - base * levelPenalty(pid));
+    }
+
+    // 充公值按比例下放給未被壓制的玩家
+    const goldShares = { ...baseShares };
+    if (confiscatedGold > 0 && unpenalizedPids.length > 0) {
+      for (const pid of unpenalizedPids) {
+        goldShares[pid] = (goldShares[pid] || 0) + Math.round(confiscatedGold * unpenalizedDmgRatio(pid));
+      }
+    }
+
+    for (const pid of participants) {
+      const share = Math.max(1, goldShares[pid] || 1);
       try {
         await sc.rewardService.grantCurrency({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -529,20 +553,38 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         if (perPidRewards[pid]) perPidRewards[pid].gold = share;
       } catch (e) { console.error(`[MonsterZone] grantCurrency(gold) failed for ${pid}`, e); }
     }
+
+    const myShare = Math.max(1, goldShares[discordId] || 1);
     const pct = Math.round(dmgRatio(discordId) * 100);
     const pen = levelPenalty(discordId);
     const penNote = pen < 1 ? `　⚠️ 等級懲罰 ${Math.round(pen * 100)}%` : "";
     const poolNote = entryFeePool > (monster.goldReward || 0) ? `（入場費加成）` : "";
-    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}%，共 ${effectiveGoldReward}${poolNote}）${penNote}`);
+    const bonusNote = pen >= 1 && confiscatedGold > 0 ? `　🎁 充公加成` : "";
+    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}%，共 ${effectiveGoldReward}${poolNote}）${penNote}${bonusNote}`);
   }
 
-  // ── EXP 依比例分配（含等級懲罰）──
+  // ── EXP 依比例分配（含等級懲罰，充公下放）──
   if (monster.expReward > 0) {
-    const myMultiplier = dmgRatio(discordId) * levelPenalty(discordId);
-    const myShare = Math.max(1, Math.round(monster.expReward * myMultiplier));
+    const baseExpShares = {};
+    let confiscatedExp = 0;
+    for (const pid of participants) {
+      const base = monster.expReward * dmgRatio(pid);
+      const penalized = Math.round(base * levelPenalty(pid));
+      baseExpShares[pid] = penalized;
+      confiscatedExp += Math.round(base - base * levelPenalty(pid));
+    }
+
+    const expShares = { ...baseExpShares };
+    if (confiscatedExp > 0 && unpenalizedPids.length > 0) {
+      for (const pid of unpenalizedPids) {
+        expShares[pid] = (expShares[pid] || 0) + Math.round(confiscatedExp * unpenalizedDmgRatio(pid));
+      }
+    }
+
+    const myShare = Math.max(1, expShares[discordId] || 1);
     let killerLvLine = "";
     for (const pid of participants) {
-      const share = Math.max(1, Math.round(monster.expReward * dmgRatio(pid) * levelPenalty(pid)));
+      const share = Math.max(1, expShares[pid] || 1);
       try {
         const expResult = await sc.progressService.grantExp({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -560,10 +602,12 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         }
       } catch (e) { console.error(`[MonsterZone] grantExp failed for ${pid}`, e); }
     }
+
     const pct = Math.round(dmgRatio(discordId) * 100);
     const pen = levelPenalty(discordId);
     const penNote = pen < 1 ? `　⚠️ 等級懲罰 ${Math.round(pen * 100)}%` : "";
-    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${monster.expReward}）${penNote}${killerLvLine}`);
+    const bonusNote = pen >= 1 && confiscatedExp > 0 ? `　🎁 充公加成` : "";
+    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${monster.expReward}）${penNote}${bonusNote}${killerLvLine}`);
   }
 
   // ── 道具掉落：從所有參戰者中抽一人，再骰各道具掉落率 ──
