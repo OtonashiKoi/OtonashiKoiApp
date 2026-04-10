@@ -44,4 +44,10 @@ module.exports = {
     lineWarning: 320, // 行數警告門檻
     lineHardLimit: 400 // 行數硬限制
   }
+  ,
+  // 遊戲參數（可微調）
+  game: {
+    // 預期同時與怪物戰鬥的玩家數（用於調整怪物血量規模）
+    monsterExpectedPlayers: Number(process.env.MONSTER_EXPECTED_PLAYERS || 6)
+  }
 };

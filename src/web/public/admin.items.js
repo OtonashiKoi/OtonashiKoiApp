@@ -28,7 +28,14 @@
     grant_status_points:"📊 屬性點",
     checkin_multiplier:"🎯 打卡加倍"
   };
-  const WEAPON_TYPE_LABELS={sword_1h:'劍(單)',sword_2h:'劍(雙)',dagger:'匕首',mace_1h:'鎚(單)',axe_1h:'斧(單)',axe_2h:'斧(雙)',staff_1h:'杖(單)',staff_2h:'杖(雙)',bow:'弓'};
+  const WEAPON_TYPE_LABELS={
+    sword_1h:'劍(單)', sword_2h:'劍(雙)',
+    mace_1h:'鎚(單)',  mace_2h:'鎚(雙)',
+    axe_1h:'斧(單)',   axe_2h:'斧(雙)',
+    dagger:'匕首',
+    staff_1h:'杖(單)', staff_2h:'杖(雙)',
+    bow:'弓'
+  };
   const OFFHAND_WEAPON_TYPE_LABELS={offhand_sword:'副手劍',offhand_dagger:'副手匕首',offhand_mace:'副手鎚'};
   function wepTypeHtml(item){
     if(item.equipSlot==='weapon'){const cur=item.weaponType||'';const opts='<option value="">（未設定）</option>'+Object.entries(WEAPON_TYPE_LABELS).map(([v,l])=>'<option value="'+v+'"'+(cur===v?' selected':'')+'>'+l+'</option>').join('');return'<select class="sheet-input" data-field="weaponType" style="width:100%;">'+opts+'</select>';}
@@ -70,7 +77,7 @@
     weaponType:"90px",
     actions:"110px"
   };
-  function matchesTab(item,tab){if(tab==='consumable')return item.itemType==='consumable';if(tab==='collectible')return item.itemType==='collectible';if(tab==='equipment'){if(!(item.itemType==='equipment'&&STANDARD_SLOTS.has(item.equipSlot)))return false;if(equipSubFilter!=='all'){const sg={weapon:['weapon','shield'],head:['head_top','head_mid','head_low'],defense:['armor','garment','shoes'],accessory:['accessory_l','accessory_r']};if(!(sg[equipSubFilter]||[]).includes(item.equipSlot))return false;}if(tierFilter!=='all'&&!(item.description||'').includes(tierFilter+'級'))return false;return true;}if(tab==='special')return item.itemType==='equipment'&&SPECIAL_SLOTS.has(item.equipSlot);return true;}
+  function matchesTab(item,tab){if(tab==='consumable')return item.itemType==='consumable';if(tab==='collectible')return item.itemType==='collectible';if(tab==='equipment'){if(!(item.itemType==='equipment'&&STANDARD_SLOTS.has(item.equipSlot)))return false;if(equipSubFilter!=='all'){const sg={weapon:['weapon','shield'],head:['head_top','head_mid','head_low'],defense:['armor','garment','shoes'],accessory:['accessory_l','accessory_r']};if(!(sg[equipSubFilter]||[]).includes(item.equipSlot))return false;}if(tierFilter!=='all'&&!(item.description||'').match(new RegExp(tierFilter+'\\s*級')))return false;return true;}if(tab==='special')return item.itemType==='equipment'&&SPECIAL_SLOTS.has(item.equipSlot);return true;}
   function defaultItemType(tab){return(tab==='equipment'||tab==='special')?'equipment':(tab==='collectible'?'collectible':'consumable');}
   function defaultSlot(tab){return tab==='special'?'title_eq':'head_top';}
   function authHeader(){return{Authorization:`Bearer ${window.getAdminToken?window.getAdminToken():''}`};}
