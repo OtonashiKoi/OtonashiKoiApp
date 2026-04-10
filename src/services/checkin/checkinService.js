@@ -12,9 +12,8 @@ class CheckinService {
     if (!a || !b) return false;
     // 以台灣時間（UTC+8）判定「同一天」
     const toTWDate = (iso) => {
-      const d = new Date(iso);
-      d.setMinutes(d.getMinutes() + d.getTimezoneOffset() + 480); // +480 = UTC+8
-      return d.toISOString().slice(0, 10);
+      const d = new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000);
+      return d.toISOString().slice(0, 10); // YYYY-MM-DD in UTC+8
     };
     return toTWDate(a) === toTWDate(b);
   }
