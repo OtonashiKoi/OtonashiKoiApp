@@ -512,7 +512,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // ── 金幣依比例分配（含等級懲罰）──
   // 實際獎池 = max(goldReward, 參戰人數 × entryFee × 1.3)
   // 入場費回饋到獎池，保證參戰者平均小賺
-  const entryFeePool = Math.round(participants.length * (monster.entryFee || 0) * 1.05);
+  const entryFeePool = Math.round(participants.length * (monster.entryFee || 0) * 1.15);
   const effectiveGoldReward = Math.max(monster.goldReward || 0, entryFeePool);
 
   if (effectiveGoldReward > 0) {
