@@ -84,13 +84,16 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
     const itemList = droppedItems.join("、");
-    // kind: "fight" (努力戰鬥獲得), "participation" (10人參與獎項)
-    if (kind === "participation") {
-      await channel.send(`🎊 **10人參與獎項** — 太棒了！恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr}（因為擊退 **${monsterName}**）取得：**${itemList}**！大家一起歡呼 🎉`);
+    if (kind === "bonus_10") {
+      await channel.send(`🎊 **10人同慶加碼！** 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 獲得加碼獎勵：**${itemList}**！感謝所有 10 位勇者的參與 🎉`);
+    } else if (kind === "bonus_15") {
+      await channel.send(`🔥 **15人大集結加碼！** 哇！${displayName} (<@${discordId}>) 在 ${timeStr} 幸運抽中加碼：**${itemList}**！這麼多人一起打真的太猛了 🏆`);
+    } else if (kind === "bonus_20") {
+      await channel.send(`🌟 **20人史詩加碼！** 不得了！${displayName} (<@${discordId}>) 在 ${timeStr} 獲得史詩級加碼獎勵：**${itemList}**！20人共鬥，傳說已留下 👑`);
     } else if (kind === "group") {
       await channel.send(`🎉 **努力戰鬥獲得** — 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr}（團隊努力）獲得 **${itemList}**！感謝所有參與者 🎊`);
     } else {
-      // default: killer
+      // default: kill
       await channel.send(`🎉 **努力戰鬥獲得** — 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 英勇擊倒 **${monsterName}**，獲得 **${itemList}**！乾杯 🥳`);
     }
   } catch (e) {
@@ -714,43 +717,49 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       }
     }
 
-    // 10 人加碼：再額外抽一位（可與第一位不同），再骰一次掉落
-    if (participants.length >= 10) {
-      // 排除第一位幸運者，從剩餘參戰者中抽
-      const bonusPool = participants.filter(pid => pid !== luckyPid);
+    // 人數加碼掉落：10/15/20 人各額外抽一位，台詞不同
+    const BONUS_MILESTONES = [
+      { threshold: 10, kind: "bonus_10" },
+      { threshold: 15, kind: "bonus_15" },
+      { threshold: 20, kind: "bonus_20" },
+    ];
+    const usedBonusPids = new Set([luckyPid]);
+    for (const { threshold, kind } of BONUS_MILESTONES) {
+      if (participants.length < threshold) break;
+      const bonusPool = participants.filter(pid => !usedBonusPids.has(pid));
       const bonusPid = bonusPool.length > 0
         ? bonusPool[Math.floor(Math.random() * bonusPool.length)]
-        : luckyPid; // 只有一人時就還是他
+        : [...usedBonusPids][0];
+      usedBonusPids.add(bonusPid);
       const bonusProg = progressCache[bonusPid];
-      if (bonusProg) {
-        if (!Array.isArray(bonusProg.inventory)) bonusProg.inventory = [];
-        const bonusItems = [];
-        for (const drop of monster.drops) {
-          if (Math.random() * 100 < drop.chance) {
-            const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
-            if (item) {
-              bonusProg.inventory.push({
-                uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
-                itemEffect: item.effect || { type: "none", value: 0 },
-                itemType: item.itemType || "consumable",
-                imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
-                equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
-                weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
-                atkStat: item.atkStat || null, tier: item.tier || null, enhanceLevel: 0,
-                source: "monster_drop_bonus", sourceRef: monster.name,
-                purchasedAt: new Date().toISOString()
-              });
-              bonusItems.push(item.name);
-            }
+      if (!bonusProg) continue;
+      if (!Array.isArray(bonusProg.inventory)) bonusProg.inventory = [];
+      const bonusItems = [];
+      for (const drop of monster.drops) {
+        if (Math.random() * 100 < drop.chance) {
+          const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
+          if (item) {
+            bonusProg.inventory.push({
+              uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
+              itemEffect: item.effect || { type: "none", value: 0 },
+              itemType: item.itemType || "consumable",
+              imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
+              equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
+              weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+              atkStat: item.atkStat || null, tier: item.tier || null, enhanceLevel: 0,
+              source: "monster_drop_bonus", sourceRef: monster.name,
+              purchasedAt: new Date().toISOString()
+            });
+            bonusItems.push(item.name);
           }
         }
-        if (bonusItems.length > 0) {
-          bonusProg.updatedAt = new Date().toISOString();
-          await sc.progressRepository.save(bonusProg);
-          if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...bonusItems];
-          const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
-          _announceDrops(sc, bonusPid, bonusName, monster.name, bonusItems, "participation").catch(() => {});
-        }
+      }
+      if (bonusItems.length > 0) {
+        bonusProg.updatedAt = new Date().toISOString();
+        await sc.progressRepository.save(bonusProg);
+        if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...bonusItems];
+        const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
+        _announceDrops(sc, bonusPid, bonusName, monster.name, bonusItems, kind).catch(() => {});
       }
     }
   }
