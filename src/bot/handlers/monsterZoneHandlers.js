@@ -67,7 +67,7 @@ async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
   }
 }
 
-async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, isLucky = false) {
+async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, kind = "fight") {
   try {
     const { getBotClient } = require("../runtimeContext");
     const client = getBotClient();
@@ -82,10 +82,14 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
     const itemList = droppedItems.join("、");
-    if (isLucky) {
-      await channel.send(`🍀 ${displayName} (<@${discordId}>) 在 ${timeStr} 參與戰鬥 **${monsterName}**，狗到了 **${itemList}**！`);
+    // kind: "fight" (努力戰鬥獲得), "participation" (10人參與獎項)
+    if (kind === "participation") {
+      await channel.send(`🎊 **10人參與獎項** — 太棒了！恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr}（因為擊退 **${monsterName}**）取得：**${itemList}**！大家一起歡呼 🎉`);
+    } else if (kind === "group") {
+      await channel.send(`🎉 **努力戰鬥獲得** — 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr}（團隊努力）獲得 **${itemList}**！感謝所有參與者 🎊`);
     } else {
-      await channel.send(`🎉 ${displayName} (<@${discordId}>) 在 ${timeStr} 擊敗了 **${monsterName}**，獲得了 **${itemList}**！`);
+      // default: killer
+      await channel.send(`🎉 **努力戰鬥獲得** — 恭喜 ${displayName} (<@${discordId}>) 在 ${timeStr} 英勇擊倒 **${monsterName}**，獲得 **${itemList}**！乾杯 🥳`);
     }
   } catch (e) {
     // suppressed
@@ -506,11 +510,16 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   participants.forEach(pid => { perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] }; });
 
   // ── 金幣依比例分配（含等級懲罰）──
-  if (monster.goldReward > 0) {
+  // 實際獎池 = max(goldReward, 參戰人數 × entryFee × 1.3)
+  // 入場費回饋到獎池，保證參戰者平均小賺
+  const entryFeePool = Math.round(participants.length * (monster.entryFee || 0) * 1.3);
+  const effectiveGoldReward = Math.max(monster.goldReward || 0, entryFeePool);
+
+  if (effectiveGoldReward > 0) {
     const myMultiplier = dmgRatio(discordId) * levelPenalty(discordId);
-    const myShare = Math.max(1, Math.round(monster.goldReward * myMultiplier));
+    const myShare = Math.max(1, Math.round(effectiveGoldReward * myMultiplier));
     for (const pid of participants) {
-      const share = Math.max(1, Math.round(monster.goldReward * dmgRatio(pid) * levelPenalty(pid)));
+      const share = Math.max(1, Math.round(effectiveGoldReward * dmgRatio(pid) * levelPenalty(pid)));
       try {
         await sc.rewardService.grantCurrency({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -523,7 +532,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const pct = Math.round(dmgRatio(discordId) * 100);
     const pen = levelPenalty(discordId);
     const penNote = pen < 1 ? `　⚠️ 等級懲罰 ${Math.round(pen * 100)}%` : "";
-    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}%，共 ${monster.goldReward}）${penNote}`);
+    const poolNote = entryFeePool > (monster.goldReward || 0) ? `（入場費加成）` : "";
+    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}%，共 ${effectiveGoldReward}${poolNote}）${penNote}`);
   }
 
   // ── EXP 依比例分配（含等級懲罰）──
@@ -605,9 +615,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         const isKiller = luckyPid === discordId;
         if (isKiller) {
           rewardLines.push(`🎁 道具掉落：${droppedItems.join("、")}`);
-          _announceDrops(sc, luckyPid, luckyName, monster.name, droppedItems, false).catch(() => {});
+          _announceDrops(sc, luckyPid, luckyName, monster.name, droppedItems, "kill").catch(() => {});
         } else {
-          _announceDrops(sc, luckyPid, luckyName, monster.name, droppedItems, true).catch(() => {});
+          _announceDrops(sc, luckyPid, luckyName, monster.name, droppedItems, "group").catch(() => {});
         }
       }
     }
@@ -647,7 +657,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           await sc.progressRepository.save(bonusProg);
           if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...bonusItems];
           const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
-          _announceDrops(sc, bonusPid, bonusName, monster.name, bonusItems, true).catch(() => {});
+          _announceDrops(sc, bonusPid, bonusName, monster.name, bonusItems, "participation").catch(() => {});
         }
       }
     }
