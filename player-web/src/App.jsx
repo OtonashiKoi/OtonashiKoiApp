@@ -492,6 +492,9 @@ function ProfileTab({ onOpenSettings }) {
   const [data, setData] = useState(null);
   const [inventory, setInventory] = useState(null);
   const [swappingSlot, setSwappingSlot] = useState(null); // { slotKey, label }
+  const [enhanceCandidates, setEnhanceCandidates] = useState(null);
+  const [selectedMaterial, setSelectedMaterial] = useState(null);
+  const [isEnhancing, setIsEnhancing] = useState(false);
 
   const loadAll = () => {
     Promise.all([
@@ -775,23 +778,77 @@ function ProfileTab({ onOpenSettings }) {
 
       {/* 快速更換裝備 Modal */}
       {swappingSlot && (
-        <div className="modal-overlay" onClick={() => setSwappingSlot(null)}>
+        <div className="modal-overlay" onClick={() => { setSwappingSlot(null); setEnhanceCandidates(null); setSelectedMaterial(null); }}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '360px', borderRadius: '24px', padding: '20px' }}>
             <div className="modal-header" style={{ marginBottom: '20px' }}>
               <div>
                 <h3 style={{ margin: 0 }}>部位操作：{swappingSlot.label}</h3>
                 {equipment[swappingSlot.key] && <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--accent)' }}>目前裝備: {equipment[swappingSlot.key].itemName}</p>}
               </div>
-              <button className="close-btn" onClick={() => setSwappingSlot(null)}>&times;</button>
+              <button className="close-btn" onClick={() => { setSwappingSlot(null); setEnhanceCandidates(null); setSelectedMaterial(null); }}>&times;</button>
             </div>
 
-            <div className="modal-body" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+            <div className="modal-body" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+              {/* 強化區 */}
+              {equipment[swappingSlot.key] && (equipment[swappingSlot.key].enhanceLevel ?? 0) < 3 && (
+                <div style={{ marginBottom: '16px', padding: '16px', background: 'rgba(240,200,87,0.07)', borderRadius: '16px', border: '1px solid rgba(240,200,87,0.2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: enhanceCandidates ? '12px' : '0' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#f0c857' }}>⚗️ 強化 {equipment[swappingSlot.key].itemName}（目前 +{equipment[swappingSlot.key].enhanceLevel ?? 0}）</p>
+                    {!enhanceCandidates && (
+                      <button className="btn" onClick={() => {
+                        const inv = inventory || [];
+                        const target = equipment[swappingSlot.key];
+                        const baseName = target.itemName.replace(/ \+\d+$/, '');
+                        const candidates = inv.filter(i => i.itemType === 'equipment' && i.itemName.replace(/ \+\d+$/, '') === baseName && !i.isEquipped);
+                        setEnhanceCandidates(candidates);
+                        setSelectedMaterial(null);
+                      }} style={{ background: '#f0c857', borderColor: '#f0c857', color: '#111', padding: '4px 12px', fontSize: '12px' }}>選材料</button>
+                    )}
+                  </div>
+                  {enhanceCandidates && (
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>選擇強化材料：</div>
+                      {enhanceCandidates.length === 0 ? (
+                        <div style={{ fontSize: '12px', color: 'var(--muted)' }}>背包中沒有可作為材料的同名裝備。</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {enhanceCandidates.map(c => (
+                            <div key={c.uuid} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <input type="radio" name="enhanceMatProfile" checked={selectedMaterial?.uuid === c.uuid} onChange={() => setSelectedMaterial(c)} />
+                              <div style={{ fontSize: '13px' }}>{c.itemName} <span style={{ color: 'var(--muted)', fontSize: '11px' }}>({c.uuid.slice(0,8)})</span></div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                        <button className="btn" disabled={!selectedMaterial || isEnhancing} onClick={async () => {
+                          if (!selectedMaterial) return;
+                          if (!confirm(`確定用 ${selectedMaterial.itemName} 強化 ${equipment[swappingSlot.key].itemName} 嗎？`)) return;
+                          try {
+                            setIsEnhancing(true);
+                            const res = await api.enhanceItem(equipment[swappingSlot.key].uuid, selectedMaterial.uuid);
+                            alert(res.message || '強化完成');
+                            setEnhanceCandidates(null);
+                            setSelectedMaterial(null);
+                            setSwappingSlot(null);
+                            loadAll();
+                          } catch (err) {
+                            alert('強化失敗: ' + err.message);
+                          } finally { setIsEnhancing(false); }
+                        }} style={{ background: '#7ad3a0', borderColor: '#7ad3a0', fontSize: '12px', padding: '4px 12px' }}>確認強化</button>
+                        <button className="btn" onClick={() => { setEnhanceCandidates(null); setSelectedMaterial(null); }} style={{ background: 'transparent', borderColor: '#ccc', fontSize: '12px', padding: '4px 12px' }}>取消</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* 卸下按鈕區 */}
               {equipment[swappingSlot.key] && (
                 <div style={{ marginBottom: '20px', padding: '16px', background: 'rgba(255,0,0,0.05)', borderRadius: '16px', border: '1px solid rgba(255,0,0,0.1)' }}>
                   <p style={{ margin: '0 0 12px 0', fontSize: '13px', textAlign: 'center', color: 'var(--muted)' }}>想要卸下此裝備嗎？</p>
-                  <button 
-                    className="btn" 
+                  <button
+                    className="btn"
                     onClick={() => handleUnequip(swappingSlot.key)}
                     style={{ borderColor: '#ff4d4f', color: '#ff4d4f', width: '100%', borderRadius: '12px', fontWeight: 'bold' }}
                   >
