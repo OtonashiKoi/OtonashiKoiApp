@@ -47,7 +47,6 @@ async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
     const client = getBotClient();
     if (!client?.isReady()) return;
     for (const [pid, rewards] of Object.entries(perPidRewards)) {
-      if (pid === killerDiscordId) continue; // 擊殺者已在戰鬥結算 embed 看到
       const lines = [];
       if (rewards.gold > 0) lines.push(`💰 金幣 **+${rewards.gold}**`);
       if (rewards.exp > 0) {
@@ -57,9 +56,12 @@ async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
       }
       if (rewards.drops.length > 0) lines.push(`🎁 道具：**${rewards.drops.join("、")}**`);
       if (!lines.length) continue;
+      const prefix = pid === killerDiscordId
+        ? `⚔️ 你擊倒了 **${monsterName}**！獎勵結算：`
+        : `⚔️ **${monsterName}** 已被擊倒，你的參戰獎勵：`;
       try {
         const user = await client.users.fetch(pid);
-        await user.send(`⚔️ **${monsterName}** 已被擊倒，你的參戰獎勵：\n${lines.join("\n")}`);
+        await user.send(`${prefix}\n${lines.join("\n")}`);
       } catch (_) { /* DM 關閉則跳過 */ }
     }
   } catch (e) {
