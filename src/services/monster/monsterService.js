@@ -1,12 +1,28 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 
-function calcStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1 }) {
+// 純公式計算，輸入屬性 → 輸出戰鬥數值
+// maxHp / def / mdef 已直接存於資料庫，不在此覆蓋
+function calcStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1 } = {}) {
   return {
-    maxHp: vit * 15 + 50,
-    atk: str * 3,
-    def: 0,
+    atk:   str * 3,
+    def:   Math.round(vit),
+    mdef:  Math.round(INT * 2),
     dodge: Math.min(50, Math.round(agi * 0.5 * 10) / 10),
-    hit: Math.min(100, 80 + dex)
+    hit:   Math.min(100, 80 + dex)
+  };
+}
+
+// 合併資料庫存儲的 maxHp/def 與公式計算的其他數值
+// def 存的是百分比（0~75），戰鬥公式：傷害 = ATK * (1 - def/100)
+function effectiveCalc(m) {
+  const base = calcStats(m);
+  const def = (typeof m.def === 'number' && !isNaN(m.def)) ? Math.min(75, m.def) : base.def;
+  return {
+    maxHp: (typeof m.maxHp === 'number' && !isNaN(m.maxHp)) ? m.maxHp : 100,
+    atk:   base.atk,
+    def,   // 百分比減傷 0~75
+    dodge: base.dodge,
+    hit:   base.hit
   };
 }
 
@@ -20,13 +36,13 @@ class MonsterService {
     const monsters = await this.monsterRepository.findAll();
     let list = includeDisabled ? monsters : monsters.filter((m) => m.enabled);
     if (zone) list = list.filter((m) => (m.zone || "normal") === zone);
-    return list.map((m) => ({ ...m, calc: calcStats(m) }));
+    return list.map((m) => ({ ...m, calc: effectiveCalc(m) }));
   }
 
   async getMonsterById(id) {
     const m = await this.monsterRepository.findById(id);
-    if (!m) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `\u600e\u7269\u4e0d\u5b58\u5728: ${id}`, 404);
-    return { ...m, calc: calcStats(m) };
+    if (!m) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `怪物不存在: ${id}`, 404);
+    return { ...m, calc: effectiveCalc(m) };
   }
 
   async createMonster(fields) {
@@ -34,7 +50,7 @@ class MonsterService {
     const monster = {
       id: crypto.randomUUID(),
       seq: Math.max(1, Number(fields.seq) || 1),
-      name: String(fields.name || "").trim() || "\u672a\u547d\u540d\u600e\u7269",
+      name: String(fields.name || "").trim() || "未命名怪物",
       imageUrl: fields.imageUrl || null,
       imageThumbnailUrl: fields.imageThumbnailUrl || null,
       str: Math.max(0, Number(fields.str) || 0),
@@ -45,45 +61,49 @@ class MonsterService {
       luk: Math.max(0, Number(fields.luk) || 0),
       level: Math.max(0, Number(fields.level) ?? 0),
       zone: fields.zone === "mid" ? "mid" : "normal",
-      entryFee: Math.max(0, Number(fields.entryFee) || 0),
+      maxHp: Math.max(1, Number(fields.maxHp) || 1),
+      def:   Math.min(75, Math.max(0, Number(fields.def) || 0)),
+      entryFee:  Math.max(0, Number(fields.entryFee)  || 0),
       expReward: Math.max(0, Number(fields.expReward) || 0),
-      goldReward: Math.max(0, Number(fields.goldReward) || 0),
+      goldReward:Math.max(0, Number(fields.goldReward)|| 0),
       drops,
       spawnRate: Math.min(100, Math.max(1, Number(fields.spawnRate) || 10)),
-      isBoss: Boolean(fields.isBoss),
+      isBoss:  Boolean(fields.isBoss),
       enabled: Boolean(fields.enabled),
       createdAt: new Date().toISOString()
     };
-    return { ...await this.monsterRepository.save(monster), calc: calcStats(monster) };
+    return { ...await this.monsterRepository.save(monster), calc: effectiveCalc(monster) };
   }
 
   async updateMonster(id, fields) {
     const monster = await this.monsterRepository.findById(id);
-    if (!monster) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `\u600e\u7269\u4e0d\u5b58\u5728: ${id}`, 404);
+    if (!monster) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `怪物不存在: ${id}`, 404);
     const updated = { ...monster };
-    if (fields.seq !== undefined) updated.seq = Math.max(1, Number(fields.seq) || 1);
-    if (fields.name !== undefined) updated.name = String(fields.name).trim() || monster.name;
-    if (fields.imageUrl !== undefined) updated.imageUrl = fields.imageUrl;
+    if (fields.seq       !== undefined) updated.seq       = Math.max(1, Number(fields.seq) || 1);
+    if (fields.name      !== undefined) updated.name      = String(fields.name).trim() || monster.name;
+    if (fields.imageUrl  !== undefined) updated.imageUrl  = fields.imageUrl;
     if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl;
     for (const stat of ["str", "agi", "vit", "int", "dex", "luk"]) {
       if (fields[stat] !== undefined) updated[stat] = Math.max(0, Number(fields[stat]) || 0);
     }
-    if (fields.level !== undefined) updated.level = Math.max(0, Number(fields.level) ?? 0);
-    if (fields.zone !== undefined) updated.zone = fields.zone === "mid" ? "mid" : "normal";
-    if (fields.entryFee !== undefined) updated.entryFee = Math.max(0, Number(fields.entryFee) || 0);
+    if (fields.level     !== undefined) updated.level     = Math.max(0, Number(fields.level) ?? 0);
+    if (fields.zone      !== undefined) updated.zone      = fields.zone === "mid" ? "mid" : "normal";
+    if (fields.maxHp !== undefined) updated.maxHp = Math.max(1, Number(fields.maxHp) || 1);
+    if (fields.def   !== undefined) updated.def   = Math.min(75, Math.max(0, Number(fields.def) || 0));
+    if (fields.entryFee  !== undefined) updated.entryFee  = Math.max(0, Number(fields.entryFee)  || 0);
     if (fields.expReward !== undefined) updated.expReward = Math.max(0, Number(fields.expReward) || 0);
-    if (fields.goldReward !== undefined) updated.goldReward = Math.max(0, Number(fields.goldReward) || 0);
-    if (fields.drops !== undefined) updated.drops = await this._resolveDrops(fields.drops);
+    if (fields.goldReward!== undefined) updated.goldReward= Math.max(0, Number(fields.goldReward)|| 0);
+    if (fields.drops     !== undefined) updated.drops     = await this._resolveDrops(fields.drops);
     if (fields.spawnRate !== undefined) updated.spawnRate = Math.min(100, Math.max(1, Number(fields.spawnRate) || 10));
-    if (fields.isBoss !== undefined) updated.isBoss = Boolean(fields.isBoss);
-    if (fields.enabled !== undefined) updated.enabled = Boolean(fields.enabled);
+    if (fields.isBoss    !== undefined) updated.isBoss    = Boolean(fields.isBoss);
+    if (fields.enabled   !== undefined) updated.enabled   = Boolean(fields.enabled);
     const saved = await this.monsterRepository.save(updated);
-    return { ...saved, calc: calcStats(saved) };
+    return { ...saved, calc: effectiveCalc(saved) };
   }
 
   async deleteMonster(id) {
     const monster = await this.monsterRepository.findById(id);
-    if (!monster) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `\u600e\u7269\u4e0d\u5b58\u5728: ${id}`, 404);
+    if (!monster) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `怪物不存在: ${id}`, 404);
     await this.monsterRepository.delete(id);
   }
 

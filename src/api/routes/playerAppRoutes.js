@@ -660,16 +660,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         for (let a = 0; a < (pStats.attackCount || 1) && outcome === null; a++) {
           const hitChance = pStats.hit - monster.calc.dodge;
           if (pStats.absoluteHit || Math.random() * 100 < hitChance) {
-            let dmg = rollDmg(Math.max(1, pStats.atk - monster.calc.def));
+            let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - monster.calc.def / 100))));
             const isCrit = Math.random() * 100 < pStats.crit;
             if (isCrit) dmg = Math.round(dmg * 1.5);
             mHp -= dmg;
             totalDamage += dmg;
             log.push(`⚔️ ${isCrit ? "✨**會心一擊**！" : ""}${rand(atkVerbs)}，對 ${monster.name} 造成 **${dmg}** 傷害！(怪剩 ${Math.max(0, mHp)})`);
-            
+
             if (mHp <= 0) { outcome = "win"; break; }
             if (outcome === null && Math.random() * 100 < pStats.combo) {
-              let cdmg = rollDmg(Math.max(1, pStats.atk - monster.calc.def));
+              let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - monster.calc.def / 100))));
               mHp -= cdmg;
               totalDamage += cdmg;
               log.push(`⚡ **連擊！** 追加造成 **${cdmg}** 傷害！(怪剩 ${Math.max(0, mHp)})`);
@@ -685,7 +685,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         for (let ma = 0; ma < (pStats.monsterAttackCount || 1) && outcome === null; ma++) {
           const monsterHitChance = monster.calc.hit - pStats.dodge;
           if (Math.random() * 100 < monsterHitChance) {
-            const dmg = rollDmg(Math.max(1, monster.calc.atk - pStats.def));
+            const dmg = rollDmg(Math.max(1, Math.round(monster.calc.atk * (1 - pStats.def / 100))));
             pHp -= dmg;
             log.push(`💥 ${monster.name} 猛力一擊，造成 **${dmg}** 傷害！(你剩 ${Math.max(0, pHp)})`);
             if (pHp <= 0) { outcome = "lose"; break; }

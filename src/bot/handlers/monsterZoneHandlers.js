@@ -406,7 +406,7 @@ async function handleStartFight(interaction) {
       for (let a = 0; a < attackCount && outcome === null; a++) {
         const hitChance = session.playerStats.hit - session.monsterStats.dodge;
         if (absoluteHit || Math.random() * 100 < hitChance) {
-          let dmg = rollDmg(Math.max(1, session.playerStats.atk - session.monsterStats.def));
+          let dmg = rollDmg(Math.max(1, Math.round(session.playerStats.atk * (1 - session.monsterStats.def / 100))));
           const isCrit = Math.random() * 100 < session.playerStats.crit;
           if (isCrit) dmg = Math.round(dmg * 1.5);
           session.monsterHp -= dmg;
@@ -420,7 +420,7 @@ async function handleStartFight(interaction) {
           if (session.monsterHp <= 0) { outcome = "win"; break; }
           // 連擊判定（AGI → combo%，命中後額外一擊，不再判命中/閃避）
           if (outcome === null && Math.random() * 100 < session.playerStats.combo) {
-            let cdmg = rollDmg(Math.max(1, session.playerStats.atk - session.monsterStats.def));
+            let cdmg = rollDmg(Math.max(1, Math.round(session.playerStats.atk * (1 - session.monsterStats.def / 100))));
             session.monsterHp -= cdmg;
             totalDamage += cdmg;
             log.push(`⚡ **${rand(comboPhrases)}** 追加攻擊造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, session.monsterHp)} HP）`);
@@ -438,7 +438,7 @@ async function handleStartFight(interaction) {
       for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
         const monsterHitChance = session.monsterStats.hit - session.playerStats.dodge;
         if (Math.random() * 100 < monsterHitChance) {
-          const dmg = rollDmg(Math.max(1, session.monsterStats.atk - session.playerStats.def));
+          const dmg = rollDmg(Math.max(1, Math.round(session.monsterStats.atk * (1 - session.playerStats.def / 100))));
           session.playerHp -= dmg;
           log.push(`💥 ${session.monsterName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, session.playerHp)} HP）`);
           if (session.playerHp <= 0) { outcome = "lose"; break; }

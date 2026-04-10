@@ -12,14 +12,22 @@
     return { "Content-Type": "application/json", Authorization: "Bearer " + (window.getAdminToken ? window.getAdminToken() : "") };
   }
 
-  function calcStats(m) {
-    const str = Number(m.str)||0, agi = Number(m.agi)||0, vit = Number(m.vit)||0;
-    const INT = Number(m.int)||0, dex = Number(m.dex)||0;
+  // 僅計算衍生數值（ATK/dodge/hit），HP/DEF 由輸入框直接決定
+  function calcDerived(m) {
+    const str = Number(m.str) || 0, agi = Number(m.agi) || 0;
+    const dex = Number(m.dex) || 0;
     return {
-      maxHp: vit*15+50, atk: str*3, def: vit*2, mdef: INT*2,
-      dodge: Math.min(50, Math.round(agi*0.5*10)/10),
-      hit: Math.min(100, 80+dex)
+      atk:   str * 3,
+      dodge: Math.min(50, Math.round(agi * 0.5 * 10) / 10),
+      hit:   Math.min(100, 80 + dex)
     };
+  }
+
+  // 建議 exp/gold（5人×3次，僅用於 placeholder，不覆蓋輸入值）
+  function suggestRewards(maxHp, level, atk) {
+    const exp  = Math.max(1, Math.round(maxHp / 15 * 1.2 + level * 50 + atk * 8));
+    const gold = Math.max(1, Math.round(exp * 0.82));
+    return { exp, gold };
   }
 
   function buildItemSelectOptions() {
@@ -192,6 +200,160 @@
     return wrap;
   }
 
+  /* ===== 全域的 道具選擇 Modal (可傳回選取結果及機率) ===== */
+  function getItemPickerModal() {
+    // singleton
+    let modal = document.getElementById("drop-item-modal");
+    if (modal) return modal;
+
+    modal = document.createElement("div");
+    modal.id = "drop-item-modal";
+    modal.style.cssText = [
+      "display:none;position:fixed;inset:0;z-index:2000;",
+      "background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;",
+      "padding:24px;",
+    ].join("");
+
+    const panel = document.createElement("div");
+    panel.style.cssText = [
+      "width:920px;max-width:100%;max-height:86vh;overflow:auto;border-radius:8px;",
+      "background:var(--surface);border:1px solid var(--accent);padding:14px;box-shadow:0 8px 32px rgba(0,0,0,0.6);",
+    ].join("");
+
+    const header = document.createElement("div");
+    header.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;";
+    header.innerHTML = `<strong style=\"font-size:1rem;\">選擇掉落道具</strong>`;
+
+    const rightControls = document.createElement("div");
+    rightControls.style.cssText = "display:flex;gap:8px;align-items:center;";
+    const chanceLabel = document.createElement("label");
+    chanceLabel.style.cssText = "font-size:0.85rem;color:var(--muted);";
+    chanceLabel.textContent = "掉落機率：";
+    const chanceInput = document.createElement("input");
+    chanceInput.type = "number"; chanceInput.min = 0; chanceInput.max = 100; chanceInput.step = 0.1; chanceInput.value = 10;
+    chanceInput.style.cssText = "width:86px;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "button"; closeBtn.textContent = "關閉";
+    closeBtn.addEventListener("click", () => { modal.style.display = "none"; modal._cb = null; });
+
+    rightControls.append(chanceLabel, chanceInput, closeBtn);
+    header.appendChild(rightControls);
+
+    const content = document.createElement("div");
+    content.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;";
+
+    // 類別篩選器（All / consumable / collectible / equipment / special）
+    const categorySelect = document.createElement("select");
+    categorySelect.style.cssText = "margin-left:8px;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);";
+    const catOpts = [{v:"",t:"全部"}].concat(Object.keys(ITEM_TYPE_LABEL).map(k => ({ v: k, t: (ITEM_TYPE_LABEL[k]||k).replace(/^[^\s]+\s/, "") })));
+    catOpts.forEach(o => categorySelect.appendChild(new Option(o.t, o.v)));
+    // 裝備次分類（動態產生，僅在選擇 equipment 時顯示）
+    const equipmentSelect = document.createElement("select");
+    equipmentSelect.style.cssText = "margin-left:8px;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);display:none;";
+    equipmentSelect.addEventListener('change', () => renderItems(search.value));
+
+    function getEquipSubtype(it) {
+      return it.slot || it.subType || it.equipType || it.category || it.type || '其他';
+    }
+
+    function populateEquipSubtypes() {
+      const set = new Set();
+      itemLib.forEach(i => { if ((i.itemType||'') === 'equipment') set.add(getEquipSubtype(i)); });
+      const arr = Array.from(set).filter(Boolean).sort();
+      equipmentSelect.innerHTML = '';
+      equipmentSelect.appendChild(new Option('全部裝備', ''));
+      arr.forEach(v => equipmentSelect.appendChild(new Option(v, v)));
+    }
+
+    categorySelect.addEventListener("change", () => {
+      equipmentSelect.style.display = categorySelect.value === 'equipment' ? '' : 'none';
+      populateEquipSubtypes();
+      renderItems(search.value);
+    });
+
+    // 數值摘要：針對常見屬性顯示中文標籤（僅顯示有數值的欄位），若無則回傳 id
+    function formatItemStats(it) {
+      if (!it || typeof it !== 'object') return "";
+      const mapping = { atk: '攻', def: '防', mdef: '魔防', str: 'STR', agi: 'AGI', vit: 'VIT', int: 'INT', dex: 'DEX', luk: 'LUK' };
+      const parts = [];
+      Object.keys(mapping).forEach(k => {
+        if (typeof it[k] === 'number' && !isNaN(it[k])) parts.push(`${mapping[k]}:${it[k]}`);
+      });
+      if (parts.length) return parts.join(' ');
+      // fallback: show some id or short descriptor
+      return it.id || "";
+    }
+
+    // render function
+    function renderItems(filter) {
+      content.innerHTML = "";
+      const kw = (filter||"").trim().toLowerCase();
+      const selCat = categorySelect.value || "";
+      const filtered = kw ? itemLib.filter(i => i.name.toLowerCase().includes(kw) || (i.itemType||"").toLowerCase().includes(kw)) : itemLib;
+      // 若選了類別，先過濾
+      const filteredByCat = selCat ? filtered.filter(i => (i.itemType||'') === selCat) : filtered;
+      // 若為裝備並有次分類選擇，進一步過濾
+      const equipSub = (typeof equipmentSelect !== 'undefined') ? (equipmentSelect.value || '') : '';
+      const finalFiltered = (selCat === 'equipment' && equipSub) ? filteredByCat.filter(i => getEquipSubtype(i) === equipSub) : filteredByCat;
+      const groups = {};
+      finalFiltered.forEach(i => { const t = i.itemType||"special"; if (!groups[t]) groups[t]=[]; groups[t].push(i); });
+
+      Object.entries(groups).forEach(([t, items]) => {
+        const gwrap = document.createElement("div");
+        // 裝備類改用多欄 Grid 顯示以利快速瀏覽；其他類別維持直列
+        if (t === 'equipment') gwrap.style.cssText = "flex:1 1 280px;min-width:240px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;";
+        else gwrap.style.cssText = "flex:1 1 220px;min-width:200px;";
+        const ghead = document.createElement("div");
+        ghead.style.cssText = "font-size:0.8rem;color:var(--muted);font-weight:700;margin-bottom:6px;";
+        ghead.textContent = (ITEM_TYPE_LABEL[t]||t).replace(/^[^\s]+\s/, "");
+        gwrap.appendChild(ghead);
+
+        items.forEach(it => {
+          const card = document.createElement("div");
+          // 裝備卡片改小尺寸以適合 Grid
+          card.style.cssText = t === 'equipment' ? "display:flex;align-items:flex-start;gap:8px;padding:6px;border-radius:6px;cursor:pointer;" : "display:flex;align-items:center;gap:8px;padding:6px;border-radius:6px;cursor:pointer;margin-bottom:6px;";
+          card.addEventListener("mouseenter", () => card.style.background = "var(--surface-hover)");
+          card.addEventListener("mouseleave", () => card.style.background = "");
+          const thumb = it.imageThumbnailUrl || it.imageUrl || "";
+          // 裝備類顯示數值摘要（中文標籤）；其他類別顯示 id
+          const infoLine = (it.itemType === 'equipment') ? formatItemStats(it) : it.id;
+          card.innerHTML = `${thumb?`<img src=\"${thumb}\" style=\"width:36px;height:36px;object-fit:contain;border-radius:6px;\"/>`:`<span style=\"width:36px;height:36px;display:inline-block;\"></span>`}<div style=\"flex:1;overflow:hidden;\"><div style=\"font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;\">${it.name}</div><div style=\"font-size:0.8rem;color:var(--muted);\">${infoLine}</div></div>`;
+          card.addEventListener("click", () => {
+            if (typeof modal._cb === "function") {
+              const c = parseFloat(chanceInput.value) || 0;
+              modal._cb(it, c);
+            }
+            modal.style.display = "none";
+            modal._cb = null;
+          });
+          gwrap.appendChild(card);
+        });
+
+        content.appendChild(gwrap);
+      });
+    }
+
+    const search = document.createElement("input");
+    search.type = "text"; search.placeholder = "🔍 搜尋道具...";
+    search.style.cssText = "width:100%;margin-bottom:8px;padding:8px;border-radius:6px;border:1px solid var(--line);";
+    search.addEventListener("input", () => renderItems(search.value));
+
+    panel.append(header, categorySelect, equipmentSelect, search, content);
+    modal.appendChild(panel);
+    document.body.appendChild(modal);
+
+    // expose open API
+    modal.open = function ({ currentItemId = "", currentChance = 10, cb = null } = {}) {
+      modal._cb = cb;
+      chanceInput.value = currentChance;
+      search.value = "";
+      renderItems("");
+      modal.style.display = "flex";
+    };
+
+    return modal;
+  }
+
   function makeDropRow(itemId = "", chance = 10) {
     const div = document.createElement("div");
     div.className = "drop-row";
@@ -204,6 +366,28 @@
     if (thumbSrc) thumb.src = thumbSrc;
 
     const combo = makeItemCombobox(itemId);
+
+    // modal 快捷按鈕（開啟分類視窗選取）
+    const modalBtn = document.createElement("button");
+    modalBtn.type = "button";
+    modalBtn.className = "drop-modal-btn button";
+    modalBtn.title = "更多選擇...";
+    modalBtn.textContent = "⋯";
+    modalBtn.style.cssText = "padding:6px 8px;margin-left:6px;border-radius:6px;flex-shrink:0;";
+    modalBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const hiddenInput = combo.querySelector(".drop-item-sel");
+      const displayInput = combo.querySelector(".drop-combo-display");
+      const modal = getItemPickerModal();
+      modal.open({ currentItemId: hiddenInput?.value || "", currentChance: Number(chanceInput.value) || 0, cb: (item, c) => {
+        if (!hiddenInput) return;
+        hiddenInput.value = item.id;
+        if (displayInput) displayInput.value = `${ITEM_TYPE_LABEL[item.itemType] || ""} ${item.name}`;
+        const src = item.imageThumbnailUrl || item.imageUrl || "";
+        if (src) { thumb.src = src; thumb.style.display = ""; } else { thumb.src = ""; thumb.style.display = "none"; }
+        chanceInput.value = c;
+      } });
+    });
 
     const chanceInput = document.createElement("input");
     chanceInput.type = "number";
@@ -223,7 +407,7 @@
     delBtn.title = "移除";
     delBtn.textContent = "×";
 
-    div.append(thumb, combo, chanceInput, pct, delBtn);
+    div.append(thumb, combo, modalBtn, chanceInput, pct, delBtn);
     return div;
   }
 
@@ -338,14 +522,16 @@
   function renderHead() {
     const head = document.getElementById("monsters-sheet-head");
     if (!head) return;
-    const cols = ["出場順", "圖", "名稱", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "計算視窗", "入場費", "EXP", "金幣", "掌落道具", "出現率%", "BOSS", "啟用", "操作"];
-    const widths = ["74px","52px","114px","82px","66px","66px","66px","66px","66px","66px","160px","86px","86px","86px","240px","70px","50px","44px","96px"];
+    const cols = ["出場順", "圖", "名稱", "等級", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "MaxHP", "DEF", "衍生數值", "入場費", "EXP", "金幣", "掌落道具", "出現率%", "BOSS", "啟用", "操作"];
+    const widths = ["74px","52px","114px","82px","66px","66px","66px","66px","66px","66px","90px","90px","120px","86px","86px","86px","240px","70px","50px","44px","96px"];
     head.innerHTML = "<tr>" + cols.map((c,i) => `<th style="width:${widths[i]};white-space:nowrap;">${c}</th>`).join("") + "</tr>";
   }
 
   function buildCalcHtml(m) {
-    const c = calcStats(m);
-    return `<div style="line-height:1.7;font-size:0.8em;color:var(--muted,#aaa);white-space:nowrap;">HP:${c.maxHp} ATK:${c.atk}<br>DEF:${c.def} MDEF:${c.mdef}<br>閃:${c.dodge}% 命:${c.hit}%</div>`;
+    const d = calcDerived(m);
+    const defPct = Math.min(75, Number(m.def) || 0);
+    const effAtk = Math.round(d.atk * (1 - defPct / 100));
+    return `<div style="line-height:1.7;font-size:0.8em;color:var(--muted,#aaa);white-space:nowrap;">ATK:${d.atk} DEF:${defPct}%<br>玩家實傷≈${effAtk} 閃:${d.dodge}%</div>`;
   }
 
   function buildRow(m, isNew) {
@@ -366,16 +552,24 @@
     const enabled = m.enabled !== false;
     const seq = m.seq || 1;
 
+    // 計算 exp/gold 建議值作為 placeholder
+    const maxHp = Number(m.maxHp) || 0;
+    const level = Number(m.level) || 1;
+    const atk = (Number(m.str) || 0) * 3;
+    const sg = suggestRewards(maxHp, level, atk);
+
     tr.innerHTML = `
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="seq" type="number" min="1" step="1" value="${seq}" style="width:62px;text-align:center;${!enabled ? 'opacity:0.35;pointer-events:none;' : ''}" ${!enabled ? 'disabled' : ''} /></td>
       <td style="padding:6px;" class="img-cell">${imgHtml}</td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="name" type="text" value="${(m.name||"").replace(/"/g,"&quot;")}" style="width:104px;" /></td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="level" type="number" min="0" max="15" step="1" value="${m.level ?? 1}" style="width:72px;text-align:center;" /></td>
       ${statsInputs}
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="maxHp" type="number" min="1" value="${m.maxHp||1}" style="width:82px;text-align:center;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="def" type="number" min="0" max="75" value="${m.def||0}" style="width:82px;text-align:center;" /></td>
       <td class="calc-cell" style="padding:6px 8px;">${buildCalcHtml(m)}</td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:76px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" style="width:76px;" /></td>
-      <td style="padding:6px 4px;"><input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" style="width:76px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" placeholder="建議:${sg.exp}" style="width:76px;" /></td>
+      <td style="padding:6px 4px;"><input class="sheet-input" data-field="goldReward" type="number" min="0" value="${m.goldReward||0}" placeholder="建議:${sg.gold}" style="width:76px;" /></td>
       <td class="drops-td" style="padding:6px 4px;"></td>
       <td style="padding:6px 4px;"><input class="sheet-input" data-field="spawnRate" type="number" min="1" max="100" step="1" value="${m.spawnRate ?? 10}" style="width:60px;text-align:center;" /></td>
       <td style="padding:8px 4px;text-align:center;"><input type="checkbox" data-field="isBoss" title="BOSS 出場時發送廣播" ${m.isBoss ? "checked" : ""} /></td>
@@ -402,13 +596,27 @@
   function updateCalc(tr) {
     const stats = {};
     tr.querySelectorAll(".stat-input").forEach(inp => { stats[inp.dataset.stat] = Number(inp.value)||0; });
+    stats.def = Number(tr.querySelector("[data-field=def]")?.value) || 0;
     const cell = tr.querySelector(".calc-cell");
     if (cell) cell.innerHTML = buildCalcHtml(stats);
+    // 更新 exp/gold 的建議 placeholder
+    const maxHp  = Number(tr.querySelector("[data-field=maxHp]")?.value) || 0;
+    const level  = Number(tr.querySelector("[data-field=level]")?.value) || 1;
+    const atk    = (Number(stats.str) || 0) * 3;
+    const sg = suggestRewards(maxHp, level, atk);
+    const expInput  = tr.querySelector("[data-field=expReward]");
+    const goldInput = tr.querySelector("[data-field=goldReward]");
+    if (expInput)  expInput.placeholder  = `建議:${sg.exp}`;
+    if (goldInput) goldInput.placeholder = `建議:${sg.gold}`;
   }
 
   function bindTableEvents(tbody) {
     tbody.addEventListener("input", function (e) {
-      if (e.target.classList.contains("stat-input")) updateCalc(e.target.closest("tr"));
+      const tr = e.target.closest("tr[data-id]");
+      if (!tr) return;
+      if (e.target.classList.contains("stat-input") || ["maxHp","def","level"].includes(e.target.dataset.field)) {
+        updateCalc(tr);
+      }
     });
     tbody.addEventListener("click", async function (e) {
       const tr = e.target.closest("tr[data-id]");
@@ -433,18 +641,20 @@
     tr.querySelectorAll(".stat-input").forEach(inp => { stats[inp.dataset.stat] = inp.value === "" ? 0 : (Number(inp.value) ?? 0); });
     const dropsTd = tr.querySelector(".drops-td");
     return {
-      seq: Number(tr.querySelector("[data-field=seq]")?.value) || 1,
-      name: tr.querySelector("[data-field=name]")?.value || "",
-      zone: activeZone,
-      level: Number(tr.querySelector("[data-field=level]")?.value) ?? 1,
+      seq:        Number(tr.querySelector("[data-field=seq]")?.value)       || 1,
+      name:              tr.querySelector("[data-field=name]")?.value       || "",
+      zone:        activeZone,
+      level:      Number(tr.querySelector("[data-field=level]")?.value)     ?? 1,
       ...stats,
-      entryFee: Number(tr.querySelector("[data-field=entryFee]")?.value) || 0,
-      expReward: Number(tr.querySelector("[data-field=expReward]")?.value) || 0,
-      goldReward: Number(tr.querySelector("[data-field=goldReward]")?.value) || 0,
-      drops: dropsTd ? readDropsFromEditor(dropsTd) : [],
-      spawnRate: Number(tr.querySelector("[data-field=spawnRate]")?.value) || 10,
-      isBoss: tr.querySelector("[data-field=isBoss]")?.checked || false,
-      enabled: tr.querySelector("[data-field=enabled]")?.checked || false
+      maxHp:      Number(tr.querySelector("[data-field=maxHp]")?.value)     || 1,
+      def:        Number(tr.querySelector("[data-field=def]")?.value)       || 0,
+      entryFee:   Number(tr.querySelector("[data-field=entryFee]")?.value)  || 0,
+      expReward:  Number(tr.querySelector("[data-field=expReward]")?.value) || 0,
+      goldReward: Number(tr.querySelector("[data-field=goldReward]")?.value)|| 0,
+      drops:      dropsTd ? readDropsFromEditor(dropsTd) : [],
+      spawnRate:  Number(tr.querySelector("[data-field=spawnRate]")?.value) || 10,
+      isBoss:            tr.querySelector("[data-field=isBoss]")?.checked   || false,
+      enabled:           tr.querySelector("[data-field=enabled]")?.checked  || false
     };
   }
 
@@ -480,7 +690,7 @@
     const tbody = document.getElementById("monsters-tbody");
     if (!tbody) return;
     const nextSeq = monsters.length ? Math.max(...monsters.map(m => m.seq||1)) + 1 : 1;
-    const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, entryFee:100, expReward:50, goldReward:30, spawnRate:10, isBoss:false, drops:[], enabled:true };
+    const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, maxHp:1000, def:50, entryFee:0, expReward:0, goldReward:0, spawnRate:10, isBoss:false, drops:[], enabled:true };
     const tr = buildRow(blank, true);
     tbody.appendChild(tr);
     // 不重新 bind，新 row 的事件會 bubble 到已綁定的 tbody listener
