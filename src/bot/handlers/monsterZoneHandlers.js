@@ -524,11 +524,31 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     unpenalizedDmgTotal > 0 ? (mergedDmg[pid]?.damage || 0) / unpenalizedDmgTotal : 1 / (unpenalizedPids.length || 1);
 
   if (effectiveGoldReward > 0) {
+    // ── 50% 上限截斷：單人不可拿超過獎池的 50%，多出來按比例分給其他人 ──
+    const cappedRatios = {};
+    const CAP = 0.5;
+    let overflow = 0;
+    for (const pid of participants) {
+      const r = dmgRatio(pid);
+      if (r > CAP) { cappedRatios[pid] = CAP; overflow += r - CAP; }
+      else { cappedRatios[pid] = r; }
+    }
+    // 將 overflow 按非上限者的原始比例重新分配
+    const nonCappedTotal = participants.reduce((s, pid) => s + (cappedRatios[pid] < CAP ? cappedRatios[pid] : 0), 0);
+    if (overflow > 0 && nonCappedTotal > 0) {
+      for (const pid of participants) {
+        if (cappedRatios[pid] < CAP) {
+          cappedRatios[pid] += overflow * (cappedRatios[pid] / nonCappedTotal);
+        }
+      }
+    }
+    const cappedDmgRatio = (pid) => cappedRatios[pid] ?? dmgRatio(pid);
+
     // 計算每人基本份額（不含充公下放）
     const baseShares = {};
     let confiscatedGold = 0;
     for (const pid of participants) {
-      const base = effectiveGoldReward * dmgRatio(pid);
+      const base = effectiveGoldReward * cappedDmgRatio(pid);
       const penalized = Math.round(base * levelPenalty(pid));
       baseShares[pid] = penalized;
       confiscatedGold += Math.round(base - base * levelPenalty(pid));
@@ -555,12 +575,14 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
 
     const myShare = Math.max(1, goldShares[discordId] || 1);
-    const pct = Math.round(dmgRatio(discordId) * 100);
+    const rawPct = Math.round(dmgRatio(discordId) * 100);
+    const capPct = Math.round(cappedDmgRatio(discordId) * 100);
+    const pct = rawPct !== capPct ? `${capPct}%（原${rawPct}%，已截斷）` : `${capPct}%`;
     const pen = levelPenalty(discordId);
     const penNote = pen < 1 ? `　⚠️ 等級懲罰 ${Math.round(pen * 100)}%` : "";
     const poolNote = entryFeePool > (monster.goldReward || 0) ? `（入場費加成）` : "";
     const bonusNote = pen >= 1 && confiscatedGold > 0 ? `　🎁 充公加成` : "";
-    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}%，共 ${effectiveGoldReward}${poolNote}）${penNote}${bonusNote}`);
+    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}，共 ${effectiveGoldReward}${poolNote}）${penNote}${bonusNote}`);
   }
 
   // ── EXP 依比例分配（含等級懲罰，充公下放）──

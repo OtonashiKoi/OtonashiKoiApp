@@ -688,8 +688,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       if (outcome === "win") {
         mHp = 0;
+        // 擊殺前先確保自己已在 participants（與未擊殺路徑一致）
+        const stateWithMe = {
+          ...state,
+          participants: [...new Set([...currentParticipants, discordId])],
+          damageMap: { ...(state.damageMap || {}), [discordId]: { name: displayName, damage: (state.damageMap?.[discordId]?.damage || 0) + totalDamage } }
+        };
         const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee };
-        rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state, totalDamage, zoneKey });
+        rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state: stateWithMe, totalDamage, zoneKey });
       } else {
         mHp = Math.max(0, mHp);
         let damageMap = {};
@@ -697,7 +703,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const freshState = await serviceContext.monsterService.getState(zoneKey);
           const prev = freshState.damageMap || {};
           damageMap = { ...prev, [discordId]: { name: displayName, damage: (prev[discordId]?.damage || 0) + totalDamage } };
-          await serviceContext.monsterService.saveState({ ...freshState, currentHp: mHp, damageMap }, zoneKey);
+          // 同時把自己加入 participants，讓後續擊殺結算能納入
+          const updatedParticipants = [...new Set([...(Array.isArray(freshState.participants) ? freshState.participants : []), discordId])];
+          await serviceContext.monsterService.saveState({ ...freshState, currentHp: mHp, damageMap, participants: updatedParticipants }, zoneKey);
         } catch (e) {
           await serviceContext.monsterService.saveState({ ...state, currentHp: mHp }, zoneKey);
         }
@@ -707,8 +715,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } else {
           rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
         }
+        rewardLines.push("⏳ 獎勵將在怪物被擊倒後依貢獻比例發放。");
+
         // update panel
-        _republishPanel(serviceContext, zoneKey, monster, mHp, currentParticipants.length, damageMap).catch(() => {});
+        _republishPanel(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
       }
 
       // 每週任務進度記錄（不阻塞回應）
