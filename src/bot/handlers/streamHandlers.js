@@ -120,6 +120,18 @@ async function handleCheckin(comment) {
       if (result.ok) {
         const grantAmount = result.checkin.rewardDetail.amount;
         console.log(`[Stream] 打卡成功並發放 ${grantAmount} gold 給 ${displayName}`);
+        // SSE 推送打卡獎勵到 web 端通知
+        try {
+          if (typeof serviceContext._pushRewardToPlayer === "function") {
+            serviceContext._pushRewardToPlayer(discordId, {
+              monsterName: "每日打卡",
+              gold: grantAmount,
+              exp: 0,
+              levelUps: 0,
+              drops: [],
+            });
+          }
+        } catch (_) {}
         // 每週任務：記錄打卡次數
         try {
           await serviceContext.weeklyQuestService.recordProgress(discordId, "checkin_count", 1);
