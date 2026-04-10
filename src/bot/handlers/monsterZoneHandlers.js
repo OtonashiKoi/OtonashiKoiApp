@@ -131,15 +131,15 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const itemList = droppedItems.join("、");
     const taunt = pickTaunt(kind, monsterName);
     if (kind === "bonus_10") {
-      await channel.send(`🎊 **10人加碼** <@${discordId}> 從 **${monsterName}** 打到 **${itemList}**　${taunt}`);
+      await channel.send(`🎊 **10人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**　${taunt}`);
     } else if (kind === "bonus_15") {
-      await channel.send(`🔥 **15人加碼** <@${discordId}> 從 **${monsterName}** 打到 **${itemList}**　${taunt}`);
+      await channel.send(`🔥 **15人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**　${taunt}`);
     } else if (kind === "bonus_20") {
-      await channel.send(`🌟 **20人加碼** <@${discordId}> 從 **${monsterName}** 打到 **${itemList}**　${taunt}`);
+      await channel.send(`🌟 **20人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**　${taunt}`);
     } else if (kind === "group") {
-      await channel.send(`🎁 <@${discordId}> 從 **${monsterName}** 打到 **${itemList}**　${taunt}`);
+      await channel.send(`🎁 ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**　${taunt}`);
     } else {
-      await channel.send(`⚔️ <@${discordId}> 擊倒 **${monsterName}** 打到 **${itemList}**　${taunt}`);
+      await channel.send(`⚔️ ${displayName} (<@${discordId}>) 擊倒 **${monsterName}** 打到 **${itemList}**　${taunt}`);
     }
   } catch (e) {
     // suppressed
