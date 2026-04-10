@@ -422,6 +422,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     if (discordId) {
       if (!sseClients.has(discordId)) sseClients.set(discordId, new Set());
       sseClients.get(discordId).add(client);
+      console.log(`[SSE] client connected: ${discordId}, total clients: ${sseClients.size}`);
+    } else {
+      console.warn("[SSE] client connected without valid token, reward events will not be received");
     }
 
     const timer = setInterval(() => {
