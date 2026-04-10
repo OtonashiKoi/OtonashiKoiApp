@@ -455,7 +455,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
   // 7. Poll notifications (fallback for Cloudflare/proxy that blocks SSE)
   router.get("/api/notifications/poll", requireAuth, (req, res) => {
-    const discordId = req.user.discordId;
+    const discordId = req.playerRecord.discordId;
     const q = notifQueue.get(discordId) || [];
     notifQueue.set(discordId, []); // 取走後清空
     res.json({ status: "ok", data: q });
