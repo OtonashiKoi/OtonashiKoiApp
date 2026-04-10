@@ -681,7 +681,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial);
 
       // 結算
-      const { handleMonsterKill, _republishPanel } = require("../../bot/handlers/monsterZoneHandlers");
+      const { handleMonsterKill, _republishPanel, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
       let rewardLines = [];
       let mHp = finalMonsterHp;
       const currentParticipants = Array.isArray(state.participants) ? state.participants : [];

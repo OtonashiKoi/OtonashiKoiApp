@@ -327,15 +327,20 @@ class ShopService {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
 
-    // 找目標裝備（背包或裝備槽）
+    // 找目標裝備（支援傳入 uuid, itemId 或 itemName）
     const inv = progress.inventory || [];
     let target = inv.find(e => e.uuid === targetUuid);
     let targetSlotKey = null;
     if (!target) {
-      // 嘗試從裝備槽找
+      // 嘗試從裝備槽找（支援 uuid / itemId / itemName）
       for (const [k, v] of Object.entries(progress.equipment || {})) {
-        if (v?.uuid === targetUuid) { target = v; targetSlotKey = k; break; }
+        if (!v) continue;
+        if (v.uuid === targetUuid || v.itemId === targetUuid || v.itemName === targetUuid) { target = v; targetSlotKey = k; break; }
       }
+    }
+    // 如果還找不到，嘗試用 itemId 或 itemName 在背包中匹配（容錯前端可能傳入 itemId）
+    if (!target) {
+      target = inv.find(e => e.itemId === targetUuid || e.itemName === targetUuid);
     }
     if (!target) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到目標裝備", 404);
     if (target.itemType !== "equipment") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標不是裝備", 400);
@@ -347,13 +352,17 @@ class ShopService {
     }
 
     // 找材料（必須在背包，同名，不能是目標本身）
-    const matIdx = inv.findIndex(e => e.uuid === materialUuid);
-    if (matIdx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到材料裝備（需在背包中）", 404);
+    let matIdx = inv.findIndex(e => e.uuid === materialUuid);
+    // 若找不到，嘗試用 itemId 或 itemName 匹配（容錯前端可能傳入 itemId 或 itemName）
+    if (matIdx === -1) {
+      matIdx = inv.findIndex(e => e.itemId === materialUuid || e.itemName === materialUuid);
+    }
+    if (matIdx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到材料裝備（需在背包中，支持 uuid/itemId/itemName）", 404);
     const material = inv[matIdx];
     if (material.itemName !== target.itemName) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `材料必須與目標同名（需要：${target.itemName}）`, 400);
     }
-    if (material.uuid === targetUuid) {
+    if (material.uuid === target.uuid || material.uuid === targetUuid) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標與材料不能是同一件裝備", 400);
     }
 

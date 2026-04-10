@@ -74,6 +74,12 @@ export const api = {
   equipItem: (uuid) => fetchWithAuth(`/me/inventory/equip/${uuid}`, { method: "POST" }),
   unequipItem: (slotKey) => fetchWithAuth(`/me/inventory/unequip/${slotKey}`, { method: "POST" }),
 
+  // 強化裝備：targetUuid（目標） + materialUuid（材料）
+  enhanceItem: (targetUuid, materialUuid) => fetchWithAuth(`/me/inventory/enhance`, {
+    method: "POST",
+    body: JSON.stringify({ targetUuid, materialUuid })
+  }),
+
   // ===== 商城系統 =====
   getShopItems: () => fetchWithAuth("/shop/items"),
   buyShopItem: (itemId) => fetchWithAuth(`/shop/buy/${itemId}`, { method: "POST" }),

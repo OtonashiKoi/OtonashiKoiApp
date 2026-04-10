@@ -822,6 +822,7 @@ module.exports = {
   isMonsterZoneButton,
   handleMonsterKill,
   _republishPanel,
+  MAX_ROUNDS,
   _broadcastBossSpawn,
   activeSessions
 };

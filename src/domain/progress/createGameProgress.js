@@ -1,5 +1,28 @@
+const { randomUUID } = require('crypto');
+
 function createGameProgress(playerId) {
   const now = new Date().toISOString();
+
+  // 預設給新手一把木製單手劍（與 server-reset 使用的模板對齊）
+  const woodenSword = {
+    uuid: randomUUID(),
+    itemId: "a56bd609-cf0b-4924-b724-891f221fc0b9",
+    itemName: "木製單手劍",
+    itemEffect: { type: "none", value: 0 },
+    itemType: "equipment",
+    imageUrl: null,
+    imageThumbnailUrl: null,
+    equipSlot: "weapon",
+    equipStats: { str: 3 },
+    weaponType: "sword_1h",
+    isTwoHanded: false,
+    grantedAt: now,
+    grantedBy: "createGameProgress",
+    atkStat: "str",
+    tier: "D",
+    enhanceLevel: 0
+  };
+
   return {
     playerId,
     level: 1,
@@ -20,7 +43,7 @@ function createGameProgress(playerId) {
       head_mid: null,
       head_low: null,
       armor: null,
-      weapon: null,
+      weapon: woodenSword,
       shield: null,
       garment: null,
       shoes: null,

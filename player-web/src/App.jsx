@@ -851,6 +851,9 @@ function InventoryTab() {
   const [inventory, setInventory] = useState(null);
   const [category, setCategory] = useState('all');
   const [activeItem, setActiveItem] = useState(null);
+  const [enhanceCandidates, setEnhanceCandidates] = useState(null);
+  const [selectedMaterial, setSelectedMaterial] = useState(null);
+  const [isEnhancing, setIsEnhancing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
 
   const loadInventory = () => {
@@ -988,6 +991,53 @@ function InventoryTab() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {activeItem.itemType === 'consumable' && (
                     <button className="btn" onClick={() => handleUse(activeItem)} style={{ background: 'var(--success)', borderColor: 'var(--success)' }}>使用</button>
+                  )}
+                  {activeItem.itemType === 'equipment' && (
+                    <div>
+                      <button className="btn" onClick={() => {
+                        // 找出同名且未裝備的同類作為材料
+                        const inv = inventory || [];
+                        const candidates = inv.filter(i => i.itemType === 'equipment' && i.itemName === activeItem.itemName && !i.isEquipped && i.uuid !== activeItem.uuid);
+                        setEnhanceCandidates(candidates);
+                        setSelectedMaterial(null);
+                      }} style={{ background: '#f0c857', borderColor: '#f0c857' }}>⚗️ 強化</button>
+
+                      {enhanceCandidates && (
+                        <div style={{ marginTop: '10px', textAlign: 'left' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>選擇強化材料：</div>
+                          {enhanceCandidates.length === 0 ? (
+                            <div style={{ fontSize: '12px', color: 'var(--muted)' }}>背包中沒有可作為材料的同名裝備。</div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {enhanceCandidates.map(c => (
+                                <div key={c.uuid} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                  <input type="radio" name="enhanceMat" checked={selectedMaterial?.uuid === c.uuid} onChange={() => setSelectedMaterial(c)} />
+                                  <div style={{ fontSize: '13px' }}>{c.itemName} <span style={{ color: 'var(--muted)', fontSize: '12px' }}>({c.uuid.slice(0,8)})</span></div>
+                                </div>
+                              ))}
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                <button className="btn" disabled={!selectedMaterial || isEnhancing} onClick={async () => {
+                                  if (!selectedMaterial) return;
+                                  if (!confirm(`確定用 ${selectedMaterial.itemName} 作為材料強化 ${activeItem.itemName} 嗎？`)) return;
+                                  try {
+                                    setIsEnhancing(true);
+                                    const res = await api.enhanceItem(activeItem.uuid, selectedMaterial.uuid);
+                                    alert(res.message || '強化完成');
+                                    setEnhanceCandidates(null);
+                                    setSelectedMaterial(null);
+                                    setActiveItem(null);
+                                    loadInventory();
+                                  } catch (err) {
+                                    alert('強化失敗: ' + err.message);
+                                  } finally { setIsEnhancing(false); }
+                                }} style={{ background: '#7ad3a0', borderColor: '#7ad3a0' }}>確認強化</button>
+                                <button className="btn" onClick={() => { setEnhanceCandidates(null); setSelectedMaterial(null); }} style={{ background: 'transparent', borderColor: '#ccc' }}>取消</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                   {activeItem.itemType === 'collectible' && activeItem.imageUrl && (
                     <button className="btn" onClick={() => setPreviewImage(getAssetUrl(activeItem.imageUrl))}>檢視圖片</button>
