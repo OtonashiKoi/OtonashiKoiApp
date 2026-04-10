@@ -343,9 +343,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
   // sseClients: Map<discordId, Set<{res}>>  (同一帳號可多個 tab)
   const sseClients = new Map();
+  // notifQueue: Map<discordId, Array> — poll fallback（Cloudflare 等 proxy 擋 SSE 時使用）
+  const notifQueue = new Map();
+
+  function enqueueNotif(discordId, summary) {
+    if (!notifQueue.has(discordId)) notifQueue.set(discordId, []);
+    const q = notifQueue.get(discordId);
+    q.push({ ...summary, id: Date.now(), time: new Date().toLocaleTimeString("zh-TW") });
+    if (q.length > 50) q.splice(0, q.length - 50); // 最多保留 50 筆
+  }
 
   // 供 monsterZoneHandlers 呼叫，推送參戰獎勵給指定玩家
   function pushRewardToPlayer(discordId, summary) {
+    // 1. 先存進 queue（poll fallback）
+    enqueueNotif(discordId, summary);
+    // 2. 嘗試 SSE 即時推（本機直連時有效）
     const clients = sseClients.get(discordId);
     if (!clients || clients.size === 0) return;
     const dataStr = `event: reward\ndata: ${JSON.stringify(summary)}\n\n`;
@@ -441,7 +453,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     });
   });
 
-  // 7. Get Chat History
+  // 7. Poll notifications (fallback for Cloudflare/proxy that blocks SSE)
+  router.get("/api/notifications/poll", requireAuth, (req, res) => {
+    const discordId = req.user.discordId;
+    const q = notifQueue.get(discordId) || [];
+    notifQueue.set(discordId, []); // 取走後清空
+    res.json({ status: "ok", data: q });
+  });
+
+  // 8. Get Chat History
   router.get("/api/chat/history", requireAuth, async (req, res, next) => {
     try {
       const layout = await serviceContext.channelLayoutRepository.get();

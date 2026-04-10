@@ -2231,23 +2231,35 @@ export default function App() {
     setIsAuthenticated(false);
   };
 
-  // 全域 SSE：監聽其他玩家擊殺怪物後的獎勵通知
+  // 全域 SSE + polling fallback：監聽獎勵通知
   useEffect(() => {
     if (!isAuthenticated) return;
     const toastTimerRef = { current: null };
-    const es = api.createChatStream(() => {}, {
-      onReward: (summary) => {
-        const notif = { ...summary, id: Date.now(), time: new Date().toLocaleTimeString() };
-        setNotifications(prev => [notif, ...prev].slice(0, 50));
-        setUnreadCount(c => c + 1);
-        setRewardToast(notif);
-        setRewardToastOpen(true);
-        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = setTimeout(() => setRewardToastOpen(false), 5000);
-      }
-    });
+
+    function handleReward(summary) {
+      const notif = { ...summary, id: Date.now(), time: new Date().toLocaleTimeString() };
+      setNotifications(prev => [notif, ...prev].slice(0, 50));
+      setUnreadCount(c => c + 1);
+      setRewardToast(notif);
+      setRewardToastOpen(true);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setRewardToastOpen(false), 5000);
+    }
+
+    // SSE（本機直連有效）
+    const es = api.createChatStream(() => {}, { onReward: handleReward });
+
+    // Polling fallback（每 8 秒，Cloudflare 等 proxy 環境用）
+    const pollInterval = setInterval(async () => {
+      try {
+        const items = await api.pollNotifications();
+        if (Array.isArray(items)) items.forEach(handleReward);
+      } catch (_) {}
+    }, 8000);
+
     return () => {
       es.close();
+      clearInterval(pollInterval);
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, [isAuthenticated]);
