@@ -4,7 +4,6 @@
 const express = require("express");
 const path = require("path");
 // 匯入服務層組合（包含所有 Service 與 Repository）
-const { createServiceContext } = require("../services/createServiceContext");
 const { isAppError } = require("../shared/errors");
 const { fail } = require("../shared/response");
 // 匯入各種路由模組
@@ -14,6 +13,7 @@ const { createAdminMonsterRoutes } = require("./routes/adminMonsterRoutes");
 const { createAdminWeeklyQuestRoutes } = require("./routes/adminWeeklyQuestRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
+const { serviceContext: sharedServiceContext } = require("../bot/runtimeContext");
 const cors = require("cors");
 const config = require("../config");
 
@@ -34,8 +34,8 @@ function createApiServer(discordClient) {
     credentials: true
   }));
   
-  // 建立服務層上下文，供路由使用
-  const serviceContext = createServiceContext();
+  // 使用共用的 serviceContext（與 bot runtimeContext 同一個實例）
+  const serviceContext = sharedServiceContext;
 
   // 解析 JSON 請求
   app.use(express.json());
