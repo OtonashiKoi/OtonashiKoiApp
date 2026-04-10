@@ -275,19 +275,19 @@ function buildTabRow(activeTab) {
 function buildPageRow(tab, page, totalPages) {
   const btns = [];
   btns.push(new ButtonBuilder()
-    .setCustomId(`backpack_tab:${tab}:${page - 1}`)
+    .setCustomId(`backpack_prev:${tab}:${page - 1}`)
     .setLabel("◀ 上一頁")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(page <= 0)
   );
   btns.push(new ButtonBuilder()
-    .setCustomId(`backpack_page_info`)
+    .setCustomId(`backpack_page_info:${tab}:${page}`)
     .setLabel(`${page + 1} / ${totalPages}`)
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(true)
   );
   btns.push(new ButtonBuilder()
-    .setCustomId(`backpack_tab:${tab}:${page + 1}`)
+    .setCustomId(`backpack_next:${tab}:${page + 1}`)
     .setLabel("下一頁 ▶")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(page >= totalPages - 1)
@@ -834,7 +834,14 @@ async function handleButton(interaction) {
     await handleBackpackTab(interaction, tab, page);
     return;
   }
-  if (id === "backpack_page_info") {
+  if (id.startsWith("backpack_prev:") || id.startsWith("backpack_next:")) {
+    const parts = id.split(":");
+    const tab = parts[1];
+    const page = parseInt(parts[2] ?? "0", 10) || 0;
+    await handleBackpackTab(interaction, tab, page);
+    return;
+  }
+  if (id.startsWith("backpack_page_info:")) {
     await interaction.deferUpdate().catch(() => {});
     return;
   }
