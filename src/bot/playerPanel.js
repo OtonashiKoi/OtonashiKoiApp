@@ -29,9 +29,9 @@ function formatTransactions(rows) {
 /** editReply wrapper：忽略 10008 Unknown Message（互動已過期或訊息被刪）*/
 async function safeEditReply(interaction, payload) {
   try {
-    return await safeEditReply(interaction, payload);
+    return await interaction.editReply(payload);
   } catch (err) {
-    if (err?.code === 10008) return; // interaction expired or message deleted — silently ignore
+    if (err?.code === 10008) return; // Unknown Message — 忽略
     throw err;
   }
 }
