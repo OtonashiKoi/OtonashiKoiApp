@@ -611,8 +611,8 @@ async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
     );
     await safeEditReply(interaction, msg);
 
-    // 廣播強化成功到 town_chat（只在 +2 或以上通知）
-    if ((result.enhanceLevel || 0) >= 2) {
+    // 廣播強化成功到 town_chat（只在 +3 通知）
+    if ((result.enhanceLevel || 0) >= 3) {
       _announceEnhance(interaction, result).catch(() => {});
     }
   } catch (err) {
