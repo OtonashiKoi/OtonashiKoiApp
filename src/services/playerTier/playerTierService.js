@@ -1,4 +1,4 @@
-const { TIER_RANKS } = require("../../adapters/json/playerTierRepository");
+const TIER_RANKS = ["E", "D", "C", "B", "A", "S", "SS"];
 
 class PlayerTierService {
   constructor(playerTierRepository) {

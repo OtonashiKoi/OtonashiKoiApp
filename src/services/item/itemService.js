@@ -5,12 +5,14 @@ const VALID_TIERS = ["D", "C", "B", "A"];
 
 // 武器種類與對應的攻擊屬性
 const VALID_WEAPON_TYPES = ["sword_1h", "sword_2h", "dagger", "mace_1h", "mace_2h", "axe_1h", "axe_2h", "staff_1h", "staff_2h", "bow"];
+const VALID_OFFHAND_TYPES = ["offhand_sword", "offhand_dagger", "offhand_mace"];
 const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "mace_2h", "axe_2h", "staff_2h", "bow"]);
 const WEAPON_ATK_STAT = {
   sword_1h: "str", sword_2h: "str",
   dagger:   "str", mace_1h: "str", mace_2h: "str", axe_1h: "str", axe_2h: "str",
   staff_1h: "int", staff_2h: "int",
-  bow:      "dex"
+  bow:      "dex",
+  offhand_sword: "str", offhand_dagger: "str", offhand_mace: "str"
 };
 
 class ItemService {
@@ -53,7 +55,8 @@ class ItemService {
     return VALID.includes(slot) ? slot : null;
   }
 
-  _normalizeWeaponType(t) {
+  _normalizeWeaponType(t, slot) {
+    if (slot === "shield") return VALID_OFFHAND_TYPES.includes(t) ? t : null;
     return VALID_WEAPON_TYPES.includes(t) ? t : null;
   }
 
@@ -64,7 +67,7 @@ class ItemService {
   async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats, weaponType, tier }) {
     const normalizedType = this._normalizeItemType(itemType);
     const normalizedSlot = normalizedType === "equipment" ? (this._normalizeEquipSlot(equipSlot) || "head_top") : null;
-    const resolvedWeaponType = normalizedSlot === "weapon" ? (this._normalizeWeaponType(weaponType) || null) : null;
+    const resolvedWeaponType = (normalizedSlot === "weapon" || normalizedSlot === "shield") ? (this._normalizeWeaponType(weaponType, normalizedSlot) || null) : null;
     const item = {
       id: crypto.randomUUID(),
       name: String(name || "").trim(),
@@ -98,7 +101,7 @@ class ItemService {
     if (fields.equipSlot !== undefined) updated.equipSlot = updated.itemType === "equipment" ? (this._normalizeEquipSlot(fields.equipSlot) || "head_top") : null;
     if (fields.equipStats !== undefined) updated.equipStats = updated.itemType === "equipment" ? (this._normalizeEquipStats(fields.equipStats) || null) : null;
     if (fields.weaponType !== undefined || fields.equipSlot !== undefined) {
-      const wt = updated.equipSlot === "weapon" ? (this._normalizeWeaponType(fields.weaponType ?? updated.weaponType) || null) : null;
+      const wt = (updated.equipSlot === "weapon" || updated.equipSlot === "shield") ? (this._normalizeWeaponType(fields.weaponType ?? updated.weaponType, updated.equipSlot) || null) : null;
       updated.weaponType = wt;
       updated.isTwoHanded = wt ? TWO_HANDED_WEAPON_TYPES.has(wt) : false;
       updated.atkStat = wt ? (WEAPON_ATK_STAT[wt] || "str") : null;

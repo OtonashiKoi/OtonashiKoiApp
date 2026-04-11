@@ -210,7 +210,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
-  // 3.5 Enhance Item
+  // 3.5 Sell Item
+  router.post("/api/me/inventory/sell/:uuid", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { uuid } = req.params;
+      const result = await serviceContext.shopService.sellItem(discordId, uuid);
+      res.json(ok(result));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 3.6 Enhance Item
   router.post("/api/me/inventory/enhance", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;

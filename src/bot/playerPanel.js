@@ -209,6 +209,8 @@ async function handleCheckinStatus(interaction) {
   );
 }
 
+const TIER_SELL_PRICE = { D: 10, C: 50, B: 100, A: 150 };
+
 /** 根據 itemType 產生背包 ActionRow，idx 為顯示編號（0-based） */
 function buildInventoryRow(e, idx) {
   const itemType = e.itemType || "consumable";
@@ -233,6 +235,16 @@ function buildInventoryRow(e, idx) {
         .setCustomId(`backpack_discard:${e.uuid}`)
         .setLabel(`${prefix} 丟棄`)
         .setStyle(ButtonStyle.Danger)
+    );
+  }
+  // 有 tier 的道具顯示販售按鈕
+  const sellPrice = e.tier ? TIER_SELL_PRICE[e.tier] : null;
+  if (sellPrice != null) {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_sell:${e.uuid}`)
+        .setLabel(`售 ${sellPrice}💰`)
+        .setStyle(ButtonStyle.Secondary)
     );
   }
   if (e.imageUrl) {
@@ -528,6 +540,26 @@ async function handleBackpackAction(interaction, action, uuid) {
   }
 }
 
+/** 販售道具 */
+async function handleBackpackSell(interaction, uuid) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const result = await serviceContext.shopService.sellItem(interaction.user.id, uuid);
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const inventory = progress?.inventory || [];
+    const tab = "item";
+    const msg = buildBackpackMessage(inventory, tab, `✅ 已販售 **${result.itemName}**，獲得 💰 ${result.price} 金幣。`);
+    await safeEditReply(interaction, msg);
+    if (!inventory.length) {
+      setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+    }
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 販售失敗：${err.message}`, components: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
+}
+
 /** 屬性重製確認 */
 async function handleRerollConfirm(interaction, uuid) {
   const serviceContext = getServiceContext();
@@ -718,8 +750,8 @@ function buildWeeklyQuestsMessage(progressList, wl) {
 async function handleWeeklyQuests(interaction) {
   const serviceContext = getServiceContext();
   const discordId = interaction.user.id;
-  const { WeeklyQuestService, currentWeekLabel } = require("../services/weeklyQuest/weeklyQuestService");
-  const wqs = serviceContext.weeklyQuestService || new WeeklyQuestService();
+  const { currentWeekLabel } = require("../services/weeklyQuest/weeklyQuestService");
+  const wqs = serviceContext.weeklyQuestService;
 
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -746,8 +778,8 @@ async function handleWeeklyQuests(interaction) {
 async function handleWeeklyQuestClaim(interaction, questId) {
   const serviceContext = getServiceContext();
   const discordId = interaction.user.id;
-  const { WeeklyQuestService, currentWeekLabel } = require("../services/weeklyQuest/weeklyQuestService");
-  const wqs = serviceContext.weeklyQuestService || new WeeklyQuestService();
+  const { currentWeekLabel } = require("../services/weeklyQuest/weeklyQuestService");
+  const wqs = serviceContext.weeklyQuestService;
 
   try {
     await interaction.deferUpdate();
@@ -782,13 +814,28 @@ async function handleWeeklyQuestClaim(interaction, questId) {
       try {
         const item = await serviceContext.itemRepository.findById(reward.rewardItemId);
         if (item) {
-          const { updateStore } = require("../adapters/json/jsonStore");
-          await updateStore((store) => {
-            if (!store.players[discordId]) store.players[discordId] = {};
-            if (!Array.isArray(store.players[discordId].inventory)) store.players[discordId].inventory = [];
-            store.players[discordId].inventory.push({ itemId: item.id, obtainedAt: new Date().toISOString() });
-            return store;
-          });
+          const prog = await serviceContext.progressRepository.findByPlayerId(discordId);
+          if (prog) {
+            if (!Array.isArray(prog.inventory)) prog.inventory = [];
+            prog.inventory.push({
+              uuid: crypto.randomUUID(),
+              itemId: item.id,
+              itemName: item.name,
+              itemEffect: item.effect || { type: "none", value: 0 },
+              itemType: item.itemType || "consumable",
+              imageUrl: item.imageUrl || null,
+              imageThumbnailUrl: item.imageThumbnailUrl || null,
+              equipSlot: item.equipSlot || null,
+              equipStats: item.equipStats || null,
+              weaponType: item.weaponType || null,
+              isTwoHanded: item.isTwoHanded || false,
+              tier: item.tier || null,
+              source: "weekly_quest",
+              obtainedAt: new Date().toISOString()
+            });
+            prog.updatedAt = new Date().toISOString();
+            await serviceContext.progressRepository.save(prog);
+          }
           reward.rewardItemName = item.name;
         }
       } catch (_) {}
@@ -853,6 +900,10 @@ async function handleButton(interaction) {
     const action = id.startsWith("backpack_use:") ? "use" : "discard";
     const uuid = id.slice(id.indexOf(":") + 1);
     await handleBackpackAction(interaction, action, uuid);
+    return;
+  }
+  if (id.startsWith("backpack_sell:")) {
+    await handleBackpackSell(interaction, id.slice("backpack_sell:".length));
     return;
   }
   if (id === BUTTON_IDS.enhance) {

@@ -116,6 +116,37 @@ function pickTaunt(kind, monsterName) {
   return pool[Math.floor(Math.random() * pool.length)](monsterName);
 }
 
+// 等級里程碑廣播（10 / 15 等）
+const LEVEL_MILESTONES = new Set([10, 15]);
+async function _announceLevelMilestone(sc, discordId, displayName, prevLevel, newLevel) {
+  try {
+    const hit = [];
+    for (let lv = prevLevel + 1; lv <= newLevel; lv++) {
+      if (LEVEL_MILESTONES.has(lv)) hit.push(lv);
+    }
+    if (hit.length === 0) return;
+
+    const { getBotClient } = require("../runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady()) return;
+    const layout = await sc.channelLayoutRepository.get();
+    const allBindings = layout?.discord?.bindings || [];
+    const binding = allBindings.find((b) => b.featureKey === "town_chat") ||
+                    allBindings.find((b) => b.featureKey === "monster_zone");
+    if (!binding?.channelId) return;
+    const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+    if (!channel?.isTextBased?.()) return;
+
+    for (const lv of hit) {
+      if (lv === 10) {
+        await channel.send(`🎉 恭喜 <@${discordId}> **${displayName}** 升上 **Lv.10**！踏入中級冒險者的行列！⚔️`);
+      } else if (lv === 15) {
+        await channel.send(`🌟 恭喜 <@${discordId}> **${displayName}** 達到 **Lv.15**！精英冒險者降臨！🔥`);
+      }
+    }
+  } catch (_) {}
+}
+
 async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, kind = "fight") {
   try {
     const { getBotClient } = require("../runtimeContext");
@@ -327,7 +358,7 @@ async function handleEnterBattle(interaction) {
     const participants = Array.isArray(state.participants) ? state.participants : [];
     if (!participants.includes(discordId)) {
       const newParticipants = [...participants, discordId];
-      await sc.monsterService.saveState({ ...state, currentHp: monsterHp, participants: newParticipants }, zoneKey);
+      await sc.monsterService.saveState({ ...state, currentHp: monsterHp, participants: newParticipants, lastHitAt: new Date().toISOString() }, zoneKey);
       const layout = await sc.channelLayoutRepository.get();
       const featureKey = zoneKey === "mid" ? "monster_zone_mid" : "monster_zone";
       const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey);
@@ -428,9 +459,9 @@ async function handleStartFight(interaction) {
         const freshState = await sc.monsterService.getState(zoneKey);
         const prev = freshState.damageMap || {};
         damageMap = { ...prev, [discordId]: { name: displayName, damage: (prev[discordId]?.damage || 0) + totalDamage } };
-        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap }, zoneKey);
+        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap, lastHitAt: new Date().toISOString() }, zoneKey);
       } catch (e) {
-        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp }, zoneKey);
+        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp, lastHitAt: new Date().toISOString() }, zoneKey);
       }
       embedTitle = "💀 戰鬥失敗";
       embedColor = 0x555555;
@@ -445,9 +476,9 @@ async function handleStartFight(interaction) {
         const freshState = await sc.monsterService.getState(zoneKey);
         const prev = freshState.damageMap || {};
         damageMap = { ...prev, [discordId]: { name: displayName, damage: (prev[discordId]?.damage || 0) + totalDamage } };
-        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap }, zoneKey);
+        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap, lastHitAt: new Date().toISOString() }, zoneKey);
       } catch (e) {
-        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp }, zoneKey);
+        await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp, lastHitAt: new Date().toISOString() }, zoneKey);
       }
       embedTitle = "⏸️ 戰鬥超時";
       embedColor = 0x888888;
@@ -677,6 +708,11 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
             perPidRewards[pid].newLevel = expResult.progress?.level ?? 0;
           }
         }
+        if (expResult.levelUps > 0) {
+          const prevLevel = (expResult.progress?.level ?? 0) - expResult.levelUps;
+          const pidName = pid === discordId ? displayName : (mergedDmg[pid]?.name || pid);
+          _announceLevelMilestone(sc, pid, pidName, prevLevel, expResult.progress.level).catch(() => {});
+        }
         if (pid === discordId && expResult.levelUps > 0) {
           killerLvLine = ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}`;
         }
@@ -881,6 +917,92 @@ async function handleMonsterZoneButton(interaction) {
   return true;
 }
 
+// ──────────────────────────────────────────────
+// 閒置自動換怪
+// ──────────────────────────────────────────────
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 分鐘
+const IDLE_TAUNTS = [
+  (name) => `😴 ${name} 等到睡著了，換下一位！`,
+  (name) => `🥱 沒人敢打 **${name}**？膽小鬼！換一隻好了。`,
+  (name) => `💤 **${name}** 打哈欠：「有沒有勇者？算了自己走了。」`,
+  (name) => `🚶 ${name} 閒得發慌，自己溜了。`,
+  (name) => `😤 ${name} 大喊：「你們是木頭嗎！？」然後憤而離去。`,
+  (name) => `🫠 **${name}** 等得花都謝了，換下一隻吧。`,
+  (name) => `👻 ${name} 消失了⋯沒人知道牠去哪。`,
+];
+
+async function _doIdleRotate(sc, zoneKey) {
+  try {
+    const state = await sc.monsterService.getState(zoneKey);
+    const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
+    const monster = allMonsters.find((m) => m.seq === state.activeMonsterSeq);
+    if (!monster) return;
+
+    // 選下一隻（加權隨機，排除當前）
+    const pool = allMonsters.filter(m => m.id !== monster.id || allMonsters.length === 1);
+    const totalWeight = pool.reduce((s, m) => s + (m.spawnRate || 10), 0);
+    let r = Math.random() * totalWeight;
+    let next = pool[pool.length - 1];
+    for (const m of pool) { r -= (m.spawnRate || 10); if (r <= 0) { next = m; break; } }
+
+    const newState = {
+      ...state,
+      currentHp: next.calc.maxHp,
+      activeMonsterSeq: next.seq,
+      participants: [],
+      damageMap: {},
+      killClaimedSeq: null,
+      lastHitAt: new Date().toISOString(),
+    };
+    await sc.monsterService.saveState(newState, zoneKey);
+    _republishPanel(sc, zoneKey, next, next.calc.maxHp, 0, {}).catch(() => {});
+    if (next.isBoss) _broadcastBossSpawn(sc, zoneKey, next).catch(() => {});
+
+    // 嗆聲廣播
+    const { getBotClient } = require("../runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady()) return;
+    const layout = await sc.channelLayoutRepository.get();
+    const bindings = layout?.discord?.bindings || [];
+    const townBinding = bindings.find((b) => b.featureKey === "town_chat");
+    const zoneFeature = zoneKey === "mid" ? "monster_zone_mid" : "monster_zone";
+    const fallback = bindings.find((b) => b.featureKey === zoneFeature);
+    const channelId = townBinding?.channelId || fallback?.channelId;
+    if (!channelId) return;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel?.isTextBased?.()) return;
+    const taunt = IDLE_TAUNTS[Math.floor(Math.random() * IDLE_TAUNTS.length)];
+    await channel.send(taunt(monster.name));
+    console.log(`[IdleRotate] zone=${zoneKey} rotated from ${monster.name} → ${next.name}`);
+  } catch (e) {
+    console.error(`[IdleRotate] zone=${zoneKey} error:`, e.message);
+  }
+}
+
+async function checkIdleRotate() {
+  const sc = getServiceContext();
+  const now = Date.now();
+  for (const zoneKey of ["normal", "mid"]) {
+    try {
+      const state = await sc.monsterService.getState(zoneKey);
+      const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
+      if (!allMonsters.length) continue;
+      // 有進行中戰鬥不換
+      const hasActive = [...activeSessions.values()].some(s => s.zoneKey === zoneKey);
+      if (hasActive) continue;
+      const lastHit = state.lastHitAt ? new Date(state.lastHitAt).getTime() : 0;
+      if (now - lastHit >= IDLE_TIMEOUT_MS) {
+        await _doIdleRotate(sc, zoneKey);
+      }
+    } catch (_) {}
+  }
+}
+
+function startIdleRotateTimer() {
+  setInterval(checkIdleRotate, 60 * 1000); // 每分鐘檢查一次
+  console.log("[IdleRotate] timer started (10min idle → auto rotate)");
+}
+
 module.exports = {
   handleMonsterZoneButton,
   isMonsterZoneButton,
@@ -888,5 +1010,6 @@ module.exports = {
   _republishPanel,
   MAX_ROUNDS,
   _broadcastBossSpawn,
-  activeSessions
+  activeSessions,
+  startIdleRotateTimer
 };

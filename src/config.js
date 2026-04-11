@@ -34,8 +34,6 @@ module.exports = {
   },
   // 資料儲存設定
   storage: {
-    driver: process.env.STORAGE_DRIVER || "json", // 儲存驅動（json 或 mongo）
-    jsonDataPath: path.resolve(process.env.JSON_DATA_PATH || "./data/game.json"), // JSON 檔案路徑
     mongoUri: process.env.MONGODB_URI || "", // MongoDB 連線字串
     mongoDbName: process.env.MONGODB_DB_NAME || "equipment_game" // MongoDB 資料庫名稱
   },

@@ -783,7 +783,16 @@ function ProfileTab({ onOpenSettings }) {
             <div className="modal-header" style={{ marginBottom: '20px' }}>
               <div>
                 <h3 style={{ margin: 0 }}>部位操作：{swappingSlot.label}</h3>
-                {equipment[swappingSlot.key] && <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--accent)' }}>目前裝備: {equipment[swappingSlot.key].itemName}</p>}
+                {equipment[swappingSlot.key] && (
+                  <div style={{ marginTop: '4px' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: 'var(--accent)' }}>目前裝備: {equipment[swappingSlot.key].itemName}</p>
+                    {equipment[swappingSlot.key].equipStats && Object.values(equipment[swappingSlot.key].equipStats).some(v => v) && (
+                      <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--muted)' }}>
+                        {Object.entries(equipment[swappingSlot.key].equipStats).filter(([, v]) => v).map(([k, v]) => `${k.toUpperCase()} +${v}`).join('　')}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               <button className="close-btn" onClick={() => { setSwappingSlot(null); setEnhanceCandidates(null); setSelectedMaterial(null); }}>&times;</button>
             </div>

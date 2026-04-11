@@ -23,12 +23,14 @@
     "pm2:status": "npx pm2 status",
     "home": "node scripts/launch-home.js",
     "auto-home": "node scripts/auto-home.js",
-    "go-live": "node scripts/go-live.js"
+    "go-live": "node scripts/go-live.js",
+    "grant:100": "node ./scripts/grant-100-gold-all.js"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "cloudinary": "^2.9.0",
     "cors": "^2.8.6",
     "discord.js": "^14.19.3",
     "dotenv": "^16.6.1",

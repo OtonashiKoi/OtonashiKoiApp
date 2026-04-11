@@ -204,6 +204,43 @@ function createMongoRepositories() {
         return normalized;
       }
     },
+    weeklyQuestRepository: {
+      async listQuests() {
+        return (await collection("weeklyQuests")).find({}).sort({ createdAt: 1 }).toArray();
+      },
+      async findQuestById(id) {
+        return (await collection("weeklyQuests")).findOne({ id }) || null;
+      },
+      async saveQuest(quest) {
+        await (await collection("weeklyQuests")).updateOne(
+          { id: quest.id },
+          { $set: quest },
+          { upsert: true }
+        );
+        return quest;
+      },
+      async deleteQuest(id) {
+        await (await collection("weeklyQuests")).deleteOne({ id });
+      },
+      // weekLabel: "2026-W15"
+      async getPlayerProgress(discordId, weekLabel) {
+        const row = await (await collection("weeklyQuestProgress")).findOne({ discordId, weekLabel });
+        return row?.progress || {};
+      },
+      async savePlayerProgress(discordId, weekLabel, progress) {
+        await (await collection("weeklyQuestProgress")).updateOne(
+          { discordId, weekLabel },
+          { $set: { discordId, weekLabel, progress, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+      },
+      async getAllProgressByWeek(weekLabel) {
+        const rows = await (await collection("weeklyQuestProgress")).find({ weekLabel }).toArray();
+        const result = {};
+        for (const row of rows) result[row.discordId] = row.progress || {};
+        return result;
+      }
+    },
     monsterRepository: {
       async findAll() {
         const monsters = await (await collection("monsters")).find({}).toArray();

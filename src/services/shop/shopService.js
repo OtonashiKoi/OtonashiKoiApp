@@ -1,6 +1,9 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 
+// 各 tier 裝備販售價格
+const TIER_SELL_PRICE = { D: 10, C: 50, B: 100, A: 150 };
+
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier"];
 
 class ShopService {
@@ -55,6 +58,7 @@ class ShopService {
       equipStats: libraryItem.itemType === "equipment" ? (libraryItem.equipStats || null) : null,
       weaponType: libraryItem.itemType === "equipment" ? (libraryItem.weaponType || null) : null,
       isTwoHanded: libraryItem.itemType === "equipment" ? (libraryItem.isTwoHanded || false) : false,
+      tier: libraryItem.tier || null,
       createdAt: new Date().toISOString()
     };
     return this.shopRepository.save(item);
@@ -78,6 +82,7 @@ class ShopService {
       updated.equipStats = libraryItem.itemType === "equipment" ? (libraryItem.equipStats || null) : null;
       updated.weaponType = libraryItem.itemType === "equipment" ? (libraryItem.weaponType || null) : null;
       updated.isTwoHanded = libraryItem.itemType === "equipment" ? (libraryItem.isTwoHanded || false) : false;
+      updated.tier = libraryItem.tier || null;
     }
     if (fields.price !== undefined) updated.price = Math.max(0, Number(fields.price) || 0);
     if (fields.currency !== undefined && ["gold", "diamond"].includes(fields.currency)) updated.currency = fields.currency;
@@ -174,7 +179,7 @@ class ShopService {
       }
       progress.inventory.push({
         uuid: crypto.randomUUID(),
-        itemId: item.id,
+        itemId: item.itemLibraryId || item.id,
         itemName: item.name,
         itemEffect: item.effect || { type: "none", value: 0 },
         itemType: item.itemType || "consumable",
@@ -184,6 +189,7 @@ class ShopService {
         equipStats: item.equipStats || null,
         weaponType: item.weaponType || null,
         isTwoHanded: item.isTwoHanded || false,
+        tier: item.tier || null,
         purchasedAt: new Date().toISOString()
       });
       progress.updatedAt = new Date().toISOString();
@@ -247,6 +253,31 @@ class ShopService {
     }
 
     return { itemName: entry.itemName, effectDesc };
+  }
+
+  async sellItem(discordId, entryUuid) {
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+    const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
+    if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+    const entry = progress.inventory[idx];
+    const tier = entry.tier || null;
+    const price = TIER_SELL_PRICE[tier] ?? null;
+    if (price === null) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品沒有設定階級，無法販售", 400);
+    // 從背包移除
+    progress.inventory.splice(idx, 1);
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+    // 給金幣
+    await this.rewardService.grantCurrency({
+      discordId,
+      displayName: discordId,
+      currencyType: "gold",
+      amount: price,
+      source: CURRENCY_SOURCES.ITEM_SELL,
+      operator: "shop:sell-item"
+    });
+    return { itemName: entry.itemName, tier, price };
   }
 
   async discardItem(discordId, entryUuid) {

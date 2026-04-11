@@ -125,13 +125,28 @@ function createAdminWeeklyQuestRoutes(serviceContext) {
         try {
           const item = await serviceContext.itemRepository.findById(reward.rewardItemId);
           if (item) {
-            const { updateStore } = require("../../adapters/json/jsonStore");
-            await updateStore((store) => {
-              if (!store.players[discordId]) store.players[discordId] = {};
-              if (!Array.isArray(store.players[discordId].inventory)) store.players[discordId].inventory = [];
-              store.players[discordId].inventory.push({ itemId: item.id, obtainedAt: new Date().toISOString() });
-              return store;
-            });
+            const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+            if (progress) {
+              if (!Array.isArray(progress.inventory)) progress.inventory = [];
+              progress.inventory.push({
+                uuid: crypto.randomUUID(),
+                itemId: item.id,
+                itemName: item.name,
+                itemEffect: item.effect || { type: "none", value: 0 },
+                itemType: item.itemType || "consumable",
+                imageUrl: item.imageUrl || null,
+                imageThumbnailUrl: item.imageThumbnailUrl || null,
+                equipSlot: item.equipSlot || null,
+                equipStats: item.equipStats || null,
+                weaponType: item.weaponType || null,
+                isTwoHanded: item.isTwoHanded || false,
+                tier: item.tier || null,
+                source: "weekly_quest",
+                obtainedAt: new Date().toISOString()
+              });
+              progress.updatedAt = new Date().toISOString();
+              await serviceContext.progressRepository.save(progress);
+            }
             reward.rewardItemName = item.name;
           }
         } catch (_) {}

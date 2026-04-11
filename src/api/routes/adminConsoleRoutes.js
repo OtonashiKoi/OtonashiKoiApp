@@ -1,12 +1,14 @@
 const path = require("path");
 const { Router } = require("express");
 const multer = require("multer");
+const os = require("os");
 const config = require("../../config");
 const { fail, ok } = require("../../shared/response");
+const { uploadImage } = require("../../shared/cloudinaryUpload");
 
-// multer 設定：圖片存到 uploads/items/，限制 25MB，只接受圖片
+// multer 暫存到系統 temp 目錄，上傳後由 Cloudinary helper 清除
 const upload = multer({
-  dest: path.resolve(__dirname, "../../web/public/uploads/items"),
+  dest: os.tmpdir(),
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     if (!file.mimetype.startsWith("image/")) {
@@ -324,26 +326,7 @@ function createAdminConsoleRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "請選擇要上傳的圖片"));
         return;
       }
-      // multer dest 模式存的是無副檔名的 buffer 檔，重新命名加副檔名
-      const fsp = require("fs/promises");
-      const sharp = require("sharp");
-      const ext = req.file.mimetype === "image/png" ? ".png"
-        : req.file.mimetype === "image/gif" ? ".gif"
-        : req.file.mimetype === "image/webp" ? ".webp"
-        : ".jpg";
-      const newName = req.file.filename + ext;
-      const oldPath = req.file.path;
-      const newPath = oldPath + ext;
-      await fsp.rename(oldPath, newPath);
-      const imageUrl = `/uploads/items/${newName}`;
-      // 生成低解析度縮圖（最大 120x120，保持比例，WebP quality 35）
-      const thumbName = req.file.filename + "_thumb.webp";
-      const thumbPath = path.resolve(__dirname, "../../web/public/uploads/items", thumbName);
-      await sharp(newPath)
-        .resize({ width: 120, height: 120, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 35 })
-        .toFile(thumbPath);
-      const imageThumbnailUrl = `/uploads/items/${thumbName}`;
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "items");
       const item = await serviceContext.itemService.updateItem(req.params.id, { imageUrl, imageThumbnailUrl });
       res.json(ok({ imageUrl, imageThumbnailUrl, item }, "image uploaded"));
     } catch (error) {
@@ -377,23 +360,7 @@ function createAdminConsoleRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "請選擇要上傳的圖片"));
         return;
       }
-      const fsp = require("fs/promises");
-      const sharp = require("sharp");
-      const ext = req.file.mimetype === "image/png" ? ".png"
-        : req.file.mimetype === "image/gif" ? ".gif"
-        : req.file.mimetype === "image/webp" ? ".webp"
-        : ".jpg";
-      const newName = req.file.filename + ext;
-      const newPath = req.file.path + ext;
-      await fsp.rename(req.file.path, newPath);
-      const imageUrl = `/uploads/items/${newName}`;
-      const thumbName = req.file.filename + "_thumb.webp";
-      const thumbPath = path.resolve(__dirname, "../../web/public/uploads/items", thumbName);
-      await sharp(newPath)
-        .resize({ width: 120, height: 120, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 35 })
-        .toFile(thumbPath);
-      const imageThumbnailUrl = `/uploads/items/${thumbName}`;
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "items");
       const item = await serviceContext.shopService.updateItem(req.params.id, { imageUrl, imageThumbnailUrl });
       res.json(ok({ imageUrl, imageThumbnailUrl, item }, "image uploaded"));
     } catch (error) {

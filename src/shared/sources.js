@@ -9,7 +9,8 @@ const CURRENCY_SOURCES = {
   SHOP_PURCHASE: "shop:purchase",                   // 金幣商店購買
   ITEM_USE: "item:use",                             // 使用道具效果
   MONSTER_ENTRY_FEE: "monster:entry-fee",           // 放怪區：入場費扣除
-  MONSTER_KILL_REWARD: "monster:kill-reward"        // 放怪區：擊殺金幣獎勵
+  MONSTER_KILL_REWARD: "monster:kill-reward",       // 放怪區：擊殺金幣獎勵
+  ITEM_SELL: "item:sell"                             // 玩家販售道具
 };
 
 // 經驗值來源類型

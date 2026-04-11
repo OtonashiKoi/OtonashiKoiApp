@@ -71,6 +71,7 @@ export const api = {
   // 道具操作
   useItem: (uuid) => fetchWithAuth(`/me/inventory/use/${uuid}`, { method: "POST" }),
   discardItem: (uuid) => fetchWithAuth(`/me/inventory/discard/${uuid}`, { method: "POST" }),
+  sellItem: (uuid) => fetchWithAuth(`/me/inventory/sell/${uuid}`, { method: "POST" }),
   equipItem: (uuid) => fetchWithAuth(`/me/inventory/equip/${uuid}`, { method: "POST" }),
   unequipItem: (slotKey) => fetchWithAuth(`/me/inventory/unequip/${slotKey}`, { method: "POST" }),
 

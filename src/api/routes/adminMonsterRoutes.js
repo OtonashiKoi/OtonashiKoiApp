@@ -1,10 +1,11 @@
-const path = require("path");
 const { Router } = require("express");
 const multer = require("multer");
+const os = require("os");
 const { ok, fail } = require("../../shared/response");
+const { uploadImage } = require("../../shared/cloudinaryUpload");
 
 const upload = multer({
-  dest: path.resolve(__dirname, "../../web/public/uploads/monsters"),
+  dest: os.tmpdir(),
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     if (!file.mimetype.startsWith("image/")) return cb(new Error("只允許上傳圖片檔案"));
@@ -125,23 +126,7 @@ function createAdminMonsterRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "請選擇要上傳的圖片"));
         return;
       }
-      const fsp = require("fs/promises");
-      const sharp = require("sharp");
-      const ext = req.file.mimetype === "image/png" ? ".png"
-        : req.file.mimetype === "image/gif" ? ".gif"
-        : req.file.mimetype === "image/webp" ? ".webp"
-        : ".jpg";
-      const newName = req.file.filename + ext;
-      const newPath = req.file.path + ext;
-      await fsp.rename(req.file.path, newPath);
-      const imageUrl = `/uploads/monsters/${newName}`;
-      const thumbName = req.file.filename + "_thumb.webp";
-      const thumbPath = path.resolve(__dirname, "../../web/public/uploads/monsters", thumbName);
-      await sharp(newPath)
-        .resize({ width: 120, height: 120, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 35 })
-        .toFile(thumbPath);
-      const imageThumbnailUrl = `/uploads/monsters/${thumbName}`;
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "monsters");
       const monster = await serviceContext.monsterService.updateMonster(req.params.id, { imageUrl, imageThumbnailUrl });
       res.json(ok({ imageUrl, imageThumbnailUrl, monster }, "image uploaded"));
     } catch (error) {

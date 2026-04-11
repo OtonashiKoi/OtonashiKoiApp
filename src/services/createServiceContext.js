@@ -33,7 +33,7 @@ function createServiceContext() {
   const itemService = new ItemService(repositories.itemRepository, repositories.progressRepository);
   const playerTierService = new PlayerTierService(repositories.playerTierRepository);
   const monsterService = new MonsterService(repositories.monsterRepository, repositories.itemRepository);
-  const weeklyQuestService = new WeeklyQuestService();
+  const weeklyQuestService = new WeeklyQuestService(repositories.weeklyQuestRepository);
   const shopService = new ShopService(repositories.shopRepository, playerService, rewardService, repositories.progressRepository, progressService, repositories.itemRepository, playerTierService);
   const transactionService = new TransactionService(playerService, repositories.transactionRepository);
   const adminService = new AdminService(
