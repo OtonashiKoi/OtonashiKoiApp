@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
-const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handleWeeklyQuests, handleEnhanceConfirm, handleEnhanceSelect } = require("./playerPanel");
+const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handleWeeklyQuests, handleEnhanceConfirm, handleEnhanceSelect, handleModal: handlePlayerPanelModal } = require("./playerPanel");
 const { WEEKLY_QUEST_OPEN_ID } = require("./weeklyQuestView");
 const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
 const { serviceContext, getBotClient } = require("./runtimeContext");
@@ -167,6 +167,10 @@ async function handleSelectMenu(interaction) {
 }
 
 async function handleModal(interaction) {
+  if (await handlePlayerPanelModal(interaction)) {
+    return;
+  }
+
   if (interaction.customId === "player-query-modal") {
     const discordId = interaction.fields.getTextInputValue("player-discord-id").trim();
 

@@ -1,4 +1,4 @@
-const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder } = require("discord.js");
+const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
 const path = require("path");
 const fs = require("fs");
 const { BUTTON_IDS, createPlayerPanelMessage } = require("./playerPanelView");
@@ -8,6 +8,7 @@ const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SL
 const { calcPlayerStats } = require("../shared/combatStats");
 
 const AUTO_DELETE_MS = 60_000;
+const ACTIVE_REPLY_BY_USER = new Map();
 
 function getServiceContext() {
   return require("./runtimeContext").serviceContext;
@@ -37,9 +38,40 @@ async function safeEditReply(interaction, payload) {
 }
 
 /** 回覆 ephemeral 訊息，並在 AUTO_DELETE_MS 後自動刪除 */
+async function clearActiveReply(interaction) {
+  const userId = interaction?.user?.id;
+  if (!userId) return;
+  const previous = ACTIVE_REPLY_BY_USER.get(userId);
+  if (!previous) return;
+  if (previous.timeoutId) clearTimeout(previous.timeoutId);
+  try {
+    await previous.webhook.deleteMessage(previous.messageId);
+  } catch (_) {}
+  ACTIVE_REPLY_BY_USER.delete(userId);
+}
+
+async function rememberActiveReply(interaction, ttlMs = AUTO_DELETE_MS) {
+  const userId = interaction?.user?.id;
+  if (!userId) return;
+  try {
+    const msg = await interaction.fetchReply();
+    const timeoutId = setTimeout(() => {
+      interaction.webhook.deleteMessage(msg.id).catch(() => {});
+      const cur = ACTIVE_REPLY_BY_USER.get(userId);
+      if (cur?.messageId === msg.id) ACTIVE_REPLY_BY_USER.delete(userId);
+    }, ttlMs);
+    ACTIVE_REPLY_BY_USER.set(userId, {
+      webhook: interaction.webhook,
+      messageId: msg.id,
+      timeoutId
+    });
+  } catch (_) {}
+}
+
 async function replyAndAutoDelete(interaction, content) {
+  await clearActiveReply(interaction);
   await interaction.reply({ content, flags: MessageFlags.Ephemeral });
-  setTimeout(() => interaction.deleteReply().catch(() => {}), AUTO_DELETE_MS);
+  await rememberActiveReply(interaction, AUTO_DELETE_MS);
 }
 
 async function replyPlayerBlocked(interaction) {
@@ -446,10 +478,9 @@ function buildPageRow(tab, page, totalPages) {
     .setDisabled(page <= 0)
   );
   btns.push(new ButtonBuilder()
-    .setCustomId(`backpack_page_info:${tab}:${page}`)
+    .setCustomId(`backpack_page_input:${tab}:${page}:${totalPages}`)
     .setLabel(`${page + 1} / ${totalPages}`)
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(true)
+    .setStyle(ButtonStyle.Primary)
   );
   btns.push(new ButtonBuilder()
     .setCustomId(`backpack_next:${tab}:${page + 1}`)
@@ -566,12 +597,14 @@ async function handleBackpack(interaction) {
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
   const msg = buildBackpackMessage(inventory, "item");
+  await clearActiveReply(interaction);
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
-  setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);
+  await rememberActiveReply(interaction, 60_000);
 }
 
 async function handleEquipmentView(interaction) {
   const serviceContext = getServiceContext();
+  await clearActiveReply(interaction);
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const [progress, player, wallet] = await Promise.all([
@@ -622,7 +655,7 @@ async function handleEquipmentView(interaction) {
   }
 
   await safeEditReply(interaction, payload);
-  setTimeout(() => interaction.deleteReply().catch(() => {}), 120_000);
+  await rememberActiveReply(interaction, 120_000);
 }
 
 async function handleEquipAction(interaction, action, value) {
@@ -646,6 +679,7 @@ async function handleEquipAction(interaction, action, value) {
 
 async function handleBackpackView(interaction, uuid) {
   const serviceContext = getServiceContext();
+  await clearActiveReply(interaction);
   // 先 defer，給後續 I/O 最多 15 分鐘
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
@@ -666,7 +700,7 @@ async function handleBackpackView(interaction, uuid) {
       content: `🖼️ **${entry.itemName}**\n${entry.source === "monster_drop" ? `掉落自 ${entry.sourceRef || "怪物"}` : `購於 ${(entry.purchasedAt || "").slice(0, 10)}`}\n\n你可以右鍵點擊圖片 → 另存圖片。`,
       files: [attachment]
     });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);
+    await rememberActiveReply(interaction, 60_000);
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 無法載入圖片：${err.message}` });
   }
@@ -848,10 +882,12 @@ function buildEnhanceEntryPayload(progress, notice = "") {
 async function handleEnhanceEntry(interaction) {
   const serviceContext = getServiceContext();
   if (!interaction.deferred && !interaction.replied) {
+    await clearActiveReply(interaction);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   await safeEditReply(interaction, buildEnhanceEntryPayload(progress));
+  await rememberActiveReply(interaction, 120_000);
 }
 
 /** 強化步驟2：選定目標後，顯示自動強化需求 */
@@ -1030,18 +1066,19 @@ async function handleWeeklyQuests(interaction) {
   const wqs = serviceContext.weeklyQuestService;
 
   try {
+    await clearActiveReply(interaction);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const progressList = await wqs.getPlayerProgress(discordId);
     const wl = currentWeekLabel();
 
     if (!progressList.length) {
       await safeEditReply(interaction, { content: `📋 **每週任務**（${wl}）\n\n本週尚無任務，請稍後再試。` });
-      setTimeout(() => interaction.deleteReply().catch(() => {}), 60_000);
+      await rememberActiveReply(interaction, 60_000);
       return;
     }
 
     await safeEditReply(interaction, buildWeeklyQuestsMessage(progressList, wl));
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 120_000);
+    await rememberActiveReply(interaction, 120_000);
   } catch (err) {
     if (interaction.deferred || interaction.replied) {
       await safeEditReply(interaction, { content: `❌ 讀取每週任務失敗：${err.message}` });
@@ -1164,8 +1201,22 @@ async function handleButton(interaction) {
     await handleBackpackTab(interaction, tab, page);
     return;
   }
-  if (id.startsWith("backpack_page_info:")) {
-    await interaction.deferUpdate().catch(() => {});
+  if (id.startsWith("backpack_page_input:")) {
+    const parts = id.split(":");
+    const tab = parts[1] || "item";
+    const currentPage = parseInt(parts[2] ?? "0", 10) || 0;
+    const totalPages = Math.max(1, parseInt(parts[3] ?? "1", 10) || 1);
+    const modal = new ModalBuilder()
+      .setCustomId(`backpack_page_modal:${tab}:${totalPages}`)
+      .setTitle("跳轉背包頁數");
+    const input = new TextInputBuilder()
+      .setCustomId("target_page")
+      .setLabel(`請輸入頁數（1 ~ ${totalPages}）`)
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder(String(Math.min(totalPages, currentPage + 1)));
+    modal.addComponents(new ActionRowBuilder().addComponents(input));
+    await interaction.showModal(modal);
     return;
   }
   if (id.startsWith("backpack_equip:")) {
@@ -1349,6 +1400,28 @@ async function handleEquipmentSelect(interaction) {
   }
 }
 
+async function handleModal(interaction) {
+  if (!interaction.customId.startsWith("backpack_page_modal:")) return false;
+
+  const [, tab = "item", totalRaw = "1"] = interaction.customId.split(":");
+  const totalPages = Math.max(1, parseInt(totalRaw, 10) || 1);
+  const raw = interaction.fields.getTextInputValue("target_page").trim();
+  const parsedPage = parseInt(raw, 10);
+  const targetPage = Number.isFinite(parsedPage)
+    ? Math.min(totalPages, Math.max(1, parsedPage)) - 1
+    : 0;
+
+  const serviceContext = getServiceContext();
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const inventory = progress?.inventory || [];
+  const msg = buildBackpackMessage(inventory, tab, undefined, targetPage);
+
+  await clearActiveReply(interaction);
+  await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
+  await rememberActiveReply(interaction, 120_000);
+  return true;
+}
+
 module.exports = {
   createPlayerPanelMessage,
   handleButton,
@@ -1358,4 +1431,5 @@ module.exports = {
   handleEnhanceEntry,
   handleEnhanceSelect,
   handleEnhanceConfirm,
+  handleModal,
 };
