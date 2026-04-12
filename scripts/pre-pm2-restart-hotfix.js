@@ -10,10 +10,11 @@ const HOTFIX_MESSAGE =
 async function pickHotfixChannelId(serviceContext) {
   const layout = await serviceContext.adminConsoleService.getChannelLayout();
   const bindings = Array.isArray(layout?.discord?.bindings) ? layout.discord.bindings : [];
-  const preferredFeatureKeys = ["monster_zone", "monster_zone_mid", "park_announcement"];
+  // 對齊掉裝公告邏輯：優先 town_chat，沒有才 fallback 到 monster_zone
+  const preferredFeatureKeys = ["town_chat", "monster_zone", "monster_zone_mid", "park_announcement"];
 
   for (const featureKey of preferredFeatureKeys) {
-    const binding = bindings.find((entry) => entry.featureKey === featureKey && entry.enabled && entry.channelId);
+    const binding = bindings.find((entry) => entry.featureKey === featureKey && entry.channelId);
     if (binding?.channelId) return binding.channelId;
   }
 
@@ -55,4 +56,3 @@ main()
   .finally(() => {
     process.exit(0);
   });
-
