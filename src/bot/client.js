@@ -140,6 +140,79 @@ async function setupLockedChannels(client) {
 
 // ── 刷屏偵測 ────────────────────────────────────────────────
 // key: `${guildId}:${userId}`，value: { lastMsg, count, timestamps: [] }
+function listAutoRepublishBindings(layout) {
+  const bindings = Array.isArray(layout?.discord?.bindings) ? layout.discord.bindings : [];
+  const supported = new Set(["personal_room", "coin_shop", "weekly_quest", "monster_zone", "monster_zone_mid"]);
+  return bindings.filter((entry) => entry?.enabled && entry?.channelId && supported.has(entry.featureKey));
+}
+
+async function resolveMonsterPanelState(zoneKey) {
+  const state = await serviceContext.monsterService.getState(zoneKey);
+  const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone: zoneKey });
+  let activeMonster = monsters.find((monster) => monster.seq === state.activeMonsterSeq) || null;
+  if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
+
+  const currentHp = state.currentHp != null ? state.currentHp : (activeMonster?.calc?.maxHp ?? null);
+  const participantCount = Array.isArray(state.participants) ? state.participants.length : 0;
+  const damageMap = state.damageMap && typeof state.damageMap === "object" ? state.damageMap : {};
+
+  return { activeMonster, currentHp, participantCount, damageMap };
+}
+
+async function republishPanelsOnStartup() {
+  const layout = await serviceContext.adminConsoleService.getChannelLayout();
+  const bindings = listAutoRepublishBindings(layout);
+  const processed = new Set();
+
+  for (const binding of bindings) {
+    if (processed.has(binding.featureKey)) continue;
+    processed.add(binding.featureKey);
+
+    try {
+      if (binding.featureKey === "personal_room") {
+        await serviceContext.adminConsoleService.publishPlayerPanel(binding.channelId, {
+          cleanChannel: true,
+          includePinned: true
+        });
+        console.log(`[PanelReset] republished personal_room -> ${binding.channelId}`);
+        continue;
+      }
+
+      if (binding.featureKey === "coin_shop") {
+        await serviceContext.adminConsoleService.publishCoinShopPanel(binding.channelId, {
+          cleanChannel: true,
+          includePinned: true
+        });
+        console.log(`[PanelReset] republished coin_shop -> ${binding.channelId}`);
+        continue;
+      }
+
+      if (binding.featureKey === "weekly_quest") {
+        await serviceContext.adminConsoleService.publishWeeklyQuestPanel(binding.channelId, {
+          cleanChannel: true,
+          includePinned: true
+        });
+        console.log(`[PanelReset] republished weekly_quest -> ${binding.channelId}`);
+        continue;
+      }
+
+      if (binding.featureKey === "monster_zone" || binding.featureKey === "monster_zone_mid") {
+        const zoneKey = binding.featureKey === "monster_zone_mid" ? "mid" : "normal";
+        const { activeMonster, currentHp, participantCount, damageMap } = await resolveMonsterPanelState(zoneKey);
+        await serviceContext.adminConsoleService.publishMonsterZonePanel(binding.channelId, activeMonster, currentHp, {
+          participantCount,
+          damageMap,
+          cleanChannel: true,
+          includePinned: true
+        });
+        console.log(`[PanelReset] republished ${binding.featureKey} -> ${binding.channelId}`);
+      }
+    } catch (error) {
+      console.warn(`[PanelReset] republish failed for ${binding.featureKey} (${binding.channelId}): ${error?.message || error}`);
+    }
+  }
+}
+
 const spamTracker = new Map();
 const MUTE_DURATION_MS = 3 * 60 * 60 * 1000; // 3 小時
 const SPAM_ANNOUNCE_CHANNEL_ID = "1292448143946027039"; // 公告頻道
@@ -215,6 +288,7 @@ function createBotClient() {
     console.log(`[Discord] Logged in as ${readyClient.user.tag}`);
     await setupPersonalRoomChannel(readyClient);
     await setupLockedChannels(readyClient);
+    await republishPanelsOnStartup();
     
     // 啟動 OneComme 直播留言監聽
     startFetcher(handleStreamComment);

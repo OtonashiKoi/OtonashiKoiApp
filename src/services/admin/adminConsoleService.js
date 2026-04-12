@@ -123,6 +123,23 @@ class AdminConsoleService {
     return this.getChannelLayout();
   }
 
+  async _clearChannelMessages(channel, { includePinned = false } = {}) {
+    try {
+      const fetched = await channel.messages.fetch({ limit: 100 });
+      const toDelete = fetched.filter((msg) => includePinned || !msg.pinned);
+      if (toDelete.size === 0) return;
+
+      await channel.bulkDelete(toDelete, true).catch(() => {});
+      for (const [, msg] of toDelete) {
+        if (!msg.bulkDeletable) {
+          await msg.delete().catch(() => {});
+        }
+      }
+    } catch (_) {
+      // suppressed
+    }
+  }
+
   async listDiscordChannels() {
     const { getBotClient } = require("../../bot/runtimeContext");
     const client = getBotClient();
@@ -173,7 +190,7 @@ class AdminConsoleService {
       .sort((left, right) => right.position - left.position);
   }
 
-  async publishPlayerPanel(channelId) {
+  async publishPlayerPanel(channelId, options = {}) {
     const { getBotClient } = require("../../bot/runtimeContext");
     const client = getBotClient();
     if (!client?.isReady()) {
@@ -188,6 +205,10 @@ class AdminConsoleService {
     const channel = await client.channels.fetch(targetChannelId);
     if (!channel || !channel.isTextBased || !channel.isTextBased()) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
+    }
+
+    if (options.cleanChannel) {
+      await this._clearChannelMessages(channel, { includePinned: options.includePinned !== false });
     }
 
     // 刪除舊面板訊息（如果有記錄的話）
@@ -316,7 +337,7 @@ class AdminConsoleService {
     return results;
   }
 
-  async publishPlayerQueryPanel(channelId) {
+  async publishPlayerQueryPanel(channelId, options = {}) {
     const { getBotClient } = require("../../bot/runtimeContext");
     const { createPlayerQueryPanelMessage } = require("../../bot/playerQueryPanelView");
 
@@ -335,6 +356,10 @@ class AdminConsoleService {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
     }
 
+    if (options.cleanChannel) {
+      await this._clearChannelMessages(channel, { includePinned: options.includePinned !== false });
+    }
+
     const message = await channel.send(createPlayerQueryPanelMessage());
     return {
       channelId: targetChannelId,
@@ -342,7 +367,7 @@ class AdminConsoleService {
     };
   }
 
-  async publishCoinShopPanel(channelId) {
+  async publishCoinShopPanel(channelId, options = {}) {
     const { getBotClient } = require("../../bot/runtimeContext");
     const { createCoinShopPanelMessage } = require("../../bot/coinShopView");
 
@@ -359,6 +384,10 @@ class AdminConsoleService {
     const channel = await client.channels.fetch(targetChannelId);
     if (!channel || !channel.isTextBased || !channel.isTextBased()) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
+    }
+
+    if (options.cleanChannel) {
+      await this._clearChannelMessages(channel, { includePinned: options.includePinned !== false });
     }
 
     // 刪除舊面板（如果記錄了 panelMessageId）
@@ -419,6 +448,10 @@ class AdminConsoleService {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
     }
 
+    if (options.cleanChannel) {
+      await this._clearChannelMessages(channel, { includePinned: options.includePinned === true });
+    }
+
     const stored = await this.channelLayoutRepository.get();
     const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
     const existingBinding = bindings.find((b) => b.channelId === targetChannelId && b.featureKey?.startsWith("monster_zone"));
@@ -430,18 +463,6 @@ class AdminConsoleService {
 
     if (options.cleanChannel) {
       // 管理員重新發布：先清空頻道訊息再發新的
-      try {
-        const fetched = await channel.messages.fetch({ limit: 100 });
-        const toDelete = fetched.filter((m) => !m.pinned);
-        if (toDelete.size > 0) {
-          await channel.bulkDelete(toDelete, true).catch(() => {});
-          for (const [, msg] of toDelete) {
-            if (!msg.bulkDeletable) await msg.delete().catch(() => {});
-          }
-        }
-      } catch (e) {
-        // suppressed
-      }
       message = await channel.send(panelMsg);
     } else {
       // 自動更新：優先 edit 現有訊息，避免多人同時觸發時產生多個面板
@@ -466,7 +487,7 @@ class AdminConsoleService {
     return { channelId: targetChannelId, messageId: message.id };
   }
 
-  async publishWeeklyQuestPanel(channelId) {
+  async publishWeeklyQuestPanel(channelId, options = {}) {
     const { getBotClient } = require("../../bot/runtimeContext");
     const { createWeeklyQuestPanelMessage } = require("../../bot/weeklyQuestView");
 
@@ -483,6 +504,10 @@ class AdminConsoleService {
     const channel = await client.channels.fetch(targetChannelId);
     if (!channel || !channel.isTextBased || !channel.isTextBased()) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
+    }
+
+    if (options.cleanChannel) {
+      await this._clearChannelMessages(channel, { includePinned: options.includePinned !== false });
     }
 
     const stored = await this.channelLayoutRepository.get();
