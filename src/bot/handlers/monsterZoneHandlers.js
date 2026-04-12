@@ -574,74 +574,50 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const totalDmgAll = participants.reduce((s, pid) => s + (mergedDmg[pid]?.damage || 0), 0);
   const dmgRatio = (pid) => totalDmgAll > 0 ? (mergedDmg[pid]?.damage || 0) / totalDmgAll : 1 / participants.length;
 
-  // ── 預先取得所有參戰者等級，計算等級懲罰係數 ──
-  // 規則：玩家等級 > 怪物等級+2 時，每超一級扣 10%，最低保留 10%
-  const monsterLevel = Math.max(1, Number(monster.level) || 1);
-  const progressMap = {};
-  await Promise.all(participants.map(async (pid) => {
-    const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
-    progressMap[pid] = prog?.level ?? 1;
-  }));
-  const levelPenalty = (pid) => {
-    const overLevel = Math.max(0, progressMap[pid] - (monsterLevel + 2));
-    return Math.max(0.1, 1 - overLevel * 0.1);
-  };
+  // ── 不使用怪物等級做獎勵壓制 ──
 
   // 每位參戰者的獎勵紀錄（用來最後 DM 通知）
   const perPidRewards = {};
   participants.forEach(pid => { perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] }; });
 
-  // ── 金幣依比例分配（含等級懲罰）──
+  // ── 金幣依比例分配 ──
   // 實際獎池 = max(goldReward, 參戰人數 × entryFee × 1.3)
   // 入場費回饋到獎池，保證參戰者平均小賺
   const entryFeePool = Math.round(participants.length * (monster.entryFee || 0) * 1.15);
   const effectiveGoldReward = Math.max(monster.goldReward || 0, entryFeePool);
 
-  // ── 等級懲罰充公值計算（充公的部分下放給未被壓制的玩家）──
-  // 未被壓制：levelPenalty = 1
-  const unpenalizedPids = participants.filter(pid => levelPenalty(pid) >= 1);
-  // 未被壓制玩家的傷害比例總和（用來按比例分配充公值）
-  const unpenalizedDmgTotal = unpenalizedPids.reduce((s, pid) => s + (mergedDmg[pid]?.damage || 0), 0);
-  const unpenalizedDmgRatio = (pid) =>
-    unpenalizedDmgTotal > 0 ? (mergedDmg[pid]?.damage || 0) / unpenalizedDmgTotal : 1 / (unpenalizedPids.length || 1);
-
-  if (effectiveGoldReward > 0) {
-    // ── 50% 上限截斷：單人不可拿超過獎池的 50%，多出來按比例分給其他人 ──
+  function buildCappedRatio(cap) {
+    if (!cap || cap >= 1) {
+      return { ratio: (pid) => dmgRatio(pid) };
+    }
     const cappedRatios = {};
-    const CAP = 0.5;
     let overflow = 0;
     for (const pid of participants) {
       const r = dmgRatio(pid);
-      if (r > CAP) { cappedRatios[pid] = CAP; overflow += r - CAP; }
+      if (r > cap) { cappedRatios[pid] = cap; overflow += r - cap; }
       else { cappedRatios[pid] = r; }
     }
-    // 將 overflow 按非上限者的原始比例重新分配
-    const nonCappedTotal = participants.reduce((s, pid) => s + (cappedRatios[pid] < CAP ? cappedRatios[pid] : 0), 0);
+    const nonCappedTotal = participants.reduce((s, pid) => s + (cappedRatios[pid] < cap ? cappedRatios[pid] : 0), 0);
     if (overflow > 0 && nonCappedTotal > 0) {
       for (const pid of participants) {
-        if (cappedRatios[pid] < CAP) {
+        if (cappedRatios[pid] < cap) {
           cappedRatios[pid] += overflow * (cappedRatios[pid] / nonCappedTotal);
         }
       }
     }
-    const cappedDmgRatio = (pid) => cappedRatios[pid] ?? dmgRatio(pid);
+    return { ratio: (pid) => cappedRatios[pid] ?? dmgRatio(pid) };
+  }
 
-    // 計算每人基本份額（不含充公下放）
-    const baseShares = {};
-    let confiscatedGold = 0;
+  // 公平共鬥門檻：
+  // 金幣：3 人以上才啟用 50% 上限
+  // EXP：4 人以上才啟用 75% 上限（之後再套用組隊倍率）
+  const goldRatio = buildCappedRatio(participants.length >= 3 ? 0.5 : 1);
+  const expRatio = buildCappedRatio(participants.length >= 4 ? 0.75 : 1);
+
+  if (effectiveGoldReward > 0) {
+    const goldShares = {};
     for (const pid of participants) {
-      const base = effectiveGoldReward * cappedDmgRatio(pid);
-      const penalized = Math.round(base * levelPenalty(pid));
-      baseShares[pid] = penalized;
-      confiscatedGold += Math.round(base - base * levelPenalty(pid));
-    }
-
-    // 充公值按比例下放給未被壓制的玩家
-    const goldShares = { ...baseShares };
-    if (confiscatedGold > 0 && unpenalizedPids.length > 0) {
-      for (const pid of unpenalizedPids) {
-        goldShares[pid] = (goldShares[pid] || 0) + Math.round(confiscatedGold * unpenalizedDmgRatio(pid));
-      }
+      goldShares[pid] = Math.round(effectiveGoldReward * goldRatio.ratio(pid));
     }
 
     for (const pid of participants) {
@@ -658,16 +634,13 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
     const myShare = Math.max(1, goldShares[discordId] || 1);
     const rawPct = Math.round(dmgRatio(discordId) * 100);
-    const capPct = Math.round(cappedDmgRatio(discordId) * 100);
+    const capPct = Math.round(goldRatio.ratio(discordId) * 100);
     const pct = rawPct !== capPct ? `${capPct}%（原${rawPct}%，已截斷）` : `${capPct}%`;
-    const pen = levelPenalty(discordId);
-    const penNote = pen < 1 ? `　⚠️ 等級懲罰 ${Math.round(pen * 100)}%` : "";
     const poolNote = entryFeePool > (monster.goldReward || 0) ? `（入場費加成）` : "";
-    const bonusNote = pen >= 1 && confiscatedGold > 0 ? `　🎁 充公加成` : "";
-    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}，共 ${effectiveGoldReward}${poolNote}）${penNote}${bonusNote}`);
+    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}，共 ${effectiveGoldReward}${poolNote}）`);
   }
 
-  // ── EXP 依比例分配（含組隊倍率、等級懲罰、充公下放）──
+  // ── EXP 依比例分配（含組隊倍率）──
   // 組隊倍率：人多共鬥獎勵更多，封頂 ×3.5
   // 組隊倍率公式：1~2人=×1.0，3人起平滑無上限增加
   // mult = 1 + (n-2)^0.7 × 0.6，人越多總池越大但每人平均遞減，不會爆量
@@ -676,20 +649,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const effectiveExpReward = Math.round(monster.expReward * partyMult);
 
   if (effectiveExpReward > 0) {
-    const baseExpShares = {};
-    let confiscatedExp = 0;
+    const expShares = {};
     for (const pid of participants) {
-      const base = effectiveExpReward * dmgRatio(pid);
-      const penalized = Math.round(base * levelPenalty(pid));
-      baseExpShares[pid] = penalized;
-      confiscatedExp += Math.round(base - base * levelPenalty(pid));
-    }
-
-    const expShares = { ...baseExpShares };
-    if (confiscatedExp > 0 && unpenalizedPids.length > 0) {
-      for (const pid of unpenalizedPids) {
-        expShares[pid] = (expShares[pid] || 0) + Math.round(confiscatedExp * unpenalizedDmgRatio(pid));
-      }
+      expShares[pid] = Math.round(effectiveExpReward * expRatio.ratio(pid));
     }
 
     const myShare = Math.max(1, expShares[discordId] || 1);
@@ -719,12 +681,11 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       } catch (e) { console.error(`[MonsterZone] grantExp failed for ${pid}`, e); }
     }
 
-    const pct = Math.round(dmgRatio(discordId) * 100);
-    const pen = levelPenalty(discordId);
-    const penNote = pen < 1 ? `　⚠️ 等級懲罰 ${Math.round(pen * 100)}%` : "";
-    const bonusNote = pen >= 1 && confiscatedExp > 0 ? `　🎁 充公加成` : "";
+    const rawPct = Math.round(dmgRatio(discordId) * 100);
+    const capPct = Math.round(expRatio.ratio(discordId) * 100);
+    const pct = rawPct !== capPct ? `${capPct}%（原${rawPct}%，已截斷）` : `${capPct}%`;
     const partyNote = partyMult > 1 ? `　👥 ×${partyMult}（${participants.length}人）` : "";
-    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${effectiveExpReward}${partyMult > 1 ? ` 原${monster.expReward}` : ""}）${partyNote}${penNote}${bonusNote}${killerLvLine}`);
+    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${effectiveExpReward}${partyMult > 1 ? ` 原${monster.expReward}` : ""}）${partyNote}${killerLvLine}`);
   }
 
   // ── 道具掉落：從所有參戰者中抽一人，再骰各道具掉落率 ──

@@ -24,7 +24,7 @@ const WEAPON_CONFIG = {
   dagger:   { mult: 2, comboBonus: 20 },
   staff_1h: { mult: 4, baseStat: "int", monsterAtk: 2, bypassDefPct: 50 },
   staff_2h: { mult: 6, baseStat: "int", isTwoHanded: true, monsterAtk: 2, bypassDefPct: 50 },
-  bow:      { mult: 3, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
+  bow:      { mult: 3.5, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
 };
 
 // 副手武器種類（可雙持）

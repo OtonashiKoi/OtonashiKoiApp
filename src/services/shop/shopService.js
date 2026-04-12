@@ -342,24 +342,107 @@ class ShopService {
     if (currentLevel >= ENHANCE_MAX) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${target.itemName} 已達強化上限（+${ENHANCE_MAX}）`, 400);
     }
-    let matIdx = inv.findIndex(e => e.uuid === materialUuid && e.uuid !== target.uuid);
-    if (matIdx === -1) {
-      matIdx = inv.findIndex(e => (e.itemId === materialUuid || e.itemName === materialUuid) && e.uuid !== target.uuid && !e.isEquipped);
+
+    const requiredUnits = Math.pow(2, currentLevel);
+    const unitValue = (entry) => {
+      const level = Number(entry?.enhanceLevel || 0);
+      if (level >= 3) return 0;
+      return Math.pow(2, Math.max(0, level));
+    };
+    const baseName = String(target.itemName || "").replace(/\s*\+\d+$/, "").trim();
+    const hasItemId = !!target.itemId;
+    const isSameBase = (entry) => {
+      if (!entry || entry.itemType !== "equipment") return false;
+      if (entry.uuid === target.uuid || entry.uuid === targetUuid) return false;
+      if (hasItemId && entry.itemId) return entry.itemId === target.itemId;
+      const n = String(entry.itemName || "").replace(/\s*\+\d+$/, "").trim();
+      return n === baseName;
+    };
+    const maxMaterialLevel = Math.min(2, Math.max(0, Number(currentLevel || 0)));
+    const candidates = inv
+      .filter(isSameBase)
+      .filter((entry) => Number(entry?.enhanceLevel || 0) <= maxMaterialLevel);
+    const availableUnits = candidates.reduce((sum, entry) => sum + unitValue(entry), 0);
+    if (availableUnits < requiredUnits) {
+      throw new AppError(
+        ERROR_CODES.INVALID_ARGUMENT,
+        `材料不足：強化 ${baseName} +${currentLevel} → +${currentLevel + 1} 需要等價 ${requiredUnits} 把同裝備（+1=2、+2=4；+3 不可當材料），背包目前只有等價 ${availableUnits} 把。`,
+        400
+      );
     }
-    if (matIdx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到符合條件的材料裝備", 404);
-    const material = inv[matIdx];
-    if (material.itemId !== target.itemId) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "材料必須與目標同種類", 400);
+
+    function pickMaterials(cands, needUnits) {
+      const items = cands.map((entry) => ({ uuid: entry.uuid, units: unitValue(entry) }));
+      const limit = needUnits + 8;
+      const dp = new Map();
+      dp.set(0, { uuids: [], sum: 0, count: 0 });
+
+      for (const it of items) {
+        const cur = new Map(dp);
+        for (const [sum, state] of dp.entries()) {
+          const nsum = Math.min(limit, sum + it.units);
+          const cand = { uuids: [...state.uuids, it.uuid], sum: nsum, count: state.count + 1 };
+          const prev = cur.get(nsum);
+          if (!prev || cand.count < prev.count) cur.set(nsum, cand);
+        }
+        dp.clear();
+        for (const [k, v] of cur.entries()) dp.set(k, v);
+      }
+
+      let best = null;
+      for (const [sum, state] of dp.entries()) {
+        if (sum < needUnits) continue;
+        const waste = sum - needUnits;
+        if (!best) best = { ...state, waste };
+        else if (waste < best.waste) best = { ...state, waste };
+        else if (waste === best.waste && state.count < best.count) best = { ...state, waste };
+      }
+      return best ? best.uuids : [];
     }
+
+    let chosen = [];
+    if (materialUuid) {
+      const preferred = inv.find((entry) => entry && (entry.uuid === materialUuid || entry.itemId === materialUuid || entry.itemName === materialUuid));
+      if (preferred && isSameBase(preferred) && Number(preferred.enhanceLevel || 0) <= maxMaterialLevel) {
+        chosen = [preferred.uuid];
+      }
+    }
+
+    const chosenSet = new Set(chosen);
+    const remainingNeed = requiredUnits - chosen.reduce((sum, uuid) => {
+      const found = candidates.find((entry) => entry.uuid === uuid);
+      return sum + (found ? unitValue(found) : 0);
+    }, 0);
+    if (remainingNeed > 0) {
+      const rest = candidates.filter((entry) => !chosenSet.has(entry.uuid));
+      const picked = pickMaterials(rest, remainingNeed);
+      chosen = [...chosen, ...picked];
+    }
+    const chosenUnits = chosen.reduce((sum, uuid) => {
+      const found = candidates.find((entry) => entry.uuid === uuid);
+      return sum + (found ? unitValue(found) : 0);
+    }, 0);
+    if (chosenUnits < requiredUnits) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "材料不足（請確認材料在背包中且同裝備）", 400);
+    }
+
     const stats = target.equipStats || {};
     const mainStat = Object.entries(stats).sort((a, b) => b[1] - a[1])[0]?.[0];
     if (!mainStat) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備沒有可強化的屬性", 400);
+    const oldStatValue = Number(stats[mainStat] || 0);
     const newStats = { ...stats, [mainStat]: (stats[mainStat] || 0) + 1 };
     const newLevel = currentLevel + 1;
-    const baseName = target.itemName.replace(/\s*\+\d+$/, '');
     const newName = `${baseName} +${newLevel}`;
     const updatedTarget = { ...target, equipStats: newStats, enhanceLevel: newLevel, itemName: newName };
-    progress.inventory.splice(matIdx, 1);
+
+    const idxs = [];
+    for (let i = 0; i < progress.inventory.length; i += 1) {
+      const entry = progress.inventory[i];
+      if (entry && chosen.includes(entry.uuid)) idxs.push(i);
+    }
+    idxs.sort((a, b) => b - a);
+    for (const i of idxs) progress.inventory.splice(i, 1);
+
     if (targetSlotKey) {
       progress.equipment[targetSlotKey] = updatedTarget;
     } else {
@@ -372,9 +455,17 @@ class ShopService {
       itemName: newName,
       enhanceLevel: newLevel,
       statBoosted: mainStat,
+      oldStatValue,
       newStatValue: newStats[mainStat],
+      materialsConsumed: requiredUnits,
+      materialsConsumedUnits: chosenUnits,
+      materialsConsumedItems: chosen.length,
       message: `成功將 ${baseName} 強化至 +${newLevel}！`
     };
+  }
+
+  async enhanceItemAuto(discordId, targetUuid) {
+    return this.enhanceItem(discordId, targetUuid, null);
   }
 }
 

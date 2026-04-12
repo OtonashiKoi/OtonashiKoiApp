@@ -260,9 +260,161 @@ function buildInventoryRow(e, idx) {
 
 const EQ_SPECIAL_SLOTS = new Set(EQ_COL3_SLOTS);
 const EQ_STANDARD_SLOTS = new Set([...EQ_LEFT_SLOTS, ...EQ_RIGHT_SLOTS]);
+const EQ_WEAPON_LIKE_SLOTS = new Set(["weapon", "shield"]);
+const EQ_SORT_ORDER = ["weapon","shield","head_top","head_mid","head_low","armor","garment","shoes","accessory_l","accessory_r","special_1","special_2","special_3"];
+const EQ_SORT_ORDER_MAP = EQ_SORT_ORDER.reduce((acc, slot, idx) => ({ ...acc, [slot]: idx }), {});
+
+function normalizeName(name) {
+  return String(name || "").replace(/\s*\+\d+$/, "").trim();
+}
+
+function isWeaponLikeSlot(slot) {
+  return EQ_WEAPON_LIKE_SLOTS.has(slot);
+}
+
+function sortBackpackItems(items, tab) {
+  const arr = [...items];
+  return arr.sort((a, b) => {
+    if (tab === "item") {
+      return String(a.itemName || "").localeCompare(String(b.itemName || ""), "zh-Hant");
+    }
+
+    const aSlot = a.equipSlot || "";
+    const bSlot = b.equipSlot || "";
+    const aOrd = EQ_SORT_ORDER_MAP[aSlot] ?? 999;
+    const bOrd = EQ_SORT_ORDER_MAP[bSlot] ?? 999;
+    if (aOrd !== bOrd) return aOrd - bOrd;
+
+    const an = normalizeName(a.itemName);
+    const bn = normalizeName(b.itemName);
+    if (an !== bn) return an.localeCompare(bn, "zh-Hant");
+
+    const aEnh = Number(a.enhanceLevel || 0);
+    const bEnh = Number(b.enhanceLevel || 0);
+    if (aEnh !== bEnh) return bEnh - aEnh;
+
+    return String(a.uuid || "").localeCompare(String(b.uuid || ""));
+  });
+}
+
+function canonicalStatsKey(stats) {
+  const s = stats && typeof stats === "object" ? stats : {};
+  const keys = Object.keys(s).sort();
+  return keys.map((k) => `${k}:${s[k]}`).join("|");
+}
+
+function formatEquipStats(stats) {
+  const statOrder = ["str", "agi", "vit", "int", "dex", "luk"];
+  const s = stats && typeof stats === "object" ? stats : null;
+  if (!s) return "";
+  const sorted = Object.entries(s)
+    .filter(([, value]) => typeof value === "number" && value !== 0 && !Number.isNaN(value))
+    .sort((a, b) => {
+      const ai = statOrder.indexOf(String(a[0]).toLowerCase());
+      const bi = statOrder.indexOf(String(b[0]).toLowerCase());
+      if (ai !== -1 && bi !== -1 && ai !== bi) return ai - bi;
+      if (ai !== -1 && bi === -1) return -1;
+      if (ai === -1 && bi !== -1) return 1;
+      return String(a[0]).localeCompare(String(b[0]), "en");
+    });
+  return sorted.map(([k, v]) => `${String(k).toUpperCase()}${v > 0 ? "+" : ""}${v}`).join(" ");
+}
+
+function groupEquipmentItems(items, tab) {
+  const list = sortBackpackItems(items, tab);
+  const groups = new Map();
+
+  for (const entry of list) {
+    const slot = entry.equipSlot || "";
+    const enh = Number(entry.enhanceLevel || 0);
+    const tier = entry.tier || "";
+    const statsKey = canonicalStatsKey(entry.equipStats);
+    const key = `${normalizeName(entry.itemName)}|${slot}|${tier}|${enh}|${statsKey}`;
+
+    if (!groups.has(key)) {
+      const sellPrice = tier ? TIER_SELL_PRICE[tier] : null;
+      groups.set(key, {
+        key,
+        repUuid: entry.uuid,
+        itemName: entry.itemName,
+        equipSlot: slot,
+        tier,
+        enhanceLevel: enh,
+        equipStats: entry.equipStats || null,
+        sellPrice,
+        imageUrl: entry.imageUrl || "",
+        count: 0,
+      });
+    }
+    const g = groups.get(key);
+    g.count += 1;
+    if (!g.imageUrl && entry.imageUrl) g.imageUrl = entry.imageUrl;
+  }
+
+  return [...groups.values()];
+}
+
+function buildEquipmentGroupRow(group, idx, opts = {}) {
+  const { tab = "item", page = 0, showImage = true, showEquip = true } = opts;
+  const prefix = ["①","②","③","④","⑤"][idx] ?? `${idx + 1}.`;
+  const btns = [];
+
+  if (showEquip) {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_equip:${group.repUuid}:${tab}:${page}`)
+        .setLabel(`${prefix} 裝備`)
+        .setStyle(ButtonStyle.Success)
+    );
+  }
+
+  if (group.sellPrice != null) {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_sell:${group.repUuid}:${tab}:${page}`)
+        .setLabel(`售 (${group.sellPrice}💰/件)`)
+        .setStyle(ButtonStyle.Secondary)
+    );
+  } else {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_sell:${group.repUuid}:${tab}:${page}`)
+        .setLabel("不可販售")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true)
+    );
+  }
+
+  if (showImage && group.imageUrl) {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_view:${group.repUuid}`)
+        .setLabel("🖼️")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+
+  return new ActionRowBuilder().addComponents(btns);
+}
 
 function filterByTab(inventory, tab) {
-  if (tab === "equip")   return inventory.filter(e => e.itemType === "equipment" && EQ_STANDARD_SLOTS.has(e.equipSlot));
+  if (tab === "equip") {
+    return inventory.filter(e => e.itemType === "equipment" && EQ_STANDARD_SLOTS.has(e.equipSlot));
+  }
+  if (tab === "weapon") {
+    return inventory.filter(e =>
+      e.itemType === "equipment" &&
+      EQ_STANDARD_SLOTS.has(e.equipSlot) &&
+      isWeaponLikeSlot(e.equipSlot)
+    );
+  }
+  if (tab === "armor") {
+    return inventory.filter(e =>
+      e.itemType === "equipment" &&
+      EQ_STANDARD_SLOTS.has(e.equipSlot) &&
+      !isWeaponLikeSlot(e.equipSlot)
+    );
+  }
   if (tab === "special") return inventory.filter(e => e.itemType === "equipment" && EQ_SPECIAL_SLOTS.has(e.equipSlot));
   return inventory.filter(e => e.itemType !== "equipment");
 }
@@ -272,7 +424,8 @@ const PAGE_SIZE = 3;
 function buildTabRow(activeTab) {
   const defs = [
     { tab: "item",    label: "🎮 道具" },
-    { tab: "equip",   label: "⚔️ 裝備" },
+    { tab: "weapon",  label: "⚔️ 武器" },
+    { tab: "armor",   label: "🛡️ 防裝" },
     { tab: "special", label: "✨ 特殊" },
   ];
   return new ActionRowBuilder().addComponents(
@@ -308,9 +461,15 @@ function buildPageRow(tab, page, totalPages) {
 }
 
 function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
-  const filtered = filterByTab(inventory, tab);
+  const rawFiltered = filterByTab(inventory, tab);
+  const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "special";
+  const filtered = isEquipTab ? groupEquipmentItems(rawFiltered, tab) : sortBackpackItems(rawFiltered, tab);
   const header = prefixMsg ? prefixMsg + "\n\n" : "";
-  const tabLabel = tab === "equip" ? "裝備" : tab === "special" ? "特殊" : "道具";
+  const tabLabel =
+    tab === "weapon" ? "武器" :
+    tab === "armor"  ? "防裝" :
+    tab === "equip"  ? "裝備" :
+    tab === "special"? "特殊" : "道具";
   const tabRow = buildTabRow(tab, page);
 
   if (!filtered.length) {
@@ -322,12 +481,44 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
   const pageItems = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
   const offset = safePage * PAGE_SIZE;
 
-  const lines = pageItems.map((e, i) => {
+  const lines = [];
+  if (tab === "weapon" && pageItems.length) lines.push("【武器】");
+  if (tab === "armor" && pageItems.length) lines.push("【防裝】");
+
+  pageItems.forEach((e, i) => {
+    if (tab === "equip" && i > 0) {
+      const prev = pageItems[i - 1];
+      const prevIsWeapon = isWeaponLikeSlot(prev.equipSlot);
+      const curIsWeapon = isWeaponLikeSlot(e.equipSlot);
+      if (prevIsWeapon !== curIsWeapon) lines.push(curIsWeapon ? "【武器】" : "【防具】");
+    }
+
+    if (isEquipTab) {
+      const baseName = normalizeName(e.itemName);
+      const enhLv = Number(e.enhanceLevel || 0);
+      const enh = enhLv > 0 ? ` +${enhLv}` : "";
+      const slotLabel = e.equipSlot ? (EQ_SLOT_LABELS[e.equipSlot] || e.equipSlot) : "";
+      const slot = slotLabel ? `（${slotLabel}）` : "";
+      const statStr = formatEquipStats(e.equipStats);
+      const statsPart = statStr ? `｜${statStr}` : "";
+      const overMax = enhLv > 3 ? " ⚠️超過上限(+3)" : "";
+      const price = e.sellPrice != null ? `售 ${e.sellPrice}💰/件` : "不可販售";
+      lines.push(`${offset + i + 1}. **${baseName}**${enh}${slot}${statsPart}｜${price}${overMax} ×${e.count}`);
+      return;
+    }
+
     const slot = e.equipSlot ? ` (${EQ_SLOT_LABELS[e.equipSlot] || e.equipSlot})` : "";
-    return `${offset + i + 1}. **${e.itemName}**${slot}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`;
+    lines.push(`${offset + i + 1}. **${e.itemName}**${slot}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`);
   });
 
-  const rows = pageItems.map((e, i) => buildInventoryRow(e, i));
+  const rows = isEquipTab
+    ? pageItems.map((g, i) => buildEquipmentGroupRow(g, i, {
+      tab,
+      page: safePage,
+      showImage: !(tab === "weapon" || tab === "armor"),
+      showEquip: true,
+    }))
+    : pageItems.map((e, i) => buildInventoryRow(e, i));
   rows.push(tabRow);
   if (totalPages > 1) rows.push(buildPageRow(tab, safePage, totalPages));
 
@@ -490,6 +681,28 @@ async function handleBackpackTab(interaction, tab, page = 0) {
   await safeEditReply(interaction, msg);
 }
 
+async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const result = await serviceContext.shopService.equipItem(interaction.user.id, uuid);
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const inventory = progress?.inventory || [];
+    const msg = buildBackpackMessage(inventory, tab, `✅ 已裝備 **${result.itemName}**！`, page);
+    await safeEditReply(interaction, msg);
+  } catch (err) {
+    try {
+      const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+      const inventory = progress?.inventory || [];
+      const msg = buildBackpackMessage(inventory, tab, `❌ 裝備失敗：${err.message}`, page);
+      await safeEditReply(interaction, msg);
+    } catch (_) {
+      await safeEditReply(interaction, { content: `❌ 裝備失敗：${err.message}`, components: [] });
+    }
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
+}
+
 async function handleBackpackAction(interaction, action, uuid) {
   const serviceContext = getServiceContext();
 
@@ -541,15 +754,14 @@ async function handleBackpackAction(interaction, action, uuid) {
 }
 
 /** 販售道具 */
-async function handleBackpackSell(interaction, uuid) {
+async function handleBackpackSell(interaction, uuid, tab = "item", page = 0) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
     const result = await serviceContext.shopService.sellItem(interaction.user.id, uuid);
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const inventory = progress?.inventory || [];
-    const tab = "item";
-    const msg = buildBackpackMessage(inventory, tab, `✅ 已販售 **${result.itemName}**，獲得 💰 ${result.price} 金幣。`);
+    const msg = buildBackpackMessage(inventory, tab, `✅ 已販售 **${result.itemName}**，獲得 💰 ${result.price} 金幣。`, page);
     await safeEditReply(interaction, msg);
     if (!inventory.length) {
       setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
@@ -576,31 +788,48 @@ async function handleRerollConfirm(interaction, uuid) {
   }
 }
 
-/** 強化入口：列出裝備槽上有 tier 的裝備讓玩家選擇目標 */
-async function handleEnhanceEntry(interaction) {
-  const serviceContext = getServiceContext();
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+const ENHANCE_SLOT_ORDER = ["weapon","shield","head_top","head_mid","head_low","armor","garment","shoes","accessory_l","accessory_r"];
+
+function buildEnhanceEntryPayload(progress, notice = "") {
   const equipped = progress?.equipment || {};
   const inv = progress?.inventory || [];
 
-  const SLOT_ORDER = ["weapon","shield","head_top","head_mid","head_low","armor","garment","shoes","accessory_l","accessory_r"];
-  const enhanceable = SLOT_ORDER
-    .map(s => equipped[s])
-    .filter(e => e && ( (e.tier) || (e.equipStats && Object.keys(e.equipStats).length > 0) ) && (e.enhanceLevel ?? 0) < 3);
+  const overMax = ENHANCE_SLOT_ORDER
+    .map((slot) => equipped[slot])
+    .filter((entry) => entry && Number(entry.enhanceLevel || 0) > 3);
+
+  const overMaxLine = overMax.length
+    ? `\n\n⚠️ 偵測到超過強化上限（+3）的裝備：\n${overMax.slice(0, 5).map((entry) => `・${entry.itemName}（+${entry.enhanceLevel}）`).join("\n")}${overMax.length > 5 ? `\n…共 ${overMax.length} 件` : ""}`
+    : "";
+
+  const enhanceable = ENHANCE_SLOT_ORDER
+    .map((slot) => equipped[slot])
+    .filter((entry) => entry && ((entry.tier) || (entry.equipStats && Object.keys(entry.equipStats).length > 0)) && (entry.enhanceLevel ?? 0) < 3);
 
   if (!enhanceable.length) {
-    await safeEditReply(interaction, { content: "⚗️ 目前裝備槽上沒有可強化的裝備（需有 tier 且未達 +3 上限）。" });
-    return;
+    return {
+      content: (notice ? `${notice}\n\n` : "") + "⚗️ 目前裝備槽上沒有可強化的裝備（需有 tier 或裝備屬性，且未達 +3 上限）。",
+      components: [],
+    };
   }
 
-  const opts = enhanceable.slice(0, 25).map(e => {
-    const slot = EQ_SLOT_LABELS[e.equipSlot] || e.equipSlot;
-    const matCount = inv.filter(m => m.itemName === e.itemName && m.uuid !== e.uuid).length;
+  const opts = enhanceable.slice(0, 25).map((entry) => {
+    const slot = EQ_SLOT_LABELS[entry.equipSlot] || entry.equipSlot;
+    const baseName = normalizeName(entry.itemName);
+    const maxMaterialLevel = Math.min(2, Math.max(0, Number(entry.enhanceLevel || 0)));
+    const matUnits = inv
+      .filter((mat) => {
+        if (!mat || mat.itemType !== "equipment") return false;
+        if (mat.uuid === entry.uuid) return false;
+        if (Number(mat.enhanceLevel || 0) > maxMaterialLevel) return false;
+        if (entry.itemId && mat.itemId) return mat.itemId === entry.itemId;
+        return normalizeName(mat.itemName) === baseName;
+      })
+      .reduce((sum, mat) => sum + Math.pow(2, Math.max(0, Number(mat.enhanceLevel || 0))), 0);
     return {
-      label: `${e.itemName}（+${e.enhanceLevel ?? 0}）`,
-      description: `${slot}　材料：${matCount} 件可用`,
-      value: e.uuid,
+      label: `${entry.itemName}（+${entry.enhanceLevel ?? 0}）`,
+      description: `${slot}　材料：等價 ${matUnits} 把可用`,
+      value: entry.uuid,
     };
   });
 
@@ -609,23 +838,32 @@ async function handleEnhanceEntry(interaction) {
     .setPlaceholder("選擇要強化的裝備")
     .addOptions(opts);
 
-  await safeEditReply(interaction, {
-    content: "⚗️ **裝備強化**\n選擇裝備槽上的裝備作為強化目標：",
-    components: [new ActionRowBuilder().addComponents(select)]
-  });
+  return {
+    content: (notice ? `${notice}\n\n` : "") + "⚗️ **裝備強化**\n選擇裝備槽上的裝備作為強化目標：" + overMaxLine,
+    components: [new ActionRowBuilder().addComponents(select)],
+  };
 }
 
-/** 強化步驟2：選定目標後，列出同名材料讓玩家選擇 */
+/** 強化入口：列出裝備槽上可強化目標 */
+async function handleEnhanceEntry(interaction) {
+  const serviceContext = getServiceContext();
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  }
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  await safeEditReply(interaction, buildEnhanceEntryPayload(progress));
+}
+
+/** 強化步驟2：選定目標後，顯示自動強化需求 */
 async function handleEnhanceSelect(interaction, targetUuid) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inv = progress?.inventory || [];
 
-  // 目標一定在裝備槽
   let target = null;
-  for (const v of Object.values(progress?.equipment || {})) {
-    if (v?.uuid === targetUuid) { target = v; break; }
+  for (const entry of Object.values(progress?.equipment || {})) {
+    if (entry?.uuid === targetUuid) { target = entry; break; }
   }
   if (!target) {
     await safeEditReply(interaction, { content: "❌ 找不到目標裝備，請確認裝備仍在裝備槽上。", components: [] });
@@ -638,46 +876,84 @@ async function handleEnhanceSelect(interaction, targetUuid) {
     return;
   }
 
-  const materials = inv.filter(e => e.itemName === target.itemName && e.uuid !== targetUuid);
-  if (!materials.length) {
+  const required = Math.pow(2, curLevel);
+  const baseName = normalizeName(target.itemName);
+  const maxMaterialLevel = Math.min(2, Math.max(0, Number(curLevel || 0)));
+  const availableUnits = inv
+    .filter((entry) => {
+      if (!entry || entry.itemType !== "equipment") return false;
+      if (entry.uuid === targetUuid) return false;
+      if (Number(entry.enhanceLevel || 0) > maxMaterialLevel) return false;
+      if (target.itemId && entry.itemId) return entry.itemId === target.itemId;
+      return normalizeName(entry.itemName) === baseName;
+    })
+    .reduce((sum, entry) => sum + Math.pow(2, Math.max(0, Number(entry.enhanceLevel || 0))), 0);
+
+  if (availableUnits < required) {
     await safeEditReply(interaction, {
-      content: `⚗️ **${target.itemName}**（+${curLevel}）強化需要消耗一件同名裝備作為材料。\n目前背包中沒有可用的 **${target.itemName}**。`,
-      components: []
+      content: `⚗️ **${baseName}**（目前 +${curLevel}）→ 強化至 **+${curLevel + 1}**\n需要等價 **${required}** 把同裝備作為材料（+1=2、+2=4；+3 不可當材料）。\n背包可用：等價 **${availableUnits}** 把（材料不足）`,
+      components: [],
     });
     return;
   }
 
-  const opts = materials.slice(0, 25).map((m) => ({
-    label: `${m.itemName}（+${m.enhanceLevel ?? 0}）`,
-    description: m.source === "monster_drop" ? `掉落自 ${m.sourceRef || "怪物"}` : `購於 ${(m.purchasedAt || "").slice(0, 10)}`,
-    value: m.uuid,
-  }));
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(`enhance_confirm:${targetUuid}`)
-    .setPlaceholder("選擇要消耗的材料裝備")
-    .addOptions(opts);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`enhance_auto:${targetUuid}`)
+      .setLabel(`強化至 +${curLevel + 1}（需等價 ${required} 把）`)
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId("enhance_back")
+      .setLabel("返回")
+      .setStyle(ButtonStyle.Secondary)
+  );
 
   await safeEditReply(interaction, {
-    content: `⚗️ **${target.itemName}**（目前 +${curLevel}）→ 強化至 **+${curLevel + 1}**\n消耗一件同名裝備，主屬 +1，請選擇要消耗的材料：`,
-    components: [new ActionRowBuilder().addComponents(select)]
+    content: `⚗️ **${baseName}**（目前 +${curLevel}）→ 強化至 **+${curLevel + 1}**\n需要等價 **${required}** 把同裝備作為材料（+1=2、+2=4；+3 不可當材料）。\n背包可用：等價 **${availableUnits}** 把\n\n選擇「強化」後會自動扣除材料，不需要手動替換。`,
+    components: [row],
   });
 }
 
-/** 強化步驟2：確認材料後執行強化 */
+/** 強化步驟3：手動指定材料（保留相容） */
 async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
     const result = await serviceContext.shopService.enhanceItem(interaction.user.id, targetUuid, materialUuid);
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const inventory = progress?.inventory || [];
-    const msg = buildBackpackMessage(inventory, "equip",
-      `✅ 強化成功！**${result.itemName}**（${result.statBoosted.toUpperCase()} → ${result.newStatValue}）`
-    );
-    await safeEditReply(interaction, msg);
+    const consumed = result.materialsConsumed
+      ? `（需求等價 ${result.materialsConsumed} 把，實際消耗 ${result.materialsConsumedItems || "?"} 件，等價總和 ${result.materialsConsumedUnits || "?"}）`
+      : "";
+    const statLabel = String(result.statBoosted || "").toUpperCase();
+    const from = result.oldStatValue ?? "?";
+    const to = result.newStatValue ?? "?";
+    const notice = `✅ 強化成功！**${result.itemName}**（${statLabel} ${from} → ${to}）${consumed}`;
+    await safeEditReply(interaction, buildEnhanceEntryPayload(progress, notice));
 
-    // 廣播強化成功到 town_chat（只在 +3 通知）
+    if ((result.enhanceLevel || 0) >= 3) {
+      _announceEnhance(interaction, result).catch(() => {});
+    }
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
+}
+
+async function handleEnhanceAuto(interaction, targetUuid) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const result = await serviceContext.shopService.enhanceItemAuto(interaction.user.id, targetUuid);
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const consumed = result.materialsConsumed
+      ? `（需求等價 ${result.materialsConsumed} 把，實際消耗 ${result.materialsConsumedItems || "?"} 件，等價總和 ${result.materialsConsumedUnits || "?"}）`
+      : "";
+    const statLabel = String(result.statBoosted || "").toUpperCase();
+    const from = result.oldStatValue ?? "?";
+    const to = result.newStatValue ?? "?";
+    const notice = `✅ 強化成功！**${result.itemName}**（${statLabel} ${from} → ${to}）${consumed}`;
+    await safeEditReply(interaction, buildEnhanceEntryPayload(progress, notice));
+
     if ((result.enhanceLevel || 0) >= 3) {
       _announceEnhance(interaction, result).catch(() => {});
     }
@@ -892,6 +1168,14 @@ async function handleButton(interaction) {
     await interaction.deferUpdate().catch(() => {});
     return;
   }
+  if (id.startsWith("backpack_equip:")) {
+    const parts = id.split(":");
+    const uuid = parts[1];
+    const tab = parts[2] || "item";
+    const page = parseInt(parts[3] ?? "0", 10) || 0;
+    await handleBackpackEquip(interaction, uuid, tab, page);
+    return;
+  }
   if (id.startsWith("backpack_view:")) {
     await handleBackpackView(interaction, id.slice("backpack_view:".length));
     return;
@@ -903,7 +1187,20 @@ async function handleButton(interaction) {
     return;
   }
   if (id.startsWith("backpack_sell:")) {
-    await handleBackpackSell(interaction, id.slice("backpack_sell:".length));
+    const parts = id.split(":");
+    const uuid = parts[1];
+    const tab = parts[2] || "item";
+    const page = parseInt(parts[3] ?? "0", 10) || 0;
+    await handleBackpackSell(interaction, uuid, tab, page);
+    return;
+  }
+  if (id === "enhance_back") {
+    await interaction.deferUpdate();
+    await handleEnhanceEntry(interaction);
+    return;
+  }
+  if (id.startsWith("enhance_auto:")) {
+    await handleEnhanceAuto(interaction, id.slice("enhance_auto:".length));
     return;
   }
   if (id === BUTTON_IDS.enhance) {
