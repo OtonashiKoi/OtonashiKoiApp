@@ -21,6 +21,7 @@
     "pm2:stop": "npx pm2 stop equipmentGAME",
     "pm2:logs": "npx pm2 logs equipmentGAME --lines 100",
     "pm2:status": "npx pm2 status",
+    "fix:tier": "node scripts/backfill-tier-values.js",
     "home": "node scripts/launch-home.js",
     "auto-home": "node scripts/auto-home.js",
     "go-live": "node scripts/go-live.js",

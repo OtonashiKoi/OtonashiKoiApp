@@ -272,6 +272,7 @@ function createAdminConsoleRoutes(serviceContext) {
         weaponType: item.weaponType || null,
         isTwoHanded: item.isTwoHanded || false,
         atkStat: item.atkStat || null,
+        tier: item.tier || null,
         purchasedAt: new Date().toISOString()
       });
       progress.updatedAt = new Date().toISOString();

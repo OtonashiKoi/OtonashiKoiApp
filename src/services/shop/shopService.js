@@ -122,6 +122,15 @@ class ShopService {
 
   async purchase(discordId, displayName, itemId, memberRoleIds = []) {
     const item = await this.getItemById(itemId);
+    let effectiveTier = item.tier || null;
+    if (!effectiveTier && item.itemLibraryId && this.itemRepository) {
+      const libItem = await this.itemRepository.findById(item.itemLibraryId).catch(() => null);
+      effectiveTier = libItem?.tier || null;
+      if (effectiveTier) {
+        await this.shopRepository.save({ ...item, tier: effectiveTier });
+        item.tier = effectiveTier;
+      }
+    }
     if (!item.enabled) throw new AppError(ERROR_CODES.SHOP_ITEM_DISABLED, "此商品目前已下架", 400);
     if (item.stock === 0) throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, "此商品已售完", 400);
 
@@ -178,7 +187,7 @@ class ShopService {
         equipStats: item.equipStats || null,
         weaponType: item.weaponType || null,
         isTwoHanded: item.isTwoHanded || false,
-        tier: item.tier || null,
+        tier: effectiveTier,
         purchasedAt: new Date().toISOString()
       });
       progress.updatedAt = new Date().toISOString();
@@ -245,7 +254,11 @@ class ShopService {
     const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
-    const tier = entry.tier || null;
+    let tier = entry.tier || null;
+    if (!tier && this.itemRepository && entry.itemId) {
+      const libItem = await this.itemRepository.findById(entry.itemId).catch(() => null);
+      tier = libItem?.tier || null;
+    }
     const price = TIER_SELL_PRICE[tier] ?? null;
     if (price === null) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品沒有設定階級，無法販售", 400);
     progress.inventory.splice(idx, 1);
