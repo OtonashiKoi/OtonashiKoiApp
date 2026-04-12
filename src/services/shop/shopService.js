@@ -1,10 +1,11 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
+const crypto = require("crypto");
 
 // 各 tier 裝備販售價格
 const TIER_SELL_PRICE = { D: 10, C: 50, B: 100, A: 150 };
 
-const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier"];
+const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes"];
 
 class ShopService {
   constructor(shopRepository, playerService, rewardService, progressRepository, progressService, itemRepository, playerTierService) {
@@ -37,7 +38,7 @@ class ShopService {
     if (!itemLibraryId) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "請從道具庫選擇道具", 400);
     if (!this.itemRepository) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "itemRepository 未初始化", 500);
     const libraryItem = await this.itemRepository.findById(itemLibraryId);
-    if (!libraryItem) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `道具庫中找不到孤道具: ${itemLibraryId}`, 404);
+    if (!libraryItem) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `道具庫中找不到此道具: ${itemLibraryId}`, 404);
     const item = {
       id: crypto.randomUUID(),
       itemLibraryId,
@@ -67,7 +68,6 @@ class ShopService {
   async updateItem(id, fields) {
     const item = await this.getItemById(id);
     const updated = { ...item };
-    // 重新連結道具庫道具（同時更新 name/desc/effect/imageUrl）
     if (fields.itemLibraryId !== undefined && this.itemRepository) {
       const libraryItem = await this.itemRepository.findById(fields.itemLibraryId);
       if (!libraryItem) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `道具庫中找不到此道具: ${fields.itemLibraryId}`, 404);
@@ -91,7 +91,6 @@ class ShopService {
     if (fields.isSale !== undefined) updated.isSale = Boolean(fields.isSale);
     if (fields.allowedTiers !== undefined) updated.allowedTiers = Array.isArray(fields.allowedTiers) ? fields.allowedTiers.map(String).filter(Boolean) : [];
     if (fields.maxPerMonth !== undefined) updated.maxPerMonth = Math.max(0, Number(fields.maxPerMonth) || 0);
-    // 保留直接更新 imageUrl 的能力（圖片上傳路由用）
     if (fields.imageUrl !== undefined) updated.imageUrl = fields.imageUrl || null;
     if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl || null;
     if (fields.weaponType !== undefined) updated.weaponType = fields.weaponType || null;
@@ -104,10 +103,6 @@ class ShopService {
     await this.shopRepository.delete(id);
   }
 
-  /**
-   * 解析玩家目前擁有的最高等級，並寫入 progress.playerTier。
-   * fire-and-forget 用途，失敗不拋錯。
-   */
   async updatePlayerTier(discordId, memberRoleIds) {
     if (!this.playerTierService) return;
     try {
@@ -118,10 +113,9 @@ class ShopService {
         progress.updatedAt = new Date().toISOString();
         await this.progressRepository.save(progress);
       }
-    } catch { /* 非關鍵操作，靜默失敗 */ }
+    } catch { /* ignored */ }
   }
 
-  /** yearMonth: "YYYY-MM" */
   _currentYearMonth() {
     return new Date().toISOString().slice(0, 7);
   }
@@ -131,7 +125,6 @@ class ShopService {
     if (!item.enabled) throw new AppError(ERROR_CODES.SHOP_ITEM_DISABLED, "此商品目前已下架", 400);
     if (item.stock === 0) throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, "此商品已售完", 400);
 
-    // 身分組限制：解析玩家最高等級，高等級可購買低等級商品
     const allowedTiers = item.allowedTiers || [];
     if (allowedTiers.length > 0 && this.playerTierService) {
       const playerHighestTier = await this.playerTierService.resolveHighestTier(memberRoleIds);
@@ -139,7 +132,6 @@ class ShopService {
       if (!canBuy) throw new AppError(ERROR_CODES.FORBIDDEN, "你目前的等級無法購買此商品", 403);
     }
 
-    // 每月次數限制
     const maxPerMonth = item.maxPerMonth || 0;
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (maxPerMonth > 0) {
@@ -151,7 +143,6 @@ class ShopService {
       }
     }
 
-    // 免費商品（price = 0）不扣款
     if (item.price > 0) {
         await this.rewardService.grantCurrency({
         discordId,
@@ -167,10 +158,8 @@ class ShopService {
       await this.shopRepository.save({ ...item, stock: item.stock - 1 });
     }
 
-    // 寫入背包 + 更新月次數
     if (progress) {
       if (!Array.isArray(progress.inventory)) progress.inventory = [];
-      // 記錄月次數
       if ((item.maxPerMonth || 0) > 0) {
         if (!progress.shopMonthlyCount) progress.shopMonthlyCount = {};
         const ym = this._currentYearMonth();
@@ -205,7 +194,6 @@ class ShopService {
     const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
-    // 消耗品才從背包移除；圖片/裝備永久保留
     const itemType = entry.itemType || "consumable";
     if (itemType === "consumable") {
       progress.inventory.splice(idx, 1);
@@ -213,7 +201,6 @@ class ShopService {
     const effect = entry.itemEffect || { type: "none", value: 0 };
     let effectDesc = "";
 
-    // 直接修改 progress 的效果先在 save 前處理
     if (effect.type === "grant_status_points") {
       progress.statusPoints = (progress.statusPoints || 0) + (effect.value || 0);
       effectDesc = `📊 +${effect.value} 屬性點`;
@@ -224,10 +211,8 @@ class ShopService {
     } else if (effect.type === "reroll_attributes") {
       const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
       const level = progress.level || 1;
-      const levelUpPoints = (level - 1) * 2; // 升等得到的點數
-      // 重置為各屬性基礎 1 點
+      const levelUpPoints = (level - 1) * 2;
       const newAttrs = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-      // 重新隨機分配升等點數
       for (let i = 0; i < levelUpPoints; i++) {
         const key = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
         newAttrs[key]++;
@@ -239,7 +224,6 @@ class ShopService {
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
 
-    // 需要呼叫外部 service 的效果
     const dn = displayName || "";
     if (effect.type === "grant_gold") {
       await this.rewardService.grantCurrency({ discordId, displayName: dn, currencyType: "gold", amount: effect.value, source: CURRENCY_SOURCES.ITEM_USE, operator: "shop:use-item" });
@@ -264,11 +248,9 @@ class ShopService {
     const tier = entry.tier || null;
     const price = TIER_SELL_PRICE[tier] ?? null;
     if (price === null) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品沒有設定階級，無法販售", 400);
-    // 從背包移除
     progress.inventory.splice(idx, 1);
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
-    // 給金幣
     await this.rewardService.grantCurrency({
       discordId,
       displayName: discordId,
@@ -303,9 +285,7 @@ class ShopService {
     if (!slot) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備未指定槽位", 400);
     if (!progress.equipment) progress.equipment = {};
 
-    // 雙手武器限制
     if (slot === "weapon" && entry.isTwoHanded) {
-      // 換上雙手武器：自動卸下副手
       const shieldItem = progress.equipment["shield"] || null;
       if (shieldItem) {
         if (!Array.isArray(progress.inventory)) progress.inventory = [];
@@ -314,7 +294,6 @@ class ShopService {
       }
     }
     if (slot === "shield") {
-      // 嘗試裝副手：主手若是雙手武器則拒絕
       const mainWeapon = progress.equipment["weapon"] || null;
       if (mainWeapon?.isTwoHanded) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "主手裝備了雙手武器，無法使用副手槽！", 400);
@@ -322,9 +301,7 @@ class ShopService {
     }
 
     const current = progress.equipment[slot] || null;
-    // 從背包移除
     progress.inventory.splice(idx, 1);
-    // 從槽換下的裝回背包
     if (current) progress.inventory.push(current);
     progress.equipment[slot] = entry;
     progress.updatedAt = new Date().toISOString();
@@ -347,88 +324,56 @@ class ShopService {
     return { itemName: equipped.itemName, slot };
   }
 
-  /**
-   * 強化裝備：消耗背包中一件同名裝備（材料），目標裝備主屬 +1，上限 +3
-   * targetUuid: 要強化的目標裝備 uuid（背包或已裝備）
-   * materialUuid: 要消耗的材料裝備 uuid（必須在背包中，且同名）
-   */
   async enhanceItem(discordId, targetUuid, materialUuid) {
-    const ENHANCE_MAX = 3;
-
+    const ENHANCE_MAX = 10;
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
-
-    // 找目標裝備（支援傳入 uuid, itemId 或 itemName）
     const inv = progress.inventory || [];
     let target = inv.find(e => e.uuid === targetUuid);
     let targetSlotKey = null;
     if (!target) {
-      // 嘗試從裝備槽找（支援 uuid / itemId / itemName）
       for (const [k, v] of Object.entries(progress.equipment || {})) {
-        if (!v) continue;
-        if (v.uuid === targetUuid || v.itemId === targetUuid || v.itemName === targetUuid) { target = v; targetSlotKey = k; break; }
+        if (v && v.uuid === targetUuid) { target = v; targetSlotKey = k; break; }
       }
-    }
-    // 如果還找不到，嘗試用 itemId 或 itemName 在背包中匹配（容錯前端可能傳入 itemId）
-    if (!target) {
-      target = inv.find(e => e.itemId === targetUuid || e.itemName === targetUuid);
     }
     if (!target) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到目標裝備", 404);
     if (target.itemType !== "equipment") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標不是裝備", 400);
-
-    // 強化上限
     const currentLevel = target.enhanceLevel || 0;
     if (currentLevel >= ENHANCE_MAX) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${target.itemName} 已達強化上限（+${ENHANCE_MAX}）`, 400);
     }
-
-    // 找材料（必須在背包，同名，不能是目標本身）
-    let matIdx = inv.findIndex(e => e.uuid === materialUuid);
-    // 若找不到，嘗試用 itemId 或 itemName 匹配（容錯前端可能傳入 itemId 或 itemName）
+    let matIdx = inv.findIndex(e => e.uuid === materialUuid && e.uuid !== target.uuid);
     if (matIdx === -1) {
-      matIdx = inv.findIndex(e => e.itemId === materialUuid || e.itemName === materialUuid);
+      matIdx = inv.findIndex(e => (e.itemId === materialUuid || e.itemName === materialUuid) && e.uuid !== target.uuid && !e.isEquipped);
     }
-    if (matIdx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到材料裝備（需在背包中，支持 uuid/itemId/itemName）", 404);
+    if (matIdx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到符合條件的材料裝備", 404);
     const material = inv[matIdx];
-    if (material.itemName !== target.itemName) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `材料必須與目標同名（需要：${target.itemName}）`, 400);
+    if (material.itemId !== target.itemId) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "材料必須與目標同種類", 400);
     }
-    if (material.uuid === target.uuid || material.uuid === targetUuid) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標與材料不能是同一件裝備", 400);
-    }
-
-    // 決定強化屬性（主屬，即數值最大的那個）
     const stats = target.equipStats || {};
     const mainStat = Object.entries(stats).sort((a, b) => b[1] - a[1])[0]?.[0];
     if (!mainStat) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備沒有可強化的屬性", 400);
-
-    // 執行強化
     const newStats = { ...stats, [mainStat]: (stats[mainStat] || 0) + 1 };
     const newLevel = currentLevel + 1;
-    const newName = target.itemName.replace(/\s*\+\d+$/, '') + ` +${newLevel}`;
-
-    // 更新目標
+    const baseName = target.itemName.replace(/\s*\+\d+$/, '');
+    const newName = `${baseName} +${newLevel}`;
     const updatedTarget = { ...target, equipStats: newStats, enhanceLevel: newLevel, itemName: newName };
-
-    // 消耗材料
     progress.inventory.splice(matIdx, 1);
-
-    // 更新目標位置
     if (targetSlotKey) {
       progress.equipment[targetSlotKey] = updatedTarget;
     } else {
-      const targetIdx = progress.inventory.findIndex(e => e.uuid === targetUuid);
+      const targetIdx = progress.inventory.findIndex(e => e.uuid === target.uuid);
       if (targetIdx !== -1) progress.inventory[targetIdx] = updatedTarget;
     }
-
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
-
     return {
       itemName: newName,
       enhanceLevel: newLevel,
       statBoosted: mainStat,
       newStatValue: newStats[mainStat],
+      message: `成功將 ${baseName} 強化至 +${newLevel}！`
     };
   }
 }

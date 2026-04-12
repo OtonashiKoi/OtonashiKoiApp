@@ -424,9 +424,14 @@ function HomeTab({ onNavigate, unreadCount = 0, onOpenNotif }) {
 
 const getAssetUrl = (url) => {
   if (!url) return null;
+  // Cloudinary or other full URLs
   if (url.startsWith('http')) return url;
-  // Ensure we don't double slash
+  
+  // Local assets (e.g., from /data/items or /public)
   const path = url.startsWith('/') ? url : `/${url}`;
+  
+  // If we are on GitHub Pages, the origin is NOT the API origin.
+  // API_ORIGIN is already set correctly in api.js.
   return `${API_ORIGIN}${path}`;
 };
 
@@ -641,7 +646,7 @@ function ProfileTab({ onOpenSettings }) {
       {/* 裝備欄 */}
       <div className="card" style={{ padding: '16px', marginBottom: '16px' }}>
         <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: 'var(--gold)', fontFamily: 'var(--font-display)', letterSpacing: '0.06em' }}>裝備欄位 (Equipment)</h4>
-        <div style={{ gridTemplateColumns: 'repeat(5, 1fr)', display: 'grid', gap: '8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
           {slots.flatMap((s, idx) => {
             const item = equipment[s.key];
             const cell = (
@@ -729,6 +734,32 @@ function ProfileTab({ onOpenSettings }) {
               <strong>{stats.crit}%</strong>
             </div>
           </div>
+
+          {/* 武器特效標籤 */}
+          {(() => {
+            const effects = [];
+            const wt = stats.weaponType;
+            if (wt === 'dagger') effects.push('🗡️ 匕首：連擊率 +20%');
+            if (wt === 'axe_2h') effects.push('🪓 雙手斧：攻擊倍率 ×4');
+            if (wt === 'staff_1h') effects.push('🪄 法杖：絕對命中、受兩次攻擊');
+            if (wt === 'staff_2h') effects.push('🪄 雙手法杖：絕對命中、受兩次攻擊、攻擊倍率 ×5');
+            if (stats.attackCount === 2) effects.push('⚔️ 雙持：每回合攻擊兩次');
+            if (!effects.length) return null;
+            return (
+              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {effects.map((fx, i) => (
+                  <div key={i} style={{
+                    fontSize: '11px', color: 'var(--gold)',
+                    background: 'var(--gold-dim)',
+                    border: '1px solid rgba(200,169,110,0.25)',
+                    borderRadius: '4px',
+                    padding: '4px 10px',
+                    letterSpacing: '0.04em',
+                  }}>{fx}</div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
       {/* 基礎屬性 */}
@@ -773,7 +804,7 @@ function ProfileTab({ onOpenSettings }) {
 
             <div className="modal-body" style={{ maxHeight: '500px', overflowY: 'auto' }}>
               {/* 強化區 */}
-              {equipment[swappingSlot.key] && (equipment[swappingSlot.key].enhanceLevel ?? 0) < 3 && (
+              {equipment[swappingSlot.key] && (equipment[swappingSlot.key].enhanceLevel ?? 0) < 10 && (
                 <div style={{ marginBottom: '16px', padding: '16px', background: 'rgba(240,200,87,0.07)', borderRadius: '16px', border: '1px solid rgba(240,200,87,0.2)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: enhanceCandidates ? '12px' : '0' }}>
                     <p style={{ margin: 0, fontSize: '13px', color: '#f0c857' }}>⚗️ 強化 {equipment[swappingSlot.key].itemName}（目前 +{equipment[swappingSlot.key].enhanceLevel ?? 0}）</p>
@@ -781,8 +812,13 @@ function ProfileTab({ onOpenSettings }) {
                       <button className="btn" onClick={() => {
                         const inv = inventory || [];
                         const target = equipment[swappingSlot.key];
-                        const baseName = target.itemName.replace(/ \+\d+$/, '');
-                        const candidates = inv.filter(i => i.itemType === 'equipment' && i.itemName.replace(/ \+\d+$/, '') === baseName && !i.isEquipped);
+                        // 優先用 itemId 比對，其次用去除了 +n 的基底名稱比對
+                        const candidates = inv.filter(i => 
+                          i.itemType === 'equipment' && 
+                          (i.itemId === target.itemId || i.itemName.replace(/ \+\d+$/, '') === target.itemName.replace(/ \+\d+$/, '')) && 
+                          !i.isEquipped && 
+                          i.uuid !== target.uuid
+                        );
                         setEnhanceCandidates(candidates);
                         setSelectedMaterial(null);
                       }} style={{ background: '#f0c857', borderColor: '#f0c857', color: '#111', padding: '4px 12px', fontSize: '12px' }}>選材料</button>
@@ -790,27 +826,30 @@ function ProfileTab({ onOpenSettings }) {
                   </div>
                   {enhanceCandidates && (
                     <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>選擇強化材料：</div>
+                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>選擇強化材料 (同名未裝備)：</div>
                       {enhanceCandidates.length === 0 ? (
-                        <div style={{ fontSize: '12px', color: 'var(--muted)' }}>背包中沒有可作為材料的同名裝備。</div>
+                        <div style={{ fontSize: '12px', color: 'var(--muted)', padding: '10px 0' }}>背包中沒有可作為材料的同名裝備。</div>
                       ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '150px', overflowY: 'auto', paddingRight: '4px' }} className="hide-scrollbar">
                           {enhanceCandidates.map(c => (
-                            <div key={c.uuid} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <label key={c.uuid} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '8px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', cursor: 'pointer', border: selectedMaterial?.uuid === c.uuid ? '1px solid #f0c857' : '1px solid transparent' }}>
                               <input type="radio" name="enhanceMatProfile" checked={selectedMaterial?.uuid === c.uuid} onChange={() => setSelectedMaterial(c)} />
-                              <div style={{ fontSize: '13px' }}>{c.itemName} <span style={{ color: 'var(--muted)', fontSize: '11px' }}>({c.uuid.slice(0,8)})</span></div>
-                            </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '13px', color: '#fff' }}>{c.itemName}</div>
+                                <div style={{ fontSize: '10px', color: 'var(--muted)' }}>強化等級: +{c.enhanceLevel || 0}</div>
+                              </div>
+                            </label>
                           ))}
                         </div>
                       )}
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                         <button className="btn" disabled={!selectedMaterial || isEnhancing} onClick={async () => {
                           if (!selectedMaterial) return;
-                          if (!confirm(`確定用 ${selectedMaterial.itemName} 強化 ${equipment[swappingSlot.key].itemName} 嗎？`)) return;
+                          if (!confirm(`確定消耗 ${selectedMaterial.itemName} 來強化嗎？\n(強化成功率 100%)`)) return;
                           try {
                             setIsEnhancing(true);
                             const res = await api.enhanceItem(equipment[swappingSlot.key].uuid, selectedMaterial.uuid);
-                            alert(res.message || '強化完成');
+                            alert(res.message || '強化成功！');
                             setEnhanceCandidates(null);
                             setSelectedMaterial(null);
                             setSwappingSlot(null);
@@ -818,8 +857,8 @@ function ProfileTab({ onOpenSettings }) {
                           } catch (err) {
                             alert('強化失敗: ' + err.message);
                           } finally { setIsEnhancing(false); }
-                        }} style={{ background: '#7ad3a0', borderColor: '#7ad3a0', fontSize: '12px', padding: '4px 12px' }}>確認強化</button>
-                        <button className="btn" onClick={() => { setEnhanceCandidates(null); setSelectedMaterial(null); }} style={{ background: 'transparent', borderColor: '#ccc', fontSize: '12px', padding: '4px 12px' }}>取消</button>
+                        }} style={{ background: '#f0c857', borderColor: '#f0c857', color: '#000', fontSize: '12px', padding: '6px 16px', fontWeight: 'bold' }}>確認強化</button>
+                        <button className="btn" onClick={() => { setEnhanceCandidates(null); setSelectedMaterial(null); }} style={{ background: 'transparent', borderColor: 'rgba(255,255,255,0.2)', fontSize: '12px', padding: '6px 16px' }}>取消</button>
                       </div>
                     </div>
                   )}
@@ -863,6 +902,21 @@ function ProfileTab({ onOpenSettings }) {
                     </div>
                   ))
                 }
+                {( !inventory || inventory.filter(item => item.itemType === 'equipment' && item.equipSlot === swappingSlot.key && !item.isEquipped).length === 0) && (
+                  <div style={{ textAlign: 'center', padding: '20px 0', background: 'rgba(255,255,255,0.02)', borderRadius: '16px' }}>
+                    <p style={{ color: 'var(--muted)', fontSize: '13px' }}>📭 背包裡沒有其他可替換的道具</p>
+                    <button 
+                      className="btn" 
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('changeTab', { detail: 'inventory' }));
+                        setSwappingSlot(null);
+                      }} 
+                      style={{ marginTop: '12px', width: 'auto', padding: '6px 16px', fontSize: '12px' }}
+                    >
+                      前往背包查看全部
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -872,17 +926,6 @@ function ProfileTab({ onOpenSettings }) {
   );
 }
 
-const INVENTORY_CATEGORIES = [
-  { key: 'all', label: '全部' },
-  { key: 'collectible', label: '收藏', filter: (i) => i.itemType === 'collectible' },
-  { key: 'consumable', label: '消耗', filter: (i) => i.itemType === 'consumable' },
-  { key: 'weapon', label: '武器', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'weapon' },
-  { key: 'armor', label: '裝備', filter: (i) => i.itemType === 'equipment' && ['armor', 'head_top', 'head_mid', 'head_low', 'garment', 'shoes', 'shield'].includes(i.equipSlot) },
-  { key: 'special', label: '特殊', filter: (i) => i.itemType === 'equipment' && ['special_1', 'special_2', 'special_3'].includes(i.equipSlot) },
-  { key: 'title', label: '稱號', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'title_eq' },
-  { key: 'job', label: '職業', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'job_eq' },
-];
-
 function InventoryTab() {
   const [inventory, setInventory] = useState(null);
   const [category, setCategory] = useState('all');
@@ -890,7 +933,6 @@ function InventoryTab() {
   const [selectedMaterial, setSelectedMaterial] = useState(null);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
-  const [sellAmount, setSellAmount] = useState(1);
 
   const loadInventory = () => {
     api.getInventory().then(data => setInventory(data.inventory || [])).catch(console.error);
@@ -910,24 +952,37 @@ function InventoryTab() {
 
   const displayList = React.useMemo(() => {
     if (!inventory) return [];
-    const currentCat = INVENTORY_CATEGORIES.find(c => c.key === category);
-    const filtered = inventory.filter(item => category === 'all' || (currentCat.filter && currentCat.filter(item)));
+    
+    const filtered = inventory.filter(item => {
+      if (category === 'all') return true;
+      return item.itemType === category;
+    });
 
     const grouped = filtered.reduce((acc, item) => {
-      const key = item.isEquipped 
-        ? `equipped_${item.uuid}` 
-        : `${item.itemName}_${item.enhanceLevel || 0}_${item.itemType}`;
+      if (item.isEquipped) {
+        acc.push({ ...item, stackCount: 1 });
+        return acc;
+      }
       
-      if (!acc[key]) {
-        acc[key] = { ...item, stackCount: 1 };
+      const existing = acc.find(i => 
+        !i.isEquipped && 
+        i.itemId === item.itemId && 
+        (i.enhanceLevel || 0) === (item.enhanceLevel || 0) &&
+        i.itemType === item.itemType &&
+        // 額外檢查屬性是否完全一致（針對獨特裝備）
+        JSON.stringify(i.equipStats) === JSON.stringify(item.equipStats)
+      );
+
+      if (existing) {
+        existing.stackCount = (existing.stackCount || 1) + 1;
       } else {
-        acc[key].stackCount++;
+        acc.push({ ...item, stackCount: 1 });
       }
       return acc;
-    }, {});
+    }, []);
 
-    return Object.values(grouped).sort((a, b) => {
-      if (a.isEquipped !== b.isEquipped) return b.isEquipped ? -1 : 1;
+    return grouped.sort((a, b) => {
+      if (a.isEquipped !== b.isEquipped) return a.isEquipped ? -1 : 1;
       return 0;
     });
   }, [inventory, category]);
@@ -937,38 +992,48 @@ function InventoryTab() {
   const handleUse = async (item) => {
     try {
       const res = await api.useItem(item.uuid);
-      alert(`✅ ${res.itemName}: ${res.effectDesc || '使用成功'}`);
+      alert(`使用了 ${res.itemName}！${res.effectDesc || ''}`);
       setActiveItem(null);
       loadInventory();
-    } catch (err) { alert(err.message); }
+    } catch (err) {
+      alert("使用失敗: " + err.message);
+    }
   };
 
   const handleEquip = async (item) => {
     try {
       await api.equipItem(item.uuid);
+      alert(`已裝備 ${item.itemName}`);
       setActiveItem(null);
       loadInventory();
-    } catch (err) { alert(err.message); }
+    } catch (err) {
+      alert("裝備失敗: " + err.message);
+    }
   };
 
   const autoSelectMaterial = (target) => {
     const material = inventory.find(i => 
       i.itemType === 'equipment' && 
-      i.itemName.replace(/ \+\d+$/, '') === target.itemName.replace(/ \+\d+$/, '') && 
+      (i.itemId === target.itemId || i.itemName.replace(/ \+\d+$/, '') === target.itemName.replace(/ \+\d+$/, '')) && 
       !i.isEquipped && 
       i.uuid !== target.uuid
     );
     setSelectedMaterial(material || null);
-    if (!material) alert("背包中沒有同名的材料裝備");
+    if (!material) alert("背包中沒有符合條件的材料裝備 (需同名且未裝備)");
   };
 
-  const TIER_PRICE = { D: 10, C: 50, B: 100, A: 150 };
+  const categories = [
+    { key: 'all', label: '全部' },
+    { key: 'equipment', label: '裝備' },
+    { key: 'consumable', label: '消耗品' },
+    { key: 'collectible', label: '收藏品' }
+  ];
 
   return (
     <div className="app-screen" style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
       <h2 style={{ marginBottom: '12px' }}>背包 Inventory</h2>
       
-      <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px' }} className="hide-scrollbar">
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px' }} className="hide-scrollbar">
         {categories.map(c => (
           <div 
             key={c.key} 
@@ -994,7 +1059,7 @@ function InventoryTab() {
             {displayList.map((item) => (
               <div
                 key={item.uuid}
-                onClick={() => { setActiveItem(item); setSelectedMaterial(null); setSellAmount(1); }}
+                onClick={() => { setActiveItem(item); setSelectedMaterial(null); }}
                 style={{
                   aspectRatio: '1',
                   background: item.isEquipped ? 'rgba(200,169,110,0.08)' : 'rgba(255,255,255,0.03)',
@@ -1003,23 +1068,26 @@ function InventoryTab() {
                   position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
                 }}
               >
-                {item.enhanceLevel > 0 && (
-                  <div style={{ position: 'absolute', top: '4px', left: '4px', color: 'var(--gold)', fontSize: '9px', fontWeight: 'bold', zIndex: 2, background: 'rgba(0,0,0,0.4)', padding: '1px 3px', borderRadius: '3px' }}>
-                    +{item.enhanceLevel}
-                  </div>
-                )}
+                {/* 數量標記 */}
                 {item.stackCount > 1 && (
-                  <div style={{ position: 'absolute', top: '4px', right: '4px', color: '#fff', fontSize: '9px', fontWeight: 'bold', zIndex: 2, background: 'rgba(168,85,247,0.8)', padding: '1px 4px', borderRadius: '4px' }}>
+                  <div style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(168,85,247,0.8)', color: '#fff', fontSize: '10px', fontWeight: 'bold', padding: '1px 5px', borderRadius: '6px', zIndex: 2 }}>
                     x{item.stackCount}
                   </div>
                 )}
-                {item.isEquipped && !item.stackCount && (
-                  <div style={{ position: 'absolute', top: '4px', right: '4px', fontSize: '10px', zIndex: 2 }}>🛡️</div>
+                {/* 強化等級標記 */}
+                {item.enhanceLevel > 0 && (
+                  <div style={{ position: 'absolute', top: '4px', left: '4px', background: 'rgba(0,0,0,0.5)', color: 'var(--gold)', fontSize: '9px', fontWeight: 'bold', padding: '1px 4px', borderRadius: '4px', zIndex: 2 }}>
+                    +{item.enhanceLevel}
+                  </div>
+                )}
+                {/* 已裝備圖示 */}
+                {item.isEquipped && (
+                  <div style={{ position: 'absolute', bottom: '18px', right: '4px', fontSize: '10px', zIndex: 2 }}>🛡️</div>
                 )}
                 
                 <div style={{ width: '60%', height: '60%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {item.imageUrl ? (
-                    <img src={getAssetUrl(item.imageUrl)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    <img src={getAssetUrl(item.imageUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   ) : <span style={{fontSize:'20px', opacity: 0.3}}>📦</span>}
                 </div>
 
@@ -1042,56 +1110,40 @@ function InventoryTab() {
             <div className="modal-body">
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                 {activeItem.imageUrl && (
-                  <img src={getAssetUrl(activeItem.imageUrl)} style={{ width: '80px', height: '80px', objectFit: 'contain', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '10px', border: '1px solid var(--glass-border)', marginBottom: '12px' }} />
+                  <img src={getAssetUrl(activeItem.imageUrl)} alt="" style={{ width: '80px', height: '80px', objectFit: 'contain', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '10px', border: '1px solid var(--glass-border)', marginBottom: '12px' }} />
                 )}
                 <p style={{ color: 'var(--muted)', fontSize: '13px', lineHeight: 1.6 }}>{activeItem.itemDescription || '無詳細描述'}</p>
+                {activeItem.equipStats && (
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    {Object.entries(activeItem.equipStats).filter(([,v])=>v).map(([k,v]) => (
+                      <span key={k} style={{ fontSize: '11px', color: 'var(--gold)', background: 'rgba(200,169,110,0.1)', padding: '2px 8px', borderRadius: '4px' }}>{k.toUpperCase()} +{v}</span>
+                    ))}
+                  </div>
+                )}
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {activeItem.itemType === 'equipment' && (
+                {activeItem.itemType === 'equipment' && (activeItem.enhanceLevel || 0) < 10 && (
                   <div style={{ background: 'rgba(200,169,110,0.05)', padding: '14px', borderRadius: '16px', border: '1px solid rgba(200,169,110,0.2)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' }}>
                       <span style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 'bold' }}>⚗️ 裝備強化 (+{activeItem.enhanceLevel || 0})</span>
                       <button className="btn" onClick={() => autoSelectMaterial(activeItem)} style={{ width: 'auto', padding: '4px 12px', fontSize: '11px', background: 'rgba(200,169,110,0.2)', color: 'var(--gold)', border: 'none' }}>自動選料</button>
                     </div>
                     {selectedMaterial && (
-                      <div style={{ fontSize: '12px', marginBottom: '10px', color: 'var(--success)' }}>已選取材料: {selectedMaterial.itemName} (+{selectedMaterial.enhanceLevel || 0})</div>
+                      <div style={{ fontSize: '12px', marginBottom: '10px', color: 'var(--success)' }}>
+                        使用材料: {selectedMaterial.itemName} (+{selectedMaterial.enhanceLevel || 0})
+                      </div>
                     )}
                     <button className="btn" disabled={!selectedMaterial || isEnhancing} onClick={async () => {
                       try {
                         setIsEnhancing(true);
                         const res = await api.enhanceItem(activeItem.uuid, selectedMaterial.uuid);
-                        alert(res.message || '強化成功');
+                        alert(res.message || '強化成功！');
                         setSelectedMaterial(null);
                         setActiveItem(null);
                         loadInventory();
                       } catch (err) { alert(err.message); } finally { setIsEnhancing(false); }
-                    }} style={{ background: 'var(--gold)', color: '#000', fontWeight: 'bold', border: 'none' }}>確認強化</button>
-                  </div>
-                )}
-
-                {TIER_PRICE[activeItem.tier] && !activeItem.isEquipped && (
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>💰 販售物品</span>
-                      <span style={{ fontSize: '12px', color: 'var(--gold)' }}>單價: {TIER_PRICE[activeItem.tier]} 🪙</span>
-                    </div>
-                    {activeItem.stackCount > 1 && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                        <input type="range" min="1" max={activeItem.stackCount} value={sellAmount} onChange={e => setSellAmount(parseInt(e.target.value))} style={{ flex: 1 }} />
-                        <span style={{ fontSize: '12px', width: '40px' }}>{sellAmount} 件</span>
-                      </div>
-                    )}
-                    <button className="btn" onClick={async () => {
-                      if (!confirm(`確認要以 ${TIER_PRICE[activeItem.tier] * sellAmount} 金幣販售 ${sellAmount} 件 ${activeItem.itemName} 嗎？`)) return;
-                      try {
-                        await api.sellItem(activeItem.uuid, sellAmount);
-                        setActiveItem(null);
-                        loadInventory();
-                      } catch (err) { alert(err.message); }
-                    }} style={{ borderColor: 'var(--gold)', color: 'var(--gold)', background: 'transparent' }}>
-                      販售獲得 {TIER_PRICE[activeItem.tier] * sellAmount} 🪙
-                    </button>
+                    }} style={{ background: 'var(--gold)', color: '#000', fontWeight: 'bold', border: 'none' }}>確認強化 (100% 成功)</button>
                   </div>
                 )}
 
@@ -1740,37 +1792,38 @@ function ChatTab() {
       setExpressions(data);
     }).catch(() => {});
 
-    // 1. 取得歷史紀錄
-    api.getChatHistory().then(history => {
-      const formatted = history.map(m => {
-        let text = m.content;
-        let author = m.author;
-        
-        if (m.isBot && text.startsWith("[Web] **")) {
-          const match = text.match(/\[Web\] \*\*([\s\S]+?)\*\*: ([\s\S]+)/);
-          if (match) {
-            author = match[1];
-            text = match[2];
-          }
-        }
-        
-          return {
-            id: m.id,
-            text: text,
-            originalText: m.content,
-            author: author,
-            avatar: m.avatar,
-            time: new Date(m.timestamp).toLocaleTimeString(),
-            replyTo: m.replyTo || null,
-          };
-        });
-      setMessages(formatted);
-      setTimeout(scrollToBottom, 100);
-    }).catch(console.error);
+          // 取得歷史紀錄
+          api.getChatHistory().then(history => {
+            const formatted = history.map(m => {
+              let text = m.content;
+              let author = m.author;
+              
+              if (m.isBot && text.startsWith("[Web] **")) {
+                const match = text.match(/\[Web\] \*\*([\s\S]+?)\*\*: ([\s\S]+)/);
+                if (match) {
+                  author = match[1];
+                  text = match[2];
+                }
+              }
+              
+              return {
+                id: m.id,
+                text: text,
+                originalText: m.content,
+                author: author,
+                avatar: m.avatar,
+                time: new Date(m.timestamp).toLocaleTimeString(),
+                replyTo: m.replyTo || null,
+              };
+            });
+            setMessages(formatted);
+            setTimeout(scrollToBottom, 100);
+          }).catch(console.error);
 
     // 2. 建立 SSE 直播連線
     const eventSource = api.createChatStream((newMsg) => {
       setMessages(prev => {
+        // 去重
         if (prev.some(m => m.id === newMsg.id)) return prev;
         
         let text = newMsg.content;
@@ -1822,11 +1875,14 @@ function ChatTab() {
 
   const handleSendExpression = async (expr) => {
     setShowPicker(false);
+    // emoji 用 code 插入文字；sticker 直接送圖片 URL
     if (expr.code) {
+      // Discord emoji code，直接附加到目前訊息或單獨發送
       const text = message ? `${message} ${expr.code}` : expr.code;
       setMessage('');
       await handleSend(text);
     } else {
+      // Sticker — 傳圖片連結
       await handleSend(expr.url);
     }
   };
@@ -1845,18 +1901,24 @@ function ChatTab() {
           const isMe = m.author === myDisplayName || m.author === "Me";
           const isSystemBot = m.isBot && !m.text?.startsWith('[Web]');
 
+          // 解析文字內容（先跳脫 HTML 防止 XSS）
           let parsedText = escapeHtml(m.text || '');
+          // Discord emoji
           parsedText = parsedText.replace(/&lt;(a?):(\w+):(\d+)&gt;/g, (_, animated, name, id) => {
             const ext = animated ? 'gif' : 'png';
             return `<img src="https://cdn.discordapp.com/emojis/${id}.${ext}" alt=":${name}:" class="chat-emoji" />`;
           });
+          // Discord CDN / media 圖片連結（貼圖）→ 渲染成圖片
           parsedText = parsedText.replace(
             /(https:\/\/(?:media|cdn)\.discordapp\.(?:net|com)\/(?:stickers|attachments)\/[^\s"<>]+\.(?:png|gif|jpg|jpeg|webp)(?:\?[^\s"<>]*)?)/gi,
             (url) => `<img src="${url}" alt="sticker" style="max-width:140px;max-height:140px;border-radius:8px;display:block;margin-top:4px;" />`
           );
+          // **粗體** markdown
           parsedText = parsedText.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#f0e6d3">$1</strong>');
+          // 提到
           parsedText = parsedText.replace(/\[@(.*?)\]/g, '<span class="mention">@$1</span>');
 
+          // ── 系統廣播（Bot 非 Web 轉發）→ 橫幅樣式 ──
           if (isSystemBot) {
             return (
               <div key={m.id || idx} style={{
@@ -1924,6 +1986,7 @@ function ChatTab() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* 表情/貼圖選擇器 */}
       {showPicker && (
         <div style={{
           position: 'absolute', bottom: '58px', left: '12px', right: '12px',
@@ -1931,6 +1994,7 @@ function ChatTab() {
           borderRadius: '12px', zIndex: 50, overflow: 'hidden',
           boxShadow: '0 -8px 32px rgba(0,0,0,0.6)',
         }}>
+          {/* Tab 列 */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--glass-border)' }}>
             {[{ key: 'emoji', label: '表情' }, { key: 'sticker', label: '貼圖' }].map(t => (
               <button key={t.key} onClick={() => setPickerTab(t.key)} style={{
@@ -1947,6 +2011,7 @@ function ChatTab() {
             }}>✕</button>
           </div>
 
+          {/* 內容 */}
           <div style={{ maxHeight: '180px', overflowY: 'auto', padding: '8px' }}>
             {pickerTab === 'emoji' && (
               expressions.emojis.length === 0
@@ -1990,7 +2055,9 @@ function ChatTab() {
         </div>
       )}
 
+      {/* 輸入列 */}
       <div style={{ marginTop: '12px', display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
+        {/* 表情按鈕 */}
         <button onClick={() => setShowPicker(p => !p)} style={{
           background: showPicker ? 'rgba(200,169,110,0.12)' : 'rgba(255,255,255,0.04)',
           border: `1px solid ${showPicker ? 'rgba(200,169,110,0.5)' : 'var(--glass-border)'}`,
@@ -2015,16 +2082,23 @@ function ChatTab() {
 function SettingsTab({ audioRef, bgmMuted, onToggleBgm, volume, onVolumeChange, onLogout }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* 音樂區塊 */}
       <div className="card" style={{ marginBottom: 0 }}>
         <p style={{ margin: '0 0 14px', fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>背景音樂</p>
+
+        {/* 開關 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
           <span style={{ fontSize: '0.95rem' }}>{bgmMuted ? '🔇 已靜音' : '🔈 播放中'}</span>
           <button onClick={onToggleBgm} style={{
             padding: '6px 18px', borderRadius: '20px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
             background: bgmMuted ? 'var(--surface-hover)' : 'var(--accent)',
             color: '#fff', border: 'none', transition: 'all 0.2s',
-          }}>{bgmMuted ? '開啟' : '關閉'}</button>
+          }}>
+            {bgmMuted ? '開啟' : '關閉'}
+          </button>
         </div>
+
+        {/* 音量滑桿 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--muted)' }}>
             <span>音量</span>
@@ -2036,9 +2110,14 @@ function SettingsTab({ audioRef, bgmMuted, onToggleBgm, volume, onVolumeChange, 
           />
         </div>
       </div>
+
+      {/* 登出 */}
       <div className="card" style={{ marginBottom: 0 }}>
         <p style={{ margin: '0 0 14px', fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>帳號</p>
-        <button className="btn" onClick={onLogout} style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#f87171' }}>登出</button>
+        <button className="btn" onClick={onLogout}
+          style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#f87171' }}>
+          登出
+        </button>
       </div>
     </div>
   );
@@ -2071,8 +2150,8 @@ function WeeklyQuestTab() {
     try {
       const reward = await api.claimWeeklyReward(questId);
       const parts = [];
-      if (reward.gold) parts.push(`${reward.gold} 🪙`);
-      if (reward.diamond) parts.push(`${reward.diamond} 💎`);
+      if (reward.gold)          parts.push(`${reward.gold} 🪙`);
+      if (reward.diamond)       parts.push(`${reward.diamond} 💎`);
       if (reward.rewardItemName) parts.push(reward.rewardItemName);
       setMsg({ type: 'ok', text: `✅ 已領取「${reward.questTitle}」獎勵：${parts.join('、') || '—'}` });
       await load();
@@ -2096,6 +2175,7 @@ function WeeklyQuestTab() {
         <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--gold)' }}>📋 每週任務</h2>
         <span style={{ fontSize: '11px', color: 'var(--muted)' }}>{weekLabel}</span>
       </div>
+
       {msg && (
         <div style={{
           margin: '8px 16px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
@@ -2104,6 +2184,7 @@ function WeeklyQuestTab() {
           border: `1px solid ${msg.type === 'ok' ? 'rgba(74,222,128,0.25)' : 'rgba(239,68,68,0.25)'}`,
         }}>{msg.text}</div>
       )}
+
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>載入中…</div>
       ) : quests.length === 0 ? (
@@ -2113,18 +2194,26 @@ function WeeklyQuestTab() {
           {quests.map(({ quest, current, claimed, done }) => {
             const pct = Math.min(100, Math.round((current / Math.max(quest.target, 1)) * 100));
             const rewards = [];
-            if (quest.rewardGold) rewards.push(`${quest.rewardGold} 🪙`);
+            if (quest.rewardGold)    rewards.push(`${quest.rewardGold} 🪙`);
             if (quest.rewardDiamond) rewards.push(`${quest.rewardDiamond} 💎`);
-            if (quest.rewardItemId) rewards.push('道具');
+            if (quest.rewardItemId)  rewards.push('道具');
             return (
               <div key={quest.id} className="card" style={{ padding: '14px 16px', marginBottom: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: '14px', color: claimed ? 'var(--muted)' : 'var(--text)' }}>{quest.title}</div>
-                    {quest.description && <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{quest.description}</div>}
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: claimed ? 'var(--muted)' : 'var(--text)' }}>
+                      {quest.title}
+                    </div>
+                    {quest.description && (
+                      <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{quest.description}</div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)', textAlign: 'right', whiteSpace: 'nowrap', marginLeft: '8px' }}>{rewards.length ? rewards.join(' ') : '—'}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--muted)', textAlign: 'right', whiteSpace: 'nowrap', marginLeft: '8px' }}>
+                    {rewards.length ? rewards.join(' ') : '—'}
+                  </div>
                 </div>
+
+                {/* 進度條 */}
                 <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginBottom: '8px', overflow: 'hidden' }}>
                   <div style={{
                     height: '100%', borderRadius: '3px', transition: 'width 0.4s',
@@ -2133,12 +2222,16 @@ function WeeklyQuestTab() {
                   }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{current} / {quest.target}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
+                    {current} / {quest.target}
+                  </span>
                   {claimed ? (
                     <span style={{ fontSize: '12px', color: 'var(--muted)' }}>✅ 已領取</span>
                   ) : done ? (
                     <button className="btn" onClick={() => claim(quest.id)} disabled={claiming === quest.id}
-                      style={{ padding: '4px 14px', fontSize: '12px', opacity: claiming === quest.id ? 0.6 : 1 }}>{claiming === quest.id ? '領取中…' : '🎁 領取獎勵'}</button>
+                      style={{ padding: '4px 14px', fontSize: '12px', opacity: claiming === quest.id ? 0.6 : 1 }}>
+                      {claiming === quest.id ? '領取中…' : '🎁 領取獎勵'}
+                    </button>
                   ) : (
                     <span style={{ fontSize: '12px', color: 'var(--muted)' }}>🔲 進行中</span>
                   )}
@@ -2156,13 +2249,13 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [isInitializing, setIsInitializing] = useState(true);
-  const [loginError, setLoginError] = useState(null);
+  const [loginError, setLoginError] = useState(null); // null | 'NOT_GUILD_MEMBER' | 'ERROR'
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showMoreDrawer, setShowMoreDrawer] = useState(false);
   const [showWeeklyTab, setShowWeeklyTab] = useState(false);
-  const [rewardToast, setRewardToast] = useState(null);
+  const [rewardToast, setRewardToast] = useState(null); // { monsterName, gold, exp, drops }
   const [rewardToastOpen, setRewardToastOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState([]); // 通知歷史紀錄
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const audioRef = useRef(null);
@@ -2171,8 +2264,11 @@ export default function App() {
 
   const toggleBgm = () => {
     if (!audioRef.current) return;
-    if (bgmMuted) audioRef.current.play().catch(() => {});
-    else audioRef.current.pause();
+    if (bgmMuted) {
+      audioRef.current.play().catch(() => {});
+    } else {
+      audioRef.current.pause();
+    }
     setBgmMuted(m => !m);
   };
 
@@ -2186,9 +2282,11 @@ export default function App() {
     setIsAuthenticated(false);
   };
 
+  // 全域 SSE + polling fallback：監聽獎勵通知
   useEffect(() => {
     if (!isAuthenticated) return;
     const toastTimerRef = { current: null };
+
     function handleReward(summary) {
       const notif = { ...summary, id: Date.now(), time: new Date().toLocaleTimeString() };
       setNotifications(prev => [notif, ...prev].slice(0, 50));
@@ -2198,24 +2296,39 @@ export default function App() {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       toastTimerRef.current = setTimeout(() => setRewardToastOpen(false), 5000);
     }
+
+    // SSE（本機直連有效）
     const es = api.createChatStream(() => {}, { onReward: handleReward });
+
+    // Polling fallback（每 8 秒，Cloudflare 等 proxy 環境用）
     const pollInterval = setInterval(async () => {
       try {
         const items = await api.pollNotifications();
         if (Array.isArray(items)) items.forEach(handleReward);
       } catch (_) {}
     }, 8000);
-    return () => { es.close(); clearInterval(pollInterval); if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
+
+    return () => {
+      es.close();
+      clearInterval(pollInterval);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
   }, [isAuthenticated]);
 
+  // 背景音樂：首次使用者互動後自動播放
   useEffect(() => {
     const audio = new Audio(`${import.meta.env.BASE_URL}op.ogg`);
     audio.loop = true;
     audio.volume = 0.35;
     audioRef.current = audio;
-    const tryPlay = () => { if (!audioRef.current) return; audioRef.current.play().catch(() => {}); };
+
+    const tryPlay = () => {
+      if (!audioRef.current) return;
+      audioRef.current.play().catch(() => {});
+    };
     window.addEventListener('pointerdown', tryPlay, { once: true });
     window.addEventListener('keydown', tryPlay, { once: true });
+
     return () => {
       window.removeEventListener('pointerdown', tryPlay);
       window.removeEventListener('keydown', tryPlay);
@@ -2224,9 +2337,11 @@ export default function App() {
     };
   }, []);
 
+  // Check URL for ?code= (Discord OAuth Callback)
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const authCode = urlParams.get('code');
+
     if (authCode) {
       api.loginWithDiscord(authCode).then(data => {
         setToken(data.token);
@@ -2234,12 +2349,19 @@ export default function App() {
         setIsAuthenticated(true);
         setIsInitializing(false);
       }).catch(err => {
+        console.error("Login failed", err);
         window.history.replaceState({}, document.title, import.meta.env.BASE_URL || '/');
-        setLoginError(err.code === 'NOT_GUILD_MEMBER' ? 'NOT_GUILD_MEMBER' : 'ERROR');
+        if (err.code === 'NOT_GUILD_MEMBER') {
+          setLoginError('NOT_GUILD_MEMBER');
+        } else {
+          setLoginError('ERROR');
+        }
         setIsInitializing(false);
       });
     } else {
-      if (localStorage.getItem("player_token")) setIsAuthenticated(true);
+      if (localStorage.getItem("player_token")) {
+        setIsAuthenticated(true);
+      }
       setIsInitializing(false);
     }
   }, []);
@@ -2247,80 +2369,271 @@ export default function App() {
   if (isInitializing) return <div className="app-screen">Loading...</div>;
 
   if (loginError === 'NOT_GUILD_MEMBER') return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '2.5rem 2rem', textAlign: 'center', background: 'linear-gradient(175deg, #04060e 0%, #08091a 50%, #060c18 100%)' }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      height: '100%', padding: '2.5rem 2rem', textAlign: 'center',
+      background: 'linear-gradient(175deg, #04060e 0%, #08091a 50%, #060c18 100%)',
+      gap: 0,
+    }}>
+      <div style={{ width: '100%', height: '1px', position: 'absolute', top: 0, background: 'linear-gradient(to right, transparent, rgba(200,169,110,0.6), transparent)' }} />
+
       <div style={{ fontSize: '3rem', marginBottom: '1.2rem', opacity: 0.7 }}>🚪</div>
-      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', letterSpacing: '0.1em', background: 'linear-gradient(135deg, #c8a96e, #e8c97a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: '0 0 0.6rem' }}>尚未加入社群</h2>
-      <a href="https://discord.gg/xnCSmQazfr" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '13px 28px', background: 'linear-gradient(135deg, #4752c4, #5865F2)', color: '#fff', borderRadius: '2px', fontSize: '0.9rem', fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 20px rgba(88,101,242,0.4)', letterSpacing: '0.08em', border: '1px solid rgba(120,140,255,0.3)', transition: 'all 0.2s', marginBottom: '1rem' }}>
-        <Icons.Discord /> 加入音無玄學棋牌社
+
+      <h2 style={{
+        fontFamily: 'var(--font-display)', fontSize: '1.3rem', letterSpacing: '0.1em',
+        background: 'linear-gradient(135deg, #c8a96e, #e8c97a)',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+        margin: '0 0 0.6rem',
+      }}>
+        尚未加入社群
+      </h2>
+
+      <div style={{ width: '60px', height: '1px', background: 'linear-gradient(to right, transparent, var(--gold), transparent)', margin: '0.8rem 0 1rem' }} />
+
+      <p style={{ fontSize: '13px', color: 'rgba(200,169,110,0.5)', lineHeight: 1.8, margin: '0 0 0.4rem', letterSpacing: '0.04em' }}>
+        這裡是限社員使用的空間。
+      </p>
+      <p style={{ fontSize: '13px', color: 'rgba(200,169,110,0.4)', lineHeight: 1.8, margin: '0 0 2rem', letterSpacing: '0.04em' }}>
+        加入 Discord 伺服器後就可以一起玩囉！
+      </p>
+
+      <a href="https://discord.gg/xnCSmQazfr" target="_blank" rel="noopener noreferrer" style={{
+        display: 'inline-flex', alignItems: 'center', gap: '10px',
+        padding: '13px 28px',
+        background: 'linear-gradient(135deg, #4752c4, #5865F2)',
+        color: '#fff', borderRadius: '2px', fontSize: '0.9rem',
+        fontWeight: 700, textDecoration: 'none',
+        boxShadow: '0 4px 20px rgba(88,101,242,0.4)',
+        letterSpacing: '0.08em', fontFamily: 'var(--font-display)',
+        border: '1px solid rgba(120,140,255,0.3)',
+        transition: 'all 0.2s',
+        marginBottom: '1rem',
+      }}
+        onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(88,101,242,0.55)'; }}
+        onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(88,101,242,0.4)'; }}
+      >
+        <Icons.Discord />
+        加入音無玄學棋牌社
       </a>
-      <button onClick={() => setLoginError(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(200,169,110,0.3)', fontSize: '11px', cursor: 'pointer' }}>← 返回登入頁</button>
+
+      <button onClick={() => setLoginError(null)} style={{
+        background: 'transparent', border: 'none',
+        color: 'rgba(200,169,110,0.3)', fontSize: '11px',
+        cursor: 'pointer', letterSpacing: '0.08em', fontFamily: 'var(--font-display)',
+        padding: '6px',
+      }}>
+        ← 返回登入頁
+      </button>
     </div>
   );
 
   if (!isAuthenticated) return <LoginScreen />;
 
   return (
-    <PlayerProvider isAuthenticated={isAuthenticated}>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <div style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-          {activeTab === 'home' && <HomeTab onNavigate={setActiveTab} unreadCount={unreadCount} onOpenNotif={() => { setUnreadCount(0); setShowNotifModal(true); }} />}
-          {activeTab === 'profile' && <ProfileTab onOpenSettings={() => setShowSettingsModal(true)} />}
-          {activeTab === 'inventory' && <InventoryTab />}
-          {activeTab === 'combat' && <CombatTab />}
-          {activeTab === 'shop' && <ShopTab />}
-          {activeTab === 'chat' && <ChatTab />}
-        </div>
-
-        {showSettingsModal && (
-          <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxHeight: '70vh' }}>
-              <div className="modal-header">
-                <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: '14px' }}>設定</span>
-                <button onClick={() => setShowSettingsModal(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '20px' }}>✕</button>
-              </div>
-              <div className="modal-body">
-                <SettingsTab audioRef={audioRef} bgmMuted={bgmMuted} onToggleBgm={toggleBgm} volume={volume} onVolumeChange={handleVolumeChange} onLogout={() => { setShowSettingsModal(false); handleLogout(); }} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showWeeklyTab && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 210, background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: '1px solid var(--glass-border)' }}>
-              <button onClick={() => setShowWeeklyTab(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '20px' }}>←</button>
-              <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: '14px' }}>每週任務</span>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyQuestTab /></div>
-          </div>
-        )}
-
-        {showMoreDrawer && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={() => setShowMoreDrawer(false)}>
-            <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', bottom: 'var(--nav-height)', left: 0, right: 0, background: 'rgba(8,10,22,0.98)', borderTop: '1px solid var(--glass-border)', borderRadius: '16px 16px 0 0', padding: '8px 0 4px', boxShadow: '0 -8px 40px rgba(0,0,0,0.7)', animation: 'modal-up 0.22s' }}>
-              <div style={{ width: '36px', height: '3px', background: 'rgba(200,169,110,0.25)', borderRadius: '2px', margin: '0 auto 12px' }} />
-              <div onClick={() => { setShowMoreDrawer(false); setShowSettingsModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 20px', cursor: 'pointer' }}>
-                <span style={{ color: 'var(--gold)', display: 'flex' }}><Icons.Settings /></span>
-                <div><div style={{ fontSize: '14px', fontWeight: 600 }}>設定</div><div style={{ fontSize: '11px', color: 'var(--muted)' }}>音樂、音量、帳號</div></div>
-              </div>
-              <div onClick={() => { setShowMoreDrawer(false); setShowWeeklyTab(true); }} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 20px', cursor: 'pointer' }}>
-                <span style={{ color: 'var(--gold)', display: 'flex', fontSize: '18px' }}>📋</span>
-                <div><div style={{ fontSize: '14px', fontWeight: 600 }}>每週任務</div><div style={{ fontSize: '11px', color: 'var(--muted)' }}>查看進度、領取獎勵</div></div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <nav className="bottom-nav">
-          <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}><Icons.Home /><span>首頁</span></div>
-          <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}><Icons.User /><span>角色</span></div>
-          <div className={`nav-item ${activeTab === 'combat' ? 'active' : ''}`} onClick={() => setActiveTab('combat')}><Icons.Swords /><span>戰鬥</span></div>
-          <div className={`nav-item ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}><Icons.Chat /><span>大廳</span></div>
-          <div className={`nav-item ${activeTab === 'inventory' ? 'active' : ''}`} onClick={() => setActiveTab('inventory')}><Icons.Backpack /><span>背包</span></div>
-          <div className={`nav-item ${activeTab === 'shop' ? 'active' : ''}`} onClick={() => setActiveTab('shop')}><Icons.Store /><span>商店</span></div>
-          <div className={`nav-item ${showMoreDrawer ? 'active' : ''}`} onClick={() => setShowMoreDrawer(d => !d)}><Icons.More /><span>更多</span></div>
-        </nav>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+        {activeTab === 'home' && <HomeTab onNavigate={setActiveTab} unreadCount={unreadCount} onOpenNotif={() => { setUnreadCount(0); setShowNotifModal(true); }} />}
+        {activeTab === 'profile' && <ProfileTab onOpenSettings={() => setShowSettingsModal(true)} />}
+        {activeTab === 'inventory' && <InventoryTab />}
+        {activeTab === 'combat' && <CombatTab />}
+        {activeTab === 'shop' && <ShopTab />}
+        {activeTab === 'chat' && <ChatTab />}
       </div>
-    </PlayerProvider>
+
+      {/* 設定 Modal（A：從角色頁 ⚙️ 觸發）*/}
+      {showSettingsModal && (
+        <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxHeight: '70vh' }}>
+            <div className="modal-header">
+              <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: '14px', letterSpacing: '0.1em' }}>設定</span>
+              <button onClick={() => setShowSettingsModal(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>✕</button>
+            </div>
+            <div className="modal-body">
+              <SettingsTab
+                audioRef={audioRef}
+                bgmMuted={bgmMuted}
+                onToggleBgm={toggleBgm}
+                volume={volume}
+                onVolumeChange={handleVolumeChange}
+                onLogout={() => { setShowSettingsModal(false); handleLogout(); }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 每週任務全螢幕覆蓋 */}
+      {showWeeklyTab && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 210, background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: '1px solid var(--glass-border)' }}>
+            <button onClick={() => setShowWeeklyTab(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: 0 }}>←</button>
+            <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: '14px', letterSpacing: '0.08em' }}>每週任務</span>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <WeeklyQuestTab />
+          </div>
+        </div>
+      )}
+
+      {/* 更多抽屜（B：從導覽列 ··· 觸發）*/}
+      {showMoreDrawer && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={() => setShowMoreDrawer(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            position: 'absolute', bottom: 'var(--nav-height)', left: 0, right: 0,
+            background: 'rgba(8,10,22,0.98)', borderTop: '1px solid var(--glass-border)',
+            borderRadius: '16px 16px 0 0',
+            padding: '8px 0 4px',
+            boxShadow: '0 -8px 40px rgba(0,0,0,0.7)',
+            animation: 'modal-up 0.22s cubic-bezier(0.16,1,0.3,1)',
+          }}>
+            {/* 拖曳指示條 */}
+            <div style={{ width: '36px', height: '3px', background: 'rgba(200,169,110,0.25)', borderRadius: '2px', margin: '0 auto 12px' }} />
+            <p style={{ margin: '0 20px 8px', fontSize: '10px', color: 'var(--muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>更多功能</p>
+
+            {/* 設定入口 */}
+            <div onClick={() => { setShowMoreDrawer(false); setShowSettingsModal(true); }} style={{
+              display: 'flex', alignItems: 'center', gap: '14px',
+              padding: '14px 20px', cursor: 'pointer', transition: 'background 0.15s',
+            }}
+              onMouseOver={e => e.currentTarget.style.background = 'rgba(200,169,110,0.07)'}
+              onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ color: 'var(--gold)', display: 'flex' }}><Icons.Settings /></span>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>設定</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '1px' }}>音樂、音量、帳號</div>
+              </div>
+            </div>
+
+            <div style={{ height: '1px', background: 'var(--line)', margin: '0 20px' }} />
+
+            {/* 每週任務 */}
+            <div onClick={() => { setShowMoreDrawer(false); setShowWeeklyTab(true); }} style={{
+              display: 'flex', alignItems: 'center', gap: '14px',
+              padding: '14px 20px', cursor: 'pointer', transition: 'background 0.15s',
+            }}
+              onMouseOver={e => e.currentTarget.style.background = 'rgba(200,169,110,0.07)'}
+              onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ color: 'var(--gold)', display: 'flex', fontSize: '18px' }}>📋</span>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>每週任務</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '1px' }}>查看進度、領取獎勵</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 其他玩家擊殺獎勵 Toast（LINE 風格從頂部滑入）*/}
+      {rewardToast && (
+        <div
+          className={`notif-toast ${rewardToastOpen ? 'entering' : 'leaving'}`}
+          onClick={() => setRewardToastOpen(false)}
+          style={{ display: rewardToast ? 'flex' : 'none' }}
+        >
+          {/* 左側 icon */}
+          <div style={{ fontSize: '22px', lineHeight: 1, flexShrink: 0, marginTop: '1px' }}>🔔</div>
+          {/* 內容 */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700, letterSpacing: '0.08em' }}>
+                獲得怪物討伐獎勵
+              </span>
+              {rewardToast.monsterName && (
+                <span style={{ fontSize: '11px', color: 'var(--muted)' }}>— {rewardToast.monsterName}</span>
+              )}
+              <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--muted)', flexShrink: 0 }}>{rewardToast.time}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {rewardToast.exp > 0 && (
+                <span style={{ fontSize: '12px', color: '#60c0ff' }}>
+                  ✨ +{rewardToast.exp.toLocaleString()} EXP
+                  {rewardToast.levelUps > 0 && <span style={{ color: '#ffd700', marginLeft: '4px' }}>▲LV+{rewardToast.levelUps}</span>}
+                </span>
+              )}
+              {rewardToast.gold > 0 && (
+                <span style={{ fontSize: '12px', color: 'var(--gold)' }}>💰 +{rewardToast.gold.toLocaleString()}</span>
+              )}
+              {rewardToast.drops && rewardToast.drops.length > 0 && (
+                <span style={{ fontSize: '12px', color: '#a88cff' }}>
+                  📦 {rewardToast.drops.map(d => d.name || d).join(', ')}
+                </span>
+              )}
+            </div>
+          </div>
+          <span style={{ fontSize: '14px', color: 'var(--muted)', flexShrink: 0, alignSelf: 'flex-start' }}>✕</span>
+        </div>
+      )}
+
+      {/* 通知歷史 Modal */}
+      {showNotifModal && (
+        <div className="modal-overlay" onClick={() => setShowNotifModal(false)} style={{ zIndex: 800 }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxHeight: '75vh' }}>
+            <div className="modal-header">
+              <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: '14px', letterSpacing: '0.1em' }}>
+                🔔 通知紀錄
+              </span>
+              <button onClick={() => setShowNotifModal(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: '12px' }}>
+              {notifications.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', padding: '24px 0' }}>尚無通知</p>
+              ) : notifications.map(n => (
+                <div key={n.id} style={{
+                  padding: '10px 12px', marginBottom: '8px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: '8px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700 }}>
+                      {n.monsterName || '怪物'} 討伐獎勵
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{n.time}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    {n.exp > 0 && <span style={{ fontSize: '12px', color: '#60c0ff' }}>✨ +{n.exp.toLocaleString()} EXP{n.levelUps > 0 ? ` ▲LV+${n.levelUps}` : ''}</span>}
+                    {n.gold > 0 && <span style={{ fontSize: '12px', color: 'var(--gold)' }}>💰 +{n.gold.toLocaleString()}</span>}
+                    {n.drops && n.drops.length > 0 && <span style={{ fontSize: '12px', color: '#a88cff' }}>📦 {n.drops.map(d => d.name || d).join(', ')}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav className="bottom-nav">
+        <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+          <Icons.Home />
+          <span>首頁</span>
+        </div>
+        <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+          <Icons.User />
+          <span>角色</span>
+        </div>
+        <div className={`nav-item ${activeTab === 'combat' ? 'active' : ''}`} onClick={() => setActiveTab('combat')}>
+          <Icons.Swords />
+          <span>戰鬥</span>
+        </div>
+        <div className={`nav-item ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
+          <Icons.Chat />
+          <span>大廳</span>
+        </div>
+        <div className={`nav-item ${activeTab === 'inventory' ? 'active' : ''}`} onClick={() => setActiveTab('inventory')}>
+          <Icons.Backpack />
+          <span>背包</span>
+        </div>
+        <div className={`nav-item ${activeTab === 'shop' ? 'active' : ''}`} onClick={() => setActiveTab('shop')}>
+          <Icons.Store />
+          <span>商店</span>
+        </div>
+        <div className={`nav-item ${showMoreDrawer ? 'active' : ''}`} onClick={() => setShowMoreDrawer(d => !d)}>
+          <Icons.More />
+          <span>更多</span>
+        </div>
+      </nav>
+    </div>
   );
 }
