@@ -325,7 +325,7 @@ class ShopService {
   }
 
   async enhanceItem(discordId, targetUuid, materialUuid) {
-    const ENHANCE_MAX = 10;
+    const ENHANCE_MAX = 3;
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
     const inv = progress.inventory || [];

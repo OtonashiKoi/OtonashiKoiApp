@@ -804,7 +804,7 @@ function ProfileTab({ onOpenSettings }) {
 
             <div className="modal-body" style={{ maxHeight: '500px', overflowY: 'auto' }}>
               {/* 強化區 */}
-              {equipment[swappingSlot.key] && (equipment[swappingSlot.key].enhanceLevel ?? 0) < 10 && (
+              {equipment[swappingSlot.key] && (equipment[swappingSlot.key].enhanceLevel ?? 0) < 3 && (
                 <div style={{ marginBottom: '16px', padding: '16px', background: 'rgba(240,200,87,0.07)', borderRadius: '16px', border: '1px solid rgba(240,200,87,0.2)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: enhanceCandidates ? '12px' : '0' }}>
                     <p style={{ margin: 0, fontSize: '13px', color: '#f0c857' }}>⚗️ 強化 {equipment[swappingSlot.key].itemName}（目前 +{equipment[swappingSlot.key].enhanceLevel ?? 0}）</p>
@@ -1123,7 +1123,7 @@ function InventoryTab() {
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {activeItem.itemType === 'equipment' && (activeItem.enhanceLevel || 0) < 10 && (
+                {activeItem.itemType === 'equipment' && (activeItem.enhanceLevel || 0) < 3 && (
                   <div style={{ background: 'rgba(200,169,110,0.05)', padding: '14px', borderRadius: '16px', border: '1px solid rgba(200,169,110,0.2)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' }}>
                       <span style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 'bold' }}>⚗️ 裝備強化 (+{activeItem.enhanceLevel || 0})</span>
