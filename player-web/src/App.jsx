@@ -872,6 +872,17 @@ function ProfileTab({ onOpenSettings }) {
   );
 }
 
+const INVENTORY_CATEGORIES = [
+  { key: 'all', label: '全部' },
+  { key: 'collectible', label: '收藏', filter: (i) => i.itemType === 'collectible' },
+  { key: 'consumable', label: '消耗', filter: (i) => i.itemType === 'consumable' },
+  { key: 'weapon', label: '武器', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'weapon' },
+  { key: 'armor', label: '裝備', filter: (i) => i.itemType === 'equipment' && ['armor', 'head_top', 'head_mid', 'head_low', 'garment', 'shoes', 'shield'].includes(i.equipSlot) },
+  { key: 'special', label: '特殊', filter: (i) => i.itemType === 'equipment' && ['special_1', 'special_2', 'special_3'].includes(i.equipSlot) },
+  { key: 'title', label: '稱號', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'title_eq' },
+  { key: 'job', label: '職業', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'job_eq' },
+];
+
 function InventoryTab() {
   const [inventory, setInventory] = useState(null);
   const [category, setCategory] = useState('all');
@@ -897,20 +908,9 @@ function InventoryTab() {
     return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
-  const categories = [
-    { key: 'all', label: '全部' },
-    { key: 'collectible', label: '收藏', filter: (i) => i.itemType === 'collectible' },
-    { key: 'consumable', label: '消耗', filter: (i) => i.itemType === 'consumable' },
-    { key: 'weapon', label: '武器', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'weapon' },
-    { key: 'armor', label: '裝備', filter: (i) => i.itemType === 'equipment' && ['armor', 'head_top', 'head_mid', 'head_low', 'garment', 'shoes', 'shield'].includes(i.equipSlot) },
-    { key: 'special', label: '特殊', filter: (i) => i.itemType === 'equipment' && ['special_1', 'special_2', 'special_3'].includes(i.equipSlot) },
-    { key: 'title', label: '稱號', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'title_eq' },
-    { key: 'job', label: '職業', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'job_eq' },
-  ];
-
   const displayList = React.useMemo(() => {
     if (!inventory) return [];
-    const currentCat = categories.find(c => c.key === category);
+    const currentCat = INVENTORY_CATEGORIES.find(c => c.key === category);
     const filtered = inventory.filter(item => category === 'all' || (currentCat.filter && currentCat.filter(item)));
 
     const grouped = filtered.reduce((acc, item) => {
