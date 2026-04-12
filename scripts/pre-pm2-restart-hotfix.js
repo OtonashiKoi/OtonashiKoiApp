@@ -11,14 +11,10 @@ async function pickHotfixChannelId(serviceContext) {
   const layout = await serviceContext.adminConsoleService.getChannelLayout();
   const bindings = Array.isArray(layout?.discord?.bindings) ? layout.discord.bindings : [];
   // 對齊掉裝公告邏輯：優先 town_chat，沒有才 fallback 到 monster_zone
-  const preferredFeatureKeys = ["town_chat", "monster_zone", "monster_zone_mid", "park_announcement"];
-
-  for (const featureKey of preferredFeatureKeys) {
-    const binding = bindings.find((entry) => entry.featureKey === featureKey && entry.channelId);
-    if (binding?.channelId) return binding.channelId;
-  }
-
-  return "";
+  const binding = bindings.find(
+    (entry) => entry.featureKey === "town_chat" && entry.enabled && entry.channelId
+  );
+  return binding?.channelId || "";
 }
 
 async function main() {
@@ -30,7 +26,7 @@ async function main() {
   const serviceContext = createServiceContext();
   const targetChannelId = await pickHotfixChannelId(serviceContext);
   if (!targetChannelId) {
-    console.warn("[HotfixNotice] 找不到可用頻道（monster_zone/park_announcement），略過重啟公告。");
+    console.warn("[HotfixNotice] 找不到已啟用的聊天大街(town_chat)綁定，略過重啟公告。");
     return;
   }
 
