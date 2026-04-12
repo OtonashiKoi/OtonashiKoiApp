@@ -974,141 +974,213 @@ function InventoryTab() {
     }
   };
 
-  const filtered = inventory.filter(item => {
-    if (category === 'all') return true;
-    return item.itemType === category;
-  });
-
+  // 1. 精確分類 (對齊 Discord 規則)
   const categories = [
     { key: 'all', label: '全部' },
-    { key: 'equipment', label: '裝備' },
-    { key: 'consumable', label: '消耗品' },
-    { key: 'collectible', label: '收藏品' }
+    { key: 'collectible', label: '收藏', filter: (i) => i.itemType === 'collectible' },
+    { key: 'consumable', label: '消耗', filter: (i) => i.itemType === 'consumable' },
+    { key: 'weapon', label: '武器', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'weapon' },
+    { key: 'armor', label: '裝備', filter: (i) => i.itemType === 'equipment' && ['armor', 'head_top', 'head_mid', 'head_low', 'garment', 'shoes', 'shield'].includes(i.equipSlot) },
+    { key: 'special', label: '特殊', filter: (i) => i.itemType === 'equipment' && ['special_1', 'special_2', 'special_3'].includes(i.equipSlot) },
+    { key: 'title', label: '稱號', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'title_eq' },
+    { key: 'job', label: '職業', filter: (i) => i.itemType === 'equipment' && i.equipSlot === 'job_eq' },
   ];
 
-  return (
-    <div className="app-screen" style={{ position: 'relative' }}>
-      <h2 style={{ marginBottom: '16px' }}>背包 Inventory</h2>
+  // 2. 道具堆疊邏輯 (同名 + 同強化等級 + 未裝備的會堆疊)
+  const displayList = React.useMemo(() => {
+    if (!inventory) return [];
+    const currentCat = categories.find(c => c.key === category);
+    const filtered = inventory.filter(item => category === 'all' || (currentCat.filter && currentCat.filter(item)));
+
+    const grouped = filtered.reduce((acc, item) => {
+      const key = item.isEquipped 
+        ? `equipped_${item.uuid}` 
+        : `${item.itemName}_${item.enhanceLevel || 0}_${item.itemType}`;
       
-      <div className="filter-bar" style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto' }}>
+      if (!acc[key]) {
+        acc[key] = { ...item, stackCount: 1 };
+      } else {
+        acc[key].stackCount++;
+      }
+      return acc;
+    }, {});
+
+    return Object.values(grouped).sort((a, b) => {
+      if (a.isEquipped !== b.isEquipped) return b.isEquipped ? -1 : 1;
+      return 0;
+    });
+  }, [inventory, category]);
+
+  if (inventory === null) return <div className="app-screen">Loading Inventory...</div>;
+
+  const handleUse = async (item) => {
+    try {
+      const res = await api.useItem(item.uuid);
+      alert(`✅ ${res.itemName}: ${res.effectDesc || '使用成功'}`);
+      setActiveItem(null);
+      loadInventory();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleEquip = async (item) => {
+    try {
+      await api.equipItem(item.uuid);
+      setActiveItem(null);
+      loadInventory();
+    } catch (err) { alert(err.message); }
+  };
+
+  const autoSelectMaterial = (target) => {
+    const material = inventory.find(i => 
+      i.itemType === 'equipment' && 
+      i.itemName.replace(/ \+\d+$/, '') === target.itemName.replace(/ \+\d+$/, '') && 
+      !i.isEquipped && 
+      i.uuid !== target.uuid
+    );
+    setSelectedMaterial(material || null);
+    if (!material) alert("背包中沒有同名的材料裝備");
+  };
+
+  const TIER_PRICE = { D: 10, C: 50, B: 100, A: 150 };
+
+  return (
+    <div className="app-screen" style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <h2 style={{ marginBottom: '12px' }}>背包 Inventory</h2>
+      
+      <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px' }} className="hide-scrollbar">
         {categories.map(c => (
           <div 
             key={c.key} 
-            className={`filter-pill ${category === c.key ? 'active' : ''}`}
             onClick={() => setCategory(c.key)}
-            style={{ padding: '6px 12px', borderRadius: '20px', background: category === c.key ? 'var(--accent)' : 'var(--surface-hover)', cursor: 'pointer', fontSize: '12px' }}
+            style={{ 
+              padding: '6px 14px', borderRadius: '20px', 
+              background: category === c.key ? 'var(--accent)' : 'rgba(255,255,255,0.05)', 
+              color: category === c.key ? '#fff' : '#888',
+              cursor: 'pointer', fontSize: '11px', whiteSpace: 'nowrap',
+              border: '1px solid var(--glass-border)'
+            }}
           >
             {c.label}
           </div>
         ))}
       </div>
 
-      {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', color: 'var(--muted)', marginTop: '60px', fontSize: '13px' }}>此分類下暫無物品</div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-          {filtered.map((item) => (
-            <div
-              key={item.uuid}
-              onClick={() => setActiveItem(item)}
-              style={{
-                aspectRatio: '1',
-                background: item.isEquipped ? 'rgba(200,169,110,0.08)' : 'rgba(255,255,255,0.03)',
-                border: item.isEquipped ? '1.5px solid rgba(200,169,110,0.6)' : '1px solid var(--glass-border)',
-                borderRadius: '10px', cursor: 'pointer',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: '4px', position: 'relative', overflow: 'hidden',
-                transition: 'all 0.18s ease',
-              }}
-              onMouseOver={e => { e.currentTarget.style.borderColor = 'rgba(200,169,110,0.5)'; e.currentTarget.style.background = 'rgba(200,169,110,0.06)'; }}
-              onMouseOut={e => { e.currentTarget.style.borderColor = item.isEquipped ? 'rgba(200,169,110,0.6)' : 'var(--glass-border)'; e.currentTarget.style.background = item.isEquipped ? 'rgba(200,169,110,0.08)' : 'rgba(255,255,255,0.03)'; }}
-            >
-              {/* 已裝備標記 */}
-              {item.isEquipped && (
-                <div style={{ position: 'absolute', top: 3, right: 3, width: '7px', height: '7px', borderRadius: '50%', background: 'var(--gold)' }} />
-              )}
-              {/* 圖片或預設圖示 */}
-              <div style={{ width: '60%', aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                {item.imageUrl
-                  ? <img src={getAssetUrl(item.imageUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                  : <span style={{ fontSize: '1.6rem', opacity: 0.25 }}>📦</span>
-                }
+      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '20px' }}>
+        {displayList.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', opacity: 0.3 }}>📦 這裡空空如也...</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+            {displayList.map((item) => (
+              <div
+                key={item.uuid}
+                onClick={() => { setActiveItem(item); setSelectedMaterial(null); setSellAmount(1); }}
+                style={{
+                  aspectRatio: '1',
+                  background: item.isEquipped ? 'rgba(200,169,110,0.08)' : 'rgba(255,255,255,0.03)',
+                  border: item.isEquipped ? '1.5px solid var(--gold)' : '1px solid var(--glass-border)',
+                  borderRadius: '10px', cursor: 'pointer',
+                  position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
+                }}
+              >
+                {item.enhanceLevel > 0 && (
+                  <div style={{ position: 'absolute', top: '4px', left: '4px', color: 'var(--gold)', fontSize: '9px', fontWeight: 'bold', zIndex: 2, background: 'rgba(0,0,0,0.4)', padding: '1px 3px', borderRadius: '3px' }}>
+                    +{item.enhanceLevel}
+                  </div>
+                )}
+                {item.stackCount > 1 && (
+                  <div style={{ position: 'absolute', top: '4px', right: '4px', color: '#fff', fontSize: '9px', fontWeight: 'bold', zIndex: 2, background: 'rgba(168,85,247,0.8)', padding: '1px 4px', borderRadius: '4px' }}>
+                    x{item.stackCount}
+                  </div>
+                )}
+                {item.isEquipped && !item.stackCount && (
+                  <div style={{ position: 'absolute', top: '4px', right: '4px', fontSize: '10px', zIndex: 2 }}>🛡️</div>
+                )}
+                
+                <div style={{ width: '60%', height: '60%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {item.imageUrl ? (
+                    <img src={getAssetUrl(item.imageUrl)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  ) : <span style={{fontSize:'20px', opacity: 0.3}}>📦</span>}
+                </div>
+
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)', padding: '2px 4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '8px', color: '#f0e6d3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.itemName}</div>
+                </div>
               </div>
-              {/* 名稱 */}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.65)', padding: '2px 4px', textAlign: 'center' }}>
-                <span style={{ fontSize: '8px', color: '#f0e6d3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{item.itemName}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
 
       {activeItem && (
-        <div className="modal-overlay" onClick={() => setActiveItem(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '320px' }}>
+        <div className="modal-overlay" onClick={() => { setActiveItem(null); setSelectedMaterial(null); }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '340px', borderRadius: '24px' }}>
             <div className="modal-header">
-              <h3>{activeItem.itemName}</h3>
-              <button className="close-btn" onClick={() => setActiveItem(null)}>&times;</button>
+              <h3 style={{ margin: 0 }}>{activeItem.itemName}</h3>
+              <button onClick={() => setActiveItem(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '20px' }}>&times;</button>
             </div>
-            <div className="modal-body" style={{ textAlign: 'center' }}>
-              <div style={{ padding: '20px 0' }}>
-                <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>{activeItem.itemDescription || '無詳細描述'}</div>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {activeItem.itemType === 'consumable' && (
-                    <button className="btn" onClick={() => handleUse(activeItem)} style={{ background: 'var(--success)', borderColor: 'var(--success)' }}>使用</button>
-                  )}
-                  {activeItem.itemType === 'equipment' && (
-                    <div>
-                      <button className="btn" onClick={() => {
-                        // 找出同名且未裝備的同類作為材料
-                        const inv = inventory || [];
-                        const candidates = inv.filter(i => i.itemType === 'equipment' && i.itemName === activeItem.itemName && !i.isEquipped && i.uuid !== activeItem.uuid);
-                        setEnhanceCandidates(candidates);
-                        setSelectedMaterial(null);
-                      }} style={{ background: '#f0c857', borderColor: '#f0c857' }}>⚗️ 強化</button>
-
-                      {enhanceCandidates && (
-                        <div style={{ marginTop: '10px', textAlign: 'left' }}>
-                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>選擇強化材料：</div>
-                          {enhanceCandidates.length === 0 ? (
-                            <div style={{ fontSize: '12px', color: 'var(--muted)' }}>背包中沒有可作為材料的同名裝備。</div>
-                          ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              {enhanceCandidates.map(c => (
-                                <div key={c.uuid} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                  <input type="radio" name="enhanceMat" checked={selectedMaterial?.uuid === c.uuid} onChange={() => setSelectedMaterial(c)} />
-                                  <div style={{ fontSize: '13px' }}>{c.itemName} <span style={{ color: 'var(--muted)', fontSize: '12px' }}>({c.uuid.slice(0,8)})</span></div>
-                                </div>
-                              ))}
-                              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                                <button className="btn" disabled={!selectedMaterial || isEnhancing} onClick={async () => {
-                                  if (!selectedMaterial) return;
-                                  if (!confirm(`確定用 ${selectedMaterial.itemName} 作為材料強化 ${activeItem.itemName} 嗎？`)) return;
-                                  try {
-                                    setIsEnhancing(true);
-                                    const res = await api.enhanceItem(activeItem.uuid, selectedMaterial.uuid);
-                                    alert(res.message || '強化完成');
-                                    setEnhanceCandidates(null);
-                                    setSelectedMaterial(null);
-                                    setActiveItem(null);
-                                    loadInventory();
-                                  } catch (err) {
-                                    alert('強化失敗: ' + err.message);
-                                  } finally { setIsEnhancing(false); }
-                                }} style={{ background: '#7ad3a0', borderColor: '#7ad3a0' }}>確認強化</button>
-                                <button className="btn" onClick={() => { setEnhanceCandidates(null); setSelectedMaterial(null); }} style={{ background: 'transparent', borderColor: '#ccc' }}>取消</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+            <div className="modal-body">
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                {activeItem.imageUrl && (
+                  <img src={getAssetUrl(activeItem.imageUrl)} style={{ width: '80px', height: '80px', objectFit: 'contain', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '10px', border: '1px solid var(--glass-border)', marginBottom: '12px' }} />
+                )}
+                <p style={{ color: 'var(--muted)', fontSize: '13px', lineHeight: 1.6 }}>{activeItem.itemDescription || '無詳細描述'}</p>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {activeItem.itemType === 'equipment' && (
+                  <div style={{ background: 'rgba(200,169,110,0.05)', padding: '14px', borderRadius: '16px', border: '1px solid rgba(200,169,110,0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 'bold' }}>⚗️ 裝備強化 (+{activeItem.enhanceLevel || 0})</span>
+                      <button className="btn" onClick={() => autoSelectMaterial(activeItem)} style={{ width: 'auto', padding: '4px 12px', fontSize: '11px', background: 'rgba(200,169,110,0.2)', color: 'var(--gold)', border: 'none' }}>自動選料</button>
                     </div>
-                  )}
-                  {activeItem.itemType === 'collectible' && activeItem.imageUrl && (
-                    <button className="btn" onClick={() => setPreviewImage(getAssetUrl(activeItem.imageUrl))}>檢視圖片</button>
-                  )}
-                  <button className="btn" onClick={() => handleDiscard(activeItem)} style={{ background: 'transparent', borderColor: '#ff4d4d', color: '#ff4d4d' }}>丟棄物品</button>
+                    {selectedMaterial && (
+                      <div style={{ fontSize: '12px', marginBottom: '10px', color: 'var(--success)' }}>已選取材料: {selectedMaterial.itemName} (+{selectedMaterial.enhanceLevel || 0})</div>
+                    )}
+                    <button className="btn" disabled={!selectedMaterial || isEnhancing} onClick={async () => {
+                      try {
+                        setIsEnhancing(true);
+                        const res = await api.enhanceItem(activeItem.uuid, selectedMaterial.uuid);
+                        alert(res.message || '強化成功');
+                        setSelectedMaterial(null);
+                        setActiveItem(null);
+                        loadInventory();
+                      } catch (err) { alert(err.message); } finally { setIsEnhancing(false); }
+                    }} style={{ background: 'var(--gold)', color: '#000', fontWeight: 'bold', border: 'none' }}>確認強化</button>
+                  </div>
+                )}
+
+                {TIER_PRICE[activeItem.tier] && !activeItem.isEquipped && (
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>💰 販售物品</span>
+                      <span style={{ fontSize: '12px', color: 'var(--gold)' }}>單價: {TIER_PRICE[activeItem.tier]} 🪙</span>
+                    </div>
+                    {activeItem.stackCount > 1 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                        <input type="range" min="1" max={activeItem.stackCount} value={sellAmount} onChange={e => setSellAmount(parseInt(e.target.value))} style={{ flex: 1 }} />
+                        <span style={{ fontSize: '12px', width: '40px' }}>{sellAmount} 件</span>
+                      </div>
+                    )}
+                    <button className="btn" onClick={async () => {
+                      if (!confirm(`確認要以 ${TIER_PRICE[activeItem.tier] * sellAmount} 金幣販售 ${sellAmount} 件 ${activeItem.itemName} 嗎？`)) return;
+                      try {
+                        await api.sellItem(activeItem.uuid, sellAmount);
+                        setActiveItem(null);
+                        loadInventory();
+                      } catch (err) { alert(err.message); }
+                    }} style={{ borderColor: 'var(--gold)', color: 'var(--gold)', background: 'transparent' }}>
+                      販售獲得 {TIER_PRICE[activeItem.tier] * sellAmount} 🪙
+                    </button>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {activeItem.itemType === 'consumable' && <button className="btn" style={{flex:2, background: 'var(--success)', border: 'none', color: '#000'}} onClick={() => handleUse(activeItem)}>使用</button>}
+                  {!activeItem.isEquipped && activeItem.itemType === 'equipment' && <button className="btn" style={{flex:2, background: 'var(--accent)', border: 'none'}} onClick={() => handleEquip(activeItem)}>穿戴</button>}
+                  {activeItem.itemType === 'collectible' && activeItem.imageUrl && <button className="btn" style={{flex:2}} onClick={() => setPreviewImage(getAssetUrl(activeItem.imageUrl))}>檢視圖片</button>}
+                  <button className="btn" style={{flex:1, borderColor: '#ff4d4f', color: '#ff4d4f', background: 'transparent'}} onClick={async () => {
+                    if (confirm(`確定丟棄 ${activeItem.itemName}？`)) { await api.discardItem(activeItem.uuid); setActiveItem(null); loadInventory(); }
+                  }}>丟棄</button>
                 </div>
               </div>
             </div>
