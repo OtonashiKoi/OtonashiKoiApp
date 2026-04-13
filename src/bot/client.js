@@ -214,69 +214,119 @@ async function republishPanelsOnStartup() {
 }
 
 const spamTracker = new Map();
-const MUTE_DURATION_MS = 3 * 60 * 60 * 1000; // 3 小時
-const SPAM_ANNOUNCE_CHANNEL_ID = "1292448143946027039"; // 公告頻道
-const SAME_MSG_LIMIT = 4;   // 同一句話連續超過幾次就禁言
-const BURST_LIMIT    = 6;   // 幾次
-const BURST_WINDOW_MS = 3000; // 在幾毫秒內
 
+// 讀取 moderation 設定（若 config 未提供，使用預設）
+const moderation = config.moderation || {
+  muteDurationMs: 12 * 60 * 60 * 1000,
+  sameMsgLimit: 4,
+  burstLimit: 6,
+  burstWindowMs: 3000,
+  spamAnnounceChannelId: "1292448143946027039",
+  mentionPerMsgLimit: 5,
+  consecutiveMentionLimit: 4
+};
+
+function formatDurationMs(ms) {
+  const hours = Math.round(ms / (60 * 60 * 1000));
+  if (hours >= 1) return `${hours} 小時`;
+  const mins = Math.round(ms / (60 * 1000));
+  return `${mins} 分鐘`;
+}
+
+async function doMuteAndAnnounce(member, message, reason, key) {
+  try {
+    spamTracker.delete(key);
+    await member.timeout(moderation.muteDurationMs, reason);
+    console.log(`[SpamGuard] 禁言 ${message.author.tag} (${message.author.id})：${reason}`);
+
+    const announceChannel = await message.guild.channels.fetch(moderation.spamAnnounceChannelId).catch(() => null);
+    if (announceChannel?.isTextBased()) {
+      const durationText = formatDurationMs(moderation.muteDurationMs);
+      await announceChannel.send(
+        `🔇 <@${message.author.id}> 因 **${reason}**（在 <#${message.channelId}>），已被禁言 ${durationText}。`
+      ).catch(() => {});
+    }
+  } catch (err) {
+    console.warn(`[SpamGuard] 無法禁言 ${message.author.tag}：${err?.message || err}`);
+  }
+}
+
+// key: `${guildId}:${userId}`，value: { lastMsg, count, timestamps: [], lastMentionedId, consecutiveMentionCount }
 async function checkSpam(message) {
-  if (!message.guild) return;                            // 只管伺服器頻道
-  if (message.author.bot) return;                       // 忽略機器人
-  // 管理員或有禁言他人權限的人不受限制
+  if (!message.guild) return;
+  if (message.author.bot) return;
+
   const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
   if (!member) return;
   if (member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
 
   const key = `${message.guild.id}:${message.author.id}`;
   const now = Date.now();
-  const content = message.content.trim().toLowerCase();
+  const content = (message.content || "").trim().toLowerCase();
 
   let state = spamTracker.get(key);
   if (!state) {
-    state = { lastMsg: content, count: 1, timestamps: [now] };
+    state = { lastMsg: content, count: 1, timestamps: [now], lastMentionedId: null, consecutiveMentionCount: 0 };
     spamTracker.set(key, state);
+  } else {
+    state.timestamps = state.timestamps.filter(t => now - t < moderation.burstWindowMs);
+    state.timestamps.push(now);
+    if (content === state.lastMsg) {
+      state.count++;
+    } else {
+      state.count = 1;
+      state.lastMsg = content;
+    }
+  }
+
+  // 單則訊息 mention 數量檢查（若超過設定則立即處理）
+  const mentionCount = (message.mentions && message.mentions.users && message.mentions.users.size) || 0;
+  if (mentionCount >= moderation.mentionPerMsgLimit) {
+    const reason = '刷屏：單則訊息標註過多成員';
+    await doMuteAndAnnounce(member, message, reason, key);
     return;
   }
 
-  // 清理 BURST_WINDOW_MS 外的時間戳
-  state.timestamps = state.timestamps.filter(t => now - t < BURST_WINDOW_MS);
-  state.timestamps.push(now);
-
-  // 同一句話計數
-  if (content === state.lastMsg) {
-    state.count++;
-  } else {
-    state.count = 1;
-    state.lastMsg = content;
+  // 單則訊息內重複標註同一人（若同一 id 在 content 中重複出現）
+  if (mentionCount > 0) {
+    for (const userId of message.mentions.users.keys()) {
+      const regex = new RegExp(`<@!?${userId}>`, "g");
+      const matches = (message.content || "").match(regex) || [];
+      if (matches.length >= moderation.consecutiveMentionLimit) {
+        const reason = '刷屏：單則訊息重複標註相同成員';
+        await doMuteAndAnnounce(member, message, reason, key);
+        return;
+      }
+    }
   }
 
-  const sameSpam  = state.count > SAME_MSG_LIMIT;
-  const burstSpam = state.timestamps.length > BURST_LIMIT;
+  // 跨訊息連續標註同一人（只考慮此則訊息包含單一 mention 的情況）
+  if (mentionCount === 1) {
+    const targetId = [...message.mentions.users.keys()][0];
+    if (state.lastMentionedId === targetId) {
+      state.consecutiveMentionCount = (state.consecutiveMentionCount || 0) + 1;
+    } else {
+      state.consecutiveMentionCount = 1;
+      state.lastMentionedId = targetId;
+    }
+    if (state.consecutiveMentionCount >= moderation.consecutiveMentionLimit) {
+      const reason = '刷屏：連續標註相同成員';
+      await doMuteAndAnnounce(member, message, reason, key);
+      return;
+    }
+  } else {
+    state.lastMentionedId = null;
+    state.consecutiveMentionCount = 0;
+  }
+
+  // 既有的連續相同訊息 / burst 檢查
+  const sameSpam = state.count >= moderation.sameMsgLimit; // >= 使用者需求（第 4 次觸發）
+  const burstSpam = state.timestamps.length > moderation.burstLimit;
 
   if (!sameSpam && !burstSpam) return;
 
-  // 重置紀錄，避免重複觸發
-  spamTracker.delete(key);
-
-  const reason = sameSpam
-    ? `刷屏：同一句話連續超過 ${SAME_MSG_LIMIT} 次`
-    : `刷屏：${BURST_WINDOW_MS / 1000} 秒內發言超過 ${BURST_LIMIT} 次`;
-
-  try {
-    await member.timeout(MUTE_DURATION_MS, reason);
-    console.log(`[SpamGuard] 禁言 ${message.author.tag} (${message.author.id})：${reason}`);
-
-    // 發公告到指定頻道
-    const announceChannel = await message.guild.channels.fetch(SPAM_ANNOUNCE_CHANNEL_ID).catch(() => null);
-    if (announceChannel?.isTextBased()) {
-      await announceChannel.send(
-        `🔇 <@${message.author.id}> 因 **${reason}**（在 <#${message.channelId}>），已被禁言 3 小時。`
-      ).catch(() => {});
-    }
-  } catch (err) {
-    console.warn(`[SpamGuard] 無法禁言 ${message.author.tag}：${err.message}`);
-  }
+  const reason = sameSpam ? '刷屏：同一句話連續超過上限' : '刷屏：短時間內過量發言';
+  await doMuteAndAnnounce(member, message, reason, key);
 }
 // ────────────────────────────────────────────────────────────
 
