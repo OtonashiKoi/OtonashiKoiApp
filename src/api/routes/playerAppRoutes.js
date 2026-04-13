@@ -73,18 +73,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       // ?箔??嫣噶?祆??皜祈岫嚗???code 隞?"mock:" ???敺銵?
       if (code.startsWith("mock:")) {
-        console.log("[PlayerApp] 雿輻?璅∪? Mock ?餃");
+        console.log("[PlayerApp] Development mode mock login");
         discordId = code.replace("mock:", "");
         if (discordId.length < 5) discordId = "1450019975031951370"; // ?身?輯??澈蝚砌?雿摰嗆葫閰?
       } else {
         // ?祕??Discord OAuth2 鈭斗? (??閬?Node 18+ ??fetch)
         if (!process.env.DISCORD_CLIENT_SECRET) {
-          return res.status(500).json({ status: "error", message: "敺垢撠閮剖? DISCORD_CLIENT_SECRET嚗瘜?霅?撖衣? Discord ?餃" });
+          return res.status(500).json({ status: "error", message: "Server missing DISCORD_CLIENT_SECRET; Discord login is unavailable." });
         }
         // redirect_uri 敹???蝡舐韏?OAuth ???湛??勗?蝡臬??
         const { redirect_uri } = req.body;
         if (!redirect_uri) {
-          return res.status(400).json({ status: "error", message: "蝻箏? redirect_uri ?" });
+          return res.status(400).json({ status: "error", message: "Missing redirect_uri" });
         }
         const params = new URLSearchParams({
           client_id: process.env.DISCORD_CLIENT_ID,
@@ -105,7 +105,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.log("[PlayerApp] Discord Auth Response:", tokenData);
 
         if (tokenData.error) {
-           return res.status(400).json({ status: "error", message: `Discord 撽?憭望?: ${tokenData.error_description || tokenData.error}` });
+           return res.status(400).json({ status: "error", message: `Discord auth failed: ${tokenData.error_description || tokenData.error}` });
         }
 
         const userRes = await fetch("https://discord.com/api/users/@me", {
@@ -276,7 +276,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId } = req.playerRecord;
       const { targetUuid, materialUuid } = req.body;
-      if (!targetUuid || !materialUuid) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "??? targetUuid ??materialUuid", 400);
+      if (!targetUuid || !materialUuid) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "targetUuid and materialUuid are required", 400);
       const result = await serviceContext.shopService.enhanceItem(discordId, targetUuid, materialUuid);
       res.json(ok(result));
     } catch (err) {
@@ -697,7 +697,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return {
           zone: key,
           monsterId: activeMonster?.id || null,
-          monsterName: activeMonster?.name || "?芰",
+          monsterName: activeMonster?.name || "Unknown",
           monsterImageUrl: activeMonster?.imageUrl || null,
           monsterLevel: activeMonster?.level || 0,
           expReward: activeMonster?.expReward || 0,
@@ -818,7 +818,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let state = stateRaw;
       
       if (!monsters.length) {
-        return res.status(400).json({ status: "error", message: "?桀?瘝??銝剔??芰" });
+        return res.status(400).json({ status: "error", message: "No enabled monster in this zone." });
       }
 
       let monster = monsters.find(m => m.seq === state.activeMonsterSeq);
