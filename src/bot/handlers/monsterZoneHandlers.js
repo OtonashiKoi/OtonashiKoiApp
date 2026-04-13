@@ -197,15 +197,79 @@ async function getZoneFromChannel(sc, channelId) {
   return featureKeyToZone(binding.featureKey);
 }
 
-async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap = {}) {
+function pickWeightedNextMonster(monsters, currentMonsterId = null) {
+  if (!Array.isArray(monsters) || monsters.length === 0) return null;
+  const pool = monsters.filter((m) => m.id !== currentMonsterId || monsters.length === 1);
+  if (!pool.length) return null;
+  const totalWeight = pool.reduce((s, m) => s + (m.spawnRate || 10), 0);
+  let r = Math.random() * Math.max(1, totalWeight);
+  let selected = pool[pool.length - 1];
+  for (const m of pool) {
+    r -= (m.spawnRate || 10);
+    if (r <= 0) {
+      selected = m;
+      break;
+    }
+  }
+  return selected || null;
+}
+
+async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap = {}, activeEvent = null) {
   const featureKey = zoneKey === "mid" ? "monster_zone_mid" : "monster_zone";
   const layout = await sc.channelLayoutRepository.get();
   const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey);
   if (binding?.channelId) {
     await sc.adminConsoleService.publishMonsterZonePanel(
-      binding.channelId, monster, monsterHp, { participantCount, damageMap }
+      binding.channelId, monster, monsterHp, { participantCount, damageMap, activeEvent }
     );
   }
+}
+
+function _scheduleZoneEventFinalize(sc, zoneKey, endsAt) {
+  if (!endsAt) return;
+  const dueMs = Math.max(1000, Date.parse(endsAt) - Date.now() + 300);
+  const prev = zoneEventTimers.get(zoneKey);
+  if (prev) clearTimeout(prev);
+  const timer = setTimeout(() => {
+    _resolveZoneEventIfExpired(sc, zoneKey).catch((error) => {
+      console.error(`[MonsterZone] resolve event failed zone=${zoneKey}`, error);
+    });
+  }, dueMs);
+  zoneEventTimers.set(zoneKey, timer);
+}
+
+async function _resolveZoneEventIfExpired(sc, zoneKey) {
+  const state = await sc.monsterService.getState(zoneKey);
+  const activeEvent = state?.activeEvent;
+  if (!activeEvent?.endsAt) return false;
+  const endAtMs = Date.parse(activeEvent.endsAt);
+  if (!Number.isFinite(endAtMs) || endAtMs > Date.now()) return false;
+
+  const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
+  if (!allMonsters.length) return false;
+
+  let nextMonster = allMonsters.find((m) => m.seq === Number(activeEvent.pendingMonsterSeq));
+  if (!nextMonster) {
+    const current = allMonsters.find((m) => m.seq === state.activeMonsterSeq) || null;
+    nextMonster = pickWeightedNextMonster(allMonsters, current?.id || null);
+  }
+  if (!nextMonster) return false;
+
+  const nextState = {
+    ...state,
+    activeMonsterSeq: nextMonster.seq,
+    currentHp: nextMonster.calc.maxHp,
+    participants: [],
+    damageMap: {},
+    killClaimedSeq: null,
+    lastHitAt: new Date().toISOString(),
+    activeEvent: null
+  };
+  await sc.monsterService.saveState(nextState, zoneKey);
+  _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}, null).catch(() => {});
+  if (nextMonster.isBoss) _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
+  zoneEventTimers.delete(zoneKey);
+  return true;
 }
 
 // BOSS 出場廣播：優先 town_chat，fallback monster_zone
@@ -290,10 +354,20 @@ async function handleEnterBattle(interaction) {
       }
     }
 
-    const [state, monsters] = await Promise.all([
+    let [state, monsters] = await Promise.all([
       sc.monsterService.getState(zoneKey),
       sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey })
     ]);
+    await _resolveZoneEventIfExpired(sc, zoneKey);
+    state = await sc.monsterService.getState(zoneKey);
+
+    if (state?.activeEvent?.endsAt && Date.parse(state.activeEvent.endsAt) > Date.now()) {
+      const remainSec = Math.max(1, Math.ceil((Date.parse(state.activeEvent.endsAt) - Date.now()) / 1000));
+      await interaction.editReply({
+        content: `Event in progress: ${state.activeEvent.name || "transition event"} (${remainSec}s remaining).`
+      });
+      return;
+    }
     if (!monsters.length) {
       await interaction.editReply({ content: "❌ 目前沒有啟用中的怪物，請稍後再試。" });
       return;
@@ -419,7 +493,14 @@ async function handleStartFight(interaction) {
   const zoneKey = session.zoneKey || "normal";
 
   try {
-    const state = await sc.monsterService.getState(zoneKey);
+    let state = await sc.monsterService.getState(zoneKey);
+    await _resolveZoneEventIfExpired(sc, zoneKey);
+    state = await sc.monsterService.getState(zoneKey);
+    if (state?.activeEvent?.endsAt && Date.parse(state.activeEvent.endsAt) > Date.now()) {
+      activeSessions.delete(discordId);
+      await interaction.editReply({ content: "Event is in progress, battle is temporarily unavailable.", embeds: [], components: [] });
+      return;
+    }
     const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
     const monster = monsters.find((m) => m.id === session.monsterId);
 
@@ -816,35 +897,56 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const finalDamageMap = { ...(freshState.damageMap || {}), ...mergedDmg };
 
   const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
-  // 加權隨機選下一隻（spawnRate 越高越常出現，預設 10）
-  const pool = allMonsters.filter(m => m.id !== monster.id || allMonsters.length === 1);
-  const totalWeight = pool.reduce((s, m) => s + (m.spawnRate || 10), 0);
-  let r = Math.random() * totalWeight;
-  let nextMonster = pool[pool.length - 1];
-  for (const m of pool) { r -= (m.spawnRate || 10); if (r <= 0) { nextMonster = m; break; } }
+  const nextMonster = pickWeightedNextMonster(allMonsters, monster.id);
+  const matchedEvent = await sc.monsterEventService.pickEventForTransition({
+    zone: zoneKey,
+    defeatedMonsterSeq: monster.seq
+  }).catch(() => null);
 
-  const newState = {
-    ...freshState,
-    currentHp: nextMonster ? nextMonster.calc.maxHp : 0,
-    activeMonsterSeq: nextMonster ? nextMonster.seq : freshState.activeMonsterSeq,
-    killCount: newKillCount,
-    participants: [], // 新怪上場，參戰名單清零
-    damageMap: {},   // 新怪上場，傷害紀錄清零
-    killClaimedSeq: null // 重置擊殺權，避免遺留造成未來結算失敗
-  };
-  await sc.monsterService.saveState(newState, zoneKey);
-
-  if (nextMonster) {
-    _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {})
-      .catch(() => {});
-    // BOSS 出場廣播
-    if (nextMonster.isBoss) {
-      console.log(`[BOSS] next monster "${nextMonster.name}" is a boss, broadcasting...`);
-      _broadcastBossSpawn(sc, zoneKey, nextMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
-    }
+  if (matchedEvent && nextMonster) {
+    const startedAt = new Date().toISOString();
+    const endsAt = new Date(Date.now() + (matchedEvent.durationSec || 12) * 1000).toISOString();
+    const eventState = {
+      ...freshState,
+      killCount: newKillCount,
+      participants: [],
+      damageMap: {},
+      killClaimedSeq: null,
+      currentHp: 0,
+      activeEvent: {
+        id: matchedEvent.id,
+        name: matchedEvent.name,
+        message: matchedEvent.message,
+        startedAt,
+        endsAt,
+        pendingMonsterSeq: nextMonster.seq
+      }
+    };
+    await sc.monsterService.saveState(eventState, zoneKey);
+    _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch(() => {});
+    _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
   } else {
-    _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap)
-      .catch(() => {});
+    const newState = {
+      ...freshState,
+      currentHp: nextMonster ? nextMonster.calc.maxHp : 0,
+      activeMonsterSeq: nextMonster ? nextMonster.seq : freshState.activeMonsterSeq,
+      killCount: newKillCount,
+      participants: [],
+      damageMap: {},
+      killClaimedSeq: null,
+      activeEvent: null
+    };
+    await sc.monsterService.saveState(newState, zoneKey);
+
+    if (nextMonster) {
+      _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}).catch(() => {});
+      if (nextMonster.isBoss) {
+        console.log(`[BOSS] next monster "${nextMonster.name}" is a boss, broadcasting...`);
+        _broadcastBossSpawn(sc, zoneKey, nextMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
+      }
+    } else {
+      _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch(() => {});
+    }
   }
 
   // 通知非擊殺者參戰獎勵（DM，擊殺者已在戰鬥 embed 看到）
@@ -916,17 +1018,16 @@ async function _doIdleRotate(sc, zoneKey) {
       console.log(`[IdleRotate] disabled by DISABLE_AUTO_ROTATE`);
       return;
     }
-    const state = await sc.monsterService.getState(zoneKey);
+    let state = await sc.monsterService.getState(zoneKey);
+    await _resolveZoneEventIfExpired(sc, zoneKey).catch(() => {});
+    state = await sc.monsterService.getState(zoneKey);
+    if (state?.activeEvent?.endsAt && Date.parse(state.activeEvent.endsAt) > Date.now()) return;
     const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
     const monster = allMonsters.find((m) => m.seq === state.activeMonsterSeq);
     if (!monster) return;
 
-    // 選下一隻（加權隨機，排除當前）
-    const pool = allMonsters.filter(m => m.id !== monster.id || allMonsters.length === 1);
-    const totalWeight = pool.reduce((s, m) => s + (m.spawnRate || 10), 0);
-    let r = Math.random() * totalWeight;
-    let next = pool[pool.length - 1];
-    for (const m of pool) { r -= (m.spawnRate || 10); if (r <= 0) { next = m; break; } }
+    const next = pickWeightedNextMonster(allMonsters, monster.id);
+    if (!next) return;
 
     const newState = {
       ...state,
@@ -936,6 +1037,7 @@ async function _doIdleRotate(sc, zoneKey) {
       damageMap: {},
       killClaimedSeq: null,
       lastHitAt: new Date().toISOString(),
+      activeEvent: null,
     };
     await sc.monsterService.saveState(newState, zoneKey);
     _republishPanel(sc, zoneKey, next, next.calc.maxHp, 0, {}).catch(() => {});
@@ -970,6 +1072,10 @@ async function checkIdleRotate() {
   for (const zoneKey of ["normal", "mid"]) {
     try {
       const state = await sc.monsterService.getState(zoneKey);
+      if (state?.activeEvent?.endsAt) {
+        const resolved = await _resolveZoneEventIfExpired(sc, zoneKey).catch(() => false);
+        if (!resolved) continue;
+      }
       const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
       if (!allMonsters.length) continue;
       // 有進行中戰鬥不換
