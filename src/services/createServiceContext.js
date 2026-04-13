@@ -13,6 +13,7 @@ const { ItemService } = require("./item/itemService");
 const { PlayerTierService } = require("./playerTier/playerTierService");
 const { MonsterService } = require("./monster/monsterService");
 const { WeeklyQuestService } = require("./weeklyQuest/weeklyQuestService");
+const { BattleConfigService } = require("./battle/battleConfigService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -34,6 +35,7 @@ function createServiceContext() {
   const playerTierService = new PlayerTierService(repositories.playerTierRepository);
   const monsterService = new MonsterService(repositories.monsterRepository, repositories.itemRepository);
   const weeklyQuestService = new WeeklyQuestService(repositories.weeklyQuestRepository);
+  const battleConfigService = new BattleConfigService(repositories.battleConfigRepository);
   const shopService = new ShopService(repositories.shopRepository, playerService, rewardService, repositories.progressRepository, progressService, repositories.itemRepository, playerTierService);
   const transactionService = new TransactionService(playerService, repositories.transactionRepository);
   const adminService = new AdminService(
@@ -67,7 +69,8 @@ function createServiceContext() {
     itemService,
     playerTierService,
     monsterService,
-    weeklyQuestService
+    weeklyQuestService,
+    battleConfigService
   };
 }
 

@@ -6,6 +6,7 @@ const { serviceContext, getBotClient } = require("../runtimeContext");
 const config = require("../../config");
 const { sendComment } = require("../onecommeSender");
 const { consumeCode } = require("../bindingStore");
+const { recordComment } = require("../../services/stream/streamPresence");
 
 // 可自訂偵測的指令關鍵字
 const STREAM_COMMANDS = {
@@ -245,6 +246,12 @@ async function handleQuery(comment) {
  */
 async function handleStreamComment(comment) {
   if (!comment.text) return;
+  const streamSnapshot = recordComment(comment);
+  if (typeof serviceContext._pushStreamPresence === "function") {
+    try {
+      serviceContext._pushStreamPresence(streamSnapshot);
+    } catch (_) {}
+  }
 
   // 全部留言 log（方便監控）
   console.log(`[Stream] 💬 ${comment.service} | ${comment.name}：${comment.text}`);

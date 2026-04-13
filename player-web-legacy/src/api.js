@@ -1,8 +1,8 @@
 import remoteConfig from './config.json';
 
 // 自動偵測 API 來源：localhost 優先走本機，否則依序讀環境變數 / config.json
-export const API_ORIGIN = window.location.hostname === 'localhost'
-  ? 'http://localhost:5566'
+export const API_ORIGIN = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  ? 'http://127.0.0.1:5566'
   : (import.meta.env.VITE_API_URL || remoteConfig.remoteApiUrl || `https://${window.location.hostname}`);
 const API_BASE = `${API_ORIGIN}/api`;
 
@@ -52,6 +52,17 @@ async function fetchWithAuth(endpoint, options = {}) {
   return data.data;
 }
 
+async function fetchPublic(endpoint, options = {}) {
+  const response = await fetch(`${API_BASE}${endpoint}`, options);
+  const data = await response.json();
+  if (!response.ok || data.status !== "ok") {
+    const err = new Error(data.message || "API request failed");
+    err.code = data.code || null;
+    throw err;
+  }
+  return data.data;
+}
+
 export const api = {
   // 驗證 Discord Code 取得 Token（redirect_uri 必須與 OAuth 發起時一致）
   loginWithDiscord: (code) => fetchWithAuth("/auth/discord", {
@@ -87,10 +98,12 @@ export const api = {
 
   // ===== 戰鬥系統 =====
   getCombatZones: () => fetchWithAuth("/combat/zones"),
+  getViewerSnapshot: () => fetchPublic("/viewer/snapshot"),
   quickBattle: (zone) => fetchWithAuth("/combat/quick-battle", {
     method: "POST",
     body: JSON.stringify({ zone })
   }),
+  getStreamPresence: () => fetchWithAuth("/stream/presence"),
 
   // ===== 大廳聊天系統 =====
   sendChatMessage: (message) => fetchWithAuth("/chat/lobby", {
@@ -106,7 +119,7 @@ export const api = {
   pollNotifications: () => fetchWithAuth("/notifications/poll"),
 
   // 建立 Server-Sent Events 連線（EventSource 不支援 Header，以 query param 傳 token）
-  createChatStream: (onMessage, { onReward } = {}) => {
+  createChatStream: (onMessage, { onReward, onStreamPresence } = {}) => {
     const token = getToken();
     const url = token
       ? `${API_BASE}/chat/stream?token=${encodeURIComponent(token)}`
@@ -127,6 +140,16 @@ export const api = {
           onReward(summary);
         } catch (err) {
           console.error("SSE reward parse error", err);
+        }
+      });
+    }
+    if (onStreamPresence) {
+      eventSource.addEventListener('stream_presence', (event) => {
+        try {
+          const snapshot = JSON.parse(event.data);
+          onStreamPresence(snapshot);
+        } catch (err) {
+          console.error("SSE stream presence parse error", err);
         }
       });
     }

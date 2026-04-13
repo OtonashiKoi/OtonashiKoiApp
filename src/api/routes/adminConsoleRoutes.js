@@ -369,6 +369,88 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
+  router.get("/admin/battle-config", async (_req, res, next) => {
+    try {
+      const configData = await serviceContext.battleConfigService.getConfig();
+      res.json(ok(configData, "battle config fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put("/admin/battle-config/weapon-rules", async (req, res, next) => {
+    try {
+      const rules = req.body?.weaponPositionRules || req.body || {};
+      const configData = await serviceContext.battleConfigService.saveWeaponRules(rules);
+      res.json(ok(configData, "battle weapon rules saved"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put("/admin/battle-config/assets/:category", async (req, res, next) => {
+    try {
+      const { category } = req.params;
+      const entries = Array.isArray(req.body?.entries) ? req.body.entries : [];
+      const configData = await serviceContext.battleConfigService.saveAssetCategory(category, entries);
+      res.json(ok(configData, "battle assets saved"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/battle-config/assets/:category/image", upload.single("image"), async (req, res, next) => {
+    try {
+      if (!req.file) {
+        res.status(400).json(fail("NO_FILE", "Image file is required."));
+        return;
+      }
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "battle_assets");
+      res.json(ok({ imageUrl, imageThumbnailUrl }, "battle asset image uploaded"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/animation-studio/bootstrap", async (_req, res, next) => {
+    try {
+      const [animationData, monsters] = await Promise.all([
+        serviceContext.battleConfigService.getAnimationStudioData(),
+        serviceContext.monsterService.listMonsters({ includeDisabled: true })
+      ]);
+      res.json(ok({
+        templates: animationData.templates || [],
+        monsters: monsters || [],
+        updatedAt: animationData.updatedAt || null
+      }, "animation studio bootstrap fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put("/admin/animation-studio/templates", async (req, res, next) => {
+    try {
+      const templates = Array.isArray(req.body?.templates) ? req.body.templates : [];
+      const saved = await serviceContext.battleConfigService.saveAnimationTemplates(templates);
+      res.json(ok({ templates: saved }, "animation templates saved"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/animation-studio/template-image", upload.single("image"), async (req, res, next) => {
+    try {
+      if (!req.file) {
+        res.status(400).json(fail("NO_FILE", "Image file is required."));
+        return;
+      }
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "animation_templates");
+      res.json(ok({ imageUrl, imageThumbnailUrl }, "animation template image uploaded"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   return router;
 }
 

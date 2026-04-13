@@ -292,8 +292,12 @@ function createBotClient() {
     
     // 啟動 OneComme 直播留言監聽
     startFetcher(handleStreamComment);
-    // 啟動閒置自動換怪計時器
-    startIdleRotateTimer();
+    // 啟動閒置自動換怪計時器（可透過 DISABLE_AUTO_ROTATE=1 暫時停用）
+    if (process.env.DISABLE_AUTO_ROTATE === '1') {
+      console.log('[IdleRotate] disabled by DISABLE_AUTO_ROTATE');
+    } else {
+      startIdleRotateTimer();
+    }
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {

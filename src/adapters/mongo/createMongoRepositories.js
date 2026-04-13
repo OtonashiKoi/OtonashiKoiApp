@@ -204,6 +204,20 @@ function createMongoRepositories() {
         return normalized;
       }
     },
+    battleConfigRepository: {
+      async get() {
+        const row = await (await collection("battleConfig")).findOne({ _id: "default" });
+        return row?.value || null;
+      },
+      async save(config) {
+        await (await collection("battleConfig")).updateOne(
+          { _id: "default" },
+          { $set: { value: config, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+        return config;
+      }
+    },
     weeklyQuestRepository: {
       async listQuests() {
         return (await collection("weeklyQuests")).find({}).sort({ createdAt: 1 }).toArray();

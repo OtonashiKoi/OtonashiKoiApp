@@ -3,13 +3,51 @@ const jwt = require("jsonwebtoken");
 const { ok } = require("../../shared/response");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
+const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 
-// 戰鬥冷卻鎖（記憶體，key: discordId, value: { zone, nextBattleAt }）
-// 冷卻時間 = 前端動畫播完所需時間（logs 數 × 700ms + 2s），防止重整繞過
+// ?�鬥?�卻?��?記憶體�?key: discordId, value: { zone, nextBattleAt }�?
+// ?�卻?��? = ?�端?�畫?��??�?�?��?（logs ??? 700ms + 2s）�??�止?�整繞�?
 const playerBattleCooldowns = new Map();
 
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
+
+  const buildCombatZonesSnapshot = async (discordId = null) => {
+    const keys = ["normal", "mid"];
+    return Promise.all(keys.map(async (key) => {
+      const [state, monsters] = await Promise.all([
+        serviceContext.monsterService.getState(key),
+        serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: key })
+      ]);
+      let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);
+      if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
+
+      const dmgMap = state.damageMap || {};
+      const damageLeaderboard = Object.values(dmgMap)
+        .sort((a, b) => b.damage - a.damage)
+        .slice(0, 10);
+
+      const cooldown = discordId ? playerBattleCooldowns.get(discordId) : null;
+      const nextBattleAt = (cooldown && cooldown.nextBattleAt > Date.now()) ? cooldown.nextBattleAt : null;
+
+      return {
+        zone: key,
+        monsterId: activeMonster?.id || null,
+        monsterName: activeMonster?.name || "??��?",
+        monsterImageUrl: activeMonster?.imageUrl || null,
+        monsterLevel: activeMonster?.level || 0,
+        expReward: activeMonster?.expReward || 0,
+        goldReward: activeMonster?.goldReward || 0,
+        drops: (activeMonster?.drops || []).map((d) => d.itemName),
+        currentHp: state.currentHp !== undefined ? state.currentHp : (activeMonster?.calc?.maxHp || 0),
+        maxHp: activeMonster?.calc?.maxHp || 0,
+        participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
+        activeMonsterSeq: state.activeMonsterSeq,
+        damageLeaderboard,
+        nextBattleAt,
+      };
+    }));
+  };
 
   // Middleware for checking JWT
   const requireAuth = (req, res, next) => {
@@ -33,20 +71,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let discordId;
       let displayName = "WebPlayer";
 
-      // 為了方便本機開發測試，如果 code 以 "mock:" 開頭則一律放行
+      // ?��??�便?��??�發測試，�???code �?"mock:" ?�頭?��?律放�?
       if (code.startsWith("mock:")) {
-        console.log("[PlayerApp] 使用開發模式 Mock 登入");
+        console.log("[PlayerApp] 使用?�發模�? Mock ?�入");
         discordId = code.replace("mock:", "");
-        if (discordId.length < 5) discordId = "1450019975031951370"; // 預設拿資料庫第一位玩家測試
+        if (discordId.length < 5) discordId = "1450019975031951370"; // ?�設?��??�庫第�?位玩家測�?
       } else {
-        // 真實的 Discord OAuth2 交換 (會需要 Node 18+ 的 fetch)
+        // ?�實??Discord OAuth2 交�? (?��?�?Node 18+ ??fetch)
         if (!process.env.DISCORD_CLIENT_SECRET) {
-          return res.status(500).json({ status: "error", message: "後端尚未設定 DISCORD_CLIENT_SECRET，無法驗證真實的 Discord 登入" });
+          return res.status(500).json({ status: "error", message: "後端尚未設�? DISCORD_CLIENT_SECRET，無法�?證�?實�? Discord ?�入" });
         }
-        // redirect_uri 必須與前端發起 OAuth 時一致，由前端傳入
+        // redirect_uri 必�??��?端發�?OAuth ?��??��??��?端傳??
         const { redirect_uri } = req.body;
         if (!redirect_uri) {
-          return res.status(400).json({ status: "error", message: "缺少 redirect_uri 參數" });
+          return res.status(400).json({ status: "error", message: "缺�? redirect_uri ?�數" });
         }
         const params = new URLSearchParams({
           client_id: process.env.DISCORD_CLIENT_ID,
@@ -67,7 +105,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.log("[PlayerApp] Discord Auth Response:", tokenData);
 
         if (tokenData.error) {
-           return res.status(400).json({ status: "error", message: `Discord 驗證失敗: ${tokenData.error_description || tokenData.error}` });
+           return res.status(400).json({ status: "error", message: `Discord 驗�?失�?: ${tokenData.error_description || tokenData.error}` });
         }
 
         const userRes = await fetch("https://discord.com/api/users/@me", {
@@ -78,7 +116,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         displayName = userData.global_name || userData.username;
       }
 
-      // ── 驗證是否為伺服器成員 ──
+      // ?�?� 驗�??�否?�伺?�器?�員 ?�?�
       const guildId = require("../../config").discord.guildId;
       if (guildId && discordClient && !code.startsWith("mock:")) {
         try {
@@ -87,9 +125,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (guild) {
             const member = await guild.members.fetch({ user: discordId, force: true }).catch(() => null);
             if (!member) {
-              return res.status(403).json({ status: "error", code: "NOT_GUILD_MEMBER", message: "你還不是伺服器成員，請先加入社群！" });
+              return res.status(403).json({ status: "error", code: "NOT_GUILD_MEMBER", message: "You must join the Discord guild before using the web app." });
             }
-            // 使用伺服器內的暱稱
+            // 使用伺�??�內?�暱�?
             displayName = member.displayName || displayName;
           }
         } catch (err) {
@@ -97,10 +135,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       }
 
-      // 確保玩家資料存在 (與 Discord 面板創角邏輯一致)
+      // 確�??�家資�?存在 (??Discord ?�板?��??�輯一??
       await serviceContext.playerService.ensurePlayer(discordId, displayName);
 
-      // 核發我們自己系統的 JWT
+      // ?�發?�們自己系統�? JWT
       const token = jwt.sign({ discordId, displayName }, process.env.JWT_SECRET || "super-secret-jwt-key", { expiresIn: "7d" });
       res.json(ok({ token, discordId, displayName }));
 
@@ -113,6 +151,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/me/profile", requireAuth, async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
+      let avatarUrl = null;
+
+      if (discordClient) {
+        try {
+          const discordUser = await discordClient.users.fetch(discordId, { force: false });
+          avatarUrl = discordUser.displayAvatarURL({ size: 256, extension: 'png' });
+        } catch (_) {}
+      }
       
       const [profileResult, walletResult] = await Promise.all([
         serviceContext.playerService.getProfile(discordId, displayName),
@@ -128,7 +174,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const nextLevelExp = isMaxLevel ? null : expToNextLevel(lv);
 
       res.json(ok({
-        player: profileResult.player,
+        player: {
+          ...profileResult.player,
+          ...(avatarUrl ? { avatarUrl } : {}),
+        },
         wallet: walletResult.wallet,
         progress: {
           level: lv,
@@ -227,7 +276,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId } = req.playerRecord;
       const { targetUuid, materialUuid } = req.body;
-      if (!targetUuid || !materialUuid) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "需提供 targetUuid 與 materialUuid", 400);
+      if (!targetUuid || !materialUuid) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "?�?��? targetUuid ??materialUuid", 400);
       const result = await serviceContext.shopService.enhanceItem(discordId, targetUuid, materialUuid);
       res.json(ok(result));
     } catch (err) {
@@ -245,21 +294,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         throw new Error("Message cannot be empty");
       }
 
-      // 取得系統設定中的 town_chat 頻道 ID
+      // ?��?系統設�?中�? town_chat ?��? ID
       const layout = await serviceContext.channelLayoutRepository.get();
       const townChatBinding = layout.discord.bindings.find(b => b.featureKey === "town_chat" && b.enabled);
       
       if (townChatBinding && townChatBinding.channelId && discordClient) {
         const channel = discordClient.channels.cache.get(townChatBinding.channelId);
         if (channel) {
-          // 取得玩家的 Discord 頭像
+          // ?��??�家??Discord ?��?
           let avatarURL = null;
           try {
             const discordUser = await discordClient.users.fetch(discordId, { force: false });
             avatarURL = discordUser.displayAvatarURL({ size: 128, extension: 'png' });
           } catch (_) {}
 
-          // 取得或建立 Webhook，讓訊息以玩家名字和頭像發送
+          // ?��??�建�?Webhook，�?訊息以玩家�?字�??��??��?
           let webhook = null;
           try {
             const webhooks = await channel.fetchWebhooks();
@@ -276,11 +325,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               ...(avatarURL ? { avatarURL } : {}),
             });
           } else {
-            // Webhook 無法建立時回退到 Bot 發送
+            // Webhook ?��?建�??��??�??Bot ?��?
             await channel.send(`**${displayName}**: ${message}`);
           }
         } else {
-          console.warn(`[PlayerApp] 找不到 Town Chat 頻道 (ID: ${townChatBinding.channelId})`);
+          console.warn(`[PlayerApp] ?��???Town Chat ?��? (ID: ${townChatBinding.channelId})`);
         }
       }
 
@@ -291,14 +340,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   // 5. SSE Client Management
-  // 輔助函式：解析 Discord 提到的名稱
+  // 輔助?��?：解??Discord ?�到?��?�?
   const resolveMentions = async (text, guild = null) => {
     if (!text || typeof text !== "string") return text;
     const mentionRegex = /<@!?(\d+)>/g;
     const matches = [...text.matchAll(mentionRegex)];
     let resolvedText = text;
 
-    // 定義一個簡單的局部緩存，防止同一次解析中多次 fetch 同一個用戶
+    // 定義一?�簡?��?局?�緩存�??�止?��?次解?�中多次 fetch ?��??�用??
     const localCache = {};
 
     for (const match of matches) {
@@ -311,15 +360,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       try {
         let playerName = null;
         
-        // 1. 如果有傳入 Guild，優先從 Server Member 中抓取「伺服器暱稱」
+        // 1. 如�??�傳??Guild，優?��? Server Member 中�??�「伺?�器?�稱??
         if (guild) {
           try {
             const member = await guild.members.fetch(userId);
             if (member) playerName = member.displayName;
-          } catch (e) { /* 繼續往下找 */ }
+          } catch (e) { /* 繼�?往下找 */ }
         }
 
-        // 2. 從資料庫找
+        // 2. 從�??�庫??
         if (!playerName) {
           const player = await serviceContext.playerRepository.findByDiscordId(userId);
           if (player) {
@@ -330,7 +379,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           }
         }
 
-        // 3. 全局 Discord API
+        // 3. ?��? Discord API
         if (!playerName && discordClient) {
           try {
             const user = await discordClient.users.fetch(userId);
@@ -344,39 +393,46 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           localCache[userId] = playerName;
           resolvedText = resolvedText.replace(match[0], `[@${playerName}]`);
         } else {
-          console.warn(`[Chat] 無法解析 ID 為 ${userId} 的名稱`);
+          console.warn(`[Chat] ?��?�?? ID ??${userId} ?��?稱`);
         }
       } catch (err) {
-        console.error(`[Chat] 解析提及 ${userId} 時發生錯誤:`, err);
+        console.error(`[Chat] �???��? ${userId} ?�發?�錯�?`, err);
       }
     }
     return resolvedText;
   };
 
-  // sseClients: Map<discordId, Set<{res}>>  (同一帳號可多個 tab)
+  // sseClients: Map<discordId, Set<{res}>>  (?��?帳�??��???tab)
   const sseClients = new Map();
-  // notifQueue: Map<discordId, Array> — poll fallback（Cloudflare 等 proxy 擋 SSE 時使用）
+  const streamPresenceClients = new Set();
+  // notifQueue: Map<discordId, Array> ??poll fallback（Cloudflare �?proxy ??SSE ?�使?��?
   const notifQueue = new Map();
 
   function enqueueNotif(discordId, summary) {
     if (!notifQueue.has(discordId)) notifQueue.set(discordId, []);
     const q = notifQueue.get(discordId);
     q.push({ ...summary, id: Date.now(), time: new Date().toLocaleTimeString("zh-TW") });
-    if (q.length > 50) q.splice(0, q.length - 50); // 最多保留 50 筆
+    if (q.length > 50) q.splice(0, q.length - 50); // ?�多�???50 �?
   }
 
-  // 供 monsterZoneHandlers 呼叫，推送參戰獎勵給指定玩家
+  // �?monsterZoneHandlers ?�叫，推?��??��??�給?��??�家
   function pushRewardToPlayer(discordId, summary) {
-    // 1. 先存進 queue（poll fallback）
+    // 1. ?��???queue（poll fallback�?
     enqueueNotif(discordId, summary);
-    // 2. 嘗試 SSE 即時推（本機直連時有效）
+    // 2. ?�試 SSE ?��??��??��??��???��?�?
     const clients = sseClients.get(discordId);
     if (!clients || clients.size === 0) return;
     const dataStr = `event: reward\ndata: ${JSON.stringify(summary)}\n\n`;
     clients.forEach(c => { try { c.res.write(dataStr); } catch (_) {} });
   }
-  // 掛載到 serviceContext 供 handlers 使用
+  // ?��???serviceContext �?handlers 使用
   serviceContext._pushRewardToPlayer = pushRewardToPlayer;
+  serviceContext._pushStreamPresence = (snapshot = getStreamPresenceSnapshot()) => {
+    const dataStr = `event: stream_presence\ndata: ${JSON.stringify(snapshot)}\n\n`;
+    streamPresenceClients.forEach((client) => {
+      try { client.res.write(dataStr); } catch (_) {}
+    });
+  };
   if (discordClient) {
     discordClient.on("messageCreate", async (msg) => {
       const hasContent = msg.content || msg.embeds.length > 0 || msg.stickers.size > 0 || msg.attachments.size > 0;
@@ -395,9 +451,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const attachUrls = [...msg.attachments.values()].map(a => a.url);
           content = [content, ...attachUrls].filter(Boolean).join(" ");
         }
-        if (msg.embeds.length > 0 && !content) content = "傳送了一個面板";
+        if (msg.embeds.length > 0 && !content) content = "[Embedded content]";
 
-        // 回覆資訊
+        // ?��?資�?
         let replyTo = null;
         if (msg.reference?.messageId) {
           try {
@@ -430,10 +486,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");  // 防止 Nginx/Cloudflare 緩衝 SSE
+    res.setHeader("X-Accel-Buffering", "no");  // ?�止 Nginx/Cloudflare 緩�? SSE
     res.flushHeaders();
 
-    // 嘗試從 query token 識別玩家身份
+    // ?�試�?query token 識別?�家身份
     let discordId = null;
     try {
       const token = req.query.token || "";
@@ -444,10 +500,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     } catch (_) {}
 
     const client = { res };
+    streamPresenceClients.add(client);
     if (discordId) {
       if (!sseClients.has(discordId)) sseClients.set(discordId, new Set());
       sseClients.get(discordId).add(client);
     }
+
+    try {
+      res.write(`event: stream_presence\ndata: ${JSON.stringify(getStreamPresenceSnapshot())}\n\n`);
+    } catch (_) {}
 
     const timer = setInterval(() => {
       res.write(":\n\n"); // Heartbeat comment
@@ -455,6 +516,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
     req.on("close", () => {
       clearInterval(timer);
+      streamPresenceClients.delete(client);
       if (discordId) {
         const s = sseClients.get(discordId);
         if (s) { s.delete(client); if (s.size === 0) sseClients.delete(discordId); }
@@ -462,11 +524,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     });
   });
 
+  router.get("/api/stream/presence", requireAuth, (req, res) => {
+    res.json(ok(getStreamPresenceSnapshot()));
+  });
+
   // 7. Poll notifications (fallback for Cloudflare/proxy that blocks SSE)
   router.get("/api/notifications/poll", requireAuth, (req, res) => {
     const discordId = req.playerRecord.discordId;
     const q = notifQueue.get(discordId) || [];
-    notifQueue.set(discordId, []); // 取走後清空
+    notifQueue.set(discordId, []); // ?�走後�?�?
     res.json({ status: "ok", data: q });
   });
 
@@ -485,7 +551,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       
       const messages = await channel.messages.fetch({ limit: 50 });
       const history = await Promise.all([...messages.values()].map(async (msg) => {
-        // 確保 member 資料載入（cache miss 時才 fetch）
+        // 確�? member 資�?載入（cache miss ?��? fetch�?
         if (!msg.member && !msg.author.bot) {
           try { await channel.guild.members.fetch(msg.author.id); } catch (_) {}
         }
@@ -498,7 +564,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const attachUrls = [...msg.attachments.values()].map(a => a.url);
           content = [content, ...attachUrls].filter(Boolean).join(" ");
         }
-        if (msg.embeds.length > 0 && !content) content = "傳送了一個面板";
+        if (msg.embeds.length > 0 && !content) content = "[Embedded content]";
 
         let replyTo = null;
         if (msg.reference?.messageId) {
@@ -587,7 +653,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId, displayName } = req.playerRecord;
       const itemId = req.params.itemId;
 
-      // 從 Bot 取得玩家在 Guild 的身分組，供 allowedTiers 驗證
+      // �?Bot ?��??�家??Guild ?�身?��?，�? allowedTiers 驗�?
       let memberRoleIds = [];
       try {
         const guildId = require("../../config").discord.guildId;
@@ -630,7 +696,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
         return {
           zone: key,
-          monsterName: activeMonster?.name || "未知",
+          monsterId: activeMonster?.id || null,
+          monsterName: activeMonster?.name || "?�知",
           monsterImageUrl: activeMonster?.imageUrl || null,
           monsterLevel: activeMonster?.level || 0,
           expReward: activeMonster?.expReward || 0,
@@ -650,17 +717,98 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  router.get("/api/viewer/battle-config", async (_req, res, next) => {
+    try {
+      const configData = await serviceContext.battleConfigService.getViewerConfig();
+      res.json(ok(configData));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/api/viewer/snapshot", async (_req, res, next) => {
+    try {
+      const keys = ["normal", "mid"];
+      const zones = await Promise.all(keys.map(async (key) => {
+        const [state, monsters] = await Promise.all([
+          serviceContext.monsterService.getState(key),
+          serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: key })
+        ]);
+
+        let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);
+        if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
+
+        const dmgMap = state.damageMap || {};
+        const damageLeaderboard = await Promise.all(
+          Object.entries(dmgMap)
+            .sort(([, a], [, b]) => b.damage - a.damage)
+            .slice(0, 10)
+            .map(async ([pid, entry]) => {
+              const [player, progress] = await Promise.all([
+                serviceContext.playerRepository?.findByDiscordId(pid).catch(() => null),
+                serviceContext.progressRepository?.findByPlayerId(pid).catch(() => null),
+              ]);
+
+              let avatarUrl = null;
+              if (discordClient) {
+                try {
+                  const discordUser = await discordClient.users.fetch(pid, { force: false });
+                  avatarUrl = discordUser.displayAvatarURL({ size: 128, extension: 'png' });
+                } catch (_) {}
+              }
+
+              return {
+                discordId: pid,
+                name: entry?.name || player?.displayName || pid,
+                damage: entry?.damage || 0,
+                damageTaken: entry?.taken || 0,
+                weaponType: progress?.equipment?.weapon?.weaponType || null,
+                offhandWeaponType: progress?.equipment?.shield?.weaponType || null,
+                weaponImageUrl: progress?.equipment?.weapon?.imageUrl || null,
+                avatarUrl,
+              };
+            })
+        );
+
+        return {
+          zone: key,
+          monsterId: activeMonster?.id || null,
+          monsterName: activeMonster?.name || "??��?",
+          monsterImageUrl: activeMonster?.imageUrl || null,
+          monsterLevel: activeMonster?.level || 0,
+          expReward: activeMonster?.expReward || 0,
+          goldReward: activeMonster?.goldReward || 0,
+          drops: (activeMonster?.drops || []).map((d) => d.itemName),
+          currentHp: state.currentHp !== undefined ? state.currentHp : (activeMonster?.calc?.maxHp || 0),
+          maxHp: activeMonster?.calc?.maxHp || 0,
+          participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
+          activeMonsterSeq: state.activeMonsterSeq,
+          damageLeaderboard,
+          nextBattleAt: null,
+        };
+      }));
+
+      res.json(ok({
+        zones,
+        streamPresence: getStreamPresenceSnapshot(),
+        refreshedAt: new Date().toISOString(),
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // 11. Quick Battle
   router.post("/api/combat/quick-battle", requireAuth, async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
       const zoneKey = req.body.zone === "mid" ? "mid" : "normal";
 
-      // 冷卻鎖：上次戰鬥動畫未結束前不可再出戰
+      // ?�卻?��?上次?�鬥?�畫?��??��?不可?�出??
       const cd = playerBattleCooldowns.get(discordId);
       if (cd && cd.nextBattleAt > Date.now()) {
         const secsLeft = Math.ceil((cd.nextBattleAt - Date.now()) / 1000);
-        return res.status(429).json({ status: "error", message: `戰鬥冷卻中，請等待 ${secsLeft} 秒後再出戰。` });
+        return res.status(429).json({ status: "error", message: `?�鬥?�卻中�?請�?�?${secsLeft} 秒�??�出?�。` });
       }
       
       const [stateRaw, monsters] = await Promise.all([
@@ -670,7 +818,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let state = stateRaw;
       
       if (!monsters.length) {
-        return res.status(400).json({ status: "error", message: "目前沒有啟用中的怪物" });
+        return res.status(400).json({ status: "error", message: "?��?沒�??�用中�??�物" });
       }
 
       let monster = monsters.find(m => m.seq === state.activeMonsterSeq);
@@ -687,7 +835,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       const playerLevel = progress?.level ?? 1;
       if (zoneKey === "mid" && playerLevel < 10) {
-        return res.status(400).json({ status: "error", message: `中級區需要等級 10 以上！目前 Lv.${playerLevel}` });
+        return res.status(400).json({ status: "error", message: `中�??�?�要�?�?10 以�?！目??Lv.${playerLevel}` });
       }
 
       // Check and deduct entry fee
@@ -695,7 +843,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const wallet = await serviceContext.walletRepository.findByPlayerId(discordId);
         const gold = wallet?.gold ?? 0;
         if (gold < monster.entryFee) {
-          return res.status(400).json({ status: "error", message: `金幣不足！需要 ${monster.entryFee} 🪙，目前 ${gold} 🪙` });
+          return res.status(400).json({ status: "error", message: `?�幣不足！�?�?${monster.entryFee} ??，目??${gold} ??` });
         }
         await serviceContext.rewardService.grantCurrency({
           discordId, displayName, currencyType: "gold",
@@ -712,8 +860,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { runCombatLoop } = require("../../shared/combatLoop");
       const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial);
+      const totalTaken = Math.max(0, (pStats.maxHp || 0) - Math.max(0, finalPlayerHp));
 
-      // 結算
+      // 結�?
       const { handleMonsterKill, _republishPanel, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
       let rewardLines = [];
       let mHp = finalMonsterHp;
@@ -721,11 +870,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       if (outcome === "win") {
         mHp = 0;
-        // 擊殺前先確保自己已在 participants（與未擊殺路徑一致）
+        // ?�殺?��?確�??�己已在 participants（�??��?殺路徑�??��?
         const stateWithMe = {
           ...state,
           participants: [...new Set([...currentParticipants, discordId])],
-          damageMap: { ...(state.damageMap || {}), [discordId]: { name: displayName, damage: (state.damageMap?.[discordId]?.damage || 0) + totalDamage } }
+          damageMap: {
+            ...(state.damageMap || {}),
+            [discordId]: {
+              name: displayName,
+              damage: (state.damageMap?.[discordId]?.damage || 0) + totalDamage,
+              taken: (state.damageMap?.[discordId]?.taken || 0) + totalTaken,
+            }
+          }
         };
         const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee };
         rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state: stateWithMe, totalDamage, zoneKey });
@@ -735,8 +891,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         try {
           const freshState = await serviceContext.monsterService.getState(zoneKey);
           const prev = freshState.damageMap || {};
-          damageMap = { ...prev, [discordId]: { name: displayName, damage: (prev[discordId]?.damage || 0) + totalDamage } };
-          // 同時把自己加入 participants，讓後續擊殺結算能納入
+          damageMap = {
+            ...prev,
+            [discordId]: {
+              name: displayName,
+              damage: (prev[discordId]?.damage || 0) + totalDamage,
+              taken: (prev[discordId]?.taken || 0) + totalTaken,
+            }
+          };
+          // ?��??�自己�???participants，�?後�??�殺結�??��???
           const updatedParticipants = [...new Set([...(Array.isArray(freshState.participants) ? freshState.participants : []), discordId])];
           await serviceContext.monsterService.saveState({ ...freshState, currentHp: mHp, damageMap, participants: updatedParticipants }, zoneKey);
         } catch (e) {
@@ -744,17 +907,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
 
         if (outcome === "lose") {
-          rewardLines = [`你被 **${monster.name}** 擊倒了！`, monster.entryFee > 0 ? "入場費已損失。" : "下次加油！"];
+          rewardLines = [`You were defeated by **${monster.name}**!`, monster.entryFee > 0 ? "Entry fee consumed." : "Try again next time."];
         } else {
-          rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
+          rewardLines = [`Survived ${MAX_ROUNDS} rounds and forced the monster to retreat.`];
         }
-        rewardLines.push("⏳ 獎勵將在怪物被擊倒後依貢獻比例發放。");
+        rewardLines.push("Monster battle state has been updated in the zone panel.");
 
         // update panel
         _republishPanel(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
       }
 
-      // 每週任務進度記錄（不阻塞回應）
+      // 每週任?�進度記�?（�??��??��?�?
       try {
         await serviceContext.weeklyQuestService.recordProgress(discordId, "battle_count", 1);
         if (outcome === "win") {
@@ -765,11 +928,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.error("[WeeklyQuest] recordProgress error:", e.message);
       }
 
-      // 設定冷卻：動畫播放時間 = 回合日誌數 × 700ms + 2000ms 緩衝
+      // 設�??�卻：�??�播?��???= ?��??��???? 700ms + 2000ms 緩�?
       const animDurationMs = roundLogs.length * 700 + 2000;
       const nextBattleAt = Date.now() + animDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
-      // 自動清理（避免 Map 無限增長）
+      // ?��?清�?（避??Map ?��?增長�?
       setTimeout(() => {
         const entry = playerBattleCooldowns.get(discordId);
         if (entry && entry.nextBattleAt <= Date.now()) playerBattleCooldowns.delete(discordId);
@@ -796,3 +959,5 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 }
 
 module.exports = { createPlayerAppRoutes };
+
+
