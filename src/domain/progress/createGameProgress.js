@@ -1,14 +1,17 @@
-const { randomUUID } = require('crypto');
+const { randomUUID } = require("crypto");
 
 function createGameProgress(playerId) {
   const now = new Date().toISOString();
 
-  // 預設給新手一把木製單手劍（與 server-reset 使用的模板對齊）
   const woodenSword = {
     uuid: randomUUID(),
     itemId: "a56bd609-cf0b-4924-b724-891f221fc0b9",
-    itemName: "木製單手劍",
+    itemName: "木劍",
     itemEffect: { type: "none", value: 0 },
+    useEffects: [],
+    passiveEffects: [],
+    procEffects: [],
+    combatEffects: [],
     itemType: "equipment",
     imageUrl: null,
     imageThumbnailUrl: null,
@@ -56,6 +59,7 @@ function createGameProgress(playerId) {
       special_3: null
     },
     inventory: [],
+    activeEffects: [],
     flags: {},
     updatedAt: now
   };

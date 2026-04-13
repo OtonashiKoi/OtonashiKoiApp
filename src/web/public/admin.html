@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#09090b" />
     <title>Equipment Game Admin</title>
-    <link rel="stylesheet" href="/static/admin.css?v=5" />
+    <link rel="stylesheet" href="/static/admin.css?v=6" />
   </head>
   <body>
     <div class="game-window">
@@ -53,6 +53,7 @@
                 <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
                 <button class="nav-link" data-target="section-monster-events">怪物切換事件</button>
                 <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
+                <button class="nav-link" data-target="section-effect-modules">效果模組</button>
                 <button class="nav-link" data-target="section-weekly-quests">每週任務管理</button>
                 <button class="nav-link" data-target="section-weekly-summary">每週完成概況</button>
               </div>
@@ -268,6 +269,12 @@
             </div>
             <div class="card" style="display:grid;gap:16px;">
               <article class="detail-card">
+                <h4>🎯 選擇操作目標玩家</h4>
+                <button id="player-ops-picker-open" type="button" class="button">選擇玩家（圖卡）</button>
+                <div id="player-ops-picked-preview" class="hint" style="margin-top:8px;">尚未選擇玩家</div>
+              </article>
+
+              <article class="detail-card">
                 <h4>帳號中繼資料</h4>
                 <dl class="detail-list">
                   <div><dt>建立時間</dt><dd id="player-created-at">-</dd></div>
@@ -302,7 +309,9 @@
               <article class="detail-card">
                 <h4>🎁 直接發放道具</h4>
                 <form id="grant-item-form" style="display:flex;flex-direction:column;gap:12px;">
-                  <select id="grant-item-select"><option value="">— 載入中 —</option></select>
+                  <input id="grant-item-id" type="hidden" />
+                  <button id="grant-item-picker-open" type="button" class="button">選擇道具（圖卡）</button>
+                  <div id="grant-item-picked-preview" class="hint">尚未選擇道具</div>
                   <button id="grant-item-submit" type="submit" class="button primary">發放到該玩家背包</button>
                 </form>
               </article>
@@ -355,6 +364,30 @@
                 <table class="shop-table" id="items-sheet-table">
                   <thead id="items-sheet-head"></thead>
                   <tbody id="items-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="section-effect-modules" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Content</p>
+                  <h2>效果模組</h2>
+                  <p class="hint">建立與管理可重複使用的效果模組（可在道具/怪物設定中選擇套用）。</p>
+                </div>
+                <div style="display:flex;gap:12px;align-items:center;">
+                  <button id="effect-modules-btn-new" class="button primary">＋ 新增模組</button>
+                  <button id="effect-modules-btn-refresh" class="button">重新載入</button>
+                </div>
+              </div>
+              <div style="overflow-x:auto;">
+                <table class="shop-table" id="effect-modules-table">
+                  <thead>
+                    <tr><th>ID</th><th>名稱</th><th>分類</th><th>說明</th><th>內容摘要</th><th>動作</th></tr>
+                  </thead>
+                  <tbody id="effect-modules-tbody"></tbody>
                 </table>
               </div>
             </div>
@@ -586,20 +619,22 @@
       </div>
     </div>
 
-    <script src="/static/adminUtils.js"></script>
-    <script src="/static/adminLayout.js"></script>
-    <script src="/static/adminPlayers.js"></script>
-    <script src="/static/admin.core.js"></script>
-    <script src="/static/admin.bindings.js"></script>
-    <script src="/static/admin.players.js"></script>
-    <script src="/static/admin.players.init.js"></script>
-    <script src="/static/admin.tiers.js"></script>
-    <script src="/static/admin.shop.js"></script>
-    <script src="/static/admin.monsters.js"></script>
-    <script src="/static/admin.monster-events.js"></script>
-    <script src="/static/admin.animation-studio.js"></script>
-    <script src="/static/admin.weekly.js"></script>
-    <script src="/static/admin.items.js"></script>
-    <script src="/static/admin.leaderboard.js"></script>
+    <script src="/static/adminUtils.js?v=6"></script>
+    <script src="/static/adminLayout.js?v=6"></script>
+    <script src="/static/adminPlayers.js?v=6"></script>
+    <script src="/static/admin.core.js?v=6"></script>
+    <script src="/static/admin.effects.js?v=1"></script>
+    <script src="/static/admin.effect-modules.js?v=1"></script>
+    <script src="/static/admin.bindings.js?v=6"></script>
+    <script src="/static/admin.players.js?v=6"></script>
+    <script src="/static/admin.players.init.js?v=6"></script>
+    <script src="/static/admin.tiers.js?v=6"></script>
+    <script src="/static/admin.shop.js?v=6"></script>
+    <script src="/static/admin.monsters.js?v=6"></script>
+    <script src="/static/admin.monster-events.js?v=6"></script>
+    <script src="/static/admin.animation-studio.js?v=6"></script>
+    <script src="/static/admin.weekly.js?v=6"></script>
+    <script src="/static/admin.items.js?v=6"></script>
+    <script src="/static/admin.leaderboard.js?v=6"></script>
   </body>
 </html>

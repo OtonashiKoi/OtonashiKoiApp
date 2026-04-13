@@ -31,7 +31,24 @@ function createApiServer(discordClient) {
   const serviceContext = sharedServiceContext;
 
   app.use(express.json());
-  app.use("/static", express.static(path.resolve(__dirname, "../web/public")));
+  app.use("/static", express.static(path.resolve(__dirname, "../web/public"), {
+    etag: false,
+    lastModified: false,
+    setHeaders(res) {
+      const contentType = String(res.getHeader("Content-Type") || "");
+      if (
+        contentType &&
+        !/charset=/i.test(contentType) &&
+        (contentType.startsWith("text/") ||
+          contentType.includes("javascript") ||
+          contentType.includes("json") ||
+          contentType.includes("xml"))
+      ) {
+        res.setHeader("Content-Type", `${contentType}; charset=utf-8`);
+      }
+      res.setHeader("Cache-Control", "no-store");
+    }
+  }));
   app.use("/uploads", express.static(path.resolve(__dirname, "../web/public/uploads")));
 
   app.use(createHealthRoutes());

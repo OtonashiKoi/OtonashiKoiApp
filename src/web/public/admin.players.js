@@ -1,4 +1,4 @@
-/* admin.players.js - player list, detail and actions */
+﻿/* admin.players.js - player list, detail and actions */
 (function () {
   const { request, log, escapeHtml, formatDateTime, togglePlayerDetail, setPlayerActionEnabled, splitLines, showSection } = window.adminCore;
   const state = window.state;

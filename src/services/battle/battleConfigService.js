@@ -40,6 +40,8 @@ const MONSTER_ACTION_KEYS = [
   "death"
 ];
 
+const EFFECT_MODULE_CATEGORIES = ["skill", "buff", "debuff", "system"];
+
 const DEFAULT_WEAPON_RULES = {
   default: { preferredRange: 210, minRange: 150, maxRange: 320, laneBias: 0, xOffset: 0, yOffset: 0 },
   sword_1h: { preferredRange: 180, minRange: 120, maxRange: 230, laneBias: 0, xOffset: 0, yOffset: 0 },
@@ -155,6 +157,24 @@ function normalizeTemplate(template) {
   };
 }
 
+function normalizeEffectModule(module) {
+  if (!module || typeof module !== "object") return null;
+  const id = String(module.id || "").trim();
+  const name = String(module.name || "").trim();
+  if (!id || !name) return null;
+  const effects = Array.isArray(module.effects) ? module.effects.map((e) => (typeof e === "object" ? e : null)).filter(Boolean) : [];
+  const rawCat = String(module.category || module.type || "").trim();
+  const category = EFFECT_MODULE_CATEGORIES.includes(rawCat) ? rawCat : "buff";
+  return {
+    id,
+    name,
+    category,
+    description: module.description ? String(module.description) : "",
+    effects,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 class BattleConfigService {
   constructor(battleConfigRepository) {
     this.battleConfigRepository = battleConfigRepository;
@@ -197,6 +217,7 @@ class BattleConfigService {
       version: Number(raw.version) || 1,
       assets,
       animationTemplates: Array.isArray(raw.animationTemplates) ? raw.animationTemplates.map(normalizeTemplate).filter(Boolean) : [],
+      effectModules: Array.isArray(raw.effectModules) ? raw.effectModules.map(normalizeEffectModule).filter(Boolean) : [],
       weaponPositionRules,
       updatedAt: raw.updatedAt || new Date().toISOString()
     };
@@ -264,6 +285,23 @@ class BattleConfigService {
     };
     await this.battleConfigRepository.save(next);
     return next.animationTemplates;
+  }
+
+  async getEffectModules() {
+    const config = await this.getConfig();
+    return Array.isArray(config.effectModules) ? config.effectModules : [];
+  }
+
+  async saveEffectModules(modules = []) {
+    const config = await this.getConfig();
+    const normalized = Array.isArray(modules) ? modules.map(normalizeEffectModule).filter(Boolean) : [];
+    const next = {
+      ...config,
+      effectModules: normalized,
+      updatedAt: new Date().toISOString()
+    };
+    await this.battleConfigRepository.save(next);
+    return next.effectModules;
   }
 }
 

@@ -5,8 +5,8 @@ const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 
-// ?圈洛?瑕??閮擃?key: discordId, value: { zone, nextBattleAt }嚗?
-// ?瑕?? = ?垢??剖?????嚗ogs ??? 700ms + 2s嚗??脫迫?蝜?
+// Track per-player battle cooldowns.
+// Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
 const playerBattleCooldowns = new Map();
 
 function createPlayerAppRoutes(serviceContext, discordClient) {
@@ -71,17 +71,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let discordId;
       let displayName = "WebPlayer";
 
-      // ?箔??嫣噶?祆??皜祈岫嚗???code 隞?"mock:" ???敺銵?
+      // Development shortcut: treat codes prefixed with "mock:" as mock Discord logins.
       if (code.startsWith("mock:")) {
         console.log("[PlayerApp] Development mode mock login");
         discordId = code.replace("mock:", "");
-        if (discordId.length < 5) discordId = "1450019975031951370"; // ?身?輯??澈蝚砌?雿摰嗆葫閰?
+        if (discordId.length < 5) discordId = "1450019975031951370"; // Fallback test account for local development.
       } else {
-        // ?祕??Discord OAuth2 鈭斗? (??閬?Node 18+ ??fetch)
+        // Exchange the authorization code with Discord OAuth2.
         if (!process.env.DISCORD_CLIENT_SECRET) {
           return res.status(500).json({ status: "error", message: "Server missing DISCORD_CLIENT_SECRET; Discord login is unavailable." });
         }
-        // redirect_uri 敹???蝡舐韏?OAuth ???湛??勗?蝡臬??
+        // redirect_uri must match the value used to start the OAuth flow.
         const { redirect_uri } = req.body;
         if (!redirect_uri) {
           return res.status(400).json({ status: "error", message: "Missing redirect_uri" });
@@ -116,7 +116,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         displayName = userData.global_name || userData.username;
       }
 
-      // ?? 撽??臬?箔撩?? ??
+      // Optional guild membership check before allowing web login.
       const guildId = require("../../config").discord.guildId;
       if (guildId && discordClient && !code.startsWith("mock:")) {
         try {
@@ -127,7 +127,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             if (!member) {
               return res.status(403).json({ status: "error", code: "NOT_GUILD_MEMBER", message: "You must join the Discord guild before using the web app." });
             }
-            // 雿輻隡箸??典?蝔?
+            // Prefer guild nickname over OAuth profile name.
             displayName = member.displayName || displayName;
           }
         } catch (err) {
@@ -135,10 +135,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       }
 
-      // 蝣箔??拙振鞈?摮 (??Discord ?Ｘ?菔??摩銝??
+      // Ensure player profile exists before returning a JWT.
       await serviceContext.playerService.ensurePlayer(discordId, displayName);
 
-      // ?貊?撌梁頂蝯梁? JWT
+      // Issue JWT for the web app session.
       const token = jwt.sign({ discordId, displayName }, process.env.JWT_SECRET || "super-secret-jwt-key", { expiresIn: "7d" });
       res.json(ok({ token, discordId, displayName }));
 
@@ -294,21 +294,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         throw new Error("Message cannot be empty");
       }
 
-      // ??蝟餌絞閮剖?銝剔? town_chat ?駁? ID
+      // Resolve the bound Discord channel for town chat.
       const layout = await serviceContext.channelLayoutRepository.get();
       const townChatBinding = layout.discord.bindings.find(b => b.featureKey === "town_chat" && b.enabled);
       
       if (townChatBinding && townChatBinding.channelId && discordClient) {
         const channel = discordClient.channels.cache.get(townChatBinding.channelId);
         if (channel) {
-          // ???拙振??Discord ?剖?
+          // Try to mirror the player's Discord avatar in web chat.
           let avatarURL = null;
           try {
             const discordUser = await discordClient.users.fetch(discordId, { force: false });
             avatarURL = discordUser.displayAvatarURL({ size: 128, extension: 'png' });
           } catch (_) {}
 
-          // ???遣蝡?Webhook嚗?閮隞亦摰嗅?摮??剖??潮?
+          // Prefer webhook relay so the message appears under the player's display name.
           let webhook = null;
           try {
             const webhooks = await channel.fetchWebhooks();
@@ -325,7 +325,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               ...(avatarURL ? { avatarURL } : {}),
             });
           } else {
-            // Webhook ?⊥?撱箇??????Bot ?潮?
+            // Fallback to a regular bot message if webhook creation fails.
             await channel.send(`**${displayName}**: ${message}`);
           }
         } else {
@@ -340,14 +340,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   // 5. SSE Client Management
-  // 頛?賢?嚗圾??Discord ???蝔?
+  // SSE and notification helpers for relaying Discord chat into the web app.
   const resolveMentions = async (text, guild = null) => {
     if (!text || typeof text !== "string") return text;
     const mentionRegex = /<@!?(\d+)>/g;
     const matches = [...text.matchAll(mentionRegex)];
     let resolvedText = text;
 
-    // 摰儔銝?陛?桃?撅?函楨摮??脫迫??甈∟圾?葉憭活 fetch ?????
+    // Cache resolved mention names within a single pass to avoid duplicate fetches.
     const localCache = {};
 
     for (const match of matches) {
@@ -360,15 +360,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       try {
         let playerName = null;
         
-        // 1. 憒????Guild嚗?? Server Member 銝剜??撩??梁迂??
+        // 1. Prefer the guild member display name when available.
         if (guild) {
           try {
             const member = await guild.members.fetch(userId);
             if (member) playerName = member.displayName;
-          } catch (e) { /* 蝜潛?敺銝 */ }
+          } catch (e) { /* ignore guild member lookup errors */ }
         }
 
-        // 2. 敺??澈??
+        // 2. Fall back to stored player/profile records.
         if (!playerName) {
           const player = await serviceContext.playerRepository.findByDiscordId(userId);
           if (player) {
@@ -379,7 +379,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           }
         }
 
-        // 3. ?典? Discord API
+        // 3. Final fallback: fetch directly from Discord API.
         if (!playerName && discordClient) {
           try {
             const user = await discordClient.users.fetch(userId);
@@ -402,30 +402,30 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     return resolvedText;
   };
 
-  // sseClients: Map<discordId, Set<{res}>>  (??撣唾??臬???tab)
+  // sseClients: Map<discordId, Set<{ res }>> for per-player browser tabs.
   const sseClients = new Map();
   const streamPresenceClients = new Set();
-  // notifQueue: Map<discordId, Array> ??poll fallback嚗loudflare 蝑?proxy ??SSE ?蝙?剁?
+  // notifQueue: polling fallback for environments where SSE is buffered or blocked.
   const notifQueue = new Map();
 
   function enqueueNotif(discordId, summary) {
     if (!notifQueue.has(discordId)) notifQueue.set(discordId, []);
     const q = notifQueue.get(discordId);
     q.push({ ...summary, id: Date.now(), time: new Date().toLocaleTimeString("zh-TW") });
-    if (q.length > 50) q.splice(0, q.length - 50); // ?憭???50 蝑?
+    if (q.length > 50) q.splice(0, q.length - 50); // Keep only the latest 50 notifications.
   }
 
-  // 靘?monsterZoneHandlers ?澆嚗???啁??萇策???拙振
+  // Exposed to monster zone handlers so battle rewards can reach the web app.
   function pushRewardToPlayer(discordId, summary) {
-    // 1. ????queue嚗oll fallback嚗?
+    // 1. Always queue the notification for polling fallback.
     enqueueNotif(discordId, summary);
-    // 2. ?岫 SSE ?單??剁??祆??湧????嚗?
+    // 2. Push instantly to all active SSE clients for that player.
     const clients = sseClients.get(discordId);
     if (!clients || clients.size === 0) return;
     const dataStr = `event: reward\ndata: ${JSON.stringify(summary)}\n\n`;
     clients.forEach(c => { try { c.res.write(dataStr); } catch (_) {} });
   }
-  // ????serviceContext 靘?handlers 雿輻
+  // Attach helper hooks onto serviceContext so other modules can reuse them.
   serviceContext._pushRewardToPlayer = pushRewardToPlayer;
   serviceContext._pushStreamPresence = (snapshot = getStreamPresenceSnapshot()) => {
     const dataStr = `event: stream_presence\ndata: ${JSON.stringify(snapshot)}\n\n`;
@@ -453,7 +453,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
         if (msg.embeds.length > 0 && !content) content = "[Embedded content]";
 
-        // ??鞈?
+        // Reply preview metadata.
         let replyTo = null;
         if (msg.reference?.messageId) {
           try {
@@ -486,10 +486,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");  // ?脫迫 Nginx/Cloudflare 蝺抵? SSE
+    res.setHeader("X-Accel-Buffering", "no");  // Disable buffering on reverse proxies for SSE
     res.flushHeaders();
 
-    // ?岫敺?query token 霅?拙振頨思遢
+    // Optional token in query string lets us bind the SSE stream to a player.
     let discordId = null;
     try {
       const token = req.query.token || "";
@@ -532,7 +532,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/notifications/poll", requireAuth, (req, res) => {
     const discordId = req.playerRecord.discordId;
     const q = notifQueue.get(discordId) || [];
-    notifQueue.set(discordId, []); // ?粥敺?蝛?
+    notifQueue.set(discordId, []); // clear queue after polling
     res.json({ status: "ok", data: q });
   });
 
@@ -551,7 +551,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       
       const messages = await channel.messages.fetch({ limit: 50 });
       const history = await Promise.all([...messages.values()].map(async (msg) => {
-        // 蝣箔? member 鞈?頛嚗ache miss ?? fetch嚗?
+        // Resolve missing guild member data on demand when cache misses.
         if (!msg.member && !msg.author.bot) {
           try { await channel.guild.members.fetch(msg.author.id); } catch (_) {}
         }
@@ -653,7 +653,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId, displayName } = req.playerRecord;
       const itemId = req.params.itemId;
 
-      // 敺?Bot ???拙振??Guild ?澈??嚗? allowedTiers 撽?
+      // Read the player's guild roles so tier-gated shop items can be validated.
       let memberRoleIds = [];
       try {
         const guildId = require("../../config").discord.guildId;
@@ -804,7 +804,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId, displayName } = req.playerRecord;
       const zoneKey = req.body.zone === "mid" ? "mid" : "normal";
 
-      // ?瑕??銝活?圈洛??芰???銝???
+      // Reject requests while the previous battle animation cooldown is still active.
       const cd = playerBattleCooldowns.get(discordId);
       if (cd && cd.nextBattleAt > Date.now()) {
         const secsLeft = Math.ceil((cd.nextBattleAt - Date.now()) / 1000);
@@ -855,7 +855,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = progress?.equipment || {};
-      const pStats = calcPlayerStats(attrs, equipped);
+      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || []);
 
       const { runCombatLoop } = require("../../shared/combatLoop");
       const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
@@ -870,7 +870,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       if (outcome === "win") {
         mHp = 0;
-        // ?捏??蝣箔??芸楛撌脣 participants嚗??芣?畾箄楝敺??湛?
+        // Ensure this player is included in participants and damage map before kill handling.
         const stateWithMe = {
           ...state,
           participants: [...new Set([...currentParticipants, discordId])],
@@ -899,7 +899,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               taken: (prev[discordId]?.taken || 0) + totalTaken,
             }
           };
-          // ???撌勗???participants嚗?敺??捏蝯??賜???
+          // Refresh participants from the latest state to avoid clobbering concurrent joins.
           const updatedParticipants = [...new Set([...(Array.isArray(freshState.participants) ? freshState.participants : []), discordId])];
           await serviceContext.monsterService.saveState({ ...freshState, currentHp: mHp, damageMap, participants: updatedParticipants }, zoneKey);
         } catch (e) {
@@ -917,7 +917,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         _republishPanel(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
       }
 
-      // 瘥曹遙?脣漲閮?嚗??餃???嚗?
+      // Weekly quest progression is updated after each battle result.
       try {
         await serviceContext.weeklyQuestService.recordProgress(discordId, "battle_count", 1);
         if (outcome === "win") {
@@ -928,11 +928,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.error("[WeeklyQuest] recordProgress error:", e.message);
       }
 
-      // 閮剖??瑕嚗??急?暹???= ???亥???? 700ms + 2000ms 蝺抵?
+      // Cooldown duration matches the client-side animation timeline.
       const animDurationMs = roundLogs.length * 700 + 2000;
       const nextBattleAt = Date.now() + animDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
-      // ?芸?皜?嚗??Map ?⊿?憓嚗?
+      // Clean up the cooldown map after the window has safely expired.
       setTimeout(() => {
         const entry = playerBattleCooldowns.get(discordId);
         if (entry && entry.nextBattleAt <= Date.now()) playerBattleCooldowns.delete(discordId);

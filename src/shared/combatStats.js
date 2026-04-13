@@ -1,4 +1,5 @@
 "use strict";
+const { collectEquipmentEffects, applyEffectsToStats } = require("./effectEngine");
 
 // ─────────────────────────────────────────────
 // 武器設定表
@@ -43,7 +44,7 @@ const DUAL_COUNTER_CHANCE = {
  * 依玩家基礎屬性與已裝備物品計算戰鬥數值。
  * monsterZoneHandlers 與 playerAppRoutes 共用此函式。
  */
-function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}) {
+function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = []) {
   // 裝備加成
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
   for (const item of Object.values(equipped)) {
@@ -99,7 +100,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const counterInheritStun  = isDualWield && (wt === "sword_1h" || wt === "dagger");
   const counterInheritBreak = isDualWield && (wt === "sword_1h" || wt === "dagger");
 
-  return {
+  const baseStats = {
     // 基礎數值
     maxHp:    V * 15 + 50,
     atk,
@@ -129,6 +130,18 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     counterInheritStun,    // 副手繼承擊暈
     counterInheritBreak,   // 副手繼承破防
   };
+
+  const equipmentEffects = collectEquipmentEffects(equipped, "passive");
+  const combinedEffects = [...equipmentEffects, ...(Array.isArray(activeEffects) ? activeEffects : [])];
+  const nextStats = applyEffectsToStats(baseStats, combinedEffects);
+
+  nextStats.def = Math.min(75, Math.max(0, Number(nextStats.def) || 0));
+  nextStats.dodge = Math.min(95, Math.max(0, Number(nextStats.dodge) || 0));
+  nextStats.hit = Math.min(100, Math.max(0, Number(nextStats.hit) || 0));
+  nextStats.crit = Math.min(100, Math.max(0, Number(nextStats.crit) || 0));
+  nextStats.maxHp = Math.max(1, Math.round(Number(nextStats.maxHp) || baseStats.maxHp));
+
+  return nextStats;
 }
 
 module.exports = { calcPlayerStats };

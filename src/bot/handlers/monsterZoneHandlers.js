@@ -22,6 +22,7 @@ const MAX_ROUNDS = 30;
 const BATTLE_TIMEOUT_MS = 60 * 1000; // 1 分鐘未按開始戰鬥 → 視為逃跑
 const ROUNDS_PER_TICK = 1;           // 每次更新顯示幾回合
 const TICK_DELAY_MS = 1500;          // 每次更新間隔（ms）
+const RARE_TIERS = new Set(["A", "S", "SS", "SSR", "UR"]);
 
 function getServiceContext() {
   return require("../runtimeContext").serviceContext;
@@ -37,6 +38,72 @@ function isMonsterZoneButton(customId) {
 function buildHpBar(hp, maxHp, fillEmoji = "🟥", emptyEmoji = "⬛", length = 10) {
   const filled = Math.round((Math.max(0, hp) / Math.max(1, maxHp)) * length);
   return fillEmoji.repeat(Math.max(0, filled)) + emptyEmoji.repeat(Math.max(0, length - filled));
+}
+
+function toPct(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return num;
+}
+
+function toMultiplier(percent) {
+  return Math.max(0, 1 + percent / 100);
+}
+
+function collectRewardEffectRefs(progress) {
+  const refs = [];
+  const equipped = progress?.equipment || {};
+  for (const entry of Object.values(equipped)) {
+    if (!entry || typeof entry !== "object") continue;
+    if (Array.isArray(entry.passiveEffects)) refs.push(...entry.passiveEffects);
+    if (Array.isArray(entry.combatEffects)) refs.push(...entry.combatEffects);
+  }
+  if (Array.isArray(progress?.activeEffects)) refs.push(...progress.activeEffects);
+  return refs.filter((effect) => effect && typeof effect === "object" && effect.key);
+}
+
+function buildRewardModifiers(progress) {
+  const refs = collectRewardEffectRefs(progress);
+  let expPct = 0;
+  let goldPct = 0;
+  let dropPct = 0;
+  let rareDropPct = 0;
+
+  for (const effect of refs) {
+    const value = toPct(effect?.params?.value ?? effect?.value ?? 0);
+    switch (effect.key) {
+      case "exp_gain_up":
+        expPct += value;
+        break;
+      case "gold_gain_up":
+        goldPct += value;
+        break;
+      case "drop_rate_up":
+        dropPct += value;
+        break;
+      case "rare_drop_rate_up":
+        rareDropPct += value;
+        break;
+      case "monster_reward_up":
+        expPct += value;
+        goldPct += value;
+        dropPct += value;
+        break;
+      default:
+        break;
+    }
+  }
+
+  return {
+    expPct,
+    goldPct,
+    dropPct,
+    rareDropPct,
+    expMultiplier: toMultiplier(expPct),
+    goldMultiplier: toMultiplier(goldPct),
+    dropMultiplier: toMultiplier(dropPct),
+    rareDropMultiplier: toMultiplier(rareDropPct)
+  };
 }
 
 // ──────────────────────────────────────────────
@@ -388,7 +455,7 @@ async function handleEnterBattle(interaction) {
     const progress = cachedProgress ?? await sc.progressRepository.findByPlayerId(discordId);
     const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     const equipped = progress?.equipment || {};
-    const pStats = calcPlayerStats(attrs, equipped);
+    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || []);
 
     // 入場費
     if (monster.entryFee > 0) {
@@ -679,6 +746,17 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const perPidRewards = {};
   participants.forEach(pid => { perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] }; });
 
+  // 預載參戰者資料，用於個人化結算倍率（金幣 / EXP / 掉落）
+  const progressCache = {};
+  await Promise.all(participants.map(async (pid) => {
+    const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
+    if (prog) progressCache[pid] = prog;
+  }));
+  const rewardModsByPid = {};
+  participants.forEach((pid) => {
+    rewardModsByPid[pid] = buildRewardModifiers(progressCache[pid]);
+  });
+
   // ── 金幣依比例分配 ──
   // 實際獎池 = max(goldReward, 參戰人數 × entryFee × 1.3)
   // 入場費回饋到獎池，保證參戰者平均小賺
@@ -720,7 +798,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
 
     for (const pid of participants) {
-      const share = Math.max(1, goldShares[pid] || 1);
+      const baseShare = Math.max(1, goldShares[pid] || 1);
+      const mod = rewardModsByPid[pid] || { goldMultiplier: 1 };
+      const share = Math.max(1, Math.round(baseShare * mod.goldMultiplier));
       try {
         await sc.rewardService.grantCurrency({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -731,12 +811,15 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       } catch (e) { console.error(`[MonsterZone] grantCurrency(gold) failed for ${pid}`, e); }
     }
 
-    const myShare = Math.max(1, goldShares[discordId] || 1);
+    const myBaseShare = Math.max(1, goldShares[discordId] || 1);
+    const myMod = rewardModsByPid[discordId] || { goldMultiplier: 1, goldPct: 0 };
+    const myShare = Math.max(1, Math.round(myBaseShare * myMod.goldMultiplier));
     const rawPct = Math.round(dmgRatio(discordId) * 100);
     const capPct = Math.round(goldRatio.ratio(discordId) * 100);
     const pct = rawPct !== capPct ? `${capPct}%（原${rawPct}%，已截斷）` : `${capPct}%`;
     const poolNote = entryFeePool > (monster.goldReward || 0) ? `（入場費加成）` : "";
-    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}，共 ${effectiveGoldReward}${poolNote}）`);
+    const modNote = myMod.goldPct > 0 ? `，個人加成 +${Math.round(myMod.goldPct)}%` : "";
+    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}，共 ${effectiveGoldReward}${poolNote}${modNote}）`);
   }
 
   // ── EXP 依比例分配（含組隊倍率）──
@@ -753,10 +836,14 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       expShares[pid] = Math.round(effectiveExpReward * expRatio.ratio(pid));
     }
 
-    const myShare = Math.max(1, expShares[discordId] || 1);
+    const myBaseShare = Math.max(1, expShares[discordId] || 1);
+    const myMod = rewardModsByPid[discordId] || { expMultiplier: 1, expPct: 0 };
+    const myShare = Math.max(1, Math.round(myBaseShare * myMod.expMultiplier));
     let killerLvLine = "";
     for (const pid of participants) {
-      const share = Math.max(1, expShares[pid] || 1);
+      const baseShare = Math.max(1, expShares[pid] || 1);
+      const mod = rewardModsByPid[pid] || { expMultiplier: 1 };
+      const share = Math.max(1, Math.round(baseShare * mod.expMultiplier));
       try {
         const expResult = await sc.progressService.grantExp({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -784,7 +871,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const capPct = Math.round(expRatio.ratio(discordId) * 100);
     const pct = rawPct !== capPct ? `${capPct}%（原${rawPct}%，已截斷）` : `${capPct}%`;
     const partyNote = partyMult > 1 ? `　👥 ×${partyMult}（${participants.length}人）` : "";
-    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${effectiveExpReward}${partyMult > 1 ? ` 原${monster.expReward}` : ""}）${partyNote}${killerLvLine}`);
+    const modNote = myMod.expPct > 0 ? `，個人加成 +${Math.round(myMod.expPct)}%` : "";
+    rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${effectiveExpReward}${partyMult > 1 ? ` 原${monster.expReward}` : ""}${modNote}）${partyNote}${killerLvLine}`);
   }
 
   // ── 道具掉落：從所有參戰者中抽一人，再骰各道具掉落率 ──
@@ -792,29 +880,31 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   //        2. 幸運者對每個掉落項目各自骰 chance%
   //        3. 骰中的道具進入幸運者背包
   if (Array.isArray(monster.drops) && monster.drops.length > 0 && participants.length > 0) {
-    // 預載全部參戰者的 progress
-    const progressCache = {};
-    await Promise.all(participants.map(async (pid) => {
-      const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
-      if (prog) progressCache[pid] = prog;
-    }));
-
     // 抽幸運者
     const luckyIdx = Math.floor(Math.random() * participants.length);
     const luckyPid = participants[luckyIdx];
     const luckyProg = progressCache[luckyPid];
+    const luckyMod = rewardModsByPid[luckyPid] || { dropMultiplier: 1, rareDropMultiplier: 1 };
 
     if (luckyProg) {
       if (!Array.isArray(luckyProg.inventory)) luckyProg.inventory = [];
       const droppedItems = [];
 
       for (const drop of monster.drops) {
-        if (Math.random() * 100 < drop.chance) {
-          const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
-          if (item) {
+        const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
+        if (item) {
+          const tier = String(item.tier || "").toUpperCase();
+          const isRare = RARE_TIERS.has(tier);
+          const chanceMult = luckyMod.dropMultiplier * (isRare ? luckyMod.rareDropMultiplier : 1);
+          const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
+          if (Math.random() * 100 < finalChance) {
             luckyProg.inventory.push({
               uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
               itemEffect: item.effect || { type: "none", value: 0 },
+              useEffects: item.useEffects || [],
+              passiveEffects: item.passiveEffects || [],
+              procEffects: item.procEffects || [],
+              combatEffects: item.combatEffects || [],
               itemType: item.itemType || "consumable",
               imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
               equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
@@ -858,16 +948,25 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         : [...usedBonusPids][0];
       usedBonusPids.add(bonusPid);
       const bonusProg = progressCache[bonusPid];
+      const bonusMod = rewardModsByPid[bonusPid] || { dropMultiplier: 1, rareDropMultiplier: 1 };
       if (!bonusProg) continue;
       if (!Array.isArray(bonusProg.inventory)) bonusProg.inventory = [];
       const bonusItems = [];
       for (const drop of monster.drops) {
-        if (Math.random() * 100 < drop.chance) {
-          const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
-          if (item) {
+        const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
+        if (item) {
+          const tier = String(item.tier || "").toUpperCase();
+          const isRare = RARE_TIERS.has(tier);
+          const chanceMult = bonusMod.dropMultiplier * (isRare ? bonusMod.rareDropMultiplier : 1);
+          const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
+          if (Math.random() * 100 < finalChance) {
             bonusProg.inventory.push({
               uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
               itemEffect: item.effect || { type: "none", value: 0 },
+              useEffects: item.useEffects || [],
+              passiveEffects: item.passiveEffects || [],
+              procEffects: item.procEffects || [],
+              combatEffects: item.combatEffects || [],
               itemType: item.itemType || "consumable",
               imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
               equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,

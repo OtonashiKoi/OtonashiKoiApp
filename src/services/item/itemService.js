@@ -1,4 +1,5 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
+const { normalizeEffectList } = require("../../shared/effectPayloads");
 
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes"];
 const VALID_TIERS = ["D", "C", "B", "A"];
@@ -24,6 +25,15 @@ class ItemService {
   _normalizeEffect(effect) {
     if (!effect || !VALID_EFFECT_TYPES.includes(effect.type)) return { type: "none", value: 0 };
     return { type: effect.type, value: Math.max(0, Number(effect.value) || 0) };
+  }
+
+  _normalizeEffectBundles(fields = {}, itemType = "consumable") {
+    return {
+      passiveEffects: normalizeEffectList(fields.passiveEffects, { fallbackTrigger: "passive", fallbackTarget: "self", sourcePhase: "passive" }),
+      procEffects: normalizeEffectList(fields.procEffects, { fallbackTrigger: "on_hit", fallbackTarget: "enemy", sourcePhase: "proc" }),
+      useEffects: normalizeEffectList(fields.useEffects, { fallbackTrigger: "on_npc_event", fallbackTarget: "self", sourcePhase: "consume" }),
+      combatEffects: normalizeEffectList(fields.combatEffects, { fallbackTrigger: "on_battle_start", fallbackTarget: "self", sourcePhase: itemType === "equipment" ? "passive" : "consume" })
+    };
   }
 
   async listItems() {
@@ -64,10 +74,11 @@ class ItemService {
     return VALID_TIERS.includes(t) ? t : null;
   }
 
-  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats, weaponType, tier }) {
+  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats, weaponType, tier, passiveEffects, procEffects, useEffects, combatEffects }) {
     const normalizedType = this._normalizeItemType(itemType);
     const normalizedSlot = normalizedType === "equipment" ? (this._normalizeEquipSlot(equipSlot) || "head_top") : null;
     const resolvedWeaponType = (normalizedSlot === "weapon" || normalizedSlot === "shield") ? (this._normalizeWeaponType(weaponType, normalizedSlot) || null) : null;
+    const effectBundles = this._normalizeEffectBundles({ passiveEffects, procEffects, useEffects, combatEffects }, normalizedType);
     const item = {
       id: crypto.randomUUID(),
       name: String(name || "").trim(),
@@ -76,6 +87,10 @@ class ItemService {
       imageUrl: imageUrl || null,
       imageThumbnailUrl: imageThumbnailUrl || null,
       effect: this._normalizeEffect(effect),
+      useEffects: effectBundles.useEffects,
+      passiveEffects: effectBundles.passiveEffects,
+      procEffects: effectBundles.procEffects,
+      combatEffects: effectBundles.combatEffects,
       equipSlot: normalizedSlot,
       equipStats: normalizedType === "equipment" ? (this._normalizeEquipStats(equipStats) || null) : null,
       weaponType: resolvedWeaponType,
@@ -96,6 +111,18 @@ class ItemService {
     if (fields.description !== undefined) updated.description = String(fields.description).trim();
     if (fields.itemType !== undefined) updated.itemType = this._normalizeItemType(fields.itemType);
     if (fields.effect !== undefined) updated.effect = this._normalizeEffect(fields.effect);
+    if (fields.passiveEffects !== undefined || fields.procEffects !== undefined || fields.useEffects !== undefined || fields.combatEffects !== undefined) {
+      const bundles = this._normalizeEffectBundles({
+        passiveEffects: fields.passiveEffects !== undefined ? fields.passiveEffects : updated.passiveEffects,
+        procEffects: fields.procEffects !== undefined ? fields.procEffects : updated.procEffects,
+        useEffects: fields.useEffects !== undefined ? fields.useEffects : updated.useEffects,
+        combatEffects: fields.combatEffects !== undefined ? fields.combatEffects : updated.combatEffects
+      }, updated.itemType);
+      updated.passiveEffects = bundles.passiveEffects;
+      updated.procEffects = bundles.procEffects;
+      updated.useEffects = bundles.useEffects;
+      updated.combatEffects = bundles.combatEffects;
+    }
     if (fields.imageUrl !== undefined) updated.imageUrl = fields.imageUrl;
     if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl;
     if (fields.equipSlot !== undefined) updated.equipSlot = updated.itemType === "equipment" ? (this._normalizeEquipSlot(fields.equipSlot) || "head_top") : null;
@@ -122,7 +149,8 @@ class ItemService {
   async _syncItemToPlayers(libItem) {
     const allProgress = await this.progressRepository.listAll();
     const SYNC_FIELDS = ["imageUrl", "imageThumbnailUrl", "equipSlot", "equipStats",
-                         "weaponType", "isTwoHanded", "atkStat", "tier", "itemEffect", "itemType"];
+                         "weaponType", "isTwoHanded", "atkStat", "tier", "itemEffect", "itemType",
+                         "useEffects", "passiveEffects", "procEffects", "combatEffects"];
 
     for (const progress of allProgress) {
       let dirty = false;
@@ -152,6 +180,10 @@ class ItemService {
           atkStat: libItem.atkStat ?? entry.atkStat,
           tier: libItem.tier ?? entry.tier,
           itemEffect: libItem.effect ?? entry.itemEffect,
+          useEffects: libItem.useEffects ?? entry.useEffects,
+          passiveEffects: libItem.passiveEffects ?? entry.passiveEffects,
+          procEffects: libItem.procEffects ?? entry.procEffects,
+          combatEffects: libItem.combatEffects ?? entry.combatEffects,
           itemType: libItem.itemType ?? entry.itemType,
         };
 

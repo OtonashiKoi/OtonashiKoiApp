@@ -1333,6 +1333,105 @@ select option { background: var(--surface); }
 }
 .item-type-badge.consumable  { background: rgba(0,230,118,.1); color: var(--success); border: 1px solid rgba(0,230,118,.2); }
 .item-type-badge.equipment   { background: var(--accent-light); color: var(--accent); border: 1px solid rgba(0,229,255,.2); }
+
+.item-picker-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 24px;
+}
+
+.item-picker-sheet {
+  width: min(1200px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.item-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.item-picker-tools {
+  display: grid;
+  grid-template-columns: minmax(240px,1.2fr) 220px 160px;
+  gap: 8px;
+}
+
+.item-picker-grid {
+  overflow: auto;
+  padding: 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.item-picker-card {
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-hover);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 10px;
+  padding: 8px;
+}
+
+.item-picker-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.18);
+}
+
+.item-picker-card.is-active {
+  border-color: var(--gold);
+}
+
+.item-picker-thumb {
+  width: 60px;
+  height: 60px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.item-picker-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.item-picker-meta {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.item-picker-meta strong {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .item-type-badge.collectible { background: var(--gold-light); color: var(--gold); border: 1px solid rgba(255,215,64,.2); }
 .item-type-badge.special     { background: var(--pink-light); color: var(--pink); border: 1px solid rgba(224,64,251,.2); }
 

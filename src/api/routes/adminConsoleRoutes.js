@@ -6,13 +6,13 @@ const config = require("../../config");
 const { fail, ok } = require("../../shared/response");
 const { uploadImage } = require("../../shared/cloudinaryUpload");
 
-// multer 暫存到系統 temp 目錄，上傳後由 Cloudinary helper 清除
+// Upload image to temp directory first, then hand over to Cloudinary helper.
 const upload = multer({
   dest: os.tmpdir(),
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     if (!file.mimetype.startsWith("image/")) {
-      return cb(new Error("只允許上傳圖片檔案"));
+      return cb(new Error("Only image files are allowed."));
     }
     cb(null, true);
   }
@@ -22,6 +22,8 @@ function createAdminConsoleRoutes(serviceContext) {
   const router = Router();
 
   router.get("/admin", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.sendFile(path.resolve(__dirname, "../../web/public/admin.html"));
   });
 
@@ -106,7 +108,7 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
-  // 金幣商店商品管理
+  // Shop item administration.
   router.get("/admin/shop/items", async (_req, res, next) => {
     try {
       const items = await serviceContext.shopService.listItems({ includeDisabled: true });
@@ -158,7 +160,7 @@ function createAdminConsoleRoutes(serviceContext) {
   router.post("/admin/channel-layout/publish-monster-zone", async (req, res, next) => {
     try {
       const { channelId } = req.body;
-      // 從 binding 推算 zone（monster_zone → normal, monster_zone_mid → mid）
+      // Derive zone from binding key: monster_zone => normal, monster_zone_mid => mid.
       const layout = await serviceContext.adminConsoleService.getChannelLayout();
       const bindings = layout?.discord?.bindings || [];
       const binding = bindings.find((b) => b.channelId === channelId && b.featureKey?.startsWith("monster_zone"));
@@ -167,7 +169,7 @@ function createAdminConsoleRoutes(serviceContext) {
       const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone });
       let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);
       if (!activeMonster && monsters.length > 0) {
-        // activeMonsterSeq 與此 zone 怪物不符 → 修正並寫回 DB
+        // Repair stale activeMonsterSeq if it no longer exists in this zone.
         activeMonster = monsters[0];
         const correctedHp = activeMonster.calc.maxHp;
         await serviceContext.monsterService.saveState(
@@ -219,7 +221,7 @@ function createAdminConsoleRoutes(serviceContext) {
     try {
       const { discordId } = req.params;
       const playerInfo = await serviceContext.adminConsoleService.getPlayerQueryInfo(discordId);
-      // 即時從 Discord 抴取成員身分組並同步等級
+      // Refresh player tier from live Discord roles when the bot is available.
       try {
         const { getBotClient } = require("../../bot/runtimeContext");
         const config = require("../../config");
@@ -230,12 +232,12 @@ function createAdminConsoleRoutes(serviceContext) {
           if (member) {
             const memberRoleIds = [...member.roles.cache.keys()];
             await serviceContext.shopService.updatePlayerTier(discordId, memberRoleIds);
-            // 將更新後的等級寫回回傳資料
+            // Reload progress after tier sync so the response reflects persisted data.
             playerInfo.progress = await serviceContext.progressRepository
               .findByPlayerId(discordId) || playerInfo.progress;
           }
         }
-      } catch { /* 非關鍵操作，非同步失敗不影響回傳 */ }
+      } catch { /* ignore Discord lookup failures and keep returning stored data */ }
       res.json(ok(playerInfo, "player info fetched"));
     } catch (error) {
       next(error);
@@ -255,7 +257,7 @@ function createAdminConsoleRoutes(serviceContext) {
         serviceContext.progressRepository.findByPlayerId(discordId)
       ]);
       if (!progress) {
-        res.status(404).json(fail("PLAYER_NOT_FOUND", "找不到玩家進度資料"));
+        res.status(404).json(fail("PLAYER_NOT_FOUND", "Player progress not found."));
         return;
       }
       if (!Array.isArray(progress.inventory)) progress.inventory = [];
@@ -264,6 +266,10 @@ function createAdminConsoleRoutes(serviceContext) {
         itemId: item.id,
         itemName: item.name,
         itemEffect: item.effect || { type: "none", value: 0 },
+        useEffects: item.useEffects || [],
+        passiveEffects: item.passiveEffects || [],
+        procEffects: item.procEffects || [],
+        combatEffects: item.combatEffects || [],
         itemType: item.itemType || "consumable",
         imageUrl: item.imageUrl || null,
         imageThumbnailUrl: item.imageThumbnailUrl || null,
@@ -283,7 +289,7 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
-  // 道具庫管理
+  // Item library administration.
   router.get("/admin/items", async (_req, res, next) => {
     try {
       const items = await serviceContext.itemService.listItems();
@@ -320,11 +326,11 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
-  // 道具圖片上傳
+  // Item image upload
   router.post("/admin/items/:id/image", upload.single("image"), async (req, res, next) => {
     try {
       if (!req.file) {
-        res.status(400).json(fail("NO_FILE", "請選擇要上傳的圖片"));
+        res.status(400).json(fail("NO_FILE", "Please select an image file to upload."));
         return;
       }
       const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "items");
@@ -335,7 +341,7 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
-  // 玩家等級設定（E~SS）
+  // Player tier settings
   router.get("/admin/player-tiers", async (_req, res, next) => {
     try {
       const tiers = await serviceContext.playerTierService.getTiers();
@@ -354,11 +360,11 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
-  // 商店商品圖片上傳
+  // Shop item image upload
   router.post("/admin/shop/items/:id/image", upload.single("image"), async (req, res, next) => {
     try {
       if (!req.file) {
-        res.status(400).json(fail("NO_FILE", "請選擇要上傳的圖片"));
+        res.status(400).json(fail("NO_FILE", "Please select an image file to upload."));
         return;
       }
       const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "items");
@@ -373,6 +379,15 @@ function createAdminConsoleRoutes(serviceContext) {
     try {
       const configData = await serviceContext.battleConfigService.getConfig();
       res.json(ok(configData, "battle config fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/effect-definitions", async (_req, res, next) => {
+    try {
+      const definitions = await serviceContext.effectDefinitionService.listDefinitions();
+      res.json(ok(definitions, "effect definitions fetched"));
     } catch (error) {
       next(error);
     }
@@ -428,6 +443,26 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
+  // Effect modules (可重複使用的技能/效果模組)
+  router.get("/admin/effect-modules", async (_req, res, next) => {
+    try {
+      const modules = await serviceContext.battleConfigService.getEffectModules();
+      res.json(ok(modules, "effect modules fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put("/admin/effect-modules", async (req, res, next) => {
+    try {
+      const modules = Array.isArray(req.body?.modules) ? req.body.modules : [];
+      const saved = await serviceContext.battleConfigService.saveEffectModules(modules);
+      res.json(ok(saved, "effect modules saved"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.put("/admin/animation-studio/templates", async (req, res, next) => {
     try {
       const templates = Array.isArray(req.body?.templates) ? req.body.templates : [];
@@ -457,3 +492,4 @@ function createAdminConsoleRoutes(serviceContext) {
 module.exports = {
   createAdminConsoleRoutes
 };
+

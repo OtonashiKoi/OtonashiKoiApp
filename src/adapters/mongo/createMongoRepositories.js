@@ -218,6 +218,20 @@ function createMongoRepositories() {
         return config;
       }
     },
+    effectDefinitionRepository: {
+      async get() {
+        const row = await (await collection("effectDefinitions")).findOne({ _id: "default" });
+        return row?.value || null;
+      },
+      async save(config) {
+        await (await collection("effectDefinitions")).updateOne(
+          { _id: "default" },
+          { $set: { value: config, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+        return config;
+      }
+    },
     weeklyQuestRepository: {
       async listQuests() {
         return (await collection("weeklyQuests")).find({}).sort({ createdAt: 1 }).toArray();

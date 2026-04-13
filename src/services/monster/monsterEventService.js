@@ -1,4 +1,4 @@
-const { AppError, ERROR_CODES } = require("../../shared/errors");
+嚜盧onst { AppError, ERROR_CODES } = require("../../shared/errors");
 
 function normalizeZone(zone) {
   return zone === "mid" ? "mid" : "normal";
@@ -31,7 +31,8 @@ function normalizeEffect(raw = {}) {
 
 function normalizeOption(raw = {}, idx = 0) {
   const id = String(raw.id || `opt_${idx + 1}`).trim() || `opt_${idx + 1}`;
-  const label = String(raw.label || raw.text || `選項 ${idx + 1}`).trim() || `選項 ${idx + 1}`;
+  const fallbackLabel = `\u9078\u9805 ${idx + 1}`;
+  const label = String(raw.label || raw.text || fallbackLabel).trim() || fallbackLabel;
   const npcReply = String(raw.npcReply || "").trim();
   const nextNodeId = raw.nextNodeId == null || raw.nextNodeId === "" ? null : String(raw.nextNodeId);
   const effects = Array.isArray(raw.effects) ? raw.effects.map(normalizeEffect) : [];
@@ -47,7 +48,7 @@ function normalizeNode(raw = {}, idx = 0) {
 
 function normalizeNpc(raw = {}) {
   return {
-    name: String(raw.name || "神秘 NPC").trim() || "神秘 NPC",
+    name: String(raw.name || "\u795e\u79d8 NPC").trim() || "\u795e\u79d8 NPC",
     imageUrl: raw.imageUrl || null,
     imageThumbnailUrl: raw.imageThumbnailUrl || null
   };
@@ -144,15 +145,16 @@ class MonsterEventService {
   _normalizeStoredEvent(row = {}) {
     const nodesRaw = Array.isArray(row.nodes) ? row.nodes : null;
     const legacyMessage = String(row.message || "").trim();
+    const defaultMessage = "\u4e8b\u4ef6\u9032\u884c\u4e2d\uff0c\u8acb\u9078\u64c7\u3002";
     const nodes = nodesRaw && nodesRaw.length
       ? nodesRaw.map((node, idx) => normalizeNode(node, idx))
-      : [normalizeNode({ id: "start", text: legacyMessage || "事件進行中，請選擇。", options: [] }, 0)];
+      : [normalizeNode({ id: "start", text: legacyMessage || defaultMessage, options: [] }, 0)];
 
     return {
       id: row.id,
       zone: normalizeZone(row.zone),
-      name: String(row.name || "NPC 事件模板").trim() || "NPC 事件模板",
-      message: legacyMessage || nodes[0]?.text || "事件進行中，請選擇。",
+      name: String(row.name || "NPC \u4e8b\u4ef6\u6a21\u677f").trim() || "NPC \u4e8b\u4ef6\u6a21\u677f",
+      message: legacyMessage || nodes[0]?.text || defaultMessage,
       triggerMonsterSeq: normalizeTriggerMonsterSeq(row.triggerMonsterSeq),
       durationSec: normalizeDurationSec(row.durationSec),
       priority: normalizePriority(row.priority),

@@ -1,4 +1,5 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
+const { normalizeEffectList, normalizeMonsterSkillList } = require("../../shared/effectPayloads");
 
 // 純公式計算，輸入屬性 → 輸出戰鬥數值
 // maxHp / def / mdef 已直接存於資料庫，不在此覆蓋
@@ -47,6 +48,10 @@ class MonsterService {
 
   async createMonster(fields) {
     const drops = await this._resolveDrops(fields.drops || []);
+    const passiveEffects = normalizeEffectList(fields.passiveEffects, { fallbackTrigger: "passive", fallbackTarget: "self", sourcePhase: "passive" });
+    const procEffects = normalizeEffectList(fields.procEffects, { fallbackTrigger: "on_hit", fallbackTarget: "enemy", sourcePhase: "proc" });
+    const battleStartEffects = normalizeEffectList(fields.battleStartEffects, { fallbackTrigger: "on_battle_start", fallbackTarget: "self", sourcePhase: "monster_skill" });
+    const skills = normalizeMonsterSkillList(fields.skills);
     const monster = {
       id: crypto.randomUUID(),
       seq: Math.max(1, Number(fields.seq) || 1),
@@ -67,6 +72,10 @@ class MonsterService {
       expReward: Math.max(0, Number(fields.expReward) || 0),
       goldReward:Math.max(0, Number(fields.goldReward)|| 0),
       drops,
+      passiveEffects,
+      procEffects,
+      battleStartEffects,
+      skills,
       spawnRate: Math.min(100, Math.max(1, Number(fields.spawnRate) || 10)),
       isBoss:  Boolean(fields.isBoss),
       enabled: Boolean(fields.enabled),
@@ -94,6 +103,10 @@ class MonsterService {
     if (fields.expReward !== undefined) updated.expReward = Math.max(0, Number(fields.expReward) || 0);
     if (fields.goldReward!== undefined) updated.goldReward= Math.max(0, Number(fields.goldReward)|| 0);
     if (fields.drops     !== undefined) updated.drops     = await this._resolveDrops(fields.drops);
+    if (fields.passiveEffects !== undefined) updated.passiveEffects = normalizeEffectList(fields.passiveEffects, { fallbackTrigger: "passive", fallbackTarget: "self", sourcePhase: "passive" });
+    if (fields.procEffects !== undefined) updated.procEffects = normalizeEffectList(fields.procEffects, { fallbackTrigger: "on_hit", fallbackTarget: "enemy", sourcePhase: "proc" });
+    if (fields.battleStartEffects !== undefined) updated.battleStartEffects = normalizeEffectList(fields.battleStartEffects, { fallbackTrigger: "on_battle_start", fallbackTarget: "self", sourcePhase: "monster_skill" });
+    if (fields.skills !== undefined) updated.skills = normalizeMonsterSkillList(fields.skills);
     if (fields.spawnRate !== undefined) updated.spawnRate = Math.min(100, Math.max(1, Number(fields.spawnRate) || 10));
     if (fields.isBoss    !== undefined) updated.isBoss    = Boolean(fields.isBoss);
     if (fields.enabled   !== undefined) updated.enabled   = Boolean(fields.enabled);

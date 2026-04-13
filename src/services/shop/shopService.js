@@ -1,5 +1,6 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
+const { applyEffectInstances } = require("../../shared/effectEngine");
 const crypto = require("crypto");
 
 // 各 tier 裝備販售價格
@@ -53,6 +54,10 @@ class ShopService {
       maxPerMonth: Math.max(0, Number(maxPerMonth) || 0),
       itemType: libraryItem.itemType || "consumable",
       effect: libraryItem.effect || { type: "none", value: 0 },
+      useEffects: libraryItem.useEffects || [],
+      passiveEffects: libraryItem.passiveEffects || [],
+      procEffects: libraryItem.procEffects || [],
+      combatEffects: libraryItem.combatEffects || [],
       imageUrl: libraryItem.imageUrl || null,
       imageThumbnailUrl: libraryItem.imageThumbnailUrl || null,
       equipSlot: libraryItem.itemType === "equipment" ? (libraryItem.equipSlot || null) : null,
@@ -76,6 +81,10 @@ class ShopService {
       updated.description = libraryItem.description;
       updated.effect = libraryItem.effect || { type: "none", value: 0 };
       updated.itemType = libraryItem.itemType || "consumable";
+      updated.useEffects = libraryItem.useEffects || [];
+      updated.passiveEffects = libraryItem.passiveEffects || [];
+      updated.procEffects = libraryItem.procEffects || [];
+      updated.combatEffects = libraryItem.combatEffects || [];
       updated.imageUrl = libraryItem.imageUrl || null;
       updated.imageThumbnailUrl = libraryItem.imageThumbnailUrl || null;
       updated.equipSlot = libraryItem.itemType === "equipment" ? (libraryItem.equipSlot || null) : null;
@@ -122,14 +131,18 @@ class ShopService {
 
   async purchase(discordId, displayName, itemId, memberRoleIds = []) {
     const item = await this.getItemById(itemId);
+    let libraryItem = null;
     let effectiveTier = item.tier || null;
     if (!effectiveTier && item.itemLibraryId && this.itemRepository) {
-      const libItem = await this.itemRepository.findById(item.itemLibraryId).catch(() => null);
-      effectiveTier = libItem?.tier || null;
+      libraryItem = await this.itemRepository.findById(item.itemLibraryId).catch(() => null);
+      effectiveTier = libraryItem?.tier || null;
       if (effectiveTier) {
         await this.shopRepository.save({ ...item, tier: effectiveTier });
         item.tier = effectiveTier;
       }
+    }
+    if (!libraryItem && item.itemLibraryId && this.itemRepository) {
+      libraryItem = await this.itemRepository.findById(item.itemLibraryId).catch(() => null);
     }
     if (!item.enabled) throw new AppError(ERROR_CODES.SHOP_ITEM_DISABLED, "此商品目前已下架", 400);
     if (item.stock === 0) throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, "此商品已售完", 400);
@@ -180,6 +193,10 @@ class ShopService {
         itemId: item.itemLibraryId || item.id,
         itemName: item.name,
         itemEffect: item.effect || { type: "none", value: 0 },
+        useEffects: item.useEffects || libraryItem?.useEffects || [],
+        passiveEffects: item.passiveEffects || libraryItem?.passiveEffects || [],
+        procEffects: item.procEffects || libraryItem?.procEffects || [],
+        combatEffects: item.combatEffects || libraryItem?.combatEffects || [],
         itemType: item.itemType || "consumable",
         imageUrl: item.imageUrl || null,
         imageThumbnailUrl: item.imageThumbnailUrl || null,
@@ -208,6 +225,7 @@ class ShopService {
       progress.inventory.splice(idx, 1);
     }
     const effect = entry.itemEffect || { type: "none", value: 0 };
+    const useEffects = Array.isArray(entry.useEffects) ? entry.useEffects : [];
     let effectDesc = "";
 
     if (effect.type === "grant_status_points") {
@@ -243,6 +261,17 @@ class ShopService {
     } else if (effect.type === "grant_exp" && this.progressService) {
       await this.progressService.grantExp({ discordId, displayName: dn, amount: effect.value, source: EXP_SOURCES.ITEM_USE_EXP });
       effectDesc = `✨ +${effect.value} 經驗值`;
+    }
+
+    if (useEffects.length > 0) {
+      progress.activeEffects = applyEffectInstances(progress.activeEffects, useEffects, {
+        sourceType: "item",
+        sourceId: entry.itemId || entry.uuid
+      });
+      progress.updatedAt = new Date().toISOString();
+      await this.progressRepository.save(progress);
+      const statusLine = `附加狀態 ${useEffects.map((useEffect) => useEffect.definitionName || useEffect.key).join("、")}`;
+      effectDesc = effectDesc ? `${effectDesc} / ${statusLine}` : statusLine;
     }
 
     return { itemName: entry.itemName, effectDesc };

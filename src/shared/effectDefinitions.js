@@ -1,0 +1,180 @@
+const EFFECT_CATEGORIES = [
+  "stat",
+  "dot",
+  "control",
+  "defense",
+  "reactive",
+  "conditional",
+  "economy",
+  "proc"
+];
+
+const EFFECT_SOURCES = [
+  "equipment",
+  "skill",
+  "monster_skill",
+  "npc_event",
+  "item",
+  "passive",
+  "activity",
+  "admin"
+];
+
+const STACK_MODES = ["refresh", "stack", "replace", "ignore"];
+const DURATION_MODES = ["turns", "battle", "seconds", "permanent", "count"];
+const TRIGGER_KEYS = [
+  "passive",
+  "on_battle_start",
+  "on_battle_end",
+  "on_attack",
+  "on_hit",
+  "on_crit",
+  "on_kill",
+  "on_take_damage",
+  "on_low_hp",
+  "on_evade",
+  "on_equip",
+  "on_unequip",
+  "on_npc_event",
+  "on_round_start",
+  "on_round_end"
+];
+
+function defineEffect(
+  key,
+  name,
+  category,
+  sourceTypes,
+  stackMode,
+  durationModes,
+  notes,
+  extra = {}
+) {
+  return {
+    key,
+    name,
+    category,
+    sourceTypes,
+    stackMode,
+    durationModes,
+    notes,
+    ...extra
+  };
+}
+
+const EFFECT_DEFINITIONS = [
+  defineEffect("max_hp_up", "Maximum HP Up", "stat", ["equipment", "skill", "npc_event"], "replace", ["battle", "permanent"], "Increase max HP."),
+  defineEffect("max_hp_down", "Maximum HP Down", "stat", ["monster_skill", "skill"], "replace", ["turns"], "Reduce max HP ceiling."),
+  defineEffect("atk_up", "Attack Up", "stat", ["equipment", "skill", "npc_event", "item"], "refresh", ["turns", "battle", "permanent"], "Increase physical attack."),
+  defineEffect("atk_down", "Attack Down", "stat", ["monster_skill", "skill"], "refresh", ["turns"], "Reduce physical attack."),
+  defineEffect("def_up", "Defense Up", "stat", ["equipment", "skill", "npc_event"], "refresh", ["turns", "battle", "permanent"], "Increase defense."),
+  defineEffect("def_down", "Defense Down", "stat", ["monster_skill", "skill"], "refresh", ["turns"], "Reduce defense."),
+  defineEffect("mdef_up", "Magic Defense Up", "stat", ["equipment", "skill"], "refresh", ["turns", "battle", "permanent"], "Increase magic defense."),
+  defineEffect("mdef_down", "Magic Defense Down", "stat", ["monster_skill", "skill"], "refresh", ["turns"], "Reduce magic defense."),
+  defineEffect("hit_up", "Hit Up", "stat", ["equipment", "skill", "npc_event"], "refresh", ["turns", "battle", "permanent"], "Increase hit rate."),
+  defineEffect("hit_down", "Hit Down", "stat", ["monster_skill", "skill"], "refresh", ["turns"], "Reduce hit rate."),
+  defineEffect("dodge_up", "Dodge Up", "stat", ["equipment", "skill"], "refresh", ["turns", "battle", "permanent"], "Increase dodge."),
+  defineEffect("dodge_down", "Dodge Down", "stat", ["monster_skill", "skill"], "refresh", ["turns"], "Reduce dodge."),
+  defineEffect("crit_rate_up", "Critical Rate Up", "stat", ["equipment", "skill"], "refresh", ["turns", "battle", "permanent"], "Increase crit rate."),
+  defineEffect("crit_rate_down", "Critical Rate Down", "stat", ["monster_skill", "skill"], "refresh", ["turns"], "Reduce crit rate."),
+  defineEffect("crit_damage_up", "Critical Damage Up", "stat", ["equipment", "skill"], "replace", ["turns", "battle", "permanent"], "Increase critical damage."),
+  defineEffect("crit_damage_down", "Critical Damage Down", "stat", ["monster_skill", "skill"], "replace", ["turns"], "Reduce critical damage."),
+  defineEffect("speed_up", "Speed Up", "stat", ["equipment", "skill"], "refresh", ["turns", "battle", "permanent"], "Increase action speed or initiative."),
+  defineEffect("speed_down", "Speed Down", "stat", ["monster_skill", "skill"], "refresh", ["turns"], "Reduce action speed or initiative."),
+  defineEffect("final_damage_up", "Final Damage Up", "stat", ["equipment", "skill", "passive"], "replace", ["turns", "battle", "permanent"], "Increase final outgoing damage."),
+  defineEffect("final_damage_down", "Final Damage Down", "stat", ["monster_skill", "skill"], "replace", ["turns"], "Reduce final outgoing damage."),
+  defineEffect("heal_over_time", "Heal Over Time", "dot", ["skill", "item", "npc_event"], "refresh", ["turns"], "Restore HP over time."),
+  defineEffect("poison", "Poison", "dot", ["monster_skill", "skill", "equipment"], "stack", ["turns"], "Stable damage over time."),
+  defineEffect("burn", "Burn", "dot", ["monster_skill", "skill", "equipment"], "refresh", ["turns"], "Short-duration fire damage over time."),
+  defineEffect("bleed", "Bleed", "dot", ["monster_skill", "skill", "equipment"], "stack", ["turns"], "Physical damage over time."),
+  defineEffect("shock_dot", "Shock", "dot", ["monster_skill", "skill"], "refresh", ["turns"], "Lightning damage over time."),
+  defineEffect("curse_dot", "Curse", "dot", ["monster_skill", "skill"], "refresh", ["turns"], "Dark damage over time."),
+  defineEffect("life_regen", "Life Regeneration", "dot", ["equipment", "passive"], "replace", ["battle", "permanent"], "Passive HP regeneration."),
+  defineEffect("mana_regen", "Mana Regeneration", "dot", ["equipment", "passive"], "replace", ["battle", "permanent"], "Passive MP/SP regeneration.", { reserved: true }),
+  defineEffect("stun", "Stun", "control", ["monster_skill", "skill", "equipment"], "refresh", ["turns"], "Cannot act while stunned."),
+  defineEffect("freeze", "Freeze", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Cannot act; often paired with bonus damage."),
+  defineEffect("sleep", "Sleep", "control", ["monster_skill", "skill", "npc_event"], "refresh", ["turns"], "Cannot act until hit or expired."),
+  defineEffect("silence", "Silence", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Cannot cast skills."),
+  defineEffect("root", "Root", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Cannot move or reposition.", { reserved: true }),
+  defineEffect("slow", "Slow", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Reduce speed or frequency of action."),
+  defineEffect("blind", "Blind", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Lower hit rate significantly."),
+  defineEffect("taunt", "Taunt", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Force target selection.", { reserved: true }),
+  defineEffect("fear", "Fear", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Chance to skip actions."),
+  defineEffect("confuse", "Confuse", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Act unpredictably.", { reserved: true }),
+  defineEffect("disarm", "Disarm", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Suppress weapon-based output."),
+  defineEffect("shield", "Shield", "defense", ["skill", "equipment", "npc_event", "item"], "replace", ["turns", "battle"], "Absorb incoming damage."),
+  defineEffect("barrier", "Barrier", "defense", ["skill", "monster_skill"], "replace", ["turns", "battle"], "Specialized shield for certain damage types."),
+  defineEffect("damage_reduction", "Damage Reduction", "defense", ["skill", "equipment", "passive"], "replace", ["turns", "battle", "permanent"], "Reduce all incoming damage."),
+  defineEffect("physical_damage_reduction", "Physical Damage Reduction", "defense", ["skill", "equipment"], "replace", ["turns", "battle"], "Reduce physical incoming damage."),
+  defineEffect("magic_damage_reduction", "Magic Damage Reduction", "defense", ["skill", "equipment"], "replace", ["turns", "battle"], "Reduce magic incoming damage."),
+  defineEffect("invincible_short", "Brief Invincibility", "defense", ["skill", "monster_skill"], "ignore", ["turns"], "Prevent all damage briefly."),
+  defineEffect("death_prevent_once", "Death Prevention", "defense", ["skill", "equipment", "passive"], "ignore", ["battle"], "Survive a lethal blow once."),
+  defineEffect("last_stand", "Last Stand", "defense", ["skill", "passive"], "ignore", ["battle"], "Low HP survival effect."),
+  defineEffect("cleanse", "Cleanse", "defense", ["skill", "item", "npc_event"], "ignore", ["count"], "Remove negative effects."),
+  defineEffect("debuff_immunity", "Debuff Immunity", "defense", ["skill", "monster_skill"], "replace", ["turns"], "Ignore debuffs."),
+  defineEffect("control_immunity", "Control Immunity", "defense", ["skill", "monster_skill"], "replace", ["turns"], "Ignore control effects."),
+  defineEffect("lifesteal", "Lifesteal", "reactive", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Convert damage dealt into healing."),
+  defineEffect("manasteal", "Mana Steal", "reactive", ["equipment", "skill"], "replace", ["battle", "permanent"], "Restore MP/SP when dealing damage.", { reserved: true }),
+  defineEffect("thorns", "Thorns", "reactive", ["equipment", "skill", "monster_skill"], "replace", ["turns", "battle", "permanent"], "Reflect damage when hit."),
+  defineEffect("counter_attack", "Counter Attack", "reactive", ["equipment", "skill"], "refresh", ["turns", "battle"], "Counterattack when damaged."),
+  defineEffect("reflect_magic", "Reflect Magic", "reactive", ["equipment", "skill", "monster_skill"], "replace", ["turns", "battle"], "Reflect magic damage or effects."),
+  defineEffect("damage_to_heal", "Damage to Heal", "reactive", ["skill", "monster_skill"], "replace", ["turns"], "Convert damage taken into healing."),
+  defineEffect("on_hit_heal", "Heal on Hit", "reactive", ["equipment", "skill"], "replace", ["battle", "permanent"], "Heal when landing hits."),
+  defineEffect("on_crit_heal", "Heal on Critical", "reactive", ["equipment", "skill"], "replace", ["battle", "permanent"], "Heal on critical strikes."),
+  defineEffect("bonus_vs_boss", "Boss Slayer", "conditional", ["equipment", "passive", "skill"], "replace", ["battle", "permanent"], "Deal more damage to bosses."),
+  defineEffect("bonus_vs_poisoned", "Bonus vs Poisoned", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Conditional damage against poisoned targets."),
+  defineEffect("bonus_vs_burning", "Bonus vs Burning", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Conditional damage against burning targets."),
+  defineEffect("bonus_vs_stunned", "Bonus vs Stunned", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Conditional damage against stunned targets."),
+  defineEffect("bonus_vs_debuffed", "Bonus vs Debuffed", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Conditional damage against any debuffed target."),
+  defineEffect("bonus_when_hp_high", "High HP Bonus", "conditional", ["equipment", "passive"], "replace", ["battle", "permanent"], "More damage when current HP is high."),
+  defineEffect("bonus_when_hp_low", "Low HP Bonus", "conditional", ["equipment", "passive", "skill"], "replace", ["battle", "permanent"], "More damage when current HP is low."),
+  defineEffect("bonus_first_hit", "First Hit Bonus", "conditional", ["equipment", "skill"], "ignore", ["battle"], "Bonus damage on first hit of the fight."),
+  defineEffect("bonus_counter_damage", "Counter Damage Bonus", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Increase counterattack damage."),
+  defineEffect("execute_under_hp_pct", "Execute", "conditional", ["equipment", "skill", "monster_skill"], "ignore", ["battle", "permanent"], "Execute or greatly increase damage to low-HP targets."),
+  defineEffect("gold_gain_up", "Gold Gain Up", "economy", ["npc_event", "equipment", "item", "activity"], "replace", ["count", "seconds", "battle"], "Increase gold rewards."),
+  defineEffect("exp_gain_up", "EXP Gain Up", "economy", ["npc_event", "equipment", "item", "activity"], "replace", ["count", "seconds", "battle"], "Increase EXP rewards."),
+  defineEffect("drop_rate_up", "Drop Rate Up", "economy", ["npc_event", "equipment", "activity"], "replace", ["count", "seconds", "battle"], "Increase item drop rate."),
+  defineEffect("rare_drop_rate_up", "Rare Drop Rate Up", "economy", ["npc_event", "equipment", "activity"], "replace", ["count", "seconds", "battle"], "Increase rare item drop rate."),
+  defineEffect("checkin_bonus_up", "Check-in Bonus Up", "economy", ["npc_event", "activity", "item"], "replace", ["count", "seconds"], "Increase check-in rewards."),
+  defineEffect("enhance_success_up", "Enhancement Success Up", "economy", ["npc_event", "activity", "item"], "replace", ["count"], "Increase enhancement success rate."),
+  defineEffect("event_trigger_rate_up", "Event Trigger Rate Up", "economy", ["npc_event", "equipment", "activity"], "replace", ["count", "seconds", "battle"], "Increase special event trigger chance."),
+  defineEffect("monster_reward_up", "Monster Reward Up", "economy", ["npc_event", "equipment", "activity"], "replace", ["count", "seconds", "battle"], "Increase monster kill rewards."),
+  defineEffect("proc_stun", "Proc Stun", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to apply stun.", { triggerHints: ["on_hit", "on_crit"] }),
+  defineEffect("proc_poison", "Proc Poison", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to apply poison.", { triggerHints: ["on_hit", "on_crit"] }),
+  defineEffect("proc_burn", "Proc Burn", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to apply burn.", { triggerHints: ["on_hit", "on_crit"] }),
+  defineEffect("proc_bleed", "Proc Bleed", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to apply bleed.", { triggerHints: ["on_hit", "on_crit"] }),
+  defineEffect("proc_slow", "Proc Slow", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to apply slow.", { triggerHints: ["on_hit", "on_crit"] }),
+  defineEffect("proc_def_down", "Proc Defense Down", "proc", ["equipment", "skill"], "replace", ["battle", "permanent"], "Chance to apply defense reduction.", { triggerHints: ["on_hit", "on_crit"] }),
+  defineEffect("proc_atk_down", "Proc Attack Down", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to apply attack reduction.", { triggerHints: ["on_hit", "on_crit"] }),
+  defineEffect("proc_extra_hit", "Proc Extra Hit", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to trigger an extra hit.", { triggerHints: ["on_hit", "on_attack"] }),
+  defineEffect("proc_chain_hit", "Proc Chain Hit", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to trigger chained hits.", { triggerHints: ["on_hit", "on_attack"] }),
+  defineEffect("proc_execute", "Proc Execute", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to execute low-HP targets.", { triggerHints: ["on_hit", "on_crit"] }),
+  defineEffect("proc_heal", "Proc Heal", "proc", ["equipment", "skill"], "replace", ["battle", "permanent"], "Chance to heal self.", { triggerHints: ["on_hit", "on_take_damage"] }),
+  defineEffect("proc_shield", "Proc Shield", "proc", ["equipment", "skill"], "replace", ["battle", "permanent"], "Chance to gain shield.", { triggerHints: ["on_hit", "on_take_damage"] }),
+  defineEffect("proc_cleanse", "Proc Cleanse", "proc", ["equipment", "skill"], "replace", ["battle", "permanent"], "Chance to remove debuffs.", { triggerHints: ["on_take_damage", "on_round_start"] }),
+  defineEffect("proc_dispel", "Proc Dispel", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to remove enemy buffs.", { triggerHints: ["on_hit", "on_crit"] }),
+  defineEffect("proc_gain_buff", "Proc Gain Buff", "proc", ["equipment", "skill", "monster_skill"], "replace", ["battle", "permanent"], "Chance to gain a self-buff.", { triggerHints: ["on_hit", "on_take_damage", "on_kill"] })
+];
+
+const EFFECT_DEFINITION_MAP = Object.fromEntries(EFFECT_DEFINITIONS.map((definition) => [definition.key, definition]));
+
+const EFFECT_DEFINITION_CONFIG = {
+  version: 2,
+  categories: EFFECT_CATEGORIES,
+  sourceTypes: EFFECT_SOURCES,
+  stackModes: STACK_MODES,
+  durationModes: DURATION_MODES,
+  triggerKeys: TRIGGER_KEYS,
+  definitions: EFFECT_DEFINITIONS
+};
+
+module.exports = {
+  EFFECT_CATEGORIES,
+  EFFECT_SOURCES,
+  STACK_MODES,
+  DURATION_MODES,
+  TRIGGER_KEYS,
+  EFFECT_DEFINITIONS,
+  EFFECT_DEFINITION_MAP,
+  EFFECT_DEFINITION_CONFIG
+};
