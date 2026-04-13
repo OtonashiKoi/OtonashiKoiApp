@@ -1,17 +1,51 @@
-const { Router } = require("express");
+﻿const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 const { ok } = require("../../shared/response");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 
-// ?�鬥?�卻?��?記憶體�?key: discordId, value: { zone, nextBattleAt }�?
-// ?�卻?��? = ?�端?�畫?��??�?�?��?（logs ??? 700ms + 2s）�??�止?�整繞�?
+// ?圈洛?瑕??閮擃?key: discordId, value: { zone, nextBattleAt }嚗?
+// ?瑕?? = ?垢??剖?????嚗ogs ??? 700ms + 2s嚗??脫迫?蝜?
 const playerBattleCooldowns = new Map();
 
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
 
+  const buildCombatZonesSnapshot = async (discordId = null) => {
+    const keys = ["normal", "mid"];
+    return Promise.all(keys.map(async (key) => {
+      const [state, monsters] = await Promise.all([
+        serviceContext.monsterService.getState(key),
+        serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: key })
+      ]);
+      let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);
+      if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
+
+      const dmgMap = state.damageMap || {};
+      const damageLeaderboard = Object.values(dmgMap)
+        .sort((a, b) => b.damage - a.damage)
+        .slice(0, 10);
+
+      const cooldown = discordId ? playerBattleCooldowns.get(discordId) : null;
+      const nextBattleAt = (cooldown && cooldown.nextBattleAt > Date.now()) ? cooldown.nextBattleAt : null;
+
+      return {
+        zone: key,
+        monsterId: activeMonster?.id || null,
+        monsterName: activeMonster?.name || "未設定",
+        monsterImageUrl: activeMonster?.imageUrl || null,
+        monsterLevel: activeMonster?.level || 0,
+        expReward: activeMonster?.expReward || 0,
+        goldReward: activeMonster?.goldReward || 0,
+        drops: (activeMonster?.drops || []).map((d) => d.itemName),
+        currentHp: state.currentHp !== undefined ? state.currentHp : (activeMonster?.calc?.maxHp || 0),
+        maxHp: activeMonster?.calc?.maxHp || 0,
+        participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
+        activeMonsterSeq: state.activeMonsterSeq,
+        damageLeaderboard,
+        nextBattleAt,
+      };
     }));
   };
 
@@ -37,20 +71,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let discordId;
       let displayName = "WebPlayer";
 
-      // ?��??�便?��??�發測試，�???code �?"mock:" ?�頭?��?律放�?
+      // ?箔??嫣噶?祆??皜祈岫嚗???code 隞?"mock:" ???敺銵?
       if (code.startsWith("mock:")) {
-        console.log("[PlayerApp] 使用?�發模�? Mock ?�入");
+        console.log("[PlayerApp] 雿輻?璅∪? Mock ?餃");
         discordId = code.replace("mock:", "");
-        if (discordId.length < 5) discordId = "1450019975031951370"; // ?�設?��??�庫第�?位玩家測�?
+        if (discordId.length < 5) discordId = "1450019975031951370"; // ?身?輯??澈蝚砌?雿摰嗆葫閰?
       } else {
-        // ?�實??Discord OAuth2 交�? (?��?�?Node 18+ ??fetch)
+        // ?祕??Discord OAuth2 鈭斗? (??閬?Node 18+ ??fetch)
         if (!process.env.DISCORD_CLIENT_SECRET) {
-          return res.status(500).json({ status: "error", message: "後端尚未設�? DISCORD_CLIENT_SECRET，無法�?證�?實�? Discord ?�入" });
+          return res.status(500).json({ status: "error", message: "敺垢撠閮剖? DISCORD_CLIENT_SECRET嚗瘜?霅?撖衣? Discord ?餃" });
         }
-        // redirect_uri 必�??��?端發�?OAuth ?��??��??��?端傳??
+        // redirect_uri 敹???蝡舐韏?OAuth ???湛??勗?蝡臬??
         const { redirect_uri } = req.body;
         if (!redirect_uri) {
-          return res.status(400).json({ status: "error", message: "缺�? redirect_uri ?�數" });
+          return res.status(400).json({ status: "error", message: "蝻箏? redirect_uri ?" });
         }
         const params = new URLSearchParams({
           client_id: process.env.DISCORD_CLIENT_ID,
@@ -71,7 +105,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.log("[PlayerApp] Discord Auth Response:", tokenData);
 
         if (tokenData.error) {
-           return res.status(400).json({ status: "error", message: `Discord 驗�?失�?: ${tokenData.error_description || tokenData.error}` });
+           return res.status(400).json({ status: "error", message: `Discord 撽?憭望?: ${tokenData.error_description || tokenData.error}` });
         }
 
         const userRes = await fetch("https://discord.com/api/users/@me", {
@@ -82,7 +116,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         displayName = userData.global_name || userData.username;
       }
 
-      // ?�?� 驗�??�否?�伺?�器?�員 ?�?�
+      // ?? 撽??臬?箔撩?? ??
       const guildId = require("../../config").discord.guildId;
       if (guildId && discordClient && !code.startsWith("mock:")) {
         try {
@@ -93,7 +127,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             if (!member) {
               return res.status(403).json({ status: "error", code: "NOT_GUILD_MEMBER", message: "You must join the Discord guild before using the web app." });
             }
-            // 使用伺�??�內?�暱�?
+            // 雿輻隡箸??典?蝔?
             displayName = member.displayName || displayName;
           }
         } catch (err) {
@@ -101,10 +135,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       }
 
-      // 確�??�家資�?存在 (??Discord ?�板?��??�輯一??
+      // 蝣箔??拙振鞈?摮 (??Discord ?Ｘ?菔??摩銝??
       await serviceContext.playerService.ensurePlayer(discordId, displayName);
 
-      // ?�發?�們自己系統�? JWT
+      // ?貊?撌梁頂蝯梁? JWT
       const token = jwt.sign({ discordId, displayName }, process.env.JWT_SECRET || "super-secret-jwt-key", { expiresIn: "7d" });
       res.json(ok({ token, discordId, displayName }));
 
@@ -242,7 +276,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId } = req.playerRecord;
       const { targetUuid, materialUuid } = req.body;
-      if (!targetUuid || !materialUuid) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "?�?��? targetUuid ??materialUuid", 400);
+      if (!targetUuid || !materialUuid) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "??? targetUuid ??materialUuid", 400);
       const result = await serviceContext.shopService.enhanceItem(discordId, targetUuid, materialUuid);
       res.json(ok(result));
     } catch (err) {
@@ -260,21 +294,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         throw new Error("Message cannot be empty");
       }
 
-      // ?��?系統設�?中�? town_chat ?��? ID
+      // ??蝟餌絞閮剖?銝剔? town_chat ?駁? ID
       const layout = await serviceContext.channelLayoutRepository.get();
       const townChatBinding = layout.discord.bindings.find(b => b.featureKey === "town_chat" && b.enabled);
       
       if (townChatBinding && townChatBinding.channelId && discordClient) {
         const channel = discordClient.channels.cache.get(townChatBinding.channelId);
         if (channel) {
-          // ?��??�家??Discord ?��?
+          // ???拙振??Discord ?剖?
           let avatarURL = null;
           try {
             const discordUser = await discordClient.users.fetch(discordId, { force: false });
             avatarURL = discordUser.displayAvatarURL({ size: 128, extension: 'png' });
           } catch (_) {}
 
-          // ?��??�建�?Webhook，�?訊息以玩家�?字�??��??��?
+          // ???遣蝡?Webhook嚗?閮隞亦摰嗅?摮??剖??潮?
           let webhook = null;
           try {
             const webhooks = await channel.fetchWebhooks();
@@ -291,11 +325,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               ...(avatarURL ? { avatarURL } : {}),
             });
           } else {
-            // Webhook ?��?建�??��??�??Bot ?��?
+            // Webhook ?⊥?撱箇??????Bot ?潮?
             await channel.send(`**${displayName}**: ${message}`);
           }
         } else {
-          console.warn(`[PlayerApp] ?��???Town Chat ?��? (ID: ${townChatBinding.channelId})`);
+          console.warn(`[PlayerApp] ?曆???Town Chat ?駁? (ID: ${townChatBinding.channelId})`);
         }
       }
 
@@ -306,14 +340,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   // 5. SSE Client Management
-  // 輔助?��?：解??Discord ?�到?��?�?
+  // 頛?賢?嚗圾??Discord ???蝔?
   const resolveMentions = async (text, guild = null) => {
     if (!text || typeof text !== "string") return text;
     const mentionRegex = /<@!?(\d+)>/g;
     const matches = [...text.matchAll(mentionRegex)];
     let resolvedText = text;
 
-    // 定義一?�簡?��?局?�緩存�??�止?��?次解?�中多次 fetch ?��??�用??
+    // 摰儔銝?陛?桃?撅?函楨摮??脫迫??甈∟圾?葉憭活 fetch ?????
     const localCache = {};
 
     for (const match of matches) {
@@ -326,15 +360,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       try {
         let playerName = null;
         
-        // 1. 如�??�傳??Guild，優?��? Server Member 中�??�「伺?�器?�稱??
+        // 1. 憒????Guild嚗?? Server Member 銝剜??撩??梁迂??
         if (guild) {
           try {
             const member = await guild.members.fetch(userId);
             if (member) playerName = member.displayName;
-          } catch (e) { /* 繼�?往下找 */ }
+          } catch (e) { /* 蝜潛?敺銝 */ }
         }
 
-        // 2. 從�??�庫??
+        // 2. 敺??澈??
         if (!playerName) {
           const player = await serviceContext.playerRepository.findByDiscordId(userId);
           if (player) {
@@ -345,7 +379,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           }
         }
 
-        // 3. ?��? Discord API
+        // 3. ?典? Discord API
         if (!playerName && discordClient) {
           try {
             const user = await discordClient.users.fetch(userId);
@@ -359,39 +393,39 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           localCache[userId] = playerName;
           resolvedText = resolvedText.replace(match[0], `[@${playerName}]`);
         } else {
-          console.warn(`[Chat] ?��?�?? ID ??${userId} ?��?稱`);
+          console.warn(`[Chat] failed to resolve mention id: ${userId}`);
         }
       } catch (err) {
-        console.error(`[Chat] �???��? ${userId} ?�發?�錯�?`, err);
+        console.error(`[Chat] mention resolve error: ${userId}`, err);
       }
     }
     return resolvedText;
   };
 
-  // sseClients: Map<discordId, Set<{res}>>  (?��?帳�??��???tab)
+  // sseClients: Map<discordId, Set<{res}>>  (??撣唾??臬???tab)
   const sseClients = new Map();
   const streamPresenceClients = new Set();
-  // notifQueue: Map<discordId, Array> ??poll fallback（Cloudflare �?proxy ??SSE ?�使?��?
+  // notifQueue: Map<discordId, Array> ??poll fallback嚗loudflare 蝑?proxy ??SSE ?蝙?剁?
   const notifQueue = new Map();
 
   function enqueueNotif(discordId, summary) {
     if (!notifQueue.has(discordId)) notifQueue.set(discordId, []);
     const q = notifQueue.get(discordId);
     q.push({ ...summary, id: Date.now(), time: new Date().toLocaleTimeString("zh-TW") });
-    if (q.length > 50) q.splice(0, q.length - 50); // ?�多�???50 �?
+    if (q.length > 50) q.splice(0, q.length - 50); // ?憭???50 蝑?
   }
 
-  // �?monsterZoneHandlers ?�叫，推?��??��??�給?��??�家
+  // 靘?monsterZoneHandlers ?澆嚗???啁??萇策???拙振
   function pushRewardToPlayer(discordId, summary) {
-    // 1. ?��???queue（poll fallback�?
+    // 1. ????queue嚗oll fallback嚗?
     enqueueNotif(discordId, summary);
-    // 2. ?�試 SSE ?��??��??��??��???��?�?
+    // 2. ?岫 SSE ?單??剁??祆??湧????嚗?
     const clients = sseClients.get(discordId);
     if (!clients || clients.size === 0) return;
     const dataStr = `event: reward\ndata: ${JSON.stringify(summary)}\n\n`;
     clients.forEach(c => { try { c.res.write(dataStr); } catch (_) {} });
   }
-  // ?��???serviceContext �?handlers 使用
+  // ????serviceContext 靘?handlers 雿輻
   serviceContext._pushRewardToPlayer = pushRewardToPlayer;
   serviceContext._pushStreamPresence = (snapshot = getStreamPresenceSnapshot()) => {
     const dataStr = `event: stream_presence\ndata: ${JSON.stringify(snapshot)}\n\n`;
@@ -419,7 +453,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
         if (msg.embeds.length > 0 && !content) content = "[Embedded content]";
 
-        // ?��?資�?
+        // ??鞈?
         let replyTo = null;
         if (msg.reference?.messageId) {
           try {
@@ -452,10 +486,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");  // ?�止 Nginx/Cloudflare 緩�? SSE
+    res.setHeader("X-Accel-Buffering", "no");  // ?脫迫 Nginx/Cloudflare 蝺抵? SSE
     res.flushHeaders();
 
-    // ?�試�?query token 識別?�家身份
+    // ?岫敺?query token 霅?拙振頨思遢
     let discordId = null;
     try {
       const token = req.query.token || "";
@@ -498,7 +532,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/notifications/poll", requireAuth, (req, res) => {
     const discordId = req.playerRecord.discordId;
     const q = notifQueue.get(discordId) || [];
-    notifQueue.set(discordId, []); // ?�走後�?�?
+    notifQueue.set(discordId, []); // ?粥敺?蝛?
     res.json({ status: "ok", data: q });
   });
 
@@ -517,7 +551,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       
       const messages = await channel.messages.fetch({ limit: 50 });
       const history = await Promise.all([...messages.values()].map(async (msg) => {
-        // 確�? member 資�?載入（cache miss ?��? fetch�?
+        // 蝣箔? member 鞈?頛嚗ache miss ?? fetch嚗?
         if (!msg.member && !msg.author.bot) {
           try { await channel.guild.members.fetch(msg.author.id); } catch (_) {}
         }
@@ -619,7 +653,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId, displayName } = req.playerRecord;
       const itemId = req.params.itemId;
 
-      // �?Bot ?��??�家??Guild ?�身?��?，�? allowedTiers 驗�?
+      // 敺?Bot ???拙振??Guild ?澈??嚗? allowedTiers 撽?
       let memberRoleIds = [];
       try {
         const guildId = require("../../config").discord.guildId;
@@ -663,7 +697,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return {
           zone: key,
           monsterId: activeMonster?.id || null,
-          monsterName: activeMonster?.name || "?�知",
+          monsterName: activeMonster?.name || "?芰",
           monsterImageUrl: activeMonster?.imageUrl || null,
           monsterLevel: activeMonster?.level || 0,
           expReward: activeMonster?.expReward || 0,
@@ -739,7 +773,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return {
           zone: key,
           monsterId: activeMonster?.id || null,
-          monsterName: activeMonster?.name || "??��?",
+          monsterName: activeMonster?.name || "??堊?",
           monsterImageUrl: activeMonster?.imageUrl || null,
           monsterLevel: activeMonster?.level || 0,
           expReward: activeMonster?.expReward || 0,
@@ -770,11 +804,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId, displayName } = req.playerRecord;
       const zoneKey = req.body.zone === "mid" ? "mid" : "normal";
 
-      // ?�卻?��?上次?�鬥?�畫?��??��?不可?�出??
+      // ?瑕??銝活?圈洛??芰???銝???
       const cd = playerBattleCooldowns.get(discordId);
       if (cd && cd.nextBattleAt > Date.now()) {
         const secsLeft = Math.ceil((cd.nextBattleAt - Date.now()) / 1000);
-        return res.status(429).json({ status: "error", message: `?�鬥?�卻中�?請�?�?${secsLeft} 秒�??�出?�。` });
+        return res.status(429).json({ status: "error", message: `battle cooldown active, retry in ${secsLeft}s` });
       }
       
       const [stateRaw, monsters] = await Promise.all([
@@ -784,7 +818,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let state = stateRaw;
       
       if (!monsters.length) {
-        return res.status(400).json({ status: "error", message: "?��?沒�??�用中�??�物" });
+        return res.status(400).json({ status: "error", message: "?桀?瘝??銝剔??芰" });
       }
 
       let monster = monsters.find(m => m.seq === state.activeMonsterSeq);
@@ -801,7 +835,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       const playerLevel = progress?.level ?? 1;
       if (zoneKey === "mid" && playerLevel < 10) {
-        return res.status(400).json({ status: "error", message: `中�??�?�要�?�?10 以�?！目??Lv.${playerLevel}` });
+        return res.status(400).json({ status: "error", message: `mid zone requires level 10 (current: Lv.${playerLevel})` });
       }
 
       // Check and deduct entry fee
@@ -809,7 +843,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const wallet = await serviceContext.walletRepository.findByPlayerId(discordId);
         const gold = wallet?.gold ?? 0;
         if (gold < monster.entryFee) {
-          return res.status(400).json({ status: "error", message: `?�幣不足！�?�?${monster.entryFee} ??，目??${gold} ??` });
+          return res.status(400).json({ status: "error", message: `gold not enough: need ${monster.entryFee}, have ${gold}` });
         }
         await serviceContext.rewardService.grantCurrency({
           discordId, displayName, currencyType: "gold",
@@ -828,7 +862,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial);
       const totalTaken = Math.max(0, (pStats.maxHp || 0) - Math.max(0, finalPlayerHp));
 
-      // 結�?
+      // 蝯?
       const { handleMonsterKill, _republishPanel, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
       let rewardLines = [];
       let mHp = finalMonsterHp;
@@ -836,7 +870,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       if (outcome === "win") {
         mHp = 0;
-        // ?�殺?��?確�??�己已在 participants（�??��?殺路徑�??��?
+        // ?捏??蝣箔??芸楛撌脣 participants嚗??芣?畾箄楝敺??湛?
         const stateWithMe = {
           ...state,
           participants: [...new Set([...currentParticipants, discordId])],
@@ -865,7 +899,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               taken: (prev[discordId]?.taken || 0) + totalTaken,
             }
           };
-          // ?��??�自己�???participants，�?後�??�殺結�??��???
+          // ???撌勗???participants嚗?敺??捏蝯??賜???
           const updatedParticipants = [...new Set([...(Array.isArray(freshState.participants) ? freshState.participants : []), discordId])];
           await serviceContext.monsterService.saveState({ ...freshState, currentHp: mHp, damageMap, participants: updatedParticipants }, zoneKey);
         } catch (e) {
@@ -883,7 +917,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         _republishPanel(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
       }
 
-      // 每週任?�進度記�?（�??��??��?�?
+      // 瘥曹遙?脣漲閮?嚗??餃???嚗?
       try {
         await serviceContext.weeklyQuestService.recordProgress(discordId, "battle_count", 1);
         if (outcome === "win") {
@@ -894,11 +928,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.error("[WeeklyQuest] recordProgress error:", e.message);
       }
 
-      // 設�??�卻：�??�播?��???= ?��??��???? 700ms + 2000ms 緩�?
+      // 閮剖??瑕嚗??急?暹???= ???亥???? 700ms + 2000ms 蝺抵?
       const animDurationMs = roundLogs.length * 700 + 2000;
       const nextBattleAt = Date.now() + animDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
-      // ?��?清�?（避??Map ?��?增長�?
+      // ?芸?皜?嚗??Map ?⊿?憓嚗?
       setTimeout(() => {
         const entry = playerBattleCooldowns.get(discordId);
         if (entry && entry.nextBattleAt <= Date.now()) playerBattleCooldowns.delete(discordId);
@@ -925,5 +959,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 }
 
 module.exports = { createPlayerAppRoutes };
+
 
 
