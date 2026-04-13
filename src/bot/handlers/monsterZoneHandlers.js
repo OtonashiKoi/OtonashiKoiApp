@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
@@ -10,6 +10,7 @@ const activeSessions = new Map();
 // 擊殺結算互斥鎖（防止兩名玩家同時打死同一隻怪造成雙重結算）
 // key: `${zoneKey}:${monsterSeq}`
 const killInProgress = new Set();
+const zoneEventTimers = new Map();
 
 const BTN = {
   enterBattle: "monster-zone:enter-battle",

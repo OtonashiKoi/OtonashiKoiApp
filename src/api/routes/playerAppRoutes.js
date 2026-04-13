@@ -12,40 +12,6 @@ const playerBattleCooldowns = new Map();
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
 
-  const buildCombatZonesSnapshot = async (discordId = null) => {
-    const keys = ["normal", "mid"];
-    return Promise.all(keys.map(async (key) => {
-      const [state, monsters] = await Promise.all([
-        serviceContext.monsterService.getState(key),
-        serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: key })
-      ]);
-      let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);
-      if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
-
-      const dmgMap = state.damageMap || {};
-      const damageLeaderboard = Object.values(dmgMap)
-        .sort((a, b) => b.damage - a.damage)
-        .slice(0, 10);
-
-      const cooldown = discordId ? playerBattleCooldowns.get(discordId) : null;
-      const nextBattleAt = (cooldown && cooldown.nextBattleAt > Date.now()) ? cooldown.nextBattleAt : null;
-
-      return {
-        zone: key,
-        monsterId: activeMonster?.id || null,
-        monsterName: activeMonster?.name || "??°î?",
-        monsterImageUrl: activeMonster?.imageUrl || null,
-        monsterLevel: activeMonster?.level || 0,
-        expReward: activeMonster?.expReward || 0,
-        goldReward: activeMonster?.goldReward || 0,
-        drops: (activeMonster?.drops || []).map((d) => d.itemName),
-        currentHp: state.currentHp !== undefined ? state.currentHp : (activeMonster?.calc?.maxHp || 0),
-        maxHp: activeMonster?.calc?.maxHp || 0,
-        participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
-        activeMonsterSeq: state.activeMonsterSeq,
-        damageLeaderboard,
-        nextBattleAt,
-      };
     }));
   };
 

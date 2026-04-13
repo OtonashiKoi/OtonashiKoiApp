@@ -323,6 +323,25 @@ function createMongoRepositories() {
         // 如果沒找到會回傳 { value: null }
         return !!(result && result.value);
       }
+    },
+    monsterEventRepository: {
+      async findAll() {
+        return (await collection("monsterEvents")).find({}).sort({ zone: 1, priority: 1, createdAt: 1 }).toArray();
+      },
+      async findById(id) {
+        return (await collection("monsterEvents")).findOne({ id }) || null;
+      },
+      async save(event) {
+        await (await collection("monsterEvents")).updateOne(
+          { id: event.id },
+          { $set: event },
+          { upsert: true }
+        );
+        return event;
+      },
+      async delete(id) {
+        await (await collection("monsterEvents")).deleteOne({ id });
+      }
     }
   };
 }

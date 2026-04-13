@@ -51,6 +51,7 @@
                 <button class="nav-link" data-target="section-shop">金幣商店管理</button>
                 <button class="nav-link" data-target="section-monster-control">怪物即時控制</button>
                 <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
+                <button class="nav-link" data-target="section-monster-events">怪物切換事件</button>
                 <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
                 <button class="nav-link" data-target="section-weekly-quests">每週任務管理</button>
                 <button class="nav-link" data-target="section-weekly-summary">每週完成概況</button>
@@ -63,7 +64,8 @@
                 <span class="nav-group-caret">▾</span>
               </button>
               <div class="nav-group-links">
-                <button class="nav-link" data-target="section-players">玩家管理</button>
+                <button class="nav-link" data-target="section-players">玩家資料總覽</button>
+                <button class="nav-link" data-target="section-player-ops">玩家操作中心</button>
                 <button class="nav-link" data-target="section-tiers">玩家等級設定</button>
               </div>
             </div>
@@ -250,55 +252,65 @@
                       </article>
                     </div>
 
-                    <div class="player-right">
-                      <article class="detail-card">
-                        <h4>帳號中繼資料</h4>
-                        <dl class="detail-list">
-                          <div><dt>建立時間</dt><dd id="player-created-at">-</dd></div>
-                          <div><dt>最後更新</dt><dd id="player-updated-at">-</dd></div>
-                          <div><dt>錢包更新</dt><dd id="player-wallet-updated-at">-</dd></div>
-                          <div><dt>進度更新</dt><dd id="player-progress-updated-at">-</dd></div>
-                        </dl>
-                      </article>
-
-                      <article class="detail-card">
-                        <h4>💰 發放 / 扣除資源</h4>
-                        <form id="currency-action-form" style="display:flex;flex-direction:column;gap:12px;">
-                          <div style="display:flex;gap:12px;">
-                            <select id="currency-type-input" style="flex:1;"><option value="gold">金幣</option><option value="diamond">鑽石</option></select>
-                            <select id="currency-operation-input" style="flex:1;"><option value="grant">增加</option><option value="deduct">扣除</option></select>
-                          </div>
-                          <input id="currency-amount-input" type="number" min="1" step="1" value="100" />
-                          <input id="currency-reason-input" type="text" placeholder="操作原因 (選填)" />
-                          <button id="currency-submit-button" type="submit" class="button primary">執行變更</button>
-                        </form>
-                      </article>
-
-                      <article class="detail-card">
-                        <h4>⭐ 經驗補償</h4>
-                        <form id="exp-action-form" style="display:flex;flex-direction:column;gap:12px;">
-                          <input id="exp-amount-input" type="number" min="1" step="1" value="100" />
-                          <input id="exp-reason-input" type="text" placeholder="補發原因 (選填)" />
-                          <button id="exp-submit-button" type="submit" class="button primary">發放經驗值</button>
-                        </form>
-                      </article>
-
-                      <article class="detail-card">
-                        <h4>🎁 直接發放道具</h4>
-                        <form id="grant-item-form" style="display:flex;flex-direction:column;gap:12px;">
-                          <select id="grant-item-select"><option value="">— 載入中 —</option></select>
-                          <button id="grant-item-submit" type="submit" class="button primary">發放到該玩家背包</button>
-                        </form>
-                      </article>
-                    </div>
                   </div>
-
-                  <article class="detail-card" style="margin-top:24px">
-                    <h4>最近經濟紀錄 (Transactions)</h4>
-                    <div id="player-transaction-list" class="transaction-list"></div>
-                  </article>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section id="section-player-ops" class="panel-section">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">Player Ops</p>
+                <h2>玩家操作中心</h2>
+                <p class="hint">此頁只做管理動作，不與資料總覽混在同頁。</p>
+              </div>
+            </div>
+            <div class="card" style="display:grid;gap:16px;">
+              <article class="detail-card">
+                <h4>帳號中繼資料</h4>
+                <dl class="detail-list">
+                  <div><dt>建立時間</dt><dd id="player-created-at">-</dd></div>
+                  <div><dt>最後更新</dt><dd id="player-updated-at">-</dd></div>
+                  <div><dt>錢包更新</dt><dd id="player-wallet-updated-at">-</dd></div>
+                  <div><dt>進度更新</dt><dd id="player-progress-updated-at">-</dd></div>
+                </dl>
+              </article>
+
+              <article class="detail-card">
+                <h4>💰 發放 / 扣除資源</h4>
+                <form id="currency-action-form" style="display:flex;flex-direction:column;gap:12px;">
+                  <div style="display:flex;gap:12px;">
+                    <select id="currency-type-input" style="flex:1;"><option value="gold">金幣</option><option value="diamond">鑽石</option></select>
+                    <select id="currency-operation-input" style="flex:1;"><option value="grant">增加</option><option value="deduct">扣除</option></select>
+                  </div>
+                  <input id="currency-amount-input" type="number" min="1" step="1" value="100" />
+                  <input id="currency-reason-input" type="text" placeholder="操作原因 (選填)" />
+                  <button id="currency-submit-button" type="submit" class="button primary">執行變更</button>
+                </form>
+              </article>
+
+              <article class="detail-card">
+                <h4>⭐ 經驗補償</h4>
+                <form id="exp-action-form" style="display:flex;flex-direction:column;gap:12px;">
+                  <input id="exp-amount-input" type="number" min="1" step="1" value="100" />
+                  <input id="exp-reason-input" type="text" placeholder="補發原因 (選填)" />
+                  <button id="exp-submit-button" type="submit" class="button primary">發放經驗值</button>
+                </form>
+              </article>
+
+              <article class="detail-card">
+                <h4>🎁 直接發放道具</h4>
+                <form id="grant-item-form" style="display:flex;flex-direction:column;gap:12px;">
+                  <select id="grant-item-select"><option value="">— 載入中 —</option></select>
+                  <button id="grant-item-submit" type="submit" class="button primary">發放到該玩家背包</button>
+                </form>
+              </article>
+
+              <article class="detail-card">
+                <h4>最近經濟紀錄 (Transactions)</h4>
+                <div id="player-transaction-list" class="transaction-list"></div>
+              </article>
             </div>
           </section>
 
@@ -402,6 +414,25 @@
               </div>
               <input type="file" id="monsters-img-input" accept="image/*" style="display:none;" />
               <div id="monsters-tbody" style="display:flex;flex-direction:column;gap:12px;"></div>
+            </div>
+          </section>
+
+          <section id="section-monster-events" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Combat</p>
+                  <h2>怪物切換事件編輯器</h2>
+                  <p class="hint">怪物被擊殺後可先進入事件，事件完成後才切換下一隻怪物。</p>
+                </div>
+                <div class="actions" style="display:flex;gap:10px;">
+                  <button id="monster-events-refresh-btn" class="button">重新載入</button>
+                  <button id="monster-events-add-btn" class="button primary">新增事件</button>
+                </div>
+              </div>
+              <div id="monster-events-list" style="display:flex;flex-direction:column;gap:12px;">
+                <p class="hint">請先登入後載入資料。</p>
+              </div>
             </div>
           </section>
 
@@ -564,6 +595,7 @@
     <script src="/static/admin.tiers.js"></script>
     <script src="/static/admin.shop.js"></script>
     <script src="/static/admin.monsters.js"></script>
+    <script src="/static/admin.monster-events.js"></script>
     <script src="/static/admin.animation-studio.js"></script>
     <script src="/static/admin.weekly.js"></script>
     <script src="/static/admin.items.js"></script>

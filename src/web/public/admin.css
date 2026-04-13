@@ -585,6 +585,21 @@ select option { background: var(--surface); }
   color: var(--bg);
   box-shadow: 0 0 20px var(--accent-glow);
 }
+.button.danger {
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+.button.danger:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.45);
+}
+
+.monster-event-card textarea {
+  width: 100%;
+  resize: vertical;
+}
 
 /* ── Tab Buttons ────────────────────────────── */
 .items-tab-btn, .shop-tab-btn, .monsters-zone-tab, .leaderboard-tab-btn {

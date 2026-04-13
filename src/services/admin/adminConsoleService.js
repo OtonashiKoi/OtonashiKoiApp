@@ -457,7 +457,13 @@ class AdminConsoleService {
     const existingBinding = bindings.find((b) => b.channelId === targetChannelId && b.featureKey?.startsWith("monster_zone"));
     const boundFeatureKey = existingBinding?.featureKey || "monster_zone";
 
-    const panelMsg = createMonsterZonePanelMessage(monster || null, currentHp ?? null, options?.participantCount ?? 0, options?.damageMap ?? {});
+    const panelMsg = createMonsterZonePanelMessage(
+      monster || null,
+      currentHp ?? null,
+      options?.participantCount ?? 0,
+      options?.damageMap ?? {},
+      { activeEvent: options?.activeEvent || null }
+    );
 
     let message = null;
 

@@ -12,6 +12,7 @@ const { ShopService } = require("./shop/shopService");
 const { ItemService } = require("./item/itemService");
 const { PlayerTierService } = require("./playerTier/playerTierService");
 const { MonsterService } = require("./monster/monsterService");
+const { MonsterEventService } = require("./monster/monsterEventService");
 const { WeeklyQuestService } = require("./weeklyQuest/weeklyQuestService");
 const { BattleConfigService } = require("./battle/battleConfigService");
 
@@ -34,6 +35,7 @@ function createServiceContext() {
   const itemService = new ItemService(repositories.itemRepository, repositories.progressRepository);
   const playerTierService = new PlayerTierService(repositories.playerTierRepository);
   const monsterService = new MonsterService(repositories.monsterRepository, repositories.itemRepository);
+  const monsterEventService = new MonsterEventService(repositories.monsterEventRepository);
   const weeklyQuestService = new WeeklyQuestService(repositories.weeklyQuestRepository);
   const battleConfigService = new BattleConfigService(repositories.battleConfigRepository);
   const shopService = new ShopService(repositories.shopRepository, playerService, rewardService, repositories.progressRepository, progressService, repositories.itemRepository, playerTierService);
@@ -69,6 +71,7 @@ function createServiceContext() {
     itemService,
     playerTierService,
     monsterService,
+    monsterEventService,
     weeklyQuestService,
     battleConfigService
   };
