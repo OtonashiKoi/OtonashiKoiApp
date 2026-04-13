@@ -229,7 +229,7 @@ body {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 
 .nav-title {
@@ -289,6 +289,67 @@ body {
   border: 1px solid rgba(0,229,255,0.1);
 }
 .nav-link.active::before { transform: translateY(-50%) scaleY(1); }
+
+.nav-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.01);
+  overflow: hidden;
+}
+
+.nav-group-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.nav-group-toggle:hover {
+  color: var(--accent);
+  background: var(--surface-hover);
+}
+
+.nav-group-caret {
+  font-size: 12px;
+  transform-origin: center;
+  transition: transform 0.18s ease;
+}
+
+.nav-group-links {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.24s ease, opacity 0.16s ease;
+}
+
+.nav-group.is-open .nav-group-links {
+  max-height: 460px;
+  opacity: 1;
+}
+
+.nav-group.is-open .nav-group-caret {
+  transform: rotate(0deg);
+}
+
+.nav-group:not(.is-open) .nav-group-caret {
+  transform: rotate(-90deg);
+}
 
 /* ── Hero Card ──────────────────────────────── */
 .hero-card {
@@ -779,6 +840,17 @@ select option { background: var(--surface); }
   display: flex;
   gap: 20px;
   height: calc(100vh - 200px);
+}
+
+.animation-studio-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.animation-studio-editor-scroll {
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 .player-list-section {

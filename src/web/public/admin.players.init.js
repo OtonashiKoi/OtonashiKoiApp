@@ -88,6 +88,16 @@
   }
 
   function bindEvents() {
+    const navGroups = [...document.querySelectorAll(".nav-group")];
+    for (const group of navGroups) {
+      const toggle = group.querySelector(".nav-group-toggle");
+      if (!toggle) continue;
+      toggle.addEventListener("click", () => {
+        const isOpen = group.classList.toggle("is-open");
+        toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      });
+    }
+
     elements.connectButton.addEventListener("click", async () => {
       try {
         if (window.adminBindings && typeof window.adminBindings.bootstrapConsole === 'function') {

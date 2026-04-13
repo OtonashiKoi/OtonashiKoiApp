@@ -5,13 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#09090b" />
     <title>Equipment Game Admin</title>
-    
-    <!-- Google Fonts included in CSS -->
     <link rel="stylesheet" href="/static/admin.css?v=5" />
   </head>
   <body>
     <div class="game-window">
-      <!-- Topbar -->
       <header class="window-top">
         <div class="window-title">Equipment Game <span style="color:var(--muted);font-weight:500;margin-left:8px;">Control Panel</span></div>
         <div class="window-controls">
@@ -24,8 +21,6 @@
 
       <div class="shell" id="app-shell">
         <div class="splitter" id="shell-splitter" style="display:none;" role="separator"></div>
-        
-        <!-- Sidebar Navigation -->
         <aside class="hero">
           <div>
             <p class="eyebrow">Equipment Game</p>
@@ -34,22 +29,55 @@
           </div>
 
           <nav class="sidebar-nav" aria-label="後台功能導覽">
-            <p class="nav-title">System</p>
-            <button class="nav-link active" data-target="section-auth">登入連線</button>
-            <button class="nav-link" data-target="section-layout">功能版位設定</button>
-            <button class="nav-link" data-target="section-access">權限與白名單</button>
-            
-            <p class="nav-title">Management</p>
-            <button class="nav-link" data-target="section-players">玩家管理</button>
-            <button class="nav-link" data-target="section-tiers">玩家等級設定</button>
-            <button class="nav-link" data-target="section-items">道具庫管理</button>
-            <button class="nav-link" data-target="section-shop">金幣商店管理</button>
-            <button class="nav-link" data-target="section-monsters">怪物庫管理</button>
-            <button class="nav-link" data-target="section-weekly">每週任務管理</button>
+            <div class="nav-group is-open" data-nav-group="foundation">
+              <button class="nav-group-toggle" type="button" aria-expanded="true">
+                <span>基礎設定</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link active" data-target="section-auth">登入連線</button>
+                <button class="nav-link" data-target="section-layout">功能版位設定</button>
+                <button class="nav-link" data-target="section-access">權限與白名單</button>
+              </div>
+            </div>
 
-            <p class="nav-title">Insights</p>
-            <button class="nav-link" data-target="section-leaderboard">排行榜</button>
-            <button class="nav-link" data-target="section-log">操作紀錄</button>
+            <div class="nav-group" data-nav-group="content">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>遊戲內容</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-items">道具庫管理</button>
+                <button class="nav-link" data-target="section-shop">金幣商店管理</button>
+                <button class="nav-link" data-target="section-monster-control">怪物即時控制</button>
+                <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
+                <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
+                <button class="nav-link" data-target="section-weekly-quests">每週任務管理</button>
+                <button class="nav-link" data-target="section-weekly-summary">每週完成概況</button>
+              </div>
+            </div>
+
+            <div class="nav-group" data-nav-group="playerops">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>玩家營運</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-players">玩家管理</button>
+                <button class="nav-link" data-target="section-tiers">玩家等級設定</button>
+              </div>
+            </div>
+
+            <div class="nav-group" data-nav-group="insights">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>監控與紀錄</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-leaderboard">排行榜</button>
+                <button class="nav-link" data-target="section-log">操作紀錄</button>
+              </div>
+            </div>
           </nav>
 
           <div class="hero-card">
@@ -61,10 +89,7 @@
           </div>
         </aside>
 
-        <!-- Main Content Area -->
         <main class="panel">
-
-          <!-- Section: Auth -->
           <section id="section-auth" class="panel-section active">
             <div class="card auth-card" style="max-width: 500px; margin: 40px auto;">
               <div class="section-head">
@@ -86,7 +111,6 @@
             </div>
           </section>
 
-          <!-- Section: Layout -->
           <section id="section-layout" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -104,7 +128,6 @@
             </div>
           </section>
 
-          <!-- Section: Access -->
           <section id="section-access" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -119,19 +142,16 @@
                   <div id="admin-role-list" class="role-list"></div>
                   <button id="save-admin-roles-button" class="button primary" style="margin-top:auto;">儲存管理員身分組</button>
                 </div>
-
                 <div class="access-card">
                   <h3>玩家身分組</h3>
                   <div id="player-role-list" class="role-list"></div>
                   <button id="save-player-roles-button" class="button primary" style="margin-top:auto;">儲存玩家身分組</button>
                 </div>
-
                 <div class="access-card">
                   <h3>管理員 ID 名單</h3>
                   <textarea id="admin-user-ids" rows="5" placeholder="每行一個 Discord User ID"></textarea>
                   <button id="save-admin-users-button" class="button primary">儲存名單</button>
                 </div>
-
                 <div class="access-card">
                   <h3>玩家 ID 名單</h3>
                   <textarea id="player-user-ids" rows="5" placeholder="每行一個 Discord User ID"></textarea>
@@ -141,7 +161,6 @@
             </div>
           </section>
 
-          <!-- Section: Players -->
           <section id="section-players" class="panel-section">
             <div class="section-head">
               <div>
@@ -152,9 +171,7 @@
                 <button id="refresh-players-button" class="button primary">重新載入列表</button>
               </div>
             </div>
-
             <div class="player-grid">
-              
               <div class="player-list-section">
                 <div class="access-card" style="flex:1; display:flex; flex-direction:column;">
                   <h3>玩家列表</h3>
@@ -165,12 +182,11 @@
                   <div id="player-list" class="player-list"></div>
                 </div>
               </div>
-              
+
               <div class="splitter" id="player-splitter" style="display:none;" role="separator"></div>
 
               <div class="player-detail-section">
                 <div id="player-detail" class="player-detail-empty">👈 請先從左側列表選擇一位玩家</div>
-                
                 <div id="player-detail-view" class="player-detail-view hidden">
                   <div class="player-hero-card">
                     <div>
@@ -206,7 +222,6 @@
                   </div>
 
                   <div class="player-body-grid">
-                    <!-- Left: Character Stats -->
                     <div class="player-left">
                       <div class="player-sub-grid">
                         <article class="detail-card">
@@ -217,7 +232,7 @@
                           </div>
                           <div id="attributes-grid" class="attributes-grid"></div>
                         </article>
-                        
+
                         <article class="detail-card">
                           <h4>戰鬥數值</h4>
                           <div id="combat-stats-grid" class="combat-stats-grid"></div>
@@ -235,7 +250,6 @@
                       </article>
                     </div>
 
-                    <!-- Right: Admin Actions -->
                     <div class="player-right">
                       <article class="detail-card">
                         <h4>帳號中繼資料</h4>
@@ -288,7 +302,6 @@
             </div>
           </section>
 
-          <!-- Section: Tiers -->
           <section id="section-tiers" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -303,7 +316,6 @@
             </div>
           </section>
 
-          <!-- Section: Items -->
           <section id="section-items" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -318,19 +330,15 @@
                   <input id="items-search-input" type="text" placeholder="🔍 搜尋名稱…" style="width:200px;" />
                 </div>
               </div>
-              
               <input type="file" id="items-csv-input" accept=".csv,text/csv" style="display:none;" />
               <input type="file" id="items-img-input" accept="image/*" style="display:none;" />
-
               <div class="tab-container">
                 <button class="items-tab-btn active" data-items-tab="consumable">🧪 消耗品</button>
                 <button class="items-tab-btn" data-items-tab="collectible">🖼️ 收藏品</button>
                 <button class="items-tab-btn" data-items-tab="equipment">⚔️ 裝備</button>
                 <button class="items-tab-btn" data-items-tab="special">✨ 特殊</button>
               </div>
-
               <div id="items-equip-sub-filter" style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>
-
               <div style="overflow-x:auto;">
                 <table class="shop-table" id="items-sheet-table">
                   <thead id="items-sheet-head"></thead>
@@ -340,7 +348,6 @@
             </div>
           </section>
 
-          <!-- Section: Shop -->
           <section id="section-shop" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -350,7 +357,6 @@
                 </div>
                 <button id="shop-btn-new" class="button primary">＋ 上架新商品</button>
               </div>
-              
               <div class="tab-container">
                 <button class="shop-tab-btn active" data-shop-tab="all">📦 全部</button>
                 <button class="shop-tab-btn" data-shop-tab="consumable">🧪 消耗品</button>
@@ -358,7 +364,6 @@
                 <button class="shop-tab-btn" data-shop-tab="equipment">⚔️ 裝備</button>
                 <button class="shop-tab-btn" data-shop-tab="special">✨ 特殊</button>
               </div>
-
               <div style="overflow-x:auto;">
                 <table class="shop-table" id="shop-sheet-table">
                   <thead id="shop-sheet-head"></thead>
@@ -368,34 +373,123 @@
             </div>
           </section>
 
-          <!-- Section: Monsters -->
+          <section id="section-monster-control" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Combat</p>
+                  <h2>怪物即時控制</h2>
+                </div>
+              </div>
+              <div id="monsters-state-area" class="access-card" style="margin-bottom:24px;border-color:var(--accent);background:var(--accent-light);">
+                <p class="hint" style="color:var(--text);margin:0;font-weight:600;">載入即時狀態中...</p>
+              </div>
+              <div class="tab-container">
+                <button data-zone="normal" class="monsters-zone-tab active">⚔️ 一般區</button>
+                <button data-zone="mid" class="monsters-zone-tab">🔥 中級區</button>
+              </div>
+            </div>
+          </section>
+
           <section id="section-monsters" class="panel-section">
             <div class="card">
               <div class="section-head">
                 <div>
                   <p class="section-kicker">Combat</p>
-                  <h2>怪物生態區管理</h2>
+                  <h2>怪物資料庫管理</h2>
                 </div>
                 <button id="monsters-btn-new" class="button primary">＋ 新增怪物</button>
               </div>
-
-              <div id="monsters-state-area" class="access-card" style="margin-bottom:24px;border-color:var(--accent);background:var(--accent-light);">
-                <p class="hint" style="color:var(--text);margin:0;font-weight:600;">載入即時狀態中...</p>
-              </div>
-
               <input type="file" id="monsters-img-input" accept="image/*" style="display:none;" />
-
-              <div class="tab-container">
-                <button data-zone="normal" class="monsters-zone-tab active">⚔️ 一般區</button>
-                <button data-zone="mid" class="monsters-zone-tab">🔥 中級區</button>
-              </div>
-
               <div id="monsters-tbody" style="display:flex;flex-direction:column;gap:12px;"></div>
             </div>
           </section>
 
-          <!-- Section: Weekly Quests -->
-          <section id="section-weekly" class="panel-section">
+          <section id="section-animation-studio" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Animation</p>
+                  <h2>動作模板工作台</h2>
+                  <p class="hint">為角色與怪物設定動作幀，並可即時預覽循環。</p>
+                </div>
+                <div class="actions" style="display:flex;gap:10px;">
+                  <button id="animation-reload" class="button">重新載入</button>
+                  <button id="animation-new-template" class="button">新增模板</button>
+                  <button id="animation-apply-preset" class="button">套用預設動作</button>
+                  <button id="animation-duplicate-template" class="button">複製模板</button>
+                  <button id="animation-delete-template" class="button">刪除模板</button>
+                  <button id="animation-export-json" class="button">匯出 JSON</button>
+                  <button id="animation-import-json" class="button">匯入 JSON</button>
+                  <button id="animation-save-all" class="button primary">儲存全部模板</button>
+                </div>
+              </div>
+              <input id="animation-import-file" type="file" accept="application/json" style="display:none;" />
+
+              <div class="animation-studio-grid" style="grid-template-columns:320px minmax(0,1fr) 420px;align-items:start;">
+                <div class="access-card" style="max-height:800px;overflow:auto;">
+                  <h3 style="margin-bottom:12px;">模板清單</h3>
+                  <div id="animation-template-list"></div>
+                </div>
+
+                <div class="animation-studio-editor-scroll">
+                  <div id="animation-editor-empty" class="access-card">
+                    <p class="hint" style="margin:0;">尚未選擇模板，請先新增或點選左側模板。</p>
+                  </div>
+
+                  <div id="animation-editor" style="display:none;">
+                    <div class="access-card" style="margin-bottom:12px;">
+                      <h3 style="margin-bottom:12px;">基本資料</h3>
+                      <div class="access-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+                        <label><span>模板 ID（系統產生）</span><input id="anim-template-id" class="sheet-input" readonly /></label>
+                        <label><span>模板名稱</span><input id="anim-template-name" class="sheet-input" /></label>
+                        <label><span>模板類型</span>
+                          <select id="anim-template-type" class="sheet-input">
+                            <option value="character">角色模板</option>
+                            <option value="monster">怪物模板</option>
+                          </select>
+                        </label>
+                      </div>
+                      <label style="margin-top:10px;display:block;"><span>備註</span><input id="anim-template-note" class="sheet-input" /></label>
+                    </div>
+
+                    <div id="anim-bind-character" class="access-card" style="margin-bottom:12px;">
+                      <h3 style="margin-bottom:12px;">角色綁定條件</h3>
+                      <div class="access-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+                        <label><span>主手武器</span><select id="anim-bind-weapon" class="sheet-input"></select></label>
+                        <label><span>副手模式</span><select id="anim-bind-offhand-mode" class="sheet-input"></select></label>
+                        <label><span>副手武器</span><select id="anim-bind-offhand-type" class="sheet-input"></select></label>
+                      </div>
+                    </div>
+
+                    <div id="anim-bind-monster" class="access-card" style="margin-bottom:12px;display:none;">
+                      <h3 style="margin-bottom:12px;">怪物綁定條件</h3>
+                      <label><span>綁定怪物</span><select id="anim-bind-monster-id" class="sheet-input"></select></label>
+                    </div>
+
+                    <div class="access-card">
+                      <h3 style="margin-bottom:12px;">動作槽位</h3>
+                      <div id="animation-action-slots"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="access-card" style="position:sticky;top:12px;">
+                  <h3 style="margin-bottom:12px;">右側預覽視窗</h3>
+                  <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+                    <label style="min-width:220px;">
+                      <span>預覽動作</span>
+                      <select id="animation-preview-action" class="sheet-input"></select>
+                    </label>
+                  </div>
+                  <span id="animation-preview-meta" class="hint" style="display:block;margin-bottom:8px;">請選擇動作</span>
+                  <canvas id="animation-preview-canvas" width="392" height="300" style="width:100%;height:auto;border:1px solid rgba(255,255,255,0.16);border-radius:10px;background:#0b1020;"></canvas>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="section-weekly-quests" class="panel-section">
             <div class="card">
               <div class="section-head">
                 <div>
@@ -404,15 +498,14 @@
                 </div>
                 <button id="weekly-add-btn" class="button">➕ 新增任務</button>
               </div>
-
-              <!-- 任務列表 -->
               <div id="weekly-quest-list" style="margin-bottom:24px;">
                 <p class="hint">載入中…</p>
               </div>
             </div>
+          </section>
 
-            <!-- 本週完成概況 -->
-            <div class="card" style="margin-top:16px;">
+          <section id="section-weekly-summary" class="panel-section">
+            <div class="card">
               <div class="section-head">
                 <div>
                   <p class="section-kicker">Summary</p>
@@ -426,7 +519,6 @@
             </div>
           </section>
 
-          <!-- Section: Leaderboard -->
           <section id="section-leaderboard" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -436,20 +528,17 @@
                 </div>
                 <button id="leaderboard-refresh" class="button">🔄 即時刷新</button>
               </div>
-              
               <div class="tab-container">
                 <button class="leaderboard-tab-btn active" data-lb-tab="gold">💰 金幣排行</button>
                 <button class="leaderboard-tab-btn" data-lb-tab="level">⭐ 等級排行</button>
                 <button class="leaderboard-tab-btn" data-lb-tab="checkin">📅 活躍打卡</button>
               </div>
-
               <div id="leaderboard-content" style="min-height: 200px;">
                 <p class="hint">請先登入 API 後點「即時刷新」。</p>
               </div>
             </div>
           </section>
 
-          <!-- Section: Log -->
           <section id="section-log" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -461,12 +550,10 @@
               <pre id="activity-log" class="activity-log">系統準備就緒。等待操作指令...</pre>
             </div>
           </section>
-
         </main>
       </div>
     </div>
 
-    <!-- Scripts -->
     <script src="/static/adminUtils.js"></script>
     <script src="/static/adminLayout.js"></script>
     <script src="/static/adminPlayers.js"></script>
@@ -477,6 +564,7 @@
     <script src="/static/admin.tiers.js"></script>
     <script src="/static/admin.shop.js"></script>
     <script src="/static/admin.monsters.js"></script>
+    <script src="/static/admin.animation-studio.js"></script>
     <script src="/static/admin.weekly.js"></script>
     <script src="/static/admin.items.js"></script>
     <script src="/static/admin.leaderboard.js"></script>

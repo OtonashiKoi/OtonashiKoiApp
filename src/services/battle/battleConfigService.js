@@ -102,9 +102,19 @@ function normalizeWeaponRule(rule, fallback) {
 }
 
 function normalizeActionSlot(slot, fallback = {}) {
+  const frameImages = Array.isArray(slot?.frameImages)
+    ? slot.frameImages.map((url) => String(url || "").trim()).filter(Boolean)
+    : [];
+  const fallbackFrameImages = Array.isArray(fallback?.frameImages)
+    ? fallback.frameImages.map((url) => String(url || "").trim()).filter(Boolean)
+    : [];
+  const effectiveFrameImages = frameImages.length ? frameImages : fallbackFrameImages;
+  const fallbackFrameCount = Number.isFinite(fallback.frameCount) ? fallback.frameCount : 1;
+  const inferredFrameCount = effectiveFrameImages.length || fallbackFrameCount;
   return {
     imageUrl: slot?.imageUrl ? String(slot.imageUrl) : (fallback.imageUrl || null),
-    frameCount: clampNumber(slot?.frameCount, 1, 240, Number.isFinite(fallback.frameCount) ? fallback.frameCount : 1),
+    frameImages: effectiveFrameImages,
+    frameCount: clampNumber(slot?.frameCount, 1, 240, inferredFrameCount),
     fps: clampNumber(slot?.fps, 1, 120, Number.isFinite(fallback.fps) ? fallback.fps : 10),
     loop: typeof slot?.loop === "boolean" ? slot.loop : (typeof fallback.loop === "boolean" ? fallback.loop : true)
   };
@@ -224,6 +234,7 @@ class BattleConfigService {
     return {
       version: config.version,
       weaponPositionRules: config.weaponPositionRules,
+      animationTemplates: config.animationTemplates || [],
       assets: {
         monsters: config.assets.monsters || [],
         characters: config.assets.characters || [],

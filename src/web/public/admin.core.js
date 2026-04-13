@@ -144,8 +144,20 @@ function showSection(targetId) {
     section.classList.toggle("active", section.id === targetId);
   }
 
+  let activeLink = null;
   for (const link of window.elements.navLinks) {
-    link.classList.toggle("active", link.dataset.target === targetId);
+    const isActive = link.dataset.target === targetId;
+    link.classList.toggle("active", isActive);
+    if (isActive) activeLink = link;
+  }
+
+  if (activeLink) {
+    const parentGroup = activeLink.closest(".nav-group");
+    if (parentGroup) {
+      parentGroup.classList.add("is-open");
+      const toggle = parentGroup.querySelector(".nav-group-toggle");
+      if (toggle) toggle.setAttribute("aria-expanded", "true");
+    }
   }
 }
 

@@ -4,6 +4,7 @@ const POLL_MS = 3500;
 const MAX_PLAYERS_ON_FIELD = 5;
 const PLAYER_LANES_Y = [254, 320, 386, 288, 352];
 const PLAYER_START_X = [150, 198, 246, 294, 342];
+const DEFAULT_FPS = 10;
 const DEFAULT_WEAPON_POSITION_RULES = {
   default: { preferredRange: 210, minRange: 150, maxRange: 320, laneBias: 0, xOffset: 0, yOffset: 0 },
   sword_1h: { preferredRange: 180, minRange: 120, maxRange: 230, laneBias: 0, xOffset: 0, yOffset: 0 },
@@ -46,6 +47,7 @@ export class CloneBattleScene extends Phaser.Scene {
     this.simSpeed = 1;
     this.weaponPositionRules = { ...DEFAULT_WEAPON_POSITION_RULES };
     this.battleAssets = { monsters: [], characters: [] };
+    this.animationTemplates = { monsters: [], characters: [] };
   }
 
   create() {
@@ -68,6 +70,7 @@ export class CloneBattleScene extends Phaser.Scene {
     const dt = (deltaMs / 1000) * this.simSpeed;
     this.updateCombat(dt);
     this.updateBullets(dt);
+    this.updateActorAnimations(dt);
     this.syncHud();
   }
 
@@ -301,6 +304,13 @@ export class CloneBattleScene extends Phaser.Scene {
         monsters: payload?.battleConfig?.assets?.monsters || [],
         characters: payload?.battleConfig?.assets?.characters || [],
       };
+      const allTemplates = Array.isArray(payload?.battleConfig?.animationTemplates)
+        ? payload.battleConfig.animationTemplates
+        : [];
+      this.animationTemplates = {
+        monsters: allTemplates.filter((tpl) => tpl?.templateType === "monster"),
+        characters: allTemplates.filter((tpl) => tpl?.templateType === "character"),
+      };
       this.zoneData.clear();
       (payload.zones || []).forEach((zone) => {
         if (zone?.zone) this.zoneData.set(zone.zone, zone);
@@ -366,7 +376,8 @@ export class CloneBattleScene extends Phaser.Scene {
     const x = this.scale.width - 216;
     const y = 322;
     const template = this.resolveMonsterTemplate(monster);
-    const texture = await this.ensureTexture(template?.imageUrl || monster.imageUrl);
+    const idleSlot = this.getTemplateActionSlot(template, "idle");
+    const texture = await this.ensureTexture(this.getSlotPrimaryImage(idleSlot) || monster.imageUrl);
 
     let sprite;
     if (texture) {
@@ -392,10 +403,13 @@ export class CloneBattleScene extends Phaser.Scene {
       hp: monster.hp,
       maxHp: monster.maxHp,
       cooldown: 1.3,
+      actionCursor: 0,
+      template,
       sprite,
       hpBg,
       hpBar,
       name,
+      anim: await this.createActorAnimationState(sprite, template, idleSlot),
       nodes: [sprite, hpBg, hpBar, name],
     };
   }
@@ -409,7 +423,8 @@ export class CloneBattleScene extends Phaser.Scene {
       const x = point.x;
       const y = point.y;
       const template = this.resolveCharacterTemplate(info);
-      const texture = await this.ensureTexture(template?.imageUrl || info.avatarUrl || info.weaponImageUrl || null);
+      const idleSlot = this.getTemplateActionSlot(template, "idle");
+      const texture = await this.ensureTexture(this.getSlotPrimaryImage(idleSlot) || info.avatarUrl || info.weaponImageUrl || null);
       const maxHp = estimatePlayerMaxHp(info, i);
       const hp = estimatePlayerHp(info, i);
 
@@ -443,10 +458,13 @@ export class CloneBattleScene extends Phaser.Scene {
         weaponType: info?.weaponType || null,
         offhandWeaponType: info?.offhandWeaponType || null,
         cooldown: 0.75 + i * 0.14,
+        actionCursor: 0,
+        template,
         sprite,
         hpBg,
         hpBar,
         label: name,
+        anim: await this.createActorAnimationState(sprite, template, idleSlot),
         nodes: [sprite, hpBg, hpBar, name],
       });
     }
@@ -467,19 +485,37 @@ export class CloneBattleScene extends Phaser.Scene {
   }
 
   resolveMonsterTemplate(monster) {
+    const templates = Array.isArray(this.animationTemplates?.monsters) ? this.animationTemplates.monsters : [];
+    if (templates.length) {
+      const exact = templates.find(
+        (tpl) =>
+          tpl &&
+          tpl.bindMonsterId &&
+          monster?.id &&
+          String(tpl.bindMonsterId) === String(monster.id) &&
+          this.hasTemplateSlotImage(tpl, "idle"),
+      );
+      if (exact) return exact;
+      const generic = templates.find(
+        (tpl) =>
+          tpl &&
+          !tpl.bindMonsterId &&
+          this.hasTemplateSlotImage(tpl, "idle"),
+      );
+      if (generic) return generic;
+    }
+
     const assets = Array.isArray(this.battleAssets?.monsters) ? this.battleAssets.monsters : [];
     if (!assets.length) return null;
-    const byMonsterId = assets.find(
+    const fallback = assets.find(
       (asset) =>
         asset &&
         (asset.actionKey || "idle") === "idle" &&
-        asset.bindMonsterId &&
-        monster?.id &&
-        String(asset.bindMonsterId) === String(monster.id) &&
+        (!asset.bindMonsterId || String(asset.bindMonsterId) === String(monster?.id || "")) &&
         asset.imageUrl,
     );
-    if (byMonsterId) return byMonsterId;
-    return assets.find((asset) => asset && !asset.bindMonsterId && (asset.actionKey || "idle") === "idle" && asset.imageUrl) || null;
+    if (!fallback) return null;
+    return this.assetToTemplate(fallback, "monster");
   }
 
   isOffhandMatch(asset, offhandWeaponType) {
@@ -491,12 +527,34 @@ export class CloneBattleScene extends Phaser.Scene {
   }
 
   resolveCharacterTemplate(info) {
-    const assets = Array.isArray(this.battleAssets?.characters) ? this.battleAssets.characters : [];
-    if (!assets.length) return null;
+    const templates = Array.isArray(this.animationTemplates?.characters) ? this.animationTemplates.characters : [];
     const weaponType = info?.weaponType || null;
     const offhandWeaponType = info?.offhandWeaponType || null;
+    if (templates.length) {
+      const strict = templates.filter(
+        (tpl) =>
+          tpl &&
+          tpl.bindWeaponType &&
+          weaponType &&
+          String(tpl.bindWeaponType) === String(weaponType) &&
+          this.isOffhandMatch(tpl, offhandWeaponType) &&
+          this.hasTemplateSlotImage(tpl, "idle"),
+      );
+      if (strict.length) return this.pickTemplateByActor(info, strict);
 
-    const strict = assets.find(
+      const generic = templates.filter(
+        (tpl) =>
+          tpl &&
+          !tpl.bindWeaponType &&
+          this.isOffhandMatch(tpl, offhandWeaponType) &&
+          this.hasTemplateSlotImage(tpl, "idle"),
+      );
+      if (generic.length) return this.pickTemplateByActor(info, generic);
+    }
+
+    const assets = Array.isArray(this.battleAssets?.characters) ? this.battleAssets.characters : [];
+    if (!assets.length) return null;
+    const strictAsset = assets.find(
       (asset) =>
         asset &&
         (asset.actionKey || "idle") === "idle" &&
@@ -506,18 +564,199 @@ export class CloneBattleScene extends Phaser.Scene {
         this.isOffhandMatch(asset, offhandWeaponType) &&
         asset.imageUrl,
     );
-    if (strict) return strict;
-
-    return (
-      assets.find(
-        (asset) =>
-          asset &&
-          !asset.bindWeaponType &&
-          (asset.actionKey || "idle") === "idle" &&
-          this.isOffhandMatch(asset, offhandWeaponType) &&
-          asset.imageUrl,
-      ) || null
+    if (strictAsset) return this.assetToTemplate(strictAsset, "character");
+    const genericAsset = assets.find(
+      (asset) =>
+        asset &&
+        !asset.bindWeaponType &&
+        (asset.actionKey || "idle") === "idle" &&
+        this.isOffhandMatch(asset, offhandWeaponType) &&
+        asset.imageUrl,
     );
+    return genericAsset ? this.assetToTemplate(genericAsset, "character") : null;
+  }
+
+  hasTemplateSlotImage(template, actionKey) {
+    const slot = template?.actions?.[actionKey];
+    if (!slot) return false;
+    return !!slot.imageUrl || (Array.isArray(slot.frameImages) && slot.frameImages.some((url) => !!url));
+  }
+
+  pickTemplateByActor(info, candidates) {
+    if (!Array.isArray(candidates) || !candidates.length) return null;
+    if (candidates.length === 1) return candidates[0];
+    const seed = String(info?.discordId || info?.name || "");
+    let hash = 0;
+    for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    return candidates[hash % candidates.length];
+  }
+
+  assetToTemplate(asset, templateType) {
+    return {
+      id: `asset_${asset.id || "fallback"}`,
+      name: asset.name || "Fallback",
+      templateType,
+      bindWeaponType: asset.bindWeaponType || null,
+      bindOffhandMode: asset.bindOffhandMode || "any",
+      bindOffhandType: asset.bindOffhandType || null,
+      bindMonsterId: asset.bindMonsterId || null,
+      actions: {
+        idle: {
+          imageUrl: asset.imageUrl || null,
+          frameImages: [],
+          frameCount: Number.isFinite(asset.frameCount) ? asset.frameCount : 1,
+          fps: Number.isFinite(asset.fps) ? asset.fps : DEFAULT_FPS,
+          loop: asset.loop !== false,
+        },
+      },
+    };
+  }
+
+  getSlotPrimaryImage(slot) {
+    if (!slot) return null;
+    if (slot.imageUrl) return slot.imageUrl;
+    if (Array.isArray(slot.frameImages)) {
+      const first = slot.frameImages.find((url) => String(url || "").trim());
+      if (first) return first;
+    }
+    return null;
+  }
+
+  getTemplateActionSlot(template, actionKey) {
+    if (!template?.actions) return null;
+    const slot = template.actions[actionKey];
+    if (slot && this.getSlotPrimaryImage(slot)) return slot;
+    const idle = template.actions.idle;
+    return idle && this.getSlotPrimaryImage(idle) ? idle : null;
+  }
+
+  async createActorAnimationState(sprite, template, initialSlot) {
+    if (!sprite || !template || !initialSlot) return null;
+    const frameImages = Array.isArray(initialSlot.frameImages)
+      ? initialSlot.frameImages.map((url) => String(url || "").trim()).filter(Boolean)
+      : [];
+    const frameTextureKeys = [];
+    for (const frameUrl of frameImages) {
+      const key = await this.ensureTexture(frameUrl);
+      if (key) frameTextureKeys.push(key);
+    }
+    const textureKey = frameTextureKeys[0] || (await this.ensureTexture(initialSlot.imageUrl));
+    if (!textureKey) return null;
+
+    const frameCount = frameTextureKeys.length || Math.max(1, Number(initialSlot.frameCount) || 1);
+    return {
+      template,
+      textureKey,
+      frameTextureKeys,
+      actionKey: "idle",
+      slot: {
+        imageUrl: initialSlot.imageUrl,
+        frameImages,
+        frameCount,
+        fps: Math.max(1, Number(initialSlot.fps) || DEFAULT_FPS),
+        loop: initialSlot.loop !== false,
+      },
+      frame: 0,
+      elapsed: 0,
+      pendingIdle: false,
+    };
+  }
+
+  applyAnimationFrame(actor) {
+    const anim = actor?.anim;
+    if (!anim || !actor?.sprite?.texture?.key) return;
+    const frameTextureKeys = Array.isArray(anim.frameTextureKeys) ? anim.frameTextureKeys : [];
+    if (frameTextureKeys.length) {
+      const frameIndex = Math.min(frameTextureKeys.length - 1, Math.max(0, anim.frame));
+      actor.sprite.setTexture(frameTextureKeys[frameIndex]);
+      actor.sprite.setCrop();
+      return;
+    }
+    const source = this.textures.get(anim.textureKey)?.getSourceImage();
+    if (!source?.width || !source?.height) return;
+    const frameCount = Math.max(1, Number(anim.slot?.frameCount) || 1);
+    const frameWidth = Math.max(1, Math.floor(source.width / frameCount));
+    const frameHeight = source.height;
+    const frameIndex = Math.min(frameCount - 1, Math.max(0, anim.frame));
+    actor.sprite.setCrop(frameIndex * frameWidth, 0, frameWidth, frameHeight);
+  }
+
+  updateActorAnimations(dt) {
+    const actors = [...this.players, this.enemy].filter(Boolean);
+    actors.forEach((actor) => {
+      const anim = actor?.anim;
+      if (!anim) return;
+      const fps = Math.max(1, Number(anim.slot?.fps) || DEFAULT_FPS);
+      const frameCount = Math.max(1, Number(anim.slot?.frameCount) || 1);
+      const frameMs = 1 / fps;
+      anim.elapsed += dt;
+      while (anim.elapsed >= frameMs) {
+        anim.elapsed -= frameMs;
+        if (anim.frame < frameCount - 1) {
+          anim.frame += 1;
+        } else if (anim.slot?.loop) {
+          anim.frame = 0;
+        } else {
+          anim.pendingIdle = true;
+        }
+      }
+      this.applyAnimationFrame(actor);
+      if (anim.pendingIdle) {
+        anim.pendingIdle = false;
+        this.playActorAction(actor, "idle");
+      }
+    });
+  }
+
+  getNextAttackAction(actor) {
+    if (!actor?.template) return null;
+    const isMonster = actor.template.templateType === "monster";
+    if (isMonster) {
+      const melee = actor.template.actions?.attack_melee;
+      return this.getSlotPrimaryImage(melee) ? "attack_melee" : null;
+    }
+
+    const keys = ["attack_1", "attack_2", "attack_3"];
+    actor.actionCursor = (actor.actionCursor || 0) + 1;
+    const roll = Math.random();
+    if (roll < 0.12 && this.getSlotPrimaryImage(actor.template.actions?.critical_1)) return "critical_1";
+    if (roll < 0.2 && this.getSlotPrimaryImage(actor.template.actions?.critical_2)) return "critical_2";
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[(actor.actionCursor + i) % keys.length];
+      if (this.getSlotPrimaryImage(actor.template.actions?.[key])) return key;
+    }
+    return null;
+  }
+
+  async playActorAction(actor, actionKey) {
+    if (!actor?.template || !actor?.anim) return;
+    const slot = this.getTemplateActionSlot(actor.template, actionKey);
+    if (!slot) return;
+    const frameImages = Array.isArray(slot.frameImages)
+      ? slot.frameImages.map((url) => String(url || "").trim()).filter(Boolean)
+      : [];
+    const frameTextureKeys = [];
+    for (const frameUrl of frameImages) {
+      const key = await this.ensureTexture(frameUrl);
+      if (key) frameTextureKeys.push(key);
+    }
+    const textureKey = frameTextureKeys[0] || (await this.ensureTexture(slot.imageUrl));
+    if (!textureKey) return;
+
+    actor.anim.textureKey = textureKey;
+    actor.anim.frameTextureKeys = frameTextureKeys;
+    actor.anim.actionKey = actionKey;
+    actor.anim.slot = {
+      imageUrl: slot.imageUrl,
+      frameImages,
+      frameCount: frameTextureKeys.length || Math.max(1, Number(slot.frameCount) || 1),
+      fps: Math.max(1, Number(slot.fps) || DEFAULT_FPS),
+      loop: slot.loop !== false,
+    };
+    actor.anim.frame = 0;
+    actor.anim.elapsed = 0;
+    actor.sprite.setTexture(textureKey);
+    this.applyAnimationFrame(actor);
   }
 
   resolvePlayerPoint(info, index) {
@@ -547,6 +786,7 @@ export class CloneBattleScene extends Phaser.Scene {
       p.cooldown -= dt;
       if (p.cooldown <= 0) {
         p.cooldown = 0.78 + Phaser.Math.FloatBetween(0, 0.68);
+        this.playActorAction(p, this.getNextAttackAction(p));
         this.fireBullet(p, this.enemy, 420 + Phaser.Math.Between(-40, 70), p.atk, "ally");
       }
     });
@@ -557,6 +797,7 @@ export class CloneBattleScene extends Phaser.Scene {
       if (!alive.length) return;
       this.enemy.cooldown = 1.2 + Phaser.Math.FloatBetween(0.4, 0.8);
       const target = Phaser.Utils.Array.GetRandom(alive);
+      this.playActorAction(this.enemy, this.getNextAttackAction(this.enemy));
       this.fireBullet(this.enemy, target, 340 + Phaser.Math.Between(-30, 40), Math.max(14, this.enemy.maxHp * 0.009), "enemy");
     }
   }
@@ -584,7 +825,9 @@ export class CloneBattleScene extends Phaser.Scene {
           yoyo: true,
           duration: 70,
         });
+        this.playActorAction(b.to, "hit");
         if (b.to.hp <= 0) {
+          this.playActorAction(b.to, "death");
           this.tweens.add({
             targets: [b.to.sprite, b.to.label, b.to.hpBg, b.to.hpBar],
             alpha: 0.2,
