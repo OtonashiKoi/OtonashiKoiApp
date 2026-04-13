@@ -422,14 +422,15 @@
               <div class="section-head">
                 <div>
                   <p class="section-kicker">Combat</p>
-                  <h2>怪物切換事件編輯器</h2>
-                  <p class="hint">怪物被擊殺後可先進入事件，事件完成後才切換下一隻怪物。</p>
+                  <h2>NPC 事件模板編輯器</h2>
+                  <p class="hint">建立可重用的 NPC 對話事件模板：圖片、台詞、選項、效果一次設定。</p>
                 </div>
                 <div class="actions" style="display:flex;gap:10px;">
                   <button id="monster-events-refresh-btn" class="button">重新載入</button>
-                  <button id="monster-events-add-btn" class="button primary">新增事件</button>
+                  <button id="monster-events-add-btn" class="button primary">新增模板</button>
                 </div>
               </div>
+              <input type="file" id="monster-events-npc-img-input" accept="image/*" style="display:none;" />
               <div id="monster-events-list" style="display:flex;flex-direction:column;gap:12px;">
                 <p class="hint">請先登入後載入資料。</p>
               </div>
