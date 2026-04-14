@@ -44,7 +44,7 @@ const DUAL_COUNTER_CHANCE = {
  * 依玩家基礎屬性與已裝備物品計算戰鬥數值。
  * monsterZoneHandlers 與 playerAppRoutes 共用此函式。
  */
-function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = []) {
+function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = []) {
   // 裝備加成
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
   for (const item of Object.values(equipped)) {
@@ -111,6 +111,9 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     hit:      Math.min(100, 70 + D),       // 基礎70，DEX每點+1
     crit:     Math.min(100, L * 0.3),      // LUK → 爆擊%
     combo:    Math.min(80, 3 + A * 0.5 + (cfg.comboBonus ?? 0)), // AGI×0.5，匕首+20%
+    comboDamageMultiplier: 1,                    // 連擊傷害倍率
+    executeChance: 0,                            // 斬殺觸發率
+    executeThresholdPct: 0,                      // 斬殺門檻血量%
 
     // 武器特效
     weaponType:        wt,
@@ -131,14 +134,19 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     counterInheritBreak,   // 副手繼承破防
   };
 
-  const equipmentEffects = collectEquipmentEffects(equipped, "passive");
+  const effectContext = { equipped, inventory };
+  const equipmentEffects = collectEquipmentEffects(equipped, "passive", effectContext);
   const combinedEffects = [...equipmentEffects, ...(Array.isArray(activeEffects) ? activeEffects : [])];
-  const nextStats = applyEffectsToStats(baseStats, combinedEffects);
+  const nextStats = applyEffectsToStats(baseStats, combinedEffects, effectContext);
 
   nextStats.def = Math.min(75, Math.max(0, Number(nextStats.def) || 0));
   nextStats.dodge = Math.min(95, Math.max(0, Number(nextStats.dodge) || 0));
   nextStats.hit = Math.min(100, Math.max(0, Number(nextStats.hit) || 0));
   nextStats.crit = Math.min(100, Math.max(0, Number(nextStats.crit) || 0));
+  nextStats.blockChance = Math.min(95, Math.max(0, Number(nextStats.blockChance) || 0));
+  nextStats.comboDamageMultiplier = Math.max(0.1, Number(nextStats.comboDamageMultiplier) || 1);
+  nextStats.executeChance = Math.min(100, Math.max(0, Number(nextStats.executeChance) || 0));
+  nextStats.executeThresholdPct = Math.min(100, Math.max(0, Number(nextStats.executeThresholdPct) || 0));
   nextStats.maxHp = Math.max(1, Math.round(Number(nextStats.maxHp) || baseStats.maxHp));
 
   return nextStats;

@@ -855,7 +855,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = progress?.equipment || {};
-      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || []);
+      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || []);
 
       const { runCombatLoop } = require("../../shared/combatLoop");
       const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =

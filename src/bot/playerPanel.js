@@ -102,7 +102,7 @@ async function handleProfile(interaction) {
 
   // ── 計算戰鬥能力（使用 shared/combatStats 確保與戰鬥邏輯一致）──
   const equipped = p.equipment || {};
-  const cs = calcPlayerStats(attrs, equipped);
+  const cs = calcPlayerStats(attrs, equipped, p.activeEffects || [], p.inventory || []);
   const calcHp    = cs.maxHp;
   const calcAtk   = cs.atk;
   const calcDef   = cs.def;

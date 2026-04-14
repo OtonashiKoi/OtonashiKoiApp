@@ -3,6 +3,7 @@
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { calcPlayerStats } = require("../../shared/combatStats");
+const { isEffectConditionMet } = require("../../shared/effectEngine");
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
 const activeSessions = new Map();
@@ -53,13 +54,22 @@ function toMultiplier(percent) {
 function collectRewardEffectRefs(progress) {
   const refs = [];
   const equipped = progress?.equipment || {};
+  const effectContext = {
+    equipped,
+    inventory: Array.isArray(progress?.inventory) ? progress.inventory : []
+  };
   for (const entry of Object.values(equipped)) {
     if (!entry || typeof entry !== "object") continue;
     if (Array.isArray(entry.passiveEffects)) refs.push(...entry.passiveEffects);
     if (Array.isArray(entry.combatEffects)) refs.push(...entry.combatEffects);
   }
   if (Array.isArray(progress?.activeEffects)) refs.push(...progress.activeEffects);
-  return refs.filter((effect) => effect && typeof effect === "object" && effect.key);
+  return refs.filter((effect) => (
+    effect &&
+    typeof effect === "object" &&
+    effect.key &&
+    isEffectConditionMet(effect, effectContext)
+  ));
 }
 
 function buildRewardModifiers(progress) {
@@ -455,7 +465,7 @@ async function handleEnterBattle(interaction) {
     const progress = cachedProgress ?? await sc.progressRepository.findByPlayerId(discordId);
     const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     const equipped = progress?.equipment || {};
-    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || []);
+    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || []);
 
     // 入場費
     if (monster.entryFee > 0) {

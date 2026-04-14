@@ -20,6 +20,11 @@ const STAT_EFFECT_MAP = {
   crit_damage_down: { stat: "critDamage", mode: "mul", amount: 0.85 },
   speed_up: { stat: "speed", mode: "add", amount: 10 },
   speed_down: { stat: "speed", mode: "add", amount: -10 },
+  atk_multiplier_up: { stat: "atk", mode: "mul", amount: 1.2 },
+  block_chance_up: { stat: "blockChance", mode: "add", amount: 10 },
+  combo_damage_up: { stat: "comboDamageMultiplier", mode: "mul", amount: 1.1 },
+  execute_chance_up: { stat: "executeChance", mode: "add", amount: 5 },
+  execute_threshold_up: { stat: "executeThresholdPct", mode: "add", amount: 10 },
   final_damage_up: { stat: "finalDamageMultiplier", mode: "mul", amount: 1.15 },
   final_damage_down: { stat: "finalDamageMultiplier", mode: "mul", amount: 0.85 }
 };
@@ -31,7 +36,72 @@ function cloneState(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function collectEffectRefsFromEntry(entry, trigger = null) {
+function normalizeConditionValues(input) {
+  if (input === undefined || input === null) return [];
+  if (Array.isArray(input)) return input.map((value) => String(value || "").trim()).filter(Boolean);
+  const value = String(input || "").trim();
+  return value ? [value] : [];
+}
+
+function matchConditionValues(input, matcher) {
+  const values = normalizeConditionValues(input);
+  if (values.length === 0) return true;
+  return values.some(matcher);
+}
+
+function matchNotConditionValues(input, matcher) {
+  const values = normalizeConditionValues(input);
+  if (values.length === 0) return true;
+  return values.every((value) => !matcher(value));
+}
+
+function isEffectConditionMet(effectRef, context = {}) {
+  const condition = effectRef?.condition;
+  if (!condition || typeof condition !== "object") return true;
+
+  const equipped = (context.equipped && typeof context.equipped === "object") ? context.equipped : {};
+  const inventory = Array.isArray(context.inventory) ? context.inventory : [];
+  const equippedEntries = Object.entries(equipped).filter(([, entry]) => entry && typeof entry === "object");
+  const equippedItemIds = new Set(equippedEntries.map(([, entry]) => entry.itemId).filter(Boolean));
+  const equippedSlots = new Set(equippedEntries.map(([slot]) => slot).filter(Boolean));
+  const inventoryItemIds = new Set(inventory.map((entry) => entry?.itemId).filter(Boolean));
+
+  const hasItemId = (itemId) => equippedItemIds.has(itemId) || inventoryItemIds.has(itemId);
+  const hasInventoryItemId = (itemId) => inventoryItemIds.has(itemId);
+  const hasEquippedItemId = (itemId) => equippedItemIds.has(itemId);
+  const hasEquippedSlot = (slot) => equippedSlots.has(slot);
+  const hasWeaponType = (weaponType) => {
+    if (!weaponType) return false;
+    const mainWeaponType = equipped?.weapon?.weaponType || null;
+    const offhandWeaponType = equipped?.shield?.weaponType || null;
+    return mainWeaponType === weaponType || offhandWeaponType === weaponType;
+  };
+
+  if (Array.isArray(condition.all) && condition.all.length > 0) {
+    const allMatch = condition.all.every((sub) => isEffectConditionMet({ condition: sub }, context));
+    if (!allMatch) return false;
+  }
+  if (Array.isArray(condition.any) && condition.any.length > 0) {
+    const anyMatch = condition.any.some((sub) => isEffectConditionMet({ condition: sub }, context));
+    if (!anyMatch) return false;
+  }
+
+  if (!matchConditionValues(condition.hasItemId, hasItemId)) return false;
+  if (!matchConditionValues(condition.hasInventoryItemId, hasInventoryItemId)) return false;
+  if (!matchConditionValues(condition.hasUnequippedItemId, hasInventoryItemId)) return false;
+  if (!matchConditionValues(condition.equippedItemId, hasEquippedItemId)) return false;
+  if (!matchConditionValues(condition.equippedSlot, hasEquippedSlot)) return false;
+  if (!matchConditionValues(condition.weaponType, hasWeaponType)) return false;
+
+  if (!matchNotConditionValues(condition.notHasItemId, hasItemId)) return false;
+  if (!matchNotConditionValues(condition.notEquippedItemId, hasEquippedItemId)) return false;
+  if (!matchNotConditionValues(condition.notEquippedSlot, hasEquippedSlot)) return false;
+  if (!matchNotConditionValues(condition.notWeaponType, hasWeaponType)) return false;
+
+  return true;
+}
+
+function collectEffectRefsFromEntry(entry, trigger = null, context = {}) {
   if (!entry || typeof entry !== "object") return [];
   const buckets = [
     ...(Array.isArray(entry.passiveEffects) ? entry.passiveEffects : []),
@@ -39,12 +109,15 @@ function collectEffectRefsFromEntry(entry, trigger = null) {
     ...(Array.isArray(entry.useEffects) ? entry.useEffects : []),
     ...(Array.isArray(entry.combatEffects) ? entry.combatEffects : [])
   ];
-  if (!trigger) return buckets;
-  return buckets.filter((effect) => effect.trigger === trigger);
+  return buckets.filter((effect) => {
+    if (!effect || typeof effect !== "object") return false;
+    if (trigger && effect.trigger !== trigger) return false;
+    return isEffectConditionMet(effect, context);
+  });
 }
 
-function collectEquipmentEffects(equipped, trigger = null) {
-  return Object.values(equipped || {}).flatMap((entry) => collectEffectRefsFromEntry(entry, trigger));
+function collectEquipmentEffects(equipped, trigger = null, context = {}) {
+  return Object.values(equipped || {}).flatMap((entry) => collectEffectRefsFromEntry(entry, trigger, context));
 }
 
 function createRuntimeEffect(effectRef, source = {}) {
@@ -58,13 +131,17 @@ function createRuntimeEffect(effectRef, source = {}) {
   });
 }
 
-function applyEffectsToStats(baseStats, effectRefs = []) {
+function applyEffectsToStats(baseStats, effectRefs = [], context = {}) {
   const result = { ...baseStats };
   if (!Number.isFinite(result.critDamage)) result.critDamage = 2.5;
   if (!Number.isFinite(result.finalDamageMultiplier)) result.finalDamageMultiplier = 1;
   if (!Number.isFinite(result.speed)) result.speed = 100;
+  if (!Number.isFinite(result.comboDamageMultiplier)) result.comboDamageMultiplier = 1;
+  if (!Number.isFinite(result.executeChance)) result.executeChance = 0;
+  if (!Number.isFinite(result.executeThresholdPct)) result.executeThresholdPct = 0;
 
   for (const effect of effectRefs) {
+    if (!isEffectConditionMet(effect, context)) continue;
     const mapped = STAT_EFFECT_MAP[effect?.key];
     if (!mapped) continue;
 
@@ -100,11 +177,12 @@ function summarizeEffectState(activeEffects = []) {
   });
 }
 
-function applyEffectInstances(currentEffects = [], incomingEffects = [], source = {}) {
+function applyEffectInstances(currentEffects = [], incomingEffects = [], source = {}, context = {}) {
   const active = normalizeActiveEffectList(currentEffects);
   const next = [...active];
 
   for (const effectRef of incomingEffects) {
+    if (!isEffectConditionMet(effectRef, context)) continue;
     const runtime = createRuntimeEffect(effectRef, source);
     if (!runtime) continue;
     const existingIndex = next.findIndex((entry) => entry.key === runtime.key);
@@ -141,9 +219,10 @@ function decrementActiveEffects(currentEffects = [], durationMode = "turns", amo
   });
 }
 
-function selectTriggeredEffects(effectRefs = [], trigger, roll = Math.random) {
+function selectTriggeredEffects(effectRefs = [], trigger, roll = Math.random, context = {}) {
   return effectRefs.filter((effect) => {
     if (!effect || effect.trigger !== trigger) return false;
+    if (!isEffectConditionMet(effect, context)) return false;
     const chance = Math.min(100, Math.max(0, Number(effect.chance) || 100));
     return roll() * 100 < chance;
   });
@@ -157,6 +236,7 @@ module.exports = {
   collectEquipmentEffects,
   createRuntimeEffect,
   applyEffectsToStats,
+  isEffectConditionMet,
   summarizeEffectState,
   applyEffectInstances,
   decrementActiveEffects,

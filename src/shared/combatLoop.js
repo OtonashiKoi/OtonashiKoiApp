@@ -86,14 +86,37 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
           log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 3 回合無法攻擊！`);
         }
 
+        // 斬殺判定（例：雙手劍職業被動）
+        if (mHp > 0 && pStats.executeChance > 0 && pStats.executeThresholdPct > 0) {
+          const thresholdHp = Math.max(1, Math.floor(mHpInit * (pStats.executeThresholdPct / 100)));
+          if (mHp <= thresholdHp && Math.random() * 100 < pStats.executeChance) {
+            const executeDamage = mHp;
+            mHp = 0;
+            totalDamage += executeDamage;
+            log.push(`🗡️ **斬殺觸發**！${mName} 生命低於 ${pStats.executeThresholdPct}% ，被一擊終結！`);
+          }
+        }
+
         if (mHp <= 0) { outcome = "win"; break; }
 
         // 連擊（匕首+20%，AGI驅動）
         if (Math.random() * 100 < pStats.combo) {
-          const cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
+          const comboBase = Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100)));
+          const cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (pStats.comboDamageMultiplier || 1)));
           mHp -= cdmg;
           totalDamage += cdmg;
           log.push(`⚡ **${rand(comboPhrases)}** 追加攻擊造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+
+          if (mHp > 0 && pStats.executeChance > 0 && pStats.executeThresholdPct > 0) {
+            const thresholdHp = Math.max(1, Math.floor(mHpInit * (pStats.executeThresholdPct / 100)));
+            if (mHp <= thresholdHp && Math.random() * 100 < pStats.executeChance) {
+              const executeDamage = mHp;
+              mHp = 0;
+              totalDamage += executeDamage;
+              log.push(`🗡️ **斬殺觸發**！${mName} 生命低於 ${pStats.executeThresholdPct}% ，被一擊終結！`);
+            }
+          }
+
           if (mHp <= 0) { outcome = "win"; break; }
         }
       } else {
