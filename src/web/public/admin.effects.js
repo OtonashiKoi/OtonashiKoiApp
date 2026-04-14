@@ -150,6 +150,36 @@
     stackMode: Object.fromEntries(STACK_MODES)
   };
 
+  const CONDITION_PRESETS = [
+    { id: "", label: "選擇條件範本..." },
+    { id: "weapon_1h_sword", label: "主武器：單手劍", value: { weaponType: "sword_1h" } },
+    { id: "weapon_2h_sword", label: "主武器：雙手劍", value: { weaponType: "sword_2h" } },
+    {
+      id: "1h_sword_with_shield",
+      label: "單手劍 + 盾牌（非副手武器）",
+      value: {
+        all: [
+          { weaponType: "sword_1h" },
+          { equippedSlot: "shield" },
+          { notWeaponType: ["offhand_sword", "offhand_dagger", "offhand_mace"] }
+        ]
+      }
+    },
+    {
+      id: "1h_sword_with_offhand_weapon",
+      label: "單手劍 + 副手武器",
+      value: {
+        all: [
+          { weaponType: "sword_1h" },
+          { any: [{ weaponType: "offhand_sword" }, { weaponType: "offhand_dagger" }, { weaponType: "offhand_mace" }] }
+        ]
+      }
+    },
+    { id: "has_inventory_item", label: "背包持有道具（未裝備）", value: { hasUnequippedItemId: "ITEM_ID" } },
+    { id: "equipped_item", label: "已裝備指定道具", value: { equippedItemId: "ITEM_ID" } },
+    { id: "equipped_slot", label: "已裝備指定欄位", value: { equippedSlot: "shield" } }
+  ];
+
   let effectDefinitions = null;
   let itemOptions = null;
   let questOptions = null;
@@ -204,6 +234,12 @@
     return head + options.map(([value, label]) => `<option value="${esc(value)}"${value === selected ? " selected" : ""}>${esc(label)}</option>`).join("");
   }
 
+  function conditionPresetOptionHtml(selected = "") {
+    return CONDITION_PRESETS
+      .map((preset) => `<option value="${esc(preset.id)}"${preset.id === selected ? " selected" : ""}>${esc(preset.label)}</option>`)
+      .join("");
+  }
+
   function getDefinitionByKey(key) {
     return (effectDefinitions || []).find((item) => item.key === key) || null;
   }
@@ -231,6 +267,45 @@
     return `${value} ${label}`;
   }
 
+  function normalizeConditionObject(input) {
+    if (!input || typeof input !== "object") return null;
+    try {
+      return JSON.parse(JSON.stringify(input));
+    } catch {
+      return null;
+    }
+  }
+
+  function conditionToJsonText(condition) {
+    const normalized = normalizeConditionObject(condition);
+    if (!normalized) return "";
+    try {
+      return JSON.stringify(normalized, null, 2);
+    } catch {
+      return "";
+    }
+  }
+
+  function parseConditionJsonText(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("限制條件必須是 JSON 物件");
+    }
+    return normalizeConditionObject(parsed);
+  }
+
+  function summarizeCondition(condition) {
+    const c = normalizeConditionObject(condition);
+    if (!c) return "";
+    if (Array.isArray(c.all) && c.all.length) return `條件 all:${c.all.length}`;
+    if (Array.isArray(c.any) && c.any.length) return `條件 any:${c.any.length}`;
+    const keys = Object.keys(c).filter(Boolean);
+    if (!keys.length) return "";
+    return `條件 ${keys.slice(0, 2).join("、")}${keys.length > 2 ? ` 等 ${keys.length} 項` : ""}`;
+  }
+
   function describeEffect(effect) {
     if (!effect?.key) return "尚未選擇效果";
     const label = getEffectLabel(effect.key);
@@ -248,6 +323,8 @@
     if (Number.isFinite(chance) && chance < 100) parts.push(`機率 ${chance}%`);
     parts.push(`持續 ${formatDuration(effect.duration)}`);
     if (stacks > 1 || effect.stackMode === "stack") parts.push(`疊層 ${stacks}（${stackMode}）`);
+    const conditionText = summarizeCondition(effect?.condition);
+    if (conditionText) parts.push(conditionText);
     return parts.join(" / ");
   }
 
@@ -328,7 +405,8 @@
         value: Math.max(0, Number(effect?.duration?.value) || 1)
       },
       params: Number.isFinite(value) ? { value } : {},
-      notes: effect?.notes || ""
+      notes: effect?.notes || "",
+      condition: normalizeConditionObject(effect?.condition)
     };
   }
 
@@ -336,6 +414,7 @@
     const key = row.querySelector('[data-field="key"]')?.value || "";
     if (!key) return null;
     const value = Number(row.querySelector('[data-field="value"]')?.value);
+    const condition = parseConditionJsonText(row.querySelector('[data-field="conditionJson"]')?.value || "");
     return {
       key,
       trigger: row.querySelector('[data-field="trigger"]')?.value || "passive",
@@ -348,15 +427,22 @@
         value: Math.max(0, Number(row.querySelector('[data-field="durationValue"]')?.value) || 1)
       },
       params: Number.isFinite(value) ? { value } : {},
-      notes: row.querySelector('[data-field="notes"]')?.value || ""
+      notes: row.querySelector('[data-field="notes"]')?.value || "",
+      condition
     };
   }
 
   function refreshRowPreview(row) {
     const preview = row.querySelector(".effect-preview");
     if (!preview) return;
-    const effect = readEffectRow(row);
-    preview.textContent = describeEffect(effect || { key: "" });
+    try {
+      const effect = readEffectRow(row);
+      preview.style.color = "";
+      preview.textContent = describeEffect(effect || { key: "" });
+    } catch (error) {
+      preview.style.color = "var(--danger)";
+      preview.textContent = `條件格式錯誤：${error.message || String(error)}`;
+    }
   }
 
   function buildEffectRow(effect, sourceType) {
@@ -382,11 +468,46 @@
         <label style="display:grid;gap:4px;"><span class="hint">疊層值</span><input class="sheet-input" data-field="stacks" type="number" min="1" value="${data.stacks}" /></label>
         <label style="display:grid;gap:4px;"><span class="hint">疊層規則</span><select class="sheet-input" data-field="stackMode">${optionHtml(STACK_MODES, data.stackMode)}</select></label>
         <label style="display:grid;gap:4px;grid-column:span 2;"><span class="hint">備註</span><input class="sheet-input" data-field="notes" placeholder="例如：只對王生效" value="${esc(data.notes)}" /></label>
+        <label style="display:grid;gap:4px;grid-column:1 / -1;">
+          <span class="hint">限制條件 JSON（選填）</span>
+          <textarea class="sheet-input" data-field="conditionJson" rows="5" placeholder='例如：{ "weaponType": "sword_2h" }'>${esc(conditionToJsonText(data.condition))}</textarea>
+        </label>
+        <div style="grid-column:1 / -1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select class="sheet-input" data-field="conditionPreset" style="min-width:260px;">${conditionPresetOptionHtml("")}</select>
+          <button type="button" class="button" data-role="apply-condition-preset">套用範本</button>
+          <button type="button" class="button" data-role="copy-condition-json">複製條件</button>
+          <button type="button" class="button" data-role="clear-condition-json">清空條件</button>
+          <span class="hint">可先套範本，再改 ITEM_ID 等欄位。</span>
+        </div>
       </div>
     `;
     row.querySelectorAll("input,select").forEach((el) => {
       el.addEventListener("input", () => refreshRowPreview(row));
       el.addEventListener("change", () => refreshRowPreview(row));
+    });
+    const conditionTextarea = row.querySelector('[data-field="conditionJson"]');
+    row.querySelector('[data-role="apply-condition-preset"]')?.addEventListener("click", () => {
+      const presetId = row.querySelector('[data-field="conditionPreset"]')?.value || "";
+      const preset = CONDITION_PRESETS.find((entry) => entry.id === presetId);
+      if (!preset || !preset.value || !conditionTextarea) return;
+      conditionTextarea.value = conditionToJsonText(preset.value);
+      refreshRowPreview(row);
+    });
+    row.querySelector('[data-role="copy-condition-json"]')?.addEventListener("click", async () => {
+      if (!conditionTextarea) return;
+      const text = String(conditionTextarea.value || "").trim();
+      if (!text) return alert("目前沒有條件可複製");
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        conditionTextarea.focus();
+        conditionTextarea.select();
+      }
+    });
+    row.querySelector('[data-role="clear-condition-json"]')?.addEventListener("click", () => {
+      if (!conditionTextarea) return;
+      conditionTextarea.value = "";
+      refreshRowPreview(row);
     });
     refreshRowPreview(row);
     return row;

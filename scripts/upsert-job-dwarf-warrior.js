@@ -3,27 +3,27 @@ require("dotenv").config();
 const { MongoClient } = require("mongodb");
 const config = require("../src/config");
 
-const JOB_ITEM_ID = "job_swordsman_v1";
+const JOB_ITEM_ID = "job_dwarf_warrior_v1";
 
-const OFFHAND_WEAPON_TYPES = ["offhand_sword", "offhand_dagger", "offhand_mace"];
+const OFFHAND_WEAPON_TYPES = ["offhand_mace", "offhand_hammer"];
 
 const JOB_ITEM = {
   id: JOB_ITEM_ID,
-  name: "劍士",
-  description: "專精單手劍與雙手劍的前線職業。",
+  name: "矮人戰士",
+  description: "專精槌類武器的矮人工匠戰士。",
   itemType: "equipment",
   imageUrl: null,
   imageThumbnailUrl: null,
   effect: { type: "none", value: 0 },
   useEffects: [],
   equipSlot: "job_eq",
-  equipStats: { str: 2, vit: 3, dex: 2 },
+  equipStats: { str: 1, vit: 5, dex: 2 },
   weaponType: null,
   isTwoHanded: false,
   atkStat: null,
   tier: "A",
   passiveEffects: [
-    // 主武器單手劍：武器倍率結算後再乘 1.2
+    // 主武器單手槌：武器倍率結算後再乘 1.2
     {
       key: "atk_multiplier_up",
       trigger: "passive",
@@ -33,10 +33,10 @@ const JOB_ITEM = {
       stackMode: "replace",
       duration: { mode: "battle", value: 1 },
       params: { value: 1.2 },
-      condition: { weaponType: "sword_1h" },
-      notes: "主武器為單手劍時，ATK x1.2"
+      condition: { weaponType: "mace_1h" },
+      notes: "主手為單手槌時武器倍率 x1.2"
     },
-    // 主武器單手劍 + 副手盾牌：格擋 +10%
+    // 主武器單手槌 + 盾牌：格擋 +20%
     {
       key: "block_chance_up",
       trigger: "passive",
@@ -45,17 +45,17 @@ const JOB_ITEM = {
       stacks: 1,
       stackMode: "replace",
       duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
+      params: { value: 20 },
       condition: {
         all: [
-          { weaponType: "sword_1h" },
+          { weaponType: "mace_1h" },
           { equippedSlot: "shield" },
           { notWeaponType: OFFHAND_WEAPON_TYPES }
         ]
       },
-      notes: "單手劍 + 盾牌，格擋 +10%"
+      notes: "單手槌 + 盾牌：格擋 +20%"
     },
-    // 主武器單手劍 + 副手武器：連擊傷害 +10%
+    // 主武器單手槌 + 副手武器：連擊傷害 +10%
     {
       key: "combo_damage_up",
       trigger: "passive",
@@ -67,15 +67,13 @@ const JOB_ITEM = {
       params: { value: 1.1 },
       condition: {
         all: [
-          { weaponType: "sword_1h" },
-          {
-            any: OFFHAND_WEAPON_TYPES.map((weaponType) => ({ weaponType }))
-          }
+          { weaponType: "mace_1h" },
+          { any: OFFHAND_WEAPON_TYPES.map((weaponType) => ({ weaponType })) }
         ]
       },
-      notes: "單手劍 + 副手武器，連擊傷害 +10%"
+      notes: "單手槌 + 副手武器：連擊傷害 +10%"
     },
-    // 主武器雙手劍：武器倍率結算後再乘 1.2
+    // 主武器雙手槌：武器倍率結算後再乘 1.2
     {
       key: "atk_multiplier_up",
       trigger: "passive",
@@ -85,50 +83,40 @@ const JOB_ITEM = {
       stackMode: "replace",
       duration: { mode: "battle", value: 1 },
       params: { value: 1.2 },
-      condition: { weaponType: "sword_2h" },
-      notes: "主武器為雙手劍時，ATK x1.2"
-    },
-    // 主武器雙手劍：格擋 +10%
-    {
-      key: "block_chance_up",
-      trigger: "passive",
-      target: "self",
-      chance: 100,
-      stacks: 1,
-      stackMode: "replace",
-      duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
-      condition: { weaponType: "sword_2h" },
-      notes: "雙手劍時，格擋 +10%"
-    },
-    // 主武器雙手劍：10% 斬殺機率（門檻 10%）
-    {
-      key: "execute_chance_up",
-      trigger: "passive",
-      target: "self",
-      chance: 100,
-      stacks: 1,
-      stackMode: "replace",
-      duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
-      condition: { weaponType: "sword_2h" },
-      notes: "雙手劍時，10% 斬殺機率"
-    },
-    {
-      key: "execute_threshold_up",
-      trigger: "passive",
-      target: "self",
-      chance: 100,
-      stacks: 1,
-      stackMode: "replace",
-      duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
-      condition: { weaponType: "sword_2h" },
-      notes: "雙手劍斬殺門檻 10%"
+      condition: { weaponType: "mace_2h" },
+      notes: "雙手槌時，武器倍率 x1.2"
     }
   ],
-  procEffects: [],
-  combatEffects: [],
+  procEffects: [
+    // 主武器雙手槌：額外 10% 機率暈眩（on_hit/upcoming triggers）
+    {
+      key: "proc_stun",
+      trigger: "on_hit",
+      target: "enemy",
+      chance: 5,
+      stacks: 1,
+      stackMode: "replace",
+      duration: { mode: "turns", value: 1 },
+      params: {},
+      condition: { weaponType: "mace_2h" },
+      notes: "雙手槌：5% 機率暈眩"
+    }
+  ],
+  combatEffects: [
+    // 主武器雙手槌時：玩家血量高於75% 時暈眩機率增加 10%
+    {
+      key: "stun_chance_up",
+      trigger: "on_high_hp",
+      target: "self",
+      chance: 100,
+      stacks: 1,
+      stackMode: "replace",
+      duration: { mode: "battle", value: 1 },
+      params: { value: 5 },
+      condition: { weaponType: "mace_2h" },
+      notes: "雙手槌：高血 (>90%) 時暈眩機率 +5%"
+    }
+  ],
   enhanceLevel: 0
 };
 
@@ -151,7 +139,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("[error] upsert job swordsman failed:", error);
+  console.error("[error] upsert job dwarf warrior failed:", error);
   process.exitCode = 1;
 });
-

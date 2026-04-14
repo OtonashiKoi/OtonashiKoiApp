@@ -11,7 +11,9 @@
  * @param {number} MAX_ROUNDS 最大回合數
  * @returns {{ outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp }}
  */
-function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
+const { collectEquipmentEffects } = require("./effectEngine");
+
+function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30, options = {}) {
   const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   // 傷害浮動：min~1.3，INT 縮小下限
@@ -66,22 +68,82 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
         const finalDef = Math.max(0, effectiveDef * (1 - bypassPct / 100));
 
         let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
-        const isCrit = Math.random() * 100 < pStats.crit;
+
+        // --- Compute on_high_hp bonuses (per-effect threshold) early so they affect crit checks ---
+        let extraHighHpCrit = 0;
+        let extraHighHpStun = 0;
+        try {
+          const equippedCtx = options.equipped || null;
+          if (equippedCtx) {
+            const highEffects = collectEquipmentEffects(equippedCtx, 'on_high_hp', { equipped: equippedCtx, inventory: options.inventory || [] });
+            for (const he of highEffects) {
+              if (!he || !he.params) continue;
+              const thresholdPct = Number.isFinite(Number(he.params.thresholdPct)) ? Number(he.params.thresholdPct) : 90;
+              if (pHp >= Math.ceil((pStats.maxHp || 1) * (thresholdPct / 100))) {
+                if (he.key === 'stun_chance_up' && Number.isFinite(Number(he.params.value))) {
+                  extraHighHpStun += Number(he.params.value);
+                }
+                if (he.key === 'crit_rate_up' && Number.isFinite(Number(he.params.value))) {
+                  extraHighHpCrit += Number(he.params.value);
+                }
+              }
+            }
+          }
+        } catch (e) {}
+
+        // Crit check (consider high-HP crit bonus)
+        const effectiveCritChance = (Number(pStats.crit) || 0) + extraHighHpCrit;
+        const isCrit = Math.random() * 100 < effectiveCritChance;
         // LUK 爆擊：×2.5 且無視怪物 DEF
         if (isCrit) {
           const critBase = Math.round(pStats.atk * (1 - finalDef / 100));
           dmg = Math.round(rollDmg(Math.max(1, critBase)) * 2.5);
         }
 
+        // 低血量傷害加成（若 equipped 傳入且玩家 HP <= 35%）
+        try {
+          const equipped = options.equipped || null;
+          if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
+            const lowHpEffects = collectEquipmentEffects(equipped, 'on_low_hp', { equipped, inventory: options.inventory || [] });
+            for (const eff of lowHpEffects) {
+              if (!eff || !eff.params) continue;
+              if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
+                dmg = Math.max(1, Math.round(dmg * Number(eff.params.value)));
+              }
+            }
+          }
+        } catch (e) {}
+
+        // --- Apply on_high_hp effects that affect crit/stun per-effect thresholds ---
+        let extraHighHpCrit = 0;
+        let extraHighHpStun = 0;
+        try {
+          const equippedCtx = options.equipped || null;
+          if (equippedCtx) {
+            const highEffects = collectEquipmentEffects(equippedCtx, 'on_high_hp', { equipped: equippedCtx, inventory: options.inventory || [] });
+            for (const he of highEffects) {
+              if (!he || !he.params) continue;
+              const thresholdPct = Number.isFinite(Number(he.params.thresholdPct)) ? Number(he.params.thresholdPct) : 90;
+              if (pHp >= Math.ceil((pStats.maxHp || 1) * (thresholdPct / 100))) {
+                if (he.key === 'stun_chance_up' && Number.isFinite(Number(he.params.value))) {
+                  extraHighHpStun += Number(he.params.value);
+                }
+                if (he.key === 'crit_rate_up' && Number.isFinite(Number(he.params.value))) {
+                  extraHighHpCrit += Number(he.params.value);
+                }
+              }
+            }
+          }
+        } catch (e) {}
+
         mHp -= dmg;
         totalDamage += dmg;
-
         const breakNote = isBreak ? "💥**破防**！" : "";
         const critNote  = isCrit  ? `✨**${rand(critPhrases)}**！` : "";
         log.push(`⚔️ ${critNote}${breakNote}${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
-
-        // 擊暈判定（槌，爆擊不額外觸發）
-        if (!isCrit && Math.random() * 100 < pStats.stunChance) {
+        // 擊暈判定（爆擊不觸發）
+        const effectiveStunChance = (Number(pStats.stunChance) || 0) + extraHighHpStun;
+        if (!isCrit && Math.random() * 100 < effectiveStunChance) {
           stunRoundsLeft = 3;
           log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 3 回合無法攻擊！`);
         }
@@ -102,7 +164,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
         // 連擊（匕首+20%，AGI驅動）
         if (Math.random() * 100 < pStats.combo) {
           const comboBase = Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100)));
-          const cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (pStats.comboDamageMultiplier || 1)));
+          let cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (pStats.comboDamageMultiplier || 1)));
+          try {
+            const equipped = options.equipped || null;
+            if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
+              const lowHpEffects = collectEquipmentEffects(equipped, 'on_low_hp', { equipped, inventory: options.inventory || [] });
+              for (const eff of lowHpEffects) {
+                if (!eff || !eff.params) continue;
+                if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
+                  cdmg = Math.max(1, Math.round(cdmg * Number(eff.params.value)));
+                }
+              }
+            }
+          } catch (e) {}
           mHp -= cdmg;
           totalDamage += cdmg;
           log.push(`⚡ **${rand(comboPhrases)}** 追加攻擊造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -161,6 +235,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
       const isBreak = Math.random() * 100 < pStats.armorBreakChance;
       const finalDef = isBreak ? 0 : mCalc.def;
       let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
+      try {
+        const equipped = options.equipped || null;
+        if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
+          const lowHpEffects = collectEquipmentEffects(equipped, 'on_low_hp', { equipped, inventory: options.inventory || [] });
+          for (const eff of lowHpEffects) {
+            if (!eff || !eff.params) continue;
+            if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
+              dmg = Math.max(1, Math.round(dmg * Number(eff.params.value)));
+            }
+          }
+        }
+      } catch (e) {}
       const isCrit = Math.random() * 100 < pStats.crit;
       if (isCrit) dmg = Math.round(dmg * 2.5);
       mHp -= dmg;
@@ -179,6 +265,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30) {
           const isBreak = pStats.counterInheritBreak && Math.random() * 100 < pStats.armorBreakChance;
           const finalDef = isBreak ? 0 : mCalc.def;
           let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
+          try {
+            const equipped = options.equipped || null;
+            if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
+              const lowHpEffects = collectEquipmentEffects(equipped, 'on_low_hp', { equipped, inventory: options.inventory || [] });
+              for (const eff of lowHpEffects) {
+                if (!eff || !eff.params) continue;
+                if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
+                  cdmg = Math.max(1, Math.round(cdmg * Number(eff.params.value)));
+                }
+              }
+            }
+          } catch (e) {}
           mHp -= cdmg;
           totalDamage += cdmg;
           log.push(`🗡️ **副手追擊**！趁隙刺出，造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);

@@ -23,7 +23,9 @@ const STAT_EFFECT_MAP = {
   atk_multiplier_up: { stat: "atk", mode: "mul", amount: 1.2 },
   block_chance_up: { stat: "blockChance", mode: "add", amount: 10 },
   combo_damage_up: { stat: "comboDamageMultiplier", mode: "mul", amount: 1.1 },
-  execute_chance_up: { stat: "executeChance", mode: "add", amount: 5 },
+  combo_up: { stat: "combo", mode: "add", amount: 5 },
+  stun_chance_up: { stat: "stunChance", mode: "add", amount: 10 },
+  execute_chance_up: { stat: "executeChance", mode: "add", amount: 10 },
   execute_threshold_up: { stat: "executeThresholdPct", mode: "add", amount: 10 },
   final_damage_up: { stat: "finalDamageMultiplier", mode: "mul", amount: 1.15 },
   final_damage_down: { stat: "finalDamageMultiplier", mode: "mul", amount: 0.85 }

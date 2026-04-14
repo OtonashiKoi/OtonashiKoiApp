@@ -3,27 +3,27 @@ require("dotenv").config();
 const { MongoClient } = require("mongodb");
 const config = require("../src/config");
 
-const JOB_ITEM_ID = "job_swordsman_v1";
+const JOB_ITEM_ID = "job_warrior_v1";
 
-const OFFHAND_WEAPON_TYPES = ["offhand_sword", "offhand_dagger", "offhand_mace"];
+const OFFHAND_WEAPON_TYPES = ["offhand_axe", "offhand_mace"];
 
 const JOB_ITEM = {
   id: JOB_ITEM_ID,
-  name: "劍士",
-  description: "專精單手劍與雙手劍的前線職業。",
+  name: "戰士",
+  description: "專精斧類武器的前線職業。",
   itemType: "equipment",
   imageUrl: null,
   imageThumbnailUrl: null,
   effect: { type: "none", value: 0 },
   useEffects: [],
   equipSlot: "job_eq",
-  equipStats: { str: 2, vit: 3, dex: 2 },
+  equipStats: { str: 4, vit: 1, luk: 2 },
   weaponType: null,
   isTwoHanded: false,
   atkStat: null,
   tier: "A",
   passiveEffects: [
-    // 主武器單手劍：武器倍率結算後再乘 1.2
+    // 主武器為單手斧：武器倍率結算後再乘 1.2
     {
       key: "atk_multiplier_up",
       trigger: "passive",
@@ -33,10 +33,10 @@ const JOB_ITEM = {
       stackMode: "replace",
       duration: { mode: "battle", value: 1 },
       params: { value: 1.2 },
-      condition: { weaponType: "sword_1h" },
-      notes: "主武器為單手劍時，ATK x1.2"
+      condition: { weaponType: "axe_1h" },
+      notes: "主手為單手斧時武器倍率 x1.2"
     },
-    // 主武器單手劍 + 副手盾牌：格擋 +10%
+    // 主武器單手斧 + 盾牌：格擋 +15%
     {
       key: "block_chance_up",
       trigger: "passive",
@@ -45,17 +45,17 @@ const JOB_ITEM = {
       stacks: 1,
       stackMode: "replace",
       duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
+      params: { value: 15 },
       condition: {
         all: [
-          { weaponType: "sword_1h" },
+          { weaponType: "axe_1h" },
           { equippedSlot: "shield" },
           { notWeaponType: OFFHAND_WEAPON_TYPES }
         ]
       },
-      notes: "單手劍 + 盾牌，格擋 +10%"
+      notes: "單手斧 + 盾牌：格擋 +15%"
     },
-    // 主武器單手劍 + 副手武器：連擊傷害 +10%
+    // 主武器單手斧 + 副手武器：連擊傷害 +10%
     {
       key: "combo_damage_up",
       trigger: "passive",
@@ -67,15 +67,13 @@ const JOB_ITEM = {
       params: { value: 1.1 },
       condition: {
         all: [
-          { weaponType: "sword_1h" },
-          {
-            any: OFFHAND_WEAPON_TYPES.map((weaponType) => ({ weaponType }))
-          }
+          { weaponType: "axe_1h" },
+          { any: OFFHAND_WEAPON_TYPES.map((weaponType) => ({ weaponType })) }
         ]
       },
-      notes: "單手劍 + 副手武器，連擊傷害 +10%"
+      notes: "單手斧 + 副手武器：連擊傷害 +10%"
     },
-    // 主武器雙手劍：武器倍率結算後再乘 1.2
+    // 主武器雙手斧：武器倍率結算後再乘 1.2
     {
       key: "atk_multiplier_up",
       trigger: "passive",
@@ -85,50 +83,39 @@ const JOB_ITEM = {
       stackMode: "replace",
       duration: { mode: "battle", value: 1 },
       params: { value: 1.2 },
-      condition: { weaponType: "sword_2h" },
-      notes: "主武器為雙手劍時，ATK x1.2"
+      condition: { weaponType: "axe_2h" },
+      notes: "雙手斧時，武器倍率 x1.2"
     },
-    // 主武器雙手劍：格擋 +10%
+    // 主武器雙手斧：暴擊率 +5%
     {
-      key: "block_chance_up",
+      key: "crit_rate_up",
       trigger: "passive",
       target: "self",
       chance: 100,
       stacks: 1,
       stackMode: "replace",
       duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
-      condition: { weaponType: "sword_2h" },
-      notes: "雙手劍時，格擋 +10%"
-    },
-    // 主武器雙手劍：10% 斬殺機率（門檻 10%）
-    {
-      key: "execute_chance_up",
-      trigger: "passive",
-      target: "self",
-      chance: 100,
-      stacks: 1,
-      stackMode: "replace",
-      duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
-      condition: { weaponType: "sword_2h" },
-      notes: "雙手劍時，10% 斬殺機率"
-    },
-    {
-      key: "execute_threshold_up",
-      trigger: "passive",
-      target: "self",
-      chance: 100,
-      stacks: 1,
-      stackMode: "replace",
-      duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
-      condition: { weaponType: "sword_2h" },
-      notes: "雙手劍斬殺門檻 10%"
+      params: { value: 5 },
+      condition: { weaponType: "axe_2h" },
+      notes: "雙手斧時，暴擊率 +5%"
     }
   ],
   procEffects: [],
-  combatEffects: [],
+  combatEffects: [
+    // 主武器雙手斧時：自身生命低於35% 時傷害提升 15%
+    {
+      key: "final_damage_up",
+      trigger: "on_low_hp",
+      target: "self",
+      chance: 100,
+      stacks: 1,
+      stackMode: "replace",
+      duration: { mode: "battle", value: 1 },
+      params: { value: 1.15 },
+      condition: { weaponType: "axe_2h" },
+      notes: "雙手斧：低血 (<35%) 時傷害 +15%（需由戰鬥事件觸發）"
+    }
+  ],
   enhanceLevel: 0
 };
 
@@ -151,7 +138,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("[error] upsert job swordsman failed:", error);
+  console.error("[error] upsert job warrior failed:", error);
   process.exitCode = 1;
 });
-

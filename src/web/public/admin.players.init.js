@@ -170,6 +170,54 @@
       }
     });
 
+    const playerOpsPickerOpen = document.getElementById("player-ops-picker-open");
+    const playerOpsPickedPreview = document.getElementById("player-ops-picked-preview");
+    if (playerOpsPickerOpen) {
+      playerOpsPickerOpen.addEventListener("click", async () => {
+        try {
+          await window.adminCore.openPlayerPicker({
+            title: "選擇操作目標玩家",
+            selectedId: state.selectedPlayerId || "",
+            onPick: async (picked) => {
+              if (!picked?.discordId) return;
+              await window.adminPlayers.loadPlayerDetail(picked.discordId);
+              if (playerOpsPickedPreview) {
+                playerOpsPickedPreview.textContent = `已選擇：${picked.displayName || "Unknown"} (${picked.discordId})`;
+              }
+              log(`已選擇操作目標：${picked.displayName || picked.discordId}`);
+            }
+          });
+        } catch (error) {
+          log(`開啟玩家選擇器失敗：${error.message}`);
+        }
+      });
+    }
+
+    const grantItemPickerOpen = document.getElementById("grant-item-picker-open");
+    const grantItemIdInput = document.getElementById("grant-item-id");
+    const grantItemPickedPreview = document.getElementById("grant-item-picked-preview");
+    if (grantItemPickerOpen) {
+      grantItemPickerOpen.addEventListener("click", async () => {
+        try {
+          await window.adminCore.openItemPicker({
+            title: "選擇發放道具",
+            selectedId: grantItemIdInput?.value || "",
+            onPick: (picked) => {
+              if (!picked?.id) return;
+              if (grantItemIdInput) grantItemIdInput.value = picked.id;
+              if (grantItemPickedPreview) {
+                const slot = picked.equipSlot ? ` / ${picked.equipSlot}` : "";
+                grantItemPickedPreview.textContent = `已選擇：${picked.name || picked.id} (${picked.id})${slot}`;
+              }
+              log(`已選擇發放道具：${picked.name || picked.id}`);
+            }
+          });
+        } catch (error) {
+          log(`開啟道具選擇器失敗：${error.message}`);
+        }
+      });
+    }
+
     elements.currencyActionForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       try {

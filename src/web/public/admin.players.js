@@ -157,6 +157,11 @@
     elements.playerWalletUpdatedAt.textContent = formatDateTime(data.wallet.updatedAt);
     elements.playerProgressUpdatedAt.textContent = formatDateTime(data.progress.updatedAt);
     renderTransactions(data.transactions);
+
+    const pickedPreview = document.getElementById("player-ops-picked-preview");
+    if (pickedPreview) {
+      pickedPreview.textContent = `已選擇：${data.player.displayName || "Unknown"} (${data.player.discordId})`;
+    }
   }
 
   function renderPlayerList() {
@@ -332,8 +337,9 @@
 
   async function submitGrantItem() {
     if (!state.selectedPlayerData) throw new Error("請先選擇一位玩家");
+    const hidden = document.getElementById("grant-item-id");
     const sel = document.getElementById("grant-item-select");
-    const itemId = sel?.value;
+    const itemId = (hidden?.value || "").trim() || sel?.value || "";
     if (!itemId) throw new Error("請選擇道具");
     const player = state.selectedPlayerData.player;
     await request(`/admin/console/players/${encodeURIComponent(player.discordId)}/grant-item`, {
@@ -341,7 +347,8 @@
       body: JSON.stringify({ itemId })
     });
     await loadPlayerDetail(player.discordId);
-    const itemName = sel.options[sel.selectedIndex]?.text || itemId;
+    const pickedPreview = document.getElementById("grant-item-picked-preview");
+    const itemName = pickedPreview?.textContent?.replace(/^已選擇：/, "").trim() || sel?.options?.[sel.selectedIndex]?.text || itemId;
     log(`已發放「${itemName}」給 ${player.displayName}`);
   }
 
