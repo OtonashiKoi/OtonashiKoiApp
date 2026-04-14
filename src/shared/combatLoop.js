@@ -70,6 +70,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30, options =
             log.push(`💚 受到隊伍效果回復 **${heal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
           }
         }
+        // 支援隊伍傷害加成（每回合生效）
+        if (pe.key === 'party_damage_up') {
+          const val = Number(pe.params?.value ?? pe.value ?? 0);
+          if (Number.isFinite(val) && val !== 0) {
+            const mul = 1 + (val / 100);
+            pStats.finalDamageMultiplier = (Number(pStats.finalDamageMultiplier) || 1) * mul;
+            log.push(`🔥 受到隊伍效果：本回合傷害提升 ${(val)}%`);
+          }
+        }
       }
     } catch (e) {}
 
@@ -222,6 +231,34 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30, options =
         }
       } else {
         log.push(`🛡️ ${mName} 猛撲而來，你${rand(mDodgePhrases)}，躲過了攻擊！`);
+        // 迴避後可能觸發的反擊（例如弓箭手的 counter_on_dodge）
+        try {
+          const equipped = options.equipped || null;
+          const inventory = Array.isArray(options.inventory) ? options.inventory : [];
+          if (equipped) {
+            const counterEffs = collectEquipmentEffects(equipped, 'passive', { equipped, inventory }).filter((e) => e && e.key === 'counter_on_dodge');
+            if (counterEffs.length > 0 && pStats.weaponType === 'bow' && outcome === null) {
+              // 取第一個定義的反擊效果作參數來源（通常只會有一個）
+              const eff = counterEffs[0];
+              // 預設反擊暴擊率 25%，可由 effect.params.critChance 覆蓋
+              const critChance = Number(eff.params?.critChance ?? eff.params?.value ?? 25);
+              const triggered = Math.random() * 100 < Math.max(0, Math.min(100, Number(eff.chance) || 100));
+              if (triggered) {
+                const isCrit = Math.random() * 100 < Math.max(0, Math.min(100, critChance));
+
+                const isBreak = Math.random() * 100 < pStats.armorBreakChance;
+                const finalDef = isBreak ? 0 : mCalc.def;
+                let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
+                if (isCrit) cdmg = Math.round(cdmg * (pStats.critDamage || 2.5));
+                mHp -= cdmg;
+                totalDamage += cdmg;
+                log.push(`🏹 **迴避反擊**！你趁勢射出反擊，對 ${mName} 造成 **${cdmg}** 點傷害！${isCrit ? '✨ 暴擊！' : ''}（怪物剩 ${Math.max(0, mHp)} HP）`);
+                if (mHp <= 0) { outcome = "win"; }
+              }
+              
+            }
+          }
+        } catch (e) {}
       }
     }
 

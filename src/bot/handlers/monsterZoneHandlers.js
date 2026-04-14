@@ -605,7 +605,8 @@ async function handleStartFight(interaction) {
         const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
         if (!prog) return;
         const equipped = prog.equipment || {};
-        const refs = collectEquipmentEffects(equipped, 'passive', { equipped, inventory: prog.inventory || [] });
+        // 收集該玩家裝備中所有可能對隊伍生效的效果（passive/combat 等）
+        const refs = collectEquipmentEffects(equipped, null, { equipped, inventory: prog.inventory || [] });
         for (const r of refs) {
           if (r && r.target === 'party') partyEffects.push(r);
         }

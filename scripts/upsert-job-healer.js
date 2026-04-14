@@ -11,7 +11,7 @@ const JOB_ITEM = {
   description: "提供隊伍治療光環的徽章，被動使同場玩家獲得每回合回復。",
   itemType: "equipment",
   equipSlot: "job_eq",
-  equipStats: { int: 3, vit: 2 },
+  equipStats: { int: 4, vit: 2, dex: 2 },
   passiveEffects: [
     {
       key: "heal_over_time",
@@ -25,7 +25,59 @@ const JOB_ITEM = {
       notes: "每回合回復隊伍成員 3% 最大 HP（需要治療師在場才生效）"
     }
   ],
-  combatEffects: [],
+  combatEffects: [
+    // 單手杖：武器倍率 x1.2
+    {
+      key: "atk_multiplier_up",
+      trigger: "passive",
+      target: "self",
+      chance: 100,
+      stacks: 1,
+      stackMode: "replace",
+      duration: { mode: "battle", value: 1 },
+      params: { value: 1.2 },
+      condition: { weaponType: "staff_1h" },
+      notes: "主武為單手杖時武器倍率 x1.2（在武器倍率結算後）"
+    },
+    // 單手杖 + 盾：格擋 +20%
+    {
+      key: "block_chance_up",
+      trigger: "passive",
+      target: "self",
+      chance: 100,
+      stacks: 1,
+      stackMode: "replace",
+      duration: { mode: "battle", value: 1 },
+      params: { value: 20 },
+      condition: { all: [ { weaponType: "staff_1h" }, { equippedSlot: "shield" } ] },
+      notes: "主武為單手杖且副武為盾牌時：格擋 +20%"
+    },
+    // 雙手杖：武器倍率 x1.4
+    {
+      key: "atk_multiplier_up",
+      trigger: "passive",
+      target: "self",
+      chance: 100,
+      stacks: 1,
+      stackMode: "replace",
+      duration: { mode: "battle", value: 1 },
+      params: { value: 1.4 },
+      condition: { weaponType: "staff_2h" },
+      notes: "主武為雙手杖時武器倍率 x1.4（在武器倍率結算後）"
+    },
+    // 共鬥：隊伍每回合傷害增加 5%
+    {
+      key: "party_damage_up",
+      trigger: "passive",
+      target: "party",
+      chance: 100,
+      stacks: 1,
+      stackMode: "replace",
+      duration: { mode: "battle", value: 1 },
+      params: { value: 5, mode: "pct" },
+      notes: "參與戰鬥人員每回合總傷害增加 5%（需要治療師在場才生效）"
+    }
+  ],
   procEffects: [],
   enhanceLevel: 0
 };
