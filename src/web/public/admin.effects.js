@@ -335,7 +335,12 @@
       if (PERCENT_EFFECT_KEYS.has(effect.key)) {
         const percent = value;
         const mult = 1 + percent / 100;
-        parts.push(`數值 ${Math.round(percent*100)/100}% → ${mult.toFixed(2)}x`);
+        const original = effect?.params?.originalInput;
+        if (original && String(original) !== String(percent)) {
+          parts.push(`輸入 ${original} → 數值 ${Math.round(percent * 100) / 100}% → ${mult.toFixed(2)}x`);
+        } else {
+          parts.push(`數值 ${Math.round(percent * 100) / 100}% → ${mult.toFixed(2)}x`);
+        }
       } else {
         parts.push(`數值 ${value}`);
       }
@@ -437,13 +442,13 @@
     const rawValueStr = String(row.querySelector('[data-field="value"]')?.value || "").trim();
     let value = Number(rawValueStr);
     // If this effect uses percent semantics and user entered a multiplier like 1.1, auto-convert to percent
+    let originalInput = null;
     try {
       if (PERCENT_EFFECT_KEYS.has(key) && rawValueStr.includes('.') && Number.isFinite(value) && value > 1) {
+        // user entered a multiplier like 1.1 — keep their input visible but store percent for backend
         const percent = (value - 1) * 100;
+        originalInput = rawValueStr;
         value = percent;
-        // update visible input to the percent value to avoid confusion
-        const inp = row.querySelector('[data-field="value"]');
-        if (inp) inp.value = Math.round(percent * 100) / 100;
       }
     } catch (e) {
       // ignore conversion errors
@@ -460,7 +465,7 @@
         mode: row.querySelector('[data-field="durationMode"]')?.value || "turns",
         value: Math.max(0, Number(row.querySelector('[data-field="durationValue"]')?.value) || 1)
       },
-      params: Number.isFinite(value) ? { value } : {},
+      params: Number.isFinite(value) ? { value, originalInput } : {},
       notes: row.querySelector('[data-field="notes"]')?.value || "",
       condition
     };
