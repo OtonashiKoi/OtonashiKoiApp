@@ -903,6 +903,15 @@
         });
       });
       preview.textContent = summarizeCurrent();
+      // add or update inline help for NPC effect fields (so NPC editor shows same hints)
+      const existingHelp = row.querySelector('.npc-effect-help');
+      const helpHtml = `<div class="npc-effect-help hint" style="font-size:12px;color:var(--muted);margin-top:6px;">機率：觸發此效果的機率 (0–100)。數值：依效果類型不同，對於發放/消耗道具或裝備為 item id/enhance 等數值；對於 ` +
+        `給予 Buff（grant_buff）為效果設定（用右方預覽檢視）。經濟型效果（EXP/GOLD）為百分比，例如輸入 <strong>10</strong> 表示 +10%，或輸入 <strong>1.1</strong> 表示 1.1x（系統會保留原輸入並自動轉換）。持續值依持續類型而定（次數=1、整場=battle、秒數=秒）。</div>`;
+      if (existingHelp) {
+        existingHelp.outerHTML = helpHtml;
+      } else {
+        fields.insertAdjacentHTML('afterend', helpHtml);
+      }
     }
 
     row.querySelector('[data-field="type"]').addEventListener("change", renderFields);
