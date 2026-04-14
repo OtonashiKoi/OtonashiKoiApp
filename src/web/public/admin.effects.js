@@ -501,6 +501,12 @@
         <label style="display:grid;gap:4px;"><span class="hint">持續類型</span><select class="sheet-input" data-field="durationMode">${optionHtml(DURATION_MODES, data.duration.mode)}</select></label>
         <label style="display:grid;gap:4px;"><span class="hint">持續值</span><input class="sheet-input" data-field="durationValue" type="number" min="0" value="${data.duration.value}" /></label>
       </div>
+      <div style="display:grid;grid-template-columns:120px 120px 130px 120px;gap:8px;align-items:center;margin-top:4px;">
+        <div class="hint" style="font-size:12px;color:var(--muted);">機率：觸發此效果的機率 (0–100)，例如 100 = 一定發生。</div>
+        <div class="hint" style="font-size:12px;color:var(--muted);">數值：效果參數；經濟型效果（EXP/GOLD）為百分比。例如輸入 <strong>10</strong> 表示 +10%，或輸入 <strong>1.1</strong> 表示 1.1x（系統會自動轉換且保留你輸入）。</div>
+        <div class="hint" style="font-size:12px;color:var(--muted);">持續類型：選擇持續方式（回合/整場/次數/秒數）。</div>
+        <div class="hint" style="font-size:12px;color:var(--muted);">持續值：依持續類型而定，例如次數=1、秒數=30。</div>
+      </div>
       <div class="effect-advanced" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end;">
         <label style="display:grid;gap:4px;"><span class="hint">觸發時機</span><select class="sheet-input" data-field="trigger">${optionHtml(TRIGGERS, data.trigger)}</select></label>
         <label style="display:grid;gap:4px;"><span class="hint">目標</span><select class="sheet-input" data-field="target">${optionHtml(TARGETS, data.target)}</select></label>
