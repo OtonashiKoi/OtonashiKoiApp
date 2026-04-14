@@ -17,17 +17,22 @@ const config = require("../src/config");
     console.log("renamed: " + docs[i].name + "  seq " + docs[i].seq + " -> " + newSeq);
   }
 
-  // 更新 mid state activeMonsterSeq 回 1（第一隻）
-  const stateCol = db.collection("monsterState");
-  const existing = await stateCol.findOne({ _id: "mid" });
+  // 更新 mid state activeMonsterSeq 回 1（第一隻） — 優先從 monsters collection 讀取，並同時寫回 monsters + legacy
+  const stateDocId = 'monsterState:mid';
+  const monstersRow = await db.collection('monsters').findOne({ _id: stateDocId }).catch(() => null);
+  const legacyRow = await db.collection('monsterState').findOne({ _id: 'mid' }).catch(() => null);
+  const existing = monstersRow || legacyRow;
   const val = (existing && existing.value) ? { ...existing.value } : {};
   val.activeMonsterSeq = 1;
-  await stateCol.updateOne(
-    { _id: "mid" },
+  try {
+    await db.collection('monsters').updateOne({ _id: stateDocId }, { $set: { value: val, updatedAt: new Date().toISOString() } }, { upsert: true });
+  } catch (e) { /* ignore */ }
+  await db.collection('monsterState').updateOne(
+    { _id: 'mid' },
     { $set: { value: val, updatedAt: new Date().toISOString() } },
     { upsert: true }
   );
-  console.log("mid state activeMonsterSeq -> 1");
+  console.log('mid state activeMonsterSeq -> 1 (monsters + legacy)');
 
   await client.close();
   console.log("done");

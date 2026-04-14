@@ -49,7 +49,6 @@
               <div class="nav-group-links">
                 <button class="nav-link" data-target="section-items">道具庫管理</button>
                 <button class="nav-link" data-target="section-shop">金幣商店管理</button>
-                <button class="nav-link" data-target="section-monster-control">怪物即時控制</button>
                 <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
                 <button class="nav-link" data-target="section-monster-events">怪物切換事件</button>
                 <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
@@ -418,32 +417,21 @@
             </div>
           </section>
 
-          <section id="section-monster-control" class="panel-section">
-            <div class="card">
-              <div class="section-head">
-                <div>
-                  <p class="section-kicker">Combat</p>
-                  <h2>怪物即時控制</h2>
-                </div>
-              </div>
-              <div id="monsters-state-area" class="access-card" style="margin-bottom:24px;border-color:var(--accent);background:var(--accent-light);">
-                <p class="hint" style="color:var(--text);margin:0;font-weight:600;">載入即時狀態中...</p>
-              </div>
-              <div class="tab-container">
-                <button data-zone="normal" class="monsters-zone-tab active">⚔️ 一般區</button>
-                <button data-zone="mid" class="monsters-zone-tab">🔥 中級區</button>
-              </div>
-            </div>
-          </section>
-
           <section id="section-monsters" class="panel-section">
             <div class="card">
               <div class="section-head">
                 <div>
                   <p class="section-kicker">Combat</p>
-                  <h2>怪物資料庫管理</h2>
+                  <h2>怪物管理（即時控制 + 資料庫）</h2>
                 </div>
                 <button id="monsters-btn-new" class="button primary">＋ 新增怪物</button>
+              </div>
+              <div id="monsters-state-area" class="access-card" style="margin-bottom:24px;border-color:var(--accent);background:var(--accent-light);">
+                <p class="hint" style="color:var(--text);margin:0;font-weight:600;">載入即時狀態中...</p>
+              </div>
+              <div class="tab-container" style="margin-bottom:16px;">
+                <button data-zone="normal" class="monsters-zone-tab active">⚔️ 一般區</button>
+                <button data-zone="mid" class="monsters-zone-tab">🔥 中級區</button>
               </div>
               <input type="file" id="monsters-img-input" accept="image/*" style="display:none;" />
               <div id="monsters-tbody" style="display:flex;flex-direction:column;gap:12px;"></div>

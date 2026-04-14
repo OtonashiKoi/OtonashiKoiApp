@@ -27,17 +27,28 @@ if (!MONGODB_URI) {
     console.log('✅ Connected to MongoDB');
     const db = client.db(MONGODB_DB_NAME);
 
-    const monsterStateCol = db.collection('monsterState');
     const playersCol = db.collection('players');
     const progressCol = db.collection('progress');
     const walletsCol = db.collection('wallets');
+
+    async function getState(db, zone) {
+      const stateDocId = `monsterState:${zone}`;
+      const mRow = await db.collection('monsters').findOne({ _id: stateDocId }).catch(() => null);
+      if (mRow && mRow.value) return mRow.value;
+      const legacy = await db.collection('monsterState').findOne({ _id: zone }).catch(() => null);
+      if (legacy && legacy.value) return legacy.value;
+      if (zone === 'normal') {
+        const def = await db.collection('monsterState').findOne({ _id: 'default' }).catch(() => null);
+        return def?.value || null;
+      }
+      return null;
+    }
 
     const zones = ['normal', 'mid'];
     const rows = [];
 
     for (const zone of zones) {
-      const doc = await monsterStateCol.findOne({ _id: zone });
-      const state = (doc && doc.value) ? doc.value : null;
+      const state = await getState(db, zone);
       if (!state) continue;
       const participants = Array.isArray(state.participants) ? state.participants : [];
       const damageMap = state.damageMap || {};

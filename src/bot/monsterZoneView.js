@@ -66,20 +66,47 @@ function createEventPanelMessage(activeEvent) {
   const endAtMs = Date.parse(activeEvent.endsAt || "");
   const remaining = Number.isFinite(endAtMs) ? Math.max(0, Math.ceil((endAtMs - Date.now()) / 1000)) : null;
   const remainLine = remaining == null ? "" : `剩餘時間：約 ${remaining} 秒`;
+
+  // 取 start node（若有 nodes 則使用節點內容以顯示選項）
+  const startNode = Array.isArray(activeEvent.nodes) && activeEvent.nodes.length
+    ? (activeEvent.nodes.find((n) => n.id === "start") || activeEvent.nodes[0])
+    : { id: "start", text: activeEvent.message || "", options: [] };
+  const options = Array.isArray(startNode.options) ? startNode.options : [];
+
   const desc = [
     `事件：**${activeEvent.name || "怪物過場事件"}**`,
-    activeEvent.message || "事件進行中，請稍候…",
+    activeEvent.message || startNode.text || "事件進行中，請稍候…",
     remainLine,
     "",
     "事件結束後會自動切換到下一隻怪物。"
   ].filter(Boolean).join("\n");
 
   const embed = new EmbedBuilder().setTitle("事件進行中").setDescription(desc).setColor(0xf59e0b);
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(BUTTON_IDS.enterBattle).setLabel("事件進行中").setStyle(ButtonStyle.Secondary).setDisabled(true)
-  );
 
-  return { embeds: [embed], components: [row], files: [] };
+  // 建立按鈕（每列最多 5 個按鈕）
+  const rows = [];
+  for (let i = 0; i < options.length; i += 5) {
+    const row = new ActionRowBuilder();
+    const chunk = options.slice(i, i + 5);
+    for (const opt of chunk) {
+      const label = String(opt.label || "選項").slice(0, 80);
+      const btn = new ButtonBuilder()
+        .setCustomId(`monster-event:choose:${activeEvent.id}:${opt.id}`)
+        .setLabel(label)
+        .setStyle(ButtonStyle.Primary);
+      row.addComponents(btn);
+    }
+    rows.push(row);
+  }
+
+  if (!rows.length) {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("monster-event:dummy").setLabel("事件進行中").setStyle(ButtonStyle.Secondary).setDisabled(true)
+    );
+    rows.push(row);
+  }
+
+  return { embeds: [embed], components: rows, files: [] };
 }
 
 function buildHpBar(hp, maxHp, length = 10) {

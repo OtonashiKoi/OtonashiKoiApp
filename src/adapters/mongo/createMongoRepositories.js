@@ -271,7 +271,8 @@ function createMongoRepositories() {
     },
     monsterRepository: {
       async findAll() {
-        const monsters = await (await collection("monsters")).find({}).toArray();
+        // 只回傳實際的怪物文件（具有 id 欄位），state 文件使用 _id 儲存，不會被此查詢回傳
+        const monsters = await (await collection("monsters")).find({ id: { $exists: true } }).toArray();
         return monsters.sort((a, b) => a.seq - b.seq);
       },
       async findById(id) {
@@ -289,6 +290,12 @@ function createMongoRepositories() {
         await (await collection("monsters")).deleteOne({ id });
       },
       async getState(zoneKey = "normal") {
+        // 1) 優先讀取 monsters collection 內嵌的 state 文件（_id: `monsterState:${zoneKey}`），
+        // 2) 若不存在則回退到舊的 monsterState collection（維持相容性）
+        const stateDocId = `monsterState:${zoneKey}`;
+        const stateRow = await (await collection("monsters")).findOne({ _id: stateDocId });
+        if (stateRow && stateRow.value) return stateRow.value;
+
         const row = await (await collection("monsterState")).findOne({ _id: zoneKey });
         if (!row && zoneKey === "normal") {
           // 向下相容：讀取舊 _id:"default" 的資料
@@ -298,6 +305,17 @@ function createMongoRepositories() {
         return row?.value || { activeMonsterSeq: 1, currentHp: null, killCount: {} };
       },
       async saveState(state, zoneKey = "normal") {
+        const stateDocId = `monsterState:${zoneKey}`;
+        // 同步寫入 monsters collection（作為合併模式）與 legacy monsterState collection（維持相容性）
+        try {
+          await (await collection("monsters")).updateOne(
+            { _id: stateDocId },
+            { $set: { value: state, updatedAt: new Date().toISOString() } },
+            { upsert: true }
+          );
+        } catch (e) {
+          // 忽略寫入 monsters collection 的錯誤，接著嘗試寫入 legacy collection
+        }
         await (await collection("monsterState")).updateOne(
           { _id: zoneKey },
           { $set: { value: state, updatedAt: new Date().toISOString() } },
@@ -308,6 +326,7 @@ function createMongoRepositories() {
       // 原子收付擊殺權：成功回 true，已被其他進程收付回 false
       // 若先前的 claim 超過 timeoutMs，允許重新 claim（回收無回應的鎖）
       async claimKill(zoneKey, monsterSeq, timeoutMs = 30 * 1000) {
+        // 為了保留原有的原子操作語意，claim 仍在 legacy monsterState collection 上執行
         const col = await collection("monsterState");
         const now = new Date();
         const cutoff = new Date(Date.now() - timeoutMs);

@@ -24,9 +24,11 @@ async function main() {
   await client.connect();
   const db = client.db(dbName);
 
-  // 1. 讀取現有 mid state
-  const stateCol = db.collection("monsterState");
-  const existing = await stateCol.findOne({ _id: "mid" });
+  // 1. 讀取現有 mid state（優先從 monsters collection 讀取整合後 state）
+  const stateDocId = "monsterState:mid";
+  const monstersRow = await db.collection('monsters').findOne({ _id: stateDocId }).catch(() => null);
+  const legacyRow = await db.collection('monsterState').findOne({ _id: 'mid' }).catch(() => null);
+  const existing = (monstersRow && monstersRow.value) ? monstersRow : legacyRow;
   console.log("📋 現有 mid state:", JSON.stringify(existing?.value || null, null, 2));
 
   // 2. 找第一個啟用中的 mid 怪物
@@ -55,13 +57,20 @@ async function main() {
   };
   console.log(`✅ 修正為 seq=${first.seq}（${first.name}），HP=${maxHp}`);
 
-  // 3. 寫回 DB
-  await stateCol.updateOne(
+  // 3. 寫回 DB（同時寫入 monsters collection 與 legacy monsterState）
+  try {
+    await db.collection('monsters').updateOne(
+      { _id: stateDocId },
+      { $set: { value: correctedState, updatedAt: new Date().toISOString() } },
+      { upsert: true }
+    );
+  } catch (e) { /* ignore */ }
+  await db.collection('monsterState').updateOne(
     { _id: "mid" },
     { $set: { value: correctedState, updatedAt: new Date().toISOString() } },
     { upsert: true }
   );
-  console.log("✅ DB state 已更新");
+  console.log("✅ DB state 已更新（monsters + legacy）");
 
   await client.close();
 

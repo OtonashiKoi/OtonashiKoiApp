@@ -521,9 +521,11 @@
     const killCount = state?.killCount || {};
 
     // 建立怪物選區（依 seq 排序，只顯示當前分區）
-    const enabledMonsters = monsters
-      .filter(m => m.enabled !== false && (m.zone || "normal") === activeZone)
+    const zoneMonsters = monsters.filter((m) => (m.zone || "normal") === activeZone);
+    const enabledMonsters = zoneMonsters
+      .filter(m => m.enabled !== false)
       .sort((a,b) => a.seq - b.seq);
+    const disabledCount = Math.max(0, zoneMonsters.length - enabledMonsters.length);
     const options = enabledMonsters.map(m => {
       const kills = killCount[m.id] || 0;
       const isActive = active && m.id === active.id;
@@ -539,6 +541,9 @@
           <p class="section-kicker" style="color:${accentColor};">ZONE STATUS — ${zoneLabel}</p>
           <h3 style="margin:0;">${active ? active.name : "目前沒有活躍怪物"}</h3>
           ${active ? `<p class="hint" style="margin:2px 0;">HP: ${state.currentHp ?? active.calc?.maxHp ?? "?"} / ${active.calc?.maxHp ?? "?"} &nbsp;|&nbsp; 被打死: ${killCount[active.id]||0} 次</p>` : ""}
+          <p class="hint" style="margin:2px 0;">
+            本區怪物：${zoneMonsters.length} 隻（啟用 ${enabledMonsters.length}、停用 ${disabledCount}）
+          </p>
         </div>
         ${active?.imageThumbnailUrl ? `<img src="${active.imageThumbnailUrl}" style="width:56px;height:56px;object-fit:contain;border-radius:6px;" />` : ""}
       </div>

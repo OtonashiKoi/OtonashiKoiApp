@@ -1028,7 +1028,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         message: matchedEvent.message,
         startedAt,
         endsAt,
-        pendingMonsterSeq: nextMonster.seq
+        pendingMonsterSeq: nextMonster.seq,
+        // 保留 nodes 與 npc 以便在面板與互動處理時使用
+        nodes: matchedEvent.nodes || [],
+        npc: matchedEvent.npc || null
       }
     };
     await sc.monsterService.saveState(eventState, zoneKey);
@@ -1105,6 +1108,158 @@ async function handleMonsterZoneButton(interaction) {
   else if (customId === BTN.startFight) await handleStartFight(interaction);
   else if (customId === BTN.deleteLog)  await handleDeleteLog(interaction);
   return true;
+}
+
+// 判斷是否為事件選項按鈕（customId 範例："monster-event:choose:<eventId>:<optionId>")
+function isMonsterEventButton(customId) {
+  return String(customId || "").startsWith("monster-event:choose:");
+}
+
+// 處理玩家在事件面板上點選某個選項
+async function handleMonsterEventChoice(interaction) {
+  await interaction.deferReply({ ephemeral: true }).catch(() => {});
+  const sc = getServiceContext();
+  const parts = String(interaction.customId || "").split(":");
+  if (parts.length < 4) {
+    await interaction.editReply({ content: "無效的操作。" }).catch(() => {});
+    return;
+  }
+  const eventId = parts[2];
+  const optionId = parts[3];
+
+  // 嘗試判斷 zoneKey：先透過 panelMessageId 對照 binding，找不到再用 channelId 推斷
+  const layout = await sc.channelLayoutRepository.get().catch(() => ({}));
+  const bindings = layout?.discord?.bindings || [];
+  let binding = bindings.find((b) => String(b.panelMessageId || "") === String(interaction.message?.id || "") && b.featureKey && b.featureKey.startsWith("monster_zone"));
+  if (!binding) {
+    binding = bindings.find((b) => String(b.channelId || "") === String(interaction.channelId || "") && b.featureKey && b.featureKey.startsWith("monster_zone"));
+  }
+  const zoneKey = binding && binding.featureKey === "monster_zone_mid" ? "mid" : "normal";
+
+  const state = await sc.monsterService.getState(zoneKey).catch(() => null);
+  const ae = state?.activeEvent;
+  if (!ae || ae.id !== eventId) {
+    await interaction.editReply({ content: "事件已結束或不可互動。" }).catch(() => {});
+    return;
+  }
+  const endAtMs = Date.parse(ae.endsAt || "");
+  if (!Number.isFinite(endAtMs) || endAtMs <= Date.now()) {
+    await interaction.editReply({ content: "事件已結束。" }).catch(() => {});
+    return;
+  }
+
+  const discordId = interaction.user.id;
+  if (ae.selections && ae.selections[discordId]) {
+    await interaction.editReply({ content: "你已經選過選項，無法重複選擇。" }).catch(() => {});
+    return;
+  }
+
+  // 取得完整事件（若 activeEvent 沒有 nodes，從 service 拿）
+  let fullEvent = ae;
+  if (!Array.isArray(ae.nodes) || !ae.nodes.length) {
+    try { fullEvent = await sc.monsterEventService.getEventById(eventId); } catch (_) { fullEvent = ae; }
+  }
+  const startNode = Array.isArray(fullEvent.nodes) && fullEvent.nodes.length ? (fullEvent.nodes.find((n) => n.id === "start") || fullEvent.nodes[0]) : { options: [] };
+  const option = (startNode.options || []).find((o) => o.id === optionId);
+  if (!option) {
+    await interaction.editReply({ content: "選項不存在或已失效。" }).catch(() => {});
+    return;
+  }
+
+  // 檢查玩家進度與錢包
+  const progress = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+  const wallet = await sc.walletRepository.findByPlayerId(discordId).catch(() => ({ gold: 0, diamond: 0 }));
+  const effectContext = { equipped: progress?.equipment || {}, inventory: Array.isArray(progress?.inventory) ? progress.inventory : [] };
+
+  // 驗證條件與計算總成本
+  let totalGoldCost = 0;
+  let totalDiamondCost = 0;
+  for (const eff of option.effects || []) {
+    if (eff.type === "grant_currency") {
+      const amt = Number(eff.payload?.amount || 0);
+      const currency = eff.payload?.currencyType || "gold";
+      if (amt < 0) {
+        if (currency === "gold") totalGoldCost += -amt;
+        else if (currency === "diamond") totalDiamondCost += -amt;
+      }
+    }
+    if (!isEffectConditionMet(eff, effectContext)) {
+      await interaction.editReply({ content: "你不符合該選項的條件，無法選擇。" }).catch(() => {});
+      return;
+    }
+  }
+
+  if ((wallet?.gold || 0) < totalGoldCost) {
+    await interaction.editReply({ content: "金幣不足，無法選擇此選項。" }).catch(() => {});
+    return;
+  }
+  if ((wallet?.diamond || 0) < totalDiamondCost) {
+    await interaction.editReply({ content: "鑽石不足，無法選擇此選項。" }).catch(() => {});
+    return;
+  }
+
+  // 執行 effects（簡單處理：支援 grant_currency 與 grant_item / grant_equipment）
+  const results = [];
+  for (const eff of option.effects || []) {
+    if (eff.type === "grant_currency") {
+      try {
+        await sc.rewardService.grantCurrency({
+          discordId,
+          displayName: interaction.member?.displayName || interaction.user.username || discordId,
+          currencyType: eff.payload?.currencyType || "gold",
+          amount: Number(eff.payload?.amount || 0),
+          source: CURRENCY_SOURCES.SHOP_PURCHASE,
+          operator: "npc_event"
+        });
+        results.push(`貨幣 ${eff.payload?.currencyType || 'gold'} ${eff.payload?.amount}`);
+      } catch (e) {
+        await interaction.editReply({ content: `處理貨幣失敗：${e?.message || e}` }).catch(() => {});
+        return;
+      }
+    } else if (eff.type === "grant_item" || eff.type === "grant_equipment") {
+      const itemId = eff.payload?.itemId;
+      if (!itemId) continue;
+      const item = await sc.itemService.getItemById(itemId).catch(() => null);
+      if (!item) {
+        results.push(`道具 ${itemId} 不存在`);
+        continue;
+      }
+      // 確保玩家存在 progress
+      let prog = progress;
+      if (!prog) {
+        await sc.playerService.ensurePlayer(discordId, interaction.member?.displayName || interaction.user.username || discordId).catch(() => {});
+        prog = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+      }
+      if (!Array.isArray(prog.inventory)) prog.inventory = [];
+      prog.inventory.push({
+        uuid: require("crypto").randomUUID(),
+        itemId: item.id, itemName: item.name,
+        itemEffect: item.effect || { type: "none", value: 0 },
+        useEffects: item.useEffects || [], passiveEffects: item.passiveEffects || [], procEffects: item.procEffects || [], combatEffects: item.combatEffects || [],
+        itemType: item.itemType || "consumable",
+        imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
+        equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
+        weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+        atkStat: item.atkStat || null, tier: item.tier || null,
+        purchasedAt: new Date().toISOString()
+      });
+      prog.updatedAt = new Date().toISOString();
+      await sc.progressRepository.save(prog).catch(() => {});
+      results.push(`獲得 ${item.name}`);
+    } else {
+      results.push(`效果 ${eff.type || 'unknown'} 未實作`);
+    }
+  }
+
+  // 紀錄玩家選擇
+  const nextState = { ...state };
+  nextState.activeEvent = { ...nextState.activeEvent, selections: { ...(nextState.activeEvent?.selections || {}), [discordId]: { optionId, selectedAt: new Date().toISOString() } } };
+  await sc.monsterService.saveState(nextState, zoneKey).catch(() => {});
+
+  const replyLines = [];
+  if (option.npcReply) replyLines.push(option.npcReply);
+  if (results.length) replyLines.push(`已執行：${results.join('，')}`);
+  await interaction.editReply({ content: replyLines.join('\n') || '已選擇', flags: MessageFlags.Ephemeral }).catch(() => {});
 }
 
 // ──────────────────────────────────────────────
@@ -1206,6 +1361,8 @@ function startIdleRotateTimer() {
 module.exports = {
   handleMonsterZoneButton,
   isMonsterZoneButton,
+  isMonsterEventButton,
+  handleMonsterEventChoice,
   handleMonsterKill,
   _republishPanel,
   MAX_ROUNDS,

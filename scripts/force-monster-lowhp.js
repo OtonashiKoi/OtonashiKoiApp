@@ -14,7 +14,11 @@ const config = require('../src/config');
   const activeSeq = monsters[0].seq;
   console.log('setting activeMonsterSeq', activeSeq);
   const state = { activeMonsterSeq: activeSeq, currentHp: 1, killCount: {}, participants: [], damageMap: {} };
+  const stateDocId = `monsterState:${zone}`;
+  try {
+    await db.collection('monsters').updateOne({ _id: stateDocId }, { $set: { value: state, updatedAt: new Date().toISOString() } }, { upsert: true });
+  } catch (e) { /* ignore */ }
   await db.collection('monsterState').updateOne({ _id: zone }, { $set: { value: state, updatedAt: new Date().toISOString() } }, { upsert: true });
-  console.log('monster state set to low HP');
+  console.log('monster state set to low HP (monsters + legacy)');
   await c.close();
 })().catch(e=>{ console.error(e); process.exit(1); });
