@@ -247,8 +247,8 @@
 
   function buildModalRoot() {
     const root = document.createElement("div");
-    root.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;padding:18px;z-index:1000;";
-    root.innerHTML = '<div style="width:min(980px,96vw);"></div>';
+    root.style.cssText = "position:fixed;inset:0;background:#000;display:none;align-items:flex-start;justify-content:center;padding:18px;z-index:1000;overflow:auto;";
+    root.innerHTML = '<div style="width:min(1100px,96vw);max-height:92vh;overflow:auto;margin-top:28px;background:var(--surface-strong);border-radius:12px;padding:12px;"></div>';
     document.body.appendChild(root);
     root.addEventListener("click", (event) => {
       if (event.target === root) closeEditor();
@@ -428,7 +428,7 @@
     }
   });
 
-  modalRoot.addEventListener("click", (event) => {
+  modalRoot.addEventListener("click", async (event) => {
     if (event.target.closest('[data-action="close-modal"]')) {
       closeEditor();
       return;
@@ -454,19 +454,27 @@
       return;
     }
     if (event.target.closest('[data-action="edit-option-effects"]')) {
-      if (!window.adminEffects) return;
+      if (!window.adminEffects) {
+        alert('效果編輯器尚未載入');
+        return;
+      }
+      if (!window.getAdminToken || !window.getAdminToken()) {
+        alert('請先在後台連線（輸入管理員金鑰）後再編輯效果');
+        return;
+      }
       const row = event.target.closest(".npc-option-row");
       const hidden = row?.querySelector('[data-opt-field="effectsData"]');
-      window.adminEffects.ensureLookups()
-        .then(() => {
-          const effects = window.adminEffects.decodeState(hidden?.value, []);
-          window.adminEffects.openNpcOptionEditor(effects, (nextEffects) => {
-            if (hidden) hidden.value = window.adminEffects.encodeState(nextEffects);
-            const summary = row?.querySelector(".npc-option-effects-summary");
-            if (summary) summary.textContent = window.adminEffects.summarizeNpcEffects(nextEffects);
-          });
-        })
-        .catch((error) => alert(error.message || String(error)));
+      try {
+        await window.adminEffects.ensureLookups();
+        const effects = window.adminEffects.decodeState(hidden?.value, []);
+        window.adminEffects.openNpcOptionEditor(effects, (nextEffects) => {
+          if (hidden) hidden.value = window.adminEffects.encodeState(nextEffects);
+          const summary = row?.querySelector(".npc-option-effects-summary");
+          if (summary) summary.textContent = window.adminEffects.summarizeNpcEffects(nextEffects);
+        });
+      } catch (error) {
+        alert(error.message || String(error));
+      }
     }
   });
 

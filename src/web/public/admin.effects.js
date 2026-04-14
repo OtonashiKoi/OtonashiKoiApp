@@ -791,7 +791,12 @@
     const preview = row.querySelector(".npc-effect-preview");
 
     function summarizeCurrent() {
-      const data = row._read();
+      let data = null;
+      if (typeof row._read === 'function') {
+        data = row._read();
+      } else {
+        data = { type, payload };
+      }
       if (!data) return "未設定";
       if (data.type === "grant_currency") return `發放 ${data.payload.currencyType || "gold"} x ${data.payload.amount || 0}`;
       if (data.type === "grant_item") return `發放道具 ${data.payload.itemId || "未選擇"} x ${data.payload.amount || 1}`;
