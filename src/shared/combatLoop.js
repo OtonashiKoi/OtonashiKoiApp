@@ -54,6 +54,25 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30, options =
   while (round <= MAX_ROUNDS && outcome === null) {
     const log = [`**【第 ${round} 回合】**`];
 
+    // ── 套用來自隊伍（party）的被動 aura，例如治療師提供的每回合回復 ──
+    try {
+      const partyEffects = Array.isArray(options.partyEffects) ? options.partyEffects : [];
+      for (const pe of partyEffects) {
+        if (!pe || !pe.key) continue;
+        // 支援治療 over-time 的簡單實作：key 可為 'heal_over_time' 或自訂 'party_heal'
+        if (pe.key === 'heal_over_time' || pe.key === 'party_heal') {
+          const mode = String(pe.params?.mode || '').toLowerCase();
+          const val = Number(pe.params?.value ?? pe.value ?? 0);
+          if (!Number.isFinite(val) || val === 0) continue;
+          const heal = mode === 'pct' ? Math.max(0, Math.round((pStats.maxHp || 0) * (val / 100))) : Math.max(0, Math.round(val));
+          if (heal > 0) {
+            pHp = Math.min(pStats.maxHp, pHp + heal);
+            log.push(`💚 受到隊伍效果回復 **${heal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+          }
+        }
+      }
+    } catch (e) {}
+
     // ── 玩家攻擊 ──
     const attackCount = pStats.isDualWield ? 2 : 1;
     const monsterIsStunned = stunRoundsLeft > 0; // 擊暈中：怪物無法閃避
@@ -109,28 +128,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 30, options =
               if (!eff || !eff.params) continue;
               if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
                 dmg = Math.max(1, Math.round(dmg * Number(eff.params.value)));
-              }
-            }
-          }
-        } catch (e) {}
-
-        // --- Apply on_high_hp effects that affect crit/stun per-effect thresholds ---
-        let extraHighHpCrit = 0;
-        let extraHighHpStun = 0;
-        try {
-          const equippedCtx = options.equipped || null;
-          if (equippedCtx) {
-            const highEffects = collectEquipmentEffects(equippedCtx, 'on_high_hp', { equipped: equippedCtx, inventory: options.inventory || [] });
-            for (const he of highEffects) {
-              if (!he || !he.params) continue;
-              const thresholdPct = Number.isFinite(Number(he.params.thresholdPct)) ? Number(he.params.thresholdPct) : 90;
-              if (pHp >= Math.ceil((pStats.maxHp || 1) * (thresholdPct / 100))) {
-                if (he.key === 'stun_chance_up' && Number.isFinite(Number(he.params.value))) {
-                  extraHighHpStun += Number(he.params.value);
-                }
-                if (he.key === 'crit_rate_up' && Number.isFinite(Number(he.params.value))) {
-                  extraHighHpCrit += Number(he.params.value);
-                }
               }
             }
           }

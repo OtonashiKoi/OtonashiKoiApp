@@ -3,7 +3,7 @@
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { calcPlayerStats } = require("../../shared/combatStats");
-const { isEffectConditionMet } = require("../../shared/effectEngine");
+const { isEffectConditionMet, collectEquipmentEffects } = require("../../shared/effectEngine");
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
 const activeSessions = new Map();
@@ -597,9 +597,27 @@ async function handleStartFight(interaction) {
     session.monsterHp = state.currentHp != null ? state.currentHp : session.monsterMaxHp;
 
     // ── 自動跑完所有回合 ──
+    // 蒐集當前參戰者中對 party 生效的 aura（由已在場的治療師等提供）
+    const participants = Array.isArray(state.participants) ? state.participants : [];
+    const partyEffects = [];
+    await Promise.all(participants.map(async (pid) => {
+      try {
+        const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
+        if (!prog) return;
+        const equipped = prog.equipment || {};
+        const refs = collectEquipmentEffects(equipped, 'passive', { equipped, inventory: prog.inventory || [] });
+        for (const r of refs) {
+          if (r && r.target === 'party') partyEffects.push(r);
+        }
+      } catch (e) {}
+    }));
+
+    const currentProg = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+    const currentEquipped = (currentProg && currentProg.equipment) ? currentProg.equipment : {};
+
     const { runCombatLoop } = require("../../shared/combatLoop");
     const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
-      runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp);
+      runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, { equipped: currentEquipped, inventory: currentProg?.inventory || [], partyEffects });
     session.monsterHp = finalMonsterHp;
     session.playerHp  = finalPlayerHp;
     const totalTaken = Math.max(0, (session.playerMaxHp || 0) - Math.max(0, finalPlayerHp));

@@ -122,6 +122,22 @@ function collectEquipmentEffects(equipped, trigger = null, context = {}) {
   return Object.values(equipped || {}).flatMap((entry) => collectEffectRefsFromEntry(entry, trigger, context));
 }
 
+function collectPartyEffectsFromProgresses(progresses = []) {
+  const refs = [];
+  if (!Array.isArray(progresses)) return refs;
+  for (const prog of progresses) {
+    try {
+      const equipped = prog?.equipment || {};
+      const inventory = Array.isArray(prog?.inventory) ? prog.inventory : [];
+      const effs = collectEquipmentEffects(equipped, null, { equipped, inventory });
+      for (const e of effs) {
+        if (e && e.target === 'party') refs.push(e);
+      }
+    } catch (e) {}
+  }
+  return refs;
+}
+
 function createRuntimeEffect(effectRef, source = {}) {
   return normalizeActiveEffect({
     ...effectRef,
@@ -244,3 +260,6 @@ module.exports = {
   decrementActiveEffects,
   selectTriggeredEffects
 };
+
+// backwards-compat export for helper
+module.exports.collectPartyEffectsFromProgresses = collectPartyEffectsFromProgresses;
