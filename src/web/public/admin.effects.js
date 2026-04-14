@@ -50,6 +50,12 @@
     ["grant_buff", "給予 Buff"]
   ];
 
+  // 這些效果的 params.value 代表百分比（percent），儲存/計算時會以 percent 為基準。
+  // 為方便使用者，若輸入像 1.1 這種小數（代表 1.1x），會自動轉為 percent = (1.1 - 1) * 100 => 10
+  const PERCENT_EFFECT_KEYS = new Set([
+    'gold_gain_up', 'exp_gain_up', 'drop_rate_up', 'rare_drop_rate_up', 'monster_reward_up', 'checkin_bonus_up', 'enhance_success_up', 'event_trigger_rate_up'
+  ]);
+
   const EFFECT_NAME_ZH = {
     max_hp_up: "最大 HP 提升",
     max_hp_down: "最大 HP 降低",
@@ -325,7 +331,15 @@
       `${trigger} -> ${target}`,
       label
     ];
-    if (Number.isFinite(value) && value !== 0) parts.push(`數值 ${value}`);
+    if (Number.isFinite(value) && value !== 0) {
+      if (PERCENT_EFFECT_KEYS.has(effect.key)) {
+        const percent = value;
+        const mult = 1 + percent / 100;
+        parts.push(`數值 ${Math.round(percent*100)/100}% → ${mult.toFixed(2)}x`);
+      } else {
+        parts.push(`數值 ${value}`);
+      }
+    }
     if (Number.isFinite(chance) && chance < 100) parts.push(`機率 ${chance}%`);
     parts.push(`持續 ${formatDuration(effect.duration)}`);
     if (stacks > 1 || effect.stackMode === "stack") parts.push(`疊層 ${stacks}（${stackMode}）`);
@@ -419,7 +433,21 @@
   function readEffectRow(row) {
     const key = row.querySelector('[data-field="key"]')?.value || "";
     if (!key) return null;
-    const value = Number(row.querySelector('[data-field="value"]')?.value);
+    // read raw string so we can detect multiplier-style input like "1.1"
+    const rawValueStr = String(row.querySelector('[data-field="value"]')?.value || "").trim();
+    let value = Number(rawValueStr);
+    // If this effect uses percent semantics and user entered a multiplier like 1.1, auto-convert to percent
+    try {
+      if (PERCENT_EFFECT_KEYS.has(key) && rawValueStr.includes('.') && Number.isFinite(value) && value > 1) {
+        const percent = (value - 1) * 100;
+        value = percent;
+        // update visible input to the percent value to avoid confusion
+        const inp = row.querySelector('[data-field="value"]');
+        if (inp) inp.value = Math.round(percent * 100) / 100;
+      }
+    } catch (e) {
+      // ignore conversion errors
+    }
     const condition = parseConditionJsonText(row.querySelector('[data-field="conditionJson"]')?.value || "");
     return {
       key,
