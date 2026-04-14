@@ -4,6 +4,8 @@ const { ok } = require("../../shared/response");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
+const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
+const { isEffectConditionMet } = require("../../shared/effectEngine");
 
 // Track per-player battle cooldowns.
 // Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
@@ -11,6 +13,33 @@ const playerBattleCooldowns = new Map();
 
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
+
+  const buildJobSpecialDisplay = (progress) => {
+    const equipped = progress?.equipment || {};
+    const inventory = progress?.inventory || [];
+    const jobEq = equipped.job_eq || null;
+    if (!jobEq) {
+      return { jobName: null, activeSpecials: [], summary: "無（未裝備職業裝）" };
+    }
+    const refs = [
+      ...(Array.isArray(jobEq.passiveEffects) ? jobEq.passiveEffects : []),
+      ...(Array.isArray(jobEq.procEffects) ? jobEq.procEffects : []),
+      ...(Array.isArray(jobEq.combatEffects) ? jobEq.combatEffects : [])
+    ];
+    const context = { equipped, inventory };
+    const activeSpecials = refs
+      .filter((effect) => isEffectConditionMet(effect, context))
+      .map((effect) => {
+        const name = EFFECT_NAME_ZH[effect.key] || effect.definitionName || effect.key;
+        const value = Number(effect?.params?.value);
+        return Number.isFinite(value) ? `${name}(${value})` : name;
+      });
+    return {
+      jobName: jobEq.itemName || null,
+      activeSpecials,
+      summary: activeSpecials.length > 0 ? activeSpecials.join("、") : "目前無符合條件的啟用效果"
+    };
+  };
 
   const buildCombatZonesSnapshot = async (discordId = null) => {
     const keys = ["normal", "mid"];
@@ -190,7 +219,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           statusPoints: progress?.statusPoints || 0,
           playerTier: progress?.playerTier || "E",
           attributes: attrs,
-          equipment: progress?.equipment || {}
+          equipment: progress?.equipment || {},
+          jobSpecialDisplay: buildJobSpecialDisplay(progress)
         }
       }));
     } catch (err) {

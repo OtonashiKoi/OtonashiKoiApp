@@ -6,6 +6,8 @@ const { expToNextLevel, MAX_LEVEL } = require("../shared/progression");
 const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
 const { calcPlayerStats } = require("../shared/combatStats");
+const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
+const { isEffectConditionMet } = require("../shared/effectEngine");
 
 const AUTO_DELETE_MS = 60_000;
 const ACTIVE_REPLY_BY_USER = new Map();
@@ -152,7 +154,32 @@ async function handleProfile(interaction) {
         effectLineParts.unshift(`🔸 裝備特效：${weaponItem.weaponEffectDescription}`);
       }
     } catch (e) { /* ignore */ }
-    const effectLine = effectLineParts.length ? "\n" + effectLineParts.join("\n") : "";
+  const effectLine = effectLineParts.length ? "\n" + effectLineParts.join("\n") : "";
+
+  // ── 職業特別顯示 ──
+  const jobEq = equipped.job_eq || null;
+  let jobSpecialLine = "職業特性：無（未裝備職業裝）";
+  if (jobEq) {
+    const context = { equipped, inventory: p.inventory || [] };
+    const allJobEffects = [
+      ...(Array.isArray(jobEq.passiveEffects) ? jobEq.passiveEffects : []),
+      ...(Array.isArray(jobEq.procEffects) ? jobEq.procEffects : []),
+      ...(Array.isArray(jobEq.combatEffects) ? jobEq.combatEffects : [])
+    ];
+    const activeJobEffects = allJobEffects.filter((effect) => isEffectConditionMet(effect, context));
+    const toLabel = (effect) => {
+      const effectName = EFFECT_NAME_ZH[effect.key] || effect.definitionName || effect.key;
+      const value = Number(effect?.params?.value);
+      const valueText = Number.isFinite(value) ? `(${value})` : "";
+      return `${effectName}${valueText}`;
+    };
+    if (activeJobEffects.length > 0) {
+      jobSpecialLine = `職業特性：${jobEq.itemName}\n` +
+        `啟用中：${activeJobEffects.map(toLabel).join("、")}`;
+    } else {
+      jobSpecialLine = `職業特性：${jobEq.itemName}\n目前無符合條件的啟用效果`;
+    }
+  }
 
   // ── 裝備清單（只列有裝備的格子）──
   const SLOT_ICONS = {
@@ -184,6 +211,7 @@ async function handleProfile(interaction) {
     `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
     `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%　🟢 迴避: ${calcDodge}%` +
     effectLine + "\n" +
+    `${jobSpecialLine}\n` +
     equipLine + "\n" +
     `==============\n` +
     `【資產】\n` +
