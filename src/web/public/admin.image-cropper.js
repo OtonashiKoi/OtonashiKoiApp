@@ -33,29 +33,25 @@
     if (!canvas) { status.textContent = '取得裁切影像失敗'; return; }
 
     return new Promise((resolve, reject) => {
-      canvas.toBlob(async (blob) => {
-        if (!blob) { status.textContent = '轉換 Blob 失敗'; reject(); return; }
-        status.textContent = '上傳中...';
+      canvas.toBlob((blob) => {
+        if (!blob) { status.textContent = '轉換 Blob 失敗'; reject(new Error('no blob')); return; }
+        status.textContent = '準備傳回 input...';
         try {
-          const fd = new FormData();
-          fd.append('file', blob, 'cropped.jpg');
-          // include original input name so backend can associate
-          if (currentInput && currentInput.name) fd.append('fieldName', currentInput.name);
-          const res = await fetch(UPLOAD_URL, { method: 'POST', body: fd, credentials: 'same-origin' });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json && json.message ? json.message : 'upload failed');
-          status.textContent = '上傳完成';
-          // set dataset and dispatch event for callers
-          if (currentInput) {
-            currentInput.dataset.uploadedUrl = json.url || json.secure_url || json.resultUrl || '';
-            const ev = new CustomEvent('croppedupload', { detail: { url: currentInput.dataset.uploadedUrl, response: json } });
-            currentInput.dispatchEvent(ev);
-          }
-          setTimeout(hideModal, 700);
-          resolve(json);
+          // create a File and place it into the original input.files so existing handlers will upload it
+          const name = (currentInput && currentInput.files && currentInput.files[0] && currentInput.files[0].name) || 'cropped.jpg';
+          const file = new File([blob], name, { type: mime });
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(file);
+          currentInput.files = dataTransfer.files;
+          // dispatch native change so existing upload handlers run
+          const ev = new Event('change', { bubbles: true });
+          currentInput.dispatchEvent(ev);
+          status.textContent = '已放回 input，等待上傳';
+          setTimeout(hideModal, 500);
+          resolve({ ok: true });
         } catch (err) {
-          status.textContent = '上傳失敗';
-          console.error('upload error', err);
+          status.textContent = '操作失敗';
+          console.error('set input files error', err);
           reject(err);
         }
       }, mime, 0.9);
