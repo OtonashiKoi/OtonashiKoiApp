@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#09090b" />
     <title>Equipment Game Admin</title>
     <link rel="stylesheet" href="/static/admin.css?v=6" />
+    <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css" />
   </head>
   <body>
     <div class="game-window">
@@ -619,6 +620,35 @@
       </div>
     </div>
 
+    <!-- Image cropper modal and script -->
+    <div id="image-cropper-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1200;align-items:center;justify-content:center;">
+      <div style="background:#0b1020;padding:16px;border-radius:8px;max-width:900px;width:92%;box-shadow:0 6px 24px rgba(0,0,0,0.6);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong style="font-size:16px;">裁切圖片</strong>
+          <div>
+            <button id="cropper-cancel" class="button">取消</button>
+            <button id="cropper-confirm" class="button primary">上傳裁切</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start;">
+          <div style="flex:1;max-height:70vh;overflow:auto;">
+            <img id="cropper-image" style="max-width:100%;display:block;" />
+          </div>
+          <div style="width:220px;display:flex;flex-direction:column;gap:8px;">
+            <label><span>輸出寬度(px)</span><input id="cropper-width" type="number" value="400" class="sheet-input" /></label>
+            <label><span>輸出高度(px)</span><input id="cropper-height" type="number" value="400" class="sheet-input" /></label>
+            <label><span>格式</span>
+              <select id="cropper-format" class="sheet-input"><option value="image/jpeg">jpg</option><option value="image/png">png</option></select>
+            </label>
+            <div style="margin-top:auto;display:flex;gap:8px;align-items:center;">
+              <small id="cropper-status" class="hint">準備中</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.js"></script>
     <script src="/static/adminUtils.js?v=6"></script>
     <script src="/static/adminLayout.js?v=6"></script>
     <script src="/static/adminPlayers.js?v=6"></script>
@@ -636,5 +666,6 @@
     <script src="/static/admin.weekly.js?v=6"></script>
     <script src="/static/admin.items.js?v=6"></script>
     <script src="/static/admin.leaderboard.js?v=6"></script>
+    <script src="/static/admin.image-cropper.js?v=1"></script>
   </body>
 </html>
