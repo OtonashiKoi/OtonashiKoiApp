@@ -1,0 +1,11 @@
+{
+  "id": "路人_明子",
+  "zone": "normal",
+  "name": "路人·明子",
+  "message": "明子匆匆路過，但她的目光偶爾流露出好奇。",
+  "triggerMonsterSeq": null,
+  "durationSec": 30,
+  "priority": 40,
+  "enabled": true,
+  "npc": { "name": "路人·明子", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [ { "id": "start", "text": "明子停下腳步：『你看起來像能幫忙的人。』", "options": [ { "id": "opt_help", "label": "幫她一個忙（報酬不穩）", "npcReply": "謝謝你。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": 30 } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_drop_rate", "params": { "value": 1.05 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] }, { "id": "opt_trade", "label": "以D階+3主手武器交換職業裝備", "npcReply": "這交換有點奇怪，但行吧。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "any" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "dplus3_passerby_any", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_passerby_token", "enhanceLevel": 0 } } ] }, { "id": "opt_story", "label": "聽她的匆匆故事（效果難辨）", "npcReply": "曾在城裡看到奇景。", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_damage", "params": { "value": 0.9 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 1.2 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] } ] } ] }

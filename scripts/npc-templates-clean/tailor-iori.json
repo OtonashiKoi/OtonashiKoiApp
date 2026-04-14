@@ -1,0 +1,14 @@
+{
+  "id": "tailor-iori",
+  "title": "裁縫 伊織 (Iori)",
+  "nodes": [
+    {
+      "id": "start",
+      "text": "針線間有她的祕密配方。",
+      "options": [
+        { "id": "opt_buy", "label": "訂製布料（1200金）", "npcReply": "我會小心縫合。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1200 } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_drop_rate", "params": { "value": 1.03 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] },
+        { "id": "opt_trade", "label": "獲得裁縫徽章", "npcReply": "用心的手藝會被記住。", "nextNodeId": null, "effects": [ { "type": "grant_equipment", "payload": { "itemId": "job_swordsman_v1", "enhanceLevel": 0 } } ] }
+      ]
+    }
+  ]
+}

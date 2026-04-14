@@ -32,14 +32,14 @@ async function simulate() {
     return { name: p.name, attrs: p.attrs, stats, hp: stats.maxHp, totalDamage: 0, alive: true };
   });
 
-  let monsterHp = mCalc.maxHp;
+  let monsterHp = (typeof monster.maxHp === 'number' && !isNaN(monster.maxHp)) ? monster.maxHp : 100;
   const monsterStats = { atk: mCalc.atk, def: mCalc.def, dodge: mCalc.dodge, hit: mCalc.hit };
 
   console.log('Simulating battle vs monster:', monster.name);
   console.log('Monster calc:', mCalc);
   console.log('Players:'); statePlayers.forEach(p => console.log(` - ${p.name}:`, p.stats));
 
-  const MAX_ROUNDS = 30;
+  const MAX_ROUNDS = 15;
   const logs = [];
   for (let round=1; round<=MAX_ROUNDS; round++){
     logs.push(`=== Round ${round} ===`);

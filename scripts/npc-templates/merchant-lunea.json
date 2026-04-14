@@ -1,0 +1,11 @@
+{
+  "id": "行商_露奈亞_2",
+  "zone": "normal",
+  "name": "行商·露奈亞",
+  "message": "露奈亞帶著新一批貨色回來，她的嗓音仍舊溫柔。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "行商·露奈亞", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [ { "id": "start", "text": "露奈亞招呼：『來看看最新的貨。』", "options": [ { "id": "opt_buy_1", "label": "購買：短杖（1000金）", "npcReply": "小心魔力。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "d_lunea_staff_01", "enhanceLevel": 0 } } ] }, { "id": "opt_buy_2", "label": "購買：護胸（1500金）", "npcReply": "保護重要器官。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1500 } }, { "type": "grant_item", "payload": { "itemId": "c_lunea_chest_01" } } ] }, { "id": "opt_buy_3", "label": "購買：手套（1000金）", "npcReply": "很不錯的觸感。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_item", "payload": { "itemId": "d_lunea_gloves_01" } } ] }, { "id": "opt_buy_4", "label": "購買：披風（1500金）", "npcReply": "遮風擋雨。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1500 } }, { "type": "grant_item", "payload": { "itemId": "c_lunea_cloak_01" } } ] }, { "id": "opt_trade", "label": "以D階+3主手武器交換職業裝備", "npcReply": "交換已經備好。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "any" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "dplus3_lunea_any_main", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_merchant_lunea_tool", "enhanceLevel": 0 } } ] } ] } ] }

@@ -1,4 +1,4 @@
-const MAX_ROUNDS = 30;
+const MAX_ROUNDS = 15;
 
 function manhattan(a, b) {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);

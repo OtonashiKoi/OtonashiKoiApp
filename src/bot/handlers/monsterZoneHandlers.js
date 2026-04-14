@@ -3,7 +3,7 @@
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { calcPlayerStats } = require("../../shared/combatStats");
-const { isEffectConditionMet, collectEquipmentEffects } = require("../../shared/effectEngine");
+const { isEffectConditionMet, collectEquipmentEffects, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
 const activeSessions = new Map();
@@ -12,6 +12,8 @@ const activeSessions = new Map();
 // key: `${zoneKey}:${monsterSeq}`
 const killInProgress = new Set();
 const zoneEventTimers = new Map();
+// track last chosen candidate per zone to avoid immediate repeats
+const zoneLastChosen = new Map();
 
 const BTN = {
   enterBattle: "monster-zone:enter-battle",
@@ -19,7 +21,7 @@ const BTN = {
   deleteLog:   "monster-zone:delete-log"
 };
 
-const MAX_ROUNDS = 30;
+const MAX_ROUNDS = 15;
 const BATTLE_TIMEOUT_MS = 60 * 1000; // 1 分鐘未按開始戰鬥 → 視為逃跑
 const ROUNDS_PER_TICK = 1;           // 每次更新顯示幾回合
 const TICK_DELAY_MS = 1500;          // 每次更新間隔（ms）
@@ -376,7 +378,9 @@ async function _broadcastBossSpawn(sc, zoneKey, monster) {
 
     const zoneName = zoneKey === "mid" ? "中級戰鬥區" : "一般戰鬥區";
     const { EmbedBuilder } = require("discord.js");
-    const thumbUrl = monster.imageUrl?.startsWith("http") ? monster.imageUrl : null;
+    const thumbUrl = (monster.imageThumbnailUrl || monster.imageUrl || "").startsWith("http")
+      ? (monster.imageThumbnailUrl || monster.imageUrl)
+      : null;
     const embed = new EmbedBuilder()
       .setColor(0xff4444)
       .setTitle(`⚠️ BOSS 登場！`)
@@ -437,7 +441,6 @@ async function handleEnterBattle(interaction) {
     ]);
     await _resolveZoneEventIfExpired(sc, zoneKey);
     state = await sc.monsterService.getState(zoneKey);
-
     if (state?.activeEvent?.endsAt && Date.parse(state.activeEvent.endsAt) > Date.now()) {
       const remainSec = Math.max(1, Math.ceil((Date.parse(state.activeEvent.endsAt) - Date.now()) / 1000));
       await interaction.editReply({
@@ -679,6 +682,15 @@ async function handleStartFight(interaction) {
       embedColor = 0x888888;
       rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
       _republishPanel(sc, zoneKey, monster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
+    }
+
+    if (currentProg && Array.isArray(currentProg.activeEffects) && currentProg.activeEffects.length > 0) {
+      const nextActiveEffects = decrementActiveEffects(currentProg.activeEffects, "battle", 1);
+      if (nextActiveEffects.length !== currentProg.activeEffects.length) {
+        currentProg.activeEffects = nextActiveEffects;
+        currentProg.updatedAt = new Date().toISOString();
+        await sc.progressRepository.save(currentProg).catch(() => {});
+      }
     }
 
     // 戰鬥已結算，但先保留 session 至顯示完畢才刪除，避免期間重複出戰
@@ -1026,57 +1038,172 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
   const nextMonster = pickWeightedNextMonster(allMonsters, monster.id);
-  const matchedEvent = await sc.monsterEventService.pickEventForTransition({
-    zone: zoneKey,
-    defeatedMonsterSeq: monster.seq
-  }).catch(() => null);
+  const npcMappingsSource = Array.isArray(freshState.npcMappings) ? freshState.npcMappings : [];
+  const allEvents = npcMappingsSource.length
+    ? await sc.monsterEventService.listEvents({ zone: zoneKey, includeDisabled: true }).catch(() => [])
+    : [];
+  const mappingPool = [];
+  for (const [index, mp] of npcMappingsSource.entries()) {
+    if (mp.triggerMonsterSeq != null && Number(mp.triggerMonsterSeq) !== Number(monster.seq)) continue;
+    const tpl = allEvents.find((e) => e.id === mp.eventId) || null;
+    if (!tpl) continue;
+    mappingPool.push({
+      id: mp.eventId || null,
+      chance: Number(mp.chance) || 0,
+      order: Number.isFinite(Number(mp.order)) ? Number(mp.order) : index,
+      triggerMonsterSeq: mp.triggerMonsterSeq == null ? null : Number(mp.triggerMonsterSeq),
+      template: tpl
+    });
+  }
 
-  if (matchedEvent && nextMonster) {
-    const startedAt = new Date().toISOString();
-    const endsAt = new Date(Date.now() + (matchedEvent.durationSec || 12) * 1000).toISOString();
-    const eventState = {
-      ...freshState,
-      killCount: newKillCount,
-      participants: [],
-      damageMap: {},
-      killClaimedSeq: null,
-      currentHp: 0,
-      activeEvent: {
-        id: matchedEvent.id,
-        name: matchedEvent.name,
-        message: matchedEvent.message,
-        startedAt,
-        endsAt,
-        pendingMonsterSeq: nextMonster.seq,
-        // 保留 nodes 與 npc 以便在面板與互動處理時使用
-        nodes: matchedEvent.nodes || [],
-        npc: matchedEvent.npc || null
+  if (mappingPool.length > 0) {
+    const sortedNpcPool = mappingPool.sort((a, b) => a.order - b.order);
+    const lastChosen = zoneLastChosen.get(zoneKey) || null;
+    let monsterPool = allMonsters.filter((m) => m.id !== monster.id || allMonsters.length === 1);
+    let eventPool = sortedNpcPool;
+    const monsterWeights = monsterPool.map((m) => Number(m.spawnRate) || 10);
+    if (lastChosen) {
+      const lastType = lastChosen.type;
+      const lastId = lastChosen.id;
+      const filteredMonsterPool = monsterPool.filter((m) => !(lastType === "monster" && m.id === lastId));
+      const filteredEventPool = eventPool.filter((e) => !(lastType === "event" && e.id === lastId));
+      if (filteredMonsterPool.length || filteredEventPool.length) {
+        monsterPool = filteredMonsterPool.length ? filteredMonsterPool : monsterPool;
+        eventPool = filteredEventPool.length ? filteredEventPool : eventPool;
       }
-    };
-    await sc.monsterService.saveState(eventState, zoneKey);
-    _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch(() => {});
-    _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
-  } else {
-    const newState = {
-      ...freshState,
-      currentHp: nextMonster ? nextMonster.calc.maxHp : 0,
-      activeMonsterSeq: nextMonster ? nextMonster.seq : freshState.activeMonsterSeq,
-      killCount: newKillCount,
-      participants: [],
-      damageMap: {},
-      killClaimedSeq: null,
-      activeEvent: null
-    };
-    await sc.monsterService.saveState(newState, zoneKey);
-
-    if (nextMonster) {
-      _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}).catch(() => {});
-      if (nextMonster.isBoss) {
-        console.log(`[BOSS] next monster "${nextMonster.name}" is a boss, broadcasting...`);
-        _broadcastBossSpawn(sc, zoneKey, nextMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
-      }
+    }
+    const eventWeights = eventPool.map((e) => Number(e.chance) || 0);
+    const totalMonsterWeight = monsterWeights.reduce((s, v) => s + v, 0);
+    const totalEventWeight = eventWeights.reduce((s, v) => s + v, 0);
+    const totalWeight = totalMonsterWeight + totalEventWeight;
+    let chosenEvent = null;
+    let chosenMonster = null;
+    if (totalWeight <= 0) {
+      chosenMonster = nextMonster;
     } else {
-      _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch(() => {});
+      let r = Math.random() * totalWeight;
+      for (let i = 0; i < monsterPool.length; i++) {
+        r -= monsterWeights[i] || 0;
+        if (r <= 0) {
+          chosenMonster = monsterPool[i];
+          break;
+        }
+      }
+      if (!chosenMonster) {
+        for (let j = 0; j < eventPool.length; j++) {
+          r -= eventWeights[j] || 0;
+          if (r <= 0) {
+            chosenEvent = eventPool[j];
+            break;
+          }
+        }
+      }
+    }
+
+    if (chosenEvent) {
+      zoneLastChosen.set(zoneKey, { type: "event", id: chosenEvent.id });
+      const pendingMonster = nextMonster;
+      const tpl = chosenEvent.template || null;
+      const startedAt = new Date().toISOString();
+      const endsAt = new Date(Date.now() + ((tpl && tpl.durationSec) || 12) * 1000).toISOString();
+      const eventState = {
+        ...freshState,
+        killCount: newKillCount,
+        participants: [],
+        damageMap: {},
+        killClaimedSeq: null,
+        currentHp: 0,
+        activeEvent: {
+          id: chosenEvent.id,
+          name: tpl ? tpl.name : chosenEvent.id,
+          message: tpl ? tpl.message : null,
+          startedAt,
+          endsAt,
+          pendingMonsterSeq: pendingMonster ? pendingMonster.seq : null,
+          nodes: (tpl && tpl.nodes) || [],
+          npc: (tpl && tpl.npc) || null
+        }
+      };
+      await sc.monsterService.saveState(eventState, zoneKey);
+      _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch(() => {});
+      _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
+    } else {
+      const pickedMonster = chosenMonster || nextMonster;
+      zoneLastChosen.set(zoneKey, { type: "monster", id: pickedMonster?.id || monster.id });
+      const newState = {
+        ...freshState,
+        currentHp: pickedMonster ? pickedMonster.calc.maxHp : 0,
+        activeMonsterSeq: pickedMonster ? pickedMonster.seq : freshState.activeMonsterSeq,
+        killCount: newKillCount,
+        participants: [],
+        damageMap: {},
+        killClaimedSeq: null,
+        activeEvent: null
+      };
+      await sc.monsterService.saveState(newState, zoneKey);
+
+      if (pickedMonster) {
+        _republishPanel(sc, zoneKey, pickedMonster, pickedMonster.calc.maxHp, 0, {}).catch(() => {});
+        if (pickedMonster.isBoss) {
+          console.log(`[BOSS] next monster "${pickedMonster.name}" is a boss, broadcasting...`);
+          _broadcastBossSpawn(sc, zoneKey, pickedMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
+        }
+      } else {
+        _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch(() => {});
+      }
+    }
+  } else {
+    const matchedEvent = await sc.monsterEventService.pickEventForTransition({
+      zone: zoneKey,
+      defeatedMonsterSeq: monster.seq
+    }).catch(() => null);
+    if (matchedEvent && nextMonster) {
+      const startedAt = new Date().toISOString();
+      const endsAt = new Date(Date.now() + (matchedEvent.durationSec || 12) * 1000).toISOString();
+      const eventState = {
+        ...freshState,
+        killCount: newKillCount,
+        participants: [],
+        damageMap: {},
+        killClaimedSeq: null,
+        currentHp: 0,
+        activeEvent: {
+          id: matchedEvent.id,
+          name: matchedEvent.name,
+          message: matchedEvent.message,
+          startedAt,
+          endsAt,
+          pendingMonsterSeq: nextMonster.seq,
+          // 保留 nodes 與 npc 以便在面板與互動處理時使用
+          nodes: matchedEvent.nodes || [],
+          npc: matchedEvent.npc || null
+        }
+      };
+      await sc.monsterService.saveState(eventState, zoneKey);
+      _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch(() => {});
+      _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
+    } else {
+      const newState = {
+        ...freshState,
+        currentHp: nextMonster ? nextMonster.calc.maxHp : 0,
+        activeMonsterSeq: nextMonster ? nextMonster.seq : freshState.activeMonsterSeq,
+        killCount: newKillCount,
+        participants: [],
+        damageMap: {},
+        killClaimedSeq: null,
+        activeEvent: null
+      };
+      await sc.monsterService.saveState(newState, zoneKey);
+
+      if (nextMonster) {
+        _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}).catch(() => {});
+        if (nextMonster.isBoss) {
+          console.log(`[BOSS] next monster "${nextMonster.name}" is a boss, broadcasting...`);
+          _broadcastBossSpawn(sc, zoneKey, nextMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
+        }
+      } else {
+        _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch(() => {});
+      }
     }
   }
 
@@ -1136,7 +1263,7 @@ function isMonsterEventButton(customId) {
 
 // 處理玩家在事件面板上點選某個選項
 async function handleMonsterEventChoice(interaction) {
-  await interaction.deferReply({ ephemeral: true }).catch(() => {});
+  await interaction.deferReply({ flags: 64 }).catch(() => {});
   const sc = getServiceContext();
   const parts = String(interaction.customId || "").split(":");
   if (parts.length < 4) {
@@ -1186,14 +1313,23 @@ async function handleMonsterEventChoice(interaction) {
   }
 
   // 檢查玩家進度與錢包
-  const progress = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+  let progress = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
   const wallet = await sc.walletRepository.findByPlayerId(discordId).catch(() => ({ gold: 0, diamond: 0 }));
   const effectContext = { equipped: progress?.equipment || {}, inventory: Array.isArray(progress?.inventory) ? progress.inventory : [] };
+  const optionEffects = Array.isArray(option.effects) ? option.effects : [];
+
+  // 檢查選項層級的條件（例如 option.condition），若不符合則阻擋選擇
+  if (option.condition && !isEffectConditionMet({ condition: option.condition }, effectContext)) {
+    await interaction.editReply({ content: "你不符合該選項的條件，無法選擇。" }).catch(() => {});
+    return;
+  }
 
   // 驗證條件與計算總成本
   let totalGoldCost = 0;
   let totalDiamondCost = 0;
-  for (const eff of option.effects || []) {
+  // 檢查需移除的道具需求（take_item）
+  const takeItemRequirements = [];
+  for (const eff of optionEffects) {
     if (eff.type === "grant_currency") {
       const amt = Number(eff.payload?.amount || 0);
       const currency = eff.payload?.currencyType || "gold";
@@ -1208,6 +1344,24 @@ async function handleMonsterEventChoice(interaction) {
     }
   }
 
+  // 處理 take_item 需求檢查（確保玩家有該道具且強化等級足夠）
+  for (const eff of optionEffects) {
+    if (eff.type === 'take_item') {
+      const wantId = eff.payload?.itemId;
+      const wantEnh = Number(eff.payload?.enhanceLevel || 0);
+      if (!wantId) continue;
+      const inv = Array.isArray(progress?.inventory) ? progress.inventory : [];
+      const found = inv.find(it => (String(it.itemId || it.id) === String(wantId) || String(it.itemName || '').includes(wantId)) && (Number(it.enhanceLevel || it.enhance || 0) >= wantEnh));
+      if (!found) {
+        const itemObj = await sc.itemService.getItemById(wantId).catch(() => null);
+        const displayName = itemObj ? itemObj.name : wantId;
+        await interaction.editReply({ content: `你沒有我所需的 ${displayName}` }).catch(() => {});
+        return;
+      }
+      takeItemRequirements.push({ wantId, wantEnh });
+    }
+  }
+
   if ((wallet?.gold || 0) < totalGoldCost) {
     await interaction.editReply({ content: "金幣不足，無法選擇此選項。" }).catch(() => {});
     return;
@@ -1217,9 +1371,37 @@ async function handleMonsterEventChoice(interaction) {
     return;
   }
 
-  // 執行 effects（簡單處理：支援 grant_currency 與 grant_item / grant_equipment）
+  // 執行 effects（支援 grant_currency / grant_item / grant_equipment / grant_buff）
   const results = [];
-  for (const eff of option.effects || []) {
+  const hasBuffEffect = optionEffects.some((eff) => eff.type === "grant_buff" && eff?.payload?.effect?.key);
+  if (hasBuffEffect && !progress) {
+    await sc.playerService.ensurePlayer(discordId, interaction.member?.displayName || interaction.user.username || discordId).catch(() => {});
+    progress = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+  }
+  for (const eff of optionEffects) {
+    // 支援移除道具（交換）
+    if (eff.type === 'take_item') {
+      const wantId = eff.payload?.itemId;
+      const wantEnh = Number(eff.payload?.enhanceLevel || 0);
+      let prog = progress;
+      if (!prog) {
+        await sc.playerService.ensurePlayer(discordId, interaction.member?.displayName || interaction.user.username || discordId).catch(() => {});
+        prog = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+      }
+      if (!Array.isArray(prog.inventory)) prog.inventory = [];
+      const idx = prog.inventory.findIndex(it => (String(it.itemId || it.id) === String(wantId) || String(it.itemName || '').includes(wantId)) && (Number(it.enhanceLevel || it.enhance || 0) >= wantEnh));
+      if (idx === -1) {
+        const itemObj = await sc.itemService.getItemById(wantId).catch(() => null);
+        const displayName = itemObj ? itemObj.name : wantId;
+        results.push(`你沒有我所需的 ${displayName}`);
+      } else {
+        const removed = prog.inventory.splice(idx, 1)[0];
+        prog.updatedAt = new Date().toISOString();
+        await sc.progressRepository.save(prog).catch(() => {});
+        results.push(`已移除 ${removed.itemName || removed.itemId || wantId}`);
+      }
+      continue;
+    }
     if (eff.type === "grant_currency") {
       try {
         await sc.rewardService.grantCurrency({
@@ -1260,11 +1442,32 @@ async function handleMonsterEventChoice(interaction) {
         equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
         weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
         atkStat: item.atkStat || null, tier: item.tier || null,
+        enhanceLevel: Number(eff.payload?.enhanceLevel || 0),
         purchasedAt: new Date().toISOString()
       });
       prog.updatedAt = new Date().toISOString();
       await sc.progressRepository.save(prog).catch(() => {});
       results.push(`獲得 ${item.name}`);
+    } else if (eff.type === "grant_buff") {
+      const buffEffect = eff?.payload?.effect;
+      if (!buffEffect || !buffEffect.key) {
+        results.push("Buff 效果未設定");
+        continue;
+      }
+      if (!progress) {
+        results.push(`Buff ${buffEffect.key} 無法套用（找不到玩家進度）`);
+        continue;
+      }
+      if (!Array.isArray(progress.activeEffects)) progress.activeEffects = [];
+      progress.activeEffects = applyEffectInstances(
+        progress.activeEffects,
+        [buffEffect],
+        { sourceType: "npc_event", sourceId: eventId || optionId },
+        effectContext
+      );
+      progress.updatedAt = new Date().toISOString();
+      await sc.progressRepository.save(progress).catch(() => {});
+      results.push(`獲得 Buff ${buffEffect.key}`);
     } else {
       results.push(`效果 ${eff.type || 'unknown'} 未實作`);
     }
@@ -1279,6 +1482,65 @@ async function handleMonsterEventChoice(interaction) {
   if (option.npcReply) replyLines.push(option.npcReply);
   if (results.length) replyLines.push(`已執行：${results.join('，')}`);
   await interaction.editReply({ content: replyLines.join('\n') || '已選擇', flags: MessageFlags.Ephemeral }).catch(() => {});
+}
+
+// 判斷是否為顯示個人化選項按鈕（customId 範例："monster-event:personal:<eventId>")
+function isMonsterEventPersonalButton(customId) {
+  return String(customId || "").startsWith("monster-event:personal:");
+}
+
+// 處理玩家要求顯示個人化選項（回覆 ephemeral 面板）
+async function handleMonsterEventPersonal(interaction) {
+  await interaction.deferReply({ flags: 64 }).catch(() => {});
+  const sc = getServiceContext();
+  const parts = String(interaction.customId || "").split(":");
+  if (parts.length < 3) {
+    await interaction.editReply({ content: "無效的操作。" }).catch(() => {});
+    return;
+  }
+  const eventId = parts[2];
+
+  // 判斷 zoneKey 如同選項處理
+  const layout = await sc.channelLayoutRepository.get().catch(() => ({}));
+  const bindings = layout?.discord?.bindings || [];
+  let binding = bindings.find((b) => String(b.panelMessageId || "") === String(interaction.message?.id || "") && b.featureKey && b.featureKey.startsWith("monster_zone"));
+  if (!binding) {
+    binding = bindings.find((b) => String(b.channelId || "") === String(interaction.channelId || "") && b.featureKey && b.featureKey.startsWith("monster_zone"));
+  }
+  const zoneKey = binding && binding.featureKey === "monster_zone_mid" ? "mid" : "normal";
+
+  const state = await sc.monsterService.getState(zoneKey).catch(() => null);
+  const ae = state?.activeEvent;
+  if (!ae || ae.id !== eventId) {
+    await interaction.editReply({ content: "事件已結束或不可互動。" }).catch(() => {});
+    return;
+  }
+
+  // 取得完整事件
+  let fullEvent = ae;
+  if (!Array.isArray(ae.nodes) || !ae.nodes.length) {
+    try { fullEvent = await sc.monsterEventService.getEventById(eventId); } catch (_) { fullEvent = ae; }
+  }
+
+  // 取得玩家進度以建 viewerContext
+  const discordId = interaction.user.id;
+  const progress = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+  const viewerContext = { equipped: progress?.equipment || {}, inventory: Array.isArray(progress?.inventory) ? progress.inventory : [] };
+
+  // 使用 createEventPanelMessage 產生個人化面板內容（只會包含符合條件的選項）
+  const { createEventPanelMessage } = require("../bot/monsterZoneView");
+  const zoneTheme = zoneKey === "mid"
+    ? { label: "中級區", color: 0x7c3aed, emoji: "✦", tagline: "危險上升，獵物更強。" }
+    : { label: "初級區", color: 0xe74c3c, emoji: "◆", tagline: "新手試煉，準備開打。" };
+
+  try {
+    const panel = await createEventPanelMessage(ae, zoneTheme, zoneKey, { viewerContext });
+    await interaction.editReply(panel).catch(async () => {
+      await interaction.editReply({ content: '顯示個人化選項失敗' }).catch(() => {});
+    });
+  } catch (e) {
+    await interaction.editReply({ content: '顯示個人化選項失敗' }).catch(() => {});
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -1381,7 +1643,9 @@ module.exports = {
   handleMonsterZoneButton,
   isMonsterZoneButton,
   isMonsterEventButton,
+  isMonsterEventPersonalButton,
   handleMonsterEventChoice,
+  handleMonsterEventPersonal,
   handleMonsterKill,
   _republishPanel,
   MAX_ROUNDS,

@@ -1,0 +1,14 @@
+{
+  "id": "priest-mika",
+  "title": "祭司 美佳 (Mika)",
+  "nodes": [
+    {
+      "id": "start",
+      "text": "她的祈禱像清晨的鐘聲。",
+      "options": [
+        { "id": "opt_listen", "label": "聽神話", "npcReply": "古老的故事會保佑你。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": 20 } } ] },
+        { "id": "opt_trade", "label": "獲得聖職徽章", "npcReply": "願光明同在。", "nextNodeId": null, "effects": [ { "type": "grant_equipment", "payload": { "itemId": "job_healer_v1", "enhanceLevel": 0 } } ] }
+      ]
+    }
+  ]
+}

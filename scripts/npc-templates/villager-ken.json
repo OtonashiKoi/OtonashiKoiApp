@@ -1,0 +1,11 @@
+{
+  "id": "村民_健次",
+  "zone": "village",
+  "name": "村民·健次",
+  "message": "健次是村裡的工匠，話不多但手藝精湛。",
+  "triggerMonsterSeq": null,
+  "durationSec": 36,
+  "priority": 42,
+  "enabled": true,
+  "npc": { "name": "村民·健次", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [ { "id": "start", "text": "健次抬頭：『要看看我做的東西嗎？』", "options": [ { "id": "opt_buy", "label": "買他的手工小物（200金）", "npcReply": "感謝。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -200 } }, { "type": "grant_item", "payload": { "itemId": "d_handmade_01" } } ] }, { "id": "opt_help", "label": "幫他運送材料（獎勵不確定）", "npcReply": "幫大忙了。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": 60 } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 1.1 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] }, { "id": "opt_trade", "label": "以D階+3主手武器交換職業裝備", "npcReply": "這把武器能幫我開田間。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "any" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "dplus3_villager_any", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_villager_tool", "enhanceLevel": 0 } } ] } ] } ] }

@@ -1,0 +1,14 @@
+{
+  "id": "villager-tomo",
+  "title": "村民 友望 (Tomo)",
+  "nodes": [
+    {
+      "id": "start",
+      "text": "他低頭看著舊布：『祖母留下的。』",
+      "options": [
+        { "id": "opt_sell", "label": "購買織物（200金）", "npcReply": "謝謝支持。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -200 } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 1.15 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] },
+        { "id": "opt_trade", "label": "接受村民徽章", "npcReply": "小物能帶來大用。", "nextNodeId": null, "effects": [ { "type": "grant_equipment", "payload": { "itemId": "job_warrior_v1", "enhanceLevel": 0 } } ] }
+      ]
+    }
+  ]
+}

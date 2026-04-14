@@ -1,0 +1,11 @@
+{
+  "id": "獵人_龍",
+  "zone": "wild",
+  "name": "獵人·龍",
+  "message": "龍穿著獵裝，眼神銳利如同山間鷹隼。",
+  "triggerMonsterSeq": null,
+  "durationSec": 50,
+  "priority": 53,
+  "enabled": true,
+  "npc": { "name": "獵人·龍", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [ { "id": "start", "text": "龍低聲：『野外收穫，有時會帶來驚喜。』", "options": [ { "id": "opt_tip", "label": "聽取狩獵秘訣", "npcReply": "明察秋毫。", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_drop_rate", "params": { "value": 1.12 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] }, { "id": "opt_buy", "label": "購買獵弓（1000金）", "npcReply": "打獵用這個最順手。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "d_hunting_bow_01", "enhanceLevel": 0 } } ] }, { "id": "opt_trade", "label": "以D階+3弓交換職業裝備", "npcReply": "交換好了。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "bow" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "dplus3_bow_main", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_hunter_tool", "enhanceLevel": 0 } } ] }, { "id": "opt_risk", "label": "接受他的試探（結果難測）", "npcReply": "你會懂的。", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_damage", "params": { "value": 0.7 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 1.3 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] } ] } ] }

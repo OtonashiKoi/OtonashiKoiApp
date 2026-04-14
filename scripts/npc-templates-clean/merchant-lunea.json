@@ -1,0 +1,14 @@
+{
+  "id": "merchant-lunea",
+  "title": "商人 露妮亞 (Lunea)",
+  "nodes": [
+    {
+      "id": "start",
+      "text": "她的櫃檯擺著旅人需求與少許幻想。",
+      "options": [
+        { "id": "opt_buy_1", "label": "買小物（1500金）", "npcReply": "保管得好就值這價。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1500 } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 1.06 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] },
+        { "id": "opt_trade", "label": "交換商隊徽章", "npcReply": "交易完成。", "nextNodeId": null, "effects": [ { "type": "grant_equipment", "payload": { "itemId": "job_swordsman_v1", "enhanceLevel": 0 } } ] }
+      ]
+    }
+  ]
+}

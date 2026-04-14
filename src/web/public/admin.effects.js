@@ -45,6 +45,7 @@
     ["grant_currency", "發放貨幣"],
     ["grant_item", "發放道具"],
     ["grant_equipment", "發放裝備"],
+    ["take_item", "消耗道具（交換）"],
     ["grant_temporary_quest", "發放限時任務"],
     ["grant_buff", "給予 Buff"]
   ];
@@ -108,6 +109,11 @@
     damage_to_heal: "受傷轉治療",
     on_hit_heal: "命中回血",
     on_crit_heal: "暴擊回血",
+    combo_up: "連擊率提升",
+    stun_chance_up: "擊暈機率提升",
+    counter_on_dodge: "迴避後反擊",
+    proc_weak_spot: "弱點打擊",
+    party_damage_up: "隊伍傷害提升",
     bonus_vs_boss: "對 Boss 增傷",
     bonus_vs_poisoned: "對中毒目標增傷",
     bonus_vs_burning: "對燃燒目標增傷",
@@ -801,6 +807,7 @@
       if (data.type === "grant_currency") return `發放 ${data.payload.currencyType || "gold"} x ${data.payload.amount || 0}`;
       if (data.type === "grant_item") return `發放道具 ${data.payload.itemId || "未選擇"} x ${data.payload.amount || 1}`;
       if (data.type === "grant_equipment") return `發放裝備 ${data.payload.itemId || "未選擇"} +${data.payload.enhanceLevel || 0}`;
+      if (data.type === "take_item") return `消耗道具 ${data.payload.itemId || "未選擇"} +${data.payload.enhanceLevel || 0}`;
       if (data.type === "grant_temporary_quest") return `發放任務 ${data.payload.questId || "未選擇"}（${data.payload.expiresInSec || 0} 秒）`;
       if (data.type === "grant_buff") return describeEffect(data?.payload?.effect || {});
       return data.type;
@@ -820,6 +827,13 @@
           <div style="display:grid;grid-template-columns:1fr 120px 120px;gap:8px;">
             <select class="sheet-input" data-field="itemId">${itemSelect}</select>
             <input class="sheet-input" data-field="amount" type="number" min="1" value="${Number(payload.amount) || 1}" />
+            <input class="sheet-input" data-field="enhanceLevel" type="number" min="0" value="${Number(payload.enhanceLevel) || 0}" />
+          </div>`;
+      } else if (currentType === "take_item") {
+        const itemSelect = optionHtml((itemOptions || []).map((item) => [item.id, item.name]), payload.itemId || "", "請選擇道具");
+        fields.innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;">
+            <select class="sheet-input" data-field="itemId">${itemSelect}</select>
             <input class="sheet-input" data-field="enhanceLevel" type="number" min="0" value="${Number(payload.enhanceLevel) || 0}" />
           </div>`;
       } else if (currentType === "grant_temporary_quest") {
@@ -876,6 +890,15 @@
           }
         };
       }
+      if (currentType === "take_item") {
+        return {
+          type: currentType,
+          payload: {
+            itemId: row.querySelector('[data-field="itemId"]').value || "",
+            enhanceLevel: Math.max(0, Number(row.querySelector('[data-field="enhanceLevel"]').value) || 0)
+          }
+        };
+      }
       if (currentType === "grant_temporary_quest") {
         return {
           type: currentType,
@@ -911,6 +934,7 @@
     const labels = (Array.isArray(list) ? list : []).slice(0, 3).map((entry) => {
       if (entry.type === "grant_currency") return "貨幣";
       if (entry.type === "grant_item") return "道具";
+      if (entry.type === "take_item") return "消耗道具";
       if (entry.type === "grant_equipment") return "裝備";
       if (entry.type === "grant_temporary_quest") return "任務";
       if (entry.type === "grant_buff") return getEffectLabel(entry?.payload?.effect?.key) || "Buff";
@@ -919,6 +943,55 @@
     if (!labels.length) return "未設定";
     return labels.join("、") + ((list.length || 0) > 3 ? ` 等 ${list.length} 項` : "");
   }
+
+  // --- NPC 分類功能 -------------------------------------------------------
+  const NPC_CATEGORIES = [
+    { key: 'grant_buff', label: '給予 Buff' },
+    { key: 'grant_currency', label: '發放貨幣' },
+    { key: 'grant_item', label: '發放道具' },
+    { key: 'grant_equipment', label: '發放裝備' },
+    { key: 'take_item', label: '消耗道具（交換）' },
+    { key: 'grant_temporary_quest', label: '發放限時任務' }
+  ];
+
+  function classifyNpcEffects(effects) {
+    const found = new Set();
+    (Array.isArray(effects) ? effects : []).forEach((e) => {
+      if (!e || !e.type) return;
+      // map direct types
+      if (NPC_CATEGORIES.some((c) => c.key === e.type)) {
+        found.add(e.type);
+        return;
+      }
+      // grant_buff can appear as payload.effect when type is grant_buff
+      if (e.type === 'grant_buff') found.add('grant_buff');
+    });
+    return [...found];
+  }
+
+  function classifyNpcEvent(event) {
+    const found = new Set();
+    if (!event || !Array.isArray(event.nodes)) return [];
+    event.nodes.forEach((node) => {
+      if (!node || !Array.isArray(node.options)) return;
+      node.options.forEach((opt) => {
+        if (!opt) return;
+        const effects = opt.effects || [];
+        classifyNpcEffects(effects).forEach((k) => found.add(k));
+      });
+    });
+    return [...found];
+  }
+
+  function buildCategoryTagsFromKeys(keys) {
+    if (!Array.isArray(keys) || !keys.length) return '';
+    const labels = keys.map((k) => {
+      const cat = NPC_CATEGORIES.find((c) => c.key === k);
+      return cat ? `<span class="mode-chip" style="margin-right:6px;">${esc(cat.label)}</span>` : '';
+    }).filter(Boolean);
+    return labels.join(' ');
+  }
+
 
   function openNpcOptionEditor(initialValue, onSave) {
     openModal("NPC 選項效果", (body) => {
@@ -932,6 +1005,11 @@
         <div class="npc-effect-list" style="display:grid;gap:8px;"></div>
       `;
       body.appendChild(section);
+      // 顯示分類標籤（根據 initialValue）
+      const categoryBar = document.createElement('div');
+      categoryBar.style.cssText = 'margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+      categoryBar.innerHTML = `<strong>分類：</strong><span class="npc-category-tags">${buildCategoryTagsFromKeys(classifyNpcEvent(initialValue).map(k=>k))}</span>`;
+      body.insertBefore(categoryBar, section);
       const list = section.querySelector(".npc-effect-list");
       (Array.isArray(initialValue) ? initialValue : []).forEach((entry) => list.appendChild(buildNpcEffectRow(entry)));
       if (!list.children.length) {
@@ -940,6 +1018,14 @@
         empty.textContent = "尚未設定效果";
         list.appendChild(empty);
       }
+      // 當效果變動時更新分類標籤
+      function refreshCategoryTags() {
+        const effects = [...list.querySelectorAll('.npc-effect-row')].map(r => r._read()).filter(Boolean);
+        const keys = classifyNpcEffects(effects);
+        categoryBar.querySelector('.npc-category-tags').innerHTML = buildCategoryTagsFromKeys(keys);
+      }
+      list.addEventListener('input', refreshCategoryTags);
+      list.addEventListener('change', refreshCategoryTags);
       section.querySelector('[data-role="add-npc-effect"]').onclick = () => {
         list.querySelector(".npc-effect-empty")?.remove();
         list.appendChild(buildNpcEffectRow(null));
@@ -984,6 +1070,8 @@
     summarizeItemDraft,
     summarizeMonsterDraft,
     summarizeNpcEffects,
+    classifyNpcEffects,
+    classifyNpcEvent,
     openItemEditor,
     openMonsterEditor,
     openNpcOptionEditor

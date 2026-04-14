@@ -424,7 +424,10 @@
                   <p class="section-kicker">Combat</p>
                   <h2>怪物管理（即時控制 + 資料庫）</h2>
                 </div>
-                <button id="monsters-btn-new" class="button primary">＋ 新增怪物</button>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <button id="monsters-btn-new" class="button primary">＋ 新增怪物</button>
+                  <button id="monsters-btn-new-npc" class="button">＋ 新增 NPC</button>
+                </div>
               </div>
               <div id="monsters-state-area" class="access-card" style="margin-bottom:24px;border-color:var(--accent);background:var(--accent-light);">
                 <p class="hint" style="color:var(--text);margin:0;font-weight:600;">載入即時狀態中...</p>
@@ -449,6 +452,15 @@
                 <div class="actions" style="display:flex;gap:10px;">
                   <button id="monster-events-refresh-btn" class="button">重新載入</button>
                   <button id="monster-events-add-btn" class="button primary">新增模板</button>
+                  <select id="monster-events-filter" class="sheet-input" style="min-width:180px;">
+                    <option value="all">篩選：全部類別</option>
+                    <option value="grant_buff">給予 Buff</option>
+                    <option value="grant_currency">發放貨幣</option>
+                    <option value="grant_item">發放道具</option>
+                    <option value="grant_equipment">發放裝備</option>
+                    <option value="take_item">消耗道具（交換）</option>
+                    <option value="grant_temporary_quest">發放限時任務</option>
+                  </select>
                 </div>
               </div>
               <input type="file" id="monster-events-npc-img-input" accept="image/*" style="display:none;" />

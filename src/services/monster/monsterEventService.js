@@ -36,7 +36,8 @@ function normalizeOption(raw = {}, idx = 0) {
   const npcReply = String(raw.npcReply || "").trim();
   const nextNodeId = raw.nextNodeId == null || raw.nextNodeId === "" ? null : String(raw.nextNodeId);
   const effects = Array.isArray(raw.effects) ? raw.effects.map(normalizeEffect) : [];
-  return { id, label, npcReply, nextNodeId, effects };
+  const condition = raw.condition && typeof raw.condition === 'object' ? raw.condition : undefined;
+  return { id, label, npcReply, nextNodeId, effects, condition };
 }
 
 function normalizeNode(raw = {}, idx = 0) {
@@ -139,7 +140,20 @@ class MonsterEventService {
 
   async pickEventForTransition({ zone, defeatedMonsterSeq }) {
     const candidates = await this.listEvents({ zone, includeDisabled: false });
-    return candidates.find((event) => event.triggerMonsterSeq == null || event.triggerMonsterSeq === Number(defeatedMonsterSeq)) || null;
+    const pool = (candidates || []).filter((event) => event.triggerMonsterSeq == null || event.triggerMonsterSeq === Number(defeatedMonsterSeq));
+    if (!pool.length) return null;
+    // Use `chance` as a weight similar to monsters' `spawnRate`.
+    const total = pool.reduce((s, e) => s + (Number(e.chance) || 0), 0);
+    if (total <= 0) {
+      // fallback: return first match
+      return pool[0] || null;
+    }
+    let r = Math.random() * total;
+    for (const e of pool) {
+      r -= (Number(e.chance) || 0);
+      if (r <= 0) return e;
+    }
+    return pool[pool.length - 1] || null;
   }
 
   _normalizeStoredEvent(row = {}) {

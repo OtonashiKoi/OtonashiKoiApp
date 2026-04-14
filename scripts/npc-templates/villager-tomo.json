@@ -1,0 +1,11 @@
+{
+  "id": "村民_友望",
+  "zone": "village",
+  "name": "村民·友望",
+  "message": "友望在村口篝火旁織布，雙手靈巧且充滿故事。",
+  "triggerMonsterSeq": null,
+  "durationSec": 35,
+  "priority": 42,
+  "enabled": true,
+  "npc": { "name": "村民·友望", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [ { "id": "start", "text": "友望抬頭：『這布是祖母留下來的。』", "options": [ { "id": "opt_listen", "label": "聽他的家族傳說", "npcReply": "曾有人在此見到幽光。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": 10 } } ] }, { "id": "opt_sell", "label": "購買織物（200金）", "npcReply": "謝謝支持。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -200 } }, { "type": "grant_item", "payload": { "itemId": "d_cloth_01" } } ] }, { "id": "opt_choice", "label": "幫忙看守牲畜（效果不明）", "npcReply": "感謝你。", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 1.15 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_drop_rate", "params": { "value": 0.95 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] }, { "id": "opt_refuse", "label": "婉拒並離開", "npcReply": "願你一路平安。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": 0 } } ] } ] } ] }

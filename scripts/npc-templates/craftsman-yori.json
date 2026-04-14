@@ -1,0 +1,11 @@
+{
+  "id": "匠人_依織",
+  "zone": "town",
+  "name": "匠人·依織",
+  "message": "依織在工作台前打磨細膩物件，她的作品被貴族與冒險者收藏。",
+  "triggerMonsterSeq": null,
+  "durationSec": 40,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "匠人·依織", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [ { "id": "start", "text": "依織一邊打磨一邊說：『細節決定價值。』", "options": [ { "id": "opt_buy", "label": "購買匠人製品（500金）", "npcReply": "請好好使用。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -500 } }, { "type": "grant_item", "payload": { "itemId": "d_craft_trinket_01" } } ] }, { "id": "opt_trade", "label": "以D階+3主手武器交換職業裝備", "npcReply": "我會用它換些工匠工具。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "any" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "dplus3_craftsman_any", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_craftsman_kit", "enhanceLevel": 0 } } ] }, { "id": "opt_risk", "label": "嘗試她的奇作（風險與報酬）", "npcReply": "別太指望完美。", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_damage", "params": { "value": 1.4 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 0.8 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] } ] } ] }

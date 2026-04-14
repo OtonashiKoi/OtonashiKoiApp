@@ -3,6 +3,7 @@
   const listEl = document.getElementById("monster-events-list");
   const refreshBtn = document.getElementById("monster-events-refresh-btn");
   const addBtn = document.getElementById("monster-events-add-btn");
+  const filterEl = document.getElementById("monster-events-filter");
   const npcImgInput = document.getElementById("monster-events-npc-img-input");
   if (!listEl) return;
 
@@ -14,10 +15,6 @@
     delete: "刪除",
     enabled: "啟用",
     disabled: "停用",
-    zoneNormal: "一般區",
-    zoneMid: "中級區",
-    triggerAny: "任何怪物",
-    triggerSeq: "怪物序號",
     optionsCount: "選項數",
     updatedAt: "更新時間",
     createSuccess: "已新增 NPC 模板",
@@ -34,10 +31,7 @@
     close: "關閉",
     save: "儲存模板",
     templateName: "模板名稱",
-    zone: "區域",
-    priority: "優先序",
     durationSec: "事件停留秒數",
-    triggerMonsterSeq: "觸發怪物序號（空白=任何）",
     npcSettings: "NPC 設定",
     npcName: "NPC 名稱",
     npcImageMissing: "尚未設定圖片",
@@ -90,10 +84,6 @@
       .replaceAll("'", "&#39;");
   }
 
-  function zoneLabel(zone) {
-    return zone === "mid" ? TEXT.zoneMid : TEXT.zoneNormal;
-  }
-
   function getStartNode(template) {
     if (Array.isArray(template?.nodes) && template.nodes.length) {
       return template.nodes.find((node) => node.id === "start") || template.nodes[0];
@@ -106,7 +96,6 @@
     const img = npc.imageThumbnailUrl || npc.imageUrl || "";
     const startNode = getStartNode(template);
     const options = Array.isArray(startNode.options) ? startNode.options : [];
-    const triggerText = template.triggerMonsterSeq == null ? TEXT.triggerAny : `${TEXT.triggerSeq} #${template.triggerMonsterSeq}`;
     const updatedText = template.updatedAt ? new Date(template.updatedAt).toLocaleString("zh-TW") : "-";
 
     return `
@@ -120,6 +109,7 @@
               <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(template.name || TEXT.newTemplateName)}</div>
               <div class="hint" style="margin-top:2px;">${esc(npc.name || TEXT.mysteryNpc)}</div>
               <div class="hint" style="margin-top:4px;">ID: ${esc((template.id || "").slice(0, 8))}</div>
+              <div style="margin-top:6px;">${renderTemplateCategories(template)}</div>
             </div>
           </div>
           <label style="display:flex;gap:6px;align-items:center;white-space:nowrap;">
@@ -129,9 +119,6 @@
         </div>
 
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;" class="hint">
-          <div>區域：${esc(zoneLabel(template.zone))}</div>
-          <div>優先序：${Number(template.priority) || 0}</div>
-          <div>觸發：${esc(triggerText)}</div>
           <div>${TEXT.optionsCount}：${options.length}</div>
           <div style="grid-column:1 / -1;">${TEXT.updatedAt}：${esc(updatedText)}</div>
         </div>
@@ -144,18 +131,50 @@
     `;
   }
 
+  function renderTemplateCategories(template) {
+    try {
+      if (!window.adminEffects || typeof window.adminEffects.classifyNpcEvent !== 'function') return '';
+      const keys = window.adminEffects.classifyNpcEvent(template || {}) || [];
+      if (!keys.length) return '';
+      const LABELS = {
+        grant_buff: '給予 Buff',
+        grant_currency: '發放貨幣',
+        grant_item: '發放道具',
+        grant_equipment: '發放裝備',
+        take_item: '消耗道具（交換）',
+        grant_temporary_quest: '發放限時任務'
+      };
+      return keys.map((k) => `<span class="mode-chip" style="margin-right:6px;">${esc(LABELS[k] || k)}</span>`).join(' ');
+    } catch (e) {
+      return '';
+    }
+  }
+
   function renderCards() {
     if (!templates.length) {
       listEl.innerHTML = `<p class="hint">${TEXT.loadEmpty}</p>`;
       return;
     }
-    listEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${templates.map(cardHtml).join("")}</div>`;
+    const filter = (filterEl && filterEl.value) ? filterEl.value : 'all';
+    const visible = templates.filter((t) => {
+      if (!filter || filter === 'all') return true;
+      try {
+        if (window.adminEffects && typeof window.adminEffects.classifyNpcEvent === 'function') {
+          const keys = window.adminEffects.classifyNpcEvent(t || {}) || [];
+          return keys.includes(filter);
+        }
+      } catch (e) {}
+      return false;
+    });
+    listEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${visible.map(cardHtml).join("")}</div>`;
   }
 
   async function load({ openId = null } = {}) {
     listEl.innerHTML = `<p class="hint">${TEXT.loading}</p>`;
     try {
       templates = await api(`${BASE}?includeDisabled=1`);
+      // initial render may need adminEffects lookups
+      try { await window.adminEffects?.ensureLookups?.(); } catch (e) {}
       renderCards();
       if (openId) openEditor(openId);
     } catch (error) {
@@ -188,7 +207,6 @@
     const npc = template.npc || {};
     const startNode = getStartNode(template);
     const options = Array.isArray(startNode.options) ? startNode.options : [];
-    const triggerSeq = template.triggerMonsterSeq == null ? "" : template.triggerMonsterSeq;
     const npcImg = npc.imageThumbnailUrl || npc.imageUrl || "";
     return `
       <div style="background:var(--surface-strong);border:1px solid var(--line-strong);border-radius:14px;padding:14px;display:grid;gap:12px;max-height:86vh;overflow:auto;">
@@ -197,15 +215,12 @@
           <button type="button" class="button" data-action="close-modal">${TEXT.close}</button>
         </div>
 
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;">
+        <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;">
           <label><span>${TEXT.templateName}</span><input class="sheet-input" data-field="name" value="${esc(template.name || "")}" /></label>
-          <label><span>${TEXT.zone}</span><select class="sheet-input" data-field="zone"><option value="normal" ${template.zone === "normal" ? "selected" : ""}>${TEXT.zoneNormal}</option><option value="mid" ${template.zone === "mid" ? "selected" : ""}>${TEXT.zoneMid}</option></select></label>
-          <label><span>${TEXT.priority}</span><input class="sheet-input" data-field="priority" type="number" min="0" step="1" value="${Number(template.priority) || 0}" /></label>
           <label style="display:flex;align-items:flex-end;gap:6px;"><input type="checkbox" data-field="enabled" ${template.enabled ? "checked" : ""}/><span>${TEXT.enabled}</span></label>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <label><span>${TEXT.triggerMonsterSeq}</span><input class="sheet-input" data-field="triggerMonsterSeq" type="number" min="1" step="1" value="${esc(triggerSeq)}" /></label>
+        <div style="display:grid;grid-template-columns:1fr;gap:10px;">
           <label><span>${TEXT.durationSec}</span><input class="sheet-input" data-field="durationSec" type="number" min="1" max="600" step="1" value="${Number(template.durationSec) || 12}" /></label>
         </div>
 
@@ -276,7 +291,6 @@
     if (!template) return null;
     const panel = modalRoot.firstElementChild;
     const field = (name) => panel.querySelector(`[data-field="${name}"]`);
-    const rawSeq = String(field("triggerMonsterSeq")?.value || "").trim();
     const optionRows = [...panel.querySelectorAll(".npc-option-row")];
     const options = optionRows.map((row, idx) => {
       const get = (name) => row.querySelector(`[data-opt-field="${name}"]`);
@@ -292,9 +306,6 @@
     return {
       enabled: Boolean(field("enabled")?.checked),
       name: String(field("name")?.value || "").trim() || TEXT.newTemplateName,
-      zone: field("zone")?.value === "mid" ? "mid" : "normal",
-      triggerMonsterSeq: rawSeq ? Number(rawSeq) : null,
-      priority: Number(field("priority")?.value || 0),
       durationSec: Number(field("durationSec")?.value || 12),
       message: String(field("startText")?.value || "").trim(),
       npc: {
@@ -312,10 +323,7 @@
         method: "POST",
         body: JSON.stringify({
           name: TEXT.newTemplateName,
-          zone: "normal",
-          triggerMonsterSeq: null,
           durationSec: 12,
-          priority: 100,
           enabled: true,
           npc: { name: TEXT.mysteryNpc, imageUrl: null, imageThumbnailUrl: null },
           message: TEXT.helloAdventurer,
@@ -505,6 +513,7 @@
 
   refreshBtn?.addEventListener("click", () => load());
   addBtn?.addEventListener("click", createTemplate);
+  filterEl?.addEventListener('change', () => renderCards());
 
   window.addEventListener("load", () => {
     if (window.getAdminToken?.()) load();

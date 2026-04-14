@@ -1,0 +1,14 @@
+{
+  "id": "hunter-ryu",
+  "title": "獵人 龍 (Ryu)",
+  "nodes": [
+    {
+      "id": "start",
+      "text": "追蹤的線索總在晨霧中出現。",
+      "options": [
+        { "id": "opt_buy", "label": "聽狩獵秘訣", "npcReply": "等待比追逐更重要。", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_drop_rate", "params": { "value": 1.12 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] },
+        { "id": "opt_trade", "label": "成為追獵者（徽章）", "npcReply": "自然會回報你。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "bow" } ] }, "effects": [ { "type": "grant_equipment", "payload": { "itemId": "job_archer_v1", "enhanceLevel": 0 } } ] }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "路人_花奈",
+  "zone": "normal",
+  "name": "路人·花奈",
+  "message": "花奈手裡提著菜籃，眼神溫柔且懷有小心思。",
+  "triggerMonsterSeq": null,
+  "durationSec": 30,
+  "priority": 40,
+  "enabled": true,
+  "npc": { "name": "路人·花奈", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [ { "id": "start", "text": "花奈輕笑：『今天天氣真好。』", "options": [ { "id": "opt_help", "label": "幫她拿菜籃", "npcReply": "謝謝你！", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": 20 } } ] }, { "id": "opt_buy", "label": "買她的自製點心（50金）", "npcReply": "請慢用。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -50 } }, { "type": "grant_item", "payload": { "itemId": "d_snack_01" } } ] }, { "id": "opt_offer", "label": "聽她的秘密（不保證好結局）", "npcReply": "我知道一個傳說……", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_drop_rate", "params": { "value": 1.08 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_damage", "params": { "value": 0.95 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] }, { "id": "opt_leave", "label": "匆匆離去", "npcReply": "…", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": 0 } } ] } ] } ] }

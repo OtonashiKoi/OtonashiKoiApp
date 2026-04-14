@@ -62,21 +62,48 @@ function createAdminMonsterRoutes(serviceContext) {
       const { activeMonsterSeq, zone = "normal" } = req.body;
       const current = await serviceContext.monsterService.getState(zone);
       const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone });
-      const target = monsters.find((m) => m.seq === Number(activeMonsterSeq));
-      if (!target) {
-        res.status(400).json(fail("INVALID_ARGUMENT", "找不到該序號的怪物"));
-        return;
+      const nextState = { ...current };
+      const hasNpcMappings = Array.isArray(req.body.npcMappings);
+
+      if (hasNpcMappings) {
+        nextState.npcMappings = req.body.npcMappings.map((entry, index) => ({
+          eventId: entry?.eventId || entry?.id || "",
+          chance: Math.min(100, Math.max(0, Number(entry?.chance) || 0)),
+          triggerMonsterSeq: entry?.triggerMonsterSeq == null || entry?.triggerMonsterSeq === ""
+            ? null
+            : Number(entry.triggerMonsterSeq),
+          order: Number.isFinite(Number(entry?.order)) ? Number(entry.order) : index
+        })).filter((entry) => entry.eventId);
       }
-      const newState = { ...current, activeMonsterSeq: target.seq, currentHp: target.calc.maxHp, participants: [], damageMap: {} };
-      await serviceContext.monsterService.saveState(newState, zone);
+
+      let target = null;
+      if (activeMonsterSeq !== undefined && activeMonsterSeq !== null && activeMonsterSeq !== "") {
+        target = monsters.find((m) => m.seq === Number(activeMonsterSeq));
+        if (!target) {
+          if (!hasNpcMappings) {
+            res.status(400).json(fail("INVALID_ARGUMENT", "找不到該序號的怪物"));
+            return;
+          }
+          target = null;
+        }
+        if (target) {
+          nextState.activeMonsterSeq = target.seq;
+          nextState.currentHp = target.calc.maxHp;
+          nextState.participants = [];
+          nextState.damageMap = {};
+        }
+      }
+
+      await serviceContext.monsterService.saveState(nextState, zone);
 
       // 若手動切換到 BOSS，也發廣播
-      if (target.isBoss) {
+      if (target?.isBoss) {
         const { _broadcastBossSpawn } = require("../../bot/handlers/monsterZoneHandlers");
         _broadcastBossSpawn(serviceContext, zone, target).catch(() => {});
       }
 
-      res.json(ok({ state: newState, active: target }, "monster state updated"));
+      const active = target || monsters.find((m) => m.seq === nextState.activeMonsterSeq) || monsters[0] || null;
+      res.json(ok({ state: nextState, active }, "monster state updated"));
     } catch (error) {
       next(error);
     }

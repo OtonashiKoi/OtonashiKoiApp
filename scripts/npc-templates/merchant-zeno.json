@@ -1,0 +1,11 @@
+{
+  "id": "行商_澤諾",
+  "zone": "normal",
+  "name": "行商·澤諾",
+  "message": "澤諾的布帳內堆滿鑲邊皮革與冷光武器，像是巡迴已久的老商人。",
+  "triggerMonsterSeq": null,
+  "durationSec": 50,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "行商·澤諾", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [ { "id": "start", "text": "澤諾沉聲：『看中了哪一樣？』", "options": [ { "id": "opt_buy_1", "label": "購買：重劍（1000金）", "npcReply": "鋒利。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "d_heavy_sword_01", "enhanceLevel": 0 } } ] }, { "id": "opt_buy_2", "label": "購買：皮甲（1500金）", "npcReply": "穿著舒心。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1500 } }, { "type": "grant_item", "payload": { "itemId": "c_leather_01" } } ] }, { "id": "opt_buy_3", "label": "購買：反曲弓（1000金）", "npcReply": "拉弦試試。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "d_recurve_bow_01", "enhanceLevel": 0 } } ] }, { "id": "opt_buy_4", "label": "購買：抗寒披風（1500金）", "npcReply": "夜晚會感激它。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1500 } }, { "type": "grant_item", "payload": { "itemId": "c_cloak_01" } } ] } ] } ] }

@@ -1,0 +1,11 @@
+{
+  "id": "法師_響",
+  "zone": "tower",
+  "name": "法師·響",
+  "message": "響在塔頂觀星，手握古老書卷，聲音像夜風一樣淡然。",
+  "triggerMonsterSeq": null,
+  "durationSec": 50,
+  "priority": 53,
+  "enabled": true,
+  "npc": { "name": "法師·響", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [ { "id": "start", "text": "響望向星空：『知識需要代價。』", "options": [ { "id": "opt_learn", "label": "學一個古法（500金）", "npcReply": "記住施法順序。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -500 } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 1.25 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] }, { "id": "opt_trade", "label": "以D階+3法杖交換職業裝備", "npcReply": "交換已完成。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "staff_1h" }, { "weaponType": "staff_2h" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "dplus3_staff_main", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_mage_staff", "enhanceLevel": 0 } } ] }, { "id": "opt_risky", "label": "嘗試他不完整的咒語（結果難料）", "npcReply": "別責怪我。", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_damage", "params": { "value": 1.5 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 0.7 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] }, { "id": "opt_story", "label": "聽他研究的麻煩（含沙漏傳說）", "npcReply": "時間有時候會反噬。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": 30 } } ] } ] } ] }

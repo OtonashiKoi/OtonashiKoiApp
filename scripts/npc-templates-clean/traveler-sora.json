@@ -1,0 +1,14 @@
+{
+  "id": "traveler-sora",
+  "title": "流浪者 宙 (Sora)",
+  "nodes": [
+    {
+      "id": "start",
+      "text": "他腳上的灰土來自陌生的道路。",
+      "options": [
+        { "id": "opt_trade", "label": "成為漂泊者（徽章）", "npcReply": "旅程會教你很多。", "nextNodeId": null, "effects": [ { "type": "grant_equipment", "payload": { "itemId": "job_swordsman_v1", "enhanceLevel": 0 } } ] },
+        { "id": "opt_story", "label": "聽他的旅程片段", "npcReply": "遠方有不同的月亮。", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_drop_rate", "params": { "value": 1.08 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "merchant-aria",
+  "title": "商人 亞莉亞 (Aria)",
+  "nodes": [
+    {
+      "id": "start",
+      "text": "櫃檯後擺滿小物與故事。",
+      "options": [
+        { "id": "opt_buy_1", "label": "購買一則秘聞（1000金）", "npcReply": "情報也有價值。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 1.05 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] },
+        { "id": "opt_trade", "label": "獲得商隊徽章", "npcReply": "好好經營就是財富。", "nextNodeId": null, "effects": [ { "type": "grant_equipment", "payload": { "itemId": "job_swordsman_v1", "enhanceLevel": 0 } } ] }
+      ]
+    }
+  ]
+}

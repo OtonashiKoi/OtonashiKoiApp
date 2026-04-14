@@ -36,6 +36,7 @@ module.exports = {
   storage: {
     mongoUri: process.env.MONGODB_URI || "", // MongoDB 連線字串
     mongoDbName: process.env.MONGODB_DB_NAME || "equipment_game" // MongoDB 資料庫名稱
+    , jsonDataPath: process.env.JSON_DATA_PATH || path.resolve(__dirname, '..', 'data', 'monsters-db-merged.json')
   },
   // 工程參數（如程式碼行數警告）
   engineering: {

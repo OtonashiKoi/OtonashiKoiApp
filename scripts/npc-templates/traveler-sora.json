@@ -1,0 +1,23 @@
+{
+  "id": "行旅_空良",
+  "zone": "normal",
+  "name": "行旅·空良",
+  "message": "空良背著旅行包，眼中時常閃過遠方港口的波光。",
+  "triggerMonsterSeq": null,
+  "durationSec": 40,
+  "priority": 48,
+  "enabled": true,
+  "npc": { "name": "行旅·空良", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "空良微笑：『旅途中總有意外的驚喜。』",
+      "options": [
+        { "id": "opt_tell", "label": "聽他的港灣故事", "npcReply": "我在港口遇見過奇怪的魚人。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": 50 } } ] },
+        { "id": "opt_give", "label": "接受他的小禮物", "npcReply": "好好保存它。", "nextNodeId": null, "effects": [ { "type": "grant_equipment", "payload": { "itemId": "d_travel_charm_01", "enhanceLevel": 0 } } ] },
+        { "id": "opt_trade", "label": "以D階+3長槍交換職業裝備", "npcReply": "交換完成。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "spear" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "dplus3_spear_main", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_spear_traveler", "enhanceLevel": 0 } } ] },
+        { "id": "opt_maybe", "label": "參與他隨意的把戲（效果不明）", "npcReply": "他輕笑。", "nextNodeId": null, "effects": [ { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_damage", "params": { "value": 1.2 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } }, { "type": "grant_buff", "payload": { "effect": { "key": "next_battle_exp", "params": { "value": 0.85 }, "duration": { "mode": "battle", "value": 1 }, "stackMode": "refresh" } } } ] }
+      ]
+    }
+  ]
+}

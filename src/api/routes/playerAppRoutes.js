@@ -5,7 +5,7 @@ const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
-const { isEffectConditionMet } = require("../../shared/effectEngine");
+const { isEffectConditionMet, decrementActiveEffects } = require("../../shared/effectEngine");
 
 // Track per-player battle cooldowns.
 // Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
@@ -945,6 +945,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
         // update panel
         _republishPanel(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
+      }
+
+      if (progress && Array.isArray(progress.activeEffects) && progress.activeEffects.length > 0) {
+        const nextActiveEffects = decrementActiveEffects(progress.activeEffects, "battle", 1);
+        if (nextActiveEffects.length !== progress.activeEffects.length) {
+          progress.activeEffects = nextActiveEffects;
+          progress.updatedAt = new Date().toISOString();
+          await serviceContext.progressRepository.save(progress).catch(() => {});
+        }
       }
 
       // Weekly quest progression is updated after each battle result.
