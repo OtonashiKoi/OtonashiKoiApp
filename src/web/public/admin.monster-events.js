@@ -489,6 +489,15 @@
   npcImgInput?.addEventListener("change", async () => {
     const file = npcImgInput.files?.[0];
     const id = pendingUploadTemplateId;
+    // If cropper integration is enabled, only proceed when the input is marked as cropped
+    if (window.USE_IMAGE_CROPPER) {
+      if (!npcImgInput.dataset.cropped) {
+        // initial file selection — cropper will re-dispatch a change after cropping
+        return;
+      }
+      // remove the marker so subsequent changes behave normally
+      delete npcImgInput.dataset.cropped;
+    }
     if (!file || !id) return;
     const form = new FormData();
     form.append("image", file);

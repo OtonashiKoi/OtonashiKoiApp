@@ -43,6 +43,8 @@
           const dataTransfer = new DataTransfer();
           dataTransfer.items.add(file);
           currentInput.files = dataTransfer.files;
+          // mark as cropped so upload handlers can detect final dispatch
+          currentInput.dataset.cropped = '1';
           // dispatch native change so existing upload handlers run
           const ev = new Event('change', { bubbles: true });
           currentInput.dispatchEvent(ev);
