@@ -1,0 +1,31 @@
+name: Skill files check
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  check-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify SKILL.md in each skill folder
+        run: |
+          set -e
+          base=".vscode/prompts/skills"
+          if [ ! -d "$base" ]; then
+            echo "No skills directory found: $base"; exit 1
+          fi
+          missing=0
+          for d in "$base"/*; do
+            if [ -d "$d" ]; then
+              if [ ! -f "$d/SKILL.md" ]; then
+                echo "Missing SKILL.md in $d"; missing=1
+              fi
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "One or more SKILL.md files are missing."; exit 1
+          fi
+          echo "All SKILL.md present." 
