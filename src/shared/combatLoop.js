@@ -281,6 +281,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
 
+        // 弓箭手徽章傷害倍率（主武器為弓時）
+        if (pStats.hasArcherBadge && pStats.weaponType === "bow") {
+          dmg = Math.round(dmg * pStats.archerBowDamageBoost);
+        }
+
         // --- Compute on_high_hp bonuses (per-effect threshold) early so they affect crit checks ---
         let extraHighHpCrit = 0;
         let extraHighHpStun = 0;
@@ -303,13 +308,37 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
         } catch (e) {}
 
-        // Crit check (consider high-HP crit bonus)
+        // Crit check：獨立判斷普通爆擊和弓箭手命中要害（可同時發生 - 疊加機制）
+        let isCrit = false;
+        let isArcherCrit = false;
+
+        // 普通爆擊邏輯（LUK 驅動）
         const effectiveCritChance = (Number(pStats.crit) || 0) + extraHighHpCrit;
-        const isCrit = Math.random() * 100 < effectiveCritChance;
-        // LUK 爆擊：×2.5 且無視怪物 DEF
+        isCrit = Math.random() * 100 < effectiveCritChance;
+
+        // 弓箭手命中要害邏輯（獨立判斷，可與爆擊同時發生）
+        if (pStats.hasArcherBadge && pStats.weaponType === "bow" && pStats.archerCritRate > 0) {
+          isArcherCrit = Math.random() * 100 < pStats.archerCritRate;
+        }
+
+        // 應用傷害倍率：
+        // 1. 基礎傷害已套用弓箭手傷害倍率（×1.2）
+        // 2. 如果觸發爆擊，再乘以 2.5
+        // 3. 如果觸發要害，再乘以 1.5
+        // 4. 如果同時觸發，傷害疊加
         if (isCrit) {
           const critBase = Math.round(pStats.atk * (1 - finalDef / 100));
           dmg = Math.round(rollDmg(Math.max(1, critBase)) * 2.5);
+
+          // 弓箭手傷害倍率也應用於爆擊
+          if (pStats.hasArcherBadge && pStats.weaponType === "bow") {
+            dmg = Math.round(dmg * pStats.archerBowDamageBoost);
+          }
+        }
+
+        // 要害傷害倍率（獨立疊加）
+        if (isArcherCrit) {
+          dmg = Math.round(dmg * (pStats.archerCritMultiplier || 1.5));
         }
 
         // 低血量傷害加成（若 equipped 傳入且玩家 HP <= 35%）
@@ -329,7 +358,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         mHp -= dmg;
         totalDamage += dmg;
         const breakNote = isBreak ? "💥**破防**！" : "";
-        const critNote  = isCrit  ? `✨**${rand(critPhrases)}**！` : "";
+        let critNote = "";
+
+        // 顯示爆擊和要害的組合
+        if (isCrit && isArcherCrit) {
+          // 同時觸發爆擊和要害
+          critNote = `✨${rand(critPhrases)}！🎯${rand(['命中要害', '精準破綻', '弱點命中'])}！`;
+        } else if (isArcherCrit) {
+          // 只觸發要害
+          critNote = `🎯**${rand(['命中要害', '精準破綻', '弱點命中', '一擊斃命'])}**！`;
+        } else if (isCrit) {
+          // 只觸發爆擊
+          critNote = `✨**${rand(critPhrases)}**！`;
+        }
+
         log.push(`⚔️ ${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
         // 擊暈判定（爆擊不觸發）
         const effectiveStunChance = (Number(pStats.stunChance) || 0) + extraHighHpStun;
@@ -415,34 +457,46 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
       } else {
         log.push(`🛡️ ${mName} 猛撲而來，你${rand(jobFlavor.dodge)}，躲過了攻擊！`);
-        // 迴避後可能觸發的反擊（例如弓箭手的 counter_on_dodge）
-        try {
-          const equipped = options.equipped || null;
-          const inventory = Array.isArray(options.inventory) ? options.inventory : [];
-          if (equipped) {
-            const counterEffs = collectEquipmentEffects(equipped, 'passive', { equipped, inventory }).filter((e) => e && e.key === 'counter_on_dodge');
-            if (counterEffs.length > 0 && pStats.weaponType === 'bow' && outcome === null) {
-              // 取第一個定義的反擊效果作參數來源（通常只會有一個）
-              const eff = counterEffs[0];
-              // 預設反擊暴擊率 25%，可由 effect.params.critChance 覆蓋
-              const critChance = Number(eff.params?.critChance ?? eff.params?.value ?? 25);
-              const triggered = Math.random() * 100 < Math.max(0, Math.min(100, Number(eff.chance) || 100));
-              if (triggered) {
-                const isCrit = Math.random() * 100 < Math.max(0, Math.min(100, critChance));
+
+        // 弓箭手迴避後追擊（必定爆擊）
+        if (pStats.hasArcherBadge && pStats.weaponType === 'bow' && outcome === null) {
+          try {
+            const equipped = options.equipped || null;
+            const inventory = Array.isArray(options.inventory) ? options.inventory : [];
+            if (equipped) {
+              // 檢查是否有迴避追擊效果
+              const dodgeCounterEffs = collectEquipmentEffects(equipped, 'passive', { equipped, inventory })
+                .filter((e) => e && (e.key === 'archer_dodge_counter' || e.key === 'dodge_counter_attack'));
+
+              if (dodgeCounterEffs.length > 0) {
+                const eff = dodgeCounterEffs[0];
+                const guaranteedCrit = eff.params?.guaranteedCrit ?? true;
+
+                // 弓箭手迴避後追擊：
+                // 1. 必定爆擊（如果設定 guaranteedCrit = true）
+                // 2. 傷害計算應用弓箭手的傷害倍率
 
                 const isBreak = Math.random() * 100 < pStats.armorBreakChance;
                 const finalDef = isBreak ? 0 : mCalc.def;
                 let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
-                if (isCrit) cdmg = Math.round(cdmg * (pStats.critDamage || 2.5));
+
+                // 應用弓箭手傷害倍率
+                cdmg = Math.round(cdmg * pStats.archerBowDamageBoost);
+
+                // 應用爆擊倍率（迴避反擊必定爆擊）
+                const critMultiplier = guaranteedCrit ? (pStats.archerCritMultiplier || 1.5) : 1;
+                cdmg = Math.round(cdmg * critMultiplier);
+
                 mHp -= cdmg;
                 totalDamage += cdmg;
-                log.push(`🏹 **迴避反擊**！${rand(jobFlavor.counter)}，對 ${mName} 造成 **${cdmg}** 點傷害！${isCrit ? '✨ 暴擊！' : ''}（怪物剩 ${Math.max(0, mHp)} HP）`);
+                const critMarker = guaranteedCrit ? '✨ **必定爆擊**！' : '';
+                log.push(`🏹 **迴避反擊**！${rand(jobFlavor.counter)}，${critMarker}對 ${mName} 造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+
                 if (mHp <= 0) { outcome = "win"; }
               }
-              
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
       }
     }
 

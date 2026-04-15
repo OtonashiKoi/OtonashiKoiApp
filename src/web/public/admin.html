@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#09090b" />
     <title>Equipment Game Admin</title>
     <link rel="stylesheet" href="/static/admin.css?v=6" />
+    <link rel="stylesheet" href="/static/admin.light.css?v=1" />
     <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css" />
   </head>
   <body>
@@ -13,6 +14,7 @@
       <header class="window-top">
         <div class="window-title">Equipment Game <span style="color:var(--muted);font-weight:500;margin-left:8px;">Control Panel</span></div>
         <div class="window-controls">
+          <button id="theme-toggle" class="control-btn" title="切換淺色主題" aria-pressed="false">淺色</button>
           <button class="control-btn" title="Refresh Panel" id="top-refresh">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-10.74l3.25 3.17"/></svg>
             <span style="margin-left:6px;">Reload</span>
@@ -650,6 +652,7 @@
 
     <script src="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.js"></script>
     <script src="/static/adminUtils.js?v=6"></script>
+    <script src="/static/admin.image-cropper.js?v=1"></script>
     <script src="/static/adminLayout.js?v=6"></script>
     <script>window.USE_IMAGE_CROPPER = true;</script>
     <script src="/static/adminPlayers.js?v=6"></script>
@@ -667,6 +670,31 @@
     <script src="/static/admin.weekly.js?v=6"></script>
     <script src="/static/admin.items.js?v=6"></script>
     <script src="/static/admin.leaderboard.js?v=6"></script>
-    <script src="/static/admin.image-cropper.js?v=1"></script>
+    <script src="/static/admin.tailwind-cleanup.js?v=1"></script>
+    <script src="/static/admin.modal-fixes.js?v=1"></script>
+    <script>
+      (function(){
+        const THEME_KEY = 'eg_admin_theme';
+        const btn = document.getElementById('theme-toggle');
+        function applyTheme(theme){
+          if(theme === 'light'){
+            document.body.classList.add('theme-light');
+            if(btn){ btn.setAttribute('aria-pressed','true'); btn.textContent = '淺色'; }
+          } else {
+            document.body.classList.remove('theme-light');
+            if(btn){ btn.setAttribute('aria-pressed','false'); btn.textContent = '深色'; }
+          }
+          try { localStorage.setItem(THEME_KEY, theme); } catch(e){}
+        }
+        if(btn){
+          btn.addEventListener('click', ()=>{
+            const current = localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+            applyTheme(current === 'light' ? 'dark' : 'light');
+          });
+        }
+        const saved = localStorage.getItem(THEME_KEY);
+        applyTheme(saved === 'light' ? 'light' : 'dark');
+      })();
+    </script>
   </body>
 </html>

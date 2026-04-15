@@ -26,14 +26,11 @@
     "home": "node scripts/launch-home.js",
     "auto-home": "node scripts/auto-home.js",
     "go-live": "node scripts/go-live.js",
-    "grant:100": "node ./scripts/grant-100-gold-all.js"
-    ,"check:db": "node scripts/check-db-collections.js"
-    ,"skills:normalize": "node scripts/normalize-skills.js"
-    ,"skills:fix-frontmatter": "node scripts/fix-skill-frontmatter.js"
-    ,"skills:rewrite-full": "node scripts/rewrite-skills-full.js"
-    ,"skills:rename-folders": "node scripts/rename-skill-folders.js"
-    ,"skills:gen-index": "node scripts/gen-skills-index.js"
-    ,"skills:recreate-structure": "node scripts/recreate-skills-structure.js"
+    "grant:100": "node ./scripts/grant-100-gold-all.js",
+    "check:db": "node scripts/check-db-collections.js",
+    "check:monster-drops": "node scripts/check-monster-drops.js",
+    "db:sync": "node scripts/sync-db-to-cloud.js",
+    "db:sync:start": "node scripts/db-sync-scheduler.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -47,6 +44,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^6.21.0",
     "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
     "sharp": "^0.34.5",
     "ws": "^8.20.0",
     "xlsx": "^0.18.5"

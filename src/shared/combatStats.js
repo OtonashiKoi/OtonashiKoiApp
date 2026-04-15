@@ -100,6 +100,22 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const counterInheritStun  = isDualWield && (wt === "sword_1h" || wt === "dagger");
   const counterInheritBreak = isDualWield && (wt === "sword_1h" || wt === "dagger");
 
+  // 弓箭手徽章效果檢測
+  const jobEq = equipped.job_eq || null;
+  const hasArcherBadge = jobEq && (
+    String(jobEq.itemId || jobEq.id || "").toLowerCase().includes("archer") ||
+    String(jobEq.itemName || jobEq.name || "").toLowerCase().includes("弓箭手") ||
+    String(jobEq.itemName || jobEq.name || "").toLowerCase().includes("archer")
+  );
+
+  // 弓箭手特殊機率（命中要害）
+  let archerCritRate = 0;
+  let archerCritMultiplier = 1.5;
+  if (hasArcherBadge && wt === "bow") {
+    // 基礎 35%，DEX 每點 +0.45%，上限 80%
+    archerCritRate = Math.min(80, 35 + D * 0.45);
+  }
+
   const baseStats = {
     // 基礎數值
     maxHp:    V * 15 + 50,
@@ -132,6 +148,13 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     counterChance,         // 副手追擊機率%
     counterInheritStun,    // 副手繼承擊暈
     counterInheritBreak,   // 副手繼承破防
+
+    // 弓箭手特效
+    hasArcherBadge,           // 是否裝備弓箭手徽章
+    archerBowDamageBoost: hasArcherBadge && wt === "bow" ? 1.2 : 1,  // 主武器為弓時傷害 ×1.2
+    archerCritRate,           // 弓箭手命中要害機率（覆蓋基礎爆擊）
+    archerCritMultiplier,     // 要害傷害倍率（1.5×）
+    archerDodgeCounterActive: false,  // 迴避後追擊標記（在 combatLoop 中設定）
   };
 
   const effectContext = { equipped, inventory };

@@ -85,10 +85,18 @@
     // reattach when dynamic sections load (simple polling)
     setInterval(attachToAll, 3000);
 
-    document.getElementById('cropper-cancel').addEventListener('click', hideModal);
-    document.getElementById('cropper-confirm').addEventListener('click', () => {
-      uploadCropped().catch(()=>{});
-    });
+    const cancelBtn = document.getElementById('cropper-cancel');
+    const confirmBtn = document.getElementById('cropper-confirm');
+    if (cancelBtn && cancelBtn.dataset.cropperBound !== '1') {
+      cancelBtn.addEventListener('click', hideModal);
+      cancelBtn.dataset.cropperBound = '1';
+    }
+    if (confirmBtn && confirmBtn.dataset.cropperBound !== '1') {
+      confirmBtn.addEventListener('click', () => {
+        uploadCropped().catch(()=>{});
+      });
+      confirmBtn.dataset.cropperBound = '1';
+    }
   });
 
 })();
