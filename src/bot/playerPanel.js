@@ -156,29 +156,65 @@ async function handleProfile(interaction) {
     } catch (e) { /* ignore */ }
   const effectLine = effectLineParts.length ? "\n" + effectLineParts.join("\n") : "";
 
-  // ── 職業特別顯示 ──
+  // ── 職業區（只顯示職業名稱）──
+  const jobAreaLine = `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})`;
+
+  // ── 職業特性區（顯示職業名稱，穿對武器時顯示特性）──
   const jobEq = equipped.job_eq || null;
-  let jobSpecialLine = "職業特性：無（未裝備職業裝）";
+  let jobTraitAreaLine = "職業特性：無（未裝備職業裝）";
+
   if (jobEq) {
-    const context = { equipped, inventory: p.inventory || [] };
-    const allJobEffects = [
-      ...(Array.isArray(jobEq.passiveEffects) ? jobEq.passiveEffects : []),
-      ...(Array.isArray(jobEq.procEffects) ? jobEq.procEffects : []),
-      ...(Array.isArray(jobEq.combatEffects) ? jobEq.combatEffects : [])
-    ];
-    const activeJobEffects = allJobEffects.filter((effect) => isEffectConditionMet(effect, context));
+    const jobId = String(jobEq.itemId || jobEq.id || "").toLowerCase();
+    const jobName = String(jobEq.itemName || jobEq.name || "").toLowerCase();
+    const wt = cs.weaponType;
+
+    // 職業與武器的對應關係
+    const jobWeaponMap = {
+      "swordsman": { weapons: ["sword_1h"], name: "劍士", trait: "格擋反擊" },
+      "warrior": { weapons: ["axe_2h"], name: "戰士", trait: "低血傷害倍增" },
+      "dwarf": { weapons: ["mace_2h"], name: "矮人", trait: "高血擊暈加成" },
+      "rogue": { weapons: ["dagger"], name: "盜賊", trait: "連擊加速" },
+      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", trait: "穿防無視" },
+      "healer": { weapons: ["staff_1h", "staff_2h"], name: "治療師", trait: "隊伍光環" },
+      "archer": { weapons: ["bow"], name: "弓箭手", trait: "命中要害" }
+    };
+
+    // 判斷職業
+    let jobType = null;
+    let jobInfo = null;
+    for (const [key, info] of Object.entries(jobWeaponMap)) {
+      if (jobId.includes(key) || jobName.includes(info.name)) {
+        jobType = key;
+        jobInfo = info;
+        break;
+      }
+    }
+
+    // 顯示職業名稱和特性（如果武器匹配）
+    if (jobInfo) {
+      const weaponMatches = jobInfo.weapons.includes(wt);
+      if (weaponMatches) {
+        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${jobInfo.trait}`;
+      } else {
+        jobTraitAreaLine = `職業特性：${jobInfo.name}`;
+      }
+    } else {
+      // 未知職業，只顯示名稱
+      jobTraitAreaLine = `職業特性：${jobEq.itemName}`;
+    }
+  }
+
+  // ── NPC Buff 區（顯示被 NPC 給予的臨時效果，所有都是 1 回合）──
+  let npcBuffAreaLine = "";
+  if (p.activeEffects && Array.isArray(p.activeEffects) && p.activeEffects.length > 0) {
     const toLabel = (effect) => {
       const effectName = EFFECT_NAME_ZH[effect.key] || effect.definitionName || effect.key;
       const value = Number(effect?.params?.value);
       const valueText = Number.isFinite(value) ? `(${value})` : "";
-      return `${effectName}${valueText}`;
+      return `${effectName}${valueText} (臨時效果)`;
     };
-    if (activeJobEffects.length > 0) {
-      jobSpecialLine = `職業特性：${jobEq.itemName}\n` +
-        `啟用中：${activeJobEffects.map(toLabel).join("、")}`;
-    } else {
-      jobSpecialLine = `職業特性：${jobEq.itemName}\n目前無符合條件的啟用效果`;
-    }
+    const buffLabels = p.activeEffects.map(toLabel);
+    npcBuffAreaLine = `【NPC Buff】\n${buffLabels.join("\n")}`;
   }
 
   // ── 裝備清單（只列有裝備的格子）──
@@ -198,10 +234,20 @@ async function handleProfile(interaction) {
     ? [...standardParts, ...specialParts].join("　")
     : "（尚未裝備）";
 
+  // ── 組合三個獨立區域 ──
+  const npcBuffSection = npcBuffAreaLine ? `${npcBuffAreaLine}\n==============\n` : "";
+
   await replyAndAutoDelete(interaction,
     `🧧 **${result.player.displayName} 的冒險者履歷**\n` +
-    `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})\n` +
-    expLine + "\n" +
+    `==============\n` +
+    `【職業】\n` +
+    `${jobAreaLine}\n` +
+    `==============\n` +
+    `【職業特性】\n` +
+    `${jobTraitAreaLine}\n` +
+    `==============\n` +
+    `${npcBuffSection}` +
+    `${expLine}\n` +
     `==============\n` +
     `【基本素質】\n` +
     `STR: ${fmt(attrs.str,"str")} | AGI: ${fmt(attrs.agi,"agi")} | VIT: ${fmt(attrs.vit,"vit")}\n` +
@@ -211,7 +257,6 @@ async function handleProfile(interaction) {
     `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
     `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%　🟢 迴避: ${calcDodge}%` +
     effectLine + "\n" +
-    `${jobSpecialLine}\n` +
     equipLine + "\n" +
     `==============\n` +
     `【資產】\n` +
