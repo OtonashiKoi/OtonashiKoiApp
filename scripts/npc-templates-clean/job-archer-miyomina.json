@@ -1,0 +1,22 @@
+{
+  "id": "job_archer_miyomina",
+  "zone": "forest",
+  "name": "雲月·澪湊",
+  "message": "曾經追捕盜匪的獵人，因失誤導致隊友受傷而隱居山林。她在尋找有天賦的弓手傳承技藝，相信訓練可以救贖過去。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "雲月·澪湊", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "澪湊輕聲說：『妳有弓的天賦嗎？』",
+      "options": [
+        { "id": "opt_exchange", "label": "我想學習射術", "npcReply": "這把弓就交給妳了。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "bow" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "a314493c-efcd-43e5-bebc-935ef1d588a5", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_archer_v1", "enhanceLevel": 0 } } ] },
+        { "id": "opt_story_1", "label": "幫我找回遺失的弓", "npcReply": "很遺憾，我無法回頭了。", "nextNodeId": null, "effects": [] },
+        { "id": "opt_story_2", "label": "妳在逃避什麼?", "npcReply": "...妳很敏銳。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

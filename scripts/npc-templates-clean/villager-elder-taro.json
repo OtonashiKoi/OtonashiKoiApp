@@ -1,0 +1,180 @@
+{
+  "id": "villager_elder_taro",
+  "zone": "village",
+  "name": "村民·村長太郎",
+  "message": "管理村莊30年的村長，對每個村民如家人。最近村莊遭魔物騷擾，尋找強大冒險家保護村人。年邁卻有堅定意志。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": {
+    "name": "村民·村長太郎",
+    "imageUrl": null,
+    "imageThumbnailUrl": null
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "太郎懇切地說：『請妳救救我們的村莊。』",
+      "options": [
+        {
+          "id": "opt_protect",
+          "label": "我保護妳們的村",
+          "npcReply": "謝謝...妳就是我們的希望。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.5
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_up",
+                  "params": {
+                    "value": 1.15
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_refuse",
+          "label": "這不是我的責任",
+          "npcReply": "...妳太殘酷了。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": -3000
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 1.6
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_payment",
+          "label": "妳們付多少報酬?",
+          "npcReply": "我們能給的都給了。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": 200
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_down",
+                  "params": {
+                    "value": 0.88
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_history",
+          "label": "講講村的歷史",
+          "npcReply": "這是我的一生啊...",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.35
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_promise",
+          "label": "我會盡力",
+          "npcReply": "感謝妳的真心。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "drop_rate_up",
+                  "params": {
+                    "value": 1.08
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            },
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": 100
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

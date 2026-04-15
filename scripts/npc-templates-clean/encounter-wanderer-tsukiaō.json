@@ -1,0 +1,141 @@
+{
+  "id": "encounter_wanderer_tsukiaō",
+  "zone": "night",
+  "name": "漂泊者·月蒼",
+  "message": "年邁旅人，已在路上走了一輩子。不記得出身，只知月亮陪伴。滿足卻又暗藏悲傷。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": {
+    "name": "漂泊者·月蒼",
+    "imageUrl": null,
+    "imageThumbnailUrl": null
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "月蒼用滄桑的聲音說：『月亮見過許多人生。』",
+      "options": [
+        {
+          "id": "opt_lonely",
+          "label": "妳一定很寂寞",
+          "npcReply": "...妳很溫柔。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.35
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_moon",
+          "label": "月亮在看著我們",
+          "npcReply": "妳聽到了月光的聲音。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_up",
+                  "params": {
+                    "value": 1.15
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_rest",
+          "label": "在我身邊歇息",
+          "npcReply": "謝謝...但我還要走。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": -2000
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_death",
+          "label": "妳想死嗎?",
+          "npcReply": "...祝妳戰鬥不順。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "drop_rate_up",
+                  "params": {
+                    "value": 1.92
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_story",
+          "label": "講講妳的故事",
+          "npcReply": "...故事太長了。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": -500
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.25
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

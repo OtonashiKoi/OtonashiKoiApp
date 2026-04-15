@@ -1,0 +1,24 @@
+{
+  "id": "merchant_yukino",
+  "zone": "market",
+  "name": "行商·雪乃",
+  "message": "年輕工坊主人，接手家族事業。用創新想法改進防具，在保持功能同時外觀優美。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "行商·雪乃", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "雪乃說：『我的設計融合了功能與美感。』",
+      "options": [
+        { "id": "opt_boot", "label": "購買：D階皮靴（1000金）", "npcReply": "腳下生風。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9", "enhanceLevel": 0 } } ] },
+        { "id": "opt_gauntlet", "label": "購買：D階鋼手套（1000金）", "npcReply": "握拳更有力。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "12cddc4e-58ef-433e-a50d-e8ca04b1041e", "enhanceLevel": 0 } } ] },
+        { "id": "opt_robe", "label": "購買：D階絲綢法袍（1000金）", "npcReply": "優雅中蘊含力量。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "ee883bee-93c6-450d-b196-754d3e345d2a", "enhanceLevel": 0 } } ] },
+        { "id": "opt_bracelet", "label": "購買：D階鑲金護腕（1000金）", "npcReply": "華貴又實用。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "1039c921-d77d-4223-8d7b-321721484850", "enhanceLevel": 0 } } ] },
+        { "id": "opt_design", "label": "妳的設計理念是什麼?", "npcReply": "美與力的和諧。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

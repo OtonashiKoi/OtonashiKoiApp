@@ -1,0 +1,198 @@
+{
+  "id": "villager_widow_ayako",
+  "zone": "village",
+  "name": "村民·少婦綾子",
+  "message": "村莊織布工，魔物騷擾中失去丈夫。靠織布養活三個孩子，每天祈禱有人救村莊。堅強卻脆弱。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": {
+    "name": "村民·少婦綾子",
+    "imageUrl": null,
+    "imageThumbnailUrl": null
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "綾子用顫抖的聲音說：『為了我們...請。』",
+      "options": [
+        {
+          "id": "opt_for_her",
+          "label": "為了妳和孩子們",
+          "npcReply": "妳...真的會幫我們嗎？",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.45
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "drop_rate_up",
+                  "params": {
+                    "value": 1.1
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_helpless",
+          "label": "我無能為力",
+          "npcReply": "...那就讓我們一起死吧。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_down",
+                  "params": {
+                    "value": 0.65
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 1.5
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_children",
+          "label": "帶我見妳的孩子",
+          "npcReply": "他們都在期待著妳。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.3
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_legacy",
+          "label": "妳丈夫遺留了什麼?",
+          "npcReply": "只有...遺憾和責任。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": 300
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_down",
+                  "params": {
+                    "value": 0.85
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_worth",
+          "label": "這裡值得守護",
+          "npcReply": "妳...妳真的相信嗎？",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_up",
+                  "params": {
+                    "value": 1.18
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.25
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

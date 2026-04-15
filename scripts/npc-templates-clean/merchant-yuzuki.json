@@ -1,0 +1,24 @@
+{
+  "id": "merchant_yuzuki",
+  "zone": "market",
+  "name": "行商·優月",
+  "message": "退役裁縫師經營防具店。用頂級手工技藝製作防具，相信好防具能保護冒險家，價格親民。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "行商·優月", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "優月說：『讓我幫妳找到合適的防具。』",
+      "options": [
+        { "id": "opt_armor_iron", "label": "購買：D階鐵盔甲（1000金）", "npcReply": "最強的防禦。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "11c00245-6d43-4ab5-a68b-a7494a9fba84", "enhanceLevel": 0 } } ] },
+        { "id": "opt_armor_leather", "label": "購買：D階皮盔甲（1000金）", "npcReply": "行動自由。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "73884cf9-67b5-47b4-af3c-b6d79a39ec57", "enhanceLevel": 0 } } ] },
+        { "id": "opt_armor_cloth", "label": "購買：D階布衣（1000金）", "npcReply": "輕盈靈巧。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "ee883bee-93c6-450d-b196-754d3e345d2a", "enhanceLevel": 0 } } ] },
+        { "id": "opt_shield", "label": "購買：D階木盾（1000金）", "npcReply": "堅實的盾牌。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "4a7c2dd6-1d33-4613-a5aa-913924d12eed", "enhanceLevel": 0 } } ] },
+        { "id": "opt_recommend", "label": "推薦適合我的防具", "npcReply": "告訴我妳的職業吧。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

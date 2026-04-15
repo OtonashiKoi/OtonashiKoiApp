@@ -1,0 +1,166 @@
+{
+  "id": "encounter_adventurer_kakenishi",
+  "zone": "dungeon",
+  "name": "冒險者·翔",
+  "message": "年輕冒險家，懷抱成為傳說的夢想。記得自己所有冒險，對每個地方充滿好奇。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": {
+    "name": "冒險者·翔",
+    "imageUrl": null,
+    "imageThumbnailUrl": null
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "翔興奮地說：『妳也要去冒險嗎？』",
+      "options": [
+        {
+          "id": "opt_join",
+          "label": "帶我去冒險",
+          "npcReply": "太棒了！",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.4
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_afraid",
+          "label": "我很害怕",
+          "npcReply": "...也許妳不適合。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_down",
+                  "params": {
+                    "value": 0.75
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_story",
+          "label": "分享一個冒險故事",
+          "npcReply": "...妳夜晚會做惡夢的。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": 100
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_down",
+                  "params": {
+                    "value": 0.85
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_legend",
+          "label": "我也想成為傳說冒險家",
+          "npcReply": "我就知道！",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.5
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_up",
+                  "params": {
+                    "value": 1.12
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_danger",
+          "label": "冒險太危險了",
+          "npcReply": "那就再見吧。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 1.6
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

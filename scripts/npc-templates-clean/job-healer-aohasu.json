@@ -1,0 +1,22 @@
+{
+  "id": "job_healer_aohasu",
+  "zone": "temple",
+  "name": "聖光·蒼蓮",
+  "message": "廢棄神廟祭司，多年獨自治療傷者。渴望找到聖光繼承者，相信聖光能淨化世界黑暗。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "聖光·蒼蓮", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "蒼蓮用溫柔的聲音說：『妳願成為聖光嗎？』",
+      "options": [
+        { "id": "opt_exchange", "label": "我願成為聖光繼承者", "npcReply": "聖光在妳心中閃耀。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "any" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "d08f99f6-6a4f-4afb-a02d-ec1a2cd69b2e", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_healer_v1", "enhanceLevel": 0 } } ] },
+        { "id": "opt_story_1", "label": "廢神廟的秘密是什麼?", "npcReply": "秘密就藏在祝福裡。", "nextNodeId": null, "effects": [] },
+        { "id": "opt_story_2", "label": "妳一個人守護這裡多久了?", "npcReply": "時間對我已無意義，因為愛是永恆的。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

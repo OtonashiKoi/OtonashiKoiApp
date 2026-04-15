@@ -1,0 +1,22 @@
+{
+  "id": "job_rogue_yatsuki",
+  "zone": "shadow",
+  "name": "影子·夜月",
+  "message": "竊賊同盟前頭目，因理想破滅而金盆洗手。尋找新代影子殺手，創造維護正義的暗夜組織。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "影子·夜月", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "夜月輕聲：『暗夜中，妳會是什麼？』",
+      "options": [
+        { "id": "opt_exchange", "label": "我想加入影子組織", "npcReply": "很好，加入吧。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "dagger" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "6c47d7a3-0937-4f9b-b447-2cc9f55ba749", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_rogue_v1", "enhanceLevel": 0 } } ] },
+        { "id": "opt_story_1", "label": "教我無聲殺人術", "npcReply": "殺人技術無法教授，只能體驗。", "nextNodeId": null, "effects": [] },
+        { "id": "opt_story_2", "label": "為什麼背叛同盟?", "npcReply": "因為信義比生命更重要。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

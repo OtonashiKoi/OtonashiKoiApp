@@ -1,0 +1,22 @@
+{
+  "id": "job_swordsman_aoshi",
+  "zone": "village",
+  "name": "鋼心·蒼司",
+  "message": "聖城前護衛隊長，因堅持信念被革職。他尋找志同道合的戰士，想要組織屬於自己的騎士團。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "鋼心·蒼司", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "蒼司說：『妳有成為騎士的勇氣嗎？』",
+      "options": [
+        { "id": "opt_exchange", "label": "加入我們的騎士團", "npcReply": "很好，這徽章就是誓約。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "sword" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "e3bcdb33-4a28-499e-9c65-50240368550f", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_swordsman_v1", "enhanceLevel": 0 } } ] },
+        { "id": "opt_story_1", "label": "我接受挑戰", "npcReply": "妳需要更多力量。", "nextNodeId": null, "effects": [] },
+        { "id": "opt_story_2", "label": "聖城發生了什麼?", "npcReply": "那是過去的事了。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

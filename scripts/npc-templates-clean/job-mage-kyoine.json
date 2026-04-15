@@ -1,0 +1,22 @@
+{
+  "id": "job_mage_kyoine",
+  "zone": "tower",
+  "name": "秘莫·晶音",
+  "message": "古代魔法塔最後守護者，族人已消亡，孤獨守護魔法知識。期盼有人學習禁咒，讓失落文明重現。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "秘莫·晶音", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "晶音用古老的聲音說：『妳想學習禁咒嗎？』",
+      "options": [
+        { "id": "opt_exchange", "label": "傳我禁咒之力", "npcReply": "終於有人來了。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "staff" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "d08f99f6-6a4f-4afb-a02d-ec1a2cd69b2e", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_mage_v1", "enhanceLevel": 0 } } ] },
+        { "id": "opt_story_1", "label": "魔法塔的秘密在哪?", "npcReply": "秘密就是力量本身。", "nextNodeId": null, "effects": [] },
+        { "id": "opt_story_2", "label": "妳是最後的法師嗎?", "npcReply": "也許...妳將是下一個。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

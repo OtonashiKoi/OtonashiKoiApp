@@ -1,0 +1,24 @@
+{
+  "id": "merchant_retsuryu",
+  "zone": "market",
+  "name": "行商·烈流",
+  "message": "遠方貿易國商人，專門販售各地奇特武器。對每件武器的故事瞭若指掌，認為好武器會找到合適主人。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "行商·烈流", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "烈流說：『看看我的珍藏武器吧。』",
+      "options": [
+        { "id": "opt_sword", "label": "購買：D階鐵長劍（1000金）", "npcReply": "堅固的選擇。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "9c809436-d8d5-4b21-bf15-e26e881cac9b", "enhanceLevel": 0 } } ] },
+        { "id": "opt_dagger", "label": "購買：D階鋼匕首（1000金）", "npcReply": "輕巧而致命。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "a5bf4a8c-2f89-4b35-9f23-8cb519bb0292", "enhanceLevel": 0 } } ] },
+        { "id": "opt_bow", "label": "購買：D階橡木弓（1000金）", "npcReply": "自然的力量。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "efd48300-f4b6-40d6-a1c5-8c2014ae4b55", "enhanceLevel": 0 } } ] },
+        { "id": "opt_staff", "label": "購買：D階水晶法杖（1000金）", "npcReply": "古老的魔力。", "nextNodeId": null, "effects": [ { "type": "grant_currency", "payload": { "currencyType": "gold", "amount": -1000 } }, { "type": "grant_equipment", "payload": { "itemId": "d08f99f6-6a4f-4afb-a02d-ec1a2cd69b2e", "enhanceLevel": 0 } } ] },
+        { "id": "opt_story", "label": "這些武器有什麼故事?", "npcReply": "每件都有傳說...只待有緣人。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

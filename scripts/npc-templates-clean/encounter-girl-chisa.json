@@ -1,0 +1,157 @@
+{
+  "id": "encounter_girl_chisa",
+  "zone": "road",
+  "name": "路人·千紗",
+  "message": "迷路的年輕女孩，在尋找什麼重要的東西。不太說話，眼神中有深深決心。偶爾問陌生人『妳有看到一個白色的...?』",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": {
+    "name": "路人·千紗",
+    "imageUrl": null,
+    "imageThumbnailUrl": null
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "千紗輕聲問：『妳有看到...什麼嗎？』",
+      "options": [
+        {
+          "id": "opt_help",
+          "label": "我來幫妳尋找",
+          "npcReply": "謝謝...妳很好。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "drop_rate_up",
+                  "params": {
+                    "value": 1.09
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_ask",
+          "label": "妳在找什麼?",
+          "npcReply": "...我也不確定了。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": -100
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_up",
+                  "params": {
+                    "value": 1.1
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_quit",
+          "label": "妳應該放棄",
+          "npcReply": "...妳有什麼資格說這話？",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 1.65
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_follow",
+          "label": "跟我走,更安全",
+          "npcReply": "...好的。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": 250
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_together",
+          "label": "我也在尋找",
+          "npcReply": "...也許我們會互相幫助。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_up",
+                  "params": {
+                    "value": 1.12
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "drop_rate_up",
+                  "params": {
+                    "value": 1.05
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

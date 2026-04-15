@@ -1,0 +1,150 @@
+{
+  "id": "encounter_beggar_shōta",
+  "zone": "town",
+  "name": "路人·樵太",
+  "message": "曾為富商之子，家族衰落淪為乞丐。從不後悔，說貧窮讓他看清人心。偶爾說出神祕話語。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": {
+    "name": "路人·樵太",
+    "imageUrl": null,
+    "imageThumbnailUrl": null
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "樵太說：『施捨者會得到祝福。』",
+      "options": [
+        {
+          "id": "opt_donate",
+          "label": "施捨金幣",
+          "npcReply": "妳的善心會回來。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "drop_rate_up",
+                  "params": {
+                    "value": 1.07
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_fortune",
+          "label": "妳算過命嗎?",
+          "npcReply": "妳的命運...很黑暗。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_down",
+                  "params": {
+                    "value": 0.8
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_success",
+          "label": "告訴我如何成功",
+          "npcReply": "失敗就是最好的老師。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.3
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_steal",
+          "label": "滾開，骯髒的乞丐",
+          "npcReply": "...妳付了代價。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": 300
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_need",
+          "label": "妳需要什麼?",
+          "npcReply": "也許只是被理解。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_down",
+                  "params": {
+                    "value": 0.85
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            },
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.2
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

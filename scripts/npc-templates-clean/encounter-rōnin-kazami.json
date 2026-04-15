@@ -1,0 +1,125 @@
+{
+  "id": "encounter_rōnin_kazami",
+  "zone": "road",
+  "name": "浪人·風見",
+  "message": "沒有目的地的旅人，靠走訪各地思考人生意義。說自己尋找『真正的家』，卻永不停下腳步。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": {
+    "name": "浪人·風見",
+    "imageUrl": null,
+    "imageThumbnailUrl": null
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "風見說：『妳也在旅途中嗎？』",
+      "options": [
+        {
+          "id": "opt_chat",
+          "label": "陪我聊天",
+          "npcReply": "妳的故事激勵了我。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "exp_gain_up",
+                  "params": {
+                    "value": 2.3
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_predict",
+          "label": "幫我預測未來",
+          "npcReply": "妳的命運中充滿黑暗啊。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "final_damage_down",
+                  "params": {
+                    "value": 0.8
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_treasure",
+          "label": "分享旅途中的寶藏地點",
+          "npcReply": "好運眷顧勇敢者。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_buff",
+              "payload": {
+                "effect": {
+                  "key": "drop_rate_up",
+                  "params": {
+                    "value": 1.08
+                  },
+                  "duration": {
+                    "mode": "battle",
+                    "value": 1
+                  },
+                  "stackMode": "refresh"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_wander",
+          "label": "我願意和妳一起流浪",
+          "npcReply": "太好了...也許我終於找到了。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": 200
+              }
+            }
+          ]
+        },
+        {
+          "id": "opt_home",
+          "label": "妳應該回家",
+          "npcReply": "...妳很殘酷。",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "grant_currency",
+              "payload": {
+                "currencyType": "gold",
+                "amount": -1500
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

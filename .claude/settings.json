@@ -4,36 +4,46 @@
   "agents": {
     "explore": {
       "enabled": true,
-      "description": "快速代碼掃描 & 檔案查找",
-      "triggers": [
-        "找現有實裝",
-        "搜尋相關代碼",
-        "檔案位置查詢"
-      ],
+      "description": "快速掃描代碼 & 檔案查找（所有領域通用）",
+      "triggers": ["找", "掃描", "查詢"],
       "thorougness": "quick",
       "modelOverride": "haiku"
     },
 
     "plan": {
       "enabled": true,
-      "description": "功能設計 & 架構規劃",
-      "triggers": [
-        "設計新職業",
-        "調整經濟系統",
-        "優化資料庫架構"
-      ],
+      "description": "設計 & 架構規劃（後台/遊戲系統均可用）",
+      "triggers": ["設計", "規劃", "方案"],
       "modelOverride": "haiku"
     },
 
     "general-purpose": {
       "enabled": true,
-      "description": "代碼實現 & 修復",
-      "triggers": [
-        "實現功能",
-        "修正 Bug",
-        "重構代碼"
-      ],
+      "description": "代碼實現（通用）",
+      "triggers": ["實現", "修復", "開發"],
       "modelOverride": "haiku"
+    }
+  },
+
+  "domains": {
+    "description": "工作領域簡單標籤 - 用前綴指定（@admin, @item, @player）",
+    "labels": [
+      "@admin - 後台管理系統",
+      "@item - 道具系統",
+      "@player - 玩家系統",
+      "@game - 遊戲核心系統"
+    ]
+  },
+
+  "roles": {
+    "description": "角色專用配置",
+    "uiux-designer": {
+      "enabled": true,
+      "description": "UI/UX 設計師專用工作流",
+      "agents": ["explore", "plan"],
+      "modelOverride": "sonnet",
+      "triggers": ["畫", "設計", "改", "排版"],
+      "focus": "設計系統、組件、用戶流程"
     }
   },
 

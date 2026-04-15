@@ -1,0 +1,22 @@
+{
+  "id": "job_dwarf_raizo",
+  "zone": "mountain",
+  "name": "岩拳·雷藏",
+  "message": "深山族群的矮人工匠，掌握祖傳鍛造技藝。希望找到真正的戰士，將傳奇之錘傳承下去。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "岩拳·雷藏", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "雷藏沉聲：『妳配得上傳奇之錘嗎？』",
+      "options": [
+        { "id": "opt_exchange", "label": "我要傳奇之錘", "npcReply": "妳的決心打動了我。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "hammer" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "25648e7c-d628-4d5d-bfed-1dfbe6a5e650", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_dwarf_warrior_v1", "enhanceLevel": 0 } } ] },
+        { "id": "opt_story_1", "label": "傳我鍛造之道", "npcReply": "妳還不夠格。", "nextNodeId": null, "effects": [] },
+        { "id": "opt_story_2", "label": "深山裡還有什麼秘密?", "npcReply": "那是矮人永恆的秘密。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

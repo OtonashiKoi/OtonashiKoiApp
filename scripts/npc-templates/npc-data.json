@@ -1,0 +1,1004 @@
+[
+  {
+    "npcId": "job_archer_001",
+    "name": "澪湊",
+    "title": "雲月",
+    "category": "job_quest",
+    "jobType": "archer",
+    "image": "cloud-wielder-archer.png",
+    "story": "一位曾經追捕盜匪的獵人，因為一次失誤導致隊友受傷，從此隱居山林。她正在尋找有天賦的弓手傳承自己的技藝，相信通過訓練可以救贖自己的過去。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "幫我找回遺失的弓",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["bow"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_archer_v1"
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "我想學習射術",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["bow"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_archer_v1"
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "妳在逃避什麼?",
+        "action": "story_dialog",
+        "reward": null
+      }
+    ]
+  },
+  {
+    "npcId": "job_swordsman_002",
+    "name": "蒼司",
+    "title": "鋼心",
+    "category": "job_quest",
+    "jobType": "swordsman",
+    "image": "steelheart-swordsman.png",
+    "story": "聖城的前護衛隊長，因為堅持自己的信念被革職。他在酒館裡尋找志同道合的戰士，想要組織一支屬於自己的騎士團。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "加入我們的騎士團",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["sword"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_swordsman_v1"
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "我接受挑戰",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["sword"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_swordsman_v1"
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "聖城發生了什麼?",
+        "action": "story_dialog",
+        "reward": null
+      }
+    ]
+  },
+  {
+    "npcId": "job_warrior_003",
+    "name": "一刀",
+    "title": "荒野",
+    "category": "job_quest",
+    "jobType": "warrior",
+    "image": "wilderness-warrior.png",
+    "story": "一位退役的邊境衛士，整日在荒野中修煉。他相信最強的戰士應該在最惡劣的環境中誕生，正在尋找願意與他並肩作戰的勇士。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "我想成為最強的戰士",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["axe"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_warrior_v1"
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "一起征服荒野",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["axe"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_warrior_v1"
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "妳為什麼選擇流浪?",
+        "action": "story_dialog",
+        "reward": null
+      }
+    ]
+  },
+  {
+    "npcId": "job_dwarf_004",
+    "name": "雷藏",
+    "title": "岩拳",
+    "category": "job_quest",
+    "jobType": "dwarf",
+    "image": "rockfist-dwarf.png",
+    "story": "來自深山族群的矮人工匠，掌握著祖傳的鍛造技藝。他希望找到真正的戰士，將自己製作的傳奇之錘傳承下去。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "傳我鍛造之道",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["hammer"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_dwarf_v1"
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "我要傳奇之錘",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["hammer"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_dwarf_v1"
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "深山裡還有什麼秘密?",
+        "action": "story_dialog",
+        "reward": null
+      }
+    ]
+  },
+  {
+    "npcId": "job_rogue_005",
+    "name": "夜月",
+    "title": "影子",
+    "category": "job_quest",
+    "jobType": "rogue",
+    "image": "nightmoon-rogue.png",
+    "story": "曾是竊賊同盟的頭目，但因為理想破滅而金盆洗手。她在尋找新一代的影子殺手，想要創造一個維護正義的暗夜組織。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "我想加入影子組織",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["dagger"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_rogue_v1"
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "教我無聲殺人術",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["dagger"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_rogue_v1"
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "為什麼背叛同盟?",
+        "action": "story_dialog",
+        "reward": null
+      }
+    ]
+  },
+  {
+    "npcId": "job_mage_006",
+    "name": "晶音",
+    "title": "秘莫",
+    "category": "job_quest",
+    "jobType": "mage",
+    "image": "crystalsound-mage.png",
+    "story": "古代魔法塔最後的守護者，族人已經消亡，她孤獨地守護著魔法知識。她期盼有人能學習古老的禁咒，讓失落的文明重現。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "傳我禁咒之力",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["staff"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_mage_v1"
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "魔法塔的秘密在哪?",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "weaponType": ["staff"],
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_mage_v1"
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "妳是最後的法師嗎?",
+        "action": "story_dialog",
+        "reward": null
+      }
+    ]
+  },
+  {
+    "npcId": "job_healer_007",
+    "name": "蒼蓮",
+    "title": "聖光",
+    "category": "job_quest",
+    "jobType": "healer",
+    "image": "bluelotus-healer.png",
+    "story": "廢棄神廟的祭司，多年來獨自治療來訪的傷者。她渴望找到一位真正的聖光繼承者，相信聖光之光能淨化世界的黑暗。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "我願成為聖光繼承者",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_healer_v1"
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "廢神廟的秘密是什麼?",
+        "action": "exchange_job_badge",
+        "requirement": {
+          "itemType": "weapon_main",
+          "grade": "d",
+          "quantity": 1
+        },
+        "reward": {
+          "jobBadge": "job_healer_v1"
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "妳一個人守護這裡多久了?",
+        "action": "story_dialog",
+        "reward": null
+      }
+    ]
+  },
+  {
+    "npcId": "merchant_weapon_008",
+    "name": "烈流",
+    "title": "行商",
+    "category": "merchant",
+    "merchantType": "weapon",
+    "image": "fierce-merchant-weapon.png",
+    "story": "來自遠方貿易國的商人，專門收購和販售來自各地的奇特武器。他對每件武器的故事都瞭若指掌，認為好的武器會找到合適的主人。",
+    "inventory": [
+      {
+        "itemId": "d_sword_iron",
+        "name": "D階鐵長劍",
+        "type": "weapon_main",
+        "grade": "d",
+        "weaponType": "sword",
+        "price": 1000,
+        "description": "堅固的鐵製長劍，適合初級戰士"
+      },
+      {
+        "itemId": "d_dagger_steel",
+        "name": "D階鋼匕首",
+        "type": "weapon_main",
+        "grade": "d",
+        "weaponType": "dagger",
+        "price": 1000,
+        "description": "輕巧的鋼製匕首，盜賊的最愛"
+      },
+      {
+        "itemId": "d_bow_oak",
+        "name": "D階橡木弓",
+        "type": "weapon_main",
+        "grade": "d",
+        "weaponType": "bow",
+        "price": 1000,
+        "description": "從古樹製成的弓，有著自然的力量"
+      },
+      {
+        "itemId": "d_staff_crystal",
+        "name": "D階水晶法杖",
+        "type": "weapon_main",
+        "grade": "d",
+        "weaponType": "staff",
+        "price": 1000,
+        "description": "晶瑩的法杖，儲存著古老的魔力"
+      }
+    ]
+  },
+  {
+    "npcId": "merchant_armor_009",
+    "name": "優月",
+    "title": "行商",
+    "category": "merchant",
+    "merchantType": "armor",
+    "image": "yuzuki-merchant-armor.png",
+    "story": "退役裁縫師開設的防具店。她用最頂級的手工技藝製作每件防具，相信好的防具能保護冒險家的生命，因此價格親民。",
+    "inventory": [
+      {
+        "itemId": "d_armor_iron",
+        "name": "D階鐵盔甲",
+        "type": "armor",
+        "grade": "d",
+        "armorType": "body",
+        "price": 1000,
+        "description": "堅固的鐵製盔甲，防禦力優秀"
+      },
+      {
+        "itemId": "d_armor_leather",
+        "name": "D階皮盔甲",
+        "type": "armor",
+        "grade": "d",
+        "armorType": "body",
+        "price": 1000,
+        "description": "柔韌的皮革防具，行動自由"
+      },
+      {
+        "itemId": "d_armor_cloth",
+        "name": "D階布衣",
+        "type": "armor",
+        "grade": "d",
+        "armorType": "body",
+        "price": 1000,
+        "description": "輕質布料衣物，適合法師穿著"
+      },
+      {
+        "itemId": "d_shield_wood",
+        "name": "D階木盾",
+        "type": "armor",
+        "grade": "d",
+        "armorType": "shield",
+        "price": 1000,
+        "description": "堅實的木製盾牌，劍士的好夥伴"
+      }
+    ]
+  },
+  {
+    "npcId": "merchant_weapon2_010",
+    "name": "巖澄",
+    "title": "行商",
+    "category": "merchant",
+    "merchantType": "weapon",
+    "image": "ganchō-merchant-weapon.png",
+    "story": "曾經的鍛造大師，因為一次爆炸失去了雙臂，現在由兒子代替販售武器。他一直堅持只賣最好的武器，絕不降低品質。",
+    "inventory": [
+      {
+        "itemId": "d_axe_steel",
+        "name": "D階鋼斧",
+        "type": "weapon_main",
+        "grade": "d",
+        "weaponType": "axe",
+        "price": 1000,
+        "description": "鋒利的鋼製斧頭，戰士的利器"
+      },
+      {
+        "itemId": "d_hammer_iron",
+        "name": "D階鐵錘",
+        "type": "weapon_main",
+        "grade": "d",
+        "weaponType": "hammer",
+        "price": 1000,
+        "description": "沉重的鐵錘，擊碎一切的力量"
+      },
+      {
+        "itemId": "d_claw_bronze",
+        "name": "D階銅爪",
+        "type": "weapon_main",
+        "grade": "d",
+        "weaponType": "claw",
+        "price": 1000,
+        "description": "銳利的銅製爪擊，野獸的能力"
+      },
+      {
+        "itemId": "d_spear_ash",
+        "name": "D階梣木長槍",
+        "type": "weapon_main",
+        "grade": "d",
+        "weaponType": "spear",
+        "price": 1000,
+        "description": "堅硬的梣木製長槍，刺穿一切"
+      }
+    ]
+  },
+  {
+    "npcId": "merchant_armor2_011",
+    "name": "雪乃",
+    "title": "行商",
+    "category": "merchant",
+    "merchantType": "armor",
+    "image": "yukino-merchant-armor.png",
+    "story": "年輕的工坊主人，從母親手中接手家族事業。她用創新的想法改進傳統防具，在保持功能的同時也讓外觀更加優美。",
+    "inventory": [
+      {
+        "itemId": "d_boot_leather",
+        "name": "D階皮靴",
+        "type": "armor",
+        "grade": "d",
+        "armorType": "feet",
+        "price": 1000,
+        "description": "舒適的皮革靴子，行動速度+5%"
+      },
+      {
+        "itemId": "d_gauntlet_steel",
+        "name": "D階鋼手套",
+        "type": "armor",
+        "grade": "d",
+        "armorType": "hands",
+        "price": 1000,
+        "description": "靈巧的鋼手套，攻擊速度+3%"
+      },
+      {
+        "itemId": "d_robe_silk",
+        "name": "D階絲綢法袍",
+        "type": "armor",
+        "grade": "d",
+        "armorType": "body",
+        "price": 1000,
+        "description": "優雅的法袍，法力強度+5%"
+      },
+      {
+        "itemId": "d_bracelet_gold",
+        "name": "D階鑲金護腕",
+        "type": "armor",
+        "grade": "d",
+        "armorType": "wrist",
+        "price": 1000,
+        "description": "華貴的護腕，幸運度+3%"
+      }
+    ]
+  },
+  {
+    "npcId": "traveler_012",
+    "name": "風見",
+    "title": "浪人",
+    "category": "encounter",
+    "encounterType": "traveler",
+    "image": "kazami-traveler.png",
+    "story": "一個沒有目的地的旅人，靠著走訪各地來思考人生的意義。他說自己在尋找『真正的家』，但似乎永遠都不會停下腳步。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "陪我聊天",
+        "reward": {
+          "type": "buff",
+          "nextBattleExp": 30
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "幫我預測未來",
+        "reward": {
+          "type": "debuff",
+          "nextBattleDamage": -20
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "分享旅途中的寶藏地點",
+        "reward": {
+          "type": "mixed",
+          "nextBattleDropRate": 8,
+          "description": "好運和凶險並存"
+        }
+      },
+      {
+        "id": "opt_4",
+        "text": "我願意和妳一起流浪",
+        "reward": {
+          "type": "buff",
+          "gold": 200
+        }
+      },
+      {
+        "id": "opt_5",
+        "text": "妳應該回家",
+        "reward": {
+          "type": "debuff",
+          "gold": -1500
+        }
+      }
+    ]
+  },
+  {
+    "npcId": "adventurer_013",
+    "name": "翔",
+    "title": "冒險者",
+    "category": "encounter",
+    "encounterType": "adventurer",
+    "image": "kakenishi-adventurer.png",
+    "story": "懷抱著成為傳說冒險家夢想的年輕人。他記得自己的所有冒險，對每個地方都充滿好奇，經常問其他冒險家要去哪裡。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "帶我去冒險",
+        "reward": {
+          "type": "buff",
+          "nextBattleExp": 40
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "我很害怕",
+        "reward": {
+          "type": "debuff",
+          "nextBattleDamage": -25
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "分享一個冒險故事",
+        "reward": {
+          "type": "mixed",
+          "gold": 100,
+          "nextBattleDamage": -15
+        }
+      },
+      {
+        "id": "opt_4",
+        "text": "我也想成為傳說冒險家",
+        "reward": {
+          "type": "buff",
+          "giftEquipment": {
+            "grade": "d",
+            "type": "weapon_main"
+          }
+        }
+      },
+      {
+        "id": "opt_5",
+        "text": "冒險太危險了",
+        "reward": {
+          "type": "debuff",
+          "nextBattleExp": -40
+        }
+      }
+    ]
+  },
+  {
+    "npcId": "wanderer_014",
+    "name": "月蒼",
+    "title": "漂泊者",
+    "category": "encounter",
+    "encounterType": "wanderer",
+    "image": "tsukiaō-wanderer.png",
+    "story": "年邁的旅人，已經在路上走了一輩子。他不記得自己的出身，只知道月亮陪伴著他。他似乎對一切都很滿足，卻又暗藏著某種深深的悲傷。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "妳一定很寂寞",
+        "reward": {
+          "type": "buff",
+          "nextBattleExp": 35
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "月亮在看著我們",
+        "reward": {
+          "type": "buff",
+          "nextBattleDamage": 15
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "在我身邊歇息",
+        "reward": {
+          "type": "debuff",
+          "gold": -2000
+        }
+      },
+      {
+        "id": "opt_4",
+        "text": "妳想死嗎?",
+        "reward": {
+          "type": "debuff",
+          "nextBattleDropRate": -8
+        }
+      },
+      {
+        "id": "opt_5",
+        "text": "講講妳的故事",
+        "reward": {
+          "type": "mixed",
+          "gold": -500,
+          "nextBattleExp": 25
+        }
+      }
+    ]
+  },
+  {
+    "npcId": "beggar_015",
+    "name": "樵太",
+    "title": "乞丐",
+    "category": "encounter",
+    "encounterType": "stranger",
+    "image": "shōta-beggar.png",
+    "story": "曾經是富商的兒子，因為家族衰落而淪為乞丐。他從不後悔，說貧窮讓他看清了人心。有時他會說出似乎知曉過去未來的神祕話語。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "施捨金幣",
+        "reward": {
+          "type": "buff",
+          "nextBattleDropRate": 7
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "妳算過命嗎?",
+        "reward": {
+          "type": "debuff",
+          "nextBattleDamage": -20
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "告訴我如何成功",
+        "reward": {
+          "type": "buff",
+          "nextBattleExp": 30
+        }
+      },
+      {
+        "id": "opt_4",
+        "text": "滾開，骯髒的乞丐",
+        "reward": {
+          "type": "buff",
+          "gold": 300,
+          "description": "他偷了妳的敵人的錢包"
+        }
+      },
+      {
+        "id": "opt_5",
+        "text": "妳需要什麼?",
+        "reward": {
+          "type": "mixed",
+          "nextBattleDamage": -15,
+          "nextBattleExp": 20
+        }
+      }
+    ]
+  },
+  {
+    "npcId": "girl_016",
+    "name": "千紗",
+    "title": "少女",
+    "category": "encounter",
+    "encounterType": "stranger",
+    "image": "chisa-girl.png",
+    "story": "迷路的年輕女孩，看起來在尋找什麼重要的東西。她不太說話，但眼神中有著深深的決心。偶爾會問陌生人『妳有看到一個白色的...?』，卻從不解釋。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "我來幫妳尋找",
+        "reward": {
+          "type": "buff",
+          "nextBattleDropRate": 9
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "妳在找什麼?",
+        "reward": {
+          "type": "mixed",
+          "gold": -100,
+          "nextBattleDamage": 10
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "妳應該放棄",
+        "reward": {
+          "type": "debuff",
+          "nextBattleExp": -35
+        }
+      },
+      {
+        "id": "opt_4",
+        "text": "跟我走，更安全",
+        "reward": {
+          "type": "buff",
+          "gold": 250
+        }
+      },
+      {
+        "id": "opt_5",
+        "text": "我也在尋找",
+        "reward": {
+          "type": "buff",
+          "nextBattleDamage": 12,
+          "nextBattleDropRate": 5
+        }
+      }
+    ]
+  },
+  {
+    "npcId": "merchant_017",
+    "name": "源",
+    "title": "商人",
+    "category": "encounter",
+    "encounterType": "stranger",
+    "image": "minamoto-merchant.png",
+    "story": "總是在各個城鎮之間流動的商人，擅長看人下菜碟。他只在乎利益，但從不傷害無辜者。他說自己是『世界的潤滑油』，雖然沒人知道他在潤滑什麼。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "和我做筆交易",
+        "reward": {
+          "type": "mixed",
+          "gold": 150,
+          "nextBattleDamage": -10
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "妳在騙我嗎?",
+        "reward": {
+          "type": "debuff",
+          "gold": -800
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "我們合作吧",
+        "reward": {
+          "type": "mixed",
+          "gold": 50,
+          "nextBattleExp": 25,
+          "nextBattleDamage": -8
+        }
+      },
+      {
+        "id": "opt_4",
+        "text": "妳的價格太貴",
+        "reward": {
+          "type": "buff",
+          "nextBattleDropRate": 8
+        }
+      },
+      {
+        "id": "opt_5",
+        "text": "滾出去",
+        "reward": {
+          "type": "debuff",
+          "nextBattleDamage": -30
+        }
+      }
+    ]
+  },
+  {
+    "npcId": "elder_018",
+    "name": "太郎",
+    "title": "村長",
+    "category": "villager",
+    "villagerType": "elder",
+    "image": "taro-elder.png",
+    "story": "管理村莊30年的村長，他對每個村民都如家人一般。最近村莊遭受魔物騷擾，他在尋找強大的冒險家來保護村人。他雖然年邁，卻有著最堅定的意志。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "我保護妳們的村",
+        "reward": {
+          "type": "buff",
+          "nextBattleExp": 50,
+          "nextBattleDamage": 15
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "這不是我的責任",
+        "reward": {
+          "type": "debuff",
+          "gold": -3000,
+          "nextBattleExp": -40
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "妳們付多少報酬?",
+        "reward": {
+          "type": "mixed",
+          "gold": 200,
+          "nextBattleDamage": -12
+        }
+      },
+      {
+        "id": "opt_4",
+        "text": "講講村的歷史",
+        "reward": {
+          "type": "buff",
+          "nextBattleExp": 35
+        }
+      },
+      {
+        "id": "opt_5",
+        "text": "我會盡力",
+        "reward": {
+          "type": "buff",
+          "nextBattleDropRate": 8,
+          "gold": 100
+        }
+      }
+    ]
+  },
+  {
+    "npcId": "widow_019",
+    "name": "綾子",
+    "title": "少婦",
+    "category": "villager",
+    "villagerType": "widow",
+    "image": "ayako-widow.png",
+    "story": "村莊裡的織布工，她在魔物騷擾中失去了丈夫。現在她靠著織布養活三個孩子，每天都在祈禱能有人來救村莊。她很堅強，卻也很脆弱。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "為了妳和孩子們",
+        "reward": {
+          "type": "buff",
+          "nextBattleExp": 45,
+          "nextBattleDropRate": 10
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "我無能為力",
+        "reward": {
+          "type": "debuff",
+          "nextBattleDamage": -35,
+          "nextBattleExp": -50
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "帶我見妳的孩子",
+        "reward": {
+          "type": "buff",
+          "nextBattleExp": 30
+        }
+      },
+      {
+        "id": "opt_4",
+        "text": "妳丈夫遺留了什麼?",
+        "reward": {
+          "type": "mixed",
+          "gold": 300,
+          "nextBattleDamage": -15
+        }
+      },
+      {
+        "id": "opt_5",
+        "text": "這裡值得守護",
+        "reward": {
+          "type": "buff",
+          "nextBattleDamage": 18,
+          "nextBattleExp": 25
+        }
+      }
+    ]
+  },
+  {
+    "npcId": "warrior_020",
+    "name": "鐵心",
+    "title": "傭兵隊長",
+    "category": "warrior",
+    "warriorType": "mercenary_leader",
+    "image": "tetushin-captain.png",
+    "story": "領導傭兵隊多年的隊長，他用實力和誠信贏得了所有人的尊重。他在尋找一個強大的戰士加入他的隊伍，繼續維護世界的平衡。他相信只有最強的人才能改變世界。",
+    "dialogOptions": [
+      {
+        "id": "opt_1",
+        "text": "我加入妳們",
+        "reward": {
+          "type": "buff",
+          "nextBattleDamage": 20,
+          "nextBattleExp": 50
+        }
+      },
+      {
+        "id": "opt_2",
+        "text": "傭兵很可恥",
+        "reward": {
+          "type": "debuff",
+          "nextBattleDamage": -30,
+          "nextBattleExp": -45,
+          "gold": -1500
+        }
+      },
+      {
+        "id": "opt_3",
+        "text": "有什麼條件?",
+        "reward": {
+          "type": "mixed",
+          "nextBattleDamage": 8,
+          "nextBattleExp": 20,
+          "nextBattleDropRate": -5
+        }
+      },
+      {
+        "id": "opt_4",
+        "text": "講講妳的戰績",
+        "reward": {
+          "type": "buff",
+          "nextBattleExp": 40
+        }
+      },
+      {
+        "id": "opt_5",
+        "text": "我們決鬥吧",
+        "reward": {
+          "type": "mixed",
+          "successPath": {
+            "nextBattleDamage": 25,
+            "nextBattleExp": 35
+          },
+          "failurePath": {
+            "nextBattleDamage": -20,
+            "nextBattleDropRate": -10
+          }
+        }
+      },
+      {
+        "id": "opt_6",
+        "text": "帶我見妳的隊伍",
+        "reward": {
+          "type": "buff",
+          "gold": 200,
+          "nextBattleExp": 25
+        }
+      }
+    ]
+  }
+]

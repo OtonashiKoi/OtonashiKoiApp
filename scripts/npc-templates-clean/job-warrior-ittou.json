@@ -1,0 +1,22 @@
+{
+  "id": "job_warrior_ittou",
+  "zone": "wilderness",
+  "name": "荒野·一刀",
+  "message": "退役邊境衛士，整日在荒野修煉。相信最強戰士應在最惡劣環境誕生，尋找願與他並肩作戰的勇士。",
+  "triggerMonsterSeq": null,
+  "durationSec": 45,
+  "priority": 50,
+  "enabled": true,
+  "npc": { "name": "荒野·一刀", "imageUrl": null, "imageThumbnailUrl": null },
+  "nodes": [
+    {
+      "id": "start",
+      "text": "一刀說：『妳敢與我共闖荒野嗎？』",
+      "options": [
+        { "id": "opt_exchange", "label": "一起征服荒野", "npcReply": "這就是我要找的人。", "nextNodeId": null, "condition": { "any": [ { "weaponType": "axe" } ] }, "effects": [ { "type": "take_item", "payload": { "itemId": "8218a81c-98ed-49d3-8a16-a38189e00be6", "enhanceLevel": 3 } }, { "type": "grant_equipment", "payload": { "itemId": "job_warrior_v1", "enhanceLevel": 0 } } ] },
+        { "id": "opt_story_1", "label": "我想成為最強的戰士", "npcReply": "力量無法速成。", "nextNodeId": null, "effects": [] },
+        { "id": "opt_story_2", "label": "妳為什麼選擇流浪?", "npcReply": "因為只有流浪才能磨練靈魂。", "nextNodeId": null, "effects": [] }
+      ]
+    }
+  ]
+}

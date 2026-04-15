@@ -2,6 +2,7 @@
   const BASE = "/admin/monster-events";
   const listEl = document.getElementById("monster-events-list");
   const refreshBtn = document.getElementById("monster-events-refresh-btn");
+  const reloadTemplatesBtn = document.getElementById("monster-events-reload-templates-btn");
   const addBtn = document.getElementById("monster-events-add-btn");
   const filterEl = document.getElementById("monster-events-filter");
   const npcImgInput = document.getElementById("monster-events-npc-img-input");
@@ -27,6 +28,8 @@
     uploadSuccess: "已更新 NPC 圖片 ",
     uploadFailed: "上傳失敗：",
     clearImageFailed: "清除圖片失敗：",
+    reloadTemplatesSuccess: "已重新載入所有模板",
+    reloadTemplatesFailed: "重新載入模板失敗：",
     modalTitle: "NPC 模板編輯",
     close: "關閉",
     save: "儲存模板",
@@ -520,7 +523,23 @@
     }
   });
 
+  async function reloadTemplates() {
+    try {
+      reloadTemplatesBtn.disabled = true;
+      reloadTemplatesBtn.textContent = "重新載入中...";
+      await api(`${BASE}/reload-templates`, { method: "POST" });
+      window.logActivity?.(TEXT.reloadTemplatesSuccess);
+      await load();
+    } catch (error) {
+      alert(`${TEXT.reloadTemplatesFailed}${error.message}`);
+    } finally {
+      reloadTemplatesBtn.disabled = false;
+      reloadTemplatesBtn.textContent = "刷新模板";
+    }
+  }
+
   refreshBtn?.addEventListener("click", () => load());
+  reloadTemplatesBtn?.addEventListener("click", reloadTemplates);
   addBtn?.addEventListener("click", createTemplate);
   filterEl?.addEventListener('change', () => renderCards());
 
