@@ -11,7 +11,7 @@ const JOB_ITEM = {
   id: JOB_ITEM_ID,
   name: "盜賊",
   description: "以匕首速攻與敏捷迴避為主的職業徽章。",
-  itemType: "equipment",
+  itemType: "job_badge",
   imageUrl: null,
   imageThumbnailUrl: null,
   effect: { type: "none", value: 0 },

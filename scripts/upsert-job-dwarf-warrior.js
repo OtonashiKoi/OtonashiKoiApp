@@ -11,7 +11,7 @@ const JOB_ITEM = {
   id: JOB_ITEM_ID,
   name: "矮人戰士",
   description: "專精槌類武器的矮人工匠戰士。",
-  itemType: "equipment",
+  itemType: "job_badge",
   imageUrl: null,
   imageThumbnailUrl: null,
   effect: { type: "none", value: 0 },

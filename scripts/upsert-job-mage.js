@@ -11,7 +11,7 @@ const JOB_ITEM = {
   id: JOB_ITEM_ID,
   name: "法師",
   description: "操控元素的施法者，杖術與元素效果為核心。",
-  itemType: "equipment",
+  itemType: "job_badge",
   imageUrl: null,
   imageThumbnailUrl: null,
   effect: { type: "none", value: 0 },

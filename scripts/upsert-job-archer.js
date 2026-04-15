@@ -9,7 +9,7 @@ const JOB_ITEM = {
   id: JOB_ITEM_ID,
   name: "弓箭手",
   description: "擅長遠程射擊的職業，弓術造成高爆發傷害並能在迴避後反擊。",
-  itemType: "equipment",
+  itemType: "job_badge",
   equipSlot: "job_eq",
   equipStats: { dex: 5, agi: 1, luk: 2 },
   passiveEffects: [

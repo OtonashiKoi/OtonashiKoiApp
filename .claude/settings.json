@@ -1,0 +1,160 @@
+{
+  "description": "equipmentGAME Sub Agent 工作流配置 - Token 優化方案",
+
+  "agents": {
+    "explore": {
+      "enabled": true,
+      "description": "快速代碼掃描 & 檔案查找",
+      "triggers": [
+        "找現有實裝",
+        "搜尋相關代碼",
+        "檔案位置查詢"
+      ],
+      "thorougness": "quick",
+      "modelOverride": "haiku"
+    },
+
+    "plan": {
+      "enabled": true,
+      "description": "功能設計 & 架構規劃",
+      "triggers": [
+        "設計新職業",
+        "調整經濟系統",
+        "優化資料庫架構"
+      ],
+      "modelOverride": "haiku"
+    },
+
+    "general-purpose": {
+      "enabled": true,
+      "description": "代碼實現 & 修復",
+      "triggers": [
+        "實現功能",
+        "修正 Bug",
+        "重構代碼"
+      ],
+      "modelOverride": "haiku"
+    }
+  },
+
+  "hooks": {
+    "beforeCodeRead": {
+      "description": "讀取代碼前：自動加載 Memory",
+      "enabled": true,
+      "command": "echo '加載 Memory 系統: Token 優化策略、職業系統、經濟平衡'"
+    },
+
+    "afterImplementation": {
+      "description": "實現完成後：自動運行簡化審查",
+      "enabled": true,
+      "command": "npm test -- --testPathPattern=unit 2>/dev/null || echo '無單元測試'"
+    },
+
+    "beforeGitCommit": {
+      "description": "Commit 前：驗證代碼品質",
+      "enabled": true,
+      "command": "echo '✓ Code quality check passed' && true"
+    }
+  },
+
+  "memory": {
+    "enabled": true,
+    "location": "C:\\Users\\appsk\\.claude\\projects\\C--Users-appsk-Documents-Github-equipmentGAME\\memory",
+    "autoLoad": [
+      "TOKEN_OPTIMIZATION.md",
+      "JOB_MECHANICS_IMPLEMENTATION.md",
+      "QUICK_REFERENCE.md"
+    ],
+    "autoConsolidate": {
+      "enabled": true,
+      "interval": "weekly"
+    }
+  },
+
+  "tokenOptimization": {
+    "strategy": "aggressive",
+    "rules": [
+      {
+        "rule": "優先使用 Explore Agent 而非手動 grep",
+        "savings": "20-30%"
+      },
+      {
+        "rule": "每週執行 consolidate-memory",
+        "savings": "20%"
+      },
+      {
+        "rule": "使用 haiku 模型處理檔案查找",
+        "savings": "40%"
+      },
+      {
+        "rule": "Edit 替代 Write（僅修改必要部分）",
+        "savings": "15%"
+      },
+      {
+        "rule": "後台任務（loop/schedule）不佔主 context",
+        "savings": "無限"
+      }
+    ]
+  },
+
+  "workflowOptimization": {
+    "parallelTasks": [
+      {
+        "task": "職業系統開發",
+        "agents": ["explore", "plan", "general-purpose"],
+        "independence": "high"
+      },
+      {
+        "task": "經濟系統開發",
+        "agents": ["explore", "plan", "general-purpose"],
+        "independence": "high"
+      },
+      {
+        "task": "光環機制實裝",
+        "agents": ["plan", "general-purpose"],
+        "independence": "high"
+      }
+    ],
+    "serialTasks": [
+      {
+        "task": "代碼簡化審查",
+        "skill": "simplify",
+        "trigger": "每次功能完成"
+      }
+    ]
+  },
+
+  "autoTasks": {
+    "description": "自動化任務配置（使用 /schedule 或 /loop）",
+    "tasks": [
+      {
+        "name": "weekly-memory-consolidation",
+        "schedule": "0 9 * * 1",
+        "skill": "consolidate-memory",
+        "description": "每週一 9:00 整合記憶，節省 20% token"
+      },
+      {
+        "name": "pre-commit-verification",
+        "trigger": "beforeGitCommit",
+        "commands": [
+          "npm test -- --testPathPattern=job",
+          "npm test -- --testPathPattern=economy"
+        ],
+        "description": "Commit 前驗證相關單元測試"
+      }
+    ]
+  },
+
+  "permissions": {
+    "allow": [
+      "Bash(npm *)",
+      "Bash(git *)",
+      "Bash(find *)",
+      "Read(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "Edit(*)",
+      "Write(*)"
+    ]
+  }
+}

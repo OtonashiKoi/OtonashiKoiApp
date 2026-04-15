@@ -11,7 +11,7 @@ const JOB_ITEM = {
   id: JOB_ITEM_ID,
   name: "戰士",
   description: "專精斧類武器的前線職業。",
-  itemType: "equipment",
+  itemType: "job_badge",
   imageUrl: null,
   imageThumbnailUrl: null,
   effect: { type: "none", value: 0 },

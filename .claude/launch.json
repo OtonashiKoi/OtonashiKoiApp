@@ -1,0 +1,34 @@
+{
+  "version": "0.0.1",
+  "description": "equipmentGAME 開發伺服器配置",
+  "configurations": [
+    {
+      "name": "game-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "description": "主遊戲開發伺服器"
+    },
+    {
+      "name": "job-system-tests",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["test", "--", "--testPathPattern=job", "--watch"],
+      "port": 3001,
+      "description": "職業系統單元測試（監視模式）"
+    },
+    {
+      "name": "economy-tests",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["test", "--", "--testPathPattern=economy", "--watch"],
+      "port": 3002,
+      "description": "經濟系統單元測試（監視模式）"
+    },
+    {
+      "name": "mongodb-local",
+      "runtimeExecutable": "mongod",
+      "runtimeArgs": ["--dbpath", "./data/db"],
+      "port": 27017,
+      "description": "本地 MongoDB（開發用）"
+    }
+  ]
+}

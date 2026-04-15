@@ -11,7 +11,7 @@ const JOB_ITEM = {
   id: JOB_ITEM_ID,
   name: "劍士",
   description: "專精單手劍與雙手劍的前線職業。",
-  itemType: "equipment",
+  itemType: "job_badge",
   imageUrl: null,
   imageThumbnailUrl: null,
   effect: { type: "none", value: 0 },

@@ -476,7 +476,8 @@ function filterByTab(inventory, tab) {
     );
   }
   if (tab === "special") return inventory.filter(e => e.itemType === "equipment" && EQ_SPECIAL_SLOTS.has(e.equipSlot));
-  return inventory.filter(e => e.itemType !== "equipment");
+  if (tab === "badge") return inventory.filter(e => e.itemType === "job_badge");
+  return inventory.filter(e => e.itemType !== "equipment" && e.itemType !== "job_badge");
 }
 
 const PAGE_SIZE = 3;
@@ -487,6 +488,7 @@ function buildTabRow(activeTab) {
     { tab: "weapon",  label: "⚔️ 武器" },
     { tab: "armor",   label: "🛡️ 防裝" },
     { tab: "special", label: "✨ 特殊" },
+    { tab: "badge",   label: "📖 職業" },
   ];
   return new ActionRowBuilder().addComponents(
     defs.map(d => new ButtonBuilder()
@@ -521,14 +523,15 @@ function buildPageRow(tab, page, totalPages) {
 
 function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
   const rawFiltered = filterByTab(inventory, tab);
-  const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "special";
+  const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "special" || tab === "badge";
   const filtered = isEquipTab ? groupEquipmentItems(rawFiltered, tab) : sortBackpackItems(rawFiltered, tab);
   const header = prefixMsg ? prefixMsg + "\n\n" : "";
   const tabLabel =
     tab === "weapon" ? "武器" :
     tab === "armor"  ? "防裝" :
     tab === "equip"  ? "裝備" :
-    tab === "special"? "特殊" : "道具";
+    tab === "special"? "特殊" :
+    tab === "badge"  ? "職業" : "道具";
   const tabRow = buildTabRow(tab, page);
 
   if (!filtered.length) {
