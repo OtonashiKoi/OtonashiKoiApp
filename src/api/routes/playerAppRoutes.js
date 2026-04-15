@@ -887,29 +887,78 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const equipped = progress?.equipment || {};
       const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || []);
 
+      // ── 治療師光環系統 ──
+      // 檢查玩家是否裝備治療師徽章
+      const jobEq = equipped.job_eq || null;
+      const jobId = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
+      const jobName = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
+      const isHealer = jobEq && (jobId.includes("healer") || jobName.includes("治療"));
+
+      // 讀取最新的怪物狀態以更新光環記錄
+      const freshStateForAura = await serviceContext.monsterService.getState(zoneKey);
+
+      let stateForCombat = freshStateForAura;
+      let partyEffects = [];
+
+      if (isHealer) {
+        // 治療師進入：收集 party 效果並記錄光環
+        const { collectEquipmentEffects } = require("../../shared/effectEngine");
+        const partyEffs = collectEquipmentEffects(equipped, "passive", { equipped, inventory: progress?.inventory || [] })
+          .filter(e => e.target === "party");
+
+        const auraState = {
+          ...freshStateForAura,
+          activeHealerAura: {
+            discordId,
+            displayName,
+            effects: partyEffs
+          }
+        };
+        await serviceContext.monsterService.saveState(auraState, zoneKey);
+        stateForCombat = auraState;
+        partyEffects = partyEffs;
+      } else if (freshStateForAura.activeHealerAura?.discordId === discordId) {
+        // 同一玩家沒穿治療師徽章再次進入 → 清除光環
+        const clearedState = {
+          ...freshStateForAura,
+          activeHealerAura: null
+        };
+        await serviceContext.monsterService.saveState(clearedState, zoneKey);
+        stateForCombat = clearedState;
+        partyEffects = [];
+      } else {
+        // 其他玩家：享受光環效果（如果存在）
+        partyEffects = freshStateForAura.activeHealerAura?.effects || [];
+        stateForCombat = freshStateForAura;
+      }
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
-        runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial);
+        runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial, undefined, {
+          equipped,
+          inventory: progress?.inventory || [],
+          partyEffects
+        });
       const totalTaken = Math.max(0, (pStats.maxHp || 0) - Math.max(0, finalPlayerHp));
 
       // 蝯?
       const { handleMonsterKill, _republishPanel, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
       let rewardLines = [];
       let mHp = finalMonsterHp;
-      const currentParticipants = Array.isArray(state.participants) ? state.participants : [];
+      const currentParticipants = Array.isArray(stateForCombat.participants) ? stateForCombat.participants : [];
 
       if (outcome === "win") {
         mHp = 0;
         // Ensure this player is included in participants and damage map before kill handling.
         const stateWithMe = {
-          ...state,
+          ...stateForCombat,
           participants: [...new Set([...currentParticipants, discordId])],
           damageMap: {
-            ...(state.damageMap || {}),
+            ...(stateForCombat.damageMap || {}),
             [discordId]: {
               name: displayName,
-              damage: (state.damageMap?.[discordId]?.damage || 0) + totalDamage,
-              taken: (state.damageMap?.[discordId]?.taken || 0) + totalTaken,
+              damage: (stateForCombat.damageMap?.[discordId]?.damage || 0) + totalDamage,
+              taken: (stateForCombat.damageMap?.[discordId]?.taken || 0) + totalTaken,
             }
           }
         };

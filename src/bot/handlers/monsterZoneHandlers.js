@@ -622,6 +622,14 @@ async function handleStartFight(interaction) {
       } catch (e) {}
     }));
 
+    // ── 治療師光環：若存在且不在 participants 中，疊加光環效果 ──
+    const aura = state.activeHealerAura;
+    if (aura && aura.effects && !participants.includes(aura.discordId)) {
+      for (const e of aura.effects) {
+        partyEffects.push(e);
+      }
+    }
+
     const currentProg = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
     const currentEquipped = (currentProg && currentProg.equipment) ? currentProg.equipment : {};
 
@@ -1119,6 +1127,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         damageMap: {},
         killClaimedSeq: null,
         currentHp: 0,
+        activeHealerAura: null,
         activeEvent: {
           id: chosenEvent.id,
           name: tpl ? tpl.name : chosenEvent.id,
@@ -1144,6 +1153,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         participants: [],
         damageMap: {},
         killClaimedSeq: null,
+        activeHealerAura: null,
         activeEvent: null
       };
       await sc.monsterService.saveState(newState, zoneKey);
