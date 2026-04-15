@@ -1,0 +1,904 @@
+[
+  {
+    "_id": "69d2ab22edbb0450da0495a1",
+    "id": "c39bdddd-a33d-4e34-8019-d17020a8083b",
+    "agi": 3,
+    "createdAt": "2026-04-05T18:34:10.645Z",
+    "dex": 3,
+    "drops": [
+      {
+        "itemId": "4a7c2dd6-1d33-4613-a5aa-913924d12eed",
+        "chance": 15
+      },
+      {
+        "itemId": "ee883bee-93c6-450d-b196-754d3e345d2a",
+        "chance": 15
+      }
+    ],
+    "enabled": true,
+    "entryFee": 5,
+    "expReward": 200,
+    "goldReward": 800,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897916/equipment-game/monsters/o1av1sdwyvx2ex0odykl.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897916/equipment-game/monsters/mgpoztcqdk3fcfrw0teo.png",
+    "int": 1,
+    "luk": 1,
+    "name": "小史(小)",
+    "seq": 1,
+    "str": 1,
+    "vit": 3,
+    "participantGoldReward": 30,
+    "level": 3,
+    "zone": "normal",
+    "spawnRate": 10,
+    "def": 10,
+    "maxHp": 5000,
+    "updatedAt": "2026-04-10T17:47:23.791Z",
+    "isBoss": false,
+    "calc": {
+      "maxHp": 5000
+    },
+    "npcMappings": [
+      {
+        "eventId": "e2d4f176-6222-4f0c-afb0-4ae05422a76c",
+        "chance": 20,
+        "triggerMonsterSeq": null
+      }
+    ]
+  },
+  {
+    "_id": "69d2ab22edbb0450da0495a3",
+    "id": "f00fd7b1-9f57-4532-9901-f4d4d74f132d",
+    "agi": 4,
+    "createdAt": "2026-04-05T18:34:10.717Z",
+    "dex": 4,
+    "drops": [
+      {
+        "itemId": "7bdf0277-dcd5-4173-b3ff-d93ccaa9e293",
+        "chance": 15
+      },
+      {
+        "itemId": "3667cf4f-18cb-4861-b4cb-8700805d8bcf",
+        "chance": 15
+      }
+    ],
+    "enabled": true,
+    "entryFee": 5,
+    "expReward": 320,
+    "goldReward": 1000,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897918/equipment-game/monsters/a2xbot94msvntzjmrwb2.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897917/equipment-game/monsters/jfzoil2fhozz8h8vstoo.jpg",
+    "int": 1,
+    "luk": 1,
+    "name": "哥布",
+    "seq": 2,
+    "str": 1,
+    "vit": 4,
+    "level": 3,
+    "zone": "normal",
+    "spawnRate": 10,
+    "def": 15,
+    "maxHp": 6000,
+    "updatedAt": "2026-04-10T17:47:23.791Z",
+    "isBoss": false,
+    "calc": {
+      "maxHp": 6000
+    }
+  },
+  {
+    "_id": "69d2ab22edbb0450da0495a4",
+    "id": "a8ef443e-3a0d-4ccb-9290-d6394edaa59f",
+    "agi": 18,
+    "createdAt": "2026-04-05T18:34:10.743Z",
+    "dex": 8,
+    "drops": [
+      {
+        "itemId": "a91fab15-a786-490a-ae7f-6ecd536febb1",
+        "chance": 15
+      },
+      {
+        "itemId": "912125cb-6738-4694-9657-81e7f6a5c2da",
+        "chance": 15
+      }
+    ],
+    "enabled": true,
+    "entryFee": 5,
+    "expReward": 270,
+    "goldReward": 900,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897920/equipment-game/monsters/vs96hfjp3wuhvydkqpcl.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897919/equipment-game/monsters/psyuv1xzgrjzelxtet4a.webp",
+    "int": 1,
+    "luk": 2,
+    "name": "小狼",
+    "seq": 3,
+    "str": 3,
+    "vit": 3,
+    "level": 6,
+    "zone": "normal",
+    "spawnRate": 10,
+    "def": 13,
+    "maxHp": 6000,
+    "updatedAt": "2026-04-10T17:47:23.791Z",
+    "isBoss": false,
+    "calc": {
+      "maxHp": 6000
+    }
+  },
+  {
+    "_id": "69d2ab22edbb0450da0495a8",
+    "id": "2d226eea-934a-4787-8ff7-9f19d12ac590",
+    "agi": 2,
+    "createdAt": "2026-04-05T18:34:10.849Z",
+    "dex": 2,
+    "drops": [
+      {
+        "itemId": "8c9ac7c4-e00d-44fb-9582-8c68b99c2357",
+        "chance": 15
+      },
+      {
+        "itemId": "19e24aca-92f5-4f81-8ab9-cc4f8ba73a72",
+        "chance": 15
+      }
+    ],
+    "enabled": true,
+    "entryFee": 5,
+    "expReward": 450,
+    "goldReward": 1200,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897922/equipment-game/monsters/fsdtjtqxp37gl0x45tnw.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897921/equipment-game/monsters/kvhacdlieutonzzwhybi.jpg",
+    "int": 1,
+    "luk": 1,
+    "name": "石頭",
+    "seq": 4,
+    "str": 1,
+    "vit": 6,
+    "level": 4,
+    "zone": "normal",
+    "spawnRate": 10,
+    "def": 25,
+    "maxHp": 5500,
+    "updatedAt": "2026-04-10T17:47:23.791Z",
+    "isBoss": false,
+    "calc": {
+      "maxHp": 5500
+    }
+  },
+  {
+    "_id": "69d5207fedbb0450da04f126",
+    "id": "321a08e9-8fed-4a80-9526-b1f977fd9103",
+    "agi": 12,
+    "createdAt": "2026-04-07T15:19:27.406Z",
+    "dex": 8,
+    "drops": [
+      {
+        "itemId": "dcb0ab95-aff6-4961-ae44-79bd49a2f0e8",
+        "chance": 20
+      },
+      {
+        "itemId": "73884cf9-67b5-47b4-af3c-b6d79a39ec57",
+        "chance": 20
+      },
+      {
+        "itemId": "12cddc4e-58ef-433e-a50d-e8ca04b1041e",
+        "chance": 20
+      },
+      {
+        "itemId": "45a8eba1-f558-4c9b-8c60-7dcc42ba2cf9",
+        "chance": 20
+      },
+      {
+        "itemId": "099d5496-e0d4-49e5-af89-ac6580262d5a",
+        "chance": 20
+      },
+      {
+        "itemId": "bb26be45-2910-4034-8db6-e02d9d473513",
+        "chance": 20
+      },
+      {
+        "itemId": "34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9",
+        "chance": 20
+      },
+      {
+        "itemId": "eb852c75-f487-4086-b8b3-0b10adab2db3",
+        "chance": 20
+      },
+      {
+        "itemId": "353b7c41-1d23-4a43-ac3c-38517bb235a5",
+        "chance": 20
+      },
+      {
+        "itemId": "9c809436-d8d5-4b21-bf15-e26e881cac9b",
+        "chance": 20
+      }
+    ],
+    "enabled": true,
+    "entryFee": 10,
+    "expReward": 800,
+    "goldReward": 3000,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897923/equipment-game/monsters/pfotzufflpzshcoejyxh.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897923/equipment-game/monsters/ciehckcf9jsbeu9vdvo6.png",
+    "int": 2,
+    "level": 7,
+    "luk": 2,
+    "name": "大史(B)",
+    "seq": 5,
+    "str": 5,
+    "vit": 8,
+    "zone": "normal",
+    "spawnRate": 2,
+    "isBoss": true,
+    "def": 35,
+    "maxHp": 9000,
+    "updatedAt": "2026-04-10T17:47:23.791Z",
+    "calc": {
+      "maxHp": 9000
+    }
+  },
+  {
+    "_id": "69d540cd4f8d71d6b0c50b42",
+    "id": "657afc88-c6db-4851-8c4c-50f225b18624",
+    "seq": 1,
+    "zone": "mid",
+    "name": "甲蟹",
+    "level": 12,
+    "str": 10,
+    "agi": 4,
+    "vit": 14,
+    "int": 1,
+    "dex": 4,
+    "luk": 2,
+    "entryFee": 45,
+    "expReward": 1400,
+    "goldReward": 1968,
+    "spawnRate": 10,
+    "enabled": true,
+    "drops": [
+      {
+        "itemId": "24d71d06-5df8-446d-b2e5-f4cb49818e3f",
+        "chance": 15
+      }
+    ],
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897925/equipment-game/monsters/ewjhk04a7iixxp0cw86n.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897924/equipment-game/monsters/a8jyo3w5n88t5rk1o0ps.jpg",
+    "def": 50,
+    "maxHp": 12000,
+    "updatedAt": "2026-04-10T17:47:23.791Z",
+    "isBoss": false,
+    "calc": {
+      "maxHp": 12000
+    }
+  },
+  {
+    "_id": "69d540cd4f8d71d6b0c50b43",
+    "id": "13f56b92-709e-42ff-87d2-e8f129ed9207",
+    "seq": 2,
+    "zone": "mid",
+    "name": "牙牙狼",
+    "level": 12,
+    "str": 8,
+    "agi": 30,
+    "vit": 8,
+    "int": 1,
+    "dex": 22,
+    "luk": 6,
+    "entryFee": 43,
+    "expReward": 1200,
+    "goldReward": 1722,
+    "spawnRate": 10,
+    "enabled": true,
+    "drops": [
+      {
+        "itemId": "fbf8fdec-72a4-4d76-bcb5-117952352dec",
+        "chance": 15
+      }
+    ],
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897927/equipment-game/monsters/obtbxb6bfbznob8ucfwr.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897926/equipment-game/monsters/aw1lndlgb5zloz1xmgfs.webp",
+    "def": 35,
+    "maxHp": 13000,
+    "updatedAt": "2026-04-10T17:47:23.791Z",
+    "isBoss": false,
+    "calc": {
+      "maxHp": 13000
+    }
+  },
+  {
+    "_id": "69d540cd4f8d71d6b0c50b44",
+    "id": "b9c226a8-ea33-41de-9c9b-be24824a9fb1",
+    "seq": 3,
+    "zone": "mid",
+    "name": "巨巨",
+    "level": 14,
+    "str": 15,
+    "agi": 3,
+    "vit": 18,
+    "int": 1,
+    "dex": 3,
+    "luk": 1,
+    "entryFee": 70,
+    "expReward": 2000,
+    "goldReward": 2952,
+    "spawnRate": 10,
+    "enabled": true,
+    "drops": [
+      {
+        "itemId": "1f04c0db-e5cb-4b84-9a43-e7150799eecb",
+        "chance": 15
+      }
+    ],
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897928/equipment-game/monsters/uy9bdpi5i4ktmnedoacj.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897927/equipment-game/monsters/ejkmi2idtw6mdvbxb3zt.jpg",
+    "def": 58,
+    "maxHp": 10000,
+    "updatedAt": "2026-04-10T17:47:23.791Z",
+    "isBoss": false,
+    "calc": {
+      "maxHp": 10000
+    }
+  },
+  {
+    "_id": "69d540cd4f8d71d6b0c50b45",
+    "id": "f4bed595-74f8-493b-8551-9158f4b5381d",
+    "seq": 4,
+    "zone": "mid",
+    "name": "黑暗弓手",
+    "level": 14,
+    "str": 9,
+    "agi": 20,
+    "vit": 8,
+    "int": 4,
+    "dex": 30,
+    "luk": 6,
+    "entryFee": 50,
+    "expReward": 1500,
+    "goldReward": 2064,
+    "spawnRate": 10,
+    "enabled": true,
+    "drops": [
+      {
+        "itemId": "fcdbb6c1-bb21-45e1-9637-3aa58a76c79e",
+        "chance": 15
+      }
+    ],
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897930/equipment-game/monsters/raew8xmbcwpr5cdf6jzq.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897929/equipment-game/monsters/t6rvihp5runnkoqwgjnc.png",
+    "def": 42,
+    "maxHp": 12000,
+    "updatedAt": "2026-04-10T17:47:23.791Z",
+    "isBoss": false,
+    "calc": {
+      "maxHp": 12000
+    }
+  },
+  {
+    "_id": "69d540cd4f8d71d6b0c50b46",
+    "id": "517f9a27-f6f7-4251-8cf8-2140f02222c0",
+    "seq": 5,
+    "zone": "mid",
+    "name": "米拉桑(B)",
+    "level": 15,
+    "str": 18,
+    "agi": 22,
+    "vit": 18,
+    "int": 8,
+    "dex": 18,
+    "luk": 10,
+    "entryFee": 150,
+    "expReward": 3500,
+    "goldReward": 5904,
+    "spawnRate": 1,
+    "enabled": true,
+    "drops": [],
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897931/equipment-game/monsters/juhtmbsiokku3hlhvvz3.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897931/equipment-game/monsters/s5hdnkitg6lmqtcts9qs.png",
+    "isBoss": true,
+    "def": 60,
+    "maxHp": 22000,
+    "updatedAt": "2026-04-10T17:05:27.712Z",
+    "calc": {
+      "maxHp": 22000
+    }
+  },
+  {
+    "_id": "69d71d34edbb0450da0544a2",
+    "id": "03c93103-eddb-4265-96ca-a8a76bb82a02",
+    "agi": 80,
+    "createdAt": "2026-04-09T03:29:56.633Z",
+    "dex": 15,
+    "drops": [
+      {
+        "itemId": "63ca559b-ca12-4835-a48d-2150e366f60e",
+        "itemName": "金幣袋子(小)",
+        "chance": 100
+      },
+      {
+        "itemId": "71aaa3a2-abb9-4b01-b024-16e553b08840",
+        "itemName": "金幣袋子(中)",
+        "chance": 10
+      }
+    ],
+    "enabled": true,
+    "entryFee": 15,
+    "expReward": 500,
+    "goldReward": 400,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897933/equipment-game/monsters/kcmmahjs3pgad3icz0gl.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897932/equipment-game/monsters/xtgchkggdt4xyirmvuxk.png",
+    "int": 3,
+    "level": 5,
+    "luk": 8,
+    "name": "小金(稀)",
+    "seq": 6,
+    "spawnRate": 2,
+    "str": 20,
+    "vit": 5,
+    "zone": "normal",
+    "isBoss": true,
+    "def": 10,
+    "maxHp": 1000,
+    "updatedAt": "2026-04-10T02:24:49.293Z"
+  },
+  {
+    "_id": "69d744b8edbb0450da054a4d",
+    "id": "3065b7ca-8839-4be4-9d02-0821932cd408",
+    "agi": 35,
+    "createdAt": "2026-04-09T06:18:32.079Z",
+    "dex": 25,
+    "drops": [
+      {
+        "itemId": "63ca559b-ca12-4835-a48d-2150e366f60e",
+        "itemName": "金幣袋子(小)",
+        "chance": 100
+      },
+      {
+        "itemId": "71aaa3a2-abb9-4b01-b024-16e553b08840",
+        "itemName": "金幣袋子(中)",
+        "chance": 10
+      }
+    ],
+    "enabled": true,
+    "entryFee": 10,
+    "expReward": 1200,
+    "goldReward": 984,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897935/equipment-game/monsters/dxrncjhbm4ca4ledkwzx.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897934/equipment-game/monsters/ftaf4platuty8b4u1dlu.png",
+    "int": 8,
+    "isBoss": true,
+    "level": 1,
+    "luk": 5,
+    "name": "小金(稀)",
+    "seq": 6,
+    "spawnRate": 1,
+    "str": 30,
+    "vit": 3,
+    "zone": "mid",
+    "def": 10,
+    "maxHp": 3000,
+    "updatedAt": "2026-04-10T02:24:49.293Z"
+  },
+  {
+    "_id": "monsterState:normal",
+    "updatedAt": "2026-04-14T16:07:22.577Z",
+    "value": {
+      "activeMonsterSeq": 2,
+      "currentHp": 6000,
+      "participantCount": 0,
+      "participants": [],
+      "damageMap": {},
+      "killClaimedSeq": null,
+      "killClaimedAt": "2026-04-14T03:37:32.550Z",
+      "killClaimedBy": 26724,
+      "killCount": {
+        "c39bdddd-a33d-4e34-8019-d17020a8083b": 792,
+        "a8ef443e-3a0d-4ccb-9290-d6394edaa59f": 704,
+        "2d226eea-934a-4787-8ff7-9f19d12ac590": 806,
+        "f00fd7b1-9f57-4532-9901-f4d4d74f132d": 805,
+        "321a08e9-8fed-4a80-9526-b1f977fd9103": 105,
+        "03c93103-eddb-4265-96ca-a8a76bb82a02": 97
+      },
+      "lastHitAt": "2026-04-14T16:07:22.576Z",
+      "activeEvent": null,
+      "npcMappings": [
+        {
+          "eventId": "8df64141-2951-44f0-b494-9b235b937103",
+          "chance": 100,
+          "triggerMonsterSeq": null,
+          "order": 0
+        }
+      ]
+    },
+    "drops": [
+      {
+        "itemId": "be6f16fa-4e72-47ab-9a08-d580bd5490ef",
+        "chance": 15
+      },
+      {
+        "itemId": "a56bd609-cf0b-4924-b724-891f221fc0b9",
+        "chance": 15
+      }
+    ]
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a2e",
+    "zone": "normal",
+    "name": "青草地精",
+    "level": 5,
+    "maxHp": 60,
+    "str": 8,
+    "agi": 6,
+    "vit": 5,
+    "int": 3,
+    "dex": 7,
+    "luk": 4,
+    "def": 15,
+    "entryFee": 10,
+    "expReward": 616,
+    "goldReward": 1057,
+    "isBoss": false,
+    "spawnRate": 30,
+    "drops": [
+      {
+        "itemId": "ce6f0608-2750-47b4-aa26-14d9c1aa0f4c",
+        "chance": 15
+      },
+      {
+        "itemId": "6da9f4e6-aac1-4088-9000-7111fd4926b0",
+        "chance": 15
+      }
+    ],
+    "id": "6f321e26-e74e-4a05-a55a-6145da53373d",
+    "seq": 100,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.018Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a2f",
+    "zone": "normal",
+    "name": "綠野狼",
+    "level": 7,
+    "maxHp": 80,
+    "str": 10,
+    "agi": 8,
+    "vit": 6,
+    "int": 4,
+    "dex": 9,
+    "luk": 3,
+    "def": 12,
+    "entryFee": 15,
+    "expReward": 770,
+    "goldReward": 1321,
+    "isBoss": false,
+    "spawnRate": 25,
+    "drops": [
+      {
+        "itemId": "2fcf7576-4e74-4280-b1e6-0d7da7b58dda",
+        "chance": 15
+      },
+      {
+        "itemId": "4885e098-3624-4c6c-9eb9-e4b27c2fb5ab",
+        "chance": 15
+      }
+    ],
+    "id": "a1ab762c-cd0b-4270-994b-74b68c242840",
+    "seq": 101,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a30",
+    "zone": "normal",
+    "name": "草地蜥蜴",
+    "level": 7,
+    "maxHp": 75,
+    "str": 9,
+    "agi": 7,
+    "vit": 7,
+    "int": 5,
+    "dex": 8,
+    "luk": 5,
+    "def": 18,
+    "entryFee": 12,
+    "expReward": 718,
+    "goldReward": 1233,
+    "isBoss": false,
+    "spawnRate": 28,
+    "drops": [
+      {
+        "itemId": "2271e23c-9648-430e-944b-cea2107ee8ec",
+        "chance": 15
+      },
+      {
+        "itemId": "421196aa-83e4-4f2e-82f6-dc05077b115a",
+        "chance": 15
+      }
+    ],
+    "id": "8d32d5f2-20a7-4334-aae0-d3cdfc50820d",
+    "seq": 102,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a31",
+    "zone": "normal",
+    "name": "牧場兔",
+    "level": 6,
+    "maxHp": 70,
+    "str": 7,
+    "agi": 10,
+    "vit": 5,
+    "int": 3,
+    "dex": 11,
+    "luk": 6,
+    "def": 10,
+    "entryFee": 8,
+    "expReward": 564,
+    "goldReward": 969,
+    "isBoss": false,
+    "spawnRate": 32,
+    "drops": [
+      {
+        "itemId": "33d319ec-cb62-4826-8bcc-82a6fe52b8fa",
+        "chance": 15
+      },
+      {
+        "itemId": "d5936211-685a-4cd7-a1e9-24524725da96",
+        "chance": 15
+      }
+    ],
+    "id": "fcebf722-fd4d-45ca-9583-e8986c084ecc",
+    "seq": 103,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a32",
+    "zone": "normal",
+    "name": "稻田守護者",
+    "level": 8,
+    "maxHp": 90,
+    "str": 11,
+    "agi": 7,
+    "vit": 8,
+    "int": 6,
+    "dex": 8,
+    "luk": 4,
+    "def": 20,
+    "entryFee": 20,
+    "expReward": 872,
+    "goldReward": 1497,
+    "isBoss": false,
+    "spawnRate": 20,
+    "drops": [
+      {
+        "itemId": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+        "chance": 15
+      },
+      {
+        "itemId": "44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf",
+        "chance": 15
+      }
+    ],
+    "id": "348dc5d4-f548-4d9f-8cb7-e3531103c252",
+    "seq": 104,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a33",
+    "zone": "normal",
+    "name": "草原之王",
+    "level": 10,
+    "maxHp": 200,
+    "str": 14,
+    "agi": 9,
+    "vit": 12,
+    "int": 8,
+    "dex": 10,
+    "luk": 5,
+    "def": 25,
+    "entryFee": 50,
+    "expReward": 1847,
+    "goldReward": 3170,
+    "isBoss": true,
+    "spawnRate": 5,
+    "drops": [
+      {
+        "itemId": "dcb0ab95-aff6-4961-ae44-79bd49a2f0e8",
+        "chance": 25
+      },
+      {
+        "itemId": "73884cf9-67b5-47b4-af3c-b6d79a39ec57",
+        "chance": 25
+      },
+      {
+        "itemId": "12cddc4e-58ef-433e-a50d-e8ca04b1041e",
+        "chance": 25
+      }
+    ],
+    "id": "e266c597-d169-4d77-8ba8-49c83195309e",
+    "seq": 105,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a34",
+    "zone": "mid",
+    "name": "林地妖靈",
+    "level": 9,
+    "maxHp": 100,
+    "str": 11,
+    "agi": 10,
+    "vit": 7,
+    "int": 9,
+    "dex": 11,
+    "luk": 5,
+    "def": 18,
+    "entryFee": 25,
+    "expReward": 1129,
+    "goldReward": 1937,
+    "isBoss": false,
+    "spawnRate": 25,
+    "drops": [
+      {
+        "itemId": "ab533d4a-3d07-4d41-8a40-511a8e6a455d",
+        "chance": 15
+      }
+    ],
+    "id": "343c18ce-9f87-4532-bbb4-618a64fe5559",
+    "seq": 106,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a35",
+    "zone": "mid",
+    "name": "森林古樹",
+    "level": 10,
+    "maxHp": 130,
+    "str": 10,
+    "agi": 6,
+    "vit": 14,
+    "int": 11,
+    "dex": 7,
+    "luk": 4,
+    "def": 28,
+    "entryFee": 35,
+    "expReward": 1334,
+    "goldReward": 2289,
+    "isBoss": false,
+    "spawnRate": 20,
+    "drops": [
+      {
+        "itemId": "a5bf4a8c-2f89-4b35-9f23-8cb519bb0292",
+        "chance": 15
+      }
+    ],
+    "id": "9f0c5372-7232-4c6f-8083-409a28b1b374",
+    "seq": 107,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a36",
+    "zone": "mid",
+    "name": "暗夜獵豹",
+    "level": 9,
+    "maxHp": 110,
+    "str": 13,
+    "agi": 12,
+    "vit": 8,
+    "int": 7,
+    "dex": 13,
+    "luk": 6,
+    "def": 15,
+    "entryFee": 30,
+    "expReward": 1180,
+    "goldReward": 2025,
+    "isBoss": false,
+    "spawnRate": 22,
+    "drops": [
+      {
+        "itemId": "234e9a7f-1220-48fa-824a-690ce0648ae6",
+        "chance": 15
+      }
+    ],
+    "id": "eb0322bc-a90a-4a89-ad57-8a9c5607e6b8",
+    "seq": 108,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a37",
+    "zone": "mid",
+    "name": "森林巫師",
+    "level": 11,
+    "maxHp": 120,
+    "str": 9,
+    "agi": 8,
+    "vit": 9,
+    "int": 15,
+    "dex": 10,
+    "luk": 8,
+    "def": 20,
+    "entryFee": 40,
+    "expReward": 1436,
+    "goldReward": 2465,
+    "isBoss": false,
+    "spawnRate": 18,
+    "drops": [
+      {
+        "itemId": "c0545f31-455e-4846-b914-79302f8bea03",
+        "chance": 15
+      }
+    ],
+    "id": "f6145411-1a2e-4919-9ee4-fe27b3a31c07",
+    "seq": 109,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a38",
+    "zone": "mid",
+    "name": "森林盜賊",
+    "level": 10,
+    "maxHp": 105,
+    "str": 12,
+    "agi": 14,
+    "vit": 7,
+    "int": 8,
+    "dex": 15,
+    "luk": 7,
+    "def": 16,
+    "entryFee": 32,
+    "expReward": 1231,
+    "goldReward": 2113,
+    "isBoss": false,
+    "spawnRate": 21,
+    "drops": [
+      {
+        "itemId": "efd48300-f4b6-40d6-a1c5-8c2014ae4b55",
+        "chance": 15
+      }
+    ],
+    "id": "5247b1b0-6bc0-4db3-8ffd-aacb755c64fb",
+    "seq": 110,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  },
+  {
+    "_id": "69df9edd1240ccbeba205a39",
+    "zone": "mid",
+    "name": "森林之獸",
+    "level": 13,
+    "maxHp": 300,
+    "str": 16,
+    "agi": 11,
+    "vit": 15,
+    "int": 12,
+    "dex": 12,
+    "luk": 6,
+    "def": 30,
+    "entryFee": 80,
+    "expReward": 2565,
+    "goldReward": 4403,
+    "isBoss": true,
+    "spawnRate": 4,
+    "drops": [
+      {
+        "itemId": "3cdbaafb-df15-41e5-bca9-16453b72669e",
+        "chance": 25
+      },
+      {
+        "itemId": "11c00245-6d43-4ab5-a68b-a7494a9fba84",
+        "chance": 25
+      },
+      {
+        "itemId": "7cdbe248-2e54-4798-9ddf-c103e80d2755",
+        "chance": 25
+      }
+    ],
+    "id": "21fb614f-7f8b-4aad-b248-9418d8cbd8c0",
+    "seq": 111,
+    "enabled": true,
+    "createdAt": "2026-04-15T14:21:17.019Z"
+  }
+]

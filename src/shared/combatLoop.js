@@ -281,9 +281,21 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
 
-        // 弓箭手徽章傷害倍率（主武器為弓時）
+        // 職業傷害倍率
+        // 弓箭手：弓傷害 ×1.2
         if (pStats.hasArcherBadge && pStats.weaponType === "bow") {
           dmg = Math.round(dmg * pStats.archerBowDamageBoost);
+        }
+
+        // 法師：法杖傷害 ×1.15
+        if (pStats.hasMageBadge && pStats.weaponType && pStats.weaponType.startsWith("staff")) {
+          dmg = Math.round(dmg * pStats.mageDamageMultiplier);
+        }
+
+        // 戰士：低血量傷害 ×1.15（<35%）
+        if (pStats.hasWarriorBadge && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
+          pStats.warriorLowHpMultiplier = 1.15;
+          dmg = Math.round(dmg * 1.15);
         }
 
         // --- Compute on_high_hp bonuses (per-effect threshold) early so they affect crit checks ---
@@ -374,7 +386,14 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         log.push(`⚔️ ${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
         // 擊暈判定（爆擊不觸發）
-        const effectiveStunChance = (Number(pStats.stunChance) || 0) + extraHighHpStun;
+        let stunBonus = extraHighHpStun;
+        // 矮人：高血量擊暈加成（>90%）
+        if (pStats.hasDwarfBadge && pStats.weaponType && pStats.weaponType.startsWith("mace")) {
+          if (pHp >= Math.ceil((pStats.maxHp || 1) * 0.9)) {
+            stunBonus += pStats.dwarfHighHpStunBoost;
+          }
+        }
+        const effectiveStunChance = (Number(pStats.stunChance) || 0) + stunBonus;
         if (!isCrit && Math.random() * 100 < effectiveStunChance) {
           stunRoundsLeft = 3;
           log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 3 回合無法攻擊！`);
@@ -394,9 +413,21 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (mHp <= 0) { outcome = "win"; break; }
 
         // 連擊（匕首+20%，AGI驅動）
-        if (Math.random() * 100 < pStats.combo) {
+        // 盜賊：連擊機率加成（+10%）
+        let comboChance = pStats.combo;
+        if (pStats.hasRogueBadge && pStats.weaponType === "dagger") {
+          comboChance = Math.min(80, comboChance + 10);
+        }
+
+        if (Math.random() * 100 < comboChance) {
           const comboBase = Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100)));
           let cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (pStats.comboDamageMultiplier || 1)));
+
+          // 盜賊：連擊傷害倍率加成（+10%）
+          if (pStats.hasRogueBadge && pStats.weaponType === "dagger") {
+            cdmg = Math.round(cdmg * 1.1);
+          }
+
           try {
             const equipped = options.equipped || null;
             if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
@@ -519,8 +550,21 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
         }
       } catch (e) {}
-      const isCrit = Math.random() * 100 < pStats.crit;
+
+      // 劍士：格擋反擊命中率加成（+20%）
+      let counterHitChance = pStats.hit;
+      if (pStats.hasSwordsmanBadge && pStats.weaponType === "sword_1h") {
+        counterHitChance = Math.min(100, counterHitChance + pStats.swordsmanBlockCritBoost);
+      }
+
+      // 劍士：格擋反擊必定爆擊檢測
+      let isCrit = Math.random() * 100 < pStats.crit;
+      if (pStats.hasSwordsmanBadge && pStats.weaponType === "sword_1h") {
+        // 單手劍時，格擋反擊有額外爆擊機率（+10%）
+        isCrit = isCrit || Math.random() * 100 < 10;
+      }
       if (isCrit) dmg = Math.round(dmg * 2.5);
+
       mHp -= dmg;
       totalDamage += dmg;
       log.push(`⚔️✨ **格擋反擊**！${rand(jobFlavor.counter)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);

@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Dashboard — Prototype</title>
+  <script>
+    // Tailwind CDN config
+    tailwind = {
+      config: {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#2563EB',
+              accent: '#06B6D4',
+              surface: '#F8FAFC'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html,body{height:100%}
+  </style>
+</head>
+<body class="min-h-screen bg-surface text-slate-800 antialiased">
+  <div class="min-h-screen flex">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-72 bg-white border-r border-gray-100 p-4 hidden md:block">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 bg-primary rounded-md flex items-center justify-center text-white font-bold">EG</div>
+        <div>
+          <div class="font-semibold">equipmentGAME</div>
+          <div class="text-xs text-slate-500">管理後台</div>
+        </div>
+      </div>
+      <nav class="space-y-1 text-sm">
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20">
+          <span class="w-5 text-primary">🏠</span>
+          <span>儀表板</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20">
+          <span class="w-5">🧑‍🤝‍🧑</span>
+          <span>玩家</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20">
+          <span class="w-5">⚔️</span>
+          <span>怪物 / 裝備</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20">
+          <span class="w-5">📊</span>
+          <span>報表</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <div class="flex-1">
+      <!-- Topbar -->
+      <header class="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6">
+        <div class="flex items-center gap-4">
+          <button id="menuBtn" class="md:hidden p-2 rounded-md hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20">☰</button>
+          <div class="text-lg font-semibold">儀表板</div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="text-sm bg-white border border-gray-200 rounded-md px-3 py-1 hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20">匯出</button>
+          <div class="flex items-center gap-3">
+            <img src="https://via.placeholder.com/36" alt="使用者" class="w-9 h-9 rounded-full border border-gray-200" />
+            <div class="text-sm">管理者</div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Content -->
+      <main class="p-6 max-w-6xl mx-auto">
+        <!-- KPI cards -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <div class="text-sm text-slate-500">線上玩家</div>
+            <div class="text-2xl font-bold text-primary">1,234</div>
+          </div>
+          <div class="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <div class="text-sm text-slate-500">今日登入</div>
+            <div class="text-2xl font-bold">2,345</div>
+          </div>
+          <div class="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <div class="text-sm text-slate-500">每日收入</div>
+            <div class="text-2xl font-bold">$12,345</div>
+          </div>
+          <div class="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <div class="text-sm text-slate-500">警示</div>
+            <div class="text-2xl font-bold text-amber-500">3</div>
+          </div>
+        </section>
+
+        <!-- Main area: table + sidebar pane -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Table area -->
+          <div class="lg:col-span-8 bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <input type="text" placeholder="搜尋玩家或 ID" class="border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <select class="border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20">
+                  <option>全部</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="text-sm bg-primary text-white rounded-md px-3 py-2">新增玩家</button>
+                <button class="text-sm bg-white border border-gray-200 rounded-md px-3 py-2">更多</button>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead class="text-slate-500 text-left">
+                  <tr>
+                    <th class="py-2 pr-4">ID</th>
+                    <th class="py-2 pr-4">玩家名稱</th>
+                    <th class="py-2 pr-4">等級</th>
+                    <th class="py-2 pr-4">最後登入</th>
+                    <th class="py-2 pr-4">操作</th>
+                  </tr>
+                </thead>
+                <tbody class="text-slate-700">
+                  <tr class="border-t hover:bg-surface focus-within:bg-surface">
+                    <td class="py-3 pr-4">1001</td>
+                    <td class="py-3 pr-4">玩家One</td>
+                    <td class="py-3 pr-4">25</td>
+                    <td class="py-3 pr-4">2026-04-15</td>
+                    <td class="py-3 pr-4">
+                      <button class="text-sm text-primary hover:underline focus:outline-none">查看</button>
+                    </td>
+                  </tr>
+                  <tr class="border-t hover:bg-surface focus-within:bg-surface">
+                    <td class="py-3 pr-4">1002</td>
+                    <td class="py-3 pr-4">玩家Two</td>
+                    <td class="py-3 pr-4">12</td>
+                    <td class="py-3 pr-4">2026-04-14</td>
+                    <td class="py-3 pr-4">
+                      <button class="text-sm text-primary hover:underline focus:outline-none">查看</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Right pane -->
+          <aside class="lg:col-span-4 bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <div class="text-sm text-slate-500 mb-2">活動摘要</div>
+            <ul class="space-y-3 text-sm text-slate-700">
+              <li class="flex items-start gap-3">
+                <div class="w-2 h-2 bg-primary mt-2 rounded-full"></div>
+                <div>玩家 <strong>玩家One</strong> 完成任務 A</div>
+              </li>
+              <li class="flex items-start gap-3">
+                <div class="w-2 h-2 bg-amber-500 mt-2 rounded-full"></div>
+                <div>伺服器延遲異常 (5 分鐘)</div>
+              </li>
+            </ul>
+          </aside>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('menuBtn')?.addEventListener('click', function(){
+      const sb = document.getElementById('sidebar');
+      if(!sb) return;
+      if(sb.classList.contains('hidden')) sb.classList.remove('hidden'); else sb.classList.add('hidden');
+    });
+  </script>
+</body>
+</html>

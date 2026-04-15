@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#09090b" />
+    <title>Equipment Game Admin</title>
+    <link rel="stylesheet" href="/static/admin.css?v=6" />
+    <link rel="stylesheet" href="/static/admin.light.css?v=1" />
+    <link rel="stylesheet" href="/static/admin.tailwind.css?v=1" />
+    <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css" />
+  </head>
+  <body>
+    <div class="game-window">
+      <header class="window-top">
+        <div class="window-title">Equipment Game <span style="color:var(--muted);font-weight:500;margin-left:8px;">Control Panel</span></div>
+        <div class="window-controls">
+          <button id="theme-toggle" class="control-btn" title="切換淺色主題" aria-pressed="false">淺色</button>
+          <button id="tailwind-toggle" class="control-btn" title="切換 Tailwind UI" aria-pressed="false">Tailwind</button>
+          <button class="control-btn" title="Refresh Panel" id="top-refresh">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-10.74l3.25 3.17"/></svg>
+            <span style="margin-left:6px;">Reload</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="shell" id="app-shell">
+        <div class="splitter" id="shell-splitter" style="display:none;" role="separator"></div>
+        <aside class="hero">
+          <div>
+            <p class="eyebrow">Equipment Game</p>
+            <h1>管理後台</h1>
+            <p class="lede">集中設定版位、玩家與參數。</p>
+          </div>
+
+          <nav class="sidebar-nav" aria-label="後台功能導覽">
+            <div class="nav-group is-open" data-nav-group="foundation">
+              <button class="nav-group-toggle" type="button" aria-expanded="true">
+                <span>基礎設定</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link active" data-target="section-auth">登入連線</button>
+                <button class="nav-link" data-target="section-layout">功能版位設定</button>
+                <button class="nav-link" data-target="section-access">權限與白名單</button>
+              </div>
+            </div>
+
+            <div class="nav-group" data-nav-group="content">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>遊戲內容</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-items">道具庫管理</button>
+                <button class="nav-link" data-target="section-shop">金幣商店管理</button>
+                <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
+                <button class="nav-link" data-target="section-monster-events">NPC 編輯器</button>
+                <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
+                <button class="nav-link" data-target="section-effect-modules">效果模組</button>
+                <button class="nav-link" data-target="section-weekly-quests">每週任務管理</button>
+                <button class="nav-link" data-target="section-weekly-summary">每週完成概況</button>
+              </div>
+            </div>
+
+            <div class="nav-group" data-nav-group="playerops">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>玩家營運</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-players">玩家資料總覽</button>
+                <button class="nav-link" data-target="section-player-ops">玩家操作中心</button>
+                <button class="nav-link" data-target="section-tiers">玩家等級設定</button>
+              </div>
+            </div>
+
+            <div class="nav-group" data-nav-group="insights">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>監控與紀錄</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-leaderboard">排行榜</button>
+                <button class="nav-link" data-target="section-log">操作紀錄</button>
+              </div>
+            </div>
+          </nav>
+
+          <div class="hero-card">
+            <div>
+              <span class="hero-label">狀態</span>
+              <strong>後台系統運行中</strong>
+            </div>
+            <p>點擊右上的 Reload 可隨時刷新頁面狀態。</p>
+          </div>
+        </aside>
+
+        <main class="panel">
+          <section id="section-auth" class="panel-section active">
+            <div class="card auth-card" style="max-width: 500px; margin: 40px auto;">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Auth</p>
+                  <h2>登入系統</h2>
+                </div>
+              </div>
+              <div class="grid one-up">
+                <label>
+                  <span>管理員驗證金鑰</span>
+                  <input id="admin-password" type="password" placeholder="輸入後台管理員密碼 / Token..." />
+                </label>
+              </div>
+              <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center;">
+                <p id="connection-state" class="hint" style="margin:0; font-weight:600;">尚未連線</p>
+                <button id="connect-button" class="button primary">連線驗證</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- ...rest omitted for brevity in backup... -->
+        </main>
+      </div>
+    </div>
+
+    <!-- Backup file: partial content stored to restore if needed -->
+  </body>
+</html>

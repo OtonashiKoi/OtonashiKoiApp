@@ -1,0 +1,108 @@
+[
+  {
+    "_id": "default",
+    "updatedAt": "2026-04-07T12:50:49.972Z",
+    "value": {
+      "activeMonsterSeq": 2,
+      "currentHp": 1945,
+      "killCount": {
+        "c39bdddd-a33d-4e34-8019-d17020a8083b": 31,
+        "f00fd7b1-9f57-4532-9901-f4d4d74f132d": 1
+      },
+      "participants": [
+        "404245980654075905",
+        "947181147488673854",
+        "344786855235026944",
+        "475247027329171456",
+        "551272452676911128",
+        "139748832517816320",
+        "538379880996405248"
+      ],
+      "damageMap": {
+        "947181147488673854": {
+          "name": "毛毛毛",
+          "damage": 135
+        },
+        "344786855235026944": {
+          "name": "喜歡跳烤爐的咩",
+          "damage": 126
+        },
+        "404245980654075905": {
+          "name": "Frank",
+          "damage": 25
+        },
+        "475247027329171456": {
+          "name": "餅乾oao",
+          "damage": 101
+        },
+        "139748832517816320": {
+          "name": "布布",
+          "damage": 50
+        },
+        "551272452676911128": {
+          "name": "智軒-tommy3134895",
+          "damage": 69
+        },
+        "538379880996405248": {
+          "name": "雪ノ下かざね🔺",
+          "damage": 29
+        }
+      }
+    }
+  },
+  {
+    "_id": "normal",
+    "updatedAt": "2026-04-14T16:07:22.589Z",
+    "value": {
+      "activeMonsterSeq": 2,
+      "currentHp": 6000,
+      "participantCount": 0,
+      "participants": [],
+      "damageMap": {},
+      "killClaimedSeq": null,
+      "killClaimedAt": "2026-04-14T03:37:32.550Z",
+      "killClaimedBy": 26724,
+      "killCount": {
+        "c39bdddd-a33d-4e34-8019-d17020a8083b": 792,
+        "a8ef443e-3a0d-4ccb-9290-d6394edaa59f": 704,
+        "2d226eea-934a-4787-8ff7-9f19d12ac590": 806,
+        "f00fd7b1-9f57-4532-9901-f4d4d74f132d": 805,
+        "321a08e9-8fed-4a80-9526-b1f977fd9103": 105,
+        "03c93103-eddb-4265-96ca-a8a76bb82a02": 97
+      },
+      "lastHitAt": "2026-04-14T16:07:22.576Z",
+      "activeEvent": null,
+      "npcMappings": [
+        {
+          "eventId": "8df64141-2951-44f0-b494-9b235b937103",
+          "chance": 100,
+          "triggerMonsterSeq": null,
+          "order": 0
+        }
+      ]
+    }
+  },
+  {
+    "_id": "mid",
+    "updatedAt": "2026-04-12T16:46:41.301Z",
+    "value": {
+      "activeMonsterSeq": 3,
+      "currentHp": 10000,
+      "participantCount": 0,
+      "participants": [],
+      "damageMap": {},
+      "killClaimedSeq": null,
+      "killClaimedAt": "2026-04-12T16:03:11.335Z",
+      "killClaimedBy": 88896,
+      "killCount": {
+        "657afc88-c6db-4851-8c4c-50f225b18624": 297,
+        "b9c226a8-ea33-41de-9c9b-be24824a9fb1": 268,
+        "13f56b92-709e-42ff-87d2-e8f129ed9207": 292,
+        "517f9a27-f6f7-4251-8cf8-2140f02222c0": 37,
+        "f4bed595-74f8-493b-8551-9158f4b5381d": 230,
+        "3065b7ca-8839-4be4-9d02-0821932cd408": 20
+      },
+      "lastHitAt": "2026-04-12T16:46:41.301Z"
+    }
+  }
+]

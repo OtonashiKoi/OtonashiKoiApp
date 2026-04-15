@@ -1,0 +1,134 @@
+[
+  {
+    "_id": "69d166dac30e6269a49d4011",
+    "adminId": "admin-console",
+    "targetPlayerId": "158390323372883968",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "diamond",
+      "amount": -5,
+      "reason": "admin console currency adjustment"
+    },
+    "createdAt": "2026-04-04T18:47:54.518Z"
+  },
+  {
+    "_id": "69d2ec02db8e2d08ef3ae2eb",
+    "adminId": "admin-console",
+    "targetPlayerId": "865264891991425055",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 100,
+      "reason": "admin console currency adjustment"
+    },
+    "createdAt": "2026-04-05T23:10:58.698Z"
+  },
+  {
+    "_id": "69d2ec4ddb8e2d08ef3ae2ee",
+    "adminId": "admin-console",
+    "targetPlayerId": "865264891991425055",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 100,
+      "reason": "admin console currency adjustment"
+    },
+    "createdAt": "2026-04-05T23:12:13.396Z"
+  },
+  {
+    "_id": "69d2ed583334ad4a09ea1fa9",
+    "adminId": "admin-console",
+    "targetPlayerId": "865264891991425055",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 100,
+      "reason": "admin console currency adjustment"
+    },
+    "createdAt": "2026-04-05T23:16:40.339Z"
+  },
+  {
+    "_id": "69d2ed593334ad4a09ea1fab",
+    "adminId": "admin-console",
+    "targetPlayerId": "865264891991425055",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 100,
+      "reason": "admin console currency adjustment"
+    },
+    "createdAt": "2026-04-05T23:16:41.043Z"
+  },
+  {
+    "_id": "69d90cde0ff417387d478ee1",
+    "adminId": "admin-console",
+    "targetPlayerId": "158390323372883968",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 100,
+      "reason": "可憐"
+    },
+    "createdAt": "2026-04-10T14:44:46.816Z"
+  },
+  {
+    "_id": "69d90db30ff417387d478f8e",
+    "adminId": "admin-console",
+    "targetPlayerId": "343019809455472651",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 100,
+      "reason": "感謝你的SC 幫你補一百"
+    },
+    "createdAt": "2026-04-10T14:48:19.196Z"
+  },
+  {
+    "_id": "69d90f70bd5234722172bc92",
+    "adminId": "admin-console",
+    "targetPlayerId": "457175988439351298",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 50,
+      "reason": "小小的補償"
+    },
+    "createdAt": "2026-04-10T14:55:44.324Z"
+  },
+  {
+    "_id": "69da10e150a7dd4b13fb09da",
+    "adminId": "admin-console",
+    "targetPlayerId": "610065281569783818",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 300,
+      "reason": "~小小的補償~"
+    },
+    "createdAt": "2026-04-11T09:14:09.867Z"
+  },
+  {
+    "_id": "69daa6da701ee1d36b500f47",
+    "adminId": "admin-console",
+    "targetPlayerId": "849451830239952896",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 100,
+      "reason": "給妳拉"
+    },
+    "createdAt": "2026-04-11T19:54:02.193Z"
+  },
+  {
+    "_id": "69de189c83bf5ec17fe75dc3",
+    "adminId": "admin-console",
+    "targetPlayerId": "865264891991425055",
+    "actionType": "grant-currency",
+    "payload": {
+      "currencyType": "gold",
+      "amount": 100000,
+      "reason": "admin console currency adjustment"
+    },
+    "createdAt": "2026-04-14T10:36:12.052Z"
+  }
+]

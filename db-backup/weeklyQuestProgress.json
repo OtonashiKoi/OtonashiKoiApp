@@ -1,0 +1,1149 @@
+[
+  {
+    "_id": "69d9d2b8daa194f5e73dc517",
+    "discordId": "865264891991425055",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:56.987Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc518",
+    "discordId": "865264891991425055",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 3,
+        "claimed": true
+      }
+    },
+    "updatedAt": "2026-04-12T15:56:10.916Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc519",
+    "discordId": "477375051109236741",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.039Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc51a",
+    "discordId": "1450019975031951370",
+    "weekLabel": "2026-W15",
+    "progress": {},
+    "updatedAt": "2026-04-11T04:48:57.053Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc51b",
+    "discordId": "860551109042110475",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.066Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc51c",
+    "discordId": "860551109042110475",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 3,
+        "claimed": true
+      }
+    },
+    "updatedAt": "2026-04-14T16:30:18.525Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc51d",
+    "discordId": "518820138363912234",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.091Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc51e",
+    "discordId": "862314794711646208",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.105Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc51f",
+    "discordId": "595837539491905536",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": true
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.117Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc520",
+    "discordId": "139748832517816320",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": true
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.129Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc521",
+    "discordId": "849451830239952896",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.141Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc522",
+    "discordId": "540936298567827487",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.154Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc523",
+    "discordId": "350565436087074817",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.168Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc524",
+    "discordId": "551272452676911128",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.180Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc525",
+    "discordId": "551272452676911128",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:45:23.791Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc526",
+    "discordId": "369732621493600257",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.206Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc527",
+    "discordId": "369732621493600257",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 3,
+        "claimed": true
+      }
+    },
+    "updatedAt": "2026-04-14T01:24:33.893Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc528",
+    "discordId": "343019809455472651",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.233Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc529",
+    "discordId": "343019809455472651",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-12T06:58:36.143Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc52a",
+    "discordId": "538379880996405248",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.261Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc52b",
+    "discordId": "475247027329171456",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.275Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc52c",
+    "discordId": "404245980654075905",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.288Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc52d",
+    "discordId": "404245980654075905",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 3,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-13T13:32:50.885Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc52e",
+    "discordId": "1217712538800881794",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.317Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc52f",
+    "discordId": "597624017851252746",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.330Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc530",
+    "discordId": "597624017851252746",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-12T10:21:27.570Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc531",
+    "discordId": "344786855235026944",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.355Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc532",
+    "discordId": "159058930402721792",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.368Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc533",
+    "discordId": "158390323372883968",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.381Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc534",
+    "discordId": "947181147488673854",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.394Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc535",
+    "discordId": "538542893342654465",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.407Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc536",
+    "discordId": "324363656819245058",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.420Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc537",
+    "discordId": "575308041109372930",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.435Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc538",
+    "discordId": "470526144186286091",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.449Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc539",
+    "discordId": "614852332026593291",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.463Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc53a",
+    "discordId": "614852332026593291",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:53:15.890Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc53b",
+    "discordId": "665557921551220746",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.494Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc53c",
+    "discordId": "525828241710252033",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.507Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc53d",
+    "discordId": "610065281569783818",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.521Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc53e",
+    "discordId": "237151667160612865",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.534Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc53f",
+    "discordId": "258971993452314624",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.547Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc540",
+    "discordId": "603736801710178304",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.560Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc541",
+    "discordId": "364417212645376001",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.573Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc542",
+    "discordId": "609388495060074536",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.586Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc543",
+    "discordId": "457175988439351298",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.599Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc544",
+    "discordId": "641514438758891530",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.611Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc545",
+    "discordId": "378169396595523586",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.624Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc546",
+    "discordId": "331642796710821892",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.637Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc547",
+    "discordId": "1200087356150120540",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.651Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc548",
+    "discordId": "543314526234345472",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.664Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc549",
+    "discordId": "1058147947545624646",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.677Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc54a",
+    "discordId": "693452522379280474",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.690Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc54b",
+    "discordId": "828294596010049536",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.703Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc54c",
+    "discordId": "828294596010049536",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-12T03:46:05.615Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc54d",
+    "discordId": "272649441616330752",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.730Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc54e",
+    "discordId": "1092085184234528898",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.744Z"
+  },
+  {
+    "_id": "69d9d2b9daa194f5e73dc54f",
+    "discordId": "1354102125042466929",
+    "weekLabel": "2026-W15",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T04:48:57.757Z"
+  },
+  {
+    "_id": "69da1336daa194f5e73dce60",
+    "discordId": "538379880996405248",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 3,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-12T12:41:50.705Z"
+  },
+  {
+    "_id": "69da135cdaa194f5e73dce67",
+    "weekLabel": "2026-W16",
+    "discordId": "693452522379280474",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T16:53:04.534Z"
+  },
+  {
+    "_id": "69da1368daa194f5e73dce68",
+    "discordId": "543314526234345472",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:16:00.637Z"
+  },
+  {
+    "_id": "69da13d6daa194f5e73dce78",
+    "discordId": "610065281569783818",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:37:21.305Z"
+  },
+  {
+    "_id": "69da17f6daa194f5e73dcf1c",
+    "weekLabel": "2026-W16",
+    "discordId": "258971993452314624",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:45:24.696Z"
+  },
+  {
+    "_id": "69da1908daa194f5e73dcf42",
+    "discordId": "237151667160612865",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:33:59.068Z"
+  },
+  {
+    "_id": "69da1d13daa194f5e73dcfd9",
+    "discordId": "475247027329171456",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:45:24.738Z"
+  },
+  {
+    "_id": "69da248cdaa194f5e73dd0db",
+    "discordId": "518820138363912234",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T20:18:20.842Z"
+  },
+  {
+    "_id": "69da2637daa194f5e73dd113",
+    "weekLabel": "2026-W16",
+    "discordId": "159058930402721792",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T10:45:11.077Z"
+  },
+  {
+    "_id": "69da26e6daa194f5e73dd130",
+    "discordId": "728605307109900319",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:45:24.709Z"
+  },
+  {
+    "_id": "69da3bf6daa194f5e73dd42d",
+    "weekLabel": "2026-W16",
+    "discordId": "689055751859208324",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 3,
+        "claimed": true
+      }
+    },
+    "updatedAt": "2026-04-11T17:45:48.825Z"
+  },
+  {
+    "_id": "69da42aedaa194f5e73dd532",
+    "discordId": "139748832517816320",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:45:24.738Z"
+  },
+  {
+    "_id": "69da4d26daa194f5e73dd6b3",
+    "discordId": "158390323372883968",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:33:07.370Z"
+  },
+  {
+    "_id": "69da4d68daa194f5e73dd6be",
+    "weekLabel": "2026-W16",
+    "discordId": "1200087356150120540",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:33:17.609Z"
+  },
+  {
+    "_id": "69da4d72daa194f5e73dd6bf",
+    "discordId": "595837539491905536",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T13:32:34.845Z"
+  },
+  {
+    "_id": "69da4dafdaa194f5e73dd6c9",
+    "discordId": "344786855235026944",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 3,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-13T11:45:09.206Z"
+  },
+  {
+    "_id": "69da4de9daa194f5e73dd6d2",
+    "discordId": "665557921551220746",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:32:11.615Z"
+  },
+  {
+    "_id": "69da4f2bdaa194f5e73dd6ff",
+    "discordId": "705033058302033990",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T13:39:55.687Z"
+  },
+  {
+    "_id": "69da50c0daa194f5e73dd73b",
+    "discordId": "378169396595523586",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T13:46:40.191Z"
+  },
+  {
+    "_id": "69da50f5daa194f5e73dd742",
+    "weekLabel": "2026-W16",
+    "discordId": "609388495060074536",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T13:47:33.965Z"
+  },
+  {
+    "_id": "69da586fdaa194f5e73dd853",
+    "discordId": "272649441616330752",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T14:19:28.004Z"
+  },
+  {
+    "_id": "69da5bd0daa194f5e73dd8ce",
+    "discordId": "742581777427726492",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T16:34:12.693Z"
+  },
+  {
+    "_id": "69da5e6fdaa194f5e73dd92c",
+    "discordId": "525828241710252033",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T14:45:03.261Z"
+  },
+  {
+    "_id": "69da5f27daa194f5e73dd947",
+    "discordId": "1354102125042466929",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:45:23.799Z"
+  },
+  {
+    "_id": "69da60e7daa194f5e73dd98c",
+    "discordId": "364417212645376001",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T14:55:35.254Z"
+  },
+  {
+    "_id": "69da6fd9daa194f5e73ddbd2",
+    "discordId": "380676012570312707",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T15:59:21.263Z"
+  },
+  {
+    "_id": "69da7020daa194f5e73ddbe3",
+    "discordId": "947181147488673854",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-13T11:55:18.136Z"
+  },
+  {
+    "_id": "69da7219daa194f5e73ddc62",
+    "weekLabel": "2026-W16",
+    "discordId": "540936298567827487",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 3,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-15T03:22:09.469Z"
+  },
+  {
+    "_id": "69da7342daa194f5e73ddc8d",
+    "weekLabel": "2026-W16",
+    "discordId": "350565436087074817",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T16:13:54.804Z"
+  },
+  {
+    "_id": "69da7506daa194f5e73ddcce",
+    "discordId": "1092085184234528898",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T16:21:26.251Z"
+  },
+  {
+    "_id": "69da77d9daa194f5e73ddd32",
+    "discordId": "1058147947545624646",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T16:33:29.729Z"
+  },
+  {
+    "_id": "69da85d0daa194f5e73ddf26",
+    "discordId": "324363656819245058",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:33:04.267Z"
+  },
+  {
+    "_id": "69da85d8daa194f5e73ddf27",
+    "discordId": "575308041109372930",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:33:12.946Z"
+  },
+  {
+    "_id": "69da860fdaa194f5e73ddf30",
+    "discordId": "1068978489035857960",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T17:34:07.721Z"
+  },
+  {
+    "_id": "69da8703daa194f5e73ddf52",
+    "discordId": "331642796710821892",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-13T18:41:29.050Z"
+  },
+  {
+    "_id": "69da93fadaa194f5e73de133",
+    "discordId": "849451830239952896",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-11T18:33:30.092Z"
+  },
+  {
+    "_id": "69db0e93daa194f5e73df2d1",
+    "weekLabel": "2026-W16",
+    "discordId": "234707929259966465",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 2,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-12T03:16:35.498Z"
+  },
+  {
+    "_id": "69dc97b1daa194f5e73e2d7c",
+    "discordId": "553639946477371419",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-13T07:13:53.105Z"
+  },
+  {
+    "_id": "69dd0bfedaa194f5e73e3dcf",
+    "discordId": "547821870360035329",
+    "weekLabel": "2026-W16",
+    "progress": {
+      "d93de823-324d-4f67-8b5a-9ba19e28be65": {
+        "current": 1,
+        "claimed": false
+      }
+    },
+    "updatedAt": "2026-04-13T15:30:06.325Z"
+  }
+]

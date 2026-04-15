@@ -100,21 +100,58 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const counterInheritStun  = isDualWield && (wt === "sword_1h" || wt === "dagger");
   const counterInheritBreak = isDualWield && (wt === "sword_1h" || wt === "dagger");
 
-  // 弓箭手徽章效果檢測
+  // 職業徽章效果檢測
   const jobEq = equipped.job_eq || null;
-  const hasArcherBadge = jobEq && (
-    String(jobEq.itemId || jobEq.id || "").toLowerCase().includes("archer") ||
-    String(jobEq.itemName || jobEq.name || "").toLowerCase().includes("弓箭手") ||
-    String(jobEq.itemName || jobEq.name || "").toLowerCase().includes("archer")
-  );
+  const jobId = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
+  const jobName = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
 
-  // 弓箭手特殊機率（命中要害）
+  const hasArcherBadge = jobEq && (jobId.includes("archer") || jobName.includes("弓箭手"));
+  const hasSwordsmanBadge = jobEq && (jobId.includes("swordsman") || jobName.includes("劍士"));
+  const hasWarriorBadge = jobEq && (jobId.includes("warrior") && !jobId.includes("dwarf") || jobName.includes("戰士") && !jobName.includes("矮人"));
+  const hasDwarfBadge = jobEq && (jobId.includes("dwarf") || jobName.includes("矮人"));
+  const hasRogueBadge = jobEq && (jobId.includes("rogue") || jobName.includes("盜賊"));
+  const hasMageBadge = jobEq && (jobId.includes("mage") || jobName.includes("法師"));
+  const hasHealerBadge = jobEq && (jobId.includes("healer") || jobName.includes("治療"));
+
+  // 弓箭手：命中要害機制（DEX 驅動）
   let archerCritRate = 0;
   let archerCritMultiplier = 1.5;
   if (hasArcherBadge && wt === "bow") {
-    // 基礎 35%，DEX 每點 +0.45%，上限 80%
     archerCritRate = Math.min(80, 35 + D * 0.45);
   }
+
+  // 劍士：格擋反擊準度加成
+  let swordsmanBlockCritBoost = 0;
+  if (hasSwordsmanBadge && wt === "sword_1h" && blockChance > 0) {
+    // 單手劍 + 盾時，反擊命中率 +20%
+    swordsmanBlockCritBoost = 20;
+  }
+
+  // 戰士：低血量傷害倍增（<35%）
+  let warriorLowHpMultiplier = 1;
+  // 在 combatLoop 中根據當前 HP 計算
+
+  // 矮人：高血量擊暈加成（>90%）
+  let dwarfHighHpStunBoost = 0;
+  if (hasDwarfBadge && wt && wt.startsWith("mace")) {
+    dwarfHighHpStunBoost = 5;
+  }
+
+  // 盜賊：連擊速度倍增
+  let rogueComboSpeedBoost = 0;
+  if (hasRogueBadge && wt === "dagger") {
+    // 匕首時連擊倍率 +10%
+    rogueComboSpeedBoost = 0.1;
+  }
+
+  // 法師：法杖傷害倍率
+  let mageDamageMultiplier = 1;
+  if (hasMageBadge && wt && wt.startsWith("staff")) {
+    mageDamageMultiplier = 1.15;  // 法杖傷害 +15%
+  }
+
+  // 治療師：不參與直接戰鬥傷害，但有 aura 加成
+  let healerAuraActive = hasHealerBadge;
 
   const baseStats = {
     // 基礎數值
@@ -149,12 +186,38 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     counterInheritStun,    // 副手繼承擊暈
     counterInheritBreak,   // 副手繼承破防
 
-    // 弓箭手特效
-    hasArcherBadge,           // 是否裝備弓箭手徽章
-    archerBowDamageBoost: hasArcherBadge && wt === "bow" ? 1.2 : 1,  // 主武器為弓時傷害 ×1.2
-    archerCritRate,           // 弓箭手命中要害機率（覆蓋基礎爆擊）
-    archerCritMultiplier,     // 要害傷害倍率（1.5×）
-    archerDodgeCounterActive: false,  // 迴避後追擊標記（在 combatLoop 中設定）
+    // 職業特效
+    // 弓箭手
+    hasArcherBadge,
+    archerBowDamageBoost: hasArcherBadge && wt === "bow" ? 1.2 : 1,
+    archerCritRate,
+    archerCritMultiplier,
+    archerDodgeCounterActive: false,
+
+    // 劍士
+    hasSwordsmanBadge,
+    swordsmanBlockCritBoost,     // 格擋反擊命中率加成
+    blockCounterDamageMultiplier: 1,  // 反擊傷害倍率
+
+    // 戰士
+    hasWarriorBadge,
+    warriorLowHpMultiplier,   // 低血量傷害倍增
+
+    // 矮人
+    hasDwarfBadge,
+    dwarfHighHpStunBoost,     // 高血量擊暈加成
+
+    // 盜賊
+    hasRogueBadge,
+    rogueComboSpeedBoost,     // 連擊速度倍增
+
+    // 法師
+    hasMageBadge,
+    mageDamageMultiplier,     // 法杖傷害倍率
+
+    // 治療師
+    hasHealerBadge,
+    healerAuraActive,         // 是否有治療光環
   };
 
   const effectContext = { equipped, inventory };

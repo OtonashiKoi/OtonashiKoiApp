@@ -1,0 +1,198 @@
+/* admin.light.css
+   Light theme overrides for existing admin UI. Enabled when <body> has class "theme-light".
+*/
+
+body.theme-light {
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-hover: #F8FAFC;
+  --line: #E6E9EE;
+  --line-strong: #D9E2EC;
+  --text: #0F172A;
+  --muted: #64748B;
+  --accent: #2563EB;
+  --accent-dim: #60A5FA;
+  --accent-light: rgba(37,99,235,0.06);
+  --accent-glow: rgba(37,99,235,0.08);
+  --pink: #7C3AED;
+  --pink-light: rgba(124,58,237,0.04);
+  --gold: #F59E0B;
+  --success: #16A34A;
+  --warn: #F59E0B;
+  --danger: #EF4444;
+  --shadow-sm: 0 1px 3px rgba(2,6,23,0.06);
+  --shadow: 0 8px 24px rgba(2,6,23,0.06);
+  --shadow-md: 0 10px 40px rgba(2,6,23,0.08);
+  --radius: 8px;
+  --radius-lg: 10px;
+  --font-sans: 'Noto Sans TC', system-ui, sans-serif;
+  --sidebar-width: 280px;
+}
+
+/* Body */
+body.theme-light {
+  background-color: var(--bg) !important;
+  background-image: none !important;
+  color: var(--text);
+}
+
+/* Topbar */
+body.theme-light .window-top {
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 0 var(--line-strong);
+  backdrop-filter: none;
+  color: var(--text);
+}
+
+/* Control button */
+body.theme-light .control-btn {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--line);
+  box-shadow: var(--shadow-sm);
+}
+body.theme-light .control-btn:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+/* Sidebar */
+body.theme-light .hero {
+  background: transparent;
+  border-right: 1px solid var(--line);
+}
+body.theme-light .hero h1 {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: var(--text) !important;
+  filter: none !important;
+  text-transform: none !important;
+  letter-spacing: 0;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Hero card */
+body.theme-light .hero-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+}
+body.theme-light .hero-card .hero-label { color: var(--muted); }
+body.theme-light .hero-card strong { color: var(--text); }
+
+/* Nav */
+body.theme-light .nav-link { color: var(--muted); background: transparent; }
+body.theme-light .nav-link:hover { background: var(--surface-hover); color: var(--text); padding-left: 18px; }
+body.theme-light .nav-link.active { background: var(--surface-hover); color: var(--accent); font-weight: 600; border: 1px solid var(--line-strong); }
+body.theme-light .nav-link::before { box-shadow: none; }
+
+/* Panel + cards */
+body.theme-light .panel { background: transparent; }
+body.theme-light .card,
+body.theme-light .access-card,
+body.theme-light .role-item,
+body.theme-light .binding-item {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+body.theme-light .card::before,
+body.theme-light .access-card::before { opacity: 0.12; }
+
+/* Form elements */
+body.theme-light input,
+body.theme-light select,
+body.theme-light textarea {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+}
+body.theme-light input:focus,
+body.theme-light select:focus,
+body.theme-light textarea:focus {
+  background: var(--bg);
+  box-shadow: 0 0 0 4px rgba(37,99,235,0.06);
+  border-color: var(--accent);
+}
+
+/* Buttons */
+body.theme-light .button {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+body.theme-light .button:hover { background: var(--accent-light); color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+body.theme-light .button.primary { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 6px 18px rgba(37,99,235,0.12); }
+
+/* Reduce decorative glows */
+body.theme-light * { text-shadow: none !important; filter: none !important; }
+
+/* Tabs */
+body.theme-light .tab-container { background: transparent; border: 1px solid var(--line); }
+
+/* Role/binding decorations */
+body.theme-light .role-item::after,
+body.theme-light .binding-item::after { border-top-color: var(--line); }
+
+/* ── Modal / Picker / Cropper overrides for light theme ─────────────────── */
+body.theme-light .item-picker-modal {
+  display: none; /* visibility controlled by existing JS */
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0,0,0,0.36);
+  backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+body.theme-light .item-picker-modal[style*="display:flex"] { display:flex; }
+
+body.theme-light .item-picker-sheet {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+  max-width: 1000px;
+  width: 100%;
+  box-shadow: var(--shadow);
+}
+
+body.theme-light .item-picker-grid { max-height: 60vh; overflow:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
+
+body.theme-light .item-picker-card {
+  display:flex; gap:12px; align-items:center; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); cursor:pointer;
+}
+body.theme-light .item-picker-card:hover { background: var(--surface-hover); }
+body.theme-light .item-picker-card.is-active { border-color: var(--accent); box-shadow: 0 8px 24px rgba(37,99,235,0.06); }
+body.theme-light .item-picker-thumb img { width:56px; height:56px; object-fit:cover; border-radius:6px; border:1px solid var(--line-strong); }
+body.theme-light .item-picker-meta strong { color: var(--text); font-weight:600; }
+body.theme-light .item-picker-meta .hint { color: var(--muted); font-size:12px; }
+
+/* Image cropper modal override (override inline dark styles when light theme active) */
+body.theme-light #image-cropper-modal { background: rgba(15,23,42,0.04) !important; }
+body.theme-light #image-cropper-modal > div { background: var(--surface) !important; color: var(--text) !important; box-shadow: var(--shadow) !important; }
+body.theme-light #image-cropper-modal .button { background: var(--surface-hover); color: var(--text); border-color: var(--line-strong); }
+
+/* Hint / small text */
+body.theme-light .hint, body.theme-light .field-note { color: var(--muted); }
+
+/* Activity log */
+body.theme-light .activity-log { background: var(--surface); color: var(--text); border: 1px solid var(--line); padding: 12px; border-radius:8px; max-height: 360px; overflow:auto; }
+
+/* Status badge */
+body.theme-light .status-badge { background: var(--accent); color: #fff; padding: 4px 8px; border-radius: 999px; font-size:12px; font-weight:600; }
+
+/* Ensure focus outlines are visible in light theme */
+body.theme-light :focus { outline: none; box-shadow: 0 0 0 4px rgba(37,99,235,0.08); }
+
+/* Reduce heavy decorative filters that clash with light theme */
+body.theme-light * { filter: none !important; text-shadow: none !important; }
+

@@ -1,0 +1,3316 @@
+[
+  {
+    "_id": "69d897a99885be7a6eca0478",
+    "id": "4a7c2dd6-1d33-4613-a5aa-913924d12eed",
+    "name": "木盾",
+    "description": "D 級 盾牌",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897866/equipment-game/items/rdyjqmzoptbqlesy0hub.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897866/equipment-game/items/fvlnachuvnayixcd4ado.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "shield",
+    "equipStats": {
+      "vit": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.852Z",
+    "tier": "D",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0479",
+    "id": "ee883bee-93c6-450d-b196-754d3e345d2a",
+    "name": "布衣",
+    "description": "D 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897867/equipment-game/items/hhllx4y8wsbjabnakasj.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897868/equipment-game/items/fbh0kaheiupaufr59y6i.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "armor",
+    "equipStats": {
+      "vit": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.860Z",
+    "tier": "D",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca047a",
+    "id": "7bdf0277-dcd5-4173-b3ff-d93ccaa9e293",
+    "name": "布帽",
+    "description": "D 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897869/equipment-game/items/vtaf0tjmqu3xphr3ex3x.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897870/equipment-game/items/v0mlpb0y64g1eqybu2ts.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_top",
+    "equipStats": {
+      "vit": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.864Z",
+    "tier": "D",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca047b",
+    "id": "3667cf4f-18cb-4861-b4cb-8700805d8bcf",
+    "name": "木框護目鏡",
+    "description": "D 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897871/equipment-game/items/lwayxikslrfldfamcng1.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897871/equipment-game/items/vwgfs4rcg9sgenpxiyfb.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_mid",
+    "equipStats": {
+      "dex": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.867Z",
+    "tier": "D",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca047c",
+    "id": "a91fab15-a786-490a-ae7f-6ecd536febb1",
+    "name": "布口罩",
+    "description": "D 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897872/equipment-game/items/knkaxei8gkv5jfev1ez8.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897873/equipment-game/items/namqmjbvlwnuyytdpcpx.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_low",
+    "equipStats": {
+      "int": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.872Z",
+    "tier": "D",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca047d",
+    "id": "912125cb-6738-4694-9657-81e7f6a5c2da",
+    "name": "布披風",
+    "description": "D 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897874/equipment-game/items/pc1ujfbelbchlyn15sew.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897875/equipment-game/items/syffuc1qjkssdsrmuwhp.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "garment",
+    "equipStats": {
+      "agi": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.876Z",
+    "tier": "D",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca047e",
+    "id": "8c9ac7c4-e00d-44fb-9582-8c68b99c2357",
+    "name": "草鞋",
+    "description": "D 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897876/equipment-game/items/ge1f9uflph0rvsejqr2w.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897876/equipment-game/items/gisf926z73nosd1oolei.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "shoes",
+    "equipStats": {
+      "agi": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.879Z",
+    "tier": "D",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca047f",
+    "id": "19e24aca-92f5-4f81-8ab9-cc4f8ba73a72",
+    "name": "銅戒指(左)",
+    "description": "D 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897877/equipment-game/items/ek7igm66dbi8pzah2ein.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897878/equipment-game/items/zegrn2siyith1qxe6p92.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "accessory_l",
+    "equipStats": {
+      "luk": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.883Z",
+    "tier": "D",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0480",
+    "id": "be6f16fa-4e72-47ab-9a08-d580bd5490ef",
+    "name": "銅戒指(右)",
+    "description": "D 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897879/equipment-game/items/pg0cgxxkwade2v76zn2j.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897880/equipment-game/items/dgwwliwkkjlxnge7wzac.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "accessory_r",
+    "equipStats": {
+      "luk": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.889Z",
+    "tier": "D",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0481",
+    "id": "dcb0ab95-aff6-4961-ae44-79bd49a2f0e8",
+    "name": "鐵盾",
+    "description": "C 級 盾牌",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897881/equipment-game/items/yqahcm9fzlvl3wsfwozv.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897881/equipment-game/items/w4o0qykv99pxk7ashbnk.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "shield",
+    "equipStats": {
+      "vit": 4
+    },
+    "createdAt": "2026-04-05T18:29:44.895Z",
+    "tier": "C",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0482",
+    "id": "73884cf9-67b5-47b4-af3c-b6d79a39ec57",
+    "name": "皮甲",
+    "description": "C 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897882/equipment-game/items/ygu6dkssylccax7dqeee.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897883/equipment-game/items/snscezmcye8nihabiqb6.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "armor",
+    "equipStats": {
+      "vit": 4
+    },
+    "createdAt": "2026-04-05T18:29:44.899Z",
+    "tier": "C",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0483",
+    "id": "12cddc4e-58ef-433e-a50d-e8ca04b1041e",
+    "name": "皮帽",
+    "description": "C 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897885/equipment-game/items/cui0ocdbash8keofkieo.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897886/equipment-game/items/lecmeyb8vhyq8vtdiqns.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_top",
+    "equipStats": {
+      "agi": 1,
+      "vit": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.903Z",
+    "tier": "C",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0484",
+    "id": "45a8eba1-f558-4c9b-8c60-7dcc42ba2cf9",
+    "name": "鐵護目鏡",
+    "description": "C 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897887/equipment-game/items/mnafcvyhjhizqzzeoewz.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897888/equipment-game/items/bregwzpph9sluxec0wt1.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_mid",
+    "equipStats": {
+      "int": 1,
+      "dex": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.907Z",
+    "tier": "C",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0485",
+    "id": "099d5496-e0d4-49e5-af89-ac6580262d5a",
+    "name": "皮口罩",
+    "description": "C 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897888/equipment-game/items/srwt3gzo1bsqbig9jihu.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897889/equipment-game/items/porrqoivv0dljtsowo4u.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_low",
+    "equipStats": {
+      "vit": 1,
+      "int": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.911Z",
+    "tier": "C",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0486",
+    "id": "bb26be45-2910-4034-8db6-e02d9d473513",
+    "name": "皮披風",
+    "description": "C 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897890/equipment-game/items/ogxgakpqxqdjzgftbww8.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897891/equipment-game/items/zwki3092us3emk5xt1pg.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "garment",
+    "equipStats": {
+      "agi": 2,
+      "vit": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.914Z",
+    "tier": "C",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0487",
+    "id": "34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9",
+    "name": "皮靴",
+    "description": "C 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897892/equipment-game/items/c8pkasbvapm4ylvuvg2l.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897893/equipment-game/items/jjanje2enhwmdv6gq7fk.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "shoes",
+    "equipStats": {
+      "agi": 2,
+      "dex": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.917Z",
+    "tier": "C",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0488",
+    "id": "eb852c75-f487-4086-b8b3-0b10adab2db3",
+    "name": "銀戒指(左)",
+    "description": "C 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897893/equipment-game/items/wwcf0xyvi4kjybnf6jl8.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897894/equipment-game/items/aijvhc8pdizdqmb2koyw.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "accessory_l",
+    "equipStats": {
+      "int": 1,
+      "luk": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.922Z",
+    "tier": "C",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0489",
+    "id": "353b7c41-1d23-4a43-ac3c-38517bb235a5",
+    "name": "銀戒指(右)",
+    "description": "C 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897895/equipment-game/items/y0y6suvyyb8a0qo3ldfh.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897896/equipment-game/items/ojmxsm3gmnbc1rkjyss8.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "accessory_r",
+    "equipStats": {
+      "str": 1,
+      "luk": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.925Z",
+    "tier": "C",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca048a",
+    "id": "3cdbaafb-df15-41e5-bca9-16453b72669e",
+    "name": "精鋼盾",
+    "description": "B 級 盾牌",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930747/equipment-game/items/j6j5ejjw3zh4ul54e0t5.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930748/equipment-game/items/to8nsdtvh84okkqxbq30.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "shield",
+    "equipStats": {
+      "str": 1,
+      "vit": 6
+    },
+    "createdAt": "2026-04-05T18:29:44.932Z",
+    "tier": "B",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca048b",
+    "id": "11c00245-6d43-4ab5-a68b-a7494a9fba84",
+    "name": "鎖甲",
+    "description": "B 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174413/equipment-game/items/vzsozai2yz8gir5faeaa.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174414/equipment-game/items/zfislllsxo72jzpsfnks.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "armor",
+    "equipStats": {
+      "str": 1,
+      "vit": 6
+    },
+    "createdAt": "2026-04-05T18:29:44.935Z",
+    "tier": "B",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca048c",
+    "id": "7cdbe248-2e54-4798-9ddf-c103e80d2755",
+    "name": "鐵盔",
+    "description": "B 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174502/equipment-game/items/eooun54xvrjge2ta5mgj.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174503/equipment-game/items/p5zr0thfg0obindaud23.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_top",
+    "equipStats": {
+      "vit": 3,
+      "agi": 1,
+      "str": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.940Z",
+    "tier": "B"
+  },
+  {
+    "_id": "69d897a99885be7a6eca048d",
+    "id": "f005d0bb-7510-4905-a1bd-6fe55cc84af5",
+    "name": "精鋼護目鏡",
+    "description": "B 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174617/equipment-game/items/nponwiy0trftolbbhyf4.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174618/equipment-game/items/o1l4lof2aj2xaye65izr.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_mid",
+    "equipStats": {
+      "int": 1,
+      "dex": 3,
+      "luk": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.944Z",
+    "tier": "B",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca048e",
+    "id": "0a2c7f28-4b49-4f3b-9ee7-2c951b4699f2",
+    "name": "鐵面罩",
+    "description": "B 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174633/equipment-game/items/wqqomabh0sxgehanl8t7.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174634/equipment-game/items/gtjxgsw7ymnfux4jfo94.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_low",
+    "equipStats": {
+      "vit": 1,
+      "int": 3,
+      "dex": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.947Z",
+    "tier": "B",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca048f",
+    "id": "8534e2da-47c0-4493-8051-a831b6476f03",
+    "name": "絲綢披風",
+    "description": "B 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174643/equipment-game/items/soofm7plfkhdxfymfmvm.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174644/equipment-game/items/ywsulusaxfkei1j24r1f.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "garment",
+    "equipStats": {
+      "agi": 3,
+      "vit": 1,
+      "dex": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.950Z",
+    "tier": "B",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0490",
+    "id": "255bd660-555d-47a9-bdad-d1fd8eb36c1b",
+    "name": "精鋼靴",
+    "description": "B 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174654/equipment-game/items/wjdzuxxs2bqvhymirwwn.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174655/equipment-game/items/ubgc89mp0iz0ylhtqbkb.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "shoes",
+    "equipStats": {
+      "str": 1,
+      "agi": 3,
+      "dex": 1
+    },
+    "createdAt": "2026-04-05T18:29:44.955Z",
+    "tier": "B",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0491",
+    "id": "4196e3d5-811f-4816-aa94-a1e8cc31ebfc",
+    "name": "魔晶石戒(左)",
+    "description": "B 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174671/equipment-game/items/dzn98acamxhpgjbjsxty.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174673/equipment-game/items/x8kakoidyni6exavm0jb.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "accessory_l",
+    "equipStats": {
+      "int": 1,
+      "dex": 1,
+      "luk": 3
+    },
+    "createdAt": "2026-04-05T18:29:44.960Z",
+    "tier": "B",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0492",
+    "id": "feb40b36-5558-44af-a0d4-294bc8acaf46",
+    "name": "魔晶石戒(右)",
+    "description": "B 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174801/equipment-game/items/gi5txorezhcvju6kjmrs.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174802/equipment-game/items/mvvet169d8bcvmnljyoj.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "accessory_r",
+    "equipStats": {
+      "str": 1,
+      "vit": 1,
+      "luk": 3
+    },
+    "createdAt": "2026-04-05T18:29:44.963Z",
+    "tier": "B",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0493",
+    "id": "585ad0b3-2c75-462a-ade6-882e5929831b",
+    "name": "秘銀盾",
+    "description": "A 級 盾牌",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930760/equipment-game/items/zpxvjbfbys8ruiado6st.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930761/equipment-game/items/blbfyc2p8snobuz8hwk1.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "shield",
+    "equipStats": {
+      "str": 2,
+      "vit": 9
+    },
+    "createdAt": "2026-04-05T18:29:44.974Z",
+    "tier": "A",
+    "atkStat": null,
+    "isTwoHanded": false,
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0494",
+    "id": "c0eb5730-e014-4286-9aac-61ba7fb38d6e",
+    "name": "板甲",
+    "description": "A 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174754/equipment-game/items/eyd5ksiva1vsy28qeyev.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174754/equipment-game/items/eusmrvjrbmdeyomwckqy.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "armor",
+    "equipStats": {
+      "str": 2,
+      "vit": 9
+    },
+    "createdAt": "2026-04-05T18:29:44.977Z",
+    "tier": "A",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0495",
+    "id": "ec5118e5-4ce6-494f-8d14-d9b91f3e0b48",
+    "name": "精鋼盔",
+    "description": "A 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": null,
+    "imageThumbnailUrl": null,
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_top",
+    "equipStats": {
+      "vit": 4,
+      "agi": 2,
+      "str": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.981Z",
+    "tier": "A"
+  },
+  {
+    "_id": "69d897a99885be7a6eca0496",
+    "id": "3eb62dad-c75f-46bb-997e-bf34c593c125",
+    "name": "秘銀護目鏡",
+    "description": "A 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": null,
+    "imageThumbnailUrl": null,
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_mid",
+    "equipStats": {
+      "dex": 4,
+      "int": 2,
+      "luk": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.985Z",
+    "tier": "A"
+  },
+  {
+    "_id": "69d897a99885be7a6eca0497",
+    "id": "e7eef959-3e12-4435-bcf3-cdc9c9e7f813",
+    "name": "秘銀面罩",
+    "description": "A 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": null,
+    "imageThumbnailUrl": null,
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "head_low",
+    "equipStats": {
+      "int": 4,
+      "vit": 2,
+      "dex": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.989Z",
+    "tier": "A"
+  },
+  {
+    "_id": "69d897a99885be7a6eca0498",
+    "id": "1039c921-d77d-4223-8d7b-321721484850",
+    "name": "天使翼披風",
+    "description": "A 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174779/equipment-game/items/etouxc7dvccrsxbcm7jy.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174780/equipment-game/items/l5tbnax0pzyx8fvvkqpv.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "garment",
+    "equipStats": {
+      "agi": 4,
+      "vit": 2,
+      "dex": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.993Z",
+    "tier": "A",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca0499",
+    "id": "6603a67d-aa9b-4c92-8171-f3da825afe50",
+    "name": "秘銀靴",
+    "description": "A 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174787/equipment-game/items/t8rofy661cfn1vc7mll5.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174788/equipment-game/items/a6uioaqpqmipeeqncmee.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "shoes",
+    "equipStats": {
+      "str": 2,
+      "agi": 4,
+      "dex": 2
+    },
+    "createdAt": "2026-04-05T18:29:44.996Z",
+    "tier": "A",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca049a",
+    "id": "72b20cc5-b0e0-4897-98d5-30f9e4d03225",
+    "name": "龍晶戒指(左)",
+    "description": "A 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174820/equipment-game/items/wmpuhcyyk01te8l54lak.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174821/equipment-game/items/bfcpdxk6ew6r9viuscwu.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "accessory_l",
+    "equipStats": {
+      "int": 2,
+      "dex": 2,
+      "luk": 4
+    },
+    "createdAt": "2026-04-05T18:29:44.999Z",
+    "tier": "A",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca049b",
+    "id": "ef5eca0d-c422-48eb-860f-5d8a4dafa95a",
+    "name": "龍晶戒指(右)",
+    "description": "A 級 裝備",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174828/equipment-game/items/mloimmtqcdcijz4r7jen.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174829/equipment-game/items/fixh3fge0yufaq2avrnu.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "accessory_r",
+    "equipStats": {
+      "str": 2,
+      "vit": 2,
+      "luk": 4
+    },
+    "createdAt": "2026-04-05T18:29:45.004Z",
+    "tier": "A",
+    "atkStat": null,
+    "combatEffects": [],
+    "isTwoHanded": false,
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69d897a99885be7a6eca049c",
+    "id": "a56bd609-cf0b-4924-b724-891f221fc0b9",
+    "name": "木製單手劍",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930790/equipment-game/items/kgbvu8t9vxdquh3ic1gn.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930791/equipment-game/items/ws8jxvygdyg4jxnl1xao.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 3
+    },
+    "weaponType": "sword_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.721Z",
+    "tier": "D"
+  },
+  {
+    "_id": "69d897a99885be7a6eca049d",
+    "id": "9c809436-d8d5-4b21-bf15-e26e881cac9b",
+    "name": "鐵製單手劍",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930805/equipment-game/items/hzbozkggzskin7iabcmm.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930806/equipment-game/items/b3jznsqkgy6womxxgqpw.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 6
+    },
+    "weaponType": "sword_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C"
+  },
+  {
+    "_id": "69d897a99885be7a6eca049e",
+    "id": "e3bcdb33-4a28-499e-9c65-50240368550f",
+    "name": "精鋼單手劍",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930827/equipment-game/items/s5w7uwms4flfhsky0hqz.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930828/equipment-game/items/btjkoyu9rcgddyzlytpc.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 9,
+      "luk": 1
+    },
+    "weaponType": "sword_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B"
+  },
+  {
+    "_id": "69d897a99885be7a6eca049f",
+    "id": "99d23a47-89a6-4291-9b03-8f15e7356eec",
+    "name": "秘銀單手劍",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930846/equipment-game/items/i9icwavhrhicj5znphdl.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930846/equipment-game/items/ppeq7wuh9zuszlkfsp2u.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 13,
+      "luk": 2
+    },
+    "weaponType": "sword_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a0",
+    "id": "ce6f0608-2750-47b4-aa26-14d9c1aa0f4c",
+    "name": "木製雙手劍",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930900/equipment-game/items/tqoutcb9osuzxubxwfct.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930901/equipment-game/items/mecgtwdew6snyjrqa3lk.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 3
+    },
+    "weaponType": "sword_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "D"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a1",
+    "id": "24d71d06-5df8-446d-b2e5-f4cb49818e3f",
+    "name": "鐵製雙手劍",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930914/equipment-game/items/uigld7wnwgjom4jlchl2.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930915/equipment-game/items/bqop9y4l6zppw5awxh1b.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 6
+    },
+    "weaponType": "sword_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a2",
+    "id": "e17d3bad-4b8e-4603-9351-0e1432a21a11",
+    "name": "精鋼雙手劍",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930930/equipment-game/items/snbdvcpzfpc5irw0f1ei.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775930931/equipment-game/items/clykx50u4xcatmva6yuq.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 9,
+      "agi": 1
+    },
+    "weaponType": "sword_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a3",
+    "id": "acfebb62-91b8-4989-8aab-431256ffd202",
+    "name": "秘銀雙手劍",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931033/equipment-game/items/vairblly5ieip3zozqzh.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931034/equipment-game/items/pukhdp018kh6hpjq3a9r.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 13,
+      "agi": 2
+    },
+    "weaponType": "sword_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a4",
+    "id": "6da9f4e6-aac1-4088-9000-7111fd4926b0",
+    "name": "木製單手槌",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931068/equipment-game/items/wxmqirl9lu7fzmezfifw.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931069/equipment-game/items/cgul2h5dyvnvbduaprkx.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 3
+    },
+    "weaponType": "mace_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "D"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a5",
+    "id": "fbf8fdec-72a4-4d76-bcb5-117952352dec",
+    "name": "鐵製單手槌",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931119/equipment-game/items/tixrocfmudclrqszcvak.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931120/equipment-game/items/uckm2ce8nn4eeptitiyz.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 6
+    },
+    "weaponType": "mace_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a6",
+    "id": "49a6108d-a199-4a7a-91ea-630814945399",
+    "name": "精鋼單手槌",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931128/equipment-game/items/n6gxsqv8ptzanrqfksh0.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931129/equipment-game/items/awxqe8icoikngxf3ptj9.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 9,
+      "vit": 1
+    },
+    "weaponType": "mace_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a7",
+    "id": "3787b328-db67-4513-950e-0cfb8e503457",
+    "name": "秘銀單手槌",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931145/equipment-game/items/y8ewk1v6nmo78whclkin.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931146/equipment-game/items/zgiy38da8odcl6q3cis9.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 13,
+      "vit": 2
+    },
+    "weaponType": "mace_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a8",
+    "id": "2fcf7576-4e74-4280-b1e6-0d7da7b58dda",
+    "name": "木製雙手槌",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174869/equipment-game/items/z8riz9clt438bszassce.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174870/equipment-game/items/rlx8ak3lswrdybsbqnp5.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 3
+    },
+    "weaponType": "mace_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "D",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04a9",
+    "id": "1f04c0db-e5cb-4b84-9a43-e7150799eecb",
+    "name": "鐵製雙手槌",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174889/equipment-game/items/bfftsb9fy7ciupr0uj4q.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174890/equipment-game/items/aqk01wcj6pvhts1gdhrp.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 6
+    },
+    "weaponType": "mace_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04aa",
+    "id": "9e7fc009-c3ab-4c3f-b7d0-b1c17cb2e9d4",
+    "name": "精鋼雙手槌",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174905/equipment-game/items/esmolnonuawhuqruztcn.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174906/equipment-game/items/liu33mroafjagb2eapkt.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 9,
+      "vit": 1
+    },
+    "weaponType": "mace_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04ab",
+    "id": "0635861a-8bb0-4516-b16d-0351539ba5e7",
+    "name": "秘銀雙手槌",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174918/equipment-game/items/frb4cmfyydptwm88s5wn.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174919/equipment-game/items/vgvftdhqxhkbddjev3oe.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 13,
+      "vit": 2
+    },
+    "weaponType": "mace_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04ac",
+    "id": "4885e098-3624-4c6c-9eb9-e4b27c2fb5ab",
+    "name": "木製單手斧",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174956/equipment-game/items/ar4czuuo2gtv15wkkafb.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174958/equipment-game/items/j4dsahky1f9wuucaet1r.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 3
+    },
+    "weaponType": "axe_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "D",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04ad",
+    "id": "fcdbb6c1-bb21-45e1-9637-3aa58a76c79e",
+    "name": "鐵製單手斧",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174965/equipment-game/items/ou8zicl4eyyflyuzg2k3.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174966/equipment-game/items/nkruuxjneaeu201ftdqd.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 6
+    },
+    "weaponType": "axe_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04ae",
+    "id": "8218a81c-98ed-49d3-8a16-a38189e00be6",
+    "name": "精鋼單手斧",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174973/equipment-game/items/dn3paqhiyhe2asf6dfdl.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174974/equipment-game/items/qh7lh8ntozoq35pggdq8.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 9,
+      "luk": 1
+    },
+    "weaponType": "axe_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04af",
+    "id": "b24ee5cd-c74b-409e-9326-14bd056d9af8",
+    "name": "秘銀單手斧",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174980/equipment-game/items/aqthm9vdomvoya4z9oqk.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174981/equipment-game/items/wlmor4elrmauxekmv0zx.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 13,
+      "luk": 2
+    },
+    "weaponType": "axe_1h",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b0",
+    "id": "2271e23c-9648-430e-944b-cea2107ee8ec",
+    "name": "木製雙手斧",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175014/equipment-game/items/qia14cxz07vnrporpjre.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175015/equipment-game/items/jhjnrm4hz1lcmkdj6oso.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 3
+    },
+    "weaponType": "axe_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "D",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b1",
+    "id": "ab533d4a-3d07-4d41-8a40-511a8e6a455d",
+    "name": "鐵製雙手斧",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175021/equipment-game/items/xpphvycu052dfxdp4qp2.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175022/equipment-game/items/edd5aojxebzpxknyeokz.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 6
+    },
+    "weaponType": "axe_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b2",
+    "id": "25648e7c-d628-4d5d-bfed-1dfbe6a5e650",
+    "name": "精鋼雙手斧",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175029/equipment-game/items/y5btwiztvgauulgacwpg.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175031/equipment-game/items/rll6voj4evsqwrprzauf.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 9,
+      "agi": 1
+    },
+    "weaponType": "axe_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b3",
+    "id": "8c1782df-9823-405c-ade8-423c854a467e",
+    "name": "秘銀雙手斧",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175037/equipment-game/items/sckrjzhpjr2ja6loj9kp.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175038/equipment-game/items/mec6dswgwhl2f5htxsoo.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 13,
+      "agi": 2
+    },
+    "weaponType": "axe_2h",
+    "isTwoHanded": true,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b4",
+    "id": "421196aa-83e4-4f2e-82f6-dc05077b115a",
+    "name": "木製匕首",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175078/equipment-game/items/lmu60hahcun6lfec2zgd.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175079/equipment-game/items/ad11aojjclvyhr0atp2y.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 3
+    },
+    "weaponType": "dagger",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "D",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b5",
+    "id": "a5bf4a8c-2f89-4b35-9f23-8cb519bb0292",
+    "name": "鐵製匕首",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175097/equipment-game/items/nhlgnu4yhjsanwdlmwbr.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175098/equipment-game/items/ky1aoknj9jrard47q0ze.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 6
+    },
+    "weaponType": "dagger",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b6",
+    "id": "6c47d7a3-0937-4f9b-b447-2cc9f55ba749",
+    "name": "精鋼匕首",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175087/equipment-game/items/o3q9ihtrl07reqeuuqcg.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175088/equipment-game/items/jh2g7mgnvwlszbktyaat.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 9,
+      "agi": 1
+    },
+    "weaponType": "dagger",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b7",
+    "id": "5da1f2b3-ad07-46b5-9d24-eb2d849d3381",
+    "name": "秘銀匕首",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175092/equipment-game/items/zscvbyj8m6kbkougjgsf.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175093/equipment-game/items/unnm3stuwgqbns6e4tjx.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "str": 13,
+      "agi": 2
+    },
+    "weaponType": "dagger",
+    "isTwoHanded": false,
+    "atkStat": "str",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b8",
+    "id": "33d319ec-cb62-4826-8bcc-82a6fe52b8fa",
+    "name": "初級單手法杖",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931367/equipment-game/items/yygth3fzi5gpenxoezij.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931368/equipment-game/items/tqam6yzwpbqzt69jkaei.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "int": 3
+    },
+    "weaponType": "staff_1h",
+    "isTwoHanded": false,
+    "atkStat": "int",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "D"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04b9",
+    "id": "234e9a7f-1220-48fa-824a-690ce0648ae6",
+    "name": "中級單手法杖",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931377/equipment-game/items/f9fhnfkye7p3ooogaoqm.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775931378/equipment-game/items/ypjijxakxyufbduoayno.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "int": 6
+    },
+    "weaponType": "staff_1h",
+    "isTwoHanded": false,
+    "atkStat": "int",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C"
+  },
+  {
+    "_id": "69d897a99885be7a6eca04ba",
+    "id": "d08f99f6-6a4f-4afb-a02d-ec1a2cd69b2e",
+    "name": "高級單手法杖",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175148/equipment-game/items/lmeecgpljih8cjixkxvf.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175149/equipment-game/items/d2h1rtat19grnigsur6x.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "int": 9,
+      "luk": 1
+    },
+    "weaponType": "staff_1h",
+    "isTwoHanded": false,
+    "atkStat": "int",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04bb",
+    "id": "d87fbd00-8882-4a95-8418-f0c7a7804343",
+    "name": "大師單手法杖",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175290/equipment-game/items/ccjnr51yjwrel9j9dp8y.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175291/equipment-game/items/eabjdgnyg3k51qfeymmr.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "int": 13,
+      "luk": 2
+    },
+    "weaponType": "staff_1h",
+    "isTwoHanded": false,
+    "atkStat": "int",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04bc",
+    "id": "d5936211-685a-4cd7-a1e9-24524725da96",
+    "name": "初級雙手法杖",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175167/equipment-game/items/ilhahya9d54smpjwtrko.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175168/equipment-game/items/rir7brq81o568hlgfssg.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "int": 3
+    },
+    "weaponType": "staff_2h",
+    "isTwoHanded": true,
+    "atkStat": "int",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "D",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04bd",
+    "id": "c0545f31-455e-4846-b914-79302f8bea03",
+    "name": "中級雙手法杖",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175299/equipment-game/items/ysp0bmexnbszawrswef9.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175300/equipment-game/items/uxt45qgun5cye1yihsqt.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "int": 6
+    },
+    "weaponType": "staff_2h",
+    "isTwoHanded": true,
+    "atkStat": "int",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04be",
+    "id": "c9c7bbfb-ea75-4ac1-92cf-a897dcd32137",
+    "name": "高級雙手法杖",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175176/equipment-game/items/keb763vpznkwnsvhv86c.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175177/equipment-game/items/zkma2kkgidssrkltxmeo.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "int": 9,
+      "luk": 1
+    },
+    "weaponType": "staff_2h",
+    "isTwoHanded": true,
+    "atkStat": "int",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04bf",
+    "id": "ca32c28a-864b-44b5-becd-1242d910f718",
+    "name": "大師雙手法杖",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175306/equipment-game/items/wmqx2tdqvvhqqzjx1whn.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175308/equipment-game/items/ssn6hed5v0ykikmomimr.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "int": 13,
+      "luk": 2
+    },
+    "weaponType": "staff_2h",
+    "isTwoHanded": true,
+    "atkStat": "int",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04c0",
+    "id": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+    "name": "木製弓",
+    "description": "D 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175221/equipment-game/items/ivqzurneospfhec3hune.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175222/equipment-game/items/utceccb7puzzfotecyvr.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "dex": 3
+    },
+    "weaponType": "bow",
+    "isTwoHanded": true,
+    "atkStat": "dex",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "D",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04c1",
+    "id": "efd48300-f4b6-40d6-a1c5-8c2014ae4b55",
+    "name": "鐵製弓",
+    "description": "C 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175228/equipment-game/items/msgypeyxjcxgatonuuhm.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175229/equipment-game/items/jhnpwcsliv5gdhyrryla.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "dex": 6
+    },
+    "weaponType": "bow",
+    "isTwoHanded": true,
+    "atkStat": "dex",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "C",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04c2",
+    "id": "a314493c-efcd-43e5-bebc-935ef1d588a5",
+    "name": "精鋼弓",
+    "description": "B 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175233/equipment-game/items/y6wiz2m9hpn3q9liq4jn.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175234/equipment-game/items/ckbh12zqcmd6g8aqupcg.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "agi": 1,
+      "dex": 9
+    },
+    "weaponType": "bow",
+    "isTwoHanded": true,
+    "atkStat": "dex",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "B",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d897a99885be7a6eca04c3",
+    "id": "bc3d565e-6d15-4080-b79f-b7f0b76e9042",
+    "name": "秘銀弓",
+    "description": "A 級 武器",
+    "itemType": "equipment",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175239/equipment-game/items/mfkjik8cr9pwol4ua5l5.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175240/equipment-game/items/glqly0xrbewrlhyu5fa3.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "weapon",
+    "equipStats": {
+      "agi": 2,
+      "dex": 13
+    },
+    "weaponType": "bow",
+    "isTwoHanded": true,
+    "atkStat": "dex",
+    "createdAt": "2026-04-10T03:38:22.722Z",
+    "tier": "A",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69d166dac30e6269a49d400c",
+    "id": "c5db63c0-79f2-452a-a076-78f09093a65c",
+    "name": "【圖片】音無2025年1月新年會限圖",
+    "description": "紀念用",
+    "itemType": "collectible",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897899/equipment-game/items/eqxuoqc5zmdkvdzykesu.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897900/equipment-game/items/htamemqbslqug9lznbhj.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "createdAt": "2026-04-04T10:24:28.953Z",
+    "atkStat": null,
+    "equipSlot": null,
+    "equipStats": null,
+    "isTwoHanded": false,
+    "tier": null,
+    "weaponType": null
+  },
+  {
+    "_id": "69d166dac30e6269a49d400d",
+    "id": "14ee61e8-e9f0-44e4-9a32-f8dd0060cbe2",
+    "name": "【鯉長】的每月俸祿",
+    "description": "",
+    "itemType": "consumable",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897901/equipment-game/items/ywocyr96vlet7ofev3gn.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897902/equipment-game/items/wkqhosi3hzuvjowlcakw.webp",
+    "effect": {
+      "type": "grant_diamond",
+      "value": 3
+    },
+    "createdAt": "2026-04-04T11:09:37.195Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d400e",
+    "id": "9d3f8e8a-3de6-40c4-a2a5-06793e83c7d5",
+    "name": "【鯉民】的每月俸祿",
+    "description": "",
+    "itemType": "consumable",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897903/equipment-game/items/wepfpmmftmhcbbnbsnls.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897904/equipment-game/items/gegqaij2yq95vghvdkt3.webp",
+    "effect": {
+      "type": "grant_diamond",
+      "value": 1
+    },
+    "createdAt": "2026-04-04T11:10:00.089Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d400f",
+    "id": "4a3b928f-c86a-4f3e-b1be-8ca2828072ae",
+    "name": "【鯉市長】的每月俸祿",
+    "description": "",
+    "itemType": "consumable",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897904/equipment-game/items/o6cnvdsg2hl5k7wqsitm.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897905/equipment-game/items/b8kfoyrfjbuoiexf4arh.webp",
+    "effect": {
+      "type": "grant_diamond",
+      "value": 10
+    },
+    "createdAt": "2026-04-04T11:33:31.442Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d4010",
+    "id": "b7f5ef58-79d3-41ef-b9d2-c726da22417b",
+    "name": "【圖片】音無 哭哭 錢錢飛走了",
+    "description": "紀念用",
+    "itemType": "collectible",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897906/equipment-game/items/rshxmjlkriu7l8zckyff.gif",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897907/equipment-game/items/az8kppsmyrmzgxdowhfe.webp",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "createdAt": "2026-04-04T13:59:48.203Z",
+    "atkStat": null,
+    "equipSlot": null,
+    "equipStats": null,
+    "isTwoHanded": false,
+    "tier": null,
+    "weaponType": null
+  },
+  {
+    "_id": "69d74419edbb0450da054a35",
+    "id": "63ca559b-ca12-4835-a48d-2150e366f60e",
+    "atkStat": null,
+    "createdAt": "2026-04-09T06:15:53.913Z",
+    "description": "使用獲得100金幣",
+    "effect": {
+      "type": "grant_gold",
+      "value": 100
+    },
+    "equipSlot": null,
+    "equipStats": null,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897909/equipment-game/items/dkjg2cmq0aji5al31x67.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897908/equipment-game/items/vpnrnpcsox12f7bfypao.png",
+    "isTwoHanded": false,
+    "itemType": "consumable",
+    "name": "金幣袋子(小)",
+    "weaponType": null,
+    "tier": null
+  },
+  {
+    "_id": "69d89b0bedbb0450da057d5b",
+    "id": "87b281be-b175-40a0-8044-0accc88a0ee0",
+    "atkStat": null,
+    "createdAt": "2026-04-10T06:39:07.653Z",
+    "description": "可以隨機重製所有屬性值",
+    "effect": {
+      "type": "reroll_attributes",
+      "value": 1
+    },
+    "enhanceLevel": 0,
+    "equipSlot": null,
+    "equipStats": null,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897911/equipment-game/items/t15i81giua7jfvagwwid.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897910/equipment-game/items/iqe7zckzp8bnz6l57r2o.png",
+    "isTwoHanded": false,
+    "itemType": "consumable",
+    "name": "屬性重製藥水",
+    "tier": null,
+    "weaponType": null
+  },
+  {
+    "_id": "69d6ca8cedbb0450da053297",
+    "id": "e290d286-bd45-4a32-b848-d52184fc88a0",
+    "atkStat": null,
+    "createdAt": "2026-04-08T21:37:16.378Z",
+    "description": "紀念音無樂園CCB的時候達到15級",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "equipSlot": "title_eq",
+    "equipStats": {
+      "luk": 3
+    },
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897913/equipment-game/items/i3insjfaxi1pwdphoqot.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897911/equipment-game/items/pkksqwruhqpr6vye9ni8.png",
+    "isTwoHanded": false,
+    "itemType": "equipment",
+    "name": "樂園CCB勇者",
+    "weaponType": null
+  },
+  {
+    "_id": "69d8b1afedbb0450da058079",
+    "id": "71aaa3a2-abb9-4b01-b024-16e553b08840",
+    "atkStat": null,
+    "createdAt": "2026-04-10T08:15:44.018Z",
+    "description": "使用獲得500金幣",
+    "effect": {
+      "type": "grant_gold",
+      "value": 500
+    },
+    "enhanceLevel": 0,
+    "equipSlot": null,
+    "equipStats": null,
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897915/equipment-game/items/oi1zfyjmfnvrwpa6rpq5.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897914/equipment-game/items/aueqhbetzfhal5p5i1vg.png",
+    "isTwoHanded": false,
+    "itemType": "consumable",
+    "name": "金幣袋子(中)",
+    "tier": null,
+    "weaponType": null
+  },
+  {
+    "_id": "69d9d376daa194f5e73dc56f",
+    "id": "44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf",
+    "atkStat": "str",
+    "createdAt": "2026-04-11T04:52:06.432Z",
+    "description": "D級 副手",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "enhanceLevel": 0,
+    "equipSlot": "shield",
+    "equipStats": {
+      "str": 1
+    },
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175265/equipment-game/items/hck0xfjqhxr9ilko0yvz.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776175264/equipment-game/items/e0kaxujsfeg9sn5vsouk.png",
+    "isTwoHanded": false,
+    "itemType": "equipment",
+    "name": "迅短劍(副)",
+    "tier": "D",
+    "weaponType": "offhand_dagger",
+    "combatEffects": [],
+    "passiveEffects": [],
+    "procEffects": [],
+    "useEffects": []
+  },
+  {
+    "_id": "69dd0cabdaa194f5e73e3de6",
+    "id": "65833876-d13e-4ca8-ac26-4eeb170726fc",
+    "atkStat": null,
+    "combatEffects": [],
+    "createdAt": "2026-04-13T15:32:59.865Z",
+    "description": "紀念音無樂園CCB2的時候達到15級",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "enhanceLevel": 0,
+    "equipSlot": "title_eq",
+    "equipStats": {
+      "luk": 3
+    },
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776094395/equipment-game/items/wwj9q9piipmoiufg4zm0.webp",
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776094394/equipment-game/items/jwnuxkmz6kx3o2iestcz.png",
+    "isTwoHanded": false,
+    "itemType": "equipment",
+    "name": "樂園CCB2勇者",
+    "passiveEffects": [
+      {
+        "key": "exp_gain_up",
+        "category": "economy",
+        "stackMode": "refresh",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "count",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 10
+        },
+        "condition": null,
+        "notes": "",
+        "definitionName": "EXP Gain Up"
+      }
+    ],
+    "procEffects": [],
+    "tier": null,
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69ddbf7edaa194f5e73e586a",
+    "id": "job_swordsman_v1",
+    "atkStat": null,
+    "combatEffects": [],
+    "createdAt": "2026-04-14T04:15:58.072Z",
+    "description": "專精單手劍與雙手劍的前線職業。",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "enhanceLevel": 0,
+    "equipSlot": "job_eq",
+    "equipStats": {
+      "str": 2,
+      "vit": 3,
+      "dex": 2
+    },
+    "imageThumbnailUrl": null,
+    "imageUrl": null,
+    "isTwoHanded": false,
+    "itemType": "equipment",
+    "name": "劍士徽章",
+    "passiveEffects": [
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "sword_1h"
+        },
+        "notes": "主武器為單手劍時，ATK x1.2",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "block_chance_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 10
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "sword_1h"
+            },
+            {
+              "equippedSlot": "shield"
+            },
+            {
+              "notWeaponType": [
+                "offhand_sword",
+                "offhand_dagger",
+                "offhand_mace"
+              ]
+            }
+          ]
+        },
+        "notes": "單手劍 + 盾牌，格擋 +10%",
+        "definitionName": "Block Chance Up"
+      },
+      {
+        "key": "combo_damage_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.1
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "sword_1h"
+            },
+            {
+              "any": [
+                {
+                  "weaponType": "offhand_sword"
+                },
+                {
+                  "weaponType": "offhand_dagger"
+                },
+                {
+                  "weaponType": "offhand_mace"
+                }
+              ]
+            }
+          ]
+        },
+        "notes": "單手劍 + 副手武器，連擊傷害 +10%",
+        "definitionName": "Combo Damage Up"
+      },
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "sword_2h"
+        },
+        "notes": "主武器為雙手劍時，ATK x1.2",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "block_chance_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 10
+        },
+        "condition": {
+          "weaponType": "sword_2h"
+        },
+        "notes": "雙手劍時，格擋 +10%",
+        "definitionName": "Block Chance Up"
+      },
+      {
+        "key": "execute_chance_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 10
+        },
+        "condition": {
+          "weaponType": "sword_2h"
+        },
+        "notes": "雙手劍時，10% 斬殺機率",
+        "definitionName": "Execute Chance Up"
+      },
+      {
+        "key": "execute_threshold_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 10
+        },
+        "condition": {
+          "weaponType": "sword_2h"
+        },
+        "notes": "雙手劍斬殺門檻 10%",
+        "definitionName": "Execute Threshold Up"
+      }
+    ],
+    "procEffects": [],
+    "tier": null,
+    "updatedAt": "2026-04-14T05:00:00.822Z",
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69ddcbe4daa194f5e73e5a29",
+    "id": "job_warrior_v1",
+    "atkStat": null,
+    "combatEffects": [
+      {
+        "key": "final_damage_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "on_low_hp",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.15
+        },
+        "condition": {
+          "weaponType": "axe_2h"
+        },
+        "notes": "雙手斧：低血 (<35%) 時傷害 +15%（需由戰鬥事件觸發）",
+        "definitionName": "Final Damage Up"
+      }
+    ],
+    "createdAt": "2026-04-14T05:08:52.925Z",
+    "description": "專精斧類武器的前線職業。",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "enhanceLevel": 0,
+    "equipSlot": "job_eq",
+    "equipStats": {
+      "str": 4,
+      "vit": 1,
+      "luk": 2
+    },
+    "imageThumbnailUrl": null,
+    "imageUrl": null,
+    "isTwoHanded": false,
+    "itemType": "equipment",
+    "name": "戰士徽章",
+    "passiveEffects": [
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "axe_1h"
+        },
+        "notes": "主手為單手斧時武器倍率 x1.2",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "block_chance_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 15
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "axe_1h"
+            },
+            {
+              "equippedSlot": "shield"
+            },
+            {
+              "notWeaponType": [
+                "offhand_axe",
+                "offhand_mace"
+              ]
+            }
+          ]
+        },
+        "notes": "單手斧 + 盾牌：格擋 +15%",
+        "definitionName": "Block Chance Up"
+      },
+      {
+        "key": "combo_damage_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.1
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "axe_1h"
+            },
+            {
+              "any": [
+                {
+                  "weaponType": "offhand_axe"
+                },
+                {
+                  "weaponType": "offhand_mace"
+                }
+              ]
+            }
+          ]
+        },
+        "notes": "單手斧 + 副手武器：連擊傷害 +10%",
+        "definitionName": "Combo Damage Up"
+      },
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "axe_2h"
+        },
+        "notes": "雙手斧時，武器倍率 x1.2",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "crit_rate_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 5
+        },
+        "condition": {
+          "weaponType": "axe_2h"
+        },
+        "notes": "雙手斧時，暴擊率 +5%",
+        "definitionName": "Critical Rate Up"
+      }
+    ],
+    "procEffects": [],
+    "tier": null,
+    "updatedAt": "2026-04-14T05:08:52.925Z",
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69ddd003daa194f5e73e5b21",
+    "id": "job_dwarf_warrior_v1",
+    "atkStat": null,
+    "combatEffects": [
+      {
+        "key": "stun_chance_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "on_battle_start",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 5
+        },
+        "condition": {
+          "weaponType": "mace_2h"
+        },
+        "notes": "雙手槌：高血 (>90%) 時暈眩機率 +5%",
+        "definitionName": "Stun Chance Up"
+      }
+    ],
+    "createdAt": "2026-04-14T05:26:27.281Z",
+    "description": "專精槌類武器的矮人工匠戰士。",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "enhanceLevel": 0,
+    "equipSlot": "job_eq",
+    "equipStats": {
+      "str": 1,
+      "vit": 5,
+      "dex": 2
+    },
+    "imageThumbnailUrl": null,
+    "imageUrl": null,
+    "isTwoHanded": false,
+    "itemType": "equipment",
+    "name": "矮人戰士徽章",
+    "passiveEffects": [
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "mace_1h"
+        },
+        "notes": "主手為單手槌時武器倍率 x1.2",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "block_chance_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 20
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "mace_1h"
+            },
+            {
+              "equippedSlot": "shield"
+            },
+            {
+              "notWeaponType": [
+                "offhand_mace",
+                "offhand_hammer"
+              ]
+            }
+          ]
+        },
+        "notes": "單手槌 + 盾牌：格擋 +20%",
+        "definitionName": "Block Chance Up"
+      },
+      {
+        "key": "combo_damage_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.1
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "mace_1h"
+            },
+            {
+              "any": [
+                {
+                  "weaponType": "offhand_mace"
+                },
+                {
+                  "weaponType": "offhand_hammer"
+                }
+              ]
+            }
+          ]
+        },
+        "notes": "單手槌 + 副手武器：連擊傷害 +10%",
+        "definitionName": "Combo Damage Up"
+      },
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "mace_2h"
+        },
+        "notes": "雙手槌時，武器倍率 x1.2",
+        "definitionName": "Attack Multiplier Up"
+      }
+    ],
+    "procEffects": [
+      {
+        "key": "proc_stun",
+        "category": "proc",
+        "stackMode": "replace",
+        "trigger": "on_hit",
+        "target": "enemy",
+        "chance": 5,
+        "stacks": 1,
+        "duration": {
+          "mode": "turns",
+          "value": 1
+        },
+        "sourcePhase": "proc",
+        "params": {},
+        "condition": {
+          "weaponType": "mace_2h"
+        },
+        "notes": "雙手槌：5% 機率暈眩",
+        "definitionName": "Proc Stun"
+      }
+    ],
+    "tier": null,
+    "updatedAt": "2026-04-14T05:31:40.920Z",
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69ddd427daa194f5e73e5bb1",
+    "id": "job_rogue_v1",
+    "atkStat": null,
+    "combatEffects": [
+      {
+        "key": "crit_rate_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "on_battle_start",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 15,
+          "thresholdPct": 80
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "dagger"
+            },
+            {
+              "any": [
+                {
+                  "weaponType": "offhand_dagger"
+                }
+              ]
+            }
+          ]
+        },
+        "notes": "主匕首 + 副手武器且血量 >80% 時爆擊率 +15%",
+        "definitionName": "Critical Rate Up"
+      }
+    ],
+    "createdAt": "2026-04-14T05:44:07.358Z",
+    "description": "以匕首速攻與敏捷迴避為主的職業徽章。",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "enhanceLevel": 0,
+    "equipSlot": "job_eq",
+    "equipStats": {
+      "str": 2,
+      "agi": 4,
+      "luk": 2
+    },
+    "imageThumbnailUrl": null,
+    "imageUrl": null,
+    "isTwoHanded": false,
+    "itemType": "equipment",
+    "name": "盜賊徽章",
+    "passiveEffects": [
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "dagger"
+        },
+        "notes": "主手為匕首時武器倍率 x1.2",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "block_chance_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 10
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "dagger"
+            },
+            {
+              "equippedSlot": "shield"
+            }
+          ]
+        },
+        "notes": "主武匕首 + 盾：格擋 +10%",
+        "definitionName": "Block Chance Up"
+      },
+      {
+        "key": "combo_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 5
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "dagger"
+            },
+            {
+              "any": [
+                {
+                  "weaponType": "offhand_dagger"
+                }
+              ]
+            }
+          ]
+        },
+        "notes": "主武匕首 + 副手武器：連擊率 +5%",
+        "definitionName": "Combo Up"
+      }
+    ],
+    "procEffects": [
+      {
+        "key": "proc_poison",
+        "category": "proc",
+        "stackMode": "replace",
+        "trigger": "on_hit",
+        "target": "enemy",
+        "chance": 20,
+        "stacks": 1,
+        "duration": {
+          "mode": "turns",
+          "value": 3
+        },
+        "sourcePhase": "proc",
+        "params": {
+          "value": 0.5,
+          "mode": "pct",
+          "stackAdd": 0.5,
+          "maxPct": 2
+        },
+        "condition": {
+          "weaponType": "dagger"
+        },
+        "notes": "主武匕首：命中時 20% 機率造成中毒（每回合 0.5% HP，持續 3 回合，每次觸發增加 0.5% 並刷新，最高疊至 2%）",
+        "definitionName": "Proc Poison"
+      }
+    ],
+    "tier": null,
+    "updatedAt": "2026-04-14T05:54:13.915Z",
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69dddd11daa194f5e73e5d03",
+    "id": "job_mage_v1",
+    "atkStat": null,
+    "combatEffects": [
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "staff_2h"
+        },
+        "notes": "雙手杖時武器倍率 x1.2",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "staff_2h"
+        },
+        "notes": "雙手杖時武器倍率 x1.2",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "hit_down",
+        "category": "stat",
+        "stackMode": "refresh",
+        "trigger": "on_hit",
+        "target": "enemy",
+        "chance": 15,
+        "stacks": 1,
+        "duration": {
+          "mode": "turns",
+          "value": 3
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 15
+        },
+        "condition": {
+          "weaponType": "staff_2h"
+        },
+        "notes": "雙手杖：命中時 10% 機率麻痺（命中率 -15%，持續 3 回合，刷新）",
+        "definitionName": "Hit Down"
+      },
+      {
+        "key": "burn",
+        "category": "dot",
+        "stackMode": "refresh",
+        "trigger": "on_hit",
+        "target": "enemy",
+        "chance": 15,
+        "stacks": 1,
+        "duration": {
+          "mode": "turns",
+          "value": 5
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1,
+          "mode": "pct"
+        },
+        "condition": {
+          "weaponType": "staff_2h"
+        },
+        "notes": "雙手杖：命中時 10% 機率燒傷（每回合 1% HP，持續 5 回合，刷新）",
+        "definitionName": "Burn"
+      },
+      {
+        "key": "freeze",
+        "category": "control",
+        "stackMode": "replace",
+        "trigger": "on_hit",
+        "target": "enemy",
+        "chance": 15,
+        "stacks": 1,
+        "duration": {
+          "mode": "turns",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "bossImmune": true
+        },
+        "condition": {
+          "weaponType": "staff_2h"
+        },
+        "notes": "雙手杖：命中時 10% 機率冰凍（該回合無法行動，BOSS 無效）",
+        "definitionName": "Freeze"
+      },
+      {
+        "key": "final_damage_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "on_battle_start",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.15,
+          "thresholdPct": 75
+        },
+        "condition": {
+          "weaponType": "staff_2h"
+        },
+        "notes": "雙手杖且血量 >75% 時傷害 +15%",
+        "definitionName": "Final Damage Up"
+      }
+    ],
+    "createdAt": "2026-04-14T06:22:09.731Z",
+    "description": "操控元素的施法者，杖術與元素效果為核心。",
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "enhanceLevel": 0,
+    "equipSlot": "job_eq",
+    "equipStats": {
+      "vit": 1,
+      "int": 5,
+      "luk": 2
+    },
+    "imageThumbnailUrl": null,
+    "imageUrl": null,
+    "isTwoHanded": false,
+    "itemType": "equipment",
+    "name": "法師徽章",
+    "passiveEffects": [
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "staff_1h"
+        },
+        "notes": "主手為單手杖時武器倍率 x1.2",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "block_chance_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 20
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "staff_1h"
+            },
+            {
+              "equippedSlot": "shield"
+            }
+          ]
+        },
+        "notes": "單手杖 + 盾：格擋 +20%",
+        "definitionName": "Block Chance Up"
+      }
+    ],
+    "procEffects": [
+      {
+        "key": "hit_down",
+        "category": "stat",
+        "stackMode": "refresh",
+        "trigger": "on_hit",
+        "target": "enemy",
+        "chance": 15,
+        "stacks": 1,
+        "duration": {
+          "mode": "turns",
+          "value": 3
+        },
+        "sourcePhase": "proc",
+        "params": {
+          "value": 15
+        },
+        "condition": {
+          "weaponType": "staff_1h"
+        },
+        "notes": "單手杖：命中時 10% 機率麻痺（命中率 -15%，持續 3 回合，刷新）",
+        "definitionName": "Hit Down"
+      },
+      {
+        "key": "burn",
+        "category": "dot",
+        "stackMode": "refresh",
+        "trigger": "on_hit",
+        "target": "enemy",
+        "chance": 15,
+        "stacks": 1,
+        "duration": {
+          "mode": "turns",
+          "value": 5
+        },
+        "sourcePhase": "proc",
+        "params": {
+          "value": 1,
+          "mode": "pct"
+        },
+        "condition": {
+          "weaponType": "staff_1h"
+        },
+        "notes": "單手杖：命中時 10% 機率燒傷（每回合 1% HP，持續 5 回合，刷新）",
+        "definitionName": "Burn"
+      },
+      {
+        "key": "freeze",
+        "category": "control",
+        "stackMode": "replace",
+        "trigger": "on_hit",
+        "target": "enemy",
+        "chance": 15,
+        "stacks": 1,
+        "duration": {
+          "mode": "turns",
+          "value": 1
+        },
+        "sourcePhase": "proc",
+        "params": {
+          "bossImmune": true
+        },
+        "condition": {
+          "weaponType": "staff_1h"
+        },
+        "notes": "單手杖：命中時 10% 機率冰凍（該回合無法行動，BOSS 無效）",
+        "definitionName": "Freeze"
+      }
+    ],
+    "tier": null,
+    "updatedAt": "2026-04-14T06:34:42.415Z",
+    "useEffects": [],
+    "weaponType": null
+  },
+  {
+    "_id": "69dde3fadaa194f5e73e5df0",
+    "id": "job_healer_v1",
+    "combatEffects": [
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.2
+        },
+        "condition": {
+          "weaponType": "staff_1h"
+        },
+        "notes": "主武為單手杖時武器倍率 x1.2（在武器倍率結算後）",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "block_chance_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 20
+        },
+        "condition": {
+          "all": [
+            {
+              "weaponType": "staff_1h"
+            },
+            {
+              "equippedSlot": "shield"
+            }
+          ]
+        },
+        "notes": "主武為單手杖且副武為盾牌時：格擋 +20%",
+        "definitionName": "Block Chance Up"
+      },
+      {
+        "key": "atk_multiplier_up",
+        "category": "stat",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 1.4
+        },
+        "condition": {
+          "weaponType": "staff_2h"
+        },
+        "notes": "主武為雙手杖時武器倍率 x1.4（在武器倍率結算後）",
+        "definitionName": "Attack Multiplier Up"
+      },
+      {
+        "key": "party_damage_up",
+        "category": "conditional",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 5,
+          "mode": "pct"
+        },
+        "condition": null,
+        "notes": "參與戰鬥人員每回合總傷害增加 5%（需要治療師在場才生效）",
+        "definitionName": "Party Damage Up"
+      }
+    ],
+    "createdAt": "2026-04-14T06:51:38.980Z",
+    "description": "提供隊伍治療光環的徽章，被動使同場玩家獲得每回合回復。",
+    "enhanceLevel": 0,
+    "equipSlot": "job_eq",
+    "equipStats": {
+      "vit": 2,
+      "int": 4,
+      "dex": 2
+    },
+    "itemType": "equipment",
+    "name": "治療師徽章",
+    "passiveEffects": [
+      {
+        "key": "heal_over_time",
+        "category": "dot",
+        "stackMode": "replace",
+        "trigger": "passive",
+        "target": "self",
+        "chance": 100,
+        "stacks": 1,
+        "duration": {
+          "mode": "battle",
+          "value": 1
+        },
+        "sourcePhase": "passive",
+        "params": {
+          "value": 3,
+          "mode": "pct"
+        },
+        "condition": null,
+        "notes": "每回合回復隊伍成員 3% 最大 HP（需要治療師在場才生效）",
+        "definitionName": "Heal Over Time"
+      }
+    ],
+    "procEffects": [],
+    "updatedAt": "2026-04-14T07:07:36.502Z",
+    "atkStat": null,
+    "effect": {
+      "type": "none",
+      "value": 0
+    },
+    "isTwoHanded": false,
+    "tier": null,
+    "useEffects": [],
+    "weaponType": null
+  }
+]

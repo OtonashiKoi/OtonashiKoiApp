@@ -1,0 +1,3077 @@
+[
+  {
+    "_id": "69d166dac30e6269a49d3d0c",
+    "discordId": "1450019975031951370",
+    "displayName": "音無醬",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.289Z",
+    "updatedAt": "2026-04-04T08:14:34.289Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d0d",
+    "discordId": "674836057245614080",
+    "displayName": "鳳梨猫",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.294Z",
+    "updatedAt": "2026-04-04T08:14:34.294Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d0e",
+    "discordId": "705033058302033990",
+    "displayName": "平和我大哥",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.298Z",
+    "updatedAt": "2026-04-06T14:35:51.291Z",
+    "externalIds": {
+      "youtube": "yt-UCuN7FO5dOVGa2sPBtjbuaMQ"
+    },
+    "streamAliases": [
+      "yungr4639"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d0f",
+    "discordId": "288320940771901440",
+    "displayName": "企鵝君ペンギン",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.303Z",
+    "updatedAt": "2026-04-04T08:14:34.303Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d10",
+    "discordId": "575308041109372930",
+    "displayName": "extreamt(公雞)",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.307Z",
+    "updatedAt": "2026-04-06T14:38:05.000Z",
+    "externalIds": {
+      "youtube": "yt-UCIHdS8NwEx-HgkRuTfBo8Ig",
+      "twitch": "tw-151410357"
+    },
+    "streamAliases": [
+      "公雞chicken",
+      "qsc_chicken"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d11",
+    "discordId": "319127703284350989",
+    "displayName": "Ikusen",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.312Z",
+    "updatedAt": "2026-04-04T08:14:34.312Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d12",
+    "discordId": "561512985609240576",
+    "displayName": "龍龍",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.317Z",
+    "updatedAt": "2026-04-04T08:14:34.317Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d13",
+    "discordId": "129545310669111297",
+    "displayName": "瓊崖",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.320Z",
+    "updatedAt": "2026-04-04T08:14:34.320Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d14",
+    "discordId": "477502869008941066",
+    "displayName": "SorA.",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.325Z",
+    "updatedAt": "2026-04-04T08:14:34.325Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d15",
+    "discordId": "331642796710821892",
+    "displayName": "トマト",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.329Z",
+    "updatedAt": "2026-04-10T14:52:29.554Z",
+    "externalIds": {
+      "youtube": "yt-UC1r_zcrvHjxSJMb1JQXxIzg"
+    },
+    "streamAliases": [
+      "トマト0527"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d16",
+    "discordId": "344786855235026944",
+    "displayName": "喜歡跳烤爐的咩",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.334Z",
+    "updatedAt": "2026-04-11T13:33:15.056Z",
+    "externalIds": {
+      "twitch": "tw-172243629",
+      "youtube": "yt-UC416-cd1xHbUaid0Un73BRw"
+    },
+    "streamAliases": [
+      "梅若冰",
+      "若冰的棋牌時光"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d17",
+    "discordId": "551272452676911128",
+    "displayName": "智軒-tommy3134895",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.338Z",
+    "updatedAt": "2026-04-10T13:58:14.713Z",
+    "externalIds": {
+      "twitch": "tw-56002896",
+      "youtube": "yt-UCls38Ay_VOf30Cq8FicJudg"
+    },
+    "streamAliases": [
+      "tommy3134895",
+      "鄭智軒-t4t"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d18",
+    "discordId": "603736801710178304",
+    "displayName": "茶莫",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.342Z",
+    "updatedAt": "2026-04-10T14:18:29.717Z",
+    "externalIds": {
+      "youtube": "yt-UCcSIfuFsh8Id6Fzm_dq_PbQ"
+    },
+    "streamAliases": [
+      "茶莫-1013"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d19",
+    "discordId": "159058930402721792",
+    "displayName": "青葉ＡＢＣ",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.347Z",
+    "updatedAt": "2026-04-06T14:29:05.456Z",
+    "externalIds": {
+      "twitch": "tw-6124397"
+    },
+    "streamAliases": [
+      "青葉エビシ"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d1a",
+    "discordId": "1000479609613193297",
+    "displayName": "風雪曲",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.352Z",
+    "updatedAt": "2026-04-04T08:14:34.352Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d1b",
+    "discordId": "689055751859208324",
+    "displayName": "阿蟲",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.356Z",
+    "updatedAt": "2026-04-11T12:10:07.208Z",
+    "externalIds": {
+      "youtube": "yt-UChl3s-soWbbFvfxMUmN8i3w"
+    },
+    "streamAliases": [
+      "阿蟲-f4w"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d1c",
+    "discordId": "369732621493600257",
+    "displayName": "聖光",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.361Z",
+    "updatedAt": "2026-04-11T14:08:17.636Z",
+    "externalIds": {
+      "twitch": "tw-53803694",
+      "youtube": "yt-UCR_Rk4aGbzhHIMARJP5y-aA"
+    },
+    "streamAliases": [
+      "聖光ソナタ",
+      "楊昌彬-聖光ひかり"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d1d",
+    "discordId": "614852332026593291",
+    "displayName": "飼育員",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.365Z",
+    "updatedAt": "2026-04-06T14:42:24.673Z",
+    "externalIds": {
+      "twitch": "tw-49240085"
+    },
+    "streamAliases": [
+      "鯨豚飼育員"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d1e",
+    "discordId": "547821870360035329",
+    "displayName": "Han",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.369Z",
+    "updatedAt": "2026-04-13T15:29:24.776Z",
+    "externalIds": {
+      "youtube": "yt-UCXZjDDn-Olcep3KxDVO6vJQ"
+    },
+    "streamAliases": [
+      "HanCingYu"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d1f",
+    "discordId": "775719386597031947",
+    "displayName": "MDFK",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.374Z",
+    "updatedAt": "2026-04-04T08:14:34.374Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d20",
+    "discordId": "1205573349447831592",
+    "displayName": "harkun",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.378Z",
+    "updatedAt": "2026-04-04T08:14:34.378Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d21",
+    "discordId": "742721187133521971",
+    "displayName": "霓茶",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.383Z",
+    "updatedAt": "2026-04-04T08:14:34.383Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d22",
+    "discordId": "364417212645376001",
+    "displayName": "享受夢境",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.388Z",
+    "updatedAt": "2026-04-06T14:37:10.970Z",
+    "externalIds": {
+      "twitch": "tw-45846247",
+      "youtube": "yt-UCVRh-5N0CfOOBLDJYhadyfA"
+    },
+    "streamAliases": [
+      "享受夢境",
+      "楊師程"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d23",
+    "discordId": "475247027329171456",
+    "displayName": "餅乾oao",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.392Z",
+    "updatedAt": "2026-04-07T11:11:52.351Z",
+    "externalIds": {
+      "youtube": "yt-UC--JofHS17YA9PMupjQJCFw",
+      "twitch": "tw-804519568"
+    },
+    "streamAliases": [
+      "餅乾-w9r",
+      "桂格超大餅乾"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d24",
+    "discordId": "442211450853785607",
+    "displayName": "only翁立",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.397Z",
+    "updatedAt": "2026-04-04T08:14:34.397Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d25",
+    "discordId": "383605877552185375",
+    "displayName": "司馬楓",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.402Z",
+    "updatedAt": "2026-04-04T08:14:34.402Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d26",
+    "discordId": "455711645222830081",
+    "displayName": "🐯虎嚕🐾五行療癒命理師🪭",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.407Z",
+    "updatedAt": "2026-04-04T08:14:34.407Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d27",
+    "discordId": "865264891991425055",
+    "displayName": "音無恋",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.412Z",
+    "updatedAt": "2026-04-11T10:27:09.260Z",
+    "externalIds": {
+      "unknown": "tw-57631093",
+      "twitch": "tw-57631093",
+      "youtube": "yt-UC7EAbgCbNkTkHlO2IN0z3hw"
+    },
+    "streamAliases": [
+      "音無恋"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d28",
+    "discordId": "909733729021345833",
+    "displayName": "波波龜",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.417Z",
+    "updatedAt": "2026-04-04T08:14:34.417Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d29",
+    "discordId": "139748832517816320",
+    "displayName": "布布",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.422Z",
+    "updatedAt": "2026-04-07T12:10:07.273Z",
+    "externalIds": {
+      "youtube": "yt-UCFo1nAPljNe-ebxlm2WMfUA",
+      "twitch": "tw-28196072"
+    },
+    "streamAliases": [
+      "布布",
+      "pchamd"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d2a",
+    "discordId": "935245860856533012",
+    "displayName": "蒼心‧翟普瑞薩",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.427Z",
+    "updatedAt": "2026-04-04T08:14:34.427Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d2b",
+    "discordId": "1126352373485420614",
+    "displayName": "豪力",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.432Z",
+    "updatedAt": "2026-04-04T08:14:34.432Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d2c",
+    "discordId": "158390323372883968",
+    "displayName": "Ashiou阿修修",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.438Z",
+    "updatedAt": "2026-04-12T12:46:29.195Z",
+    "externalIds": {
+      "twitch": "tw-10592742",
+      "youtube": "yt-UCX6Ya8JYAaHfJtA3VqWPz4Q"
+    },
+    "streamAliases": [
+      "阿修修修修修修修",
+      "阿修"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d2d",
+    "discordId": "426418808895569932",
+    "displayName": "ℍ𝕦𝕟𝕥𝕖𝕣漢格",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.443Z",
+    "updatedAt": "2026-04-04T08:14:34.443Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d2e",
+    "discordId": "201822843799863296",
+    "displayName": "Pusheen",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.448Z",
+    "updatedAt": "2026-04-04T08:14:34.448Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d2f",
+    "discordId": "732871224270782485",
+    "displayName": "西園寺桔梗",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.453Z",
+    "updatedAt": "2026-04-06T16:14:34.635Z",
+    "externalIds": {
+      "twitch": "tw-90465247"
+    },
+    "streamAliases": [
+      "西園寺桔梗"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d30",
+    "discordId": "469881640840331294",
+    "displayName": "星野Poteto",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.458Z",
+    "updatedAt": "2026-04-04T08:14:34.458Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d31",
+    "discordId": "537330703717629962",
+    "displayName": "Tsunshin",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.464Z",
+    "updatedAt": "2026-04-04T08:14:34.464Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d32",
+    "discordId": "609388495060074536",
+    "displayName": "彩雲",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.469Z",
+    "updatedAt": "2026-04-07T13:14:31.980Z",
+    "externalIds": {
+      "twitch": "tw-85208657"
+    },
+    "streamAliases": [
+      "彩雲かぜ"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d33",
+    "discordId": "453560048677945354",
+    "displayName": "曦和",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.475Z",
+    "updatedAt": "2026-04-04T08:14:34.475Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d34",
+    "discordId": "665557921551220746",
+    "displayName": "Jakklim90",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.481Z",
+    "updatedAt": "2026-04-06T14:42:14.497Z",
+    "externalIds": {
+      "youtube": "yt-UC-UB3WW_l5KIK_Wj82GM4mA"
+    },
+    "streamAliases": [
+      "jakklim90"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d35",
+    "discordId": "523793022111055883",
+    "displayName": "Yaroko",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.487Z",
+    "updatedAt": "2026-04-04T08:14:34.487Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d36",
+    "discordId": "503704064719192074",
+    "displayName": "柚子",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.492Z",
+    "updatedAt": "2026-04-04T18:42:54.820Z",
+    "externalIds": {
+      "twitch": "tw-31338024"
+    },
+    "streamAliases": [
+      "我是顆柚子"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d37",
+    "discordId": "519122085503827988",
+    "displayName": "ste_okita",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.498Z",
+    "updatedAt": "2026-04-04T08:14:34.498Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d38",
+    "discordId": "343019809455472651",
+    "displayName": "Tojo Kenjiro(東條健次郎)",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.503Z",
+    "updatedAt": "2026-04-10T13:54:48.954Z",
+    "externalIds": {
+      "twitch": "tw-20797698",
+      "youtube": "yt-UC1Bv6LO0I7RxxFd6WbgPEzg"
+    },
+    "streamAliases": [
+      "東條_健次郎"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d39",
+    "discordId": "607191138855813140",
+    "displayName": "CC",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.508Z",
+    "updatedAt": "2026-04-04T08:14:34.508Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d3a",
+    "discordId": "1417449503786663989",
+    "displayName": "活動小助手",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.514Z",
+    "updatedAt": "2026-04-04T08:14:34.514Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d3b",
+    "discordId": "191890857484484609",
+    "displayName": "滄",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.521Z",
+    "updatedAt": "2026-04-04T08:14:34.521Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d3c",
+    "discordId": "525828241710252033",
+    "displayName": "噴火龍的訓練家",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.526Z",
+    "updatedAt": "2026-04-06T14:42:51.932Z",
+    "externalIds": {
+      "youtube": "yt-UCwz32xcuHu8UyBBIpzNvmqA"
+    },
+    "streamAliases": [
+      "噴火龍的訓練家"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d3d",
+    "discordId": "534874347114987574",
+    "displayName": "gold dai",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.532Z",
+    "updatedAt": "2026-04-04T08:14:34.532Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d3e",
+    "discordId": "535320293984567307",
+    "displayName": "天翎",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.538Z",
+    "updatedAt": "2026-04-04T08:14:34.538Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d3f",
+    "discordId": "595837539491905536",
+    "displayName": "沒味蟹堡",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.544Z",
+    "updatedAt": "2026-04-07T18:38:08.079Z",
+    "externalIds": {
+      "twitch": "tw-1109667674"
+    }
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d40",
+    "discordId": "597624017851252746",
+    "displayName": "YEE",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.551Z",
+    "updatedAt": "2026-04-06T14:30:11.136Z",
+    "externalIds": {
+      "twitch": "tw-485415681"
+    },
+    "streamAliases": [
+      "北洋水師提督"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d41",
+    "discordId": "897114265884971078",
+    "displayName": "曦",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.556Z",
+    "updatedAt": "2026-04-04T08:14:34.556Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d42",
+    "discordId": "860551109042110475",
+    "displayName": "B.Y",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.562Z",
+    "updatedAt": "2026-04-11T16:32:07.026Z",
+    "externalIds": {
+      "twitch": "tw-567992234",
+      "youtube": "yt-UC-lCkuYNeWwYGtbsdqqyygw"
+    },
+    "streamAliases": [
+      "嗶歪",
+      "B___Y"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d43",
+    "discordId": "334394962458443779",
+    "displayName": "Kelvin",
+    "status": "active",
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T08:14:34.568Z",
+    "updatedAt": "2026-04-04T08:14:34.568Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d44",
+    "discordId": "827919765770600459",
+    "displayName": "萌新",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.322Z",
+    "updatedAt": "2026-04-04T13:53:10.322Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d45",
+    "discordId": "378169396595523586",
+    "displayName": "BrooF",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-457676767"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.330Z",
+    "updatedAt": "2026-04-06T15:06:13.199Z",
+    "streamAliases": [
+      "broof1052"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d46",
+    "discordId": "638380227944513536",
+    "displayName": "包子",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.341Z",
+    "updatedAt": "2026-04-04T13:53:10.341Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d47",
+    "discordId": "914137437889003541",
+    "displayName": ".w.",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.348Z",
+    "updatedAt": "2026-04-04T13:53:10.348Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d48",
+    "discordId": "597269957042110464",
+    "displayName": "台戰☆≡｡ﾟ被子",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.358Z",
+    "updatedAt": "2026-04-04T13:53:10.358Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d49",
+    "discordId": "947695501124435968",
+    "displayName": "小鳥遊ひな.",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.366Z",
+    "updatedAt": "2026-04-04T13:53:10.366Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d4a",
+    "discordId": "714762228493975672",
+    "displayName": "shogibegin",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.376Z",
+    "updatedAt": "2026-04-04T13:53:10.376Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d4b",
+    "discordId": "692713451398758442",
+    "displayName": "ATUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.387Z",
+    "updatedAt": "2026-04-04T13:53:10.387Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d4c",
+    "discordId": "806536404170833931",
+    "displayName": "彌月燐",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.394Z",
+    "updatedAt": "2026-04-04T13:53:10.394Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d4d",
+    "discordId": "604581538923020289",
+    "displayName": "熱狗",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.402Z",
+    "updatedAt": "2026-04-04T13:53:10.402Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d4e",
+    "discordId": "457253421276463125",
+    "displayName": "+0",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.409Z",
+    "updatedAt": "2026-04-04T13:53:10.409Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d4f",
+    "discordId": "868809668619812884",
+    "displayName": "句點",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.426Z",
+    "updatedAt": "2026-04-04T13:53:10.426Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d50",
+    "discordId": "575318374242844682",
+    "displayName": "飯糰",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.438Z",
+    "updatedAt": "2026-04-04T13:53:10.438Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d51",
+    "discordId": "806632564198080556",
+    "displayName": "BͣaͨnͭaͥnͮaͤF͛ish",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.450Z",
+    "updatedAt": "2026-04-04T13:53:10.450Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d52",
+    "discordId": "620063960875663376",
+    "displayName": "Jsan",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.458Z",
+    "updatedAt": "2026-04-04T13:53:10.458Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d53",
+    "discordId": "1340613831222624356",
+    "displayName": "瑞陽",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.466Z",
+    "updatedAt": "2026-04-04T13:53:10.466Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d54",
+    "discordId": "468163983271264267",
+    "displayName": "平井葵",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.475Z",
+    "updatedAt": "2026-04-04T13:53:10.475Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d55",
+    "discordId": "1320606663862124607",
+    "displayName": "安露 • 書拉密",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.484Z",
+    "updatedAt": "2026-04-04T13:53:10.484Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d56",
+    "discordId": "1439182200854679734",
+    "displayName": "崴wade",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UCDPT0zFy6Hxo4OBYP-tOg9w"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.493Z",
+    "updatedAt": "2026-04-06T14:36:53.487Z",
+    "streamAliases": [
+      "黃湘崴-m4k"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d57",
+    "discordId": "836647956589182986",
+    "displayName": "狼雪玥",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.501Z",
+    "updatedAt": "2026-04-04T13:53:10.501Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d58",
+    "discordId": "515749551018082316",
+    "displayName": "書え",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.514Z",
+    "updatedAt": "2026-04-04T13:53:10.514Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d59",
+    "discordId": "213591479518494720",
+    "displayName": "henryesno",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UCBgHyliq_BbJqKfdJwlWxFw"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.522Z",
+    "updatedAt": "2026-04-06T14:45:22.064Z",
+    "streamAliases": [
+      "henryesno1"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d5a",
+    "discordId": "1006608095063056384",
+    "displayName": "瑀夢",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.539Z",
+    "updatedAt": "2026-04-04T13:53:10.539Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d5b",
+    "discordId": "1028663651651039303",
+    "displayName": "JunFu",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.547Z",
+    "updatedAt": "2026-04-04T13:53:10.547Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d5c",
+    "discordId": "911923887284051991",
+    "displayName": "呆貓貓",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.557Z",
+    "updatedAt": "2026-04-04T13:53:10.557Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d5d",
+    "discordId": "522401300726677514",
+    "displayName": "skywhilebear",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.566Z",
+    "updatedAt": "2026-04-04T13:53:10.566Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d5e",
+    "discordId": "318647386111082496",
+    "displayName": "心華",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.577Z",
+    "updatedAt": "2026-04-04T13:53:10.577Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d5f",
+    "discordId": "557599024140517377",
+    "displayName": "夜思雨",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.591Z",
+    "updatedAt": "2026-04-04T13:53:10.591Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d60",
+    "discordId": "697841072667230238",
+    "displayName": "口口口",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.600Z",
+    "updatedAt": "2026-04-04T13:53:10.600Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d61",
+    "discordId": "500914659642048550",
+    "displayName": "哇咖",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.613Z",
+    "updatedAt": "2026-04-04T13:53:10.613Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d62",
+    "discordId": "540936298567827487",
+    "displayName": "四季風",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UCCxxv-zP-07i4JfUlEnlm7g",
+      "twitch": "tw-86108325"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.621Z",
+    "updatedAt": "2026-04-06T14:59:06.699Z",
+    "streamAliases": [
+      "賴嘉宏-b5v",
+      "joyevsvs"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d63",
+    "discordId": "855808638002528267",
+    "displayName": "藍仙遊子",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.635Z",
+    "updatedAt": "2026-04-04T13:53:10.635Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d64",
+    "discordId": "1030106416532434975",
+    "displayName": "魯賓貓",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.643Z",
+    "updatedAt": "2026-04-04T13:53:10.643Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d65",
+    "discordId": "409692632332238848",
+    "displayName": "最強村貓",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.652Z",
+    "updatedAt": "2026-04-04T13:53:10.652Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d66",
+    "discordId": "172394584867864577",
+    "displayName": "Starry Miracle",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.661Z",
+    "updatedAt": "2026-04-04T13:53:10.661Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d67",
+    "discordId": "525263807254233088",
+    "displayName": "麵麵",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.669Z",
+    "updatedAt": "2026-04-04T13:53:10.669Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d68",
+    "discordId": "392862893001146369",
+    "displayName": "草四/Aki秋夜迷迭草",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.677Z",
+    "updatedAt": "2026-04-04T13:53:10.677Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d69",
+    "discordId": "1172404870528110686",
+    "displayName": "小萌新",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.686Z",
+    "updatedAt": "2026-04-04T13:53:10.686Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d6a",
+    "discordId": "1091197600692187247",
+    "displayName": "派派",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.695Z",
+    "updatedAt": "2026-04-04T13:53:10.695Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d6b",
+    "discordId": "590535483906588673",
+    "displayName": "維恩ウェイン",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.707Z",
+    "updatedAt": "2026-04-04T13:53:10.707Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d6c",
+    "discordId": "1147556913584816159",
+    "displayName": "天上月",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.719Z",
+    "updatedAt": "2026-04-04T13:53:10.719Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d6d",
+    "discordId": "324363656819245058",
+    "displayName": "笑不語",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-122268631"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.733Z",
+    "updatedAt": "2026-04-10T13:41:05.676Z",
+    "streamAliases": [
+      "笑_不語"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d6e",
+    "discordId": "565905310208753674",
+    "displayName": "平寶",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.741Z",
+    "updatedAt": "2026-04-04T13:53:10.741Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d6f",
+    "discordId": "973787843757481994",
+    "displayName": "極光uwu",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.751Z",
+    "updatedAt": "2026-04-04T13:53:10.751Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d70",
+    "discordId": "177671994051919872",
+    "displayName": "千城君",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.760Z",
+    "updatedAt": "2026-04-04T13:53:10.760Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d71",
+    "discordId": "300617144146853889",
+    "displayName": "火柴狼",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.769Z",
+    "updatedAt": "2026-04-04T13:53:10.769Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d72",
+    "discordId": "820506637437239376",
+    "displayName": "彌子(miko)",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.784Z",
+    "updatedAt": "2026-04-04T13:53:10.784Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d73",
+    "discordId": "858382543368093707",
+    "displayName": "花玥",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.793Z",
+    "updatedAt": "2026-04-04T13:53:10.793Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d74",
+    "discordId": "908404241419354182",
+    "displayName": "海羽",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.803Z",
+    "updatedAt": "2026-04-04T13:53:10.803Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d75",
+    "discordId": "611575315260637241",
+    "displayName": "加拿大球_𝕮𝖆𝖓𝖆𝖉𝖆 𝖇𝖆𝖑𝖑",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.813Z",
+    "updatedAt": "2026-04-04T13:53:10.813Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d76",
+    "discordId": "828294596010049536",
+    "displayName": "卡布利可",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-47180569"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.831Z",
+    "updatedAt": "2026-04-10T15:25:11.524Z",
+    "streamAliases": [
+      "卡布利可ノ"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d77",
+    "discordId": "475057810485542923",
+    "displayName": "WuGaren",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.841Z",
+    "updatedAt": "2026-04-04T13:53:10.841Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d78",
+    "discordId": "576684462683979786",
+    "displayName": "チワマス",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.850Z",
+    "updatedAt": "2026-04-04T13:53:10.850Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d79",
+    "discordId": "342188592325459970",
+    "displayName": "雪阿雪",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.860Z",
+    "updatedAt": "2026-04-04T13:53:10.860Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d7a",
+    "discordId": "990120091037360208",
+    "displayName": "joshuaxd1991",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.870Z",
+    "updatedAt": "2026-04-04T13:53:10.870Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d7b",
+    "discordId": "937701319312044052",
+    "displayName": "coldsilence",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.886Z",
+    "updatedAt": "2026-04-04T13:53:10.886Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d7c",
+    "discordId": "1076733639905251409",
+    "displayName": "Sleppy",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.897Z",
+    "updatedAt": "2026-04-04T13:53:10.897Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d7d",
+    "discordId": "879341337571389502",
+    "displayName": "江一玄",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.907Z",
+    "updatedAt": "2026-04-04T13:53:10.907Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d7e",
+    "discordId": "564279639045046282",
+    "displayName": "子燒",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.917Z",
+    "updatedAt": "2026-04-04T13:53:10.917Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d7f",
+    "discordId": "332339323196145664",
+    "displayName": "Ming",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.927Z",
+    "updatedAt": "2026-04-04T13:53:10.927Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d80",
+    "discordId": "1157556022290939944",
+    "displayName": "億德",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.938Z",
+    "updatedAt": "2026-04-04T13:53:10.938Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d81",
+    "discordId": "538542893342654465",
+    "displayName": "包里斯",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-605127817"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.950Z",
+    "updatedAt": "2026-04-06T14:29:55.182Z",
+    "streamAliases": [
+      "包里斯"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d82",
+    "discordId": "1104783533400133693",
+    "displayName": "死燐",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.959Z",
+    "updatedAt": "2026-04-04T13:53:10.959Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d83",
+    "discordId": "1354102125042466929",
+    "displayName": "CuchIllo",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UCn4TFiD13VL3H6DExmNT75Q"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.970Z",
+    "updatedAt": "2026-04-10T15:48:53.534Z",
+    "streamAliases": [
+      "Sainco"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d84",
+    "discordId": "518820138363912234",
+    "displayName": "滷灰灰",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-190921000"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.981Z",
+    "updatedAt": "2026-04-07T19:07:37.015Z",
+    "streamAliases": [
+      "滷灰灰"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d85",
+    "discordId": "610065281569783818",
+    "displayName": "大島玉",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-1478009115"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:10.991Z",
+    "updatedAt": "2026-04-10T13:57:16.705Z",
+    "streamAliases": [
+      "胡桃澤北"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d86",
+    "discordId": "619127059586744340",
+    "displayName": "amaz",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.001Z",
+    "updatedAt": "2026-04-04T13:53:11.001Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d87",
+    "discordId": "153427652324229120",
+    "displayName": "阿得",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.011Z",
+    "updatedAt": "2026-04-04T13:53:11.011Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d88",
+    "discordId": "337241809149231104",
+    "displayName": "麻糬",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.022Z",
+    "updatedAt": "2026-04-04T13:53:11.022Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d89",
+    "discordId": "614758773097103362",
+    "displayName": "Sumizen",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.033Z",
+    "updatedAt": "2026-04-04T13:53:11.033Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d8a",
+    "discordId": "567597922988851200",
+    "displayName": "及時行樂",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.043Z",
+    "updatedAt": "2026-04-04T13:53:11.043Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d8b",
+    "discordId": "701762754532474951",
+    "displayName": "Trader_Zneaky",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.054Z",
+    "updatedAt": "2026-04-04T13:53:11.054Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d8c",
+    "discordId": "1164517655949086804",
+    "displayName": "平安",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.064Z",
+    "updatedAt": "2026-04-04T13:53:11.064Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d8d",
+    "discordId": "314400982479929345",
+    "displayName": "巨型鳳梨",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.081Z",
+    "updatedAt": "2026-04-04T13:53:11.081Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d8e",
+    "discordId": "769350203462516747",
+    "displayName": "白貓",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.097Z",
+    "updatedAt": "2026-04-04T13:53:11.097Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d8f",
+    "discordId": "468644359550664715",
+    "displayName": "黑王",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.109Z",
+    "updatedAt": "2026-04-04T13:53:11.109Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d90",
+    "discordId": "860603078104186901",
+    "displayName": "安兪真的狗",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.120Z",
+    "updatedAt": "2026-04-04T13:53:11.120Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d91",
+    "discordId": "1153703345492607087",
+    "displayName": "天月在搞我==",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.131Z",
+    "updatedAt": "2026-04-04T13:53:11.131Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d92",
+    "discordId": "802555530366681118",
+    "displayName": "夜雨柔",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.142Z",
+    "updatedAt": "2026-04-04T13:53:11.142Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d93",
+    "discordId": "971263115503206400",
+    "displayName": "林愫(綺蕾)",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.157Z",
+    "updatedAt": "2026-04-04T13:53:11.157Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d94",
+    "discordId": "604901485926678548",
+    "displayName": "雨海ルカの弟子",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.168Z",
+    "updatedAt": "2026-04-04T13:53:11.168Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d95",
+    "discordId": "1092085184234528898",
+    "displayName": "WG",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UCSIZAMq73pAxFzEpVSpvpgg"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.189Z",
+    "updatedAt": "2026-04-10T15:34:18.452Z",
+    "streamAliases": [
+      "WeiG-00"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d96",
+    "discordId": "768782848197918771",
+    "displayName": "shelter",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.200Z",
+    "updatedAt": "2026-04-04T13:53:11.200Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d97",
+    "discordId": "313212280949178369",
+    "displayName": "Ching",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.211Z",
+    "updatedAt": "2026-04-04T13:53:11.211Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d98",
+    "discordId": "1240430119110185032",
+    "displayName": "Yi",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.223Z",
+    "updatedAt": "2026-04-04T13:53:11.223Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d99",
+    "discordId": "396564566684991488",
+    "displayName": "栗子雞湯",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.235Z",
+    "updatedAt": "2026-04-04T13:53:11.235Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d9a",
+    "discordId": "670964035419897870",
+    "displayName": "惜字",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.246Z",
+    "updatedAt": "2026-04-04T13:53:11.246Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d9b",
+    "discordId": "457907731982974980",
+    "displayName": "Apriblain",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.257Z",
+    "updatedAt": "2026-04-04T13:53:11.257Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d9c",
+    "discordId": "557542230487728138",
+    "displayName": "Szzeay(林愫)",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.275Z",
+    "updatedAt": "2026-04-04T13:53:11.275Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d9d",
+    "discordId": "1187034603748327424",
+    "displayName": "小夜璃的玩物",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.287Z",
+    "updatedAt": "2026-04-04T13:53:11.287Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d9e",
+    "discordId": "258971993452314624",
+    "displayName": "雨川紫",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UCRAac9tcy1IVyLxh8XS6VtQ"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.297Z",
+    "updatedAt": "2026-04-06T14:42:30.666Z",
+    "streamAliases": [
+      "akpurplech"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3d9f",
+    "discordId": "519163876487725057",
+    "displayName": "霜田シオリ",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.324Z",
+    "updatedAt": "2026-04-04T13:53:11.324Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da0",
+    "discordId": "964415464304422932",
+    "displayName": "Heidi温",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.341Z",
+    "updatedAt": "2026-04-04T13:53:11.341Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da1",
+    "discordId": "1136838168398794802",
+    "displayName": "Jimmy Lo",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.351Z",
+    "updatedAt": "2026-04-04T13:53:11.351Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da2",
+    "discordId": "1268165819024805932",
+    "displayName": "aads2864",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.362Z",
+    "updatedAt": "2026-04-04T13:53:11.362Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da3",
+    "discordId": "308614438481690624",
+    "displayName": "YanZhi(´◓Д◔`)",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.373Z",
+    "updatedAt": "2026-04-04T13:53:11.373Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da4",
+    "discordId": "883678707326287913",
+    "displayName": "紀綸",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.385Z",
+    "updatedAt": "2026-04-04T13:53:11.385Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da5",
+    "discordId": "1382986331944128553",
+    "displayName": "雲裳舞姬",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.397Z",
+    "updatedAt": "2026-04-04T13:53:11.397Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da6",
+    "discordId": "510072251207516161",
+    "displayName": "凰影咎",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.412Z",
+    "updatedAt": "2026-04-04T13:53:11.412Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da7",
+    "discordId": "680211181515964452",
+    "displayName": "南犬",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.437Z",
+    "updatedAt": "2026-04-04T13:53:11.437Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da8",
+    "discordId": "321217379810017280",
+    "displayName": "RoM",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.450Z",
+    "updatedAt": "2026-04-04T13:53:11.450Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3da9",
+    "discordId": "562648879519105049",
+    "displayName": "松田開司",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.462Z",
+    "updatedAt": "2026-04-04T13:53:11.462Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3daa",
+    "discordId": "391858546553389057",
+    "displayName": "菜菜子（Sphene我老婆一生愛）",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.473Z",
+    "updatedAt": "2026-04-04T13:53:11.473Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dab",
+    "discordId": "1006188075715661824",
+    "displayName": "隔壁老王",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.490Z",
+    "updatedAt": "2026-04-04T13:53:11.490Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dac",
+    "discordId": "1299618367107371032",
+    "displayName": "熙熙",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.501Z",
+    "updatedAt": "2026-04-04T13:53:11.501Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dad",
+    "discordId": "1157721148080001116",
+    "displayName": "木瓜",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.512Z",
+    "updatedAt": "2026-04-04T13:53:11.512Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dae",
+    "discordId": "947181147488673854",
+    "displayName": "毛毛毛",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UCMk4VFln0nQ6qXc5g6iT7mw",
+      "twitch": "tw-772279468"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.524Z",
+    "updatedAt": "2026-04-06T14:57:13.153Z",
+    "streamAliases": [
+      "毛毛",
+      "怪物毛毛"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3daf",
+    "discordId": "503569646394277908",
+    "displayName": "jejuneness",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.535Z",
+    "updatedAt": "2026-04-04T13:53:11.535Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db0",
+    "discordId": "408941110430531597",
+    "displayName": "狂暴小粉紅",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.547Z",
+    "updatedAt": "2026-04-04T13:53:11.547Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db1",
+    "discordId": "853909479195541504",
+    "displayName": "幸運",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.558Z",
+    "updatedAt": "2026-04-04T13:53:11.558Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db2",
+    "discordId": "141063931446820865",
+    "displayName": "ming_saber",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.570Z",
+    "updatedAt": "2026-04-04T13:53:11.570Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db3",
+    "discordId": "949296341610299425",
+    "displayName": "周某",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.594Z",
+    "updatedAt": "2026-04-04T13:53:11.594Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db4",
+    "discordId": "234707929259966465",
+    "displayName": "息吹之風",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UCkSSE5BhVbUqP-zOl14oEIA"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.605Z",
+    "updatedAt": "2026-04-12T03:16:19.412Z",
+    "streamAliases": [
+      "ibukikaze996"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db5",
+    "discordId": "311367819465981952",
+    "displayName": "ma13469",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.617Z",
+    "updatedAt": "2026-04-04T13:53:11.617Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db6",
+    "discordId": "425221496948916244",
+    "displayName": "理工",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.629Z",
+    "updatedAt": "2026-04-04T13:53:11.629Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db7",
+    "discordId": "1258295052057317409",
+    "displayName": "斯奧Theo",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.641Z",
+    "updatedAt": "2026-04-04T13:53:11.641Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db8",
+    "discordId": "339336248978046986",
+    "displayName": "語樂",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.653Z",
+    "updatedAt": "2026-04-04T13:53:11.653Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3db9",
+    "discordId": "553639946477371419",
+    "displayName": "印魂ソウルカブ",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-424695759",
+      "youtube": "yt-UCUOjGwg2cMFqetU-juTkCXg"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.670Z",
+    "updatedAt": "2026-04-13T07:41:03.877Z",
+    "streamAliases": [
+      "印魂"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dba",
+    "discordId": "538379880996405248",
+    "displayName": "雪ノ下かざね🔺",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UC7I1Ll7puICjTzUaiNbzr1w",
+      "twitch": "tw-119237358"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.682Z",
+    "updatedAt": "2026-04-07T15:23:16.595Z",
+    "streamAliases": [
+      "雪ノ下かざね"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dbb",
+    "discordId": "610829005339230230",
+    "displayName": "翊(ﾟ∀。)",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.693Z",
+    "updatedAt": "2026-04-04T13:53:11.693Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dbc",
+    "discordId": "828240597897969684",
+    "displayName": "錯過",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.711Z",
+    "updatedAt": "2026-04-04T13:53:11.711Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dbd",
+    "discordId": "649530698255826964",
+    "displayName": "nugro3",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.724Z",
+    "updatedAt": "2026-04-04T13:53:11.724Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dbe",
+    "discordId": "617320355391864862",
+    "displayName": "KM",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.735Z",
+    "updatedAt": "2026-04-04T13:53:11.735Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dbf",
+    "discordId": "539685029337628693",
+    "displayName": "C.C",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.747Z",
+    "updatedAt": "2026-04-04T13:53:11.747Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc0",
+    "discordId": "395944805278023681",
+    "displayName": "千(Alex)",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.766Z",
+    "updatedAt": "2026-04-04T13:53:11.766Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc1",
+    "discordId": "333529633872150528",
+    "displayName": "OneF1SH",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.778Z",
+    "updatedAt": "2026-04-04T13:53:11.778Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc2",
+    "discordId": "723879016825880627",
+    "displayName": "9k",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.790Z",
+    "updatedAt": "2026-04-04T13:53:11.790Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc3",
+    "discordId": "915208925543010364",
+    "displayName": "小七",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.808Z",
+    "updatedAt": "2026-04-04T13:53:11.808Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc4",
+    "discordId": "540912178753044531",
+    "displayName": "kuan",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.832Z",
+    "updatedAt": "2026-04-04T13:53:11.832Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc5",
+    "discordId": "470526144186286091",
+    "displayName": "酪文",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-159745435"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.844Z",
+    "updatedAt": "2026-04-10T13:42:58.329Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc6",
+    "discordId": "815445216718749716",
+    "displayName": "阿土",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.862Z",
+    "updatedAt": "2026-04-04T13:53:11.862Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc7",
+    "discordId": "583973203588808706",
+    "displayName": "貓夜幻月",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.875Z",
+    "updatedAt": "2026-04-04T13:53:11.875Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc8",
+    "discordId": "556458088111276035",
+    "displayName": "抹茶呱呱",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.887Z",
+    "updatedAt": "2026-04-04T13:53:11.887Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dc9",
+    "discordId": "662984153335332884",
+    "displayName": "BiBo",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.899Z",
+    "updatedAt": "2026-04-04T13:53:11.899Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dca",
+    "discordId": "676755695630155800",
+    "displayName": "奶茶",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.911Z",
+    "updatedAt": "2026-04-04T13:53:11.911Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dcb",
+    "discordId": "467320636260220929",
+    "displayName": "可可",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.924Z",
+    "updatedAt": "2026-04-04T13:53:11.924Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dcc",
+    "discordId": "619938728994930724",
+    "displayName": "一塊懶骨頭",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-720526141"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.937Z",
+    "updatedAt": "2026-04-06T14:43:39.185Z",
+    "streamAliases": [
+      "一塊懶骨頭"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dcd",
+    "discordId": "1266218197770698813",
+    "displayName": "Powerface#0823",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.950Z",
+    "updatedAt": "2026-04-04T13:53:11.950Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dce",
+    "discordId": "1217712538800881794",
+    "displayName": "rikataya.",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-781212839"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.968Z",
+    "updatedAt": "2026-04-09T05:39:43.920Z",
+    "streamAliases": [
+      "凜香たや"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dcf",
+    "discordId": "758699756226347058",
+    "displayName": "命運",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.980Z",
+    "updatedAt": "2026-04-04T13:53:11.980Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd0",
+    "discordId": "359290382158266368",
+    "displayName": "KiraOAO",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:11.993Z",
+    "updatedAt": "2026-04-04T13:53:11.993Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd1",
+    "discordId": "543314526234345472",
+    "displayName": "Eric Huang (回憶風鈴)",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-27623325",
+      "youtube": "yt-UCmlyDDB6xgpXsO_gSd-YjBg"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.005Z",
+    "updatedAt": "2026-04-10T16:02:18.764Z",
+    "streamAliases": [
+      "回憶風鈴"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd2",
+    "discordId": "503889760683687938",
+    "displayName": "Smile",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.017Z",
+    "updatedAt": "2026-04-04T13:53:12.017Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd3",
+    "discordId": "132150080743407616",
+    "displayName": "slightly_red-微紅",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.030Z",
+    "updatedAt": "2026-04-04T13:53:12.030Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd4",
+    "discordId": "857115276834111489",
+    "displayName": "kecy",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.055Z",
+    "updatedAt": "2026-04-04T13:53:12.055Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd5",
+    "discordId": "673416368065871873",
+    "displayName": "euterpe169",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.068Z",
+    "updatedAt": "2026-04-04T13:53:12.068Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd6",
+    "discordId": "556413978440499200",
+    "displayName": "feiwuluguo",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.081Z",
+    "updatedAt": "2026-04-04T13:53:12.081Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd7",
+    "discordId": "1141868386603782225",
+    "displayName": "齋藤一",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.094Z",
+    "updatedAt": "2026-04-04T13:53:12.094Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd8",
+    "discordId": "477375051109236741",
+    "displayName": "阿築築",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-549603827"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.107Z",
+    "updatedAt": "2026-04-09T11:43:37.496Z",
+    "streamAliases": [
+      "煮竹煮竹阿築築"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dd9",
+    "discordId": "649250927483813908",
+    "displayName": "Hangg",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.120Z",
+    "updatedAt": "2026-04-04T13:53:12.120Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dda",
+    "discordId": "556461863278346250",
+    "displayName": "J島狛仁",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.139Z",
+    "updatedAt": "2026-04-04T13:53:12.139Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3ddb",
+    "discordId": "1404121173272297486",
+    "displayName": "usagi",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.153Z",
+    "updatedAt": "2026-04-04T13:53:12.153Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3ddc",
+    "discordId": "404245980654075905",
+    "displayName": "Frank",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-119256862"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.165Z",
+    "updatedAt": "2026-04-06T14:44:07.990Z",
+    "streamAliases": [
+      "Frank3390"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3ddd",
+    "discordId": "416586949420384256",
+    "displayName": "天櫻(hazama_9898)",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.178Z",
+    "updatedAt": "2026-04-04T13:53:12.178Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dde",
+    "discordId": "1168573166768115790",
+    "displayName": "竜絃",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.192Z",
+    "updatedAt": "2026-04-04T13:53:12.192Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3ddf",
+    "discordId": "596202869611298827",
+    "displayName": "晚餐剝皮辣椒雞湯",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.205Z",
+    "updatedAt": "2026-04-04T13:53:12.205Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de0",
+    "discordId": "820616244385546260",
+    "displayName": "Nick",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.225Z",
+    "updatedAt": "2026-04-04T13:53:12.225Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de1",
+    "discordId": "419855336086962191",
+    "displayName": "七貓sevencat",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.239Z",
+    "updatedAt": "2026-04-04T13:53:12.239Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de2",
+    "discordId": "471930687641878550",
+    "displayName": "皮皮貓",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.251Z",
+    "updatedAt": "2026-04-04T13:53:12.251Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de3",
+    "discordId": "999576094065840188",
+    "displayName": "包包",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.265Z",
+    "updatedAt": "2026-04-04T13:53:12.265Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de4",
+    "discordId": "554325539167666196",
+    "displayName": "餿水蛇",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.278Z",
+    "updatedAt": "2026-04-04T13:53:12.278Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de5",
+    "discordId": "237151667160612865",
+    "displayName": "企鵝",
+    "status": "active",
+    "externalIds": {
+      "youtube": "yt-UCKG70HBiZCIP_30eAuysm9g",
+      "twitch": "tw-25087618"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.292Z",
+    "updatedAt": "2026-04-11T09:25:49.508Z",
+    "streamAliases": [
+      "冷羽葉",
+      "楓鈐"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de6",
+    "discordId": "819929128659582987",
+    "displayName": "卓宇",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.306Z",
+    "updatedAt": "2026-04-04T13:53:12.306Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de7",
+    "discordId": "849451830239952896",
+    "displayName": "貓貓咖波",
+    "status": "active",
+    "externalIds": {
+      "twitch": "tw-798698033"
+    },
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.327Z",
+    "updatedAt": "2026-04-04T18:54:47.560Z",
+    "streamAliases": [
+      "貓貓咖波"
+    ]
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de8",
+    "discordId": "676653429317304332",
+    "displayName": "Cybra",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.343Z",
+    "updatedAt": "2026-04-04T13:53:12.343Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3de9",
+    "discordId": "408256499610025994",
+    "displayName": "冰棒",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.358Z",
+    "updatedAt": "2026-04-04T13:53:12.358Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dea",
+    "discordId": "563016191698927658",
+    "displayName": "Tamaki",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.373Z",
+    "updatedAt": "2026-04-04T13:53:12.373Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3deb",
+    "discordId": "994515644009676801",
+    "displayName": "李洛",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.390Z",
+    "updatedAt": "2026-04-04T13:53:12.390Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dec",
+    "discordId": "644480611372892160",
+    "displayName": "夏炙",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.412Z",
+    "updatedAt": "2026-04-04T13:53:12.412Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3ded",
+    "discordId": "976723797346504724",
+    "displayName": "天兔靈曜",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.429Z",
+    "updatedAt": "2026-04-04T13:53:12.429Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dee",
+    "discordId": "425577856425525252",
+    "displayName": "戲夢人生",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.449Z",
+    "updatedAt": "2026-04-04T13:53:12.449Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3def",
+    "discordId": "1114853385431162930",
+    "displayName": "sugar",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.464Z",
+    "updatedAt": "2026-04-04T13:53:12.464Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df0",
+    "discordId": "624854863687319554",
+    "displayName": "歐金伯",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.480Z",
+    "updatedAt": "2026-04-04T13:53:12.480Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df1",
+    "discordId": "529274840289378315",
+    "displayName": "浠門沁",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.494Z",
+    "updatedAt": "2026-04-04T13:53:12.494Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df2",
+    "discordId": "306943826906447883",
+    "displayName": "超級狂暴霸王雷克斯暴龍",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.507Z",
+    "updatedAt": "2026-04-04T13:53:12.507Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df3",
+    "discordId": "942255956908195881",
+    "displayName": "靈魂月☯苦力怕",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.521Z",
+    "updatedAt": "2026-04-04T13:53:12.521Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df4",
+    "discordId": "330670594175533056",
+    "displayName": "†Ἀχιλλεύς",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.536Z",
+    "updatedAt": "2026-04-04T13:53:12.536Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df5",
+    "discordId": "747447079898448033",
+    "displayName": "rogeraka",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.551Z",
+    "updatedAt": "2026-04-04T13:53:12.551Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df6",
+    "discordId": "1038297938385981550",
+    "displayName": "玄米豆",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.567Z",
+    "updatedAt": "2026-04-04T13:53:12.567Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df7",
+    "discordId": "259991543299964931",
+    "displayName": "阿閃",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.580Z",
+    "updatedAt": "2026-04-04T13:53:12.580Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df8",
+    "discordId": "550716332283527169",
+    "displayName": "魅侍",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.595Z",
+    "updatedAt": "2026-04-04T13:53:12.595Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3df9",
+    "discordId": "332898526747164673",
+    "displayName": "Meaokai",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.609Z",
+    "updatedAt": "2026-04-04T13:53:12.609Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dfa",
+    "discordId": "553777318544539648",
+    "displayName": "小莊子",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.624Z",
+    "updatedAt": "2026-04-04T13:53:12.624Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dfb",
+    "discordId": "973778385807482931",
+    "displayName": "狐狸緋英",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.639Z",
+    "updatedAt": "2026-04-04T13:53:12.639Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dfc",
+    "discordId": "998829531764887613",
+    "displayName": "雨",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.661Z",
+    "updatedAt": "2026-04-04T13:53:12.661Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dfd",
+    "discordId": "1351954726819856435",
+    "displayName": "根利.",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.676Z",
+    "updatedAt": "2026-04-04T13:53:12.676Z"
+  },
+  {
+    "_id": "69d166dac30e6269a49d3dfe",
+    "discordId": "1032639263675797534",
+    "displayName": "666666",
+    "status": "active",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "createdAt": "2026-04-04T13:53:12.698Z",
+    "updatedAt": "2026-04-04T13:53:12.698Z"
+  },
+  {
+    "_id": "69d3c45bedbb0450da04be9e",
+    "discordId": "350565436087074817",
+    "createdAt": "2026-04-06T14:34:03.034Z",
+    "displayName": "贗作十三夜寐",
+    "externalIds": {
+      "twitch": "tw-120003401"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-06T14:37:12.708Z",
+    "streamAliases": [
+      "十三夜寐"
+    ]
+  },
+  {
+    "_id": "69d3c621edbb0450da04bee4",
+    "discordId": "1392785638721585283",
+    "createdAt": "2026-04-06T14:41:37.829Z",
+    "displayName": "回憶.",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-06T14:41:37.829Z"
+  },
+  {
+    "_id": "69d3c799edbb0450da04bf22",
+    "discordId": "380676012570312707",
+    "createdAt": "2026-04-06T14:47:53.120Z",
+    "displayName": "阿豬",
+    "externalIds": {
+      "twitch": "tw-130709102"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-06T14:49:32.118Z",
+    "streamAliases": [
+      "阿豬_タツキ"
+    ]
+  },
+  {
+    "_id": "69d3ca49edbb0450da04bf91",
+    "discordId": "1058147947545624646",
+    "createdAt": "2026-04-06T14:59:21.830Z",
+    "displayName": "火焰",
+    "externalIds": {
+      "twitch": "tw-1445016727"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-06T15:00:10.392Z",
+    "streamAliases": [
+      "火焰最愛亞絲娜"
+    ]
+  },
+  {
+    "_id": "69d3dba8edbb0450da04c27f",
+    "discordId": "693452522379280474",
+    "createdAt": "2026-04-06T16:13:28.724Z",
+    "displayName": "吉村佐惠子",
+    "externalIds": {
+      "youtube": "yt-UCQYHGCHiOpZDA4YVcdYRt6g",
+      "twitch": "tw-263241169"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-11T09:24:20.130Z",
+    "streamAliases": [
+      "gxb_s40",
+      "吉村佐惠子"
+    ]
+  },
+  {
+    "_id": "69d4d763edbb0450da04e636",
+    "discordId": "153098959399813120",
+    "createdAt": "2026-04-07T10:07:31.080Z",
+    "displayName": "音子ちゃん",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-07T10:07:31.080Z"
+  },
+  {
+    "_id": "69d576f9edbb0450da04fefb",
+    "discordId": "862314794711646208",
+    "createdAt": "2026-04-07T21:28:25.428Z",
+    "displayName": "kxcdzov",
+    "externalIds": {
+      "twitch": "tw-799315020"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-07T21:28:58.628Z",
+    "streamAliases": [
+      "千代です"
+    ]
+  },
+  {
+    "_id": "69d63e1cedbb0450da051b24",
+    "discordId": "1206243571863261286",
+    "createdAt": "2026-04-08T11:38:04.423Z",
+    "displayName": "小嗶歪",
+    "externalIds": {
+      "twitch": "tw-567992234"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-12T05:36:57.968Z",
+    "streamAliases": [
+      "嗶歪"
+    ]
+  },
+  {
+    "_id": "69d63f0bedbb0450da051b47",
+    "discordId": "877540660029304834",
+    "createdAt": "2026-04-08T11:42:03.536Z",
+    "displayName": "鯊鯊",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-08T11:42:03.536Z"
+  },
+  {
+    "_id": "69d63f81edbb0450da051b5a",
+    "discordId": "1142174309666783272",
+    "createdAt": "2026-04-08T11:44:01.484Z",
+    "displayName": "hentai.228922",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-08T11:44:01.484Z"
+  },
+  {
+    "_id": "69d643a6edbb0450da051c13",
+    "discordId": "560130188252282891",
+    "createdAt": "2026-04-08T12:01:42.092Z",
+    "displayName": "chuliko",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-08T12:01:42.092Z"
+  },
+  {
+    "_id": "69d646bcedbb0450da051c80",
+    "discordId": "tester1",
+    "createdAt": "2026-04-08T12:14:52.314Z",
+    "displayName": "WebPlayer",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-08T12:14:52.314Z"
+  },
+  {
+    "_id": "69d67659edbb0450da052353",
+    "discordId": "177804810005905408",
+    "createdAt": "2026-04-08T15:38:01.695Z",
+    "displayName": "KOI",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-08T15:38:01.695Z"
+  },
+  {
+    "_id": "69d69470edbb0450da052a26",
+    "discordId": "437662562658811914",
+    "createdAt": "2026-04-08T17:46:24.084Z",
+    "displayName": "Babayaga",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-08T17:46:24.084Z"
+  },
+  {
+    "_id": "69d6d234edbb0450da0533a4",
+    "discordId": "749613227192746036",
+    "createdAt": "2026-04-08T22:09:56.857Z",
+    "displayName": "甘露（社畜版）",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-08T22:09:56.857Z"
+  },
+  {
+    "_id": "69d8fef6edbb0450da058b94",
+    "discordId": "1200087356150120540",
+    "createdAt": "2026-04-10T13:45:26.772Z",
+    "displayName": "紫魔",
+    "externalIds": {
+      "youtube": "yt-UC6ZD--AhCY1_GC-LCkyA12Q"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-10T14:53:19.379Z",
+    "streamAliases": [
+      "紫魔-k4w"
+    ]
+  },
+  {
+    "_id": "69d903fe61eb2b58ea2eb941",
+    "discordId": "641514438758891530",
+    "createdAt": "2026-04-10T14:06:54.433Z",
+    "displayName": "sosi",
+    "externalIds": {
+      "youtube": "yt-UCUgbceR_5WQrqXyrpX1xqsQ"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-10T14:19:13.872Z",
+    "streamAliases": [
+      "sosi4464"
+    ]
+  },
+  {
+    "_id": "69d906e161eb2b58ea2eb9a8",
+    "discordId": "457175988439351298",
+    "createdAt": "2026-04-10T14:19:13.031Z",
+    "displayName": "鱈魚",
+    "externalIds": {
+      "youtube": "yt-UC2HCQVenkVvMEw15joDYNpw"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-10T14:25:57.968Z",
+    "streamAliases": [
+      "codfish3819"
+    ]
+  },
+  {
+    "_id": "69d90f1c61eb2b58ea2ebad2",
+    "discordId": "354487070829445121",
+    "createdAt": "2026-04-10T14:54:21.014Z",
+    "displayName": "DD(～'ω')～",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-10T14:54:21.014Z"
+  },
+  {
+    "_id": "69d90fa261eb2b58ea2ebae7",
+    "discordId": "968853767560785930",
+    "createdAt": "2026-04-10T14:56:34.534Z",
+    "displayName": "bk",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-10T14:56:34.534Z"
+  },
+  {
+    "_id": "69d9164861eb2b58ea2ebbee",
+    "discordId": "272649441616330752",
+    "createdAt": "2026-04-10T15:24:56.176Z",
+    "displayName": "JIL-達",
+    "externalIds": {
+      "youtube": "yt-UCH39e3QPdDINgMUXYMcOhNQ"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-10T15:34:30.980Z",
+    "streamAliases": [
+      "joile003"
+    ]
+  },
+  {
+    "_id": "69d91afc61eb2b58ea2ebcba",
+    "discordId": "1365324159130796134",
+    "createdAt": "2026-04-10T15:45:00.640Z",
+    "displayName": "我是納西妲的狗",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-10T15:45:00.640Z"
+  },
+  {
+    "_id": "69d98abcdaa194f5e73dbaca",
+    "discordId": "1481121783242555525",
+    "createdAt": "2026-04-10T23:41:49.010Z",
+    "displayName": "蒼心vtuber",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-10T23:41:49.010Z"
+  },
+  {
+    "_id": "69d9e58ddaa194f5e73dc817",
+    "discordId": "977964732537503764",
+    "createdAt": "2026-04-11T06:09:17.843Z",
+    "displayName": "evan",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-11T06:09:17.843Z"
+  },
+  {
+    "_id": "69da263cdaa194f5e73dd116",
+    "discordId": "728605307109900319",
+    "createdAt": "2026-04-11T10:45:16.361Z",
+    "displayName": "shuangjih",
+    "externalIds": {
+      "youtube": "yt-UCFiJw2sZ5strvodRSU725jQ"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-12T05:37:26.286Z",
+    "streamAliases": [
+      "紀錄者-w1r"
+    ]
+  },
+  {
+    "_id": "69da2f69daa194f5e73dd259",
+    "discordId": "930532798538842142",
+    "createdAt": "2026-04-11T11:24:25.952Z",
+    "displayName": "dyfftydgjg",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-11T11:24:25.952Z"
+  },
+  {
+    "_id": "69da52f7daa194f5e73dd789",
+    "discordId": "1126456597565145178",
+    "createdAt": "2026-04-11T13:56:07.991Z",
+    "displayName": "米花教主的阿南",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-11T13:56:07.991Z"
+  },
+  {
+    "_id": "69da58c6daa194f5e73dd861",
+    "discordId": "742581777427726492",
+    "createdAt": "2026-04-11T14:20:54.527Z",
+    "displayName": "杯琴",
+    "externalIds": {
+      "youtube": "yt-UCQXmF-D1yr23yV6F7wakyrA"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-11T14:31:22.773Z",
+    "streamAliases": [
+      "陳楷威-j7p"
+    ]
+  },
+  {
+    "_id": "69da7354daa194f5e73ddc90",
+    "discordId": "1195723372894625904",
+    "createdAt": "2026-04-11T16:14:12.963Z",
+    "displayName": "杀侍勤",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-11T16:14:12.963Z"
+  },
+  {
+    "_id": "69da77dadaa194f5e73ddd34",
+    "discordId": "1068978489035857960",
+    "createdAt": "2026-04-11T16:33:30.326Z",
+    "displayName": "Brian_Zhou",
+    "externalIds": {
+      "twitch": "tw-1230638788"
+    },
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-11T16:42:36.739Z",
+    "streamAliases": [
+      "brianvvv704"
+    ]
+  },
+  {
+    "_id": "69dc0e3cdaa194f5e73e1930",
+    "discordId": "web-guest",
+    "createdAt": "2026-04-12T21:27:24.162Z",
+    "displayName": "WebPlayer",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-12T21:27:24.162Z"
+  },
+  {
+    "_id": "69dc5b47daa194f5e73e2513",
+    "discordId": "battle-viewer",
+    "createdAt": "2026-04-13T02:56:07.953Z",
+    "displayName": "WebPlayer",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-13T02:56:07.953Z"
+  },
+  {
+    "_id": "69dcd60ddaa194f5e73e3613",
+    "discordId": "1491917757674160128",
+    "createdAt": "2026-04-13T11:39:57.745Z",
+    "displayName": "銫希恩",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-13T11:39:57.745Z"
+  },
+  {
+    "_id": "69ddb122daa194f5e73e5669",
+    "discordId": "sim_test_1",
+    "createdAt": "2026-04-14T03:14:42.863Z",
+    "displayName": "SimTester",
+    "externalIds": {},
+    "schemaVersion": 1,
+    "status": "active",
+    "updatedAt": "2026-04-14T03:14:42.863Z"
+  }
+]
