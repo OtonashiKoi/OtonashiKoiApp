@@ -8,7 +8,7 @@
   let npcTemplates = [];
 
   const STAT_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
-  const ITEM_TYPE_LABEL = { consumable: "🧪 消耗品", collectible: "🖼️ 圖片", equipment: "⚔️ 裝備", special: "✨ 特殊" };
+  const ITEM_TYPE_LABEL = { consumable: "🧪 消耗品", collectible: "🖼️ 圖片", equipment: "⚔️ 裝備", job_badge: "📖 職業徽章", special: "✨ 特殊" };
 
   function apiHeaders() {
     return { "Content-Type": "application/json", Authorization: "Bearer " + (window.getAdminToken ? window.getAdminToken() : "") };
@@ -284,6 +284,7 @@
       { key: "accessory",  label: "💍 飾品" },
       { key: "consumable", label: "🧪 消耗品" },
       { key: "collectible",label: "📦 收藏品" },
+      { key: "job_badge",  label: "📖 職業徽章" },
     ];
     const WEAPON_TYPE_LABELS = {
       sword_1h:'劍(單)', sword_2h:'劍(雙)',
@@ -345,6 +346,7 @@
     function getTab(it) {
       if (it.itemType === "consumable") return "consumable";
       if (it.itemType === "collectible") return "collectible";
+      if (it.itemType === "job_badge") return "job_badge";
       if (it.itemType !== "equipment") return "other";
       const slot = it.equipSlot || "";
       if (slot === "weapon") return "weapon";

@@ -27,12 +27,13 @@
   function esc(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 
   // ── Item Picker Modal（與怪物掉落物相同風格）──
-  const PICKER_TABS=[{key:"all",label:"全部"},{key:"weapon",label:"⚔️ 武器"},{key:"defense",label:"🛡️ 防具/盾"},{key:"head",label:"🪖 頭部"},{key:"accessory",label:"💍 飾品"},{key:"consumable",label:"🧪 消耗品"},{key:"collectible",label:"📦 收藏品"}];
+  const PICKER_TABS=[{key:"all",label:"全部"},{key:"weapon",label:"⚔️ 武器"},{key:"defense",label:"🛡️ 防具/盾"},{key:"head",label:"🪖 頭部"},{key:"accessory",label:"💍 飾品"},{key:"consumable",label:"🧪 消耗品"},{key:"collectible",label:"📦 收藏品"},{key:"job_badge",label:"📖 職業徽章"}];
   const WEAPON_TYPE_LABELS={sword_1h:'劍(單)',sword_2h:'劍(雙)',mace_1h:'鎚(單)',mace_2h:'鎚(雙)',axe_1h:'斧(單)',axe_2h:'斧(雙)',dagger:'匕首',staff_1h:'杖(單)',staff_2h:'杖(雙)',bow:'弓'};
   const TIER_COLORS={D:'#8899aa',C:'#44cc88',B:'#6699ff',A:'#ffcc44'};
   function getItemTab(it){
     if(it.itemType==='consumable')return 'consumable';
     if(it.itemType==='collectible')return 'collectible';
+    if(it.itemType==='job_badge')return 'job_badge';
     if(it.itemType!=='equipment')return 'other';
     const s=it.equipSlot||'';
     if(s==='weapon')return 'weapon';
@@ -122,7 +123,7 @@
       const kw=(filter||'').trim().toLowerCase();
       let list=kw?libraryItems.filter(i=>(i.name||'').toLowerCase().includes(kw)):libraryItems;
       if(pickerActiveTab!=='all')list=list.filter(i=>getItemTab(i)===pickerActiveTab);
-      if(pickerActiveTier!=='all')list=list.filter(i=>i.tier===pickerActiveTier);
+      if(pickerActiveTier!=='all'&&pickerActiveTab!=='job_badge')list=list.filter(i=>i.tier===pickerActiveTier);
       if(!list.length){content.innerHTML='<div style="text-align:center;color:var(--muted);padding:40px;">沒有符合條件的道具</div>';return;}
       if(pickerActiveTab==='weapon'||(pickerActiveTab==='all'&&!kw)){
         const weapons=list.filter(i=>i.equipSlot==='weapon');
