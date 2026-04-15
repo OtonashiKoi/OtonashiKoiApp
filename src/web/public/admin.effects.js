@@ -56,6 +56,31 @@
     'gold_gain_up', 'exp_gain_up', 'drop_rate_up', 'rare_drop_rate_up', 'monster_reward_up', 'checkin_bonus_up', 'enhance_success_up', 'event_trigger_rate_up'
   ]);
 
+  // 加值類效果的預設基準（與後端 `STAT_EFFECT_MAP` 的 add 類型對應）
+  const ADD_BASELINE = {
+    max_hp_up: 50,
+    atk_up: 10,
+    def_up: 5,
+    mdef_up: 5,
+    hit_up: 8,
+    dodge_up: 8,
+    crit_rate_up: 5,
+    speed_up: 10,
+    block_chance_up: 10,
+    combo_up: 5,
+    stun_chance_up: 10,
+    execute_chance_up: 10,
+    execute_threshold_up: 10
+  };
+
+  function convertPercentToAbsolute(key, percent) {
+    const pct = Number(percent || 0);
+    if (!Number.isFinite(pct)) return 0;
+    const base = Number(ADD_BASELINE[key] || 0);
+    if (!Number.isFinite(base) || base === 0) return pct; // fallback: keep value
+    return (base * pct) / 100;
+  }
+
   const EFFECT_NAME_ZH = {
     max_hp_up: "最大 HP 提升",
     max_hp_down: "最大 HP 降低",
@@ -341,6 +366,15 @@
         } else {
           parts.push(`數值 ${Math.round(percent * 100) / 100}% → ${mult.toFixed(2)}x`);
         }
+      } else if (Object.prototype.hasOwnProperty.call(ADD_BASELINE, effect.key)) {
+        const original = effect?.params?.originalInput;
+        const base = Number(ADD_BASELINE[effect.key] || 0);
+        const absolute = Number(value);
+        if (original && String(original) !== String(absolute)) {
+          parts.push(`輸入 ${original}% → 數值 ${Math.round(absolute * 100) / 100}`);
+        } else {
+          parts.push(`數值 ${Math.round(absolute * 100) / 100}`);
+        }
       } else {
         parts.push(`數值 ${value}`);
       }
@@ -441,14 +475,24 @@
     // read raw string so we can detect multiplier-style input like "1.1"
     const rawValueStr = String(row.querySelector('[data-field="value"]')?.value || "").trim();
     let value = Number(rawValueStr);
-    // If this effect uses percent semantics and user entered a multiplier like 1.1, auto-convert to percent
+    // store original input for preview
     let originalInput = null;
     try {
+      // Economy-type percent handling (existing behavior)
       if (PERCENT_EFFECT_KEYS.has(key) && rawValueStr.includes('.') && Number.isFinite(value) && value > 1) {
-        // user entered a multiplier like 1.1 — keep their input visible but store percent for backend
         const percent = (value - 1) * 100;
         originalInput = rawValueStr;
         value = percent;
+      }
+      // Add-mode effects: UI shows percent, convert percent -> absolute based on baseline
+      if (Object.prototype.hasOwnProperty.call(ADD_BASELINE, key)) {
+        // if user entered a trailing % remove it
+        const cleaned = rawValueStr.replace(/%/g, "");
+        const asNum = Number(cleaned);
+        if (Number.isFinite(asNum)) {
+          originalInput = cleaned;
+          value = convertPercentToAbsolute(key, asNum);
+        }
       }
     } catch (e) {
       // ignore conversion errors
@@ -495,13 +539,25 @@
         <button type="button" class="button danger" data-role="delete-effect">刪除</button>
       </div>
       <div class="effect-preview"></div>
-      <div style="display:grid;grid-template-columns:120px 120px 130px 120px;gap:8px;align-items:center;">
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;align-items:center;">
         <label style="display:grid;gap:4px;"><span class="hint">機率 %</span><input class="sheet-input" data-field="chance" type="number" min="0" max="100" value="${data.chance}" /></label>
-        <label style="display:grid;gap:4px;"><span class="hint">數值 value</span><input class="sheet-input" data-field="value" type="number" value="${Number(data.params.value) || 0}" /></label>
+        <label style="display:grid;gap:4px;"><span class="hint">數值 value</span><input class="sheet-input" data-field="value" type="number" value="${(function(){
+            const rawVal = Number(data.params.value);
+            if (Object.prototype.hasOwnProperty.call(ADD_BASELINE, data.key)) {
+              const base = Number(ADD_BASELINE[data.key] || 0);
+              if (base) {
+                // if originalInput present, show it; otherwise compute percent
+                const orig = data.params?.originalInput;
+                if (orig) return esc(String(orig));
+                return Math.round((rawVal / base) * 100 * 100) / 100;
+              }
+            }
+            return Number(rawVal) || 0;
+          })()}" /></label>
         <label style="display:grid;gap:4px;"><span class="hint">持續類型</span><select class="sheet-input" data-field="durationMode">${optionHtml(DURATION_MODES, data.duration.mode)}</select></label>
         <label style="display:grid;gap:4px;"><span class="hint">持續值</span><input class="sheet-input" data-field="durationValue" type="number" min="0" value="${data.duration.value}" /></label>
       </div>
-      <div style="display:grid;grid-template-columns:120px 120px 130px 120px;gap:8px;align-items:center;margin-top:4px;">
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;align-items:center;margin-top:4px;">
         <div class="hint" style="font-size:12px;color:var(--muted);">機率：觸發此效果的機率 (0–100)，例如 100 = 一定發生。</div>
         <div class="hint" style="font-size:12px;color:var(--muted);">數值：效果參數；經濟型效果（EXP/GOLD）為百分比。例如輸入 <strong>10</strong> 表示 +10%，或輸入 <strong>1.1</strong> 表示 1.1x（系統會自動轉換且保留你輸入）。</div>
         <div class="hint" style="font-size:12px;color:var(--muted);">持續類型：選擇持續方式（回合/整場/次數/秒數）。</div>
@@ -890,7 +946,17 @@
             <select class="sheet-input" data-field="durationMode">${optionHtml(DURATION_MODES, payload.effect?.duration?.mode || "battle")}</select>
             <input class="sheet-input" data-field="durationValue" type="number" min="0" value="${Number(payload.effect?.duration?.value) || 1}" />
             <input class="sheet-input" data-field="stacks" type="number" min="1" value="${Number(payload.effect?.stacks) || 1}" />
-            <input class="sheet-input" data-field="value" type="number" value="${Number(payload.effect?.params?.value) || 0}" />
+            <input class="sheet-input" data-field="value" type="number" value="${(function(){
+              const rawVal = Number(payload.effect?.params?.value);
+              const key = payload.effect?.key;
+              if (key && Object.prototype.hasOwnProperty.call(ADD_BASELINE, key)) {
+                const base = Number(ADD_BASELINE[key] || 0);
+                const orig = payload.effect?.params?.originalInput;
+                if (orig) return esc(String(orig));
+                if (base) return Math.round((rawVal / base) * 100 * 100) / 100;
+              }
+              return Number(rawVal) || 0;
+            })()}" />
           </div>`;
       }
 
@@ -903,14 +969,18 @@
         });
       });
       preview.textContent = summarizeCurrent();
-      // add or update inline help for NPC effect fields (so NPC editor shows same hints)
-      const existingHelp = row.querySelector('.npc-effect-help');
-      const helpHtml = `<div class="npc-effect-help hint" style="font-size:12px;color:var(--muted);margin-top:6px;">機率：觸發此效果的機率 (0–100)。數值：依效果類型不同，對於發放/消耗道具或裝備為 item id/enhance 等數值；對於 ` +
-        `給予 Buff（grant_buff）為效果設定（用右方預覽檢視）。經濟型效果（EXP/GOLD）為百分比，例如輸入 <strong>10</strong> 表示 +10%，或輸入 <strong>1.1</strong> 表示 1.1x（系統會保留原輸入並自動轉換）。持續值依持續類型而定（次數=1、整場=battle、秒數=秒）。</div>`;
+      // add or update inline help for NPC effect fields (place inside the fields grid so it aligns)
+      const existingHelp = fields.querySelector('.npc-effect-help');
+      const helpHtml = `<div class="npc-effect-help hint" style="font-size:12px;color:var(--muted);grid-column:1 / -1;margin-top:6px;">機率：觸發此效果的機率 (0–100)。數值：依效果類型不同：<br/>` +
+        `- 發放/消耗道具或裝備：請選道具 id / 強化等級。<br/>` +
+        `- 給予 Buff（grant_buff）：請設定內部效果（右方預覽）。<br/>` +
+        `- 經濟類（EXP/GOLD）：為百分比，例如輸入 <strong>10</strong> 表示 +10%，或輸入 <strong>1.1</strong> 表示 1.1x（系統會保留原輸入並自動轉換）。<br/>` +
+        `- 攻擊/防禦等「加值」類（例如 atk_up）：請輸入 <strong>百分比</strong>，系統會以預設基準轉為絕對值（例如基準 +10，輸入 <strong>20</strong> 表示 +2），儲存時會自動轉換為後端期望的絕對數值。<br/>` +
+        `持續值依持續類型而定（次數=1、整場=battle、秒數=秒）。</div>`;
       if (existingHelp) {
         existingHelp.outerHTML = helpHtml;
       } else {
-        fields.insertAdjacentHTML('afterend', helpHtml);
+        fields.insertAdjacentHTML('beforeend', helpHtml);
       }
     }
 
@@ -970,7 +1040,15 @@
               mode: row.querySelector('[data-field="durationMode"]').value || "battle",
               value: Math.max(0, Number(row.querySelector('[data-field="durationValue"]').value) || 1)
             },
-            params: { value: Number(row.querySelector('[data-field="value"]').value) || 0 }
+            params: (function(){
+              const key = row.querySelector('[data-field="effectKey"]').value || "";
+              const raw = String(row.querySelector('[data-field="value"]').value || "").trim().replace(/%/g, "");
+              const num = Number(raw);
+              if (Object.prototype.hasOwnProperty.call(ADD_BASELINE, key) && Number.isFinite(num)) {
+                return { value: convertPercentToAbsolute(key, num), originalInput: raw };
+              }
+              return { value: Number(num) || 0 };
+            })()
           }
         }
       };

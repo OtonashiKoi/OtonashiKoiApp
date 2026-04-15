@@ -1,6 +1,12 @@
 ﻿"use strict";
 
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
+const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
+
+// 這些效果的 params.value 代表百分比（percent），顯示時會特別格式化
+const PERCENT_EFFECT_KEYS = new Set([
+  'gold_gain_up', 'exp_gain_up', 'drop_rate_up', 'rare_drop_rate_up', 'monster_reward_up', 'checkin_bonus_up', 'enhance_success_up', 'event_trigger_rate_up'
+]);
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { calcPlayerStats } = require("../../shared/combatStats");
 const { isEffectConditionMet, collectEquipmentEffects, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
@@ -1468,6 +1474,44 @@ async function handleMonsterEventChoice(interaction) {
       progress.updatedAt = new Date().toISOString();
       await sc.progressRepository.save(progress).catch(() => {});
       results.push(`獲得 Buff ${buffEffect.key}`);
+
+      // 嘗試發送中文 DM 給玩家，告知獲得的 Buff（若使用者關閉 DM 則忽略）
+      try {
+        const { getBotClient } = require("../runtimeContext");
+        const client = getBotClient();
+        if (client?.isReady && client.isReady()) {
+          const user = await client.users.fetch(discordId).catch(() => null);
+          if (user) {
+            const nameZh = EFFECT_NAME_ZH[buffEffect.key] || buffEffect.key;
+            const rawVal = Number(buffEffect?.params?.value ?? buffEffect?.value ?? 0);
+            let valueText = "";
+            if (PERCENT_EFFECT_KEYS.has(buffEffect.key)) {
+              // percent stored as e.g. 10 => +10%
+              const pct = rawVal;
+              const mult = (1 + pct / 100).toFixed(2);
+              valueText = `數值 ${Math.round(pct * 100) / 100}%（${mult}x）`;
+            } else {
+              if (Number.isFinite(rawVal) && rawVal !== 0) valueText = `數值 ${rawVal}`;
+            }
+            const durationMode = (buffEffect?.duration?.mode) || "turns";
+            const durationVal = Number(buffEffect?.duration?.value || 1);
+            let durationText = "";
+            if (durationMode === 'battle') durationText = '整場戰鬥';
+            else if (durationMode === 'permanent') durationText = '永久';
+            else if (durationMode === 'seconds') durationText = `${durationVal} 秒`;
+            else durationText = `${durationVal} 回合`;
+
+            const parts = [];
+            parts.push(`✨ 你獲得 Buff：${nameZh}`);
+            if (valueText) parts.push(valueText);
+            if (durationText) parts.push(`持續 ${durationText}`);
+
+            await user.send(parts.join('　')).catch(() => {});
+          }
+        }
+      } catch (e) {
+        // 忽略 DM 發送錯誤
+      }
     } else {
       results.push(`效果 ${eff.type || 'unknown'} 未實作`);
     }

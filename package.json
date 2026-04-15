@@ -27,6 +27,13 @@
     "auto-home": "node scripts/auto-home.js",
     "go-live": "node scripts/go-live.js",
     "grant:100": "node ./scripts/grant-100-gold-all.js"
+    ,"check:db": "node scripts/check-db-collections.js"
+    ,"skills:normalize": "node scripts/normalize-skills.js"
+    ,"skills:fix-frontmatter": "node scripts/fix-skill-frontmatter.js"
+    ,"skills:rewrite-full": "node scripts/rewrite-skills-full.js"
+    ,"skills:rename-folders": "node scripts/rename-skill-folders.js"
+    ,"skills:gen-index": "node scripts/gen-skills-index.js"
+    ,"skills:recreate-structure": "node scripts/recreate-skills-structure.js"
   },
   "engines": {
     "node": ">=20.0.0"
