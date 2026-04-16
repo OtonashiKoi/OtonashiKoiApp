@@ -322,7 +322,7 @@ class ShopService {
     const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此裝備", 404);
     const entry = progress.inventory[idx];
-    if (entry.itemType !== "equipment") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不是裝備", 400);
+    if (entry.itemType !== "equipment" && entry.itemType !== "job_badge") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不是裝備", 400);
 
     let slot = entry.equipSlot;
     if (!slot) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備未指定槽位", 400);
@@ -392,8 +392,8 @@ class ShopService {
       }
     }
     if (!target) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到目標裝備", 404);
-    if (target.itemType !== "equipment") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標不是裝備", 400);
-    if (target.equipSlot === "special") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "特殊裝備無法強化", 400);
+    if (target.itemType !== "equipment" && target.itemType !== "job_badge") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標不是裝備", 400);
+    if (target.equipSlot === "special" || target.equipSlot === "job_eq" || target.equipSlot === "title_eq") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此槽位裝備無法強化", 400);
     const currentLevel = target.enhanceLevel || 0;
     if (currentLevel >= ENHANCE_MAX) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${target.itemName} 已達強化上限（+${ENHANCE_MAX}）`, 400);
