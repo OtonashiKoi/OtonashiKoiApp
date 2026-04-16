@@ -43,7 +43,14 @@
     if(item.equipSlot==='shield'){const cur=item.weaponType||'';const opts='<option value="">防具（無攻擊）</option>'+Object.entries(OFFHAND_WEAPON_TYPE_LABELS).map(([v,l])=>'<option value="'+v+'"'+(cur===v?' selected':'')+'>'+l+'</option>').join('');return'<select class="sheet-input" data-field="weaponType" style="width:100%;">'+opts+'</select>';}
     return'<span style="padding:2px 6px;color:var(--muted)">—</span>';
   }
-  const TAB_COLS={consumable:['seq','img','name','desc','effect','effectValue','actions'],collectible:['seq','img','name','desc','actions'],equipment:['seq','img','name','desc','slot','weaponType','tier','str','agi','vit','int','dex','luk','actions'],special:['seq','img','name','desc','slot','str','agi','vit','int','dex','luk','actions'],job_badge:['seq','img','name','desc','slot','str','agi','vit','int','dex','luk','actions']};
+  const TAB_COLS={
+    consumable:['seq','img','name','desc','effect','effectValue','actions'],
+    collectible:['seq','img','name','desc','actions'],
+    equipment:['seq','img','name','desc','slot','weaponType','tier','str','agi','vit','int','dex','luk','actions'],
+    special:['seq','img','name','desc','slot','str','agi','vit','int','dex','luk','actions'],
+    job_badge:['seq','img','name','desc','slot','str','agi','vit','int','dex','luk','actions'],
+    card:['seq','img','name','desc','slot','tier','actions']
+  };
   const COL_HEADERS={
     seq:"#",
     img:"圖片",
@@ -80,8 +87,32 @@
     weaponType:"90px",
     actions:"110px"
   };
-  function matchesTab(item,tab){if(tab==='consumable')return item.itemType==='consumable';if(tab==='collectible')return item.itemType==='collectible';if(tab==='equipment'){if(!(item.itemType==='equipment'&&STANDARD_SLOTS.has(item.equipSlot)))return false;if(equipSubFilter!=='all'){const sg={weapon:['weapon','shield'],head:['head_top','head_mid','head_low'],defense:['armor','garment','shoes'],accessory:['accessory_l','accessory_r']};if(!(sg[equipSubFilter]||[]).includes(item.equipSlot))return false;}if(tierFilter!=='all'&&item.tier!==tierFilter)return false;return true;}if(tab==='special')return item.itemType==='equipment'&&SPECIAL_SLOTS.has(item.equipSlot);if(tab==='job_badge')return item.itemType==='job_badge';return true;}
-  function defaultItemType(tab){return(tab==='equipment'||tab==='special')?'equipment':(tab==='job_badge'?'job_badge':(tab==='collectible'?'collectible':'consumable'));}
+  function matchesTab(item,tab){
+    if(tab==='consumable')return item.itemType==='consumable';
+    if(tab==='collectible')return item.itemType==='collectible';
+    if(tab==='equipment'){
+      if(!(item.itemType==='equipment'&&STANDARD_SLOTS.has(item.equipSlot)))return false;
+      if(equipSubFilter!=='all'){
+        const sg={weapon:['weapon','shield'],head:['head_top','head_mid','head_low'],defense:['armor','garment','shoes'],accessory:['accessory_l','accessory_r']};
+        if(!(sg[equipSubFilter]||[]).includes(item.equipSlot))return false;
+      }
+      if(tierFilter!=='all'&&item.tier!==tierFilter)return false;
+      return true;
+    }
+    if(tab==='special')return item.itemType==='equipment'&&SPECIAL_SLOTS.has(item.equipSlot);
+    if(tab==='job_badge')return item.itemType==='job_badge';
+    if(tab==='card'){
+      return item.itemType==='monster_card';
+    }
+    return true;
+  }
+  function defaultItemType(tab){
+    if(tab==='equipment'||tab==='special')return'equipment';
+    if(tab==='job_badge')return'job_badge';
+    if(tab==='collectible')return'collectible';
+    if(tab==='card')return'monster_card';
+    return'consumable';
+  }
   function defaultSlot(tab){return tab==='special'?'title_eq':(tab==='job_badge'?'job_eq':'head_top');}
   function authHeader(){return{Authorization:`Bearer ${window.getAdminToken?window.getAdminToken():''}`};}
   function jsonHeaders(){return{'Content-Type':'application/json',...authHeader()};}
@@ -103,6 +134,26 @@
   document.getElementById('items-btn-new')?.addEventListener('click',addNewRow);
   document.getElementById('items-img-input')?.addEventListener('change',async function(){const file=this.files[0];if(!file||!pendingImgRowId)return;if(pendingImgRowId==='__new__'){alert('請先按「儲存」建立道具，再上傳圖片。');this.value='';return;}await uploadImage(pendingImgRowId,file);this.value='';pendingImgRowId=null;});
   document.querySelectorAll('.items-tab-btn').forEach(btn=>{btn.addEventListener('click',()=>{activeTab=btn.dataset.itemsTab;equipSubFilter='all';tierFilter='all';document.querySelectorAll('.items-tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderAll();});});
+
+  // 新增卡片分類 tab 按鈕（如果不存在）
+  window.addEventListener('DOMContentLoaded',()=>{
+    const tabBar = document.querySelector('.items-tab-bar');
+    if(tabBar && !tabBar.querySelector('[data-items-tab="card"]')){
+      const btn = document.createElement('button');
+      btn.className = 'items-tab-btn';
+      btn.dataset.itemsTab = 'card';
+      btn.textContent = '卡片';
+      btn.addEventListener('click',()=>{
+        activeTab='card';
+        equipSubFilter='all';
+        tierFilter='all';
+        document.querySelectorAll('.items-tab-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        renderAll();
+      });
+      tabBar.appendChild(btn);
+    }
+  });
   document.getElementById('items-search-input')?.addEventListener('input',function(){searchQuery=this.value.trim();renderBody();});
   window.itemsUI={reload:loadItems,getAll:()=>items};
   document.addEventListener('adminConnected',()=>loadItems());
