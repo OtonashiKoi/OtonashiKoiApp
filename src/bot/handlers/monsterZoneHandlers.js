@@ -1726,7 +1726,7 @@ async function handleMonsterEventPersonal(interaction) {
   const viewerContext = { equipped: progress?.equipment || {}, inventory: Array.isArray(progress?.inventory) ? progress.inventory : [] };
 
   // 使用 createEventPanelMessage 產生個人化面板內容（只會包含符合條件的選項）
-  const { createEventPanelMessage } = require("../bot/monsterZoneView");
+  const { createEventPanelMessage } = require("../monsterZoneView");
   const zoneTheme = zoneKey === "mid"
     ? { label: "中級區", color: 0x7c3aed, emoji: "✦", tagline: "危險上升，獵物更強。" }
     : { label: "初級區", color: 0xe74c3c, emoji: "◆", tagline: "新手試煉，準備開打。" };
