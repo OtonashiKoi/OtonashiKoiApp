@@ -730,27 +730,185 @@ async function handleEnterBattle(interaction) {
       }
     }
 
-    const monsterBar = buildHpBar(monsterHp, monster.calc.maxHp, "🟥", "⬛");
-    const playerBar  = buildHpBar(pStats.maxHp, pStats.maxHp, "🟩", "⬛");
-    const feeMsg = monster.entryFee > 0
-      ? `入場費已扣除 **${monster.entryFee}** 🪙`
-      : "本場免費入場";
+    // 直接執行戰鬥（自動按下開始戰鬥）
+    if (session.timeoutId) { clearTimeout(session.timeoutId); session.timeoutId = null; }
+    session.state = "fighting";
 
-    const embed = new EmbedBuilder()
-      .setTitle(`⚔️ 準備出戰 — ${monster.name}`)
-      .setDescription([
-        `👾 **${monster.name}** HP：${Math.max(0, monsterHp)} / ${monster.calc.maxHp}`,
-        monsterBar, "",
-        `❤️ 你的 HP：${pStats.maxHp} / ${pStats.maxHp}`,
-        playerBar, "", feeMsg, "",
-        "⏰ **請在 1 分鐘內按「開始戰鬥」，否則視為逃跑。**"
-      ].join("\n"))
-      .setColor(0xe74c3c);
+    try {
+      let battleState = await sc.monsterService.getState(zoneKey);
+      await _resolveZoneEventIfExpired(sc, zoneKey);
+      battleState = await sc.monsterService.getState(zoneKey);
+      if (battleState?.activeEvent?.endsAt && Date.parse(battleState.activeEvent.endsAt) > Date.now()) {
+        activeSessions.delete(discordId);
+        await interaction.editReply({ content: "Event is in progress, battle is temporarily unavailable.", embeds: [], components: [] });
+        return;
+      }
+      const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
+      const battleMonster = monsters.find((m) => m.id === session.monsterId);
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(BTN.startFight).setLabel("⚔️ 開始戰鬥").setStyle(ButtonStyle.Danger)
-    );
-    await interaction.editReply({ embeds: [embed], components: [row] });
+      // 怪物已被別人打死
+      if (!battleMonster || battleState.activeMonsterSeq !== session.monsterSeq) {
+        activeSessions.delete(discordId);
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setTitle("😮 怪物已被擊倒！")
+            .setDescription("怪物已被其他玩家擊倒，下一隻怪物已上場。\n請重新點擊出戰按鈕！")
+            .setColor(0xaaaaaa)],
+          components: []
+        });
+        return;
+      }
+
+      session.monsterHp = battleState.currentHp != null ? battleState.currentHp : session.monsterMaxHp;
+
+      // ── 自動跑完所有回合 ──
+      // 蒐集當前參戰者中對 party 生效的 aura（由已在場的治療師等提供）
+      const participants = Array.isArray(battleState.participants) ? battleState.participants : [];
+      const partyEffects = [];
+      await Promise.all(participants.map(async (pid) => {
+        try {
+          const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
+          if (!prog) return;
+          const equipped = prog.equipment || {};
+          // 收集該玩家裝備中所有可能對隊伍生效的效果（passive/combat 等）
+          const refs = collectEquipmentEffects(equipped, null, { equipped, inventory: prog.inventory || [] });
+          for (const r of refs) {
+            if (r && r.target === 'party') partyEffects.push(r);
+          }
+        } catch (e) {}
+      }));
+
+      // ── 治療師光環：若存在且不在 participants 中，疊加光環效果 ──
+      const aura = battleState.activeHealerAura;
+      if (aura && aura.effects && !participants.includes(aura.discordId)) {
+        for (const e of aura.effects) {
+          partyEffects.push(e);
+        }
+      }
+
+      const currentProg = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+      const currentEquipped = (currentProg && currentProg.equipment) ? currentProg.equipment : {};
+
+      const { runCombatLoop } = require("../../shared/combatLoop");
+      const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
+        runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, { equipped: currentEquipped, inventory: currentProg?.inventory || [], partyEffects });
+      session.monsterHp = finalMonsterHp;
+      session.playerHp  = finalPlayerHp;
+      const totalTaken = Math.max(0, (session.playerMaxHp || 0) - Math.max(0, finalPlayerHp));
+
+      // ── 結算 ──
+      let rewardLines = [];
+      let embedTitle, embedColor;
+      const currentParticipants = Array.isArray(battleState.participants) ? battleState.participants : [];
+
+      if (outcome === "win") {
+        session.monsterHp = 0;
+        rewardLines = await handleMonsterKill({ discordId, displayName, session, monster, state: battleState, totalDamage, zoneKey });
+        embedTitle = "🏆 勝利！";
+        embedColor = 0xf1c40f;
+      } else if (outcome === "lose") {
+        session.monsterHp = Math.max(0, session.monsterHp);
+        let damageMap = {};
+        try {
+          const freshState = await sc.monsterService.getState(zoneKey);
+          const prev = freshState.damageMap || {};
+          damageMap = {
+            ...prev,
+            [discordId]: {
+              name: displayName,
+              damage: (prev[discordId]?.damage || 0) + totalDamage,
+              taken: (prev[discordId]?.taken || 0) + totalTaken,
+            }
+          };
+          await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap, lastHitAt: new Date().toISOString() }, zoneKey);
+        } catch (e) {
+          await sc.monsterService.saveState({ ...battleState, currentHp: session.monsterHp, lastHitAt: new Date().toISOString() }, zoneKey);
+        }
+
+        // 記錄死亡冷卻
+        recordDeathCooldown(discordId);
+
+        embedTitle = "💀 戰鬥失敗";
+        embedColor = 0x555555;
+        rewardLines = [
+          `你被 **${session.monsterName}** 擊倒了！`,
+          session.entryFee > 0 ? `入場費 **${session.entryFee}** 🪙 已損失，下次加油！` : "下次加油！",
+          `⏳ 冷卻中... 25 秒後可再次進場。`
+        ];
+        _republishPanel(sc, zoneKey, battleMonster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
+      } else {
+        let damageMap = {};
+        try {
+          const freshState = await sc.monsterService.getState(zoneKey);
+          const prev = freshState.damageMap || {};
+          damageMap = {
+            ...prev,
+            [discordId]: {
+              name: displayName,
+              damage: (prev[discordId]?.damage || 0) + totalDamage,
+              taken: (prev[discordId]?.taken || 0) + totalTaken,
+            }
+          };
+          await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap, lastHitAt: new Date().toISOString() }, zoneKey);
+        } catch (e) {
+          await sc.monsterService.saveState({ ...battleState, currentHp: session.monsterHp, lastHitAt: new Date().toISOString() }, zoneKey);
+        }
+        embedTitle = "⏸️ 戰鬥超時";
+        embedColor = 0x888888;
+        rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
+        _republishPanel(sc, zoneKey, battleMonster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
+      }
+
+      if (currentProg && Array.isArray(currentProg.activeEffects) && currentProg.activeEffects.length > 0) {
+        const nextActiveEffects = decrementActiveEffects(currentProg.activeEffects, "battle", 1);
+        if (nextActiveEffects.length !== currentProg.activeEffects.length) {
+          currentProg.activeEffects = nextActiveEffects;
+          currentProg.updatedAt = new Date().toISOString();
+          await sc.progressRepository.save(currentProg);
+        }
+      }
+
+      // 戰鬥已結算，但先保留 session 至顯示完畢才刪除，避免期間重複出戰
+      if (activeSessions.has(discordId)) activeSessions.get(discordId).state = "displaying";
+
+      // ── 逐步顯示回合（每 ROUNDS_PER_TICK 回合更新一次）──
+      const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+      const MAX_DESC = 3800;
+      const tickDelay = calculateTickDelay(session.playerStats?.agi ?? 1);
+
+      for (let i = ROUNDS_PER_TICK; i < roundLogs.length; i += ROUNDS_PER_TICK) {
+        const soFar = roundLogs.slice(0, i).join("\n\n");
+        const truncated = soFar.length > MAX_DESC ? soFar.slice(0, MAX_DESC) + "\n…" : soFar;
+        const progressEmbed = new EmbedBuilder()
+          .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(i, roundLogs.length)} 回合`)
+          .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
+          .setColor(0xe74c3c);
+        await interaction.editReply({ embeds: [progressEmbed], components: [] });
+        await delay(tickDelay);
+      }
+
+      // ── 最終結果 ──
+      const logText = roundLogs.join("\n\n");
+      const displayLog = logText.length > MAX_DESC
+        ? logText.slice(0, MAX_DESC) + "\n…（部分回合已省略）"
+        : logText;
+      const resultBlock = rewardLines.length > 0 ? "\n\n" + rewardLines.join("\n") : "";
+
+      const embed = new EmbedBuilder()
+        .setTitle(embedTitle)
+        .setDescription(displayLog + resultBlock)
+        .setColor(embedColor);
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(BTN.deleteLog).setLabel("🗑️ 刪除紀錄").setStyle(ButtonStyle.Secondary)
+      );
+
+      await interaction.editReply({ embeds: [embed], components: [row] });
+      activeSessions.delete(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
+    } catch (err) {
+      activeSessions.delete(discordId);
+      await interaction.editReply({ content: "❌ 戰鬥發生錯誤，請稍後再試。", embeds: [], components: [] });
+    }
   } catch (err) {
     await interaction.editReply({ content: "❌ 出戰失敗，請稍後再試。" });
   }
@@ -1526,7 +1684,11 @@ async function handleMonsterZoneButton(interaction) {
   const { customId } = interaction;
   if (!isMonsterZoneButton(customId)) return false;
   if (customId === BTN.enterBattle)     await handleEnterBattle(interaction);
-  else if (customId === BTN.startFight) await handleStartFight(interaction);
+  else if (customId === BTN.startFight) {
+    // 已廢棄（戰鬥在 handleEnterBattle 中自動執行），但保留以防止錯誤
+    await interaction.deferUpdate();
+    await interaction.editReply({ content: "❌ 此操作已廢棄。請重新點擊進入戰鬥。", embeds: [], components: [] });
+  }
   else if (customId === BTN.deleteLog)  await handleDeleteLog(interaction);
   return true;
 }
