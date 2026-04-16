@@ -1410,10 +1410,7 @@ async function handleMonsterEventChoice(interaction) {
   }
 
   const discordId = interaction.user.id;
-  if (ae.selections && ae.selections[discordId]) {
-    await interaction.editReply({ content: "你已經選過選項，無法重複選擇。" }).catch(() => {});
-    return;
-  }
+  // 允許所有玩家都能選擇同一個選項（記錄多個玩家的選擇）
 
   // 取得完整事件（若 activeEvent 沒有 nodes，從 service 拿）
   let fullEvent = ae;
