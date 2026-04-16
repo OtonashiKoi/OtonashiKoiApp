@@ -14,6 +14,9 @@ const { isEffectConditionMet, collectEquipmentEffects, applyEffectInstances, dec
 // 戰鬥 session 依 discordId 儲存（記憶體）
 const activeSessions = new Map();
 
+// 死亡冷卻記錄：key = discordId, value = { deathTime: timestamp, cooldownMs: 25000 }
+const deathCooldowns = new Map();
+
 // 擊殺結算互斥鎖（防止兩名玩家同時打死同一隻怪造成雙重結算）
 // key: `${zoneKey}:${monsterSeq}`
 const killInProgress = new Set();
@@ -30,6 +33,7 @@ const BTN = {
 const MAX_ROUNDS = 15;
 const BATTLE_TIMEOUT_MS = 60 * 1000; // 1 分鐘未按開始戰鬥 → 視為逃跑
 const ROUNDS_PER_TICK = 1;           // 每次更新顯示幾回合
+const DEATH_COOLDOWN_MS = 25 * 1000; // 死亡冷卻時間：25 秒
 
 // AGI 攻速機制：AGI 1→1500ms，AGI 40→500ms（上限），屬性上限 60
 // 公式：delay = 1500 - ((min(agi, 40) - 1) / 39) * 1000
@@ -109,6 +113,42 @@ function getGemsToAwardFromDrops(droppedItems, progress) {
 
 function isMonsterZoneButton(customId) {
   return customId.startsWith("monster-zone:");
+}
+
+/**
+ * 記錄玩家死亡冷卻
+ */
+function recordDeathCooldown(discordId) {
+  deathCooldowns.set(discordId, {
+    deathTime: Date.now(),
+    cooldownMs: DEATH_COOLDOWN_MS
+  });
+}
+
+/**
+ * 獲取玩家的剩餘冷卻時間（秒）
+ * @returns {number} 剩餘秒數，0 = 無冷卻
+ */
+function getRemainingCooldown(discordId) {
+  const cooldown = deathCooldowns.get(discordId);
+  if (!cooldown) return 0;
+
+  const elapsedMs = Date.now() - cooldown.deathTime;
+  const remainingMs = Math.max(0, cooldown.cooldownMs - elapsedMs);
+
+  if (remainingMs <= 0) {
+    deathCooldowns.delete(discordId);
+    return 0;
+  }
+
+  return Math.ceil(remainingMs / 1000); // 向上取整秒數
+}
+
+/**
+ * 檢查玩家是否在冷卻中
+ */
+function isInCooldown(discordId) {
+  return getRemainingCooldown(discordId) > 0;
 }
 
 // 攻擊倍率常數已移至 src/shared/combatStats.js
@@ -369,7 +409,6 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
   }
 }
 
-
 // ──────────────────────────────────────────────
 // 輔助：重發公開面板
 // ──────────────────────────────────────────────
@@ -404,12 +443,22 @@ function pickWeightedNextMonster(monsters, currentMonsterId = null) {
 }
 
 async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap = {}, activeEvent = null) {
+  // 添加冷卻時間信息到 damageMap
+  const damageMapWithCooldown = {};
+  for (const [key, entry] of Object.entries(damageMap)) {
+    const cooldownRemaining = getRemainingCooldown(key);
+    damageMapWithCooldown[key] = {
+      ...entry,
+      cooldownRemaining: cooldownRemaining > 0 ? cooldownRemaining : 0
+    };
+  }
+
   const featureKey = zoneKey === "mid" ? "monster_zone_mid" : "monster_zone";
   const layout = await sc.channelLayoutRepository.get();
   const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey);
   if (binding?.channelId) {
     await sc.adminConsoleService.publishMonsterZonePanel(
-      binding.channelId, monster, monsterHp, { participantCount, damageMap, activeEvent }
+      binding.channelId, monster, monsterHp, { participantCount, damageMap: damageMapWithCooldown, activeEvent }
     );
   }
 }
@@ -565,6 +614,15 @@ async function handleEnterBattle(interaction) {
     const zoneKey = await getZoneFromChannel(sc, interaction.channelId);
     if (!zoneKey) {
       await interaction.editReply({ content: "❌ 此頻道未設定為放怪區。" });
+      return;
+    }
+
+    // 死亡冷卻檢查
+    const cooldownRemaining = getRemainingCooldown(discordId);
+    if (cooldownRemaining > 0) {
+      await interaction.editReply({
+        content: `⏳ 你還在冷卻中！請等待 **${cooldownRemaining}** 秒後再進場。`
+      });
       return;
     }
 
@@ -807,11 +865,16 @@ async function handleStartFight(interaction) {
       } catch (e) {
         await sc.monsterService.saveState({ ...state, currentHp: session.monsterHp, lastHitAt: new Date().toISOString() }, zoneKey);
       }
+
+      // 記錄死亡冷卻
+      recordDeathCooldown(discordId);
+
       embedTitle = "💀 戰鬥失敗";
       embedColor = 0x555555;
       rewardLines = [
         `你被 **${session.monsterName}** 擊倒了！`,
-        session.entryFee > 0 ? `入場費 **${session.entryFee}** 🪙 已損失，下次加油！` : "下次加油！"
+        session.entryFee > 0 ? `入場費 **${session.entryFee}** 🪙 已損失，下次加油！` : "下次加油！",
+        `⏳ 冷卻中... 25 秒後可再次進場。`
       ];
       _republishPanel(sc, zoneKey, monster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
     } else {
@@ -1105,8 +1168,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
               equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
               weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
-              atkStat: item.atkStat || null, tier: item.tier || null, enhanceLevel: 0,
-              source: "monster_drop", sourceRef: monster.name,
+              atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
+              enhanceLevel: 0, source: "monster_drop", sourceRef: monster.name,
               purchasedAt: new Date().toISOString()
             });
             droppedItems.push(item.name);
@@ -1195,8 +1258,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
               equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
               weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
-              atkStat: item.atkStat || null, tier: item.tier || null, enhanceLevel: 0,
-              source: "monster_drop_bonus", sourceRef: monster.name,
+              atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
+              enhanceLevel: 0, source: "monster_drop_bonus", sourceRef: monster.name,
               purchasedAt: new Date().toISOString()
             });
             bonusItems.push(item.name);
@@ -1777,6 +1840,98 @@ async function handleMonsterEventPersonal(interaction) {
 }
 
 // ──────────────────────────────────────────────
+// NPC 對話互動
+// ──────────────────────────────────────────────
+function isNpcDialogButton(customId) {
+  return String(customId || "").startsWith("npc_dialog:");
+}
+
+async function handleNpcDialog(interaction) {
+  const parts = String(interaction.customId || "").split(":");
+  if (parts.length < 5) {
+    await interaction.deferUpdate();
+    return;
+  }
+
+  const [, npcId, nodeId, optionId, discordId] = parts;
+  const sc = getServiceContext();
+
+  try {
+    await interaction.deferUpdate();
+
+    // 只有點按鈕的人能互動
+    if (interaction.user.id !== discordId) {
+      await interaction.followUp({ content: "只有該玩家可以互動", ephemeral: true }).catch(() => {});
+      return;
+    }
+
+    const npc = await sc.npcService.getNpcById(npcId);
+    if (!npc) {
+      await interaction.followUp({ content: "❌ NPC 不存在", ephemeral: true }).catch(() => {});
+      return;
+    }
+
+    const currentNode = npc.nodes.find(n => n.id === nodeId);
+    if (!currentNode) {
+      await interaction.followUp({ content: "❌ 對話節點不存在", ephemeral: true }).catch(() => {});
+      return;
+    }
+
+    const option = currentNode.options.find(o => o.id === optionId);
+    if (!option) {
+      await interaction.followUp({ content: "❌ 選項不存在", ephemeral: true }).catch(() => {});
+      return;
+    }
+
+    // 顯示 NPC 的回覆
+    const reply = option.npcReply || "...";
+    let responseMsg = `🎤 **${npc.name}**：${reply}`;
+
+    // 處理效果
+    if (Array.isArray(option.effects) && option.effects.length > 0) {
+      // TODO: 實裝效果系統（給 buff / item）
+      responseMsg += "\n✨ 效果發動中...";
+    }
+
+    // 決定是否繼續對話
+    const nextNodeId = option.nextNodeId;
+    const nextNode = nextNodeId ? npc.nodes.find(n => n.id === nextNodeId) : null;
+
+    if (nextNode) {
+      // 繼續到下一個節點
+      const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+      const buttons = [];
+      const optionsSlice = nextNode.options.slice(0, 5);
+      for (let i = 0; i < optionsSlice.length; i++) {
+        const opt = optionsSlice[i];
+        buttons.push(
+          new ButtonBuilder()
+            .setCustomId(`npc_dialog:${npcId}:${nextNode.id}:${opt.id}:${discordId}`)
+            .setLabel(opt.label.slice(0, 80))
+            .setStyle(ButtonStyle.Primary)
+        );
+      }
+      const components = buttons.length > 0 ? [new ActionRowBuilder().addComponents(buttons)] : [];
+      responseMsg += `\n\n**${nextNode.text}**`;
+
+      await interaction.editReply({
+        content: responseMsg,
+        components
+      }).catch(() => {});
+    } else {
+      // 對話結束
+      await interaction.editReply({
+        content: responseMsg + "\n\n✅ 對話結束",
+        components: []
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.error("[NPC Dialog] Error:", e);
+    await interaction.followUp({ content: "❌ 互動失敗", ephemeral: true }).catch(() => {});
+  }
+}
+
+// ──────────────────────────────────────────────
 // 閒置自動換怪
 // ──────────────────────────────────────────────
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 分鐘
@@ -1879,6 +2034,8 @@ module.exports = {
   isMonsterEventPersonalButton,
   handleMonsterEventChoice,
   handleMonsterEventPersonal,
+  isNpcDialogButton,
+  handleNpcDialog,
   handleMonsterKill,
   _republishPanel,
   MAX_ROUNDS,

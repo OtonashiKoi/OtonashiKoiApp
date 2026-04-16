@@ -11,7 +11,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const zoneKey = options.zoneKey || activeEvent?.zone || monster?.zone || "normal";
   const zoneTheme = zoneKey === "mid"
     ? { label: "中級區", color: 0x7c3aed, emoji: "✦", tagline: "危險上升，獵物更強。" }
-    : { label: "初級區", color: 0xe74c3c, emoji: "◆", tagline: "新手試煉，準備開打。" };
+    : { label: "初級區", color: 0xe74c3c, emoji: "◆", tagline: "" };
   if (activeEvent) {
     return await createEventPanelMessage(activeEvent, zoneTheme, zoneKey);
   }
@@ -45,12 +45,15 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     participantCount > 0 ? `參戰 ${participantCount} 人` : "暫無參戰者"
   ].join(" ・ ");
   const damageLine = damageEntries.length > 0
-    ? damageEntries.slice(0, 3).map((v, i) => `${i + 1}. ${v.name} ${v.damage}`).join("\n")
+    ? damageEntries.map((v, i) => {
+      const cooldownSec = v.cooldownRemaining ?? 0;
+      const cooldownStr = cooldownSec > 0 ? ` ⏳ ${cooldownSec}s` : "";
+      return `${i + 1}. ${v.name}${cooldownStr} - ${v.damage}`;
+    }).join("\n")
     : "暫無排行";
 
   const desc = [
     `${zoneTheme.emoji} **${zoneTheme.label}**`,
-    zoneTheme.tagline,
     "",
     "點擊下方按鈕即可進入戰鬥"
   ].join("\n");
@@ -73,9 +76,10 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
           const buffer = Buffer.from(await response.arrayBuffer());
           const fileName = `monster.${ext}`;
           files.push(new AttachmentBuilder(buffer, { name: fileName }));
-          embed.setImage(`attachment://${fileName}`);
+          // 使用縮圖顯示於上方，避免描述行出現冗長標語
+          embed.setThumbnail(`attachment://${fileName}`);
         } else {
-          embed.setImage(imageSource);
+          embed.setThumbnail(imageSource);
         }
       } catch (_) {
         embed.setImage(imageSource);
@@ -85,7 +89,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
       if (fs.existsSync(imagePath)) {
         const fileName = path.basename(imagePath);
         files.push(new AttachmentBuilder(imagePath, { name: fileName }));
-        embed.setImage(`attachment://${fileName}`);
+        embed.setThumbnail(`attachment://${fileName}`);
       }
     }
   }
