@@ -168,13 +168,13 @@ async function handleProfile(interaction) {
 
     // 職業與武器的對應關係
     const jobWeaponMap = {
-      "swordsman": { weapons: ["sword_1h"], name: "劍士", trait: "格擋反擊" },
-      "warrior": { weapons: ["axe_2h"], name: "戰士", trait: "低血傷害倍增" },
-      "dwarf": { weapons: ["mace_2h"], name: "矮人", trait: "高血擊暈加成" },
-      "rogue": { weapons: ["dagger"], name: "盜賊", trait: "連擊加速" },
-      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", trait: "穿防無視" },
-      "healer": { weapons: ["staff_1h", "staff_2h"], name: "治療師", trait: "隊伍光環" },
-      "archer": { weapons: ["bow"], name: "弓箭手", trait: "命中要害" }
+      "swordsman": { weapons: ["sword_1h"], name: "劍士", trait: "格擋反擊", detail: "格擋成功後可進行額外反擊，爆擊倍率 ×2.5" },
+      "warrior": { weapons: ["axe_2h"], name: "戰士", trait: "低血傷害倍增", detail: "血量低於 35% 時，攻擊傷害 ×1.15" },
+      "dwarf": { weapons: ["mace_2h"], name: "矮人", trait: "高血擊暈加成", detail: "血量高於 90% 時，擊暈機率 +5%" },
+      "rogue": { weapons: ["dagger"], name: "盜賊", trait: "連擊加速", detail: "連擊機率 +10%，連擊傷害 ×1.1" },
+      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", trait: "穿防無視", detail: "法杖傷害 ×1.15，無視怪物 50% 防禦" },
+      "healer": { weapons: ["staff_1h", "staff_2h"], name: "治療師", trait: "隊伍光環", detail: "每回合回復隊友生命值（需裝備治療師徽章）" },
+      "archer": { weapons: ["bow"], name: "弓箭手", trait: "命中要害", detail: "基礎要害率：35% + DEX ×0.45%（上限 80%），要害倍數 ×1.5\n閃躲後追擊：要害率 35%，要害倍數 ×1.5" }
     };
 
     // 判斷職業
@@ -192,9 +192,9 @@ async function handleProfile(interaction) {
     if (jobInfo) {
       const weaponMatches = jobInfo.weapons.includes(wt);
       if (weaponMatches) {
-        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${jobInfo.trait}`;
+        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${jobInfo.trait}\n${jobInfo.detail}`;
       } else {
-        jobTraitAreaLine = `職業特性：${jobInfo.name}`;
+        jobTraitAreaLine = `職業特性：${jobInfo.name}（需配備指定武器啟用）`;
       }
     } else {
       // 未知職業，只顯示名稱
@@ -202,7 +202,38 @@ async function handleProfile(interaction) {
     }
   }
 
-  // ── NPC Buff 區（顯示被 NPC 給予的臨時效果，所有都是 1 回合）──
+  // ── 卡片效果區（顯示已裝備卡片及其效果）──
+  let cardEffectLine = "";
+  try {
+    const specialSlots = ['special_1', 'special_2', 'special_3'];
+    const lines = [];
+    const active = Array.isArray(p.activeEffects) ? p.activeEffects : [];
+
+    for (const slot of specialSlots) {
+      const it = equipped[slot];
+      if (!it) continue;
+
+      const cardName = it.itemName || it.name || '';
+      const skill = it.monsterCardSkill || null;
+
+      if (!skill || !skill.name) {
+        lines.push(`🎴 ${cardName}：（無效果）`);
+        continue;
+      }
+
+      // 檢查該卡片的效果是否發動中
+      const procKeys = skill.procEffects?.map(pe => pe.key).filter(Boolean) || [];
+      const isActive = procKeys.some(k => active.some(e => e && e.key === k));
+      const activeLabel = isActive ? " ⚡" : "";
+
+      // 組合技能名稱和描述
+      const skillDesc = skill.description ? `（${skill.description}）` : "";
+      lines.push(`🎴 ${cardName}：${skill.name}${skillDesc}${activeLabel}`);
+    }
+
+    if (lines.length) cardEffectLine = `【已裝備卡片】\n${lines.join("\n")}`;
+  } catch (e) { /* ignore */ }
+
   let npcBuffAreaLine = "";
   if (p.activeEffects && Array.isArray(p.activeEffects) && p.activeEffects.length > 0) {
     const toLabel = (effect) => {
@@ -232,7 +263,8 @@ async function handleProfile(interaction) {
     ? [...standardParts, ...specialParts].join("　")
     : "（尚未裝備）";
 
-  // ── 組合三個獨立區域 ──
+  // ── 組合獨立區域 ──
+  const cardSection = cardEffectLine ? `${cardEffectLine}\n==============\n` : "";
   const npcBuffSection = npcBuffAreaLine ? `${npcBuffAreaLine}\n==============\n` : "";
 
   await replyAndAutoDelete(interaction,
@@ -244,6 +276,7 @@ async function handleProfile(interaction) {
     `【職業特性】\n` +
     `${jobTraitAreaLine}\n` +
     `==============\n` +
+    `${cardSection}` +
     `${npcBuffSection}` +
     `${expLine}\n` +
     `==============\n` +
@@ -536,7 +569,7 @@ function filterByTab(inventory, tab) {
       !isWeaponLikeSlot(e.equipSlot)
     );
   }
-  if (tab === "special") return inventory.filter(e => e.itemType === "equipment" && EQ_SPECIAL_SLOTS.has(e.equipSlot));
+  if (tab === "special") return inventory.filter(e => e.itemType === "equipment" && (EQ_SPECIAL_SLOTS.has(e.equipSlot) || e.equipSlot === "special"));
   if (tab === "badge") return inventory.filter(e => e.itemType === "job_badge");
   return inventory.filter(e => e.itemType !== "equipment" && e.itemType !== "job_badge");
 }
@@ -586,6 +619,7 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
   const rawFiltered = filterByTab(inventory, tab);
   const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "special" || tab === "badge";
   const filtered = isEquipTab ? groupEquipmentItems(rawFiltered, tab) : sortBackpackItems(rawFiltered, tab);
+
   const header = prefixMsg ? prefixMsg + "\n\n" : "";
   const tabLabel =
     tab === "weapon" ? "武器" :
@@ -811,9 +845,20 @@ async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
-    const result = await serviceContext.shopService.equipItem(interaction.user.id, uuid);
+    // 檢查是否是怪物卡片，自動穿上第一個空槽位
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const inventory = progress?.inventory || [];
+    const item = progress?.inventory?.find(i => i.uuid === uuid);
+    let targetSlot = null;
+
+    if (item?.equipSlot === "special") {
+      const SPECIAL_SLOTS = ["special_1", "special_2", "special_3"];
+      const equipped = progress?.equipment || {};
+      targetSlot = SPECIAL_SLOTS.find(s => !equipped[s]) || SPECIAL_SLOTS[0];
+    }
+
+    const result = await serviceContext.shopService.equipItem(interaction.user.id, uuid, targetSlot);
+    const updatedProgress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const inventory = updatedProgress?.inventory || [];
     const msg = buildBackpackMessage(inventory, tab, `✅ 已裝備 **${result.itemName}**！`, page);
     await safeEditReply(interaction, msg);
   } catch (err) {
@@ -1076,43 +1121,49 @@ async function handleEnhanceSelect(interaction, targetUuid) {
     await safeEditReply(interaction, { content: `❌ **${target.itemName}** 已達強化上限（+3）。`, components: [] });
     return;
   }
+  // 使用寶石強化流程：詢問 enhanceService 取得寶石需求與成功率
+  try {
+    const enhanceInfo = await serviceContext.enhanceService.getEnhanceInfo(interaction.user.id, targetUuid);
+    if (!enhanceInfo) {
+      await safeEditReply(interaction, { content: `❌ 該裝備無法使用寶石強化。`, components: [] });
+      return;
+    }
 
-  const required = Math.pow(2, curLevel);
-  const baseName = normalizeName(target.itemName);
-  const maxMaterialLevel = Math.min(2, Math.max(0, Number(curLevel || 0)));
-  const availableUnits = inv
-    .filter((entry) => {
-      if (!entry || entry.itemType !== "equipment") return false;
-      if (entry.uuid === targetUuid) return false;
-      if (Number(entry.enhanceLevel || 0) > maxMaterialLevel) return false;
-      if (target.itemId && entry.itemId) return entry.itemId === target.itemId;
-      return normalizeName(entry.itemName) === baseName;
-    })
-    .reduce((sum, entry) => sum + Math.pow(2, Math.max(0, Number(entry.enhanceLevel || 0))), 0);
+    if (enhanceInfo.isMaxed) {
+      await safeEditReply(interaction, { content: `❌ **${enhanceInfo.itemName}** 已達強化上限（+3）。`, components: [] });
+      return;
+    }
 
-  if (availableUnits < required) {
+    const gemsRequired = enhanceInfo.gemsRequired ?? 0;
+    const gemsOwned = enhanceInfo.gemsOwned ?? 0;
+    const successRate = enhanceInfo.successRate ?? 0;
+    const nextLevel = enhanceInfo.nextLevel ?? (curLevel + 1);
+
+    const canEnhanceWithGems = gemsOwned >= gemsRequired;
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`enhance_auto:${targetUuid}`)
+        .setLabel(canEnhanceWithGems ? `以寶石強化至 +${nextLevel}` : `寶石不足：需 ${gemsRequired} 顆`)
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(!canEnhanceWithGems),
+      new ButtonBuilder()
+        .setCustomId("enhance_back")
+        .setLabel("返回")
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    const baseName = normalizeName(enhanceInfo.itemName);
+    const shortageNote = canEnhanceWithGems ? "" : "（材料不足）";
     await safeEditReply(interaction, {
-      content: `⚗️ **${baseName}**（目前 +${curLevel}）→ 強化至 **+${curLevel + 1}**\n需要等價 **${required}** 把同裝備作為材料（+1=2、+2=4；+3 不可當材料）。\n背包可用：等價 **${availableUnits}** 把（材料不足）`,
-      components: [],
+      content: `⚗️ ${baseName}（目前 +${curLevel}）→ 強化至 +${nextLevel}\n消耗：${gemsRequired} 顆對應階級寶石\n持有：${gemsOwned} 顆\n成功率：${successRate}% ${shortageNote}`,
+      components: [row],
     });
     return;
+  } catch (e) {
+    await safeEditReply(interaction, { content: `❌ 讀取強化資訊失敗：${e.message}`, components: [] });
+    return;
   }
-
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`enhance_auto:${targetUuid}`)
-      .setLabel(`強化至 +${curLevel + 1}（需等價 ${required} 把）`)
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId("enhance_back")
-      .setLabel("返回")
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  await safeEditReply(interaction, {
-    content: `⚗️ **${baseName}**（目前 +${curLevel}）→ 強化至 **+${curLevel + 1}**\n需要等價 **${required}** 把同裝備作為材料（+1=2、+2=4；+3 不可當材料）。\n背包可用：等價 **${availableUnits}** 把\n\n選擇「強化」後會自動扣除材料，不需要手動替換。`,
-    components: [row],
-  });
 }
 
 /** 強化步驟3：手動指定材料（保留相容） */
@@ -1144,19 +1195,40 @@ async function handleEnhanceAuto(interaction, targetUuid) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
-    const result = await serviceContext.shopService.enhanceItemAuto(interaction.user.id, targetUuid);
+    // 使用 EnhanceService（寶石強化）而非舊的材料等價實作
+    const result = await serviceContext.enhanceService.enhanceEquipment(interaction.user.id, targetUuid);
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const consumed = result.materialsConsumed
-      ? `（需求等價 ${result.materialsConsumed} 把，實際消耗 ${result.materialsConsumedItems || "?"} 件，等價總和 ${result.materialsConsumedUnits || "?"}）`
-      : "";
-    const statLabel = String(result.statBoosted || "").toUpperCase();
-    const from = result.oldStatValue ?? "?";
-    const to = result.newStatValue ?? "?";
-    const notice = `✅ 強化成功！**${result.itemName}**（${statLabel} ${from} → ${to}）${consumed}`;
-    await safeEditReply(interaction, buildEnhanceEntryPayload(progress, notice));
 
-    if ((result.enhanceLevel || 0) >= 3) {
-      _announceEnhance(interaction, result).catch(() => {});
+    // result.message 已包含成功/失敗說明
+    await safeEditReply(interaction, buildEnhanceEntryPayload(progress, result.message));
+
+    // 如果成功並達到 +3，嘗試組成通知內容後廣播
+    if (result.success && (result.newLevel || 0) >= 3) {
+      // 取得剛剛被強化的裝備資料以構成公告內容
+      let ann = null;
+      try {
+        const itemName = (() => {
+          // 嘗試從已更新的 progress 裡找到該裝備
+          const invItem = (progress.inventory || []).find(i => i.uuid === targetUuid);
+          if (invItem) return invItem.itemName;
+          for (const v of Object.values(progress.equipment || {})) {
+            if (v && v.uuid === targetUuid) return v.itemName;
+          }
+          return null;
+        })();
+        if (itemName) {
+          // 嘗試找出被提升的主屬性值
+          const entry = (progress.inventory || []).find(i => i.uuid === targetUuid) || Object.values(progress.equipment || {}).find(e => e && e.uuid === targetUuid) || null;
+          if (entry) {
+            const mainStat = Object.entries(entry.equipStats || {}).sort((a, b) => b[1] - a[1])[0];
+            if (mainStat) ann = { itemName, statBoosted: mainStat[0], newStatValue: mainStat[1], enhanceLevel: entry.enhanceLevel };
+            else ann = { itemName, enhanceLevel: entry.enhanceLevel };
+          } else {
+            ann = { itemName };
+          }
+        }
+      } catch (_) { ann = null; }
+      if (ann) _announceEnhance(interaction, ann).catch(() => {});
     }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
@@ -1578,7 +1650,19 @@ async function handleEquipmentSelect(interaction) {
       await safeEditReply(interaction, { content: `✅ 已卸下 **${result.itemName}**，放回背包。`, components: [], files: [] });
     } else {
       const uuid = value.slice("equip:".length);
-      result = await serviceContext.shopService.equipItem(interaction.user.id, uuid);
+
+      // 檢查是否是怪物卡片，自動穿上第一個空槽位
+      const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+      const item = progress?.inventory?.find(i => i.uuid === uuid);
+      let targetSlot = null;
+
+      if (item?.equipSlot === "special") {
+        const SPECIAL_SLOTS = ["special_1", "special_2", "special_3"];
+        const equipped = progress?.equipment || {};
+        targetSlot = SPECIAL_SLOTS.find(s => !equipped[s]) || SPECIAL_SLOTS[0];
+      }
+
+      result = await serviceContext.shopService.equipItem(interaction.user.id, uuid, targetSlot);
       await safeEditReply(interaction, { content: `✅ 已裝備 **${result.itemName}**！`, components: [], files: [] });
     }
     setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
