@@ -60,8 +60,8 @@ class ShopService {
       combatEffects: libraryItem.combatEffects || [],
       imageUrl: libraryItem.imageUrl || null,
       imageThumbnailUrl: libraryItem.imageThumbnailUrl || null,
-      equipSlot: libraryItem.itemType === "equipment" ? (libraryItem.equipSlot || null) : null,
-      equipStats: libraryItem.itemType === "equipment" ? (libraryItem.equipStats || null) : null,
+      equipSlot: (libraryItem.itemType === "equipment" || libraryItem.itemType === "job_badge") ? (libraryItem.equipSlot || null) : null,
+      equipStats: (libraryItem.itemType === "equipment" || libraryItem.itemType === "job_badge") ? (libraryItem.equipStats || null) : null,
       weaponType: libraryItem.itemType === "equipment" ? (libraryItem.weaponType || null) : null,
       isTwoHanded: libraryItem.itemType === "equipment" ? (libraryItem.isTwoHanded || false) : false,
       tier: libraryItem.tier || null,
@@ -87,8 +87,8 @@ class ShopService {
       updated.combatEffects = libraryItem.combatEffects || [];
       updated.imageUrl = libraryItem.imageUrl || null;
       updated.imageThumbnailUrl = libraryItem.imageThumbnailUrl || null;
-      updated.equipSlot = libraryItem.itemType === "equipment" ? (libraryItem.equipSlot || null) : null;
-      updated.equipStats = libraryItem.itemType === "equipment" ? (libraryItem.equipStats || null) : null;
+      updated.equipSlot = (libraryItem.itemType === "equipment" || libraryItem.itemType === "job_badge") ? (libraryItem.equipSlot || null) : null;
+      updated.equipStats = (libraryItem.itemType === "equipment" || libraryItem.itemType === "job_badge") ? (libraryItem.equipStats || null) : null;
       updated.weaponType = libraryItem.itemType === "equipment" ? (libraryItem.weaponType || null) : null;
       updated.isTwoHanded = libraryItem.itemType === "equipment" ? (libraryItem.isTwoHanded || false) : false;
       updated.tier = libraryItem.tier || null;
