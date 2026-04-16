@@ -65,6 +65,7 @@ function defineEffect(
 const EFFECT_DEFINITIONS = [
   defineEffect("max_hp_up", "Maximum HP Up", "stat", ["equipment", "skill", "npc_event"], "replace", ["battle", "permanent"], "Increase max HP."),
   defineEffect("max_hp_down", "Maximum HP Down", "stat", ["monster_skill", "skill"], "replace", ["turns"], "Reduce max HP ceiling."),
+  defineEffect("str_up", "Strength Up", "stat", ["equipment", "skill", "npc_event", "monster_skill"], "refresh", ["turns", "battle", "permanent"], "Increase strength (STR)."),
   defineEffect("atk_up", "Attack Up", "stat", ["equipment", "skill", "npc_event", "item"], "refresh", ["turns", "battle", "permanent"], "Increase physical attack."),
   defineEffect("atk_down", "Attack Down", "stat", ["monster_skill", "skill"], "refresh", ["turns"], "Reduce physical attack."),
   defineEffect("def_up", "Defense Up", "stat", ["equipment", "skill", "npc_event"], "refresh", ["turns", "battle", "permanent"], "Increase defense."),

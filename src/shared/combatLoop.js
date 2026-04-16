@@ -203,6 +203,76 @@ function getJobFlavor(jobProfile = {}, pStats = {}) {
   };
 }
 
+// 應用怪物 activeEffects 到屬性計算
+function applyMonsterEffects(mCalc, activeEffects = [], currentRound = 1) {
+  const adjusted = { ...mCalc };
+
+  for (const effect of activeEffects) {
+    if (!effect || !effect.key) continue;
+
+    const params = effect.params || {};
+    const duration = params.duration || {};
+
+    // 檢查持續時間（"turns" 模式）
+    if (duration.mode === 'turns') {
+      const appliedRound = effect.appliedAt || 1;
+      const endRound = appliedRound + (duration.value || 1);
+      if (currentRound > endRound) continue; // 效果已過期
+    }
+
+    // 應用各種 Buff 效果
+    switch (effect.key) {
+      case 'str_up':
+        // STR 提升 → 提升 ATK
+        adjusted.atk = (adjusted.atk || 0) + (params.value || 0) * 4; // STR 1 = ATK 4
+        break;
+      case 'atk_up':
+        // ATK 提升（百分比）
+        adjusted.atk = Math.round((adjusted.atk || 0) * (1 + (params.value || 0) / 100));
+        break;
+      case 'def_up':
+        // DEF 提升（固定值）
+        adjusted.def = (adjusted.def || 0) + (params.value || 0);
+        break;
+      case 'dodge_up':
+        // 迴避提升（百分比）
+        adjusted.dodge = Math.min(100, (adjusted.dodge || 0) + (params.value || 0));
+        break;
+      case 'speed_up':
+        // AGI 提升 → 提升迴避率
+        adjusted.dodge = Math.min(100, (adjusted.dodge || 0) + (params.value || 0) * 4); // AGI 1 = dodge 4
+        break;
+      case 'block_chance_up':
+        // 格擋率提升（新屬性，暫不實現）
+        break;
+      case 'crit_rate_up':
+        // 爆擊率提升（暫不實現於怪物）
+        break;
+    }
+  }
+
+  return adjusted;
+}
+
+// 清理過期的 activeEffects
+function cleanExpiredEffects(activeEffects = [], currentRound = 1) {
+  return activeEffects.filter((effect) => {
+    if (!effect || !effect.key) return false;
+
+    const params = effect.params || {};
+    const duration = params.duration || {};
+
+    // 檢查持續時間（"turns" 模式）
+    if (duration.mode === 'turns') {
+      const appliedRound = effect.appliedAt || 1;
+      const endRound = appliedRound + (duration.value || 1);
+      if (currentRound > endRound) return false; // 效果已過期，移除
+    }
+
+    return true;
+  });
+}
+
 function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options = {}) {
   const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -250,6 +320,34 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const log = [`**【第 ${round} 回合】**`];
     if (round === 1 && jobProfile.jobName) {
       log.push(`✨ ${jobProfile.jobName} ${rand(jobFlavor.intro)}`);
+    }
+
+    // ── 應用怪物的 activeEffects（Buff/Debuff） ──
+    const adjustedMCalc = applyMonsterEffects(mCalc, monsterActiveEffects, round);
+
+    // ── 應用玩家的 DOT 效果（如中毒） ──
+    if (Array.isArray(options.playerActiveEffects)) {
+      for (const dotEffect of options.playerActiveEffects) {
+        if (!dotEffect || !dotEffect.key) continue;
+        const dotParams = dotEffect.params || {};
+        const dotDuration = dotParams.duration || {};
+
+        // 檢查效果是否仍在持續（"turns" 模式）
+        if (dotDuration.mode === 'turns') {
+          const appliedRound = dotEffect.appliedAt || 1;
+          const endRound = appliedRound + (dotDuration.value || 1);
+          if (round > endRound) continue; // 效果已過期
+        }
+
+        // 應用 DOT 傷害
+        if (dotEffect.key === 'poison') {
+          const damagePercent = Number(dotParams.damagePercent ?? dotParams.value ?? 5);
+          const dotDmg = Math.max(1, Math.round((pStats.maxHp || 1) * (damagePercent / 100)));
+          pHp -= dotDmg;
+          log.push(`☠️ 中毒傷害！造成 **${dotDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          if (pHp <= 0) { outcome = "lose"; break; }
+        }
+      }
     }
 
     // ── 套用來自隊伍（party）的被動 aura，例如治療師提供的每回合回復 ──
@@ -351,11 +449,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const attackCount = pStats.isDualWield ? 2 : 1;
     const monsterIsStunned = stunRoundsLeft > 0; // 擊暈中：怪物無法閃避
     for (let a = 0; a < attackCount && outcome === null; a++) {
-      const hitChance = pStats.hit - mCalc.dodge;
+      const hitChance = pStats.hit - adjustedMCalc.dodge;
       if (monsterIsStunned || Math.random() * 100 < hitChance) {
         // 破防判定（斧）
         const isBreak = Math.random() * 100 < pStats.armorBreakChance;
-        const effectiveDef = isBreak ? 0 : mCalc.def;
+        const effectiveDef = isBreak ? 0 : adjustedMCalc.def;
         // 法杖無視怪物 DEF 的 bypassMonsterDefPct%（預設0，法杖50）
         const bypassPct = pStats.bypassMonsterDefPct ?? 0;
         const finalDef = Math.max(0, effectiveDef * (1 - bypassPct / 100));
@@ -571,7 +669,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     let blockedThisRound = false;
     for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
-      const monsterHitChance = mCalc.hit - pStats.dodge;
+      const monsterHitChance = adjustedMCalc.hit - pStats.dodge;
       if (Math.random() * 100 < monsterHitChance) {
         // 盾格擋判定
         if (Math.random() * 100 < pStats.blockChance) {
@@ -580,7 +678,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           pHp -= 1;
           if (pHp <= 0) { outcome = "lose"; break; }
         } else {
-          const dmg = rollMDmg(Math.max(1, Math.round(mCalc.atk * (1 - pStats.def / 100))));
+          const dmg = rollMDmg(Math.max(1, Math.round(adjustedMCalc.atk * (1 - pStats.def / 100))));
           pHp -= dmg;
           log.push(`💥 ${mName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
@@ -607,7 +705,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
                 // 2. 傷害計算應用弓箭手的傷害倍率
 
                 const isBreak = Math.random() * 100 < pStats.armorBreakChance;
-                const finalDef = isBreak ? 0 : mCalc.def;
+                const finalDef = isBreak ? 0 : adjustedMCalc.def;
                 let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
 
                 // 應用弓箭手傷害倍率
@@ -635,7 +733,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 盾格擋反擊（單手劍+盾，必中）──
     if (blockedThisRound && pStats.blockCounter && outcome === null) {
       const isBreak = Math.random() * 100 < pStats.armorBreakChance;
-      const finalDef = isBreak ? 0 : mCalc.def;
+      const finalDef = isBreak ? 0 : adjustedMCalc.def;
       let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
       try {
         const equipped = options.equipped || null;
@@ -675,10 +773,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 雙持副手追擊（怪物攻擊後觸發）──
     if (pStats.isDualWield && monsterAttackCount > 0 && outcome === null) {
       if (Math.random() * 100 < pStats.counterChance) {
-        const hitChance = pStats.hit - mCalc.dodge;
+        const hitChance = pStats.hit - adjustedMCalc.dodge;
         if (monsterIsStunned || Math.random() * 100 < hitChance) {
           const isBreak = pStats.counterInheritBreak && Math.random() * 100 < pStats.armorBreakChance;
-          const finalDef = isBreak ? 0 : mCalc.def;
+          const finalDef = isBreak ? 0 : adjustedMCalc.def;
           let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
           try {
             const equipped = options.equipped || null;
@@ -709,6 +807,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     roundLogs.push(log.join("\n"));
     if (outcome !== null) break;
+
+    // ── 清理過期的 activeEffects ──
+    monsterActiveEffects = cleanExpiredEffects(monsterActiveEffects, round);
+    if (options.playerActiveEffects) {
+      options.playerActiveEffects = cleanExpiredEffects(options.playerActiveEffects, round);
+    }
+
     round++;
   }
 
