@@ -280,13 +280,27 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     } catch (e) {}
 
     // ── 怪物卡片技能觸發（每回合最多 1 次，5% 機率） ──
+    // 優先檢查怪物的卡片，其次檢查玩家的卡片
     let equippedCard = null;
-    const specialSlots = ['special_1', 'special_2', 'special_3'];
-    for (const slot of specialSlots) {
-      const slotItem = options.equipped?.[slot];
-      if (slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
-        equippedCard = slotItem;
-        break;
+    let cardSource = null; // 'player' 或 'monster'
+
+    // 先檢查怪物是否裝備了自己的卡片
+    const monsterEquipped = options.monsterEquipped || {};
+    if (monsterEquipped.special_1 && monsterEquipped.special_1.monsterCardSkill && monsterEquipped.special_1.monsterCardSkill.key) {
+      equippedCard = monsterEquipped.special_1;
+      cardSource = 'monster';
+    }
+
+    // 如果怪物沒有卡片，檢查玩家是否裝備了怪物卡片
+    if (!equippedCard) {
+      const specialSlots = ['special_1', 'special_2', 'special_3'];
+      for (const slot of specialSlots) {
+        const slotItem = options.equipped?.[slot];
+        if (slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
+          equippedCard = slotItem;
+          cardSource = 'player';
+          break;
+        }
       }
     }
 
@@ -294,7 +308,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const skill = equippedCard.monsterCardSkill;
       const cardName = equippedCard.itemName || equippedCard.name || '怪物卡';
 
-      log.push(`🎴 **${cardName}！技能發動！** ${skill.name || ''}${skill.description ? '(' + skill.description + ')' : ''}`);
+      if (cardSource === 'monster') {
+        // 怪物發動卡片技能
+        log.push(`🎴 **${mName}（${cardName}）！技能發動！** ${skill.name || ''}${skill.description ? '（' + skill.description + '）' : ''}`);
+      } else {
+        // 玩家裝備的卡片被觸發
+        log.push(`🎴 **${cardName}！技能發動！** ${skill.name || ''}${skill.description ? '（' + skill.description + '）' : ''}`);
+      }
 
       // TODO: 根據 skill.effect 執行具體效果
       // 效果可能包含：傷害、治療、Buff、Debuff 等
