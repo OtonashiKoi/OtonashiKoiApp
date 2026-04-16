@@ -90,9 +90,7 @@ async function handleProfile(interaction) {
     serviceContext.shopService.updatePlayerTier(interaction.user.id, memberRoleIds)
   ]);
   // 重新讀取 progress 以拿到更新後的等級
-  const freshProgress = await serviceContext.progressRepository
-    ? await serviceContext.progressRepository.findByPlayerId(interaction.user.id)
-    : null;
+  const freshProgress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const p = freshProgress || result.progress;
   const attrs = p.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
   const tierLine = p.playerTier ? `\n玄家等級：**${p.playerTier}級**` : "";
