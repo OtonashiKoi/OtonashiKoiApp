@@ -30,7 +30,8 @@
     "check:db": "node scripts/check-db-collections.js",
     "check:monster-drops": "node scripts/check-monster-drops.js",
     "db:sync": "node scripts/sync-db-to-cloud.js",
-    "db:sync:start": "node scripts/db-sync-scheduler.js"
+    "db:sync:start": "node scripts/db-sync-scheduler.js",
+    "workflow:finalize": "node scripts/workflow-finalize.js"
   },
   "engines": {
     "node": ">=20.0.0"
