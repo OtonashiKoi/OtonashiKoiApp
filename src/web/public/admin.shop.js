@@ -12,6 +12,7 @@
     if(tab==='collectible')return lib.itemType==='collectible';
     if(tab==='equipment')return lib.itemType==='equipment'&&STANDARD_SLOTS.has(lib.equipSlot);
     if(tab==='special')return lib.itemType==='equipment'&&SPECIAL_SLOTS.has(lib.equipSlot);
+    if(tab==='job_badge')return lib.itemType==='job_badge';
     return true;
   }
   const TIER_RANKS=["E","D","C","B","A","S","SS"];
