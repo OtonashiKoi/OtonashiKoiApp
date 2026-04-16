@@ -75,7 +75,7 @@ function createMongoRepositories() {
       },
       async save(progress) {
         let lastError = null;
-        const maxRetries = 3;
+        const maxRetries = 5;  // 增加重試次數
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
@@ -88,19 +88,27 @@ function createMongoRepositories() {
             if (result.matchedCount === 0 && result.upsertedCount === 0) {
               console.warn(`[ProgressRepository] Save had no effect for ${progress.playerId}`);
             }
+            // 成功保存時記錄
+            if (attempt > 1) {
+              console.info(`[ProgressRepository] Save succeeded for ${progress.playerId} on attempt ${attempt}`);
+            }
             return progress;
           } catch (err) {
             lastError = err;
-            if (attempt < maxRetries) {
-              // 指數退避：1ms、2ms、4ms
-              await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1)));
+            const isLastAttempt = attempt === maxRetries;
+            console.error(`[ProgressRepository] Save failed for ${progress.playerId} (attempt ${attempt}/${maxRetries}):`, err.message);
+
+            if (!isLastAttempt) {
+              // 指數退避：10ms、20ms、40ms、80ms、160ms
+              const delay = Math.pow(2, attempt) * 10;
+              await new Promise(r => setTimeout(r, delay));
               continue;
             }
           }
         }
 
-        // 重試 3 次仍失敗，拋出錯誤
-        console.error(`[ProgressRepository] Failed to save progress for ${progress.playerId} after ${maxRetries} attempts:`, lastError);
+        // 重試多次仍失敗，拋出錯誤
+        console.error(`[ProgressRepository] CRITICAL: Failed to save progress for ${progress.playerId} after ${maxRetries} attempts. Data loss risk!`, lastError);
         throw lastError;
       },
       async listAll() {

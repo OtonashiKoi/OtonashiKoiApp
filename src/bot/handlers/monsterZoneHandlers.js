@@ -1623,7 +1623,9 @@ async function handleMonsterEventChoice(interaction) {
         purchasedAt: new Date().toISOString()
       });
       prog.updatedAt = new Date().toISOString();
-      await sc.progressRepository.save(prog).catch(() => {});
+      await sc.progressRepository.save(prog).catch((err) => {
+        console.error(`[NPC Event] Failed to save item grant for ${discordId}:`, err);
+      });
       results.push(`獲得 ${item.name}`);
     } else if (eff.type === "grant_buff") {
       const buffEffect = eff?.payload?.effect;
@@ -1643,7 +1645,9 @@ async function handleMonsterEventChoice(interaction) {
         effectContext
       );
       progress.updatedAt = new Date().toISOString();
-      await sc.progressRepository.save(progress).catch(() => {});
+      await sc.progressRepository.save(progress).catch((err) => {
+        console.error(`[NPC Event] Failed to save Buff for ${discordId}:`, err);
+      });
       results.push(formatBuffMessage(buffEffect));
 
       // 嘗試發送中文 DM 給玩家，告知獲得的 Buff（若使用者關閉 DM 則忽略）
@@ -1668,7 +1672,9 @@ async function handleMonsterEventChoice(interaction) {
   // 紀錄玩家選擇
   const nextState = { ...state };
   nextState.activeEvent = { ...nextState.activeEvent, selections: { ...(nextState.activeEvent?.selections || {}), [discordId]: { optionId, selectedAt: new Date().toISOString() } } };
-  await sc.monsterService.saveState(nextState, zoneKey).catch(() => {});
+  await sc.monsterService.saveState(nextState, zoneKey).catch((err) => {
+    console.error(`[NPC Event] Failed to save player selection for ${discordId}:`, err);
+  });
 
   const replyLines = [];
   if (option.npcReply) replyLines.push(option.npcReply);
