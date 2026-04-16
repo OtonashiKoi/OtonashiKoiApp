@@ -1087,7 +1087,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       const droppedItemObjects = [];
 
       for (const drop of monster.drops) {
-        const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
+        let item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
         if (item) {
           const tier = String(item.tier || "").toUpperCase();
           const isRare = RARE_TIERS.has(tier);
@@ -1177,7 +1177,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       const bonusItems = [];
       const bonusItemObjects = [];
       for (const drop of monster.drops) {
-        const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
+        let item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
         if (item) {
           const tier = String(item.tier || "").toUpperCase();
           const isRare = RARE_TIERS.has(tier);
