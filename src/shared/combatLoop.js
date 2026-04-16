@@ -564,6 +564,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
 
         log.push(`⚔️ ${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+
+        // ── 檢查怪物反彈傷害效果 ──
+        if (Array.isArray(monsterActiveEffects)) {
+          for (const reflectEff of monsterActiveEffects) {
+            if (reflectEff && reflectEff.key === 'reflect_damage') {
+              const reflectParams = reflectEff.params || {};
+              const reflectPercent = Number(reflectParams.reflectPercent ?? reflectParams.value ?? 50);
+              const reflectDmg = Math.max(1, Math.round(dmg * (reflectPercent / 100)));
+              pHp -= reflectDmg;
+              log.push(`🛡️ ${mName} 的甲殼反彈！你受到 **${reflectDmg}** 點反彈傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+              if (pHp <= 0) { outcome = "lose"; break; }
+            }
+          }
+        }
         // 擊暈判定（爆擊不觸發）
         let stunBonus = extraHighHpStun;
         // 矮人：高血量擊暈加成（>90%）
@@ -678,9 +692,52 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           pHp -= 1;
           if (pHp <= 0) { outcome = "lose"; break; }
         } else {
-          const dmg = rollMDmg(Math.max(1, Math.round(adjustedMCalc.atk * (1 - pStats.def / 100))));
+          let dmg = rollMDmg(Math.max(1, Math.round(adjustedMCalc.atk * (1 - pStats.def / 100))));
+
+          // ── 檢查怪物的要害率 ──
+          let hasWeaknessCrit = false;
+          let weaknessCritRate = 0;
+          if (Array.isArray(monsterActiveEffects)) {
+            for (const wEff of monsterActiveEffects) {
+              if (wEff && wEff.key === 'weakness_hit_rate') {
+                const wParams = wEff.params || {};
+                weaknessCritRate += Number(wParams.value || 0);
+              }
+            }
+          }
+          if (weaknessCritRate > 0 && Math.random() * 100 < weaknessCritRate) {
+            hasWeaknessCrit = true;
+            dmg = Math.round(dmg * 1.5);
+          }
+
+          // ── 檢查怪物的爆擊率 ──
+          let hasMonsterCrit = false;
+          let monsterCritRate = 0;
+          if (Array.isArray(monsterActiveEffects)) {
+            for (const cEff of monsterActiveEffects) {
+              if (cEff && cEff.key === 'crit_rate_up') {
+                const cParams = cEff.params || {};
+                monsterCritRate += Number(cParams.value || 0);
+              }
+            }
+          }
+          if (monsterCritRate > 0 && Math.random() * 100 < monsterCritRate) {
+            hasMonsterCrit = true;
+            dmg = Math.round(dmg * 2.5);
+          }
+
+          // 構建傷害敘述
+          let mAtkNote = "";
+          if (hasWeaknessCrit && hasMonsterCrit) {
+            mAtkNote = "🎯✨**要害爆擊**！";
+          } else if (hasWeaknessCrit) {
+            mAtkNote = "🎯**要害命中**！";
+          } else if (hasMonsterCrit) {
+            mAtkNote = "✨**會心一擊**！";
+          }
+
           pHp -= dmg;
-          log.push(`💥 ${mName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          log.push(`💥 ${mAtkNote}${mName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
       } else {
