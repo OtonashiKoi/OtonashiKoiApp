@@ -430,9 +430,44 @@ function _scheduleZoneEventFinalize(sc, zoneKey, endsAt) {
 async function _resolveZoneEventIfExpired(sc, zoneKey) {
   const state = await sc.monsterService.getState(zoneKey);
   const activeEvent = state?.activeEvent;
-  if (!activeEvent?.endsAt) return false;
+  if (!activeEvent) return false;
+
+  // 如果沒有 endsAt 或解析失敗，強制清除（防止事件卡住）
+  if (!activeEvent.endsAt) {
+    console.warn(`[NPC Event] Event has no endsAt, forcing cleanup: ${activeEvent.name || 'unknown'}`);
+    const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
+    if (allMonsters.length) {
+      const current = allMonsters.find((m) => m.seq === state.activeMonsterSeq) || allMonsters[0];
+      const nextMonster = pickWeightedNextMonster(allMonsters, current.id);
+      await sc.monsterService.saveState(
+        {
+          ...state,
+          activeMonsterSeq: nextMonster.seq,
+          currentHp: nextMonster.calc.maxHp,
+          participants: [],
+          damageMap: {},
+          killClaimedSeq: null,
+          activeEvent: null,
+          lastHitAt: new Date().toISOString()
+        },
+        zoneKey
+      );
+      _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}, null).catch(() => {});
+      zoneEventTimers.delete(zoneKey);
+      return true;
+    }
+    return false;
+  }
+
   const endAtMs = Date.parse(activeEvent.endsAt);
-  if (!Number.isFinite(endAtMs) || endAtMs > Date.now()) return false;
+  if (!Number.isFinite(endAtMs)) {
+    console.error(`[NPC Event] Invalid endsAt format: ${activeEvent.endsAt}, forcing cleanup`);
+    // 時間格式無效，強制清除
+    await sc.monsterService.saveState({ ...state, activeEvent: null }, zoneKey);
+    zoneEventTimers.delete(zoneKey);
+    return true;
+  }
+  if (endAtMs > Date.now()) return false;
 
   const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
   if (!allMonsters.length) return false;
