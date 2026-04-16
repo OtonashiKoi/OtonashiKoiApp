@@ -168,13 +168,13 @@ async function handleProfile(interaction) {
 
     // 職業與武器的對應關係
     const jobWeaponMap = {
-      "swordsman": { weapons: ["sword_1h"], name: "劍士", trait: "格擋反擊 (×2.5)" },
-      "warrior": { weapons: ["axe_2h"], name: "戰士", trait: "低血傷害 (×1.15)" },
-      "dwarf": { weapons: ["mace_2h"], name: "矮人", trait: "高血擊暈 (+5%)" },
-      "rogue": { weapons: ["dagger"], name: "盜賊", trait: "連擊加速 (+10%)" },
-      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", trait: "穿防無視" },
-      "healer": { weapons: ["staff_1h", "staff_2h"], name: "治療師", trait: "隊伍光環" },
-      "archer": { weapons: ["bow"], name: "弓箭手", trait: "命中要害 (35%+)" }
+      "swordsman": { weapons: ["sword_1h"], name: "劍士", traits: ["格擋反擊", "連擊", "斬殺"] },
+      "warrior": { weapons: ["axe_2h"], name: "戰士", traits: ["低血傷害倍增", "爆擊提升"] },
+      "dwarf": { weapons: ["mace_2h"], name: "矮人", traits: ["高血擊暈加成", "連擊"] },
+      "rogue": { weapons: ["dagger"], name: "盜賊", traits: ["連擊加速", "連擊傷害"] },
+      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", traits: ["無視防禦", "元素傷害"] },
+      "healer": { weapons: ["staff_1h", "staff_2h"], name: "治療師", traits: ["回血光環", "隊伍傷害加成"] },
+      "archer": { weapons: ["bow"], name: "弓箭手", traits: ["命中要害", "閃躲後追擊"] }
     };
 
     // 判斷職業
@@ -192,7 +192,8 @@ async function handleProfile(interaction) {
     if (jobInfo) {
       const weaponMatches = jobInfo.weapons.includes(wt);
       if (weaponMatches) {
-        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${jobInfo.trait}`;
+        const traitsStr = jobInfo.traits.join(" / ");
+        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${traitsStr}`;
       } else {
         jobTraitAreaLine = `職業特性：${jobInfo.name}`;
       }
