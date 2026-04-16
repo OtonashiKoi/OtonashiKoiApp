@@ -1025,6 +1025,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     if (luckyProg) {
       if (!Array.isArray(luckyProg.inventory)) luckyProg.inventory = [];
       const droppedItems = [];
+      let hasEquipmentDropped = false;
 
       for (const drop of monster.drops) {
         const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
@@ -1050,12 +1051,16 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               purchasedAt: new Date().toISOString()
             });
             droppedItems.push(item.name);
+            // 檢查是否掉落了裝備（不是消耗品）
+            if (item.itemType !== "consumable") {
+              hasEquipmentDropped = true;
+            }
           }
         }
       }
 
-      // 檢查是否要贈送強化寶石（只有武器和防具掉落時）
-      const gemId = checkAndGetEnhanceGem(luckyProg);
+      // 檢查是否要贈送強化寶石（只有非消耗品掉落時）
+      const gemId = hasEquipmentDropped ? checkAndGetEnhanceGem(luckyProg) : null;
       const droppedGems = [];
       if (gemId) {
         const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
@@ -1114,6 +1119,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       if (!bonusProg) continue;
       if (!Array.isArray(bonusProg.inventory)) bonusProg.inventory = [];
       const bonusItems = [];
+      let hasBonusEquipmentDropped = false;
       for (const drop of monster.drops) {
         const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
         if (item) {
@@ -1138,11 +1144,15 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               purchasedAt: new Date().toISOString()
             });
             bonusItems.push(item.name);
+            // 檢查是否掉落了裝備（不是消耗品）
+            if (item.itemType !== "consumable") {
+              hasBonusEquipmentDropped = true;
+            }
           }
         }
       }
-      // 檢查是否要贈送強化寶石
-      const bonusGemId = checkAndGetEnhanceGem(bonusProg);
+      // 檢查是否要贈送強化寶石（只有非消耗品掉落時）
+      const bonusGemId = hasBonusEquipmentDropped ? checkAndGetEnhanceGem(bonusProg) : null;
       const bonusGems = [];
       if (bonusGemId) {
         const gemItem = await sc.itemRepository.findById(bonusGemId).catch(() => null);
