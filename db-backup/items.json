@@ -3339,7 +3339,17 @@
     "monsterCardOf": "c39bdddd-a33d-4e34-8019-d17020a8083b",
     "monsterName": "小史(小)",
     "monsterSeq": 1,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "44a92886-8dcd-44e0-a2ad-20a09db55fe6",
@@ -3367,7 +3377,17 @@
     "monsterCardOf": "f00fd7b1-9f57-4532-9901-f4d4d74f132d",
     "monsterName": "哥布",
     "monsterSeq": 2,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "02a60faf-9668-4540-8f38-8ae5dc4c8e09",
@@ -3395,7 +3415,17 @@
     "monsterCardOf": "a8ef443e-3a0d-4ccb-9290-d6394edaa59f",
     "monsterName": "小狼",
     "monsterSeq": 3,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "13b21046-11f9-49f4-a64b-71a599b29109",
@@ -3423,7 +3453,17 @@
     "monsterCardOf": "2d226eea-934a-4787-8ff7-9f19d12ac590",
     "monsterName": "石頭",
     "monsterSeq": 4,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "56cc3681-ec59-46b9-a558-93749760fff9",
@@ -3451,7 +3491,17 @@
     "monsterCardOf": "321a08e9-8fed-4a80-9526-b1f977fd9103",
     "monsterName": "大史(B)",
     "monsterSeq": 5,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "fa341746-7b22-49aa-9586-46014853491d",
@@ -3479,7 +3529,17 @@
     "monsterCardOf": "657afc88-c6db-4851-8c4c-50f225b18624",
     "monsterName": "甲蟹",
     "monsterSeq": 1,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "0149e55e-1696-4d1e-a792-1c9dc8ec59b6",
@@ -3507,7 +3567,17 @@
     "monsterCardOf": "13f56b92-709e-42ff-87d2-e8f129ed9207",
     "monsterName": "牙牙狼",
     "monsterSeq": 2,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "3398ee8f-270e-409d-bc74-11169c3d6b68",
@@ -3535,7 +3605,17 @@
     "monsterCardOf": "b9c226a8-ea33-41de-9c9b-be24824a9fb1",
     "monsterName": "巨巨",
     "monsterSeq": 3,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "5eae3c9c-d312-4485-85ca-44c7203cf166",
@@ -3563,7 +3643,17 @@
     "monsterCardOf": "f4bed595-74f8-493b-8551-9158f4b5381d",
     "monsterName": "黑暗弓手",
     "monsterSeq": 4,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "c46d29a8-af40-45f2-804f-5db3c1503308",
@@ -3591,7 +3681,17 @@
     "monsterCardOf": "517f9a27-f6f7-4251-8cf8-2140f02222c0",
     "monsterName": "米拉桑(B)",
     "monsterSeq": 5,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "6ca8ffa6-845a-4276-bc99-1dcd60bbac1a",
@@ -3619,7 +3719,17 @@
     "monsterCardOf": "03c93103-eddb-4265-96ca-a8a76bb82a02",
     "monsterName": "小金(稀)",
     "monsterSeq": 6,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "9352e71d-8119-4290-8f35-1d31bedb6b8c",
@@ -3647,7 +3757,17 @@
     "monsterCardOf": "3065b7ca-8839-4be4-9d02-0821932cd408",
     "monsterName": "小金(稀)",
     "monsterSeq": 6,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "da6cb2d5-60e0-4a0f-a170-19e4ff95f509",
@@ -3675,7 +3795,17 @@
     "monsterCardOf": "6f321e26-e74e-4a05-a55a-6145da53373d",
     "monsterName": "青草地精",
     "monsterSeq": 100,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "2b93be07-aa74-4084-a406-ed5a094e9e70",
@@ -3703,7 +3833,17 @@
     "monsterCardOf": "a1ab762c-cd0b-4270-994b-74b68c242840",
     "monsterName": "綠野狼",
     "monsterSeq": 101,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "cf44eb40-4f36-4273-a9dc-5d973764fc7c",
@@ -3731,7 +3871,17 @@
     "monsterCardOf": "8d32d5f2-20a7-4334-aae0-d3cdfc50820d",
     "monsterName": "草地蜥蜴",
     "monsterSeq": 102,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "353fa62a-4bb2-40fb-b68b-5ba6e9eb5349",
@@ -3759,7 +3909,17 @@
     "monsterCardOf": "fcebf722-fd4d-45ca-9583-e8986c084ecc",
     "monsterName": "牧場兔",
     "monsterSeq": 103,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "69e21aa8-1846-471f-8709-d534a8193309",
@@ -3787,7 +3947,17 @@
     "monsterCardOf": "348dc5d4-f548-4d9f-8cb7-e3531103c252",
     "monsterName": "稻田守護者",
     "monsterSeq": 104,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "0675d3c9-4ed5-42d3-897d-de91b3f4b0ee",
@@ -3815,7 +3985,17 @@
     "monsterCardOf": "e266c597-d169-4d77-8ba8-49c83195309e",
     "monsterName": "草原之王",
     "monsterSeq": 105,
-    "monsterZone": "normal"
+    "monsterZone": "normal",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "fb51881c-ac27-44d1-b109-d418425dec31",
@@ -3843,7 +4023,17 @@
     "monsterCardOf": "343c18ce-9f87-4532-bbb4-618a64fe5559",
     "monsterName": "林地妖靈",
     "monsterSeq": 106,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "63f548c1-c232-49bd-8739-178d78c0badb",
@@ -3871,7 +4061,17 @@
     "monsterCardOf": "9f0c5372-7232-4c6f-8083-409a28b1b374",
     "monsterName": "森林古樹",
     "monsterSeq": 107,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "28104106-3202-4ac0-8e7b-092f6f1401f7",
@@ -3899,7 +4099,17 @@
     "monsterCardOf": "eb0322bc-a90a-4a89-ad57-8a9c5607e6b8",
     "monsterName": "暗夜獵豹",
     "monsterSeq": 108,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "d196f011-3391-41fc-bffc-5ad9a3855a44",
@@ -3927,7 +4137,17 @@
     "monsterCardOf": "f6145411-1a2e-4919-9ee4-fe27b3a31c07",
     "monsterName": "森林巫師",
     "monsterSeq": 109,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "cc3f4f95-cd67-454e-a128-41f156f51f10",
@@ -3955,7 +4175,17 @@
     "monsterCardOf": "5247b1b0-6bc0-4db3-8ffd-aacb755c64fb",
     "monsterName": "森林盜賊",
     "monsterSeq": 110,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   },
   {
     "id": "dfc08233-ad1a-4773-ad4a-732f78495e38",
@@ -3983,6 +4213,16 @@
     "monsterCardOf": "21fb614f-7f8b-4aad-b248-9418d8cbd8c0",
     "monsterName": "森林之獸",
     "monsterSeq": 111,
-    "monsterZone": "mid"
+    "monsterZone": "mid",
+    "monsterCardSkill": {
+      "key": null,
+      "name": null,
+      "description": null,
+      "effect": {
+        "type": null,
+        "value": 0
+      },
+      "procEffects": []
+    }
   }
 ]

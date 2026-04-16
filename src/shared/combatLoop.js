@@ -279,6 +279,28 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     } catch (e) {}
 
+    // ── 怪物卡片技能觸發（每回合最多 1 次，5% 機率） ──
+    let equippedCard = null;
+    const specialSlots = ['special_1', 'special_2', 'special_3'];
+    for (const slot of specialSlots) {
+      const slotItem = options.equipped?.[slot];
+      if (slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
+        equippedCard = slotItem;
+        break;
+      }
+    }
+
+    if (equippedCard && Math.random() * 100 < 5) {
+      const skill = equippedCard.monsterCardSkill;
+      const cardName = equippedCard.itemName || equippedCard.name || '怪物卡';
+
+      log.push(`🎴 **${cardName}！技能發動！** ${skill.name || ''}${skill.description ? '(' + skill.description + ')' : ''}`);
+
+      // TODO: 根據 skill.effect 執行具體效果
+      // 效果可能包含：傷害、治療、Buff、Debuff 等
+      // 詳細機制將在後續版本設計實現
+    }
+
     // ── 玩家攻擊 ──
     const attackCount = pStats.isDualWield ? 2 : 1;
     const monsterIsStunned = stunRoundsLeft > 0; // 擊暈中：怪物無法閃避
