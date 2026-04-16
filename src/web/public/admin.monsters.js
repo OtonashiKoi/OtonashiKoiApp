@@ -349,6 +349,7 @@
       if (it.itemType === "collectible") return "collectible";
       if (it.itemType === "job_badge") return "job_badge";
       if (it.itemType === "monster_card") return "monster_card";
+      if (it.monsterCardOf) return "monster_card"; // equipment 類型的怪物卡
       if (it.itemType !== "equipment") return "other";
       const slot = it.equipSlot || "";
       if (slot === "weapon") return "weapon";
@@ -369,7 +370,11 @@
       card.addEventListener("mouseleave", () => { card.style.background = ""; card.style.borderColor = "transparent"; });
       const thumb = it.imageThumbnailUrl || it.imageUrl || "";
       const tierBadge = it.tier ? `<span style="font-size:10px;padding:1px 5px;border-radius:4px;background:${TIER_COLORS[it.tier]||'#888'};color:#111;font-weight:700;margin-left:4px;">${it.tier}</span>` : "";
-      const statsLine = it.itemType === "equipment" ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">${formatStats(it.equipStats)||'—'}</div>` : `<div style="font-size:10px;color:var(--muted);">${it.effect?.type !== 'none' ? it.effect?.type : ''}</div>`;
+      const statsLine = it.monsterCardOf
+        ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">🎴 ${it.monsterCardSkill?.name || '怪物卡片'}</div>`
+        : it.itemType === "equipment"
+          ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">${formatStats(it.equipStats)||'—'}</div>`
+          : `<div style="font-size:10px;color:var(--muted);">${it.effect?.type !== 'none' ? it.effect?.type : ''}</div>`;
       card.innerHTML = `${thumb ? `<img src="${thumb}" style="width:34px;height:34px;object-fit:contain;border-radius:5px;flex-shrink:0;"/>` : `<div style="width:34px;height:34px;background:rgba(255,255,255,0.05);border-radius:5px;flex-shrink:0;"></div>`}<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.name}${tierBadge}</div>${statsLine}</div>`;
       card.addEventListener("click", () => {
         if (typeof modal._cb === "function") modal._cb(it, parseFloat(chanceInput.value) || 0);
@@ -461,35 +466,39 @@
     div.className = "drop-row";
     div.style.cssText = "display:flex;gap:4px;align-items:center;margin-bottom:4px;";
 
-    const thumbSrc = getItemThumb(itemId);
+    // 隱藏的 value
+    const hidden = document.createElement("input");
+    hidden.type = "hidden";
+    hidden.className = "drop-item-sel";
+    hidden.value = itemId;
+
+    // 縮圖
+    const selectedItem = itemLib.find(i => i.id === itemId) || null;
+    const thumbSrc = selectedItem ? (selectedItem.imageThumbnailUrl || selectedItem.imageUrl || "") : "";
     const thumb = document.createElement("img");
     thumb.className = "drop-thumb";
     thumb.style.cssText = `width:22px;height:22px;object-fit:contain;border-radius:3px;flex-shrink:0;${thumbSrc ? "" : "display:none;"}`;
     if (thumbSrc) thumb.src = thumbSrc;
 
-    const combo = makeItemCombobox(itemId);
+    // 點擊開大視窗的按鈕（取代 combobox）
+    const selectBtn = document.createElement("button");
+    selectBtn.type = "button";
+    selectBtn.className = "sheet-input drop-select-btn";
+    selectBtn.style.cssText = "flex:1;text-align:left;cursor:pointer;padding:5px 8px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    selectBtn.textContent = selectedItem ? `${ITEM_TYPE_LABEL[selectedItem.itemType] || ""} ${selectedItem.name}` : "🔍 點擊選擇道具...";
 
-    // modal 快捷按鈕（開啟分類視窗選取）
-    const modalBtn = document.createElement("button");
-    modalBtn.type = "button";
-    modalBtn.className = "drop-modal-btn button";
-    modalBtn.title = "更多選擇...";
-    modalBtn.textContent = "⋯";
-    modalBtn.style.cssText = "padding:6px 8px;margin-left:6px;border-radius:6px;flex-shrink:0;";
-    modalBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      const hiddenInput = combo.querySelector(".drop-item-sel");
-      const displayInput = combo.querySelector(".drop-combo-display");
+    function openPicker() {
       const modal = getItemPickerModal();
-      modal.open({ currentItemId: hiddenInput?.value || "", currentChance: Number(chanceInput.value) || 0, cb: (item, c) => {
-        if (!hiddenInput) return;
-        hiddenInput.value = item.id;
-        if (displayInput) displayInput.value = `${ITEM_TYPE_LABEL[item.itemType] || ""} ${item.name}`;
+      modal.open({ currentItemId: hidden.value || "", currentChance: Number(chanceInput.value) || 0, cb: (item, c) => {
+        hidden.value = item.id;
+        selectBtn.textContent = `${ITEM_TYPE_LABEL[item.itemType] || ""} ${item.name}`;
         const src = item.imageThumbnailUrl || item.imageUrl || "";
         if (src) { thumb.src = src; thumb.style.display = ""; } else { thumb.src = ""; thumb.style.display = "none"; }
         chanceInput.value = c;
-      } });
-    });
+      }});
+    }
+
+    selectBtn.addEventListener("click", openPicker);
 
     const chanceInput = document.createElement("input");
     chanceInput.type = "number";
@@ -509,7 +518,7 @@
     delBtn.title = "移除";
     delBtn.textContent = "×";
 
-    div.append(thumb, combo, modalBtn, chanceInput, pct, delBtn);
+    div.append(hidden, thumb, selectBtn, chanceInput, pct, delBtn);
     return div;
   }
 
