@@ -938,10 +938,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       try {
         const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
         const db = await getMongoDb();
-        const monsterCard = await db.collection("monsterCards").findOne(
-          { name: monster.name },
-          { sort: { card_id: 1 } }
-        );
+        const monsterCard = await db.collection("items").findOne({
+          name: { $regex: monster.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '卡' },
+          equipSlot: 'special'
+        });
         if (monsterCard) {
           monsterEquipped.special_1 = monsterCard;
         }

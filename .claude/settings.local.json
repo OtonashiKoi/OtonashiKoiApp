@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(cd /root)",
+      "Bash(node -e ':*)",
+      "Bash(node scripts/check-monsters.js)",
+      "Bash(git commit -m ':*)",
+      "Bash(grep -E \"\\\\.\\(js|ts\\)$\")",
+      "Bash(find src:*)",
+      "Bash(git commit -m 'fix: correct require path for monsterZoneView module:*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -n \"mongoUri\\\\|MONGODB\" src/api/*.js src/api/**/*.js)"
     ]
   }
 }

@@ -166,7 +166,10 @@ function createAdminMonsterRoutes(serviceContext) {
     try {
       const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
       const db = await getMongoDb();
-      const cards = await db.collection("monsterCards").find({}).sort({ zone: 1, level: 1, card_id: 1 }).toArray();
+      const cards = await db.collection("items").find({
+        itemType: 'equipment',
+        equipSlot: 'special'
+      }).sort({ name: 1 }).toArray();
       res.json(ok(cards, `${cards.length} cards fetched`));
     } catch (error) {
       next(error);
