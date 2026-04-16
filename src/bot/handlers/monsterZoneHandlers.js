@@ -30,7 +30,16 @@ const BTN = {
 const MAX_ROUNDS = 15;
 const BATTLE_TIMEOUT_MS = 60 * 1000; // 1 分鐘未按開始戰鬥 → 視為逃跑
 const ROUNDS_PER_TICK = 1;           // 每次更新顯示幾回合
-const TICK_DELAY_MS = 1500;          // 每次更新間隔（ms）
+
+// AGI 攻速機制：AGI 1→1500ms，AGI 40→500ms（上限），屬性上限 60
+// 公式：delay = 1500 - ((min(agi, 40) - 1) / 39) * 1000
+const calculateTickDelay = (agi = 1) => {
+  const baseDelay = 1500;
+  const minDelay  = 500;
+  const capAgi    = 40;
+  const capped = Math.min(Math.max(1, agi), capAgi);
+  return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
+};
 const RARE_TIERS = new Set(["A", "S", "SS", "SSR", "UR"]);
 
 function getServiceContext() {
@@ -713,6 +722,7 @@ async function handleStartFight(interaction) {
     // ── 逐步顯示回合（每 ROUNDS_PER_TICK 回合更新一次）──
     const delay = (ms) => new Promise((r) => setTimeout(r, ms));
     const MAX_DESC = 3800;
+    const tickDelay = calculateTickDelay(session.playerStats?.agi ?? 1);
 
     for (let i = ROUNDS_PER_TICK; i < roundLogs.length; i += ROUNDS_PER_TICK) {
       const soFar = roundLogs.slice(0, i).join("\n\n");
@@ -722,7 +732,7 @@ async function handleStartFight(interaction) {
         .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
         .setColor(0xe74c3c);
       await interaction.editReply({ embeds: [progressEmbed], components: [] });
-      await delay(TICK_DELAY_MS);
+      await delay(tickDelay);
     }
 
     // ── 最終結果 ──
