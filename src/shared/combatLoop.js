@@ -304,7 +304,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
-    if (equippedCard && Math.random() * 100 < 5) {
+    // 技能觸發機率：怪物卡片 30%，玩家卡片 5%
+    const triggerChance = cardSource === 'monster' ? 30 : 5;
+    if (equippedCard && Math.random() * 100 < triggerChance) {
       const skill = equippedCard.monsterCardSkill;
       const cardName = equippedCard.itemName || equippedCard.name || '怪物卡';
 
