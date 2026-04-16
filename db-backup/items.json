@@ -3341,14 +3341,26 @@
     "monsterSeq": 1,
     "monsterZone": "normal",
     "monsterCardSkill": {
-      "key": null,
-      "name": null,
-      "description": null,
+      "key": "fierce_strike",
+      "name": "狂暴之力",
+      "description": "激發狂暴力量，力量提升 STR +2",
       "effect": {
-        "type": null,
-        "value": 0
+        "type": "buff",
+        "value": "str_up"
       },
-      "procEffects": []
+      "procEffects": [
+        {
+          "key": "str_up",
+          "params": {
+            "value": 2,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            },
+            "stackMode": "refresh"
+          }
+        }
+      ]
     }
   },
   {
@@ -3379,14 +3391,26 @@
     "monsterSeq": 2,
     "monsterZone": "normal",
     "monsterCardSkill": {
-      "key": null,
-      "name": null,
-      "description": null,
+      "key": "poison_blade",
+      "name": "毒刃",
+      "description": "以劇毒的刀刃進行刺擊，使目標中毒",
       "effect": {
-        "type": null,
-        "value": 0
+        "type": "debuff",
+        "value": "poison"
       },
-      "procEffects": []
+      "procEffects": [
+        {
+          "key": "poison",
+          "params": {
+            "damagePercent": 0.03,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            },
+            "stackMode": "stack"
+          }
+        }
+      ]
     }
   },
   {
@@ -3417,14 +3441,25 @@
     "monsterSeq": 3,
     "monsterZone": "normal",
     "monsterCardSkill": {
-      "key": null,
-      "name": null,
-      "description": null,
+      "key": "evasion_dodge",
+      "name": "敏捷躲閃",
+      "description": "以敏捷的身形躲閃攻擊，此回合迴避率提升 8%",
       "effect": {
-        "type": null,
-        "value": 0
+        "type": "buff",
+        "value": "dodge_up"
       },
-      "procEffects": []
+      "procEffects": [
+        {
+          "key": "dodge_up",
+          "params": {
+            "value": 8,
+            "duration": {
+              "mode": "turns",
+              "value": 1
+            }
+          }
+        }
+      ]
     }
   },
   {
@@ -3455,14 +3490,25 @@
     "monsterSeq": 4,
     "monsterZone": "normal",
     "monsterCardSkill": {
-      "key": null,
-      "name": null,
-      "description": null,
+      "key": "stone_defense",
+      "name": "堅石防禦",
+      "description": "堅硬的石質身體形成防禦，此回合格擋率提升 8%",
       "effect": {
-        "type": null,
-        "value": 0
+        "type": "buff",
+        "value": "block_chance_up"
       },
-      "procEffects": []
+      "procEffects": [
+        {
+          "key": "block_chance_up",
+          "params": {
+            "value": 8,
+            "duration": {
+              "mode": "turns",
+              "value": 1
+            }
+          }
+        }
+      ]
     }
   },
   {
@@ -3493,14 +3539,25 @@
     "monsterSeq": 5,
     "monsterZone": "normal",
     "monsterCardSkill": {
-      "key": null,
-      "name": null,
-      "description": null,
+      "key": "deadly_strike",
+      "name": "致命一擊",
+      "description": "聚集全身力量進行致命一擊，此回合爆擊率提升 20%",
       "effect": {
-        "type": null,
-        "value": 0
+        "type": "buff",
+        "value": "crit_rate_up"
       },
-      "procEffects": []
+      "procEffects": [
+        {
+          "key": "crit_rate_up",
+          "params": {
+            "value": 20,
+            "duration": {
+              "mode": "turns",
+              "value": 1
+            }
+          }
+        }
+      ]
     }
   },
   {
@@ -3721,14 +3778,27 @@
     "monsterSeq": 6,
     "monsterZone": "normal",
     "monsterCardSkill": {
-      "key": null,
-      "name": null,
-      "description": null,
+      "key": "gold_fortune",
+      "name": "黃金運氣",
+      "description": "帶來黃金的運氣，結算時增加金幣獲得 5%（可疊加，最高 30%）",
       "effect": {
-        "type": null,
-        "value": 0
+        "type": "buff",
+        "value": "gold_gain_up"
       },
-      "procEffects": []
+      "procEffects": [
+        {
+          "key": "gold_gain_up",
+          "params": {
+            "value": 5,
+            "duration": {
+              "mode": "battle",
+              "value": 1
+            },
+            "stackMode": "stack",
+            "maxStack": 6
+          }
+        }
+      ]
     }
   },
   {
@@ -3797,14 +3867,27 @@
     "monsterSeq": 100,
     "monsterZone": "normal",
     "monsterCardSkill": {
-      "key": null,
-      "name": null,
-      "description": null,
+      "key": "goblin_power",
+      "name": "地精之力",
+      "description": "激發內在力量，攻擊力提升 5%（可疊加至 10%，觸發時刷新持續時間）",
       "effect": {
-        "type": null,
-        "value": 0
+        "type": "buff",
+        "value": "atk_up"
       },
-      "procEffects": []
+      "procEffects": [
+        {
+          "key": "atk_up",
+          "params": {
+            "value": 5,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            },
+            "stackMode": "stack",
+            "maxStack": 2
+          }
+        }
+      ]
     }
   },
   {
@@ -3835,14 +3918,26 @@
     "monsterSeq": 101,
     "monsterZone": "normal",
     "monsterCardSkill": {
-      "key": null,
-      "name": null,
-      "description": null,
+      "key": "wolf_father",
+      "name": "小狼的爸爸",
+      "description": "狼族父親的力量，敏捷大幅提升 AGI +2",
       "effect": {
-        "type": null,
-        "value": 0
+        "type": "buff",
+        "value": "speed_up"
       },
-      "procEffects": []
+      "procEffects": [
+        {
+          "key": "speed_up",
+          "params": {
+            "value": 2,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            },
+            "stackMode": "refresh"
+          }
+        }
+      ]
     }
   },
   {

@@ -118,6 +118,22 @@
           "notes": "Reduce physical attack."
         },
         {
+          "key": "str_up",
+          "name": "Strength Up",
+          "category": "stat",
+          "sourceTypes": [
+            "monster_skill",
+            "skill"
+          ],
+          "stackMode": "refresh",
+          "durationModes": [
+            "turns",
+            "battle",
+            "permanent"
+          ],
+          "notes": "Increase physical strength (STR)."
+        },
+        {
           "key": "def_up",
           "name": "Defense Up",
           "category": "stat",

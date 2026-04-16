@@ -48,6 +48,13 @@
   },
 
   "hooks": {
+    "autoLoadSkillSnapshot": {
+      "description": "會話開始：自動更新 otonashisekai.md DB 快照",
+      "enabled": true,
+      "trigger": "onSessionStart",
+      "command": "cd /c/Users/appsk/Documents/Github/equipmentGAME && node scripts/generate-skill-snapshot.js 2>&1 | tail -1 || echo '⚠️ otonashisekai.md 快照生成失敗，請手動執行: node scripts/generate-skill-snapshot.js'"
+    },
+
     "beforeCodeRead": {
       "description": "讀取代碼前：自動加載 Memory",
       "enabled": true,
