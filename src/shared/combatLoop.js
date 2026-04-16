@@ -821,44 +821,28 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       } else {
         log.push(`🛡️ ${mName} 猛撲而來，你${rand(jobFlavor.dodge)}，躲過了攻擊！`);
 
-        // 弓箭手迴避後追擊（必定爆擊）
-        if (pStats.hasArcherBadge && pStats.weaponType === 'bow' && outcome === null) {
-          try {
-            const equipped = options.equipped || null;
-            const inventory = Array.isArray(options.inventory) ? options.inventory : [];
-            if (equipped) {
-              // 檢查是否有迴避追擊效果
-              const dodgeCounterEffs = collectEquipmentEffects(equipped, 'passive', { equipped, inventory })
-                .filter((e) => e && (e.key === 'archer_dodge_counter' || e.key === 'dodge_counter_attack'));
+        // 弓：閃躲後追擊
+        if (pStats.weaponType === 'bow' && outcome === null) {
+          const isBreak = Math.random() * 100 < pStats.armorBreakChance;
+          const finalDef = isBreak ? 0 : adjustedMCalc.def;
+          let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
 
-              if (dodgeCounterEffs.length > 0) {
-                const eff = dodgeCounterEffs[0];
-                const guaranteedCrit = eff.params?.guaranteedCrit ?? true;
+          // 應用弓的傷害倍率（1.2）
+          cdmg = Math.round(cdmg * (pStats.archerBowDamageBoost || 1.2));
 
-                // 弓箭手迴避後追擊：
-                // 1. 必定爆擊（如果設定 guaranteedCrit = true）
-                // 2. 傷害計算應用弓箭手的傷害倍率
+          // 檢查追擊要害（獨立判定）
+          const hasCounterCrit = Math.random() * 100 < (pStats.bowDodgeCounterCritRate || 5);
+          if (hasCounterCrit) {
+            const counterCritMultiplier = pStats.bowDodgeCounterCritMultiplier || 1.2;
+            cdmg = Math.round(cdmg * counterCritMultiplier);
+          }
 
-                const isBreak = Math.random() * 100 < pStats.armorBreakChance;
-                const finalDef = isBreak ? 0 : adjustedMCalc.def;
-                let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
+          mHp -= cdmg;
+          totalDamage += cdmg;
+          const critMarker = hasCounterCrit ? '🎯 **命中要害**！' : '';
+          log.push(`🏹 **閃躲後追擊**！${rand(jobFlavor.counter)}，${critMarker}對 ${mName} 造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
 
-                // 應用弓箭手傷害倍率
-                cdmg = Math.round(cdmg * pStats.archerBowDamageBoost);
-
-                // 應用爆擊倍率（迴避反擊必定爆擊）
-                const critMultiplier = guaranteedCrit ? (pStats.archerCritMultiplier || 1.5) : 1;
-                cdmg = Math.round(cdmg * critMultiplier);
-
-                mHp -= cdmg;
-                totalDamage += cdmg;
-                const critMarker = guaranteedCrit ? '✨ **必定爆擊**！' : '';
-                log.push(`🏹 **迴避反擊**！${rand(jobFlavor.counter)}，${critMarker}對 ${mName} 造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
-
-                if (mHp <= 0) { outcome = "win"; }
-              }
-            }
-          } catch (e) {}
+          if (mHp <= 0) { outcome = "win"; }
         }
       }
     }

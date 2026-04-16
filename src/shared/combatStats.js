@@ -25,7 +25,7 @@ const WEAPON_CONFIG = {
   dagger:   { mult: 2, comboBonus: 20 },
   staff_1h: { mult: 4, baseStat: "int", monsterAtk: 2, bypassDefPct: 50 },
   staff_2h: { mult: 6, baseStat: "int", isTwoHanded: true, monsterAtk: 2, bypassDefPct: 50 },
-  bow:      { mult: 3.5, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
+  bow:      { mult: 4, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
 };
 
 // 副手武器種類（可雙持）
@@ -120,6 +120,15 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     archerCritRate = Math.min(80, 35 + D * 0.45);
   }
 
+  // 弓：閃躲後追擊機制
+  let bowDodgeCounterCritRate = 5;   // 基礎 5%
+  let bowDodgeCounterCritMultiplier = 1.2;  // 基礎 1.2 倍
+  if (hasArcherBadge && wt === "bow") {
+    // 弓箭手徽章強化：提升至 35% 和 1.5 倍
+    bowDodgeCounterCritRate = 35;
+    bowDodgeCounterCritMultiplier = 1.5;
+  }
+
   // 劍士：格擋反擊準度加成
   let swordsmanBlockCritBoost = 0;
   if (hasSwordsmanBadge && wt === "sword_1h" && blockChance > 0) {
@@ -193,6 +202,8 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     archerCritRate,
     archerCritMultiplier,
     archerDodgeCounterActive: false,
+    bowDodgeCounterCritRate,
+    bowDodgeCounterCritMultiplier,
 
     // 劍士
     hasSwordsmanBadge,
