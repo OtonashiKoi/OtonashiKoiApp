@@ -242,6 +242,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let totalDamage = 0;
   let round = 1;
   let stunRoundsLeft = 0; // 怪物剩餘擊暈回合數
+  let monsterActiveEffects = []; // 怪物的 active effects（Buff/Debuff）
 
   const roundLogs = [];
 
@@ -318,9 +319,32 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         log.push(`🎴 **${cardName}！技能發動！** ${skill.name || ''}${skill.description ? '（' + skill.description + '）' : ''}`);
       }
 
-      // TODO: 根據 skill.effect 執行具體效果
-      // 效果可能包含：傷害、治療、Buff、Debuff 等
-      // 詳細機制將在後續版本設計實現
+      // ── 應用技能效果 ──
+      if (skill.procEffects && Array.isArray(skill.procEffects)) {
+        for (const procEffect of skill.procEffects) {
+          if (!procEffect || !procEffect.key) continue;
+
+          // 根據 cardSource 決定效果應用對象
+          if (cardSource === 'monster') {
+            // 怪物技能 → 應用到怪物
+            monsterActiveEffects.push({
+              key: procEffect.key,
+              params: procEffect.params || {},
+              appliedAt: round,
+              source: 'monster_skill'
+            });
+          } else if (cardSource === 'player') {
+            // 玩家技能 → 應用到玩家
+            if (!options.playerActiveEffects) options.playerActiveEffects = [];
+            options.playerActiveEffects.push({
+              key: procEffect.key,
+              params: procEffect.params || {},
+              appliedAt: round,
+              source: 'player_card_skill'
+            });
+          }
+        }
+      }
     }
 
     // ── 玩家攻擊 ──
