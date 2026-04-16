@@ -5,7 +5,6 @@
   let itemLib = [];
   let activeZone = "normal";
   let zoneState = {};
-  let npcTemplates = [];
 
   const STAT_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
   const ITEM_TYPE_LABEL = { consumable: "🧪 消耗品", collectible: "🖼️ 圖片", equipment: "⚔️ 裝備", job_badge: "📖 職業徽章", monster_card: "🎴 卡片", special: "✨ 特殊" };
@@ -58,29 +57,6 @@
     return item ? (item.imageThumbnailUrl || item.imageUrl || "") : "";
   }
 
-  function getNpcTemplate(id) {
-    return npcTemplates.find((tpl) => tpl.id === id) || null;
-  }
-
-  async function loadNpcTemplates() {
-    const r = await fetch(BASE + "/monster-events?includeDisabled=1", { headers: apiHeaders() });
-    const j = await r.json();
-    npcTemplates = Array.isArray(j.data) ? j.data : [];
-  }
-
-  function normalizeNpcEncounter(entry = {}, index = 0) {
-    const eventId = String(entry.eventId || entry.id || "").trim();
-    const chance = Math.max(0, Math.min(100, Number(entry.chance) || 0));
-    const triggerMonsterSeq = entry.triggerMonsterSeq == null || entry.triggerMonsterSeq === ""
-      ? null
-      : Number(entry.triggerMonsterSeq);
-    return {
-      eventId,
-      chance,
-      triggerMonsterSeq: Number.isFinite(triggerMonsterSeq) && triggerMonsterSeq > 0 ? Math.floor(triggerMonsterSeq) : null,
-      order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : index
-    };
-  }
 
   /* ── 搜尋式 combobox（取代原生 select） ── */
   function makeItemCombobox(selectedItemId = "") {
@@ -552,122 +528,6 @@
     return drops;
   }
 
-  function buildNpcEncounterRow(entry = {}, index = 0) {
-    const data = normalizeNpcEncounter(entry, index);
-    const row = document.createElement("div");
-    row.className = "npc-encounter-row";
-    row.style.cssText = "display:grid;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--surface);";
-
-    const templateOptions = [
-      `<option value="">請選擇 NPC 模板</option>`,
-      ...npcTemplates.map((tpl) => {
-        const npc = tpl.npc || {};
-        const label = npc.name || tpl.name || tpl.id;
-        return `<option value="${tpl.id}"${tpl.id === data.eventId ? " selected" : ""}>${esc(label)}</option>`;
-      })
-    ].join("");
-
-    row.innerHTML = `
-      <div style="display:grid;grid-template-columns:1.5fr 110px 130px auto;gap:8px;align-items:center;">
-        <select class="sheet-input" data-field="eventId">${templateOptions}</select>
-        <input class="sheet-input" data-field="chance" type="number" min="0" max="100" step="0.1" value="${data.chance}" />
-        <input class="sheet-input" data-field="triggerMonsterSeq" type="number" min="1" step="1" value="${data.triggerMonsterSeq ?? ""}" placeholder="任何怪物" />
-        <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">
-          <button type="button" class="button" data-role="move-up">↑</button>
-          <button type="button" class="button" data-role="move-down">↓</button>
-          <button type="button" class="button danger" data-role="remove-npc">刪除</button>
-        </div>
-      </div>
-      <div class="hint npc-encounter-preview"></div>
-    `;
-
-    function refreshPreview() {
-      const preview = row.querySelector(".npc-encounter-preview");
-      const tpl = getNpcTemplate(row.querySelector('[data-field="eventId"]')?.value || "");
-      if (!preview) return;
-      if (!tpl) {
-        preview.textContent = "尚未選擇 NPC 模板";
-        return;
-      }
-      const npc = tpl.npc || {};
-      const name = npc.name || tpl.name || tpl.id;
-      preview.textContent = `${name} / 權重 ${Number(row.querySelector('[data-field="chance"]')?.value) || 0}% / ${row.querySelector('[data-field="triggerMonsterSeq"]')?.value ? `指定怪物序號 ${row.querySelector('[data-field="triggerMonsterSeq"]')?.value}` : "任意怪物"}`;
-    }
-
-    row.querySelectorAll("input,select").forEach((el) => {
-      el.addEventListener("input", refreshPreview);
-      el.addEventListener("change", refreshPreview);
-    });
-    row.querySelector('[data-role="move-up"]').addEventListener("click", () => {
-      const prev = row.previousElementSibling;
-      if (prev && prev.classList.contains("npc-encounter-row")) row.parentElement.insertBefore(row, prev);
-    });
-    row.querySelector('[data-role="move-down"]').addEventListener("click", () => {
-      const next = row.nextElementSibling;
-      if (next && next.classList.contains("npc-encounter-row")) row.parentElement.insertBefore(next, row);
-    });
-    row.querySelector('[data-role="remove-npc"]').addEventListener("click", () => row.remove());
-    refreshPreview();
-
-    row._read = () => {
-      const eventId = row.querySelector('[data-field="eventId"]')?.value || "";
-      if (!eventId) return null;
-      return normalizeNpcEncounter({
-        eventId,
-        chance: row.querySelector('[data-field="chance"]')?.value,
-        triggerMonsterSeq: row.querySelector('[data-field="triggerMonsterSeq"]')?.value
-      });
-    };
-    return row;
-  }
-
-  function renderNpcEncounterList(container, rows) {
-    if (!container) return;
-    container.innerHTML = "";
-    const list = Array.isArray(rows) ? rows : [];
-    if (!list.length) {
-      const empty = document.createElement("p");
-      empty.className = "hint npc-encounter-empty";
-      empty.style.margin = "0";
-      empty.textContent = "尚未設定 NPC 遭遇池，按「＋ 新增 NPC」開始新增。";
-      container.appendChild(empty);
-      return;
-    }
-    list.forEach((entry, index) => container.appendChild(buildNpcEncounterRow(entry, index)));
-  }
-
-  function readNpcEncounterList(container) {
-    if (!container) return [];
-    return [...container.querySelectorAll(".npc-encounter-row")]
-      .map((row, index) => {
-        const data = row._read ? row._read() : null;
-        if (!data) return null;
-        return { ...data, order: index };
-      })
-      .filter((entry) => entry && entry.eventId);
-  }
-
-  async function saveNpcEncounters() {
-    const container = document.getElementById("npc-encounters-list");
-    if (!container) return;
-    const npcMappings = readNpcEncounterList(container);
-    const nextState = {
-      ...(zoneState || {}),
-      npcMappings
-    };
-    const r = await fetch(BASE + "/monsters/state", {
-      method: "PUT",
-      headers: apiHeaders(),
-      body: JSON.stringify({ zone: activeZone, npcMappings })
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.status !== "ok") {
-      alert("儲存 NPC 遭遇設定失敗: " + (j.message || r.status));
-      return;
-    }
-    zoneState = nextState;
-    await loadState();
-  }
 
   //  狀態卡片 
   async function loadState() {
@@ -684,7 +544,6 @@
     const j = await r.json();
     const { state, active } = j.data || {};
     zoneState = state || {};
-    const npcMappings = Array.isArray(zoneState.npcMappings) ? zoneState.npcMappings : [];
     const killCount = state?.killCount || {};
 
     // 建立怪物選區（依 seq 排序，只顯示當前分區）
@@ -720,19 +579,6 @@
         <button id="monsters-zone-switch-btn" class="button primary" style="padding:4px 14px;${isMid ? "background:#f97316;" : ""}">切換上場</button>
         <span id="monsters-zone-msg" style="font-size:0.82em;color:${accentColor};"></span>
       </div>
-      <div style="margin-top:16px;display:grid;gap:10px;padding-top:12px;border-top:1px solid var(--line);">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-          <div>
-            <strong style="display:block;">地圖 NPC 遭遇池</strong>
-            <span class="hint">來源：NPC 編輯器模板；可用順序與權重安排出現。</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <button id="monsters-btn-new-npc" class="button">＋ 新增 NPC</button>
-            <button id="npc-encounters-save-btn" class="button primary">儲存 NPC 遭遇設定</button>
-          </div>
-        </div>
-        <div id="npc-encounters-list" style="display:grid;gap:8px;"></div>
-      </div>
     `;
 
     const switchBtn = document.getElementById("monsters-zone-switch-btn");
@@ -751,12 +597,6 @@
       setTimeout(() => loadState(), 800);
     };
 
-    const npcList = document.getElementById("npc-encounters-list");
-    if (npcList) {
-      renderNpcEncounterList(npcList, npcMappings);
-    }
-    const saveBtn = document.getElementById("npc-encounters-save-btn");
-    if (saveBtn) saveBtn.onclick = saveNpcEncounters;
   }
 
   //  表格 
@@ -1028,22 +868,10 @@
 
   document.addEventListener("adminConnected", async () => {
     await loadItemLib();
-    await loadNpcTemplates().catch(() => { npcTemplates = []; });
     await loadMonsters();
     initImageUpload();
     initZoneTabs();
     document.getElementById("monsters-btn-new")?.addEventListener("click", addNewRow);
-    document.getElementById("monsters-btn-new-npc")?.addEventListener("click", async () => {
-      const container = document.getElementById("npc-encounters-list");
-      if (!container) return;
-      const row = buildNpcEncounterRow({}, container.querySelectorAll(".npc-encounter-row").length);
-      container.appendChild(row);
-      container.querySelector(".npc-encounter-empty")?.remove();
-      row.scrollIntoView({ behavior: "smooth", block: "center" });
-      const selector = row.querySelector('[data-field="eventId"]');
-      if (selector) selector.focus();
-    });
-    document.getElementById("npc-encounters-save-btn")?.addEventListener("click", saveNpcEncounters);
   });
 })();
 
