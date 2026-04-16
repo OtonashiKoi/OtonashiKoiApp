@@ -37,6 +37,10 @@ const EXECUTE_PHRASES = ["一擊終結", "致命收尾", "毫不留情地帶走"
 const PARTY_HEAL_PHRASES = ["暖流湧上", "生命回到體內", "治癒波動拂過", "體力稍微回穩", "來自隊伍的守護生效", "你穩住了陣腳"];
 const PARTY_DAMAGE_PHRASES = ["隊伍氣勢高漲", "攻勢被推上頂點", "同伴的鬥志加持在身", "戰意一路飆升", "你感到火力被放大", "鋒芒更盛"];
 
+// AGI 優勢敘述
+const AGI_FIRST_STRIKE_PHRASES = ["反應不及，你太快了", "無法跟上你的速度", "被你的敏捷完全壓制", "你的速度超乎預料", "來不及反應"];
+const AGI_SLOWED_ATTACK_PHRASES = ["有點跟不上節奏", "被你的速度牽著鼻子走", "招架不住你的敏捷", "無力應對你的攻勢"];
+
 function pickWeaponPhrases(weaponType) {
   if (!weaponType) return WEAPON_PHRASE_BANK.default;
   if (weaponType.startsWith("staff")) return WEAPON_PHRASE_BANK.staff;
@@ -222,6 +226,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const mAtkPhrases = MONSTER_ATK_PHRASES;
   const blockPhrases = BLOCK_PHRASES;
   const stunPhrases = STUN_PHRASES;
+  const agiFirstStrikePhrases = AGI_FIRST_STRIKE_PHRASES;
+  const agiSlowedAttackPhrases = AGI_SLOWED_ATTACK_PHRASES;
+
+  // ── AGI 優勢判定 ──
+  const playerAgi = pStats.agi || 1;
+  const monsterAgi = mCalc.agi || 1;
+  const agiDiff = playerAgi - monsterAgi;
+  const hasAgiFirstStrike = agiDiff > 2;   // 第1回合玩家先手，怪物無法反擊
+  const hasAgiSlowedMonster = agiDiff > 5; // 怪物只在偶數回合反擊
 
   let mHp = mHpInit;
   let pHp = pStats.maxHp;
@@ -464,10 +477,28 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
 
     // ── 怪物攻擊 ──
-    const monsterAttackCount = stunRoundsLeft > 0 ? 0 : (pStats.monsterAttackCount || 1);
+    // AGI 優勢判定：第1回合先手，或偶數回合才反擊
+    let monsterAttackCount = 0;
+    let skipMonsterAttackReason = null;
+
     if (stunRoundsLeft > 0) {
       stunRoundsLeft--;
-          log.push(`😵 ${mName} 仍處於擊暈狀態，無法攻擊！`);
+      skipMonsterAttackReason = "stun";
+    } else if (hasAgiFirstStrike && round === 1) {
+      skipMonsterAttackReason = "agi_first_strike";
+    } else if (hasAgiSlowedMonster && round % 2 !== 0) {
+      // 如果 AGI 差 > 5，奇數回合怪物不攻擊
+      skipMonsterAttackReason = "agi_slowed";
+    } else {
+      monsterAttackCount = pStats.monsterAttackCount || 1;
+    }
+
+    if (skipMonsterAttackReason === "stun") {
+      log.push(`😵 ${mName} 仍處於擊暈狀態，無法攻擊！`);
+    } else if (skipMonsterAttackReason === "agi_first_strike") {
+      log.push(`⚡ ${mName} ${rand(agiFirstStrikePhrases)}，無法反擊！`);
+    } else if (skipMonsterAttackReason === "agi_slowed") {
+      log.push(`⚡ ${mName} ${rand(agiSlowedAttackPhrases)}，無法即時反擊！`);
     }
 
     let blockedThisRound = false;
