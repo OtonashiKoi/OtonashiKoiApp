@@ -92,7 +92,7 @@ const EFFECT_DEFINITIONS = [
   defineEffect("execute_threshold_up", "Execute Threshold Up", "stat", ["equipment", "skill", "passive"], "replace", ["battle", "permanent"], "Increase execute HP threshold."),
   defineEffect("final_damage_up", "Final Damage Up", "stat", ["equipment", "skill", "passive"], "replace", ["turns", "battle", "permanent"], "Increase final outgoing damage."),
   defineEffect("final_damage_down", "Final Damage Down", "stat", ["monster_skill", "skill"], "replace", ["turns"], "Reduce final outgoing damage."),
-  defineEffect("heal_over_time", "Heal Over Time", "dot", ["skill", "item", "npc_event"], "refresh", ["turns"], "Restore HP over time."),
+  defineEffect("heal_over_time", "Heal Over Time", "dot", ["skill", "item", "npc_event", "monster_skill"], "refresh", ["turns"], "Restore HP over time."),
   defineEffect("poison", "Poison", "dot", ["monster_skill", "skill", "equipment"], "stack", ["turns"], "Stable damage over time."),
   defineEffect("burn", "Burn", "dot", ["monster_skill", "skill", "equipment"], "refresh", ["turns"], "Short-duration fire damage over time."),
   defineEffect("bleed", "Bleed", "dot", ["monster_skill", "skill", "equipment"], "stack", ["turns"], "Physical damage over time."),

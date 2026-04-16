@@ -325,6 +325,34 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 應用怪物的 activeEffects（Buff/Debuff） ──
     const adjustedMCalc = applyMonsterEffects(mCalc, monsterActiveEffects, round);
 
+    // ── 應用怪物的恢復效果（heal_over_time） ──
+    if (Array.isArray(monsterActiveEffects)) {
+      for (const healEff of monsterActiveEffects) {
+        if (!healEff || !healEff.key) continue;
+        const healParams = healEff.params || {};
+        const healDuration = healParams.duration || {};
+
+        // 檢查效果是否仍在持續
+        if (healDuration.mode === 'turns') {
+          const appliedRound = healEff.appliedAt || 1;
+          const endRound = appliedRound + (healDuration.value || 1);
+          if (round > endRound) continue;
+        }
+
+        // 應用怪物恢復
+        if (healEff.key === 'heal_over_time') {
+          const mode = String(healParams.mode || 'pct').toLowerCase();
+          const val = Number(healParams.value ?? 0);
+          if (!Number.isFinite(val) || val === 0) continue;
+          const heal = mode === 'pct' ? Math.max(0, Math.round(mHpInit * (val / 100))) : Math.max(0, Math.round(val));
+          if (heal > 0) {
+            mHp = Math.min(mHpInit, mHp + heal);
+            log.push(`💚 ${mName} 生命力逐漸恢復，回復 **${heal}** HP！（${mName} 剩 ${mHp} HP）`);
+          }
+        }
+      }
+    }
+
     // ── 應用玩家的 DOT 效果（如中毒） ──
     if (Array.isArray(options.playerActiveEffects)) {
       for (const dotEffect of options.playerActiveEffects) {
@@ -448,6 +476,21 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 玩家攻擊 ──
     const attackCount = pStats.isDualWield ? 2 : 1;
     const monsterIsStunned = stunRoundsLeft > 0; // 擊暈中：怪物無法閃避
+
+    // ── 計算玩家是否受到攻擊力下降（atk_down） ──
+    let playerAtkMultiplier = 1;
+    if (Array.isArray(options.playerActiveEffects)) {
+      for (const atkDownEff of options.playerActiveEffects) {
+        if (atkDownEff && atkDownEff.key === 'atk_down') {
+          const atkDownParams = atkDownEff.params || {};
+          const atkDownValue = Number(atkDownParams.value ?? 0);
+          if (atkDownValue > 0) {
+            playerAtkMultiplier *= (1 - atkDownValue / 100);
+          }
+        }
+      }
+    }
+
     for (let a = 0; a < attackCount && outcome === null; a++) {
       const hitChance = pStats.hit - adjustedMCalc.dodge;
       if (monsterIsStunned || Math.random() * 100 < hitChance) {
@@ -458,7 +501,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const bypassPct = pStats.bypassMonsterDefPct ?? 0;
         const finalDef = Math.max(0, effectiveDef * (1 - bypassPct / 100));
 
-        let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
+        let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
 
         // 職業傷害倍率
         // 弓箭手：弓傷害 ×1.2
@@ -613,7 +656,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
 
         if (Math.random() * 100 < comboChance) {
-          const comboBase = Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100)));
+          const comboBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100)));
           let cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (pStats.comboDamageMultiplier || 1)));
 
           // 盜賊：連擊傷害倍率加成（+10%）
@@ -738,6 +781,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
           pHp -= dmg;
           log.push(`💥 ${mAtkNote}${mName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+
+          // ── 檢查怪物吸血效果 ──
+          if (Array.isArray(monsterActiveEffects)) {
+            for (const lifeEff of monsterActiveEffects) {
+              if (lifeEff && lifeEff.key === 'lifesteal') {
+                const lifeParams = lifeEff.params || {};
+                const lifePercent = Number(lifeParams.value || 0);
+                const healAmount = Math.max(1, Math.round(dmg * (lifePercent / 100)));
+                mHp = Math.min(mHpInit, mHp + healAmount);
+                log.push(`💚 ${mName} 吸取生命力，恢復 **${healAmount}** HP！（${mName} 剩 ${mHp} HP）`);
+              }
+            }
+          }
+
           if (pHp <= 0) { outcome = "lose"; break; }
         }
       } else {
@@ -763,7 +820,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
                 const isBreak = Math.random() * 100 < pStats.armorBreakChance;
                 const finalDef = isBreak ? 0 : adjustedMCalc.def;
-                let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
+                let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
 
                 // 應用弓箭手傷害倍率
                 cdmg = Math.round(cdmg * pStats.archerBowDamageBoost);
@@ -791,7 +848,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (blockedThisRound && pStats.blockCounter && outcome === null) {
       const isBreak = Math.random() * 100 < pStats.armorBreakChance;
       const finalDef = isBreak ? 0 : adjustedMCalc.def;
-      let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
+      let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
       try {
         const equipped = options.equipped || null;
         if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
@@ -834,7 +891,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (monsterIsStunned || Math.random() * 100 < hitChance) {
           const isBreak = pStats.counterInheritBreak && Math.random() * 100 < pStats.armorBreakChance;
           const finalDef = isBreak ? 0 : adjustedMCalc.def;
-          let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * (1 - finalDef / 100))));
+          let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
           try {
             const equipped = options.equipped || null;
             if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
