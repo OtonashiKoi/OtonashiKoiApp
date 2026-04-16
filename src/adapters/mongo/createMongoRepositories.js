@@ -74,12 +74,34 @@ function createMongoRepositories() {
         return (await collection("progress")).findOne({ playerId });
       },
       async save(progress) {
-        await (await collection("progress")).updateOne(
-          { playerId: progress.playerId },
-          { $set: progress },
-          { upsert: true }
-        );
-        return progress;
+        let lastError = null;
+        const maxRetries = 3;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            const result = await (await collection("progress")).updateOne(
+              { playerId: progress.playerId },
+              { $set: { ...progress, updatedAt: new Date().toISOString() } },
+              { upsert: true }
+            );
+
+            if (result.matchedCount === 0 && result.upsertedCount === 0) {
+              console.warn(`[ProgressRepository] Save had no effect for ${progress.playerId}`);
+            }
+            return progress;
+          } catch (err) {
+            lastError = err;
+            if (attempt < maxRetries) {
+              // 指數退避：1ms、2ms、4ms
+              await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1)));
+              continue;
+            }
+          }
+        }
+
+        // 重試 3 次仍失敗，拋出錯誤
+        console.error(`[ProgressRepository] Failed to save progress for ${progress.playerId} after ${maxRetries} attempts:`, lastError);
+        throw lastError;
       },
       async listAll() {
         return (await collection("progress")).find({}).toArray();

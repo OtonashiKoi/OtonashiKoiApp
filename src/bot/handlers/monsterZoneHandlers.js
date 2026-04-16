@@ -749,7 +749,7 @@ async function handleStartFight(interaction) {
       if (nextActiveEffects.length !== currentProg.activeEffects.length) {
         currentProg.activeEffects = nextActiveEffects;
         currentProg.updatedAt = new Date().toISOString();
-        await sc.progressRepository.save(currentProg).catch(() => {});
+        await sc.progressRepository.save(currentProg);
       }
     }
 
@@ -1512,7 +1512,7 @@ async function handleMonsterEventChoice(interaction) {
       } else {
         const removed = prog.inventory.splice(idx, 1)[0];
         prog.updatedAt = new Date().toISOString();
-        await sc.progressRepository.save(prog).catch(() => {});
+        await sc.progressRepository.save(prog);
         results.push(`已移除 ${removed.itemName || removed.itemId || wantId}`);
       }
       continue;
