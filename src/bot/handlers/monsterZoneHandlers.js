@@ -42,8 +42,45 @@ const calculateTickDelay = (agi = 1) => {
 };
 const RARE_TIERS = new Set(["A", "S", "SS", "SSR", "UR"]);
 
+// 強化寶石 ID 對應表
+const ENHANCE_GEM_IDS = {
+  'D': '72fde92d-e33f-42fb-8d86-2e811d03f84d',
+  'C': '556db9e1-b084-4b22-bab5-a66c2b586184',
+  'B': '8fdfa7d9-f0fa-4e6a-a291-703b1e354072',
+  'A': 'a6ae293d-52fc-4af5-8770-891ddf842e35'
+};
+
 function getServiceContext() {
   return require("../runtimeContext").serviceContext;
+}
+
+/**
+ * 檢查玩家身上是否有該品階的武器或防具
+ * 若有，則回傳該品階的寶石 ID（用於掉落時贈送）
+ */
+function checkAndGetEnhanceGem(progress) {
+  if (!progress?.equipment || typeof progress.equipment !== 'object') return null;
+
+  const equipped = progress.equipment;
+
+  // 檢查武器欄位 (weapon 和 shield)
+  const weaponSlots = ['weapon', 'shield'];
+  // 檢查防具欄位
+  const armorSlots = ['head_top', 'head_mid', 'head_low', 'armor', 'garment', 'shoes', 'accessory_l', 'accessory_r'];
+
+  const validSlots = [...weaponSlots, ...armorSlots];
+
+  for (const slot of validSlots) {
+    const item = equipped[slot];
+    if (item && item.tier) {
+      const tier = String(item.tier || '').toUpperCase();
+      if (ENHANCE_GEM_IDS[tier]) {
+        return ENHANCE_GEM_IDS[tier];
+      }
+    }
+  }
+
+  return null;
 }
 
 function isMonsterZoneButton(customId) {
@@ -983,17 +1020,43 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         }
       }
 
-      if (droppedItems.length > 0) {
+      // 檢查是否要贈送強化寶石（只有武器和防具掉落時）
+      const gemId = checkAndGetEnhanceGem(luckyProg);
+      const droppedGems = [];
+      if (gemId) {
+        const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
+        if (gemItem) {
+          luckyProg.inventory.push({
+            uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
+            itemEffect: gemItem.effect || { type: "none", value: 0 },
+            useEffects: gemItem.useEffects || [],
+            passiveEffects: gemItem.passiveEffects || [],
+            procEffects: gemItem.procEffects || [],
+            combatEffects: gemItem.combatEffects || [],
+            itemType: gemItem.itemType || "consumable",
+            imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
+            equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
+            weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
+            atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
+            source: "monster_drop_bonus_gem", sourceRef: monster.name,
+            purchasedAt: new Date().toISOString()
+          });
+          droppedGems.push(gemItem.name);
+        }
+      }
+
+      if (droppedItems.length > 0 || droppedGems.length > 0) {
         luckyProg.updatedAt = new Date().toISOString();
         await sc.progressRepository.save(luckyProg);
-        if (perPidRewards[luckyPid]) perPidRewards[luckyPid].drops = [...droppedItems];
+        const allDropped = [...droppedItems, ...droppedGems];
+        if (perPidRewards[luckyPid]) perPidRewards[luckyPid].drops = [...allDropped];
         const luckyName = luckyPid === discordId ? displayName : (mergedDmg[luckyPid]?.name || luckyPid);
         const isKiller = luckyPid === discordId;
         if (isKiller) {
-          rewardLines.push(`🎁 道具掉落：${droppedItems.join("、")}`);
-          _announceDrops(sc, luckyPid, luckyName, monster.name, droppedItems, "kill").catch(() => {});
+          rewardLines.push(`🎁 道具掉落：${allDropped.join("、")}`);
+          _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, "kill").catch(() => {});
         } else {
-          _announceDrops(sc, luckyPid, luckyName, monster.name, droppedItems, "group").catch(() => {});
+          _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, "group").catch(() => {});
         }
       }
     }
@@ -1044,12 +1107,38 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           }
         }
       }
-      if (bonusItems.length > 0) {
+      // 檢查是否要贈送強化寶石
+      const bonusGemId = checkAndGetEnhanceGem(bonusProg);
+      const bonusGems = [];
+      if (bonusGemId) {
+        const gemItem = await sc.itemRepository.findById(bonusGemId).catch(() => null);
+        if (gemItem) {
+          bonusProg.inventory.push({
+            uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
+            itemEffect: gemItem.effect || { type: "none", value: 0 },
+            useEffects: gemItem.useEffects || [],
+            passiveEffects: gemItem.passiveEffects || [],
+            procEffects: gemItem.procEffects || [],
+            combatEffects: gemItem.combatEffects || [],
+            itemType: gemItem.itemType || "consumable",
+            imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
+            equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
+            weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
+            atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
+            source: "monster_drop_bonus_gem", sourceRef: monster.name,
+            purchasedAt: new Date().toISOString()
+          });
+          bonusGems.push(gemItem.name);
+        }
+      }
+
+      if (bonusItems.length > 0 || bonusGems.length > 0) {
         bonusProg.updatedAt = new Date().toISOString();
         await sc.progressRepository.save(bonusProg);
-        if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...bonusItems];
+        const allBonusDropped = [...bonusItems, ...bonusGems];
+        if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...allBonusDropped];
         const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
-        _announceDrops(sc, bonusPid, bonusName, monster.name, bonusItems, kind).catch(() => {});
+        _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, kind).catch(() => {});
       }
     }
   }

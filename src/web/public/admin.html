@@ -6,7 +6,6 @@
     <meta name="theme-color" content="#09090b" />
     <title>Equipment Game Admin</title>
     <link rel="stylesheet" href="/static/admin.css?v=6" />
-    <link rel="stylesheet" href="/static/admin.light.css?v=1" />
     <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css" />
   </head>
   <body>
@@ -14,7 +13,6 @@
       <header class="window-top">
         <div class="window-title">Equipment Game <span style="color:var(--muted);font-weight:500;margin-left:8px;">Control Panel</span></div>
         <div class="window-controls">
-          <button id="theme-toggle" class="control-btn" title="切換淺色主題" aria-pressed="false">淺色</button>
           <button class="control-btn" title="Refresh Panel" id="top-refresh">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-10.74l3.25 3.17"/></svg>
             <span style="margin-left:6px;">Reload</span>
@@ -53,6 +51,7 @@
                 <button class="nav-link" data-target="section-items">道具庫管理</button>
                 <button class="nav-link" data-target="section-shop">金幣商店管理</button>
                 <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
+                <button class="nav-link" data-target="section-monster-cards">怪物卡片庫</button>
                 <button class="nav-link" data-target="section-monster-events">NPC 編輯器</button>
                 <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
                 <button class="nav-link" data-target="section-effect-modules">效果模組</button>
@@ -360,7 +359,6 @@
                 <button class="items-tab-btn" data-items-tab="collectible">🖼️ 收藏品</button>
                 <button class="items-tab-btn" data-items-tab="equipment">⚔️ 裝備</button>
                 <button class="items-tab-btn" data-items-tab="special">✨ 特殊</button>
-                <button class="items-tab-btn" data-items-tab="job_badge">📖 職業徽章</button>
               </div>
               <div id="items-equip-sub-filter" style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>
               <div style="overflow-x:auto;">
@@ -445,6 +443,29 @@
             </div>
           </section>
 
+          <section id="section-monster-cards" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Card Library</p>
+                  <h2>怪物卡片庫</h2>
+                  <p class="hint">瀏覽所有怪物技能卡片與效果說明</p>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <select id="monster-card-zone-filter" class="sheet-input" style="min-width:140px;">
+                    <option value="">全部區域</option>
+                    <option value="basic">基礎區</option>
+                    <option value="mid">中級區</option>
+                    <option value="forest">森林區</option>
+                  </select>
+                  <button id="monster-card-refresh-btn" class="button">重新載入</button>
+                </div>
+              </div>
+
+              <div id="monster-card-grid" class="monster-card-grid"></div>
+            </div>
+          </section>
+
           <section id="section-monster-events" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -455,7 +476,6 @@
                 </div>
                 <div class="actions" style="display:flex;gap:10px;">
                   <button id="monster-events-refresh-btn" class="button">重新載入</button>
-                  <button id="monster-events-reload-templates-btn" class="button">刷新模板</button>
                   <button id="monster-events-add-btn" class="button primary">新增模板</button>
                   <select id="monster-events-filter" class="sheet-input" style="min-width:180px;">
                     <option value="all">篩選：全部類別</option>
@@ -654,7 +674,6 @@
 
     <script src="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.js"></script>
     <script src="/static/adminUtils.js?v=6"></script>
-    <script src="/static/admin.image-cropper.js?v=1"></script>
     <script src="/static/adminLayout.js?v=6"></script>
     <script>window.USE_IMAGE_CROPPER = true;</script>
     <script src="/static/adminPlayers.js?v=6"></script>
@@ -667,36 +686,12 @@
     <script src="/static/admin.tiers.js?v=6"></script>
     <script src="/static/admin.shop.js?v=6"></script>
     <script src="/static/admin.monsters.js?v=6"></script>
+    <script src="/static/admin.monster-cards.js?v=1"></script>
     <script src="/static/admin.monster-events.js?v=6"></script>
     <script src="/static/admin.animation-studio.js?v=6"></script>
     <script src="/static/admin.weekly.js?v=6"></script>
     <script src="/static/admin.items.js?v=6"></script>
     <script src="/static/admin.leaderboard.js?v=6"></script>
-    <script src="/static/admin.tailwind-cleanup.js?v=1"></script>
-    <script src="/static/admin.modal-fixes.js?v=1"></script>
-    <script>
-      (function(){
-        const THEME_KEY = 'eg_admin_theme';
-        const btn = document.getElementById('theme-toggle');
-        function applyTheme(theme){
-          if(theme === 'light'){
-            document.body.classList.add('theme-light');
-            if(btn){ btn.setAttribute('aria-pressed','true'); btn.textContent = '淺色'; }
-          } else {
-            document.body.classList.remove('theme-light');
-            if(btn){ btn.setAttribute('aria-pressed','false'); btn.textContent = '深色'; }
-          }
-          try { localStorage.setItem(THEME_KEY, theme); } catch(e){}
-        }
-        if(btn){
-          btn.addEventListener('click', ()=>{
-            const current = localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
-            applyTheme(current === 'light' ? 'dark' : 'light');
-          });
-        }
-        const saved = localStorage.getItem(THEME_KEY);
-        applyTheme(saved === 'light' ? 'light' : 'dark');
-      })();
-    </script>
+    <script src="/static/admin.image-cropper.js?v=1"></script>
   </body>
 </html>

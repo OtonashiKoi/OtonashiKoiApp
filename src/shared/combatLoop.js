@@ -406,68 +406,58 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     } catch (e) {}
 
-    // ── 怪物卡片技能觸發（每回合最多 1 次，5% 機率） ──
-    // 優先檢查怪物的卡片，其次檢查玩家的卡片
-    let equippedCard = null;
-    let cardSource = null; // 'player' 或 'monster'
+    // ── 怪物卡片技能觸發 ──
+    // 怪物卡片 30% 觸發，玩家卡片 5% 觸發
+    // 每張卡片獨立判定，所以三張卡片都可能在同一回合觸發
 
     // 先檢查怪物是否裝備了自己的卡片
     const monsterEquipped = options.monsterEquipped || {};
     if (monsterEquipped.special_1 && monsterEquipped.special_1.monsterCardSkill && monsterEquipped.special_1.monsterCardSkill.key) {
-      equippedCard = monsterEquipped.special_1;
-      cardSource = 'monster';
-    }
-
-    // 如果怪物沒有卡片，檢查玩家是否裝備了怪物卡片
-    if (!equippedCard) {
-      const specialSlots = ['special_1', 'special_2', 'special_3'];
-      for (const slot of specialSlots) {
-        const slotItem = options.equipped?.[slot];
-        if (slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
-          equippedCard = slotItem;
-          cardSource = 'player';
-          break;
-        }
-      }
-    }
-
-    // 技能觸發機率：怪物卡片 30%，玩家卡片 5%
-    const triggerChance = cardSource === 'monster' ? 30 : 5;
-    if (equippedCard && Math.random() * 100 < triggerChance) {
+      const equippedCard = monsterEquipped.special_1;
       const skill = equippedCard.monsterCardSkill;
       const cardName = equippedCard.itemName || equippedCard.name || '怪物卡';
 
-      if (cardSource === 'monster') {
+      if (Math.random() * 100 < 30) {
         // 怪物發動卡片技能
         log.push(`🎴 **${mName}（${cardName}）！技能發動！** ${skill.name || ''}${skill.description ? '（' + skill.description + '）' : ''}`);
-      } else {
-        // 玩家裝備的卡片被觸發
-        log.push(`🎴 **${cardName}！技能發動！** ${skill.name || ''}${skill.description ? '（' + skill.description + '）' : ''}`);
-      }
 
-      // ── 應用技能效果 ──
-      if (skill.procEffects && Array.isArray(skill.procEffects)) {
-        for (const procEffect of skill.procEffects) {
-          if (!procEffect || !procEffect.key) continue;
-
-          // 根據 cardSource 決定效果應用對象
-          if (cardSource === 'monster') {
-            // 怪物技能 → 應用到怪物
+        if (skill.procEffects && Array.isArray(skill.procEffects)) {
+          for (const procEffect of skill.procEffects) {
+            if (!procEffect || !procEffect.key) continue;
             monsterActiveEffects.push({
               key: procEffect.key,
               params: procEffect.params || {},
               appliedAt: round,
               source: 'monster_skill'
             });
-          } else if (cardSource === 'player') {
-            // 玩家技能 → 應用到玩家
-            if (!options.playerActiveEffects) options.playerActiveEffects = [];
-            options.playerActiveEffects.push({
-              key: procEffect.key,
-              params: procEffect.params || {},
-              appliedAt: round,
-              source: 'player_card_skill'
-            });
+          }
+        }
+      }
+    }
+
+    // 檢查玩家裝備的卡片（所有三個槽位都獨立判定）
+    const specialSlots = ['special_1', 'special_2', 'special_3'];
+    for (const slot of specialSlots) {
+      const slotItem = options.equipped?.[slot];
+      if (slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
+        const skill = slotItem.monsterCardSkill;
+        const cardName = slotItem.itemName || slotItem.name || '怪物卡';
+
+        // 玩家卡片 5% 觸發率
+        if (Math.random() * 100 < 5) {
+          log.push(`🎴 **${cardName}！技能發動！** ${skill.name || ''}${skill.description ? '（' + skill.description + '）' : ''}`);
+
+          if (skill.procEffects && Array.isArray(skill.procEffects)) {
+            for (const procEffect of skill.procEffects) {
+              if (!procEffect || !procEffect.key) continue;
+              if (!options.playerActiveEffects) options.playerActiveEffects = [];
+              options.playerActiveEffects.push({
+                key: procEffect.key,
+                params: procEffect.params || {},
+                appliedAt: round,
+                source: 'player_card_skill'
+              });
+            }
           }
         }
       }

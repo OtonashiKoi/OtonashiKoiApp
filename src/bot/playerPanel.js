@@ -473,6 +473,24 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
     );
   }
 
+  // 強化按鈕：只有武器和防具可強化
+  const isWeaponOrArmor = group.equipSlot &&
+    (["weapon", "shield", "head_top", "head_mid", "head_low", "armor", "garment", "shoes", "accessory_l", "accessory_r"].includes(group.equipSlot));
+  const hasValidTier = group.tier && ["D", "C", "B", "A"].includes(String(group.tier || "").toUpperCase());
+  const canEnhance = isWeaponOrArmor && hasValidTier;
+
+  if (canEnhance) {
+    const currentLevel = Number(group.enhanceLevel || 0);
+    const isMaxed = currentLevel >= 3;
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_enhance:${group.repUuid}:${tab}:${page}`)
+        .setLabel(`⚡ 強化 ${currentLevel > 0 ? `(+${currentLevel}→+${currentLevel + 1})` : "(+0→+1)"}`)
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(isMaxed)
+    );
+  }
+
   if (group.sellPrice != null) {
     btns.push(
       new ButtonBuilder()
@@ -878,6 +896,79 @@ async function handleBackpackSell(interaction, uuid, tab = "item", page = 0) {
     }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 販售失敗：${err.message}`, components: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
+}
+
+/** 寶石強化：顯示強化信息並執行 */
+async function handleBackpackEnhance(interaction, uuid, tab = "item", page = 0) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    // 先取得強化信息（不消耗）
+    const info = await serviceContext.enhanceService.getEnhanceInfo(interaction.user.id, uuid);
+    if (!info) {
+      await safeEditReply(interaction, { content: "❌ 該道具無法強化。", components: [] });
+      return;
+    }
+
+    // 構建確認訊息
+    const statusLine = info.isMaxed
+      ? `已達最大強化等級 +${info.currentLevel}`
+      : `目前強化等級：+${info.currentLevel}→+${info.nextLevel}`;
+
+    const requirementLine = info.isMaxed
+      ? ""
+      : `\n消耗：**${info.gemsRequired} 顆** ${info.tier}階寶石\n持有：${info.gemsOwned} 顆\n成功率：**${info.successRate}%**`;
+
+    const canEnhance = !info.isMaxed && info.gemsOwned >= info.gemsRequired;
+    const buttonLabel = info.isMaxed
+      ? "已達上限"
+      : `強化至 +${info.nextLevel}`;
+
+    const row = new ActionRowBuilder();
+    if (!info.isMaxed) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`backpack_enhance_confirm:${uuid}:${tab}:${page}`)
+          .setLabel(buttonLabel)
+          .setStyle(ButtonStyle.Danger)
+          .setDisabled(!canEnhance)
+      );
+    }
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`backpack_enhance_cancel:${tab}:${page}`)
+        .setLabel("取消")
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await safeEditReply(interaction, {
+      content: `⚡ **${info.itemName}**\n${statusLine}${requirementLine}${!canEnhance && !info.isMaxed ? "\n❌ 寶石數量不足" : ""}`,
+      components: [row]
+    });
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
+}
+
+/** 寶石強化確認：執行強化 */
+async function handleBackpackEnhanceConfirm(interaction, uuid, tab = "item", page = 0) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const result = await serviceContext.enhanceService.enhanceEquipment(interaction.user.id, uuid);
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const inventory = progress?.inventory || [];
+
+    const statusEmoji = result.success ? "✅" : "❌";
+    const prefixMsg = `${statusEmoji} ${result.message}`;
+
+    const msg = buildBackpackMessage(inventory, tab, prefixMsg, page);
+    await safeEditReply(interaction, msg);
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
@@ -1319,6 +1410,29 @@ async function handleButton(interaction) {
     const tab = parts[2] || "item";
     const page = parseInt(parts[3] ?? "0", 10) || 0;
     await handleBackpackSell(interaction, uuid, tab, page);
+    return;
+  }
+  if (id.startsWith("backpack_enhance:")) {
+    const parts = id.split(":");
+    const uuid = parts[1];
+    const tab = parts[2] || "item";
+    const page = parseInt(parts[3] ?? "0", 10) || 0;
+    await handleBackpackEnhance(interaction, uuid, tab, page);
+    return;
+  }
+  if (id.startsWith("backpack_enhance_confirm:")) {
+    const parts = id.split(":");
+    const uuid = parts[1];
+    const tab = parts[2] || "item";
+    const page = parseInt(parts[3] ?? "0", 10) || 0;
+    await handleBackpackEnhanceConfirm(interaction, uuid, tab, page);
+    return;
+  }
+  if (id.startsWith("backpack_enhance_cancel:")) {
+    const parts = id.split(":");
+    const tab = parts[1] || "item";
+    const page = parseInt(parts[2] ?? "0", 10) || 0;
+    await handleBackpackTab(interaction, tab, page);
     return;
   }
   if (id === "enhance_back") {

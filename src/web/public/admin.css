@@ -1668,6 +1668,181 @@ select option { background: var(--surface); }
 }
 
 /* ══════════════════════════════════════════════
+   MONSTER CARD GRID
+   ══════════════════════════════════════════════ */
+.monster-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding-bottom: 20px;
+}
+
+.monster-card {
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(13,16,32,0.8) 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.monster-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0,229,255,0.1), transparent);
+  transition: left 0.5s;
+}
+
+.monster-card:hover {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--surface-hover) 0%, rgba(20,23,40,0.9) 100%);
+  box-shadow: 0 0 20px rgba(0,229,255,0.2);
+  transform: translateY(-4px);
+}
+
+.monster-card:hover::before {
+  left: 100%;
+}
+
+.monster-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.monster-card-name {
+  font-size: 1.1em;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0;
+}
+
+.monster-card-level {
+  font-size: 0.85em;
+  padding: 4px 8px;
+  background: rgba(0,229,255,0.15);
+  border-radius: 4px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.monster-card-zone {
+  display: inline-block;
+  font-size: 0.75em;
+  padding: 4px 8px;
+  background: rgba(224,64,251,0.15);
+  border-radius: 4px;
+  color: var(--pink);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.monster-card-skill {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.monster-card-skill-name {
+  font-size: 0.95em;
+  font-weight: 600;
+  color: var(--gold);
+  margin: 0 0 6px 0;
+}
+
+.monster-card-skill-desc {
+  font-size: 0.85em;
+  color: var(--muted);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.monster-card-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.monster-card-effect-tag {
+  display: inline-block;
+  font-size: 0.75em;
+  padding: 4px 8px;
+  background: rgba(0,229,255,0.1);
+  border: 1px solid rgba(0,229,255,0.3);
+  border-radius: 4px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.monster-card-params {
+  font-size: 0.8em;
+  color: var(--muted);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,229,255,0.1);
+}
+
+.monster-card-params dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+
+.monster-card-params dt {
+  color: var(--muted);
+  font-weight: 500;
+  text-align: right;
+}
+
+.monster-card-params dd {
+  color: var(--accent);
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.monster-card-stats {
+  font-size: 0.8em;
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(0,229,255,0.05);
+  border-radius: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.monster-card-stat-item {
+  text-align: center;
+}
+
+.monster-card-stat-label {
+  color: var(--muted);
+  font-size: 0.75em;
+}
+
+.monster-card-stat-value {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.monster-card-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: var(--muted);
+}
+
+/* ══════════════════════════════════════════════
    RESPONSIVE
    ══════════════════════════════════════════════ */
 @media (max-width: 1200px) {
@@ -1680,4 +1855,9 @@ select option { background: var(--surface); }
   .player-grid { flex-direction: column; height: auto; }
   .player-list-section { width: 100%; max-height: 380px; }
   .player-body-grid { grid-template-columns: 1fr; }
+  .monster-card-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .monster-card-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 }

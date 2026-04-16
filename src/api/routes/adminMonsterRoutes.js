@@ -16,7 +16,7 @@ const upload = multer({
 function createAdminMonsterRoutes(serviceContext) {
   const router = Router();
 
-  router.use("/admin/monsters", (req, res, next) => {
+  router.use("/admin/", (req, res, next) => {
     const token = (req.header("Authorization") || "").replace("Bearer ", "");
     const config = require("../../config");
     if (token !== config.api.adminPassword) {
@@ -156,6 +156,18 @@ function createAdminMonsterRoutes(serviceContext) {
       const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "monsters");
       const monster = await serviceContext.monsterService.updateMonster(req.params.id, { imageUrl, imageThumbnailUrl });
       res.json(ok({ imageUrl, imageThumbnailUrl, monster }, "image uploaded"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // 怪物卡片庫 API
+  router.get("/admin/monster-cards", async (_req, res, next) => {
+    try {
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const db = await getMongoDb();
+      const cards = await db.collection("monsterCards").find({}).sort({ zone: 1, level: 1, card_id: 1 }).toArray();
+      res.json(ok(cards, `${cards.length} cards fetched`));
     } catch (error) {
       next(error);
     }

@@ -246,7 +246,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId } = req.playerRecord;
       const { uuid } = req.params;
-      const result = await serviceContext.shopService.equipItem(discordId, uuid);
+      const { targetSlot } = req.body || {};
+      const result = await serviceContext.shopService.equipItem(discordId, uuid, targetSlot);
       res.json(ok(result));
     } catch (err) {
       next(err);
@@ -932,12 +933,29 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         stateForCombat = freshStateForAura;
       }
 
+      // ── 為怪物自動裝備自己的卡片 ──
+      let monsterEquipped = {};
+      try {
+        const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+        const db = await getMongoDb();
+        const monsterCard = await db.collection("monsterCards").findOne(
+          { name: monster.name },
+          { sort: { card_id: 1 } }
+        );
+        if (monsterCard) {
+          monsterEquipped.special_1 = monsterCard;
+        }
+      } catch (e) {
+        // 如果無法取得怪物卡片，繼續進行戰鬥
+      }
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial, undefined, {
           equipped,
           inventory: progress?.inventory || [],
-          partyEffects
+          partyEffects,
+          monsterEquipped
         });
       const totalTaken = Math.max(0, (pStats.maxHp || 0) - Math.max(0, finalPlayerHp));
 
@@ -1038,6 +1056,36 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         nextBattleAt,
       }));
 
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ──────────────────────────────────────────────────
+  // 寶石強化相關 endpoints
+  // ──────────────────────────────────────────────────
+
+  // GET /api/me/enhance/:itemUuid - 查詢某件裝備的強化信息（寶石強化）
+  router.get("/api/me/enhance/:itemUuid", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const info = await serviceContext.enhanceService.getEnhanceInfo(discordId, req.params.itemUuid);
+      if (!info) {
+        return res.status(400).json({ error: "該道具無法強化" });
+      }
+
+      res.json(ok(info, "強化信息"));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /api/me/enhance/:itemUuid - 強化裝備（寶石強化）
+  router.post("/api/me/enhance/:itemUuid", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const result = await serviceContext.enhanceService.enhanceEquipment(discordId, req.params.itemUuid);
+      res.json(ok(result, result.message));
     } catch (err) {
       next(err);
     }
