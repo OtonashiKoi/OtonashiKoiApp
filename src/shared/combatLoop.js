@@ -248,6 +248,10 @@ function applyMonsterEffects(mCalc, activeEffects = [], currentRound = 1) {
       case 'crit_rate_up':
         // 爆擊率提升（暫不實現於怪物）
         break;
+      case 'atk_down':
+        // 攻擊力下降（百分比，value 為正數代表降低）
+        adjusted.atk = Math.max(0, Math.round((adjusted.atk || 0) * (1 - Math.abs(params.value || 0) / 100)));
+        break;
     }
   }
 
@@ -436,6 +440,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // 檢查玩家裝備的卡片（所有三個槽位都獨立判定）
+    // 「攻擊型」效果施加給怪物，「增益型」效果施加給玩家
+    const PLAYER_CARD_OFFENSIVE_KEYS = new Set([
+      'atk_down', 'def_down', 'poison', 'bleed', 'burn', 'freeze', 'stun',
+      'silence', 'charm', 'dark_curse', 'life_steal_strong', 'lightning',
+      'ancient_power', 'freeze_slow'
+    ]);
     const specialSlots = ['special_1', 'special_2', 'special_3'];
     for (const slot of specialSlots) {
       const slotItem = options.equipped?.[slot];
@@ -443,20 +453,26 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const skill = slotItem.monsterCardSkill;
         const cardName = slotItem.itemName || slotItem.name || '怪物卡';
 
-        // 玩家卡片 5% 觸發率
-        if (Math.random() * 100 < 5) {
+        // 玩家卡片 10% 觸發率（提升體感）
+        if (Math.random() * 100 < 10) {
           log.push(`🎴 **${cardName}！技能發動！** ${skill.name || ''}${skill.description ? '（' + skill.description + '）' : ''}`);
 
           if (skill.procEffects && Array.isArray(skill.procEffects)) {
             for (const procEffect of skill.procEffects) {
               if (!procEffect || !procEffect.key) continue;
-              if (!options.playerActiveEffects) options.playerActiveEffects = [];
-              options.playerActiveEffects.push({
+              const effectEntry = {
                 key: procEffect.key,
                 params: procEffect.params || {},
                 appliedAt: round,
                 source: 'player_card_skill'
-              });
+              };
+              // 攻擊型效果 → 施加給怪物；增益型效果 → 施加給玩家
+              if (PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key)) {
+                monsterActiveEffects.push(effectEntry);
+              } else {
+                if (!options.playerActiveEffects) options.playerActiveEffects = [];
+                options.playerActiveEffects.push(effectEntry);
+              }
             }
           }
         }
@@ -467,16 +483,24 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const attackCount = pStats.isDualWield ? 2 : 1;
     const monsterIsStunned = stunRoundsLeft > 0; // 擊暈中：怪物無法閃避
 
-    // ── 計算玩家是否受到攻擊力下降（atk_down） ──
+    // ── 計算玩家主動效果倍率 ──
     let playerAtkMultiplier = 1;
+    let playerCritRateBonus = 0;
+    let playerLifestealPct = 0;
     if (Array.isArray(options.playerActiveEffects)) {
-      for (const atkDownEff of options.playerActiveEffects) {
-        if (atkDownEff && atkDownEff.key === 'atk_down') {
-          const atkDownParams = atkDownEff.params || {};
-          const atkDownValue = Number(atkDownParams.value ?? 0);
-          if (atkDownValue > 0) {
-            playerAtkMultiplier *= (1 - atkDownValue / 100);
-          }
+      for (const eff of options.playerActiveEffects) {
+        if (!eff) continue;
+        const effParams = eff.params || {};
+        const effValue = Number(effParams.value ?? 0);
+        if (eff.key === 'atk_down') {
+          // 從怪物施加的攻擊力下降（negative）
+          if (effValue > 0) playerAtkMultiplier *= (1 - effValue / 100);
+        } else if (eff.key === 'crit_rate_up') {
+          // 玩家爆擊率提升（來自卡片技能）
+          playerCritRateBonus += effValue;
+        } else if (eff.key === 'lifesteal') {
+          // 玩家吸血（來自卡片技能）
+          playerLifestealPct += effValue;
         }
       }
     }
@@ -536,8 +560,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         let isCrit = false;
         let isArcherCrit = false;
 
-        // 普通爆擊邏輯（LUK 驅動）
-        const effectiveCritChance = (Number(pStats.crit) || 0) + extraHighHpCrit;
+        // 普通爆擊邏輯（LUK 驅動 + 卡片技能加成）
+        const effectiveCritChance = (Number(pStats.crit) || 0) + extraHighHpCrit + playerCritRateBonus;
         isCrit = Math.random() * 100 < effectiveCritChance;
 
         // 弓箭手命中要害邏輯（獨立判斷，可與爆擊同時發生）
@@ -597,6 +621,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
 
         log.push(`⚔️ ${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+
+        // ── 玩家吸血效果（來自卡片技能）──
+        if (playerLifestealPct > 0) {
+          const healAmt = Math.max(1, Math.round(dmg * (playerLifestealPct / 100)));
+          pHp = Math.min(pStats.maxHp, pHp + healAmt);
+          log.push(`💚 吸取生命力！恢復 **${healAmt}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+        }
 
         // ── 檢查怪物反彈傷害效果 ──
         if (Array.isArray(monsterActiveEffects)) {
