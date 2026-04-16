@@ -168,13 +168,13 @@ async function handleProfile(interaction) {
 
     // 職業與武器的對應關係
     const jobWeaponMap = {
-      "swordsman": { weapons: ["sword_1h"], name: "劍士", trait: "格擋反擊", detail: "格擋成功後可進行額外反擊，爆擊倍率 ×2.5" },
-      "warrior": { weapons: ["axe_2h"], name: "戰士", trait: "低血傷害倍增", detail: "血量低於 35% 時，攻擊傷害 ×1.15" },
-      "dwarf": { weapons: ["mace_2h"], name: "矮人", trait: "高血擊暈加成", detail: "血量高於 90% 時，擊暈機率 +5%" },
-      "rogue": { weapons: ["dagger"], name: "盜賊", trait: "連擊加速", detail: "連擊機率 +10%，連擊傷害 ×1.1" },
-      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", trait: "穿防無視", detail: "法杖傷害 ×1.15，無視怪物 50% 防禦" },
-      "healer": { weapons: ["staff_1h", "staff_2h"], name: "治療師", trait: "隊伍光環", detail: "每回合回復隊友生命值（需裝備治療師徽章）" },
-      "archer": { weapons: ["bow"], name: "弓箭手", trait: "命中要害", detail: "基礎要害率：35% + DEX ×0.45%（上限 80%），要害倍數 ×1.5\n閃躲後追擊：要害率 35%，要害倍數 ×1.5" }
+      "swordsman": { weapons: ["sword_1h"], name: "劍士", trait: "格擋反擊 (×2.5)" },
+      "warrior": { weapons: ["axe_2h"], name: "戰士", trait: "低血傷害 (×1.15)" },
+      "dwarf": { weapons: ["mace_2h"], name: "矮人", trait: "高血擊暈 (+5%)" },
+      "rogue": { weapons: ["dagger"], name: "盜賊", trait: "連擊加速 (+10%)" },
+      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", trait: "穿防無視" },
+      "healer": { weapons: ["staff_1h", "staff_2h"], name: "治療師", trait: "隊伍光環" },
+      "archer": { weapons: ["bow"], name: "弓箭手", trait: "命中要害 (35%+)" }
     };
 
     // 判斷職業
@@ -192,9 +192,9 @@ async function handleProfile(interaction) {
     if (jobInfo) {
       const weaponMatches = jobInfo.weapons.includes(wt);
       if (weaponMatches) {
-        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${jobInfo.trait}\n${jobInfo.detail}`;
+        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${jobInfo.trait}`;
       } else {
-        jobTraitAreaLine = `職業特性：${jobInfo.name}（需配備指定武器啟用）`;
+        jobTraitAreaLine = `職業特性：${jobInfo.name}`;
       }
     } else {
       // 未知職業，只顯示名稱
