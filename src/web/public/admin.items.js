@@ -99,7 +99,7 @@
       if(tierFilter!=='all'&&item.tier!==tierFilter)return false;
       return true;
     }
-    if(tab==='special')return item.itemType==='equipment'&&SPECIAL_SLOTS.has(item.equipSlot);
+    if(tab==='special')return item.itemType==='equipment'&&(SPECIAL_SLOTS.has(item.equipSlot)||item.equipSlot==='special');
     if(tab==='job_badge')return item.itemType==='job_badge';
     if(tab==='card'){
       return item.itemType==='monster_card';
