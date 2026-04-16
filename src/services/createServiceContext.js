@@ -38,7 +38,7 @@ function createServiceContext() {
   const playerTierService = new PlayerTierService(repositories.playerTierRepository);
   const monsterService = new MonsterService(repositories.monsterRepository, repositories.itemRepository);
   const monsterEventService = new MonsterEventService(repositories.monsterEventRepository);
-  const weeklyQuestService = new WeeklyQuestService(repositories.weeklyQuestRepository);
+  const weeklyQuestService = new WeeklyQuestService(repositories.weeklyQuestRepository, playerService);
   const battleConfigService = new BattleConfigService(repositories.battleConfigRepository);
   const effectDefinitionService = new EffectDefinitionService(repositories.effectDefinitionRepository);
   const enhanceService = new EnhanceService(repositories.progressRepository, repositories.itemRepository);
