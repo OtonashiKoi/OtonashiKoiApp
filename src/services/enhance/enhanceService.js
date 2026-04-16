@@ -20,14 +20,28 @@ class EnhanceService {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家未找到", 404);
 
-    // 找到要強化的裝備
+    // 找到要強化的裝備（可能在背包或身上）
     const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
-    const equipmentIndex = inventory.findIndex(item => item.uuid === inventoryUuid);
-    if (equipmentIndex === -1) {
-      throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中未找到該裝備", 404);
+    let equipment = null;
+    let equipmentIndex = -1;
+
+    // 先查詢背包
+    equipmentIndex = inventory.findIndex(item => item.uuid === inventoryUuid);
+    if (equipmentIndex !== -1) {
+      equipment = inventory[equipmentIndex];
+    } else {
+      // 再查詢身上的裝備
+      for (const [slotKey, slotItem] of Object.entries(progress.equipment || {})) {
+        if (slotItem && slotItem.uuid === inventoryUuid) {
+          equipment = slotItem;
+          break;
+        }
+      }
     }
 
-    const equipment = inventory[equipmentIndex];
+    if (!equipment) {
+      throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "未找到該裝備", 404);
+    }
 
     // 驗證該物品是否為可強化的裝備（武器或防具）
     const tier = String(equipment.tier || "").toUpperCase();
@@ -37,6 +51,12 @@ class EnhanceService {
 
     const itemType = String(equipment.itemType || "").toLowerCase();
     const equipSlot = String(equipment.equipSlot || "");
+
+    // 檢查是否為特殊裝備
+    if (equipSlot === "special") {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "特殊裝備無法強化", 400);
+    }
+
     const isWeaponOrArmor = (itemType === "equipment");
     if (!isWeaponOrArmor) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有武器和防具可以強化", 400);
@@ -134,8 +154,14 @@ class EnhanceService {
     if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家未找到", 404);
 
     const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
-    const equipment = inventory.find(item => item.uuid === inventoryUuid);
-    if (!equipment) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中未找到該裝備", 404);
+    // 支援傳入已裝備的 uuid：先在背包找，找不到再從 progress.equipment 裡查
+    let equipment = inventory.find(item => item.uuid === inventoryUuid);
+    if (!equipment) {
+      for (const v of Object.values(progress.equipment || {})) {
+        if (v && v.uuid === inventoryUuid) { equipment = v; break; }
+      }
+    }
+    if (!equipment) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該裝備（請檢查是否在背包或已裝備）", 404);
 
     const tier = String(equipment.tier || "").toUpperCase();
     const currentLevel = Math.max(0, Number(equipment.enhanceLevel) || 0);
