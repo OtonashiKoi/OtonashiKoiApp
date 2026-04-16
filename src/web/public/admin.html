@@ -52,7 +52,6 @@
                 <button class="nav-link" data-target="section-shop">金幣商店管理</button>
                 <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
                 <button class="nav-link" data-target="section-monster-cards">怪物卡片庫</button>
-                <button class="nav-link" data-target="section-monster-events">NPC 編輯器</button>
                 <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
                 <button class="nav-link" data-target="section-effect-modules">效果模組</button>
                 <button class="nav-link" data-target="section-weekly-quests">每週任務管理</button>
@@ -428,7 +427,6 @@
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
                   <button id="monsters-btn-new" class="button primary">＋ 新增怪物</button>
-                  <button id="monsters-btn-new-npc" class="button">＋ 新增 NPC</button>
                 </div>
               </div>
               <div id="monsters-state-area" class="access-card" style="margin-bottom:24px;border-color:var(--accent);background:var(--accent-light);">
@@ -466,34 +464,6 @@
             </div>
           </section>
 
-          <section id="section-monster-events" class="panel-section">
-            <div class="card">
-              <div class="section-head">
-                <div>
-                  <p class="section-kicker">Combat</p>
-                  <h2>NPC 事件模板編輯器</h2>
-                  <p class="hint">建立可重用的 NPC 對話事件模板：圖片、台詞、選項、效果一次設定。</p>
-                </div>
-                <div class="actions" style="display:flex;gap:10px;">
-                  <button id="monster-events-refresh-btn" class="button">重新載入</button>
-                  <button id="monster-events-add-btn" class="button primary">新增模板</button>
-                  <select id="monster-events-filter" class="sheet-input" style="min-width:180px;">
-                    <option value="all">篩選：全部類別</option>
-                    <option value="grant_buff">給予 Buff</option>
-                    <option value="grant_currency">發放貨幣</option>
-                    <option value="grant_item">發放道具</option>
-                    <option value="grant_equipment">發放裝備</option>
-                    <option value="take_item">消耗道具（交換）</option>
-                    <option value="grant_temporary_quest">發放限時任務</option>
-                  </select>
-                </div>
-              </div>
-              <input type="file" id="monster-events-npc-img-input" accept="image/*" style="display:none;" />
-              <div id="monster-events-list" style="display:flex;flex-direction:column;gap:12px;">
-                <p class="hint">請先登入後載入資料。</p>
-              </div>
-            </div>
-          </section>
 
           <section id="section-animation-studio" class="panel-section">
             <div class="card">
@@ -687,7 +657,6 @@
     <script src="/static/admin.shop.js?v=6"></script>
     <script src="/static/admin.monsters.js?v=6"></script>
     <script src="/static/admin.monster-cards.js?v=1"></script>
-    <script src="/static/admin.monster-events.js?v=6"></script>
     <script src="/static/admin.animation-studio.js?v=6"></script>
     <script src="/static/admin.weekly.js?v=6"></script>
     <script src="/static/admin.items.js?v=6"></script>
