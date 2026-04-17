@@ -149,22 +149,47 @@ class EnhanceService {
   }
 
   /**
-   * 統計背包中特定寶石的數量
+   * 統計背包中特定寶石的數量（考慮堆疊）
    */
   _countGemsInInventory(inventory, gemItemId) {
-    return inventory.filter(item => item.itemId === gemItemId).length;
+    let total = 0;
+    for (const item of inventory) {
+      if (item?.itemId === gemItemId) {
+        // 如果有 stackCount 就用堆疊數量，否則視為 1 顆
+        total += Math.max(1, item.stackCount || 1);
+      }
+    }
+    return total;
   }
 
   /**
-   * 從背包中移除特定數量的寶石
+   * 從背包中移除特定數量的寶石（支持堆疊）
+   * 如果有 stackCount，優先減少堆疊數量；完全消耗後刪除項目
    */
   _consumeGemsFromInventory(inventory, gemItemId, count) {
     let removed = 0;
     for (let i = 0; i < inventory.length && removed < count; i++) {
       if (inventory[i].itemId === gemItemId) {
-        inventory.splice(i, 1);
-        removed++;
-        i--; // 因為刪除了元素，需要回退索引
+        const gem = inventory[i];
+        const stackCount = Math.max(1, gem.stackCount || 1);
+
+        if (stackCount > 1) {
+          // 有堆疊：減少堆疊數量
+          const toRemove = Math.min(count - removed, stackCount);
+          gem.stackCount = stackCount - toRemove;
+          removed += toRemove;
+
+          // 如果堆疊數量用完，刪除該項目
+          if (gem.stackCount <= 0) {
+            inventory.splice(i, 1);
+            i--;
+          }
+        } else {
+          // 無堆疊或堆疊為 1：刪除整個項目
+          inventory.splice(i, 1);
+          removed++;
+          i--;
+        }
       }
     }
   }

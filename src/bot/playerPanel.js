@@ -682,7 +682,8 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
     }
 
     const slot = e.equipSlot ? ` (${EQ_SLOT_LABELS[e.equipSlot] || e.equipSlot})` : "";
-    lines.push(`${offset + i + 1}. **${e.itemName}**${slot}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`);
+    const stackDisplay = e.stackCount ? ` ×${e.stackCount}` : "";
+    lines.push(`${offset + i + 1}. **${e.itemName}**${slot}${stackDisplay}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`);
   });
 
   const rows = isEquipTab
@@ -914,6 +915,28 @@ async function handleBackpackAction(interaction, action, uuid) {
         content: `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n你目前所有的升等屬性點將會**完全重新隨機分配**，此操作不可逆！`,
         components: [row]
       });
+      return;
+    }
+
+    // 如果有 stackCount，顯示數量選擇模態
+    if (entry?.stackCount && entry.stackCount > 1) {
+      await interaction.showModal(
+        new ModalBuilder()
+          .setCustomId(`consumable_quantity:${uuid}`)
+          .setTitle(`使用 ${entry.itemName}`)
+          .addComponents(
+            new ActionRowBuilder().addComponents(
+              new TextInputBuilder()
+                .setCustomId("quantity_input")
+                .setLabel(`請輸入使用數量 (1-${entry.stackCount})`)
+                .setStyle(TextInputStyle.Short)
+                .setMinLength(1)
+                .setMaxLength(10)
+                .setPlaceholder("1")
+                .setRequired(true)
+            )
+          )
+      );
       return;
     }
   }
@@ -1690,6 +1713,51 @@ async function handleEquipmentSelect(interaction) {
 }
 
 async function handleModal(interaction) {
+  // 處理消耗品堆疊數量選擇
+  if (interaction.customId.startsWith("consumable_quantity:")) {
+    const uuid = interaction.customId.slice("consumable_quantity:".length);
+    const quantityStr = interaction.fields.getTextInputValue("quantity_input").trim();
+    const quantity = parseInt(quantityStr, 10);
+
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      await interaction.reply({ content: "❌ 請輸入有效的數字。", flags: MessageFlags.Ephemeral });
+      return true;
+    }
+
+    const serviceContext = getServiceContext();
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const entry = (progress?.inventory || []).find(e => e.uuid === uuid);
+
+    if (!entry) {
+      await interaction.reply({ content: "❌ 找不到該道具。", flags: MessageFlags.Ephemeral });
+      return true;
+    }
+
+    if (quantity > (entry.stackCount || 1)) {
+      await interaction.reply({ content: `❌ 數量超出持有量 (最多 ${entry.stackCount || 1})。`, flags: MessageFlags.Ephemeral });
+      return true;
+    }
+
+    try {
+      // 先減少堆疊數量，再調用使用邏輯
+      for (let i = 0; i < quantity; i++) {
+        await serviceContext.shopService.useItem(interaction.user.id, uuid, interaction.user.displayName || interaction.user.username);
+      }
+
+      // 重新載入背包
+      const updatedProgress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+      const inventory = updatedProgress?.inventory || [];
+      const msg = buildBackpackMessage(inventory, "item", `✅ 已使用 **${entry.itemName}** ×${quantity}。`);
+
+      await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
+      await rememberActiveReply(interaction, 120_000);
+    } catch (err) {
+      await interaction.reply({ content: `❌ 使用失敗：${err.message}`, flags: MessageFlags.Ephemeral });
+    }
+
+    return true;
+  }
+
   if (!interaction.customId.startsWith("backpack_page_modal:")) return false;
 
   const [, tab = "item", totalRaw = "1"] = interaction.customId.split(":");

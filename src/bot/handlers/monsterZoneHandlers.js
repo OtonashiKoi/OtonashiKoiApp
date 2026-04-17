@@ -128,6 +128,24 @@ function playerAlreadyOwnsItem(progress, itemId) {
   return false;
 }
 
+/**
+ * 嘗試堆疊寶石到背包中的相同寶石上，如果成功回傳 true，否則回傳 false
+ * @returns {boolean} 成功堆疊則回傳 true，否則 false
+ */
+function tryStackGem(progress, gemItemId) {
+  if (!gemItemId || !Array.isArray(progress?.inventory)) return false;
+
+  // 查找背包中相同 itemId 的寶石
+  const existingGem = progress.inventory.find(i => i?.itemId === gemItemId);
+  if (existingGem) {
+    // 初始化 stackCount 如果還沒有
+    if (!existingGem.stackCount) existingGem.stackCount = 1;
+    existingGem.stackCount += 1;
+    return true;
+  }
+  return false;
+}
+
 function isMonsterZoneButton(customId) {
   return customId.startsWith("monster-zone:");
 }
@@ -1436,21 +1454,25 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               const gemId = ENHANCE_GEM_IDS[tier];
               const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
               if (gemItem) {
-                luckyProg.inventory.push({
-                  uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
-                  itemEffect: gemItem.effect || { type: "none", value: 0 },
-                  useEffects: gemItem.useEffects || [],
-                  passiveEffects: gemItem.passiveEffects || [],
-                  procEffects: gemItem.procEffects || [],
-                  combatEffects: gemItem.combatEffects || [],
-                  itemType: gemItem.itemType || "consumable",
-                  imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
-                  equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
-                  weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
-                  atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
-                  source: "monster_drop_duplicate_gem", sourceRef: monster.name,
-                  purchasedAt: new Date().toISOString()
-                });
+                // 嘗試堆疊寶石，如果失敗則新增
+                if (!tryStackGem(luckyProg, gemItem.id)) {
+                  luckyProg.inventory.push({
+                    uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
+                    itemEffect: gemItem.effect || { type: "none", value: 0 },
+                    useEffects: gemItem.useEffects || [],
+                    passiveEffects: gemItem.passiveEffects || [],
+                    procEffects: gemItem.procEffects || [],
+                    combatEffects: gemItem.combatEffects || [],
+                    itemType: gemItem.itemType || "consumable",
+                    imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
+                    equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
+                    weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
+                    atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
+                    stackCount: 1,
+                    source: "monster_drop_duplicate_gem", sourceRef: monster.name,
+                    purchasedAt: new Date().toISOString()
+                  });
+                }
                 droppedItems.push(`${gemItem.name}（${item.name} 重複）`);
                 droppedItemObjects.push(gemItem);
               }
@@ -1491,21 +1513,25 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       for (const gemId of gemIdsToAward) {
         const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
         if (gemItem) {
-          luckyProg.inventory.push({
-            uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
-            itemEffect: gemItem.effect || { type: "none", value: 0 },
-            useEffects: gemItem.useEffects || [],
-            passiveEffects: gemItem.passiveEffects || [],
-            procEffects: gemItem.procEffects || [],
-            combatEffects: gemItem.combatEffects || [],
-            itemType: gemItem.itemType || "consumable",
-            imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
-            equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
-            weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
-            atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
-            source: "monster_drop_bonus_gem", sourceRef: monster.name,
-            purchasedAt: new Date().toISOString()
-          });
+          // 嘗試堆疊寶石，如果失敗則新增
+          if (!tryStackGem(luckyProg, gemItem.id)) {
+            luckyProg.inventory.push({
+              uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
+              itemEffect: gemItem.effect || { type: "none", value: 0 },
+              useEffects: gemItem.useEffects || [],
+              passiveEffects: gemItem.passiveEffects || [],
+              procEffects: gemItem.procEffects || [],
+              combatEffects: gemItem.combatEffects || [],
+              itemType: gemItem.itemType || "consumable",
+              imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
+              equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
+              weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
+              atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
+              stackCount: 1,
+              source: "monster_drop_bonus_gem", sourceRef: monster.name,
+              purchasedAt: new Date().toISOString()
+            });
+          }
           droppedGems.push(gemItem.name);
         }
       }
@@ -1559,21 +1585,25 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               const gemId = ENHANCE_GEM_IDS[tier];
               const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
               if (gemItem) {
-                bonusProg.inventory.push({
-                  uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
-                  itemEffect: gemItem.effect || { type: "none", value: 0 },
-                  useEffects: gemItem.useEffects || [],
-                  passiveEffects: gemItem.passiveEffects || [],
-                  procEffects: gemItem.procEffects || [],
-                  combatEffects: gemItem.combatEffects || [],
-                  itemType: gemItem.itemType || "consumable",
-                  imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
-                  equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
-                  weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
-                  atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
-                  source: "monster_drop_duplicate_gem", sourceRef: monster.name,
-                  purchasedAt: new Date().toISOString()
-                });
+                // 嘗試堆疊寶石，如果失敗則新增
+                if (!tryStackGem(bonusProg, gemItem.id)) {
+                  bonusProg.inventory.push({
+                    uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
+                    itemEffect: gemItem.effect || { type: "none", value: 0 },
+                    useEffects: gemItem.useEffects || [],
+                    passiveEffects: gemItem.passiveEffects || [],
+                    procEffects: gemItem.procEffects || [],
+                    combatEffects: gemItem.combatEffects || [],
+                    itemType: gemItem.itemType || "consumable",
+                    imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
+                    equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
+                    weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
+                    atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
+                    stackCount: 1,
+                    source: "monster_drop_duplicate_gem", sourceRef: monster.name,
+                    purchasedAt: new Date().toISOString()
+                  });
+                }
                 bonusItems.push(`${gemItem.name}（${item.name} 重複）`);
                 bonusItemObjects.push(gemItem);
               }
@@ -1613,21 +1643,25 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       for (const gemId of bonusGemIds) {
         const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
         if (gemItem) {
-          bonusProg.inventory.push({
-            uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
-            itemEffect: gemItem.effect || { type: "none", value: 0 },
-            useEffects: gemItem.useEffects || [],
-            passiveEffects: gemItem.passiveEffects || [],
-            procEffects: gemItem.procEffects || [],
-            combatEffects: gemItem.combatEffects || [],
-            itemType: gemItem.itemType || "consumable",
-            imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
-            equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
-            weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
-            atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
-            source: "monster_drop_bonus_gem", sourceRef: monster.name,
-            purchasedAt: new Date().toISOString()
-          });
+          // 嘗試堆疊寶石，如果失敗則新增
+          if (!tryStackGem(bonusProg, gemItem.id)) {
+            bonusProg.inventory.push({
+              uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
+              itemEffect: gemItem.effect || { type: "none", value: 0 },
+              useEffects: gemItem.useEffects || [],
+              passiveEffects: gemItem.passiveEffects || [],
+              procEffects: gemItem.procEffects || [],
+              combatEffects: gemItem.combatEffects || [],
+              itemType: gemItem.itemType || "consumable",
+              imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
+              equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
+              weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
+              atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
+              stackCount: 1,
+              source: "monster_drop_bonus_gem", sourceRef: monster.name,
+              purchasedAt: new Date().toISOString()
+            });
+          }
           bonusGems.push(gemItem.name);
         }
       }
