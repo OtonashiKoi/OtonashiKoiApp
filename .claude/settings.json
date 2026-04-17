@@ -27,7 +27,15 @@
       "Read(//c/Users/appsk/.pm2/pids/**)",
       "Bash(node --env-file=.env -e ' *)",
       "Bash(node -e \"require\\('./src/shared/combatLoop.js'\\); console.log\\('OK'\\);\")",
-      "Bash(node -c /c/Users/appsk/Documents/Github/equipmentGAME/src/bot/handlers/monsterZoneHandlers.js)"
+      "Bash(node -c /c/Users/appsk/Documents/Github/equipmentGAME/src/bot/handlers/monsterZoneHandlers.js)",
+      "Bash(node scripts/migrate-gem-stacking.js)",
+      "Bash(node -e \"require\\('./src/services/auction/auctionRepository.js'\\); console.log\\('auctionRepository OK'\\)\")",
+      "Bash(node -e \"require\\('./src/services/auction/auctionService.js'\\); console.log\\('auctionService OK'\\)\")",
+      "Bash(node -e \"require\\('./src/bot/handlers/auctionZoneHandlers.js'\\); console.log\\('auctionZoneHandlers OK'\\)\")",
+      "Bash(node -e \"require\\('./src/services/createServiceContext.js'\\); console.log\\('createServiceContext OK'\\)\")",
+      "Bash(node -e \"require\\('./src/bot/handlers/auctionZoneHandlers.js'\\); console.log\\('OK'\\)\")",
+      "Bash(node -e \"require\\('./src/bot/commands.js'\\); console.log\\('OK'\\)\")",
+      "Bash(node scripts/fix-all-enhance-gear.js)"
     ]
   },
   "description": "equipmentGAME Sub Agent 工作流配置 - Token 優化方案",

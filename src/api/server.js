@@ -12,6 +12,7 @@ const { createAdminMonsterEventRoutes } = require("./routes/adminMonsterEventRou
 const { createAdminWeeklyQuestRoutes } = require("./routes/adminWeeklyQuestRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
+const { createMahjongRoutes } = require("./routes/mahjongRoutes");
 const { serviceContext: sharedServiceContext } = require("../bot/runtimeContext");
 const config = require("../config");
 
@@ -63,6 +64,7 @@ function createApiServer(discordClient) {
   app.use(createAdminMonsterEventRoutes(serviceContext));
   app.use(createAdminWeeklyQuestRoutes(serviceContext));
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
+  app.use(createMahjongRoutes());
 
   app.use((error, _req, res, _next) => {
     console.error("[API] request error", error);

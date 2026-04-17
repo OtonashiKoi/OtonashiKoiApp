@@ -369,7 +369,7 @@ class ShopService {
           combatEffects: libItem.combatEffects || entry.combatEffects || [],
           procEffects: libItem.procEffects || entry.procEffects || [],
           useEffects: libItem.useEffects || entry.useEffects || [],
-          equipStats: libItem.equipStats || entry.equipStats || null,
+          // 不覆蓋 equipStats，保留強化後的數值
         };
         // 背包裡的 snapshot 也同步更新
         progress.inventory[idx] = freshEntry;

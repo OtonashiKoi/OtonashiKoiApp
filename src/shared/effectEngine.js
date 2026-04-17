@@ -161,13 +161,26 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
     if (!entry) { merged[slot] = entry; continue; }
     const lib = libMap[entry.itemId];
     if (!lib) { merged[slot] = entry; continue; }
+
+    // equipStats：從道具庫取最新基礎值，再疊加強化等級
+    // enhanceLevel > 0 時，找主屬性（最大值）加上強化等級，保留玩家的強化加成
+    let equipStats = lib.equipStats || entry.equipStats || null;
+    const enhanceLevel = Math.max(0, Number(entry.enhanceLevel) || 0);
+    if (equipStats && enhanceLevel > 0) {
+      const entries = Object.entries(equipStats);
+      if (entries.length > 0) {
+        const mainStat = entries.sort((a, b) => b[1] - a[1])[0][0];
+        equipStats = { ...equipStats, [mainStat]: (equipStats[mainStat] || 0) + enhanceLevel };
+      }
+    }
+
     merged[slot] = {
       ...entry,
       passiveEffects: lib.passiveEffects || [],
       combatEffects:  lib.combatEffects  || [],
       procEffects:    lib.procEffects    || [],
       useEffects:     lib.useEffects     || [],
-      equipStats:     lib.equipStats     || entry.equipStats || null,
+      equipStats,
       weaponType:     lib.weaponType     || entry.weaponType || null,
       isTwoHanded:    lib.isTwoHanded    ?? entry.isTwoHanded ?? false,
       monsterCardSkill: lib.monsterCardSkill || entry.monsterCardSkill || null,

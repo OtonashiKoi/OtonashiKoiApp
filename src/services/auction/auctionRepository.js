@@ -91,26 +91,35 @@ const auctionRepository = {
   },
 
   /**
-   * 取得拍賣場頻道設定
+   * 取得拍賣場設定（頻道、開關、上架 Tier）
+   * 預設：開啟、C 以上可上架
    */
-  async getChannelConfig() {
+  async getSettings() {
     const db = await getMongoDb();
     const row = await db.collection("auctionConfig").findOne({ _id: "default" });
-    return row?.value || { channelId: null };
+    return row?.value || {
+      channelId: null,
+      enabled: true,
+      sellerTiers: ["C", "B", "A", "S", "SS"]
+    };
   },
 
   /**
-   * 儲存拍賣場頻道設定
+   * 儲存拍賣場設定
    */
-  async saveChannelConfig(config) {
+  async saveSettings(settings) {
     const db = await getMongoDb();
     await db.collection("auctionConfig").updateOne(
       { _id: "default" },
-      { $set: { value: config, updatedAt: new Date().toISOString() } },
+      { $set: { value: settings, updatedAt: new Date().toISOString() } },
       { upsert: true }
     );
-    return config;
-  }
+    return settings;
+  },
+
+  // 向下相容舊呼叫
+  async getChannelConfig() { return this.getSettings(); },
+  async saveChannelConfig(config) { return this.saveSettings(config); }
 };
 
 module.exports = { auctionRepository };

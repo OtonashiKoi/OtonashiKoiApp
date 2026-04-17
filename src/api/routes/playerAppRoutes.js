@@ -515,6 +515,29 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     });
   }
 
+  // 5b. Viewer Profile — public, no auth required
+  // Used by chat.html to look up a viewer's in-game level & title via OneComme platform ID.
+  router.get("/api/chat/viewer-profile", async (req, res) => {
+    try {
+      const { platform, userId } = req.query;
+      if (!platform || !userId) return res.json({ found: false });
+
+      const player = await serviceContext.playerRepository.findByExternalId(platform, userId);
+      if (!player) return res.json({ found: false });
+
+      const progress = await serviceContext.progressRepository.findByPlayerId(player.discordId);
+      if (!progress) return res.json({ found: false });
+
+      const level = progress.level || 1;
+      const titleEq = progress.equipment?.title_eq;
+      const title = titleEq?.itemName || null;
+
+      return res.json({ found: true, level, title, displayName: player.displayName });
+    } catch (_) {
+      return res.json({ found: false });
+    }
+  });
+
   // 6. SSE Stream
   router.get("/api/chat/stream", (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
@@ -824,6 +847,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       res.json(ok({
         zones,
+        roundMs: ROUND_MS,
         streamPresence: getStreamPresenceSnapshot(),
         refreshedAt: new Date().toISOString(),
       }));

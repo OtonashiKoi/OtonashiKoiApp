@@ -17,9 +17,7 @@ const GOLD_MIN = 5000;
 const GOLD_MAX = 10_000_000;
 const DIAMOND_MIN = 1;
 const DIAMOND_MAX = 200_000;
-// Tier 順序（C 以上才能上架）
 const TIER_RANKS = ["E", "D", "C", "B", "A", "S", "SS"];
-const MIN_SELLER_TIER = "C";
 
 class AuctionService {
   constructor(progressRepository, walletRepository, playerTierService) {
@@ -29,18 +27,40 @@ class AuctionService {
   }
 
   // ─────────────────────────────────────────────
+  //  設定
+  // ─────────────────────────────────────────────
+  async getSettings() {
+    return auctionRepository.getSettings();
+  }
+
+  async saveSettings(settings) {
+    return auctionRepository.saveSettings(settings);
+  }
+
+  // ─────────────────────────────────────────────
   //  上架
   // ─────────────────────────────────────────────
   /**
-   * 確認玩家是否有上架資格（Tier C 以上）
+   * 確認玩家是否有上架資格（從後台設定讀取允許的 Tier）
    * @param {string[]} memberRoleIds  Discord member 的 roleIds
    */
   async checkSellerEligibility(memberRoleIds) {
+    const settings = await auctionRepository.getSettings();
+    const allowedTiers = Array.isArray(settings.sellerTiers) && settings.sellerTiers.length > 0
+      ? settings.sellerTiers
+      : ["C", "B", "A", "S", "SS"];
+
     const highestTier = await this.playerTierService.resolveHighestTier(memberRoleIds);
     if (!highestTier) return false;
-    const sellerIdx = TIER_RANKS.indexOf(highestTier);
-    const minIdx    = TIER_RANKS.indexOf(MIN_SELLER_TIER);
-    return sellerIdx >= minIdx;
+    return allowedTiers.includes(highestTier);
+  }
+
+  /**
+   * 確認拍賣場是否開啟
+   */
+  async isEnabled() {
+    const settings = await auctionRepository.getSettings();
+    return settings.enabled !== false;
   }
 
   /**
@@ -61,6 +81,11 @@ class AuctionService {
    * @param {number} opts.hours      1 | 6 | 12 | 24
    */
   async listItem({ sellerId, itemUuid, currency, price, hours }) {
+    // 檢查拍賣場是否開啟
+    if (!await this.isEnabled()) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "拍賣場目前已關閉", 400);
+    }
+
     // 驗證貨幣
     if (!["gold", "diamond"].includes(currency)) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "貨幣類型無效", 400);
@@ -158,6 +183,10 @@ class AuctionService {
    * @param {string} auctionId
    */
   async buyItem(buyerId, auctionId) {
+    if (!await this.isEnabled()) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "拍賣場目前已關閉", 400);
+    }
+
     const auction = await auctionRepository.findById(auctionId);
     if (!auction) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該拍賣商品", 404);
     if (auction.status !== "active") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此商品已售出或到期", 400);
@@ -298,13 +327,9 @@ class AuctionService {
     return auctionRepository.findBySeller(sellerId);
   }
 
-  async getChannelConfig() {
-    return auctionRepository.getChannelConfig();
-  }
-
-  async saveChannelConfig(config) {
-    return auctionRepository.saveChannelConfig(config);
-  }
+  // 向下相容
+  async getChannelConfig() { return auctionRepository.getSettings(); }
+  async saveChannelConfig(cfg) { return auctionRepository.saveSettings(cfg); }
 
   // 管理後台
   async adminGetAll(opts) {

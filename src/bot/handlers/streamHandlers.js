@@ -7,6 +7,7 @@ const config = require("../../config");
 const { sendComment } = require("../onecommeSender");
 const { consumeCode } = require("../bindingStore");
 const { recordComment } = require("../../services/stream/streamPresence");
+const { joinQueue } = require("../../services/mahjong/mahjongQueue");
 
 // 可自訂偵測的指令關鍵字
 const STREAM_COMMANDS = {
@@ -261,6 +262,27 @@ async function handleStreamComment(comment) {
   const text = rawText.trim();
   const stripped = text.replace(/^!+/, "");
   const textLower = stripped.toLowerCase();
+
+  // 日麻排隊：++
+  if (text === "++" || text === "＋＋") {
+    const { joined, alreadyIn, newTeam } = joinQueue(
+      comment.name,
+      comment.userId || comment.id || comment.name,
+      normalizePlatform(comment.service, comment.userId || "")
+    );
+    const targetService = normalizePlatform(comment.service, comment.userId || "") === "youtube" ? "yt"
+      : normalizePlatform(comment.service, comment.userId || "") === "twitch" ? "twitch"
+      : comment.service;
+    if (alreadyIn) {
+      try { await sendComment({ service: targetService, displayName: comment.name, comment: `${comment.name} 已在排隊或隊伍中！` }); } catch (_) {}
+    } else if (joined && newTeam) {
+      const memberNames = newTeam.members.map(m => m.name).join("、");
+      try { await sendComment({ service: targetService, displayName: comment.name, comment: `🀄 第${newTeam.id}桌組成！${memberNames}` }); } catch (_) {}
+    } else if (joined) {
+      try { await sendComment({ service: targetService, displayName: comment.name, comment: `${comment.name} 加入排隊！` }); } catch (_) {}
+    }
+    return;
+  }
 
   // 綁定指令：!綁定 CODE
   if (textLower.startsWith("綁定 ") || textLower.startsWith("綁定\t")) {

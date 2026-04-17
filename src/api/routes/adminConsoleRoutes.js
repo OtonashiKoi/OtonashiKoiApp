@@ -516,22 +516,30 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
-  // 取得拍賣場頻道設定
+  // 取得拍賣場完整設定
   router.get("/admin/auction/config", async (_req, res, next) => {
     try {
-      const config = await serviceContext.auctionService.getChannelConfig();
-      res.json(ok(config, "auction config fetched"));
+      const settings = await serviceContext.auctionService.getSettings();
+      res.json(ok(settings, "auction settings fetched"));
     } catch (error) {
       next(error);
     }
   });
 
-  // 儲存拍賣場頻道設定
+  // 儲存拍賣場完整設定（channelId, enabled, sellerTiers）
   router.put("/admin/auction/config", async (req, res, next) => {
     try {
-      const { channelId } = req.body;
-      const config = await serviceContext.auctionService.saveChannelConfig({ channelId });
-      res.json(ok(config, "auction config saved"));
+      const { channelId, enabled, sellerTiers } = req.body;
+      // 先取得現有設定，只更新有傳入的欄位
+      const current = await serviceContext.auctionService.getSettings();
+      const updated = {
+        ...current,
+        ...(channelId !== undefined && { channelId }),
+        ...(enabled !== undefined && { enabled: Boolean(enabled) }),
+        ...(Array.isArray(sellerTiers) && { sellerTiers })
+      };
+      const saved = await serviceContext.auctionService.saveSettings(updated);
+      res.json(ok(saved, "auction settings saved"));
     } catch (error) {
       next(error);
     }
