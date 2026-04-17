@@ -246,7 +246,24 @@ function applyMonsterEffects(mCalc, activeEffects = [], currentRound = 1) {
         // 格擋率提升（新屬性，暫不實現）
         break;
       case 'crit_rate_up':
-        // 爆擊率提升（暫不實現於怪物）
+        // 爆擊率提升（百分比，value=20 表示 +20% 爆擊率）
+        adjusted.crit = Math.min(100, (adjusted.crit || 0) + Math.abs(params.value || 0));
+        break;
+      case 'lifesteal':
+        // 吸血：記錄百分比，戰鬥攻擊時處理
+        adjusted.lifestealPct = (adjusted.lifestealPct || 0) + Math.abs(params.value || 0);
+        break;
+      case 'life_steal_strong':
+        // 強力吸血：記錄百分比，戰鬥攻擊時處理
+        adjusted.lifestealPct = (adjusted.lifestealPct || 0) + Math.abs(params.value || 0);
+        break;
+      case 'counter':
+        // 反擊：記錄反擊機率，被擊中時處理
+        adjusted.counterChance = (adjusted.counterChance || 0) + Math.abs(params.value || 0);
+        break;
+      case 'ancient_power':
+        // 遠古力量：怪物增強自身 ATK value%
+        adjusted.atk = Math.round((adjusted.atk || 0) * (1 + Math.abs(params.value || 0) / 100));
         break;
       case 'atk_down':
         // 攻擊力下降（百分比，value 為正數代表降低）
@@ -497,6 +514,30 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           log.push(`☠️ 中毒傷害！造成 **${dotDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
+        // 流血 DOT（怪物施加給玩家）
+        if (dotEffect.key === 'bleed') {
+          const bleedPct = Number(dotParams.value ?? 10);
+          const bleedDmg = Math.max(1, Math.round((pStats.maxHp || 1) * (bleedPct / 100)));
+          pHp -= bleedDmg;
+          log.push(`🩸 流血持續！你受到 **${bleedDmg}** 點流血傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          if (pHp <= 0) { outcome = "lose"; break; }
+        }
+        // 燒傷 DOT（怪物施加給玩家）
+        if (dotEffect.key === 'burn') {
+          const burnPct = Number(dotParams.value ?? 5);
+          const burnDmg = Math.max(1, Math.round((pStats.maxHp || 1) * (burnPct / 100)));
+          pHp -= burnDmg;
+          log.push(`🔥 燒傷持續！你受到 **${burnDmg}** 點灼燒傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          if (pHp <= 0) { outcome = "lose"; break; }
+        }
+        // 閃電 DOT（怪物施加給玩家）
+        if (dotEffect.key === 'lightning') {
+          const lightPct = Number(dotParams.value ?? 20);
+          const lightDmg = Math.max(1, Math.round((pStats.maxHp || 1) * (lightPct / 100)));
+          pHp -= lightDmg;
+          log.push(`⚡ 閃電傷害！你受到 **${lightDmg}** 點雷電傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          if (pHp <= 0) { outcome = "lose"; break; }
+        }
       }
     }
 
@@ -565,9 +606,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const cardName = equippedCard.itemName || equippedCard.name || '卡片';
 
       // 怪物增益效果（施加給怪物自己）
-      const MONSTER_BUFF_KEYS = new Set(['str_up', 'def_up', 'atk_up', 'lifesteal', 'life_steal_strong', 'crit_rate_up', 'atk_multiplier_up', 'counter']);
+      const MONSTER_BUFF_KEYS = new Set(['str_up', 'def_up', 'atk_up', 'lifesteal', 'life_steal_strong', 'crit_rate_up', 'atk_multiplier_up', 'counter', 'ancient_power']);
       // 怪物DEBUFF效果（施加給玩家）
-      const MONSTER_DEBUFF_KEYS = new Set(['poison', 'bleed', 'burn', 'atk_down', 'def_down', 'silence', 'freeze', 'stun', 'charm', 'lightning', 'dark_curse', 'ancient_power']);
+      const MONSTER_DEBUFF_KEYS = new Set(['poison', 'bleed', 'burn', 'atk_down', 'def_down', 'silence', 'freeze', 'stun', 'charm', 'lightning', 'dark_curse']);
 
       if (Math.random() * 100 < 50) {
         log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
@@ -600,7 +641,38 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
+    // ── 玩家攻擊 ──
+    const attackCount = pStats.isDualWield ? 2 : 1;
+    const monsterIsStunned = stunRoundsLeft > 0; // 擊暈中：怪物無法閃避
+
+    // ── 檢查玩家受到的狀態效果（怪物施加的 debuff）──
+    let playerIsStunned = false;
+    let playerIsFrozen = false;
+    let playerIsSilenced = false;
+    if (Array.isArray(options.playerActiveEffects)) {
+      for (const pEff of options.playerActiveEffects) {
+        if (!pEff || !pEff.key) continue;
+        const pDur = pEff.params?.duration || {};
+        if (pDur.mode === 'turns') {
+          const pEnd = (pEff.appliedAt || 1) + (pDur.value || 1);
+          if (round > pEnd) continue;
+        }
+        if (pEff.key === 'stun') playerIsStunned = true;
+        if (pEff.key === 'freeze') playerIsFrozen = true;
+        if (pEff.key === 'silence') playerIsSilenced = true;
+      }
+    }
+    if (playerIsStunned) {
+      log.push(`😵 你陷入擊暈狀態，此回合無法攻擊！`);
+    } else if (playerIsFrozen) {
+      log.push(`🧊 你被冰凍住，此回合無法攻擊！`);
+    }
+
     // 玩家裝備的卡片技能（special_1/2/3 獨立觸發）
+    // 沉默（怪物施加）：玩家無法發動卡片技能
+    if (playerIsSilenced) {
+      log.push(`🔇 你陷入沉默，此回合無法發動卡片技能！`);
+    }
     // 攻擊型效果（施加給怪物）；其餘增益型效果施加給玩家
     const PLAYER_CARD_OFFENSIVE_KEYS = new Set([
       'atk_down', 'def_down', 'poison', 'bleed', 'burn', 'freeze', 'stun',
@@ -610,7 +682,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const specialSlots = ['special_1', 'special_2', 'special_3'];
     for (const slot of specialSlots) {
       const slotItem = options.equipped?.[slot];
-      if (slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
+      if (!playerIsSilenced && slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
         const skill = slotItem.monsterCardSkill;
         const cardName = slotItem.itemName || slotItem.name || '卡片';
 
@@ -639,10 +711,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
-    // ── 玩家攻擊 ──
-    const attackCount = pStats.isDualWield ? 2 : 1;
-    const monsterIsStunned = stunRoundsLeft > 0; // 擊暈中：怪物無法閃避
-
     // ── 計算玩家主動效果倍率 ──
     let playerAtkMultiplier = 1;
     let playerCritRateBonus = 0;
@@ -659,28 +727,29 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (round > end) continue;
         }
         if (eff.key === 'atk_down') {
-          // 從怪物施加的攻擊力下降（negative）
+          // 從怪物施加的攻擊力下降
           if (effValue > 0) playerAtkMultiplier *= (1 - effValue / 100);
+          else if (effValue < 0) playerAtkMultiplier *= (1 - Math.abs(effValue) / 100);
+        } else if (eff.key === 'charm') {
+          // 魅惑（米拉桑）：玩家攻擊力降低 value%
+          playerAtkMultiplier *= (1 - Math.abs(effValue) / 100);
+        } else if (eff.key === 'dark_curse') {
+          // 黑暗詛咒（森林盜賊）：玩家攻擊力降低 |value|%
+          playerAtkMultiplier *= (1 - Math.abs(effValue) / 100);
         } else if (eff.key === 'crit_rate_up') {
-          // 玩家爆擊率提升（來自卡片技能）
+          // 玩家爆擊率提升（來自玩家卡片技能）
           playerCritRateBonus += effValue;
         } else if (eff.key === 'lifesteal') {
-          // 玩家吸血（來自卡片技能）
+          // 玩家吸血（來自玩家卡片技能）
           playerLifestealPct += effValue;
-        } else if (eff.key === 'dark_curse') {
-          // 黑暗詛咒：玩家攻擊力降低 |value|%
-          playerAtkMultiplier *= (1 - Math.abs(effValue) / 100);
-        } else if (eff.key === 'ancient_power') {
-          // 遠古力量：玩家攻擊力提升 value%
-          playerAtkMultiplier *= (1 + effValue / 100);
         } else if (eff.key === 'life_steal_strong') {
-          // 強力吸血：傷害的 value% 回復為 HP
+          // 強力吸血：傷害的 value% 回復為 HP（來自玩家卡片技能）
           playerLifestealStrongPct += effValue;
         }
       }
     }
 
-    for (let a = 0; a < attackCount && outcome === null; a++) {
+    for (let a = 0; a < attackCount && outcome === null && !playerIsStunned && !playerIsFrozen; a++) {
       const hitChance = pStats.hit - adjustedMCalc.dodge;
       if (monsterIsStunned || Math.random() * 100 < hitChance) {
         // 破防判定（斧）
@@ -826,6 +895,26 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               log.push(`🛡️ ${mName} 的甲殼反彈！你受到 **${reflectDmg}** 點反彈傷害！（你剩 ${Math.max(0, pHp)} HP）`);
               if (pHp <= 0) { outcome = "lose"; break; }
             }
+          }
+        }
+        // ── 怪物反擊（counter）：被玩家攻擊時，value% 機率反擊造成受到傷害的 20%──
+        if (outcome === null && Array.isArray(monsterActiveEffects)) {
+          for (const ctEff of monsterActiveEffects) {
+            if (!ctEff || ctEff.key !== 'counter') continue;
+            const ctParams = ctEff.params || {};
+            const ctDur = ctParams.duration || {};
+            if (ctDur.mode === 'turns') {
+              const ctEnd = (ctEff.appliedAt || 1) + (ctDur.value || 1);
+              if (round > ctEnd) continue;
+            }
+            const counterChance = Number(ctParams.value || 30);
+            if (Math.random() * 100 < counterChance) {
+              const counterDmg = Math.max(1, Math.round(dmg * 0.2));
+              pHp -= counterDmg;
+              log.push(`🦀 ${mName} **反擊**！以受到傷害的 20% 回擊，造成 **${counterDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+              if (pHp <= 0) { outcome = "lose"; }
+            }
+            break; // 只處理第一個 counter 效果
           }
         }
         // 擊暈判定（爆擊不觸發）
