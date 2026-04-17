@@ -1149,7 +1149,12 @@ async function handleStartFight(interaction) {
       new ButtonBuilder().setCustomId(BTN.deleteLog).setLabel("🗑️ 刪除紀錄").setStyle(ButtonStyle.Secondary)
     );
 
-    await interaction.editReply({ embeds: [embed], components: [row] });
+    try {
+      await interaction.editReply({ embeds: [embed], components: [row] });
+    } catch (componentErr) {
+      console.error("[monsterZoneHandlers] 編輯回覆失敗 (components):", componentErr.message);
+      await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
+    }
     activeSessions.delete(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
   } catch (err) {
     activeSessions.delete(discordId);
