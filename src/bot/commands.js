@@ -14,6 +14,7 @@ const {
 } = require("./handlers/publishHandlers");
 const { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect } = require("./handlers/coinShopHandlers");
 const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal, isNpcDialogButton, handleNpcDialog } = require("./handlers/monsterZoneHandlers");
+const { isAuctionButton, handleAuctionButton, handleAuctionSelect, handleAuctionSellModal, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -63,7 +64,10 @@ const definitions = [
     .setDescription("管理員對指定玩家發放經驗")
     .addUserOption((opt) => opt.setName("玩家").setDescription("目標玩家").setRequired(true))
     .addIntegerOption((opt) => opt.setName("數量").setDescription("經驗數量").setRequired(true).setMinValue(1))
-    .addStringOption((opt) => opt.setName("原因").setDescription("操作原因").setRequired(false))
+    .addStringOption((opt) => opt.setName("原因").setDescription("操作原因").setRequired(false)),
+  new SlashCommandBuilder()
+    .setName("發布拍賣場面板")
+    .setDescription("管理員在目前聊天室發布拍賣場面板"),
 ].map((d) => d.toJSON());
 
 async function isAdmin(interaction) {
@@ -125,9 +129,26 @@ async function handleCommand(interaction) {
     await handleAdminExpCommand(interaction);
     return;
   }
+
+  if (interaction.commandName === "發布拍賣場面板") {
+    if (!await isAdmin(interaction)) {
+      await interaction.reply({ content: "❌ 僅限管理員使用。", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    await publishAuctionPanel(interaction);
+    return;
+  }
 }
 
 async function handleButton(interaction) {
+  if (isAuctionButton(interaction.customId)) {
+    if (interaction.customId.startsWith("auction:sell_confirm:")) {
+      await handleAuctionSellConfirm(interaction);
+      return;
+    }
+    await handleAuctionButton(interaction);
+    return;
+  }
   if (isMonsterZoneButton(interaction.customId)) {
     await handleMonsterZoneButton(interaction);
     return;
@@ -157,6 +178,10 @@ async function handleButton(interaction) {
 }
 
 async function handleSelectMenu(interaction) {
+  if (interaction.customId.startsWith("auction:sell_item:") || interaction.customId.startsWith("auction:sell_currency:")) {
+    await handleAuctionSelect(interaction);
+    return;
+  }
   if (isCoinShopSelect(interaction.customId)) {
     await handleShopSelect(interaction);
     return;
@@ -179,6 +204,14 @@ async function handleSelectMenu(interaction) {
 }
 
 async function handleModal(interaction) {
+  if (interaction.customId.startsWith("auction:sell_currency:")) {
+    await handleAuctionSellModal(interaction);
+    return;
+  }
+  if (interaction.customId.startsWith("auction:sell_modal:")) {
+    await handleAuctionModal(interaction);
+    return;
+  }
   if (await handlePlayerPanelModal(interaction)) {
     return;
   }

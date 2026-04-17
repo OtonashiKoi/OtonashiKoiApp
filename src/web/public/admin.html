@@ -71,6 +71,16 @@
               </div>
             </div>
 
+            <div class="nav-group" data-nav-group="auction">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>拍賣場</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-auction">拍賣場管理</button>
+              </div>
+            </div>
+
             <div class="nav-group" data-nav-group="insights">
               <button class="nav-group-toggle" type="button" aria-expanded="false">
                 <span>監控與紀錄</span>
@@ -601,6 +611,49 @@
             </div>
           </section>
 
+          <section id="section-auction" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Auction House</p>
+                  <h2>拍賣場管理</h2>
+                </div>
+              </div>
+
+              <!-- 頻道設定 -->
+              <div class="subsection" style="margin-bottom:1.5rem;">
+                <h3 style="margin-bottom:.75rem;">📡 頻道設定</h3>
+                <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+                  <select id="auction-channel-select" style="flex:1;min-width:200px;">
+                    <option value="">── 選擇文字頻道 ──</option>
+                  </select>
+                  <button id="auction-save-channel-btn" class="btn btn-primary">儲存頻道</button>
+                  <button id="auction-publish-btn" class="btn btn-secondary">發布面板到頻道</button>
+                </div>
+                <p id="auction-channel-status" style="margin-top:.5rem;font-size:.85rem;color:#6b7280;"></p>
+              </div>
+
+              <!-- 篩選列 -->
+              <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center;">
+                <select id="auction-filter-status" style="padding:.4rem .75rem;border-radius:6px;border:1px solid #d1d5db;">
+                  <option value="">全部狀態</option>
+                  <option value="active">上架中</option>
+                  <option value="sold">已售出</option>
+                  <option value="expired">已到期</option>
+                  <option value="reclaimed">已領回</option>
+                  <option value="removed">已強制下架</option>
+                </select>
+                <button id="auction-refresh-btn" class="btn btn-secondary">🔄 重新整理</button>
+                <span id="auction-count-label" style="color:#6b7280;font-size:.9rem;"></span>
+              </div>
+
+              <!-- 拍賣列表 -->
+              <div id="auction-list-container">
+                <p style="color:#9ca3af;">請先連線後載入資料。</p>
+              </div>
+            </div>
+          </section>
+
           <section id="section-log" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -664,5 +717,6 @@
     <script src="/static/admin.items.js?v=6"></script>
     <script src="/static/admin.leaderboard.js?v=6"></script>
     <script src="/static/admin.image-cropper.js?v=1"></script>
+    <script src="/static/admin.auction.js?v=1"></script>
   </body>
 </html>

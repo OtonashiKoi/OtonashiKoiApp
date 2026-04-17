@@ -489,6 +489,70 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
+  // ── 拍賣場管理 ──────────────────────────────────────
+
+  // 取得所有拍賣（支援 status 篩選、分頁）
+  router.get("/admin/auction/list", async (req, res, next) => {
+    try {
+      const { status, page = 0, limit = 30 } = req.query;
+      const result = await serviceContext.auctionService.adminGetAll({
+        status: status || undefined,
+        page: parseInt(page, 10) || 0,
+        limit: parseInt(limit, 10) || 30
+      });
+      res.json(ok(result, "auction list fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // 強制下架（退還物品給賣家）
+  router.delete("/admin/auction/:id", async (req, res, next) => {
+    try {
+      const auction = await serviceContext.auctionService.adminForceRemove(req.params.id, "admin");
+      res.json(ok({ id: auction.id }, "auction removed"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // 取得拍賣場頻道設定
+  router.get("/admin/auction/config", async (_req, res, next) => {
+    try {
+      const config = await serviceContext.auctionService.getChannelConfig();
+      res.json(ok(config, "auction config fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // 儲存拍賣場頻道設定
+  router.put("/admin/auction/config", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      const config = await serviceContext.auctionService.saveChannelConfig({ channelId });
+      res.json(ok(config, "auction config saved"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // 在指定頻道發布拍賣場面板
+  router.post("/admin/auction/publish", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      if (!channelId) {
+        return res.status(400).json(fail("MISSING_CHANNEL", "請提供 channelId"));
+      }
+      const { refreshAuctionChannel } = require("../../bot/handlers/auctionZoneHandlers");
+      await serviceContext.auctionService.saveChannelConfig({ channelId });
+      await refreshAuctionChannel();
+      res.json(ok({ channelId }, "auction panel published"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   return router;
 }
 

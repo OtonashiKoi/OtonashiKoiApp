@@ -218,6 +218,11 @@
     if (window.adminPlayers && typeof window.adminPlayers.loadPlayers === 'function') {
       await window.adminPlayers.loadPlayers();
     }
+
+    // 拍賣場管理載入
+    if (window.__auctionAdmin && typeof window.__auctionAdmin.load === 'function') {
+      await window.__auctionAdmin.load(data);
+    }
   }
 
   async function saveLayout() {

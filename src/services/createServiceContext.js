@@ -17,6 +17,7 @@ const { WeeklyQuestService } = require("./weeklyQuest/weeklyQuestService");
 const { BattleConfigService } = require("./battle/battleConfigService");
 const { EffectDefinitionService } = require("./effect/effectDefinitionService");
 const { EnhanceService } = require("./enhance/enhanceService");
+const { AuctionService } = require("./auction/auctionService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -42,6 +43,7 @@ function createServiceContext() {
   const battleConfigService = new BattleConfigService(repositories.battleConfigRepository);
   const effectDefinitionService = new EffectDefinitionService(repositories.effectDefinitionRepository);
   const enhanceService = new EnhanceService(repositories.progressRepository, repositories.itemRepository);
+  const auctionService = new AuctionService(repositories.progressRepository, repositories.walletRepository, playerTierService);
   const shopService = new ShopService(repositories.shopRepository, playerService, rewardService, repositories.progressRepository, progressService, repositories.itemRepository, playerTierService);
   const transactionService = new TransactionService(playerService, repositories.transactionRepository);
   const adminService = new AdminService(
@@ -79,7 +81,8 @@ function createServiceContext() {
     weeklyQuestService,
     battleConfigService,
     effectDefinitionService,
-    enhanceService
+    enhanceService,
+    auctionService
   };
 }
 
