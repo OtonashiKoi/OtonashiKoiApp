@@ -82,7 +82,6 @@ async function replyPlayerBlocked(interaction) {
 
 
 async function handleProfile(interaction) {
-  console.log(`[handleProfile] called by ${interaction.user.id}`);
   const serviceContext = getServiceContext();
   const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
   // getProfile 與 updatePlayerTier 互不相依，並行執行
@@ -1419,7 +1418,6 @@ function buildProgressBar(current, target, width = 10) {
 
 async function handleButton(interaction) {
   const id = interaction.customId;
-  console.log(`[playerPanel.handleButton] id=${id} user=${interaction.user?.id}`);
 
   // 每週任務領取
   if (id.startsWith("wq_claim:")) {

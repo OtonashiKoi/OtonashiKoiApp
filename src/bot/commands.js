@@ -128,7 +128,6 @@ async function handleCommand(interaction) {
 }
 
 async function handleButton(interaction) {
-  console.log(`[handleButton] customId=${interaction.customId} user=${interaction.user?.id}`);
   if (isMonsterZoneButton(interaction.customId)) {
     await handleMonsterZoneButton(interaction);
     return;
