@@ -1455,6 +1455,14 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
                 droppedItemObjects.push(gemItem);
               }
             } else {
+              // 戒指掉落時隨機屬性 +1
+              let equipStats = item.equipStats ? { ...item.equipStats } : {};
+              if (item.equipSlot === 'accessory_l' || item.equipSlot === 'accessory_r') {
+                const statKeys = ['str', 'agi', 'vit', 'int', 'dex', 'luk'];
+                const randomStat = statKeys[Math.floor(Math.random() * statKeys.length)];
+                equipStats[randomStat] = (equipStats[randomStat] || 0) + 1;
+              }
+
               luckyProg.inventory.push({
                 uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
                 itemEffect: item.effect || { type: "none", value: 0 },
@@ -1464,7 +1472,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
                 combatEffects: item.combatEffects || [],
                 itemType: item.itemType || "consumable",
                 imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
-                equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
+                equipSlot: item.equipSlot || null, equipStats,
                 weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
                 atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
                 enhanceLevel: 0, source: "monster_drop", sourceRef: monster.name,
@@ -1570,6 +1578,14 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
                 bonusItemObjects.push(gemItem);
               }
             } else {
+              // 戒指掉落時隨機屬性 +1
+              let equipStats = item.equipStats ? { ...item.equipStats } : {};
+              if (item.equipSlot === 'accessory_l' || item.equipSlot === 'accessory_r') {
+                const statKeys = ['str', 'agi', 'vit', 'int', 'dex', 'luk'];
+                const randomStat = statKeys[Math.floor(Math.random() * statKeys.length)];
+                equipStats[randomStat] = (equipStats[randomStat] || 0) + 1;
+              }
+
               bonusProg.inventory.push({
                 uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
                 itemEffect: item.effect || { type: "none", value: 0 },
@@ -1579,7 +1595,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
                 combatEffects: item.combatEffects || [],
                 itemType: item.itemType || "consumable",
                 imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
-                equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
+                equipSlot: item.equipSlot || null, equipStats,
                 weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
                 atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
                 enhanceLevel: 0, source: "monster_drop_bonus", sourceRef: monster.name,
