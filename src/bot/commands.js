@@ -14,7 +14,7 @@ const {
 } = require("./handlers/publishHandlers");
 const { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect } = require("./handlers/coinShopHandlers");
 const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal, isNpcDialogButton, handleNpcDialog } = require("./handlers/monsterZoneHandlers");
-const { isAuctionButton, handleAuctionButton, handleAuctionSelect, handleAuctionSellModal, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
+const { isAuctionButton, handleAuctionButton, handleAuctionSelect, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -204,10 +204,6 @@ async function handleSelectMenu(interaction) {
 }
 
 async function handleModal(interaction) {
-  if (interaction.customId.startsWith("auction:sell_currency:")) {
-    await handleAuctionSellModal(interaction);
-    return;
-  }
   if (interaction.customId.startsWith("auction:sell_modal:")) {
     await handleAuctionModal(interaction);
     return;

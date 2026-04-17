@@ -315,6 +315,38 @@ async function handleAuctionButton(interaction) {
     await interaction.editReply({ content: "🏷️ **上架商品**\n\n請選擇要上架的物品：", components: [row, backRow] });
     return;
   }
+
+  // Step 3: 選完貨幣 → 彈出 Modal 填寫價格 + 時間（Button 互動直接 showModal）
+  if (id.startsWith(PFX.sellCurrency)) {
+    const parts = id.slice(PFX.sellCurrency.length).split(":");
+    const itemUuid = parts[0];
+    const currency = parts[1]; // "gold" | "diamond"
+
+    await interaction.showModal(
+      new ModalBuilder()
+        .setCustomId(`${PFX.sellModal}${itemUuid}:${currency}`)
+        .setTitle("設定價格與上架時間")
+        .addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId("price_input")
+              .setLabel(currency === "gold" ? "金幣定價（5,000 ～ 10,000,000）" : "鑽石定價（1 ～ 200,000）")
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder(currency === "gold" ? "例：50000" : "例：1000")
+              .setRequired(true)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId("hours_input")
+              .setLabel("上架時間（小時）：1、6、12、24")
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder("例：24")
+              .setRequired(true)
+          )
+        )
+    );
+    return;
+  }
 }
 
 // ─── Select Menu 入口 ────────────────────────────────
@@ -333,47 +365,6 @@ async function handleAuctionSelect(interaction) {
     await interaction.editReply({ content: "💱 **選擇定價貨幣**\n\n你想用哪種貨幣標價？", components: [row] });
     return;
   }
-}
-
-// ─── 貨幣選完 → 顯示 Modal 填寫價格與時間 ─────────────
-async function handleAuctionSellModal(interaction) {
-  const id = interaction.customId;
-
-  // Step 3: 選完貨幣 → 彈出 Modal 填寫價格 + 時間
-  if (id.startsWith(PFX.sellCurrency)) {
-    const parts = id.slice(PFX.sellCurrency.length).split(":");
-    const itemUuid = parts[0];
-    const currency = parts[1]; // "gold" | "diamond"
-
-    const minPrice = currency === "gold" ? "5000" : "1";
-    const maxPrice = currency === "gold" ? "10000000" : "200000";
-
-    await interaction.showModal(
-      new ModalBuilder()
-        .setCustomId(`${PFX.sellModal}${itemUuid}:${currency}`)
-        .setTitle("設定價格與上架時間")
-        .addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-              .setCustomId("price_input")
-              .setLabel(`定價（${currency === "gold" ? "金幣 5,000～10,000,000" : "鑽石 1～200,000"}）`)
-              .setStyle(TextInputStyle.Short)
-              .setPlaceholder(currency === "gold" ? "例：50000" : "例：1000")
-              .setRequired(true)
-          ),
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-              .setCustomId("hours_input")
-              .setLabel("上架時間（小時）：1、6、12、24")
-              .setStyle(TextInputStyle.Short)
-              .setPlaceholder("例：24")
-              .setRequired(true)
-          )
-        )
-    );
-    return true;
-  }
-  return false;
 }
 
 // ─── Modal 提交 ──────────────────────────────────────
@@ -537,7 +528,6 @@ module.exports = {
   isAuctionButton,
   handleAuctionButton,
   handleAuctionSelect,
-  handleAuctionSellModal,
   handleAuctionModal,
   handleAuctionSellConfirm,
   publishAuctionPanel,
