@@ -657,15 +657,22 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const pEnd = (pEff.appliedAt || 1) + (pDur.value || 1);
           if (round > pEnd) continue;
         }
-        if (pEff.key === 'stun') playerIsStunned = true;
-        if (pEff.key === 'freeze') playerIsFrozen = true;
+        // stun：value 為觸發機率（40% = 40），每回合重新判定
+        if (pEff.key === 'stun') {
+          const stunChance = Number(pEff.params?.value ?? 100);
+          if (Math.random() * 100 < stunChance) playerIsStunned = true;
+        }
+        // freeze：攻速 -50% → 每 2 回合跳過 1 次攻擊（偶數回合才攻擊）
+        if (pEff.key === 'freeze') {
+          if (round % 2 !== 0) playerIsFrozen = true;
+        }
         if (pEff.key === 'silence') playerIsSilenced = true;
       }
     }
     if (playerIsStunned) {
-      log.push(`😵 你陷入擊暈狀態，此回合無法攻擊！`);
+      log.push(`😵 **擊暈**！你無法行動，此回合無法攻擊！`);
     } else if (playerIsFrozen) {
-      log.push(`🧊 你被冰凍住，此回合無法攻擊！`);
+      log.push(`🧊 **冰凍**！行動遲緩，此回合無法攻擊！`);
     }
 
     // 玩家裝備的卡片技能（special_1/2/3 獨立觸發）
