@@ -183,28 +183,31 @@ async function handleProfile(interaction) {
 
     // 顯示職業名稱和特性（如果武器匹配；weapons=null 表示任何武器都觸發）
     if (jobInfo) {
-      // 從 passiveEffects 提取結算加成（職業 + 稱號）
-      const bonusParts = [];
       // 職業裝備加成
+      const jobBonusParts = [];
       for (const eff of (jobEq.passiveEffects || [])) {
         const v = eff?.params?.value;
         if (!v) continue;
-        if (eff.key === 'gold_gain_up')  bonusParts.push(`金幣 +${v}%`);
-        if (eff.key === 'exp_gain_up')   bonusParts.push(`經驗 +${v}%`);
-        if (eff.key === 'drop_rate_up')  bonusParts.push(`掉落 +${v}%`);
+        if (eff.key === 'gold_gain_up')  jobBonusParts.push(`金幣 +${v}%`);
+        if (eff.key === 'exp_gain_up')   jobBonusParts.push(`經驗 +${v}%`);
+        if (eff.key === 'drop_rate_up')  jobBonusParts.push(`掉落 +${v}%`);
       }
+      const jobBonusLine = jobBonusParts.length ? `\n結算加成：${jobBonusParts.join("、")}` : "";
+
       // 稱號裝備加成
+      const titleBonusParts = [];
       const titleEq = equipped.title_eq;
       if (titleEq) {
         for (const eff of (titleEq.passiveEffects || [])) {
           const v = eff?.params?.value;
           if (!v) continue;
-          if (eff.key === 'gold_gain_up')  bonusParts.push(`金幣 +${v}%`);
-          if (eff.key === 'exp_gain_up')   bonusParts.push(`經驗 +${v}%`);
-          if (eff.key === 'drop_rate_up')  bonusParts.push(`掉落 +${v}%`);
+          if (eff.key === 'gold_gain_up')  titleBonusParts.push(`金幣 +${v}%`);
+          if (eff.key === 'exp_gain_up')   titleBonusParts.push(`經驗 +${v}%`);
+          if (eff.key === 'drop_rate_up')  titleBonusParts.push(`掉落 +${v}%`);
         }
       }
-      const bonusLine = bonusParts.length ? `\n結算加成：${bonusParts.join("、")}` : "";
+      const titleBonusLine = titleBonusParts.length ? `\n稱號加成：${titleBonusParts.join("、")}` : "";
+      const bonusLine = jobBonusLine + titleBonusLine;
 
       const weaponMatches = jobInfo.weapons === null || jobInfo.weapons.includes(wt);
       if (weaponMatches) {
