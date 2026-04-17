@@ -564,20 +564,32 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const skill = equippedCard.monsterCardSkill;
       const cardName = equippedCard.itemName || equippedCard.name || '卡片';
 
+      // 怪物增益效果（施加給怪物自己）
+      const MONSTER_BUFF_KEYS = new Set(['str_up', 'def_up', 'atk_up', 'lifesteal', 'life_steal_strong', 'crit_rate_up', 'atk_multiplier_up', 'counter']);
+      // 怪物DEBUFF效果（施加給玩家）
+      const MONSTER_DEBUFF_KEYS = new Set(['poison', 'bleed', 'burn', 'atk_down', 'def_down', 'silence', 'freeze', 'stun', 'charm', 'lightning', 'dark_curse', 'ancient_power']);
+
       if (Math.random() * 100 < 50) {
         log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
 
         if (skill.procEffects && Array.isArray(skill.procEffects)) {
           for (const procEffect of skill.procEffects) {
             if (!procEffect || !procEffect.key) continue;
-            // 怪物卡片技能的效果施加給玩家
-            if (!options.playerActiveEffects) options.playerActiveEffects = [];
-            options.playerActiveEffects.push({
+            const effectEntry = {
               key: procEffect.key,
               params: procEffect.params || {},
               appliedAt: round,
               source: 'monster_skill'
-            });
+            };
+            // 根據效果類型決定施加對象
+            if (MONSTER_BUFF_KEYS.has(procEffect.key)) {
+              // 怪物增益 → 施加給怪物
+              monsterActiveEffects.push(effectEntry);
+            } else if (MONSTER_DEBUFF_KEYS.has(procEffect.key)) {
+              // 怪物DEBUFF → 施加給玩家
+              if (!options.playerActiveEffects) options.playerActiveEffects = [];
+              options.playerActiveEffects.push(effectEntry);
+            }
           }
         }
       }
