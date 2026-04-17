@@ -231,8 +231,8 @@ function applyMonsterEffects(mCalc, activeEffects = [], currentRound = 1) {
         adjusted.atk = Math.round((adjusted.atk || 0) * (1 + (params.value || 0) / 100));
         break;
       case 'def_up':
-        // DEF 提升（固定值）
-        adjusted.def = (adjusted.def || 0) + (params.value || 0);
+        // DEF 提升（百分比，value=25 表示 +25%）
+        adjusted.def = Math.round((adjusted.def || 0) * (1 + Math.abs(params.value || 0) / 100));
         break;
       case 'dodge_up':
         // 迴避提升（百分比）
@@ -583,7 +583,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             };
             // 根據效果類型決定施加對象
             if (MONSTER_BUFF_KEYS.has(procEffect.key)) {
-              // 怪物增益 → 施加給怪物
+              // 怪物增益 → 施加給怪物（同 key 先清舊的，防止乘法疊加）
+              for (let i = monsterActiveEffects.length - 1; i >= 0; i--) {
+                if (monsterActiveEffects[i].key === procEffect.key && monsterActiveEffects[i].source === 'monster_skill') {
+                  monsterActiveEffects.splice(i, 1);
+                }
+              }
               monsterActiveEffects.push(effectEntry);
             } else if (MONSTER_DEBUFF_KEYS.has(procEffect.key)) {
               // 怪物DEBUFF → 施加給玩家
