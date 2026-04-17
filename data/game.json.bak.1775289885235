@@ -1,0 +1,1575 @@
+{
+  "schemaVersion": 1,
+  "players": {
+    "1450019975031951370": {
+      "discordId": "1450019975031951370",
+      "displayName": "音無醬",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.349Z",
+      "updatedAt": "2026-03-27T10:05:34.349Z"
+    },
+    "674836057245614080": {
+      "discordId": "674836057245614080",
+      "displayName": "鳳梨猫",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.354Z",
+      "updatedAt": "2026-03-27T10:05:34.354Z"
+    },
+    "705033058302033990": {
+      "discordId": "705033058302033990",
+      "displayName": "平和我大哥",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.358Z",
+      "updatedAt": "2026-03-27T10:05:34.358Z"
+    },
+    "288320940771901440": {
+      "discordId": "288320940771901440",
+      "displayName": "企鵝君ペンギン",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.363Z",
+      "updatedAt": "2026-03-27T10:05:34.363Z"
+    },
+    "575308041109372930": {
+      "discordId": "575308041109372930",
+      "displayName": "extreamt(公雞)",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.366Z",
+      "updatedAt": "2026-03-27T10:05:34.366Z"
+    },
+    "319127703284350989": {
+      "discordId": "319127703284350989",
+      "displayName": "Ikusen",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.371Z",
+      "updatedAt": "2026-03-27T10:05:34.371Z"
+    },
+    "561512985609240576": {
+      "discordId": "561512985609240576",
+      "displayName": "龍龍",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.375Z",
+      "updatedAt": "2026-03-27T10:05:34.375Z"
+    },
+    "129545310669111297": {
+      "discordId": "129545310669111297",
+      "displayName": "瓊崖",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.380Z",
+      "updatedAt": "2026-03-27T10:05:34.380Z"
+    },
+    "477502869008941066": {
+      "discordId": "477502869008941066",
+      "displayName": "SorA.",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.384Z",
+      "updatedAt": "2026-03-27T10:05:34.384Z"
+    },
+    "331642796710821892": {
+      "discordId": "331642796710821892",
+      "displayName": "トマト",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.388Z",
+      "updatedAt": "2026-03-27T10:05:34.388Z"
+    },
+    "344786855235026944": {
+      "discordId": "344786855235026944",
+      "displayName": "喜歡跳烤爐的咩",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.392Z",
+      "updatedAt": "2026-03-27T10:05:34.392Z"
+    },
+    "551272452676911128": {
+      "discordId": "551272452676911128",
+      "displayName": "智軒-tommy3134895",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.397Z",
+      "updatedAt": "2026-03-27T10:05:34.397Z"
+    },
+    "603736801710178304": {
+      "discordId": "603736801710178304",
+      "displayName": "茶莫",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.402Z",
+      "updatedAt": "2026-03-27T10:05:34.402Z"
+    },
+    "159058930402721792": {
+      "discordId": "159058930402721792",
+      "displayName": "青葉ＡＢＣ",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.405Z",
+      "updatedAt": "2026-03-27T10:05:34.405Z"
+    },
+    "1000479609613193297": {
+      "discordId": "1000479609613193297",
+      "displayName": "風雪曲",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.409Z",
+      "updatedAt": "2026-03-27T10:05:34.409Z"
+    },
+    "689055751859208324": {
+      "discordId": "689055751859208324",
+      "displayName": "阿蟲",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.414Z",
+      "updatedAt": "2026-03-27T10:05:34.414Z"
+    },
+    "369732621493600257": {
+      "discordId": "369732621493600257",
+      "displayName": "聖光",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.419Z",
+      "updatedAt": "2026-03-27T10:05:34.419Z"
+    },
+    "547821870360035329": {
+      "discordId": "547821870360035329",
+      "displayName": "Han",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.423Z",
+      "updatedAt": "2026-03-27T10:05:34.423Z"
+    },
+    "775719386597031947": {
+      "discordId": "775719386597031947",
+      "displayName": "MDFK",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.428Z",
+      "updatedAt": "2026-03-27T10:05:34.428Z"
+    },
+    "1205573349447831592": {
+      "discordId": "1205573349447831592",
+      "displayName": "harkun",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.433Z",
+      "updatedAt": "2026-03-27T10:05:34.433Z"
+    },
+    "742721187133521971": {
+      "discordId": "742721187133521971",
+      "displayName": "霓茶",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.437Z",
+      "updatedAt": "2026-03-27T10:05:34.437Z"
+    },
+    "364417212645376001": {
+      "discordId": "364417212645376001",
+      "displayName": "享受夢境",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.441Z",
+      "updatedAt": "2026-03-27T10:05:34.441Z"
+    },
+    "475247027329171456": {
+      "discordId": "475247027329171456",
+      "displayName": "餅乾oao",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.447Z",
+      "updatedAt": "2026-03-27T10:05:34.447Z"
+    },
+    "1354102125042466929": {
+      "discordId": "1354102125042466929",
+      "displayName": "CuchIllo",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.451Z",
+      "updatedAt": "2026-03-27T10:05:34.451Z"
+    },
+    "442211450853785607": {
+      "discordId": "442211450853785607",
+      "displayName": "only翁立",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.455Z",
+      "updatedAt": "2026-03-27T10:05:34.455Z"
+    },
+    "314400982479929345": {
+      "discordId": "314400982479929345",
+      "displayName": "巨型鳳梨",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.459Z",
+      "updatedAt": "2026-03-27T10:05:34.459Z"
+    },
+    "383605877552185375": {
+      "discordId": "383605877552185375",
+      "displayName": "司馬楓",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.465Z",
+      "updatedAt": "2026-03-27T10:05:34.465Z"
+    },
+    "455711645222830081": {
+      "discordId": "455711645222830081",
+      "displayName": "🐯虎嚕🐾五行療癒命理師🪭",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.469Z",
+      "updatedAt": "2026-03-27T10:05:34.469Z"
+    },
+    "865264891991425055": {
+      "discordId": "865264891991425055",
+      "displayName": "音無恋",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.473Z",
+      "updatedAt": "2026-03-27T10:05:34.473Z"
+    },
+    "909733729021345833": {
+      "discordId": "909733729021345833",
+      "displayName": "波波龜🐢",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.479Z",
+      "updatedAt": "2026-03-27T10:05:34.479Z"
+    },
+    "139748832517816320": {
+      "discordId": "139748832517816320",
+      "displayName": "布布",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.483Z",
+      "updatedAt": "2026-03-27T10:05:34.483Z"
+    },
+    "1126352373485420614": {
+      "discordId": "1126352373485420614",
+      "displayName": "豪力",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.487Z",
+      "updatedAt": "2026-03-27T10:05:34.487Z"
+    },
+    "158390323372883968": {
+      "discordId": "158390323372883968",
+      "displayName": "Ashiou阿修修",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.492Z",
+      "updatedAt": "2026-03-27T10:05:34.492Z"
+    },
+    "426418808895569932": {
+      "discordId": "426418808895569932",
+      "displayName": "ℍ𝕦𝕟𝕥𝕖𝕣漢格",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.498Z",
+      "updatedAt": "2026-03-27T10:05:34.498Z"
+    },
+    "732871224270782485": {
+      "discordId": "732871224270782485",
+      "displayName": "西園寺桔梗",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.503Z",
+      "updatedAt": "2026-03-27T10:05:34.503Z"
+    },
+    "469881640840331294": {
+      "discordId": "469881640840331294",
+      "displayName": "星野Poteto",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.508Z",
+      "updatedAt": "2026-03-27T10:05:34.508Z"
+    },
+    "537330703717629962": {
+      "discordId": "537330703717629962",
+      "displayName": "Tsunshin",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.514Z",
+      "updatedAt": "2026-03-27T10:05:34.514Z"
+    },
+    "609388495060074536": {
+      "discordId": "609388495060074536",
+      "displayName": "彩雲",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.518Z",
+      "updatedAt": "2026-03-27T10:05:34.518Z"
+    },
+    "553639946477371419": {
+      "discordId": "553639946477371419",
+      "displayName": "印魂ソウルカブ",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.523Z",
+      "updatedAt": "2026-03-27T10:05:34.523Z"
+    },
+    "453560048677945354": {
+      "discordId": "453560048677945354",
+      "displayName": "曦和",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.535Z",
+      "updatedAt": "2026-03-27T10:05:34.535Z"
+    },
+    "665557921551220746": {
+      "discordId": "665557921551220746",
+      "displayName": "Jakklim90",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.540Z",
+      "updatedAt": "2026-03-27T10:05:34.540Z"
+    },
+    "523793022111055883": {
+      "discordId": "523793022111055883",
+      "displayName": "Yaroko",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.546Z",
+      "updatedAt": "2026-03-27T10:05:34.546Z"
+    },
+    "503704064719192074": {
+      "discordId": "503704064719192074",
+      "displayName": "柚子",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.551Z",
+      "updatedAt": "2026-03-27T10:05:34.551Z"
+    },
+    "519122085503827988": {
+      "discordId": "519122085503827988",
+      "displayName": "ste_okita",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.555Z",
+      "updatedAt": "2026-03-27T10:05:34.555Z"
+    },
+    "343019809455472651": {
+      "discordId": "343019809455472651",
+      "displayName": "Tojo Kenjiro(東條健次郎)",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.561Z",
+      "updatedAt": "2026-03-27T10:05:34.561Z"
+    },
+    "607191138855813140": {
+      "discordId": "607191138855813140",
+      "displayName": "CC",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.566Z",
+      "updatedAt": "2026-03-27T10:05:34.566Z"
+    },
+    "191890857484484609": {
+      "discordId": "191890857484484609",
+      "displayName": "滄",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.571Z",
+      "updatedAt": "2026-03-27T10:05:34.571Z"
+    },
+    "525828241710252033": {
+      "discordId": "525828241710252033",
+      "displayName": "噴火龍的訓練家",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.575Z",
+      "updatedAt": "2026-03-27T10:05:34.575Z"
+    },
+    "534874347114987574": {
+      "discordId": "534874347114987574",
+      "displayName": "gold dai",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.581Z",
+      "updatedAt": "2026-03-27T10:05:34.581Z"
+    },
+    "535320293984567307": {
+      "discordId": "535320293984567307",
+      "displayName": "天翎",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.586Z",
+      "updatedAt": "2026-03-27T10:05:34.586Z"
+    },
+    "595837539491905536": {
+      "discordId": "595837539491905536",
+      "displayName": "沒味蟹堡",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.591Z",
+      "updatedAt": "2026-03-27T10:05:34.591Z"
+    },
+    "597624017851252746": {
+      "discordId": "597624017851252746",
+      "displayName": "YEE",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.597Z",
+      "updatedAt": "2026-03-27T10:05:34.597Z"
+    },
+    "897114265884971078": {
+      "discordId": "897114265884971078",
+      "displayName": "曦",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.603Z",
+      "updatedAt": "2026-03-27T10:05:34.603Z"
+    },
+    "860551109042110475": {
+      "discordId": "860551109042110475",
+      "displayName": "B.Y",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.608Z",
+      "updatedAt": "2026-03-27T10:05:34.608Z"
+    },
+    "334394962458443779": {
+      "discordId": "334394962458443779",
+      "displayName": "Kelvin",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-27T10:05:34.614Z",
+      "updatedAt": "2026-03-27T10:05:34.614Z"
+    },
+    "935245860856533012": {
+      "discordId": "935245860856533012",
+      "displayName": "蒼心‧翟普瑞薩",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-28T20:05:27.825Z",
+      "updatedAt": "2026-03-28T20:05:27.825Z"
+    },
+    "1417449503786663989": {
+      "discordId": "1417449503786663989",
+      "displayName": "活動小助手",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-03-31T10:03:33.344Z",
+      "updatedAt": "2026-03-31T10:03:33.344Z"
+    },
+    "201822843799863296": {
+      "discordId": "201822843799863296",
+      "displayName": "Pusheen",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-04-02T18:20:20.220Z",
+      "updatedAt": "2026-04-02T18:20:20.220Z"
+    },
+    "614852332026593291": {
+      "discordId": "614852332026593291",
+      "displayName": "海夢的狗",
+      "status": "active",
+      "schemaVersion": 1,
+      "createdAt": "2026-04-03T15:26:37.376Z",
+      "updatedAt": "2026-04-03T15:26:37.376Z"
+    }
+  },
+  "wallets": {
+    "1450019975031951370": {
+      "playerId": "1450019975031951370",
+      "gold": 900,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:45:22.308Z"
+    },
+    "674836057245614080": {
+      "playerId": "674836057245614080",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.355Z"
+    },
+    "705033058302033990": {
+      "playerId": "705033058302033990",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.359Z"
+    },
+    "288320940771901440": {
+      "playerId": "288320940771901440",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.364Z"
+    },
+    "575308041109372930": {
+      "playerId": "575308041109372930",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.368Z"
+    },
+    "319127703284350989": {
+      "playerId": "319127703284350989",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.372Z"
+    },
+    "561512985609240576": {
+      "playerId": "561512985609240576",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.376Z"
+    },
+    "129545310669111297": {
+      "playerId": "129545310669111297",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.381Z"
+    },
+    "477502869008941066": {
+      "playerId": "477502869008941066",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.385Z"
+    },
+    "331642796710821892": {
+      "playerId": "331642796710821892",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.389Z"
+    },
+    "344786855235026944": {
+      "playerId": "344786855235026944",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.394Z"
+    },
+    "551272452676911128": {
+      "playerId": "551272452676911128",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.398Z"
+    },
+    "603736801710178304": {
+      "playerId": "603736801710178304",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.402Z"
+    },
+    "159058930402721792": {
+      "playerId": "159058930402721792",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.406Z"
+    },
+    "1000479609613193297": {
+      "playerId": "1000479609613193297",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.410Z"
+    },
+    "689055751859208324": {
+      "playerId": "689055751859208324",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.415Z"
+    },
+    "369732621493600257": {
+      "playerId": "369732621493600257",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.420Z"
+    },
+    "547821870360035329": {
+      "playerId": "547821870360035329",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.425Z"
+    },
+    "775719386597031947": {
+      "playerId": "775719386597031947",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.430Z"
+    },
+    "1205573349447831592": {
+      "playerId": "1205573349447831592",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.434Z"
+    },
+    "742721187133521971": {
+      "playerId": "742721187133521971",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.438Z"
+    },
+    "364417212645376001": {
+      "playerId": "364417212645376001",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.442Z"
+    },
+    "475247027329171456": {
+      "playerId": "475247027329171456",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.448Z"
+    },
+    "1354102125042466929": {
+      "playerId": "1354102125042466929",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.452Z"
+    },
+    "442211450853785607": {
+      "playerId": "442211450853785607",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.456Z"
+    },
+    "314400982479929345": {
+      "playerId": "314400982479929345",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.460Z"
+    },
+    "383605877552185375": {
+      "playerId": "383605877552185375",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.466Z"
+    },
+    "455711645222830081": {
+      "playerId": "455711645222830081",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.470Z"
+    },
+    "865264891991425055": {
+      "playerId": "865264891991425055",
+      "gold": 100,
+      "diamond": 0,
+      "updatedAt": "2026-04-04T08:02:03.408Z"
+    },
+    "909733729021345833": {
+      "playerId": "909733729021345833",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.480Z"
+    },
+    "139748832517816320": {
+      "playerId": "139748832517816320",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.484Z"
+    },
+    "1126352373485420614": {
+      "playerId": "1126352373485420614",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.489Z"
+    },
+    "158390323372883968": {
+      "playerId": "158390323372883968",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.493Z"
+    },
+    "426418808895569932": {
+      "playerId": "426418808895569932",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.499Z"
+    },
+    "732871224270782485": {
+      "playerId": "732871224270782485",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.504Z"
+    },
+    "469881640840331294": {
+      "playerId": "469881640840331294",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.509Z"
+    },
+    "537330703717629962": {
+      "playerId": "537330703717629962",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.515Z"
+    },
+    "609388495060074536": {
+      "playerId": "609388495060074536",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.520Z"
+    },
+    "553639946477371419": {
+      "playerId": "553639946477371419",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.524Z"
+    },
+    "453560048677945354": {
+      "playerId": "453560048677945354",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.536Z"
+    },
+    "665557921551220746": {
+      "playerId": "665557921551220746",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.541Z"
+    },
+    "523793022111055883": {
+      "playerId": "523793022111055883",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.547Z"
+    },
+    "503704064719192074": {
+      "playerId": "503704064719192074",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.552Z"
+    },
+    "519122085503827988": {
+      "playerId": "519122085503827988",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.557Z"
+    },
+    "343019809455472651": {
+      "playerId": "343019809455472651",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.562Z"
+    },
+    "607191138855813140": {
+      "playerId": "607191138855813140",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.567Z"
+    },
+    "191890857484484609": {
+      "playerId": "191890857484484609",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.572Z"
+    },
+    "525828241710252033": {
+      "playerId": "525828241710252033",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.577Z"
+    },
+    "534874347114987574": {
+      "playerId": "534874347114987574",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.583Z"
+    },
+    "535320293984567307": {
+      "playerId": "535320293984567307",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.587Z"
+    },
+    "595837539491905536": {
+      "playerId": "595837539491905536",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.593Z"
+    },
+    "597624017851252746": {
+      "playerId": "597624017851252746",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.599Z"
+    },
+    "897114265884971078": {
+      "playerId": "897114265884971078",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.604Z"
+    },
+    "860551109042110475": {
+      "playerId": "860551109042110475",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.609Z"
+    },
+    "334394962458443779": {
+      "playerId": "334394962458443779",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-27T10:05:34.615Z"
+    },
+    "935245860856533012": {
+      "playerId": "935245860856533012",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-28T20:05:27.827Z"
+    },
+    "1417449503786663989": {
+      "playerId": "1417449503786663989",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-03-31T10:03:33.346Z"
+    },
+    "201822843799863296": {
+      "playerId": "201822843799863296",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-04-02T18:20:20.222Z"
+    },
+    "614852332026593291": {
+      "playerId": "614852332026593291",
+      "gold": 0,
+      "diamond": 0,
+      "updatedAt": "2026-04-03T15:26:37.379Z"
+    }
+  },
+  "progress": {
+    "1450019975031951370": {
+      "playerId": "1450019975031951370",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.352Z"
+    },
+    "674836057245614080": {
+      "playerId": "674836057245614080",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.356Z"
+    },
+    "705033058302033990": {
+      "playerId": "705033058302033990",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.360Z"
+    },
+    "288320940771901440": {
+      "playerId": "288320940771901440",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.365Z"
+    },
+    "575308041109372930": {
+      "playerId": "575308041109372930",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.369Z"
+    },
+    "319127703284350989": {
+      "playerId": "319127703284350989",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.373Z"
+    },
+    "561512985609240576": {
+      "playerId": "561512985609240576",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.377Z"
+    },
+    "129545310669111297": {
+      "playerId": "129545310669111297",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.382Z"
+    },
+    "477502869008941066": {
+      "playerId": "477502869008941066",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.386Z"
+    },
+    "331642796710821892": {
+      "playerId": "331642796710821892",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.390Z"
+    },
+    "344786855235026944": {
+      "playerId": "344786855235026944",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.395Z"
+    },
+    "551272452676911128": {
+      "playerId": "551272452676911128",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.400Z"
+    },
+    "603736801710178304": {
+      "playerId": "603736801710178304",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.403Z"
+    },
+    "159058930402721792": {
+      "playerId": "159058930402721792",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.407Z"
+    },
+    "1000479609613193297": {
+      "playerId": "1000479609613193297",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.411Z"
+    },
+    "689055751859208324": {
+      "playerId": "689055751859208324",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.416Z"
+    },
+    "369732621493600257": {
+      "playerId": "369732621493600257",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.421Z"
+    },
+    "547821870360035329": {
+      "playerId": "547821870360035329",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.426Z"
+    },
+    "775719386597031947": {
+      "playerId": "775719386597031947",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.431Z"
+    },
+    "1205573349447831592": {
+      "playerId": "1205573349447831592",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.435Z"
+    },
+    "742721187133521971": {
+      "playerId": "742721187133521971",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.439Z"
+    },
+    "364417212645376001": {
+      "playerId": "364417212645376001",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.444Z"
+    },
+    "475247027329171456": {
+      "playerId": "475247027329171456",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.449Z"
+    },
+    "1354102125042466929": {
+      "playerId": "1354102125042466929",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.453Z"
+    },
+    "442211450853785607": {
+      "playerId": "442211450853785607",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.457Z"
+    },
+    "314400982479929345": {
+      "playerId": "314400982479929345",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.462Z"
+    },
+    "383605877552185375": {
+      "playerId": "383605877552185375",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.467Z"
+    },
+    "455711645222830081": {
+      "playerId": "455711645222830081",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.471Z"
+    },
+    "865264891991425055": {
+      "playerId": "865264891991425055",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.476Z"
+    },
+    "909733729021345833": {
+      "playerId": "909733729021345833",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.481Z"
+    },
+    "139748832517816320": {
+      "playerId": "139748832517816320",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.485Z"
+    },
+    "1126352373485420614": {
+      "playerId": "1126352373485420614",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.490Z"
+    },
+    "158390323372883968": {
+      "playerId": "158390323372883968",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.495Z"
+    },
+    "426418808895569932": {
+      "playerId": "426418808895569932",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.500Z"
+    },
+    "732871224270782485": {
+      "playerId": "732871224270782485",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.506Z"
+    },
+    "469881640840331294": {
+      "playerId": "469881640840331294",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.511Z"
+    },
+    "537330703717629962": {
+      "playerId": "537330703717629962",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.516Z"
+    },
+    "609388495060074536": {
+      "playerId": "609388495060074536",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.521Z"
+    },
+    "553639946477371419": {
+      "playerId": "553639946477371419",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.526Z"
+    },
+    "453560048677945354": {
+      "playerId": "453560048677945354",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.537Z"
+    },
+    "665557921551220746": {
+      "playerId": "665557921551220746",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.542Z"
+    },
+    "523793022111055883": {
+      "playerId": "523793022111055883",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.549Z"
+    },
+    "503704064719192074": {
+      "playerId": "503704064719192074",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.553Z"
+    },
+    "519122085503827988": {
+      "playerId": "519122085503827988",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.558Z"
+    },
+    "343019809455472651": {
+      "playerId": "343019809455472651",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.564Z"
+    },
+    "607191138855813140": {
+      "playerId": "607191138855813140",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.568Z"
+    },
+    "191890857484484609": {
+      "playerId": "191890857484484609",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.573Z"
+    },
+    "525828241710252033": {
+      "playerId": "525828241710252033",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.579Z"
+    },
+    "534874347114987574": {
+      "playerId": "534874347114987574",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.584Z"
+    },
+    "535320293984567307": {
+      "playerId": "535320293984567307",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.589Z"
+    },
+    "595837539491905536": {
+      "playerId": "595837539491905536",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.594Z"
+    },
+    "597624017851252746": {
+      "playerId": "597624017851252746",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.600Z"
+    },
+    "897114265884971078": {
+      "playerId": "897114265884971078",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.606Z"
+    },
+    "860551109042110475": {
+      "playerId": "860551109042110475",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.611Z"
+    },
+    "334394962458443779": {
+      "playerId": "334394962458443779",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-27T10:05:34.616Z"
+    },
+    "935245860856533012": {
+      "playerId": "935245860856533012",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-28T20:05:27.829Z"
+    },
+    "1417449503786663989": {
+      "playerId": "1417449503786663989",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-03-31T10:03:33.347Z"
+    },
+    "201822843799863296": {
+      "playerId": "201822843799863296",
+      "level": 1,
+      "exp": 0,
+      "flags": {},
+      "updatedAt": "2026-04-02T18:20:20.224Z"
+    },
+    "614852332026593291": {
+      "playerId": "614852332026593291",
+      "level": 1,
+      "exp": 0,
+      "job": "Novice",
+      "jobLevel": 1,
+      "statusPoints": 0,
+      "attributes": {
+        "str": 1,
+        "agi": 1,
+        "vit": 1,
+        "int": 1,
+        "dex": 1,
+        "luk": 1
+      },
+      "equipment": {
+        "head_top": null,
+        "head_mid": null,
+        "head_low": null,
+        "armor": null,
+        "weapon": null,
+        "shield": null,
+        "garment": null,
+        "shoes": null,
+        "accessory_l": null,
+        "accessory_r": null
+      },
+      "inventory": [],
+      "flags": {},
+      "updatedAt": "2026-04-03T15:26:37.381Z"
+    }
+  },
+  "transactions": [
+    {
+      "playerId": "1450019975031951370",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "admin:manual-grant",
+      "sourceRef": "",
+      "balanceAfter": 100,
+      "operator": "admin-console",
+      "createdAt": "2026-03-27T10:44:59.455Z"
+    },
+    {
+      "playerId": "1450019975031951370",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "admin:manual-grant",
+      "sourceRef": "",
+      "balanceAfter": 200,
+      "operator": "admin-console",
+      "createdAt": "2026-03-27T10:45:02.726Z"
+    },
+    {
+      "playerId": "1450019975031951370",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "admin:manual-grant",
+      "sourceRef": "",
+      "balanceAfter": 300,
+      "operator": "admin-console",
+      "createdAt": "2026-03-27T10:45:03.949Z"
+    },
+    {
+      "playerId": "1450019975031951370",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "admin:manual-grant",
+      "sourceRef": "",
+      "balanceAfter": 400,
+      "operator": "admin-console",
+      "createdAt": "2026-03-27T10:45:03.998Z"
+    },
+    {
+      "playerId": "1450019975031951370",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "admin:manual-grant",
+      "sourceRef": "",
+      "balanceAfter": 500,
+      "operator": "admin-console",
+      "createdAt": "2026-03-27T10:45:04.646Z"
+    },
+    {
+      "playerId": "1450019975031951370",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "admin:manual-grant",
+      "sourceRef": "",
+      "balanceAfter": 600,
+      "operator": "admin-console",
+      "createdAt": "2026-03-27T10:45:05.215Z"
+    },
+    {
+      "playerId": "1450019975031951370",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "admin:manual-grant",
+      "sourceRef": "",
+      "balanceAfter": 700,
+      "operator": "admin-console",
+      "createdAt": "2026-03-27T10:45:20.967Z"
+    },
+    {
+      "playerId": "1450019975031951370",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "admin:manual-grant",
+      "sourceRef": "",
+      "balanceAfter": 800,
+      "operator": "admin-console",
+      "createdAt": "2026-03-27T10:45:21.670Z"
+    },
+    {
+      "playerId": "1450019975031951370",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "admin:manual-grant",
+      "sourceRef": "",
+      "balanceAfter": 900,
+      "operator": "admin-console",
+      "createdAt": "2026-03-27T10:45:22.310Z"
+    },
+    {
+      "playerId": "865264891991425055",
+      "currencyType": "gold",
+      "amount": 100,
+      "direction": "credit",
+      "source": "discord:test-reward",
+      "sourceRef": "",
+      "balanceAfter": 100,
+      "operator": "system:checkin",
+      "createdAt": "2026-04-04T08:02:03.411Z"
+    }
+  ],
+  "adminActionLogs": [
+    {
+      "adminId": "admin-console",
+      "targetPlayerId": "1450019975031951370",
+      "actionType": "grant-currency",
+      "payload": {
+        "currencyType": "gold",
+        "amount": 100,
+        "reason": "admin console currency adjustment"
+      },
+      "createdAt": "2026-03-27T10:44:59.456Z"
+    },
+    {
+      "adminId": "admin-console",
+      "targetPlayerId": "1450019975031951370",
+      "actionType": "grant-currency",
+      "payload": {
+        "currencyType": "gold",
+        "amount": 100,
+        "reason": "admin console currency adjustment"
+      },
+      "createdAt": "2026-03-27T10:45:02.728Z"
+    },
+    {
+      "adminId": "admin-console",
+      "targetPlayerId": "1450019975031951370",
+      "actionType": "grant-currency",
+      "payload": {
+        "currencyType": "gold",
+        "amount": 100,
+        "reason": "admin console currency adjustment"
+      },
+      "createdAt": "2026-03-27T10:45:03.950Z"
+    },
+    {
+      "adminId": "admin-console",
+      "targetPlayerId": "1450019975031951370",
+      "actionType": "grant-currency",
+      "payload": {
+        "currencyType": "gold",
+        "amount": 100,
+        "reason": "admin console currency adjustment"
+      },
+      "createdAt": "2026-03-27T10:45:03.999Z"
+    },
+    {
+      "adminId": "admin-console",
+      "targetPlayerId": "1450019975031951370",
+      "actionType": "grant-currency",
+      "payload": {
+        "currencyType": "gold",
+        "amount": 100,
+        "reason": "admin console currency adjustment"
+      },
+      "createdAt": "2026-03-27T10:45:04.647Z"
+    },
+    {
+      "adminId": "admin-console",
+      "targetPlayerId": "1450019975031951370",
+      "actionType": "grant-currency",
+      "payload": {
+        "currencyType": "gold",
+        "amount": 100,
+        "reason": "admin console currency adjustment"
+      },
+      "createdAt": "2026-03-27T10:45:05.216Z"
+    },
+    {
+      "adminId": "admin-console",
+      "targetPlayerId": "1450019975031951370",
+      "actionType": "grant-currency",
+      "payload": {
+        "currencyType": "gold",
+        "amount": 100,
+        "reason": "admin console currency adjustment"
+      },
+      "createdAt": "2026-03-27T10:45:20.968Z"
+    },
+    {
+      "adminId": "admin-console",
+      "targetPlayerId": "1450019975031951370",
+      "actionType": "grant-currency",
+      "payload": {
+        "currencyType": "gold",
+        "amount": 100,
+        "reason": "admin console currency adjustment"
+      },
+      "createdAt": "2026-03-27T10:45:21.671Z"
+    },
+    {
+      "adminId": "admin-console",
+      "targetPlayerId": "1450019975031951370",
+      "actionType": "grant-currency",
+      "payload": {
+        "currencyType": "gold",
+        "amount": 100,
+        "reason": "admin console currency adjustment"
+      },
+      "createdAt": "2026-03-27T10:45:22.311Z"
+    }
+  ],
+  "accessControl": {
+    "discord": {
+      "adminRoleIds": [
+        "1228591337142485062"
+      ],
+      "adminUserIds": [],
+      "playerRoleIds": [
+        "1313830391886381106",
+        "1315674233749110808",
+        "1315674233749110807",
+        "1315674233749110806",
+        "1313831036618280990"
+      ],
+      "playerUserIds": []
+    }
+  },
+  "channelLayout": {
+    "discord": {
+      "bindings": [
+        {
+          "featureKey": "park_announcement",
+          "channelId": "1450059054071418910",
+          "enabled": true,
+          "note": "",
+          "visibleTo": {
+            "player": false,
+            "admin": true
+          }
+        },
+        {
+          "featureKey": "town_chat",
+          "channelId": "1450062298076151952",
+          "enabled": true,
+          "note": "",
+          "visibleTo": {
+            "player": false,
+            "admin": true
+          }
+        },
+        {
+          "featureKey": "daily_quest",
+          "channelId": "1486423293044068392",
+          "enabled": true,
+          "note": "",
+          "visibleTo": {
+            "player": false,
+            "admin": true
+          }
+        },
+        {
+          "featureKey": "coin_shop",
+          "channelId": "1486423379685675008",
+          "enabled": true,
+          "note": "",
+          "visibleTo": {
+            "player": false,
+            "admin": true
+          }
+        },
+        {
+          "featureKey": "personal_room",
+          "channelId": "1486423399638110350",
+          "enabled": true,
+          "note": "",
+          "visibleTo": {
+            "player": false,
+            "admin": true
+          }
+        }
+      ]
+    }
+  },
+  "checkins": [
+    {
+      "id": "865264891991425055:1775289723412",
+      "playerId": "865264891991425055",
+      "discordId": "865264891991425055",
+      "channelId": "unknown",
+      "messageId": "",
+      "content": "!打卡",
+      "occurredAt": "2026-04-04T08:02:03.406Z",
+      "rewardGranted": true,
+      "rewardDetail": {
+        "currencyType": "gold",
+        "amount": 100,
+        "txId": ""
+      },
+      "createdAt": "2026-04-04T08:02:03.412Z"
+    }
+  ]
+}

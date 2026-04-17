@@ -1,30 +1,69 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npm *)",
+      "Bash(git *)",
+      "Bash(find *)",
+      "Read(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "Edit(*)",
+      "Write(*)",
+      "Bash(node -e ' *)",
+      "Bash(node --check src/shared/combatLoop.js)",
+      "Bash(node --check src/shared/combatStats.js)",
+      "Bash(findstr /r /s \"參戰\" src\\\\*.js)",
+      "Bash(findstr /s /r \"參戰\\\\|notifyKill\\\\|DM\\\\|user.send\" src\\\\*.js src\\\\bot\\\\*.js src\\\\api\\\\routes\\\\*.js)",
+      "Bash(mongosh mongodb://localhost:27017/equipmentgame --quiet --eval ' *)",
+      "Bash(grep -n \"itemRepository\" src/bootstrap.js)",
+      "Bash(grep -rn \"itemRepository\" src/index.js)",
+      "Bash(node --check src/shared/effectEngine.js)",
+      "Bash(node --check src/bot/handlers/monsterZoneHandlers.js)",
+      "Bash(node --check src/api/routes/playerAppRoutes.js)",
+      "Bash(node --check src/services/shop/shopService.js)",
+      "Read(//c/Users/appsk/.pm2/logs/**)",
+      "Read(//root/.pm2/**)",
+      "Bash(tasklist)",
+      "Read(//c/Users/appsk/.pm2/pids/**)",
+      "Bash(node --env-file=.env -e ' *)",
+      "Bash(node -e \"require\\('./src/shared/combatLoop.js'\\); console.log\\('OK'\\);\")",
+      "Bash(node -c /c/Users/appsk/Documents/Github/equipmentGAME/src/bot/handlers/monsterZoneHandlers.js)"
+    ]
+  },
   "description": "equipmentGAME Sub Agent 工作流配置 - Token 優化方案",
-
   "agents": {
     "explore": {
       "enabled": true,
       "description": "快速掃描代碼 & 檔案查找（所有領域通用）",
-      "triggers": ["找", "掃描", "查詢"],
+      "triggers": [
+        "找",
+        "掃描",
+        "查詢"
+      ],
       "thorougness": "quick",
       "modelOverride": "haiku"
     },
-
     "plan": {
       "enabled": true,
       "description": "設計 & 架構規劃（後台/遊戲系統均可用）",
-      "triggers": ["設計", "規劃", "方案"],
+      "triggers": [
+        "設計",
+        "規劃",
+        "方案"
+      ],
       "modelOverride": "haiku"
     },
-
     "general-purpose": {
       "enabled": true,
       "description": "代碼實現（通用）",
-      "triggers": ["實現", "修復", "開發"],
+      "triggers": [
+        "實現",
+        "修復",
+        "開發"
+      ],
       "modelOverride": "haiku"
     }
   },
-
   "domains": {
     "description": "工作領域簡單標籤 - 用前綴指定（@admin, @item, @player）",
     "labels": [
@@ -34,46 +73,25 @@
       "@game - 遊戲核心系統"
     ]
   },
-
   "roles": {
     "description": "角色專用配置",
     "uiux-designer": {
       "enabled": true,
       "description": "UI/UX 設計師專用工作流",
-      "agents": ["explore", "plan"],
+      "agents": [
+        "explore",
+        "plan"
+      ],
       "modelOverride": "sonnet",
-      "triggers": ["畫", "設計", "改", "排版"],
+      "triggers": [
+        "畫",
+        "設計",
+        "改",
+        "排版"
+      ],
       "focus": "設計系統、組件、用戶流程"
     }
   },
-
-  "hooks": {
-    "autoLoadSkillSnapshot": {
-      "description": "會話開始：自動更新 otonashisekai.md DB 快照",
-      "enabled": true,
-      "trigger": "onSessionStart",
-      "command": "cd /c/Users/appsk/Documents/Github/equipmentGAME && node scripts/generate-skill-snapshot.js 2>&1 | tail -1 || echo '⚠️ otonashisekai.md 快照生成失敗，請手動執行: node scripts/generate-skill-snapshot.js'"
-    },
-
-    "beforeCodeRead": {
-      "description": "讀取代碼前：自動加載 Memory",
-      "enabled": true,
-      "command": "echo '加載 Memory 系統: Token 優化策略、職業系統、經濟平衡'"
-    },
-
-    "afterImplementation": {
-      "description": "實現完成後：自動運行簡化審查",
-      "enabled": true,
-      "command": "npm test -- --testPathPattern=unit 2>/dev/null || echo '無單元測試'"
-    },
-
-    "beforeGitCommit": {
-      "description": "Commit 前：驗證代碼品質",
-      "enabled": true,
-      "command": "echo '✓ Code quality check passed' && true"
-    }
-  },
-
   "memory": {
     "enabled": true,
     "location": "C:\\Users\\appsk\\.claude\\projects\\C--Users-appsk-Documents-Github-equipmentGAME\\memory",
@@ -87,7 +105,6 @@
       "interval": "weekly"
     }
   },
-
   "tokenOptimization": {
     "strategy": "aggressive",
     "rules": [
@@ -113,22 +130,32 @@
       }
     ]
   },
-
   "workflowOptimization": {
     "parallelTasks": [
       {
         "task": "職業系統開發",
-        "agents": ["explore", "plan", "general-purpose"],
+        "agents": [
+          "explore",
+          "plan",
+          "general-purpose"
+        ],
         "independence": "high"
       },
       {
         "task": "經濟系統開發",
-        "agents": ["explore", "plan", "general-purpose"],
+        "agents": [
+          "explore",
+          "plan",
+          "general-purpose"
+        ],
         "independence": "high"
       },
       {
         "task": "光環機制實裝",
-        "agents": ["plan", "general-purpose"],
+        "agents": [
+          "plan",
+          "general-purpose"
+        ],
         "independence": "high"
       }
     ],
@@ -140,7 +167,6 @@
       }
     ]
   },
-
   "autoTasks": {
     "description": "自動化任務配置（使用 /schedule 或 /loop）",
     "tasks": [
@@ -159,19 +185,6 @@
         ],
         "description": "Commit 前驗證相關單元測試"
       }
-    ]
-  },
-
-  "permissions": {
-    "allow": [
-      "Bash(npm *)",
-      "Bash(git *)",
-      "Bash(find *)",
-      "Read(*)",
-      "Glob(*)",
-      "Grep(*)",
-      "Edit(*)",
-      "Write(*)"
     ]
   }
 }

@@ -1,0 +1,611 @@
+[
+  {
+    "card_id": 1,
+    "name": "小史(小)",
+    "level": 5,
+    "zone": "basic",
+    "hp": 80,
+    "attributes": {
+      "str": 8,
+      "agi": 5,
+      "vit": 100,
+      "int": 2,
+      "dex": 4,
+      "luk": 2
+    },
+    "monsterCardSkill": {
+      "key": "str_up",
+      "name": "肌肉爆發",
+      "description": "提升自身力量",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "str_up",
+          "params": {
+            "value": 2,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 2,
+    "name": "甲蟹",
+    "level": 10,
+    "zone": "mid",
+    "hp": 450,
+    "attributes": {
+      "str": 5,
+      "agi": 5,
+      "vit": 450,
+      "int": 1,
+      "dex": 5,
+      "luk": 3
+    },
+    "monsterCardSkill": {
+      "key": "reflect_damage",
+      "name": "甲殼反彈",
+      "description": "將受到的傷害反彈回攻擊者",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "reflect_damage",
+          "params": {
+            "reflectPercent": 50,
+            "duration": {
+              "mode": "turns",
+              "value": 1
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 3,
+    "name": "哥布",
+    "level": 6,
+    "zone": "basic",
+    "hp": 120,
+    "attributes": {
+      "str": 10,
+      "agi": 8,
+      "vit": 120,
+      "int": 5,
+      "dex": 6,
+      "luk": 3
+    },
+    "monsterCardSkill": {
+      "key": "poison",
+      "name": "毒液噴濺",
+      "description": "對敵人施加中毒",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "poison",
+          "params": {
+            "value": 10,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 4,
+    "name": "牙牙狼",
+    "level": 10,
+    "zone": "mid",
+    "hp": 180,
+    "attributes": {
+      "str": 12,
+      "agi": 15,
+      "vit": 150,
+      "int": 3,
+      "dex": 8,
+      "luk": 4
+    },
+    "monsterCardSkill": {
+      "key": "weakness_hit_rate",
+      "name": "致命一擊",
+      "description": "增加要害命中機率",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "weakness_hit_rate",
+          "params": {
+            "value": 20,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 5,
+    "name": "小狼",
+    "level": 8,
+    "zone": "basic",
+    "hp": 140,
+    "attributes": {
+      "str": 9,
+      "agi": 12,
+      "vit": 130,
+      "int": 2,
+      "dex": 7,
+      "luk": 3
+    },
+    "monsterCardSkill": {
+      "key": "dodge_up",
+      "name": "敏捷迴避",
+      "description": "提升迴避率",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "dodge_up",
+          "params": {
+            "value": 8,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 6,
+    "name": "石頭",
+    "level": 7,
+    "zone": "basic",
+    "hp": 200,
+    "attributes": {
+      "str": 6,
+      "agi": 2,
+      "vit": 200,
+      "int": 1,
+      "dex": 3,
+      "luk": 2
+    },
+    "monsterCardSkill": {
+      "key": "block_chance_up",
+      "name": "堅固防禦",
+      "description": "提升格擋機率",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "block_chance_up",
+          "params": {
+            "value": 8,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 7,
+    "name": "大史(B)",
+    "level": 9,
+    "zone": "basic",
+    "hp": 180,
+    "attributes": {
+      "str": 14,
+      "agi": 7,
+      "vit": 160,
+      "int": 3,
+      "dex": 5,
+      "luk": 5
+    },
+    "monsterCardSkill": {
+      "key": "crit_rate_up",
+      "name": "爆擊傾向",
+      "description": "增加爆擊率",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "crit_rate_up",
+          "params": {
+            "value": 20,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 8,
+    "name": "青草地精",
+    "level": 5,
+    "zone": "basic",
+    "hp": 100,
+    "attributes": {
+      "str": 6,
+      "agi": 10,
+      "vit": 100,
+      "int": 8,
+      "dex": 7,
+      "luk": 4
+    },
+    "monsterCardSkill": {
+      "key": "atk_up",
+      "name": "能量增幅",
+      "description": "提升攻擊力",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "atk_up",
+          "params": {
+            "value": 5,
+            "stackMode": "stack",
+            "maxStackValue": 10,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 9,
+    "name": "綠野狼",
+    "level": 6,
+    "zone": "basic",
+    "hp": 150,
+    "attributes": {
+      "str": 10,
+      "agi": 13,
+      "vit": 140,
+      "int": 2,
+      "dex": 6,
+      "luk": 4
+    },
+    "monsterCardSkill": {
+      "key": "speed_up",
+      "name": "急速衝刺",
+      "description": "提升攻擊速度",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "speed_up",
+          "params": {
+            "value": 4,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 10,
+    "name": "巨巨",
+    "level": 12,
+    "zone": "mid",
+    "hp": 400,
+    "attributes": {
+      "str": 16,
+      "agi": 4,
+      "vit": 400,
+      "int": 2,
+      "dex": 3,
+      "luk": 2
+    },
+    "monsterCardSkill": {
+      "key": "def_up",
+      "name": "防禦姿態",
+      "description": "提升防禦力",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "def_up",
+          "params": {
+            "value": 15,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 11,
+    "name": "黑暗弓手",
+    "level": 14,
+    "zone": "mid",
+    "hp": 220,
+    "attributes": {
+      "str": 8,
+      "agi": 16,
+      "vit": 200,
+      "int": 6,
+      "dex": 14,
+      "luk": 5
+    },
+    "monsterCardSkill": {
+      "key": "dodge_down",
+      "name": "魔法箭雨",
+      "description": "降低敵方迴避率",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "dodge_down",
+          "params": {
+            "value": 10,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 12,
+    "name": "米拉桑(B)",
+    "level": 15,
+    "zone": "mid",
+    "hp": 350,
+    "attributes": {
+      "str": 12,
+      "agi": 10,
+      "vit": 350,
+      "int": 8,
+      "dex": 8,
+      "luk": 6
+    },
+    "monsterCardSkill": {
+      "key": "boss_buff",
+      "name": "戰鬥強化",
+      "description": "施加複合強化效果",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "atk_up",
+          "params": {
+            "value": 10,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            }
+          }
+        },
+        {
+          "key": "speed_up",
+          "params": {
+            "value": 4,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 13,
+    "name": "林地妖靈",
+    "level": 11,
+    "zone": "forest",
+    "hp": 200,
+    "attributes": {
+      "str": 7,
+      "agi": 11,
+      "vit": 190,
+      "int": 10,
+      "dex": 9,
+      "luk": 6
+    },
+    "monsterCardSkill": {
+      "key": "heal_over_time",
+      "name": "生命力逐漸恢復",
+      "description": "每回合回復一定比例生命值",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "heal_over_time",
+          "params": {
+            "mode": "pct",
+            "value": 20,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 14,
+    "name": "森林古樹",
+    "level": 13,
+    "zone": "forest",
+    "hp": 380,
+    "attributes": {
+      "str": 9,
+      "agi": 5,
+      "vit": 380,
+      "int": 11,
+      "dex": 6,
+      "luk": 4
+    },
+    "monsterCardSkill": {
+      "key": "lifesteal",
+      "name": "吸血",
+      "description": "從攻擊傷害中吸取生命",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "lifesteal",
+          "params": {
+            "value": 25,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 15,
+    "name": "暗夜獵豹",
+    "level": 12,
+    "zone": "forest",
+    "hp": 210,
+    "attributes": {
+      "str": 10,
+      "agi": 14,
+      "vit": 200,
+      "int": 4,
+      "dex": 11,
+      "luk": 5
+    },
+    "monsterCardSkill": {
+      "key": "dodge_up",
+      "name": "敏捷迴避",
+      "description": "提升迴避率",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "dodge_up",
+          "params": {
+            "value": 8,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 16,
+    "name": "森林巫師",
+    "level": 13,
+    "zone": "forest",
+    "hp": 240,
+    "attributes": {
+      "str": 5,
+      "agi": 8,
+      "vit": 220,
+      "int": 15,
+      "dex": 10,
+      "luk": 7
+    },
+    "monsterCardSkill": {
+      "key": "int_up",
+      "name": "智慧提升",
+      "description": "提升智力（怪物轉換為ATK+12%）",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "int_up",
+          "params": {
+            "value": 4,
+            "duration": {
+              "mode": "turns",
+              "value": 2
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 17,
+    "name": "森林盜賊",
+    "level": 11,
+    "zone": "forest",
+    "hp": 180,
+    "attributes": {
+      "str": 11,
+      "agi": 15,
+      "vit": 170,
+      "int": 5,
+      "dex": 12,
+      "luk": 7
+    },
+    "monsterCardSkill": {
+      "key": "dodge_up",
+      "name": "迴避強化",
+      "description": "提升迴避率（可疊加至最高10%）",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "dodge_up",
+          "params": {
+            "value": 5,
+            "stackMode": "refresh",
+            "maxStackValue": 10,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "card_id": 18,
+    "name": "森林之獸",
+    "level": 14,
+    "zone": "forest",
+    "hp": 320,
+    "attributes": {
+      "str": 13,
+      "agi": 9,
+      "vit": 310,
+      "int": 6,
+      "dex": 8,
+      "luk": 5
+    },
+    "monsterCardSkill": {
+      "key": "atk_down",
+      "name": "詛咒削弱",
+      "description": "降低敵方攻擊力",
+      "procRate": 30,
+      "procEffects": [
+        {
+          "key": "atk_down",
+          "params": {
+            "value": 15,
+            "duration": {
+              "mode": "turns",
+              "value": 3
+            }
+          }
+        }
+      ]
+    }
+  }
+]
