@@ -279,6 +279,9 @@ function createAdminConsoleRoutes(serviceContext) {
         isTwoHanded: item.isTwoHanded || false,
         atkStat: item.atkStat || null,
         tier: item.tier || null,
+        monsterCardSkill: item.monsterCardSkill || null,
+        enhanceLevel: 0,
+        source: "admin_grant",
         purchasedAt: new Date().toISOString()
       });
       progress.updatedAt = new Date().toISOString();

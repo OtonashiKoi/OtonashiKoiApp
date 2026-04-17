@@ -1,9 +1,11 @@
 const { getMongoDb } = require("./createMongoClient");
+const { withProgressCache, withWalletCache, withPlayerCache } = require("./requestCache");
+const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 
 function createMongoRepositories() {
   const collection = async (name) => (await getMongoDb()).collection(name);
 
-  return {
+  const repos = {
     accessControlRepository: {
       async get() {
         const row = await (await collection("accessControl")).findOne({ _id: "default" });
@@ -71,7 +73,12 @@ function createMongoRepositories() {
     },
     progressRepository: {
       async findByPlayerId(playerId) {
-        return (await collection("progress")).findOne({ playerId });
+        const progress = await (await collection("progress")).findOne({ playerId });
+        if (progress?.equipment) {
+          // 永遠從 DB 讀取最新 effects，所有呼叫方自動拿到最新設計值
+          progress.equipment = await mergeEquippedFromLibrary(progress.equipment, repos.itemRepository).catch(() => progress.equipment);
+        }
+        return progress;
       },
       async save(progress) {
         let lastError = null;
@@ -407,6 +414,13 @@ function createMongoRepositories() {
       }
     }
   };
+
+  // 套用請求層級快取：同一請求內的重複讀取直接從記憶體回傳
+  repos.playerRepository = withPlayerCache(repos.playerRepository);
+  repos.walletRepository = withWalletCache(repos.walletRepository);
+  repos.progressRepository = withProgressCache(repos.progressRepository);
+
+  return repos;
 }
 
 module.exports = {

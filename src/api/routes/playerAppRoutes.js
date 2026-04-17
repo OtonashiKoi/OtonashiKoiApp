@@ -5,11 +5,14 @@ const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
-const { isEffectConditionMet, decrementActiveEffects } = require("../../shared/effectEngine");
+const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 
 // Track per-player battle cooldowns.
 // Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
 const playerBattleCooldowns = new Map();
+
+// 每回合動畫長度（ms）。可用 env `ROUND_MS` 覆寫。預設為 700 * 0.8
+const ROUND_MS = Number(process.env.ROUND_MS || Math.round(700 * 0.8));
 
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
@@ -882,10 +885,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         });
       }
 
-      // Calc player stats
+      // Calc player stats（永遠從 DB 讀取最新 effects，不使用 snapshot 裡的舊值）
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-      const equipped = progress?.equipment || {};
+      const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
       const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || []);
 
       // ── 治療師光環系統 ──
@@ -903,7 +906,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       if (isHealer) {
         // 治療師進入：收集 party 效果並記錄光環
-        const { collectEquipmentEffects } = require("../../shared/effectEngine");
         const partyEffs = collectEquipmentEffects(equipped, "passive", { equipped, inventory: progress?.inventory || [] })
           .filter(e => e.target === "party");
 
@@ -929,7 +931,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         partyEffects = [];
       } else {
         // 其他玩家：享受光環效果（如果存在）
-        partyEffects = freshStateForAura.activeHealerAura?.effects || [];
+        const aura = freshStateForAura.activeHealerAura;
+        partyEffects = (aura?.effects || []).map(e => ({ ...e, sourceName: aura?.displayName || null }));
         stateForCombat = freshStateForAura;
       }
 
@@ -1035,7 +1038,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       // Cooldown duration matches the client-side animation timeline.
-      const animDurationMs = roundLogs.length * 700 + 2000;
+      const animDurationMs = roundLogs.length * ROUND_MS + 2000;
       const nextBattleAt = Date.now() + animDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
       // Clean up the cooldown map after the window has safely expired.

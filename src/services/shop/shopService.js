@@ -188,20 +188,23 @@ class ShopService {
         if (!progress.shopMonthlyCount[itemId]) progress.shopMonthlyCount[itemId] = {};
         progress.shopMonthlyCount[itemId][ym] = ((progress.shopMonthlyCount[itemId][ym] || 0) + 1);
       }
+      // 原則：玩家身上只存「玩家自有資料」（uuid、itemId、購買時間等）。
+      // passiveEffects/combatEffects 等設計欄位永遠從 items DB 讀取（mergeEquippedFromLibrary），
+      // 這裡雖然也存一份，但戰鬥時會被 DB 最新值覆蓋，不需要手動同步。
       progress.inventory.push({
         uuid: crypto.randomUUID(),
         itemId: item.itemLibraryId || item.id,
         itemName: item.name,
         itemEffect: item.effect || { type: "none", value: 0 },
-        useEffects: item.useEffects || libraryItem?.useEffects || [],
-        passiveEffects: item.passiveEffects || libraryItem?.passiveEffects || [],
-        procEffects: item.procEffects || libraryItem?.procEffects || [],
-        combatEffects: item.combatEffects || libraryItem?.combatEffects || [],
+        useEffects: libraryItem?.useEffects || item.useEffects || [],
+        passiveEffects: libraryItem?.passiveEffects || item.passiveEffects || [],
+        procEffects: libraryItem?.procEffects || item.procEffects || [],
+        combatEffects: libraryItem?.combatEffects || item.combatEffects || [],
         itemType: item.itemType || "consumable",
         imageUrl: item.imageUrl || null,
         imageThumbnailUrl: item.imageThumbnailUrl || null,
         equipSlot: item.equipSlot || null,
-        equipStats: item.equipStats || null,
+        equipStats: libraryItem?.equipStats || item.equipStats || null,
         weaponType: item.weaponType || null,
         isTwoHanded: item.isTwoHanded || false,
         tier: effectiveTier,
@@ -355,13 +358,36 @@ class ShopService {
       }
     }
 
+    // 裝備時從道具庫同步最新 effects（確保修正後的 effects 立即生效）
+    let freshEntry = entry;
+    if (entry.itemId && this.itemRepository) {
+      const libItem = await this.itemRepository.findById(entry.itemId).catch(() => null);
+      if (libItem) {
+        freshEntry = {
+          ...entry,
+          passiveEffects: libItem.passiveEffects || entry.passiveEffects || [],
+          combatEffects: libItem.combatEffects || entry.combatEffects || [],
+          procEffects: libItem.procEffects || entry.procEffects || [],
+          useEffects: libItem.useEffects || entry.useEffects || [],
+          equipStats: libItem.equipStats || entry.equipStats || null,
+        };
+        // 背包裡的 snapshot 也同步更新
+        progress.inventory[idx] = freshEntry;
+      }
+    }
+
     const current = progress.equipment[slot] || null;
     progress.inventory.splice(idx, 1);
     if (current) progress.inventory.push(current);
-    progress.equipment[slot] = entry;
+    progress.equipment[slot] = freshEntry;
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
-    return { itemName: entry.itemName, slot };
+    return {
+      itemName: entry.itemName,
+      slot,
+      equipment: progress.equipment,
+      inventory: progress.inventory
+    };
   }
 
   async unequipItem(discordId, slot) {
@@ -376,7 +402,12 @@ class ShopService {
     progress.equipment[slot] = null;
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
-    return { itemName: equipped.itemName, slot };
+    return {
+      itemName: equipped.itemName,
+      slot,
+      equipment: progress.equipment,
+      inventory: progress.inventory
+    };
   }
 
   async enhanceItem(discordId, targetUuid, materialUuid) {
@@ -489,7 +520,17 @@ class ShopService {
     const newStats = { ...stats, [mainStat]: (stats[mainStat] || 0) + 1 };
     const newLevel = currentLevel + 1;
     const newName = `${baseName} +${newLevel}`;
-    const updatedTarget = { ...target, equipStats: newStats, enhanceLevel: newLevel, itemName: newName };
+    const updatedTarget = {
+      ...target,
+      equipStats: newStats,
+      enhanceLevel: newLevel,
+      itemName: newName,
+      // 確保強化後保留原始道具的所有 effects
+      procEffects: target.procEffects || [],
+      passiveEffects: target.passiveEffects || [],
+      useEffects: target.useEffects || [],
+      combatEffects: target.combatEffects || []
+    };
 
     const idxs = [];
     for (let i = 0; i < progress.inventory.length; i += 1) {
@@ -507,6 +548,29 @@ class ShopService {
     }
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
+
+    // 強化完成後，同步該道具的最新 effects（如果有 itemId）
+    if (updatedTarget.itemId && this.itemRepository) {
+      const libItem = await this.itemRepository.findById(updatedTarget.itemId).catch(() => null);
+      if (libItem) {
+        // 同步 procEffects、passiveEffects 等從 DB
+        const slot = targetSlotKey;
+        if (slot && progress.equipment[slot]) {
+          progress.equipment[slot].procEffects = libItem.procEffects || [];
+          progress.equipment[slot].passiveEffects = libItem.passiveEffects || [];
+          progress.equipment[slot].useEffects = libItem.useEffects || [];
+          progress.equipment[slot].combatEffects = libItem.combatEffects || [];
+        } else if (!slot && targetIdx !== -1) {
+          progress.inventory[targetIdx].procEffects = libItem.procEffects || [];
+          progress.inventory[targetIdx].passiveEffects = libItem.passiveEffects || [];
+          progress.inventory[targetIdx].useEffects = libItem.useEffects || [];
+          progress.inventory[targetIdx].combatEffects = libItem.combatEffects || [];
+        }
+        if (slot || targetIdx !== -1) {
+          await this.progressRepository.save(progress);
+        }
+      }
+    }
     return {
       itemName: newName,
       enhanceLevel: newLevel,

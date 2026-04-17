@@ -13,7 +13,7 @@ const {
   handleUnlockPersonalRoom
 } = require("./handlers/publishHandlers");
 const { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect } = require("./handlers/coinShopHandlers");
-const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal } = require("./handlers/monsterZoneHandlers");
+const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal, isNpcDialogButton, handleNpcDialog } = require("./handlers/monsterZoneHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -128,6 +128,7 @@ async function handleCommand(interaction) {
 }
 
 async function handleButton(interaction) {
+  console.log(`[handleButton] customId=${interaction.customId} user=${interaction.user?.id}`);
   if (isMonsterZoneButton(interaction.customId)) {
     await handleMonsterZoneButton(interaction);
     return;
@@ -142,6 +143,10 @@ async function handleButton(interaction) {
   }
   if (isMonsterEventButton(interaction.customId)) {
     await handleMonsterEventChoice(interaction);
+    return;
+  }
+  if (isNpcDialogButton(interaction.customId)) {
+    await handleNpcDialog(interaction);
     return;
   }
   if (interaction.customId === WEEKLY_QUEST_OPEN_ID) {

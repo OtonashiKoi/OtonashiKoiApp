@@ -109,6 +109,10 @@
           </select>
         </label>
         <label>
+          <span>等級限制（達到此等級才可見；0 表示不限制）</span>
+          <input class="sheet-input" data-field="levelLimit" type="number" min="0" value="${q.levelLimit || 0}" />
+        </label>
+        <label>
           <span>獎勵金幣 🪙</span>
           <input class="sheet-input" data-field="rewardGold" type="number" min="0" value="${q.rewardGold}" />
         </label>
@@ -148,6 +152,7 @@
       type:          div.querySelector("[data-field=type]")?.value,
       target:        Number(div.querySelector("[data-field=target]")?.value),
       enabled:       div.querySelector("[data-field=enabled]")?.value === "true",
+      levelLimit:    Number(div.querySelector("[data-field=levelLimit]")?.value) || 0,
       rewardGold:    Number(div.querySelector("[data-field=rewardGold]")?.value),
       rewardDiamond: Number(div.querySelector("[data-field=rewardDiamond]")?.value),
       rewardItemId:  div.querySelector("[data-field=rewardItemId]")?.value || null,
@@ -206,6 +211,7 @@
         rewardGold: 100,
         rewardDiamond: 0,
         enabled: true,
+        levelLimit: 0,
       };
       const res = await fetch("/admin/weekly-quests", {
         method: "POST", headers: apiHeaders(), body: JSON.stringify(payload),

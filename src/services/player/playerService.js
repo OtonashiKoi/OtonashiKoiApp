@@ -10,23 +10,26 @@ class PlayerService {
   }
 
   async ensurePlayer(discordId, displayName) {
-    let player = await this.playerRepository.findByDiscordId(discordId);
+    let [player, wallet, progress] = await Promise.all([
+      this.playerRepository.findByDiscordId(discordId),
+      this.walletRepository.findByPlayerId(discordId),
+      this.progressRepository.findByPlayerId(discordId),
+    ]);
+
+    const saves = [];
     if (!player) {
       player = createPlayer(discordId, displayName);
-      await this.playerRepository.save(player);
+      saves.push(this.playerRepository.save(player));
     }
-
-    let wallet = await this.walletRepository.findByPlayerId(discordId);
     if (!wallet) {
       wallet = createWallet(discordId);
-      await this.walletRepository.save(wallet);
+      saves.push(this.walletRepository.save(wallet));
     }
-
-    let progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) {
       progress = createGameProgress(discordId);
-      await this.progressRepository.save(progress);
+      saves.push(this.progressRepository.save(progress));
     }
+    if (saves.length > 0) await Promise.all(saves);
 
     return { player, wallet, progress };
   }

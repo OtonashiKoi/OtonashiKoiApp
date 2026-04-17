@@ -23,7 +23,7 @@ const WEAPON_CONFIG = {
   axe_1h:   { mult: 3, armorBreak: 15 },
   axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15 },
   dagger:   { mult: 2, comboBonus: 20 },
-  staff_1h: { mult: 4, baseStat: "int", monsterAtk: 2, bypassDefPct: 50 },
+  staff_1h: { mult: 4, baseStat: "int", monsterAtk: 2, bypassDefPct: 30 },
   staff_2h: { mult: 6, baseStat: "int", isTwoHanded: true, monsterAtk: 2, bypassDefPct: 50 },
   bow:      { mult: 4, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
 };
@@ -32,6 +32,7 @@ const WEAPON_CONFIG = {
 const OFFHAND_WEAPON_TYPES = new Set(["offhand_sword", "offhand_dagger", "offhand_mace"]);
 
 // 雙持時主手不同武器的副手追擊機率
+// staff_1h：副手觸發但傷害為 0，僅用於觸發法師 proc 效果（燒傷/麻痺/冰凍）
 const DUAL_COUNTER_CHANCE = {
   sword_1h: 20,
   mace_1h:  20,
@@ -95,7 +96,9 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const armorBreakChance = cfg.armorBreak ?? 0;
 
   // 副手追擊（雙持時，怪物攻擊後觸發）
-  const counterChance = isDualWield ? (DUAL_COUNTER_CHANCE[wt] ?? 20) : 0;
+  const counterChance = isDualWield ? (DUAL_COUNTER_CHANCE[wt] ?? 0) : 0;
+  // 法杖雙持：副手只觸發 proc，傷害固定為 0
+  const counterIsStaffProc = isDualWield && wt === "staff_1h";
   // 副手追擊繼承擊暈/破防：劍和匕首繼承，槌/斧不繼承
   const counterInheritStun  = isDualWield && (wt === "sword_1h" || wt === "dagger");
   const counterInheritBreak = isDualWield && (wt === "sword_1h" || wt === "dagger");
@@ -194,6 +197,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     counterChance,         // 副手追擊機率%
     counterInheritStun,    // 副手繼承擊暈
     counterInheritBreak,   // 副手繼承破防
+    counterIsStaffProc,    // 法杖雙持：副手觸發 proc 但傷害為 0
 
     // 職業特效
     // 弓箭手
@@ -213,6 +217,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     // 戰士
     hasWarriorBadge,
     warriorLowHpMultiplier,   // 低血量傷害倍增
+    warriorCritDamageBonus: (hasWarriorBadge && wt === "axe_2h") ? 0.2 : 0,  // 雙手斧爆擊傷害 +0.2x
 
     // 矮人
     hasDwarfBadge,

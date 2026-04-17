@@ -122,6 +122,60 @@ function collectEquipmentEffects(equipped, trigger = null, context = {}) {
   return Object.values(equipped || {}).flatMap((entry) => collectEffectRefsFromEntry(entry, trigger, context));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 動態合併裝備 Effects（永遠從 DB 讀取，不用 snapshot）
+//
+// 原則：玩家身上的裝備 snapshot 只保留「玩家自有資料」：
+//   uuid、itemId、itemName、enhanceLevel、tier、purchasedAt、grantedAt 等。
+// 所有「設計資料」（passiveEffects、combatEffects、procEffects、useEffects、
+//   equipStats、weaponType、isTwoHanded）永遠從 items collection 動態讀取。
+// 這樣 DB 一改，所有玩家下一場戰鬥就自動套用新值，不需要跑修正腳本。
+// ─────────────────────────────────────────────────────────────────────────────
+async function mergeEquippedFromLibrary(equipped, itemRepository) {
+  if (!equipped || !itemRepository) return equipped || {};
+  const slots = Object.keys(equipped);
+  if (slots.length === 0) return equipped;
+
+  // 收集所有需要查詢的 itemId（去重）
+  const itemIds = [...new Set(
+    slots.map(s => equipped[s]?.itemId).filter(Boolean)
+  )];
+  if (itemIds.length === 0) return equipped;
+
+  // 批量查詢（減少 DB round-trip）
+  let libMap = {};
+  try {
+    const results = await Promise.all(
+      itemIds.map(id => itemRepository.findById(id).catch(() => null))
+    );
+    itemIds.forEach((id, i) => { if (results[i]) libMap[id] = results[i]; });
+  } catch (e) {
+    // DB 查詢失敗時 fallback 用 snapshot，戰鬥不中斷
+    return equipped;
+  }
+
+  // 用 DB 最新值覆蓋設計欄位
+  const merged = {};
+  for (const slot of slots) {
+    const entry = equipped[slot];
+    if (!entry) { merged[slot] = entry; continue; }
+    const lib = libMap[entry.itemId];
+    if (!lib) { merged[slot] = entry; continue; }
+    merged[slot] = {
+      ...entry,
+      passiveEffects: lib.passiveEffects || [],
+      combatEffects:  lib.combatEffects  || [],
+      procEffects:    lib.procEffects    || [],
+      useEffects:     lib.useEffects     || [],
+      equipStats:     lib.equipStats     || entry.equipStats || null,
+      weaponType:     lib.weaponType     || entry.weaponType || null,
+      isTwoHanded:    lib.isTwoHanded    ?? entry.isTwoHanded ?? false,
+      monsterCardSkill: lib.monsterCardSkill || entry.monsterCardSkill || null,
+    };
+  }
+  return merged;
+}
+
 function collectPartyEffectsFromProgresses(progresses = []) {
   const refs = [];
   if (!Array.isArray(progresses)) return refs;
@@ -252,6 +306,7 @@ module.exports = {
   DOT_KEYS,
   collectEffectRefsFromEntry,
   collectEquipmentEffects,
+  mergeEquippedFromLibrary,
   createRuntimeEffect,
   applyEffectsToStats,
   isEffectConditionMet,

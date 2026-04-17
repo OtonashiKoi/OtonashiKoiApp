@@ -4,6 +4,7 @@ const cors = require("cors");
 
 const { isAppError } = require("../shared/errors");
 const { fail } = require("../shared/response");
+const { runWithCache } = require("../adapters/mongo/requestCache");
 const { createAdminConsoleRoutes } = require("./routes/adminConsoleRoutes");
 const { createAdminPlayerRoutes } = require("./routes/adminPlayerRoutes");
 const { createAdminMonsterRoutes } = require("./routes/adminMonsterRoutes");
@@ -31,6 +32,10 @@ function createApiServer(discordClient) {
   const serviceContext = sharedServiceContext;
 
   app.use(express.json());
+
+  // 每個 API 請求建立獨立的記憶體快取 context
+  // 同一請求內對同一 playerId 的重複 DB 讀取直接從記憶體回傳
+  app.use((_req, _res, next) => runWithCache(next));
   app.use("/static", express.static(path.resolve(__dirname, "../web/public"), {
     etag: false,
     lastModified: false,

@@ -702,16 +702,20 @@
     "spawnRate": 5,
     "drops": [
       {
-        "itemId": "dcb0ab95-aff6-4961-ae44-79bd49a2f0e8",
-        "chance": 25
+        "itemId": "4a7c2dd6-1d33-4613-a5aa-913924d12eed",
+        "chance": 15
       },
       {
-        "itemId": "73884cf9-67b5-47b4-af3c-b6d79a39ec57",
-        "chance": 25
+        "itemId": "ee883bee-93c6-450d-b196-754d3e345d2a",
+        "chance": 15
       },
       {
-        "itemId": "12cddc4e-58ef-433e-a50d-e8ca04b1041e",
-        "chance": 25
+        "itemId": "7bdf0277-dcd5-4173-b3ff-d93ccaa9e293",
+        "chance": 15
+      },
+      {
+        "itemId": "3667cf4f-18cb-4861-b4cb-8700805d8bcf",
+        "chance": 15
       }
     ],
     "id": "e266c597-d169-4d77-8ba8-49c83195309e",

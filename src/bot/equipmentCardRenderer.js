@@ -18,6 +18,7 @@ const SLOT_LABELS = {
   garment:     "披肩",     shoes:       "鞋子",
   accessory_l: "飾品 左",  accessory_r: "飾品 右",
   title_eq:    "稱號",     job_eq:      "職業",
+  special:     "怪物卡",
   special_1:   "特殊①",    special_2:   "特殊②",
   special_3:   "特殊③"
 };

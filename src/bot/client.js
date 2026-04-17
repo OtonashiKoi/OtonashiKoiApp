@@ -9,6 +9,7 @@ const { serviceContext, setBotClient, getBotClient } = require("./runtimeContext
 const { startFetcher } = require("./commentFetcher");
 const { handleStreamComment } = require("./handlers/streamHandlers");
 const { startIdleRotateTimer } = require("./handlers/monsterZoneHandlers");
+const { runWithCache } = require("../adapters/mongo/requestCache");
 
 async function ensureMemberPlayerProfile(member, reason) {
   try {
@@ -350,21 +351,25 @@ function createBotClient() {
     }
   });
 
-  client.on(Events.InteractionCreate, async (interaction) => {
-    try {
-      if (interaction.isChatInputCommand()) { await handleCommand(interaction); return; }
-      if (interaction.isButton()) { await handleButton(interaction); return; }
-      if (interaction.isStringSelectMenu()) { await handleSelectMenu(interaction); return; }
-      if (interaction.isModalSubmit()) { await handleModal(interaction); return; }
-    } catch (error) {
-      console.error("[Discord] command error", error);
-      const message = isAppError(error) ? `❌ ${error.message}` : "發生錯誤，請稍後再試。";
-      if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
-      } else {
-        await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+  client.on(Events.InteractionCreate, (interaction) => {
+    // 每個 interaction 建立獨立的記憶體快取 context
+    // 同一個指令內重複讀取同一 playerId 的資料直接從記憶體回傳
+    runWithCache(async () => {
+      try {
+        if (interaction.isChatInputCommand()) { await handleCommand(interaction); return; }
+        if (interaction.isButton()) { await handleButton(interaction); return; }
+        if (interaction.isStringSelectMenu()) { await handleSelectMenu(interaction); return; }
+        if (interaction.isModalSubmit()) { await handleModal(interaction); return; }
+      } catch (error) {
+        console.error("[Discord] command error", error);
+        const message = isAppError(error) ? `❌ ${error.message}` : "發生錯誤，請稍後再試。";
+        if (interaction.deferred || interaction.replied) {
+          await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
+        } else {
+          await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+        }
       }
-    }
+    });
   });
 
   client.on(Events.MessageCreate, async (message) => {

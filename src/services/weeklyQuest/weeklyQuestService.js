@@ -17,8 +17,9 @@ function currentWeekLabel() {
 }
 
 class WeeklyQuestService {
-  constructor(weeklyQuestRepository) {
+  constructor(weeklyQuestRepository, playerService) {
     this.repo = weeklyQuestRepository;
+    this.playerService = playerService;
   }
 
   // ── 任務定義 CRUD ──────────────────────────────────
@@ -38,6 +39,8 @@ class WeeklyQuestService {
       rewardDiamond: Math.max(0, Number(fields.rewardDiamond) || 0),
       rewardItemId:  fields.rewardItemId || null,
       enabled:       fields.enabled !== false,
+      // 等級限制：達到此等級才會在玩家端看見（0 或未設定 = 不限制）
+      levelLimit:    Math.max(0, Number(fields.levelLimit) || 0),
       createdAt:     new Date().toISOString(),
     };
     return this.repo.saveQuest(quest);
@@ -54,6 +57,7 @@ class WeeklyQuestService {
     if (fields.rewardDiamond !== undefined) quest.rewardDiamond = Math.max(0, Number(fields.rewardDiamond) || 0);
     if (fields.rewardItemId !== undefined) quest.rewardItemId = fields.rewardItemId || null;
     if (fields.enabled     !== undefined) quest.enabled       = Boolean(fields.enabled);
+    if (fields.levelLimit  !== undefined) quest.levelLimit    = Math.max(0, Number(fields.levelLimit) || 0);
     return this.repo.saveQuest(quest);
   }
 
@@ -67,7 +71,13 @@ class WeeklyQuestService {
   async getPlayerProgress(discordId, weekLabel = null) {
     const wl = weekLabel || currentWeekLabel();
     const allQuests = await this.repo.listQuests();
-    const quests = allQuests.filter((q) => q.enabled);
+    // 依玩家等級過濾不可見的任務
+    let playerLevel = 1;
+    try {
+      const profile = await this.playerService.getProfile(discordId, discordId);
+      playerLevel = (profile?.progress?.level) || 1;
+    } catch (_) { /* ignore */ }
+    const quests = allQuests.filter((q) => q.enabled && (!q.levelLimit || q.levelLimit <= playerLevel));
     const playerWk = await this.repo.getPlayerProgress(discordId, wl);
     return quests.map((q) => {
       const p = playerWk[q.id] || { current: 0, claimed: false };
@@ -88,7 +98,13 @@ class WeeklyQuestService {
   async recordProgress(discordId, type, amount = 1) {
     const wl = currentWeekLabel();
     const allQuests = await this.repo.listQuests();
-    const quests = allQuests.filter((q) => q.enabled && q.type === type);
+    // 只對符合類型且玩家等級可見的任務進行進度記錄
+    let playerLevel = 1;
+    try {
+      const profile = await this.playerService.getProfile(discordId, discordId);
+      playerLevel = (profile?.progress?.level) || 1;
+    } catch (_) { /* ignore */ }
+    const quests = allQuests.filter((q) => q.enabled && q.type === type && (!q.levelLimit || q.levelLimit <= playerLevel));
     if (!quests.length) return;
 
     const playerWk = await this.repo.getPlayerProgress(discordId, wl);
@@ -110,6 +126,16 @@ class WeeklyQuestService {
     const allQuests = await this.repo.listQuests();
     const quest = allQuests.find((q) => q.id === questId && q.enabled);
     if (!quest) throw new Error("任務不存在或未啟用");
+
+    // 檢查玩家等級是否達標
+    try {
+      const profile = await this.playerService.getProfile(discordId, discordId);
+      const playerLevel = (profile?.progress?.level) || 1;
+      if (quest.levelLimit && quest.levelLimit > playerLevel) throw new Error("等級不足");
+    } catch (e) {
+      if (e.message === "等級不足") throw e;
+      // 否則忽略 profile 取得錯誤
+    }
 
     const playerWk = await this.repo.getPlayerProgress(discordId, wl);
     const p = playerWk[questId] || { current: 0, claimed: false };

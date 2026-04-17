@@ -20,6 +20,8 @@ class EnhanceService {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家未找到", 404);
 
+    // 強化完成後會自動同步，不需要在這裡手動從 DB 拉（itemService._syncItemToPlayers 負責）
+
     // 找到要強化的裝備（可能在背包或身上）
     const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
     let equipment = null;
@@ -96,11 +98,43 @@ class EnhanceService {
         // 更新顯示名稱
         equipment.itemName = `${equipment.itemName.split(" +")[0]} +${nextLevel}`;
       }
+      // 確保強化後保留原始道具的所有 effects
+      if (!equipment.procEffects) equipment.procEffects = [];
+      if (!equipment.passiveEffects) equipment.passiveEffects = [];
+      if (!equipment.useEffects) equipment.useEffects = [];
+      if (!equipment.combatEffects) equipment.combatEffects = [];
     }
 
     // 保存進度
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
+
+    // 強化完成後，同步該道具的最新 effects（如果有 itemId）
+    if (isSuccess && equipment.itemId && this.itemRepository) {
+      const libItem = await this.itemRepository.findById(equipment.itemId).catch(() => null);
+      if (libItem) {
+        // 同步 procEffects、passiveEffects 等從 DB
+        if (equipmentIndex !== -1) {
+          // 在背包
+          progress.inventory[equipmentIndex].procEffects = libItem.procEffects || [];
+          progress.inventory[equipmentIndex].passiveEffects = libItem.passiveEffects || [];
+          progress.inventory[equipmentIndex].useEffects = libItem.useEffects || [];
+          progress.inventory[equipmentIndex].combatEffects = libItem.combatEffects || [];
+        } else {
+          // 在裝備槽
+          for (const [slotKey, slotItem] of Object.entries(progress.equipment || {})) {
+            if (slotItem && slotItem.uuid === inventoryUuid) {
+              progress.equipment[slotKey].procEffects = libItem.procEffects || [];
+              progress.equipment[slotKey].passiveEffects = libItem.passiveEffects || [];
+              progress.equipment[slotKey].useEffects = libItem.useEffects || [];
+              progress.equipment[slotKey].combatEffects = libItem.combatEffects || [];
+              break;
+            }
+          }
+        }
+        await this.progressRepository.save(progress);
+      }
+    }
 
     return {
       success: isSuccess,

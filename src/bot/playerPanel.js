@@ -7,7 +7,7 @@ const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
 const { calcPlayerStats } = require("../shared/combatStats");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
-const { isEffectConditionMet } = require("../shared/effectEngine");
+const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
 
 const AUTO_DELETE_MS = 60_000;
 const ACTIVE_REPLY_BY_USER = new Map();
@@ -82,6 +82,7 @@ async function replyPlayerBlocked(interaction) {
 
 
 async function handleProfile(interaction) {
+  console.log(`[handleProfile] called by ${interaction.user.id}`);
   const serviceContext = getServiceContext();
   const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
   // getProfile 與 updatePlayerTier 互不相依，並行執行
@@ -101,14 +102,15 @@ async function handleProfile(interaction) {
     : `等級：Base ${p.level} (EXP: ${p.exp} / ${expNeeded}，還差 ${expNeeded - p.exp})${tierLine}`;
 
   // ── 計算戰鬥能力（使用 shared/combatStats 確保與戰鬥邏輯一致）──
-  const equipped = p.equipment || {};
+  // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
+  const equipped = await mergeEquippedFromLibrary(p.equipment || {}, serviceContext.itemRepository);
   const cs = calcPlayerStats(attrs, equipped, p.activeEffects || [], p.inventory || []);
-  const calcHp    = cs.maxHp;
-  const calcAtk   = cs.atk;
-  const calcDef   = cs.def;
-  const calcCrit  = Math.round(cs.crit  * 10) / 10;
-  const calcCombo = Math.round(cs.combo * 10) / 10;
-  const calcDodge = Math.round((cs.dodge || 0) * 10) / 10;
+  const calcHp    = Math.ceil(cs.maxHp);
+  const calcAtk   = Math.ceil(cs.atk);
+  const calcDef   = Math.ceil(cs.def);
+  const calcCrit  = Math.ceil(cs.crit);
+  const calcCombo = Math.ceil(cs.combo);
+  const calcDodge = Math.ceil(cs.dodge || 0);
 
   // ── 裝備屬性加成 ──
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
@@ -135,14 +137,6 @@ async function handleProfile(interaction) {
   if (cs.bypassMonsterDefPct > 0) specialEffects.push(`🪄 無視怪物 ${cs.bypassMonsterDefPct}% DEF`);
   if (cs.monsterAttackCount && cs.monsterAttackCount > 1) specialEffects.push(`⚠️ 觸發時怪物攻擊 ×${cs.monsterAttackCount}`);
 
-  // 若為弓類，嘗試計算武器帶來的額外閃避（從總閃避扣掉屬性基底）
-  try {
-    const agiTotal = (attrs.agi || 1) + (bonus.agi || 0);
-    const baseDodge = Math.min(50, agiTotal * 0.5);
-    const weaponDodge = Math.round(Math.max(0, (cs.dodge || 0) - baseDodge));
-    if (weaponDodge > 0) specialEffects.push(`🏹 閃避 +${weaponDodge}%`);
-  } catch (e) {}
-
   // 顯示裝備特效（優先顯示已裝備武器的說明，否則使用推斷的武器特效）
   let effectLineParts = [...specialEffects];
     try {
@@ -168,12 +162,12 @@ async function handleProfile(interaction) {
 
     // 職業與武器的對應關係
     const jobWeaponMap = {
-      "swordsman": { weapons: ["sword_1h"], name: "劍士", traits: ["格擋反擊", "連擊", "斬殺"] },
-      "warrior": { weapons: ["axe_2h"], name: "戰士", traits: ["低血傷害倍增", "爆擊提升"] },
-      "dwarf": { weapons: ["mace_2h"], name: "矮人", traits: ["高血擊暈加成", "連擊"] },
+      "swordsman": { weapons: ["sword_1h", "sword_2h"], name: "劍士", traits: ["格擋反擊", "連擊", "斬殺"] },
+      "warrior": { weapons: ["axe_1h", "axe_2h"], name: "戰士", traits: ["低血傷害倍增", "爆擊提升"] },
+      "dwarf": { weapons: ["mace_1h", "mace_2h"], name: "矮人", traits: ["高血擊暈加成", "連擊"] },
       "rogue": { weapons: ["dagger"], name: "盜賊", traits: ["連擊加速", "連擊傷害"] },
-      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", traits: ["無視防禦", "元素傷害"] },
-      "healer": { weapons: ["staff_1h", "staff_2h"], name: "治療師", traits: ["回血光環", "隊伍傷害加成"] },
+      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", traits: ["無視防禦", "燒傷/麻痺/冰凍"] },
+      "healer": { weapons: null, name: "治療師", traits: ["回血光環", "隊伍傷害加成"] },
       "archer": { weapons: ["bow"], name: "弓箭手", traits: ["命中要害", "閃躲後追擊"] }
     };
 
@@ -188,14 +182,25 @@ async function handleProfile(interaction) {
       }
     }
 
-    // 顯示職業名稱和特性（如果武器匹配）
+    // 顯示職業名稱和特性（如果武器匹配；weapons=null 表示任何武器都觸發）
     if (jobInfo) {
-      const weaponMatches = jobInfo.weapons.includes(wt);
+      // 從 passiveEffects 提取結算加成
+      const bonusParts = [];
+      for (const eff of (jobEq.passiveEffects || [])) {
+        const v = eff?.params?.value;
+        if (!v) continue;
+        if (eff.key === 'gold_gain_up')  bonusParts.push(`金幣 +${v}%`);
+        if (eff.key === 'exp_gain_up')   bonusParts.push(`經驗 +${v}%`);
+        if (eff.key === 'drop_rate_up')  bonusParts.push(`掉落 +${v}%`);
+      }
+      const bonusLine = bonusParts.length ? `\n結算加成：${bonusParts.join("、")}` : "";
+
+      const weaponMatches = jobInfo.weapons === null || jobInfo.weapons.includes(wt);
       if (weaponMatches) {
         const traitsStr = jobInfo.traits.join(" / ");
-        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${traitsStr}`;
+        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${traitsStr}${bonusLine}`;
       } else {
-        jobTraitAreaLine = `職業特性：${jobInfo.name}`;
+        jobTraitAreaLine = `職業特性：${jobInfo.name}${bonusLine}`;
       }
     } else {
       // 未知職業，只顯示名稱
@@ -270,9 +275,6 @@ async function handleProfile(interaction) {
 
   await replyAndAutoDelete(interaction,
     `🧧 **${result.player.displayName} 的冒險者履歷**\n` +
-    `==============\n` +
-    `【職業】\n` +
-    `${jobAreaLine}\n` +
     `==============\n` +
     `【職業特性】\n` +
     `${jobTraitAreaLine}\n` +
@@ -1417,6 +1419,7 @@ function buildProgressBar(current, target, width = 10) {
 
 async function handleButton(interaction) {
   const id = interaction.customId;
+  console.log(`[playerPanel.handleButton] id=${id} user=${interaction.user?.id}`);
 
   // 每週任務領取
   if (id.startsWith("wq_claim:")) {
@@ -1597,7 +1600,7 @@ async function handleEquipSlotButton(interaction, slot) {
   await interaction.deferUpdate();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const equipped = progress?.equipment || {};
-  const inventory = (progress?.inventory || []).filter(e => e.itemType === "equipment" && e.equipSlot === slot);
+  const inventory = (progress?.inventory || []).filter(e => (e.itemType === "equipment" || e.itemType === "job_badge") && e.equipSlot === slot);
 
   const options = [];
   if (equipped[slot]) {

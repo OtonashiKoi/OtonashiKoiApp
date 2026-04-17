@@ -252,6 +252,18 @@ function applyMonsterEffects(mCalc, activeEffects = [], currentRound = 1) {
         // 攻擊力下降（百分比，value 為正數代表降低）
         adjusted.atk = Math.max(0, Math.round((adjusted.atk || 0) * (1 - Math.abs(params.value || 0) / 100)));
         break;
+      case 'def_down':
+        // 防禦力下降（百分比，value 為正數代表降低）
+        adjusted.def = Math.max(0, Math.round((adjusted.def || 0) * (1 - Math.abs(params.value || 0) / 100)));
+        break;
+      case 'hit_rate_down':
+        // 麻痺：命中率下降（固定值）
+        adjusted.hit = Math.max(0, (adjusted.hit || 0) - Math.abs(params.value || 0));
+        break;
+      case 'charm':
+        // 魅惑：怪物攻擊力降低 value%（混亂）
+        adjusted.atk = Math.max(0, Math.round((adjusted.atk || 0) * (1 - Math.abs(params.value || 0) / 100)));
+        break;
     }
   }
 
@@ -317,6 +329,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let round = 1;
   let stunRoundsLeft = 0; // 怪物剩餘擊暈回合數
   let monsterActiveEffects = []; // 怪物的 active effects（Buff/Debuff）
+  let warriorRageTriggered = false; // 戰士激怒只提示一次
 
   const roundLogs = [];
 
@@ -324,6 +337,36 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const log = [`**【第 ${round} 回合】**`];
     if (round === 1 && jobProfile.jobName) {
       log.push(`✨ ${jobProfile.jobName} ${rand(jobFlavor.intro)}`);
+      // 職業配武器效果提示（只顯示本場實際生效的）
+      const wt = pStats.weaponType || "";
+      const jobHints = [];
+      if (pStats.hasMageBadge && wt.startsWith("staff")) {
+        const tier = wt === "staff_2h" ? "屬性攻擊(中)" : "屬性攻擊(小)";
+        jobHints.push(`🔮 **(法師)** ${tier}：法杖傷害提升，命中後有機率觸發燒傷/麻痺/冰凍`);
+      }
+      if (pStats.hasArcherBadge && wt === "bow") {
+        jobHints.push(`🏹 **(弓箭手)** 命中要害(中)：弓傷害提升，命中要害機制啟動`);
+      }
+      if (pStats.hasWarriorBadge && (wt === "axe_1h" || wt === "axe_2h")) {
+        const tier = wt === "axe_2h" ? "低血爆發(中)" : "低血爆發(小)";
+        jobHints.push(`🪓 **(戰士)** ${tier}：低血量時傷害爆發${wt === "axe_2h" ? "，爆擊傷害加深" : ""}`);
+      }
+      if (pStats.hasDwarfBadge && wt.startsWith("mace")) {
+        const tier = wt === "mace_2h" ? "擊暈(中)" : "擊暈(小)";
+        jobHints.push(`🔨 **(矮人)** ${tier}：高血量時擊暈機率提升${wt === "mace_2h" ? "，命中後有機率額外擊暈" : ""}`);
+      }
+      if (pStats.hasRogueBadge && wt === "dagger") {
+        jobHints.push(`🗡️ **(盜賊)** 中毒(小)＋連擊強化：命中後有機率中毒疊加，連擊傷害提升`);
+      }
+      if (pStats.hasSwordsmanBadge && wt === "sword_1h" && pStats.blockChance > 0) {
+        jobHints.push(`⚔️ **(劍士)** 盾反強化(小)：格擋反擊命中率與爆擊率提升`);
+      }
+      if (pStats.hasHealerBadge) {
+        if (wt === "staff_1h") jobHints.push(`💚 **(治療師)** 回血(小)＋輸出提升：單手杖傷害提升，每回合自我回血`);
+        else if (wt === "staff_2h") jobHints.push(`💚 **(治療師)** 回血(小)＋輸出提升(中)：雙手杖傷害提升，每回合自我回血`);
+        else jobHints.push(`💚 **(治療師)** 回血(小)：每回合自我回血`);
+      }
+      for (const hint of jobHints) log.push(hint);
     }
 
     // ── 應用怪物的 activeEffects（Buff/Debuff） ──
@@ -357,6 +400,81 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
+    // ── 應用怪物的 DOT 效果（燒傷/freeze/麻痺） ──
+    let monsterFrozenThisRound = false;
+    if (Array.isArray(monsterActiveEffects)) {
+      for (const mEff of monsterActiveEffects) {
+        if (!mEff || !mEff.key) continue;
+        const mParams = mEff.params || {};
+        const mDur = mParams.duration || {};
+
+        if (mDur.mode === 'turns') {
+          const appliedRound = mEff.appliedAt || 1;
+          const endRound = appliedRound + (mDur.value || 1);
+          if (round > endRound) continue;
+        }
+
+        // 燒傷：每回合扣怪物最大 HP 的 value%（DB params，預設 1%）
+        if (mEff.key === 'burn') {
+          const burnPct = Number(mParams.value ?? 1);
+          const burnBase = mParams.mode === 'current' ? mHp : mHpInit;
+          const burnDmg = Math.max(1, Math.round(burnBase * (burnPct / 100)));
+          mHp -= burnDmg;
+          totalDamage += burnDmg;
+          log.push(`🔥 燒傷持續！${mName} 受到 **${burnDmg}** 點灼燒傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          if (mHp <= 0) { outcome = "win"; break; }
+        }
+
+        // 中毒：每回合扣怪物最大 HP 的 value%（盜賊疊加）
+        if (mEff.key === 'poison') {
+          const poisonPct = Number(mParams.value ?? 0.5);
+          const poisonDmg = Math.max(1, Math.round(mHpInit * (poisonPct / 100)));
+          mHp -= poisonDmg;
+          totalDamage += poisonDmg;
+          log.push(`☠️ 中毒持續！${mName} 受到 **${poisonDmg}** 點毒素傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          if (mHp <= 0) { outcome = "win"; break; }
+        }
+
+        // 冰凍：此回合怪物無法攻擊（一次性，appliedAt 回合消耗）
+        if (mEff.key === 'freeze') {
+          if (round === (mEff.appliedAt || round)) {
+            monsterFrozenThisRound = true;
+          }
+        }
+
+        // 擊暈（卡片觸發）：設定 stunRoundsLeft
+        if (mEff.key === 'stun') {
+          const stunTurns = Number(mParams.duration?.value ?? 1);
+          // appliedAt 回合起持續 stunTurns 回合
+          const stunEnd = (mEff.appliedAt || 1) + stunTurns;
+          if (round <= stunEnd && stunRoundsLeft < stunTurns) {
+            stunRoundsLeft = Math.max(stunRoundsLeft, stunEnd - round + 1);
+          }
+        }
+
+        // 流血：每回合扣怪物最大 HP 的 value%
+        if (mEff.key === 'bleed') {
+          const bleedPct = Number(mParams.value ?? 10);
+          const bleedDmg = Math.max(1, Math.round(mHpInit * (bleedPct / 100)));
+          mHp -= bleedDmg;
+          totalDamage += bleedDmg;
+          log.push(`🩸 流血持續！${mName} 受到 **${bleedDmg}** 點流血傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          if (mHp <= 0) { outcome = "win"; break; }
+        }
+
+        // 閃電：每回合對怪物造成 value% 最大 HP 電擊傷害
+        if (mEff.key === 'lightning') {
+          const lightPct = Number(mParams.value ?? 20);
+          const lightDmg = Math.max(1, Math.round(mHpInit * (lightPct / 100)));
+          mHp -= lightDmg;
+          totalDamage += lightDmg;
+          log.push(`⚡ 閃電持續！${mName} 受到 **${lightDmg}** 點雷電傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          if (mHp <= 0) { outcome = "win"; break; }
+        }
+      }
+    }
+    if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+
     // ── 應用玩家的 DOT 效果（如中毒） ──
     if (Array.isArray(options.playerActiveEffects)) {
       for (const dotEffect of options.playerActiveEffects) {
@@ -383,6 +501,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 套用來自隊伍（party）的被動 aura，例如治療師提供的每回合回復 ──
+    let roundDmgMultiplier = 1; // 每回合重置，累積本回合所有 party_damage_up
     try {
       const partyEffects = Array.isArray(options.partyEffects) ? options.partyEffects : [];
       for (const pe of partyEffects) {
@@ -395,40 +514,65 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const heal = mode === 'pct' ? Math.max(0, Math.round((pStats.maxHp || 0) * (val / 100))) : Math.max(0, Math.round(val));
           if (heal > 0) {
             pHp = Math.min(pStats.maxHp, pHp + heal);
-            log.push(`💚 ${rand(PARTY_HEAL_PHRASES)}，回復 **${heal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+            const healerTag = pe.sourceName ? `（${pe.sourceName}）` : "";
+            log.push(`💚 **(治療師)** 光環${healerTag} 回復 **${heal}** HP`);
           }
         }
         // 支援隊伍傷害加成（每回合生效）
         if (pe.key === 'party_damage_up') {
           const val = Number(pe.params?.value ?? pe.value ?? 0);
           if (Number.isFinite(val) && val !== 0) {
-            const mul = 1 + (val / 100);
-            pStats.finalDamageMultiplier = (Number(pStats.finalDamageMultiplier) || 1) * mul;
-            log.push(`🔥 ${rand(PARTY_DAMAGE_PHRASES)}，本回合傷害提升 ${(val)}%`);
+            roundDmgMultiplier *= (1 + val / 100);
+            const healerTag = pe.sourceName ? `（${pe.sourceName}）` : "";
+            log.push(`🔥 **(治療師)** 光環${healerTag} 傷害提升 ${val}%`);
           }
         }
       }
     } catch (e) {}
 
-    // ── 怪物卡片技能觸發 ──
-    // 怪物卡片 30% 觸發，玩家卡片 5% 觸發
-    // 每張卡片獨立判定，所以三張卡片都可能在同一回合觸發
+    // ── 治療師自我回血（每回合 3% 最大 HP） ──
+    if (pStats.hasHealerBadge) {
+      const selfHeal = Math.max(1, Math.round(pStats.maxHp * 0.03));
+      if (pHp < pStats.maxHp) {
+        pHp = Math.min(pStats.maxHp, pHp + selfHeal);
+        log.push(`💚 **(治療師)** 自我回復 **${selfHeal}** HP`);
+      }
+    }
 
-    // 先檢查怪物是否裝備了自己的卡片
+    // ── 卡片技能觸發 ──
+    // 怪物卡片 30% 觸發，玩家裝備卡片 10% 觸發
+    // 每張卡片獨立判定，所以三個槽位都可能在同一回合觸發
+
+    // 怪物自身的卡片技能
     const monsterEquipped = options.monsterEquipped || {};
-    if (monsterEquipped.special_1 && monsterEquipped.special_1.monsterCardSkill && monsterEquipped.special_1.monsterCardSkill.key) {
+    // 沉默：怪物無法發動卡片技能
+    const monsterIsSilenced = Array.isArray(monsterActiveEffects) && monsterActiveEffects.some(e => {
+      if (e?.key !== 'silence') return false;
+      const dur = e.params?.duration || {};
+      if (dur.mode === 'turns') {
+        const end = (e.appliedAt || 1) + (dur.value || 1);
+        return round <= end;
+      }
+      return true;
+    });
+    const monsterHasCardSkill = !!(monsterEquipped.special_1?.monsterCardSkill?.key);
+    if (monsterIsSilenced && monsterHasCardSkill) {
+      log.push(`🔇 ${mName} 陷入沉默，無法發動技能！`);
+    }
+    if (!monsterIsSilenced && monsterEquipped.special_1 && monsterEquipped.special_1.monsterCardSkill && monsterEquipped.special_1.monsterCardSkill.key) {
       const equippedCard = monsterEquipped.special_1;
       const skill = equippedCard.monsterCardSkill;
-      const cardName = equippedCard.itemName || equippedCard.name || '怪物卡';
+      const cardName = equippedCard.itemName || equippedCard.name || '卡片';
 
-      if (Math.random() * 100 < 30) {
-        // 怪物發動卡片技能
-        log.push(`🎴 **${mName}（${cardName}）！技能發動！** ${skill.name || ''}${skill.description ? '（' + skill.description + '）' : ''}`);
+      if (Math.random() * 100 < 50) {
+        log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
 
         if (skill.procEffects && Array.isArray(skill.procEffects)) {
           for (const procEffect of skill.procEffects) {
             if (!procEffect || !procEffect.key) continue;
-            monsterActiveEffects.push({
+            // 怪物卡片技能的效果施加給玩家
+            if (!options.playerActiveEffects) options.playerActiveEffects = [];
+            options.playerActiveEffects.push({
               key: procEffect.key,
               params: procEffect.params || {},
               appliedAt: round,
@@ -439,23 +583,22 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
-    // 檢查玩家裝備的卡片（所有三個槽位都獨立判定）
-    // 「攻擊型」效果施加給怪物，「增益型」效果施加給玩家
+    // 玩家裝備的卡片技能（special_1/2/3 獨立觸發）
+    // 攻擊型效果（施加給怪物）；其餘增益型效果施加給玩家
     const PLAYER_CARD_OFFENSIVE_KEYS = new Set([
       'atk_down', 'def_down', 'poison', 'bleed', 'burn', 'freeze', 'stun',
-      'silence', 'charm', 'dark_curse', 'life_steal_strong', 'lightning',
-      'ancient_power', 'freeze_slow'
+      'silence', 'charm', 'lightning', 'freeze_slow'
+      // dark_curse / life_steal_strong / ancient_power → 施加給玩家，見下方 playerActiveEffects
     ]);
     const specialSlots = ['special_1', 'special_2', 'special_3'];
     for (const slot of specialSlots) {
       const slotItem = options.equipped?.[slot];
       if (slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
         const skill = slotItem.monsterCardSkill;
-        const cardName = slotItem.itemName || slotItem.name || '怪物卡';
+        const cardName = slotItem.itemName || slotItem.name || '卡片';
 
-        // 玩家卡片 10% 觸發率（提升體感）
-        if (Math.random() * 100 < 10) {
-          log.push(`🎴 **${cardName}！技能發動！** ${skill.name || ''}${skill.description ? '（' + skill.description + '）' : ''}`);
+        if (Math.random() * 100 < 5) {
+          log.push(`🎴 【${skill.name || cardName}】發動！${skill.description ? skill.description : ''}`);
 
           if (skill.procEffects && Array.isArray(skill.procEffects)) {
             for (const procEffect of skill.procEffects) {
@@ -487,11 +630,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerAtkMultiplier = 1;
     let playerCritRateBonus = 0;
     let playerLifestealPct = 0;
+    let playerLifestealStrongPct = 0;
     if (Array.isArray(options.playerActiveEffects)) {
       for (const eff of options.playerActiveEffects) {
         if (!eff) continue;
         const effParams = eff.params || {};
         const effValue = Number(effParams.value ?? 0);
+        // 過期檢查
+        if (effParams.duration?.mode === 'turns') {
+          const end = (eff.appliedAt || 1) + (effParams.duration.value || 1);
+          if (round > end) continue;
+        }
         if (eff.key === 'atk_down') {
           // 從怪物施加的攻擊力下降（negative）
           if (effValue > 0) playerAtkMultiplier *= (1 - effValue / 100);
@@ -501,6 +650,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         } else if (eff.key === 'lifesteal') {
           // 玩家吸血（來自卡片技能）
           playerLifestealPct += effValue;
+        } else if (eff.key === 'dark_curse') {
+          // 黑暗詛咒：玩家攻擊力降低 |value|%
+          playerAtkMultiplier *= (1 - Math.abs(effValue) / 100);
+        } else if (eff.key === 'ancient_power') {
+          // 遠古力量：玩家攻擊力提升 value%
+          playerAtkMultiplier *= (1 + effValue / 100);
+        } else if (eff.key === 'life_steal_strong') {
+          // 強力吸血：傷害的 value% 回復為 HP
+          playerLifestealStrongPct += effValue;
         }
       }
     }
@@ -515,7 +673,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const bypassPct = pStats.bypassMonsterDefPct ?? 0;
         const finalDef = Math.max(0, effectiveDef * (1 - bypassPct / 100));
 
-        let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
+        let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * (1 - finalDef / 100))));
 
         // 職業傷害倍率
         // 弓箭手：弓傷害 ×1.2
@@ -532,6 +690,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (pStats.hasWarriorBadge && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
           pStats.warriorLowHpMultiplier = 1.15;
           dmg = Math.round(dmg * 1.15);
+          if (!warriorRageTriggered) {
+            warriorRageTriggered = true;
+            log.push(`🔱 **(戰士)** 血氣上湧，傷害爆發！`);
+          }
         }
 
         // --- Compute on_high_hp bonuses (per-effect threshold) early so they affect crit checks ---
@@ -576,7 +738,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 4. 如果同時觸發，傷害疊加
         if (isCrit) {
           const critBase = Math.round(pStats.atk * (1 - finalDef / 100));
-          dmg = Math.round(rollDmg(Math.max(1, critBase)) * 2.5);
+          const critMultiplier = 2.5 + (pStats.warriorCritDamageBonus || 0); // 戰士雙手斧 +0.2 → 2.7
+          dmg = Math.round(rollDmg(Math.max(1, critBase)) * critMultiplier);
 
           // 弓箭手傷害倍率也應用於爆擊
           if (pStats.hasArcherBadge && pStats.weaponType === "bow") {
@@ -611,10 +774,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 顯示爆擊和要害的組合
         if (isCrit && isArcherCrit) {
           // 同時觸發爆擊和要害
-          critNote = `✨${rand(critPhrases)}！🎯${rand(['命中要害', '精準破綻', '弱點命中'])}！`;
+          critNote = `✨${rand(critPhrases)}！🎯**(弓箭手)** ${rand(['命中要害', '精準破綻', '弱點命中'])}！`;
         } else if (isArcherCrit) {
           // 只觸發要害
-          critNote = `🎯**${rand(['命中要害', '精準破綻', '弱點命中', '一擊斃命'])}**！`;
+          critNote = `🎯**(弓箭手)** **${rand(['命中要害', '精準破綻', '弱點命中', '一擊斃命'])}**！`;
         } else if (isCrit) {
           // 只觸發爆擊
           critNote = `✨**${rand(critPhrases)}**！`;
@@ -627,6 +790,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const healAmt = Math.max(1, Math.round(dmg * (playerLifestealPct / 100)));
           pHp = Math.min(pStats.maxHp, pHp + healAmt);
           log.push(`💚 吸取生命力！恢復 **${healAmt}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+        }
+        // ── 強力吸血效果（林地妖靈卡）──
+        if (playerLifestealStrongPct > 0) {
+          const sHeal = Math.max(1, Math.round(dmg * (playerLifestealStrongPct / 100)));
+          pHp = Math.min(pStats.maxHp, pHp + sHeal);
+          log.push(`💜 強力吸血！恢復 **${sHeal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
         }
 
         // ── 檢查怪物反彈傷害效果 ──
@@ -669,6 +838,63 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         if (mHp <= 0) { outcome = "win"; break; }
 
+        // ── 職業徽章 on_hit proc（直接讀 DB procEffects，不 hardcode）──
+        const jobEqForProc = options.equipped?.job_eq;
+        if (jobEqForProc && Array.isArray(jobEqForProc.procEffects)) {
+          for (const pe of jobEqForProc.procEffects) {
+            if (!pe || pe.trigger !== 'on_hit' || pe.target !== 'enemy') continue;
+            // 武器條件
+            if (pe.condition?.weaponType && pe.condition.weaponType !== wt) continue;
+            if (Math.random() * 100 >= (pe.chance || 0)) continue;
+
+            const pp = pe.params || {};
+            const dur = { ...pp.duration } || { mode: 'turns', value: 3 };
+
+            switch (pe.key) {
+              case 'burn': {
+                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
+                monsterActiveEffects.push({ key: 'burn', params: { value: pp.value ?? 1, mode: pp.mode ?? 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
+                log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 ${dur.value ?? 3} 回合！`);
+                break;
+              }
+              case 'hit_down': {
+                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'hit_rate_down');
+                monsterActiveEffects.push({ key: 'hit_rate_down', params: { value: pp.value ?? 15, duration: dur }, appliedAt: round, source: 'job_proc' });
+                log.push(`⚡ **(法師)** **麻痺**！${mName} 行動遲緩，命中率下降，持續 ${dur.value ?? 3} 回合！`);
+                break;
+              }
+              case 'freeze': {
+                const recentFreeze = monsterActiveEffects.find(e => e.key === 'freeze' && e.appliedAt >= round - 1);
+                if (!recentFreeze) {
+                  monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'freeze');
+                  monsterActiveEffects.push({ key: 'freeze', params: { duration: dur, bossImmune: pp.bossImmune ?? true }, appliedAt: round + 1, source: 'job_proc' });
+                  log.push(`🧊 **(法師)** **冰凍**！${mName} 被凍結，下回合無法攻擊！`);
+                }
+                break;
+              }
+              case 'proc_stun': {
+                stunRoundsLeft = Math.max(stunRoundsLeft, dur.value ?? 1);
+                log.push(`😵 **(矮人)** **槌擊暈眩**！${mName} 被重擊擊暈，下回合無法攻擊！`);
+                break;
+              }
+              case 'proc_poison': {
+                const existing = monsterActiveEffects.find(e => e.key === 'poison');
+                const prevPct = existing ? Number(existing.params?.value ?? 0) : 0;
+                const nextPctRaw = Math.min(pp.maxPct ?? 3, prevPct + (existing ? (pp.stackAdd ?? 1) : (pp.value ?? 0.5)));
+                const nextPct = Math.ceil(nextPctRaw * 10) / 10;
+                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'poison');
+                monsterActiveEffects.push({ key: 'poison', params: { value: nextPct, mode: 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
+                if (existing) {
+                  log.push(`☠️ **(盜賊)** **中毒加深**！${mName} 毒性增強至每回合 ${nextPct}% HP 傷害！`);
+                } else {
+                  log.push(`☠️ **(盜賊)** **中毒**！${mName} 陷入中毒狀態，每回合損失 ${nextPct}% HP！`);
+                }
+                break;
+              }
+            }
+          }
+        }
+
         // 連擊（匕首+20%，AGI驅動）
         // 盜賊：連擊機率加成（+10%）
         let comboChance = pStats.combo;
@@ -677,7 +903,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
 
         if (Math.random() * 100 < comboChance) {
-          const comboBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100)));
+          const comboBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * (1 - finalDef / 100)));
           let cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (pStats.comboDamageMultiplier || 1)));
 
           // 盜賊：連擊傷害倍率加成（+10%）
@@ -723,11 +949,14 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 怪物攻擊 ──
     // AGI 優勢判定：第1回合先手，或偶數回合才反擊
     let monsterAttackCount = 0;
+    let monsterDmgThisRound = 0; // 怪物本回合總傷害（甲蟹反擊用）
     let skipMonsterAttackReason = null;
 
     if (stunRoundsLeft > 0) {
       stunRoundsLeft--;
       skipMonsterAttackReason = "stun";
+    } else if (monsterFrozenThisRound) {
+      skipMonsterAttackReason = "freeze";
     } else if (hasAgiFirstStrike && round === 1) {
       skipMonsterAttackReason = "agi_first_strike";
     } else if (hasAgiSlowedMonster && round % 2 !== 0) {
@@ -739,6 +968,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     if (skipMonsterAttackReason === "stun") {
       log.push(`😵 ${mName} 仍處於擊暈狀態，無法攻擊！`);
+    } else if (skipMonsterAttackReason === "freeze") {
+      log.push(`🧊 ${mName} 被冰凍住，此回合無法攻擊！`);
     } else if (skipMonsterAttackReason === "agi_first_strike") {
       log.push(`⚡ ${mName} ${rand(agiFirstStrikePhrases)}，無法反擊！`);
     } else if (skipMonsterAttackReason === "agi_slowed") {
@@ -801,6 +1032,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
 
           pHp -= dmg;
+          monsterDmgThisRound += dmg;
           log.push(`💥 ${mAtkNote}${mName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
 
           // ── 檢查怪物吸血效果 ──
@@ -825,7 +1057,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (pStats.weaponType === 'bow' && outcome === null) {
           const isBreak = Math.random() * 100 < pStats.armorBreakChance;
           const finalDef = isBreak ? 0 : adjustedMCalc.def;
-          let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
+          let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * (1 - finalDef / 100))));
 
           // 應用弓的傷害倍率（1.2）
           cdmg = Math.round(cdmg * (pStats.archerBowDamageBoost || 1.2));
@@ -839,8 +1071,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
           mHp -= cdmg;
           totalDamage += cdmg;
+          const archerTag = pStats.hasArcherBadge ? " **(弓箭手)**" : "";
           const critMarker = hasCounterCrit ? '🎯 **命中要害**！' : '';
-          log.push(`🏹 **閃躲後追擊**！${rand(jobFlavor.counter)}，${critMarker}對 ${mName} 造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          log.push(`🏹 **閃躲後追擊**${archerTag}！${rand(jobFlavor.counter)}，${critMarker}對 ${mName} 造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
 
           if (mHp <= 0) { outcome = "win"; }
         }
@@ -849,11 +1082,36 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     if (outcome === "lose") { roundLogs.push(log.join("\n")); break; }
 
+    // ── 甲蟹卡反擊（怪物攻擊後，30% 觸發，傷害為怪物本回合傷害的 20%）──
+    if (monsterAttackCount > 0 && outcome === null) {
+      const counterEff = (options.playerActiveEffects || []).find(e => e && e.key === 'counter');
+      if (!counterEff) {
+        // 也檢查 equipped special 槽位的 procEffects
+        const specialSlotKeys = ['special_1', 'special_2', 'special_3'];
+        for (const slot of specialSlotKeys) {
+          const slotItem = options.equipped?.[slot];
+          if (slotItem?.procEffects?.some(e => e.key === 'counter')) {
+            const triggerChance = Number(slotItem.procEffects.find(e => e.key === 'counter')?.params?.value ?? 30);
+            if (Math.random() * 100 < triggerChance) {
+              const counterDmg = Math.max(1, Math.round(monsterDmgThisRound * 0.2));
+              mHp -= counterDmg;
+              totalDamage += counterDmg;
+              log.push(`🦀 **甲蟹反擊**！以受到傷害的 20% 反彈，對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+              if (mHp <= 0) { outcome = "win"; }
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+
     // ── 盾格擋反擊（單手劍+盾，必中）──
     if (blockedThisRound && pStats.blockCounter && outcome === null) {
       const isBreak = Math.random() * 100 < pStats.armorBreakChance;
       const finalDef = isBreak ? 0 : adjustedMCalc.def;
-      let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
+      let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * (1 - finalDef / 100))));
       try {
         const equipped = options.equipped || null;
         if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
@@ -883,7 +1141,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
       mHp -= dmg;
       totalDamage += dmg;
-      log.push(`⚔️✨ **格擋反擊**！${rand(jobFlavor.counter)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+      const swordsmanTag = pStats.hasSwordsmanBadge ? " **(劍士)**" : "";
+      log.push(`⚔️✨ **格擋反擊**${swordsmanTag}！${rand(jobFlavor.counter)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
       if (mHp <= 0) { outcome = "win"; }
     }
 
@@ -894,30 +1153,55 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (Math.random() * 100 < pStats.counterChance) {
         const hitChance = pStats.hit - adjustedMCalc.dodge;
         if (monsterIsStunned || Math.random() * 100 < hitChance) {
-          const isBreak = pStats.counterInheritBreak && Math.random() * 100 < pStats.armorBreakChance;
-          const finalDef = isBreak ? 0 : adjustedMCalc.def;
-          let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * (1 - finalDef / 100))));
-          try {
-            const equipped = options.equipped || null;
-            if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
-              const lowHpEffects = collectEquipmentEffects(equipped, 'on_low_hp', { equipped, inventory: options.inventory || [] });
-              for (const eff of lowHpEffects) {
-                if (!eff || !eff.params) continue;
-                if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
-                  cdmg = Math.max(1, Math.round(cdmg * Number(eff.params.value)));
-                }
+          // 法杖雙持：副手只觸發 proc 效果，傷害為 0
+          if (pStats.counterIsStaffProc) {
+            log.push(`🔮 副手接觸，魔力灌注！`);
+            // 觸發法師屬性 proc（燒傷/麻痺/冰凍）—— 需要法師徽章
+            if (pStats.hasMageBadge) {
+              const procChance = 10;
+              if (Math.random() * 100 < procChance) {
+                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
+                monsterActiveEffects.push({ key: 'burn', params: { damagePercent: 10, duration: { mode: 'turns', value: 3 } }, appliedAt: round, source: 'mage_offhand' });
+                log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 3 回合！`);
+              }
+              if (Math.random() * 100 < procChance) {
+                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'hit_rate_down');
+                monsterActiveEffects.push({ key: 'hit_rate_down', params: { value: 30, duration: { mode: 'turns', value: 3 } }, appliedAt: round, source: 'mage_offhand' });
+                log.push(`⚡ **(法師)** **麻痺**！${mName} 行動遲緩，命中率下降，持續 3 回合！`);
+              }
+              const recentFreeze = monsterActiveEffects.find(e => e.key === 'freeze' && e.appliedAt >= round - 1);
+              if (!recentFreeze && Math.random() * 100 < procChance) {
+                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'freeze');
+                monsterActiveEffects.push({ key: 'freeze', params: { duration: { mode: 'turns', value: 1 } }, appliedAt: round + 1, source: 'mage_offhand' });
+                log.push(`🧊 **(法師)** **冰凍**！${mName} 被凍結，下回合無法攻擊！`);
               }
             }
-          } catch (e) {}
-          mHp -= cdmg;
-          totalDamage += cdmg;
-          log.push(`🗡️ **副手追擊**！${rand(jobFlavor.counter)}，造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
-          // 副手擊暈繼承（劍/匕首）
-          if (pStats.counterInheritStun && Math.random() * 100 < pStats.stunChance) {
-            stunRoundsLeft = 3;
-            log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 3 回合無法攻擊！`);
+          } else {
+            const isBreak = pStats.counterInheritBreak && Math.random() * 100 < pStats.armorBreakChance;
+            const finalDef = isBreak ? 0 : adjustedMCalc.def;
+            let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * (1 - finalDef / 100))));
+            try {
+              const equipped = options.equipped || null;
+              if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
+                const lowHpEffects = collectEquipmentEffects(equipped, 'on_low_hp', { equipped, inventory: options.inventory || [] });
+                for (const eff of lowHpEffects) {
+                  if (!eff || !eff.params) continue;
+                  if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
+                    cdmg = Math.max(1, Math.round(cdmg * Number(eff.params.value)));
+                  }
+                }
+              }
+            } catch (e) {}
+            mHp -= cdmg;
+            totalDamage += cdmg;
+            log.push(`🗡️ **副手追擊**！${rand(jobFlavor.counter)}，造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+            // 副手擊暈繼承（劍/匕首）
+            if (pStats.counterInheritStun && Math.random() * 100 < pStats.stunChance) {
+              stunRoundsLeft = 3;
+              log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 3 回合無法攻擊！`);
+            }
+            if (mHp <= 0) { outcome = "win"; }
           }
-          if (mHp <= 0) { outcome = "win"; }
         } else {
           log.push(`🗡️ 副手追擊出手，但 ${mName} ${rand(dodgePhrases)}！`);
         }

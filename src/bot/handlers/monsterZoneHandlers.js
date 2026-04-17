@@ -9,7 +9,7 @@ const PERCENT_EFFECT_KEYS = new Set([
 ]);
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { calcPlayerStats } = require("../../shared/combatStats");
-const { isEffectConditionMet, collectEquipmentEffects, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
+const { isEffectConditionMet, collectEquipmentEffects, mergeEquippedFromLibrary, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
 const activeSessions = new Map();
@@ -109,6 +109,23 @@ function getGemsToAwardFromDrops(droppedItems, progress) {
   }
 
   return Array.from(gemsToAward);
+}
+
+/**
+ * 檢查玩家是否已擁有某件道具（背包 + 裝備欄）
+ * @returns {boolean}
+ */
+function playerAlreadyOwnsItem(progress, itemId) {
+  if (!itemId) return false;
+  // 檢查背包
+  if (Array.isArray(progress?.inventory)) {
+    if (progress.inventory.some(i => i?.itemId === itemId)) return true;
+  }
+  // 檢查裝備欄
+  if (progress?.equipment && typeof progress.equipment === 'object') {
+    if (Object.values(progress.equipment).some(i => i?.itemId === itemId)) return true;
+  }
+  return false;
 }
 
 function isMonsterZoneButton(customId) {
@@ -272,9 +289,12 @@ function buildRewardModifiers(progress) {
 // 輔助：掉落裝備公告
 // ──────────────────────────────────────────────
 async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
+  console.log(`[NotifyKill] monster=${monsterName} killer=${killerDiscordId} pids=${Object.keys(perPidRewards).join(",")}`);
   try {
     const { getBotClient } = require("../runtimeContext");
+    const sc = getServiceContext();
     const client = getBotClient();
+    console.log(`[NotifyKill] client ready=${client?.isReady()}`);
     if (!client?.isReady()) return;
     for (const [pid, rewards] of Object.entries(perPidRewards)) {
       const lines = [];
@@ -293,6 +313,27 @@ async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
         const user = await client.users.fetch(pid);
         await user.send(`${prefix}\n${lines.join("\n")}`);
       } catch (_) { /* DM 關閉則跳過 */ }
+
+      // 治療師專屬 DM：額外發送加成明細
+      try {
+        const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+        const db = await getMongoDb();
+        const prog = await db.collection("progress").findOne({ playerId: pid });
+        const jobEq = prog?.equipment?.job_eq;
+        const jobId = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
+        const jobName = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
+        if (jobId.includes("healer") || jobName.includes("治療")) {
+          const goldBonus = rewards.gold > 0 ? Math.max(1, Math.round(rewards.gold / 11)) : 0;
+          const expBonus  = rewards.exp  > 0 ? Math.max(1, Math.round(rewards.exp  / 11)) : 0;
+          const parts = [];
+          if (goldBonus > 0) parts.push(`+${goldBonus} 金幣`);
+          if (expBonus  > 0) parts.push(`+${expBonus} EXP`);
+          if (parts.length > 0) {
+            const user = await client.users.fetch(pid);
+            await user.send(`💚 **治療師加成**：${parts.join("、")}`);
+          }
+        }
+      } catch (e) { console.error("[HealerCheck] error:", e.message); }
     }
   } catch (e) {
     // suppressed
@@ -670,7 +711,8 @@ async function handleEnterBattle(interaction) {
 
     const progress = cachedProgress ?? await sc.progressRepository.findByPlayerId(discordId);
     const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-    const equipped = progress?.equipment || {};
+    // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
+    const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, sc.itemRepository);
     const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || []);
 
     // 入場費
@@ -763,17 +805,20 @@ async function handleEnterBattle(interaction) {
 
       // ── 自動跑完所有回合 ──
       // 蒐集當前參戰者中對 party 生效的 aura（由已在場的治療師等提供）
+      // 包含自己（discordId），確保治療師自身的光環也套用到自己
       const participants = Array.isArray(battleState.participants) ? battleState.participants : [];
+      const allParticipantsWithSelf = [...new Set([...participants, discordId])];
       const partyEffects = [];
-      await Promise.all(participants.map(async (pid) => {
+      await Promise.all(allParticipantsWithSelf.map(async (pid) => {
         try {
           const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
           if (!prog) return;
-          const equipped = prog.equipment || {};
-          // 收集該玩家裝備中所有可能對隊伍生效的效果（passive/combat 等）
+          // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
+          const equipped = await mergeEquippedFromLibrary(prog.equipment || {}, sc.itemRepository);
           const refs = collectEquipmentEffects(equipped, null, { equipped, inventory: prog.inventory || [] });
+          const pidName = pid === discordId ? displayName : ((await sc.playerRepository.findByDiscordId(pid).catch(() => null))?.displayName || null);
           for (const r of refs) {
-            if (r && r.target === 'party') partyEffects.push(r);
+            if (r && r.target === 'party') partyEffects.push({ ...r, sourceName: pidName });
           }
         } catch (e) {}
       }));
@@ -782,24 +827,43 @@ async function handleEnterBattle(interaction) {
       const aura = battleState.activeHealerAura;
       if (aura && aura.effects && !participants.includes(aura.discordId)) {
         for (const e of aura.effects) {
-          partyEffects.push(e);
+          partyEffects.push({ ...e, sourceName: aura.displayName || null });
         }
       }
 
       const currentProg = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
-      const currentEquipped = (currentProg && currentProg.equipment) ? currentProg.equipment : {};
+      // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
+      const currentEquipped = await mergeEquippedFromLibrary((currentProg && currentProg.equipment) ? currentProg.equipment : {}, sc.itemRepository);
 
       const { runCombatLoop } = require("../../shared/combatLoop");
       const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
-        runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, { equipped: currentEquipped, inventory: currentProg?.inventory || [], partyEffects });
+        runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, { equipped: currentEquipped, inventory: currentProg?.inventory || [], partyEffects, monsterEquipped: battleMonster?.equipment || {} });
       session.monsterHp = finalMonsterHp;
       session.playerHp  = finalPlayerHp;
       const totalTaken = Math.max(0, (session.playerMaxHp || 0) - Math.max(0, finalPlayerHp));
 
+      // ── 戰鬥結果立刻更新排行榜（不等結算完成）──
+      const currentParticipants = Array.isArray(battleState.participants) ? battleState.participants : [];
+      try {
+        const freshState = await sc.monsterService.getState(zoneKey);
+        const prev = freshState.damageMap || {};
+        const updatedDamageMap = {
+          ...prev,
+          [discordId]: {
+            name: displayName,
+            damage: (prev[discordId]?.damage || 0) + totalDamage,
+            taken: (prev[discordId]?.taken || 0) + totalTaken,
+          }
+        };
+        await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap: updatedDamageMap, lastHitAt: new Date().toISOString() }, zoneKey);
+        _republishPanel(sc, zoneKey, battleMonster, session.monsterHp, currentParticipants.length, updatedDamageMap).catch(() => {});
+      } catch (e) {
+        console.error("[monsterZoneHandlers] 排行榜更新失敗:", e.message);
+      }
+
       // ── 結算 ──
       let rewardLines = [];
       let embedTitle, embedColor;
-      const currentParticipants = Array.isArray(battleState.participants) ? battleState.participants : [];
 
       if (outcome === "win") {
         session.monsterHp = 0;
@@ -808,19 +872,10 @@ async function handleEnterBattle(interaction) {
         embedColor = 0xf1c40f;
       } else if (outcome === "lose") {
         session.monsterHp = Math.max(0, session.monsterHp);
-        let damageMap = {};
+        // 排行榜已在戰鬥完成後立刻更新，此處只紀錄狀態
         try {
           const freshState = await sc.monsterService.getState(zoneKey);
-          const prev = freshState.damageMap || {};
-          damageMap = {
-            ...prev,
-            [discordId]: {
-              name: displayName,
-              damage: (prev[discordId]?.damage || 0) + totalDamage,
-              taken: (prev[discordId]?.taken || 0) + totalTaken,
-            }
-          };
-          await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap, lastHitAt: new Date().toISOString() }, zoneKey);
+          await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, lastHitAt: new Date().toISOString() }, zoneKey);
         } catch (e) {
           await sc.monsterService.saveState({ ...battleState, currentHp: session.monsterHp, lastHitAt: new Date().toISOString() }, zoneKey);
         }
@@ -835,28 +890,17 @@ async function handleEnterBattle(interaction) {
           session.entryFee > 0 ? `入場費 **${session.entryFee}** 🪙 已損失，下次加油！` : "下次加油！",
           `⏳ 冷卻中... 25 秒後可再次進場。`
         ];
-        _republishPanel(sc, zoneKey, battleMonster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
       } else {
-        let damageMap = {};
+        // 排行榜已在戰鬥完成後立刻更新，此處只紀錄狀態
         try {
           const freshState = await sc.monsterService.getState(zoneKey);
-          const prev = freshState.damageMap || {};
-          damageMap = {
-            ...prev,
-            [discordId]: {
-              name: displayName,
-              damage: (prev[discordId]?.damage || 0) + totalDamage,
-              taken: (prev[discordId]?.taken || 0) + totalTaken,
-            }
-          };
-          await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, damageMap, lastHitAt: new Date().toISOString() }, zoneKey);
+          await sc.monsterService.saveState({ ...freshState, currentHp: session.monsterHp, lastHitAt: new Date().toISOString() }, zoneKey);
         } catch (e) {
           await sc.monsterService.saveState({ ...battleState, currentHp: session.monsterHp, lastHitAt: new Date().toISOString() }, zoneKey);
         }
         embedTitle = "⏸️ 戰鬥超時";
         embedColor = 0x888888;
         rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
-        _republishPanel(sc, zoneKey, battleMonster, session.monsterHp, currentParticipants.length, damageMap).catch(() => {});
       }
 
       if (currentProg && Array.isArray(currentProg.activeEffects) && currentProg.activeEffects.length > 0) {
@@ -963,16 +1007,18 @@ async function handleStartFight(interaction) {
     // ── 自動跑完所有回合 ──
     // 蒐集當前參戰者中對 party 生效的 aura（由已在場的治療師等提供）
     const participants = Array.isArray(state.participants) ? state.participants : [];
+    const allParticipantsWithSelf = [...new Set([...participants, discordId])];
     const partyEffects = [];
-    await Promise.all(participants.map(async (pid) => {
+    await Promise.all(allParticipantsWithSelf.map(async (pid) => {
       try {
         const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
         if (!prog) return;
-        const equipped = prog.equipment || {};
-        // 收集該玩家裝備中所有可能對隊伍生效的效果（passive/combat 等）
+        // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
+        const equipped = await mergeEquippedFromLibrary(prog.equipment || {}, sc.itemRepository);
         const refs = collectEquipmentEffects(equipped, null, { equipped, inventory: prog.inventory || [] });
+        const pidName = pid === discordId ? displayName : ((await sc.playerRepository.findByDiscordId(pid).catch(() => null))?.displayName || null);
         for (const r of refs) {
-          if (r && r.target === 'party') partyEffects.push(r);
+          if (r && r.target === 'party') partyEffects.push({ ...r, sourceName: pidName });
         }
       } catch (e) {}
     }));
@@ -981,16 +1027,17 @@ async function handleStartFight(interaction) {
     const aura = state.activeHealerAura;
     if (aura && aura.effects && !participants.includes(aura.discordId)) {
       for (const e of aura.effects) {
-        partyEffects.push(e);
+        partyEffects.push({ ...e, sourceName: aura.displayName || null });
       }
     }
 
     const currentProg = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
-    const currentEquipped = (currentProg && currentProg.equipment) ? currentProg.equipment : {};
+    // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
+    const currentEquipped = await mergeEquippedFromLibrary((currentProg && currentProg.equipment) ? currentProg.equipment : {}, sc.itemRepository);
 
     const { runCombatLoop } = require("../../shared/combatLoop");
     const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
-      runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, { equipped: currentEquipped, inventory: currentProg?.inventory || [], partyEffects });
+      runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, { equipped: currentEquipped, inventory: currentProg?.inventory || [], partyEffects, monsterEquipped: monster?.equipment || {} });
     session.monsterHp = finalMonsterHp;
     session.playerHp  = finalPlayerHp;
     const totalTaken = Math.max(0, (session.playerMaxHp || 0) - Math.max(0, finalPlayerHp));
@@ -1124,6 +1171,7 @@ async function handleDeleteLog(interaction) {
 // 擊殺結算（發獎勵 + 推進怪物 + 重發面板）
 // ──────────────────────────────────────────────
 async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal" }) {
+  console.log(`[MonsterKill] called discordId=${discordId} monster=${monster?.name} zone=${zoneKey}`);
   const sc = getServiceContext();
   const rewardLines = [];
 
@@ -1160,7 +1208,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // 每位參戰者的獎勵紀錄（用來最後 DM 通知）
   const perPidRewards = {};
-  participants.forEach(pid => { perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] }; });
+  participants.forEach(pid => { perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [], healerGoldBonus: 0, healerExpBonus: 0, isHealer: false }; });
 
   // 預載參戰者資料，用於個人化結算倍率（金幣 / EXP / 掉落）
   const progressCache = {};
@@ -1169,9 +1217,34 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     if (prog) progressCache[pid] = prog;
   }));
   const rewardModsByPid = {};
-  participants.forEach((pid) => {
-    rewardModsByPid[pid] = buildRewardModifiers(progressCache[pid]);
-  });
+  await Promise.all(participants.map(async (pid) => {
+    const prog = progressCache[pid];
+    if (prog) {
+      // 永遠從 DB 讀取最新 effects，確保獎勵加成使用最新設計值
+      prog.equipment = await mergeEquippedFromLibrary(prog.equipment || {}, sc.itemRepository);
+    }
+    rewardModsByPid[pid] = buildRewardModifiers(prog);
+  }));
+
+  // ── 治療師徽章：治療師本人結算時額外 +10% 金幣與 EXP ──
+  const healerBonusPids = new Set();
+  for (const pid of participants) {
+    const prog = progressCache[pid];
+    if (!prog) continue;
+    const jobEq = prog.equipment?.job_eq;
+    if (!jobEq) continue;
+    const jobId = String(jobEq.itemId || jobEq.id || "").toLowerCase();
+    const jobName = String(jobEq.itemName || jobEq.name || "").toLowerCase();
+    if (jobId.includes("healer") || jobName.includes("治療")) {
+      healerBonusPids.add(pid);
+      if (perPidRewards[pid]) perPidRewards[pid].isHealer = true;
+      const mod = rewardModsByPid[pid];
+      mod.goldPct    = (mod.goldPct    || 0) + 10;
+      mod.expPct     = (mod.expPct     || 0) + 10;
+      mod.goldMultiplier = toMultiplier(mod.goldPct);
+      mod.expMultiplier  = toMultiplier(mod.expPct);
+    }
+  }
 
   // ── 金幣依比例分配 ──
   // 實際獎池 = max(goldReward, 參戰人數 × entryFee × 1.3)
@@ -1207,6 +1280,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const goldRatio = buildCappedRatio(participants.length >= 3 ? 0.5 : 1);
   const expRatio = buildCappedRatio(participants.length >= 4 ? 0.75 : 1);
 
+  let myBaseGoldShare = 0;
   if (effectiveGoldReward > 0) {
     const goldShares = {};
     for (const pid of participants) {
@@ -1228,6 +1302,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
 
     const myBaseShare = Math.max(1, goldShares[discordId] || 1);
+    myBaseGoldShare = myBaseShare;
     const myMod = rewardModsByPid[discordId] || { goldMultiplier: 1, goldPct: 0 };
     const myShare = Math.max(1, Math.round(myBaseShare * myMod.goldMultiplier));
     const rawPct = Math.round(dmgRatio(discordId) * 100);
@@ -1246,6 +1321,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const partyMult = n <= 2 ? 1.0 : +(1 + Math.pow(n - 2, 0.7) * 0.6).toFixed(2);
   const effectiveExpReward = Math.round(monster.expReward * partyMult);
 
+  let myBaseExpShare = 0;
   if (effectiveExpReward > 0) {
     const expShares = {};
     for (const pid of participants) {
@@ -1253,6 +1329,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
 
     const myBaseShare = Math.max(1, expShares[discordId] || 1);
+    myBaseExpShare = myBaseShare;
     const myMod = rewardModsByPid[discordId] || { expMultiplier: 1, expPct: 0 };
     const myShare = Math.max(1, Math.round(myBaseShare * myMod.expMultiplier));
     let killerLvLine = "";
@@ -1291,6 +1368,40 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}%，共 ${effectiveExpReward}${partyMult > 1 ? ` 原${monster.expReward}` : ""}${modNote}）${partyNote}${killerLvLine}`);
   }
 
+  // ── 治療師徽章結算特別顯示 + 專屬 DM ──
+  // 用實際已發出的 gold/exp 反推加成數值（10% / 1.1 = 原始base × 0.1）
+  for (const hpid of healerBonusPids) {
+    const r = perPidRewards[hpid];
+    if (!r) continue;
+    // 實際發出的是 base * 1.1，所以加成 = 實際發出 / 1.1 * 0.1 = 實際發出 / 11
+    r.healerGoldBonus = r.gold > 0 ? Math.max(1, Math.round(r.gold / 11)) : 0;
+    r.healerExpBonus  = r.exp  > 0 ? Math.max(1, Math.round(r.exp  / 11)) : 0;
+
+    // 治療師專屬 DM（在這裡直接發，gold/exp 值都已確定）
+    const parts = [];
+    if (r.healerGoldBonus > 0) parts.push(`+${r.healerGoldBonus} 金幣`);
+    if (r.healerExpBonus  > 0) parts.push(`+${r.healerExpBonus} EXP`);
+    if (parts.length > 0) {
+      try {
+        const { getBotClient } = require("../runtimeContext");
+        const client = getBotClient();
+        if (client?.isReady()) {
+          const user = await client.users.fetch(hpid);
+          await user.send(`💚 **治療師加成**（${monster.name}）：${parts.join("、")}`);
+        }
+      } catch (_) {}
+    }
+  }
+  if (healerBonusPids.has(discordId)) {
+    const r = perPidRewards[discordId];
+    const parts = [];
+    if (r?.healerGoldBonus > 0) parts.push(`+${r.healerGoldBonus} 金幣`);
+    if (r?.healerExpBonus  > 0) parts.push(`+${r.healerExpBonus} EXP`);
+    if (parts.length > 0) {
+      rewardLines.push(`💚 **治療師加成**：${parts.join("、")}`);
+    }
+  }
+
   // ── 道具掉落：從所有參戰者中抽一人，再骰各道具掉落率 ──
   // 規則：1. 從 participants 隨機抽出一位幸運者
   //        2. 幸運者對每個掉落項目各自骰 chance%
@@ -1315,23 +1426,48 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           const chanceMult = luckyMod.dropMultiplier * (isRare ? luckyMod.rareDropMultiplier : 1);
           const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
           if (Math.random() * 100 < finalChance) {
-            luckyProg.inventory.push({
-              uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
-              itemEffect: item.effect || { type: "none", value: 0 },
-              useEffects: item.useEffects || [],
-              passiveEffects: item.passiveEffects || [],
-              procEffects: item.procEffects || [],
-              combatEffects: item.combatEffects || [],
-              itemType: item.itemType || "consumable",
-              imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
-              equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
-              weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
-              atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
-              enhanceLevel: 0, source: "monster_drop", sourceRef: monster.name,
-              purchasedAt: new Date().toISOString()
-            });
-            droppedItems.push(item.name);
-            droppedItemObjects.push(item);
+            // 已擁有同件裝備 → 改為該品階強化寶石
+            if (item.itemType !== 'consumable' && playerAlreadyOwnsItem(luckyProg, item.id) && ENHANCE_GEM_IDS[tier]) {
+              const gemId = ENHANCE_GEM_IDS[tier];
+              const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
+              if (gemItem) {
+                luckyProg.inventory.push({
+                  uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
+                  itemEffect: gemItem.effect || { type: "none", value: 0 },
+                  useEffects: gemItem.useEffects || [],
+                  passiveEffects: gemItem.passiveEffects || [],
+                  procEffects: gemItem.procEffects || [],
+                  combatEffects: gemItem.combatEffects || [],
+                  itemType: gemItem.itemType || "consumable",
+                  imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
+                  equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
+                  weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
+                  atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
+                  source: "monster_drop_duplicate_gem", sourceRef: monster.name,
+                  purchasedAt: new Date().toISOString()
+                });
+                droppedItems.push(`${gemItem.name}（${item.name} 重複）`);
+                droppedItemObjects.push(gemItem);
+              }
+            } else {
+              luckyProg.inventory.push({
+                uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
+                itemEffect: item.effect || { type: "none", value: 0 },
+                useEffects: item.useEffects || [],
+                passiveEffects: item.passiveEffects || [],
+                procEffects: item.procEffects || [],
+                combatEffects: item.combatEffects || [],
+                itemType: item.itemType || "consumable",
+                imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
+                equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
+                weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+                atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
+                enhanceLevel: 0, source: "monster_drop", sourceRef: monster.name,
+                purchasedAt: new Date().toISOString()
+              });
+              droppedItems.push(item.name);
+              droppedItemObjects.push(item);
+            }
           }
         }
       }
@@ -1405,23 +1541,48 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           const chanceMult = bonusMod.dropMultiplier * (isRare ? bonusMod.rareDropMultiplier : 1);
           const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
           if (Math.random() * 100 < finalChance) {
-            bonusProg.inventory.push({
-              uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
-              itemEffect: item.effect || { type: "none", value: 0 },
-              useEffects: item.useEffects || [],
-              passiveEffects: item.passiveEffects || [],
-              procEffects: item.procEffects || [],
-              combatEffects: item.combatEffects || [],
-              itemType: item.itemType || "consumable",
-              imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
-              equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
-              weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
-              atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
-              enhanceLevel: 0, source: "monster_drop_bonus", sourceRef: monster.name,
-              purchasedAt: new Date().toISOString()
-            });
-            bonusItems.push(item.name);
-            bonusItemObjects.push(item);
+            // 已擁有同件裝備 → 改為該品階強化寶石
+            if (item.itemType !== 'consumable' && playerAlreadyOwnsItem(bonusProg, item.id) && ENHANCE_GEM_IDS[tier]) {
+              const gemId = ENHANCE_GEM_IDS[tier];
+              const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
+              if (gemItem) {
+                bonusProg.inventory.push({
+                  uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
+                  itemEffect: gemItem.effect || { type: "none", value: 0 },
+                  useEffects: gemItem.useEffects || [],
+                  passiveEffects: gemItem.passiveEffects || [],
+                  procEffects: gemItem.procEffects || [],
+                  combatEffects: gemItem.combatEffects || [],
+                  itemType: gemItem.itemType || "consumable",
+                  imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
+                  equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
+                  weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
+                  atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
+                  source: "monster_drop_duplicate_gem", sourceRef: monster.name,
+                  purchasedAt: new Date().toISOString()
+                });
+                bonusItems.push(`${gemItem.name}（${item.name} 重複）`);
+                bonusItemObjects.push(gemItem);
+              }
+            } else {
+              bonusProg.inventory.push({
+                uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
+                itemEffect: item.effect || { type: "none", value: 0 },
+                useEffects: item.useEffects || [],
+                passiveEffects: item.passiveEffects || [],
+                procEffects: item.procEffects || [],
+                combatEffects: item.combatEffects || [],
+                itemType: item.itemType || "consumable",
+                imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
+                equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
+                weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+                atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
+                enhanceLevel: 0, source: "monster_drop_bonus", sourceRef: monster.name,
+                purchasedAt: new Date().toISOString()
+              });
+              bonusItems.push(item.name);
+              bonusItemObjects.push(item);
+            }
           }
         }
       }
@@ -1641,7 +1802,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   }
 
   // 通知非擊殺者參戰獎勵（DM，擊殺者已在戰鬥 embed 看到）
-  _notifyKillRewards(monster.name, perPidRewards, discordId).catch(() => {});
+  _notifyKillRewards(monster.name, perPidRewards, discordId).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
 
   // 推送 SSE reward 事件給所有參戰者（web 端通知紀錄）
   try {
