@@ -632,8 +632,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               }
               monsterActiveEffects.push(effectEntry);
             } else if (MONSTER_DEBUFF_KEYS.has(procEffect.key)) {
-              // 怪物DEBUFF → 施加給玩家
+              // 怪物DEBUFF → 施加給玩家（同 key 先清舊的，防止 DOT 疊加）
               if (!options.playerActiveEffects) options.playerActiveEffects = [];
+              for (let i = options.playerActiveEffects.length - 1; i >= 0; i--) {
+                if (options.playerActiveEffects[i].key === procEffect.key && options.playerActiveEffects[i].source === 'monster_skill') {
+                  options.playerActiveEffects.splice(i, 1);
+                }
+              }
               options.playerActiveEffects.push(effectEntry);
             }
           }
