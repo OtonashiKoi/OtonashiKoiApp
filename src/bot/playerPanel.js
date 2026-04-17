@@ -260,10 +260,10 @@ async function handleProfile(interaction) {
   const ALL_SLOTS = [...EQ_LEFT_SLOTS, ...EQ_RIGHT_SLOTS, ...EQ_COL3_SLOTS];
   const standardParts = ALL_SLOTS
     .filter(s => !EQ_COL3_SLOTS.includes(s) && equipped[s])
-    .map(s => `${SLOT_ICONS[s] || "▪️"}${equipped[s].itemName}`);
+    .map(s => `${SLOT_ICONS[s] || "▪️"}${equipped[s].itemName || equipped[s].name}`);
   const specialParts = EQ_COL3_SLOTS
     .filter(s => equipped[s])
-    .map(s => `[${EQ_SLOT_LABELS[s]}] ${equipped[s].itemName}`);
+    .map(s => `[${EQ_SLOT_LABELS[s]}] ${equipped[s].itemName || equipped[s].name}`);
   const equipLine = standardParts.length || specialParts.length
     ? [...standardParts, ...specialParts].join("　")
     : "（尚未裝備）";
