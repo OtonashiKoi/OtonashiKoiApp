@@ -223,8 +223,8 @@ function applyMonsterEffects(mCalc, activeEffects = [], currentRound = 1) {
     // 應用各種 Buff 效果
     switch (effect.key) {
       case 'str_up':
-        // STR 提升 → 提升 ATK
-        adjusted.atk = (adjusted.atk || 0) + (params.value || 0) * 4; // STR 1 = ATK 4
+        // STR 提升（百分比，value=30 表示 ATK +30%）
+        adjusted.atk = Math.round((adjusted.atk || 0) * (1 + Math.abs(params.value || 0) / 100));
         break;
       case 'atk_up':
         // ATK 提升（百分比）
