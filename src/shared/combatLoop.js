@@ -610,7 +610,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       // 怪物DEBUFF效果（施加給玩家）
       const MONSTER_DEBUFF_KEYS = new Set(['poison', 'bleed', 'burn', 'atk_down', 'def_down', 'silence', 'freeze', 'stun', 'charm', 'lightning', 'dark_curse']);
 
-      if (Math.random() * 100 < 50) {
+      if (Math.random() * 100 < 30) {
         log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
 
         if (skill.procEffects && Array.isArray(skill.procEffects)) {
