@@ -1,7 +1,7 @@
 ---
-name: Token 消耗優化
-description: 大型項目的快速查詢、智能快取、記憶系統策略
-trigger: "When working on large projects, struggling with token usage, or needing quick codebase navigation"
+name: token-optimization
+description: Token 消耗過高時使用——快速索引系統、Memory 策略、對話提示技巧，目標節省 35-50% token。
+when_to_use: Token 消耗過快、對話快到上限、需要建立架構索引或 Memory 系統時使用。
 ---
 
 # Token 消耗優化策略

@@ -369,7 +369,21 @@ function buildInventoryRow(e, idx) {
   const itemType = e.itemType || "consumable";
   const prefix = ["①","②","③","④","⑤"][idx] ?? `${idx+1}.`;
   const btns = [];
-  if (itemType === "consumable") {
+
+  // 強化寶石不能使用（只能用於強化）
+  const ENHANCE_GEM_IDS = new Set([
+    '72fde92d-e33f-42fb-8d86-2e811d03f84d', // D
+    '556db9e1-b084-4b22-bab5-a66c2b586184', // C
+    '8fdfa7d9-f0fa-4e6a-a291-703b1e354072', // B
+    'a6ae293d-52fc-4af5-8770-891ddf842e35'  // A
+  ]);
+  const isEnhanceGem = ENHANCE_GEM_IDS.has(e.itemId);
+
+  if (isEnhanceGem) {
+    // 強化寶石：只有販售和丟棄（寶石本身不能強化）
+    // 販售按鈕會在下面的 tier 判斷加上
+  } else if (itemType === "consumable") {
+    // 普通消耗品：使用、丟棄
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_use:${e.uuid}`)
@@ -383,6 +397,7 @@ function buildInventoryRow(e, idx) {
         .setStyle(ButtonStyle.Danger)
     );
   } else {
+    // 其他物品：丟棄
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_discard:${e.uuid}`)

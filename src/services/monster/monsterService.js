@@ -1,5 +1,6 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { normalizeEffectList, normalizeMonsterSkillList } = require("../../shared/effectPayloads");
+const { normalizeZone } = require("../../shared/zones");
 
 // 純公式計算，輸入屬性 → 輸出戰鬥數值
 // maxHp / def / mdef 已直接存於資料庫，不在此覆蓋
@@ -65,7 +66,7 @@ class MonsterService {
       dex: Math.max(0, Number(fields.dex) || 0),
       luk: Math.max(0, Number(fields.luk) || 0),
       level: Math.max(0, Number(fields.level) ?? 0),
-      zone: fields.zone === "mid" ? "mid" : "normal",
+      zone: normalizeZone(fields.zone),
       maxHp: Math.max(1, Number(fields.maxHp) || 1),
       def:   Math.min(75, Math.max(0, Number(fields.def) || 0)),
       entryFee:  Math.max(0, Number(fields.entryFee)  || 0),
@@ -96,7 +97,7 @@ class MonsterService {
       if (fields[stat] !== undefined) updated[stat] = Math.max(0, Number(fields[stat]) || 0);
     }
     if (fields.level     !== undefined) updated.level     = Math.max(0, Number(fields.level) ?? 0);
-    if (fields.zone      !== undefined) updated.zone      = fields.zone === "mid" ? "mid" : "normal";
+    if (fields.zone      !== undefined) updated.zone      = normalizeZone(fields.zone);
     if (fields.maxHp !== undefined) updated.maxHp = Math.max(1, Number(fields.maxHp) || 1);
     if (fields.def   !== undefined) updated.def   = Math.min(75, Math.max(0, Number(fields.def) || 0));
     if (fields.entryFee  !== undefined) updated.entryFee  = Math.max(0, Number(fields.entryFee)  || 0);

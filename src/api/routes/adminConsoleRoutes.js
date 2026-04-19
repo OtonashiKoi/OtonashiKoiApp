@@ -5,6 +5,7 @@ const os = require("os");
 const config = require("../../config");
 const { fail, ok } = require("../../shared/response");
 const { uploadImage } = require("../../shared/cloudinaryUpload");
+const { featureKeyToZone } = require("../../shared/zones");
 
 // Upload image to temp directory first, then hand over to Cloudinary helper.
 const upload = multer({
@@ -160,11 +161,11 @@ function createAdminConsoleRoutes(serviceContext) {
   router.post("/admin/channel-layout/publish-monster-zone", async (req, res, next) => {
     try {
       const { channelId } = req.body;
-      // Derive zone from binding key: monster_zone => normal, monster_zone_mid => mid.
+      // Derive zone from binding key using shared zones module.
       const layout = await serviceContext.adminConsoleService.getChannelLayout();
       const bindings = layout?.discord?.bindings || [];
       const binding = bindings.find((b) => b.channelId === channelId && b.featureKey?.startsWith("monster_zone"));
-      const zone = (binding?.featureKey === "monster_zone_mid") ? "mid" : "normal";
+      const zone = featureKeyToZone(binding?.featureKey);
       const state = await serviceContext.monsterService.getState(zone);
       const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone });
       let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);

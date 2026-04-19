@@ -1,7 +1,7 @@
 ---
-name: Discord 命令與互動規範
-description: 統一管理 30+ 斜杠命令、按鈕互動、選單的標準實裝模式
-trigger: "When adding new Discord commands, handling button interactions, or debugging command permissions"
+name: discord-commands-convention
+description: 新增 Discord 功能時使用——斜杠命令定義、按鈕互動、選單、Modal 的標準實裝模式。涵蓋 defer/editReply、權限檢查、錯誤處理。
+when_to_use: 新增或修改 Discord 斜杠命令、按鈕互動、選單、Modal，或偵錯命令權限問題時使用。
 ---
 
 # Discord 命令與互動規範

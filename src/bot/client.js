@@ -10,6 +10,7 @@ const { startFetcher } = require("./commentFetcher");
 const { handleStreamComment } = require("./handlers/streamHandlers");
 const { startIdleRotateTimer } = require("./handlers/monsterZoneHandlers");
 const { runWithCache } = require("../adapters/mongo/requestCache");
+const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
 
 async function ensureMemberPlayerProfile(member, reason) {
   try {
@@ -97,8 +98,6 @@ async function setupLockedChannels(client) {
 
   // 鎖定非聊天大街的頻道（只有管理員與 bot 可發言，所有人可讀歷史）
   const lockBindings = bindings.filter((b) => b.enabled && b.channelId && b.featureKey !== "town_chat");
-  const isMonsterZone = (fk) => fk === "monster_zone" || fk === "monster_zone_mid";
-
   await Promise.allSettled(lockBindings.map(async (binding) => {
     try {
       const channel = await client.channels.fetch(binding.channelId);
@@ -110,7 +109,7 @@ async function setupLockedChannels(client) {
         ...adminRoleIds.map((id) => channel.permissionOverwrites.edit(id, { SendMessages: true, ReadMessageHistory: true }).catch(() => {})),
       ];
       // 只有戰鬥區才需要明確禁止玩家發言（其他頻道 @everyone 已封鎖，無需逐一設定）
-      if (isMonsterZone(binding.featureKey)) {
+      if (isMonsterZoneFeatureKey(binding.featureKey)) {
         tasks.push(...playerRoleIds.map((id) => channel.permissionOverwrites.edit(id, { SendMessages: false, ReadMessageHistory: true }).catch(() => {})));
       }
       await Promise.allSettled(tasks);
@@ -143,7 +142,7 @@ async function setupLockedChannels(client) {
 // key: `${guildId}:${userId}`，value: { lastMsg, count, timestamps: [] }
 function listAutoRepublishBindings(layout) {
   const bindings = Array.isArray(layout?.discord?.bindings) ? layout.discord.bindings : [];
-  const supported = new Set(["personal_room", "coin_shop", "weekly_quest", "monster_zone", "monster_zone_mid"]);
+  const supported = new Set(["personal_room", "coin_shop", "weekly_quest", ...MONSTER_ZONE_FEATURE_KEYS]);
   return bindings.filter((entry) => entry?.enabled && entry?.channelId && supported.has(entry.featureKey));
 }
 
@@ -197,8 +196,8 @@ async function republishPanelsOnStartup() {
         continue;
       }
 
-      if (binding.featureKey === "monster_zone" || binding.featureKey === "monster_zone_mid") {
-        const zoneKey = binding.featureKey === "monster_zone_mid" ? "mid" : "normal";
+      if (isMonsterZoneFeatureKey(binding.featureKey)) {
+        const zoneKey = featureKeyToZone(binding.featureKey);
         const { activeMonster, currentHp, participantCount, damageMap } = await resolveMonsterPanelState(zoneKey);
         await serviceContext.adminConsoleService.publishMonsterZonePanel(binding.channelId, activeMonster, currentHp, {
           participantCount,

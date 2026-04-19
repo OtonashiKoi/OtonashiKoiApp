@@ -1,7 +1,7 @@
 ---
-name: 效能分析與優化
-description: Discord Bot + API + MongoDB 的效能監控、瓶頸診斷、優化策略
-trigger: "When profiling performance, investigating slow queries, or optimizing response times"
+name: performance-optimization
+description: Discord Bot + API + MongoDB 效能下降時使用——監控工具、瓶頸診斷、PM2 競態條件、記憶體洩漏偵測、索引優化。
+when_to_use: API 響應變慢、Discord 互動超時、MongoDB 查詢效能下降、PM2 進程記憶體持續增長時使用。
 ---
 
 # 效能分析與優化

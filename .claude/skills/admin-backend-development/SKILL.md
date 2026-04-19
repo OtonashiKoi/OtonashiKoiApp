@@ -1,7 +1,7 @@
 ---
-name: Admin 後台開發規範
-description: 怪物編輯、道具管理、NPC 事件、圖片上傳的前後端標準實裝
-trigger: "When building admin features, managing game content, or integrating with Cloudinary"
+name: admin-backend-development
+description: 開發後台功能時使用——怪物編輯、道具管理、NPC 事件、圖片上傳的前後端標準實裝。涵蓋 Express 路由、原生 JS 前端、Cloudinary 整合、表單驗證。
+when_to_use: 新增或修改後台 Admin 功能、管理遊戲內容（怪物/道具/任務）、整合 Cloudinary 圖片上傳時使用。
 ---
 
 # Admin 後台開發規範

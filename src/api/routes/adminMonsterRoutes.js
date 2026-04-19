@@ -3,6 +3,7 @@ const multer = require("multer");
 const os = require("os");
 const { ok, fail } = require("../../shared/response");
 const { uploadImage } = require("../../shared/cloudinaryUpload");
+const { ALL_ZONE_KEYS, zoneToFeatureKey } = require("../../shared/zones");
 
 const upload = multer({
   dest: os.tmpdir(),
@@ -113,14 +114,14 @@ function createAdminMonsterRoutes(serviceContext) {
     try {
       const monster = await serviceContext.monsterService.updateMonster(req.params.id, req.body);
       // 如果被編輯的怪物正在上場，自動重發面板讓 Discord 即時顯示新資料
-      for (const zone of ["normal", "mid"]) {
+      for (const zone of ALL_ZONE_KEYS) {
         try {
           const state = await serviceContext.monsterService.getState(zone);
           const monsters = await serviceContext.monsterService.listMonsters({ zone });
           const active = monsters.find((m) => m.seq === state.activeMonsterSeq);
           if (active && active.id === monster.id) {
             const currentHp = state.currentHp != null ? state.currentHp : active.calc.maxHp;
-            const featureKey = zone === "mid" ? "monster_zone_mid" : "monster_zone";
+            const featureKey = zoneToFeatureKey(zone);
             const layout = await serviceContext.adminConsoleService.getChannelLayout();
             const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey && b.enabled);
             if (binding?.channelId) {

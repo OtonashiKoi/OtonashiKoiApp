@@ -535,9 +535,16 @@
     if (!area) return;
 
     // 依分區切換狀態卡顏色
-    const isMid = activeZone === "mid";
-    area.style.borderColor = isMid ? "#f97316" : "var(--accent)";
-    area.style.background  = isMid ? "rgba(249,115,22,0.12)" : "var(--accent-light)";
+    const ZONE_META = {
+      beginner: { label: "🌱 新手區", color: "#2ecc71", bg: "rgba(46,204,113,0.12)" },
+      normal:   { label: "⚔️ 一般區", color: "var(--accent,#4ade80)", bg: "var(--accent-light)" },
+      mid:      { label: "✦ 中級區",  color: "#7c3aed", bg: "rgba(124,58,237,0.12)" },
+      hard:     { label: "🔥 高級區", color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+      elite:    { label: "💀 精英區", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+    };
+    const zoneMeta = ZONE_META[activeZone] || ZONE_META.normal;
+    area.style.borderColor = zoneMeta.color;
+    area.style.background  = zoneMeta.bg;
 
     const r = await fetch(BASE + "/monsters/state?zone=" + activeZone, { headers: apiHeaders() });
     if (!r.ok) { area.innerHTML = `<p class="hint">無法載入狀態</p>`; return; }
@@ -558,8 +565,8 @@
       return `<option value="${m.seq}" ${isActive?"selected":""}>${m.seq}. ${m.name}${kills > 0 ? ` （打死 ${kills} 次）` : ""}</option>`;
     }).join("");
 
-    const zoneLabel = isMid ? "🔥 中級區" : "⚔️ 一般區";
-    const accentColor = isMid ? "#f97316" : "var(--accent,#4ade80)";
+    const zoneLabel = zoneMeta.label;
+    const accentColor = zoneMeta.color;
 
     area.innerHTML = `
       <div class="player-hero-card" style="margin-bottom:1rem;">
@@ -576,7 +583,7 @@
       <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
         <label style="font-size:0.88em;color:var(--muted,#aaa);">強制指定上場怪物：</label>
         <select id="monsters-zone-sel" class="sheet-input" style="width:200px;">${options.length ? options : `<option value="">請先新增怪物</option>`}</select>
-        <button id="monsters-zone-switch-btn" class="button primary" style="padding:4px 14px;${isMid ? "background:#f97316;" : ""}">切換上場</button>
+        <button id="monsters-zone-switch-btn" class="button primary" style="padding:4px 14px;background:${zoneMeta.color};">切換上場</button>
         <span id="monsters-zone-msg" style="font-size:0.82em;color:${accentColor};"></span>
       </div>
     `;

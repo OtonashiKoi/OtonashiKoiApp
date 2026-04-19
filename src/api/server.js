@@ -4,6 +4,7 @@ const cors = require("cors");
 
 const { isAppError } = require("../shared/errors");
 const { fail } = require("../shared/response");
+const { setApiContractHeaders } = require("../shared/apiContract");
 const { runWithCache } = require("../adapters/mongo/requestCache");
 const { createAdminConsoleRoutes } = require("./routes/adminConsoleRoutes");
 const { createAdminPlayerRoutes } = require("./routes/adminPlayerRoutes");
@@ -33,6 +34,12 @@ function createApiServer(discordClient) {
   const serviceContext = sharedServiceContext;
 
   app.use(express.json());
+
+  // Freeze API contract via response headers without changing existing payload shapes.
+  app.use((_req, res, next) => {
+    setApiContractHeaders(res);
+    next();
+  });
 
   // 每個 API 請求建立獨立的記憶體快取 context
   // 同一請求內對同一 playerId 的重複 DB 讀取直接從記憶體回傳

@@ -224,8 +224,24 @@ class ShopService {
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
     const itemType = entry.itemType || "consumable";
+
+    // 強化寶石不能直接使用
+    const ENHANCE_GEM_IDS = new Set([
+      '72fde92d-e33f-42fb-8d86-2e811d03f84d', // D
+      '556db9e1-b084-4b22-bab5-a66c2b586184', // C
+      '8fdfa7d9-f0fa-4e6a-a291-703b1e354072', // B
+      'a6ae293d-52fc-4af5-8770-891ddf842e35'  // A
+    ]);
+    if (ENHANCE_GEM_IDS.has(entry.itemId)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石只能用於強化裝備，無法直接使用", 400);
+    }
     if (itemType === "consumable") {
-      progress.inventory.splice(idx, 1);
+      // 支持堆疊：優先減少 stackCount，到 0 才刪除物品
+      if (entry.stackCount && entry.stackCount > 1) {
+        entry.stackCount -= 1;
+      } else {
+        progress.inventory.splice(idx, 1);
+      }
     }
     const effect = entry.itemEffect || { type: "none", value: 0 };
     const useEffects = Array.isArray(entry.useEffects) ? entry.useEffects : [];

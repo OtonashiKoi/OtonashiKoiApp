@@ -1,7 +1,7 @@
 ---
-name: MongoDB 儲存層標準化
-description: 統一使用 MongoDB，移除 JSON 儲存層依賴，確保多進程環境與生產就緒
-trigger: "When working on storage layer, data persistence, or environment setup"
+name: mongodb-standard
+description: 任何涉及 MongoDB 操作時使用——統一儲存層標準、Repository 新增步驟、Collection 規範、索引策略。
+when_to_use: 新增 Collection、設計 Repository、執行批量操作、查詢優化、或需要確認 MongoDB 標準規範時使用。
 ---
 
 # MongoDB 儲存層標準化

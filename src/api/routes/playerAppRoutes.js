@@ -6,6 +6,7 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
+const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey } = require("../../shared/zones");
 
 // Track per-player battle cooldowns.
 // Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
@@ -45,7 +46,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   };
 
   const buildCombatZonesSnapshot = async (discordId = null) => {
-    const keys = ["normal", "mid"];
+    const keys = ALL_ZONE_KEYS;
     return Promise.all(keys.map(async (key) => {
       const [state, monsters] = await Promise.all([
         serviceContext.monsterService.getState(key),
@@ -733,7 +734,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // 10. Get Combat Zones Status
   router.get("/api/combat/zones", requireAuth, async (req, res, next) => {
     try {
-      const keys = ["normal", "mid"];
+      const keys = ALL_ZONE_KEYS;
       const results = await Promise.all(keys.map(async (key) => {
         const [state, monsters] = await Promise.all([
           serviceContext.monsterService.getState(key),
@@ -785,7 +786,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
   router.get("/api/viewer/snapshot", async (_req, res, next) => {
     try {
-      const keys = ["normal", "mid"];
+      const keys = ALL_ZONE_KEYS;
       const zones = await Promise.all(keys.map(async (key) => {
         const [state, monsters] = await Promise.all([
           serviceContext.monsterService.getState(key),
@@ -860,7 +861,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.post("/api/combat/quick-battle", requireAuth, async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
-      const zoneKey = req.body.zone === "mid" ? "mid" : "normal";
+      const zoneKey = normalizeZone(req.body.zone);
 
       // Reject requests while the previous battle animation cooldown is still active.
       const cd = playerBattleCooldowns.get(discordId);
@@ -889,11 +890,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       
       const monsterHpInitial = state.currentHp != null ? state.currentHp : monster.calc.maxHp;
 
-      // Check level
+      // Check level — 優先讀 channel layout binding 的自訂限制，fallback 到靜態預設
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       const playerLevel = progress?.level ?? 1;
-      if (zoneKey === "mid" && playerLevel < 10) {
-        return res.status(400).json({ status: "error", message: `mid zone requires level 10 (current: Lv.${playerLevel})` });
+      const layout = await serviceContext.adminConsoleService.getChannelLayout();
+      const featureKey = zoneToFeatureKey(zoneKey);
+      const zoneBinding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey && b.enabled);
+      const levelError = checkZoneLevelRequirementWithBinding(zoneKey, playerLevel, zoneBinding || null);
+      if (levelError) {
+        return res.status(400).json({ status: "error", message: levelError });
       }
 
       // Check and deduct entry fee

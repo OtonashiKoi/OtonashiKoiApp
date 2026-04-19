@@ -1,6 +1,7 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { createPlayerPanelMessage } = require("../../bot/playerPanelView");
 const config = require("../../config");
+const { featureKeyToZone } = require("../../shared/zones");
 
 const AVAILABLE_FEATURES = [
   {
@@ -29,14 +30,29 @@ const AVAILABLE_FEATURES = [
     description: "玩家個人化功能與私人操作"
   },
   {
+    key: "monster_zone_beginner",
+    label: "放怪區面板（新手）",
+    description: "Lv.1～3 新手專屬戰鬥區"
+  },
+  {
     key: "monster_zone",
-    label: "放怪區面板",
-    description: "玩家在此頻道選擇出戰並進行回合制戰鬥"
+    label: "放怪區面板（一般）",
+    description: "Lv.1～10 玩家的一般戰鬥區"
   },
   {
     key: "monster_zone_mid",
     label: "放怪區面板（中級）",
-    description: "10 等以上玩家才能進入的中級戰鬥區"
+    description: "Lv.10 以上玩家才能進入的中級戰鬥區"
+  },
+  {
+    key: "monster_zone_hard",
+    label: "放怪區面板（高級）",
+    description: "Lv.20 以上玩家才能進入的高級戰鬥區"
+  },
+  {
+    key: "monster_zone_elite",
+    label: "放怪區面板（精英）",
+    description: "Lv.30 以上玩家才能進入的精英戰鬥區"
   },
   {
     key: "weekly_quest",
@@ -464,7 +480,8 @@ class AdminConsoleService {
       options?.damageMap ?? {},
       {
         activeEvent: options?.activeEvent || null,
-        zoneKey: options?.zoneKey || monster?.zone || (boundFeatureKey === "monster_zone_mid" ? "mid" : "normal")
+        zoneKey: options?.zoneKey || monster?.zone || featureKeyToZone(boundFeatureKey),
+        zoneBinding: existingBinding || null
       }
     );
 

@@ -2,6 +2,7 @@
 
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
+const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, getZoneTheme, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
 
 // 這些效果的 params.value 代表百分比（percent），顯示時會特別格式化
 const PERCENT_EFFECT_KEYS = new Set([
@@ -472,16 +473,13 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
 // 輔助：重發公開面板
 // ──────────────────────────────────────────────
 // ─── Zone 輔助 ─────────────────────────────────
-function featureKeyToZone(featureKey) {
-  return featureKey === "monster_zone_mid" ? "mid" : "normal";
-}
 async function getZoneFromChannel(sc, channelId) {
   const layout = await sc.channelLayoutRepository.get();
   const binding = (layout?.discord?.bindings || []).find(
     (b) => b.channelId === channelId && b.featureKey?.startsWith("monster_zone")
   );
   if (!binding) return null;
-  return featureKeyToZone(binding.featureKey);
+  return _featureKeyToZone(binding.featureKey);
 }
 
 function pickWeightedNextMonster(monsters, currentMonsterId = null) {
@@ -512,7 +510,7 @@ async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount
     };
   }
 
-  const featureKey = zoneKey === "mid" ? "monster_zone_mid" : "monster_zone";
+  const featureKey = zoneToFeatureKey(zoneKey);
   const layout = await sc.channelLayoutRepository.get();
   const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey);
   if (binding?.channelId) {
@@ -629,7 +627,7 @@ async function _broadcastBossSpawn(sc, zoneKey, monster) {
       return;
     }
 
-    const zoneName = zoneKey === "mid" ? "中級戰鬥區" : "一般戰鬥區";
+    const zoneName = getZoneTheme(zoneKey).label + "戰鬥區";
     const { EmbedBuilder } = require("discord.js");
     const thumbUrl = (monster.imageThumbnailUrl || monster.imageUrl || "").startsWith("http")
       ? (monster.imageThumbnailUrl || monster.imageUrl)
@@ -685,14 +683,17 @@ async function handleEnterBattle(interaction) {
       return;
     }
 
-    // 中級區等級限制
+    // 等級限制檢查 — 優先讀 channel layout binding 的自訂限制
     let cachedProgress = null;
-    if (zoneKey === "mid") {
+    {
       cachedProgress = await sc.progressRepository.findByPlayerId(discordId);
       const playerLevel = cachedProgress?.level ?? 1;
-      if (playerLevel < 10) {
-        await interaction.editReply({ content: `🔒 **中級區**需要 **Lv.10** 以上才能進入！
-目前等級：**Lv.${playerLevel}**` });
+      const layout = await sc.channelLayoutRepository.get().catch(() => null);
+      const featureKey = zoneToFeatureKey(zoneKey);
+      const zoneBinding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey && b.enabled) || null;
+      const levelError = checkZoneLevelRequirementWithBinding(zoneKey, playerLevel, zoneBinding);
+      if (levelError) {
+        await interaction.editReply({ content: `🔒 ${levelError}` });
         return;
       }
     }
@@ -780,7 +781,7 @@ async function handleEnterBattle(interaction) {
       const newParticipants = [...participants, discordId];
       await sc.monsterService.saveState({ ...state, currentHp: monsterHp, participants: newParticipants, lastHitAt: new Date().toISOString() }, zoneKey);
       const layout = await sc.channelLayoutRepository.get();
-      const featureKey = zoneKey === "mid" ? "monster_zone_mid" : "monster_zone";
+      const featureKey = zoneToFeatureKey(zoneKey);
       const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey);
       if (binding?.channelId) {
         sc.adminConsoleService
@@ -1933,7 +1934,7 @@ async function handleMonsterEventChoice(interaction) {
   if (!binding) {
     binding = bindings.find((b) => String(b.channelId || "") === String(interaction.channelId || "") && b.featureKey && b.featureKey.startsWith("monster_zone"));
   }
-  const zoneKey = binding && binding.featureKey === "monster_zone_mid" ? "mid" : "normal";
+  const zoneKey = _featureKeyToZone(binding?.featureKey);
 
   const state = await sc.monsterService.getState(zoneKey).catch(() => null);
   const ae = state?.activeEvent;
@@ -2181,7 +2182,7 @@ async function handleMonsterEventPersonal(interaction) {
   if (!binding) {
     binding = bindings.find((b) => String(b.channelId || "") === String(interaction.channelId || "") && b.featureKey && b.featureKey.startsWith("monster_zone"));
   }
-  const zoneKey = binding && binding.featureKey === "monster_zone_mid" ? "mid" : "normal";
+  const zoneKey = _featureKeyToZone(binding?.featureKey);
 
   const state = await sc.monsterService.getState(zoneKey).catch(() => null);
   const ae = state?.activeEvent;
@@ -2203,9 +2204,7 @@ async function handleMonsterEventPersonal(interaction) {
 
   // 使用 createEventPanelMessage 產生個人化面板內容（只會包含符合條件的選項）
   const { createEventPanelMessage } = require("../monsterZoneView");
-  const zoneTheme = zoneKey === "mid"
-    ? { label: "中級區", color: 0x7c3aed, emoji: "✦", tagline: "危險上升，獵物更強。" }
-    : { label: "初級區", color: 0xe74c3c, emoji: "◆", tagline: "新手試煉，準備開打。" };
+  const zoneTheme = getZoneTheme(zoneKey);
 
   try {
     const panel = await createEventPanelMessage(ae, zoneTheme, zoneKey, { viewerContext });
@@ -2361,7 +2360,7 @@ async function _doIdleRotate(sc, zoneKey) {
     const layout = await sc.channelLayoutRepository.get();
     const bindings = layout?.discord?.bindings || [];
     const townBinding = bindings.find((b) => b.featureKey === "town_chat");
-    const zoneFeature = zoneKey === "mid" ? "monster_zone_mid" : "monster_zone";
+    const zoneFeature = zoneToFeatureKey(zoneKey);
     const fallback = bindings.find((b) => b.featureKey === zoneFeature);
     const channelId = townBinding?.channelId || fallback?.channelId;
     if (!channelId) return;
@@ -2380,7 +2379,7 @@ async function _doIdleRotate(sc, zoneKey) {
 async function checkIdleRotate() {
   const sc = getServiceContext();
   const now = Date.now();
-  for (const zoneKey of ["normal", "mid"]) {
+  for (const zoneKey of ALL_ZONE_KEYS) {
     try {
       const state = await sc.monsterService.getState(zoneKey);
       if (state?.activeEvent?.endsAt) {

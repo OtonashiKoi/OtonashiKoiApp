@@ -93,7 +93,7 @@
           ? "/admin/channel-layout/publish-player-query"
           : feature.key === "coin_shop"
             ? "/admin/channel-layout/publish-coin-shop"
-            : (feature.key === "monster_zone" || feature.key === "monster_zone_mid")
+            : feature.key.startsWith("monster_zone")
               ? "/admin/channel-layout/publish-monster-zone"
               : feature.key === "weekly_quest"
                 ? "/admin/channel-layout/publish-weekly-quest"
@@ -102,6 +102,24 @@
       const publishBtn = publishEndpoint
         ? `<button class="button publish-panel-btn" data-publish-endpoint="${publishEndpoint}" title="將按鈕面板發布到已選頻道">📨 發布面板</button>`
         : "";
+
+      const isMonsterZone = feature.key.startsWith("monster_zone");
+      const zoneLevelHtml = isMonsterZone ? `
+        <div class="field-row" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+          <label class="field" style="flex:1;min-width:100px;">
+            <span>最低等級（含）</span>
+            <input data-field="minLevel" type="number" min="0" max="999" step="1"
+              value="${binding.minLevel != null ? binding.minLevel : ""}"
+              placeholder="不限" style="width:100%;" />
+          </label>
+          <label class="field" style="flex:1;min-width:100px;">
+            <span>最高等級（含）</span>
+            <input data-field="maxLevel" type="number" min="0" max="999" step="1"
+              value="${binding.maxLevel != null ? binding.maxLevel : ""}"
+              placeholder="不限" style="width:100%;" />
+          </label>
+          <p class="hint" style="margin:0;font-size:0.8em;color:var(--muted,#888);flex-basis:100%;">留空 = 沿用系統預設；填入數值可覆蓋預設限制</p>
+        </div>` : "";
 
       wrapper.innerHTML = `
       <header>
@@ -124,6 +142,7 @@
           <span>備註</span>
           <input data-field="note" type="text" value="${binding.note}" placeholder="例如：新手入口、GM 管理頻道" />
         </label>
+        ${zoneLevelHtml}
         <label class="toggle binding-toggle">
           <input data-field="enabled" type="checkbox" ${binding.enabled ? "checked" : ""} />
           啟用這個功能綁定
@@ -186,16 +205,33 @@
   }
 
   function collectBindings() {
-    return [...elements.bindingList.querySelectorAll(".binding-item")].map((item) => ({
-      featureKey: item.dataset.featureKey,
-      channelId: item.querySelector('[data-field="channelId"]').value,
-      note: item.querySelector('[data-field="note"]').value.trim(),
-      enabled: item.querySelector('[data-field="enabled"]').checked,
-      visibleTo: {
-        player: item.querySelector('[data-field="visible-player"]').checked,
-        admin: item.querySelector('[data-field="visible-admin"]').checked
+    return [...elements.bindingList.querySelectorAll(".binding-item")].map((item) => {
+      const fk = item.dataset.featureKey;
+      const minLevelInput = item.querySelector('[data-field="minLevel"]');
+      const maxLevelInput = item.querySelector('[data-field="maxLevel"]');
+      const parseLevel = (input) => {
+        if (!input) return undefined;
+        const v = input.value.trim();
+        if (v === "") return null;
+        const n = parseInt(v, 10);
+        return Number.isFinite(n) ? n : null;
+      };
+      const entry = {
+        featureKey: fk,
+        channelId: item.querySelector('[data-field="channelId"]').value,
+        note: item.querySelector('[data-field="note"]').value.trim(),
+        enabled: item.querySelector('[data-field="enabled"]').checked,
+        visibleTo: {
+          player: item.querySelector('[data-field="visible-player"]').checked,
+          admin: item.querySelector('[data-field="visible-admin"]').checked
+        }
+      };
+      if (fk.startsWith("monster_zone")) {
+        entry.minLevel = parseLevel(minLevelInput);
+        entry.maxLevel = parseLevel(maxLevelInput);
       }
-    }));
+      return entry;
+    });
   }
 
   async function bootstrapConsole() {

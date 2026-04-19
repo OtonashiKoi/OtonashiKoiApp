@@ -1,8 +1,5 @@
 ﻿const { AppError, ERROR_CODES } = require("../../shared/errors");
-
-function normalizeZone(zone) {
-  return zone === "mid" ? "mid" : "normal";
-}
+const { normalizeZone } = require("../../shared/zones");
 
 function normalizePriority(value, fallback = 100) {
   const n = Number(value);

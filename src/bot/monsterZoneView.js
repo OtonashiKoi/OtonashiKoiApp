@@ -1,6 +1,7 @@
 ﻿const path = require("path");
 const fs = require("fs");
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, AttachmentBuilder } = require("discord.js");
+const { getZoneTheme, ZONE_BY_KEY } = require("../shared/zones");
 
 const BUTTON_IDS = {
   enterBattle: "monster-zone:enter-battle"
@@ -9,9 +10,8 @@ const BUTTON_IDS = {
 async function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0, damageMap = {}, options = {}) {
   const activeEvent = options.activeEvent || null;
   const zoneKey = options.zoneKey || activeEvent?.zone || monster?.zone || "normal";
-  const zoneTheme = zoneKey === "mid"
-    ? { label: "中級區", color: 0x7c3aed, emoji: "✦", tagline: "危險上升，獵物更強。" }
-    : { label: "初級區", color: 0xe74c3c, emoji: "◆", tagline: "" };
+  const zoneTheme = getZoneTheme(zoneKey);
+  const zoneBinding = options.zoneBinding || null;
   if (activeEvent) {
     return await createEventPanelMessage(activeEvent, zoneTheme, zoneKey);
   }
@@ -30,9 +30,6 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const bonusNote = entryFeePool > goldReward && participantCount > 0 ? ` 額外+${entryFeePool - goldReward}` : "";
 
   const damageEntries = Object.values(damageMap).sort((a, b) => b.damage - a.damage);
-  const damageSection = damageEntries.length > 0
-    ? "傷害排行榜\n" + damageEntries.map((v) => `${v.name} - ${v.damage}`).join("\n")
-    : "";
 
   const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, Math.round((hp / maxHp) * 100))) : 0;
   const hpLine = maxHp > 0 ? `${hp} / ${maxHp} (${hpPct}%)\n${hpBar}` : "尚未設定";
@@ -52,8 +49,17 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     }).join("\n")
     : "暫無排行";
 
+  // 計算生效等級限制：binding 有設定優先，否則用 zone 靜態預設
+  const zoneDef = ZONE_BY_KEY[zoneKey] || {};
+  const effectiveMin = (zoneBinding && zoneBinding.minLevel != null) ? zoneBinding.minLevel : (zoneDef.minLevel ?? 1);
+  const effectiveMax = (zoneBinding && zoneBinding.maxLevel !== undefined) ? zoneBinding.maxLevel : (zoneDef.maxLevel ?? null);
+  const levelParts = [];
+  if (effectiveMin > 1) levelParts.push(`Lv.${effectiveMin}+`);
+  if (effectiveMax !== null) levelParts.push(`上限 Lv.${effectiveMax}`);
+  const levelTag = levelParts.length > 0 ? ` ・ ${levelParts.join(" ")}` : "";
+
   const desc = [
-    `${zoneTheme.emoji} **${zoneTheme.label}**`,
+    `${zoneTheme.emoji} **${zoneTheme.label}**${levelTag}`,
     "",
     "點擊下方按鈕即可進入戰鬥"
   ].join("\n");
