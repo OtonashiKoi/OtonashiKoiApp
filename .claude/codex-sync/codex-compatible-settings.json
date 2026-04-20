@@ -1,0 +1,60 @@
+{
+  "generatedAt": "2026-04-19",
+  "source": {
+    "claudeSettings": ".claude/settings.json",
+    "claudeMemoryRoot": "C:/Users/appsk/.claude/projects/c--Users-appsk-Documents-Github-equipmentGAME/memory"
+  },
+  "codexCompatibilityProfile": {
+    "purpose": "Map Claude agent/model preferences into Codex-usable equivalents",
+    "modelMapping": {
+      "haiku": "gpt-5.4-mini",
+      "sonnet": "gpt-5.4"
+    },
+    "agentPresets": {
+      "explore": {
+        "enabled": true,
+        "model": "gpt-5.4-mini",
+        "reasoning_effort": "low",
+        "notes": "Fast codebase scan and lookup."
+      },
+      "plan": {
+        "enabled": true,
+        "model": "gpt-5.4-mini",
+        "reasoning_effort": "medium",
+        "notes": "Architecture and decomposition."
+      },
+      "general-purpose": {
+        "enabled": true,
+        "model": "gpt-5.4",
+        "reasoning_effort": "medium",
+        "notes": "Default implementation profile."
+      },
+      "uiux-designer": {
+        "enabled": true,
+        "model": "gpt-5.4",
+        "reasoning_effort": "high",
+        "notes": "UI/UX-first design and visual decision making."
+      }
+    }
+  },
+  "memoryBootstrap": {
+    "enabled": true,
+    "importedPath": ".claude/codex-sync/memory",
+    "preferredLoadOrder": [
+      "MEMORY.md",
+      "session_checkpoint.md",
+      "TOKEN_OPTIMIZATION.md",
+      "JOB_MECHANICS_IMPLEMENTATION.md",
+      "QUICK_REFERENCE.md"
+    ],
+    "consolidationSuggestion": {
+      "enabled": true,
+      "cadence": "weekly",
+      "day": "Monday"
+    }
+  },
+  "notes": [
+    "This file is for Codex workflow alignment only; it does not auto-change runtime model selection.",
+    "When using multi-agent work, prefer gpt-5.4-mini for parallel explorer tasks."
+  ]
+}

@@ -1,0 +1,26 @@
+- [上次工作暫存](session_checkpoint.md) — **每次新對話先讀這裡**，了解上次做了什麼
+- [Token 90% 存記憶規範](feedback_context_save_policy.md) — 對話到 90% 時主動存進度記憶
+- [自動暫存記憶規則](feedback_autosave_policy.md) — 完成任務後3分鐘無回覆自動存暫存；每次新對話優先讀取
+- [溝通語言規範](FEEDBACK_COMMUNICATION_LANG.md) — 所有需要決策/許可/詢問用戶的事項，一律用繁體中文
+- [PM2 操作規範](feedback_pm2_policy.md) — PM2 啟動由用戶自己負責；需要重啟告知用戶用 npm run pm2:reset
+- [Worktree 工作流程規則](WORKTREE_WORKFLOW.md) — 使用 worktree 時只改應用代碼，PM2和.env要改主目錄
+- [Worktree 合併反馈](feedback_worktree_cleanup.md) — 完成推送和生產環境測試時必須合併 worktree
+- [屬性系統改動同步須知](FEEDBACK_ATTRIBUTE_CHANGES.md) — 每次改屬性代碼必須同步 ATTRIBUTES_SYSTEM.md
+- [六大屬性系統完整參考](ATTRIBUTES_SYSTEM.md) — STR/AGI/VIT/INT/DEX/LUK 功能、公式、職業綁定；**設計任何屬性相關功能必查**
+- [AGI 攻速機制](AGI_COMBAT_SPEED.md) — AGI 40 達最快攻速 0.5s/回合，設計 AGI 相關功能必看
+- [完整職業系統](JOB_MECHANICS_IMPLEMENTATION.md) — 7 個職業的獨特戰鬥機制已實現
+- [快速參考指南](QUICK_REFERENCE.md) — 職業數值、代碼位置、常用命令速查
+- [治療師光環系統](HEALER_AURA_SYSTEM.md) — 「在場」光環機制，跨玩家效果持久化
+- [弓箭手徽章實裝](ARCHER_BADGE_IMPLEMENTATION.md) — 獨立命中要害機制，可與爆擊疊加
+- [怪物卡片技能系統](MONSTER_CARD_SKILL_SYSTEM.md) — 24張怪物卡片技能框架、數據結構、觸發機制
+- [怪物卡片技能實裝完成](MONSTER_CARD_IMPLEMENTATION_STATUS.md) — Buff/Debuff應用、DOT效果、效果過期管理
+- [Buff/Debuff效果參考表](BUFF_DEBUFF_REFERENCE.md) — 系統支持的完整Buff key表，**設計任何Buff都要查此表**
+- [裝備強化系統實裝](EQUIPMENT_ENHANCE_SYSTEM.md) — 完整強化規則、API、服務層；寶石ID查 ENHANCE_GEMS.md
+- [裝備強化寶石系統](ENHANCE_GEMS.md) — 四階寶石ID，自動掉落機制
+- [otonashisekai.md快照規則](SKILL_SNAPSHOT.md) — 道具/怪物/NPC設計**優先查 otonashisekai.md**
+- [裝備道具設計工作流程](EQUIPMENT_DESIGN_WORKFLOW.md) — 涉及道具的NPC/事件設計必須先查詢資料庫
+- [DC (Discord) 個人資料系統](DC_PROFILE_SYSTEM.md) — 個人資料欄位、戰鬥能力、裝備、資產完整規格
+- [MongoDB 統一決策](MONGODB_UNIFIED.md) — 儲存層統一 MongoDB，移除 JSON 和環境變數開關
+- [所有可用AI Agent Skills](AVAILABLE_SKILLS.md) — Skills完整索引；**開發時不知道用哪個Skill查這裡**
+- [工作流自動化指南](WORKFLOW_AUTOMATION.md) — 一鍵完成驗證、測試、提交、清理 (npm run workflow:finalize)
+- [Token 優化策略](TOKEN_OPTIMIZATION.md) — 快速索引 + Memory 系統，節省 35-50% token

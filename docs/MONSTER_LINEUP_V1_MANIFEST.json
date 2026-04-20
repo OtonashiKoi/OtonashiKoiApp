@@ -1,0 +1,105 @@
+{
+  "version": "lineup_v1",
+  "updatedAt": "2026-04-19",
+  "style": "JRPG pixel-art C",
+  "animationSpec": {
+    "idle": { "frames": 6, "fps": 8, "loop": true },
+    "attack": { "frames": 8, "fps": 10, "loop": false },
+    "hit": { "frames": 4, "fps": 12, "loop": false },
+    "death": { "frames": 10, "fps": 8, "loop": false },
+    "skill": { "frames": 10, "fps": 10, "loop": false }
+  },
+  "monsters": [
+    {
+      "slot": 1,
+      "id": "c39bdddd-a33d-4e34-8019-d17020a8083b",
+      "name": "小史(小)",
+      "zone": "normal",
+      "level": 3,
+      "species": "slime",
+      "traits": ["small", "cute", "gel", "non_humanoid"]
+    },
+    {
+      "slot": 2,
+      "id": "f00fd7b1-9f57-4532-9901-f4d4d74f132d",
+      "name": "哥布",
+      "zone": "normal",
+      "level": 3,
+      "species": "goblin",
+      "traits": ["agile", "spear"]
+    },
+    {
+      "slot": 3,
+      "id": "a8ef443e-3a0d-4ccb-9290-d6394edaa59f",
+      "name": "小狼",
+      "zone": "normal",
+      "level": 6,
+      "species": "wolf",
+      "traits": ["quick", "low_profile"]
+    },
+    {
+      "slot": 4,
+      "id": "2d226eea-934a-4787-8ff7-9f19d12ac590",
+      "name": "石頭",
+      "zone": "normal",
+      "level": 4,
+      "species": "golem",
+      "traits": ["heavy", "tank"]
+    },
+    {
+      "slot": 5,
+      "id": "321a08e9-8fed-4a80-9526-b1f977fd9103",
+      "name": "大史(B)",
+      "zone": "normal",
+      "level": 7,
+      "species": "slime",
+      "traits": ["boss", "crown", "large"]
+    },
+    {
+      "slot": 6,
+      "id": "657afc88-c6db-4851-8c4c-50f225b18624",
+      "name": "甲蟹",
+      "zone": "mid",
+      "level": 12,
+      "species": "crab",
+      "traits": ["armored", "front_guard"]
+    },
+    {
+      "slot": 7,
+      "id": "13f56b92-709e-42ff-87d2-e8f129ed9207",
+      "name": "牙牙狼",
+      "zone": "mid",
+      "level": 12,
+      "species": "wolf",
+      "traits": ["feral", "spike_fur"]
+    },
+    {
+      "slot": 8,
+      "id": "b9c226a8-ea33-41de-9c9b-be24824a9fb1",
+      "name": "巨巨",
+      "zone": "mid",
+      "level": 14,
+      "species": "ogre",
+      "traits": ["massive", "brute"]
+    },
+    {
+      "slot": 9,
+      "id": "f4bed595-74f8-493b-8551-9158f4b5381d",
+      "name": "黑暗弓手",
+      "zone": "mid",
+      "level": 14,
+      "species": "dark_archer",
+      "traits": ["cloak", "ranged"]
+    },
+    {
+      "slot": 10,
+      "id": "517f9a27-f6f7-4251-8cf8-2140f02222c0",
+      "name": "米拉桑(B)",
+      "zone": "mid",
+      "level": 15,
+      "species": "angelic_knight",
+      "traits": ["boss", "winged", "holy_armor"]
+    }
+  ]
+}
+
