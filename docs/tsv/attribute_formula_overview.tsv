@@ -1,0 +1,20 @@
+module	formulaId	target	input	formula	cap	floor	notes
+player/combatStats	ATK_BASE	atk	S/I/D + weapon mult	atk = round(baseStat * mult); baseStat=STR(default), staff->INT, bow->DEX	-	1	baseStat with equipped bonus
+player/combatStats	MAX_HP	maxHp	VIT	maxHp = VIT * 15 + 50	-	1	
+player/combatStats	DEF	def%	VIT	def = min(75, VIT * 2)	75	0	percent reduction
+player/combatStats	DODGE	dodge%	AGI + weapon bonus	dodge = min(50, AGI*0.5) + dodgeBonus	95(after clamp)	0	final clamp in calcPlayerStats
+player/combatStats	HIT	hit%	DEX	hit = min(100, 70 + DEX)	100	0	
+player/combatStats	CRIT	crit%	LUK	crit = min(100, LUK*0.3)	100	0	
+player/combatStats	COMBO	combo%	AGI + weapon bonus	combo = min(80, 3 + AGI*0.5 + comboBonus)	80	0	
+player/combatStats	DMG_ROLL_MIN	damage roll min	INT	dmgMin = min(0.9, 0.5 + INT*0.01)	0.9	0.5	max roll fixed 1.3
+player/combatStats	BLOCK_BASE	blockChance%	shield equipped	blockChance = 20 if shield && not dual-wield else 0	95(after clamp)	0	
+player/combatLoop	PLAYER_HIT_CHECK	hit success	player hit, monster dodge	random(0..100) < (pStats.hit - adjustedMonster.dodge)	-	-	
+player/combatLoop	MONSTER_HIT_CHECK	monster hit success	monster hit, player dodge	random(0..100) < (monsterHit - pStats.dodge)	-	-	
+player/combatLoop	CRIT_DAMAGE	crit dmg	base dmg, class bonus	crit multiplier = 2.5 + warriorCritDamageBonus(axe_2h +0.2)	-	-	swordsman block-counter has extra crit chance
+player/combatLoop	EXECUTE	execute	executeChance, executeThresholdPct	if monsterHP <= mHpInit*(threshold%) and random < executeChance => damage = remaining HP	-	-	instant finish
+player/combatLoop	AGI_FIRST_STRIKE	monster skip attack	playerAgi - monsterAgi	if agiDiff>2 and round==1 => monster cannot attack	-	-	
+player/combatLoop	AGI_SLOW	monster attack frequency	playerAgi - monsterAgi	if agiDiff>5 => monster attacks only even rounds	-	-	
+discord/monsterZoneHandlers	TICK_DELAY	battle tick delay(ms)	AGI	delay = 1500 - ((min(AGI,40)-1)/39)*1000	min 500	max 1500	AGI1=1500ms, AGI40=500ms
+monster/monsterService	MONSTER_ATK	monster atk	STR	atk = STR * 3	-	0	
+monster/monsterService	MONSTER_DODGE	monster dodge%	AGI	dodge = min(50, round(AGI*0.5,1))	50	0	
+monster/monsterService	MONSTER_HIT	monster hit%	DEX	hit = min(100, 80 + DEX)	100	0	

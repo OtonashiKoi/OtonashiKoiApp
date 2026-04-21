@@ -142,7 +142,7 @@ async function setupLockedChannels(client) {
 // key: `${guildId}:${userId}`，value: { lastMsg, count, timestamps: [] }
 function listAutoRepublishBindings(layout) {
   const bindings = Array.isArray(layout?.discord?.bindings) ? layout.discord.bindings : [];
-  const supported = new Set(["personal_room", "coin_shop", "weekly_quest", ...MONSTER_ZONE_FEATURE_KEYS]);
+  const supported = new Set(["personal_room", "coin_shop", "daily_quest", "weekly_quest", "idle_zone", ...MONSTER_ZONE_FEATURE_KEYS]);
   return bindings.filter((entry) => entry?.enabled && entry?.channelId && supported.has(entry.featureKey));
 }
 
@@ -193,6 +193,24 @@ async function republishPanelsOnStartup() {
           includePinned: true
         });
         console.log(`[PanelReset] republished weekly_quest -> ${binding.channelId}`);
+        continue;
+      }
+
+      if (binding.featureKey === "daily_quest") {
+        await serviceContext.adminConsoleService.publishDailyQuestPanel(binding.channelId, {
+          cleanChannel: true,
+          includePinned: true
+        });
+        console.log(`[PanelReset] republished daily_quest -> ${binding.channelId}`);
+        continue;
+      }
+
+      if (binding.featureKey === "idle_zone") {
+        await serviceContext.adminConsoleService.publishIdleZonePanel(binding.channelId, {
+          cleanChannel: true,
+          includePinned: true
+        });
+        console.log(`[PanelReset] republished idle_zone -> ${binding.channelId}`);
         continue;
       }
 
@@ -338,7 +356,13 @@ function createBotClient() {
     console.log(`[Discord] Logged in as ${readyClient.user.tag}`);
     await setupPersonalRoomChannel(readyClient);
     await setupLockedChannels(readyClient);
-    await republishPanelsOnStartup();
+    const shouldRepublishPanels = process.env.ENABLE_STARTUP_PANEL_REPUBLISH === "1";
+    if (shouldRepublishPanels) {
+      await republishPanelsOnStartup();
+      console.log("[PanelReset] startup auto-republish enabled");
+    } else {
+      console.log("[PanelReset] startup auto-republish disabled");
+    }
     
     // 啟動 OneComme 直播留言監聽
     startFetcher(handleStreamComment);

@@ -1,0 +1,196 @@
+zone	seq	monsterId	monsterName	dropOrder	itemId	itemName	itemType	tier	equipSlot	weaponType	chance
+normal											
+normal				1	be6f16fa-4e72-47ab-9a08-d580bd5490ef	銅戒指(右)	equipment	D	accessory_r		15
+normal				2	a56bd609-cf0b-4924-b724-891f221fc0b9	木製單手劍	equipment	D	weapon	sword_1h	15
+beginner	1	75fc9a55-3f1b-406d-92e7-3ec4fd787e44	小史(小)	1	33d319ec-cb62-4826-8bcc-82a6fe52b8fa	初級單手法杖	equipment	D	weapon	staff_1h	25
+beginner	1	75fc9a55-3f1b-406d-92e7-3ec4fd787e44	小史(小)	2	d5936211-685a-4cd7-a1e9-24524725da96	初級雙手法杖	equipment	D	weapon	staff_2h	25
+beginner	1	75fc9a55-3f1b-406d-92e7-3ec4fd787e44	小史(小)	3	a91fab15-a786-490a-ae7f-6ecd536febb1	布口罩	equipment	D	head_low		25
+beginner	1	75fc9a55-3f1b-406d-92e7-3ec4fd787e44	小史(小)	4	7bdf0277-dcd5-4173-b3ff-d93ccaa9e293	布帽	equipment	D	head_top		25
+beginner	2	ac87e4b7-2c1c-4d6c-8fa8-c873fc26039f	野兔	1	912125cb-6738-4694-9657-81e7f6a5c2da	布披風	equipment	D	garment		25
+beginner	2	ac87e4b7-2c1c-4d6c-8fa8-c873fc26039f	野兔	2	ee883bee-93c6-450d-b196-754d3e345d2a	布衣	equipment	D	armor		25
+beginner	2	ac87e4b7-2c1c-4d6c-8fa8-c873fc26039f	野兔	3	3667cf4f-18cb-4861-b4cb-8700805d8bcf	木框護目鏡	equipment	D	head_mid		25
+beginner	2	ac87e4b7-2c1c-4d6c-8fa8-c873fc26039f	野兔	4	4a7c2dd6-1d33-4613-a5aa-913924d12eed	木盾	equipment	D	shield		25
+beginner	3	5606a251-bea4-4d4c-bd37-d985a7d7a6d3	蘑菇怪	1	421196aa-83e4-4f2e-82f6-dc05077b115a	木製匕首	equipment	D	weapon	dagger	25
+beginner	3	5606a251-bea4-4d4c-bd37-d985a7d7a6d3	蘑菇怪	2	a56bd609-cf0b-4924-b724-891f221fc0b9	木製單手劍	equipment	D	weapon	sword_1h	25
+beginner	3	5606a251-bea4-4d4c-bd37-d985a7d7a6d3	蘑菇怪	3	4885e098-3624-4c6c-9eb9-e4b27c2fb5ab	木製單手斧	equipment	D	weapon	axe_1h	25
+beginner	3	5606a251-bea4-4d4c-bd37-d985a7d7a6d3	蘑菇怪	4	6da9f4e6-aac1-4088-9000-7111fd4926b0	木製單手槌	equipment	D	weapon	mace_1h	25
+beginner	4	92974d12-fd4d-4482-8ea7-171712ae894c	小史(中)	1	d95a76a8-79ab-4dc7-ab07-82a39dbb5912	木製弓	equipment	D	weapon	bow	25
+beginner	4	92974d12-fd4d-4482-8ea7-171712ae894c	小史(中)	2	ce6f0608-2750-47b4-aa26-14d9c1aa0f4c	木製雙手劍	equipment	D	weapon	sword_2h	25
+beginner	4	92974d12-fd4d-4482-8ea7-171712ae894c	小史(中)	3	2271e23c-9648-430e-944b-cea2107ee8ec	木製雙手斧	equipment	D	weapon	axe_2h	25
+beginner	4	92974d12-fd4d-4482-8ea7-171712ae894c	小史(中)	4	2fcf7576-4e74-4280-b1e6-0d7da7b58dda	木製雙手槌	equipment	D	weapon	mace_2h	25
+beginner	5	19fecf53-1ee1-48bc-a097-42bccbe12227	大野兔(B)	1	8c9ac7c4-e00d-44fb-9582-8c68b99c2357	草鞋	equipment	D	shoes		25
+beginner	5	19fecf53-1ee1-48bc-a097-42bccbe12227	大野兔(B)	2	be6f16fa-4e72-47ab-9a08-d580bd5490ef	銅戒指(右)	equipment	D	accessory_r		25
+beginner	5	19fecf53-1ee1-48bc-a097-42bccbe12227	大野兔(B)	3	19e24aca-92f5-4f81-8ab9-cc4f8ba73a72	銅戒指(左)	equipment	D	accessory_l		25
+hard	1	5152b379-9bdd-404a-acb4-b80935664aba	城牆衛兵	1	4196e3d5-811f-4816-aa94-a1e8cc31ebfc	魔晶石戒(左)	equipment	B	accessory_l		15
+hard	1	5152b379-9bdd-404a-acb4-b80935664aba	城牆衛兵	2	a314493c-efcd-43e5-bebc-935ef1d588a5	精鋼弓	equipment	B	weapon	bow	15
+hard	1	5152b379-9bdd-404a-acb4-b80935664aba	城牆衛兵	3	3cdbaafb-df15-41e5-bca9-16453b72669e	精鋼盾	equipment	B	shield		15
+hard	2	f24bfc8c-4eba-4c10-85a0-73e77e4f6448	古城弓手	1	11c00245-6d43-4ab5-a68b-a7494a9fba84	鎖甲	equipment	B	armor		15
+hard	2	f24bfc8c-4eba-4c10-85a0-73e77e4f6448	古城弓手	2	25648e7c-d628-4d5d-bfed-1dfbe6a5e650	精鋼雙手斧	equipment	B	weapon	axe_2h	15
+hard	2	f24bfc8c-4eba-4c10-85a0-73e77e4f6448	古城弓手	3	f005d0bb-7510-4905-a1bd-6fe55cc84af5	精鋼護目鏡	equipment	B	head_mid		15
+hard	3	814f097c-283e-4c35-98b5-7aaa8b08dd7c	石像鬼	1	a314493c-efcd-43e5-bebc-935ef1d588a5	精鋼弓	equipment	B	weapon	bow	15
+hard	3	814f097c-283e-4c35-98b5-7aaa8b08dd7c	石像鬼	2	3cdbaafb-df15-41e5-bca9-16453b72669e	精鋼盾	equipment	B	shield		15
+hard	3	814f097c-283e-4c35-98b5-7aaa8b08dd7c	石像鬼	3	7cdbe248-2e54-4798-9ddf-c103e80d2755	鐵盔	equipment	B	head_top		15
+hard	4	2d0d3516-e7ef-4916-b966-b38145a18fd4	古城法師	1	255bd660-555d-47a9-bdad-d1fd8eb36c1b	精鋼靴	equipment	B	shoes		15
+hard	4	2d0d3516-e7ef-4916-b966-b38145a18fd4	古城法師	2	0a2c7f28-4b49-4f3b-9ee7-2c951b4699f2	鐵面罩	equipment	B	head_low		15
+hard	4	2d0d3516-e7ef-4916-b966-b38145a18fd4	古城法師	3	7cdbe248-2e54-4798-9ddf-c103e80d2755	鐵盔	equipment	B	head_top		15
+hard	5	388a118f-b839-4287-ba02-0c7a12cd0c06	廢墟蠍兵	1	8218a81c-98ed-49d3-8a16-a38189e00be6	精鋼單手斧	equipment	B	weapon	axe_1h	15
+hard	5	388a118f-b839-4287-ba02-0c7a12cd0c06	廢墟蠍兵	2	e3bcdb33-4a28-499e-9c65-50240368550f	精鋼單手劍	equipment	B	weapon	sword_1h	15
+hard	5	388a118f-b839-4287-ba02-0c7a12cd0c06	廢墟蠍兵	3	3cdbaafb-df15-41e5-bca9-16453b72669e	精鋼盾	equipment	B	shield		15
+hard	6	53fdc9ee-b719-4f8c-a93e-3ab5a0a3ce09	冰封騎士	1	d08f99f6-6a4f-4afb-a02d-ec1a2cd69b2e	高級單手法杖	equipment	B	weapon	staff_1h	15
+hard	6	53fdc9ee-b719-4f8c-a93e-3ab5a0a3ce09	冰封騎士	2	9e7fc009-c3ab-4c3f-b7d0-b1c17cb2e9d4	精鋼雙手槌	equipment	B	weapon	mace_2h	15
+hard	6	53fdc9ee-b719-4f8c-a93e-3ab5a0a3ce09	冰封騎士	3	49a6108d-a199-4a7a-91ea-630814945399	精鋼單手槌	equipment	B	weapon	mace_1h	15
+hard	7	9a0ac6a5-4f2e-4186-a66a-73a6de9cb5e2	詛咒祭司	1	8534e2da-47c0-4493-8051-a831b6476f03	絲綢披風	equipment	B	garment		15
+hard	7	9a0ac6a5-4f2e-4186-a66a-73a6de9cb5e2	詛咒祭司	2	0a2c7f28-4b49-4f3b-9ee7-2c951b4699f2	鐵面罩	equipment	B	head_low		15
+hard	7	9a0ac6a5-4f2e-4186-a66a-73a6de9cb5e2	詛咒祭司	3	255bd660-555d-47a9-bdad-d1fd8eb36c1b	精鋼靴	equipment	B	shoes		15
+hard	8	8eea80b7-c836-413b-8912-7c3ce6a899a7	鐵甲衛將	1	6c47d7a3-0937-4f9b-b447-2cc9f55ba749	精鋼匕首	equipment	B	weapon	dagger	15
+hard	8	8eea80b7-c836-413b-8912-7c3ce6a899a7	鐵甲衛將	2	a314493c-efcd-43e5-bebc-935ef1d588a5	精鋼弓	equipment	B	weapon	bow	15
+hard	8	8eea80b7-c836-413b-8912-7c3ce6a899a7	鐵甲衛將	3	11c00245-6d43-4ab5-a68b-a7494a9fba84	鎖甲	equipment	B	armor		15
+hard	9	4a46dd14-b74c-4a5d-9cde-b7d0f270ce0f	古城刺客	1	255bd660-555d-47a9-bdad-d1fd8eb36c1b	精鋼靴	equipment	B	shoes		15
+hard	9	4a46dd14-b74c-4a5d-9cde-b7d0f270ce0f	古城刺客	2	8534e2da-47c0-4493-8051-a831b6476f03	絲綢披風	equipment	B	garment		15
+hard	9	4a46dd14-b74c-4a5d-9cde-b7d0f270ce0f	古城刺客	3	f005d0bb-7510-4905-a1bd-6fe55cc84af5	精鋼護目鏡	equipment	B	head_mid		15
+hard	10	139df36b-f838-4875-b3f0-2d9003fc6f8f	毒霧蜘蛛	1	49a6108d-a199-4a7a-91ea-630814945399	精鋼單手槌	equipment	B	weapon	mace_1h	15
+hard	10	139df36b-f838-4875-b3f0-2d9003fc6f8f	毒霧蜘蛛	2	3cdbaafb-df15-41e5-bca9-16453b72669e	精鋼盾	equipment	B	shield		15
+hard	10	139df36b-f838-4875-b3f0-2d9003fc6f8f	毒霧蜘蛛	3	f005d0bb-7510-4905-a1bd-6fe55cc84af5	精鋼護目鏡	equipment	B	head_mid		15
+hard	11	32a783be-798c-4640-bd2d-00af3e330313	古城狂戰士	1	8218a81c-98ed-49d3-8a16-a38189e00be6	精鋼單手斧	equipment	B	weapon	axe_1h	15
+hard	11	32a783be-798c-4640-bd2d-00af3e330313	古城狂戰士	2	e3bcdb33-4a28-499e-9c65-50240368550f	精鋼單手劍	equipment	B	weapon	sword_1h	15
+hard	11	32a783be-798c-4640-bd2d-00af3e330313	古城狂戰士	3	feb40b36-5558-44af-a0d4-294bc8acaf46	魔晶石戒(右)	equipment	B	accessory_r		15
+hard	12	35ec8cc7-9f0c-4d61-8a40-343d8857be2f	黑焰巫師	1	9e7fc009-c3ab-4c3f-b7d0-b1c17cb2e9d4	精鋼雙手槌	equipment	B	weapon	mace_2h	15
+hard	12	35ec8cc7-9f0c-4d61-8a40-343d8857be2f	黑焰巫師	2	e17d3bad-4b8e-4603-9351-0e1432a21a11	精鋼雙手劍	equipment	B	weapon	sword_2h	15
+hard	12	35ec8cc7-9f0c-4d61-8a40-343d8857be2f	黑焰巫師	3	8534e2da-47c0-4493-8051-a831b6476f03	絲綢披風	equipment	B	garment		15
+hard	13	5c20d4ba-5f38-4d6b-a724-369eb632ff1d	城堡魔像(B)	1	b24ee5cd-c74b-409e-9326-14bd056d9af8	秘銀單手斧	equipment	A	weapon	axe_1h	10
+hard	13	5c20d4ba-5f38-4d6b-a724-369eb632ff1d	城堡魔像(B)	2	99d23a47-89a6-4291-9b03-8f15e7356eec	秘銀單手劍	equipment	A	weapon	sword_1h	10
+hard	13	5c20d4ba-5f38-4d6b-a724-369eb632ff1d	城堡魔像(B)	3	1039c921-d77d-4223-8d7b-321721484850	天使翼披風	equipment	A	garment		10
+hard	14	69459022-2457-48e3-9804-d6f9be346a25	古城將軍(B)	1	ca32c28a-864b-44b5-becd-1242d910f718	大師雙手法杖	equipment	A	weapon	staff_2h	10
+hard	14	69459022-2457-48e3-9804-d6f9be346a25	古城將軍(B)	2	acfebb62-91b8-4989-8aab-431256ffd202	秘銀雙手劍	equipment	A	weapon	sword_2h	10
+hard	14	69459022-2457-48e3-9804-d6f9be346a25	古城將軍(B)	3	ec5118e5-4ce6-494f-8d14-d9b91f3e0b48	精鋼盔	equipment	A	head_top		10
+hard	15	0496ea5d-786e-4b07-ba65-30949c1afe31	廢都魔王(B)	1	0635861a-8bb0-4516-b16d-0351539ba5e7	秘銀雙手槌	equipment	A	weapon	mace_2h	10
+hard	15	0496ea5d-786e-4b07-ba65-30949c1afe31	廢都魔王(B)	2	b24ee5cd-c74b-409e-9326-14bd056d9af8	秘銀單手斧	equipment	A	weapon	axe_1h	10
+hard	15	0496ea5d-786e-4b07-ba65-30949c1afe31	廢都魔王(B)	3	bc3d565e-6d15-4080-b79f-b7f0b76e9042	秘銀弓	equipment	A	weapon	bow	10
+mid	1	657afc88-c6db-4851-8c4c-50f225b18624	甲蟹	1	353b7c41-1d23-4a43-ac3c-38517bb235a5	銀戒指(右)	equipment	C	accessory_r		15
+mid	1	657afc88-c6db-4851-8c4c-50f225b18624	甲蟹	2	bb26be45-2910-4034-8db6-e02d9d473513	皮披風	equipment	C	garment		15
+mid	1	657afc88-c6db-4851-8c4c-50f225b18624	甲蟹	3	12cddc4e-58ef-433e-a50d-e8ca04b1041e	皮帽	equipment	C	head_top		15
+mid	1	657afc88-c6db-4851-8c4c-50f225b18624	甲蟹	4	fcdbb6c1-bb21-45e1-9637-3aa58a76c79e	鐵製單手斧	equipment	C	weapon	axe_1h	15
+mid	1	657afc88-c6db-4851-8c4c-50f225b18624	甲蟹	5	crab-card	甲蟹卡	equipment	C	special		3
+mid	1	657afc88-c6db-4851-8c4c-50f225b18624	甲蟹	6	ab533d4a-3d07-4d41-8a40-511a8e6a455d	鐵製雙手斧	equipment	C	weapon	axe_2h	10
+mid	2	13f56b92-709e-42ff-87d2-e8f129ed9207	牙牙狼	1	353b7c41-1d23-4a43-ac3c-38517bb235a5	銀戒指(右)	equipment	C	accessory_r		15
+mid	2	13f56b92-709e-42ff-87d2-e8f129ed9207	牙牙狼	2	a5bf4a8c-2f89-4b35-9f23-8cb519bb0292	鐵製匕首	equipment	C	weapon	dagger	15
+mid	2	13f56b92-709e-42ff-87d2-e8f129ed9207	牙牙狼	3	dcb0ab95-aff6-4961-ae44-79bd49a2f0e8	鐵盾	equipment	C	shield		15
+mid	2	13f56b92-709e-42ff-87d2-e8f129ed9207	牙牙狼	4	fang-wolf-card	牙牙狼卡	equipment	C	special		3
+mid	2	13f56b92-709e-42ff-87d2-e8f129ed9207	牙牙狼	5	efd48300-f4b6-40d6-a1c5-8c2014ae4b55	鐵製弓	equipment	C	weapon	bow	10
+mid	3	b9c226a8-ea33-41de-9c9b-be24824a9fb1	巨巨	1	1f04c0db-e5cb-4b84-9a43-e7150799eecb	鐵製雙手槌	equipment	C	weapon	mace_2h	15
+mid	3	b9c226a8-ea33-41de-9c9b-be24824a9fb1	巨巨	2	fcdbb6c1-bb21-45e1-9637-3aa58a76c79e	鐵製單手斧	equipment	C	weapon	axe_1h	15
+mid	3	b9c226a8-ea33-41de-9c9b-be24824a9fb1	巨巨	3	ab533d4a-3d07-4d41-8a40-511a8e6a455d	鐵製雙手斧	equipment	C	weapon	axe_2h	15
+mid	3	b9c226a8-ea33-41de-9c9b-be24824a9fb1	巨巨	4	giant-card	巨巨卡	equipment	C	special		3
+mid	3	b9c226a8-ea33-41de-9c9b-be24824a9fb1	巨巨	5	fbf8fdec-72a4-4d76-bcb5-117952352dec	鐵製單手槌	equipment	C	weapon	mace_1h	10
+mid	4	f4bed595-74f8-493b-8551-9158f4b5381d	黑暗弓手	1	73884cf9-67b5-47b4-af3c-b6d79a39ec57	皮甲	equipment	C	armor		15
+mid	4	f4bed595-74f8-493b-8551-9158f4b5381d	黑暗弓手	2	45a8eba1-f558-4c9b-8c60-7dcc42ba2cf9	鐵護目鏡	equipment	C	head_mid		15
+mid	4	f4bed595-74f8-493b-8551-9158f4b5381d	黑暗弓手	3	bb26be45-2910-4034-8db6-e02d9d473513	皮披風	equipment	C	garment		15
+mid	4	f4bed595-74f8-493b-8551-9158f4b5381d	黑暗弓手	4	dark-archer-card	黑暗弓手卡	equipment	C	special		3
+mid	4	f4bed595-74f8-493b-8551-9158f4b5381d	黑暗弓手	5	efd48300-f4b6-40d6-a1c5-8c2014ae4b55	鐵製弓	equipment	C	weapon	bow	15
+mid	4	f4bed595-74f8-493b-8551-9158f4b5381d	黑暗弓手	6	a5bf4a8c-2f89-4b35-9f23-8cb519bb0292	鐵製匕首	equipment	C	weapon	dagger	15
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	1	a5bf4a8c-2f89-4b35-9f23-8cb519bb0292	鐵製匕首	equipment	C	weapon	dagger	15
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	2	efd48300-f4b6-40d6-a1c5-8c2014ae4b55	鐵製弓	equipment	C	weapon	bow	15
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	3	fbf8fdec-72a4-4d76-bcb5-117952352dec	鐵製單手槌	equipment	C	weapon	mace_1h	15
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	4	mira-b-card	米拉桑(B)卡	equipment	C	special		3
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	5	e3bcdb33-4a28-499e-9c65-50240368550f	精鋼單手劍	equipment	B	weapon	sword_1h	10
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	6	e17d3bad-4b8e-4603-9351-0e1432a21a11	精鋼雙手劍	equipment	B	weapon	sword_2h	10
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	7	49a6108d-a199-4a7a-91ea-630814945399	精鋼單手槌	equipment	B	weapon	mace_1h	10
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	8	9e7fc009-c3ab-4c3f-b7d0-b1c17cb2e9d4	精鋼雙手槌	equipment	B	weapon	mace_2h	10
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	9	8218a81c-98ed-49d3-8a16-a38189e00be6	精鋼單手斧	equipment	B	weapon	axe_1h	10
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	10	25648e7c-d628-4d5d-bfed-1dfbe6a5e650	精鋼雙手斧	equipment	B	weapon	axe_2h	10
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	11	6c47d7a3-0937-4f9b-b447-2cc9f55ba749	精鋼匕首	equipment	B	weapon	dagger	10
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	12	d08f99f6-6a4f-4afb-a02d-ec1a2cd69b2e	高級單手法杖	equipment	B	weapon	staff_1h	10
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	13	c9c7bbfb-ea75-4ac1-92cf-a897dcd32137	高級雙手法杖	equipment	B	weapon	staff_2h	10
+mid	5	517f9a27-f6f7-4251-8cf8-2140f02222c0	米拉桑(B)	14	a314493c-efcd-43e5-bebc-935ef1d588a5	精鋼弓	equipment	B	weapon	bow	10
+mid	6	3065b7ca-8839-4be4-9d02-0821932cd408	小金(稀)	1	bb26be45-2910-4034-8db6-e02d9d473513	皮披風	equipment	C	garment		15
+mid	6	3065b7ca-8839-4be4-9d02-0821932cd408	小金(稀)	2	eb852c75-f487-4086-b8b3-0b10adab2db3	銀戒指(左)	equipment	C	accessory_l		15
+mid	6	3065b7ca-8839-4be4-9d02-0821932cd408	小金(稀)	3	45a8eba1-f558-4c9b-8c60-7dcc42ba2cf9	鐵護目鏡	equipment	C	head_mid		15
+mid	6	3065b7ca-8839-4be4-9d02-0821932cd408	小金(稀)	4	71aaa3a2-abb9-4b01-b024-16e553b08840	金幣袋子(中)	consumable				100
+mid	106	343c18ce-9f87-4532-bbb4-618a64fe5559	林地妖靈(樹樹)	1	9c809436-d8d5-4b21-bf15-e26e881cac9b	鐵製單手劍	equipment	C	weapon	sword_1h	15
+mid	106	343c18ce-9f87-4532-bbb4-618a64fe5559	林地妖靈(樹樹)	2	dcb0ab95-aff6-4961-ae44-79bd49a2f0e8	鐵盾	equipment	C	shield		15
+mid	106	343c18ce-9f87-4532-bbb4-618a64fe5559	林地妖靈(樹樹)	3	234e9a7f-1220-48fa-824a-690ce0648ae6	中級單手法杖	equipment	C	weapon	staff_1h	15
+mid	106	343c18ce-9f87-4532-bbb4-618a64fe5559	林地妖靈(樹樹)	4	forest-spirit-card	林地妖靈卡	equipment	B	special		3
+mid	107	9f0c5372-7232-4c6f-8083-409a28b1b374	森林古樹	1	a5bf4a8c-2f89-4b35-9f23-8cb519bb0292	鐵製匕首	equipment	C	weapon	dagger	15
+mid	107	9f0c5372-7232-4c6f-8083-409a28b1b374	森林古樹	2	fbf8fdec-72a4-4d76-bcb5-117952352dec	鐵製單手槌	equipment	C	weapon	mace_1h	15
+mid	107	9f0c5372-7232-4c6f-8083-409a28b1b374	森林古樹	3	bb26be45-2910-4034-8db6-e02d9d473513	皮披風	equipment	C	garment		15
+mid	107	9f0c5372-7232-4c6f-8083-409a28b1b374	森林古樹	4	forest-tree-card	森林古樹卡	equipment	B	special		3
+mid	108	eb0322bc-a90a-4a89-ad57-8a9c5607e6b8	暗夜獵豹	1	1f04c0db-e5cb-4b84-9a43-e7150799eecb	鐵製雙手槌	equipment	C	weapon	mace_2h	15
+mid	108	eb0322bc-a90a-4a89-ad57-8a9c5607e6b8	暗夜獵豹	2	eb852c75-f487-4086-b8b3-0b10adab2db3	銀戒指(左)	equipment	C	accessory_l		15
+mid	108	eb0322bc-a90a-4a89-ad57-8a9c5607e6b8	暗夜獵豹	3	efd48300-f4b6-40d6-a1c5-8c2014ae4b55	鐵製弓	equipment	C	weapon	bow	15
+mid	108	eb0322bc-a90a-4a89-ad57-8a9c5607e6b8	暗夜獵豹	4	night-leopard-card	暗夜獵豹卡	equipment	B	special		3
+mid	109	f6145411-1a2e-4919-9ee4-fe27b3a31c07	森林巫師	1	c0545f31-455e-4846-b914-79302f8bea03	中級雙手法杖	equipment	C	weapon	staff_2h	15
+mid	109	f6145411-1a2e-4919-9ee4-fe27b3a31c07	森林巫師	2	forest-wizard-card	森林巫師卡	equipment	B	special		0
+mid	109	f6145411-1a2e-4919-9ee4-fe27b3a31c07	森林巫師	3	dcb0ab95-aff6-4961-ae44-79bd49a2f0e8	鐵盾	equipment	C	shield		15
+mid	109	f6145411-1a2e-4919-9ee4-fe27b3a31c07	森林巫師	4	45a8eba1-f558-4c9b-8c60-7dcc42ba2cf9	鐵護目鏡	equipment	C	head_mid		15
+mid	109	f6145411-1a2e-4919-9ee4-fe27b3a31c07	森林巫師	5	bb26be45-2910-4034-8db6-e02d9d473513	皮披風	equipment	C	garment		15
+mid	109	f6145411-1a2e-4919-9ee4-fe27b3a31c07	森林巫師	6	12cddc4e-58ef-433e-a50d-e8ca04b1041e	皮帽	equipment	C	head_top		15
+mid	110	5247b1b0-6bc0-4db3-8ffd-aacb755c64fb	森林盜賊	1	efd48300-f4b6-40d6-a1c5-8c2014ae4b55	鐵製弓	equipment	C	weapon	bow	15
+mid	110	5247b1b0-6bc0-4db3-8ffd-aacb755c64fb	森林盜賊	2	forest-rogue-card	森林盜賊卡	equipment	B	special		0
+mid	110	5247b1b0-6bc0-4db3-8ffd-aacb755c64fb	森林盜賊	3	c0545f31-455e-4846-b914-79302f8bea03	中級雙手法杖	equipment	C	weapon	staff_2h	15
+mid	110	5247b1b0-6bc0-4db3-8ffd-aacb755c64fb	森林盜賊	4	fcdbb6c1-bb21-45e1-9637-3aa58a76c79e	鐵製單手斧	equipment	C	weapon	axe_1h	15
+mid	110	5247b1b0-6bc0-4db3-8ffd-aacb755c64fb	森林盜賊	5	34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9	皮靴	equipment	C	shoes		15
+mid	110	5247b1b0-6bc0-4db3-8ffd-aacb755c64fb	森林盜賊	6	234e9a7f-1220-48fa-824a-690ce0648ae6	中級單手法杖	equipment	C	weapon	staff_1h	15
+mid	110	5247b1b0-6bc0-4db3-8ffd-aacb755c64fb	森林盜賊	7	099d5496-e0d4-49e5-af89-ac6580262d5a	皮口罩	equipment	C	head_low		15
+mid	110	5247b1b0-6bc0-4db3-8ffd-aacb755c64fb	森林盜賊	8	bb4a624b-c5df-4ace-ae50-d5ec16248e6d	立直棒	equipment	C	weapon	bow	20
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	1	73884cf9-67b5-47b4-af3c-b6d79a39ec57	皮甲	equipment	C	armor		25
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	2	12cddc4e-58ef-433e-a50d-e8ca04b1041e	皮帽	equipment	C	head_top		25
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	3	ab533d4a-3d07-4d41-8a40-511a8e6a455d	鐵製雙手斧	equipment	C	weapon	axe_2h	25
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	4	forest-beast-card	森林之獸卡	equipment	B	special		3
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	5	24d71d06-5df8-446d-b2e5-f4cb49818e3f	鐵製雙手劍	equipment	C	weapon	sword_2h	15
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	6	eb852c75-f487-4086-b8b3-0b10adab2db3	銀戒指(左)	equipment	C	accessory_l		15
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	7	fbf8fdec-72a4-4d76-bcb5-117952352dec	鐵製單手槌	equipment	C	weapon	mace_1h	15
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	8	c0545f31-455e-4846-b914-79302f8bea03	中級雙手法杖	equipment	C	weapon	staff_2h	15
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	9	099d5496-e0d4-49e5-af89-ac6580262d5a	皮口罩	equipment	C	head_low		15
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	10	353b7c41-1d23-4a43-ac3c-38517bb235a5	銀戒指(右)	equipment	C	accessory_r		15
+mid	111	21fb614f-7f8b-4aad-b248-9418d8cbd8c0	森林之獸	11	234e9a7f-1220-48fa-824a-690ce0648ae6	中級單手法杖	equipment	C	weapon	staff_1h	15
+normal	1	c39bdddd-a33d-4e34-8019-d17020a8083b	小史	1	ce6f0608-2750-47b4-aa26-14d9c1aa0f4c	木製雙手劍	equipment	D	weapon	sword_2h	15
+normal	1	c39bdddd-a33d-4e34-8019-d17020a8083b	小史	2	912125cb-6738-4694-9657-81e7f6a5c2da	布披風	equipment	D	garment		15
+normal	1	c39bdddd-a33d-4e34-8019-d17020a8083b	小史	3	be6f16fa-4e72-47ab-9a08-d580bd5490ef	銅戒指(右)	equipment	D	accessory_r		15
+normal	1	c39bdddd-a33d-4e34-8019-d17020a8083b	小史	4	d5936211-685a-4cd7-a1e9-24524725da96	初級雙手法杖	equipment	D	weapon	staff_2h	15
+normal	1	c39bdddd-a33d-4e34-8019-d17020a8083b	小史	5	xiaoshi-small-card	小史(小)卡	equipment	D	special		3
+normal	1	c39bdddd-a33d-4e34-8019-d17020a8083b	小史	6	2fcf7576-4e74-4280-b1e6-0d7da7b58dda	木製雙手槌	equipment	D	weapon	mace_2h	15
+normal	2	f00fd7b1-9f57-4532-9901-f4d4d74f132d	哥布	1	4a7c2dd6-1d33-4613-a5aa-913924d12eed	木盾	equipment	D	shield		15
+normal	2	f00fd7b1-9f57-4532-9901-f4d4d74f132d	哥布	2	7bdf0277-dcd5-4173-b3ff-d93ccaa9e293	布帽	equipment	D	head_top		15
+normal	2	f00fd7b1-9f57-4532-9901-f4d4d74f132d	哥布	3	d5936211-685a-4cd7-a1e9-24524725da96	初級雙手法杖	equipment	D	weapon	staff_2h	15
+normal	2	f00fd7b1-9f57-4532-9901-f4d4d74f132d	哥布	4	912125cb-6738-4694-9657-81e7f6a5c2da	布披風	equipment	D	garment		15
+normal	2	f00fd7b1-9f57-4532-9901-f4d4d74f132d	哥布	5	goblin-card	哥布卡	equipment	D	special		3
+normal	2	f00fd7b1-9f57-4532-9901-f4d4d74f132d	哥布	6	33d319ec-cb62-4826-8bcc-82a6fe52b8fa	初級單手法杖	equipment	D	weapon	staff_1h	15
+normal	3	a8ef443e-3a0d-4ccb-9290-d6394edaa59f	小狼	1	19e24aca-92f5-4f81-8ab9-cc4f8ba73a72	銅戒指(左)	equipment	D	accessory_l		15
+normal	3	a8ef443e-3a0d-4ccb-9290-d6394edaa59f	小狼	2	d5936211-685a-4cd7-a1e9-24524725da96	初級雙手法杖	equipment	D	weapon	staff_2h	15
+normal	3	a8ef443e-3a0d-4ccb-9290-d6394edaa59f	小狼	3	44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf	迅短劍(副)	equipment	D	shield	offhand_dagger	15
+normal	3	a8ef443e-3a0d-4ccb-9290-d6394edaa59f	小狼	4	a91fab15-a786-490a-ae7f-6ecd536febb1	布口罩	equipment	D	head_low		15
+normal	3	a8ef443e-3a0d-4ccb-9290-d6394edaa59f	小狼	5	xiaolang-card	小狼卡	equipment	D	special		3
+normal	3	a8ef443e-3a0d-4ccb-9290-d6394edaa59f	小狼	6	d95a76a8-79ab-4dc7-ab07-82a39dbb5912	木製弓	equipment	D	weapon	bow	15
+normal	4	2d226eea-934a-4787-8ff7-9f19d12ac590	石頭	1	4a7c2dd6-1d33-4613-a5aa-913924d12eed	木盾	equipment	D	shield		15
+normal	4	2d226eea-934a-4787-8ff7-9f19d12ac590	石頭	2	ce6f0608-2750-47b4-aa26-14d9c1aa0f4c	木製雙手劍	equipment	D	weapon	sword_2h	15
+normal	4	2d226eea-934a-4787-8ff7-9f19d12ac590	石頭	3	a56bd609-cf0b-4924-b724-891f221fc0b9	木製單手劍	equipment	D	weapon	sword_1h	15
+normal	4	2d226eea-934a-4787-8ff7-9f19d12ac590	石頭	4	4885e098-3624-4c6c-9eb9-e4b27c2fb5ab	木製單手斧	equipment	D	weapon	axe_1h	15
+normal	4	2d226eea-934a-4787-8ff7-9f19d12ac590	石頭	5	stone-card	石頭卡	equipment	D	special		3
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	1	dcb0ab95-aff6-4961-ae44-79bd49a2f0e8	鐵盾	equipment	C	shield		20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	2	73884cf9-67b5-47b4-af3c-b6d79a39ec57	皮甲	equipment	C	armor		20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	3	12cddc4e-58ef-433e-a50d-e8ca04b1041e	皮帽	equipment	C	head_top		20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	4	45a8eba1-f558-4c9b-8c60-7dcc42ba2cf9	鐵護目鏡	equipment	C	head_mid		20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	5	099d5496-e0d4-49e5-af89-ac6580262d5a	皮口罩	equipment	C	head_low		20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	6	bb26be45-2910-4034-8db6-e02d9d473513	皮披風	equipment	C	garment		20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	7	34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9	皮靴	equipment	C	shoes		20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	8	eb852c75-f487-4086-b8b3-0b10adab2db3	銀戒指(左)	equipment	C	accessory_l		20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	9	353b7c41-1d23-4a43-ac3c-38517bb235a5	銀戒指(右)	equipment	C	accessory_r		20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	10	9c809436-d8d5-4b21-bf15-e26e881cac9b	鐵製單手劍	equipment	C	weapon	sword_1h	20
+normal	5	321a08e9-8fed-4a80-9526-b1f977fd9103	大史(B)	11	daishi-b-card	大史(B)卡	equipment	D	special		3
+normal	6	03c93103-eddb-4265-96ca-a8a76bb82a02	小金(稀)	1	6da9f4e6-aac1-4088-9000-7111fd4926b0	木製單手槌	equipment	D	weapon	mace_1h	15
+normal	6	03c93103-eddb-4265-96ca-a8a76bb82a02	小金(稀)	2	ee883bee-93c6-450d-b196-754d3e345d2a	布衣	equipment	D	armor		15
+normal	6	03c93103-eddb-4265-96ca-a8a76bb82a02	小金(稀)	3	8c9ac7c4-e00d-44fb-9582-8c68b99c2357	草鞋	equipment	D	shoes		15
+normal	6	03c93103-eddb-4265-96ca-a8a76bb82a02	小金(稀)	4	be6f16fa-4e72-47ab-9a08-d580bd5490ef	銅戒指(右)	equipment	D	accessory_r		15
+normal	100	6f321e26-e74e-4a05-a55a-6145da53373d	青草地精	1	2271e23c-9648-430e-944b-cea2107ee8ec	木製雙手斧	equipment	D	weapon	axe_2h	15
+normal	100	6f321e26-e74e-4a05-a55a-6145da53373d	青草地精	2	912125cb-6738-4694-9657-81e7f6a5c2da	布披風	equipment	D	garment		15
+normal	100	6f321e26-e74e-4a05-a55a-6145da53373d	青草地精	3	ee883bee-93c6-450d-b196-754d3e345d2a	布衣	equipment	D	armor		15
+normal	100	6f321e26-e74e-4a05-a55a-6145da53373d	青草地精	4	ce6f0608-2750-47b4-aa26-14d9c1aa0f4c	木製雙手劍	equipment	D	weapon	sword_2h	15
+normal	100	6f321e26-e74e-4a05-a55a-6145da53373d	青草地精	5	grass-goblin-card	青草地精卡	equipment	D	special		3
+normal	100	6f321e26-e74e-4a05-a55a-6145da53373d	青草地精	6	421196aa-83e4-4f2e-82f6-dc05077b115a	木製匕首	equipment	D	weapon	dagger	15
+normal	101	a1ab762c-cd0b-4270-994b-74b68c242840	綠野狼	1	4a7c2dd6-1d33-4613-a5aa-913924d12eed	木盾	equipment	D	shield		15
+normal	101	a1ab762c-cd0b-4270-994b-74b68c242840	綠野狼	2	ee883bee-93c6-450d-b196-754d3e345d2a	布衣	equipment	D	armor		15
+normal	101	a1ab762c-cd0b-4270-994b-74b68c242840	綠野狼	3	7bdf0277-dcd5-4173-b3ff-d93ccaa9e293	布帽	equipment	D	head_top		15
+normal	101	a1ab762c-cd0b-4270-994b-74b68c242840	綠野狼	4	3667cf4f-18cb-4861-b4cb-8700805d8bcf	木框護目鏡	equipment	D	head_mid		15
+normal	101	a1ab762c-cd0b-4270-994b-74b68c242840	綠野狼	5	d95a76a8-79ab-4dc7-ab07-82a39dbb5912	木製弓	equipment	D	weapon	bow	15
+normal	101	a1ab762c-cd0b-4270-994b-74b68c242840	綠野狼	6	green-wolf-card	綠野狼卡	equipment	D	special		3
+normal	101	a1ab762c-cd0b-4270-994b-74b68c242840	綠野狼	7	421196aa-83e4-4f2e-82f6-dc05077b115a	木製匕首	equipment	D	weapon	dagger	15

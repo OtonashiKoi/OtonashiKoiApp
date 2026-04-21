@@ -10,7 +10,9 @@ const CURRENCY_SOURCES = {
   ITEM_USE: "item:use",                             // 使用道具效果
   MONSTER_ENTRY_FEE: "monster:entry-fee",           // 放怪區：入場費扣除
   MONSTER_KILL_REWARD: "monster:kill-reward",       // 放怪區：擊殺金幣獎勵
-  ITEM_SELL: "item:sell"                             // 玩家販售道具
+  ITEM_SELL: "item:sell",                            // 玩家販售道具
+  QUEST_REWARD: "quest:reward",                      // 任務獎勵（金幣）
+  IDLE_REWARD: "idle:reward"                         // 放置掛機：結算金幣獎勵
 };
 
 // 經驗值來源類型
@@ -18,7 +20,9 @@ const EXP_SOURCES = {
   DISCORD_TEST_EXP: "discord:test-exp",             // 測試用：Discord 測試經驗
   ADMIN_MANUAL_GRANT_EXP: "admin:manual-grant-exp", // 管理員手動發放經驗
   ITEM_USE_EXP: "item:use-exp",                     // 使用道具效果
-  MONSTER_KILL: "monster:kill"                      // 放怪區：擊殺 EXP 獎勵
+  MONSTER_KILL: "monster:kill",                     // 放怪區：擊殺 EXP 獎勵
+  QUEST_REWARD_EXP: "quest:reward-exp",            // 任務獎勵（經驗）
+  IDLE_REWARD_EXP: "idle:reward-exp"               // 放置掛機：結算 EXP 獎勵
 };
 
 // 驗證金幣來源是否合法

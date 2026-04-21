@@ -225,6 +225,12 @@ async function handleStreamBind(comment) {
   player.streamAliases = [...aliases];
   player.updatedAt = new Date().toISOString();
   await serviceContext.playerRepository.save(player);
+  try {
+    const questService = serviceContext.questService || serviceContext.weeklyQuestService;
+    await questService.recordProgress(discordId, "stream_bind_count", 1);
+  } catch (e) {
+    console.error("[Quest] stream bind recordProgress error:", e.message);
+  }
 
   console.log(`[Stream] ✅ 綁定成功 ${displayName} (${platform}:${platformUserId || "無userId"}) ↔ discordId:${discordId}`);
   try {

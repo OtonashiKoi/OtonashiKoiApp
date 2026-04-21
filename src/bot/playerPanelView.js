@@ -42,7 +42,7 @@ function createPlayerPanelMessage() {
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(BUTTON_IDS.weeklyQuests)
-        .setLabel("📋 每週任務")
+        .setLabel("📋 任務中心")
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(BUTTON_IDS.bindStream)

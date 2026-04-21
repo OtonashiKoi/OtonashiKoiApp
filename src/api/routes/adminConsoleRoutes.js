@@ -198,6 +198,26 @@ function createAdminConsoleRoutes(serviceContext) {
     }
   });
 
+  router.post("/admin/channel-layout/publish-daily-quest", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      const result = await serviceContext.adminConsoleService.publishDailyQuestPanel(channelId);
+      res.json(ok(result, "daily quest panel published"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/channel-layout/publish-idle-zone", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      const result = await serviceContext.adminConsoleService.publishIdleZonePanel(channelId);
+      res.json(ok(result, "idle zone panel published"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/admin/console/players", async (req, res, next) => {
     try {
       const limit = req.query.limit ? Number(req.query.limit) : 50;

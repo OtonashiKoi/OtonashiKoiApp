@@ -9,7 +9,7 @@
  * @param {string} mName    怪物名稱
  * @param {number} mHpInit  怪物起始 HP
  * @param {number} MAX_ROUNDS 最大回合數
- * @returns {{ outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp }}
+ * @returns {{ outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp, combatStats }}
  */
 const { collectEquipmentEffects, isEffectConditionMet } = require("./effectEngine");
 
@@ -347,6 +347,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let stunRoundsLeft = 0; // 怪物剩餘擊暈回合數
   let monsterActiveEffects = []; // 怪物的 active effects（Buff/Debuff）
   let warriorRageTriggered = false; // 戰士激怒只提示一次
+  const combatStats = {
+    comboCount: 0,
+    dodgeCount: 0,
+    blockCount: 0,
+    stunCount: 0,
+    burnTriggerCount: 0
+  };
 
   const roundLogs = [];
 
@@ -940,6 +947,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const effectiveStunChance = (Number(pStats.stunChance) || 0) + stunBonus;
         if (!isCrit && Math.random() * 100 < effectiveStunChance) {
           stunRoundsLeft = 3;
+          combatStats.stunCount += 1;
           log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 3 回合無法攻擊！`);
         }
 
@@ -972,6 +980,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               case 'burn': {
                 monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
                 monsterActiveEffects.push({ key: 'burn', params: { value: pp.value ?? 1, mode: pp.mode ?? 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
+                combatStats.burnTriggerCount += 1;
                 log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 ${dur.value ?? 3} 回合！`);
                 break;
               }
@@ -1021,6 +1030,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
 
         if (Math.random() * 100 < comboChance) {
+          combatStats.comboCount += 1;
           const comboBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * (1 - finalDef / 100)));
           let cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (pStats.comboDamageMultiplier || 1)));
 
@@ -1101,6 +1111,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 盾格擋判定
         if (Math.random() * 100 < pStats.blockChance) {
           blockedThisRound = true;
+          combatStats.blockCount += 1;
           log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻擊被格擋，傷害降至 **1**！`);
           pHp -= 1;
           if (pHp <= 0) { outcome = "lose"; break; }
@@ -1169,6 +1180,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (pHp <= 0) { outcome = "lose"; break; }
         }
       } else {
+        combatStats.dodgeCount += 1;
         log.push(`🛡️ ${mName} 猛撲而來，你${rand(jobFlavor.dodge)}，躲過了攻擊！`);
 
         // 弓：閃躲後追擊
@@ -1280,6 +1292,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               if (Math.random() * 100 < procChance) {
                 monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
                 monsterActiveEffects.push({ key: 'burn', params: { damagePercent: 10, duration: { mode: 'turns', value: 3 } }, appliedAt: round, source: 'mage_offhand' });
+                combatStats.burnTriggerCount += 1;
                 log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 3 回合！`);
               }
               if (Math.random() * 100 < procChance) {
@@ -1316,6 +1329,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             // 副手擊暈繼承（劍/匕首）
             if (pStats.counterInheritStun && Math.random() * 100 < pStats.stunChance) {
               stunRoundsLeft = 3;
+              combatStats.stunCount += 1;
               log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 3 回合無法攻擊！`);
             }
             if (mHp <= 0) { outcome = "win"; }
@@ -1345,7 +1359,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     roundLogs,
     totalDamage,
     finalMonsterHp: Math.max(0, mHp),
-    finalPlayerHp:  Math.max(0, pHp)
+    finalPlayerHp:  Math.max(0, pHp),
+    combatStats
   };
 }
 

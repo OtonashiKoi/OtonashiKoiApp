@@ -120,9 +120,8 @@ async function handleAuctionButton(interaction) {
 
   // 開啟拍賣場
   if (id === PFX.open) {
-    await interaction.deferUpdate();
     const panel = await buildAuctionPanel();
-    await interaction.editReply({ ...panel, flags: MessageFlags.Ephemeral });
+    await interaction.reply({ ...panel, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -471,15 +470,33 @@ async function refreshAuctionChannel() {
     const channel = await client.channels.fetch(config.channelId).catch(() => null);
     if (!channel) return;
 
-    // 找到最近一條 bot 的面板訊息
-    const messages = await channel.messages.fetch({ limit: 20 });
-    const panelMsg = messages.find(m => m.author.id === client.user.id && m.components?.length > 0);
-
     const panel = await buildPublicAuctionPanel();
+    let panelMsg = null;
+
+    if (config.messageId) {
+      panelMsg = await channel.messages.fetch(config.messageId).catch(() => null);
+    }
+
+    if (!panelMsg) {
+      const messages = await channel.messages.fetch({ limit: 50 });
+      panelMsg = messages.find((m) =>
+        m.author.id === client.user.id
+        && Array.isArray(m.components)
+        && m.components.some((row) =>
+          Array.isArray(row?.components)
+          && row.components.some((c) => c?.customId === PFX.open)
+        )
+      );
+    }
 
     if (panelMsg) {
       await panelMsg.edit(panel).catch(() => {});
+      await sc.auctionService.saveChannelConfig({ channelId: channel.id, messageId: panelMsg.id });
+      return;
     }
+
+    const created = await channel.send(panel);
+    await sc.auctionService.saveChannelConfig({ channelId: channel.id, messageId: created.id });
   } catch (_) {}
 }
 
@@ -515,11 +532,8 @@ async function buildPublicAuctionPanel() {
 // ─── 發布面板（管理員指令用）─────────────────────────
 async function publishAuctionPanel(interaction) {
   const sc = getSC();
-  const panel = await buildPublicAuctionPanel();
-  const msg = await interaction.channel.send(panel);
-
-  // 儲存頻道 ID
-  await sc.auctionService.saveChannelConfig({ channelId: interaction.channelId, messageId: msg.id });
+  await sc.auctionService.saveChannelConfig({ channelId: interaction.channelId });
+  await refreshAuctionChannel();
 
   await interaction.reply({ content: `✅ 拍賣場面板已發布在此頻道！`, flags: MessageFlags.Ephemeral });
 }

@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handleWeeklyQuests, handleEnhanceConfirm, handleEnhanceSelect, handleModal: handlePlayerPanelModal } = require("./playerPanel");
-const { WEEKLY_QUEST_OPEN_ID } = require("./weeklyQuestView");
+const { WEEKLY_QUEST_OPEN_ID, DAILY_QUEST_OPEN_ID } = require("./weeklyQuestView");
 const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
 const { serviceContext, getBotClient } = require("./runtimeContext");
 const { isAppError } = require("../shared/errors");
@@ -14,6 +14,7 @@ const {
 } = require("./handlers/publishHandlers");
 const { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect } = require("./handlers/coinShopHandlers");
 const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal, isNpcDialogButton, handleNpcDialog } = require("./handlers/monsterZoneHandlers");
+const { handleIdleZoneButton, isIdleZoneButton, handleIdleZoneSelect, isIdleZoneSelect } = require("./handlers/idleZoneHandlers");
 const { isAuctionButton, handleAuctionButton, handleAuctionSelect, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
 
 const definitions = [
@@ -157,6 +158,10 @@ async function handleButton(interaction) {
     await handleCoinShopButton(interaction);
     return;
   }
+  if (isIdleZoneButton(interaction.customId)) {
+    await handleIdleZoneButton(interaction);
+    return;
+  }
   if (isMonsterEventPersonalButton(interaction.customId)) {
     await handleMonsterEventPersonal(interaction);
     return;
@@ -173,6 +178,10 @@ async function handleButton(interaction) {
     await handleWeeklyQuests(interaction);
     return;
   }
+  if (interaction.customId === DAILY_QUEST_OPEN_ID) {
+    await handleWeeklyQuests(interaction, "daily");
+    return;
+  }
   await handlePlayerPanelButton(interaction);
   await handlePlayerQueryButton(interaction);
 }
@@ -180,6 +189,10 @@ async function handleButton(interaction) {
 async function handleSelectMenu(interaction) {
   if (interaction.customId.startsWith("auction:sell_item:") || interaction.customId.startsWith("auction:sell_currency:")) {
     await handleAuctionSelect(interaction);
+    return;
+  }
+  if (isIdleZoneSelect(interaction.customId)) {
+    await handleIdleZoneSelect(interaction);
     return;
   }
   if (isCoinShopSelect(interaction.customId)) {

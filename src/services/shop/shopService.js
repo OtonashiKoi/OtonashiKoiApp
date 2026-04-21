@@ -9,7 +9,7 @@ const TIER_SELL_PRICE = { D: 10, C: 50, B: 100, A: 150 };
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes"];
 
 class ShopService {
-  constructor(shopRepository, playerService, rewardService, progressRepository, progressService, itemRepository, playerTierService) {
+  constructor(shopRepository, playerService, rewardService, progressRepository, progressService, itemRepository, playerTierService, questService = null) {
     this.shopRepository = shopRepository;
     this.playerService = playerService;
     this.rewardService = rewardService;
@@ -17,6 +17,7 @@ class ShopService {
     this.progressService = progressService;
     this.itemRepository = itemRepository;
     this.playerTierService = playerTierService;
+    this.questService = questService;
   }
 
   _normalizeEffect(effect) {
@@ -398,6 +399,9 @@ class ShopService {
     progress.equipment[slot] = freshEntry;
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
+    if (this.questService) {
+      this.questService.recordProgress(discordId, "equip_count", 1).catch(() => {});
+    }
     return {
       itemName: entry.itemName,
       slot,
@@ -586,6 +590,9 @@ class ShopService {
           await this.progressRepository.save(progress);
         }
       }
+    }
+    if (this.questService) {
+      this.questService.recordProgress(discordId, "enhance_count", 1).catch(() => {});
     }
     return {
       itemName: newName,

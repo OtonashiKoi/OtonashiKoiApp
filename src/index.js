@@ -8,6 +8,15 @@ const config = require("./config");
 
 async function bootstrap() {
   await serviceContext.effectDefinitionService.syncDefaults();
+  try {
+    const questService = serviceContext.questService || serviceContext.weeklyQuestService;
+    const seedResult = await questService.ensureDefaultSeeds();
+    if (seedResult?.createdCount) {
+      console.log(`[Quest] seeded default quests: +${seedResult.createdCount}`);
+    }
+  } catch (e) {
+    console.warn("[Quest] seed defaults skipped:", e.message);
+  }
 
   await registerCommands();
 

@@ -59,6 +59,24 @@ function getServiceContext() {
   return require("../runtimeContext").serviceContext;
 }
 
+async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null) {
+  const questService = sc?.questService || sc?.weeklyQuestService;
+  if (!questService || typeof questService.recordProgress !== "function") return;
+
+  await questService.recordProgress(discordId, "battle_count", 1);
+  await questService.recordProgress(discordId, "damage_total", totalDamage);
+  if (outcome === "lose") {
+    await questService.recordProgress(discordId, "death_count", 1);
+  }
+
+  if (!combatStats) return;
+  if (combatStats.comboCount > 0) await questService.recordProgress(discordId, "combo_count", combatStats.comboCount);
+  if (combatStats.dodgeCount > 0) await questService.recordProgress(discordId, "dodge_count", combatStats.dodgeCount);
+  if (combatStats.blockCount > 0) await questService.recordProgress(discordId, "block_count", combatStats.blockCount);
+  if (combatStats.stunCount > 0) await questService.recordProgress(discordId, "stun_count", combatStats.stunCount);
+  if (combatStats.burnTriggerCount > 0) await questService.recordProgress(discordId, "burn_trigger_count", combatStats.burnTriggerCount);
+}
+
 /**
  * 獲取玩家身上已有的所有裝備品階
  */
@@ -655,6 +673,7 @@ async function handleEnterBattle(interaction) {
   const sc = getServiceContext();
   const discordId = interaction.user.id;
   const displayName = interaction.member?.displayName || interaction.user.username;
+  let idleSettleNotice = null;
 
   // 已有進行中的戰鬥，拒絕重複出戰
   if (activeSessions.has(discordId)) {
@@ -696,6 +715,16 @@ async function handleEnterBattle(interaction) {
         await interaction.editReply({ content: `🔒 ${levelError}` });
         return;
       }
+    }
+
+    // 若玩家正在掛機，進戰鬥時自動先結算一次並結束掛機
+    try {
+      const idleSummary = await sc.idleService?.settleDiscordSessionOnBattleStart(discordId, displayName);
+      if (idleSummary) {
+        idleSettleNotice = `⏳ 已自動結算掛機（${idleSummary.zoneLabel}）：+${idleSummary.reward.gold} 金幣、+${idleSummary.reward.exp} EXP（${idleSummary.ticks} 次）`;
+      }
+    } catch (e) {
+      console.warn("[Idle->Battle] auto settle failed:", e?.message || e);
     }
 
     let [state, monsters] = await Promise.all([
@@ -855,7 +884,7 @@ async function handleEnterBattle(interaction) {
       const currentEquipped = await mergeEquippedFromLibrary((currentProg && currentProg.equipment) ? currentProg.equipment : {}, sc.itemRepository);
 
       const { runCombatLoop } = require("../../shared/combatLoop");
-      const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
+      const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp, combatStats } =
         runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, { equipped: currentEquipped, inventory: currentProg?.inventory || [], partyEffects, monsterEquipped: battleMonster?.equipment || {} });
       session.monsterHp = finalMonsterHp;
       session.playerHp  = finalPlayerHp;
@@ -922,6 +951,10 @@ async function handleEnterBattle(interaction) {
         rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
       }
 
+      if (idleSettleNotice) {
+        rewardLines = [idleSettleNotice, ...rewardLines];
+      }
+
       if (currentProg && Array.isArray(currentProg.activeEffects) && currentProg.activeEffects.length > 0) {
         const nextActiveEffects = decrementActiveEffects(currentProg.activeEffects, "battle", 1);
         if (nextActiveEffects.length !== currentProg.activeEffects.length) {
@@ -929,6 +962,11 @@ async function handleEnterBattle(interaction) {
           currentProg.updatedAt = new Date().toISOString();
           await sc.progressRepository.save(currentProg);
         }
+      }
+      try {
+        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats);
+      } catch (e) {
+        console.error("[Quest] recordProgress error:", e.message);
       }
 
       // 戰鬥已結算，但先保留 session 至顯示完畢才刪除，避免期間重複出戰
@@ -1055,7 +1093,7 @@ async function handleStartFight(interaction) {
     const currentEquipped = await mergeEquippedFromLibrary((currentProg && currentProg.equipment) ? currentProg.equipment : {}, sc.itemRepository);
 
     const { runCombatLoop } = require("../../shared/combatLoop");
-    const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
+    const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp, combatStats } =
       runCombatLoop(session.playerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, { equipped: currentEquipped, inventory: currentProg?.inventory || [], partyEffects, monsterEquipped: monster?.equipment || {} });
     session.monsterHp = finalMonsterHp;
     session.playerHp  = finalPlayerHp;
@@ -1131,6 +1169,11 @@ async function handleStartFight(interaction) {
         currentProg.updatedAt = new Date().toISOString();
         await sc.progressRepository.save(currentProg);
       }
+    }
+    try {
+      await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats);
+    } catch (e) {
+      console.error("[Quest] recordProgress error:", e.message);
     }
 
     // 戰鬥已結算，但先保留 session 至顯示完畢才刪除，避免期間重複出戰
@@ -1220,6 +1263,19 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // 參戰名單（含擊殺者）
   const participants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
+
+  // 任務勝利判定：怪物被擊殺時，全參戰者都算 1 次勝利。
+  // 這裡統一寫入，確保 Discord/Web 兩條戰鬥流程規則一致。
+  try {
+    const questService = sc.questService || sc.weeklyQuestService;
+    if (questService && typeof questService.recordProgress === "function") {
+      await Promise.allSettled(
+        participants.map((pid) => questService.recordProgress(pid, "battle_win", 1))
+      );
+    }
+  } catch (_) {
+    // ignore quest write failures; reward settlement must continue
+  }
 
   // ── 依傷害比例計算每人分配量 ──
   const rawDmgMap = state.damageMap || {};

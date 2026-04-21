@@ -329,7 +329,13 @@ class AuctionService {
 
   // 向下相容
   async getChannelConfig() { return auctionRepository.getSettings(); }
-  async saveChannelConfig(cfg) { return auctionRepository.saveSettings(cfg); }
+  async saveChannelConfig(cfg) {
+    const current = await auctionRepository.getSettings();
+    return auctionRepository.saveSettings({
+      ...current,
+      ...(cfg || {})
+    });
+  }
 
   // 管理後台
   async adminGetAll(opts) {

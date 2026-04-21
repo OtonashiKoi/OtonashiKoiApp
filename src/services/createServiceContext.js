@@ -18,6 +18,7 @@ const { BattleConfigService } = require("./battle/battleConfigService");
 const { EffectDefinitionService } = require("./effect/effectDefinitionService");
 const { EnhanceService } = require("./enhance/enhanceService");
 const { AuctionService } = require("./auction/auctionService");
+const { IdleService } = require("./idle/idleService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -39,12 +40,23 @@ function createServiceContext() {
   const playerTierService = new PlayerTierService(repositories.playerTierRepository);
   const monsterService = new MonsterService(repositories.monsterRepository, repositories.itemRepository);
   const monsterEventService = new MonsterEventService(repositories.monsterEventRepository);
-  const weeklyQuestService = new WeeklyQuestService(repositories.weeklyQuestRepository, playerService);
+  const questService = new WeeklyQuestService(repositories.weeklyQuestRepository, playerService);
+  const weeklyQuestService = questService; // backward-compatible alias
   const battleConfigService = new BattleConfigService(repositories.battleConfigRepository);
   const effectDefinitionService = new EffectDefinitionService(repositories.effectDefinitionRepository);
-  const enhanceService = new EnhanceService(repositories.progressRepository, repositories.itemRepository);
+  const enhanceService = new EnhanceService(repositories.progressRepository, repositories.itemRepository, questService);
   const auctionService = new AuctionService(repositories.progressRepository, repositories.walletRepository, playerTierService);
-  const shopService = new ShopService(repositories.shopRepository, playerService, rewardService, repositories.progressRepository, progressService, repositories.itemRepository, playerTierService);
+  const idleService = new IdleService({
+    idleRepository: repositories.idleRepository,
+    playerService,
+    progressRepository: repositories.progressRepository,
+    rewardService,
+    progressService,
+    itemRepository: repositories.itemRepository,
+    channelLayoutRepository: repositories.channelLayoutRepository,
+    monsterService
+  });
+  const shopService = new ShopService(repositories.shopRepository, playerService, rewardService, repositories.progressRepository, progressService, repositories.itemRepository, playerTierService, questService);
   const transactionService = new TransactionService(playerService, repositories.transactionRepository);
   const adminService = new AdminService(
     playerService,
@@ -78,11 +90,13 @@ function createServiceContext() {
     playerTierService,
     monsterService,
     monsterEventService,
+    questService,
     weeklyQuestService,
     battleConfigService,
     effectDefinitionService,
     enhanceService,
-    auctionService
+    auctionService,
+    idleService
   };
 }
 

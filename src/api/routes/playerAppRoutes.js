@@ -982,7 +982,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       const { runCombatLoop } = require("../../shared/combatLoop");
-      const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp } =
+      const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp, combatStats } =
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial, undefined, {
           equipped,
           inventory: progress?.inventory || [],
@@ -1057,11 +1057,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       // Weekly quest progression is updated after each battle result.
       try {
-        await serviceContext.weeklyQuestService.recordProgress(discordId, "battle_count", 1);
-        if (outcome === "win") {
-          await serviceContext.weeklyQuestService.recordProgress(discordId, "battle_win", 1);
+        const questService = serviceContext.questService || serviceContext.weeklyQuestService;
+        await questService.recordProgress(discordId, "battle_count", 1);
+        // battle_win is granted in handleMonsterKill to all participants on kill.
+        await questService.recordProgress(discordId, "damage_total", totalDamage);
+        if (outcome === "lose") {
+          await questService.recordProgress(discordId, "death_count", 1);
         }
-        await serviceContext.weeklyQuestService.recordProgress(discordId, "damage_total", totalDamage);
+        if (combatStats) {
+          if (combatStats.comboCount > 0) await questService.recordProgress(discordId, "combo_count", combatStats.comboCount);
+          if (combatStats.dodgeCount > 0) await questService.recordProgress(discordId, "dodge_count", combatStats.dodgeCount);
+          if (combatStats.blockCount > 0) await questService.recordProgress(discordId, "block_count", combatStats.blockCount);
+          if (combatStats.stunCount > 0) await questService.recordProgress(discordId, "stun_count", combatStats.stunCount);
+          if (combatStats.burnTriggerCount > 0) await questService.recordProgress(discordId, "burn_trigger_count", combatStats.burnTriggerCount);
+        }
       } catch (e) {
         console.error("[WeeklyQuest] recordProgress error:", e.message);
       }
@@ -1127,6 +1136,4 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 }
 
 module.exports = { createPlayerAppRoutes };
-
-
 

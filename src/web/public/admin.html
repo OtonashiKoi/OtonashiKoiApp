@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#09090b" />
     <title>Equipment Game Admin</title>
-    <link rel="stylesheet" href="/static/admin.css?v=6" />
+    <link rel="stylesheet" href="/static/admin.css?v=7" />
     <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css" />
   </head>
   <body>
@@ -54,8 +54,9 @@
                 <button class="nav-link" data-target="section-monster-cards">怪物卡片庫</button>
                 <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
                 <button class="nav-link" data-target="section-effect-modules">效果模組</button>
-                <button class="nav-link" data-target="section-weekly-quests">每週任務管理</button>
-                <button class="nav-link" data-target="section-weekly-summary">每週完成概況</button>
+                <button class="nav-link" data-target="section-weekly-quests">任務管理中心</button>
+                <button class="nav-link" data-target="section-weekly-summary">任務完成概況</button>
+                <button class="nav-link" data-target="section-idle-zones" hidden>放置掛機區</button>
               </div>
             </div>
 
@@ -568,12 +569,49 @@
             <div class="card">
               <div class="section-head">
                 <div>
-                  <p class="section-kicker">Weekly</p>
-                  <h2>每週任務管理</h2>
+                  <p class="section-kicker">Quest Center</p>
+                  <h2>任務管理中心</h2>
+                  <p class="hint">可用篩選快速檢查新手 / 每日 / 每週任務與啟用狀態。</p>
                 </div>
-                <button id="weekly-add-btn" class="button">➕ 新增任務</button>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                  <button id="weekly-seed-btn" class="button">🌱 補齊預設任務</button>
+                  <button id="weekly-add-btn" class="button">➕ 新增任務</button>
+                </div>
               </div>
-              <div id="weekly-quest-list" style="margin-bottom:24px;">
+              <div id="weekly-filter-bar" class="quest-filter-bar">
+                <label class="quest-filter-item">
+                  <span>搜尋任務</span>
+                  <input id="weekly-filter-search" type="text" placeholder="輸入任務名稱、說明…" />
+                </label>
+                <label class="quest-filter-item">
+                  <span>任務週期</span>
+                  <select id="weekly-filter-cadence">
+                    <option value="all">全部</option>
+                    <option value="onboarding">新手</option>
+                    <option value="daily">每日</option>
+                    <option value="weekly">每週</option>
+                  </select>
+                </label>
+                <label class="quest-filter-item">
+                  <span>任務類型</span>
+                  <select id="weekly-filter-type">
+                    <option value="all">全部</option>
+                  </select>
+                </label>
+                <label class="quest-filter-item">
+                  <span>啟用狀態</span>
+                  <select id="weekly-filter-enabled">
+                    <option value="all">全部</option>
+                    <option value="true">已啟用</option>
+                    <option value="false">已停用</option>
+                  </select>
+                </label>
+                <div class="quest-filter-actions">
+                  <button id="weekly-filter-reset" class="button">清除篩選</button>
+                  <span id="weekly-filter-stats" class="hint">-</span>
+                </div>
+              </div>
+              <div id="weekly-quest-list" class="quest-list">
                 <p class="hint">載入中…</p>
               </div>
             </div>
@@ -590,6 +628,35 @@
               </div>
               <div id="weekly-summary-area">
                 <p class="hint">點「載入」查看本週所有玩家進度。</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="section-idle-zones" class="panel-section" hidden>
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Idle Zone</p>
+                  <h2>放置掛機區管理</h2>
+                  <p class="hint">先把後台與 API 串好，細部數值後續再調整。獎勵階層使用 JSON 編輯。</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button id="idle-zones-refresh-btn" class="button">🔄 重新載入</button>
+                  <button id="idle-zones-seed-btn" class="button">🌱 建立預設區域</button>
+                  <button id="idle-zones-add-btn" class="button primary">➕ 新增掛機區</button>
+                </div>
+              </div>
+              <div class="access-card" style="margin-bottom:14px;">
+                <h3 style="margin-bottom:8px;">rewardTiers JSON 格式</h3>
+                <pre class="hint" style="white-space:pre-wrap;margin:0;">[
+  { "minLevel": 1, "maxLevel": 20, "goldPerMinute": 8, "expPerMinute": 6, "drops": [] },
+  { "minLevel": 21, "maxLevel": 40, "goldPerMinute": 12, "expPerMinute": 10, "drops": [
+    { "itemId": "xxx", "chancePercent": 5, "rollEveryMinutes": 60, "maxCount": 1 }
+  ] }
+]</pre>
+              </div>
+              <div id="idle-zones-list" style="display:flex;flex-direction:column;gap:12px;">
+                <p class="hint">請先登入後台後載入。</p>
               </div>
             </div>
           </section>
@@ -708,7 +775,7 @@
     <script src="/static/admin.core.js?v=6"></script>
     <script src="/static/admin.effects.js?v=1"></script>
     <script src="/static/admin.effect-modules.js?v=1"></script>
-    <script src="/static/admin.bindings.js?v=6"></script>
+    <script src="/static/admin.bindings.js?v=7"></script>
     <script src="/static/admin.players.js?v=6"></script>
     <script src="/static/admin.players.init.js?v=6"></script>
     <script src="/static/admin.tiers.js?v=6"></script>
@@ -717,9 +784,10 @@
     <script src="/static/admin.monster-cards.js?v=1"></script>
     <script src="/static/admin.animation-studio.js?v=6"></script>
     <script src="/static/admin.weekly.js?v=6"></script>
+    <script src="/static/admin.idle.js?v=1"></script>
     <script src="/static/admin.items.js?v=6"></script>
     <script src="/static/admin.leaderboard.js?v=6"></script>
     <script src="/static/admin.image-cropper.js?v=1"></script>
-    <script src="/static/admin.auction.js?v=1"></script>
+    <script src="/static/admin.auction.js?v=2"></script>
   </body>
 </html>

@@ -6,6 +6,7 @@ const { normalizeZone } = require("../../shared/zones");
 // maxHp / def / mdef 已直接存於資料庫，不在此覆蓋
 function calcStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1 } = {}) {
   return {
+    agi:   Math.max(1, Math.round(agi)),
     atk:   str * 3,
     def:   Math.round(vit),
     mdef:  Math.round(INT * 2),
@@ -21,6 +22,7 @@ function effectiveCalc(m) {
   const def = (typeof m.def === 'number' && !isNaN(m.def)) ? Math.min(75, m.def) : base.def;
   return {
     maxHp: (typeof m.maxHp === 'number' && !isNaN(m.maxHp)) ? m.maxHp : 100,
+    agi:   (typeof m.agi === 'number' && !isNaN(m.agi)) ? Math.max(1, Math.round(m.agi)) : base.agi,
     atk:   base.atk,
     def,   // 百分比減傷 0~75
     dodge: base.dodge,

@@ -11,8 +11,10 @@ const { createAdminPlayerRoutes } = require("./routes/adminPlayerRoutes");
 const { createAdminMonsterRoutes } = require("./routes/adminMonsterRoutes");
 const { createAdminMonsterEventRoutes } = require("./routes/adminMonsterEventRoutes");
 const { createAdminWeeklyQuestRoutes } = require("./routes/adminWeeklyQuestRoutes");
+const { createAdminIdleRoutes } = require("./routes/adminIdleRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
+const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
 const { createMahjongRoutes } = require("./routes/mahjongRoutes");
 const { serviceContext: sharedServiceContext } = require("../bot/runtimeContext");
 const config = require("../config");
@@ -70,7 +72,9 @@ function createApiServer(discordClient) {
   app.use(createAdminMonsterRoutes(serviceContext));
   app.use(createAdminMonsterEventRoutes(serviceContext));
   app.use(createAdminWeeklyQuestRoutes(serviceContext));
+  app.use(createAdminIdleRoutes(serviceContext));
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
+  app.use(createPlayerIdleRoutes(serviceContext));
   app.use(createMahjongRoutes());
 
   app.use((error, _req, res, _next) => {

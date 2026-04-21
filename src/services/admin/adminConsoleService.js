@@ -25,6 +25,11 @@ const AVAILABLE_FEATURES = [
     description: "商店與資源兌換功能"
   },
   {
+    key: "auction_house",
+    label: "交易所面板",
+    description: "拍賣場與玩家交易入口"
+  },
+  {
     key: "personal_room",
     label: "個人房間面板",
     description: "玩家個人化功能與私人操作"
@@ -58,14 +63,28 @@ const AVAILABLE_FEATURES = [
     key: "weekly_quest",
     label: "每週任務面板",
     description: "每週任務查看與獎勵領取入口"
+  },
+  {
+    key: "idle_zone",
+    label: "掛機區面板",
+    description: "放置掛機入口與獎勵查看面板"
   }
 ];
 
+function normalizeLevelBound(value) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.min(999, parsed));
+}
+
 function normalizeBinding(binding) {
   const visibleTo = binding?.visibleTo && typeof binding.visibleTo === "object" ? binding.visibleTo : {};
+  const featureKey = String(binding.featureKey || "").trim();
 
-  return {
-    featureKey: String(binding.featureKey || "").trim(),
+  const normalized = {
+    featureKey,
     channelId: String(binding.channelId || "").trim(),
     enabled: Boolean(binding.enabled),
     note: String(binding.note || "").trim(),
@@ -75,6 +94,14 @@ function normalizeBinding(binding) {
       admin: visibleTo.admin !== false
     }
   };
+
+  // monster zone 自訂等級上下限需被保留，否則會在儲存時遺失
+  if (featureKey.startsWith("monster_zone")) {
+    normalized.minLevel = normalizeLevelBound(binding?.minLevel);
+    normalized.maxLevel = normalizeLevelBound(binding?.maxLevel);
+  }
+
+  return normalized;
 }
 
 function validateBindings(bindings) {
@@ -92,6 +119,19 @@ function validateBindings(bindings) {
 
     if (seen.has(binding.featureKey)) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `duplicate featureKey: ${binding.featureKey}`, 400);
+    }
+
+    if (
+      binding.featureKey.startsWith("monster_zone") &&
+      binding.minLevel != null &&
+      binding.maxLevel != null &&
+      binding.maxLevel < binding.minLevel
+    ) {
+      throw new AppError(
+        ERROR_CODES.INVALID_ARGUMENT,
+        `monster zone level range invalid: ${binding.featureKey} maxLevel(${binding.maxLevel}) < minLevel(${binding.minLevel})`,
+        400
+      );
     }
 
     seen.add(binding.featureKey);
@@ -552,6 +592,96 @@ class AdminConsoleService {
     );
     if (!updatedBindings.some((b) => b.featureKey === "weekly_quest")) {
       updatedBindings.push(normalizeBinding({ featureKey: "weekly_quest", channelId: targetChannelId, panelMessageId: message.id }));
+    }
+    await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
+
+    return { channelId: targetChannelId, messageId: message.id };
+  }
+
+  async publishDailyQuestPanel(channelId, options = {}) {
+    const { getBotClient } = require("../../bot/runtimeContext");
+    const { createDailyQuestPanelMessage } = require("../../bot/weeklyQuestView");
+
+    const client = getBotClient();
+    if (!client?.isReady()) {
+      throw new AppError(ERROR_CODES.UNAUTHORIZED, "Discord bot is not ready", 503);
+    }
+
+    const targetChannelId = String(channelId || "").trim();
+    if (!targetChannelId) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "channelId is required", 400);
+    }
+
+    const channel = await client.channels.fetch(targetChannelId);
+    if (!channel || !channel.isTextBased || !channel.isTextBased()) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
+    }
+
+    if (options.cleanChannel) {
+      await this._clearChannelMessages(channel, { includePinned: options.includePinned !== false });
+    }
+
+    const stored = await this.channelLayoutRepository.get();
+    const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
+    const existingBinding = bindings.find((b) => b.featureKey === "daily_quest");
+    if (existingBinding?.panelMessageId) {
+      await channel.messages.fetch(existingBinding.panelMessageId)
+        .then((msg) => msg.delete())
+        .catch(() => {});
+    }
+
+    const message = await channel.send(createDailyQuestPanelMessage());
+
+    const updatedBindings = bindings.map((b) =>
+      b.featureKey === "daily_quest" ? { ...b, panelMessageId: message.id } : b
+    );
+    if (!updatedBindings.some((b) => b.featureKey === "daily_quest")) {
+      updatedBindings.push(normalizeBinding({ featureKey: "daily_quest", channelId: targetChannelId, panelMessageId: message.id }));
+    }
+    await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
+
+    return { channelId: targetChannelId, messageId: message.id };
+  }
+
+  async publishIdleZonePanel(channelId, options = {}) {
+    const { getBotClient } = require("../../bot/runtimeContext");
+    const { createIdleZonePanelMessage } = require("../../bot/idleZoneView");
+
+    const client = getBotClient();
+    if (!client?.isReady()) {
+      throw new AppError(ERROR_CODES.UNAUTHORIZED, "Discord bot is not ready", 503);
+    }
+
+    const targetChannelId = String(channelId || "").trim();
+    if (!targetChannelId) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "channelId is required", 400);
+    }
+
+    const channel = await client.channels.fetch(targetChannelId);
+    if (!channel || !channel.isTextBased || !channel.isTextBased()) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "target channel is not text-based", 400);
+    }
+
+    if (options.cleanChannel) {
+      await this._clearChannelMessages(channel, { includePinned: options.includePinned !== false });
+    }
+
+    const stored = await this.channelLayoutRepository.get();
+    const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
+    const existingBinding = bindings.find((b) => b.featureKey === "idle_zone");
+    if (existingBinding?.panelMessageId) {
+      await channel.messages.fetch(existingBinding.panelMessageId)
+        .then((msg) => msg.delete())
+        .catch(() => {});
+    }
+
+    const message = await channel.send(createIdleZonePanelMessage());
+
+    const updatedBindings = bindings.map((b) =>
+      b.featureKey === "idle_zone" ? { ...b, panelMessageId: message.id } : b
+    );
+    if (!updatedBindings.some((b) => b.featureKey === "idle_zone")) {
+      updatedBindings.push(normalizeBinding({ featureKey: "idle_zone", channelId: targetChannelId, panelMessageId: message.id }));
     }
     await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
 

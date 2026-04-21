@@ -287,23 +287,88 @@ function createMongoRepositories() {
       async deleteQuest(id) {
         await (await collection("weeklyQuests")).deleteOne({ id });
       },
-      // weekLabel: "2026-W15"
-      async getPlayerProgress(discordId, weekLabel) {
-        const row = await (await collection("weeklyQuestProgress")).findOne({ discordId, weekLabel });
-        return row?.progress || {};
+      async getPlayerProgress(discordId, periodKey, cadence = "weekly") {
+        // 新格式：discordId + cadence + periodKey
+        const modern = await (await collection("weeklyQuestProgress")).findOne({ discordId, cadence, periodKey });
+        if (modern?.progress) return modern.progress;
+
+        // 舊格式相容：weekly 使用 weekLabel
+        if (cadence === "weekly") {
+          const legacy = await (await collection("weeklyQuestProgress")).findOne({ discordId, weekLabel: periodKey });
+          if (legacy?.progress) return legacy.progress;
+        }
+        return {};
       },
-      async savePlayerProgress(discordId, weekLabel, progress) {
+      async savePlayerProgress(discordId, periodKey, progress, cadence = "weekly") {
         await (await collection("weeklyQuestProgress")).updateOne(
-          { discordId, weekLabel },
-          { $set: { discordId, weekLabel, progress, updatedAt: new Date().toISOString() } },
+          { discordId, cadence, periodKey },
+          { $set: {
+            discordId,
+            cadence,
+            periodKey,
+            // 保留舊欄位以維持相容（weekly 才需要）
+            weekLabel: cadence === "weekly" ? periodKey : null,
+            progress,
+            updatedAt: new Date().toISOString()
+          } },
           { upsert: true }
         );
+      },
+      async getAllProgressByPeriod(periodKey, cadence = "weekly") {
+        const col = await collection("weeklyQuestProgress");
+        const rows = await col.find({ cadence, periodKey }).toArray();
+        const result = {};
+        for (const row of rows) result[row.discordId] = row.progress || {};
+
+        // weekly 相容：若是舊資料只有 weekLabel，補讀一次
+        if (cadence === "weekly") {
+          const legacyRows = await col.find({ weekLabel: periodKey, $or: [{ cadence: { $exists: false } }, { cadence: null }] }).toArray();
+          for (const row of legacyRows) {
+            if (!result[row.discordId]) result[row.discordId] = row.progress || {};
+          }
+        }
+        return result;
       },
       async getAllProgressByWeek(weekLabel) {
         const rows = await (await collection("weeklyQuestProgress")).find({ weekLabel }).toArray();
         const result = {};
         for (const row of rows) result[row.discordId] = row.progress || {};
         return result;
+      }
+    },
+    idleRepository: {
+      async listZones() {
+        return (await collection("idleZones")).find({}).toArray();
+      },
+      async findZoneById(id) {
+        return (await collection("idleZones")).findOne({ id }) || null;
+      },
+      async saveZone(zone) {
+        await (await collection("idleZones")).updateOne(
+          { id: zone.id },
+          { $set: zone },
+          { upsert: true }
+        );
+        return zone;
+      },
+      async deleteZone(id) {
+        await (await collection("idleZones")).deleteOne({ id });
+      },
+      async findPlayerState(playerId) {
+        return (await collection("idlePlayerStates")).findOne({ playerId }) || null;
+      },
+      async savePlayerState(playerId, state) {
+        const nextState = {
+          ...state,
+          playerId,
+          updatedAt: new Date().toISOString()
+        };
+        await (await collection("idlePlayerStates")).updateOne(
+          { playerId },
+          { $set: nextState },
+          { upsert: true }
+        );
+        return nextState;
       }
     },
     monsterRepository: {

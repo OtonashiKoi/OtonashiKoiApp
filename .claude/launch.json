@@ -29,6 +29,13 @@
       "runtimeArgs": ["--dbpath", "./data/db"],
       "port": 27017,
       "description": "本地 MongoDB（開發用）"
+    },
+    {
+      "name": "web-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "../equipmentGAME-web"],
+      "port": 5174,
+      "description": "手機版玩家網頁前端"
     }
   ]
 }

@@ -14,6 +14,7 @@
     document.getElementById("auction-refresh-btn")?.addEventListener("click", loadAuctions);
     document.getElementById("auction-filter-status")?.addEventListener("change", loadAuctions);
     document.getElementById("auction-save-settings-btn")?.addEventListener("click", saveSettings);
+    document.getElementById("auction-save-channel-btn")?.addEventListener("click", saveSettings);
     document.getElementById("auction-publish-btn")?.addEventListener("click", publishPanel);
     document.getElementById("auction-toggle-btn")?.addEventListener("click", toggleEnabled);
   }
@@ -240,8 +241,10 @@
   }
 
   function setSettingsStatus(msg) {
-    const el = document.getElementById("auction-settings-status");
-    if (el) el.textContent = msg;
+    const settingEl = document.getElementById("auction-settings-status");
+    if (settingEl) settingEl.textContent = msg;
+    const channelEl = document.getElementById("auction-channel-status");
+    if (channelEl) channelEl.textContent = msg;
   }
 
   function setContainerMsg(msg) {

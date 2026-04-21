@@ -166,6 +166,14 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   let healerAuraActive = hasHealerBadge;
 
   const baseStats = {
+    // 原始總屬性（含裝備），提供戰鬥流程與外部邏輯直接使用
+    str: S,
+    agi: A,
+    vit: V,
+    int: I,
+    dex: D,
+    luk: L,
+
     // 基礎數值
     maxHp:    V * 15 + 50,
     atk,

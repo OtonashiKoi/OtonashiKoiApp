@@ -3,10 +3,43 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getGemsRequired, getSuccessRate, validateEnhance, ENHANCE_GEMS, MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
 
+const WEAPON_MAIN_STAT_BY_TYPE = {
+  staff_1h: "int",
+  staff_2h: "int",
+  bow: "dex",
+  dagger: "agi",
+  sword_1h: "str",
+  sword_2h: "str",
+  axe_1h: "str",
+  axe_2h: "str",
+  mace_1h: "str",
+  mace_2h: "str",
+  offhand_sword: "str",
+  offhand_dagger: "agi",
+  offhand_mace: "str",
+  offhand_axe: "str",
+  offhand_hammer: "str"
+};
+
+const WEAPON_ENHANCE_BONUS_BY_TIER = {
+  D: 1,
+  C: 1.5,
+  B: 2,
+  A: 2
+};
+
+const ARMOR_ENHANCE_VIT_BY_TIER = {
+  D: 1,
+  C: 2,
+  B: 3,
+  A: 3
+};
+
 class EnhanceService {
-  constructor(progressRepository, itemRepository) {
+  constructor(progressRepository, itemRepository, questService = null) {
     this.progressRepository = progressRepository;
     this.itemRepository = itemRepository;
+    this.questService = questService;
   }
 
   /**
@@ -92,12 +125,9 @@ class EnhanceService {
     // 更新裝備狀態
     if (isSuccess) {
       equipment.enhanceLevel = nextLevel;
-      const mainStat = this._getMainStat(equipment.equipStats);
-      if (mainStat) {
-        equipment.equipStats[mainStat] = (equipment.equipStats[mainStat] || 0) + 1;
-        // 更新顯示名稱
-        equipment.itemName = `${equipment.itemName.split(" +")[0]} +${nextLevel}`;
-      }
+      this._applyEnhanceStats(equipment, tier);
+      // 更新顯示名稱
+      equipment.itemName = `${equipment.itemName.split(" +")[0]} +${nextLevel}`;
       // 確保強化後保留原始道具的所有 effects
       if (!equipment.procEffects) equipment.procEffects = [];
       if (!equipment.passiveEffects) equipment.passiveEffects = [];
@@ -134,6 +164,9 @@ class EnhanceService {
         }
         await this.progressRepository.save(progress);
       }
+    }
+    if (isSuccess && this.questService) {
+      this.questService.recordProgress(discordId, "enhance_count", 1).catch(() => {});
     }
 
     return {
@@ -195,14 +228,48 @@ class EnhanceService {
   }
 
   /**
-   * 取得裝備的主屬性
+   * 依裝備型態與階級套用強化數值
    */
-  _getMainStat(equipStats) {
+  _applyEnhanceStats(equipment, tier) {
+    if (!equipment || typeof equipment !== "object") return;
+    if (!equipment.equipStats || typeof equipment.equipStats !== "object") {
+      equipment.equipStats = {};
+    }
+
+    const normalizedTier = String(tier || "").toUpperCase();
+    const equipSlot = String(equipment.equipSlot || "");
+    const weaponType = String(equipment.weaponType || "");
+    const isOffhandWeapon = equipSlot === "shield" && weaponType.startsWith("offhand_");
+    const isMainWeapon = equipSlot === "weapon";
+
+    if (isMainWeapon || isOffhandWeapon) {
+      const delta = WEAPON_ENHANCE_BONUS_BY_TIER[normalizedTier] ?? 1;
+      const mainStat = this._getWeaponMainStat(equipment);
+      if (!mainStat) return;
+      const currentValue = Number(equipment.equipStats[mainStat]) || 0;
+      equipment.equipStats[mainStat] = Number((currentValue + delta).toFixed(2));
+      return;
+    }
+
+    // 盾牌(非副手武器)與防具統一加 VIT
+    const vitDelta = ARMOR_ENHANCE_VIT_BY_TIER[normalizedTier] ?? 1;
+    const vitValue = Number(equipment.equipStats.vit) || 0;
+    equipment.equipStats.vit = Number((vitValue + vitDelta).toFixed(2));
+  }
+
+  /**
+   * 取得武器主屬性（優先看 weaponType；找不到再回退到最高值）
+   */
+  _getWeaponMainStat(equipment) {
+    const weaponType = String(equipment?.weaponType || "");
+    const byType = WEAPON_MAIN_STAT_BY_TYPE[weaponType];
+    if (byType) return byType;
+
+    const equipStats = equipment?.equipStats;
     if (!equipStats || typeof equipStats !== "object") return null;
-    const entries = Object.entries(equipStats);
+    const entries = Object.entries(equipStats).filter(([, value]) => Number.isFinite(Number(value)));
     if (entries.length === 0) return null;
-    // 回傳數值最大的屬性
-    return entries.sort((a, b) => b[1] - a[1])[0][0];
+    return entries.sort((a, b) => Number(b[1]) - Number(a[1]))[0][0];
   }
 
   /**

@@ -10,7 +10,10 @@
       "Bash(find src:*)",
       "Bash(git commit -m 'fix: correct require path for monsterZoneView module:*)",
       "Bash(xargs grep:*)",
-      "Bash(grep -n \"mongoUri\\\\|MONGODB\" src/api/*.js src/api/**/*.js)"
+      "Bash(grep -n \"mongoUri\\\\|MONGODB\" src/api/*.js src/api/**/*.js)",
+      "Bash(npx tailwindcss *)",
+      "WebFetch(domain:tw.gashpoint.com)",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }
