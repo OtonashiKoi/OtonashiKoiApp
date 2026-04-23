@@ -5,6 +5,7 @@
   let itemLib = [];
   let activeZone = "normal";
   let zoneState = {};
+  let worldBossSnapshot = null;
 
   const STAT_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
   const ITEM_TYPE_LABEL = { consumable: "🧪 消耗品", collectible: "🖼️ 圖片", equipment: "⚔️ 裝備", job_badge: "📖 職業徽章", monster_card: "🎴 卡片", special: "✨ 特殊" };
@@ -20,6 +21,102 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
+  }
+
+  async function fetchWorldBossConfig() {
+    const r = await fetch(BASE + "/world-boss-config", { headers: apiHeaders() });
+    const j = await r.json();
+    if (!r.ok || j.status !== "ok") throw new Error(j.message || "world boss config load failed");
+    return j.data || null;
+  }
+
+  function buildWorldBossConfigBlock(data) {
+    const config = data?.config || {};
+    const status = data?.status || {};
+    const phaseList = Array.isArray(config.phaseConfig) ? config.phaseConfig : [];
+    const p1 = phaseList[0] || { hpBelowPercent: 70, atkMultiplier: 1, defMultiplier: 1 };
+    const p2 = phaseList[1] || { hpBelowPercent: 40, atkMultiplier: 1.2, defMultiplier: 1.1 };
+    const p3 = phaseList[2] || { hpBelowPercent: 0, atkMultiplier: 1.4, defMultiplier: 1.2 };
+    return `
+      <div id="world-boss-config-card" class="access-card" style="margin-top:12px;border-color:#ef4444;background:rgba(239,68,68,0.08);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div>
+            <p class="section-kicker" style="color:#ef4444;">WORLD BOSS V1</p>
+            <h3 style="margin:0;">精英區世界BOSS設定</h3>
+            <p class="hint" style="margin:4px 0 0 0;">週進度 ${esc(status.hardKills || 0)}/${esc(status.unlockTarget || config.weeklyUnlockKillTarget || 300)}（${esc(status.weekKey || "-")}）</p>
+          </div>
+          <button id="world-boss-save-btn" class="button primary">💾 儲存世界BOSS設定</button>
+        </div>
+
+        <div class="access-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px;">
+          <label><span>啟用</span>
+            <select id="wb-enabled" class="sheet-input">
+              <option value="true" ${config.enabled !== false ? "selected" : ""}>啟用</option>
+              <option value="false" ${config.enabled === false ? "selected" : ""}>停用</option>
+            </select>
+          </label>
+          <label><span>每週高級區擊殺門檻</span><input id="wb-unlock-target" class="sheet-input" type="number" min="1" value="${Number(config.weeklyUnlockKillTarget || 300)}" /></label>
+          <label><span>挑戰時限（分鐘）</span><input id="wb-battle-limit" class="sheet-input" type="number" min="1" value="${Number(config.battleTimeLimitMinutes || 60)}" /></label>
+          <label><span>擊殺後重生冷卻（分鐘）</span><input id="wb-respawn-cd" class="sheet-input" type="number" min="0" value="${Number(config.respawnCooldownMinutes || 120)}" /></label>
+        </div>
+
+        <div style="margin-top:10px;">
+          <p class="hint" style="margin:0 0 8px 0;">三階段（依剩餘 HP%）</p>
+          <div class="access-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+            <label><span>P1 觸發 HP% 以下</span><input id="wb-p1-hp" class="sheet-input" type="number" min="0" max="100" value="${Number(p1.hpBelowPercent || 70)}" /></label>
+            <label><span>P1 ATK 倍率</span><input id="wb-p1-atk" class="sheet-input" type="number" min="0.1" step="0.1" value="${Number(p1.atkMultiplier || 1)}" /></label>
+            <label><span>P1 DEF 倍率</span><input id="wb-p1-def" class="sheet-input" type="number" min="0.1" step="0.1" value="${Number(p1.defMultiplier || 1)}" /></label>
+            <label><span>P2 觸發 HP% 以下</span><input id="wb-p2-hp" class="sheet-input" type="number" min="0" max="100" value="${Number(p2.hpBelowPercent || 40)}" /></label>
+            <label><span>P2 ATK 倍率</span><input id="wb-p2-atk" class="sheet-input" type="number" min="0.1" step="0.1" value="${Number(p2.atkMultiplier || 1.2)}" /></label>
+            <label><span>P2 DEF 倍率</span><input id="wb-p2-def" class="sheet-input" type="number" min="0.1" step="0.1" value="${Number(p2.defMultiplier || 1.1)}" /></label>
+            <label><span>P3 觸發 HP% 以下</span><input id="wb-p3-hp" class="sheet-input" type="number" min="0" max="100" value="${Number(p3.hpBelowPercent || 0)}" /></label>
+            <label><span>P3 ATK 倍率</span><input id="wb-p3-atk" class="sheet-input" type="number" min="0.1" step="0.1" value="${Number(p3.atkMultiplier || 1.4)}" /></label>
+            <label><span>P3 DEF 倍率</span><input id="wb-p3-def" class="sheet-input" type="number" min="0.1" step="0.1" value="${Number(p3.defMultiplier || 1.2)}" /></label>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function saveWorldBossConfig() {
+    const payload = {
+      enabled: document.getElementById("wb-enabled")?.value !== "false",
+      weeklyUnlockKillTarget: Number(document.getElementById("wb-unlock-target")?.value || 300),
+      battleTimeLimitMinutes: Number(document.getElementById("wb-battle-limit")?.value || 60),
+      respawnCooldownMinutes: Number(document.getElementById("wb-respawn-cd")?.value || 120),
+      phaseConfig: [
+        {
+          phase: 1,
+          hpBelowPercent: Number(document.getElementById("wb-p1-hp")?.value || 70),
+          atkMultiplier: Number(document.getElementById("wb-p1-atk")?.value || 1),
+          defMultiplier: Number(document.getElementById("wb-p1-def")?.value || 1),
+          note: "第一階段"
+        },
+        {
+          phase: 2,
+          hpBelowPercent: Number(document.getElementById("wb-p2-hp")?.value || 40),
+          atkMultiplier: Number(document.getElementById("wb-p2-atk")?.value || 1.2),
+          defMultiplier: Number(document.getElementById("wb-p2-def")?.value || 1.1),
+          note: "第二階段"
+        },
+        {
+          phase: 3,
+          hpBelowPercent: Number(document.getElementById("wb-p3-hp")?.value || 0),
+          atkMultiplier: Number(document.getElementById("wb-p3-atk")?.value || 1.4),
+          defMultiplier: Number(document.getElementById("wb-p3-def")?.value || 1.2),
+          note: "第三階段"
+        }
+      ]
+    };
+
+    const r = await fetch(BASE + "/world-boss-config", {
+      method: "PUT",
+      headers: apiHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json();
+    if (!r.ok || j.status !== "ok") throw new Error(j.message || "world boss config save failed");
+    return j.data || null;
   }
 
   // 僅計算衍生數值（ATK/dodge/hit），HP/DEF 由輸入框直接決定
@@ -568,6 +665,16 @@
     const zoneLabel = zoneMeta.label;
     const accentColor = zoneMeta.color;
 
+    let worldBossHtml = "";
+    if (activeZone === "elite") {
+      try {
+        worldBossSnapshot = await fetchWorldBossConfig();
+        worldBossHtml = buildWorldBossConfigBlock(worldBossSnapshot);
+      } catch (e) {
+        worldBossHtml = `<div class="hint" style="margin-top:10px;color:#f87171;">❌ 世界BOSS設定載入失敗：${esc(e.message)}</div>`;
+      }
+    }
+
     area.innerHTML = `
       <div class="player-hero-card" style="margin-bottom:1rem;">
         <div>
@@ -586,6 +693,7 @@
         <button id="monsters-zone-switch-btn" class="button primary" style="padding:4px 14px;background:${zoneMeta.color};">切換上場</button>
         <span id="monsters-zone-msg" style="font-size:0.82em;color:${accentColor};"></span>
       </div>
+      ${worldBossHtml}
     `;
 
     const switchBtn = document.getElementById("monsters-zone-switch-btn");
@@ -603,6 +711,24 @@
       document.getElementById("monsters-zone-msg").textContent = "已切換✔";
       setTimeout(() => loadState(), 800);
     };
+
+    const wbSaveBtn = document.getElementById("world-boss-save-btn");
+    if (wbSaveBtn) {
+      wbSaveBtn.onclick = async () => {
+        wbSaveBtn.disabled = true;
+        wbSaveBtn.textContent = "儲存中...";
+        try {
+          await saveWorldBossConfig();
+          document.getElementById("monsters-zone-msg").textContent = "世界BOSS設定已儲存✔";
+          await loadState();
+        } catch (e) {
+          document.getElementById("monsters-zone-msg").textContent = `儲存失敗: ${e.message}`;
+        } finally {
+          wbSaveBtn.disabled = false;
+          wbSaveBtn.textContent = "💾 儲存世界BOSS設定";
+        }
+      };
+    }
 
   }
 
@@ -881,4 +1007,3 @@
     document.getElementById("monsters-btn-new")?.addEventListener("click", addNewRow);
   });
 })();
-

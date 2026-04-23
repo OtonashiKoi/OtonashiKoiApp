@@ -11,6 +11,8 @@ const CURRENCY_SOURCES = {
   MONSTER_ENTRY_FEE: "monster:entry-fee",           // 放怪區：入場費扣除
   MONSTER_KILL_REWARD: "monster:kill-reward",       // 放怪區：擊殺金幣獎勵
   ITEM_SELL: "item:sell",                            // 玩家販售道具
+  AUCTION_PURCHASE: "auction:purchase",              // 交易所購買（買家扣款）
+  AUCTION_SALE: "auction:sale",                      // 交易所成交（賣家入帳）
   QUEST_REWARD: "quest:reward",                      // 任務獎勵（金幣）
   IDLE_REWARD: "idle:reward"                         // 放置掛機：結算金幣獎勵
 };

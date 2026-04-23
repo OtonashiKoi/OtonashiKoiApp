@@ -196,11 +196,13 @@
         : "─";
       const statusHtml = STATUS_LABELS[a.status] || a.status;
       const canRemove = a.status === "active" || a.status === "expired";
+      const buyerIdLabel = a.buyerId ? esc(a.buyerId) : "─";
 
       return `<tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:.5rem .75rem;font-size:.85rem;max-width:200px;word-break:break-all;">${esc(itemLabel)}</td>
         <td style="padding:.5rem .75rem;font-size:.85rem;">${esc(priceLabel)}</td>
         <td style="padding:.5rem .75rem;font-size:.8rem;color:#6b7280;max-width:160px;word-break:break-all;">${esc(a.sellerId || "─")}</td>
+        <td style="padding:.5rem .75rem;font-size:.8rem;color:#6b7280;max-width:160px;word-break:break-all;">${buyerIdLabel}</td>
         <td style="padding:.5rem .75rem;font-size:.85rem;">${statusHtml}</td>
         <td style="padding:.5rem .75rem;font-size:.8rem;color:#9ca3af;white-space:nowrap;">${esc(expiresLabel)}</td>
         <td style="padding:.5rem .75rem;">
@@ -216,6 +218,7 @@
         <th style="padding:.5rem .75rem;text-align:left;font-size:.8rem;color:#6b7280;">商品</th>
         <th style="padding:.5rem .75rem;text-align:left;font-size:.8rem;color:#6b7280;">定價</th>
         <th style="padding:.5rem .75rem;text-align:left;font-size:.8rem;color:#6b7280;">賣家 ID</th>
+        <th style="padding:.5rem .75rem;text-align:left;font-size:.8rem;color:#6b7280;">買家 ID</th>
         <th style="padding:.5rem .75rem;text-align:left;font-size:.8rem;color:#6b7280;">狀態</th>
         <th style="padding:.5rem .75rem;text-align:left;font-size:.8rem;color:#6b7280;">到期時間</th>
         <th style="padding:.5rem .75rem;text-align:left;font-size:.8rem;color:#6b7280;">操作</th>

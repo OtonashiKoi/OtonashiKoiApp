@@ -36,6 +36,25 @@ function createAdminMonsterRoutes(serviceContext) {
     }
   });
 
+  router.get("/admin/world-boss-config", async (_req, res, next) => {
+    try {
+      const data = await serviceContext.worldBossService.getConfigWithStatus();
+      res.json(ok(data, "world boss config fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put("/admin/world-boss-config", async (req, res, next) => {
+    try {
+      const config = await serviceContext.worldBossService.saveConfig(req.body || {});
+      const data = await serviceContext.worldBossService.getConfigWithStatus();
+      res.json(ok({ config, state: data.state, status: data.status }, "world boss config saved"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/admin/monsters", async (req, res, next) => {
     try {
       const monster = await serviceContext.monsterService.createMonster(req.body);

@@ -23,11 +23,16 @@ function safeIso(input, fallback = null) {
   return d.toISOString();
 }
 
+// 掛機收益 = 手動收益的 10%
+const IDLE_REWARD_RATIO = 0.1;
+const NON_MEMBER_DAILY_IDLE_LIMIT_MINUTES = 6 * 60;
+
 class IdleService {
   constructor({
     idleRepository,
     playerService,
     progressRepository,
+    playerTierService,
     rewardService,
     progressService,
     itemRepository,
@@ -37,6 +42,7 @@ class IdleService {
     this.idleRepository = idleRepository;
     this.playerService = playerService;
     this.progressRepository = progressRepository;
+    this.playerTierService = playerTierService;
     this.rewardService = rewardService;
     this.progressService = progressService;
     this.itemRepository = itemRepository;
@@ -52,7 +58,10 @@ class IdleService {
 
   async _getMonsterZoneAverageReward(zoneKey) {
     const monsters = await this.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
-    if (!Array.isArray(monsters) || monsters.length === 0) {
+    const nonBossMonsters = Array.isArray(monsters)
+      ? monsters.filter((m) => !m?.isBoss)
+      : [];
+    if (nonBossMonsters.length === 0) {
       return {
         zoneKey,
         monsterCount: 0,
@@ -61,13 +70,13 @@ class IdleService {
       };
     }
 
-    const totalGold = monsters.reduce((sum, m) => sum + Math.max(0, Number(m.goldReward) || 0), 0);
-    const totalExp = monsters.reduce((sum, m) => sum + Math.max(0, Number(m.expReward) || 0), 0);
+    const totalGold = nonBossMonsters.reduce((sum, m) => sum + Math.max(0, Number(m.goldReward) || 0), 0);
+    const totalExp = nonBossMonsters.reduce((sum, m) => sum + Math.max(0, Number(m.expReward) || 0), 0);
     return {
       zoneKey,
-      monsterCount: monsters.length,
-      avgGold: totalGold / monsters.length,
-      avgExp: totalExp / monsters.length
+      monsterCount: nonBossMonsters.length,
+      avgGold: (totalGold / nonBossMonsters.length) * IDLE_REWARD_RATIO,
+      avgExp: (totalExp / nonBossMonsters.length) * IDLE_REWARD_RATIO
     };
   }
 
@@ -114,18 +123,95 @@ class IdleService {
     };
   }
 
-  async getDiscordPanelStatus(discordId, displayName = "Player") {
+  _getTaipeiDateKey(date = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Taipei",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(date);
+    const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+    return `${map.year}-${map.month}-${map.day}`;
+  }
+
+  _normalizeDailyClaim(dailyClaim, dateKey) {
+    const normalized = dailyClaim && typeof dailyClaim === "object" ? dailyClaim : {};
+    if (normalized.dateKey !== dateKey) {
+      return { dateKey, nonMemberClaimedMinutes: 0 };
+    }
+    return {
+      dateKey,
+      nonMemberClaimedMinutes: Math.max(0, Math.floor(Number(normalized.nonMemberClaimedMinutes) || 0))
+    };
+  }
+
+  async _resolveMembership(discordId, memberRoleIds = []) {
+    if (this.playerTierService?.resolveHighestTier && Array.isArray(memberRoleIds) && memberRoleIds.length > 0) {
+      const tier = await this.playerTierService.resolveHighestTier(memberRoleIds).catch(() => null);
+      if (tier) return { isMember: true, tier };
+    }
+    const progress = await this.progressRepository.findByPlayerId(discordId).catch(() => null);
+    const tier = progress?.playerTier || null;
+    return { isMember: !!tier, tier };
+  }
+
+  _applyDailyLimitToSummary(summary, dailyClaimInfo) {
+    if (dailyClaimInfo.isMember) {
+      return {
+        ...summary,
+        effectiveMinutesRaw: summary.effectiveMinutes,
+        dailyLimitMinutes: null,
+        dailyClaimedMinutesBefore: null,
+        dailyClaimedMinutesAfter: null,
+        dailyRemainingMinutes: null,
+        dailyCapHit: false
+      };
+    }
+
+    const used = Math.max(0, Number(dailyClaimInfo.nonMemberClaimedMinutes || 0));
+    const remaining = Math.max(0, NON_MEMBER_DAILY_IDLE_LIMIT_MINUTES - used);
+    const rawEffective = Math.max(0, Number(summary.effectiveMinutes || 0));
+    const effectiveMinutes = Math.min(rawEffective, remaining);
+    const ratio = rawEffective > 0 ? (effectiveMinutes / rawEffective) : 0;
+    const totalGold = Math.max(0, Math.round((Number(summary.totalGold) || 0) * ratio));
+    const totalExp = Math.max(0, Math.round((Number(summary.totalExp) || 0) * ratio));
+
+    return {
+      ...summary,
+      effectiveMinutesRaw: rawEffective,
+      effectiveMinutes,
+      totalGold,
+      totalExp,
+      dailyLimitMinutes: NON_MEMBER_DAILY_IDLE_LIMIT_MINUTES,
+      dailyClaimedMinutesBefore: used,
+      dailyClaimedMinutesAfter: used + effectiveMinutes,
+      dailyRemainingMinutes: Math.max(0, NON_MEMBER_DAILY_IDLE_LIMIT_MINUTES - (used + effectiveMinutes)),
+      dailyCapHit: rawEffective > effectiveMinutes
+    };
+  }
+
+  async getDiscordPanelStatus(discordId, displayName = "Player", options = {}) {
     const { progress } = await this.playerService.ensurePlayer(discordId, displayName);
     const level = Number(progress?.level || 1);
+    const member = await this._resolveMembership(discordId, options.memberRoleIds || []);
+    const now = new Date();
+    const dateKey = this._getTaipeiDateKey(now);
     const state = await this.idleRepository.findPlayerState(discordId);
+    const dailyClaim = this._normalizeDailyClaim(state?.dailyClaim, dateKey);
     const zones = await this._buildDiscordZoneOptions(level);
     const session = state?.discordSession || null;
-    const sessionSummary = session ? this._computeDiscordSessionSummary(session) : null;
+    const baseSummary = session ? this._computeDiscordSessionSummary(session, now) : null;
+    const sessionSummary = baseSummary ? this._applyDailyLimitToSummary(baseSummary, {
+      isMember: member.isMember,
+      nonMemberClaimedMinutes: dailyClaim.nonMemberClaimedMinutes
+    }) : null;
     return {
       level,
       zones,
       discordSession: session,
-      sessionSummary
+      sessionSummary,
+      membership: member,
+      dailyClaim
     };
   }
 
@@ -170,7 +256,7 @@ class IdleService {
     return session;
   }
 
-  async claimDiscordSession(discordId, displayName, reason = "manual_claim") {
+  async claimDiscordSession(discordId, displayName, reason = "manual_claim", options = {}) {
     await this.playerService.ensurePlayer(discordId, displayName);
     const state = await this.idleRepository.findPlayerState(discordId);
     const session = state?.discordSession || null;
@@ -178,7 +264,15 @@ class IdleService {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目前沒有進行中的掛機", 400);
     }
 
-    const summary = this._computeDiscordSessionSummary(session);
+    const member = await this._resolveMembership(discordId, options.memberRoleIds || []);
+    const now = new Date();
+    const dateKey = this._getTaipeiDateKey(now);
+    const dailyClaim = this._normalizeDailyClaim(state?.dailyClaim, dateKey);
+    const baseSummary = this._computeDiscordSessionSummary(session, now);
+    const summary = this._applyDailyLimitToSummary(baseSummary, {
+      isMember: member.isMember,
+      nonMemberClaimedMinutes: dailyClaim.nonMemberClaimedMinutes
+    });
     const reward = { gold: summary.totalGold, exp: summary.totalExp };
 
     if (reward.gold > 0) {
@@ -200,7 +294,7 @@ class IdleService {
       });
     }
 
-    const endedAt = new Date().toISOString();
+    const endedAt = now.toISOString();
     const result = {
       reason,
       zoneKey: session.zoneKey,
@@ -209,15 +303,30 @@ class IdleService {
       endedAt,
       elapsedMinutes: summary.elapsedMinutes,
       effectiveMinutes: summary.effectiveMinutes,
+      effectiveMinutesRaw: summary.effectiveMinutesRaw ?? summary.effectiveMinutes,
       rewardFactor: summary.rewardFactor,
-      reward
+      reward,
+      membership: member,
+      dailyLimitMinutes: summary.dailyLimitMinutes,
+      dailyClaimedMinutesBefore: summary.dailyClaimedMinutesBefore,
+      dailyClaimedMinutesAfter: summary.dailyClaimedMinutesAfter,
+      dailyRemainingMinutes: summary.dailyRemainingMinutes,
+      dailyCapHit: summary.dailyCapHit
     };
+
+    const nextDailyClaim = member.isMember
+      ? dailyClaim
+      : {
+          dateKey,
+          nonMemberClaimedMinutes: Math.max(0, summary.dailyClaimedMinutesAfter || 0)
+        };
 
     await this.idleRepository.savePlayerState(discordId, {
       ...state,
       playerId: discordId,
       discordSession: null,
       lastClaimSummary: result,
+      dailyClaim: nextDailyClaim,
       updatedAt: endedAt
     });
 
@@ -256,10 +365,10 @@ class IdleService {
     return result;
   }
 
-  async settleDiscordSessionOnBattleStart(discordId, displayName) {
+  async settleDiscordSessionOnBattleStart(discordId, displayName, options = {}) {
     const state = await this.idleRepository.findPlayerState(discordId);
     if (!state?.discordSession) return null;
-    return this.claimDiscordSession(discordId, displayName, "battle_start");
+    return this.claimDiscordSession(discordId, displayName, "battle_start", options);
   }
 
   async listZones({ includeDisabled = true } = {}) {

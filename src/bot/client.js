@@ -231,6 +231,28 @@ async function republishPanelsOnStartup() {
   }
 }
 
+let auctionPanelRefreshTimer = null;
+function startAuctionPanelRefreshTimer() {
+  if (process.env.DISABLE_AUCTION_PANEL_REFRESH === "1") {
+    console.log("[AuctionPanel] auto-refresh disabled by DISABLE_AUCTION_PANEL_REFRESH");
+    return;
+  }
+
+  const sec = Math.max(15, Number.parseInt(process.env.AUCTION_PANEL_REFRESH_SECONDS || "600", 10) || 600);
+  if (auctionPanelRefreshTimer) clearInterval(auctionPanelRefreshTimer);
+
+  auctionPanelRefreshTimer = setInterval(async () => {
+    try {
+      const { refreshAuctionChannel } = require("./handlers/auctionZoneHandlers");
+      await refreshAuctionChannel();
+    } catch (error) {
+      console.warn(`[AuctionPanel] refresh failed: ${error?.message || error}`);
+    }
+  }, sec * 1000);
+
+  console.log(`[AuctionPanel] auto-refresh started (${sec}s)`);
+}
+
 const spamTracker = new Map();
 
 // 讀取 moderation 設定（若 config 未提供，使用預設）
@@ -363,6 +385,9 @@ function createBotClient() {
     } else {
       console.log("[PanelReset] startup auto-republish disabled");
     }
+
+    // 拍賣場公開面板倒數/到期狀態需定時重繪
+    startAuctionPanelRefreshTimer();
     
     // 啟動 OneComme 直播留言監聽
     startFetcher(handleStreamComment);

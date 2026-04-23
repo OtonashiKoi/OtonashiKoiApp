@@ -690,6 +690,26 @@
                 </div>
               </div>
 
+              <!-- 使用限制設定 -->
+              <div class="subsection" style="margin-bottom:1.5rem;">
+                <h3 style="margin-bottom:.75rem;">🛡️ 使用限制設定</h3>
+                <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;">
+                  <button id="auction-toggle-btn" class="button">🟢 開啟拍賣場</button>
+                  <button id="auction-save-settings-btn" class="button primary">儲存使用限制</button>
+                </div>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;">
+                  <label style="display:inline-flex;align-items:center;gap:.35rem;"><input id="auction-tier-E" type="checkbox" /> Tier E</label>
+                  <label style="display:inline-flex;align-items:center;gap:.35rem;"><input id="auction-tier-D" type="checkbox" /> Tier D</label>
+                  <label style="display:inline-flex;align-items:center;gap:.35rem;"><input id="auction-tier-C" type="checkbox" /> Tier C</label>
+                  <label style="display:inline-flex;align-items:center;gap:.35rem;"><input id="auction-tier-B" type="checkbox" /> Tier B</label>
+                  <label style="display:inline-flex;align-items:center;gap:.35rem;"><input id="auction-tier-A" type="checkbox" /> Tier A</label>
+                  <label style="display:inline-flex;align-items:center;gap:.35rem;"><input id="auction-tier-S" type="checkbox" /> Tier S</label>
+                  <label style="display:inline-flex;align-items:center;gap:.35rem;"><input id="auction-tier-SS" type="checkbox" /> Tier SS</label>
+                </div>
+                <p class="hint" style="margin:.25rem 0 0 0;">此限制套用在「上架資格」（購買端不限制 Tier）。</p>
+                <p id="auction-settings-status" style="margin-top:.5rem;font-size:.85rem;color:#6b7280;"></p>
+              </div>
+
               <!-- 頻道設定 -->
               <div class="subsection" style="margin-bottom:1.5rem;">
                 <h3 style="margin-bottom:.75rem;">📡 頻道設定</h3>
@@ -788,6 +808,6 @@
     <script src="/static/admin.items.js?v=6"></script>
     <script src="/static/admin.leaderboard.js?v=6"></script>
     <script src="/static/admin.image-cropper.js?v=1"></script>
-    <script src="/static/admin.auction.js?v=2"></script>
+    <script src="/static/admin.auction.js?v=3"></script>
   </body>
 </html>

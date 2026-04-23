@@ -19,6 +19,7 @@ const { EffectDefinitionService } = require("./effect/effectDefinitionService");
 const { EnhanceService } = require("./enhance/enhanceService");
 const { AuctionService } = require("./auction/auctionService");
 const { IdleService } = require("./idle/idleService");
+const { WorldBossService } = require("./worldBoss/worldBossService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -45,17 +46,24 @@ function createServiceContext() {
   const battleConfigService = new BattleConfigService(repositories.battleConfigRepository);
   const effectDefinitionService = new EffectDefinitionService(repositories.effectDefinitionRepository);
   const enhanceService = new EnhanceService(repositories.progressRepository, repositories.itemRepository, questService);
-  const auctionService = new AuctionService(repositories.progressRepository, repositories.walletRepository, playerTierService);
+  const auctionService = new AuctionService(
+    repositories.progressRepository,
+    repositories.walletRepository,
+    playerTierService,
+    repositories.transactionRepository
+  );
   const idleService = new IdleService({
     idleRepository: repositories.idleRepository,
     playerService,
     progressRepository: repositories.progressRepository,
+    playerTierService,
     rewardService,
     progressService,
     itemRepository: repositories.itemRepository,
     channelLayoutRepository: repositories.channelLayoutRepository,
     monsterService
   });
+  const worldBossService = new WorldBossService(repositories.worldBossRepository);
   const shopService = new ShopService(repositories.shopRepository, playerService, rewardService, repositories.progressRepository, progressService, repositories.itemRepository, playerTierService, questService);
   const transactionService = new TransactionService(playerService, repositories.transactionRepository);
   const adminService = new AdminService(
@@ -71,7 +79,8 @@ function createServiceContext() {
     adminService,
     repositories.walletRepository,
     repositories.progressRepository,
-    repositories.checkinRepository
+    repositories.checkinRepository,
+    worldBossService
   );
 
   return {
@@ -96,7 +105,8 @@ function createServiceContext() {
     effectDefinitionService,
     enhanceService,
     auctionService,
-    idleService
+    idleService,
+    worldBossService
   };
 }
 

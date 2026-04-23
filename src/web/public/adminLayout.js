@@ -159,15 +159,20 @@ async function saveLayout(state) {
     method: "PUT",
     body: JSON.stringify({ bindings: collectBindings() })
   });
-  state.channelLayout = data;
+  state.channelLayout = data?.channelLayout || data;
   renderBindings(state);
   log("Discord 版位設定已儲存");
+  if (Array.isArray(data?.syncReport)) {
+    const changed = data.syncReport.reduce((sum, row) => sum + Number(row.granted || 0) + Number(row.revoked || 0), 0);
+    log(`🔐 權限同步完成：${data.syncReport.length} 個綁定，變更 ${changed} 筆覆寫`);
+  }
 }
 
 async function saveAccessControl(url, body, successMessage, state) {
   const data = await request(url, { method: "PUT", body: JSON.stringify(body) });
   const accessControl = data?.accessControl || data;
   const syncReport = data?.syncReport;
+  const permissionSync = data?.permissionSync;
 
   state.accessControl = accessControl;
   renderAccessControl(state);
@@ -177,5 +182,9 @@ async function saveAccessControl(url, body, successMessage, state) {
     log(
       `玩家資料同步：處理 ${syncReport.ensured} 人，新增玩家 ${syncReport.createdPlayers}、錢包 ${syncReport.createdWallets}、進度 ${syncReport.createdProgress}，略過 ${syncReport.skipped}（${syncReport.reason}）`
     );
+  }
+  if (Array.isArray(permissionSync)) {
+    const changed = permissionSync.reduce((sum, row) => sum + Number(row.granted || 0) + Number(row.revoked || 0), 0);
+    log(`🔐 權限同步完成：${permissionSync.length} 個綁定，變更 ${changed} 筆覆寫`);
   }
 }

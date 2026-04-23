@@ -4,6 +4,8 @@ const { normalizeActiveEffect, normalizeActiveEffectList } = require("./effectPa
 const STAT_EFFECT_MAP = {
   max_hp_up: { stat: "maxHp", mode: "add", amount: 50 },
   max_hp_down: { stat: "maxHp", mode: "add", amount: -50 },
+  agi_up: { stat: "agi", mode: "add", amount: 3 },
+  agi_down: { stat: "agi", mode: "add", amount: -3 },
   atk_up: { stat: "atk", mode: "add", amount: 10 },
   atk_down: { stat: "atk", mode: "add", amount: -10 },
   def_up: { stat: "def", mode: "add", amount: 5 },

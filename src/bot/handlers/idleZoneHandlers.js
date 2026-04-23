@@ -75,6 +75,17 @@ function buildSessionControlRows() {
   ];
 }
 
+async function resolveMemberRoleIds(interaction) {
+  let roleIds = interaction.member?.roles?.cache?.map((r) => r.id) || [];
+  if (roleIds.length > 0) return roleIds;
+  if (!interaction.guild) return [];
+  try {
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    roleIds = member?.roles?.cache?.map((r) => r.id) || [];
+  } catch (_) {}
+  return roleIds;
+}
+
 function buildStatusPayload(status, headline = "") {
   const session = status?.discordSession || null;
   const summary = status?.sessionSummary || null;
@@ -138,6 +149,11 @@ function buildStatusText(status, title = "") {
   const startedAtMs = new Date(session.startedAt).getTime();
   const capAtIso = new Date(startedAtMs + 12 * 60 * 60 * 1000).toISOString();
   lines.push(`收益封頂時間：${formatRelativeTime(capAtIso)}`);
+  if (summary.dailyLimitMinutes != null) {
+    lines.push(`非會員每日上限：${formatDuration(summary.dailyLimitMinutes)}（今日已領 ${formatDuration(summary.dailyClaimedMinutesAfter || 0)}，剩餘 ${formatDuration(summary.dailyRemainingMinutes || 0)}）`);
+  } else {
+    lines.push("會員狀態：今日領取不限時數。");
+  }
   if (summary.effectiveMinutes < 5) {
     const nextTickIso = new Date(startedAtMs + 5 * 60 * 1000).toISOString();
     lines.push(`未滿 5 分鐘暫無獎勵，達標時間：${formatRelativeTime(nextTickIso)}。`);
@@ -187,7 +203,8 @@ async function handleIdleStart(interaction) {
   const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
 
   try {
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName);
+    const memberRoleIds = await resolveMemberRoleIds(interaction);
+    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds });
     if (status.discordSession) {
       const stickerUrl = await resolveIdleStickerUrl(interaction);
       const embed = new EmbedBuilder()
@@ -215,7 +232,8 @@ async function handleIdleZoneSelect(interaction) {
 
   try {
     const session = await serviceContext.idleService.startDiscordSession(discordId, displayName, zoneKey);
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName);
+    const memberRoleIds = await resolveMemberRoleIds(interaction);
+    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds });
     const stickerUrl = await resolveIdleStickerUrl(interaction);
     const embed = new EmbedBuilder()
       .setColor(0x16a34a)
@@ -237,14 +255,16 @@ async function handleIdleClaim(interaction) {
   const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
 
   try {
-    const summary = await serviceContext.idleService.claimDiscordSession(discordId, displayName, "manual_claim");
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName).catch(() => null);
+    const memberRoleIds = await resolveMemberRoleIds(interaction);
+    const summary = await serviceContext.idleService.claimDiscordSession(discordId, displayName, "manual_claim", { memberRoleIds });
+    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds }).catch(() => null);
     const extra = status ? `\n\n${buildStatusText(status, "目前狀態：")}` : "";
     await interaction.editReply(
-      `🎁 已結算掛機\n區域：${summary.zoneLabel}\n開始：${formatTaipeiDateTime(summary.startedAt)}\n結束：${formatTaipeiDateTime(summary.endedAt)}\n掛機時長：${formatDuration(summary.elapsedMinutes)}\n可計算時長：${formatDuration(summary.effectiveMinutes)}（達標後連續累積）\n獲得：**${summary.reward.gold} 金幣**、**${summary.reward.exp} EXP**${extra}`
+      `🎁 已結算掛機\n區域：${summary.zoneLabel}\n開始：${formatTaipeiDateTime(summary.startedAt)}\n結束：${formatTaipeiDateTime(summary.endedAt)}\n掛機時長：${formatDuration(summary.elapsedMinutes)}\n可計算時長：${formatDuration(summary.effectiveMinutes)}（達標後連續累積）\n獲得：**${summary.reward.gold} 金幣**、**${summary.reward.exp} EXP**${summary.dailyLimitMinutes != null ? `\n非會員今日剩餘可領：${formatDuration(summary.dailyRemainingMinutes || 0)}` : `\n會員：今日可持續領取`}${extra}`
     );
   } catch (error) {
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName).catch(() => null);
+    const memberRoleIds = await resolveMemberRoleIds(interaction);
+    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds }).catch(() => null);
     const extra = status ? `\n\n${buildStatusText(status, "目前狀態：")}` : "";
     await interaction.editReply(`❌ 領取失敗：${error.message}${extra}`);
   }
@@ -256,7 +276,8 @@ async function handleIdleStatus(interaction) {
   const discordId = interaction.user.id;
   const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
   try {
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName);
+    const memberRoleIds = await resolveMemberRoleIds(interaction);
+    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds });
     const stickerUrl = status?.discordSession ? await resolveIdleStickerUrl(interaction) : null;
     if (stickerUrl) {
       const embed = new EmbedBuilder()
@@ -279,7 +300,8 @@ async function handleIdleRefresh(interaction) {
   const discordId = interaction.user.id;
   const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
   try {
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName);
+    const memberRoleIds = await resolveMemberRoleIds(interaction);
+    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds });
     const stickerUrl = status?.discordSession ? await resolveIdleStickerUrl(interaction) : null;
     if (stickerUrl) {
       const embed = new EmbedBuilder()
@@ -304,13 +326,15 @@ async function handleIdleCancel(interaction) {
 
   try {
     const summary = await serviceContext.idleService.cancelDiscordSession(discordId, displayName);
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName).catch(() => null);
+    const memberRoleIds = await resolveMemberRoleIds(interaction);
+    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds }).catch(() => null);
     const extra = status ? `\n\n${buildStatusText(status, "目前狀態：")}` : "";
     await interaction.editReply(
       `⛔ 已取消掛機\n區域：${summary.zoneLabel}\n開始：${formatTaipeiDateTime(summary.startedAt)}\n結束：${formatTaipeiDateTime(summary.endedAt)}\n掛機時長：${formatDuration(summary.elapsedMinutes)}\n可計算時長：${formatDuration(summary.effectiveMinutes)}（達標後連續累積）\n本次未領取獎勵。${extra}`
     );
   } catch (error) {
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName).catch(() => null);
+    const memberRoleIds = await resolveMemberRoleIds(interaction);
+    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds }).catch(() => null);
     const extra = status ? `\n\n${buildStatusText(status, "目前狀態：")}` : "";
     await interaction.editReply(`❌ 取消失敗：${error.message}${extra}`);
   }

@@ -5,6 +5,19 @@ const { ok, fail } = require("../../shared/response");
 
 function createAdminPlayerRoutes(serviceContext) {
   const router = Router();
+  const mergeAccessControlForSync = (previous = {}, current = {}) => {
+    const p = previous?.discord || {};
+    const c = current?.discord || {};
+    const union = (a, b) => [...new Set([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])])];
+    return {
+      discord: {
+        adminRoleIds: union(p.adminRoleIds, c.adminRoleIds),
+        adminUserIds: union(p.adminUserIds, c.adminUserIds),
+        playerRoleIds: union(p.playerRoleIds, c.playerRoleIds),
+        playerUserIds: union(p.playerUserIds, c.playerUserIds)
+      }
+    };
+  };
 
   router.use("/admin", (req, res, next) => {
     const authHeader = req.header("Authorization") || "";
@@ -43,10 +56,14 @@ function createAdminPlayerRoutes(serviceContext) {
 
   router.put("/admin/access-control/discord-roles", async (req, res, next) => {
     try {
+      const previousAccessControl = await serviceContext.accessControlService.getAccessControl();
       const { adminRoleIds } = req.body;
       const accessControl = await serviceContext.accessControlService.setDiscordRoleIds(adminRoleIds);
       const syncReport = await serviceContext.accessControlService.syncAllowedPlayers();
-      res.json(ok({ accessControl, syncReport }, "discord admin roles updated"));
+      const permissionSync = await serviceContext.adminConsoleService.syncChannelPermissions(
+        mergeAccessControlForSync(previousAccessControl, accessControl)
+      );
+      res.json(ok({ accessControl, syncReport, permissionSync }, "discord admin roles updated"));
     } catch (error) {
       next(error);
     }
@@ -54,10 +71,14 @@ function createAdminPlayerRoutes(serviceContext) {
 
   router.put("/admin/access-control/discord-users", async (req, res, next) => {
     try {
+      const previousAccessControl = await serviceContext.accessControlService.getAccessControl();
       const { adminUserIds } = req.body;
       const accessControl = await serviceContext.accessControlService.setDiscordUserIds(adminUserIds);
       const syncReport = await serviceContext.accessControlService.syncAllowedPlayers();
-      res.json(ok({ accessControl, syncReport }, "discord admin users updated"));
+      const permissionSync = await serviceContext.adminConsoleService.syncChannelPermissions(
+        mergeAccessControlForSync(previousAccessControl, accessControl)
+      );
+      res.json(ok({ accessControl, syncReport, permissionSync }, "discord admin users updated"));
     } catch (error) {
       next(error);
     }
@@ -65,10 +86,14 @@ function createAdminPlayerRoutes(serviceContext) {
 
   router.put("/admin/access-control/player-roles", async (req, res, next) => {
     try {
+      const previousAccessControl = await serviceContext.accessControlService.getAccessControl();
       const { playerRoleIds } = req.body;
       const accessControl = await serviceContext.accessControlService.setDiscordPlayerRoleIds(playerRoleIds);
       const syncReport = await serviceContext.accessControlService.syncAllowedPlayers();
-      res.json(ok({ accessControl, syncReport }, "discord player roles updated"));
+      const permissionSync = await serviceContext.adminConsoleService.syncChannelPermissions(
+        mergeAccessControlForSync(previousAccessControl, accessControl)
+      );
+      res.json(ok({ accessControl, syncReport, permissionSync }, "discord player roles updated"));
     } catch (error) {
       next(error);
     }
@@ -76,10 +101,14 @@ function createAdminPlayerRoutes(serviceContext) {
 
   router.put("/admin/access-control/player-users", async (req, res, next) => {
     try {
+      const previousAccessControl = await serviceContext.accessControlService.getAccessControl();
       const { playerUserIds } = req.body;
       const accessControl = await serviceContext.accessControlService.setDiscordPlayerUserIds(playerUserIds);
       const syncReport = await serviceContext.accessControlService.syncAllowedPlayers();
-      res.json(ok({ accessControl, syncReport }, "discord player users updated"));
+      const permissionSync = await serviceContext.adminConsoleService.syncChannelPermissions(
+        mergeAccessControlForSync(previousAccessControl, accessControl)
+      );
+      res.json(ok({ accessControl, syncReport, permissionSync }, "discord player users updated"));
     } catch (error) {
       next(error);
     }

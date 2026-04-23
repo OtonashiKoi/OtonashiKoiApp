@@ -3,10 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>戰場原型</title>
+    <title>月影星花 - Pixel Platformer</title>
   </head>
   <body>
+    <div id="game-hud" aria-live="polite"></div>
     <div id="game-root"></div>
+    <div id="game-message" aria-live="polite"></div>
+    <div id="touch-controls" aria-label="觸控操作">
+      <div class="touch-cluster">
+        <button type="button" data-control="left">←</button>
+        <button type="button" data-control="right">→</button>
+      </div>
+      <div class="touch-cluster">
+        <button type="button" data-control="dash">Dash</button>
+        <button type="button" data-control="jump">Jump</button>
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -11,6 +11,8 @@ const ENHANCE_GEM_IDS = new Set([
   '8fdfa7d9-f0fa-4e6a-a291-703b1e354072',
   'a6ae293d-52fc-4af5-8770-891ddf842e35'
 ]);
+const FORBIDDEN_EQUIP_SLOTS = new Set(["job_eq", "title_eq"]);
+const FORBIDDEN_ITEM_TYPES = new Set(["job_badge", "title"]);
 
 function getSC() { return require("../runtimeContext").serviceContext; }
 
@@ -22,6 +24,7 @@ const PFX = {
   buyConfirm:   "auction:buy_confirm:",
   myList:       "auction:my_list",
   reclaim:      "auction:reclaim:",
+  cancel:       "auction:cancel:",
   sell:         "auction:sell",
   sellItem:     "auction:sell_item:",     // 選好物品後
   sellCurrency: "auction:sell_currency:", // 選好貨幣後
@@ -43,15 +46,20 @@ function fmtPrice(price, currency) {
 function fmtRemaining(expiresAt) {
   const ms = new Date(expiresAt).getTime() - Date.now();
   if (ms <= 0) return "已到期";
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  const unix = Math.floor(new Date(expiresAt).getTime() / 1000);
+  return `<t:${unix}:R>`;
 }
 
 function fmtItem(item) {
   const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
   const stack = item.isGem && item.stackCount ? ` ×${item.stackCount}` : "";
   return `${item.itemName}${enh}${stack}`;
+}
+
+function isSellableItem(item) {
+  if (!item) return false;
+  if (FORBIDDEN_ITEM_TYPES.has(item.itemType) || FORBIDDEN_EQUIP_SLOTS.has(item.equipSlot)) return false;
+  return item.itemType === "equipment" || ENHANCE_GEM_IDS.has(item.itemId);
 }
 
 // ─── 拍賣列表面板 ────────────────────────────────────
@@ -179,6 +187,27 @@ async function handleAuctionButton(interaction) {
         ...panel,
         content: `✅ 成功購買 **${result.itemName}**！物品已進入背包。\n\n${panel.content}`,
       });
+      // 同步刷新公開拍賣場面板，避免外層列表殘留已售商品
+      await refreshAuctionChannel();
+      // 通知買家（DM）
+      try {
+        const { getBotClient } = require("../runtimeContext");
+        const client = getBotClient();
+        let sellerText = `${result.auction.sellerId}`;
+        if (client?.isReady()) {
+          const sellerUser = await client.users.fetch(result.auction.sellerId).catch(() => null);
+          if (sellerUser) sellerText = `${sellerUser.username} (${sellerUser.id})`;
+        }
+        const priceStr = fmtPrice(result.auction.price, result.auction.currency);
+        await interaction.user.send(
+          `🛒 **購買成功通知**\n` +
+          `商品：**${result.itemName}**\n` +
+          `價格：${priceStr}\n` +
+          `賣家：${sellerText}\n` +
+          `買家：${interaction.user.username} (${interaction.user.id})\n` +
+          `狀態：已入背包`
+        ).catch(() => {});
+      } catch (_) {}
       // 通知賣家
       try {
         const { getBotClient } = require("../runtimeContext");
@@ -187,7 +216,14 @@ async function handleAuctionButton(interaction) {
           const sellerUser = await client.users.fetch(result.auction.sellerId).catch(() => null);
           if (sellerUser) {
             const priceStr = fmtPrice(result.auction.price, result.auction.currency);
-            await sellerUser.send(`💰 **拍賣成交通知**\n你的 **${result.itemName}** 已售出，獲得 ${priceStr}！`).catch(() => {});
+            await sellerUser.send(
+              `💰 **拍賣成交通知**\n` +
+              `商品：**${result.itemName}**\n` +
+              `價格：${priceStr}\n` +
+              `賣家：${sellerUser.username} (${sellerUser.id})\n` +
+              `買家：${interaction.user.username} (${interaction.user.id})\n` +
+              `狀態：已售出，款項已入帳`
+            ).catch(() => {});
           }
         }
       } catch (_) {}
@@ -217,19 +253,24 @@ async function handleAuctionButton(interaction) {
     });
     // 領回按鈕（只顯示 expired 的）
     const expiredListings = listings.filter(a => a.status === "expired");
-    const reclaimBtns = expiredListings.slice(0, 4).map(a =>
+    const reclaimBtns = expiredListings.slice(0, 3).map(a =>
       new ButtonBuilder()
         .setCustomId(`${PFX.reclaim}${a.id}`)
         .setLabel(`領回 ${fmtItem(a.item)}`)
         .setStyle(ButtonStyle.Success)
     );
+    const activeListings = listings.filter(a => a.status === "active");
+    const cancelBtns = activeListings.slice(0, 3).map(a =>
+      new ButtonBuilder()
+        .setCustomId(`${PFX.cancel}${a.id}`)
+        .setLabel(`下架 ${fmtItem(a.item)}`)
+        .setStyle(ButtonStyle.Danger)
+    );
     const backBtn = new ButtonBuilder().setCustomId(PFX.open).setLabel("← 返回").setStyle(ButtonStyle.Secondary);
     const rows = [];
-    if (reclaimBtns.length > 0) {
-      rows.push(new ActionRowBuilder().addComponents(...reclaimBtns, backBtn));
-    } else {
-      rows.push(new ActionRowBuilder().addComponents(backBtn));
-    }
+    const actionBtns = [...reclaimBtns, ...cancelBtns];
+    if (actionBtns.length > 0) rows.push(new ActionRowBuilder().addComponents(...actionBtns.slice(0, 5)));
+    rows.push(new ActionRowBuilder().addComponents(backBtn));
     await interaction.editReply({ content: `📦 **我的上架**\n\n${lines.join("\n")}`, components: rows });
     return;
   }
@@ -256,6 +297,30 @@ async function handleAuctionButton(interaction) {
     return;
   }
 
+  // 下架（賣家主動下架 active 商品）
+  if (id.startsWith(PFX.cancel)) {
+    const auctionId = id.slice(PFX.cancel.length);
+    await interaction.deferUpdate();
+    const sc = getSC();
+    try {
+      const result = await sc.auctionService.cancelListing(interaction.user.id, auctionId);
+      await refreshAuctionChannel();
+      const listings = await sc.auctionService.getMyListings(interaction.user.id);
+      const remainActive = listings.filter(a => a.status === "active").length;
+      const backRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(PFX.myList).setLabel("📦 返回我的上架").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(PFX.open).setLabel("← 返回拍賣場").setStyle(ButtonStyle.Secondary)
+      );
+      await interaction.editReply({
+        content: `✅ 已下架 **${result.itemName}**，物品已退回背包。${remainActive > 0 ? `\n目前仍有 ${remainActive} 件上架中。` : ""}`,
+        components: [backRow],
+      });
+    } catch (err) {
+      await interaction.editReply({ content: `❌ 下架失敗：${err.message}`, components: [] });
+    }
+    return;
+  }
+
   // ─── 上架流程 ───────────────────────────────────────
 
   // Step 1: 點「上架商品」→ 顯示背包中可上架的物品（Select Menu）
@@ -273,8 +338,8 @@ async function handleAuctionButton(interaction) {
 
     // 是否已有上架
     const activeCount = await sc.auctionService.getActiveListingCount(interaction.user.id);
-    if (activeCount >= 1) {
-      await interaction.editReply({ content: "❌ 你目前已有上架中的商品，最多同時上架 1 件。", components: [] });
+    if (activeCount >= 3) {
+      await interaction.editReply({ content: "❌ 你目前已有上架中的商品，最多同時上架 3 件。", components: [] });
       return;
     }
 
@@ -282,12 +347,10 @@ async function handleAuctionButton(interaction) {
     const inventory = progress?.inventory || [];
 
     // 可上架的物品：裝備 + 強化寶石
-    const sellable = inventory.filter(item =>
-      item.itemType === "equipment" || ENHANCE_GEM_IDS.has(item.itemId)
-    );
+    const sellable = inventory.filter(isSellableItem);
 
     if (!sellable.length) {
-      await interaction.editReply({ content: "❌ 背包中沒有可上架的裝備或強化寶石。", components: [] });
+      await interaction.editReply({ content: "❌ 背包中沒有可上架的裝備或強化石（職業徽章/稱號不可上架）。", components: [] });
       return;
     }
 
@@ -320,6 +383,15 @@ async function handleAuctionButton(interaction) {
     const parts = id.slice(PFX.sellCurrency.length).split(":");
     const itemUuid = parts[0];
     const currency = parts[1]; // "gold" | "diamond"
+    const sc = getSC();
+    const progress = await sc.progressRepository.findByPlayerId(interaction.user.id);
+    const item = (progress?.inventory || []).find(i => i.uuid === itemUuid);
+    if (!item || !isSellableItem(item)) {
+      await interaction.reply({ content: "❌ 此物品無法上架。", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const isGem = ENHANCE_GEM_IDS.has(item.itemId);
+    const maxQty = Math.max(1, item.stackCount || 1);
 
     await interaction.showModal(
       new ModalBuilder()
@@ -340,6 +412,15 @@ async function handleAuctionButton(interaction) {
               .setLabel("上架時間（小時）：1、6、12、24")
               .setStyle(TextInputStyle.Short)
               .setPlaceholder("例：24")
+              .setRequired(true)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId("quantity_input")
+              .setLabel(isGem ? `上架數量（1～${maxQty}）` : "上架數量（裝備固定為 1）")
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder("例：1")
+              .setValue("1")
               .setRequired(true)
           )
         )
@@ -377,11 +458,13 @@ async function handleAuctionModal(interaction) {
 
     const priceRaw = interaction.fields.getTextInputValue("price_input").trim().replace(/,/g, "");
     const hoursRaw = interaction.fields.getTextInputValue("hours_input").trim();
+    const quantityRaw = interaction.fields.getTextInputValue("quantity_input").trim();
     const price = parseInt(priceRaw, 10);
     const hours = parseInt(hoursRaw, 10);
+    const quantity = parseInt(quantityRaw, 10);
 
-    if (!Number.isFinite(price) || !Number.isFinite(hours)) {
-      await interaction.reply({ content: "❌ 請輸入有效的數字。", flags: MessageFlags.Ephemeral });
+    if (!Number.isFinite(price) || !Number.isFinite(hours) || !Number.isFinite(quantity) || quantity <= 0) {
+      await interaction.reply({ content: "❌ 請輸入有效的數字（數量需為正整數）。", flags: MessageFlags.Ephemeral });
       return true;
     }
 
@@ -389,19 +472,31 @@ async function handleAuctionModal(interaction) {
     const sc = getSC();
     const progress = await sc.progressRepository.findByPlayerId(interaction.user.id);
     const item = (progress?.inventory || []).find(i => i.uuid === itemUuid);
-    if (!item) {
+    if (!item || !isSellableItem(item)) {
       await interaction.reply({ content: "❌ 找不到該物品。", flags: MessageFlags.Ephemeral });
       return true;
     }
+    const isGem = ENHANCE_GEM_IDS.has(item.itemId);
+    if (!isGem && quantity !== 1) {
+      await interaction.reply({ content: "❌ 裝備每次只能上架 1 件。", flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    if (isGem) {
+      const curStack = Math.max(1, item.stackCount || 1);
+      if (quantity > curStack) {
+        await interaction.reply({ content: `❌ 強化石數量不足，目前只有 ${curStack} 顆。`, flags: MessageFlags.Ephemeral });
+        return true;
+      }
+    }
 
     const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
-    const stack = item.stackCount ? ` ×${item.stackCount}` : "";
+    const stack = isGem ? ` ×${quantity}` : "";
     const itemLabel = `${item.itemName}${enh}${stack}`;
     const priceLabel = currency === "gold" ? `${price.toLocaleString()} 💰` : `${price.toLocaleString()} 💎`;
 
     const confirmRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`${PFX.sellConfirm}${itemUuid}:${currency}:${price}:${hours}`)
+        .setCustomId(`${PFX.sellConfirm}${itemUuid}:${currency}:${price}:${hours}:${quantity}`)
         .setLabel("確認上架")
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
@@ -431,6 +526,7 @@ async function handleAuctionSellConfirm(interaction) {
     const currency = parts[1];
     const price = parseInt(parts[2], 10);
     const hours = parseInt(parts[3], 10);
+    const quantity = parseInt(parts[4] || "1", 10);
 
     const sc = getSC();
     try {
@@ -440,10 +536,12 @@ async function handleAuctionSellConfirm(interaction) {
         currency,
         price,
         hours,
+        quantity,
       });
       const enh = auction.item.enhanceLevel > 0 ? ` +${auction.item.enhanceLevel}` : "";
+      const stack = auction.item.isGem && auction.item.stackCount ? ` ×${auction.item.stackCount}` : "";
       await interaction.editReply({
-        content: `✅ **上架成功！**\n\n商品：**${auction.item.itemName}${enh}**\n定價：${fmtPrice(price, currency)}\n到期：${new Date(auction.expiresAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
+        content: `✅ **上架成功！**\n\n商品：**${auction.item.itemName}${enh}${stack}**\n定價：${fmtPrice(price, currency)}\n到期：${new Date(auction.expiresAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
         components: [],
       });
       // 刷新拍賣場面板（公開頻道）
@@ -505,13 +603,24 @@ async function buildPublicAuctionPanel() {
   const sc = getSC();
   await sc.auctionService.processExpired();
   const auctions = await sc.auctionService.getActiveListings();
+  const settings = await sc.auctionService.getSettings();
+  const sellerTiers = Array.isArray(settings?.sellerTiers) && settings.sellerTiers.length > 0
+    ? settings.sellerTiers
+    : ["C", "B", "A", "S", "SS"];
+  const sellerRuleText = `僅限會員（Tier ${sellerTiers.join(" / ")}）可上架`;
+  const auctionRulesText = [
+    "📜 規則：",
+    `• ${sellerRuleText}`,
+    "• 每位玩家同時最多上架 3 件",
+    "• 上架後不可主動撤回，商品到期可領回"
+  ].join("\n");
 
   const openBtn = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(PFX.open).setLabel("🏪 開啟拍賣場").setStyle(ButtonStyle.Primary),
   );
 
   if (!auctions.length) {
-    return { content: `🏪 **拍賣場**\n\n目前沒有上架中的商品。\n\n點下方按鈕開啟拍賣場面板。`, components: [openBtn] };
+    return { content: `🏪 **拍賣場**\n\n目前沒有上架中的商品。\n\n${auctionRulesText}\n\n點下方按鈕開啟拍賣場面板。`, components: [openBtn] };
   }
 
   const lines = auctions.slice(0, 10).map((a, i) => {
@@ -524,7 +633,7 @@ async function buildPublicAuctionPanel() {
   const more = auctions.length > 10 ? `\n\n...及其他 ${auctions.length - 10} 件` : "";
 
   return {
-    content: `🏪 **拍賣場** （共 ${auctions.length} 件上架中）\n\n${lines.join("\n")}${more}\n\n點下方按鈕開啟拍賣場面板。`,
+    content: `🏪 **拍賣場** （共 ${auctions.length} 件上架中）\n\n${lines.join("\n")}${more}\n\n${auctionRulesText}\n\n點下方按鈕開啟拍賣場面板。`,
     components: [openBtn],
   };
 }

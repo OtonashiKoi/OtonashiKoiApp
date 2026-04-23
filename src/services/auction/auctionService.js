@@ -3,6 +3,8 @@
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { auctionRepository } = require("./auctionRepository");
+const { createTransactionLog } = require("../../domain/transaction/createTransactionLog");
+const { CURRENCY_SOURCES } = require("../../shared/sources");
 
 // 強化寶石 itemId 集合
 const ENHANCE_GEM_IDS = new Set([
@@ -18,12 +20,16 @@ const GOLD_MAX = 10_000_000;
 const DIAMOND_MIN = 1;
 const DIAMOND_MAX = 200_000;
 const TIER_RANKS = ["E", "D", "C", "B", "A", "S", "SS"];
+const MAX_ACTIVE_LISTINGS_PER_SELLER = 3;
+const FORBIDDEN_EQUIP_SLOTS = new Set(["job_eq", "title_eq"]);
+const FORBIDDEN_ITEM_TYPES = new Set(["job_badge", "title"]);
 
 class AuctionService {
-  constructor(progressRepository, walletRepository, playerTierService) {
+  constructor(progressRepository, walletRepository, playerTierService, transactionRepository) {
     this.progressRepository = progressRepository;
     this.walletRepository = walletRepository;
     this.playerTierService = playerTierService;
+    this.transactionRepository = transactionRepository;
   }
 
   // ─────────────────────────────────────────────
@@ -80,7 +86,7 @@ class AuctionService {
    * @param {number} opts.price
    * @param {number} opts.hours      1 | 6 | 12 | 24
    */
-  async listItem({ sellerId, itemUuid, currency, price, hours }) {
+  async listItem({ sellerId, itemUuid, currency, price, hours, quantity = 1 }) {
     // 檢查拍賣場是否開啟
     if (!await this.isEnabled()) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "拍賣場目前已關閉", 400);
@@ -109,8 +115,8 @@ class AuctionService {
 
     // 已有上架中的商品
     const activeCount = await this.getActiveListingCount(sellerId);
-    if (activeCount >= 1) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "你目前已有上架中的商品，最多同時上架 1 件", 400);
+    if (activeCount >= MAX_ACTIVE_LISTINGS_PER_SELLER) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `你目前已有上架中的商品，最多同時上架 ${MAX_ACTIVE_LISTINGS_PER_SELLER} 件`, 400);
     }
 
     // 從背包取出物品
@@ -125,23 +131,37 @@ class AuctionService {
 
     const item = inventory[itemIdx];
 
-    // 只允許上架裝備或強化寶石
+    // 只允許上架裝備或強化寶石，且禁止職業徽章/稱號
     const isGem = ENHANCE_GEM_IDS.has(item.itemId);
+    if (FORBIDDEN_ITEM_TYPES.has(item.itemType) || FORBIDDEN_EQUIP_SLOTS.has(item.equipSlot)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章與稱號不可上架", 400);
+    }
     if (item.itemType !== "equipment" && !isGem) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有裝備和強化寶石可以上架", 400);
     }
 
-    // 寶石堆疊：從 stackCount 扣 1
+    const safeQuantity = Number.isInteger(quantity) ? quantity : parseInt(quantity, 10);
+    if (!Number.isFinite(safeQuantity) || safeQuantity <= 0) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "上架數量必須是正整數", 400);
+    }
+
+    // 寶石堆疊：從 stackCount 扣指定數量；其他裝備固定 1 件
     let stackSnap = null;
     if (isGem) {
       const curStack = Math.max(1, item.stackCount || 1);
-      stackSnap = 1; // 每次只上架 1 顆
-      if (curStack > 1) {
-        item.stackCount = curStack - 1;
+      if (safeQuantity > curStack) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `強化石可上架數量不足（目前持有 ${curStack}）`, 400);
+      }
+      stackSnap = safeQuantity;
+      if (curStack > safeQuantity) {
+        item.stackCount = curStack - safeQuantity;
       } else {
         inventory.splice(itemIdx, 1);
       }
     } else {
+      if (safeQuantity !== 1) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "裝備每次只能上架 1 件", 400);
+      }
       inventory.splice(itemIdx, 1);
     }
 
@@ -215,6 +235,18 @@ class AuctionService {
       buyerWallet.diamond = (buyerWallet.diamond || 0) - auction.price;
     }
     await this.walletRepository.save(buyerWallet);
+    if (this.transactionRepository) {
+      await this.transactionRepository.append(createTransactionLog({
+        playerId: buyerId,
+        currencyType: auction.currency,
+        amount: auction.price,
+        direction: "debit",
+        source: CURRENCY_SOURCES.AUCTION_PURCHASE,
+        sourceRef: auctionId,
+        balanceAfter: auction.currency === "gold" ? (buyerWallet.gold || 0) : (buyerWallet.diamond || 0),
+        operator: "system:auction"
+      }));
+    }
 
     // 賣家收款
     const sellerWallet = await this.walletRepository.findByPlayerId(auction.sellerId);
@@ -225,6 +257,18 @@ class AuctionService {
         sellerWallet.diamond = (sellerWallet.diamond || 0) + auction.price;
       }
       await this.walletRepository.save(sellerWallet);
+      if (this.transactionRepository) {
+        await this.transactionRepository.append(createTransactionLog({
+          playerId: auction.sellerId,
+          currencyType: auction.currency,
+          amount: auction.price,
+          direction: "credit",
+          source: CURRENCY_SOURCES.AUCTION_SALE,
+          sourceRef: auctionId,
+          balanceAfter: auction.currency === "gold" ? (sellerWallet.gold || 0) : (sellerWallet.diamond || 0),
+          operator: "system:auction"
+        }));
+      }
     }
 
     // 物品進買家背包
@@ -234,12 +278,13 @@ class AuctionService {
     const itemToGive = { ...auction.item };
     // 寶石：嘗試堆疊
     if (itemToGive.isGem && itemToGive.itemId) {
+      const listedCount = Math.max(1, itemToGive.stackCount || 1);
       const existingGem = (buyerProgress.inventory || []).find(i => i.itemId === itemToGive.itemId);
       if (existingGem) {
-        existingGem.stackCount = Math.max(1, existingGem.stackCount || 1) + 1;
+        existingGem.stackCount = Math.max(1, existingGem.stackCount || 1) + listedCount;
       } else {
         itemToGive.uuid = crypto.randomUUID();
-        itemToGive.stackCount = 1;
+        itemToGive.stackCount = listedCount;
         itemToGive.source = "auction_buy";
         buyerProgress.inventory = buyerProgress.inventory || [];
         buyerProgress.inventory.push(itemToGive);
@@ -293,12 +338,13 @@ class AuctionService {
     const itemToReturn = { ...auction.item };
 
     if (itemToReturn.isGem && itemToReturn.itemId) {
+      const listedCount = Math.max(1, itemToReturn.stackCount || 1);
       const existingGem = progress.inventory.find(i => i.itemId === itemToReturn.itemId);
       if (existingGem) {
-        existingGem.stackCount = Math.max(1, existingGem.stackCount || 1) + 1;
+        existingGem.stackCount = Math.max(1, existingGem.stackCount || 1) + listedCount;
       } else {
         itemToReturn.uuid = crypto.randomUUID();
-        itemToReturn.stackCount = 1;
+        itemToReturn.stackCount = listedCount;
         itemToReturn.source = "auction_reclaim";
         delete itemToReturn.isGem;
         progress.inventory.push(itemToReturn);
@@ -312,6 +358,49 @@ class AuctionService {
 
     await this.progressRepository.save(progress);
     await auctionRepository.updateStatus(auctionId, "reclaimed", { reclaimedAt: new Date().toISOString() });
+
+    return { itemName: auction.item.itemName };
+  }
+
+  /**
+   * 賣家主動下架 still-active 商品（立即退回背包）
+   */
+  async cancelListing(sellerId, auctionId) {
+    const auction = await auctionRepository.findById(auctionId);
+    if (!auction) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該拍賣", 404);
+    if (auction.sellerId !== sellerId) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "這不是你的拍賣", 403);
+    if (auction.status !== "active") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有上架中的商品可下架", 400);
+
+    const progress = await this.progressRepository.findByPlayerId(sellerId);
+    if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家資料不存在", 404);
+
+    progress.inventory = progress.inventory || [];
+    const itemToReturn = { ...auction.item };
+
+    if (itemToReturn.isGem && itemToReturn.itemId) {
+      const listedCount = Math.max(1, itemToReturn.stackCount || 1);
+      const existingGem = progress.inventory.find(i => i.itemId === itemToReturn.itemId);
+      if (existingGem) {
+        existingGem.stackCount = Math.max(1, existingGem.stackCount || 1) + listedCount;
+      } else {
+        itemToReturn.uuid = crypto.randomUUID();
+        itemToReturn.stackCount = listedCount;
+        itemToReturn.source = "auction_cancel";
+        delete itemToReturn.isGem;
+        progress.inventory.push(itemToReturn);
+      }
+    } else {
+      itemToReturn.uuid = crypto.randomUUID();
+      itemToReturn.source = "auction_cancel";
+      delete itemToReturn.isGem;
+      progress.inventory.push(itemToReturn);
+    }
+
+    await this.progressRepository.save(progress);
+    await auctionRepository.updateStatus(auctionId, "reclaimed", {
+      reclaimedAt: new Date().toISOString(),
+      cancelledBySeller: true
+    });
 
     return { itemName: auction.item.itemName };
   }
@@ -359,9 +448,23 @@ class AuctionService {
       const progress = await this.progressRepository.findByPlayerId(auction.sellerId);
       if (!progress) return;
       progress.inventory = progress.inventory || [];
-      const itemToReturn = { ...auction.item, uuid: crypto.randomUUID(), source: "auction_admin_remove" };
-      delete itemToReturn.isGem;
-      progress.inventory.push(itemToReturn);
+      const itemToReturn = { ...auction.item, source: "auction_admin_remove" };
+      if (itemToReturn.isGem && itemToReturn.itemId) {
+        const listedCount = Math.max(1, itemToReturn.stackCount || 1);
+        const existingGem = progress.inventory.find(i => i.itemId === itemToReturn.itemId);
+        if (existingGem) {
+          existingGem.stackCount = Math.max(1, existingGem.stackCount || 1) + listedCount;
+        } else {
+          itemToReturn.uuid = crypto.randomUUID();
+          itemToReturn.stackCount = listedCount;
+          delete itemToReturn.isGem;
+          progress.inventory.push(itemToReturn);
+        }
+      } else {
+        itemToReturn.uuid = crypto.randomUUID();
+        delete itemToReturn.isGem;
+        progress.inventory.push(itemToReturn);
+      }
       await this.progressRepository.save(progress);
     } catch (_) {}
   }

@@ -122,17 +122,19 @@ class AccessControlService {
 
   async getAccessControl() {
     const stored = await this.accessControlRepository.get();
-    const storedAdminRoles = stored?.discord?.adminRoleIds || [];
-    const storedAdminUsers = stored?.discord?.adminUserIds || [];
-    const storedPlayerRoles = stored?.discord?.playerRoleIds || [];
-    const storedPlayerUsers = stored?.discord?.playerUserIds || [];
+    const discordStored = stored?.discord || {};
+    const hasStored = (key) => Object.prototype.hasOwnProperty.call(discordStored, key);
+    const storedAdminRoles = hasStored("adminRoleIds") ? discordStored.adminRoleIds : config.discord.adminRoleIds;
+    const storedAdminUsers = hasStored("adminUserIds") ? discordStored.adminUserIds : config.discord.adminUserIds;
+    const storedPlayerRoles = hasStored("playerRoleIds") ? discordStored.playerRoleIds : config.discord.playerRoleIds;
+    const storedPlayerUsers = hasStored("playerUserIds") ? discordStored.playerUserIds : config.discord.playerUserIds;
 
     return {
       discord: {
-        adminRoleIds: uniq([...config.discord.adminRoleIds, ...storedAdminRoles]),
-        adminUserIds: uniq([...config.discord.adminUserIds, ...storedAdminUsers]),
-        playerRoleIds: uniq([...config.discord.playerRoleIds, ...storedPlayerRoles]),
-        playerUserIds: uniq([...config.discord.playerUserIds, ...storedPlayerUsers])
+        adminRoleIds: uniq(Array.isArray(storedAdminRoles) ? storedAdminRoles : []),
+        adminUserIds: uniq(Array.isArray(storedAdminUsers) ? storedAdminUsers : []),
+        playerRoleIds: uniq(Array.isArray(storedPlayerRoles) ? storedPlayerRoles : []),
+        playerUserIds: uniq(Array.isArray(storedPlayerUsers) ? storedPlayerUsers : [])
       }
     };
   }

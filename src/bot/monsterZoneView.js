@@ -4,12 +4,18 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, AttachmentBu
 const { getZoneTheme, ZONE_BY_KEY } = require("../shared/zones");
 
 const BUTTON_IDS = {
-  enterBattle: "monster-zone:enter-battle"
+  enterBattle: "monster-zone:enter-battle",
+  enterBattleHead: "monster-zone:enter-battle:head",
+  enterBattleBody: "monster-zone:enter-battle:body",
+  enterBattleLegs: "monster-zone:enter-battle:legs"
 };
 
 async function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0, damageMap = {}, options = {}) {
   const activeEvent = options.activeEvent || null;
   const zoneKey = options.zoneKey || activeEvent?.zone || monster?.zone || "normal";
+  const worldBossStatus = options.worldBossStatus || null;
+  const worldBossPartsHp = options.worldBossPartsHp || null;
+  const fastUpdate = options.fastUpdate === true;
   const zoneTheme = getZoneTheme(zoneKey);
   const zoneBinding = options.zoneBinding || null;
   if (activeEvent) {
@@ -33,6 +39,20 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
 
   const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, Math.round((hp / maxHp) * 100))) : 0;
   const hpLine = maxHp > 0 ? `${hp} / ${maxHp} (${hpPct}%)\n${hpBar}` : "尚未設定";
+  let worldBossPartsLine = null;
+  if (zoneKey === "elite" && worldBossPartsHp && typeof worldBossPartsHp === "object") {
+    const headHp = Math.max(0, Number(worldBossPartsHp.head || 0));
+    const bodyHp = Math.max(0, Number(worldBossPartsHp.body || 0));
+    const legsHp = Math.max(0, Number(worldBossPartsHp.legs || 0));
+    const totalHp = headHp + bodyHp + legsHp;
+    const doneCount = [headHp, bodyHp, legsHp].filter((v) => v <= 0).length;
+    worldBossPartsLine = [
+      `頭部：${Math.round(headHp)}`,
+      `軀幹：${Math.round(bodyHp)}`,
+      `下肢：${Math.round(legsHp)}`,
+      `總計：${Math.round(totalHp)}（已擊破 ${doneCount}/3）`
+    ].join("\n");
+  }
   const rewardLine = [
     expReward > 0 ? `EXP +${expReward}` : null,
     effectivePool > 0 ? `金幣 +${effectivePool}${bonusNote}` : null
@@ -58,11 +78,27 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   if (effectiveMax !== null) levelParts.push(`上限 Lv.${effectiveMax}`);
   const levelTag = levelParts.length > 0 ? ` ・ ${levelParts.join(" ")}` : "";
 
-  const desc = [
+  const descLines = [
     `${zoneTheme.emoji} **${zoneTheme.label}**${levelTag}`,
-    "",
-    "點擊下方按鈕即可進入戰鬥"
-  ].join("\n");
+    ""
+  ];
+  if (zoneKey === "elite" && worldBossStatus) {
+    const unlockLine = `世界BOSS解鎖進度：${worldBossStatus.hardKills}/${worldBossStatus.unlockTarget}`;
+    if (!worldBossStatus.unlocked) {
+      descLines.push(`🔒 尚未解鎖（還差 ${worldBossStatus.remainingUnlockKills} 隻高級區擊殺）`);
+    } else if (worldBossStatus.cooldownRemainingMs > 0) {
+      descLines.push(`⏳ 世界BOSS 冷卻中（約 ${worldBossStatus.cooldownRemainingMinutes} 分鐘）`);
+    } else if (worldBossStatus.battleStartedAt) {
+      descLines.push(`⚠️ 世界BOSS戰進行中（剩餘約 ${worldBossStatus.battleRemainingMinutes} 分鐘）`);
+    } else {
+      descLines.push("✅ 世界BOSS 可挑戰");
+    }
+    descLines.push(unlockLine);
+    descLines.push("限制：開戰後 1 小時內未擊殺視為失敗");
+  } else {
+    descLines.push("點擊下方按鈕即可進入戰鬥");
+  }
+  const desc = descLines.join("\n");
 
   const embed = new EmbedBuilder()
     .setTitle(`${zoneTheme.emoji} ${monsterName}`)
@@ -74,6 +110,9 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const imageSource = monster?.imageThumbnailUrl || monster?.imageUrl || "";
   if (typeof imageSource === "string" && imageSource) {
     if (/^https?:\/\//i.test(imageSource)) {
+      if (fastUpdate) {
+        embed.setThumbnail(imageSource);
+      } else {
       try {
         const response = await fetch(imageSource);
         if (response.ok) {
@@ -90,6 +129,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
       } catch (_) {
         embed.setImage(imageSource);
       }
+      }
     } else {
       const imagePath = path.resolve(__dirname, "../web/public", imageSource.replace(/^\//, ""));
       if (fs.existsSync(imagePath)) {
@@ -100,18 +140,50 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     }
   }
 
-  embed.addFields(
-    { name: "HP", value: hpLine, inline: false },
+  const fields = [
+    { name: "HP", value: hpLine, inline: false }
+  ];
+  if (worldBossPartsLine) {
+    fields.push({ name: "世界王部位血量", value: worldBossPartsLine, inline: false });
+  }
+  fields.push(
     { name: "獎勵", value: rewardLine, inline: true },
     { name: "狀態", value: statsLine, inline: true },
     { name: "傷害排行", value: damageLine, inline: false }
   );
+  embed.addFields(...fields);
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(BUTTON_IDS.enterBattle).setLabel("進入戰鬥").setStyle(ButtonStyle.Danger)
-  );
+  const canEnter = zoneKey !== "elite" || !worldBossStatus || worldBossStatus.canChallenge;
+  let components = [];
+  if (zoneKey === "elite" && canEnter) {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.enterBattleHead)
+        .setLabel("🎯 打頭部")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.enterBattleBody)
+        .setLabel("⚔️ 打軀幹")
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.enterBattleLegs)
+        .setLabel("🦵 打下盤")
+        .setStyle(ButtonStyle.Secondary)
+    );
+    components = [row];
+  } else {
+    const enterLabel = canEnter ? "進入戰鬥" : "暫時無法挑戰";
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.enterBattle)
+        .setLabel(enterLabel)
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(!canEnter)
+    );
+    components = [row];
+  }
 
-  return { embeds: [embed], components: [row], files };
+  return { embeds: [embed], components, files };
 }
 
 const { isEffectConditionMet } = require("../shared/effectEngine");

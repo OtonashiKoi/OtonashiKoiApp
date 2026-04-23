@@ -1,19 +1,28 @@
 import Phaser from "phaser";
 import "./style.css";
-import { CloneBattleScene } from "./scenes/CloneBattleScene";
+import { PlatformerScene } from "./scenes/PlatformerScene";
 
 const config = {
-  type: Phaser.AUTO,
+  type: Phaser.CANVAS,
   parent: "game-root",
-  width: 1365,
-  height: 768,
-  backgroundColor: "#0a1c1e",
-  scene: [CloneBattleScene],
+  width: 960,
+  height: 540,
+  backgroundColor: "#0b1025",
+  pixelArt: true,
+  physics: {
+    default: "arcade",
+    arcade: {
+      gravity: { y: 980 },
+      debug: false,
+    },
+  },
+  scene: [PlatformerScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
 
+window.__equipmentPlatformerGame = game;

@@ -272,9 +272,13 @@
       method: "PUT",
       body: JSON.stringify({ bindings: collectBindings() })
     });
-    state.channelLayout = data;
+    state.channelLayout = data?.channelLayout || data;
     renderBindings();
     log("Discord 版位設定已儲存");
+    if (Array.isArray(data?.syncReport)) {
+      const changed = data.syncReport.reduce((sum, row) => sum + Number(row.granted || 0) + Number(row.revoked || 0), 0);
+      log(`🔐 權限同步完成：${data.syncReport.length} 個綁定，變更 ${changed} 筆覆寫`);
+    }
   }
 
   // expose bindings API

@@ -1,7 +1,7 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { createPlayerPanelMessage } = require("../../bot/playerPanelView");
 const config = require("../../config");
-const { featureKeyToZone } = require("../../shared/zones");
+const { featureKeyToZone, zoneToFeatureKey } = require("../../shared/zones");
 
 const AVAILABLE_FEATURES = [
   {
@@ -144,13 +144,14 @@ function validateBindings(bindings) {
 let _panelPublishMutex = null;
 
 class AdminConsoleService {
-  constructor(channelLayoutRepository, playerRepository, adminService, walletRepository, progressRepository, checkinRepository) {
+  constructor(channelLayoutRepository, playerRepository, adminService, walletRepository, progressRepository, checkinRepository, worldBossService = null) {
     this.channelLayoutRepository = channelLayoutRepository;
     this.playerRepository = playerRepository;
     this.adminService = adminService;
     this.walletRepository = walletRepository;
     this.progressRepository = progressRepository;
     this.checkinRepository = checkinRepository;
+    this.worldBossService = worldBossService;
   }
 
   async getChannelLayout() {
@@ -354,7 +355,10 @@ class AdminConsoleService {
     const discord = accessControl?.discord || {};
     const adminRoleIds = discord.adminRoleIds || [];
     const playerRoleIds = discord.playerRoleIds || [];
+    const adminUserIds = discord.adminUserIds || [];
+    const playerUserIds = discord.playerUserIds || [];
     const allManagedRoles = [...new Set([...adminRoleIds, ...playerRoleIds])];
+    const allManagedUsers = [...new Set([...adminUserIds, ...playerUserIds])];
 
     const results = [];
 
@@ -366,9 +370,40 @@ class AdminConsoleService {
         ...(binding.visibleTo?.player ? playerRoleIds : []),
         ...(binding.visibleTo?.admin ? adminRoleIds : [])
       ]);
+      const grantUsers = new Set([
+        ...(binding.visibleTo?.player ? playerUserIds : []),
+        ...(binding.visibleTo?.admin ? adminUserIds : [])
+      ]);
 
       let granted = 0;
       let revoked = 0;
+
+      // 受眾面板要採「先鎖全部，再放行白名單」：
+      // - 只要可見對象不是「玩家+管理員都開」，就強制鎖 @everyone
+      // - 或者雖然都開，但有任一白名單設定時也鎖 @everyone 再放行
+      const hasAudienceToggle =
+        binding.visibleTo?.player !== true || binding.visibleTo?.admin !== true;
+      const hasAnyRestrictionConfig =
+        allManagedRoles.length > 0 || allManagedUsers.length > 0;
+      const shouldDenyEveryone = hasAudienceToggle || hasAnyRestrictionConfig;
+
+      if (shouldDenyEveryone) {
+        try {
+          await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { ViewChannel: false });
+        } catch (_err) {
+          // ignore
+        }
+      } else {
+        // 無白名單配置時，回復 @everyone 預設（刪除覆寫）
+        try {
+          const everyoneOverwrite = channel.permissionOverwrites.cache.get(channel.guild.roles.everyone.id);
+          if (everyoneOverwrite) {
+            await channel.permissionOverwrites.delete(channel.guild.roles.everyone.id);
+          }
+        } catch (_err) {
+          // ignore
+        }
+      }
 
       for (const roleId of allManagedRoles) {
         try {
@@ -387,7 +422,30 @@ class AdminConsoleService {
         }
       }
 
-      results.push({ featureKey: binding.featureKey, channelId: binding.channelId, granted, revoked });
+      for (const userId of allManagedUsers) {
+        try {
+          if (grantUsers.has(userId)) {
+            await channel.permissionOverwrites.edit(userId, { ViewChannel: true });
+            granted++;
+          } else {
+            const existing = channel.permissionOverwrites.cache.get(userId);
+            if (existing) {
+              await channel.permissionOverwrites.delete(userId);
+              revoked++;
+            }
+          }
+        } catch (_err) {
+          // skip users that can't be modified
+        }
+      }
+
+      results.push({
+        featureKey: binding.featureKey,
+        channelId: binding.channelId,
+        granted,
+        revoked,
+        everyoneDenied: shouldDenyEveryone
+      });
     }
 
     return results;
@@ -510,8 +568,25 @@ class AdminConsoleService {
 
     const stored = await this.channelLayoutRepository.get();
     const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
-    const existingBinding = bindings.find((b) => b.channelId === targetChannelId && b.featureKey?.startsWith("monster_zone"));
-    const boundFeatureKey = existingBinding?.featureKey || "monster_zone";
+    const resolvedZoneKey = options?.zoneKey || monster?.zone || null;
+    const preferredFeatureKey =
+      options?.featureKey ||
+      (resolvedZoneKey ? zoneToFeatureKey(resolvedZoneKey) : null) ||
+      "monster_zone";
+
+    const existingBinding = bindings.find(
+      (b) => b.channelId === targetChannelId && b.featureKey === preferredFeatureKey
+    ) || bindings.find(
+      (b) => b.channelId === targetChannelId && b.featureKey?.startsWith("monster_zone")
+    );
+    const boundFeatureKey = existingBinding?.featureKey || preferredFeatureKey;
+
+    const finalZoneKey = resolvedZoneKey || featureKeyToZone(boundFeatureKey);
+    let worldBossStatus = null;
+    if (finalZoneKey === "elite" && this.worldBossService) {
+      const wb = await this.worldBossService.getConfigWithStatus().catch(() => null);
+      worldBossStatus = wb?.status || null;
+    }
 
     const panelMsg = await createMonsterZonePanelMessage(
       monster || null,
@@ -520,8 +595,11 @@ class AdminConsoleService {
       options?.damageMap ?? {},
       {
         activeEvent: options?.activeEvent || null,
-        zoneKey: options?.zoneKey || monster?.zone || featureKeyToZone(boundFeatureKey),
-        zoneBinding: existingBinding || null
+        zoneKey: finalZoneKey,
+        zoneBinding: existingBinding || null,
+        worldBossStatus,
+        worldBossPartsHp: options?.worldBossPartsHp || null,
+        fastUpdate: options?.fastUpdate === true
       }
     );
 

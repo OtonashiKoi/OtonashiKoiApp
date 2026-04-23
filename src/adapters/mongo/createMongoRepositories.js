@@ -269,6 +269,32 @@ function createMongoRepositories() {
         return config;
       }
     },
+    worldBossRepository: {
+      async getConfig() {
+        const row = await (await collection("worldBossConfig")).findOne({ _id: "default" });
+        return row?.value || null;
+      },
+      async saveConfig(config) {
+        await (await collection("worldBossConfig")).updateOne(
+          { _id: "default" },
+          { $set: { value: config, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+        return config;
+      },
+      async getState() {
+        const row = await (await collection("worldBossState")).findOne({ _id: "default" });
+        return row?.value || null;
+      },
+      async saveState(state) {
+        await (await collection("worldBossState")).updateOne(
+          { _id: "default" },
+          { $set: { value: state, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+        return state;
+      }
+    },
     weeklyQuestRepository: {
       async listQuests() {
         return (await collection("weeklyQuests")).find({}).sort({ createdAt: 1 }).toArray();

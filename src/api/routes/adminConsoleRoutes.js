@@ -73,7 +73,9 @@ function createAdminConsoleRoutes(serviceContext) {
     try {
       const { bindings } = req.body;
       const result = await serviceContext.adminConsoleService.setChannelLayout(bindings);
-      res.json(ok(result, "channel layout updated"));
+      const accessControl = await serviceContext.accessControlService.getAccessControl();
+      const syncReport = await serviceContext.adminConsoleService.syncChannelPermissions(accessControl);
+      res.json(ok({ channelLayout: result, syncReport }, "channel layout updated"));
     } catch (error) {
       next(error);
     }
@@ -531,6 +533,8 @@ function createAdminConsoleRoutes(serviceContext) {
   router.delete("/admin/auction/:id", async (req, res, next) => {
     try {
       const auction = await serviceContext.auctionService.adminForceRemove(req.params.id, "admin");
+      const { refreshAuctionChannel } = require("../../bot/handlers/auctionZoneHandlers");
+      await refreshAuctionChannel();
       res.json(ok({ id: auction.id }, "auction removed"));
     } catch (error) {
       next(error);
