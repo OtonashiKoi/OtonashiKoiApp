@@ -165,6 +165,40 @@ function applyWorldBossPhaseModifiers(monsterStats, phase) {
   };
 }
 
+function compactAuraSourceNames(roundLogs = []) {
+  if (!Array.isArray(roundLogs)) return roundLogs;
+  return roundLogs.map((roundLog) => {
+    const lines = String(roundLog || "").split("\n");
+    const entries = [];
+    const byKey = new Map();
+
+    for (const line of lines) {
+      const match = line.match(/^(.*光環)（([^（）]+)）(.*)$/);
+      if (!match) {
+        entries.push({ type: "raw", line });
+        continue;
+      }
+
+      const [, prefix, name, suffix] = match;
+      const key = `${prefix}\u0000${suffix}`;
+      const existing = byKey.get(key);
+      if (existing) {
+        if (!existing.names.includes(name)) existing.names.push(name);
+        continue;
+      }
+
+      const entry = { type: "aura", prefix, suffix, names: [name] };
+      byKey.set(key, entry);
+      entries.push(entry);
+    }
+
+    return entries.map((entry) => {
+      if (entry.type !== "aura") return entry.line;
+      return `${entry.prefix}（${entry.names.join("、")}）${entry.suffix}`;
+    }).join("\n");
+  });
+}
+
 async function maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster) {
   if (zoneKey !== "elite" || !sc.worldBossService || !monster?.isBoss) return { state, timedOut: false };
   const info = await sc.worldBossService.getConfigWithStatus().catch(() => null);
@@ -220,12 +254,27 @@ async function scheduleEliteWorldBossTimeout(sc, zoneKey, monster) {
   worldBossTimeoutTimers.set(zoneKey, timer);
 }
 
-async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null) {
+function resolveWeaponQuestMetric(weaponType = "") {
+  const wt = String(weaponType || "");
+  if (wt === "sword_1h" || wt === "sword_2h") return "battle_with_sword";
+  if (wt === "axe_1h" || wt === "axe_2h") return "battle_with_axe";
+  if (wt === "mace_1h" || wt === "mace_2h") return "battle_with_mace";
+  if (wt === "dagger") return "battle_with_dagger";
+  if (wt === "staff_1h" || wt === "staff_2h") return "battle_with_staff";
+  if (wt === "bow") return "battle_with_bow";
+  return null;
+}
+
+async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null) {
   const questService = sc?.questService || sc?.weeklyQuestService;
   if (!questService || typeof questService.recordProgress !== "function") return;
 
   await questService.recordProgress(discordId, "battle_count", 1);
   await questService.recordProgress(discordId, "damage_total", totalDamage);
+  const weaponMetric = resolveWeaponQuestMetric(weaponType);
+  if (weaponMetric) {
+    await questService.recordProgress(discordId, weaponMetric, 1);
+  }
   if (outcome === "lose") {
     await questService.recordProgress(discordId, "death_count", 1);
   }
@@ -262,34 +311,6 @@ function getPlayerEquippedTiers(progress) {
   }
 
   return tiers;
-}
-
-/**
- * 根據掉落物品的品階，判斷是否應賦予強化寶石
- * 只有當玩家身上已經有該品階的裝備，且掉落的物品中也有該品階的裝備時，才賦予
- */
-function getGemsToAwardFromDrops(droppedItems, progress) {
-  const gemsToAward = new Set();
-  const playerTiers = getPlayerEquippedTiers(progress);
-
-  // 獲取掉落物品中的所有非消耗品的品階
-  const droppedEquipmentTiers = new Set();
-  for (const item of droppedItems) {
-    if (isMonsterCardItem(item)) continue;
-    if (item && item.itemType !== 'consumable' && item.tier) {
-      const tier = String(item.tier || '').toUpperCase();
-      droppedEquipmentTiers.add(tier);
-    }
-  }
-
-  // 只有當玩家身上有該品階的裝備，且掉落的物品中也有時，才賦予
-  for (const tier of droppedEquipmentTiers) {
-    if (playerTiers.has(tier) && ENHANCE_GEM_IDS[tier]) {
-      gemsToAward.add(ENHANCE_GEM_IDS[tier]);
-    }
-  }
-
-  return Array.from(gemsToAward);
 }
 
 /**
@@ -939,6 +960,26 @@ async function handleEnterBattle(interaction) {
       const idleSummary = await sc.idleService?.settleDiscordSessionOnBattleStart(discordId, displayName, { memberRoleIds });
       if (idleSummary) {
         idleSettleNotice = `⏳ 已自動結算掛機（${idleSummary.zoneLabel}）：+${idleSummary.reward.gold} 金幣、+${idleSummary.reward.exp} EXP`;
+        try {
+          const { getBotClient } = require("../runtimeContext");
+          const client = getBotClient();
+          if (client?.isReady()) {
+            const user = await client.users.fetch(discordId).catch(() => null);
+            if (user) {
+              const dailyLine = idleSummary.dailyLimitMinutes != null
+                ? `\n非會員今日剩餘可領：${Math.max(0, Number(idleSummary.dailyRemainingMinutes || 0))} 分鐘`
+                : `\n會員：今日可持續領取`;
+              await user.send(
+                `⏳ **掛機已自動結算**\n` +
+                `區域：${idleSummary.zoneLabel}\n` +
+                `原因：你已進入怪物區開始戰鬥\n` +
+                `獲得：**${idleSummary.reward.gold} 金幣**、**${idleSummary.reward.exp} EXP**\n` +
+                `掛機時長：${Math.max(0, Number(idleSummary.elapsedMinutes || 0))} 分鐘\n` +
+                `可計算時長：${Math.max(0, Number(idleSummary.effectiveMinutes || 0))} 分鐘${dailyLine}`
+              ).catch(() => {});
+            }
+          }
+        } catch (_) {}
       }
     } catch (e) {
       console.warn("[Idle->Battle] auto settle failed:", e?.message || e);
@@ -1361,7 +1402,7 @@ async function handleEnterBattle(interaction) {
         }
       }
       try {
-        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats);
+        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null);
       } catch (e) {
         console.error("[Quest] recordProgress error:", e.message);
       }
@@ -1373,12 +1414,13 @@ async function handleEnterBattle(interaction) {
       const delay = (ms) => new Promise((r) => setTimeout(r, ms));
       const MAX_DESC = 3800;
       const tickDelay = calculateTickDelay(session.playerStats?.agi ?? 1);
+      const displayRoundLogs = compactAuraSourceNames(roundLogs);
 
-      for (let i = ROUNDS_PER_TICK; i < roundLogs.length; i += ROUNDS_PER_TICK) {
-        const soFar = roundLogs.slice(0, i).join("\n\n");
+      for (let i = ROUNDS_PER_TICK; i < displayRoundLogs.length; i += ROUNDS_PER_TICK) {
+        const soFar = displayRoundLogs.slice(0, i).join("\n\n");
         const truncated = soFar.length > MAX_DESC ? soFar.slice(0, MAX_DESC) + "\n…" : soFar;
         const progressEmbed = new EmbedBuilder()
-          .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(i, roundLogs.length)} 回合`)
+          .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(i, displayRoundLogs.length)} 回合`)
           .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
           .setColor(0xe74c3c);
         await interaction.editReply({ embeds: [progressEmbed], components: [] });
@@ -1386,7 +1428,7 @@ async function handleEnterBattle(interaction) {
       }
 
       // ── 最終結果 ──
-      const logText = roundLogs.join("\n\n");
+      const logText = displayRoundLogs.join("\n\n");
       const displayLog = logText.length > MAX_DESC
         ? logText.slice(0, MAX_DESC) + "\n…（部分回合已省略）"
         : logText;
@@ -1636,7 +1678,7 @@ async function handleStartFight(interaction) {
       }
     }
     try {
-      await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats);
+      await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null);
     } catch (e) {
       console.error("[Quest] recordProgress error:", e.message);
     }
@@ -1648,12 +1690,13 @@ async function handleStartFight(interaction) {
     const delay = (ms) => new Promise((r) => setTimeout(r, ms));
     const MAX_DESC = 3800;
     const tickDelay = calculateTickDelay(session.playerStats?.agi ?? 1);
+    const displayRoundLogs = compactAuraSourceNames(roundLogs);
 
-    for (let i = ROUNDS_PER_TICK; i < roundLogs.length; i += ROUNDS_PER_TICK) {
-      const soFar = roundLogs.slice(0, i).join("\n\n");
+    for (let i = ROUNDS_PER_TICK; i < displayRoundLogs.length; i += ROUNDS_PER_TICK) {
+      const soFar = displayRoundLogs.slice(0, i).join("\n\n");
       const truncated = soFar.length > MAX_DESC ? soFar.slice(0, MAX_DESC) + "\n…" : soFar;
       const progressEmbed = new EmbedBuilder()
-        .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(i, roundLogs.length)} 回合`)
+        .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(i, displayRoundLogs.length)} 回合`)
         .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
         .setColor(0xe74c3c);
       await interaction.editReply({ embeds: [progressEmbed], components: [] });
@@ -1661,7 +1704,7 @@ async function handleStartFight(interaction) {
     }
 
     // ── 最終結果 ──
-    const logText = roundLogs.join("\n\n");
+    const logText = displayRoundLogs.join("\n\n");
     const displayLog = logText.length > MAX_DESC
       ? logText.slice(0, MAX_DESC) + "\n…（部分回合已省略）"
       : logText;
@@ -2010,13 +2053,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
                 droppedItemObjects.push(gemItem);
               }
             } else {
-              // 戒指掉落時隨機屬性 +1
-              let equipStats = item.equipStats ? { ...item.equipStats } : {};
-              if (item.equipSlot === 'accessory_l' || item.equipSlot === 'accessory_r') {
-                const statKeys = ['str', 'agi', 'vit', 'int', 'dex', 'luk'];
-                const randomStat = statKeys[Math.floor(Math.random() * statKeys.length)];
-                equipStats[randomStat] = (equipStats[randomStat] || 0) + 1;
-              }
+              const equipStats = item.equipStats ? { ...item.equipStats } : {};
 
               luckyProg.inventory.push({
                 uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
@@ -2040,39 +2077,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         }
       }
 
-      // 根據掉落物品決定是否賦予強化寶石
-      const gemIdsToAward = getGemsToAwardFromDrops(droppedItemObjects, luckyProg);
-      const droppedGems = [];
-      for (const gemId of gemIdsToAward) {
-        const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
-        if (gemItem) {
-          // 嘗試堆疊寶石，如果失敗則新增
-          if (!tryStackGem(luckyProg, gemItem.id)) {
-            luckyProg.inventory.push({
-              uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
-              itemEffect: gemItem.effect || { type: "none", value: 0 },
-              useEffects: gemItem.useEffects || [],
-              passiveEffects: gemItem.passiveEffects || [],
-              procEffects: gemItem.procEffects || [],
-              combatEffects: gemItem.combatEffects || [],
-              itemType: gemItem.itemType || "consumable",
-              imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
-              equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
-              weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
-              atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
-              stackCount: 1,
-              source: "monster_drop_bonus_gem", sourceRef: monster.name,
-              purchasedAt: new Date().toISOString()
-            });
-          }
-          droppedGems.push(gemItem.name);
-        }
-      }
-
-      if (droppedItems.length > 0 || droppedGems.length > 0) {
+      if (droppedItems.length > 0) {
         luckyProg.updatedAt = new Date().toISOString();
         await sc.progressRepository.save(luckyProg);
-        const allDropped = [...droppedItems, ...droppedGems];
+        const allDropped = [...droppedItems];
         if (perPidRewards[luckyPid]) perPidRewards[luckyPid].drops = [...allDropped];
         const luckyName = luckyPid === discordId ? displayName : (mergedDmg[luckyPid]?.name || luckyPid);
         const isKiller = luckyPid === discordId;
@@ -2141,13 +2149,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
                 bonusItemObjects.push(gemItem);
               }
             } else {
-              // 戒指掉落時隨機屬性 +1
-              let equipStats = item.equipStats ? { ...item.equipStats } : {};
-              if (item.equipSlot === 'accessory_l' || item.equipSlot === 'accessory_r') {
-                const statKeys = ['str', 'agi', 'vit', 'int', 'dex', 'luk'];
-                const randomStat = statKeys[Math.floor(Math.random() * statKeys.length)];
-                equipStats[randomStat] = (equipStats[randomStat] || 0) + 1;
-              }
+              const equipStats = item.equipStats ? { ...item.equipStats } : {};
 
               bonusProg.inventory.push({
                 uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
@@ -2170,39 +2172,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           }
         }
       }
-      // 根據掉落物品決定是否賦予強化寶石
-      const bonusGemIds = getGemsToAwardFromDrops(bonusItemObjects, bonusProg);
-      const bonusGems = [];
-      for (const gemId of bonusGemIds) {
-        const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
-        if (gemItem) {
-          // 嘗試堆疊寶石，如果失敗則新增
-          if (!tryStackGem(bonusProg, gemItem.id)) {
-            bonusProg.inventory.push({
-              uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
-              itemEffect: gemItem.effect || { type: "none", value: 0 },
-              useEffects: gemItem.useEffects || [],
-              passiveEffects: gemItem.passiveEffects || [],
-              procEffects: gemItem.procEffects || [],
-              combatEffects: gemItem.combatEffects || [],
-              itemType: gemItem.itemType || "consumable",
-              imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
-              equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
-              weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
-              atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
-              stackCount: 1,
-              source: "monster_drop_bonus_gem", sourceRef: monster.name,
-              purchasedAt: new Date().toISOString()
-            });
-          }
-          bonusGems.push(gemItem.name);
-        }
-      }
-
-      if (bonusItems.length > 0 || bonusGems.length > 0) {
+      if (bonusItems.length > 0) {
         bonusProg.updatedAt = new Date().toISOString();
         await sc.progressRepository.save(bonusProg);
-        const allBonusDropped = [...bonusItems, ...bonusGems];
+        const allBonusDropped = [...bonusItems];
         if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...allBonusDropped];
         const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
         _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, kind).catch(() => {});

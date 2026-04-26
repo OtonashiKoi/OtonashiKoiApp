@@ -53,15 +53,13 @@ class EnhanceService {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家未找到", 404);
 
-    // 強化完成後會自動同步，不需要在這裡手動從 DB 拉（itemService._syncItemToPlayers 負責）
-
     // 找到要強化的裝備（可能在背包或身上）
     const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
     let equipment = null;
-    let equipmentIndex = -1;
+    let equipmentSlotKey = null;
 
     // 先查詢背包
-    equipmentIndex = inventory.findIndex(item => item.uuid === inventoryUuid);
+    const equipmentIndex = inventory.findIndex(item => item.uuid === inventoryUuid);
     if (equipmentIndex !== -1) {
       equipment = inventory[equipmentIndex];
     } else {
@@ -69,6 +67,7 @@ class EnhanceService {
       for (const [slotKey, slotItem] of Object.entries(progress.equipment || {})) {
         if (slotItem && slotItem.uuid === inventoryUuid) {
           equipment = slotItem;
+          equipmentSlotKey = slotKey;
           break;
         }
       }
@@ -139,34 +138,37 @@ class EnhanceService {
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
 
+    if (isSuccess && this.questService) {
+      this.questService.recordProgress(discordId, "enhance_count", 1).catch(() => {});
+    }
+
     // 強化完成後，同步該道具的最新 effects（如果有 itemId）
     if (isSuccess && equipment.itemId && this.itemRepository) {
       const libItem = await this.itemRepository.findById(equipment.itemId).catch(() => null);
       if (libItem) {
+        let updated = false;
         // 同步 procEffects、passiveEffects 等從 DB
-        if (equipmentIndex !== -1) {
-          // 在背包
-          progress.inventory[equipmentIndex].procEffects = libItem.procEffects || [];
-          progress.inventory[equipmentIndex].passiveEffects = libItem.passiveEffects || [];
-          progress.inventory[equipmentIndex].useEffects = libItem.useEffects || [];
-          progress.inventory[equipmentIndex].combatEffects = libItem.combatEffects || [];
+        if (equipmentSlotKey && progress.equipment?.[equipmentSlotKey]?.uuid === inventoryUuid) {
+          progress.equipment[equipmentSlotKey].procEffects = libItem.procEffects || [];
+          progress.equipment[equipmentSlotKey].passiveEffects = libItem.passiveEffects || [];
+          progress.equipment[equipmentSlotKey].useEffects = libItem.useEffects || [];
+          progress.equipment[equipmentSlotKey].combatEffects = libItem.combatEffects || [];
+          updated = true;
         } else {
-          // 在裝備槽
-          for (const [slotKey, slotItem] of Object.entries(progress.equipment || {})) {
-            if (slotItem && slotItem.uuid === inventoryUuid) {
-              progress.equipment[slotKey].procEffects = libItem.procEffects || [];
-              progress.equipment[slotKey].passiveEffects = libItem.passiveEffects || [];
-              progress.equipment[slotKey].useEffects = libItem.useEffects || [];
-              progress.equipment[slotKey].combatEffects = libItem.combatEffects || [];
-              break;
-            }
+          const refreshedIndex = (progress.inventory || []).findIndex((item) => item?.uuid === inventoryUuid);
+          if (refreshedIndex !== -1) {
+            progress.inventory[refreshedIndex].procEffects = libItem.procEffects || [];
+            progress.inventory[refreshedIndex].passiveEffects = libItem.passiveEffects || [];
+            progress.inventory[refreshedIndex].useEffects = libItem.useEffects || [];
+            progress.inventory[refreshedIndex].combatEffects = libItem.combatEffects || [];
+            updated = true;
           }
         }
-        await this.progressRepository.save(progress);
+
+        if (updated) {
+          await this.progressRepository.save(progress);
+        }
       }
-    }
-    if (isSuccess && this.questService) {
-      this.questService.recordProgress(discordId, "enhance_count", 1).catch(() => {});
     }
 
     return {

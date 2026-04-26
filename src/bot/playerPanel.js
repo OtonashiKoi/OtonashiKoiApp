@@ -1,4 +1,4 @@
-const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
+const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder } = require("discord.js");
 const path = require("path");
 const fs = require("fs");
 const { BUTTON_IDS, createPlayerPanelMessage } = require("./playerPanelView");
@@ -9,6 +9,7 @@ const { calcPlayerStats } = require("../shared/combatStats");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
 const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
+const { MAX_ENHANCE_LEVEL } = require("../shared/enhanceConfig");
 
 const AUTO_DELETE_MS = 60_000;
 const ACTIVE_REPLY_BY_USER = new Map();
@@ -545,7 +546,7 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
 
   if (canEnhance) {
     const currentLevel = Number(group.enhanceLevel || 0);
-    const isMaxed = currentLevel >= 3;
+    const isMaxed = currentLevel >= MAX_ENHANCE_LEVEL;
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_enhance:${group.repUuid}:${tab}:${page}`)
@@ -602,7 +603,12 @@ function filterByTab(inventory, tab) {
       !isWeaponLikeSlot(e.equipSlot)
     );
   }
-  if (tab === "special") return inventory.filter(e => e.itemType === "equipment" && (EQ_SPECIAL_SLOTS.has(e.equipSlot) || e.equipSlot === "special"));
+  if (tab === "special") {
+    return inventory.filter(e =>
+      (e.itemType === "equipment" && (EQ_SPECIAL_SLOTS.has(e.equipSlot) || e.equipSlot === "special")) ||
+      (e.itemType === "monster_card")
+    );
+  }
   if (tab === "badge") return inventory.filter(e => e.itemType === "job_badge");
   return inventory.filter(e => e.itemType !== "equipment" && e.itemType !== "job_badge");
 }
@@ -691,7 +697,7 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
       const slot = slotLabel ? `（${slotLabel}）` : "";
       const statStr = formatEquipStats(e.equipStats);
       const statsPart = statStr ? `｜${statStr}` : "";
-      const overMax = enhLv > 3 ? " ⚠️超過上限(+3)" : "";
+  const overMax = enhLv > MAX_ENHANCE_LEVEL ? ` ⚠️超過上限(+${MAX_ENHANCE_LEVEL})` : "";
       const price = e.sellPrice != null ? `售 ${e.sellPrice}💰/件` : "不可販售";
       lines.push(`${offset + i + 1}. **${baseName}**${enh}${slot}${statsPart}｜${price}${overMax} ×${e.count}`);
       return;
@@ -849,9 +855,19 @@ async function handleBackpackView(interaction, uuid) {
     return;
   }
   try {
-    const imagePath = path.resolve(__dirname, "../web/public", entry.imageUrl.replace(/^\//, ""));
+    const imageUrl = String(entry.imageUrl || "").trim();
+    if (/^https?:\/\//i.test(imageUrl)) {
+      const embed = new EmbedBuilder().setImage(imageUrl);
+      await safeEditReply(interaction, {
+        content: `🖼️ **${entry.itemName}**\n${entry.source === "monster_drop" ? `掉落自 ${entry.sourceRef || "怪物"}` : `購於 ${(entry.purchasedAt || "").slice(0, 10)}`}\n\n你可以右鍵點擊圖片 → 在瀏覽器中開啟或另存圖片。`,
+        embeds: [embed]
+      });
+      await rememberActiveReply(interaction, 60_000);
+      return;
+    }
+    const imagePath = path.resolve(__dirname, "../web/public", imageUrl.replace(/^\//, ""));
     if (!fs.existsSync(imagePath)) {
-      await interaction.reply({ content: "❌ 圖片檔案不存在。", flags: MessageFlags.Ephemeral });
+      await safeEditReply(interaction, { content: "❌ 圖片檔案不存在。" });
       return;
     }
     const fileName = path.basename(imagePath);
@@ -884,7 +900,7 @@ async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0) {
     const item = progress?.inventory?.find(i => i.uuid === uuid);
     let targetSlot = null;
 
-    if (item?.equipSlot === "special") {
+    if (item?.equipSlot === "special" || item?.itemType === "monster_card") {
       const SPECIAL_SLOTS = ["special_1", "special_2", "special_3"];
       const equipped = progress?.equipment || {};
       targetSlot = SPECIAL_SLOTS.find(s => !equipped[s]) || SPECIAL_SLOTS[0];
@@ -1096,19 +1112,19 @@ function buildEnhanceEntryPayload(progress, notice = "") {
 
   const overMax = ENHANCE_SLOT_ORDER
     .map((slot) => equipped[slot])
-    .filter((entry) => entry && Number(entry.enhanceLevel || 0) > 3);
+    .filter((entry) => entry && Number(entry.enhanceLevel || 0) > MAX_ENHANCE_LEVEL);
 
   const overMaxLine = overMax.length
-    ? `\n\n⚠️ 偵測到超過強化上限（+3）的裝備：\n${overMax.slice(0, 5).map((entry) => `・${entry.itemName}（+${entry.enhanceLevel}）`).join("\n")}${overMax.length > 5 ? `\n…共 ${overMax.length} 件` : ""}`
+    ? `\n\n⚠️ 偵測到超過強化上限（+${MAX_ENHANCE_LEVEL}）的裝備：\n${overMax.slice(0, 5).map((entry) => `・${entry.itemName}（+${entry.enhanceLevel}）`).join("\n")}${overMax.length > 5 ? `\n…共 ${overMax.length} 件` : ""}`
     : "";
 
   const enhanceable = ENHANCE_SLOT_ORDER
     .map((slot) => equipped[slot])
-    .filter((entry) => entry && ((entry.tier) || (entry.equipStats && Object.keys(entry.equipStats).length > 0)) && (entry.enhanceLevel ?? 0) < 3);
+    .filter((entry) => entry && ((entry.tier) || (entry.equipStats && Object.keys(entry.equipStats).length > 0)) && (entry.enhanceLevel ?? 0) < MAX_ENHANCE_LEVEL);
 
   if (!enhanceable.length) {
     return {
-      content: (notice ? `${notice}\n\n` : "") + "⚗️ 目前裝備槽上沒有可強化的裝備（需有 tier 或裝備屬性，且未達 +3 上限）。",
+      content: (notice ? `${notice}\n\n` : "") + `⚗️ 目前裝備槽上沒有可強化的裝備（需有 tier 或裝備屬性，且未達 +${MAX_ENHANCE_LEVEL} 上限）。`,
       components: [],
     };
   }
@@ -1116,7 +1132,7 @@ function buildEnhanceEntryPayload(progress, notice = "") {
   const opts = enhanceable.slice(0, 25).map((entry) => {
     const slot = EQ_SLOT_LABELS[entry.equipSlot] || entry.equipSlot;
     const baseName = normalizeName(entry.itemName);
-    const maxMaterialLevel = Math.min(2, Math.max(0, Number(entry.enhanceLevel || 0)));
+    const maxMaterialLevel = Math.min(MAX_ENHANCE_LEVEL - 1, Math.max(0, Number(entry.enhanceLevel || 0)));
     const matUnits = inv
       .filter((mat) => {
         if (!mat || mat.itemType !== "equipment") return false;
@@ -1173,8 +1189,8 @@ async function handleEnhanceSelect(interaction, targetUuid) {
   }
 
   const curLevel = target.enhanceLevel ?? 0;
-  if (curLevel >= 3) {
-    await safeEditReply(interaction, { content: `❌ **${target.itemName}** 已達強化上限（+3）。`, components: [] });
+  if (curLevel >= MAX_ENHANCE_LEVEL) {
+    await safeEditReply(interaction, { content: `❌ **${target.itemName}** 已達強化上限（+${MAX_ENHANCE_LEVEL}）。`, components: [] });
     return;
   }
   // 使用寶石強化流程：詢問 enhanceService 取得寶石需求與成功率
@@ -1186,7 +1202,7 @@ async function handleEnhanceSelect(interaction, targetUuid) {
     }
 
     if (enhanceInfo.isMaxed) {
-      await safeEditReply(interaction, { content: `❌ **${enhanceInfo.itemName}** 已達強化上限（+3）。`, components: [] });
+      await safeEditReply(interaction, { content: `❌ **${enhanceInfo.itemName}** 已達強化上限（+${MAX_ENHANCE_LEVEL}）。`, components: [] });
       return;
     }
 
@@ -1258,7 +1274,7 @@ async function handleEnhanceAuto(interaction, targetUuid) {
     // result.message 已包含成功/失敗說明
     await safeEditReply(interaction, buildEnhanceEntryPayload(progress, result.message));
 
-    // 如果成功並達到 +3，嘗試組成通知內容後廣播
+    // 如果成功並達到公告門檻（+3 以上），嘗試組成通知內容後廣播
     if (result.success && (result.newLevel || 0) >= 3) {
       // 取得剛剛被強化的裝備資料以構成公告內容
       let ann = null;
@@ -1317,6 +1333,7 @@ async function _announceEnhance(interaction, result) {
 
 const QUEST_TAB_META = {
   onboarding: { label: "新手任務", emoji: "🌱", resetText: "一次性任務（不重置）" },
+  job: { label: "職業任務", emoji: "🎖️", resetText: "符合條件時自動出現，完成後獲得職業徽章" },
   daily: { label: "每日任務", emoji: "🗓️", resetText: "台灣時間每日 00:00 重置" },
   weekly: { label: "每週任務", emoji: "📅", resetText: "台灣時間每週一 00:00 重置" }
 };
@@ -1327,6 +1344,10 @@ function buildQuestTabRow(activeCadence = "weekly") {
       .setCustomId("quest_tab:onboarding")
       .setLabel("🌱 新手")
       .setStyle(activeCadence === "onboarding" ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId("quest_tab:job")
+      .setLabel("🎖️ 職業")
+      .setStyle(activeCadence === "job" ? ButtonStyle.Primary : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId("quest_tab:daily")
       .setLabel("🗓️ 每日")
@@ -1353,7 +1374,8 @@ function buildQuestCenterMessage(progressList, cadence = "weekly") {
     if (quest.rewardExp) rewards.push(`${quest.rewardExp} ⭐`);
     if (quest.rewardItemId) rewards.push("＋道具");
     const rewardStr = rewards.length ? ` ｜ 獎勵：${rewards.join(" ")}` : "";
-    lines.push(`**${quest.title}** ${status}\n${bar} ${current}／${quest.target}${rewardStr}`);
+    const descStr = quest.description ? `\n${quest.description}` : "";
+    lines.push(`**${quest.title}** ${status}${descStr}\n${bar} ${current}／${quest.target}${rewardStr}`);
 
     if (done && !claimed) {
       claimButtons.push(
@@ -1685,7 +1707,18 @@ async function handleEquipSlotButton(interaction, slot) {
   await interaction.deferUpdate();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const equipped = progress?.equipment || {};
-  const inventory = (progress?.inventory || []).filter(e => (e.itemType === "equipment" || e.itemType === "job_badge") && e.equipSlot === slot);
+  const inventory = (progress?.inventory || []).filter((e) => {
+    if (e.itemType === "job_badge") return e.equipSlot === slot;
+    if (e.itemType === "equipment") {
+      if (e.equipSlot === slot) return true;
+      if (slot.startsWith("special_") && e.equipSlot === "special") return true;
+      return false;
+    }
+    if (e.itemType === "monster_card") {
+      return slot.startsWith("special_");
+    }
+    return false;
+  });
 
   const options = [];
   if (equipped[slot]) {
@@ -1745,7 +1778,7 @@ async function handleEquipmentSelect(interaction) {
       const item = progress?.inventory?.find(i => i.uuid === uuid);
       let targetSlot = null;
 
-      if (item?.equipSlot === "special") {
+      if (item?.equipSlot === "special" || item?.itemType === "monster_card") {
         const SPECIAL_SLOTS = ["special_1", "special_2", "special_3"];
         const equipped = progress?.equipment || {};
         targetSlot = SPECIAL_SLOTS.find(s => !equipped[s]) || SPECIAL_SLOTS[0];

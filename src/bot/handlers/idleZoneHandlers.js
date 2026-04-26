@@ -168,7 +168,7 @@ function buildZoneSelectMessage(status) {
   const lines = [
     `📊 目前等級：**Lv.${status.level}**`,
     "請選擇要掛機的怪物區（依怪物區等級限制開放）：",
-    "規則：前 5 分鐘無獎勵；達標後依時間連續累積（最多 12 小時）；不掉道具。"
+    "規則：只獲得金幣與 EXP；前 5 分鐘無獎勵；達標後依時間連續累積（最多 12 小時）；非會員每日最多領 6 小時；會員不限時數。"
   ];
 
   if (!zones.length) {

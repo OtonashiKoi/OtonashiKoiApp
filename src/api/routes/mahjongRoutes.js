@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { getState, joinQueue, removeFromQueue, dismissTeam, resetAll, subscribers } = require('../../services/mahjong/mahjongQueue');
+const { getState, joinQueue, removeFromQueue, moveQueueEntry, moveQueueEntryToIndex, dismissTeam, resetAll, subscribers } = require('../../services/mahjong/mahjongQueue');
 
 function createMahjongRoutes() {
   const router = Router();
@@ -37,6 +37,21 @@ function createMahjongRoutes() {
   router.delete('/api/mahjong/queue/:userId', (req, res) => {
     const { platform = 'unknown' } = req.query;
     removeFromQueue(req.params.userId, platform);
+    res.json(getState());
+  });
+
+  // 調整排隊順序（主持人）
+  router.post('/api/mahjong/queue/:userId/move', (req, res) => {
+    const { platform = 'unknown', direction } = req.body || {};
+    if (!direction) return res.status(400).json({ error: 'direction required' });
+    moveQueueEntry(req.params.userId, platform, direction);
+    res.json(getState());
+  });
+
+  router.post('/api/mahjong/queue/:userId/reorder', (req, res) => {
+    const { platform = 'unknown', targetIndex } = req.body || {};
+    if (!Number.isInteger(targetIndex)) return res.status(400).json({ error: 'targetIndex required' });
+    moveQueueEntryToIndex(req.params.userId, platform, targetIndex);
     res.json(getState());
   });
 

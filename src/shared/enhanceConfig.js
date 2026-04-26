@@ -19,29 +19,37 @@ const ENHANCE_RULES = {
   D: {
     '+1': { gems: 2, success: 100 },
     '+2': { gems: 5, success: 80 },
-    '+3': { gems: 15, success: 60 }
+    '+3': { gems: 15, success: 60 },
+    '+4': { gems: 30, success: 45 },
+    '+5': { gems: 50, success: 30 }
   },
   C: {
     '+1': { gems: 2, success: 100 },
     '+2': { gems: 5, success: 80 },
-    '+3': { gems: 15, success: 60 }
+    '+3': { gems: 15, success: 60 },
+    '+4': { gems: 30, success: 45 },
+    '+5': { gems: 50, success: 30 }
   },
   B: {
     '+1': { gems: 2, success: 100 },
     '+2': { gems: 5, success: 80 },
-    '+3': { gems: 15, success: 60 }
+    '+3': { gems: 15, success: 60 },
+    '+4': { gems: 30, success: 45 },
+    '+5': { gems: 50, success: 30 }
   },
   A: {
     '+1': { gems: 2, success: 100 },
     '+2': { gems: 5, success: 80 },
-    '+3': { gems: 15, success: 60 }
+    '+3': { gems: 15, success: 60 },
+    '+4': { gems: 30, success: 45 },
+    '+5': { gems: 50, success: 30 }
   }
 };
 
 /**
  * 各等級最大強化等級
  */
-const MAX_ENHANCE_LEVEL = 3;
+const MAX_ENHANCE_LEVEL = 5;
 
 /**
  * 獲取強化所需的寶石數量

@@ -840,6 +840,7 @@ select option { background: var(--surface); }
 }
 
 .quest-chip.cadence-onboarding { color: #7cff97; border-color: rgba(124, 255, 151, 0.35); background: rgba(124, 255, 151, 0.08); }
+.quest-chip.cadence-job { color: #ff9bd1; border-color: rgba(255, 155, 209, 0.35); background: rgba(255, 155, 209, 0.08); }
 .quest-chip.cadence-daily { color: #6de0ff; border-color: rgba(109, 224, 255, 0.35); background: rgba(109, 224, 255, 0.08); }
 .quest-chip.cadence-weekly { color: #f6cb74; border-color: rgba(246, 203, 116, 0.35); background: rgba(246, 203, 116, 0.08); }
 .quest-chip.enabled-false { color: #ff8da2; border-color: rgba(255, 141, 162, 0.35); background: rgba(255, 23, 68, 0.08); }

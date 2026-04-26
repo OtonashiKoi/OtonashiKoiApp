@@ -18,6 +18,12 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const fastUpdate = options.fastUpdate === true;
   const zoneTheme = getZoneTheme(zoneKey);
   const zoneBinding = options.zoneBinding || null;
+  const showEliteWaitingState = (
+    zoneKey === "elite" &&
+    worldBossStatus &&
+    !worldBossStatus.battleStartedAt &&
+    !worldBossStatus.canChallenge
+  );
   if (activeEvent) {
     return await createEventPanelMessage(activeEvent, zoneTheme, zoneKey);
   }
@@ -100,14 +106,18 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   }
   const desc = descLines.join("\n");
 
+  const panelTitle = showEliteWaitingState
+    ? `${zoneTheme.emoji} 世界BOSS 未現身`
+    : `${zoneTheme.emoji} ${monsterName}`;
+
   const embed = new EmbedBuilder()
-    .setTitle(`${zoneTheme.emoji} ${monsterName}`)
+    .setTitle(panelTitle)
     .setDescription(desc)
     .setColor(zoneTheme.color)
     .setFooter({ text: "怪物區域" });
   const files = [];
 
-  const imageSource = monster?.imageThumbnailUrl || monster?.imageUrl || "";
+  const imageSource = showEliteWaitingState ? "" : (monster?.imageThumbnailUrl || monster?.imageUrl || "");
   if (typeof imageSource === "string" && imageSource) {
     if (/^https?:\/\//i.test(imageSource)) {
       if (fastUpdate) {
@@ -140,17 +150,27 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     }
   }
 
-  const fields = [
-    { name: "HP", value: hpLine, inline: false }
-  ];
-  if (worldBossPartsLine) {
-    fields.push({ name: "世界王部位血量", value: worldBossPartsLine, inline: false });
+  const fields = [];
+  if (showEliteWaitingState) {
+    const waitingStatusLine = !worldBossStatus.unlocked
+      ? "世界BOSS 尚未現身，請先完成解鎖條件。"
+      : `世界BOSS 已撤離，冷卻剩餘約 ${worldBossStatus.cooldownRemainingMinutes} 分鐘。`;
+    fields.push(
+      { name: "目前狀態", value: waitingStatusLine, inline: false },
+      { name: "解鎖進度", value: `${worldBossStatus.hardKills}/${worldBossStatus.unlockTarget}`, inline: true },
+      { name: "挑戰限制", value: "開戰後 1 小時內未擊殺視為失敗", inline: true }
+    );
+  } else {
+    fields.push({ name: "HP", value: hpLine, inline: false });
+    if (worldBossPartsLine) {
+      fields.push({ name: "世界王部位血量", value: worldBossPartsLine, inline: false });
+    }
+    fields.push(
+      { name: "獎勵", value: rewardLine, inline: true },
+      { name: "狀態", value: statsLine, inline: true },
+      { name: "傷害排行", value: damageLine, inline: false }
+    );
   }
-  fields.push(
-    { name: "獎勵", value: rewardLine, inline: true },
-    { name: "狀態", value: statsLine, inline: true },
-    { name: "傷害排行", value: damageLine, inline: false }
-  );
   embed.addFields(...fields);
 
   const canEnter = zoneKey !== "elite" || !worldBossStatus || worldBossStatus.canChallenge;

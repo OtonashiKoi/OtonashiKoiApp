@@ -12,6 +12,12 @@ const { startIdleRotateTimer } = require("./handlers/monsterZoneHandlers");
 const { runWithCache } = require("../adapters/mongo/requestCache");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
 
+const RESTRICTED_ANIMATED_EMOJI_NAMES = new Set(["HUHU"]);
+const RESTRICTED_EMOJI_WARNING_DELETE_MS = 10_000;
+const WELCOME_AUDIT_INTERVAL_MS = 10 * 60 * 1000;
+
+let welcomeAuditTimer = null;
+
 async function ensureMemberPlayerProfile(member, reason) {
   try {
     const allowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(member);
@@ -29,6 +35,160 @@ async function ensureMemberPlayerProfile(member, reason) {
   } catch (error) {
     console.error(`[Discord] auto-provision failed for ${member?.user?.id || "unknown"}`, error);
   }
+}
+
+async function markPlayerWelcomeAnnounced(discordId, reason = "unknown") {
+  try {
+    const player = await serviceContext.playerService.playerRepository.findByDiscordId(discordId);
+    if (!player) return;
+    await serviceContext.playerService.playerRepository.save({
+      ...player,
+      welcomeAnnouncementSentAt: new Date().toISOString(),
+      welcomeAnnouncementReason: reason
+    });
+  } catch (error) {
+    console.warn("[Discord] 無法標記歡迎公告狀態：", error?.message || error);
+  }
+}
+
+async function ensureWelcomeAnnouncement(member, reason = "unknown") {
+  try {
+    const allowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(member);
+    if (!allowed) return false;
+
+    await ensureMemberPlayerProfile(member, reason);
+    const player = await serviceContext.playerService.playerRepository.findByDiscordId(member.user.id);
+    if (player?.welcomeAnnouncementSentAt) {
+      return false;
+    }
+
+    await sendPlayerWelcomeAnnouncement(member);
+    await markPlayerWelcomeAnnounced(member.user.id, reason);
+    return true;
+  } catch (error) {
+    console.warn("[Discord] 補發歡迎公告失敗：", error?.message || error);
+    return false;
+  }
+}
+
+async function sendPlayerWelcomeAnnouncement(member) {
+  try {
+    const client = getBotClient();
+    if (!client?.isReady() || !member?.guild) return;
+
+    const layout = await serviceContext.adminConsoleService.getChannelLayout().catch(() => null);
+    const bindings = layout?.discord?.bindings || [];
+    const announcementBinding = bindings.find((b) => b.enabled && b.channelId && b.featureKey === "town_chat") || null;
+
+    let channel = null;
+    if (announcementBinding?.channelId) {
+      channel = await client.channels.fetch(announcementBinding.channelId).catch(() => null);
+    }
+
+    if (!channel) {
+      const channels = await member.guild.channels.fetch().catch(() => null);
+      if (channels) {
+        channel = Array.from(channels.values()).find((ch) => {
+          if (!ch?.isTextBased?.()) return false;
+          const name = String(ch.name || "");
+          return (
+            name.includes("聊天大街") ||
+            name.includes("樂園廣播大街") ||
+            name.includes("乐园广播大街") ||
+            name.includes("掉落裝備") ||
+            name.includes("掉落装备")
+          );
+        }) || null;
+      }
+    }
+
+    if (!channel?.isTextBased()) return;
+
+    await channel.send(
+      `🎉 歡迎 <@${member.user.id}> 加入音無樂園，已正式取得玩家資格！\n` +
+      `快去完成打卡、任務，開始你的冒險之旅吧。`
+    );
+  } catch (error) {
+    console.warn("[Discord] 歡迎新玩家公告發送失敗：", error?.message || error);
+  }
+}
+
+async function auditMissingWelcomeAnnouncements(client) {
+  try {
+    if (!client?.isReady() || !config.discord.guildId) return;
+    const guild = await client.guilds.fetch(config.discord.guildId);
+    await guild.members.fetch();
+
+    let scanned = 0;
+    let announced = 0;
+    for (const member of guild.members.cache.values()) {
+      if (member.user?.bot) continue;
+      scanned += 1;
+      const didAnnounce = await ensureWelcomeAnnouncement(member, "welcome-audit");
+      if (didAnnounce) announced += 1;
+    }
+    if (announced > 0) {
+      console.log(`[Discord] welcome audit scanned ${scanned} members, announced ${announced}`);
+    }
+  } catch (error) {
+    console.warn("[Discord] 歡迎公告補掃描失敗：", error?.message || error);
+  }
+}
+
+function extractCustomEmojis(content = "") {
+  const matches = [...String(content).matchAll(/<(a?):([A-Za-z0-9_]+):(\d+)>/g)];
+  return matches.map((match) => ({
+    animated: match[1] === "a",
+    name: match[2],
+    id: match[3]
+  }));
+}
+
+async function isAdminMember(member) {
+  if (!member) return false;
+  const access = await serviceContext.accessControlService.getAccessControl().catch(() => null);
+  const adminRoleIds = access?.discord?.adminRoleIds || [];
+  const adminUserIds = access?.discord?.adminUserIds || [];
+
+  if (adminUserIds.includes(member.user?.id)) {
+    return true;
+  }
+
+  if (member.permissions?.has(PermissionsBitField.Flags.ManageGuild) || member.permissions?.has(PermissionsBitField.Flags.Administrator)) {
+    return true;
+  }
+
+  return adminRoleIds.some((roleId) => member.roles?.cache?.has(roleId));
+}
+
+async function moderateRestrictedAnimatedEmoji(message) {
+  if (!message.guild) return false;
+  if (message.author?.bot) return false;
+
+  const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+  if (!member) return false;
+  if (await isAdminMember(member)) return false;
+
+  const usedRestrictedEmoji = extractCustomEmojis(message.content).some((emoji) => (
+    emoji.animated && RESTRICTED_ANIMATED_EMOJI_NAMES.has(String(emoji.name || "").toUpperCase())
+  ));
+
+  if (!usedRestrictedEmoji) return false;
+
+  await message.delete().catch(() => {});
+
+  if (message.channel?.isTextBased()) {
+    const warning = await message.channel.send(
+      `⚠️ <@${message.author.id}> 不可以使用指定的動態表情，這次訊息已移除。再使用請改用一般文字或其他表情。`
+    ).catch(() => null);
+    if (warning) {
+      setTimeout(() => {
+        warning.delete().catch(() => {});
+      }, RESTRICTED_EMOJI_WARNING_DELETE_MS);
+    }
+  }
+
+  return true;
 }
 
 async function setupPersonalRoomChannel(client) {
@@ -397,6 +557,12 @@ function createBotClient() {
     } else {
       startIdleRotateTimer();
     }
+
+    await auditMissingWelcomeAnnouncements(readyClient);
+    if (welcomeAuditTimer) clearInterval(welcomeAuditTimer);
+    welcomeAuditTimer = setInterval(() => {
+      auditMissingWelcomeAnnouncements(readyClient).catch(() => {});
+    }, WELCOME_AUDIT_INTERVAL_MS);
   });
 
   client.on(Events.InteractionCreate, (interaction) => {
@@ -422,18 +588,24 @@ function createBotClient() {
 
   client.on(Events.MessageCreate, async (message) => {
     await checkSpam(message).catch((err) => console.error("[SpamGuard] error", err));
+    const handled = await moderateRestrictedAnimatedEmoji(message).catch((err) => {
+      console.error("[EmojiModeration] error", err);
+      return false;
+    });
+    if (handled) return;
     // 直播留言也在這裡走（原本由 commentFetcher 負責，非 Discord 訊息，故不衝突）
   });
 
   client.on(Events.GuildMemberAdd, async (member) => {
     await ensureMemberPlayerProfile(member, "guild-member-add");
+    await ensureWelcomeAnnouncement(member, "guild-member-add");
   });
 
   client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
     const wasAllowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(oldMember);
     const isAllowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(newMember);
     if (!wasAllowed && isAllowed) {
-      await ensureMemberPlayerProfile(newMember, "guild-member-update");
+      await ensureWelcomeAnnouncement(newMember, "guild-member-update");
     }
   });
 

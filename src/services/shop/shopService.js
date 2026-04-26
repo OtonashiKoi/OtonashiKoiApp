@@ -1,12 +1,14 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { applyEffectInstances } = require("../../shared/effectEngine");
+const { MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
 const crypto = require("crypto");
 
 // 各 tier 裝備販售價格
 const TIER_SELL_PRICE = { D: 10, C: 50, B: 100, A: 150 };
 
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes"];
+const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow"]);
 
 class ShopService {
   constructor(shopRepository, playerService, rewardService, progressRepository, progressService, itemRepository, playerTierService, questService = null) {
@@ -23,6 +25,11 @@ class ShopService {
   _normalizeEffect(effect) {
     if (!effect || !VALID_EFFECT_TYPES.includes(effect.type)) return { type: "none", value: 0 };
     return { type: effect.type, value: Math.max(0, Number(effect.value) || 0) };
+  }
+
+  _resolveIsTwoHanded({ weaponType = null, isTwoHanded = false } = {}) {
+    if (weaponType && TWO_HANDED_WEAPON_TYPES.has(String(weaponType))) return true;
+    return Boolean(isTwoHanded);
   }
 
   async listItems({ includeDisabled = false } = {}) {
@@ -64,7 +71,9 @@ class ShopService {
       equipSlot: (libraryItem.itemType === "equipment" || libraryItem.itemType === "job_badge") ? (libraryItem.equipSlot || null) : null,
       equipStats: (libraryItem.itemType === "equipment" || libraryItem.itemType === "job_badge") ? (libraryItem.equipStats || null) : null,
       weaponType: libraryItem.itemType === "equipment" ? (libraryItem.weaponType || null) : null,
-      isTwoHanded: libraryItem.itemType === "equipment" ? (libraryItem.isTwoHanded || false) : false,
+      isTwoHanded: libraryItem.itemType === "equipment"
+        ? this._resolveIsTwoHanded({ weaponType: libraryItem.weaponType, isTwoHanded: libraryItem.isTwoHanded })
+        : false,
       tier: libraryItem.tier || null,
       createdAt: new Date().toISOString()
     };
@@ -91,7 +100,9 @@ class ShopService {
       updated.equipSlot = (libraryItem.itemType === "equipment" || libraryItem.itemType === "job_badge") ? (libraryItem.equipSlot || null) : null;
       updated.equipStats = (libraryItem.itemType === "equipment" || libraryItem.itemType === "job_badge") ? (libraryItem.equipStats || null) : null;
       updated.weaponType = libraryItem.itemType === "equipment" ? (libraryItem.weaponType || null) : null;
-      updated.isTwoHanded = libraryItem.itemType === "equipment" ? (libraryItem.isTwoHanded || false) : false;
+      updated.isTwoHanded = libraryItem.itemType === "equipment"
+        ? this._resolveIsTwoHanded({ weaponType: libraryItem.weaponType, isTwoHanded: libraryItem.isTwoHanded })
+        : false;
       updated.tier = libraryItem.tier || null;
     }
     if (fields.price !== undefined) updated.price = Math.max(0, Number(fields.price) || 0);
@@ -104,7 +115,12 @@ class ShopService {
     if (fields.imageUrl !== undefined) updated.imageUrl = fields.imageUrl || null;
     if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl || null;
     if (fields.weaponType !== undefined) updated.weaponType = fields.weaponType || null;
-    if (fields.isTwoHanded !== undefined) updated.isTwoHanded = Boolean(fields.isTwoHanded);
+    if (fields.isTwoHanded !== undefined || fields.weaponType !== undefined) {
+      updated.isTwoHanded = this._resolveIsTwoHanded({
+        weaponType: updated.weaponType,
+        isTwoHanded: fields.isTwoHanded !== undefined ? fields.isTwoHanded : updated.isTwoHanded
+      });
+    }
     return this.shopRepository.save(updated);
   }
 
@@ -207,7 +223,7 @@ class ShopService {
         equipSlot: item.equipSlot || null,
         equipStats: libraryItem?.equipStats || item.equipStats || null,
         weaponType: item.weaponType || null,
-        isTwoHanded: item.isTwoHanded || false,
+        isTwoHanded: this._resolveIsTwoHanded({ weaponType: item.weaponType, isTwoHanded: item.isTwoHanded }),
         tier: effectiveTier,
         purchasedAt: new Date().toISOString()
       });
@@ -341,10 +357,21 @@ class ShopService {
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);
     const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此裝備", 404);
-    const entry = progress.inventory[idx];
-    if (entry.itemType !== "equipment" && entry.itemType !== "job_badge") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不是裝備", 400);
+    let entry = progress.inventory[idx];
+    if (entry.itemType !== "equipment" && entry.itemType !== "job_badge" && entry.itemType !== "monster_card") {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不是裝備", 400);
+    }
 
     let slot = entry.equipSlot;
+    if (entry.itemType === "monster_card" && !slot) {
+      slot = "special";
+      entry = {
+        ...entry,
+        itemType: "equipment",
+        equipSlot: "special"
+      };
+      progress.inventory[idx] = entry;
+    }
     if (!slot) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備未指定槽位", 400);
 
     // 特殊卡片：允許指定目標槽位 (special_1, special_2, special_3)
@@ -360,7 +387,9 @@ class ShopService {
 
     if (!progress.equipment) progress.equipment = {};
 
-    if (slot === "weapon" && entry.isTwoHanded) {
+    const entryIsTwoHanded = this._resolveIsTwoHanded({ weaponType: entry.weaponType, isTwoHanded: entry.isTwoHanded });
+
+    if (slot === "weapon" && entryIsTwoHanded) {
       const shieldItem = progress.equipment["shield"] || null;
       if (shieldItem) {
         if (!Array.isArray(progress.inventory)) progress.inventory = [];
@@ -370,7 +399,11 @@ class ShopService {
     }
     if (slot === "shield") {
       const mainWeapon = progress.equipment["weapon"] || null;
-      if (mainWeapon?.isTwoHanded) {
+      const mainWeaponIsTwoHanded = this._resolveIsTwoHanded({
+        weaponType: mainWeapon?.weaponType,
+        isTwoHanded: mainWeapon?.isTwoHanded
+      });
+      if (mainWeaponIsTwoHanded) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "主手裝備了雙手武器，無法使用副手槽！", 400);
       }
     }
@@ -382,6 +415,13 @@ class ShopService {
       if (libItem) {
         freshEntry = {
           ...entry,
+          itemType: (libItem.itemType === "monster_card" ? "equipment" : (libItem.itemType || entry.itemType || "equipment")),
+          equipSlot: libItem.equipSlot || slot || entry.equipSlot || "special",
+          weaponType: libItem.weaponType || entry.weaponType || null,
+          isTwoHanded: this._resolveIsTwoHanded({
+            weaponType: libItem.weaponType || entry.weaponType || null,
+            isTwoHanded: libItem.isTwoHanded ?? entry.isTwoHanded
+          }),
           passiveEffects: libItem.passiveEffects || entry.passiveEffects || [],
           combatEffects: libItem.combatEffects || entry.combatEffects || [],
           procEffects: libItem.procEffects || entry.procEffects || [],
@@ -431,7 +471,7 @@ class ShopService {
   }
 
   async enhanceItem(discordId, targetUuid, materialUuid) {
-    const ENHANCE_MAX = 3;
+    const ENHANCE_MAX = MAX_ENHANCE_LEVEL;
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
     const inv = progress.inventory || [];
@@ -453,7 +493,7 @@ class ShopService {
     const requiredUnits = Math.pow(2, currentLevel);
     const unitValue = (entry) => {
       const level = Number(entry?.enhanceLevel || 0);
-      if (level >= 3) return 0;
+      if (level >= ENHANCE_MAX) return 0;
       return Math.pow(2, Math.max(0, level));
     };
     const baseName = String(target.itemName || "").replace(/\s*\+\d+$/, "").trim();
@@ -465,7 +505,7 @@ class ShopService {
       const n = String(entry.itemName || "").replace(/\s*\+\d+$/, "").trim();
       return n === baseName;
     };
-    const maxMaterialLevel = Math.min(2, Math.max(0, Number(currentLevel || 0)));
+    const maxMaterialLevel = Math.min(ENHANCE_MAX - 1, Math.max(0, Number(currentLevel || 0)));
     const candidates = inv
       .filter(isSameBase)
       .filter((entry) => Number(entry?.enhanceLevel || 0) <= maxMaterialLevel);
@@ -473,7 +513,7 @@ class ShopService {
     if (availableUnits < requiredUnits) {
       throw new AppError(
         ERROR_CODES.INVALID_ARGUMENT,
-        `材料不足：強化 ${baseName} +${currentLevel} → +${currentLevel + 1} 需要等價 ${requiredUnits} 把同裝備（+1=2、+2=4；+3 不可當材料），背包目前只有等價 ${availableUnits} 把。`,
+        `材料不足：強化 ${baseName} +${currentLevel} → +${currentLevel + 1} 需要等價 ${requiredUnits} 把同裝備（+1=2、+2=4、+3=8、+4=16；+${ENHANCE_MAX} 不可當材料），背包目前只有等價 ${availableUnits} 把。`,
         400
       );
     }
@@ -560,19 +600,25 @@ class ShopService {
     idxs.sort((a, b) => b - a);
     for (const i of idxs) progress.inventory.splice(i, 1);
 
+    let savedTargetIndex = -1;
     if (targetSlotKey) {
       progress.equipment[targetSlotKey] = updatedTarget;
     } else {
-      const targetIdx = progress.inventory.findIndex(e => e.uuid === target.uuid);
-      if (targetIdx !== -1) progress.inventory[targetIdx] = updatedTarget;
+      savedTargetIndex = progress.inventory.findIndex(e => e.uuid === target.uuid);
+      if (savedTargetIndex !== -1) progress.inventory[savedTargetIndex] = updatedTarget;
     }
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
+
+    if (this.questService) {
+      this.questService.recordProgress(discordId, "enhance_count", 1).catch(() => {});
+    }
 
     // 強化完成後，同步該道具的最新 effects（如果有 itemId）
     if (updatedTarget.itemId && this.itemRepository) {
       const libItem = await this.itemRepository.findById(updatedTarget.itemId).catch(() => null);
       if (libItem) {
+        let updated = false;
         // 同步 procEffects、passiveEffects 等從 DB
         const slot = targetSlotKey;
         if (slot && progress.equipment[slot]) {
@@ -580,19 +626,23 @@ class ShopService {
           progress.equipment[slot].passiveEffects = libItem.passiveEffects || [];
           progress.equipment[slot].useEffects = libItem.useEffects || [];
           progress.equipment[slot].combatEffects = libItem.combatEffects || [];
-        } else if (!slot && targetIdx !== -1) {
-          progress.inventory[targetIdx].procEffects = libItem.procEffects || [];
-          progress.inventory[targetIdx].passiveEffects = libItem.passiveEffects || [];
-          progress.inventory[targetIdx].useEffects = libItem.useEffects || [];
-          progress.inventory[targetIdx].combatEffects = libItem.combatEffects || [];
+          updated = true;
+        } else {
+          const refreshedIndex = savedTargetIndex !== -1
+            ? savedTargetIndex
+            : progress.inventory.findIndex((entry) => entry?.uuid === updatedTarget.uuid);
+          if (refreshedIndex !== -1) {
+            progress.inventory[refreshedIndex].procEffects = libItem.procEffects || [];
+            progress.inventory[refreshedIndex].passiveEffects = libItem.passiveEffects || [];
+            progress.inventory[refreshedIndex].useEffects = libItem.useEffects || [];
+            progress.inventory[refreshedIndex].combatEffects = libItem.combatEffects || [];
+            updated = true;
+          }
         }
-        if (slot || targetIdx !== -1) {
+        if (updated) {
           await this.progressRepository.save(progress);
         }
       }
-    }
-    if (this.questService) {
-      this.questService.recordProgress(discordId, "enhance_count", 1).catch(() => {});
     }
     return {
       itemName: newName,

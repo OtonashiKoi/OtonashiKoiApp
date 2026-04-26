@@ -3,8 +3,6 @@
  * server 重啟後清空（直播期間用，合理）
  */
 
-const TEAM_SIZE = 3;
-
 // 等待佇列：[{ name, userId, platform, joinedAt }]
 let queue = [];
 
@@ -25,7 +23,7 @@ function broadcast() {
 }
 
 function getState() {
-  return { queue, teams, teamSize: TEAM_SIZE, updatedAt: new Date().toISOString() };
+  return { queue, teams, teamSize: 0, updatedAt: new Date().toISOString() };
 }
 
 /**
@@ -40,16 +38,8 @@ function joinQueue(name, userId, platform) {
 
   queue.push({ name, userId, platform, joinedAt: new Date().toISOString() });
 
-  // 湊滿一隊
-  let newTeam = null;
-  if (queue.length >= TEAM_SIZE) {
-    const members = queue.splice(0, TEAM_SIZE);
-    newTeam = { id: teamCounter++, members, formedAt: new Date().toISOString() };
-    teams.push(newTeam);
-  }
-
   broadcast();
-  return { joined: true, alreadyIn: false, newTeam };
+  return { joined: true, alreadyIn: false, newTeam: null };
 }
 
 /** 手動移除排隊（主持人操作） */
@@ -58,6 +48,39 @@ function removeFromQueue(userId, platform) {
   queue = queue.filter(p => !(p.userId === userId && p.platform === platform));
   if (queue.length !== before) broadcast();
   return queue.length !== before;
+}
+
+/** 調整排隊順序 */
+function moveQueueEntry(userId, platform, direction) {
+  const index = queue.findIndex((p) => p.userId === userId && p.platform === platform);
+  if (index === -1) return false;
+
+  let targetIndex = index;
+  if (direction === "up") targetIndex = Math.max(0, index - 1);
+  if (direction === "down") targetIndex = Math.min(queue.length - 1, index + 1);
+  if (direction === "top") targetIndex = 0;
+  if (direction === "bottom") targetIndex = queue.length - 1;
+
+  if (targetIndex === index) return false;
+
+  const [entry] = queue.splice(index, 1);
+  queue.splice(targetIndex, 0, entry);
+  broadcast();
+  return true;
+}
+
+/** 直接移動到指定 index（拖曳排序用） */
+function moveQueueEntryToIndex(userId, platform, targetIndex) {
+  const index = queue.findIndex((p) => p.userId === userId && p.platform === platform);
+  if (index === -1) return false;
+
+  const safeIndex = Math.max(0, Math.min(queue.length - 1, Number(targetIndex)));
+  if (safeIndex === index || Number.isNaN(safeIndex)) return false;
+
+  const [entry] = queue.splice(index, 1);
+  queue.splice(safeIndex, 0, entry);
+  broadcast();
+  return true;
 }
 
 /** 解散指定隊伍 */
@@ -76,4 +99,4 @@ function resetAll() {
   broadcast();
 }
 
-module.exports = { getState, joinQueue, removeFromQueue, dismissTeam, resetAll, subscribers };
+module.exports = { getState, joinQueue, removeFromQueue, moveQueueEntry, moveQueueEntryToIndex, dismissTeam, resetAll, subscribers };

@@ -1,8 +1,14 @@
 "use strict";
 
-const QUEST_CADENCES = ["onboarding", "daily", "weekly"];
+const QUEST_CADENCES = ["onboarding", "job", "daily", "weekly"];
 const QUEST_TYPES = {
   battle_count:      { label: "出戰次數",        unit: "次" },
+  battle_with_sword: { label: "使用劍系出戰次數", unit: "次" },
+  battle_with_axe:   { label: "使用斧系出戰次數", unit: "次" },
+  battle_with_mace:  { label: "使用槌系出戰次數", unit: "次" },
+  battle_with_dagger:{ label: "使用匕首出戰次數", unit: "次" },
+  battle_with_staff: { label: "使用法杖出戰次數", unit: "次" },
+  battle_with_bow:   { label: "使用弓出戰次數",   unit: "次" },
   battle_win:        { label: "戰鬥勝利次數",     unit: "次" },
   damage_total:      { label: "累計造成傷害",     unit: "點" },
   checkin_count:     { label: "打卡次數",        unit: "次" },
@@ -19,7 +25,7 @@ const QUEST_TYPES = {
   weekly_complete_count: { label: "完成全部每週任務", unit: "項" },
 };
 
-const CADENCE_ORDER = { onboarding: 1, daily: 2, weekly: 3 };
+const CADENCE_ORDER = { onboarding: 1, job: 2, daily: 3, weekly: 4 };
 
 function normalizeCadence(cadence) {
   return QUEST_CADENCES.includes(cadence) ? cadence : "weekly";
@@ -27,6 +33,7 @@ function normalizeCadence(cadence) {
 
 function resetPolicyByCadence(cadence) {
   if (cadence === "onboarding") return "once";
+  if (cadence === "job") return "once";
   if (cadence === "daily") return "tw_daily";
   return "tw_weekly";
 }
@@ -73,6 +80,7 @@ function currentWeekLabel() {
 function resolvePeriodKey(cadence) {
   const c = normalizeCadence(cadence);
   if (c === "onboarding") return "onboarding-v1";
+  if (c === "job") return "job-v1";
   if (c === "daily") return currentDayLabel();
   return currentWeekLabel();
 }
@@ -98,6 +106,12 @@ class WeeklyQuestService {
 
   _normalizeDefinition(def) {
     const cadence = normalizeCadence(def?.cadence || "weekly");
+    const unlockWeaponTypes = Array.isArray(def?.unlockWeaponTypes)
+      ? def.unlockWeaponTypes.map((v) => String(v || "").trim()).filter(Boolean)
+      : (typeof def?.unlockWeaponTypes === "string"
+        ? String(def.unlockWeaponTypes).split(",").map((v) => v.trim()).filter(Boolean)
+        : []);
+    const unlockAttribute = def?.unlockAttribute ? String(def.unlockAttribute).trim().toLowerCase() : null;
     return {
       ...def,
       cadence,
@@ -105,7 +119,12 @@ class WeeklyQuestService {
       sortOrder: Number(def?.sortOrder || 0),
       groupKey: String(def?.groupKey || "core"),
       levelLimit: Math.max(0, Number(def?.levelLimit || 0)),
-      enabled: def?.enabled !== false
+      enabled: def?.enabled !== false,
+      unlockLevel: Math.max(0, Number(def?.unlockLevel || 0)),
+      unlockWeaponTypes,
+      unlockAttribute: ["str", "agi", "vit", "int", "dex", "luk"].includes(unlockAttribute) ? unlockAttribute : null,
+      unlockAttributeMin: Math.max(0, Number(def?.unlockAttributeMin || 0)),
+      hideIfRewardOwned: def?.hideIfRewardOwned !== false
     };
   }
 
@@ -118,6 +137,72 @@ class WeeklyQuestService {
       // ignore
     }
     return playerLevel;
+  }
+
+  async _getPlayerQuestContext(discordId) {
+    let level = 1;
+    let attributes = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+    let equipment = {};
+    let inventory = [];
+
+    try {
+      const profile = await this.playerService.getProfile(discordId, discordId);
+      const progress = profile?.progress || {};
+      level = Number(progress.level || 1);
+      attributes = { ...attributes, ...(progress.attributes || {}) };
+      equipment = progress.equipment || {};
+      inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
+    } catch (_) {
+      // ignore
+    }
+
+      return {
+        level,
+        attributes,
+        equipment,
+        inventory,
+        weaponType: equipment?.weapon?.weaponType || null,
+        inventoryItemIds: new Set(
+          (Array.isArray(inventory) ? inventory : [])
+            .map((item) => item?.itemId ? String(item.itemId) : null)
+            .filter(Boolean)
+        ),
+        equippedItemIds: new Set(
+          Object.values(equipment || {})
+            .map((item) => item?.itemId ? String(item.itemId) : null)
+            .filter(Boolean)
+        )
+    };
+  }
+
+  _isQuestVisibleForPlayer(quest, context) {
+    if (!quest?.enabled) return false;
+    const level = Number(context?.level || 1);
+    if (quest.levelLimit && quest.levelLimit > level) return false;
+    if (quest.unlockLevel && level < Number(quest.unlockLevel || 0)) return false;
+
+      if (
+        quest.hideIfRewardOwned &&
+        quest.rewardItemId &&
+        (
+          context?.equippedItemIds?.has(String(quest.rewardItemId)) ||
+          context?.inventoryItemIds?.has(String(quest.rewardItemId))
+        )
+      ) {
+        return false;
+      }
+
+    if (Array.isArray(quest.unlockWeaponTypes) && quest.unlockWeaponTypes.length > 0) {
+      const weaponType = String(context?.weaponType || "");
+      if (!quest.unlockWeaponTypes.includes(weaponType)) return false;
+    }
+
+    if (quest.unlockAttribute) {
+      const baseValue = Number(context?.attributes?.[quest.unlockAttribute] || 0);
+      if (!(baseValue > Number(quest.unlockAttributeMin || 0))) return false;
+    }
+
+    return true;
   }
 
   _computeCompletionProgress(defs, playerPeriod, completionType) {
@@ -164,6 +249,11 @@ class WeeklyQuestService {
       cadence,
       resetPolicy: fields?.resetPolicy || resetPolicyByCadence(cadence),
       sortOrder: Number(fields?.sortOrder || 0),
+      unlockLevel: Math.max(0, Number(fields?.unlockLevel || 0)),
+      unlockWeaponTypes: fields?.unlockWeaponTypes || [],
+      unlockAttribute: fields?.unlockAttribute || null,
+      unlockAttributeMin: Math.max(0, Number(fields?.unlockAttributeMin || 0)),
+      hideIfRewardOwned: fields?.hideIfRewardOwned !== false,
       groupKey: String(fields?.groupKey || "core"),
       createdAt: new Date().toISOString()
     });
@@ -194,6 +284,11 @@ class WeeklyQuestService {
       cadence: fields?.cadence !== undefined ? normalizeCadence(fields.cadence) : normalizeCadence(quest.cadence),
       resetPolicy: fields?.resetPolicy !== undefined ? String(fields.resetPolicy || "") : quest.resetPolicy,
       sortOrder: fields?.sortOrder !== undefined ? Number(fields.sortOrder || 0) : Number(quest.sortOrder || 0),
+      unlockLevel: fields?.unlockLevel !== undefined ? Math.max(0, Number(fields.unlockLevel) || 0) : Number(quest.unlockLevel || 0),
+      unlockWeaponTypes: fields?.unlockWeaponTypes !== undefined ? fields.unlockWeaponTypes : (quest.unlockWeaponTypes || []),
+      unlockAttribute: fields?.unlockAttribute !== undefined ? (fields.unlockAttribute || null) : (quest.unlockAttribute || null),
+      unlockAttributeMin: fields?.unlockAttributeMin !== undefined ? Math.max(0, Number(fields.unlockAttributeMin) || 0) : Number(quest.unlockAttributeMin || 0),
+      hideIfRewardOwned: fields?.hideIfRewardOwned !== undefined ? Boolean(fields.hideIfRewardOwned) : quest.hideIfRewardOwned !== false,
       groupKey: fields?.groupKey !== undefined ? String(fields.groupKey || "core") : String(quest.groupKey || "core")
     });
     if (!next.resetPolicy) next.resetPolicy = resetPolicyByCadence(next.cadence);
@@ -218,8 +313,9 @@ class WeeklyQuestService {
     const c = normalizeCadence(cadence);
     const periodKey = resolvePeriodKey(c);
     const allDefs = await this.listDefinitions(c);
-    const playerLevel = await this._getPlayerLevel(discordId);
-    const defs = allDefs.filter((q) => q.enabled && (!q.levelLimit || q.levelLimit <= playerLevel));
+    const context = await this._getPlayerQuestContext(discordId);
+    const playerLevel = context.level;
+    const defs = allDefs.filter((q) => this._isQuestVisibleForPlayer(q, context));
     const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, c);
     const completionByType = {};
     if (c === "onboarding" && defs.some((q) => q.type === "onboarding_complete_count")) {
@@ -263,11 +359,17 @@ class WeeklyQuestService {
   async recordProgress(discordId, type, amount = 1) {
     const inc = Math.max(0, Number(amount) || 0);
     if (!inc) return;
-    const playerLevel = await this._getPlayerLevel(discordId);
+    const context = await this._getPlayerQuestContext(discordId);
+    const playerLevel = context.level;
 
     for (const cadence of QUEST_CADENCES) {
       const allDefs = await this.listDefinitions(cadence);
-      const defs = allDefs.filter((q) => q.enabled && q.type === type && (!q.levelLimit || q.levelLimit <= playerLevel));
+      const defs = allDefs.filter((q) => (
+        q.enabled &&
+        q.type === type &&
+        (!q.levelLimit || q.levelLimit <= playerLevel) &&
+        this._isQuestVisibleForPlayer(q, context)
+      ));
       if (!defs.length) continue;
 
       const periodKey = resolvePeriodKey(cadence);
@@ -381,6 +483,15 @@ class WeeklyQuestService {
       { cadence: "onboarding", title: "成功觸發燃燒3次", type: "burn_trigger_count", target: 3, rewardGold: 300, rewardExp: 140, rewardDiamond: 0, rewardItemId: "d5936211-685a-4cd7-a1e9-24524725da96", sortOrder: 140, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "成功連擊20次", type: "combo_count", target: 20, rewardGold: 500, rewardExp: 220, rewardDiamond: 0, rewardItemId: "44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf", sortOrder: 150, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "完成全部新手任務", type: "onboarding_complete_count", target: 1, rewardGold: 0, rewardExp: 0, rewardDiamond: 0, rewardItemId: "87b281be-b175-40a0-8044-0accc88a0ee0", sortOrder: 160, groupKey: "seed_v1" },
+
+      // job (7)
+      { cadence: "job", title: "劍士試煉", description: "出戰 10 次。完成可獲得 500 金幣與劍士徽章。", type: "battle_with_sword", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_swordsman_v1", sortOrder: 10, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["sword_1h", "sword_2h"], unlockAttribute: "str", unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "戰士試煉", description: "等級達到 10，基礎 STR 大於 10，裝備單手斧或雙手斧出戰 10 次。完成可獲得 500 金幣與戰士徽章。", type: "battle_with_axe", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_warrior_v1", sortOrder: 20, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["axe_1h", "axe_2h"], unlockAttribute: "str", unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "矮人戰士試煉", description: "等級達到 10，基礎 VIT 大於 10，裝備單手槌或雙手槌出戰 10 次。完成可獲得 500 金幣與矮人戰士徽章。", type: "battle_with_mace", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_dwarf_warrior_v1", sortOrder: 30, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["mace_1h", "mace_2h"], unlockAttribute: "vit", unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "盜賊試煉", description: "等級達到 10，基礎 AGI 大於 10，裝備匕首出戰 10 次。完成可獲得 500 金幣與盜賊徽章。", type: "battle_with_dagger", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_rogue_v1", sortOrder: 40, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["dagger"], unlockAttribute: "agi", unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "法師試煉（雙手法杖）", description: "出戰 10 次。完成可獲得 500 金幣與法師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_mage_v1", sortOrder: 50, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_2h"], unlockAttribute: "int", unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "治療師試煉（單手法杖）", description: "等級達到 10，基礎 INT 大於 10，裝備單手法杖出戰 10 次。完成可獲得 500 金幣與治療師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_healer_v1", sortOrder: 60, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_1h"], unlockAttribute: "int", unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "弓箭手試煉", description: "等級達到 10，基礎 DEX 大於 10，裝備弓出戰 10 次。完成可獲得 500 金幣與弓箭手徽章。", type: "battle_with_bow", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_archer_v1", sortOrder: 70, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["bow"], unlockAttribute: "dex", unlockAttributeMin: 10, hideIfRewardOwned: true },
 
       // daily (4)
       { cadence: "daily", title: "每日出戰 5 次", type: "battle_count", target: 5, rewardGold: 250, rewardExp: 120, rewardDiamond: 0, sortOrder: 10, groupKey: "seed_v1" },

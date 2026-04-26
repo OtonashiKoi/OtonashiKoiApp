@@ -2,6 +2,12 @@
 (function () {
   const QUEST_TYPE_LABELS = {
     battle_count:  "出戰次數",
+    battle_with_sword: "使用劍系出戰次數",
+    battle_with_axe: "使用斧系出戰次數",
+    battle_with_mace: "使用槌系出戰次數",
+    battle_with_dagger: "使用匕首出戰次數",
+    battle_with_staff: "使用法杖出戰次數",
+    battle_with_bow: "使用弓出戰次數",
     battle_win:    "戰鬥勝利次數",
     damage_total:  "累計造成傷害",
     checkin_count: "打卡次數",
@@ -19,6 +25,12 @@
   };
   const QUEST_TYPE_UNITS = {
     battle_count:  "次",
+    battle_with_sword: "次",
+    battle_with_axe: "次",
+    battle_with_mace: "次",
+    battle_with_dagger: "次",
+    battle_with_staff: "次",
+    battle_with_bow: "次",
     battle_win:    "次",
     damage_total:  "點",
     checkin_count: "次",
@@ -36,6 +48,7 @@
   };
   const CADENCE_LABELS = {
     onboarding: "新手",
+    job: "職業",
     daily: "每日",
     weekly: "每週"
   };
@@ -127,7 +140,7 @@
     const search = normalize(filters.search);
     return [...quests]
       .sort((a, b) => {
-        const cadenceRank = { onboarding: 1, daily: 2, weekly: 3 };
+        const cadenceRank = { onboarding: 1, job: 2, daily: 3, weekly: 4 };
         const ar = cadenceRank[a.cadence || "weekly"] || 99;
         const br = cadenceRank[b.cadence || "weekly"] || 99;
         if (ar !== br) return ar - br;
@@ -356,7 +369,7 @@
   }
 
   async function seedDefaultQuests() {
-    if (!confirm("補齊預設新手/每日/每週任務？（不會覆蓋現有任務）")) return;
+    if (!confirm("補齊預設新手/職業/每日/每週任務？（不會覆蓋現有任務）")) return;
     if (seedBtn) {
       seedBtn.disabled = true;
       seedBtn.textContent = "補齊中…";

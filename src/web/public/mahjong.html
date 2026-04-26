@@ -2,334 +2,279 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>日麻排隊</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OBS 排隊框</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;900&family=Noto+Sans+TC:wght@700;900&display=swap');
 
-    :root {
-      --gold: #f0d080; --gold2: #c89a20;
-      --ice:  #a8d8f8; --ice2:  #4a90c8;
-      --green: #50fa7b; --green2: #1a8a3a;
-      --panel: rgba(6,14,36,0.92);
-      --border: rgba(140,185,255,0.20);
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    * { box-sizing:border-box; margin:0; padding:0; }
     html, body {
-      width:100%; height:100%;
-      background:transparent;
-      overflow:hidden;
-      font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;
-      color:#dde8ff;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: 'Noto Serif TC', 'Noto Sans TC', 'Microsoft JhengHei', serif;
     }
 
-    #root {
-      width:100vw; height:100vh;
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      padding:12px;
+    #board {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 8px;
+      align-content: start;
     }
 
-    /* ── 標題列 ── */
-    #header {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-    }
-    #title {
-      font-size:16px;
-      font-weight:900;
-      letter-spacing:3px;
-      color:var(--gold);
-      text-shadow:0 0 14px rgba(240,208,128,0.6),1px 1px 4px #000;
-      display:flex;
-      align-items:center;
-      gap:8px;
-    }
-    #title::before { content:'🀄'; font-size:20px; }
-
-    #queue-count {
-      font-size:12px;
-      color:rgba(200,220,255,0.5);
-      letter-spacing:1px;
-    }
-    #queue-count b { color:var(--green); font-size:15px; }
-
-    /* ── 通用面板 ── */
-    .panel {
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-left:2px solid rgba(140,185,255,0.4);
-      backdrop-filter:blur(8px);
-      -webkit-backdrop-filter:blur(8px);
-      padding:10px 14px;
-      position:relative;
-      clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));
-    }
-    .panel::after {
-      content:'◆';
-      position:absolute;
-      top:5px; right:8px;
-      font-size:7px;
-      color:rgba(140,185,255,0.25);
-    }
-    .panel-title {
-      font-size:10px;
-      letter-spacing:2px;
-      color:var(--ice2);
-      margin-bottom:8px;
-      display:flex;
-      align-items:center;
-      gap:5px;
-    }
-    .panel-title::before {
-      content:'';
-      display:inline-block;
-      width:2px; height:10px;
-      background:var(--ice2);
+    /* ── 卡片底層 ── */
+    .card {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 32px 9px 10px;
+      background: linear-gradient(135deg, rgba(38, 18, 52, 0.72) 0%, rgba(22, 10, 38, 0.78) 100%);
+      border: 1px solid rgba(200, 160, 100, 0.3);
+      outline: 1px solid rgba(255, 200, 220, 0.08);
+      outline-offset: 2px;
+      cursor: grab;
+      user-select: none;
+      transition: border-color 0.2s;
     }
 
-    /* ── 排隊區 ── */
-    #queue-panel { flex-shrink:0; }
-    #queue-list {
-      display:flex;
-      flex-wrap:wrap;
-      gap:6px;
+    /* 頂部極細裝飾線 */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 12px; right: 12px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 210, 130, 0.5), transparent);
     }
 
-    .queue-chip {
-      display:flex;
-      align-items:center;
-      gap:5px;
-      padding:3px 10px 3px 6px;
-      background:rgba(20,40,90,0.6);
-      border:1px solid rgba(140,185,255,0.2);
-      font-size:13px;
-      font-weight:700;
-      color:#c8deff;
-      animation:chipIn 0.3s cubic-bezier(0.22,1,0.36,1) both;
-      clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
-    }
-    @keyframes chipIn {
-      from{opacity:0;transform:translateY(6px) scale(0.9)}
-      to  {opacity:1;transform:none}
-    }
-    .queue-pos {
-      font-size:10px;
-      color:var(--ice2);
-      font-weight:900;
-    }
-    .queue-empty {
-      font-size:12px;
-      color:rgba(200,220,255,0.2);
-      letter-spacing:1px;
-      padding:4px 0;
+    /* ── 第一位：金輝特效 ── */
+    .card:first-child {
+      background: linear-gradient(135deg, rgba(55, 30, 18, 0.82) 0%, rgba(30, 12, 40, 0.85) 100%);
+      border-color: rgba(255, 200, 80, 0.55);
+      outline-color: rgba(255, 180, 60, 0.15);
+      box-shadow:
+        0 0 20px rgba(255, 180, 60, 0.1),
+        inset 0 0 40px rgba(255, 160, 80, 0.05);
     }
 
-    /* ── 隊伍區 ── */
-    #teams-panel { flex:1; overflow:hidden; }
-    #teams-list {
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      height:100%;
-      overflow-y:auto;
-    }
-    #teams-list::-webkit-scrollbar { width:3px; }
-    #teams-list::-webkit-scrollbar-thumb { background:rgba(140,185,255,0.2); border-radius:2px; }
-
-    .team-card {
-      border:1px solid rgba(240,208,128,0.2);
-      border-left:2px solid var(--gold2);
-      background:linear-gradient(100deg,rgba(18,14,8,0.85),rgba(25,20,10,0.75));
-      padding:8px 12px;
-      clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
-      animation:teamIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
-    }
-    @keyframes teamIn {
-      from{opacity:0;transform:translateX(-12px)}
-      to  {opacity:1;transform:none}
+    .card:first-child::before {
+      background: linear-gradient(90deg, transparent, rgba(255, 200, 80, 0.7), transparent);
     }
 
-    .team-header {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      margin-bottom:6px;
-    }
-    .team-label {
-      font-size:11px;
-      font-weight:900;
-      color:var(--gold);
-      letter-spacing:2px;
-      text-shadow:0 0 8px rgba(240,208,128,0.5);
-    }
-    .team-time {
-      font-size:9px;
-      color:rgba(200,220,255,0.3);
+    .card.dragging { opacity: 0.35; cursor: grabbing; }
+
+    .card.drop-target {
+      border-color: rgba(180, 140, 255, 0.7);
+      box-shadow: 0 0 16px rgba(160, 120, 255, 0.2);
     }
 
-    .team-members {
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-    .member-chip {
-      display:flex;
-      align-items:center;
-      gap:5px;
-      padding:4px 10px;
-      background:rgba(240,208,128,0.08);
-      border:1px solid rgba(240,208,128,0.2);
-      font-size:14px;
-      font-weight:700;
-      color:var(--gold);
-      text-shadow:0 0 8px rgba(240,208,128,0.4),1px 1px 3px #000;
-      clip-path:polygon(5px 0%,100% 0%,calc(100% - 5px) 100%,0% 100%);
-    }
-    .member-platform {
-      font-size:9px;
-      color:rgba(200,220,255,0.3);
-      font-weight:400;
+    /* ── 編號徽章 ── */
+    .num {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(200, 160, 100, 0.4);
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: 'Noto Sans TC', sans-serif;
+      color: rgba(220, 180, 120, 0.8);
+      background: rgba(200, 150, 80, 0.08);
+      line-height: 1;
     }
 
-    /* 麻將牌裝飾 */
-    .mahjong-deco {
-      font-size:18px;
-      opacity:0.15;
-      position:absolute;
-      right:12px;
-      bottom:6px;
-      letter-spacing:2px;
+    .card:first-child .num {
+      font-size: 13px;
+      border-color: rgba(255, 200, 80, 0.7);
+      color: #ffd080;
+      background: rgba(255, 180, 60, 0.12);
+      box-shadow: 0 0 8px rgba(255, 180, 60, 0.25);
     }
 
-    /* ── 連線狀態 ── */
-    #ws-dot {
-      width:5px; height:5px; border-radius:50%;
-      background:#888; display:inline-block; margin-right:4px;
-      transition:background 0.4s;
+    /* ── 名字 ── */
+    .name {
+      flex: 1;
+      min-width: 0;
+      font-size: 19px;
+      font-weight: 900;
+      color: #f0e8f5;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      letter-spacing: 0.02em;
+      text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8);
     }
-    #ws-dot.on  { background:#50fa7b; box-shadow:0 0 5px #50fa7b; }
-    #ws-dot.off { background:#ff5555; }
-    #footer {
-      font-size:9px;
-      color:rgba(200,220,255,0.25);
-      display:flex;
-      align-items:center;
+
+    .card:first-child .name {
+      font-size: 21px;
+      color: #fff5f0;
+      text-shadow:
+        0 0 16px rgba(255, 180, 120, 0.25),
+        0 1px 10px rgba(0, 0, 0, 0.8);
     }
+
+    /* 第一位名字前的桜花符號 */
+    .card:first-child .name::before {
+      content: '✿ ';
+      color: #ffb8d0;
+      font-size: 14px;
+    }
+
+    /* ── 移除按鈕 ── */
+    .remove {
+      position: absolute;
+      top: 50%;
+      right: 7px;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      background: none;
+      border: none;
+      color: rgba(255, 220, 240, 0.2);
+      font-size: 11px;
+      line-height: 20px;
+      text-align: center;
+      cursor: pointer;
+      padding: 0;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+
+    .remove:hover { color: rgba(255, 120, 140, 0.85); }
   </style>
 </head>
 <body>
-<div id="root">
+  <div id="board"></div>
 
-  <div id="header">
-    <div id="title">日麻排隊系統</div>
-    <div id="queue-count">等待中：<b id="q-num">0</b> 人</div>
-  </div>
+  <script>
+    const API = 'http://127.0.0.1:5566';
+    const boardEl = document.getElementById('board');
 
-  <!-- 排隊等候 -->
-  <div class="panel" id="queue-panel">
-    <div class="panel-title">等待入隊</div>
-    <div id="queue-list"><div class="queue-empty">目前無人排隊，喊 ++ 加入！</div></div>
-    <div class="mahjong-deco">🀇🀈🀉</div>
-  </div>
+    let queueState = [];
+    let dragEntryKey = null;
 
-  <!-- 已組成隊伍 -->
-  <div class="panel" id="teams-panel">
-    <div class="panel-title">已組成隊伍</div>
-    <div id="teams-list"><div class="queue-empty">尚未組成任何隊伍</div></div>
-  </div>
+    function entryKey(entry) {
+      return `${entry.platform || 'unknown'}::${entry.userId}`;
+    }
 
-  <div id="footer"><span id="ws-dot"></span>即時同步</div>
-</div>
+    async function api(path, options = {}) {
+      const response = await fetch(`${API}${path}`, {
+        method: options.method || 'GET',
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }
 
-<script>
-  const API = 'http://127.0.0.1:5566';
-
-  const qNum    = document.getElementById('q-num');
-  const qList   = document.getElementById('queue-list');
-  const tList   = document.getElementById('teams-list');
-  const dot     = document.getElementById('ws-dot');
-
-  const PLATFORM_LABEL = { youtube:'YT', twitch:'Tw', niconico:'Nico', manual:'手動', unknown:'' };
-
-  function fmtTime(iso) {
-    const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-  }
-
-  function render(state) {
-    const queue = state.queue || [];
-    const teams = state.teams || [];
-
-    // ── 排隊列表 ──
-    qNum.textContent = queue.length;
-    if (queue.length === 0) {
-      qList.innerHTML = '<div class="queue-empty">目前無人排隊，喊 ++ 加入！</div>';
-    } else {
-      qList.innerHTML = '';
-      queue.forEach((p, i) => {
-        const chip = document.createElement('div');
-        chip.className = 'queue-chip';
-        chip.innerHTML = `<span class="queue-pos">#${i+1}</span>${p.name}`;
-        qList.appendChild(chip);
+    async function removeEntry(entry) {
+      await fetch(`${API}/api/mahjong/queue/${encodeURIComponent(entry.userId)}?platform=${encodeURIComponent(entry.platform || 'unknown')}`, {
+        method: 'DELETE',
       });
     }
 
-    // ── 隊伍列表 ──
-    if (teams.length === 0) {
-      tList.innerHTML = '<div class="queue-empty">尚未組成任何隊伍</div>';
-    } else {
-      tList.innerHTML = '';
-      // 最新的在上面
-      [...teams].reverse().forEach(t => {
+    async function reorderEntry(entry, targetIndex) {
+      await api(`/api/mahjong/queue/${encodeURIComponent(entry.userId)}/reorder`, {
+        method: 'POST',
+        body: { platform: entry.platform || 'unknown', targetIndex },
+      });
+    }
+
+    function clearDropTargets() {
+      boardEl.querySelectorAll('.drop-target').forEach(n => n.classList.remove('drop-target'));
+    }
+
+    function render(queue) {
+      queueState = queue || [];
+      boardEl.innerHTML = '';
+
+      queueState.forEach((entry, index) => {
         const card = document.createElement('div');
-        card.className = 'team-card';
-        const membersHtml = t.members.map(m => {
-          const plat = PLATFORM_LABEL[m.platform] || m.platform || '';
-          return `<div class="member-chip">
-            ${m.name}
-            ${plat ? `<span class="member-platform">${plat}</span>` : ''}
-          </div>`;
-        }).join('');
-        card.innerHTML = `
-          <div class="team-header">
-            <span class="team-label">第 ${t.id} 桌</span>
-            <span class="team-time">${fmtTime(t.formedAt)}</span>
-          </div>
-          <div class="team-members">${membersHtml}</div>
-        `;
-        tList.appendChild(card);
+        card.className = 'card';
+        card.draggable = true;
+        card.dataset.key = entryKey(entry);
+
+        const numEl = document.createElement('div');
+        numEl.className = 'num';
+        numEl.textContent = index === 0 ? '✦' : `${index + 1}`;
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = entry.name;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove';
+        removeBtn.textContent = '✕';
+        removeBtn.title = '移除';
+        removeBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await removeEntry(entry).catch(console.error);
+        });
+
+        card.appendChild(numEl);
+        card.appendChild(nameEl);
+        card.appendChild(removeBtn);
+
+        card.addEventListener('dragstart', (e) => {
+          dragEntryKey = entryKey(entry);
+          card.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', dragEntryKey);
+        });
+
+        card.addEventListener('dragend', () => {
+          dragEntryKey = null;
+          card.classList.remove('dragging');
+          clearDropTargets();
+        });
+
+        card.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (!dragEntryKey || dragEntryKey === entryKey(entry)) return;
+          clearDropTargets();
+          card.classList.add('drop-target');
+          e.dataTransfer.dropEffect = 'move';
+        });
+
+        card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+
+        card.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          clearDropTargets();
+          if (!dragEntryKey || dragEntryKey === entryKey(entry)) return;
+          const dragged = queueState.find(item => entryKey(item) === dragEntryKey);
+          if (!dragged) return;
+          await reorderEntry(dragged, index).catch(console.error);
+        });
+
+        boardEl.appendChild(card);
       });
     }
-  }
 
-  // ── SSE 即時更新 ──
-  function connect() {
-    dot.className = '';
-    const es = new EventSource(`${API}/api/mahjong/stream`);
+    function connect() {
+      const source = new EventSource(`${API}/api/mahjong/stream`);
+      source.onmessage = (e) => {
+        try { render(JSON.parse(e.data).queue || []); } catch {}
+      };
+      source.onerror = () => {
+        source.close();
+        setTimeout(connect, 2500);
+      };
+    }
 
-    es.onopen = () => { dot.className = 'on'; };
+    fetch(`${API}/api/mahjong/state`)
+      .then(r => r.json())
+      .then(s => render(s.queue || []))
+      .catch(console.error);
 
-    es.onmessage = (ev) => {
-      try { render(JSON.parse(ev.data)); } catch (_) {}
-    };
-
-    es.onerror = () => {
-      dot.className = 'off';
-      es.close();
-      setTimeout(connect, 3000);
-    };
-  }
-
-  // 先拉一次初始狀態
-  fetch(`${API}/api/mahjong/state`)
-    .then(r => r.json())
-    .then(render)
-    .catch(() => {});
-
-  connect();
-</script>
+    connect();
+  </script>
 </body>
 </html>

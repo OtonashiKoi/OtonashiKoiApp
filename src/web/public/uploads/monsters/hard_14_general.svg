@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#61282a"/>
+        <stop offset="55%" stop-color="#e1a84a"/>
+        <stop offset="100%" stop-color="#f8ecd8"/>
+      </linearGradient>
+      <radialGradient id="glow" cx="50%" cy="38%" r="52%">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.35)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      </radialGradient>
+      <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="rgba(0,0,0,0.35)"/>
+      </filter>
+    </defs>
+    <rect width="512" height="512" rx="36" fill="url(#bg)"/>
+    <rect x="18" y="18" width="476" height="476" rx="24" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
+    <ellipse cx="256" cy="410" rx="150" ry="28" fill="rgba(0,0,0,0.22)"/>
+    <rect y="340" width="512" height="172" fill="rgba(20,18,25,0.24)"/>
+    <circle cx="256" cy="180" r="180" fill="url(#glow)"/>
+    <text x="256" y="468" text-anchor="middle" font-family="Arial, 'Noto Sans TC', sans-serif" font-size="28" font-weight="700" fill="rgba(255,255,255,0.9)">古城將軍(B)</text>
+  
+  
+        <g filter="url(#shadow)">
+          <rect x="182" y="132" width="148" height="142" rx="32" fill="#61282a" stroke="#e1a84a" stroke-width="8"/>
+          <rect x="224" y="94" width="64" height="38" rx="8" fill="#e1a84a"/>
+          <path d="M188 168 L256 104 L324 168" fill="#61282a" stroke="#e1a84a" stroke-width="8"/>
+          <path d="M220 112 L196 82 M292 112 L316 82" stroke="#e1a84a" stroke-width="10" stroke-linecap="round"/>
+          
+    <circle cx="230" cy="204" r="8" fill="#ffd95e"/>
+    <circle cx="282" cy="204" r="8" fill="#ffd95e"/>
+    <circle cx="228" cy="202" r="2.5" fill="#fff"/>
+    <circle cx="280" cy="202" r="2.5" fill="#fff"/>
+  
+          <rect x="206" y="268" width="100" height="110" rx="22" fill="#e1a84a" opacity="0.8"/>
+          <rect x="216" y="374" width="24" height="42" rx="10" fill="#61282a"/>
+          <rect x="272" y="374" width="24" height="42" rx="10" fill="#61282a"/>
+          <rect x="346" y="174" width="12" height="206" rx="6" fill="#e9ddd2"/>
+          <path d="M358 176 L408 190 L358 212 Z" fill="#e1a84a"/>
+        </g>
+</svg>
