@@ -164,17 +164,9 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
     const lib = libMap[entry.itemId];
     if (!lib) { merged[slot] = entry; continue; }
 
-    // equipStats：從道具庫取最新基礎值，再疊加強化等級
-    // enhanceLevel > 0 時，找主屬性（最大值）加上強化等級，保留玩家的強化加成
-    let equipStats = lib.equipStats || entry.equipStats || null;
-    const enhanceLevel = Math.max(0, Number(entry.enhanceLevel) || 0);
-    if (equipStats && enhanceLevel > 0) {
-      const entries = Object.entries(equipStats);
-      if (entries.length > 0) {
-        const mainStat = entries.sort((a, b) => b[1] - a[1])[0][0];
-        equipStats = { ...equipStats, [mainStat]: (equipStats[mainStat] || 0) + enhanceLevel };
-      }
-    }
+    // equipStats：優先用玩家背包的已強化值（enhanceService 已正確計算）
+    // 若背包沒有，才從 library 讀原始基礎值（防舊資料）
+    let equipStats = entry.equipStats || lib.equipStats || null;
 
     merged[slot] = {
       ...entry,

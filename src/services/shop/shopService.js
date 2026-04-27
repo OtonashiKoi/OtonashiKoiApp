@@ -678,8 +678,21 @@ class ShopService {
     const stats = target.equipStats || {};
     const mainStat = Object.entries(stats).sort((a, b) => b[1] - a[1])[0]?.[0];
     if (!mainStat) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備沒有可強化的屬性", 400);
+
+    // 根据品阶計算正确的強化增值（與 enhanceService.enhanceEquipment() 一致）
+    const WEAPON_ENHANCE_BONUS = { D: 1, C: 1.5, B: 2, A: 2 };
+    const ARMOR_ENHANCE_VIT = { D: 1, C: 2, B: 3, A: 3 };
+    const tier = String(target.tier || "").toUpperCase();
+    const isWeapon = target.equipSlot === "weapon" || target.equipSlot === "shield";
+    let delta = 1; // 預設值
+    if (isWeapon) {
+      delta = WEAPON_ENHANCE_BONUS[tier] ?? 1;
+    } else {
+      delta = ARMOR_ENHANCE_VIT[tier] ?? 1;
+    }
+
     const oldStatValue = Number(stats[mainStat] || 0);
-    const newStats = { ...stats, [mainStat]: (stats[mainStat] || 0) + 1 };
+    const newStats = { ...stats, [mainStat]: Number(((stats[mainStat] || 0) + delta).toFixed(2)) };
     const newLevel = currentLevel + 1;
     const newName = `${baseName} +${newLevel}`;
     const updatedTarget = {
