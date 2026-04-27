@@ -1444,9 +1444,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             dmg = Math.round(dmg * 1.5);
           }
 
-          // ── 檢查怪物的爆擊率 ──
+          // ── 檢查怪物的爆擊率（基礎值來自 LUK，可疊加 buff）──
           let hasMonsterCrit = false;
-          let monsterCritRate = 0;
+          let monsterCritRate = adjustedMCalc.critRate || 0;
           if (Array.isArray(monsterActiveEffects)) {
             for (const cEff of monsterActiveEffects) {
               if (cEff && cEff.key === 'crit_rate_up') {
@@ -1518,6 +1518,25 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
           if (mHp <= 0) { outcome = "win"; }
         }
+      }
+    }
+
+    // ── 怪物連擊（AGI 驅動，同玩家公式：3 + AGI×0.5）──
+    const monsterComboChance = adjustedMCalc.comboChance || 0;
+    if (monsterComboChance > 0 && !skipMonsterAttackReason && outcome === null) {
+      if (Math.random() * 100 < monsterComboChance) {
+        const monsterDefIgnorePctC = Math.min(100, Math.max(0, Number(adjustedMCalc.defIgnorePct || 0)));
+        const effectivePlayerDefC = Math.min(95, Math.max(0, ((pStats.def * (1 + playerDefBonusPct / 100) * (1 - playerDefDownPct / 100)) + playerDefFlatBonus) * (1 - monsterDefIgnorePctC / 100)));
+        let comboDmg = playerInvincible
+          ? 0
+          : rollMDmg(Math.max(1, Math.round(adjustedMCalc.atk * (adjustedMCalc.finalDamageMultiplier || 1) * (1 - effectivePlayerDefC / 100))));
+        if (!playerInvincible && playerDamageReductionPct > 0) {
+          comboDmg = Math.max(1, Math.round(comboDmg * (1 - Math.min(95, playerDamageReductionPct) / 100)));
+        }
+        pHp -= comboDmg;
+        monsterDmgThisRound += comboDmg;
+        log.push(`⚡ **${mName} 連擊**！追加攻擊造成 **${comboDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+        if (pHp <= 0) { outcome = "lose"; }
       }
     }
 

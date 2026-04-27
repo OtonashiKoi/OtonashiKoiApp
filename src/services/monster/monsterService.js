@@ -20,13 +20,20 @@ function calcStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1 } = {}) {
 function effectiveCalc(m) {
   const base = calcStats(m);
   const def = (typeof m.def === 'number' && !isNaN(m.def)) ? Math.min(75, m.def) : base.def;
+  const defIgnorePct = (typeof m.defIgnorePct === 'number' && !isNaN(m.defIgnorePct))
+    ? Math.min(100, Math.max(0, m.defIgnorePct)) : 0;
+  const luk = typeof m.luk === 'number' ? m.luk : 0;
+  const agi = (typeof m.agi === 'number' && !isNaN(m.agi)) ? Math.max(1, Math.round(m.agi)) : base.agi;
   return {
     maxHp: (typeof m.maxHp === 'number' && !isNaN(m.maxHp)) ? m.maxHp : 100,
-    agi:   (typeof m.agi === 'number' && !isNaN(m.agi)) ? Math.max(1, Math.round(m.agi)) : base.agi,
+    agi,
     atk:   base.atk,
-    def,   // 百分比減傷 0~75
+    def,
+    defIgnorePct,
     dodge: base.dodge,
-    hit:   base.hit
+    hit:   base.hit,
+    critRate:    Math.min(100, Math.round(luk * 0.3)),           // LUK → 爆擊%（同玩家公式）
+    comboChance: Math.min(80,  Math.round(3 + agi * 0.5)),      // AGI → 連擊%（同玩家公式）
   };
 }
 

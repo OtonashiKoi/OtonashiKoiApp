@@ -20,6 +20,7 @@ function getSC() { return require("../runtimeContext").serviceContext; }
 const PFX = {
   open:         "auction:open",
   filter:       "auction:filter:",
+  nav:          "auction:nav:",           // 換頁：auction:nav:{page}:{type}:{currency}:{sort}
   buy:          "auction:buy:",
   buyConfirm:   "auction:buy_confirm:",
   myList:       "auction:my_list",
@@ -63,12 +64,24 @@ function isSellableItem(item) {
 }
 
 // ─── 拍賣列表面板 ────────────────────────────────────
+const PAGE_SIZE = 8; // 每頁最多 8 件（2 排購買按鈕 × 4，留第 5 排給換頁）
+
 async function buildAuctionPanel(filter = {}) {
   const sc = getSC();
   const auctions = await sc.auctionService.getActiveListings(filter);
 
   // 先讓到期的自動標記
   await sc.auctionService.processExpired();
+
+  const page = Math.max(0, filter.page || 0);
+  const totalPages = Math.max(1, Math.ceil(auctions.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageItems = auctions.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  // 編碼換頁按鈕需要的 filter 狀態
+  const t = filter.itemType || "_";
+  const c = filter.currency || "_";
+  const s = filter.sort || "_";
 
   // 篩選按鈕列
   const filterRow = new ActionRowBuilder().addComponents(
@@ -94,31 +107,58 @@ async function buildAuctionPanel(filter = {}) {
     };
   }
 
-  const lines = auctions.slice(0, 8).map((a, i) => {
+  const lines = pageItems.map((a, i) => {
     const item = fmtItem(a.item);
     const price = fmtPrice(a.price, a.currency);
     const remain = fmtRemaining(a.expiresAt);
-    return `\`${i + 1}.\` **${item}** ─ ${price}　剩 ${remain}`;
+    const globalIdx = safePage * PAGE_SIZE + i + 1;
+    return `\`${globalIdx}.\` **${item}** ─ ${price}　剩 ${remain}`;
   });
 
-  // 購買按鈕（最多 5 件/列）
+  // 購買按鈕（每排 4 個，最多 2 排）
   const buyRows = [];
-  const slice = auctions.slice(0, 8);
-  for (let i = 0; i < slice.length; i += 4) {
-    const chunk = slice.slice(i, i + 4);
+  for (let i = 0; i < pageItems.length; i += 4) {
+    const chunk = pageItems.slice(i, i + 4);
     buyRows.push(new ActionRowBuilder().addComponents(
-      chunk.map((a, j) =>
-        new ButtonBuilder()
+      chunk.map((a, j) => {
+        const globalIdx = safePage * PAGE_SIZE + i + j + 1;
+        return new ButtonBuilder()
           .setCustomId(`${PFX.buy}${a.id}`)
-          .setLabel(`購買 ${i + j + 1}`)
-          .setStyle(ButtonStyle.Primary)
-      )
+          .setLabel(`購買 ${globalIdx}`)
+          .setStyle(ButtonStyle.Primary);
+      })
     ));
   }
 
+  const components = [filterRow, sortRow, ...buyRows];
+
+  // 換頁列（超過 1 頁才顯示）
+  if (totalPages > 1) {
+    const pageInfo = `${safePage + 1} / ${totalPages} 頁`;
+    const navRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${PFX.nav}${safePage - 1}:${t}:${c}:${s}`)
+        .setLabel("◀ 上一頁")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(safePage === 0),
+      new ButtonBuilder()
+        .setCustomId(`${PFX.nav}${safePage}:${t}:${c}:${s}:noop`)
+        .setLabel(pageInfo)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true),
+      new ButtonBuilder()
+        .setCustomId(`${PFX.nav}${safePage + 1}:${t}:${c}:${s}`)
+        .setLabel("下一頁 ▶")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(safePage >= totalPages - 1),
+    );
+    components.push(navRow);
+  }
+
+  const pageNote = totalPages > 1 ? `　（第 ${safePage + 1} / ${totalPages} 頁）` : "";
   return {
-    content: `🏪 **拍賣場** （共 ${auctions.length} 件）\n\n${lines.join("\n")}`,
-    components: [filterRow, sortRow, ...buyRows],
+    content: `🏪 **拍賣場** （共 ${auctions.length} 件）${pageNote}\n\n${lines.join("\n")}`,
+    components,
   };
 }
 
@@ -133,7 +173,7 @@ async function handleAuctionButton(interaction) {
     return;
   }
 
-  // 篩選
+  // 篩選（切換篩選條件時重設回第 1 頁）
   if (id.startsWith(PFX.filter)) {
     await interaction.deferUpdate();
     const key = id.slice(PFX.filter.length);
@@ -145,6 +185,24 @@ async function handleAuctionButton(interaction) {
     else if (key === "price_asc") filter.sort = "price_asc";
     else if (key === "price_desc") filter.sort = "price_desc";
     else if (key === "time_asc") filter.sort = "time_asc";
+    // page 不傳 → 預設 0
+    const panel = await buildAuctionPanel(filter);
+    await interaction.editReply(panel);
+    return;
+  }
+
+  // 換頁（保留篩選條件）
+  if (id.startsWith(PFX.nav)) {
+    const raw = id.slice(PFX.nav.length);
+    const parts = raw.split(":");
+    // noop button（頁碼顯示用，已 disabled，理論上不會觸發）
+    if (parts[4] === "noop") { await interaction.deferUpdate(); return; }
+    await interaction.deferUpdate();
+    const page = parseInt(parts[0], 10);
+    const filter = { page: isNaN(page) ? 0 : page };
+    if (parts[1] && parts[1] !== "_") filter.itemType = parts[1];
+    if (parts[2] && parts[2] !== "_") filter.currency = parts[2];
+    if (parts[3] && parts[3] !== "_") filter.sort = parts[3];
     const panel = await buildAuctionPanel(filter);
     await interaction.editReply(panel);
     return;

@@ -8,7 +8,7 @@ const { handleCommand, handleButton, handleSelectMenu, handleModal } = require("
 const { serviceContext, setBotClient, getBotClient } = require("./runtimeContext");
 const { startFetcher } = require("./commentFetcher");
 const { handleStreamComment } = require("./handlers/streamHandlers");
-const { startIdleRotateTimer } = require("./handlers/monsterZoneHandlers");
+const { startIdleRotateTimer, refreshEliteWorldBossPanel } = require("./handlers/monsterZoneHandlers");
 const { runWithCache } = require("../adapters/mongo/requestCache");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
 
@@ -391,6 +391,16 @@ async function republishPanelsOnStartup() {
   }
 }
 
+let elitePanelRefreshTimer = null;
+function startElitePanelRefreshTimer() {
+  const sec = 300; // 5 分鐘
+  if (elitePanelRefreshTimer) clearInterval(elitePanelRefreshTimer);
+  elitePanelRefreshTimer = setInterval(async () => {
+    await refreshEliteWorldBossPanel();
+  }, sec * 1000);
+  console.log(`[ElitePanel] auto-refresh started (${sec}s)`);
+}
+
 let auctionPanelRefreshTimer = null;
 function startAuctionPanelRefreshTimer() {
   if (process.env.DISABLE_AUCTION_PANEL_REFRESH === "1") {
@@ -548,6 +558,8 @@ function createBotClient() {
 
     // 拍賣場公開面板倒數/到期狀態需定時重繪
     startAuctionPanelRefreshTimer();
+    // 精英區世界BOSS面板每5分鐘自動刷新（高級區有人在打時）
+    startElitePanelRefreshTimer();
     
     // 啟動 OneComme 直播留言監聽
     startFetcher(handleStreamComment);

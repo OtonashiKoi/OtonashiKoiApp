@@ -45,6 +45,14 @@ function withProgressCache(repo) {
       if (store) store.set(`progress:${progress.playerId}`, result);
       return result;
     },
+    async saveIfUnchanged(progress, prevUpdatedAt) {
+      const saved = await repo.saveIfUnchanged(progress, prevUpdatedAt);
+      // 不論成功失敗都清快取：成功時下次讀拿到新值；失敗時下次重試讀到 DB 的最新狀態
+      // 否則重試會一直讀到同個 stale 物件，CAS 永遠失敗
+      const store = storage.getStore();
+      if (store) store.delete(`progress:${progress.playerId}`);
+      return saved;
+    },
     async listAll() {
       return repo.listAll();
     }

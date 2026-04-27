@@ -794,7 +794,7 @@ async function handleEquipmentView(interaction) {
     const col3Slot  = EQ_COL3_SLOTS[i];
     const makeSlotBtn = (slot) => {
       const item = equipped[slot];
-      const label = item ? item.itemName.slice(0, 20) : EQ_SLOT_LABELS[slot];
+      const label = item ? (item.itemName || item.name || '').slice(0, 20) : EQ_SLOT_LABELS[slot];
       return new ButtonBuilder()
         .setCustomId(`eq_btn:${slot}`)
         .setLabel(label)
@@ -927,16 +927,17 @@ async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0) {
 async function handleBackpackAction(interaction, action, uuid) {
   const serviceContext = getServiceContext();
 
-  // reroll_attributes 需要確認
+  // 危險型消耗品需要確認
   if (action === "use") {
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const entry = (progress?.inventory || []).find(e => e.uuid === uuid);
-    if (entry?.itemEffect?.type === "reroll_attributes") {
+    if (entry?.itemEffect?.type === "reroll_attributes" || entry?.itemEffect?.type === "level_down_random_attributes") {
+      const isLevelDown = entry?.itemEffect?.type === "level_down_random_attributes";
       await interaction.deferUpdate();
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`reroll_confirm:${uuid}`)
-          .setLabel("確認重製屬性")
+          .setLabel(isLevelDown ? "確認使用降等藥水" : "確認重製屬性")
           .setStyle(ButtonStyle.Danger),
         new ButtonBuilder()
           .setCustomId(`reroll_cancel`)
@@ -944,7 +945,9 @@ async function handleBackpackAction(interaction, action, uuid) {
           .setStyle(ButtonStyle.Secondary)
       );
       await safeEditReply(interaction, {
-        content: `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n你目前所有的升等屬性點將會**完全重新隨機分配**，此操作不可逆！`,
+        content: isLevelDown
+          ? `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n使用後會**降低 1 級**，並**隨機下降 2 點屬性**（屬性最低不會低於 1），此操作不可逆！`
+          : `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n你目前所有的升等屬性點將會**完全重新隨機分配**，此操作不可逆！`,
         components: [row]
       });
       return;

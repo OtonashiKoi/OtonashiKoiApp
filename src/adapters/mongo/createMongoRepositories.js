@@ -118,6 +118,19 @@ function createMongoRepositories() {
         console.error(`[ProgressRepository] CRITICAL: Failed to save progress for ${progress.playerId} after ${maxRetries} attempts. Data loss risk!`, lastError);
         throw lastError;
       },
+      // CAS 寫入：只有 updatedAt 未被別人改過才成功，回傳是否成功
+      async saveIfUnchanged(progress, prevUpdatedAt) {
+        const now = new Date().toISOString();
+        const filter = prevUpdatedAt
+          ? { playerId: progress.playerId, updatedAt: prevUpdatedAt }
+          : { playerId: progress.playerId };
+        const result = await (await collection("progress")).updateOne(
+          filter,
+          { $set: { ...progress, updatedAt: now } },
+          { upsert: false }
+        );
+        return result.matchedCount > 0;
+      },
       async listAll() {
         return (await collection("progress")).find({}).toArray();
       }

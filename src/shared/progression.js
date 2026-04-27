@@ -10,7 +10,7 @@ function expToNextLevel(level) {
     return Math.round(340 * Math.pow(level, 1.62));
   }
   // 21-40 後期再拉長，避免狂點太快畢業
-  return Math.round(430 * Math.pow(level, 1.62));
+  return Math.round(500 * Math.pow(level, 1.68));
 }
 
 module.exports = {

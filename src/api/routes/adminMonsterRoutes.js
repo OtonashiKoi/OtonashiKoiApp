@@ -181,6 +181,61 @@ function createAdminMonsterRoutes(serviceContext) {
     }
   });
 
+  // 戰鬥監視：各區域當前在戰鬥中的玩家數（公開，不需要 admin token）
+  router.get("/monitor/combat-status", async (_req, res, next) => {
+    try {
+      const { ALL_ZONE_KEYS } = require("../../shared/zones");
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const db = await getMongoDb();
+
+      const zones = [];
+      let grandTotal = 0;
+
+      for (const zoneKey of ALL_ZONE_KEYS) {
+        const stateDoc = await db.collection("monsters").findOne({ _id: `monsterState:${zoneKey}` });
+        const state = stateDoc?.value || null;
+        const participants = Array.isArray(state?.participants) ? state.participants : [];
+        const damageMap = state?.damageMap || {};
+        const currentHp = state?.currentHp ?? null;
+
+        // 用 activeMonsterSeq 查怪物名稱和 maxHp
+        let monsterName = null;
+        let maxHp = null;
+        if (state?.activeMonsterSeq != null) {
+          const monsterDoc = await db.collection("monsters").findOne(
+            { zone: zoneKey, seq: state.activeMonsterSeq, id: { $exists: true } },
+            { projection: { name: 1, "calc.maxHp": 1 } }
+          );
+          if (monsterDoc) {
+            monsterName = monsterDoc.name || null;
+            maxHp = monsterDoc.calc?.maxHp ?? null;
+          }
+        }
+
+        // 從 damageMap 取玩家名稱對應
+        const fighters = participants.map(pid => ({
+          id: pid,
+          name: damageMap[pid]?.name || pid,
+          damage: damageMap[pid]?.damage || 0
+        }));
+
+        grandTotal += participants.length;
+        zones.push({
+          zoneKey,
+          count: participants.length,
+          monsterName,
+          currentHp,
+          maxHp,
+          fighters
+        });
+      }
+
+      res.json(ok({ zones, grandTotal }, "combat status fetched"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // 怪物卡片庫 API
   router.get("/admin/monster-cards", async (_req, res, next) => {
     try {

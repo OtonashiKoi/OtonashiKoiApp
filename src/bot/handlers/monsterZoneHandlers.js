@@ -151,6 +151,12 @@ const ENHANCE_GEM_IDS = {
   'B': '8fdfa7d9-f0fa-4e6a-a291-703b1e354072',
   'A': 'a6ae293d-52fc-4af5-8770-891ddf842e35'
 };
+// 參與獎勵寶石：依區域決定品階
+const ZONE_PARTICIPATION_GEM_TIER = {
+  beginner: 'D', normal: 'D', mid: 'C', hard: 'B', elite: 'A'
+};
+// 參與獎勵寶石掉落率（依品階）
+const GEM_PARTICIPATION_RATE = { D: 0.25, C: 0.15, B: 0.10, A: 0.05 };
 
 function getServiceContext() {
   return require("../runtimeContext").serviceContext;
@@ -228,6 +234,35 @@ async function maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster) {
     }
   }
   await _republishPanel(sc, zoneKey, monster, resetState.currentHp, 0, {}, null, resetState.worldBossPartsHp).catch(() => {});
+
+  // 世界 Boss 退場嗆聲
+  const BOSS_RETREAT_TAUNTS = [
+    (name) => `😈 **${name}** 冷笑道：「30 分鐘都殺不了我？下次再來吧。」然後消失了。`,
+    (name) => `💀 **${name}** 撤離了，留下一片廢墟和滿地的羞恥⋯`,
+    (name) => `👑 **${name}** 傲慢地宣告：「你們不夠格。」一小時後再來挑戰。`,
+    (name) => `🌑 **${name}** 緩緩退入黑暗——「我還會回來的。」`,
+    (name) => `😤 **${name}** 拂袖而去：「雜魚就是雜魚，滾回去練等。」`,
+  ];
+  try {
+    const { getBotClient } = require("../runtimeContext");
+    const client = getBotClient();
+    if (client?.isReady()) {
+      const layout = await sc.channelLayoutRepository.get();
+      const bindings = layout?.discord?.bindings || [];
+      const townBinding = bindings.find((b) => b.featureKey === "town_chat");
+      const zoneFeature = zoneToFeatureKey(zoneKey);
+      const fallback = bindings.find((b) => b.featureKey === zoneFeature);
+      const channelId = townBinding?.channelId || fallback?.channelId;
+      if (channelId) {
+        const channel = await client.channels.fetch(channelId).catch(() => null);
+        if (channel?.isTextBased?.()) {
+          const taunt = BOSS_RETREAT_TAUNTS[Math.floor(Math.random() * BOSS_RETREAT_TAUNTS.length)];
+          await channel.send(taunt(monster.name));
+        }
+      }
+    }
+  } catch (_) {}
+
   return { state: resetState, timedOut: true };
 }
 
@@ -591,7 +626,12 @@ async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
             await user.send(`💚 **治療師加成**：${parts.join("、")}`);
           }
         }
-      } catch (e) { console.error("[HealerCheck] error:", e.message); }
+      } catch (e) {
+        // 忽略「無共同伺服器」或「DM 關閉」的正常情況
+        if (!e.message?.includes("mutual guilds") && !e.message?.includes("Cannot send messages")) {
+          console.error("[HealerCheck] error:", e.message);
+        }
+      }
     }
   } catch (e) {
     // suppressed
@@ -2025,33 +2065,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           const chanceMult = luckyMod.dropMultiplier * (isRare ? luckyMod.rareDropMultiplier : 1);
           const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
           if (Math.random() * 100 < finalChance) {
-            // 已擁有同件裝備 → 改為該品階強化寶石
-            if (!isMonsterCardItem(item) && item.itemType !== 'consumable' && playerAlreadyOwnsItem(luckyProg, item.id) && ENHANCE_GEM_IDS[tier]) {
-              const gemId = ENHANCE_GEM_IDS[tier];
-              const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
-              if (gemItem) {
-                // 嘗試堆疊寶石，如果失敗則新增
-                if (!tryStackGem(luckyProg, gemItem.id)) {
-                  luckyProg.inventory.push({
-                    uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
-                    itemEffect: gemItem.effect || { type: "none", value: 0 },
-                    useEffects: gemItem.useEffects || [],
-                    passiveEffects: gemItem.passiveEffects || [],
-                    procEffects: gemItem.procEffects || [],
-                    combatEffects: gemItem.combatEffects || [],
-                    itemType: gemItem.itemType || "consumable",
-                    imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
-                    equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
-                    weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
-                    atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
-                    stackCount: 1,
-                    source: "monster_drop_duplicate_gem", sourceRef: monster.name,
-                    purchasedAt: new Date().toISOString()
-                  });
-                }
-                droppedItems.push(`${gemItem.name}（${item.name} 重複）`);
-                droppedItemObjects.push(gemItem);
-              }
+            // 已擁有同件裝備 → 跳過（由參與獎勵機制補償）
+            if (!isMonsterCardItem(item) && item.itemType !== 'consumable' && playerAlreadyOwnsItem(luckyProg, item.id)) {
+              // skip duplicate
             } else {
               const equipStats = item.equipStats ? { ...item.equipStats } : {};
 
@@ -2121,33 +2137,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           const chanceMult = bonusMod.dropMultiplier * (isRare ? bonusMod.rareDropMultiplier : 1);
           const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
           if (Math.random() * 100 < finalChance) {
-            // 已擁有同件裝備 → 改為該品階強化寶石
-            if (!isMonsterCardItem(item) && item.itemType !== 'consumable' && playerAlreadyOwnsItem(bonusProg, item.id) && ENHANCE_GEM_IDS[tier]) {
-              const gemId = ENHANCE_GEM_IDS[tier];
-              const gemItem = await sc.itemRepository.findById(gemId).catch(() => null);
-              if (gemItem) {
-                // 嘗試堆疊寶石，如果失敗則新增
-                if (!tryStackGem(bonusProg, gemItem.id)) {
-                  bonusProg.inventory.push({
-                    uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
-                    itemEffect: gemItem.effect || { type: "none", value: 0 },
-                    useEffects: gemItem.useEffects || [],
-                    passiveEffects: gemItem.passiveEffects || [],
-                    procEffects: gemItem.procEffects || [],
-                    combatEffects: gemItem.combatEffects || [],
-                    itemType: gemItem.itemType || "consumable",
-                    imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
-                    equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
-                    weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
-                    atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
-                    stackCount: 1,
-                    source: "monster_drop_duplicate_gem", sourceRef: monster.name,
-                    purchasedAt: new Date().toISOString()
-                  });
-                }
-                bonusItems.push(`${gemItem.name}（${item.name} 重複）`);
-                bonusItemObjects.push(gemItem);
-              }
+            // 已擁有同件裝備 → 跳過（由參與獎勵機制補償）
+            if (!isMonsterCardItem(item) && item.itemType !== 'consumable' && playerAlreadyOwnsItem(bonusProg, item.id)) {
+              // skip duplicate
             } else {
               const equipStats = item.equipStats ? { ...item.equipStats } : {};
 
@@ -2179,6 +2171,45 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...allBonusDropped];
         const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
         _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, kind).catch(() => {});
+      }
+    }
+  }
+
+  // ── 參與獎勵：每位參戰者有 5% 機率獲得該區域強化石（上限 C 階，DM 通知）──
+  {
+    const participationGemTier = ZONE_PARTICIPATION_GEM_TIER[zoneKey] || 'D';
+    const participationGemId = ENHANCE_GEM_IDS[participationGemTier];
+    if (participationGemId) {
+      const gemItem = await sc.itemRepository.findById(participationGemId).catch(() => null);
+      if (gemItem) {
+        const participationRate = GEM_PARTICIPATION_RATE[participationGemTier] ?? 0.05;
+        for (const pid of participants) {
+          if (Math.random() >= participationRate) continue;
+          const prog = progressCache[pid];
+          if (!prog) continue;
+          if (!Array.isArray(prog.inventory)) prog.inventory = [];
+          if (!tryStackGem(prog, gemItem.id)) {
+            prog.inventory.push({
+              uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
+              itemEffect: gemItem.effect || { type: "none", value: 0 },
+              useEffects: gemItem.useEffects || [],
+              passiveEffects: gemItem.passiveEffects || [],
+              procEffects: gemItem.procEffects || [],
+              combatEffects: gemItem.combatEffects || [],
+              itemType: gemItem.itemType || "consumable",
+              imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
+              equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
+              weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
+              atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
+              stackCount: 1,
+              source: "monster_participation_gem", sourceRef: monster.name,
+              purchasedAt: new Date().toISOString()
+            });
+          }
+          prog.updatedAt = new Date().toISOString();
+          await sc.progressRepository.save(prog);
+          if (perPidRewards[pid]) perPidRewards[pid].drops = [...(perPidRewards[pid].drops || []), gemItem.name];
+        }
       }
     }
   }
@@ -2911,9 +2942,28 @@ async function _doIdleRotate(sc, zoneKey) {
       lastHitAt: new Date().toISOString(),
       activeEvent: null,
     };
+
+    // 精英區世界 Boss idle：重置三部位 HP
+    // 只有「有人開戰但超時」才重置解鎖進度，純閒置不重置
+    if (zoneKey === "elite" && next.isBoss && sc.worldBossService) {
+      const partMax = createWorldBossPartHpTemplate(next.calc.maxHp);
+      newState.worldBossPartsMaxHp = partMax;
+      newState.worldBossPartsHp = { ...partMax };
+      const wbState = await sc.worldBossService._getStateEnsured().catch(() => null);
+      if (wbState?.battleStartedAt) {
+        // 有人曾開戰但沒打完，視為失敗，重置解鎖進度
+        await sc.worldBossService.markBossFailedTimeout().catch(() => {});
+        console.log(`[IdleRotate] elite world boss failed — parts & unlock progress cleared`);
+      } else {
+        // 純閒置，只重置部位 HP，不動解鎖進度
+        console.log(`[IdleRotate] elite world boss idle reset — parts HP only`);
+      }
+    }
+
     await sc.monsterService.saveState(newState, zoneKey);
     _republishPanel(sc, zoneKey, next, next.calc.maxHp, 0, {}).catch(() => {});
-    if (next.isBoss) _broadcastBossSpawn(sc, zoneKey, next).catch(() => {});
+    // 精英區 Boss 由解鎖流程觸發廣播，idle rotate 不廣播
+    if (next.isBoss && zoneKey !== "elite") _broadcastBossSpawn(sc, zoneKey, next).catch(() => {});
 
     // 嗆聲廣播
     const { getBotClient } = require("../runtimeContext");
@@ -2966,6 +3016,30 @@ function startIdleRotateTimer() {
   console.log("[IdleRotate] timer started (10min idle → auto rotate)");
 }
 
+async function refreshEliteWorldBossPanel() {
+  try {
+    const sc = getServiceContext();
+    // 只有高級區有人在打時才刷新精英區世界BOSS面板
+    const hardState = await sc.monsterService.getState("hard").catch(() => null);
+    const hardParticipants = Array.isArray(hardState?.participants) ? hardState.participants : [];
+    if (hardParticipants.length === 0) return;
+
+    const eliteState = await sc.monsterService.getState("elite").catch(() => null);
+    if (!eliteState?.currentMonster) return;
+
+    const monster = eliteState.currentMonster;
+    const monsterHp = eliteState.currentHp ?? monster.hp ?? 0;
+    const damageMap = eliteState.damageMap || {};
+    const participantCount = Array.isArray(eliteState.participants) ? eliteState.participants.length : 0;
+    const activeEvent = eliteState.activeEvent || null;
+    const worldBossPartsHp = eliteState.worldBossPartsHp || null;
+
+    await _republishPanel(sc, "elite", monster, monsterHp, participantCount, damageMap, activeEvent, worldBossPartsHp);
+  } catch (error) {
+    console.warn(`[ElitePanel] auto-refresh failed: ${error?.message || error}`);
+  }
+}
+
 module.exports = {
   handleMonsterZoneButton,
   isMonsterZoneButton,
@@ -2980,5 +3054,6 @@ module.exports = {
   MAX_ROUNDS,
   _broadcastBossSpawn,
   activeSessions,
-  startIdleRotateTimer
+  startIdleRotateTimer,
+  refreshEliteWorldBossPanel
 };

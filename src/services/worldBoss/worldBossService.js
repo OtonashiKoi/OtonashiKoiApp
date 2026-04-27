@@ -123,9 +123,9 @@ class WorldBossService {
   }
 
   _buildStatus(config, state, now = Date.now()) {
-    const unlockTarget = Math.max(1, Number(config.weeklyUnlockKillTarget || 300));
+    const unlockTarget = Math.max(0, Number(config.weeklyUnlockKillTarget ?? 300));
     const hardKills = Math.max(0, Number(state.hardKills || 0));
-    const unlocked = hardKills >= unlockTarget;
+    const unlocked = unlockTarget === 0 || hardKills >= unlockTarget;
     const lastKilledAtMs = state.lastKilledAt ? Date.parse(state.lastKilledAt) : NaN;
     const cooldownMs = Math.max(0, Number(config.respawnCooldownMinutes || 0) * 60 * 1000);
     const cooldownRemainingMs = Number.isFinite(lastKilledAtMs)
@@ -203,11 +203,10 @@ class WorldBossService {
 
   async markBossFailedTimeout() {
     const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
+    const nowIso = new Date().toISOString();
     state.battleStartedAt = null;
-    state.lastFailedAt = new Date().toISOString();
-    state.hardKills = 0;
-    state.unlockedAt = null;
-    state.lastKilledAt = null;
+    state.lastFailedAt = nowIso;
+    state.lastKilledAt = nowIso; // 觸發冷卻計時，讓 boss 隔一段時間才再出現
     await this.repo.saveState(state);
     return {
       state,

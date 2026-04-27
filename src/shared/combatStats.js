@@ -24,7 +24,7 @@ const WEAPON_CONFIG = {
   axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15 },
   dagger:   { mult: 2, comboBonus: 20 },
   staff_1h: { mult: 4, baseStat: "int", monsterAtk: 2, bypassDefPct: 30 },
-  staff_2h: { mult: 6, baseStat: "int", isTwoHanded: true, monsterAtk: 2, bypassDefPct: 50 },
+  staff_2h: { mult: 5, baseStat: "int", isTwoHanded: true, monsterAtk: 2, bypassDefPct: 35 },
   bow:      { mult: 4, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
 };
 

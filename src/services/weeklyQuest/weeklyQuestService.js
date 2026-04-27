@@ -111,7 +111,9 @@ class WeeklyQuestService {
       : (typeof def?.unlockWeaponTypes === "string"
         ? String(def.unlockWeaponTypes).split(",").map((v) => v.trim()).filter(Boolean)
         : []);
+    const VALID_ATTRS = ["str", "agi", "vit", "int", "dex", "luk"];
     const unlockAttribute = def?.unlockAttribute ? String(def.unlockAttribute).trim().toLowerCase() : null;
+    const unlockAttribute2 = def?.unlockAttribute2 ? String(def.unlockAttribute2).trim().toLowerCase() : null;
     return {
       ...def,
       cadence,
@@ -122,7 +124,8 @@ class WeeklyQuestService {
       enabled: def?.enabled !== false,
       unlockLevel: Math.max(0, Number(def?.unlockLevel || 0)),
       unlockWeaponTypes,
-      unlockAttribute: ["str", "agi", "vit", "int", "dex", "luk"].includes(unlockAttribute) ? unlockAttribute : null,
+      unlockAttribute: VALID_ATTRS.includes(unlockAttribute) ? unlockAttribute : null,
+      unlockAttribute2: VALID_ATTRS.includes(unlockAttribute2) ? unlockAttribute2 : null,
       unlockAttributeMin: Math.max(0, Number(def?.unlockAttributeMin || 0)),
       hideIfRewardOwned: def?.hideIfRewardOwned !== false
     };
@@ -175,6 +178,26 @@ class WeeklyQuestService {
     };
   }
 
+  // 用於 recordProgress：只判斷「行為條件是否符合」（武器/屬性/等級）
+  // 不檢查 hideIfRewardOwned —— 玩家透過商店或活動取得 reward 不該阻止任務進度累積
+  _canAccrueProgress(quest, context) {
+    if (!quest?.enabled) return false;
+    const level = Number(context?.level || 1);
+    if (quest.levelLimit && quest.levelLimit > level) return false;
+    if (quest.unlockLevel && level < Number(quest.unlockLevel || 0)) return false;
+    if (Array.isArray(quest.unlockWeaponTypes) && quest.unlockWeaponTypes.length > 0) {
+      const weaponType = String(context?.weaponType || "");
+      if (!quest.unlockWeaponTypes.includes(weaponType)) return false;
+    }
+    if (quest.unlockAttribute) {
+      const val1 = Number(context?.attributes?.[quest.unlockAttribute] || 0);
+      const val2 = quest.unlockAttribute2 ? Number(context?.attributes?.[quest.unlockAttribute2] || 0) : 0;
+      const total = quest.unlockAttribute2 ? val1 + val2 : val1;
+      if (!(total > Number(quest.unlockAttributeMin || 0))) return false;
+    }
+    return true;
+  }
+
   _isQuestVisibleForPlayer(quest, context) {
     if (!quest?.enabled) return false;
     const level = Number(context?.level || 1);
@@ -198,8 +221,10 @@ class WeeklyQuestService {
     }
 
     if (quest.unlockAttribute) {
-      const baseValue = Number(context?.attributes?.[quest.unlockAttribute] || 0);
-      if (!(baseValue > Number(quest.unlockAttributeMin || 0))) return false;
+      const val1 = Number(context?.attributes?.[quest.unlockAttribute] || 0);
+      const val2 = quest.unlockAttribute2 ? Number(context?.attributes?.[quest.unlockAttribute2] || 0) : 0;
+      const total = quest.unlockAttribute2 ? val1 + val2 : val1;
+      if (!(total > Number(quest.unlockAttributeMin || 0))) return false;
     }
 
     return true;
@@ -252,6 +277,7 @@ class WeeklyQuestService {
       unlockLevel: Math.max(0, Number(fields?.unlockLevel || 0)),
       unlockWeaponTypes: fields?.unlockWeaponTypes || [],
       unlockAttribute: fields?.unlockAttribute || null,
+      unlockAttribute2: fields?.unlockAttribute2 || null,
       unlockAttributeMin: Math.max(0, Number(fields?.unlockAttributeMin || 0)),
       hideIfRewardOwned: fields?.hideIfRewardOwned !== false,
       groupKey: String(fields?.groupKey || "core"),
@@ -287,6 +313,7 @@ class WeeklyQuestService {
       unlockLevel: fields?.unlockLevel !== undefined ? Math.max(0, Number(fields.unlockLevel) || 0) : Number(quest.unlockLevel || 0),
       unlockWeaponTypes: fields?.unlockWeaponTypes !== undefined ? fields.unlockWeaponTypes : (quest.unlockWeaponTypes || []),
       unlockAttribute: fields?.unlockAttribute !== undefined ? (fields.unlockAttribute || null) : (quest.unlockAttribute || null),
+      unlockAttribute2: fields?.unlockAttribute2 !== undefined ? (fields.unlockAttribute2 || null) : (quest.unlockAttribute2 || null),
       unlockAttributeMin: fields?.unlockAttributeMin !== undefined ? Math.max(0, Number(fields.unlockAttributeMin) || 0) : Number(quest.unlockAttributeMin || 0),
       hideIfRewardOwned: fields?.hideIfRewardOwned !== undefined ? Boolean(fields.hideIfRewardOwned) : quest.hideIfRewardOwned !== false,
       groupKey: fields?.groupKey !== undefined ? String(fields.groupKey || "core") : String(quest.groupKey || "core")
@@ -367,8 +394,7 @@ class WeeklyQuestService {
       const defs = allDefs.filter((q) => (
         q.enabled &&
         q.type === type &&
-        (!q.levelLimit || q.levelLimit <= playerLevel) &&
-        this._isQuestVisibleForPlayer(q, context)
+        this._canAccrueProgress(q, context)
       ));
       if (!defs.length) continue;
 
@@ -401,12 +427,10 @@ class WeeklyQuestService {
       const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, quest.cadence);
       const p = playerPeriod[questId] || { current: 0, claimed: false };
       if (quest.type === "onboarding_complete_count" || quest.type === "weekly_complete_count") {
-        const defs = (await this.listDefinitions("onboarding"))
-          .filter((q) => q.enabled && (!q.levelLimit || q.levelLimit <= playerLevel));
+        const context = await this._getPlayerQuestContext(discordId);
         const targetCadence = quest.cadence === "weekly" ? "weekly" : "onboarding";
-        const cadenceDefs = targetCadence === "onboarding"
-          ? defs
-          : (await this.listDefinitions("weekly")).filter((q) => q.enabled && (!q.levelLimit || q.levelLimit <= playerLevel));
+        const cadenceDefs = (await this.listDefinitions(targetCadence))
+          .filter((q) => this._isQuestVisibleForPlayer(q, context) || Boolean((playerPeriod[q.id] || {}).claimed));
         const completion = this._computeCompletionProgress(cadenceDefs, playerPeriod, quest.type);
         if (completion.current < completion.target) throw new Error("任務尚未完成");
         p.current = completion.current;
@@ -480,7 +504,6 @@ class WeeklyQuestService {
       { cadence: "onboarding", title: "成功格擋3次", type: "block_count", target: 3, rewardGold: 220, rewardExp: 100, rewardDiamond: 0, rewardItemId: "6da9f4e6-aac1-4088-9000-7111fd4926b0", sortOrder: 110, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "成功擊暈3次", type: "stun_count", target: 3, rewardGold: 260, rewardExp: 120, rewardDiamond: 0, rewardItemId: "2fcf7576-4e74-4280-b1e6-0d7da7b58dda", sortOrder: 120, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "角色死亡3次", type: "death_count", target: 3, rewardGold: 260, rewardExp: 120, rewardDiamond: 0, rewardItemId: "33d319ec-cb62-4826-8bcc-82a6fe52b8fa", sortOrder: 130, groupKey: "seed_v1" },
-      { cadence: "onboarding", title: "成功觸發燃燒3次", type: "burn_trigger_count", target: 3, rewardGold: 300, rewardExp: 140, rewardDiamond: 0, rewardItemId: "d5936211-685a-4cd7-a1e9-24524725da96", sortOrder: 140, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "成功連擊20次", type: "combo_count", target: 20, rewardGold: 500, rewardExp: 220, rewardDiamond: 0, rewardItemId: "44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf", sortOrder: 150, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "完成全部新手任務", type: "onboarding_complete_count", target: 1, rewardGold: 0, rewardExp: 0, rewardDiamond: 0, rewardItemId: "87b281be-b175-40a0-8044-0accc88a0ee0", sortOrder: 160, groupKey: "seed_v1" },
 

@@ -89,18 +89,19 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     ""
   ];
   if (zoneKey === "elite" && worldBossStatus) {
-    const unlockLine = `世界BOSS解鎖進度：${worldBossStatus.hardKills}/${worldBossStatus.unlockTarget}`;
     if (!worldBossStatus.unlocked) {
       descLines.push(`🔒 尚未解鎖（還差 ${worldBossStatus.remainingUnlockKills} 隻高級區擊殺）`);
     } else if (worldBossStatus.cooldownRemainingMs > 0) {
-      descLines.push(`⏳ 世界BOSS 冷卻中（約 ${worldBossStatus.cooldownRemainingMinutes} 分鐘）`);
+      descLines.push(`⏳ 世界BOSS 冷卻中（約 ${worldBossStatus.cooldownRemainingMinutes} 分鐘後再現身）`);
     } else if (worldBossStatus.battleStartedAt) {
       descLines.push(`⚠️ 世界BOSS戰進行中（剩餘約 ${worldBossStatus.battleRemainingMinutes} 分鐘）`);
     } else {
       descLines.push("✅ 世界BOSS 可挑戰");
     }
-    descLines.push(unlockLine);
-    descLines.push("限制：開戰後 1 小時內未擊殺視為失敗");
+    if (worldBossStatus.unlockTarget > 0) {
+      descLines.push(`世界BOSS解鎖進度：${worldBossStatus.hardKills}/${worldBossStatus.unlockTarget}`);
+    }
+    descLines.push("限制：開戰後 30 分鐘內未擊殺視為失敗");
   } else {
     descLines.push("點擊下方按鈕即可進入戰鬥");
   }
@@ -154,12 +155,15 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   if (showEliteWaitingState) {
     const waitingStatusLine = !worldBossStatus.unlocked
       ? "世界BOSS 尚未現身，請先完成解鎖條件。"
-      : `世界BOSS 已撤離，冷卻剩餘約 ${worldBossStatus.cooldownRemainingMinutes} 分鐘。`;
-    fields.push(
+      : `世界BOSS 已撤離，約 ${worldBossStatus.cooldownRemainingMinutes} 分鐘後再現身。`;
+    const statusFields = [
       { name: "目前狀態", value: waitingStatusLine, inline: false },
-      { name: "解鎖進度", value: `${worldBossStatus.hardKills}/${worldBossStatus.unlockTarget}`, inline: true },
-      { name: "挑戰限制", value: "開戰後 1 小時內未擊殺視為失敗", inline: true }
-    );
+      { name: "挑戰限制", value: "開戰後 30 分鐘內未擊殺視為失敗", inline: true }
+    ];
+    if (worldBossStatus.unlockTarget > 0) {
+      statusFields.splice(1, 0, { name: "解鎖進度", value: `${worldBossStatus.hardKills}/${worldBossStatus.unlockTarget}`, inline: true });
+    }
+    fields.push(...statusFields);
   } else {
     fields.push({ name: "HP", value: hpLine, inline: false });
     if (worldBossPartsLine) {

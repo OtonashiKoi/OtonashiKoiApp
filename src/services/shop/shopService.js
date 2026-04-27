@@ -7,7 +7,7 @@ const crypto = require("crypto");
 // 各 tier 裝備販售價格
 const TIER_SELL_PRICE = { D: 10, C: 50, B: 100, A: 150 };
 
-const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes"];
+const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes", "level_down_random_attributes"];
 const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow"]);
 
 class ShopService {
@@ -25,6 +25,27 @@ class ShopService {
   _normalizeEffect(effect) {
     if (!effect || !VALID_EFFECT_TYPES.includes(effect.type)) return { type: "none", value: 0 };
     return { type: effect.type, value: Math.max(0, Number(effect.value) || 0) };
+  }
+
+  _rollRandomAttributeDrops(attributes, amount = 2) {
+    const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
+    const next = { ...(attributes || {}) };
+    for (const key of ATTR_KEYS) {
+      next[key] = Math.max(1, Number(next[key]) || 1);
+    }
+
+    const dropped = [];
+    for (let i = 0; i < amount; i++) {
+      const available = ATTR_KEYS.filter((key) => next[key] > 1);
+      if (!available.length) break;
+      const key = available[Math.floor(Math.random() * available.length)];
+      next[key] -= 1;
+      const existing = dropped.find((entry) => entry.key === key);
+      if (existing) existing.amount += 1;
+      else dropped.push({ key, amount: 1 });
+    }
+
+    return { nextAttributes: next, dropped };
   }
 
   _resolveIsTwoHanded({ weaponType = null, isTwoHanded = false } = {}) {
@@ -235,82 +256,150 @@ class ShopService {
   }
 
   async useItem(discordId, entryUuid, displayName) {
-    const progress = await this.progressRepository.findByPlayerId(discordId);
-    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
-    const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
-    if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
-    const entry = progress.inventory[idx];
-    const itemType = entry.itemType || "consumable";
-
-    // 強化寶石不能直接使用
+    const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
     const ENHANCE_GEM_IDS = new Set([
       '72fde92d-e33f-42fb-8d86-2e811d03f84d', // D
       '556db9e1-b084-4b22-bab5-a66c2b586184', // C
       '8fdfa7d9-f0fa-4e6a-a291-703b1e354072', // B
       'a6ae293d-52fc-4af5-8770-891ddf842e35'  // A
     ]);
-    if (ENHANCE_GEM_IDS.has(entry.itemId)) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石只能用於強化裝備，無法直接使用", 400);
-    }
-    if (itemType === "consumable") {
-      // 支持堆疊：優先減少 stackCount，到 0 才刪除物品
-      if (entry.stackCount && entry.stackCount > 1) {
-        entry.stackCount -= 1;
-      } else {
-        progress.inventory.splice(idx, 1);
+    const CAS_MAX_RETRIES = 8;
+
+    let savedEntry = null;
+    let savedEffect = null;
+    let savedUseEffects = [];
+    let savedEffectDesc = "";
+    let casSuccess = false;
+
+    // CAS 重試：避免與 grantExp、其他 progress 寫入衝突
+    for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+
+      const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
+      if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+
+      const entry = progress.inventory[idx];
+      const itemType = entry.itemType || "consumable";
+
+      if (ENHANCE_GEM_IDS.has(entry.itemId)) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石只能用於強化裝備，無法直接使用", 400);
+      }
+
+      const effect = entry.itemEffect || { type: "none", value: 0 };
+      const useEffects = Array.isArray(entry.useEffects) ? entry.useEffects : [];
+
+      // 預先驗證（不依賴狀態）
+      if (effect.type === "level_down_random_attributes") {
+        const currentLevel = Math.max(1, Number(progress.level) || 1);
+        if (currentLevel <= 1) {
+          throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "等級已是 1，無法再降低。", 400);
+        }
+      }
+
+      // 深拷貝避免污染 request cache（同 grantExp 的修法）
+      const next = {
+        ...progress,
+        attributes: { ...(progress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 }) },
+        inventory: (progress.inventory || []).map(e => ({ ...e })),
+        flags: { ...(progress.flags || {}) },
+        activeEffects: [...(progress.activeEffects || [])]
+      };
+
+      // 消耗物品
+      if (itemType === "consumable") {
+        const nextEntry = next.inventory[idx];
+        if (nextEntry.stackCount && nextEntry.stackCount > 1) {
+          nextEntry.stackCount -= 1;
+        } else {
+          next.inventory.splice(idx, 1);
+        }
+      }
+
+      let effectDesc = "";
+
+      if (effect.type === "grant_status_points") {
+        next.statusPoints = (next.statusPoints || 0) + (effect.value || 0);
+        effectDesc = `📊 +${effect.value} 屬性點`;
+      } else if (effect.type === "checkin_multiplier") {
+        next.flags.checkinMultiplier = effect.value || 2;
+        effectDesc = `🎯 下次打卡 ×${effect.value} 倍`;
+      } else if (effect.type === "reroll_attributes") {
+        // 用「目前實際持有的總點數」當預算，保留藥水等額外獲得的點數
+        const currentAttrTotal = ATTR_KEYS.reduce((sum, k) => sum + (Number(next.attributes?.[k]) || 0), 0);
+        const currentStatusPoints = next.statusPoints || 0;
+        const totalPoints = currentAttrTotal + currentStatusPoints;
+        const pointsToDistribute = Math.max(0, totalPoints - 6);
+        const newAttrs = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+        for (let i = 0; i < pointsToDistribute; i++) {
+          const key = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
+          newAttrs[key]++;
+        }
+        next.attributes = newAttrs;
+        next.statusPoints = 0;
+        const attrLine = ATTR_KEYS.map(k => `${k.toUpperCase()}:${newAttrs[k]}`).join(" ");
+        effectDesc = `🔮 屬性已重製！新屬性：${attrLine}`;
+      } else if (effect.type === "level_down_random_attributes") {
+        const currentLevel = Math.max(1, Number(next.level) || 1);
+        const { nextAttributes, dropped } = this._rollRandomAttributeDrops(next.attributes, 2);
+        next.level = currentLevel - 1;
+        next.exp = 0;
+        next.attributes = nextAttributes;
+        const droppedText = dropped.length
+          ? dropped.map(({ key, amount }) => `${key.toUpperCase()}-${amount}`).join("、")
+          : "沒有可再下降的屬性";
+        effectDesc = `☯️ 等級下降至 Lv.${next.level}，並隨機失去 ${droppedText}。`;
+      }
+
+      // useEffects 同個 CAS 一起寫入，避免分兩次寫入造成另一輪競態
+      if (useEffects.length > 0) {
+        next.activeEffects = applyEffectInstances(next.activeEffects, useEffects, {
+          sourceType: "item",
+          sourceId: entry.itemId || entry.uuid
+        });
+      }
+
+      next.updatedAt = new Date().toISOString();
+
+      const saved = await this.progressRepository.saveIfUnchanged(next, progress.updatedAt);
+      if (saved) {
+        savedEntry = entry;
+        savedEffect = effect;
+        savedUseEffects = useEffects;
+        savedEffectDesc = effectDesc;
+        casSuccess = true;
+        break;
+      }
+
+      if (attempt < CAS_MAX_RETRIES - 1) {
+        await new Promise(r => setTimeout(r, 10 * (attempt + 1)));
+        console.warn(`[useItem] CAS retry ${attempt + 1} for ${discordId}`);
       }
     }
-    const effect = entry.itemEffect || { type: "none", value: 0 };
-    const useEffects = Array.isArray(entry.useEffects) ? entry.useEffects : [];
-    let effectDesc = "";
 
-    if (effect.type === "grant_status_points") {
-      progress.statusPoints = (progress.statusPoints || 0) + (effect.value || 0);
-      effectDesc = `📊 +${effect.value} 屬性點`;
-    } else if (effect.type === "checkin_multiplier") {
-      progress.flags = progress.flags || {};
-      progress.flags.checkinMultiplier = effect.value || 2;
-      effectDesc = `🎯 下次打卡 ×${effect.value} 倍`;
-    } else if (effect.type === "reroll_attributes") {
-      const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
-      const level = progress.level || 1;
-      const levelUpPoints = (level - 1) * 2;
-      const newAttrs = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-      for (let i = 0; i < levelUpPoints; i++) {
-        const key = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
-        newAttrs[key]++;
-      }
-      progress.attributes = newAttrs;
-      const attrLine = ATTR_KEYS.map(k => `${k.toUpperCase()}:${newAttrs[k]}`).join(" ");
-      effectDesc = `🔮 屬性已重製！新屬性：${attrLine}`;
+    if (!casSuccess) {
+      throw new AppError(ERROR_CODES.INTERNAL_ERROR, `useItem CAS failed after ${CAS_MAX_RETRIES} retries for ${discordId}`, 500);
     }
-    progress.updatedAt = new Date().toISOString();
-    await this.progressRepository.save(progress);
 
+    // 獨立的 side-effects（wallet / 另一支 progress CAS 自己處理併發）
     const dn = displayName || "";
-    if (effect.type === "grant_gold") {
-      await this.rewardService.grantCurrency({ discordId, displayName: dn, currencyType: "gold", amount: effect.value, source: CURRENCY_SOURCES.ITEM_USE, operator: "shop:use-item" });
-      effectDesc = `💰 +${effect.value} 金幣`;
-    } else if (effect.type === "grant_diamond") {
-      await this.rewardService.grantCurrency({ discordId, displayName: dn, currencyType: "diamond", amount: effect.value, source: CURRENCY_SOURCES.ITEM_USE, operator: "shop:use-item" });
-      effectDesc = `💎 +${effect.value} 鑽石`;
-    } else if (effect.type === "grant_exp" && this.progressService) {
-      await this.progressService.grantExp({ discordId, displayName: dn, amount: effect.value, source: EXP_SOURCES.ITEM_USE_EXP });
-      effectDesc = `✨ +${effect.value} 經驗值`;
+    if (savedEffect.type === "grant_gold") {
+      await this.rewardService.grantCurrency({ discordId, displayName: dn, currencyType: "gold", amount: savedEffect.value, source: CURRENCY_SOURCES.ITEM_USE, operator: "shop:use-item" });
+      savedEffectDesc = `💰 +${savedEffect.value} 金幣`;
+    } else if (savedEffect.type === "grant_diamond") {
+      await this.rewardService.grantCurrency({ discordId, displayName: dn, currencyType: "diamond", amount: savedEffect.value, source: CURRENCY_SOURCES.ITEM_USE, operator: "shop:use-item" });
+      savedEffectDesc = `💎 +${savedEffect.value} 鑽石`;
+    } else if (savedEffect.type === "grant_exp" && this.progressService) {
+      await this.progressService.grantExp({ discordId, displayName: dn, amount: savedEffect.value, source: EXP_SOURCES.ITEM_USE_EXP });
+      savedEffectDesc = `✨ +${savedEffect.value} 經驗值`;
     }
 
-    if (useEffects.length > 0) {
-      progress.activeEffects = applyEffectInstances(progress.activeEffects, useEffects, {
-        sourceType: "item",
-        sourceId: entry.itemId || entry.uuid
-      });
-      progress.updatedAt = new Date().toISOString();
-      await this.progressRepository.save(progress);
-      const statusLine = `附加狀態 ${useEffects.map((useEffect) => useEffect.definitionName || useEffect.key).join("、")}`;
-      effectDesc = effectDesc ? `${effectDesc} / ${statusLine}` : statusLine;
+    if (savedUseEffects.length > 0) {
+      const statusLine = `附加狀態 ${savedUseEffects.map((u) => u.definitionName || u.key).join("、")}`;
+      savedEffectDesc = savedEffectDesc ? `${savedEffectDesc} / ${statusLine}` : statusLine;
     }
 
-    return { itemName: entry.itemName, effectDesc };
+    return { itemName: savedEntry.itemName, effectDesc: savedEffectDesc };
   }
 
   async sellItem(discordId, entryUuid) {
@@ -386,6 +475,19 @@ class ShopService {
     }
 
     if (!progress.equipment) progress.equipment = {};
+
+    // 同張卡片不能同時裝備在多個 special 槽
+    if (slot.startsWith("special_")) {
+      const SPECIAL_SLOTS = ["special_1", "special_2", "special_3"];
+      const cardItemId = entry.itemId;
+      for (const s of SPECIAL_SLOTS) {
+        if (s === slot) continue;
+        const equipped = progress.equipment[s];
+        if (equipped && equipped.itemId === cardItemId) {
+          throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `同一張卡片（${entry.itemName}）不能同時裝備在多個槽位`, 400);
+        }
+      }
+    }
 
     const entryIsTwoHanded = this._resolveIsTwoHanded({ weaponType: entry.weaponType, isTwoHanded: entry.isTwoHanded });
 
