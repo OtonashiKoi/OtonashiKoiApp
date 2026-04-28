@@ -1285,64 +1285,67 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         if (mHp <= 0) { outcome = "win"; break; }
 
-        // ── 職業徽章 on_hit proc（直接讀 DB procEffects，不 hardcode）──
+        // ── 職業徽章 on_hit proc（procEffects 和 combatEffects）──
         const jobEqForProc = options.equipped?.job_eq;
-        if (jobEqForProc && Array.isArray(jobEqForProc.procEffects)) {
-          for (const pe of jobEqForProc.procEffects) {
-            if (!pe || pe.trigger !== 'on_hit' || pe.target !== 'enemy') continue;
-            // 武器條件
-            if (pe.condition?.weaponType && pe.condition.weaponType !== wt) continue;
-            if (Math.random() * 100 >= (pe.chance || 0)) continue;
+        const allProcs = [
+          ...(Array.isArray(jobEqForProc?.procEffects) ? jobEqForProc.procEffects : []),
+          ...(Array.isArray(jobEqForProc?.combatEffects) ? jobEqForProc.combatEffects : [])
+        ];
 
-            const pp = pe.params || {};
-            const dur = { ...pp.duration } || { mode: 'turns', value: 3 };
+        for (const pe of allProcs) {
+          if (!pe || pe.trigger !== 'on_hit' || pe.target !== 'enemy') continue;
+          // 武器條件
+          if (pe.condition?.weaponType && pe.condition.weaponType !== wt) continue;
+          if (Math.random() * 100 >= (pe.chance || 0)) continue;
 
-            switch (pe.key) {
-              case 'burn': {
-                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
-                monsterActiveEffects.push({ key: 'burn', params: { value: pp.value ?? 0.5, mode: pp.mode ?? 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
-                combatStats.burnTriggerCount += 1;
-                log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 ${dur.value ?? 3} 回合！`);
-                break;
+          const pp = pe.params || {};
+          const dur = { ...pp.duration } || { mode: 'turns', value: 3 };
+
+          switch (pe.key) {
+            case 'burn': {
+              monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
+              monsterActiveEffects.push({ key: 'burn', params: { value: pp.value ?? 0.5, mode: pp.mode ?? 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
+              combatStats.burnTriggerCount += 1;
+              log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 ${dur.value ?? 3} 回合！`);
+              break;
+            }
+            case 'hit_down': {
+              monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'hit_rate_down');
+              monsterActiveEffects.push({ key: 'hit_rate_down', params: { value: pp.value ?? 15, duration: dur }, appliedAt: round, source: 'job_proc' });
+              log.push(`⚡ **(法師)** **麻痺**！${mName} 行動遲緩，命中率下降，持續 ${dur.value ?? 3} 回合！`);
+              break;
+            }
+            case 'freeze': {
+              const recentFreeze = monsterActiveEffects.find(e => e.key === 'freeze' && e.appliedAt >= round - 1);
+              if (!recentFreeze) {
+                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'freeze');
+                monsterActiveEffects.push({ key: 'freeze', params: { duration: dur, bossImmune: pp.bossImmune ?? true }, appliedAt: round + 1, source: 'job_proc' });
+                log.push(`🧊 **(法師)** **冰凍**！${mName} 被凍結，下回合無法攻擊！`);
               }
-              case 'hit_down': {
-                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'hit_rate_down');
-                monsterActiveEffects.push({ key: 'hit_rate_down', params: { value: pp.value ?? 15, duration: dur }, appliedAt: round, source: 'job_proc' });
-                log.push(`⚡ **(法師)** **麻痺**！${mName} 行動遲緩，命中率下降，持續 ${dur.value ?? 3} 回合！`);
-                break;
+              break;
+            }
+            case 'proc_stun': {
+              stunRoundsLeft = Math.max(stunRoundsLeft, dur.value ?? 1);
+              log.push(`😵 **(矮人戰士)** **槌擊暈眩**！${mName} 被重擊擊暈，下回合無法攻擊！`);
+              break;
+            }
+            case 'proc_poison': {
+              const existing = monsterActiveEffects.find(e => e.key === 'poison');
+              const prevPct = existing ? Number(existing.params?.value ?? 0) : 0;
+              let dexBonus = 0;
+              if (!existing && pp.dexMultiplier) {
+                dexBonus = Number(pStats.dex ?? 0) * Number(pp.dexMultiplier);
               }
-              case 'freeze': {
-                const recentFreeze = monsterActiveEffects.find(e => e.key === 'freeze' && e.appliedAt >= round - 1);
-                if (!recentFreeze) {
-                  monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'freeze');
-                  monsterActiveEffects.push({ key: 'freeze', params: { duration: dur, bossImmune: pp.bossImmune ?? true }, appliedAt: round + 1, source: 'job_proc' });
-                  log.push(`🧊 **(法師)** **冰凍**！${mName} 被凍結，下回合無法攻擊！`);
-                }
-                break;
+              const nextPctRaw = Math.min(pp.maxPct ?? 3.5, prevPct + (existing ? (pp.stackAdd ?? 1) : (pp.value ?? 0.5)) + dexBonus);
+              const nextPct = Math.ceil(nextPctRaw * 10) / 10;
+              monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'poison');
+              monsterActiveEffects.push({ key: 'poison', params: { value: nextPct, mode: 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
+              if (existing) {
+                log.push(`☠️ **(盜賊)** **中毒加深**！${mName} 毒性增強至每回合 ${nextPct}% HP 傷害！`);
+              } else {
+                log.push(`☠️ **(盜賊)** **中毒**！${mName} 陷入中毒狀態，每回合損失 ${nextPct}% HP！（DEX: +${dexBonus.toFixed(2)}%）`);
               }
-              case 'proc_stun': {
-                stunRoundsLeft = Math.max(stunRoundsLeft, dur.value ?? 1);
-                log.push(`😵 **(矮人戰士)** **槌擊暈眩**！${mName} 被重擊擊暈，下回合無法攻擊！`);
-                break;
-              }
-              case 'proc_poison': {
-                const existing = monsterActiveEffects.find(e => e.key === 'poison');
-                const prevPct = existing ? Number(existing.params?.value ?? 0) : 0;
-                let dexBonus = 0;
-                if (!existing && pp.dexMultiplier) {
-                  dexBonus = Number(pStats.dex ?? 0) * Number(pp.dexMultiplier);
-                }
-                const nextPctRaw = Math.min(pp.maxPct ?? 3.5, prevPct + (existing ? (pp.stackAdd ?? 1) : (pp.value ?? 0.5)) + dexBonus);
-                const nextPct = Math.ceil(nextPctRaw * 10) / 10;
-                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'poison');
-                monsterActiveEffects.push({ key: 'poison', params: { value: nextPct, mode: 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
-                if (existing) {
-                  log.push(`☠️ **(盜賊)** **中毒加深**！${mName} 毒性增強至每回合 ${nextPct}% HP 傷害！`);
-                } else {
-                  log.push(`☠️ **(盜賊)** **中毒**！${mName} 陷入中毒狀態，每回合損失 ${nextPct}% HP！（DEX: +${dexBonus.toFixed(2)}%）`);
-                }
-                break;
-              }
+              break;
             }
           }
         }
