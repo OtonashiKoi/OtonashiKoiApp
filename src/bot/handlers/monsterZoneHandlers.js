@@ -754,9 +754,9 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const notificationChannelId = "1498608950671839263";
     const notifChannel = await client.channels.fetch(notificationChannelId).catch(() => null);
     if (notifChannel?.isTextBased?.()) {
-      // 過濾卡片和 A 階裝備
+      // 過濾卡片和 A 階裝備（卡片不算 A 階裝備）
       const cardDrops = droppedItemObjects.filter((item) => item.itemType === "card");
-      const aEquipDrops = droppedItemObjects.filter((item) => String(item.tier || "").toUpperCase() === "A");
+      const aEquipDrops = droppedItemObjects.filter((item) => String(item.tier || "").toUpperCase() === "A" && item.itemType !== "card");
 
       // 發送卡片掉落公告
       if (cardDrops.length > 0) {
@@ -764,8 +764,8 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
       }
 
       // 發送 A 階裝備掉落公告
-      for (const equip of aEquipDrops) {
-        await notifChannel.send(`⚙️ **A階裝備**：${equip.name}${equip.enhanceLevel > 0 ? ` +${equip.enhanceLevel}` : ""} | ${discordId} <@${discordId}>`);
+      if (aEquipDrops.length > 0) {
+        await notifChannel.send(`⚙️ A階裝備  <@${discordId}>`);
       }
     }
   } catch (e) {
