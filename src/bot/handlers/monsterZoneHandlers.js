@@ -725,23 +725,48 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const client = getBotClient();
     if (!client?.isReady()) return;
 
-    // 發送到通知頻道 1498608950671839263
-    const notificationChannelId = "1498608950671839263";
-    const channel = await client.channels.fetch(notificationChannelId).catch(() => null);
-    if (!channel?.isTextBased?.()) return;
-
-    // 過濾卡片和 A 階裝備
-    const cardDrops = droppedItemObjects.filter((item) => item.itemType === "card");
-    const aEquipDrops = droppedItemObjects.filter((item) => String(item.tier || "").toUpperCase() === "A");
-
-    // 發送卡片掉落公告
-    for (const card of cardDrops) {
-      await channel.send(`🃏 **卡片掉落**：${card.name} | ${discordId} <@${discordId}>`);
+    // 發送原本的廣播到 town_chat 或 monster_zone
+    const layout = await sc.channelLayoutRepository.get();
+    const allBindings = layout?.discord?.bindings || [];
+    const binding = allBindings.find((b) => b.featureKey === "town_chat") ||
+                    allBindings.find((b) => b.featureKey === "monster_zone");
+    if (binding?.channelId) {
+      const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+      if (channel?.isTextBased?.()) {
+        const itemList = droppedItems.join("、");
+        const taunt = pickTaunt(kind, monsterName);
+        const tauntSuffix = taunt ? `　${taunt}` : '';
+        if (kind === "bonus_10") {
+          await channel.send(`🎊 **10人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
+        } else if (kind === "bonus_15") {
+          await channel.send(`🔥 **15人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
+        } else if (kind === "bonus_20") {
+          await channel.send(`🌟 **20人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
+        } else if (kind === "group") {
+          await channel.send(`🎁 ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
+        } else {
+          await channel.send(`⚔️ ${displayName} (<@${discordId}>) 擊倒 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
+        }
+      }
     }
 
-    // 發送 A 階裝備掉落公告
-    for (const equip of aEquipDrops) {
-      await channel.send(`⚙️ **A階裝備**：${equip.name}${equip.enhanceLevel > 0 ? ` +${equip.enhanceLevel}` : ""} | ${discordId} <@${discordId}>`);
+    // 發送特殊物品公告到通知頻道 1498608950671839263
+    const notificationChannelId = "1498608950671839263";
+    const notifChannel = await client.channels.fetch(notificationChannelId).catch(() => null);
+    if (notifChannel?.isTextBased?.()) {
+      // 過濾卡片和 A 階裝備
+      const cardDrops = droppedItemObjects.filter((item) => item.itemType === "card");
+      const aEquipDrops = droppedItemObjects.filter((item) => String(item.tier || "").toUpperCase() === "A");
+
+      // 發送卡片掉落公告
+      for (const card of cardDrops) {
+        await notifChannel.send(`🃏 **卡片掉落**：${card.name} | ${discordId} <@${discordId}>`);
+      }
+
+      // 發送 A 階裝備掉落公告
+      for (const equip of aEquipDrops) {
+        await notifChannel.send(`⚙️ **A階裝備**：${equip.name}${equip.enhanceLevel > 0 ? ` +${equip.enhanceLevel}` : ""} | ${discordId} <@${discordId}>`);
+      }
     }
   } catch (e) {
     // suppressed
