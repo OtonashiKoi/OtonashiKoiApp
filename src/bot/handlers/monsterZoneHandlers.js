@@ -2133,10 +2133,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           const chanceMult = luckyMod.dropMultiplier * (isRare ? luckyMod.rareDropMultiplier : 1);
           const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
           if (Math.random() * 100 < finalChance) {
-            // 已擁有同件裝備 → 跳過（由參與獎勵機制補償）
-            if (!isMonsterCardItem(item) && item.itemType !== 'consumable' && playerAlreadyOwnsItem(luckyProg, item.id)) {
-              // skip duplicate
-            } else {
+            {
               const equipStats = item.equipStats ? { ...item.equipStats } : {};
 
               luckyProg.inventory.push({
@@ -2205,10 +2202,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           const chanceMult = bonusMod.dropMultiplier * (isRare ? bonusMod.rareDropMultiplier : 1);
           const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
           if (Math.random() * 100 < finalChance) {
-            // 已擁有同件裝備 → 跳過（由參與獎勵機制補償）
-            if (!isMonsterCardItem(item) && item.itemType !== 'consumable' && playerAlreadyOwnsItem(bonusProg, item.id)) {
-              // skip duplicate
-            } else {
+            {
               const equipStats = item.equipStats ? { ...item.equipStats } : {};
 
               bonusProg.inventory.push({

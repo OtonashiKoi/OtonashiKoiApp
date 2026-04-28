@@ -1328,14 +1328,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               case 'proc_poison': {
                 const existing = monsterActiveEffects.find(e => e.key === 'poison');
                 const prevPct = existing ? Number(existing.params?.value ?? 0) : 0;
-                const nextPctRaw = Math.min(pp.maxPct ?? 3, prevPct + (existing ? (pp.stackAdd ?? 1) : (pp.value ?? 0.5)));
+                let dexBonus = 0;
+                if (!existing && pp.dexMultiplier) {
+                  dexBonus = Number(pStats.dex ?? 0) * Number(pp.dexMultiplier);
+                }
+                const nextPctRaw = Math.min(pp.maxPct ?? 3.5, prevPct + (existing ? (pp.stackAdd ?? 1) : (pp.value ?? 0.5)) + dexBonus);
                 const nextPct = Math.ceil(nextPctRaw * 10) / 10;
                 monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'poison');
                 monsterActiveEffects.push({ key: 'poison', params: { value: nextPct, mode: 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
                 if (existing) {
                   log.push(`☠️ **(盜賊)** **中毒加深**！${mName} 毒性增強至每回合 ${nextPct}% HP 傷害！`);
                 } else {
-                  log.push(`☠️ **(盜賊)** **中毒**！${mName} 陷入中毒狀態，每回合損失 ${nextPct}% HP！`);
+                  log.push(`☠️ **(盜賊)** **中毒**！${mName} 陷入中毒狀態，每回合損失 ${nextPct}% HP！（DEX: +${dexBonus.toFixed(2)}%）`);
                 }
                 break;
               }

@@ -43,7 +43,12 @@
       "Bash(node scripts/grant-reroll-potion-and-announce.js)",
       "Bash(node scripts/fix-enhance-equipment-stats.js --dry-run)",
       "Bash(node scripts/fix-enhance-equipment-stats.js)",
-      "Bash(cd /d \"C:\\\\Users\\\\appsk\\\\Documents\\\\Github\\\\equipmentGAME\")"
+      "Bash(cd /d \"C:\\\\Users\\\\appsk\\\\Documents\\\\Github\\\\equipmentGAME\")",
+      "Bash(mongodump --uri \"mongodb://localhost:27017\" --db equipment_game --out \"backups/equipment_game_$\\(date +%Y%m%d_%H%M%S\\)\")",
+      "Bash(grep -E \"\\\\.\\(js|md\\)$\")",
+      "Bash(node scripts/upsert-job-mage.js)",
+      "Bash(node scripts/upsert-job-rogue.js)",
+      "Bash(node \"C:\\\\Users\\\\appsk\\\\Documents\\\\Github\\\\equipmentGAME\\\\scripts\\\\show-job-full-specs.js\")"
     ]
   }
 }

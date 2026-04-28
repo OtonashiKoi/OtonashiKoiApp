@@ -50,47 +50,9 @@ const JOB_ITEM = {
       notes: "單手杖 + 盾：格擋 +20%"
     }
   ],
-  procEffects: [
-    // 單手杖：命中時機率使目標命中下降（麻痺）/ 燒傷 / 冰凍
-    {
-      key: "hit_down",
-      trigger: "on_hit",
-      target: "enemy",
-      chance: 15,
-      stacks: 1,
-      stackMode: "refresh",
-      duration: { mode: "turns", value: 3 },
-      params: { value: 15 },
-      condition: { weaponType: "staff_1h" },
-      notes: "單手杖：命中時 10% 機率麻痺（命中率 -15%，持續 3 回合，刷新）"
-    },
-    {
-      key: "burn",
-      trigger: "on_hit",
-      target: "enemy",
-      chance: 15,
-      stacks: 1,
-      stackMode: "refresh",
-      duration: { mode: "turns", value: 5 },
-      params: { value: 1, mode: "pct" },
-      condition: { weaponType: "staff_1h" },
-      notes: "單手杖：命中時 10% 機率燒傷（每回合 1% HP，持續 5 回合，刷新）"
-    },
-    {
-      key: "freeze",
-      trigger: "on_hit",
-      target: "enemy",
-      chance: 15,
-      stacks: 1,
-      stackMode: "replace",
-      duration: { mode: "turns", value: 1 },
-      params: { bossImmune: true },
-      condition: { weaponType: "staff_1h" },
-      notes: "單手杖：命中時 10% 機率冰凍（該回合無法行動，BOSS 無效）"
-    }
-  ],
+  procEffects: [],
   combatEffects: [
-    // 雙手杖：武器倍率 x1.2，並 proc 麻痺/燒傷/冰
+    // 雙手杖：武器倍率 x1.2
     {
       key: "atk_multiplier_up",
       trigger: "passive",
@@ -103,18 +65,7 @@ const JOB_ITEM = {
       condition: { weaponType: "staff_2h" },
       notes: "雙手杖時武器倍率 x1.2"
     },
-    {
-      key: "atk_multiplier_up",
-      trigger: "passive",
-      target: "self",
-      chance: 100,
-      stacks: 1,
-      stackMode: "replace",
-      duration: { mode: "battle", value: 1 },
-      params: { value: 1.2 },
-      condition: { weaponType: "staff_2h" },
-      notes: "雙手杖時武器倍率 x1.2"
-    },
+    // 雙手杖：命中時機率麻痺/燒傷/冰凍
     {
       key: "hit_down",
       trigger: "on_hit",
@@ -125,7 +76,7 @@ const JOB_ITEM = {
       duration: { mode: "turns", value: 3 },
       params: { value: 15 },
       condition: { weaponType: "staff_2h" },
-      notes: "雙手杖：命中時 10% 機率麻痺（命中率 -15%，持續 3 回合，刷新）"
+      notes: "雙手杖：命中時 15% 機率麻痺（命中率 -15%，持續 3 回合，刷新）"
     },
     {
       key: "burn",
@@ -134,10 +85,10 @@ const JOB_ITEM = {
       chance: 15,
       stacks: 1,
       stackMode: "refresh",
-      duration: { mode: "turns", value: 5 },
-      params: { value: 1, mode: "pct" },
+      duration: { mode: "turns", value: 3 },
+      params: { value: 0.8, mode: "pct" },
       condition: { weaponType: "staff_2h" },
-      notes: "雙手杖：命中時 10% 機率燒傷（每回合 1% HP，持續 5 回合，刷新）"
+      notes: "雙手杖：命中時 15% 機率燒傷（每回合 0.8% HP，持續 3 回合，刷新）"
     },
     {
       key: "freeze",
@@ -149,7 +100,7 @@ const JOB_ITEM = {
       duration: { mode: "turns", value: 1 },
       params: { bossImmune: true },
       condition: { weaponType: "staff_2h" },
-      notes: "雙手杖：命中時 10% 機率冰凍（該回合無法行動，BOSS 無效）"
+      notes: "雙手杖：命中時 15% 機率冰凍（該回合無法行動，BOSS 無效）"
     },
     // 雙手杖 + 高血量 (>75%)：傷害再上升 15%
     {
