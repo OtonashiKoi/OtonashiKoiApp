@@ -163,9 +163,9 @@ async function handleProfile(interaction) {
 
     // 職業與武器的對應關係
     const jobWeaponMap = {
+      "dwarf_warrior": { weapons: ["mace_1h", "mace_2h"], name: "矮人戰士", traits: ["武器倍率強化", "擊暈機率", "高血擊暈加成"] },
       "swordsman": { weapons: ["sword_1h", "sword_2h"], name: "劍士", traits: ["格擋反擊", "連擊", "斬殺"] },
       "warrior": { weapons: ["axe_1h", "axe_2h"], name: "戰士", traits: ["低血傷害倍增", "爆擊提升"] },
-      "dwarf": { weapons: ["mace_1h", "mace_2h"], name: "矮人", traits: ["高血擊暈加成", "連擊"] },
       "rogue": { weapons: ["dagger"], name: "盜賊", traits: ["連擊加速", "連擊傷害"] },
       "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", traits: ["無視防禦", "燒傷/麻痺/冰凍"] },
       "healer": { weapons: null, name: "治療師", traits: ["回血光環", "隊伍傷害加成"] },

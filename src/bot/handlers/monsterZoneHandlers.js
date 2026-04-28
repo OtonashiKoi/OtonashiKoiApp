@@ -26,6 +26,10 @@ const worldBossTimeoutTimers = new Map();
 // track last chosen candidate per zone to avoid immediate repeats
 const zoneLastChosen = new Map();
 
+// 排行榜去重：key = zoneKey, value = { lastPublishTime, lastDamageMap, pendingTimer }
+// 防止戰鬥中頻繁編輯面板，最多 5 秒更新一次排行榜
+const damageRankingDebounce = new Map();
+
 const BTN = {
   enterBattle: "monster-zone:enter-battle",
   enterBattlePrefix: "monster-zone:enter-battle:",
@@ -582,12 +586,10 @@ function buildRewardModifiers(progress) {
 // 輔助：掉落裝備公告
 // ──────────────────────────────────────────────
 async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
-  console.log(`[NotifyKill] monster=${monsterName} killer=${killerDiscordId} pids=${Object.keys(perPidRewards).join(",")}`);
   try {
     const { getBotClient } = require("../runtimeContext");
     const sc = getServiceContext();
     const client = getBotClient();
-    console.log(`[NotifyKill] client ready=${client?.isReady()}`);
     if (!client?.isReady()) return;
     for (const [pid, rewards] of Object.entries(perPidRewards)) {
       const lines = [];
@@ -776,6 +778,64 @@ function pickWeightedNextMonster(monsters, currentMonsterId = null) {
     }
   }
   return selected || null;
+}
+
+// 排行榜去重：戰鬥中最多 5 秒更新一次面板
+// 邏輯：
+// 1. 如果排行沒變，跳過
+// 2. 如果排行有變但不足 5 秒，延迟到 5 秒後發佈
+// 3. 如果距上次發佈超過 5 秒，立即發佈
+// 4. 定時器到期時會無條件發佈一次（確保至少 5 秒更新）
+async function _republishPanelWithRankingDebounce(sc, zoneKey, monster, monsterHp, participantCount, damageMap = {}, activeEvent = null, worldBossPartsHp = null, options = {}) {
+  const now = Date.now();
+  const debounce = damageRankingDebounce.get(zoneKey) || {};
+  const lastPublishTime = debounce.lastPublishTime || 0;
+  const lastDamageMap = debounce.lastDamageMap || {};
+  let lastTimer = debounce.pendingTimer || null;
+
+  // 比較排行榜是否真的改變
+  const damageStr = JSON.stringify(Object.entries(damageMap).sort((a, b) => b[1].damage - a[1].damage));
+  const lastDamageStr = JSON.stringify(Object.entries(lastDamageMap).sort((a, b) => b[1].damage - a[1].damage));
+  const rankingChanged = damageStr !== lastDamageStr;
+
+  // 如果排行沒變，直接跳過
+  if (!rankingChanged) {
+    return;
+  }
+
+  // 檢查是否距上次發佈超過 5 秒
+  const timeSinceLastPublish = now - lastPublishTime;
+  if (timeSinceLastPublish >= 5000) {
+    // 超過 5 秒，立即發佈
+    if (lastTimer) clearTimeout(lastTimer);
+    await _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap, activeEvent, worldBossPartsHp, options).catch(() => {});
+    damageRankingDebounce.set(zoneKey, {
+      lastPublishTime: Date.now(),
+      lastDamageMap: damageMap,
+      pendingTimer: null
+    });
+    return;
+  }
+
+  // 不足 5 秒，清除舊計時器，設定新的延遲計時器
+  if (lastTimer) clearTimeout(lastTimer);
+  const delayMs = 5000 - timeSinceLastPublish;
+  const newTimer = setTimeout(() => {
+    // 定時器到期時，無條件發佈一次（確保至少 5 秒內更新）
+    _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap, activeEvent, worldBossPartsHp, options).catch(() => {});
+    damageRankingDebounce.set(zoneKey, {
+      lastPublishTime: Date.now(),
+      lastDamageMap: damageMap,
+      pendingTimer: null
+    });
+  }, delayMs);
+
+  // 更新 debounce 狀態（保留當前 damageMap 以便定時器使用）
+  damageRankingDebounce.set(zoneKey, {
+    lastPublishTime,
+    lastDamageMap: damageMap,
+    pendingTimer: newTimer
+  });
 }
 
 async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap = {}, activeEvent = null, worldBossPartsHp = null, options = {}) {
@@ -2449,7 +2509,12 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   }
 
   // 通知非擊殺者參戰獎勵（DM，擊殺者已在戰鬥 embed 看到）
-  _notifyKillRewards(monster.name, perPidRewards, discordId).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
+  const rewardsForNonKillers = Object.fromEntries(
+    Object.entries(perPidRewards).filter(([pid]) => pid !== discordId)
+  );
+  if (Object.keys(rewardsForNonKillers).length > 0) {
+    _notifyKillRewards(monster.name, rewardsForNonKillers, discordId).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
+  }
 
   // 推送 SSE reward 事件給所有參戰者（web 端通知紀錄）
   try {
@@ -3051,6 +3116,7 @@ module.exports = {
   handleNpcDialog,
   handleMonsterKill,
   _republishPanel,
+  _republishPanelWithRankingDebounce,
   MAX_ROUNDS,
   _broadcastBossSpawn,
   activeSessions,

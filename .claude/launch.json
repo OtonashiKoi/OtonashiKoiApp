@@ -32,8 +32,8 @@
     },
     {
       "name": "web-frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "../equipmentGAME-web"],
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd", "/d", "C:\\Users\\appsk\\Documents\\Github\\equipmentGAME-web", "&&", "npm", "run", "dev"],
       "port": 5174,
       "description": "手機版玩家網頁前端"
     }

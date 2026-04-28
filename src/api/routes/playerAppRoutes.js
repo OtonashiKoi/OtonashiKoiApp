@@ -992,7 +992,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const totalTaken = Math.max(0, (pStats.maxHp || 0) - Math.max(0, finalPlayerHp));
 
       // 蝯?
-      const { handleMonsterKill, _republishPanel, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
+      const { handleMonsterKill, _republishPanel, _republishPanelWithRankingDebounce, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
       let rewardLines = [];
       let mHp = finalMonsterHp;
       const currentParticipants = Array.isArray(stateForCombat.participants) ? stateForCombat.participants : [];
@@ -1042,8 +1042,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
         rewardLines.push("Monster battle state has been updated in the zone panel.");
 
-        // update panel
-        _republishPanel(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
+        // update panel（排行榜去重，最多 5 秒更新一次）
+        _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
       }
 
       if (progress && Array.isArray(progress.activeEffects) && progress.activeEffects.length > 0) {

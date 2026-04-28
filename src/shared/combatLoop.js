@@ -519,9 +519,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const tier = wt === "axe_2h" ? "低血爆發(中)" : "低血爆發(小)";
         jobHints.push(`🪓 **(戰士)** ${tier}：低血量時傷害爆發${wt === "axe_2h" ? "，爆擊傷害加深" : ""}`);
       }
-      if (pStats.hasDwarfBadge && wt.startsWith("mace")) {
+      if (pStats.hasDwarfWarriorBadge && wt && wt.startsWith("mace")) {
         const tier = wt === "mace_2h" ? "擊暈(中)" : "擊暈(小)";
-        jobHints.push(`🔨 **(矮人)** ${tier}：高血量時擊暈機率提升${wt === "mace_2h" ? "，命中後有機率額外擊暈" : ""}`);
+        jobHints.push(`🔨 **(矮人戰士)** ${tier}：高血量時擊暈機率提升${wt === "mace_2h" ? "，命中後有機率額外擊暈" : ""}`);
       }
       if (pStats.hasRogueBadge && wt === "dagger") {
         jobHints.push(`🗡️ **(盜賊)** 中毒(小)＋連擊強化：命中後有機率中毒疊加，連擊傷害提升`);
@@ -582,9 +582,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (round > endRound) continue;
         }
 
-        // 燒傷：每回合扣怪物最大 HP 的 value%（DB params，預設 1%）
+        // 燒傷：每回合扣怪物最大 HP 的 value%（DB params，預設 0.5%）
         if (mEff.key === 'burn') {
-          const burnPct = Number(mParams.value ?? 1);
+          const burnPct = Number(mParams.value ?? 0.5);
           const burnBase = mParams.mode === 'caster_atk_pct'
             ? Math.max(1, Number(mParams.casterAtk || 1))
             : (mParams.mode === 'current' ? mHp : mHpInit);
@@ -709,7 +709,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         // 燒傷 DOT（怪物施加給玩家）
         if (dotEffect.key === 'burn') {
-          const burnPct = Number(dotParams.value ?? 5);
+          const burnPct = Number(dotParams.value ?? 0.5);
           const burnBase = dotParams.mode === 'caster_atk_pct'
             ? Math.max(1, Number(dotParams.casterAtk || 1))
             : (pStats.maxHp || 1);
@@ -1241,10 +1241,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         // 擊暈判定（爆擊不觸發）
         let stunBonus = extraHighHpStun;
-        // 矮人：高血量擊暈加成（>90%）
-        if (pStats.hasDwarfBadge && pStats.weaponType && pStats.weaponType.startsWith("mace")) {
-          if (pHp >= Math.ceil((pStats.maxHp || 1) * 0.9)) {
-            stunBonus += pStats.dwarfHighHpStunBoost;
+        // 矮人戰士：高血量擊暈加成（>85%，需拿槌子）
+        if (pStats.hasDwarfWarriorBadge && pStats.weaponType && pStats.weaponType.startsWith("mace")) {
+          if (pHp >= Math.ceil((pStats.maxHp || 1) * 0.85)) {
+            stunBonus += pStats.dwarfWarriorHighHpStunBoost;
           }
         }
         const effectiveStunChance = (Number(pStats.stunChance) || 0) + stunBonus;
@@ -1282,7 +1282,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             switch (pe.key) {
               case 'burn': {
                 monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
-                monsterActiveEffects.push({ key: 'burn', params: { value: pp.value ?? 1, mode: pp.mode ?? 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
+                monsterActiveEffects.push({ key: 'burn', params: { value: pp.value ?? 0.5, mode: pp.mode ?? 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
                 combatStats.burnTriggerCount += 1;
                 log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 ${dur.value ?? 3} 回合！`);
                 break;
@@ -1304,7 +1304,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               }
               case 'proc_stun': {
                 stunRoundsLeft = Math.max(stunRoundsLeft, dur.value ?? 1);
-                log.push(`😵 **(矮人)** **槌擊暈眩**！${mName} 被重擊擊暈，下回合無法攻擊！`);
+                log.push(`😵 **(矮人戰士)** **槌擊暈眩**！${mName} 被重擊擊暈，下回合無法攻擊！`);
                 break;
               }
               case 'proc_poison': {
@@ -1634,7 +1634,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               const procChance = 10;
               if (Math.random() * 100 < procChance) {
                 monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
-                monsterActiveEffects.push({ key: 'burn', params: { damagePercent: 10, duration: { mode: 'turns', value: 3 } }, appliedAt: round, source: 'mage_offhand' });
+                monsterActiveEffects.push({ key: 'burn', params: { value: 0.5, duration: { mode: 'turns', value: 3 } }, appliedAt: round, source: 'mage_offhand' });
                 combatStats.burnTriggerCount += 1;
                 log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 3 回合！`);
               }

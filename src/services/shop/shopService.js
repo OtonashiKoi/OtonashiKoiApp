@@ -463,6 +463,14 @@ class ShopService {
     }
     if (!slot) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備未指定槽位", 400);
 
+    // 職業徽章等級限制：10 等以下禁止穿戴
+    if (slot === "job_eq") {
+      const playerLevel = progress.level || 1;
+      if (playerLevel < 10) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `職業徽章需要 Lv.10 以上才能穿戴（目前 Lv.${playerLevel}）`, 400);
+      }
+    }
+
     // 特殊卡片：允許指定目標槽位 (special_1, special_2, special_3)
     if (slot === "special" && targetSlot) {
       const SPECIAL_SLOTS = ["special_1", "special_2", "special_3"];

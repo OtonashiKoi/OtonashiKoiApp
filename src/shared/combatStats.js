@@ -20,11 +20,11 @@ const WEAPON_CONFIG = {
   sword_2h: { mult: 7, isTwoHanded: true },
   mace_1h:  { mult: 3, stunChance: 5 },
   mace_2h:  { mult: 4, isTwoHanded: true, stunChance: 10 },
-  axe_1h:   { mult: 3, armorBreak: 15 },
-  axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15 },
+  axe_1h:   { mult: 3, armorBreak: 15, critBonus: 10 },
+  axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15, critBonus: 20 },
   dagger:   { mult: 2, comboBonus: 20 },
-  staff_1h: { mult: 4, baseStat: "int", monsterAtk: 2, bypassDefPct: 30 },
-  staff_2h: { mult: 5, baseStat: "int", isTwoHanded: true, monsterAtk: 2, bypassDefPct: 35 },
+  staff_1h: { mult: 3, baseStat: "int", monsterAtk: 2, bypassDefPct: 15 },
+  staff_2h: { mult: 4, baseStat: "int", isTwoHanded: true, monsterAtk: 2, bypassDefPct: 25 },
   bow:      { mult: 4, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
 };
 
@@ -110,8 +110,8 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
 
   const hasArcherBadge = jobEq && (jobId.includes("archer") || jobName.includes("弓箭手"));
   const hasSwordsmanBadge = jobEq && (jobId.includes("swordsman") || jobName.includes("劍士"));
-  const hasWarriorBadge = jobEq && (jobId.includes("warrior") && !jobId.includes("dwarf") || jobName.includes("戰士") && !jobName.includes("矮人"));
-  const hasDwarfBadge = jobEq && (jobId.includes("dwarf") || jobName.includes("矮人"));
+  const hasWarriorBadge = jobEq && (jobId === "job_warrior_v1" || (jobName.includes("戰士") && !jobName.includes("矮人")));
+  const hasDwarfWarriorBadge = jobEq && (jobId === "job_dwarf_warrior_v1" || jobName.includes("矮人戰士"));
   const hasRogueBadge = jobEq && (jobId.includes("rogue") || jobName.includes("盜賊"));
   const hasMageBadge = jobEq && (jobId.includes("mage") || jobName.includes("法師"));
   const hasHealerBadge = jobEq && (jobId.includes("healer") || jobName.includes("治療"));
@@ -143,10 +143,10 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   let warriorLowHpMultiplier = 1;
   // 在 combatLoop 中根據當前 HP 計算
 
-  // 矮人：高血量擊暈加成（>90%）
-  let dwarfHighHpStunBoost = 0;
-  if (hasDwarfBadge && wt && wt.startsWith("mace")) {
-    dwarfHighHpStunBoost = 5;
+  // 矮人戰士：高血量擊暈加成（>85%，需拿槌子）
+  let dwarfWarriorHighHpStunBoost = 0;
+  if (hasDwarfWarriorBadge && wt && wt.startsWith("mace")) {
+    dwarfWarriorHighHpStunBoost = 5;
   }
 
   // 盜賊：連擊速度倍增
@@ -182,7 +182,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     def:      Math.min(75, V * 2),         // 百分比減傷 0~75%
     dodge:    Math.min(50, A * 0.5) + (cfg.dodgeBonus ?? 0), // 弓+30%，上限不強制（弓本來就特殊）
     hit:      Math.min(100, 70 + D),       // 基礎70，DEX每點+1
-    crit:     Math.min(100, L * 0.3),      // LUK → 爆擊%
+    crit:     Math.min(100, L * 0.3 + (cfg.critBonus ?? 0)), // LUK → 爆擊%，斧+10/20%
     combo:    Math.min(80, 3 + A * 0.5 + (cfg.comboBonus ?? 0)), // AGI×0.5，匕首+20%
     comboDamageMultiplier: 1,                    // 連擊傷害倍率
     executeChance: 0,                            // 斬殺觸發率
@@ -227,9 +227,9 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     warriorLowHpMultiplier,   // 低血量傷害倍增
     warriorCritDamageBonus: (hasWarriorBadge && wt === "axe_2h") ? 0.2 : 0,  // 雙手斧爆擊傷害 +0.2x
 
-    // 矮人
-    hasDwarfBadge,
-    dwarfHighHpStunBoost,     // 高血量擊暈加成
+    // 矮人戰士
+    hasDwarfWarriorBadge,
+    dwarfWarriorHighHpStunBoost,     // 高血量擊暈加成
 
     // 盜賊
     hasRogueBadge,
