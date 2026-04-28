@@ -2054,7 +2054,12 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         if (pid === discordId && expResult.levelUps > 0) {
           killerLvLine = ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}`;
         }
-      } catch (e) { console.error(`[MonsterZone] grantExp failed for ${pid}`, e); }
+      } catch (e) {
+        console.error(`[MonsterZone] grantExp failed for ${pid}`, e?.message || e);
+        // 記錄失敗原因，幫助診斷 DM 通知與實際經驗值不符的問題
+        if (!perPidRewards[pid]) perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] };
+        perPidRewards[pid]._expGrantFailed = true;
+      }
     }
 
     const rawPct = Math.round(dmgRatio(discordId) * 100);
@@ -2508,13 +2513,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
   }
 
-  // 通知非擊殺者參戰獎勵（DM，擊殺者已在戰鬥 embed 看到）
-  const rewardsForNonKillers = Object.fromEntries(
-    Object.entries(perPidRewards).filter(([pid]) => pid !== discordId)
-  );
-  if (Object.keys(rewardsForNonKillers).length > 0) {
-    _notifyKillRewards(monster.name, rewardsForNonKillers, discordId).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
-  }
+  // 通知參戰獎勵（DM）
+  _notifyKillRewards(monster.name, perPidRewards, discordId).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
 
   // 推送 SSE reward 事件給所有參戰者（web 端通知紀錄）
   try {
