@@ -759,8 +759,8 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
       const aEquipDrops = droppedItemObjects.filter((item) => String(item.tier || "").toUpperCase() === "A");
 
       // 發送卡片掉落公告
-      for (const card of cardDrops) {
-        await notifChannel.send(`🃏 **卡片掉落**：${card.name} | ${discordId} <@${discordId}>`);
+      if (cardDrops.length > 0) {
+        await notifChannel.send(`🃏 卡片掉落  <@${discordId}>`);
       }
 
       // 發送 A 階裝備掉落公告
