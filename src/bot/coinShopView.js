@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require("discord.js");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
 
 const SHOP_OPEN_ID = "shop_open";
 const SHOP_CANCEL_ID = "shop_cancel";
@@ -15,6 +15,8 @@ const CAT_LABELS = {
 
 function shopBuyId(itemId) { return `shop_buy:${itemId}`; }
 function shopConfirmId(itemId) { return `shop_confirm:${itemId}`; }
+function shopQuantityModalId(itemId) { return `shop_quantity_modal:${itemId}`; }
+function shopQuantityConfirmId(itemId) { return `shop_quantity_confirm:${itemId}`; }
 
 // 等級由低到高
 const TIER_ORDER = ["E", "D", "C", "B", "A", "S", "SS"];
@@ -216,6 +218,52 @@ function createConfirmMessage(item, attachmentName) {
   };
 }
 
+/**
+ * 創建消耗品數量輸入的 Modal
+ */
+function createQuantityModal(item) {
+  const modal = new ModalBuilder()
+    .setCustomId(shopQuantityModalId(item.id))
+    .setTitle(`購買 ${item.name}`);
+
+  const quantityInput = new TextInputBuilder()
+    .setCustomId("quantity_input")
+    .setLabel("購買數量")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setPlaceholder("輸入要購買的數量（1-999）")
+    .setMinLength(1)
+    .setMaxLength(3)
+    .setValue("1");
+
+  modal.addComponents(new ActionRowBuilder().addComponents(quantityInput));
+  return modal;
+}
+
+/**
+ * 創建消耗品購買確認訊息（顯示數量與總價）
+ */
+function createConsumableConfirmMessage(item, quantity) {
+  const currencyLabel = item.currency === "diamond" ? "💎 鑽石" : "💰 金幣";
+  const totalPrice = item.price * quantity;
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(shopQuantityConfirmId(item.id))
+      .setLabel("✅ 確認購買")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(SHOP_CANCEL_ID)
+      .setLabel("❌ 取消")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  return {
+    content: `🛒 確定要購買 **${item.name}** 嗎？\n單價：**${item.price}** ${currencyLabel}\n數量：**${quantity}**\n總額：**${totalPrice}** ${currencyLabel}\n\n${item.description}`,
+    components: [row]
+  };
+}
+
 module.exports = {
   SHOP_OPEN_ID,
   SHOP_CANCEL_ID,
@@ -223,7 +271,11 @@ module.exports = {
   SHOP_CAT_PREFIX,
   shopBuyId,
   shopConfirmId,
+  shopQuantityModalId,
+  shopQuantityConfirmId,
   createCoinShopPanelMessage,
   createShopMainMessage,
-  createConfirmMessage
+  createConfirmMessage,
+  createQuantityModal,
+  createConsumableConfirmMessage
 };

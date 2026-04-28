@@ -12,7 +12,7 @@ const {
   handlePublishPersonalRoom,
   handleUnlockPersonalRoom
 } = require("./handlers/publishHandlers");
-const { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect } = require("./handlers/coinShopHandlers");
+const { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect, handleQuantityModalSubmit, isCoinShopModal } = require("./handlers/coinShopHandlers");
 const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal, isNpcDialogButton, handleNpcDialog } = require("./handlers/monsterZoneHandlers");
 const { handleIdleZoneButton, isIdleZoneButton, handleIdleZoneSelect, isIdleZoneSelect } = require("./handlers/idleZoneHandlers");
 const { isAuctionButton, handleAuctionButton, handleAuctionSelect, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
@@ -217,6 +217,10 @@ async function handleSelectMenu(interaction) {
 }
 
 async function handleModal(interaction) {
+  if (isCoinShopModal(interaction.customId)) {
+    await handleQuantityModalSubmit(interaction);
+    return;
+  }
   if (interaction.customId.startsWith("auction:sell_modal:")) {
     await handleAuctionModal(interaction);
     return;

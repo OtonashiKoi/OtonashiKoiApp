@@ -167,7 +167,10 @@ class ShopService {
     return new Date().toISOString().slice(0, 7);
   }
 
-  async purchase(discordId, displayName, itemId, memberRoleIds = []) {
+  async purchase(discordId, displayName, itemId, memberRoleIds = [], quantity = 1) {
+    // 驗證數量
+    quantity = Math.max(1, Math.min(999, parseInt(quantity) || 1));
+
     const item = await this.getItemById(itemId);
     let libraryItem = null;
     let effectiveTier = item.tier || null;
@@ -185,6 +188,11 @@ class ShopService {
     if (!item.enabled) throw new AppError(ERROR_CODES.SHOP_ITEM_DISABLED, "此商品目前已下架", 400);
     if (item.stock === 0) throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, "此商品已售完", 400);
 
+    // 檢查庫存是否足夠
+    if (item.stock > 0 && quantity > item.stock) {
+      throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, `庫存不足，目前僅剩 ${item.stock} 個`, 400);
+    }
+
     const allowedTiers = item.allowedTiers || [];
     if (allowedTiers.length > 0 && this.playerTierService) {
       const playerHighestTier = await this.playerTierService.resolveHighestTier(memberRoleIds);
@@ -198,24 +206,26 @@ class ShopService {
       const ym = this._currentYearMonth();
       const counts = (progress?.shopMonthlyCount || {});
       const used = (counts[itemId] || {})[ym] || 0;
-      if (used >= maxPerMonth) {
-        throw new AppError(ERROR_CODES.FORBIDDEN, `此商品本月已達領取上限（${maxPerMonth} 次）`, 403);
+      if (used + quantity > maxPerMonth) {
+        throw new AppError(ERROR_CODES.FORBIDDEN, `此商品本月購買已達上限（已購 ${used}/${maxPerMonth}，無法再購 ${quantity} 個）`, 403);
       }
     }
 
+    // 扣除金幣（總額）
     if (item.price > 0) {
         await this.rewardService.grantCurrency({
         discordId,
         displayName,
         currencyType: item.currency,
-        amount: -item.price,
+        amount: -(item.price * quantity),
         source: CURRENCY_SOURCES.SHOP_PURCHASE,
         operator: "shop"
       });
     }
 
+    // 扣除庫存
     if (item.stock > 0) {
-      await this.shopRepository.save({ ...item, stock: item.stock - 1 });
+      await this.shopRepository.save({ ...item, stock: Math.max(0, item.stock - quantity) });
     }
 
     if (progress) {
@@ -224,30 +234,30 @@ class ShopService {
         if (!progress.shopMonthlyCount) progress.shopMonthlyCount = {};
         const ym = this._currentYearMonth();
         if (!progress.shopMonthlyCount[itemId]) progress.shopMonthlyCount[itemId] = {};
-        progress.shopMonthlyCount[itemId][ym] = ((progress.shopMonthlyCount[itemId][ym] || 0) + 1);
+        progress.shopMonthlyCount[itemId][ym] = ((progress.shopMonthlyCount[itemId][ym] || 0) + quantity);
       }
-      // 原則：玩家身上只存「玩家自有資料」（uuid、itemId、購買時間等）。
-      // passiveEffects/combatEffects 等設計欄位永遠從 items DB 讀取（mergeEquippedFromLibrary），
-      // 這裡雖然也存一份，但戰鬥時會被 DB 最新值覆蓋，不需要手動同步。
-      progress.inventory.push({
-        uuid: crypto.randomUUID(),
-        itemId: item.itemLibraryId || item.id,
-        itemName: item.name,
-        itemEffect: item.effect || { type: "none", value: 0 },
-        useEffects: libraryItem?.useEffects || item.useEffects || [],
-        passiveEffects: libraryItem?.passiveEffects || item.passiveEffects || [],
-        procEffects: libraryItem?.procEffects || item.procEffects || [],
-        combatEffects: libraryItem?.combatEffects || item.combatEffects || [],
-        itemType: item.itemType || "consumable",
-        imageUrl: item.imageUrl || null,
-        imageThumbnailUrl: item.imageThumbnailUrl || null,
-        equipSlot: item.equipSlot || null,
-        equipStats: libraryItem?.equipStats || item.equipStats || null,
-        weaponType: item.weaponType || null,
-        isTwoHanded: this._resolveIsTwoHanded({ weaponType: item.weaponType, isTwoHanded: item.isTwoHanded }),
-        tier: effectiveTier,
-        purchasedAt: new Date().toISOString()
-      });
+      // 添加 quantity 個物品到背包
+      for (let i = 0; i < quantity; i++) {
+        progress.inventory.push({
+          uuid: crypto.randomUUID(),
+          itemId: item.itemLibraryId || item.id,
+          itemName: item.name,
+          itemEffect: item.effect || { type: "none", value: 0 },
+          useEffects: libraryItem?.useEffects || item.useEffects || [],
+          passiveEffects: libraryItem?.passiveEffects || item.passiveEffects || [],
+          procEffects: libraryItem?.procEffects || item.procEffects || [],
+          combatEffects: libraryItem?.combatEffects || item.combatEffects || [],
+          itemType: item.itemType || "consumable",
+          imageUrl: item.imageUrl || null,
+          imageThumbnailUrl: item.imageThumbnailUrl || null,
+          equipSlot: item.equipSlot || null,
+          equipStats: libraryItem?.equipStats || item.equipStats || null,
+          weaponType: item.weaponType || null,
+          isTwoHanded: this._resolveIsTwoHanded({ weaponType: item.weaponType, isTwoHanded: item.isTwoHanded }),
+          tier: effectiveTier,
+          purchasedAt: new Date().toISOString()
+        });
+      }
       progress.updatedAt = new Date().toISOString();
       await this.progressRepository.save(progress);
     }

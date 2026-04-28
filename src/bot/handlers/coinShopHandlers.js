@@ -6,8 +6,12 @@ const {
   SHOP_CANCEL_ID,
   SHOP_SELECT_ID,
   SHOP_CAT_PREFIX,
+  shopQuantityModalId,
+  shopQuantityConfirmId,
   createShopMainMessage,
-  createConfirmMessage
+  createConfirmMessage,
+  createQuantityModal,
+  createConsumableConfirmMessage
 } = require("../coinShopView");
 
 function getServiceContext() {
@@ -85,11 +89,20 @@ async function handleShopBuy(interaction, itemId) {
     await interaction.update({ content: "❌ 此商品目前無法購買。", components: [], embeds: [], attachments: [] });
     return;
   }
+
+  // 消耗品：顯示數量輸入 Modal
+  if (item.itemType === "consumable") {
+    const modal = createQuantityModal(item);
+    await interaction.showModal(modal);
+    return;
+  }
+
+  // 非消耗品：顯示購買確認
   const updateData = await buildConfirmUpdate(item);
   await interaction.update(updateData);
 }
 
-async function handleShopConfirm(interaction, itemId) {
+async function handleShopConfirm(interaction, itemId, quantity = 1) {
   const serviceContext = getServiceContext();
   try {
     // 取得成員身分組 ID 清單（ephemeral 互動 cache 可能為空，補 fetch）
@@ -104,10 +117,12 @@ async function handleShopConfirm(interaction, itemId) {
       interaction.user.id,
       interaction.user.displayName || interaction.user.username,
       itemId,
-      memberRoleIds
+      memberRoleIds,
+      quantity
     );
+    const quantityText = quantity > 1 ? `**${quantity}** 個` : "";
     await interaction.update({
-      content: `✅ 成功購買 **${item.name}**！已加入你的背包。`,
+      content: `✅ 成功購買 ${quantityText}**${item.name}**！已加入你的背包。`,
       components: [], embeds: [], attachments: []
     });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 3000);
@@ -118,6 +133,85 @@ async function handleShopConfirm(interaction, itemId) {
     });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
+}
+
+/**
+ * 處理消耗品數量 Modal 提交
+ */
+async function handleQuantityModalSubmit(interaction) {
+  const modalId = interaction.customId;
+  const itemId = modalId.replace("shop_quantity_modal:", "");
+  const quantityStr = interaction.fields.getTextInputValue("quantity_input").trim();
+
+  // 驗證數量
+  let quantity = parseInt(quantityStr, 10);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) {
+    await interaction.reply({
+      content: "❌ 數量必須是 1 到 999 之間的整數。",
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
+
+  // 獲取商品並顯示確認訊息
+  const serviceContext = getServiceContext();
+  try {
+    const item = await serviceContext.shopService.getItemById(itemId);
+    if (!item.enabled || item.stock === 0) {
+      await interaction.reply({
+        content: "❌ 此商品目前無法購買。",
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    // 檢查庫存
+    if (item.stock > 0 && quantity > item.stock) {
+      await interaction.reply({
+        content: `❌ 庫存不足。目前庫存只有 **${item.stock}** 個。`,
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    const msg = createConsumableConfirmMessage(item, quantity);
+    // 儲存數量到 customData 以便後續確認時使用
+    msg.components[0].components[0].setCustomId(`shop_quantity_confirm:${itemId}:${quantity}`);
+    await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
+  } catch (err) {
+    await interaction.reply({
+      content: `❌ 錯誤：${err.message}`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+
+/**
+ * 處理消耗品數量確認購買
+ */
+async function handleQuantityConfirm(interaction, customId) {
+  const parts = customId.replace("shop_quantity_confirm:", "").split(":");
+  if (parts.length < 2) {
+    await interaction.update({
+      content: "❌ 無效的購買請求。",
+      components: [], embeds: [], attachments: []
+    });
+    return;
+  }
+
+  const itemId = parts[0];
+  const quantity = parseInt(parts[1], 10);
+
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    await interaction.update({
+      content: "❌ 無效的數量。",
+      components: [], embeds: [], attachments: []
+    });
+    return;
+  }
+
+  // 直接執行購買
+  await handleShopConfirm(interaction, itemId, quantity);
 }
 
 async function handleShopSelect(interaction) {
@@ -144,6 +238,7 @@ async function handleCoinShopButton(interaction) {
   if (id.startsWith(SHOP_CAT_PREFIX)) { await handleShopCat(interaction, id.slice(SHOP_CAT_PREFIX.length)); return; }
   if (id.startsWith("shop_buy:")) { await handleShopBuy(interaction, id.slice("shop_buy:".length)); return; }
   if (id.startsWith("shop_confirm:")) { await handleShopConfirm(interaction, id.slice("shop_confirm:".length)); return; }
+  if (id.startsWith("shop_quantity_confirm:")) { await handleQuantityConfirm(interaction, id); return; }
   if (id === SHOP_CANCEL_ID) { await handleShopCancel(interaction); return; }
 }
 
@@ -153,7 +248,8 @@ function isCoinShopButton(customId) {
     customId === SHOP_CANCEL_ID ||
     customId.startsWith(SHOP_CAT_PREFIX) ||
     customId.startsWith("shop_buy:") ||
-    customId.startsWith("shop_confirm:")
+    customId.startsWith("shop_confirm:") ||
+    customId.startsWith("shop_quantity_confirm:")
   );
 }
 
@@ -161,5 +257,9 @@ function isCoinShopSelect(customId) {
   return customId === SHOP_SELECT_ID;
 }
 
-module.exports = { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect };
+function isCoinShopModal(customId) {
+  return customId.startsWith("shop_quantity_modal:");
+}
+
+module.exports = { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect, handleQuantityModalSubmit, isCoinShopModal };
 
