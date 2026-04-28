@@ -2433,7 +2433,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         }
       };
       await sc.monsterService.saveState(eventState, zoneKey);
-      _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch(() => {});
+      await _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch((e) => console.error("[Panel] NPC event publish failed:", e?.message || e));
       _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
     } else {
       const pickedMonster = chosenMonster || nextMonster;
@@ -2452,13 +2452,13 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       await sc.monsterService.saveState(newState, zoneKey);
 
       if (pickedMonster) {
-        _republishPanel(sc, zoneKey, pickedMonster, pickedMonster.calc.maxHp, 0, {}).catch(() => {});
+        await _republishPanel(sc, zoneKey, pickedMonster, pickedMonster.calc.maxHp, 0, {}).catch((e) => console.error("[Panel] monster publish failed:", e?.message || e));
         if (pickedMonster.isBoss) {
           console.log(`[BOSS] next monster "${pickedMonster.name}" is a boss, broadcasting...`);
           _broadcastBossSpawn(sc, zoneKey, pickedMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
         }
       } else {
-        _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch(() => {});
+        await _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch((e) => console.error("[Panel] empty state publish failed:", e?.message || e));
       }
     }
   } else {
@@ -2489,7 +2489,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         }
       };
       await sc.monsterService.saveState(eventState, zoneKey);
-      _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch(() => {});
+      await _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch((e) => console.error("[Panel] NPC event publish failed:", e?.message || e));
       _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
     } else {
       const newState = {
@@ -2505,13 +2505,13 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       await sc.monsterService.saveState(newState, zoneKey);
 
       if (nextMonster) {
-        _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}).catch(() => {});
+        await _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}).catch((e) => console.error("[Panel] next monster publish failed:", e?.message || e));
         if (nextMonster.isBoss) {
           console.log(`[BOSS] next monster "${nextMonster.name}" is a boss, broadcasting...`);
           _broadcastBossSpawn(sc, zoneKey, nextMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
         }
       } else {
-        _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch(() => {});
+        await _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch((e) => console.error("[Panel] empty state publish failed:", e?.message || e));
       }
     }
   }
