@@ -5,10 +5,29 @@ const { isValidExpSource } = require("../../shared/sources");
 const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
 const CAS_MAX_RETRIES = 8;
 
+// 玩家級別的操作鎖，防止同一玩家的並發 grantExp 導致 CAS 衝突
+const playerExpLocks = new Map();
+
 class ProgressService {
   constructor(playerService, progressRepository) {
     this.playerService = playerService;
     this.progressRepository = progressRepository;
+  }
+
+  // 獲取或建立玩家的鎖
+  _getExpLock(discordId) {
+    if (!playerExpLocks.has(discordId)) {
+      playerExpLocks.set(discordId, Promise.resolve());
+    }
+    return playerExpLocks.get(discordId);
+  }
+
+  // 使用鎖執行 grantExp，確保同一玩家的操作序列化
+  async _withExpLock(discordId, fn) {
+    const currentLock = this._getExpLock(discordId);
+    const newLock = currentLock.then(fn).catch(e => { throw e; });
+    playerExpLocks.set(discordId, newLock);
+    return newLock;
   }
 
   async grantExp({ discordId, displayName, amount, source }) {
@@ -19,6 +38,13 @@ class ProgressService {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `unsupported exp source: ${source}`, 400);
     }
 
+    // 使用玩家級別的鎖序列化操作，防止並發的 CAS 衝突
+    return this._withExpLock(discordId, async () => {
+      return await this._grantExpInternal({ discordId, displayName, amount, source });
+    });
+  }
+
+  async _grantExpInternal({ discordId, displayName, amount, source }) {
     // CAS 重試：讀取 → 計算 → 條件寫入（只在 updatedAt 未變時才寫）
     // 若被其他寫入搶先，重新讀取最新狀態再試，確保屬性絕對不會重複給
     for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
