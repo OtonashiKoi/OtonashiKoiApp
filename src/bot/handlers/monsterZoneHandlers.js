@@ -1483,7 +1483,7 @@ async function handleEnterBattle(interaction) {
         }
         embedTitle = "⏸️ 戰鬥超時";
         embedColor = 0x888888;
-        rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
+        rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。\n你造成了 **${totalDamage}** 點傷害。`];
       }
 
       if (idleSettleNotice) {
@@ -1763,7 +1763,7 @@ async function handleStartFight(interaction) {
     } else {
       embedTitle = "⏸️ 戰鬥超時";
       embedColor = 0x888888;
-      rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。`];
+      rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。\n你造成了 **${totalDamage}** 點傷害。`];
     }
     if (zoneKey === "elite" && monster?.isBoss) {
       rewardLines = [`🎯 鎖定部位：${session.worldBossTargetLabel || "軀幹"}${battleTargetNote ? `（${battleTargetNote}）` : ""}`, ...rewardLines];
