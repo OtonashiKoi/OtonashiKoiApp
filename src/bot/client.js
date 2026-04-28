@@ -74,34 +74,11 @@ async function ensureWelcomeAnnouncement(member, reason = "unknown") {
 async function sendPlayerWelcomeAnnouncement(member) {
   try {
     const client = getBotClient();
-    if (!client?.isReady() || !member?.guild) return;
+    if (!client?.isReady()) return;
 
-    const layout = await serviceContext.adminConsoleService.getChannelLayout().catch(() => null);
-    const bindings = layout?.discord?.bindings || [];
-    const announcementBinding = bindings.find((b) => b.enabled && b.channelId && b.featureKey === "town_chat") || null;
-
-    let channel = null;
-    if (announcementBinding?.channelId) {
-      channel = await client.channels.fetch(announcementBinding.channelId).catch(() => null);
-    }
-
-    if (!channel) {
-      const channels = await member.guild.channels.fetch().catch(() => null);
-      if (channels) {
-        channel = Array.from(channels.values()).find((ch) => {
-          if (!ch?.isTextBased?.()) return false;
-          const name = String(ch.name || "");
-          return (
-            name.includes("聊天大街") ||
-            name.includes("樂園廣播大街") ||
-            name.includes("乐园广播大街") ||
-            name.includes("掉落裝備") ||
-            name.includes("掉落装备")
-          );
-        }) || null;
-      }
-    }
-
+    // 發送到通知頻道 1498608950671839263
+    const notificationChannelId = "1498608950671839263";
+    const channel = await client.channels.fetch(notificationChannelId).catch(() => null);
     if (!channel?.isTextBased()) return;
 
     await channel.send(

@@ -48,7 +48,9 @@
       "Bash(grep -E \"\\\\.\\(js|md\\)$\")",
       "Bash(node scripts/upsert-job-mage.js)",
       "Bash(node scripts/upsert-job-rogue.js)",
-      "Bash(node \"C:\\\\Users\\\\appsk\\\\Documents\\\\Github\\\\equipmentGAME\\\\scripts\\\\show-job-full-specs.js\")"
+      "Bash(node \"C:\\\\Users\\\\appsk\\\\Documents\\\\Github\\\\equipmentGAME\\\\scripts\\\\show-job-full-specs.js\")",
+      "Read(//c/Users/appsk/**)",
+      "Read(//c/Users/appsk/AppData/**)"
     ]
   }
 }
