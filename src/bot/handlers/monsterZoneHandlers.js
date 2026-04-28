@@ -1458,6 +1458,7 @@ async function handleEnterBattle(interaction) {
         embedColor = 0x555555;
         rewardLines = [
           `你被 **${session.monsterName}** 擊倒了！`,
+          `你造成了 **${totalDamage}** 點傷害。`,
           session.entryFee > 0 ? `入場費 **${session.entryFee}** 🪙 已損失，下次加油！` : "下次加油！",
           `⏳ 冷卻中... 25 秒後可再次進場。`
         ];
@@ -1757,6 +1758,7 @@ async function handleStartFight(interaction) {
       embedColor = 0x555555;
       rewardLines = [
         `你被 **${session.monsterName}** 擊倒了！`,
+        `你造成了 **${totalDamage}** 點傷害。`,
         session.entryFee > 0 ? `入場費 **${session.entryFee}** 🪙 已損失，下次加油！` : "下次加油！",
         `⏳ 冷卻中... 25 秒後可再次進場。`
       ];
