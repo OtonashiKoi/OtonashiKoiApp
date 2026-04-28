@@ -2009,6 +2009,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const pct = rawPct !== capPct ? `${capPct}%（原${rawPct}%，已截斷）` : `${capPct}%`;
     const poolNote = entryFeePool > (monster.goldReward || 0) ? `（入場費加成）` : "";
     const modNote = myMod.goldPct > 0 ? `，個人加成 +${Math.round(myMod.goldPct)}%` : "";
+    rewardLines.push(`你造成了 **${totalDamage}** 點傷害。`);
     rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}，共 ${effectiveGoldReward}${poolNote}${modNote}）`);
   }
 
