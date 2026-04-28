@@ -719,31 +719,29 @@ async function _announceLevelMilestone(sc, discordId, displayName, prevLevel, ne
   } catch (_) {}
 }
 
-async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, kind = "fight") {
+async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, droppedItemObjects = [], kind = "fight") {
   try {
     const { getBotClient } = require("../runtimeContext");
     const client = getBotClient();
     if (!client?.isReady()) return;
-    const layout = await sc.channelLayoutRepository.get();
-    const allBindings = layout?.discord?.bindings || [];
-    const binding = allBindings.find((b) => b.featureKey === "town_chat") ||
-                    allBindings.find((b) => b.featureKey === "monster_zone");
-    if (!binding?.channelId) return;
-    const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+
+    // 發送到通知頻道 1498608950671839263
+    const notificationChannelId = "1498608950671839263";
+    const channel = await client.channels.fetch(notificationChannelId).catch(() => null);
     if (!channel?.isTextBased?.()) return;
-    const itemList = droppedItems.join("、");
-    const taunt = pickTaunt(kind, monsterName);
-    const tauntSuffix = taunt ? `　${taunt}` : '';
-    if (kind === "bonus_10") {
-      await channel.send(`🎊 **10人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
-    } else if (kind === "bonus_15") {
-      await channel.send(`🔥 **15人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
-    } else if (kind === "bonus_20") {
-      await channel.send(`🌟 **20人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
-    } else if (kind === "group") {
-      await channel.send(`🎁 ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
-    } else {
-      await channel.send(`⚔️ ${displayName} (<@${discordId}>) 擊倒 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`);
+
+    // 過濾卡片和 A 階裝備
+    const cardDrops = droppedItemObjects.filter((item) => item.itemType === "card");
+    const aEquipDrops = droppedItemObjects.filter((item) => String(item.tier || "").toUpperCase() === "A");
+
+    // 發送卡片掉落公告
+    for (const card of cardDrops) {
+      await channel.send(`🃏 **卡片掉落**：${card.name} | ${discordId} <@${discordId}>`);
+    }
+
+    // 發送 A 階裝備掉落公告
+    for (const equip of aEquipDrops) {
+      await channel.send(`⚙️ **A階裝備**：${equip.name}${equip.enhanceLevel > 0 ? ` +${equip.enhanceLevel}` : ""} | ${discordId} <@${discordId}>`);
     }
   } catch (e) {
     // suppressed
@@ -995,6 +993,13 @@ async function _broadcastBossSpawn(sc, zoneKey, monster) {
 
     await channel.send({ embeds: [embed] });
     console.log(`[BOSS] broadcast sent for ${monster.name} in ${zoneKey}`);
+
+    // 發送 BOSS 出場公告到通知頻道
+    const notificationChannelId = "1498608950671839263";
+    const notifChannel = await client.channels.fetch(notificationChannelId).catch(() => null);
+    if (notifChannel?.isTextBased?.()) {
+      await notifChannel.send(`👑 **BOSS出現**：${monster.name}`);
+    }
   } catch (err) {
     console.error("[BOSS] broadcast error:", err);
   }
@@ -2162,14 +2167,15 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         luckyProg.updatedAt = new Date().toISOString();
         await sc.progressRepository.save(luckyProg);
         const allDropped = [...droppedItems];
+        const allDroppedObjects = [...droppedItemObjects];
         if (perPidRewards[luckyPid]) perPidRewards[luckyPid].drops = [...allDropped];
         const luckyName = luckyPid === discordId ? displayName : (mergedDmg[luckyPid]?.name || luckyPid);
         const isKiller = luckyPid === discordId;
         if (isKiller) {
           rewardLines.push(`🎁 道具掉落：${allDropped.join("、")}`);
-          _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, "kill").catch(() => {});
+          _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "kill").catch(() => {});
         } else {
-          _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, "group").catch(() => {});
+          _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "group").catch(() => {});
         }
       }
     }
@@ -2230,9 +2236,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         bonusProg.updatedAt = new Date().toISOString();
         await sc.progressRepository.save(bonusProg);
         const allBonusDropped = [...bonusItems];
+        const allBonusDroppedObjects = [...bonusItemObjects];
         if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...allBonusDropped];
         const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
-        _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, kind).catch(() => {});
+        _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, allBonusDroppedObjects, kind).catch(() => {});
       }
     }
   }
