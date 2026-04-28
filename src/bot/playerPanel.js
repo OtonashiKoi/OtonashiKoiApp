@@ -112,6 +112,7 @@ async function handleProfile(interaction) {
   const calcCrit  = Math.ceil(cs.crit);
   const calcCombo = Math.ceil(cs.combo);
   const calcDodge = Math.ceil(cs.dodge || 0);
+  const calcBlock = Math.ceil(cs.blockChance || 0);
 
   // ── 裝備屬性加成 ──
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
@@ -305,7 +306,7 @@ async function handleProfile(interaction) {
     `==============\n` +
     `【戰鬥能力】\n` +
     `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
-    `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%　🟢 迴避: ${calcDodge}%` +
+    `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%　🟢 迴避: ${calcDodge}%　🪨 格擋: ${calcBlock}%` +
     effectLine + "\n" +
     equipLine + "\n" +
     `==============\n` +
