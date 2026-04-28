@@ -50,7 +50,45 @@ const JOB_ITEM = {
       notes: "單手杖 + 盾：格擋 +20%"
     }
   ],
-  procEffects: [],
+  procEffects: [
+    // 單手杖：命中時機率麻痺/燒傷/冰凍
+    {
+      key: "hit_down",
+      trigger: "on_hit",
+      target: "enemy",
+      chance: 8,
+      stacks: 1,
+      stackMode: "refresh",
+      duration: { mode: "turns", value: 3 },
+      params: { value: 15 },
+      condition: { weaponType: "staff_1h" },
+      notes: "單手杖：命中時 8% 機率麻痺（命中率 -15%，持續 3 回合，刷新）"
+    },
+    {
+      key: "burn",
+      trigger: "on_hit",
+      target: "enemy",
+      chance: 8,
+      stacks: 1,
+      stackMode: "refresh",
+      duration: { mode: "turns", value: 3 },
+      params: { value: 0.8, mode: "pct" },
+      condition: { weaponType: "staff_1h" },
+      notes: "單手杖：命中時 8% 機率燒傷（每回合 0.8% HP，持續 3 回合，刷新）"
+    },
+    {
+      key: "freeze",
+      trigger: "on_hit",
+      target: "enemy",
+      chance: 8,
+      stacks: 1,
+      stackMode: "replace",
+      duration: { mode: "turns", value: 1 },
+      params: { bossImmune: true },
+      condition: { weaponType: "staff_1h" },
+      notes: "單手杖：命中時 8% 機率冰凍（該回合無法行動，BOSS 無效）"
+    }
+  ],
   combatEffects: [
     // 雙手杖：武器倍率 x1.2
     {
