@@ -738,8 +738,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let roundDmgMultiplier = 1; // 每回合重置，累積本回合所有 party_damage_up
     try {
       const partyEffects = Array.isArray(options.partyEffects) ? options.partyEffects : [];
+      const healerAuraDetails = new Map(); // 依 sourceName 分組光環效果
+
       for (const pe of partyEffects) {
         if (!pe || !pe.key) continue;
+        const sourceName = pe.sourceName || "未知";
+        if (!healerAuraDetails.has(sourceName)) {
+          healerAuraDetails.set(sourceName, { heal: 0, dmgBoost: 0 });
+        }
+
         // 支援治療 over-time 的簡單實作：key 可為 'heal_over_time' 或自訂 'party_heal'
         if (pe.key === 'heal_over_time' || pe.key === 'party_heal') {
           const mode = String(pe.params?.mode || '').toLowerCase();
@@ -748,8 +755,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const heal = mode === 'pct' ? Math.max(0, Math.round((pStats.maxHp || 0) * (val / 100))) : Math.max(0, Math.round(val));
           if (heal > 0) {
             pHp = Math.min(pStats.maxHp, pHp + heal);
-            const healerTag = pe.sourceName ? `（${pe.sourceName}）` : "";
-            log.push(`💚 **(治療師)** 光環${healerTag} 回復 **${heal}** HP`);
+            const detail = healerAuraDetails.get(sourceName);
+            detail.heal = heal;
           }
         }
         // 支援隊伍傷害加成（每回合生效）
@@ -757,9 +764,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const val = Number(pe.params?.value ?? pe.value ?? 0);
           if (Number.isFinite(val) && val !== 0) {
             roundDmgMultiplier *= (1 + val / 100);
-            const healerTag = pe.sourceName ? `（${pe.sourceName}）` : "";
-            log.push(`🔥 **(治療師)** 光環${healerTag} 傷害提升 ${val}%`);
+            const detail = healerAuraDetails.get(sourceName);
+            detail.dmgBoost = val;
           }
+        }
+      }
+
+      // 輸出合併的光環效果
+      for (const [sourceName, detail] of healerAuraDetails) {
+        if (detail.heal > 0 || detail.dmgBoost !== 0) {
+          const healerTag = sourceName !== "未知" ? `（${sourceName}）` : "";
+          const parts = [];
+          if (detail.heal > 0) parts.push(`回復 **${detail.heal}** HP`);
+          if (detail.dmgBoost !== 0) parts.push(`傷害提升 ${detail.dmgBoost}%`);
+          log.push(`💚 **(治療師)** 光環${healerTag} ${parts.join("、")}`);
         }
       }
     } catch (e) {}
