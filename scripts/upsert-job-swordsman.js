@@ -36,7 +36,7 @@ const JOB_ITEM = {
       condition: { weaponType: "sword_1h" },
       notes: "主武器為單手劍時，ATK x1.2"
     },
-    // 主武器單手劍 + 副手盾牌：格擋 +10%
+    // 主武器單手劍 + 副手盾牌：格擋 +15%
     {
       key: "block_chance_up",
       trigger: "passive",
@@ -45,7 +45,7 @@ const JOB_ITEM = {
       stacks: 1,
       stackMode: "replace",
       duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
+      params: { value: 15 },
       condition: {
         all: [
           { weaponType: "sword_1h" },
@@ -53,7 +53,7 @@ const JOB_ITEM = {
           { notWeaponType: OFFHAND_WEAPON_TYPES }
         ]
       },
-      notes: "單手劍 + 盾牌，格擋 +10%"
+      notes: "單手劍 + 盾牌，格擋 +15%"
     },
     // 主武器單手劍 + 副手武器：連擊傷害 +10%
     {
@@ -88,7 +88,7 @@ const JOB_ITEM = {
       condition: { weaponType: "sword_2h" },
       notes: "主武器為雙手劍時，ATK x1.2"
     },
-    // 主武器雙手劍：格擋 +10%
+    // 主武器雙手劍：格擋 +20%
     {
       key: "block_chance_up",
       trigger: "passive",
@@ -97,9 +97,9 @@ const JOB_ITEM = {
       stacks: 1,
       stackMode: "replace",
       duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
+      params: { value: 20 },
       condition: { weaponType: "sword_2h" },
-      notes: "雙手劍時，格擋 +10%"
+      notes: "雙手劍時，格擋 +20%"
     },
     // 主武器雙手劍：10% 斬殺機率（門檻 10%）
     {
