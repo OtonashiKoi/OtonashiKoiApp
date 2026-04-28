@@ -439,6 +439,45 @@ class ShopService {
     return { itemName: entry.itemName, tier, price };
   }
 
+  async sellItemBulk(discordId, entryUuid, qty) {
+    qty = Math.max(1, Math.floor(Number(qty) || 1));
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+
+    const refEntry = (progress.inventory || []).find(e => e.uuid === entryUuid);
+    if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+
+    const tier = refEntry.tier || null;
+    const price = TIER_SELL_PRICE[tier] ?? null;
+    if (price === null) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品沒有設定階級，無法販售", 400);
+
+    // 找出背包中相同 itemId + 相同強化等級的道具
+    const refEnhLv = refEntry.enhanceLevel || 0;
+    const matchingUuids = (progress.inventory || [])
+      .filter(e => e.itemId === refEntry.itemId && (e.enhanceLevel || 0) === refEnhLv)
+      .map(e => e.uuid);
+
+    const sellCount = Math.min(qty, matchingUuids.length);
+    if (sellCount === 0) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中沒有可販售的此物品", 404);
+
+    const toRemove = new Set(matchingUuids.slice(0, sellCount));
+    progress.inventory = progress.inventory.filter(e => !toRemove.has(e.uuid));
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+
+    const totalGold = price * sellCount;
+    await this.rewardService.grantCurrency({
+      discordId,
+      displayName: discordId,
+      currencyType: "gold",
+      amount: totalGold,
+      source: CURRENCY_SOURCES.ITEM_SELL,
+      operator: "shop:sell-item-bulk"
+    });
+
+    return { itemName: refEntry.itemName, tier, priceEach: price, sellCount, totalGold };
+  }
+
   async discardItem(discordId, entryUuid) {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);

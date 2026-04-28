@@ -425,15 +425,24 @@ function startAuctionPanelRefreshTimer() {
 
 const spamTracker = new Map();
 
+// 累計違規次數（重啟後歸零，但同一場 session 內遞增）
+// key: `${guildId}:${userId}`，value: 累計禁言次數
+const offenseTracker = new Map();
+
 // 讀取 moderation 設定（若 config 未提供，使用預設）
 const moderation = config.moderation || {
-  muteDurationMs: 12 * 60 * 60 * 1000,
-  sameMsgLimit: 4,
-  burstLimit: 6,
-  burstWindowMs: 3000,
+  // 分級禁言時長：[第1次, 第2次, 第3次+]
+  muteTierMs: [
+    1 * 60 * 60 * 1000,   // 第1次：1 小時
+    6 * 60 * 60 * 1000,   // 第2次：6 小時
+    12 * 60 * 60 * 1000,  // 第3次+：12 小時
+  ],
+  sameMsgLimit: 7,
+  burstLimit: 8,
+  burstWindowMs: 5000,
   spamAnnounceChannelId: "1292448143946027039",
   mentionPerMsgLimit: 5,
-  consecutiveMentionLimit: 4
+  consecutiveMentionLimit: 6
 };
 
 function formatDurationMs(ms) {
@@ -443,17 +452,35 @@ function formatDurationMs(ms) {
   return `${mins} 分鐘`;
 }
 
+function getMuteDurationMs(guildId, userId) {
+  const key = `${guildId}:${userId}`;
+  const tiers = moderation.muteTierMs || [
+    1 * 60 * 60 * 1000,
+    6 * 60 * 60 * 1000,
+    12 * 60 * 60 * 1000,
+  ];
+  const offense = offenseTracker.get(key) || 0;
+  return tiers[Math.min(offense, tiers.length - 1)];
+}
+
 async function doMuteAndAnnounce(member, message, reason, key) {
   try {
     spamTracker.delete(key);
-    await member.timeout(moderation.muteDurationMs, reason);
-    console.log(`[SpamGuard] 禁言 ${message.author.tag} (${message.author.id})：${reason}`);
+
+    const offenseKey = `${message.guild.id}:${message.author.id}`;
+    const offenseBefore = offenseTracker.get(offenseKey) || 0;
+    const muteDurationMs = getMuteDurationMs(message.guild.id, message.author.id);
+    offenseTracker.set(offenseKey, offenseBefore + 1);
+
+    await member.timeout(muteDurationMs, reason);
+    console.log(`[SpamGuard] 禁言 ${message.author.tag} (${message.author.id}) 第${offenseBefore + 1}次：${reason}`);
 
     const announceChannel = await message.guild.channels.fetch(moderation.spamAnnounceChannelId).catch(() => null);
     if (announceChannel?.isTextBased()) {
-      const durationText = formatDurationMs(moderation.muteDurationMs);
+      const durationText = formatDurationMs(muteDurationMs);
+      const offenseLabel = offenseBefore === 0 ? '初次' : offenseBefore === 1 ? '第二次' : '第三次以上';
       await announceChannel.send(
-        `🔇 <@${message.author.id}> 因 **${reason}**（在 <#${message.channelId}>），已被禁言 ${durationText}。`
+        `🔇 <@${message.author.id}> 因 **${reason}**（在 <#${message.channelId}>），${offenseLabel}違規，已被禁言 **${durationText}**。`
       ).catch(() => {});
     }
   } catch (err) {
@@ -530,7 +557,7 @@ async function checkSpam(message) {
   }
 
   // 既有的連續相同訊息 / burst 檢查
-  const sameSpam = state.count >= moderation.sameMsgLimit; // >= 使用者需求（第 4 次觸發）
+  const sameSpam = state.count >= moderation.sameMsgLimit;
   const burstSpam = state.timestamps.length > moderation.burstLimit;
 
   if (!sameSpam && !burstSpam) return;

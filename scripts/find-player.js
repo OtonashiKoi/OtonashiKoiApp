@@ -1,36 +1,33 @@
-#!/usr/bin/env node
-"use strict";
+const { MongoClient } = require("mongodb");
 
-const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
-
-const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
+const MONGO_URL = process.env.MONGODB_URL || "mongodb://localhost:27017";
+const DB_NAME = "equipment_game";
+const PLAYER_ID = "365382420419051520";
 
 async function main() {
+  const client = new MongoClient(MONGO_URL);
   try {
-    const db = await getMongoDb();
-    const playerCollection = db.collection("players");
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const progressCol = db.collection("progress");
 
-    // 搜尋含有「青葉」的玩家
-    const players = await playerCollection.find({
-      displayName: { $regex: "青葉", $options: 'i' }
-    }).toArray();
-
-    if (players.length === 0) {
-      console.log("❌ 找不到含有「青葉」的玩家");
-      process.exit(0);
+    const player = await progressCol.findOne({ discordId: PLAYER_ID });
+    if (player) {
+      console.log("✅ 找到玩家：");
+      console.log(JSON.stringify(player, null, 2));
+    } else {
+      console.log("❌ 找不到此玩家，查詢所有玩家：");
+      const allPlayers = await progressCol.find({}).limit(5).toArray();
+      allPlayers.forEach(p => {
+        console.log(`  discordId: ${p.discordId}, displayName: ${p.displayName}`);
+      });
     }
-
-    console.log(`✅ 找到 ${players.length} 位玩家：\n`);
-    players.forEach((p, i) => {
-      console.log(`${i + 1}. ${p.displayName} (ID: ${p.discordId})`);
-    });
-
-    process.exit(0);
-  } catch (err) {
-    console.error("❌ 查詢失敗：", err);
-    process.exit(1);
+  } finally {
+    await client.close();
   }
 }
 
-main();
+main().catch(err => {
+  console.error("❌ 錯誤:", err.message);
+  process.exit(1);
+});

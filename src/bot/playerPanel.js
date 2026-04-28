@@ -417,6 +417,12 @@ function buildInventoryRow(e, idx) {
         .setLabel(`售 ${sellPrice}💰`)
         .setStyle(ButtonStyle.Secondary)
     );
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_sell_bulk:${e.uuid}:item:0`)
+        .setLabel("批量售")
+        .setStyle(ButtonStyle.Secondary)
+    );
   }
   if (e.imageUrl) {
     btns.push(
@@ -561,9 +567,17 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_sell:${group.repUuid}:${tab}:${page}`)
-        .setLabel(`售 (${group.sellPrice}💰/件)`)
+        .setLabel(`售 1件 (${group.sellPrice}💰)`)
         .setStyle(ButtonStyle.Secondary)
     );
+    if (group.count > 1) {
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`backpack_sell_bulk:${group.repUuid}:${tab}:${page}`)
+          .setLabel(`批量售 (共${group.count}件)`)
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
   } else {
     btns.push(
       new ButtonBuilder()
@@ -1015,6 +1029,55 @@ async function handleBackpackSell(interaction, uuid, tab = "item", page = 0) {
     }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 販售失敗：${err.message}`, components: [] });
+    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+  }
+}
+
+/** 批量販售：彈出 Modal 讓玩家輸入數量 */
+async function handleBackpackSellBulkPrompt(interaction, uuid, tab = "item", page = 0) {
+  const modal = new ModalBuilder()
+    .setCustomId(`backpack_sell_bulk_modal:${uuid}:${tab}:${page}`)
+    .setTitle("批量販售");
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId("qty")
+        .setLabel("販售數量")
+        .setPlaceholder("輸入要賣出的數量（例如：5）")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(4)
+    )
+  );
+  await interaction.showModal(modal);
+}
+
+/** 批量販售：處理 Modal 提交 */
+async function handleBackpackSellBulkConfirm(interaction, uuid, tab = "item", page = 0) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const qtyRaw = interaction.fields.getTextInputValue("qty");
+    const qty = parseInt(qtyRaw, 10);
+    if (isNaN(qty) || qty < 1) {
+      await safeEditReply(interaction, { content: "❌ 請輸入有效的數量（正整數）。", components: [] });
+      setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
+      return;
+    }
+    const result = await serviceContext.shopService.sellItemBulk(interaction.user.id, uuid, qty);
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const inventory = progress?.inventory || [];
+    const msg = buildBackpackMessage(
+      inventory, tab,
+      `✅ 已批量販售 **${result.itemName}** × ${result.sellCount} 件，獲得 💰 ${result.totalGold} 金幣。`,
+      page
+    );
+    await safeEditReply(interaction, msg);
+    if (!inventory.length) {
+      setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
+    }
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 批量販售失敗：${err.message}`, components: [] });
     setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
@@ -1597,6 +1660,14 @@ async function handleButton(interaction) {
     await handleBackpackSell(interaction, uuid, tab, page);
     return;
   }
+  if (id.startsWith("backpack_sell_bulk:")) {
+    const parts = id.split(":");
+    const uuid = parts[1];
+    const tab = parts[2] || "item";
+    const page = parseInt(parts[3] ?? "0", 10) || 0;
+    await handleBackpackSellBulkPrompt(interaction, uuid, tab, page);
+    return;
+  }
   if (id.startsWith("backpack_enhance:")) {
     const parts = id.split(":");
     const uuid = parts[1];
@@ -1841,6 +1912,15 @@ async function handleModal(interaction) {
       await interaction.reply({ content: `❌ 使用失敗：${err.message}`, flags: MessageFlags.Ephemeral });
     }
 
+    return true;
+  }
+
+  if (interaction.customId.startsWith("backpack_sell_bulk_modal:")) {
+    const parts = interaction.customId.split(":");
+    const uuid = parts[1];
+    const tab = parts[2] || "item";
+    const page = parseInt(parts[3] ?? "0", 10) || 0;
+    await handleBackpackSellBulkConfirm(interaction, uuid, tab, page);
     return true;
   }
 
