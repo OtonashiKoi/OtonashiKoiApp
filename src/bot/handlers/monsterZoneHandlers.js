@@ -978,55 +978,23 @@ async function _resolveZoneEventIfExpired(sc, zoneKey) {
   return true;
 }
 
-// BOSS 出場廣播：優先 town_chat，fallback monster_zone
+// BOSS 出場公告
 async function _broadcastBossSpawn(sc, zoneKey, monster) {
   try {
     const { getBotClient } = require("../runtimeContext");
     const client = getBotClient();
     if (!client?.isReady()) {
-      console.warn("[BOSS] bot not ready, skip broadcast");
       return;
     }
-
-    const layout = await sc.channelLayoutRepository.get();
-    const bindings = layout?.discord?.bindings || [];
-    const binding = bindings.find((b) => b.featureKey === "town_chat" && b.enabled && b.channelId)
-                 || bindings.find((b) => b.featureKey === "monster_zone" && b.enabled && b.channelId);
-    if (!binding) {
-      console.warn("[BOSS] no suitable channel binding found, skip broadcast");
-      return;
-    }
-
-    const channel = await client.channels.fetch(binding.channelId).catch(() => null);
-    if (!channel) {
-      console.warn("[BOSS] channel fetch failed:", binding.channelId);
-      return;
-    }
-
-    const zoneName = getZoneTheme(zoneKey).label + "戰鬥區";
-    const { EmbedBuilder } = require("discord.js");
-    const thumbUrl = (monster.imageThumbnailUrl || monster.imageUrl || "").startsWith("http")
-      ? (monster.imageThumbnailUrl || monster.imageUrl)
-      : null;
-    const embed = new EmbedBuilder()
-      .setColor(0xff4444)
-      .setTitle(`⚠️ BOSS 登場！`)
-      .setDescription(`**${zoneName}** 出現了強大的 BOSS！\n\n👹 **${monster.name}** 降臨！\n快去挑戰吧！`)
-      .setFooter({ text: `Lv.${monster.level || "?"} · HP ${monster.calc?.maxHp || "?"}` })
-      .setTimestamp();
-    if (thumbUrl) embed.setThumbnail(thumbUrl);
-
-    await channel.send({ embeds: [embed] });
-    console.log(`[BOSS] broadcast sent for ${monster.name} in ${zoneKey}`);
 
     // 發送 BOSS 出場公告到通知頻道
     const notificationChannelId = "1498608950671839263";
     const notifChannel = await client.channels.fetch(notificationChannelId).catch(() => null);
     if (notifChannel?.isTextBased?.()) {
-      await notifChannel.send(`👑 **BOSS出現**：${monster.name}`);
+      await notifChannel.send(`👑 BOSS出現  ${monster.name}`);
     }
   } catch (err) {
-    console.error("[BOSS] broadcast error:", err);
+    console.error("[BOSS] announcement error:", err);
   }
 }
 
