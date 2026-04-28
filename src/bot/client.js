@@ -78,15 +78,23 @@ async function sendPlayerWelcomeAnnouncement(member) {
 
     // 發送到通知頻道 1498608950671839263
     const notificationChannelId = "1498608950671839263";
-    const channel = await client.channels.fetch(notificationChannelId).catch(() => null);
-    if (!channel?.isTextBased()) return;
+    const channel = await client.channels.fetch(notificationChannelId).catch((err) => {
+      console.error(`[Welcome Announce] Failed to fetch notification channel ${notificationChannelId}:`, err?.message);
+      return null;
+    });
+    if (!channel?.isTextBased()) {
+      console.error(`[Welcome Announce] Notification channel ${notificationChannelId} not found or not text-based`);
+      return;
+    }
 
     await channel.send(
       `🎉 歡迎 <@${member.user.id}> 加入音無樂園，已正式取得玩家資格！\n` +
       `快去完成打卡、任務，開始你的冒險之旅吧。`
-    );
+    ).catch((err) => {
+      console.error("[Welcome Announce] Failed to send welcome announcement:", err?.message);
+    });
   } catch (error) {
-    console.warn("[Discord] 歡迎新玩家公告發送失敗：", error?.message || error);
+    console.error("[Welcome Announce] Unexpected error:", error?.message || error);
   }
 }
 

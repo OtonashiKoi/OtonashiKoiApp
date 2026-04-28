@@ -752,7 +752,10 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
 
     // 發送特殊物品公告到通知頻道 1498608950671839263
     const notificationChannelId = "1498608950671839263";
-    const notifChannel = await client.channels.fetch(notificationChannelId).catch(() => null);
+    const notifChannel = await client.channels.fetch(notificationChannelId).catch((err) => {
+      console.error(`[Drop Announce] Failed to fetch notification channel ${notificationChannelId}:`, err?.message);
+      return null;
+    });
     if (notifChannel?.isTextBased?.()) {
       // 過濾卡片和 A 階裝備（卡片不算 A 階裝備）
       const cardDrops = droppedItemObjects.filter((item) => item.itemType === "card");
@@ -760,16 +763,22 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
 
       // 發送卡片掉落公告
       if (cardDrops.length > 0) {
-        await notifChannel.send(`🃏 卡片掉落  <@${discordId}>`);
+        await notifChannel.send(`🃏 卡片掉落  <@${discordId}>`).catch((err) => {
+          console.error(`[Drop Announce] Failed to send card announcement:`, err?.message);
+        });
       }
 
       // 發送 A 階裝備掉落公告
       if (aEquipDrops.length > 0) {
-        await notifChannel.send(`⚙️ A階裝備  <@${discordId}>`);
+        await notifChannel.send(`⚙️ A階裝備  <@${discordId}>`).catch((err) => {
+          console.error(`[Drop Announce] Failed to send A-tier equipment announcement:`, err?.message);
+        });
       }
+    } else {
+      console.error(`[Drop Announce] Notification channel ${notificationChannelId} not found or not text-based`);
     }
   } catch (e) {
-    // suppressed
+    console.error(`[Drop Announce] Unexpected error:`, e?.message || e);
   }
 }
 
@@ -989,12 +998,19 @@ async function _broadcastBossSpawn(sc, zoneKey, monster) {
 
     // 發送 BOSS 出場公告到通知頻道
     const notificationChannelId = "1498608950671839263";
-    const notifChannel = await client.channels.fetch(notificationChannelId).catch(() => null);
+    const notifChannel = await client.channels.fetch(notificationChannelId).catch((err) => {
+      console.error(`[BOSS Announce] Failed to fetch notification channel ${notificationChannelId}:`, err?.message);
+      return null;
+    });
     if (notifChannel?.isTextBased?.()) {
-      await notifChannel.send(`👑 BOSS出現  ${monster.name}`);
+      await notifChannel.send(`👑 BOSS出現  ${monster.name}`).catch((err) => {
+        console.error("[BOSS Announce] Failed to send BOSS announcement:", err?.message);
+      });
+    } else {
+      console.error(`[BOSS Announce] Notification channel ${notificationChannelId} not found or not text-based`);
     }
   } catch (err) {
-    console.error("[BOSS] announcement error:", err);
+    console.error("[BOSS Announce] Unexpected error:", err?.message || err);
   }
 }
 
