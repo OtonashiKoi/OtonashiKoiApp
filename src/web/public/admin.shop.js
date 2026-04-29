@@ -1,6 +1,6 @@
 /* admin.shop.js */
 (function(){
-  let shopItems=[],libraryItems=[],activeTab='all';
+  let shopItems=[],libraryItems=[],shopClaims=[],activeTab='all';
   const STANDARD_SLOTS=new Set(['head_top','head_mid','head_low','armor','weapon','shield','garment','shoes','accessory_l','accessory_r']);
   const SPECIAL_SLOTS=new Set(['title_eq','job_eq','special_1','special_2','special_3']);
   function getLibItem(id){return libraryItems.find(i=>i.id===id)||null;}
@@ -16,13 +16,14 @@
     return true;
   }
   const TIER_RANKS=["E","D","C","B","A","S","SS"];
-  const COLS=["seq","img","item","price","currency","stock","monthLimit","tiers","sale","enabled","actions"];
-  const COL_HEADERS={seq:"#",img:"圖片",item:"道具名稱",price:"售價",currency:"幣種",stock:"庫存(-1=無限)",monthLimit:"月上限(0=無限)",tiers:"限定等級(空=全部)",sale:"優惠",enabled:"上架",actions:"操作"};
-  const COL_WIDTHS={seq:"36px",img:"52px",item:"220px",price:"72px",currency:"90px",stock:"90px",monthLimit:"100px",tiers:"210px",sale:"48px",enabled:"52px",actions:"100px"};
+  const COLS=["seq","img","item","price","currency","stock","monthLimit","claimLimit","tiers","sale","enabled","actions"];
+  const COL_HEADERS={seq:"#",img:"圖片",item:"道具名稱",price:"售價",currency:"幣種",stock:"庫存(-1=無限)",monthLimit:"月上限(0=無限)",claimLimit:"會員紀錄",tiers:"限定等級(空=全部)",sale:"優惠",enabled:"上架",actions:"操作"};
+  const COL_WIDTHS={seq:"36px",img:"52px",item:"220px",price:"72px",currency:"90px",stock:"90px",monthLimit:"100px",claimLimit:"112px",tiers:"210px",sale:"48px",enabled:"52px",actions:"100px"};
   function auth(){return{Authorization:`Bearer ${window.getAdminToken?window.getAdminToken():""}` };}
   function jsonH(){return{"Content-Type":"application/json",...auth()};}
   async function loadShop(){const res=await fetch("/admin/shop/items",{headers:auth()});const json=await res.json();if(json.status==="ok"){shopItems=json.data||[];renderAll();}else{window.logActivity&&window.logActivity("❌ 無法載入商品："+(json.message||""));}}
   async function loadLib(){const res=await fetch("/admin/items",{headers:auth()});const json=await res.json();if(json.status==="ok")libraryItems=json.data||[];}
+  async function loadClaims(){const res=await fetch("/admin/shop/claims",{headers:auth()});const json=await res.json();if(json.status==="ok"){shopClaims=json.data||[];renderClaims();}else{window.logActivity&&window.logActivity("❌ 無法載入會員獎勵紀錄："+(json.message||""));}}
   function renderAll(){renderHead();renderBody();}
   function renderHead(){const h=document.getElementById("shop-sheet-head");if(!h)return;h.innerHTML=`<tr>${COLS.map(c=>`<th style="min-width:${COL_WIDTHS[c]};white-space:nowrap;">${COL_HEADERS[c]}</th>`).join("")}</tr>`;}
   function esc(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
@@ -189,6 +190,7 @@
       currency:`<td><select class="sheet-input" data-field="currency" style="width:100%;"><option value="gold"${(item.currency||"gold")==="gold"?" selected":""}>💰 金幣</option><option value="diamond"${item.currency==="diamond"?" selected":""}>💎 鑽石</option></select></td>`,
       stock:`<td><input class="sheet-input" data-field="stock" type="number" value="${esc(String(item.stock??-1))}" style="width:100%;text-align:right;"></td>`,
       monthLimit:`<td><input class="sheet-input" data-field="monthLimit" type="number" min="0" value="${esc(String(item.maxPerMonth??0))}" style="width:100%;text-align:right;"></td>`,
+      claimLimit:`<td><select class="sheet-input" data-field="claimLimit" style="width:100%;"><option value="none"${(item.claimLimit||"none")==="none"?" selected":""}>無</option><option value="once_per_player"${item.claimLimit==="once_per_player"?" selected":""}>每人一次</option></select></td>`,
       tiers:`<td style="white-space:nowrap;">${TIER_RANKS.map(r=>`<span class="tier-chip${(item.allowedTiers||[]).includes(r)?" active":""}" data-tier="${r}">${r}</span>`).join("")}</td>`,
       sale:`<td style="text-align:center;"><input type="checkbox" data-field="sale"${item.isSale?" checked":""}></td>`,
       enabled:`<td style="text-align:center;"><input type="checkbox" data-field="enabled"${item.enabled!==false?" checked":""}></td>`,
@@ -223,11 +225,36 @@
     tbody.innerHTML=filtered.map((item,i)=>buildRow(item,false,i+1)).join("");
     bindEvents(tbody);
   }
+  function fmtTime(v){
+    if(!v)return '—';
+    try{return new Date(v).toLocaleString('zh-TW',{hour12:false});}catch{return String(v);}
+  }
+  function renderClaims(){
+    const tbody=document.getElementById("shop-claims-tbody");
+    if(!tbody)return;
+    if(!shopClaims.length){
+      tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem;">目前沒有會員獎勵領取紀錄。</td></tr>`;
+      return;
+    }
+    tbody.innerHTML=shopClaims.map((row)=>{
+      return `<tr>
+        <td>${esc(fmtTime(row.claimedAt))}</td>
+        <td>${esc(row.boundDiscordId||'')}</td>
+        <td>${esc(row.playerDisplayName||'')}</td>
+        <td>${esc(row.boundYouTubeId||'')}</td>
+        <td>${esc(fmtTime(row.youtubeLinkedAt))}</td>
+        <td>${esc(row.boundTwitchId||'')}</td>
+        <td>${esc(fmtTime(row.twitchLinkedAt))}</td>
+        <td>${esc(row.itemName||row.itemId||'')}</td>
+        <td>${esc(row.claimLimit==="once_per_player"?'每人一次':'')}${row.source?` ${esc(row.source)}`:''}</td>
+      </tr>`;
+    }).join("");
+  }
   function getPayload(tr){
     const get=f=>tr.querySelector(`[data-field="${f}"]`)?.value??"";
     const chk=f=>tr.querySelector(`[data-field="${f}"]`)?.checked??false;
     const allowedTiers=[...tr.querySelectorAll(".tier-chip.active")].map(c=>c.dataset.tier);
-    return{itemLibraryId:get("item"),price:Number(get("price"))||0,currency:get("currency")||"gold",stock:Number(get("stock"))||-1,maxPerMonth:Number(get("monthLimit"))||0,allowedTiers,isSale:chk("sale"),enabled:chk("enabled")};
+    return{itemLibraryId:get("item"),price:Number(get("price"))||0,currency:get("currency")||"gold",stock:Number(get("stock"))||-1,maxPerMonth:Number(get("monthLimit"))||0,claimLimit:get("claimLimit")||"none",allowedTiers,isSale:chk("sale"),enabled:chk("enabled")};
   }
   async function saveRow(tr){
     const id=tr.dataset.shopId,payload=getPayload(tr);
@@ -250,7 +277,7 @@
     if(!tbody)return;
     const ph=tbody.querySelector("td[colspan]");
     if(ph)ph.closest("tr").remove();
-    const ei={id:"__new__",itemLibraryId:"",price:100,currency:"gold",stock:-1,maxPerMonth:0,allowedTiers:[],isSale:false,enabled:true};
+    const ei={id:"__new__",itemLibraryId:"",price:100,currency:"gold",stock:-1,maxPerMonth:0,claimLimit:"none",allowedTiers:[],isSale:false,enabled:true};
     const tmp=document.createElement("tbody");
     tmp.innerHTML=buildRow(ei,true);
     const nr=tmp.firstElementChild;
@@ -258,13 +285,14 @@
     bindEvents(tbody);
     nr.querySelector('.shop-pick-btn')?.focus();
   }
-  window.shopUI={reload:loadShop};
+  window.shopUI={reload:async()=>{await loadShop();await loadClaims();}};
   document.getElementById("shop-btn-new")?.addEventListener("click",addNewRow);
+  document.getElementById("shop-claims-refresh")?.addEventListener("click",loadClaims);
   document.querySelectorAll(".shop-tab-btn").forEach(btn=>btn.addEventListener("click",()=>{
     document.querySelectorAll(".shop-tab-btn").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
     activeTab=btn.dataset.shopTab;
     renderBody();
   }));
-  document.addEventListener("adminConnected",async()=>{await loadLib();await loadShop();});
+  document.addEventListener("adminConnected",async()=>{await loadLib();await loadShop();await loadClaims();});
 })();

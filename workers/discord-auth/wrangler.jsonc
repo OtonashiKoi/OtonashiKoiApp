@@ -1,0 +1,13 @@
+{
+  "name": "equipmentgame-discord-auth",
+  "main": "src/index.js",
+  "compatibility_date": "2026-04-29",
+  "send_metrics": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "equipmentgame-stream-bindings",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+    }
+  ]
+}

@@ -123,8 +123,8 @@ function createAdminConsoleRoutes(serviceContext) {
 
   router.post("/admin/shop/items", async (req, res, next) => {
     try {
-      const { itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth } = req.body;
-      const item = await serviceContext.shopService.createItem({ itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth });
+      const { itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, claimLimit } = req.body;
+      const item = await serviceContext.shopService.createItem({ itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, claimLimit });
       res.json(ok(item, "shop item created"));
     } catch (error) {
       next(error);
@@ -133,9 +133,34 @@ function createAdminConsoleRoutes(serviceContext) {
 
   router.put("/admin/shop/items/:id", async (req, res, next) => {
     try {
-      const { itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, imageUrl, imageThumbnailUrl, weaponType, isTwoHanded } = req.body;
-      const item = await serviceContext.shopService.updateItem(req.params.id, { itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, imageUrl, imageThumbnailUrl, weaponType, isTwoHanded });
+      const { itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, claimLimit, imageUrl, imageThumbnailUrl, weaponType, isTwoHanded } = req.body;
+      const item = await serviceContext.shopService.updateItem(req.params.id, { itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, claimLimit, imageUrl, imageThumbnailUrl, weaponType, isTwoHanded });
       res.json(ok(item, "shop item updated"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/shop/claims", async (_req, res, next) => {
+    try {
+      const claims = (await serviceContext.shopClaimRepository.listRecent(200))
+        .filter((claim) => claim.claimLimit === "once_per_player");
+      const players = await serviceContext.playerRepository.listAll().catch(() => []);
+      const playerMap = new Map(players.map((p) => [p.discordId, p]));
+      const enriched = claims.map((claim) => {
+        const player = playerMap.get(claim.discordId || claim.playerId) || null;
+        return {
+          ...claim,
+          playerDisplayName: player?.displayName || claim.playerId || claim.discordId || "",
+          boundDiscordId: claim.discordId || claim.playerId || "",
+          boundYouTubeId: player?.externalIds?.youtube || "",
+          boundTwitchId: player?.externalIds?.twitch || "",
+          youtubeLinkedAt: player?.externalIdLinkedAt?.youtube || "",
+          twitchLinkedAt: player?.externalIdLinkedAt?.twitch || "",
+          playerUpdatedAt: player?.updatedAt || ""
+        };
+      });
+      res.json(ok(enriched, "shop claims fetched"));
     } catch (error) {
       next(error);
     }

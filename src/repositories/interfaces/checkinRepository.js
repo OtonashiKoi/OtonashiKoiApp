@@ -10,6 +10,10 @@ class CheckinRepository {
   async listByDiscordId() {
     throw new Error("listByDiscordId must be implemented");
   }
+
+  async findLastByPlatformUserId() {
+    throw new Error("findLastByPlatformUserId must be implemented");
+  }
 }
 
 module.exports = {

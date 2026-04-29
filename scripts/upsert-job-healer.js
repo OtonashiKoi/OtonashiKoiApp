@@ -7,7 +7,7 @@ const JOB_ITEM_ID = "job_healer_v1";
 
 const JOB_ITEM = {
   id: JOB_ITEM_ID,
-  name: "治療師",
+  name: "治療師徽章",
   description: "提供隊伍治療光環的徽章，被動使同場玩家獲得每回合回復。",
   itemType: "job_badge",
   equipSlot: "job_eq",

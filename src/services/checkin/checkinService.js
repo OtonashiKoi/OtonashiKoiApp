@@ -18,12 +18,22 @@ class CheckinService {
     return toTWDate(a) === toTWDate(b);
   }
 
-  async handleMessage({ discordId, displayName, channelId, messageId, content, occurredAt }) {
+  async handleMessage({ discordId, displayName, channelId, messageId, content, occurredAt, platform = "", platformUserId = "" }) {
     if (!discordId) {
       throw new Error("discordId required");
     }
 
     const now = occurredAt ? new Date(occurredAt).toISOString() : new Date().toISOString();
+    const normalizedPlatform = String(platform || "").toLowerCase();
+    const normalizedPlatformUserId = String(platformUserId || "").trim();
+
+    // 同一個平台帳號只能領一次當日打卡獎勵，避免換 Discord 重複領取
+    if (normalizedPlatform && normalizedPlatformUserId && this.checkinRepository?.findLastByPlatformUserId) {
+      const lastByAccount = await this.checkinRepository.findLastByPlatformUserId(normalizedPlatform, normalizedPlatformUserId);
+      if (lastByAccount && (await this.isSameDay(lastByAccount.occurredAt, now))) {
+        return { ok: false, reason: "already_checked_in_platform", last: lastByAccount };
+      }
+    }
 
     const last = await this.checkinRepository.findLastByDiscordId(discordId);
     if (last && (await this.isSameDay(last.occurredAt, now))) {
@@ -60,6 +70,8 @@ class CheckinService {
       channelId: channelId || "stream",
       messageId: messageId || "",
       content: content || "",
+      platform: normalizedPlatform || "",
+      platformUserId: normalizedPlatformUserId || "",
       occurredAt: now,
       rewardGranted: true,
       rewardDetail: {

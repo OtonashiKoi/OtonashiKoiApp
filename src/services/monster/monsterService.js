@@ -1,6 +1,6 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { normalizeEffectList, normalizeMonsterSkillList } = require("../../shared/effectPayloads");
-const { normalizeZone } = require("../../shared/zones");
+const { normalizeZone, getZoneDefaultEntryFee } = require("../../shared/zones");
 
 // 純公式計算，輸入屬性 → 輸出戰鬥數值
 // maxHp / def / mdef 已直接存於資料庫，不在此覆蓋
@@ -35,6 +35,13 @@ function effectiveCalc(m) {
     critRate:    Math.min(100, Math.round(luk * 0.3)),           // LUK → 爆擊%（同玩家公式）
     comboChance: Math.min(80,  Math.round(3 + agi * 0.5)),      // AGI → 連擊%（同玩家公式）
   };
+}
+
+function normalizeEntryFee(entryFee, zoneKey) {
+  if (entryFee !== undefined && entryFee !== null && entryFee !== "") {
+    return Math.max(0, Number(entryFee) || 0);
+  }
+  return getZoneDefaultEntryFee(zoneKey);
 }
 
 class MonsterService {
@@ -78,7 +85,7 @@ class MonsterService {
       zone: normalizeZone(fields.zone),
       maxHp: Math.max(1, Number(fields.maxHp) || 1),
       def:   Math.min(75, Math.max(0, Number(fields.def) || 0)),
-      entryFee:  Math.max(0, Number(fields.entryFee)  || 0),
+      entryFee: normalizeEntryFee(fields.entryFee, normalizeZone(fields.zone)),
       expReward: Math.max(0, Number(fields.expReward) || 0),
       goldReward:Math.max(0, Number(fields.goldReward)|| 0),
       drops,
@@ -109,7 +116,11 @@ class MonsterService {
     if (fields.zone      !== undefined) updated.zone      = normalizeZone(fields.zone);
     if (fields.maxHp !== undefined) updated.maxHp = Math.max(1, Number(fields.maxHp) || 1);
     if (fields.def   !== undefined) updated.def   = Math.min(75, Math.max(0, Number(fields.def) || 0));
-    if (fields.entryFee  !== undefined) updated.entryFee  = Math.max(0, Number(fields.entryFee)  || 0);
+    if (fields.entryFee  !== undefined) {
+      updated.entryFee = normalizeEntryFee(fields.entryFee, updated.zone);
+    } else if (fields.zone !== undefined) {
+      updated.entryFee = getZoneDefaultEntryFee(updated.zone);
+    }
     if (fields.expReward !== undefined) updated.expReward = Math.max(0, Number(fields.expReward) || 0);
     if (fields.goldReward!== undefined) updated.goldReward= Math.max(0, Number(fields.goldReward)|| 0);
     if (fields.drops     !== undefined) updated.drops     = await this._resolveDrops(fields.drops);

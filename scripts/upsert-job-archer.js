@@ -7,7 +7,7 @@ const JOB_ITEM_ID = "job_archer_v1";
 
 const JOB_ITEM = {
   id: JOB_ITEM_ID,
-  name: "弓箭手",
+  name: "弓箭手徽章",
   description: "擅長遠程射擊的職業，弓術造成高爆發傷害並能在迴避後反擊。",
   itemType: "job_badge",
   equipSlot: "job_eq",

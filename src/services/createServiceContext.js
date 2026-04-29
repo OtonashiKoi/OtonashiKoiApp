@@ -45,7 +45,13 @@ function createServiceContext() {
   const weeklyQuestService = questService; // backward-compatible alias
   const battleConfigService = new BattleConfigService(repositories.battleConfigRepository);
   const effectDefinitionService = new EffectDefinitionService(repositories.effectDefinitionRepository);
-  const enhanceService = new EnhanceService(repositories.progressRepository, repositories.itemRepository, questService);
+  const enhanceService = new EnhanceService(
+    repositories.progressRepository,
+    repositories.itemRepository,
+    repositories.walletRepository,
+    rewardService,
+    questService
+  );
   const auctionService = new AuctionService(
     repositories.progressRepository,
     repositories.walletRepository,
@@ -64,7 +70,18 @@ function createServiceContext() {
     monsterService
   });
   const worldBossService = new WorldBossService(repositories.worldBossRepository);
-  const shopService = new ShopService(repositories.shopRepository, playerService, rewardService, repositories.progressRepository, progressService, repositories.itemRepository, playerTierService, questService);
+  const shopService = new ShopService(
+    repositories.shopRepository,
+    playerService,
+    rewardService,
+    repositories.progressRepository,
+    progressService,
+    repositories.itemRepository,
+    playerTierService,
+    questService,
+    repositories.shopClaimRepository,
+    repositories.streamAccountBindingRepository
+  );
   const transactionService = new TransactionService(playerService, repositories.transactionRepository);
   const adminService = new AdminService(
     playerService,

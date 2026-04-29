@@ -203,6 +203,7 @@ function createRuntimeEffect(effectRef, source = {}) {
   return normalizeActiveEffect({
     ...effectRef,
     id: source.id || randomUUID(),
+    source: source.source || source.sourceType || "system",
     sourceType: source.sourceType || "system",
     sourceId: source.sourceId || null,
     remaining: effectRef.duration,
@@ -264,7 +265,20 @@ function applyEffectInstances(currentEffects = [], incomingEffects = [], source 
     if (!isEffectConditionMet(effectRef, context)) continue;
     const runtime = createRuntimeEffect(effectRef, source);
     if (!runtime) continue;
-    const existingIndex = next.findIndex((entry) => entry.key === runtime.key);
+    const existingIndex = next.findIndex((entry) => {
+      if (!entry || entry.key !== runtime.key) return false;
+      const runtimeSourceId = runtime.sourceId ?? null;
+      const entrySourceId = entry.sourceId ?? null;
+      if (runtimeSourceId !== null && entrySourceId !== null) {
+        return String(runtimeSourceId ?? "") === String(entrySourceId ?? "");
+      }
+      const runtimeSourceType = runtime.sourceType ?? null;
+      const entrySourceType = entry.sourceType ?? null;
+      if (runtimeSourceType !== null && entrySourceType !== null) {
+        return String(runtimeSourceType ?? "") === String(entrySourceType ?? "");
+      }
+      return String(runtime.source || "") === String(entry.source || "");
+    });
     if (existingIndex === -1) {
       next.push(runtime);
       continue;

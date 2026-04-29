@@ -4,7 +4,6 @@ const fs = require("fs");
 const {
   SHOP_OPEN_ID,
   SHOP_CANCEL_ID,
-  SHOP_SELECT_ID,
   SHOP_CAT_PREFIX,
   shopQuantityModalId,
   shopQuantityConfirmId,
@@ -16,6 +15,25 @@ const {
 
 function getServiceContext() {
   return require("../runtimeContext").serviceContext;
+}
+
+async function buildClaimIdentityKeys(player, discordId) {
+  const keys = new Set();
+  if (discordId) keys.add(`discord:${discordId}`);
+  const externalIds = player?.externalIds || {};
+  for (const [platform, platformUserId] of Object.entries(externalIds)) {
+    if (platform && platformUserId) keys.add(`${platform}:${platformUserId}`);
+  }
+  const bindingRepo = getServiceContext().streamAccountBindingRepository;
+  if (bindingRepo?.listByDiscordId && discordId) {
+    const bindings = await bindingRepo.listByDiscordId(discordId).catch(() => []);
+    for (const binding of Array.isArray(bindings) ? bindings : []) {
+      if (binding?.platform && binding?.platformUserId) {
+        keys.add(`${binding.platform}:${binding.platformUserId}`);
+      }
+    }
+  }
+  return [...keys];
 }
 
 /** 取得即時玩家等級與身分組 ID（ephemeral cache 可能為空，補 fetch）*/
@@ -31,15 +49,28 @@ async function fetchMemberTier(interaction) {
   return { tier, roleIds };
 }
 
-async function handleShopOpen(interaction, category = "all") {
+async function handleShopOpen(interaction, category = "all", page = 0) {
   const serviceContext = getServiceContext();
-  const [items, progress, { tier: realTier, roleIds }] = await Promise.all([
+  const [items, progress, player, { tier: realTier, roleIds }] = await Promise.all([
     serviceContext.shopService.listItems(),
     serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null),
+    serviceContext.playerRepository.findByDiscordId(interaction.user.id).catch(() => null),
     fetchMemberTier(interaction)
   ]);
+  if (!(await serviceContext.shopService._hasLinkedStreamAccount(player, interaction.user.id))) {
+    await interaction.reply({
+      content: "❌ 使用音無樂園商店前，請先綁定 YouTube 或 Twitch 帳號。",
+      flags: MessageFlags.Ephemeral
+    });
+    return;
+  }
   if (progress && realTier != null) progress.playerTier = realTier;
-  const msg = createShopMainMessage(items, progress, category);
+  const identityKeys = await buildClaimIdentityKeys(player, interaction.user.id);
+  const claims = serviceContext.shopClaimRepository?.listByIdentityKeys
+    ? await serviceContext.shopClaimRepository.listByIdentityKeys(identityKeys).catch(() => [])
+    : [];
+  const claimedItemIds = [...new Set((claims || []).map((c) => c.itemId).filter(Boolean))];
+  const msg = createShopMainMessage(items, progress, category, claimedItemIds, page);
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
   // 3分鐘無操作自動刪除
   setTimeout(() => interaction.deleteReply().catch(() => {}), 3 * 60 * 1000);
@@ -47,15 +78,28 @@ async function handleShopOpen(interaction, category = "all") {
   serviceContext.shopService.updatePlayerTier(interaction.user.id, roleIds);
 }
 
-async function handleShopCat(interaction, category) {
+async function handleShopCat(interaction, category, page = 0) {
   const serviceContext = getServiceContext();
-  const [items, progress, { tier: realTier }] = await Promise.all([
+  const [items, progress, player, { tier: realTier }] = await Promise.all([
     serviceContext.shopService.listItems(),
     serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null),
+    serviceContext.playerRepository.findByDiscordId(interaction.user.id).catch(() => null),
     fetchMemberTier(interaction)
   ]);
+  if (!(await serviceContext.shopService._hasLinkedStreamAccount(player, interaction.user.id))) {
+    await interaction.update({
+      content: "❌ 使用音無樂園商店前，請先綁定 YouTube 或 Twitch 帳號。",
+      components: [], embeds: [], attachments: []
+    });
+    return;
+  }
   if (progress && realTier != null) progress.playerTier = realTier;
-  const msg = createShopMainMessage(items, progress, category);
+  const identityKeys = await buildClaimIdentityKeys(player, interaction.user.id);
+  const claims = serviceContext.shopClaimRepository?.listByIdentityKeys
+    ? await serviceContext.shopClaimRepository.listByIdentityKeys(identityKeys).catch(() => [])
+    : [];
+  const claimedItemIds = [...new Set((claims || []).map((c) => c.itemId).filter(Boolean))];
+  const msg = createShopMainMessage(items, progress, category, claimedItemIds, page);
   await interaction.update({ ...msg, embeds: [], attachments: [] });
 }
 
@@ -78,6 +122,14 @@ async function buildConfirmUpdate(item) {
 
 async function handleShopBuy(interaction, itemId) {
   const serviceContext = getServiceContext();
+  const player = await serviceContext.playerRepository.findByDiscordId(interaction.user.id).catch(() => null);
+  if (!(await serviceContext.shopService._hasLinkedStreamAccount(player, interaction.user.id))) {
+    await interaction.update({
+      content: "❌ 使用音無樂園商店前，請先綁定 YouTube 或 Twitch 帳號。",
+      components: [], embeds: [], attachments: []
+    });
+    return;
+  }
   let item;
   try {
     item = await serviceContext.shopService.getItemById(itemId);
@@ -105,6 +157,14 @@ async function handleShopBuy(interaction, itemId) {
 async function handleShopConfirm(interaction, itemId, quantity = 1) {
   const serviceContext = getServiceContext();
   try {
+    const player = await serviceContext.playerRepository.findByDiscordId(interaction.user.id).catch(() => null);
+    if (!(await serviceContext.shopService._hasLinkedStreamAccount(player, interaction.user.id))) {
+      await interaction.update({
+        content: "❌ 使用音無樂園商店前，請先綁定 YouTube 或 Twitch 帳號。",
+        components: [], embeds: [], attachments: []
+      });
+      return;
+    }
     // 取得成員身分組 ID 清單（ephemeral 互動 cache 可能為空，補 fetch）
     let memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
     if (memberRoleIds.length === 0 && interaction.guild) {
@@ -214,28 +274,70 @@ async function handleQuantityConfirm(interaction, customId) {
   await handleShopConfirm(interaction, itemId, quantity);
 }
 
-async function handleShopSelect(interaction) {
-  const itemId = interaction.values[0];
-  await handleShopBuy(interaction, itemId);
-}
-
 async function handleShopCancel(interaction) {
   // 回到商品列表（全部分類）
   const serviceContext = getServiceContext();
-  const [items, progress, realTier] = await Promise.all([
+  const [items, progress, player, realTier] = await Promise.all([
     serviceContext.shopService.listItems(),
     serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null),
+    serviceContext.playerRepository.findByDiscordId(interaction.user.id).catch(() => null),
     fetchMemberTier(interaction)
   ]);
+  if (!(await serviceContext.shopService._hasLinkedStreamAccount(player, interaction.user.id))) {
+    await interaction.update({
+      content: "❌ 使用音無樂園商店前，請先綁定 YouTube 或 Twitch 帳號。",
+      components: [], embeds: [], attachments: []
+    });
+    return;
+  }
   if (progress && realTier != null) progress.playerTier = realTier;
-  const msg = createShopMainMessage(items, progress, "all");
+  const identityKeys = await buildClaimIdentityKeys(player, interaction.user.id);
+  const claims = serviceContext.shopClaimRepository?.listByIdentityKeys
+    ? await serviceContext.shopClaimRepository.listByIdentityKeys(identityKeys).catch(() => [])
+    : [];
+  const claimedItemIds = [...new Set((claims || []).map((c) => c.itemId).filter(Boolean))];
+  const msg = createShopMainMessage(items, progress, "all", claimedItemIds, 0);
+  await interaction.update({ ...msg, embeds: [], attachments: [] });
+}
+
+async function handleShopPage(interaction, category, page) {
+  const serviceContext = getServiceContext();
+  const [items, progress, player, { tier: realTier }] = await Promise.all([
+    serviceContext.shopService.listItems(),
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null),
+    serviceContext.playerRepository.findByDiscordId(interaction.user.id).catch(() => null),
+    fetchMemberTier(interaction)
+  ]);
+  if (!(await serviceContext.shopService._hasLinkedStreamAccount(player, interaction.user.id))) {
+    await interaction.update({
+      content: "❌ 使用音無樂園商店前，請先綁定 YouTube 或 Twitch 帳號。",
+      components: [], embeds: [], attachments: []
+    });
+    return;
+  }
+  if (progress && realTier != null) progress.playerTier = realTier;
+  const identityKeys = await buildClaimIdentityKeys(player, interaction.user.id);
+  const claims = serviceContext.shopClaimRepository?.listByIdentityKeys
+    ? await serviceContext.shopClaimRepository.listByIdentityKeys(identityKeys).catch(() => [])
+    : [];
+  const claimedItemIds = [...new Set((claims || []).map((c) => c.itemId).filter(Boolean))];
+  const msg = createShopMainMessage(items, progress, category, claimedItemIds, page);
   await interaction.update({ ...msg, embeds: [], attachments: [] });
 }
 
 async function handleCoinShopButton(interaction) {
   const id = interaction.customId;
   if (id === SHOP_OPEN_ID) { await handleShopOpen(interaction); return; }
-  if (id.startsWith(SHOP_CAT_PREFIX)) { await handleShopCat(interaction, id.slice(SHOP_CAT_PREFIX.length)); return; }
+  if (id.startsWith(SHOP_CAT_PREFIX)) {
+    const [, category = "all", pageRaw = "0"] = id.split(":");
+    await handleShopCat(interaction, category, parseInt(pageRaw, 10) || 0);
+    return;
+  }
+  if (id.startsWith("shop_page:")) {
+    const [, category = "all", pageRaw = "0"] = id.split(":");
+    await handleShopPage(interaction, category, parseInt(pageRaw, 10) || 0);
+    return;
+  }
   if (id.startsWith("shop_buy:")) { await handleShopBuy(interaction, id.slice("shop_buy:".length)); return; }
   if (id.startsWith("shop_confirm:")) { await handleShopConfirm(interaction, id.slice("shop_confirm:".length)); return; }
   if (id.startsWith("shop_quantity_confirm:")) { await handleQuantityConfirm(interaction, id); return; }
@@ -247,6 +349,7 @@ function isCoinShopButton(customId) {
     customId === SHOP_OPEN_ID ||
     customId === SHOP_CANCEL_ID ||
     customId.startsWith(SHOP_CAT_PREFIX) ||
+    customId.startsWith("shop_page:") ||
     customId.startsWith("shop_buy:") ||
     customId.startsWith("shop_confirm:") ||
     customId.startsWith("shop_quantity_confirm:")
@@ -254,12 +357,12 @@ function isCoinShopButton(customId) {
 }
 
 function isCoinShopSelect(customId) {
-  return customId === SHOP_SELECT_ID;
+  return false;
 }
 
 function isCoinShopModal(customId) {
   return customId.startsWith("shop_quantity_modal:");
 }
 
-module.exports = { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect, handleQuantityModalSubmit, isCoinShopModal };
+module.exports = { handleCoinShopButton, isCoinShopButton, isCoinShopSelect, handleQuantityModalSubmit, isCoinShopModal };
 

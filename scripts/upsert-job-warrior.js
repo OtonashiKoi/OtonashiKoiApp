@@ -9,7 +9,7 @@ const OFFHAND_WEAPON_TYPES = ["offhand_axe", "offhand_mace"];
 
 const JOB_ITEM = {
   id: JOB_ITEM_ID,
-  name: "戰士",
+  name: "戰士徽章",
   description: "專精斧類武器的前線職業。",
   itemType: "job_badge",
   imageUrl: null,
@@ -21,7 +21,7 @@ const JOB_ITEM = {
   weaponType: null,
   isTwoHanded: false,
   atkStat: null,
-  tier: "A",
+  tier: null,
   passiveEffects: [
     // 主武器為單手斧：武器倍率結算後再乘 1.2
     {

@@ -9,7 +9,7 @@ const OFFHAND_WEAPON_TYPES = ["offhand_mace", "offhand_hammer"];
 
 const JOB_ITEM = {
   id: JOB_ITEM_ID,
-  name: "矮人戰士",
+  name: "矮人戰士徽章",
   description: "專精槌類武器的矮人工匠戰士。",
   itemType: "job_badge",
   imageUrl: null,
@@ -21,7 +21,7 @@ const JOB_ITEM = {
   weaponType: null,
   isTwoHanded: false,
   atkStat: null,
-  tier: "A",
+  tier: null,
   passiveEffects: [
     // 主武器單手槌：武器倍率結算後再乘 1.2
     {

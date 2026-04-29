@@ -1,7 +1,8 @@
 "use strict";
 
 const { AppError, ERROR_CODES } = require("../../shared/errors");
-const { getGemsRequired, getSuccessRate, validateEnhance, ENHANCE_GEMS, MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
+const { getEnhanceCost, validateEnhance, ENHANCE_GEMS, MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
+const { CURRENCY_SOURCES } = require("../../shared/sources");
 
 const WEAPON_MAIN_STAT_BY_TYPE = {
   staff_1h: "int",
@@ -35,10 +36,21 @@ const ARMOR_ENHANCE_VIT_BY_TIER = {
   A: 3
 };
 
+const STAT_LABEL_ZH = {
+  str: "力量 STR",
+  agi: "敏捷 AGI",
+  vit: "體質 VIT",
+  int: "智力 INT",
+  dex: "靈巧 DEX",
+  luk: "幸運 LUK"
+};
+
 class EnhanceService {
-  constructor(progressRepository, itemRepository, questService = null) {
+  constructor(progressRepository, itemRepository, walletRepository = null, rewardService = null, questService = null) {
     this.progressRepository = progressRepository;
     this.itemRepository = itemRepository;
+    this.walletRepository = walletRepository;
+    this.rewardService = rewardService;
     this.questService = questService;
   }
 
@@ -97,6 +109,9 @@ class EnhanceService {
     }
 
     const currentLevel = Math.max(0, Number(equipment.enhanceLevel) || 0);
+    const preview = this._buildEnhancePreview(equipment, tier, currentLevel);
+    const wallet = this.walletRepository ? await this.walletRepository.findByPlayerId(discordId).catch(() => null) : null;
+    const goldOwned = Math.max(0, Number(wallet?.gold) || 0);
 
     // 驗證是否可強化
     const gemItemId = ENHANCE_GEMS[tier];
@@ -106,17 +121,21 @@ class EnhanceService {
 
     // 計算背包中的寶石數量
     const gemsOwned = this._countGemsInInventory(inventory, gemItemId);
-    const validation = validateEnhance(tier, currentLevel, gemsOwned);
+    const validation = validateEnhance(tier, currentLevel, gemsOwned, goldOwned);
     if (!validation.canEnhance) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, validation.reason, 400);
     }
 
-    const gemsRequired = getGemsRequired(tier, currentLevel);
-    const successRate = getSuccessRate(tier, currentLevel);
+    const { gemsRequired, goldRequired, successRate } = getEnhanceCost(tier, currentLevel);
     const nextLevel = currentLevel + 1;
+    const displayName = progress.displayName || progress.playerName || discordId;
+    const goldText = goldRequired > 0 ? `${goldRequired} 金幣` : "免費";
 
     // 消耗寶石
     this._consumeGemsFromInventory(inventory, gemItemId, gemsRequired);
+    if (goldRequired > 0) {
+      await this._consumeGold(discordId, displayName, goldRequired);
+    }
 
     // 計算是否強化成功
     const isSuccess = Math.random() * 100 < successRate;
@@ -175,11 +194,17 @@ class EnhanceService {
       success: isSuccess,
       newLevel: isSuccess ? nextLevel : currentLevel,
       tier,
+      itemName: equipment.itemName,
       gemsUsed: gemsRequired,
+      goldUsed: goldRequired,
       successRate,
+      statBoosted: preview.statBoosted,
+      oldStatValue: preview.oldStatValue,
+      newStatValue: isSuccess ? preview.newStatValue : preview.oldStatValue,
+      statDelta: preview.statDelta,
       message: isSuccess
-        ? `✅ 強化成功！裝備升級至 +${nextLevel}`
-        : `❌ 強化失敗，消耗了 ${gemsRequired} 顆 ${tier} 階寶石`
+        ? `✅ 強化成功！裝備升級至 +${nextLevel}，消耗 ${gemsRequired} 顆 ${tier} 階寶石、${goldText}`
+        : `❌ 強化失敗，消耗了 ${gemsRequired} 顆 ${tier} 階寶石、${goldText}`
     };
   }
 
@@ -274,6 +299,67 @@ class EnhanceService {
     return entries.sort((a, b) => Number(b[1]) - Number(a[1]))[0][0];
   }
 
+  _buildEnhancePreview(equipment, tier, currentLevel) {
+    const normalizedTier = String(tier || "").toUpperCase();
+    const equipSlot = String(equipment?.equipSlot || "");
+    const weaponType = String(equipment?.weaponType || "");
+    const isMainWeapon = equipSlot === "weapon";
+    const isOffhandWeapon = equipSlot === "shield" && weaponType.startsWith("offhand_");
+    let statBoosted = null;
+    let delta = 0;
+
+    if (isMainWeapon || isOffhandWeapon) {
+      statBoosted = this._getWeaponMainStat(equipment);
+      delta = WEAPON_ENHANCE_BONUS_BY_TIER[normalizedTier] ?? 1;
+    } else {
+      statBoosted = "vit";
+      delta = ARMOR_ENHANCE_VIT_BY_TIER[normalizedTier] ?? 1;
+    }
+
+    const equipStats = equipment?.equipStats || {};
+    const currentValue = Number(equipStats?.[statBoosted]) || 0;
+    const nextValue = Number((currentValue + delta).toFixed(2));
+
+    return {
+      statBoosted,
+      statBoostedZh: statBoosted ? (STAT_LABEL_ZH[statBoosted] || String(statBoosted).toUpperCase()) : null,
+      oldStatValue: currentValue,
+      newStatValue: nextValue,
+      statDelta: Number(delta)
+    };
+  }
+
+  async _consumeGold(discordId, displayName, amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    if (this.rewardService?.grantCurrency) {
+      await this.rewardService.grantCurrency({
+        discordId,
+        displayName,
+        currencyType: "gold",
+        amount: -Math.abs(Math.trunc(amount)),
+        source: CURRENCY_SOURCES.ENHANCE,
+        operator: "enhance:equipment"
+      });
+      return;
+    }
+
+    if (!this.walletRepository) {
+      throw new AppError(ERROR_CODES.INTERNAL_ERROR, "缺少金幣扣款服務", 500);
+    }
+
+    const wallet = await this.walletRepository.findByPlayerId(discordId);
+    if (!wallet) {
+      throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家錢包未找到", 404);
+    }
+    if ((wallet.gold || 0) < amount) {
+      throw new AppError(ERROR_CODES.INSUFFICIENT_BALANCE, "金幣不足", 400);
+    }
+    wallet.gold = (wallet.gold || 0) - amount;
+    wallet.updatedAt = new Date().toISOString();
+    await this.walletRepository.save(wallet);
+  }
+
   /**
    * 取得某個玩家的強化進度信息（用於 UI 顯示）
    */
@@ -293,6 +379,7 @@ class EnhanceService {
 
     const tier = String(equipment.tier || "").toUpperCase();
     const currentLevel = Math.max(0, Number(equipment.enhanceLevel) || 0);
+    const preview = this._buildEnhancePreview(equipment, tier, currentLevel);
 
     if (!["D", "C", "B", "A"].includes(tier)) {
       return null; // 無法強化的道具
@@ -300,10 +387,13 @@ class EnhanceService {
 
     const gemItemId = ENHANCE_GEMS[tier];
     const gemsOwned = this._countGemsInInventory(inventory, gemItemId);
+    const wallet = this.walletRepository ? await this.walletRepository.findByPlayerId(discordId).catch(() => null) : null;
+    const goldOwned = Math.max(0, Number(wallet?.gold) || 0);
 
     const isMaxed = currentLevel >= MAX_ENHANCE_LEVEL;
-    const gemsRequired = isMaxed ? -1 : getGemsRequired(tier, currentLevel);
-    const successRate = isMaxed ? -1 : getSuccessRate(tier, currentLevel);
+    const { gemsRequired, goldRequired, successRate } = isMaxed
+      ? { gemsRequired: -1, goldRequired: -1, successRate: -1 }
+      : getEnhanceCost(tier, currentLevel);
 
     return {
       itemName: equipment.itemName,
@@ -311,9 +401,16 @@ class EnhanceService {
       currentLevel,
       isMaxed,
       gemsRequired: gemsRequired > 0 ? gemsRequired : null,
+      goldRequired: goldRequired >= 0 ? goldRequired : null,
       gemsOwned,
+      goldOwned,
       successRate: successRate > 0 ? successRate : null,
-      nextLevel: isMaxed ? null : currentLevel + 1
+      nextLevel: isMaxed ? null : currentLevel + 1,
+      statBoosted: preview.statBoosted,
+      statBoostedZh: preview.statBoostedZh,
+      oldStatValue: preview.oldStatValue,
+      newStatValue: preview.newStatValue,
+      statDelta: preview.statDelta
     };
   }
 }

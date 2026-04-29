@@ -1,9 +1,11 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
 
 const SHOP_OPEN_ID = "shop_open";
 const SHOP_CANCEL_ID = "shop_cancel";
-const SHOP_SELECT_ID = "shop_select";
 const SHOP_CAT_PREFIX = "shop_cat:";
+const SHOP_ITEM_PREFIX = "shop_item:";
+const SHOP_PAGE_PREFIX = "shop_page:";
+const TAIPEI_TIME_ZONE = "Asia/Taipei";
 
 const CAT_LABELS = {
   all:         "📦 全部",
@@ -17,6 +19,18 @@ function shopBuyId(itemId) { return `shop_buy:${itemId}`; }
 function shopConfirmId(itemId) { return `shop_confirm:${itemId}`; }
 function shopQuantityModalId(itemId) { return `shop_quantity_modal:${itemId}`; }
 function shopQuantityConfirmId(itemId) { return `shop_quantity_confirm:${itemId}`; }
+function shopPageId(category, page) { return `${SHOP_PAGE_PREFIX}${category}:${page}`; }
+
+function getTaipeiYearMonth() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TAIPEI_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit"
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value || "0000";
+  const month = parts.find((part) => part.type === "month")?.value || "00";
+  return `${year}-${month}`;
+}
 
 // 等級由低到高
 const TIER_ORDER = ["E", "D", "C", "B", "A", "S", "SS"];
@@ -46,45 +60,51 @@ function createCoinShopPanelMessage() {
   };
 }
 
+function chunkArray(list, size) {
+  const chunks = [];
+  for (let i = 0; i < list.length; i += size) {
+    chunks.push(list.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet) {
+  const badges = [];
+  if (item.stock === 0) badges.push("❌售完");
+  else if (item.stock > 0) badges.push(`📦${item.stock}`);
+  if (item.maxPerMonth > 0) {
+    const used = (monthlyCount[item.id] || {})[ym] || 0;
+    if (used >= item.maxPerMonth) badges.push("⛔上限");
+    else if (used > 0) badges.push(`🔄${used}/${item.maxPerMonth}`);
+  }
+  if (item.claimLimit === "once_per_player" && claimedSet.has(item.id)) {
+    badges.push("🎫已領");
+  } else if (item.claimLimit === "once_per_player") {
+    badges.push("🎫1次");
+  }
+  const owned = inventory.filter((e) => e.itemId === item.id).length;
+  if (owned > 0) badges.push(`✅×${owned}`);
+  return badges.length ? `  ${badges.join("  ")}` : "";
+}
+
+function buildShopItemLabel(item, playerTier, inventory, monthlyCount, ym, claimedSet) {
+  const badges = formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet);
+  const price = item.price === 0 ? "免費" : `${item.price} ${item.currency === "diamond" ? "💎 鑽石" : "💰 金幣"}`;
+  const tierOk = canBuyTier(playerTier, item.allowedTiers);
+  const base = `${item.currency === "diamond" ? "💎" : "💰"} ${item.name}`.slice(0, 60);
+  const prefix = !tierOk || item.stock === 0 ? "🔒 " : "";
+  return `${prefix}${base}｜${price}${badges}`.slice(0, 80);
+}
+
 /**
- * 商店主畫面：文字清單 + 分類按鈕 + 下拉選單（最多 25 項，僅可購買商品）
+ * 商店主畫面：文字清單 + 分類按鈕 + 分頁按鈕卡片
  */
-function createShopMainMessage(items, progress, activeCategory = "all") {
+function createShopMainMessage(items, progress, activeCategory = "all", claimedItemIds = [], page = 0) {
   const playerTier = progress?.playerTier || null;
-  const ym = new Date().toISOString().slice(0, 7);
+  const ym = getTaipeiYearMonth();
   const inventory = progress?.inventory || [];
   const monthlyCount = progress?.shopMonthlyCount || {};
-
-  const currencyLabel = (c) => c === "diamond" ? "💎 鑽石" : "💰 金幣";
-
-  function statusBadges(item) {
-    const badges = [];
-    // 庫存
-    if (item.stock === 0) badges.push("❌售完");
-    else if (item.stock > 0) badges.push(`📦${item.stock}`);
-    // 每月上限
-    if (item.maxPerMonth > 0) {
-      const used = (monthlyCount[item.id] || {})[ym] || 0;
-      if (used >= item.maxPerMonth) badges.push("⛔上限");
-      else if (used > 0) badges.push(`🔄${used}/${item.maxPerMonth}`);
-    }
-    // 已擁有
-    const owned = inventory.filter((e) => e.itemId === item.id).length;
-    if (owned > 0) badges.push(`✅×${owned}`);
-    return badges.length ? `  ${badges.join("  ")}` : "";
-  }
-
-  // purchaseNote still used by select menu description
-  function purchaseNote(item) {
-    if (item.maxPerMonth > 0) {
-      const used = (monthlyCount[item.id] || {})[ym] || 0;
-      if (used >= item.maxPerMonth) return "⛔上限";
-      if (used > 0) return `🔄${used}/${item.maxPerMonth}`;
-    }
-    const owned = inventory.filter((e) => e.itemId === item.id).length;
-    if (owned > 0) return `✅×${owned}`;
-    return "";
-  }
+  const claimedSet = new Set(claimedItemIds || []);
 
   if (!items.length) {
     return { content: "🏪 目前商店沒有可購買的商品，請稍後再來！", components: [] };
@@ -117,28 +137,11 @@ function createShopMainMessage(items, progress, activeCategory = "all") {
   const diamond = catFiltered.filter((i) => !i.isSale && i.currency === "diamond" && canBuyTier(playerTier, i.allowedTiers));
   const sale    = catFiltered.filter((i) => i.isSale                               && canBuyTier(playerTier, i.allowedTiers));
   const ordered = [...gold, ...diamond, ...sale];
-
-  function itemLine(item) {
-    const price = item.price === 0 ? "免費" : `${item.price} ${currencyLabel(item.currency)}`;
-    return `**${item.name}** — ${price}${statusBadges(item)}`;
-  }
-
-  function sectionLines(label, arr) {
-    if (!arr.length) return "";
-    return `${label}\n${arr.map((item, i) => `${i + 1}. ${itemLine(item)}`).join("\n")}`;
-  }
-
-  const sections = [
-    sectionLines("━━━━━ 💰 **金幣商品** ━━━━━", gold),
-    sectionLines("━━━━━ 💎 **鑽石商品** ━━━━━", diamond),
-    sectionLines("━━━━━ 🔥 **優惠商品** ━━━━━", sale),
-  ].filter(Boolean);
-
-  // 下拉選單只列可購買（等級符合且有庫存）的商品，最多 25 項
-  const buyable = ordered.filter(
-    (item) => canBuyTier(playerTier, item.allowedTiers) && item.stock !== 0
-  );
-  const menuItems = buyable.slice(0, 25);
+  const buyable = ordered;
+  const pageSize = 4;
+  const totalPages = Math.max(1, Math.ceil(buyable.length / pageSize));
+  const safePage = Math.max(0, Math.min(page, totalPages - 1));
+  const pageItems = buyable.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   const components = [];
 
@@ -153,22 +156,43 @@ function createShopMainMessage(items, progress, activeCategory = "all") {
   );
   components.push(catRow);
 
-  if (menuItems.length > 0) {
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId(SHOP_SELECT_ID)
-      .setPlaceholder("🛒 選擇想購買的商品…")
-      .addOptions(
-        menuItems.map((item) => {
-          const noteText = purchaseNote(item).trim();
-          const priceStr = `${item.price} ${currencyLabel(item.currency)}`;
-          const desc = (noteText ? `${priceStr}  ${noteText}` : priceStr).slice(0, 100);
-          return new StringSelectMenuOptionBuilder()
-            .setLabel(`${item.currency === "diamond" ? "💎" : "💰"} ${item.name}`.slice(0, 100))
-            .setDescription(desc)
-            .setValue(item.id);
+  if (pageItems.length > 0) {
+    const itemRows = chunkArray(pageItems, 2);
+    for (const rowItems of itemRows) {
+      const row = new ActionRowBuilder().addComponents(
+        rowItems.map((item) => {
+          const canBuy = canBuyTier(playerTier, item.allowedTiers) && item.stock !== 0 && !(item.claimLimit === "once_per_player" && claimedSet.has(item.id));
+          return new ButtonBuilder()
+            .setCustomId(shopBuyId(item.id))
+            .setLabel(buildShopItemLabel(item, playerTier, inventory, monthlyCount, ym, claimedSet))
+            .setStyle(canBuy ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            .setDisabled(!canBuy);
         })
       );
-    components.push(new ActionRowBuilder().addComponents(selectMenu));
+      components.push(row);
+    }
+  }
+
+  if (totalPages > 1) {
+    components.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(shopPageId(activeCategory, safePage - 1))
+          .setLabel("◀ 上一頁")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(safePage <= 0),
+        new ButtonBuilder()
+          .setCustomId(shopPageId(activeCategory, safePage))
+          .setLabel(`${safePage + 1}/${totalPages}`)
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId(shopPageId(activeCategory, safePage + 1))
+          .setLabel("下一頁 ▶")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(safePage >= totalPages - 1)
+      )
+    );
   }
 
   components.push(
@@ -180,12 +204,21 @@ function createShopMainMessage(items, progress, activeCategory = "all") {
     )
   );
 
-  const overflowNote = buyable.length > 25
-    ? "\n\n> ⚠️ 可購買商品超過 25 項，僅顯示前 25 項。"
-    : "";
+  const lines = pageItems.length
+    ? pageItems.map((item, index) => {
+        const price = item.price === 0 ? "免費" : `${item.price} ${item.currency === "diamond" ? "💎 鑽石" : "💰 金幣"}`;
+        const badges = formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet);
+        return `${safePage * pageSize + index + 1}. **${item.name}** — ${price}${badges}`;
+      })
+    : ["此頁沒有商品。"];
+
+  const title = CAT_LABELS[activeCategory] || "📦 全部";
+  const pageLine = buyable.length > 0
+    ? `第 ${safePage + 1} / ${totalPages} 頁，共 ${buyable.length} 項可購買商品`
+    : "目前沒有可購買商品。";
 
   return {
-    content: `🏪 **商店商品列表**\n\n${sections.join("\n\n")}${overflowNote}`,
+    content: `🏪 **商店商品列表 ${title}**\n${pageLine}\n\n${lines.join("\n")}`,
     components
   };
 }
@@ -267,12 +300,12 @@ function createConsumableConfirmMessage(item, quantity) {
 module.exports = {
   SHOP_OPEN_ID,
   SHOP_CANCEL_ID,
-  SHOP_SELECT_ID,
   SHOP_CAT_PREFIX,
   shopBuyId,
   shopConfirmId,
   shopQuantityModalId,
   shopQuantityConfirmId,
+  shopPageId,
   createCoinShopPanelMessage,
   createShopMainMessage,
   createConfirmMessage,

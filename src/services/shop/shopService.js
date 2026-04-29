@@ -5,13 +5,15 @@ const { MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
 const crypto = require("crypto");
 
 // 各 tier 裝備販售價格
-const TIER_SELL_PRICE = { D: 10, C: 50, B: 100, A: 150 };
+const TIER_SELL_PRICE = { D: 200, C: 500, B: 1000, A: 10000 };
+const TAIPEI_TIME_ZONE = "Asia/Taipei";
 
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes", "level_down_random_attributes"];
 const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow"]);
+const VALID_CLAIM_LIMITS = new Set(["none", "once_per_player"]);
 
 class ShopService {
-  constructor(shopRepository, playerService, rewardService, progressRepository, progressService, itemRepository, playerTierService, questService = null) {
+  constructor(shopRepository, playerService, rewardService, progressRepository, progressService, itemRepository, playerTierService, questService = null, shopClaimRepository = null, streamAccountBindingRepository = null) {
     this.shopRepository = shopRepository;
     this.playerService = playerService;
     this.rewardService = rewardService;
@@ -20,6 +22,8 @@ class ShopService {
     this.itemRepository = itemRepository;
     this.playerTierService = playerTierService;
     this.questService = questService;
+    this.shopClaimRepository = shopClaimRepository;
+    this.streamAccountBindingRepository = streamAccountBindingRepository;
   }
 
   _normalizeEffect(effect) {
@@ -53,6 +57,99 @@ class ShopService {
     return Boolean(isTwoHanded);
   }
 
+  _normalizeClaimLimit(value) {
+    if (!value) return "none";
+    const normalized = String(value).trim();
+    return VALID_CLAIM_LIMITS.has(normalized) ? normalized : "none";
+  }
+
+  async _getStreamBindings(player, discordId) {
+    const bindings = [];
+    if (this.streamAccountBindingRepository?.listByDiscordId && discordId) {
+      const rows = await this.streamAccountBindingRepository.listByDiscordId(discordId).catch(() => []);
+      for (const row of Array.isArray(rows) ? rows : []) {
+        if (row?.platform && row?.platformUserId) bindings.push(row);
+      }
+    }
+    if (bindings.length > 0) return bindings;
+
+    const externalIds = player?.externalIds || {};
+    for (const [platform, platformUserId] of Object.entries(externalIds)) {
+      if (platform && platformUserId) {
+        bindings.push({
+          platform,
+          platformUserId,
+          discordId: discordId || player?.discordId || "",
+          displayName: player?.displayName || "",
+          linkedAt: player?.externalIdLinkedAt || null
+        });
+      }
+    }
+    return bindings;
+  }
+
+  async _hasLinkedStreamAccount(player, discordId) {
+    const bindings = await this._getStreamBindings(player, discordId);
+    return bindings.some((binding) => {
+      const platform = String(binding?.platform || "").trim().toLowerCase();
+      const platformUserId = String(binding?.platformUserId || "").trim();
+      return (platform === "youtube" || platform === "twitch") && Boolean(platformUserId);
+    });
+  }
+
+  _normalizeBadgeLabels(binding) {
+    if (!binding) return [];
+    const labels = binding.linkedSupportBadgeLabelsAtLink;
+    if (Array.isArray(labels)) return labels.map((label) => String(label).trim()).filter(Boolean);
+    if (typeof labels === "string" && labels.trim()) {
+      return labels.split("|").map((label) => String(label).trim()).filter(Boolean);
+    }
+    return [];
+  }
+
+  _hasVerifiedSupportSnapshot(binding) {
+    if (!binding) return false;
+    const platform = String(binding.platform || "").trim().toLowerCase();
+    const supportKind = String(binding.linkedSupportKindAtLink || binding.supportKindAtLink || "").trim().toLowerCase();
+    const linkedSupportAtLink = binding.linkedSupportAtLink;
+    const badgeText = this._normalizeBadgeLabels(binding).join("|");
+
+    if (platform === "youtube") {
+      return linkedSupportAtLink === true || supportKind === "member" || /會員/.test(badgeText);
+    }
+
+    if (platform === "twitch") {
+      return linkedSupportAtLink === true || supportKind === "subscriber" || /訂閱者|subscriber/i.test(badgeText);
+    }
+
+    return false;
+  }
+
+  async _hasVerifiedSupportForPlayer(player, discordId) {
+    const bindings = await this._getStreamBindings(player, discordId);
+    return bindings.some((binding) => this._hasVerifiedSupportSnapshot(binding));
+  }
+
+  async assertLinkedStreamAccount(player, discordId) {
+    const hasLinked = await this._hasLinkedStreamAccount(player, discordId);
+    if (!hasLinked) {
+      throw new AppError(ERROR_CODES.FORBIDDEN, "使用音無樂園商店前，請先綁定 YouTube 或 Twitch 帳號", 403);
+    }
+    return true;
+  }
+
+  async _buildClaimIdentityKeys(player, discordId) {
+    const keys = new Set();
+    if (discordId) keys.add(`discord:${discordId}`);
+    const bindings = await this._getStreamBindings(player, discordId);
+    for (const binding of bindings) {
+      if (binding?.platform && binding?.platformUserId) {
+        keys.add(`${binding.platform}:${binding.platformUserId}`);
+      }
+    }
+    return [...keys];
+  }
+
   async listItems({ includeDisabled = false } = {}) {
     const items = await this.shopRepository.findAll();
     return includeDisabled ? items : items.filter((i) => i.enabled);
@@ -64,7 +161,7 @@ class ShopService {
     return item;
   }
 
-  async createItem({ itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth }) {
+  async createItem({ itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, claimLimit }) {
     if (!itemLibraryId) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "請從道具庫選擇道具", 400);
     if (!this.itemRepository) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "itemRepository 未初始化", 500);
     const libraryItem = await this.itemRepository.findById(itemLibraryId);
@@ -81,6 +178,7 @@ class ShopService {
       isSale: Boolean(isSale),
       allowedTiers: Array.isArray(allowedTiers) ? allowedTiers.map(String).filter(Boolean) : [],
       maxPerMonth: Math.max(0, Number(maxPerMonth) || 0),
+      claimLimit: this._normalizeClaimLimit(claimLimit),
       itemType: libraryItem.itemType || "consumable",
       effect: libraryItem.effect || { type: "none", value: 0 },
       useEffects: libraryItem.useEffects || [],
@@ -133,6 +231,7 @@ class ShopService {
     if (fields.isSale !== undefined) updated.isSale = Boolean(fields.isSale);
     if (fields.allowedTiers !== undefined) updated.allowedTiers = Array.isArray(fields.allowedTiers) ? fields.allowedTiers.map(String).filter(Boolean) : [];
     if (fields.maxPerMonth !== undefined) updated.maxPerMonth = Math.max(0, Number(fields.maxPerMonth) || 0);
+    if (fields.claimLimit !== undefined) updated.claimLimit = this._normalizeClaimLimit(fields.claimLimit);
     if (fields.imageUrl !== undefined) updated.imageUrl = fields.imageUrl || null;
     if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl || null;
     if (fields.weaponType !== undefined) updated.weaponType = fields.weaponType || null;
@@ -164,7 +263,14 @@ class ShopService {
   }
 
   _currentYearMonth() {
-    return new Date().toISOString().slice(0, 7);
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: TAIPEI_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit"
+    }).formatToParts(new Date());
+    const year = parts.find((part) => part.type === "year")?.value || "0000";
+    const month = parts.find((part) => part.type === "month")?.value || "00";
+    return `${year}-${month}`;
   }
 
   async purchase(discordId, displayName, itemId, memberRoleIds = [], quantity = 1) {
@@ -172,6 +278,8 @@ class ShopService {
     quantity = Math.max(1, Math.min(999, parseInt(quantity) || 1));
 
     const item = await this.getItemById(itemId);
+    const { player } = await this.playerService.ensurePlayer(discordId, displayName);
+    await this.assertLinkedStreamAccount(player, discordId);
     let libraryItem = null;
     let effectiveTier = item.tier || null;
     if (!effectiveTier && item.itemLibraryId && this.itemRepository) {
@@ -186,18 +294,42 @@ class ShopService {
       libraryItem = await this.itemRepository.findById(item.itemLibraryId).catch(() => null);
     }
     if (!item.enabled) throw new AppError(ERROR_CODES.SHOP_ITEM_DISABLED, "此商品目前已下架", 400);
-    if (item.stock === 0) throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, "此商品已售完", 400);
-
-    // 檢查庫存是否足夠
-    if (item.stock > 0 && quantity > item.stock) {
-      throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, `庫存不足，目前僅剩 ${item.stock} 個`, 400);
-    }
 
     const allowedTiers = item.allowedTiers || [];
     if (allowedTiers.length > 0 && this.playerTierService) {
       const playerHighestTier = await this.playerTierService.resolveHighestTier(memberRoleIds);
       const canBuy = allowedTiers.includes(playerHighestTier ?? "");
       if (!canBuy) throw new AppError(ERROR_CODES.FORBIDDEN, "你目前的等級無法購買此商品", 403);
+
+      const hasVerifiedSupport = await this._hasVerifiedSupportForPlayer(player, discordId);
+      if (playerHighestTier && !hasVerifiedSupport) {
+        throw new AppError(
+          ERROR_CODES.FORBIDDEN,
+          "你的綁定來源目前未偵測到會員 / 訂閱者身分，無法購買此位階限定商品",
+          403
+        );
+      }
+    }
+
+    const claimLimit = this._normalizeClaimLimit(item.claimLimit);
+    if (claimLimit === "once_per_player") {
+      if (quantity !== 1) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此會員獎勵每位玩家只能領取 1 次", 400);
+      }
+      const identityKeys = await this._buildClaimIdentityKeys(player, discordId);
+      if (this.shopClaimRepository?.findByDiscordOrIdentityAndItem) {
+        const existingClaim = await this.shopClaimRepository.findByDiscordOrIdentityAndItem({ discordId, identityKeys, itemId: item.id });
+        if (existingClaim) {
+          throw new AppError(ERROR_CODES.FORBIDDEN, "這個會員獎勵你已經領取過了", 403);
+        }
+      }
+    }
+
+    if (item.stock === 0) throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, "此商品已售完", 400);
+
+    // 檢查庫存是否足夠
+    if (item.stock > 0 && quantity > item.stock) {
+      throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, `庫存不足，目前僅剩 ${item.stock} 個`, 400);
     }
 
     const maxPerMonth = item.maxPerMonth || 0;
@@ -256,6 +388,25 @@ class ShopService {
           isTwoHanded: this._resolveIsTwoHanded({ weaponType: item.weaponType, isTwoHanded: item.isTwoHanded }),
           tier: effectiveTier,
           purchasedAt: new Date().toISOString()
+        });
+      }
+
+      if (claimLimit === "once_per_player" && this.shopClaimRepository?.saveClaim) {
+        const identityKeys = await this._buildClaimIdentityKeys(player, discordId);
+        const claimedAt = new Date().toISOString();
+        await this.shopClaimRepository.saveClaim({
+          id: crypto.randomUUID(),
+          playerId: discordId,
+          discordId,
+          identityKeys,
+          itemId: item.id,
+          itemLibraryId: item.itemLibraryId || null,
+          itemName: item.name,
+          itemTier: effectiveTier,
+          claimLimit,
+          quantity,
+          source: "official_shop",
+          claimedAt
         });
       }
       progress.updatedAt = new Date().toISOString();
@@ -413,18 +564,12 @@ class ShopService {
   }
 
   async sellItem(discordId, entryUuid) {
+    const quote = await this.getSellQuote(discordId, entryUuid, 1);
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
     const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
-    let tier = entry.tier || null;
-    if (!tier && this.itemRepository && entry.itemId) {
-      const libItem = await this.itemRepository.findById(entry.itemId).catch(() => null);
-      tier = libItem?.tier || null;
-    }
-    const price = TIER_SELL_PRICE[tier] ?? null;
-    if (price === null) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品沒有設定階級，無法販售", 400);
     progress.inventory.splice(idx, 1);
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
@@ -432,50 +577,100 @@ class ShopService {
       discordId,
       displayName: discordId,
       currencyType: "gold",
-      amount: price,
+      amount: quote.totalGold,
       source: CURRENCY_SOURCES.ITEM_SELL,
       operator: "shop:sell-item"
     });
-    return { itemName: entry.itemName, tier, price };
+    return { itemName: entry.itemName, tier: quote.tier, price: quote.priceEach };
   }
 
-  async sellItemBulk(discordId, entryUuid, qty) {
+  async getSellQuote(discordId, entryUuid, qty = 1) {
     qty = Math.max(1, Math.floor(Number(qty) || 1));
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
 
     const refEntry = (progress.inventory || []).find(e => e.uuid === entryUuid);
     if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+    if (refEntry.itemType === "job_badge" || refEntry.equipSlot === "job_eq") {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章不可販售", 400);
+    }
 
-    const tier = refEntry.tier || null;
+    // tier 查詢：同 sellItem，entry 沒有就查 library
+    let tier = refEntry.tier ? String(refEntry.tier).toUpperCase() : null;
+    if (!tier && this.itemRepository && refEntry.itemId) {
+      const libItem = await this.itemRepository.findById(refEntry.itemId).catch(() => null);
+      tier = libItem?.tier ? String(libItem.tier).toUpperCase() : null;
+    }
     const price = TIER_SELL_PRICE[tier] ?? null;
     if (price === null) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品沒有設定階級，無法販售", 400);
 
-    // 找出背包中相同 itemId + 相同強化等級的道具
-    const refEnhLv = refEntry.enhanceLevel || 0;
-    const matchingUuids = (progress.inventory || [])
-      .filter(e => e.itemId === refEntry.itemId && (e.enhanceLevel || 0) === refEnhLv)
-      .map(e => e.uuid);
+    const stackCount = refEntry.stackCount || 1;
+    let sellCount = 0;
 
-    const sellCount = Math.min(qty, matchingUuids.length);
+    if (stackCount > 1) {
+      sellCount = Math.min(qty, stackCount);
+    } else {
+      const refEnhLv = refEntry.enhanceLevel || 0;
+      const matchingCount = (progress.inventory || [])
+        .filter(e => e.itemId === refEntry.itemId && (e.enhanceLevel || 0) === refEnhLv)
+        .length;
+      sellCount = Math.min(qty, matchingCount);
+    }
+
     if (sellCount === 0) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中沒有可販售的此物品", 404);
+    return {
+      itemName: refEntry.itemName,
+      tier,
+      priceEach: price,
+      sellCount,
+      totalGold: price * sellCount
+    };
+  }
 
-    const toRemove = new Set(matchingUuids.slice(0, sellCount));
-    progress.inventory = progress.inventory.filter(e => !toRemove.has(e.uuid));
+  async sellItemBulk(discordId, entryUuid, qty) {
+    qty = Math.max(1, Math.floor(Number(qty) || 1));
+    const quote = await this.getSellQuote(discordId, entryUuid, qty);
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+
+    const refEntry = (progress.inventory || []).find(e => e.uuid === entryUuid);
+    if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+
+    const stackCount = refEntry.stackCount || 1;
+    const sellCount = quote.sellCount;
+
+    if (stackCount > 1) {
+      // ── 堆疊型（消耗品）：從 stackCount 扣除 ──
+      const idx = progress.inventory.findIndex(e => e.uuid === entryUuid);
+      if (sellCount >= stackCount) {
+        progress.inventory.splice(idx, 1);          // 全部賣完，移除紀錄
+      } else {
+        progress.inventory[idx].stackCount = stackCount - sellCount;  // 部分賣，扣數量
+      }
+    } else {
+      // ── 非堆疊型（裝備/寶石）：計算同 itemId + enhanceLevel 的筆數 ──
+      const refEnhLv = refEntry.enhanceLevel || 0;
+      const matchingUuids = (progress.inventory || [])
+        .filter(e => e.itemId === refEntry.itemId && (e.enhanceLevel || 0) === refEnhLv)
+        .map(e => e.uuid);
+
+      const toRemove = new Set(matchingUuids.slice(0, sellCount));
+      progress.inventory = progress.inventory.filter(e => !toRemove.has(e.uuid));
+    }
+
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
 
-    const totalGold = price * sellCount;
     await this.rewardService.grantCurrency({
       discordId,
       displayName: discordId,
       currencyType: "gold",
-      amount: totalGold,
+      amount: quote.totalGold,
       source: CURRENCY_SOURCES.ITEM_SELL,
       operator: "shop:sell-item-bulk"
     });
 
-    return { itemName: refEntry.itemName, tier, priceEach: price, sellCount, totalGold };
+    return quote;
   }
 
   async discardItem(discordId, entryUuid) {

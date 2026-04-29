@@ -815,7 +815,7 @@
       <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <label style="font-size:11px;color:var(--muted);">入場費</label>
-          <input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee||0}" style="width:88px;text-align:center;" />
+          <input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee ?? (activeZone === "elite" ? 5000 : 0)}" style="width:88px;text-align:center;" />
           <label style="font-size:11px;color:var(--muted);">EXP</label>
           <input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" placeholder="建議:${sg.exp}" style="width:96px;text-align:center;" />
           <label style="font-size:11px;color:var(--muted);">金幣</label>
@@ -947,7 +947,7 @@
     const container = document.getElementById("monsters-tbody");
     if (!container) return;
     const nextSeq = monsters.length ? Math.max(...monsters.map(m => m.seq||1)) + 1 : 1;
-    const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, maxHp:1000, def:50, entryFee:0, expReward:0, goldReward:0, spawnRate:10, isBoss:false, drops:[], enabled:true };
+    const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, maxHp:1000, def:50, entryFee: activeZone === "elite" ? 5000 : 0, expReward:0, goldReward:0, spawnRate:10, isBoss:false, drops:[], enabled:true };
     const card = buildRow(blank, true);
     container.appendChild(card);
     card.querySelector("[data-field=name]")?.focus();

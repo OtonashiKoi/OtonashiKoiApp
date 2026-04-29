@@ -2,7 +2,7 @@
 
 const {
   MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle,
-  StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle
+  ModalBuilder, TextInputBuilder, TextInputStyle
 } = require("discord.js");
 
 const ENHANCE_GEM_IDS = new Set([
@@ -27,10 +27,13 @@ const PFX = {
   reclaim:      "auction:reclaim:",
   cancel:       "auction:cancel:",
   sell:         "auction:sell",
+  sellTab:      "auction:sell_tab:",
+  sellSubTab:   "auction:sell_subtab:",
   sellItem:     "auction:sell_item:",     // 選好物品後
   sellCurrency: "auction:sell_currency:", // 選好貨幣後
   sellModal:    "auction:sell_modal:",    // 填寫價格 Modal
   sellConfirm:  "auction:sell_confirm:",  // 確認上架
+  sellPage:     "auction:sell_page:",     // 上架物品翻頁
 };
 
 function isAuctionButton(customId) {
@@ -65,6 +68,103 @@ function isSellableItem(item) {
 
 // ─── 拍賣列表面板 ────────────────────────────────────
 const PAGE_SIZE = 8; // 每頁最多 8 件（2 排購買按鈕 × 4，留第 5 排給換頁）
+const SELL_PAGE_SIZE = 4;
+const SELL_MAIN_TABS = [
+  { tab: "all", label: "📦 全部" },
+  { tab: "weapon", label: "⚔️ 武器" },
+  { tab: "armor", label: "🛡️ 防裝" },
+  { tab: "gem", label: "💎 強化石" },
+];
+const SELL_WEAPON_SUBTABS = [
+  { subTab: "all", label: "📦 全部" },
+  { subTab: "melee1", label: "🗡️ 單手" },
+  { subTab: "melee2", label: "🪓 雙手" },
+  { subTab: "ranged", label: "🏹 遠程" },
+  { subTab: "magic", label: "🪄 法系" },
+];
+const SELL_ARMOR_SUBTABS = [
+  { subTab: "all", label: "📦 全部" },
+  { subTab: "head", label: "🪖 頭部" },
+  { subTab: "core", label: "🥋 核心" },
+  { subTab: "shield", label: "🛡️ 盾牌" },
+  { subTab: "accessory", label: "💍 飾品" },
+];
+const SELL_ARMOR_SLOTS = new Set(["shield", "head_top", "head_mid", "head_low", "armor", "garment", "shoes", "accessory_l", "accessory_r"]);
+const SELL_WEAPON_SLOTS = new Set(["weapon"]);
+
+function buildSellItemLabel(item) {
+  const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
+  const stack = item.stackCount ? ` ×${item.stackCount}` : "";
+  return `${item.itemName}${enh}${stack}`.slice(0, 80);
+}
+
+function sellWeaponFamily(entry) {
+  const wt = String(entry?.weaponType || "").toLowerCase();
+  if (!wt) return "all";
+  if (wt.startsWith("staff")) return "magic";
+  if (wt.endsWith("_1h")) return "melee1";
+  if (wt.endsWith("_2h")) return "melee2";
+  if (wt === "bow") return "ranged";
+  return "all";
+}
+
+function matchSellWeaponSubTab(entry, subTab = "all") {
+  if (subTab === "all") return true;
+  return sellWeaponFamily(entry) === subTab;
+}
+
+function matchSellArmorSubTab(entry, subTab = "all") {
+  if (subTab === "all") return true;
+  const slot = String(entry?.equipSlot || "");
+  if (subTab === "head") return ["head_top", "head_mid", "head_low"].includes(slot);
+  if (subTab === "core") return ["armor", "garment", "shoes"].includes(slot);
+  if (subTab === "shield") return slot === "shield";
+  if (subTab === "accessory") return ["accessory_l", "accessory_r"].includes(slot);
+  return false;
+}
+
+function filterSellByTab(inventory, tab = "all", subTab = "all") {
+  const sellable = inventory.filter(isSellableItem);
+  if (tab === "weapon") {
+    return sellable.filter((entry) => SELL_WEAPON_SLOTS.has(entry.equipSlot) && matchSellWeaponSubTab(entry, subTab));
+  }
+  if (tab === "armor") {
+    return sellable.filter((entry) => SELL_ARMOR_SLOTS.has(entry.equipSlot) && matchSellArmorSubTab(entry, subTab));
+  }
+  if (tab === "gem") {
+    return sellable.filter((entry) => ENHANCE_GEM_IDS.has(entry.itemId));
+  }
+  return sellable;
+}
+
+function buildSellMainTabRow(activeTab = "all") {
+  return new ActionRowBuilder().addComponents(
+    SELL_MAIN_TABS.map((d) => new ButtonBuilder()
+      .setCustomId(`${PFX.sellTab}${d.tab}:all:0`)
+      .setLabel(d.label)
+      .setStyle(d.tab === activeTab ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    )
+  );
+}
+
+function buildSellSubTabRows(tab = "all", activeSubTab = "all", page = 0) {
+  const defs = tab === "weapon" ? SELL_WEAPON_SUBTABS : tab === "armor" ? SELL_ARMOR_SUBTABS : [];
+  if (!defs.length) return [];
+  const rows = [];
+  for (let i = 0; i < defs.length; i += 5) {
+    const rowDefs = defs.slice(i, i + 5);
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        rowDefs.map((d) => new ButtonBuilder()
+          .setCustomId(`${PFX.sellSubTab}${tab}:${d.subTab}:${page}`)
+          .setLabel(d.label)
+          .setStyle(d.subTab === activeSubTab ? ButtonStyle.Primary : ButtonStyle.Secondary)
+        )
+      )
+    );
+  }
+  return rows;
+}
 
 async function buildAuctionPanel(filter = {}) {
   const sc = getSC();
@@ -159,6 +259,90 @@ async function buildAuctionPanel(filter = {}) {
   return {
     content: `🏪 **拍賣場** （共 ${auctions.length} 件）${pageNote}\n\n${lines.join("\n")}`,
     components,
+  };
+}
+
+async function buildSellPanel(interaction, opts = {}) {
+  const sc = getSC();
+  const { tab = "all", subTab = "all", page = 0 } = opts;
+  const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) || [];
+  const eligible = await sc.auctionService.checkSellerEligibility(memberRoleIds);
+  if (!eligible) {
+    return { content: "❌ 只有 Tier C 以上的會員才能上架商品。", components: [] };
+  }
+
+  const activeCount = await sc.auctionService.getActiveListingCount(interaction.user.id);
+  if (activeCount >= 3) {
+    return { content: "❌ 你目前已有上架中的商品，最多同時上架 3 件。", components: [] };
+  }
+
+  const progress = await sc.progressRepository.findByPlayerId(interaction.user.id);
+  const inventory = progress?.inventory || [];
+  const tabItems = filterSellByTab(inventory, tab, subTab);
+  if (!tabItems.length) {
+    const emptyLabel =
+      tab === "weapon" ? "武器" :
+      tab === "armor" ? "防裝" :
+      tab === "gem" ? "強化石" : "可上架";
+    return {
+      content: `❌ 背包中沒有${emptyLabel}可上架（職業徽章/稱號不可上架）。`,
+      components: [buildSellMainTabRow(tab)],
+    };
+  }
+
+  const totalPages = Math.max(1, Math.ceil(tabItems.length / SELL_PAGE_SIZE));
+  const safePage = Math.max(0, Math.min(page, totalPages - 1));
+  const pageItems = tabItems.slice(safePage * SELL_PAGE_SIZE, (safePage + 1) * SELL_PAGE_SIZE);
+
+  const rows = [
+    buildSellMainTabRow(tab),
+    ...buildSellSubTabRows(tab, subTab, safePage),
+    new ActionRowBuilder().addComponents(
+      pageItems.map((item) => new ButtonBuilder()
+        .setCustomId(`${PFX.sellItem}${item.uuid}`)
+        .setLabel(buildSellItemLabel(item))
+        .setStyle(ButtonStyle.Primary)
+      )
+    ),
+  ];
+
+  if (totalPages > 1) {
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${PFX.sellPage}${tab}:${subTab}:${safePage - 1}`)
+          .setLabel("◀ 上一頁")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(safePage <= 0),
+        new ButtonBuilder()
+          .setCustomId(`${PFX.sellPage}${tab}:${subTab}:${safePage}`)
+          .setLabel(`${safePage + 1}/${totalPages}`)
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId(`${PFX.sellPage}${tab}:${subTab}:${safePage + 1}`)
+          .setLabel("下一頁 ▶")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(safePage >= totalPages - 1),
+      )
+    );
+  }
+
+  rows.push(
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(PFX.open).setLabel("← 取消").setStyle(ButtonStyle.Secondary)
+    )
+  );
+
+  const tabLabel =
+    tab === "weapon" ? `武器${subTab === "all" ? "" : ` / ${SELL_WEAPON_SUBTABS.find((d) => d.subTab === subTab)?.label || subTab}`}` :
+    tab === "armor" ? `防裝${subTab === "all" ? "" : ` / ${SELL_ARMOR_SUBTABS.find((d) => d.subTab === subTab)?.label || subTab}`}` :
+    tab === "gem" ? "強化石" : "全部";
+  const lines = pageItems.map((item, idx) => `${safePage * SELL_PAGE_SIZE + idx + 1}. **${buildSellItemLabel(item)}**`);
+
+  return {
+    content: `🏷️ **上架商品**\n\n分類：**${tabLabel}**\n請選擇要上架的物品：\n${lines.join("\n")}`,
+    components: rows
   };
 }
 
@@ -381,58 +565,70 @@ async function handleAuctionButton(interaction) {
 
   // ─── 上架流程 ───────────────────────────────────────
 
-  // Step 1: 點「上架商品」→ 顯示背包中可上架的物品（Select Menu）
+  // Step 1: 點「上架商品」→ 顯示背包中可上架的物品（按鈕分頁）
   if (id === PFX.sell) {
     await interaction.deferUpdate();
-    const sc = getSC();
+    const panel = await buildSellPanel(interaction, { tab: "all", subTab: "all", page: 0 });
+    await interaction.editReply(panel);
+    return;
+  }
 
-    // 會員資格檢查
-    const memberRoleIds = interaction.member?.roles?.cache?.map(r => r.id) || [];
-    const eligible = await sc.auctionService.checkSellerEligibility(memberRoleIds);
-    if (!eligible) {
-      await interaction.editReply({ content: "❌ 只有 Tier C 以上的會員才能上架商品。", components: [] });
-      return;
-    }
-
-    // 是否已有上架
-    const activeCount = await sc.auctionService.getActiveListingCount(interaction.user.id);
-    if (activeCount >= 3) {
-      await interaction.editReply({ content: "❌ 你目前已有上架中的商品，最多同時上架 3 件。", components: [] });
-      return;
-    }
-
-    const progress = await sc.progressRepository.findByPlayerId(interaction.user.id);
-    const inventory = progress?.inventory || [];
-
-    // 可上架的物品：裝備 + 強化寶石
-    const sellable = inventory.filter(isSellableItem);
-
-    if (!sellable.length) {
-      await interaction.editReply({ content: "❌ 背包中沒有可上架的裝備或強化石（職業徽章/稱號不可上架）。", components: [] });
-      return;
-    }
-
-    const options = sellable.slice(0, 25).map(item => {
-      const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
-      const stack = item.stackCount ? ` ×${item.stackCount}` : "";
-      const stats = item.equipStats ? ` [${Object.entries(item.equipStats).map(([k, v]) => `${k}+${v}`).join(",")}]` : "";
-      return {
-        label: `${item.itemName}${enh}${stack}`.slice(0, 100),
-        description: stats.slice(0, 100) || "強化寶石",
-        value: item.uuid,
-      };
+  if (id.startsWith(PFX.sellTab)) {
+    await interaction.deferUpdate();
+    const raw = id.slice(PFX.sellTab.length);
+    const parts = raw.split(":");
+    const tab = parts[0] || "all";
+    const page = parseInt(parts[2] || "0", 10);
+    const panel = await buildSellPanel(interaction, {
+      tab,
+      subTab: "all",
+      page: Number.isFinite(page) ? page : 0,
     });
+    await interaction.editReply(panel);
+    return;
+  }
 
+  if (id.startsWith(PFX.sellSubTab)) {
+    await interaction.deferUpdate();
+    const raw = id.slice(PFX.sellSubTab.length);
+    const parts = raw.split(":");
+    const tab = parts[0] || "all";
+    const subTab = parts[1] || "all";
+    const page = parseInt(parts[2] || "0", 10);
+    const panel = await buildSellPanel(interaction, {
+      tab,
+      subTab,
+      page: Number.isFinite(page) ? page : 0,
+    });
+    await interaction.editReply(panel);
+    return;
+  }
+
+  if (id.startsWith(PFX.sellPage)) {
+    await interaction.deferUpdate();
+    const raw = id.slice(PFX.sellPage.length);
+    const parts = raw.split(":");
+    const tab = parts[0] || "all";
+    const subTab = parts[1] || "all";
+    const page = parseInt(parts[2] || "0", 10);
+    const panel = await buildSellPanel(interaction, {
+      tab,
+      subTab,
+      page: Number.isFinite(page) ? page : 0,
+    });
+    await interaction.editReply(panel);
+    return;
+  }
+
+  if (id.startsWith(PFX.sellItem)) {
+    await interaction.deferUpdate();
+    const itemUuid = id.slice(PFX.sellItem.length);
     const row = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(`${PFX.sellItem}select`)
-        .setPlaceholder("選擇要上架的物品")
-        .addOptions(options)
+      new ButtonBuilder().setCustomId(`${PFX.sellCurrency}${itemUuid}:gold`).setLabel("💰 金幣").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`${PFX.sellCurrency}${itemUuid}:diamond`).setLabel("💎 鑽石").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(PFX.open).setLabel("← 取消").setStyle(ButtonStyle.Secondary),
     );
-    const backRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(PFX.open).setLabel("← 取消").setStyle(ButtonStyle.Secondary)
-    );
-    await interaction.editReply({ content: "🏷️ **上架商品**\n\n請選擇要上架的物品：", components: [row, backRow] });
+    await interaction.editReply({ content: "💱 **選擇定價貨幣**\n\n你想用哪種貨幣標價？", components: [row] });
     return;
   }
 
@@ -483,24 +679,6 @@ async function handleAuctionButton(interaction) {
           )
         )
     );
-    return;
-  }
-}
-
-// ─── Select Menu 入口 ────────────────────────────────
-async function handleAuctionSelect(interaction) {
-  const id = interaction.customId;
-
-  // Step 2: 選完物品 → 選擇貨幣
-  if (id === `${PFX.sellItem}select`) {
-    await interaction.deferUpdate();
-    const itemUuid = interaction.values[0];
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`${PFX.sellCurrency}${itemUuid}:gold`).setLabel("💰 金幣").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`${PFX.sellCurrency}${itemUuid}:diamond`).setLabel("💎 鑽石").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(PFX.open).setLabel("← 取消").setStyle(ButtonStyle.Secondary),
-    );
-    await interaction.editReply({ content: "💱 **選擇定價貨幣**\n\n你想用哪種貨幣標價？", components: [row] });
     return;
   }
 }
@@ -708,7 +886,6 @@ async function publishAuctionPanel(interaction) {
 module.exports = {
   isAuctionButton,
   handleAuctionButton,
-  handleAuctionSelect,
   handleAuctionModal,
   handleAuctionSellConfirm,
   publishAuctionPanel,

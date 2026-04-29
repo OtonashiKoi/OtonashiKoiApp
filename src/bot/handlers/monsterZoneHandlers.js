@@ -1,15 +1,15 @@
-﻿"use strict";
+"use strict";
 
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
-const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, getZoneTheme, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, getZoneTheme, getZoneDefaultEntryFee, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
 
 // 這些效果的 params.value 代表百分比（percent），顯示時會特別格式化
 const PERCENT_EFFECT_KEYS = new Set([
   'gold_gain_up', 'exp_gain_up', 'drop_rate_up', 'rare_drop_rate_up', 'monster_reward_up', 'checkin_bonus_up', 'enhance_success_up', 'event_trigger_rate_up'
 ]);
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
-const { calcPlayerStats } = require("../../shared/combatStats");
+const { calcPlayerStats, isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { isEffectConditionMet, collectEquipmentEffects, mergeEquippedFromLibrary, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
@@ -41,6 +41,23 @@ const MAX_ROUNDS = 15;
 const BATTLE_TIMEOUT_MS = 60 * 1000; // 1 分鐘未按開始戰鬥 → 視為逃跑
 const ROUNDS_PER_TICK = 1;           // 每次更新顯示幾回合
 const DEATH_COOLDOWN_MS = 25 * 1000; // 死亡冷卻時間：25 秒
+
+// 金幣池採「怪物原始金幣」與「參戰人數保底」取高。
+// 這能保留傷害占比，同時避免多人共鬥時每個人分到的金幣太薄。
+const GOLD_POOL_RULE_BY_ZONE = {
+  beginner: { minPerPlayer: 80 },
+  normal: { minPerPlayer: 220 },
+  mid: { minPerPlayer: 650 },
+  hard: { minPerPlayer: 1200 },
+  elite: { minPerPlayer: 6000 }
+};
+
+// 低階區戰力同步：高階裝備仍可使用，但單次戰鬥有效輸出會被壓到該區合理範圍。
+const ZONE_DAMAGE_SYNC_RULES = {
+  beginner: { maxHpRatioPerBattle: 0.30 },
+  normal: { maxHpRatioPerBattle: 0.45 }
+};
+const DAMAGE_SYNC_NOTICE = "套用戰力同步：高階裝備與效果會暫時壓制到該區合理範圍。";
 
 // AGI 攻速機制：AGI 1→1500ms，AGI 40→500ms（上限），屬性上限 60
 // 公式：delay = 1500 - ((min(agi, 40) - 1) / 39) * 1000
@@ -120,6 +137,46 @@ function isWorldBossAllPartsDefeated(partsHp) {
   return ["head", "body", "legs"].every((k) => Number(partsHp[k] || 0) <= 0);
 }
 
+function getDynamicGoldPoolFloor(zoneKey, participantCount) {
+  const zoneRule = GOLD_POOL_RULE_BY_ZONE[zoneKey];
+  if (!zoneRule) return 0;
+  const minPerPlayer = Number(zoneRule.minPerPlayer || 0);
+  if (minPerPlayer <= 0) return 0;
+  return Math.round(Math.max(1, participantCount) * minPerPlayer);
+}
+
+function applyZoneDamageSync(zoneKey, startMonsterHp, monsterMaxHp, rawDamage, rawFinalMonsterHp, rawOutcome) {
+  const raw = Math.max(0, Math.round(Number(rawDamage || 0)));
+  const startHp = Math.max(0, Math.round(Number(startMonsterHp || 0)));
+  const rawFinalHp = Math.max(0, Math.round(Number(rawFinalMonsterHp ?? Math.max(0, startHp - raw))));
+  const rule = ZONE_DAMAGE_SYNC_RULES[zoneKey];
+
+  if (!rule || raw <= 0) {
+    return {
+      damage: raw,
+      monsterHp: rawFinalHp,
+      outcome: rawOutcome,
+      applied: false,
+      notice: null
+    };
+  }
+
+  const maxHp = Math.max(1, Math.round(Number(monsterMaxHp || startHp || 1)));
+  const cap = Math.max(1, Math.round(maxHp * Number(rule.maxHpRatioPerBattle || 1)));
+  const damage = Math.min(raw, cap, startHp);
+  const monsterHp = Math.max(0, startHp - damage);
+  const outcome = rawOutcome === "lose" ? "lose" : (monsterHp <= 0 ? "win" : "timeout");
+  const applied = damage < raw;
+
+  return {
+    damage,
+    monsterHp,
+    outcome,
+    applied,
+    notice: applied ? `${DAMAGE_SYNC_NOTICE} 本次有效傷害 ${damage} / 原始傷害 ${raw}。` : DAMAGE_SYNC_NOTICE
+  };
+}
+
 function ensureWorldBossPartState(state, monsterMaxHp) {
   const defaultMax = createWorldBossPartHpTemplate(monsterMaxHp);
   const currentMax = (state && state.worldBossPartsMaxHp && typeof state.worldBossPartsMaxHp === "object")
@@ -160,7 +217,7 @@ const ZONE_PARTICIPATION_GEM_TIER = {
   beginner: 'D', normal: 'D', mid: 'C', hard: 'B', elite: 'A'
 };
 // 參與獎勵寶石掉落率（依品階）
-const GEM_PARTICIPATION_RATE = { D: 0.25, C: 0.15, B: 0.10, A: 0.05 };
+const GEM_PARTICIPATION_RATE = { D: 0.50, C: 0.35, B: 0.15, A: 0.05 };
 
 function getServiceContext() {
   return require("../runtimeContext").serviceContext;
@@ -585,7 +642,7 @@ function buildRewardModifiers(progress) {
 // ──────────────────────────────────────────────
 // 輔助：掉落裝備公告
 // ──────────────────────────────────────────────
-async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
+async function _notifyKillRewards(monsterName, perPidRewards) {
   try {
     const { getBotClient } = require("../runtimeContext");
     const sc = getServiceContext();
@@ -596,14 +653,19 @@ async function _notifyKillRewards(monsterName, perPidRewards, killerDiscordId) {
       if (rewards.gold > 0) lines.push(`💰 金幣 **+${rewards.gold}**`);
       if (rewards.exp > 0) {
         let expLine = `⭐ EXP **+${rewards.exp}**`;
-        if (rewards.levelUps > 0) expLine += `　✨ 升級 ${rewards.levelUps} 次！**Lv.${rewards.newLevel}**`;
+        if (rewards.levelUps > 0) {
+          const detailText = Array.isArray(rewards.levelUpDetails) && rewards.levelUpDetails.length
+            ? rewards.levelUpDetails.map((lv) => `Lv.${lv.level}：${Array.isArray(lv.attrsZh) ? lv.attrsZh.join("、") : ""}`).join("；")
+            : "";
+          expLine += detailText
+            ? `　✨ 升級 ${rewards.levelUps} 次！**Lv.${rewards.newLevel}**\n   ${detailText}`
+            : `　✨ 升級 ${rewards.levelUps} 次！**Lv.${rewards.newLevel}**`;
+        }
         lines.push(expLine);
       }
       if (rewards.drops.length > 0) lines.push(`🎁 道具：**${rewards.drops.join("、")}**`);
       if (!lines.length) continue;
-      const prefix = pid === killerDiscordId
-        ? `⚔️ 你擊倒了 **${monsterName}**！獎勵結算：`
-        : `⚔️ **${monsterName}** 已被擊倒，你的參戰獎勵：`;
+      const prefix = `⚔️ **${monsterName}** 已被擊倒，你的參戰獎勵：`;
       try {
         const user = await client.users.fetch(pid);
         await user.send(`${prefix}\n${lines.join("\n")}`);
@@ -757,13 +819,14 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
       return null;
     });
     if (notifChannel?.isTextBased?.()) {
-      // 過濾卡片和 A 階裝備（卡片不算 A 階裝備）
-      const cardDrops = droppedItemObjects.filter((item) => item.itemType === "card");
-      const aEquipDrops = droppedItemObjects.filter((item) => String(item.tier || "").toUpperCase() === "A" && item.itemType !== "card");
+      // 過濾卡片和 A 階裝備（用 isMonsterCardItem 正確識別怪物卡）
+      const cardDrops = droppedItemObjects.filter((item) => isMonsterCardItem(item));
+      const aEquipDrops = droppedItemObjects.filter((item) => String(item.tier || "").toUpperCase() === "A" && !isMonsterCardItem(item));
 
-      // 發送卡片掉落公告
+      // 發送卡片掉落公告（顯示卡片名稱）
       if (cardDrops.length > 0) {
-        await notifChannel.send(`🃏 卡片掉落  <@${discordId}>`).catch((err) => {
+        const cardNames = cardDrops.map(c => c.name || c.itemName || "怪物卡").join("、");
+        await notifChannel.send(`🃏 **${cardNames}**  <@${discordId}>`).catch((err) => {
           console.error(`[Drop Announce] Failed to send card announcement:`, err?.message);
         });
       }
@@ -1187,27 +1250,33 @@ async function handleEnterBattle(interaction) {
       ? Math.max(0, Number(state?.worldBossPartsHp?.[selectedBossPart] || 0))
       : (state.currentHp != null ? state.currentHp : monster.calc.maxHp);
 
+    const entryFee = Math.max(0, Number(monster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0);
+    if (entryFee > 0) {
+      const wallet = await sc.walletRepository.findByPlayerId(discordId).catch(() => ({ gold: 0 }));
+      const goldOwned = Math.max(0, Number(wallet?.gold) || 0);
+      if (goldOwned < entryFee) {
+        await interaction.editReply({
+          content: `❌ 進入 **${monster.name}** 需要 **${entryFee}** 金幣，但你目前只有 **${goldOwned}** 金幣。`
+        });
+        return;
+      }
+      await sc.rewardService.grantCurrency({
+        discordId,
+        displayName,
+        currencyType: "gold",
+        amount: -entryFee,
+        source: CURRENCY_SOURCES.MONSTER_ENTRY_FEE,
+        operator: "monster_zone:enter_battle"
+      }).catch((err) => {
+        throw err;
+      });
+    }
+
     const progress = cachedProgress ?? await sc.progressRepository.findByPlayerId(discordId);
     const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
     const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, sc.itemRepository);
     const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || []);
-
-    // 入場費
-    if (monster.entryFee > 0) {
-      const wallet = await sc.walletRepository.findByPlayerId(discordId);
-      const gold = wallet?.gold ?? 0;
-      if (gold < monster.entryFee) {
-        await interaction.editReply({
-          content: `❌ 金幣不足！入場費需要 **${monster.entryFee}** 🪙，你目前有 **${gold}** 🪙。`
-        });
-        return;
-      }
-      await sc.rewardService.grantCurrency({
-        discordId, displayName, currencyType: "gold",
-        amount: -monster.entryFee, source: CURRENCY_SOURCES.MONSTER_ENTRY_FEE, operator: "monster_zone"
-      });
-    }
 
     // 建立 session（state: waiting）
     const session = {
@@ -1216,7 +1285,7 @@ async function handleEnterBattle(interaction) {
       monsterId: monster.id, monsterSeq: monster.seq, monsterName: monster.name,
       monsterMaxHp: monster.calc.maxHp, monsterHp, monsterStats: monster.calc,
       playerMaxHp: pStats.maxHp, playerHp: pStats.maxHp, playerStats: pStats,
-      entryFee: monster.entryFee, timeoutId: null,
+      entryFee, timeoutId: null,
       worldBossTargetPart: selectedBossPart,
       worldBossTargetLabel: selectedBossPartProfile.label
     };
@@ -1370,16 +1439,37 @@ async function handleEnterBattle(interaction) {
         battleTargetNote = adjusted.profile?.note || null;
       }
 
+      const monsterHpBeforeBattle = session.monsterHp;
       const { runCombatLoop } = require("../../shared/combatLoop");
-      const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp, combatStats } =
-        runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, {
+      const combatResult =
+        runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
           equipped: currentEquipped,
           inventory: currentProg?.inventory || [],
           partyEffects,
           monsterEquipped: battleMonster?.equipment || {},
           worldBossPhase: session.worldBossPhase || null
         });
-      session.monsterHp = finalMonsterHp;
+      const { roundLogs, finalPlayerHp, combatStats } = combatResult;
+      const zoneDamageSyncApplied = ["beginner", "normal"].includes(zoneKey) && !isOnlyDTierEquipped(currentEquipped);
+      const syncResult = zoneDamageSyncApplied
+        ? applyZoneDamageSync(
+          zoneKey,
+          monsterHpBeforeBattle,
+          battleMonster?.calc?.maxHp || session.monsterStats?.maxHp,
+          combatResult.totalDamage,
+          combatResult.finalMonsterHp,
+          combatResult.outcome
+        )
+        : {
+          damage: Math.max(0, Math.round(Number(combatResult.totalDamage || 0))),
+          monsterHp: Math.max(0, Math.round(Number(combatResult.finalMonsterHp ?? Math.max(0, monsterHpBeforeBattle - combatResult.totalDamage)))),
+          outcome: combatResult.outcome,
+          applied: false,
+          notice: null
+        };
+      const outcome = syncResult.outcome;
+      const totalDamage = syncResult.damage;
+      session.monsterHp = syncResult.monsterHp;
       session.playerHp  = finalPlayerHp;
       const totalTaken = Math.max(0, (session.playerMaxHp || 0) - Math.max(0, finalPlayerHp));
       let battleStateForSettlement = battleState;
@@ -1503,6 +1593,9 @@ async function handleEnterBattle(interaction) {
 
       if (idleSettleNotice) {
         rewardLines = [idleSettleNotice, ...rewardLines];
+      }
+      if (syncResult.notice) {
+        rewardLines = [syncResult.notice, ...rewardLines];
       }
       if (zoneKey === "elite" && battleMonster?.isBoss) {
         rewardLines = [`🎯 鎖定部位：${session.worldBossTargetLabel}${battleTargetNote ? `（${battleTargetNote}）` : ""}`, ...rewardLines];
@@ -1688,16 +1781,37 @@ async function handleStartFight(interaction) {
       session.worldBossTargetLabel = adjusted.profile?.label || session.worldBossTargetLabel || "軀幹";
     }
 
+    const monsterHpBeforeBattle = session.monsterHp;
     const { runCombatLoop } = require("../../shared/combatLoop");
-    const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp, combatStats } =
-      runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, session.monsterHp, MAX_ROUNDS, {
+    const combatResult =
+      runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
         equipped: currentEquipped,
         inventory: currentProg?.inventory || [],
         partyEffects,
         monsterEquipped: monster?.equipment || {},
         worldBossPhase: session.worldBossPhase || null
       });
-    session.monsterHp = finalMonsterHp;
+    const { roundLogs, finalPlayerHp, combatStats } = combatResult;
+    const zoneDamageSyncApplied = ["beginner", "normal"].includes(zoneKey) && !isOnlyDTierEquipped(currentEquipped);
+    const syncResult = zoneDamageSyncApplied
+      ? applyZoneDamageSync(
+        zoneKey,
+        monsterHpBeforeBattle,
+        monster?.calc?.maxHp || session.monsterStats?.maxHp,
+        combatResult.totalDamage,
+        combatResult.finalMonsterHp,
+        combatResult.outcome
+      )
+      : {
+        damage: Math.max(0, Math.round(Number(combatResult.totalDamage || 0))),
+        monsterHp: Math.max(0, Math.round(Number(combatResult.finalMonsterHp ?? Math.max(0, monsterHpBeforeBattle - combatResult.totalDamage)))),
+        outcome: combatResult.outcome,
+        applied: false,
+        notice: null
+      };
+    const outcome = syncResult.outcome;
+    const totalDamage = syncResult.damage;
+    session.monsterHp = syncResult.monsterHp;
     session.playerHp  = finalPlayerHp;
     const totalTaken = Math.max(0, (session.playerMaxHp || 0) - Math.max(0, finalPlayerHp));
     const currentParticipants = Array.isArray(state.participants) ? state.participants : [];
@@ -1781,6 +1895,9 @@ async function handleStartFight(interaction) {
       embedColor = 0x888888;
       rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。\n你造成了 **${totalDamage}** 點傷害。`];
     }
+    if (syncResult.notice) {
+      rewardLines = [syncResult.notice, ...rewardLines];
+    }
     if (zoneKey === "elite" && monster?.isBoss) {
       rewardLines = [`🎯 鎖定部位：${session.worldBossTargetLabel || "軀幹"}${battleTargetNote ? `（${battleTargetNote}）` : ""}`, ...rewardLines];
     }
@@ -1862,7 +1979,6 @@ async function handleDeleteLog(interaction) {
 // 擊殺結算（發獎勵 + 推進怪物 + 重發面板）
 // ──────────────────────────────────────────────
 async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal" }) {
-  console.log(`[MonsterKill] called discordId=${discordId} monster=${monster?.name} zone=${zoneKey}`);
   const sc = getServiceContext();
   const rewardLines = [];
 
@@ -1890,7 +2006,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     return rewardLines;
   }
 
-  // 參戰名單（含擊殺者）
+  // 參戰名單（含本次打到尾段的玩家）
   const participants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
 
   if (zoneKey === "hard" && !monster?.isBoss && sc.worldBossService) {
@@ -1912,7 +2028,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // ── 依傷害比例計算每人分配量 ──
   const rawDmgMap = state.damageMap || {};
-  // 合入本次擊殺者的傷害
+  // 合入本次尾段傷害
   const mergedDmg = { ...rawDmgMap, [discordId]: { name: displayName, damage: (rawDmgMap[discordId]?.damage || 0) + totalDamage } };
   const totalDmgAll = participants.reduce((s, pid) => s + (mergedDmg[pid]?.damage || 0), 0);
   const dmgRatio = (pid) => totalDmgAll > 0 ? (mergedDmg[pid]?.damage || 0) / totalDmgAll : 1 / participants.length;
@@ -1960,10 +2076,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   }
 
   // ── 金幣依比例分配 ──
-  // 實際獎池 = max(goldReward, 參戰人數 × entryFee × 1.3)
-  // 入場費回饋到獎池，保證參戰者平均小賺
-  const entryFeePool = Math.round(participants.length * (monster.entryFee || 0) * 1.15);
-  const effectiveGoldReward = Math.max(monster.goldReward || 0, entryFeePool);
+  // 實際獎池 = max(goldReward, 參戰人數 × 區域每人保底金幣)
+  const dynamicGoldPool = getDynamicGoldPoolFloor(zoneKey, participants.length);
+  const effectiveGoldReward = Math.max(monster.goldReward || 0, dynamicGoldPool);
 
   function buildCappedRatio(cap) {
     if (!cap || cap >= 1) {
@@ -2021,7 +2136,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const rawPct = Math.round(dmgRatio(discordId) * 100);
     const capPct = Math.round(goldRatio.ratio(discordId) * 100);
     const pct = rawPct !== capPct ? `${capPct}%（原${rawPct}%，已截斷）` : `${capPct}%`;
-    const poolNote = entryFeePool > (monster.goldReward || 0) ? `（入場費加成）` : "";
+    const poolNote = dynamicGoldPool > (monster.goldReward || 0) ? `（動態金幣池）` : "";
     const modNote = myMod.goldPct > 0 ? `，個人加成 +${Math.round(myMod.goldPct)}%` : "";
     rewardLines.push(`你造成了 **${totalDamage}** 點傷害。`);
     rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}，共 ${effectiveGoldReward}${poolNote}${modNote}）`);
@@ -2058,10 +2173,11 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         });
         if (perPidRewards[pid]) {
           perPidRewards[pid].exp = share;
-          if (expResult.levelUps > 0) {
-            perPidRewards[pid].levelUps = expResult.levelUps;
-            perPidRewards[pid].newLevel = expResult.progress?.level ?? 0;
-          }
+        if (expResult.levelUps > 0) {
+          perPidRewards[pid].levelUps = expResult.levelUps;
+          perPidRewards[pid].newLevel = expResult.progress?.level ?? 0;
+          perPidRewards[pid].levelUpDetails = expResult.levelUpDetails || [];
+        }
         }
         if (expResult.levelUps > 0) {
           const prevLevel = (expResult.progress?.level ?? 0) - expResult.levelUps;
@@ -2069,7 +2185,12 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           _announceLevelMilestone(sc, pid, pidName, prevLevel, expResult.progress.level).catch(() => {});
         }
         if (pid === discordId && expResult.levelUps > 0) {
-          killerLvLine = ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}`;
+          const detailText = Array.isArray(expResult.levelUpDetails) && expResult.levelUpDetails.length
+            ? expResult.levelUpDetails.map((lv) => `Lv.${lv.level}：${Array.isArray(lv.attrsZh) ? lv.attrsZh.join("、") : ""}`).join("；")
+            : "";
+          killerLvLine = detailText
+            ? ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}\n   ${detailText}`
+            : ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}`;
         }
       } catch (e) {
         console.error(`[MonsterZone] grantExp failed for ${pid}`, e?.message || e);
@@ -2323,7 +2444,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
     _republishPanel(sc, zoneKey, monster, bossResetState.currentHp, 0, {}, null, bossResetState.worldBossPartsHp).catch(() => {});
 
-    _notifyKillRewards(monster.name, perPidRewards, discordId).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
+    _notifyKillRewards(monster.name, perPidRewards).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
 
     try {
       const pushReward = sc._pushRewardToPlayer;
@@ -2464,7 +2585,6 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       if (pickedMonster) {
         await _republishPanel(sc, zoneKey, pickedMonster, pickedMonster.calc.maxHp, 0, {}).catch((e) => console.error("[Panel] monster publish failed:", e?.message || e));
         if (pickedMonster.isBoss) {
-          console.log(`[BOSS] next monster "${pickedMonster.name}" is a boss, broadcasting...`);
           _broadcastBossSpawn(sc, zoneKey, pickedMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
         }
       } else {
@@ -2517,7 +2637,6 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       if (nextMonster) {
         await _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}).catch((e) => console.error("[Panel] next monster publish failed:", e?.message || e));
         if (nextMonster.isBoss) {
-          console.log(`[BOSS] next monster "${nextMonster.name}" is a boss, broadcasting...`);
           _broadcastBossSpawn(sc, zoneKey, nextMonster).catch((e) => console.error("[BOSS] top-level catch:", e));
         }
       } else {
@@ -2527,7 +2646,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   }
 
   // 通知參戰獎勵（DM）
-  _notifyKillRewards(monster.name, perPidRewards, discordId).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
+  _notifyKillRewards(monster.name, perPidRewards).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
 
   // 推送 SSE reward 事件給所有參戰者（web 端通知紀錄）
   try {
@@ -2996,7 +3115,6 @@ const IDLE_TAUNTS = [
 async function _doIdleRotate(sc, zoneKey) {
   try {
     if (process.env.DISABLE_AUTO_ROTATE === '1') {
-      console.log(`[IdleRotate] disabled by DISABLE_AUTO_ROTATE`);
       return;
     }
     let state = await sc.monsterService.getState(zoneKey);
@@ -3031,10 +3149,8 @@ async function _doIdleRotate(sc, zoneKey) {
       if (wbState?.battleStartedAt) {
         // 有人曾開戰但沒打完，視為失敗，重置解鎖進度
         await sc.worldBossService.markBossFailedTimeout().catch(() => {});
-        console.log(`[IdleRotate] elite world boss failed — parts & unlock progress cleared`);
       } else {
         // 純閒置，只重置部位 HP，不動解鎖進度
-        console.log(`[IdleRotate] elite world boss idle reset — parts HP only`);
       }
     }
 
@@ -3060,7 +3176,6 @@ async function _doIdleRotate(sc, zoneKey) {
       const taunt = IDLE_TAUNTS[Math.floor(Math.random() * IDLE_TAUNTS.length)];
       await channel.send(taunt(monster.name));
     }
-    console.log(`[IdleRotate] zone=${zoneKey} rotated from ${monster.name} → ${next.name}`);
   } catch (e) {
     console.error(`[IdleRotate] zone=${zoneKey} error:`, e.message);
   }
@@ -3091,7 +3206,6 @@ async function checkIdleRotate() {
 
 function startIdleRotateTimer() {
   setInterval(checkIdleRotate, 60 * 1000); // 每分鐘檢查一次
-  console.log("[IdleRotate] timer started (10min idle → auto rotate)");
 }
 
 async function refreshEliteWorldBossPanel() {

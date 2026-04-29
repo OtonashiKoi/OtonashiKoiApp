@@ -8,6 +8,7 @@ const { sendComment } = require("../onecommeSender");
 const { consumeCode } = require("../bindingStore");
 const { recordComment } = require("../../services/stream/streamPresence");
 const { joinQueue } = require("../../services/mahjong/mahjongQueue");
+const { CURRENCY_SOURCES } = require("../../shared/sources");
 
 // 可自訂偵測的指令關鍵字
 const STREAM_COMMANDS = {
@@ -37,6 +38,207 @@ function normalizePlatform(service, userId) {
   return s;
 }
 
+function normalizeStreamName(name) {
+  return String(name || "").trim().toLowerCase();
+}
+
+function summarizeBadges(badges) {
+  if (!badges) return "none";
+  if (Array.isArray(badges)) {
+    return badges
+      .map((badge) => {
+        if (!badge) return "";
+        if (typeof badge === "string") return badge;
+        if (typeof badge === "object") return badge.name || badge.label || badge.id || badge.type || "";
+        return String(badge);
+      })
+      .filter(Boolean)
+      .join("|") || "none";
+  }
+  if (typeof badges === "object") {
+    return Object.entries(badges)
+      .map(([key, value]) => {
+        if (value === true) return key;
+        if (value && typeof value === "object") return value.name || value.label || value.id || key;
+        return `${key}:${String(value)}`;
+      })
+      .filter(Boolean)
+      .join("|") || "none";
+  }
+  return String(badges);
+}
+
+function extractBadgeLabels(badges) {
+  if (!badges) return [];
+  if (Array.isArray(badges)) {
+    return badges
+      .map((badge) => {
+        if (!badge) return "";
+        if (typeof badge === "string") return badge;
+        if (typeof badge === "object") return badge.label || badge.title || badge.name || badge.id || badge.type || "";
+        return String(badge);
+      })
+      .filter(Boolean);
+  }
+  if (typeof badges === "object") {
+    return Object.values(badges)
+      .map((badge) => {
+        if (!badge) return "";
+        if (typeof badge === "string") return badge;
+        if (typeof badge === "object") return badge.label || badge.title || badge.name || badge.id || badge.type || "";
+        return String(badge);
+      })
+      .filter(Boolean);
+  }
+  return [String(badges)];
+}
+
+function inferOneCommeMembershipTier(raw = {}) {
+  if (!raw || raw.isMember !== true) return null;
+  const badgesText = summarizeBadges(raw.badges);
+  if (/#3\b/.test(badgesText)) {
+    return { tier: "B", label: "鯉長", badge: "#3" };
+  }
+  return null;
+}
+
+function inferStreamSupportSnapshot(comment) {
+  const raw = comment?.raw || {};
+  const platform = normalizePlatform(comment?.service, comment?.userId || raw.userId || "");
+  const badgeLabels = extractBadgeLabels(raw.badges);
+  const badgeText = badgeLabels.join("|");
+
+  if (platform === "youtube") {
+    const isMember = raw.isMember === true || /會員/.test(badgeText);
+    return {
+      platform,
+      supportKind: isMember ? "member" : null,
+      supportLabel: badgeText || (isMember ? "member" : null),
+      supportDetected: isMember
+    };
+  }
+
+  if (platform === "twitch") {
+    const isSubscriber = raw.subscriber === "1" || /訂閱者/i.test(badgeText);
+    return {
+      platform,
+      supportKind: isSubscriber ? "subscriber" : null,
+      supportLabel: badgeText || (isSubscriber ? "subscriber" : null),
+      supportDetected: isSubscriber
+    };
+  }
+
+  return {
+    platform,
+    supportKind: null,
+    supportLabel: badgeText || null,
+    supportDetected: false
+  };
+}
+
+function parsePositiveNumber(value) {
+  const text = String(value ?? "").replace(/,/g, "");
+  const match = text.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return 0;
+  const n = Number(match[1]);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function inferDonationReward(comment) {
+  const raw = comment?.raw || {};
+  const platform = normalizePlatform(comment?.service, comment?.userId || raw.userId || "");
+  if (platform !== "youtube") return null; // 目前先只做 YouTube 斗內
+  if (raw.isTest === true || raw.test === true) return null;
+
+  const rawType = String(raw.type || raw.payload?.type || "").toLowerCase();
+  const amountCandidates = [
+    raw.amount,
+    raw.amountValue,
+    raw.purchaseAmount,
+    raw.price
+  ];
+  const amount = amountCandidates.map(parsePositiveNumber).find((n) => n > 0) || 0;
+  const currency = String(raw.currency || "").toUpperCase();
+  const displayString = String(raw.displayString || raw.comment || raw.message || comment?.text || "");
+  const textForCurrency = `${currency} ${displayString}`.toUpperCase();
+  const looksLikeDonation =
+    rawType === "superchat" ||
+    raw.isSuperChat === true ||
+    raw.isPaid === true ||
+    raw.hasDonation === true ||
+    raw.isDonation === true ||
+    amount > 0 ||
+    /NT\$|TWD|NTD|新台幣|台幣/.test(textForCurrency);
+
+  if (!looksLikeDonation) return null;
+
+  const looksLikeTwd =
+    /NT\$|TWD|NTD|新台幣|台幣/.test(textForCurrency) ||
+    currency === "TWD" ||
+    currency === "NTD" ||
+    currency === "NT$" ||
+    currency === "TWD$" ||
+    rawType === "superchat" ||
+    raw.isSuperChat === true ||
+    raw.isPaid === true ||
+    raw.hasDonation === true ||
+    raw.isDonation === true ||
+    amount > 0;
+
+  if (!looksLikeTwd) return null;
+
+  const twdAmount = amount > 0 ? amount : parsePositiveNumber(displayString);
+  if (!twdAmount) return null;
+
+  const diamondAmount = Math.floor(twdAmount / 100);
+  if (diamondAmount <= 0) return null;
+
+  const sourceId = String(
+    raw._id ||
+    raw.hash ||
+    raw.createdAtTimestamp ||
+    raw.createdAt ||
+    comment?.id ||
+    ""
+  ).trim();
+
+  return {
+    platform,
+    platformUserId: comment?.userId || raw.userId || "",
+    displayName: comment?.name || raw.displayName || raw.name || "未知用戶",
+    twdAmount,
+    diamondAmount,
+    sourceRef: `youtube:${sourceId || `${comment?.userId || raw.userId || "unknown"}:${twdAmount}:${displayString}`}`,
+    donationLabel: raw.displayString || raw.message || displayString
+  };
+}
+
+async function findPlayersByDisplayName(displayName) {
+  const target = normalizeStreamName(displayName);
+  if (!target) return [];
+  const players = await serviceContext.playerRepository.listAll();
+  return players.filter((player) => {
+    if (!player || !player.discordId) return false;
+    if (normalizeStreamName(player.displayName) === target) return true;
+    if (Array.isArray(player.streamAliases) && player.streamAliases.some((alias) => normalizeStreamName(alias) === target)) return true;
+    return false;
+  });
+}
+
+async function sendDiscordDm(discordId, content) {
+  try {
+    const client = getBotClient();
+    if (!client?.isReady()) return false;
+    const user = await client.users.fetch(discordId).catch(() => null);
+    if (!user) return false;
+    await user.send(content);
+    return true;
+  } catch (error) {
+    console.warn(`[Stream] DM 發送失敗 (${discordId}):`, error?.message || error);
+    return false;
+  }
+}
+
 /**
  * 處理打卡指令
  * 先以平台 userId 查玩家；找不到則退而求其次用 displayName，並自動綁定 userId
@@ -47,7 +249,6 @@ async function handleCheckin(comment) {
   const service = comment.service;
   const platformUserId = comment.userId || "";
   const platform = normalizePlatform(service, platformUserId);
-  console.log(`[Stream] ⭐ 打卡 | ${service} | ${displayName} | "${comment.text}"`);
 
   try {
     let matched = null;
@@ -59,28 +260,41 @@ async function handleCheckin(comment) {
 
     // 2. 找不到則退回 displayName 或 streamAliases 比對
     if (!matched) {
-      const players = await serviceContext.playerRepository.listAll();
-      const nameLower = displayName.toLowerCase();
-      matched = players.find((p) => {
-        if (p.displayName && p.displayName.toLowerCase() === nameLower) return true;
-        if (Array.isArray(p.streamAliases) && p.streamAliases.some((a) => a.toLowerCase() === nameLower)) return true;
-        return false;
-      }) || null;
+      const nameMatches = await findPlayersByDisplayName(displayName);
+      if (nameMatches.length === 1) {
+        matched = nameMatches[0];
+      } else if (nameMatches.length > 1) {
+        console.warn(`[Stream] 顯示名稱比對到多個玩家，略過自動綁定/發獎：${displayName}`);
+        return;
+      }
 
       // 3. 找到後自動綁定 platformUserId（供下次直接比對）
       if (matched && platformUserId && platform !== "unknown") {
-        const existing = matched.externalIds || {};
-        if (!existing[platform]) {
-          matched.externalIds = { ...existing, [platform]: platformUserId };
-          matched.updatedAt = new Date().toISOString();
-          await serviceContext.playerRepository.save(matched);
-          console.log(`[Stream] 🔗 自動綁定 ${displayName} ↔ ${platform}:${platformUserId}`);
+        const bindingRepo = serviceContext.streamAccountBindingRepository;
+        const existingBinding = bindingRepo
+          ? await bindingRepo.findByPlatformAndUserId(platform, platformUserId).catch(() => null)
+          : null;
+        if (!existingBinding) {
+          try {
+            await bindingRepo?.save({
+              platform,
+              platformUserId,
+              discordId: matched.discordId,
+              displayName: matched.displayName || displayName,
+              linkedAt: new Date().toISOString()
+            });
+          } catch (bindErr) {
+            if (bindErr?.code === 11000) {
+              console.warn(`[Stream] 自動綁定衝突：${platform}:${platformUserId} 已被其他 Discord 使用`);
+            } else {
+              console.warn(`[Stream] 自動綁定失敗：${bindErr?.message || bindErr}`);
+            }
+          }
         }
       }
     }
 
     if (!matched) {
-      console.log(`[Stream] 未找到連結的玩家（displayName=${displayName}），無法自動發獎。`);
       return;
     }
 
@@ -97,17 +311,14 @@ async function handleCheckin(comment) {
         const guild = await client.guilds.fetch(config.discord.guildId);
         const member = await guild.members.fetch(discordId).catch(() => null);
         if (!member) {
-          console.log(`[Stream] 找不到 guild member (id=${discordId})，略過發獎。`);
           return;
         }
 
         const allowed = await serviceContext.accessControlService.isDiscordMemberWhitelisted(member);
         if (!allowed) {
-          console.log(`[Stream] ${displayName} 並非設定的玩家身分組成員，略過發獎。`);
           return;
         }
       } else {
-        console.log('[Stream] Bot 未就緒或未設定 guildId，跳過 Discord 身分組檢查，將繼續發獎（請留意風險）。');
       }
 
       const result = await serviceContext.checkinService.handleMessage({
@@ -116,12 +327,13 @@ async function handleCheckin(comment) {
         channelId: comment.service,
         messageId: comment.id || "",
         content: comment.text,
-        occurredAt: new Date().toISOString()
+        occurredAt: new Date().toISOString(),
+        platform,
+        platformUserId
       });
 
       if (result.ok) {
         const grantAmount = result.checkin.rewardDetail.amount;
-        console.log(`[Stream] 打卡成功並發放 ${grantAmount} gold 給 ${displayName}`);
         // SSE 推送打卡獎勵到 web 端通知
         try {
           if (typeof serviceContext._pushRewardToPlayer === "function") {
@@ -150,7 +362,6 @@ async function handleCheckin(comment) {
             if (user) {
               try {
                 await user.send(`✅ 打卡成功！💰 金幣 **+${grantAmount}**`);
-                console.log(`[Stream] DM 已發送給 ${displayName} (${discordId})`);
               } catch (sendErr) {
                 console.warn(`[Stream] DM send 失敗 (${discordId}):`, sendErr?.message, sendErr?.code);
               }
@@ -171,12 +382,18 @@ async function handleCheckin(comment) {
           console.warn("[Stream] 無法回覆直播留言：", e && e.message ? e.message : e);
         }
       } else if (result.reason === "already_checked_in") {
-        console.log(`[Stream] ${displayName} 今日已打卡，略過發獎。`);
         try {
           const targetService = (platform === "youtube") ? "yt" : (platform === "twitch") ? "twitch" : comment.service || "stream";
           await sendComment({ service: targetService, displayName, comment: `${displayName} 今天打卡過囉` });
         } catch (e) {
           console.warn("[Stream] 無法回覆已打卡訊息：", e && e.message ? e.message : e);
+        }
+      } else if (result.reason === "already_checked_in_platform") {
+        try {
+          const targetService = (platform === "youtube") ? "yt" : (platform === "twitch") ? "twitch" : comment.service || "stream";
+          await sendComment({ service: targetService, displayName, comment: `${displayName} 這個帳號今天已經打卡過囉` });
+        } catch (e) {
+          console.warn("[Stream] 無法回覆平台已打卡訊息：", e && e.message ? e.message : e);
         }
       }
     } catch (err) {
@@ -191,40 +408,138 @@ async function handleCheckin(comment) {
  * 處理 !綁定 CODE 指令
  */
 async function handleStreamBind(comment) {
-  const rawCode = comment.text.replace(/^!+/, "").replace(/^綁定\s+/i, "").trim();
+  const normalizedText = comment.text.replace(/^!+/, "").trim();
+  const isVerifyCommand = /^驗證(\s|$)/i.test(normalizedText);
+  const rawCode = normalizedText.replace(/^(綁定|驗證)\s+/i, "").trim();
   const displayName = comment.name;
   const platformUserId = comment.userId || "";
   const platform = normalizePlatform(comment.service, platformUserId);
-  console.log(`[Stream] 🔗 綁定請求 | ${comment.service} | ${displayName} | code:${rawCode}`);
 
   const targetService = platform === "youtube" ? "yt" : platform === "twitch" ? "twitch" : comment.service;
-
+  const platformLabel = platform === "youtube" ? "YouTube" : platform === "twitch" ? "Twitch" : platform;
+  const actionLabel = isVerifyCommand ? "驗證" : "綁定";
   const discordId = consumeCode(rawCode);
   if (!discordId) {
-    try { await sendComment({ service: targetService, displayName, comment: `${displayName} 綁定碼無效或已過期，請重新在 Discord 取得綁定碼。` }); } catch { /* ignore */ }
+    try { await sendComment({ service: targetService, displayName, comment: `${displayName} ${actionLabel}碼無效或已過期，請重新在 Discord 取得驗證碼。` }); } catch { /* ignore */ }
     return;
   }
+
+  const notifyFailure = async (message, dmMessage) => {
+    try {
+      await sendComment({ service: targetService, displayName, comment: `${displayName} ${message}` });
+    } catch { /* ignore */ }
+    try {
+      if (discordId) {
+        await sendDiscordDm(discordId, dmMessage || `❌ ${message}`);
+      }
+    } catch { /* ignore */ }
+  };
 
   const player = await serviceContext.playerRepository.findByDiscordId(discordId);
   if (!player) {
-    try { await sendComment({ service: targetService, displayName, comment: `${displayName} 找不到對應的玩家資料。` }); } catch { /* ignore */ }
+    await notifyFailure("找不到對應的玩家資料。", "❌ 找不到對應的玩家資料。");
     return;
   }
 
-  // 儲存 externalIds（有 userId 才存）
-  const externalIds = { ...player.externalIds || {} };
-  if (platformUserId && platform !== "unknown") {
-    externalIds[platform] = platformUserId;
+  let playerTierAtLink = null;
+  let memberRoleIdsAtLink = [];
+  const supportSnapshot = inferStreamSupportSnapshot(comment);
+  try {
+    const inferredStreamTier = inferOneCommeMembershipTier(comment.raw || {});
+    if (inferredStreamTier) {
+      playerTierAtLink = inferredStreamTier.tier;
+    }
+
+    const client = getBotClient();
+    if (client?.isReady() && config.discord.guildId) {
+      const guild = await client.guilds.fetch(config.discord.guildId);
+      const member = await guild.members.fetch(discordId).catch(() => null);
+      if (member) {
+        memberRoleIdsAtLink = member.roles.cache.map((r) => r.id);
+        const discordTier = await serviceContext.playerTierService.resolveHighestTier(memberRoleIdsAtLink).catch(() => null);
+        if (!playerTierAtLink && discordTier) playerTierAtLink = discordTier;
+      } else {
+      }
+    } else {
+    }
+  } catch (tierErr) {
+    console.warn("[Stream] 綁定時解析會員等級失敗：", tierErr?.message || tierErr);
   }
 
-  // 儲存 streamAliases（displayName 別名，供 unknown 平台比對使用）
-  const aliases = new Set(player.streamAliases || []);
-  aliases.add(displayName);
+  const bindingRepo = serviceContext.streamAccountBindingRepository;
+  if (!bindingRepo) {
+    await notifyFailure("綁定服務尚未就緒，請稍後再試。", "❌ 綁定服務尚未就緒，請稍後再試。");
+    return;
+  }
 
-  player.externalIds = externalIds;
-  player.streamAliases = [...aliases];
-  player.updatedAt = new Date().toISOString();
-  await serviceContext.playerRepository.save(player);
+  const existingForDiscord = await bindingRepo.findByDiscordAndPlatform(discordId, platform).catch(() => null);
+  if (existingForDiscord && existingForDiscord.platformUserId !== platformUserId) {
+    await notifyFailure(`你的 ${platformLabel} 已經綁定過，無法更換帳號。`, `❌ 你的 ${platformLabel} 已經綁定過，無法更換帳號。`);
+    return;
+  }
+
+  if (platformUserId && platform !== "unknown") {
+    const existingBinding = await bindingRepo.findByPlatformAndUserId(platform, platformUserId).catch(() => null);
+    if (existingBinding && existingBinding.discordId !== discordId) {
+      await notifyFailure("該帳號已綁定其他DC", "❌ 該帳號已綁定其他DC");
+      return;
+    }
+  }
+
+  if (existingForDiscord && existingForDiscord.platformUserId === platformUserId) {
+    try {
+      await bindingRepo.save({
+        platform,
+        platformUserId,
+        discordId,
+        displayName: player.displayName || displayName,
+        linkedAt: existingForDiscord.linkedAt || new Date().toISOString(),
+        playerTierAtLink,
+        memberRoleIdsAtLink,
+        linkedSupportAtLink: supportSnapshot.supportDetected,
+        linkedSupportKindAtLink: supportSnapshot.supportKind,
+        linkedSupportBadgeLabelsAtLink: extractBadgeLabels(comment.raw?.badges)
+      });
+    } catch (err) {
+      console.warn("[Stream] 綁定更新失敗（同帳號覆寫）:", err?.message || err);
+    }
+    try {
+      await sendComment({ service: targetService, displayName, comment: `${displayName} ${platformLabel} 帳號已${actionLabel}完成。` });
+    } catch { /* ignore */ }
+    try {
+      await sendDiscordDm(discordId, `✅ 你的 ${platformLabel} 已經${actionLabel}完成。`);
+    } catch { /* ignore */ }
+    return;
+  }
+
+  if (!platformUserId || platform === "unknown") {
+    await notifyFailure("目前無法辨識這個平台帳號，請確認你是從 YouTube / Twitch 綁定。", "❌ 目前無法辨識這個平台帳號，請確認你是從 YouTube / Twitch 綁定。");
+    return;
+  }
+
+  try {
+    await bindingRepo.save({
+      platform,
+      platformUserId,
+      discordId,
+      displayName: player.displayName || displayName,
+      linkedAt: existingForDiscord?.linkedAt || new Date().toISOString(),
+      playerTierAtLink,
+      memberRoleIdsAtLink,
+      linkedSupportAtLink: supportSnapshot.supportDetected,
+      linkedSupportKindAtLink: supportSnapshot.supportKind,
+      linkedSupportBadgeLabelsAtLink: extractBadgeLabels(comment.raw?.badges)
+    });
+  } catch (err) {
+    if (err?.code === 11000) {
+      await notifyFailure("該帳號已綁定其他DC", "❌ 該帳號已綁定其他DC");
+      return;
+    }
+    console.error("[Stream] 綁定寫入失敗：", err?.message || err);
+    await notifyFailure("綁定寫入失敗，請稍後再試。", "❌ 綁定寫入失敗，請稍後再試。");
+    return;
+  }
+
   try {
     const questService = serviceContext.questService || serviceContext.weeklyQuestService;
     await questService.recordProgress(discordId, "stream_bind_count", 1);
@@ -232,10 +547,49 @@ async function handleStreamBind(comment) {
     console.error("[Quest] stream bind recordProgress error:", e.message);
   }
 
-  console.log(`[Stream] ✅ 綁定成功 ${displayName} (${platform}:${platformUserId || "無userId"}) ↔ discordId:${discordId}`);
   try {
-    await sendComment({ service: targetService, displayName, comment: `${displayName} 帳號綁定成功！之後打卡就能自動識別囉 🎉` });
+    await sendComment({ service: targetService, displayName, comment: `${displayName} 帳號已${actionLabel}成功！之後打卡就能自動識別囉 🎉` });
   } catch { /* ignore */ }
+  try {
+    await sendDiscordDm(discordId, `✅ 你的 ${platformLabel} 已${actionLabel}成功！`);
+  } catch { /* ignore */ }
+}
+
+/**
+ * 處理直播斗內（目前先支援 YouTube SuperChat）
+ * @param {{ id: string, name: string, userId: string, text: string, service: string, raw: object }} comment
+ */
+async function handleDonation(comment) {
+  const donation = inferDonationReward(comment);
+  if (!donation) return false;
+
+  const bindingPlayer = await serviceContext.playerRepository.findByExternalId(donation.platform, donation.platformUserId).catch(() => null);
+  if (!bindingPlayer?.discordId) {
+    console.log(`[Donation] 未找到綁定玩家，略過發放：platform=${donation.platform} userId=${donation.platformUserId} amount=${donation.twdAmount}`);
+    return false;
+  }
+
+  const displayName = bindingPlayer.displayName || donation.displayName;
+  try {
+    const result = await serviceContext.rewardService.grantCurrency({
+      discordId: bindingPlayer.discordId,
+      displayName,
+      currencyType: "diamond",
+      amount: donation.diamondAmount,
+      source: CURRENCY_SOURCES.DONATION_REWARD,
+      sourceRef: donation.sourceRef,
+      operator: "stream:donation"
+    });
+
+    const duplicate = Boolean(result.duplicated);
+    if (!duplicate) {
+      console.log(`[Donation] 發放完成 ${displayName} (${donation.platform}:${donation.platformUserId}) TWD=${donation.twdAmount} -> 💎 ${donation.diamondAmount}`);
+    }
+    return true;
+  } catch (err) {
+    console.error("[Donation] 發放失敗：", err?.message || err);
+    return false;
+  }
 }
 
 /**
@@ -243,7 +597,6 @@ async function handleStreamBind(comment) {
  * @param {{ name: string, text: string, service: string }} comment
  */
 async function handleQuery(comment) {
-  console.log(`[Stream] 🔍 查詢指令 | ${comment.service} | ${comment.name} | "${comment.text}"`);
   // TODO: 未來可結合 Discord 用戶對應機制，返回玩家資料到 OBS 或 Discord
 }
 
@@ -260,14 +613,19 @@ async function handleStreamComment(comment) {
     } catch (_) {}
   }
 
-  // 全部留言 log（方便監控）
-  console.log(`[Stream] 💬 ${comment.service} | ${comment.name}：${comment.text}`);
-
   // 指令偵測
   const rawText = comment.text || "";
   const text = rawText.trim();
   const stripped = text.replace(/^!+/, "");
   const textLower = stripped.toLowerCase();
+
+  // 斗內事件：先處理，再進一般指令判定
+  if (await handleDonation(comment).catch((err) => {
+    console.error("[Donation] 處理失敗：", err?.message || err);
+    return false;
+  })) {
+    return;
+  }
 
   // 日麻排隊：++
   if (text === "++" || text === "＋＋") {
@@ -291,9 +649,14 @@ async function handleStreamComment(comment) {
   }
 
   // 綁定指令：!綁定 CODE
-  if (textLower.startsWith("綁定 ") || textLower.startsWith("綁定\t")) {
+  if (
+    textLower.startsWith("綁定 ") ||
+    textLower.startsWith("綁定\t") ||
+    textLower.startsWith("驗證 ") ||
+    textLower.startsWith("驗證\t")
+  ) {
     await handleStreamBind(comment).catch((err) =>
-      console.error("[Stream] 綁定處理失敗：", err.message)
+      console.error("[Stream] 綁定/驗證處理失敗：", err.message)
     );
     return;
   }

@@ -3,6 +3,14 @@ const { expToNextLevel, MAX_LEVEL } = require("../../shared/progression");
 const { isValidExpSource } = require("../../shared/sources");
 
 const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
+const ATTR_LABEL_ZH = {
+  str: "力量 STR",
+  agi: "敏捷 AGI",
+  vit: "體質 VIT",
+  int: "智力 INT",
+  dex: "靈巧 DEX",
+  luk: "幸運 LUK"
+};
 const CAS_MAX_RETRIES = 8;
 
 // 玩家級別的操作鎖，防止同一玩家的並發 grantExp 導致 CAS 衝突
@@ -60,21 +68,29 @@ class ProgressService {
       next.exp = (next.exp || 0) + amount;
 
       let levelUps = 0;
+      const levelUpDetails = [];
       while (next.level < MAX_LEVEL && next.exp >= expToNextLevel(next.level)) {
         next.exp -= expToNextLevel(next.level);
         next.level += 1;
         levelUps += 1;
+        const gainedAttrs = [];
         // 升級自動隨機 +1 兩次（各自獨立抽屬性）
         for (let i = 0; i < 2; i++) {
           const randKey = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
           next.attributes[randKey] = (next.attributes[randKey] || 1) + 1;
+          gainedAttrs.push(randKey);
         }
+        levelUpDetails.push({
+          level: next.level,
+          attrs: gainedAttrs,
+          attrsZh: gainedAttrs.map((key) => ATTR_LABEL_ZH[key] || key.toUpperCase())
+        });
       }
       if (next.level >= MAX_LEVEL) next.exp = 0;
       next.updatedAt = new Date().toISOString();
 
       const saved = await this.progressRepository.saveIfUnchanged(next, prevUpdatedAt);
-      if (saved) return { player, progress: next, levelUps };
+      if (saved) return { player, progress: next, levelUps, levelUpDetails };
 
       // 文件已被其他操作修改，等一下重試
       if (attempt < CAS_MAX_RETRIES - 1) {

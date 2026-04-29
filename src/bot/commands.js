@@ -12,10 +12,10 @@ const {
   handlePublishPersonalRoom,
   handleUnlockPersonalRoom
 } = require("./handlers/publishHandlers");
-const { handleCoinShopButton, isCoinShopButton, handleShopSelect, isCoinShopSelect, handleQuantityModalSubmit, isCoinShopModal } = require("./handlers/coinShopHandlers");
+const { handleCoinShopButton, isCoinShopButton, handleQuantityModalSubmit, isCoinShopModal } = require("./handlers/coinShopHandlers");
 const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal, isNpcDialogButton, handleNpcDialog } = require("./handlers/monsterZoneHandlers");
 const { handleIdleZoneButton, isIdleZoneButton, handleIdleZoneSelect, isIdleZoneSelect } = require("./handlers/idleZoneHandlers");
-const { isAuctionButton, handleAuctionButton, handleAuctionSelect, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
+const { isAuctionButton, handleAuctionButton, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -187,16 +187,8 @@ async function handleButton(interaction) {
 }
 
 async function handleSelectMenu(interaction) {
-  if (interaction.customId.startsWith("auction:sell_item:") || interaction.customId.startsWith("auction:sell_currency:")) {
-    await handleAuctionSelect(interaction);
-    return;
-  }
   if (isIdleZoneSelect(interaction.customId)) {
     await handleIdleZoneSelect(interaction);
-    return;
-  }
-  if (isCoinShopSelect(interaction.customId)) {
-    await handleShopSelect(interaction);
     return;
   }
   if (interaction.customId.startsWith("eq_pick:")) {

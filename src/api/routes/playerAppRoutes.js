@@ -1,12 +1,13 @@
 ﻿const { Router } = require("express");
 const jwt = require("jsonwebtoken");
+const config = require("../../config");
 const { ok } = require("../../shared/response");
-const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
-const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee } = require("../../shared/zones");
+const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 
 // Track per-player battle cooldowns.
 // Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
@@ -15,8 +16,346 @@ const playerBattleCooldowns = new Map();
 // 每回合動畫長度（ms）。可用 env `ROUND_MS` 覆寫。預設為 700 * 0.8
 const ROUND_MS = Number(process.env.ROUND_MS || Math.round(700 * 0.8));
 
+// 與 Discord 戰鬥相同的低階區戰力同步規則。
+const ZONE_DAMAGE_SYNC_RULES = {
+  beginner: { maxHpRatioPerBattle: 0.30 },
+  normal: { maxHpRatioPerBattle: 0.45 }
+};
+const DAMAGE_SYNC_NOTICE = "套用戰力同步：高階裝備與效果會暫時壓制到該區合理範圍。";
+
+function applyZoneDamageSync(zoneKey, startMonsterHp, monsterMaxHp, rawDamage, rawFinalMonsterHp, rawOutcome) {
+  const raw = Math.max(0, Math.round(Number(rawDamage || 0)));
+  const startHp = Math.max(0, Math.round(Number(startMonsterHp || 0)));
+  const rawFinalHp = Math.max(0, Math.round(Number(rawFinalMonsterHp ?? Math.max(0, startHp - raw))));
+  const rule = ZONE_DAMAGE_SYNC_RULES[zoneKey];
+
+  if (!rule || raw <= 0) {
+    return {
+      damage: raw,
+      monsterHp: rawFinalHp,
+      outcome: rawOutcome,
+      applied: false,
+      notice: null
+    };
+  }
+
+  const maxHp = Math.max(1, Math.round(Number(monsterMaxHp || startHp || 1)));
+  const cap = Math.max(1, Math.round(maxHp * Number(rule.maxHpRatioPerBattle || 1)));
+  const damage = Math.min(raw, cap, startHp);
+  const monsterHp = Math.max(0, startHp - damage);
+  const outcome = rawOutcome === "lose" ? "lose" : (monsterHp <= 0 ? "win" : "timeout");
+  const applied = damage < raw;
+
+  return {
+    damage,
+    monsterHp,
+    outcome,
+    applied,
+    notice: applied ? `${DAMAGE_SYNC_NOTICE} 本次有效傷害 ${damage} / 原始傷害 ${raw}。` : DAMAGE_SYNC_NOTICE
+  };
+}
+
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
+  const STREAM_AUTH_STATE_TTL = "15m";
+  const DISCORD_AUTH_STATE_TTL = "15m";
+
+  function getPublicBaseUrl(req = null) {
+    const configured = String(config.api?.publicBaseUrl || "").trim();
+    if (configured) return configured.replace(/\/+$/, "");
+    if (req?.get && req?.protocol) {
+      const host = req.get("host");
+      if (host) return `${req.protocol}://${host}`.replace(/\/+$/, "");
+    }
+    return `http://localhost:${config.api?.port || 5566}`;
+  }
+
+  function signStreamAuthState(discordId) {
+    return jwt.sign(
+      { discordId: String(discordId || "").trim() },
+      config.streamAuth?.stateSecret || process.env.JWT_SECRET || "stream-auth-secret",
+      { expiresIn: STREAM_AUTH_STATE_TTL }
+    );
+  }
+
+  function verifyStreamAuthState(token) {
+    return jwt.verify(
+      String(token || ""),
+      config.streamAuth?.stateSecret || process.env.JWT_SECRET || "stream-auth-secret"
+    );
+  }
+
+  function signDiscordAuthState(payload) {
+    return jwt.sign(
+      {
+        discordId: String(payload?.discordId || "").trim(),
+        discordName: String(payload?.discordName || "").trim(),
+        purpose: "discord-binding-audit"
+      },
+      process.env.JWT_SECRET || "super-secret-jwt-key",
+      { expiresIn: DISCORD_AUTH_STATE_TTL }
+    );
+  }
+
+  function verifyDiscordAuthState(token) {
+    return jwt.verify(
+      String(token || ""),
+      process.env.JWT_SECRET || "super-secret-jwt-key"
+    );
+  }
+
+  function htmlEscape(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function renderAuthResultPage(title, lines, buttons = []) {
+    const buttonHtml = buttons.map((btn) => {
+      const href = htmlEscape(btn.href);
+      const label = htmlEscape(btn.label);
+      return `<a class="btn ${htmlEscape(btn.kind || "primary")}" href="${href}" target="_blank" rel="noreferrer">${label}</a>`;
+    }).join("");
+    const lineHtml = lines.map((line) => `<p>${htmlEscape(line)}</p>`).join("");
+    return `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${htmlEscape(title)}</title>
+<style>
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1220;color:#f5f7ff;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+  .card{max-width:760px;width:100%;background:#171b2c;border:1px solid #2b3350;border-radius:18px;padding:24px 24px 20px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+  h1{font-size:26px;margin:0 0 14px}
+  p{margin:8px 0;line-height:1.7;color:#d7defc}
+  .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 18px;border-radius:12px;text-decoration:none;font-weight:700}
+  .btn.primary{background:#5b67ff;color:#fff}
+  .btn.secondary{background:#20273c;color:#fff;border:1px solid #32406b}
+  .muted{color:#9aa4cf;font-size:13px;margin-top:14px}
+</style>
+</head>
+<body>
+  <main class="card">
+    <h1>${htmlEscape(title)}</h1>
+    ${lineHtml}
+    <div class="actions">${buttonHtml}</div>
+    <p class="muted">如果是從 Discord 進來，回到原本玩家面板再重新綁定即可。</p>
+  </main>
+</body>
+</html>`;
+  }
+
+  function mapTwitchTierToPlayerTier(tier) {
+    const normalized = String(tier || "").trim();
+    const mapping = {
+      "1000": "C",
+      "2000": "C",
+      "3000": "B"
+    };
+    return mapping[normalized] || null;
+  }
+
+  function mapYoutubeLevelToPlayerTier(displayName) {
+    const normalized = String(displayName || "").trim();
+    const mapping = config.streamMembership?.youtubeTiers || {};
+    for (const [tier, name] of Object.entries(mapping)) {
+      if (normalized === String(name || "").trim()) return tier;
+    }
+    return null;
+  }
+
+  function pickHigherTier(a, b) {
+    const tierOrder = ["E", "D", "C", "B", "A", "S", "SS"];
+    const normA = String(a || "").trim().toUpperCase();
+    const normB = String(b || "").trim().toUpperCase();
+    const idxA = tierOrder.indexOf(normA);
+    const idxB = tierOrder.indexOf(normB);
+    if (idxA === -1) return normB || normA || null;
+    if (idxB === -1) return normA || normB || null;
+    return idxA >= idxB ? normA : normB;
+  }
+
+  async function fetchGoogleCreatorAccessToken() {
+    const auth = config.streamAuth || {};
+    if (!auth.youtubeClientId || !auth.youtubeClientSecret || !auth.youtubeCreatorRefreshToken) {
+      throw new Error("YouTube creator OAuth 未設定完成，請先補齊 YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET / STREAM_YOUTUBE_CREATOR_REFRESH_TOKEN。");
+    }
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: auth.youtubeClientId,
+        client_secret: auth.youtubeClientSecret,
+        refresh_token: auth.youtubeCreatorRefreshToken,
+        grant_type: "refresh_token"
+      })
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok || tokenData.error) {
+      throw new Error(`YouTube creator token refresh failed: ${tokenData.error_description || tokenData.error || tokenRes.statusText}`);
+    }
+    return tokenData.access_token;
+  }
+
+  async function upsertStreamBindingAndTier({
+    discordId,
+    provider,
+    platformUserId,
+    displayName,
+    tier,
+    memberRoleIdsAtLink = [],
+    linkedSupportAtLink = null,
+    linkedSupportKindAtLink = null,
+    linkedSupportBadgeLabelsAtLink = []
+  }) {
+    const bindingRepo = serviceContext.streamAccountBindingRepository;
+    const existingSameProvider = await bindingRepo.findByDiscordAndPlatform(discordId, provider).catch(() => null);
+    if (existingSameProvider && existingSameProvider.platformUserId && existingSameProvider.platformUserId !== platformUserId) {
+      throw new Error(`你的 ${provider === "youtube" ? "YouTube" : "Twitch"} 已綁定過，無法更換帳號。`);
+    }
+
+    const existingByPlatform = await bindingRepo.findByPlatformAndUserId(provider, platformUserId).catch(() => null);
+    if (existingByPlatform && existingByPlatform.discordId && existingByPlatform.discordId !== discordId) {
+      throw new Error("該帳號已綁定其他DC");
+    }
+
+    const payload = {
+      platform: provider,
+      platformUserId,
+      discordId,
+      displayName,
+      linkedAt: existingSameProvider?.linkedAt || new Date().toISOString(),
+      playerTierAtLink: tier || existingSameProvider?.playerTierAtLink || null,
+      memberRoleIdsAtLink,
+      linkedSupportAtLink,
+      linkedSupportKindAtLink,
+      linkedSupportBadgeLabelsAtLink
+    };
+    await bindingRepo.save(payload);
+
+    if (tier) {
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (progress && progress.playerTier !== tier) {
+        progress.playerTier = tier;
+        progress.updatedAt = new Date().toISOString();
+        await serviceContext.progressRepository.save(progress);
+      }
+    }
+
+    return payload;
+  }
+
+  async function sendTierDm(discordId, lines) {
+    try {
+      if (!discordClient?.isReady()) return false;
+      const user = await discordClient.users.fetch(discordId).catch(() => null);
+      if (!user) return false;
+      await user.send(lines.join("\n"));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function getDiscordOAuthProfile(accessToken) {
+    const userRes = await fetch("https://discord.com/api/users/@me", {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const userData = await userRes.json();
+    if (!userRes.ok || userData?.message || !userData?.id) {
+      throw new Error(userData?.message || "Discord profile fetch failed");
+    }
+    return {
+      id: String(userData.id),
+      username: String(userData.username || "").trim(),
+      globalName: String(userData.global_name || "").trim()
+    };
+  }
+
+  async function buildBindingAudit(discordId) {
+    const bindingRepo = serviceContext.streamAccountBindingRepository;
+    const bindings = await bindingRepo.listByDiscordId(discordId).catch(() => []);
+    const duplicates = [];
+    for (const binding of bindings) {
+      if (!binding?.platform || !binding?.platformUserId) continue;
+      const found = await bindingRepo.findByPlatformAndUserId(binding.platform, binding.platformUserId).catch(() => null);
+      if (found && String(found.discordId || "") !== String(discordId)) {
+        duplicates.push({
+          platform: binding.platform,
+          platformUserId: binding.platformUserId,
+          displayName: binding.displayName || found.displayName || "",
+          otherDiscordId: found.discordId || "",
+          linkedAt: found.linkedAt || null
+        });
+      }
+    }
+    return { bindings, duplicates };
+  }
+
+  async function getTwitchProfile(accessToken) {
+    const auth = config.streamAuth || {};
+    const validateRes = await fetch("https://id.twitch.tv/oauth2/validate", {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const validateData = await validateRes.json();
+    if (!validateRes.ok) {
+      throw new Error(validateData?.message || "Twitch token validate failed");
+    }
+    const userRes = await fetch("https://api.twitch.tv/helix/users", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Client-Id": auth.twitchClientId
+      }
+    });
+    const userData = await userRes.json();
+    if (!userRes.ok || !userData?.data?.length) {
+      throw new Error(userData?.message || "無法取得 Twitch 使用者資料");
+    }
+    const user = userData.data[0];
+    return {
+      userId: validateData.user_id || user.id,
+      login: validateData.login || user.login,
+      displayName: user.display_name || validateData.login || user.login
+    };
+  }
+
+  async function parseTwitchSubscriptionTier(accessToken, userId) {
+    const auth = config.streamAuth || {};
+    if (!auth.twitchClientId || !auth.twitchBroadcasterId) {
+      throw new Error("Twitch 會員驗證未設定完成，請先補齊 TWITCH_CLIENT_ID / TWITCH_BROADCASTER_ID。");
+    }
+    const subRes = await fetch(`https://api.twitch.tv/helix/subscriptions/user?broadcaster_id=${encodeURIComponent(auth.twitchBroadcasterId)}&user_id=${encodeURIComponent(userId)}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Client-Id": auth.twitchClientId
+      }
+    });
+    if (subRes.status === 404) return null;
+    const subData = await subRes.json();
+    if (!subRes.ok) {
+      throw new Error(subData?.message || subRes.statusText || "Twitch 訂閱查詢失敗");
+    }
+    return subData?.data?.[0]?.tier || null;
+  }
+
+  async function getYoutubeProfile(accessToken) {
+    const channelsRes = await fetch("https://www.googleapis.com/youtube/v3/channels?part=id,snippet&mine=true", {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const channelsData = await channelsRes.json();
+    if (!channelsRes.ok || !channelsData?.items?.length) {
+      throw new Error(channelsData?.error?.message || "無法取得 YouTube 頻道資料");
+    }
+    const channel = channelsData.items[0];
+    return {
+      channelId: channel.id,
+      displayName: channel.snippet?.title || channel.id
+    };
+  }
 
   const buildJobSpecialDisplay = (progress) => {
     const equipped = progress?.equipment || {};
@@ -96,6 +435,315 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       return res.status(401).json({ status: "error", message: "Invalid or expired token" });
     }
   };
+
+  router.get("/api/stream-auth/start", async (req, res) => {
+    try {
+      const provider = String(req.query.provider || "").trim().toLowerCase();
+      const stateToken = String(req.query.state || "").trim();
+      if (!provider || !["youtube", "twitch"].includes(provider)) {
+        return res.status(400).send(renderAuthResultPage("授權失敗", ["❌ 缺少或錯誤的 provider。"]));
+      }
+      const state = verifyStreamAuthState(stateToken);
+      const baseUrl = getPublicBaseUrl(req);
+      const callbackUrl = `${baseUrl}/api/stream-auth/callback/${provider}`;
+
+      if (provider === "twitch") {
+        const auth = config.streamAuth || {};
+        if (!auth.twitchClientId || !auth.twitchClientSecret || !auth.twitchBroadcasterId) {
+          return res.status(500).send(renderAuthResultPage("授權失敗", [
+            "❌ Twitch OAuth 尚未設定完成。",
+            "請補齊 TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET / TWITCH_BROADCASTER_ID。"
+          ]));
+        }
+        const authorizeUrl = new URL("https://id.twitch.tv/oauth2/authorize");
+        authorizeUrl.search = new URLSearchParams({
+          client_id: auth.twitchClientId,
+          redirect_uri: callbackUrl,
+          response_type: "code",
+          scope: "user:read:subscriptions",
+          state: stateToken
+        }).toString();
+        return res.redirect(authorizeUrl.toString());
+      }
+
+      const auth = config.streamAuth || {};
+      if (!auth.youtubeClientId || !auth.youtubeClientSecret || !auth.youtubeCreatorRefreshToken) {
+        return res.status(500).send(renderAuthResultPage("授權失敗", [
+          "❌ YouTube OAuth 尚未設定完成。",
+          "請補齊 YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET / STREAM_YOUTUBE_CREATOR_REFRESH_TOKEN。"
+        ]));
+      }
+
+      const authorizeUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authorizeUrl.search = new URLSearchParams({
+        client_id: auth.youtubeClientId,
+        redirect_uri: callbackUrl,
+        response_type: "code",
+        scope: [
+          "openid",
+          "email",
+          "profile",
+          "https://www.googleapis.com/auth/youtube.readonly"
+        ].join(" "),
+        access_type: "offline",
+        prompt: "consent",
+        state: stateToken
+      }).toString();
+      return res.redirect(authorizeUrl.toString());
+    } catch (err) {
+      return res.status(400).send(renderAuthResultPage("授權失敗", [
+        `❌ ${err.message || "授權流程無法啟動"}`
+      ]));
+    }
+  });
+
+  router.get("/api/discord-auth/start", async (req, res) => {
+    try {
+      const discordId = String(req.query.discordId || "").trim();
+      const discordName = String(req.query.discordName || "").trim();
+      if (!discordId) {
+        return res.status(400).send(renderAuthResultPage("授權失敗", ["❌ 缺少 Discord ID。"]));
+      }
+      const auth = config.discord || {};
+      if (!auth.clientId || !auth.clientSecret) {
+        return res.status(500).send(renderAuthResultPage("授權失敗", [
+          "❌ Discord OAuth 尚未設定完成。",
+          "請補齊 DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET。"
+        ]));
+      }
+      const stateToken = signDiscordAuthState({ discordId, discordName });
+      const callbackUrl = `${getPublicBaseUrl(req)}/api/discord-auth/callback`;
+      const authorizeUrl = new URL("https://discord.com/api/oauth2/authorize");
+      authorizeUrl.search = new URLSearchParams({
+        client_id: auth.clientId,
+        redirect_uri: callbackUrl,
+        response_type: "code",
+        scope: "identify",
+        state: stateToken,
+        prompt: "consent"
+      }).toString();
+      return res.redirect(authorizeUrl.toString());
+    } catch (err) {
+      return res.status(400).send(renderAuthResultPage("授權失敗", [
+        `❌ ${err.message || "Discord 授權流程無法啟動"}`
+      ]));
+    }
+  });
+
+  router.get("/api/discord-auth/callback", async (req, res) => {
+    try {
+      const state = verifyDiscordAuthState(req.query.state);
+      if (!state || state.purpose !== "discord-binding-audit") {
+        throw new Error("授權狀態無效，請重新從玩家面板開啟。");
+      }
+      const code = String(req.query.code || "").trim();
+      if (!code) {
+        return res.status(400).send(renderAuthResultPage("Discord 授權失敗", ["❌ 缺少授權 code。"]));
+      }
+      const auth = config.discord || {};
+      if (!auth.clientId || !auth.clientSecret) {
+        return res.status(500).send(renderAuthResultPage("Discord 授權失敗", [
+          "❌ Discord OAuth 尚未設定完成。",
+          "請補齊 DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET。"
+        ]));
+      }
+
+      const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: auth.clientId,
+          client_secret: auth.clientSecret,
+          code,
+          grant_type: "authorization_code",
+          redirect_uri: `${getPublicBaseUrl(req)}/api/discord-auth/callback`
+        })
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || tokenData.error) {
+        throw new Error(tokenData?.error_description || tokenData?.error || "Discord token exchange failed");
+      }
+
+      const profile = await getDiscordOAuthProfile(tokenData.access_token);
+      if (state.discordId && String(state.discordId) !== String(profile.id)) {
+        throw new Error("你登入的 Discord 與按鈕發送者不一致，請使用原本那個帳號重新驗證。");
+      }
+
+      const guildId = config.discord?.guildId;
+      if (guildId && discordClient) {
+        const guild = discordClient.guilds.cache.get(guildId) || await discordClient.guilds.fetch(guildId).catch(() => null);
+        if (guild) {
+          const member = await guild.members.fetch({ user: profile.id, force: true }).catch(() => null);
+          if (!member) {
+            return res.status(403).send(renderAuthResultPage("Discord 授權失敗", [
+              "❌ 你必須先加入伺服器才能進行驗證。"
+            ]));
+          }
+        }
+      }
+
+      const audit = await buildBindingAudit(profile.id);
+      const lines = [
+        "✅ Discord 授權完成",
+        `帳號：${profile.globalName || profile.username || "Unknown"} (${profile.id})`,
+        audit.bindings.length > 0
+          ? `目前綁定：${audit.bindings.map((b) => `${b.platform === "youtube" ? "YouTube" : "Twitch"}:${b.displayName || b.platformUserId}`).join("、")}`
+          : "目前沒有任何直播綁定",
+        audit.duplicates.length > 0
+          ? `重複綁定：${audit.duplicates.map((d) => `${d.platform === "youtube" ? "YouTube" : "Twitch"}:${d.displayName || d.platformUserId} → ${d.otherDiscordId}`).join("、")}`
+          : "未發現與其他 DC 重複的綁定"
+      ];
+
+      await sendTierDm(profile.id, lines);
+
+      return res.send(renderAuthResultPage("Discord 驗證完成", lines, [
+        { label: "回到 Discord", href: config.discord.inviteUrl || "https://discord.gg/", kind: "secondary" }
+      ]));
+    } catch (err) {
+      return res.status(400).send(renderAuthResultPage("Discord 授權失敗", [
+        `❌ ${err.message || "Discord 授權失敗"}`
+      ]));
+    }
+  });
+
+  router.get("/api/stream-auth/callback/twitch", async (req, res) => {
+    try {
+      const state = verifyStreamAuthState(req.query.state);
+      const code = String(req.query.code || "").trim();
+      if (!code) {
+        return res.status(400).send(renderAuthResultPage("Twitch 授權失敗", ["❌ 缺少授權 code。"]));
+      }
+
+      const auth = config.streamAuth || {};
+      const tokenRes = await fetch("https://id.twitch.tv/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: auth.twitchClientId,
+          client_secret: auth.twitchClientSecret,
+          code,
+          grant_type: "authorization_code",
+          redirect_uri: `${getPublicBaseUrl(req)}/api/stream-auth/callback/twitch`
+        })
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || tokenData.error) {
+        throw new Error(tokenData?.message || tokenData?.error_description || "Twitch token exchange failed");
+      }
+
+      const profile = await getTwitchProfile(tokenData.access_token);
+      const tierRaw = await parseTwitchSubscriptionTier(tokenData.access_token, profile.userId);
+        const mappedTier = mapTwitchTierToPlayerTier(tierRaw);
+        const progress = await serviceContext.progressRepository.findByPlayerId(state.discordId);
+        const currentTier = progress?.playerTier || null;
+        const newTier = pickHigherTier(mappedTier, currentTier) || currentTier || mappedTier || null;
+      const linkedSupportBadgeLabelsAtLink = tierRaw ? [`訂閱等級:${tierRaw}`] : [];
+
+      const binding = await upsertStreamBindingAndTier({
+        discordId: state.discordId,
+        provider: "twitch",
+        platformUserId: profile.userId,
+        displayName: profile.displayName,
+        tier: newTier,
+        memberRoleIdsAtLink: [],
+        linkedSupportAtLink: Boolean(tierRaw),
+        linkedSupportKindAtLink: tierRaw ? "subscriber" : null,
+        linkedSupportBadgeLabelsAtLink
+      });
+
+      const lines = [
+        "✅ Twitch 授權完成",
+        `帳號：${profile.displayName} (${profile.userId})`,
+        tierRaw ? `訂閱等級：${tierRaw}` : "目前沒有偵測到訂閱，位階維持原狀",
+        newTier ? `已同步位階：${newTier}` : `位階維持原狀：${currentTier || "未設定"}`
+      ];
+
+      await sendTierDm(state.discordId, lines);
+
+      return res.send(renderAuthResultPage("Twitch 授權完成", lines, [
+        { label: "回到 Discord", href: config.discord.inviteUrl || "https://discord.gg/", kind: "secondary" }
+      ]));
+    } catch (err) {
+      return res.status(400).send(renderAuthResultPage("Twitch 授權失敗", [
+        `❌ ${err.message || "Twitch 授權失敗"}`
+      ]));
+    }
+  });
+
+  router.get("/api/stream-auth/callback/youtube", async (req, res) => {
+    try {
+      const state = verifyStreamAuthState(req.query.state);
+      const code = String(req.query.code || "").trim();
+      if (!code) {
+        return res.status(400).send(renderAuthResultPage("YouTube 授權失敗", ["❌ 缺少授權 code。"]));
+      }
+
+      const auth = config.streamAuth || {};
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: auth.youtubeClientId,
+          client_secret: auth.youtubeClientSecret,
+          code,
+          grant_type: "authorization_code",
+          redirect_uri: `${getPublicBaseUrl(req)}/api/stream-auth/callback/youtube`
+        })
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || tokenData.error) {
+        throw new Error(tokenData?.error_description || tokenData?.error || "YouTube token exchange failed");
+      }
+
+      const profile = await getYoutubeProfile(tokenData.access_token);
+      const creatorAccessToken = await fetchGoogleCreatorAccessToken();
+      const memberRes = await fetch(`https://www.googleapis.com/youtube/v3/members?part=snippet&filterByMemberChannelId=${encodeURIComponent(profile.channelId)}&maxResults=1`, {
+        headers: { Authorization: `Bearer ${creatorAccessToken}` }
+      });
+      const memberData = await memberRes.json();
+      if (!memberRes.ok) {
+        const errMsg = memberData?.error?.message || memberData?.error?.errors?.[0]?.message || "YouTube 會員查詢失敗";
+        throw new Error(errMsg);
+      }
+
+      const member = memberData?.items?.[0] || null;
+      const levelName = member?.snippet?.membershipsDetails?.highestAccessibleLevelDisplayName || null;
+        const mappedTier = mapYoutubeLevelToPlayerTier(levelName);
+        const progress = await serviceContext.progressRepository.findByPlayerId(state.discordId);
+        const currentTier = progress?.playerTier || null;
+        const newTier = pickHigherTier(mappedTier, currentTier) || currentTier || mappedTier || null;
+      const linkedSupportBadgeLabelsAtLink = levelName ? [`會員等級:${levelName}`] : [];
+
+      const binding = await upsertStreamBindingAndTier({
+        discordId: state.discordId,
+        provider: "youtube",
+        platformUserId: profile.channelId,
+        displayName: profile.displayName,
+        tier: newTier,
+        memberRoleIdsAtLink: [],
+        linkedSupportAtLink: Boolean(levelName),
+        linkedSupportKindAtLink: levelName ? "member" : null,
+        linkedSupportBadgeLabelsAtLink
+      });
+
+      const lines = [
+        "✅ YouTube 授權完成",
+        `頻道：${profile.displayName} (${profile.channelId})`,
+        levelName ? `會員等級：${levelName}` : "目前沒有偵測到會員，位階維持原狀",
+        newTier ? `已同步位階：${newTier}` : `位階維持原狀：${currentTier || "未設定"}`
+      ];
+
+      await sendTierDm(state.discordId, lines);
+
+      return res.send(renderAuthResultPage("YouTube 授權完成", lines, [
+        { label: "回到 Discord", href: config.discord.inviteUrl || "https://discord.gg/", kind: "secondary" }
+      ]));
+    } catch (err) {
+      return res.status(400).send(renderAuthResultPage("YouTube 授權失敗", [
+        `❌ ${err.message || "YouTube 授權失敗"}`
+      ]));
+    }
+  });
 
   // 1. OAuth2 Login
   router.post("/api/auth/discord", async (req, res, next) => {
@@ -299,6 +947,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId } = req.playerRecord;
       const { uuid } = req.params;
+      const confirm = req.body?.confirm === true || req.body?.confirm === "true";
+      if (!confirm) {
+        const quote = await serviceContext.shopService.getSellQuote(discordId, uuid, 1);
+        return res.json(ok({
+          requiresConfirmation: true,
+          confirmField: "confirm",
+          itemName: quote.itemName,
+          sellCount: quote.sellCount,
+          priceEach: quote.priceEach,
+          totalGold: quote.totalGold,
+          message: `你確定要販售 ${quote.itemName} 嗎？販售總價值 ${quote.totalGold} 金幣。`
+        }));
+      }
       const result = await serviceContext.shopService.sellItem(discordId, uuid);
       res.json(ok(result));
     } catch (err) {
@@ -901,19 +1562,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return res.status(400).json({ status: "error", message: levelError });
       }
 
-      // Check and deduct entry fee
-      if (monster.entryFee > 0) {
-        const wallet = await serviceContext.walletRepository.findByPlayerId(discordId);
-        const gold = wallet?.gold ?? 0;
-        if (gold < monster.entryFee) {
-          return res.status(400).json({ status: "error", message: `gold not enough: need ${monster.entryFee}, have ${gold}` });
-        }
-        await serviceContext.rewardService.grantCurrency({
-          discordId, displayName, currencyType: "gold",
-          amount: -monster.entryFee, source: CURRENCY_SOURCES.MONSTER_ENTRY_FEE, operator: "monster_zone"
-        });
-      }
-
       // Calc player stats（永遠從 DB 讀取最新 effects，不使用 snapshot 裡的舊值）
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
@@ -982,19 +1630,39 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       const { runCombatLoop } = require("../../shared/combatLoop");
-      const { outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp, combatStats } =
+      const combatResult =
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial, undefined, {
           equipped,
           inventory: progress?.inventory || [],
           partyEffects,
           monsterEquipped
         });
+      const { roundLogs, finalPlayerHp, combatStats } = combatResult;
+      const zoneDamageSyncApplied = ["beginner", "normal"].includes(zoneKey) && !isOnlyDTierEquipped(equipped);
+      const syncResult = zoneDamageSyncApplied
+        ? applyZoneDamageSync(
+          zoneKey,
+          monsterHpInitial,
+          monster.calc?.maxHp,
+          combatResult.totalDamage,
+          combatResult.finalMonsterHp,
+          combatResult.outcome
+        )
+        : {
+          damage: Math.max(0, Math.round(Number(combatResult.totalDamage || 0))),
+          monsterHp: Math.max(0, Math.round(Number(combatResult.finalMonsterHp ?? Math.max(0, monsterHpInitial - combatResult.totalDamage)))),
+          outcome: combatResult.outcome,
+          applied: false,
+          notice: null
+        };
+      const outcome = syncResult.outcome;
+      const totalDamage = syncResult.damage;
       const totalTaken = Math.max(0, (pStats.maxHp || 0) - Math.max(0, finalPlayerHp));
 
       // 蝯?
       const { handleMonsterKill, _republishPanel, _republishPanelWithRankingDebounce, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
       let rewardLines = [];
-      let mHp = finalMonsterHp;
+      let mHp = syncResult.monsterHp;
       const currentParticipants = Array.isArray(stateForCombat.participants) ? stateForCombat.participants : [];
 
       if (outcome === "win") {
@@ -1012,7 +1680,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             }
           }
         };
-        const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee };
+        const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee ?? getZoneDefaultEntryFee(zoneKey) };
         rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state: stateWithMe, totalDamage, zoneKey });
       } else {
         mHp = Math.max(0, mHp);
@@ -1036,7 +1704,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
 
         if (outcome === "lose") {
-          rewardLines = [`You were defeated by **${monster.name}**!`, monster.entryFee > 0 ? "Entry fee consumed." : "Try again next time."];
+          rewardLines = [`You were defeated by **${monster.name}**!`, (monster.entryFee ?? getZoneDefaultEntryFee(zoneKey)) > 0 ? "Entry fee consumed." : "Try again next time."];
         } else {
           rewardLines = [`Survived ${MAX_ROUNDS} rounds and forced the monster to retreat.`];
         }
@@ -1044,6 +1712,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
         // update panel（排行榜去重，最多 5 秒更新一次）
         _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
+      }
+
+      if (syncResult.notice) {
+        rewardLines = [syncResult.notice, ...rewardLines];
       }
 
       if (progress && Array.isArray(progress.activeEffects) && progress.activeEffects.length > 0) {
@@ -1136,4 +1808,3 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 }
 
 module.exports = { createPlayerAppRoutes };
-

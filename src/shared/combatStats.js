@@ -30,6 +30,18 @@ const WEAPON_CONFIG = {
 
 // 副手武器種類（可雙持）
 const OFFHAND_WEAPON_TYPES = new Set(["offhand_sword", "offhand_dagger", "offhand_mace"]);
+const EQUIPPED_TIER_SLOTS = [
+  "weapon",
+  "shield",
+  "head_top",
+  "head_mid",
+  "head_low",
+  "armor",
+  "garment",
+  "shoes",
+  "accessory_l",
+  "accessory_r"
+];
 
 // 雙持時主手不同武器的副手追擊機率
 // staff_1h：副手觸發但傷害為 0，僅用於觸發法師 proc 效果（燒傷/麻痺/冰凍）
@@ -262,4 +274,24 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   return nextStats;
 }
 
-module.exports = { calcPlayerStats };
+function getEquippedTierSet(progressOrEquipped = {}) {
+  const equipped = progressOrEquipped?.equipment && typeof progressOrEquipped.equipment === "object"
+    ? progressOrEquipped.equipment
+    : progressOrEquipped;
+  if (!equipped || typeof equipped !== "object") return new Set();
+
+  const tiers = new Set();
+  for (const slot of EQUIPPED_TIER_SLOTS) {
+    const item = equipped[slot];
+    const tier = String(item?.tier || "").toUpperCase();
+    if (tier) tiers.add(tier);
+  }
+  return tiers;
+}
+
+function isOnlyDTierEquipped(progressOrEquipped = {}) {
+  const tiers = getEquippedTierSet(progressOrEquipped);
+  return tiers.size > 0 && tiers.size === 1 && tiers.has("D");
+}
+
+module.exports = { calcPlayerStats, getEquippedTierSet, isOnlyDTierEquipped };

@@ -383,6 +383,16 @@ function effectIsActive(effect, currentRound) {
   return currentRound <= endRound;
 }
 
+function procEffectApplies(effect, ownerHpPct, targetHpPct) {
+  if (!effect || !effect.key) return false;
+  const params = effect.params || {};
+  if (Number.isFinite(Number(params.ownerHpAbovePct)) && ownerHpPct <= Number(params.ownerHpAbovePct)) return false;
+  if (Number.isFinite(Number(params.ownerHpBelowPct)) && ownerHpPct >= Number(params.ownerHpBelowPct)) return false;
+  if (Number.isFinite(Number(params.targetHpBelowPct)) && targetHpPct >= Number(params.targetHpBelowPct)) return false;
+  if (Number.isFinite(Number(params.targetHpAbovePct)) && targetHpPct <= Number(params.targetHpAbovePct)) return false;
+  return true;
+}
+
 function hasAnyDebuff(activeEffects = [], currentRound = 1) {
   const debuffKeys = new Set([
     "atk_down", "def_down", "hit_down", "hit_rate_down", "dodge_down",
@@ -416,7 +426,7 @@ function hasAnyEquippedName(equipped = {}, names = []) {
   return names.some((name) => equippedNames.has(String(name)));
 }
 
-function makeCardEffectEntry(procEffect, round, source, overrides = {}) {
+function makeCardEffectEntry(procEffect, round, sourceType, overrides = {}, sourceId = null) {
   const params = { ...(procEffect.params || {}) };
   if (Object.prototype.hasOwnProperty.call(overrides, "value")) params.value = overrides.value;
   const duration = procEffect.duration || params.duration;
@@ -426,8 +436,40 @@ function makeCardEffectEntry(procEffect, round, source, overrides = {}) {
     params,
     stackMode: procEffect.stackMode,
     appliedAt: round,
-    source
+    source: sourceType,
+    sourceType,
+    sourceId: sourceId ? String(sourceId) : null
   };
+}
+
+function upsertActiveEffectBySource(activeEffects = [], effectEntry = {}) {
+  if (!effectEntry || !effectEntry.key) return Array.isArray(activeEffects) ? activeEffects : [];
+  const next = Array.isArray(activeEffects) ? [...activeEffects] : [];
+  const sameSource = (entry) => {
+    if (!entry || entry.key !== effectEntry.key) return false;
+
+    const effectSourceId = effectEntry.sourceId ?? null;
+    const entrySourceId = entry.sourceId ?? null;
+    if (effectSourceId !== null && entrySourceId !== null) {
+      return String(effectSourceId ?? "") === String(entrySourceId ?? "");
+    }
+
+    const effectSourceType = effectEntry.sourceType ?? null;
+    const entrySourceType = entry.sourceType ?? null;
+    if (effectSourceType !== null && entrySourceType !== null) {
+      return String(effectSourceType ?? "") === String(entrySourceType ?? "");
+    }
+
+    return String(effectEntry.source || "") === String(entry.source || "");
+  };
+
+  const existingIndex = next.findIndex(sameSource);
+  if (existingIndex >= 0) {
+    next[existingIndex] = { ...next[existingIndex], ...effectEntry };
+    return next;
+  }
+  next.push(effectEntry);
+  return next;
 }
 
 function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options = {}) {
@@ -811,6 +853,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const equippedCard = monsterEquipped.special_1;
       const skill = equippedCard.monsterCardSkill;
       const cardName = equippedCard.itemName || equippedCard.name || '卡片';
+      const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+      const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
 
       // 怪物增益效果（施加給怪物自己）
       const MONSTER_BUFF_KEYS = new Set(['str_up', 'agi_up', 'def_up', 'atk_up', 'lifesteal', 'life_steal_strong', 'crit_rate_up', 'crit_damage_up', 'dodge_up', 'damage_reduction', 'def_ignore', 'final_damage_up', 'atk_multiplier_up', 'counter', 'ancient_power', 'invincible_short']);
@@ -819,20 +863,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
       const cooldownKey = equippedCard.itemId || equippedCard.id || cardName;
       const triggerChance = Math.min(100, Math.max(0, Number(skill.chance ?? equippedCard.cardProcChance ?? 30)));
-      if ((cardCooldowns.monster[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
+      const applicableProcEffects = Array.isArray(skill.procEffects)
+        ? skill.procEffects.filter((procEffect) => procEffectApplies(procEffect, monsterHpPct, playerHpPct))
+        : [];
+      if (applicableProcEffects.length > 0 && (cardCooldowns.monster[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
         log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
         if (Number(skill.cooldownTurns) > 0) cardCooldowns.monster[cooldownKey] = Number(skill.cooldownTurns);
 
-        if (skill.procEffects && Array.isArray(skill.procEffects)) {
-          for (const procEffect of skill.procEffects) {
+        if (applicableProcEffects.length > 0) {
+          for (const procEffect of applicableProcEffects) {
             if (!procEffect || !procEffect.key) continue;
-            const hpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
-            const targetHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
             const pp = procEffect.params || {};
-            if (Number.isFinite(Number(pp.ownerHpAbovePct)) && hpPct <= Number(pp.ownerHpAbovePct)) continue;
-            if (Number.isFinite(Number(pp.ownerHpBelowPct)) && hpPct >= Number(pp.ownerHpBelowPct)) continue;
-            if (Number.isFinite(Number(pp.targetHpBelowPct)) && targetHpPct >= Number(pp.targetHpBelowPct)) continue;
-            if (Number.isFinite(Number(pp.targetHpAbovePct)) && targetHpPct <= Number(pp.targetHpAbovePct)) continue;
             const targetHadDebuff = procEffect.target === 'self'
               ? hasAnyDebuff(monsterActiveEffects, round)
               : hasAnyDebuff(options.playerActiveEffects || [], round);
@@ -849,7 +890,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               'monster_skill',
               hasEquippedBonus
                 ? { value: equippedBonusValue }
-                : (targetHadDebuff && Number.isFinite(bonusValue) ? { value: bonusValue } : {})
+                : (targetHadDebuff && Number.isFinite(bonusValue) ? { value: bonusValue } : {}),
+              equippedCard.uuid || equippedCard.itemId || equippedCard.id || cardName
             );
             if (effectEntry.params.mode === 'caster_atk_pct') effectEntry.params.casterAtk = adjustedMCalc.atk || mCalc.atk || 1;
             // 根據效果類型決定施加對象
@@ -944,23 +986,22 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (!playerIsSilenced && slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
         const skill = slotItem.monsterCardSkill;
         const cardName = slotItem.itemName || slotItem.name || '卡片';
+        const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
+        const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
 
         const cooldownKey = slotItem.itemId || slotItem.id || `${slot}:${cardName}`;
         const triggerChance = Math.min(100, Math.max(0, Number(skill.chance ?? slotItem.cardProcChance ?? 5)));
-        if ((cardCooldowns.player[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
+        const applicableProcEffects = Array.isArray(skill.procEffects)
+          ? skill.procEffects.filter((procEffect) => procEffectApplies(procEffect, playerHpPct, monsterHpPct))
+          : [];
+        if (applicableProcEffects.length > 0 && (cardCooldowns.player[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
           log.push(`🎴 【${skill.name || cardName}】發動！${skill.description ? skill.description : ''}`);
           if (Number(skill.cooldownTurns) > 0) cardCooldowns.player[cooldownKey] = Number(skill.cooldownTurns);
 
-          if (skill.procEffects && Array.isArray(skill.procEffects)) {
-            for (const procEffect of skill.procEffects) {
+          if (applicableProcEffects.length > 0) {
+            for (const procEffect of applicableProcEffects) {
               if (!procEffect || !procEffect.key) continue;
-              const hpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
-              const targetHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
               const pp = procEffect.params || {};
-              if (Number.isFinite(Number(pp.ownerHpAbovePct)) && hpPct <= Number(pp.ownerHpAbovePct)) continue;
-              if (Number.isFinite(Number(pp.ownerHpBelowPct)) && hpPct >= Number(pp.ownerHpBelowPct)) continue;
-              if (Number.isFinite(Number(pp.targetHpBelowPct)) && targetHpPct >= Number(pp.targetHpBelowPct)) continue;
-              if (Number.isFinite(Number(pp.targetHpAbovePct)) && targetHpPct <= Number(pp.targetHpAbovePct)) continue;
               const targetHadDebuff = (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key))
                 ? hasAnyDebuff(monsterActiveEffects, round)
                 : hasAnyDebuff(options.playerActiveEffects || [], round);
@@ -977,7 +1018,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
                 'player_card_skill',
                 hasEquippedBonus
                   ? { value: equippedBonusValue }
-                  : (targetHadDebuff && Number.isFinite(bonusValue) ? { value: bonusValue } : {})
+                  : (targetHadDebuff && Number.isFinite(bonusValue) ? { value: bonusValue } : {}),
+                `${slot}:${slotItem.uuid || slotItem.itemId || slotItem.id || cardName}`
               );
               if (effectEntry.params.mode === 'caster_atk_pct') effectEntry.params.casterAtk = pStats.atk || 1;
               // 攻擊型效果 → 施加給怪物；增益型效果 → 施加給玩家
@@ -1303,23 +1345,38 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
           switch (pe.key) {
             case 'burn': {
-              monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
-              monsterActiveEffects.push({ key: 'burn', params: { value: pp.value ?? 0.5, mode: pp.mode ?? 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
+              monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                key: 'burn',
+                params: { value: pp.value ?? 0.5, mode: pp.mode ?? 'pct', duration: dur },
+                appliedAt: round,
+                sourceType: 'job_proc',
+                sourceId: `${jobEqForProc?.uuid || jobEqForProc?.itemId || 'job'}:burn`
+              });
               combatStats.burnTriggerCount += 1;
               log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 ${dur.value ?? 3} 回合！`);
               break;
             }
             case 'hit_down': {
-              monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'hit_rate_down');
-              monsterActiveEffects.push({ key: 'hit_rate_down', params: { value: pp.value ?? 15, duration: dur }, appliedAt: round, source: 'job_proc' });
+              monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                key: 'hit_rate_down',
+                params: { value: pp.value ?? 15, duration: dur },
+                appliedAt: round,
+                sourceType: 'job_proc',
+                sourceId: `${jobEqForProc?.uuid || jobEqForProc?.itemId || 'job'}:hit_down`
+              });
               log.push(`⚡ **(法師)** **麻痺**！${mName} 行動遲緩，命中率下降，持續 ${dur.value ?? 3} 回合！`);
               break;
             }
             case 'freeze': {
               const recentFreeze = monsterActiveEffects.find(e => e.key === 'freeze' && e.appliedAt >= round - 1);
               if (!recentFreeze) {
-                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'freeze');
-                monsterActiveEffects.push({ key: 'freeze', params: { duration: dur, bossImmune: pp.bossImmune ?? true }, appliedAt: round + 1, source: 'job_proc' });
+                monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                  key: 'freeze',
+                  params: { duration: dur, bossImmune: pp.bossImmune ?? true },
+                  appliedAt: round + 1,
+                  sourceType: 'job_proc',
+                  sourceId: `${jobEqForProc?.uuid || jobEqForProc?.itemId || 'job'}:freeze`
+                });
                 log.push(`🧊 **(法師)** **冰凍**！${mName} 被凍結，下回合無法攻擊！`);
               }
               break;
@@ -1330,7 +1387,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               break;
             }
             case 'proc_poison': {
-              const existing = monsterActiveEffects.find(e => e.key === 'poison');
+              const poisonSourceId = `${jobEqForProc?.uuid || jobEqForProc?.itemId || 'job'}:poison`;
+              const existing = monsterActiveEffects.find((e) => e.key === 'poison' && String(e.sourceId || "") === String(poisonSourceId));
               const prevPct = existing ? Number(existing.params?.value ?? 0) : 0;
               let dexBonus = 0;
               if (!existing && pp.dexMultiplier) {
@@ -1338,8 +1396,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               }
               const nextPctRaw = Math.min(pp.maxPct ?? 3.5, prevPct + (existing ? (pp.stackAdd ?? 1) : (pp.value ?? 0.5)) + dexBonus);
               const nextPct = Math.ceil(nextPctRaw * 10) / 10;
-              monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'poison');
-              monsterActiveEffects.push({ key: 'poison', params: { value: nextPct, mode: 'pct', duration: dur }, appliedAt: round, source: 'job_proc' });
+              monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                key: 'poison',
+                params: { value: nextPct, mode: 'pct', duration: dur },
+                appliedAt: round,
+                sourceType: 'job_proc',
+                sourceId: poisonSourceId
+              });
               if (existing) {
                 log.push(`☠️ **(盜賊)** **中毒加深**！${mName} 毒性增強至每回合 ${nextPct}% HP 傷害！`);
               } else {
@@ -1594,7 +1657,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               const counterDmg = Math.max(1, Math.round(monsterDmgThisRound * (counterDmgPct / 100)));
               mHp -= counterDmg;
               totalDamage += counterDmg;
-              log.push(`🦀 **甲蟹反擊**！以受到傷害的 ${counterDmgPct}% 反彈，對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+              const counterLabel = slotItem.monsterCardSkill?.name || slotItem.itemName || slotItem.name || "反擊";
+              log.push(`🦀 **${counterLabel}**！以受到傷害的 ${counterDmgPct}% 反彈，對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
               if (mHp <= 0) { outcome = "win"; }
             }
             break;
@@ -1658,20 +1722,35 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (pStats.hasMageBadge) {
               const procChance = 10;
               if (Math.random() * 100 < procChance) {
-                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'burn');
-                monsterActiveEffects.push({ key: 'burn', params: { value: 0.5, duration: { mode: 'turns', value: 3 } }, appliedAt: round, source: 'mage_offhand' });
+                monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                  key: 'burn',
+                  params: { value: 0.5, duration: { mode: 'turns', value: 3 } },
+                  appliedAt: round,
+                  sourceType: 'mage_offhand',
+                  sourceId: `${options.equipped?.weapon?.itemId || options.equipped?.weapon?.uuid || 'weapon'}:mage_offhand:burn`
+                });
                 combatStats.burnTriggerCount += 1;
                 log.push(`🔥 **(法師)** **燒傷**！${mName} 陷入燃燒狀態，持續 3 回合！`);
               }
               if (Math.random() * 100 < procChance) {
-                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'hit_rate_down');
-                monsterActiveEffects.push({ key: 'hit_rate_down', params: { value: 30, duration: { mode: 'turns', value: 3 } }, appliedAt: round, source: 'mage_offhand' });
+                monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                  key: 'hit_rate_down',
+                  params: { value: 30, duration: { mode: 'turns', value: 3 } },
+                  appliedAt: round,
+                  sourceType: 'mage_offhand',
+                  sourceId: `${options.equipped?.weapon?.itemId || options.equipped?.weapon?.uuid || 'weapon'}:mage_offhand:hit_rate_down`
+                });
                 log.push(`⚡ **(法師)** **麻痺**！${mName} 行動遲緩，命中率下降，持續 3 回合！`);
               }
               const recentFreeze = monsterActiveEffects.find(e => e.key === 'freeze' && e.appliedAt >= round - 1);
               if (!recentFreeze && Math.random() * 100 < procChance) {
-                monsterActiveEffects = monsterActiveEffects.filter(e => e.key !== 'freeze');
-                monsterActiveEffects.push({ key: 'freeze', params: { duration: { mode: 'turns', value: 1 } }, appliedAt: round + 1, source: 'mage_offhand' });
+                monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                  key: 'freeze',
+                  params: { duration: { mode: 'turns', value: 1 } },
+                  appliedAt: round + 1,
+                  sourceType: 'mage_offhand',
+                  sourceId: `${options.equipped?.weapon?.itemId || options.equipped?.weapon?.uuid || 'weapon'}:mage_offhand:freeze`
+                });
                 log.push(`🧊 **(法師)** **冰凍**！${mName} 被凍結，下回合無法攻擊！`);
               }
             }

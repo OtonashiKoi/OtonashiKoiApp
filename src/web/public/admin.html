@@ -429,6 +429,34 @@
                 </table>
               </div>
             </div>
+            <div class="card" style="margin-top:16px;">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Audit Trail</p>
+                  <h2>會員獎勵領取紀錄</h2>
+                  <p class="hint">顯示 Discord、綁定的 YouTube / Twitch 與綁定時間，方便查會員限定商品。</p>
+                </div>
+                <button id="shop-claims-refresh" class="button">重新載入</button>
+              </div>
+              <div style="overflow-x:auto;">
+                <table class="shop-table" id="shop-claims-table">
+                  <thead>
+                    <tr>
+                      <th>時間</th>
+                      <th>Discord</th>
+                      <th>玩家名稱</th>
+                      <th>YouTube</th>
+                      <th>YouTube 綁定時間</th>
+                      <th>Twitch</th>
+                      <th>Twitch 綁定時間</th>
+                      <th>商品</th>
+                      <th>備註</th>
+                    </tr>
+                  </thead>
+                  <tbody id="shop-claims-tbody"></tbody>
+                </table>
+              </div>
+            </div>
           </section>
 
           <section id="section-monsters" class="panel-section">
@@ -800,7 +828,7 @@
     <script src="/static/admin.players.js?v=6"></script>
     <script src="/static/admin.players.init.js?v=6"></script>
     <script src="/static/admin.tiers.js?v=6"></script>
-    <script src="/static/admin.shop.js?v=6"></script>
+    <script src="/static/admin.shop.js?v=7"></script>
     <script src="/static/admin.monsters.js?v=6"></script>
     <script src="/static/admin.monster-cards.js?v=1"></script>
     <script src="/static/admin.animation-studio.js?v=6"></script>

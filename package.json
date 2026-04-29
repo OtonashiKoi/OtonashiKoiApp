@@ -29,6 +29,7 @@
     "grant:100": "node ./scripts/grant-100-gold-all.js",
     "check:db": "node scripts/check-db-collections.js",
     "check:monster-drops": "node scripts/check-monster-drops.js",
+    "status:update": "node scripts/update-current-game-status.js",
     "db:sync": "node scripts/sync-db-to-cloud.js",
     "db:sync:start": "node scripts/db-sync-scheduler.js",
     "workflow:finalize": "node scripts/workflow-finalize.js"

@@ -9,7 +9,7 @@ const OFFHAND_WEAPON_TYPES = ["offhand_sword", "offhand_dagger", "offhand_mace"]
 
 const JOB_ITEM = {
   id: JOB_ITEM_ID,
-  name: "劍士",
+  name: "劍士徽章",
   description: "專精單手劍與雙手劍的前線職業。",
   itemType: "job_badge",
   imageUrl: null,
@@ -21,7 +21,7 @@ const JOB_ITEM = {
   weaponType: null,
   isTwoHanded: false,
   atkStat: null,
-  tier: "A",
+  tier: null,
   passiveEffects: [
     // 主武器單手劍：武器倍率結算後再乘 1.2
     {
@@ -154,4 +154,3 @@ main().catch((error) => {
   console.error("[error] upsert job swordsman failed:", error);
   process.exitCode = 1;
 });
-

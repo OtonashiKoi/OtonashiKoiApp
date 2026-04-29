@@ -1,6 +1,7 @@
 const { getMongoDb } = require("./createMongoClient");
 const { withProgressCache, withWalletCache, withPlayerCache } = require("./requestCache");
 const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
+const { createStreamAccountBindingRepository } = require("../streamBindings/createStreamAccountBindingRepository");
 
 function createMongoRepositories() {
   const collection = async (name) => (await getMongoDb()).collection(name);
@@ -41,6 +42,11 @@ function createMongoRepositories() {
         return (await collection("players")).findOne({ discordId });
       },
       async findByExternalId(platform, platformUserId) {
+        const binding = await repos.streamAccountBindingRepository.findByPlatformAndUserId(platform, platformUserId).catch(() => null);
+        if (binding?.discordId) {
+          const matched = await repos.playerRepository.findByDiscordId(binding.discordId);
+          if (matched) return matched;
+        }
         return (await collection("players")).findOne({ [`externalIds.${platform}`]: platformUserId });
       },
       async save(player) {
@@ -55,6 +61,7 @@ function createMongoRepositories() {
         return (await collection("players")).find({}).toArray();
       }
     },
+    streamAccountBindingRepository: createStreamAccountBindingRepository({ collection }),
     walletRepository: {
       async findByPlayerId(playerId) {
         return (await collection("wallets")).findOne({ playerId });
@@ -140,6 +147,10 @@ function createMongoRepositories() {
         await (await collection("transactions")).insertOne(transaction);
         return transaction;
       },
+      async findBySourceAndRef(source, sourceRef) {
+        if (!source || !sourceRef) return null;
+        return (await collection("transactions")).findOne({ source, sourceRef });
+      },
       async listByPlayerId(playerId, limit = 20) {
         return (await collection("transactions"))
           .find({ playerId })
@@ -177,6 +188,15 @@ function createMongoRepositories() {
       async listByDiscordId(discordId) {
         return (await collection("checkins")).find({ discordId }).toArray();
       },
+      async findLastByPlatformUserId(platform, platformUserId) {
+        if (!platform || !platformUserId) return null;
+        const results = await (await collection("checkins"))
+          .find({ platform, platformUserId })
+          .sort({ occurredAt: -1 })
+          .limit(1)
+          .toArray();
+        return results[0] || null;
+      },
       async countAllByPlayer() {
         const agg = await (await collection("checkins")).aggregate([
           { $group: { _id: "$discordId", count: { $sum: 1 } } }
@@ -203,6 +223,54 @@ function createMongoRepositories() {
       },
       async delete(id) {
         await (await collection("shopItems")).deleteOne({ id });
+      }
+    },
+    shopClaimRepository: {
+      async findByDiscordOrIdentityAndItem({ discordId = null, identityKeys = [], itemId }) {
+        const keys = Array.isArray(identityKeys) ? identityKeys.filter(Boolean) : [];
+        const query = { itemId };
+        if (discordId && keys.length) {
+          query.$or = [
+            { discordId },
+            { identityKeys: { $in: keys } }
+          ];
+        } else if (discordId) {
+          query.discordId = discordId;
+        } else if (keys.length) {
+          query.identityKeys = { $in: keys };
+        } else {
+          return null;
+        }
+        return (await collection("shopClaims")).findOne(query) || null;
+      },
+      async listByIdentityKeys(identityKeys) {
+        const keys = Array.isArray(identityKeys) ? identityKeys.filter(Boolean) : [];
+        if (!keys.length) return [];
+        return (await collection("shopClaims"))
+          .find({ identityKeys: { $in: keys } })
+          .sort({ claimedAt: -1 })
+          .toArray();
+      },
+      async listByPlayerId(playerId) {
+        return (await collection("shopClaims"))
+          .find({ playerId })
+          .sort({ claimedAt: -1 })
+          .toArray();
+      },
+      async listRecent(limit = 100) {
+        return (await collection("shopClaims"))
+          .find({})
+          .sort({ claimedAt: -1 })
+          .limit(limit)
+          .toArray();
+      },
+      async saveClaim(claim) {
+        await (await collection("shopClaims")).updateOne(
+          { discordId: claim.discordId, itemId: claim.itemId },
+          { $set: claim },
+          { upsert: true }
+        );
+        return claim;
       }
     },
     itemRepository: {

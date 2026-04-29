@@ -9,7 +9,7 @@ const OFFHAND_WEAPON_TYPES = ["offhand_staff"];
 
 const JOB_ITEM = {
   id: JOB_ITEM_ID,
-  name: "法師",
+  name: "法師徽章",
   description: "操控元素的施法者，杖術與元素效果為核心。",
   itemType: "job_badge",
   imageUrl: null,
@@ -21,7 +21,7 @@ const JOB_ITEM = {
   weaponType: null,
   isTwoHanded: false,
   atkStat: null,
-  tier: "A",
+  tier: null,
   passiveEffects: [
     // 單手杖：武器倍率 x1.2
     {

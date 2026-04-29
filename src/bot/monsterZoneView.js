@@ -1,7 +1,7 @@
 ﻿const path = require("path");
 const fs = require("fs");
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, AttachmentBuilder } = require("discord.js");
-const { getZoneTheme, ZONE_BY_KEY } = require("../shared/zones");
+const { getZoneTheme, ZONE_BY_KEY, getZoneDefaultEntryFee } = require("../shared/zones");
 
 const BUTTON_IDS = {
   enterBattle: "monster-zone:enter-battle",
@@ -33,7 +33,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const hpBar = maxHp > 0 ? buildHpBar(hp, maxHp) : "";
 
   const monsterName = monster?.name ?? "尚未設定怪物";
-  const entryFee = monster?.entryFee ?? 0;
+  const entryFee = monster?.entryFee ?? getZoneDefaultEntryFee(zoneKey);
   const expReward = monster?.expReward ?? 0;
   const goldReward = monster?.goldReward ?? 0;
 

@@ -3,15 +3,15 @@ const path = require("path");
 const fs = require("fs");
 const { BUTTON_IDS, createPlayerPanelMessage } = require("./playerPanelView");
 const { expToNextLevel, MAX_LEVEL } = require("../shared/progression");
+const config = require("../config");
 const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
 const { calcPlayerStats } = require("../shared/combatStats");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
 const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
-const { MAX_ENHANCE_LEVEL } = require("../shared/enhanceConfig");
+const { MAX_ENHANCE_LEVEL, getEnhanceCost } = require("../shared/enhanceConfig");
 
-const AUTO_DELETE_MS = 60_000;
 const ACTIVE_REPLY_BY_USER = new Map();
 
 function getServiceContext() {
@@ -41,56 +41,79 @@ async function safeEditReply(interaction, payload) {
   }
 }
 
-/** 回覆 ephemeral 訊息，並在 AUTO_DELETE_MS 後自動刪除 */
+/** 切換面板前先關掉前一個個人面板回覆 */
 async function clearActiveReply(interaction) {
   const userId = interaction?.user?.id;
   if (!userId) return;
   const previous = ACTIVE_REPLY_BY_USER.get(userId);
   if (!previous) return;
-  if (previous.timeoutId) clearTimeout(previous.timeoutId);
   try {
     await previous.webhook.deleteMessage(previous.messageId);
   } catch (_) {}
   ACTIVE_REPLY_BY_USER.delete(userId);
 }
 
-async function rememberActiveReply(interaction, ttlMs = AUTO_DELETE_MS) {
+async function rememberActiveReply(interaction) {
   const userId = interaction?.user?.id;
   if (!userId) return;
   try {
     const msg = await interaction.fetchReply();
-    const timeoutId = setTimeout(() => {
-      interaction.webhook.deleteMessage(msg.id).catch(() => {});
-      const cur = ACTIVE_REPLY_BY_USER.get(userId);
-      if (cur?.messageId === msg.id) ACTIVE_REPLY_BY_USER.delete(userId);
-    }, ttlMs);
     ACTIVE_REPLY_BY_USER.set(userId, {
       webhook: interaction.webhook,
-      messageId: msg.id,
-      timeoutId
+      messageId: msg.id
     });
   } catch (_) {}
 }
 
 async function replyAndAutoDelete(interaction, content) {
-  await clearActiveReply(interaction);
   await interaction.reply({ content, flags: MessageFlags.Ephemeral });
-  await rememberActiveReply(interaction, AUTO_DELETE_MS);
 }
 
 async function replyPlayerBlocked(interaction) {
   await replyAndAutoDelete(interaction, "❌ 你目前不在可用玩家白名單中。");
 }
 
+function formatStreamMembershipRules() {
+  const rules = config.streamMembership || {};
+  const youtubeTiers = rules.youtubeTiers || {};
+  const twitchTiers = rules.twitchTiers || {};
+  const youtubeLine = Object.entries(youtubeTiers).map(([tier, name]) => `${name}-${tier}`).join("、") || "未設定";
+  const twitchLine = Object.entries(twitchTiers).map(([tier, tierName]) => `位階${tier}=${tierName}`).join("、") || "未設定";
+  const noMembership = rules.noMembershipPolicy === "unchanged" ? "不變" : String(rules.noMembershipPolicy || "不變");
+  return [
+    `管理員 DCID：${(rules.adminUserIds || []).join("、") || "未設定"}`,
+    `YouTube：${rules.youtubeChannel || "未設定"}`,
+    `Twitch：${rules.twitchChannel || "未設定"}`,
+    `YouTube 會員 → ${youtubeLine}`,
+    `Twitch 訂閱 → ${twitchLine}`,
+    `沒會員 → ${noMembership}`
+  ];
+}
+
+function formatBindingSnapshot(binding) {
+  const platformLabel = binding.platform === "youtube" ? "YouTube" : binding.platform === "twitch" ? "Twitch" : binding.platform;
+  const linkedAt = binding.linkedAt ? `（綁定：${new Date(binding.linkedAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}）` : "";
+  const tierAtLink = binding.playerTierAtLink ? `，綁定時位階：${binding.playerTierAtLink}` : "";
+  const roleCount = Array.isArray(binding.memberRoleIdsAtLink) && binding.memberRoleIdsAtLink.length > 0
+    ? `，綁定時身分組：${binding.memberRoleIdsAtLink.length} 個`
+    : "";
+  const displayName = binding.displayName ? `，顯示名稱：${binding.displayName}` : "";
+  return `• ${platformLabel}：\`${binding.platformUserId}\`${displayName}${tierAtLink}${roleCount}${linkedAt}`;
+}
+
+async function getBindingRows(interaction) {
+  const serviceContext = getServiceContext();
+  const player = await serviceContext.playerRepository.findByDiscordId(interaction.user.id);
+  const bindingRepo = serviceContext.streamAccountBindingRepository;
+  const bindings = bindingRepo ? await bindingRepo.listByDiscordId(interaction.user.id).catch(() => []) : [];
+  const bindingLines = bindings.map((binding) => formatBindingSnapshot(binding));
+  return { player, bindings, bindingLines };
+}
+
 
 async function handleProfile(interaction) {
   const serviceContext = getServiceContext();
-  const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
-  // getProfile 與 updatePlayerTier 互不相依，並行執行
-  const [result] = await Promise.all([
-    serviceContext.playerService.getProfile(interaction.user.id, interaction.user.username),
-    serviceContext.shopService.updatePlayerTier(interaction.user.id, memberRoleIds)
-  ]);
+  const result = await serviceContext.playerService.getProfile(interaction.user.id, interaction.user.username);
   // 重新讀取 progress 以拿到更新後的等級
   const freshProgress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const p = freshProgress || result.progress;
@@ -365,7 +388,7 @@ async function handleCheckinStatus(interaction) {
   );
 }
 
-const TIER_SELL_PRICE = { D: 10, C: 50, B: 100, A: 150 };
+const TIER_SELL_PRICE = { D: 200, C: 500, B: 1000, A: 10000 };
 
 /** 根據 itemType 產生背包 ActionRow，idx 為顯示編號（0-based） */
 function buildInventoryRow(e, idx) {
@@ -409,7 +432,7 @@ function buildInventoryRow(e, idx) {
     );
   }
   // 有 tier 的道具顯示販售按鈕
-  const sellPrice = e.tier ? TIER_SELL_PRICE[e.tier] : null;
+  const sellPrice = e.tier ? TIER_SELL_PRICE[String(e.tier).toUpperCase()] : null;
   if (sellPrice != null) {
     btns.push(
       new ButtonBuilder()
@@ -440,6 +463,27 @@ const EQ_STANDARD_SLOTS = new Set([...EQ_LEFT_SLOTS, ...EQ_RIGHT_SLOTS]);
 const EQ_WEAPON_LIKE_SLOTS = new Set(["weapon", "shield"]);
 const EQ_SORT_ORDER = ["weapon","shield","head_top","head_mid","head_low","armor","garment","shoes","accessory_l","accessory_r","special_1","special_2","special_3"];
 const EQ_SORT_ORDER_MAP = EQ_SORT_ORDER.reduce((acc, slot, idx) => ({ ...acc, [slot]: idx }), {});
+const BACKPACK_MAIN_TABS = [
+  { tab: "item", label: "🎮 道具" },
+  { tab: "weapon", label: "⚔️ 武器" },
+  { tab: "armor", label: "🛡️ 防裝" },
+  { tab: "special", label: "✨ 特殊" },
+  { tab: "badge", label: "📖 職業" },
+];
+const BACKPACK_WEAPON_SUBTABS = [
+  { subTab: "all", label: "📦 全部" },
+  { subTab: "melee1", label: "🗡️ 單手" },
+  { subTab: "melee2", label: "🪓 雙手" },
+  { subTab: "ranged", label: "🏹 遠程" },
+  { subTab: "magic", label: "🪄 法系" },
+];
+const BACKPACK_ARMOR_SUBTABS = [
+  { subTab: "all", label: "📦 全部" },
+  { subTab: "head", label: "🪖 頭部" },
+  { subTab: "core", label: "🥋 核心" },
+  { subTab: "shield", label: "🛡️ 盾牌" },
+  { subTab: "accessory", label: "💍 飾品" },
+];
 
 function normalizeName(name) {
   return String(name || "").replace(/\s*\+\d+$/, "").trim();
@@ -447,6 +491,50 @@ function normalizeName(name) {
 
 function isWeaponLikeSlot(slot) {
   return EQ_WEAPON_LIKE_SLOTS.has(slot);
+}
+
+function isWeaponSlotItem(entry) {
+  return entry?.itemType === "equipment" && entry?.equipSlot === "weapon";
+}
+
+function isArmorSlotItem(entry) {
+  return entry?.itemType === "equipment" && entry?.equipSlot && [
+    "shield",
+    "head_top",
+    "head_mid",
+    "head_low",
+    "armor",
+    "garment",
+    "shoes",
+    "accessory_l",
+    "accessory_r",
+  ].includes(entry.equipSlot);
+}
+
+function weaponFamily(entry) {
+  const wt = String(entry?.weaponType || "").toLowerCase();
+  if (!wt) return "other";
+  if (wt.startsWith("staff")) return "magic";
+  if (wt === "bow") return "ranged";
+  if (wt === "dagger") return "melee1";
+  if (wt.startsWith("sword_1h") || wt.startsWith("axe_1h") || wt.startsWith("mace_1h")) return "melee1";
+  if (wt.startsWith("sword_2h") || wt.startsWith("axe_2h") || wt.startsWith("mace_2h")) return "melee2";
+  return "other";
+}
+
+function matchWeaponSubTab(entry, subTab = "all") {
+  if (subTab === "all") return true;
+  return weaponFamily(entry) === subTab;
+}
+
+function matchArmorSubTab(entry, subTab = "all") {
+  if (subTab === "all") return true;
+  const slot = entry?.equipSlot || "";
+  if (subTab === "head") return ["head_top", "head_mid", "head_low"].includes(slot);
+  if (subTab === "core") return ["armor", "garment", "shoes"].includes(slot);
+  if (subTab === "shield") return slot === "shield";
+  if (subTab === "accessory") return ["accessory_l", "accessory_r"].includes(slot);
+  return false;
 }
 
 function sortBackpackItems(items, tab) {
@@ -504,7 +592,7 @@ function groupEquipmentItems(items, tab) {
   for (const entry of list) {
     const slot = entry.equipSlot || "";
     const enh = Number(entry.enhanceLevel || 0);
-    const tier = entry.tier || "";
+    const tier = entry.tier ? String(entry.tier).toUpperCase() : "";
     const statsKey = canonicalStatsKey(entry.equipStats);
     const key = `${normalizeName(entry.itemName)}|${slot}|${tier}|${enh}|${statsKey}`;
 
@@ -532,14 +620,14 @@ function groupEquipmentItems(items, tab) {
 }
 
 function buildEquipmentGroupRow(group, idx, opts = {}) {
-  const { tab = "item", page = 0, showImage = true, showEquip = true } = opts;
+  const { tab = "item", subTab = "all", page = 0, showImage = true, showEquip = true } = opts;
   const prefix = ["①","②","③","④","⑤"][idx] ?? `${idx + 1}.`;
   const btns = [];
 
   if (showEquip) {
     btns.push(
       new ButtonBuilder()
-        .setCustomId(`backpack_equip:${group.repUuid}:${tab}:${page}`)
+        .setCustomId(`backpack_equip:${group.repUuid}:${tab}:${subTab}:${page}`)
         .setLabel(`${prefix} 裝備`)
         .setStyle(ButtonStyle.Success)
     );
@@ -556,7 +644,7 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
     const isMaxed = currentLevel >= MAX_ENHANCE_LEVEL;
     btns.push(
       new ButtonBuilder()
-        .setCustomId(`backpack_enhance:${group.repUuid}:${tab}:${page}`)
+        .setCustomId(`backpack_enhance:${group.repUuid}:${tab}:${subTab}:${page}`)
         .setLabel(`⚡ 強化 ${currentLevel > 0 ? `(+${currentLevel}→+${currentLevel + 1})` : "(+0→+1)"}`)
         .setStyle(ButtonStyle.Primary)
         .setDisabled(isMaxed)
@@ -566,14 +654,14 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
   if (group.sellPrice != null) {
     btns.push(
       new ButtonBuilder()
-        .setCustomId(`backpack_sell:${group.repUuid}:${tab}:${page}`)
+        .setCustomId(`backpack_sell:${group.repUuid}:${tab}:${subTab}:${page}`)
         .setLabel(`售 1件 (${group.sellPrice}💰)`)
         .setStyle(ButtonStyle.Secondary)
     );
     if (group.count > 1) {
       btns.push(
         new ButtonBuilder()
-          .setCustomId(`backpack_sell_bulk:${group.repUuid}:${tab}:${page}`)
+          .setCustomId(`backpack_sell_bulk:${group.repUuid}:${tab}:${subTab}:${page}`)
           .setLabel(`批量售 (共${group.count}件)`)
           .setStyle(ButtonStyle.Secondary)
       );
@@ -581,7 +669,7 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
   } else {
     btns.push(
       new ButtonBuilder()
-        .setCustomId(`backpack_sell:${group.repUuid}:${tab}:${page}`)
+        .setCustomId(`backpack_sell:${group.repUuid}:${tab}:${subTab}:${page}`)
         .setLabel("不可販售")
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(true)
@@ -600,23 +688,15 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
   return new ActionRowBuilder().addComponents(btns);
 }
 
-function filterByTab(inventory, tab) {
+function filterByTab(inventory, tab, subTab = "all") {
   if (tab === "equip") {
     return inventory.filter(e => e.itemType === "equipment" && EQ_STANDARD_SLOTS.has(e.equipSlot));
   }
   if (tab === "weapon") {
-    return inventory.filter(e =>
-      e.itemType === "equipment" &&
-      EQ_STANDARD_SLOTS.has(e.equipSlot) &&
-      isWeaponLikeSlot(e.equipSlot)
-    );
+    return inventory.filter(e => isWeaponSlotItem(e) && matchWeaponSubTab(e, subTab));
   }
   if (tab === "armor") {
-    return inventory.filter(e =>
-      e.itemType === "equipment" &&
-      EQ_STANDARD_SLOTS.has(e.equipSlot) &&
-      !isWeaponLikeSlot(e.equipSlot)
-    );
+    return inventory.filter(e => isArmorSlotItem(e) && matchArmorSubTab(e, subTab));
   }
   if (tab === "special") {
     return inventory.filter(e =>
@@ -629,39 +709,52 @@ function filterByTab(inventory, tab) {
 }
 
 const PAGE_SIZE = 3;
+const EQUIP_PAGE_SIZE = 2;
 
-function buildTabRow(activeTab) {
-  const defs = [
-    { tab: "item",    label: "🎮 道具" },
-    { tab: "weapon",  label: "⚔️ 武器" },
-    { tab: "armor",   label: "🛡️ 防裝" },
-    { tab: "special", label: "✨ 特殊" },
-    { tab: "badge",   label: "📖 職業" },
-  ];
+function buildTabRow(activeTab, activeSubTab = "all") {
   return new ActionRowBuilder().addComponents(
-    defs.map(d => new ButtonBuilder()
-      .setCustomId(`backpack_tab:${d.tab}:0`)
+    BACKPACK_MAIN_TABS.map(d => new ButtonBuilder()
+      .setCustomId(`backpack_tab:${d.tab}:all:0`)
       .setLabel(d.label)
       .setStyle(d.tab === activeTab ? ButtonStyle.Primary : ButtonStyle.Secondary)
     )
   );
 }
 
-function buildPageRow(tab, page, totalPages) {
+function buildSubTabRows(tab, activeSubTab = "all") {
+  const defs = tab === "weapon" ? BACKPACK_WEAPON_SUBTABS : tab === "armor" ? BACKPACK_ARMOR_SUBTABS : [];
+  if (!defs.length) return [];
+  const rows = [];
+  for (let i = 0; i < defs.length; i += 5) {
+    const rowDefs = defs.slice(i, i + 5);
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        rowDefs.map((d) => new ButtonBuilder()
+          .setCustomId(`backpack_subtab:${tab}:${d.subTab}:0`)
+          .setLabel(d.label)
+          .setStyle(d.subTab === activeSubTab ? ButtonStyle.Primary : ButtonStyle.Secondary)
+        )
+      )
+    );
+  }
+  return rows;
+}
+
+function buildPageRow(tab, subTab, page, totalPages) {
   const btns = [];
   btns.push(new ButtonBuilder()
-    .setCustomId(`backpack_prev:${tab}:${page - 1}`)
+    .setCustomId(`backpack_prev:${tab}:${subTab}:${page - 1}`)
     .setLabel("◀ 上一頁")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(page <= 0)
   );
   btns.push(new ButtonBuilder()
-    .setCustomId(`backpack_page_input:${tab}:${page}:${totalPages}`)
+    .setCustomId(`backpack_page_input:${tab}:${subTab}:${page}:${totalPages}`)
     .setLabel(`${page + 1} / ${totalPages}`)
     .setStyle(ButtonStyle.Primary)
   );
   btns.push(new ButtonBuilder()
-    .setCustomId(`backpack_next:${tab}:${page + 1}`)
+    .setCustomId(`backpack_next:${tab}:${subTab}:${page + 1}`)
     .setLabel("下一頁 ▶")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(page >= totalPages - 1)
@@ -669,28 +762,30 @@ function buildPageRow(tab, page, totalPages) {
   return new ActionRowBuilder().addComponents(btns);
 }
 
-function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
-  const rawFiltered = filterByTab(inventory, tab);
+function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subTab = "all") {
+  const rawFiltered = filterByTab(inventory, tab, subTab);
   const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "special" || tab === "badge";
   const filtered = isEquipTab ? groupEquipmentItems(rawFiltered, tab) : sortBackpackItems(rawFiltered, tab);
 
   const header = prefixMsg ? prefixMsg + "\n\n" : "";
   const tabLabel =
-    tab === "weapon" ? "武器" :
-    tab === "armor"  ? "防裝" :
+    tab === "weapon" ? `武器${subTab === "all" ? "" : ` / ${BACKPACK_WEAPON_SUBTABS.find(d => d.subTab === subTab)?.label || subTab}`}` :
+    tab === "armor"  ? `防裝${subTab === "all" ? "" : ` / ${BACKPACK_ARMOR_SUBTABS.find(d => d.subTab === subTab)?.label || subTab}`}` :
     tab === "equip"  ? "裝備" :
     tab === "special"? "特殊" :
     tab === "badge"  ? "職業" : "道具";
-  const tabRow = buildTabRow(tab, page);
+  const tabRow = buildTabRow(tab, subTab);
+  const subTabRows = buildSubTabRows(tab, subTab);
 
   if (!filtered.length) {
-    return { content: header + `🎒 **背包 — ${tabLabel}**\n\n此分類目前為空。`, components: [tabRow] };
+    return { content: header + `🎒 **背包 — ${tabLabel}**\n\n此分類目前為空。`, components: [tabRow, ...subTabRows] };
   }
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const pageSize = (tab === "weapon" || tab === "armor") ? EQUIP_PAGE_SIZE : PAGE_SIZE;
+  const totalPages = Math.ceil(filtered.length / pageSize);
   const safePage = Math.max(0, Math.min(page, totalPages - 1));
-  const pageItems = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
-  const offset = safePage * PAGE_SIZE;
+  const pageItems = filtered.slice(safePage * pageSize, (safePage + 1) * pageSize);
+  const offset = safePage * pageSize;
 
   const lines = [];
   if (tab === "weapon" && pageItems.length) lines.push("【武器】");
@@ -712,7 +807,7 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
       const slot = slotLabel ? `（${slotLabel}）` : "";
       const statStr = formatEquipStats(e.equipStats);
       const statsPart = statStr ? `｜${statStr}` : "";
-  const overMax = enhLv > MAX_ENHANCE_LEVEL ? ` ⚠️超過上限(+${MAX_ENHANCE_LEVEL})` : "";
+      const overMax = enhLv > MAX_ENHANCE_LEVEL ? ` ⚠️超過上限(+${MAX_ENHANCE_LEVEL})` : "";
       const price = e.sellPrice != null ? `售 ${e.sellPrice}💰/件` : "不可販售";
       lines.push(`${offset + i + 1}. **${baseName}**${enh}${slot}${statsPart}｜${price}${overMax} ×${e.count}`);
       return;
@@ -723,33 +818,35 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0) {
     lines.push(`${offset + i + 1}. **${e.itemName}**${slot}${stackDisplay}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`);
   });
 
-  const rows = isEquipTab
+  const rows = [tabRow, ...subTabRows];
+  const itemRows = isEquipTab
     ? pageItems.map((g, i) => buildEquipmentGroupRow(g, i, {
       tab,
+      subTab,
       page: safePage,
       showImage: !(tab === "weapon" || tab === "armor"),
       showEquip: true,
     }))
     : pageItems.map((e, i) => buildInventoryRow(e, i));
-  rows.push(tabRow);
-  if (totalPages > 1) rows.push(buildPageRow(tab, safePage, totalPages));
+  rows.push(...itemRows);
+  if (totalPages > 1) rows.push(buildPageRow(tab, subTab, safePage, totalPages));
 
   return { content: header + `🎒 **背包 — ${tabLabel}**（第 ${safePage + 1}/${totalPages} 頁，共 ${filtered.length} 項）\n\n${lines.join("\n")}`, components: rows };
 }
 
 async function handleBind(interaction) {
-  const serviceContext = getServiceContext();
-  const player = await serviceContext.playerRepository.findByDiscordId(interaction.user.id);
+  const { player, bindings, bindingLines } = await getBindingRows(interaction);
+  const boundLines = [...bindingLines];
 
-  const externalIds = player?.externalIds || {};
-  const streamAliases = player?.streamAliases || [];
-
-  const boundLines = [];
-  for (const [platform, uid] of Object.entries(externalIds)) {
-    boundLines.push(`• ${platform}：\`${uid}\``);
-  }
-  for (const alias of streamAliases) {
-    boundLines.push(`• 顯示名稱：\`${alias}\``);
+  if (boundLines.length === 0) {
+    const externalIds = player?.externalIds || {};
+    const streamAliases = player?.streamAliases || [];
+    for (const [platform, uid] of Object.entries(externalIds)) {
+      boundLines.push(`• ${platform}：\`${uid}\``);
+    }
+    for (const alias of streamAliases) {
+      boundLines.push(`• 顯示名稱：\`${alias}\``);
+    }
   }
 
   if (boundLines.length > 0) {
@@ -771,6 +868,14 @@ async function handleBind(interaction) {
     `**!綁定 ${code}**\n\n` +
     `綁定後，打卡就會自動識別你的直播帳號。`
   );
+}
+
+function resolveSnapshotTier(binding, playerTierService) {
+  const tier = String(binding?.playerTierAtLink || "").trim().toUpperCase();
+  if (tier) return tier;
+  const roleIds = Array.isArray(binding?.memberRoleIdsAtLink) ? binding.memberRoleIdsAtLink : [];
+  if (!playerTierService || roleIds.length === 0) return null;
+  return playerTierService.resolveHighestTier(roleIds).catch(() => null);
 }
 
 async function handleBackpack(interaction) {
@@ -851,10 +956,8 @@ async function handleEquipAction(interaction, action, value) {
       result = await serviceContext.shopService.unequipItem(interaction.user.id, value);
       await safeEditReply(interaction, { content: `\u2705 已卸下 **${result.itemName}**，已放回背包。`, components: [] });
     }
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
   } catch (err) {
     await safeEditReply(interaction, { content: `\u274c 操作失敗\uff1a${err.message}`, components: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
@@ -897,16 +1000,16 @@ async function handleBackpackView(interaction, uuid) {
   }
 }
 
-async function handleBackpackTab(interaction, tab, page = 0) {
+async function handleBackpackTab(interaction, tab, page = 0, subTab = "all") {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
-  const msg = buildBackpackMessage(inventory, tab, undefined, page);
+  const msg = buildBackpackMessage(inventory, tab, undefined, page, subTab);
   await safeEditReply(interaction, msg);
 }
 
-async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0) {
+async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0, subTab = "all") {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
@@ -924,18 +1027,17 @@ async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0) {
     const result = await serviceContext.shopService.equipItem(interaction.user.id, uuid, targetSlot);
     const updatedProgress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const inventory = updatedProgress?.inventory || [];
-    const msg = buildBackpackMessage(inventory, tab, `✅ 已裝備 **${result.itemName}**！`, page);
+    const msg = buildBackpackMessage(inventory, tab, `✅ 已裝備 **${result.itemName}**！`, page, subTab);
     await safeEditReply(interaction, msg);
   } catch (err) {
     try {
       const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
       const inventory = progress?.inventory || [];
-      const msg = buildBackpackMessage(inventory, tab, `❌ 裝備失敗：${err.message}`, page);
+      const msg = buildBackpackMessage(inventory, tab, `❌ 裝備失敗：${err.message}`, page, subTab);
       await safeEditReply(interaction, msg);
     } catch (_) {
       await safeEditReply(interaction, { content: `❌ 裝備失敗：${err.message}`, components: [] });
     }
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
@@ -1005,38 +1107,60 @@ async function handleBackpackAction(interaction, action, uuid) {
     const tab = "item";
     const msg = buildBackpackMessage(inventory, tab, `✅ 已${verb} **${result.itemName}**。${extra}`);
     await safeEditReply(interaction, msg);
-    if (!inventory.length) {
-      setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
-    }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 操作失敗：${err.message}`, components: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
 /** 販售道具 */
-async function handleBackpackSell(interaction, uuid, tab = "item", page = 0) {
+async function handleBackpackSell(interaction, uuid, tab = "item", page = 0, subTab = "all") {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const quote = await serviceContext.shopService.getSellQuote(interaction.user.id, uuid, 1);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`backpack_sell_confirm:${uuid}:${tab}:${subTab}:${page}`)
+        .setLabel("確定販售")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`backpack_sell_cancel:${tab}:${subTab}:${page}`)
+        .setLabel("取消")
+        .setStyle(ButtonStyle.Secondary)
+    );
+    await safeEditReply(interaction, {
+      content:
+        `⚠️ **販售確認**\n\n` +
+        `你確定要販售 **${quote.itemName}** 嗎？\n` +
+        `販售數量：**1**\n` +
+        `販售總價值：💰 **${quote.totalGold.toLocaleString()} 金幣**\n\n` +
+        `確認後道具會從背包移除，無法復原。`,
+      components: [row]
+    });
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 販售失敗：${err.message}`, components: [] });
+  }
+}
+
+/** 確認販售道具 */
+async function handleBackpackSellConfirm(interaction, uuid, tab = "item", page = 0, subTab = "all") {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
     const result = await serviceContext.shopService.sellItem(interaction.user.id, uuid);
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const inventory = progress?.inventory || [];
-    const msg = buildBackpackMessage(inventory, tab, `✅ 已販售 **${result.itemName}**，獲得 💰 ${result.price} 金幣。`, page);
+    const msg = buildBackpackMessage(inventory, tab, `✅ 已販售 **${result.itemName}**，獲得 💰 ${result.price} 金幣。`, page, subTab);
     await safeEditReply(interaction, msg);
-    if (!inventory.length) {
-      setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
-    }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 販售失敗：${err.message}`, components: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
 /** 批量販售：彈出 Modal 讓玩家輸入數量 */
-async function handleBackpackSellBulkPrompt(interaction, uuid, tab = "item", page = 0) {
+async function handleBackpackSellBulkPrompt(interaction, uuid, tab = "item", page = 0, subTab = "all") {
   const modal = new ModalBuilder()
-    .setCustomId(`backpack_sell_bulk_modal:${uuid}:${tab}:${page}`)
+    .setCustomId(`backpack_sell_bulk_modal:${uuid}:${tab}:${subTab}:${page}`)
     .setTitle("批量販售");
   modal.addComponents(
     new ActionRowBuilder().addComponents(
@@ -1053,7 +1177,7 @@ async function handleBackpackSellBulkPrompt(interaction, uuid, tab = "item", pag
 }
 
 /** 批量販售：處理 Modal 提交 */
-async function handleBackpackSellBulkConfirm(interaction, uuid, tab = "item", page = 0) {
+async function handleBackpackSellBulkConfirm(interaction, uuid, tab = "item", page = 0, subTab = "all") {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
@@ -1061,29 +1185,102 @@ async function handleBackpackSellBulkConfirm(interaction, uuid, tab = "item", pa
     const qty = parseInt(qtyRaw, 10);
     if (isNaN(qty) || qty < 1) {
       await safeEditReply(interaction, { content: "❌ 請輸入有效的數量（正整數）。", components: [] });
-      setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
       return;
     }
+    const quote = await serviceContext.shopService.getSellQuote(interaction.user.id, uuid, qty);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`backpack_sell_bulk_confirm:${uuid}:${tab}:${subTab}:${page}:${quote.sellCount}`)
+        .setLabel("確定批量販售")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`backpack_sell_cancel:${tab}:${subTab}:${page}`)
+        .setLabel("取消")
+        .setStyle(ButtonStyle.Secondary)
+    );
+    await safeEditReply(interaction, {
+      content:
+        `⚠️ **批量販售確認**\n\n` +
+        `你確定要販售 **${quote.itemName}** × **${quote.sellCount}** 嗎？\n` +
+        `單價：💰 **${quote.priceEach.toLocaleString()} 金幣**\n` +
+        `販售總價值：💰 **${quote.totalGold.toLocaleString()} 金幣**\n\n` +
+        `確認後道具會從背包移除，無法復原。`,
+      components: [row]
+    });
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 批量販售失敗：${err.message}`, components: [] });
+  }
+}
+
+/** 確認批量販售 */
+async function handleBackpackSellBulkExecute(interaction, uuid, tab = "item", page = 0, qty = 1, subTab = "all") {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
     const result = await serviceContext.shopService.sellItemBulk(interaction.user.id, uuid, qty);
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const inventory = progress?.inventory || [];
     const msg = buildBackpackMessage(
       inventory, tab,
       `✅ 已批量販售 **${result.itemName}** × ${result.sellCount} 件，獲得 💰 ${result.totalGold} 金幣。`,
-      page
+      page,
+      subTab
     );
     await safeEditReply(interaction, msg);
-    if (!inventory.length) {
-      setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
-    }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 批量販售失敗：${err.message}`, components: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
+function formatEnhanceNumber(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "?";
+  if (Number.isInteger(num)) return String(num);
+  return num.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+}
+
+function buildEnhanceConfirmLines(info) {
+  const itemName = info?.itemName || "未知道具";
+  const currentLevel = Number(info?.currentLevel || 0);
+  if (info?.isMaxed) {
+    return [
+      `🎯 **目標道具**：${itemName}`,
+      `⚡ **強化等級**：已達上限 +${currentLevel}`,
+      "⚠️ 這件裝備已達最高強化等級，無法再強化。"
+    ].join("\n");
+  }
+
+  const nextLevel = info?.nextLevel ?? (currentLevel + 1);
+  const gemsRequired = Number(info?.gemsRequired || 0);
+  const goldRequired = Number(info?.goldRequired || 0);
+  const gemsOwned = Number(info?.gemsOwned || 0);
+  const goldOwned = Number(info?.goldOwned || 0);
+  const successRate = Number(info?.successRate || 0);
+  const statBoosted = info?.statBoostedZh || (info?.statBoosted ? String(info.statBoosted).toUpperCase() : "");
+  const oldStatValue = info?.oldStatValue;
+  const newStatValue = info?.newStatValue;
+  const statDelta = Number(info?.statDelta || 0);
+
+  const lines = [
+    `🎯 **目標道具**：${itemName}`,
+    `⚡ **強化等級**：+${currentLevel} → +${nextLevel}`,
+    `🧪 **素材消耗**：${gemsRequired} 顆 ${info?.tier || ""}階強化石`,
+    `💰 **金幣消耗**：${goldRequired > 0 ? `${goldRequired}` : "免費"}`,
+    `📦 **持有素材**：${gemsOwned} 顆強化石 / ${goldOwned} 金幣`,
+    `🎲 **成功率**：${successRate}%`,
+  ];
+
+  if (statBoosted && Number.isFinite(Number(oldStatValue)) && Number.isFinite(Number(newStatValue))) {
+    const deltaText = statDelta >= 0 ? `+${formatEnhanceNumber(statDelta)}` : formatEnhanceNumber(statDelta);
+    lines.push(`📈 **數值預覽**：${statBoosted} ${formatEnhanceNumber(oldStatValue)} → ${formatEnhanceNumber(newStatValue)}（${deltaText}）`);
+  }
+
+  lines.push("⚠️ 確認後會直接消耗素材與金幣，請再次確認要強化的道具。");
+  return lines.join("\n");
+}
+
 /** 寶石強化：顯示強化信息並執行 */
-async function handleBackpackEnhance(interaction, uuid, tab = "item", page = 0) {
+async function handleBackpackEnhance(interaction, uuid, tab = "item", page = 0, subTab = "all") {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
@@ -1099,59 +1296,62 @@ async function handleBackpackEnhance(interaction, uuid, tab = "item", page = 0) 
       ? `已達最大強化等級 +${info.currentLevel}`
       : `目前強化等級：+${info.currentLevel}→+${info.nextLevel}`;
 
-    const requirementLine = info.isMaxed
-      ? ""
-      : `\n消耗：**${info.gemsRequired} 顆** ${info.tier}階寶石\n持有：${info.gemsOwned} 顆\n成功率：**${info.successRate}%**`;
-
-    const canEnhance = !info.isMaxed && info.gemsOwned >= info.gemsRequired;
+    const canEnhance = !info.isMaxed && info.gemsOwned >= info.gemsRequired && info.goldOwned >= info.goldRequired;
     const buttonLabel = info.isMaxed
       ? "已達上限"
-      : `強化至 +${info.nextLevel}`;
+      : `確認強化 +${info.nextLevel}`;
 
     const row = new ActionRowBuilder();
     if (!info.isMaxed) {
       row.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`backpack_enhance_confirm:${uuid}:${tab}:${page}`)
-          .setLabel(buttonLabel)
-          .setStyle(ButtonStyle.Danger)
-          .setDisabled(!canEnhance)
+      new ButtonBuilder()
+        .setCustomId(`backpack_enhance_confirm:${uuid}:${tab}:${subTab}:${page}`)
+        .setLabel(buttonLabel)
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(!canEnhance)
       );
     }
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(`backpack_enhance_cancel:${tab}:${page}`)
+        .setCustomId(`backpack_enhance_cancel:${tab}:${subTab}:${page}`)
         .setLabel("取消")
         .setStyle(ButtonStyle.Secondary)
     );
 
     await safeEditReply(interaction, {
-      content: `⚡ **${info.itemName}**\n${statusLine}${requirementLine}${!canEnhance && !info.isMaxed ? "\n❌ 寶石數量不足" : ""}`,
+      content: `⚡ **${info.itemName}**\n${statusLine}\n${buildEnhanceConfirmLines(info)}${!canEnhance && !info.isMaxed ? "\n❌ 素材或金幣不足" : ""}`,
       components: [row]
     });
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
 /** 寶石強化確認：執行強化 */
-async function handleBackpackEnhanceConfirm(interaction, uuid, tab = "item", page = 0) {
+async function handleBackpackEnhanceConfirm(interaction, uuid, tab = "item", page = 0, subTab = "all") {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
     const result = await serviceContext.enhanceService.enhanceEquipment(interaction.user.id, uuid);
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const statLabel = result.statBoostedZh || String(result.statBoosted || "").toUpperCase();
+    const from = formatEnhanceNumber(result.oldStatValue ?? "?");
+    const to = formatEnhanceNumber(result.newStatValue ?? "?");
+    const deltaText = Number.isFinite(Number(result.statDelta))
+      ? (Number(result.statDelta) >= 0 ? `+${formatEnhanceNumber(result.statDelta)}` : formatEnhanceNumber(result.statDelta))
+      : "";
+    const goldText = Number(result.goldUsed || 0) > 0 ? `${result.goldUsed} 金幣` : "免費";
     const inventory = progress?.inventory || [];
 
     const statusEmoji = result.success ? "✅" : "❌";
-    const prefixMsg = `${statusEmoji} ${result.message}`;
+    const prefixMsg = result.success
+      ? `${statusEmoji} 強化成功！**${result.itemName}**（${statLabel} ${from} → ${to}${deltaText ? `，${deltaText}` : ""}）`
+      : `${statusEmoji} 強化失敗，**${result.itemName}** 已消耗 ${result.gemsUsed} 顆 ${result.tier}階寶石與 ${goldText}。`;
 
-    const msg = buildBackpackMessage(inventory, tab, prefixMsg, page);
+    const msg = buildBackpackMessage(inventory, tab, prefixMsg, page, subTab);
     await safeEditReply(interaction, msg);
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
@@ -1167,7 +1367,6 @@ async function handleRerollConfirm(interaction, uuid) {
     await safeEditReply(interaction, msg);
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 使用失敗：${err.message}`, components: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
@@ -1175,7 +1374,6 @@ const ENHANCE_SLOT_ORDER = ["weapon","shield","head_top","head_mid","head_low","
 
 function buildEnhanceEntryPayload(progress, notice = "") {
   const equipped = progress?.equipment || {};
-  const inv = progress?.inventory || [];
 
   const overMax = ENHANCE_SLOT_ORDER
     .map((slot) => equipped[slot])
@@ -1198,20 +1396,14 @@ function buildEnhanceEntryPayload(progress, notice = "") {
 
   const opts = enhanceable.slice(0, 25).map((entry) => {
     const slot = EQ_SLOT_LABELS[entry.equipSlot] || entry.equipSlot;
-    const baseName = normalizeName(entry.itemName);
-    const maxMaterialLevel = Math.min(MAX_ENHANCE_LEVEL - 1, Math.max(0, Number(entry.enhanceLevel || 0)));
-    const matUnits = inv
-      .filter((mat) => {
-        if (!mat || mat.itemType !== "equipment") return false;
-        if (mat.uuid === entry.uuid) return false;
-        if (Number(mat.enhanceLevel || 0) > maxMaterialLevel) return false;
-        if (entry.itemId && mat.itemId) return mat.itemId === entry.itemId;
-        return normalizeName(mat.itemName) === baseName;
-      })
-      .reduce((sum, mat) => sum + Math.pow(2, Math.max(0, Number(mat.enhanceLevel || 0))), 0);
+    const curLevel = Number(entry.enhanceLevel || 0);
+    const { gemsRequired, goldRequired, successRate } = getEnhanceCost(entry.tier, curLevel);
+    const gemsText = Number.isFinite(Number(gemsRequired)) ? `${gemsRequired} 石` : "未知石數";
+    const goldText = Number.isFinite(Number(goldRequired)) ? (Number(goldRequired) > 0 ? `${goldRequired} 金` : "免費") : "未知金額";
+    const rateText = Number.isFinite(Number(successRate)) ? `${successRate}%` : "未知成功率";
     return {
       label: `${entry.itemName}（+${entry.enhanceLevel ?? 0}）`,
-      description: `${slot}　材料：等價 ${matUnits} 把可用`,
+      description: `${slot}　${gemsText} / ${goldText} / ${rateText}`,
       value: entry.uuid,
     };
   });
@@ -1244,7 +1436,6 @@ async function handleEnhanceSelect(interaction, targetUuid) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-  const inv = progress?.inventory || [];
 
   let target = null;
   for (const entry of Object.values(progress?.equipment || {})) {
@@ -1275,15 +1466,16 @@ async function handleEnhanceSelect(interaction, targetUuid) {
 
     const gemsRequired = enhanceInfo.gemsRequired ?? 0;
     const gemsOwned = enhanceInfo.gemsOwned ?? 0;
-    const successRate = enhanceInfo.successRate ?? 0;
+    const goldRequired = enhanceInfo.goldRequired ?? 0;
+    const goldOwned = enhanceInfo.goldOwned ?? 0;
     const nextLevel = enhanceInfo.nextLevel ?? (curLevel + 1);
 
-    const canEnhanceWithGems = gemsOwned >= gemsRequired;
+    const canEnhanceWithGems = gemsOwned >= gemsRequired && goldOwned >= goldRequired;
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`enhance_auto:${targetUuid}`)
-        .setLabel(canEnhanceWithGems ? `以寶石強化至 +${nextLevel}` : `寶石不足：需 ${gemsRequired} 顆`)
+        .setLabel(canEnhanceWithGems ? `確認強化 +${nextLevel}` : `素材不足：需 ${gemsRequired} 石 / ${goldRequired} 金`)
         .setStyle(ButtonStyle.Success)
         .setDisabled(!canEnhanceWithGems),
       new ButtonBuilder()
@@ -1293,9 +1485,8 @@ async function handleEnhanceSelect(interaction, targetUuid) {
     );
 
     const baseName = normalizeName(enhanceInfo.itemName);
-    const shortageNote = canEnhanceWithGems ? "" : "（材料不足）";
     await safeEditReply(interaction, {
-      content: `⚗️ ${baseName}（目前 +${curLevel}）→ 強化至 +${nextLevel}\n消耗：${gemsRequired} 顆對應階級寶石\n持有：${gemsOwned} 顆\n成功率：${successRate}% ${shortageNote}`,
+      content: `⚗️ ${baseName}（目前 +${curLevel}）→ 強化至 +${nextLevel}\n${buildEnhanceConfirmLines(enhanceInfo)}`,
       components: [row],
     });
     return;
@@ -1315,7 +1506,7 @@ async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
     const consumed = result.materialsConsumed
       ? `（需求等價 ${result.materialsConsumed} 把，實際消耗 ${result.materialsConsumedItems || "?"} 件，等價總和 ${result.materialsConsumedUnits || "?"}）`
       : "";
-    const statLabel = String(result.statBoosted || "").toUpperCase();
+    const statLabel = result.statBoostedZh || String(result.statBoosted || "").toUpperCase();
     const from = result.oldStatValue ?? "?";
     const to = result.newStatValue ?? "?";
     const notice = `✅ 強化成功！**${result.itemName}**（${statLabel} ${from} → ${to}）${consumed}`;
@@ -1326,7 +1517,6 @@ async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
     }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
@@ -1337,9 +1527,18 @@ async function handleEnhanceAuto(interaction, targetUuid) {
     // 使用 EnhanceService（寶石強化）而非舊的材料等價實作
     const result = await serviceContext.enhanceService.enhanceEquipment(interaction.user.id, targetUuid);
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const statLabel = String(result.statBoosted || "").toUpperCase();
+    const from = formatEnhanceNumber(result.oldStatValue ?? "?");
+    const to = formatEnhanceNumber(result.newStatValue ?? "?");
+    const deltaText = Number.isFinite(Number(result.statDelta))
+      ? (Number(result.statDelta) >= 0 ? `+${formatEnhanceNumber(result.statDelta)}` : formatEnhanceNumber(result.statDelta))
+      : "";
+    const goldText = Number(result.goldUsed || 0) > 0 ? `${result.goldUsed} 金幣` : "免費";
 
-    // result.message 已包含成功/失敗說明
-    await safeEditReply(interaction, buildEnhanceEntryPayload(progress, result.message));
+    const notice = result.success
+      ? `✅ 強化成功！**${result.itemName}**（${statLabel} ${from} → ${to}${deltaText ? `，${deltaText}` : ""}）`
+      : `❌ 強化失敗，**${result.itemName}** 已消耗 ${result.gemsUsed} 顆 ${result.tier}階寶石與 ${goldText}。`;
+    await safeEditReply(interaction, buildEnhanceEntryPayload(progress, notice));
 
     // 如果成功並達到公告門檻（+3 以上），嘗試組成通知內容後廣播
     if (result.success && (result.newLevel || 0) >= 3) {
@@ -1371,7 +1570,6 @@ async function handleEnhanceAuto(interaction, targetUuid) {
     }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
@@ -1404,6 +1602,68 @@ const QUEST_TAB_META = {
   daily: { label: "每日任務", emoji: "🗓️", resetText: "台灣時間每日 00:00 重置" },
   weekly: { label: "每週任務", emoji: "📅", resetText: "台灣時間每週一 00:00 重置" }
 };
+
+function formatRewardWeaponSummary(item) {
+  if (!item?.weaponType) return "";
+  const weaponText = {
+    sword_1h: "單手劍：攻擊倍率 ×4",
+    sword_2h: "雙手劍：攻擊倍率 ×7",
+    mace_1h: "單手槌：攻擊倍率 ×3，擊暈率 +5%",
+    mace_2h: "雙手槌：攻擊倍率 ×4，擊暈率 +10%",
+    axe_1h: "單手斧：攻擊倍率 ×3，破防率 +15%，爆擊 +10%",
+    axe_2h: "雙手斧：攻擊倍率 ×5，破防率 +15%，爆擊 +20%",
+    dagger: "匕首：攻擊倍率 ×2，連擊率 +20%",
+    staff_1h: "單手法杖：攻擊倍率 ×3，主屬性 INT，無視怪物 DEF 15%，怪物攻擊 ×2",
+    staff_2h: "雙手法杖：攻擊倍率 ×4，主屬性 INT，無視怪物 DEF 25%，怪物攻擊 ×2",
+    bow: "弓：攻擊倍率 ×4，主屬性 DEX，迴避 +20%，雙手武器"
+  }[item.weaponType];
+  if (!weaponText) return "";
+  const statText = formatEquipStats(item.equipStats);
+  return statText ? `${weaponText}，${statText}` : weaponText;
+}
+
+function formatRewardItemLabel(item) {
+  if (!item) return "＋道具";
+  const itemName = item.name || item.itemName || "未命名道具";
+  const parts = [`${itemName}`];
+  if (item.itemType === "equipment") {
+    const statText = formatEquipStats(item.equipStats);
+    const weaponSummary = formatRewardWeaponSummary(item);
+    if (weaponSummary) {
+      parts.push(`武器效果：${weaponSummary}`);
+    } else if (statText) {
+      parts.push(`裝備效果：${statText}`);
+    }
+  }
+  return `${parts.join("（")}${parts.length > 1 ? "）" : ""}`;
+}
+
+async function enrichQuestRewards(serviceContext, progressList) {
+  const itemRepo = serviceContext?.itemRepository;
+  if (!itemRepo) return progressList;
+
+  const cache = new Map();
+  const getItem = async (itemId) => {
+    const key = String(itemId || "");
+    if (!key) return null;
+    if (cache.has(key)) return cache.get(key);
+    const item = await itemRepo.findById(key).catch(() => null);
+    cache.set(key, item || null);
+    return item || null;
+  };
+
+  return Promise.all(progressList.map(async (row) => {
+    const quest = row?.quest ? { ...row.quest } : null;
+    if (quest?.rewardItemId) {
+      const item = await getItem(quest.rewardItemId);
+      if (item) {
+        quest.rewardItemName = item.name || item.itemName || null;
+        quest.rewardItemSummary = formatRewardItemLabel(item);
+      }
+    }
+    return { ...row, quest };
+  }));
+}
 
 function buildQuestTabRow(activeCadence = "weekly") {
   return new ActionRowBuilder().addComponents(
@@ -1439,7 +1699,9 @@ function buildQuestCenterMessage(progressList, cadence = "weekly") {
     const rewards = [];
     if (quest.rewardGold) rewards.push(`${quest.rewardGold} 🪙`);
     if (quest.rewardExp) rewards.push(`${quest.rewardExp} ⭐`);
-    if (quest.rewardItemId) rewards.push("＋道具");
+    if (quest.rewardItemSummary) rewards.push(`＋${quest.rewardItemSummary}`);
+    else if (quest.rewardItemName) rewards.push(`＋${quest.rewardItemName}`);
+    else if (quest.rewardItemId) rewards.push("＋道具");
     const rewardStr = rewards.length ? ` ｜ 獎勵：${rewards.join(" ")}` : "";
     const descStr = quest.description ? `\n${quest.description}` : "";
     lines.push(`**${quest.title}** ${status}${descStr}\n${bar} ${current}／${quest.target}${rewardStr}`);
@@ -1512,6 +1774,7 @@ async function grantQuestRewardDiscord(serviceContext, discordId, displayName, r
         await serviceContext.progressRepository.save(prog);
       }
       reward.rewardItemName = item.name;
+      reward.rewardItemSummary = formatRewardItemLabel(item);
     }
   }
 }
@@ -1519,7 +1782,7 @@ async function grantQuestRewardDiscord(serviceContext, discordId, displayName, r
 async function renderQuestCenter(interaction, cadence = "weekly", prefixText = "") {
   const serviceContext = getServiceContext();
   const questService = serviceContext.questService || serviceContext.weeklyQuestService;
-  const progressList = await questService.getPlayerProgress(interaction.user.id, cadence);
+  const progressList = await enrichQuestRewards(serviceContext, await questService.getPlayerProgress(interaction.user.id, cadence));
   if (!progressList.length) {
     const meta = QUEST_TAB_META[cadence] || QUEST_TAB_META.weekly;
     await safeEditReply(interaction, {
@@ -1565,7 +1828,8 @@ async function handleWeeklyQuestClaim(interaction, questId, cadenceHint = "weekl
     const rewardParts = [];
     if (reward.gold > 0) rewardParts.push(`${reward.gold} 🪙`);
     if (reward.exp > 0) rewardParts.push(`${reward.exp} ⭐`);
-    if (reward.rewardItemName) rewardParts.push(`「${reward.rewardItemName}」`);
+    if (reward.rewardItemSummary) rewardParts.push(reward.rewardItemSummary);
+    else if (reward.rewardItemName) rewardParts.push(`「${reward.rewardItemName}」`);
     const rewardDesc = rewardParts.length ? rewardParts.join(" ＋ ") : "（無獎勵）";
 
     const nextCadence = reward.cadence || cadenceHint || "weekly";
@@ -1604,25 +1868,36 @@ async function handleButton(interaction) {
   // 背包動作
   if (id.startsWith("backpack_tab:")) {
     const parts = id.slice("backpack_tab:".length).split(":");
+    const tab = parts[0] || "item";
+    const subTab = parts.length >= 3 ? (parts[1] || "all") : "all";
+    const page = parseInt(parts.length >= 3 ? (parts[2] ?? "0") : (parts[1] ?? "0"), 10) || 0;
+    await handleBackpackTab(interaction, tab, page, subTab);
+    return;
+  }
+  if (id.startsWith("backpack_subtab:")) {
+    const parts = id.slice("backpack_subtab:".length).split(":");
     const tab = parts[0];
-    const page = parseInt(parts[1] ?? "0", 10) || 0;
-    await handleBackpackTab(interaction, tab, page);
+    const subTab = parts[1] || "all";
+    const page = parseInt(parts[2] ?? "0", 10) || 0;
+    await handleBackpackTab(interaction, tab, page, subTab);
     return;
   }
   if (id.startsWith("backpack_prev:") || id.startsWith("backpack_next:")) {
     const parts = id.split(":");
-    const tab = parts[1];
-    const page = parseInt(parts[2] ?? "0", 10) || 0;
-    await handleBackpackTab(interaction, tab, page);
+    const tab = parts[1] || "item";
+    const subTab = parts.length >= 4 ? (parts[2] || "all") : "all";
+    const page = parseInt(parts.length >= 4 ? (parts[3] ?? "0") : (parts[2] ?? "0"), 10) || 0;
+    await handleBackpackTab(interaction, tab, page, subTab);
     return;
   }
   if (id.startsWith("backpack_page_input:")) {
     const parts = id.split(":");
     const tab = parts[1] || "item";
-    const currentPage = parseInt(parts[2] ?? "0", 10) || 0;
-    const totalPages = Math.max(1, parseInt(parts[3] ?? "1", 10) || 1);
+    const subTab = parts.length >= 5 ? (parts[2] || "all") : "all";
+    const currentPage = parseInt(parts.length >= 5 ? (parts[3] ?? "0") : (parts[2] ?? "0"), 10) || 0;
+    const totalPages = Math.max(1, parseInt(parts.length >= 5 ? (parts[4] ?? "1") : (parts[3] ?? "1"), 10) || 1);
     const modal = new ModalBuilder()
-      .setCustomId(`backpack_page_modal:${tab}:${totalPages}`)
+      .setCustomId(`backpack_page_modal:${tab}:${subTab}:${totalPages}`)
       .setTitle("跳轉背包頁數");
     const input = new TextInputBuilder()
       .setCustomId("target_page")
@@ -1638,8 +1913,9 @@ async function handleButton(interaction) {
     const parts = id.split(":");
     const uuid = parts[1];
     const tab = parts[2] || "item";
-    const page = parseInt(parts[3] ?? "0", 10) || 0;
-    await handleBackpackEquip(interaction, uuid, tab, page);
+    const subTab = parts.length >= 5 ? (parts[3] || "all") : "all";
+    const page = parseInt(parts.length >= 5 ? (parts[4] ?? "0") : (parts[3] ?? "0"), 10) || 0;
+    await handleBackpackEquip(interaction, uuid, tab, page, subTab);
     return;
   }
   if (id.startsWith("backpack_view:")) {
@@ -1652,43 +1928,79 @@ async function handleButton(interaction) {
     await handleBackpackAction(interaction, action, uuid);
     return;
   }
+  if (id.startsWith("backpack_sell_confirm:")) {
+    const parts = id.split(":");
+    const uuid = parts[1];
+    const tab = parts[2] || "item";
+    const subTab = parts.length >= 5 ? (parts[3] || "all") : "all";
+    const page = parseInt(parts.length >= 5 ? (parts[4] ?? "0") : (parts[3] ?? "0"), 10) || 0;
+    await handleBackpackSellConfirm(interaction, uuid, tab, page, subTab);
+    return;
+  }
+  if (id.startsWith("backpack_sell_bulk_confirm:")) {
+    const parts = id.split(":");
+    const uuid = parts[1];
+    const tab = parts[2] || "item";
+    const subTab = parts.length >= 6 ? (parts[3] || "all") : "all";
+    const page = parseInt(parts.length >= 6 ? (parts[4] ?? "0") : (parts[3] ?? "0"), 10) || 0;
+    const qty = parseInt(parts.length >= 6 ? (parts[5] ?? "1") : (parts[4] ?? "1"), 10) || 1;
+    await handleBackpackSellBulkExecute(interaction, uuid, tab, page, qty, subTab);
+    return;
+  }
+  if (id.startsWith("backpack_sell_cancel:")) {
+    const parts = id.split(":");
+    const tab = parts[1] || "item";
+    const subTab = parts.length >= 4 ? (parts[2] || "all") : "all";
+    const page = parseInt(parts.length >= 4 ? (parts[3] ?? "0") : (parts[2] ?? "0"), 10) || 0;
+    await interaction.deferUpdate();
+    const serviceContext = getServiceContext();
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const msg = buildBackpackMessage(progress?.inventory || [], tab, "已取消販售。", page, subTab);
+    await safeEditReply(interaction, msg);
+    return;
+  }
   if (id.startsWith("backpack_sell:")) {
     const parts = id.split(":");
     const uuid = parts[1];
     const tab = parts[2] || "item";
-    const page = parseInt(parts[3] ?? "0", 10) || 0;
-    await handleBackpackSell(interaction, uuid, tab, page);
+    const subTab = parts.length >= 5 ? (parts[3] || "all") : "all";
+    const page = parseInt(parts.length >= 5 ? (parts[4] ?? "0") : (parts[3] ?? "0"), 10) || 0;
+    await handleBackpackSell(interaction, uuid, tab, page, subTab);
     return;
   }
   if (id.startsWith("backpack_sell_bulk:")) {
     const parts = id.split(":");
     const uuid = parts[1];
     const tab = parts[2] || "item";
-    const page = parseInt(parts[3] ?? "0", 10) || 0;
-    await handleBackpackSellBulkPrompt(interaction, uuid, tab, page);
+    const subTab = parts.length >= 5 ? (parts[3] || "all") : "all";
+    const page = parseInt(parts.length >= 5 ? (parts[4] ?? "0") : (parts[3] ?? "0"), 10) || 0;
+    await handleBackpackSellBulkPrompt(interaction, uuid, tab, page, subTab);
     return;
   }
   if (id.startsWith("backpack_enhance:")) {
     const parts = id.split(":");
     const uuid = parts[1];
     const tab = parts[2] || "item";
-    const page = parseInt(parts[3] ?? "0", 10) || 0;
-    await handleBackpackEnhance(interaction, uuid, tab, page);
+    const subTab = parts.length >= 5 ? (parts[3] || "all") : "all";
+    const page = parseInt(parts.length >= 5 ? (parts[4] ?? "0") : (parts[3] ?? "0"), 10) || 0;
+    await handleBackpackEnhance(interaction, uuid, tab, page, subTab);
     return;
   }
   if (id.startsWith("backpack_enhance_confirm:")) {
     const parts = id.split(":");
     const uuid = parts[1];
     const tab = parts[2] || "item";
-    const page = parseInt(parts[3] ?? "0", 10) || 0;
-    await handleBackpackEnhanceConfirm(interaction, uuid, tab, page);
+    const subTab = parts.length >= 5 ? (parts[3] || "all") : "all";
+    const page = parseInt(parts.length >= 5 ? (parts[4] ?? "0") : (parts[3] ?? "0"), 10) || 0;
+    await handleBackpackEnhanceConfirm(interaction, uuid, tab, page, subTab);
     return;
   }
   if (id.startsWith("backpack_enhance_cancel:")) {
     const parts = id.split(":");
     const tab = parts[1] || "item";
-    const page = parseInt(parts[2] ?? "0", 10) || 0;
-    await handleBackpackTab(interaction, tab, page);
+    const subTab = parts.length >= 4 ? (parts[2] || "all") : "all";
+    const page = parseInt(parts.length >= 4 ? (parts[3] ?? "0") : (parts[2] ?? "0"), 10) || 0;
+    await handleBackpackTab(interaction, tab, page, subTab);
     return;
   }
   if (id === "enhance_back") {
@@ -1816,7 +2128,6 @@ async function handleEquipSlotButton(interaction, slot) {
 
   if (options.length === 0) {
     await safeEditReply(interaction, { content: `❌ 背包沒有可裝備在 **${EQ_SLOT_LABELS[slot]}** 的道具，且此槽位是空的。`, components: [], files: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
     return;
   }
 
@@ -1862,10 +2173,8 @@ async function handleEquipmentSelect(interaction) {
       result = await serviceContext.shopService.equipItem(interaction.user.id, uuid, targetSlot);
       await safeEditReply(interaction, { content: `✅ 已裝備 **${result.itemName}**！`, components: [], files: [] });
     }
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 操作失敗：${err.message}`, components: [], files: [] });
-    setTimeout(() => interaction.deleteReply().catch(() => {}), 8000);
   }
 }
 
@@ -1919,14 +2228,18 @@ async function handleModal(interaction) {
     const parts = interaction.customId.split(":");
     const uuid = parts[1];
     const tab = parts[2] || "item";
-    const page = parseInt(parts[3] ?? "0", 10) || 0;
-    await handleBackpackSellBulkConfirm(interaction, uuid, tab, page);
+    const subTab = parts.length >= 5 ? (parts[3] || "all") : "all";
+    const page = parseInt(parts.length >= 5 ? (parts[4] ?? "0") : (parts[3] ?? "0"), 10) || 0;
+    await handleBackpackSellBulkConfirm(interaction, uuid, tab, page, subTab);
     return true;
   }
 
   if (!interaction.customId.startsWith("backpack_page_modal:")) return false;
 
-  const [, tab = "item", totalRaw = "1"] = interaction.customId.split(":");
+  const parts = interaction.customId.split(":");
+  const tab = parts[1] || "item";
+  const subTab = parts.length >= 4 ? (parts[2] || "all") : "all";
+  const totalRaw = parts.length >= 4 ? (parts[3] || "1") : (parts[2] || "1");
   const totalPages = Math.max(1, parseInt(totalRaw, 10) || 1);
   const raw = interaction.fields.getTextInputValue("target_page").trim();
   const parsedPage = parseInt(raw, 10);
@@ -1937,7 +2250,7 @@ async function handleModal(interaction) {
   const serviceContext = getServiceContext();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
-  const msg = buildBackpackMessage(inventory, tab, undefined, targetPage);
+  const msg = buildBackpackMessage(inventory, tab, undefined, targetPage, subTab);
 
   await clearActiveReply(interaction);
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });

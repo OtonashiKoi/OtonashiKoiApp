@@ -14,6 +14,7 @@ const ZONE_DEFS = [
     color:        0x2ecc71,
     minLevel:     1,   // 最低等級（包含）
     maxLevel:     3,   // 最高等級（包含），null = 無上限
+    defaultEntryFee: 0,
   },
   {
     key:          "normal",
@@ -24,6 +25,7 @@ const ZONE_DEFS = [
     color:        0xe74c3c,
     minLevel:     1,
     maxLevel:     10,
+    defaultEntryFee: 0,
   },
   {
     key:          "mid",
@@ -34,6 +36,7 @@ const ZONE_DEFS = [
     color:        0x7c3aed,
     minLevel:     10,
     maxLevel:     null,
+    defaultEntryFee: 0,
   },
   {
     key:          "hard",
@@ -44,6 +47,7 @@ const ZONE_DEFS = [
     color:        0xf97316,
     minLevel:     20,
     maxLevel:     null,
+    defaultEntryFee: 0,
   },
   {
     key:          "elite",
@@ -54,6 +58,7 @@ const ZONE_DEFS = [
     color:        0xef4444,
     minLevel:     30,
     maxLevel:     null,
+    defaultEntryFee: 5000,
   },
 ];
 
@@ -90,6 +95,11 @@ function isMonsterZoneFeatureKey(featureKey) {
 function getZoneTheme(zoneKey) {
   const def = ZONE_BY_KEY[zoneKey] || ZONE_BY_KEY["normal"];
   return { label: def.label, color: def.color, emoji: def.emoji, tagline: def.tagline };
+}
+
+function getZoneDefaultEntryFee(zoneKey) {
+  const def = ZONE_BY_KEY[zoneKey] || ZONE_BY_KEY["normal"];
+  return Math.max(0, Number(def.defaultEntryFee || 0));
 }
 
 /**
@@ -145,6 +155,7 @@ module.exports = {
   normalizeZone,
   isMonsterZoneFeatureKey,
   getZoneTheme,
+  getZoneDefaultEntryFee,
   checkZoneLevelRequirement,
   checkZoneLevelRequirementWithBinding,
 };

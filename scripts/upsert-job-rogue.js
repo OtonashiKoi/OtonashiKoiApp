@@ -9,7 +9,7 @@ const OFFHAND_WEAPON_TYPES = ["offhand_dagger"];
 
 const JOB_ITEM = {
   id: JOB_ITEM_ID,
-  name: "盜賊",
+  name: "盜賊徽章",
   description: "以匕首速攻與敏捷迴避為主的職業徽章。",
   itemType: "job_badge",
   imageUrl: null,
@@ -21,7 +21,7 @@ const JOB_ITEM = {
   weaponType: null,
   isTwoHanded: false,
   atkStat: null,
-  tier: "A",
+  tier: null,
   passiveEffects: [
     // 主武器為匕首時：武器倍率結算後再乘 1.2
     {
@@ -73,9 +73,9 @@ const JOB_ITEM = {
       stacks: 1,
       stackMode: "replace",
       duration: { mode: "turns", value: 3 },
-      params: { value: 0.5, mode: "pct", stackAdd: 1, maxPct: 3.5, dexMultiplier: 0.01 },
+      params: { value: 0.5, mode: "pct", stackAdd: 1, maxPct: 2, dexMultiplier: 0.01 },
       condition: { weaponType: "dagger" },
-      notes: "主武匕首：命中時 10% 機率造成中毒（基礎 0.5% HP + DEX × 0.01%，持續 3 回合，每次觸發增加 1% 並刷新，最高疊至 3.5%）"
+      notes: "主武匕首：命中時 10% 機率造成中毒（基礎 0.5% HP + DEX × 0.01%，持續 3 回合，每次觸發增加 1% 並刷新，最高疊至 2%）"
     }
   ],
   combatEffects: [

@@ -9,7 +9,7 @@ class RewardService {
     this.transactionRepository = transactionRepository;
   }
 
-  async grantCurrency({ discordId, displayName, currencyType, amount, source, operator }) {
+  async grantCurrency({ discordId, displayName, currencyType, amount, source, sourceRef = "", operator }) {
     if (!Number.isInteger(amount) || amount === 0) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "amount must be a non-zero integer", 400);
     }
@@ -20,6 +20,15 @@ class RewardService {
 
     if (!isValidCurrencySource(source)) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `unsupported currency source: ${source}`, 400);
+    }
+
+    const normalizedSourceRef = String(sourceRef || "").trim();
+    if (normalizedSourceRef && typeof this.transactionRepository?.findBySourceAndRef === "function") {
+      const existingTransaction = await this.transactionRepository.findBySourceAndRef(source, normalizedSourceRef);
+      if (existingTransaction) {
+        const { player, wallet } = await this.playerService.ensurePlayer(discordId, displayName);
+        return { player, wallet, transaction: existingTransaction, duplicated: true };
+      }
     }
 
     const { player, wallet } = await this.playerService.ensurePlayer(discordId, displayName);
@@ -46,7 +55,7 @@ class RewardService {
       amount,
       direction: amount >= 0 ? "credit" : "debit",
       source,
-      sourceRef: "",
+      sourceRef: normalizedSourceRef,
       balanceAfter,
       operator
     });

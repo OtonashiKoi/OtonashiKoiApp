@@ -1,0 +1,425 @@
+# Current Game Status
+
+Generated at: 2026-04-28T16:27:17.947Z
+
+> This file is generated from MongoDB. Run `npm run status:update` to refresh it.
+
+## Summary
+
+| 項目 | 數量 |
+| --- | --- |
+| 玩家 | 336 |
+| 進度資料 | 340 |
+| 怪物 | 41 |
+| 怪物狀態文件 | 5 |
+| 道具 | 259 |
+| 任務 | 34 |
+| 職業徽章 | 7 |
+| 職業任務 | 7 |
+| 世界王設定 | 1 |
+| 世界王狀態 | 1 |
+
+## Zones
+
+| Zone | 名稱 | 最低等級 | 最高等級 | 怪物 | 啟用 | Boss |
+| --- | --- | --- | --- | --- | --- | --- |
+| beginner | 新手區 | 1 | 3 | 5 | 5 | 1 |
+| normal | 一般區 | 1 | 10 | 8 | 8 | 2 |
+| mid | 中級區 | 10 | 無上限 | 12 | 12 | 2 |
+| hard | 高級區 | 20 | 無上限 | 15 | 15 | 3 |
+| elite | 精英區 | 30 | 無上限 | 1 | 1 | 1 |
+
+## Monsters
+
+| Zone | 序號 | 怪物 | 等級 | HP | EXP | 金幣 | 入場費 | Boss | 掉落數 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| beginner | 1 | 小史(小) | 1 | 1600 | 40 | 200 | 0 | 否 | 10 |
+| beginner | 2 | 野兔 | 2 | 2000 | 60 | 220 | 0 | 否 | 10 |
+| beginner | 3 | 蘑菇怪 | 2 | 2400 | 75 | 240 | 0 | 否 | 9 |
+| beginner | 4 | 小史(中) | 3 | 2800 | 90 | 280 | 0 | 否 | 9 |
+| beginner | 5 | 大野兔(B) | 3 | 4950 | 200 | 1000 | 0 | 是 | 12 |
+| elite | 1 | 大史王 | 35 | 950000 | 26000 | 75000 | 0 | 是 | 32 |
+| hard | 1 | 城牆衛兵 | 20 | 45000 | 4500 | 4200 | 0 | 否 | 10 |
+| hard | 2 | 古城弓手 | 20 | 35000 | 3800 | 4200 | 0 | 否 | 10 |
+| hard | 3 | 石像鬼 | 22 | 45000 | 6000 | 4200 | 0 | 否 | 9 |
+| hard | 4 | 古城法師 | 22 | 32000 | 5200 | 4200 | 0 | 否 | 10 |
+| hard | 5 | 廢墟蠍兵 | 23 | 38000 | 5500 | 4200 | 0 | 否 | 9 |
+| hard | 6 | 冰封騎士 | 24 | 38000 | 7000 | 4200 | 0 | 否 | 11 |
+| hard | 7 | 詛咒祭司 | 24 | 46000 | 6200 | 4200 | 0 | 否 | 9 |
+| hard | 8 | 鐵甲衛將 | 25 | 55000 | 7500 | 4200 | 0 | 否 | 10 |
+| hard | 9 | 古城刺客 | 25 | 38000 | 7000 | 4200 | 0 | 否 | 10 |
+| hard | 10 | 毒霧蜘蛛 | 26 | 35000 | 6800 | 4200 | 0 | 否 | 9 |
+| hard | 11 | 古城狂戰士 | 27 | 40000 | 9000 | 4200 | 0 | 否 | 9 |
+| hard | 12 | 黑焰巫師 | 27 | 35000 | 8500 | 4200 | 0 | 否 | 9 |
+| hard | 13 | 城堡魔像(B) | 28 | 150000 | 15000 | 20000 | 0 | 是 | 11 |
+| hard | 14 | 古城將軍(B) | 30 | 105000 | 18000 | 23000 | 0 | 是 | 19 |
+| hard | 15 | 廢都魔王(B) | 35 | 200000 | 25000 | 26000 | 0 | 是 | 22 |
+| mid | 1 | 甲蟹 | 12 | 12000 | 1400 | 2300 | 0 | 否 | 11 |
+| mid | 2 | 牙牙狼 | 12 | 13000 | 1200 | 2300 | 0 | 否 | 10 |
+| mid | 3 | 巨巨 | 14 | 10000 | 2000 | 2300 | 0 | 否 | 9 |
+| mid | 4 | 黑暗弓手 | 14 | 12000 | 1500 | 2300 | 0 | 否 | 11 |
+| mid | 5 | 米拉桑(B) | 15 | 22000 | 3500 | 8500 | 0 | 是 | 12 |
+| mid | 6 | 中金(稀) | 1 | 3000 | 1200 | 7500 | 0 | 是 | 2 |
+| mid | 106 | 林地妖靈(樹樹) | 9 | 15000 | 1129 | 2300 | 0 | 否 | 10 |
+| mid | 107 | 森林古樹 | 10 | 14000 | 1334 | 2300 | 0 | 否 | 11 |
+| mid | 108 | 暗夜獵豹 | 9 | 11000 | 1180 | 2300 | 0 | 否 | 9 |
+| mid | 109 | 森林巫師 | 11 | 12000 | 1436 | 2300 | 0 | 否 | 9 |
+| mid | 110 | 森林盜賊 | 10 | 10500 | 1231 | 2300 | 0 | 否 | 10 |
+| mid | 111 | 森林之獸 | 13 | 13000 | 2565 | 2300 | 0 | 否 | 9 |
+| normal | 1 | 小史 | 3 | 5000 | 100 | 500 | 0 | 否 | 9 |
+| normal | 2 | 哥布 | 3 | 6000 | 160 | 550 | 0 | 否 | 10 |
+| normal | 3 | 小狼 | 6 | 5000 | 135 | 550 | 0 | 否 | 10 |
+| normal | 4 | 石頭 | 4 | 6000 | 250 | 650 | 0 | 否 | 9 |
+| normal | 5 | 大史(B) | 7 | 9000 | 400 | 1800 | 0 | 是 | 12 |
+| normal | 6 | 小金(稀) | 5 | 1000 | 250 | 1800 | 0 | 是 | 12 |
+| normal | 100 | 青草地精 | 5 | 6000 | 300 | 650 | 0 | 否 | 10 |
+| normal | 101 | 綠野狼 | 7 | 7000 | 355 | 700 | 0 | 否 | 10 |
+
+## Items Summary
+
+| 分類 | 數量 |
+| --- | --- |
+| collectible | 4 |
+| consumable | 12 |
+| equipment | 236 |
+| job_badge | 7 |
+
+| 階級 | 數量 |
+| --- | --- |
+| A | 64 |
+| B | 57 |
+| C | 58 |
+| D | 64 |
+| 無階級 | 16 |
+
+| 槽位 | 數量 |
+| --- | --- |
+| accessory_l | 16 |
+| accessory_r | 16 |
+| armor | 16 |
+| garment | 16 |
+| head_low | 16 |
+| head_mid | 16 |
+| head_top | 16 |
+| job_eq | 7 |
+| shield | 8 |
+| shoes | 16 |
+| special | 59 |
+| weapon | 41 |
+| 無槽位 | 16 |
+
+## Items
+
+| ID | 名稱 | 類型 | 階級 | 槽位 | 武器類型 | 屬性 | 效果 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| b7f5ef58-79d3-41ef-b9d2-c726da22417b | 【圖片】音無 哭哭 錢錢飛走了 | collectible |  |  |  |  | none |
+| c5db63c0-79f2-452a-a076-78f09093a65c | 【圖片】音無2025年1月新年會限圖 | collectible |  |  |  |  | none |
+| 9d3c7998-6b65-4d5a-81d5-4c34a8dc744e | 【圖片】音無2025年情人節會限圖 | collectible |  |  |  |  | none |
+| 9b8ef677-eda3-42bc-82d7-63c202b49cd2 | 【圖片】音無樂園限定CB圖 | collectible |  |  |  |  | none |
+| 9b8ad195-9ec1-401b-9b7f-2c1033628cba | 【 我命由我不由天 】藥水 | consumable |  |  |  |  | level_down_random_attributes |
+| 4a3b928f-c86a-4f3e-b1be-8ca2828072ae | 【鯉市長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
+| 9d3f8e8a-3de6-40c4-a2a5-06793e83c7d5 | 【鯉民】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
+| 14ee61e8-e9f0-44e4-9a32-f8dd0060cbe2 | 【鯉長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
+| 87b281be-b175-40a0-8044-0accc88a0ee0 | 屬性重製藥水 | consumable |  |  |  |  | reroll_attributes |
+| 71aaa3a2-abb9-4b01-b024-16e553b08840 | 金幣袋子(中) | consumable |  |  |  |  | grant_gold |
+| 1854a2b1-a569-4604-802d-9171f480a9ae | 金幣袋子(大) | consumable |  |  |  |  | grant_gold |
+| 63ca559b-ca12-4835-a48d-2150e366f60e | 金幣袋子(小) | consumable |  |  |  |  | grant_gold |
+| a6ae293d-52fc-4af5-8770-891ddf842e35 | A階寶石 | consumable | A |  |  |  | none |
+| 8fdfa7d9-f0fa-4e6a-a291-703b1e354072 | B階寶石 | consumable | B |  |  |  | none |
+| 556db9e1-b084-4b22-bab5-a66c2b586184 | C階寶石 | consumable | C |  |  |  | grant_gold |
+| 72fde92d-e33f-42fb-8d86-2e811d03f84d | D階寶石 | consumable | D |  |  |  | grant_gold |
+| f579720d-08da-446b-b86b-48020a4ccdd2 | 智紋金戒指(左) | equipment | A | accessory_l |  | INT+5 LUK+2 | none |
+| ab7ae63e-f2c9-4d1d-9418-f332f80033ab | 迅紋金戒指(左) | equipment | A | accessory_l |  | DEX+5 LUK+2 | none |
+| 82c89915-2b11-49bf-8557-e7cd544a86fd | 金戒指(左) | equipment | A | accessory_l |  | AGI+3 VIT+3 LUK+3 | none |
+| 46514870-8bb0-4cf1-a3a4-b13fe158eb29 | 鬥紋金戒指(左) | equipment | A | accessory_l |  | STR+5 LUK+2 | none |
+| 6979ee0e-f7c2-4b11-805e-0d2fd05fb40f | 智紋金戒指(右) | equipment | A | accessory_r |  | INT+5 LUK+2 | none |
+| c46e57fe-2636-436c-9e5b-ffca8ee9f9b3 | 迅紋金戒指(右) | equipment | A | accessory_r |  | STR+2 DEX+5 | none |
+| 6041efc9-f493-4e7d-9d78-df8aaa3763a9 | 金戒指(右) | equipment | A | accessory_r |  | AGI+3 VIT+3 LUK+3 | none |
+| 7be81010-a486-4c77-b912-7e811e94b9d7 | 鬥紋金戒指(右) | equipment | A | accessory_r |  | STR+5 LUK+2 | none |
+| 0d9d737a-15af-4a3f-a62b-2417c44b41b2 | 智紋鋼鐵袍 | equipment | A | armor |  | VIT+5 INT+9 DEX+1 | none |
+| 0cfdadac-6b8c-4f92-9621-cbc5b6e7281d | 迅紋鋼鐵甲 | equipment | A | armor |  | AGI+1 VIT+9 DEX+5 | none |
+| a192dd6c-8de2-4421-a8b3-04e0d60c5041 | 鋼鐵甲 | equipment | A | armor |  | VIT+15 | none |
+| 121cbe5e-5adf-4600-93bb-cb5cf68bd5e7 | 鬥紋鋼鐵甲 | equipment | A | armor |  | STR+4 VIT+9 LUK+2 | none |
+| 40116efc-f44e-48cd-ab0f-56f63ff838c9 | 智紋鋼鐵披風 | equipment | A | garment |  | VIT+7 INT+5 | none |
+| 457fd983-b4f1-48c3-bca4-963bebe1fbb2 | 迅紋鋼鐵披肩 | equipment | A | garment |  | VIT+7 DEX+5 | none |
+| 4359a991-d4ee-4783-b6f3-4aed0d9a1fc5 | 鋼鐵披風 | equipment | A | garment |  | AGI+1 VIT+11 | none |
+| bd515bca-77d7-4c6b-a5bc-54fd66ab61d5 | 鬥紋鋼鐵披肩 | equipment | A | garment |  | STR+5 VIT+7 | none |
+| c1345f1a-8b68-4ec5-9f14-1b7d4cb39837 | 智紋鋼鐵口飾 | equipment | A | head_low |  | VIT+7 INT+4 LUK+3 | none |
+| 9c7b7e3f-bd2e-4056-9b38-4c3dd235670b | 迅紋鋼鐵面罩 | equipment | A | head_low |  | VIT+7 DEX+4 LUK+3 | none |
+| 5c72b89a-f20c-4df1-b1ce-f6fb7d011eaf | 鋼鐵口罩 | equipment | A | head_low |  | STR+2 VIT+9 | none |
+| 6ef4eed9-d62f-4f3b-af22-9ca7488504e0 | 鬥紋鋼鐵面甲 | equipment | A | head_low |  | STR+4 VIT+7 LUK+3 | none |
+| 195d08bf-fd36-431f-88b7-4a3dbdceac0a | 智紋鋼鐵鏡片 | equipment | A | head_mid |  | VIT+5 INT+5 DEX+3 | none |
+| 083da513-8b25-4b33-8932-7405ca9489fa | 迅紋鋼鐵護目 | equipment | A | head_mid |  | VIT+5 DEX+8 | none |
+| cef73b6e-e86c-4c82-8df7-6831fc03cd11 | 鋼鐵護目鏡 | equipment | A | head_mid |  | STR+3 VIT+10 | none |
+| 22e3c6e5-fdee-45b7-a9ac-a362d8b2b3ae | 鬥紋鋼鐵護目 | equipment | A | head_mid |  | STR+3 VIT+5 DEX+5 | none |
+| 0139abbe-ea30-4213-9b5a-781b6136ac79 | 智紋鋼鐵帽 | equipment | A | head_top |  | VIT+5 INT+8 | none |
+| af331293-1ade-4da8-a53b-dc0bcdbcf645 | 迅紋鋼鐵帽 | equipment | A | head_top |  | VIT+5 DEX+8 | none |
+| 371b770c-e03a-4eaf-b028-d9a5989bc3e5 | 鋼鐵帽 | equipment | A | head_top |  | VIT+13 | none |
+| 9d3a61d5-4e98-4ab1-ac47-42f049b6d54a | 鬥紋鋼鐵盔 | equipment | A | head_top |  | STR+8 VIT+5 | none |
+| 585ad0b3-2c75-462a-ade6-882e5929831b | 秘銀盾 | equipment | A | shield |  | VIT+14 | none |
+| afa8d955-ad56-4d49-9ee8-0b845f489997 | 秘銀短匕(副手) | equipment | A | shield | offhand_dagger | AGI+9 LUK+3 | none |
+| 38f310e3-1959-4717-b031-bae1e390a8db | 智紋鋼鐵靴 | equipment | A | shoes |  | VIT+7 INT+6 | none |
+| dd86252c-57b8-49a2-91a3-158b179f59be | 迅紋鋼鐵靴 | equipment | A | shoes |  | VIT+7 DEX+6 | none |
+| b4b5d9fa-6c55-466d-aa43-64b22837e8b3 | 鋼鐵靴 | equipment | A | shoes |  | AGI+5 VIT+8 | none |
+| c20f00f1-e114-4975-a0f9-88347d6e5e81 | 鬥紋鋼鐵靴 | equipment | A | shoes |  | STR+6 VIT+7 | none |
+| monster-card-53fdc9ee-b719-4f8c-a93e-3ab5a0a3ce09 | 冰封騎士卡 | equipment | A | special |  |  | none |
+| monster-card-4a46dd14-b74c-4a5d-9cde-b7d0f270ce0f | 古城刺客卡 | equipment | A | special |  |  | none |
+| monster-card-69459022-2457-48e3-9804-d6f9be346a25 | 古城將軍(B)卡 | equipment | A | special |  |  | none |
+| monster-card-f24bfc8c-4eba-4c10-85a0-73e77e4f6448 | 古城弓手卡 | equipment | A | special |  |  | none |
+| monster-card-2d0d3516-e7ef-4916-b966-b38145a18fd4 | 古城法師卡 | equipment | A | special |  |  | none |
+| monster-card-32a783be-798c-4640-bd2d-00af3e330313 | 古城狂戰士卡 | equipment | A | special |  |  | none |
+| monster-card-5c20d4ba-5f38-4d6b-a724-369eb632ff1d | 城堡魔像(B)卡 | equipment | A | special |  |  | none |
+| monster-card-5152b379-9bdd-404a-acb4-b80935664aba | 城牆衛兵卡 | equipment | A | special |  |  | none |
+| monster-card-e5a4a7e58fb2e78e8be58da1 | 大史王卡 | equipment | A | special |  |  | none |
+| monster-card-388a118f-b839-4287-ba02-0c7a12cd0c06 | 廢墟蠍兵卡 | equipment | A | special |  |  | none |
+| monster-card-0496ea5d-786e-4b07-ba65-30949c1afe31 | 廢都魔王(B)卡 | equipment | A | special |  |  | none |
+| monster-card-139df36b-f838-4875-b3f0-2d9003fc6f8f | 毒霧蜘蛛卡 | equipment | A | special |  |  | none |
+| monster-card-814f097c-283e-4c35-98b5-7aaa8b08dd7c | 石像鬼卡 | equipment | A | special |  |  | none |
+| monster-card-9a0ac6a5-4f2e-4186-a66a-73a6de9cb5e2 | 詛咒祭司卡 | equipment | A | special |  |  | none |
+| monster-card-8eea80b7-c836-413b-8912-7c3ce6a899a7 | 鐵甲衛將卡 | equipment | A | special |  |  | none |
+| monster-card-35ec8cc7-9f0c-4d61-8a40-343d8857be2f | 黑焰巫師卡 | equipment | A | special |  |  | none |
+| 5da1f2b3-ad07-46b5-9d24-eb2d849d3381 | 秘銀匕首 | equipment | A | weapon | dagger | STR+4 AGI+15 | none |
+| 99d23a47-89a6-4291-9b03-8f15e7356eec | 秘銀單手劍 | equipment | A | weapon | sword_1h | STR+19 | none |
+| b24ee5cd-c74b-409e-9326-14bd056d9af8 | 秘銀單手斧 | equipment | A | weapon | axe_1h | STR+14 LUK+5 | none |
+| 3787b328-db67-4513-950e-0cfb8e503457 | 秘銀單手槌 | equipment | A | weapon | mace_1h | STR+14 VIT+5 | none |
+| 1cfe6151-f879-4e94-9fe0-611e15519a9f | 秘銀單手法杖 | equipment | A | weapon | staff_1h | INT+14 DEX+5 | none |
+| bc3d565e-6d15-4080-b79f-b7f0b76e9042 | 秘銀弓 | equipment | A | weapon | bow | AGI+4 DEX+19 | none |
+| acfebb62-91b8-4989-8aab-431256ffd202 | 秘銀雙手劍 | equipment | A | weapon | sword_2h | STR+25 | none |
+| 8c1782df-9823-405c-ade8-423c854a467e | 秘銀雙手斧 | equipment | A | weapon | axe_2h | STR+20 LUK+5 | none |
+| 0635861a-8bb0-4516-b16d-0351539ba5e7 | 秘銀雙手槌 | equipment | A | weapon | mace_2h | STR+20 VIT+5 | none |
+| 5947532d-7960-420c-99e7-5bdd02635a0a | 秘銀雙手法杖 | equipment | A | weapon | staff_2h | INT+19 DEX+4 | none |
+| 45c816d2-f3b3-49cd-83ab-2860cf69c785 | 智紋銀戒指(左) | equipment | B | accessory_l |  | INT+4 LUK+1 | none |
+| ad35c2cd-9436-4c3a-b154-3655804d17c6 | 迅紋銀戒指(左) | equipment | B | accessory_l |  | DEX+4 LUK+1 | none |
+| d6be2017-2f33-433c-8ac4-a32eab7960cc | 銀戒指(左) | equipment | B | accessory_l |  | AGI+2 VIT+2 LUK+2 | none |
+| fd9a1b20-d4d9-43c1-b5a7-fdf61e6d07bc | 鬥紋銀戒指(左) | equipment | B | accessory_l |  | STR+3 LUK+1 | none |
+| 2d6c95fa-f152-4848-aa4d-0ed0e14b12ed | 智紋銀戒指(右) | equipment | B | accessory_r |  | INT+4 LUK+1 | none |
+| e7abb3f2-935f-4d0a-b467-ee1992496e35 | 迅紋銀戒指(右) | equipment | B | accessory_r |  | DEX+4 LUK+1 | none |
+| e7d6970b-e44c-4262-ac14-3acdaa28f48f | 銀戒指(右) | equipment | B | accessory_r |  | AGI+2 VIT+2 LUK+2 | none |
+| a8590411-05c3-4662-93b1-50205ac2aea7 | 鬥紋銀戒指(右) | equipment | B | accessory_r |  | STR+4 LUK+1 | none |
+| cabab778-85cc-4889-9a5f-c72c5fdaf0a1 | 智紋鐵袍 | equipment | B | armor |  | VIT+6 INT+4 LUK+1 | none |
+| e3c0f284-42ef-4a94-aef5-45b4bb5be8ce | 迅紋鐵甲 | equipment | B | armor |  | AGI+1 VIT+7 DEX+3 | none |
+| 310cffe4-8337-478b-9cce-2571f2159747 | 鐵甲 | equipment | B | armor |  | VIT+11 | none |
+| 3846effb-38c8-44b0-9f26-c9296b8adad6 | 鬥紋鐵甲 | equipment | B | armor |  | STR+3 VIT+7 LUK+1 | none |
+| cedc5e5d-90ed-464d-be86-c5f1de6f485a | 智紋鐵披風 | equipment | B | garment |  | VIT+3 INT+3 | none |
+| 16f1c744-f800-499a-b6ed-4156fa58877d | 迅紋鐵披肩 | equipment | B | garment |  | AGI+2 VIT+4 | none |
+| 8a6cc975-67fb-4cd9-9eb4-9511f7a12f8a | 鐵披風 | equipment | B | garment |  | AGI+1 VIT+5 | none |
+| 809fa6d3-6828-4e02-a6d3-6782929ac19d | 鬥紋鐵披肩 | equipment | B | garment |  | STR+3 VIT+3 | none |
+| 6cff4f87-354c-4fd7-9b2c-146ba6407f19 | 智紋鐵口飾 | equipment | B | head_low |  | VIT+5 INT+3 | none |
+| 82ca0d8e-740d-48f9-8801-7f543c152a6b | 迅紋鐵面罩 | equipment | B | head_low |  | VIT+5 DEX+3 | none |
+| e6e29ed7-ff4e-43b8-a6cd-5e168d6eea81 | 鐵口罩 | equipment | B | head_low |  | VIT+8 | none |
+| 080fa80a-5487-457e-b4c0-a4b6e93b0380 | 鬥紋鐵面甲 | equipment | B | head_low |  | STR+3 VIT+5 | none |
+| 864131cc-f27a-454f-af5c-eb53ef2eb143 | 智紋鐵鏡片 | equipment | B | head_mid |  | VIT+3 INT+5 | none |
+| 9b112914-416f-42fd-91d9-861900e4287f | 迅紋鐵護目 | equipment | B | head_mid |  | VIT+4 DEX+4 | none |
+| f8db4676-21b0-4a49-bc87-e9914ab0ca47 | 鐵護目鏡 | equipment | B | head_mid |  | STR+2 VIT+5 DEX+1 | none |
+| ba9ce57b-1b34-4f30-bd55-60ebfb639a32 | 鬥紋鐵護目 | equipment | B | head_mid |  | STR+4 VIT+4 | none |
+| b1a9fa70-95b8-46e9-ae14-ec72ecdd47ff | 智紋鐵帽 | equipment | B | head_top |  | VIT+4 INT+4 | none |
+| 7739f5c3-66b1-4be5-a726-81a41c93fa75 | 迅紋鐵帽 | equipment | B | head_top |  | VIT+4 DEX+4 | none |
+| f0a86964-551a-4d93-90b5-6c4ca5a96587 | 鐵帽 | equipment | B | head_top |  | AGI+2 VIT+7 | none |
+| 4c4e5a9e-97e7-4b74-9be2-b32b8f2320f8 | 鬥紋鐵盔 | equipment | B | head_top |  | STR+4 VIT+4 | none |
+| 3824e2ac-5781-422e-a1d2-881e44ca7a28 | 鋼盾 | equipment | B | shield |  | VIT+8 | none |
+| c60d4d99-3eed-4ac9-811e-680b6d637648 | 鋼製短匕(副手) | equipment | B | shield | offhand_dagger | AGI+6 LUK+2 | none |
+| 511f7ea7-6647-45e8-b5c4-050b6bcc9866 | 智紋鐵靴 | equipment | B | shoes |  | VIT+5 INT+3 | none |
+| 184d4cc9-81cf-494d-809e-7704a1b73e59 | 迅紋鐵靴 | equipment | B | shoes |  | VIT+3 DEX+5 | none |
+| d9e16875-14cb-45b1-91eb-da46b6972698 | 鐵靴 | equipment | B | shoes |  | AGI+3 VIT+5 | none |
+| 8693f1d9-aa26-4c08-9d1f-9908a4b81281 | 鬥紋鐵靴 | equipment | B | shoes |  | STR+5 VIT+3 | none |
+| night-leopard-card | 暗夜獵豹卡 | equipment | B | special |  |  | none |
+| monster-card-eb0322bc-a90a-4a89-ad57-8a9c5607e6b8 | 暗夜獵豹卡 | equipment | B | special |  |  | none |
+| monster-card-343c18ce-9f87-4532-bbb4-618a64fe5559 | 林地妖靈卡 | equipment | B | special |  |  | none |
+| forest-spirit-card | 林地妖靈卡 | equipment | B | special |  |  | none |
+| monster-card-21fb614f-7f8b-4aad-b248-9418d8cbd8c0 | 森林之獸卡 | equipment | B | special |  |  | none |
+| forest-beast-card | 森林之獸卡 | equipment | B | special |  |  | none |
+| forest-tree-card | 森林古樹卡 | equipment | B | special |  |  | none |
+| monster-card-9f0c5372-7232-4c6f-8083-409a28b1b374 | 森林古樹卡 | equipment | B | special |  |  | none |
+| forest-wizard-card | 森林巫師卡 | equipment | B | special |  |  | none |
+| monster-card-f6145411-1a2e-4919-9ee4-fe27b3a31c07 | 森林巫師卡 | equipment | B | special |  |  | none |
+| monster-card-5247b1b0-6bc0-4db3-8ffd-aacb755c64fb | 森林盜賊卡 | equipment | B | special |  |  | none |
+| forest-rogue-card | 森林盜賊卡 | equipment | B | special |  |  | none |
+| 46df8bac-c8c1-4e31-8689-7a602bafd7b5 | 鋼製匕首 | equipment | B | weapon | dagger | STR+4 AGI+7 | none |
+| 9807c319-abbd-43ad-808c-dcfb9313d7ba | 鋼製單手劍 | equipment | B | weapon | sword_1h | STR+11 | none |
+| d374cdb4-702d-4a3f-b5ba-34a3d3e5c8c3 | 鋼製單手斧 | equipment | B | weapon | axe_1h | STR+8 LUK+3 | none |
+| dec0d571-15e7-405d-a2e6-03f06548f828 | 鋼製單手槌 | equipment | B | weapon | mace_1h | STR+8 VIT+3 | none |
+| 3af17736-185f-4732-99e1-0513f4b48a56 | 鋼製單手法杖 | equipment | B | weapon | staff_1h | INT+8 DEX+3 | none |
+| e0c56754-719a-4150-8942-e885c9af29d0 | 鋼製弓 | equipment | B | weapon | bow | AGI+3 DEX+12 | none |
+| 0d162338-7c5b-4004-95ae-530e2ac0eec3 | 鋼製雙手劍 | equipment | B | weapon | sword_2h | STR+15 | none |
+| 94ca2b06-b149-4527-ae09-0106904a7dff | 鋼製雙手斧 | equipment | B | weapon | axe_2h | STR+12 LUK+3 | none |
+| 3b0d9f3f-dc9d-43d2-a3ec-c9a284ba1eb6 | 鋼製雙手槌 | equipment | B | weapon | mace_2h | STR+12 VIT+3 | none |
+| dc12e5e5-ced0-4e7b-923e-9897ddc9b7ce | 鋼製雙手法杖 | equipment | B | weapon | staff_2h | INT+12 LUK+3 | none |
+| 60af8c07-331e-4b4e-80b4-ff66eaf84210 | 智紋鐵戒指(左) | equipment | C | accessory_l |  | INT+3 | none |
+| 158004d3-d23a-4d65-b3e3-275cbcda8142 | 迅紋鐵戒指(左) | equipment | C | accessory_l |  | DEX+3 | none |
+| e1ba9e0c-3e3a-4ebe-97a0-6fa166651463 | 鐵戒指(左) | equipment | C | accessory_l |  | AGI+1 VIT+1 LUK+1 | none |
+| 7ec80ac4-bd34-44ac-a161-189ef41d113a | 鬥紋鐵戒指(左) | equipment | C | accessory_l |  | STR+2 | none |
+| 0dbe1a4f-28a2-440e-b59b-fd02dbf7050f | 智紋鐵戒指(右) | equipment | C | accessory_r |  | INT+3 | none |
+| 1a628982-694e-48ce-bcd6-fc0c16f39a17 | 迅紋鐵戒指(右) | equipment | C | accessory_r |  | DEX+3 | none |
+| 4a4e5575-c48c-4613-83df-7f0f30a906fe | 鐵戒指(右) | equipment | C | accessory_r |  | AGI+1 VIT+1 LUK+1 | none |
+| baadc603-e28d-4721-9f4e-96a2a33c561c | 鬥紋鐵戒指(右) | equipment | C | accessory_r |  | STR+3 | none |
+| a0932b81-a2f3-454a-81e2-e0b21807c5fd | 智紋皮袍 | equipment | C | armor |  | VIT+1 INT+2 DEX+1 | none |
+| 73884cf9-67b5-47b4-af3c-b6d79a39ec57 | 皮甲 | equipment | C | armor |  | VIT+4 | none |
+| 770da6ff-a1d6-49a9-af30-3acbe3cd3cc3 | 迅紋皮甲 | equipment | C | armor |  | AGI+1 VIT+1 DEX+2 | none |
+| 4d72c88d-e632-492e-bb6c-7f7b6f93e624 | 鬥紋皮甲 | equipment | C | armor |  | STR+2 AGI+1 VIT+1 | none |
+| 04c5a488-68e2-491a-ba1a-3d7e3518a9c5 | 智紋皮披風 | equipment | C | garment |  | VIT+1 INT+3 | none |
+| bb26be45-2910-4034-8db6-e02d9d473513 | 皮披風 | equipment | C | garment |  | AGI+1 VIT+3 | none |
+| 1e584c2e-d9f1-40c9-8490-ee615fedbf9f | 迅紋皮披肩 | equipment | C | garment |  | VIT+1 DEX+3 | none |
+| 159e76d1-467a-4235-b364-5b7d85d9d79d | 鬥紋皮披肩 | equipment | C | garment |  | STR+3 VIT+1 | none |
+| 7c5ac61b-5024-4fa5-8402-d4ebed7ebc9a | 智紋皮口飾 | equipment | C | head_low |  | VIT+1 INT+3 | none |
+| 099d5496-e0d4-49e5-af89-ac6580262d5a | 皮口罩 | equipment | C | head_low |  | VIT+4 | none |
+| 71f8cf22-9f9a-4f73-9eed-e4f23becd8a5 | 迅紋皮面罩 | equipment | C | head_low |  | VIT+1 DEX+3 | none |
+| 2f1400c6-17a7-4911-9fc2-6b3ca820dccf | 鬥紋皮面甲 | equipment | C | head_low |  | STR+3 VIT+1 | none |
+| 1ed26548-f724-45b2-8010-3355a89626f3 | 智紋皮鏡片 | equipment | C | head_mid |  | VIT+1 INT+3 | none |
+| c48e3207-8f7f-4f6c-b4bd-d635f2d1e88b | 護目鏡 | equipment | C | head_mid |  | STR+1 VIT+3 | none |
+| 4f6436a1-fb7d-4348-8f45-067e7f9004d0 | 迅紋皮護目 | equipment | C | head_mid |  | VIT+1 DEX+3 | none |
+| 0dc3cae8-d18a-4b0f-a0ea-6f6c81eb6535 | 鬥紋皮護目 | equipment | C | head_mid |  | STR+3 VIT+1 | none |
+| 72d9fd72-01e0-4162-b0f3-aa7c9b2b4e38 | 智紋皮帽 | equipment | C | head_top |  | VIT+2 INT+2 | none |
+| 12cddc4e-58ef-433e-a50d-e8ca04b1041e | 皮帽 | equipment | C | head_top |  | AGI+2 VIT+2 | none |
+| 23e96235-d1b0-42ab-92c9-5d0044acabcd | 迅紋皮帽 | equipment | C | head_top |  | VIT+2 DEX+2 | none |
+| 121b7336-eac0-44ed-a5f6-783d0dd6b538 | 鬥紋皮盔 | equipment | C | head_top |  | STR+2 VIT+2 | none |
+| dcb0ab95-aff6-4961-ae44-79bd49a2f0e8 | 鐵盾 | equipment | C | shield |  | VIT+5 | none |
+| 43615e5a-176a-4286-bedc-ed17d98a661b | 鐵製短匕(副手) | equipment | C | shield | offhand_sword | AGI+3 LUK+1 | none |
+| 8ba1dc5c-41df-4a9b-abd4-fa2c949b2d90 | 智紋皮靴 | equipment | C | shoes |  | INT+2 DEX+2 | none |
+| 34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9 | 皮靴 | equipment | C | shoes |  | AGI+2 VIT+2 | none |
+| bf1dc51e-84f1-4314-b95e-3446aa3d0df0 | 迅紋皮靴 | equipment | C | shoes |  | VIT+2 DEX+2 | none |
+| c8252c6f-0d78-447b-b082-ca0960dfb45d | 鬥紋皮靴 | equipment | C | shoes |  | STR+2 VIT+2 | none |
+| monster-card-3065b7ca-8839-4be4-9d02-0821932cd408 | 中金(稀)卡 | equipment | C | special |  |  | none |
+| monster-card-03c93103-eddb-4265-96ca-a8a76bb82a02 | 小金(稀)卡 | equipment | C | special |  |  | none |
+| giant-card | 巨巨卡 | equipment | C | special |  |  | none |
+| monster-card-b9c226a8-ea33-41de-9c9b-be24824a9fb1 | 巨巨卡 | equipment | C | special |  |  | none |
+| fang-wolf-card | 牙牙狼卡 | equipment | C | special |  |  | none |
+| monster-card-13f56b92-709e-42ff-87d2-e8f129ed9207 | 牙牙狼卡 | equipment | C | special |  |  | none |
+| crab-card | 甲蟹卡 | equipment | C | special |  |  | none |
+| monster-card-657afc88-c6db-4851-8c4c-50f225b18624 | 甲蟹卡 | equipment | C | special |  |  | none |
+| mira-b-card | 米拉桑(B)卡 | equipment | C | special |  |  | none |
+| monster-card-517f9a27-f6f7-4251-8cf8-2140f02222c0 | 米拉桑(B)卡 | equipment | C | special |  |  | none |
+| dark-archer-card | 黑暗弓手卡 | equipment | C | special |  |  | none |
+| monster-card-f4bed595-74f8-493b-8551-9158f4b5381d | 黑暗弓手卡 | equipment | C | special |  |  | none |
+| bb4a624b-c5df-4ace-ae50-d5ec16248e6d | 立直棒 | equipment | C | weapon | bow | AGI+1 VIT+2 INT+1 DEX+8 LUK+-3 | none |
+| a5bf4a8c-2f89-4b35-9f23-8cb519bb0292 | 鐵製匕首 | equipment | C | weapon | dagger | STR+2 AGI+4 | none |
+| 9c809436-d8d5-4b21-bf15-e26e881cac9b | 鐵製單手劍 | equipment | C | weapon | sword_1h | STR+6 | none |
+| fcdbb6c1-bb21-45e1-9637-3aa58a76c79e | 鐵製單手斧 | equipment | C | weapon | axe_1h | STR+5 LUK+1 | none |
+| fbf8fdec-72a4-4d76-bcb5-117952352dec | 鐵製單手槌 | equipment | C | weapon | mace_1h | STR+5 VIT+1 | none |
+| d803fe81-5812-414a-a0c9-f7e011e75f5d | 鐵製單手法杖 | equipment | C | weapon | staff_1h | INT+5 DEX+1 | none |
+| efd48300-f4b6-40d6-a1c5-8c2014ae4b55 | 鐵製弓 | equipment | C | weapon | bow | AGI+2 DEX+5 LUK+2 | none |
+| 24d71d06-5df8-446d-b2e5-f4cb49818e3f | 鐵製雙手劍 | equipment | C | weapon | sword_2h | STR+10 | none |
+| ab533d4a-3d07-4d41-8a40-511a8e6a455d | 鐵製雙手斧 | equipment | C | weapon | axe_2h | STR+7 LUK+2 | none |
+| 1f04c0db-e5cb-4b84-9a43-e7150799eecb | 鐵製雙手槌 | equipment | C | weapon | mace_2h | STR+7 VIT+2 | none |
+| 7e983a31-a7ea-452b-882d-4d0fcd92253a | 鐵製雙手法杖 | equipment | C | weapon | staff_2h | INT+8 LUK+1 | none |
+| 0e2ede69-4bd1-4ce1-9ec8-fe4df6463dfa | 智紋銅戒指(左) | equipment | D | accessory_l |  | INT+1 | none |
+| 5a29d084-2e5c-42d6-8613-3cef6bc294e9 | 迅紋銅戒指(左) | equipment | D | accessory_l |  | DEX+1 | none |
+| 19e24aca-92f5-4f81-8ab9-cc4f8ba73a72 | 銅戒指(左) | equipment | D | accessory_l |  | AGI+1 | none |
+| 871bc362-1ea4-40e1-8617-b5ff03dd7e9e | 鬥紋銅戒指(左) | equipment | D | accessory_l |  | STR+1 | none |
+| 7ae92560-2004-4e54-a162-2bf5bb530b62 | 智紋銅戒指(右) | equipment | D | accessory_r |  | INT+1 | none |
+| f7eb0824-d7f5-4f5d-9e92-4cf07ffacb4a | 迅紋銅戒指(右) | equipment | D | accessory_r |  | DEX+1 | none |
+| be6f16fa-4e72-47ab-9a08-d580bd5490ef | 銅戒指(右) | equipment | D | accessory_r |  | LUK+1 | none |
+| feee43ab-4b22-44d6-b86b-0655da4acf57 | 鬥紋銅戒指(右) | equipment | D | accessory_r |  | STR+1 | none |
+| ee883bee-93c6-450d-b196-754d3e345d2a | 布衣 | equipment | D | armor |  | VIT+2 | none |
+| a2c70ed8-90c5-44ad-89fa-314ebba2af65 | 智紋布袍 | equipment | D | armor |  | VIT+1 INT+1 | none |
+| 48180673-7800-48c6-93df-a30fa03a957b | 迅紋布甲 | equipment | D | armor |  | VIT+1 DEX+1 | none |
+| 7c4446d5-7988-4d71-816e-a479545ba23a | 鬥紋布甲 | equipment | D | armor |  | STR+1 VIT+1 | none |
+| 912125cb-6738-4694-9657-81e7f6a5c2da | 布披風 | equipment | D | garment |  | VIT+2 | none |
+| 9fc5e65a-269b-429c-9cd9-5fd9a00f977a | 智紋布披風 | equipment | D | garment |  | VIT+1 INT+1 | none |
+| e785d724-1988-435e-a705-345da963d5c4 | 迅紋布披肩 | equipment | D | garment |  | VIT+1 DEX+1 | none |
+| af191f1f-f4ed-4728-991f-60757f1eb041 | 鬥紋布披肩 | equipment | D | garment |  | STR+1 VIT+1 | none |
+| a91fab15-a786-490a-ae7f-6ecd536febb1 | 布口罩 | equipment | D | head_low |  | VIT+2 | none |
+| ee223bf7-986d-44f3-be07-9cf7ea8b9cfa | 智紋布口飾 | equipment | D | head_low |  | VIT+1 INT+1 | none |
+| 5608761a-e8cb-44bc-91d0-449efff03d1e | 迅紋布面罩 | equipment | D | head_low |  | VIT+1 DEX+1 | none |
+| 292b581b-f464-4a12-b9a4-8a199c3a580e | 鬥紋布面甲 | equipment | D | head_low |  | STR+1 VIT+1 | none |
+| 51f1e217-7668-4810-87af-1c523dbd8d14 | 新手護目鏡 | equipment | D | head_mid |  | VIT+2 | none |
+| cd5175ba-66bd-4719-a316-b1de5540a677 | 智紋布鏡片 | equipment | D | head_mid |  | INT+1 DEX+1 | none |
+| 3f8e801b-7d07-461f-bd4b-c1860f136c4a | 迅紋布護目 | equipment | D | head_mid |  | INT+1 DEX+1 | none |
+| b8e74b56-2662-4e9d-9bfa-8a74009b7e86 | 鬥紋布護目 | equipment | D | head_mid |  | STR+1 DEX+1 | none |
+| 7bdf0277-dcd5-4173-b3ff-d93ccaa9e293 | 布帽 | equipment | D | head_top |  | AGI+1 VIT+1 | none |
+| b78aed5f-8887-4a89-aa00-5d441ca6d63f | 智紋布帽 | equipment | D | head_top |  | VIT+1 INT+1 | none |
+| 7a438607-fb9e-4f31-baf7-d3e0b0f2221c | 迅紋布帽 | equipment | D | head_top |  | AGI+1 DEX+1 | none |
+| ca305d93-7609-4ed4-a00a-c748aedf8539 | 鬥紋布盔 | equipment | D | head_top |  | STR+1 VIT+1 | none |
+| 4a7c2dd6-1d33-4613-a5aa-913924d12eed | 木盾 | equipment | D | shield |  | VIT+2 | none |
+| a318a9e7-6b68-47da-b3b6-24488eaa05b7 | 木製短匕(副手) | equipment | D | shield | offhand_dagger | AGI+1 | none |
+| d8c97439-b3f6-488b-8e69-97b4dacf3e2a | 布鞋 | equipment | D | shoes |  | VIT+2 | none |
+| 912afa75-bfcc-4788-a42c-cf099dc209c3 | 智紋布靴 | equipment | D | shoes |  | VIT+1 INT+1 | none |
+| f6ba24ae-c749-4daa-a6aa-bfed255f1807 | 迅紋布靴 | equipment | D | shoes |  | VIT+1 DEX+1 | none |
+| 7cf9a5d3-9287-4da6-b944-a5d616b5bdd7 | 鬥紋布靴 | equipment | D | shoes |  | STR+1 VIT+1 | none |
+| monster-card-f00fd7b1-9f57-4532-9901-f4d4d74f132d | 哥布卡 | equipment | D | special |  |  | none |
+| goblin-card | 哥布卡 | equipment | D | special |  |  | none |
+| monster-card-321a08e9-8fed-4a80-9526-b1f977fd9103 | 大史(B)卡 | equipment | D | special |  |  | none |
+| daishi-b-card | 大史(B)卡 | equipment | D | special |  |  | none |
+| monster-card-19fecf53-1ee1-48bc-a097-42bccbe12227 | 大野兔(B)卡 | equipment | D | special |  |  | none |
+| monster-card-92974d12-fd4d-4482-8ea7-171712ae894c | 小史(中)卡 | equipment | D | special |  |  | none |
+| xiaoshi-small-card | 小史(小)卡 | equipment | D | special |  |  | none |
+| monster-card-75fc9a55-3f1b-406d-92e7-3ec4fd787e44 | 小史(小)卡 | equipment | D | special |  |  | none |
+| monster-card-c39bdddd-a33d-4e34-8019-d17020a8083b | 小史卡 | equipment | D | special |  |  | none |
+| monster-card-a8ef443e-3a0d-4ccb-9290-d6394edaa59f | 小狼卡 | equipment | D | special |  |  | none |
+| xiaolang-card | 小狼卡 | equipment | D | special |  |  | none |
+| stone-card | 石頭卡 | equipment | D | special |  |  | none |
+| monster-card-2d226eea-934a-4787-8ff7-9f19d12ac590 | 石頭卡 | equipment | D | special |  |  | none |
+| green-wolf-card | 綠野狼卡 | equipment | D | special |  |  | none |
+| monster-card-a1ab762c-cd0b-4270-994b-74b68c242840 | 綠野狼卡 | equipment | D | special |  |  | none |
+| monster-card-5606a251-bea4-4d4c-bd37-d985a7d7a6d3 | 蘑菇怪卡 | equipment | D | special |  |  | none |
+| monster-card-ac87e4b7-2c1c-4d6c-8fa8-c873fc26039f | 野兔卡 | equipment | D | special |  |  | none |
+| grass-goblin-card | 青草地精卡 | equipment | D | special |  |  | none |
+| monster-card-6f321e26-e74e-4a05-a55a-6145da53373d | 青草地精卡 | equipment | D | special |  |  | none |
+| 421196aa-83e4-4f2e-82f6-dc05077b115a | 木製匕首 | equipment | D | weapon | dagger | STR+1 AGI+3 | none |
+| a56bd609-cf0b-4924-b724-891f221fc0b9 | 木製單手劍 | equipment | D | weapon | sword_1h | STR+3 | none |
+| 4885e098-3624-4c6c-9eb9-e4b27c2fb5ab | 木製單手斧 | equipment | D | weapon | axe_1h | STR+2 LUK+1 | none |
+| 6da9f4e6-aac1-4088-9000-7111fd4926b0 | 木製單手槌 | equipment | D | weapon | mace_1h | STR+2 VIT+1 | none |
+| e986b09f-aad4-4a1a-8db8-1219ad238fa3 | 木製單手法杖 | equipment | D | weapon | staff_1h | INT+2 DEX+1 | none |
+| d95a76a8-79ab-4dc7-ab07-82a39dbb5912 | 木製弓 | equipment | D | weapon | bow | AGI+1 DEX+2 | none |
+| ce6f0608-2750-47b4-aa26-14d9c1aa0f4c | 木製雙手劍 | equipment | D | weapon | sword_2h | STR+6 | none |
+| 2271e23c-9648-430e-944b-cea2107ee8ec | 木製雙手斧 | equipment | D | weapon | axe_2h | STR+5 LUK+1 | none |
+| 2fcf7576-4e74-4280-b1e6-0d7da7b58dda | 木製雙手槌 | equipment | D | weapon | mace_2h | STR+5 VIT+1 | none |
+| e3794447-e19d-41a2-9b0a-c5050dcdd9ea | 木製雙手法杖 | equipment | D | weapon | staff_2h | INT+5 LUK+1 | none |
+| job_archer_v1 | 弓箭手徽章 | job_badge |  | job_eq |  | AGI+1 DEX+5 LUK+2 | none |
+| job_warrior_v1 | 戰士徽章 | job_badge |  | job_eq |  | STR+4 VIT+1 LUK+2 | none |
+| job_healer_v1 | 治療師徽章 | job_badge |  | job_eq |  | VIT+2 INT+4 DEX+2 | none |
+| job_dwarf_warrior_v1 | 矮人戰士徽章 | job_badge |  | job_eq |  | STR+1 VIT+5 DEX+2 | none |
+| job_swordsman_v1 | 劍士 | job_badge | A | job_eq |  | STR+2 VIT+3 DEX+2 | none |
+| job_mage_v1 | 法師 | job_badge | A | job_eq |  | VIT+1 INT+5 LUK+2 | none |
+| job_rogue_v1 | 盜賊 | job_badge | A | job_eq |  | STR+2 AGI+4 LUK+2 | none |
+
+## Quests
+
+| 分類 | 排序 | 任務 | Metric | 目標 | 狀態 | 獎勵 | 說明 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| daily | 10 | 每日出戰 5 次 | battle_count | 5 | 啟用 | 250 金幣 + 120 EXP |  |
+| daily | 20 | 每日贏得 3 場 | battle_win | 3 | 啟用 | 300 金幣 + 140 EXP |  |
+| daily | 30 | 每日累計 3000 傷害 | damage_total | 3000 | 啟用 | 320 金幣 + 160 EXP |  |
+| daily | 40 | 每日完成打卡 | checkin_count | 1 | 啟用 | 180 金幣 + 100 EXP |  |
+| job | 10 | 劍士試煉 | battle_with_sword | 10 | 啟用 | 500 金幣 + 劍士 | 等級達到 10，STR + DEX 加總大於 10，裝備單手劍或雙手劍出戰 10 次。完成可獲得 500 金幣與劍士徽章。 |
+| job | 20 | 戰士試煉 | battle_with_axe | 10 | 啟用 | 500 金幣 + 戰士徽章 | 等級達到 10，STR + VIT 加總大於 10，裝備單手斧或雙手斧出戰 10 次。完成可獲得 500 金幣與戰士徽章。 |
+| job | 30 | 矮人戰士試煉 | battle_with_mace | 10 | 啟用 | 500 金幣 + 矮人戰士徽章 | 等級達到 10，VIT + STR 加總大於 10，裝備錘出戰 10 次。完成可獲得 500 金幣與矮人戰士徽章。 |
+| job | 40 | 盜賊試煉 | battle_with_dagger | 10 | 啟用 | 500 金幣 + 盜賊 | 等級達到 10，AGI + DEX 加總大於 10，裝備匕首出戰 10 次。完成可獲得 500 金幣與盜賊徽章。 |
+| job | 50 | 法師試煉（雙手法杖） | battle_with_staff | 10 | 啟用 | 500 金幣 + 法師 | 等級達到 10，INT + AGI 加總大於 10，裝備雙手法杖出戰 10 次。完成可獲得 500 金幣與法師徽章。 |
+| job | 60 | 治療師試煉（單手法杖） | battle_with_staff | 10 | 啟用 | 500 金幣 + 治療師徽章 | 等級達到 10，INT + VIT 加總大於 10，裝備單手法杖出戰 10 次。完成可獲得 500 金幣與治療師徽章。 |
+| job | 70 | 弓箭手試煉 | battle_with_bow | 10 | 啟用 | 500 金幣 + 弓箭手徽章 | 等級達到 10，DEX + AGI 加總大於 10，裝備弓出戰 10 次。完成可獲得 500 金幣與弓箭手徽章。 |
+| onboarding | 10 | 完成直播綁定 | stream_bind_count | 1 | 啟用 | 200 金幣 + 80 EXP + 布帽 |  |
+| onboarding | 20 | 首次出戰 | battle_count | 1 | 啟用 | 120 金幣 + 60 EXP + 木製單手劍 |  |
+| onboarding | 30 | 首次勝利 | battle_win | 1 | 啟用 | 180 金幣 + 90 EXP + 木盾 |  |
+| onboarding | 40 | 累計造成 500 傷害 | damage_total | 500 | 啟用 | 200 金幣 + 100 EXP + 布衣 |  |
+| onboarding | 50 | 完成 1 次打卡 | checkin_count | 1 | 啟用 | 150 金幣 + 60 EXP + 8c9ac7c4-e00d-44fb-9582-8c68b99c2357 |  |
+| onboarding | 60 | 裝備任一裝備 1 次 | equip_count | 1 | 啟用 | 200 金幣 + 90 EXP + 木製單手斧 |  |
+| onboarding | 70 | 完成 1 次強化 | enhance_count | 1 | 啟用 | 240 金幣 + 120 EXP + 布披風 |  |
+| onboarding | 80 | 出戰 10 次 | battle_count | 10 | 啟用 | 400 金幣 + 160 EXP + 木製雙手劍 |  |
+| onboarding | 90 | 成功連擊3次 | combo_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製匕首 |  |
+| onboarding | 100 | 成功迴避3次 | dodge_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製弓 |  |
+| onboarding | 110 | 成功格擋3次 | block_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製單手槌 |  |
+| onboarding | 120 | 成功擊暈3次 | stun_count | 3 | 啟用 | 260 金幣 + 120 EXP + 木製雙手槌 |  |
+| onboarding | 130 | 角色死亡3次 | death_count | 3 | 啟用 | 260 金幣 + 120 EXP + 33d319ec-cb62-4826-8bcc-82a6fe52b8fa |  |
+| onboarding | 140 | 成功觸發燃燒3次 | burn_trigger_count | 3 | 停用 | 300 金幣 + 140 EXP + d5936211-685a-4cd7-a1e9-24524725da96 |  |
+| onboarding | 150 | 成功連擊20次 | combo_count | 20 | 啟用 | 500 金幣 + 220 EXP + 44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf |  |
+| onboarding | 160 | 完成全部新手任務 | onboarding_complete_count | 1 | 啟用 | 屬性重製藥水 | 領完其他新手任務後可領取最終獎勵 |
+| weekly | 10 | 每週出戰 30 次 | battle_count | 30 | 啟用 | 1200 金幣 + 500 EXP |  |
+| weekly | 20 | 每週贏得 20 場 | battle_win | 20 | 啟用 | 1500 金幣 + 700 EXP |  |
+| weekly | 30 | 每週累計 50000 傷害 | damage_total | 50000 | 啟用 | 1800 金幣 + 900 EXP |  |
+| weekly | 40 | 每週完成 5 次打卡 | checkin_count | 5 | 啟用 | 1000 金幣 + 420 EXP |  |
+| weekly | 50 | 每週裝備 10 次 | equip_count | 10 | 啟用 | 1200 金幣 + 600 EXP |  |
+| weekly | 60 | 每週完成 3 次強化 | enhance_count | 3 | 啟用 | 1400 金幣 + 700 EXP |  |
+| weekly | 70 | 完成全部每週任務 | weekly_complete_count | 1 | 啟用 | 屬性重製藥水 | 完成當週其餘每週任務後可領取 |
+
+## Jobs
+
+| 徽章ID | 職業徽章 | 階級 | 任務 | 任務狀態 | 解鎖等級 | 武器條件 | 基礎屬性條件 | 徽章屬性 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| job_archer_v1 | 弓箭手徽章 |  | 弓箭手試煉 | 啟用 | 10 | bow | DEX > 10 | AGI+1 DEX+5 LUK+2 |
+| job_warrior_v1 | 戰士徽章 |  | 戰士試煉 | 啟用 | 10 | axe_1h, axe_2h | STR > 10 | STR+4 VIT+1 LUK+2 |
+| job_healer_v1 | 治療師徽章 |  | 治療師試煉（單手法杖） | 啟用 | 10 | staff_1h | INT > 10 | VIT+2 INT+4 DEX+2 |
+| job_dwarf_warrior_v1 | 矮人戰士徽章 |  | 矮人戰士試煉 | 啟用 | 10 | mace_1h, mace_2h | VIT > 10 | STR+1 VIT+5 DEX+2 |
+| job_swordsman_v1 | 劍士 | A | 劍士試煉 | 啟用 | 10 | sword_1h, sword_2h | STR > 10 | STR+2 VIT+3 DEX+2 |
+| job_mage_v1 | 法師 | A | 法師試煉（雙手法杖） | 啟用 | 10 | staff_2h | INT > 10 | VIT+1 INT+5 LUK+2 |
+| job_rogue_v1 | 盜賊 | A | 盜賊試煉 | 啟用 | 10 | dagger | AGI > 10 | STR+2 AGI+4 LUK+2 |
+

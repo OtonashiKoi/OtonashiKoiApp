@@ -18,6 +18,7 @@ module.exports = {
   discord: {
     token: process.env.DISCORD_TOKEN || "", // Bot Token
     clientId: process.env.DISCORD_CLIENT_ID || "", // Bot 應用程式 ID
+    clientSecret: process.env.DISCORD_CLIENT_SECRET || "", // Discord OAuth Client Secret
     guildId: process.env.DISCORD_GUILD_ID || "", // 伺服器 ID
     adminRoleIds: parseCsv(process.env.ADMIN_ROLE_IDS), // 管理員角色 ID 陣列
     adminUserIds: parseCsv(process.env.ADMIN_USER_IDS), // 管理員用戶 ID 陣列
@@ -30,7 +31,8 @@ module.exports = {
   api: {
     port: Number(process.env.API_PORT || 5566), // 監聽埠號
     adminPassword: process.env.ADMIN_PASSWORD || "admin123", // 管理後台密碼
-    allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS) // CORS 允許的來源，逗號分隔
+    allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS), // CORS 允許的來源，逗號分隔
+    publicBaseUrl: process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ""
   },
   // 資料儲存設定
   storage: {
@@ -59,5 +61,33 @@ module.exports = {
   game: {
     // 預期同時與怪物戰鬥的玩家數（用於調整怪物血量規模）
     monsterExpectedPlayers: Number(process.env.MONSTER_EXPECTED_PLAYERS || 6)
+  },
+  // 直播會員 / 訂閱位階規則
+  streamMembership: {
+    adminUserIds: parseCsv(process.env.STREAM_ADMIN_USER_IDS || "865264891991425055"),
+    youtubeChannel: process.env.STREAM_YOUTUBE_CHANNEL || "www.youtube.com/@音無恋",
+    twitchChannel: process.env.STREAM_TWITCH_CHANNEL || "https://www.twitch.tv/otonashikoi",
+    youtubeTiers: {
+      C: "鯉民",
+      B: "鯉長",
+      A: "鯉市長"
+    },
+    twitchTiers: {
+      "1": "C",
+      "2": "C",
+      "3": "B"
+    },
+    noMembershipPolicy: "unchanged"
+  },
+  // 直播 OAuth / 即時會員查詢設定
+  streamAuth: {
+    stateSecret: process.env.STREAM_AUTH_SECRET || process.env.JWT_SECRET || "stream-auth-secret",
+    twitchClientId: process.env.TWITCH_CLIENT_ID || "",
+    twitchClientSecret: process.env.TWITCH_CLIENT_SECRET || "",
+    twitchBroadcasterId: process.env.TWITCH_BROADCASTER_ID || "",
+    youtubeClientId: process.env.YOUTUBE_CLIENT_ID || "",
+    youtubeClientSecret: process.env.YOUTUBE_CLIENT_SECRET || "",
+    youtubeCreatorRefreshToken: process.env.STREAM_YOUTUBE_CREATOR_REFRESH_TOKEN || "",
+    youtubeCreatorChannelId: process.env.STREAM_YOUTUBE_CREATOR_CHANNEL_ID || ""
   }
 };

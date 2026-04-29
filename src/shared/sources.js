@@ -14,7 +14,9 @@ const CURRENCY_SOURCES = {
   AUCTION_PURCHASE: "auction:purchase",              // 交易所購買（買家扣款）
   AUCTION_SALE: "auction:sale",                      // 交易所成交（賣家入帳）
   QUEST_REWARD: "quest:reward",                      // 任務獎勵（金幣）
-  IDLE_REWARD: "idle:reward"                         // 放置掛機：結算金幣獎勵
+  IDLE_REWARD: "idle:reward",                        // 放置掛機：結算金幣獎勵
+  DONATION_REWARD: "donation:reward",                // 直播斗內：鑽石獎勵
+  ENHANCE: "enhance:cost"                            // 裝備強化：金幣消耗
 };
 
 // 經驗值來源類型
