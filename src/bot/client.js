@@ -8,15 +8,17 @@ const { handleCommand, handleButton, handleSelectMenu, handleModal } = require("
 const { serviceContext, setBotClient, getBotClient } = require("./runtimeContext");
 const { startFetcher } = require("./commentFetcher");
 const { handleStreamComment } = require("./handlers/streamHandlers");
-const { startIdleRotateTimer, refreshEliteWorldBossPanel } = require("./handlers/monsterZoneHandlers");
+const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels } = require("./handlers/monsterZoneHandlers");
 const { runWithCache } = require("../adapters/mongo/requestCache");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
 
 const RESTRICTED_ANIMATED_EMOJI_NAMES = new Set(["HUHU"]);
 const RESTRICTED_EMOJI_WARNING_DELETE_MS = 10_000;
-const WELCOME_AUDIT_INTERVAL_MS = 10 * 60 * 1000;
+const WELCOME_AUDIT_ENABLED = config.discord.welcomeAuditEnabled !== false;
+const WELCOME_AUDIT_INTERVAL_MS = config.discord.welcomeAuditIntervalMs || 30 * 60 * 1000;
 
 let welcomeAuditTimer = null;
+let welcomeAuditRunning = false;
 
 async function ensureMemberPlayerProfile(member, reason) {
   try {
@@ -99,6 +101,8 @@ async function sendPlayerWelcomeAnnouncement(member) {
 }
 
 async function auditMissingWelcomeAnnouncements(client) {
+  if (!WELCOME_AUDIT_ENABLED || welcomeAuditRunning) return;
+  welcomeAuditRunning = true;
   try {
     if (!client?.isReady() || !config.discord.guildId) return;
     const guild = await client.guilds.fetch(config.discord.guildId);
@@ -117,6 +121,8 @@ async function auditMissingWelcomeAnnouncements(client) {
     }
   } catch (error) {
     console.warn("[Discord] 歡迎公告補掃描失敗：", error?.message || error);
+  } finally {
+    welcomeAuditRunning = false;
   }
 }
 
@@ -378,12 +384,27 @@ async function republishPanelsOnStartup() {
 
 let elitePanelRefreshTimer = null;
 function startElitePanelRefreshTimer() {
-  const sec = 300; // 5 分鐘
+  const sec = Math.max(5, Number.parseInt(process.env.ELITE_PANEL_REFRESH_SECONDS || "10", 10) || 10);
   if (elitePanelRefreshTimer) clearInterval(elitePanelRefreshTimer);
   elitePanelRefreshTimer = setInterval(async () => {
-    await refreshEliteWorldBossPanel();
+    await refreshEliteWorldBossPanel().catch(() => {});
   }, sec * 1000);
   console.log(`[ElitePanel] auto-refresh started (${sec}s)`);
+}
+
+let monsterPanelRefreshTimer = null;
+function startMonsterPanelRefreshTimer() {
+  if (process.env.DISABLE_MONSTER_PANEL_REFRESH === "1") {
+    console.log("[MonsterPanel] auto-refresh disabled by DISABLE_MONSTER_PANEL_REFRESH");
+    return;
+  }
+
+  const sec = Math.max(30, Number.parseInt(process.env.MONSTER_PANEL_REFRESH_SECONDS || "30", 10) || 30);
+  if (monsterPanelRefreshTimer) clearInterval(monsterPanelRefreshTimer);
+  monsterPanelRefreshTimer = setInterval(async () => {
+    await refreshMonsterZonePanels().catch(() => {});
+  }, sec * 1000);
+  console.log(`[MonsterPanel] auto-refresh started (${sec}s)`);
 }
 
 let auctionPanelRefreshTimer = null;
@@ -570,7 +591,9 @@ function createBotClient() {
 
     // 拍賣場公開面板倒數/到期狀態需定時重繪
     startAuctionPanelRefreshTimer();
-    // 精英區世界BOSS面板每5分鐘自動刷新（高級區有人在打時）
+    // 一般怪物區面板定時重繪，避免打完後卡住舊狀態
+    startMonsterPanelRefreshTimer();
+    // 精英區世界BOSS面板固定自動刷新
     startElitePanelRefreshTimer();
     
     // 啟動 OneComme 直播留言監聽
@@ -582,11 +605,16 @@ function createBotClient() {
       startIdleRotateTimer();
     }
 
-    await auditMissingWelcomeAnnouncements(readyClient);
     if (welcomeAuditTimer) clearInterval(welcomeAuditTimer);
-    welcomeAuditTimer = setInterval(() => {
-      auditMissingWelcomeAnnouncements(readyClient).catch(() => {});
-    }, WELCOME_AUDIT_INTERVAL_MS);
+    auditMissingWelcomeAnnouncements(readyClient).catch(() => {});
+    if (WELCOME_AUDIT_ENABLED) {
+      welcomeAuditTimer = setInterval(() => {
+        auditMissingWelcomeAnnouncements(readyClient).catch(() => {});
+      }, WELCOME_AUDIT_INTERVAL_MS);
+      console.log(`[Discord] welcome audit timer started (${WELCOME_AUDIT_INTERVAL_MS}ms)`);
+    } else {
+      console.log("[Discord] welcome audit disabled");
+    }
   });
 
   client.on(Events.InteractionCreate, (interaction) => {

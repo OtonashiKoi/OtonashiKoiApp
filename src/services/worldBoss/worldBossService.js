@@ -123,9 +123,9 @@ class WorldBossService {
   }
 
   _buildStatus(config, state, now = Date.now()) {
-    const unlockTarget = Math.max(0, Number(config.weeklyUnlockKillTarget ?? 300));
+    const unlockTarget = 0;
     const hardKills = Math.max(0, Number(state.hardKills || 0));
-    const unlocked = unlockTarget === 0 || hardKills >= unlockTarget;
+    const unlocked = true;
     const lastKilledAtMs = state.lastKilledAt ? Date.parse(state.lastKilledAt) : NaN;
     const cooldownMs = Math.max(0, Number(config.respawnCooldownMinutes || 0) * 60 * 1000);
     const cooldownRemainingMs = Number.isFinite(lastKilledAtMs)
@@ -151,7 +151,7 @@ class WorldBossService {
       battleRemainingMs,
       battleRemainingMinutes: Math.ceil(battleRemainingMs / 60000),
       battleTimeoutReached,
-      canChallenge: config.enabled && unlocked && cooldownRemainingMs <= 0
+      canChallenge: config.enabled && cooldownRemainingMs <= 0
     };
   }
 
@@ -167,9 +167,6 @@ class WorldBossService {
   async recordHardZoneKill(count = 1) {
     const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
     const next = { ...state, hardKills: Math.max(0, Number(state.hardKills || 0) + Math.max(1, Math.floor(toNum(count, 1)))) };
-    if (!next.unlockedAt && next.hardKills >= Number(config.weeklyUnlockKillTarget || 300)) {
-      next.unlockedAt = new Date().toISOString();
-    }
     await this.repo.saveState(next);
     return {
       state: next,

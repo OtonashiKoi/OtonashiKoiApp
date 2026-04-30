@@ -113,21 +113,42 @@ async function getBindingRows(interaction) {
 
 async function handleProfile(interaction) {
   const serviceContext = getServiceContext();
-  const result = await serviceContext.playerService.getProfile(interaction.user.id, interaction.user.username);
-  // 重新讀取 progress 以拿到更新後的等級
-  const freshProgress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-  const p = freshProgress || result.progress;
+  let result = null;
+  let fallbackUsed = false;
+  try {
+    result = await serviceContext.playerService.getProfile(interaction.user.id, interaction.user.username);
+  } catch (err) {
+    fallbackUsed = true;
+    console.warn("[PlayerPanel] getProfile failed, falling back to direct repositories:", err?.message || err);
+    const [player, wallet, progress] = await Promise.all([
+      serviceContext.playerRepository.findByDiscordId(interaction.user.id).catch(() => null),
+      serviceContext.walletRepository.findByPlayerId(interaction.user.id).catch(() => null),
+      serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null)
+    ]);
+    result = { player, wallet, progress };
+  }
+
+  const freshProgress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null);
+  const p = freshProgress || result?.progress || {};
   const attrs = p.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
   const tierLine = p.playerTier ? `\n玄家等級：**${p.playerTier}級**` : "";
-  const isMaxLevel = p.level >= MAX_LEVEL;
-  const expNeeded = isMaxLevel ? 0 : expToNextLevel(p.level);
+  const playerLevel = Number(p.level || 1);
+  const playerExp = Number(p.exp || 0);
+  const isMaxLevel = playerLevel >= MAX_LEVEL;
+  const expNeeded = isMaxLevel ? 0 : expToNextLevel(playerLevel);
   const expLine = isMaxLevel
-    ? `等級：Base ${p.level} ⭐ 已達最高等級${tierLine}`
-    : `等級：Base ${p.level} (EXP: ${p.exp} / ${expNeeded}，還差 ${expNeeded - p.exp})${tierLine}`;
+    ? `等級：Base ${playerLevel} ⭐ 已達最高等級${tierLine}`
+    : `等級：Base ${playerLevel} (EXP: ${playerExp} / ${expNeeded}，還差 ${Math.max(0, expNeeded - playerExp)})${tierLine}`;
 
   // ── 計算戰鬥能力（使用 shared/combatStats 確保與戰鬥邏輯一致）──
   // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
-  const equipped = await mergeEquippedFromLibrary(p.equipment || {}, serviceContext.itemRepository);
+  let equipped = p.equipment || {};
+  try {
+    equipped = await mergeEquippedFromLibrary(equipped, serviceContext.itemRepository);
+  } catch (err) {
+    fallbackUsed = true;
+    console.warn("[PlayerPanel] mergeEquippedFromLibrary failed, using snapshot equipment:", err?.message || err);
+  }
   const cs = calcPlayerStats(attrs, equipped, p.activeEffects || [], p.inventory || []);
   const calcHp    = Math.ceil(cs.maxHp);
   const calcAtk   = Math.ceil(cs.atk);
@@ -187,7 +208,7 @@ async function handleProfile(interaction) {
 
     // 職業與武器的對應關係
     const jobWeaponMap = {
-      "dwarf_warrior": { weapons: ["mace_1h", "mace_2h"], name: "矮人戰士", traits: ["武器倍率強化", "擊暈機率", "高血擊暈加成"] },
+      "dwarf_warrior": { weapons: ["mace_1h", "mace_2h"], name: "矮人戰士", traits: ["武器倍率強化", "擊暈機率", "高血擊暈加成", "對暈眩目標增傷"] },
       "swordsman": { weapons: ["sword_1h", "sword_2h"], name: "劍士", traits: ["格擋反擊", "連擊", "斬殺"] },
       "warrior": { weapons: ["axe_1h", "axe_2h"], name: "戰士", traits: ["低血傷害倍增", "爆擊提升"] },
       "rogue": { weapons: ["dagger"], name: "盜賊", traits: ["連擊加速", "連擊傷害"] },
@@ -313,8 +334,11 @@ async function handleProfile(interaction) {
   const cardSection = cardEffectLine ? `${cardEffectLine}\n==============\n` : "";
   const npcBuffSection = npcBuffAreaLine ? `${npcBuffAreaLine}\n==============\n` : "";
 
+  const displayName = result?.player?.displayName || interaction.user.displayName || interaction.user.username;
+  const wallet = result?.wallet || { gold: 0, diamond: 0 };
+
   await replyAndAutoDelete(interaction,
-    `🧧 **${result.player.displayName} 的冒險者履歷**\n` +
+    `🧧 **${displayName} 的冒險者履歷**${fallbackUsed ? "（資料已降級顯示）" : ""}\n` +
     `==============\n` +
     `【職業特性】\n` +
     `${jobTraitAreaLine}\n` +
@@ -334,8 +358,8 @@ async function handleProfile(interaction) {
     equipLine + "\n" +
     `==============\n` +
     `【資產】\n` +
-    `💰 金幣: ${result.wallet.gold}\n` +
-    `💎 鑽石: ${result.wallet.diamond}`
+    `💰 金幣: ${Number(wallet.gold || 0)}\n` +
+    `💎 鑽石: ${Number(wallet.diamond || 0)}`
   );
 }
 

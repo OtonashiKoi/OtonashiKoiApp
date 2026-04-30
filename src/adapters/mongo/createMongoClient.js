@@ -24,6 +24,7 @@ async function ensureIndexes(db) {
 
       // 交易和日誌
       db.collection("transactions").createIndex({ playerId: 1, createdAt: -1 }),
+      db.collection("transactions").createIndex({ createdAt: -1 }),
       db.collection("transactions").createIndex(
         { source: 1, sourceRef: 1 },
         {

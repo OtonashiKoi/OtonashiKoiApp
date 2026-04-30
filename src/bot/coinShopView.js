@@ -68,6 +68,11 @@ function chunkArray(list, size) {
   return chunks;
 }
 
+function formatCurrencyAmount(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toLocaleString("en-US") : "0";
+}
+
 function formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet) {
   const badges = [];
   if (item.stock === 0) badges.push("❌售完");
@@ -99,12 +104,14 @@ function buildShopItemLabel(item, playerTier, inventory, monthlyCount, ym, claim
 /**
  * 商店主畫面：文字清單 + 分類按鈕 + 分頁按鈕卡片
  */
-function createShopMainMessage(items, progress, activeCategory = "all", claimedItemIds = [], page = 0) {
+function createShopMainMessage(items, progress, activeCategory = "all", claimedItemIds = [], page = 0, wallet = null) {
   const playerTier = progress?.playerTier || null;
   const ym = getTaipeiYearMonth();
   const inventory = progress?.inventory || [];
   const monthlyCount = progress?.shopMonthlyCount || {};
   const claimedSet = new Set(claimedItemIds || []);
+  const goldBalance = formatCurrencyAmount(wallet?.gold ?? 0);
+  const diamondBalance = formatCurrencyAmount(wallet?.diamond ?? 0);
 
   if (!items.length) {
     return { content: "🏪 目前商店沒有可購買的商品，請稍後再來！", components: [] };
@@ -216,9 +223,10 @@ function createShopMainMessage(items, progress, activeCategory = "all", claimedI
   const pageLine = buyable.length > 0
     ? `第 ${safePage + 1} / ${totalPages} 頁，共 ${buyable.length} 項可購買商品`
     : "目前沒有可購買商品。";
+  const balanceLine = `💰 金幣：${goldBalance}　💎 鑽石：${diamondBalance}`;
 
   return {
-    content: `🏪 **商店商品列表 ${title}**\n${pageLine}\n\n${lines.join("\n")}`,
+    content: `🏪 **商店商品列表 ${title}**\n${balanceLine}\n${pageLine}\n\n${lines.join("\n")}`,
     components
   };
 }

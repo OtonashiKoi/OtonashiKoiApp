@@ -36,6 +36,14 @@ async function buildClaimIdentityKeys(player, discordId) {
   return [...keys];
 }
 
+async function fetchWallet(interaction) {
+  const serviceContext = getServiceContext();
+  const { wallet } = await serviceContext.walletService
+    .getWalletByDiscordId(interaction.user.id, interaction.user.username)
+    .catch(() => ({ wallet: null }));
+  return wallet || { gold: 0, diamond: 0 };
+}
+
 /** 取得即時玩家等級與身分組 ID（ephemeral cache 可能為空，補 fetch）*/
 async function fetchMemberTier(interaction) {
   let roleIds = interaction.member?.roles?.cache?.map((r) => r.id) ?? [];
@@ -57,6 +65,7 @@ async function handleShopOpen(interaction, category = "all", page = 0) {
     serviceContext.playerRepository.findByDiscordId(interaction.user.id).catch(() => null),
     fetchMemberTier(interaction)
   ]);
+  const wallet = await fetchWallet(interaction);
   if (!(await serviceContext.shopService._hasLinkedStreamAccount(player, interaction.user.id))) {
     await interaction.reply({
       content: "❌ 使用音無樂園商店前，請先綁定 YouTube 或 Twitch 帳號。",
@@ -70,7 +79,7 @@ async function handleShopOpen(interaction, category = "all", page = 0) {
     ? await serviceContext.shopClaimRepository.listByIdentityKeys(identityKeys).catch(() => [])
     : [];
   const claimedItemIds = [...new Set((claims || []).map((c) => c.itemId).filter(Boolean))];
-  const msg = createShopMainMessage(items, progress, category, claimedItemIds, page);
+  const msg = createShopMainMessage(items, progress, category, claimedItemIds, page, wallet);
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
   // 3分鐘無操作自動刪除
   setTimeout(() => interaction.deleteReply().catch(() => {}), 3 * 60 * 1000);
@@ -86,6 +95,7 @@ async function handleShopCat(interaction, category, page = 0) {
     serviceContext.playerRepository.findByDiscordId(interaction.user.id).catch(() => null),
     fetchMemberTier(interaction)
   ]);
+  const wallet = await fetchWallet(interaction);
   if (!(await serviceContext.shopService._hasLinkedStreamAccount(player, interaction.user.id))) {
     await interaction.update({
       content: "❌ 使用音無樂園商店前，請先綁定 YouTube 或 Twitch 帳號。",
@@ -99,7 +109,7 @@ async function handleShopCat(interaction, category, page = 0) {
     ? await serviceContext.shopClaimRepository.listByIdentityKeys(identityKeys).catch(() => [])
     : [];
   const claimedItemIds = [...new Set((claims || []).map((c) => c.itemId).filter(Boolean))];
-  const msg = createShopMainMessage(items, progress, category, claimedItemIds, page);
+  const msg = createShopMainMessage(items, progress, category, claimedItemIds, page, wallet);
   await interaction.update({ ...msg, embeds: [], attachments: [] });
 }
 

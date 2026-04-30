@@ -557,9 +557,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (pStats.hasArcherBadge && wt === "bow") {
         jobHints.push(`🏹 **(弓箭手)** 命中要害(中)：弓傷害提升，命中要害機制啟動`);
       }
-      if (pStats.hasWarriorBadge && (wt === "axe_1h" || wt === "axe_2h")) {
-        const tier = wt === "axe_2h" ? "低血爆發(中)" : "低血爆發(小)";
-        jobHints.push(`🪓 **(戰士)** ${tier}：低血量時傷害爆發${wt === "axe_2h" ? "，爆擊傷害加深" : ""}`);
+      if (pStats.hasWarriorBadge && wt === "axe_1h") {
+        jobHints.push(`🪓 **(戰士)** 單手斧強化：武器倍率提升，單手斧 + 盾 / 副手武器時也有額外加成`);
+      }
+      if (pStats.hasWarriorBadge && wt === "axe_2h") {
+        jobHints.push(`🪓 **(戰士)** 雙手斧強化：武器倍率提升、暴擊率與暴擊傷害提升，低血時額外爆發`);
       }
       if (pStats.hasDwarfWarriorBadge && wt && wt.startsWith("mace")) {
         const tier = wt === "mace_2h" ? "擊暈(中)" : "擊暈(小)";
@@ -833,6 +835,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
+    const monsterIsStunned = stunRoundsLeft > 0;
+
     // 怪物自身的卡片技能
     const monsterEquipped = options.monsterEquipped || {};
     // 沉默：怪物無法發動卡片技能
@@ -846,10 +850,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       return true;
     });
     const monsterHasCardSkill = !!(monsterEquipped.special_1?.monsterCardSkill?.key);
-    if (monsterIsSilenced && monsterHasCardSkill) {
+    if (monsterIsStunned && monsterHasCardSkill) {
+      log.push(`😵 ${mName} 仍處於擊暈狀態，無法發動技能！`);
+    } else if (monsterIsSilenced && monsterHasCardSkill) {
       log.push(`🔇 ${mName} 陷入沉默，無法發動技能！`);
     }
-    if (!monsterIsSilenced && monsterEquipped.special_1 && monsterEquipped.special_1.monsterCardSkill && monsterEquipped.special_1.monsterCardSkill.key) {
+    if (!monsterIsStunned && !monsterIsSilenced && monsterEquipped.special_1 && monsterEquipped.special_1.monsterCardSkill && monsterEquipped.special_1.monsterCardSkill.key) {
       const equippedCard = monsterEquipped.special_1;
       const skill = equippedCard.monsterCardSkill;
       const cardName = equippedCard.itemName || equippedCard.name || '卡片';
@@ -930,7 +936,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     // ── 玩家攻擊 ──
     const attackCount = pStats.isDualWield ? 2 : 1;
-    const monsterIsStunned = stunRoundsLeft > 0; // 擊暈中：怪物無法閃避
+    // 擊暈中：怪物無法閃避
 
     // ── 檢查玩家受到的狀態效果（怪物施加的 debuff）──
     let playerIsStunned = false;
@@ -1134,7 +1140,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (playerBonusVsDebuffedPct > 0 && hasAnyDebuff(monsterActiveEffects, round)) {
           conditionalBonusMultiplier *= (1 + playerBonusVsDebuffedPct / 100);
         }
-        let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * playerFinalDamageMultiplier * conditionalBonusMultiplier * (1 - finalDef / 100))));
+        if (pStats.hasDwarfWarriorBadge && pStats.weaponType && pStats.weaponType.startsWith("mace")) {
+          const monsterIsStunned = Array.isArray(monsterActiveEffects) && monsterActiveEffects.some((e) => e && e.key === 'stun' && effectIsActive(e, round));
+          if (monsterIsStunned && Number.isFinite(Number(pStats.dwarfWarriorBonusVsStunnedPct)) && Number(pStats.dwarfWarriorBonusVsStunnedPct) > 0) {
+            conditionalBonusMultiplier *= (1 + Number(pStats.dwarfWarriorBonusVsStunnedPct) / 100);
+          }
+        }
+        const attackBase = Math.max(
+          1,
+          Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * playerFinalDamageMultiplier * conditionalBonusMultiplier)
+        );
+        let dmg = rollDmg(Math.max(1, Math.round(attackBase * (1 - finalDef / 100))));
 
         // 職業傷害倍率
         // 弓箭手：弓傷害 ×1.2
@@ -1145,16 +1161,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 法師：法杖傷害 ×1.15
         if (pStats.hasMageBadge && pStats.weaponType && pStats.weaponType.startsWith("staff")) {
           dmg = Math.round(dmg * pStats.mageDamageMultiplier);
-        }
-
-        // 戰士：低血量傷害 ×1.15（<35%）
-        if (pStats.hasWarriorBadge && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
-          pStats.warriorLowHpMultiplier = 1.15;
-          dmg = Math.round(dmg * 1.15);
-          if (!warriorRageTriggered) {
-            warriorRageTriggered = true;
-            log.push(`🔱 **(戰士)** 血氣上湧，傷害爆發！`);
-          }
         }
 
         // --- Compute on_high_hp bonuses (per-effect threshold) early so they affect crit checks ---
@@ -1193,12 +1199,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
 
         // 應用傷害倍率：
-        // 1. 基礎傷害已套用弓箭手傷害倍率（×1.2）
-        // 2. 如果觸發爆擊，再乘以 2.5
-        // 3. 如果觸發要害，再乘以 1.5
-        // 4. 如果同時觸發，傷害疊加
+        // 1. 基礎傷害先算出未吃防禦的原始值
+        // 2. 若未爆擊，則先套用防禦減免
+        // 3. 爆擊直接以未吃防禦的原始值計算
+        // 4. 如果觸發要害，再乘以要害倍率
         if (isCrit) {
-          const critBase = Math.round(pStats.atk * (1 - finalDef / 100));
+          const critBase = attackBase;
           const critMultiplier = (2.5 * playerCritDamageMultiplier) + (pStats.warriorCritDamageBonus || 0); // 戰士雙手斧 +0.2 → 2.7
           dmg = Math.round(rollDmg(Math.max(1, critBase)) * critMultiplier);
 
@@ -1247,7 +1253,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           critNote = `🎯**(弓箭手)** **${rand(['命中要害', '精準破綻', '弱點命中', '一擊斃命'])}**！`;
         } else if (isCrit) {
           // 只觸發爆擊
-          critNote = `✨**${rand(critPhrases)}**！`;
+          if (pStats.hasWarriorBadge && pStats.weaponType === "axe_2h" && Number(pStats.warriorCritDamageBonus || 0) > 0) {
+            critNote = `✨**${rand(critPhrases)}**！🔥**(戰士)** **暴擊增傷**！`;
+          } else {
+            critNote = `✨**${rand(critPhrases)}**！`;
+          }
         }
 
         log.push(`⚔️ ${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1644,7 +1654,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           log.push(`🦀 **反擊**！以受到傷害的 ${counterDmgPct}% 回擊，對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
           if (mHp <= 0) { outcome = "win"; }
         }
-      } else {
+      } else if (!monsterIsStunned) {
         // 也檢查 equipped special 槽位的 procEffects
         const specialSlotKeys = ['special_1', 'special_2', 'special_3'];
         for (const slot of specialSlotKeys) {
@@ -1673,7 +1683,22 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (blockedThisRound && pStats.blockCounter && outcome === null) {
       const isBreak = Math.random() * 100 < pStats.armorBreakChance;
       const finalDef = isBreak ? 0 : adjustedMCalc.def;
-      let dmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * (1 - finalDef / 100))));
+      const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier));
+      let dmg = rollDmg(Math.max(1, Math.round(counterBase * (1 - finalDef / 100))));
+
+      // 劍士：格擋反擊命中率加成（+20%）
+      let counterHitChance = pStats.hit;
+      if (pStats.hasSwordsmanBadge && (pStats.weaponType === "sword_1h" || pStats.weaponType === "sword_2h")) {
+        counterHitChance = Math.min(100, counterHitChance + pStats.swordsmanBlockCritBoost);
+      }
+
+      // 劍士：格擋反擊爆擊檢測
+      let isCrit = Math.random() * 100 < pStats.crit;
+      if (pStats.hasSwordsmanBadge && (pStats.weaponType === "sword_1h" || pStats.weaponType === "sword_2h")) {
+        // 劍士格擋反擊有額外爆擊機率（+35%）
+        isCrit = isCrit || Math.random() * 100 < 35;
+      }
+      if (isCrit) dmg = Math.round(rollDmg(counterBase) * 2.5);
       try {
         const equipped = options.equipped || null;
         if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {
@@ -1687,24 +1712,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
       } catch (e) {}
 
-      // 劍士：格擋反擊命中率加成（+20%）
-      let counterHitChance = pStats.hit;
-      if (pStats.hasSwordsmanBadge && pStats.weaponType === "sword_1h") {
-        counterHitChance = Math.min(100, counterHitChance + pStats.swordsmanBlockCritBoost);
-      }
-
-      // 劍士：格擋反擊必定爆擊檢測
-      let isCrit = Math.random() * 100 < pStats.crit;
-      if (pStats.hasSwordsmanBadge && pStats.weaponType === "sword_1h") {
-        // 單手劍時，格擋反擊有額外爆擊機率（+10%）
-        isCrit = isCrit || Math.random() * 100 < 10;
-      }
-      if (isCrit) dmg = Math.round(dmg * 2.5);
-
       mHp -= dmg;
       totalDamage += dmg;
-      const swordsmanTag = pStats.hasSwordsmanBadge ? " **(劍士)**" : "";
-      log.push(`⚔️✨ **格擋反擊**${swordsmanTag}！${rand(jobFlavor.counter)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+      const swordsmanEffectNote = pStats.hasSwordsmanBadge
+        ? " **(劍士)** **格擋反擊發動**"
+        : " **格擋反擊**";
+      log.push(`⚔️✨${swordsmanEffectNote}！${rand(jobFlavor.counter)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
       if (mHp <= 0) { outcome = "win"; }
     }
 

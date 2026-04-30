@@ -11,6 +11,7 @@ const QUEST_TYPES = {
   battle_with_bow:   { label: "使用弓出戰次數",   unit: "次" },
   battle_win:        { label: "戰鬥勝利次數",     unit: "次" },
   damage_total:      { label: "累計造成傷害",     unit: "點" },
+  level_10_job_badge:{ label: "達成 Lv.10 並獲得職業徽章", unit: "項" },
   checkin_count:     { label: "打卡次數",        unit: "次" },
   stream_bind_count: { label: "直播綁定次數",     unit: "次" },
   equip_count:       { label: "裝備次數",        unit: "次" },
@@ -85,6 +86,10 @@ function resolvePeriodKey(cadence) {
   return currentWeekLabel();
 }
 
+function isJobBadgeItemId(itemId) {
+  return String(itemId || "").toLowerCase().startsWith("job_");
+}
+
 class WeeklyQuestService {
   constructor(weeklyQuestRepository, playerService) {
     this.repo = weeklyQuestRepository;
@@ -127,7 +132,8 @@ class WeeklyQuestService {
       unlockAttribute: VALID_ATTRS.includes(unlockAttribute) ? unlockAttribute : null,
       unlockAttribute2: VALID_ATTRS.includes(unlockAttribute2) ? unlockAttribute2 : null,
       unlockAttributeMin: Math.max(0, Number(def?.unlockAttributeMin || 0)),
-      hideIfRewardOwned: def?.hideIfRewardOwned !== false
+      hideIfRewardOwned: def?.hideIfRewardOwned !== false,
+      claimOnce: Boolean(def?.claimOnce)
     };
   }
 
@@ -174,7 +180,11 @@ class WeeklyQuestService {
           Object.values(equipment || {})
             .map((item) => item?.itemId ? String(item.itemId) : null)
             .filter(Boolean)
-        )
+        ),
+        hasJobBadge: [
+          ...(Array.isArray(inventory) ? inventory : []),
+          ...Object.values(equipment || {})
+        ].some((item) => isJobBadgeItemId(item?.itemId))
     };
   }
 
@@ -243,6 +253,19 @@ class WeeklyQuestService {
     };
   }
 
+  _resolveStaticQuestProgress(quest, context) {
+    if (!quest?.enabled) return null;
+    if (quest.type === "level_10_job_badge") {
+      const level = Number(context?.level || 1);
+      const hasJobBadge = Boolean(context?.hasJobBadge);
+      return {
+        current: level >= 10 && hasJobBadge ? 1 : 0,
+        target: 1
+      };
+    }
+    return null;
+  }
+
   async listDefinitions(cadence = "all") {
     const all = (await this.repo.listQuests()).map((q) => this._normalizeDefinition(q));
     if (cadence && cadence !== "all") {
@@ -280,6 +303,7 @@ class WeeklyQuestService {
       unlockAttribute2: fields?.unlockAttribute2 || null,
       unlockAttributeMin: Math.max(0, Number(fields?.unlockAttributeMin || 0)),
       hideIfRewardOwned: fields?.hideIfRewardOwned !== false,
+      claimOnce: Boolean(fields?.claimOnce),
       groupKey: String(fields?.groupKey || "core"),
       createdAt: new Date().toISOString()
     });
@@ -316,6 +340,7 @@ class WeeklyQuestService {
       unlockAttribute2: fields?.unlockAttribute2 !== undefined ? (fields.unlockAttribute2 || null) : (quest.unlockAttribute2 || null),
       unlockAttributeMin: fields?.unlockAttributeMin !== undefined ? Math.max(0, Number(fields.unlockAttributeMin) || 0) : Number(quest.unlockAttributeMin || 0),
       hideIfRewardOwned: fields?.hideIfRewardOwned !== undefined ? Boolean(fields.hideIfRewardOwned) : quest.hideIfRewardOwned !== false,
+      claimOnce: fields?.claimOnce !== undefined ? Boolean(fields.claimOnce) : Boolean(quest.claimOnce),
       groupKey: fields?.groupKey !== undefined ? String(fields.groupKey || "core") : String(quest.groupKey || "core")
     });
     if (!next.resetPolicy) next.resetPolicy = resetPolicyByCadence(next.cadence);
@@ -354,18 +379,23 @@ class WeeklyQuestService {
     return defs.map((quest) => {
       const p = playerPeriod[quest.id] || { current: 0, claimed: false };
       const completion = completionByType[quest.type] || null;
-      const current = completion
-        ? completion.current
-        : Number(p.current || 0);
-      const target = completion
-        ? completion.target
-        : Number(quest.target || 1);
+      const staticProgress = this._resolveStaticQuestProgress(quest, context);
+      const current = staticProgress
+        ? staticProgress.current
+        : completion
+          ? completion.current
+          : Number(p.current || 0);
+      const target = staticProgress
+        ? staticProgress.target
+        : completion
+          ? completion.target
+          : Number(quest.target || 1);
       return {
         cadence: c,
         periodKey,
         quest,
         current,
-        claimed: Boolean(p.claimed),
+        claimed: Boolean(p.claimed || (quest.claimOnce && p.claimedOnce)),
         done: current >= target
       };
     });
@@ -402,7 +432,7 @@ class WeeklyQuestService {
       const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, cadence);
       for (const q of defs) {
         if (!playerPeriod[q.id]) playerPeriod[q.id] = { current: 0, claimed: false };
-        if (!playerPeriod[q.id].claimed) {
+        if (!playerPeriod[q.id].claimed && !playerPeriod[q.id].claimedOnce) {
           playerPeriod[q.id].current = Math.min(Number(q.target || 1), Number(playerPeriod[q.id].current || 0) + inc);
         }
       }
@@ -426,20 +456,28 @@ class WeeklyQuestService {
     try {
       const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, quest.cadence);
       const p = playerPeriod[questId] || { current: 0, claimed: false };
+      const context = await this._getPlayerQuestContext(discordId);
       if (quest.type === "onboarding_complete_count" || quest.type === "weekly_complete_count") {
-        const context = await this._getPlayerQuestContext(discordId);
         const targetCadence = quest.cadence === "weekly" ? "weekly" : "onboarding";
         const cadenceDefs = (await this.listDefinitions(targetCadence))
           .filter((q) => this._isQuestVisibleForPlayer(q, context) || Boolean((playerPeriod[q.id] || {}).claimed));
         const completion = this._computeCompletionProgress(cadenceDefs, playerPeriod, quest.type);
         if (completion.current < completion.target) throw new Error("任務尚未完成");
         p.current = completion.current;
+      } else if (quest.type === "level_10_job_badge") {
+        const staticProgress = this._resolveStaticQuestProgress(quest, context);
+        p.current = staticProgress?.current || 0;
+        if (p.current < Number(quest.target || 1)) throw new Error("任務尚未完成");
       } else if (Number(p.current || 0) < Number(quest.target || 1)) {
         throw new Error("任務尚未完成");
       }
-      if (p.claimed) throw new Error("獎勵已領取");
+      if (p.claimed || (quest.claimOnce && p.claimedOnce)) throw new Error("獎勵已領取");
 
       p.claimed = true;
+      if (quest.claimOnce) {
+        p.claimedOnce = true;
+        p.claimedAt = p.claimedAt || new Date().toISOString();
+      }
       playerPeriod[questId] = p;
       await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, quest.cadence);
 
@@ -490,7 +528,7 @@ class WeeklyQuestService {
 
   async ensureDefaultSeeds() {
     const defaults = [
-      // onboarding (8)
+      // onboarding (16)
       { cadence: "onboarding", title: "完成直播綁定", description: "先完成直播綁定，讓系統認得你的直播帳號。", type: "stream_bind_count", target: 1, rewardGold: 200, rewardExp: 80, rewardDiamond: 0, rewardItemId: "7bdf0277-dcd5-4173-b3ff-d93ccaa9e293", sortOrder: 10, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "首次出戰", description: "進入任一戰鬥完成 1 次出戰即可。", type: "battle_count", target: 1, rewardGold: 120, rewardExp: 60, rewardDiamond: 0, rewardItemId: "a56bd609-cf0b-4924-b724-891f221fc0b9", sortOrder: 20, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "首次勝利", description: "用任一武器打贏 1 場戰鬥即可。", type: "battle_win", target: 1, rewardGold: 180, rewardExp: 90, rewardDiamond: 0, rewardItemId: "4a7c2dd6-1d33-4613-a5aa-913924d12eed", sortOrder: 30, groupKey: "seed_v1" },
@@ -504,6 +542,7 @@ class WeeklyQuestService {
       { cadence: "onboarding", title: "成功格擋3次", description: "裝備盾牌即可格擋；若想兼顧格擋後反擊，建議單手劍 + 盾。", type: "block_count", target: 3, rewardGold: 220, rewardExp: 100, rewardDiamond: 0, rewardItemId: "6da9f4e6-aac1-4088-9000-7111fd4926b0", sortOrder: 110, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "成功擊暈3次", description: "建議使用槌類武器，尤其是雙手槌，擊暈機率更高。", type: "stun_count", target: 3, rewardGold: 260, rewardExp: 120, rewardDiamond: 0, rewardItemId: "2fcf7576-4e74-4280-b1e6-0d7da7b58dda", sortOrder: 120, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "角色死亡3次", description: "在戰鬥中累積死亡 3 次即可。", type: "death_count", target: 3, rewardGold: 260, rewardExp: 120, rewardDiamond: 0, rewardItemId: "33d319ec-cb62-4826-8bcc-82a6fe52b8fa", sortOrder: 130, groupKey: "seed_v1" },
+      { cadence: "onboarding", title: "達成 Lv.10 並獲得職業徽章", description: "升到 Lv.10，並獲得任一職業徽章即可完成。", type: "level_10_job_badge", target: 1, rewardGold: 300, rewardExp: 150, rewardDiamond: 0, rewardItemId: null, sortOrder: 140, groupKey: "seed_v1", claimOnce: true },
       { cadence: "onboarding", title: "成功連擊20次", description: "同樣建議用匕首，配合高 AGI 與持續輸出，較容易把連擊堆高。", type: "combo_count", target: 20, rewardGold: 500, rewardExp: 220, rewardDiamond: 0, rewardItemId: "44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf", sortOrder: 150, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "完成全部新手任務", description: "完成前面所有新手任務後，再回來領取最終獎勵。", type: "onboarding_complete_count", target: 1, rewardGold: 0, rewardExp: 0, rewardDiamond: 0, rewardItemId: "87b281be-b175-40a0-8044-0accc88a0ee0", sortOrder: 160, groupKey: "seed_v1" },
 
@@ -533,11 +572,17 @@ class WeeklyQuestService {
     ];
 
     const existing = await this.listDefinitions("all");
-    const existsSet = new Set(existing.map((q) => `${q.cadence}|${q.title}|${q.type}`));
+    const existingMap = new Map(existing.map((q) => [`${q.cadence}|${q.title}|${q.type}`, q]));
     const created = [];
     for (const def of defaults) {
       const key = `${def.cadence}|${def.title}|${def.type}`;
-      if (existsSet.has(key)) continue;
+      const existingQuest = existingMap.get(key) || null;
+      if (existingQuest) {
+        if (def.claimOnce && !existingQuest.claimOnce) {
+          await this.updateDefinition(existingQuest.id, { claimOnce: true });
+        }
+        continue;
+      }
       const row = await this.createDefinition({
         ...def,
         enabled: true,

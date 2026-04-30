@@ -5,6 +5,28 @@ const { createStreamAccountBindingRepository } = require("../streamBindings/crea
 
 function createMongoRepositories() {
   const collection = async (name) => (await getMongoDb()).collection(name);
+  const normalizeLowLevelJobBadge = (progress) => {
+    if (!progress || typeof progress !== "object") return progress;
+    const level = Math.max(1, Number(progress.level) || 1);
+    if (level >= 10) return progress;
+
+    const equipment = progress.equipment;
+    if (!equipment || typeof equipment !== "object") return progress;
+    const jobEq = equipment.job_eq;
+    if (!jobEq) return progress;
+
+    const nextInventory = Array.isArray(progress.inventory) ? [...progress.inventory] : [];
+    nextInventory.push(jobEq);
+
+    return {
+      ...progress,
+      equipment: {
+        ...equipment,
+        job_eq: null
+      },
+      inventory: nextInventory
+    };
+  };
 
   const repos = {
     accessControlRepository: {
@@ -88,6 +110,7 @@ function createMongoRepositories() {
         return progress;
       },
       async save(progress) {
+        progress = normalizeLowLevelJobBadge(progress);
         let lastError = null;
         const maxRetries = 5;  // 增加重試次數
 
@@ -127,6 +150,7 @@ function createMongoRepositories() {
       },
       // CAS 寫入：只有 updatedAt 未被別人改過才成功，回傳是否成功
       async saveIfUnchanged(progress, prevUpdatedAt) {
+        progress = normalizeLowLevelJobBadge(progress);
         const now = new Date().toISOString();
         const filter = prevUpdatedAt
           ? { playerId: progress.playerId, updatedAt: prevUpdatedAt }

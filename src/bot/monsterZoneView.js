@@ -10,8 +10,23 @@ const BUTTON_IDS = {
   enterBattleLegs: "monster-zone:enter-battle:legs"
 };
 
+function formatRemainingTime(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours} 小時 ${minutes} 分 ${String(seconds).padStart(2, "0")} 秒`;
+  }
+  if (minutes > 0) {
+    return `${minutes} 分 ${String(seconds).padStart(2, "0")} 秒`;
+  }
+  return `${seconds} 秒`;
+}
+
 async function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0, damageMap = {}, options = {}) {
   const activeEvent = options.activeEvent || null;
+  const activeTransition = options.activeTransition || null;
   const zoneKey = options.zoneKey || activeEvent?.zone || monster?.zone || "normal";
   const worldBossStatus = options.worldBossStatus || null;
   const worldBossPartsHp = options.worldBossPartsHp || null;
@@ -24,6 +39,9 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     !worldBossStatus.battleStartedAt &&
     !worldBossStatus.canChallenge
   );
+  if (activeTransition) {
+    return await createMonsterTransitionPanelMessage(activeTransition, zoneTheme, zoneKey);
+  }
   if (activeEvent) {
     return await createEventPanelMessage(activeEvent, zoneTheme, zoneKey);
   }
@@ -89,17 +107,12 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     ""
   ];
   if (zoneKey === "elite" && worldBossStatus) {
-    if (!worldBossStatus.unlocked) {
-      descLines.push(`🔒 尚未解鎖（還差 ${worldBossStatus.remainingUnlockKills} 隻高級區擊殺）`);
-    } else if (worldBossStatus.cooldownRemainingMs > 0) {
-      descLines.push(`⏳ 世界BOSS 冷卻中（約 ${worldBossStatus.cooldownRemainingMinutes} 分鐘後再現身）`);
+    if (worldBossStatus.cooldownRemainingMs > 0) {
+      descLines.push(`⏳ 世界BOSS 冷卻中（剩餘 ${formatRemainingTime(worldBossStatus.cooldownRemainingMs)} 再現身）`);
     } else if (worldBossStatus.battleStartedAt) {
-      descLines.push(`⚠️ 世界BOSS戰進行中（剩餘約 ${worldBossStatus.battleRemainingMinutes} 分鐘）`);
+      descLines.push(`⚠️ 世界BOSS戰進行中（剩餘 ${formatRemainingTime(worldBossStatus.battleRemainingMs)}）`);
     } else {
       descLines.push("✅ 世界BOSS 可挑戰");
-    }
-    if (worldBossStatus.unlockTarget > 0) {
-      descLines.push(`世界BOSS解鎖進度：${worldBossStatus.hardKills}/${worldBossStatus.unlockTarget}`);
     }
     descLines.push("限制：開戰後 30 分鐘內未擊殺視為失敗");
   } else {
@@ -153,16 +166,11 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
 
   const fields = [];
   if (showEliteWaitingState) {
-    const waitingStatusLine = !worldBossStatus.unlocked
-      ? "世界BOSS 尚未現身，請先完成解鎖條件。"
-      : `世界BOSS 已撤離，約 ${worldBossStatus.cooldownRemainingMinutes} 分鐘後再現身。`;
+    const waitingStatusLine = `世界BOSS 已撤離，剩餘 ${formatRemainingTime(worldBossStatus.cooldownRemainingMs)} 再現身。`;
     const statusFields = [
       { name: "目前狀態", value: waitingStatusLine, inline: false },
       { name: "挑戰限制", value: "開戰後 30 分鐘內未擊殺視為失敗", inline: true }
     ];
-    if (worldBossStatus.unlockTarget > 0) {
-      statusFields.splice(1, 0, { name: "解鎖進度", value: `${worldBossStatus.hardKills}/${worldBossStatus.unlockTarget}`, inline: true });
-    }
     fields.push(...statusFields);
   } else {
     fields.push({ name: "HP", value: hpLine, inline: false });
@@ -211,6 +219,31 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
 }
 
 const { isEffectConditionMet } = require("../shared/effectEngine");
+
+async function createMonsterTransitionPanelMessage(activeTransition, zoneTheme = { label: "怪物區", color: 0xf59e0b, emoji: "◆", tagline: "" }, zoneKey = "normal") {
+  const endAtMs = Date.parse(activeTransition?.endsAt || "");
+  const remaining = Number.isFinite(endAtMs) ? Math.max(0, Math.ceil((endAtMs - Date.now()) / 1000)) : null;
+  const roll = Number.isFinite(Number(activeTransition?.diceRoll)) ? Number(activeTransition.diceRoll) : null;
+
+  const desc = [
+    `${zoneTheme.emoji} **${zoneTheme.label}**`,
+    zoneTheme.tagline || "怪物換場中，請稍候…",
+    "",
+    "🎲 **骰子轉場中**",
+    roll == null ? "結果：擲骰中…" : `結果：**${roll}**`,
+    remaining == null ? null : `剩餘時間：約 ${remaining} 秒`,
+    "",
+    "下一隻怪物正在生成，請稍候…"
+  ].filter(Boolean).join("\n");
+
+  const embed = new EmbedBuilder()
+    .setTitle(`${zoneTheme.emoji} 怪物生成中`)
+    .setDescription(desc)
+    .setColor(zoneTheme.color)
+    .setFooter({ text: "怪物區域" });
+
+  return { embeds: [embed], components: [], files: [] };
+}
 
 async function createEventPanelMessage(activeEvent, zoneTheme = { label: "怪物區", color: 0xf59e0b, emoji: "◆", tagline: "" }, zoneKey = "normal", options = {}) {
   const endAtMs = Date.parse(activeEvent.endsAt || "");

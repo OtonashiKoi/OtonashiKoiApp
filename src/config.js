@@ -25,6 +25,8 @@ module.exports = {
     playerRoleIds: parseCsv(process.env.PLAYER_ROLE_IDS), // 玩家角色 ID 陣列
     playerUserIds: parseCsv(process.env.PLAYER_USER_IDS), // 玩家用戶 ID 陣列
     personalRoomChannelId: process.env.PERSONAL_ROOM_CHANNEL_ID || "", // 個人房間頻道 ID
+    welcomeAuditEnabled: process.env.DISABLE_WELCOME_AUDIT === "1" ? false : true,
+    welcomeAuditIntervalMs: Math.max(60_000, Number.parseInt(process.env.WELCOME_AUDIT_INTERVAL_MS || "1800000", 10) || 1_800_000),
     inviteUrl: process.env.DISCORD_INVITE_URL || "https://discord.gg/your-invite" // 預設 Discord 邀請連結
   },
   // API 伺服器設定

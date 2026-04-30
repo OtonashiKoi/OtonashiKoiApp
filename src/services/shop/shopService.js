@@ -2,6 +2,7 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { applyEffectInstances } = require("../../shared/effectEngine");
 const { MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
+const { withPlayerProgressLock } = require("../progress/progressLocks");
 const crypto = require("crypto");
 
 // 各 tier 裝備販售價格
@@ -50,6 +51,35 @@ class ShopService {
     }
 
     return { nextAttributes: next, dropped };
+  }
+
+  _autoUnequipJobBadgeIfNeeded(progress) {
+    if (!progress || typeof progress !== "object") return null;
+    const playerLevel = Math.max(1, Number(progress.level) || 1);
+    if (playerLevel >= 10) return null;
+    if (!progress.equipment || typeof progress.equipment !== "object") return null;
+
+    const jobEq = progress.equipment.job_eq;
+    if (!jobEq) return null;
+
+    if (!Array.isArray(progress.inventory)) progress.inventory = [];
+    progress.inventory.push(jobEq);
+    progress.equipment.job_eq = null;
+    return jobEq;
+  }
+
+  async _saveProgressWithFallback(progress, prevUpdatedAt) {
+    if (typeof this.progressRepository?.saveIfUnchanged === "function") {
+      return this.progressRepository.saveIfUnchanged(progress, prevUpdatedAt);
+    }
+
+    if (typeof this.progressRepository?.save === "function") {
+      console.warn("[ShopService] progressRepository.saveIfUnchanged missing, falling back to save()");
+      await this.progressRepository.save(progress);
+      return true;
+    }
+
+    throw new AppError(ERROR_CODES.INTERNAL_ERROR, "progressRepository does not support save/saveIfUnchanged", 500);
   }
 
   _resolveIsTwoHanded({ weaponType = null, isTwoHanded = false } = {}) {
@@ -433,7 +463,8 @@ class ShopService {
     let casSuccess = false;
 
     // CAS 重試：避免與 grantExp、其他 progress 寫入衝突
-    for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
+    await withPlayerProgressLock(discordId, async () => {
+      for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
       const progress = await this.progressRepository.findByPlayerId(discordId);
       if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
 
@@ -512,6 +543,14 @@ class ShopService {
         effectDesc = `☯️ 等級下降至 Lv.${next.level}，並隨機失去 ${droppedText}。`;
       }
 
+      const autoRemovedJobBadge = this._autoUnequipJobBadgeIfNeeded(next);
+      if (autoRemovedJobBadge) {
+        const badgeName = autoRemovedJobBadge.itemName || autoRemovedJobBadge.name || "職業徽章";
+        effectDesc = effectDesc
+          ? `${effectDesc} / 因等級低於 Lv.10，自動卸下 **${badgeName}**`
+          : `因等級低於 Lv.10，自動卸下 **${badgeName}**`;
+      }
+
       // useEffects 同個 CAS 一起寫入，避免分兩次寫入造成另一輪競態
       if (useEffects.length > 0) {
         next.activeEffects = applyEffectInstances(next.activeEffects, useEffects, {
@@ -522,7 +561,7 @@ class ShopService {
 
       next.updatedAt = new Date().toISOString();
 
-      const saved = await this.progressRepository.saveIfUnchanged(next, progress.updatedAt);
+      const saved = await this._saveProgressWithFallback(next, progress.updatedAt);
       if (saved) {
         savedEntry = entry;
         savedEffect = effect;
@@ -532,11 +571,12 @@ class ShopService {
         break;
       }
 
-      if (attempt < CAS_MAX_RETRIES - 1) {
-        await new Promise(r => setTimeout(r, 10 * (attempt + 1)));
-        console.warn(`[useItem] CAS retry ${attempt + 1} for ${discordId}`);
+        if (attempt < CAS_MAX_RETRIES - 1) {
+          await new Promise(r => setTimeout(r, 10 * (attempt + 1)));
+          console.warn(`[useItem] CAS retry ${attempt + 1} for ${discordId}`);
+        }
       }
-    }
+    });
 
     if (!casSuccess) {
       throw new AppError(ERROR_CODES.INTERNAL_ERROR, `useItem CAS failed after ${CAS_MAX_RETRIES} retries for ${discordId}`, 500);

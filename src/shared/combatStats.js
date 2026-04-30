@@ -77,6 +77,18 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const offhand = equipped.shield || null;
   const wt      = weapon?.weaponType || null;
   const cfg     = WEAPON_CONFIG[wt] || {};
+  
+  // 職業徽章效果檢測
+  const jobEq = equipped.job_eq || null;
+  const jobId = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
+  const jobName = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
+  const hasArcherBadge = jobEq && (jobId.includes("archer") || jobName.includes("弓箭手"));
+  const hasSwordsmanBadge = jobEq && (jobId.includes("swordsman") || jobName.includes("劍士"));
+  const hasWarriorBadge = jobEq && (jobId === "job_warrior_v1" || (jobName.includes("戰士") && !jobName.includes("矮人")));
+  const hasDwarfWarriorBadge = jobEq && (jobId === "job_dwarf_warrior_v1" || jobName.includes("矮人戰士"));
+  const hasRogueBadge = jobEq && (jobId.includes("rogue") || jobName.includes("盜賊"));
+  const hasMageBadge = jobEq && (jobId.includes("mage") || jobName.includes("法師"));
+  const hasHealerBadge = jobEq && (jobId.includes("healer") || jobName.includes("治療"));
 
   // 雙持判定：主手非雙手武器 + 副手是武器類型
   const isDualWield = !cfg.isTwoHanded && wt && offhand?.weaponType != null && OFFHAND_WEAPON_TYPES.has(offhand.weaponType);
@@ -96,10 +108,11 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const dmgMax = 1.3;
 
   // 盾格擋：裝備盾牌就有 20% 格擋機會（傷害降至1）
-  // 格擋反擊：只有單手劍+盾才有（不含槌/斧）
+  // 格擋反擊：單手劍+盾、雙手劍都可觸發
   const hasShield = !!offhand && offhand.equipSlot === "shield" && !isDualWield;
-  const blockChance   = hasShield ? 20 : 0;
-  const blockCounter  = hasShield && wt === "sword_1h" ? true : false;
+  const hasSwordsmanBlock = hasSwordsmanBadge && (wt === "sword_1h" || wt === "sword_2h");
+  const blockChance   = hasShield ? 20 : (hasSwordsmanBlock && wt === "sword_2h" ? 20 : 0);
+  const blockCounter  = (hasShield && wt === "sword_1h") || (hasSwordsmanBlock && wt === "sword_2h");
 
   // 擊暈機率（槌類）
   const stunChance = cfg.stunChance ?? 0;
@@ -114,19 +127,6 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   // 副手追擊繼承擊暈/破防：劍和匕首繼承，槌/斧不繼承
   const counterInheritStun  = isDualWield && (wt === "sword_1h" || wt === "dagger");
   const counterInheritBreak = isDualWield && (wt === "sword_1h" || wt === "dagger");
-
-  // 職業徽章效果檢測
-  const jobEq = equipped.job_eq || null;
-  const jobId = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
-  const jobName = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
-
-  const hasArcherBadge = jobEq && (jobId.includes("archer") || jobName.includes("弓箭手"));
-  const hasSwordsmanBadge = jobEq && (jobId.includes("swordsman") || jobName.includes("劍士"));
-  const hasWarriorBadge = jobEq && (jobId === "job_warrior_v1" || (jobName.includes("戰士") && !jobName.includes("矮人")));
-  const hasDwarfWarriorBadge = jobEq && (jobId === "job_dwarf_warrior_v1" || jobName.includes("矮人戰士"));
-  const hasRogueBadge = jobEq && (jobId.includes("rogue") || jobName.includes("盜賊"));
-  const hasMageBadge = jobEq && (jobId.includes("mage") || jobName.includes("法師"));
-  const hasHealerBadge = jobEq && (jobId.includes("healer") || jobName.includes("治療"));
 
   // 弓箭手：命中要害機制（DEX 驅動）
   let archerCritRate = 0;
@@ -146,8 +146,8 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
 
   // 劍士：格擋反擊準度加成
   let swordsmanBlockCritBoost = 0;
-  if (hasSwordsmanBadge && wt === "sword_1h" && blockChance > 0) {
-    // 單手劍 + 盾時，反擊命中率 +20%
+  if (hasSwordsmanBadge && (wt === "sword_1h" || wt === "sword_2h") && blockChance > 0) {
+    // 劍士格擋反擊命中率 +20%
     swordsmanBlockCritBoost = 20;
   }
 
@@ -159,6 +159,14 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   let dwarfWarriorHighHpStunBoost = 0;
   if (hasDwarfWarriorBadge && wt && wt.startsWith("mace")) {
     dwarfWarriorHighHpStunBoost = 5;
+  }
+
+  // 矮人戰士：對暈眩目標增傷
+  let dwarfWarriorBonusVsStunnedPct = 0;
+  if (hasDwarfWarriorBadge && wt === "mace_1h") {
+    dwarfWarriorBonusVsStunnedPct = 5;
+  } else if (hasDwarfWarriorBadge && wt === "mace_2h") {
+    dwarfWarriorBonusVsStunnedPct = 15;
   }
 
   // 盜賊：連擊速度倍增
@@ -242,6 +250,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     // 矮人戰士
     hasDwarfWarriorBadge,
     dwarfWarriorHighHpStunBoost,     // 高血量擊暈加成
+    dwarfWarriorBonusVsStunnedPct,    // 對暈眩目標增傷
 
     // 盜賊
     hasRogueBadge,
