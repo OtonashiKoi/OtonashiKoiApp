@@ -2,7 +2,7 @@ const { Router } = require("express");
 const multer = require("multer");
 const os = require("os");
 const { ok, fail } = require("../../shared/response");
-const { uploadImage } = require("../../shared/cloudinaryUpload");
+const { uploadImageLocally } = require("../../shared/localImageUpload");
 const { ALL_ZONE_KEYS, zoneToFeatureKey } = require("../../shared/zones");
 
 const upload = multer({
@@ -173,8 +173,25 @@ function createAdminMonsterRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "請選擇要上傳的圖片"));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "monsters");
+      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(
+        req.file.path,
+        "monsters",
+        req.file.originalname,
+        req.file.mimetype
+      );
       const monster = await serviceContext.monsterService.updateMonster(req.params.id, { imageUrl, imageThumbnailUrl });
+      const linkedCards = await serviceContext.itemRepository?.findByMonsterCardOf?.(monster.id).catch(() => []);
+      if (Array.isArray(linkedCards) && linkedCards.length > 0) {
+        const updatedAt = new Date().toISOString();
+        await Promise.all(linkedCards.map(async (card) => {
+          await serviceContext.itemRepository.save({
+            ...card,
+            imageUrl,
+            imageThumbnailUrl,
+            updatedAt
+          });
+        }));
+      }
       res.json(ok({ imageUrl, imageThumbnailUrl, monster }, "image uploaded"));
     } catch (error) {
       next(error);

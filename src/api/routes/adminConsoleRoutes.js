@@ -4,7 +4,8 @@ const multer = require("multer");
 const os = require("os");
 const config = require("../../config");
 const { fail, ok } = require("../../shared/response");
-const { uploadImage } = require("../../shared/cloudinaryUpload");
+const { uploadImageLocally } = require("../../shared/localImageUpload");
+const { addEnhanceGemToInventory } = require("../../shared/inventoryStacking");
 const { featureKeyToZone } = require("../../shared/zones");
 
 // Upload image to temp directory first, then hand over to Cloudinary helper.
@@ -309,29 +310,34 @@ function createAdminConsoleRoutes(serviceContext) {
         return;
       }
       if (!Array.isArray(progress.inventory)) progress.inventory = [];
-      progress.inventory.push({
-        uuid: require("crypto").randomUUID(),
-        itemId: item.id,
-        itemName: item.name,
-        itemEffect: item.effect || { type: "none", value: 0 },
-        useEffects: item.useEffects || [],
-        passiveEffects: item.passiveEffects || [],
-        procEffects: item.procEffects || [],
-        combatEffects: item.combatEffects || [],
-        itemType: item.itemType || "consumable",
-        imageUrl: item.imageUrl || null,
-        imageThumbnailUrl: item.imageThumbnailUrl || null,
-        equipSlot: item.equipSlot || null,
-        equipStats: item.equipStats || null,
-        weaponType: item.weaponType || null,
-        isTwoHanded: item.isTwoHanded || false,
-        atkStat: item.atkStat || null,
-        tier: item.tier || null,
-        monsterCardSkill: item.monsterCardSkill || null,
-        enhanceLevel: 0,
-        source: "admin_grant",
-        purchasedAt: new Date().toISOString()
+      const stacked = addEnhanceGemToInventory(progress.inventory, item, 1, {
+        source: "admin_grant"
       });
+      if (!stacked) {
+        progress.inventory.push({
+          uuid: require("crypto").randomUUID(),
+          itemId: item.id,
+          itemName: item.name,
+          itemEffect: item.effect || { type: "none", value: 0 },
+          useEffects: item.useEffects || [],
+          passiveEffects: item.passiveEffects || [],
+          procEffects: item.procEffects || [],
+          combatEffects: item.combatEffects || [],
+          itemType: item.itemType || "consumable",
+          imageUrl: item.imageUrl || null,
+          imageThumbnailUrl: item.imageThumbnailUrl || null,
+          equipSlot: item.equipSlot || null,
+          equipStats: item.equipStats || null,
+          weaponType: item.weaponType || null,
+          isTwoHanded: item.isTwoHanded || false,
+          atkStat: item.atkStat || null,
+          tier: item.tier || null,
+          monsterCardSkill: item.monsterCardSkill || null,
+          enhanceLevel: 0,
+          source: "admin_grant",
+          purchasedAt: new Date().toISOString()
+        });
+      }
       progress.updatedAt = new Date().toISOString();
       await serviceContext.progressRepository.save(progress);
       res.json(ok({ itemName: item.name }, "item granted"));
@@ -380,14 +386,23 @@ function createAdminConsoleRoutes(serviceContext) {
   // Item image upload
   router.post("/admin/items/:id/image", upload.single("image"), async (req, res, next) => {
     try {
+      const startedAt = Date.now();
+      console.log(`[AdminItemImage] start id=${req.params.id} file=${req.file?.originalname || "none"}`);
       if (!req.file) {
         res.status(400).json(fail("NO_FILE", "Please select an image file to upload."));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "items");
-      const item = await serviceContext.itemService.updateItem(req.params.id, { imageUrl, imageThumbnailUrl });
+      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(req.file.path, "items", req.file.originalname, req.file.mimetype);
+      console.log(`[AdminItemImage] upload done id=${req.params.id} elapsed=${Date.now() - startedAt}ms`);
+      const item = await serviceContext.itemService.updateItem(
+        req.params.id,
+        { imageUrl, imageThumbnailUrl },
+        { skipPlayerSync: true }
+      );
+      console.log(`[AdminItemImage] item saved id=${req.params.id} elapsed=${Date.now() - startedAt}ms`);
       res.json(ok({ imageUrl, imageThumbnailUrl, item }, "image uploaded"));
     } catch (error) {
+      console.error(`[AdminItemImage] failed id=${req.params.id}`, error?.message || error);
       next(error);
     }
   });
@@ -414,14 +429,19 @@ function createAdminConsoleRoutes(serviceContext) {
   // Shop item image upload
   router.post("/admin/shop/items/:id/image", upload.single("image"), async (req, res, next) => {
     try {
+      const startedAt = Date.now();
+      console.log(`[AdminShopItemImage] start id=${req.params.id} file=${req.file?.originalname || "none"}`);
       if (!req.file) {
         res.status(400).json(fail("NO_FILE", "Please select an image file to upload."));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "items");
+      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(req.file.path, "shop_items", req.file.originalname, req.file.mimetype);
+      console.log(`[AdminShopItemImage] upload done id=${req.params.id} elapsed=${Date.now() - startedAt}ms`);
       const item = await serviceContext.shopService.updateItem(req.params.id, { imageUrl, imageThumbnailUrl });
+      console.log(`[AdminShopItemImage] item saved id=${req.params.id} elapsed=${Date.now() - startedAt}ms`);
       res.json(ok({ imageUrl, imageThumbnailUrl, item }, "image uploaded"));
     } catch (error) {
+      console.error(`[AdminShopItemImage] failed id=${req.params.id}`, error?.message || error);
       next(error);
     }
   });
@@ -471,7 +491,7 @@ function createAdminConsoleRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "Image file is required."));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "battle_assets");
+      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(req.file.path, "battle_assets", req.file.originalname, req.file.mimetype);
       res.json(ok({ imageUrl, imageThumbnailUrl }, "battle asset image uploaded"));
     } catch (error) {
       next(error);
@@ -530,7 +550,7 @@ function createAdminConsoleRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "Image file is required."));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "animation_templates");
+      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(req.file.path, "animation_templates", req.file.originalname, req.file.mimetype);
       res.json(ok({ imageUrl, imageThumbnailUrl }, "animation template image uploaded"));
     } catch (error) {
       next(error);

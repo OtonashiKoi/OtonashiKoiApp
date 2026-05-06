@@ -4,6 +4,12 @@
   let currentInput = null;
   let cropper = null;
 
+  function shouldSkipCropper(input) {
+    if (!input) return true;
+    const skipIds = new Set(['items-img-input', 'items-csv-input']);
+    return skipIds.has(input.id) || input.dataset.noCropper === '1';
+  }
+
   function showModal(dataUrl, inputEl) {
     const modal = document.getElementById('image-cropper-modal');
     const img = document.getElementById('cropper-image');
@@ -48,6 +54,11 @@
           // dispatch native change so existing upload handlers run
           const ev = new Event('change', { bubbles: true });
           currentInput.dispatchEvent(ev);
+          setTimeout(() => {
+            if (currentInput && currentInput.dataset.cropped === '1') {
+              delete currentInput.dataset.cropped;
+            }
+          }, 0);
           status.textContent = '已放回 input，等待上傳';
           setTimeout(hideModal, 500);
           resolve({ ok: true });
@@ -63,6 +74,11 @@
   function onFileChange(e) {
     const input = e.target;
     if (!input.files || input.files.length === 0) return;
+    if (shouldSkipCropper(input)) return;
+    if (input.dataset.cropped === '1') {
+      delete input.dataset.cropped;
+      return;
+    }
     const file = input.files[0];
     if (!file.type.startsWith('image/')) return;
     const reader = new FileReader();

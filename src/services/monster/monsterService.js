@@ -68,6 +68,7 @@ class MonsterService {
     const passiveEffects = normalizeEffectList(fields.passiveEffects, { fallbackTrigger: "passive", fallbackTarget: "self", sourcePhase: "passive" });
     const procEffects = normalizeEffectList(fields.procEffects, { fallbackTrigger: "on_hit", fallbackTarget: "enemy", sourcePhase: "proc" });
     const battleStartEffects = normalizeEffectList(fields.battleStartEffects, { fallbackTrigger: "on_battle_start", fallbackTarget: "self", sourcePhase: "monster_skill" });
+    const now = new Date().toISOString();
     const skills = normalizeMonsterSkillList(fields.skills);
     const monster = {
       id: crypto.randomUUID(),
@@ -96,7 +97,8 @@ class MonsterService {
       spawnRate: Math.min(100, Math.max(1, Number(fields.spawnRate) || 10)),
       isBoss:  Boolean(fields.isBoss),
       enabled: Boolean(fields.enabled),
-      createdAt: new Date().toISOString()
+      createdAt: now,
+      updatedAt: now
     };
     return { ...await this.monsterRepository.save(monster), calc: effectiveCalc(monster) };
   }
@@ -105,10 +107,17 @@ class MonsterService {
     const monster = await this.monsterRepository.findById(id);
     if (!monster) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, `怪物不存在: ${id}`, 404);
     const updated = { ...monster };
+    let imageChanged = false;
     if (fields.seq       !== undefined) updated.seq       = Math.max(1, Number(fields.seq) || 1);
     if (fields.name      !== undefined) updated.name      = String(fields.name).trim() || monster.name;
-    if (fields.imageUrl  !== undefined) updated.imageUrl  = fields.imageUrl;
-    if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl;
+    if (fields.imageUrl  !== undefined) {
+      updated.imageUrl  = fields.imageUrl;
+      imageChanged = true;
+    }
+    if (fields.imageThumbnailUrl !== undefined) {
+      updated.imageThumbnailUrl = fields.imageThumbnailUrl;
+      imageChanged = true;
+    }
     for (const stat of ["str", "agi", "vit", "int", "dex", "luk"]) {
       if (fields[stat] !== undefined) updated[stat] = Math.max(0, Number(fields[stat]) || 0);
     }
@@ -131,6 +140,8 @@ class MonsterService {
     if (fields.spawnRate !== undefined) updated.spawnRate = Math.min(100, Math.max(1, Number(fields.spawnRate) || 10));
     if (fields.isBoss    !== undefined) updated.isBoss    = Boolean(fields.isBoss);
     if (fields.enabled   !== undefined) updated.enabled   = Boolean(fields.enabled);
+    updated.updatedAt = new Date().toISOString();
+    if (imageChanged) updated.imageUpdatedAt = updated.updatedAt;
     const saved = await this.monsterRepository.save(updated);
     return { ...saved, calc: effectiveCalc(saved) };
   }

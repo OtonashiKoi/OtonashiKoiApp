@@ -869,46 +869,49 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
       const cooldownKey = equippedCard.itemId || equippedCard.id || cardName;
       const triggerChance = Math.min(100, Math.max(0, Number(skill.chance ?? equippedCard.cardProcChance ?? 30)));
-      const applicableProcEffects = Array.isArray(skill.procEffects)
-        ? skill.procEffects.filter((procEffect) => procEffectApplies(procEffect, monsterHpPct, playerHpPct))
-        : [];
-      if (applicableProcEffects.length > 0 && (cardCooldowns.monster[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
+      const procEffects = Array.isArray(skill.procEffects) ? skill.procEffects : [];
+      if (procEffects.length > 0 && (cardCooldowns.monster[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
         log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
         if (Number(skill.cooldownTurns) > 0) cardCooldowns.monster[cooldownKey] = Number(skill.cooldownTurns);
 
-        if (applicableProcEffects.length > 0) {
-          for (const procEffect of applicableProcEffects) {
-            if (!procEffect || !procEffect.key) continue;
-            const pp = procEffect.params || {};
-            const targetHadDebuff = procEffect.target === 'self'
-              ? hasAnyDebuff(monsterActiveEffects, round)
-              : hasAnyDebuff(options.playerActiveEffects || [], round);
-            const bonusValue = Number(pp.bonusIfTargetDebuffed);
-            const equippedBonusValue = Number(pp.bonusIfEquippedValue);
-            const hasEquippedBonus = Number.isFinite(equippedBonusValue)
-              && (
-                hasEquippedNames(monsterEquipped, pp.bonusIfEquippedNames)
-                || hasAnyEquippedName(monsterEquipped, pp.bonusIfEquippedAnyNames)
-              );
-            const effectEntry = makeCardEffectEntry(
-              procEffect,
-              round,
-              'monster_skill',
-              hasEquippedBonus
-                ? { value: equippedBonusValue }
-                : (targetHadDebuff && Number.isFinite(bonusValue) ? { value: bonusValue } : {}),
-              equippedCard.uuid || equippedCard.itemId || equippedCard.id || cardName
+        for (const procEffect of procEffects) {
+          if (!procEffect || !procEffect.key) continue;
+          const procChance = Number.isFinite(Number(procEffect.chance))
+            ? Math.min(100, Math.max(0, Number(procEffect.chance)))
+            : 100;
+          if (Math.random() * 100 >= procChance) continue;
+          const currentMonsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+          const currentPlayerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
+          if (!procEffectApplies(procEffect, currentMonsterHpPct, currentPlayerHpPct)) continue;
+          const pp = procEffect.params || {};
+          const targetHadDebuff = procEffect.target === 'self'
+            ? hasAnyDebuff(monsterActiveEffects, round)
+            : hasAnyDebuff(options.playerActiveEffects || [], round);
+          const bonusValue = Number(pp.bonusIfTargetDebuffed);
+          const equippedBonusValue = Number(pp.bonusIfEquippedValue);
+          const hasEquippedBonus = Number.isFinite(equippedBonusValue)
+            && (
+              hasEquippedNames(monsterEquipped, pp.bonusIfEquippedNames)
+              || hasAnyEquippedName(monsterEquipped, pp.bonusIfEquippedAnyNames)
             );
-            if (effectEntry.params.mode === 'caster_atk_pct') effectEntry.params.casterAtk = adjustedMCalc.atk || mCalc.atk || 1;
-            // 根據效果類型決定施加對象
-            if (procEffect.target === 'self' || MONSTER_BUFF_KEYS.has(procEffect.key)) {
-              // 怪物增益 → 施加給怪物（同 key 先清舊的，防止乘法疊加）
-              monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, effectEntry);
-            } else if (procEffect.target === 'enemy' || MONSTER_DEBUFF_KEYS.has(procEffect.key)) {
-              // 怪物DEBUFF → 施加給玩家（同 key 先清舊的，防止 DOT 疊加）
-              if (!options.playerActiveEffects) options.playerActiveEffects = [];
-              options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, effectEntry);
-            }
+          const effectEntry = makeCardEffectEntry(
+            procEffect,
+            round,
+            'monster_skill',
+            hasEquippedBonus
+              ? { value: equippedBonusValue }
+              : (targetHadDebuff && Number.isFinite(bonusValue) ? { value: bonusValue } : {}),
+            equippedCard.uuid || equippedCard.itemId || equippedCard.id || cardName
+          );
+          if (effectEntry.params.mode === 'caster_atk_pct') effectEntry.params.casterAtk = adjustedMCalc.atk || mCalc.atk || 1;
+          // 根據效果類型決定施加對象
+          if (procEffect.target === 'self' || MONSTER_BUFF_KEYS.has(procEffect.key)) {
+            // 怪物增益 → 施加給怪物（同 key 先清舊的，防止乘法疊加）
+            monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, effectEntry);
+          } else if (procEffect.target === 'enemy' || MONSTER_DEBUFF_KEYS.has(procEffect.key)) {
+            // 怪物DEBUFF → 施加給玩家（同 key 先清舊的，防止 DOT 疊加）
+            if (!options.playerActiveEffects) options.playerActiveEffects = [];
+            options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, effectEntry);
           }
         }
       }
@@ -997,44 +1000,47 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         const cooldownKey = slotItem.itemId || slotItem.id || `${slot}:${cardName}`;
         const triggerChance = Math.min(100, Math.max(0, Number(skill.chance ?? slotItem.cardProcChance ?? 5)));
-        const applicableProcEffects = Array.isArray(skill.procEffects)
-          ? skill.procEffects.filter((procEffect) => procEffectApplies(procEffect, playerHpPct, monsterHpPct))
-          : [];
-        if (applicableProcEffects.length > 0 && (cardCooldowns.player[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
+        const procEffects = Array.isArray(skill.procEffects) ? skill.procEffects : [];
+        if (procEffects.length > 0 && (cardCooldowns.player[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
           log.push(`🎴 【${skill.name || cardName}】發動！${skill.description ? skill.description : ''}`);
           if (Number(skill.cooldownTurns) > 0) cardCooldowns.player[cooldownKey] = Number(skill.cooldownTurns);
 
-          if (applicableProcEffects.length > 0) {
-            for (const procEffect of applicableProcEffects) {
-              if (!procEffect || !procEffect.key) continue;
-              const pp = procEffect.params || {};
-              const targetHadDebuff = (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key))
-                ? hasAnyDebuff(monsterActiveEffects, round)
-                : hasAnyDebuff(options.playerActiveEffects || [], round);
-              const bonusValue = Number(pp.bonusIfTargetDebuffed);
-              const equippedBonusValue = Number(pp.bonusIfEquippedValue);
-              const hasEquippedBonus = Number.isFinite(equippedBonusValue)
-                && (
-                  hasEquippedNames(options.equipped || {}, pp.bonusIfEquippedNames)
-                  || hasAnyEquippedName(options.equipped || {}, pp.bonusIfEquippedAnyNames)
-                );
-              const effectEntry = makeCardEffectEntry(
-                procEffect,
-                round,
-                'player_card_skill',
-                hasEquippedBonus
-                  ? { value: equippedBonusValue }
-                  : (targetHadDebuff && Number.isFinite(bonusValue) ? { value: bonusValue } : {}),
-                `${slot}:${slotItem.uuid || slotItem.itemId || slotItem.id || cardName}`
+          for (const procEffect of procEffects) {
+            if (!procEffect || !procEffect.key) continue;
+            const procChance = Number.isFinite(Number(procEffect.chance))
+              ? Math.min(100, Math.max(0, Number(procEffect.chance)))
+              : 100;
+            if (Math.random() * 100 >= procChance) continue;
+            const currentPlayerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
+            const currentMonsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+            if (!procEffectApplies(procEffect, currentPlayerHpPct, currentMonsterHpPct)) continue;
+            const pp = procEffect.params || {};
+            const targetHadDebuff = (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key))
+              ? hasAnyDebuff(monsterActiveEffects, round)
+              : hasAnyDebuff(options.playerActiveEffects || [], round);
+            const bonusValue = Number(pp.bonusIfTargetDebuffed);
+            const equippedBonusValue = Number(pp.bonusIfEquippedValue);
+            const hasEquippedBonus = Number.isFinite(equippedBonusValue)
+              && (
+                hasEquippedNames(options.equipped || {}, pp.bonusIfEquippedNames)
+                || hasAnyEquippedName(options.equipped || {}, pp.bonusIfEquippedAnyNames)
               );
-              if (effectEntry.params.mode === 'caster_atk_pct') effectEntry.params.casterAtk = pStats.atk || 1;
-              // 攻擊型效果 → 施加給怪物；增益型效果 → 施加給玩家
-              if (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key)) {
-                monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, effectEntry);
-              } else {
-                if (!options.playerActiveEffects) options.playerActiveEffects = [];
-                options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, effectEntry);
-              }
+            const effectEntry = makeCardEffectEntry(
+              procEffect,
+              round,
+              'player_card_skill',
+              hasEquippedBonus
+                ? { value: equippedBonusValue }
+                : (targetHadDebuff && Number.isFinite(bonusValue) ? { value: bonusValue } : {}),
+              `${slot}:${slotItem.uuid || slotItem.itemId || slotItem.id || cardName}`
+            );
+            if (effectEntry.params.mode === 'caster_atk_pct') effectEntry.params.casterAtk = pStats.atk || 1;
+            // 攻擊型效果 → 施加給怪物；增益型效果 → 施加給玩家
+            if (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key)) {
+              monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, effectEntry);
+            } else {
+              if (!options.playerActiveEffects) options.playerActiveEffects = [];
+              options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, effectEntry);
             }
           }
         }

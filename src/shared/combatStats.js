@@ -107,11 +107,16 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const dmgMin = Math.min(0.9, 0.5 + I * 0.01);
   const dmgMax = 1.3;
 
-  // 盾格擋：裝備盾牌就有 20% 格擋機會（傷害降至1）
-  // 格擋反擊：單手劍+盾、雙手劍都可觸發
+  // 盾格擋：盾牌本身 20%
+  // 雙手劍格擋：雙手劍本身 10%
+  // 劍士額外加成：單手劍+盾再 +20%，雙手劍再 +10%
   const hasShield = !!offhand && offhand.equipSlot === "shield" && !isDualWield;
   const hasSwordsmanBlock = hasSwordsmanBadge && (wt === "sword_1h" || wt === "sword_2h");
-  const blockChance   = hasShield ? 20 : (hasSwordsmanBlock && wt === "sword_2h" ? 20 : 0);
+  let blockChance = 0;
+  if (hasShield) blockChance += 20;
+  if (wt === "sword_2h") blockChance += 10;
+  if (hasSwordsmanBadge && hasShield && wt === "sword_1h") blockChance += 20;
+  if (hasSwordsmanBadge && wt === "sword_2h") blockChance += 10;
   const blockCounter  = (hasShield && wt === "sword_1h") || (hasSwordsmanBlock && wt === "sword_2h");
 
   // 擊暈機率（槌類）

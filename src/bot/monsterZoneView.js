@@ -24,6 +24,14 @@ function formatRemainingTime(ms) {
   return `${seconds} 秒`;
 }
 
+function appendCacheBust(url, version) {
+  if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return url;
+  const v = String(version || "").trim();
+  if (!v) return url;
+  const joiner = url.includes("?") ? "&" : "?";
+  return `${url}${joiner}v=${encodeURIComponent(v)}`;
+}
+
 async function createMonsterZonePanelMessage(monster, currentHp, participantCount = 0, damageMap = {}, options = {}) {
   const activeEvent = options.activeEvent || null;
   const activeTransition = options.activeTransition || null;
@@ -131,7 +139,8 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     .setFooter({ text: "怪物區域" });
   const files = [];
 
-  const imageSource = showEliteWaitingState ? "" : (monster?.imageThumbnailUrl || monster?.imageUrl || "");
+  const imageVersion = monster?.imageUpdatedAt || monster?.updatedAt || monster?.createdAt || null;
+  const imageSource = showEliteWaitingState ? "" : appendCacheBust((monster?.imageThumbnailUrl || monster?.imageUrl || ""), imageVersion);
   if (typeof imageSource === "string" && imageSource) {
     if (/^https?:\/\//i.test(imageSource)) {
       if (fastUpdate) {

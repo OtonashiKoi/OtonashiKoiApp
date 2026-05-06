@@ -31,7 +31,7 @@ async function ensureIndexes(db) {
           unique: true,
           partialFilterExpression: {
             source: "donation:reward",
-            sourceRef: { $exists: true, $ne: "" }
+            sourceRef: { $gt: "" }
           }
         }
       ),

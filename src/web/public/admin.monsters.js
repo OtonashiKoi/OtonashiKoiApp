@@ -154,6 +154,14 @@
     return item ? (item.imageThumbnailUrl || item.imageUrl || "") : "";
   }
 
+  function cacheBust(url, version) {
+    if (!url || typeof url !== "string" || !/^https?:\/\//i.test(url)) return url || "";
+    const v = String(version || "").trim();
+    if (!v) return url;
+    const joiner = url.includes("?") ? "&" : "?";
+    return `${url}${joiner}v=${encodeURIComponent(v)}`;
+  }
+
 
   /* ── 搜尋式 combobox（取代原生 select） ── */
   function makeItemCombobox(selectedItemId = "") {
@@ -441,7 +449,7 @@
       card.style.cssText = "display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer;border:1px solid transparent;transition:background 0.12s;";
       card.addEventListener("mouseenter", () => { card.style.background = "var(--surface-hover)"; card.style.borderColor = "var(--accent)"; });
       card.addEventListener("mouseleave", () => { card.style.background = ""; card.style.borderColor = "transparent"; });
-      const thumb = it.imageThumbnailUrl || it.imageUrl || "";
+      const thumb = cacheBust(it.imageThumbnailUrl || it.imageUrl || "", it.imageUpdatedAt || it.updatedAt || it.createdAt);
       const tierBadge = it.tier ? `<span style="font-size:10px;padding:1px 5px;border-radius:4px;background:${TIER_COLORS[it.tier]||'#888'};color:#111;font-weight:700;margin-left:4px;">${it.tier}</span>` : "";
       const statsLine = it.monsterCardOf
         ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">🎴 ${it.monsterCardSkill?.name || '怪物卡片'}</div>`
@@ -547,7 +555,7 @@
 
     // 縮圖
     const selectedItem = itemLib.find(i => i.id === itemId) || null;
-    const thumbSrc = selectedItem ? (selectedItem.imageThumbnailUrl || selectedItem.imageUrl || "") : "";
+    const thumbSrc = selectedItem ? cacheBust(selectedItem.imageThumbnailUrl || selectedItem.imageUrl || "", selectedItem.imageUpdatedAt || selectedItem.updatedAt || selectedItem.createdAt) : "";
     const thumb = document.createElement("img");
     thumb.className = "drop-thumb";
     thumb.style.cssText = `width:22px;height:22px;object-fit:contain;border-radius:3px;flex-shrink:0;${thumbSrc ? "" : "display:none;"}`;
@@ -565,7 +573,7 @@
       modal.open({ currentItemId: hidden.value || "", currentChance: Number(chanceInput.value) || 0, cb: (item, c) => {
         hidden.value = item.id;
         selectBtn.textContent = `${ITEM_TYPE_LABEL[item.itemType] || ""} ${item.name}`;
-        const src = item.imageThumbnailUrl || item.imageUrl || "";
+        const src = cacheBust(item.imageThumbnailUrl || item.imageUrl || "", item.imageUpdatedAt || item.updatedAt || item.createdAt);
         if (src) { thumb.src = src; thumb.style.display = ""; } else { thumb.src = ""; thumb.style.display = "none"; }
         chanceInput.value = c;
       }});
@@ -773,7 +781,7 @@
     const level = Number(m.level) || 1;
     const atk = (Number(m.str) || 0) * 3;
     const sg = suggestRewards(maxHp, level, atk);
-    const imgSrc = m.imageThumbnailUrl || m.imageUrl || "";
+    const imgSrc = cacheBust(m.imageThumbnailUrl || m.imageUrl || "", m.imageUpdatedAt || m.updatedAt || m.createdAt);
 
     // ── Row 1：圖片 + 基本資訊 + 屬性 ──
     const row1 = document.createElement("div");
@@ -969,12 +977,17 @@
       });
       if (!r.ok) { alert("圖片上傳失敗"); return; }
       const json = await r.json();
-      const thumb = json.data?.imageThumbnailUrl || json.data?.imageUrl;
+      const thumb = cacheBust(
+        json.data?.imageThumbnailUrl || json.data?.imageUrl,
+        json.data?.monster?.imageUpdatedAt || json.data?.monster?.updatedAt || json.data?.monster?.createdAt
+      );
       if (thumb) {
         const card = document.querySelector(`.monster-card[data-id="${rowId}"]`);
         const cell = card?.querySelector(".img-cell");
         if (cell) cell.innerHTML = `<img src="${thumb}" style="width:52px;height:52px;object-fit:contain;" class="monster-img-preview"/>`;
       }
+      await loadItemLib();
+      await loadMonsters();
     });
   }
 

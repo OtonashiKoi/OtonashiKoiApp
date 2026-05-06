@@ -15,6 +15,8 @@ const { withPlayerProgressLock } = require("../../services/progress/progressLock
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
 const activeSessions = new Map();
+const pendingBattleReservations = new Map();
+const battleActionLocks = new Map();
 
 // 死亡冷卻記錄：key = discordId, value = { deathTime: timestamp, cooldownMs: 25000 }
 const deathCooldowns = new Map();
@@ -730,6 +732,16 @@ function isInCooldown(discordId) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
+function tryAcquireBattleActionLock(discordId) {
+  if (battleActionLocks.has(discordId)) return false;
+  battleActionLocks.set(discordId, Date.now());
+  return true;
+}
+
+function releaseBattleActionLock(discordId) {
+  battleActionLocks.delete(discordId);
 }
 
 function formatQueueSeconds(seconds) {
@@ -1528,9 +1540,9 @@ async function _broadcastBossSpawn(sc, zoneKey, monster) {
 // 出戰（入場）— 顯示準備畫面 + 開始戰鬥按鈕
 // ──────────────────────────────────────────────
 async function handleEnterBattle(interaction) {
+  const discordId = interaction.user.id;
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const sc = getServiceContext();
-  const discordId = interaction.user.id;
   const displayName = interaction.member?.displayName || interaction.user.username;
   const selectedBossPart = parseWorldBossTargetPart(interaction.customId);
   const selectedBossPartProfile = getWorldBossTargetProfile(selectedBossPart);
@@ -1539,13 +1551,24 @@ async function handleEnterBattle(interaction) {
 
   // 已有進行中的戰鬥，拒絕重複出戰
   if (activeSessions.has(discordId)) {
+    if (pendingBattleReservations.has(discordId)) {
+      await interaction.editReply({
+        content: "⏳ 你已經預約了一場戰鬥，最多只能再排 1 場，請等這一場跑完。"
+      }).catch(() => {});
+      return;
+    }
+    pendingBattleReservations.set(discordId, { requestedAt: Date.now() });
     const s = activeSessions.get(discordId);
     const phase = getSessionPhaseState(s, discordId);
     await interaction.editReply({
-      content: `⏳ 你目前${phase.label}，約 ${formatQueueSeconds(phase.countdownSeconds)} 後${phase.actionText}。`
+      content: `⏳ 你目前${phase.label}，已預約下一場，約 ${formatQueueSeconds(phase.countdownSeconds)} 後${phase.actionText}。`
     }).catch(() => {});
-    while (activeSessions.has(discordId)) {
-      await sleep(BATTLE_QUEUE_POLL_MS);
+    try {
+      while (activeSessions.has(discordId)) {
+        await sleep(BATTLE_QUEUE_POLL_MS);
+      }
+    } finally {
+      pendingBattleReservations.delete(discordId);
     }
   }
 
@@ -2171,6 +2194,7 @@ async function handleEnterBattle(interaction) {
     if (hasActiveSessionLock && activeSessions.get(discordId)?.state === "starting") {
       activeSessions.delete(discordId);
     }
+    releaseBattleActionLock(discordId);
   }
 }
 
@@ -2178,14 +2202,26 @@ async function handleEnterBattle(interaction) {
 // 開始戰鬥 — 自動跑完所有回合，顯示完整戰鬥紀錄
 // ──────────────────────────────────────────────
 async function handleStartFight(interaction) {
-  await interaction.deferUpdate();
-  const sc = getServiceContext();
   const discordId = interaction.user.id;
+  if (!tryAcquireBattleActionLock(discordId)) {
+    await interaction.deferUpdate().catch(() => {});
+    await interaction.editReply({ content: "⏳ 你的戰鬥操作正在處理中，請稍候再試。", embeds: [], components: [] }).catch(() => {});
+    return;
+  }
+
+  try {
+    await interaction.deferUpdate();
+  } catch (_err) {
+    releaseBattleActionLock(discordId);
+    return;
+  }
+  const sc = getServiceContext();
   const displayName = interaction.member?.displayName || interaction.user.username;
   const session = activeSessions.get(discordId);
 
   if (!session) {
     await interaction.editReply({ content: "❌ 找不到你的戰鬥紀錄，請重新出戰。", embeds: [], components: [] });
+    releaseBattleActionLock(discordId);
     return;
   }
 
@@ -2469,6 +2505,8 @@ async function handleStartFight(interaction) {
   } catch (err) {
     activeSessions.delete(discordId);
     await interaction.editReply({ content: "❌ 戰鬥發生錯誤，請稍後再試。", embeds: [], components: [] });
+  } finally {
+    releaseBattleActionLock(discordId);
   }
 }
 

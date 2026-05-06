@@ -54,10 +54,28 @@ function fmtRemaining(expiresAt) {
   return `<t:${unix}:R>`;
 }
 
+function formatEquipStats(stats) {
+  if (!stats || typeof stats !== "object") return "";
+  const order = ["str", "agi", "vit", "int", "dex", "luk"];
+  const entries = Object.entries(stats)
+    .filter(([, value]) => typeof value === "number" && value !== 0 && !Number.isNaN(value))
+    .sort((a, b) => {
+      const ai = order.indexOf(String(a[0]).toLowerCase());
+      const bi = order.indexOf(String(b[0]).toLowerCase());
+      if (ai !== -1 && bi !== -1 && ai !== bi) return ai - bi;
+      if (ai !== -1 && bi === -1) return -1;
+      if (ai === -1 && bi !== -1) return 1;
+      return String(a[0]).localeCompare(String(b[0]), "en");
+    });
+  return entries.map(([key, value]) => `${String(key).toUpperCase()}${value > 0 ? "+" : ""}${value}`).join(" ");
+}
+
 function fmtItem(item) {
+  const statsText = item?.itemType === "equipment" ? formatEquipStats(item.equipStats) : "";
   const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
   const stack = item.isGem && item.stackCount ? ` ×${item.stackCount}` : "";
-  return `${item.itemName}${enh}${stack}`;
+  const stats = statsText ? `｜${statsText}` : "";
+  return `${item.itemName}${enh}${stats}${stack}`;
 }
 
 function isSellableItem(item) {
@@ -94,8 +112,10 @@ const SELL_WEAPON_SLOTS = new Set(["weapon"]);
 
 function buildSellItemLabel(item) {
   const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
+  const statsText = item?.itemType === "equipment" ? formatEquipStats(item.equipStats) : "";
+  const stats = statsText ? `｜${statsText}` : "";
   const stack = item.stackCount ? ` ×${item.stackCount}` : "";
-  return `${item.itemName}${enh}${stack}`.slice(0, 80);
+  return `${item.itemName}${enh}${stats}${stack}`.slice(0, 80);
 }
 
 function sellWeaponFamily(entry) {
@@ -774,10 +794,8 @@ async function handleAuctionSellConfirm(interaction) {
         hours,
         quantity,
       });
-      const enh = auction.item.enhanceLevel > 0 ? ` +${auction.item.enhanceLevel}` : "";
-      const stack = auction.item.isGem && auction.item.stackCount ? ` ×${auction.item.stackCount}` : "";
       await interaction.editReply({
-        content: `✅ **上架成功！**\n\n商品：**${auction.item.itemName}${enh}${stack}**\n定價：${fmtPrice(price, currency)}\n到期：${new Date(auction.expiresAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
+        content: `✅ **上架成功！**\n\n商品：**${fmtItem(auction.item)}**\n定價：${fmtPrice(price, currency)}\n到期：${new Date(auction.expiresAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
         components: [],
       });
       // 刷新拍賣場面板（公開頻道）

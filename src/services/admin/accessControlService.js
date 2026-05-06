@@ -276,6 +276,24 @@ class AccessControlService {
 
     return roleIds.some((roleId) => member.roles.cache?.has(roleId));
   }
+
+  async isDiscordPlayerWhitelisted(member) {
+    if (!member?.user?.id) return false;
+
+    const access = await this.getAccessControl();
+    const playerRoleIds = access.discord.playerRoleIds;
+    const playerUserIds = access.discord.playerUserIds;
+
+    if (playerUserIds.includes(member.user.id)) {
+      return true;
+    }
+
+    if (playerRoleIds.length === 0) {
+      return false;
+    }
+
+    return playerRoleIds.some((roleId) => member.roles.cache?.has(roleId));
+  }
 }
 
 module.exports = {

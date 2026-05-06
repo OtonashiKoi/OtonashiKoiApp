@@ -104,7 +104,8 @@ class ItemService {
     return this.itemRepository.save(item);
   }
 
-  async updateItem(id, fields) {
+  async updateItem(id, fields, options = {}) {
+    const { skipPlayerSync = false } = options || {};
     const item = await this.getItemById(id);
     const updated = { ...item };
     if (fields.name !== undefined) updated.name = String(fields.name).trim();
@@ -139,7 +140,7 @@ class ItemService {
     if (!updated.name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具名稱不可空白", 400);
     const saved = await this.itemRepository.save(updated);
     // 背景同步玩家背包與裝備槽中相同 itemId 的道具
-    if (this.progressRepository) {
+    if (this.progressRepository && !skipPlayerSync) {
       this._syncItemToPlayers(saved).catch(e => console.error("[ItemService] syncItemToPlayers error:", e));
     }
     return saved;

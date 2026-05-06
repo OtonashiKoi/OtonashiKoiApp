@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-04-28T16:27:17.947Z
+Generated at: 2026-05-06T02:29:37.542Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,8 +8,8 @@ Generated at: 2026-04-28T16:27:17.947Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 336 |
-| 進度資料 | 340 |
+| 玩家 | 347 |
+| 進度資料 | 351 |
 | 怪物 | 41 |
 | 怪物狀態文件 | 5 |
 | 道具 | 259 |
@@ -38,7 +38,7 @@ Generated at: 2026-04-28T16:27:17.947Z
 | beginner | 3 | 蘑菇怪 | 2 | 2400 | 75 | 240 | 0 | 否 | 9 |
 | beginner | 4 | 小史(中) | 3 | 2800 | 90 | 280 | 0 | 否 | 9 |
 | beginner | 5 | 大野兔(B) | 3 | 4950 | 200 | 1000 | 0 | 是 | 12 |
-| elite | 1 | 大史王 | 35 | 950000 | 26000 | 75000 | 0 | 是 | 32 |
+| elite | 1 | 大史王 | 35 | 950000 | 26000 | 75000 | 5000 | 是 | 32 |
 | hard | 1 | 城牆衛兵 | 20 | 45000 | 4500 | 4200 | 0 | 否 | 10 |
 | hard | 2 | 古城弓手 | 20 | 35000 | 3800 | 4200 | 0 | 否 | 10 |
 | hard | 3 | 石像鬼 | 22 | 45000 | 6000 | 4200 | 0 | 否 | 9 |
@@ -81,16 +81,17 @@ Generated at: 2026-04-28T16:27:17.947Z
 | --- | --- |
 | collectible | 4 |
 | consumable | 12 |
-| equipment | 236 |
+| equipment | 218 |
 | job_badge | 7 |
+| monster_card | 18 |
 
 | 階級 | 數量 |
 | --- | --- |
-| A | 64 |
+| A | 61 |
 | B | 57 |
 | C | 58 |
 | D | 64 |
-| 無階級 | 16 |
+| 無階級 | 19 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -104,9 +105,9 @@ Generated at: 2026-04-28T16:27:17.947Z
 | job_eq | 7 |
 | shield | 8 |
 | shoes | 16 |
-| special | 59 |
+| special | 41 |
 | weapon | 41 |
-| 無槽位 | 16 |
+| 無槽位 | 34 |
 
 ## Items
 
@@ -223,16 +224,10 @@ Generated at: 2026-04-28T16:27:17.947Z
 | d9e16875-14cb-45b1-91eb-da46b6972698 | 鐵靴 | equipment | B | shoes |  | AGI+3 VIT+5 | none |
 | 8693f1d9-aa26-4c08-9d1f-9908a4b81281 | 鬥紋鐵靴 | equipment | B | shoes |  | STR+5 VIT+3 | none |
 | night-leopard-card | 暗夜獵豹卡 | equipment | B | special |  |  | none |
-| monster-card-eb0322bc-a90a-4a89-ad57-8a9c5607e6b8 | 暗夜獵豹卡 | equipment | B | special |  |  | none |
-| monster-card-343c18ce-9f87-4532-bbb4-618a64fe5559 | 林地妖靈卡 | equipment | B | special |  |  | none |
 | forest-spirit-card | 林地妖靈卡 | equipment | B | special |  |  | none |
-| monster-card-21fb614f-7f8b-4aad-b248-9418d8cbd8c0 | 森林之獸卡 | equipment | B | special |  |  | none |
 | forest-beast-card | 森林之獸卡 | equipment | B | special |  |  | none |
 | forest-tree-card | 森林古樹卡 | equipment | B | special |  |  | none |
-| monster-card-9f0c5372-7232-4c6f-8083-409a28b1b374 | 森林古樹卡 | equipment | B | special |  |  | none |
 | forest-wizard-card | 森林巫師卡 | equipment | B | special |  |  | none |
-| monster-card-f6145411-1a2e-4919-9ee4-fe27b3a31c07 | 森林巫師卡 | equipment | B | special |  |  | none |
-| monster-card-5247b1b0-6bc0-4db3-8ffd-aacb755c64fb | 森林盜賊卡 | equipment | B | special |  |  | none |
 | forest-rogue-card | 森林盜賊卡 | equipment | B | special |  |  | none |
 | 46df8bac-c8c1-4e31-8689-7a602bafd7b5 | 鋼製匕首 | equipment | B | weapon | dagger | STR+4 AGI+7 | none |
 | 9807c319-abbd-43ad-808c-dcfb9313d7ba | 鋼製單手劍 | equipment | B | weapon | sword_1h | STR+11 | none |
@@ -281,15 +276,10 @@ Generated at: 2026-04-28T16:27:17.947Z
 | monster-card-3065b7ca-8839-4be4-9d02-0821932cd408 | 中金(稀)卡 | equipment | C | special |  |  | none |
 | monster-card-03c93103-eddb-4265-96ca-a8a76bb82a02 | 小金(稀)卡 | equipment | C | special |  |  | none |
 | giant-card | 巨巨卡 | equipment | C | special |  |  | none |
-| monster-card-b9c226a8-ea33-41de-9c9b-be24824a9fb1 | 巨巨卡 | equipment | C | special |  |  | none |
 | fang-wolf-card | 牙牙狼卡 | equipment | C | special |  |  | none |
-| monster-card-13f56b92-709e-42ff-87d2-e8f129ed9207 | 牙牙狼卡 | equipment | C | special |  |  | none |
 | crab-card | 甲蟹卡 | equipment | C | special |  |  | none |
-| monster-card-657afc88-c6db-4851-8c4c-50f225b18624 | 甲蟹卡 | equipment | C | special |  |  | none |
 | mira-b-card | 米拉桑(B)卡 | equipment | C | special |  |  | none |
-| monster-card-517f9a27-f6f7-4251-8cf8-2140f02222c0 | 米拉桑(B)卡 | equipment | C | special |  |  | none |
 | dark-archer-card | 黑暗弓手卡 | equipment | C | special |  |  | none |
-| monster-card-f4bed595-74f8-493b-8551-9158f4b5381d | 黑暗弓手卡 | equipment | C | special |  |  | none |
 | bb4a624b-c5df-4ace-ae50-d5ec16248e6d | 立直棒 | equipment | C | weapon | bow | AGI+1 VIT+2 INT+1 DEX+8 LUK+-3 | none |
 | a5bf4a8c-2f89-4b35-9f23-8cb519bb0292 | 鐵製匕首 | equipment | C | weapon | dagger | STR+2 AGI+4 | none |
 | 9c809436-d8d5-4b21-bf15-e26e881cac9b | 鐵製單手劍 | equipment | C | weapon | sword_1h | STR+6 | none |
@@ -335,25 +325,18 @@ Generated at: 2026-04-28T16:27:17.947Z
 | 912afa75-bfcc-4788-a42c-cf099dc209c3 | 智紋布靴 | equipment | D | shoes |  | VIT+1 INT+1 | none |
 | f6ba24ae-c749-4daa-a6aa-bfed255f1807 | 迅紋布靴 | equipment | D | shoes |  | VIT+1 DEX+1 | none |
 | 7cf9a5d3-9287-4da6-b944-a5d616b5bdd7 | 鬥紋布靴 | equipment | D | shoes |  | STR+1 VIT+1 | none |
-| monster-card-f00fd7b1-9f57-4532-9901-f4d4d74f132d | 哥布卡 | equipment | D | special |  |  | none |
 | goblin-card | 哥布卡 | equipment | D | special |  |  | none |
-| monster-card-321a08e9-8fed-4a80-9526-b1f977fd9103 | 大史(B)卡 | equipment | D | special |  |  | none |
 | daishi-b-card | 大史(B)卡 | equipment | D | special |  |  | none |
 | monster-card-19fecf53-1ee1-48bc-a097-42bccbe12227 | 大野兔(B)卡 | equipment | D | special |  |  | none |
 | monster-card-92974d12-fd4d-4482-8ea7-171712ae894c | 小史(中)卡 | equipment | D | special |  |  | none |
 | xiaoshi-small-card | 小史(小)卡 | equipment | D | special |  |  | none |
-| monster-card-75fc9a55-3f1b-406d-92e7-3ec4fd787e44 | 小史(小)卡 | equipment | D | special |  |  | none |
 | monster-card-c39bdddd-a33d-4e34-8019-d17020a8083b | 小史卡 | equipment | D | special |  |  | none |
-| monster-card-a8ef443e-3a0d-4ccb-9290-d6394edaa59f | 小狼卡 | equipment | D | special |  |  | none |
 | xiaolang-card | 小狼卡 | equipment | D | special |  |  | none |
 | stone-card | 石頭卡 | equipment | D | special |  |  | none |
-| monster-card-2d226eea-934a-4787-8ff7-9f19d12ac590 | 石頭卡 | equipment | D | special |  |  | none |
 | green-wolf-card | 綠野狼卡 | equipment | D | special |  |  | none |
-| monster-card-a1ab762c-cd0b-4270-994b-74b68c242840 | 綠野狼卡 | equipment | D | special |  |  | none |
 | monster-card-5606a251-bea4-4d4c-bd37-d985a7d7a6d3 | 蘑菇怪卡 | equipment | D | special |  |  | none |
 | monster-card-ac87e4b7-2c1c-4d6c-8fa8-c873fc26039f | 野兔卡 | equipment | D | special |  |  | none |
 | grass-goblin-card | 青草地精卡 | equipment | D | special |  |  | none |
-| monster-card-6f321e26-e74e-4a05-a55a-6145da53373d | 青草地精卡 | equipment | D | special |  |  | none |
 | 421196aa-83e4-4f2e-82f6-dc05077b115a | 木製匕首 | equipment | D | weapon | dagger | STR+1 AGI+3 | none |
 | a56bd609-cf0b-4924-b724-891f221fc0b9 | 木製單手劍 | equipment | D | weapon | sword_1h | STR+3 | none |
 | 4885e098-3624-4c6c-9eb9-e4b27c2fb5ab | 木製單手斧 | equipment | D | weapon | axe_1h | STR+2 LUK+1 | none |
@@ -364,13 +347,31 @@ Generated at: 2026-04-28T16:27:17.947Z
 | 2271e23c-9648-430e-944b-cea2107ee8ec | 木製雙手斧 | equipment | D | weapon | axe_2h | STR+5 LUK+1 | none |
 | 2fcf7576-4e74-4280-b1e6-0d7da7b58dda | 木製雙手槌 | equipment | D | weapon | mace_2h | STR+5 VIT+1 | none |
 | e3794447-e19d-41a2-9b0a-c5050dcdd9ea | 木製雙手法杖 | equipment | D | weapon | staff_2h | INT+5 LUK+1 | none |
+| job_swordsman_v1 | 劍士徽章 | job_badge |  | job_eq |  | STR+2 VIT+3 DEX+2 | none |
 | job_archer_v1 | 弓箭手徽章 | job_badge |  | job_eq |  | AGI+1 DEX+5 LUK+2 | none |
 | job_warrior_v1 | 戰士徽章 | job_badge |  | job_eq |  | STR+4 VIT+1 LUK+2 | none |
 | job_healer_v1 | 治療師徽章 | job_badge |  | job_eq |  | VIT+2 INT+4 DEX+2 | none |
+| job_mage_v1 | 法師徽章 | job_badge |  | job_eq |  | VIT+1 INT+5 LUK+2 | none |
+| job_rogue_v1 | 盜賊徽章 | job_badge |  | job_eq |  | STR+2 AGI+4 LUK+2 | none |
 | job_dwarf_warrior_v1 | 矮人戰士徽章 | job_badge |  | job_eq |  | STR+1 VIT+5 DEX+2 | none |
-| job_swordsman_v1 | 劍士 | job_badge | A | job_eq |  | STR+2 VIT+3 DEX+2 | none |
-| job_mage_v1 | 法師 | job_badge | A | job_eq |  | VIT+1 INT+5 LUK+2 | none |
-| job_rogue_v1 | 盜賊 | job_badge | A | job_eq |  | STR+2 AGI+4 LUK+2 | none |
+| monster-card-eb0322bc-a90a-4a89-ad57-8a9c5607e6b8 | 暗夜獵豹卡 | monster_card | B |  |  |  | none |
+| monster-card-343c18ce-9f87-4532-bbb4-618a64fe5559 | 林地妖靈卡 | monster_card | B |  |  |  | none |
+| monster-card-21fb614f-7f8b-4aad-b248-9418d8cbd8c0 | 森林之獸卡 | monster_card | B |  |  |  | none |
+| monster-card-9f0c5372-7232-4c6f-8083-409a28b1b374 | 森林古樹卡 | monster_card | B |  |  |  | none |
+| monster-card-f6145411-1a2e-4919-9ee4-fe27b3a31c07 | 森林巫師卡 | monster_card | B |  |  |  | none |
+| monster-card-5247b1b0-6bc0-4db3-8ffd-aacb755c64fb | 森林盜賊卡 | monster_card | B |  |  |  | none |
+| monster-card-b9c226a8-ea33-41de-9c9b-be24824a9fb1 | 巨巨卡 | monster_card | C |  |  |  | none |
+| monster-card-13f56b92-709e-42ff-87d2-e8f129ed9207 | 牙牙狼卡 | monster_card | C |  |  |  | none |
+| monster-card-657afc88-c6db-4851-8c4c-50f225b18624 | 甲蟹卡 | monster_card | C |  |  |  | none |
+| monster-card-517f9a27-f6f7-4251-8cf8-2140f02222c0 | 米拉桑(B)卡 | monster_card | C |  |  |  | none |
+| monster-card-f4bed595-74f8-493b-8551-9158f4b5381d | 黑暗弓手卡 | monster_card | C |  |  |  | none |
+| monster-card-f00fd7b1-9f57-4532-9901-f4d4d74f132d | 哥布卡 | monster_card | D |  |  |  | none |
+| monster-card-321a08e9-8fed-4a80-9526-b1f977fd9103 | 大史(B)卡 | monster_card | D |  |  |  | none |
+| monster-card-75fc9a55-3f1b-406d-92e7-3ec4fd787e44 | 小史(小)卡 | monster_card | D |  |  |  | none |
+| monster-card-a8ef443e-3a0d-4ccb-9290-d6394edaa59f | 小狼卡 | monster_card | D |  |  |  | none |
+| monster-card-2d226eea-934a-4787-8ff7-9f19d12ac590 | 石頭卡 | monster_card | D |  |  |  | none |
+| monster-card-a1ab762c-cd0b-4270-994b-74b68c242840 | 綠野狼卡 | monster_card | D |  |  |  | none |
+| monster-card-6f321e26-e74e-4a05-a55a-6145da53373d | 青草地精卡 | monster_card | D |  |  |  | none |
 
 ## Quests
 
@@ -380,29 +381,29 @@ Generated at: 2026-04-28T16:27:17.947Z
 | daily | 20 | 每日贏得 3 場 | battle_win | 3 | 啟用 | 300 金幣 + 140 EXP |  |
 | daily | 30 | 每日累計 3000 傷害 | damage_total | 3000 | 啟用 | 320 金幣 + 160 EXP |  |
 | daily | 40 | 每日完成打卡 | checkin_count | 1 | 啟用 | 180 金幣 + 100 EXP |  |
-| job | 10 | 劍士試煉 | battle_with_sword | 10 | 啟用 | 500 金幣 + 劍士 | 等級達到 10，STR + DEX 加總大於 10，裝備單手劍或雙手劍出戰 10 次。完成可獲得 500 金幣與劍士徽章。 |
+| job | 10 | 劍士試煉 | battle_with_sword | 10 | 啟用 | 500 金幣 + 劍士徽章 | 等級達到 10，STR + DEX 加總大於 10，裝備單手劍或雙手劍出戰 10 次。完成可獲得 500 金幣與劍士徽章。 |
 | job | 20 | 戰士試煉 | battle_with_axe | 10 | 啟用 | 500 金幣 + 戰士徽章 | 等級達到 10，STR + VIT 加總大於 10，裝備單手斧或雙手斧出戰 10 次。完成可獲得 500 金幣與戰士徽章。 |
 | job | 30 | 矮人戰士試煉 | battle_with_mace | 10 | 啟用 | 500 金幣 + 矮人戰士徽章 | 等級達到 10，VIT + STR 加總大於 10，裝備錘出戰 10 次。完成可獲得 500 金幣與矮人戰士徽章。 |
-| job | 40 | 盜賊試煉 | battle_with_dagger | 10 | 啟用 | 500 金幣 + 盜賊 | 等級達到 10，AGI + DEX 加總大於 10，裝備匕首出戰 10 次。完成可獲得 500 金幣與盜賊徽章。 |
-| job | 50 | 法師試煉（雙手法杖） | battle_with_staff | 10 | 啟用 | 500 金幣 + 法師 | 等級達到 10，INT + AGI 加總大於 10，裝備雙手法杖出戰 10 次。完成可獲得 500 金幣與法師徽章。 |
+| job | 40 | 盜賊試煉 | battle_with_dagger | 10 | 啟用 | 500 金幣 + 盜賊徽章 | 等級達到 10，AGI + DEX 加總大於 10，裝備匕首出戰 10 次。完成可獲得 500 金幣與盜賊徽章。 |
+| job | 50 | 法師試煉（雙手法杖） | battle_with_staff | 10 | 啟用 | 500 金幣 + 法師徽章 | 等級達到 10，INT + AGI 加總大於 10，裝備雙手法杖出戰 10 次。完成可獲得 500 金幣與法師徽章。 |
 | job | 60 | 治療師試煉（單手法杖） | battle_with_staff | 10 | 啟用 | 500 金幣 + 治療師徽章 | 等級達到 10，INT + VIT 加總大於 10，裝備單手法杖出戰 10 次。完成可獲得 500 金幣與治療師徽章。 |
 | job | 70 | 弓箭手試煉 | battle_with_bow | 10 | 啟用 | 500 金幣 + 弓箭手徽章 | 等級達到 10，DEX + AGI 加總大於 10，裝備弓出戰 10 次。完成可獲得 500 金幣與弓箭手徽章。 |
-| onboarding | 10 | 完成直播綁定 | stream_bind_count | 1 | 啟用 | 200 金幣 + 80 EXP + 布帽 |  |
-| onboarding | 20 | 首次出戰 | battle_count | 1 | 啟用 | 120 金幣 + 60 EXP + 木製單手劍 |  |
-| onboarding | 30 | 首次勝利 | battle_win | 1 | 啟用 | 180 金幣 + 90 EXP + 木盾 |  |
-| onboarding | 40 | 累計造成 500 傷害 | damage_total | 500 | 啟用 | 200 金幣 + 100 EXP + 布衣 |  |
-| onboarding | 50 | 完成 1 次打卡 | checkin_count | 1 | 啟用 | 150 金幣 + 60 EXP + 8c9ac7c4-e00d-44fb-9582-8c68b99c2357 |  |
-| onboarding | 60 | 裝備任一裝備 1 次 | equip_count | 1 | 啟用 | 200 金幣 + 90 EXP + 木製單手斧 |  |
-| onboarding | 70 | 完成 1 次強化 | enhance_count | 1 | 啟用 | 240 金幣 + 120 EXP + 布披風 |  |
-| onboarding | 80 | 出戰 10 次 | battle_count | 10 | 啟用 | 400 金幣 + 160 EXP + 木製雙手劍 |  |
-| onboarding | 90 | 成功連擊3次 | combo_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製匕首 |  |
-| onboarding | 100 | 成功迴避3次 | dodge_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製弓 |  |
-| onboarding | 110 | 成功格擋3次 | block_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製單手槌 |  |
-| onboarding | 120 | 成功擊暈3次 | stun_count | 3 | 啟用 | 260 金幣 + 120 EXP + 木製雙手槌 |  |
-| onboarding | 130 | 角色死亡3次 | death_count | 3 | 啟用 | 260 金幣 + 120 EXP + 33d319ec-cb62-4826-8bcc-82a6fe52b8fa |  |
-| onboarding | 140 | 成功觸發燃燒3次 | burn_trigger_count | 3 | 停用 | 300 金幣 + 140 EXP + d5936211-685a-4cd7-a1e9-24524725da96 |  |
-| onboarding | 150 | 成功連擊20次 | combo_count | 20 | 啟用 | 500 金幣 + 220 EXP + 44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf |  |
-| onboarding | 160 | 完成全部新手任務 | onboarding_complete_count | 1 | 啟用 | 屬性重製藥水 | 領完其他新手任務後可領取最終獎勵 |
+| onboarding | 10 | 完成直播綁定 | stream_bind_count | 1 | 啟用 | 200 金幣 + 80 EXP + 布帽 | 先完成直播綁定，讓系統認得你的直播帳號。 |
+| onboarding | 20 | 首次出戰 | battle_count | 1 | 啟用 | 120 金幣 + 60 EXP + 木製單手劍 | 進入任一戰鬥完成 1 次出戰即可。 |
+| onboarding | 30 | 首次勝利 | battle_win | 1 | 啟用 | 180 金幣 + 90 EXP + 木盾 | 用任一武器打贏 1 場戰鬥即可。 |
+| onboarding | 40 | 累計造成 500 傷害 | damage_total | 500 | 啟用 | 200 金幣 + 100 EXP + 布衣 | 持續出戰、累積輸出，總傷害達到 500 即可。 |
+| onboarding | 50 | 完成 1 次打卡 | checkin_count | 1 | 啟用 | 150 金幣 + 60 EXP + 8c9ac7c4-e00d-44fb-9582-8c68b99c2357 | 到打卡功能完成 1 次打卡即可。 |
+| onboarding | 60 | 裝備任一裝備 1 次 | equip_count | 1 | 啟用 | 200 金幣 + 90 EXP + 木製單手斧 | 任意裝備一件裝備即可完成。 |
+| onboarding | 70 | 完成 1 次強化 | enhance_count | 1 | 啟用 | 240 金幣 + 120 EXP + 布披風 | 對任一裝備進行 1 次強化即可。 |
+| onboarding | 80 | 出戰 10 次 | battle_count | 10 | 啟用 | 400 金幣 + 160 EXP + 木製雙手劍 | 重複出戰累積到 10 次即可。 |
+| onboarding | 90 | 成功連擊3次 | combo_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製匕首 | 建議使用匕首，連擊率最高；搭配高 AGI 會更容易累積連擊。 |
+| onboarding | 100 | 成功迴避3次 | dodge_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製弓 | 提升 AGI，或使用弓這類偏閃躲的配置來提高迴避機會。 |
+| onboarding | 110 | 成功格擋3次 | block_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製單手槌 | 裝備盾牌即可格擋；若想兼顧格擋後反擊，建議單手劍 + 盾。 |
+| onboarding | 120 | 成功擊暈3次 | stun_count | 3 | 啟用 | 260 金幣 + 120 EXP + 木製雙手槌 | 建議使用槌類武器，尤其是雙手槌，擊暈機率更高。 |
+| onboarding | 130 | 角色死亡3次 | death_count | 3 | 啟用 | 260 金幣 + 120 EXP + 33d319ec-cb62-4826-8bcc-82a6fe52b8fa | 在戰鬥中累積死亡 3 次即可。 |
+| onboarding | 140 | 達成 Lv.10 並獲得職業徽章 | level_10_job_badge | 1 | 啟用 | 300 金幣 + 150 EXP | 升到 Lv.10，並獲得任一職業徽章即可完成。 |
+| onboarding | 150 | 成功連擊20次 | combo_count | 20 | 啟用 | 500 金幣 + 220 EXP + 44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf | 同樣建議用匕首，配合高 AGI 與持續輸出，較容易把連擊堆高。 |
+| onboarding | 160 | 完成全部新手任務 | onboarding_complete_count | 1 | 啟用 | 屬性重製藥水 | 完成前面所有新手任務後，再回來領取最終獎勵。 |
 | weekly | 10 | 每週出戰 30 次 | battle_count | 30 | 啟用 | 1200 金幣 + 500 EXP |  |
 | weekly | 20 | 每週贏得 20 場 | battle_win | 20 | 啟用 | 1500 金幣 + 700 EXP |  |
 | weekly | 30 | 每週累計 50000 傷害 | damage_total | 50000 | 啟用 | 1800 金幣 + 900 EXP |  |
@@ -415,11 +416,11 @@ Generated at: 2026-04-28T16:27:17.947Z
 
 | 徽章ID | 職業徽章 | 階級 | 任務 | 任務狀態 | 解鎖等級 | 武器條件 | 基礎屬性條件 | 徽章屬性 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| job_swordsman_v1 | 劍士徽章 |  | 劍士試煉 | 啟用 | 10 | sword_1h, sword_2h | STR > 10 | STR+2 VIT+3 DEX+2 |
 | job_archer_v1 | 弓箭手徽章 |  | 弓箭手試煉 | 啟用 | 10 | bow | DEX > 10 | AGI+1 DEX+5 LUK+2 |
 | job_warrior_v1 | 戰士徽章 |  | 戰士試煉 | 啟用 | 10 | axe_1h, axe_2h | STR > 10 | STR+4 VIT+1 LUK+2 |
 | job_healer_v1 | 治療師徽章 |  | 治療師試煉（單手法杖） | 啟用 | 10 | staff_1h | INT > 10 | VIT+2 INT+4 DEX+2 |
+| job_mage_v1 | 法師徽章 |  | 法師試煉（雙手法杖） | 啟用 | 10 | staff_2h | INT > 10 | VIT+1 INT+5 LUK+2 |
+| job_rogue_v1 | 盜賊徽章 |  | 盜賊試煉 | 啟用 | 10 | dagger | AGI > 10 | STR+2 AGI+4 LUK+2 |
 | job_dwarf_warrior_v1 | 矮人戰士徽章 |  | 矮人戰士試煉 | 啟用 | 10 | mace_1h, mace_2h | VIT > 10 | STR+1 VIT+5 DEX+2 |
-| job_swordsman_v1 | 劍士 | A | 劍士試煉 | 啟用 | 10 | sword_1h, sword_2h | STR > 10 | STR+2 VIT+3 DEX+2 |
-| job_mage_v1 | 法師 | A | 法師試煉（雙手法杖） | 啟用 | 10 | staff_2h | INT > 10 | VIT+1 INT+5 LUK+2 |
-| job_rogue_v1 | 盜賊 | A | 盜賊試煉 | 啟用 | 10 | dagger | AGI > 10 | STR+2 AGI+4 LUK+2 |
 

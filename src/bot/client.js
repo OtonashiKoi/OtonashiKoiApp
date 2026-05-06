@@ -158,6 +158,7 @@ async function moderateRestrictedAnimatedEmoji(message) {
 
   const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
   if (!member) return false;
+  if (await serviceContext.accessControlService.isDiscordPlayerWhitelisted(member)) return false;
   if (await isAdminMember(member)) return false;
 
   const usedRestrictedEmoji = extractCustomEmojis(message.content).some((emoji) => (
@@ -501,6 +502,7 @@ async function checkSpam(message) {
 
   const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
   if (!member) return;
+  if (await serviceContext.accessControlService.isDiscordPlayerWhitelisted(member)) return;
   if (member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
 
   const key = `${message.guild.id}:${message.author.id}`;
@@ -627,12 +629,17 @@ function createBotClient() {
         if (interaction.isStringSelectMenu()) { await handleSelectMenu(interaction); return; }
         if (interaction.isModalSubmit()) { await handleModal(interaction); return; }
       } catch (error) {
+        if (error?.code === 10062) return; // interaction token 已過期，無法回應，靜默忽略
         console.error("[Discord] command error", error);
         const message = isAppError(error) ? `❌ ${error.message}` : "發生錯誤，請稍後再試。";
-        if (interaction.deferred || interaction.replied) {
-          await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
-        } else {
-          await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+        try {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
+          } else {
+            await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+          }
+        } catch (replyError) {
+          if (replyError?.code !== 10062) console.error("[Discord] reply error", replyError);
         }
       }
     });

@@ -1,7 +1,7 @@
 "use strict";
 
 const { AppError, ERROR_CODES } = require("../../shared/errors");
-const { getEnhanceCost, validateEnhance, ENHANCE_GEMS, MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
+const { getEnhanceCost, ENHANCE_GEMS, MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 
 const WEAPON_MAIN_STAT_BY_TYPE = {
@@ -36,6 +36,13 @@ const ARMOR_ENHANCE_VIT_BY_TIER = {
   A: 3
 };
 
+const ARMOR_RANDOM_ENHANCE_BONUS_BY_TIER = {
+  D: 1,
+  C: 1,
+  B: 2,
+  A: 3
+};
+
 const STAT_LABEL_ZH = {
   str: "力量 STR",
   agi: "敏捷 AGI",
@@ -44,6 +51,17 @@ const STAT_LABEL_ZH = {
   dex: "靈巧 DEX",
   luk: "幸運 LUK"
 };
+
+const ENHANCE_MODES = {
+  NORMAL: "normal",
+  GAMBLE: "gamble"
+};
+
+function normalizeEnhanceMode(mode) {
+  return String(mode || ENHANCE_MODES.NORMAL).toLowerCase() === ENHANCE_MODES.GAMBLE
+    ? ENHANCE_MODES.GAMBLE
+    : ENHANCE_MODES.NORMAL;
+}
 
 class EnhanceService {
   constructor(progressRepository, itemRepository, walletRepository = null, rewardService = null, questService = null) {
@@ -60,7 +78,11 @@ class EnhanceService {
    * @param {string} inventoryUuid 背包中的裝備 UUID（用於識別具體是哪一件）
    * @returns {object} { success: boolean, newLevel: number, message: string }
    */
-  async enhanceEquipment(discordId, inventoryUuid) {
+  async enhanceEquipment(discordId, inventoryUuid, options = {}) {
+    const mode = normalizeEnhanceMode(options?.mode);
+    const isGamble = mode === ENHANCE_MODES.GAMBLE;
+    const costMultiplier = isGamble ? 0.5 : 1;
+
     // 取得玩家進度
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家未找到", 404);
@@ -110,6 +132,12 @@ class EnhanceService {
 
     const currentLevel = Math.max(0, Number(equipment.enhanceLevel) || 0);
     const preview = this._buildEnhancePreview(equipment, tier, currentLevel);
+    if (!preview) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備沒有可強化的屬性", 400);
+    }
+    const beforeEquipStats = equipment.equipStats && typeof equipment.equipStats === "object"
+      ? JSON.parse(JSON.stringify(equipment.equipStats))
+      : null;
     const wallet = this.walletRepository ? await this.walletRepository.findByPlayerId(discordId).catch(() => null) : null;
     const goldOwned = Math.max(0, Number(wallet?.gold) || 0);
 
@@ -121,12 +149,20 @@ class EnhanceService {
 
     // 計算背包中的寶石數量
     const gemsOwned = this._countGemsInInventory(inventory, gemItemId);
-    const validation = validateEnhance(tier, currentLevel, gemsOwned, goldOwned);
-    if (!validation.canEnhance) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, validation.reason, 400);
+    const baseCost = getEnhanceCost(tier, currentLevel);
+    const { gemsRequired: baseGemsRequired, goldRequired: baseGoldRequired, successRate } = baseCost;
+    const gemsRequired = Math.max(1, Math.ceil(Number(baseGemsRequired || 0) * costMultiplier));
+    const goldRequired = Math.max(0, Math.ceil(Number(baseGoldRequired || 0) * costMultiplier));
+    if (!Number.isFinite(Number(baseGemsRequired)) || !Number.isFinite(Number(baseGoldRequired)) || !Number.isFinite(Number(successRate))) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備無法強化", 400);
+    }
+    if (gemsOwned < gemsRequired) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `寶石不足，需要 ${gemsRequired} 顆，目前擁有 ${gemsOwned} 顆`, 400);
+    }
+    if (goldOwned < goldRequired) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `金幣不足，需要 ${goldRequired} 金幣，目前擁有 ${goldOwned} 金幣`, 400);
     }
 
-    const { gemsRequired, goldRequired, successRate } = getEnhanceCost(tier, currentLevel);
     const nextLevel = currentLevel + 1;
     const displayName = progress.displayName || progress.playerName || discordId;
     const goldText = goldRequired > 0 ? `${goldRequired} 金幣` : "免費";
@@ -139,11 +175,13 @@ class EnhanceService {
 
     // 計算是否強化成功
     const isSuccess = Math.random() * 100 < successRate;
+    const isExploded = !isSuccess && isGamble && Math.random() < 0.5;
 
     // 更新裝備狀態
+    let enhanceResult = null;
     if (isSuccess) {
       equipment.enhanceLevel = nextLevel;
-      this._applyEnhanceStats(equipment, tier);
+      enhanceResult = this._applyEnhanceStats(equipment, tier);
       // 更新顯示名稱
       equipment.itemName = `${equipment.itemName.split(" +")[0]} +${nextLevel}`;
       // 確保強化後保留原始道具的所有 effects
@@ -151,6 +189,8 @@ class EnhanceService {
       if (!equipment.passiveEffects) equipment.passiveEffects = [];
       if (!equipment.useEffects) equipment.useEffects = [];
       if (!equipment.combatEffects) equipment.combatEffects = [];
+    } else if (isExploded) {
+      this._destroyEquipment(progress, inventoryUuid, equipmentSlotKey);
     }
 
     // 保存進度
@@ -192,19 +232,30 @@ class EnhanceService {
 
     return {
       success: isSuccess,
+      exploded: isExploded,
+      mode,
+      isGamble,
+      currentLevel,
       newLevel: isSuccess ? nextLevel : currentLevel,
       tier,
       itemName: equipment.itemName,
+      beforeEquipStats,
+      currentEquipStats: equipment.equipStats || null,
       gemsUsed: gemsRequired,
       goldUsed: goldRequired,
       successRate,
-      statBoosted: preview.statBoosted,
-      oldStatValue: preview.oldStatValue,
-      newStatValue: isSuccess ? preview.newStatValue : preview.oldStatValue,
-      statDelta: preview.statDelta,
+      explodeRate: isGamble ? 50 : 0,
+      statBoosted: isSuccess ? (enhanceResult?.statBoosted || preview.statBoosted) : preview.statBoosted,
+      statBoostedZh: isSuccess ? (enhanceResult?.statBoostedZh || preview.statBoostedZh) : preview.statBoostedZh,
+      oldStatValue: isSuccess ? (enhanceResult?.oldStatValue ?? preview.oldStatValue) : preview.oldStatValue,
+      newStatValue: isSuccess ? (enhanceResult?.newStatValue ?? preview.newStatValue) : preview.newStatValue,
+      statDelta: isSuccess ? (enhanceResult?.statDelta ?? preview.statDelta) : preview.statDelta,
+      targetStatSummary: preview.targetStatSummary,
       message: isSuccess
         ? `✅ 強化成功！裝備升級至 +${nextLevel}，消耗 ${gemsRequired} 顆 ${tier} 階寶石、${goldText}`
-        : `❌ 強化失敗，消耗了 ${gemsRequired} 顆 ${tier} 階寶石、${goldText}`
+        : isExploded
+          ? `💥 強化失敗，裝備爆掉了！消耗了 ${gemsRequired} 顆 ${tier} 階寶石、${goldText}`
+          : `❌ 強化失敗，消耗了 ${gemsRequired} 顆 ${tier} 階寶石、${goldText}`
     };
   }
 
@@ -254,6 +305,24 @@ class EnhanceService {
     }
   }
 
+  _destroyEquipment(progress, inventoryUuid, equipmentSlotKey = null) {
+    if (!progress || !inventoryUuid) return false;
+
+    if (equipmentSlotKey && progress.equipment?.[equipmentSlotKey]?.uuid === inventoryUuid) {
+      progress.equipment[equipmentSlotKey] = null;
+      return true;
+    }
+
+    const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
+    const index = inventory.findIndex((item) => item?.uuid === inventoryUuid);
+    if (index !== -1) {
+      inventory.splice(index, 1);
+      return true;
+    }
+
+    return false;
+  }
+
   /**
    * 依裝備型態與階級套用強化數值
    */
@@ -274,14 +343,43 @@ class EnhanceService {
       const mainStat = this._getWeaponMainStat(equipment);
       if (!mainStat) return;
       const currentValue = Number(equipment.equipStats[mainStat]) || 0;
-      equipment.equipStats[mainStat] = Number((currentValue + delta).toFixed(2));
-      return;
+      const nextValue = Number((currentValue + delta).toFixed(2));
+      equipment.equipStats[mainStat] = nextValue;
+      return {
+        statBoosted: mainStat,
+        statBoostedZh: STAT_LABEL_ZH[mainStat] || String(mainStat).toUpperCase(),
+        oldStatValue: currentValue,
+        newStatValue: nextValue,
+        statDelta: Number(delta),
+        targetStatSummary: mainStat
+      };
     }
 
-    // 盾牌(非副手武器)與防具統一加 VIT
-    const vitDelta = ARMOR_ENHANCE_VIT_BY_TIER[normalizedTier] ?? 1;
-    const vitValue = Number(equipment.equipStats.vit) || 0;
-    equipment.equipStats.vit = Number((vitValue + vitDelta).toFixed(2));
+    // 盾牌(非副手武器)與防具：每 1 點都重新抽一次可用屬性
+    const candidateStats = Object.entries(equipment.equipStats)
+      .filter(([key, value]) => key && Number.isFinite(Number(value)) && Number(value) !== 0)
+      .map(([key]) => key);
+    if (!candidateStats.length) return null;
+
+    const delta = ARMOR_RANDOM_ENHANCE_BONUS_BY_TIER[normalizedTier] ?? 1;
+    const appliedStats = {};
+    for (let i = 0; i < delta; i++) {
+      const chosenStat = candidateStats[Math.floor(Math.random() * candidateStats.length)];
+      equipment.equipStats[chosenStat] = Number((Number(equipment.equipStats[chosenStat]) || 0) + 1);
+      appliedStats[chosenStat] = (appliedStats[chosenStat] || 0) + 1;
+    }
+    const summary = Object.entries(appliedStats)
+      .map(([key, amount]) => `${STAT_LABEL_ZH[key] || String(key).toUpperCase()}+${amount}`)
+      .join(" / ");
+    return {
+      statBoosted: "random",
+      statBoostedZh: "隨機屬性",
+      oldStatValue: null,
+      newStatValue: null,
+      statDelta: Number(delta),
+      targetStatSummary: candidateStats.map((stat) => STAT_LABEL_ZH[stat] || String(stat).toUpperCase()).join(" / "),
+      appliedStats: summary || null
+    };
   }
 
   /**
@@ -307,25 +405,33 @@ class EnhanceService {
     const isOffhandWeapon = equipSlot === "shield" && weaponType.startsWith("offhand_");
     let statBoosted = null;
     let delta = 0;
+    let targetStatSummary = "";
 
     if (isMainWeapon || isOffhandWeapon) {
       statBoosted = this._getWeaponMainStat(equipment);
       delta = WEAPON_ENHANCE_BONUS_BY_TIER[normalizedTier] ?? 1;
+      targetStatSummary = statBoosted ? (STAT_LABEL_ZH[statBoosted] || String(statBoosted).toUpperCase()) : "";
     } else {
-      statBoosted = "vit";
-      delta = ARMOR_ENHANCE_VIT_BY_TIER[normalizedTier] ?? 1;
+      const candidateStats = Object.entries(equipment?.equipStats || {})
+        .filter(([key, value]) => key && Number.isFinite(Number(value)) && Number(value) !== 0)
+        .map(([key]) => key);
+      if (!candidateStats.length) return null;
+      delta = ARMOR_RANDOM_ENHANCE_BONUS_BY_TIER[normalizedTier] ?? 1;
+      targetStatSummary = candidateStats.map((stat) => STAT_LABEL_ZH[stat] || String(stat).toUpperCase()).join(" / ");
     }
 
     const equipStats = equipment?.equipStats || {};
-    const currentValue = Number(equipStats?.[statBoosted]) || 0;
-    const nextValue = Number((currentValue + delta).toFixed(2));
+    const currentValue = statBoosted && statBoosted !== "random" ? (Number(equipStats?.[statBoosted]) || 0) : null;
+    const nextValue = statBoosted && statBoosted !== "random" ? Number((currentValue + delta).toFixed(2)) : null;
 
     return {
       statBoosted,
-      statBoostedZh: statBoosted ? (STAT_LABEL_ZH[statBoosted] || String(statBoosted).toUpperCase()) : null,
+      statBoostedZh: statBoosted ? (STAT_LABEL_ZH[statBoosted] || String(statBoosted).toUpperCase()) : (targetStatSummary ? "隨機屬性" : null),
       oldStatValue: currentValue,
       newStatValue: nextValue,
-      statDelta: Number(delta)
+      statDelta: Number(delta),
+      targetStatSummary,
+      appliedStats: null
     };
   }
 
@@ -363,7 +469,10 @@ class EnhanceService {
   /**
    * 取得某個玩家的強化進度信息（用於 UI 顯示）
    */
-  async getEnhanceInfo(discordId, inventoryUuid) {
+  async getEnhanceInfo(discordId, inventoryUuid, options = {}) {
+    const mode = normalizeEnhanceMode(options?.mode);
+    const isGamble = mode === ENHANCE_MODES.GAMBLE;
+    const costMultiplier = isGamble ? 0.5 : 1;
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家未找到", 404);
 
@@ -394,14 +503,20 @@ class EnhanceService {
     const { gemsRequired, goldRequired, successRate } = isMaxed
       ? { gemsRequired: -1, goldRequired: -1, successRate: -1 }
       : getEnhanceCost(tier, currentLevel);
+    const adjustedGemsRequired = gemsRequired > 0 ? Math.max(1, Math.ceil(gemsRequired * costMultiplier)) : gemsRequired;
+    const adjustedGoldRequired = goldRequired >= 0 ? Math.max(0, Math.ceil(goldRequired * costMultiplier)) : goldRequired;
 
     return {
+      mode,
+      isGamble,
+      explodeRate: isGamble ? 50 : 0,
       itemName: equipment.itemName,
       tier,
       currentLevel,
       isMaxed,
-      gemsRequired: gemsRequired > 0 ? gemsRequired : null,
-      goldRequired: goldRequired >= 0 ? goldRequired : null,
+      currentEquipStats: equipment.equipStats || null,
+      gemsRequired: adjustedGemsRequired > 0 ? adjustedGemsRequired : null,
+      goldRequired: adjustedGoldRequired >= 0 ? adjustedGoldRequired : null,
       gemsOwned,
       goldOwned,
       successRate: successRate > 0 ? successRate : null,
@@ -410,7 +525,9 @@ class EnhanceService {
       statBoostedZh: preview.statBoostedZh,
       oldStatValue: preview.oldStatValue,
       newStatValue: preview.newStatValue,
-      statDelta: preview.statDelta
+      statDelta: preview.statDelta,
+      targetStatSummary: preview.targetStatSummary,
+      appliedStats: preview.appliedStats || null
     };
   }
 }

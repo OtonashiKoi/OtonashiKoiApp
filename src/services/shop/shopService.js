@@ -8,6 +8,15 @@ const crypto = require("crypto");
 // 各 tier 裝備販售價格
 const TIER_SELL_PRICE = { D: 200, C: 500, B: 1000, A: 10000 };
 const TAIPEI_TIME_ZONE = "Asia/Taipei";
+const ARMOR_RANDOM_ENHANCE_BONUS = { D: 1, C: 1, B: 2, A: 3 };
+const STAT_LABEL_ZH = {
+  str: "力量 STR",
+  agi: "敏捷 AGI",
+  vit: "體質 VIT",
+  int: "智力 INT",
+  dex: "靈巧 DEX",
+  luk: "幸運 LUK"
+};
 
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes", "level_down_random_attributes"];
 const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow"]);
@@ -91,6 +100,52 @@ class ShopService {
     if (!value) return "none";
     const normalized = String(value).trim();
     return VALID_CLAIM_LIMITS.has(normalized) ? normalized : "none";
+  }
+
+  _normalizeItemRefText(value) {
+    return String(value || "").replace(/\s*\+\d+$/, "").trim();
+  }
+
+  _buildInventoryEntryRef(entry) {
+    if (!entry || typeof entry !== "object") return "";
+    if (entry.uuid) return `uuid:${entry.uuid}`;
+    const base = this._normalizeItemRefText(entry.itemName || entry.name || entry.itemId || "");
+    const slot = String(entry.equipSlot || "").trim();
+    const tier = String(entry.tier || "").trim();
+    const enh = String(Number(entry.enhanceLevel || 0));
+    return `key:${[base, slot, tier, enh].join("|")}`;
+  }
+
+  _matchesInventoryEntryRef(entry, ref) {
+    if (!entry || !ref) return false;
+    const raw = String(ref || "");
+    if (String(entry.uuid || "") === raw) return true;
+    const normalizedRaw = raw.startsWith("uuid:") ? raw.slice(5) : raw.startsWith("key:") ? raw.slice(4) : raw;
+    if (!normalizedRaw) return false;
+    if (String(entry.uuid || "") === normalizedRaw) return true;
+    const [keyBase = "", keySlot = "", keyTier = "", keyEnh = ""] = normalizedRaw.split("|");
+    const entryBase = this._normalizeItemRefText(entry.itemName || entry.name || entry.itemId || "");
+    const entrySlot = String(entry.equipSlot || "").trim();
+    const entryTier = String(entry.tier || "").trim();
+    const entryEnh = String(Number(entry.enhanceLevel || 0));
+    if (entry.itemId && String(entry.itemId) === keyBase) {
+      if (keySlot && entrySlot !== keySlot) return false;
+      if (keyTier && entryTier !== keyTier) return false;
+      if (keyEnh && entryEnh !== keyEnh) return false;
+      return true;
+    }
+    return entryBase === this._normalizeItemRefText(keyBase)
+      && (!keySlot || entrySlot === keySlot)
+      && (!keyTier || entryTier === keyTier)
+      && (!keyEnh || entryEnh === keyEnh);
+  }
+
+  _findInventoryEntryByRef(progress, ref, { includeEquipment = false } = {}) {
+    const inventory = Array.isArray(progress?.inventory) ? progress.inventory : [];
+    const inventoryHit = inventory.find((entry) => this._matchesInventoryEntryRef(entry, ref));
+    if (inventoryHit || !includeEquipment) return inventoryHit || null;
+    const equipment = progress?.equipment && typeof progress.equipment === "object" ? Object.values(progress.equipment) : [];
+    return equipment.find((entry) => this._matchesInventoryEntryRef(entry, ref)) || null;
   }
 
   async _getStreamBindings(player, discordId) {
@@ -468,7 +523,7 @@ class ShopService {
       const progress = await this.progressRepository.findByPlayerId(discordId);
       if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
 
-      const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
+      const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
       if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
 
       const entry = progress.inventory[idx];
@@ -607,7 +662,7 @@ class ShopService {
     const quote = await this.getSellQuote(discordId, entryUuid, 1);
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
-    const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
+    const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
     progress.inventory.splice(idx, 1);
@@ -629,7 +684,7 @@ class ShopService {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
 
-    const refEntry = (progress.inventory || []).find(e => e.uuid === entryUuid);
+    const refEntry = this._findInventoryEntryByRef(progress, entryUuid);
     if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     if (refEntry.itemType === "job_badge" || refEntry.equipSlot === "job_eq") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章不可販售", 400);
@@ -673,7 +728,7 @@ class ShopService {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
 
-    const refEntry = (progress.inventory || []).find(e => e.uuid === entryUuid);
+    const refEntry = this._findInventoryEntryByRef(progress, entryUuid);
     if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
 
     const stackCount = refEntry.stackCount || 1;
@@ -681,7 +736,7 @@ class ShopService {
 
     if (stackCount > 1) {
       // ── 堆疊型（消耗品）：從 stackCount 扣除 ──
-      const idx = progress.inventory.findIndex(e => e.uuid === entryUuid);
+      const idx = progress.inventory.findIndex(e => this._matchesInventoryEntryRef(e, entryUuid));
       if (sellCount >= stackCount) {
         progress.inventory.splice(idx, 1);          // 全部賣完，移除紀錄
       } else {
@@ -692,10 +747,10 @@ class ShopService {
       const refEnhLv = refEntry.enhanceLevel || 0;
       const matchingUuids = (progress.inventory || [])
         .filter(e => e.itemId === refEntry.itemId && (e.enhanceLevel || 0) === refEnhLv)
-        .map(e => e.uuid);
+        .map(e => this._buildInventoryEntryRef(e));
 
       const toRemove = new Set(matchingUuids.slice(0, sellCount));
-      progress.inventory = progress.inventory.filter(e => !toRemove.has(e.uuid));
+      progress.inventory = progress.inventory.filter(e => !toRemove.has(this._buildInventoryEntryRef(e)));
     }
 
     progress.updatedAt = new Date().toISOString();
@@ -716,7 +771,7 @@ class ShopService {
   async discardItem(discordId, entryUuid) {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
-    const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
+    const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
     progress.inventory.splice(idx, 1);
@@ -728,7 +783,7 @@ class ShopService {
   async equipItem(discordId, entryUuid, targetSlot = null) {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);
-    const idx = (progress.inventory || []).findIndex((e) => e.uuid === entryUuid);
+    const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此裝備", 404);
     let entry = progress.inventory[idx];
     if (entry.itemType !== "equipment" && entry.itemType !== "job_badge" && entry.itemType !== "monster_card") {
@@ -869,11 +924,11 @@ class ShopService {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
     const inv = progress.inventory || [];
-    let target = inv.find(e => e.uuid === targetUuid);
+    let target = inv.find(e => this._matchesInventoryEntryRef(e, targetUuid));
     let targetSlotKey = null;
     if (!target) {
       for (const [k, v] of Object.entries(progress.equipment || {})) {
-        if (v && v.uuid === targetUuid) { target = v; targetSlotKey = k; break; }
+        if (v && this._matchesInventoryEntryRef(v, targetUuid)) { target = v; targetSlotKey = k; break; }
       }
     }
     if (!target) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到目標裝備", 404);
@@ -894,7 +949,7 @@ class ShopService {
     const hasItemId = !!target.itemId;
     const isSameBase = (entry) => {
       if (!entry || entry.itemType !== "equipment") return false;
-      if (entry.uuid === target.uuid || entry.uuid === targetUuid) return false;
+      if (this._matchesInventoryEntryRef(entry, target.uuid || targetUuid)) return false;
       if (hasItemId && entry.itemId) return entry.itemId === target.itemId;
       const n = String(entry.itemName || "").replace(/\s*\+\d+$/, "").trim();
       return n === baseName;
@@ -912,17 +967,17 @@ class ShopService {
       );
     }
 
-    function pickMaterials(cands, needUnits) {
-      const items = cands.map((entry) => ({ uuid: entry.uuid, units: unitValue(entry) }));
+    const pickMaterials = (cands, needUnits) => {
+      const items = cands.map((entry) => ({ ref: this._buildInventoryEntryRef(entry), units: unitValue(entry) }));
       const limit = needUnits + 8;
       const dp = new Map();
-      dp.set(0, { uuids: [], sum: 0, count: 0 });
+      dp.set(0, { refs: [], sum: 0, count: 0 });
 
       for (const it of items) {
         const cur = new Map(dp);
         for (const [sum, state] of dp.entries()) {
           const nsum = Math.min(limit, sum + it.units);
-          const cand = { uuids: [...state.uuids, it.uuid], sum: nsum, count: state.count + 1 };
+          const cand = { refs: [...state.refs, it.ref], sum: nsum, count: state.count + 1 };
           const prev = cur.get(nsum);
           if (!prev || cand.count < prev.count) cur.set(nsum, cand);
         }
@@ -938,29 +993,29 @@ class ShopService {
         else if (waste < best.waste) best = { ...state, waste };
         else if (waste === best.waste && state.count < best.count) best = { ...state, waste };
       }
-      return best ? best.uuids : [];
-    }
+      return best ? best.refs : [];
+    };
 
     let chosen = [];
     if (materialUuid) {
-      const preferred = inv.find((entry) => entry && (entry.uuid === materialUuid || entry.itemId === materialUuid || entry.itemName === materialUuid));
+      const preferred = inv.find((entry) => entry && (this._matchesInventoryEntryRef(entry, materialUuid) || entry.itemId === materialUuid || entry.itemName === materialUuid));
       if (preferred && isSameBase(preferred) && Number(preferred.enhanceLevel || 0) <= maxMaterialLevel) {
-        chosen = [preferred.uuid];
+        chosen = [this._buildInventoryEntryRef(preferred)];
       }
     }
 
     const chosenSet = new Set(chosen);
     const remainingNeed = requiredUnits - chosen.reduce((sum, uuid) => {
-      const found = candidates.find((entry) => entry.uuid === uuid);
+      const found = candidates.find((entry) => this._matchesInventoryEntryRef(entry, uuid));
       return sum + (found ? unitValue(found) : 0);
     }, 0);
     if (remainingNeed > 0) {
-      const rest = candidates.filter((entry) => !chosenSet.has(entry.uuid));
+      const rest = candidates.filter((entry) => !chosenSet.has(this._buildInventoryEntryRef(entry)));
       const picked = pickMaterials(rest, remainingNeed);
       chosen = [...chosen, ...picked];
     }
     const chosenUnits = chosen.reduce((sum, uuid) => {
-      const found = candidates.find((entry) => entry.uuid === uuid);
+      const found = candidates.find((entry) => this._matchesInventoryEntryRef(entry, uuid));
       return sum + (found ? unitValue(found) : 0);
     }, 0);
     if (chosenUnits < requiredUnits) {
@@ -968,23 +1023,27 @@ class ShopService {
     }
 
     const stats = target.equipStats || {};
-    const mainStat = Object.entries(stats).sort((a, b) => b[1] - a[1])[0]?.[0];
-    if (!mainStat) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備沒有可強化的屬性", 400);
+    const statEntries = Object.entries(stats).filter(([, value]) => Number.isFinite(Number(value)) && Number(value) !== 0);
+    if (statEntries.length === 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備沒有可強化的屬性", 400);
 
     // 根据品阶計算正确的強化增值（與 enhanceService.enhanceEquipment() 一致）
     const WEAPON_ENHANCE_BONUS = { D: 1, C: 1.5, B: 2, A: 2 };
-    const ARMOR_ENHANCE_VIT = { D: 1, C: 2, B: 3, A: 3 };
     const tier = String(target.tier || "").toUpperCase();
     const isWeapon = target.equipSlot === "weapon" || target.equipSlot === "shield";
+    let mainStat = null;
     let delta = 1; // 預設值
     if (isWeapon) {
+      mainStat = Object.entries(stats).sort((a, b) => b[1] - a[1])[0]?.[0];
+      if (!mainStat) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備沒有可強化的屬性", 400);
       delta = WEAPON_ENHANCE_BONUS[tier] ?? 1;
     } else {
-      delta = ARMOR_ENHANCE_VIT[tier] ?? 1;
+      const candidateStats = statEntries.map(([key]) => key);
+      mainStat = candidateStats[Math.floor(Math.random() * candidateStats.length)];
+      delta = ARMOR_RANDOM_ENHANCE_BONUS[tier] ?? 1;
     }
 
     const oldStatValue = Number(stats[mainStat] || 0);
-    const newStats = { ...stats, [mainStat]: Number(((stats[mainStat] || 0) + delta).toFixed(2)) };
+    const newStats = { ...stats, [mainStat]: Number((oldStatValue + delta).toFixed(2)) };
     const newLevel = currentLevel + 1;
     const newName = `${baseName} +${newLevel}`;
     const updatedTarget = {
@@ -1002,7 +1061,7 @@ class ShopService {
     const idxs = [];
     for (let i = 0; i < progress.inventory.length; i += 1) {
       const entry = progress.inventory[i];
-      if (entry && chosen.includes(entry.uuid)) idxs.push(i);
+      if (entry && chosen.includes(this._buildInventoryEntryRef(entry))) idxs.push(i);
     }
     idxs.sort((a, b) => b - a);
     for (const i of idxs) progress.inventory.splice(i, 1);
@@ -1011,7 +1070,7 @@ class ShopService {
     if (targetSlotKey) {
       progress.equipment[targetSlotKey] = updatedTarget;
     } else {
-      savedTargetIndex = progress.inventory.findIndex(e => e.uuid === target.uuid);
+      savedTargetIndex = progress.inventory.findIndex(e => this._matchesInventoryEntryRef(e, target.uuid || targetUuid));
       if (savedTargetIndex !== -1) progress.inventory[savedTargetIndex] = updatedTarget;
     }
     progress.updatedAt = new Date().toISOString();
@@ -1037,7 +1096,7 @@ class ShopService {
         } else {
           const refreshedIndex = savedTargetIndex !== -1
             ? savedTargetIndex
-            : progress.inventory.findIndex((entry) => entry?.uuid === updatedTarget.uuid);
+            : progress.inventory.findIndex((entry) => this._matchesInventoryEntryRef(entry, updatedTarget.uuid || targetUuid));
           if (refreshedIndex !== -1) {
             progress.inventory[refreshedIndex].procEffects = libItem.procEffects || [];
             progress.inventory[refreshedIndex].passiveEffects = libItem.passiveEffects || [];
@@ -1054,7 +1113,9 @@ class ShopService {
     return {
       itemName: newName,
       enhanceLevel: newLevel,
+      currentEquipStats: newStats,
       statBoosted: mainStat,
+      statBoostedZh: STAT_LABEL_ZH[mainStat] || String(mainStat).toUpperCase(),
       oldStatValue,
       newStatValue: newStats[mainStat],
       materialsConsumed: requiredUnits,

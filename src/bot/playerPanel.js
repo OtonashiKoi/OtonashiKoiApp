@@ -13,6 +13,26 @@ const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
 const { MAX_ENHANCE_LEVEL, getEnhanceCost } = require("../shared/enhanceConfig");
 
 const ACTIVE_REPLY_BY_USER = new Map();
+const ENHANCE_MODE_NORMAL = "normal";
+const ENHANCE_MODE_GAMBLE = "gamble";
+
+function normalizeEnhanceMode(mode) {
+  return String(mode || ENHANCE_MODE_NORMAL).toLowerCase() === ENHANCE_MODE_GAMBLE
+    ? ENHANCE_MODE_GAMBLE
+    : ENHANCE_MODE_NORMAL;
+}
+
+function getEnhanceModeLabel(mode) {
+  return normalizeEnhanceMode(mode) === ENHANCE_MODE_GAMBLE
+    ? "🎰 賭鬼強化（消耗減半，失敗有 50% 機率爆裝）"
+    : "🛡️ 一般強化（正常消耗）";
+}
+
+function getEnhanceModeToggleLabel(mode) {
+  return normalizeEnhanceMode(mode) === ENHANCE_MODE_GAMBLE
+    ? "一般強化"
+    : "賭鬼強化";
+}
 
 function getServiceContext() {
   return require("./runtimeContext").serviceContext;
@@ -494,6 +514,7 @@ const BACKPACK_MAIN_TABS = [
   { tab: "special", label: "✨ 特殊" },
   { tab: "badge", label: "📖 職業" },
 ];
+const BACKPACK_SECTION_TABS = new Set(["weapon", "armor", "special", "badge"]);
 const BACKPACK_WEAPON_SUBTABS = [
   { subTab: "all", label: "📦 全部" },
   { subTab: "melee1", label: "🗡️ 單手" },
@@ -592,6 +613,27 @@ function canonicalStatsKey(stats) {
   return keys.map((k) => `${k}:${s[k]}`).join("|");
 }
 
+function canonicalEquipmentKey(entry) {
+  const itemId = String(entry?.itemId || "").trim();
+  const nameKey = normalizeName(entry?.itemName);
+  const slot = String(entry?.equipSlot || "").trim();
+  const tier = String(entry?.tier || "").trim().toUpperCase();
+  const enh = String(Number(entry?.enhanceLevel || 0));
+  const weaponType = String(entry?.weaponType || "").trim().toLowerCase();
+  const statsKey = canonicalStatsKey(entry?.equipStats);
+
+  // 同名但數值不同、武器型態不同或來源不同的裝備，不要疊在同一筆
+  return [
+    itemId || nameKey,
+    nameKey,
+    slot,
+    tier,
+    enh,
+    weaponType,
+    statsKey
+  ].join("|");
+}
+
 function formatEquipStats(stats) {
   const statOrder = ["str", "agi", "vit", "int", "dex", "luk"];
   const s = stats && typeof stats === "object" ? stats : null;
@@ -617,8 +659,7 @@ function groupEquipmentItems(items, tab) {
     const slot = entry.equipSlot || "";
     const enh = Number(entry.enhanceLevel || 0);
     const tier = entry.tier ? String(entry.tier).toUpperCase() : "";
-    const statsKey = canonicalStatsKey(entry.equipStats);
-    const key = `${normalizeName(entry.itemName)}|${slot}|${tier}|${enh}|${statsKey}`;
+    const key = canonicalEquipmentKey(entry);
 
     if (!groups.has(key)) {
       const sellPrice = tier ? TIER_SELL_PRICE[tier] : null;
@@ -745,6 +786,15 @@ function buildTabRow(activeTab, activeSubTab = "all") {
   );
 }
 
+function buildBackpackHomeRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("backpack_home")
+      .setLabel("返回背包")
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
 function buildSubTabRows(tab, activeSubTab = "all") {
   const defs = tab === "weapon" ? BACKPACK_WEAPON_SUBTABS : tab === "armor" ? BACKPACK_ARMOR_SUBTABS : [];
   if (!defs.length) return [];
@@ -764,7 +814,7 @@ function buildSubTabRows(tab, activeSubTab = "all") {
   return rows;
 }
 
-function buildPageRow(tab, subTab, page, totalPages) {
+function buildPageRow(tab, subTab, page, totalPages, options = {}) {
   const btns = [];
   btns.push(new ButtonBuilder()
     .setCustomId(`backpack_prev:${tab}:${subTab}:${page - 1}`)
@@ -783,10 +833,18 @@ function buildPageRow(tab, subTab, page, totalPages) {
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(page >= totalPages - 1)
   );
+  if (options.includeHome) {
+    btns.push(new ButtonBuilder()
+      .setCustomId("backpack_home")
+      .setLabel("返回背包")
+      .setStyle(ButtonStyle.Secondary)
+    );
+  }
   return new ActionRowBuilder().addComponents(btns);
 }
 
-function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subTab = "all") {
+function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subTab = "all", options = {}) {
+  const sectionMode = Boolean(options.sectionMode) || BACKPACK_SECTION_TABS.has(tab);
   const rawFiltered = filterByTab(inventory, tab, subTab);
   const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "special" || tab === "badge";
   const filtered = isEquipTab ? groupEquipmentItems(rawFiltered, tab) : sortBackpackItems(rawFiltered, tab);
@@ -799,13 +857,18 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
     tab === "special"? "特殊" :
     tab === "badge"  ? "職業" : "道具";
   const tabRow = buildTabRow(tab, subTab);
-  const subTabRows = buildSubTabRows(tab, subTab);
+  const subTabRows = sectionMode ? [] : buildSubTabRows(tab, subTab);
 
   if (!filtered.length) {
-    return { content: header + `🎒 **背包 — ${tabLabel}**\n\n此分類目前為空。`, components: [tabRow, ...subTabRows] };
+    const components = sectionMode
+      ? [buildBackpackHomeRow()]
+      : [tabRow, ...subTabRows];
+    return { content: header + `🎒 **背包 — ${tabLabel}**\n\n此分類目前為空。`, components };
   }
 
-  const pageSize = (tab === "weapon" || tab === "armor") ? EQUIP_PAGE_SIZE : PAGE_SIZE;
+  const pageSize = sectionMode && isEquipTab
+    ? 4
+    : ((tab === "weapon" || tab === "armor") ? EQUIP_PAGE_SIZE : PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / pageSize);
   const safePage = Math.max(0, Math.min(page, totalPages - 1));
   const pageItems = filtered.slice(safePage * pageSize, (safePage + 1) * pageSize);
@@ -842,7 +905,7 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
     lines.push(`${offset + i + 1}. **${e.itemName}**${slot}${stackDisplay}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`);
   });
 
-  const rows = [tabRow, ...subTabRows];
+  const rows = sectionMode ? [] : [tabRow, ...subTabRows];
   const itemRows = isEquipTab
     ? pageItems.map((g, i) => buildEquipmentGroupRow(g, i, {
       tab,
@@ -853,7 +916,12 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
     }))
     : pageItems.map((e, i) => buildInventoryRow(e, i));
   rows.push(...itemRows);
-  if (totalPages > 1) rows.push(buildPageRow(tab, subTab, safePage, totalPages));
+  if (sectionMode) {
+    if (totalPages > 1) rows.push(buildPageRow(tab, subTab, safePage, totalPages, { includeHome: true }));
+    else rows.push(buildBackpackHomeRow());
+  } else if (totalPages > 1) {
+    rows.push(buildPageRow(tab, subTab, safePage, totalPages));
+  }
 
   return { content: header + `🎒 **背包 — ${tabLabel}**（第 ${safePage + 1}/${totalPages} 頁，共 ${filtered.length} 項）\n\n${lines.join("\n")}`, components: rows };
 }
@@ -907,9 +975,7 @@ async function handleBackpack(interaction) {
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
   const msg = buildBackpackMessage(inventory, "item");
-  await clearActiveReply(interaction);
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
-  await rememberActiveReply(interaction, 60_000);
 }
 
 async function handleEquipmentView(interaction) {
@@ -1031,6 +1097,15 @@ async function handleBackpackTab(interaction, tab, page = 0, subTab = "all") {
   const inventory = progress?.inventory || [];
   const msg = buildBackpackMessage(inventory, tab, undefined, page, subTab);
   await safeEditReply(interaction, msg);
+}
+
+async function openBackpackSection(interaction, tab, page = 0, subTab = "all") {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const inventory = progress?.inventory || [];
+  const msg = buildBackpackMessage(inventory, tab, undefined, page, subTab, { sectionMode: true });
+  await interaction.followUp({ ...msg, flags: MessageFlags.Ephemeral });
 }
 
 async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0, subTab = "all") {
@@ -1263,15 +1338,48 @@ function formatEnhanceNumber(value) {
   return num.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 }
 
+function formatEnhanceAppliedStats(info) {
+  const applied = String(info?.appliedStats || "").trim();
+  if (applied) return applied;
+
+  const statLabel = info?.statBoostedZh || (info?.statBoosted ? String(info.statBoosted).toUpperCase() : "");
+  const from = info?.oldStatValue;
+  const to = info?.newStatValue;
+  const delta = Number(info?.statDelta || 0);
+  if (statLabel && Number.isFinite(Number(from)) && Number.isFinite(Number(to))) {
+    const deltaText = delta >= 0 ? `+${formatEnhanceNumber(delta)}` : formatEnhanceNumber(delta);
+    return `${statLabel} ${formatEnhanceNumber(from)} → ${formatEnhanceNumber(to)}（${deltaText}）`;
+  }
+  if (statLabel && delta) {
+    const deltaText = delta >= 0 ? `+${formatEnhanceNumber(delta)}` : formatEnhanceNumber(delta);
+    return `${statLabel} ${deltaText}`;
+  }
+  return "";
+}
+
+function formatEnhanceStatsBeforeAfter(info) {
+  const beforeText = formatEquipStats(info?.beforeEquipStats || null);
+  const afterText = formatEquipStats(info?.currentEquipStats || null);
+  if (!beforeText && !afterText) return "";
+  if (beforeText && afterText) return `${beforeText} → ${afterText}`;
+  return afterText || beforeText || "";
+}
+
 function buildEnhanceConfirmLines(info) {
   const itemName = info?.itemName || "未知道具";
   const currentLevel = Number(info?.currentLevel || 0);
+  const currentEquipStatsText = formatEquipStats(info?.currentEquipStats);
+  const mode = normalizeEnhanceMode(info?.mode);
   if (info?.isMaxed) {
-    return [
+    const lines = [
       `🎯 **目標道具**：${itemName}`,
       `⚡ **強化等級**：已達上限 +${currentLevel}`,
       "⚠️ 這件裝備已達最高強化等級，無法再強化。"
-    ].join("\n");
+    ];
+    if (currentEquipStatsText) {
+      lines.splice(2, 0, `📊 **目前屬性**：${currentEquipStatsText}`);
+    }
+    return lines.join("\n");
   }
 
   const nextLevel = info?.nextLevel ?? (currentLevel + 1);
@@ -1284,22 +1392,34 @@ function buildEnhanceConfirmLines(info) {
   const oldStatValue = info?.oldStatValue;
   const newStatValue = info?.newStatValue;
   const statDelta = Number(info?.statDelta || 0);
+  const targetStatSummary = String(info?.targetStatSummary || "").trim();
 
   const lines = [
     `🎯 **目標道具**：${itemName}`,
     `⚡ **強化等級**：+${currentLevel} → +${nextLevel}`,
+    `📌 **模式**：${getEnhanceModeLabel(mode)}`,
     `🧪 **素材消耗**：${gemsRequired} 顆 ${info?.tier || ""}階強化石`,
     `💰 **金幣消耗**：${goldRequired > 0 ? `${goldRequired}` : "免費"}`,
     `📦 **持有素材**：${gemsOwned} 顆強化石 / ${goldOwned} 金幣`,
     `🎲 **成功率**：${successRate}%`,
   ];
 
-  if (statBoosted && Number.isFinite(Number(oldStatValue)) && Number.isFinite(Number(newStatValue))) {
+  if (currentEquipStatsText) {
+    lines.push(`📊 **目前屬性**：${currentEquipStatsText}`);
+  }
+
+  if (targetStatSummary && (!statBoosted || statBoosted === "隨機屬性" || statBoosted === "random")) {
+    const deltaText = statDelta >= 0 ? `+${formatEnhanceNumber(statDelta)}` : formatEnhanceNumber(statDelta);
+    lines.push(`📈 **數值預覽**：隨機分配 ${deltaText} 點至 ${targetStatSummary}`);
+  } else if (statBoosted && Number.isFinite(Number(oldStatValue)) && Number.isFinite(Number(newStatValue))) {
     const deltaText = statDelta >= 0 ? `+${formatEnhanceNumber(statDelta)}` : formatEnhanceNumber(statDelta);
     lines.push(`📈 **數值預覽**：${statBoosted} ${formatEnhanceNumber(oldStatValue)} → ${formatEnhanceNumber(newStatValue)}（${deltaText}）`);
   }
 
   lines.push("⚠️ 確認後會直接消耗素材與金幣，請再次確認要強化的道具。");
+  if (mode === ENHANCE_MODE_GAMBLE) {
+    lines.splice(4, 0, "💥 **失敗效果**：有 50% 機率直接爆裝。");
+  }
   return lines.join("\n");
 }
 
@@ -1456,9 +1576,10 @@ async function handleEnhanceEntry(interaction) {
 }
 
 /** 強化步驟2：選定目標後，顯示自動強化需求 */
-async function handleEnhanceSelect(interaction, targetUuid) {
+async function handleEnhanceSelect(interaction, targetUuid, mode = ENHANCE_MODE_NORMAL) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
+  const enhanceMode = normalizeEnhanceMode(mode);
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
 
   let target = null;
@@ -1477,7 +1598,7 @@ async function handleEnhanceSelect(interaction, targetUuid) {
   }
   // 使用寶石強化流程：詢問 enhanceService 取得寶石需求與成功率
   try {
-    const enhanceInfo = await serviceContext.enhanceService.getEnhanceInfo(interaction.user.id, targetUuid);
+    const enhanceInfo = await serviceContext.enhanceService.getEnhanceInfo(interaction.user.id, targetUuid, { mode: enhanceMode });
     if (!enhanceInfo) {
       await safeEditReply(interaction, { content: `❌ 該裝備無法使用寶石強化。`, components: [] });
       return;
@@ -1495,13 +1616,21 @@ async function handleEnhanceSelect(interaction, targetUuid) {
     const nextLevel = enhanceInfo.nextLevel ?? (curLevel + 1);
 
     const canEnhanceWithGems = gemsOwned >= gemsRequired && goldOwned >= goldRequired;
+    const toggleMode = enhanceMode === ENHANCE_MODE_GAMBLE ? ENHANCE_MODE_NORMAL : ENHANCE_MODE_GAMBLE;
+    const confirmLabel = enhanceMode === ENHANCE_MODE_GAMBLE
+      ? `確認賭鬼強化 +${nextLevel}`
+      : `確認強化 +${nextLevel}`;
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`enhance_auto:${targetUuid}`)
-        .setLabel(canEnhanceWithGems ? `確認強化 +${nextLevel}` : `素材不足：需 ${gemsRequired} 石 / ${goldRequired} 金`)
-        .setStyle(ButtonStyle.Success)
+        .setCustomId(`enhance_auto:${enhanceMode}:${targetUuid}`)
+        .setLabel(canEnhanceWithGems ? confirmLabel : `素材不足：需 ${gemsRequired} 石 / ${goldRequired} 金`)
+        .setStyle(enhanceMode === ENHANCE_MODE_GAMBLE ? ButtonStyle.Danger : ButtonStyle.Success)
         .setDisabled(!canEnhanceWithGems),
+      new ButtonBuilder()
+        .setCustomId(`enhance_mode:${toggleMode}:${targetUuid}`)
+        .setLabel(getEnhanceModeToggleLabel(enhanceMode))
+        .setStyle(enhanceMode === ENHANCE_MODE_GAMBLE ? ButtonStyle.Secondary : ButtonStyle.Danger),
       new ButtonBuilder()
         .setCustomId("enhance_back")
         .setLabel("返回")
@@ -1530,13 +1659,26 @@ async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
     const consumed = result.materialsConsumed
       ? `（需求等價 ${result.materialsConsumed} 把，實際消耗 ${result.materialsConsumedItems || "?"} 件，等價總和 ${result.materialsConsumedUnits || "?"}）`
       : "";
-    const statLabel = result.statBoostedZh || String(result.statBoosted || "").toUpperCase();
-    const from = result.oldStatValue ?? "?";
-    const to = result.newStatValue ?? "?";
-    const notice = `✅ 強化成功！**${result.itemName}**（${statLabel} ${from} → ${to}）${consumed}`;
+    const appliedText = formatEnhanceAppliedStats(result);
+    const statsBeforeAfterText = formatEnhanceStatsBeforeAfter(result);
+    const goldText = Number(result.goldUsed || 0) > 0 ? `${result.goldUsed} 金幣` : "免費";
+    const equippedEntry = (progress?.inventory || []).find((item) => item?.uuid === targetUuid)
+      || Object.values(progress?.equipment || {}).find((item) => item?.uuid === targetUuid)
+      || null;
+    const currentStatsText = formatEquipStats(equippedEntry?.equipStats || result.currentEquipStats || null);
+    const notice = result.success
+      ? `✅ 強化成功！**${result.itemName}**\n📈 本次強化：${appliedText || "已提升"}${consumed}\n📊 強化前 → 後：${statsBeforeAfterText || currentStatsText || "無"}`
+      : `❌ 強化失敗！**${result.itemName}**\n📈 本次強化：${appliedText || "已提升"}${consumed}\n📊 強化前 → 後：${statsBeforeAfterText || currentStatsText || "無"}\n🧾 消耗：${result.gemsUsed} 顆 ${result.tier}階強化石 / ${goldText}`;
     await safeEditReply(interaction, buildEnhanceEntryPayload(progress, notice));
 
-    if ((result.enhanceLevel || 0) >= 3) {
+    if (result.success && (result.newLevel || 0) >= 3) {
+      _announceEnhance(interaction, {
+        ...result,
+        success: true,
+        beforeEquipStats: result.beforeEquipStats || null,
+        currentEquipStats: result.currentEquipStats || null
+      }).catch(() => {});
+    } else if (!result.success && (result.currentLevel || 0) >= 3) {
       _announceEnhance(interaction, result).catch(() => {});
     }
   } catch (err) {
@@ -1544,53 +1686,43 @@ async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
   }
 }
 
-async function handleEnhanceAuto(interaction, targetUuid) {
+async function handleEnhanceAuto(interaction, targetUuid, mode = ENHANCE_MODE_NORMAL) {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
     // 使用 EnhanceService（寶石強化）而非舊的材料等價實作
-    const result = await serviceContext.enhanceService.enhanceEquipment(interaction.user.id, targetUuid);
+    const result = await serviceContext.enhanceService.enhanceEquipment(interaction.user.id, targetUuid, { mode });
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const statLabel = String(result.statBoosted || "").toUpperCase();
-    const from = formatEnhanceNumber(result.oldStatValue ?? "?");
-    const to = formatEnhanceNumber(result.newStatValue ?? "?");
-    const deltaText = Number.isFinite(Number(result.statDelta))
-      ? (Number(result.statDelta) >= 0 ? `+${formatEnhanceNumber(result.statDelta)}` : formatEnhanceNumber(result.statDelta))
-      : "";
     const goldText = Number(result.goldUsed || 0) > 0 ? `${result.goldUsed} 金幣` : "免費";
+    const appliedText = formatEnhanceAppliedStats(result);
+    const statsBeforeAfterText = formatEnhanceStatsBeforeAfter(result);
+    const equippedEntry = (progress?.inventory || []).find((item) => item?.uuid === targetUuid)
+      || Object.values(progress?.equipment || {}).find((item) => item?.uuid === targetUuid)
+      || null;
+    const currentStatsText = formatEquipStats(equippedEntry?.equipStats || result.currentEquipStats || null);
 
+    const modeText = normalizeEnhanceMode(result.mode) === ENHANCE_MODE_GAMBLE ? "賭鬼強化" : "一般強化";
     const notice = result.success
-      ? `✅ 強化成功！**${result.itemName}**（${statLabel} ${from} → ${to}${deltaText ? `，${deltaText}` : ""}）`
-      : `❌ 強化失敗，**${result.itemName}** 已消耗 ${result.gemsUsed} 顆 ${result.tier}階寶石與 ${goldText}。`;
+      ? `✅ 強化成功！**${result.itemName}**\n📈 本次強化：${appliedText || "已提升"}\n📊 強化前 → 後：${statsBeforeAfterText || currentStatsText || "無"}`
+      : result.exploded
+        ? `💥 ${modeText}失敗！**${result.itemName}** 已爆裝消失。\n🧾 消耗：${result.gemsUsed} 顆 ${result.tier}階寶石 / ${goldText}`
+        : `❌ ${modeText}失敗，**${result.itemName}** 已消耗 ${result.gemsUsed} 顆 ${result.tier}階寶石與 ${goldText}。`;
     await safeEditReply(interaction, buildEnhanceEntryPayload(progress, notice));
 
-    // 如果成功並達到公告門檻（+3 以上），嘗試組成通知內容後廣播
     if (result.success && (result.newLevel || 0) >= 3) {
-      // 取得剛剛被強化的裝備資料以構成公告內容
-      let ann = null;
-      try {
-        const itemName = (() => {
-          // 嘗試從已更新的 progress 裡找到該裝備
-          const invItem = (progress.inventory || []).find(i => i.uuid === targetUuid);
-          if (invItem) return invItem.itemName;
-          for (const v of Object.values(progress.equipment || {})) {
-            if (v && v.uuid === targetUuid) return v.itemName;
-          }
-          return null;
-        })();
-        if (itemName) {
-          // 嘗試找出被提升的主屬性值
-          const entry = (progress.inventory || []).find(i => i.uuid === targetUuid) || Object.values(progress.equipment || {}).find(e => e && e.uuid === targetUuid) || null;
-          if (entry) {
-            const mainStat = Object.entries(entry.equipStats || {}).sort((a, b) => b[1] - a[1])[0];
-            if (mainStat) ann = { itemName, statBoosted: mainStat[0], newStatValue: mainStat[1], enhanceLevel: entry.enhanceLevel };
-            else ann = { itemName, enhanceLevel: entry.enhanceLevel };
-          } else {
-            ann = { itemName };
-          }
-        }
-      } catch (_) { ann = null; }
-      if (ann) _announceEnhance(interaction, ann).catch(() => {});
+      _announceEnhance(interaction, {
+        ...result,
+        success: true,
+        beforeEquipStats: result.beforeEquipStats || null,
+        currentEquipStats: result.currentEquipStats || null
+      }).catch(() => {});
+    } else if (result.exploded || (!result.success && (result.currentLevel || 0) >= 3)) {
+      _announceEnhance(interaction, {
+        ...result,
+        success: false,
+        beforeEquipStats: result.beforeEquipStats || null,
+        currentEquipStats: result.currentEquipStats || null
+      }).catch(() => {});
     }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
@@ -1602,21 +1734,33 @@ async function _announceEnhance(interaction, result) {
     const { getBotClient } = require("./runtimeContext");
     const client = getBotClient();
     if (!client?.isReady()) return;
-    const sc = getServiceContext();
-    const layout = await sc.channelLayoutRepository.get();
-    const bindings = layout?.discord?.bindings || [];
-    const binding = bindings.find(b => b.featureKey === "town_chat") ||
-                    bindings.find(b => b.featureKey === "monster_zone");
-    if (!binding?.channelId) return;
-    const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+    const channelId = result.success
+      ? (config.discord?.enhanceSuccessAnnounceChannelId || "1450062298076151952")
+      : (config.discord?.enhanceFailureAnnounceChannelId || "1498608950671839263");
+    if (!channelId) return;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
     if (!channel?.isTextBased?.()) return;
     const displayName = interaction.member?.displayName || interaction.user.username;
-    const discordId = interaction.user.id;
-    const statLabel = result.statBoosted.toUpperCase();
-    await channel.send(
-      `⚗️ **${displayName}** (<@${discordId}>) 強化成功！\n` +
-      `✨ **${result.itemName}** ${statLabel} 提升至 **${result.newStatValue}**！`
-    );
+    const shortName = String(displayName).replace(/[（(].*$/, "").trim() || displayName;
+    const currentEquipStatsText = formatEquipStats(result.currentEquipStats || null);
+    const brokenItemName = result.itemName || "未知道具";
+    const header = result.success
+      ? `⚗️ @${shortName} 強化成功！`
+      : result.exploded
+        ? `💥 @${shortName} 的 ${brokenItemName} 爆掉了！`
+        : `⚗️ @${shortName} 強化 "${result.itemName || "未知道具"}" 失敗！`;
+    const lines = [header];
+    if (result.success) {
+      lines.push(`🎯 目標道具：${result.itemName}${currentEquipStatsText ? `  ${currentEquipStatsText}` : ""}`);
+    } else {
+      lines[0] = result.exploded
+        ? `💥 @${shortName} 的 ${brokenItemName} 爆掉了！`
+        : `⚗️ @${shortName} 強化道具失敗！`;
+      if (result.exploded) {
+        lines.push(`🎯 目標道具：${brokenItemName}`);
+      }
+    }
+    await channel.send(lines.join("\n"));
   } catch (_) { /* suppressed */ }
 }
 
@@ -1895,7 +2039,20 @@ async function handleButton(interaction) {
     const tab = parts[0] || "item";
     const subTab = parts.length >= 3 ? (parts[1] || "all") : "all";
     const page = parseInt(parts.length >= 3 ? (parts[2] ?? "0") : (parts[1] ?? "0"), 10) || 0;
-    await handleBackpackTab(interaction, tab, page, subTab);
+    if (BACKPACK_SECTION_TABS.has(tab)) {
+      await openBackpackSection(interaction, tab, page, subTab);
+    } else {
+      await handleBackpackTab(interaction, tab, page, subTab);
+    }
+    return;
+  }
+  if (id === "backpack_home") {
+    await interaction.deferUpdate();
+    const serviceContext = getServiceContext();
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const inventory = progress?.inventory || [];
+    const msg = buildBackpackMessage(inventory, "item");
+    await interaction.followUp({ ...msg, flags: MessageFlags.Ephemeral });
     return;
   }
   if (id.startsWith("backpack_subtab:")) {
@@ -2032,8 +2189,22 @@ async function handleButton(interaction) {
     await handleEnhanceEntry(interaction);
     return;
   }
+  if (id.startsWith("enhance_mode:")) {
+    const parts = id.split(":");
+    const mode = parts[1] || ENHANCE_MODE_NORMAL;
+    const targetUuid = parts.slice(2).join(":");
+    await handleEnhanceSelect(interaction, targetUuid, mode);
+    return;
+  }
   if (id.startsWith("enhance_auto:")) {
-    await handleEnhanceAuto(interaction, id.slice("enhance_auto:".length));
+    const parts = id.split(":");
+    if (parts.length >= 3) {
+      const mode = parts[1] || ENHANCE_MODE_NORMAL;
+      const targetUuid = parts.slice(2).join(":");
+      await handleEnhanceAuto(interaction, targetUuid, mode);
+    } else {
+      await handleEnhanceAuto(interaction, id.slice("enhance_auto:".length), ENHANCE_MODE_NORMAL);
+    }
     return;
   }
   if (id === BUTTON_IDS.enhance) {
@@ -2119,6 +2290,7 @@ async function handleEquipSlotButton(interaction, slot) {
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const equipped = progress?.equipment || {};
   const inventory = (progress?.inventory || []).filter((e) => {
+    if (!e) return false;
     if (e.itemType === "job_badge") return e.equipSlot === slot;
     if (e.itemType === "equipment") {
       if (e.equipSlot === slot) return true;
@@ -2131,12 +2303,14 @@ async function handleEquipSlotButton(interaction, slot) {
     return false;
   });
 
+  const getItemLabel = (item) => String(item?.itemName || item?.name || item?.itemId || item?.uuid || "未知道具");
+
   const options = [];
   if (equipped[slot]) {
     const item = equipped[slot];
     options.push({
       label: `↩️ 卸下`.slice(0, 25),
-      description: item.itemName.slice(0, 50),
+      description: getItemLabel(item).slice(0, 50),
       value: `unequip:${slot}`
     });
   }
@@ -2144,7 +2318,7 @@ async function handleEquipSlotButton(interaction, slot) {
     const stats = e.equipStats || {};
     const statStr = Object.entries(stats).filter(([,v])=>v).map(([k,v])=>`${k.toUpperCase()}${v>0?"+":""}${v}`).join(" ");
     options.push({
-      label: e.itemName.slice(0, 25),
+      label: getItemLabel(e).slice(0, 25),
       description: (statStr || "點此裝備").slice(0, 50),
       value: `equip:${e.uuid}`
     });

@@ -1,7 +1,9 @@
+const { randomUUID } = require("crypto");
 const { getMongoDb } = require("./createMongoClient");
 const { withProgressCache, withWalletCache, withPlayerCache } = require("./requestCache");
 const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { createStreamAccountBindingRepository } = require("../streamBindings/createStreamAccountBindingRepository");
+const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
 
 function createMongoRepositories() {
   const collection = async (name) => (await getMongoDb()).collection(name);
@@ -25,6 +27,49 @@ function createMongoRepositories() {
         job_eq: null
       },
       inventory: nextInventory
+    };
+  };
+
+  const normalizeProgressItemEntry = (entry) => {
+    if (!entry || typeof entry !== "object") return entry;
+    const itemName = String(entry.itemName || entry.name || entry.itemId || entry.uuid || "未知道具");
+    const itemId = entry.itemId || entry.id || null;
+    return {
+      ...entry,
+      uuid: entry.uuid || randomUUID(),
+      itemId,
+      itemName,
+      name: entry.name || itemName
+    };
+  };
+
+  const normalizeProgressItemEntries = (progress) => {
+    if (!progress || typeof progress !== "object") return progress;
+
+    const nextInventory = Array.isArray(progress.inventory)
+      ? progress.inventory.map((entry) => normalizeProgressItemEntry(entry))
+      : progress.inventory;
+
+    const equipment = progress.equipment && typeof progress.equipment === "object"
+      ? Object.fromEntries(
+        Object.entries(progress.equipment).map(([slot, entry]) => [slot, normalizeProgressItemEntry(entry)])
+      )
+      : progress.equipment;
+
+    return {
+      ...progress,
+      inventory: nextInventory,
+      equipment
+    };
+  };
+
+  const normalizeProgressDocument = (progress) => normalizeProgressItemEntries(normalizeLowLevelJobBadge(progress));
+  const normalizeProgressDocumentWithGemStacks = (progress) => {
+    const normalized = normalizeProgressDocument(progress);
+    if (!normalized || typeof normalized !== "object") return normalized;
+    return {
+      ...normalized,
+      inventory: normalizeEnhanceGemStacks(normalized.inventory)
     };
   };
 
@@ -103,14 +148,16 @@ function createMongoRepositories() {
     progressRepository: {
       async findByPlayerId(playerId) {
         const progress = await (await collection("progress")).findOne({ playerId });
-        if (progress?.equipment) {
+        if (!progress) return progress;
+        const normalized = normalizeProgressDocumentWithGemStacks(progress);
+        if (normalized?.equipment) {
           // 永遠從 DB 讀取最新 effects，所有呼叫方自動拿到最新設計值
-          progress.equipment = await mergeEquippedFromLibrary(progress.equipment, repos.itemRepository).catch(() => progress.equipment);
+          normalized.equipment = await mergeEquippedFromLibrary(normalized.equipment, repos.itemRepository).catch(() => normalized.equipment);
         }
-        return progress;
+        return normalized;
       },
       async save(progress) {
-        progress = normalizeLowLevelJobBadge(progress);
+        progress = normalizeProgressDocumentWithGemStacks(progress);
         let lastError = null;
         const maxRetries = 5;  // 增加重試次數
 
@@ -150,7 +197,7 @@ function createMongoRepositories() {
       },
       // CAS 寫入：只有 updatedAt 未被別人改過才成功，回傳是否成功
       async saveIfUnchanged(progress, prevUpdatedAt) {
-        progress = normalizeLowLevelJobBadge(progress);
+        progress = normalizeProgressDocumentWithGemStacks(progress);
         const now = new Date().toISOString();
         const filter = prevUpdatedAt
           ? { playerId: progress.playerId, updatedAt: prevUpdatedAt }
@@ -303,6 +350,10 @@ function createMongoRepositories() {
       },
       async findById(id) {
         return (await collection("items")).findOne({ id }) || null;
+      },
+      async findByMonsterCardOf(monsterCardOf) {
+        if (!monsterCardOf) return [];
+        return (await collection("items")).find({ monsterCardOf }).toArray();
       },
       async save(item) {
         await (await collection("items")).updateOne(
@@ -569,6 +620,20 @@ function createMongoRepositories() {
         const q = {
           _id: zoneKey,
           "value.activeMonsterSeq": monsterSeq,
+          $and: [
+            {
+              $or: [
+                { "value.activeTransition": { $exists: false } },
+                { "value.activeTransition": null }
+              ]
+            },
+            {
+              $or: [
+                { "value.activeEvent": { $exists: false } },
+                { "value.activeEvent": null }
+              ]
+            }
+          ],
           $or: [
             { "value.killClaimedSeq": { $ne: monsterSeq } },
             { "value.killClaimedAt": { $lt: cutoff } },
