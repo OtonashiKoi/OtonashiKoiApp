@@ -13,9 +13,6 @@ const { createAdminMonsterEventRoutes } = require("./routes/adminMonsterEventRou
 const { createAdminWeeklyQuestRoutes } = require("./routes/adminWeeklyQuestRoutes");
 const { createAdminIdleRoutes } = require("./routes/adminIdleRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
-const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
-const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
-const { createMahjongRoutes } = require("./routes/mahjongRoutes");
 const { serviceContext: sharedServiceContext } = require("../bot/runtimeContext");
 const config = require("../config");
 
@@ -65,14 +62,6 @@ function createApiServer(discordClient) {
     }
   }));
   app.use("/uploads", express.static(path.resolve(__dirname, "../web/public/uploads")));
-  app.use("/game", express.static(path.resolve(__dirname, "../../web-game"), {
-    etag: false,
-    lastModified: false,
-    setHeaders(res) {
-      res.setHeader("Cache-Control", "no-store");
-    }
-  }));
-
   app.use(createHealthRoutes());
   app.use(createAdminConsoleRoutes(serviceContext));
   app.use(createAdminPlayerRoutes(serviceContext));
@@ -80,9 +69,6 @@ function createApiServer(discordClient) {
   app.use(createAdminMonsterEventRoutes(serviceContext));
   app.use(createAdminWeeklyQuestRoutes(serviceContext));
   app.use(createAdminIdleRoutes(serviceContext));
-  app.use(createPlayerAppRoutes(serviceContext, discordClient));
-  app.use(createPlayerIdleRoutes(serviceContext));
-  app.use(createMahjongRoutes());
 
   app.use((error, _req, res, _next) => {
     console.error("[API] request error", error);
