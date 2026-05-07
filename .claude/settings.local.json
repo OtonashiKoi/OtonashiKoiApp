@@ -50,7 +50,8 @@
       "Bash(node scripts/upsert-job-rogue.js)",
       "Bash(node \"C:\\\\Users\\\\appsk\\\\Documents\\\\Github\\\\equipmentGAME\\\\scripts\\\\show-job-full-specs.js\")",
       "Read(//c/Users/appsk/**)",
-      "Read(//c/Users/appsk/AppData/**)"
+      "Read(//c/Users/appsk/AppData/**)",
+      "Bash(node query_jobs_temp.js)"
     ]
   }
 }

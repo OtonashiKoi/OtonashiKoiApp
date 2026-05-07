@@ -65,6 +65,13 @@ function createApiServer(discordClient) {
     }
   }));
   app.use("/uploads", express.static(path.resolve(__dirname, "../web/public/uploads")));
+  app.use("/game", express.static(path.resolve(__dirname, "../../web-game"), {
+    etag: false,
+    lastModified: false,
+    setHeaders(res) {
+      res.setHeader("Cache-Control", "no-store");
+    }
+  }));
 
   app.use(createHealthRoutes());
   app.use(createAdminConsoleRoutes(serviceContext));

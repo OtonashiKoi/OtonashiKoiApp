@@ -16,6 +16,7 @@ const { handleCoinShopButton, isCoinShopButton, handleQuantityModalSubmit, isCoi
 const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal, isNpcDialogButton, handleNpcDialog } = require("./handlers/monsterZoneHandlers");
 const { handleIdleZoneButton, isIdleZoneButton, handleIdleZoneSelect, isIdleZoneSelect } = require("./handlers/idleZoneHandlers");
 const { isAuctionButton, handleAuctionButton, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
+const { isPkArenaButton, handlePkArenaButton, publishPkArenaPanel } = require("./handlers/pkArenaHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -69,6 +70,9 @@ const definitions = [
   new SlashCommandBuilder()
     .setName("發布拍賣場面板")
     .setDescription("管理員在目前聊天室發布拍賣場面板"),
+  new SlashCommandBuilder()
+    .setName("發布pk擂台")
+    .setDescription("管理員在目前聊天室發布 PK 擂台面板（預覽）"),
 ].map((d) => d.toJSON());
 
 async function isAdmin(interaction) {
@@ -139,9 +143,22 @@ async function handleCommand(interaction) {
     await publishAuctionPanel(interaction);
     return;
   }
+
+  if (interaction.commandName === "發布pk擂台") {
+    if (!await isAdmin(interaction)) {
+      await interaction.reply({ content: "❌ 僅限管理員使用。", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    await publishPkArenaPanel(interaction);
+    return;
+  }
 }
 
 async function handleButton(interaction) {
+  if (isPkArenaButton(interaction.customId)) {
+    await handlePkArenaButton(interaction);
+    return;
+  }
   if (isAuctionButton(interaction.customId)) {
     if (interaction.customId.startsWith("auction:sell_confirm:")) {
       await handleAuctionSellConfirm(interaction);

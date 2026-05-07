@@ -61,7 +61,9 @@
       "Bash(mkdir -p .claude/skills/game-api-reference)",
       "Bash(mv .claude/skills/game-api-reference.md .claude/skills/game-api-reference/SKILL.md)",
       "Edit(/.claude/skills/game-api-reference/**)",
-      "Edit(/.claude/skills/ui-ux-pro-max/**)"
+      "Edit(/.claude/skills/ui-ux-pro-max/**)",
+      "Bash(node --check /c/Users/appsk/Documents/Github/equipmentGAME/src/shared/pkCombat.js)",
+      "Bash(node --check /c/Users/appsk/Documents/Github/equipmentGAME/src/bot/handlers/pkArenaHandlers.js)"
     ],
     "additionalDirectories": [
       "c:\\Users\\appsk\\.claude\\projects\\c--Users-appsk-Documents-Github-equipmentGAME\\memory"

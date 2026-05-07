@@ -257,6 +257,10 @@ function applyMonsterEffects(mCalc, activeEffects = [], currentRound = 1) {
         // 爆擊率提升（百分比，value=20 表示 +20% 爆擊率）
         adjusted.crit = Math.min(100, (adjusted.crit || 0) + Math.abs(params.value || 0));
         break;
+      case 'hit_up':
+        // 命中提升
+        adjusted.hit = Math.min(100, (adjusted.hit || 0) + Math.abs(params.value || 0));
+        break;
       case 'crit_damage_up':
         adjusted.critDamageMultiplier = (adjusted.critDamageMultiplier || 1) * (1 + Math.abs(params.value || 0) / 100);
         break;
@@ -393,6 +397,17 @@ function procEffectApplies(effect, ownerHpPct, targetHpPct) {
   return true;
 }
 
+function effectHasHpThreshold(effect) {
+  if (!effect || typeof effect !== "object") return false;
+  const params = effect.params || {};
+  return [
+    "ownerHpAbovePct",
+    "ownerHpBelowPct",
+    "targetHpBelowPct",
+    "targetHpAbovePct"
+  ].some((key) => Number.isFinite(Number(params[key])));
+}
+
 function hasAnyDebuff(activeEffects = [], currentRound = 1) {
   const debuffKeys = new Set([
     "atk_down", "def_down", "hit_down", "hit_rate_down", "dodge_down",
@@ -439,6 +454,89 @@ function makeCardEffectEntry(procEffect, round, sourceType, overrides = {}, sour
     source: sourceType,
     sourceType,
     sourceId: sourceId ? String(sourceId) : null
+  };
+}
+
+function applyCardProcEffects({
+  procEffects = [],
+  ownerHpPct = 100,
+  targetHpPct = 100,
+  round = 1,
+  sourceType = "monster_skill",
+  cardName = "卡片",
+  skillName = "",
+  skillDescription = "",
+  cooldownBucket = null,
+  cooldownKey = null,
+  cooldownTurns = 0,
+  ownerActiveEffects = [],
+  targetActiveEffects = [],
+  ownerEquipped = {},
+  ownerLabel = "怪物",
+  buffKeys = new Set(),
+  debuffKeys = new Set(),
+  sourceId = null,
+  log = []
+}) {
+  let nextOwnerActiveEffects = Array.isArray(ownerActiveEffects) ? ownerActiveEffects : [];
+  let nextTargetActiveEffects = Array.isArray(targetActiveEffects) ? targetActiveEffects : [];
+  const hpGatedEffects = procEffects.filter(effectHasHpThreshold);
+  if (hpGatedEffects.length === 0) {
+    return {
+      ownerActiveEffects: nextOwnerActiveEffects,
+      targetActiveEffects: nextTargetActiveEffects,
+      applied: false,
+      appliedHpGatedOnly: false
+    };
+  }
+
+  const currentCooldown = cooldownBucket && cooldownKey != null ? Number(cooldownBucket[cooldownKey] || 0) : 0;
+  if (currentCooldown > 0) {
+    return {
+      ownerActiveEffects: nextOwnerActiveEffects,
+      targetActiveEffects: nextTargetActiveEffects,
+      applied: false,
+      appliedHpGatedOnly: true
+    };
+  }
+
+  const matchedEffects = hpGatedEffects.filter((procEffect) => procEffectApplies(procEffect, ownerHpPct, targetHpPct));
+  if (matchedEffects.length === 0) {
+    return {
+      ownerActiveEffects: nextOwnerActiveEffects,
+      targetActiveEffects: nextTargetActiveEffects,
+      applied: false,
+      appliedHpGatedOnly: true
+    };
+  }
+
+  log.push(`🎴 **${ownerLabel}** 發動【${skillName || cardName}】！${skillDescription || ""}`);
+  if (Number(cooldownTurns) > 0 && cooldownBucket && cooldownKey != null) {
+    cooldownBucket[cooldownKey] = Number(cooldownTurns);
+  }
+
+  for (const procEffect of matchedEffects) {
+    if (!procEffect || !procEffect.key) continue;
+    const effectEntry = makeCardEffectEntry(
+      procEffect,
+      round,
+      sourceType,
+      {},
+      sourceId
+    );
+
+    if (procEffect.target === 'self' || buffKeys.has(procEffect.key)) {
+      nextOwnerActiveEffects = addOrStackCardEffect(nextOwnerActiveEffects, effectEntry);
+    } else if (procEffect.target === 'enemy' || debuffKeys.has(procEffect.key)) {
+      nextTargetActiveEffects = addOrStackCardEffect(nextTargetActiveEffects, effectEntry);
+    }
+  }
+
+  return {
+    ownerActiveEffects: nextOwnerActiveEffects,
+    targetActiveEffects: nextTargetActiveEffects,
+    applied: true,
+    appliedHpGatedOnly: true
   };
 }
 
@@ -526,7 +624,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let round = 1;
   let stunRoundsLeft = 0; // 怪物剩餘擊暈回合數
   let monsterActiveEffects = []; // 怪物的 active effects（Buff/Debuff）
-  let warriorRageTriggered = false; // 戰士激怒只提示一次
+  let warriorLowHpTriggered = false; // 戰士低血量加成只提示一次
+  const lowHpTriggerText = pStats.hasWarriorBadge
+    ? "⚔️ 戰士低血量加成觸發！"
+    : "⚡ 低血量觸發！";
   const cardCooldowns = { player: {}, monster: {} };
   const combatStats = {
     comboCount: 0,
@@ -870,19 +971,47 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const cooldownKey = equippedCard.itemId || equippedCard.id || cardName;
       const triggerChance = Math.min(100, Math.max(0, Number(skill.chance ?? equippedCard.cardProcChance ?? 30)));
       const procEffects = Array.isArray(skill.procEffects) ? skill.procEffects : [];
-      if (procEffects.length > 0 && (cardCooldowns.monster[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
+      const hpGatedEffects = procEffects.filter(effectHasHpThreshold);
+      const normalProcEffects = hpGatedEffects.length > 0 ? procEffects.filter((effect) => !effectHasHpThreshold(effect)) : procEffects;
+
+      if (hpGatedEffects.length > 0) {
+        const result = applyCardProcEffects({
+          procEffects: hpGatedEffects,
+          ownerHpPct: monsterHpPct,
+          targetHpPct: playerHpPct,
+          round,
+          sourceType: 'monster_skill',
+          cardName,
+          skillName: skill.name || cardName,
+          skillDescription: skill.description || '',
+          cooldownBucket: cardCooldowns.monster,
+          cooldownKey,
+          cooldownTurns: Number(skill.cooldownTurns) || 0,
+          ownerActiveEffects: monsterActiveEffects,
+          targetActiveEffects: options.playerActiveEffects || [],
+          ownerLabel: mName,
+          buffKeys: MONSTER_BUFF_KEYS,
+          debuffKeys: MONSTER_DEBUFF_KEYS,
+          sourceId: equippedCard.uuid || equippedCard.itemId || equippedCard.id || cardName,
+          log
+        });
+        monsterActiveEffects = result.ownerActiveEffects;
+        options.playerActiveEffects = result.targetActiveEffects;
+      }
+
+      if (normalProcEffects.length > 0 && (cardCooldowns.monster[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
         log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
         if (Number(skill.cooldownTurns) > 0) cardCooldowns.monster[cooldownKey] = Number(skill.cooldownTurns);
 
-        for (const procEffect of procEffects) {
+        for (const procEffect of normalProcEffects) {
           if (!procEffect || !procEffect.key) continue;
+          const currentMonsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+          const currentPlayerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
+          if (!procEffectApplies(procEffect, currentMonsterHpPct, currentPlayerHpPct)) continue;
           const procChance = Number.isFinite(Number(procEffect.chance))
             ? Math.min(100, Math.max(0, Number(procEffect.chance)))
             : 100;
           if (Math.random() * 100 >= procChance) continue;
-          const currentMonsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
-          const currentPlayerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
-          if (!procEffectApplies(procEffect, currentMonsterHpPct, currentPlayerHpPct)) continue;
           const pp = procEffect.params || {};
           const targetHadDebuff = procEffect.target === 'self'
             ? hasAnyDebuff(monsterActiveEffects, round)
@@ -1001,22 +1130,50 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const cooldownKey = slotItem.itemId || slotItem.id || `${slot}:${cardName}`;
         const triggerChance = Math.min(100, Math.max(0, Number(skill.chance ?? slotItem.cardProcChance ?? 5)));
         const procEffects = Array.isArray(skill.procEffects) ? skill.procEffects : [];
-        if (procEffects.length > 0 && (cardCooldowns.player[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
+        const hpGatedEffects = procEffects.filter(effectHasHpThreshold);
+        const normalProcEffects = hpGatedEffects.length > 0 ? procEffects.filter((effect) => !effectHasHpThreshold(effect)) : procEffects;
+
+        if (hpGatedEffects.length > 0) {
+          const result = applyCardProcEffects({
+            procEffects: hpGatedEffects,
+            ownerHpPct: playerHpPct,
+            targetHpPct: monsterHpPct,
+            round,
+            sourceType: 'player_card',
+            cardName,
+            skillName: skill.name || cardName,
+            skillDescription: skill.description || '',
+            cooldownBucket: cardCooldowns.player,
+            cooldownKey,
+            cooldownTurns: Number(skill.cooldownTurns) || 0,
+            ownerActiveEffects: options.playerActiveEffects || [],
+            targetActiveEffects: monsterActiveEffects,
+            ownerLabel: '你',
+            buffKeys: PLAYER_CARD_OFFENSIVE_KEYS,
+            debuffKeys: PLAYER_CARD_OFFENSIVE_KEYS,
+            sourceId: slotItem.uuid || slotItem.itemId || slotItem.id || cardName,
+            log
+          });
+          options.playerActiveEffects = result.ownerActiveEffects;
+          monsterActiveEffects = result.targetActiveEffects;
+        }
+
+        if (normalProcEffects.length > 0 && (cardCooldowns.player[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
           log.push(`🎴 【${skill.name || cardName}】發動！${skill.description ? skill.description : ''}`);
           if (Number(skill.cooldownTurns) > 0) cardCooldowns.player[cooldownKey] = Number(skill.cooldownTurns);
 
-          for (const procEffect of procEffects) {
-            if (!procEffect || !procEffect.key) continue;
-            const procChance = Number.isFinite(Number(procEffect.chance))
-              ? Math.min(100, Math.max(0, Number(procEffect.chance)))
-              : 100;
-            if (Math.random() * 100 >= procChance) continue;
-            const currentPlayerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
-            const currentMonsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
-            if (!procEffectApplies(procEffect, currentPlayerHpPct, currentMonsterHpPct)) continue;
-            const pp = procEffect.params || {};
-            const targetHadDebuff = (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key))
-              ? hasAnyDebuff(monsterActiveEffects, round)
+        for (const procEffect of normalProcEffects) {
+          if (!procEffect || !procEffect.key) continue;
+          const currentPlayerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
+          const currentMonsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+          if (!procEffectApplies(procEffect, currentPlayerHpPct, currentMonsterHpPct)) continue;
+          const procChance = Number.isFinite(Number(procEffect.chance))
+            ? Math.min(100, Math.max(0, Number(procEffect.chance)))
+            : 100;
+          if (Math.random() * 100 >= procChance) continue;
+          const pp = procEffect.params || {};
+          const targetHadDebuff = (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key))
+            ? hasAnyDebuff(monsterActiveEffects, round)
               : hasAnyDebuff(options.playerActiveEffects || [], round);
             const bonusValue = Number(pp.bonusIfTargetDebuffed);
             const equippedBonusValue = Number(pp.bonusIfEquippedValue);
@@ -1064,6 +1221,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerInvincible = false;
     let playerBonusVsPoisonedPct = 0;
     let playerBonusVsDebuffedPct = 0;
+    let playerHitBonus = 0;
     if (Array.isArray(options.playerActiveEffects)) {
       for (const eff of options.playerActiveEffects) {
         if (!eff) continue;
@@ -1091,6 +1249,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         } else if (eff.key === 'crit_rate_up') {
           // 玩家爆擊率提升（來自玩家卡片技能）
           playerCritRateBonus += effValue;
+        } else if (eff.key === 'hit_up') {
+          playerHitBonus += effValue;
         } else if (eff.key === 'crit_damage_up') {
           playerCritDamageMultiplier *= (1 + Math.abs(effValue) / 100);
         } else if (eff.key === 'lifesteal') {
@@ -1129,7 +1289,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     for (let a = 0; a < attackCount && outcome === null && !playerIsStunned && !playerIsFrozen; a++) {
-      const hitChance = (pStats.hit - playerHitPenalty) - adjustedMCalc.dodge;
+      const hitChance = (pStats.hit + playerHitBonus - playerHitPenalty) - adjustedMCalc.dodge;
       if (monsterIsStunned || Math.random() * 100 < hitChance) {
         // 破防判定（斧）
         const isBreak = Math.random() * 100 < pStats.armorBreakChance;
@@ -1239,6 +1399,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             for (const eff of lowHpEffects) {
               if (!eff || !eff.params) continue;
               if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
+                if (!warriorLowHpTriggered) {
+                  log.push(lowHpTriggerText);
+                  warriorLowHpTriggered = true;
+                }
                 dmg = Math.max(1, Math.round(dmg * Number(eff.params.value)));
               }
             }
@@ -1453,6 +1617,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               for (const eff of lowHpEffects) {
                 if (!eff || !eff.params) continue;
                 if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
+                  if (!warriorLowHpTriggered) {
+                    log.push(lowHpTriggerText);
+                    warriorLowHpTriggered = true;
+                  }
                   cdmg = Math.max(1, Math.round(cdmg * Number(eff.params.value)));
                 }
               }
@@ -1712,6 +1880,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           for (const eff of lowHpEffects) {
             if (!eff || !eff.params) continue;
             if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
+              if (!warriorLowHpTriggered) {
+                log.push(lowHpTriggerText);
+                warriorLowHpTriggered = true;
+              }
               dmg = Math.max(1, Math.round(dmg * Number(eff.params.value)));
             }
           }
@@ -1784,6 +1956,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
                 for (const eff of lowHpEffects) {
                   if (!eff || !eff.params) continue;
                   if (eff.key === 'final_damage_up' && Number.isFinite(Number(eff.params.value))) {
+                    if (!warriorLowHpTriggered) {
+                      log.push(lowHpTriggerText);
+                      warriorLowHpTriggered = true;
+                    }
                     cdmg = Math.max(1, Math.round(cdmg * Number(eff.params.value)));
                   }
                 }

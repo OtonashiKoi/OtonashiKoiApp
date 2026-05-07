@@ -5,3 +5,9 @@
 Godot_v*.exe
 .claude/codex-sync/**/__pycache__/
 *.pyc
+backups/equipment_game_2026-04-30-0030.json
+-
+web-game/
+web-game-react/
+web-game-react-dist/
+tmp-test-out.gif

@@ -10,7 +10,6 @@ const {
 const {
   IDLE_ZONE_START_ID,
   IDLE_ZONE_CLAIM_ID,
-  IDLE_ZONE_CANCEL_ID,
   IDLE_ZONE_SELECT_ID,
   IDLE_ZONE_STATUS_ID,
   IDLE_ZONE_REFRESH_ID
@@ -63,10 +62,6 @@ function buildSessionControlRows() {
         .setCustomId(IDLE_ZONE_CLAIM_ID)
         .setLabel("🎁 領取獎勵")
         .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(IDLE_ZONE_CANCEL_ID)
-        .setLabel("⛔ 取消掛機")
-        .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(IDLE_ZONE_REFRESH_ID)
         .setLabel("🔄 刷新時間")
@@ -318,28 +313,6 @@ async function handleIdleRefresh(interaction) {
   }
 }
 
-async function handleIdleCancel(interaction) {
-  const serviceContext = getServiceContext();
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const discordId = interaction.user.id;
-  const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
-
-  try {
-    const summary = await serviceContext.idleService.cancelDiscordSession(discordId, displayName);
-    const memberRoleIds = await resolveMemberRoleIds(interaction);
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds }).catch(() => null);
-    const extra = status ? `\n\n${buildStatusText(status, "目前狀態：")}` : "";
-    await interaction.editReply(
-      `⛔ 已取消掛機\n區域：${summary.zoneLabel}\n開始：${formatTaipeiDateTime(summary.startedAt)}\n結束：${formatTaipeiDateTime(summary.endedAt)}\n掛機時長：${formatDuration(summary.elapsedMinutes)}\n可計算時長：${formatDuration(summary.effectiveMinutes)}（達標後連續累積）\n本次未領取獎勵。${extra}`
-    );
-  } catch (error) {
-    const memberRoleIds = await resolveMemberRoleIds(interaction);
-    const status = await serviceContext.idleService.getDiscordPanelStatus(discordId, displayName, { memberRoleIds }).catch(() => null);
-    const extra = status ? `\n\n${buildStatusText(status, "目前狀態：")}` : "";
-    await interaction.editReply(`❌ 取消失敗：${error.message}${extra}`);
-  }
-}
-
 async function handleIdleZoneButton(interaction) {
   if (!(await ensurePlayerAllowed(interaction))) return;
   const id = interaction.customId;
@@ -355,10 +328,6 @@ async function handleIdleZoneButton(interaction) {
     await handleIdleClaim(interaction);
     return;
   }
-  if (id === IDLE_ZONE_CANCEL_ID) {
-    await handleIdleCancel(interaction);
-    return;
-  }
   if (id === IDLE_ZONE_REFRESH_ID) {
     await handleIdleRefresh(interaction);
   }
@@ -368,7 +337,6 @@ function isIdleZoneButton(customId) {
   return customId === IDLE_ZONE_START_ID
     || customId === IDLE_ZONE_STATUS_ID
     || customId === IDLE_ZONE_CLAIM_ID
-    || customId === IDLE_ZONE_CANCEL_ID
     || customId === IDLE_ZONE_REFRESH_ID;
 }
 

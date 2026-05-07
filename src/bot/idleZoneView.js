@@ -1,6 +1,5 @@
 const IDLE_ZONE_START_ID = "idle_zone:start";
 const IDLE_ZONE_CLAIM_ID = "idle_zone:claim";
-const IDLE_ZONE_CANCEL_ID = "idle_zone:cancel";
 const IDLE_ZONE_SELECT_ID = "idle_zone:select";
 const IDLE_ZONE_STATUS_ID = "idle_zone:status";
 const IDLE_ZONE_REFRESH_ID = "idle_zone:refresh";
@@ -16,10 +15,6 @@ function createIdleZonePanelMessage() {
       .setCustomId(IDLE_ZONE_CLAIM_ID)
       .setLabel("🎁 領取獎勵")
       .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(IDLE_ZONE_CANCEL_ID)
-      .setLabel("⛔ 取消掛機")
-      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(IDLE_ZONE_STATUS_ID)
       .setLabel("📊 掛機狀態")
@@ -45,7 +40,6 @@ function createIdleZonePanelMessage() {
 module.exports = {
   IDLE_ZONE_START_ID,
   IDLE_ZONE_CLAIM_ID,
-  IDLE_ZONE_CANCEL_ID,
   IDLE_ZONE_SELECT_ID,
   IDLE_ZONE_STATUS_ID,
   IDLE_ZONE_REFRESH_ID,
