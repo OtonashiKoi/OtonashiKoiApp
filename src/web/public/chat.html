@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>聊天室</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+    }
+
+    /* ── 整體容器：由上而下 ── */
+    #chat-wrap {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      padding: 12px 14px;
+      gap: 6px;
+      max-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── 單則訊息卡片 ── */
+    .msg {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 7px 12px 7px 14px;
+      position: relative;
+      animation: slideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+      /* 星穹鐵道：深藍半透明面板 */
+      background: linear-gradient(
+        100deg,
+        rgba(8, 18, 42, 0.82) 0%,
+        rgba(12, 28, 62, 0.78) 60%,
+        rgba(18, 38, 80, 0.65) 100%
+      );
+      border-top: 1px solid rgba(140, 185, 255, 0.22);
+      border-bottom: 1px solid rgba(60, 100, 180, 0.15);
+      /* 左側星光線 */
+      border-left: 2px solid rgba(140, 185, 255, 0.45);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      clip-path: polygon(
+        0 0,
+        calc(100% - 10px) 0,
+        100% 10px,
+        100% 100%,
+        10px 100%,
+        0 calc(100% - 10px)
+      );
+    }
+
+    /* 玩家訊息：左側線改為金色 */
+    .msg.is-player {
+      border-left-color: rgba(212, 175, 80, 0.7);
+      background: linear-gradient(
+        100deg,
+        rgba(18, 14, 8, 0.85) 0%,
+        rgba(30, 22, 10, 0.80) 60%,
+        rgba(20, 18, 10, 0.65) 100%
+      );
+    }
+
+    /* 右上角菱形裝飾 */
+    .msg::after {
+      content: '◆';
+      position: absolute;
+      top: 4px; right: 6px;
+      font-size: 7px;
+      color: rgba(140, 185, 255, 0.4);
+      letter-spacing: 2px;
+    }
+    .msg.is-player::after {
+      color: rgba(212, 175, 80, 0.45);
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── 上排：等級 + 名稱 + 稱號 ── */
+    .msg-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* 等級徽章 */
+    .badge-lv {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 1px 6px;
+      color: #1a1100;
+      background: linear-gradient(135deg, #f5d060 0%, #c89a20 100%);
+      clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+      white-space: nowrap;
+      text-shadow: none;
+      flex-shrink: 0;
+    }
+
+    /* 名稱 */
+    .author-name {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      color: #c8deff;
+      text-shadow:
+        0 0 8px rgba(120, 170, 255, 0.6),
+        1px 1px 3px rgba(0, 0, 0, 0.9);
+      white-space: nowrap;
+    }
+
+    /* 玩家（已綁定）名稱：金色 */
+    .msg.is-player .author-name {
+      color: #f0d080;
+      text-shadow:
+        0 0 10px rgba(220, 170, 60, 0.7),
+        1px 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    /* YT 會員 / Twitch 訂閱者 */
+    .msg.is-member .author-name { color: #7eeaaa; text-shadow: 0 0 8px rgba(80, 220, 130, 0.6), 1px 1px 3px #000; }
+    .msg.is-sub    .author-name { color: #d4a8ff; text-shadow: 0 0 8px rgba(180, 120, 255, 0.6), 1px 1px 3px #000; }
+
+    /* 稱號 */
+    .badge-title {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      padding: 1px 8px;
+      color: #a8d8f8;
+      background: rgba(40, 80, 160, 0.5);
+      border: 1px solid rgba(120, 180, 255, 0.35);
+      white-space: nowrap;
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-shadow: 0 0 6px rgba(100, 160, 255, 0.5);
+    }
+
+    /* ── 下排：訊息內容 ── */
+    .msg-content {
+      font-size: 14px;
+      font-weight: 400;
+      color: #dde8ff;
+      line-height: 1.5;
+      word-break: break-word;
+      text-shadow: 1px 1px 4px rgba(0,0,0,0.95);
+      padding-left: 2px;
+    }
+
+    /* 行內表情符號 */
+    .inline-emote {
+      height: 1.4em;
+      width: auto;
+      vertical-align: middle;
+      margin: 0 2px;
+      display: inline;
+    }
+
+    /* 圖片 */
+    .msg-images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .msg-images img {
+      max-width: 160px;
+      max-height: 120px;
+      object-fit: cover;
+      border: 1px solid rgba(140, 185, 255, 0.2);
+      border-radius: 2px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .msg-images img:hover {
+      transform: scale(1.04);
+    }
+
+    /* 連線狀態小點 */
+    #ws-dot {
+      position: fixed;
+      top: 6px; right: 8px;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #888;
+      transition: background 0.4s;
+    }
+    #ws-dot.on  { background: #50fa7b; box-shadow: 0 0 6px #50fa7b; }
+    #ws-dot.off { background: #ff5555; box-shadow: 0 0 6px #ff5555; }
+  </style>
+</head>
+<body>
+  <div id="ws-dot"></div>
+  <div id="chat-wrap"></div>
+
+  <script>
+    const API_BASE   = 'http://127.0.0.1:5566';
+    const WS_URL     = 'ws://127.0.0.1:11180/sub';
+    const MAX_MSGS   = 30;
+    const STORE_KEY  = 'chat_history_v1';
+    const CACHE_TTL  = 10 * 1000; // 10 秒內同一人不重複打 API
+
+    const wrap = document.getElementById('chat-wrap');
+    const dot  = document.getElementById('ws-dot');
+
+    // ── 玩家資料快取 ──
+    const profileCache = new Map();
+
+    async function fetchProfile(platform, userId) {
+      const key = `${platform}|${userId}`;
+      const hit = profileCache.get(key);
+      if (hit && Date.now() - hit.fetchedAt < CACHE_TTL) return hit.data;
+      try {
+        const r = await fetch(`${API_BASE}/api/chat/viewer-profile?platform=${encodeURIComponent(platform)}&userId=${encodeURIComponent(userId)}`);
+        if (!r.ok) return { found: false };
+        const j = await r.json();
+        profileCache.set(key, { data: j, fetchedAt: Date.now() });
+        return j;
+      } catch (_) {
+        return { found: false };
+      }
+    }
+
+    // ── localStorage 持久化 ──
+    // 每筆紀錄只存原始 commentObj（輕量），渲染時重新查最新 profile
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); }
+      catch (_) { return []; }
+    }
+
+    function saveHistory(list) {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(list.slice(-MAX_MSGS))); }
+      catch (_) {}
+    }
+
+    // 歷史列表（記憶體中的主副本）
+    let history = loadHistory();
+
+    // 用來去重的 ID 集合（避免刷新後重複渲染 WebSocket 又推了同一則）
+    const seenIds = new Set(history.map(c => (c.data || c).id).filter(Boolean));
+
+    // ── 解析平台 / 會員狀態 ──
+    function normPlatform(comment) {
+      // OneComme WS 原始結構：payload.data.comments[i].data.service
+      const d   = comment.data || comment;
+      const svc = (d.service || '').toLowerCase();
+      const uid = (d.userId || '').toLowerCase();
+      if (svc.includes('youtube') || svc === 'yt') return 'youtube';
+      if (svc.includes('twitch')  || svc === 'tw') return 'twitch';
+      if (svc.includes('nico'))                    return 'niconico';
+      // service 不明時從 userId 前綴推斷（與後端 normalizePlatform 一致）
+      if (uid.startsWith('tw-') || uid.startsWith('twitch-')) return 'twitch';
+      if (uid.startsWith('uc')  || uid.startsWith('yt-') || uid.startsWith('youtube-')) return 'youtube';
+      return svc || 'unknown';
+    }
+
+    function memberStatus(d) {
+      if (d.isMember === true) return 'member';
+      if (d.isSubscriber === true) return 'sub';
+      if (d.badges?.some(b => /會員|member/i.test(b.label || ''))) return 'member';
+      if (d.badges?.some(b => /訂閱|subscriber/i.test(b.label || ''))) return 'sub';
+      return '';
+    }
+
+    // ── 判斷 img 標籤是否為表情符號（emote）──
+    function isEmote(imgTag) {
+      if (/class=["'][^"']*emote[^"']*["']/i.test(imgTag)) return true;   // class="emote"
+      if (/data-custom-emoji=["']true["']/i.test(imgTag))  return true;   // YT 自訂表情
+      if (/data-[a-z]+=["'][^"']*emoji[^"']*["']/i.test(imgTag)) return true; // 任何 data-*emoji
+      if (/alt=["'][^"']{1,8}["']/.test(imgTag)) return true;             // alt 很短（貼圖縮寫）
+      return false;
+    }
+
+    // ── 從訊息資料中收集「真正的貼圖/圖片」URL（排除 emote）──
+    function extractImages(d) {
+      const urls = [];
+      const raw = d.comment || d.body || '';
+
+      // 1. d.img / d.image（單張欄位，非 emote）
+      if (d.img)   urls.push(d.img);
+      if (d.image) urls.push(d.image);
+
+      // 2. d.images / d.attachments（陣列）
+      if (Array.isArray(d.images))      d.images.forEach(i => urls.push(typeof i === 'string' ? i : (i?.url || i?.src)));
+      if (Array.isArray(d.attachments)) d.attachments.forEach(a => urls.push(typeof a === 'string' ? a : (a?.url || a?.src)));
+
+      // 3. comment 內含 <img> 但 **不是 emote** 的標籤
+      const imgTagRe = /(<img[^>]+>)/gi;
+      let m;
+      while ((m = imgTagRe.exec(raw)) !== null) {
+        if (!isEmote(m[1])) {
+          const srcMatch = m[1].match(/src=["']([^"']+)["']/i);
+          if (srcMatch) urls.push(srcMatch[1]);
+        }
+      }
+
+      // 4. 裸露的圖片 URL（直接貼連結）
+      const urlRe = /https?:\/\/\S+\.(?:png|jpe?g|gif|webp|avif)(\?\S*)?/gi;
+      let u;
+      while ((u = urlRe.exec(raw)) !== null) urls.push(u[0]);
+
+      return [...new Set(urls.filter(Boolean))];
+    }
+
+    // ── 把 comment 渲染成安全的 HTML（emote 變小圖，其他標籤轉純文字）──
+    function buildContentHtml(raw) {
+      if (!raw) return '';
+      // 把 <img> 處理：emote → 行內小圖；非 emote → 移除（已由 extractImages 獨立處理）
+      const processed = raw.replace(/(<img[^>]+>)/gi, (tag) => {
+        if (isEmote(tag)) {
+          const srcMatch = tag.match(/src=["']([^"']+)["']/i);
+          const altMatch = tag.match(/alt=["']([^"']*)["']/i);
+          if (srcMatch) {
+            const src = srcMatch[1];
+            const alt = altMatch ? altMatch[1] : '';
+            return `<img src="${src}" alt="${alt}" class="inline-emote" onerror="this.remove()">`;
+          }
+          return '';
+        }
+        return ''; // 非 emote img 移除（獨立顯示）
+      });
+      // 移除其他 HTML 標籤、保留文字和 inline-emote img
+      // 用 DOMParser 安全解析
+      const tmp = document.createElement('div');
+      tmp.innerHTML = processed;
+      // 只保留文字節點和 img.inline-emote
+      const frag = document.createDocumentFragment();
+      tmp.childNodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          // 移除裸露的圖片 URL
+          const cleaned = node.textContent.replace(/https?:\/\/\S+\.(?:png|jpe?g|gif|webp|avif)(\?\S*)?/gi, '').trim();
+          if (cleaned) frag.appendChild(document.createTextNode(cleaned));
+        } else if (node.nodeName === 'IMG' && node.classList.contains('inline-emote')) {
+          frag.appendChild(node.cloneNode());
+        }
+      });
+      return frag;
+    }
+
+    // ── 純文字版（用於空值判斷）──
+    function extractText(raw) {
+      return raw
+        .replace(/<img[^>]*>/gi, ' ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/https?:\/\/\S+\.(?:png|jpe?g|gif|webp|avif)(\?\S*)?/gi, '')
+        .trim();
+    }
+
+    // ── 渲染單則訊息（傳入已查好的 profile） ──
+    function renderMsg(commentObj, profile) {
+      const d       = commentObj.data || commentObj;
+      const rawName = d.displayName || d.name || d.author || '匿名';
+      const rawText    = d.comment || d.body || '';
+      const images     = extractImages(d);
+      const displayText = extractText(rawText);
+
+      if (!displayText && images.length === 0) return null;
+
+      const platform = normPlatform(commentObj);
+      const mStatus  = memberStatus(d);
+      const showName = profile.found ? (profile.displayName || rawName) : rawName;
+
+      const el = document.createElement('div');
+      el.className = [
+        'msg',
+        profile.found ? 'is-player' : '',
+        mStatus === 'member' && !profile.found ? 'is-member' : '',
+        mStatus === 'sub'    && !profile.found ? 'is-sub'    : '',
+      ].filter(Boolean).join(' ');
+
+      // ── 上排 header ──
+      const header = document.createElement('div');
+      header.className = 'msg-header';
+
+      if (profile.found) {
+        const lv = document.createElement('span');
+        lv.className = 'badge-lv';
+        lv.textContent = `Lv.${profile.level}`;
+        header.appendChild(lv);
+      }
+
+      const name = document.createElement('span');
+      name.className = 'author-name';
+      name.textContent = showName;
+      header.appendChild(name);
+
+      if (profile.found && profile.title) {
+        const ttl = document.createElement('span');
+        ttl.className = 'badge-title';
+        ttl.textContent = profile.title;
+        ttl.title = profile.title;
+        header.appendChild(ttl);
+      }
+
+      el.appendChild(header);
+
+      // ── 文字內容（含行內 emote）──
+      const contentFrag = buildContentHtml(rawText);
+      const hasContentNodes = contentFrag.childNodes.length > 0;
+      if (hasContentNodes) {
+        const body = document.createElement('div');
+        body.className = 'msg-content';
+        body.appendChild(contentFrag);
+        el.appendChild(body);
+      }
+
+      // ── 圖片 ──
+      if (images.length > 0) {
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'msg-images';
+        images.forEach(url => {
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = '';
+          img.loading = 'lazy';
+          img.onerror = () => img.remove();
+          imgWrap.appendChild(img);
+        });
+        el.appendChild(imgWrap);
+      }
+
+      return el;
+    }
+
+    // ── 加入一則訊息（去重 + 存檔 + 渲染） ──
+    async function addMsg(commentObj, skipSave = false) {
+      const d      = commentObj.data || commentObj;
+      const content = (d.comment || d.body || '').trim();
+      const hasImg  = !!(d.img || d.image || d.images?.length || d.attachments?.length ||
+                        /<img/i.test(content) ||
+                        /https?:\/\/\S+\.(?:png|jpe?g|gif|webp|avif)/i.test(content));
+      const displayText = extractText(content);
+      if (!displayText && !hasImg) return;
+
+      // 去重
+      const msgId = d.id || null;
+      if (msgId) {
+        if (seenIds.has(msgId)) return;
+        seenIds.add(msgId);
+      }
+
+      // 存進歷史
+      if (!skipSave) {
+        history.push(commentObj);
+        if (history.length > MAX_MSGS) history = history.slice(-MAX_MSGS);
+        saveHistory(history);
+      }
+
+      // 查最新 profile（即時連動）
+      const platform   = normPlatform(commentObj);
+      const platformId = d.userId || '';   // d.id 是訊息ID不是玩家ID，不能混用
+      let profile = { found: false };
+      if (platformId) profile = await fetchProfile(platform, platformId);
+
+      const el = renderMsg(commentObj, profile);
+      if (!el) return;
+
+      wrap.prepend(el);
+
+      while (wrap.children.length > MAX_MSGS) {
+        wrap.lastChild.remove();
+      }
+    }
+
+    // ── 啟動時先還原歷史訊息（最新在最上，所以倒序渲染） ──
+    async function restoreHistory() {
+      for (const commentObj of [...history].reverse()) {
+        const d          = commentObj.data || commentObj;
+        const platform   = normPlatform(commentObj);
+        const platformId = d.userId || '';
+        let profile = { found: false };
+        if (platformId) profile = await fetchProfile(platform, platformId);
+        const el = renderMsg(commentObj, profile);
+        if (el) wrap.appendChild(el);
+      }
+    }
+
+    // ── WebSocket ──
+    let ws;
+    function connect() {
+      dot.className = '';
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen  = () => { dot.className = 'on'; };
+      ws.onclose = () => { dot.className = 'off'; setTimeout(connect, 5000); };
+      ws.onerror = () => ws.close();
+
+      ws.onmessage = (ev) => {
+        try {
+          const p = JSON.parse(ev.data);
+          if (p.type === 'comments' && p.data?.comments) {
+            p.data.comments.forEach(c => addMsg(c));
+          }
+        } catch (_) {}
+      };
+    }
+
+    // 先還原歷史，再連線
+    restoreHistory().then(connect);
+  </script>
+</body>
+</html>

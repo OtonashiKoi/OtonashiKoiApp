@@ -63,7 +63,8 @@
       "Edit(/.claude/skills/game-api-reference/**)",
       "Edit(/.claude/skills/ui-ux-pro-max/**)",
       "Bash(node --check /c/Users/appsk/Documents/Github/equipmentGAME/src/shared/pkCombat.js)",
-      "Bash(node --check /c/Users/appsk/Documents/Github/equipmentGAME/src/bot/handlers/pkArenaHandlers.js)"
+      "Bash(node --check /c/Users/appsk/Documents/Github/equipmentGAME/src/bot/handlers/pkArenaHandlers.js)",
+      "Bash(node --check /c/Users/appsk/Documents/Github/equipmentGAME/src/api/server.js)"
     ],
     "additionalDirectories": [
       "c:\\Users\\appsk\\.claude\\projects\\c--Users-appsk-Documents-Github-equipmentGAME\\memory"

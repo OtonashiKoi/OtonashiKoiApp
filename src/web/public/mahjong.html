@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OBS 排隊框</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;900&family=Noto+Sans+TC:wght@700;900&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: 'Noto Serif TC', 'Noto Sans TC', 'Microsoft JhengHei', serif;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 8px;
+      align-content: start;
+    }
+
+    /* ── 卡片底層 ── */
+    .card {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 32px 9px 10px;
+      background: linear-gradient(135deg, rgba(38, 18, 52, 0.72) 0%, rgba(22, 10, 38, 0.78) 100%);
+      border: 1px solid rgba(200, 160, 100, 0.3);
+      outline: 1px solid rgba(255, 200, 220, 0.08);
+      outline-offset: 2px;
+      cursor: grab;
+      user-select: none;
+      transition: border-color 0.2s;
+    }
+
+    /* 頂部極細裝飾線 */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 12px; right: 12px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 210, 130, 0.5), transparent);
+    }
+
+    /* ── 第一位：金輝特效 ── */
+    .card:first-child {
+      background: linear-gradient(135deg, rgba(55, 30, 18, 0.82) 0%, rgba(30, 12, 40, 0.85) 100%);
+      border-color: rgba(255, 200, 80, 0.55);
+      outline-color: rgba(255, 180, 60, 0.15);
+      box-shadow:
+        0 0 20px rgba(255, 180, 60, 0.1),
+        inset 0 0 40px rgba(255, 160, 80, 0.05);
+    }
+
+    .card:first-child::before {
+      background: linear-gradient(90deg, transparent, rgba(255, 200, 80, 0.7), transparent);
+    }
+
+    .card.dragging { opacity: 0.35; cursor: grabbing; }
+
+    .card.drop-target {
+      border-color: rgba(180, 140, 255, 0.7);
+      box-shadow: 0 0 16px rgba(160, 120, 255, 0.2);
+    }
+
+    /* ── 編號徽章 ── */
+    .num {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(200, 160, 100, 0.4);
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: 'Noto Sans TC', sans-serif;
+      color: rgba(220, 180, 120, 0.8);
+      background: rgba(200, 150, 80, 0.08);
+      line-height: 1;
+    }
+
+    .card:first-child .num {
+      font-size: 13px;
+      border-color: rgba(255, 200, 80, 0.7);
+      color: #ffd080;
+      background: rgba(255, 180, 60, 0.12);
+      box-shadow: 0 0 8px rgba(255, 180, 60, 0.25);
+    }
+
+    /* ── 名字 ── */
+    .name {
+      flex: 1;
+      min-width: 0;
+      font-size: 19px;
+      font-weight: 900;
+      color: #f0e8f5;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      letter-spacing: 0.02em;
+      text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8);
+    }
+
+    .card:first-child .name {
+      font-size: 21px;
+      color: #fff5f0;
+      text-shadow:
+        0 0 16px rgba(255, 180, 120, 0.25),
+        0 1px 10px rgba(0, 0, 0, 0.8);
+    }
+
+    /* 第一位名字前的桜花符號 */
+    .card:first-child .name::before {
+      content: '✿ ';
+      color: #ffb8d0;
+      font-size: 14px;
+    }
+
+    /* ── 移除按鈕 ── */
+    .remove {
+      position: absolute;
+      top: 50%;
+      right: 7px;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      background: none;
+      border: none;
+      color: rgba(255, 220, 240, 0.2);
+      font-size: 11px;
+      line-height: 20px;
+      text-align: center;
+      cursor: pointer;
+      padding: 0;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+
+    .remove:hover { color: rgba(255, 120, 140, 0.85); }
+  </style>
+</head>
+<body>
+  <div id="board"></div>
+
+  <script>
+    const API = 'http://127.0.0.1:5566';
+    const boardEl = document.getElementById('board');
+
+    let queueState = [];
+    let dragEntryKey = null;
+
+    function entryKey(entry) {
+      return `${entry.platform || 'unknown'}::${entry.userId}`;
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(`${API}${path}`, {
+        method: options.method || 'GET',
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }
+
+    async function removeEntry(entry) {
+      await fetch(`${API}/api/mahjong/queue/${encodeURIComponent(entry.userId)}?platform=${encodeURIComponent(entry.platform || 'unknown')}`, {
+        method: 'DELETE',
+      });
+    }
+
+    async function reorderEntry(entry, targetIndex) {
+      await api(`/api/mahjong/queue/${encodeURIComponent(entry.userId)}/reorder`, {
+        method: 'POST',
+        body: { platform: entry.platform || 'unknown', targetIndex },
+      });
+    }
+
+    function clearDropTargets() {
+      boardEl.querySelectorAll('.drop-target').forEach(n => n.classList.remove('drop-target'));
+    }
+
+    function render(queue) {
+      queueState = queue || [];
+      boardEl.innerHTML = '';
+
+      queueState.forEach((entry, index) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.draggable = true;
+        card.dataset.key = entryKey(entry);
+
+        const numEl = document.createElement('div');
+        numEl.className = 'num';
+        numEl.textContent = index === 0 ? '✦' : `${index + 1}`;
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = entry.name;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove';
+        removeBtn.textContent = '✕';
+        removeBtn.title = '移除';
+        removeBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await removeEntry(entry).catch(console.error);
+        });
+
+        card.appendChild(numEl);
+        card.appendChild(nameEl);
+        card.appendChild(removeBtn);
+
+        card.addEventListener('dragstart', (e) => {
+          dragEntryKey = entryKey(entry);
+          card.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', dragEntryKey);
+        });
+
+        card.addEventListener('dragend', () => {
+          dragEntryKey = null;
+          card.classList.remove('dragging');
+          clearDropTargets();
+        });
+
+        card.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (!dragEntryKey || dragEntryKey === entryKey(entry)) return;
+          clearDropTargets();
+          card.classList.add('drop-target');
+          e.dataTransfer.dropEffect = 'move';
+        });
+
+        card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+
+        card.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          clearDropTargets();
+          if (!dragEntryKey || dragEntryKey === entryKey(entry)) return;
+          const dragged = queueState.find(item => entryKey(item) === dragEntryKey);
+          if (!dragged) return;
+          await reorderEntry(dragged, index).catch(console.error);
+        });
+
+        boardEl.appendChild(card);
+      });
+    }
+
+    function connect() {
+      const source = new EventSource(`${API}/api/mahjong/stream`);
+      source.onmessage = (e) => {
+        try { render(JSON.parse(e.data).queue || []); } catch {}
+      };
+      source.onerror = () => {
+        source.close();
+        setTimeout(connect, 2500);
+      };
+    }
+
+    fetch(`${API}/api/mahjong/state`)
+      .then(r => r.json())
+      .then(s => render(s.queue || []))
+      .catch(console.error);
+
+    connect();
+  </script>
+</body>
+</html>

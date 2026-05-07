@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>情緒值 LOADING + SC 禮物流星</title>
+  <style>
+    :root {
+      --bg-0: #08131f;
+      --bg-1: #10243c;
+      --panel: rgba(9, 20, 34, 0.78);
+      --line: rgba(173, 234, 255, 0.25);
+      --text: #f3fbff;
+      --muted: #9ac6d8;
+      --hot: #ffb347;
+      --hot-2: #ff6b6b;
+      --cool: #67e8f9;
+      --ok: #5eead4;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 700px at -10% 110%, rgba(255, 107, 107, 0.24), transparent 60%),
+        radial-gradient(1200px 700px at 120% -10%, rgba(103, 232, 249, 0.24), transparent 60%),
+        linear-gradient(135deg, var(--bg-0), var(--bg-1));
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 3;
+      width: min(950px, 94vw);
+      margin: 2.2vh auto 0;
+      padding: 1.1rem 1.2rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      backdrop-filter: blur(6px);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.36);
+    }
+
+    h1 {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.15rem, 2.4vw, 1.75rem);
+      letter-spacing: 0.02em;
+    }
+
+    .sub {
+      margin: 0 0 1rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 0.55rem;
+    }
+
+    .label {
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .score {
+      color: var(--ok);
+      font-weight: 800;
+      font-size: 1.02rem;
+      min-width: 7em;
+      text-align: right;
+    }
+
+    .bar {
+      position: relative;
+      width: 100%;
+      height: 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+
+    .fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cool) 0%, var(--hot) 58%, var(--hot-2) 100%);
+      box-shadow: 0 0 24px rgba(255, 179, 71, 0.55);
+      transition: width 180ms ease-out;
+    }
+
+    .fill::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -38%;
+      width: 34%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.52), transparent);
+      animation: shine 1.7s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes shine {
+      to { left: 120%; }
+    }
+
+    .emoji-pad {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.95rem;
+    }
+
+    .emoji-btn,
+    .ctrl-btn {
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      cursor: pointer;
+      transition: transform 120ms ease, background 150ms ease, border-color 150ms ease;
+    }
+
+    .emoji-btn {
+      min-width: 56px;
+      height: 56px;
+      font-size: 1.8rem;
+    }
+
+    .ctrl-btn {
+      min-width: 132px;
+      height: 40px;
+      padding: 0 0.85rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .emoji-btn:hover,
+    .ctrl-btn:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.45);
+      background: rgba(255, 255, 255, 0.17);
+    }
+
+    .emoji-btn:active,
+    .ctrl-btn:active {
+      transform: translateY(0);
+    }
+
+    .status {
+      margin-top: 0.78rem;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .floaters {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      overflow: hidden;
+    }
+
+    .float-emoji {
+      position: absolute;
+      font-size: clamp(1.45rem, 3.4vw, 2.15rem);
+      animation: pop-up 720ms ease-out forwards;
+      text-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+      user-select: none;
+    }
+
+    @keyframes pop-up {
+      0% { transform: translateY(0) scale(0.95); opacity: 0.95; }
+      100% { transform: translateY(-62px) scale(1.18); opacity: 0; }
+    }
+
+    .meteor {
+      position: absolute;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.38rem;
+      font-size: clamp(1.05rem, 2.3vw, 1.55rem);
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: #fff7ee;
+      text-shadow: 0 0 16px rgba(255, 255, 255, 0.5), 0 8px 30px rgba(0, 0, 0, 0.4);
+      padding: 0.08rem 0.5rem 0.16rem;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255, 209, 140, 0.15), rgba(255, 255, 255, 0.06));
+      border: 1px solid rgba(255, 243, 225, 0.26);
+      animation: meteor-fly var(--meteor-duration, 5200ms) cubic-bezier(0.18, 0.84, 0.31, 1) forwards;
+      user-select: none;
+    }
+
+    .meteor::before {
+      content: "";
+      position: absolute;
+      left: calc(100% + 8px);
+      top: 50%;
+      width: 210px;
+      height: 7px;
+      border-radius: 999px;
+      transform: translateY(-50%);
+      background: linear-gradient(90deg, rgba(255, 225, 173, 0.95), rgba(255, 255, 255, 0));
+      filter: blur(1.1px);
+      opacity: 0.9;
+    }
+
+    .meteor::after {
+      content: "";
+      position: absolute;
+      left: calc(100% + 48px);
+      top: 50%;
+      width: 170px;
+      height: 2px;
+      border-radius: 999px;
+      transform: translateY(-50%);
+      background: linear-gradient(90deg, rgba(255, 246, 229, 0.9), rgba(255, 255, 255, 0));
+      opacity: 0.85;
+    }
+
+    @keyframes meteor-fly {
+      0% {
+        transform: translate3d(0, 0, 0) scale(0.88) rotate(0deg);
+        opacity: 0;
+      }
+      9% {
+        opacity: 1;
+      }
+      100% {
+        transform: translate3d(-125vw, var(--meteor-drop, 16vh), 0) scale(1.08) rotate(var(--meteor-rot, -6deg));
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>互動值 LOADING</h1>
+    <p class="sub">一直按下面表情會累積互動值；如果收到 SC / 禮物事件，會有「語句流星」爆發噴出。</p>
+
+    <div class="row">
+      <div class="label">互動值</div>
+      <div id="score" class="score">0 / 100</div>
+    </div>
+    <div class="bar">
+      <div id="fill" class="fill"></div>
+    </div>
+
+    <div id="emojiPad" class="emoji-pad">
+      <button class="emoji-btn" data-add="7">😀</button>
+      <button class="emoji-btn" data-add="9">😍</button>
+      <button class="emoji-btn" data-add="8">🤣</button>
+      <button class="emoji-btn" data-add="10">🔥</button>
+      <button class="emoji-btn" data-add="11">🎉</button>
+      <button class="emoji-btn" data-add="12">💖</button>
+      <button class="ctrl-btn" id="testMeteor">測試禮物流星</button>
+      <button class="ctrl-btn" id="resetMeter">重置情緒值</button>
+    </div>
+
+    <div id="status" class="status">WebSocket: connecting...</div>
+  </div>
+
+  <div id="fx" class="floaters"></div>
+
+  <script>
+    (function () {
+      const WS_URL = "ws://127.0.0.1:11180/sub";
+      const MAX_SCORE = 100;
+      const SC_GAIN = 100;
+      const METEOR_RESET_DELAY_MS = 6200;
+      const DECAY_PER_SEC = 0;
+      const GIFT_EMOJIS = ["🎁", "💎", "🪙", "🌟", "🧧", "💝", "🚀"];
+      const MESSAGE_POOL_LIMIT = 100;
+
+      const scoreEl = document.getElementById("score");
+      const fillEl = document.getElementById("fill");
+      const statusEl = document.getElementById("status");
+      const fxEl = document.getElementById("fx");
+      const pad = document.getElementById("emojiPad");
+      const testMeteorBtn = document.getElementById("testMeteor");
+      const resetMeterBtn = document.getElementById("resetMeter");
+
+      let score = 0;
+      let lastTick = performance.now();
+      let ws = null;
+      let wasMaxed = false;
+      let meteorResetTimer = null;
+      const messagePool = [];
+
+      function setStatus(text, tone) {
+        statusEl.textContent = text;
+        if (tone === "ok") statusEl.style.color = "#5eead4";
+        else if (tone === "warn") statusEl.style.color = "#ffd59e";
+        else if (tone === "bad") statusEl.style.color = "#ff9da0";
+        else statusEl.style.color = "#9ac6d8";
+      }
+
+      function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+      }
+
+      function renderScore() {
+        const shown = Math.round(score);
+        const pct = (shown / MAX_SCORE) * 100;
+        scoreEl.textContent = shown + " / " + MAX_SCORE;
+        fillEl.style.width = pct.toFixed(1) + "%";
+      }
+
+      function scheduleResetAfterMeteor() {
+        if (meteorResetTimer) clearTimeout(meteorResetTimer);
+        meteorResetTimer = setTimeout(function () {
+          score = 0;
+          wasMaxed = false;
+          renderScore();
+        }, METEOR_RESET_DELAY_MS);
+      }
+
+      function applyScoreDelta(amount) {
+        const prev = score;
+        score = clamp(score + amount, 0, MAX_SCORE);
+        renderScore();
+        const isMaxed = score >= MAX_SCORE;
+        if (isMaxed && !wasMaxed && prev < MAX_SCORE) {
+          spawnMeteorBurst(10, "💥 滿條爆發");
+          scheduleResetAfterMeteor();
+        }
+        wasMaxed = isMaxed;
+      }
+
+      function addScore(amount, x, y, emojiText) {
+        applyScoreDelta(amount);
+        spawnClickFx(x, y, emojiText);
+      }
+
+      function spawnClickFx(x, y, text) {
+        const node = document.createElement("div");
+        node.className = "float-emoji";
+        node.textContent = text;
+        node.style.left = (x - 12) + "px";
+        node.style.top = (y - 12) + "px";
+        fxEl.appendChild(node);
+        setTimeout(function () { node.remove(); }, 740);
+      }
+
+      function randomGift() {
+        return GIFT_EMOJIS[Math.floor(Math.random() * GIFT_EMOJIS.length)];
+      }
+
+      function cacheCommentSnippet(payloadItem) {
+        const d = (payloadItem && payloadItem.data) ? payloadItem.data : payloadItem || {};
+        const name = String(d.displayName || d.name || "").trim();
+        const text = String(d.comment || "").replace(/\s+/g, " ").trim();
+        if (!text) return;
+        const short = text.length > 22 ? (text.slice(0, 22) + "…") : text;
+        const line = (name ? (name + "：") : "") + short;
+        messagePool.push(line);
+        if (messagePool.length > MESSAGE_POOL_LIMIT) messagePool.splice(0, messagePool.length - MESSAGE_POOL_LIMIT);
+      }
+
+      function pickMessageSnippet() {
+        if (messagePool.length === 0) return "互動爆發中";
+        return messagePool[Math.floor(Math.random() * messagePool.length)];
+      }
+
+      function spawnGiftMeteor(label, opt) {
+        const node = document.createElement("div");
+        node.className = "meteor";
+        node.textContent = label;
+        node.style.right = "-15vw";
+        node.style.top = (6 + Math.random() * 42).toFixed(1) + "vh";
+        node.style.setProperty("--meteor-drop", ((12 + Math.random() * 22).toFixed(1) + "vh"));
+        node.style.setProperty("--meteor-rot", ((-10 + Math.random() * 8).toFixed(1) + "deg"));
+        node.style.setProperty("--meteor-duration", (((opt && opt.durationMs) || (4200 + Math.random() * 1400)).toFixed(0) + "ms"));
+        fxEl.appendChild(node);
+        const removeAfter = (opt && opt.durationMs ? opt.durationMs : 5600) + 500;
+        setTimeout(function () { node.remove(); }, removeAfter);
+      }
+
+      function spawnMeteorBurst(count, labelPrefix) {
+        for (let i = 0; i < count; i += 1) {
+          const delay = Math.floor(Math.random() * 1800);
+          setTimeout(function () {
+            const snippet = pickMessageSnippet();
+            const prefix = labelPrefix || randomGift();
+            const tail = Math.random() < 0.52 ? (" · " + snippet) : "";
+            spawnGiftMeteor(prefix + tail, {
+              durationMs: 4300 + Math.floor(Math.random() * 1400),
+            });
+          }, delay);
+        }
+      }
+
+      function isScOrGift(payloadItem) {
+        const d = (payloadItem && payloadItem.data) ? payloadItem.data : payloadItem || {};
+        const txt = String(d.comment || "").toLowerCase();
+        const badges = Array.isArray(d.badges) ? d.badges.map(function (b) {
+          return String((b && b.label) || "").toLowerCase();
+        }).join(" ") : "";
+
+        if (d.hasGift === true) return true;
+        if (d.isSuperChat === true || d.isPaid === true) return true;
+        if (Number(d.purchaseAmount || 0) > 0) return true;
+        if (txt.includes("superchat") || txt.includes("sc")) return true;
+        if (badges.includes("super") || badges.includes("gift") || badges.includes("贈禮") || badges.includes("斗內")) return true;
+        return false;
+      }
+
+      function normalizePlatform(service, userId) {
+        const s = String(service || "").toLowerCase();
+        const u = String(userId || "").toLowerCase();
+        if (s.includes("youtube") || s === "yt") return "youtube";
+        if (s.includes("twitch") || s === "tw") return "twitch";
+        if (u.startsWith("tw-") || u.startsWith("twitch-")) return "twitch";
+        if (u.startsWith("yt-") || u.startsWith("youtube-") || u.startsWith("uc")) return "youtube";
+        return "unknown";
+      }
+
+      function countUnicodeEmoji(text) {
+        if (!text) return 0;
+        const matches = String(text).match(/[\p{Extended_Pictographic}]/gu);
+        return matches ? matches.length : 0;
+      }
+
+      function countHtmlEmojiOrSticker(text) {
+        if (!text) return 0;
+        const imgLike = String(text).match(/<img\b[^>]*>|:[a-z0-9_]{2,}:/gi);
+        return imgLike ? imgLike.length : 0;
+      }
+
+      function getEmoteLikeScore(payloadItem) {
+        const d = (payloadItem && payloadItem.data) ? payloadItem.data : payloadItem || {};
+        const platform = normalizePlatform(d.service, d.userId);
+        const rawComment = String(d.comment || "");
+
+        let hits = 0;
+        hits += Math.min(4, countUnicodeEmoji(rawComment));
+        hits += Math.min(4, countHtmlEmojiOrSticker(rawComment));
+
+        // 常見貼圖/表情欄位保險偵測（OneComme 來源可能不同）
+        if (d.sticker || d.superSticker || d.stickerUrl || d.emoji || d.emotes) hits += 2;
+        if (Array.isArray(d.emotes) && d.emotes.length > 0) hits += Math.min(4, d.emotes.length);
+
+        // Twitch 常見 emote token（Kappa / LUL / PogChamp 類）
+        if (platform === "twitch") {
+          const twTokens = rawComment.match(/\b[A-Z][A-Za-z0-9]{2,}\b/g);
+          if (twTokens && twTokens.length > 0) hits += Math.min(3, twTokens.length);
+        }
+
+        // YT 通常會出現短量 emoji 或貼圖圖片，稍微加權
+        if (platform === "youtube" && hits > 0) hits += 1;
+
+        // 一般表情留言每則小幅加分，避免太暴衝
+        return Math.min(15, hits * 2);
+      }
+
+      function buildGiftLabel(payloadItem) {
+        const d = (payloadItem && payloadItem.data) ? payloadItem.data : payloadItem || {};
+        const name = d.displayName || d.name || "SC";
+        const amount = d.purchaseAmount || d.amountValue || d.amount || "";
+        const tail = amount ? (" " + amount) : "";
+        return randomGift() + " " + name + tail + " ✦";
+      }
+
+      function connectWs() {
+        try {
+          ws = new WebSocket(WS_URL);
+        } catch (err) {
+          setStatus("WebSocket 啟動失敗：" + (err && err.message ? err.message : String(err)), "bad");
+          setTimeout(connectWs, 2400);
+          return;
+        }
+
+        ws.onopen = function () {
+          setStatus("WebSocket 已連線：" + WS_URL, "ok");
+        };
+
+        ws.onmessage = function (event) {
+          let payload;
+          try {
+            payload = JSON.parse(event.data);
+          } catch (_) {
+            return;
+          }
+
+          const comments = (payload && payload.type === "comments" && payload.data && Array.isArray(payload.data.comments))
+            ? payload.data.comments
+            : [];
+
+          comments.forEach(function (item) {
+            cacheCommentSnippet(item);
+            if (isScOrGift(item)) {
+              spawnMeteorBurst(20, buildGiftLabel(item));
+              applyScoreDelta(SC_GAIN);
+              scheduleResetAfterMeteor();
+              return;
+            }
+
+            const emoteScore = getEmoteLikeScore(item);
+            if (emoteScore > 0) {
+              applyScoreDelta(emoteScore);
+            }
+          });
+        };
+
+        ws.onerror = function () {
+          setStatus("WebSocket 發生錯誤，稍後重連。", "warn");
+        };
+
+        ws.onclose = function () {
+          setStatus("WebSocket 已斷線，2 秒後重連...", "warn");
+          setTimeout(connectWs, 2000);
+        };
+      }
+
+      function tick(now) {
+        const dt = (now - lastTick) / 1000;
+        lastTick = now;
+        score = clamp(score - DECAY_PER_SEC * dt, 0, MAX_SCORE);
+        wasMaxed = score >= MAX_SCORE;
+        renderScore();
+        requestAnimationFrame(tick);
+      }
+
+      pad.addEventListener("click", function (e) {
+        const btn = e.target.closest("button[data-add]");
+        if (!btn) return;
+        const add = Number(btn.dataset.add || 0);
+        const rect = btn.getBoundingClientRect();
+        const x = rect.left + rect.width * 0.5;
+        const y = rect.top + rect.height * 0.45;
+        addScore(add, x, y, btn.textContent || "✨");
+      });
+
+      resetMeterBtn.addEventListener("click", function () {
+        if (meteorResetTimer) clearTimeout(meteorResetTimer);
+        score = 0;
+        wasMaxed = false;
+        renderScore();
+      });
+
+      testMeteorBtn.addEventListener("click", function () {
+        spawnMeteorBurst(20, randomGift() + " 測試爆發");
+      });
+
+      renderScore();
+      connectWs();
+      requestAnimationFrame(function (t) {
+        lastTick = t;
+        requestAnimationFrame(tick);
+      });
+    })();
+  </script>
+</body>
+</html>
