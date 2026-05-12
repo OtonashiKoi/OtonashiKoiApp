@@ -36,6 +36,13 @@
       "runtimeArgs": ["/c", "cd", "/d", "C:\\Users\\appsk\\Documents\\Github\\equipmentGAME-web", "&&", "npm", "run", "dev"],
       "port": 5174,
       "description": "手機版玩家網頁前端"
+    },
+    {
+      "name": "webgame-vue",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd", "/d", "C:\\Users\\appsk\\Documents\\Github\\equipmentGAME-WEBGAME", "&&", "npm", "run", "dev"],
+      "port": 5173,
+      "description": "Vue 3 網頁遊戲版（HMR 熱更新）"
     }
   ]
 }

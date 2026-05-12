@@ -1632,10 +1632,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial, undefined, {
+          playerName: displayName,
           equipped,
           inventory: progress?.inventory || [],
           partyEffects,
-          monsterEquipped
+          monsterEquipped,
+          monsterIsBoss: Boolean(monster?.isBoss)
         });
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
       const zoneDamageSyncApplied = ["beginner", "normal"].includes(zoneKey) && !isOnlyDTierEquipped(equipped);

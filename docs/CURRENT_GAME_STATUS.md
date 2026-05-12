@@ -24,10 +24,10 @@ Generated at: 2026-05-06T02:29:37.542Z
 | Zone | 名稱 | 最低等級 | 最高等級 | 怪物 | 啟用 | Boss |
 | --- | --- | --- | --- | --- | --- | --- |
 | beginner | 新手區 | 1 | 3 | 5 | 5 | 1 |
-| normal | 一般區 | 1 | 10 | 8 | 8 | 2 |
+| normal | 一般區 | 1 | 無上限 | 8 | 8 | 2 |
 | mid | 中級區 | 10 | 無上限 | 12 | 12 | 2 |
 | hard | 高級區 | 20 | 無上限 | 15 | 15 | 3 |
-| elite | 精英區 | 30 | 無上限 | 1 | 1 | 1 |
+| elite | 精英區 | 20 | 無上限 | 1 | 1 | 1 |
 
 ## Monsters
 
@@ -108,6 +108,17 @@ Generated at: 2026-05-06T02:29:37.542Z
 | special | 41 |
 | weapon | 41 |
 | 無槽位 | 34 |
+
+## Equipment Tier Set Bonuses
+
+一般裝備依照身上穿著的 D / C / B / A 階件數觸發效果；可混搭，各階級分開計算。計算槽位為 `weapon`、`shield`、`head_top`、`head_mid`、`head_low`、`armor`、`garment`、`shoes`、`accessory_l`、`accessory_r`，不包含稱號、職業徽章、怪物卡與特殊槽。
+
+| 階級 | 3 件效果 | 5 件效果 | 7 件效果 |
+| --- | --- | --- | --- |
+| D | STR +3 / INT +3 / DEX +3 | 金幣獲得 +10% | EXP +10% |
+| C | 迴避 +10% | 傷害 +5% | 命中 +15% |
+| B | 傷害 +10% | 暴擊率 +5% | 暴擊傷害 +10% |
+| A | 最終傷害 +5% | Boss 傷害 +10% | 掉落率 +10% |
 
 ## Items
 
@@ -423,4 +434,3 @@ Generated at: 2026-05-06T02:29:37.542Z
 | job_mage_v1 | 法師徽章 |  | 法師試煉（雙手法杖） | 啟用 | 10 | staff_2h | INT > 10 | VIT+1 INT+5 LUK+2 |
 | job_rogue_v1 | 盜賊徽章 |  | 盜賊試煉 | 啟用 | 10 | dagger | AGI > 10 | STR+2 AGI+4 LUK+2 |
 | job_dwarf_warrior_v1 | 矮人戰士徽章 |  | 矮人戰士試煉 | 啟用 | 10 | mace_1h, mace_2h | VIT > 10 | STR+1 VIT+5 DEX+2 |
-

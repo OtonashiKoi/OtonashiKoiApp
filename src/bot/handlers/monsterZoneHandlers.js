@@ -10,7 +10,9 @@ const PERCENT_EFFECT_KEYS = new Set([
 ]);
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { calcPlayerStats, isOnlyDTierEquipped } = require("../../shared/combatStats");
+const { getEquipmentTierSetBonuses } = require("../../shared/equipmentTierSetBonuses");
 const { isEffectConditionMet, collectEquipmentEffects, mergeEquippedFromLibrary, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
+const { isPkBattleActive, replaceMonsterBattlePresence } = require("../../shared/battlePresence");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
@@ -34,6 +36,22 @@ const zoneLastChosen = new Map();
 // 排行榜去重：key = zoneKey, value = { lastPublishTime, lastDamageMap, pendingTimer }
 // 防止戰鬥中頻繁編輯面板，最多 5 秒更新一次排行榜
 const damageRankingDebounce = new Map();
+const BOSS_SPAWN_BROADCAST_ENABLED = false;
+
+function syncMonsterBattlePresence() {
+  replaceMonsterBattlePresence([...activeSessions.keys()]);
+}
+
+function setMonsterSession(discordId, session) {
+  activeSessions.set(discordId, session);
+  syncMonsterBattlePresence();
+}
+
+function deleteMonsterSession(discordId) {
+  const removed = activeSessions.delete(discordId);
+  if (removed) syncMonsterBattlePresence();
+  return removed;
+}
 
 const BTN = {
   enterBattle: "monster-zone:enter-battle",
@@ -273,7 +291,7 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
         worldBossPartsHp
       ).catch(() => {});
 
-      if (nextMonster.isBoss && zoneKey !== "elite") {
+      if (nextMonster.isBoss && zoneKey !== "elite" && BOSS_SPAWN_BROADCAST_ENABLED) {
         _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
       }
       } catch (e) {
@@ -356,7 +374,7 @@ async function _resolveExpiredMonsterTransition(sc, zoneKey) {
     worldBossPartsHp
   ).catch(() => {});
 
-  if (nextMonster.isBoss && zoneKey !== "elite") {
+  if (nextMonster.isBoss && zoneKey !== "elite" && BOSS_SPAWN_BROADCAST_ENABLED) {
     _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
   }
 
@@ -497,7 +515,7 @@ async function maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster) {
   for (const [pid, session] of activeSessions.entries()) {
     if (session?.zoneKey === zoneKey && session?.monsterId === monster.id) {
       if (session.timeoutId) clearTimeout(session.timeoutId);
-      activeSessions.delete(pid);
+      deleteMonsterSession(pid);
     }
   }
   await _republishPanel(sc, zoneKey, monster, resetState.currentHp, 0, {}, null, resetState.worldBossPartsHp).catch(() => {});
@@ -993,6 +1011,7 @@ function collectRewardEffectRefs(progress) {
 
 function buildRewardModifiers(progress) {
   const refs = collectRewardEffectRefs(progress);
+  const tierSetBonuses = getEquipmentTierSetBonuses(progress?.equipment || {});
   let expPct = 0;
   let goldPct = 0;
   let dropPct = 0;
@@ -1022,6 +1041,10 @@ function buildRewardModifiers(progress) {
         break;
     }
   }
+
+  expPct += tierSetBonuses.expPct;
+  goldPct += tierSetBonuses.goldPct;
+  dropPct += tierSetBonuses.dropPct;
 
   return {
     expPct,
@@ -1504,13 +1527,14 @@ async function _resolveZoneEventIfExpired(sc, zoneKey) {
   };
   await sc.monsterService.saveState(nextState, zoneKey);
   _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}, null).catch(() => {});
-  if (nextMonster.isBoss) _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
+  if (nextMonster.isBoss && BOSS_SPAWN_BROADCAST_ENABLED) _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
   zoneEventTimers.delete(zoneKey);
   return true;
 }
 
 // BOSS 出場公告
 async function _broadcastBossSpawn(sc, zoneKey, monster) {
+  if (!BOSS_SPAWN_BROADCAST_ENABLED) return;
   try {
     const { getBotClient } = require("../runtimeContext");
     const client = getBotClient();
@@ -1536,12 +1560,39 @@ async function _broadcastBossSpawn(sc, zoneKey, monster) {
   }
 }
 
+async function safeBattleResultReply(interaction, payload, fallbackContent) {
+  try {
+    await interaction.editReply(payload);
+    return true;
+  } catch (err) {
+    const isExpired = err?.code === 10062 || /Unknown interaction/i.test(err?.message || "");
+    if (!isExpired) throw err;
+    try {
+      if (interaction.channel?.isTextBased?.()) {
+        await interaction.channel.send({
+          content: fallbackContent || `戰鬥結果已結算：<@${interaction.user.id}>`,
+          embeds: payload.embeds || [],
+        });
+      }
+    } catch (sendErr) {
+      console.error("[monsterZoneHandlers] battle fallback send failed:", sendErr?.message || sendErr);
+    }
+    return false;
+  }
+}
+
 // ──────────────────────────────────────────────
 // 出戰（入場）— 顯示準備畫面 + 開始戰鬥按鈕
 // ──────────────────────────────────────────────
 async function handleEnterBattle(interaction) {
   const discordId = interaction.user.id;
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (isPkBattleActive(discordId)) {
+    await interaction.editReply({
+      content: "❌ 你目前正在進行 PK，不能同時挑戰怪物。"
+    }).catch(() => {});
+    return;
+  }
   const sc = getServiceContext();
   const displayName = interaction.member?.displayName || interaction.user.username;
   const selectedBossPart = parseWorldBossTargetPart(interaction.customId);
@@ -1572,7 +1623,7 @@ async function handleEnterBattle(interaction) {
     }
   }
 
-  activeSessions.set(discordId, { state: "starting", battleStartedAt: Date.now() });
+  setMonsterSession(discordId, { state: "starting", battleStartedAt: Date.now() });
   hasActiveSessionLock = true;
 
   try {
@@ -1640,6 +1691,11 @@ async function handleEnterBattle(interaction) {
     state = await sc.monsterService.getState(zoneKey);
     if (await _resolveExpiredMonsterTransition(sc, zoneKey)) {
       state = await sc.monsterService.getState(zoneKey);
+    }
+    if (zoneKey !== "elite" && Number(state?.currentHp || 0) <= 0 && !state?.activeEvent && !state?.activeTransition) {
+      await _doIdleRotate(sc, zoneKey).catch(() => {});
+      state = await sc.monsterService.getState(zoneKey);
+      monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
     }
 
     const ready = await waitForBattleReady(sc, { discordId, zoneKey, interaction });
@@ -1747,7 +1803,7 @@ async function handleEnterBattle(interaction) {
     session.timeoutId = setTimeout(async () => {
       const s = activeSessions.get(discordId);
       if (s && s.state === "waiting") {
-        activeSessions.delete(discordId);
+        deleteMonsterSession(discordId);
         const feeNote = session.entryFee > 0 ? `\n入場費 **${session.entryFee}** 🪙 已損失。` : "";
         interaction.editReply({
           content: `⏰ 超過 1 分鐘未開始戰鬥，已自動結束等待。${feeNote}`,
@@ -1756,11 +1812,11 @@ async function handleEnterBattle(interaction) {
       }
     }, BATTLE_TIMEOUT_MS);
 
-    activeSessions.set(discordId, session);
+    setMonsterSession(discordId, session);
 
     const battleReady = await waitForBattleReady(sc, { discordId, zoneKey, interaction, session });
     if (battleReady.blocked) {
-      activeSessions.delete(discordId);
+      deleteMonsterSession(discordId);
       return;
     }
 
@@ -1795,11 +1851,11 @@ async function handleEnterBattle(interaction) {
 
     const battleEntryFee = Math.max(0, Number(battleMonster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0);
     session.entryFee = battleEntryFee;
-    if (battleEntryFee > 0) {
-      const wallet = await sc.walletRepository.findByPlayerId(discordId).catch(() => ({ gold: 0 }));
-      const goldOwned = Math.max(0, Number(wallet?.gold) || 0);
-      if (goldOwned < battleEntryFee) {
-        activeSessions.delete(discordId);
+      if (battleEntryFee > 0) {
+        const wallet = await sc.walletRepository.findByPlayerId(discordId).catch(() => ({ gold: 0 }));
+        const goldOwned = Math.max(0, Number(wallet?.gold) || 0);
+        if (goldOwned < battleEntryFee) {
+        deleteMonsterSession(discordId);
         await interaction.editReply({
           content: `❌ 進入 **${battleMonster.name}** 需要 **${battleEntryFee}** 金幣，但你目前只有 **${goldOwned}** 金幣。`,
           embeds: [],
@@ -1868,7 +1924,7 @@ async function handleEnterBattle(interaction) {
       if (!battleMonster || battleState.activeMonsterSeq !== session.monsterSeq) {
         const queuedReady = await waitForBattleReady(sc, { discordId, zoneKey, interaction, session });
         if (!queuedReady?.monster || !queuedReady?.state) {
-          activeSessions.delete(discordId);
+          deleteMonsterSession(discordId);
           return;
         }
         battleState = queuedReady.state;
@@ -1878,7 +1934,7 @@ async function handleEnterBattle(interaction) {
       const timeoutResult = await maybeHandleEliteWorldBossTimeout(sc, zoneKey, battleState, battleMonster);
       battleState = timeoutResult.state;
       if (timeoutResult.timedOut) {
-        activeSessions.delete(discordId);
+        deleteMonsterSession(discordId);
         await interaction.editReply({
           content: "⌛ 世界BOSS 挑戰超過 1 小時未擊殺，本輪已判定失敗。\n🔒 解鎖進度已重置，需重新擊殺 300 隻高級區怪物才能再次挑戰。",
           embeds: [],
@@ -1953,10 +2009,12 @@ async function handleEnterBattle(interaction) {
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
         runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
+          playerName: displayName,
           equipped: currentEquipped,
           inventory: currentProg?.inventory || [],
           partyEffects,
           monsterEquipped: battleMonster?.equipment || {},
+          monsterIsBoss: Boolean(battleMonster?.isBoss),
           worldBossPhase: session.worldBossPhase || null
         });
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
@@ -2182,17 +2240,29 @@ async function handleEnterBattle(interaction) {
         new ButtonBuilder().setCustomId(BTN.deleteLog).setLabel("🗑️ 刪除紀錄").setStyle(ButtonStyle.Secondary)
       );
 
-      await interaction.editReply({ embeds: [embed], components: [row] });
-      activeSessions.delete(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
+      await safeBattleResultReply(interaction, { embeds: [embed], components: [row] }, `⚔️ 戰鬥結算：<@${discordId}>`).catch((err) => {
+        console.error("[monsterZoneHandlers] battle result reply failed:", err?.message || err);
+      });
+      deleteMonsterSession(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
     } catch (err) {
-      activeSessions.delete(discordId);
-      await interaction.editReply({ content: "❌ 戰鬥發生錯誤，請稍後再試。", embeds: [], components: [] });
+      console.error("[monsterZoneHandlers] battle finalization error:", err?.message || err);
+      deleteMonsterSession(discordId);
+      await safeBattleResultReply(
+        interaction,
+        { content: "❌ 戰鬥發生錯誤，請稍後再試。", embeds: [], components: [] },
+        `❌ 戰鬥發生錯誤，請稍後再試。 <@${discordId}>`
+      ).catch(() => {});
     }
   } catch (err) {
-    await interaction.editReply({ content: "❌ 出戰失敗，請稍後再試。" });
+    console.error("[monsterZoneHandlers] battle start error:", err?.message || err);
+    await safeBattleResultReply(
+      interaction,
+      { content: "❌ 出戰失敗，請稍後再試。" },
+      `❌ 出戰失敗，請稍後再試。 <@${discordId}>`
+    ).catch(() => {});
   } finally {
     if (hasActiveSessionLock && activeSessions.get(discordId)?.state === "starting") {
-      activeSessions.delete(discordId);
+      deleteMonsterSession(discordId);
     }
     releaseBattleActionLock(discordId);
   }
@@ -2231,7 +2301,7 @@ async function handleStartFight(interaction) {
   try {
     const ready = await waitForBattleReady(sc, { discordId, zoneKey, interaction, session });
     if (!ready?.state || !ready?.monster) {
-      activeSessions.delete(discordId);
+      deleteMonsterSession(discordId);
       return;
     }
     let state = ready.state;
@@ -2241,7 +2311,7 @@ async function handleStartFight(interaction) {
     const timeoutResult = await maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster);
     state = timeoutResult.state;
     if (timeoutResult.timedOut) {
-      activeSessions.delete(discordId);
+      deleteMonsterSession(discordId);
       await interaction.editReply({
         content: "⌛ 世界BOSS 挑戰超過 1 小時未擊殺，本輪已判定失敗。\n🔒 解鎖進度已重置，需重新擊殺 300 隻高級區怪物才能再次挑戰。",
         embeds: [],
@@ -2317,10 +2387,12 @@ async function handleStartFight(interaction) {
     const { runCombatLoop } = require("../../shared/combatLoop");
     const combatResult =
       runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
+        playerName: displayName,
         equipped: currentEquipped,
         inventory: currentProg?.inventory || [],
         partyEffects,
         monsterEquipped: monster?.equipment || {},
+        monsterIsBoss: Boolean(monster?.isBoss),
         worldBossPhase: session.worldBossPhase || null
       });
     const { roundLogs, finalPlayerHp, combatStats } = combatResult;
@@ -2501,9 +2573,9 @@ async function handleStartFight(interaction) {
       console.error("[monsterZoneHandlers] 編輯回覆失敗 (components):", componentErr.message);
       await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
     }
-    activeSessions.delete(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
+    deleteMonsterSession(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
   } catch (err) {
-    activeSessions.delete(discordId);
+    deleteMonsterSession(discordId);
     await interaction.editReply({ content: "❌ 戰鬥發生錯誤，請稍後再試。", embeds: [], components: [] });
   } finally {
     releaseBattleActionLock(discordId);
@@ -3789,7 +3861,7 @@ async function _doIdleRotate(sc, zoneKey) {
     await sc.monsterService.saveState(newState, zoneKey);
     _republishPanel(sc, zoneKey, next, next.calc.maxHp, 0, {}).catch(() => {});
     // 精英區 Boss 由解鎖流程觸發廣播，idle rotate 不廣播
-    if (next.isBoss && zoneKey !== "elite") _broadcastBossSpawn(sc, zoneKey, next).catch(() => {});
+  if (next.isBoss && zoneKey !== "elite" && BOSS_SPAWN_BROADCAST_ENABLED) _broadcastBossSpawn(sc, zoneKey, next).catch(() => {});
 
     // 嗆聲廣播
     const { getBotClient } = require("../runtimeContext");
@@ -3873,15 +3945,20 @@ async function refreshMonsterZonePanels() {
         const zoneKey = _featureKeyToZone(binding.featureKey);
         if (await _resolveExpiredMonsterTransition(sc, zoneKey)) continue;
         const state = await sc.monsterService.getState(zoneKey).catch(() => null);
+        const hasDeadState = Number(state?.currentHp || 0) <= 0 && !state?.activeTransition && !state?.activeEvent;
+        if (hasDeadState && zoneKey !== "elite") {
+          await _doIdleRotate(sc, zoneKey).catch(() => {});
+        }
+        const freshState = hasDeadState ? await sc.monsterService.getState(zoneKey).catch(() => null) : state;
         const monsters = await sc.monsterService.listMonsters({ includeDisabled: true, zone: zoneKey }).catch(() => []);
-        let monster = state?.currentMonster || monsters.find((m) => m.seq === state?.activeMonsterSeq) || null;
+        let monster = freshState?.currentMonster || monsters.find((m) => m.seq === freshState?.activeMonsterSeq) || null;
         if (!monster && monsters.length > 0) monster = monsters[0];
-        const monsterHp = state?.currentHp != null ? state.currentHp : (monster?.calc?.maxHp ?? null);
-        const participantCount = Array.isArray(state?.participants) ? state.participants.length : 0;
-        const damageMap = state?.damageMap || {};
-        const activeEvent = state?.activeEvent || null;
-        const worldBossPartsHp = state?.worldBossPartsHp || null;
-        const activeTransition = state?.activeTransition || null;
+        const monsterHp = freshState?.currentHp != null ? freshState.currentHp : (monster?.calc?.maxHp ?? null);
+        const participantCount = Array.isArray(freshState?.participants) ? freshState.participants.length : 0;
+        const damageMap = freshState?.damageMap || {};
+        const activeEvent = freshState?.activeEvent || null;
+        const worldBossPartsHp = freshState?.worldBossPartsHp || null;
+        const activeTransition = freshState?.activeTransition || null;
         await _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap, activeEvent, worldBossPartsHp, { fastUpdate: true, activeTransition });
       } catch (error) {
         console.warn(`[MonsterPanel] auto-refresh failed for ${binding.featureKey} (${binding.channelId}): ${error?.message || error}`);
@@ -3906,6 +3983,7 @@ module.exports = {
   _republishPanelWithRankingDebounce,
   MAX_ROUNDS,
   _broadcastBossSpawn,
+  _doIdleRotate,
   activeSessions,
   startIdleRotateTimer,
   refreshEliteWorldBossPanel,

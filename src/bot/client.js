@@ -8,7 +8,8 @@ const { handleCommand, handleButton, handleSelectMenu, handleModal } = require("
 const { serviceContext, setBotClient, getBotClient } = require("./runtimeContext");
 const { startFetcher } = require("./commentFetcher");
 const { handleStreamComment } = require("./handlers/streamHandlers");
-const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels } = require("./handlers/monsterZoneHandlers");
+const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels, _doIdleRotate } = require("./handlers/monsterZoneHandlers");
+const { initPkArenaState } = require("./handlers/pkArenaHandlers");
 const { runWithCache } = require("../adapters/mongo/requestCache");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
 
@@ -299,7 +300,12 @@ function listAutoRepublishBindings(layout) {
 }
 
 async function resolveMonsterPanelState(zoneKey) {
-  const state = await serviceContext.monsterService.getState(zoneKey);
+  let state = await serviceContext.monsterService.getState(zoneKey);
+  const hasDeadState = Number(state?.currentHp || 0) <= 0 && !state?.activeTransition && !state?.activeEvent;
+  if (hasDeadState && zoneKey !== "elite") {
+    await _doIdleRotate(serviceContext, zoneKey).catch(() => {});
+    state = await serviceContext.monsterService.getState(zoneKey);
+  }
   const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone: zoneKey });
   let activeMonster = monsters.find((monster) => monster.seq === state.activeMonsterSeq) || null;
   if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
@@ -590,6 +596,10 @@ function createBotClient() {
     } else {
       console.log("[PanelReset] startup auto-republish disabled");
     }
+
+    await initPkArenaState().catch((error) => {
+      console.warn(`[PKArena] restore failed: ${error?.message || error}`);
+    });
 
     // 拍賣場公開面板倒數/到期狀態需定時重繪
     startAuctionPanelRefreshTimer();

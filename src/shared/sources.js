@@ -10,6 +10,10 @@ const CURRENCY_SOURCES = {
   ITEM_USE: "item:use",                             // 使用道具效果
   MONSTER_ENTRY_FEE: "monster:entry-fee",           // 放怪區：入場費扣除
   MONSTER_KILL_REWARD: "monster:kill-reward",       // 放怪區：擊殺金幣獎勵
+  PK_BATTLE_REWARD: "pk:battle-reward",             // PK 戰鬥獎勵（金幣）
+  PK_BET: "pk:bet",                                 // PK 下注扣款
+  PK_BET_REFUND: "pk:bet-refund",                   // PK 下注退還
+  PK_BET_WIN: "pk:bet-win",                         // PK 下注中獎
   ITEM_SELL: "item:sell",                            // 玩家販售道具
   AUCTION_PURCHASE: "auction:purchase",              // 交易所購買（買家扣款）
   AUCTION_SALE: "auction:sale",                      // 交易所成交（賣家入帳）
@@ -25,6 +29,7 @@ const EXP_SOURCES = {
   ADMIN_MANUAL_GRANT_EXP: "admin:manual-grant-exp", // 管理員手動發放經驗
   ITEM_USE_EXP: "item:use-exp",                     // 使用道具效果
   MONSTER_KILL: "monster:kill",                     // 放怪區：擊殺 EXP 獎勵
+  PK_BATTLE_REWARD_EXP: "pk:battle-reward-exp",     // PK 戰鬥獎勵（EXP）
   QUEST_REWARD_EXP: "quest:reward-exp",            // 任務獎勵（經驗）
   IDLE_REWARD_EXP: "idle:reward-exp"               // 放置掛機：結算 EXP 獎勵
 };

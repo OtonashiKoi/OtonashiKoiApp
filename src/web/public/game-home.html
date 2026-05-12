@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>遊戲大廳</title>
+  <link rel="stylesheet" href="game-home.css">
+</head>
+<body>
+  <div class="game-container">
+
+    <!-- 玩家信息條 -->
+    <div class="player-header">
+      <div class="player-info">
+        <img src="https://via.placeholder.com/60" alt="玩家頭像" class="player-avatar" id="playerAvatar">
+        <div class="player-basic">
+          <div class="player-name" id="playerName">載入中...</div>
+          <div class="player-level">
+            <span class="label">Lv.</span>
+            <span class="value" id="playerLevel">1</span>
+          </div>
+        </div>
+      </div>
+      <div class="player-stats-quick">
+        <div class="stat-item">
+          <div class="stat-label">幣</div>
+          <div class="stat-value" id="playerGold">0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">晶</div>
+          <div class="stat-value" id="playerGems">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 角色狀態 -->
+    <div class="character-status">
+      <div class="status-row">
+        <div class="status-label">HP</div>
+        <div class="status-bar-container">
+          <div class="status-bar hp-bar">
+            <div class="status-fill" id="hpFill" style="width: 100%"></div>
+          </div>
+          <div class="status-text" id="hpText">1000/1000</div>
+        </div>
+      </div>
+      <div class="status-row">
+        <div class="status-label">MP</div>
+        <div class="status-bar-container">
+          <div class="status-bar mp-bar">
+            <div class="status-fill" id="mpFill" style="width: 100%"></div>
+          </div>
+          <div class="status-text" id="mpText">100/100</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 適合的對戰區域 -->
+    <div class="zone-selection">
+      <div class="zone-title">適合的對戰區域</div>
+      <div class="zone-cards" id="zoneCards">
+        <!-- 動態生成 -->
+      </div>
+    </div>
+
+    <!-- 出戰按鈕 -->
+    <div class="battle-action">
+      <button class="btn-battle" id="btnBattle">
+        <span class="btn-icon">⚔️</span>
+        <span class="btn-text">出戰</span>
+      </button>
+    </div>
+
+    <!-- 裝備顯示與替換 -->
+    <div class="equipment-section">
+      <div class="equipment-title">
+        <span>裝備</span>
+        <button class="btn-manage" id="btnManageEquip">管理</button>
+      </div>
+      <div class="equipment-slots" id="equipmentSlots">
+        <!-- 動態生成 -->
+      </div>
+
+      <!-- 裝備管理模態 -->
+      <div class="equipment-modal" id="equipmentModal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span>裝備管理</span>
+            <button class="btn-close" id="btnCloseModal">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="slot-tabs" id="slotTabs">
+              <!-- 動態生成 -->
+            </div>
+            <div class="equipment-list" id="equipmentList">
+              <!-- 動態生成 -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 快速操作按鈕 -->
+    <div class="quick-actions">
+      <button class="btn-quick" id="btnInventory" title="背包">
+        <span class="icon">🎒</span>
+        <span class="label">背包</span>
+      </button>
+      <button class="btn-quick" id="btnShop" title="商城">
+        <span class="icon">🛍️</span>
+        <span class="label">商城</span>
+      </button>
+      <button class="btn-quick" id="btnQuest" title="任務">
+        <span class="icon">📋</span>
+        <span class="label">任務</span>
+      </button>
+      <button class="btn-quick" id="btnSettings" title="設置">
+        <span class="icon">⚙️</span>
+        <span class="label">設置</span>
+      </button>
+    </div>
+
+  </div>
+
+  <script src="game-home.js"></script>
+</body>
+</html>

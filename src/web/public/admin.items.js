@@ -3,13 +3,14 @@
   let items=[],activeTab='consumable',pendingImgRowId=null,searchQuery='',equipSubFilter='all',tierFilter='all',jobBadgeFilter='all';
   const SPECIAL_SLOTS=new Set(['title_eq','job_eq','special','special_1','special_2','special_3']);
   const STANDARD_SLOTS=new Set(['head_top','head_mid','head_low','armor','weapon','shield','garment','shoes','accessory_l','accessory_r']);
+  const OFFHAND_WEAPON_TYPES=new Set(['offhand_sword','offhand_dagger','offhand_mace']);
   const SLOT_LABELS={
     head_top:"頭上",
     head_mid:"頭中",
     head_low:"頭下",
     armor:"衣服",
     weapon:"武器",
-    shield:"副手防具",
+    shield:"副手",
     garment:"披肩",
     shoes:"鞋子",
     accessory_l:"飾品左",
@@ -50,6 +51,7 @@ level_down_random_attributes:"☯️ 降等扣屬性"
     consumable:['seq','img','name','desc','effect','effectValue','actions'],
     collectible:['seq','img','name','desc','actions'],
     equipment:['seq','img','name','desc','slot','weaponType','tier','str','agi','vit','int','dex','luk','actions'],
+    offhand:['seq','img','name','desc','slot','weaponType','tier','str','agi','vit','int','dex','luk','actions'],
     special:['seq','img','name','desc','slot','str','agi','vit','int','dex','luk','actions'],
     job_badge:['seq','img','name','desc','slot','str','agi','vit','int','dex','luk','actions'],
     card:['seq','img','name','desc','slot','tier','actions']
@@ -94,14 +96,15 @@ level_down_random_attributes:"☯️ 降等扣屬性"
     if(tab==='consumable')return item.itemType==='consumable';
     if(tab==='collectible')return item.itemType==='collectible';
     if(tab==='equipment'){
-      if(!(item.itemType==='equipment'&&STANDARD_SLOTS.has(item.equipSlot)))return false;
+      if(!(item.itemType==='equipment'&&STANDARD_SLOTS.has(item.equipSlot)&&!(item.equipSlot==='shield'&&OFFHAND_WEAPON_TYPES.has(item.weaponType))))return false;
       if(equipSubFilter!=='all'){
-        const sg={weapon:['weapon','shield'],head:['head_top','head_mid','head_low'],defense:['armor','garment','shoes'],accessory:['accessory_l','accessory_r']};
+        const sg={weapon:['weapon'],head:['head_top','head_mid','head_low'],defense:['shield','armor','garment','shoes'],accessory:['accessory_l','accessory_r']};
         if(!(sg[equipSubFilter]||[]).includes(item.equipSlot))return false;
       }
       if(tierFilter!=='all'&&item.tier!==tierFilter)return false;
       return true;
     }
+    if(tab==='offhand')return item.itemType==='equipment'&&item.equipSlot==='shield'&&OFFHAND_WEAPON_TYPES.has(item.weaponType);
     if(tab==='special')return item.itemType==='equipment'&&(SPECIAL_SLOTS.has(item.equipSlot)||item.equipSlot==='special');
     if(tab==='job_badge')return item.itemType==='job_badge';
     if(tab==='card'){
@@ -111,12 +114,13 @@ level_down_random_attributes:"☯️ 降等扣屬性"
   }
   function defaultItemType(tab){
     if(tab==='equipment'||tab==='special')return'equipment';
+    if(tab==='offhand')return'equipment';
     if(tab==='job_badge')return'job_badge';
     if(tab==='collectible')return'collectible';
     if(tab==='card')return'monster_card';
     return'consumable';
   }
-  function defaultSlot(tab){return tab==='special'?'title_eq':(tab==='job_badge'?'job_eq':'head_top');}
+  function defaultSlot(tab){return tab==='special'?'title_eq':(tab==='job_badge'?'job_eq':(tab==='offhand'?'shield':'head_top'));}
   function authHeader(){return{Authorization:`Bearer ${window.getAdminToken?window.getAdminToken():''}`};}
   function jsonHeaders(){return{'Content-Type':'application/json',...authHeader()};}
   async function loadItems(){const res=await fetch('/admin/items',{headers:authHeader()});const json=await res.json();if(json.status==='ok'){items=json.data||[];renderAll();}else{window.logActivity&&window.logActivity('❌ 無法載入道具庫：'+(json.message||'')); }}
@@ -129,7 +133,7 @@ level_down_random_attributes:"☯️ 降等扣屬性"
   function effectOptsHtml(sel){return Object.entries(EFFECT_LABELS).map(([v,l])=>`<option value="${v}"${v===sel?' selected':''}>${l}</option>`).join('');}
   function buildRow(item,isNew=false,seq=0){const cols=TAB_COLS[activeTab],id=item.id||'__new__',s=item.equipStats||{},eff=item.effect||{type:'none',value:0};const effectDraft={useEffects:Array.isArray(item.useEffects)?item.useEffects:[],passiveEffects:Array.isArray(item.passiveEffects)?item.passiveEffects:[],procEffects:Array.isArray(item.procEffects)?item.procEffects:[],combatEffects:Array.isArray(item.combatEffects)?item.combatEffects:[]};const effectSummary=window.adminEffects?window.adminEffects.summarizeItemDraft(effectDraft):'未設定';const cells={seq:`<td style="text-align:center;color:var(--muted);font-size:0.8em;user-select:none;">${isNew?'':seq}</td>`,img:`<td class="img-cell" data-img-id="${id}" title="點此上傳圖片">${item.imageUrl?`<img src="${esc(item.imageUrl)}" style="height:40px;width:40px;object-fit:cover;border-radius:6px;" />`:`<span style="font-size:1.5em;color:var(--muted)">📷</span>`}</td>`,name:`<td><input class="sheet-input" data-field="name" value="${esc(item.name||'')}" placeholder="道具名稱" style="width:100%;" /></td>`,desc:`<td><input class="sheet-input" data-field="desc" value="${esc(item.description||'')}" placeholder="說明文字" style="width:100%;" /></td>`,effect:`<td><select class="sheet-input" data-field="effect" style="width:100%;">${effectOptsHtml(eff.type)}</select></td>`,effectValue:`<td><input class="sheet-input" data-field="effectValue" type="number" value="${eff.value||0}" style="width:100%;text-align:center;" /></td>`,slot:`<td><select class="sheet-input" data-field="slot" style="width:100%;">${slotOptsHtml(item.equipSlot)}</select></td>`,weaponType:`<td>${wepTypeHtml(item)}</td>`,tier:`<td><select class="sheet-input" data-field="tier" style="width:100%;"><option value="">—</option>${['D','C','B','A'].map(t=>`<option value="${t}"${item.tier===t?' selected':''}>${t} 級</option>`).join('')}</select></td>`,str:`<td><input class="sheet-input" data-field="str" type="number" value="${s.str||0}" style="width:100%;text-align:center;" /></td>`,agi:`<td><input class="sheet-input" data-field="agi" type="number" value="${s.agi||0}" style="width:100%;text-align:center;" /></td>`,vit:`<td><input class="sheet-input" data-field="vit" type="number" value="${s.vit||0}" style="width:100%;text-align:center;" /></td>`,int:`<td><input class="sheet-input" data-field="int" type="number" value="${s.int||0}" style="width:100%;text-align:center;" /></td>`,dex:`<td><input class="sheet-input" data-field="dex" type="number" value="${s.dex||0}" style="width:100%;text-align:center;" /></td>`,luk:`<td><input class="sheet-input" data-field="luk" type="number" value="${s.luk||0}" style="width:100%;text-align:center;" /></td>`,actions:`<td style="white-space:nowrap;"><input type="hidden" data-field="effectDraft" value="${esc(window.adminEffects?window.adminEffects.encodeState(effectDraft):'')}" /><button class="button small item-effects-btn" type="button">效果</button><div class="hint item-effects-summary" style="margin:4px 0 6px;max-width:180px;white-space:normal;">${esc(effectSummary)}</div><button class="button small item-save-btn">儲存</button>${!isNew?`<button class="button small danger item-del-btn" data-name="${esc(item.name||'')}">刪除</button>`:''}</td>`};return`<tr data-item-id="${id}">${cols.map(c=>cells[c]||'<td></td>').join('')}</tr>`;}
   function bindRowEvents(tbody){tbody.querySelectorAll('.img-cell').forEach(td=>{td.addEventListener('click',()=>{pendingImgRowId=td.dataset.imgId;document.getElementById('items-img-input').click();});});tbody.querySelectorAll('.item-save-btn').forEach(btn=>{btn.addEventListener('click',()=>saveRow(btn.closest('tr')));});tbody.querySelectorAll('.item-del-btn').forEach(btn=>{btn.addEventListener('click',()=>{const tr=btn.closest('tr');deleteItem(tr.dataset.itemId,btn.dataset.name);});});tbody.querySelectorAll('.item-effects-btn').forEach(btn=>{btn.addEventListener('click',async()=>{const tr=btn.closest('tr');if(!window.adminEffects)return;await window.adminEffects.ensureLookups();const hidden=tr.querySelector('[data-field="effectDraft"]');const draft=window.adminEffects.decodeState(hidden?.value,{useEffects:[],passiveEffects:[],procEffects:[],combatEffects:[]});window.adminEffects.openItemEditor(draft,async(nextDraft)=>{if(hidden)hidden.value=window.adminEffects.encodeState(nextDraft);const summary=tr.querySelector('.item-effects-summary');if(summary)summary.textContent=window.adminEffects.summarizeItemDraft(nextDraft);await saveRow(tr);});});});}
-  function getRowPayload(tr){const get=f=>tr.querySelector(`[data-field="${f}"]`)?.value??'';const isEq=activeTab==='equipment'||activeTab==='special';const isJobBadge=activeTab==='job_badge';const isCard=activeTab==='card';const draft=window.adminEffects?window.adminEffects.decodeState(get('effectDraft'),{useEffects:[],passiveEffects:[],procEffects:[],combatEffects:[]}):{useEffects:[],passiveEffects:[],procEffects:[],combatEffects:[]};const p={name:get('name'),description:get('desc'),itemType:isEq?'equipment':(isJobBadge?'job_badge':(isCard?'monster_card':defaultItemType(activeTab))),useEffects:draft.useEffects||[],passiveEffects:draft.passiveEffects||[],procEffects:draft.procEffects||[],combatEffects:draft.combatEffects||[]};if(activeTab==='consumable')p.effect={type:get('effect')||'none',value:Number(get('effectValue'))||0};if(isEq||isJobBadge){p.effect={type:get('effect')||'none',value:Number(get('effectValue'))||0};p.equipSlot=get('slot')||defaultSlot(activeTab);p.equipStats={str:Number(get('str'))||0,agi:Number(get('agi'))||0,vit:Number(get('vit'))||0,int:Number(get('int'))||0,dex:Number(get('dex'))||0,luk:Number(get('luk'))||0};p.weaponType=(p.equipSlot==='weapon'||p.equipSlot==='shield')?(get('weaponType')||null):null;p.tier=get('tier')||null;}if(isCard){p.tier=get('tier')||null;}return p;}
+  function getRowPayload(tr){const get=f=>tr.querySelector(`[data-field="${f}"]`)?.value??'';const isEq=activeTab==='equipment'||activeTab==='special'||activeTab==='offhand';const isJobBadge=activeTab==='job_badge';const isCard=activeTab==='card';const draft=window.adminEffects?window.adminEffects.decodeState(get('effectDraft'),{useEffects:[],passiveEffects:[],procEffects:[],combatEffects:[]}):{useEffects:[],passiveEffects:[],procEffects:[],combatEffects:[]};const p={name:get('name'),description:get('desc'),itemType:isEq?'equipment':(isJobBadge?'job_badge':(isCard?'monster_card':defaultItemType(activeTab))),useEffects:draft.useEffects||[],passiveEffects:draft.passiveEffects||[],procEffects:draft.procEffects||[],combatEffects:draft.combatEffects||[]};if(activeTab==='consumable')p.effect={type:get('effect')||'none',value:Number(get('effectValue'))||0};if(isEq||isJobBadge){p.effect={type:get('effect')||'none',value:Number(get('effectValue'))||0};p.equipSlot=get('slot')||defaultSlot(activeTab);p.equipStats={str:Number(get('str'))||0,agi:Number(get('agi'))||0,vit:Number(get('vit'))||0,int:Number(get('int'))||0,dex:Number(get('dex'))||0,luk:Number(get('luk'))||0};p.weaponType=(p.equipSlot==='weapon'||p.equipSlot==='shield')?(get('weaponType')||null):null;p.tier=get('tier')||null;}if(isCard){p.tier=get('tier')||null;}return p;}
   async function saveRow(tr){const id=tr.dataset.itemId,payload=getRowPayload(tr);if(!payload.name.trim()){alert('請輸入道具名稱');return;}const isNew=id==='__new__';const res=await fetch(isNew?'/admin/items':`/admin/items/${id}`,{method:isNew?'POST':'PUT',headers:jsonHeaders(),body:JSON.stringify(payload)});const json=await res.json();if(json.status==='ok'){window.logActivity&&window.logActivity(`✅ 道具已${isNew?'新增':'更新'}：${payload.name}`);await loadItems();}else{window.logActivity&&window.logActivity('❌ 儲存失敗：'+(json.message||'')); }}
   async function deleteItem(id,name){if(!confirm(`確定要刪除道具「${name}」？`))return;const res=await fetch(`/admin/items/${id}`,{method:'DELETE',headers:authHeader()});const json=await res.json();if(json.status==='ok'){window.logActivity&&window.logActivity(`🗑️ 道具已刪除：${name}`);await loadItems();}else{window.logActivity&&window.logActivity('❌ 刪除失敗：'+(json.message||'')); }}
   async function uploadImage(id,file){const fd=new FormData();fd.append('image',file);const res=await fetch(`/admin/items/${id}/image`,{method:'POST',headers:authHeader(),body:fd});const json=await res.json();if(json.status==='ok'){window.logActivity&&window.logActivity('🖼️ 圖片上傳成功');const thumb=json.data?.imageThumbnailUrl||json.data?.imageUrl;if(thumb){const cell=document.querySelector(`.img-cell[data-img-id="${id}"]`);if(cell)cell.innerHTML=`<img src="${thumb}" style="height:40px;width:40px;object-fit:cover;border-radius:6px;" />`;}else{await loadItems();}}else{window.logActivity&&window.logActivity('❌ 圖片上傳失敗：'+(json.message||'')); }}
@@ -141,20 +145,31 @@ level_down_random_attributes:"☯️ 降等扣屬性"
   // 新增卡片分類 tab 按鈕（如果不存在）
   window.addEventListener('DOMContentLoaded',()=>{
     const tabBar = document.querySelector('.items-tab-bar');
-    if(tabBar && !tabBar.querySelector('[data-items-tab="card"]')){
-      const btn = document.createElement('button');
-      btn.className = 'items-tab-btn';
-      btn.dataset.itemsTab = 'card';
-      btn.textContent = '卡片';
-      btn.addEventListener('click',()=>{
-        activeTab='card';
-        equipSubFilter='all';
-        tierFilter='all';
-        document.querySelectorAll('.items-tab-btn').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        renderAll();
-      });
-      tabBar.appendChild(btn);
+    if(tabBar){
+      const ensureTabButton = (tabName, label, beforeTab = null) => {
+        if (tabBar.querySelector(`[data-items-tab="${tabName}"]`)) return;
+        const btn = document.createElement('button');
+        btn.className = 'items-tab-btn';
+        btn.dataset.itemsTab = tabName;
+        btn.textContent = label;
+        btn.addEventListener('click',()=>{
+          activeTab=tabName;
+          equipSubFilter='all';
+          tierFilter='all';
+          document.querySelectorAll('.items-tab-btn').forEach(b=>b.classList.remove('active'));
+          btn.classList.add('active');
+          renderAll();
+        });
+        if(beforeTab){
+          const ref = tabBar.querySelector(`[data-items-tab="${beforeTab}"]`);
+          if(ref) tabBar.insertBefore(btn, ref);
+          else tabBar.appendChild(btn);
+        }else{
+          tabBar.appendChild(btn);
+        }
+      };
+      ensureTabButton('offhand', '副手', 'special');
+      ensureTabButton('card', '卡片');
     }
   });
   document.getElementById('items-search-input')?.addEventListener('input',function(){searchQuery=this.value.trim();renderBody();});
@@ -167,6 +182,7 @@ level_down_random_attributes:"☯️ 降等扣屬性"
     consumable:  ['name','description','effect','effectValue'],
     collectible: ['name','description'],
     equipment:   ['name','description','equipSlot','weaponType','str','agi','vit','int','dex','luk'],
+    offhand:     ['name','description','equipSlot','weaponType','str','agi','vit','int','dex','luk'],
     special:     ['name','description','equipSlot','str','agi','vit','int','dex','luk'],
     card:        ['name','description','tier'],
     job_badge:   ['name','description','str','agi','vit','int','dex','luk']
@@ -231,7 +247,7 @@ level_down_random_attributes:"☯️ 降等扣屬性"
     const lines = clean.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) { alert('檔案為空或只有標頭'); return; }
     const cols = parseCsvLine(lines[0]);
-    const isEq = activeTab === 'equipment' || activeTab === 'special';
+    const isEq = activeTab === 'equipment' || activeTab === 'special' || activeTab === 'offhand';
     const isCard = activeTab === 'card';
     const isJobBadge = activeTab === 'job_badge';
     let ok = 0, fail = 0;

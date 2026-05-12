@@ -24,7 +24,7 @@ const ZONE_DEFS = [
     tagline:      "新手試煉，準備開打。",
     color:        0xe74c3c,
     minLevel:     1,
-    maxLevel:     10,
+    maxLevel:     null,
     defaultEntryFee: 0,
   },
   {
@@ -56,7 +56,7 @@ const ZONE_DEFS = [
     emoji:        "💀",
     tagline:      "極限試煉，非凡之路。",
     color:        0xef4444,
-    minLevel:     30,
+    minLevel:     20,
     maxLevel:     null,
     defaultEntryFee: 5000,
   },

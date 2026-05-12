@@ -42,22 +42,22 @@ const AVAILABLE_FEATURES = [
   {
     key: "monster_zone",
     label: "放怪區面板（一般）",
-    description: "Lv.1～10 玩家的一般戰鬥區"
+    description: "Lv.1 以上玩家可進入的一般戰鬥區"
   },
   {
     key: "monster_zone_mid",
     label: "放怪區面板（中級）",
-    description: "Lv.10 以上玩家才能進入的中級戰鬥區"
+    description: "Lv.10 以上玩家可進入的中級戰鬥區"
   },
   {
     key: "monster_zone_hard",
     label: "放怪區面板（高級）",
-    description: "Lv.20 以上玩家才能進入的高級戰鬥區"
+    description: "Lv.20 以上玩家可進入的高級戰鬥區"
   },
   {
     key: "monster_zone_elite",
     label: "放怪區面板（精英）",
-    description: "Lv.30 以上玩家才能進入的精英戰鬥區"
+    description: "Lv.20 以上玩家可進入的精英戰鬥區"
   },
   {
     key: "weekly_quest",

@@ -14,12 +14,7 @@ const WEAPON_MAIN_STAT_BY_TYPE = {
   axe_1h: "str",
   axe_2h: "str",
   mace_1h: "str",
-  mace_2h: "str",
-  offhand_sword: "str",
-  offhand_dagger: "agi",
-  offhand_mace: "str",
-  offhand_axe: "str",
-  offhand_hammer: "str"
+  mace_2h: "str"
 };
 
 const WEAPON_ENHANCE_BONUS_BY_TIER = {
@@ -334,11 +329,9 @@ class EnhanceService {
 
     const normalizedTier = String(tier || "").toUpperCase();
     const equipSlot = String(equipment.equipSlot || "");
-    const weaponType = String(equipment.weaponType || "");
-    const isOffhandWeapon = equipSlot === "shield" && weaponType.startsWith("offhand_");
     const isMainWeapon = equipSlot === "weapon";
 
-    if (isMainWeapon || isOffhandWeapon) {
+    if (isMainWeapon) {
       const delta = WEAPON_ENHANCE_BONUS_BY_TIER[normalizedTier] ?? 1;
       const mainStat = this._getWeaponMainStat(equipment);
       if (!mainStat) return;
@@ -355,7 +348,7 @@ class EnhanceService {
       };
     }
 
-    // 盾牌(非副手武器)與防具：每 1 點都重新抽一次可用屬性
+    // 副手 / 盾牌 / 防具：依階級隨機加到原本已有的屬性
     const candidateStats = Object.entries(equipment.equipStats)
       .filter(([key, value]) => key && Number.isFinite(Number(value)) && Number(value) !== 0)
       .map(([key]) => key);
@@ -400,14 +393,12 @@ class EnhanceService {
   _buildEnhancePreview(equipment, tier, currentLevel) {
     const normalizedTier = String(tier || "").toUpperCase();
     const equipSlot = String(equipment?.equipSlot || "");
-    const weaponType = String(equipment?.weaponType || "");
     const isMainWeapon = equipSlot === "weapon";
-    const isOffhandWeapon = equipSlot === "shield" && weaponType.startsWith("offhand_");
     let statBoosted = null;
     let delta = 0;
     let targetStatSummary = "";
 
-    if (isMainWeapon || isOffhandWeapon) {
+    if (isMainWeapon) {
       statBoosted = this._getWeaponMainStat(equipment);
       delta = WEAPON_ENHANCE_BONUS_BY_TIER[normalizedTier] ?? 1;
       targetStatSummary = statBoosted ? (STAT_LABEL_ZH[statBoosted] || String(statBoosted).toUpperCase()) : "";

@@ -195,6 +195,8 @@ async function handleProfile(interaction) {
   if (wt === "axe_2h") specialEffects.push("🪓 雙手斧：攻擊倍率 ×4");
   if (wt === "staff_1h") specialEffects.push("🪄 法杖：無視怪物 50% DEF、怪物攻擊 ×2");
   if (wt === "staff_2h") specialEffects.push("🪄 雙手法杖：無視怪物 50% DEF、怪物攻擊 ×2、倍率 ↑");
+  if (wt === "mace_1h") specialEffects.push("🔨 單手槌：攻擊倍率 ×3、基礎擊暈 +20%、矮人高血再 +10%、對暈眩目標 +5%");
+  if (wt === "mace_2h") specialEffects.push("🔨 雙手槌：攻擊倍率 ×4、基礎擊暈 +30%、矮人高血再 +10%、對暈眩目標 +15%");
   if (cs.isDualWield) specialEffects.push("⚔️ 雙持：可觸發副手追擊");
 
   // 使用 combatStats 提供的欄位顯示進一步特效
@@ -213,6 +215,34 @@ async function handleProfile(interaction) {
       }
     } catch (e) { /* ignore */ }
   const effectLine = effectLineParts.length ? "\n" + effectLineParts.join("\n") : "";
+  const tierSetBonuses = cs.tierSetBonuses || { tierCounts: {} };
+  const tierSetLines = [];
+  const tierCounts = tierSetBonuses.tierCounts || {};
+  if ((tierCounts.D || 0) >= 3) {
+    const parts = ["3件：STR/INT/DEX +3"];
+    if (tierCounts.D >= 5) parts.push("5件：金幣 +10%");
+    if (tierCounts.D >= 7) parts.push("7件：EXP +10%");
+    tierSetLines.push(`D階 ${tierCounts.D}件 - ${parts.join("、")}`);
+  }
+  if ((tierCounts.C || 0) >= 3) {
+    const parts = ["3件：迴避 +10%"];
+    if (tierCounts.C >= 5) parts.push("5件：傷害 +5%");
+    if (tierCounts.C >= 7) parts.push("7件：命中 +15%");
+    tierSetLines.push(`C階 ${tierCounts.C}件 - ${parts.join("、")}`);
+  }
+  if ((tierCounts.B || 0) >= 3) {
+    const parts = ["3件：傷害 +10%"];
+    if (tierCounts.B >= 5) parts.push("5件：暴擊率 +5%");
+    if (tierCounts.B >= 7) parts.push("7件：暴擊傷害 +10%");
+    tierSetLines.push(`B階 ${tierCounts.B}件 - ${parts.join("、")}`);
+  }
+  if ((tierCounts.A || 0) >= 3) {
+    const parts = ["3件：最終傷害 +5%"];
+    if (tierCounts.A >= 5) parts.push("5件：Boss傷害 +10%");
+    if (tierCounts.A >= 7) parts.push("7件：掉落率 +10%");
+    tierSetLines.push(`A階 ${tierCounts.A}件 - ${parts.join("、")}`);
+  }
+  const tierSetLine = tierSetLines.length ? `\n【階級套裝】\n${tierSetLines.join("\n")}` : "";
 
   // ── 職業區（只顯示職業名稱）──
   const jobAreaLine = `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})`;
@@ -280,6 +310,9 @@ async function handleProfile(interaction) {
       if (weaponMatches) {
         const traitsStr = jobInfo.traits.join(" / ");
         jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${traitsStr}${bonusLine}`;
+        if (jobInfo.name === "矮人戰士" && (wt === "mace_1h" || wt === "mace_2h")) {
+      jobTraitAreaLine += `\n暈眩值：單手槌 20%、雙手槌 30%、矮人高血再 +10%、對暈眩目標：單手 +5%、雙手 +15%`;
+        }
       } else {
         jobTraitAreaLine = `職業特性：${jobInfo.name}${bonusLine}`;
       }
@@ -375,6 +408,7 @@ async function handleProfile(interaction) {
     `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
     `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%　🟢 迴避: ${calcDodge}%　🪨 格擋: ${calcBlock}%` +
     effectLine + "\n" +
+    tierSetLine + (tierSetLine ? "\n" : "") +
     equipLine + "\n" +
     `==============\n` +
     `【資產】\n` +
@@ -511,10 +545,12 @@ const BACKPACK_MAIN_TABS = [
   { tab: "item", label: "🎮 道具" },
   { tab: "weapon", label: "⚔️ 武器" },
   { tab: "armor", label: "🛡️ 防裝" },
+  { tab: "offhand", label: "🪓 副手" },
   { tab: "special", label: "✨ 特殊" },
+  { tab: "card", label: "🎴 卡片" },
   { tab: "badge", label: "📖 職業" },
 ];
-const BACKPACK_SECTION_TABS = new Set(["weapon", "armor", "special", "badge"]);
+const BACKPACK_SECTION_TABS = new Set(["weapon", "armor", "offhand", "special", "badge"]);
 const BACKPACK_WEAPON_SUBTABS = [
   { subTab: "all", label: "📦 全部" },
   { subTab: "melee1", label: "🗡️ 單手" },
@@ -542,8 +578,18 @@ function isWeaponSlotItem(entry) {
   return entry?.itemType === "equipment" && entry?.equipSlot === "weapon";
 }
 
+function isOffhandSlotItem(entry) {
+  const weaponType = String(entry?.weaponType || "").toLowerCase();
+  return entry?.itemType === "equipment"
+    && entry?.equipSlot === "shield"
+    && weaponType.startsWith("offhand_");
+}
+
 function isArmorSlotItem(entry) {
-  return entry?.itemType === "equipment" && entry?.equipSlot && [
+  return entry?.itemType === "equipment"
+    && entry?.equipSlot
+    && !isOffhandSlotItem(entry)
+    && [
     "shield",
     "head_top",
     "head_mid",
@@ -577,7 +623,7 @@ function matchArmorSubTab(entry, subTab = "all") {
   const slot = entry?.equipSlot || "";
   if (subTab === "head") return ["head_top", "head_mid", "head_low"].includes(slot);
   if (subTab === "core") return ["armor", "garment", "shoes"].includes(slot);
-  if (subTab === "shield") return slot === "shield";
+  if (subTab === "shield") return slot === "shield" && !isOffhandSlotItem(entry);
   if (subTab === "accessory") return ["accessory_l", "accessory_r"].includes(slot);
   return false;
 }
@@ -755,7 +801,7 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
 
 function filterByTab(inventory, tab, subTab = "all") {
   if (tab === "equip") {
-    return inventory.filter(e => e.itemType === "equipment" && EQ_STANDARD_SLOTS.has(e.equipSlot));
+    return inventory.filter(e => e.itemType === "equipment" && EQ_STANDARD_SLOTS.has(e.equipSlot) && !isOffhandSlotItem(e));
   }
   if (tab === "weapon") {
     return inventory.filter(e => isWeaponSlotItem(e) && matchWeaponSubTab(e, subTab));
@@ -763,27 +809,38 @@ function filterByTab(inventory, tab, subTab = "all") {
   if (tab === "armor") {
     return inventory.filter(e => isArmorSlotItem(e) && matchArmorSubTab(e, subTab));
   }
+  if (tab === "offhand") {
+    return inventory.filter(e => isOffhandSlotItem(e));
+  }
   if (tab === "special") {
     return inventory.filter(e =>
-      (e.itemType === "equipment" && (EQ_SPECIAL_SLOTS.has(e.equipSlot) || e.equipSlot === "special")) ||
-      (e.itemType === "monster_card")
+      e.itemType === "equipment" &&
+      (EQ_SPECIAL_SLOTS.has(e.equipSlot) || e.equipSlot === "special") &&
+      !e.monsterCardSkill
     );
   }
+  if (tab === "card") {
+    return inventory.filter(e => e.itemType === "monster_card" || Boolean(e.monsterCardSkill));
+  }
   if (tab === "badge") return inventory.filter(e => e.itemType === "job_badge");
-  return inventory.filter(e => e.itemType !== "equipment" && e.itemType !== "job_badge");
+  return inventory.filter(e => e.itemType !== "equipment" && e.itemType !== "job_badge" && e.itemType !== "monster_card");
 }
 
 const PAGE_SIZE = 3;
 const EQUIP_PAGE_SIZE = 2;
 
 function buildTabRow(activeTab, activeSubTab = "all") {
-  return new ActionRowBuilder().addComponents(
-    BACKPACK_MAIN_TABS.map(d => new ButtonBuilder()
-      .setCustomId(`backpack_tab:${d.tab}:all:0`)
-      .setLabel(d.label)
-      .setStyle(d.tab === activeTab ? ButtonStyle.Primary : ButtonStyle.Secondary)
-    )
-  );
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`backpack_tab_select:${activeSubTab}`)
+    .setPlaceholder("選擇背包分類")
+    .addOptions(
+      BACKPACK_MAIN_TABS.map((d) => ({
+        label: d.label,
+        value: d.tab,
+        default: d.tab === activeTab
+      }))
+    );
+  return [new ActionRowBuilder().addComponents(menu)];
 }
 
 function buildBackpackHomeRow() {
@@ -846,23 +903,25 @@ function buildPageRow(tab, subTab, page, totalPages, options = {}) {
 function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subTab = "all", options = {}) {
   const sectionMode = Boolean(options.sectionMode) || BACKPACK_SECTION_TABS.has(tab);
   const rawFiltered = filterByTab(inventory, tab, subTab);
-  const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "special" || tab === "badge";
+  const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "offhand" || tab === "special" || tab === "card" || tab === "badge";
   const filtered = isEquipTab ? groupEquipmentItems(rawFiltered, tab) : sortBackpackItems(rawFiltered, tab);
 
   const header = prefixMsg ? prefixMsg + "\n\n" : "";
   const tabLabel =
     tab === "weapon" ? `武器${subTab === "all" ? "" : ` / ${BACKPACK_WEAPON_SUBTABS.find(d => d.subTab === subTab)?.label || subTab}`}` :
     tab === "armor"  ? `防裝${subTab === "all" ? "" : ` / ${BACKPACK_ARMOR_SUBTABS.find(d => d.subTab === subTab)?.label || subTab}`}` :
+    tab === "offhand" ? "副手" :
+    tab === "card"   ? "卡片" :
     tab === "equip"  ? "裝備" :
     tab === "special"? "特殊" :
     tab === "badge"  ? "職業" : "道具";
-  const tabRow = buildTabRow(tab, subTab);
+  const tabRows = buildTabRow(tab, subTab);
   const subTabRows = sectionMode ? [] : buildSubTabRows(tab, subTab);
 
   if (!filtered.length) {
     const components = sectionMode
       ? [buildBackpackHomeRow()]
-      : [tabRow, ...subTabRows];
+      : [...tabRows, ...subTabRows];
     return { content: header + `🎒 **背包 — ${tabLabel}**\n\n此分類目前為空。`, components };
   }
 
@@ -877,6 +936,8 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
   const lines = [];
   if (tab === "weapon" && pageItems.length) lines.push("【武器】");
   if (tab === "armor" && pageItems.length) lines.push("【防裝】");
+  if (tab === "offhand" && pageItems.length) lines.push("【副手】");
+  if (tab === "card" && pageItems.length) lines.push("【卡片】");
 
   pageItems.forEach((e, i) => {
     if (tab === "equip" && i > 0) {
@@ -905,7 +966,7 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
     lines.push(`${offset + i + 1}. **${e.itemName}**${slot}${stackDisplay}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`);
   });
 
-  const rows = sectionMode ? [] : [tabRow, ...subTabRows];
+  const rows = sectionMode ? [] : [...tabRows, ...subTabRows];
   const itemRows = isEquipTab
     ? pageItems.map((g, i) => buildEquipmentGroupRow(g, i, {
       tab,
@@ -1096,6 +1157,19 @@ async function handleBackpackTab(interaction, tab, page = 0, subTab = "all") {
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
   const msg = buildBackpackMessage(inventory, tab, undefined, page, subTab);
+  await safeEditReply(interaction, msg);
+}
+
+async function handleBackpackTabSelect(interaction) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  const selectedTab = String(interaction.values?.[0] || "item");
+  const activeSubTab = interaction.customId.startsWith("backpack_tab_select:")
+    ? interaction.customId.slice("backpack_tab_select:".length) || "all"
+    : "all";
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const inventory = progress?.inventory || [];
+  const msg = buildBackpackMessage(inventory, selectedTab, undefined, 0, activeSubTab, BACKPACK_SECTION_TABS.has(selectedTab) ? { sectionMode: true } : {});
   await safeEditReply(interaction, msg);
 }
 
@@ -1773,11 +1847,17 @@ const QUEST_TAB_META = {
 
 function formatRewardWeaponSummary(item) {
   if (!item?.weaponType) return "";
+  const formatMaceStun = (baseStun, dwarfHighHpBonus, dwarfStunnedBonus) => {
+    const parts = [`擊暈率 +${baseStun}%`];
+    if (dwarfHighHpBonus > 0) parts.push(`矮人高血再 +${dwarfHighHpBonus}%`);
+    if (dwarfStunnedBonus > 0) parts.push(`對暈眩目標 +${dwarfStunnedBonus}%`);
+    return parts.join("、");
+  };
   const weaponText = {
     sword_1h: "單手劍：攻擊倍率 ×4",
     sword_2h: "雙手劍：攻擊倍率 ×7",
-    mace_1h: "單手槌：攻擊倍率 ×3，擊暈率 +5%",
-    mace_2h: "雙手槌：攻擊倍率 ×4，擊暈率 +10%",
+    mace_1h: `單手槌：攻擊倍率 ×3，${formatMaceStun(20, 10, 5)}`,
+    mace_2h: `雙手槌：攻擊倍率 ×4，${formatMaceStun(30, 10, 15)}`,
     axe_1h: "單手斧：攻擊倍率 ×3，破防率 +15%，爆擊 +10%",
     axe_2h: "雙手斧：攻擊倍率 ×5，破防率 +15%，爆擊 +20%",
     dagger: "匕首：攻擊倍率 ×2，連擊率 +20%",
@@ -2460,6 +2540,7 @@ module.exports = {
   createPlayerPanelMessage,
   handleButton,
   handleEquipmentSelect,
+  handleBackpackTabSelect,
   handleWeeklyQuests,
   handleWeeklyQuestClaim,
   handleEnhanceEntry,

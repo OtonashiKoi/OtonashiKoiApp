@@ -1,5 +1,6 @@
 "use strict";
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } = require("discord.js");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, StringSelectMenuBuilder } = require("discord.js");
+const { ARENA_COUNT, getPkArenaBracketByIndex } = require("../shared/pkArenaConfig");
 
 // ── Button ID 常數 ───────────────────────────────────────────
 const PK_ARENA_IDS = {
@@ -15,9 +16,19 @@ const PK_ARENA_IDS = {
   refresh:  "pk:refresh",
 };
 
-const ARENA_COUNT = 3;
-const ARENA_LABELS = ["①", "②", "③"];
-const BET_AMOUNT = 100; // 每次下注固定金額
+const PK_JOIN_IDS = [
+  "pk:join:1",
+  "pk:join:2",
+  "pk:join:3",
+  "pk:join:4",
+  "pk:join:5",
+  "pk:join:6",
+  "pk:join:7",
+];
+
+const ARENA_LABELS = ["①", "②", "③", "④", "⑤", "⑥", "⑦"];
+const BET_AMOUNT = 500; // 每次下注固定金額
+const PK_BET_SELECT_ID = "pk:bet_select";
 
 // ── 狀態 Emoji ────────────────────────────────────────────────
 const ARENA_STATUS = {
@@ -37,18 +48,19 @@ function fmtCountdown(ms) {
 // ── 擂台狀態列 ───────────────────────────────────────────────
 function slotLine(slot, index) {
   const tag = ARENA_LABELS[index];
+  const bracket = getPkArenaBracketByIndex(index);
   if (!slot || (!slot.challenger && !slot.defender)) {
-    return `${ARENA_STATUS.empty} **擂台 ${tag}** ⸺ 空位，等待挑戰者`;
+    return `${ARENA_STATUS.empty} **${tag} ${bracket.label}** ⸺ 空位`;
   }
   if (slot.challenger && !slot.defender) {
-    return `${ARENA_STATUS.waiting} **擂台 ${tag}** ⸺ **${slot.challenger.name}** 正在等待對手…`;
+    return `${ARENA_STATUS.waiting} **${tag} ${bracket.label}** ⸺ **${slot.challenger.name}** 等對手`;
   }
   if (slot.state === "fighting") {
-    return `${ARENA_STATUS.fighting} **擂台 ${tag}** ⸺ **${slot.challenger.name}** ⚔️ **${slot.defender.name}** 戰鬥中！`;
+    return `${ARENA_STATUS.fighting} **${tag} ${bracket.label}** ⸺ **${slot.challenger.name}** ⚔️ **${slot.defender.name}**`;
   }
   // 下注倒數
-  const remain = slot.betDeadline ? fmtCountdown(slot.betDeadline - Date.now()) : "—";
-  return `${ARENA_STATUS.betting} **擂台 ${tag}** ⸺ **${slot.challenger.name}** ⚔️ **${slot.defender.name}**\n　　　　　　 ⏳ 下注倒數 ${remain}`;
+  const remain = slot.betDeadlineAt ? fmtCountdown(slot.betDeadlineAt - Date.now()) : "—";
+  return `${ARENA_STATUS.betting} **${tag} ${bracket.label}** ⸺ **${slot.challenger.name}** ⚔️ **${slot.defender.name}**\n　　　　　　 ⏳ ${remain}`;
 }
 
 // ── 下注摘要（某擂台） ───────────────────────────────────────
@@ -63,7 +75,7 @@ function betSummaryLine(slot, index) {
     .reduce((s, b) => s + b.amount, 0);
   const challName = slot.challenger?.name ?? "挑戰者";
   const defName   = slot.defender?.name ?? "應戰者";
-  return `擂台 ${tag}　${challName} ${challBet}🪙 ／ ${defName} ${defBet}🪙`;
+  return `${tag}　${challName} ${challBet}🪙／${defName} ${defBet}🪙`;
 }
 
 // ── 主面板 ───────────────────────────────────────────────────
@@ -79,8 +91,8 @@ function createPkArenaPanelMessage(arenaSlots = []) {
     .setColor(0xc0392b)
     .setDescription(
       [
-        "選擇空擂台發起挑戰，或點入有人的擂台應戰。",
-        "雙方就位後開放 **3 分鐘下注**，系統隨機決定先後攻，自動戰鬥 **15 回合**。",
+        "選空台挑戰，或進有人台應戰。",
+        `就位後開放 **1 分鐘下注**，每次 **${BET_AMOUNT} 🪙**，隨機先後攻，自動 **15 回合**。`,
         "",
         "━━━━━━━━━━━━━━━━━━━━━━",
         slotLines,
@@ -90,30 +102,30 @@ function createPkArenaPanelMessage(arenaSlots = []) {
 
   if (betLines.length > 0) {
     embed.addFields({
-      name: `💰 目前下注（每次 ${BET_AMOUNT} 🪙）`,
+      name: `💰 下注（每次 ${BET_AMOUNT} 🪙）`,
       value: betLines.join("\n"),
       inline: false,
     });
   }
 
-  embed.setFooter({ text: "勝者通吃下注池 · 平局退還 · 無對手不退入場費" });
+  embed.setFooter({ text: "勝者吃池 · 平局退 · 無對手不退場" });
 
   // ── 第一列：擂台按鈕 ──────────────────────────────────────
-  const joinRow = new ActionRowBuilder().addComponents(
-    ...slots.map((slot, i) => {
+  const joinButtons = slots.map((slot, i) => {
       const isFighting = slot?.state === "fighting";
       const isBetting  = slot?.state === "betting";
       const hasBoth    = !!(slot?.challenger && slot?.defender);
       const hasOne     = !!(slot?.challenger && !slot?.defender);
+      const bracket = getPkArenaBracketByIndex(i);
 
       return new ButtonBuilder()
-        .setCustomId(Object.values(PK_ARENA_IDS)[i]) // join:1 / join:2 / join:3
+        .setCustomId(PK_JOIN_IDS[i])
         .setLabel(
-          isFighting ? `⚙️ 擂台 ${i + 1} 戰鬥中`
-            : isBetting  ? `🔴 擂台 ${i + 1} 下注中`
-              : hasBoth    ? `🔴 擂台 ${i + 1} 準備中`
-                : hasOne     ? `🟡 擂台 ${i + 1} 應戰`
-                  :              `🟢 擂台 ${i + 1} 挑戰`
+          isFighting ? `⚙️ 擂台 ${i + 1} ${bracket.label}`
+            : isBetting  ? `🔴 擂台 ${i + 1} ${bracket.label}`
+              : hasBoth    ? `🔴 擂台 ${i + 1} ${bracket.label}`
+                : hasOne     ? `🟡 擂台 ${i + 1} ${bracket.label}`
+                  :              `🟢 擂台 ${i + 1} ${bracket.label}`
         )
         .setStyle(
           isFighting || isBetting || hasBoth ? ButtonStyle.Danger
@@ -121,33 +133,46 @@ function createPkArenaPanelMessage(arenaSlots = []) {
               :           ButtonStyle.Success
         )
         .setDisabled(!!(isFighting || isBetting || hasBoth));
-    })
-  );
+    });
 
-  // ── 第二列：下注按鈕（只在下注階段且擂台有人才顯示） ──────
+  const joinRows = [];
+  for (let i = 0; i < joinButtons.length; i += 5) {
+    joinRows.push(new ActionRowBuilder().addComponents(joinButtons.slice(i, i + 5)));
+  }
+
+  // ── 第二列：下注選單（只在下注階段且擂台有人才顯示） ──────
   const activeBettingSlots = slots
     .map((s, i) => ({ s, i }))
     .filter(({ s }) => s?.state === "betting");
 
-  const components = [joinRow];
+  const components = [...joinRows];
 
   if (activeBettingSlots.length > 0) {
-    // 每個正在下注的擂台產生一列按鈕（最多 3 擂台，各 2 個下注按鈕）
+    const options = [];
     for (const { s, i } of activeBettingSlots) {
       const challName = s.challenger?.name ?? `挑戰者`;
       const defName   = s.defender?.name ?? `應戰者`;
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`pk:bet:${i + 1}:challenger`)
-          .setLabel(`💰 押 ${challName} 贏 (${BET_AMOUNT}🪙)`)
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`pk:bet:${i + 1}:defender`)
-          .setLabel(`💰 押 ${defName} 贏 (${BET_AMOUNT}🪙)`)
-          .setStyle(ButtonStyle.Primary),
-      );
-      components.push(row);
+      const challId   = s.challenger?.discordId || "";
+      const defId     = s.defender?.discordId || "";
+      options.push({
+        label: `擂台 ${i + 1}｜押 ${challName} 贏`,
+        value: `pkbet:${i}:${challId}:${encodeURIComponent(challName)}:challenger`,
+        description: `下注 ${BET_AMOUNT}🪙`,
+      });
+      options.push({
+        label: `擂台 ${i + 1}｜押 ${defName} 贏`,
+        value: `pkbet:${i}:${defId}:${encodeURIComponent(defName)}:defender`,
+        description: `下注 ${BET_AMOUNT}🪙`,
+      });
     }
+    components.push(
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(PK_BET_SELECT_ID)
+          .setPlaceholder("💰 選擇要下注的擂台與對象")
+          .addOptions(options.slice(0, 25))
+      )
+    );
   }
 
   // 重新整理按鈕固定在最後一列（Discord 最多 5 列）
@@ -166,8 +191,9 @@ function createPkArenaPanelMessage(arenaSlots = []) {
 }
 
 // ── 戰報 Embed ────────────────────────────────────────────────
-function createPkBattleReportMessage(slot, result, betPayouts = []) {
+function createPkBattleReportMessage(slot, result, betPayouts = [], battleRewards = [], options = {}) {
   const { winner, roundLogs, finalHpA, finalHpB, hpPctA, hpPctB } = result;
+  const includeRoundLogs = options.includeRoundLogs !== false;
   const challName = slot.challenger.name;
   const defName   = slot.defender.name;
   const challMaxHp = slot.challenger.stats.maxHp;
@@ -209,17 +235,27 @@ function createPkBattleReportMessage(slot, result, betPayouts = []) {
       ].join("\n")
     );
 
-  // 戰鬥紀錄（最多顯示後 10 回合，避免超長）
-  const logChunks = roundLogs.slice(-10).join("\n\n");
-  if (logChunks.length > 0) {
-    const trimmed = logChunks.length > 3800 ? logChunks.slice(-3800) : logChunks;
-    embed.addFields({ name: "📜 戰鬥記錄（最後 10 回合）", value: trimmed });
+  // 戰鬥紀錄（只在需要時附上）
+  if (includeRoundLogs) {
+    const logChunks = roundLogs.slice(-10).join("\n\n");
+    if (logChunks.length > 0) {
+      const trimmed = logChunks.length > 3800 ? logChunks.slice(-3800) : logChunks;
+      embed.addFields({ name: "📜 戰鬥記錄（最後 10 回合）", value: trimmed });
+    }
   }
 
   if (betPayouts.length > 0) {
     embed.addFields({
       name: "💰 下注結算",
       value: betPayouts.join("\n"),
+      inline: false,
+    });
+  }
+
+  if (battleRewards.length > 0) {
+    embed.addFields({
+      name: "🎁 戰鬥獎勵",
+      value: battleRewards.join("\n"),
       inline: false,
     });
   }

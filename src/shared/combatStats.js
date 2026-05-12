@@ -1,5 +1,6 @@
 "use strict";
 const { collectEquipmentEffects, applyEffectsToStats } = require("./effectEngine");
+const { getEquipmentTierSetBonuses, TIER_SET_SLOTS } = require("./equipmentTierSetBonuses");
 
 // ─────────────────────────────────────────────
 // 武器設定表
@@ -17,9 +18,9 @@ const { collectEquipmentEffects, applyEffectsToStats } = require("./effectEngine
 // ─────────────────────────────────────────────
 const WEAPON_CONFIG = {
   sword_1h: { mult: 4 },
-  sword_2h: { mult: 7, isTwoHanded: true },
-  mace_1h:  { mult: 3, stunChance: 5 },
-  mace_2h:  { mult: 4, isTwoHanded: true, stunChance: 10 },
+  sword_2h: { mult: 5, isTwoHanded: true },
+  mace_1h:  { mult: 3, stunChance: 20 },
+  mace_2h:  { mult: 4, isTwoHanded: true, stunChance: 30 },
   axe_1h:   { mult: 3, armorBreak: 15, critBonus: 10 },
   axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15, critBonus: 20 },
   dagger:   { mult: 2, comboBonus: 20 },
@@ -30,18 +31,7 @@ const WEAPON_CONFIG = {
 
 // 副手武器種類（可雙持）
 const OFFHAND_WEAPON_TYPES = new Set(["offhand_sword", "offhand_dagger", "offhand_mace"]);
-const EQUIPPED_TIER_SLOTS = [
-  "weapon",
-  "shield",
-  "head_top",
-  "head_mid",
-  "head_low",
-  "armor",
-  "garment",
-  "shoes",
-  "accessory_l",
-  "accessory_r"
-];
+const EQUIPPED_TIER_SLOTS = TIER_SET_SLOTS;
 
 // 雙持時主手不同武器的副手追擊機率
 // staff_1h：副手觸發但傷害為 0，僅用於觸發法師 proc 效果（燒傷/麻痺/冰凍）
@@ -58,6 +48,8 @@ const DUAL_COUNTER_CHANCE = {
  * monsterZoneHandlers 與 playerAppRoutes 共用此函式。
  */
 function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = []) {
+  const tierSetBonuses = getEquipmentTierSetBonuses(equipped);
+
   // 裝備加成
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
   for (const item of Object.values(equipped)) {
@@ -66,11 +58,11 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
       if (k in bonus) bonus[k] += (v || 0);
     }
   }
-  const S = str + bonus.str;
+  const S = str + bonus.str + tierSetBonuses.stats.str;
   const A = agi + bonus.agi;
   const V = vit + bonus.vit;
-  const I = INT + bonus.int;
-  const D = dex + bonus.dex;
+  const I = INT + bonus.int + tierSetBonuses.stats.int;
+  const D = dex + bonus.dex + tierSetBonuses.stats.dex;
   const L = luk + bonus.luk;
 
   const weapon  = equipped.weapon || null;
@@ -163,22 +155,22 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   // 矮人戰士：高血量擊暈加成（>85%，需拿槌子）
   let dwarfWarriorHighHpStunBoost = 0;
   if (hasDwarfWarriorBadge && wt && wt.startsWith("mace")) {
-    dwarfWarriorHighHpStunBoost = 5;
+    dwarfWarriorHighHpStunBoost = 10;
   }
 
   // 矮人戰士：對暈眩目標增傷
   let dwarfWarriorBonusVsStunnedPct = 0;
   if (hasDwarfWarriorBadge && wt === "mace_1h") {
-    dwarfWarriorBonusVsStunnedPct = 5;
-  } else if (hasDwarfWarriorBadge && wt === "mace_2h") {
     dwarfWarriorBonusVsStunnedPct = 15;
+  } else if (hasDwarfWarriorBadge && wt === "mace_2h") {
+    dwarfWarriorBonusVsStunnedPct = 25;
   }
 
   // 盜賊：連擊速度倍增
   let rogueComboSpeedBoost = 0;
   if (hasRogueBadge && wt === "dagger") {
-    // 匕首時連擊倍率 +10%
-    rogueComboSpeedBoost = 0.1;
+    // 匕首時連擊倍率 +30%
+    rogueComboSpeedBoost = 0.3;
   }
 
   // 法師：法杖傷害倍率
@@ -204,12 +196,17 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     atk,
     dmgMin,   // 傷害浮動下限（顯示用）
     dmgMax,   // 傷害浮動上限
-    def:      Math.min(75, V * 2),         // 百分比減傷 0~75%
-    dodge:    Math.min(50, A * 0.5) + (cfg.dodgeBonus ?? 0), // 弓+30%，上限不強制（弓本來就特殊）
-    hit:      Math.min(100, 70 + D),       // 基礎70，DEX每點+1
-    crit:     Math.min(100, L * 0.3 + (cfg.critBonus ?? 0)), // LUK → 爆擊%，斧+10/20%
+    def:      Math.min(75, vit * 2),       // 百分比減傷 0~75%（僅基礎 VIT，裝備 VIT 不計入防禦）
+    dodge:    Math.min(50, A * 0.5) + (cfg.dodgeBonus ?? 0) + tierSetBonuses.dodgePct, // 弓+30%，上限不強制（弓本來就特殊）
+    hit:      Math.min(100, 70 + D) + tierSetBonuses.hitPct,       // 基礎70，DEX每點+1
+    crit:     Math.min(100, L * 0.3 + (cfg.critBonus ?? 0)) + tierSetBonuses.critRatePct, // LUK → 爆擊%，斧+10/20%
     combo:    Math.min(80, 3 + A * 0.5 + (cfg.comboBonus ?? 0)), // AGI×0.5，匕首+20%
     comboDamageMultiplier: 1,                    // 連擊傷害倍率
+    tierSetBonuses,
+    tierDamageMultiplier: 1 + tierSetBonuses.damagePct / 100,
+    tierFinalDamageMultiplier: 1 + tierSetBonuses.finalDamagePct / 100,
+    tierBossDamageMultiplier: 1 + tierSetBonuses.bossDamagePct / 100,
+    tierCritDamageMultiplier: 1 + tierSetBonuses.critDamagePct / 100,
     executeChance: 0,                            // 斬殺觸發率
     executeThresholdPct: 0,                      // 斬殺門檻血量%
 

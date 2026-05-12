@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
-const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handleWeeklyQuests, handleEnhanceConfirm, handleEnhanceSelect, handleModal: handlePlayerPanelModal } = require("./playerPanel");
+const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handleBackpackTabSelect, handleWeeklyQuests, handleEnhanceConfirm, handleEnhanceSelect, handleModal: handlePlayerPanelModal } = require("./playerPanel");
 const { WEEKLY_QUEST_OPEN_ID, DAILY_QUEST_OPEN_ID } = require("./weeklyQuestView");
 const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
 const { serviceContext, getBotClient } = require("./runtimeContext");
@@ -15,8 +15,8 @@ const {
 const { handleCoinShopButton, isCoinShopButton, handleQuantityModalSubmit, isCoinShopModal } = require("./handlers/coinShopHandlers");
 const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal, isNpcDialogButton, handleNpcDialog } = require("./handlers/monsterZoneHandlers");
 const { handleIdleZoneButton, isIdleZoneButton, handleIdleZoneSelect, isIdleZoneSelect } = require("./handlers/idleZoneHandlers");
-const { isAuctionButton, handleAuctionButton, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
-const { isPkArenaButton, handlePkArenaButton, publishPkArenaPanel } = require("./handlers/pkArenaHandlers");
+const { isAuctionButton, handleAuctionButton, handleAuctionFilterSelect, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
+const { isPkArenaButton, isPkArenaSelectMenu, handlePkArenaButton, handlePkArenaSelectMenu, publishPkArenaPanel } = require("./handlers/pkArenaHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -204,12 +204,24 @@ async function handleButton(interaction) {
 }
 
 async function handleSelectMenu(interaction) {
+  if (isPkArenaSelectMenu(interaction.customId)) {
+    await handlePkArenaSelectMenu(interaction);
+    return;
+  }
   if (isIdleZoneSelect(interaction.customId)) {
     await handleIdleZoneSelect(interaction);
     return;
   }
   if (interaction.customId.startsWith("eq_pick:")) {
     await handleEquipmentSelect(interaction);
+    return;
+  }
+  if (interaction.customId.startsWith("backpack_tab_select:")) {
+    await handleBackpackTabSelect(interaction);
+    return;
+  }
+  if (interaction.customId.startsWith("auction:filter_select:")) {
+    await handleAuctionFilterSelect(interaction);
     return;
   }
   if (interaction.customId === "enhance_pick_target") {

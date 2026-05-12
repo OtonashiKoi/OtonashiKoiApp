@@ -1,7 +1,7 @@
 "use strict";
 
 const {
-  MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder,
   ModalBuilder, TextInputBuilder, TextInputStyle
 } = require("discord.js");
 
@@ -38,6 +38,27 @@ const PFX = {
 
 function isAuctionButton(customId) {
   return customId.startsWith("auction:");
+}
+
+function buildAuctionFilterRow(filter = {}) {
+  const activeValue = filter.itemType || filter.currency || "all";
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`auction:filter_select:${filter.sort || "_"}`)
+    .setPlaceholder("選擇拍賣篩選")
+    .addOptions(
+      [
+        { label: "全部", value: "all" },
+        { label: "⚔️ 裝備", value: "equipment" },
+        { label: "🎴 卡片", value: "card" },
+        { label: "💎 寶石", value: "gem" },
+        { label: "💰 金幣", value: "gold" },
+        { label: "💎 鑽石", value: "diamond" },
+      ].map((opt) => ({
+        ...opt,
+        default: opt.value === activeValue,
+      }))
+    );
+  return new ActionRowBuilder().addComponents(menu);
 }
 
 // ─── 金額格式 ─────────────────────────────────────────
@@ -81,7 +102,7 @@ function fmtItem(item) {
 function isSellableItem(item) {
   if (!item) return false;
   if (FORBIDDEN_ITEM_TYPES.has(item.itemType) || FORBIDDEN_EQUIP_SLOTS.has(item.equipSlot)) return false;
-  return item.itemType === "equipment" || ENHANCE_GEM_IDS.has(item.itemId);
+  return item.itemType === "equipment" || item.itemType === "monster_card" || ENHANCE_GEM_IDS.has(item.itemId);
 }
 
 // ─── 拍賣列表面板 ────────────────────────────────────
@@ -91,6 +112,7 @@ const SELL_MAIN_TABS = [
   { tab: "all", label: "📦 全部" },
   { tab: "weapon", label: "⚔️ 武器" },
   { tab: "armor", label: "🛡️ 防裝" },
+  { tab: "card", label: "🎴 卡片" },
   { tab: "gem", label: "💎 強化石" },
 ];
 const SELL_WEAPON_SUBTABS = [
@@ -151,6 +173,9 @@ function filterSellByTab(inventory, tab = "all", subTab = "all") {
   if (tab === "armor") {
     return sellable.filter((entry) => SELL_ARMOR_SLOTS.has(entry.equipSlot) && matchSellArmorSubTab(entry, subTab));
   }
+  if (tab === "card") {
+    return sellable.filter((entry) => entry.itemType === "monster_card" || Boolean(entry.monsterCardSkill));
+  }
   if (tab === "gem") {
     return sellable.filter((entry) => ENHANCE_GEM_IDS.has(entry.itemId));
   }
@@ -203,14 +228,8 @@ async function buildAuctionPanel(filter = {}) {
   const c = filter.currency || "_";
   const s = filter.sort || "_";
 
-  // 篩選按鈕列
-  const filterRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`${PFX.filter}all`).setLabel("全部").setStyle(filter.all ? ButtonStyle.Primary : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`${PFX.filter}equipment`).setLabel("⚔️ 裝備").setStyle(filter.itemType === "equipment" ? ButtonStyle.Primary : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`${PFX.filter}gem`).setLabel("💎 寶石").setStyle(filter.itemType === "gem" ? ButtonStyle.Primary : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`${PFX.filter}gold`).setLabel("💰 金幣").setStyle(filter.currency === "gold" ? ButtonStyle.Primary : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`${PFX.filter}diamond`).setLabel("💎 鑽石").setStyle(filter.currency === "diamond" ? ButtonStyle.Primary : ButtonStyle.Secondary),
-  );
+  // 篩選選單
+  const filterRow = buildAuctionFilterRow(filter);
 
   const sortRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${PFX.filter}price_asc`).setLabel("價格↑").setStyle(filter.sort === "price_asc" ? ButtonStyle.Primary : ButtonStyle.Secondary),
@@ -282,6 +301,24 @@ async function buildAuctionPanel(filter = {}) {
   };
 }
 
+async function handleAuctionFilterSelect(interaction) {
+  await interaction.deferUpdate();
+  const raw = String(interaction.customId || "");
+  const parts = raw.split(":");
+  const sort = parts.length >= 3 ? (parts[2] || "_") : "_";
+  const selected = String(interaction.values?.[0] || "all");
+  const filter = { sort: sort === "_" ? undefined : sort };
+
+  if (selected === "equipment") filter.itemType = "equipment";
+  else if (selected === "card") filter.itemType = "card";
+  else if (selected === "gem") filter.itemType = "gem";
+  else if (selected === "gold") filter.currency = "gold";
+  else if (selected === "diamond") filter.currency = "diamond";
+
+  const panel = await buildAuctionPanel(filter);
+  await interaction.editReply(panel);
+}
+
 async function buildSellPanel(interaction, opts = {}) {
   const sc = getSC();
   const { tab = "all", subTab = "all", page = 0 } = opts;
@@ -303,6 +340,7 @@ async function buildSellPanel(interaction, opts = {}) {
     const emptyLabel =
       tab === "weapon" ? "武器" :
       tab === "armor" ? "防裝" :
+      tab === "card" ? "卡片" :
       tab === "gem" ? "強化石" : "可上架";
     return {
       content: `❌ 背包中沒有${emptyLabel}可上架（職業徽章/稱號不可上架）。`,
@@ -357,6 +395,7 @@ async function buildSellPanel(interaction, opts = {}) {
   const tabLabel =
     tab === "weapon" ? `武器${subTab === "all" ? "" : ` / ${SELL_WEAPON_SUBTABS.find((d) => d.subTab === subTab)?.label || subTab}`}` :
     tab === "armor" ? `防裝${subTab === "all" ? "" : ` / ${SELL_ARMOR_SUBTABS.find((d) => d.subTab === subTab)?.label || subTab}`}` :
+    tab === "card" ? "卡片" :
     tab === "gem" ? "強化石" : "全部";
   const lines = pageItems.map((item, idx) => `${safePage * SELL_PAGE_SIZE + idx + 1}. **${buildSellItemLabel(item)}**`);
 
@@ -383,6 +422,7 @@ async function handleAuctionButton(interaction) {
     const key = id.slice(PFX.filter.length);
     const filter = {};
     if (key === "equipment") filter.itemType = "equipment";
+    else if (key === "card") filter.itemType = "card";
     else if (key === "gem") filter.itemType = "gem";
     else if (key === "gold") filter.currency = "gold";
     else if (key === "diamond") filter.currency = "diamond";
@@ -904,6 +944,7 @@ async function publishAuctionPanel(interaction) {
 module.exports = {
   isAuctionButton,
   handleAuctionButton,
+  handleAuctionFilterSelect,
   handleAuctionModal,
   handleAuctionSellConfirm,
   publishAuctionPanel,

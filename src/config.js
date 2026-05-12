@@ -25,6 +25,9 @@ module.exports = {
     playerRoleIds: parseCsv(process.env.PLAYER_ROLE_IDS), // 玩家角色 ID 陣列
     playerUserIds: parseCsv(process.env.PLAYER_USER_IDS), // 玩家用戶 ID 陣列
     personalRoomChannelId: process.env.PERSONAL_ROOM_CHANNEL_ID || "", // 個人房間頻道 ID
+    pkArenaStartNoticeChannelId: process.env.PK_ARENA_START_NOTICE_CHANNEL_ID || "1498608950671839263", // PK 開戰通知頻道 ID
+    pkArenaReportChannelId: process.env.PK_ARENA_REPORT_CHANNEL_ID || "1486423293044068392", // PK 戰報頻道 ID
+    pkArenaForumChannelId: process.env.PK_ARENA_FORUM_CHANNEL_ID || "1501890000000913479", // PK 論壇戰報頻道 ID
     enhanceSuccessAnnounceChannelId: process.env.ENHANCE_SUCCESS_ANNOUNCE_CHANNEL_ID || "1450062298076151952", // 強化成功公告頻道 ID
     enhanceFailureAnnounceChannelId: process.env.ENHANCE_FAILURE_ANNOUNCE_CHANNEL_ID || "1450062298076151952", // 強化失敗公告頻道 ID
     welcomeAuditEnabled: process.env.DISABLE_WELCOME_AUDIT === "1" ? false : true,

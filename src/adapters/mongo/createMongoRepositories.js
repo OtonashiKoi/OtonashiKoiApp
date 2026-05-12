@@ -451,6 +451,20 @@ function createMongoRepositories() {
         return state;
       }
     },
+    pkArenaRepository: {
+      async getState() {
+        const row = await (await collection("pkArenaState")).findOne({ _id: "default" });
+        return row?.value || null;
+      },
+      async saveState(state) {
+        await (await collection("pkArenaState")).updateOne(
+          { _id: "default" },
+          { $set: { value: state, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+        return state;
+      }
+    },
     weeklyQuestRepository: {
       async listQuests() {
         return (await collection("weeklyQuests")).find({}).sort({ createdAt: 1 }).toArray();

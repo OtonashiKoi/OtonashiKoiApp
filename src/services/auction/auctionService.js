@@ -136,8 +136,8 @@ class AuctionService {
     if (FORBIDDEN_ITEM_TYPES.has(item.itemType) || FORBIDDEN_EQUIP_SLOTS.has(item.equipSlot)) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章與稱號不可上架", 400);
     }
-    if (item.itemType !== "equipment" && !isGem) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有裝備和強化寶石可以上架", 400);
+    if (item.itemType !== "equipment" && item.itemType !== "monster_card" && !isGem) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有裝備、卡片和強化寶石可以上架", 400);
     }
 
     const safeQuantity = Number.isInteger(quantity) ? quantity : parseInt(quantity, 10);
