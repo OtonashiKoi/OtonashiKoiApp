@@ -988,6 +988,20 @@ function formatBuffMessage(buffEffect) {
   return parts.join('　');
 }
 
+// 將怪物自帶的 monsterCardSkill 包裝成 combatLoop 需要的 monsterEquipped 格式
+function buildMonsterEquipped(monster) {
+  const base = monster?.equipment || {};
+  if (!monster?.monsterCardSkill) return base;
+  return {
+    ...base,
+    special_1: {
+      ...(base.special_1 || {}),
+      monsterCardSkill: monster.monsterCardSkill,
+      itemName: monster.name,
+    },
+  };
+}
+
 function collectRewardEffectRefs(progress) {
   const refs = [];
   const equipped = progress?.equipment || {};
@@ -2029,7 +2043,7 @@ async function handleEnterBattle(interaction) {
           equipped: currentEquipped,
           inventory: currentProg?.inventory || [],
           partyEffects,
-          monsterEquipped: battleMonster?.equipment || {},
+          monsterEquipped: buildMonsterEquipped(battleMonster),
           monsterIsBoss: Boolean(battleMonster?.isBoss),
           worldBossPhase: session.worldBossPhase || null
         });
@@ -2407,7 +2421,7 @@ async function handleStartFight(interaction) {
         equipped: currentEquipped,
         inventory: currentProg?.inventory || [],
         partyEffects,
-        monsterEquipped: monster?.equipment || {},
+        monsterEquipped: buildMonsterEquipped(monster),
         monsterIsBoss: Boolean(monster?.isBoss),
         worldBossPhase: session.worldBossPhase || null
       });

@@ -209,6 +209,19 @@ function buildTowerPartyEffects(members) {
   return partyEffects;
 }
 
+function buildMonsterEquipped(monster) {
+  const base = monster?.equipment || {};
+  if (!monster?.monsterCardSkill) return base;
+  return {
+    ...base,
+    special_1: {
+      ...(base.special_1 || {}),
+      monsterCardSkill: monster.monsterCardSkill,
+      itemName: monster.name,
+    },
+  };
+}
+
 // ── 單層戰鬥結算（全職業完整邏輯） ──────────────────────────
 // 存活隊員依序各自對同一隻怪跑 runCombatLoop，共享怪物殘血
 // 每人打完把殘血帶給下一個人；全員陣亡或怪物死亡即結束
@@ -259,7 +272,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       inventory:         m.inventory  || [],
       playerActiveEffects: Array.isArray(m.activeEffects) ? [...m.activeEffects] : [],
       partyEffects,
-      monsterEquipped:   monster.equipment || {},
+      monsterEquipped:   buildMonsterEquipped(monster),
       monsterIsBoss:     Boolean(monster.isBoss),
     };
 
