@@ -12,7 +12,7 @@ const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { calcPlayerStats, isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { getEquipmentTierSetBonuses } = require("../../shared/equipmentTierSetBonuses");
 const { isEffectConditionMet, collectEquipmentEffects, mergeEquippedFromLibrary, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
-const { isPkBattleActive, replaceMonsterBattlePresence } = require("../../shared/battlePresence");
+const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = require("../../shared/battlePresence");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
@@ -1009,12 +1009,16 @@ function collectRewardEffectRefs(progress) {
   ));
 }
 
-function buildRewardModifiers(progress) {
-  const refs = collectRewardEffectRefs(progress);
+function buildRewardModifiers(progress, partyRefs = []) {
+  const refs = [
+    ...collectRewardEffectRefs(progress),
+    ...(Array.isArray(partyRefs) ? partyRefs : [])
+  ];
   const tierSetBonuses = getEquipmentTierSetBonuses(progress?.equipment || {});
+  const luk = Number(progress?.attributes?.luk ?? 0);
   let expPct = 0;
   let goldPct = 0;
-  let dropPct = 0;
+  let dropPct = luk * 0.1;  // LUK 每點 +0.1% 掉落率
   let rareDropPct = 0;
 
   for (const effect of refs) {
@@ -1036,6 +1040,12 @@ function buildRewardModifiers(progress) {
         expPct += value;
         goldPct += value;
         dropPct += value;
+        break;
+      case "party_exp_gain_up":
+        expPct += value;
+        break;
+      case "party_gold_gain_up":
+        goldPct += value;
         break;
       default:
         break;
@@ -1587,6 +1597,12 @@ async function safeBattleResultReply(interaction, payload, fallbackContent) {
 async function handleEnterBattle(interaction) {
   const discordId = interaction.user.id;
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (isTowerBattleActive(discordId)) {
+    await interaction.editReply({
+      content: "❌ 你目前正在組隊攻塔，不能同時挑戰怪物。請先解散隊伍。"
+    }).catch(() => {});
+    return;
+  }
   if (isPkBattleActive(discordId)) {
     await interaction.editReply({
       content: "❌ 你目前正在進行 PK，不能同時挑戰怪物。"
@@ -1785,7 +1801,7 @@ async function handleEnterBattle(interaction) {
       })
     };
     participantCache.seed(discordId, currentSnapshot);
-    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || []);
+    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating });
 
     // 建立 session（state: waiting）
     const session = {
@@ -2663,17 +2679,36 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
     if (prog) progressCache[pid] = prog;
   }));
-  const rewardModsByPid = {};
   await Promise.all(participants.map(async (pid) => {
     const prog = progressCache[pid];
     if (prog) {
-      // 永遠從 DB 讀取最新 effects，確保獎勵加成使用最新設計值
+      // 永遠從 DB 讀取最新 effects，確保光環與獎勵加成使用最新設計值
       prog.equipment = await mergeEquippedFromLibrary(prog.equipment || {}, sc.itemRepository);
     }
-    rewardModsByPid[pid] = buildRewardModifiers(prog);
+  }));
+  const rewardModsByPid = {};
+  const partyRewardEffects = [];
+  for (const pid of participants) {
+    const prog = progressCache[pid];
+    if (!prog) continue;
+    for (const effect of collectRewardEffectRefs(prog)) {
+      if (effect?.target === "party") partyRewardEffects.push({ ...effect, sourcePlayerId: pid });
+    }
+  }
+  const activeAura = state?.activeHealerAura;
+  if (activeAura?.effects && !participants.includes(activeAura.discordId)) {
+    for (const effect of activeAura.effects) {
+      if (effect?.target === "party") partyRewardEffects.push({ ...effect, sourcePlayerId: activeAura.discordId });
+    }
+  }
+  await Promise.all(participants.map(async (pid) => {
+    const prog = progressCache[pid];
+    rewardModsByPid[pid] = buildRewardModifiers(prog, partyRewardEffects);
   }));
 
-  // ── 治療師徽章：治療師本人結算時額外 +10% 金幣與 EXP ──
+  // ── 光環職業（治療師/軍師/詩人/結界師）本人結算時額外 +10% 金幣、EXP、掉落率 +5% ──
+  const AURA_JOB_IDS = ["healer", "tactician", "bard", "barrier_mage"];
+  const AURA_JOB_NAMES = ["治療", "軍師", "詩人", "結界"];
   const healerBonusPids = new Set();
   for (const pid of participants) {
     const prog = progressCache[pid];
@@ -2682,14 +2717,17 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     if (!jobEq) continue;
     const jobId = String(jobEq.itemId || jobEq.id || "").toLowerCase();
     const jobName = String(jobEq.itemName || jobEq.name || "").toLowerCase();
-    if (jobId.includes("healer") || jobName.includes("治療")) {
+    const isAuraJob = AURA_JOB_IDS.some(k => jobId.includes(k)) || AURA_JOB_NAMES.some(k => jobName.includes(k));
+    if (isAuraJob) {
       healerBonusPids.add(pid);
       if (perPidRewards[pid]) perPidRewards[pid].isHealer = true;
       const mod = rewardModsByPid[pid];
       mod.goldPct    = (mod.goldPct    || 0) + 10;
       mod.expPct     = (mod.expPct     || 0) + 10;
+      mod.dropPct    = (mod.dropPct    || 0) + 5;
       mod.goldMultiplier = toMultiplier(mod.goldPct);
       mod.expMultiplier  = toMultiplier(mod.expPct);
+      mod.dropMultiplier = toMultiplier(mod.dropPct);
     }
   }
 
@@ -2843,8 +2881,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         if (item) {
           const tier = String(item.tier || "").toUpperCase();
           const isRare = RARE_TIERS.has(tier);
-          const chanceMult = luckyMod.dropMultiplier * (isRare ? luckyMod.rareDropMultiplier : 1);
-          const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
+          const dropAdd = (luckyMod.dropPct ?? 0) + (isRare ? (luckyMod.rareDropPct ?? 0) : 0);
+          const finalChance = Math.min(100, Math.max(0, Number(drop.chance) + dropAdd));
           if (Math.random() * 100 < finalChance) {
             const equipStats = item.equipStats ? { ...item.equipStats } : {};
             droppedItems.push(item.name);
@@ -2941,8 +2979,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         if (item) {
           const tier = String(item.tier || "").toUpperCase();
           const isRare = RARE_TIERS.has(tier);
-          const chanceMult = bonusMod.dropMultiplier * (isRare ? bonusMod.rareDropMultiplier : 1);
-          const finalChance = Math.min(100, Math.max(0, Number(drop.chance) * chanceMult));
+          const dropAdd = (bonusMod.dropPct ?? 0) + (isRare ? (bonusMod.rareDropPct ?? 0) : 0);
+          const finalChance = Math.min(100, Math.max(0, Number(drop.chance) + dropAdd));
           if (Math.random() * 100 < finalChance) {
             {
               const equipStats = item.equipStats ? { ...item.equipStats } : {};
@@ -3042,8 +3080,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
       for (const pid of participants) {
         const triggeredGemDrops = [];
+        const pidDropPct = rewardModsByPid[pid]?.dropPct ?? 0;
         for (const cfg of participationGemItems) {
-          if (Math.random() >= cfg.participationRate) continue;
+          const effectiveRate = Math.min(1, cfg.participationRate + pidDropPct / 100);
+          if (Math.random() >= effectiveRate) continue;
           const dropCount = Math.random() < cfg.doubleDropRate ? 2 : 1;
           for (let i = 0; i < dropCount; i++) {
             triggeredGemDrops.push(cfg.item);

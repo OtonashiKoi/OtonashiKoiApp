@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
-const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handleBackpackTabSelect, handleWeeklyQuests, handleEnhanceConfirm, handleEnhanceSelect, handleModal: handlePlayerPanelModal } = require("./playerPanel");
+const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handlePresetSwitchSelect, handleBackpackTabSelect, handleWeeklyQuests, handleEnhanceConfirm, handleEnhanceSelect, handleModal: handlePlayerPanelModal } = require("./playerPanel");
 const { WEEKLY_QUEST_OPEN_ID, DAILY_QUEST_OPEN_ID } = require("./weeklyQuestView");
 const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
 const { serviceContext, getBotClient } = require("./runtimeContext");
@@ -17,6 +17,7 @@ const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, hand
 const { handleIdleZoneButton, isIdleZoneButton, handleIdleZoneSelect, isIdleZoneSelect } = require("./handlers/idleZoneHandlers");
 const { isAuctionButton, handleAuctionButton, handleAuctionFilterSelect, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
 const { isPkArenaButton, isPkArenaSelectMenu, handlePkArenaButton, handlePkArenaSelectMenu, publishPkArenaPanel } = require("./handlers/pkArenaHandlers");
+const { isTowerButton, handleTowerButton, publishTowerHallPanel } = require("./handlers/towerHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -73,6 +74,9 @@ const definitions = [
   new SlashCommandBuilder()
     .setName("發布pk擂台")
     .setDescription("管理員在目前聊天室發布 PK 擂台面板（預覽）"),
+  new SlashCommandBuilder()
+    .setName("發布爬塔面板")
+    .setDescription("管理員在面板大廳頻道發布爬塔常駐按鈕面板"),
 ].map((d) => d.toJSON());
 
 async function isAdmin(interaction) {
@@ -152,9 +156,22 @@ async function handleCommand(interaction) {
     await publishPkArenaPanel(interaction);
     return;
   }
+
+  if (interaction.commandName === "發布爬塔面板") {
+    if (!await isAdmin(interaction)) {
+      await interaction.reply({ content: "❌ 僅限管理員使用。", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    await publishTowerHallPanel(interaction);
+    return;
+  }
 }
 
 async function handleButton(interaction) {
+  if (isTowerButton(interaction.customId)) {
+    await handleTowerButton(interaction);
+    return;
+  }
   if (isPkArenaButton(interaction.customId)) {
     await handlePkArenaButton(interaction);
     return;
@@ -210,6 +227,10 @@ async function handleSelectMenu(interaction) {
   }
   if (isIdleZoneSelect(interaction.customId)) {
     await handleIdleZoneSelect(interaction);
+    return;
+  }
+  if (interaction.customId === "eq_preset_switch_select") {
+    await handlePresetSwitchSelect(interaction);
     return;
   }
   if (interaction.customId.startsWith("eq_pick:")) {

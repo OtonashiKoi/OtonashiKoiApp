@@ -773,7 +773,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const hasBossAgiFirstStrike = worldBossHasAgiSuppress && bossAgiDiff > 2;   // 第1回合怪物壓制，玩家無法行動
   const hasBossAgiTurnSuppress = worldBossHasAgiSuppress && bossAgiDiff > 5;  // 玩家奇數回合被壓制
 
-  let mHp = mHpInit;
+  // options.startMonsterHp：攻塔多人輪流時，從上一位打完的殘血繼續
+  let mHp = (options.startMonsterHp != null && options.startMonsterHp < mHpInit)
+    ? Math.max(0, options.startMonsterHp)
+    : mHpInit;
   let pHp = pStats.maxHp;
   let outcome = null;
   let totalDamage = 0;
@@ -1110,16 +1113,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 套用來自隊伍（party）的被動 aura，例如治療師提供的每回合回復 ──
-    let roundDmgMultiplier = 1; // 每回合重置，累積本回合所有 party_damage_up
+    let roundDmgMultiplier = 1; // 每回合重置，累積本回合所有 party damage aura
+    let roundBossDmgMultiplier = 1;
+    let roundMonsterDefDownPct = 0;
+    let roundPartyDamageReductionPct = 0;
+    let roundPartyCritDamageReductionPct = 0;
     try {
       const partyEffects = Array.isArray(options.partyEffects) ? options.partyEffects : [];
-      const healerAuraDetails = new Map(); // 依 sourceName 分組光環效果
+      const auraDetails = new Map(); // 依 sourceName 分組光環效果
 
       for (const pe of partyEffects) {
         if (!pe || !pe.key) continue;
         const sourceName = pe.sourceName || "未知";
-        if (!healerAuraDetails.has(sourceName)) {
-          healerAuraDetails.set(sourceName, { heal: 0, dmgBoost: 0 });
+        if (!auraDetails.has(sourceName)) {
+          auraDetails.set(sourceName, { heal: 0, dmgBoost: 0, bossDmgBoost: 0, defDown: 0, damageReduction: 0, critReduction: 0 });
         }
 
         // 支援治療 over-time 的簡單實作：key 可為 'heal_over_time' 或自訂 'party_heal'
@@ -1130,7 +1137,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const heal = mode === 'pct' ? Math.max(0, Math.round((pStats.maxHp || 0) * (val / 100))) : Math.max(0, Math.round(val));
           if (heal > 0) {
             pHp = Math.min(pStats.maxHp, pHp + heal);
-            const detail = healerAuraDetails.get(sourceName);
+            const detail = auraDetails.get(sourceName);
             detail.heal = heal;
           }
         }
@@ -1139,20 +1146,56 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const val = Number(pe.params?.value ?? pe.value ?? 0);
           if (Number.isFinite(val) && val !== 0) {
             roundDmgMultiplier *= (1 + val / 100);
-            const detail = healerAuraDetails.get(sourceName);
+            const detail = auraDetails.get(sourceName);
             detail.dmgBoost = val;
+          }
+        }
+        if (pe.key === 'party_boss_damage_up') {
+          const val = Number(pe.params?.value ?? pe.value ?? 0);
+          if (Number.isFinite(val) && val !== 0) {
+            if (options.monsterIsBoss) roundBossDmgMultiplier *= (1 + val / 100);
+            const detail = auraDetails.get(sourceName);
+            detail.bossDmgBoost = val;
+          }
+        }
+        if (pe.key === 'party_monster_def_down') {
+          const val = Math.abs(Number(pe.params?.value ?? pe.value ?? 0));
+          if (Number.isFinite(val) && val !== 0) {
+            roundMonsterDefDownPct += val;
+            const detail = auraDetails.get(sourceName);
+            detail.defDown = val;
+          }
+        }
+        if (pe.key === 'party_damage_reduction') {
+          const val = Math.abs(Number(pe.params?.value ?? pe.value ?? 0));
+          if (Number.isFinite(val) && val !== 0) {
+            roundPartyDamageReductionPct += val;
+            const detail = auraDetails.get(sourceName);
+            detail.damageReduction = val;
+          }
+        }
+        if (pe.key === 'party_crit_damage_reduction') {
+          const val = Math.abs(Number(pe.params?.value ?? pe.value ?? 0));
+          if (Number.isFinite(val) && val !== 0) {
+            roundPartyCritDamageReductionPct += val;
+            const detail = auraDetails.get(sourceName);
+            detail.critReduction = val;
           }
         }
       }
 
       // 輸出合併的光環效果
-      for (const [sourceName, detail] of healerAuraDetails) {
-        if (detail.heal > 0 || detail.dmgBoost !== 0) {
-          const healerTag = sourceName !== "未知" ? `（${sourceName}）` : "";
+      for (const [sourceName, detail] of auraDetails) {
+        if (detail.heal > 0 || detail.dmgBoost !== 0 || detail.bossDmgBoost !== 0 || detail.defDown > 0 || detail.damageReduction > 0 || detail.critReduction > 0) {
+          const auraTag = sourceName !== "未知" ? `（${sourceName}）` : "";
           const parts = [];
           if (detail.heal > 0) parts.push(`回復 **${detail.heal}** HP`);
           if (detail.dmgBoost !== 0) parts.push(`傷害提升 ${detail.dmgBoost}%`);
-          log.push(`💚 **(治療師)** 光環${healerTag} ${parts.join("、")}`);
+          if (detail.bossDmgBoost !== 0) parts.push(`Boss 傷害提升 ${detail.bossDmgBoost}%`);
+          if (detail.defDown > 0) parts.push(`怪物防禦降低 ${detail.defDown}%`);
+          if (detail.damageReduction > 0) parts.push(`受到傷害降低 ${detail.damageReduction}%`);
+          if (detail.critReduction > 0) parts.push(`被暴擊傷害降低 ${detail.critReduction}%`);
+          log.push(`✨ **共鬥光環**${auraTag} ${parts.join("、")}`);
         }
       }
     } catch (e) {}
@@ -1594,7 +1637,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (monsterIsStunned || Math.random() * 100 < hitChance) {
         // 破防判定（斧）
         const isBreak = Math.random() * 100 < pStats.armorBreakChance;
-        const effectiveDef = isBreak ? 0 : adjustedMCalc.def;
+        const effectiveDef = isBreak ? 0 : Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
         // 法杖無視怪物 DEF 的 bypassMonsterDefPct%（預設0，法杖50）
         const bypassPct = pStats.bypassMonsterDefPct ?? 0;
         const combinedBypassPct = Math.min(100, Math.max(0, bypassPct + playerDefIgnorePct));
@@ -1615,7 +1658,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         const attackBase = Math.max(
           1,
-          Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier)
+          Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier)
         );
         let dmg = rollDmg(Math.max(1, Math.round(attackBase * (1 - finalDef / 100))));
 
@@ -1914,7 +1957,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         if (Math.random() * 100 < comboChance) {
           combatStats.comboCount += 1;
-          const comboBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * (1 - finalDef / 100)));
+          const comboBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * (1 - finalDef / 100)));
           let cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (pStats.comboDamageMultiplier || 1)));
 
           // 盜賊：連擊傷害倍率加成（×1.3）
@@ -2042,6 +2085,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (monsterCritRate > 0 && Math.random() * 100 < monsterCritRate) {
             hasMonsterCrit = true;
             dmg = Math.round(dmg * (2.5 * (adjustedMCalc.critDamageMultiplier || 1)));
+            if (!playerInvincible && roundPartyCritDamageReductionPct > 0) {
+              dmg = Math.max(1, Math.round(dmg * (1 - Math.min(95, roundPartyCritDamageReductionPct) / 100)));
+            }
+          }
+          if (!playerInvincible && roundPartyDamageReductionPct > 0) {
+            dmg = Math.max(1, Math.round(dmg * (1 - Math.min(95, roundPartyDamageReductionPct) / 100)));
           }
 
           // 構建傷害敘述
@@ -2081,8 +2130,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 弓：閃躲後追擊
         if (pStats.weaponType === 'bow' && outcome === null) {
           const isBreak = Math.random() * 100 < pStats.armorBreakChance;
-          const finalDef = isBreak ? 0 : adjustedMCalc.def;
-          let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * (1 - finalDef / 100))));
+          const finalDef = isBreak ? 0 : Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
+          let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * (1 - finalDef / 100))));
 
           // 應用弓的傷害倍率（1.2）
           cdmg = Math.round(cdmg * (pStats.archerBowDamageBoost || 1.2));
@@ -2116,6 +2165,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           : rollMDmg(Math.max(1, Math.round(adjustedMCalc.atk * (adjustedMCalc.finalDamageMultiplier || 1) * (1 - effectivePlayerDefC / 100))));
         if (!playerInvincible && playerDamageReductionPct > 0) {
           comboDmg = Math.max(1, Math.round(comboDmg * (1 - Math.min(95, playerDamageReductionPct) / 100)));
+        }
+        if (!playerInvincible && roundPartyDamageReductionPct > 0) {
+          comboDmg = Math.max(1, Math.round(comboDmg * (1 - Math.min(95, roundPartyDamageReductionPct) / 100)));
         }
         pHp -= comboDmg;
         monsterDmgThisRound += comboDmg;
@@ -2168,8 +2220,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 盾格擋反擊（單手劍+盾，必中）──
     if (blockedThisRound && pStats.blockCounter && outcome === null) {
       const isBreak = Math.random() * 100 < pStats.armorBreakChance;
-      const finalDef = isBreak ? 0 : adjustedMCalc.def;
-      const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier));
+      const finalDef = isBreak ? 0 : Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
+      const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier));
       let dmg = rollDmg(Math.max(1, Math.round(counterBase * (1 - finalDef / 100))));
 
       // 劍士：格擋反擊命中率加成（+20%）
@@ -2259,8 +2311,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             }
           } else {
             const isBreak = pStats.counterInheritBreak && Math.random() * 100 < pStats.armorBreakChance;
-            const finalDef = isBreak ? 0 : adjustedMCalc.def;
-            let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * (1 - finalDef / 100))));
+            const finalDef = isBreak ? 0 : Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
+            let cdmg = rollDmg(Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * (1 - finalDef / 100))));
             try {
               const equipped = options.equipped || null;
               if (equipped && pHp <= Math.floor((pStats.maxHp || 1) * 0.35)) {

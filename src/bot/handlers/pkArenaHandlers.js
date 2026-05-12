@@ -8,9 +8,9 @@ const { calcPlayerStats } = require("../../shared/combatStats");
 const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { runPkCombat } = require("../../shared/pkCombat");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
-const { isMonsterBattleActive, replacePkBattlePresence } = require("../../shared/battlePresence");
+const { isMonsterBattleActive, replacePkBattlePresence, isTowerBattleActive } = require("../../shared/battlePresence");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
-const { getPkArenaBracketByIndex, isLevelInPkArenaBracket } = require("../../shared/pkArenaConfig");
+const { getPkArenaBracketByIndex, isLevelInPkArenaBracket, PK_RATING_DEFAULT, PK_RATING_MIN, calcRatingChange } = require("../../shared/pkArenaConfig");
 const {
   BET_AMOUNT,
   ARENA_COUNT,
@@ -190,7 +190,8 @@ async function restorePkPanelMessage() {
     }
   }
 
-  panelMessage = await channel.send(createPkArenaPanelMessage(arenaSlots)).catch(() => null);
+  const ranking = await fetchPkRanking(10).catch(() => []);
+  panelMessage = await channel.send(createPkArenaPanelMessage(arenaSlots, ranking)).catch(() => null);
   if (panelMessage) {
     persistedPanelChannelId = panelMessage.channelId;
     persistedPanelMessageId = panelMessage.id;
@@ -237,10 +238,18 @@ async function restorePkArenaState() {
   await refreshPanel();
 }
 
+async function fetchPkRanking(limit = 10) {
+  try {
+    return await serviceContext.progressRepository.findTopByPkRating(limit);
+  } catch (_) {}
+  return [];
+}
+
 async function refreshPanel() {
   if (!panelMessage) return;
   try {
-    await panelMessage.edit(createPkArenaPanelMessage(arenaSlots));
+    const ranking = await fetchPkRanking(10);
+    await panelMessage.edit(createPkArenaPanelMessage(arenaSlots, ranking));
   } catch (_) {}
 }
 
@@ -393,6 +402,43 @@ async function grantPkRewardStone(sc, discordId, displayName, tier, amount) {
     }
     return false;
   });
+}
+
+async function updatePkRatings(sc, slot, result, challFirst) {
+  const challId = slot.challenger?.discordId;
+  const defId   = slot.defender?.discordId;
+  if (!challId || !defId || result.winner === "draw") return;
+
+  const [challProg, defProg] = await Promise.all([
+    sc.progressRepository.findByPlayerId(challId).catch(() => null),
+    sc.progressRepository.findByPlayerId(defId).catch(() => null),
+  ]);
+  if (!challProg || !defProg) return;
+
+  const challRating = challProg.pkRating ?? PK_RATING_DEFAULT;
+  const defRating   = defProg.pkRating   ?? PK_RATING_DEFAULT;
+
+  // result.winner is "A" or "B"; A=challFirst player, B=second
+  const challIsA = challFirst;
+  const challWon = (result.winner === "A" && challIsA) || (result.winner === "B" && !challIsA);
+
+  const challDelta = calcRatingChange(challRating, defRating, challWon);
+  const defDelta   = calcRatingChange(defRating, challRating, !challWon);
+
+  challProg.pkRating = Math.max(PK_RATING_MIN, challRating + challDelta);
+  challProg.pkWins   = (challProg.pkWins   || 0) + (challWon ? 1 : 0);
+  challProg.pkLosses = (challProg.pkLosses || 0) + (challWon ? 0 : 1);
+  challProg.updatedAt = new Date().toISOString();
+
+  defProg.pkRating = Math.max(PK_RATING_MIN, defRating + defDelta);
+  defProg.pkWins   = (defProg.pkWins   || 0) + (challWon ? 0 : 1);
+  defProg.pkLosses = (defProg.pkLosses || 0) + (challWon ? 1 : 0);
+  defProg.updatedAt = new Date().toISOString();
+
+  await Promise.all([
+    sc.progressRepository.save(challProg).catch(() => {}),
+    sc.progressRepository.save(defProg).catch(() => {}),
+  ]);
 }
 
 async function grantPkBracketRewards(sc, slot, result, arenaIdx) {
@@ -728,6 +774,10 @@ async function handleJoin(interaction) {
     return;
   }
 
+  if (isTowerBattleActive(discordId)) {
+    await interaction.editReply({ content: "❌ 你目前正在組隊攻塔，不能同時參與 PK。請先解散隊伍。" });
+    return;
+  }
   if (isMonsterBattleActive(discordId)) {
     await interaction.editReply({ content: "❌ 你目前正在打怪，不能同時參與 PK。" });
     return;
@@ -1000,6 +1050,11 @@ async function startBattle(idx, { recovered = false } = {}) {
       return { rewards: [] };
     });
 
+    // ── Rating 更新 ───────────────────────────────────────────
+    await updatePkRatings(sc, slot, result, challFirst).catch((err) => {
+      console.warn("[PK] rating update failed:", err?.message || err);
+    });
+
     // ── 發布戰報 ─────────────────────────────────────────────
     try {
       await sendPkBattleThread(slot, result, betPayouts, battleRewardResult.rewards || []);
@@ -1018,13 +1073,15 @@ async function startBattle(idx, { recovered = false } = {}) {
 // ── 重整面板 ─────────────────────────────────────────────────
 async function handleRefresh(interaction) {
   await ensureArenaStateLoaded();
-  await interaction.update(createPkArenaPanelMessage(arenaSlots));
+  const ranking = await fetchPkRanking(10);
+  await interaction.update(createPkArenaPanelMessage(arenaSlots, ranking));
 }
 
 // ── 發布面板（指令用） ────────────────────────────────────────
 async function publishPkArenaPanel(interaction) {
   await ensureArenaStateLoaded();
-  const msg = createPkArenaPanelMessage(arenaSlots);
+  const ranking = await fetchPkRanking(10);
+  const msg = createPkArenaPanelMessage(arenaSlots, ranking);
   await interaction.reply(msg);
   panelMessage = await interaction.fetchReply();
   persistedPanelChannelId = panelMessage?.channelId || persistedPanelChannelId;

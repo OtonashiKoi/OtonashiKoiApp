@@ -1568,24 +1568,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
       const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || []);
 
-      // ── 治療師光環系統 ──
-      // 檢查玩家是否裝備治療師徽章
-      const jobEq = equipped.job_eq || null;
-      const jobId = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
-      const jobName = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
-      const isHealer = jobEq && (jobId.includes("healer") || jobName.includes("治療"));
-
-      // 讀取最新的怪物狀態以更新光環記錄
+      // ── 共鬥光環系統 ──
       const freshStateForAura = await serviceContext.monsterService.getState(zoneKey);
 
       let stateForCombat = freshStateForAura;
       let partyEffects = [];
+      const partyEffs = collectEquipmentEffects(equipped, "passive", { equipped, inventory: progress?.inventory || [] })
+        .filter(e => e.target === "party");
+      const hasPartyAura = partyEffs.length > 0;
 
-      if (isHealer) {
-        // 治療師進入：收集 party 效果並記錄光環
-        const partyEffs = collectEquipmentEffects(equipped, "passive", { equipped, inventory: progress?.inventory || [] })
-          .filter(e => e.target === "party");
-
+      if (hasPartyAura) {
+        // 光環職業進入：收集 party 效果並記錄光環
         const auraState = {
           ...freshStateForAura,
           activeHealerAura: {
@@ -1598,7 +1591,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         stateForCombat = auraState;
         partyEffects = partyEffs;
       } else if (freshStateForAura.activeHealerAura?.discordId === discordId) {
-        // 同一玩家沒穿治療師徽章再次進入 → 清除光環
+        // 同一玩家不再具備 party 光環 → 清除光環
         const clearedState = {
           ...freshStateForAura,
           activeHealerAura: null

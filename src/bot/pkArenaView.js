@@ -1,6 +1,6 @@
 "use strict";
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, StringSelectMenuBuilder } = require("discord.js");
-const { ARENA_COUNT, getPkArenaBracketByIndex } = require("../shared/pkArenaConfig");
+const { ARENA_COUNT, getPkArenaBracketByIndex, getBossBoostPct, PK_RATING_DEFAULT } = require("../shared/pkArenaConfig");
 
 // ── Button ID 常數 ───────────────────────────────────────────
 const PK_ARENA_IDS = {
@@ -78,8 +78,26 @@ function betSummaryLine(slot, index) {
   return `${tag}　${challName} ${challBet}🪙／${defName} ${defBet}🪙`;
 }
 
+// ── 排行榜列 ─────────────────────────────────────────────────
+const RANK_MEDALS = ["🥇", "🥈", "🥉"];
+
+function buildRankingField(ranking = []) {
+  if (!ranking || ranking.length === 0) return null;
+  const lines = ranking.map((row, i) => {
+    const medal = RANK_MEDALS[i] || `${i + 1}.`;
+    const name = row.displayName || row.playerId || "???";
+    const rating = Math.round(Number(row.pkRating) || PK_RATING_DEFAULT);
+    const wins = Number(row.pkWins) || 0;
+    const losses = Number(row.pkLosses) || 0;
+    const boostPct = getBossBoostPct(rating);
+    const boostStr = boostPct > 0 ? ` ⚔️+${boostPct}%` : "";
+    return `${medal} **${name}** ${rating}分 (${wins}勝${losses}敗)${boostStr}`;
+  });
+  return lines.join("\n");
+}
+
 // ── 主面板 ───────────────────────────────────────────────────
-function createPkArenaPanelMessage(arenaSlots = []) {
+function createPkArenaPanelMessage(arenaSlots = [], ranking = []) {
   const slots = Array.from({ length: ARENA_COUNT }, (_, i) => arenaSlots[i] ?? null);
 
   // ── Embed ─────────────────────────────────────────────────
@@ -108,7 +126,16 @@ function createPkArenaPanelMessage(arenaSlots = []) {
     });
   }
 
-  embed.setFooter({ text: "勝者吃池 · 平局退 · 無對手不退場" });
+  const rankingText = buildRankingField(ranking);
+  if (rankingText) {
+    embed.addFields({
+      name: "🏆 Rating 排行榜 TOP 10（Lv.40）",
+      value: rankingText,
+      inline: false,
+    });
+  }
+
+  embed.setFooter({ text: "Elo Rating・勝者吃池・平局退・無對手不退場 | Rating≥1400:+3%・≥1600:+5%・≥1800:+7% BOSS傷害" });
 
   // ── 第一列：擂台按鈕 ──────────────────────────────────────
   const joinButtons = slots.map((slot, i) => {

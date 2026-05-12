@@ -2,6 +2,7 @@
 
 const monsterBattlePlayers = new Set();
 const pkBattlePlayers = new Set();
+const towerBattlePlayers = new Set();
 
 function setPresence(targetSet, ids = [], enabled = true) {
   const list = Array.isArray(ids) ? ids : [ids];
@@ -56,6 +57,14 @@ function replacePkBattlePresence(ids = []) {
   replacePresence(pkBattlePlayers, ids);
 }
 
+function setTowerPresence(ids = [], enabled = true) {
+  setPresence(towerBattlePlayers, ids, enabled);
+}
+
+function isTowerBattleActive(discordId) {
+  return towerBattlePlayers.has(discordId);
+}
+
 module.exports = {
   getBattlePresenceState,
   setMonsterBattlePresence,
@@ -66,4 +75,6 @@ module.exports = {
   clearPkBattlePresence,
   isPkBattleActive,
   replacePkBattlePresence,
+  setTowerPresence,
+  isTowerBattleActive,
 };

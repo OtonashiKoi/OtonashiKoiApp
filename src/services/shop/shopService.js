@@ -919,6 +919,75 @@ class ShopService {
     };
   }
 
+  async switchEquipPreset(discordId, targetPreset) {
+    const VALID_PRESETS = ["A", "B", "C"];
+    if (!VALID_PRESETS.includes(targetPreset)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "無效分頁，請選擇 A / B / C", 400);
+    }
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);
+
+    if (!progress.equipPresets) progress.equipPresets = {};
+    const currentPreset = progress.activePreset || "A";
+    if (currentPreset === targetPreset) return { activePreset: targetPreset, equipment: progress.equipment };
+
+    // 把目前裝備存入離開的分頁（快照，不含 inventory 引用）
+    progress.equipPresets[currentPreset] = this._snapshotEquipment(progress.equipment);
+
+    // 套用目標分頁的裝備
+    const inventory = progress.inventory || [];
+    const savedPreset = progress.equipPresets[targetPreset] || {};
+    const ALL_SLOTS = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r","title_eq","job_eq","special_1","special_2","special_3"];
+
+    // 先把目前全部裝備卸回背包
+    for (const slot of ALL_SLOTS) {
+      const cur = progress.equipment?.[slot];
+      if (cur) {
+        inventory.push(cur);
+        progress.equipment[slot] = null;
+      }
+    }
+
+    // 套上目標分頁中仍在背包的裝備
+    for (const slot of ALL_SLOTS) {
+      const saved = savedPreset[slot];
+      if (!saved) continue;
+      // 以 uuid 或 itemId 找背包
+      const invIdx = inventory.findIndex(e =>
+        (saved.uuid && e.uuid === saved.uuid) ||
+        (!saved.uuid && e.itemId === saved.itemId && e.equipSlot === slot)
+      );
+      if (invIdx === -1) continue; // 背包中已不存在，跳過
+      progress.equipment[slot] = inventory.splice(invIdx, 1)[0];
+    }
+
+    // 雙手武器帶了盾牌時清掉盾牌（一致性保護）
+    const weaponIsTwoHanded = this._resolveIsTwoHanded({
+      weaponType: progress.equipment?.weapon?.weaponType,
+      isTwoHanded: progress.equipment?.weapon?.isTwoHanded
+    });
+    if (weaponIsTwoHanded && progress.equipment?.shield) {
+      inventory.push(progress.equipment.shield);
+      progress.equipment.shield = null;
+    }
+
+    progress.inventory = inventory;
+    progress.activePreset = targetPreset;
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+    return { activePreset: targetPreset, equipment: progress.equipment };
+  }
+
+  _snapshotEquipment(equipment = {}) {
+    const snap = {};
+    for (const [slot, item] of Object.entries(equipment)) {
+      if (!item) { snap[slot] = null; continue; }
+      // 只存識別用欄位，不存整個大物件（節省空間）
+      snap[slot] = { uuid: item.uuid || null, itemId: item.itemId, itemName: item.itemName || item.name || null, equipSlot: item.equipSlot || slot };
+    }
+    return snap;
+  }
+
   async enhanceItem(discordId, targetUuid, materialUuid) {
     const ENHANCE_MAX = MAX_ENHANCE_LEVEL;
     const progress = await this.progressRepository.findByPlayerId(discordId);

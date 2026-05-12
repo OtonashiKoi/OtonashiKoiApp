@@ -28,6 +28,8 @@ module.exports = {
     pkArenaStartNoticeChannelId: process.env.PK_ARENA_START_NOTICE_CHANNEL_ID || "1498608950671839263", // PK 開戰通知頻道 ID
     pkArenaReportChannelId: process.env.PK_ARENA_REPORT_CHANNEL_ID || "1486423293044068392", // PK 戰報頻道 ID
     pkArenaForumChannelId: process.env.PK_ARENA_FORUM_CHANNEL_ID || "1501890000000913479", // PK 論壇戰報頻道 ID
+    towerLobbyChannelId: process.env.TOWER_LOBBY_CHANNEL_ID || "1503635545832558632",   // 爬塔：面板大廳頻道 ID
+    towerForumChannelId: process.env.TOWER_FORUM_CHANNEL_ID || "1503635643488796682",   // 爬塔：組隊攻略論壇 ID
     enhanceSuccessAnnounceChannelId: process.env.ENHANCE_SUCCESS_ANNOUNCE_CHANNEL_ID || "1450062298076151952", // 強化成功公告頻道 ID
     enhanceFailureAnnounceChannelId: process.env.ENHANCE_FAILURE_ANNOUNCE_CHANNEL_ID || "1450062298076151952", // 強化失敗公告頻道 ID
     welcomeAuditEnabled: process.env.DISABLE_WELCOME_AUDIT === "1" ? false : true,

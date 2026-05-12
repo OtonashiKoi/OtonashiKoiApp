@@ -1,6 +1,7 @@
 "use strict";
 const { collectEquipmentEffects, applyEffectsToStats } = require("./effectEngine");
 const { getEquipmentTierSetBonuses, TIER_SET_SLOTS } = require("./equipmentTierSetBonuses");
+const { getBossBoostPct, PK_RATING_DEFAULT } = require("./pkArenaConfig");
 
 // ─────────────────────────────────────────────
 // 武器設定表
@@ -47,7 +48,7 @@ const DUAL_COUNTER_CHANCE = {
  * 依玩家基礎屬性與已裝備物品計算戰鬥數值。
  * monsterZoneHandlers 與 playerAppRoutes 共用此函式。
  */
-function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = []) {
+function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = [], { pkRating } = {}) {
   const tierSetBonuses = getEquipmentTierSetBonuses(equipped);
 
   // 裝備加成
@@ -79,8 +80,11 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const hasWarriorBadge = jobEq && (jobId === "job_warrior_v1" || (jobName.includes("戰士") && !jobName.includes("矮人")));
   const hasDwarfWarriorBadge = jobEq && (jobId === "job_dwarf_warrior_v1" || jobName.includes("矮人戰士"));
   const hasRogueBadge = jobEq && (jobId.includes("rogue") || jobName.includes("盜賊"));
-  const hasMageBadge = jobEq && (jobId.includes("mage") || jobName.includes("法師"));
+  const hasMageBadge = jobEq && (jobId.includes("mage") && !jobId.includes("barrier") || jobName.includes("法師") && !jobName.includes("結界"));
   const hasHealerBadge = jobEq && (jobId.includes("healer") || jobName.includes("治療"));
+  const hasTacticianBadge = jobEq && (jobId.includes("tactician") || jobName.includes("軍師"));
+  const hasBardBadge = jobEq && (jobId.includes("bard") || jobName.includes("詩人"));
+  const hasBarrierMageBadge = jobEq && (jobId.includes("barrier_mage") || jobName.includes("結界"));
 
   // 雙持判定：主手非雙手武器 + 副手是武器類型
   const isDualWield = !cfg.isTwoHanded && wt && offhand?.weaponType != null && OFFHAND_WEAPON_TYPES.has(offhand.weaponType);
@@ -205,7 +209,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     tierSetBonuses,
     tierDamageMultiplier: 1 + tierSetBonuses.damagePct / 100,
     tierFinalDamageMultiplier: 1 + tierSetBonuses.finalDamagePct / 100,
-    tierBossDamageMultiplier: 1 + tierSetBonuses.bossDamagePct / 100,
+    tierBossDamageMultiplier: (1 + tierSetBonuses.bossDamagePct / 100) * (1 + getBossBoostPct(pkRating ?? PK_RATING_DEFAULT) / 100),
     tierCritDamageMultiplier: 1 + tierSetBonuses.critDamagePct / 100,
     executeChance: 0,                            // 斬殺觸發率
     executeThresholdPct: 0,                      // 斬殺門檻血量%
@@ -265,6 +269,15 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     // 治療師
     hasHealerBadge,
     healerAuraActive,         // 是否有治療光環
+
+    // 軍師
+    hasTacticianBadge,
+
+    // 詩人
+    hasBardBadge,
+
+    // 結界師
+    hasBarrierMageBadge,
   };
 
   const effectContext = { equipped, inventory };

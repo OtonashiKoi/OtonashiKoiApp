@@ -55,6 +55,12 @@ function withProgressCache(repo) {
     },
     async listAll() {
       return repo.listAll();
+    },
+    async findTopByPkRating(limit) {
+      return repo.findTopByPkRating(limit);
+    },
+    async findTopByTowerRecord(limit) {
+      return repo.findTopByTowerRecord(limit);
     }
   };
 }

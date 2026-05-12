@@ -262,6 +262,9 @@ async function handleProfile(interaction) {
       "swordsman": { weapons: ["sword_1h", "sword_2h"], name: "劍士", traits: ["格擋反擊", "連擊", "斬殺"] },
       "warrior": { weapons: ["axe_1h", "axe_2h"], name: "戰士", traits: ["低血傷害倍增", "爆擊提升"] },
       "rogue": { weapons: ["dagger"], name: "盜賊", traits: ["連擊加速", "連擊傷害"] },
+      "tactician": { weapons: ["sword_1h"], name: "軍師", traits: ["Boss傷害光環", "降低怪物防禦"] },
+      "bard": { weapons: ["bow"], name: "詩人", traits: ["經驗光環", "金幣光環"] },
+      "barrier_mage": { weapons: ["staff_1h", "staff_2h"], name: "結界師", traits: ["減傷光環", "抗暴擊傷害"] },
       "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", traits: ["無視防禦", "燒傷/麻痺/冰凍"] },
       "healer": { weapons: null, name: "治療師", traits: ["回血光環", "隊伍傷害加成"] },
       "archer": { weapons: ["bow"], name: "弓箭手", traits: ["命中要害", "閃躲後追擊"] }
@@ -1039,27 +1042,11 @@ async function handleBackpack(interaction) {
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
 }
 
-async function handleEquipmentView(interaction) {
-  const serviceContext = getServiceContext();
-  await clearActiveReply(interaction);
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+// ── 裝備槽畫面（原本 5 列，進入某分頁後顯示）──
+function buildEquipmentViewPayload({ progress, player, wallet, imgBuffer }) {
+  const equipped = progress?.equipment || {};
+  const activePreset = progress?.activePreset || "A";
 
-  const [progress, player, wallet] = await Promise.all([
-    serviceContext.progressRepository.findByPlayerId(interaction.user.id),
-    serviceContext.playerRepository.findByDiscordId(interaction.user.id),
-    serviceContext.walletRepository.findByPlayerId(interaction.user.id),
-  ]);
-  const equipped  = progress?.equipment || {};
-
-  // 生成裝備欄圖片
-  const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", forceStatic: true });
-  const publicDir = path.resolve(__dirname, "../web/public");
-  let imgBuffer = null;
-  try {
-    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress, player, wallet });
-  } catch { /* 圖片失敗退回文字 */ }
-
-  // ── 5 列 × 3 按鈕：[左槽] [右槽] [第三欄] ──────────────
   const rows = EQ_LEFT_SLOTS.map((leftSlot, i) => {
     const rightSlot = EQ_RIGHT_SLOTS[i];
     const col3Slot  = EQ_COL3_SLOTS[i];
@@ -1080,19 +1067,164 @@ async function handleEquipmentView(interaction) {
   if (imgBuffer) {
     const attachment = new AttachmentBuilder(imgBuffer, { name: "equipment.png" });
     payload.files = [attachment];
-    payload.content = "";
+    payload.content = `【裝備方案 ${activePreset}】`;
   } else {
-    // 圖片失敗退回純文字
     const SLOT_ORDER = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r"];
     const lines = SLOT_ORDER.map(s => {
       const item = equipped[s];
       return `　${EQ_SLOT_LABELS[s]}：${item ? `**${item.itemName}**` : "空"}`;
     });
-    payload.content = `⚔️ **裝備欄**\n\n${lines.join("\n")}`;
+    payload.content = `⚔️ **裝備欄【裝備方案 ${activePreset}】**\n\n${lines.join("\n")}`;
+  }
+  return payload;
+}
+
+// ── 第一層：裝備方案總覽畫面 ──
+// 列1：下拉選單快速切換方案（套裝備）
+// 列2：A / B / C 按鈕（進去換裝）
+function buildPresetSelectPayload({ progress, imgBuffer }) {
+  const equipped = progress?.equipment || {};
+  const activePreset = progress?.activePreset || "A";
+  const PRESETS = ["A", "B", "C"];
+
+  // 下拉選單：快速切換目前生效的分頁
+  const switchMenu = new StringSelectMenuBuilder()
+    .setCustomId("eq_preset_switch_select")
+    .setPlaceholder(`目前方案：${activePreset}　▾ 快速切換裝備方案`)
+    .addOptions(PRESETS.map(p => ({
+      label: `裝備方案 ${p}`,
+      description: p === activePreset ? "目前使用中" : "切換並套用此方案的裝備記錄",
+      value: p,
+      default: p === activePreset
+    })));
+
+  // 按鈕列：進入各方案換裝
+  const enterRow = new ActionRowBuilder().addComponents(
+    PRESETS.map(p =>
+      new ButtonBuilder()
+        .setCustomId(`eq_preset:${p}`)
+        .setLabel(`方案 ${p} 換裝`)
+        .setStyle(p === activePreset ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    )
+  );
+
+  const components = [
+    new ActionRowBuilder().addComponents(switchMenu),
+    enterRow
+  ];
+
+  const payload = { components, flags: MessageFlags.Ephemeral };
+  if (imgBuffer) {
+    payload.files = [new AttachmentBuilder(imgBuffer, { name: "equipment.png" })];
+    payload.content = `⚔️ **裝備方案**　目前：**方案 ${activePreset}**`;
+  } else {
+    const SLOT_ORDER = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r"];
+    const lines = SLOT_ORDER.map(s => {
+      const item = equipped[s];
+      return `　${EQ_SLOT_LABELS[s]}：${item ? `**${item.itemName}**` : "空"}`;
+    });
+    payload.content = `⚔️ **裝備方案**　目前：**方案 ${activePreset}**\n\n${lines.join("\n")}`;
+  }
+  return payload;
+}
+
+function hasEquipPresetAccess(progress, targetPreset) {
+  if (targetPreset === "A") return true;
+  return !!progress?.playerTier;
+}
+
+const PRESET_NO_ACCESS_MSG = { content: "🔒 **裝備方案 B / C** 限頻道付費會員使用。", components: [], files: [], flags: MessageFlags.Ephemeral };
+
+async function handleEquipmentView(interaction) {
+  const serviceContext = getServiceContext();
+  await clearActiveReply(interaction);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const [progress, player, wallet] = await Promise.all([
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id),
+    serviceContext.playerRepository.findByDiscordId(interaction.user.id),
+    serviceContext.walletRepository.findByPlayerId(interaction.user.id),
+  ]);
+
+  const equipped = progress?.equipment || {};
+  const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", forceStatic: true });
+  const publicDir = path.resolve(__dirname, "../web/public");
+  let imgBuffer = null;
+  try {
+    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress, player, wallet });
+  } catch { /* 退回文字 */ }
+
+  await safeEditReply(interaction, buildPresetSelectPayload({ progress, imgBuffer }));
+  await rememberActiveReply(interaction, 120_000);
+}
+
+// 下拉選單快速切換（只換套裝，留在總覽畫面）
+async function handlePresetSwitchSelect(interaction) {
+  const serviceContext = getServiceContext();
+  const targetPreset = interaction.values[0];
+  await interaction.deferUpdate();
+
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  if (!hasEquipPresetAccess(progress, targetPreset)) {
+    await safeEditReply(interaction, PRESET_NO_ACCESS_MSG);
+    return;
   }
 
-  await safeEditReply(interaction, payload);
-  await rememberActiveReply(interaction, 120_000);
+  try {
+    await serviceContext.shopService.switchEquipPreset(interaction.user.id, targetPreset);
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 切換失敗：${err.message}`, components: [], files: [] });
+    return;
+  }
+
+  const [freshProgress, player, wallet] = await Promise.all([
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id),
+    serviceContext.playerRepository.findByDiscordId(interaction.user.id),
+    serviceContext.walletRepository.findByPlayerId(interaction.user.id),
+  ]);
+  const equipped = freshProgress?.equipment || {};
+  const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", forceStatic: true });
+  const publicDir = path.resolve(__dirname, "../web/public");
+  let imgBuffer = null;
+  try {
+    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress: freshProgress, player, wallet });
+  } catch { /* 退回文字 */ }
+
+  await safeEditReply(interaction, buildPresetSelectPayload({ progress: freshProgress, imgBuffer }));
+}
+
+// 按鈕進入換裝 → 切換裝備方案並進裝備槽畫面
+async function handleEquipPresetSwitch(interaction, targetPreset) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  if (!hasEquipPresetAccess(progress, targetPreset)) {
+    await safeEditReply(interaction, PRESET_NO_ACCESS_MSG);
+    return;
+  }
+
+  try {
+    await serviceContext.shopService.switchEquipPreset(interaction.user.id, targetPreset);
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 切換失敗：${err.message}`, components: [], files: [] });
+    return;
+  }
+
+  const [freshProgress, player, wallet] = await Promise.all([
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id),
+    serviceContext.playerRepository.findByDiscordId(interaction.user.id),
+    serviceContext.walletRepository.findByPlayerId(interaction.user.id),
+  ]);
+  const equipped = freshProgress?.equipment || {};
+  const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", forceStatic: true });
+  const publicDir = path.resolve(__dirname, "../web/public");
+  let imgBuffer = null;
+  try {
+    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress: freshProgress, player, wallet });
+  } catch { /* 退回文字 */ }
+
+  await safeEditReply(interaction, buildEquipmentViewPayload({ progress: freshProgress, player, wallet, imgBuffer }));
 }
 
 async function handleEquipAction(interaction, action, value) {
@@ -1934,7 +2066,7 @@ function buildQuestTabRow(activeCadence = "weekly") {
   );
 }
 
-function buildQuestCenterMessage(progressList, cadence = "weekly") {
+function buildQuestCenterMessage(progressList, cadence = "weekly", claimPage = 0) {
   const meta = QUEST_TAB_META[cadence] || QUEST_TAB_META.weekly;
   const lines = [];
   const claimButtons = [];
@@ -1964,10 +2096,33 @@ function buildQuestCenterMessage(progressList, cadence = "weekly") {
     }
   }
 
-  const content = `${meta.emoji} **${meta.label}**${titleSuffix}\n${meta.resetText}\n\n${lines.join("\n\n")}`;
+  const pageSize = 5;
+  const totalClaimPages = Math.max(1, Math.ceil(claimButtons.length / pageSize));
+  const safeClaimPage = Math.min(Math.max(Number(claimPage) || 0, 0), totalClaimPages - 1);
+  const pageStart = safeClaimPage * pageSize;
+  const pageButtons = claimButtons.slice(pageStart, pageStart + pageSize);
+  const claimPageText = claimButtons.length > pageSize
+    ? `\n可領取按鈕：第 ${safeClaimPage + 1} / ${totalClaimPages} 頁`
+    : "";
+
+  const content = `${meta.emoji} **${meta.label}**${titleSuffix}\n${meta.resetText}${claimPageText}\n\n${lines.join("\n\n")}`;
   const components = [buildQuestTabRow(cadence)];
-  for (let i = 0; i < claimButtons.length && i < 5; i += 5) {
-    components.push(new ActionRowBuilder().addComponents(claimButtons.slice(i, i + 5)));
+  if (pageButtons.length) {
+    components.push(new ActionRowBuilder().addComponents(pageButtons));
+  }
+  if (claimButtons.length > pageSize) {
+    components.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`quest_claim_page:${cadence}:${safeClaimPage - 1}`)
+        .setLabel("上一頁")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(safeClaimPage <= 0),
+      new ButtonBuilder()
+        .setCustomId(`quest_claim_page:${cadence}:${safeClaimPage + 1}`)
+        .setLabel("下一頁")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(safeClaimPage >= totalClaimPages - 1)
+    ));
   }
   return { content, components };
 }
@@ -2027,19 +2182,21 @@ async function grantQuestRewardDiscord(serviceContext, discordId, displayName, r
   }
 }
 
-async function renderQuestCenter(interaction, cadence = "weekly", prefixText = "") {
+async function renderQuestCenter(interaction, cadence = "weekly", prefixText = "", claimPage = 0) {
   const serviceContext = getServiceContext();
   const questService = serviceContext.questService || serviceContext.weeklyQuestService;
-  const progressList = await enrichQuestRewards(serviceContext, await questService.getPlayerProgress(interaction.user.id, cadence));
+  const rawProgressList = await questService.getPlayerProgress(interaction.user.id, cadence);
+  const visibleProgressList = rawProgressList.filter((row) => !row?.claimed);
+  const progressList = await enrichQuestRewards(serviceContext, visibleProgressList);
   if (!progressList.length) {
     const meta = QUEST_TAB_META[cadence] || QUEST_TAB_META.weekly;
     await safeEditReply(interaction, {
-      content: `${meta.emoji} **${meta.label}**\n${meta.resetText}\n\n目前尚無可顯示任務，請稍後再試。`,
+      content: `${meta.emoji} **${meta.label}**\n${meta.resetText}\n\n目前沒有未領取或進行中的任務。`,
       components: [buildQuestTabRow(cadence)]
     });
     return;
   }
-  const payload = buildQuestCenterMessage(progressList, cadence);
+  const payload = buildQuestCenterMessage(progressList, cadence, claimPage);
   if (prefixText) {
     payload.content = `${prefixText}\n\n${payload.content}`;
   }
@@ -2104,6 +2261,13 @@ async function handleButton(interaction) {
   if (id.startsWith("quest_claim:")) {
     const [, questId = "", cadence = "weekly"] = id.split(":");
     await handleWeeklyQuestClaim(interaction, questId, cadence);
+    return;
+  }
+  if (id.startsWith("quest_claim_page:")) {
+    const [, cadence = "weekly", pageText = "0"] = id.split(":");
+    const claimPage = Math.max(0, parseInt(pageText, 10) || 0);
+    await interaction.deferUpdate();
+    await renderQuestCenter(interaction, cadence, "", claimPage);
     return;
   }
   if (id.startsWith("quest_tab:")) {
@@ -2306,6 +2470,12 @@ async function handleButton(interaction) {
   // 裝備欄格按鈕
   if (id.startsWith("eq_btn:")) {
     await handleEquipSlotButton(interaction, id.slice("eq_btn:".length));
+    return;
+  }
+
+  // 裝備分頁切換
+  if (id.startsWith("eq_preset:")) {
+    await handleEquipPresetSwitch(interaction, id.slice("eq_preset:".length));
     return;
   }
 
@@ -2540,6 +2710,7 @@ module.exports = {
   createPlayerPanelMessage,
   handleButton,
   handleEquipmentSelect,
+  handlePresetSwitchSelect,
   handleBackpackTabSelect,
   handleWeeklyQuests,
   handleWeeklyQuestClaim,

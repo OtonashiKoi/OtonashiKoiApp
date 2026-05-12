@@ -20,7 +20,8 @@ const CURRENCY_SOURCES = {
   QUEST_REWARD: "quest:reward",                      // 任務獎勵（金幣）
   IDLE_REWARD: "idle:reward",                        // 放置掛機：結算金幣獎勵
   DONATION_REWARD: "donation:reward",                // 直播斗內：鑽石獎勵
-  ENHANCE: "enhance:cost"                            // 裝備強化：金幣消耗
+  ENHANCE: "enhance:cost",                           // 裝備強化：金幣消耗
+  TOWER_REWARD: "tower:reward"                       // 組隊爬塔：通關金幣獎勵
 };
 
 // 經驗值來源類型
@@ -31,7 +32,8 @@ const EXP_SOURCES = {
   MONSTER_KILL: "monster:kill",                     // 放怪區：擊殺 EXP 獎勵
   PK_BATTLE_REWARD_EXP: "pk:battle-reward-exp",     // PK 戰鬥獎勵（EXP）
   QUEST_REWARD_EXP: "quest:reward-exp",            // 任務獎勵（經驗）
-  IDLE_REWARD_EXP: "idle:reward-exp"               // 放置掛機：結算 EXP 獎勵
+  IDLE_REWARD_EXP: "idle:reward-exp",               // 放置掛機：結算 EXP 獎勵
+  TOWER_REWARD_EXP: "tower:reward-exp"              // 組隊爬塔：通關 EXP 獎勵
 };
 
 // 驗證金幣來源是否合法

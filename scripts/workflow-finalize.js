@@ -40,7 +40,7 @@ async function verifySystem() {
     const db = client.db(dbName);
 
     const checks = {
-      '🎴 怪物卡片': { coll: 'items', query: { itemType: 'monster_card' }, min: 24 },
+      '🎴 怪物卡片': { coll: 'items', query: { itemType: 'equipment', equipSlot: 'special', monsterCardSkill: { $exists: true } }, min: 24 },
       '💎 強化寶石': { coll: 'items', query: { itemType: 'consumable', name: { $in: ['D階寶石', 'C階寶石', 'B階寶石', 'A階寶石'] } }, min: 4 },
       '🎖️  職業徽章': { coll: 'items', query: { itemType: 'job_badge' }, min: 7 },
       '⚔️  裝備': { coll: 'items', query: { itemType: 'equipment' }, min: 50 }

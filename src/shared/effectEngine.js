@@ -23,6 +23,8 @@ const STAT_EFFECT_MAP = {
   speed_up: { stat: "speed", mode: "add", amount: 10 },
   speed_down: { stat: "speed", mode: "add", amount: -10 },
   atk_multiplier_up: { stat: "atk", mode: "mul", amount: 1.2 },
+  def_multiplier_up: { stat: "def", mode: "mul", amount: 1.1 },
+  max_hp_multiplier_up: { stat: "maxHp", mode: "mul", amount: 1.1 },
   block_chance_up: { stat: "blockChance", mode: "add", amount: 10 },
   combo_damage_up: { stat: "comboDamageMultiplier", mode: "mul", amount: 1.1 },
   combo_up: { stat: "combo", mode: "add", amount: 5 },
@@ -178,6 +180,9 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
       weaponType:     lib.weaponType     || entry.weaponType || null,
       isTwoHanded:    lib.isTwoHanded    ?? entry.isTwoHanded ?? false,
       monsterCardSkill: lib.monsterCardSkill || entry.monsterCardSkill || null,
+      // 確保 name / itemName 以 DB 為準（DB 欄位是 name，snapshot 可能只有 itemName）
+      name:     lib.name     || entry.name     || entry.itemName || null,
+      itemName: lib.name     || entry.itemName || entry.name     || null,
     };
   }
   return merged;

@@ -10,6 +10,7 @@ const { startFetcher } = require("./commentFetcher");
 const { handleStreamComment } = require("./handlers/streamHandlers");
 const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels, _doIdleRotate } = require("./handlers/monsterZoneHandlers");
 const { initPkArenaState } = require("./handlers/pkArenaHandlers");
+const { restoreTowerSessions } = require("./handlers/towerHandlers");
 const { runWithCache } = require("../adapters/mongo/requestCache");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
 
@@ -599,6 +600,10 @@ function createBotClient() {
 
     await initPkArenaState().catch((error) => {
       console.warn(`[PKArena] restore failed: ${error?.message || error}`);
+    });
+
+    await restoreTowerSessions().catch((error) => {
+      console.warn(`[Tower] restore failed: ${error?.message || error}`);
     });
 
     // 拍賣場公開面板倒數/到期狀態需定時重繪

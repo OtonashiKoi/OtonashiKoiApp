@@ -211,6 +211,22 @@ function createMongoRepositories() {
       },
       async listAll() {
         return (await collection("progress")).find({}).toArray();
+      },
+      async findTopByPkRating(limit = 10) {
+        return (await collection("progress"))
+          .find({ pkRating: { $exists: true }, level: { $gte: 40 } })
+          .sort({ pkRating: -1 })
+          .limit(limit)
+          .project({ playerId: 1, displayName: 1, pkRating: 1, pkWins: 1, pkLosses: 1, level: 1 })
+          .toArray();
+      },
+      async findTopByTowerRecord(limit = 10) {
+        return (await collection("progress"))
+          .find({ "towerRecord.bestFloor": { $exists: true, $gt: 0 } })
+          .sort({ "towerRecord.bestFloor": -1, "towerRecord.bestAt": 1 })
+          .limit(limit)
+          .project({ playerId: 1, displayName: 1, towerRecord: 1 })
+          .toArray();
       }
     },
     transactionRepository: {
@@ -686,6 +702,21 @@ function createMongoRepositories() {
       },
       async delete(id) {
         await (await collection("monsterEvents")).deleteOne({ id });
+      }
+    },
+    towerSessionRepository: {
+      async save(session) {
+        await (await collection("towerSessions")).replaceOne(
+          { threadId: session.threadId },
+          session,
+          { upsert: true }
+        );
+      },
+      async findAll() {
+        return (await collection("towerSessions")).find({}).toArray();
+      },
+      async delete(threadId) {
+        await (await collection("towerSessions")).deleteOne({ threadId });
       }
     }
   };
