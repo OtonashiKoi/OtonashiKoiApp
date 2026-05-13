@@ -256,72 +256,48 @@ async function handleProfile(interaction) {
     const jobName = String(jobEq.itemName || jobEq.name || "").toLowerCase();
     const wt = cs.weaponType;
 
-    // 職業與武器的對應關係
-    const jobWeaponMap = {
-      "dwarf_warrior": { weapons: ["mace_1h", "mace_2h"], name: "矮人戰士", traits: ["武器倍率強化", "擊暈機率", "高血擊暈加成", "對暈眩目標增傷"] },
-      "swordsman": { weapons: ["sword_1h", "sword_2h"], name: "劍士", traits: ["格擋反擊", "連擊", "斬殺"] },
-      "warrior": { weapons: ["axe_1h", "axe_2h"], name: "戰士", traits: ["低血傷害倍增", "爆擊提升"] },
-      "rogue": { weapons: ["dagger"], name: "盜賊", traits: ["連擊加速", "連擊傷害"] },
-      "tactician": { weapons: ["sword_1h"], name: "軍師", traits: ["Boss傷害光環", "降低怪物防禦"] },
-      "bard": { weapons: ["bow"], name: "詩人", traits: ["經驗光環", "金幣光環"] },
-      "barrier_mage": { weapons: ["staff_1h", "staff_2h"], name: "結界師", traits: ["減傷光環", "抗暴擊傷害"] },
-      "mage": { weapons: ["staff_1h", "staff_2h"], name: "法師", traits: ["無視防禦", "燒傷/麻痺/冰凍"] },
-      "healer": { weapons: null, name: "治療師", traits: ["回血光環", "隊伍傷害加成"] },
-      "archer": { weapons: ["bow"], name: "弓箭手", traits: ["命中要害", "閃躲後追擊"] }
-    };
+    const jobDisplayName = jobEq.itemName || jobEq.name || "未知職業";
 
-    // 判斷職業
-    let jobType = null;
-    let jobInfo = null;
-    for (const [key, info] of Object.entries(jobWeaponMap)) {
-      if (jobId.includes(key) || jobName.includes(info.name)) {
-        jobType = key;
-        jobInfo = info;
-        break;
-      }
+    // 職業裝備加成
+    const jobBonusParts = [];
+    for (const eff of (jobEq.passiveEffects || [])) {
+      const v = eff?.params?.value;
+      if (!v) continue;
+      if (eff.key === 'gold_gain_up')  jobBonusParts.push(`金幣 +${v}%`);
+      if (eff.key === 'exp_gain_up')   jobBonusParts.push(`經驗 +${v}%`);
+      if (eff.key === 'drop_rate_up')  jobBonusParts.push(`掉落 +${v}%`);
     }
+    const jobBonusLine = jobBonusParts.length ? `\n結算加成：${jobBonusParts.join("、")}` : "";
 
-    // 顯示職業名稱和特性（如果武器匹配；weapons=null 表示任何武器都觸發）
-    if (jobInfo) {
-      // 職業裝備加成
-      const jobBonusParts = [];
-      for (const eff of (jobEq.passiveEffects || [])) {
+    // 稱號裝備加成
+    const titleBonusParts = [];
+    const titleEq = equipped.title_eq;
+    if (titleEq) {
+      for (const eff of (titleEq.passiveEffects || [])) {
         const v = eff?.params?.value;
         if (!v) continue;
-        if (eff.key === 'gold_gain_up')  jobBonusParts.push(`金幣 +${v}%`);
-        if (eff.key === 'exp_gain_up')   jobBonusParts.push(`經驗 +${v}%`);
-        if (eff.key === 'drop_rate_up')  jobBonusParts.push(`掉落 +${v}%`);
+        if (eff.key === 'gold_gain_up')  titleBonusParts.push(`金幣 +${v}%`);
+        if (eff.key === 'exp_gain_up')   titleBonusParts.push(`經驗 +${v}%`);
+        if (eff.key === 'drop_rate_up')  titleBonusParts.push(`掉落 +${v}%`);
       }
-      const jobBonusLine = jobBonusParts.length ? `\n結算加成：${jobBonusParts.join("、")}` : "";
+    }
+    const titleBonusLine = titleBonusParts.length ? `\n稱號加成：${titleBonusParts.join("、")}` : "";
+    const bonusLine = jobBonusLine + titleBonusLine;
 
-      // 稱號裝備加成
-      const titleBonusParts = [];
-      const titleEq = equipped.title_eq;
-      if (titleEq) {
-        for (const eff of (titleEq.passiveEffects || [])) {
-          const v = eff?.params?.value;
-          if (!v) continue;
-          if (eff.key === 'gold_gain_up')  titleBonusParts.push(`金幣 +${v}%`);
-          if (eff.key === 'exp_gain_up')   titleBonusParts.push(`經驗 +${v}%`);
-          if (eff.key === 'drop_rate_up')  titleBonusParts.push(`掉落 +${v}%`);
-        }
-      }
-      const titleBonusLine = titleBonusParts.length ? `\n稱號加成：${titleBonusParts.join("、")}` : "";
-      const bonusLine = jobBonusLine + titleBonusLine;
-
-      const weaponMatches = jobInfo.weapons === null || jobInfo.weapons.includes(wt);
-      if (weaponMatches) {
-        const traitsStr = jobInfo.traits.join(" / ");
-        jobTraitAreaLine = `職業特性：${jobInfo.name}\n啟用中：${traitsStr}${bonusLine}`;
-        if (jobInfo.name === "矮人戰士" && (wt === "mace_1h" || wt === "mace_2h")) {
-      jobTraitAreaLine += `\n暈眩值：單手槌 20%、雙手槌 30%、矮人高血再 +10%、對暈眩目標：單手 +5%、雙手 +15%`;
-        }
-      } else {
-        jobTraitAreaLine = `職業特性：${jobInfo.name}${bonusLine}`;
-      }
+    // 從 jobSkills 讀取技能名稱與效果描述
+    const jobSkills = Array.isArray(jobEq.jobSkills) ? jobEq.jobSkills : [];
+    if (jobSkills.length > 0) {
+      const skillLines = jobSkills.map(sk => {
+        const cond = sk.condition || {};
+        const condParts = [];
+        if (Number.isFinite(Number(cond.ownerHpBelowPct))) condParts.push(`HP<${cond.ownerHpBelowPct}%`);
+        if (Number.isFinite(Number(cond.ownerHpAbovePct))) condParts.push(`HP>${cond.ownerHpAbovePct}%`);
+        const condStr = condParts.length ? `（${condParts.join("、")}）` : "";
+        return `・${sk.name}${condStr}：${sk.description || ""}`;
+      });
+      jobTraitAreaLine = `職業技能：${jobDisplayName}\n${skillLines.join("\n")}${bonusLine}`;
     } else {
-      // 未知職業，只顯示名稱
-      jobTraitAreaLine = `職業特性：${jobEq.itemName}`;
+      jobTraitAreaLine = `職業技能：${jobDisplayName}${bonusLine}`;
     }
   }
 
@@ -396,7 +372,7 @@ async function handleProfile(interaction) {
   await replyAndAutoDelete(interaction,
     `🧧 **${displayName} 的冒險者履歷**${fallbackUsed ? "（資料已降級顯示）" : ""}\n` +
     `==============\n` +
-    `【職業特性】\n` +
+    `【職業技能】\n` +
     `${jobTraitAreaLine}\n` +
     `==============\n` +
     `${cardSection}` +

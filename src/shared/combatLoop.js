@@ -233,6 +233,9 @@ function applyMonsterEffects(mCalc, activeEffects = [], currentRound = 1) {
       case 'final_damage_up':
         adjusted.finalDamageMultiplier = (adjusted.finalDamageMultiplier || 1) * (1 + Math.abs(params.value || 0) / 100);
         break;
+      case 'final_damage_down':
+        adjusted.finalDamageMultiplier = (adjusted.finalDamageMultiplier || 1) * (1 - Math.min(95, Math.abs(params.value || 0)) / 100);
+        break;
       case 'def_up':
         // DEF 提升（百分比，value=25 表示 +25%）
         if (params.mode === 'flat') adjusted.def = (adjusted.def || 0) + Math.abs(params.value || 0);
@@ -774,20 +777,27 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const hasBossAgiTurnSuppress = worldBossHasAgiSuppress && bossAgiDiff > 5;  // 玩家奇數回合被壓制
 
   // options.startMonsterHp：攻塔多人輪流時，從上一位打完的殘血繼續
-  let mHp = (options.startMonsterHp != null && options.startMonsterHp < mHpInit)
-    ? Math.max(0, options.startMonsterHp)
+  let mHp = (options.startMonsterHp != null)
+    ? Math.max(0, Math.min(mHpInit, Number(options.startMonsterHp) || 0))
     : mHpInit;
-  let pHp = pStats.maxHp;
+  let pHp = options.startPlayerHp != null
+    ? Math.max(0, Math.min(pStats.maxHp, Number(options.startPlayerHp) || 0))
+    : pStats.maxHp;
   let outcome = null;
   let totalDamage = 0;
-  let round = 1;
-  let stunRoundsLeft = 0; // 怪物剩餘擊暈回合數
-  let monsterActiveEffects = []; // 怪物的 active effects（Buff/Debuff）
+  let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
+  const endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
+  let stunRoundsLeft = Math.max(0, Math.floor(Number(options.stunRoundsLeft || 0))); // 怪物剩餘擊暈回合數
+  let monsterActiveEffects = Array.isArray(options.monsterActiveEffects)
+    ? options.monsterActiveEffects.map((effect) => ({ ...effect, params: { ...(effect.params || {}) } }))
+    : []; // 怪物的 active effects（Buff/Debuff）
   let warriorLowHpTriggered = false; // 戰士低血量加成只提示一次
   const lowHpTriggerText = pStats.hasWarriorBadge
     ? "⚔️ 戰士低血量加成觸發！"
     : "⚡ 低血量觸發！";
   const cardCooldowns = { player: {}, monster: {} };
+  const jobSkillCooldowns = {}; // { [skillKey]: remainingTurns }
+  let jobSkillUsedThisRound = false;
   const combatStats = {
     comboCount: 0,
     dodgeCount: 0,
@@ -802,13 +812,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const tierBossDamageMultiplier = options.monsterIsBoss ? Math.max(0.1, Number(pStats.tierBossDamageMultiplier) || 1) : 1;
   const tierCritDamageMultiplier = Math.max(0.1, Number(pStats.tierCritDamageMultiplier) || 1);
 
-  while (round <= MAX_ROUNDS && outcome === null) {
+  while (round <= endRound && outcome === null) {
     const log = [`**【第 ${round} 回合】**`];
     for (const bucket of Object.values(cardCooldowns)) {
       for (const key of Object.keys(bucket)) {
         bucket[key] = Math.max(0, Number(bucket[key] || 0) - 1);
       }
     }
+    for (const key of Object.keys(jobSkillCooldowns)) {
+      jobSkillCooldowns[key] = Math.max(0, Number(jobSkillCooldowns[key] || 0) - 1);
+    }
+    jobSkillUsedThisRound = false;
     if (round === 1 && jobProfile.jobName) {
       log.push(`✨ ${jobProfile.jobName} ${rand(jobFlavor.intro)}`);
       // 職業配武器效果提示（只顯示本場實際生效的）
@@ -1855,6 +1869,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const effectiveStunChance = (Number(pStats.stunChance) || 0) + stunBonus;
         if (!isCrit && Math.random() * 100 < effectiveStunChance) {
           stunRoundsLeft = 3;
+          monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+            key: 'stun',
+            params: { value: 100, duration: { mode: 'turns', value: 3 } },
+            appliedAt: round,
+            sourceType: 'job_proc',
+            sourceId: 'dwarf_warrior:stun'
+          });
           combatStats.stunCount += 1;
           log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 3 回合無法攻擊！`);
         }
@@ -1999,6 +2020,68 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
       } else {
         log.push(`💨 ${mName} ${rand(jobFlavor.dodge)}，你的攻擊落空了！`);
+      }
+    }
+
+    // ── 職業技能觸發（25% 機率，每回合限一次，從可用技能隨機選一個）──
+    if (!jobSkillUsedThisRound && !playerIsStunned && !playerIsFrozen && outcome === null) {
+      const jobSkills = Array.isArray(options.equipped?.job_eq?.jobSkills)
+        ? options.equipped.job_eq.jobSkills
+        : [];
+      if (jobSkills.length > 0 && Math.random() < 0.25) {
+        const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
+        const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+        const available = jobSkills.filter((sk) => {
+          if (!sk || !sk.key) return false;
+          if ((jobSkillCooldowns[sk.key] || 0) > 0) return false;
+          // HP 條件
+          const c = sk.condition || {};
+          if (Number.isFinite(Number(c.ownerHpAbovePct)) && playerHpPct <= Number(c.ownerHpAbovePct)) return false;
+          if (Number.isFinite(Number(c.ownerHpBelowPct)) && playerHpPct >= Number(c.ownerHpBelowPct)) return false;
+          if (Number.isFinite(Number(c.targetHpBelowPct)) && monsterHpPct >= Number(c.targetHpBelowPct)) return false;
+          return true;
+        });
+        if (available.length > 0) {
+          const chosen = available[Math.floor(Math.random() * available.length)];
+          jobSkillUsedThisRound = true;
+          if (Number(chosen.cooldownTurns) > 0) jobSkillCooldowns[chosen.key] = Number(chosen.cooldownTurns);
+
+          const JOB_SKILL_OFFENSIVE = new Set([
+            'atk_down', 'def_down', 'hit_down', 'agi_down', 'stun', 'silence',
+            'poison', 'bleed', 'burn', 'lightning', 'freeze', 'charm', 'dark_curse'
+          ]);
+          let skillApplied = false;
+          for (const pe of (Array.isArray(chosen.procEffects) ? chosen.procEffects : [])) {
+            if (!pe || !pe.key) continue;
+            // 即時回血
+            if (IMMEDIATE_HEAL_EFFECT_KEYS.has(pe.key)) {
+              const params = pe.params || {};
+              const base = params.mode === 'max_hp_pct' || params.mode === 'pct'
+                ? pStats.maxHp
+                : (params.mode === 'current_hp' ? pHp : pStats.maxHp);
+              const heal = Math.max(1, Math.round(base * ((Number(params.value) || 10) / 100)));
+              pHp = Math.min(pStats.maxHp, pHp + heal);
+              log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 【${chosen.name}】！回復 **${heal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+              skillApplied = true;
+              continue;
+            }
+            const entry = makeCardEffectEntry(pe, round, 'job_skill', {}, `job:${chosen.key}`);
+            entry.params.sourceName = jobProfile.jobName || '職業技能';
+            if (pe.target === 'enemy' || JOB_SKILL_OFFENSIVE.has(pe.key)) {
+              monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, entry);
+            } else {
+              if (!options.playerActiveEffects) options.playerActiveEffects = [];
+              options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, entry);
+            }
+            skillApplied = true;
+          }
+          if (skillApplied) {
+            const hasImmedHeal = (chosen.procEffects || []).some(pe => IMMEDIATE_HEAL_EFFECT_KEYS.has(pe?.key));
+            if (!hasImmedHeal) {
+              log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${chosen.name}】！${chosen.description || ''}`);
+            }
+          }
+        }
       }
     }
 
@@ -2335,6 +2418,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             // 副手擊暈繼承（劍/匕首）
             if (pStats.counterInheritStun && Math.random() * 100 < pStats.stunChance) {
               stunRoundsLeft = 3;
+              monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                key: 'stun',
+                params: { value: 100, duration: { mode: 'turns', value: 3 } },
+                appliedAt: round,
+                sourceType: 'job_proc',
+                sourceId: 'counter:stun'
+              });
               combatStats.stunCount += 1;
               log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 3 回合無法攻擊！`);
             }
@@ -2366,7 +2456,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     totalDamage,
     finalMonsterHp: Math.max(0, mHp),
     finalPlayerHp:  Math.max(0, pHp),
-    combatStats
+    combatStats,
+    monsterActiveEffects,
+    stunRoundsLeft,
+    nextRound: round
   };
 }
 
