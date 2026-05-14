@@ -27,6 +27,27 @@ const QUEST_TYPES = {
 };
 
 const CADENCE_ORDER = { onboarding: 1, job: 2, daily: 3, weekly: 4 };
+const VALID_UNLOCK_ATTRS = ["str", "agi", "vit", "int", "dex", "luk"];
+
+function normalizeUnlockAttributes(def = {}) {
+  const raw = Array.isArray(def.unlockAttributes) && def.unlockAttributes.length > 0
+    ? def.unlockAttributes
+    : [
+      def.unlockAttribute,
+      def.unlockAttribute2
+    ];
+  const normalized = raw
+    .map((attr) => String(attr || "").trim().toLowerCase())
+    .filter((attr, index, arr) => VALID_UNLOCK_ATTRS.includes(attr) && arr.indexOf(attr) === index);
+  return normalized;
+}
+
+function getUnlockAttributeTotal(quest, attributes = {}) {
+  const unlockAttributes = Array.isArray(quest?.unlockAttributes) && quest.unlockAttributes.length > 0
+    ? quest.unlockAttributes
+    : normalizeUnlockAttributes(quest);
+  return unlockAttributes.reduce((sum, attr) => sum + Number(attributes?.[attr] || 0), 0);
+}
 
 function normalizeCadence(cadence) {
   return QUEST_CADENCES.includes(cadence) ? cadence : "weekly";
@@ -116,9 +137,9 @@ class WeeklyQuestService {
       : (typeof def?.unlockWeaponTypes === "string"
         ? String(def.unlockWeaponTypes).split(",").map((v) => v.trim()).filter(Boolean)
         : []);
-    const VALID_ATTRS = ["str", "agi", "vit", "int", "dex", "luk"];
-    const unlockAttribute = def?.unlockAttribute ? String(def.unlockAttribute).trim().toLowerCase() : null;
-    const unlockAttribute2 = def?.unlockAttribute2 ? String(def.unlockAttribute2).trim().toLowerCase() : null;
+    const unlockAttributes = normalizeUnlockAttributes(def);
+    const unlockAttribute = unlockAttributes[0] || null;
+    const unlockAttribute2 = unlockAttributes[1] || null;
     return {
       ...def,
       cadence,
@@ -129,8 +150,9 @@ class WeeklyQuestService {
       enabled: def?.enabled !== false,
       unlockLevel: Math.max(0, Number(def?.unlockLevel || 0)),
       unlockWeaponTypes,
-      unlockAttribute: VALID_ATTRS.includes(unlockAttribute) ? unlockAttribute : null,
-      unlockAttribute2: VALID_ATTRS.includes(unlockAttribute2) ? unlockAttribute2 : null,
+      unlockAttributes,
+      unlockAttribute,
+      unlockAttribute2,
       unlockAttributeMin: Math.max(0, Number(def?.unlockAttributeMin || 0)),
       hideIfRewardOwned: def?.hideIfRewardOwned !== false,
       claimOnce: Boolean(def?.claimOnce)
@@ -199,10 +221,8 @@ class WeeklyQuestService {
       const weaponType = String(context?.weaponType || "");
       if (!quest.unlockWeaponTypes.includes(weaponType)) return false;
     }
-    if (quest.unlockAttribute) {
-      const val1 = Number(context?.attributes?.[quest.unlockAttribute] || 0);
-      const val2 = quest.unlockAttribute2 ? Number(context?.attributes?.[quest.unlockAttribute2] || 0) : 0;
-      const total = quest.unlockAttribute2 ? val1 + val2 : val1;
+    if ((quest.unlockAttributes && quest.unlockAttributes.length > 0) || quest.unlockAttribute) {
+      const total = getUnlockAttributeTotal(quest, context?.attributes || {});
       if (!(total > Number(quest.unlockAttributeMin || 0))) return false;
     }
     return true;
@@ -225,10 +245,8 @@ class WeeklyQuestService {
         return false;
       }
 
-    if (quest.unlockAttribute) {
-      const val1 = Number(context?.attributes?.[quest.unlockAttribute] || 0);
-      const val2 = quest.unlockAttribute2 ? Number(context?.attributes?.[quest.unlockAttribute2] || 0) : 0;
-      const total = quest.unlockAttribute2 ? val1 + val2 : val1;
+    if ((quest.unlockAttributes && quest.unlockAttributes.length > 0) || quest.unlockAttribute) {
+      const total = getUnlockAttributeTotal(quest, context?.attributes || {});
       if (!(total > Number(quest.unlockAttributeMin || 0))) return false;
     }
 
@@ -294,6 +312,7 @@ class WeeklyQuestService {
       sortOrder: Number(fields?.sortOrder || 0),
       unlockLevel: Math.max(0, Number(fields?.unlockLevel || 0)),
       unlockWeaponTypes: fields?.unlockWeaponTypes || [],
+      unlockAttributes: fields?.unlockAttributes || [],
       unlockAttribute: fields?.unlockAttribute || null,
       unlockAttribute2: fields?.unlockAttribute2 || null,
       unlockAttributeMin: Math.max(0, Number(fields?.unlockAttributeMin || 0)),
@@ -331,6 +350,7 @@ class WeeklyQuestService {
       sortOrder: fields?.sortOrder !== undefined ? Number(fields.sortOrder || 0) : Number(quest.sortOrder || 0),
       unlockLevel: fields?.unlockLevel !== undefined ? Math.max(0, Number(fields.unlockLevel) || 0) : Number(quest.unlockLevel || 0),
       unlockWeaponTypes: fields?.unlockWeaponTypes !== undefined ? fields.unlockWeaponTypes : (quest.unlockWeaponTypes || []),
+      unlockAttributes: fields?.unlockAttributes !== undefined ? fields.unlockAttributes : (quest.unlockAttributes || []),
       unlockAttribute: fields?.unlockAttribute !== undefined ? (fields.unlockAttribute || null) : (quest.unlockAttribute || null),
       unlockAttribute2: fields?.unlockAttribute2 !== undefined ? (fields.unlockAttribute2 || null) : (quest.unlockAttribute2 || null),
       unlockAttributeMin: fields?.unlockAttributeMin !== undefined ? Math.max(0, Number(fields.unlockAttributeMin) || 0) : Number(quest.unlockAttributeMin || 0),
@@ -542,16 +562,16 @@ class WeeklyQuestService {
       { cadence: "onboarding", title: "完成全部新手任務", description: "完成前面所有新手任務後，再回來領取最終獎勵。", type: "onboarding_complete_count", target: 1, rewardGold: 0, rewardExp: 0, rewardDiamond: 0, rewardItemId: "87b281be-b175-40a0-8044-0accc88a0ee0", sortOrder: 160, groupKey: "seed_v1" },
 
       // job (10)
-      { cadence: "job", title: "劍士試煉", description: "出現條件：Lv.10，基礎 STR > 10。進度武器：單手劍或雙手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與劍士徽章。", type: "battle_with_sword", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_swordsman_v1", sortOrder: 10, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["sword_1h", "sword_2h"], unlockAttribute: "str", unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "戰士試煉", description: "出現條件：Lv.10，基礎 STR > 10。進度武器：單手斧或雙手斧；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與戰士徽章。", type: "battle_with_axe", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_warrior_v1", sortOrder: 20, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["axe_1h", "axe_2h"], unlockAttribute: "str", unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "矮人戰士試煉", description: "出現條件：Lv.10，基礎 VIT > 10。進度武器：單手槌或雙手槌；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與矮人戰士徽章。", type: "battle_with_mace", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_dwarf_warrior_v1", sortOrder: 30, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["mace_1h", "mace_2h"], unlockAttribute: "vit", unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "盜賊試煉", description: "出現條件：Lv.10，基礎 AGI > 10。進度武器：匕首；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與盜賊徽章。", type: "battle_with_dagger", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_rogue_v1", sortOrder: 40, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["dagger"], unlockAttribute: "agi", unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "法師試煉", description: "出現條件：Lv.10，基礎 INT > 10。進度武器：雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與法師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_mage_v1", sortOrder: 50, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_2h"], unlockAttribute: "int", unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "治療師試煉", description: "出現條件：Lv.10，基礎 INT > 10。進度武器：單手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與治療師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_healer_v1", sortOrder: 60, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_1h"], unlockAttribute: "int", unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "弓箭手試煉", description: "出現條件：Lv.10，基礎 DEX > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與弓箭手徽章。", type: "battle_with_bow", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_archer_v1", sortOrder: 70, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["bow"], unlockAttribute: "dex", unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "軍師試煉", description: "出現條件：Lv.10，基礎 AGI > 10。進度武器：單手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與軍師徽章。", type: "battle_with_sword", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_tactician_v1", sortOrder: 80, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["sword_1h"], unlockAttribute: "agi", unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "詩人試煉", description: "出現條件：Lv.10，基礎 DEX > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與詩人徽章。", type: "battle_with_bow", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_bard_v1", sortOrder: 90, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["bow"], unlockAttribute: "dex", unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "結界師試煉", description: "出現條件：Lv.10，基礎 INT > 10。進度武器：單手法杖或雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與結界師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_barrier_mage_v1", sortOrder: 100, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_1h", "staff_2h"], unlockAttribute: "int", unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "劍士試煉", description: "出現條件：Lv.10，基礎 STR + DEX > 10。進度武器：單手劍或雙手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與劍士徽章。", type: "battle_with_sword", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_swordsman_v1", sortOrder: 10, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["sword_1h", "sword_2h"], unlockAttributes: ["str", "dex"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "戰士試煉", description: "出現條件：Lv.10，基礎 STR + VIT > 10。進度武器：單手斧或雙手斧；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與戰士徽章。", type: "battle_with_axe", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_warrior_v1", sortOrder: 20, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["axe_1h", "axe_2h"], unlockAttributes: ["str", "vit"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "矮人戰士試煉", description: "出現條件：Lv.10，基礎 VIT + STR > 10。進度武器：單手槌或雙手槌；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與矮人戰士徽章。", type: "battle_with_mace", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_dwarf_warrior_v1", sortOrder: 30, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["mace_1h", "mace_2h"], unlockAttributes: ["vit", "str"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "盜賊試煉", description: "出現條件：Lv.10，基礎 AGI + DEX > 10。進度武器：匕首；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與盜賊徽章。", type: "battle_with_dagger", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_rogue_v1", sortOrder: 40, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["dagger"], unlockAttributes: ["agi", "dex"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "法師試煉", description: "出現條件：Lv.10，基礎 INT + AGI > 10。進度武器：雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與法師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_mage_v1", sortOrder: 50, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_2h"], unlockAttributes: ["int", "agi"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "治療師試煉", description: "出現條件：Lv.10，基礎 INT + VIT > 10。進度武器：單手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與治療師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_healer_v1", sortOrder: 60, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_1h"], unlockAttributes: ["int", "vit"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "弓箭手試煉", description: "出現條件：Lv.10，基礎 DEX + AGI > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與弓箭手徽章。", type: "battle_with_bow", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_archer_v1", sortOrder: 70, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["bow"], unlockAttributes: ["dex", "agi"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "軍師試煉", description: "出現條件：Lv.10，基礎 AGI + INT + DEX > 10。進度武器：單手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與軍師徽章。", type: "battle_with_sword", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_tactician_v1", sortOrder: 80, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["sword_1h"], unlockAttributes: ["agi", "int", "dex"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "詩人試煉", description: "出現條件：Lv.10，基礎 DEX + AGI + LUK > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與詩人徽章。", type: "battle_with_bow", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_bard_v1", sortOrder: 90, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["bow"], unlockAttributes: ["dex", "agi", "luk"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "結界師試煉", description: "出現條件：Lv.10，基礎 INT + VIT + DEX > 10。進度武器：單手法杖或雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與結界師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_barrier_mage_v1", sortOrder: 100, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_1h", "staff_2h"], unlockAttributes: ["int", "vit", "dex"], unlockAttributeMin: 10, hideIfRewardOwned: true },
 
       // daily (4)
       { cadence: "daily", title: "每日出戰 5 次", type: "battle_count", target: 5, rewardGold: 250, rewardExp: 120, rewardDiamond: 0, sortOrder: 10, groupKey: "seed_v1" },

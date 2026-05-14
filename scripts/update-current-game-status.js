@@ -32,6 +32,18 @@ function rewardLine(quest, itemById) {
   return parts.join(" + ");
 }
 
+function unlockAttributeLine(quest) {
+  const raw = Array.isArray(quest?.unlockAttributes) && quest.unlockAttributes.length > 0
+    ? quest.unlockAttributes
+    : [quest?.unlockAttribute, quest?.unlockAttribute2];
+  const attrs = raw
+    .map((attr) => String(attr || "").trim().toUpperCase())
+    .filter(Boolean)
+    .filter((attr, index, arr) => arr.indexOf(attr) === index);
+  if (!attrs.length) return "";
+  return `${attrs.join(" + ")} > ${quest.unlockAttributeMin ?? ""}`.trim();
+}
+
 function table(headers, rows) {
   const head = `| ${headers.join(" | ")} |`;
   const sep = `| ${headers.map(() => "---").join(" | ")} |`;
@@ -150,7 +162,7 @@ async function main() {
       quest?.enabled === false || quest?.isActive === false ? "停用" : (quest ? "啟用" : "無任務"),
       quest?.unlockLevel ?? "",
       Array.isArray(quest?.unlockWeaponTypes) ? quest.unlockWeaponTypes.join(", ") : "",
-      quest?.unlockAttribute ? `${quest.unlockAttribute.toUpperCase()} > ${quest.unlockAttributeMin}` : "",
+      unlockAttributeLine(quest),
       statLine(badge.equipStats),
     ];
   });
