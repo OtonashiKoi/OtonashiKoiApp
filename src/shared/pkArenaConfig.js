@@ -1,13 +1,13 @@
 "use strict";
 
 const PK_ARENA_BRACKETS = [
-  { index: 0, key: "S", label: "Lv.40", minLevel: 40, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
-  { index: 1, key: "S", label: "Lv.40", minLevel: 40, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
-  { index: 2, key: "S", label: "Lv.40", minLevel: 40, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
-  { index: 3, key: "S", label: "Lv.40", minLevel: 40, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
-  { index: 4, key: "S", label: "Lv.40", minLevel: 40, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
-  { index: 5, key: "S", label: "Lv.40", minLevel: 40, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
-  { index: 6, key: "S", label: "Lv.40", minLevel: 40, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
+  { index: 0, key: "S", label: "Lv.30", minLevel: 30, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
+  { index: 1, key: "S", label: "Lv.30", minLevel: 30, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
+  { index: 2, key: "S", label: "Lv.30", minLevel: 30, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
+  { index: 3, key: "S", label: "Lv.30", minLevel: 30, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
+  { index: 4, key: "S", label: "Lv.30", minLevel: 30, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
+  { index: 5, key: "S", label: "Lv.30", minLevel: 30, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
+  { index: 6, key: "S", label: "Lv.30", minLevel: 30, maxLevel: null, stoneCount: 2, stoneDropRate: 0.5 },
 ];
 
 // Rating 系統：Elo-based，初始 1500，依勝敗和等級差動態調整 K

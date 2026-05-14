@@ -131,7 +131,7 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = []) {
   const rankingText = buildRankingField(ranking);
   if (rankingText) {
     embed.addFields({
-      name: "🏆 Rating 排行榜 TOP 10（Lv.40）",
+      name: "🏆 Rating 排行榜 TOP 10（Lv.30+）",
       value: rankingText,
       inline: false,
     });

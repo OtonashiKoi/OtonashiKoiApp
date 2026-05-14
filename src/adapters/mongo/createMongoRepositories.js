@@ -214,7 +214,7 @@ function createMongoRepositories() {
       },
       async findTopByPkRating(limit = 10) {
         return (await collection("progress"))
-          .find({ pkRating: { $exists: true }, level: { $gte: 40 } })
+          .find({ pkRating: { $exists: true }, level: { $gte: 30 } })
           .sort({ pkRating: -1 })
           .limit(limit)
           .project({ playerId: 1, displayName: 1, pkRating: 1, pkWins: 1, pkLosses: 1, level: 1 })
