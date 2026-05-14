@@ -50,8 +50,8 @@ const TOWER_FLOOR_BUFFS = [
     emoji: "💀",
     color: 0xe74c3c,
     partyBonus: { atkPct: 35, hpPct: 70 },
-    monsterScalePct: 600,
-    monsterAtkScalePct: 450,
+    monsterScalePct: 420,
+    monsterAtkScalePct: 320,
   },
   {
     minFloor: 41,
@@ -60,8 +60,8 @@ const TOWER_FLOOR_BUFFS = [
     emoji: "👑",
     color: 0x1a1a2e,
     partyBonus: { atkPct: 50, hpPct: 100 },
-    monsterScalePct: 1200,
-    monsterAtkScalePct: 800,
+    monsterScalePct: 900,
+    monsterAtkScalePct: 620,
   },
 ];
 
@@ -78,7 +78,7 @@ const TOWER_MONSTER_ZONE_POOL = {
 // ── 隊伍行動軸規則 ──────────────────────────────────────────────────────────
 // 每層戰鬥：玩家與怪物都依 AGI 速度條排軸；怪物死亡即過關。
 // 此數值保留舊名稱供相容使用，實際會換算成每層最大行動切片，避免無限迴圈。
-const MAX_ROUNDS_PER_MEMBER = 50;
+const MAX_ROUNDS_PER_MEMBER = 65;
 
 // ── 戰場連結 HP 規則 ──────────────────────────────────────────────────────────
 // 隊員 HP 在整場攻塔期間持續消耗，不回血，只有層間 Buff 加成最大HP
