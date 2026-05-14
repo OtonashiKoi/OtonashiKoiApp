@@ -342,23 +342,33 @@ function getTowerPartyDefense(partyEffects = []) {
 
 function applyMonsterTeamAttack(session, mCalc, partyEffects, floor) {
   const { damageReductionPct, critReductionPct } = getTowerPartyDefense(partyEffects);
-  const baseAtk = Math.max(1, Number(mCalc.atk || 1));
-  const critRate = Math.max(0, Number(mCalc.critRate || 0));
-  const isCrit = Math.random() * 100 < critRate;
-  const hits = [];
+  const baseAtk   = Math.max(1, Number(mCalc.atk || 1));
+  const critRate  = Math.max(0, Number(mCalc.critRate || 0));
+  const monsterHit = Math.min(100, Math.max(0, Number(mCalc.hit || 80)));
+  const isCrit    = Math.random() * 100 < critRate;
+  const hits      = [];
 
   for (const member of session.members) {
     if (!member || member.currentHp <= 0) continue;
-    const stats = getEffectiveMemberStats(member, partyEffects);
-    const defPct = Math.min(75, Math.max(0, Number(stats.def || 0)));
+    const stats   = getEffectiveMemberStats(member, partyEffects);
+    const defPct  = Math.min(75, Math.max(0, Number(stats.def || 0)));
+    const dodge   = Math.min(95, Math.max(0, Number(stats.dodge || 0)));
+    const missChance = Math.max(0, dodge - monsterHit + 70); // 基準命中 70，超出部分才閃
+    if (Math.random() * 100 < missChance) {
+      hits.push({ name: member.name, damage: 0, dodged: true, hp: member.currentHp, maxHp: member.maxHp, dead: false });
+      continue;
+    }
     let damage = baseAtk * (1 - defPct / 100);
     if (isCrit) damage *= Math.max(1, 1.5 - critReductionPct / 100);
     damage *= (1 - Math.min(90, Math.max(0, damageReductionPct)) / 100);
     damage = Math.max(1, Math.round(damage));
     member.currentHp = Math.max(0, member.currentHp - damage);
-    hits.push({ name: member.name, damage, hp: member.currentHp, maxHp: member.maxHp, dead: member.currentHp <= 0 });
+    hits.push({ name: member.name, damage, dodged: false, hp: member.currentHp, maxHp: member.maxHp, dead: member.currentHp <= 0 });
   }
 
+  const hitSummary = hits
+    .map((h) => h.dodged ? `${h.name}閃避` : `${h.name}-${h.damage}${h.dead ? "💀" : ""}`)
+    .join("、");
   return {
     type: "monster",
     name: "怪物",
@@ -367,7 +377,7 @@ function applyMonsterTeamAttack(session, mCalc, partyEffects, floor) {
     damageReductionPct,
     hits,
     summary: hits.length
-      ? `怪物全隊攻擊${isCrit ? "（暴擊）" : ""}：${hits.map((h) => `${h.name}-${h.damage}${h.dead ? "💀" : ""}`).join("、")}`
+      ? `怪物全隊攻擊${isCrit ? "（暴擊）" : ""}：${hitSummary}`
       : "怪物行動，但沒有可攻擊的存活隊員。"
   };
 }
@@ -453,12 +463,12 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
 
     if (actor.type === "monster") {
       if (stunRoundsLeft > 0) {
-        stunRoundsLeft = 0;
+        stunRoundsLeft -= 1;
         memberLogs.push({
           type: "monster",
           name: monster.name,
           agi: actor.agi,
-          logs: [`😵 ${monster.name} 處於暈眩狀態，本次行動跳過。`],
+          logs: [`😵 ${monster.name} 處於暈眩狀態，本次行動跳過。${stunRoundsLeft > 0 ? `（剩 ${stunRoundsLeft} 次）` : ""}`],
           monsterHpAfter: monsterHp,
           partyHpAfter: session.members.map((m) => ({ name: m.name, hp: m.currentHp, maxHp: m.maxHp })),
         });
@@ -492,7 +502,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       inventory: m.inventory || [],
       playerActiveEffects: Array.isArray(m.activeEffects) ? [...m.activeEffects] : [],
       partyEffects: nonHealPartyEffects,
-      monsterEquipped: {},
+      monsterEquipped: buildMonsterEquipped(monster),
       monsterIsBoss: Boolean(monster.isBoss),
       monsterActiveEffects,
       stunRoundsLeft,
@@ -510,7 +520,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     m.currentHp = Math.max(0, Math.round(result.finalPlayerHp));
     m.activeEffects = Array.isArray(options.playerActiveEffects) ? options.playerActiveEffects : [];
     monsterActiveEffects = Array.isArray(result.monsterActiveEffects) ? result.monsterActiveEffects : [];
-    stunRoundsLeft = Math.min(1, Math.max(0, Number(result.stunRoundsLeft || 0)));
+    stunRoundsLeft = Math.max(0, Number(result.stunRoundsLeft || 0));
     sharedRound = Math.max(sharedRound + 1, Number(result.nextRound || sharedRound + 1));
     memberLogs.push({
       type: "member",
@@ -523,6 +533,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       outcome: result.outcome,
       monsterHpAfter: monsterHp,
       playerHpAfter: m.currentHp,
+      partyHpAfter: session.members.map((mb) => ({ name: mb.name, hp: mb.currentHp, maxHp: mb.maxHp })),
     });
   }
 
