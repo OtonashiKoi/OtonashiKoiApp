@@ -18,6 +18,47 @@ const TOWER_IDS = {
   ranking:    "tower:ranking",     // 任意：排行榜
 };
 
+function buildTowerActionPreview(members = []) {
+  const actors = members
+    .filter((m) => m && (m.currentHp == null || m.currentHp > 0))
+    .map((m, index) => ({
+      type: "member",
+      name: m.name,
+      agi: Number(m.stats?.agi || 0),
+      dex: Number(m.stats?.dex || 0),
+      speed: 100 + Math.max(0, Number(m.stats?.agi || 0)),
+      gauge: 0,
+      index,
+    }));
+
+  const preview = [];
+  for (let i = 0; i < 10 && actors.length > 0; i++) {
+    const nextNeed = Math.min(...actors.map((a) => (1000 - a.gauge) / Math.max(1, a.speed)));
+    for (const actor of actors) actor.gauge += actor.speed * nextNeed;
+    const ready = actors
+      .filter((a) => a.gauge >= 999.999)
+      .sort((a, b) => (b.gauge - a.gauge) || (b.agi - a.agi) || (b.dex - a.dex) || (a.index - b.index));
+    const actor = ready[0];
+    actor.gauge -= 1000;
+    preview.push({ ...actor });
+  }
+  return preview;
+}
+
+function formatTowerActionOrder(members = []) {
+  const order = buildTowerActionPreview(members);
+  if (order.length === 0) return "（尚無行動軸資料）";
+  const memberOrder = order
+    .map((actor, index) => `${index + 1}. **${actor.name}** AGI ${actor.agi}`)
+    .join("\n");
+  return `👾 怪物在前方，依速度條排軸圍攻\n${memberOrder}`;
+}
+
+function formatActorName(actor) {
+  if (actor?.type === "monster") return `👾${actor.name || "怪物"}`;
+  return actor?.name || "???";
+}
+
 // ── 面板大廳常駐面板 ──────────────────────────────────────────
 function createTowerHallMessage(topRanking = []) {
   const MEDALS = ["🥇", "🥈", "🥉"];
@@ -78,6 +119,7 @@ function createTowerThreadLobbyMessage(session) {
     const crown = m.discordId === leaderId ? "👑 " : "";
     return `${crown}**${m.name}** Lv.${m.level}`;
   });
+  const actionOrder = formatTowerActionOrder(members);
 
   const embed = new EmbedBuilder()
     .setTitle(`🗼 組隊攻塔 ― 等待中 [${roomId}]`)
@@ -88,6 +130,9 @@ function createTowerThreadLobbyMessage(session) {
         "",
         "**── 隊伍成員 ──**",
         memberLines.length > 0 ? memberLines.join("\n") : "（等待中）",
+        "",
+        "**── 行動軸（依 AGI）──**",
+        actionOrder,
         "",
         "隊長按 **▶ 開始攻塔** 即鎖定全員裝備出發！",
         "> ⏳ 逾 10 分鐘無人開始自動解散",
@@ -157,17 +202,27 @@ function createTowerThreadBattleMessage(session) {
   // 本層戰報區（上一層打完後顯示）
   const battleSection = [];
   if (lastFloorResult) {
-    const { floor, monsterName, scaledHp, rounds, totalRounds, monsterKilled, survived, monsterHpFinal } = lastFloorResult;
+    const { floor, monsterName, scaledHp, memberLogs = [], actionOrder = [], totalRounds, monsterKilled, survived, monsterHpFinal } = lastFloorResult;
     battleSection.push("", `**── 第 ${floor} 層：${monsterName}（HP ${scaledHp}）──**`);
-    for (const round of rounds) {
-      battleSection.push(`**回合 ${round.roundNum}**`);
-      for (const atk of round.attacks) {
-        const crit = atk.isCrit ? "⚡" : "　";
-        battleSection.push(`　${crit}**${atk.name}** -${atk.dmg}　怪物剩 ${atk.monsterHpAfter}`);
+    if (actionOrder.length > 0) {
+      battleSection.push(`行動軸：${actionOrder.map(formatActorName).join(" → ")}`);
+    }
+    for (const action of memberLogs.slice(0, 8)) {
+      const hpText = action.type === "monster"
+        ? "全隊承受攻擊"
+        : `怪物剩 ${Math.max(0, action.monsterHpAfter || 0)} HP`;
+      battleSection.push(`• **${formatActorName(action)}** 行動（AGI ${action.agi ?? "?"}）｜${hpText}`);
+      const lastLog = Array.isArray(action.logs) ? action.logs.at(-1) : null;
+      if (typeof lastLog === "string") {
+        const summary = lastLog.split("\n")
+          .filter((line) => line && !line.startsWith("**【"))
+          .slice(-2)
+          .join("\n　");
+        if (summary) battleSection.push(`　${summary}`);
       }
-      if (round.counterDmg > 0) {
-        battleSection.push(`　${monsterName} 反擊 各 -${round.counterDmg}`);
-      }
+    }
+    if (memberLogs.length > 8) {
+      battleSection.push(`　…其餘 ${memberLogs.length - 8} 次行動略，完整戰報保留在系統紀錄。`);
     }
     if (monsterKilled && survived)       battleSection.push(`✅ **${monsterName}** 討伐！共 ${totalRounds} 回合，第 ${floor} 層通關！`);
     else if (!monsterKilled)             battleSection.push(`❌ 共 ${totalRounds} 回合仍未擊敗，${monsterName} 剩 ${monsterHpFinal} HP`);
@@ -190,6 +245,9 @@ function createTowerThreadBattleMessage(session) {
     "",
     "**── 隊伍成員 ──**",
     ...memberLines,
+    "",
+    "**── 目前行動軸（依 AGI）──**",
+    formatTowerActionOrder(members),
     ...battleSection,
     "",
     buildFloorProgress(clearedFloor, currentFloor || nextFloor),

@@ -4,7 +4,7 @@ const { MessageFlags } = require("discord.js");
 const config = require("../../config");
 const { serviceContext, getBotClient } = require("../runtimeContext");
 const { calcPlayerStats } = require("../../shared/combatStats");
-const { mergeEquippedFromLibrary, applyEffectInstances, collectEquipmentEffects, isEffectConditionMet } = require("../../shared/effectEngine");
+const { mergeEquippedFromLibrary, applyEffectInstances, applyEffectsToStats, collectEquipmentEffects, isEffectConditionMet } = require("../../shared/effectEngine");
 const { runCombatLoop } = require("../../shared/combatLoop");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { setTowerPresence, isTowerBattleActive } = require("../../shared/battlePresence");
@@ -91,6 +91,9 @@ const JOB_TRAITS = {
   mage:         { name: "法師",   emoji: "🪄",  traits: ["法杖傷害×1.15", "無視DEF 50%", "穿防遠攻"] },
   healer:       { name: "治療師", emoji: "💚",  traits: ["每回合回復3% MaxHP", "在場光環", "團隊支援"] },
   archer:       { name: "弓箭手", emoji: "🏹",  traits: ["弓傷害×1.2", "命中要害35%+", "迴避後必暴追擊"] },
+  tactician:    { name: "軍師",   emoji: "♟️",  traits: ["Boss傷害光環+5%", "怪物防禦-5%", "單手劍指揮"] },
+  bard:         { name: "詩人",   emoji: "🎼",  traits: ["EXP光環+5%", "金幣光環+5%", "弓系支援"] },
+  barrier_mage: { name: "結界師", emoji: "🛡️", traits: ["隊伍減傷-5%", "抗暴傷-10%", "法杖結界"] },
   default:      { name: "冒險者", emoji: "🧑",  traits: ["無職業加成"] },
 };
 
@@ -105,6 +108,9 @@ function detectJob(equipped = {}) {
   if (has("warrior") || has("戰士"))   return JOB_TRAITS.warrior;
   if (has("archer") || has("弓箭手"))  return JOB_TRAITS.archer;
   if (has("healer") || has("治療師"))  return JOB_TRAITS.healer;
+  if (has("tactician") || has("軍師"))  return JOB_TRAITS.tactician;
+  if (has("bard") || has("詩人"))       return JOB_TRAITS.bard;
+  if (has("barrier") || has("結界"))    return JOB_TRAITS.barrier_mage;
   if (has("mage") || has("法師"))      return JOB_TRAITS.mage;
   if (has("rogue") || has("盜賊"))     return JOB_TRAITS.rogue;
   return JOB_TRAITS.default;
@@ -195,18 +201,30 @@ async function pickFloorMonster(floor) {
 // ── 收集全隊 party 光環 effects ──────────────────────────────
 // 掃全員 equipped 的 target=party effects（與怪物區邏輯相同）
 function buildTowerPartyEffects(members) {
-  const partyEffects = [];
+  const bestByJobAndKey = new Map();
+  const freeStackEffects = [];
+
   for (const m of members) {
     if (!m.equipped || m.currentHp <= 0) continue;
     const context = { equipped: m.equipped, inventory: m.inventory || [] };
     const refs = collectEquipmentEffects(m.equipped, null, context);
+    const jobName = m.job?.name || null;
     for (const r of refs) {
       if (r && r.target === "party" && isEffectConditionMet(r, context)) {
-        partyEffects.push({ ...r, sourceName: m.name });
+        const effect = { ...r, sourceName: m.name, sourceJobName: jobName };
+        if (!jobName) {
+          freeStackEffects.push(effect);
+          continue;
+        }
+        const key = `${jobName}:${r.key}`;
+        const current = bestByJobAndKey.get(key);
+        const currentValue = Number(current?.params?.value || 0);
+        const nextValue = Number(effect?.params?.value || 0);
+        if (!current || nextValue > currentValue) bestByJobAndKey.set(key, effect);
       }
     }
   }
-  return partyEffects;
+  return [...bestByJobAndKey.values(), ...freeStackEffects];
 }
 
 function buildMonsterEquipped(monster) {
@@ -222,9 +240,141 @@ function buildMonsterEquipped(monster) {
   };
 }
 
+function getEffectiveMemberStats(member, partyEffects = []) {
+  const baseStats = member?.stats || {};
+  const activeEffects = Array.isArray(member?.activeEffects) ? member.activeEffects : [];
+  const effective = applyEffectsToStats(baseStats, activeEffects, {
+    equipped: member?.equipped || {},
+    inventory: member?.inventory || []
+  });
+  let partyAgiPct = 0;
+  for (const effect of partyEffects) {
+    if (effect?.key !== "party_agi_up") continue;
+    partyAgiPct = Math.max(partyAgiPct, Number(effect?.params?.value || 0));
+  }
+  if (partyAgiPct > 0) {
+    effective.agi = Math.round((Number(effective.agi || 0)) * (1 + partyAgiPct / 100));
+  }
+  return effective;
+}
+
+function buildTowerActionPreview(members = [], monsterCalc = null, partyEffects = []) {
+  const actors = members
+    .filter((m) => m && (m.currentHp == null || m.currentHp > 0))
+    .map((m, index) => {
+      const stats = getEffectiveMemberStats(m, partyEffects);
+      return {
+        type: "member",
+        discordId: m.discordId,
+        name: m.name,
+        agi: Number(stats.agi || 0),
+        dex: Number(stats.dex || 0),
+        speed: 100 + Math.max(0, Number(stats.agi || 0)),
+        gauge: 0,
+        index
+      };
+    });
+  if (monsterCalc) {
+    actors.push({
+      type: "monster",
+      discordId: "monster",
+      name: "怪物",
+      agi: Number(monsterCalc.agi || 0),
+      dex: Number(monsterCalc.dex || 0),
+      speed: 100 + Math.max(0, Number(monsterCalc.agi || 0)),
+      gauge: 0,
+      index: 999
+    });
+  }
+
+  const preview = [];
+  for (let i = 0; i < 12 && actors.length > 0; i++) {
+    const nextNeed = Math.min(...actors.map((a) => (1000 - a.gauge) / Math.max(1, a.speed)));
+    for (const actor of actors) actor.gauge += actor.speed * nextNeed;
+    const ready = actors
+      .filter((a) => a.gauge >= 999.999)
+      .sort((a, b) => (b.gauge - a.gauge) || (b.agi - a.agi) || (b.dex - a.dex) || (a.index - b.index));
+    const actor = ready[0];
+    actor.gauge -= 1000;
+    preview.push({ ...actor, overflow: actor.gauge });
+  }
+  return preview;
+}
+
+function calcTowerPartyHeal(partyEffects = [], maxHp = 1) {
+  let total = 0;
+  for (const effect of partyEffects) {
+    if (effect?.key !== "heal_over_time" && effect?.key !== "party_heal") continue;
+    const params = effect.params || {};
+    const value = Number(params.value || 0);
+    if (value <= 0) continue;
+    total += params.mode === "flat"
+      ? Math.round(value)
+      : Math.round(maxHp * (value / 100));
+  }
+  return Math.max(0, total);
+}
+
+function applyTowerPartyHealing(members = [], partyEffects = []) {
+  const healed = [];
+  for (const member of members) {
+    if (!member || member.currentHp <= 0) continue;
+    const heal = calcTowerPartyHeal(partyEffects, member.maxHp || member.stats?.maxHp || 1);
+    if (heal <= 0) continue;
+    const before = member.currentHp;
+    member.currentHp = Math.min(member.maxHp, member.currentHp + heal);
+    const actual = member.currentHp - before;
+    if (actual > 0) healed.push({ name: member.name, amount: actual, hp: member.currentHp, maxHp: member.maxHp });
+  }
+  return healed;
+}
+
+function getTowerPartyDefense(partyEffects = []) {
+  let damageReductionPct = 0;
+  let critReductionPct = 0;
+  for (const effect of partyEffects) {
+    const value = Number(effect?.params?.value || 0);
+    if (effect?.key === "party_damage_reduction") damageReductionPct = Math.max(damageReductionPct, value);
+    if (effect?.key === "party_crit_damage_reduction") critReductionPct = Math.max(critReductionPct, value);
+  }
+  return { damageReductionPct, critReductionPct };
+}
+
+function applyMonsterTeamAttack(session, mCalc, partyEffects, floor) {
+  const { damageReductionPct, critReductionPct } = getTowerPartyDefense(partyEffects);
+  const baseAtk = Math.max(1, Number(mCalc.atk || 1));
+  const critRate = Math.max(0, Number(mCalc.critRate || 0));
+  const isCrit = Math.random() * 100 < critRate;
+  const hits = [];
+
+  for (const member of session.members) {
+    if (!member || member.currentHp <= 0) continue;
+    const stats = getEffectiveMemberStats(member, partyEffects);
+    const defPct = Math.min(75, Math.max(0, Number(stats.def || 0)));
+    let damage = baseAtk * (1 - defPct / 100);
+    if (isCrit) damage *= Math.max(1, 1.5 - critReductionPct / 100);
+    damage *= (1 - Math.min(90, Math.max(0, damageReductionPct)) / 100);
+    damage = Math.max(1, Math.round(damage));
+    member.currentHp = Math.max(0, member.currentHp - damage);
+    hits.push({ name: member.name, damage, hp: member.currentHp, maxHp: member.maxHp, dead: member.currentHp <= 0 });
+  }
+
+  return {
+    type: "monster",
+    name: "怪物",
+    floor,
+    isCrit,
+    damageReductionPct,
+    hits,
+    summary: hits.length
+      ? `怪物全隊攻擊${isCrit ? "（暴擊）" : ""}：${hits.map((h) => `${h.name}-${h.damage}${h.dead ? "💀" : ""}`).join("、")}`
+      : "怪物行動，但沒有可攻擊的存活隊員。"
+  };
+}
+
 // ── 單層戰鬥結算（全職業完整邏輯） ──────────────────────────
-// 存活隊員依序各自對同一隻怪跑 runCombatLoop，共享怪物殘血
-// 每人打完把殘血帶給下一個人；全員陣亡或怪物死亡即結束
+// 依 AGI 速度條輪流出手；高 AGI 會更快回到行動點。
+// 怪物殘血與怪物身上的 debuff / stun 會在全隊之間共享。
 async function fightFloor(session, monster, scaledHp, scaledAtk) {
   const floor  = session.currentFloor;
   const bonus  = getCumulativePartyBonus(floor);
@@ -247,56 +397,138 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
 
   const aliveMembers = () => session.members.filter((m) => m.currentHp > 0);
   if (aliveMembers().length === 0)
-    return { survived: false, memberLogs: [], totalRounds: 0, monsterKilled: false, monsterHpFinal: scaledHp };
+    return { survived: false, memberLogs: [], totalRounds: 0, monsterKilled: false, monsterHpFinal: scaledHp, actionOrder: [] };
 
-  const partyEffects = buildTowerPartyEffects(session.members);
   let   monsterHp    = scaledHp;
-  const memberLogs   = []; // 每位成員的 roundLogs
-  let   totalRounds  = 0;
+  const memberLogs   = [];
+  let   monsterActiveEffects = [];
+  let   stunRoundsLeft = 0;
+  let   sharedRound = 1;
+  let   totalActions = 0;
+  const initialActionOrder = buildTowerActionPreview(session.members, mCalc, buildTowerPartyEffects(session.members)).slice(0, 10);
+  const gauges = new Map();
+  for (const member of session.members) gauges.set(member.discordId, 0);
+  gauges.set("monster", 0);
+  const maxActionSlices = Math.max(50, Math.max(1, MAX_ROUNDS_PER_MEMBER) * Math.max(2, session.members.length + 1));
 
-  for (const m of session.members) {
-    if (m.currentHp <= 0 || monsterHp <= 0) continue;
+  while (monsterHp > 0 && aliveMembers().length > 0 && totalActions < maxActionSlices) {
+    const partyEffects = buildTowerPartyEffects(session.members);
+    const actors = [
+      ...session.members
+        .filter((m) => m.currentHp > 0)
+        .map((m, index) => {
+          const stats = getEffectiveMemberStats(m, partyEffects);
+          return {
+            type: "member",
+            id: m.discordId,
+            name: m.name,
+            member: m,
+            stats,
+            agi: Number(stats.agi || 0),
+            dex: Number(stats.dex || 0),
+            speed: 100 + Math.max(0, Number(stats.agi || 0)),
+            index,
+          };
+        }),
+      {
+        type: "monster",
+        id: "monster",
+        name: monster.name,
+        agi: Number(mCalc.agi || 0),
+        dex: Number(mCalc.dex || 0),
+        speed: 100 + Math.max(0, Number(mCalc.agi || 0)),
+        index: 999,
+      }
+    ];
+    if (actors.length <= 1) break;
 
-    // 套用隊伍 atkPct 到個人 stats snapshot
+    const nextNeed = Math.min(...actors.map((actor) => (1000 - (gauges.get(actor.id) || 0)) / Math.max(1, actor.speed)));
+    for (const actor of actors) gauges.set(actor.id, (gauges.get(actor.id) || 0) + actor.speed * nextNeed);
+    const ready = actors
+      .filter((actor) => (gauges.get(actor.id) || 0) >= 999.999)
+      .sort((a, b) => ((gauges.get(b.id) || 0) - (gauges.get(a.id) || 0)) || (b.agi - a.agi) || (b.dex - a.dex) || (a.index - b.index));
+    const actor = ready[0];
+    gauges.set(actor.id, (gauges.get(actor.id) || 0) - 1000);
+    totalActions += 1;
+
+    if (actor.type === "monster") {
+      if (stunRoundsLeft > 0) {
+        stunRoundsLeft = 0;
+        memberLogs.push({
+          type: "monster",
+          name: monster.name,
+          agi: actor.agi,
+          logs: [`😵 ${monster.name} 處於暈眩狀態，本次行動跳過。`],
+          monsterHpAfter: monsterHp,
+          partyHpAfter: session.members.map((m) => ({ name: m.name, hp: m.currentHp, maxHp: m.maxHp })),
+        });
+        continue;
+      }
+      const attack = applyMonsterTeamAttack(session, mCalc, partyEffects, floor);
+      memberLogs.push({
+        ...attack,
+        agi: actor.agi,
+        logs: [attack.summary],
+        monsterHpAfter: monsterHp,
+        partyHpAfter: session.members.map((m) => ({ name: m.name, hp: m.currentHp, maxHp: m.maxHp })),
+      });
+      continue;
+    }
+
+    const m = actor.member;
+    const healed = applyTowerPartyHealing(session.members, partyEffects);
+    const nonHealPartyEffects = partyEffects.filter((effect) => effect?.key !== "heal_over_time" && effect?.key !== "party_heal");
     const effStats = {
-      ...m.stats,
-      atk: Math.round((m.stats.atk || 10) * (1 + bonus.atkPct / 100)),
-      maxHp: m.maxHp, // 使用本層計算過的 maxHp
+      ...actor.stats,
+      atk: Math.round((actor.stats.atk || 10) * (1 + bonus.atkPct / 100)),
+      maxHp: m.maxHp,
     };
-
-    // options 用外部物件存放，讓 combatLoop 的 mutation 可以被讀回
-    const combatOptions = {
-      startMonsterHp:    monsterHp,
-      playerName:        m.name,
-      equipped:          m.equipped,
-      inventory:         m.inventory  || [],
+    const options = {
+      startMonsterHp: monsterHp,
+      startPlayerHp: m.currentHp,
+      startRound: sharedRound,
+      playerName: m.name,
+      equipped: m.equipped,
+      inventory: m.inventory || [],
       playerActiveEffects: Array.isArray(m.activeEffects) ? [...m.activeEffects] : [],
-      partyEffects,
-      monsterEquipped:   buildMonsterEquipped(monster),
-      monsterIsBoss:     Boolean(monster.isBoss),
+      partyEffects: nonHealPartyEffects,
+      monsterEquipped: {},
+      monsterIsBoss: Boolean(monster.isBoss),
+      monsterActiveEffects,
+      stunRoundsLeft,
     };
-
     const result = runCombatLoop(
       effStats,
-      mCalc,
+      { ...mCalc, atk: 0, monsterAttackCount: 0 },
       monster.name,
       scaledHp,
-      MAX_ROUNDS_PER_MEMBER,
-      combatOptions
+      1,
+      options
     );
 
-    monsterHp   = result.finalMonsterHp;
+    monsterHp = result.finalMonsterHp;
     m.currentHp = Math.max(0, Math.round(result.finalPlayerHp));
-    // DOT 狀態不跨層，每層結束後清除戰鬥中產生的臨時效果
-    totalRounds += (result.roundLogs?.length || 0);
-    memberLogs.push({ name: m.name, logs: result.roundLogs || [], outcome: result.outcome });
-
-    if (monsterHp <= 0) break;
+    m.activeEffects = Array.isArray(options.playerActiveEffects) ? options.playerActiveEffects : [];
+    monsterActiveEffects = Array.isArray(result.monsterActiveEffects) ? result.monsterActiveEffects : [];
+    stunRoundsLeft = Math.min(1, Math.max(0, Number(result.stunRoundsLeft || 0)));
+    sharedRound = Math.max(sharedRound + 1, Number(result.nextRound || sharedRound + 1));
+    memberLogs.push({
+      type: "member",
+      name: m.name,
+      agi: actor.agi,
+      logs: [
+        ...(healed.length ? [`💚 全隊回復：${healed.map((h) => `${h.name}+${h.amount}`).join("、")}`] : []),
+        ...(result.roundLogs || [])
+      ],
+      outcome: result.outcome,
+      monsterHpAfter: monsterHp,
+      playerHpAfter: m.currentHp,
+    });
   }
 
   const killed   = monsterHp <= 0;
   const survived = aliveMembers().length > 0;
-  return { survived, memberLogs, totalRounds, monsterKilled: killed, monsterHpFinal: monsterHp };
+  return { survived, memberLogs, totalRounds: totalActions, monsterKilled: killed, monsterHpFinal: monsterHp, actionOrder: initialActionOrder };
 }
 
 // ── 攻略單層（隊長每次按按鈕觸發一層） ──────────────────────
@@ -337,6 +569,7 @@ async function processNextFloor(session) {
     monsterName:   monster.name,
     scaledHp,
     memberLogs:    fightResult.memberLogs,
+    actionOrder:   fightResult.actionOrder,
     totalRounds:   fightResult.totalRounds,
     monsterKilled: fightResult.monsterKilled,
     survived:      fightResult.survived,

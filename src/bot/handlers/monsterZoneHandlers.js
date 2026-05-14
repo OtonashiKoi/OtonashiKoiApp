@@ -56,7 +56,6 @@ function deleteMonsterSession(discordId) {
 const BTN = {
   enterBattle: "monster-zone:enter-battle",
   enterBattlePrefix: "monster-zone:enter-battle:",
-  startFight:  "monster-zone:start-fight",
   deleteLog:   "monster-zone:delete-log"
 };
 
@@ -1082,6 +1081,24 @@ function buildRewardModifiers(progress, partyRefs = []) {
   };
 }
 
+function getJobNameFromEquipped(equipped = {}) {
+  const jobEq = equipped?.job_eq;
+  if (!jobEq) return null;
+  const id = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
+  const name = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
+  if (id.includes("barrier_mage") || name.includes("結界")) return "結界師";
+  if (id.includes("dwarf") || name.includes("矮人")) return "矮人戰士";
+  if (id.includes("swordsman") || name.includes("劍士")) return "劍士";
+  if (id.includes("warrior") || name.includes("戰士")) return "戰士";
+  if (id.includes("archer") || name.includes("弓箭手")) return "弓箭手";
+  if (id.includes("tactician") || name.includes("軍師")) return "軍師";
+  if (id.includes("bard") || name.includes("詩人")) return "詩人";
+  if (id.includes("healer") || name.includes("治療")) return "治療師";
+  if (id.includes("mage") || name.includes("法師")) return "法師";
+  if (id.includes("rogue") || name.includes("盜賊")) return "盜賊";
+  return jobEq?.itemName || jobEq?.name || null;
+}
+
 function createBattleParticipantCache(sc) {
   const cache = new Map();
 
@@ -2009,8 +2026,9 @@ async function handleEnterBattle(interaction) {
           // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
           const refs = participant.refs || [];
           const pidName = participant.displayName || (pid === discordId ? displayName : null);
+          const pidJobName = getJobNameFromEquipped(participant.equipped);
           for (const r of refs) {
-            if (r && r.target === 'party') partyEffects.push({ ...r, sourceName: pidName });
+            if (r && r.target === 'party') partyEffects.push({ ...r, sourceName: pidName, sourceJobName: pidJobName });
           }
         } catch (e) {}
       }));
@@ -2019,7 +2037,7 @@ async function handleEnterBattle(interaction) {
       const aura = battleState.activeHealerAura;
       if (aura && aura.effects && !participants.includes(aura.discordId)) {
         for (const e of aura.effects) {
-          partyEffects.push({ ...e, sourceName: aura.displayName || null });
+          partyEffects.push({ ...e, sourceName: aura.displayName || null, sourceJobName: "治療師" });
         }
       }
 
@@ -2386,8 +2404,9 @@ async function handleStartFight(interaction) {
         // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
         const refs = participant.refs || [];
         const pidName = participant.displayName || (pid === discordId ? displayName : null);
+        const pidJobName = getJobNameFromEquipped(participant.equipped);
         for (const r of refs) {
-          if (r && r.target === 'party') partyEffects.push({ ...r, sourceName: pidName });
+          if (r && r.target === 'party') partyEffects.push({ ...r, sourceName: pidName, sourceJobName: pidJobName });
         }
       } catch (e) {}
     }));
@@ -2396,7 +2415,7 @@ async function handleStartFight(interaction) {
     const aura = state.activeHealerAura;
     if (aura && aura.effects && !participants.includes(aura.discordId)) {
       for (const e of aura.effects) {
-        partyEffects.push({ ...e, sourceName: aura.displayName || null });
+        partyEffects.push({ ...e, sourceName: aura.displayName || null, sourceJobName: "治療師" });
       }
     }
 
@@ -3448,11 +3467,6 @@ async function handleMonsterZoneButton(interaction) {
   if (!isMonsterZoneButton(customId)) return false;
   if (customId === BTN.enterBattle || String(customId).startsWith(BTN.enterBattlePrefix)) {
     await handleEnterBattle(interaction);
-  }
-  else if (customId === BTN.startFight) {
-    // 已廢棄（戰鬥在 handleEnterBattle 中自動執行），但保留以防止錯誤
-    await interaction.deferUpdate();
-    await interaction.editReply({ content: "❌ 此操作已廢棄。請重新點擊進入戰鬥。", embeds: [], components: [] });
   }
   else if (customId === BTN.deleteLog)  await handleDeleteLog(interaction);
   return true;

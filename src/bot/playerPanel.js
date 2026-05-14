@@ -6,7 +6,8 @@ const { expToNextLevel, MAX_LEVEL } = require("../shared/progression");
 const config = require("../config");
 const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
-const { calcPlayerStats } = require("../shared/combatStats");
+const { calcPlayerStats, getWeaponConfig } = require("../shared/combatStats");
+const { TIER_SET_SLOTS } = require("../shared/equipmentTierSetBonuses");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
 const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
@@ -110,6 +111,147 @@ function formatStreamMembershipRules() {
   ];
 }
 
+const DEPRECATED_JOB_PASSIVE_KEYS = new Set([
+  "execute_chance_up",
+  "execute_threshold_up",
+]);
+
+function formatSignedPct(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n) || n === 0) return null;
+  return `${n > 0 ? "+" : ""}${n}%`;
+}
+
+const WEAPON_TYPE_LABELS = {
+  sword_1h: "單手劍",
+  sword_2h: "雙手劍",
+  mace_1h: "單手槌",
+  mace_2h: "雙手槌",
+  axe_1h: "單手斧",
+  axe_2h: "雙手斧",
+  dagger: "匕首",
+  staff_1h: "單手法杖",
+  staff_2h: "雙手法杖",
+  bow: "弓",
+  offhand_sword: "副手劍",
+  offhand_dagger: "副手匕首",
+  offhand_mace: "副手槌"
+};
+
+const BASE_STAT_LABELS = {
+  str: "STR",
+  int: "INT",
+  dex: "DEX"
+};
+
+function formatEquipStats(stats = {}) {
+  const parts = [];
+  for (const key of ["str", "agi", "vit", "int", "dex", "luk"]) {
+    const value = Number(stats?.[key] || 0);
+    if (Number.isFinite(value) && value !== 0) parts.push(`${key.toUpperCase()} ${value > 0 ? "+" : ""}${value}`);
+  }
+  return parts.join("、");
+}
+
+function formatEffectCondition(condition = {}) {
+  if (!condition || typeof condition !== "object") return "";
+  const weaponMap = {
+    sword_1h: "單手劍",
+    sword_2h: "雙手劍",
+    mace_1h: "單手槌",
+    mace_2h: "雙手槌",
+    axe_1h: "單手斧",
+    axe_2h: "雙手斧",
+    dagger: "匕首",
+    staff_1h: "單手法杖",
+    staff_2h: "雙手法杖",
+    bow: "弓"
+  };
+  const weaponTypes = [];
+  if (condition.weaponType) weaponTypes.push(condition.weaponType);
+  if (Array.isArray(condition.any)) {
+    for (const entry of condition.any) {
+      if (entry?.weaponType) weaponTypes.push(entry.weaponType);
+    }
+  }
+  if (weaponTypes.length > 0) {
+    return `（需${weaponTypes.map((type) => weaponMap[type] || type).join(" / ")}）`;
+  }
+  return "";
+}
+
+function formatSkillCondition(condition = {}) {
+  const parts = [];
+  if (Number.isFinite(Number(condition.ownerHpBelowPct))) parts.push(`自身HP<${condition.ownerHpBelowPct}%`);
+  if (Number.isFinite(Number(condition.ownerHpAbovePct))) parts.push(`自身HP>${condition.ownerHpAbovePct}%`);
+  if (Number.isFinite(Number(condition.targetHpBelowPct))) parts.push(`敵方HP<${condition.targetHpBelowPct}%`);
+  return parts.length ? `條件：${parts.join("、")}；` : "";
+}
+
+function formatJobSkillLine(skill) {
+  const cooldown = Number(skill?.cooldownTurns || 0);
+  const cooldownText = cooldown > 0 ? `CD ${cooldown}回合；` : "";
+  const conditionText = formatSkillCondition(skill?.condition || {});
+  const detailText = [conditionText, cooldownText, skill?.description || ""].filter(Boolean).join("");
+  return `・${skill?.name || skill?.key || "未命名技能"}：${detailText || "效果未設定"}`;
+}
+
+function formatPassiveNote(note) {
+  return String(note || "")
+    .replace(/攻擊倍率\s*[x×]\s*\d+(?:\.\d+)?/gi, "攻擊強化")
+    .replace(/\s*[x×]\s*\d+(?:\.\d+)?/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatPassiveEffect(effect, context) {
+  if (!effect || !effect.key) return null;
+  const active = isEffectConditionMet(effect, context);
+  if (!active) return null;
+  const note = formatPassiveNote(effect.notes || effect.description || "");
+  const name = EFFECT_NAME_ZH[effect.key] || effect.key;
+  const value = Number(effect?.params?.value);
+  const valueText = Number.isFinite(value) ? ` ${value > 0 ? "+" : ""}${value}${effect?.params?.mode === "pct" ? "%" : ""}` : "";
+  const targetText = effect.target === "party" ? "隊伍：" : effect.target === "enemy" ? "敵方：" : "";
+  const conditionText = formatEffectCondition(effect.condition);
+  return `・${targetText}${note || `${name}${valueText}`}${conditionText}`;
+}
+
+function buildWeaponEffectLines(cs, equipped = {}) {
+  const weaponType = cs.weaponType;
+  if (!weaponType) return [];
+
+  const cfg = getWeaponConfig(weaponType) || {};
+  const weaponName = equipped?.weapon?.itemName || equipped?.weapon?.name || WEAPON_TYPE_LABELS[weaponType] || "武器";
+  const baseStat = BASE_STAT_LABELS[cfg.baseStat || "str"] || String(cfg.baseStat || "str").toUpperCase();
+  const lines = [`🔸 武器：${weaponName}（${WEAPON_TYPE_LABELS[weaponType] || weaponType}，主屬性 ${baseStat}）`];
+
+  const parts = [];
+  if (Number(cs.combo || 0) > 0 && Number(cfg.comboBonus || 0) > 0) parts.push(`連擊率 ${formatSignedPct(cfg.comboBonus)}`);
+  if (Number(cs.stunChance || 0) > 0) parts.push(`擊暈機率 ${Math.ceil(cs.stunChance)}%`);
+  if (Number(cs.armorBreakChance || 0) > 0) parts.push(`破防機率 ${Math.ceil(cs.armorBreakChance)}%`);
+  if (Number(cs.bypassMonsterDefPct || 0) > 0) parts.push(`無視怪物 DEF ${Math.ceil(cs.bypassMonsterDefPct)}%`);
+  if (Number(cfg.critBonus || 0) > 0) parts.push(`暴擊率 ${formatSignedPct(cfg.critBonus)}`);
+  if (Number(cfg.dodgeBonus || 0) > 0) parts.push(`迴避 ${formatSignedPct(cfg.dodgeBonus)}`);
+  if (Number(cs.monsterAttackCount || 1) > 1) parts.push(`怪物攻擊次數 ×${cs.monsterAttackCount}`);
+  if (cs.isDualWield) {
+    const counterText = Number(cs.counterChance || 0) > 0 ? `副手追擊 ${Math.ceil(cs.counterChance)}%` : "副手追擊";
+    parts.push(counterText);
+  }
+
+  if (parts.length > 0) lines.push(`⚙️ 武器效果：${parts.join("、")}`);
+  if (cs.hasDwarfWarriorBadge && weaponType.startsWith("mace")) {
+    const highHpStun = Number(cs.stunChance || 0) + Number(cs.dwarfWarriorHighHpStunBoost || 0);
+    if (highHpStun > Number(cs.stunChance || 0)) {
+      lines.push(`🔨 矮人擊暈：HP≥60% 時 ${Math.ceil(highHpStun)}%`);
+    }
+    if (Number(cs.dwarfWarriorBonusVsStunnedPct || 0) > 0) {
+      lines.push(`😵 對暈眩目標傷害 +${Math.ceil(cs.dwarfWarriorBonusVsStunnedPct)}%`);
+    }
+  }
+  return lines;
+}
+
 function formatBindingSnapshot(binding) {
   const platformLabel = binding.platform === "youtube" ? "YouTube" : binding.platform === "twitch" ? "Twitch" : binding.platform;
   const linkedAt = binding.linkedAt ? `（綁定：${new Date(binding.linkedAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}）` : "";
@@ -188,61 +330,59 @@ async function handleProfile(interaction) {
   }
   const fmt = (base, key) => bonus[key] > 0 ? `${base} (+${bonus[key]})` : `${base}`;
 
-  // ── 武器特效說明（由 combatStats 推斷，並結合已裝備武器描述） ──
+  // ── 武器特效說明：只從 combatStats 最新計算結果生成，不使用舊硬寫文字 ──
   const wt = cs.weaponType;
-  const specialEffects = [];
-  if (wt === "dagger") specialEffects.push("🗡️ 匕首：連擊率 +20%");
-  if (wt === "axe_2h") specialEffects.push("🪓 雙手斧：攻擊倍率 ×4");
-  if (wt === "staff_1h") specialEffects.push("🪄 法杖：無視怪物 50% DEF、怪物攻擊 ×2");
-  if (wt === "staff_2h") specialEffects.push("🪄 雙手法杖：無視怪物 50% DEF、怪物攻擊 ×2、倍率 ↑");
-  if (wt === "mace_1h") specialEffects.push("🔨 單手槌：攻擊倍率 ×3、基礎擊暈 +20%、矮人高血再 +10%、對暈眩目標 +5%");
-  if (wt === "mace_2h") specialEffects.push("🔨 雙手槌：攻擊倍率 ×4、基礎擊暈 +30%、矮人高血再 +10%、對暈眩目標 +15%");
-  if (cs.isDualWield) specialEffects.push("⚔️ 雙持：可觸發副手追擊");
-
-  // 使用 combatStats 提供的欄位顯示進一步特效
-  if (cs.stunChance && cs.stunChance > 0) specialEffects.push(`💥 擊暈機率 ${cs.stunChance}%`);
-  if (cs.armorBreakChance && cs.armorBreakChance > 0) specialEffects.push(`🛠️ 破防機率 ${cs.armorBreakChance}%`);
-  if (cs.bypassMonsterDefPct > 0) specialEffects.push(`🪄 無視怪物 ${cs.bypassMonsterDefPct}% DEF`);
-  if (cs.monsterAttackCount && cs.monsterAttackCount > 1) specialEffects.push(`⚠️ 觸發時怪物攻擊 ×${cs.monsterAttackCount}`);
-
-  // 顯示裝備特效（優先顯示已裝備武器的說明，否則使用推斷的武器特效）
-  let effectLineParts = [...specialEffects];
-    try {
-      const weaponItem = equipped.weapon || null;
-      if (weaponItem && weaponItem.weaponEffectDescription) {
-        // 放在最前面並換行顯示
-        effectLineParts.unshift(`🔸 裝備特效：${weaponItem.weaponEffectDescription}`);
-      }
-    } catch (e) { /* ignore */ }
+  const effectLineParts = buildWeaponEffectLines(cs, equipped);
   const effectLine = effectLineParts.length ? "\n" + effectLineParts.join("\n") : "";
   const tierSetBonuses = cs.tierSetBonuses || { tierCounts: {} };
   const tierSetLines = [];
   const tierCounts = tierSetBonuses.tierCounts || {};
+  const tierItems = { D: [], C: [], B: [], A: [] };
+  for (const slot of TIER_SET_SLOTS) {
+    const item = equipped?.[slot];
+    const tier = String(item?.tier || "").toUpperCase();
+    if (tierItems[tier]) {
+      tierItems[tier].push(`${EQ_SLOT_LABELS[slot] || slot}:${item.itemName || item.name || item.id}`);
+    }
+  }
   if ((tierCounts.D || 0) >= 3) {
     const parts = ["3件：STR/INT/DEX +3"];
     if (tierCounts.D >= 5) parts.push("5件：金幣 +10%");
     if (tierCounts.D >= 7) parts.push("7件：EXP +10%");
-    tierSetLines.push(`D階 ${tierCounts.D}件 - ${parts.join("、")}`);
+    tierSetLines.push(`D階 ${tierCounts.D}件 - ${parts.join("、")}\n　計算裝備：${tierItems.D.join("、")}`);
   }
   if ((tierCounts.C || 0) >= 3) {
     const parts = ["3件：迴避 +10%"];
     if (tierCounts.C >= 5) parts.push("5件：傷害 +5%");
     if (tierCounts.C >= 7) parts.push("7件：命中 +15%");
-    tierSetLines.push(`C階 ${tierCounts.C}件 - ${parts.join("、")}`);
+    tierSetLines.push(`C階 ${tierCounts.C}件 - ${parts.join("、")}\n　計算裝備：${tierItems.C.join("、")}`);
   }
   if ((tierCounts.B || 0) >= 3) {
     const parts = ["3件：傷害 +10%"];
     if (tierCounts.B >= 5) parts.push("5件：暴擊率 +5%");
     if (tierCounts.B >= 7) parts.push("7件：暴擊傷害 +10%");
-    tierSetLines.push(`B階 ${tierCounts.B}件 - ${parts.join("、")}`);
+    tierSetLines.push(`B階 ${tierCounts.B}件 - ${parts.join("、")}\n　計算裝備：${tierItems.B.join("、")}`);
   }
   if ((tierCounts.A || 0) >= 3) {
     const parts = ["3件：最終傷害 +5%"];
     if (tierCounts.A >= 5) parts.push("5件：Boss傷害 +10%");
     if (tierCounts.A >= 7) parts.push("7件：掉落率 +10%");
-    tierSetLines.push(`A階 ${tierCounts.A}件 - ${parts.join("、")}`);
+    tierSetLines.push(`A階 ${tierCounts.A}件 - ${parts.join("、")}\n　計算裝備：${tierItems.A.join("、")}`);
   }
   const tierSetLine = tierSetLines.length ? `\n【階級套裝】\n${tierSetLines.join("\n")}` : "";
+  const tierSummaryParts = [
+    tierSetBonuses.damagePct ? `傷害 ${formatSignedPct(tierSetBonuses.damagePct)}` : null,
+    tierSetBonuses.finalDamagePct ? `最終傷害 ${formatSignedPct(tierSetBonuses.finalDamagePct)}` : null,
+    tierSetBonuses.bossDamagePct ? `Boss傷害 ${formatSignedPct(tierSetBonuses.bossDamagePct)}` : null,
+    tierSetBonuses.critRatePct ? `暴擊率 ${formatSignedPct(tierSetBonuses.critRatePct)}` : null,
+    tierSetBonuses.critDamagePct ? `暴擊傷害 ${formatSignedPct(tierSetBonuses.critDamagePct)}` : null,
+    tierSetBonuses.hitPct ? `命中 ${formatSignedPct(tierSetBonuses.hitPct)}` : null,
+    tierSetBonuses.dodgePct ? `迴避 ${formatSignedPct(tierSetBonuses.dodgePct)}` : null,
+    tierSetBonuses.goldPct ? `金幣 ${formatSignedPct(tierSetBonuses.goldPct)}` : null,
+    tierSetBonuses.expPct ? `EXP ${formatSignedPct(tierSetBonuses.expPct)}` : null,
+    tierSetBonuses.dropPct ? `掉落 ${formatSignedPct(tierSetBonuses.dropPct)}` : null,
+  ].filter(Boolean);
+  const tierSummaryLine = tierSummaryParts.length ? `\n📦 套裝總加成：${tierSummaryParts.join("、")}` : "";
 
   // ── 職業區（只顯示職業名稱）──
   const jobAreaLine = `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})`;
@@ -255,8 +395,21 @@ async function handleProfile(interaction) {
     const jobId = String(jobEq.itemId || jobEq.id || "").toLowerCase();
     const jobName = String(jobEq.itemName || jobEq.name || "").toLowerCase();
     const wt = cs.weaponType;
+    const isArcherJob = Boolean(cs.hasArcherBadge || jobId.includes("archer") || jobName.includes("弓箭手"));
+    const isSwordsmanJob = Boolean(cs.hasSwordsmanBadge || jobId.includes("swordsman") || jobName.includes("劍士"));
+    const isWarriorJob = Boolean(cs.hasWarriorBadge || jobId === "job_warrior_v1" || (jobName.includes("戰士") && !jobName.includes("矮人")));
+    const isDwarfJob = Boolean(cs.hasDwarfWarriorBadge || jobId === "job_dwarf_warrior_v1" || jobName.includes("矮人戰士"));
+    const isRogueJob = Boolean(cs.hasRogueBadge || jobId.includes("rogue") || jobName.includes("盜賊"));
+    const isMageJob = Boolean(cs.hasMageBadge || ((jobId.includes("mage") && !jobId.includes("barrier")) || (jobName.includes("法師") && !jobName.includes("結界"))));
+    const isHealerJob = Boolean(cs.hasHealerBadge || jobId.includes("healer") || jobName.includes("治療"));
+    const isTacticianJob = Boolean(cs.hasTacticianBadge || jobId.includes("tactician") || jobName.includes("軍師"));
+    const isBardJob = Boolean(cs.hasBardBadge || jobId.includes("bard") || jobName.includes("詩人"));
+    const isBarrierMageJob = Boolean(cs.hasBarrierMageBadge || jobId.includes("barrier_mage") || jobName.includes("結界"));
 
     const jobDisplayName = jobEq.itemName || jobEq.name || "未知職業";
+    const jobStatLine = formatEquipStats(jobEq.equipStats)
+      ? `\n徽章屬性：${formatEquipStats(jobEq.equipStats)}`
+      : "";
 
     // 職業裝備加成
     const jobBonusParts = [];
@@ -283,22 +436,58 @@ async function handleProfile(interaction) {
     }
     const titleBonusLine = titleBonusParts.length ? `\n稱號加成：${titleBonusParts.join("、")}` : "";
     const bonusLine = jobBonusLine + titleBonusLine;
-
-    // 從 jobSkills 讀取技能名稱與效果描述
-    const jobSkills = Array.isArray(jobEq.jobSkills) ? jobEq.jobSkills : [];
-    if (jobSkills.length > 0) {
-      const skillLines = jobSkills.map(sk => {
-        const cond = sk.condition || {};
-        const condParts = [];
-        if (Number.isFinite(Number(cond.ownerHpBelowPct))) condParts.push(`HP<${cond.ownerHpBelowPct}%`);
-        if (Number.isFinite(Number(cond.ownerHpAbovePct))) condParts.push(`HP>${cond.ownerHpAbovePct}%`);
-        const condStr = condParts.length ? `（${condParts.join("、")}）` : "";
-        return `・${sk.name}${condStr}：${sk.description || ""}`;
-      });
-      jobTraitAreaLine = `職業技能：${jobDisplayName}\n${skillLines.join("\n")}${bonusLine}`;
-    } else {
-      jobTraitAreaLine = `職業技能：${jobDisplayName}${bonusLine}`;
+    const activeJobEffects = [
+      ...(Array.isArray(jobEq.passiveEffects) ? jobEq.passiveEffects : []),
+      ...(Array.isArray(jobEq.procEffects) ? jobEq.procEffects : []),
+      ...(Array.isArray(jobEq.combatEffects) ? jobEq.combatEffects : []),
+    ];
+    const passiveLines = activeJobEffects
+      .filter((effect) => !DEPRECATED_JOB_PASSIVE_KEYS.has(effect?.key))
+      .map((effect) => formatPassiveEffect(effect, { equipped, inventory: p.inventory || [] }))
+      .filter(Boolean);
+    const passiveLine = passiveLines.length ? `\n徽章效果：\n${passiveLines.join("\n")}` : "";
+    const mechanicLines = [];
+    if (isDwarfJob) {
+      if (wt && wt.startsWith("mace")) {
+        if (Number(cs.dwarfWarriorHighHpStunBoost || 0) > 0) mechanicLines.push(`・HP≥60% 時擊暈 +${cs.dwarfWarriorHighHpStunBoost}%`);
+        if (Number(cs.dwarfWarriorBonusVsStunnedPct || 0) > 0) mechanicLines.push(`・對暈眩目標傷害 +${cs.dwarfWarriorBonusVsStunnedPct}%`);
+      }
     }
+    if (isSwordsmanJob && Number(cs.blockChance || 0) > 0) {
+      mechanicLines.push(`・劍系格擋/反擊：目前格擋 ${Math.ceil(cs.blockChance || 0)}%`);
+    }
+    if (isWarriorJob && Number(cs.armorBreakChance || 0) > 0) {
+      mechanicLines.push(`・斧系破防：目前破防 ${cs.armorBreakChance || 0}%；低血量時會提高傷害`);
+    }
+    if (isRogueJob && wt === "dagger") {
+      mechanicLines.push(`・匕首連擊：目前連擊 ${Math.ceil(cs.combo || 0)}%`);
+    }
+    if (isArcherJob && wt === "bow") {
+      mechanicLines.push(`・弓系機動：目前迴避 ${Math.ceil(cs.dodge || 0)}%`);
+    }
+    if (isMageJob && wt && wt.startsWith("staff") && Number(cs.bypassMonsterDefPct || 0) > 0) {
+      mechanicLines.push(`・法杖魔法：無視怪物 DEF ${cs.bypassMonsterDefPct}%`);
+    }
+    if (isHealerJob) {
+      mechanicLines.push("・治療師光環：在場提供隊伍治療支援");
+    }
+    if (isTacticianJob) {
+      mechanicLines.push("・軍師光環：單手劍時提供 Boss 傷害與降防支援");
+    }
+    if (isBardJob) {
+      mechanicLines.push("・詩人光環：弓裝備時提供 EXP / 金幣支援");
+    }
+    if (isBarrierMageJob) {
+      mechanicLines.push("・結界師光環：法杖時提供隊伍減傷與抗暴傷");
+    }
+    const mechanicLine = mechanicLines.length ? `\n實際啟動：\n${mechanicLines.join("\n")}` : "";
+
+    // 職業技能只讀道具庫同步後的 jobSkills，避免面板內建舊資料蓋過最新設計。
+    const jobSkills = Array.isArray(jobEq.jobSkills) ? jobEq.jobSkills : [];
+    const skillLine = jobSkills.length > 0
+      ? `\n主動技能：每回合約35%機率從可用技能中發動1個\n${jobSkills.map(formatJobSkillLine).join("\n")}`
+      : "";
+    jobTraitAreaLine = `職業技能：${jobDisplayName}${jobStatLine}${passiveLine}${mechanicLine}${skillLine}${bonusLine}`;
   }
 
   // ── 卡片效果區（顯示已裝備卡片及其效果）──
@@ -386,8 +575,10 @@ async function handleProfile(interaction) {
     `【戰鬥能力】\n` +
     `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
     `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%　🟢 迴避: ${calcDodge}%　🪨 格擋: ${calcBlock}%` +
+    tierSummaryLine +
     effectLine + "\n" +
     tierSetLine + (tierSetLine ? "\n" : "") +
+    `【裝備清單】\n` +
     equipLine + "\n" +
     `==============\n` +
     `【資產】\n` +
@@ -1019,7 +1210,7 @@ async function handleBackpack(interaction) {
 }
 
 // ── 裝備槽畫面（原本 5 列，進入某分頁後顯示）──
-function buildEquipmentViewPayload({ progress, player, wallet, imgBuffer }) {
+function buildEquipmentViewPayload({ progress, player, wallet, imgBuffer, notice = "" }) {
   const equipped = progress?.equipment || {};
   const activePreset = progress?.activePreset || "A";
 
@@ -1043,16 +1234,33 @@ function buildEquipmentViewPayload({ progress, player, wallet, imgBuffer }) {
   if (imgBuffer) {
     const attachment = new AttachmentBuilder(imgBuffer, { name: "equipment.png" });
     payload.files = [attachment];
-    payload.content = `【裝備方案 ${activePreset}】`;
+    payload.content = `${notice ? `${notice}\n\n` : ""}【裝備方案 ${activePreset}】`;
   } else {
     const SLOT_ORDER = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r"];
     const lines = SLOT_ORDER.map(s => {
       const item = equipped[s];
       return `　${EQ_SLOT_LABELS[s]}：${item ? `**${item.itemName}**` : "空"}`;
     });
-    payload.content = `⚔️ **裝備欄【裝備方案 ${activePreset}】**\n\n${lines.join("\n")}`;
+    payload.content = `${notice ? `${notice}\n\n` : ""}⚔️ **裝備欄【裝備方案 ${activePreset}】**\n\n${lines.join("\n")}`;
   }
   return payload;
+}
+
+async function buildFreshEquipmentViewPayload(interaction, notice = "") {
+  const serviceContext = getServiceContext();
+  const [progress, player, wallet] = await Promise.all([
+    serviceContext.progressRepository.findByPlayerId(interaction.user.id),
+    serviceContext.playerRepository.findByDiscordId(interaction.user.id),
+    serviceContext.walletRepository.findByPlayerId(interaction.user.id),
+  ]);
+  const equipped = progress?.equipment || {};
+  const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", forceStatic: true });
+  const publicDir = path.resolve(__dirname, "../web/public");
+  let imgBuffer = null;
+  try {
+    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress, player, wallet });
+  } catch { /* 退回文字 */ }
+  return buildEquipmentViewPayload({ progress, player, wallet, imgBuffer, notice });
 }
 
 // ── 第一層：裝備方案總覽畫面 ──
@@ -1208,13 +1416,15 @@ async function handleEquipAction(interaction, action, value) {
   await interaction.deferUpdate();
   try {
     let result;
+    let notice;
     if (action === "equip") {
       result = await serviceContext.shopService.equipItem(interaction.user.id, value);
-      await safeEditReply(interaction, { content: `\u2705 已裝備 **${result.itemName}**！`, components: [] });
+      notice = `✅ 已裝備 **${result.itemName}**！`;
     } else {
       result = await serviceContext.shopService.unequipItem(interaction.user.id, value);
-      await safeEditReply(interaction, { content: `\u2705 已卸下 **${result.itemName}**，已放回背包。`, components: [] });
+      notice = `✅ 已卸下 **${result.itemName}**，已放回背包。`;
     }
+    await safeEditReply(interaction, await buildFreshEquipmentViewPayload(interaction, notice));
   } catch (err) {
     await safeEditReply(interaction, { content: `\u274c 操作失敗\uff1a${err.message}`, components: [] });
   }
@@ -1955,27 +2165,20 @@ const QUEST_TAB_META = {
 
 function formatRewardWeaponSummary(item) {
   if (!item?.weaponType) return "";
-  const formatMaceStun = (baseStun, dwarfHighHpBonus, dwarfStunnedBonus) => {
-    const parts = [`擊暈率 +${baseStun}%`];
-    if (dwarfHighHpBonus > 0) parts.push(`矮人高血再 +${dwarfHighHpBonus}%`);
-    if (dwarfStunnedBonus > 0) parts.push(`對暈眩目標 +${dwarfStunnedBonus}%`);
-    return parts.join("、");
-  };
-  const weaponText = {
-    sword_1h: "單手劍：攻擊倍率 ×4",
-    sword_2h: "雙手劍：攻擊倍率 ×7",
-    mace_1h: `單手槌：攻擊倍率 ×3，${formatMaceStun(20, 10, 5)}`,
-    mace_2h: `雙手槌：攻擊倍率 ×4，${formatMaceStun(30, 10, 15)}`,
-    axe_1h: "單手斧：攻擊倍率 ×3，破防率 +15%，爆擊 +10%",
-    axe_2h: "雙手斧：攻擊倍率 ×5，破防率 +15%，爆擊 +20%",
-    dagger: "匕首：攻擊倍率 ×2，連擊率 +20%",
-    staff_1h: "單手法杖：攻擊倍率 ×3，主屬性 INT，無視怪物 DEF 15%，怪物攻擊 ×2",
-    staff_2h: "雙手法杖：攻擊倍率 ×4，主屬性 INT，無視怪物 DEF 25%，怪物攻擊 ×2",
-    bow: "弓：攻擊倍率 ×4，主屬性 DEX，迴避 +20%，雙手武器"
-  }[item.weaponType];
-  if (!weaponText) return "";
+  const cfg = getWeaponConfig(item.weaponType) || {};
+  const parts = [];
+  const baseStat = BASE_STAT_LABELS[cfg.baseStat || "str"] || String(cfg.baseStat || "str").toUpperCase();
+  parts.push(`${WEAPON_TYPE_LABELS[item.weaponType] || item.weaponType}：主屬性 ${baseStat}`);
+  if (Number(cfg.stunChance || 0) > 0) parts.push(`擊暈率 ${cfg.stunChance}%`);
+  if (Number(cfg.armorBreak || 0) > 0) parts.push(`破防率 ${cfg.armorBreak}%`);
+  if (Number(cfg.critBonus || 0) > 0) parts.push(`暴擊率 ${formatSignedPct(cfg.critBonus)}`);
+  if (Number(cfg.comboBonus || 0) > 0) parts.push(`連擊率 ${formatSignedPct(cfg.comboBonus)}`);
+  if (Number(cfg.bypassDefPct || 0) > 0) parts.push(`無視怪物 DEF ${cfg.bypassDefPct}%`);
+  if (Number(cfg.dodgeBonus || 0) > 0) parts.push(`迴避 ${formatSignedPct(cfg.dodgeBonus)}`);
+  if (cfg.isTwoHanded) parts.push("雙手武器");
   const statText = formatEquipStats(item.equipStats);
-  return statText ? `${weaponText}，${statText}` : weaponText;
+  if (statText) parts.push(statText);
+  return parts.join("，");
 }
 
 function formatRewardItemLabel(item) {
@@ -2579,7 +2782,7 @@ async function handleEquipmentSelect(interaction) {
     let result;
     if (value.startsWith("unequip:")) {
       result = await serviceContext.shopService.unequipItem(interaction.user.id, slot);
-      await safeEditReply(interaction, { content: `✅ 已卸下 **${result.itemName}**，放回背包。`, components: [], files: [] });
+      await safeEditReply(interaction, await buildFreshEquipmentViewPayload(interaction, `✅ 已卸下 **${result.itemName}**，放回背包。`));
     } else {
       const uuid = value.slice("equip:".length);
 
@@ -2595,7 +2798,7 @@ async function handleEquipmentSelect(interaction) {
       }
 
       result = await serviceContext.shopService.equipItem(interaction.user.id, uuid, targetSlot);
-      await safeEditReply(interaction, { content: `✅ 已裝備 **${result.itemName}**！`, components: [], files: [] });
+      await safeEditReply(interaction, await buildFreshEquipmentViewPayload(interaction, `✅ 已裝備 **${result.itemName}**！`));
     }
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 操作失敗：${err.message}`, components: [], files: [] });

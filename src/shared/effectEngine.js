@@ -176,6 +176,7 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
       combatEffects:  lib.combatEffects  || [],
       procEffects:    lib.procEffects    || [],
       useEffects:     lib.useEffects     || [],
+      jobSkills:      lib.jobSkills      || entry.jobSkills || [],
       equipStats,
       weaponType:     lib.weaponType     || entry.weaponType || null,
       isTwoHanded:    lib.isTwoHanded    ?? entry.isTwoHanded ?? false,
@@ -188,21 +189,6 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
   return merged;
 }
 
-function collectPartyEffectsFromProgresses(progresses = []) {
-  const refs = [];
-  if (!Array.isArray(progresses)) return refs;
-  for (const prog of progresses) {
-    try {
-      const equipped = prog?.equipment || {};
-      const inventory = Array.isArray(prog?.inventory) ? prog.inventory : [];
-      const effs = collectEquipmentEffects(equipped, null, { equipped, inventory });
-      for (const e of effs) {
-        if (e && e.target === 'party') refs.push(e);
-      }
-    } catch (e) {}
-  }
-  return refs;
-}
 
 function createRuntimeEffect(effectRef, source = {}) {
   return normalizeActiveEffect({
@@ -246,21 +232,6 @@ function applyEffectsToStats(baseStats, effectRefs = [], context = {}) {
   return result;
 }
 
-function summarizeEffectState(activeEffects = []) {
-  const normalized = normalizeActiveEffectList(activeEffects);
-  return normalized.reduce((summary, effect) => {
-    if (CONTROL_KEYS.has(effect.key)) summary.control.add(effect.key);
-    if (DOT_KEYS.has(effect.key)) summary.dot.add(effect.key);
-    if (effect.key === "shield") {
-      summary.shield += Math.max(0, Number(effect.params?.value) || 0);
-    }
-    return summary;
-  }, {
-    control: new Set(),
-    dot: new Set(),
-    shield: 0
-  });
-}
 
 function applyEffectInstances(currentEffects = [], incomingEffects = [], source = {}, context = {}) {
   const active = normalizeActiveEffectList(currentEffects);
@@ -317,15 +288,6 @@ function decrementActiveEffects(currentEffects = [], durationMode = "turns", amo
   });
 }
 
-function selectTriggeredEffects(effectRefs = [], trigger, roll = Math.random, context = {}) {
-  return effectRefs.filter((effect) => {
-    if (!effect || effect.trigger !== trigger) return false;
-    if (!isEffectConditionMet(effect, context)) return false;
-    const chance = Math.min(100, Math.max(0, Number(effect.chance) || 100));
-    return roll() * 100 < chance;
-  });
-}
-
 module.exports = {
   STAT_EFFECT_MAP,
   CONTROL_KEYS,
@@ -336,11 +298,6 @@ module.exports = {
   createRuntimeEffect,
   applyEffectsToStats,
   isEffectConditionMet,
-  summarizeEffectState,
   applyEffectInstances,
   decrementActiveEffects,
-  selectTriggeredEffects
 };
-
-// backwards-compat export for helper
-module.exports.collectPartyEffectsFromProgresses = collectPartyEffectsFromProgresses;

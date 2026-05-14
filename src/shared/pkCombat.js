@@ -40,9 +40,11 @@ function addOrStackEffect(effects = [], entry = {}) {
   if (!entry || !entry.key) return effects;
   const next = [...effects];
   const stackMode = entry.stackMode || entry.params?.stackMode || "refresh";
-  const idx = next.findIndex(
-    (e) => e?.key === entry.key && (e.sourceType === entry.sourceType || e.sourceId === entry.sourceId)
-  );
+  const idx = next.findIndex((e) => {
+    if (e?.key !== entry.key) return false;
+    if (e.sourceId && entry.sourceId) return e.sourceId === entry.sourceId;
+    return e.sourceType === entry.sourceType;
+  });
   if (idx < 0 || stackMode === "stack_instance") { next.push(entry); return next; }
   if (stackMode === "ignore") return next;
   if (stackMode === "stack_value") {
@@ -292,6 +294,69 @@ function attackerTurn({
     ...getDefEquipmentEffects().filter((eff) => eff?.key === key),
   ];
 
+  // ── 職業技能觸發（35% 機率，每回合限一次，回合開頭讀取 HP 條件後發動）──
+  if (!atkSilenced && !atkOpts._jobSkillUsed) {
+    const jobSkills = Array.isArray(atkOpts.equipped?.job_eq?.jobSkills) ? atkOpts.equipped.job_eq.jobSkills : [];
+    const jobName = atkOpts.equipped?.job_eq?.itemName || atkOpts.equipped?.job_eq?.name || '職業技能';
+    if (jobSkills.length > 0 && Math.random() < 0.35) {
+      const atkHpPct = atkStats.maxHp > 0 ? (atkHpRef.value / atkStats.maxHp) * 100 : 100;
+      if (!atkOpts._jobSkillCooldowns) atkOpts._jobSkillCooldowns = {};
+      const available = jobSkills.filter(sk => {
+        if (!sk?.key) return false;
+        if ((atkOpts._jobSkillCooldowns[sk.key] || 0) > 0) return false;
+        const c = sk.condition || {};
+        if (Number.isFinite(Number(c.ownerHpAbovePct)) && atkHpPct <= Number(c.ownerHpAbovePct)) return false;
+        if (Number.isFinite(Number(c.ownerHpBelowPct)) && atkHpPct >= Number(c.ownerHpBelowPct)) return false;
+        return true;
+      });
+      if (available.length > 0) {
+        const chosen = available[Math.floor(Math.random() * available.length)];
+        atkOpts._jobSkillUsed = true;
+        if (Number(chosen.cooldownTurns) > 0) atkOpts._jobSkillCooldowns[chosen.key] = Number(chosen.cooldownTurns);
+        const JOB_SKILL_SELF_KEYS = new Set([
+          'atk_up', 'crit_rate_up', 'crit_damage_up', 'def_up', 'dodge_up', 'hit_up',
+          'block_chance_up', 'damage_reduction', 'invincible_short', 'combo_damage_up',
+          'final_damage_up', 'def_ignore', 'heal_over_time'
+        ]);
+        const JOB_SKILL_ENEMY_KEYS = new Set([
+          'atk_down', 'def_down', 'hit_down', 'agi_down', 'dodge_down', 'stun',
+          'silence', 'poison', 'bleed', 'burn', 'freeze', 'damage_taken_up',
+          'final_damage_down'
+        ]);
+        let skillApplied = false;
+        for (const pe of (Array.isArray(chosen.procEffects) ? chosen.procEffects : [])) {
+          if (!pe?.key) continue;
+          const pp = pe.params || {};
+          if (pe.key === 'heal_over_time' && pe.target === 'self') {
+            const heal = Math.max(1, Math.round(atkStats.maxHp * Number(pp.value || 5) / 100));
+            atkHpRef.value = Math.min(atkStats.maxHp, atkHpRef.value + heal);
+            log.push(`✨ **(${jobName})** 發動【${chosen.name}】！回復 **${heal}** HP（${atkName} 剩 ${atkHpRef.value} / ${atkStats.maxHp}）`);
+            skillApplied = true;
+            continue;
+          }
+          const entry = {
+            key: pe.key, params: { ...pp },
+            stackMode: pe.stackMode || 'replace',
+            appliedAt: round - 1,
+            sourceType: 'pvp_job_skill',
+            sourceId: `${atkName}:${chosen.key}:${pe.key}`
+          };
+          entry.params.sourceName = jobName;
+          if (pe.target === 'enemy' || JOB_SKILL_ENEMY_KEYS.has(pe.key)) {
+            defActive = addOrStackEffect(defActive, entry);
+          } else if (pe.target === 'self' || JOB_SKILL_SELF_KEYS.has(pe.key)) {
+            atkActive = addOrStackEffect(atkActive, entry);
+          }
+          skillApplied = true;
+        }
+        if (skillApplied) {
+          const hasImmedHeal = (chosen.procEffects || []).some(pe => pe?.key === 'heal_over_time' && pe?.target === 'self');
+          if (!hasImmedHeal) log.push(`✨ **(${jobName})** 發動【${chosen.name}】！${chosen.description || ''}`);
+        }
+      }
+    }
+  }
+
   // ── 計算攻擊方本回合 Buff 倍率 ────────────────────────────
   let atkMultiplier = Math.max(0.1, Number(atkStats.tierDamageMultiplier) || 1);
   let critRateBonus = 0;
@@ -341,6 +406,9 @@ function attackerTurn({
       case 'damage_reduction': damageRedPct += Math.abs(v); break;
       case 'dodge_up':       defDodgeBonus += Math.abs(v); break;
       case 'agi_up':         defDodgeBonus += Math.abs(v) * 0.5; break;
+      case 'invincible_short': damageRedPct += 100; break;
+      case 'damage_taken_up': damageRedPct -= Math.abs(v); break; // 被動增傷（負減免）
+      case 'final_damage_down': damageRedPct += Math.abs(v); break;
     }
   }
 
@@ -393,27 +461,6 @@ function attackerTurn({
       }
     }
 
-    // 弓：閃躲後追擊
-    if (atkStats.weaponType === "bow" && !killed) {
-      const isBreak = Math.random() * 100 < atkStats.armorBreakChance;
-      const finalDef = isBreak ? 0 : calcEffDef(0);
-      let cdmg = rollDmg(Math.max(1, Math.round(atkStats.atk * atkMultiplier * finalDmgMult * (1 - finalDef / 100))));
-      cdmg = Math.round(cdmg * (atkStats.archerBowDamageBoost || 1.2));
-      const hasCrit = Math.random() * 100 < (atkStats.bowDodgeCounterCritRate || 5);
-      if (hasCrit) cdmg = Math.round(cdmg * (atkStats.bowDodgeCounterCritMultiplier || 1.2));
-      const capResult = applyRoundDamageCap({
-        targetKey: defTargetKey,
-        rawDamage: cdmg,
-        roundDamageState,
-      });
-      cdmg = capResult.damage;
-      defHpRef.value -= cdmg;
-      const archerTag = atkStats.hasArcherBadge ? " **(弓箭手)**" : "";
-      const critTag   = hasCrit ? "🎯命中要害！" : "";
-      log.push(`🏹 **閃躲後追擊**${archerTag}！${rand(COUNTER_PHRASES)}，${critTag}對 **${defName}** 造成 **${cdmg}** 點傷害！（${defName} 剩 ${Math.max(0, defHpRef.value)} HP）`);
-      pushCappedNotice(log, defName, capResult.capped);
-      if (defHpRef.value <= 0) killed = true;
-    }
   } else {
     // 命中
     const isBreak = Math.random() * 100 < atkStats.armorBreakChance;
@@ -438,51 +485,43 @@ function attackerTurn({
     }
 
     let isCrit = false;
-    let isArcherCrit = false;
 
-    // 職業傷害倍率
-    if (atkStats.hasArcherBadge && atkStats.weaponType === "bow") {
-      dmg = Math.round(dmg * (atkStats.archerBowDamageBoost || 1.2));
-    }
-    if (atkStats.hasMageBadge && atkStats.weaponType?.startsWith("staff")) {
-      dmg = Math.round(dmg * (atkStats.mageDamageMultiplier || 1.15));
-    }
-
-    // 低血量爆發（戰士/卡片 on_low_hp）
-    try {
-      const eq = atkOpts.equipped;
-      if (eq && atkHpRef.value <= Math.floor((atkStats.maxHp || 1) * 0.35)) {
-        const lowFx = collectEquipmentEffects(eq, 'on_low_hp', { equipped: eq, inventory: atkOpts.inventory || [] });
-        for (const eff of lowFx) {
-          if (eff?.key === 'final_damage_up' && Number.isFinite(Number(eff.params?.value))) {
-            dmg = Math.max(1, Math.round(dmg * Number(eff.params.value)));
-          }
+    // ── 弓箭手要害一擊（proc_weak_spot）──
+    let weakSpotTriggered = false;
+    {
+      const jobEq = atkOpts.equipped?.job_eq;
+      const allProcs = [
+        ...(Array.isArray(jobEq?.procEffects) ? jobEq.procEffects : []),
+        ...(Array.isArray(jobEq?.combatEffects) ? jobEq.combatEffects : []),
+      ];
+      const wsEff = allProcs.find(e => e?.key === 'proc_weak_spot' && e.trigger === 'on_hit');
+      if (wsEff) {
+        const wp = wsEff.params || {};
+        const baseChance = Number(wp.baseChance ?? wp.chance ?? 45);
+        const perDex = Number(wp.perDex ?? 0.5);
+        const maxChance = Number(wp.maxChance ?? 80);
+        const triggerChance = Math.min(maxChance, baseChance + (atkStats.dex || 0) * perDex);
+        if (Math.random() * 100 < triggerChance) {
+          weakSpotTriggered = true;
+          dmg = Math.max(1, Math.round(dmg * Number(wp.damageMultiplier ?? 1.5)));
         }
       }
-    } catch (_) {}
+    }
 
     const nonCritDamageBase = dmg;
 
     // 爆擊
     const effectiveCrit = Math.min(100, (atkStats.crit || 0) + critRateBonus);
-    isCrit = Math.random() * 100 < effectiveCrit;
-    // 弓箭手命中要害（獨立）
-    if (atkStats.hasArcherBadge && atkStats.weaponType === "bow" && atkStats.archerCritRate > 0) {
-      isArcherCrit = Math.random() * 100 < atkStats.archerCritRate;
-    }
+    isCrit = weakSpotTriggered || Math.random() * 100 < effectiveCrit;
 
     let finalDamage = dmg;
     if (isCrit) {
-      const critMult = (2.5 * critDmgMult) + (atkStats.warriorCritDamageBonus || 0);
+      const critMult = 2.5 * critDmgMult;
       finalDamage = Math.round(rollDmg(Math.max(1, attackBase)) * critMult);
-      if (atkStats.hasArcherBadge && atkStats.weaponType === "bow") {
-        finalDamage = Math.round(finalDamage * (atkStats.archerBowDamageBoost || 1.2));
-      }
     }
-    if (isArcherCrit) finalDamage = Math.round(finalDamage * (atkStats.archerCritMultiplier || 1.5));
 
     if (wasBlocked) {
-      if (isCrit || isArcherCrit) {
+      if (isCrit) {
         finalDamage = Math.max(1, Math.round(nonCritDamageBase));
         blockNote += `，因對手爆擊擊破防禦，改以未爆擊傷害計算！`;
       } else {
@@ -504,12 +543,10 @@ function attackerTurn({
 
     // 敘述
     const breakNote = isBreak ? "💥**破防**！" : "";
-    let critNote = "";
-    if (isCrit && isArcherCrit) critNote = `✨${rand(CRIT_PHRASES)}！🎯**命中要害**！`;
-    else if (isArcherCrit)      critNote = `🎯**(弓箭手)** **${rand(['命中要害', '精準破綻', '弱點命中'])}**！`;
-    else if (isCrit)            critNote = `✨**${rand(CRIT_PHRASES)}**！`;
+    const critNote = isCrit ? `✨**${rand(CRIT_PHRASES)}**！` : "";
 
     log.push(`⚔️ ${critNote}${breakNote}**${atkName}** ${rand(atkVerbs)}${blockNote}，對 **${defName}** 造成 **${finalDamage}** 點傷害！（${defName} 剩 ${Math.max(0, defHpRef.value)} HP）`);
+    if (weakSpotTriggered) log.push(`🎯 **${atkName}** 命中要害！傷害 ×1.5 並必定爆擊！`);
     pushCappedNotice(log, defName, capResult.capped);
 
     // 吸血
@@ -591,12 +628,12 @@ function attackerTurn({
     if (!killed && !isCrit) {
       const effectiveStun = (atkStats.stunChance || 0);
       if (effectiveStun > 0 && Math.random() * 100 < effectiveStun) {
-        // 對 defActive 加 stun 效果
+        const weaponStunDur = atkStats.stunDuration || 3;
         defActive = addOrStackEffect(defActive, {
-          key: 'stun', params: { duration: { mode: 'turns', value: 3 } },
+          key: 'stun', params: { duration: { mode: 'turns', value: weaponStunDur } },
           appliedAt: round, sourceType: 'pvp_stun', sourceId: `${atkName}:stun`
         });
-        log.push(`😵 **${defName}** ${rand(STUN_PHRASES)}！接下來 3 回合無法攻擊！`);
+        log.push(`😵 **${defName}** ${rand(STUN_PHRASES)}！接下來 ${weaponStunDur} 回合無法攻擊！`);
       }
     }
 
@@ -976,9 +1013,11 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
   let bActive  = Array.isArray(bOpts.activeEffects) ? [...bOpts.activeEffects] : [];
   const roundDamageState = createRoundDamageState(aStats, bStats);
 
-  // 冷卻注入到 opts（card cooldowns）
+  // 冷卻注入到 opts（card cooldowns + job skill cooldowns）
   aOpts._cardCooldowns = {};
   bOpts._cardCooldowns = {};
+  aOpts._jobSkillCooldowns = {};
+  bOpts._jobSkillCooldowns = {};
 
   const roundLogs = [];
   let winner = null;
@@ -989,6 +1028,12 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
     roundDamageState.B.taken = 0;
     roundDamageState.A.noticeShown = false;
     roundDamageState.B.noticeShown = false;
+
+    // job skill 冷卻倒數
+    for (const k of Object.keys(aOpts._jobSkillCooldowns)) aOpts._jobSkillCooldowns[k] = Math.max(0, aOpts._jobSkillCooldowns[k] - 1);
+    for (const k of Object.keys(bOpts._jobSkillCooldowns)) bOpts._jobSkillCooldowns[k] = Math.max(0, bOpts._jobSkillCooldowns[k] - 1);
+    aOpts._jobSkillUsed = false;
+    bOpts._jobSkillUsed = false;
 
     // 冷卻倒數
     for (const k of Object.keys(aOpts._cardCooldowns)) aOpts._cardCooldowns[k] = Math.max(0, aOpts._cardCooldowns[k] - 1);
