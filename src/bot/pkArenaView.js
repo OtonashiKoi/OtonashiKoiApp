@@ -1,6 +1,6 @@
 "use strict";
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, StringSelectMenuBuilder } = require("discord.js");
-const { ARENA_COUNT, getPkArenaBracketByIndex, getBossBoostPct, PK_RATING_DEFAULT } = require("../shared/pkArenaConfig");
+const { ARENA_COUNT, getPkArenaBracketByIndex, getBossBoostPct, getDropBoostPct, PK_RATING_DEFAULT } = require("../shared/pkArenaConfig");
 
 // ── Button ID 常數 ───────────────────────────────────────────
 const PK_ARENA_IDS = {
@@ -90,8 +90,10 @@ function buildRankingField(ranking = []) {
     const wins = Number(row.pkWins) || 0;
     const losses = Number(row.pkLosses) || 0;
     const boostPct = getBossBoostPct(rating);
+    const dropPct  = getDropBoostPct(rating);
     const boostStr = boostPct > 0 ? ` ⚔️+${boostPct}%` : "";
-    return `${medal} **${name}** ${rating}分 (${wins}勝${losses}敗)${boostStr}`;
+    const dropStr  = dropPct  > 0 ? ` 🎁+${dropPct}%` : "";
+    return `${medal} **${name}** ${rating}分 (${wins}勝${losses}敗)${boostStr}${dropStr}`;
   });
   return lines.join("\n");
 }

@@ -13,6 +13,7 @@ const { calcPlayerStats, isOnlyDTierEquipped } = require("../../shared/combatSta
 const { getEquipmentTierSetBonuses } = require("../../shared/equipmentTierSetBonuses");
 const { isEffectConditionMet, collectEquipmentEffects, mergeEquippedFromLibrary, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
 const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = require("../../shared/battlePresence");
+const { getDropBoostPct } = require("../../shared/pkArenaConfig");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
 
 // 戰鬥 session 依 discordId 儲存（記憶體）
@@ -1068,6 +1069,7 @@ function buildRewardModifiers(progress, partyRefs = []) {
   expPct += tierSetBonuses.expPct;
   goldPct += tierSetBonuses.goldPct;
   dropPct += tierSetBonuses.dropPct;
+  dropPct += getDropBoostPct(Number(progress?.pkRating ?? 0));
 
   return {
     expPct,

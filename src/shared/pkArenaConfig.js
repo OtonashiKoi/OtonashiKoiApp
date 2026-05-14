@@ -29,6 +29,14 @@ function getBossBoostPct(rating) {
   return 0;
 }
 
+// 掉落率加成：依 rating 區間（%）
+function getDropBoostPct(rating) {
+  if (rating >= 1800) return 5;
+  if (rating >= 1600) return 3;
+  if (rating >= 1400) return 1;
+  return 0;
+}
+
 function getPkArenaBracketByIndex(index = 0) {
   const idx = Math.max(0, Math.min(PK_ARENA_BRACKETS.length - 1, Number(index) || 0));
   return PK_ARENA_BRACKETS[idx] || PK_ARENA_BRACKETS[0];
@@ -51,4 +59,5 @@ module.exports = {
   PK_RATING_MIN,
   calcRatingChange,
   getBossBoostPct,
+  getDropBoostPct,
 };
