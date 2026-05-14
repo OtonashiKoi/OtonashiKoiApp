@@ -16,6 +16,7 @@ const TOWER_IDS = {
   refresh:    "tower:refresh",     // Thread：重整
   fightNext:  "tower:fight_next",  // Thread：攻略下一層（隊長）
   ranking:    "tower:ranking",     // 任意：排行榜
+  useItem:    "tower:use_item",    // Thread：使用道具（隊長）
 };
 
 function buildTowerActionPreview(members = []) {
@@ -268,6 +269,11 @@ function createTowerThreadBattleMessage(session) {
       .setCustomId(TOWER_IDS.fightNext)
       .setLabel(isBossNext ? "👑 挑戰終焉魔王！" : `⚔️ 攻略第 ${nextFloor} 層`)
       .setStyle(isBossNext ? ButtonStyle.Danger : ButtonStyle.Primary)
+      .setDisabled(isFighting || alreadyDone),
+    new ButtonBuilder()
+      .setCustomId(TOWER_IDS.useItem)
+      .setLabel("🧪 使用道具")
+      .setStyle(ButtonStyle.Success)
       .setDisabled(isFighting || alreadyDone),
     new ButtonBuilder()
       .setCustomId(TOWER_IDS.refresh)

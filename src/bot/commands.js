@@ -17,7 +17,7 @@ const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, hand
 const { handleIdleZoneButton, isIdleZoneButton, handleIdleZoneSelect, isIdleZoneSelect } = require("./handlers/idleZoneHandlers");
 const { isAuctionButton, handleAuctionButton, handleAuctionFilterSelect, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
 const { isPkArenaButton, isPkArenaSelectMenu, handlePkArenaButton, handlePkArenaSelectMenu, publishPkArenaPanel } = require("./handlers/pkArenaHandlers");
-const { isTowerButton, handleTowerButton, publishTowerHallPanel } = require("./handlers/towerHandlers");
+const { isTowerButton, handleTowerButton, isTowerSelectMenu, handleTowerSelectMenu, publishTowerHallPanel } = require("./handlers/towerHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -221,6 +221,10 @@ async function handleButton(interaction) {
 }
 
 async function handleSelectMenu(interaction) {
+  if (isTowerSelectMenu(interaction.customId)) {
+    await handleTowerSelectMenu(interaction);
+    return;
+  }
   if (isPkArenaSelectMenu(interaction.customId)) {
     await handlePkArenaSelectMenu(interaction);
     return;

@@ -428,6 +428,16 @@ class ShopService {
       }
     }
 
+    // 背包持有上限（maxOwn）：限定類消耗品（如爬塔藥水）每種最多持有 N 罐
+    const maxOwn = item.maxOwn || 0;
+    if (maxOwn > 0 && progress) {
+      const libId = item.itemLibraryId || item.id;
+      const owned = (progress.inventory || []).filter((e) => e.itemId === libId).length;
+      if (owned + quantity > maxOwn) {
+        throw new AppError(ERROR_CODES.FORBIDDEN, `此商品最多持有 ${maxOwn} 個（目前背包已有 ${owned} 個）`, 403);
+      }
+    }
+
     // 扣除金幣（總額）
     if (item.price > 0) {
         await this.rewardService.grantCurrency({

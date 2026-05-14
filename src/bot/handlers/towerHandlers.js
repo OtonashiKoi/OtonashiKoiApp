@@ -1,6 +1,6 @@
 "use strict";
 
-const { MessageFlags } = require("discord.js");
+const { MessageFlags, ActionRowBuilder, StringSelectMenuBuilder } = require("discord.js");
 const config = require("../../config");
 const { serviceContext, getBotClient } = require("../runtimeContext");
 const { calcPlayerStats } = require("../../shared/combatStats");
@@ -599,6 +599,10 @@ async function processNextFloor(session) {
 
   // 每層通關後嘗試掉落怪物卡
   awardFloorCardDrops(session, monster).catch(() => {});
+  // 每層通關後嘗試掉落藥水
+  awardFloorPotionDrop(session, floor).then((r) => {
+    if (r) console.log(`[Tower] 第${floor}層掉落藥水：${r.itemName} → ${r.name}`);
+  }).catch(() => {});
 
   if (session.clearedFloor >= TOWER_TOTAL_FLOORS) {
     await persistSession(session);
@@ -1183,6 +1187,237 @@ function isTowerButton(customId) {
   return typeof customId === "string" && customId.startsWith("tower:");
 }
 
+// ── 爬塔藥水：道具 ID 對應 ────────────────────────────────────
+const TOWER_POTION_IDS = {
+  "f56aefd0-faa8-45b5-8451-fbbae5810c74": { name: "回復藥水（小）",  effect: { type: "tower_heal_flat", value: 80 } },
+  "97fbd546-e207-4130-b130-2fadd799703a": { name: "回復藥水（中）",  effect: { type: "tower_heal_flat", value: 200 } },
+  "3eb1d302-3d04-40a5-8335-1f9ed844dc27": { name: "回復藥水（大）",  effect: { type: "tower_heal_pct",  value: 50 } },
+  "12bfb110-6489-4784-8537-f3f496759f8f": { name: "復活藥水（小）", effect: { type: "tower_revive_pct", value: 30 } },
+  "c4794326-ced1-4efe-983d-17c14ee2f2f8": { name: "復活藥水（大）", effect: { type: "tower_revive_pct", value: 70 } },
+};
+
+// 爬塔各層掉落藥水機率表（依通關層數，機率 = %，可掉0~1罐）
+function getTowerPotionDropPool(floor) {
+  if (floor >= 35) return [
+    { id: "3eb1d302-3d04-40a5-8335-1f9ed844dc27", chance: 6 },  // 回復大
+    { id: "c4794326-ced1-4efe-983d-17c14ee2f2f8", chance: 4 },  // 復活大
+    { id: "12bfb110-6489-4784-8537-f3f496759f8f", chance: 3 },  // 復活小
+  ];
+  if (floor >= 20) return [
+    { id: "97fbd546-e207-4130-b130-2fadd799703a", chance: 8 },  // 回復中
+    { id: "3eb1d302-3d04-40a5-8335-1f9ed844dc27", chance: 4 },  // 回復大
+    { id: "12bfb110-6489-4784-8537-f3f496759f8f", chance: 3 },  // 復活小
+  ];
+  if (floor >= 10) return [
+    { id: "f56aefd0-faa8-45b5-8451-fbbae5810c74", chance: 10 }, // 回復小
+    { id: "97fbd546-e207-4130-b130-2fadd799703a", chance: 5 },  // 回復中
+  ];
+  return [
+    { id: "f56aefd0-faa8-45b5-8451-fbbae5810c74", chance: 8 },  // 回復小
+  ];
+}
+
+// 爬塔通關後嘗試掉落藥水給隨機成員
+async function awardFloorPotionDrop(session, floor) {
+  const sc = serviceContext;
+  const pool = getTowerPotionDropPool(floor);
+  const dropped = pool.find((p) => Math.random() * 100 < p.chance);
+  if (!dropped) return null;
+  const potion = TOWER_POTION_IDS[dropped.id];
+  if (!potion) return null;
+
+  const luckyMember = session.members[Math.floor(Math.random() * session.members.length)];
+  const entry = {
+    uuid: require("crypto").randomUUID(),
+    itemId: dropped.id,
+    itemName: potion.name,
+    itemEffect: potion.effect,
+    useEffects: [], passiveEffects: [], procEffects: [], combatEffects: [],
+    itemType: "tower_consumable",
+    imageUrl: null, imageThumbnailUrl: null,
+    equipSlot: null, equipStats: {}, weaponType: null, isTwoHanded: false,
+    tier: null, enhanceLevel: 0,
+    source: "tower_drop", sourceRef: `第${floor}層`,
+    purchasedAt: new Date().toISOString(),
+  };
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const prog = await sc.progressRepository.findByPlayerId(luckyMember.discordId).catch(() => null);
+    if (!prog) break;
+    const next = { ...prog, inventory: [...(prog.inventory || []), entry], updatedAt: new Date().toISOString() };
+    try {
+      if (typeof sc.progressRepository.saveIfUnchanged === "function") {
+        const ok = await sc.progressRepository.saveIfUnchanged(next, prog.updatedAt);
+        if (ok) return { name: luckyMember.name, itemName: potion.name };
+      } else {
+        await sc.progressRepository.save(next);
+        return { name: luckyMember.name, itemName: potion.name };
+      }
+    } catch (_) {}
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 10 * (attempt + 1)));
+  }
+  return null;
+}
+
+// ── 使用道具：隊長按「使用道具」按鈕，彈出藥水選單 ─────────
+async function handleUseItem(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const discordId = interaction.user.id;
+  const session = [...activeSessions.values()].find((s) => s.threadId === interaction.channelId);
+  if (!session) return interaction.editReply({ content: "❌ 找不到攻塔房間。" });
+  if (session.leaderId !== discordId) return interaction.editReply({ content: "❌ 只有隊長可以使用道具。" });
+  if (session.state !== "ready_to_fight") return interaction.editReply({ content: "❌ 只能在層與層之間（準備攻略下一層前）使用道具。" });
+
+  // 收集所有成員背包中的爬塔藥水
+  const sc = serviceContext;
+  const allPotions = [];
+  for (const m of session.members) {
+    const prog = await sc.progressRepository.findByPlayerId(m.discordId).catch(() => null);
+    const inv = (prog?.inventory || []).filter((e) => TOWER_POTION_IDS[e.itemId]);
+    for (const entry of inv) {
+      allPotions.push({ member: m, entry, prog });
+    }
+  }
+
+  if (allPotions.length === 0) return interaction.editReply({ content: "🎒 隊伍中目前沒有任何爬塔藥水。" });
+
+  // 建立藥水選單（先選藥水，最多25個選項）
+  const options = allPotions.slice(0, 25).map((p, i) => {
+    const potionInfo = TOWER_POTION_IDS[p.entry.itemId];
+    const isRevive = potionInfo.effect.type === "tower_revive_pct";
+    const isDead = p.member.currentHp <= 0;
+    const canUse = isRevive ? isDead : !isDead;
+    return {
+      label: `${p.entry.itemName}`,
+      description: `持有者：${p.member.name}（${isRevive ? "復活，目標需已陣亡" : "回血，目標需存活"}）${canUse ? "" : " ⚠️ 持有者狀態不符"}`,
+      value: `${p.entry.uuid}:${p.member.discordId}`,
+    };
+  });
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("tower:use_item_pick_potion")
+    .setPlaceholder("選擇要使用的藥水…")
+    .addOptions(options);
+
+  await interaction.editReply({
+    content: "🧪 **使用爬塔道具**\n選擇藥水後，再選擇目標隊員。",
+    components: [new ActionRowBuilder().addComponents(menu)],
+  });
+}
+
+// ── 選完藥水後，選目標成員 ──────────────────────────────────
+async function handlePickPotion(interaction) {
+  await interaction.deferUpdate();
+  const [itemUuid, ownerDiscordId] = interaction.values[0].split(":");
+  const session = [...activeSessions.values()].find((s) => s.threadId === interaction.channelId);
+  if (!session) return interaction.editReply({ content: "❌ 找不到攻塔房間。" });
+  if (session.leaderId !== interaction.user.id) return interaction.editReply({ content: "❌ 只有隊長可以使用道具。" });
+
+  const sc = serviceContext;
+  const ownerProg = await sc.progressRepository.findByPlayerId(ownerDiscordId).catch(() => null);
+  const entry = (ownerProg?.inventory || []).find((e) => e.uuid === itemUuid);
+  if (!entry) return interaction.editReply({ content: "❌ 找不到該道具（可能已被使用）。", components: [] });
+
+  const potionInfo = TOWER_POTION_IDS[entry.itemId];
+  if (!potionInfo) return interaction.editReply({ content: "❌ 無效的道具。", components: [] });
+
+  const isRevive = potionInfo.effect.type === "tower_revive_pct";
+
+  // 根據藥水類型篩選可選目標
+  const validTargets = session.members.filter((m) => isRevive ? m.currentHp <= 0 : m.currentHp > 0);
+  if (validTargets.length === 0) {
+    const reason = isRevive ? "目前沒有已陣亡的隊員可以復活。" : "目前所有隊員都已陣亡，無法使用回復藥水。";
+    return interaction.editReply({ content: `❌ ${reason}`, components: [] });
+  }
+
+  const memberOptions = validTargets.map((m) => ({
+    label: m.name,
+    description: isRevive ? "已陣亡，可復活" : `HP ${m.currentHp} / ${m.maxHp}`,
+    value: `${itemUuid}:${ownerDiscordId}:${m.discordId}`,
+  }));
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("tower:use_item_pick_target")
+    .setPlaceholder(`選擇要對誰使用「${entry.itemName}」…`)
+    .addOptions(memberOptions);
+
+  await interaction.editReply({
+    content: `🧪 **${entry.itemName}** — 選擇目標隊員`,
+    components: [new ActionRowBuilder().addComponents(menu)],
+  });
+}
+
+// ── 選完目標後，執行藥水效果 ────────────────────────────────
+async function handleApplyPotion(interaction) {
+  await interaction.deferUpdate();
+  const [itemUuid, ownerDiscordId, targetDiscordId] = interaction.values[0].split(":");
+  const session = [...activeSessions.values()].find((s) => s.threadId === interaction.channelId);
+  if (!session) return interaction.editReply({ content: "❌ 找不到攻塔房間。", components: [] });
+  if (session.leaderId !== interaction.user.id) return interaction.editReply({ content: "❌ 只有隊長可以使用道具。", components: [] });
+  if (session.state !== "ready_to_fight") return interaction.editReply({ content: "❌ 只能在層與層之間使用道具。", components: [] });
+
+  const sc = serviceContext;
+  // 從背包取出並消耗道具
+  let entry = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const prog = await sc.progressRepository.findByPlayerId(ownerDiscordId).catch(() => null);
+    if (!prog) break;
+    const idx = (prog.inventory || []).findIndex((e) => e.uuid === itemUuid);
+    if (idx === -1) break;
+    entry = prog.inventory[idx];
+    const next = { ...prog, inventory: prog.inventory.filter((_, i) => i !== idx), updatedAt: new Date().toISOString() };
+    try {
+      if (typeof sc.progressRepository.saveIfUnchanged === "function") {
+        const ok = await sc.progressRepository.saveIfUnchanged(next, prog.updatedAt);
+        if (ok) break;
+      } else {
+        await sc.progressRepository.save(next);
+        break;
+      }
+    } catch (_) {}
+    entry = null;
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 10 * (attempt + 1)));
+  }
+  if (!entry) return interaction.editReply({ content: "❌ 道具消耗失敗（可能已被使用）。", components: [] });
+
+  const potionInfo = TOWER_POTION_IDS[entry.itemId];
+  const target = session.members.find((m) => m.discordId === targetDiscordId);
+  if (!target) return interaction.editReply({ content: "❌ 找不到目標隊員。", components: [] });
+
+  const ownerMember = session.members.find((m) => m.discordId === ownerDiscordId);
+  const ownerName = ownerMember ? ownerMember.name : "隊員";
+
+  // 套用效果
+  const eff = potionInfo.effect;
+  let resultMsg = "";
+  if (eff.type === "tower_heal_flat") {
+    if (target.currentHp <= 0) return interaction.editReply({ content: "❌ 目標已陣亡，無法使用回復藥水。", components: [] });
+    const before = target.currentHp;
+    target.currentHp = Math.min(target.maxHp, target.currentHp + eff.value);
+    const healed = target.currentHp - before;
+    resultMsg = `💚 **${target.name}** 恢復了 **${healed} HP**（${before} → ${target.currentHp} / ${target.maxHp}）`;
+  } else if (eff.type === "tower_heal_pct") {
+    if (target.currentHp <= 0) return interaction.editReply({ content: "❌ 目標已陣亡，無法使用回復藥水。", components: [] });
+    const before = target.currentHp;
+    const heal = Math.round(target.maxHp * eff.value / 100);
+    target.currentHp = Math.min(target.maxHp, target.currentHp + heal);
+    const healed = target.currentHp - before;
+    resultMsg = `💚 **${target.name}** 恢復了 **${healed} HP**（${eff.value}% MaxHP，${before} → ${target.currentHp} / ${target.maxHp}）`;
+  } else if (eff.type === "tower_revive_pct") {
+    if (target.currentHp > 0) return interaction.editReply({ content: "❌ 目標尚未陣亡，無法使用復活藥水。", components: [] });
+    const reviveHp = Math.round(target.maxHp * eff.value / 100);
+    target.currentHp = Math.max(1, reviveHp);
+    resultMsg = `✨ **${target.name}** 復活！恢復 **${target.currentHp} HP**（${eff.value}% MaxHP）`;
+  }
+
+  await persistSession(session);
+  await updateThreadPanel(session, createTowerThreadBattleMessage(session));
+  await interaction.editReply({
+    content: `${resultMsg}\n（${ownerName} 的「${entry.itemName}」已消耗）`,
+    components: [],
+  });
+}
+
 async function handleTowerButton(interaction) {
   switch (interaction.customId) {
   case TOWER_IDS.openLobby:  return handleOpenLobby(interaction);
@@ -1193,12 +1428,27 @@ async function handleTowerButton(interaction) {
   case TOWER_IDS.fightNext:  return handleFightNext(interaction);
   case TOWER_IDS.refresh:    return handleRefresh(interaction);
   case TOWER_IDS.ranking:    return handleRanking(interaction);
+  case TOWER_IDS.useItem:    return handleUseItem(interaction);
   }
+}
+
+function isTowerSelectMenu(customId) {
+  return typeof customId === "string" && (
+    customId === "tower:use_item_pick_potion" ||
+    customId === "tower:use_item_pick_target"
+  );
+}
+
+async function handleTowerSelectMenu(interaction) {
+  if (interaction.customId === "tower:use_item_pick_potion") return handlePickPotion(interaction);
+  if (interaction.customId === "tower:use_item_pick_target") return handleApplyPotion(interaction);
 }
 
 module.exports = {
   isTowerButton,
   handleTowerButton,
+  isTowerSelectMenu,
+  handleTowerSelectMenu,
   publishTowerHallPanel,
   restoreTowerSessions,
 };
