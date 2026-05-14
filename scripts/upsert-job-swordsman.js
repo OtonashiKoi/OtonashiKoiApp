@@ -101,31 +101,6 @@ const JOB_ITEM = {
       condition: { weaponType: "sword_2h" },
       notes: "雙手劍時，格擋 +20%"
     },
-    // 主武器雙手劍：10% 斬殺機率（門檻 10%）
-    {
-      key: "execute_chance_up",
-      trigger: "passive",
-      target: "self",
-      chance: 100,
-      stacks: 1,
-      stackMode: "replace",
-      duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
-      condition: { weaponType: "sword_2h" },
-      notes: "雙手劍時，10% 斬殺機率"
-    },
-    {
-      key: "execute_threshold_up",
-      trigger: "passive",
-      target: "self",
-      chance: 100,
-      stacks: 1,
-      stackMode: "replace",
-      duration: { mode: "battle", value: 1 },
-      params: { value: 10 },
-      condition: { weaponType: "sword_2h" },
-      notes: "雙手劍斬殺門檻 10%"
-    }
   ],
   procEffects: [],
   combatEffects: [],

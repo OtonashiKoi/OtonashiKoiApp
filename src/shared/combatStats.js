@@ -20,8 +20,8 @@ const { getBossBoostPct, PK_RATING_DEFAULT } = require("./pkArenaConfig");
 const WEAPON_CONFIG = {
   sword_1h: { mult: 4 },
   sword_2h: { mult: 5, isTwoHanded: true },
-  mace_1h:  { mult: 3, stunChance: 10, stunDuration: 2 },
-  mace_2h:  { mult: 4, isTwoHanded: true, stunChance: 0, stunDuration: 2 },
+  mace_1h:  { mult: 3, stunChance: 10, stunDuration: 3 },
+  mace_2h:  { mult: 4, isTwoHanded: true, stunChance: 0, stunDuration: 3 },
   axe_1h:   { mult: 3, armorBreak: 15, critBonus: 10 },
   axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15, critBonus: 20 },
   dagger:   { mult: 2, comboBonus: 20 },
