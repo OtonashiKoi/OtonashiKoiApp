@@ -93,7 +93,7 @@ const TOWER_LOBBY_TIMEOUT_MS = 10 * 60 * 1000; // 10 分鐘未開始 → 自動�
 
 // ── 攻塔限制 ─────────────────────────────────────────────────
 const TOWER_MIN_LEVEL = 30;          // 最低等級限制
-const TOWER_HOURLY_LIMIT = 3;        // 每人每小時最多挑戰次數
+const TOWER_HOURLY_LIMIT = 10;       // 每人每小時最多挑戰次數
 const TOWER_HOURLY_WINDOW_MS = 60 * 60 * 1000; // 1 小時滑動窗口
 
 // ── 過關 Buff（僅限怪物區，刷新不疊加） ─────────────────────
