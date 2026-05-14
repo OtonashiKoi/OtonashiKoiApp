@@ -2,7 +2,7 @@
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const {
-  TOWER_MAX_MEMBERS, TOWER_TOTAL_FLOORS,
+  TOWER_MAX_MEMBERS, TOWER_TOTAL_FLOORS, MAX_ROUNDS_PER_MEMBER,
   getTowerFloorBuff, getCumulativePartyBonus,
 } = require("../shared/towerConfig");
 
@@ -225,7 +225,7 @@ function createTowerThreadBattleMessage(session) {
       battleSection.push(`　…其餘 ${memberLogs.length - 8} 次行動略，完整戰報保留在系統紀錄。`);
     }
     if (monsterKilled && survived)       battleSection.push(`✅ **${monsterName}** 討伐！共 ${totalRounds} 回合，第 ${floor} 層通關！`);
-    else if (!monsterKilled)             battleSection.push(`❌ 共 ${totalRounds} 回合仍未擊敗，${monsterName} 剩 ${monsterHpFinal} HP`);
+    else if (!monsterKilled)             battleSection.push(`❌ 行動格耗盡（${totalRounds} 格）仍未擊敗，${monsterName} 剩 ${monsterHpFinal} HP`);
     else                                 battleSection.push(`💀 全員陣亡`);
   }
 
@@ -256,11 +256,12 @@ function createTowerThreadBattleMessage(session) {
   // 4000 字元保護
   const desc = descLines.join("\n").slice(0, 4000);
 
+  const actionLimit = MAX_ROUNDS_PER_MEMBER * (session.members.length + 1);
   const embed = new EmbedBuilder()
     .setTitle(titleText)
     .setColor(alreadyDone ? 0xf1c40f : buff.color)
     .setDescription(desc)
-    .setFooter({ text: "裝備已鎖定快照 · 隊長按按鈕攻略下一層" });
+    .setFooter({ text: `裝備已鎖定快照 · 每層最多 ${actionLimit} 個行動格（每人約 ${MAX_ROUNDS_PER_MEMBER} 格），超時視為失敗` });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -311,7 +312,7 @@ function createTowerThreadResultMessage(session, reward) {
         ...rewardLines,
       ].filter((l) => l !== "").join("\n")
     )
-    .setFooter({ text: "個人最高紀錄已更新 · 感謝挑戰！" });
+    .setFooter({ text: `個人最高紀錄已更新 · 感謝挑戰！ · 每層行動格上限 = 每人 ${MAX_ROUNDS_PER_MEMBER} 格 × (隊員數+1)` });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()

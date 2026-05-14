@@ -589,7 +589,7 @@ async function processNextFloor(session) {
 
   if (!fightResult.monsterKilled || !fightResult.survived) {
     session.failReason = !fightResult.monsterKilled
-      ? `第 ${floor} 層共 ${fightResult.totalRounds} 回合仍未擊敗 ${monster.name}，攻塔終止。`
+      ? `第 ${floor} 層行動格耗盡（${fightResult.totalRounds} 格），火力不足以擊敗 ${monster.name}，攻塔終止。（每人約 ${MAX_ROUNDS_PER_MEMBER} 格，需提升 ATK 或帶高輸出職業）`
       : `第 ${floor} 層通關後全員陣亡。`;
     await persistSession(session);
     return finishTower(session);
