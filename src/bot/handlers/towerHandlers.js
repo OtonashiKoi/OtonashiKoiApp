@@ -175,27 +175,71 @@ async function updateThreadPanel(session, payload) {
 // 第 floor 層就取排序後第 floor 隻，每隻只打一次
 const TOWER_ZONE_ORDER = ["beginner", "normal", "mid", "hard", "elite"];
 
-let _cachedMonsterList = null; // 啟動後快取一次，避免每層都查 DB
+let _cachedMonstersByZone = null;
+let _cachedBossMap = null;
 
-async function buildTowerMonsterList() {
+// ── 爬塔怪物池 ──────────────────────────────────────────────────
+// 層段對應 zone，每段最後一層固定出指定 Boss
+// 廢都魔王(B) 強度過高不列入爬塔
+const TOWER_FLOOR_BOSS = {
+  10: "大野兔(B)",
+  20: "米拉桑(B)",
+  30: "古城將軍(B)",
+  40: "城堡魔像(B)",
+  41: "大史王",
+};
+
+const TOWER_FLOOR_ZONE = (floor) => {
+  if (floor <= 10) return "beginner";
+  if (floor <= 20) return "normal";   // 11-19 用 normal
+  if (floor <= 30) return "mid";      // 21-29 用 mid
+  return "hard";                      // 31-40 用 hard（非boss）
+};
+
+// 排除不應出現在一般層的怪
+const TOWER_EXCLUDED_MONSTERS = new Set(["廢都魔王(B)"]);
+
+async function buildTowerMonsterPools() {
   const sc  = serviceContext;
   const all = await sc.monsterService.listMonsters({ includeDisabled: false }).catch(() => []);
-  return [...all].sort((a, b) => {
-    const za = TOWER_ZONE_ORDER.indexOf(a.zone || "normal");
-    const zb = TOWER_ZONE_ORDER.indexOf(b.zone || "normal");
-    if (za !== zb) return za - zb;
-    // 同 zone：非 boss 先，再按 HP 低到高
-    if (!!a.isBoss !== !!b.isBoss) return a.isBoss ? 1 : -1;
-    return (a.maxHp || 0) - (b.maxHp || 0);
-  });
+
+  const byZone = {};
+  const bossMap = {};
+
+  for (const m of all) {
+    // Boss 建立查詢 map
+    if (m.isBoss) {
+      bossMap[m.name] = m;
+    }
+    // 非 boss 且非排除清單，加入 zone 池
+    if (!m.isBoss && !TOWER_EXCLUDED_MONSTERS.has(m.name)) {
+      const z = m.zone || "normal";
+      if (!byZone[z]) byZone[z] = [];
+      byZone[z].push(m);
+    }
+  }
+
+  _cachedMonstersByZone = byZone;
+  _cachedBossMap = bossMap;
 }
 
 async function pickFloorMonster(floor) {
-  if (!_cachedMonsterList) {
-    _cachedMonsterList = await buildTowerMonsterList();
+  if (!_cachedMonstersByZone) {
+    await buildTowerMonsterPools();
   }
-  const idx = floor - 1; // floor 1 = index 0
-  return _cachedMonsterList[idx] || null;
+
+  // 固定 Boss 關
+  const bossName = TOWER_FLOOR_BOSS[floor];
+  if (bossName) {
+    const boss = _cachedBossMap[bossName];
+    if (boss) return boss;
+  }
+
+  // 一般層：從對應 zone 隨機抽一隻非 boss 怪
+  const zone = TOWER_FLOOR_ZONE(floor);
+  const pool = _cachedMonstersByZone[zone] || [];
+  if (pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // ── 收集全隊 party 光環 effects ──────────────────────────────
@@ -751,10 +795,31 @@ async function settleTowerSession(session, reward) {
           amount: reward.exp, source: EXP_SOURCES.TOWER_REWARD_EXP,
         }).catch(() => {});
       }
+    } catch (e) { /* ignore per-member errors */ }
+  }
 
+  // 41 層通關 → 寫入全服名人堂（只記錄一次，不依人頭）
+  if (session.clearedFloor >= TOWER_TOTAL_FLOORS) {
+    try {
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const mongoDb = await getMongoDb();
+      await mongoDb.collection("towerHallOfFame").insertOne({
+        clearedAt: new Date().toISOString(),
+        members: session.members.map((m) => ({
+          discordId: m.discordId,
+          name: m.name,
+          job: m.job?.name || m.job || null,
+          level: m.level || null,
+        })),
+        floor: session.clearedFloor,
+      });
+    } catch (_e) { /* 寫入失敗不影響主流程 */ }
+  }
+
+  for (const m of session.members) {
+    try {
       // DM 通知
-      try {
-        const client = getBotClient();
+      const client = getBotClient();
         const user   = await client.users.fetch(m.discordId).catch(() => null);
         if (user) {
           const isFull    = session.clearedFloor >= TOWER_TOTAL_FLOORS;
@@ -783,7 +848,6 @@ async function settleTowerSession(session, reward) {
 
           await user.send({ content: dmLines }).catch(() => {});
         }
-      } catch (_) {}
     } catch (_) {}
   }
 }
