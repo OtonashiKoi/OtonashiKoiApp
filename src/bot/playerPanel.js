@@ -1014,7 +1014,7 @@ function filterByTab(inventory, tab, subTab = "all") {
   if (tab === "card") {
     return inventory.filter(e => e.itemType === "monster_card" || Boolean(e.monsterCardSkill));
   }
-  if (tab === "badge") return inventory.filter(e => e.itemType === "job_badge");
+  if (tab === "badge") return inventory.filter(e => e.itemType === "job_badge" || e.equipSlot === "job_eq");
   return inventory.filter(e => e.itemType !== "equipment" && e.itemType !== "job_badge" && e.itemType !== "monster_card");
 }
 
@@ -2261,7 +2261,7 @@ function formatRewardItemLabel(item) {
   if (!item) return "＋道具";
   const itemName = item.name || item.itemName || "未命名道具";
   const parts = [`${itemName}`];
-  if (item.itemType === "equipment") {
+  if (item.itemType === "equipment" || item.itemType === "job_badge" || item.equipSlot === "job_eq") {
     const statText = formatEquipStats(item.equipStats);
     const weaponSummary = formatRewardWeaponSummary(item);
     if (weaponSummary) {
@@ -2408,6 +2408,7 @@ async function grantQuestRewardDiscord(serviceContext, discordId, displayName, r
       const prog = await serviceContext.progressRepository.findByPlayerId(discordId);
       if (prog) {
         if (!Array.isArray(prog.inventory)) prog.inventory = [];
+        const rewardItemType = item.equipSlot === "job_eq" ? "job_badge" : (item.itemType || "consumable");
         prog.inventory.push({
           uuid: crypto.randomUUID(),
           itemId: item.id,
@@ -2417,7 +2418,7 @@ async function grantQuestRewardDiscord(serviceContext, discordId, displayName, r
           passiveEffects: item.passiveEffects || [],
           procEffects: item.procEffects || [],
           combatEffects: item.combatEffects || [],
-          itemType: item.itemType || "consumable",
+          itemType: rewardItemType,
           imageUrl: item.imageUrl || null,
           imageThumbnailUrl: item.imageThumbnailUrl || null,
           equipSlot: item.equipSlot || null,

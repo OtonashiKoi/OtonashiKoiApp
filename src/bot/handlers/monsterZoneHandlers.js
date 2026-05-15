@@ -62,7 +62,7 @@ const BTN = {
 
 const MAX_ROUNDS = 15;
 const BATTLE_TIMEOUT_MS = 60 * 1000; // 1 分鐘未按開始戰鬥 → 視為逃跑
-const ROUNDS_PER_TICK = 1;           // 每次更新顯示幾回合
+const ROUNDS_PER_TICK = 1;           // 每次更新顯示 1 回合，維持逐回合戰報節奏
 const MONSTER_TRANSITION_MS = 500;   // 怪物轉場空窗：0.5 秒
 const BATTLE_QUEUE_POLL_MS = 500;    // 排隊等待輪詢：0.5 秒
 const DEATH_EXTRA_COOLDOWN_MS = 10 * 1000; // 死亡額外冷卻：在 15 回合基準時間外再加 10 秒

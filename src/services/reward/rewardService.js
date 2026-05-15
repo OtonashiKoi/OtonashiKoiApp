@@ -36,7 +36,7 @@ class RewardService {
 
     const currentBalance = currencyType === "diamond" ? nextWallet.diamond : nextWallet.gold;
     const nextBalance = currentBalance + amount;
-    if (nextBalance < 0) {
+    if (amount < 0 && nextBalance < 0) {
       throw new AppError(ERROR_CODES.INSUFFICIENT_BALANCE, `${currencyType} balance is not enough`, 400);
     }
 

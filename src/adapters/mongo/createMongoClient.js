@@ -37,6 +37,12 @@ async function ensureIndexes(db) {
       ),
       db.collection("adminActionLogs").createIndex({ createdAt: -1 }),
       db.collection("checkins").createIndex({ discordId: 1, occurredAt: -1 }),
+      db.collection("weeklyQuestProgress").createIndex({ discordId: 1, cadence: 1, periodKey: 1 }, { unique: true }),
+      db.collection("weeklyQuestProgress").createIndex({ cadence: 1, periodKey: 1 }),
+      db.collection("weeklyQuestProgress").createIndex({ weekLabel: 1 }),
+      db.collection("monsterState").createIndex({ _id: 1 }),
+      db.collection("monsters").createIndex({ zone: 1, enabled: 1, spawnRate: -1 }),
+      db.collection("monsters").createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $type: "string" } } }),
 
       // 商店和道具
       db.collection("shopItems").createIndex({ id: 1 }, { unique: true }),
@@ -117,7 +123,9 @@ async function getMongoDb() {
 
   cachedClient = new MongoClient(config.storage.mongoUri, {
     serverSelectionTimeoutMS: 5000,
+    minPoolSize: 5,
     maxPoolSize: 50,                    // 提高連接池以應對高頻更新
+    maxIdleTimeMS: 120000,
     socketTimeoutMS: 45000,             // 避免長連接超時
     retryWrites: true,                  // 自動重試寫入
     writeConcern: { w: 'majority' },    // 確保寫入到多個副本（如果有）
