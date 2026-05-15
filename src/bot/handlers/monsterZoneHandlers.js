@@ -1221,6 +1221,37 @@ async function _notifyKillRewards(monsterName, perPidRewards) {
   }
 }
 
+function buildPartyRewardSummary(perPidRewards = {}, damageMap = {}, options = {}) {
+  const limit = Math.max(1, Number(options.limit) || 12);
+  const entries = Object.entries(perPidRewards)
+    .filter(([, rewards]) => rewards && (rewards.gold > 0 || rewards.exp > 0 || rewards.drops?.length || rewards._expGrantFailed))
+    .sort((a, b) => {
+      const dmgA = Number(damageMap?.[a[0]]?.damage || 0);
+      const dmgB = Number(damageMap?.[b[0]]?.damage || 0);
+      return dmgB - dmgA;
+    });
+
+  if (!entries.length) return [];
+
+  const lines = entries.slice(0, limit).map(([pid, rewards]) => {
+    const name = damageMap?.[pid]?.name || pid;
+    const parts = [];
+    if (rewards.gold > 0) parts.push(`金幣 +${rewards.gold}`);
+    if (rewards._expGrantFailed) parts.push("EXP 未寫入");
+    else if (rewards.exp > 0) parts.push(`EXP +${rewards.exp}`);
+    if (rewards.levelUps > 0) parts.push(`升級到 Lv.${rewards.newLevel}`);
+    if (Array.isArray(rewards.drops) && rewards.drops.length > 0) {
+      parts.push(`道具 ${rewards.drops.join("、")}`);
+    }
+    return `・${name}：${parts.join("、") || "無獎勵"}`;
+  });
+
+  if (entries.length > limit) {
+    lines.push(`・其餘 ${entries.length - limit} 人略`);
+  }
+  return ["👥 **全體參戰獎勵**", ...lines];
+}
+
 const DROP_TAUNTS = {
   kill: [
     (n) => `${n}：「我只是滑倒！」`,
@@ -3210,6 +3241,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
     _republishPanel(sc, zoneKey, monster, bossResetState.currentHp, 0, {}, null, bossResetState.worldBossPartsHp).catch(() => {});
 
+    rewardLines.push(...buildPartyRewardSummary(perPidRewards, mergedDmg));
     _notifyKillRewards(monster.name, perPidRewards).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
 
     try {
@@ -3424,6 +3456,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   }
 
   // 通知參戰獎勵（DM）
+  rewardLines.push(...buildPartyRewardSummary(perPidRewards, mergedDmg));
   _notifyKillRewards(monster.name, perPidRewards).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
 
   // 推送 SSE reward 事件給所有參戰者（web 端通知紀錄）

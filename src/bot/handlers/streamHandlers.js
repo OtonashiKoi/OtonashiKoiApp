@@ -22,7 +22,7 @@ const STREAM_COMMANDS = {
  * @param {string[]} keywords
  */
 function matchCommand(text, keywords) {
-  const t = text.trim().toLowerCase();
+  const t = text.trim().replace(/^[!！/]+/, "").trim().toLowerCase();
   return keywords.some((kw) => t === kw.toLowerCase() || t.startsWith(kw.toLowerCase()));
 }
 
@@ -408,7 +408,7 @@ async function handleCheckin(comment) {
  * 處理 !綁定 CODE 指令
  */
 async function handleStreamBind(comment) {
-  const normalizedText = comment.text.replace(/^!+/, "").trim();
+  const normalizedText = comment.text.replace(/^[!！/]+/, "").trim();
   const isVerifyCommand = /^驗證(\s|$)/i.test(normalizedText);
   const rawCode = normalizedText.replace(/^(綁定|驗證)\s+/i, "").trim();
   const displayName = comment.name;
@@ -622,8 +622,12 @@ async function handleStreamComment(comment) {
   // 指令偵測
   const rawText = comment.text || "";
   const text = rawText.trim();
-  const stripped = text.replace(/^!+/, "");
+  const stripped = text.replace(/^[!！/]+/, "").trim();
   const textLower = stripped.toLowerCase();
+
+  if (comment.raw?._onecommeHistory) {
+    return;
+  }
 
   // 斗內事件：先處理，再進一般指令判定
   if (await handleDonation(comment).catch((err) => {

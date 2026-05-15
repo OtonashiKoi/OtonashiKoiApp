@@ -9,20 +9,33 @@ async function sendComment({ service = "postman", displayName = "系統", commen
   // resolve service to an existing OneComme service id when possible
   let serviceId = String(service);
   let serviceName = String(service);
+  let serviceWrite = false;
   try {
     const svcRes = await fetch(`${ONECOMME_API_URL}/api/services`);
     if (svcRes.ok) {
-      const services = await svcRes.json();
+      const json = await svcRes.json();
+      const services = Array.isArray(json)
+        ? json
+        : Array.isArray(json?.services)
+          ? json.services
+          : Array.isArray(json?.data)
+            ? json.data
+            : [];
       const found = services.find((s) => {
         if (!s) return false;
         const n = String(s.name || "").toLowerCase();
         const url = String(s.url || "").toLowerCase();
         const q = String(service).toLowerCase();
-        return n.includes(q) || url.includes(q) || (s.id === service);
+        if (s.id === service) return true;
+        if (n.includes(q) || url.includes(q)) return true;
+        if ((q === "yt" || q === "youtube") && url.includes("youtube")) return true;
+        if ((q === "tw" || q === "twitch") && url.includes("twitch")) return true;
+        return false;
       });
       if (found) {
         serviceId = found.id;
         serviceName = found.name || serviceName;
+        serviceWrite = Boolean(found.write);
       }
     }
   } catch (_) {}
@@ -31,7 +44,7 @@ async function sendComment({ service = "postman", displayName = "系統", commen
     service: {
       id: serviceId,
       name: serviceName,
-      write: false,
+      write: serviceWrite,
       speech: false,
       persist: false
     },

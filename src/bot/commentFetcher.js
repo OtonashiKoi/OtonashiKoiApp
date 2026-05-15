@@ -6,6 +6,13 @@ const WebSocket = require("ws");
 
 const ONECOMME_WS_URL = process.env.ONECOMME_WS_URL || "ws://127.0.0.1:11180/sub";
 const RECONNECT_DELAY_MS = 5000;
+const LOG_TEXT_LIMIT = 120;
+
+function compactLogText(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= LOG_TEXT_LIMIT) return text;
+  return `${text.slice(0, LOG_TEXT_LIMIT)}...`;
+}
 
 /**
  * 啟動 OneComme WebSocket 監聽
@@ -13,6 +20,7 @@ const RECONNECT_DELAY_MS = 5000;
  */
 function startFetcher(onComment) {
   console.log("[OneComme] 嘗試連線至：", ONECOMME_WS_URL);
+  const connectedAt = Date.now();
 
   const ws = new WebSocket(ONECOMME_WS_URL);
 
@@ -23,11 +31,15 @@ function startFetcher(onComment) {
   ws.on("message", (rawData) => {
     try {
       const payload = JSON.parse(rawData);
+      const comments = Array.isArray(payload.data?.comments) ? payload.data.comments : [];
 
-      if (payload.type === "comments" && Array.isArray(payload.data?.comments)) {
-        for (const c of payload.data.comments) {
+      if (comments.length > 0) {
+        let handledCount = 0;
+        for (const c of comments) {
           const d = c.data;
           if (!d) continue;
+          const ts = Date.parse(d.timestamp || d.createdAt || "");
+          const isHistory = payload.type !== "comments" && Number.isFinite(ts) && ts < connectedAt - 30_000;
 
           const comment = {
             id: d.id || "",
@@ -35,12 +47,25 @@ function startFetcher(onComment) {
             userId: d.userId || "",
             text: d.comment || "",
             service: d.service || "unknown",
-            raw: d
+            raw: {
+              ...d,
+              _onecommeEventType: payload.type,
+              _onecommeHistory: isHistory
+            }
           };
 
           if (typeof onComment === "function") {
             onComment(comment);
+            handledCount += 1;
           }
+
+          if (payload.type === "comments") {
+            const text = compactLogText(comment.text);
+            console.log(`[OneComme] ${comment.service} ${comment.name}: ${text || "(空白留言)"}`);
+          }
+        }
+        if (payload.type === "comments") {
+          console.log(`[OneComme] 收到留言 ${handledCount} 則`);
         }
       }
     } catch (_) {

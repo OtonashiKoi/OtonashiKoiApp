@@ -1,9 +1,10 @@
 "use strict";
+require("dotenv").config();
 const { MongoClient } = require("mongodb");
 const { runCombatLoop } = require("../src/shared/combatLoop");
 const { calcPlayerStats } = require("../src/shared/combatStats");
 
-const client = new MongoClient("mongodb://localhost:27017");
+const client = new MongoClient(process.env.MONGODB_URI || "mongodb://localhost:27017");
 
 const SIMS = 500;
 const MAX_ROUNDS = 25;
@@ -71,7 +72,7 @@ function parseProcTriggers(roundLogs) {
 
 async function main() {
   await client.connect();
-  const db = client.db("equipment_game");
+  const db = client.db(process.env.MONGODB_DB_NAME || "equipment_game");
 
   // B 級武器
   const weaponItems = await db.collection("items").find({ tier: "B", equipSlot: "weapon" }).toArray();

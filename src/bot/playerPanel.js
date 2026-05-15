@@ -53,6 +53,22 @@ function formatTransactions(rows) {
     .join("\n");
 }
 
+function taipeiDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const map = {};
+  for (const part of parts) {
+    if (part.type !== "literal") map[part.type] = part.value;
+  }
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
 /** editReply wrapper：忽略 10008 Unknown Message（互動已過期或訊息被刪）*/
 async function safeEditReply(interaction, payload) {
   try {
@@ -620,20 +636,20 @@ async function handleTransactions(interaction) {
 
 async function handleCheckinStatus(interaction) {
   const serviceContext = getServiceContext();
-  const checkins = await serviceContext.checkinService.listRecentByDiscordId(
+  const checkins = (await serviceContext.checkinService.listRecentByDiscordId(
     interaction.user.id,
     7
-  );
+  )).sort((a, b) => new Date(b.occurredAt || 0) - new Date(a.occurredAt || 0));
 
-  const today = new Date().toISOString().slice(0, 10);
-  const todayCheckin = checkins.find((c) => (c.occurredAt || "").slice(0, 10) === today);
+  const today = taipeiDateKey();
+  const todayCheckin = checkins.find((c) => taipeiDateKey(c.occurredAt) === today);
 
   const statusLine = todayCheckin
-    ? `✅ 今日已打卡！（${new Date(todayCheckin.occurredAt).toLocaleTimeString("zh-TW")} 獲得 ${todayCheckin.rewardDetail?.amount ?? 0} 金幣）`
+    ? `✅ 今日已打卡！（${new Date(todayCheckin.occurredAt).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei" })} 獲得 ${todayCheckin.rewardDetail?.amount ?? 0} 金幣）`
     : `❌ 今日尚未打卡，在直播輸入 **!打卡** 可獲得 100 金幣！`;
 
   const historyLines = checkins.length
-    ? checkins.map((c) => `${(c.occurredAt || "").slice(0, 10)}  +${c.rewardDetail?.amount ?? 0} 金幣`).join("\n")
+    ? checkins.map((c) => `${taipeiDateKey(c.occurredAt) || "-"}  +${c.rewardDetail?.amount ?? 0} 金幣`).join("\n")
     : "尚無打卡紀錄";
 
   await replyAndAutoDelete(interaction,

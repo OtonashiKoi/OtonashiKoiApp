@@ -407,7 +407,7 @@ async function grantPkRewardStone(sc, discordId, displayName, tier, amount) {
 async function updatePkRatings(sc, slot, result, challFirst) {
   const challId = slot.challenger?.discordId;
   const defId   = slot.defender?.discordId;
-  if (!challId || !defId || result.winner === "draw") return;
+  if (!challId || !defId || !result.winner || result.winner === "draw") return;
 
   const [challProg, defProg] = await Promise.all([
     sc.progressRepository.findByPlayerId(challId).catch(() => null),
