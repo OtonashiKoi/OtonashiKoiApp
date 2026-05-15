@@ -183,6 +183,29 @@ function buildMemberBlock(m, showHp = true) {
   return `${crown}${job.emoji} **${m.name}**${dead} ${job.name} Lv.${m.level}${traits}${hpPart}`;
 }
 
+function formatTowerStatRanking(rows = [], unit = "") {
+  if (!Array.isArray(rows) || rows.length === 0) return "無";
+  return rows
+    .slice(0, 6)
+    .map((row, index) => `${index + 1}. ${row.name} ${row.value}${unit}`)
+    .join("　");
+}
+
+function appendTowerFloorSummary(lines, summary) {
+  if (!summary) return;
+  const mvp = Array.isArray(summary.mvpDamage) ? summary.mvpDamage : [];
+  const taken = Array.isArray(summary.damageTaken) ? summary.damageTaken : [];
+  const healing = Array.isArray(summary.healing) ? summary.healing : [];
+  const auras = Array.isArray(summary.auras) ? summary.auras : [];
+
+  lines.push("");
+  lines.push("**── 本層統計 ──**");
+  lines.push(`🏆 MVP 輸出：${formatTowerStatRanking(mvp, "傷害")}`);
+  lines.push(`🛡️ 承傷排行：${formatTowerStatRanking(taken, "傷害")}`);
+  lines.push(`💚 治療量：${formatTowerStatRanking(healing, "HP")}`);
+  lines.push(`✨ 光環生效：${auras.length ? auras.slice(0, 8).join("；") : "無"}`);
+}
+
 // ── Thread：等待隊長操作的戰況面板 ───────────────────────────
 function createTowerThreadBattleMessage(session) {
   const { members, currentFloor, clearedFloor, roomId, state, lastFloorResult } = session;
@@ -203,11 +226,13 @@ function createTowerThreadBattleMessage(session) {
   // 本層戰報區（上一層打完後顯示）
   const battleSection = [];
   if (lastFloorResult) {
-    const { floor, monsterName, scaledHp, memberLogs = [], actionOrder = [], totalRounds, monsterKilled, survived, monsterHpFinal } = lastFloorResult;
+    const { floor, monsterName, scaledHp, memberLogs = [], actionOrder = [], totalRounds, monsterKilled, survived, monsterHpFinal, summary } = lastFloorResult;
     battleSection.push("", `**── 第 ${floor} 層：${monsterName}（HP ${scaledHp}）──**`);
     if (actionOrder.length > 0) {
       battleSection.push(`行動軸：${actionOrder.map(formatActorName).join(" → ")}`);
     }
+    appendTowerFloorSummary(battleSection, summary);
+    battleSection.push("", "**── 行動摘要 ──**");
     for (const action of memberLogs.slice(0, 8)) {
       const hpText = action.type === "monster"
         ? "全隊承受攻擊"

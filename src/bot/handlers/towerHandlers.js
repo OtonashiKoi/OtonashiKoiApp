@@ -142,8 +142,8 @@ function getTowerJobAuraEffects(member) {
       return [towerPartyEffect(member, "party_high_hp_damage_up", 5, "爬塔：隊伍對 HP 50%以上怪物傷害 +5%")];
     case "dwarf_warrior":
       return [
-        towerPartyEffect(member, "party_stun_chance_up", 5, "爬塔：全隊擊暈值 +5%"),
-        towerPartyEffect(member, "party_stunned_damage_up", 10, "爬塔：對暈眩中的怪物傷害 +10%"),
+        towerPartyEffect(member, "party_stun_chance_up", 8, "爬塔：全隊擊暈值 +8%"),
+        towerPartyEffect(member, "party_stunned_damage_up", 12, "爬塔：對暈眩中的怪物傷害 +12%"),
       ];
     case "rogue":
       return [towerPartyEffect(member, "party_combo_up", 5, "爬塔：隊伍連擊率 +5%")];
@@ -506,6 +506,57 @@ function getTowerPartyDefense(partyEffects = []) {
   return { damageReductionPct, critReductionPct };
 }
 
+function createTowerFloorStats(members = []) {
+  const byId = new Map();
+  for (const member of members) {
+    byId.set(member.discordId, {
+      discordId: member.discordId,
+      name: member.name,
+      damageDealt: 0,
+      damageTaken: 0,
+      healingReceived: 0,
+    });
+  }
+  return byId;
+}
+
+function addTowerStat(stats, discordId, key, amount) {
+  const row = stats.get(discordId);
+  const value = Math.max(0, Math.round(Number(amount || 0)));
+  if (!row || value <= 0) return;
+  row[key] = Math.max(0, Math.round(Number(row[key] || 0) + value));
+}
+
+function summarizeTowerAuras(partyEffects = []) {
+  const seen = new Set();
+  const lines = [];
+  for (const effect of partyEffects) {
+    if (!effect?.key) continue;
+    const source = effect.sourceJobName || effect.sourceName || "未知";
+    const value = Number(effect?.params?.value || 0);
+    const note = effect.notes || `${effect.key} ${value}`;
+    const key = `${source}:${effect.key}:${value}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(`${source}｜${note}`);
+  }
+  return lines;
+}
+
+function buildTowerFloorSummary(stats, auraLines = []) {
+  const rows = [...stats.values()];
+  const sortBy = (key) => rows
+    .filter((row) => Number(row[key] || 0) > 0)
+    .sort((a, b) => Number(b[key] || 0) - Number(a[key] || 0))
+    .map((row) => ({ name: row.name, value: Math.round(Number(row[key] || 0)) }));
+  return {
+    mvpDamage: sortBy("damageDealt"),
+    damageTaken: sortBy("damageTaken"),
+    healing: sortBy("healingReceived"),
+    auras: auraLines,
+  };
+}
+
 function applyMonsterTeamAttack(session, mCalc, partyEffects, floor) {
   const { damageReductionPct, critReductionPct } = getTowerPartyDefense(partyEffects);
   const baseAtk   = Math.max(1, Number(mCalc.atk || 1));
@@ -581,7 +632,10 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
   let   stunRoundsLeft = 0;
   let   sharedRound = 1;
   let   totalActions = 0;
-  const initialActionOrder = buildTowerActionPreview(session.members, mCalc, buildTowerPartyEffects(session.members)).slice(0, 10);
+  const openingPartyEffects = buildTowerPartyEffects(session.members);
+  const floorStats = createTowerFloorStats(session.members);
+  const floorAuraLines = summarizeTowerAuras(openingPartyEffects);
+  const initialActionOrder = buildTowerActionPreview(session.members, mCalc, openingPartyEffects).slice(0, 10);
   const gauges = new Map();
   for (const member of session.members) gauges.set(member.discordId, 0);
   gauges.set("monster", 0);
@@ -642,6 +696,10 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
         continue;
       }
       const attack = applyMonsterTeamAttack(session, mCalc, partyEffects, floor);
+      for (const hit of attack.hits || []) {
+        const target = session.members.find((member) => member.name === hit.name);
+        if (target) addTowerStat(floorStats, target.discordId, "damageTaken", hit.damage);
+      }
       memberLogs.push({
         ...attack,
         agi: actor.agi,
@@ -654,6 +712,10 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
 
     const m = actor.member;
     const healed = applyTowerPartyHealing(session.members, partyEffects);
+    for (const heal of healed) {
+      const target = session.members.find((member) => member.name === heal.name);
+      if (target) addTowerStat(floorStats, target.discordId, "healingReceived", heal.amount);
+    }
     const nonHealPartyEffects = partyEffects.filter((effect) => effect?.key !== "heal_over_time" && effect?.key !== "party_heal");
     const effStats = {
       ...actor.stats,
@@ -677,6 +739,8 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       monsterActiveEffects,
       stunRoundsLeft,
     };
+    const beforeMonsterHp = monsterHp;
+    const beforePlayerHp = m.currentHp;
     const result = runCombatLoop(
       effStats,
       { ...mCalc, atk: 0, monsterAttackCount: 0 },
@@ -688,6 +752,8 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
 
     monsterHp = result.finalMonsterHp;
     m.currentHp = Math.max(0, Math.round(result.finalPlayerHp));
+    addTowerStat(floorStats, m.discordId, "damageDealt", Math.max(0, beforeMonsterHp - monsterHp));
+    addTowerStat(floorStats, m.discordId, "damageTaken", Math.max(0, beforePlayerHp - m.currentHp));
     m.activeEffects = Array.isArray(options.playerActiveEffects) ? options.playerActiveEffects : [];
     m.cardCooldowns = result.cardCooldowns || options.cardCooldowns || { player: {}, monster: {} };
     monsterActiveEffects = Array.isArray(result.monsterActiveEffects) ? result.monsterActiveEffects : [];
@@ -710,7 +776,15 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
 
   const killed   = monsterHp <= 0;
   const survived = aliveMembers().length > 0;
-  return { survived, memberLogs, totalRounds: totalActions, monsterKilled: killed, monsterHpFinal: monsterHp, actionOrder: initialActionOrder };
+  return {
+    survived,
+    memberLogs,
+    totalRounds: totalActions,
+    monsterKilled: killed,
+    monsterHpFinal: monsterHp,
+    actionOrder: initialActionOrder,
+    summary: buildTowerFloorSummary(floorStats, floorAuraLines),
+  };
 }
 
 // ── 攻略單層（隊長每次按按鈕觸發一層） ──────────────────────
@@ -749,6 +823,7 @@ async function processNextFloor(session) {
     monsterKilled: fightResult.monsterKilled,
     survived:      fightResult.survived,
     monsterHpFinal: fightResult.monsterHpFinal,
+    summary:       fightResult.summary,
   };
 
   if (!fightResult.monsterKilled || !fightResult.survived) {
