@@ -504,6 +504,12 @@ async function handleStreamBind(comment) {
       console.warn("[Stream] 綁定更新失敗（同帳號覆寫）:", err?.message || err);
     }
     try {
+      const questService = serviceContext.questService || serviceContext.weeklyQuestService;
+      await questService.recordProgress(discordId, "stream_bind_count", 1);
+    } catch (e) {
+      console.error("[Quest] stream bind recordProgress error:", e.message);
+    }
+    try {
       await sendComment({ service: targetService, displayName, comment: `${displayName} ${platformLabel} 帳號已${actionLabel}完成。` });
     } catch { /* ignore */ }
     try {
