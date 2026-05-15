@@ -20,6 +20,10 @@ class PlayerService {
     if (!player) {
       player = createPlayer(discordId, displayName);
       saves.push(this.playerRepository.save(player));
+    } else if (displayName && player.displayName !== displayName) {
+      player.displayName = displayName;
+      player.name = displayName;
+      saves.push(this.playerRepository.save(player));
     }
     if (!wallet) {
       wallet = createWallet(discordId);

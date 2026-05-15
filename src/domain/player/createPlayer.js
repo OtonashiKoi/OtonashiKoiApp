@@ -4,6 +4,7 @@ function createPlayer(discordId, displayName) {
   return {
     discordId,
     displayName,
+    name: displayName,
     status: "active",
     externalIds: {},
     externalIdLinkedAt: {},
