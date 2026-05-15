@@ -215,7 +215,8 @@ function createShopMainMessage(items, progress, activeCategory = "all", claimedI
     ? pageItems.map((item, index) => {
         const price = item.price === 0 ? "免費" : `${item.price} ${item.currency === "diamond" ? "💎 鑽石" : "💰 金幣"}`;
         const badges = formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet);
-        return `${safePage * pageSize + index + 1}. **${item.name}** — ${price}${badges}`;
+        const desc = item.description ? `\n   *${item.description}*` : "";
+        return `${safePage * pageSize + index + 1}. **${item.name}** — ${price}${badges}${desc}`;
       })
     : ["此頁沒有商品。"];
 
