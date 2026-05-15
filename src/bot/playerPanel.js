@@ -422,20 +422,7 @@ async function handleProfile(interaction) {
     }
     const jobBonusLine = jobBonusParts.length ? `\n結算加成：${jobBonusParts.join("、")}` : "";
 
-    // 稱號裝備加成
-    const titleBonusParts = [];
-    const titleEq = equipped.title_eq;
-    if (titleEq) {
-      for (const eff of (titleEq.passiveEffects || [])) {
-        const v = eff?.params?.value;
-        if (!v) continue;
-        if (eff.key === 'gold_gain_up')  titleBonusParts.push(`金幣 +${v}%`);
-        if (eff.key === 'exp_gain_up')   titleBonusParts.push(`經驗 +${v}%`);
-        if (eff.key === 'drop_rate_up')  titleBonusParts.push(`掉落 +${v}%`);
-      }
-    }
-    const titleBonusLine = titleBonusParts.length ? `\n稱號加成：${titleBonusParts.join("、")}` : "";
-    const bonusLine = jobBonusLine + titleBonusLine;
+    const bonusLine = jobBonusLine;
     const activeJobEffects = [
       ...(Array.isArray(jobEq.passiveEffects) ? jobEq.passiveEffects : []),
       ...(Array.isArray(jobEq.procEffects) ? jobEq.procEffects : []),
@@ -475,7 +462,7 @@ async function handleProfile(interaction) {
       mechanicLines.push("・軍師光環：單手劍時提供 Boss 傷害與降防支援");
     }
     if (isBardJob) {
-      mechanicLines.push("・詩人光環：弓裝備時提供 EXP / 金幣支援");
+      mechanicLines.push("・詩人光環：弓裝備時提供 EXP / AGI 支援");
     }
     if (isBarrierMageJob) {
       mechanicLines.push("・結界師光環：法杖時提供隊伍減傷與抗暴傷");
@@ -551,6 +538,23 @@ async function handleProfile(interaction) {
     ? [...standardParts, ...specialParts].join("　")
     : "（尚未裝備）";
 
+  // ── 稱號加成（獨立計算）──
+  let titleBonusSection = "";
+  const titleEqFinal = equipped.title_eq;
+  if (titleEqFinal) {
+    const titleBonusParts = [];
+    for (const eff of (titleEqFinal.passiveEffects || [])) {
+      const v = eff?.params?.value;
+      if (!v) continue;
+      if (eff.key === 'gold_gain_up')  titleBonusParts.push(`金幣 +${v}%`);
+      if (eff.key === 'exp_gain_up')   titleBonusParts.push(`經驗 +${v}%`);
+      if (eff.key === 'drop_rate_up')  titleBonusParts.push(`掉落 +${v}%`);
+    }
+    if (titleBonusParts.length) {
+      titleBonusSection = `🏅 稱號加成：${titleBonusParts.join("、")}\n`;
+    }
+  }
+
   // ── 組合獨立區域 ──
   const cardSection = cardEffectLine ? `${cardEffectLine}\n==============\n` : "";
   const npcBuffSection = npcBuffAreaLine ? `${npcBuffAreaLine}\n==============\n` : "";
@@ -580,6 +584,7 @@ async function handleProfile(interaction) {
     tierSetLine + (tierSetLine ? "\n" : "") +
     `【裝備清單】\n` +
     equipLine + "\n" +
+    (titleBonusSection ? titleBonusSection : "") +
     `==============\n` +
     `【資產】\n` +
     `💰 金幣: ${Number(wallet.gold || 0)}\n` +
