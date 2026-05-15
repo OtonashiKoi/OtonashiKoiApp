@@ -61,7 +61,7 @@ const TOWER_FLOOR_BUFFS = [
     color: 0x1a1a2e,
     partyBonus: { atkPct: 50, hpPct: 100 },
     monsterScalePct: 900,
-    monsterAtkScalePct: 620,
+    monsterAtkScalePct: 320,
   },
 ];
 
