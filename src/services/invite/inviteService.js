@@ -54,9 +54,9 @@ class InviteService {
     // 不能用自己的碼
     if (doc.inviterId === newPlayerId) return { ok: false, reason: "不能使用自己的邀請碼。" };
 
-    // 已經用過
-    const alreadyUsed = (doc.uses || []).some(u => u.usedBy === newPlayerId);
-    if (alreadyUsed) return { ok: false, reason: "你已經使用過邀請碼了。" };
+    // 已使用過任何邀請碼（每個新玩家只能兌換一次）
+    const allDocs = await this.inviteCodeRepository.findAllUsedBy(newPlayerId);
+    if (allDocs) return { ok: false, reason: "每位玩家只能使用一次邀請碼。" };
 
     // 判斷是否為新玩家
     const player = await this.playerRepository.findByDiscordId(newPlayerId);
@@ -104,17 +104,18 @@ class InviteService {
       const libItem = await this.itemRepository.findById(reward.itemId).catch(() => null);
       if (!libItem) continue;
 
-      // 可堆疊消耗品：找已有的疊加，或新增
+      // 可堆疊消耗品：找已有的疊加（用 stackCount），或新增
       const existing = progress.inventory.find(i => i.itemId === reward.itemId);
       if (existing) {
-        existing.quantity = (existing.quantity || 1) + reward.quantity;
+        existing.stackCount = (existing.stackCount || 1) + reward.quantity;
       } else {
         progress.inventory.push({
           uuid: randomUUID(),
           itemId: libItem.id,
           itemName: libItem.name,
+          name: libItem.name,
           itemType: libItem.itemType,
-          quantity: reward.quantity,
+          stackCount: reward.quantity,
           useEffects: libItem.useEffects || [],
           passiveEffects: libItem.passiveEffects || [],
           procEffects: libItem.procEffects || [],

@@ -726,6 +726,9 @@ function createMongoRepositories() {
       async findByCode(code) {
         return (await collection("inviteCodes")).findOne({ code }) || null;
       },
+      async findAllUsedBy(playerId) {
+        return (await collection("inviteCodes")).findOne({ "uses.usedBy": playerId }) || null;
+      },
       async save(doc) {
         await (await collection("inviteCodes")).replaceOne(
           { inviterId: doc.inviterId },
