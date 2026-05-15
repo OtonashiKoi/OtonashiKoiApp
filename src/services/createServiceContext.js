@@ -20,6 +20,7 @@ const { EnhanceService } = require("./enhance/enhanceService");
 const { AuctionService } = require("./auction/auctionService");
 const { IdleService } = require("./idle/idleService");
 const { WorldBossService } = require("./worldBoss/worldBossService");
+const { InviteService } = require("./invite/inviteService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -70,6 +71,14 @@ function createServiceContext() {
     monsterService
   });
   const worldBossService = new WorldBossService(repositories.worldBossRepository);
+  const inviteService = new InviteService({
+    inviteCodeRepository: repositories.inviteCodeRepository,
+    playerRepository: repositories.playerRepository,
+    progressRepository: repositories.progressRepository,
+    walletRepository: repositories.walletRepository,
+    itemRepository: repositories.itemRepository,
+    transactionRepository: repositories.transactionRepository
+  });
   const shopService = new ShopService(
     repositories.shopRepository,
     playerService,
@@ -123,7 +132,8 @@ function createServiceContext() {
     enhanceService,
     auctionService,
     idleService,
-    worldBossService
+    worldBossService,
+    inviteService
   };
 }
 

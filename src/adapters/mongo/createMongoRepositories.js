@@ -718,6 +718,21 @@ function createMongoRepositories() {
       async delete(threadId) {
         await (await collection("towerSessions")).deleteOne({ threadId });
       }
+    },
+    inviteCodeRepository: {
+      async findByInviterId(inviterId) {
+        return (await collection("inviteCodes")).findOne({ inviterId }) || null;
+      },
+      async findByCode(code) {
+        return (await collection("inviteCodes")).findOne({ code }) || null;
+      },
+      async save(doc) {
+        await (await collection("inviteCodes")).replaceOne(
+          { inviterId: doc.inviterId },
+          doc,
+          { upsert: true }
+        );
+      }
     }
   };
 

@@ -8,7 +8,9 @@ const BUTTON_IDS = {
   equipment: "player-panel:equipment",
   enhance: "player-panel:enhance",
   weeklyQuests: "player-panel:weekly-quests",
-  bindStream: "player-panel:bind-stream"
+  bindStream: "player-panel:bind-stream",
+  invite: "player-panel:invite",
+  useInvite: "player-panel:use-invite"
 };
 
 function createPlayerPanelMessage() {
@@ -47,6 +49,14 @@ function createPlayerPanelMessage() {
       new ButtonBuilder()
         .setCustomId(BUTTON_IDS.bindStream)
         .setLabel("🔗 綁定直播帳號")
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.invite)
+        .setLabel("🎟️ 我的邀請碼")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.useInvite)
+        .setLabel("🎁 輸入邀請碼")
         .setStyle(ButtonStyle.Success)
     )
   ];

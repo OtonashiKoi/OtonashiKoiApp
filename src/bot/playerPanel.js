@@ -16,6 +16,7 @@ const { MAX_ENHANCE_LEVEL, getEnhanceCost } = require("../shared/enhanceConfig")
 const ACTIVE_REPLY_BY_USER = new Map();
 const ENHANCE_MODE_NORMAL = "normal";
 const ENHANCE_MODE_GAMBLE = "gamble";
+const GAMBLE_MIN_ENHANCE_LEVEL = 1;
 
 function normalizeEnhanceMode(mode) {
   return String(mode || ENHANCE_MODE_NORMAL).toLowerCase() === ENHANCE_MODE_GAMBLE
@@ -1162,6 +1163,58 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
   return { content: header + `🎒 **背包 — ${tabLabel}**（第 ${safePage + 1}/${totalPages} 頁，共 ${filtered.length} 項）\n\n${lines.join("\n")}`, components: rows };
 }
 
+async function handleMyInviteCode(interaction) {
+  const serviceContext = getServiceContext();
+  await serviceContext.playerService.ensurePlayer(interaction.user.id, interaction.user.username);
+  const doc = await serviceContext.inviteService.getOrCreateCode(interaction.user.id);
+  const useCount = (doc.uses || []).length;
+  await replyAndAutoDelete(interaction,
+    `🎟️ **你的專屬邀請碼**\n` +
+    `==============\n` +
+    `\`${doc.code}\`\n\n` +
+    `已邀請人數：${useCount} 人\n\n` +
+    `📌 邀請方式：把這組碼給新朋友，讓他們在加入後 **24 小時內** 點「🎁 輸入邀請碼」貼上。\n` +
+    `雙方都會獲得：💰 金幣 50,000、D階寶石 ×20、C階寶石 ×5`
+  );
+}
+
+async function handleUseInviteCodeModal(interaction) {
+  const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require("discord.js");
+  const modal = new ModalBuilder()
+    .setCustomId("invite_code_submit")
+    .setTitle("輸入邀請碼");
+  const input = new TextInputBuilder()
+    .setCustomId("invite_code_input")
+    .setLabel("邀請碼（8碼大寫英數）")
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(8)
+    .setMaxLength(8)
+    .setPlaceholder("例：A1B2C3D4")
+    .setRequired(true);
+  modal.addComponents(new ActionRowBuilder().addComponents(input));
+  await interaction.showModal(modal);
+}
+
+async function handleInviteCodeSubmit(interaction) {
+  const serviceContext = getServiceContext();
+  await serviceContext.playerService.ensurePlayer(interaction.user.id, interaction.user.username);
+  const code = (interaction.fields.getTextInputValue("invite_code_input") || "").trim().toUpperCase();
+  const result = await serviceContext.inviteService.useCode(code, interaction.user.id);
+  if (!result.ok) {
+    await replyAndAutoDelete(interaction, `❌ ${result.reason}`);
+    return;
+  }
+  await replyAndAutoDelete(interaction,
+    `🎉 **邀請碼兌換成功！**\n` +
+    `==============\n` +
+    `邀請人：${result.inviterName}\n\n` +
+    `🎁 獎勵已發放給雙方：\n` +
+    `・💰 金幣 50,000\n` +
+    `・D階寶石 ×20\n` +
+    `・C階寶石 ×5`
+  );
+}
+
 async function handleBind(interaction) {
   const { player, bindings, bindingLines } = await getBindingRows(interaction);
   const boundLines = [...bindingLines];
@@ -2013,6 +2066,7 @@ async function handleEnhanceSelect(interaction, targetUuid, mode = ENHANCE_MODE_
     const nextLevel = enhanceInfo.nextLevel ?? (curLevel + 1);
 
     const canEnhanceWithGems = gemsOwned >= gemsRequired && goldOwned >= goldRequired;
+    const canUseGambleMode = curLevel >= GAMBLE_MIN_ENHANCE_LEVEL;
     const toggleMode = enhanceMode === ENHANCE_MODE_GAMBLE ? ENHANCE_MODE_NORMAL : ENHANCE_MODE_GAMBLE;
     const confirmLabel = enhanceMode === ENHANCE_MODE_GAMBLE
       ? `確認賭鬼強化 +${nextLevel}`
@@ -2026,8 +2080,9 @@ async function handleEnhanceSelect(interaction, targetUuid, mode = ENHANCE_MODE_
         .setDisabled(!canEnhanceWithGems),
       new ButtonBuilder()
         .setCustomId(`enhance_mode:${toggleMode}:${targetUuid}`)
-        .setLabel(getEnhanceModeToggleLabel(enhanceMode))
-        .setStyle(enhanceMode === ENHANCE_MODE_GAMBLE ? ButtonStyle.Secondary : ButtonStyle.Danger),
+        .setLabel(!canUseGambleMode && enhanceMode !== ENHANCE_MODE_GAMBLE ? "+1 後開放賭鬼" : getEnhanceModeToggleLabel(enhanceMode))
+        .setStyle(enhanceMode === ENHANCE_MODE_GAMBLE ? ButtonStyle.Secondary : ButtonStyle.Danger)
+        .setDisabled(!canUseGambleMode && enhanceMode !== ENHANCE_MODE_GAMBLE),
       new ButtonBuilder()
         .setCustomId("enhance_back")
         .setLabel("返回")
@@ -2716,6 +2771,16 @@ async function handleButton(interaction) {
     await handleBind(interaction);
     return;
   }
+
+  if (id === BUTTON_IDS.invite) {
+    await handleMyInviteCode(interaction);
+    return;
+  }
+
+  if (id === BUTTON_IDS.useInvite) {
+    await handleUseInviteCodeModal(interaction);
+    return;
+  }
 }
 
 async function handleEquipSlotButton(interaction, slot) {
@@ -2863,6 +2928,11 @@ async function handleModal(interaction) {
     const subTab = parts.length >= 5 ? (parts[3] || "all") : "all";
     const page = parseInt(parts.length >= 5 ? (parts[4] ?? "0") : (parts[3] ?? "0"), 10) || 0;
     await handleBackpackSellBulkConfirm(interaction, uuid, tab, page, subTab);
+    return true;
+  }
+
+  if (interaction.customId === "invite_code_submit") {
+    await handleInviteCodeSubmit(interaction);
     return true;
   }
 
