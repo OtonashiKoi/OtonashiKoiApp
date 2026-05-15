@@ -51,7 +51,13 @@
       "Bash(node \"C:\\\\Users\\\\appsk\\\\Documents\\\\Github\\\\equipmentGAME\\\\scripts\\\\show-job-full-specs.js\")",
       "Read(//c/Users/appsk/**)",
       "Read(//c/Users/appsk/AppData/**)",
-      "Bash(node query_jobs_temp.js)"
+      "Bash(node query_jobs_temp.js)",
+      "Bash(findstr MONGODB)",
+      "Bash(Remove-Item -Recurse -Force \"exports\\\\db-backup-2026-04-09T16-48-00-601Z\")",
+      "Bash(Remove-Item -Recurse -Force \"exports\\\\db-backup-2026-04-21T03-44-46-667Z\")",
+      "Bash(Remove-Item -Force \"exports\\\\battle_report_2026-04-12T16-26-05-093Z.json\",\"exports\\\\leaderboard_2026-04-12T16-26-05-093Z.csv\",\"exports\\\\players_detailed_2026-04-12T16-34-46-675Z.csv\",\"exports\\\\effects_sample_hybrid.csv\")",
+      "Bash(Remove-Item -Force \"exports\\\\players-backup-2026-04-16T18-22-34-470Z.json\",\"exports\\\\wallets-backup-2026-04-16T18-22-34-470Z.json\",\"exports\\\\progress-backup-2026-04-16T18-22-34-470Z.json\")",
+      "Bash(Remove-Item -Force \"exports\\\\project-snapshot-2026-04-21_11-46-36.zip\",\"exports\\\\project-snapshot-2026-04-21_11-48-52.zip\")"
     ]
   }
 }
