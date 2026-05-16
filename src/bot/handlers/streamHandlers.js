@@ -503,6 +503,18 @@ async function handleStreamBind(comment) {
     } catch (err) {
       console.warn("[Stream] 綁定更新失敗（同帳號覆寫）:", err?.message || err);
     }
+    if (playerTierAtLink) {
+      try {
+        const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+        if (progress && progress.playerTier !== playerTierAtLink) {
+          progress.playerTier = playerTierAtLink;
+          progress.updatedAt = new Date().toISOString();
+          await serviceContext.progressRepository.save(progress);
+        }
+      } catch (tierErr) {
+        console.warn("[Stream] 綁定後同步 playerTier 失敗：", tierErr?.message || tierErr);
+      }
+    }
     try {
       const questService = serviceContext.questService || serviceContext.weeklyQuestService;
       await questService.recordProgress(discordId, "stream_bind_count", 1);
@@ -544,6 +556,19 @@ async function handleStreamBind(comment) {
     console.error("[Stream] 綁定寫入失敗：", err?.message || err);
     await notifyFailure("綁定寫入失敗，請稍後再試。", "❌ 綁定寫入失敗，請稍後再試。");
     return;
+  }
+
+  if (playerTierAtLink) {
+    try {
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (progress && progress.playerTier !== playerTierAtLink) {
+        progress.playerTier = playerTierAtLink;
+        progress.updatedAt = new Date().toISOString();
+        await serviceContext.progressRepository.save(progress);
+      }
+    } catch (tierErr) {
+      console.warn("[Stream] 綁定後同步 playerTier 失敗：", tierErr?.message || tierErr);
+    }
   }
 
   try {

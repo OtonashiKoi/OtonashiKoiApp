@@ -2099,7 +2099,7 @@ async function handleEnterBattle(interaction) {
           worldBossPhase: session.worldBossPhase || null
         });
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
-      const zoneDamageSyncApplied = ["beginner", "normal"].includes(zoneKey) && !isOnlyDTierEquipped(currentEquipped);
+      const zoneDamageSyncApplied = false;
       const syncResult = zoneDamageSyncApplied
         ? applyZoneDamageSync(
           zoneKey,
@@ -2478,7 +2478,7 @@ async function handleStartFight(interaction) {
         worldBossPhase: session.worldBossPhase || null
       });
     const { roundLogs, finalPlayerHp, combatStats } = combatResult;
-    const zoneDamageSyncApplied = ["beginner", "normal"].includes(zoneKey) && !isOnlyDTierEquipped(currentEquipped);
+    const zoneDamageSyncApplied = false;
     const syncResult = zoneDamageSyncApplied
       ? applyZoneDamageSync(
         zoneKey,
