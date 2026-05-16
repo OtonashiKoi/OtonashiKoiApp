@@ -1966,15 +1966,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const dur = pe.duration || { mode: 'turns', value: 3 };
 
             if (pe.key === 'proc_poison') {
-              const poisonPct = Number(pp.value ?? 0.5);
+              const dexBonus = Number(pp.dexMultiplier ?? 0) * (pStats.dex || 0);
+              const poisonPct = Number(pp.value ?? 0.5) + dexBonus;
               const existing = monsterActiveEffects.find(e => e.key === 'poison' && effectIsActive(e, round));
               const currentPct = existing ? Number(existing.params?.value ?? poisonPct) : 0;
-              const newPct = Math.min(Number(pp.maxPct ?? 1.5), currentPct > 0 ? currentPct + Number(pp.stackAdd ?? 1) : poisonPct);
+              const newPct = Math.min(Number(pp.maxPct ?? 1.5), currentPct > 0 ? currentPct + Number(pp.stackAdd ?? poisonPct) : poisonPct);
               monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
                 key: 'poison', params: { value: newPct, mode: 'pct', duration: dur },
                 appliedAt: round, sourceType: 'job_proc', sourceId: 'badge:poison'
               });
-              log.push(`☠️ 匕首淬毒！${mName} 中毒（每回合最大 HP ${newPct}% 毒傷）！`);
+              log.push(`☠️ 匕首淬毒！${mName} 中毒（每回合最大 HP ${newPct.toFixed(2)}% 毒傷）！`);
 
             } else if (pe.key === 'proc_stun') {
               // 矮人戰士雙手槌擊暈（走 stunChance 已處理，此分支處理直接 proc_stun key）
@@ -2181,6 +2182,23 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       } else {
         combatStats.dodgeCount += 1;
         log.push(`🛡️ ${mName} 猛撲而來，你${rand(jobFlavor.dodge)}，躲過了攻擊！`);
+
+        // ── 弓箭手閃避反擊（counter_on_dodge）──
+        const hasCounterOnDodge = jobProfile.activeJobEffects.some(e => e.key === 'counter_on_dodge');
+        if (hasCounterOnDodge && outcome === null) {
+          const effectiveDef = Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
+          const counterBypassPct = Math.min(100, Math.max(0, (pStats.bypassMonsterDefPct ?? 0) + playerDefIgnorePct + roundPartyDefIgnorePct));
+          const finalDef = Math.max(0, effectiveDef * (1 - counterBypassPct / 100));
+          const conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
+          const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier));
+          const critMultiplier = 2.5 * playerCritDamageMultiplier * tierCritDamageMultiplier;
+          const counterDmg = Math.max(1, Math.round(rollDmg(Math.max(1, Math.round(counterBase * (1 - finalDef / 100)))) * critMultiplier));
+          mHp -= counterDmg;
+          totalDamage += counterDmg;
+          combatStats.critCount += 1;
+          log.push(`🏹✨ **閃避反擊**！你趁隙射出必中要害，對 ${mName} 造成 **${counterDmg}** 點暴擊傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          if (mHp <= 0) { outcome = "win"; }
+        }
       }
     }
 
