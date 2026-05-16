@@ -10,6 +10,7 @@ const { calcPlayerStats, getWeaponConfig } = require("../shared/combatStats");
 const { TIER_SET_SLOTS } = require("../shared/equipmentTierSetBonuses");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
 const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
+const { calcScaledAuraValue, getSupportJobKey } = require("../shared/supportAuraScaling");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
 const { MAX_ENHANCE_LEVEL, getEnhanceCost } = require("../shared/enhanceConfig");
 
@@ -17,6 +18,7 @@ const ACTIVE_REPLY_BY_USER = new Map();
 const ENHANCE_MODE_NORMAL = "normal";
 const ENHANCE_MODE_GAMBLE = "gamble";
 const GAMBLE_MIN_ENHANCE_LEVEL = 1;
+const AURA_STAT_LABELS = { str: "STR", agi: "AGI", vit: "VIT", int: "INT", dex: "DEX", luk: "LUK" };
 
 function normalizeEnhanceMode(mode) {
   return String(mode || ENHANCE_MODE_NORMAL).toLowerCase() === ENHANCE_MODE_GAMBLE
@@ -231,6 +233,15 @@ function formatPassiveEffect(effect, context) {
   const valueText = Number.isFinite(value) ? ` ${value > 0 ? "+" : ""}${value}${effect?.params?.mode === "pct" ? "%" : ""}` : "";
   const targetText = effect.target === "party" ? "隊伍：" : effect.target === "enemy" ? "敵方：" : "";
   const conditionText = formatEffectCondition(effect.condition);
+  const jobKey = effect.target === "party" ? getSupportJobKey({ equipped: context?.equipped || {} }) : null;
+  const isPctAura = effect.target === "party" && jobKey && effect?.params?.mode === "pct" && Number.isFinite(value);
+  if (isPctAura) {
+    const scaled = calcScaledAuraValue(jobKey, effect.key, context?.providerStats || {}, value);
+    const total = Number(scaled.value || value);
+    const extra = Math.max(0, Math.round((total - value) * 10) / 10);
+    const statText = scaled.statKey ? ` / ${AURA_STAT_LABELS[scaled.statKey] || scaled.statKey}` : "";
+    return `・${targetText}${note || `${name}${valueText}`}（基礎 ${value}% + 追加 ${extra}%${statText}）${conditionText}`;
+  }
   return `・${targetText}${note || `${name}${valueText}`}${conditionText}`;
 }
 
@@ -447,7 +458,7 @@ async function handleProfile(interaction) {
     ];
     const passiveLines = activeJobEffects
       .filter((effect) => !DEPRECATED_JOB_PASSIVE_KEYS.has(effect?.key))
-      .map((effect) => formatPassiveEffect(effect, { equipped, inventory: p.inventory || [] }))
+      .map((effect) => formatPassiveEffect(effect, { equipped, inventory: p.inventory || [], providerStats: cs }))
       .filter(Boolean);
     const passiveLine = passiveLines.length ? `\n徽章效果：\n${passiveLines.join("\n")}` : "";
     const mechanicLines = [];
@@ -471,18 +482,6 @@ async function handleProfile(interaction) {
     }
     if (isMageJob && wt && wt.startsWith("staff") && Number(cs.bypassMonsterDefPct || 0) > 0) {
       mechanicLines.push(`・法杖魔法：無視怪物 DEF ${cs.bypassMonsterDefPct}%`);
-    }
-    if (isHealerJob) {
-      mechanicLines.push("・治療師光環：在場提供隊伍治療支援");
-    }
-    if (isTacticianJob) {
-      mechanicLines.push("・軍師光環：單手劍時提供 Boss 傷害與降防支援");
-    }
-    if (isBardJob) {
-      mechanicLines.push("・詩人光環：弓裝備時提供 EXP / AGI 支援");
-    }
-    if (isBarrierMageJob) {
-      mechanicLines.push("・結界師光環：法杖時提供隊伍減傷與抗暴傷");
     }
     const mechanicLine = mechanicLines.length ? `\n實際啟動：\n${mechanicLines.join("\n")}` : "";
 

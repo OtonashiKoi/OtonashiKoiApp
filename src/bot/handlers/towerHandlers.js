@@ -5,6 +5,7 @@ const config = require("../../config");
 const { serviceContext, getBotClient } = require("../runtimeContext");
 const { calcPlayerStats } = require("../../shared/combatStats");
 const { mergeEquippedFromLibrary, applyEffectInstances, applyEffectsToStats, collectEquipmentEffects, isEffectConditionMet } = require("../../shared/effectEngine");
+const { scaleSupportPartyEffect } = require("../../shared/supportAuraScaling");
 const { runCombatLoop } = require("../../shared/combatLoop");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { setTowerPresence, isTowerBattleActive } = require("../../shared/battlePresence");
@@ -327,7 +328,13 @@ function buildTowerPartyEffects(members) {
     for (const r of refs) {
       if (r && r.target === "party" && isEffectConditionMet(r, context)) {
         if (isReplacedByTowerAura(jobKey, r.key)) continue;
-        const effect = { ...r, sourceName: m.name, sourceJobName: jobName };
+        const scaled = scaleSupportPartyEffect(r, {
+          providerStats: m.stats || {},
+          jobKey,
+          jobName,
+          equipped: m.equipped || {}
+        });
+        const effect = { ...scaled, sourceName: m.name, sourceJobName: jobName };
         if (!jobName) {
           freeStackEffects.push(effect);
           continue;
@@ -340,7 +347,13 @@ function buildTowerPartyEffects(members) {
       }
     }
 
-    for (const effect of getTowerJobAuraEffects(m)) {
+    for (const rawEffect of getTowerJobAuraEffects(m)) {
+      const effect = scaleSupportPartyEffect(rawEffect, {
+        providerStats: m.stats || {},
+        jobKey,
+        jobName,
+        equipped: m.equipped || {}
+      });
       const key = `${jobName || jobKey || m.name}:${effect.key}`;
       const current = bestByJobAndKey.get(key);
       const currentValue = Number(current?.params?.value || 0);

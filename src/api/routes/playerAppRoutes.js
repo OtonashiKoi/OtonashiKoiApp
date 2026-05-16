@@ -6,6 +6,7 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
+const { scaleSupportPartyEffects } = require("../../shared/supportAuraScaling");
 const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee } = require("../../shared/zones");
 const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 
@@ -1573,8 +1574,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       let stateForCombat = freshStateForAura;
       let partyEffects = [];
-      const partyEffs = collectEquipmentEffects(equipped, "passive", { equipped, inventory: progress?.inventory || [] })
+      const rawPartyEffs = collectEquipmentEffects(equipped, "passive", { equipped, inventory: progress?.inventory || [] })
         .filter(e => e.target === "party");
+      const partyEffs = scaleSupportPartyEffects(rawPartyEffs, { providerStats: pStats, equipped });
       const hasPartyAura = partyEffs.length > 0;
 
       if (hasPartyAura) {
@@ -1584,7 +1586,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           activeHealerAura: {
             discordId,
             displayName,
-            effects: partyEffs
+            effects: rawPartyEffs
           }
         };
         await serviceContext.monsterService.saveState(auraState, zoneKey);
@@ -1602,7 +1604,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       } else {
         // 其他玩家：享受光環效果（如果存在）
         const aura = freshStateForAura.activeHealerAura;
-        partyEffects = (aura?.effects || []).map(e => ({ ...e, sourceName: aura?.displayName || null }));
+        let auraProviderStats = null;
+        let auraProviderEquipped = {};
+        if (aura?.discordId) {
+          const auraProgress = await serviceContext.progressRepository.findByPlayerId(aura.discordId).catch(() => null);
+          if (auraProgress) {
+            auraProviderEquipped = await mergeEquippedFromLibrary(auraProgress.equipment || {}, serviceContext.itemRepository);
+            const auraAttrs = auraProgress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+            auraProviderStats = calcPlayerStats(auraAttrs, auraProviderEquipped, auraProgress.activeEffects || [], auraProgress.inventory || []);
+          }
+        }
+        partyEffects = scaleSupportPartyEffects(
+          (aura?.effects || []).map(e => ({ ...e, sourceName: aura?.displayName || null })),
+          { providerStats: auraProviderStats || {}, equipped: auraProviderEquipped }
+        );
         stateForCombat = freshStateForAura;
       }
 

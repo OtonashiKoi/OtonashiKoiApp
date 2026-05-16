@@ -12,6 +12,7 @@ const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { calcPlayerStats, isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { getEquipmentTierSetBonuses } = require("../../shared/equipmentTierSetBonuses");
 const { isEffectConditionMet, collectEquipmentEffects, mergeEquippedFromLibrary, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
+const { scaleSupportPartyEffect } = require("../../shared/supportAuraScaling");
 const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = require("../../shared/battlePresence");
 const { getDropBoostPct } = require("../../shared/pkArenaConfig");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
@@ -1132,16 +1133,20 @@ function createBattleParticipantCache(sc) {
 
         const displayName = player?.displayName || displayNameFallback || null;
         const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, sc.itemRepository);
+        const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+        const inventory = Array.isArray(progress?.inventory) ? progress.inventory : [];
         const refs = collectEquipmentEffects(equipped, null, {
           equipped,
-          inventory: Array.isArray(progress?.inventory) ? progress.inventory : []
+          inventory
         });
+        const stats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], inventory, { pkRating: progress?.pkRating });
 
         return {
           progress,
           player,
           displayName,
           equipped,
+          stats,
           refs
         };
       })();
@@ -1853,19 +1858,20 @@ async function handleEnterBattle(interaction) {
     const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
     const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, sc.itemRepository);
+    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating });
     const participantCache = createBattleParticipantCache(sc);
     const currentSnapshot = {
       progress,
       player: null,
       displayName,
       equipped,
+      stats: pStats,
       refs: collectEquipmentEffects(equipped, null, {
         equipped,
         inventory: Array.isArray(progress?.inventory) ? progress.inventory : []
       })
     };
     participantCache.seed(discordId, currentSnapshot);
-    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating });
 
     // 建立 session（state: waiting）
     const session = {
@@ -2061,7 +2067,14 @@ async function handleEnterBattle(interaction) {
           const pidName = participant.displayName || (pid === discordId ? displayName : null);
           const pidJobName = getJobNameFromEquipped(participant.equipped);
           for (const r of refs) {
-            if (r && r.target === 'party') partyEffects.push({ ...r, sourceName: pidName, sourceJobName: pidJobName });
+            if (r && r.target === 'party') {
+              const scaled = scaleSupportPartyEffect(r, {
+                providerStats: participant.stats || {},
+                jobName: pidJobName,
+                equipped: participant.equipped || {}
+              });
+              partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: pidJobName });
+            }
           }
         } catch (e) {}
       }));
@@ -2439,7 +2452,14 @@ async function handleStartFight(interaction) {
         const pidName = participant.displayName || (pid === discordId ? displayName : null);
         const pidJobName = getJobNameFromEquipped(participant.equipped);
         for (const r of refs) {
-          if (r && r.target === 'party') partyEffects.push({ ...r, sourceName: pidName, sourceJobName: pidJobName });
+          if (r && r.target === 'party') {
+            const scaled = scaleSupportPartyEffect(r, {
+              providerStats: participant.stats || {},
+              jobName: pidJobName,
+              equipped: participant.equipped || {}
+            });
+            partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: pidJobName });
+          }
         }
       } catch (e) {}
     }));
