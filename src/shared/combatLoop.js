@@ -440,6 +440,23 @@ const IMMEDIATE_LOG_SUPPRESS_KEYS = new Set([
   ...IMMEDIATE_HEAL_EFFECT_KEYS
 ]);
 
+function hasMultiTurnDuration(procEffect) {
+  const duration = procEffect?.duration || procEffect?.params?.duration || null;
+  return duration?.mode === "turns" && Number(duration.value || 0) > 1;
+}
+
+function shouldApplyAsImmediateDamage(procEffect) {
+  return IMMEDIATE_DAMAGE_EFFECT_KEYS.has(procEffect?.key) && !hasMultiTurnDuration(procEffect);
+}
+
+function shouldApplyAsImmediateHeal(procEffect) {
+  return IMMEDIATE_HEAL_EFFECT_KEYS.has(procEffect?.key) && !hasMultiTurnDuration(procEffect);
+}
+
+function shouldSuppressImmediateLog(procEffect) {
+  return shouldApplyAsImmediateDamage(procEffect) || shouldApplyAsImmediateHeal(procEffect);
+}
+
 function applyImmediateCardDamageEffect({
   procEffect,
   ownerLabel = "怪物",
@@ -451,7 +468,7 @@ function applyImmediateCardDamageEffect({
   applyTargetDamage = null,
   log = []
 }) {
-  if (!procEffect || !IMMEDIATE_DAMAGE_EFFECT_KEYS.has(procEffect.key) || typeof applyTargetDamage !== "function") {
+  if (!procEffect || !shouldApplyAsImmediateDamage(procEffect) || typeof applyTargetDamage !== "function") {
     return false;
   }
 
@@ -494,7 +511,7 @@ function applyImmediateCardHealEffect({
   applyTargetHeal = null,
   log = []
 }) {
-  if (!procEffect || !IMMEDIATE_HEAL_EFFECT_KEYS.has(procEffect.key) || typeof applyTargetHeal !== "function") {
+  if (!procEffect || !shouldApplyAsImmediateHeal(procEffect) || typeof applyTargetHeal !== "function") {
     return false;
   }
 
@@ -694,7 +711,7 @@ function applyCardProcEffects({
     }
   }
 
-  if (!matchedEffects.some((effect) => IMMEDIATE_LOG_SUPPRESS_KEYS.has(effect.key))) {
+  if (!matchedEffects.some((effect) => shouldSuppressImmediateLog(effect))) {
     log.push(`🎴 **${ownerLabel}** 發動【${skillName || cardName}】！${skillDescription || ""}`);
   }
 
@@ -1536,7 +1553,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
       if (normalProcEffects.length > 0 && (cardCooldowns.player[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
         if (Number(skill.cooldownTurns) > 0) cardCooldowns.player[cooldownKey] = Number(skill.cooldownTurns);
-        const shouldShowGenericSkillLine = !normalProcEffects.some((effect) => IMMEDIATE_LOG_SUPPRESS_KEYS.has(effect?.key));
+        const shouldShowGenericSkillLine = !normalProcEffects.some((effect) => shouldSuppressImmediateLog(effect));
         let appliedAnyNormalProc = false;
 
         for (const procEffect of normalProcEffects) {
@@ -1978,13 +1995,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               log.push(`☠️ 匕首淬毒！${mName} 中毒（每回合最大 HP ${newPct.toFixed(2)}% 毒傷）！`);
 
             } else if (pe.key === 'proc_stun') {
-              // 矮人戰士雙手槌擊暈（走 stunChance 已處理，此分支處理直接 proc_stun key）
-              stunRoundsLeft = 3;
+              const stunDur = Number(dur?.value ?? 3);
+              stunRoundsLeft = Math.max(stunRoundsLeft, stunDur);
               monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
-                key: 'stun', params: { value: 100, duration: { mode: 'turns', value: 1 } },
+                key: 'stun', params: { value: 100, duration: { mode: 'turns', value: stunDur } },
                 appliedAt: round, sourceType: 'job_proc', sourceId: 'badge:stun'
               });
-              log.push(`😵 ${mName} 被重擊擊暈！`);
+              log.push(`😵 ${mName} 被重擊擊暈！接下來 ${stunDur} 回合無法攻擊！`);
 
             } else if (pe.key === 'burn') {
               monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {

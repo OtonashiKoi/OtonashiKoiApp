@@ -96,10 +96,10 @@ const JOB_ITEM = {
       chance: 5,
       stacks: 1,
       stackMode: "replace",
-      duration: { mode: "turns", value: 1 },
+      duration: { mode: "turns", value: 3 },
       params: {},
       condition: { weaponType: "mace_2h" },
-      notes: "雙手槌：5% 機率暈眩"
+      notes: "雙手槌：5% 機率暈眩（持續 3 回合）"
     }
   ],
   combatEffects: [
