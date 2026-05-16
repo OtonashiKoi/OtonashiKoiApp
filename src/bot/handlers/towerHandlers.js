@@ -787,6 +787,31 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
   };
 }
 
+// ── 每層通關廣播 ─────────────────────────────────────────────
+async function broadcastTowerFloorCleared(session, floor, monsterName) {
+  const client = getBotClient();
+  if (!client?.isReady()) return;
+  const channelId = config.discord.towerFloorBroadcastChannelId;
+  if (!channelId) return;
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel?.isTextBased?.()) return;
+
+  const aliveCount = session.members.filter((m) => m.currentHp > 0).length;
+  const memberList = session.members
+    .map((m) => `<@${m.discordId}>${m.job?.emoji ? ` ${m.job.emoji}` : ""}`)
+    .join("、");
+  const isBossFloor = Object.values(TOWER_FLOOR_BOSS).includes(monsterName);
+
+  const content = [
+    `🗼 **隊伍攻塔通關 第 ${floor} 層！**`,
+    `怪物：${isBossFloor ? "👑 " : ""}${monsterName}　存活：${aliveCount}／${session.members.length} 人`,
+    `成員：${memberList}`,
+    `房號 \`${session.roomId}\``,
+  ].join("\n");
+
+  await channel.send({ content }).catch(() => {});
+}
+
 // ── 攻略單層（隊長每次按按鈕觸發一層） ──────────────────────
 async function processNextFloor(session) {
   const floor = session.clearedFloor + 1;
@@ -843,6 +868,8 @@ async function processNextFloor(session) {
     if (r) console.log(`[Tower] 第${floor}層掉落藥水：${r.itemName} → ${r.name}`);
   }).catch(() => {});
 
+  broadcastTowerFloorCleared(session, floor, monster.name).catch(() => {});
+
   if (session.clearedFloor >= TOWER_TOTAL_FLOORS) {
     await persistSession(session);
     return finishTower(session);
@@ -859,6 +886,9 @@ async function finishTower(session) {
   const reward = calcTowerReward(session.clearedFloor);
   await settleTowerSession(session, reward);
   await updateThreadPanel(session, createTowerThreadResultMessage(session, reward));
+  await refreshTowerHallPanelByConfig().catch((e) => {
+    console.warn("[Tower] refresh hall panel failed:", e?.message || e);
+  });
 
   setTimeout(async () => {
     const t = session.thread;
@@ -932,6 +962,9 @@ async function awardFloorCardDrops(session, monster) {
 async function settleTowerSession(session, reward) {
   const sc = serviceContext;
   const clearBuff = getTowerClearBuff(session.clearedFloor);
+  const settledAt = new Date().toISOString();
+  const runId = `${session.roomId || session.threadId || "tower"}:${Date.now()}`;
+  const partySnapshot = session.members.map((p) => ({ discordId: p.discordId, name: p.name }));
 
   for (const m of session.members) {
     try {
@@ -941,7 +974,6 @@ async function settleTowerSession(session, reward) {
       m.towerRecord = { ...(m.towerRecord || {}), prevBest };
       const newBest = Math.max(prevBest, session.clearedFloor);
       const isNewRecord = newBest > prevBest;
-      const partySnapshot = session.members.map((p) => ({ discordId: p.discordId, name: p.name }));
 
       // 記錄本次挑戰時間（用於每小時次數限制）
       const now = Date.now();
@@ -952,10 +984,14 @@ async function settleTowerSession(session, reward) {
       prog.towerRecord = {
         bestFloor: newBest,
         bestAt: isNewRecord
-          ? new Date().toISOString()
-          : (prog.towerRecord?.bestAt || new Date().toISOString()),
+          ? settledAt
+          : (prog.towerRecord?.bestAt || settledAt),
         totalRuns: (prog.towerRecord?.totalRuns || 0) + 1,
         bestParty: isNewRecord ? partySnapshot : (prog.towerRecord?.bestParty || partySnapshot),
+        lastFloor: session.clearedFloor,
+        lastAt: settledAt,
+        lastParty: partySnapshot,
+        lastRunId: runId,
         recentRuns: pruned,
       };
       m.towerRecord = prog.towerRecord;
@@ -1355,15 +1391,44 @@ async function handleRanking(interaction) {
 }
 
 // ── 常駐大廳面板 ─────────────────────────────────────────────
+async function fetchTowerHallRecords(limit = 5) {
+  if (typeof serviceContext.progressRepository.findRecentTowerRuns === "function") {
+    const recent = await serviceContext.progressRepository.findRecentTowerRuns(limit).catch(() => []);
+    if (recent.length > 0) return recent;
+  }
+  return serviceContext.progressRepository.findTopByTowerRecord(limit).catch(() => []);
+}
+
 async function publishTowerHallPanel(interaction) {
-  const ranking = await serviceContext.progressRepository.findTopByTowerRecord(5).catch(() => []);
+  const ranking = await fetchTowerHallRecords(5);
   await interaction.reply(createTowerHallMessage(ranking));
 }
 
 async function refreshHallPanel(hallMessage) {
   if (!hallMessage) return;
-  const ranking = await serviceContext.progressRepository.findTopByTowerRecord(5).catch(() => []);
+  const ranking = await fetchTowerHallRecords(5);
   await hallMessage.edit(createTowerHallMessage(ranking)).catch(() => {});
+}
+
+async function refreshTowerHallPanelByConfig() {
+  const client = getBotClient();
+  if (!client?.isReady() || !config.discord.towerLobbyChannelId) return;
+
+  const channel = await client.channels.fetch(config.discord.towerLobbyChannelId).catch(() => null);
+  if (!channel?.messages?.fetch) return;
+
+  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+  if (!messages) return;
+
+  const panelMessage = messages.find((msg) => {
+    const hasTowerEmbed = msg.embeds?.some((embed) => String(embed.title || "").includes("組隊攻塔"));
+    const hasTowerButton = msg.components?.some((row) =>
+      row.components?.some((component) => component.customId === TOWER_IDS.openLobby)
+    );
+    return msg.author?.id === client.user.id && (hasTowerEmbed || hasTowerButton);
+  });
+
+  if (panelMessage) await refreshHallPanel(panelMessage);
 }
 
 // ── Bot 重啟後從 DB 還原進行中的 session ──────────────────────
