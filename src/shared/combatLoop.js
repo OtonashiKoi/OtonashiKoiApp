@@ -939,9 +939,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
-        // 冰凍：此回合怪物無法攻擊（一次性，appliedAt 回合消耗）
+        // 冰凍：下回合起持續 duration 回合無法攻擊（appliedAt 是觸發回合，效果從下回合起算）
         if (mEff.key === 'freeze') {
-          if (round === (mEff.appliedAt || round)) {
+          const freezeDur = Number(mEff.params?.duration?.value ?? 1);
+          const freezeStart = (mEff.appliedAt ?? round) + 1;
+          if (round >= freezeStart && round < freezeStart + freezeDur) {
             monsterFrozenThisRound = true;
           }
         }
