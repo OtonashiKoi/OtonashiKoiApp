@@ -1551,6 +1551,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           });
           options.playerActiveEffects = result.ownerActiveEffects;
           monsterActiveEffects = result.targetActiveEffects;
+          if (result.applied) {
+            const appliedStun = result.targetActiveEffects.find(e => e.key === 'stun' && e.appliedAt === round);
+            if (appliedStun) {
+              const stunDur = Number(appliedStun.params?.duration?.value ?? 1);
+              stunRoundsLeft = Math.max(stunRoundsLeft, stunDur);
+            }
+          }
         }
 
       if (normalProcEffects.length > 0 && (cardCooldowns.player[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
@@ -1621,6 +1628,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key)) {
             monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, effectEntry);
             appliedAnyNormalProc = true;
+            if (effectEntry.key === 'stun') {
+              const stunDur = Number(effectEntry.params?.duration?.value ?? 1);
+              stunRoundsLeft = Math.max(stunRoundsLeft, stunDur);
+            }
           } else {
             if (!options.playerActiveEffects) options.playerActiveEffects = [];
             options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, effectEntry);
@@ -1675,6 +1686,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             entry.params.sourceName = jobProfile.jobName || '職業技能';
             if (pe.target === 'enemy' || JOB_SKILL_OFFENSIVE.has(pe.key)) {
               monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, entry);
+              if (entry.key === 'stun') {
+                const stunDur = Number(entry.params?.duration?.value ?? 1);
+                stunRoundsLeft = Math.max(stunRoundsLeft, stunDur);
+              }
             } else {
               if (!options.playerActiveEffects) options.playerActiveEffects = [];
               options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, entry);

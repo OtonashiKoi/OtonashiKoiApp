@@ -209,8 +209,10 @@
   <div id="chat-wrap"></div>
 
   <script>
-    const API_BASE   = 'http://127.0.0.1:5566';
-    const WS_URL     = 'ws://127.0.0.1:11180/sub';
+    // 動態檢測 host（支援 localhost 和區域網路 IP）
+    const host = window.location.hostname || '127.0.0.1';
+    const API_BASE   = `http://${host}:5566`;
+    const WS_URL     = `ws://${host}:11180/sub`;
     const MAX_MSGS   = 30;
     const STORE_KEY  = 'chat_history_v1';
     const CACHE_TTL  = 10 * 1000; // 10 秒內同一人不重複打 API

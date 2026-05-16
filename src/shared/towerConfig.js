@@ -60,8 +60,8 @@ const TOWER_FLOOR_BUFFS = [
     emoji: "👑",
     color: 0x1a1a2e,
     partyBonus: { atkPct: 50, hpPct: 100 },
-    monsterScalePct: 900,
-    monsterAtkScalePct: 320,
+    monsterScalePct: 100,
+    monsterAtkScalePct: 100,
   },
 ];
 

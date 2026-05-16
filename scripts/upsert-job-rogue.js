@@ -69,13 +69,13 @@ const JOB_ITEM = {
       key: "proc_poison",
       trigger: "on_hit",
       target: "enemy",
-      chance: 10,
+      chance: 6,
       stacks: 1,
       stackMode: "replace",
-      duration: { mode: "turns", value: 3 },
-      params: { value: 0.5, mode: "pct", stackAdd: 1, maxPct: 2, dexMultiplier: 0.01 },
+      duration: { mode: "turns", value: 2 },
+      params: { value: 0.5, mode: "pct", stackAdd: 1, maxPct: 1.5, dexMultiplier: 0.01 },
       condition: { weaponType: "dagger" },
-      notes: "主武匕首：命中時 10% 機率造成中毒（基礎 0.5% HP + DEX × 0.01%，持續 3 回合，每次觸發增加 1% 並刷新，最高疊至 2%）"
+      notes: "主武匕首：命中時 6% 機率造成中毒（基礎 0.5% HP + DEX × 0.01%，持續 2 回合，每次觸發增加 1% 並刷新，最高疊至 1.5%）"
     }
   ],
   combatEffects: [

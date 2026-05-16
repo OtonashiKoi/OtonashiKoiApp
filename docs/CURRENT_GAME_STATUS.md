@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-05-14T10:55:08.713Z
+Generated at: 2026-05-16T16:55:39.186Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,11 +8,11 @@ Generated at: 2026-05-14T10:55:08.713Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 359 |
-| 進度資料 | 363 |
+| 玩家 | 362 |
+| 進度資料 | 366 |
 | 怪物 | 41 |
 | 怪物狀態文件 | 5 |
-| 道具 | 249 |
+| 道具 | 253 |
 | 任務 | 37 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
@@ -38,7 +38,7 @@ Generated at: 2026-05-14T10:55:08.713Z
 | beginner | 3 | 蘑菇怪 | 2 | 2400 | 75 | 240 | 0 | 否 | 11 |
 | beginner | 4 | 小史(中) | 3 | 2800 | 90 | 280 | 0 | 否 | 11 |
 | beginner | 5 | 大野兔(B) | 3 | 4950 | 200 | 1000 | 0 | 是 | 13 |
-| elite | 1 | 大史王 | 35 | 950000 | 26000 | 75000 | 5000 | 是 | 32 |
+| elite | 1 | 大史王 | 35 | 950000 | 26000 | 75000 | 5000 | 是 | 60 |
 | hard | 1 | 城牆衛兵 | 20 | 45000 | 4500 | 4200 | 0 | 否 | 11 |
 | hard | 2 | 古城弓手 | 20 | 35000 | 3800 | 4200 | 0 | 否 | 10 |
 | hard | 3 | 石像鬼 | 22 | 45000 | 6000 | 4200 | 0 | 否 | 9 |
@@ -79,11 +79,10 @@ Generated at: 2026-05-14T10:55:08.713Z
 
 | 分類 | 數量 |
 | --- | --- |
-| collectible | 4 |
-| consumable | 12 |
-| equipment | 218 |
+| collectible | 5 |
+| consumable | 17 |
+| equipment | 221 |
 | job_badge | 10 |
-| tower_consumable | 5 |
 
 | 階級 | 數量 |
 | --- | --- |
@@ -91,7 +90,7 @@ Generated at: 2026-05-14T10:55:08.713Z
 | B | 51 |
 | C | 53 |
 | D | 57 |
-| 無階級 | 27 |
+| 無階級 | 31 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -106,14 +105,16 @@ Generated at: 2026-05-14T10:55:08.713Z
 | shield | 8 |
 | shoes | 16 |
 | special | 41 |
+| title_eq | 3 |
 | weapon | 41 |
-| 無槽位 | 21 |
+| 無槽位 | 22 |
 
 ## Items
 
 | ID | 名稱 | 類型 | 階級 | 槽位 | 武器類型 | 屬性 | 效果 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | b7f5ef58-79d3-41ef-b9d2-c726da22417b | 【圖片】音無 哭哭 錢錢飛走了 | collectible |  |  |  |  | none |
+| 50110bc1-9403-4ac2-a69f-27d8162d1a9e | 【圖片】音無2025年11月11日 | collectible |  |  |  |  | none |
 | c5db63c0-79f2-452a-a076-78f09093a65c | 【圖片】音無2025年1月新年會限圖 | collectible |  |  |  |  | none |
 | 9d3c7998-6b65-4d5a-81d5-4c34a8dc744e | 【圖片】音無2025年情人節會限圖 | collectible |  |  |  |  | none |
 | 9b8ef677-eda3-42bc-82d7-63c202b49cd2 | 【圖片】音無樂園限定CB圖 | collectible |  |  |  |  | none |
@@ -121,7 +122,12 @@ Generated at: 2026-05-14T10:55:08.713Z
 | 4a3b928f-c86a-4f3e-b1be-8ca2828072ae | 【鯉市長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
 | 9d3f8e8a-3de6-40c4-a2a5-06793e83c7d5 | 【鯉民】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
 | 14ee61e8-e9f0-44e4-9a32-f8dd0060cbe2 | 【鯉長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
+| 97fbd546-e207-4130-b130-2fadd799703a | 回復藥水（中） | consumable |  |  |  |  | tower_heal_flat |
+| 3eb1d302-3d04-40a5-8335-1f9ed844dc27 | 回復藥水（大） | consumable |  |  |  |  | tower_heal_pct |
+| f56aefd0-faa8-45b5-8451-fbbae5810c74 | 回復藥水（小） | consumable |  |  |  |  | tower_heal_flat |
 | 87b281be-b175-40a0-8044-0accc88a0ee0 | 屬性重製藥水 | consumable |  |  |  |  | reroll_attributes |
+| c4794326-ced1-4efe-983d-17c14ee2f2f8 | 復活藥水（大） | consumable |  |  |  |  | tower_revive_pct |
+| 12bfb110-6489-4784-8537-f3f496759f8f | 復活藥水（小） | consumable |  |  |  |  | tower_revive_pct |
 | 71aaa3a2-abb9-4b01-b024-16e553b08840 | 金幣袋子(中) | consumable |  |  |  |  | grant_gold |
 | 1854a2b1-a569-4604-802d-9171f480a9ae | 金幣袋子(大) | consumable |  |  |  |  | grant_gold |
 | 63ca559b-ca12-4835-a48d-2150e366f60e | 金幣袋子(小) | consumable |  |  |  |  | grant_gold |
@@ -129,6 +135,9 @@ Generated at: 2026-05-14T10:55:08.713Z
 | 8fdfa7d9-f0fa-4e6a-a291-703b1e354072 | B階寶石 | consumable | B |  |  |  | none |
 | 556db9e1-b084-4b22-bab5-a66c2b586184 | C階寶石 | consumable | C |  |  |  | grant_gold |
 | 72fde92d-e33f-42fb-8d86-2e811d03f84d | D階寶石 | consumable | D |  |  |  | grant_gold |
+| 65833876-d13e-4ca8-ac26-4eeb170726fc | 樂園CCB2勇者 | equipment |  | title_eq |  | LUK+3 | none |
+| e290d286-bd45-4a32-b848-d52184fc88a0 | 樂園CCB勇者 | equipment |  | title_eq |  | LUK+3 | none |
+| dc067571-4f8f-49af-b0c1-50f32c6941ab | 樂園最終CB勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | f579720d-08da-446b-b86b-48020a4ccdd2 | 智紋金戒指(左) | equipment | A | accessory_l |  | INT+5 LUK+2 | none |
 | ab7ae63e-f2c9-4d1d-9418-f332f80033ab | 迅紋金戒指(左) | equipment | A | accessory_l |  | DEX+5 LUK+2 | none |
 | 82c89915-2b11-49bf-8557-e7cd544a86fd | 金戒指(左) | equipment | A | accessory_l |  | AGI+3 VIT+3 LUK+3 | none |
@@ -354,14 +363,9 @@ Generated at: 2026-05-14T10:55:08.713Z
 | job_mage_v1 | 法師徽章 | job_badge |  | job_eq |  | VIT+1 INT+5 LUK+2 | none |
 | job_rogue_v1 | 盜賊徽章 | job_badge |  | job_eq |  | STR+2 AGI+4 LUK+2 | none |
 | job_dwarf_warrior_v1 | 矮人戰士徽章 | job_badge |  | job_eq |  | STR+1 VIT+5 DEX+2 | none |
-| job_barrier_mage_v1 | 結界師徽章 | job_badge |  | job_eq |  | VIT+3 INT+3 DEX+2 |  |
-| job_bard_v1 | 詩人徽章 | job_badge |  | job_eq |  | AGI+2 DEX+4 LUK+2 |  |
-| job_tactician_v1 | 軍師徽章 | job_badge |  | job_eq |  | AGI+4 INT+2 DEX+2 |  |
-| 97fbd546-e207-4130-b130-2fadd799703a | 回復藥水（中） | tower_consumable |  |  |  |  | tower_heal_flat |
-| 3eb1d302-3d04-40a5-8335-1f9ed844dc27 | 回復藥水（大） | tower_consumable |  |  |  |  | tower_heal_pct |
-| f56aefd0-faa8-45b5-8451-fbbae5810c74 | 回復藥水（小） | tower_consumable |  |  |  |  | tower_heal_flat |
-| c4794326-ced1-4efe-983d-17c14ee2f2f8 | 復活藥水（大） | tower_consumable |  |  |  |  | tower_revive_pct |
-| 12bfb110-6489-4784-8537-f3f496759f8f | 復活藥水（小） | tower_consumable |  |  |  |  | tower_revive_pct |
+| job_barrier_mage_v1 | 結界師徽章 | job_badge |  | job_eq |  | VIT+3 INT+3 DEX+2 | none |
+| job_bard_v1 | 詩人徽章 | job_badge |  | job_eq |  | AGI+2 DEX+4 LUK+2 | none |
+| job_tactician_v1 | 軍師徽章 | job_badge |  | job_eq |  | AGI+4 INT+2 DEX+2 | none |
 
 ## Quests
 
