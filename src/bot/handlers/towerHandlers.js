@@ -787,8 +787,8 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
   };
 }
 
-// ── 每層通關廣播 ─────────────────────────────────────────────
-async function broadcastTowerFloorCleared(session, floor, monsterName) {
+// ── 全服爬塔最高紀錄廣播 ────────────────────────────────────
+async function broadcastTowerServerRecord(session, newRecord) {
   const client = getBotClient();
   if (!client?.isReady()) return;
   const channelId = config.discord.towerFloorBroadcastChannelId;
@@ -796,15 +796,15 @@ async function broadcastTowerFloorCleared(session, floor, monsterName) {
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel?.isTextBased?.()) return;
 
-  const aliveCount = session.members.filter((m) => m.currentHp > 0).length;
   const memberList = session.members
     .map((m) => `<@${m.discordId}>${m.job?.emoji ? ` ${m.job.emoji}` : ""}`)
     .join("、");
-  const isBossFloor = Object.values(TOWER_FLOOR_BOSS).includes(monsterName);
+  const isFull = newRecord >= TOWER_TOTAL_FLOORS;
 
   const content = [
-    `🗼 **隊伍攻塔通關 第 ${floor} 層！**`,
-    `怪物：${isBossFloor ? "👑 " : ""}${monsterName}　存活：${aliveCount}／${session.members.length} 人`,
+    isFull
+      ? `🏆 **全服爬塔最高紀錄刷新！隊伍全層通關！**`
+      : `🗼 **全服爬塔最高紀錄刷新！第 ${newRecord} 層！**`,
     `成員：${memberList}`,
     `房號 \`${session.roomId}\``,
   ].join("\n");
@@ -868,7 +868,6 @@ async function processNextFloor(session) {
     if (r) console.log(`[Tower] 第${floor}層掉落藥水：${r.itemName} → ${r.name}`);
   }).catch(() => {});
 
-  broadcastTowerFloorCleared(session, floor, monster.name).catch(() => {});
 
   if (session.clearedFloor >= TOWER_TOTAL_FLOORS) {
     await persistSession(session);
@@ -966,6 +965,18 @@ async function settleTowerSession(session, reward) {
   const runId = `${session.roomId || session.threadId || "tower"}:${Date.now()}`;
   const partySnapshot = session.members.map((p) => ({ discordId: p.discordId, name: p.name }));
 
+  // 結算前先抓全服最高層紀錄
+  let serverBestBefore = 0;
+  try {
+    const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+    const mongoDb = await getMongoDb();
+    const rec = await mongoDb.collection("progress").findOne(
+      { "towerRecord.bestFloor": { $exists: true } },
+      { sort: { "towerRecord.bestFloor": -1 }, projection: { "towerRecord.bestFloor": 1 } }
+    );
+    serverBestBefore = rec?.towerRecord?.bestFloor || 0;
+  } catch (_) {}
+
   for (const m of session.members) {
     try {
       const prog = await sc.progressRepository.findByPlayerId(m.discordId).catch(() => null);
@@ -1027,6 +1038,11 @@ async function settleTowerSession(session, reward) {
         }).catch(() => {});
       }
     } catch (e) { /* ignore per-member errors */ }
+  }
+
+  // 刷新全服最高紀錄 → 廣播
+  if (session.clearedFloor > serverBestBefore) {
+    broadcastTowerServerRecord(session, session.clearedFloor).catch(() => {});
   }
 
   // 41 層通關 → 寫入全服名人堂（只記錄一次，不依人頭）
