@@ -61,6 +61,9 @@ function withProgressCache(repo) {
     },
     async findTopByTowerRecord(limit) {
       return repo.findTopByTowerRecord(limit);
+    },
+    async findRecentTowerRuns(limit) {
+      return repo.findRecentTowerRuns(limit);
     }
   };
 }

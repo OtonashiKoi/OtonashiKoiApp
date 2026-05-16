@@ -227,6 +227,24 @@ function createMongoRepositories() {
           .limit(limit)
           .project({ playerId: 1, displayName: 1, towerRecord: 1 })
           .toArray();
+      },
+      async findRecentTowerRuns(limit = 5) {
+        return (await collection("progress"))
+          .aggregate([
+            { $match: { "towerRecord.lastAt": { $exists: true } } },
+            { $sort: { "towerRecord.lastAt": -1 } },
+            {
+              $group: {
+                _id: { $ifNull: ["$towerRecord.lastRunId", "$playerId"] },
+                doc: { $first: "$$ROOT" }
+              }
+            },
+            { $replaceRoot: { newRoot: "$doc" } },
+            { $sort: { "towerRecord.lastAt": -1 } },
+            { $limit: limit },
+            { $project: { playerId: 1, displayName: 1, towerRecord: 1 } }
+          ])
+          .toArray();
       }
     },
     transactionRepository: {

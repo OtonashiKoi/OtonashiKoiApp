@@ -75,6 +75,23 @@ const IMMEDIATE_HEAL_KEYS = new Set(["heal_over_time", "life_regen", "mana_regen
 const IMMEDIATE_DAMAGE_KEYS = new Set(["burn", "poison", "bleed", "lightning", "shock_dot", "curse_dot"]);
 const IMMEDIATE_LOG_SUPPRESS_KEYS = new Set([...IMMEDIATE_DAMAGE_KEYS, ...IMMEDIATE_HEAL_KEYS]);
 
+function hasMultiTurnDuration(effect) {
+  const duration = effect?.duration || effect?.params?.duration || null;
+  return duration?.mode === "turns" && Number(duration.value || 0) > 1;
+}
+
+function shouldApplyAsImmediateDamage(effect) {
+  return IMMEDIATE_DAMAGE_KEYS.has(effect?.key) && !hasMultiTurnDuration(effect);
+}
+
+function shouldApplyAsImmediateHeal(effect) {
+  return IMMEDIATE_HEAL_KEYS.has(effect?.key) && !hasMultiTurnDuration(effect);
+}
+
+function shouldSuppressImmediateLog(effect) {
+  return shouldApplyAsImmediateDamage(effect) || shouldApplyAsImmediateHeal(effect);
+}
+
 function createRoundDamageState(aStats, bStats) {
   return {
     A: {
@@ -722,7 +739,7 @@ function attackerTurn({
           atkOpts._cardCooldowns[cooldownKey] = Number(skill.cooldownTurns);
         }
 
-        const shouldShowGenericSkillLine = !procEffects.some((effect) => IMMEDIATE_LOG_SUPPRESS_KEYS.has(effect?.key));
+        const shouldShowGenericSkillLine = !procEffects.some((effect) => shouldSuppressImmediateLog(effect));
         let appliedAnyProc = false;
 
         for (const pe of procEffects) {
@@ -736,17 +753,18 @@ function attackerTurn({
         if (Number.isFinite(Number(pp.targetHpBelowPct)) && defHpPct >= Number(pp.targetHpBelowPct)) continue;
 
         const skillName = skill.name || cardName;
-        const isImmediateDamage = IMMEDIATE_DAMAGE_KEYS.has(pe.key);
+        const isImmediateDamage = shouldApplyAsImmediateDamage(pe);
+        const duration = pe.duration || pp.duration;
         const entry = {
           key: pe.key,
-          params: { ...pp },
+          params: duration && !pp.duration ? { ...pp, duration } : { ...pp },
           stackMode: pe.stackMode,
           appliedAt: round,
           sourceType: 'pvp_card',
           sourceId: `${slot}:${slotItem.uuid || slotItem.itemId || cardName}`
         };
         entry.params.sourceName = atkName;
-        if (IMMEDIATE_HEAL_KEYS.has(pe.key)) {
+        if (shouldApplyAsImmediateHeal(pe)) {
           const healBase = pp.mode === 'flat'
             ? Math.max(1, Number(pp.value ?? 0))
             : Math.max(1, Number(pp.value ?? 5));

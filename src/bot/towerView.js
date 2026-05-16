@@ -66,8 +66,8 @@ function createTowerHallMessage(topRanking = []) {
   const rankLines = topRanking.length > 0
     ? topRanking.slice(0, 5).map((r, i) => {
       const medal  = MEDALS[i] || `${i + 1}.`;
-      const floor  = r.towerRecord?.bestFloor || 0;
-      const party  = r.towerRecord?.bestParty || [];
+      const floor  = r.towerRecord?.lastFloor ?? r.towerRecord?.bestFloor ?? 0;
+      const party  = r.towerRecord?.lastParty || r.towerRecord?.bestParty || [];
       const names  = party.length > 0
         ? party.map((p) => p.name).join("・")
         : (r.displayName || r.playerId || "???");

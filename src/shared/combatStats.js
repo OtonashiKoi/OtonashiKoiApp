@@ -11,7 +11,7 @@ const { getBossBoostPct, PK_RATING_DEFAULT } = require("./pkArenaConfig");
 // comboBonus  : 連擊率加成%
 // stunChance  : 擊暈機率%（擊暈後怪物3回合無法攻擊）
 // armorBreak  : 破防%（此次攻擊無視怪物 DEF%）
-// monsterAtk  : 怪物每回合攻擊次數（倍數，預設1）
+// monsterAtk  : 怪物每回合攻擊次數（倍數，預設1；目前法杖不再提高被攻擊次數）
 // bypassDefPct: 無視怪物 DEF 的百分比（0~100，法杖專用，50=無視一半）
 // counterChance: 雙持副手追擊機率%（怪物攻擊後觸發）
 // counterStun : 副手追擊是否繼承擊暈機率
@@ -177,7 +177,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     isTwoHanded:       cfg.isTwoHanded ?? false,
     isDualWield,
     bypassMonsterDefPct: cfg.bypassDefPct ?? 0,    // 法杖：無視怪物DEF的百分比（50=無視一半）
-    monsterAttackCount:cfg.monsterAtk ?? 1,       // 法杖：怪物攻擊×2
+    monsterAttackCount:cfg.monsterAtk ?? 1,       // 武器可指定怪物攻擊次數；預設1
     stunChance,                                    // 槌：擊暈機率%
     stunDuration: cfg.stunDuration ?? 3,           // 槌：擊暈持續回合數（預設3，槌類2）
     armorBreakChance,                              // 斧：破防機率%
