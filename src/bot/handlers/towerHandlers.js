@@ -1096,17 +1096,29 @@ async function settleTowerSession(session, reward) {
             ? `⚡ **${clearBuff.label}** 已啟動（${durationLabel}，限怪物區）${buffEffectDesc ? `\n　效果：${buffEffectDesc}` : ""}`
             : null;
 
-          // 失敗時顯示怪物剩餘血量
+          // 失敗時顯示原因標籤與怪物剩餘血量
           const lastResult = session.lastFloorResult;
-          const monsterHpLine = (!isFull && lastResult && !lastResult.monsterKilled && lastResult.scaledHp > 0)
-            ? `🩸 怪物剩餘 HP：${Math.max(0, lastResult.monsterHpFinal).toLocaleString()} / ${lastResult.scaledHp.toLocaleString()}（${Math.round((Math.max(0, lastResult.monsterHpFinal) / lastResult.scaledHp) * 100)}%）`
-            : null;
+          let failTypeLabel = null;
+          let monsterHpLine = null;
+          if (!isFull && lastResult) {
+            if (!lastResult.monsterKilled) {
+              failTypeLabel = `⏱️ **終止原因：行動格耗盡（火力不足）**`;
+              if (lastResult.scaledHp > 0) {
+                const remaining = Math.max(0, lastResult.monsterHpFinal);
+                const pct = Math.round((remaining / lastResult.scaledHp) * 100);
+                monsterHpLine = `🩸 怪物剩餘 HP：${remaining.toLocaleString()} / ${lastResult.scaledHp.toLocaleString()}（${pct}%）`;
+              }
+            } else if (!lastResult.survived) {
+              failTypeLabel = `💀 **終止原因：通關後全員陣亡**`;
+            }
+          }
 
           const dmLines = [
             isFull
               ? `🎉 **恭喜！組隊攻塔全層通關！**`
               : `🗼 **組隊攻塔結束 ― 第 ${session.clearedFloor} 層**`,
             session.failReason ? `❌ ${session.failReason}` : null,
+            failTypeLabel,
             monsterHpLine,
             "",
             isNewRec ? `🆕 **個人新紀錄！** 最高層：${session.clearedFloor} 層` : `個人最高：${m.towerRecord?.bestFloor || session.clearedFloor} 層`,
