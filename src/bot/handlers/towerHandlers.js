@@ -1077,8 +1077,29 @@ async function settleTowerSession(session, reward) {
             reward.bonusMsg  || null,
           ].filter(Boolean).join("\n");
 
+          // 祝福效果描述
+          const BUFF_EFFECT_LABELS = {
+            atk_multiplier_up:    (v) => `ATK ×${v}`,
+            def_multiplier_up:    (v) => `DEF ×${v}`,
+            max_hp_multiplier_up: (v) => `MaxHP ×${v}`,
+          };
+          const buffEffectDesc = clearBuff
+            ? clearBuff.effects
+                .map((e) => BUFF_EFFECT_LABELS[e.key]?.(e.params?.value))
+                .filter(Boolean)
+                .join("、")
+            : null;
+          const durationLabel = clearBuff
+            ? (clearBuff.durationSec >= 3600 ? "1 小時" : "30 分鐘")
+            : null;
           const buffLine = clearBuff
-            ? `⚡ **${clearBuff.label}** 已啟動（${clearBuff.durationSec >= 3600 ? "1 小時" : "30 分鐘"}，限怪物區）`
+            ? `⚡ **${clearBuff.label}** 已啟動（${durationLabel}，限怪物區）${buffEffectDesc ? `\n　效果：${buffEffectDesc}` : ""}`
+            : null;
+
+          // 失敗時顯示怪物剩餘血量
+          const lastResult = session.lastFloorResult;
+          const monsterHpLine = (!isFull && lastResult && !lastResult.monsterKilled && lastResult.scaledHp > 0)
+            ? `🩸 怪物剩餘 HP：${Math.max(0, lastResult.monsterHpFinal).toLocaleString()} / ${lastResult.scaledHp.toLocaleString()}（${Math.round((Math.max(0, lastResult.monsterHpFinal) / lastResult.scaledHp) * 100)}%）`
             : null;
 
           const dmLines = [
@@ -1086,6 +1107,7 @@ async function settleTowerSession(session, reward) {
               ? `🎉 **恭喜！組隊攻塔全層通關！**`
               : `🗼 **組隊攻塔結束 ― 第 ${session.clearedFloor} 層**`,
             session.failReason ? `❌ ${session.failReason}` : null,
+            monsterHpLine,
             "",
             isNewRec ? `🆕 **個人新紀錄！** 最高層：${session.clearedFloor} 層` : `個人最高：${m.towerRecord?.bestFloor || session.clearedFloor} 層`,
             "",
