@@ -2496,7 +2496,7 @@ async function handleWeeklyQuestClaim(interaction, questId, cadenceHint = "weekl
     await renderQuestCenter(interaction, nextCadence, `✅ 已領取「${reward.questTitle}」獎勵：${rewardDesc}`);
   } catch (err) {
     const msg = err.message || "領取失敗";
-    await interaction.followUp({ content: `❌ ${msg}`, flags: MessageFlags.Ephemeral });
+    await interaction.editReply({ content: `❌ ${msg}`, embeds: [], components: [] }).catch(() => {});
   }
 }
 
