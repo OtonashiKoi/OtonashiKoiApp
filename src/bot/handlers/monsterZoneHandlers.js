@@ -1639,13 +1639,24 @@ async function _broadcastBossSpawn(sc, zoneKey, monster) {
   }
 }
 
+function isTransientDiscordError(err) {
+  if (!err) return false;
+  if (err?.code === 10062) return true;
+  if (/Unknown interaction/i.test(err?.message || "")) return true;
+  // HTTP/2 GOAWAY / 網路斷線類錯誤
+  if (err instanceof AggregateError) return true;
+  const code = err?.code || "";
+  if (code === "UND_ERR_SOCKET" || code === "ENOTFOUND" || code === "ECONNREFUSED" || code === "ETIMEDOUT") return true;
+  if (/GOAWAY|ConnectTimeout|getaddrinfo/i.test(err?.message || "")) return true;
+  return false;
+}
+
 async function safeBattleResultReply(interaction, payload, fallbackContent) {
   try {
     await interaction.editReply(payload);
     return true;
   } catch (err) {
-    const isExpired = err?.code === 10062 || /Unknown interaction/i.test(err?.message || "");
-    if (!isExpired) throw err;
+    if (!isTransientDiscordError(err)) throw err;
     try {
       if (interaction.channel?.isTextBased?.()) {
         await interaction.channel.send({
