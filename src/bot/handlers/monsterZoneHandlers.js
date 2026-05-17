@@ -2351,11 +2351,21 @@ async function handleEnterBattle(interaction) {
       );
 
       await safeBattleResultReply(interaction, { embeds: [embed], components: [row] }, `⚔️ 戰鬥結算：<@${discordId}>`).catch((err) => {
-        console.error("[monsterZoneHandlers] battle result reply failed:", err?.message || err);
+        if (!isTransientDiscordError(err)) {
+          console.error(`[monsterZoneHandlers] battle result reply failed | player=${discordId}(${displayName}) | zone=${zoneKey ?? "?"} | err=${err?.message || err}`);
+        }
       });
       deleteMonsterSession(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
     } catch (err) {
-      console.error("[monsterZoneHandlers] battle finalization error:", err?.message || err);
+      const isTransient = isTransientDiscordError(err);
+      console.error(
+        `[monsterZoneHandlers] battle finalization error` +
+        ` | player=${discordId}(${displayName})` +
+        ` | zone=${zoneKey ?? "?"}` +
+        ` | monster=${battleMonster?.name ?? "?"}` +
+        ` | transient=${isTransient}` +
+        ` | err=${err?.message || err}`
+      );
       deleteMonsterSession(discordId);
       await safeBattleResultReply(
         interaction,
