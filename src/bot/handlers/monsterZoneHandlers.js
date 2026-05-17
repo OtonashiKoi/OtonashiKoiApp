@@ -2365,7 +2365,6 @@ async function handleEnterBattle(interaction) {
     }
   } catch (err) {
     console.error("[monsterZoneHandlers] battle start error:", err?.message || err);
-    if (hasActiveSessionLock) deleteMonsterSession(discordId);
     await safeBattleResultReply(
       interaction,
       { content: "❌ 出戰失敗，請稍後再試。" },
