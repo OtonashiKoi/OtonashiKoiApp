@@ -2317,7 +2317,7 @@ async function handleEnterBattle(interaction) {
           .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(i, displayRoundLogs.length)} 回合`)
           .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
           .setColor(0xe74c3c);
-        await interaction.editReply({ embeds: [progressEmbed], components: [] });
+        await interaction.editReply({ embeds: [progressEmbed], components: [] }).catch(() => {});
         await delay(tickDelay);
       }
 
@@ -2676,7 +2676,7 @@ async function handleStartFight(interaction) {
         .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(i, displayRoundLogs.length)} 回合`)
         .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
         .setColor(0xe74c3c);
-      await interaction.editReply({ embeds: [progressEmbed], components: [] });
+      await interaction.editReply({ embeds: [progressEmbed], components: [] }).catch(() => {});
       await delay(tickDelay);
     }
 
