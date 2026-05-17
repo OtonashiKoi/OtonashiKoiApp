@@ -1645,8 +1645,9 @@ function isTransientDiscordError(err) {
   if (/Unknown interaction/i.test(err?.message || "")) return true;
   // HTTP/2 GOAWAY / 網路斷線類錯誤
   if (err instanceof AggregateError) return true;
+  if (/Received one or more errors/i.test(err?.message || "")) return true;
   const code = err?.code || "";
-  if (code === "UND_ERR_SOCKET" || code === "ENOTFOUND" || code === "ECONNREFUSED" || code === "ETIMEDOUT") return true;
+  if (code === "UND_ERR_SOCKET" || code === "UND_ERR_CONNECT_TIMEOUT" || code === "ENOTFOUND" || code === "ECONNREFUSED" || code === "ETIMEDOUT") return true;
   if (/GOAWAY|ConnectTimeout|getaddrinfo/i.test(err?.message || "")) return true;
   return false;
 }
