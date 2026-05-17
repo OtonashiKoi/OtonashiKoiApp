@@ -42,79 +42,82 @@ function calcScaledAuraValue(jobKey, effectKey, providerStats = {}, baseValue = 
   let scaled = base;
   let statKey = null;
 
+  // 縮放公式統一以 base 為起點往上加，每 step 點屬性 +1%（或 +0.5%）
+  // 上限為 base + cap，確保不會無限膨脹
+  // 設計基準：Lv40 平均屬性 ~14，最大專注投資 ~35，step=10 → 平均 +1%，最大 +3~4%
   if (jobKey === "healer") {
     if (effectKey === "heal_over_time" || effectKey === "party_heal") {
       statKey = "int";
-      scaled = clampAuraValue(2 + floorStep(int, 50, 0.5), 6);
+      scaled = clampAuraValue(base + floorStep(int, 10, 0.5), base + 4);
     } else if (effectKey === "party_damage_up") {
       statKey = "dex";
-      scaled = clampAuraValue(3 + floorStep(dex, 80, 1), 10);
+      scaled = clampAuraValue(base + floorStep(dex, 12, 1), base + 5);
     }
   } else if (jobKey === "tactician") {
     if (effectKey === "party_boss_damage_up" || effectKey === "party_damage_up") {
       statKey = "agi";
-      scaled = clampAuraValue(4 + floorStep(agi, 60, 1), 12);
+      scaled = clampAuraValue(base + floorStep(agi, 12, 1), base + 5);
     } else if (effectKey === "party_monster_def_down") {
       statKey = "int";
-      scaled = clampAuraValue(4 + floorStep(int, 70, 1), 12);
+      scaled = clampAuraValue(base + floorStep(int, 12, 1), base + 5);
     }
   } else if (jobKey === "bard") {
     if (effectKey === "party_exp_gain_up" || effectKey === "party_gold_gain_up") {
       statKey = "luk";
-      scaled = clampAuraValue(5 + floorStep(luk, 80, 1), 12);
+      scaled = clampAuraValue(base + floorStep(luk, 12, 1), base + 5);
     } else if (effectKey === "party_agi_up") {
       statKey = "dex";
-      scaled = clampAuraValue(5 + floorStep(dex, 50, 1), 15);
+      scaled = clampAuraValue(base + floorStep(dex, 10, 1), base + 8);
     } else if (effectKey === "party_combo_up") {
       statKey = "agi";
-      scaled = clampAuraValue(3 + floorStep(agi, 70, 1), 10);
+      scaled = clampAuraValue(base + floorStep(agi, 12, 1), base + 5);
     }
   } else if (jobKey === "barrier_mage") {
     if (effectKey === "party_damage_reduction") {
       statKey = "vit";
-      scaled = clampAuraValue(8 + floorStep(vit, 60, 1), 18);
+      scaled = clampAuraValue(base + floorStep(vit, 10, 1), base + 8);
     } else if (effectKey === "party_crit_damage_reduction") {
       statKey = "int";
-      scaled = clampAuraValue(8 + floorStep(int, 60, 1), 20);
+      scaled = clampAuraValue(base + floorStep(int, 10, 1), base + 8);
     } else if (effectKey === "party_max_hp_up") {
       statKey = "int";
-      scaled = clampAuraValue(5 + floorStep(int, 70, 1), 12);
+      scaled = clampAuraValue(base + floorStep(int, 12, 1), base + 5);
     }
   } else if (jobKey === "swordsman") {
     if (effectKey === "party_damage_reduction") {
       statKey = "vit";
-      scaled = clampAuraValue(3 + floorStep(vit, 70, 1), 12);
+      scaled = clampAuraValue(base + floorStep(vit, 12, 1), base + 6);
     }
   } else if (jobKey === "warrior") {
     if (effectKey === "party_high_hp_damage_up") {
       statKey = "str";
-      scaled = clampAuraValue(4 + floorStep(str, 60, 1), 14);
+      scaled = clampAuraValue(base + floorStep(str, 10, 1), base + 6);
     }
   } else if (jobKey === "dwarf_warrior") {
     if (effectKey === "party_stun_chance_up") {
       statKey = "vit";
-      scaled = clampAuraValue(5 + floorStep(vit, 70, 1), 14);
+      scaled = clampAuraValue(base + floorStep(vit, 12, 1), base + 5);
     } else if (effectKey === "party_stunned_damage_up") {
       statKey = "str";
-      scaled = clampAuraValue(8 + floorStep(str, 60, 1), 20);
+      scaled = clampAuraValue(base + floorStep(str, 10, 1), base + 8);
     }
   } else if (jobKey === "rogue") {
     if (effectKey === "party_combo_up") {
       statKey = "agi";
-      scaled = clampAuraValue(3 + floorStep(agi, 70, 1), 10);
+      scaled = clampAuraValue(base + floorStep(agi, 12, 1), base + 5);
     }
   } else if (jobKey === "mage") {
     if (effectKey === "party_def_ignore_up") {
       statKey = "int";
-      scaled = clampAuraValue(4 + floorStep(int, 60, 1), 14);
+      scaled = clampAuraValue(base + floorStep(int, 10, 1), base + 6);
     }
   } else if (jobKey === "archer") {
     if (effectKey === "party_boss_damage_up") {
       statKey = "dex";
-      scaled = clampAuraValue(4 + floorStep(dex, 60, 1), 14);
+      scaled = clampAuraValue(base + floorStep(dex, 10, 1), base + 6);
     } else if (effectKey === "party_elite_damage_up") {
       statKey = "luk";
-      scaled = clampAuraValue(4 + floorStep(luk, 70, 1), 12);
+      scaled = clampAuraValue(base + floorStep(luk, 12, 1), base + 5);
     }
   }
 
