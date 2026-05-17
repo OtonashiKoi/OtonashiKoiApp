@@ -1616,24 +1616,30 @@ async function awardFloorPotionDrop(session, floor) {
   if (!potion) return null;
 
   const luckyMember = session.members[Math.floor(Math.random() * session.members.length)];
-  const entry = {
-    uuid: require("crypto").randomUUID(),
-    itemId: dropped.id,
-    itemName: potion.name,
-    itemEffect: potion.effect,
-    useEffects: [], passiveEffects: [], procEffects: [], combatEffects: [],
-    itemType: "tower_consumable",
-    imageUrl: null, imageThumbnailUrl: null,
-    equipSlot: null, equipStats: {}, weaponType: null, isTwoHanded: false,
-    tier: null, enhanceLevel: 0,
-    source: "tower_drop", sourceRef: `第${floor}層`,
-    purchasedAt: new Date().toISOString(),
-  };
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const prog = await sc.progressRepository.findByPlayerId(luckyMember.discordId).catch(() => null);
     if (!prog) break;
-    const next = { ...prog, inventory: [...(prog.inventory || []), entry], updatedAt: new Date().toISOString() };
+    const inv = [...(prog.inventory || [])];
+    const existing = inv.find((e) => e.itemId === dropped.id && e.itemType === "tower_consumable");
+    if (existing) {
+      existing.stackCount = Math.max(1, Number(existing.stackCount) || 1) + 1;
+    } else {
+      inv.push({
+        uuid: require("crypto").randomUUID(),
+        itemId: dropped.id,
+        itemName: potion.name,
+        itemEffect: potion.effect,
+        useEffects: [], passiveEffects: [], procEffects: [], combatEffects: [],
+        itemType: "tower_consumable",
+        imageUrl: null, imageThumbnailUrl: null,
+        equipSlot: null, equipStats: {}, weaponType: null, isTwoHanded: false,
+        tier: null, enhanceLevel: 0, stackCount: 1,
+        source: "tower_drop", sourceRef: `第${floor}層`,
+        purchasedAt: new Date().toISOString(),
+      });
+    }
+    const next = { ...prog, inventory: inv, updatedAt: new Date().toISOString() };
     try {
       if (typeof sc.progressRepository.saveIfUnchanged === "function") {
         const ok = await sc.progressRepository.saveIfUnchanged(next, prog.updatedAt);
@@ -1657,29 +1663,36 @@ async function handleUseItem(interaction) {
   if (session.leaderId !== discordId) return interaction.editReply({ content: "❌ 只有隊長可以使用道具。" });
   if (session.state !== "ready_to_fight") return interaction.editReply({ content: "❌ 只能在層與層之間（準備攻略下一層前）使用道具。" });
 
-  // 收集所有成員背包中的爬塔藥水
+  // 收集所有成員背包中的爬塔藥水（依 itemId 疊加）
   const sc = serviceContext;
   const allPotions = [];
   for (const m of session.members) {
     const prog = await sc.progressRepository.findByPlayerId(m.discordId).catch(() => null);
     const inv = (prog?.inventory || []).filter((e) => TOWER_POTION_IDS[e.itemId]);
+    const grouped = new Map();
     for (const entry of inv) {
-      allPotions.push({ member: m, entry, prog });
+      const count = Math.max(1, Number(entry.stackCount) || 1);
+      if (grouped.has(entry.itemId)) {
+        grouped.get(entry.itemId).count += count;
+      } else {
+        grouped.set(entry.itemId, { member: m, entry, count });
+      }
     }
+    for (const g of grouped.values()) allPotions.push(g);
   }
 
   if (allPotions.length === 0) return interaction.editReply({ content: "🎒 隊伍中目前沒有任何爬塔藥水。" });
 
   // 建立藥水選單（先選藥水，最多25個選項）
-  const options = allPotions.slice(0, 25).map((p, i) => {
+  const options = allPotions.slice(0, 25).map((p) => {
     const potionInfo = TOWER_POTION_IDS[p.entry.itemId];
     const isRevive = potionInfo.effect.type === "tower_revive_pct";
     const isDead = p.member.currentHp <= 0;
     const canUse = isRevive ? isDead : !isDead;
     return {
-      label: `${p.entry.itemName}`,
+      label: `${p.entry.itemName}${p.count > 1 ? ` ×${p.count}` : ""}`,
       description: `持有者：${p.member.name}（${isRevive ? "復活，目標需已陣亡" : "回血，目標需存活"}）${canUse ? "" : " ⚠️ 持有者狀態不符"}`,
-      value: `${p.entry.uuid}:${p.member.discordId}`,
+      value: `${p.entry.itemId}:${p.member.discordId}`,
     };
   });
 
@@ -1697,14 +1710,14 @@ async function handleUseItem(interaction) {
 // ── 選完藥水後，選目標成員 ──────────────────────────────────
 async function handlePickPotion(interaction) {
   await interaction.deferUpdate();
-  const [itemUuid, ownerDiscordId] = interaction.values[0].split(":");
+  const [itemId, ownerDiscordId] = interaction.values[0].split(":");
   const session = [...activeSessions.values()].find((s) => s.threadId === interaction.channelId);
   if (!session) return interaction.editReply({ content: "❌ 找不到攻塔房間。" });
   if (session.leaderId !== interaction.user.id) return interaction.editReply({ content: "❌ 只有隊長可以使用道具。" });
 
   const sc = serviceContext;
   const ownerProg = await sc.progressRepository.findByPlayerId(ownerDiscordId).catch(() => null);
-  const entry = (ownerProg?.inventory || []).find((e) => e.uuid === itemUuid);
+  const entry = (ownerProg?.inventory || []).find((e) => e.itemId === itemId && TOWER_POTION_IDS[e.itemId]);
   if (!entry) return interaction.editReply({ content: "❌ 找不到該道具（可能已被使用）。", components: [] });
 
   const potionInfo = TOWER_POTION_IDS[entry.itemId];
@@ -1722,7 +1735,7 @@ async function handlePickPotion(interaction) {
   const memberOptions = validTargets.map((m) => ({
     label: m.name,
     description: isRevive ? "已陣亡，可復活" : `HP ${m.currentHp} / ${m.maxHp}`,
-    value: `${itemUuid}:${ownerDiscordId}:${m.discordId}`,
+    value: `${itemId}:${ownerDiscordId}:${m.discordId}`,
   }));
 
   const menu = new StringSelectMenuBuilder()
@@ -1739,22 +1752,29 @@ async function handlePickPotion(interaction) {
 // ── 選完目標後，執行藥水效果 ────────────────────────────────
 async function handleApplyPotion(interaction) {
   await interaction.deferUpdate();
-  const [itemUuid, ownerDiscordId, targetDiscordId] = interaction.values[0].split(":");
+  const [itemId, ownerDiscordId, targetDiscordId] = interaction.values[0].split(":");
   const session = [...activeSessions.values()].find((s) => s.threadId === interaction.channelId);
   if (!session) return interaction.editReply({ content: "❌ 找不到攻塔房間。", components: [] });
   if (session.leaderId !== interaction.user.id) return interaction.editReply({ content: "❌ 只有隊長可以使用道具。", components: [] });
   if (session.state !== "ready_to_fight") return interaction.editReply({ content: "❌ 只能在層與層之間使用道具。", components: [] });
 
   const sc = serviceContext;
-  // 從背包取出並消耗道具
+  // 從背包取出並消耗道具（疊加藥水：stackCount-1，歸零時移除條目）
   let entry = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     const prog = await sc.progressRepository.findByPlayerId(ownerDiscordId).catch(() => null);
     if (!prog) break;
-    const idx = (prog.inventory || []).findIndex((e) => e.uuid === itemUuid);
+    const idx = (prog.inventory || []).findIndex((e) => e.itemId === itemId && TOWER_POTION_IDS[e.itemId]);
     if (idx === -1) break;
     entry = prog.inventory[idx];
-    const next = { ...prog, inventory: prog.inventory.filter((_, i) => i !== idx), updatedAt: new Date().toISOString() };
+    const stackCount = Math.max(1, Number(entry.stackCount) || 1);
+    let newInv;
+    if (stackCount <= 1) {
+      newInv = prog.inventory.filter((_, i) => i !== idx);
+    } else {
+      newInv = prog.inventory.map((e, i) => i === idx ? { ...e, stackCount: stackCount - 1 } : e);
+    }
+    const next = { ...prog, inventory: newInv, updatedAt: new Date().toISOString() };
     try {
       if (typeof sc.progressRepository.saveIfUnchanged === "function") {
         const ok = await sc.progressRepository.saveIfUnchanged(next, prog.updatedAt);

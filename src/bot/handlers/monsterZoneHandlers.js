@@ -1700,8 +1700,13 @@ async function handleEnterBattle(interaction) {
       content: `⏳ 你目前${phase.label}，已預約下一場，約 ${formatQueueSeconds(phase.countdownSeconds)} 後${phase.actionText}。`
     }).catch(() => {});
     try {
-      while (activeSessions.has(discordId)) {
+      const reservationExpiry = Date.now() + 5 * 60 * 1000; // 最多等 5 分鐘
+      while (activeSessions.has(discordId) && Date.now() < reservationExpiry) {
         await sleep(BATTLE_QUEUE_POLL_MS);
+      }
+      if (activeSessions.has(discordId)) {
+        // 超時強制清除卡住的 session
+        deleteMonsterSession(discordId);
       }
     } finally {
       pendingBattleReservations.delete(discordId);
@@ -2349,6 +2354,7 @@ async function handleEnterBattle(interaction) {
     }
   } catch (err) {
     console.error("[monsterZoneHandlers] battle start error:", err?.message || err);
+    if (hasActiveSessionLock) deleteMonsterSession(discordId);
     await safeBattleResultReply(
       interaction,
       { content: "❌ 出戰失敗，請稍後再試。" },

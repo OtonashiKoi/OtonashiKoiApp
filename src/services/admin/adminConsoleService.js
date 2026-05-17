@@ -611,9 +611,12 @@ class AdminConsoleService {
     } else {
       // 自動更新：優先 edit 現有訊息，避免多人同時觸發時產生多個面板
       if (existingBinding?.panelMessageId) {
-        message = await channel.messages.fetch(existingBinding.panelMessageId)
-          .then((msg) => msg.edit(panelMsg))
-          .catch(() => null);
+        const existing = await channel.messages.fetch(existingBinding.panelMessageId).catch(() => null);
+        if (existing) {
+          message = await existing.edit(panelMsg).catch(() => null);
+          // edit 失敗但訊息存在 → 刪除舊面板再重發，避免頻道出現兩個面板
+          if (!message) await existing.delete().catch(() => null);
+        }
       }
       if (!message) {
         message = await channel.send(panelMsg);
