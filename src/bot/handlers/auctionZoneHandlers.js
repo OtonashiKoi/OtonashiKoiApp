@@ -29,7 +29,8 @@ const PFX = {
   sell:         "auction:sell",
   sellTab:      "auction:sell_tab:",
   sellSubTab:   "auction:sell_subtab:",
-  sellItem:     "auction:sell_item:",     // 選好物品後
+  sellSelect:   "auction:sell_select:",   // 下拉選物品（SelectMenu）
+  sellItem:     "auction:sell_item:",     // 選好物品後（相容舊流程）
   sellCurrency: "auction:sell_currency:", // 選好貨幣後
   sellModal:    "auction:sell_modal:",    // 填寫價格 Modal
   sellConfirm:  "auction:sell_confirm:",  // 確認上架
@@ -107,7 +108,7 @@ function isSellableItem(item) {
 
 // ─── 拍賣列表面板 ────────────────────────────────────
 const PAGE_SIZE = 8; // 每頁最多 8 件（2 排購買按鈕 × 4，留第 5 排給換頁）
-const SELL_PAGE_SIZE = 4;
+const SELL_PAGE_SIZE = 25; // 下拉選單最多 25 個選項
 const SELL_MAIN_TABS = [
   { tab: "all", label: "📦 全部" },
   { tab: "weapon", label: "⚔️ 武器" },
@@ -138,6 +139,32 @@ function buildSellItemLabel(item) {
   const stats = statsText ? `｜${statsText}` : "";
   const stack = item.stackCount ? ` ×${item.stackCount}` : "";
   return `${item.itemName}${enh}${stats}${stack}`.slice(0, 80);
+}
+
+// SelectMenu option label：道具名 + 加值 + 數量（最多 100 字）
+function buildSellSelectLabel(item) {
+  const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
+  const stack = (item.stackCount && item.stackCount > 1) ? ` ×${item.stackCount}` : "";
+  return `${item.itemName}${enh}${stack}`.slice(0, 100);
+}
+
+// SelectMenu option description：數值（最多 100 字）
+function buildSellSelectDescription(item) {
+  if (item.itemType === "equipment" || item.equipSlot) {
+    const stats = formatEquipStats(item.equipStats || {});
+    const tier = item.tier ? `[${item.tier}]` : "";
+    const parts = [tier, stats].filter(Boolean);
+    return parts.join(" ").slice(0, 100) || "裝備";
+  }
+  if (item.itemType === "monster_card" || item.monsterCardSkill) {
+    const tier = item.tier ? `[${item.tier}]` : "";
+    const skill = item.monsterCardSkill?.name || "";
+    return `${tier} 怪物卡${skill ? ` · ${skill}` : ""}`.trim().slice(0, 100);
+  }
+  if (ENHANCE_GEM_IDS.has(item.itemId)) {
+    return `強化石 數量：${item.stackCount || 1}`;
+  }
+  return item.itemName?.slice(0, 100) || "";
 }
 
 function sellWeaponFamily(entry) {
@@ -352,16 +379,21 @@ async function buildSellPanel(interaction, opts = {}) {
   const safePage = Math.max(0, Math.min(page, totalPages - 1));
   const pageItems = tabItems.slice(safePage * SELL_PAGE_SIZE, (safePage + 1) * SELL_PAGE_SIZE);
 
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(`${PFX.sellSelect}${tab}:${subTab}:${safePage}`)
+    .setPlaceholder("選擇要上架的物品...")
+    .addOptions(
+      pageItems.map((item) => ({
+        label: buildSellSelectLabel(item),
+        description: buildSellSelectDescription(item),
+        value: item.uuid,
+      }))
+    );
+
   const rows = [
     buildSellMainTabRow(tab),
     ...buildSellSubTabRows(tab, subTab, safePage),
-    new ActionRowBuilder().addComponents(
-      pageItems.map((item) => new ButtonBuilder()
-        .setCustomId(`${PFX.sellItem}${item.uuid}`)
-        .setLabel(buildSellItemLabel(item))
-        .setStyle(ButtonStyle.Primary)
-      )
-    ),
+    new ActionRowBuilder().addComponents(selectMenu),
   ];
 
   if (totalPages > 1) {
@@ -397,10 +429,10 @@ async function buildSellPanel(interaction, opts = {}) {
     tab === "armor" ? `防裝${subTab === "all" ? "" : ` / ${SELL_ARMOR_SUBTABS.find((d) => d.subTab === subTab)?.label || subTab}`}` :
     tab === "card" ? "卡片" :
     tab === "gem" ? "強化石" : "全部";
-  const lines = pageItems.map((item, idx) => `${safePage * SELL_PAGE_SIZE + idx + 1}. **${buildSellItemLabel(item)}**`);
+  const pageNote = totalPages > 1 ? `（第 ${safePage + 1}/${totalPages} 頁，共 ${tabItems.length} 件）` : `（共 ${tabItems.length} 件）`;
 
   return {
-    content: `🏷️ **上架商品**\n\n分類：**${tabLabel}**\n請選擇要上架的物品：\n${lines.join("\n")}`,
+    content: `🏷️ **上架商品**\n\n分類：**${tabLabel}** ${pageNote}\n請從下拉選單選擇要上架的物品：`,
     components: rows
   };
 }
@@ -849,6 +881,18 @@ async function handleAuctionSellConfirm(interaction) {
 }
 
 // ─── 刷新拍賣場頻道公開面板 ──────────────────────────
+// ─── 下拉選物品（SelectMenu）────────────────────────────
+async function handleAuctionSellSelect(interaction) {
+  await interaction.deferUpdate();
+  const itemUuid = interaction.values[0];
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`${PFX.sellCurrency}${itemUuid}:gold`).setLabel("💰 金幣").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`${PFX.sellCurrency}${itemUuid}:diamond`).setLabel("💎 鑽石").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(PFX.open).setLabel("← 取消").setStyle(ButtonStyle.Secondary),
+  );
+  await interaction.editReply({ content: "💱 **選擇定價貨幣**\n\n你想用哪種貨幣標價？", components: [row] });
+}
+
 async function refreshAuctionChannel() {
   try {
     const sc = getSC();
@@ -945,6 +989,7 @@ module.exports = {
   isAuctionButton,
   handleAuctionButton,
   handleAuctionFilterSelect,
+  handleAuctionSellSelect,
   handleAuctionModal,
   handleAuctionSellConfirm,
   publishAuctionPanel,
