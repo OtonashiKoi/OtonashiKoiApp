@@ -591,8 +591,20 @@ async function handleStreamBind(comment) {
  * @param {{ id: string, name: string, userId: string, text: string, service: string, raw: object }} comment
  */
 async function handleDonation(comment) {
+  const raw = comment?.raw || {};
+  const rawType = String(raw.type || raw.payload?.type || "").toLowerCase();
+  const looksLikeSC = rawType === "superchat" || raw.isSuperChat === true || raw.isPaid === true || raw.hasDonation === true || raw.isDonation === true;
+  if (looksLikeSC) {
+    console.log(`[Donation] SC 事件收到：userId=${comment?.userId} name=${comment?.name} type=${rawType} amount=${raw.purchaseAmount ?? raw.amount ?? raw.price ?? "?"} currency=${raw.currency} displayString=${raw.displayString}`);
+  }
+
   const donation = inferDonationReward(comment);
-  if (!donation) return false;
+  if (!donation) {
+    if (looksLikeSC) {
+      console.log(`[Donation] SC 識別失敗，略過：userId=${comment?.userId} platform=${normalizePlatform(comment?.service, comment?.userId || "")} twdAmount=${raw.purchaseAmount ?? raw.amount ?? 0}`);
+    }
+    return false;
+  }
 
   const bindingPlayer = await serviceContext.playerRepository.findByExternalId(donation.platform, donation.platformUserId).catch(() => null);
   if (!bindingPlayer?.discordId) {
@@ -613,8 +625,11 @@ async function handleDonation(comment) {
     });
 
     const duplicate = Boolean(result.duplicated);
-    if (!duplicate) {
+    if (duplicate) {
+      console.log(`[Donation] 重複發放，略過：${displayName} sourceRef=${donation.sourceRef}`);
+    } else {
       console.log(`[Donation] 發放完成 ${displayName} (${donation.platform}:${donation.platformUserId}) TWD=${donation.twdAmount} -> 💎 ${donation.diamondAmount}`);
+      await sendDiscordDm(bindingPlayer.discordId, `💎 感謝你的 NT$${donation.twdAmount} 斗內！已獲得 **${donation.diamondAmount}** 顆鑽石`).catch(() => {});
     }
     return true;
   } catch (err) {
@@ -636,6 +651,16 @@ async function handleQuery(comment) {
  * @param {{ name: string, text: string, service: string, raw: object }} comment
  */
 async function handleStreamComment(comment) {
+  if (comment.raw?._onecommeHistory) return;
+
+  // 斗內事件：不受 text 限制（SC 可能沒有留言文字）
+  if (await handleDonation(comment).catch((err) => {
+    console.error("[Donation] 處理失敗：", err?.message || err);
+    return false;
+  })) {
+    return;
+  }
+
   if (!comment.text) return;
   const streamSnapshot = recordComment(comment);
   if (typeof serviceContext._pushStreamPresence === "function") {
@@ -649,18 +674,6 @@ async function handleStreamComment(comment) {
   const text = rawText.trim();
   const stripped = text.replace(/^[!！/]+/, "").trim();
   const textLower = stripped.toLowerCase();
-
-  if (comment.raw?._onecommeHistory) {
-    return;
-  }
-
-  // 斗內事件：先處理，再進一般指令判定
-  if (await handleDonation(comment).catch((err) => {
-    console.error("[Donation] 處理失敗：", err?.message || err);
-    return false;
-  })) {
-    return;
-  }
 
   // 日麻排隊：++
   if (text === "++" || text === "＋＋") {
