@@ -1,7 +1,7 @@
 // Discord Bot Client 建立與登入
 // ------------------------------------------------
 
-const { Client, GatewayIntentBits, Events, MessageFlags, PermissionsBitField } = require("discord.js");
+const { Client, GatewayIntentBits, Events, MessageFlags, PermissionsBitField, RESTEvents } = require("discord.js");
 const config = require("../config");
 const { isAppError } = require("../shared/errors");
 const { handleCommand, handleButton, handleSelectMenu, handleModal } = require("./commands");
@@ -13,6 +13,13 @@ const { initPkArenaState } = require("./handlers/pkArenaHandlers");
 const { restoreTowerSessions } = require("./handlers/towerHandlers");
 const { runWithCache } = require("../adapters/mongo/requestCache");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
+const {
+  isTransientDiscordNetworkError,
+  markDiscordRestError,
+  markDiscordRestRateLimited,
+  resetDiscordRestAgent,
+  shouldSkipOptionalDiscordSend
+} = require("./discordRestRecovery");
 
 const RESTRICTED_ANIMATED_EMOJI_NAMES = new Set(["HUHU"]);
 const RESTRICTED_EMOJI_WARNING_DELETE_MS = 10_000;
@@ -124,6 +131,10 @@ async function auditMissingWelcomeAnnouncements(client) {
   } catch (error) {
     console.warn("[Discord] 歡迎公告補掃描失敗：", error?.message || error);
   } finally {
+    if (config.discord.guildId) {
+      const guild = client.guilds.cache.get(config.discord.guildId);
+      guild?.members?.cache?.clear?.();
+    }
     welcomeAuditRunning = false;
   }
 }
@@ -296,7 +307,7 @@ async function setupLockedChannels(client) {
 // key: `${guildId}:${userId}`，value: { lastMsg, count, timestamps: [] }
 function listAutoRepublishBindings(layout) {
   const bindings = Array.isArray(layout?.discord?.bindings) ? layout.discord.bindings : [];
-  const supported = new Set(["personal_room", "coin_shop", "daily_quest", "weekly_quest", "idle_zone", ...MONSTER_ZONE_FEATURE_KEYS]);
+  const supported = new Set(["personal_room", "player_query", "coin_shop", "idle_zone", ...MONSTER_ZONE_FEATURE_KEYS]);
   return bindings.filter((entry) => entry?.enabled && entry?.channelId && supported.has(entry.featureKey));
 }
 
@@ -315,7 +326,8 @@ async function resolveMonsterPanelState(zoneKey) {
   const participantCount = Array.isArray(state.participants) ? state.participants.length : 0;
   const damageMap = state.damageMap && typeof state.damageMap === "object" ? state.damageMap : {};
 
-  return { activeMonster, currentHp, participantCount, damageMap };
+  const worldBossPartsHp = zoneKey === "elite" ? (state.worldBossPartsHp || null) : null;
+  return { activeMonster, currentHp, participantCount, damageMap, worldBossPartsHp };
 }
 
 async function republishPanelsOnStartup() {
@@ -346,23 +358,15 @@ async function republishPanelsOnStartup() {
         continue;
       }
 
-      if (binding.featureKey === "weekly_quest") {
-        await serviceContext.adminConsoleService.publishWeeklyQuestPanel(binding.channelId, {
+      if (binding.featureKey === "player_query") {
+        await serviceContext.adminConsoleService.publishPlayerQueryPanel(binding.channelId, {
           cleanChannel: true,
           includePinned: true
         });
-        console.log(`[PanelReset] republished weekly_quest -> ${binding.channelId}`);
+        console.log(`[PanelReset] republished player_query -> ${binding.channelId}`);
         continue;
       }
 
-      if (binding.featureKey === "daily_quest") {
-        await serviceContext.adminConsoleService.publishDailyQuestPanel(binding.channelId, {
-          cleanChannel: true,
-          includePinned: true
-        });
-        console.log(`[PanelReset] republished daily_quest -> ${binding.channelId}`);
-        continue;
-      }
 
       if (binding.featureKey === "idle_zone") {
         await serviceContext.adminConsoleService.publishIdleZonePanel(binding.channelId, {
@@ -375,10 +379,11 @@ async function republishPanelsOnStartup() {
 
       if (isMonsterZoneFeatureKey(binding.featureKey)) {
         const zoneKey = featureKeyToZone(binding.featureKey);
-        const { activeMonster, currentHp, participantCount, damageMap } = await resolveMonsterPanelState(zoneKey);
+        const { activeMonster, currentHp, participantCount, damageMap, worldBossPartsHp } = await resolveMonsterPanelState(zoneKey);
         await serviceContext.adminConsoleService.publishMonsterZonePanel(binding.channelId, activeMonster, currentHp, {
           participantCount,
           damageMap,
+          worldBossPartsHp,
           cleanChannel: true,
           includePinned: true
         });
@@ -392,9 +397,15 @@ async function republishPanelsOnStartup() {
 
 let elitePanelRefreshTimer = null;
 function startElitePanelRefreshTimer() {
+  if (process.env.ENABLE_ELITE_PANEL_REFRESH !== "1") {
+    console.log("[ElitePanel] auto-refresh disabled; panels refresh on player activity");
+    return;
+  }
+
   const sec = Math.max(5, Number.parseInt(process.env.ELITE_PANEL_REFRESH_SECONDS || "10", 10) || 10);
   if (elitePanelRefreshTimer) clearInterval(elitePanelRefreshTimer);
   elitePanelRefreshTimer = setInterval(async () => {
+    if (shouldSkipOptionalDiscordSend("elite panel refresh")) return;
     await refreshEliteWorldBossPanel().catch(() => {});
   }, sec * 1000);
   console.log(`[ElitePanel] auto-refresh started (${sec}s)`);
@@ -402,14 +413,15 @@ function startElitePanelRefreshTimer() {
 
 let monsterPanelRefreshTimer = null;
 function startMonsterPanelRefreshTimer() {
-  if (process.env.DISABLE_MONSTER_PANEL_REFRESH === "1") {
-    console.log("[MonsterPanel] auto-refresh disabled by DISABLE_MONSTER_PANEL_REFRESH");
+  if (process.env.ENABLE_MONSTER_PANEL_REFRESH !== "1") {
+    console.log("[MonsterPanel] auto-refresh disabled; panels refresh on player activity");
     return;
   }
 
   const sec = Math.max(30, Number.parseInt(process.env.MONSTER_PANEL_REFRESH_SECONDS || "30", 10) || 30);
   if (monsterPanelRefreshTimer) clearInterval(monsterPanelRefreshTimer);
   monsterPanelRefreshTimer = setInterval(async () => {
+    if (shouldSkipOptionalDiscordSend("monster panel refresh")) return;
     await refreshMonsterZonePanels().catch(() => {});
   }, sec * 1000);
   console.log(`[MonsterPanel] auto-refresh started (${sec}s)`);
@@ -417,8 +429,8 @@ function startMonsterPanelRefreshTimer() {
 
 let auctionPanelRefreshTimer = null;
 function startAuctionPanelRefreshTimer() {
-  if (process.env.DISABLE_AUCTION_PANEL_REFRESH === "1") {
-    console.log("[AuctionPanel] auto-refresh disabled by DISABLE_AUCTION_PANEL_REFRESH");
+  if (process.env.ENABLE_AUCTION_PANEL_REFRESH !== "1") {
+    console.log("[AuctionPanel] auto-refresh disabled; panels refresh on player activity");
     return;
   }
 
@@ -427,6 +439,7 @@ function startAuctionPanelRefreshTimer() {
 
   auctionPanelRefreshTimer = setInterval(async () => {
     try {
+      if (shouldSkipOptionalDiscordSend("auction panel refresh")) return;
       const { refreshAuctionChannel } = require("./handlers/auctionZoneHandlers");
       await refreshAuctionChannel();
     } catch (error) {
@@ -586,6 +599,10 @@ function createBotClient() {
   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildWebhooks, GatewayIntentBits.GuildEmojisAndStickers] });
   setBotClient(client);
 
+  client.rest.on(RESTEvents.RateLimited, (rateLimitData) => {
+    markDiscordRestRateLimited(rateLimitData);
+  });
+
   client.once(Events.ClientReady, async (readyClient) => {
     console.log(`[Discord] Logged in as ${readyClient.user.tag}`);
     await setupPersonalRoomChannel(readyClient);
@@ -645,6 +662,12 @@ function createBotClient() {
         if (interaction.isModalSubmit()) { await handleModal(interaction); return; }
       } catch (error) {
         if (error?.code === 10062) return; // interaction token 已過期，無法回應，靜默忽略
+        if (isTransientDiscordNetworkError(error)) {
+          markDiscordRestError(error, "interaction handling");
+          resetDiscordRestAgent(interaction.client, error?.code || error?.message || "transient interaction error");
+          console.warn("[Discord] transient interaction reply error:", error?.message || error);
+          return;
+        }
         console.error("[Discord] command error", error);
         const message = isAppError(error) ? `❌ ${error.message}` : "發生錯誤，請稍後再試。";
         try {
@@ -654,7 +677,7 @@ function createBotClient() {
             await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
           }
         } catch (replyError) {
-          if (replyError?.code !== 10062) console.error("[Discord] reply error", replyError);
+          if (!isTransientDiscordNetworkError(replyError)) console.error("[Discord] reply error", replyError);
         }
       }
     });

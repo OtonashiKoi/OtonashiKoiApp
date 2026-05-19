@@ -540,6 +540,27 @@ function addTowerStat(stats, discordId, key, amount) {
   row[key] = Math.max(0, Math.round(Number(row[key] || 0) + value));
 }
 
+function compactTowerMemberLogs(memberLogs = [], limit = 8) {
+  return (Array.isArray(memberLogs) ? memberLogs : [])
+    .slice(0, Math.max(0, Number(limit) || 0))
+    .map((entry) => ({
+      type: entry?.type || "member",
+      name: entry?.name || "???",
+      agi: entry?.agi,
+      logs: Array.isArray(entry?.logs)
+        ? entry.logs.map((log) => {
+          const lines = String(log || "").split("\n").filter(Boolean);
+          const important = lines.filter((line) => /中毒|淬毒|燒傷|流血|冰凍|擊暈|麻痺|詛咒|閃電|震盪/.test(line));
+          return [...new Set([...important.slice(-3), ...lines.slice(-2)])].slice(-4).join("\n");
+        }).filter(Boolean)
+        : [],
+      outcome: entry?.outcome,
+      monsterHpAfter: entry?.monsterHpAfter,
+      playerHpAfter: entry?.playerHpAfter,
+      partyHpAfter: Array.isArray(entry?.partyHpAfter) ? entry.partyHpAfter : [],
+    }));
+}
+
 function summarizeTowerAuras(partyEffects = []) {
   const seen = new Set();
   const lines = [];
@@ -554,6 +575,17 @@ function summarizeTowerAuras(partyEffects = []) {
     lines.push(`${source}｜${note}`);
   }
   return lines;
+}
+
+function formatTowerEndPartyStatus(members = []) {
+  const lines = (Array.isArray(members) ? members : []).map((member) => {
+    const job = member?.job || {};
+    const jobLabel = `${job.emoji ? `${job.emoji} ` : ""}${job.name || "冒險者"}`;
+    const hp = Math.max(0, Math.round(Number(member?.currentHp || 0)));
+    const maxHp = Math.max(1, Math.round(Number(member?.maxHp || member?.stats?.maxHp || 1)));
+    return `• ${member?.name || "???"}｜${jobLabel}｜HP ${hp.toLocaleString()} / ${maxHp.toLocaleString()}`;
+  });
+  return lines.length ? `**── 結束狀態 ──**\n${lines.join("\n")}` : null;
 }
 
 function buildTowerFloorSummary(stats, auraLines = []) {
@@ -855,7 +887,7 @@ async function processNextFloor(session) {
     floor,
     monsterName:   monster.name,
     scaledHp,
-    memberLogs:    fightResult.memberLogs,
+    memberLogs:    compactTowerMemberLogs(fightResult.memberLogs),
     actionOrder:   fightResult.actionOrder,
     totalRounds:   fightResult.totalRounds,
     monsterKilled: fightResult.monsterKilled,
@@ -1133,6 +1165,7 @@ async function settleTowerSession(session, reward) {
             session.failReason ? `❌ ${session.failReason}` : null,
             failTypeLabel,
             monsterHpLine,
+            formatTowerEndPartyStatus(session.members),
             "",
             isNewRec ? `🆕 **個人新紀錄！** 最高層：${session.clearedFloor} 層` : `個人最高：${m.towerRecord?.bestFloor || session.clearedFloor} 層`,
             "",
@@ -1455,30 +1488,64 @@ async function handleRanking(interaction) {
 
 // ── 常駐大廳面板 ─────────────────────────────────────────────
 async function fetchTowerHallRecords(limit = 5) {
-  if (typeof serviceContext.progressRepository.findRecentTowerRuns === "function") {
-    const recent = await serviceContext.progressRepository.findRecentTowerRuns(limit).catch(() => []);
-    if (recent.length > 0) return recent;
-  }
   return serviceContext.progressRepository.findTopByTowerRecord(limit).catch(() => []);
+}
+
+async function getStoredTowerHallPanelRef() {
+  const layout = await serviceContext.channelLayoutRepository?.get?.().catch(() => null);
+  const panel = layout?.discord?.towerHallPanel || null;
+  return {
+    channelId: panel?.channelId || config.discord.towerLobbyChannelId || "",
+    messageId: panel?.messageId || "",
+  };
+}
+
+async function saveTowerHallPanelRef(message) {
+  if (!message?.id || !message?.channelId || !serviceContext.channelLayoutRepository?.save) return;
+  const layout = await serviceContext.channelLayoutRepository.get().catch(() => ({ discord: { bindings: [] } }));
+  const discord = layout.discord || {};
+  await serviceContext.channelLayoutRepository.save({
+    ...layout,
+    discord: {
+      ...discord,
+      towerHallPanel: {
+        channelId: message.channelId,
+        messageId: message.id,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }).catch(() => {});
 }
 
 async function publishTowerHallPanel(interaction) {
   const ranking = await fetchTowerHallRecords(5);
   await interaction.reply(createTowerHallMessage(ranking));
+  const message = await interaction.fetchReply().catch(() => null);
+  await saveTowerHallPanelRef(message);
 }
 
 async function refreshHallPanel(hallMessage) {
   if (!hallMessage) return;
   const ranking = await fetchTowerHallRecords(5);
   await hallMessage.edit(createTowerHallMessage(ranking)).catch(() => {});
+  await saveTowerHallPanelRef(hallMessage);
 }
 
 async function refreshTowerHallPanelByConfig() {
   const client = getBotClient();
   if (!client?.isReady() || !config.discord.towerLobbyChannelId) return;
 
-  const channel = await client.channels.fetch(config.discord.towerLobbyChannelId).catch(() => null);
+  const storedRef = await getStoredTowerHallPanelRef();
+  const channel = await client.channels.fetch(storedRef.channelId || config.discord.towerLobbyChannelId).catch(() => null);
   if (!channel?.messages?.fetch) return;
+
+  if (storedRef.messageId) {
+    const storedMessage = await channel.messages.fetch(storedRef.messageId).catch(() => null);
+    if (storedMessage) {
+      await refreshHallPanel(storedMessage);
+      return;
+    }
+  }
 
   const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
   if (!messages) return;
@@ -1492,6 +1559,7 @@ async function refreshTowerHallPanelByConfig() {
   });
 
   if (panelMessage) await refreshHallPanel(panelMessage);
+  else console.warn(`[Tower] hall panel not found in channel ${channel.id}; please republish /發布爬塔面板`);
 }
 
 // ── Bot 重啟後從 DB 還原進行中的 session ──────────────────────
@@ -1621,8 +1689,11 @@ async function awardFloorPotionDrop(session, floor) {
     const prog = await sc.progressRepository.findByPlayerId(luckyMember.discordId).catch(() => null);
     if (!prog) break;
     const inv = [...(prog.inventory || [])];
-    const existing = inv.find((e) => e.itemId === dropped.id && e.itemType === "tower_consumable");
+    const existing = inv.find((e) => e?.itemId === dropped.id && TOWER_POTION_IDS[e.itemId]);
     if (existing) {
+      existing.itemName = potion.name;
+      existing.itemEffect = potion.effect;
+      existing.itemType = "tower_consumable";
       existing.stackCount = Math.max(1, Number(existing.stackCount) || 1) + 1;
     } else {
       inv.push({

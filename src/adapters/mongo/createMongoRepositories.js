@@ -209,16 +209,30 @@ function createMongoRepositories() {
         );
         return result.matchedCount > 0;
       },
+      // 只更新 PK 相關欄位，避免覆蓋玩家的 inventory/equipped 等資料
+      async updatePkStats(playerId, { pkRating, pkWins, pkLosses }) {
+        const now = new Date().toISOString();
+        await (await collection("progress")).updateOne(
+          { playerId },
+          { $set: { pkRating, pkWins, pkLosses, updatedAt: now } },
+          { upsert: false }
+        );
+      },
       async listAll() {
         return (await collection("progress")).find({}).toArray();
       },
       async findTopByPkRating(limit = 10) {
-        return (await collection("progress"))
-          .find({ pkRating: { $exists: true }, level: { $gte: 30 } })
-          .sort({ pkRating: -1 })
-          .limit(limit)
-          .project({ playerId: 1, displayName: 1, pkRating: 1, pkWins: 1, pkLosses: 1, level: 1 })
-          .toArray();
+        return (await collection("progress")).aggregate([
+          { $match: { level: { $gte: 30 }, $or: [{ pkWins: { $gt: 0 } }, { pkLosses: { $gt: 0 } }] } },
+          { $sort: { pkRating: -1 } },
+          { $limit: limit },
+          { $lookup: { from: "players", localField: "playerId", foreignField: "discordId", as: "_player" } },
+          { $project: {
+            playerId: 1,
+            displayName: { $ifNull: [{ $arrayElemAt: ["$_player.displayName", 0] }, "$playerId"] },
+            pkRating: 1, pkWins: 1, pkLosses: 1, level: 1
+          }}
+        ]).toArray();
       },
       async findTopByTowerRecord(limit = 10) {
         return (await collection("progress"))

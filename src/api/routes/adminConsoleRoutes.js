@@ -209,7 +209,12 @@ function createAdminConsoleRoutes(serviceContext) {
       }
       const currentHp = state.currentHp != null ? state.currentHp : (activeMonster?.calc?.maxHp ?? null);
       const participantCount = Array.isArray(state.participants) ? state.participants.length : 0;
-      const result = await serviceContext.adminConsoleService.publishMonsterZonePanel(channelId, activeMonster, currentHp, { participantCount, cleanChannel: true });
+      const result = await serviceContext.adminConsoleService.publishMonsterZonePanel(channelId, activeMonster, currentHp, {
+        participantCount,
+        damageMap: state.damageMap || {},
+        worldBossPartsHp: zone === "elite" ? (state.worldBossPartsHp || null) : null,
+        cleanChannel: true
+      });
       res.json(ok(result, "monster zone panel published"));
     } catch (error) {
       next(error);
@@ -637,4 +642,3 @@ function createAdminConsoleRoutes(serviceContext) {
 module.exports = {
   createAdminConsoleRoutes
 };
-

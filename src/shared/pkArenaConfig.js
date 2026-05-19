@@ -13,12 +13,33 @@ const PK_ARENA_BRACKETS = [
 // Rating 系統：Elo-based，初始 1500，依勝敗和等級差動態調整 K
 const PK_RATING_DEFAULT = 1500;
 const PK_RATING_MIN = 100;
+const PK_BET_ODDS_HOUSE_RATE = 0.9;
+const PK_BET_ODDS_MIN = 1.1;
+const PK_BET_ODDS_MAX = 5;
 
 function calcRatingChange(myRating, opRating, didWin) {
   const K = 32;
   const expected = 1 / (1 + Math.pow(10, (opRating - myRating) / 400));
   const score = didWin ? 1 : 0;
   return Math.round(K * (score - expected));
+}
+
+function calcPkWinProbability(myRating, opRating) {
+  const my = Number.isFinite(Number(myRating)) ? Number(myRating) : PK_RATING_DEFAULT;
+  const op = Number.isFinite(Number(opRating)) ? Number(opRating) : PK_RATING_DEFAULT;
+  return 1 / (1 + Math.pow(10, (op - my) / 400));
+}
+
+function calcPkBetOdds(myRating, opRating) {
+  const probability = Math.max(0.01, Math.min(0.99, calcPkWinProbability(myRating, opRating)));
+  const rawOdds = (1 / probability) * PK_BET_ODDS_HOUSE_RATE;
+  const clamped = Math.max(PK_BET_ODDS_MIN, Math.min(PK_BET_ODDS_MAX, rawOdds));
+  return Math.round(clamped * 100) / 100;
+}
+
+function formatPkBetOdds(odds) {
+  const value = Number.isFinite(Number(odds)) ? Number(odds) : 1;
+  return `${value.toFixed(2)}x`;
 }
 
 // BOSS 傷害加成：依 rating 區間
@@ -58,6 +79,9 @@ module.exports = {
   PK_RATING_DEFAULT,
   PK_RATING_MIN,
   calcRatingChange,
+  calcPkWinProbability,
+  calcPkBetOdds,
+  formatPkBetOdds,
   getBossBoostPct,
   getDropBoostPct,
 };

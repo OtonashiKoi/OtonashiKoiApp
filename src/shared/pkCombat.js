@@ -4,7 +4,7 @@
  * PK 玩家 vs 玩家戰鬥引擎
  *
  * 雙方都走完整的攻擊邏輯（職業技能、卡片技能、DOT、Buff/Debuff、
- * 連擊、副手追擊、盾反、格擋、斬殺、低血量爆發全部生效）。
+ * 連擊、雙持副手第二主攻、副手反擊（被攻後觸發）、盾反、格擋、斬殺全部生效）。
  * 每回合：先攻方出招 → 後攻方出招（若先攻方打死則提前結束）。
  */
 
@@ -187,6 +187,7 @@ function resolveGuaranteedStrike({
   roundDamageState,
   verbPool = COUNTER_PHRASES,
   damageLabel = "傷害",
+  allowBlock = false,
 }) {
   let atkMultiplier = Math.max(0.1, Number(sourceStats.tierDamageMultiplier) || 1);
   let critRateBonus = 0;
@@ -237,11 +238,24 @@ function resolveGuaranteedStrike({
   const attackBase = Math.max(1, Math.round(sourceStats.atk * atkMultiplier * finalDmgMult));
   const finalDef = calcEffDef();
   let dmg = Math.max(1, Math.round(rollDmg(Math.max(1, Math.round(attackBase * (1 - finalDef / 100))), sourceStats)));
+  const nonCritDamageBase = dmg;
 
   const effectiveCrit = Math.min(100, (sourceStats.crit || 0) + critRateBonus);
   const isCrit = Math.random() * 100 < effectiveCrit;
   if (isCrit) {
     dmg = Math.round(rollDmg(Math.max(1, attackBase), sourceStats) * (2.5 * critDmgMult));
+  }
+
+  let blockNote = "";
+  if (allowBlock && targetStats.blockChance > 0 && Math.random() * 100 < targetStats.blockChance) {
+    blockNote = `，但 **${targetName}** ${rand(BLOCK_PHRASES)}`;
+    if (isCrit) {
+      dmg = Math.max(1, Math.round(nonCritDamageBase));
+      blockNote += `，因對手爆擊擊破防禦，改以未爆擊傷害計算！`;
+    } else {
+      dmg = 1;
+      blockNote += `，傷害降至 **1**！`;
+    }
   }
   if (damageRedPct > 0) dmg = Math.max(1, Math.round(dmg * (1 - Math.min(95, damageRedPct) / 100)));
 
@@ -252,7 +266,7 @@ function resolveGuaranteedStrike({
   });
   const finalDamage = capResult.damage;
   targetHpRef.value -= finalDamage;
-  log.push(`⚔️ **${sourceName}** ${rand(verbPool)}，對 **${targetName}** 造成 **${finalDamage}** 點${damageLabel}！（${targetName} 剩 ${Math.max(0, targetHpRef.value)} HP）`);
+  log.push(`⚔️ **${sourceName}** ${rand(verbPool)}${blockNote}，對 **${targetName}** 造成 **${finalDamage}** 點${damageLabel}！（${targetName} 剩 ${Math.max(0, targetHpRef.value)} HP）`);
   pushCappedNotice(log, targetName, capResult.capped);
   return { damage: finalDamage, crit: isCrit, killed: targetHpRef.value <= 0 };
 }
@@ -473,6 +487,7 @@ function attackerTurn({
           roundDamageState,
           verbPool: COUNTER_PHRASES,
           damageLabel: "傷害",
+          allowBlock: true,
         });
         if (strike.killed) killed = true;
       }
@@ -490,6 +505,11 @@ function attackerTurn({
       // bonus_vs_debuffed 效果（若有的話，從 atkActive 找）
       const bvd = atkActive.filter(e => e.key === 'bonus_vs_debuffed' && effectIsActive(e, round));
       for (const b of bvd) condBonus *= (1 + Math.abs(Number(b.params?.value ?? 0)) / 100);
+    }
+    // 矮人戰士：對暈眩目標增傷
+    if (Number(atkStats.dwarfWarriorBonusVsStunnedPct) > 0) {
+      const defIsStunned = defActive.some(e => e.key === 'stun' && effectIsActive(e, round));
+      if (defIsStunned) condBonus *= (1 + Number(atkStats.dwarfWarriorBonusVsStunnedPct) / 100);
     }
 
     const attackBase = Math.max(1, Math.round(atkStats.atk * atkMultiplier * finalDmgMult * condBonus));
@@ -595,7 +615,11 @@ function attackerTurn({
     }
 
     if (!killed) {
-      const reactiveCounterEffects = getDefReactionEffects('counter_attack');
+      // 同時支援 counter_attack（主動效果）和 counter（城牆衛兵卡等卡片效果）
+      const reactiveCounterEffects = [
+        ...getDefReactionEffects('counter_attack'),
+        ...getDefReactionEffects('counter'),
+      ];
       for (const counterEff of reactiveCounterEffects) {
         const triggerChance = Number(counterEff.params?.value ?? 100);
         if (Math.random() * 100 >= triggerChance) continue;
@@ -643,7 +667,10 @@ function attackerTurn({
 
     // ── 擊暈（槌類，非爆擊）───────────────────────────────
     if (!killed && !isCrit) {
-      const effectiveStun = (atkStats.stunChance || 0);
+      // 矮人戰士：高血量擊暈加成（HP > 60%）
+      const dwarfStunBonus = (Number(atkStats.dwarfWarriorHighHpStunBoost) > 0 && atkHpRef.value >= Math.ceil((atkStats.maxHp || 1) * 0.60))
+        ? Number(atkStats.dwarfWarriorHighHpStunBoost) : 0;
+      const effectiveStun = (atkStats.stunChance || 0) + dwarfStunBonus;
       if (effectiveStun > 0 && Math.random() * 100 < effectiveStun) {
         const weaponStunDur = atkStats.stunDuration || 3;
         defActive = addOrStackEffect(defActive, {
@@ -764,6 +791,10 @@ function attackerTurn({
           sourceId: `${slot}:${slotItem.uuid || slotItem.itemId || cardName}`
         };
         entry.params.sourceName = atkName;
+        // caster_atk_pct DOT 需要儲存施法者的實際 ATK，否則 tick 時 base=1
+        if (!entry.params.casterAtk && entry.params.mode === 'caster_atk_pct') {
+          entry.params.casterAtk = atkStats.atk;
+        }
         if (shouldApplyAsImmediateHeal(pe)) {
           const healBase = pp.mode === 'flat'
             ? Math.max(1, Number(pp.value ?? 0))
@@ -791,7 +822,7 @@ function attackerTurn({
         }
         if (isImmediateDamage && (pe.target === 'enemy' || OFFENSIVE_KEYS.has(pe.key))) {
           const immediateBase = pp.mode === 'caster_atk_pct'
-            ? Math.max(1, Number(pp.casterAtk || 1))
+            ? Math.max(1, atkStats.atk)
             : defStats.maxHp;
           const pct = Number(pp.value ?? (
             pe.key === 'lightning' ? 0.2 :
@@ -865,6 +896,38 @@ function attackerTurn({
       if (defHpRef.value <= 0) killed = true;
     }
   }
+  }
+
+  // ── 副手第二主攻（雙持：主手非雙手武器 + 副手武器）────────────────────────
+  if (!killed && atkStats.isDualWield) {
+    if (stunRoundsLeft <= 0 && Math.random() * 100 >= hitChance) {
+      log.push(`💨 **${defName}** ${rand(DODGE_PHRASES)}，躲過了副手攻擊！`);
+    } else {
+      const effDef2 = calcEffDef(0);
+      let condBonus2 = 1;
+      if (hasAnyDebuff(defActive, round)) {
+        for (const b of atkActive.filter(e => e.key === 'bonus_vs_debuffed' && effectIsActive(e, round)))
+          condBonus2 *= (1 + Math.abs(Number(b.params?.value ?? 0)) / 100);
+      }
+      const attackBase2 = Math.max(1, Math.round(atkStats.atk * atkMultiplier * finalDmgMult * condBonus2));
+      let finalDamage2 = rollDmg(Math.max(1, Math.round(attackBase2 * (1 - effDef2 / 100))));
+      const isCrit2 = Math.random() * 100 < Math.min(100, (atkStats.crit || 0) + critRateBonus);
+      if (isCrit2) {
+        finalDamage2 = Math.round(rollDmg(Math.max(1, attackBase2)) * (2.5 * critDmgMult));
+      }
+      const capResult2 = applyRoundDamageCap({ targetKey: defTargetKey, rawDamage: finalDamage2, roundDamageState });
+      finalDamage2 = capResult2.damage;
+      defHpRef.value -= finalDamage2;
+      const critNote2 = isCrit2 ? `✨**${rand(CRIT_PHRASES)}**！` : "";
+      log.push(`🗡️ ${critNote2}**${atkName}** 副手追擊，對 **${defName}** 造成 **${finalDamage2}** 點傷害！（${defName} 剩 ${Math.max(0, defHpRef.value)} HP）`);
+      pushCappedNotice(log, defName, capResult2.capped);
+      if (lifestealPct > 0) {
+        const heal2 = Math.max(1, Math.round(finalDamage2 * lifestealPct / 100));
+        atkHpRef.value = Math.min(atkStats.maxHp, atkHpRef.value + heal2);
+        log.push(`💚 **${atkName}** 吸取生命力！恢復 **${heal2}** HP`);
+      }
+      if (defHpRef.value <= 0) killed = true;
+    }
   }
 
   return { killed, atkActive, defActive };
@@ -1079,6 +1142,26 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
       aActive = r.atkActive;
       bActive = r.defActive;
       if (r.killed) { winner = "A"; roundLogs.push(log.join("\n")); break; }
+      // ── B 的副手反擊（被 A 攻擊後觸發）──────────────────────────────────────
+      if (bStats.isDualWield && bStats.counterChance > 0 && bHpRef.value > 0) {
+        if (Math.random() * 100 < bStats.counterChance) {
+          const bHitVsA = bStats.hit - aStats.dodge;
+          if (aDot.frozen || Math.random() * 100 < bHitVsA) {
+            const bEffDef = Math.min(95, Math.max(0, aStats.def));
+            const bBase = Math.max(1, Math.round(bStats.atk * (1 - bEffDef / 100)));
+            const bRoll = bStats.dmgMin + Math.random() * (bStats.dmgMax - bStats.dmgMin);
+            let bCdmg = Math.max(1, Math.round(bBase * bRoll));
+            const bCap = applyRoundDamageCap({ targetKey: "A", rawDamage: bCdmg, roundDamageState });
+            bCdmg = bCap.damage;
+            aHpRef.value -= bCdmg;
+            log.push(`🗡️ **${bName}** 副手反擊！趁隙刺出，對 **${aName}** 造成 **${bCdmg}** 點傷害！（${aName} 剩 ${Math.max(0, aHpRef.value)} HP）`);
+            pushCappedNotice(log, aName, bCap.capped);
+            if (aHpRef.value <= 0) { winner = "B"; roundLogs.push(log.join("\n")); break; }
+          } else {
+            log.push(`🗡️ **${bName}** 副手出擊，但 **${aName}** ${rand(DODGE_PHRASES)}！`);
+          }
+        }
+      }
     } else {
       log.push(`⏸️ **${aName}** 無法行動！`);
     }
@@ -1097,6 +1180,26 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
       bActive = r.atkActive;
       aActive = r.defActive;
       if (r.killed) { winner = "B"; roundLogs.push(log.join("\n")); break; }
+      // ── A 的副手反擊（被 B 攻擊後觸發）──────────────────────────────────────
+      if (aStats.isDualWield && aStats.counterChance > 0 && aHpRef.value > 0) {
+        if (Math.random() * 100 < aStats.counterChance) {
+          const aHitVsB = aStats.hit - bStats.dodge;
+          if (bDot.frozen || Math.random() * 100 < aHitVsB) {
+            const aEffDef = Math.min(95, Math.max(0, bStats.def));
+            const aBase = Math.max(1, Math.round(aStats.atk * (1 - aEffDef / 100)));
+            const aRoll = aStats.dmgMin + Math.random() * (aStats.dmgMax - aStats.dmgMin);
+            let aCdmg = Math.max(1, Math.round(aBase * aRoll));
+            const aCap = applyRoundDamageCap({ targetKey: "B", rawDamage: aCdmg, roundDamageState });
+            aCdmg = aCap.damage;
+            bHpRef.value -= aCdmg;
+            log.push(`🗡️ **${aName}** 副手反擊！趁隙刺出，對 **${bName}** 造成 **${aCdmg}** 點傷害！（${bName} 剩 ${Math.max(0, bHpRef.value)} HP）`);
+            pushCappedNotice(log, bName, aCap.capped);
+            if (bHpRef.value <= 0) { winner = "A"; roundLogs.push(log.join("\n")); break; }
+          } else {
+            log.push(`🗡️ **${aName}** 副手出擊，但 **${bName}** ${rand(DODGE_PHRASES)}！`);
+          }
+        }
+      }
     } else {
       log.push(`⏸️ **${bName}** 無法行動！`);
     }

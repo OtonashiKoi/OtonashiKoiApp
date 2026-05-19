@@ -356,8 +356,9 @@ async function buildSellPanel(interaction, opts = {}) {
   }
 
   const activeCount = await sc.auctionService.getActiveListingCount(interaction.user.id);
-  if (activeCount >= 3) {
-    return { content: "❌ 你目前已有上架中的商品，最多同時上架 3 件。", components: [] };
+  const maxListings = await sc.auctionService.getMaxListings(memberRoleIds);
+  if (activeCount >= maxListings) {
+    return { content: `❌ 你目前已有上架中的商品，最多同時上架 ${maxListings} 件。`, components: [] };
   }
 
   const progress = await sc.progressRepository.findByPlayerId(interaction.user.id);
@@ -857,6 +858,7 @@ async function handleAuctionSellConfirm(interaction) {
     const quantity = parseInt(parts[4] || "1", 10);
 
     const sc = getSC();
+    const memberRoleIds = interaction.member?.roles?.cache?.map((r) => r.id) || [];
     try {
       const auction = await sc.auctionService.listItem({
         sellerId: interaction.user.id,
@@ -865,6 +867,7 @@ async function handleAuctionSellConfirm(interaction) {
         price,
         hours,
         quantity,
+        memberRoleIds,
       });
       await interaction.editReply({
         content: `✅ **上架成功！**\n\n商品：**${fmtItem(auction.item)}**\n定價：${fmtPrice(price, currency)}\n到期：${new Date(auction.expiresAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`,
@@ -949,7 +952,7 @@ async function buildPublicAuctionPanel() {
   const auctionRulesText = [
     "📜 規則：",
     `• ${sellerRuleText}`,
-    "• 每位玩家同時最多上架 3 件",
+    "• 上架上限：鯉民 3 件 / 鯉長 5 件 / 鯉市長 7 件",
     "• 上架後不可主動撤回，商品到期可領回"
   ].join("\n");
 

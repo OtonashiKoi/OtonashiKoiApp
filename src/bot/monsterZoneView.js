@@ -143,26 +143,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const imageSource = showEliteWaitingState ? "" : appendCacheBust((monster?.imageThumbnailUrl || monster?.imageUrl || ""), imageVersion);
   if (typeof imageSource === "string" && imageSource) {
     if (/^https?:\/\//i.test(imageSource)) {
-      if (fastUpdate) {
-        embed.setThumbnail(imageSource);
-      } else {
-      try {
-        const response = await fetch(imageSource);
-        if (response.ok) {
-          const contentType = response.headers.get("content-type") || "image/png";
-          const ext = contentType.includes("jpeg") ? "jpg" : contentType.includes("webp") ? "webp" : contentType.includes("gif") ? "gif" : "png";
-          const buffer = Buffer.from(await response.arrayBuffer());
-          const fileName = `monster.${ext}`;
-          files.push(new AttachmentBuilder(buffer, { name: fileName }));
-          // 使用縮圖顯示於上方，避免描述行出現冗長標語
-          embed.setThumbnail(`attachment://${fileName}`);
-        } else {
-          embed.setThumbnail(imageSource);
-        }
-      } catch (_) {
-        embed.setImage(imageSource);
-      }
-      }
+      embed.setThumbnail(imageSource);
     } else {
       const imagePath = path.resolve(__dirname, "../web/public", imageSource.replace(/^\//, ""));
       if (fs.existsSync(imagePath)) {

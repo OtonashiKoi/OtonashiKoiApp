@@ -1,10 +1,13 @@
 require("dotenv").config();
 
+const { installRestartAudit, markBootstrapFailure } = require("./shared/restartAudit");
 const { registerCommands } = require("./bot/registerCommands");
 const { createBotClient, loginBot } = require("./bot/client");
 const { createApiServer } = require("./api/server");
 const { serviceContext } = require("./bot/runtimeContext");
 const config = require("./config");
+
+installRestartAudit();
 
 async function bootstrap() {
   await serviceContext.effectDefinitionService.syncDefaults();
@@ -31,6 +34,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
+  markBootstrapFailure(error);
   console.error("Fatal bootstrap error", error);
   process.exit(1);
 });

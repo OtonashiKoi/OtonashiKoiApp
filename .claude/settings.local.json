@@ -71,7 +71,26 @@
       "Bash(pm2 logs *)",
       "Bash(ls ~/.pm2/logs/)",
       "Read(//Users/riuchen/.pm2/logs/**)",
-      "Bash(awk -F: '$2 < 2341')"
+      "Bash(awk -F: '$2 < 2341')",
+      "Bash(node --check src/bot/handlers/towerHandlers.js)",
+      "Bash(node scripts/migrate-tower-potion-stacking.js)",
+      "Bash(node --check src/services/admin/adminConsoleService.js)",
+      "Bash(node --check src/bot/playerPanel.js)",
+      "Bash(awk -F: '$2 > 1677 && $2 < 2380')",
+      "Bash(awk 'NR>=1730 && NR<=1760' src/bot/handlers/monsterZoneHandlers.js)",
+      "Bash(awk -F: '$2 > 1730 && $2 < 2360')",
+      "Bash(awk -F: '$2 > 1730 && $2 < 2380')",
+      "Bash(awk 'NR>=2195 && NR<=2215' src/bot/handlers/monsterZoneHandlers.js)",
+      "Bash(grep -v \"^$\")",
+      "Bash(curl -s \"http://localhost:5566/api/admin/players/424228546303623168\")",
+      "Bash(curl -s \"http://localhost:5566/api/admin/player-query?discordId=424228546303623168\")",
+      "Bash(curl -s \"http://localhost:5566/api/admin/auction/listings?sellerId=424228546303623168\")",
+      "Bash(curl -s \"http://localhost:5566/api/admin/players\")",
+      "Bash(curl -s \"http://localhost:5566/api/admin/players/424228546303623168/profile\")",
+      "Bash(curl -s \"http://localhost:5566/api/admin/console/players/424228546303623168\")",
+      "Bash(curl -s \"http://localhost:5566/admin/console/players/424228546303623168\")",
+      "Bash(curl -s \"http://localhost:5566/admin/auction/list\")",
+      "Bash(grep -n \"try {$\\\\|} catch\\\\|} finally\\\\|deleteMonsterSession\\\\|hasActiveSessionLock\" /Users/riuchen/Documents/otonashiKoi_game/src/bot/handlers/monsterZoneHandlers.js)"
     ]
   }
 }

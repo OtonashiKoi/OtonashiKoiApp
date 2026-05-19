@@ -20,7 +20,8 @@ const GOLD_MAX = 10_000_000;
 const DIAMOND_MIN = 1;
 const DIAMOND_MAX = 200_000;
 const TIER_RANKS = ["E", "D", "C", "B", "A", "S", "SS"];
-const MAX_ACTIVE_LISTINGS_PER_SELLER = 3;
+const MAX_LISTINGS_BY_TIER = { E: 0, D: 0, C: 3, B: 5, A: 7, S: 7, SS: 7 };
+const DEFAULT_MAX_LISTINGS = 3;
 const FORBIDDEN_EQUIP_SLOTS = new Set(["job_eq", "title_eq"]);
 const FORBIDDEN_ITEM_TYPES = new Set(["job_badge", "title"]);
 
@@ -86,7 +87,12 @@ class AuctionService {
    * @param {number} opts.price
    * @param {number} opts.hours      1 | 6 | 12 | 24
    */
-  async listItem({ sellerId, itemUuid, currency, price, hours, quantity = 1 }) {
+  async getMaxListings(memberRoleIds = []) {
+    const highestTier = await this.playerTierService.resolveHighestTier(memberRoleIds);
+    return MAX_LISTINGS_BY_TIER[highestTier] ?? DEFAULT_MAX_LISTINGS;
+  }
+
+  async listItem({ sellerId, itemUuid, currency, price, hours, quantity = 1, memberRoleIds = [] }) {
     // 檢查拍賣場是否開啟
     if (!await this.isEnabled()) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "拍賣場目前已關閉", 400);
@@ -115,8 +121,9 @@ class AuctionService {
 
     // 已有上架中的商品
     const activeCount = await this.getActiveListingCount(sellerId);
-    if (activeCount >= MAX_ACTIVE_LISTINGS_PER_SELLER) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `你目前已有上架中的商品，最多同時上架 ${MAX_ACTIVE_LISTINGS_PER_SELLER} 件`, 400);
+    const maxListings = await this.getMaxListings(memberRoleIds);
+    if (activeCount >= maxListings) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `你目前已有上架中的商品，最多同時上架 ${maxListings} 件`, 400);
     }
 
     // 從背包取出物品

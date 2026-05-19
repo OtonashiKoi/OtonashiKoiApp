@@ -10,9 +10,10 @@ const { runPkCombat } = require("../../shared/pkCombat");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { isMonsterBattleActive, replacePkBattlePresence, isTowerBattleActive } = require("../../shared/battlePresence");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
-const { getPkArenaBracketByIndex, isLevelInPkArenaBracket, PK_RATING_DEFAULT, PK_RATING_MIN, calcRatingChange } = require("../../shared/pkArenaConfig");
+const { getPkArenaBracketByIndex, isLevelInPkArenaBracket, PK_RATING_DEFAULT, PK_RATING_MIN, calcRatingChange, getBossBoostPct, getDropBoostPct, formatPkBetOdds } = require("../../shared/pkArenaConfig");
 const {
   BET_AMOUNT,
+  getSlotBetOdds,
   ARENA_COUNT,
   createPkArenaPanelMessage,
   createPkBattleReportMessage,
@@ -35,16 +36,23 @@ const PK_BATTLE_THREAD_TTL_MS = 30 * 60 * 1000;
 const PK_BATTLE_POST_TTL_MS = 30 * 60 * 1000;
 const PK_BATTLE_POST_TITLE_PREFIX = "PK｜";
 const PK_BRACKET_REWARD_RATIO = 0.25;
+const PK_TOP_GHOST_MATCH_CHANCE = 0.35;
+const PK_TOP_GHOST_POOL_SIZE = 3;
+const PK_TOP_RANK_ANNOUNCE_CHANNEL_ID = "1498608950671839263";
 const PK_REWARD_ITEM_IDS = {
   D: "72fde92d-e33f-42fb-8d86-2e811d03f84d",
   C: "556db9e1-b084-4b22-bab5-a66c2b586184",
   B: "8fdfa7d9-f0fa-4e6a-a291-703b1e354072",
 };
+const PK_DISPLAY_NAME_CACHE_TTL_MS = 10 * 60 * 1000;
 
 // 主面板的 Message 引用（供更新用）
 let panelMessage = null;
 let persistedPanelChannelId = null;
 let persistedPanelMessageId = null;
+const pkDisplayNameCache = new Map();
+let pkQueue = [];
+let pkTopGhostCursor = 0;
 
 // ── 工具 ─────────────────────────────────────────────────────
 
@@ -66,20 +74,19 @@ function getBetSelectInfo(customId, values = []) {
   const rawValue = Array.isArray(values) ? values[0] : null;
   if (!rawValue) return null;
   const value = String(rawValue);
-  const modern = value.match(/^pkbet:(\d+):([^:]+):([^:]+):(challenger|defender|win|lose)$/);
-  if (modern) {
-    const side = modern[4] === "win" ? "challenger" : modern[4] === "lose" ? "defender" : modern[4];
-    return {
-      arenaIdx: parseInt(modern[1], 10) - 1,
-      targetDiscordId: modern[2],
-      targetName: decodeURIComponent(modern[3] || ""),
-      side
-    };
+  // 新格式（無名字）: pkbet:<idx>:<discordId>:<side>
+  const compact = value.match(/^pkbet:(\d+):([^:]+):(challenger|defender|win|lose)$/);
+  if (compact) {
+    const side = compact[3] === "win" ? "challenger" : compact[3] === "lose" ? "defender" : compact[3];
+    return { arenaIdx: parseInt(compact[1], 10) - 1, targetDiscordId: compact[2], targetName: null, side };
   }
-  const legacy = value.match(/^pkbet:(\d+):(challenger|defender|win|lose)$/);
-  if (!legacy) return null;
-  const side = legacy[2] === "win" ? "challenger" : legacy[2] === "lose" ? "defender" : legacy[2];
-  return { arenaIdx: parseInt(legacy[1], 10) - 1, targetDiscordId: null, targetName: null, side };
+  // 舊格式（含名字）: pkbet:<idx>:<discordId>:<encodedName>:<side>
+  const legacy = value.match(/^pkbet:(\d+):([^:]+):([^:]+):(challenger|defender|win|lose)$/);
+  if (legacy) {
+    const side = legacy[4] === "win" ? "challenger" : legacy[4] === "lose" ? "defender" : legacy[4];
+    return { arenaIdx: parseInt(legacy[1], 10) - 1, targetDiscordId: legacy[2], targetName: decodeURIComponent(legacy[3] || ""), side };
+  }
+  return null;
 }
 
 function cloneSlot(slot) {
@@ -102,12 +109,22 @@ function normalizeLoadedSlot(slot) {
   };
 }
 
+function normalizeQueueEntry(entry) {
+  if (!entry || typeof entry !== "object" || !entry.discordId) return null;
+  return {
+    discordId: String(entry.discordId),
+    name: entry.name || entry.displayName || String(entry.discordId),
+    level: Math.max(1, Number(entry.level || 1)),
+    queuedAt: Number(entry.queuedAt || Date.now())
+  };
+}
+
 function syncPkBattlePresence() {
   const ids = new Set();
   for (const slot of arenaSlots) {
-    if (!slot || slot.state !== "fighting") continue;
-    if (slot.challenger?.discordId) ids.add(slot.challenger.discordId);
-    if (slot.defender?.discordId) ids.add(slot.defender.discordId);
+    if (!slot || !["betting", "fighting"].includes(slot.state)) continue;
+    if (slot.challenger?.discordId && !slot.challenger?.isGhost) ids.add(slot.challenger.discordId);
+    if (slot.defender?.discordId && !slot.defender?.isGhost) ids.add(slot.defender.discordId);
   }
   replacePkBattlePresence([...ids]);
 }
@@ -133,6 +150,8 @@ function scheduleArenaBattle(idx, deadlineAt, recovered = false) {
 function getArenaStateSnapshot() {
   return {
     slots: arenaSlots.map((slot) => cloneSlot(slot)),
+    queue: pkQueue.map((entry) => ({ ...entry })),
+    topGhostCursor: pkTopGhostCursor,
     panelChannelId: panelMessage?.channelId || persistedPanelChannelId || null,
     panelMessageId: panelMessage?.id || persistedPanelMessageId || null,
   };
@@ -161,8 +180,22 @@ async function ensureArenaStateLoaded() {
         persistedPanelMessageId = state.panelMessageId || null;
         const slots = Array.isArray(state.slots) ? state.slots : [];
         for (let i = 0; i < ARENA_COUNT; i++) {
-          arenaSlots[i] = normalizeLoadedSlot(slots[i]);
+          const loadedSlot = normalizeLoadedSlot(slots[i]);
+          if (loadedSlot?.state === "waiting" && loadedSlot.challenger?.discordId) {
+            pkQueue.push(normalizeQueueEntry({
+              discordId: loadedSlot.challenger.discordId,
+              name: loadedSlot.challenger.name,
+              level: loadedSlot.challenger.level,
+              queuedAt: loadedSlot.waitDeadlineAt ? loadedSlot.waitDeadlineAt - PK_WAIT_WINDOW_MS : Date.now()
+            }));
+            arenaSlots[i] = null;
+          } else {
+            arenaSlots[i] = loadedSlot;
+          }
         }
+        pkQueue.push(...(Array.isArray(state.queue) ? state.queue.map(normalizeQueueEntry).filter(Boolean) : []));
+        pkQueue = dedupePkQueue(pkQueue);
+        pkTopGhostCursor = Math.max(0, Number(state.topGhostCursor || 0)) % PK_TOP_GHOST_POOL_SIZE;
       }
       arenaStateLoaded = true;
     })().finally(() => {
@@ -177,9 +210,11 @@ async function restorePkPanelMessage() {
   if (!client?.isReady()) return null;
 
   if (panelMessage) return panelMessage;
-  if (!persistedPanelChannelId) return null;
 
-  const channel = await client.channels.fetch(persistedPanelChannelId).catch(() => null);
+  const targetChannelId = persistedPanelChannelId || config.discord.pkArenaReportChannelId;
+  if (!targetChannelId) return null;
+
+  const channel = await client.channels.fetch(targetChannelId).catch(() => null);
   if (!channel?.isTextBased()) return null;
 
   if (persistedPanelMessageId) {
@@ -191,7 +226,7 @@ async function restorePkPanelMessage() {
   }
 
   const ranking = await fetchPkRanking(10).catch(() => []);
-  panelMessage = await channel.send(createPkArenaPanelMessage(arenaSlots, ranking)).catch(() => null);
+  panelMessage = await channel.send(createPkArenaPanelMessage(arenaSlots, ranking, pkQueue)).catch(() => null);
   if (panelMessage) {
     persistedPanelChannelId = panelMessage.channelId;
     persistedPanelMessageId = panelMessage.id;
@@ -218,6 +253,9 @@ async function restorePkArenaState() {
   }
 
   await kickExpiredWaitingSlots("restore");
+  await tryMatchPkQueue("restore").catch((err) => {
+    console.warn("[PK] restore queue match failed:", err?.message || err);
+  });
   for (let i = 0; i < ARENA_COUNT; i++) {
     const slot = arenaSlots[i];
     if (!slot) continue;
@@ -240,23 +278,191 @@ async function restorePkArenaState() {
 
 async function fetchPkRanking(limit = 10) {
   try {
-    return await serviceContext.progressRepository.findTopByPkRating(limit);
+    const ranking = await serviceContext.progressRepository.findTopByPkRating(limit);
+    return await hydratePkRankingDisplayNames(ranking);
   } catch (_) {}
   return [];
+}
+
+async function tryMatchPkQueue(trigger = "queue") {
+  await ensureArenaStateLoaded();
+  pkQueue = dedupePkQueue(pkQueue);
+  let matched = 0;
+
+  while (pkQueue.length >= 1) {
+    const idx = findEmptyArenaIndex();
+    if (idx < 0) break;
+
+    const eligible = [];
+    for (const entry of pkQueue) {
+      const id = entry.discordId;
+      if (findParticipantArenaIndex(id) >= 0) continue;
+      if (isTowerBattleActive(id) || isMonsterBattleActive(id)) continue;
+      const data = await loadPlayerData(id).catch(() => null);
+      if (!data) continue;
+      const bracket = getPkArenaBracketByIndex(idx);
+      if (!isLevelInPkArenaBracket(data.level, bracket)) continue;
+      eligible.push({ entry, data });
+    }
+
+    if (eligible.length < 1) break;
+
+    const topPkIds = await fetchTopPkPlayerIds().catch(() => new Set());
+    const shuffledEligible = shuffleEntries(eligible);
+    const realTopEligible = shuffledEligible.filter((entry) => topPkIds.has(String(entry.entry.discordId)));
+    const first = realTopEligible[0] || shuffledEligible[0];
+    let second = null;
+    const shouldUseGhost = realTopEligible.length === 0 && Math.random() < PK_TOP_GHOST_MATCH_CHANCE;
+    if (shouldUseGhost) {
+      second = await pickTopPkGhostOpponent(first.entry.discordId, idx).catch(() => null);
+    }
+    if (!second) {
+      second = shuffledEligible.find((entry) => entry.entry.discordId !== first.entry.discordId) || null;
+    }
+    if (!second) break;
+
+    const firstIsChallenger = Math.random() < 0.5;
+    const challengerSource = firstIsChallenger ? first : second;
+    const defenderSource = firstIsChallenger ? second : first;
+
+    function toParticipant(source) {
+      return {
+        discordId: source.entry.discordId,
+        name: source.entry.name,
+        level: source.data.level,
+        rating: source.data.rating,
+        isGhost: Boolean(source.isGhost),
+        stats: source.data.stats,
+        opts: {
+          equipped: source.data.equipped,
+          inventory: source.data.inventory,
+          activeEffects: source.data.activeEffects
+        }
+      };
+    }
+
+    arenaSlots[idx] = {
+      state: "betting",
+      challenger: toParticipant(challengerSource),
+      defender: toParticipant(defenderSource),
+      bets: {},
+      betDeadlineAt: Date.now() + PK_BET_WINDOW_MS,
+      waitDeadlineAt: null,
+      firstAttacker: Math.random() < 0.5 ? "challenger" : "defender",
+      battleStartedAt: null,
+      betNoticeSent: false,
+    };
+
+    const matchedIds = new Set([first.entry.discordId, second.entry.discordId]);
+    pkQueue = pkQueue.filter((entry) => !matchedIds.has(entry.discordId));
+    scheduleArenaBattle(idx, arenaSlots[idx].betDeadlineAt);
+    matched += 1;
+    console.log(`[PK] matched queue (${trigger}) arena=${idx + 1} players=${[...matchedIds].join(",")}`);
+  }
+
+  if (matched > 0) {
+    syncPkBattlePresence();
+    await saveArenaState();
+  }
+  return matched;
+}
+
+async function fetchTopPkPlayerIds(limit = PK_TOP_GHOST_POOL_SIZE) {
+  const ranking = await serviceContext.progressRepository.findTopByPkRating(limit).catch(() => []);
+  return new Set((Array.isArray(ranking) ? ranking : [])
+    .map((row) => String(row.playerId || ""))
+    .filter(Boolean));
+}
+
+function isParticipantInAnyPkSlot(discordId) {
+  if (!discordId) return false;
+  return arenaSlots.some((slot) => (
+    slot?.challenger?.discordId === discordId ||
+    slot?.defender?.discordId === discordId
+  ));
+}
+
+async function pickTopPkGhostOpponent(playerId, arenaIdx) {
+  const ranking = await serviceContext.progressRepository.findTopByPkRating(PK_TOP_GHOST_POOL_SIZE).catch(() => []);
+  if (!Array.isArray(ranking) || ranking.length === 0) return null;
+  const bracket = getPkArenaBracketByIndex(arenaIdx);
+  const start = pkTopGhostCursor % ranking.length;
+
+  for (let offset = 0; offset < ranking.length; offset += 1) {
+    const index = (start + offset) % ranking.length;
+    const row = ranking[index];
+    const id = String(row.playerId);
+    if (!id || id === String(playerId)) continue;
+    if (findQueueIndex(id) >= 0) continue;
+    if (isParticipantInAnyPkSlot(id)) continue;
+
+    const data = await loadPlayerData(id).catch(() => null);
+    if (!data || !isLevelInPkArenaBracket(data.level, bracket)) continue;
+    const name = await resolvePkDisplayName(id, row.displayName || id).catch(() => row.displayName || id);
+    pkTopGhostCursor = (index + 1) % ranking.length;
+    return {
+      isGhost: true,
+      entry: {
+        discordId: id,
+        name: `${name}（TOP幻影）`,
+        level: data.level,
+        queuedAt: Date.now()
+      },
+      data
+    };
+  }
+  return null;
+}
+
+function isDiscordSnowflake(value) {
+  return /^\d{17,20}$/.test(String(value || ""));
+}
+
+async function resolvePkDisplayName(discordId, fallbackName = "") {
+  const id = String(discordId || "");
+  if (!isDiscordSnowflake(id)) return fallbackName || id || "???";
+
+  const cached = pkDisplayNameCache.get(id);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.name;
+  }
+
+  let name = "";
+  const client = getBotClient();
+  if (client?.isReady() && config.discord.guildId) {
+    const guild = await client.guilds.fetch(config.discord.guildId).catch(() => null);
+    const member = await guild?.members?.fetch(id).catch(() => null);
+    name = member?.displayName || member?.user?.globalName || member?.user?.username || "";
+  }
+
+  const resolved = name || (isDiscordSnowflake(fallbackName) ? id : fallbackName) || id || "???";
+  pkDisplayNameCache.set(id, {
+    name: resolved,
+    expiresAt: Date.now() + PK_DISPLAY_NAME_CACHE_TTL_MS
+  });
+  return resolved;
+}
+
+async function hydratePkRankingDisplayNames(ranking = []) {
+  if (!Array.isArray(ranking) || ranking.length === 0) return [];
+  return await Promise.all(ranking.map(async (row) => {
+    const displayName = await resolvePkDisplayName(row.playerId, row.displayName).catch(() => row.displayName || row.playerId);
+    return { ...row, displayName };
+  }));
 }
 
 async function refreshPanel() {
   if (!panelMessage) return;
   try {
     const ranking = await fetchPkRanking(10);
-    await panelMessage.edit(createPkArenaPanelMessage(arenaSlots, ranking));
+    await panelMessage.edit(createPkArenaPanelMessage(arenaSlots, ranking, pkQueue));
   } catch (_) {}
 }
 
 function buildPkMentionList(slot, betPayouts = []) {
   const ids = new Set();
-  if (slot?.challenger?.discordId) ids.add(slot.challenger.discordId);
-  if (slot?.defender?.discordId) ids.add(slot.defender.discordId);
+  if (slot?.challenger?.discordId && !slot.challenger?.isGhost) ids.add(slot.challenger.discordId);
+  if (slot?.defender?.discordId && !slot.defender?.isGhost) ids.add(slot.defender.discordId);
   for (const bet of Object.values(slot?.bets || {})) {
     if (bet?.discordId) ids.add(bet.discordId);
   }
@@ -266,22 +472,28 @@ function buildPkMentionList(slot, betPayouts = []) {
 
 function collectPkMentionIds(slot) {
   return [...new Set([
-    slot?.challenger?.discordId,
-    slot?.defender?.discordId,
+    slot?.challenger?.isGhost ? null : slot?.challenger?.discordId,
+    slot?.defender?.isGhost ? null : slot?.defender?.discordId,
     ...Object.values(slot?.bets || {}).map((bet) => bet?.discordId).filter(Boolean)
   ].filter(Boolean))];
 }
 
 function collectPkParticipantIds(slot) {
   return [...new Set([
-    slot?.challenger?.discordId,
-    slot?.defender?.discordId,
+    slot?.challenger?.isGhost ? null : slot?.challenger?.discordId,
+    slot?.defender?.isGhost ? null : slot?.defender?.discordId,
   ].filter(Boolean))];
 }
 
+function formatPkParticipantForNotice(participant, fallback) {
+  if (!participant?.discordId) return fallback;
+  if (participant.isGhost) return participant.name || fallback;
+  return `<@${participant.discordId}>`;
+}
+
 function buildPkBattleNotice(slot) {
-  const challMention = slot?.challenger?.discordId ? `<@${slot.challenger.discordId}>` : "挑戰者";
-  const defMention = slot?.defender?.discordId ? `<@${slot.defender.discordId}>` : "應戰者";
+  const challMention = formatPkParticipantForNotice(slot?.challenger, "挑戰者");
+  const defMention = formatPkParticipantForNotice(slot?.defender, "應戰者");
   return {
     content: `💰 PK可以下注了 ${challMention} ⚔️ ${defMention}`,
     allowedMentions: {
@@ -298,9 +510,40 @@ function sleep(ms) {
 function findParticipantArenaIndex(discordId) {
   if (!discordId) return -1;
   return arenaSlots.findIndex((slot) => (
-    slot?.challenger?.discordId === discordId ||
-    slot?.defender?.discordId === discordId
+    (slot?.challenger?.discordId === discordId && !slot.challenger?.isGhost) ||
+    (slot?.defender?.discordId === discordId && !slot.defender?.isGhost)
   ));
+}
+
+function findQueueIndex(discordId) {
+  if (!discordId) return -1;
+  return pkQueue.findIndex((entry) => String(entry.discordId) === String(discordId));
+}
+
+function dedupePkQueue(queue = []) {
+  const seen = new Set();
+  const result = [];
+  for (const entry of queue) {
+    const normalized = normalizeQueueEntry(entry);
+    if (!normalized || seen.has(normalized.discordId)) continue;
+    if (findParticipantArenaIndex(normalized.discordId) >= 0) continue;
+    seen.add(normalized.discordId);
+    result.push(normalized);
+  }
+  return result.sort((a, b) => Number(a.queuedAt || 0) - Number(b.queuedAt || 0));
+}
+
+function findEmptyArenaIndex() {
+  return arenaSlots.findIndex((slot) => !slot || (!slot.challenger && !slot.defender));
+}
+
+function shuffleEntries(entries = []) {
+  const copy = [...entries];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 }
 
 function formatPkPostTime(date = new Date()) {
@@ -409,6 +652,9 @@ async function updatePkRatings(sc, slot, result, challFirst) {
   const defId   = slot.defender?.discordId;
   if (!challId || !defId || !result.winner || result.winner === "draw") return;
 
+  const beforeTop3 = await sc.progressRepository.findTopByPkRating(3).catch(() => []);
+  const beforeTop3Ids = new Set((Array.isArray(beforeTop3) ? beforeTop3 : []).map((row) => String(row.playerId || "")));
+
   const [challProg, defProg] = await Promise.all([
     sc.progressRepository.findByPlayerId(challId).catch(() => null),
     sc.progressRepository.findByPlayerId(defId).catch(() => null),
@@ -425,20 +671,59 @@ async function updatePkRatings(sc, slot, result, challFirst) {
   const challDelta = calcRatingChange(challRating, defRating, challWon);
   const defDelta   = calcRatingChange(defRating, challRating, !challWon);
 
-  challProg.pkRating = Math.max(PK_RATING_MIN, challRating + challDelta);
-  challProg.pkWins   = (challProg.pkWins   || 0) + (challWon ? 1 : 0);
-  challProg.pkLosses = (challProg.pkLosses || 0) + (challWon ? 0 : 1);
-  challProg.updatedAt = new Date().toISOString();
+  const newChallRating = Math.max(PK_RATING_MIN, challRating + challDelta);
+  const newChallWins   = (challProg.pkWins   || 0) + (challWon ? 1 : 0);
+  const newChallLosses = (challProg.pkLosses || 0) + (challWon ? 0 : 1);
 
-  defProg.pkRating = Math.max(PK_RATING_MIN, defRating + defDelta);
-  defProg.pkWins   = (defProg.pkWins   || 0) + (challWon ? 0 : 1);
-  defProg.pkLosses = (defProg.pkLosses || 0) + (challWon ? 1 : 0);
-  defProg.updatedAt = new Date().toISOString();
+  const newDefRating   = Math.max(PK_RATING_MIN, defRating + defDelta);
+  const newDefWins     = (defProg.pkWins   || 0) + (challWon ? 0 : 1);
+  const newDefLosses   = (defProg.pkLosses || 0) + (challWon ? 1 : 0);
 
+  // 只更新 PK 統計欄位，避免全量覆寫而蓋掉同時發生的 inventory/progress 變更
   await Promise.all([
-    sc.progressRepository.save(challProg).catch(() => {}),
-    sc.progressRepository.save(defProg).catch(() => {}),
+    sc.progressRepository.updatePkStats(challId, {
+      pkRating: newChallRating, pkWins: newChallWins, pkLosses: newChallLosses,
+    }).catch(() => {}),
+    sc.progressRepository.updatePkStats(defId, {
+      pkRating: newDefRating, pkWins: newDefWins, pkLosses: newDefLosses,
+    }).catch(() => {}),
   ]);
+
+  await announceNewPkTop3Entrants(sc, beforeTop3Ids).catch((err) => {
+    console.warn("[PK] top3 announce failed:", err?.message || err);
+  });
+}
+
+async function announceNewPkTop3Entrants(sc, beforeTop3Ids) {
+  const afterTop3 = await sc.progressRepository.findTopByPkRating(3).catch(() => []);
+  if (!Array.isArray(afterTop3) || afterTop3.length === 0) return;
+
+  const newcomers = afterTop3
+    .map((row, index) => ({ ...row, rank: index + 1 }))
+    .filter((row) => row.playerId && !beforeTop3Ids.has(String(row.playerId)));
+  if (newcomers.length === 0) return;
+
+  const client = getBotClient();
+  if (!client?.isReady()) return;
+  const channel = await client.channels.fetch(PK_TOP_RANK_ANNOUNCE_CHANNEL_ID).catch(() => null);
+  if (!channel?.isTextBased?.()) return;
+
+  const medal = ["🥇", "🥈", "🥉"];
+  for (const row of newcomers) {
+    const id = String(row.playerId);
+    const name = await resolvePkDisplayName(id, row.displayName || id).catch(() => row.displayName || id);
+    const rating = Math.round(Number(row.pkRating ?? PK_RATING_DEFAULT));
+    const wins = Number(row.pkWins || 0);
+    const losses = Number(row.pkLosses || 0);
+    await channel.send({
+      content: [
+        `🏆 **PK 新王者登榜！**`,
+        `${medal[row.rank - 1] || `#${row.rank}`} **${name}** 登上 Rating 排行榜第 ${row.rank} 名`,
+        `Rating：**${rating} 分**｜戰績：${wins}勝${losses}敗`
+      ].join("\n"),
+      allowedMentions: { parse: [] }
+    }).catch(() => {});
+  }
 }
 
 async function grantPkBracketRewards(sc, slot, result, arenaIdx) {
@@ -451,6 +736,7 @@ async function grantPkBracketRewards(sc, slot, result, arenaIdx) {
 
   for (const participant of [slot?.challenger, slot?.defender]) {
     if (!participant?.discordId) continue;
+    if (participant.isGhost) continue;
     const displayName = participant.name || participant.discordId;
 
     if (rewardGold > 0) {
@@ -485,7 +771,8 @@ async function grantPkBracketRewards(sc, slot, result, arenaIdx) {
   if (rewardGold > 0 || rewardExp > 0) {
     const rewardParts = [`EXP +${rewardExp}`];
     if (rewardGold > 0) rewardParts.push(`金幣 +${rewardGold}`);
-    rewards.unshift(`🎁 **PK區間獎勵（${bracketName}）**：每位參賽者 ${rewardParts.join("、")}`);
+    const hasGhost = Boolean(slot?.challenger?.isGhost || slot?.defender?.isGhost);
+    rewards.unshift(`🎁 **PK區間獎勵（${bracketName}）**：${hasGhost ? "真人參賽者" : "每位參賽者"} ${rewardParts.join("、")}`);
   } else {
     rewards.unshift(`🎁 **PK區間獎勵（${bracketName}）**：固定獎勵為強化石，實際掉落如下。`);
   }
@@ -752,14 +1039,21 @@ async function loadPlayerData(discordId) {
   const inventory     = Array.isArray(progress.inventory) ? progress.inventory : [];
   const activeEffects = Array.isArray(progress.activeEffects) ? progress.activeEffects : [];
   const pStats   = calcPlayerStats(attrs, equipped, activeEffects, inventory);
-  return { stats: pStats, equipped, inventory, activeEffects, level: Math.max(1, Number(progress.level || 1)) };
+  return {
+    stats: pStats,
+    equipped,
+    inventory,
+    activeEffects,
+    level: Math.max(1, Number(progress.level || 1)),
+    rating: Math.max(PK_RATING_MIN, Number(progress.pkRating ?? PK_RATING_DEFAULT) || PK_RATING_DEFAULT),
+  };
 }
 
 function getDisplayName(interaction) {
   return interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
 }
 
-// ── 入場 ─────────────────────────────────────────────────────
+// ── 隨機配對排隊 ─────────────────────────────────────────────
 async function handleJoin(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   await ensureArenaStateLoaded();
@@ -767,41 +1061,10 @@ async function handleJoin(interaction) {
   const sc   = serviceContext;
   const discordId = interaction.user.id;
   const name  = getDisplayName(interaction);
-  const idx   = getArenaIndex(interaction.customId);
 
-  if (idx < 0 || idx >= ARENA_COUNT) {
-    await interaction.editReply({ content: "❌ 無效的擂台。" });
-    return;
-  }
-
-  if (isTowerBattleActive(discordId)) {
-    await interaction.editReply({ content: "❌ 你目前正在組隊攻塔，不能同時參與 PK。請先解散隊伍。" });
-    return;
-  }
-  if (isMonsterBattleActive(discordId)) {
-    await interaction.editReply({ content: "❌ 你目前正在打怪，不能同時參與 PK。" });
-    return;
-  }
-
-  await kickExpiredWaitingSlots("join");
-  const slot = arenaSlots[idx];
-
-  // 已有兩人或戰鬥中
-  if (slot && (slot.state === "fighting" || slot.state === "betting" || (slot.challenger && slot.defender))) {
-    await interaction.editReply({ content: "❌ 此擂台已滿員，請選其他擂台。" });
-    return;
-  }
-
-  // 同一玩家同時只能存在於一個擂台
   const existingArenaIdx = findParticipantArenaIndex(discordId);
-  if (existingArenaIdx >= 0 && existingArenaIdx !== idx) {
-    await interaction.editReply({ content: `⚠️ 你已在**擂台 ${existingArenaIdx + 1}** 參與 PK，請先結束這場再進入其他擂台。` });
-    return;
-  }
-
-  // 同一玩家不能重複加入同一擂台
-  if (slot?.challenger?.discordId === discordId) {
-    await interaction.editReply({ content: "⚠️ 你已在此擂台等待對手，請稍候。" });
+  if (existingArenaIdx >= 0) {
+    await interaction.editReply({ content: `⚠️ 你已在**擂台 ${existingArenaIdx + 1}** 的配對場次中，這場結束前不能重新排隊。` });
     return;
   }
 
@@ -819,70 +1082,50 @@ async function handleJoin(interaction) {
     return;
   }
 
-  const participant = {
-    discordId,
-    name,
-    level: pData.level,
-    stats: pData.stats,
-    opts: { equipped: pData.equipped, inventory: pData.inventory, activeEffects: pData.activeEffects }
-  };
-  const bracket = getPkArenaBracketByIndex(idx);
+  const bracket = getPkArenaBracketByIndex(0);
   if (!isLevelInPkArenaBracket(pData.level, bracket)) {
-    const rangeText = bracket.maxLevel != null
-      ? `Lv.${bracket.minLevel}～${bracket.maxLevel}`
-      : `Lv.${bracket.minLevel}以上`;
-    const validArenas = bracket.maxLevel != null
-      ? bracket.minLevel <= 10
-        ? "①②"
-        : "③④"
-      : "⑤⑥⑦";
-    await interaction.editReply({ content: `⚠️ 你的等級為 **Lv.${pData.level}**，只能進入 **${rangeText}** 的擂台。請改點 **${validArenas}**。` });
+    await interaction.editReply({ content: `⚠️ 你的等級為 **Lv.${pData.level}**，PK 擂台需要 **Lv.${bracket.minLevel}以上**。` });
     return;
   }
 
-  if (!slot || !slot.challenger) {
-    // 第一人進場 → 挑戰者
-    arenaSlots[idx] = {
-      state: "waiting",
-      challenger: participant,
-      defender:   null,
-      bets:       {},
-      betDeadlineAt: null,
-      waitDeadlineAt: Date.now() + PK_WAIT_WINDOW_MS,
-      firstAttacker: null,
-      battleStartedAt: null,
-    };
-    syncPkBattlePresence();
-    await interaction.editReply({ content: `✅ 你已進入**擂台 ${idx + 1}**，等待對手應戰中…` });
-  } else {
-    // 第二人進場 → 應戰者，開始下注倒數
-    const challName = slot.challenger.name;
-    arenaSlots[idx] = {
-      ...slot,
-      state:       "betting",
-      defender:    participant,
-      betDeadlineAt: Date.now() + PK_BET_WINDOW_MS,
-      waitDeadlineAt: null,
-      firstAttacker: Math.random() < 0.5 ? "challenger" : "defender",
-      battleStartedAt: null,
-      betNoticeSent: false,
-    };
-    syncPkBattlePresence();
-    await interaction.editReply({
-      content: `✅ 你已應戰 **${challName}** 於**擂台 ${idx + 1}**！\n⏳ 下注倒數 **1 分鐘**開始，其他玩家可押注誰會贏。`
-    });
-
-    // 1 分鐘後自動開打（以絕對時間儲存，重啟後可重建）
-    scheduleArenaBattle(idx, arenaSlots[idx].betDeadlineAt);
-
-    try {
-      await sendPkBattleNotice(arenaSlots[idx]);
-      arenaSlots[idx].betNoticeSent = true;
-    } catch (_) {}
+  if (findQueueIndex(discordId) >= 0) {
+    await interaction.editReply({ content: `⚠️ 你已在 PK 隊列中，目前排隊人數：**${pkQueue.length}**。\n排隊期間可以玩其他內容；要取消請按「離開排隊」。` });
+    return;
   }
 
+  pkQueue.push({ discordId, name, level: pData.level, queuedAt: Date.now() });
+  pkQueue = dedupePkQueue(pkQueue);
+  await saveArenaState();
+  await tryMatchPkQueue("join");
+  const matchedArenaIdx = findParticipantArenaIndex(discordId);
+  const matchedSlot = matchedArenaIdx >= 0 ? arenaSlots[matchedArenaIdx] : null;
+  const opponent = matchedSlot?.challenger?.discordId === discordId
+    ? matchedSlot?.defender
+    : matchedSlot?.challenger;
+  const opponentName = opponent?.name || "對手";
+  await interaction.editReply({
+    content: matchedArenaIdx >= 0
+      ? `✅ 已加入隊列並完成配對！\n對手：**${opponentName}**\n擂台：**${matchedArenaIdx + 1}**｜請回 PK 面板查看下注倒數。`
+      : `✅ 已加入 PK 隊列，目前排隊人數：**${pkQueue.length}**。\n排隊期間可以玩其他內容；配對成功後會鎖定 PK 狀態。`
+  });
   await saveArenaState();
   await refreshPanel();
+}
+
+async function handleLeaveQueue(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await ensureArenaStateLoaded();
+
+  const discordId = interaction.user.id;
+  const before = pkQueue.length;
+  pkQueue = pkQueue.filter((entry) => String(entry.discordId) !== String(discordId));
+  if (pkQueue.length === before) {
+    await interaction.editReply({ content: "⚠️ 你目前不在 PK 排隊隊列中。" });
+    return;
+  }
+  await saveArenaState();
+  await refreshPanel();
+  await interaction.editReply({ content: `✅ 已離開 PK 排隊隊列，目前排隊人數：**${pkQueue.length}**。` });
 }
 
 // ── 下注 ─────────────────────────────────────────────────────
@@ -948,6 +1191,8 @@ async function handleBetRequest(interaction, betInfo) {
   const target = targetSide === "challenger" ? slot.challenger : slot.defender;
   const targetName = betInfo.targetName || target?.name || (targetSide === "challenger" ? slot.challenger?.name : slot.defender?.name) || "對手";
   const targetDiscordId = target?.discordId || betInfo.targetDiscordId || null;
+  const odds = getSlotBetOdds(slot, targetSide);
+  const payout = Math.floor(BET_AMOUNT * odds);
 
   slot.bets[discordId] = {
     discordId,
@@ -955,12 +1200,14 @@ async function handleBetRequest(interaction, betInfo) {
     targetDiscordId,
     targetName,
     amount: BET_AMOUNT,
+    odds,
+    payout,
     name: getDisplayName(interaction),
   };
   syncPkBattlePresence();
   await saveArenaState();
 
-  await interaction.editReply({ content: `✅ 已押注 **${BET_AMOUNT}** 🪙 → **${targetName}** 獲勝！` });
+  await interaction.editReply({ content: `✅ 已押注 **${BET_AMOUNT}** 🪙 → **${targetName}** 獲勝！\n賠率 **${formatPkBetOdds(odds)}**，猜中返還 **${payout}** 🪙。` });
 
   await refreshPanel();
 }
@@ -1017,28 +1264,26 @@ async function startBattle(idx, { recovered = false } = {}) {
           ? (challFirst ? "defender" : "challenger")
           : null; // 平局
 
-    const winnerPot = Object.values(slot.bets).reduce((s, b) => s + b.amount, 0);
-    const winnerBetters = Object.entries(slot.bets).filter(([, b]) => b.side === winningSide);
-
     for (const [bid, bet] of Object.entries(slot.bets)) {
     if (!winningSide) {
       // 平局退還
+      const refundAmount = Math.max(0, Number(bet.amount || BET_AMOUNT));
       await sc.rewardService.grantCurrency({
         discordId: bid, displayName: bet.name,
-        currencyType: "gold", amount: BET_AMOUNT,
+        currencyType: "gold", amount: refundAmount,
         source: CURRENCY_SOURCES.PK_BET_REFUND, operator: "pk:bet_refund",
       }).catch(() => {});
-      betPayouts.push(`↩️ **${bet.name}** 退還 ${BET_AMOUNT} 🪙（平局）`);
+      betPayouts.push(`↩️ **${bet.name}** 退還 ${refundAmount} 🪙（平局）`);
     } else if (bet.side === winningSide) {
-      // 均分彩池
-      const share = winnerBetters.length > 0 ? Math.floor(winnerPot / winnerBetters.length) : 0;
-      if (share > 0) {
+      const odds = Number(bet.odds || getSlotBetOdds(slot, bet.side));
+      const payout = Math.max(0, Math.floor(Number(bet.amount || BET_AMOUNT) * odds));
+      if (payout > 0) {
         await sc.rewardService.grantCurrency({
           discordId: bid, displayName: bet.name,
-          currencyType: "gold", amount: share,
+          currencyType: "gold", amount: payout,
           source: CURRENCY_SOURCES.PK_BET_WIN, operator: "pk:bet_win",
         }).catch(() => {});
-        betPayouts.push(`🏆 **${bet.name}** 獲得 ${share} 🪙`);
+        betPayouts.push(`🏆 **${bet.name}** 賠率 ${formatPkBetOdds(odds)}，返還 ${payout} 🪙`);
       }
       } else {
         betPayouts.push(`💸 **${bet.name}** 下注失敗，損失 ${bet.amount} 🪙`);
@@ -1064,6 +1309,9 @@ async function startBattle(idx, { recovered = false } = {}) {
     arenaSlots[idx] = null;
     syncPkBattlePresence();
     await saveArenaState();
+    await tryMatchPkQueue("battle-end").catch((err) => {
+      console.warn("[PK] queue match after battle failed:", err?.message || err);
+    });
     await refreshPanel();
   } finally {
     activeBattleLocks.delete(idx);
@@ -1074,14 +1322,49 @@ async function startBattle(idx, { recovered = false } = {}) {
 async function handleRefresh(interaction) {
   await ensureArenaStateLoaded();
   const ranking = await fetchPkRanking(10);
-  await interaction.update(createPkArenaPanelMessage(arenaSlots, ranking));
+  await interaction.update(createPkArenaPanelMessage(arenaSlots, ranking, pkQueue));
+}
+
+async function handleMyRecord(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const discordId = interaction.user.id;
+  const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username || discordId;
+  const progress = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
+  if (!progress) {
+    await interaction.editReply("❌ 找不到你的玩家資料，請先建立角色。");
+    return;
+  }
+
+  const rating = Math.round(Number(progress.pkRating ?? PK_RATING_DEFAULT));
+  const wins = Number(progress.pkWins || 0);
+  const losses = Number(progress.pkLosses || 0);
+  const total = wins + losses;
+  const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
+  const level = Number(progress.level || 1);
+  const bossBoostPct = getBossBoostPct(rating);
+  const dropBoostPct = getDropBoostPct(rating);
+  const ranking = await fetchPkRanking(100).catch(() => []);
+  const rankIndex = ranking.findIndex((row) => String(row.playerId) === String(discordId));
+  const rankText = rankIndex >= 0 ? `第 ${rankIndex + 1} 名` : total > 0 ? "未進入前 100" : "尚未參戰";
+
+  await interaction.editReply(
+    [
+      `📊 **${displayName} 的 PK 成績**`,
+      `等級：Lv.${level}`,
+      `Rating：**${rating} 分**（${rankText}）`,
+      `戰績：${wins} 勝 ${losses} 敗${total > 0 ? `｜勝率 ${winRate}%` : ""}`,
+      `加成：BOSS傷害 +${bossBoostPct}%｜掉落率 +${dropBoostPct}%`,
+      level >= 30 ? "狀態：可參加 Lv.30+ 擂台" : "狀態：Lv.30 後可參加 PK 擂台"
+    ].join("\n")
+  );
 }
 
 // ── 發布面板（指令用） ────────────────────────────────────────
 async function publishPkArenaPanel(interaction) {
   await ensureArenaStateLoaded();
   const ranking = await fetchPkRanking(10);
-  const msg = createPkArenaPanelMessage(arenaSlots, ranking);
+  const msg = createPkArenaPanelMessage(arenaSlots, ranking, pkQueue);
   await interaction.reply(msg);
   panelMessage = await interaction.fetchReply();
   persistedPanelChannelId = panelMessage?.channelId || persistedPanelChannelId;
@@ -1099,12 +1382,16 @@ function isPkArenaSelectMenu(customId) {
 }
 
 async function handlePkArenaButton(interaction) {
-  if (interaction.customId === "pk:refresh") {
-    await handleRefresh(interaction);
+  if (interaction.customId === "pk:my-record" || interaction.customId === "pk:refresh") {
+    await handleMyRecord(interaction);
     return;
   }
-  if (interaction.customId.startsWith("pk:join:")) {
+  if (interaction.customId === "pk:join-queue" || interaction.customId.startsWith("pk:join:")) {
     await handleJoin(interaction);
+    return;
+  }
+  if (interaction.customId === "pk:leave-queue") {
+    await handleLeaveQueue(interaction);
     return;
   }
   if (interaction.customId.startsWith("pk:bet:")) {
@@ -1125,6 +1412,12 @@ async function initPkArenaState() {
   arenaWatchdogTimer = setInterval(() => {
     kickExpiredWaitingSlots("watchdog").catch((err) => {
       console.warn("[PK] waiting watchdog error:", err?.message || err);
+    });
+    tryMatchPkQueue("watchdog").then((matched) => {
+      if (matched > 0) return refreshPanel();
+      return null;
+    }).catch((err) => {
+      console.warn("[PK] queue watchdog error:", err?.message || err);
     });
     kickExpiredBettingSlots("watchdog").catch((err) => {
       console.warn("[PK] watchdog error:", err?.message || err);

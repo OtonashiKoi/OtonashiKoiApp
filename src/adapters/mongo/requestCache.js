@@ -53,6 +53,12 @@ function withProgressCache(repo) {
       if (store) store.delete(`progress:${progress.playerId}`);
       return saved;
     },
+    async updatePkStats(playerId, stats) {
+      const result = await repo.updatePkStats(playerId, stats);
+      const store = storage.getStore();
+      if (store) store.delete(`progress:${playerId}`);
+      return result;
+    },
     async listAll() {
       return repo.listAll();
     },

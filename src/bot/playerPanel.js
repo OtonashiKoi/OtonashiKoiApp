@@ -1,6 +1,7 @@
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder } = require("discord.js");
 const path = require("path");
 const fs = require("fs");
+const { createHash } = require("crypto");
 const { BUTTON_IDS, createPlayerPanelMessage } = require("./playerPanelView");
 const { expToNextLevel, MAX_LEVEL } = require("../shared/progression");
 const config = require("../config");
@@ -15,6 +16,35 @@ const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
 const { MAX_ENHANCE_LEVEL, getEnhanceCost } = require("../shared/enhanceConfig");
 
 const ACTIVE_REPLY_BY_USER = new Map();
+
+// 裝備卡圖片快取：相同裝備 + 頭像不重新渲染
+const _equipCardCache = new Map(); // playerId → { hash, buffer }
+function _equipCardHash(equipped, avatarUrl, progress, player, wallet) {
+  const key = JSON.stringify({
+    eq: equipped || {},
+    lv: progress?.level,
+    job: progress?.job,
+    attrs: progress?.attributes,
+    gold: wallet?.gold,
+    name: player?.displayName,
+    avatar: avatarUrl || "",
+  });
+  return createHash("sha1").update(key).digest("hex");
+}
+async function renderEquipmentCardCached({ equipped, avatarUrl, publicDir, progress, player, wallet }) {
+  const playerId = progress?.playerId;
+  const hash = _equipCardHash(equipped, avatarUrl, progress, player, wallet);
+  const cached = playerId ? _equipCardCache.get(playerId) : null;
+  if (cached?.hash === hash) return cached.buffer;
+  const buffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress, player, wallet });
+  if (playerId) {
+    if (_equipCardCache.size >= 100) {
+      for (const k of [..._equipCardCache.keys()].slice(0, 20)) _equipCardCache.delete(k);
+    }
+    _equipCardCache.set(playerId, { hash, buffer });
+  }
+  return buffer;
+}
 const ENHANCE_MODE_NORMAL = "normal";
 const ENHANCE_MODE_GAMBLE = "gamble";
 const GAMBLE_MIN_ENHANCE_LEVEL = 1;
@@ -321,7 +351,7 @@ async function handleProfile(interaction) {
   const freshProgress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id).catch(() => null);
   const p = freshProgress || result?.progress || {};
   const attrs = p.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-  const tierLine = p.playerTier ? `\n玄家等級：**${p.playerTier}級**` : "";
+  const tierLine = p.playerTier ? `\n玩家位階：**${p.playerTier}級**` : "";
   const playerLevel = Number(p.level || 1);
   const playerExp = Number(p.exp || 0);
   const isMaxLevel = playerLevel >= MAX_LEVEL;
@@ -347,6 +377,7 @@ async function handleProfile(interaction) {
   const calcCombo = Math.ceil(cs.combo);
   const calcDodge = Math.ceil(cs.dodge || 0);
   const calcBlock = Math.ceil(cs.blockChance || 0);
+  const calcHit   = Math.ceil(cs.hit || 0);
 
   // ── 裝備屬性加成 ──
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
@@ -417,7 +448,7 @@ async function handleProfile(interaction) {
 
   // ── 職業特性區（顯示職業名稱，穿對武器時顯示特性）──
   const jobEq = equipped.job_eq || null;
-  let jobTraitAreaLine = "職業特性：無（未裝備職業裝）";
+  let jobTraitAreaLine = "職業：無（未裝備職業徽章）";
 
   if (jobEq) {
     const jobId = String(jobEq.itemId || jobEq.id || "").toLowerCase();
@@ -483,14 +514,14 @@ async function handleProfile(interaction) {
     if (isMageJob && wt && wt.startsWith("staff") && Number(cs.bypassMonsterDefPct || 0) > 0) {
       mechanicLines.push(`・法杖魔法：無視怪物 DEF ${cs.bypassMonsterDefPct}%`);
     }
-    const mechanicLine = mechanicLines.length ? `\n實際啟動：\n${mechanicLines.join("\n")}` : "";
+    const mechanicLine = mechanicLines.length ? `\n武器搭配生效：\n${mechanicLines.join("\n")}` : "";
 
     // 職業技能只讀道具庫同步後的 jobSkills，避免面板內建舊資料蓋過最新設計。
     const jobSkills = Array.isArray(jobEq.jobSkills) ? jobEq.jobSkills : [];
     const skillLine = jobSkills.length > 0
       ? `\n主動技能：每回合約35%機率從可用技能中發動1個\n${jobSkills.map(formatJobSkillLine).join("\n")}`
       : "";
-    jobTraitAreaLine = `職業技能：${jobDisplayName}${jobStatLine}${passiveLine}${mechanicLine}${skillLine}${bonusLine}`;
+    jobTraitAreaLine = `職業：${jobDisplayName}${jobStatLine}${passiveLine}${mechanicLine}${skillLine}${bonusLine}`;
   }
 
   // ── 卡片效果區（顯示已裝備卡片及其效果）──
@@ -581,20 +612,16 @@ async function handleProfile(interaction) {
   await replyAndAutoDelete(interaction,
     `🧧 **${displayName} 的冒險者履歷**${fallbackUsed ? "（資料已降級顯示）" : ""}\n` +
     `==============\n` +
-    `【職業技能】\n` +
-    `${jobTraitAreaLine}\n` +
-    `==============\n` +
-    `${cardSection}` +
-    `${npcBuffSection}` +
     `${expLine}\n` +
     `==============\n` +
     `【基本素質】\n` +
     `STR: ${fmt(attrs.str,"str")} | AGI: ${fmt(attrs.agi,"agi")} | VIT: ${fmt(attrs.vit,"vit")}\n` +
     `INT: ${fmt(attrs.int,"int")} | DEX: ${fmt(attrs.dex,"dex")} | LUK: ${fmt(attrs.luk,"luk")}\n` +
+    `※ 數字後 (+N) 為裝備加成。STR/INT→攻擊力、DEX→命中、AGI→迴避＆連擊、LUK→暴擊、VIT→減傷（只計基礎值，裝備 VIT 不加減傷）\n` +
     `==============\n` +
     `【戰鬥能力】\n` +
-    `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF: ${calcDef}\n` +
-    `🎯 CRIT: ${calcCrit}%　⚡ 連擊: ${calcCombo}%　🟢 迴避: ${calcDodge}%　🪨 格擋: ${calcBlock}%` +
+    `❤️ HP: ${calcHp}　⚔️ ATK: ${calcAtk}　🛡️ DEF(減傷): ${calcDef}%\n` +
+    `🎯 命中: ${calcHit}%　🟢 迴避: ${calcDodge}%　🪨 格擋: ${calcBlock}%　💥 暴擊: ${calcCrit}%　⚡ 連擊: ${calcCombo}%` +
     tierSummaryLine +
     effectLine + "\n" +
     tierSetLine + (tierSetLine ? "\n" : "") +
@@ -602,6 +629,11 @@ async function handleProfile(interaction) {
     equipLine + "\n" +
     (titleBonusSection ? titleBonusSection : "") +
     `==============\n` +
+    `【職業徽章】\n` +
+    `${jobTraitAreaLine}\n` +
+    `==============\n` +
+    `${cardSection}` +
+    `${npcBuffSection}` +
     `【資產】\n` +
     `💰 金幣: ${Number(wallet.gold || 0)}\n` +
     `💎 鑽石: ${Number(wallet.diamond || 0)}`
@@ -1093,6 +1125,7 @@ function buildPageRow(tab, subTab, page, totalPages, options = {}) {
 
 function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subTab = "all", options = {}) {
   const sectionMode = Boolean(options.sectionMode) || BACKPACK_SECTION_TABS.has(tab);
+  const showSectionSubTabs = sectionMode && tab === "weapon";
   const rawFiltered = filterByTab(inventory, tab, subTab);
   const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "offhand" || tab === "special" || tab === "card" || tab === "badge";
   const filtered = isEquipTab ? groupEquipmentItems(rawFiltered, tab) : sortBackpackItems(rawFiltered, tab);
@@ -1107,16 +1140,18 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
     tab === "special"? "特殊" :
     tab === "badge"  ? "職業" : "道具";
   const tabRows = buildTabRow(tab, subTab);
-  const subTabRows = sectionMode ? [] : buildSubTabRows(tab, subTab);
+  const subTabRows = (!sectionMode || showSectionSubTabs) ? buildSubTabRows(tab, subTab) : [];
 
   if (!filtered.length) {
     const components = sectionMode
-      ? [buildBackpackHomeRow()]
+      ? [...subTabRows, buildBackpackHomeRow()]
       : [...tabRows, ...subTabRows];
     return { content: header + `🎒 **背包 — ${tabLabel}**\n\n此分類目前為空。`, components };
   }
 
-  const pageSize = sectionMode && isEquipTab
+  const pageSize = showSectionSubTabs
+    ? 3
+    : sectionMode && isEquipTab
     ? 4
     : ((tab === "weapon" || tab === "armor") ? EQUIP_PAGE_SIZE : PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / pageSize);
@@ -1157,7 +1192,7 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
     lines.push(`${offset + i + 1}. **${e.itemName}**${slot}${stackDisplay}　${e.source === "monster_drop" ? `掉落自 ${e.sourceRef || "怪物"}` : `購於 ${(e.purchasedAt || "").slice(0, 10)}`}`);
   });
 
-  const rows = sectionMode ? [] : [...tabRows, ...subTabRows];
+  const rows = sectionMode ? [...subTabRows] : [...tabRows, ...subTabRows];
   const itemRows = isEquipTab
     ? pageItems.map((g, i) => buildEquipmentGroupRow(g, i, {
       tab,
@@ -1331,7 +1366,7 @@ async function buildFreshEquipmentViewPayload(interaction, notice = "") {
   const publicDir = path.resolve(__dirname, "../web/public");
   let imgBuffer = null;
   try {
-    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress, player, wallet });
+    imgBuffer = await renderEquipmentCardCached({ equipped, avatarUrl, publicDir, progress, player, wallet });
   } catch { /* 退回文字 */ }
   return buildEquipmentViewPayload({ progress, player, wallet, imgBuffer, notice });
 }
@@ -1408,7 +1443,7 @@ async function handleEquipmentView(interaction) {
   const publicDir = path.resolve(__dirname, "../web/public");
   let imgBuffer = null;
   try {
-    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress, player, wallet });
+    imgBuffer = await renderEquipmentCardCached({ equipped, avatarUrl, publicDir, progress, player, wallet });
   } catch { /* 退回文字 */ }
 
   await safeEditReply(interaction, buildPresetSelectPayload({ progress, imgBuffer }));
@@ -1444,7 +1479,7 @@ async function handlePresetSwitchSelect(interaction) {
   const publicDir = path.resolve(__dirname, "../web/public");
   let imgBuffer = null;
   try {
-    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress: freshProgress, player, wallet });
+    imgBuffer = await renderEquipmentCardCached({ equipped, avatarUrl, publicDir, progress: freshProgress, player, wallet });
   } catch { /* 退回文字 */ }
 
   await safeEditReply(interaction, buildPresetSelectPayload({ progress: freshProgress, imgBuffer }));
@@ -1478,7 +1513,7 @@ async function handleEquipPresetSwitch(interaction, targetPreset) {
   const publicDir = path.resolve(__dirname, "../web/public");
   let imgBuffer = null;
   try {
-    imgBuffer = await renderEquipmentCard({ equipped, avatarUrl, publicDir, progress: freshProgress, player, wallet });
+    imgBuffer = await renderEquipmentCardCached({ equipped, avatarUrl, publicDir, progress: freshProgress, player, wallet });
   } catch { /* 退回文字 */ }
 
   await safeEditReply(interaction, buildEquipmentViewPayload({ progress: freshProgress, player, wallet, imgBuffer }));
@@ -1657,22 +1692,58 @@ async function handleBackpackAction(interaction, action, uuid) {
     }
   }
 
+  // 丟棄：先顯示確認
+  if (action === "discard") {
+    await interaction.deferUpdate();
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const entry = (progress?.inventory || []).find(e => e.uuid === uuid);
+    if (!entry) {
+      await safeEditReply(interaction, { content: "❌ 找不到該道具。", components: [], embeds: [], files: [] });
+      return;
+    }
+    const enh = entry.enhanceLevel > 0 ? ` +${entry.enhanceLevel}` : "";
+    const stack = entry.stackCount > 1 ? ` ×${entry.stackCount}` : "";
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`backpack_discard_confirm:${uuid}`)
+        .setLabel("確定丟棄")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`backpack_view:${uuid}`)
+        .setLabel("取消")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await safeEditReply(interaction, {
+      content: `⚠️ 確定要丟棄 **${entry.itemName}${enh}${stack}** 嗎？此操作**無法復原**！`,
+      components: [row],
+      embeds: [],
+      files: [],
+    });
+    return;
+  }
+
   await interaction.deferUpdate();
   try {
-    const isUse = action === "use";
-    const result = isUse
-      ? await serviceContext.shopService.useItem(interaction.user.id, uuid, interaction.user.displayName || interaction.user.username)
-      : await serviceContext.shopService.discardItem(interaction.user.id, uuid);
-    const verb = isUse ? "使用" : "丟棄";
-    const extra = isUse && result.effectDesc ? `\n${result.effectDesc}` : "";
+    const result = await serviceContext.shopService.useItem(interaction.user.id, uuid, interaction.user.displayName || interaction.user.username);
+    const extra = result.effectDesc ? `\n${result.effectDesc}` : "";
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const inventory = progress?.inventory || [];
-    // 判斷原本在哪個 tab（根據被操作的道具欄位）
-    const tab = "item";
-    const msg = buildBackpackMessage(inventory, tab, `✅ 已${verb} **${result.itemName}**。${extra}`);
+    const msg = buildBackpackMessage(progress?.inventory || [], "item", `✅ 已使用 **${result.itemName}**。${extra}`);
     await safeEditReply(interaction, msg);
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 操作失敗：${err.message}`, components: [] });
+  }
+}
+
+async function handleBackpackDiscardConfirm(interaction, uuid) {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const result = await serviceContext.shopService.discardItem(interaction.user.id, uuid);
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const msg = buildBackpackMessage(progress?.inventory || [], "item", `✅ 已丟棄 **${result.itemName}**。`);
+    await safeEditReply(interaction, msg);
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 丟棄失敗：${err.message}`, components: [] });
   }
 }
 
@@ -1712,8 +1783,7 @@ async function handleBackpackSellConfirm(interaction, uuid, tab = "item", page =
   await interaction.deferUpdate();
   try {
     const result = await serviceContext.shopService.sellItem(interaction.user.id, uuid);
-    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const inventory = progress?.inventory || [];
+    const inventory = Array.isArray(result.inventory) ? result.inventory : [];
     const msg = buildBackpackMessage(inventory, tab, `✅ 已販售 **${result.itemName}**，獲得 💰 ${result.price} 金幣。`, page, subTab);
     await safeEditReply(interaction, msg);
   } catch (err) {
@@ -1782,8 +1852,7 @@ async function handleBackpackSellBulkExecute(interaction, uuid, tab = "item", pa
   await interaction.deferUpdate();
   try {
     const result = await serviceContext.shopService.sellItemBulk(interaction.user.id, uuid, qty);
-    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const inventory = progress?.inventory || [];
+    const inventory = Array.isArray(result.inventory) ? result.inventory : [];
     const msg = buildBackpackMessage(
       inventory, tab,
       `✅ 已批量販售 **${result.itemName}** × ${result.sellCount} 件，獲得 💰 ${result.totalGold} 金幣。`,
@@ -2600,6 +2669,10 @@ async function handleButton(interaction) {
   }
   if (id.startsWith("backpack_view:")) {
     await handleBackpackView(interaction, id.slice("backpack_view:".length));
+    return;
+  }
+  if (id.startsWith("backpack_discard_confirm:")) {
+    await handleBackpackDiscardConfirm(interaction, id.slice("backpack_discard_confirm:".length));
     return;
   }
   if (id.startsWith("backpack_use:") || id.startsWith("backpack_discard:")) {

@@ -15,11 +15,6 @@ const AVAILABLE_FEATURES = [
     description: "玩家聊天室與社群互動"
   },
   {
-    key: "daily_quest",
-    label: "每日挑戰任務面板",
-    description: "每日任務與挑戰入口"
-  },
-  {
     key: "coin_shop",
     label: "金幣商店面板",
     description: "商店與資源兌換功能"
@@ -58,11 +53,6 @@ const AVAILABLE_FEATURES = [
     key: "monster_zone_elite",
     label: "放怪區面板（精英）",
     description: "Lv.20 以上玩家可進入的精英戰鬥區"
-  },
-  {
-    key: "weekly_quest",
-    label: "每週任務面板",
-    description: "每週任務查看與獎勵領取入口"
   },
   {
     key: "idle_zone",
@@ -474,7 +464,25 @@ class AdminConsoleService {
       await this._clearChannelMessages(channel, { includePinned: options.includePinned !== false });
     }
 
+    const stored = await this.channelLayoutRepository.get();
+    const bindings = Array.isArray(stored?.discord?.bindings) ? stored.discord.bindings : [];
+    const existingBinding = bindings.find((b) => b.featureKey === "player_query");
+    if (existingBinding?.panelMessageId) {
+      await channel.messages.fetch(existingBinding.panelMessageId)
+        .then((msg) => msg.delete())
+        .catch(() => {});
+    }
+
     const message = await channel.send(createPlayerQueryPanelMessage());
+
+    const updatedBindings = bindings.map((b) =>
+      b.featureKey === "player_query" ? { ...b, panelMessageId: message.id } : b
+    );
+    if (!updatedBindings.some((b) => b.featureKey === "player_query")) {
+      updatedBindings.push(normalizeBinding({ featureKey: "player_query", channelId: targetChannelId, panelMessageId: message.id }));
+    }
+    await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
+
     return {
       channelId: targetChannelId,
       messageId: message.id
@@ -623,6 +631,8 @@ class AdminConsoleService {
         if (message && existingMsg) await existingMsg.delete().catch(() => null);
       }
     }
+
+    if (!message) return { channelId: targetChannelId, messageId: null };
 
     const updatedBindings = bindings.map((b) =>
       b.channelId === targetChannelId && b.featureKey === boundFeatureKey ? { ...b, panelMessageId: message.id } : b

@@ -1119,6 +1119,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
+    // 玩家被 DOT（中毒/流血/燒傷等）打死時，立刻結束本回合，避免之後的治療光環/世界王技能在死亡訊息後又被寫進戰報
+    if (outcome === "lose") { roundLogs.push(log.join("\n")); break; }
+
     // ── 套用來自隊伍（party）的被動 aura，例如治療師提供的每回合回復 ──
     let roundDmgMultiplier = 1; // 每回合重置，累積本回合所有 party damage aura
     let roundBossDmgMultiplier = 1;
@@ -1456,6 +1459,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 玩家攻擊 ──
+    log.push(`──── ⚔️ 你的回合 ────`);
     const attackCount = pStats.isDualWield ? 2 : 1;
     // 擊暈中：怪物無法閃避
 
@@ -1522,6 +1526,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const hpGatedEffects = procEffects.filter(effectHasHpThreshold);
         const normalProcEffects = hpGatedEffects.length > 0 ? procEffects.filter((effect) => !effectHasHpThreshold(effect)) : procEffects;
 
+        let hpGatedAppliedThisRound = false;
         if (hpGatedEffects.length > 0) {
           const result = applyCardProcEffects({
             procEffects: hpGatedEffects,
@@ -1552,6 +1557,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           options.playerActiveEffects = result.ownerActiveEffects;
           monsterActiveEffects = result.targetActiveEffects;
           if (result.applied) {
+            hpGatedAppliedThisRound = true;
             const appliedStun = result.targetActiveEffects.find(e => e.key === 'stun' && e.appliedAt === round);
             if (appliedStun) {
               const stunDur = Number(appliedStun.params?.duration?.value ?? 1);
@@ -1638,7 +1644,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             appliedAnyNormalProc = true;
           }
         }
-        if (shouldShowGenericSkillLine && appliedAnyNormalProc) {
+        if (shouldShowGenericSkillLine && appliedAnyNormalProc && !hpGatedAppliedThisRound) {
           log.push(`🎴 **${playerBattleName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
         }
       }
@@ -1790,6 +1796,30 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
+    // ── 高血量條件加成（例如職業徽章 on_high_hp）──
+    let extraHighHpCrit = 0;
+    let extraHighHpStun = 0;
+    let extraHighHpPoisonChance = 0;
+    let extraHighHpDodge = 0;
+    try {
+      const equippedCtx = options.equipped || null;
+      if (equippedCtx) {
+        const highEffects = collectEquipmentEffects(equippedCtx, 'on_high_hp', { equipped: equippedCtx, inventory: options.inventory || [] });
+        for (const he of highEffects) {
+          if (!he || !he.params) continue;
+          const thresholdPct = Number.isFinite(Number(he.params.thresholdPct)) ? Number(he.params.thresholdPct) : 90;
+          if (pHp < Math.ceil((pStats.maxHp || 1) * (thresholdPct / 100))) continue;
+          const highValue = Number(he.params.value);
+          if (!Number.isFinite(highValue)) continue;
+          if (he.key === 'crit_rate_up') extraHighHpCrit += highValue;
+          else if (he.key === 'stun_chance_up') extraHighHpStun += highValue;
+          else if (he.key === 'poison_chance_up') extraHighHpPoisonChance += highValue;
+          else if (he.key === 'dodge_up') extraHighHpDodge += Math.abs(highValue);
+        }
+      }
+    } catch (e) {}
+    playerDodgeBonus += extraHighHpDodge;
+
     for (let a = 0; a < attackCount && outcome === null && !playerIsStunned && !playerIsFrozen; a++) {
       const hitChance = (pStats.hit + playerHitBonus - playerHitPenalty) - adjustedMCalc.dodge;
       if (monsterIsStunned || Math.random() * 100 < hitChance) {
@@ -1819,28 +1849,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier)
         );
         let dmg = rollDmg(Math.max(1, Math.round(attackBase * (1 - finalDef / 100))));
-
-        // --- Compute on_high_hp bonuses (per-effect threshold) early so they affect crit checks ---
-        let extraHighHpCrit = 0;
-        let extraHighHpStun = 0;
-        try {
-          const equippedCtx = options.equipped || null;
-          if (equippedCtx) {
-            const highEffects = collectEquipmentEffects(equippedCtx, 'on_high_hp', { equipped: equippedCtx, inventory: options.inventory || [] });
-            for (const he of highEffects) {
-              if (!he || !he.params) continue;
-              const thresholdPct = Number.isFinite(Number(he.params.thresholdPct)) ? Number(he.params.thresholdPct) : 90;
-              if (pHp >= Math.ceil((pStats.maxHp || 1) * (thresholdPct / 100))) {
-                if (he.key === 'stun_chance_up' && Number.isFinite(Number(he.params.value))) {
-                  extraHighHpStun += Number(he.params.value);
-                }
-                if (he.key === 'crit_rate_up' && Number.isFinite(Number(he.params.value))) {
-                  extraHighHpCrit += Number(he.params.value);
-                }
-              }
-            }
-          }
-        } catch (e) {}
 
         // ── 弓箭手要害一擊（proc_weak_spot）──
         let weakSpotTriggered = false;
@@ -1874,7 +1882,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const nonCritDamageBase = dmg;
 
         // 爆擊（要害一擊必定爆擊）
-        const effectiveCrit = Math.min(100, (pStats.crit || 0) + playerCritRateBonus);
+        const effectiveCrit = Math.min(100, (pStats.crit || 0) + playerCritRateBonus + extraHighHpCrit);
         isCrit = weakSpotTriggered || Math.random() * 100 < effectiveCrit;
 
         let finalDamage = dmg;
@@ -1918,53 +1926,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         log.push(`⚔️ ${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
         if (weakSpotTriggered) log.push(`🎯 命中要害！傷害 ×1.5 並必定爆擊！`);
 
-        // ── 玩家吸血效果（來自卡片技能）──
-        if (playerLifestealPct > 0) {
-          const healAmt = Math.max(1, Math.round(dmg * (playerLifestealPct / 100)));
-          pHp = Math.min(pStats.maxHp, pHp + healAmt);
-          log.push(`💚 吸取生命力！恢復 **${healAmt}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
-        }
-        // ── 強力吸血效果（林地妖靈卡）──
-        if (playerLifestealStrongPct > 0) {
-          const sHeal = Math.max(1, Math.round(dmg * (playerLifestealStrongPct / 100)));
-          pHp = Math.min(pStats.maxHp, pHp + sHeal);
-          log.push(`💜 強力吸血！恢復 **${sHeal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
-        }
-
-        // ── 檢查怪物反彈傷害效果 ──
-        if (Array.isArray(monsterActiveEffects)) {
-          for (const reflectEff of monsterActiveEffects) {
-            if (reflectEff && reflectEff.key === 'reflect_damage') {
-              const reflectParams = reflectEff.params || {};
-              const reflectPercent = Number(reflectParams.reflectPercent ?? reflectParams.value ?? 50);
-              const reflectDmg = Math.max(1, Math.round(dmg * (reflectPercent / 100)));
-              pHp -= reflectDmg;
-              log.push(`🛡️ ${mName} 的甲殼反彈！你受到 **${reflectDmg}** 點反彈傷害！（你剩 ${Math.max(0, pHp)} HP）`);
-              if (pHp <= 0) { outcome = "lose"; break; }
-            }
-          }
-        }
-        // ── 怪物反擊（counter）：被玩家攻擊時，value% 機率反擊造成受到傷害的 20%──
-        if (outcome === null && Array.isArray(monsterActiveEffects)) {
-          for (const ctEff of monsterActiveEffects) {
-            if (!ctEff || ctEff.key !== 'counter') continue;
-            const ctParams = ctEff.params || {};
-            const ctDur = ctParams.duration || {};
-            if (ctDur.mode === 'turns') {
-              const ctEnd = (ctEff.appliedAt || 1) + (ctDur.value || 1);
-              if (round > ctEnd) continue;
-            }
-            const counterChance = Number(ctParams.value || 30);
-            if (Math.random() * 100 < counterChance) {
-              const counterDmgPct = Number(ctParams.counterDamagePct ?? 20);
-              const counterDmg = Math.max(1, Math.round(dmg * (counterDmgPct / 100)));
-              pHp -= counterDmg;
-              log.push(`🦀 ${mName} **反擊**！以受到傷害的 ${counterDmgPct}% 回擊，造成 **${counterDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
-              if (pHp <= 0) { outcome = "lose"; }
-            }
-            break; // 只處理第一個 counter 效果
-          }
-        }
         // 擊暈判定（爆擊不觸發）
         let stunBonus = extraHighHpStun;
         // 矮人戰士：高血量擊暈加成（>60%，需拿槌子）
@@ -1995,7 +1956,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           for (const pe of jobProfile.activeJobEffects) {
             if (pe.trigger !== 'on_hit') continue;
             if (!procEffectApplies(pe, playerHpPct, monsterHpPct)) continue;
-            if (Math.random() * 100 >= (Number(pe.chance) || 100)) continue;
+            const procChanceBonus = pe.key === 'proc_poison' ? extraHighHpPoisonChance : 0;
+            const procChance = Math.min(100, Math.max(0, (Number(pe.chance) || 100) + procChanceBonus));
+            if (Math.random() * 100 >= procChance) continue;
             const pp = pe.params || {};
             const dur = pe.duration || { mode: 'turns', value: 3 };
 
@@ -2048,6 +2011,53 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
         }
 
+        // ── 玩家吸血效果（來自卡片技能）──
+        if (playerLifestealPct > 0) {
+          const healAmt = Math.max(1, Math.round(dmg * (playerLifestealPct / 100)));
+          pHp = Math.min(pStats.maxHp, pHp + healAmt);
+          log.push(`💚 吸取生命力！恢復 **${healAmt}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+        }
+        // ── 強力吸血效果（林地妖靈卡）──
+        if (playerLifestealStrongPct > 0) {
+          const sHeal = Math.max(1, Math.round(dmg * (playerLifestealStrongPct / 100)));
+          pHp = Math.min(pStats.maxHp, pHp + sHeal);
+          log.push(`💜 強力吸血！恢復 **${sHeal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+        }
+
+        // ── 檢查怪物反彈傷害效果 ──
+        if (Array.isArray(monsterActiveEffects)) {
+          for (const reflectEff of monsterActiveEffects) {
+            if (reflectEff && reflectEff.key === 'reflect_damage') {
+              const reflectParams = reflectEff.params || {};
+              const reflectPercent = Number(reflectParams.reflectPercent ?? reflectParams.value ?? 50);
+              const reflectDmg = Math.max(1, Math.round(dmg * (reflectPercent / 100)));
+              pHp -= reflectDmg;
+              log.push(`🛡️ ${mName} 的甲殼反彈！你受到 **${reflectDmg}** 點反彈傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+              if (pHp <= 0) { outcome = "lose"; break; }
+            }
+          }
+        }
+        // ── 怪物反擊（counter）：被玩家攻擊時，value% 機率反擊造成受到傷害的 20%──
+        if (outcome === null && Array.isArray(monsterActiveEffects)) {
+          for (const ctEff of monsterActiveEffects) {
+            if (!ctEff || ctEff.key !== 'counter') continue;
+            const ctParams = ctEff.params || {};
+            const ctDur = ctParams.duration || {};
+            if (ctDur.mode === 'turns') {
+              const ctEnd = (ctEff.appliedAt || 1) + (ctDur.value || 1);
+              if (round > ctEnd) continue;
+            }
+            const counterChance = Number(ctParams.value || 30);
+            if (Math.random() * 100 < counterChance) {
+              const counterDmgPct = Number(ctParams.counterDamagePct ?? 20);
+              const counterDmg = Math.max(1, Math.round(dmg * (counterDmgPct / 100)));
+              pHp -= counterDmg;
+              log.push(`🦀 ${mName} **反擊**！以受到傷害的 ${counterDmgPct}% 回擊，造成 **${counterDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+              if (pHp <= 0) { outcome = "lose"; }
+            }
+            break; // 只處理第一個 counter 效果
+          }
+        }
         // 斬殺判定（例：雙手劍職業被動）
         if (mHp > 0 && pStats.executeChance > 0 && pStats.executeThresholdPct > 0) {
           const thresholdHp = Math.max(1, Math.floor(mHpInit * (pStats.executeThresholdPct / 100)));
@@ -2095,6 +2105,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
 
     // ── 怪物攻擊 ──
+    log.push(`──── 🛡️ ${mName} 的回合 ────`);
     // AGI 優勢判定：第1回合先手，或偶數回合才反擊
     let monsterAttackCount = 0;
     let monsterDmgThisRound = 0; // 怪物本回合總傷害（甲蟹反擊用）
@@ -2126,7 +2137,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     let blockedThisRound = false;
     for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
-      const monsterHitChance = adjustedMCalc.hit - (pStats.dodge * (1 + roundPartyAgiBoostPct / 100) + playerDodgeBonus);
+      const monsterHitChance = playerIsStunned
+        ? 100
+        : adjustedMCalc.hit - (pStats.dodge * (1 + roundPartyAgiBoostPct / 100) + playerDodgeBonus);
       if (Math.random() * 100 < monsterHitChance) {
         // 盾格擋判定
         if (Math.random() * 100 < pStats.blockChance) {
@@ -2220,18 +2233,22 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // ── 弓箭手閃避反擊（counter_on_dodge）──
         const hasCounterOnDodge = jobProfile.activeJobEffects.some(e => e.key === 'counter_on_dodge');
         if (hasCounterOnDodge && outcome === null) {
-          const effectiveDef = Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
-          const counterBypassPct = Math.min(100, Math.max(0, (pStats.bypassMonsterDefPct ?? 0) + playerDefIgnorePct + roundPartyDefIgnorePct));
-          const finalDef = Math.max(0, effectiveDef * (1 - counterBypassPct / 100));
-          const conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
-          const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier));
-          const critMultiplier = 2.5 * playerCritDamageMultiplier * tierCritDamageMultiplier;
-          const counterDmg = Math.max(1, Math.round(rollDmg(Math.max(1, Math.round(counterBase * (1 - finalDef / 100)))) * critMultiplier));
-          mHp -= counterDmg;
-          totalDamage += counterDmg;
-          combatStats.critCount += 1;
-          log.push(`🏹✨ **閃避反擊**！你趁隙射出必中要害，對 ${mName} 造成 **${counterDmg}** 點暴擊傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
-          if (mHp <= 0) { outcome = "win"; }
+          const counterHitChance = (pStats.hit + playerHitBonus - playerHitPenalty) - adjustedMCalc.dodge;
+          if (monsterIsStunned || Math.random() * 100 < counterHitChance) {
+            const effectiveDef = Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
+            const counterBypassPct = Math.min(100, Math.max(0, (pStats.bypassMonsterDefPct ?? 0) + playerDefIgnorePct + roundPartyDefIgnorePct));
+            const finalDef = Math.max(0, effectiveDef * (1 - counterBypassPct / 100));
+            const conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
+            const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier));
+            const weakSpotMultiplier = 1.5;
+            const counterDmg = Math.max(1, Math.round(rollDmg(Math.max(1, Math.round(counterBase * (1 - finalDef / 100)))) * weakSpotMultiplier));
+            mHp -= counterDmg;
+            totalDamage += counterDmg;
+            log.push(`🏹✨ **閃避反擊**！你趁隙射中要害，對 ${mName} 造成 **${counterDmg}** 點要害傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+            if (mHp <= 0) { outcome = "win"; }
+          } else {
+            log.push(`🏹 閃避後出箭，但 ${mName} ${rand(dodgePhrases)}！`);
+          }
         }
       }
     }
@@ -2329,9 +2346,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 矮人槌+副手匕：副手追擊不借用暈眩必中（防止擊暈期間副手無限必中）
         const counterUsesStun = monsterIsStunned && !(pStats.hasDwarfWarriorBadge && pStats.weaponType && pStats.weaponType.startsWith('mace'));
         if (counterUsesStun || Math.random() * 100 < hitChance) {
-          if (pStats.counterIsStaffProc) {
-            log.push(`🔮 副手接觸，魔力灌注！`);
-          } else {
+          {
             const isBreak = pStats.counterInheritBreak && Math.random() * 100 < pStats.armorBreakChance;
             const effectiveDef = isBreak ? 0 : Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
             const counterBypassPct = Math.min(100, Math.max(0, (pStats.bypassMonsterDefPct ?? 0) + playerDefIgnorePct + roundPartyDefIgnorePct));

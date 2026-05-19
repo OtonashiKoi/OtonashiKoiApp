@@ -1,9 +1,11 @@
 "use strict";
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, StringSelectMenuBuilder } = require("discord.js");
-const { ARENA_COUNT, getPkArenaBracketByIndex, getBossBoostPct, getDropBoostPct, PK_RATING_DEFAULT } = require("../shared/pkArenaConfig");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } = require("discord.js");
+const { ARENA_COUNT, getPkArenaBracketByIndex, getBossBoostPct, getDropBoostPct, PK_RATING_DEFAULT, calcPkBetOdds, formatPkBetOdds } = require("../shared/pkArenaConfig");
 
 // ── Button ID 常數 ───────────────────────────────────────────
 const PK_ARENA_IDS = {
+  joinQueue: "pk:join-queue",
+  leaveQueue: "pk:leave-queue",
   join1:    "pk:join:1",
   join2:    "pk:join:2",
   join3:    "pk:join:3",
@@ -13,6 +15,7 @@ const PK_ARENA_IDS = {
   bet1lose: "pk:bet:1:lose",  // 下注擂台1 — 挑戰者輸
   bet2lose: "pk:bet:2:lose",
   bet3lose: "pk:bet:3:lose",
+  myRecord: "pk:my-record",
   refresh:  "pk:refresh",
 };
 
@@ -29,6 +32,18 @@ const PK_JOIN_IDS = [
 const ARENA_LABELS = ["①", "②", "③", "④", "⑤", "⑥", "⑦"];
 const BET_AMOUNT = 500; // 每次下注固定金額
 const PK_BET_SELECT_ID = "pk:bet_select";
+
+function getParticipantRating(participant) {
+  return Math.round(Number(participant?.rating ?? PK_RATING_DEFAULT));
+}
+
+function getSlotBetOdds(slot, side) {
+  const challRating = getParticipantRating(slot?.challenger);
+  const defRating = getParticipantRating(slot?.defender);
+  return side === "challenger"
+    ? calcPkBetOdds(challRating, defRating)
+    : calcPkBetOdds(defRating, challRating);
+}
 
 // ── 狀態 Emoji ────────────────────────────────────────────────
 const ARENA_STATUS = {
@@ -50,7 +65,7 @@ function slotLine(slot, index) {
   const tag = ARENA_LABELS[index];
   const bracket = getPkArenaBracketByIndex(index);
   if (!slot || (!slot.challenger && !slot.defender)) {
-    return `${ARENA_STATUS.empty} **${tag} ${bracket.label}** ⸺ 空位`;
+    return `${ARENA_STATUS.empty} **${tag} ${bracket.label}** ⸺ 等待配對`;
   }
   if (slot.challenger && !slot.defender) {
     return `${ARENA_STATUS.waiting} **${tag} ${bracket.label}** ⸺ **${slot.challenger.name}** 等對手`;
@@ -75,7 +90,9 @@ function betSummaryLine(slot, index) {
     .reduce((s, b) => s + b.amount, 0);
   const challName = slot.challenger?.name ?? "挑戰者";
   const defName   = slot.defender?.name ?? "應戰者";
-  return `${tag}　${challName} ${challBet}🪙／${defName} ${defBet}🪙`;
+  const challOdds = formatPkBetOdds(getSlotBetOdds(slot, "challenger"));
+  const defOdds = formatPkBetOdds(getSlotBetOdds(slot, "defender"));
+  return `${tag}　${challName} ${challOdds} ${challBet}🪙／${defName} ${defOdds} ${defBet}🪙`;
 }
 
 // ── 排行榜列 ─────────────────────────────────────────────────
@@ -86,7 +103,7 @@ function buildRankingField(ranking = []) {
   const lines = ranking.map((row, i) => {
     const medal = RANK_MEDALS[i] || `${i + 1}.`;
     const name = row.displayName || row.playerId || "???";
-    const rating = Math.round(Number(row.pkRating) || PK_RATING_DEFAULT);
+    const rating = Math.round(Number(row.pkRating) || 0);
     const wins = Number(row.pkWins) || 0;
     const losses = Number(row.pkLosses) || 0;
     const boostPct = getBossBoostPct(rating);
@@ -99,20 +116,25 @@ function buildRankingField(ranking = []) {
 }
 
 // ── 主面板 ───────────────────────────────────────────────────
-function createPkArenaPanelMessage(arenaSlots = [], ranking = []) {
+function createPkArenaPanelMessage(arenaSlots = [], ranking = [], queue = []) {
   const slots = Array.from({ length: ARENA_COUNT }, (_, i) => arenaSlots[i] ?? null);
 
   // ── Embed ─────────────────────────────────────────────────
-  const slotLines = slots.map((s, i) => slotLine(s, i)).join("\n");
+  const activeSlots = slots.filter((s) => s?.challenger || s?.defender);
+  const slotLines = activeSlots.length > 0
+    ? slots.map((s, i) => slotLine(s, i)).join("\n")
+    : "目前沒有進行中的配對。";
   const betLines  = slots.map((s, i) => betSummaryLine(s, i)).filter(Boolean);
+  const queueCount = Array.isArray(queue) ? queue.length : 0;
 
   const embed = new EmbedBuilder()
     .setTitle("⚔️ PK 擂台場")
     .setColor(0xc0392b)
     .setDescription(
       [
-        "選空台挑戰，或進有人台應戰。",
-        `就位後開放 **1 分鐘下注**，每次 **${BET_AMOUNT} 🪙**，隨機先後攻，自動 **15 回合**。`,
+        "按下排隊後會自動隨機配對。",
+        `配對成功後開放 **1 分鐘下注**，每注 **${BET_AMOUNT} 🪙**，依 Rating 賠率派彩，隨機先後攻，自動 **15 回合**。`,
+        `排隊中可玩其他內容，配對成功後會鎖定 PK 狀態。現在排隊：**${queueCount} 人**。`,
         "",
         "━━━━━━━━━━━━━━━━━━━━━━",
         slotLines,
@@ -122,7 +144,7 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = []) {
 
   if (betLines.length > 0) {
     embed.addFields({
-      name: `💰 下注（每次 ${BET_AMOUNT} 🪙）`,
+      name: `💰 下注（每注 ${BET_AMOUNT} 🪙）`,
       value: betLines.join("\n"),
       inline: false,
     });
@@ -137,44 +159,29 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = []) {
     });
   }
 
-  embed.setFooter({ text: "Elo Rating・勝者吃池・平局退・無對手不退場 | Rating≥1400:+3%・≥1600:+5%・≥1800:+7% BOSS傷害" });
-
-  // ── 第一列：擂台按鈕 ──────────────────────────────────────
-  const joinButtons = slots.map((slot, i) => {
-      const isFighting = slot?.state === "fighting";
-      const isBetting  = slot?.state === "betting";
-      const hasBoth    = !!(slot?.challenger && slot?.defender);
-      const hasOne     = !!(slot?.challenger && !slot?.defender);
-      const bracket = getPkArenaBracketByIndex(i);
-
-      return new ButtonBuilder()
-        .setCustomId(PK_JOIN_IDS[i])
-        .setLabel(
-          isFighting ? `⚙️ 擂台 ${i + 1} ${bracket.label}`
-            : isBetting  ? `🔴 擂台 ${i + 1} ${bracket.label}`
-              : hasBoth    ? `🔴 擂台 ${i + 1} ${bracket.label}`
-                : hasOne     ? `🟡 擂台 ${i + 1} ${bracket.label}`
-                  :              `🟢 擂台 ${i + 1} ${bracket.label}`
-        )
-        .setStyle(
-          isFighting || isBetting || hasBoth ? ButtonStyle.Danger
-            : hasOne ? ButtonStyle.Primary
-              :           ButtonStyle.Success
-        )
-        .setDisabled(!!(isFighting || isBetting || hasBoth));
-    });
-
-  const joinRows = [];
-  for (let i = 0; i < joinButtons.length; i += 5) {
-    joinRows.push(new ActionRowBuilder().addComponents(joinButtons.slice(i, i + 5)));
-  }
+  embed.setFooter({ text: "Elo Rating・賠率下注・平局退・無對手不退場 | Rating≥1400:+3%・≥1600:+5%・≥1800:+7% BOSS傷害" });
 
   // ── 第二列：下注選單（只在下注階段且擂台有人才顯示） ──────
   const activeBettingSlots = slots
     .map((s, i) => ({ s, i }))
     .filter(({ s }) => s?.state === "betting");
 
-  const components = [...joinRows];
+  const components = [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(PK_ARENA_IDS.joinQueue)
+        .setLabel("⚔️ 加入排隊")
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(PK_ARENA_IDS.leaveQueue)
+        .setLabel("🚪 離開排隊")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(PK_ARENA_IDS.myRecord)
+        .setLabel("📊 我的成績")
+        .setStyle(ButtonStyle.Secondary)
+    )
+  ];
 
   if (activeBettingSlots.length > 0) {
     const options = [];
@@ -183,15 +190,17 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = []) {
       const defName   = s.defender?.name ?? `應戰者`;
       const challId   = s.challenger?.discordId || "";
       const defId     = s.defender?.discordId || "";
+      const challOdds = getSlotBetOdds(s, "challenger");
+      const defOdds = getSlotBetOdds(s, "defender");
       options.push({
         label: `擂台 ${i + 1}｜押 ${challName} 贏`,
-        value: `pkbet:${i}:${challId}:${encodeURIComponent(challName)}:challenger`,
-        description: `下注 ${BET_AMOUNT}🪙`,
+        value: `pkbet:${i + 1}:${challId}:challenger`,
+        description: `賠率 ${formatPkBetOdds(challOdds)}｜中獎返還 ${Math.floor(BET_AMOUNT * challOdds)}🪙`,
       });
       options.push({
         label: `擂台 ${i + 1}｜押 ${defName} 贏`,
-        value: `pkbet:${i}:${defId}:${encodeURIComponent(defName)}:defender`,
-        description: `下注 ${BET_AMOUNT}🪙`,
+        value: `pkbet:${i + 1}:${defId}:defender`,
+        description: `賠率 ${formatPkBetOdds(defOdds)}｜中獎返還 ${Math.floor(BET_AMOUNT * defOdds)}🪙`,
       });
     }
     components.push(
@@ -200,18 +209,6 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = []) {
           .setCustomId(PK_BET_SELECT_ID)
           .setPlaceholder("💰 選擇要下注的擂台與對象")
           .addOptions(options.slice(0, 25))
-      )
-    );
-  }
-
-  // 重新整理按鈕固定在最後一列（Discord 最多 5 列）
-  if (components.length < 5) {
-    components.push(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(PK_ARENA_IDS.refresh)
-          .setLabel("🔄 重新整理")
-          .setStyle(ButtonStyle.Secondary)
       )
     );
   }
@@ -295,6 +292,7 @@ function createPkBattleReportMessage(slot, result, betPayouts = [], battleReward
 module.exports = {
   PK_ARENA_IDS,
   BET_AMOUNT,
+  getSlotBetOdds,
   ARENA_COUNT,
   createPkArenaPanelMessage,
   createPkBattleReportMessage,

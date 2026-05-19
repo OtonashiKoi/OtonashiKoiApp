@@ -6,6 +6,17 @@ const { createServiceContext } = require("../src/services/createServiceContext")
 
 const HOTFIX_MESSAGE =
   "📢 **官方公告**\n音無樂園要 HOTFIX 啦，請注意會斷線，請先完成目前操作。";
+const DISCORD_OPERATION_TIMEOUT_MS = 5000;
+
+function withTimeout(promise, label, timeoutMs = DISCORD_OPERATION_TIMEOUT_MS) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
 
 async function pickHotfixChannelId(serviceContext) {
   const layout = await serviceContext.adminConsoleService.getChannelLayout();
@@ -32,13 +43,13 @@ async function main() {
 
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   try {
-    await client.login(config.discord.token);
-    const channel = await client.channels.fetch(targetChannelId);
+    await withTimeout(client.login(config.discord.token), "Discord login");
+    const channel = await withTimeout(client.channels.fetch(targetChannelId), "Discord channel fetch");
     if (!channel?.isTextBased || !channel.isTextBased()) {
       console.warn(`[HotfixNotice] 目標頻道不可發送訊息：${targetChannelId}`);
       return;
     }
-    await channel.send(HOTFIX_MESSAGE);
+    await withTimeout(channel.send(HOTFIX_MESSAGE), "Discord hotfix notice send");
     console.log(`[HotfixNotice] 已發送重啟公告到頻道 ${targetChannelId}`);
   } finally {
     try { client.destroy(); } catch (_) {}

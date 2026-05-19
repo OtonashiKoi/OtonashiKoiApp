@@ -116,6 +116,39 @@ class ShopService {
     return `key:${[base, slot, tier, enh].join("|")}`;
   }
 
+  _stableObjectSignature(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+    const keys = Object.keys(value).sort();
+    return keys
+      .map((key) => `${key}:${Number.isFinite(Number(value[key])) ? Number(value[key]) : String(value[key] ?? "")}`)
+      .join(",");
+  }
+
+  _getBulkSellSignature(entry) {
+    if (!entry || typeof entry !== "object") return "";
+    return [
+      String(entry.itemId || this._normalizeItemRefText(entry.itemName || entry.name || "")),
+      String(entry.itemType || ""),
+      String(entry.equipSlot || ""),
+      String(entry.tier || ""),
+      String(entry.weaponType || ""),
+      entry.isTwoHanded ? "2h" : "1h",
+      String(Number(entry.enhanceLevel || 0)),
+      this._stableObjectSignature(entry.equipStats || {})
+    ].join("|");
+  }
+
+  _findBulkSellMatches(inventory, refEntry, entryUuid) {
+    const refSignature = this._getBulkSellSignature(refEntry);
+    const matches = (Array.isArray(inventory) ? inventory : [])
+      .filter((entry) => this._getBulkSellSignature(entry) === refSignature);
+    return matches.sort((a, b) => {
+      const aIsRef = this._matchesInventoryEntryRef(a, entryUuid) ? 0 : 1;
+      const bIsRef = this._matchesInventoryEntryRef(b, entryUuid) ? 0 : 1;
+      return aIsRef - bIsRef;
+    });
+  }
+
   _matchesInventoryEntryRef(entry, ref) {
     if (!entry || !ref) return false;
     const raw = String(ref || "");
@@ -146,6 +179,26 @@ class ShopService {
     if (inventoryHit || !includeEquipment) return inventoryHit || null;
     const equipment = progress?.equipment && typeof progress.equipment === "object" ? Object.values(progress.equipment) : [];
     return equipment.find((entry) => this._matchesInventoryEntryRef(entry, ref)) || null;
+  }
+
+  _normalizeUuidRef(ref) {
+    const raw = String(ref || "").trim();
+    const normalized = raw.startsWith("uuid:") ? raw.slice(5) : raw;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)
+      ? normalized
+      : null;
+  }
+
+  _findInventoryIndexForAction(progress, ref) {
+    const inventory = Array.isArray(progress?.inventory) ? progress.inventory : [];
+    const uuid = this._normalizeUuidRef(ref);
+    if (uuid) return inventory.findIndex((entry) => String(entry?.uuid || "") === uuid);
+    return inventory.findIndex((entry) => this._matchesInventoryEntryRef(entry, ref));
+  }
+
+  _findInventoryEntryForAction(progress, ref) {
+    const idx = this._findInventoryIndexForAction(progress, ref);
+    return idx >= 0 ? progress.inventory[idx] : null;
   }
 
   async _getStreamBindings(player, discordId) {
@@ -672,12 +725,12 @@ class ShopService {
     const quote = await this.getSellQuote(discordId, entryUuid, 1);
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
-    const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
+    const idx = this._findInventoryIndexForAction(progress, entryUuid);
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
     progress.inventory.splice(idx, 1);
     progress.updatedAt = new Date().toISOString();
-    await this.progressRepository.save(progress);
+    const savedProgress = await this.progressRepository.save(progress);
     await this.rewardService.grantCurrency({
       discordId,
       displayName: discordId,
@@ -686,7 +739,12 @@ class ShopService {
       source: CURRENCY_SOURCES.ITEM_SELL,
       operator: "shop:sell-item"
     });
-    return { itemName: entry.itemName, tier: quote.tier, price: quote.priceEach };
+    return {
+      itemName: entry.itemName,
+      tier: quote.tier,
+      price: quote.priceEach,
+      inventory: Array.isArray(savedProgress?.inventory) ? savedProgress.inventory : progress.inventory
+    };
   }
 
   async getSellQuote(discordId, entryUuid, qty = 1) {
@@ -694,7 +752,7 @@ class ShopService {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
 
-    const refEntry = this._findInventoryEntryByRef(progress, entryUuid);
+    const refEntry = this._findInventoryEntryForAction(progress, entryUuid);
     if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     if (refEntry.itemType === "job_badge" || refEntry.equipSlot === "job_eq") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章不可販售", 400);
@@ -715,10 +773,7 @@ class ShopService {
     if (stackCount > 1) {
       sellCount = Math.min(qty, stackCount);
     } else {
-      const refEnhLv = refEntry.enhanceLevel || 0;
-      const matchingCount = (progress.inventory || [])
-        .filter(e => e.itemId === refEntry.itemId && (e.enhanceLevel || 0) === refEnhLv)
-        .length;
+      const matchingCount = this._findBulkSellMatches(progress.inventory || [], refEntry, entryUuid).length;
       sellCount = Math.min(qty, matchingCount);
     }
 
@@ -738,7 +793,7 @@ class ShopService {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
 
-    const refEntry = this._findInventoryEntryByRef(progress, entryUuid);
+    const refEntry = this._findInventoryEntryForAction(progress, entryUuid);
     if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
 
     const stackCount = refEntry.stackCount || 1;
@@ -746,17 +801,15 @@ class ShopService {
 
     if (stackCount > 1) {
       // ── 堆疊型（消耗品）：從 stackCount 扣除 ──
-      const idx = progress.inventory.findIndex(e => this._matchesInventoryEntryRef(e, entryUuid));
+      const idx = this._findInventoryIndexForAction(progress, entryUuid);
       if (sellCount >= stackCount) {
         progress.inventory.splice(idx, 1);          // 全部賣完，移除紀錄
       } else {
         progress.inventory[idx].stackCount = stackCount - sellCount;  // 部分賣，扣數量
       }
     } else {
-      // ── 非堆疊型（裝備/寶石）：計算同 itemId + enhanceLevel 的筆數 ──
-      const refEnhLv = refEntry.enhanceLevel || 0;
-      const matchingUuids = (progress.inventory || [])
-        .filter(e => e.itemId === refEntry.itemId && (e.enhanceLevel || 0) === refEnhLv)
+      // ── 非堆疊型（裝備/寶石）：只賣同模板、同強化、同素質簽名的項目 ──
+      const matchingUuids = this._findBulkSellMatches(progress.inventory || [], refEntry, entryUuid)
         .map(e => this._buildInventoryEntryRef(e));
 
       const toRemove = new Set(matchingUuids.slice(0, sellCount));
@@ -764,7 +817,7 @@ class ShopService {
     }
 
     progress.updatedAt = new Date().toISOString();
-    await this.progressRepository.save(progress);
+    const savedProgress = await this.progressRepository.save(progress);
 
     await this.rewardService.grantCurrency({
       discordId,
@@ -775,7 +828,10 @@ class ShopService {
       operator: "shop:sell-item-bulk"
     });
 
-    return quote;
+    return {
+      ...quote,
+      inventory: Array.isArray(savedProgress?.inventory) ? savedProgress.inventory : progress.inventory
+    };
   }
 
   async discardItem(discordId, entryUuid) {

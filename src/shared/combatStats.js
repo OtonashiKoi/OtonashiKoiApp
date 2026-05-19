@@ -9,13 +9,12 @@ const { getBossBoostPct, PK_RATING_DEFAULT } = require("./pkArenaConfig");
 // baseStat    : 主屬性（預設 "str"）
 // isTwoHanded : 是否雙手（不可配副手武器）
 // comboBonus  : 連擊率加成%
-// stunChance  : 擊暈機率%（擊暈後怪物3回合無法攻擊）
-// armorBreak  : 破防%（此次攻擊無視怪物 DEF%）
-// monsterAtk  : 怪物每回合攻擊次數（倍數，預設1；目前法杖不再提高被攻擊次數）
-// bypassDefPct: 無視怪物 DEF 的百分比（0~100，法杖專用，50=無視一半）
-// counterChance: 雙持副手追擊機率%（怪物攻擊後觸發）
-// counterStun : 副手追擊是否繼承擊暈機率
-// counterBreak: 副手追擊是否繼承破防
+// stunChance  : 擊暈機率%
+// stunDuration: 擊暈持續回合數
+// armorBreak  : 破防機率%（此次攻擊無視 DEF%）
+// critBonus   : 爆擊率加成%
+// bypassDefPct: 無視對方 DEF 的百分比
+// dodgeBonus  : 閃避率加成%
 // ─────────────────────────────────────────────
 const WEAPON_CONFIG = {
   sword_1h: { mult: 4 },
@@ -35,18 +34,15 @@ const OFFHAND_WEAPON_TYPES = new Set(["offhand_sword", "offhand_dagger", "offhan
 const EQUIPPED_TIER_SLOTS = TIER_SET_SLOTS;
 
 // 雙持時主手不同武器的副手追擊機率
-// staff_1h：副手觸發但傷害為 0，僅用於觸發法師 proc 效果（燒傷/麻痺/冰凍）
 const DUAL_COUNTER_CHANCE = {
   sword_1h: 20,
   mace_1h:  20,
   axe_1h:   20,
   dagger:   40,
-  staff_1h: 20,
 };
 
 /**
  * 依玩家基礎屬性與已裝備物品計算戰鬥數值。
- * monsterZoneHandlers 與 playerAppRoutes 共用此函式。
  */
 function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = [], { pkRating } = {}) {
   const tierSetBonuses = getEquipmentTierSetBonuses(equipped);
@@ -103,9 +99,9 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const dmgMin = Math.min(0.9, 0.5 + I * 0.01);
   const dmgMax = 1.3;
 
-  // 盾格擋：盾牌本身 20%
-  // 雙手劍格擋：雙手劍本身 10%
-  // 劍士額外加成：單手劍+盾再 +20%，雙手劍再 +10%
+  // 盾牌 +20%；雙手劍 +10%
+  // 劍士：單手劍+盾再 +20%，雙手劍再 +5%
+  // 軍師：單手劍+盾再 +20%
   const hasShield = !!offhand && offhand.equipSlot === "shield" && !isDualWield;
   const hasSwordsmanBlock = hasSwordsmanBadge && (wt === "sword_1h" || wt === "sword_2h");
   let blockChance = 0;
@@ -116,27 +112,20 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   if (hasTacticianBadge && hasShield && wt === "sword_1h") blockChance += 20;
   const blockCounter  = (hasShield && wt === "sword_1h") || (hasSwordsmanBlock && wt === "sword_2h");
 
-  // 擊暈機率（槌類）
   const stunChance = cfg.stunChance ?? 0;
-
-  // 破防機率（斧類，此回合無視怪物DEF%）
   const armorBreakChance = cfg.armorBreak ?? 0;
 
-  // 副手追擊（雙持時，怪物攻擊後觸發）
   const counterChance = isDualWield ? (DUAL_COUNTER_CHANCE[wt] ?? 0) : 0;
-  // 法杖雙持：副手只觸發 proc，傷害固定為 0
-  const counterIsStaffProc = isDualWield && wt === "staff_1h";
-  // 副手追擊繼承擊暈/破防：劍和匕首繼承，槌/斧不繼承
+  // 劍和匕首雙持時繼承擊暈/破防；槌/斧不繼承
   const counterInheritStun  = isDualWield && (wt === "sword_1h" || wt === "dagger");
   const counterInheritBreak = isDualWield && (wt === "sword_1h" || wt === "dagger");
 
-  // 矮人戰士：高血量擊暈加成（>85%，需拿槌子）
+  // 矮人戰士：高血量時擊暈加成（需拿槌子，HP 門檻由戰鬥流程判斷）
   let dwarfWarriorHighHpStunBoost = 0;
   if (hasDwarfWarriorBadge && wt && wt.startsWith("mace")) {
     dwarfWarriorHighHpStunBoost = 10;
   }
 
-  // 矮人戰士：對暈眩目標增傷
   let dwarfWarriorBonusVsStunnedPct = 0;
   if (hasDwarfWarriorBadge && wt === "mace_1h") {
     dwarfWarriorBonusVsStunnedPct = 15;
@@ -156,46 +145,45 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     // 基礎數值
     maxHp:    V * 15 + 50,
     atk,
-    dmgMin,   // 傷害浮動下限（顯示用）
-    dmgMax,   // 傷害浮動上限
-    def:      Math.min(75, vit * 2),       // 百分比減傷 0~75%（僅基礎 VIT，裝備 VIT 不計入防禦）
-    dodge:    Math.min(50, A * 0.5) + (cfg.dodgeBonus ?? 0) + tierSetBonuses.dodgePct, // 弓+30%，上限不強制（弓本來就特殊）
-    hit:      Math.min(100, 70 + D) + tierSetBonuses.hitPct,       // 基礎70，DEX每點+1
-    crit:     Math.min(100, L * 0.3 + (cfg.critBonus ?? 0)) + tierSetBonuses.critRatePct, // LUK → 爆擊%，斧+10/20%
-    combo:    Math.min(80, 3 + A * 0.5 + (cfg.comboBonus ?? 0)), // AGI×0.5，匕首+20%
-    comboDamageMultiplier: 1,                    // 連擊傷害倍率
+    dmgMin,
+    dmgMax,
+    def:      Math.min(75, vit * 2),
+    dodge:    Math.min(50, A * 0.5) + (cfg.dodgeBonus ?? 0) + tierSetBonuses.dodgePct,
+    hit:      Math.min(100, 70 + D) + tierSetBonuses.hitPct,
+    crit:     Math.min(100, L * 0.3 + (cfg.critBonus ?? 0)) + tierSetBonuses.critRatePct,
+    combo:    Math.min(80, 3 + A * 0.5 + (cfg.comboBonus ?? 0)),
+    comboDamageMultiplier: 1,
     tierSetBonuses,
     tierDamageMultiplier: 1 + tierSetBonuses.damagePct / 100,
     tierFinalDamageMultiplier: 1 + tierSetBonuses.finalDamagePct / 100,
-    tierBossDamageMultiplier: (1 + tierSetBonuses.bossDamagePct / 100) * (1 + getBossBoostPct(pkRating ?? PK_RATING_DEFAULT) / 100),
+    tierBossDamageMultiplier: (1 + tierSetBonuses.bossDamagePct / 100) * (1 + getBossBoostPct(pkRating ?? 0) / 100),
     tierCritDamageMultiplier: 1 + tierSetBonuses.critDamagePct / 100,
-    executeChance: 0,                            // 斬殺觸發率
-    executeThresholdPct: 0,                      // 斬殺門檻血量%
+    executeChance: 0,
+    executeThresholdPct: 0,
 
     // 武器特效
     weaponType:        wt,
     isTwoHanded:       cfg.isTwoHanded ?? false,
     isDualWield,
-    bypassMonsterDefPct: cfg.bypassDefPct ?? 0,    // 法杖：無視怪物DEF的百分比（50=無視一半）
-    monsterAttackCount:cfg.monsterAtk ?? 1,       // 武器可指定怪物攻擊次數；預設1
-    stunChance,                                    // 槌：擊暈機率%
-    stunDuration: cfg.stunDuration ?? 3,           // 槌：擊暈持續回合數（預設3，槌類2）
-    armorBreakChance,                              // 斧：破防機率%
+    bypassMonsterDefPct: cfg.bypassDefPct ?? 0,
+    monsterAttackCount:cfg.monsterAtk ?? 1,
+    stunChance,
+    stunDuration: cfg.stunDuration ?? 3,
+    armorBreakChance,
 
     // 盾牌
-    blockChance,     // 盾格擋機率%
-    blockCounter,    // 單手劍+盾：格擋後反擊
+    blockChance,
+    blockCounter,
 
     // 雙持
-    counterChance,         // 副手追擊機率%
-    counterInheritStun,    // 副手繼承擊暈
-    counterInheritBreak,   // 副手繼承破防
-    counterIsStaffProc,    // 法杖雙持：副手觸發 proc 但傷害為 0
+    counterChance,
+    counterInheritStun,
+    counterInheritBreak,
 
     // 矮人戰士
     hasDwarfWarriorBadge,
-    dwarfWarriorHighHpStunBoost,     // 高血量擊暈加成
-    dwarfWarriorBonusVsStunnedPct,    // 對暈眩目標增傷
+    dwarfWarriorHighHpStunBoost,
+    dwarfWarriorBonusVsStunnedPct,
   };
 
   const effectContext = { equipped, inventory };

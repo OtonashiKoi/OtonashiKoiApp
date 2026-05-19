@@ -66,8 +66,8 @@ function createTowerHallMessage(topRanking = []) {
   const rankLines = topRanking.length > 0
     ? topRanking.slice(0, 5).map((r, i) => {
       const medal  = MEDALS[i] || `${i + 1}.`;
-      const floor  = r.towerRecord?.lastFloor ?? r.towerRecord?.bestFloor ?? 0;
-      const party  = r.towerRecord?.lastParty || r.towerRecord?.bestParty || [];
+      const floor  = r.towerRecord?.bestFloor ?? r.towerRecord?.lastFloor ?? 0;
+      const party  = r.towerRecord?.bestParty || r.towerRecord?.lastParty || [];
       const names  = party.length > 0
         ? party.map((p) => p.name).join("・")
         : (r.displayName || r.playerId || "???");
@@ -91,7 +91,7 @@ function createTowerHallMessage(topRanking = []) {
         "💀 **31–40 層** 滅世熔爐",
         "👑 **41 層** 終焉魔王",
         "",
-        "**── 近期最高紀錄 ──**",
+        "**── 最高紀錄 ──**",
         ...rankLines,
       ].join("\n")
     )
@@ -191,6 +191,25 @@ function formatTowerStatRanking(rows = [], unit = "") {
     .join("　");
 }
 
+function summarizeTowerActionLog(logText) {
+  if (typeof logText !== "string") return "";
+  const lines = logText
+    .split("\n")
+    .filter((line) => line && !line.startsWith("**【"));
+  const important = lines.filter((line) => /中毒|淬毒|燒傷|流血|冰凍|擊暈|麻痺|詛咒|閃電|震盪/.test(line));
+  return [...new Set([...important.slice(-3), ...lines.slice(-2)])]
+    .slice(-4)
+    .join("\n　");
+}
+
+function formatTowerMemberStatusLine(member) {
+  const job = member?.job || {};
+  const jobLabel = `${job.emoji ? `${job.emoji} ` : ""}${job.name || "冒險者"}`;
+  const hp = Math.max(0, Math.round(Number(member?.currentHp || 0)));
+  const maxHp = Math.max(1, Math.round(Number(member?.maxHp || member?.stats?.maxHp || 1)));
+  return `• **${member?.name || "???"}**｜${jobLabel}｜HP ${hp.toLocaleString()} / ${maxHp.toLocaleString()}`;
+}
+
 function appendTowerFloorSummary(lines, summary) {
   if (!summary) return;
   const mvp = Array.isArray(summary.mvpDamage) ? summary.mvpDamage : [];
@@ -240,10 +259,7 @@ function createTowerThreadBattleMessage(session) {
       battleSection.push(`• **${formatActorName(action)}** 行動（AGI ${action.agi ?? "?"}）｜${hpText}`);
       const lastLog = Array.isArray(action.logs) ? action.logs.at(-1) : null;
       if (typeof lastLog === "string") {
-        const summary = lastLog.split("\n")
-          .filter((line) => line && !line.startsWith("**【"))
-          .slice(-2)
-          .join("\n　");
+        const summary = summarizeTowerActionLog(lastLog);
         if (summary) battleSection.push(`　${summary}`);
       }
     }
@@ -312,14 +328,22 @@ function createTowerThreadBattleMessage(session) {
 
 // ── Thread：結算面板 ──────────────────────────────────────────
 function createTowerThreadResultMessage(session, reward) {
-  const { members, clearedFloor, failReason } = session;
+  const { members, clearedFloor, failReason, lastFloorResult } = session;
   const isFull = clearedFloor >= TOWER_TOTAL_FLOORS;
+  let monsterHpLine = null;
+  if (!isFull && lastFloorResult && !lastFloorResult.monsterKilled && Number(lastFloorResult.scaledHp || 0) > 0) {
+    const remaining = Math.max(0, Math.round(Number(lastFloorResult.monsterHpFinal || 0)));
+    const maxHp = Math.max(1, Math.round(Number(lastFloorResult.scaledHp || 1)));
+    const pct = Math.round((remaining / maxHp) * 100);
+    monsterHpLine = `🩸 怪物剩餘 HP：**${remaining.toLocaleString()} / ${maxHp.toLocaleString()}**（${pct}%）`;
+  }
 
   const memberLines = members.map((m) => {
     const best   = m.towerRecord?.bestFloor || 0;
     const newRec = clearedFloor > (m.towerRecord?.prevBest || 0) ? " 🆕個人紀錄" : "";
     return `• **${m.name}**${newRec}　個人最高：${best} 層`;
   });
+  const memberStatusLines = members.map(formatTowerMemberStatusLine);
 
   const rewardLines = [
     reward.gold > 0 ? `💰 金幣 +${reward.gold}` : null,
@@ -335,9 +359,13 @@ function createTowerThreadResultMessage(session, reward) {
         isFull
           ? `🏆 恭喜全隊通過所有 ${TOWER_TOTAL_FLOORS} 層！`
           : `最高通關層：**第 ${clearedFloor} 層**${failReason ? `\n❌ ${failReason}` : ""}`,
+        monsterHpLine,
         "",
         "**── 成員成績 ──**",
         ...memberLines,
+        "",
+        "**── 結束狀態 ──**",
+        ...memberStatusLines,
         "",
         rewardLines.length > 0 ? "**── 本次獎勵（每位） ──**" : "",
         ...rewardLines,
