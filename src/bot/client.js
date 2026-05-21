@@ -29,6 +29,9 @@ const WELCOME_AUDIT_ENABLED = config.discord.welcomeAuditEnabled !== false;
 const WELCOME_AUDIT_INTERVAL_MS = config.discord.welcomeAuditIntervalMs || 30 * 60 * 1000;
 const MEMORY_AUDIT_ENABLED = process.env.ENABLE_MEMORY_AUDIT !== "0";
 const MEMORY_AUDIT_INTERVAL_MS = Math.max(10_000, Number(process.env.MEMORY_AUDIT_INTERVAL_MS || 60_000));
+const MEMORY_AUDIT_VERBOSE = process.env.MEMORY_AUDIT_VERBOSE === "1";
+const MEMORY_AUDIT_LOG_RSS_MB = Math.max(128, Number(process.env.MEMORY_AUDIT_LOG_RSS_MB || 500));
+const MEMORY_AUDIT_LOG_HEAP_MB = Math.max(128, Number(process.env.MEMORY_AUDIT_LOG_HEAP_MB || 350));
 const MEMORY_HEAPSNAPSHOT_ENABLED = process.env.ENABLE_MEMORY_HEAPSNAPSHOT !== "0";
 const MEMORY_HEAPSNAPSHOT_RSS_MB = Math.max(256, Number(process.env.MEMORY_HEAPSNAPSHOT_RSS_MB || 950));
 const MEMORY_HEAPSNAPSHOT_HEAP_MB = Math.max(256, Number(process.env.MEMORY_HEAPSNAPSHOT_HEAP_MB || 650));
@@ -600,7 +603,16 @@ function startMemoryAuditTimer(client) {
         pk: getPkArenaDiagnostics(),
         tower: getTowerDiagnostics()
       };
-      console.log(`[MemoryAudit] ${JSON.stringify(payload)}`);
+      // 只在異常時印 log（記憶體偏高、有 overdue、Discord 無 guild 等），減少 PM2 雜訊
+      const abnormalReasons = [];
+      if (payload.rssMB >= MEMORY_AUDIT_LOG_RSS_MB) abnormalReasons.push(`rss>=${MEMORY_AUDIT_LOG_RSS_MB}MB`);
+      if (payload.heapUsedMB >= MEMORY_AUDIT_LOG_HEAP_MB) abnormalReasons.push(`heap>=${MEMORY_AUDIT_LOG_HEAP_MB}MB`);
+      if (payload.monsterZone?.displayingOverdue > 0) abnormalReasons.push(`mz_overdue=${payload.monsterZone.displayingOverdue}`);
+      if (payload.discord?.guilds === 0) abnormalReasons.push("discord_disconnected");
+      if (MEMORY_AUDIT_VERBOSE || abnormalReasons.length > 0) {
+        const prefix = abnormalReasons.length > 0 ? `[MemoryAudit] abnormal:${abnormalReasons.join(",")} ` : "[MemoryAudit] ";
+        console.log(`${prefix}${JSON.stringify(payload)}`);
+      }
       maybeWriteMemoryHeapSnapshot(payload);
     } catch (error) {
       console.warn(`[MemoryAudit] failed: ${error?.message || error}`);
