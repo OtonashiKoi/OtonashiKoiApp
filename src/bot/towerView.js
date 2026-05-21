@@ -60,6 +60,17 @@ function formatActorName(actor) {
   return actor?.name || "???";
 }
 
+function formatTowerRecordProgress(record = {}) {
+  const floor = Number(record.bestProgressFloor || 0);
+  const damage = Number(record.bestProgressDamage || 0);
+  const maxHp = Number(record.bestProgressMaxHp || 0);
+  if (floor <= 0 || damage <= 0 || maxHp <= 0) return "";
+
+  const pct = Number(record.bestProgressDamagePct || ((damage / maxHp) * 100));
+  const monster = record.bestProgressMonsterName ? ` ${record.bestProgressMonsterName}` : "";
+  return `｜第 ${floor} 層${monster} 傷害 ${damage.toLocaleString()}（${pct.toFixed(2)}%）`;
+}
+
 // ── 面板大廳常駐面板 ──────────────────────────────────────────
 function createTowerHallMessage(topRanking = []) {
   const MEDALS = ["🥇", "🥈", "🥉"];
@@ -67,11 +78,12 @@ function createTowerHallMessage(topRanking = []) {
     ? topRanking.slice(0, 5).map((r, i) => {
       const medal  = MEDALS[i] || `${i + 1}.`;
       const floor  = r.towerRecord?.bestFloor ?? r.towerRecord?.lastFloor ?? 0;
+      const progress = formatTowerRecordProgress(r.towerRecord);
       const party  = r.towerRecord?.bestParty || r.towerRecord?.lastParty || [];
       const names  = party.length > 0
         ? party.map((p) => p.name).join("・")
         : (r.displayName || r.playerId || "???");
-      return `${medal} **${floor} 層** — ${names}`;
+      return `${medal} **${floor} 層**${progress} — ${names}`;
     })
     : ["（尚無挑戰紀錄）"];
 
@@ -459,11 +471,12 @@ function createTowerRankingMessage(rankList = []) {
       const date  = r.towerRecord?.bestAt
         ? new Date(r.towerRecord.bestAt).toLocaleDateString("zh-TW")
         : "—";
+      const progress = formatTowerRecordProgress(r.towerRecord);
       const party = r.towerRecord?.bestParty || [];
       const names = party.length > 0
         ? party.map((p) => p.name).join("・")
         : (r.displayName || r.playerId || "???");
-      return `${medal} **${floor} 層** ― ${names}（${runs} 次 · ${date}）`;
+      return `${medal} **${floor} 層**${progress} ― ${names}（${runs} 次 · ${date}）`;
     })
     : ["（尚無紀錄）"];
 
@@ -471,7 +484,7 @@ function createTowerRankingMessage(rankList = []) {
     .setTitle("🗼 爬塔隊伍最高層排行榜")
     .setColor(0xf1c40f)
     .setDescription(lines.join("\n"))
-    .setFooter({ text: "依個人最高通關層排列 · TOP 10" });
+    .setFooter({ text: "依最高通關層排列；同層依下一層怪物傷害排序 · TOP 10" });
 
   return { embeds: [embed], components: [] };
 }

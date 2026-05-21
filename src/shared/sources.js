@@ -14,6 +14,7 @@ const CURRENCY_SOURCES = {
   PK_BET: "pk:bet",                                 // PK 下注扣款
   PK_BET_REFUND: "pk:bet-refund",                   // PK 下注退還
   PK_BET_WIN: "pk:bet-win",                         // PK 下注中獎
+  PK_BET_DIVIDEND: "pk:bet-dividend",               // PK 下注熱度勝者分紅
   ITEM_SELL: "item:sell",                            // 玩家販售道具
   AUCTION_PURCHASE: "auction:purchase",              // 交易所購買（買家扣款）
   AUCTION_SALE: "auction:sale",                      // 交易所成交（賣家入帳）

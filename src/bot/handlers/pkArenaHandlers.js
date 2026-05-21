@@ -13,6 +13,8 @@ const { withPlayerProgressLock } = require("../../services/progress/progressLock
 const { getPkArenaBracketByIndex, isLevelInPkArenaBracket, PK_RATING_DEFAULT, PK_RATING_MIN, calcRatingChange, getBossBoostPct, getDropBoostPct, formatPkBetOdds } = require("../../shared/pkArenaConfig");
 const {
   BET_AMOUNT,
+  BET_AMOUNTS,
+  formatGold,
   getSlotBetOdds,
   ARENA_COUNT,
   createPkArenaPanelMessage,
@@ -38,7 +40,8 @@ const PK_BATTLE_POST_TITLE_PREFIX = "PK｜";
 const PK_BRACKET_REWARD_RATIO = 0.25;
 const PK_TOP_GHOST_MATCH_CHANCE = 0.35;
 const PK_TOP_GHOST_POOL_SIZE = 3;
-const PK_TOP_RANK_ANNOUNCE_CHANNEL_ID = "1498608950671839263";
+const PK_TOP_RANK_ANNOUNCE_CHANNEL_ID = "1450062298076151952";
+const PK_WINNER_BET_DIVIDEND_RATE = 0.05;
 const PK_REWARD_ITEM_IDS = {
   D: "72fde92d-e33f-42fb-8d86-2e811d03f84d",
   C: "556db9e1-b084-4b22-bab5-a66c2b586184",
@@ -53,8 +56,57 @@ let persistedPanelMessageId = null;
 const pkDisplayNameCache = new Map();
 let pkQueue = [];
 let pkTopGhostCursor = 0;
+let pkRuntimePruneTimer = null;
 
 // ── 工具 ─────────────────────────────────────────────────────
+
+function prunePkDisplayNameCache(now = Date.now()) {
+  for (const [id, cached] of pkDisplayNameCache.entries()) {
+    if (!cached?.expiresAt || cached.expiresAt <= now) {
+      pkDisplayNameCache.delete(id);
+    }
+  }
+}
+
+function startPkRuntimePruneTimer() {
+  if (pkRuntimePruneTimer) return;
+  pkRuntimePruneTimer = setInterval(() => prunePkDisplayNameCache(), 5 * 60 * 1000);
+  pkRuntimePruneTimer.unref?.();
+}
+
+function schedulePkBattleThreadCleanup(channelId, threadId) {
+  if (!channelId || !threadId) return;
+  setTimeout(async () => {
+    const client = getBotClient();
+    if (!client?.isReady()) return;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    const thread = await channel?.threads?.fetch(threadId).catch(() => null);
+    await thread?.delete?.("PK battle report auto cleanup").catch(() => {});
+  }, PK_BATTLE_THREAD_TTL_MS).unref?.();
+}
+
+function getPkArenaDiagnostics() {
+  let activeSlots = 0;
+  let totalBets = 0;
+  const slotStates = {};
+  for (const slot of arenaSlots) {
+    if (!slot) continue;
+    activeSlots += 1;
+    const state = slot.state || "unknown";
+    slotStates[state] = (slotStates[state] || 0) + 1;
+    totalBets += Object.keys(slot.bets || {}).length;
+  }
+  return {
+    activeSlots,
+    slotStates,
+    arenaTimers: arenaTimers.size,
+    activeBattleLocks: activeBattleLocks.size,
+    pkQueue: pkQueue.length,
+    pkDisplayNameCache: pkDisplayNameCache.size,
+    totalBets,
+    hasPanelMessage: Boolean(panelMessage)
+  };
+}
 
 function getArenaIndex(customId) {
   const m = customId.match(/^pk:join:(\d+)$/);
@@ -70,7 +122,9 @@ function getBetInfo(customId) {
 }
 
 function getBetSelectInfo(customId, values = []) {
-  if (customId !== "pk:bet_select") return null;
+  const idMatch = String(customId || "").match(/^pk:bet_select(?::(\d+))?$/);
+  if (!idMatch) return null;
+  const amount = Number(idMatch[1] || BET_AMOUNT);
   const rawValue = Array.isArray(values) ? values[0] : null;
   if (!rawValue) return null;
   const value = String(rawValue);
@@ -78,15 +132,20 @@ function getBetSelectInfo(customId, values = []) {
   const compact = value.match(/^pkbet:(\d+):([^:]+):(challenger|defender|win|lose)$/);
   if (compact) {
     const side = compact[3] === "win" ? "challenger" : compact[3] === "lose" ? "defender" : compact[3];
-    return { arenaIdx: parseInt(compact[1], 10) - 1, targetDiscordId: compact[2], targetName: null, side };
+    return { arenaIdx: parseInt(compact[1], 10) - 1, targetDiscordId: compact[2], targetName: null, side, amount };
   }
   // 舊格式（含名字）: pkbet:<idx>:<discordId>:<encodedName>:<side>
   const legacy = value.match(/^pkbet:(\d+):([^:]+):([^:]+):(challenger|defender|win|lose)$/);
   if (legacy) {
     const side = legacy[4] === "win" ? "challenger" : legacy[4] === "lose" ? "defender" : legacy[4];
-    return { arenaIdx: parseInt(legacy[1], 10) - 1, targetDiscordId: legacy[2], targetName: decodeURIComponent(legacy[3] || ""), side };
+    return { arenaIdx: parseInt(legacy[1], 10) - 1, targetDiscordId: legacy[2], targetName: decodeURIComponent(legacy[3] || ""), side, amount };
   }
   return null;
+}
+
+function normalizePkBetAmount(amount) {
+  const value = Math.floor(Number(amount) || BET_AMOUNT);
+  return BET_AMOUNTS.includes(value) ? value : BET_AMOUNT;
 }
 
 function cloneSlot(slot) {
@@ -650,16 +709,17 @@ async function grantPkRewardStone(sc, discordId, displayName, tier, amount) {
 async function updatePkRatings(sc, slot, result, challFirst) {
   const challId = slot.challenger?.discordId;
   const defId   = slot.defender?.discordId;
-  if (!challId || !defId || !result.winner || result.winner === "draw") return;
+  if (!challId || !defId || !result.winner || result.winner === "draw") return [];
 
   const beforeTop3 = await sc.progressRepository.findTopByPkRating(3).catch(() => []);
   const beforeTop3Ids = new Set((Array.isArray(beforeTop3) ? beforeTop3 : []).map((row) => String(row.playerId || "")));
+  const beforeTop1Id = Array.isArray(beforeTop3) && beforeTop3[0] ? String(beforeTop3[0].playerId || "") : "";
 
   const [challProg, defProg] = await Promise.all([
     sc.progressRepository.findByPlayerId(challId).catch(() => null),
     sc.progressRepository.findByPlayerId(defId).catch(() => null),
   ]);
-  if (!challProg || !defProg) return;
+  if (!challProg || !defProg) return [];
 
   const challRating = challProg.pkRating ?? PK_RATING_DEFAULT;
   const defRating   = defProg.pkRating   ?? PK_RATING_DEFAULT;
@@ -689,19 +749,31 @@ async function updatePkRatings(sc, slot, result, challFirst) {
     }).catch(() => {}),
   ]);
 
-  await announceNewPkTop3Entrants(sc, beforeTop3Ids).catch((err) => {
+  await announceNewPkTop3Entrants(sc, beforeTop3Ids, beforeTop1Id).catch((err) => {
     console.warn("[PK] top3 announce failed:", err?.message || err);
   });
+
+  const challName = slot.challenger?.name || challId;
+  const defName = slot.defender?.name || defId;
+  const formatDelta = (delta) => delta >= 0 ? `+${delta}` : `${delta}`;
+  return [
+    `• **${challName}**：${Math.round(challRating)} → **${Math.round(newChallRating)}**（${formatDelta(newChallRating - challRating)}）`,
+    `• **${defName}**：${Math.round(defRating)} → **${Math.round(newDefRating)}**（${formatDelta(newDefRating - defRating)}）`,
+  ];
 }
 
-async function announceNewPkTop3Entrants(sc, beforeTop3Ids) {
+async function announceNewPkTop3Entrants(sc, beforeTop3Ids, beforeTop1Id = "") {
   const afterTop3 = await sc.progressRepository.findTopByPkRating(3).catch(() => []);
   if (!Array.isArray(afterTop3) || afterTop3.length === 0) return;
 
-  const newcomers = afterTop3
-    .map((row, index) => ({ ...row, rank: index + 1 }))
-    .filter((row) => row.playerId && !beforeTop3Ids.has(String(row.playerId)));
-  if (newcomers.length === 0) return;
+  const afterTop3Ranked = afterTop3.map((row, index) => ({ ...row, rank: index + 1 }));
+  const newcomers = afterTop3Ranked.filter((row) => row.playerId && !beforeTop3Ids.has(String(row.playerId)));
+
+  const afterTop1Id = afterTop3[0] ? String(afterTop3[0].playerId || "") : "";
+  const top1Changed = afterTop1Id && beforeTop1Id && afterTop1Id !== beforeTop1Id
+    && !newcomers.some((r) => r.rank === 1);
+
+  if (newcomers.length === 0 && !top1Changed) return;
 
   const client = getBotClient();
   if (!client?.isReady()) return;
@@ -709,6 +781,26 @@ async function announceNewPkTop3Entrants(sc, beforeTop3Ids) {
   if (!channel?.isTextBased?.()) return;
 
   const medal = ["🥇", "🥈", "🥉"];
+
+  // 第1名換人（前3名內部輪替）
+  if (top1Changed) {
+    const row = afterTop3Ranked[0];
+    const id = String(row.playerId);
+    const name = await resolvePkDisplayName(id, row.displayName || id).catch(() => row.displayName || id);
+    const rating = Math.round(Number(row.pkRating ?? PK_RATING_DEFAULT));
+    const wins = Number(row.pkWins || 0);
+    const losses = Number(row.pkLosses || 0);
+    await channel.send({
+      content: [
+        `🏆 **PK 王座易主！**`,
+        `🥇 **${name}** 登上 Rating 排行榜第 1 名`,
+        `Rating：**${rating} 分**｜戰績：${wins}勝${losses}敗`
+      ].join("\n"),
+      allowedMentions: { parse: [] }
+    }).catch(() => {});
+  }
+
+  // 新進入前3名的人
   for (const row of newcomers) {
     const id = String(row.playerId);
     const name = await resolvePkDisplayName(id, row.displayName || id).catch(() => row.displayName || id);
@@ -767,14 +859,12 @@ async function grantPkBracketRewards(sc, slot, result, arenaIdx) {
     }
   }
 
-  const bracketName = bracket.label;
   if (rewardGold > 0 || rewardExp > 0) {
+    const bracketName = bracket.label;
     const rewardParts = [`EXP +${rewardExp}`];
     if (rewardGold > 0) rewardParts.push(`金幣 +${rewardGold}`);
     const hasGhost = Boolean(slot?.challenger?.isGhost || slot?.defender?.isGhost);
     rewards.unshift(`🎁 **PK區間獎勵（${bracketName}）**：${hasGhost ? "真人參賽者" : "每位參賽者"} ${rewardParts.join("、")}`);
-  } else {
-    rewards.unshift(`🎁 **PK區間獎勵（${bracketName}）**：固定獎勵為強化石，實際掉落如下。`);
   }
 
   return { rewards, bracket, avgReward };
@@ -894,7 +984,7 @@ async function cleanupPkBattleForumPosts() {
   return { deleted, skipped };
 }
 
-async function sendPkBattleThread(slot, result, betPayouts = [], battleRewards = []) {
+async function sendPkBattleThread(slot, result, betPayouts = [], battleRewards = [], ratingLines = []) {
   const client = getBotClient();
   const targetChannel = await getPkReportTargetChannel();
   if (!client?.isReady() || !targetChannel) return null;
@@ -944,11 +1034,9 @@ async function sendPkBattleThread(slot, result, betPayouts = [], battleRewards =
       }
     }
 
-    const reportMsg = createPkBattleReportMessage(slot, result, betPayouts, battleRewards, { includeRoundLogs: false });
+    const reportMsg = createPkBattleReportMessage(slot, result, betPayouts, battleRewards, { includeRoundLogs: false, ratingLines });
     await thread.send({ ...reportMsg, allowedMentions });
-    setTimeout(() => {
-      thread.delete("PK battle report auto cleanup").catch(() => {});
-    }, PK_BATTLE_THREAD_TTL_MS);
+    schedulePkBattleThreadCleanup(targetChannel.id, thread.id);
     return thread;
   } catch (err) {
     console.warn("[PK] thread send failed:", {
@@ -971,7 +1059,7 @@ async function sendPkBattleThread(slot, result, betPayouts = [], battleRewards =
           await sleep(350);
         }
       }
-      const reportMsg = createPkBattleReportMessage(slot, result, betPayouts, battleRewards, { includeRoundLogs: false });
+      const reportMsg = createPkBattleReportMessage(slot, result, betPayouts, battleRewards, { includeRoundLogs: false, ratingLines });
       await targetChannel.send({ ...reportMsg, allowedMentions });
     } catch (_) {}
     return null;
@@ -1142,6 +1230,7 @@ async function handleBetRequest(interaction, betInfo) {
   }
 
   const { arenaIdx, side } = betInfo;
+  const betAmount = normalizePkBetAmount(betInfo.amount);
   const slot = arenaSlots[arenaIdx];
 
   if (!slot || slot.state !== "betting") {
@@ -1168,8 +1257,8 @@ async function handleBetRequest(interaction, betInfo) {
 
   // 扣金幣
   const wallet = await sc.walletRepository.findByPlayerId(discordId).catch(() => null);
-  if (!wallet || (wallet.gold ?? 0) < BET_AMOUNT) {
-    await interaction.editReply({ content: `❌ 金幣不足，下注需要 **${BET_AMOUNT}** 🪙。` });
+  if (!wallet || (wallet.gold ?? 0) < betAmount) {
+    await interaction.editReply({ content: `❌ 金幣不足，下注需要 **${formatGold(betAmount)}** 🪙。` });
     return;
   }
 
@@ -1178,7 +1267,7 @@ async function handleBetRequest(interaction, betInfo) {
       discordId,
       displayName: getDisplayName(interaction),
       currencyType: "gold",
-      amount: -BET_AMOUNT,
+      amount: -betAmount,
       source: CURRENCY_SOURCES.PK_BET,
       operator: "pk:bet",
     });
@@ -1192,14 +1281,14 @@ async function handleBetRequest(interaction, betInfo) {
   const targetName = betInfo.targetName || target?.name || (targetSide === "challenger" ? slot.challenger?.name : slot.defender?.name) || "對手";
   const targetDiscordId = target?.discordId || betInfo.targetDiscordId || null;
   const odds = getSlotBetOdds(slot, targetSide);
-  const payout = Math.floor(BET_AMOUNT * odds);
+  const payout = Math.floor(betAmount * odds);
 
   slot.bets[discordId] = {
     discordId,
     side: targetSide,
     targetDiscordId,
     targetName,
-    amount: BET_AMOUNT,
+    amount: betAmount,
     odds,
     payout,
     name: getDisplayName(interaction),
@@ -1207,7 +1296,7 @@ async function handleBetRequest(interaction, betInfo) {
   syncPkBattlePresence();
   await saveArenaState();
 
-  await interaction.editReply({ content: `✅ 已押注 **${BET_AMOUNT}** 🪙 → **${targetName}** 獲勝！\n賠率 **${formatPkBetOdds(odds)}**，猜中返還 **${payout}** 🪙。` });
+  await interaction.editReply({ content: `✅ 已押注 **${formatGold(betAmount)}** 🪙 → **${targetName}** 獲勝！\n賠率 **${formatPkBetOdds(odds)}**，猜中返還 **${formatGold(payout)}** 🪙。` });
 
   await refreshPanel();
 }
@@ -1263,6 +1352,8 @@ async function startBattle(idx, { recovered = false } = {}) {
         : result.winner === "B"
           ? (challFirst ? "defender" : "challenger")
           : null; // 平局
+    const totalBetAmount = Object.values(slot.bets || {})
+      .reduce((sum, bet) => sum + Math.max(0, Number(bet?.amount || BET_AMOUNT)), 0);
 
     for (const [bid, bet] of Object.entries(slot.bets)) {
     if (!winningSide) {
@@ -1273,7 +1364,7 @@ async function startBattle(idx, { recovered = false } = {}) {
         currencyType: "gold", amount: refundAmount,
         source: CURRENCY_SOURCES.PK_BET_REFUND, operator: "pk:bet_refund",
       }).catch(() => {});
-      betPayouts.push(`↩️ **${bet.name}** 退還 ${refundAmount} 🪙（平局）`);
+      betPayouts.push(`↩️ **${bet.name}** 退還 ${formatGold(refundAmount)} 🪙（平局）`);
     } else if (bet.side === winningSide) {
       const odds = Number(bet.odds || getSlotBetOdds(slot, bet.side));
       const payout = Math.max(0, Math.floor(Number(bet.amount || BET_AMOUNT) * odds));
@@ -1283,10 +1374,29 @@ async function startBattle(idx, { recovered = false } = {}) {
           currencyType: "gold", amount: payout,
           source: CURRENCY_SOURCES.PK_BET_WIN, operator: "pk:bet_win",
         }).catch(() => {});
-        betPayouts.push(`🏆 **${bet.name}** 賠率 ${formatPkBetOdds(odds)}，返還 ${payout} 🪙`);
+        betPayouts.push(`🏆 **${bet.name}** 賠率 ${formatPkBetOdds(odds)}，返還 ${formatGold(payout)} 🪙`);
       }
       } else {
-        betPayouts.push(`💸 **${bet.name}** 下注失敗，損失 ${bet.amount} 🪙`);
+        betPayouts.push(`💸 **${bet.name}** 下注失敗，損失 ${formatGold(bet.amount)} 🪙`);
+      }
+    }
+
+    if (winningSide && totalBetAmount > 0) {
+      const winner = winningSide === "challenger" ? slot.challenger : slot.defender;
+      const dividend = Math.max(1, Math.floor(totalBetAmount * PK_WINNER_BET_DIVIDEND_RATE));
+      if (winner?.discordId && dividend > 0) {
+        await sc.rewardService.grantCurrency({
+          discordId: winner.discordId,
+          displayName: winner.name || winner.discordId,
+          currencyType: "gold",
+          amount: dividend,
+          source: CURRENCY_SOURCES.PK_BET_DIVIDEND,
+          operator: "pk:bet_dividend",
+        }).then(() => {
+          betPayouts.push(`💰 **${winner.name || "勝者"}** 獲得下注熱度分紅 ${formatGold(dividend)} 🪙（總下注 ${formatGold(totalBetAmount)} 的 5%）`);
+        }).catch((err) => {
+          console.warn("[PK] bet dividend grant failed:", err?.message || err);
+        });
       }
     }
 
@@ -1296,13 +1406,14 @@ async function startBattle(idx, { recovered = false } = {}) {
     });
 
     // ── Rating 更新 ───────────────────────────────────────────
-    await updatePkRatings(sc, slot, result, challFirst).catch((err) => {
+    const ratingLines = await updatePkRatings(sc, slot, result, challFirst).catch((err) => {
       console.warn("[PK] rating update failed:", err?.message || err);
+      return [];
     });
 
     // ── 發布戰報 ─────────────────────────────────────────────
     try {
-      await sendPkBattleThread(slot, result, betPayouts, battleRewardResult.rewards || []);
+      await sendPkBattleThread(slot, result, betPayouts, battleRewardResult.rewards || [], ratingLines);
     } catch (_) {}
 
     // 清空擂台
@@ -1378,7 +1489,7 @@ function isPkArenaButton(customId) {
 }
 
 function isPkArenaSelectMenu(customId) {
-  return customId === "pk:bet_select";
+  return typeof customId === "string" && customId.startsWith("pk:bet_select");
 }
 
 async function handlePkArenaButton(interaction) {
@@ -1401,13 +1512,14 @@ async function handlePkArenaButton(interaction) {
 }
 
 async function handlePkArenaSelectMenu(interaction) {
-  if (interaction.customId === "pk:bet_select") {
+  if (interaction.customId.startsWith("pk:bet_select")) {
     await handleBetSelect(interaction);
   }
 }
 
 async function initPkArenaState() {
   await restorePkArenaState();
+  startPkRuntimePruneTimer();
   if (arenaWatchdogTimer) clearInterval(arenaWatchdogTimer);
   arenaWatchdogTimer = setInterval(() => {
     kickExpiredWaitingSlots("watchdog").catch((err) => {
@@ -1432,4 +1544,5 @@ module.exports = {
   handlePkArenaSelectMenu,
   publishPkArenaPanel,
   initPkArenaState,
+  getPkArenaDiagnostics,
 };

@@ -1,7 +1,10 @@
 // Discord Bot Client 建立與登入
 // ------------------------------------------------
 
-const { Client, GatewayIntentBits, Events, MessageFlags, PermissionsBitField, RESTEvents } = require("discord.js");
+const fs = require("node:fs");
+const path = require("node:path");
+const v8 = require("node:v8");
+const { Client, GatewayIntentBits, Events, MessageFlags, PermissionsBitField, RESTEvents, Options } = require("discord.js");
 const config = require("../config");
 const { isAppError } = require("../shared/errors");
 const { handleCommand, handleButton, handleSelectMenu, handleModal } = require("./commands");
@@ -11,7 +14,7 @@ const { handleStreamComment } = require("./handlers/streamHandlers");
 const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels, _doIdleRotate } = require("./handlers/monsterZoneHandlers");
 const { initPkArenaState } = require("./handlers/pkArenaHandlers");
 const { restoreTowerSessions } = require("./handlers/towerHandlers");
-const { runWithCache } = require("../adapters/mongo/requestCache");
+const { runWithCache, clearCurrentCache } = require("../adapters/mongo/requestCache");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
 const {
   isTransientDiscordNetworkError,
@@ -25,9 +28,18 @@ const RESTRICTED_ANIMATED_EMOJI_NAMES = new Set(["HUHU"]);
 const RESTRICTED_EMOJI_WARNING_DELETE_MS = 10_000;
 const WELCOME_AUDIT_ENABLED = config.discord.welcomeAuditEnabled !== false;
 const WELCOME_AUDIT_INTERVAL_MS = config.discord.welcomeAuditIntervalMs || 30 * 60 * 1000;
+const MEMORY_AUDIT_ENABLED = process.env.ENABLE_MEMORY_AUDIT !== "0";
+const MEMORY_AUDIT_INTERVAL_MS = Math.max(10_000, Number(process.env.MEMORY_AUDIT_INTERVAL_MS || 60_000));
+const MEMORY_HEAPSNAPSHOT_ENABLED = process.env.ENABLE_MEMORY_HEAPSNAPSHOT !== "0";
+const MEMORY_HEAPSNAPSHOT_RSS_MB = Math.max(256, Number(process.env.MEMORY_HEAPSNAPSHOT_RSS_MB || 950));
+const MEMORY_HEAPSNAPSHOT_HEAP_MB = Math.max(256, Number(process.env.MEMORY_HEAPSNAPSHOT_HEAP_MB || 650));
+const MEMORY_HEAPSNAPSHOT_COOLDOWN_MS = Math.max(60_000, Number(process.env.MEMORY_HEAPSNAPSHOT_COOLDOWN_MS || 30 * 60 * 1000));
 
 let welcomeAuditTimer = null;
 let welcomeAuditRunning = false;
+let runtimeCachePruneTimer = null;
+let memoryAuditTimer = null;
+let lastMemoryHeapSnapshotAt = 0;
 
 async function ensureMemberPlayerProfile(member, reason) {
   try {
@@ -397,17 +409,20 @@ async function republishPanelsOnStartup() {
 
 let elitePanelRefreshTimer = null;
 function startElitePanelRefreshTimer() {
-  if (process.env.ENABLE_ELITE_PANEL_REFRESH !== "1") {
+  if (process.env.ENABLE_ELITE_PANEL_REFRESH === "0") {
     console.log("[ElitePanel] auto-refresh disabled; panels refresh on player activity");
     return;
   }
 
-  const sec = Math.max(5, Number.parseInt(process.env.ELITE_PANEL_REFRESH_SECONDS || "10", 10) || 10);
-  if (elitePanelRefreshTimer) clearInterval(elitePanelRefreshTimer);
-  elitePanelRefreshTimer = setInterval(async () => {
+  const sec = Math.max(10, Number.parseInt(process.env.ELITE_PANEL_REFRESH_SECONDS || "30", 10) || 30);
+  const run = async () => {
     if (shouldSkipOptionalDiscordSend("elite panel refresh")) return;
     await refreshEliteWorldBossPanel().catch(() => {});
-  }, sec * 1000);
+  };
+  if (elitePanelRefreshTimer) clearInterval(elitePanelRefreshTimer);
+  elitePanelRefreshTimer = setInterval(run, sec * 1000);
+  elitePanelRefreshTimer.unref?.();
+  setTimeout(run, 5_000).unref?.();
   console.log(`[ElitePanel] auto-refresh started (${sec}s)`);
 }
 
@@ -455,6 +470,8 @@ const spamTracker = new Map();
 // 累計違規次數（重啟後歸零，但同一場 session 內遞增）
 // key: `${guildId}:${userId}`，value: 累計禁言次數
 const offenseTracker = new Map();
+const SPAM_TRACKER_TTL_MS = 10 * 60 * 1000;
+const OFFENSE_TRACKER_TTL_MS = 24 * 60 * 60 * 1000;
 
 // 讀取 moderation 設定（若 config 未提供，使用預設）
 const moderation = config.moderation || {
@@ -486,8 +503,113 @@ function getMuteDurationMs(guildId, userId) {
     6 * 60 * 60 * 1000,
     12 * 60 * 60 * 1000,
   ];
-  const offense = offenseTracker.get(key) || 0;
+  const offenseEntry = offenseTracker.get(key) || 0;
+  const offense = typeof offenseEntry === "object" ? Number(offenseEntry.count || 0) : Number(offenseEntry || 0);
   return tiers[Math.min(offense, tiers.length - 1)];
+}
+
+function pruneRuntimeMaps(now = Date.now()) {
+  for (const [key, state] of spamTracker.entries()) {
+    const lastSeenAt = Number(state?.lastSeenAt || 0);
+    if (!lastSeenAt || now - lastSeenAt > SPAM_TRACKER_TTL_MS) spamTracker.delete(key);
+  }
+  for (const [key, entry] of offenseTracker.entries()) {
+    const updatedAt = typeof entry === "object" ? Number(entry.updatedAt || 0) : 0;
+    if (!updatedAt || now - updatedAt > OFFENSE_TRACKER_TTL_MS) offenseTracker.delete(key);
+  }
+}
+
+function startRuntimeCachePruneTimer() {
+  if (runtimeCachePruneTimer) return;
+  runtimeCachePruneTimer = setInterval(() => pruneRuntimeMaps(), 5 * 60 * 1000);
+  runtimeCachePruneTimer.unref?.();
+}
+
+function mb(bytes) {
+  return Math.round((Number(bytes || 0) / 1024 / 1024) * 10) / 10;
+}
+
+function getDiscordCacheDiagnostics(client) {
+  const guilds = client?.guilds?.cache;
+  let channels = 0;
+  let members = 0;
+  let messages = 0;
+  let threads = 0;
+
+  for (const guild of guilds?.values?.() || []) {
+    channels += guild.channels?.cache?.size || 0;
+    members += guild.members?.cache?.size || 0;
+    for (const channel of guild.channels?.cache?.values?.() || []) {
+      messages += channel.messages?.cache?.size || 0;
+      threads += channel.threads?.cache?.size || 0;
+    }
+  }
+
+  return {
+    guilds: guilds?.size || 0,
+    users: client?.users?.cache?.size || 0,
+    channels,
+    members,
+    messages,
+    threads
+  };
+}
+
+function maybeWriteMemoryHeapSnapshot(payload) {
+  if (!MEMORY_HEAPSNAPSHOT_ENABLED) return;
+  const overThreshold = payload.rssMB >= MEMORY_HEAPSNAPSHOT_RSS_MB || payload.heapUsedMB >= MEMORY_HEAPSNAPSHOT_HEAP_MB;
+  if (!overThreshold) return;
+
+  const now = Date.now();
+  if (now - lastMemoryHeapSnapshotAt < MEMORY_HEAPSNAPSHOT_COOLDOWN_MS) return;
+  lastMemoryHeapSnapshotAt = now;
+
+  try {
+    const heapDir = path.resolve(process.cwd(), "logs", "heap");
+    fs.mkdirSync(heapDir, { recursive: true });
+    const stamp = new Date(now).toISOString().replace(/[:.]/g, "-");
+    const filePath = path.join(heapDir, `heap-${stamp}-rss${payload.rssMB}-heap${payload.heapUsedMB}.heapsnapshot`);
+    const writtenPath = v8.writeHeapSnapshot(filePath);
+    console.warn(`[MemoryAudit] heap snapshot written file=${writtenPath} rssMB=${payload.rssMB} heapUsedMB=${payload.heapUsedMB}`);
+  } catch (error) {
+    console.warn(`[MemoryAudit] heap snapshot failed: ${error?.message || error}`);
+  }
+}
+
+function startMemoryAuditTimer(client) {
+  if (!MEMORY_AUDIT_ENABLED || memoryAuditTimer) return;
+  const run = () => {
+    try {
+      const mem = process.memoryUsage();
+      const { getMonsterZoneDiagnostics } = require("./handlers/monsterZoneHandlers");
+      const { getPkArenaDiagnostics } = require("./handlers/pkArenaHandlers");
+      const { getTowerDiagnostics } = require("./handlers/towerHandlers");
+      const payload = {
+        uptimeSec: Math.round(process.uptime()),
+        rssMB: mb(mem.rss),
+        heapUsedMB: mb(mem.heapUsed),
+        heapTotalMB: mb(mem.heapTotal),
+        externalMB: mb(mem.external),
+        arrayBuffersMB: mb(mem.arrayBuffers),
+        activeHandles: typeof process._getActiveHandles === "function" ? process._getActiveHandles().length : null,
+        discord: getDiscordCacheDiagnostics(client),
+        runtimeMaps: {
+          spamTracker: spamTracker.size,
+          offenseTracker: offenseTracker.size
+        },
+        monsterZone: getMonsterZoneDiagnostics(),
+        pk: getPkArenaDiagnostics(),
+        tower: getTowerDiagnostics()
+      };
+      console.log(`[MemoryAudit] ${JSON.stringify(payload)}`);
+      maybeWriteMemoryHeapSnapshot(payload);
+    } catch (error) {
+      console.warn(`[MemoryAudit] failed: ${error?.message || error}`);
+    }
+  };
+  memoryAuditTimer = setInterval(run, MEMORY_AUDIT_INTERVAL_MS);
+  memoryAuditTimer.unref?.();
+  setTimeout(run, 5_000).unref?.();
 }
 
 async function doMuteAndAnnounce(member, message, reason, key) {
@@ -495,9 +617,10 @@ async function doMuteAndAnnounce(member, message, reason, key) {
     spamTracker.delete(key);
 
     const offenseKey = `${message.guild.id}:${message.author.id}`;
-    const offenseBefore = offenseTracker.get(offenseKey) || 0;
+    const offenseEntry = offenseTracker.get(offenseKey) || 0;
+    const offenseBefore = typeof offenseEntry === "object" ? Number(offenseEntry.count || 0) : Number(offenseEntry || 0);
     const muteDurationMs = getMuteDurationMs(message.guild.id, message.author.id);
-    offenseTracker.set(offenseKey, offenseBefore + 1);
+    offenseTracker.set(offenseKey, { count: offenseBefore + 1, updatedAt: Date.now() });
 
     await member.timeout(muteDurationMs, reason);
     console.log(`[SpamGuard] 禁言 ${message.author.tag} (${message.author.id}) 第${offenseBefore + 1}次：${reason}`);
@@ -531,9 +654,10 @@ async function checkSpam(message) {
 
   let state = spamTracker.get(key);
   if (!state) {
-    state = { lastMsg: content, count: 1, timestamps: [now], lastMentionedId: null, consecutiveMentionCount: 0 };
+    state = { lastMsg: content, count: 1, timestamps: [now], lastMentionedId: null, consecutiveMentionCount: 0, lastSeenAt: now };
     spamTracker.set(key, state);
   } else {
+    state.lastSeenAt = now;
     state.timestamps = state.timestamps.filter(t => now - t < moderation.burstWindowMs);
     state.timestamps.push(now);
     if (content === state.lastMsg) {
@@ -596,7 +720,28 @@ async function checkSpam(message) {
 // ────────────────────────────────────────────────────────────
 
 function createBotClient() {
-  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildWebhooks, GatewayIntentBits.GuildEmojisAndStickers] });
+  const client = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildWebhooks, GatewayIntentBits.GuildEmojisAndStickers],
+    makeCache: Options.cacheWithLimits({
+      ...Options.DefaultMakeCacheSettings,
+      MessageManager: 0,
+      GuildMemberManager: 100,
+      UserManager: 100,
+      ThreadManager: 25,
+      ThreadMemberManager: 0,
+      ReactionManager: 0,
+      ReactionUserManager: 0,
+      PresenceManager: 0,
+      VoiceStateManager: 0
+    }),
+    sweepers: {
+      ...Options.DefaultSweeperSettings,
+      threads: {
+        interval: 30 * 60,
+        lifetime: 30 * 60
+      }
+    }
+  });
   setBotClient(client);
 
   client.rest.on(RESTEvents.RateLimited, (rateLimitData) => {
@@ -605,12 +750,19 @@ function createBotClient() {
 
   client.once(Events.ClientReady, async (readyClient) => {
     console.log(`[Discord] Logged in as ${readyClient.user.tag}`);
+    startRuntimeCachePruneTimer();
+    startMemoryAuditTimer(readyClient);
+    // Timed panel maintenance must not wait for Discord permission overwrite calls.
+    startAuctionPanelRefreshTimer();
+    startMonsterPanelRefreshTimer();
+    startElitePanelRefreshTimer();
     await setupPersonalRoomChannel(readyClient);
     await setupLockedChannels(readyClient);
-    const shouldRepublishPanels = process.env.ENABLE_STARTUP_PANEL_REPUBLISH === "1";
+    const startupPanelRepublishMode = String(process.env.ENABLE_STARTUP_PANEL_REPUBLISH || "").trim().toLowerCase();
+    const shouldRepublishPanels = startupPanelRepublishMode === "force";
     if (shouldRepublishPanels) {
       await republishPanelsOnStartup();
-      console.log("[PanelReset] startup auto-republish enabled");
+      console.log("[PanelReset] startup auto-republish enabled by force mode");
     } else {
       console.log("[PanelReset] startup auto-republish disabled");
     }
@@ -623,13 +775,6 @@ function createBotClient() {
       console.warn(`[Tower] restore failed: ${error?.message || error}`);
     });
 
-    // 拍賣場公開面板倒數/到期狀態需定時重繪
-    startAuctionPanelRefreshTimer();
-    // 一般怪物區面板定時重繪，避免打完後卡住舊狀態
-    startMonsterPanelRefreshTimer();
-    // 精英區世界BOSS面板固定自動刷新
-    startElitePanelRefreshTimer();
-    
     // 啟動 OneComme 直播留言監聽
     startFetcher(handleStreamComment);
     // 啟動閒置自動換怪計時器（可透過 DISABLE_AUTO_ROTATE=1 暫時停用）
@@ -679,6 +824,8 @@ function createBotClient() {
         } catch (replyError) {
           if (!isTransientDiscordNetworkError(replyError)) console.error("[Discord] reply error", replyError);
         }
+      } finally {
+        clearCurrentCache();
       }
     });
   });

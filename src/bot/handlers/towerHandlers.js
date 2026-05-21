@@ -1003,12 +1003,52 @@ async function awardFloorCardDrops(session, monster) {
 }
 
 // ── 結算：發獎 + 更新個人紀錄 ───────────────────────────────
+function buildTowerRunProgress(session) {
+  const result = session?.lastFloorResult || null;
+  const maxHp = Math.max(0, Math.round(Number(result?.scaledHp || 0)));
+  if (!result || maxHp <= 0) {
+    return {
+      floor: Math.max(0, Number(session?.clearedFloor || 0)),
+      monsterName: null,
+      damage: 0,
+      damagePct: 0,
+      remainingHp: 0,
+      maxHp: 0,
+    };
+  }
+
+  const remainingHp = Math.max(0, Math.min(maxHp, Math.round(Number(result.monsterHpFinal || 0))));
+  const damage = Math.max(0, maxHp - remainingHp);
+  return {
+    floor: Math.max(0, Number(result.floor || session?.clearedFloor || 0)),
+    monsterName: result.monsterName || null,
+    damage,
+    damagePct: maxHp > 0 ? Number(((damage / maxHp) * 100).toFixed(2)) : 0,
+    remainingHp,
+    maxHp,
+  };
+}
+
+function isBetterTowerRecordRun(clearedFloor, runProgress, record = {}) {
+  const prevFloor = Number(record.bestFloor || 0);
+  if (clearedFloor !== prevFloor) return clearedFloor > prevFloor;
+
+  const prevPct = Number(record.bestProgressDamagePct || 0);
+  const nextPct = Number(runProgress?.damagePct || 0);
+  if (nextPct !== prevPct) return nextPct > prevPct;
+
+  const prevDamage = Number(record.bestProgressDamage || 0);
+  const nextDamage = Number(runProgress?.damage || 0);
+  return nextDamage > prevDamage;
+}
+
 async function settleTowerSession(session, reward) {
   const sc = serviceContext;
   const clearBuff = getTowerClearBuff(session.clearedFloor);
   const settledAt = new Date().toISOString();
   const runId = `${session.roomId || session.threadId || "tower"}:${Date.now()}`;
   const partySnapshot = session.members.map((p) => ({ discordId: p.discordId, name: p.name }));
+  const runProgress = buildTowerRunProgress(session);
 
   // 結算前先抓全服最高層紀錄
   let serverBestBefore = 0;
@@ -1029,7 +1069,7 @@ async function settleTowerSession(session, reward) {
       const prevBest = prog.towerRecord?.bestFloor || 0;
       m.towerRecord = { ...(m.towerRecord || {}), prevBest };
       const newBest = Math.max(prevBest, session.clearedFloor);
-      const isNewRecord = newBest > prevBest;
+      const isNewRecord = isBetterTowerRecordRun(session.clearedFloor, runProgress, prog.towerRecord);
 
       // 記錄本次挑戰時間（用於每小時次數限制）
       const now = Date.now();
@@ -1038,18 +1078,32 @@ async function settleTowerSession(session, reward) {
       pruned.push(now);
 
       prog.towerRecord = {
+        ...(prog.towerRecord || {}),
         bestFloor: newBest,
         bestAt: isNewRecord
           ? settledAt
           : (prog.towerRecord?.bestAt || settledAt),
         totalRuns: (prog.towerRecord?.totalRuns || 0) + 1,
         bestParty: isNewRecord ? partySnapshot : (prog.towerRecord?.bestParty || partySnapshot),
+        bestProgressFloor: isNewRecord ? runProgress.floor : (prog.towerRecord?.bestProgressFloor || runProgress.floor),
+        bestProgressMonsterName: isNewRecord ? runProgress.monsterName : (prog.towerRecord?.bestProgressMonsterName || runProgress.monsterName),
+        bestProgressDamage: isNewRecord ? runProgress.damage : Number(prog.towerRecord?.bestProgressDamage || 0),
+        bestProgressDamagePct: isNewRecord ? runProgress.damagePct : Number(prog.towerRecord?.bestProgressDamagePct || 0),
+        bestProgressRemainingHp: isNewRecord ? runProgress.remainingHp : Number(prog.towerRecord?.bestProgressRemainingHp || 0),
+        bestProgressMaxHp: isNewRecord ? runProgress.maxHp : Number(prog.towerRecord?.bestProgressMaxHp || 0),
         lastFloor: session.clearedFloor,
         lastAt: settledAt,
         lastParty: partySnapshot,
         lastRunId: runId,
+        lastProgressFloor: runProgress.floor,
+        lastProgressMonsterName: runProgress.monsterName,
+        lastProgressDamage: runProgress.damage,
+        lastProgressDamagePct: runProgress.damagePct,
+        lastProgressRemainingHp: runProgress.remainingHp,
+        lastProgressMaxHp: runProgress.maxHp,
         recentRuns: pruned,
       };
+      prog.towerRecord.bestFloor = newBest;
       m.towerRecord = prog.towerRecord;
 
       // 發放過關 Buff（刷新模式，condition: zone=monster）
@@ -1924,6 +1978,31 @@ async function handleTowerSelectMenu(interaction) {
   if (interaction.customId === "tower:use_item_pick_target") return handleApplyPotion(interaction);
 }
 
+function getTowerDiagnostics() {
+  const sessionStates = {};
+  let memberCount = 0;
+  let sessionsWithThreadRef = 0;
+  let sessionsWithStarterMessage = 0;
+  let lobbyTimers = 0;
+  for (const session of activeSessions.values()) {
+    const state = session?.state || "unknown";
+    sessionStates[state] = (sessionStates[state] || 0) + 1;
+    memberCount += Array.isArray(session?.members) ? session.members.length : 0;
+    if (session?.thread) sessionsWithThreadRef += 1;
+    if (session?.starterMessage) sessionsWithStarterMessage += 1;
+    if (session?.lobbyTimer) lobbyTimers += 1;
+  }
+  return {
+    activeSessions: activeSessions.size,
+    sessionStates,
+    playerThreadMap: playerThreadMap.size,
+    memberCount,
+    sessionsWithThreadRef,
+    sessionsWithStarterMessage,
+    lobbyTimers
+  };
+}
+
 module.exports = {
   isTowerButton,
   handleTowerButton,
@@ -1931,4 +2010,5 @@ module.exports = {
   handleTowerSelectMenu,
   publishTowerHallPanel,
   restoreTowerSessions,
+  getTowerDiagnostics,
 };

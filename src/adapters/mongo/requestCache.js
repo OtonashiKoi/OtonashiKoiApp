@@ -22,6 +22,11 @@ function runWithCache(fn) {
   return storage.run(new Map(), fn);
 }
 
+function clearCurrentCache() {
+  const store = storage.getStore();
+  if (store) store.clear();
+}
+
 /**
  * 包裝 progressRepository，加上請求層級快取。
  */
@@ -133,4 +138,4 @@ function withPlayerCache(repo) {
   };
 }
 
-module.exports = { runWithCache, withProgressCache, withWalletCache, withPlayerCache };
+module.exports = { runWithCache, clearCurrentCache, withProgressCache, withWalletCache, withPlayerCache };

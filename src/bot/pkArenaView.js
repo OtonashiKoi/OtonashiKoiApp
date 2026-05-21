@@ -30,8 +30,15 @@ const PK_JOIN_IDS = [
 ];
 
 const ARENA_LABELS = ["①", "②", "③", "④", "⑤", "⑥", "⑦"];
-const BET_AMOUNT = 500; // 每次下注固定金額
+const BET_AMOUNTS = [10000, 20000, 30000];
+const BET_AMOUNT = BET_AMOUNTS[0]; // 舊互動 fallback：最低下注額
 const PK_BET_SELECT_ID = "pk:bet_select";
+
+function formatGold(amount) {
+  const value = Math.max(0, Number(amount) || 0);
+  if (value >= 10000 && value % 10000 === 0) return `${value / 10000}萬`;
+  return value.toLocaleString("zh-TW");
+}
 
 function getParticipantRating(participant) {
   return Math.round(Number(participant?.rating ?? PK_RATING_DEFAULT));
@@ -103,6 +110,7 @@ function buildRankingField(ranking = []) {
   const lines = ranking.map((row, i) => {
     const medal = RANK_MEDALS[i] || `${i + 1}.`;
     const name = row.displayName || row.playerId || "???";
+    const jobName = row.jobName ? `｜${row.jobName}` : "";
     const rating = Math.round(Number(row.pkRating) || 0);
     const wins = Number(row.pkWins) || 0;
     const losses = Number(row.pkLosses) || 0;
@@ -110,7 +118,7 @@ function buildRankingField(ranking = []) {
     const dropPct  = getDropBoostPct(rating);
     const boostStr = boostPct > 0 ? ` ⚔️+${boostPct}%` : "";
     const dropStr  = dropPct  > 0 ? ` 🎁+${dropPct}%` : "";
-    return `${medal} **${name}** ${rating}分 (${wins}勝${losses}敗)${boostStr}${dropStr}`;
+    return `${medal} **${name}**${jobName} ${rating}分 (${wins}勝${losses}敗)${boostStr}${dropStr}`;
   });
   return lines.join("\n");
 }
@@ -133,7 +141,7 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = [], queue = []) {
     .setDescription(
       [
         "按下排隊後會自動隨機配對。",
-        `配對成功後開放 **1 分鐘下注**，每注 **${BET_AMOUNT} 🪙**，依 Rating 賠率派彩，隨機先後攻，自動 **15 回合**。`,
+        `配對成功後開放 **1 分鐘下注**，下注可選 **${BET_AMOUNTS.map((amount) => `${formatGold(amount)} 🪙`).join(" / ")}**，依 Rating 賠率派彩，隨機先後攻，自動 **15 回合**。`,
         `排隊中可玩其他內容，配對成功後會鎖定 PK 狀態。現在排隊：**${queueCount} 人**。`,
         "",
         "━━━━━━━━━━━━━━━━━━━━━━",
@@ -144,7 +152,7 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = [], queue = []) {
 
   if (betLines.length > 0) {
     embed.addFields({
-      name: `💰 下注（每注 ${BET_AMOUNT} 🪙）`,
+      name: `💰 下注（${BET_AMOUNTS.map((amount) => formatGold(amount)).join(" / ")} 🪙）`,
       value: betLines.join("\n"),
       inline: false,
     });
@@ -184,7 +192,7 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = [], queue = []) {
   ];
 
   if (activeBettingSlots.length > 0) {
-    const options = [];
+    const optionsByAmount = BET_AMOUNTS.map((amount) => ({ amount, options: [] }));
     for (const { s, i } of activeBettingSlots) {
       const challName = s.challenger?.name ?? `挑戰者`;
       const defName   = s.defender?.name ?? `應戰者`;
@@ -192,25 +200,30 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = [], queue = []) {
       const defId     = s.defender?.discordId || "";
       const challOdds = getSlotBetOdds(s, "challenger");
       const defOdds = getSlotBetOdds(s, "defender");
-      options.push({
-        label: `擂台 ${i + 1}｜押 ${challName} 贏`,
-        value: `pkbet:${i + 1}:${challId}:challenger`,
-        description: `賠率 ${formatPkBetOdds(challOdds)}｜中獎返還 ${Math.floor(BET_AMOUNT * challOdds)}🪙`,
-      });
-      options.push({
-        label: `擂台 ${i + 1}｜押 ${defName} 贏`,
-        value: `pkbet:${i + 1}:${defId}:defender`,
-        description: `賠率 ${formatPkBetOdds(defOdds)}｜中獎返還 ${Math.floor(BET_AMOUNT * defOdds)}🪙`,
-      });
+      for (const group of optionsByAmount) {
+        group.options.push({
+          label: `擂台 ${i + 1}｜押 ${challName} 贏`,
+          value: `pkbet:${i + 1}:${challId}:challenger`,
+          description: `${formatGold(group.amount)}｜賠率 ${formatPkBetOdds(challOdds)}｜返還 ${formatGold(Math.floor(group.amount * challOdds))}🪙`,
+        });
+        group.options.push({
+          label: `擂台 ${i + 1}｜押 ${defName} 贏`,
+          value: `pkbet:${i + 1}:${defId}:defender`,
+          description: `${formatGold(group.amount)}｜賠率 ${formatPkBetOdds(defOdds)}｜返還 ${formatGold(Math.floor(group.amount * defOdds))}🪙`,
+        });
+      }
     }
-    components.push(
-      new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(PK_BET_SELECT_ID)
-          .setPlaceholder("💰 選擇要下注的擂台與對象")
-          .addOptions(options.slice(0, 25))
-      )
-    );
+    for (const group of optionsByAmount) {
+      if (group.options.length === 0) continue;
+      components.push(
+        new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`${PK_BET_SELECT_ID}:${group.amount}`)
+            .setPlaceholder(`💰 ${formatGold(group.amount)}下注：選擇擂台與對象`)
+            .addOptions(group.options.slice(0, 25))
+        )
+      );
+    }
   }
 
   return { embeds: [embed], components };
@@ -220,6 +233,7 @@ function createPkArenaPanelMessage(arenaSlots = [], ranking = [], queue = []) {
 function createPkBattleReportMessage(slot, result, betPayouts = [], battleRewards = [], options = {}) {
   const { winner, roundLogs, finalHpA, finalHpB, hpPctA, hpPctB } = result;
   const includeRoundLogs = options.includeRoundLogs !== false;
+  const ratingLines = Array.isArray(options.ratingLines) ? options.ratingLines : [];
   const challName = slot.challenger.name;
   const defName   = slot.defender.name;
   const challMaxHp = slot.challenger.stats.maxHp;
@@ -270,6 +284,14 @@ function createPkBattleReportMessage(slot, result, betPayouts = [], battleReward
     }
   }
 
+  if (ratingLines.length > 0) {
+    embed.addFields({
+      name: "📈 Rating 變動",
+      value: ratingLines.join("\n"),
+      inline: false,
+    });
+  }
+
   if (betPayouts.length > 0) {
     embed.addFields({
       name: "💰 下注結算",
@@ -292,6 +314,8 @@ function createPkBattleReportMessage(slot, result, betPayouts = [], battleReward
 module.exports = {
   PK_ARENA_IDS,
   BET_AMOUNT,
+  BET_AMOUNTS,
+  formatGold,
   getSlotBetOdds,
   ARENA_COUNT,
   createPkArenaPanelMessage,

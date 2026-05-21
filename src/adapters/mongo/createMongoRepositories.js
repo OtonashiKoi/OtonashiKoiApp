@@ -230,14 +230,25 @@ function createMongoRepositories() {
           { $project: {
             playerId: 1,
             displayName: { $ifNull: [{ $arrayElemAt: ["$_player.displayName", 0] }, "$playerId"] },
-            pkRating: 1, pkWins: 1, pkLosses: 1, level: 1
+            pkRating: 1, pkWins: 1, pkLosses: 1, level: 1,
+            jobName: {
+              $ifNull: [
+                "$equipment.job_eq.itemName",
+                { $ifNull: ["$equipment.job_eq.name", ""] }
+              ]
+            }
           }}
         ]).toArray();
       },
       async findTopByTowerRecord(limit = 10) {
         return (await collection("progress"))
           .find({ "towerRecord.bestFloor": { $exists: true, $gt: 0 } })
-          .sort({ "towerRecord.bestFloor": -1, "towerRecord.bestAt": 1 })
+          .sort({
+            "towerRecord.bestFloor": -1,
+            "towerRecord.bestProgressDamagePct": -1,
+            "towerRecord.bestProgressDamage": -1,
+            "towerRecord.bestAt": 1
+          })
           .limit(limit)
           .project({ playerId: 1, displayName: 1, towerRecord: 1 })
           .toArray();

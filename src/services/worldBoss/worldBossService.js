@@ -44,7 +44,7 @@ const DEFAULT_CONFIG = {
   targetZone: "hard",
   weeklyUnlockKillTarget: 300,
   battleTimeLimitMinutes: 60,
-  respawnCooldownMinutes: 120,
+  respawnCooldownMinutes: 60,
   eliteZoneKey: "elite",
   phaseConfig: [
     { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0, defMultiplier: 1.0, agiBonus: 0, note: "第一階段" },

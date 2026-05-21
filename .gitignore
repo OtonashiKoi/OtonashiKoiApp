@@ -2,6 +2,7 @@
 .env
 
 # Local runtime/editor artifacts
+logs/
 Godot_v*.exe
 .claude/codex-sync/**/__pycache__/
 *.pyc

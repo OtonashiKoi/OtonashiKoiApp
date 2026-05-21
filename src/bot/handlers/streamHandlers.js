@@ -137,6 +137,31 @@ function inferStreamSupportSnapshot(comment) {
   };
 }
 
+function buildEffectiveSupportSnapshot(snapshot, platform, playerTierAtLink, rawBadges) {
+  const badgeLabels = extractBadgeLabels(rawBadges);
+  if (snapshot?.supportDetected) {
+    return {
+      supportDetected: true,
+      supportKind: snapshot.supportKind,
+      badgeLabels,
+    };
+  }
+
+  if ((platform === "youtube" || platform === "twitch") && playerTierAtLink) {
+    return {
+      supportDetected: true,
+      supportKind: platform === "youtube" ? "member" : "subscriber",
+      badgeLabels: [...badgeLabels, `Discord身分組:${playerTierAtLink}`],
+    };
+  }
+
+  return {
+    supportDetected: false,
+    supportKind: null,
+    badgeLabels,
+  };
+}
+
 function parsePositiveNumber(value) {
   const text = String(value ?? "").replace(/,/g, "");
   const match = text.match(/(\d+(?:\.\d+)?)/);
@@ -466,6 +491,12 @@ async function handleStreamBind(comment) {
   } catch (tierErr) {
     console.warn("[Stream] 綁定時解析會員等級失敗：", tierErr?.message || tierErr);
   }
+  const effectiveSupportSnapshot = buildEffectiveSupportSnapshot(
+    supportSnapshot,
+    platform,
+    playerTierAtLink,
+    comment.raw?.badges
+  );
 
   const bindingRepo = serviceContext.streamAccountBindingRepository;
   if (!bindingRepo) {
@@ -497,9 +528,9 @@ async function handleStreamBind(comment) {
         linkedAt: existingForDiscord.linkedAt || new Date().toISOString(),
         playerTierAtLink,
         memberRoleIdsAtLink,
-        linkedSupportAtLink: supportSnapshot.supportDetected,
-        linkedSupportKindAtLink: supportSnapshot.supportKind,
-        linkedSupportBadgeLabelsAtLink: extractBadgeLabels(comment.raw?.badges)
+        linkedSupportAtLink: effectiveSupportSnapshot.supportDetected,
+        linkedSupportKindAtLink: effectiveSupportSnapshot.supportKind,
+        linkedSupportBadgeLabelsAtLink: effectiveSupportSnapshot.badgeLabels
       });
     } catch (err) {
       console.warn("[Stream] 綁定更新失敗（同帳號覆寫）:", err?.message || err);
@@ -545,9 +576,9 @@ async function handleStreamBind(comment) {
       linkedAt: existingForDiscord?.linkedAt || new Date().toISOString(),
       playerTierAtLink,
       memberRoleIdsAtLink,
-      linkedSupportAtLink: supportSnapshot.supportDetected,
-      linkedSupportKindAtLink: supportSnapshot.supportKind,
-      linkedSupportBadgeLabelsAtLink: extractBadgeLabels(comment.raw?.badges)
+      linkedSupportAtLink: effectiveSupportSnapshot.supportDetected,
+      linkedSupportKindAtLink: effectiveSupportSnapshot.supportKind,
+      linkedSupportBadgeLabelsAtLink: effectiveSupportSnapshot.badgeLabels
     });
   } catch (err) {
     if (err?.code === 11000) {

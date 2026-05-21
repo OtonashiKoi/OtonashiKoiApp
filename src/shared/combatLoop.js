@@ -12,6 +12,7 @@
  * @returns {{ outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp, combatStats }}
  */
 const { collectEquipmentEffects, isEffectConditionMet } = require("./effectEngine");
+const { calcHitChance } = require("./hitChance");
 
 const WEAPON_PHRASE_BANK = {
   default: ["揮拳猛擊", "飛腿踢出", "怒拳轟擊", "突刺重擊", "橫掃一擊", "沉肩衝撞"],
@@ -1821,7 +1822,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     playerDodgeBonus += extraHighHpDodge;
 
     for (let a = 0; a < attackCount && outcome === null && !playerIsStunned && !playerIsFrozen; a++) {
-      const hitChance = (pStats.hit + playerHitBonus - playerHitPenalty) - adjustedMCalc.dodge;
+      const hitChance = calcHitChance({
+        hit: (pStats.hit + playerHitBonus - playerHitPenalty),
+        dodge: adjustedMCalc.dodge,
+        min: 20,
+      });
       if (monsterIsStunned || Math.random() * 100 < hitChance) {
         // 破防判定（斧）
         const isBreak = Math.random() * 100 < pStats.armorBreakChance;
@@ -1881,9 +1886,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 先記住「未爆擊」的傷害，格擋穿防時會回退到這個值
         const nonCritDamageBase = dmg;
 
-        // 爆擊（要害一擊必定爆擊）
+        // 爆擊與要害分開判定；要害只提供自己的傷害倍率
         const effectiveCrit = Math.min(100, (pStats.crit || 0) + playerCritRateBonus + extraHighHpCrit);
-        isCrit = weakSpotTriggered || Math.random() * 100 < effectiveCrit;
+        isCrit = Math.random() * 100 < effectiveCrit;
 
         let finalDamage = dmg;
         if (isCrit) {
@@ -1924,7 +1929,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
 
         log.push(`⚔️ ${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
-        if (weakSpotTriggered) log.push(`🎯 命中要害！傷害 ×1.5 並必定爆擊！`);
+        if (weakSpotTriggered) log.push(`🎯 命中要害！傷害 ×1.5！`);
 
         // 擊暈判定（爆擊不觸發）
         let stunBonus = extraHighHpStun;
@@ -2139,7 +2144,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
       const monsterHitChance = playerIsStunned
         ? 100
-        : adjustedMCalc.hit - (pStats.dodge * (1 + roundPartyAgiBoostPct / 100) + playerDodgeBonus);
+        : calcHitChance({
+            hit: adjustedMCalc.hit,
+            dodge: pStats.dodge * (1 + roundPartyAgiBoostPct / 100) + playerDodgeBonus,
+            min: 20,
+          });
       if (Math.random() * 100 < monsterHitChance) {
         // 盾格擋判定
         if (Math.random() * 100 < pStats.blockChance) {
@@ -2233,7 +2242,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // ── 弓箭手閃避反擊（counter_on_dodge）──
         const hasCounterOnDodge = jobProfile.activeJobEffects.some(e => e.key === 'counter_on_dodge');
         if (hasCounterOnDodge && outcome === null) {
-          const counterHitChance = (pStats.hit + playerHitBonus - playerHitPenalty) - adjustedMCalc.dodge;
+          const counterHitChance = calcHitChance({
+            hit: (pStats.hit + playerHitBonus - playerHitPenalty),
+            dodge: adjustedMCalc.dodge,
+            min: 20,
+          });
           if (monsterIsStunned || Math.random() * 100 < counterHitChance) {
             const effectiveDef = Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
             const counterBypassPct = Math.min(100, Math.max(0, (pStats.bypassMonsterDefPct ?? 0) + playerDefIgnorePct + roundPartyDefIgnorePct));
@@ -2326,7 +2339,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier));
       let dmg = rollDmg(Math.max(1, Math.round(counterBase * (1 - finalDef / 100))));
 
-      const counterHitChance = pStats.hit;
       const isCrit = Math.random() * 100 < pStats.crit;
       if (isCrit) dmg = Math.round(rollDmg(counterBase) * 2.5 * tierCritDamageMultiplier);
       if (adjustedMCalc.damageTakenMultiplier > 1) dmg = Math.max(1, Math.round(dmg * adjustedMCalc.damageTakenMultiplier));
@@ -2342,7 +2354,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 雙持副手追擊（怪物攻擊後觸發）──
     if (pStats.isDualWield && monsterAttackCount > 0 && outcome === null) {
       if (Math.random() * 100 < pStats.counterChance) {
-        const hitChance = pStats.hit - adjustedMCalc.dodge;
+        const hitChance = calcHitChance({
+          hit: pStats.hit,
+          dodge: adjustedMCalc.dodge,
+          min: 20,
+        });
         // 矮人槌+副手匕：副手追擊不借用暈眩必中（防止擊暈期間副手無限必中）
         const counterUsesStun = monsterIsStunned && !(pStats.hasDwarfWarriorBadge && pStats.weaponType && pStats.weaponType.startsWith('mace'));
         if (counterUsesStun || Math.random() * 100 < hitChance) {

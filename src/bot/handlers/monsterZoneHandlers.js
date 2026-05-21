@@ -16,6 +16,7 @@ const { scaleSupportPartyEffect } = require("../../shared/supportAuraScaling");
 const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = require("../../shared/battlePresence");
 const { getDropBoostPct } = require("../../shared/pkArenaConfig");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
+const { clearCurrentCache } = require("../../adapters/mongo/requestCache");
 const {
   isDiscordRestProtected,
   isTransientDiscordNetworkError,
@@ -48,6 +49,71 @@ const announcementWebhookCache = new Map();
 // 防止戰鬥中頻繁編輯面板，最多 5 秒更新一次排行榜
 const damageRankingDebounce = new Map();
 const BOSS_SPAWN_BROADCAST_ENABLED = false;
+const COOLDOWN_MAP_PRUNE_INTERVAL_MS = 5 * 60 * 1000;
+let cooldownMapPruneTimer = null;
+
+function pruneCooldownMap(map, now = Date.now()) {
+  for (const [discordId, cooldown] of map.entries()) {
+    if (Number(cooldown?.availableAt || 0) <= now) {
+      map.delete(discordId);
+    }
+  }
+}
+
+function startCooldownMapPruneTimer() {
+  if (cooldownMapPruneTimer) return;
+  cooldownMapPruneTimer = setInterval(() => {
+    const now = Date.now();
+    pruneCooldownMap(battleCooldowns, now);
+    pruneCooldownMap(deathCooldowns, now);
+  }, COOLDOWN_MAP_PRUNE_INTERVAL_MS);
+  cooldownMapPruneTimer.unref?.();
+}
+
+startCooldownMapPruneTimer();
+
+function getMonsterZoneDiagnostics() {
+  const sessionStates = {};
+  const now = Date.now();
+  let displayingOverdue = 0;
+  let maxDisplayAgeSec = 0;
+  let maxDisplayOverdueSec = 0;
+  let displayCleanupTimers = 0;
+  for (const session of activeSessions.values()) {
+    const state = session?.state || "unknown";
+    sessionStates[state] = (sessionStates[state] || 0) + 1;
+    if (state === "displaying") {
+      const startedAt = Number(session?.displayStartedAt || 0);
+      const endsAt = Number(session?.displayEndsAt || 0)
+        || (Number(session?.displayStartedAt || 0) + Number(session?.displayDurationMs || 0));
+      if (startedAt) maxDisplayAgeSec = Math.max(maxDisplayAgeSec, Math.round((now - startedAt) / 1000));
+      if (endsAt && now > endsAt + DISPLAYING_SESSION_CLEANUP_GRACE_MS) {
+        displayingOverdue += 1;
+        maxDisplayOverdueSec = Math.max(maxDisplayOverdueSec, Math.round((now - endsAt) / 1000));
+      }
+      if (session?.displayCleanupTimeoutId) displayCleanupTimers += 1;
+    }
+  }
+  return {
+    activeSessions: activeSessions.size,
+    sessionStates,
+    displayingOverdue,
+    maxDisplayAgeSec,
+    maxDisplayOverdueSec,
+    displayCleanupTimers,
+    pendingBattleReservations: pendingBattleReservations.size,
+    battleActionLocks: battleActionLocks.size,
+    battleCooldowns: battleCooldowns.size,
+    deathCooldowns: deathCooldowns.size,
+    killInProgress: killInProgress.size,
+    zoneEventTimers: zoneEventTimers.size,
+    monsterTransitionTimers: monsterTransitionTimers.size,
+    activeMonsterTransitions: activeMonsterTransitions.size,
+    worldBossTimeoutTimers: worldBossTimeoutTimers.size,
+    announcementWebhookCache: announcementWebhookCache.size,
+    damageRankingDebounce: damageRankingDebounce.size
+  };
+}
 
 async function getAnnouncementWebhook(channel, name = "OtonashiKoi Announcements") {
   if (!channel?.isTextBased?.()) return null;
@@ -98,6 +164,11 @@ function setMonsterSession(discordId, session) {
 }
 
 function deleteMonsterSession(discordId) {
+  const session = activeSessions.get(discordId);
+  if (session?.displayCleanupTimeoutId) {
+    clearTimeout(session.displayCleanupTimeoutId);
+    session.displayCleanupTimeoutId = null;
+  }
   const removed = activeSessions.delete(discordId);
   if (removed) syncMonsterBattlePresence();
   return removed;
@@ -114,6 +185,25 @@ function cancelMonsterSession(discordId, reason = "戰鬥已取消。") {
   }
   pendingBattleReservations.delete(discordId);
   return deleteMonsterSession(discordId);
+}
+
+function scheduleDisplayingSessionCleanup(discordId, displayEndsAtMs) {
+  const session = activeSessions.get(discordId);
+  if (!session || session.state !== "displaying") return;
+  if (session.displayCleanupTimeoutId) {
+    clearTimeout(session.displayCleanupTimeoutId);
+  }
+  const dueMs = Math.max(1_000, Number(displayEndsAtMs || 0) - Date.now() + DISPLAYING_SESSION_CLEANUP_GRACE_MS);
+  session.displayCleanupTimeoutId = setTimeout(() => {
+    const live = activeSessions.get(discordId);
+    if (!live || live.state !== "displaying") return;
+    const endsAt = Number(live.displayEndsAt || 0)
+      || (Number(live.displayStartedAt || 0) + Number(live.displayDurationMs || 0));
+    if (endsAt && Date.now() < endsAt + DISPLAYING_SESSION_CLEANUP_GRACE_MS) return;
+    console.warn(`[MonsterZone] cleared stale displaying session | player=${discordId} | zone=${live.zoneKey || "?"} | monster=${live.monsterName || "?"}`);
+    deleteMonsterSession(discordId);
+  }, dueMs);
+  session.displayCleanupTimeoutId.unref?.();
 }
 
 function clearQueuedEliteWorldBossSessions(reason = "世界BOSS 已結束，本次排隊已取消，請重新排隊。") {
@@ -138,6 +228,8 @@ const ROUNDS_PER_TICK = 1;           // 每次更新顯示 1 回合，維持逐�
 const BATTLE_PROGRESS_MAX_UPDATES = 3; // 避免對 Discord 連續重送大量戰報造成 GOAWAY
 const BATTLE_PROGRESS_RECENT_LOGS = 4;
 const DISCORD_REPLY_RETRY_DELAY_MS = 700;
+const DISCORD_REPLY_TIMEOUT_MS = 8_000;
+const DISPLAYING_SESSION_CLEANUP_GRACE_MS = 15_000;
 const MONSTER_TRANSITION_MS = 500;   // 怪物轉場空窗：0.5 秒
 const BATTLE_QUEUE_POLL_MS = 500;    // 排隊等待輪詢：0.5 秒
 const DEATH_EXTRA_COOLDOWN_MS = 10 * 1000; // 死亡額外冷卻：在 15 回合基準時間外再加 10 秒
@@ -666,6 +758,7 @@ async function scheduleEliteWorldBossTimeout(sc, zoneKey, monster) {
   }, Math.max(1000, remainingMs + 1000));
 
   worldBossTimeoutTimers.set(zoneKey, timer);
+  timer.unref?.();
 }
 
 function resolveWeaponQuestMetric(weaponType = "") {
@@ -1300,6 +1393,9 @@ function createBattleParticipantCache(sc) {
       if (!pid) return;
       cache.set(pid, Promise.resolve(snapshot));
     },
+    clear() {
+      cache.clear();
+    },
     async get(pid, displayNameFallback = null) {
       if (!pid) {
         return {
@@ -1848,7 +1944,7 @@ function isTransientDiscordError(err) {
   if (isTransientDiscordNetworkError(err)) return true;
   if (/Unknown interaction/i.test(err?.message || "")) return true;
   const code = err?.code || "";
-  return code === "ENOTFOUND" || code === "ECONNREFUSED";
+  return code === "ENOTFOUND" || code === "ECONNREFUSED" || code === "DISCORD_REQUEST_TIMEOUT";
 }
 
 function getBattleProgressSteps(logCount) {
@@ -1901,6 +1997,82 @@ function getBattleProgressDelayMs(totalDurationMs, progressStepCount) {
   return Math.max(0, Math.floor(Math.max(0, Number(totalDurationMs) || 0) / slots));
 }
 
+async function displaySettledBattleResult({
+  interaction,
+  discordId,
+  displayRoundLogs,
+  rewardLines,
+  embedTitle,
+  embedColor,
+  displayEndsAt,
+  progressDelayMs,
+  pendingDeathCooldown = false,
+  battleStartedAt = Date.now(),
+  playerAgi = 1
+}) {
+  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+  const MAX_DESC = 3800;
+  const progressSteps = getBattleProgressSteps(displayRoundLogs.length);
+
+  for (const step of progressSteps) {
+    const truncated = buildBattleProgressDescription(displayRoundLogs, step, MAX_DESC);
+    const progressEmbed = new EmbedBuilder()
+      .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(step, displayRoundLogs.length)} 回合`)
+      .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
+      .setColor(0xe74c3c);
+    await retryInteractionEditReply(interaction, { embeds: [progressEmbed], components: [] }, 1).catch(() => {});
+    await delay(progressDelayMs);
+  }
+  await delay(Math.max(0, Number(displayEndsAt || 0) - Date.now()));
+
+  if (pendingDeathCooldown) {
+    const availableAt = Math.max(
+      Number(displayEndsAt || 0),
+      Number(battleStartedAt || Date.now()) + getBattleBaselineDurationMs(playerAgi ?? 1)
+    ) + DEATH_EXTRA_COOLDOWN_MS;
+    recordDeathCooldown(discordId, availableAt);
+    const remainingCooldown = getRemainingCooldown(discordId);
+    rewardLines = rewardLines.map((line) => (
+      /^⏳ (死亡懲罰|冷卻)/.test(line)
+        ? (remainingCooldown > 0
+          ? `⏳ 冷卻中... 約 ${remainingCooldown} 秒後可再次進場。`
+          : "⏳ 冷卻即將結束，請稍後再試。")
+        : line
+    ));
+  }
+
+  const logText = displayRoundLogs.join("\n\n");
+  let displayLog = logText.length > MAX_DESC
+    ? logText.slice(0, MAX_DESC) + "\n…（部分回合已省略）"
+    : logText;
+  if (logText.length > MAX_DESC) {
+    const highlights = buildCombatImportantHighlights(displayRoundLogs, displayLog);
+    if (highlights) {
+      displayLog = (highlights + displayLog).slice(0, MAX_DESC) + "\n…（部分回合已省略）";
+    }
+  }
+  const resultBlock = rewardLines.length > 0 ? "\n\n" + rewardLines.join("\n") : "";
+
+  const embed = new EmbedBuilder()
+    .setTitle(embedTitle)
+    .setDescription(displayLog + resultBlock)
+    .setColor(embedColor);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(BTN.deleteLog).setLabel("🗑️ 刪除紀錄").setStyle(ButtonStyle.Secondary)
+  );
+
+  try {
+    await safeBattleResultReply(interaction, { embeds: [embed], components: [row] }, `⚔️ 戰鬥結算已完成：<@${discordId}>`);
+  } catch (componentErr) {
+    console.error("[monsterZoneHandlers] 編輯回覆失敗 (components):", componentErr.message);
+    await safeBattleResultReply(interaction, { embeds: [embed], components: [] }, `⚔️ 戰鬥結算已完成：<@${discordId}>`).catch(() => {});
+  } finally {
+    displayRoundLogs.length = 0;
+    rewardLines.length = 0;
+  }
+}
+
 async function retryInteractionEditReply(interaction, payload, attempts = 2) {
   if (isDiscordRestProtected()) return false;
 
@@ -1908,7 +2080,11 @@ async function retryInteractionEditReply(interaction, payload, attempts = 2) {
   const maxAttempts = Math.max(1, Number(attempts) || 1);
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await interaction.editReply(payload);
+      await withDiscordTimeout(
+        interaction.editReply(payload),
+        DISCORD_REPLY_TIMEOUT_MS,
+        "interaction editReply timeout"
+      );
       return true;
     } catch (err) {
       lastErr = err;
@@ -1921,6 +2097,21 @@ async function retryInteractionEditReply(interaction, payload, attempts = 2) {
   throw lastErr;
 }
 
+function withDiscordTimeout(promise, timeoutMs, message) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(message || "Discord request timeout");
+      error.code = "DISCORD_REQUEST_TIMEOUT";
+      reject(error);
+    }, Math.max(1_000, Number(timeoutMs) || DISCORD_REPLY_TIMEOUT_MS));
+    timer.unref?.();
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 async function safeBattleResultReply(interaction, payload, fallbackContent) {
   try {
     return await retryInteractionEditReply(interaction, payload, 3);
@@ -1928,10 +2119,14 @@ async function safeBattleResultReply(interaction, payload, fallbackContent) {
     markDiscordRestError(err, "battle result reply");
     if (!isTransientDiscordError(err)) throw err;
     try {
-      await interaction.followUp({
-        flags: MessageFlags.Ephemeral,
-        content: fallbackContent || "戰鬥結果已完成結算，但 Discord 回覆暫時不穩，已略過完整戰報顯示。",
-      });
+      await withDiscordTimeout(
+        interaction.followUp({
+          flags: MessageFlags.Ephemeral,
+          content: fallbackContent || "戰鬥結果已完成結算，但 Discord 回覆暫時不穩，已略過完整戰報顯示。",
+        }),
+        DISCORD_REPLY_TIMEOUT_MS,
+        "interaction followUp timeout"
+      );
     } catch (sendErr) {
       console.error("[monsterZoneHandlers] battle fallback followUp failed:", sendErr?.message || sendErr);
     }
@@ -2141,13 +2336,13 @@ async function handleEnterBattle(interaction) {
 
     const entryFee = Math.max(0, Number(monster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0);
 
-    const progress = cachedProgress ?? await sc.progressRepository.findByPlayerId(discordId);
+    let progress = cachedProgress ?? await sc.progressRepository.findByPlayerId(discordId);
     const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
-    const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, sc.itemRepository);
+    let equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, sc.itemRepository);
     const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating });
     const participantCache = createBattleParticipantCache(sc);
-    const currentSnapshot = {
+    let currentSnapshot = {
       progress,
       player: null,
       displayName,
@@ -2396,9 +2591,9 @@ async function handleEnterBattle(interaction) {
         }
       }
 
-      const currentProg = currentSnapshot.progress;
+      let currentProg = currentSnapshot.progress;
       // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
-      const currentEquipped = currentSnapshot.equipped;
+      let currentEquipped = currentSnapshot.equipped;
 
       let battlePlayerStats = session.playerStats;
       let battleTargetNote = null;
@@ -2410,7 +2605,7 @@ async function handleEnterBattle(interaction) {
 
       const monsterHpBeforeBattle = session.monsterHp;
       const { runCombatLoop } = require("../../shared/combatLoop");
-      const combatResult =
+      let combatResult =
         runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
           playerName: displayName,
           equipped: currentEquipped,
@@ -2420,7 +2615,8 @@ async function handleEnterBattle(interaction) {
           monsterIsBoss: Boolean(battleMonster?.isBoss),
           worldBossPhase: session.worldBossPhase || null
         });
-      const { roundLogs, finalPlayerHp, combatStats } = combatResult;
+      const { roundLogs, finalPlayerHp } = combatResult;
+      let combatStats = combatResult.combatStats;
       const zoneDamageSyncApplied = false;
       const syncResult = zoneDamageSyncApplied
         ? applyZoneDamageSync(
@@ -2606,78 +2802,59 @@ async function handleEnterBattle(interaction) {
       } catch (e) {
         console.error("[Quest] recordProgress error:", e.message);
       }
+      participantCache.clear();
+      partyEffects.length = 0;
+      if (currentProg) {
+        currentProg.inventory = [];
+        currentProg.equipment = {};
+      }
 
       // 戰鬥已結算，但先保留 session 至顯示完畢才刪除，避免期間重複出戰
       if (activeSessions.has(discordId)) activeSessions.get(discordId).state = "displaying";
 
-      // ── 逐步顯示回合（每 ROUNDS_PER_TICK 回合更新一次）──
-      const delay = (ms) => new Promise((r) => setTimeout(r, ms));
-      const MAX_DESC = 3800;
       const displayRoundLogs = compactAuraSourceNames(roundLogs);
-      const progressSteps = getBattleProgressSteps(displayRoundLogs.length);
+      roundLogs.length = 0;
       const displayDelayMs = getBattleDisplayDurationMs(session.playerStats?.agi ?? 1, MAX_ROUNDS);
-      const progressDelayMs = getBattleProgressDelayMs(displayDelayMs, progressSteps.length);
+      const progressDelayMs = getBattleProgressDelayMs(displayDelayMs, getBattleProgressSteps(displayRoundLogs.length).length);
+      const displayStartedAt = Date.now();
+      const displayEndsAt = displayStartedAt + displayDelayMs;
+      const battleStartedAtForDisplay = Number(session.battleStartedAt || displayStartedAt);
+      const playerAgiForDisplay = session.playerStats?.agi ?? 1;
       if (activeSessions.has(discordId)) {
-        const displayStartedAt = Date.now();
         const activeSession = activeSessions.get(discordId);
         activeSession.displayStartedAt = displayStartedAt;
         activeSession.displayDurationMs = displayDelayMs;
-        activeSession.displayEndsAt = displayStartedAt + displayDelayMs;
+        activeSession.displayEndsAt = displayEndsAt;
       }
-      const displayEndsAt = Date.now() + displayDelayMs;
       recordBattleCooldown(discordId, displayEndsAt);
+      scheduleDisplayingSessionCleanup(discordId, displayEndsAt);
+      session.monsterStats = null;
+      session.playerStats = { agi: playerAgiForDisplay };
+      currentEquipped = null;
+      currentProg = null;
+      currentSnapshot = null;
+      equipped = null;
+      progress = null;
+      battlePlayerStats = null;
+      combatResult = null;
+      combatStats = null;
+      battleState = null;
+      battleStateForSettlement = null;
+      battleMonster = null;
+      clearCurrentCache();
 
-      for (const step of progressSteps) {
-        const truncated = buildBattleProgressDescription(displayRoundLogs, step, MAX_DESC);
-        const progressEmbed = new EmbedBuilder()
-          .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(step, displayRoundLogs.length)} 回合`)
-          .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
-          .setColor(0xe74c3c);
-        await retryInteractionEditReply(interaction, { embeds: [progressEmbed], components: [] }, 1).catch(() => {});
-        await delay(progressDelayMs);
-      }
-      await delay(Math.max(0, displayEndsAt - Date.now()));
-
-    if (pendingDeathCooldown) {
-      const battleStartedAt = Number(session.battleStartedAt || Date.now());
-      const availableAt = Math.max(displayEndsAt, battleStartedAt + getBattleBaselineDurationMs(session.playerStats?.agi ?? 1)) + DEATH_EXTRA_COOLDOWN_MS;
-      recordDeathCooldown(discordId, availableAt);
-      const remainingCooldown = getRemainingCooldown(discordId);
-      rewardLines = rewardLines.map((line) => (
-        line === "⏳ 死亡懲罰計時中..."
-          ? (remainingCooldown > 0
-            ? `⏳ 冷卻中... 約 ${remainingCooldown} 秒後可再次進場。`
-            : "⏳ 冷卻即將結束，請稍後再試。")
-          : line
-      ));
-    }
-
-      // ── 最終結果 ──
-      const logText = displayRoundLogs.join("\n\n");
-      let displayLog = logText.length > MAX_DESC
-        ? logText.slice(0, MAX_DESC) + "\n…（部分回合已省略）"
-        : logText;
-      if (logText.length > MAX_DESC) {
-        const highlights = buildCombatImportantHighlights(displayRoundLogs, displayLog);
-        if (highlights) {
-          displayLog = (highlights + displayLog).slice(0, MAX_DESC) + "\n…（部分回合已省略）";
-        }
-      }
-      const resultBlock = rewardLines.length > 0 ? "\n\n" + rewardLines.join("\n") : "";
-
-      const embed = new EmbedBuilder()
-        .setTitle(embedTitle)
-        .setDescription(displayLog + resultBlock)
-        .setColor(embedColor);
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(BTN.deleteLog).setLabel("🗑️ 刪除紀錄").setStyle(ButtonStyle.Secondary)
-      );
-
-      await safeBattleResultReply(interaction, { embeds: [embed], components: [row] }, `⚔️ 戰鬥結算：<@${discordId}>`).catch((err) => {
-        if (!isTransientDiscordError(err)) {
-          console.error(`[monsterZoneHandlers] battle result reply failed | player=${discordId}(${displayName}) | zone=${zoneKey ?? "?"} | err=${err?.message || err}`);
-        }
+      await displaySettledBattleResult({
+        interaction,
+        discordId,
+        displayRoundLogs,
+        rewardLines,
+        embedTitle,
+        embedColor,
+        displayEndsAt,
+        progressDelayMs,
+        pendingDeathCooldown,
+        battleStartedAt: battleStartedAtForDisplay,
+        playerAgi: playerAgiForDisplay
       });
       deleteMonsterSession(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
     } catch (err) {
@@ -2801,7 +2978,7 @@ async function handleStartFight(interaction) {
     const participants = Array.isArray(state.participants) ? state.participants : [];
     const allParticipantsWithSelf = [...new Set([...participants, discordId])];
     const participantCache = createBattleParticipantCache(sc);
-    const currentSnapshot = await participantCache.get(discordId, displayName);
+    let currentSnapshot = await participantCache.get(discordId, displayName);
     const partyEffects = [];
     await Promise.all(allParticipantsWithSelf.map(async (pid) => {
       try {
@@ -2831,9 +3008,9 @@ async function handleStartFight(interaction) {
       }
     }
 
-    const currentProg = currentSnapshot.progress;
+    let currentProg = currentSnapshot.progress;
     // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
-    const currentEquipped = currentSnapshot.equipped;
+    let currentEquipped = currentSnapshot.equipped;
 
     let battlePlayerStats = session.playerStats;
     let battleTargetNote = null;
@@ -2846,7 +3023,7 @@ async function handleStartFight(interaction) {
 
     const monsterHpBeforeBattle = session.monsterHp;
     const { runCombatLoop } = require("../../shared/combatLoop");
-    const combatResult =
+    let combatResult =
       runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
         playerName: displayName,
         equipped: currentEquipped,
@@ -2856,7 +3033,8 @@ async function handleStartFight(interaction) {
         monsterIsBoss: Boolean(monster?.isBoss),
         worldBossPhase: session.worldBossPhase || null
       });
-    const { roundLogs, finalPlayerHp, combatStats } = combatResult;
+    const { roundLogs, finalPlayerHp } = combatResult;
+    let combatStats = combatResult.combatStats;
     const zoneDamageSyncApplied = false;
     const syncResult = zoneDamageSyncApplied
       ? applyZoneDamageSync(
@@ -3010,72 +3188,54 @@ async function handleStartFight(interaction) {
     } catch (e) {
       console.error("[Quest] recordProgress error:", e.message);
     }
+    participantCache.clear();
+    partyEffects.length = 0;
+    if (currentProg) {
+      currentProg.inventory = [];
+      currentProg.equipment = {};
+    }
 
     // 戰鬥已結算，但先保留 session 至顯示完畢才刪除，避免期間重複出戰
     if (activeSessions.has(discordId)) activeSessions.get(discordId).state = "displaying";
 
-    // ── 逐步顯示回合（每 ROUNDS_PER_TICK 回合更新一次）──
-    const delay = (ms) => new Promise((r) => setTimeout(r, ms));
-    const MAX_DESC = 3800;
     const displayRoundLogs = compactAuraSourceNames(roundLogs);
-    const progressSteps = getBattleProgressSteps(displayRoundLogs.length);
+    roundLogs.length = 0;
     const displayDelayMs = getBattleDisplayDurationMs(session.playerStats?.agi ?? 1, MAX_ROUNDS);
-    const progressDelayMs = getBattleProgressDelayMs(displayDelayMs, progressSteps.length);
+    const progressDelayMs = getBattleProgressDelayMs(displayDelayMs, getBattleProgressSteps(displayRoundLogs.length).length);
+    const battleStartedAtForDisplay = Number(session.battleStartedAt || Date.now());
+    const playerAgiForDisplay = session.playerStats?.agi ?? 1;
     session.displayStartedAt = Date.now();
     session.displayDurationMs = displayDelayMs;
     session.displayEndsAt = session.displayStartedAt + session.displayDurationMs;
-    recordBattleCooldown(discordId, session.displayEndsAt);
+    const displayEndsAt = session.displayEndsAt;
+    recordBattleCooldown(discordId, displayEndsAt);
+    scheduleDisplayingSessionCleanup(discordId, displayEndsAt);
+    session.monsterStats = null;
+    session.playerStats = { agi: playerAgiForDisplay };
+    currentEquipped = null;
+    currentProg = null;
+    currentSnapshot = null;
+    battlePlayerStats = null;
+    combatResult = null;
+    combatStats = null;
+    state = null;
+    stateForSettlement = null;
+    monster = null;
+    clearCurrentCache();
 
-    for (const step of progressSteps) {
-      const truncated = buildBattleProgressDescription(displayRoundLogs, step, MAX_DESC);
-      const progressEmbed = new EmbedBuilder()
-        .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(step, displayRoundLogs.length)} 回合`)
-        .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
-        .setColor(0xe74c3c);
-      await retryInteractionEditReply(interaction, { embeds: [progressEmbed], components: [] }, 1).catch(() => {});
-      await delay(progressDelayMs);
-    }
-    await delay(Math.max(0, session.displayEndsAt - Date.now()));
-
-    if (pendingDeathCooldown) {
-      const remainingCooldown = getRemainingCooldown(discordId);
-      rewardLines = rewardLines.map((line) => (
-        /^⏳ 冷卻/.test(line)
-          ? (remainingCooldown > 0
-            ? `⏳ 冷卻中... 約 ${remainingCooldown} 秒後可再次進場。`
-            : "⏳ 冷卻即將結束，請稍後再試。")
-          : line
-      ));
-    }
-
-    // ── 最終結果 ──
-    const logText = displayRoundLogs.join("\n\n");
-    let displayLog = logText.length > MAX_DESC
-      ? logText.slice(0, MAX_DESC) + "\n…（部分回合已省略）"
-      : logText;
-    if (logText.length > MAX_DESC) {
-      const highlights = buildCombatImportantHighlights(displayRoundLogs, displayLog);
-      if (highlights) {
-        displayLog = (highlights + displayLog).slice(0, MAX_DESC) + "\n…（部分回合已省略）";
-      }
-    }
-    const resultBlock = rewardLines.length > 0 ? "\n\n" + rewardLines.join("\n") : "";
-
-    const embed = new EmbedBuilder()
-      .setTitle(embedTitle)
-      .setDescription(displayLog + resultBlock)
-      .setColor(embedColor);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(BTN.deleteLog).setLabel("🗑️ 刪除紀錄").setStyle(ButtonStyle.Secondary)
-    );
-
-    try {
-      await safeBattleResultReply(interaction, { embeds: [embed], components: [row] }, `⚔️ 戰鬥結算已完成：<@${discordId}>`);
-    } catch (componentErr) {
-      console.error("[monsterZoneHandlers] 編輯回覆失敗 (components):", componentErr.message);
-      await safeBattleResultReply(interaction, { embeds: [embed], components: [] }, `⚔️ 戰鬥結算已完成：<@${discordId}>`).catch(() => {});
-    }
+    await displaySettledBattleResult({
+      interaction,
+      discordId,
+      displayRoundLogs,
+      rewardLines,
+      embedTitle,
+      embedColor,
+      displayEndsAt,
+      progressDelayMs,
+      pendingDeathCooldown,
+      battleStartedAt: battleStartedAtForDisplay,
+      playerAgi: playerAgiForDisplay
+    });
     deleteMonsterSession(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
   } catch (err) {
     deleteMonsterSession(discordId);
@@ -3630,7 +3790,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   if (zoneKey === "elite" && monster?.isBoss && sc.worldBossService) {
     const resetParts = ensureWorldBossPartState({}, monster.calc.maxHp);
     const wbConfig = await sc.worldBossService.getConfig().catch(() => null);
-    const bossLockMs = Math.max(1, Number(wbConfig?.respawnCooldownMinutes || 120)) * 60 * 1000;
+    const bossLockMs = Math.max(1, Number(wbConfig?.respawnCooldownMinutes || 60)) * 60 * 1000;
     const bossLockUntil = new Date(Date.now() + bossLockMs + 15 * 1000);
     const bossResetState = {
       ...freshState,
@@ -4438,17 +4598,25 @@ async function refreshEliteWorldBossPanel() {
   try {
     const sc = getServiceContext();
     if (await _resolveExpiredMonsterTransition(sc, "elite")) return;
-    const eliteState = await sc.monsterService.getState("elite").catch(() => null);
+    let eliteState = await sc.monsterService.getState("elite").catch(() => null);
     const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: "elite" }).catch(() => []);
     const monster = monsters.find((m) => Number(m.seq) === Number(eliteState?.activeMonsterSeq))
       || monsters.find((m) => m.isBoss)
       || null;
-    const monsterHp = monster ? (eliteState.currentHp ?? monster.calc?.maxHp ?? 0) : null;
-    const damageMap = eliteState.damageMap || {};
-    const participantCount = Array.isArray(eliteState.participants) ? eliteState.participants.length : 0;
-    const activeEvent = eliteState.activeEvent || null;
-    const worldBossPartsHp = eliteState.worldBossPartsHp || null;
-    const activeTransition = eliteState.activeTransition || null;
+    if (monster?.isBoss) {
+      const timeoutResult = await maybeHandleEliteWorldBossTimeout(sc, "elite", eliteState || {}, monster);
+      if (timeoutResult?.timedOut) {
+        eliteState = timeoutResult.state;
+      } else {
+        await scheduleEliteWorldBossTimeout(sc, "elite", monster).catch(() => {});
+      }
+    }
+    const monsterHp = monster ? (eliteState?.currentHp ?? monster.calc?.maxHp ?? 0) : null;
+    const damageMap = eliteState?.damageMap || {};
+    const participantCount = Array.isArray(eliteState?.participants) ? eliteState.participants.length : 0;
+    const activeEvent = eliteState?.activeEvent || null;
+    const worldBossPartsHp = eliteState?.worldBossPartsHp || null;
+    const activeTransition = eliteState?.activeTransition || null;
 
     await _republishPanel(sc, "elite", monster, monsterHp, participantCount, damageMap, activeEvent, worldBossPartsHp, { activeTransition });
   } catch (error) {
@@ -4510,6 +4678,7 @@ module.exports = {
   _broadcastBossSpawn,
   _doIdleRotate,
   activeSessions,
+  getMonsterZoneDiagnostics,
   startIdleRotateTimer,
   refreshEliteWorldBossPanel,
   refreshMonsterZonePanels

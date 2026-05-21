@@ -57,7 +57,7 @@
           </label>
           <label><span>每週高級區擊殺門檻</span><input id="wb-unlock-target" class="sheet-input" type="number" min="1" value="${Number(config.weeklyUnlockKillTarget || 300)}" /></label>
           <label><span>挑戰時限（分鐘）</span><input id="wb-battle-limit" class="sheet-input" type="number" min="1" value="${Number(config.battleTimeLimitMinutes || 60)}" /></label>
-          <label><span>擊殺後重生冷卻（分鐘）</span><input id="wb-respawn-cd" class="sheet-input" type="number" min="0" value="${Number(config.respawnCooldownMinutes || 120)}" /></label>
+          <label><span>擊殺後重生冷卻（分鐘）</span><input id="wb-respawn-cd" class="sheet-input" type="number" min="0" value="${Number(config.respawnCooldownMinutes || 60)}" /></label>
         </div>
 
         <div style="margin-top:10px;">
@@ -83,7 +83,7 @@
       enabled: document.getElementById("wb-enabled")?.value !== "false",
       weeklyUnlockKillTarget: Number(document.getElementById("wb-unlock-target")?.value || 300),
       battleTimeLimitMinutes: Number(document.getElementById("wb-battle-limit")?.value || 60),
-      respawnCooldownMinutes: Number(document.getElementById("wb-respawn-cd")?.value || 120),
+      respawnCooldownMinutes: Number(document.getElementById("wb-respawn-cd")?.value || 60),
       phaseConfig: [
         {
           phase: 1,

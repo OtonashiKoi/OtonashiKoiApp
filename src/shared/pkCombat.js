@@ -11,6 +11,7 @@
 const {
   collectEquipmentEffects,
 } = require("./effectEngine");
+const { calcHitChance } = require("./hitChance");
 
 // ── 從 combatLoop 借用純工具函式 ─────────────────────────────
 // 直接 inline 以避免循環依賴（combatLoop 沒有 export 這些）
@@ -74,6 +75,11 @@ const ROUND_DAMAGE_CAP_PCT = 25;
 const IMMEDIATE_HEAL_KEYS = new Set(["heal_over_time", "life_regen", "mana_regen", "on_hit_heal", "on_crit_heal"]);
 const IMMEDIATE_DAMAGE_KEYS = new Set(["burn", "poison", "bleed", "lightning", "shock_dot", "curse_dot"]);
 const IMMEDIATE_LOG_SUPPRESS_KEYS = new Set([...IMMEDIATE_DAMAGE_KEYS, ...IMMEDIATE_HEAL_KEYS]);
+const PK_CARD_OFFENSIVE_KEYS = new Set([
+  'atk_down', 'def_down', 'poison', 'bleed', 'burn', 'freeze', 'stun',
+  'silence', 'charm', 'lightning', 'freeze_slow', 'hit_down', 'hit_rate_down',
+  'agi_down', 'dodge_down', 'dark_curse'
+]);
 
 function hasMultiTurnDuration(effect) {
   const duration = effect?.duration || effect?.params?.duration || null;
@@ -164,6 +170,29 @@ function dealImmediateSkillHeal({
   targetHpRef.value = Math.min(targetMaxHp, targetHpRef.value + heal);
   log.push(`🎴 **${sourceName || targetName}** 發動【${skillName}】！${healLabel} **${heal}** HP！（${targetName} 剩 ${Math.max(0, targetHpRef.value)} HP）`);
   return heal;
+}
+
+function hasActiveInvincible(activeEffects = [], round = 1) {
+  return (activeEffects || []).some((eff) => eff?.key === "invincible_short" && effectIsActive(eff, round));
+}
+
+function applyInvincibleDamage(rawDamage, activeEffects = [], round = 1) {
+  return hasActiveInvincible(activeEffects, round) ? 0 : rawDamage;
+}
+
+function effectHasHpThreshold(effect = {}) {
+  const p = effect.params || {};
+  return Number.isFinite(Number(p.ownerHpBelowPct))
+    || Number.isFinite(Number(p.ownerHpAbovePct))
+    || Number.isFinite(Number(p.targetHpBelowPct));
+}
+
+function hpThresholdApplies(effect = {}, ownerHpPct = 100, targetHpPct = 100) {
+  const p = effect.params || {};
+  if (Number.isFinite(Number(p.ownerHpAbovePct)) && ownerHpPct <= Number(p.ownerHpAbovePct)) return false;
+  if (Number.isFinite(Number(p.ownerHpBelowPct)) && ownerHpPct >= Number(p.ownerHpBelowPct)) return false;
+  if (Number.isFinite(Number(p.targetHpBelowPct)) && targetHpPct >= Number(p.targetHpBelowPct)) return false;
+  return true;
 }
 
 function rollDmg(base, stats = {}) {
@@ -258,6 +287,7 @@ function resolveGuaranteedStrike({
     }
   }
   if (damageRedPct > 0) dmg = Math.max(1, Math.round(dmg * (1 - Math.min(95, damageRedPct) / 100)));
+  dmg = applyInvincibleDamage(dmg, targetActive, round);
 
   const capResult = applyRoundDamageCap({
     targetKey,
@@ -292,6 +322,86 @@ const COUNTER_PHRASES= ["抓準破綻", "順勢回擊", "趁勢反撲", "借力�
 const COMBO_PHRASES  = ["連擊！", "殘影連斬！", "急速追打！", "趁勢猛攻！", "流暢追擊！"];
 const STUN_PHRASES   = ["被重擊擊暈", "失去平衡", "陷入眩暈", "腦中一陣空白"];
 
+function applyPkHpGatedSelfCards({
+  actorStats,
+  actorOpts,
+  actorName,
+  actorHpRef,
+  actorActive,
+  targetStats,
+  targetHpRef,
+  round,
+  log,
+}) {
+  let nextActive = Array.isArray(actorActive) ? actorActive : [];
+  if (!actorOpts?._cardCooldowns) actorOpts._cardCooldowns = {};
+
+  for (const [slot, slotItem] of Object.entries(actorOpts?.equipped || {})) {
+    const skill = slotItem?.monsterCardSkill;
+    if (!skill?.key) continue;
+    const skillName = skill.name || slotItem.itemName || slotItem.name || "卡片";
+    const cooldownKey = slotItem.itemId || slotItem.id || `${slot}:${skillName}`;
+    if (Number(actorOpts._cardCooldowns[cooldownKey] || 0) > 0) continue;
+
+    const procEffects = (Array.isArray(skill.procEffects) ? skill.procEffects : [])
+      .filter((effect) => effectHasHpThreshold(effect)
+        && effect.target !== "enemy"
+        && !PK_CARD_OFFENSIVE_KEYS.has(effect.key));
+    if (procEffects.length === 0) continue;
+
+    const ownerHpPct = actorStats.maxHp > 0 ? (actorHpRef.value / actorStats.maxHp) * 100 : 100;
+    const targetHpPct = targetStats.maxHp > 0 ? (targetHpRef.value / targetStats.maxHp) * 100 : 100;
+    const matched = procEffects.filter((effect) => hpThresholdApplies(effect, ownerHpPct, targetHpPct));
+    if (matched.length === 0) continue;
+
+    if (Number(skill.cooldownTurns) > 0) {
+      actorOpts._cardCooldowns[cooldownKey] = Number(skill.cooldownTurns);
+    }
+
+    let appliedAny = false;
+    for (const effect of matched) {
+      const pp = effect.params || {};
+      const chance = Number.isFinite(Number(effect.chance)) ? Number(effect.chance) : 100;
+      if (Math.random() * 100 >= chance) continue;
+      if (shouldApplyAsImmediateHeal(effect)) {
+        const healPct = Number.isFinite(Number(pp.value)) ? Math.abs(Number(pp.value)) : 5;
+        const healAmount = pp.mode === "flat"
+          ? Math.max(1, Number(pp.value ?? 0))
+          : Math.max(1, Math.round((actorStats.maxHp || 1) * (healPct / 100)));
+        dealImmediateSkillHeal({
+          log,
+          sourceName: actorName,
+          skillName,
+          targetName: actorName,
+          targetHpRef: actorHpRef,
+          targetMaxHp: actorStats.maxHp || actorHpRef.value || 1,
+          rawHeal: healAmount,
+          healLabel: "回復",
+        });
+        appliedAny = true;
+        continue;
+      }
+      const duration = effect.duration || pp.duration;
+      const entry = {
+        key: effect.key,
+        params: duration && !pp.duration ? { ...pp, duration } : { ...pp },
+        stackMode: effect.stackMode,
+        appliedAt: round,
+        sourceType: "pvp_card",
+        sourceId: `${slot}:${slotItem.uuid || slotItem.itemId || slotItem.id || skillName}`,
+      };
+      entry.params.sourceName = actorName;
+      nextActive = addOrStackEffect(nextActive, entry);
+      appliedAny = true;
+    }
+    if (appliedAny && !matched.some((effect) => shouldSuppressImmediateLog(effect))) {
+      log.push(`🎴 **${actorName}** 發動【${skillName}】！${skill.description || ""}`);
+    }
+  }
+
+  return nextActive;
+}
+
 // ── 玩家出招函式 ─────────────────────────────────────────────
 // 把 combatLoop 的完整玩家攻擊段封裝，對兩個玩家都適用
 // 回傳: { killed: bool, atkActiveEffects, defActiveEffects }
@@ -324,6 +434,20 @@ function attackerTurn({
     ...(Array.isArray(defActive) ? defActive.filter((eff) => eff?.key === key) : []),
     ...getDefEquipmentEffects().filter((eff) => eff?.key === key),
   ];
+
+  if (!atkSilenced) {
+    atkActive = applyPkHpGatedSelfCards({
+      actorStats: atkStats,
+      actorOpts: atkOpts,
+      actorName: atkName,
+      actorHpRef: atkHpRef,
+      actorActive: atkActive,
+      targetStats: defStats,
+      targetHpRef: defHpRef,
+      round,
+      log,
+    });
+  }
 
   // ── 職業技能觸發（35% 機率，每回合限一次，回合開頭讀取 HP 條件後發動）──
   if (!atkSilenced && !atkOpts._jobSkillUsed) {
@@ -368,7 +492,7 @@ function attackerTurn({
           const entry = {
             key: pe.key, params: { ...pp },
             stackMode: pe.stackMode || 'replace',
-            appliedAt: round - 1,
+            appliedAt: round,
             sourceType: 'pvp_job_skill',
             sourceId: `${atkName}:${chosen.key}:${pe.key}`
           };
@@ -415,6 +539,8 @@ function attackerTurn({
       case 'dodge_up':         dodgeBonus    += Math.abs(v); break;
       case 'agi_up':           dodgeBonus    += Math.abs(v) * 0.5; break;
       case 'hit_up':           hitBonus      += Math.abs(v); break;
+      case 'hit_down':
+      case 'hit_rate_down':    hitBonus      -= Math.abs(v); break;
     }
   }
 
@@ -437,6 +563,8 @@ function attackerTurn({
       case 'damage_reduction': damageRedPct += Math.abs(v); break;
       case 'dodge_up':       defDodgeBonus += Math.abs(v); break;
       case 'agi_up':         defDodgeBonus += Math.abs(v) * 0.5; break;
+      case 'dodge_down':     defDodgeBonus -= Math.abs(v); break;
+      case 'agi_down':       defDodgeBonus -= Math.abs(v) * 0.5; break;
       case 'invincible_short': damageRedPct += 100; break;
       case 'damage_taken_up': damageRedPct -= Math.abs(v); break; // 被動增傷（負減免）
       case 'final_damage_down': damageRedPct += Math.abs(v); break;
@@ -457,10 +585,11 @@ function attackerTurn({
     return Math.max(1, Math.round(base * roll));
   };
 
-  // 閃避判定
-  const effectiveHit = Math.min(100, atkStats.hit + hitBonus);
-  const effectiveDodge = Math.min(95, defStats.dodge + defDodgeBonus);
-  const hitChance = effectiveHit - effectiveDodge;
+  const hitChance = calcHitChance({
+    hit: atkStats.hit + hitBonus,
+    dodge: defStats.dodge + defDodgeBonus,
+    min: 30,
+  });
 
   let killed = false;
 
@@ -506,6 +635,10 @@ function attackerTurn({
       const bvd = atkActive.filter(e => e.key === 'bonus_vs_debuffed' && effectIsActive(e, round));
       for (const b of bvd) condBonus *= (1 + Math.abs(Number(b.params?.value ?? 0)) / 100);
     }
+    if (defActive.some(e => e.key === 'poison' && effectIsActive(e, round))) {
+      const bvp = atkActive.filter(e => e.key === 'bonus_vs_poisoned' && effectIsActive(e, round));
+      for (const b of bvp) condBonus *= (1 + Math.abs(Number(b.params?.value ?? 0)) / 100);
+    }
     // 矮人戰士：對暈眩目標增傷
     if (Number(atkStats.dwarfWarriorBonusVsStunnedPct) > 0) {
       const defIsStunned = defActive.some(e => e.key === 'stun' && effectIsActive(e, round));
@@ -549,7 +682,7 @@ function attackerTurn({
 
     // 爆擊
     const effectiveCrit = Math.min(100, (atkStats.crit || 0) + critRateBonus);
-    isCrit = weakSpotTriggered || Math.random() * 100 < effectiveCrit;
+    isCrit = Math.random() * 100 < effectiveCrit;
 
     let finalDamage = dmg;
     if (isCrit) {
@@ -569,6 +702,7 @@ function attackerTurn({
 
     // 防守方傷害減免（damage_reduction debuff）
     if (damageRedPct > 0) finalDamage = Math.max(1, Math.round(finalDamage * (1 - Math.min(95, damageRedPct) / 100)));
+    finalDamage = applyInvincibleDamage(finalDamage, defActive, round);
 
     const capResult = applyRoundDamageCap({
       targetKey: defTargetKey,
@@ -583,7 +717,7 @@ function attackerTurn({
     const critNote = isCrit ? `✨**${rand(CRIT_PHRASES)}**！` : "";
 
     log.push(`⚔️ ${critNote}${breakNote}**${atkName}** ${rand(atkVerbs)}${blockNote}，對 **${defName}** 造成 **${finalDamage}** 點傷害！（${defName} 剩 ${Math.max(0, defHpRef.value)} HP）`);
-    if (weakSpotTriggered) log.push(`🎯 **${atkName}** 命中要害！傷害 ×1.5 並必定爆擊！`);
+    if (weakSpotTriggered) log.push(`🎯 **${atkName}** 命中要害！傷害 ×1.5！`);
     pushCappedNotice(log, defName, capResult.capped);
 
     // 吸血
@@ -740,11 +874,6 @@ function attackerTurn({
 
     // ── 卡片技能（所有裝備欄位）────────────────────────────
     if (!killed && !atkSilenced) {
-      const OFFENSIVE_KEYS = new Set([
-        'atk_down', 'def_down', 'poison', 'bleed', 'burn', 'freeze', 'stun',
-        'silence', 'charm', 'lightning', 'freeze_slow', 'hit_down', 'hit_rate_down',
-        'agi_down', 'dark_curse'
-      ]);
       const cardEntries = Object.entries(atkOpts.equipped || {})
         .filter(([, slotItem]) => slotItem?.monsterCardSkill?.key);
       for (const [slot, slotItem] of cardEntries) {
@@ -758,7 +887,8 @@ function attackerTurn({
         if ((atkOpts._cardCooldowns?.[cooldownKey] || 0) > 0) continue;
         if (Math.random() * 100 >= triggerChance) continue;
 
-        const procEffects = Array.isArray(skill.procEffects) ? skill.procEffects : [];
+        const procEffects = (Array.isArray(skill.procEffects) ? skill.procEffects : [])
+          .filter((effect) => !effectHasHpThreshold(effect));
         if (procEffects.length === 0) continue;
 
         if (Number(skill.cooldownTurns) > 0) {
@@ -820,7 +950,7 @@ function attackerTurn({
           }
           continue;
         }
-        if (isImmediateDamage && (pe.target === 'enemy' || OFFENSIVE_KEYS.has(pe.key))) {
+        if (isImmediateDamage && (pe.target === 'enemy' || PK_CARD_OFFENSIVE_KEYS.has(pe.key))) {
           const immediateBase = pp.mode === 'caster_atk_pct'
             ? Math.max(1, atkStats.atk)
             : defStats.maxHp;
@@ -842,7 +972,7 @@ function attackerTurn({
             targetHpRef: defHpRef,
             targetKey: defTargetKey,
             roundDamageState,
-            rawDamage: immediateDamage,
+            rawDamage: applyInvincibleDamage(immediateDamage, defActive, round),
             damageLabel: label,
           });
           appliedAnyProc = true;
@@ -852,7 +982,7 @@ function attackerTurn({
           }
           continue;
         }
-        if (pe.target === 'enemy' || OFFENSIVE_KEYS.has(pe.key)) {
+        if (pe.target === 'enemy' || PK_CARD_OFFENSIVE_KEYS.has(pe.key)) {
           defActive = addOrStackEffect(defActive, entry);
           appliedAnyProc = true;
         } else {
@@ -884,6 +1014,7 @@ function attackerTurn({
       const comboBase = Math.max(1, Math.round(atkStats.atk * atkMultiplier * finalDmgMult * condBonus * (1 - calcEffDef() / 100)));
       let cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (atkStats.comboDamageMultiplier || 1)));
       if (atkStats.hasRogueBadge && atkStats.weaponType === "dagger") cdmg = Math.round(cdmg * 1.1);
+      cdmg = applyInvincibleDamage(cdmg, defActive, round);
       const capResult = applyRoundDamageCap({
         targetKey: defTargetKey,
         rawDamage: cdmg,
@@ -909,12 +1040,17 @@ function attackerTurn({
         for (const b of atkActive.filter(e => e.key === 'bonus_vs_debuffed' && effectIsActive(e, round)))
           condBonus2 *= (1 + Math.abs(Number(b.params?.value ?? 0)) / 100);
       }
+      if (defActive.some(e => e.key === 'poison' && effectIsActive(e, round))) {
+        for (const b of atkActive.filter(e => e.key === 'bonus_vs_poisoned' && effectIsActive(e, round)))
+          condBonus2 *= (1 + Math.abs(Number(b.params?.value ?? 0)) / 100);
+      }
       const attackBase2 = Math.max(1, Math.round(atkStats.atk * atkMultiplier * finalDmgMult * condBonus2));
       let finalDamage2 = rollDmg(Math.max(1, Math.round(attackBase2 * (1 - effDef2 / 100))));
       const isCrit2 = Math.random() * 100 < Math.min(100, (atkStats.crit || 0) + critRateBonus);
       if (isCrit2) {
         finalDamage2 = Math.round(rollDmg(Math.max(1, attackBase2)) * (2.5 * critDmgMult));
       }
+      finalDamage2 = applyInvincibleDamage(finalDamage2, defActive, round);
       const capResult2 = applyRoundDamageCap({ targetKey: defTargetKey, rawDamage: finalDamage2, roundDamageState });
       finalDamage2 = capResult2.damage;
       defHpRef.value -= finalDamage2;
@@ -1145,12 +1281,17 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
       // ── B 的副手反擊（被 A 攻擊後觸發）──────────────────────────────────────
       if (bStats.isDualWield && bStats.counterChance > 0 && bHpRef.value > 0) {
         if (Math.random() * 100 < bStats.counterChance) {
-          const bHitVsA = bStats.hit - aStats.dodge;
+          const bHitVsA = calcHitChance({
+            hit: bStats.hit,
+            dodge: aStats.dodge,
+            min: 30,
+          });
           if (aDot.frozen || Math.random() * 100 < bHitVsA) {
             const bEffDef = Math.min(95, Math.max(0, aStats.def));
             const bBase = Math.max(1, Math.round(bStats.atk * (1 - bEffDef / 100)));
             const bRoll = bStats.dmgMin + Math.random() * (bStats.dmgMax - bStats.dmgMin);
             let bCdmg = Math.max(1, Math.round(bBase * bRoll));
+            bCdmg = applyInvincibleDamage(bCdmg, aActive, round);
             const bCap = applyRoundDamageCap({ targetKey: "A", rawDamage: bCdmg, roundDamageState });
             bCdmg = bCap.damage;
             aHpRef.value -= bCdmg;
@@ -1183,12 +1324,17 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
       // ── A 的副手反擊（被 B 攻擊後觸發）──────────────────────────────────────
       if (aStats.isDualWield && aStats.counterChance > 0 && aHpRef.value > 0) {
         if (Math.random() * 100 < aStats.counterChance) {
-          const aHitVsB = aStats.hit - bStats.dodge;
+          const aHitVsB = calcHitChance({
+            hit: aStats.hit,
+            dodge: bStats.dodge,
+            min: 30,
+          });
           if (bDot.frozen || Math.random() * 100 < aHitVsB) {
             const aEffDef = Math.min(95, Math.max(0, bStats.def));
             const aBase = Math.max(1, Math.round(aStats.atk * (1 - aEffDef / 100)));
             const aRoll = aStats.dmgMin + Math.random() * (aStats.dmgMax - aStats.dmgMin);
             let aCdmg = Math.max(1, Math.round(aBase * aRoll));
+            aCdmg = applyInvincibleDamage(aCdmg, bActive, round);
             const aCap = applyRoundDamageCap({ targetKey: "B", rawDamage: aCdmg, roundDamageState });
             aCdmg = aCap.damage;
             bHpRef.value -= aCdmg;
