@@ -16,7 +16,9 @@ function isTransientDiscordNetworkError(error) {
   if (error instanceof AggregateError) return true;
   const code = error?.code || "";
   if (code === "UND_ERR_SOCKET" || code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT") return true;
-  return /GOAWAY|ConnectTimeout|getaddrinfo/i.test(error?.message || "");
+  const status = Number(error?.status || error?.statusCode || 0);
+  if (status >= 500 && status < 600) return true;
+  return /GOAWAY|ConnectTimeout|getaddrinfo|Service Unavailable|Bad Gateway|Gateway Timeout/i.test(error?.message || "");
 }
 
 function resetDiscordRestAgent(client, reason = "network error") {

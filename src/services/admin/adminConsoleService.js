@@ -622,13 +622,20 @@ class AdminConsoleService {
       if (existingBinding?.panelMessageId) {
         existingMsg = await channel.messages.fetch(existingBinding.panelMessageId).catch(() => null);
         if (existingMsg) {
-          message = await existingMsg.edit(panelMsg).catch(() => null);
+          // edit 上限 retry 3 次（5xx/網路抖動會被吞掉），減少 fallback 發新訊息的機會
+          for (let attempt = 0; attempt < 3 && !message; attempt += 1) {
+            message = await existingMsg.edit(panelMsg).catch(() => null);
+            if (!message && attempt < 2) await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+          }
         }
       }
       if (!message) {
-        // edit 失敗或無舊面板：先發新的，成功才刪舊的，確保面板不會消失
+        // edit 仍失敗或無舊面板：先發新的，再強制清掉舊的（含 fetch 失敗的）
         message = await channel.send(panelMsg).catch(() => null);
-        if (message && existingMsg) await existingMsg.delete().catch(() => null);
+        if (message && existingBinding?.panelMessageId && existingBinding.panelMessageId !== message.id) {
+          // 透過 channel.messages.delete 直接打 API，不需要先 fetch；即使 fetch 失敗也能刪
+          await channel.messages.delete(existingBinding.panelMessageId).catch(() => null);
+        }
       }
     }
 

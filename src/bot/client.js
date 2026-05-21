@@ -14,7 +14,6 @@ const { handleStreamComment } = require("./handlers/streamHandlers");
 const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels, _doIdleRotate } = require("./handlers/monsterZoneHandlers");
 const { initPkArenaState } = require("./handlers/pkArenaHandlers");
 const { restoreTowerSessions } = require("./handlers/towerHandlers");
-const { runWithCache, clearCurrentCache } = require("../adapters/mongo/requestCache");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
 const {
   isTransientDiscordNetworkError,
@@ -30,6 +29,9 @@ const WELCOME_AUDIT_ENABLED = config.discord.welcomeAuditEnabled !== false;
 const WELCOME_AUDIT_INTERVAL_MS = config.discord.welcomeAuditIntervalMs || 30 * 60 * 1000;
 const MEMORY_AUDIT_ENABLED = process.env.ENABLE_MEMORY_AUDIT !== "0";
 const MEMORY_AUDIT_INTERVAL_MS = Math.max(10_000, Number(process.env.MEMORY_AUDIT_INTERVAL_MS || 60_000));
+const MEMORY_AUDIT_VERBOSE = process.env.MEMORY_AUDIT_VERBOSE === "1";
+const MEMORY_AUDIT_LOG_RSS_MB = Math.max(128, Number(process.env.MEMORY_AUDIT_LOG_RSS_MB || 500));
+const MEMORY_AUDIT_LOG_HEAP_MB = Math.max(128, Number(process.env.MEMORY_AUDIT_LOG_HEAP_MB || 350));
 const MEMORY_HEAPSNAPSHOT_ENABLED = process.env.ENABLE_MEMORY_HEAPSNAPSHOT !== "0";
 const MEMORY_HEAPSNAPSHOT_RSS_MB = Math.max(256, Number(process.env.MEMORY_HEAPSNAPSHOT_RSS_MB || 950));
 const MEMORY_HEAPSNAPSHOT_HEAP_MB = Math.max(256, Number(process.env.MEMORY_HEAPSNAPSHOT_HEAP_MB || 650));
@@ -601,7 +603,16 @@ function startMemoryAuditTimer(client) {
         pk: getPkArenaDiagnostics(),
         tower: getTowerDiagnostics()
       };
-      console.log(`[MemoryAudit] ${JSON.stringify(payload)}`);
+      // 只在異常時印 log（記憶體偏高、有 overdue、Discord 無 guild 等），減少 PM2 雜訊
+      const abnormalReasons = [];
+      if (payload.rssMB >= MEMORY_AUDIT_LOG_RSS_MB) abnormalReasons.push(`rss>=${MEMORY_AUDIT_LOG_RSS_MB}MB`);
+      if (payload.heapUsedMB >= MEMORY_AUDIT_LOG_HEAP_MB) abnormalReasons.push(`heap>=${MEMORY_AUDIT_LOG_HEAP_MB}MB`);
+      if (payload.monsterZone?.displayingOverdue > 0) abnormalReasons.push(`mz_overdue=${payload.monsterZone.displayingOverdue}`);
+      if (payload.discord?.guilds === 0) abnormalReasons.push("discord_disconnected");
+      if (MEMORY_AUDIT_VERBOSE || abnormalReasons.length > 0) {
+        const prefix = abnormalReasons.length > 0 ? `[MemoryAudit] abnormal:${abnormalReasons.join(",")} ` : "[MemoryAudit] ";
+        console.log(`${prefix}${JSON.stringify(payload)}`);
+      }
       maybeWriteMemoryHeapSnapshot(payload);
     } catch (error) {
       console.warn(`[MemoryAudit] failed: ${error?.message || error}`);
@@ -796,38 +807,33 @@ function createBotClient() {
     }
   });
 
-  client.on(Events.InteractionCreate, (interaction) => {
-    // 每個 interaction 建立獨立的記憶體快取 context
-    // 同一個指令內重複讀取同一 playerId 的資料直接從記憶體回傳
-    runWithCache(async () => {
-      try {
-        if (interaction.isChatInputCommand()) { await handleCommand(interaction); return; }
-        if (interaction.isButton()) { await handleButton(interaction); return; }
-        if (interaction.isStringSelectMenu()) { await handleSelectMenu(interaction); return; }
-        if (interaction.isModalSubmit()) { await handleModal(interaction); return; }
-      } catch (error) {
-        if (error?.code === 10062) return; // interaction token 已過期，無法回應，靜默忽略
-        if (isTransientDiscordNetworkError(error)) {
-          markDiscordRestError(error, "interaction handling");
-          resetDiscordRestAgent(interaction.client, error?.code || error?.message || "transient interaction error");
-          console.warn("[Discord] transient interaction reply error:", error?.message || error);
-          return;
-        }
-        console.error("[Discord] command error", error);
-        const message = isAppError(error) ? `❌ ${error.message}` : "發生錯誤，請稍後再試。";
-        try {
-          if (interaction.deferred || interaction.replied) {
-            await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
-          } else {
-            await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
-          }
-        } catch (replyError) {
-          if (!isTransientDiscordNetworkError(replyError)) console.error("[Discord] reply error", replyError);
-        }
-      } finally {
-        clearCurrentCache();
+  client.on(Events.InteractionCreate, async (interaction) => {
+    try {
+      if (interaction.isChatInputCommand()) { await handleCommand(interaction); return; }
+      if (interaction.isButton()) { await handleButton(interaction); return; }
+      if (interaction.isStringSelectMenu()) { await handleSelectMenu(interaction); return; }
+      if (interaction.isModalSubmit()) { await handleModal(interaction); return; }
+    } catch (error) {
+      if (error?.code === 10062) return; // interaction token 已過期，無法回應，靜默忽略
+      if (error?.code === 40060) return; // interaction 已被 acknowledge（重複觸發），靜默忽略
+      if (isTransientDiscordNetworkError(error)) {
+        markDiscordRestError(error, "interaction handling");
+        resetDiscordRestAgent(interaction.client, error?.code || error?.message || "transient interaction error");
+        console.warn("[Discord] transient interaction reply error:", error?.message || error);
+        return;
       }
-    });
+      console.error("[Discord] command error", error);
+      const message = isAppError(error) ? `❌ ${error.message}` : "發生錯誤，請稍後再試。";
+      try {
+        if (interaction.deferred || interaction.replied) {
+          await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
+        } else {
+          await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+        }
+      } catch (replyError) {
+        if (!isTransientDiscordNetworkError(replyError)) console.error("[Discord] reply error", replyError);
+      }
+    }
   });
 
   client.on(Events.MessageCreate, async (message) => {
