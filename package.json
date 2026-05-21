@@ -58,6 +58,7 @@
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "localtunnel": "^2.0.2",
+    "mongodb-memory-server": "^11.1.0",
     "pm2": "^6.0.14"
   }
 }

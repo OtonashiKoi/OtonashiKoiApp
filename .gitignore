@@ -2,6 +2,9 @@
 .claude/skills/
 .env
 
+# Node deps（之前漏寫 → 部分 node_modules 已被誤 tracked，後續另開議題清理）
+node_modules/
+
 # Local runtime/editor artifacts
 logs/
 Godot_v*.exe
