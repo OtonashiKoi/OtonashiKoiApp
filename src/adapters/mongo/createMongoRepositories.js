@@ -6,6 +6,25 @@ const { createStreamAccountBindingRepository } = require("../streamBindings/crea
 const { createCreatorTokenRepository } = require("../creatorTokens/createCreatorTokenRepository");
 const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
 
+function emitRealtimeInvalidate(type, discordId) {
+  if (!discordId) return;
+  try {
+    // lazy require 避免循環依賴
+    const { playerEventBus } = require("../../services/realtime/playerEventBus");
+    if (type === "progress") {
+      playerEventBus.invalidateProfile(discordId, "progress_changed");
+      playerEventBus.invalidateInventory(discordId);
+    } else if (type === "wallet") {
+      playerEventBus.invalidateProfile(discordId, "wallet_changed");
+    } else if (type === "binding") {
+      playerEventBus.invalidateBindings(discordId);
+      playerEventBus.invalidateProfile(discordId, "binding_changed");
+    }
+  } catch (_) {
+    // event bus not available（例如測試環境）→ 安靜忽略
+  }
+}
+
 function createMongoRepositories() {
   const collection = async (name) => (await getMongoDb()).collection(name);
   const normalizeLowLevelJobBadge = (progress) => {
@@ -141,6 +160,7 @@ function createMongoRepositories() {
           { $set: wallet },
           { upsert: true }
         );
+        emitRealtimeInvalidate("wallet", wallet.playerId);
         return wallet;
       },
       async listAll() {
@@ -178,6 +198,7 @@ function createMongoRepositories() {
             if (attempt > 1) {
               console.info(`[ProgressRepository] Save succeeded for ${progress.playerId} on attempt ${attempt}`);
             }
+            emitRealtimeInvalidate("progress", progress.playerId);
             return progress;
           } catch (err) {
             lastError = err;
@@ -209,6 +230,9 @@ function createMongoRepositories() {
           { $set: { ...progress, updatedAt: now } },
           { upsert: false }
         );
+        if (result.matchedCount > 0) {
+          emitRealtimeInvalidate("progress", progress.playerId);
+        }
         return result.matchedCount > 0;
       },
       // 只更新 PK 相關欄位，避免覆蓋玩家的 inventory/equipped 等資料
@@ -219,6 +243,7 @@ function createMongoRepositories() {
           { $set: { pkRating, pkWins, pkLosses, updatedAt: now } },
           { upsert: false }
         );
+        emitRealtimeInvalidate("progress", playerId);
       },
       async listAll() {
         return (await collection("progress")).find({}).toArray();

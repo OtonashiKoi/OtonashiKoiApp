@@ -872,6 +872,136 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 2.5 Fetch Stream Bindings + 即時會員狀態（用 broadcaster token 查）
+  router.get("/api/me/bindings", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const bindings = await serviceContext.streamAccountBindingRepository
+        .listByDiscordId(discordId)
+        .catch(() => []);
+
+      // 對每個 binding 嘗試即時查會員狀態
+      const enriched = await Promise.all(bindings.map(async (b) => {
+        const baseInfo = {
+          platform: b.platform,
+          platformUserId: b.platformUserId,
+          displayName: b.displayName,
+          linkedAt: b.linkedAt,
+          playerTierAtLink: b.playerTierAtLink || null
+        };
+        try {
+          if (b.platform === "twitch") {
+            const tier = await parseTwitchSubscriptionTier(b.platformUserId);
+            return {
+              ...baseInfo,
+              membership: {
+                isMember: Boolean(tier),
+                tier: tier || null,
+                levelName: tier ? `訂閱等級 ${tier}` : null,
+                checkedAt: new Date().toISOString(),
+                source: "twitch-api"
+              }
+            };
+          }
+          if (b.platform === "youtube") {
+            // 用 broadcaster token 查單一頻道是否是會員
+            try {
+              const creatorAccessToken = await fetchGoogleCreatorAccessToken();
+              const memberRes = await fetch(
+                `https://www.googleapis.com/youtube/v3/members?part=snippet&filterByMemberChannelId=${encodeURIComponent(b.platformUserId)}&maxResults=1`,
+                { headers: { Authorization: `Bearer ${creatorAccessToken}` } }
+              );
+              const memberData = await memberRes.json().catch(() => ({}));
+              if (!memberRes.ok) {
+                throw new Error(memberData?.error?.message || "YouTube 會員查詢失敗");
+              }
+              const member = memberData?.items?.[0] || null;
+              const levelName = member?.snippet?.membershipsDetails?.highestAccessibleLevelDisplayName || null;
+              return {
+                ...baseInfo,
+                membership: {
+                  isMember: Boolean(levelName),
+                  tier: null,
+                  levelName,
+                  checkedAt: new Date().toISOString(),
+                  source: "youtube-api"
+                }
+              };
+            } catch (err) {
+              return {
+                ...baseInfo,
+                membership: {
+                  isMember: false,
+                  checkedAt: new Date().toISOString(),
+                  source: "unavailable",
+                  error: err.message
+                }
+              };
+            }
+          }
+          return baseInfo;
+        } catch (err) {
+          return {
+            ...baseInfo,
+            membership: {
+              isMember: false,
+              checkedAt: new Date().toISOString(),
+              source: "unavailable",
+              error: err.message
+            }
+          };
+        }
+      }));
+
+      res.json(ok({ bindings: enriched }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 2.6 SSE realtime — server push 推送資料變化給 web client
+  router.get("/api/me/stream", (req, res) => {
+    // SSE 不能用 Authorization header（EventSource 不支援），改用 query param token
+    const token = String(req.query.token || "").trim();
+    let playerRecord;
+    try {
+      playerRecord = jwt.verify(token, process.env.JWT_SECRET || "super-secret-jwt-key");
+    } catch (_) {
+      return res.status(401).json({ status: "error", message: "Invalid or expired token" });
+    }
+    const discordId = String(playerRecord?.discordId || "").trim();
+    if (!discordId) return res.status(400).json({ status: "error", message: "Missing discordId" });
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // 給 nginx / cloudflare 用
+    res.flushHeaders?.();
+
+    const send = (event) => {
+      try {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      } catch (_) { /* connection closed */ }
+    };
+
+    // 連線建立後送一個 hello 事件
+    send({ type: "connected", data: { discordId, ts: new Date().toISOString() } });
+
+    // 訂閱該玩家的 bus
+    const { playerEventBus } = require("../../services/realtime/playerEventBus");
+    const unsubscribe = playerEventBus.subscribe(discordId, send);
+
+    // 每 25 秒送一個 heartbeat（避免被 proxy 斷線）
+    const heartbeat = setInterval(() => {
+      try { res.write(`: heartbeat ${Date.now()}\n\n`); } catch (_) {}
+    }, 25_000);
+
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+  });
+
   // 3. Fetch Player Inventory
   router.get("/api/me/inventory", requireAuth, async (req, res, next) => {
     try {
