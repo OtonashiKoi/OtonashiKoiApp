@@ -69,6 +69,7 @@ const EFFECT_NAME_ZH = {
   party_damage_up: "隊伍傷害提升",
   party_boss_damage_up: "隊伍 Boss 傷害提升",
   party_monster_def_down: "隊伍降低怪物防禦",
+  party_agi_up: "隊伍 AGI 提升",
   party_damage_reduction: "隊伍受到傷害降低",
   party_crit_damage_reduction: "隊伍受到暴擊傷害降低",
   party_exp_gain_up: "隊伍經驗值獲得增加",

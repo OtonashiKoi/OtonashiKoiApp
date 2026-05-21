@@ -51,6 +51,7 @@ const ENHANCE_MODES = {
   NORMAL: "normal",
   GAMBLE: "gamble"
 };
+const GAMBLE_MIN_ENHANCE_LEVEL = 1;
 
 function normalizeEnhanceMode(mode) {
   return String(mode || ENHANCE_MODES.NORMAL).toLowerCase() === ENHANCE_MODES.GAMBLE
@@ -126,6 +127,9 @@ class EnhanceService {
     }
 
     const currentLevel = Math.max(0, Number(equipment.enhanceLevel) || 0);
+    if (isGamble && currentLevel < GAMBLE_MIN_ENHANCE_LEVEL) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "賭鬼強化需裝備至少 +1 才能使用", 400);
+    }
     const preview = this._buildEnhancePreview(equipment, tier, currentLevel);
     if (!preview) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備沒有可強化的屬性", 400);
@@ -479,6 +483,9 @@ class EnhanceService {
 
     const tier = String(equipment.tier || "").toUpperCase();
     const currentLevel = Math.max(0, Number(equipment.enhanceLevel) || 0);
+    if (isGamble && currentLevel < GAMBLE_MIN_ENHANCE_LEVEL) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "賭鬼強化需裝備至少 +1 才能使用", 400);
+    }
     const preview = this._buildEnhancePreview(equipment, tier, currentLevel);
 
     if (!["D", "C", "B", "A"].includes(tier)) {

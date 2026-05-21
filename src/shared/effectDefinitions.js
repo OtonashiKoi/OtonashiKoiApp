@@ -152,6 +152,7 @@ const EFFECT_DEFINITIONS = [
   defineEffect("party_damage_up", "Party Damage Up", "conditional", ["equipment", "passive", "npc_event"], "replace", ["battle", "permanent"], "Increase party damage output."),
   defineEffect("party_boss_damage_up", "Party Boss Damage Up", "conditional", ["equipment", "passive", "npc_event"], "replace", ["battle", "permanent"], "Increase party damage against bosses."),
   defineEffect("party_monster_def_down", "Party Monster Defense Down", "conditional", ["equipment", "passive", "npc_event"], "replace", ["battle", "permanent"], "Reduce monster defense for party members."),
+  defineEffect("party_agi_up", "Party AGI Up", "stat", ["equipment", "passive", "npc_event"], "replace", ["battle", "permanent"], "Increase party agility."),
   defineEffect("party_damage_reduction", "Party Damage Reduction", "defense", ["equipment", "passive", "npc_event"], "replace", ["battle", "permanent"], "Reduce incoming damage for party members."),
   defineEffect("party_crit_damage_reduction", "Party Critical Damage Reduction", "defense", ["equipment", "passive", "npc_event"], "replace", ["battle", "permanent"], "Reduce incoming critical damage for party members."),
   defineEffect("party_exp_gain_up", "Party EXP Gain Up", "economy", ["equipment", "passive", "npc_event"], "replace", ["battle", "permanent"], "Increase party EXP rewards."),
