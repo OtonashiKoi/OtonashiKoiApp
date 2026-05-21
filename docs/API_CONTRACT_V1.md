@@ -2,6 +2,13 @@
 
 Last updated: 2026-04-19
 
+> ⚠️ **過時提示（2026-05-21）**：本文件未涵蓋 2026-04 之後新增的端點，包含：
+> - `POST /api/me/enhance/:itemUuid`（賭鬼模式 `mode=gamble`，需裝備 +1 以上）
+> - 爬塔（Tower）相關端點
+> - 隊伍戰鬥（Party Battle）相關端點
+>
+> 新系統索引請見 [`NEW_SYSTEMS_V1_INDEX.md`](./NEW_SYSTEMS_V1_INDEX.md)。
+
 ## Goal
 
 Lock current API behavior for existing clients while allowing safe future expansion.

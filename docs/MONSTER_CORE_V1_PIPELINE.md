@@ -2,6 +2,12 @@
 
 Last updated: 2026-04-19
 
+> ⚠️ **過時提示（2026-05-21）**：本文件未涵蓋：
+> - 世界王（World Boss）的週循環與多階段機制 — 詳見 `src/services/worldBoss/worldBossService.js`
+> - 爬塔（Tower）boss 的特殊行為與祝福效果 — 詳見 `src/bot/handlers/towerHandlers.js`
+>
+> 新系統索引請見 [`NEW_SYSTEMS_V1_INDEX.md`](./NEW_SYSTEMS_V1_INDEX.md)。
+
 ## Goal
 
 Create a playable Monster 01 core animation package from current assets, with explicit placeholder handling for missing actions.
