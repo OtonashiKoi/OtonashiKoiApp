@@ -14,7 +14,6 @@ const { handleStreamComment } = require("./handlers/streamHandlers");
 const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels, _doIdleRotate } = require("./handlers/monsterZoneHandlers");
 const { initPkArenaState } = require("./handlers/pkArenaHandlers");
 const { restoreTowerSessions } = require("./handlers/towerHandlers");
-const { runWithCache, clearCurrentCache } = require("../adapters/mongo/requestCache");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
 const {
   isTransientDiscordNetworkError,
@@ -796,38 +795,33 @@ function createBotClient() {
     }
   });
 
-  client.on(Events.InteractionCreate, (interaction) => {
-    // 每個 interaction 建立獨立的記憶體快取 context
-    // 同一個指令內重複讀取同一 playerId 的資料直接從記憶體回傳
-    runWithCache(async () => {
-      try {
-        if (interaction.isChatInputCommand()) { await handleCommand(interaction); return; }
-        if (interaction.isButton()) { await handleButton(interaction); return; }
-        if (interaction.isStringSelectMenu()) { await handleSelectMenu(interaction); return; }
-        if (interaction.isModalSubmit()) { await handleModal(interaction); return; }
-      } catch (error) {
-        if (error?.code === 10062) return; // interaction token 已過期，無法回應，靜默忽略
-        if (isTransientDiscordNetworkError(error)) {
-          markDiscordRestError(error, "interaction handling");
-          resetDiscordRestAgent(interaction.client, error?.code || error?.message || "transient interaction error");
-          console.warn("[Discord] transient interaction reply error:", error?.message || error);
-          return;
-        }
-        console.error("[Discord] command error", error);
-        const message = isAppError(error) ? `❌ ${error.message}` : "發生錯誤，請稍後再試。";
-        try {
-          if (interaction.deferred || interaction.replied) {
-            await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
-          } else {
-            await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
-          }
-        } catch (replyError) {
-          if (!isTransientDiscordNetworkError(replyError)) console.error("[Discord] reply error", replyError);
-        }
-      } finally {
-        clearCurrentCache();
+  client.on(Events.InteractionCreate, async (interaction) => {
+    try {
+      if (interaction.isChatInputCommand()) { await handleCommand(interaction); return; }
+      if (interaction.isButton()) { await handleButton(interaction); return; }
+      if (interaction.isStringSelectMenu()) { await handleSelectMenu(interaction); return; }
+      if (interaction.isModalSubmit()) { await handleModal(interaction); return; }
+    } catch (error) {
+      if (error?.code === 10062) return; // interaction token 已過期，無法回應，靜默忽略
+      if (error?.code === 40060) return; // interaction 已被 acknowledge（重複觸發），靜默忽略
+      if (isTransientDiscordNetworkError(error)) {
+        markDiscordRestError(error, "interaction handling");
+        resetDiscordRestAgent(interaction.client, error?.code || error?.message || "transient interaction error");
+        console.warn("[Discord] transient interaction reply error:", error?.message || error);
+        return;
       }
-    });
+      console.error("[Discord] command error", error);
+      const message = isAppError(error) ? `❌ ${error.message}` : "發生錯誤，請稍後再試。";
+      try {
+        if (interaction.deferred || interaction.replied) {
+          await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
+        } else {
+          await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+        }
+      } catch (replyError) {
+        if (!isTransientDiscordNetworkError(replyError)) console.error("[Discord] reply error", replyError);
+      }
+    }
   });
 
   client.on(Events.MessageCreate, async (message) => {

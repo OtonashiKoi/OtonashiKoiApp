@@ -1,6 +1,5 @@
 const { randomUUID } = require("crypto");
 const { getMongoDb } = require("./createMongoClient");
-const { withProgressCache, withWalletCache, withPlayerCache } = require("./requestCache");
 const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { createStreamAccountBindingRepository } = require("../streamBindings/createStreamAccountBindingRepository");
 const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
@@ -781,11 +780,6 @@ function createMongoRepositories() {
       }
     }
   };
-
-  // 套用請求層級快取：同一請求內的重複讀取直接從記憶體回傳
-  repos.playerRepository = withPlayerCache(repos.playerRepository);
-  repos.walletRepository = withWalletCache(repos.walletRepository);
-  repos.progressRepository = withProgressCache(repos.progressRepository);
 
   return repos;
 }
