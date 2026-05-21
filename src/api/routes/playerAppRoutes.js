@@ -690,18 +690,28 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       const profile = await getYoutubeProfile(tokenData.access_token);
-      const creatorAccessToken = await fetchGoogleCreatorAccessToken();
-      const memberRes = await fetch(`https://www.googleapis.com/youtube/v3/members?part=snippet&filterByMemberChannelId=${encodeURIComponent(profile.channelId)}&maxResults=1`, {
-        headers: { Authorization: `Bearer ${creatorAccessToken}` }
-      });
-      const memberData = await memberRes.json();
-      if (!memberRes.ok) {
-        const errMsg = memberData?.error?.message || memberData?.error?.errors?.[0]?.message || "YouTube 會員查詢失敗";
-        throw new Error(errMsg);
-      }
 
-      const member = memberData?.items?.[0] || null;
-      const levelName = member?.snippet?.membershipsDetails?.highestAccessibleLevelDisplayName || null;
+      // 查會員狀態時容錯：頻道沒開 Channel Memberships、broadcaster token 過期、quota 用完
+      // 等等情況都不該擋 bind，bind 是「身分綁定」，會員狀態查不到當未訂閱處理。
+      let levelName = null;
+      let memberLookupError = null;
+      try {
+        const creatorAccessToken = await fetchGoogleCreatorAccessToken();
+        const memberRes = await fetch(`https://www.googleapis.com/youtube/v3/members?part=snippet&filterByMemberChannelId=${encodeURIComponent(profile.channelId)}&maxResults=1`, {
+          headers: { Authorization: `Bearer ${creatorAccessToken}` }
+        });
+        const memberData = await memberRes.json().catch(() => ({}));
+        if (!memberRes.ok) {
+          memberLookupError = memberData?.error?.message || memberData?.error?.errors?.[0]?.message || `${memberRes.status} ${memberRes.statusText}`;
+          console.warn("[stream-auth/youtube] member 查詢失敗（不擋 bind）:", memberLookupError);
+        } else {
+          const member = memberData?.items?.[0] || null;
+          levelName = member?.snippet?.membershipsDetails?.highestAccessibleLevelDisplayName || null;
+        }
+      } catch (err) {
+        memberLookupError = err.message || String(err);
+        console.warn("[stream-auth/youtube] member 查詢例外（不擋 bind）:", memberLookupError);
+      }
         const mappedTier = mapYoutubeLevelToPlayerTier(levelName);
         const progress = await serviceContext.progressRepository.findByPlayerId(state.discordId);
         const currentTier = progress?.playerTier || null;
@@ -723,7 +733,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const lines = [
         "✅ YouTube 授權完成",
         `頻道：${profile.displayName} (${profile.channelId})`,
-        levelName ? `會員等級：${levelName}` : "目前沒有偵測到會員，位階維持原狀",
+        levelName ? `會員等級：${levelName}` : (memberLookupError
+          ? `會員狀態暫時無法查詢（${memberLookupError}）`
+          : "目前沒有偵測到會員，位階維持原狀"),
         newTier ? `已同步位階：${newTier}` : `位階維持原狀：${currentTier || "未設定"}`
       ];
 
