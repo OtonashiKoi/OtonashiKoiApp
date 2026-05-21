@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Creator OAuth 管理</title>
+<style>
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1220;color:#f5f7ff;padding:24px;min-height:100vh;box-sizing:border-box}
+  .container{max-width:920px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 6px}
+  p.subtitle{color:#9aa4cf;margin:0 0 20px}
+  .login{background:#171b2c;border:1px solid #2b3350;border-radius:14px;padding:18px;margin-bottom:18px;display:flex;gap:8px;align-items:center}
+  .login input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid #2b3350;background:#0f1220;color:#f5f7ff;font-size:14px}
+  .login button{padding:10px 16px;border-radius:10px;border:0;background:#5b67ff;color:#fff;font-weight:700;cursor:pointer}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:#171b2c;border:1px solid #2b3350;border-radius:14px;padding:18px}
+  .card h2{margin:0 0 8px;font-size:18px;display:flex;align-items:center;gap:8px}
+  .badge{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700}
+  .badge.active{background:#1e3a2e;color:#7fffa5}
+  .badge.unset{background:#3a2a1e;color:#ffc97f}
+  .badge.expired{background:#3a1e1e;color:#ff7f7f}
+  .badge.revoked{background:#2a2a3a;color:#aaa}
+  dl{margin:8px 0;display:grid;grid-template-columns:max-content 1fr;gap:6px 12px;font-size:13px}
+  dt{color:#9aa4cf}
+  dd{margin:0;color:#d7defc;word-break:break-all}
+  .actions{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+  .btn{padding:9px 14px;border-radius:10px;font-weight:700;text-decoration:none;cursor:pointer;border:0;font-size:13px}
+  .btn.primary{background:#5b67ff;color:#fff}
+  .btn.secondary{background:#20273c;color:#fff;border:1px solid #32406b}
+  .btn.danger{background:#3a1e1e;color:#ff7f7f;border:1px solid #5a2e2e}
+  .scope{font-size:11px;color:#9aa4cf;margin-top:6px}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#171b2c;border:1px solid #2b3350;border-radius:10px;padding:10px 18px;color:#f5f7ff;display:none}
+  .toast.show{display:block}
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Creator OAuth 管理</h1>
+    <p class="subtitle">管理 Twitch / YouTube 頻道主授權 token。授權後，玩家綁定只需證明身分，會員 / 訂閱狀態由系統用此 token 主動查詢。</p>
+
+    <div class="login" id="loginBar">
+      <input id="adminPwd" type="password" placeholder="輸入管理員密碼" autocomplete="current-password" />
+      <button id="loginBtn" type="button">儲存並載入</button>
+    </div>
+
+    <div class="grid" id="cards" style="display:none">
+      <section class="card" data-provider="twitch">
+        <h2>Twitch <span class="badge unset" data-field="status">未設定</span></h2>
+        <dl>
+          <dt>已設定 OAuth 憑證</dt><dd data-field="configured">-</dd>
+          <dt>Broadcaster 頻道</dt><dd data-field="broadcaster">-</dd>
+          <dt>Access token 有效</dt><dd data-field="accessTokenValid">-</dd>
+          <dt>過期時間</dt><dd data-field="expiresAt">-</dd>
+          <dt>上次刷新</dt><dd data-field="lastRefreshedAt">-</dd>
+          <dt>備註</dt><dd data-field="notes">-</dd>
+        </dl>
+        <div class="scope" data-field="scope">Scope: -</div>
+        <div class="actions">
+          <button class="btn primary" data-action="auth">重新授權</button>
+          <button class="btn danger" data-action="revoke">撤銷</button>
+        </div>
+      </section>
+
+      <section class="card" data-provider="youtube">
+        <h2>YouTube <span class="badge unset" data-field="status">未設定</span></h2>
+        <dl>
+          <dt>已設定 OAuth 憑證</dt><dd data-field="configured">-</dd>
+          <dt>Broadcaster 頻道</dt><dd data-field="broadcaster">-</dd>
+          <dt>Access token 有效</dt><dd data-field="accessTokenValid">-</dd>
+          <dt>過期時間</dt><dd data-field="expiresAt">-</dd>
+          <dt>上次刷新</dt><dd data-field="lastRefreshedAt">-</dd>
+          <dt>備註</dt><dd data-field="notes">-</dd>
+        </dl>
+        <div class="scope" data-field="scope">Scope: -</div>
+        <div class="actions">
+          <button class="btn primary" data-action="auth">重新授權</button>
+          <button class="btn danger" data-action="revoke">撤銷</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "equipmentgame.adminPassword";
+    const loginBar = document.getElementById("loginBar");
+    const cards = document.getElementById("cards");
+    const pwdInput = document.getElementById("adminPwd");
+    const toast = document.getElementById("toast");
+
+    function getPassword() { return localStorage.getItem(STORAGE_KEY) || ""; }
+    function setPassword(v) { if (v) localStorage.setItem(STORAGE_KEY, v); else localStorage.removeItem(STORAGE_KEY); }
+
+    function showToast(msg, ms = 2400) {
+      toast.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), ms);
+    }
+
+    async function apiCall(method, path, body) {
+      const pwd = getPassword();
+      const res = await fetch(path, {
+        method,
+        headers: { "Authorization": `Bearer ${pwd}`, "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || `${res.status} ${res.statusText}`);
+      return data?.data || data;
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return "-";
+      try { return new Date(iso).toLocaleString("zh-TW"); } catch { return String(iso); }
+    }
+
+    function render(status) {
+      ["twitch", "youtube"].forEach((provider) => {
+        const card = cards.querySelector(`[data-provider="${provider}"]`);
+        const s = status[provider] || {};
+        const statusEl = card.querySelector('[data-field="status"]');
+        statusEl.textContent = s.status === "active" ? "active" : s.status === "expired" ? "已過期" : s.status === "revoked" ? "已撤銷" : "未設定";
+        statusEl.className = `badge ${s.status === "active" ? "active" : s.status === "expired" ? "expired" : s.status === "revoked" ? "revoked" : "unset"}`;
+        card.querySelector('[data-field="configured"]').textContent = s.configured ? "是" : "否（缺 CLIENT_ID / CLIENT_SECRET）";
+        card.querySelector('[data-field="broadcaster"]').textContent = s.broadcasterDisplayName ? `${s.broadcasterDisplayName} (${s.broadcasterUserId || "?"})` : "尚未取得";
+        card.querySelector('[data-field="accessTokenValid"]').textContent = s.accessTokenValid ? "是" : "否";
+        card.querySelector('[data-field="expiresAt"]').textContent = fmtDate(s.expiresAt);
+        card.querySelector('[data-field="lastRefreshedAt"]').textContent = fmtDate(s.lastRefreshedAt);
+        card.querySelector('[data-field="notes"]').textContent = s.notes || "-";
+        card.querySelector('[data-field="scope"]').textContent = `Scope: ${(s.scope && s.scope.length) ? s.scope.join(", ") : "(無)"}`;
+      });
+    }
+
+    async function refresh() {
+      try {
+        const status = await apiCall("GET", "/admin/creator-auth/status");
+        render(status);
+        cards.style.display = "";
+        loginBar.style.display = "";
+      } catch (err) {
+        showToast(`載入失敗：${err.message}`);
+        cards.style.display = "none";
+      }
+    }
+
+    async function startAuth(provider) {
+      try {
+        const result = await apiCall("POST", "/admin/creator-auth/start", { provider });
+        if (!result?.url) throw new Error("找不到授權 URL");
+        location.href = result.url;
+      } catch (err) {
+        showToast(`啟動授權失敗：${err.message}`);
+      }
+    }
+
+    async function revoke(provider) {
+      if (!confirm(`確定撤銷 ${provider} broadcaster token？\n撤銷後玩家會員狀態查詢會失敗，需重新授權。`)) return;
+      try {
+        await apiCall("POST", "/admin/creator-auth/revoke", { provider });
+        showToast(`已撤銷 ${provider} token`);
+        refresh();
+      } catch (err) {
+        showToast(`撤銷失敗：${err.message}`);
+      }
+    }
+
+    document.getElementById("loginBtn").addEventListener("click", () => {
+      setPassword(pwdInput.value.trim());
+      pwdInput.value = "";
+      refresh();
+    });
+    pwdInput.addEventListener("keydown", (e) => { if (e.key === "Enter") document.getElementById("loginBtn").click(); });
+
+    cards.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      const provider = btn.closest("[data-provider]").dataset.provider;
+      if (btn.dataset.action === "auth") startAuth(provider);
+      else if (btn.dataset.action === "revoke") revoke(provider);
+    });
+
+    if (getPassword()) refresh();
+  </script>
+</body>
+</html>

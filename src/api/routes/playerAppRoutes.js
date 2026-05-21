@@ -181,25 +181,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   }
 
   async function fetchGoogleCreatorAccessToken() {
-    const auth = config.streamAuth || {};
-    if (!auth.youtubeClientId || !auth.youtubeClientSecret || !auth.youtubeCreatorRefreshToken) {
-      throw new Error("YouTube creator OAuth 未設定完成，請先補齊 YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET / STREAM_YOUTUBE_CREATOR_REFRESH_TOKEN。");
-    }
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: auth.youtubeClientId,
-        client_secret: auth.youtubeClientSecret,
-        refresh_token: auth.youtubeCreatorRefreshToken,
-        grant_type: "refresh_token"
-      })
-    });
-    const tokenData = await tokenRes.json();
-    if (!tokenRes.ok || tokenData.error) {
-      throw new Error(`YouTube creator token refresh failed: ${tokenData.error_description || tokenData.error || tokenRes.statusText}`);
-    }
-    return tokenData.access_token;
+    return serviceContext.creatorTokenService.getValidToken("youtube");
+  }
+
+  async function fetchTwitchBroadcasterAccessToken() {
+    return serviceContext.creatorTokenService.getValidToken("twitch");
   }
 
   async function upsertStreamBindingAndTier({
@@ -324,14 +310,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     };
   }
 
-  async function parseTwitchSubscriptionTier(accessToken, userId) {
+  async function parseTwitchSubscriptionTier(userId) {
     const auth = config.streamAuth || {};
     if (!auth.twitchClientId || !auth.twitchBroadcasterId) {
       throw new Error("Twitch 會員驗證未設定完成，請先補齊 TWITCH_CLIENT_ID / TWITCH_BROADCASTER_ID。");
     }
-    const subRes = await fetch(`https://api.twitch.tv/helix/subscriptions/user?broadcaster_id=${encodeURIComponent(auth.twitchBroadcasterId)}&user_id=${encodeURIComponent(userId)}`, {
+    const broadcasterToken = await fetchTwitchBroadcasterAccessToken();
+    const subRes = await fetch(`https://api.twitch.tv/helix/subscriptions?broadcaster_id=${encodeURIComponent(auth.twitchBroadcasterId)}&user_id=${encodeURIComponent(userId)}`, {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${broadcasterToken}`,
         "Client-Id": auth.twitchClientId
       }
     });
@@ -461,7 +448,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           client_id: auth.twitchClientId,
           redirect_uri: callbackUrl,
           response_type: "code",
-          scope: "user:read:subscriptions",
+          // bind 階段只證明身分，訂閱狀態由 broadcaster token 查詢
+          scope: "",
           state: stateToken
         }).toString();
         return res.redirect(authorizeUrl.toString());
@@ -633,7 +621,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       const profile = await getTwitchProfile(tokenData.access_token);
-      const tierRaw = await parseTwitchSubscriptionTier(tokenData.access_token, profile.userId);
+      const tierRaw = await parseTwitchSubscriptionTier(profile.userId).catch((err) => {
+        console.warn("[stream-auth/twitch] subscription check via broadcaster token failed:", err.message);
+        return null;
+      });
         const mappedTier = mapTwitchTierToPlayerTier(tierRaw);
         const progress = await serviceContext.progressRepository.findByPlayerId(state.discordId);
         const currentTier = progress?.playerTier || null;

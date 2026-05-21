@@ -3,6 +3,7 @@ const { getMongoDb } = require("./createMongoClient");
 const { withProgressCache, withWalletCache, withPlayerCache } = require("./requestCache");
 const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { createStreamAccountBindingRepository } = require("../streamBindings/createStreamAccountBindingRepository");
+const { createCreatorTokenRepository } = require("../creatorTokens/createCreatorTokenRepository");
 const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
 
 function createMongoRepositories() {
@@ -129,6 +130,7 @@ function createMongoRepositories() {
       }
     },
     streamAccountBindingRepository: createStreamAccountBindingRepository({ collection }),
+    creatorTokenRepository: createCreatorTokenRepository({ collection }),
     walletRepository: {
       async findByPlayerId(playerId) {
         return (await collection("wallets")).findOne({ playerId });

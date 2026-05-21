@@ -15,7 +15,8 @@ async function ensureIndexes(db) {
       db.collection("players").createIndex({ discordId: 1 }, { unique: true }),
       db.collection("wallets").createIndex({ playerId: 1 }, { unique: true }),
       db.collection("streamAccountBindings").createIndex({ platform: 1, platformUserId: 1 }, { unique: true }),
-      db.collection("streamAccountBindings").createIndex({ discordId: 1, platform: 1 }),
+      db.collection("streamAccountBindings").createIndex({ discordId: 1, platform: 1 }, { unique: true }),
+      db.collection("creatorTokens").createIndex({ provider: 1 }, { unique: true }),
 
       // 進度（頻繁更新，加快查詢和保存）
       db.collection("progress").createIndex({ playerId: 1 }, { unique: true }),

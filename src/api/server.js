@@ -12,6 +12,7 @@ const { createAdminMonsterRoutes } = require("./routes/adminMonsterRoutes");
 const { createAdminMonsterEventRoutes } = require("./routes/adminMonsterEventRoutes");
 const { createAdminWeeklyQuestRoutes } = require("./routes/adminWeeklyQuestRoutes");
 const { createAdminIdleRoutes } = require("./routes/adminIdleRoutes");
+const { createAdminCreatorAuthRoutes } = require("./routes/adminCreatorAuthRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
@@ -72,6 +73,7 @@ function createApiServer(discordClient) {
   app.use(createAdminMonsterEventRoutes(serviceContext));
   app.use(createAdminWeeklyQuestRoutes(serviceContext));
   app.use(createAdminIdleRoutes(serviceContext));
+  app.use(createAdminCreatorAuthRoutes(serviceContext));
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
   app.use(createPlayerIdleRoutes(serviceContext));
   app.use(createMahjongRoutes());

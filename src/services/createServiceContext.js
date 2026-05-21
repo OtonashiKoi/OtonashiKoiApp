@@ -21,6 +21,7 @@ const { AuctionService } = require("./auction/auctionService");
 const { IdleService } = require("./idle/idleService");
 const { WorldBossService } = require("./worldBoss/worldBossService");
 const { InviteService } = require("./invite/inviteService");
+const { CreatorTokenService } = require("./creatorAuth/creatorTokenService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -99,6 +100,9 @@ function createServiceContext() {
     progressService,
     repositories.adminActionLogRepository
   );
+  const creatorTokenService = new CreatorTokenService({
+    creatorTokenRepository: repositories.creatorTokenRepository
+  });
   const adminConsoleService = new AdminConsoleService(
     repositories.channelLayoutRepository,
     repositories.playerRepository,
@@ -133,7 +137,8 @@ function createServiceContext() {
     auctionService,
     idleService,
     worldBossService,
-    inviteService
+    inviteService,
+    creatorTokenService
   };
 }
 
