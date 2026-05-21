@@ -456,12 +456,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       const auth = config.streamAuth || {};
-      if (!auth.youtubeClientId || !auth.youtubeClientSecret || !auth.youtubeCreatorRefreshToken) {
+      if (!auth.youtubeClientId || !auth.youtubeClientSecret) {
         return res.status(500).send(renderAuthResultPage("授權失敗", [
           "❌ YouTube OAuth 尚未設定完成。",
-          "請補齊 YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET / STREAM_YOUTUBE_CREATOR_REFRESH_TOKEN。"
+          "請補齊 YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET。"
         ]));
       }
+      // 註：broadcaster refresh token 在 creatorTokens collection（由 /admin/creator-auth 流程寫入），
+      //     玩家綁定流程本身只需要 client_id/secret + 用戶 OAuth code，不需要 creator token
 
       const authorizeUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
       authorizeUrl.search = new URLSearchParams({
