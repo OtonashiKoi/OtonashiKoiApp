@@ -24,12 +24,20 @@ function createApiServer(discordClient) {
   const app = express();
 
   const allowedOrigins = config.api.allowedOrigins || [];
+  // PUBLIC_BASE_URL 自動加入 allow list（後端自己對外的 URL）
+  const publicBaseOrigin = (() => {
+    try {
+      const u = new URL(config.api?.publicBaseUrl || "");
+      return u.origin;
+    } catch (_) { return null; }
+  })();
   app.use(cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) return callback(null, true);
       // Cloudflare Tunnel quick tunnels — 開發環境使用，URL 會隨重啟改變
       if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(origin)) return callback(null, true);
+      if (publicBaseOrigin && origin === publicBaseOrigin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
       callback(new Error(`CORS blocked: ${origin}`));
     },
