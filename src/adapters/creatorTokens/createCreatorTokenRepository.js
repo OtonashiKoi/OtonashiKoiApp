@@ -41,7 +41,9 @@ function createCreatorTokenRepository({ collection }) {
         throw new Error("creatorToken.provider is required");
       }
       const now = new Date().toISOString();
-      const setDoc = { ...doc, updatedAt: now };
+      // 把 createdAt 從 $set 拿掉，避免跟 $setOnInsert 衝突
+      const { createdAt: _ignored, ...rest } = doc;
+      const setDoc = { ...rest, updatedAt: now };
       await (await collection("creatorTokens")).updateOne(
         { provider: doc.provider },
         {
@@ -50,7 +52,7 @@ function createCreatorTokenRepository({ collection }) {
         },
         { upsert: true }
       );
-      return setDoc;
+      return { ...setDoc, createdAt: doc.createdAt || now };
     },
 
     async updateStatus(provider, patch) {

@@ -28,6 +28,8 @@ function createApiServer(discordClient) {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) return callback(null, true);
+      // Cloudflare Tunnel quick tunnels — 開發環境使用，URL 會隨重啟改變
+      if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(origin)) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
       callback(new Error(`CORS blocked: ${origin}`));
     },
