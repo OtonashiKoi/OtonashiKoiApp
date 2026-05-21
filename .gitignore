@@ -1,4 +1,5 @@
 .claude/worktrees/
+.claude/skills/
 .env
 
 # Local runtime/editor artifacts
@@ -12,3 +13,10 @@ web-game/
 web-game-react/
 web-game-react-dist/
 tmp-test-out.gif
+
+# Local agent / tooling workspace
+.agents/
+
+# DB exports & migration dumps (local-only)
+exports/
+scripts/_migrate_data_dump.json
