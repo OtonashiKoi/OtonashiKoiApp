@@ -53,8 +53,10 @@
           <dt>Access token 有效</dt><dd data-field="accessTokenValid">-</dd>
           <dt>過期時間</dt><dd data-field="expiresAt">-</dd>
           <dt>上次刷新</dt><dd data-field="lastRefreshedAt">-</dd>
+          <dt>授權於</dt><dd data-field="authorizedAt">-</dd>
           <dt>備註</dt><dd data-field="notes">-</dd>
         </dl>
+        <div class="refresh-warn" data-field="refreshWarn" style="display:none;margin-top:6px;padding:6px 10px;border-radius:6px;background:#3a2a1e;color:#ffc97f;font-size:12px"></div>
         <div class="scope" data-field="scope">Scope: -</div>
         <div class="actions">
           <button class="btn primary" data-action="auth">重新授權</button>
@@ -70,8 +72,10 @@
           <dt>Access token 有效</dt><dd data-field="accessTokenValid">-</dd>
           <dt>過期時間</dt><dd data-field="expiresAt">-</dd>
           <dt>上次刷新</dt><dd data-field="lastRefreshedAt">-</dd>
+          <dt>授權於</dt><dd data-field="authorizedAt">-</dd>
           <dt>備註</dt><dd data-field="notes">-</dd>
         </dl>
+        <div class="refresh-warn" data-field="refreshWarn" style="display:none;margin-top:6px;padding:6px 10px;border-radius:6px;background:#3a2a1e;color:#ffc97f;font-size:12px"></div>
         <div class="scope" data-field="scope">Scope: -</div>
         <div class="actions">
           <button class="btn primary" data-action="auth">重新授權</button>
@@ -128,8 +132,33 @@
         card.querySelector('[data-field="accessTokenValid"]').textContent = s.accessTokenValid ? "是" : "否";
         card.querySelector('[data-field="expiresAt"]').textContent = fmtDate(s.expiresAt);
         card.querySelector('[data-field="lastRefreshedAt"]').textContent = fmtDate(s.lastRefreshedAt);
+        card.querySelector('[data-field="authorizedAt"]').textContent = fmtDate(s.updatedAt || s.lastVerifiedAt);
         card.querySelector('[data-field="notes"]').textContent = s.notes || "-";
         card.querySelector('[data-field="scope"]').textContent = `Scope: ${(s.scope && s.scope.length) ? s.scope.join(", ") : "(無)"}`;
+
+        // YouTube testing 模式下 refresh_token 7 天後過期；用 updatedAt 倒數
+        const warnEl = card.querySelector('[data-field="refreshWarn"]');
+        if (provider === "youtube" && s.status === "active" && s.updatedAt) {
+          const daysLeft = 7 - (Date.now() - new Date(s.updatedAt).getTime()) / 86400000;
+          if (daysLeft > 0) {
+            warnEl.style.display = "";
+            if (daysLeft < 1) {
+              warnEl.textContent = `⚠️ Testing 模式 refresh_token 不到 24 小時將失效（剩 ${Math.max(1, Math.round(daysLeft * 24))} 小時），請盡快重新授權`;
+              warnEl.style.background = "#3a1e1e"; warnEl.style.color = "#ff7f7f";
+            } else if (daysLeft < 3) {
+              warnEl.textContent = `⚠️ Testing 模式 refresh_token 還剩 ${Math.floor(daysLeft)} 天會失效，建議快重新授權`;
+            } else {
+              warnEl.textContent = `ℹ️ Testing 模式 refresh_token 7 天後失效（剩 ${Math.floor(daysLeft)} 天）。發布到 production 後即永久有效`;
+              warnEl.style.background = "#1e2a3a"; warnEl.style.color = "#9ac1ff";
+            }
+          } else {
+            warnEl.style.display = "";
+            warnEl.textContent = `❌ Testing 模式 refresh_token 應已失效，請立刻重新授權`;
+            warnEl.style.background = "#3a1e1e"; warnEl.style.color = "#ff7f7f";
+          }
+        } else {
+          warnEl.style.display = "none";
+        }
       });
     }
 

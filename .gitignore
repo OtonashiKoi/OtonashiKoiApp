@@ -23,3 +23,9 @@ tmp-test-out.gif
 # DB exports & migration dumps (local-only)
 exports/
 scripts/_migrate_data_dump.json
+
+# Env backups (含 secret，絕對不 commit)
+.env.bak
+.env.backup
+.env.*
+!.env.example

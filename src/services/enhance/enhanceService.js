@@ -172,8 +172,28 @@ class EnhanceService {
       await this._consumeGold(discordId, displayName, goldRequired);
     }
 
+    // 計算強化成功率加成（enhance_success_up）
+    let enhanceBonusPct = 0;
+    try {
+      const equippedAll = progress?.equipment || {};
+      const allEffectRefs = [];
+      for (const entry of Object.values(equippedAll)) {
+        if (!entry || typeof entry !== "object") continue;
+        if (Array.isArray(entry.passiveEffects)) allEffectRefs.push(...entry.passiveEffects);
+        if (Array.isArray(entry.combatEffects)) allEffectRefs.push(...entry.combatEffects);
+      }
+      if (Array.isArray(progress?.activeEffects)) allEffectRefs.push(...progress.activeEffects);
+      for (const eff of allEffectRefs) {
+        if (eff?.key === 'enhance_success_up') {
+          const v = Number(eff.params?.value ?? eff.value ?? 0);
+          if (Number.isFinite(v)) enhanceBonusPct += Math.abs(v);
+        }
+      }
+    } catch (e) {}
+
     // 計算是否強化成功
-    const isSuccess = Math.random() * 100 < successRate;
+    const effectiveSuccessRate = Math.min(100, successRate + enhanceBonusPct);
+    const isSuccess = Math.random() * 100 < effectiveSuccessRate;
     const isExploded = !isSuccess && isGamble && Math.random() < 0.5;
 
     // 更新裝備狀態

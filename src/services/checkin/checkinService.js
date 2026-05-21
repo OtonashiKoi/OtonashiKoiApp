@@ -53,6 +53,27 @@ class CheckinService {
         progress.updatedAt = new Date().toISOString();
         await this.progressRepository.save(progress);
       }
+      // checkin_bonus_up：裝備/Buff 提供的打卡加成
+      try {
+        const equippedAll = progress?.equipment || {};
+        const allEffectRefs = [];
+        for (const entry of Object.values(equippedAll)) {
+          if (!entry || typeof entry !== "object") continue;
+          if (Array.isArray(entry.passiveEffects)) allEffectRefs.push(...entry.passiveEffects);
+          if (Array.isArray(entry.combatEffects)) allEffectRefs.push(...entry.combatEffects);
+        }
+        if (Array.isArray(progress?.activeEffects)) allEffectRefs.push(...progress.activeEffects);
+        let bonusPct = 0;
+        for (const eff of allEffectRefs) {
+          if (eff?.key === 'checkin_bonus_up') {
+            const v = Number(eff.params?.value ?? eff.value ?? 0);
+            if (Number.isFinite(v)) bonusPct += Math.abs(v);
+          }
+        }
+        if (bonusPct > 0) {
+          grantAmount = Math.round(grantAmount * (1 + bonusPct / 100));
+        }
+      } catch (e) {}
     }
     const rewardResult = await this.rewardService.grantCurrency({
       discordId,
