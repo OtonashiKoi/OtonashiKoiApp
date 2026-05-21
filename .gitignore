@@ -5,6 +5,9 @@
 # Node deps（之前漏寫 → 部分 node_modules 已被誤 tracked，後續另開議題清理）
 node_modules/
 
+# DEV_MIRROR 本地持久化資料（每台機器自己的 dev data，不要 commit）
+.dev-mirror-data/
+
 # Local runtime/editor artifacts
 logs/
 Godot_v*.exe
