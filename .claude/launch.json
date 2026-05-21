@@ -43,6 +43,20 @@
       "runtimeArgs": ["/c", "cd", "/d", "C:\\Users\\appsk\\Documents\\Github\\equipmentGAME-WEBGAME", "&&", "npm", "run", "dev"],
       "port": 5173,
       "description": "Vue 3 網頁遊戲版（HMR 熱更新）"
+    },
+    {
+      "name": "camera",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd", "/d", "C:\\Users\\appsk\\Documents\\Github\\equipmentGAME-camera", "&&", "npm", "run", "dev"],
+      "port": 4123,
+      "description": "OBS 直播展示頁面"
+    },
+    {
+      "name": "equipmentgame-app",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd", "/d", "C:\\Users\\appsk\\Documents\\Github\\equipmentGAME-app", "&&", "npm", "run", "dev"],
+      "port": 5180,
+      "description": "新版 React + Vite + Capacitor 前端（取代 archived player-web）"
     }
   ]
 }

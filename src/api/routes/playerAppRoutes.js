@@ -872,6 +872,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 2.4 Issue stream-auth state token — 前端綁定流程的第一步
+  router.post("/api/me/stream-auth/state", requireAuth, (req, res) => {
+    const { discordId } = req.playerRecord;
+    const state = signStreamAuthState(discordId);
+    res.json(ok({ state, expiresIn: STREAM_AUTH_STATE_TTL }));
+  });
+
   // 2.5 Fetch Stream Bindings + 即時會員狀態（用 broadcaster token 查）
   router.get("/api/me/bindings", requireAuth, async (req, res, next) => {
     try {
