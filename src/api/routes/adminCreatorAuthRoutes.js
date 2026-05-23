@@ -97,6 +97,27 @@ function createAdminCreatorAuthRoutes(serviceContext) {
     }
   });
 
+  // Debug: 用 broadcaster token 直接打 YouTube members API，看 Google 回的完整錯誤
+  router.get("/admin/creator-auth/debug/youtube-members", requireAdmin, async (req, res, next) => {
+    try {
+      const channelId = String(req.query.channelId || "").trim();
+      const token = await creatorTokenService.getValidToken("youtube");
+      const url = channelId
+        ? `https://www.googleapis.com/youtube/v3/members?part=snippet&filterByMemberChannelId=${encodeURIComponent(channelId)}&maxResults=5`
+        : `https://www.googleapis.com/youtube/v3/members?part=snippet&maxResults=5`;
+      const apiRes = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const body = await apiRes.text();
+      res.json(ok({
+        status: apiRes.status,
+        statusText: apiRes.statusText,
+        url,
+        body: body.slice(0, 2000)
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post("/admin/creator-auth/revoke", requireAdmin, async (req, res, next) => {
     try {
       const provider = String(req.body?.provider || req.query?.provider || "").trim().toLowerCase();

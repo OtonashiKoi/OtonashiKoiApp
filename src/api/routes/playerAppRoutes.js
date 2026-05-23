@@ -854,11 +854,44 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-      
+
       const { expToNextLevel, MAX_LEVEL } = require("../../shared/progression");
       const lv = progress?.level || 1;
       const isMaxLevel = lv >= MAX_LEVEL;
       const nextLevelExp = isMaxLevel ? null : expToNextLevel(lv);
+
+      // 計算完整戰鬥能力（與 DC「我的資料」一致）
+      let combatStats = null;
+      let equipBonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
+      let mergedEquipment = progress?.equipment || {};
+      try {
+        const { calcPlayerStats } = require("../../shared/combatStats");
+        mergedEquipment = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
+        const cs = calcPlayerStats(attrs, mergedEquipment, progress?.activeEffects || [], progress?.inventory || []);
+        // 計算裝備屬性加成
+        for (const item of Object.values(mergedEquipment)) {
+          if (!item?.equipStats) continue;
+          for (const [k, v] of Object.entries(item.equipStats)) {
+            if (k in equipBonus) equipBonus[k] += (Number(v) || 0);
+          }
+        }
+        combatStats = {
+          maxHp: Math.ceil(cs.maxHp),
+          atk: Math.ceil(cs.atk),
+          def: Math.ceil(cs.def),
+          hit: Math.ceil(cs.hit || 0),
+          dodge: Math.ceil(cs.dodge || 0),
+          block: Math.ceil(cs.blockChance || 0),
+          crit: Math.ceil(cs.crit || 0),
+          combo: Math.ceil(cs.combo || 0),
+          weaponType: cs.weaponType || null,
+          isTwoHanded: Boolean(cs.isTwoHanded),
+          isDualWield: Boolean(cs.isDualWield),
+          tierSetBonuses: cs.tierSetBonuses || null
+        };
+      } catch (err) {
+        console.warn("[profile] combatStats calc failed:", err?.message || err);
+      }
 
       res.json(ok({
         player: {
@@ -877,7 +910,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           statusPoints: progress?.statusPoints || 0,
           playerTier: progress?.playerTier || "E",
           attributes: attrs,
-          equipment: progress?.equipment || {},
+          equipBonus,
+          equipment: mergedEquipment,
+          combatStats,
+          activeEffects: progress?.activeEffects || [],
           jobSpecialDisplay: buildJobSpecialDisplay(progress)
         }
       }));
