@@ -554,6 +554,9 @@ async function _resolveExpiredMonsterTransition(sc, zoneKey) {
   return true;
 }
 
+const _staleTransitionLogAt = new Map();
+const STALE_TRANSITION_LOG_THROTTLE_MS = 60_000;
+
 function hasBlockingMonsterTransition(state, zoneKey) {
   if (state?.activeTransition) return true;
   if (!activeMonsterTransitions.has(zoneKey)) return false;
@@ -563,7 +566,12 @@ function hasBlockingMonsterTransition(state, zoneKey) {
   const timer = monsterTransitionTimers.get(zoneKey);
   if (timer) clearTimeout(timer);
   monsterTransitionTimers.delete(zoneKey);
-  console.warn(`[MonsterTransition] cleared stale in-memory transition zone=${zoneKey}`);
+  const now = Date.now();
+  const lastAt = _staleTransitionLogAt.get(zoneKey) || 0;
+  if (now - lastAt >= STALE_TRANSITION_LOG_THROTTLE_MS) {
+    _staleTransitionLogAt.set(zoneKey, now);
+    console.warn(`[MonsterTransition] cleared stale in-memory transition zone=${zoneKey}`);
+  }
   return false;
 }
 
@@ -2859,7 +2867,8 @@ async function handleEnterBattle(interaction) {
       deleteMonsterSession(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
     } catch (err) {
       const isTransient = isTransientDiscordError(err);
-      console.error(
+      const logFn = isTransient ? console.warn : console.error;
+      logFn(
         `[monsterZoneHandlers] battle finalization error` +
         ` | player=${discordId}(${displayName})` +
         ` | zone=${zoneKey ?? "?"}` +
