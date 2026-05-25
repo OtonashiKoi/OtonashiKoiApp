@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-05-21T07:45:44.082Z
+Generated at: 2026-05-25T02:41:11.173Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,11 +8,11 @@ Generated at: 2026-05-21T07:45:44.082Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 362 |
-| 進度資料 | 366 |
+| 玩家 | 365 |
+| 進度資料 | 369 |
 | 怪物 | 41 |
 | 怪物狀態文件 | 5 |
-| 道具 | 253 |
+| 道具 | 254 |
 | 任務 | 37 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
@@ -40,7 +40,7 @@ Generated at: 2026-05-21T07:45:44.082Z
 | beginner | 5 | 大野兔(B) | 3 | 4950 | 200 | 1000 | 0 | 是 | 13 |
 | elite | 1 | 大史王 | 35 | 950000 | 26000 | 75000 | 5000 | 是 | 60 |
 | hard | 1 | 城牆衛兵 | 20 | 45000 | 4500 | 4200 | 0 | 否 | 11 |
-| hard | 2 | 古城弓手 | 20 | 35000 | 3800 | 4200 | 0 | 否 | 10 |
+| hard | 2 | 古城弓手 | 20 | 35000 | 3800 | 4200 | 0 | 否 | 11 |
 | hard | 3 | 石像鬼 | 22 | 45000 | 6000 | 4200 | 0 | 否 | 9 |
 | hard | 4 | 古城法師 | 22 | 32000 | 5200 | 4200 | 0 | 否 | 11 |
 | hard | 5 | 廢墟蠍兵 | 23 | 38000 | 5500 | 4200 | 0 | 否 | 9 |
@@ -53,7 +53,7 @@ Generated at: 2026-05-21T07:45:44.082Z
 | hard | 12 | 黑焰巫師 | 27 | 35000 | 8500 | 4200 | 0 | 否 | 10 |
 | hard | 13 | 城堡魔像(B) | 28 | 150000 | 15000 | 20000 | 0 | 是 | 13 |
 | hard | 14 | 古城將軍(B) | 30 | 105000 | 18000 | 23000 | 0 | 是 | 19 |
-| hard | 15 | 廢都魔王(B) | 35 | 200000 | 25000 | 26000 | 0 | 是 | 22 |
+| hard | 15 | 廢都魔王(B) | 35 | 200000 | 25000 | 26000 | 0 | 是 | 23 |
 | mid | 1 | 甲蟹 | 12 | 12000 | 1400 | 2300 | 0 | 否 | 14 |
 | mid | 2 | 牙牙狼 | 12 | 13000 | 1200 | 2300 | 0 | 否 | 11 |
 | mid | 3 | 巨巨 | 14 | 10000 | 2000 | 2300 | 0 | 否 | 12 |
@@ -81,13 +81,13 @@ Generated at: 2026-05-21T07:45:44.082Z
 | --- | --- |
 | collectible | 5 |
 | consumable | 17 |
-| equipment | 221 |
+| equipment | 222 |
 | job_badge | 10 |
 
 | 階級 | 數量 |
 | --- | --- |
 | A | 61 |
-| B | 51 |
+| B | 52 |
 | C | 53 |
 | D | 57 |
 | 無階級 | 31 |
@@ -106,7 +106,7 @@ Generated at: 2026-05-21T07:45:44.082Z
 | shoes | 16 |
 | special | 41 |
 | title_eq | 3 |
-| weapon | 41 |
+| weapon | 42 |
 | 無槽位 | 22 |
 
 ## Items
@@ -238,6 +238,7 @@ Generated at: 2026-05-21T07:45:44.082Z
 | forest-tree-card | 森林古樹卡 | equipment | B | special |  |  | none |
 | forest-wizard-card | 森林巫師卡 | equipment | B | special |  |  | none |
 | forest-rogue-card | 森林盜賊卡 | equipment | B | special |  |  | none |
+| cfcbde64-96cb-4f8d-9aed-7011b9fe7e20 | 立直棒-跳滿手 | equipment | B | weapon | staff_1h | AGI+1 VIT+2 INT+15 DEX+3 LUK+-6 | none |
 | 46df8bac-c8c1-4e31-8689-7a602bafd7b5 | 鋼製匕首 | equipment | B | weapon | dagger | STR+4 AGI+7 | none |
 | 9807c319-abbd-43ad-808c-dcfb9313d7ba | 鋼製單手劍 | equipment | B | weapon | sword_1h | STR+11 | none |
 | d374cdb4-702d-4a3f-b5ba-34a3d3e5c8c3 | 鋼製單手斧 | equipment | B | weapon | axe_1h | STR+8 LUK+3 | none |

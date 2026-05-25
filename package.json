@@ -35,6 +35,7 @@
     "db:prune-transactions": "node scripts/prune-transactions-this-week.js",
     "status:update": "node scripts/update-current-game-status.js",
     "db:sync": "node scripts/sync-db-to-cloud.js",
+    "db:pull": "node scripts/sync-cloud-to-local.js",
     "db:sync:start": "node scripts/db-sync-scheduler.js",
     "workflow:finalize": "node scripts/workflow-finalize.js"
   },
