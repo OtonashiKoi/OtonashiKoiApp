@@ -225,8 +225,6 @@ const BTN = {
 const MAX_ROUNDS = 15;
 const BATTLE_TIMEOUT_MS = 60 * 1000; // 1 分鐘未按開始戰鬥 → 視為逃跑
 const ROUNDS_PER_TICK = 1;           // 每次更新顯示 1 回合，維持逐回合戰報節奏
-const BATTLE_PROGRESS_MAX_UPDATES = 3; // 避免對 Discord 連續重送大量戰報造成 GOAWAY
-const BATTLE_PROGRESS_RECENT_LOGS = 4;
 const DISCORD_REPLY_RETRY_DELAY_MS = 700;
 const DISCORD_REPLY_TIMEOUT_MS = 8_000;
 const DISPLAYING_SESSION_CLEANUP_GRACE_MS = 15_000;
@@ -1955,32 +1953,6 @@ function isTransientDiscordError(err) {
   return code === "ENOTFOUND" || code === "ECONNREFUSED" || code === "DISCORD_REQUEST_TIMEOUT";
 }
 
-function getBattleProgressSteps(logCount) {
-  const count = Math.max(0, Number(logCount) || 0);
-  if (count <= 1) return [];
-
-  const lastProgressStep = count - 1;
-  const rawSteps = [
-    1,
-    Math.ceil(count / 3),
-    Math.ceil((count * 2) / 3),
-    lastProgressStep
-  ];
-
-  return [...new Set(rawSteps)]
-    .filter((step) => step > 0 && step <= lastProgressStep)
-    .slice(0, BATTLE_PROGRESS_MAX_UPDATES);
-}
-
-function buildBattleProgressDescription(roundLogs, step, maxDesc) {
-  const safeStep = Math.min(Math.max(1, step), roundLogs.length);
-  const start = Math.max(0, safeStep - BATTLE_PROGRESS_RECENT_LOGS);
-  const visibleLogs = roundLogs.slice(start, safeStep).join("\n\n");
-  const prefix = start > 0 ? `（前 ${start} 回合已省略，僅顯示最近戰況）\n\n` : "";
-  const text = `${prefix}${visibleLogs}`;
-  return text.length > maxDesc ? text.slice(0, maxDesc) + "\n…" : text;
-}
-
 function buildCombatImportantHighlights(roundLogs = [], displayedText = "") {
   if (!Array.isArray(roundLogs) || roundLogs.length === 0) return "";
   const importantLines = [];
@@ -2000,11 +1972,6 @@ function getBattleDisplayDurationMs(agi = 1, roundCount = MAX_ROUNDS) {
   return Math.max(1000, getBattleBaselineDurationMs(agi, Math.max(1, roundCount)));
 }
 
-function getBattleProgressDelayMs(totalDurationMs, progressStepCount) {
-  const slots = Math.max(1, Number(progressStepCount) || 0) + 1;
-  return Math.max(0, Math.floor(Math.max(0, Number(totalDurationMs) || 0) / slots));
-}
-
 async function displaySettledBattleResult({
   interaction,
   discordId,
@@ -2012,32 +1979,28 @@ async function displaySettledBattleResult({
   rewardLines,
   embedTitle,
   embedColor,
-  displayEndsAt,
-  progressDelayMs,
   pendingDeathCooldown = false,
   battleStartedAt = Date.now(),
   playerAgi = 1
 }) {
   const delay = (ms) => new Promise((r) => setTimeout(r, ms));
   const MAX_DESC = 3800;
-  const progressSteps = getBattleProgressSteps(displayRoundLogs.length);
+  const tickDelay = calculateTickDelay(playerAgi);
 
-  for (const step of progressSteps) {
-    const truncated = buildBattleProgressDescription(displayRoundLogs, step, MAX_DESC);
+  // ── 逐回合更新（累積顯示，每回合 tickDelay 一次）──
+  for (let i = ROUNDS_PER_TICK; i < displayRoundLogs.length; i += ROUNDS_PER_TICK) {
+    const soFar = displayRoundLogs.slice(0, i).join("\n\n");
+    const truncated = soFar.length > MAX_DESC ? soFar.slice(0, MAX_DESC) + "\n…" : soFar;
     const progressEmbed = new EmbedBuilder()
-      .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(step, displayRoundLogs.length)} 回合`)
+      .setTitle(`⚔️ 戰鬥中 — 第 ${Math.min(i, displayRoundLogs.length)} 回合`)
       .setDescription(truncated + "\n\n⏳ 戰鬥繼續中...")
       .setColor(0xe74c3c);
     await retryInteractionEditReply(interaction, { embeds: [progressEmbed], components: [] }, 1).catch(() => {});
-    await delay(progressDelayMs);
+    await delay(tickDelay);
   }
-  await delay(Math.max(0, Number(displayEndsAt || 0) - Date.now()));
 
   if (pendingDeathCooldown) {
-    const availableAt = Math.max(
-      Number(displayEndsAt || 0),
-      Number(battleStartedAt || Date.now()) + getBattleBaselineDurationMs(playerAgi ?? 1)
-    ) + DEATH_EXTRA_COOLDOWN_MS;
+    const availableAt = Number(battleStartedAt || Date.now()) + getBattleBaselineDurationMs(playerAgi ?? 1) + DEATH_EXTRA_COOLDOWN_MS;
     recordDeathCooldown(discordId, availableAt);
     const remainingCooldown = getRemainingCooldown(discordId);
     rewardLines = rewardLines.map((line) => (
@@ -2616,6 +2579,7 @@ async function handleEnterBattle(interaction) {
       let combatResult =
         runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
           playerName: displayName,
+          playerLevel: currentProg?.level || 1,
           equipped: currentEquipped,
           inventory: currentProg?.inventory || [],
           partyEffects,
@@ -2822,8 +2786,8 @@ async function handleEnterBattle(interaction) {
 
       const displayRoundLogs = compactAuraSourceNames(roundLogs);
       roundLogs.length = 0;
-      const displayDelayMs = getBattleDisplayDurationMs(session.playerStats?.agi ?? 1, MAX_ROUNDS);
-      const progressDelayMs = getBattleProgressDelayMs(displayDelayMs, getBattleProgressSteps(displayRoundLogs.length).length);
+      // 用實際回合數而非 MAX_ROUNDS：快速戰鬥（1-3 回合）就不用等 22.5 秒
+      const displayDelayMs = getBattleDisplayDurationMs(session.playerStats?.agi ?? 1, Math.max(1, displayRoundLogs.length));
       const displayStartedAt = Date.now();
       const displayEndsAt = displayStartedAt + displayDelayMs;
       const battleStartedAtForDisplay = Number(session.battleStartedAt || displayStartedAt);
@@ -2858,8 +2822,6 @@ async function handleEnterBattle(interaction) {
         rewardLines,
         embedTitle,
         embedColor,
-        displayEndsAt,
-        progressDelayMs,
         pendingDeathCooldown,
         battleStartedAt: battleStartedAtForDisplay,
         playerAgi: playerAgiForDisplay
@@ -3035,6 +2997,7 @@ async function handleStartFight(interaction) {
     let combatResult =
       runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
         playerName: displayName,
+        playerLevel: currentProg?.level || 1,
         equipped: currentEquipped,
         inventory: currentProg?.inventory || [],
         partyEffects,
@@ -3209,8 +3172,8 @@ async function handleStartFight(interaction) {
 
     const displayRoundLogs = compactAuraSourceNames(roundLogs);
     roundLogs.length = 0;
-    const displayDelayMs = getBattleDisplayDurationMs(session.playerStats?.agi ?? 1, MAX_ROUNDS);
-    const progressDelayMs = getBattleProgressDelayMs(displayDelayMs, getBattleProgressSteps(displayRoundLogs.length).length);
+    // 用實際回合數而非 MAX_ROUNDS：快速戰鬥（1-3 回合）就不用等 22.5 秒
+    const displayDelayMs = getBattleDisplayDurationMs(session.playerStats?.agi ?? 1, Math.max(1, displayRoundLogs.length));
     const battleStartedAtForDisplay = Number(session.battleStartedAt || Date.now());
     const playerAgiForDisplay = session.playerStats?.agi ?? 1;
     session.displayStartedAt = Date.now();
@@ -3239,8 +3202,6 @@ async function handleStartFight(interaction) {
       rewardLines,
       embedTitle,
       embedColor,
-      displayEndsAt,
-      progressDelayMs,
       pendingDeathCooldown,
       battleStartedAt: battleStartedAtForDisplay,
       playerAgi: playerAgiForDisplay
@@ -3298,7 +3259,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // 參戰名單（含本次打到尾段的玩家）
   const participants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
 
-  if (zoneKey === "hard" && !monster?.isBoss && sc.worldBossService) {
+  // 世界王解鎖累計：原 hard 區拆成古城/古城深處，兩區擊殺都算
+  if ((zoneKey === "ancient_city" || zoneKey === "ancient_city_deep") && !monster?.isBoss && sc.worldBossService) {
     await sc.worldBossService.recordHardZoneKill(1).catch(() => {});
   }
 
@@ -4600,6 +4562,11 @@ async function checkIdleRotate() {
 }
 
 function startIdleRotateTimer() {
+  // 預設關閉閒置自動換怪；要啟用需明確設定 ENABLE_IDLE_ROTATE=1
+  if (process.env.ENABLE_IDLE_ROTATE !== "1") {
+    console.log("[IdleRotate] timer disabled; monsters only rotate on player activity");
+    return;
+  }
   setInterval(checkIdleRotate, 60 * 1000); // 每分鐘檢查一次
 }
 

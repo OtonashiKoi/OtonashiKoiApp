@@ -391,6 +391,15 @@ async function republishPanelsOnStartup() {
         continue;
       }
 
+      if (binding.featureKey === "casino_wheel") {
+        await serviceContext.adminConsoleService.publishCasinoPanel(binding.channelId, {
+          cleanChannel: true,
+          includePinned: true
+        });
+        console.log(`[PanelReset] republished casino_wheel -> ${binding.channelId}`);
+        continue;
+      }
+
       if (isMonsterZoneFeatureKey(binding.featureKey)) {
         const zoneKey = featureKeyToZone(binding.featureKey);
         const { activeMonster, currentHp, participantCount, damageMap, worldBossPartsHp } = await resolveMonsterPanelState(zoneKey);
@@ -411,21 +420,9 @@ async function republishPanelsOnStartup() {
 
 let elitePanelRefreshTimer = null;
 function startElitePanelRefreshTimer() {
-  if (process.env.ENABLE_ELITE_PANEL_REFRESH === "0") {
-    console.log("[ElitePanel] auto-refresh disabled; panels refresh on player activity");
-    return;
-  }
-
-  const sec = Math.max(10, Number.parseInt(process.env.ELITE_PANEL_REFRESH_SECONDS || "30", 10) || 30);
-  const run = async () => {
-    if (shouldSkipOptionalDiscordSend("elite panel refresh")) return;
-    await refreshEliteWorldBossPanel().catch(() => {});
-  };
-  if (elitePanelRefreshTimer) clearInterval(elitePanelRefreshTimer);
-  elitePanelRefreshTimer = setInterval(run, sec * 1000);
-  elitePanelRefreshTimer.unref?.();
-  setTimeout(run, 5_000).unref?.();
-  console.log(`[ElitePanel] auto-refresh started (${sec}s)`);
+  // 強制關閉 elite 自動刷新（防止疊面板）。要重新啟用請手動移除這段 return。
+  console.log("[ElitePanel] auto-refresh HARDCODED OFF; panels refresh on player activity only");
+  return;
 }
 
 let monsterPanelRefreshTimer = null;
@@ -768,15 +765,17 @@ function createBotClient() {
     startMonsterPanelRefreshTimer();
     startElitePanelRefreshTimer();
     await setupPersonalRoomChannel(readyClient);
-    await setupLockedChannels(readyClient);
-    const startupPanelRepublishMode = String(process.env.ENABLE_STARTUP_PANEL_REPUBLISH || "").trim().toLowerCase();
-    const shouldRepublishPanels = startupPanelRepublishMode === "force";
-    if (shouldRepublishPanels) {
-      await republishPanelsOnStartup();
-      console.log("[PanelReset] startup auto-republish enabled by force mode");
+    // 啟動時自動鎖頻道會對每個頻道做 3-6 次 PATCH，極易撞到 Discord 對 /channels/:id/permissions/:id
+    // 的嚴格限流，連帶把玩家互動的 editReply 卡住。Discord 的權限會保留在伺服器端，重啟不需要重新套用。
+    // 要強制重套請設 ENABLE_STARTUP_CHANNEL_LOCK=1。
+    if (process.env.ENABLE_STARTUP_CHANNEL_LOCK === "1") {
+      await setupLockedChannels(readyClient);
     } else {
-      console.log("[PanelReset] startup auto-republish disabled");
+      console.log("[Discord] startup channel lock HARDCODED OFF (set ENABLE_STARTUP_CHANNEL_LOCK=1 to re-enable)");
     }
+    // 啟動時自動重發面板會在 rate limit 下產生孤兒面板，已強制關閉。
+    // 要重發面板請到後台手動按「📨 發布面板」。
+    console.log("[PanelReset] startup auto-republish HARDCODED OFF (ignore ENABLE_STARTUP_PANEL_REPUBLISH env)");
 
     await initPkArenaState().catch((error) => {
       console.warn(`[PKArena] restore failed: ${error?.message || error}`);
@@ -785,6 +784,14 @@ function createBotClient() {
     await restoreTowerSessions().catch((error) => {
       console.warn(`[Tower] restore failed: ${error?.message || error}`);
     });
+
+    try {
+      const { initCasinoPanel } = require("./handlers/casinoHandlers");
+      await initCasinoPanel();
+      console.log("[Casino] service started, panel refresh loop running");
+    } catch (err) {
+      console.warn("[Casino] init failed:", err?.message || err);
+    }
 
     // 啟動 OneComme 直播留言監聽
     startFetcher(handleStreamComment);

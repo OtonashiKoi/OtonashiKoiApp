@@ -74,8 +74,13 @@ function markDiscordRestRateLimited(rateLimitData = {}) {
   const route = rateLimitData.route || rateLimitData.url || "?";
   const reason = `rate limit scope=${scope} route=${route}`;
 
-  if (rateLimitData.global || scope === "global" || retryAfterMs >= 60_000) {
+  // 只有真正的 global rate limit 才進入全域保護模式。
+  // per-route rate limit 交由 discord.js 內建 queue 處理，避免單一 route 慢拖累所有互動。
+  if (rateLimitData.global || scope === "global") {
     enterDiscordRestProtection(reason, retryAfterMs || DEFAULT_PROTECTION_MS);
+  } else if (retryAfterMs >= 60_000) {
+    // 長 retry-after 但非 global：只記 log 不封鎖
+    console.warn(`[DiscordREST] long retry-after on single route (skipped global protection): ${reason} retryAfter=${Math.ceil(retryAfterMs/1000)}s`);
   }
 }
 
@@ -83,8 +88,15 @@ function markDiscordRestError(error, context = "discord request") {
   const retryAfterMs = getRetryAfterMs(error?.retry_after || error?.retryAfter);
   const status = error?.status || error?.statusCode || error?.code;
   const message = error?.message || "";
-  if (status === 429 || /rate limit|too many requests|HTTP\/2 429/i.test(message)) {
+  const is429 = status === 429 || /rate limit|too many requests|HTTP\/2 429/i.test(message);
+  if (!is429) return;
+
+  // 只有 global rate limit 才進入全域保護模式。per-route 由 discord.js 內建 queue 處理。
+  const isGlobal = error?.global === true || /\bglobal\b/i.test(message);
+  if (isGlobal) {
     enterDiscordRestProtection(`${context}: ${message || status}`, retryAfterMs || DEFAULT_PROTECTION_MS);
+  } else {
+    console.warn(`[DiscordREST] per-route 429 (skipped global protection): ${context} status=${status} retryAfter=${Math.ceil(retryAfterMs/1000)}s`);
   }
 }
 
