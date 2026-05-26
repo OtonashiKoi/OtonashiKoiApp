@@ -47,7 +47,8 @@ function pickZoneForLevel(level) {
   if (level < 10)  return "normal";
   if (level < 20)  return "mid";
   if (level < 30)  return "ancient_city";       // Lv.20-29
-  return "ancient_city_deep";                   // Lv.30-40
+  if (level < 40)  return "ancient_city_deep";  // Lv.30-39
+  return "dragon_realm";                        // Lv.40-50
 }
 
 function scaleAttrs(ratio, total) {

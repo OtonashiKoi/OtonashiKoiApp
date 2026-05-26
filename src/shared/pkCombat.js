@@ -12,10 +12,40 @@ const {
   collectEquipmentEffects,
 } = require("./effectEngine");
 const { calcHitChance } = require("./hitChance");
+const {
+  calcAttackTierProbs,
+  calcDefenseTierProbs,
+  rollAttackTier,
+  rollDefenseTier,
+  ATTACK_TIER_MULT,
+  DEFENSE_TIER_MULT,
+} = require("./combatStats");
 
 // ── 從 combatLoop 借用純工具函式 ─────────────────────────────
 // 直接 inline 以避免循環依賴（combatLoop 沒有 export 這些）
 const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// ── 等級壓制（非對稱）/ 新 DEF 公式 (與 PvE combatLoop 對齊) ──
+// 高打低：+0~+20% ；低打高：-0~-50% ；每差 1 級 ±2%
+const PK_LEVEL_DIFF_PCT = 2;
+const PK_LEVEL_DIFF_CAP_UP = 20;
+const PK_LEVEL_DIFF_CAP_DOWN = 50;
+function pkLevelMult(srcLv, dstLv) {
+  const diff = Math.max(1, srcLv || 1) - Math.max(1, dstLv || 1);
+  if (diff >= 0) return 1 + Math.min(PK_LEVEL_DIFF_CAP_UP, diff * PK_LEVEL_DIFF_PCT) / 100;
+  return 1 - Math.min(PK_LEVEL_DIFF_CAP_DOWN, -diff * PK_LEVEL_DIFF_PCT) / 100;
+}
+function pkApplyDefense(rawDmg, flatDef, pctDef, rawAtk = null) {
+  // 新公式 B：flatDef 壓制原始 ATK，等同於 flatDef 被攻擊乘數放大
+  // (atk × M − flatDef × M) × (1 − DEF%) = ((atk − flatDef) × M) × (1 − DEF%)
+  let effectiveFlatDef = Math.max(0, flatDef || 0);
+  if (rawAtk && rawAtk > 0 && rawDmg > rawAtk) {
+    effectiveFlatDef *= (rawDmg / rawAtk);
+  }
+  const afterFlat = Math.max(0, rawDmg - effectiveFlatDef);
+  const finalPct = Math.max(0, Math.min(95, pctDef || 0));
+  return Math.max(1, Math.round(afterFlat * (1 - finalPct / 100)));
+}
 
 function effectIsActive(effect, round) {
   if (!effect || !effect.key) return false;
@@ -71,7 +101,8 @@ function cleanExpiredEffects(effects = [], round = 1) {
   });
 }
 
-const ROUND_DAMAGE_CAP_PCT = 25;
+// 預設 25% per-round HP cap；benchmark 可設 PK_ROUND_DAMAGE_CAP_PCT=999 等大值繞過
+const ROUND_DAMAGE_CAP_PCT = Math.max(1, Number(process.env.PK_ROUND_DAMAGE_CAP_PCT) || 25);
 const IMMEDIATE_HEAL_KEYS = new Set(["heal_over_time", "life_regen", "mana_regen", "on_hit_heal", "on_crit_heal"]);
 const IMMEDIATE_DAMAGE_KEYS = new Set(["burn", "poison", "bleed", "lightning", "shock_dot", "curse_dot"]);
 const IMMEDIATE_LOG_SUPPRESS_KEYS = new Set([...IMMEDIATE_DAMAGE_KEYS, ...IMMEDIATE_HEAL_KEYS]);
@@ -264,15 +295,20 @@ function resolveGuaranteedStrike({
     ));
   };
 
-  const attackBase = Math.max(1, Math.round(sourceStats.atk * atkMultiplier * finalDmgMult));
+  // 等級壓制
+  const levelMult = pkLevelMult(sourceStats.level, targetStats.level);
+  const attackBase = Math.max(1, Math.round(sourceStats.atk * atkMultiplier * finalDmgMult * levelMult));
   const finalDef = calcEffDef();
-  let dmg = Math.max(1, Math.round(rollDmg(Math.max(1, Math.round(attackBase * (1 - finalDef / 100))), sourceStats)));
+  // 新公式：(ATK − targetFlatDef) × (1 − finalDef/100)
+  let dmg = Math.max(1, Math.round(rollDmg(pkApplyDefense(attackBase, targetStats.flatDef || 0, finalDef, sourceStats.atk), sourceStats)));
   const nonCritDamageBase = dmg;
 
   const effectiveCrit = Math.min(100, (sourceStats.crit || 0) + critRateBonus);
   const isCrit = Math.random() * 100 < effectiveCrit;
   if (isCrit) {
-    dmg = Math.round(rollDmg(Math.max(1, attackBase), sourceStats) * (2.5 * critDmgMult));
+    // 爆擊：與普攻一樣過 DEF，倍率 ×2
+    const critPostDef = pkApplyDefense(attackBase, targetStats.flatDef || 0, finalDef, sourceStats.atk);
+    dmg = Math.round(rollDmg(critPostDef, sourceStats) * (2 * critDmgMult));
   }
 
   let blockNote = "";
@@ -593,7 +629,25 @@ function attackerTurn({
 
   let killed = false;
 
-  if (stunRoundsLeft <= 0 && Math.random() * 100 >= hitChance) {
+  // ── 擲攻擊階級 ──
+  const pkAtkTier = rollAttackTier(calcAttackTierProbs(atkStats.dex || 0, atkStats.luk || 0));
+
+  // 大失敗：攻方自殘
+  if (pkAtkTier === 'critFail') {
+    const selfBase = Math.max(1, Math.round((atkStats.atk || 1) * (atkMultiplier || 1)));
+    const selfDmg = Math.max(1, Math.round(selfBase * 0.3 * (0.7 + Math.random() * 0.3)));
+    atkHpRef.value -= selfDmg;
+    log.push(`💥 **${atkName} 大失敗**！揮拳失手砸到自己，受到 **${selfDmg}** 點傷害！`);
+    if (atkHpRef.value <= 0) killed = true;
+    return { killed, atkActive, defActive };
+  }
+  if (pkAtkTier === 'fail') {
+    log.push(`❌ **${atkName} 失敗**！揮空了！`);
+    return { killed, atkActive, defActive };
+  }
+  const pkForceHit = (pkAtkTier === 'great' || pkAtkTier === 'perfect');
+
+  if (!pkForceHit && stunRoundsLeft <= 0 && Math.random() * 100 >= hitChance) {
     // 閃避
     log.push(`💨 **${atkName}** 出手，**${defName}** ${rand(DODGE_PHRASES)}，躲過了攻擊！`);
 
@@ -645,8 +699,22 @@ function attackerTurn({
       if (defIsStunned) condBonus *= (1 + Number(atkStats.dwarfWarriorBonusVsStunnedPct) / 100);
     }
 
-    const attackBase = Math.max(1, Math.round(atkStats.atk * atkMultiplier * finalDmgMult * condBonus));
-    let dmg = rollDmg(Math.max(1, Math.round(attackBase * (1 - finalDef / 100))));
+    // 等級壓制
+    const levelMult = pkLevelMult(atkStats.level, defStats.level);
+    const attackBase = Math.max(1, Math.round(atkStats.atk * atkMultiplier * finalDmgMult * condBonus * levelMult));
+    // 新公式：(ATK − defenderFlatDef) × (1 − finalDef/100)
+    let dmg = rollDmg(pkApplyDefense(attackBase, defStats.flatDef || 0, finalDef, atkStats.atk));
+
+    // ── 套攻擊階級乘數（成功 ×1.0 / 大成功 ×1.3；完美走爆擊另算）──
+    const pkAtkTierMult = ATTACK_TIER_MULT[pkAtkTier] ?? 1.0;
+    if (pkAtkTier !== 'perfect' && pkAtkTierMult !== 1.0) {
+      dmg = Math.max(1, Math.round(dmg * pkAtkTierMult));
+    }
+    // ── 防禦階級擲骰 ──
+    const pkDefTier = rollDefenseTier(calcDefenseTierProbs(defStats.dex || 0, defStats.luk || 0));
+    const pkDefTierMult = DEFENSE_TIER_MULT[pkDefTier] ?? 1.0;
+    if (pkDefTierMult !== 1.0) dmg = Math.max(1, Math.round(dmg * pkDefTierMult));
+
     let wasBlocked = false;
     let blockNote = "";
     if (defStats.blockChance > 0 && Math.random() * 100 < defStats.blockChance) {
@@ -656,38 +724,17 @@ function attackerTurn({
 
     let isCrit = false;
 
-    // ── 弓箭手要害一擊（proc_weak_spot）──
-    let weakSpotTriggered = false;
-    {
-      const jobEq = atkOpts.equipped?.job_eq;
-      const allProcs = [
-        ...(Array.isArray(jobEq?.procEffects) ? jobEq.procEffects : []),
-        ...(Array.isArray(jobEq?.combatEffects) ? jobEq.combatEffects : []),
-      ];
-      const wsEff = allProcs.find(e => e?.key === 'proc_weak_spot' && e.trigger === 'on_hit');
-      if (wsEff) {
-        const wp = wsEff.params || {};
-        const baseChance = Number(wp.baseChance ?? wp.chance ?? 45);
-        const perDex = Number(wp.perDex ?? 0.5);
-        const maxChance = Number(wp.maxChance ?? 80);
-        const triggerChance = Math.min(maxChance, baseChance + (atkStats.dex || 0) * perDex);
-        if (Math.random() * 100 < triggerChance) {
-          weakSpotTriggered = true;
-          dmg = Math.max(1, Math.round(dmg * Number(wp.damageMultiplier ?? 1.5)));
-        }
-      }
-    }
-
     const nonCritDamageBase = dmg;
 
-    // 爆擊
+    // 爆擊：完美 = 必爆擊；否則照爆擊率
     const effectiveCrit = Math.min(100, (atkStats.crit || 0) + critRateBonus);
-    isCrit = Math.random() * 100 < effectiveCrit;
+    isCrit = (pkAtkTier === 'perfect') || (Math.random() * 100 < effectiveCrit);
 
     let finalDamage = dmg;
     if (isCrit) {
-      const critMult = 2.5 * critDmgMult;
-      finalDamage = Math.round(rollDmg(Math.max(1, attackBase)) * critMult);
+      const critMult = 2 * critDmgMult;
+      const critPostDef = pkApplyDefense(attackBase, defStats.flatDef || 0, finalDef, atkStats.atk);
+      finalDamage = Math.round(rollDmg(critPostDef) * critMult);
     }
 
     if (wasBlocked) {
@@ -715,9 +762,15 @@ function attackerTurn({
     // 敘述
     const breakNote = isBreak ? "💥**破防**！" : "";
     const critNote = isCrit ? `✨**${rand(CRIT_PHRASES)}**！` : "";
+    let pkAtkTierNote = "";
+    if (pkAtkTier === 'great') pkAtkTierNote = "⚡**大成功**！";
+    else if (pkAtkTier === 'perfect') pkAtkTierNote = "🌟**完美**！";
+    let pkDefTierNote = "";
+    if (pkDefTier === 'crushed') pkDefTierNote = " 💢被爆打";
+    else if (pkDefTier === 'reduce') pkDefTierNote = " 🛡️減傷";
+    else if (pkDefTier === 'graze') pkDefTierNote = " 🌬️擦傷";
 
-    log.push(`⚔️ ${critNote}${breakNote}**${atkName}** ${rand(atkVerbs)}${blockNote}，對 **${defName}** 造成 **${finalDamage}** 點傷害！（${defName} 剩 ${Math.max(0, defHpRef.value)} HP）`);
-    if (weakSpotTriggered) log.push(`🎯 **${atkName}** 命中要害！傷害 ×1.5！`);
+    log.push(`⚔️ ${pkAtkTierNote}${critNote}${breakNote}**${atkName}** ${rand(atkVerbs)}${blockNote}，對 **${defName}** 造成 **${finalDamage}** 點傷害${pkDefTierNote}！（${defName} 剩 ${Math.max(0, defHpRef.value)} HP）`);
     pushCappedNotice(log, defName, capResult.capped);
 
     // 吸血
@@ -1006,65 +1059,29 @@ function attackerTurn({
       }
     }
 
-    // ── 連擊 ───────────────────────────────────────────
+    // ── 連擊 ─── 簡化：觸發後同一次傷害再扣一次（× 2 效果）
     if (!killed) {
       let comboChance = atkStats.combo;
       if (atkStats.hasRogueBadge && atkStats.weaponType === "dagger") comboChance = Math.min(80, comboChance + 10);
       if (Math.random() * 100 < comboChance) {
-      const comboBase = Math.max(1, Math.round(atkStats.atk * atkMultiplier * finalDmgMult * condBonus * (1 - calcEffDef() / 100)));
-      let cdmg = Math.max(1, Math.round(rollDmg(comboBase) * (atkStats.comboDamageMultiplier || 1)));
-      if (atkStats.hasRogueBadge && atkStats.weaponType === "dagger") cdmg = Math.round(cdmg * 1.1);
-      cdmg = applyInvincibleDamage(cdmg, defActive, round);
-      const capResult = applyRoundDamageCap({
-        targetKey: defTargetKey,
-        rawDamage: cdmg,
-        roundDamageState,
-      });
-      cdmg = capResult.damage;
-      defHpRef.value -= cdmg;
-      log.push(`⚡ **${rand(COMBO_PHRASES)}** **${atkName}** 追加攻擊造成 **${cdmg}** 點傷害！（${defName} 剩 ${Math.max(0, defHpRef.value)} HP）`);
-      pushCappedNotice(log, defName, capResult.capped);
-      if (defHpRef.value <= 0) killed = true;
+        let cdmg = Math.max(1, Math.round(finalDamage * (atkStats.comboDamageMultiplier || 1)));
+        if (atkStats.hasRogueBadge && atkStats.weaponType === "dagger") cdmg = Math.round(cdmg * 1.1);
+        cdmg = applyInvincibleDamage(cdmg, defActive, round);
+        const capResult = applyRoundDamageCap({
+          targetKey: defTargetKey,
+          rawDamage: cdmg,
+          roundDamageState,
+        });
+        cdmg = capResult.damage;
+        defHpRef.value -= cdmg;
+        log.push(`⚡ **${rand(COMBO_PHRASES)}** **${atkName}** 連擊！再造成 **${cdmg}** 點傷害！（${defName} 剩 ${Math.max(0, defHpRef.value)} HP）`);
+        pushCappedNotice(log, defName, capResult.capped);
+        if (defHpRef.value <= 0) killed = true;
+      }
     }
-  }
-  }
+  }  // close else (命中 branch)
 
-  // ── 副手第二主攻（雙持：主手非雙手武器 + 副手武器）────────────────────────
-  if (!killed && atkStats.isDualWield) {
-    if (stunRoundsLeft <= 0 && Math.random() * 100 >= hitChance) {
-      log.push(`💨 **${defName}** ${rand(DODGE_PHRASES)}，躲過了副手攻擊！`);
-    } else {
-      const effDef2 = calcEffDef(0);
-      let condBonus2 = 1;
-      if (hasAnyDebuff(defActive, round)) {
-        for (const b of atkActive.filter(e => e.key === 'bonus_vs_debuffed' && effectIsActive(e, round)))
-          condBonus2 *= (1 + Math.abs(Number(b.params?.value ?? 0)) / 100);
-      }
-      if (defActive.some(e => e.key === 'poison' && effectIsActive(e, round))) {
-        for (const b of atkActive.filter(e => e.key === 'bonus_vs_poisoned' && effectIsActive(e, round)))
-          condBonus2 *= (1 + Math.abs(Number(b.params?.value ?? 0)) / 100);
-      }
-      const attackBase2 = Math.max(1, Math.round(atkStats.atk * atkMultiplier * finalDmgMult * condBonus2));
-      let finalDamage2 = rollDmg(Math.max(1, Math.round(attackBase2 * (1 - effDef2 / 100))));
-      const isCrit2 = Math.random() * 100 < Math.min(100, (atkStats.crit || 0) + critRateBonus);
-      if (isCrit2) {
-        finalDamage2 = Math.round(rollDmg(Math.max(1, attackBase2)) * (2.5 * critDmgMult));
-      }
-      finalDamage2 = applyInvincibleDamage(finalDamage2, defActive, round);
-      const capResult2 = applyRoundDamageCap({ targetKey: defTargetKey, rawDamage: finalDamage2, roundDamageState });
-      finalDamage2 = capResult2.damage;
-      defHpRef.value -= finalDamage2;
-      const critNote2 = isCrit2 ? `✨**${rand(CRIT_PHRASES)}**！` : "";
-      log.push(`🗡️ ${critNote2}**${atkName}** 副手追擊，對 **${defName}** 造成 **${finalDamage2}** 點傷害！（${defName} 剩 ${Math.max(0, defHpRef.value)} HP）`);
-      pushCappedNotice(log, defName, capResult2.capped);
-      if (lifestealPct > 0) {
-        const heal2 = Math.max(1, Math.round(finalDamage2 * lifestealPct / 100));
-        atkHpRef.value = Math.min(atkStats.maxHp, atkHpRef.value + heal2);
-        log.push(`💚 **${atkName}** 吸取生命力！恢復 **${heal2}** HP`);
-      }
-      if (defHpRef.value <= 0) killed = true;
-    }
-  }
+  // 副手第二主攻機制已移除（2026-05-26）
 
   return { killed, atkActive, defActive };
 }
@@ -1224,6 +1241,9 @@ function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, target
  * @returns {{ winner, roundLogs, finalHpA, finalHpB, hpPctA, hpPctB }}
  */
 function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15) {
+  // 注入等級給戰鬥內部使用（等級壓制）
+  aStats = { ...aStats, level: Math.max(1, Number(aOpts?.level || aStats?.level || 1)) };
+  bStats = { ...bStats, level: Math.max(1, Number(bOpts?.level || bStats?.level || 1)) };
   const aHpRef = { value: aStats.maxHp };
   const bHpRef = { value: bStats.maxHp };
   let aActive  = Array.isArray(aOpts.activeEffects) ? [...aOpts.activeEffects] : [];
@@ -1278,31 +1298,7 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
       aActive = r.atkActive;
       bActive = r.defActive;
       if (r.killed) { winner = "A"; roundLogs.push(log.join("\n")); break; }
-      // ── B 的副手反擊（被 A 攻擊後觸發）──────────────────────────────────────
-      if (bStats.isDualWield && bStats.counterChance > 0 && bHpRef.value > 0) {
-        if (Math.random() * 100 < bStats.counterChance) {
-          const bHitVsA = calcHitChance({
-            hit: bStats.hit,
-            dodge: aStats.dodge,
-            min: 30,
-          });
-          if (aDot.frozen || Math.random() * 100 < bHitVsA) {
-            const bEffDef = Math.min(95, Math.max(0, aStats.def));
-            const bBase = Math.max(1, Math.round(bStats.atk * (1 - bEffDef / 100)));
-            const bRoll = bStats.dmgMin + Math.random() * (bStats.dmgMax - bStats.dmgMin);
-            let bCdmg = Math.max(1, Math.round(bBase * bRoll));
-            bCdmg = applyInvincibleDamage(bCdmg, aActive, round);
-            const bCap = applyRoundDamageCap({ targetKey: "A", rawDamage: bCdmg, roundDamageState });
-            bCdmg = bCap.damage;
-            aHpRef.value -= bCdmg;
-            log.push(`🗡️ **${bName}** 副手反擊！趁隙刺出，對 **${aName}** 造成 **${bCdmg}** 點傷害！（${aName} 剩 ${Math.max(0, aHpRef.value)} HP）`);
-            pushCappedNotice(log, aName, bCap.capped);
-            if (aHpRef.value <= 0) { winner = "B"; roundLogs.push(log.join("\n")); break; }
-          } else {
-            log.push(`🗡️ **${bName}** 副手出擊，但 **${aName}** ${rand(DODGE_PHRASES)}！`);
-          }
-        }
-      }
+      // 副手反擊機制已移除（2026-05-26）
     } else {
       log.push(`⏸️ **${aName}** 無法行動！`);
     }
@@ -1321,31 +1317,7 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
       bActive = r.atkActive;
       aActive = r.defActive;
       if (r.killed) { winner = "B"; roundLogs.push(log.join("\n")); break; }
-      // ── A 的副手反擊（被 B 攻擊後觸發）──────────────────────────────────────
-      if (aStats.isDualWield && aStats.counterChance > 0 && aHpRef.value > 0) {
-        if (Math.random() * 100 < aStats.counterChance) {
-          const aHitVsB = calcHitChance({
-            hit: aStats.hit,
-            dodge: bStats.dodge,
-            min: 30,
-          });
-          if (bDot.frozen || Math.random() * 100 < aHitVsB) {
-            const aEffDef = Math.min(95, Math.max(0, bStats.def));
-            const aBase = Math.max(1, Math.round(aStats.atk * (1 - aEffDef / 100)));
-            const aRoll = aStats.dmgMin + Math.random() * (aStats.dmgMax - aStats.dmgMin);
-            let aCdmg = Math.max(1, Math.round(aBase * aRoll));
-            aCdmg = applyInvincibleDamage(aCdmg, bActive, round);
-            const aCap = applyRoundDamageCap({ targetKey: "B", rawDamage: aCdmg, roundDamageState });
-            aCdmg = aCap.damage;
-            bHpRef.value -= aCdmg;
-            log.push(`🗡️ **${aName}** 副手反擊！趁隙刺出，對 **${bName}** 造成 **${aCdmg}** 點傷害！（${bName} 剩 ${Math.max(0, bHpRef.value)} HP）`);
-            pushCappedNotice(log, bName, aCap.capped);
-            if (bHpRef.value <= 0) { winner = "A"; roundLogs.push(log.join("\n")); break; }
-          } else {
-            log.push(`🗡️ **${aName}** 副手出擊，但 **${bName}** ${rand(DODGE_PHRASES)}！`);
-          }
-        }
-      }
+      // 副手反擊機制已移除（2026-05-26）
     } else {
       log.push(`⏸️ **${bName}** 無法行動！`);
     }

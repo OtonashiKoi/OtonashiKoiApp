@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { ok, fail } = require("../../shared/response");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
+const { pushBonusWeaponToInventory } = require("../../shared/jobBadgeBonus");
 
 async function grantQuestReward(serviceContext, { discordId, displayName, reward, sourceTag = "quest" }) {
   if (reward.gold > 0) {
@@ -35,7 +36,8 @@ async function grantQuestReward(serviceContext, { discordId, displayName, reward
         const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
         if (progress) {
           if (!Array.isArray(progress.inventory)) progress.inventory = [];
-          progress.inventory.push({
+          const rewardItemType = item.equipSlot === "job_eq" ? "job_badge" : (item.itemType || "consumable");
+          const badgeEntry = {
             uuid: crypto.randomUUID(),
             itemId: item.id,
             itemName: item.name,
@@ -44,7 +46,7 @@ async function grantQuestReward(serviceContext, { discordId, displayName, reward
             passiveEffects: item.passiveEffects || [],
             procEffects: item.procEffects || [],
             combatEffects: item.combatEffects || [],
-            itemType: item.itemType || "consumable",
+            itemType: rewardItemType,
             imageUrl: item.imageUrl || null,
             imageThumbnailUrl: item.imageThumbnailUrl || null,
             equipSlot: item.equipSlot || null,
@@ -54,7 +56,20 @@ async function grantQuestReward(serviceContext, { discordId, displayName, reward
             tier: item.tier || null,
             source: sourceTag,
             obtainedAt: new Date().toISOString()
-          });
+          };
+          progress.inventory.push(badgeEntry);
+
+          // 領取職業徽章時，附送對應職業的 C 階武器
+          const bonusWeapon = await pushBonusWeaponToInventory({
+            progress,
+            itemRepository: serviceContext.itemRepository,
+            badge: badgeEntry,
+            source: sourceTag + "_job_badge_bonus",
+          }).catch((err) => { console.warn("[admin grantQuestReward] bonus weapon grant failed:", err?.message); return null; });
+          if (bonusWeapon) {
+            reward.bonusWeaponName = bonusWeapon.name;
+          }
+
           progress.updatedAt = new Date().toISOString();
           await serviceContext.progressRepository.save(progress);
         }

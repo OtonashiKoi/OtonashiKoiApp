@@ -8,6 +8,7 @@ const config = require("../config");
 const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
 const { calcPlayerStats, getWeaponConfig } = require("../shared/combatStats");
+const { pushBonusWeaponToInventory } = require("../shared/jobBadgeBonus");
 const { TIER_SET_SLOTS } = require("../shared/equipmentTierSetBonuses");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
 const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
@@ -2477,7 +2478,7 @@ async function grantQuestRewardDiscord(serviceContext, discordId, displayName, r
       if (prog) {
         if (!Array.isArray(prog.inventory)) prog.inventory = [];
         const rewardItemType = item.equipSlot === "job_eq" ? "job_badge" : (item.itemType || "consumable");
-        prog.inventory.push({
+        const badgeEntry = {
           uuid: crypto.randomUUID(),
           itemId: item.id,
           itemName: item.name,
@@ -2496,7 +2497,19 @@ async function grantQuestRewardDiscord(serviceContext, discordId, displayName, r
           tier: item.tier || null,
           source: "quest",
           obtainedAt: new Date().toISOString()
-        });
+        };
+        prog.inventory.push(badgeEntry);
+
+        // 領取職業徽章時，附送對應職業的 C 階武器
+        const bonusWeapon = await pushBonusWeaponToInventory({
+          progress: prog,
+          itemRepository: serviceContext.itemRepository,
+          badge: badgeEntry,
+        }).catch((err) => { console.warn("[grantQuestReward] bonus weapon grant failed:", err?.message); return null; });
+        if (bonusWeapon) {
+          reward.bonusWeaponName = bonusWeapon.name;
+        }
+
         prog.updatedAt = new Date().toISOString();
         await serviceContext.progressRepository.save(prog);
       }
@@ -2559,6 +2572,7 @@ async function handleWeeklyQuestClaim(interaction, questId, cadenceHint = "weekl
     if (reward.exp > 0) rewardParts.push(`${reward.exp} ⭐`);
     if (reward.rewardItemSummary) rewardParts.push(reward.rewardItemSummary);
     else if (reward.rewardItemName) rewardParts.push(`「${reward.rewardItemName}」`);
+    if (reward.bonusWeaponName) rewardParts.push(`🎁 加贈「${reward.bonusWeaponName}」`);
     const rewardDesc = rewardParts.length ? rewardParts.join(" ＋ ") : "（無獎勵）";
 
     const nextCadence = reward.cadence || cadenceHint || "weekly";
