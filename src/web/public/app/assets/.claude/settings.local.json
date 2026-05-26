@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:\\\\Users\\\\appsk\\\\Documents\\\\Github\\\\equipmentGAME-app\" && cat package.json | grep -E \"sharp|jimp\" ; ls node_modules/sharp 2>/dev/null | head -3)",
+      "Bash(node scripts/split-11.mjs)",
+      "Bash(ls -lt \"C:/Users/appsk/Documents/Github/equipmentGAME-app/public/assets/\"*.png 2>&1 | head -5 && echo \"---\" && ls \"C:/Users/appsk/Documents/Github/equipmentGAME-app/\" 2>&1 | head -20)",
+      "Bash(python -c \"from PIL import Image; im=Image.open\\('C:/Users/appsk/Documents/Github/equipmentGAME-app/public/assets/11.png'\\); print\\(im.size, im.mode\\)\")",
+      "Bash(python scripts/split-bag.py)"
+    ]
+  }
+}

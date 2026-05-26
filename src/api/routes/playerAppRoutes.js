@@ -1819,6 +1819,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const combatResult =
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial, undefined, {
           playerName: displayName,
+          playerLevel: progress?.level || 1,
           equipped,
           inventory: progress?.inventory || [],
           partyEffects,
@@ -1957,6 +1958,39 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         nextBattleAt,
       }));
 
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ──────────────────────────────────────────────────
+  // 打卡狀態查詢（DC 我的資料 → 📅 打卡狀態）
+  // ──────────────────────────────────────────────────
+  router.get("/api/me/checkin", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const limit = Math.min(30, Math.max(1, Number(req.query.limit) || 7));
+      const checkins = await serviceContext.checkinService.listRecentByDiscordId(discordId, limit);
+
+      // 算今日是否已打卡（用台北時區）
+      const tz = "Asia/Taipei";
+      const todayKey = new Date().toLocaleDateString("zh-TW", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
+      const todayCheckin = (checkins || []).find((c) => {
+        if (!c?.occurredAt) return false;
+        const k = new Date(c.occurredAt).toLocaleDateString("zh-TW", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
+        return k === todayKey;
+      });
+
+      res.json(ok({
+        checkedToday: Boolean(todayCheckin),
+        todayReward: todayCheckin?.rewardDetail?.amount ?? null,
+        todayAt: todayCheckin?.occurredAt || null,
+        history: (checkins || []).slice(0, limit).map((c) => ({
+          date: c?.occurredAt ? new Date(c.occurredAt).toLocaleDateString("zh-TW", { timeZone: tz }) : null,
+          amount: c?.rewardDetail?.amount ?? 0,
+          occurredAt: c?.occurredAt || null
+        }))
+      }));
     } catch (err) {
       next(err);
     }

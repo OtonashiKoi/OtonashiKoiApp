@@ -88,6 +88,52 @@ function createApiServer(discordClient) {
   app.use(createPlayerIdleRoutes(serviceContext));
   app.use(createMahjongRoutes());
 
+  // === Web 前端 SPA 靜態服務 ===
+  // equipmentGAME-app 經過 `npm run deploy` 後產出在 src/web/public/app/
+  // 提供：
+  //   /privacy.html / /terms.html → 原本就有的靜態檔（serve 自 src/web/public/）
+  //   /assets/* / /index.html / 等 → web app build 產物
+  //   /(其他任何 SPA 路徑) → 回 index.html（HTML5 history 路由）
+  const webAppDir = path.resolve(__dirname, "../web/public/app");
+  const fs = require("fs");
+  if (fs.existsSync(webAppDir)) {
+    // 靜態檔：assets / favicon 等
+    app.use(express.static(webAppDir, {
+      index: false, // 我們自己處理 / 跟 SPA fallback
+      setHeaders(res, filePath) {
+        // index.html 永遠不快取（部署新版立即生效）
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-store");
+        } else if (/\.(js|css|woff2?|png|jpg|jpeg|webp|svg|ico)$/i.test(filePath)) {
+          // 帶 hash 的 asset 長快取
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      }
+    }));
+    // 同時 serve src/web/public/ 根目錄的 privacy.html、terms.html
+    app.use(express.static(path.resolve(__dirname, "../web/public"), {
+      index: false,
+      setHeaders(res) {
+        res.setHeader("Cache-Control", "no-store");
+      }
+    }));
+    // SPA fallback：任何不是 api / admin / static / uploads / health / *.html
+    // 的 GET 請求，都回 index.html
+    app.get(/^(?!\/(api|admin|static|uploads|health)(\/|$)).*$/, (req, res, next) => {
+      if (req.method !== "GET") return next();
+      if (req.path.includes(".")) return next(); // 有副檔名的當作 asset，讓 static 已處理或 404
+      const indexPath = path.join(webAppDir, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        next();
+      }
+    });
+  } else {
+    console.warn(`[Web] App build 不存在於 ${webAppDir}，前端 SPA 將無法服務。`);
+    console.warn(`[Web]   解決：到 equipmentGAME-app 跑 \`npm run deploy\``);
+  }
+
   app.use((error, _req, res, _next) => {
     console.error("[API] request error", error);
     if (isAppError(error)) {
