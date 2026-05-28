@@ -47,7 +47,7 @@ class ItemService {
   }
 
   _normalizeItemType(t) {
-    return ["consumable", "collectible", "equipment", "job_badge"].includes(t) ? t : "consumable";
+    return ["consumable", "collectible", "equipment", "job_badge", "pet_egg", "pet"].includes(t) ? t : "consumable";
   }
 
   _normalizeEquipStats(stats) {

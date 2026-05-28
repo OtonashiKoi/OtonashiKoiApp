@@ -138,13 +138,15 @@ class AuctionService {
 
     const item = inventory[itemIdx];
 
-    // 只允許上架裝備或強化寶石，且禁止職業徽章/稱號
+    // 只允許上架裝備 / 卡片 / 強化寶石 / 寵物蛋，且禁止職業徽章/稱號
     const isGem = ENHANCE_GEM_IDS.has(item.itemId);
+    const isPetEgg = item.itemType === "pet_egg";
+    const isStackable = isGem || isPetEgg; // 可堆疊上架的類型
     if (FORBIDDEN_ITEM_TYPES.has(item.itemType) || FORBIDDEN_EQUIP_SLOTS.has(item.equipSlot)) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章與稱號不可上架", 400);
     }
-    if (item.itemType !== "equipment" && item.itemType !== "monster_card" && !isGem) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有裝備、卡片和強化寶石可以上架", 400);
+    if (item.itemType !== "equipment" && item.itemType !== "monster_card" && !isGem && !isPetEgg) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有裝備、卡片、強化寶石與寵物蛋可以上架", 400);
     }
 
     const safeQuantity = Number.isInteger(quantity) ? quantity : parseInt(quantity, 10);
@@ -152,12 +154,12 @@ class AuctionService {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "上架數量必須是正整數", 400);
     }
 
-    // 寶石堆疊：從 stackCount 扣指定數量；其他裝備固定 1 件
+    // 可堆疊（寶石 / 寵物蛋）：從 stackCount 扣指定數量；其他裝備固定 1 件
     let stackSnap = null;
-    if (isGem) {
+    if (isStackable) {
       const curStack = Math.max(1, item.stackCount || 1);
       if (safeQuantity > curStack) {
-        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `強化石可上架數量不足（目前持有 ${curStack}）`, 400);
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `可上架數量不足（目前持有 ${curStack}）`, 400);
       }
       stackSnap = safeQuantity;
       if (curStack > safeQuantity) {

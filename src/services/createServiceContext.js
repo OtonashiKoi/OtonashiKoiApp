@@ -22,6 +22,8 @@ const { IdleService } = require("./idle/idleService");
 const { WorldBossService } = require("./worldBoss/worldBossService");
 const { InviteService } = require("./invite/inviteService");
 const { CreatorTokenService } = require("./creatorAuth/creatorTokenService");
+const { CasinoService } = require("./casino/casinoService");
+const { PetService } = require("./pet/petService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -103,6 +105,27 @@ function createServiceContext() {
   const creatorTokenService = new CreatorTokenService({
     creatorTokenRepository: repositories.creatorTokenRepository
   });
+  const casinoService = new CasinoService({
+    casinoRepository: repositories.casinoRepository,
+    itemRepository: {
+      // 適配既有 itemRepository（findAll → listAll 別名）
+      listAll: () => repositories.itemRepository.findAll(),
+      findAll: () => repositories.itemRepository.findAll(),
+    },
+    walletRepository: repositories.walletRepository,
+    progressRepository: repositories.progressRepository,
+    rewardService,
+    playerService,
+    getBotClient: () => {
+      try { return require("../bot/runtimeContext").getBotClient(); } catch (_) { return null; }
+    },
+    channelLayoutRepository: repositories.channelLayoutRepository,
+  });
+  const petService = new PetService({
+    progressRepository: repositories.progressRepository,
+    itemRepository: repositories.itemRepository,
+    petRepository: repositories.petRepository,
+  });
   const adminConsoleService = new AdminConsoleService(
     repositories.channelLayoutRepository,
     repositories.playerRepository,
@@ -138,7 +161,9 @@ function createServiceContext() {
     idleService,
     worldBossService,
     inviteService,
-    creatorTokenService
+    creatorTokenService,
+    casinoService,
+    petService
   };
 }
 

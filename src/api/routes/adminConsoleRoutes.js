@@ -85,7 +85,7 @@ function createAdminConsoleRoutes(serviceContext) {
   router.post("/admin/channel-layout/publish-player-panel", async (req, res, next) => {
     try {
       const { channelId } = req.body;
-      const result = await serviceContext.adminConsoleService.publishPlayerPanel(channelId);
+      const result = await serviceContext.adminConsoleService.publishPlayerPanel(channelId, { cleanChannel: true });
       res.json(ok(result, "player panel published"));
     } catch (error) {
       next(error);
@@ -95,7 +95,7 @@ function createAdminConsoleRoutes(serviceContext) {
   router.post("/admin/channel-layout/publish-player-query", async (req, res, next) => {
     try {
       const { channelId } = req.body;
-      const result = await serviceContext.adminConsoleService.publishPlayerQueryPanel(channelId);
+      const result = await serviceContext.adminConsoleService.publishPlayerQueryPanel(channelId, { cleanChannel: true });
       res.json(ok(result, "player query panel published"));
     } catch (error) {
       next(error);
@@ -179,7 +179,7 @@ function createAdminConsoleRoutes(serviceContext) {
   router.post("/admin/channel-layout/publish-coin-shop", async (req, res, next) => {
     try {
       const { channelId } = req.body;
-      const result = await serviceContext.adminConsoleService.publishCoinShopPanel(channelId);
+      const result = await serviceContext.adminConsoleService.publishCoinShopPanel(channelId, { cleanChannel: true });
       res.json(ok(result, "coin shop panel published"));
     } catch (error) {
       next(error);
@@ -194,7 +194,7 @@ function createAdminConsoleRoutes(serviceContext) {
       const bindings = layout?.discord?.bindings || [];
       const binding = bindings.find((b) => b.channelId === channelId && b.featureKey?.startsWith("monster_zone"));
       const zone = featureKeyToZone(binding?.featureKey);
-      const state = await serviceContext.monsterService.getState(zone);
+      let state = await serviceContext.monsterService.getState(zone);
       const monsters = await serviceContext.monsterService.listMonsters({ includeDisabled: true, zone });
       let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);
       if (!activeMonster && monsters.length > 0) {
@@ -224,7 +224,7 @@ function createAdminConsoleRoutes(serviceContext) {
   router.post("/admin/channel-layout/publish-weekly-quest", async (req, res, next) => {
     try {
       const { channelId } = req.body;
-      const result = await serviceContext.adminConsoleService.publishWeeklyQuestPanel(channelId);
+      const result = await serviceContext.adminConsoleService.publishWeeklyQuestPanel(channelId, { cleanChannel: true });
       res.json(ok(result, "weekly quest panel published"));
     } catch (error) {
       next(error);
@@ -234,7 +234,7 @@ function createAdminConsoleRoutes(serviceContext) {
   router.post("/admin/channel-layout/publish-daily-quest", async (req, res, next) => {
     try {
       const { channelId } = req.body;
-      const result = await serviceContext.adminConsoleService.publishDailyQuestPanel(channelId);
+      const result = await serviceContext.adminConsoleService.publishDailyQuestPanel(channelId, { cleanChannel: true });
       res.json(ok(result, "daily quest panel published"));
     } catch (error) {
       next(error);
@@ -244,8 +244,81 @@ function createAdminConsoleRoutes(serviceContext) {
   router.post("/admin/channel-layout/publish-idle-zone", async (req, res, next) => {
     try {
       const { channelId } = req.body;
-      const result = await serviceContext.adminConsoleService.publishIdleZonePanel(channelId);
+      const result = await serviceContext.adminConsoleService.publishIdleZonePanel(channelId, { cleanChannel: true });
       res.json(ok(result, "idle zone panel published"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/channel-layout/publish-pet-panel", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      const result = await serviceContext.adminConsoleService.publishPetPanel(channelId, { cleanChannel: true });
+      res.json(ok(result, "pet panel published"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/channel-layout/publish-casino", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      if (!channelId) return res.status(400).json(fail("MISSING_CHANNEL", "請提供 channelId"));
+      const result = await serviceContext.adminConsoleService.publishCasinoPanel(channelId, { cleanChannel: true });
+      res.json(ok(result, "casino panel published"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/casino/enabled", async (req, res, next) => {
+    try {
+      const enabled = req.body?.enabled !== false && req.body?.enabled !== "false" && Boolean(req.body?.enabled);
+      const result = await serviceContext.adminConsoleService.setCasinoEnabled(enabled);
+      res.json(ok(result, `casino ${enabled ? "enabled" : "disabled"}`));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/casino/status", async (req, res, next) => {
+    try {
+      const repo = serviceContext.casinoRepository;
+      const state = await repo.getState();
+      const daily = await repo.getDailyStats();
+      res.json(ok({
+        enabled: (await serviceContext.channelLayoutRepository.get())
+          ?.discord?.bindings?.find((b) => b.featureKey === "casino_wheel")?.enabled !== false,
+        currentRound: state?.currentRound || null,
+        recentResults: state?.recentResults || [],
+        lastRoundId: state?.lastRoundId || 0,
+        daily,
+      }, "casino status"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/channel-layout/publish-pk-arena", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      if (!channelId) return res.status(400).json(fail("MISSING_CHANNEL", "請提供 channelId"));
+      const { publishPkArenaPanelToChannel } = require("../../bot/handlers/pkArenaHandlers");
+      const result = await publishPkArenaPanelToChannel(channelId, { cleanChannel: true });
+      res.json(ok(result, "pk arena panel published"));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/channel-layout/publish-tower-hall", async (req, res, next) => {
+    try {
+      const { channelId } = req.body;
+      if (!channelId) return res.status(400).json(fail("MISSING_CHANNEL", "請提供 channelId"));
+      const { publishTowerHallPanelToChannel } = require("../../bot/handlers/towerHandlers");
+      const result = await publishTowerHallPanelToChannel(channelId, { cleanChannel: true });
+      res.json(ok(result, "tower hall panel published"));
     } catch (error) {
       next(error);
     }

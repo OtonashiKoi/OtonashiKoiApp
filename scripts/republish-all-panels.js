@@ -19,6 +19,7 @@ const PUBLISH_MAP = {
   weekly_quest:                   "/admin/channel-layout/publish-weekly-quest",
   daily_quest:                    "/admin/channel-layout/publish-daily-quest",
   idle_zone:                      "/admin/channel-layout/publish-idle-zone",
+  pet_panel:                      "/admin/channel-layout/publish-pet-panel",
   casino_wheel:                   "/admin/channel-layout/publish-casino",
   pk_arena:                       "/admin/channel-layout/publish-pk-arena",
   tower_hall:                     "/admin/channel-layout/publish-tower-hall",
@@ -29,6 +30,7 @@ const PUBLISH_MAP = {
   monster_zone_mid:               "/admin/channel-layout/publish-monster-zone",
   monster_zone_ancient_city:      "/admin/channel-layout/publish-monster-zone",
   monster_zone_ancient_city_deep: "/admin/channel-layout/publish-monster-zone",
+  monster_zone_dragon_realm:      "/admin/channel-layout/publish-monster-zone",
   monster_zone_elite:             "/admin/channel-layout/publish-monster-zone",
 };
 

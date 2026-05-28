@@ -652,6 +652,27 @@ function createMongoRepositories() {
         return nextState;
       }
     },
+    petRepository: {
+      // 寵物「種類定義」collection（像 monsters 的設計表，非玩家實例）
+      async findAll() {
+        const pets = await (await collection("pets")).find({ id: { $exists: true } }).toArray();
+        return pets.sort((a, b) => (a.seq || 0) - (b.seq || 0));
+      },
+      async findById(id) {
+        return (await collection("pets")).findOne({ id }) || null;
+      },
+      async save(pet) {
+        await (await collection("pets")).updateOne(
+          { id: pet.id },
+          { $set: pet },
+          { upsert: true }
+        );
+        return pet;
+      },
+      async delete(id) {
+        await (await collection("pets")).deleteOne({ id });
+      },
+    },
     monsterRepository: {
       async findAll() {
         // 只回傳實際的怪物文件（具有 id 欄位），state 文件使用 _id 儲存，不會被此查詢回傳
@@ -804,6 +825,108 @@ function createMongoRepositories() {
           doc,
           { upsert: true }
         );
+      }
+    },
+    casinoRepository: {
+      async getState() {
+        const row = await (await collection("casinoState")).findOne({ _id: "default" });
+        return row || null;
+      },
+      async saveState(state) {
+        const { _id, ...rest } = state;
+        await (await collection("casinoState")).updateOne(
+          { _id: "default" },
+          { $set: { ...rest, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+      },
+      async transitionStatus(roundId, fromStatus, toStatus) {
+        const result = await (await collection("casinoState")).updateOne(
+          { _id: "default", "currentRound.roundId": roundId, "currentRound.status": fromStatus },
+          { $set: { "currentRound.status": toStatus, updatedAt: new Date().toISOString() } }
+        );
+        return result.matchedCount > 0;
+      },
+      async incrementRoundTotals(roundId, color, amount) {
+        await (await collection("casinoState")).updateOne(
+          { _id: "default", "currentRound.roundId": roundId },
+          {
+            $inc: {
+              [`currentRound.totals.${color}`]: amount,
+              "currentRound.betCount": 1,
+            },
+            $set: { updatedAt: new Date().toISOString() }
+          }
+        );
+      },
+      async appendBet(bet) {
+        const doc = { ...bet, _id: undefined, createdAt: new Date(bet.placedAt || Date.now()).toISOString() };
+        delete doc._id;
+        const result = await (await collection("casinoBets")).insertOne(doc);
+        return result.insertedId;
+      },
+      async updateBetOutcome(betId, { outcome, payout, dropKey }) {
+        if (!betId) return;
+        await (await collection("casinoBets")).updateOne(
+          { _id: betId },
+          { $set: { outcome, payout, dropKey, settledAt: new Date().toISOString() } }
+        );
+      },
+      async listBetsByRound(roundId) {
+        return (await collection("casinoBets")).find({ roundId }).toArray();
+      },
+      async listBetsByRoundAndPlayer(roundId, discordId) {
+        return (await collection("casinoBets")).find({ roundId, discordId }).toArray();
+      },
+      async appendRound(round) {
+        await (await collection("casinoRounds")).updateOne(
+          { roundId: round.roundId },
+          { $set: { ...round, createdAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+      },
+      async listRecentRounds(limit = 10) {
+        return (await collection("casinoRounds")).find({}).sort({ roundId: -1 }).limit(limit).toArray();
+      },
+      async pushRecentResult(result) {
+        await (await collection("casinoState")).updateOne(
+          { _id: "default" },
+          {
+            $push: { recentResults: { $each: [result], $slice: -10 } },
+            $set: { updatedAt: new Date().toISOString() }
+          },
+          { upsert: true }
+        );
+      },
+      async getPlayerStats(discordId, since = null) {
+        const match = { discordId };
+        if (since) match.createdAt = { $gte: since };
+        const agg = await (await collection("casinoBets")).aggregate([
+          { $match: match },
+          { $group: {
+            _id: null,
+            totalBet: { $sum: "$amount" },
+            totalPay: { $sum: { $ifNull: ["$payout", 0] } },
+            wins: { $sum: { $cond: [{ $eq: ["$outcome", "win"] }, 1, 0] } },
+            count: { $sum: 1 }
+          } }
+        ]).toArray();
+        return agg[0] || { totalBet: 0, totalPay: 0, wins: 0, count: 0 };
+      },
+      async getDailyStats(date = new Date()) {
+        const start = new Date(date); start.setHours(0, 0, 0, 0);
+        const end = new Date(start); end.setDate(end.getDate() + 1);
+        const agg = await (await collection("casinoRounds")).aggregate([
+          { $match: { createdAt: { $gte: start.toISOString(), $lt: end.toISOString() } } },
+          { $group: {
+            _id: null,
+            totalBet: { $sum: "$totalBet" },
+            totalPayout: { $sum: "$totalPayout" },
+            houseProfit: { $sum: "$houseProfit" },
+            rounds: { $sum: 1 }
+          } }
+        ]).toArray();
+        return agg[0] || { totalBet: 0, totalPayout: 0, houseProfit: 0, rounds: 0 };
       }
     }
   };

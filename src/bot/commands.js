@@ -9,8 +9,7 @@ const { handleAdminExpCommand } = require("./handlers/adminExpHandler");
 const {
   handlePublishPlayerQuery,
   handlePublishPlayerPanel,
-  handlePublishPersonalRoom,
-  handleUnlockPersonalRoom
+  handlePublishPersonalRoom
 } = require("./handlers/publishHandlers");
 const { handleCoinShopButton, isCoinShopButton, handleQuantityModalSubmit, isCoinShopModal } = require("./handlers/coinShopHandlers");
 const { handleMonsterZoneButton, isMonsterZoneButton, isMonsterEventButton, handleMonsterEventChoice, isMonsterEventPersonalButton, handleMonsterEventPersonal, isNpcDialogButton, handleNpcDialog } = require("./handlers/monsterZoneHandlers");
@@ -18,6 +17,8 @@ const { handleIdleZoneButton, isIdleZoneButton, handleIdleZoneSelect, isIdleZone
 const { isAuctionButton, handleAuctionButton, handleAuctionFilterSelect, handleAuctionSellSelect, handleAuctionModal, handleAuctionSellConfirm, publishAuctionPanel } = require("./handlers/auctionZoneHandlers");
 const { isPkArenaButton, isPkArenaSelectMenu, handlePkArenaButton, handlePkArenaSelectMenu, publishPkArenaPanel } = require("./handlers/pkArenaHandlers");
 const { isTowerButton, handleTowerButton, isTowerSelectMenu, handleTowerSelectMenu, publishTowerHallPanel } = require("./handlers/towerHandlers");
+const { isCasinoButton, isCasinoModal, handleCasinoButton, handleCasinoModal } = require("./handlers/casinoHandlers");
+const { isPetButton, isPetSelect, isPetModal, handlePetButton, handlePetSelect, handlePetModal } = require("./handlers/petHandlers");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -32,9 +33,6 @@ const definitions = [
   new SlashCommandBuilder()
     .setName("發布個人房間面板")
     .setDescription("管理員在目前聊天室發布個人房間面板並鎖定頻道（僅顯示按鈕介面）"),
-  new SlashCommandBuilder()
-    .setName("解鎖個人房間面板")
-    .setDescription("管理員解除目前聊天室的個人房間鎖定並還原權限"),
   new SlashCommandBuilder()
     .setName("發布玩家查詢")
     .setDescription("管理員發布玩家資訊查詢面板"),
@@ -124,11 +122,6 @@ async function handleCommand(interaction) {
     return;
   }
 
-  if (interaction.commandName === "解鎖個人房間面板") {
-    await handleUnlockPersonalRoom(interaction);
-    return;
-  }
-
   if (["管理員加金幣", "管理員加鑽石", "管理員扣金幣", "管理員扣鑽石"].includes(interaction.commandName)) {
     await handleAdminCurrencyCommand(interaction);
     return;
@@ -168,6 +161,10 @@ async function handleCommand(interaction) {
 }
 
 async function handleButton(interaction) {
+  if (isCasinoButton(interaction.customId)) {
+    await handleCasinoButton(interaction);
+    return;
+  }
   if (isTowerButton(interaction.customId)) {
     await handleTowerButton(interaction);
     return;
@@ -194,6 +191,10 @@ async function handleButton(interaction) {
   }
   if (isIdleZoneButton(interaction.customId)) {
     await handleIdleZoneButton(interaction);
+    return;
+  }
+  if (isPetButton(interaction.customId)) {
+    await handlePetButton(interaction);
     return;
   }
   if (isMonsterEventPersonalButton(interaction.customId)) {
@@ -233,6 +234,10 @@ async function handleSelectMenu(interaction) {
     await handleIdleZoneSelect(interaction);
     return;
   }
+  if (isPetSelect(interaction.customId)) {
+    await handlePetSelect(interaction);
+    return;
+  }
   if (interaction.customId === "eq_preset_switch_select") {
     await handlePresetSwitchSelect(interaction);
     return;
@@ -267,8 +272,16 @@ async function handleSelectMenu(interaction) {
 }
 
 async function handleModal(interaction) {
+  if (isCasinoModal(interaction.customId)) {
+    await handleCasinoModal(interaction);
+    return;
+  }
   if (isCoinShopModal(interaction.customId)) {
     await handleQuantityModalSubmit(interaction);
+    return;
+  }
+  if (isPetModal(interaction.customId)) {
+    await handlePetModal(interaction);
     return;
   }
   if (interaction.customId.startsWith("auction:sell_modal:")) {
