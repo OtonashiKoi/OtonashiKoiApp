@@ -57,7 +57,20 @@
     elements.bindingList.innerHTML = "";
     const bindings = state.channelLayout.discord.bindings;
 
-    for (const feature of state.channelLayout.discord.availableFeatures) {
+    const allFeatures = state.channelLayout.discord.availableFeatures;
+    const inferCategory = (f) => f.category || (f.key.startsWith("monster_zone") ? "monster" : "system");
+    const groupBy = (cat) => allFeatures.filter(f => inferCategory(f) === cat);
+    const systemFeatures = groupBy("system");
+    const socialFeatures = groupBy("social");
+    const pkPartyFeatures = groupBy("pk_party");
+    const monsterFeatures = groupBy("monster");
+
+    function renderGroup(features, groupLabel) {
+      const groupHeader = document.createElement("div");
+      groupHeader.className = "binding-group-header";
+      groupHeader.innerHTML = `<span class="binding-group-label">${groupLabel}</span>`;
+      elements.bindingList.appendChild(groupHeader);
+      for (const feature of features) {
       const binding = bindings.find((item) => item.featureKey === feature.key) || {
         featureKey: feature.key,
         channelId: "",
@@ -87,23 +100,21 @@
         selectedNotInFiltered +
         filteredChannels.map((ch) => `<option value="${ch.id}" ${ch.id === binding.channelId ? "selected" : ""}>#${ch.name}</option>`).join("");
 
-      const publishEndpoint = feature.key === "personal_room"
-        ? "/admin/channel-layout/publish-player-panel"
-        : feature.key === "player_query"
-          ? "/admin/channel-layout/publish-player-query"
-          : feature.key === "daily_quest"
-            ? "/admin/channel-layout/publish-daily-quest"
-          : feature.key === "idle_zone"
-            ? "/admin/channel-layout/publish-idle-zone"
-          : feature.key === "coin_shop"
-            ? "/admin/channel-layout/publish-coin-shop"
-            : feature.key === "auction_house"
-              ? "/admin/auction/publish"
-            : feature.key.startsWith("monster_zone")
-              ? "/admin/channel-layout/publish-monster-zone"
-              : feature.key === "weekly_quest"
-                ? "/admin/channel-layout/publish-weekly-quest"
-                : null;
+      const PUBLISH_ENDPOINTS = {
+        personal_room:  "/admin/channel-layout/publish-player-panel",
+        player_query:   "/admin/channel-layout/publish-player-query",
+        daily_quest:    "/admin/channel-layout/publish-daily-quest",
+        weekly_quest:   "/admin/channel-layout/publish-weekly-quest",
+        idle_zone:      "/admin/channel-layout/publish-idle-zone",
+        pet_panel:      "/admin/channel-layout/publish-pet-panel",
+        coin_shop:      "/admin/channel-layout/publish-coin-shop",
+        auction_house:  "/admin/auction/publish",
+        pk_arena:       "/admin/channel-layout/publish-pk-arena",
+        party_lobby:    "/admin/channel-layout/publish-tower-hall",
+        casino_wheel:   "/admin/channel-layout/publish-casino",
+      };
+      const publishEndpoint = PUBLISH_ENDPOINTS[feature.key]
+        || (feature.key.startsWith("monster_zone") ? "/admin/channel-layout/publish-monster-zone" : null);
 
       const publishBtn = publishEndpoint
         ? `<button class="button publish-panel-btn" data-publish-endpoint="${publishEndpoint}" title="將按鈕面板發布到已選頻道">📨 發布面板</button>`
@@ -193,7 +204,13 @@
           }
         });
       }
-    }
+      } // end for feature
+    } // end renderGroup
+
+    renderGroup(systemFeatures, "⚙️ 系統面板");
+    if (socialFeatures.length) renderGroup(socialFeatures, "💬 社群頻道");
+    if (pkPartyFeatures.length) renderGroup(pkPartyFeatures, "⚔️ PK / 組隊頻道");
+    renderGroup(monsterFeatures, "🗺️ 怪物地圖面板");
   }
 
   function renderAccessControl() {

@@ -20,10 +20,19 @@ const MAX_LEVEL = 50;
 const HATCH_THRESHOLD = 800;            // 約 20 件 D 裝
 const SATIETY_MAX = 100;
 const HUNGER_GRACE_HOURS = 12;          // 餵飽後 12 小時不掉等
-const GATHER_INTERVAL_MIN = 20;         // 每 20 分鐘 1 個（= 3 個/小時）
+const GATHER_INTERVAL_MIN = 20;         // 基礎間隔（每 20 分 1 個），各龍以 intervalMult 調整
 const GATHER_CAP = 18;                  // 最多累積 18 個（6 小時量）
-const GEM_DROP_RATE = 0.7;              // 採集 70% 強化石 / 30% 裝備
+const GEM_DROP_RATE = 0.7;              // 預設強化石比例（無 modifier 時 fallback）
 const LEVELUP_EXP_PER_LEVEL = 120;      // 每級所需成長 exp
+
+// 採集階級順序（高一階用）
+const TIER_ORDER = ["D", "C", "B", "A"];
+function tierUp(tier) {
+  const i = TIER_ORDER.indexOf(tier);
+  return i >= 0 && i < TIER_ORDER.length - 1 ? TIER_ORDER[i + 1] : tier;
+}
+// 預設 modifier（孵化前/無種類資料時）
+const DEFAULT_GATHER_MOD = { intervalMult: 1.0, gemBias: GEM_DROP_RATE, qualityUpChance: 0 };
 
 function nowMs() { return Date.now(); }
 function isoNow() { return new Date().toISOString(); }
@@ -88,31 +97,35 @@ class PetService {
     return pet;
   }
 
-  // ── 懶結算：採集累積 ──
+  // ── 懶結算：採集累積（依該龍 gatherMod：速度 / 產出偏好 / 高一階）──
   _settleGathering(pet) {
     if (pet.stage !== "grown") return pet; // 未孵化不採集
     const now = nowMs();
     const last = Number(pet.lastSettleAt || now);
     if (!Array.isArray(pet.accruedItems)) pet.accruedItems = [];
 
-    // 飽食 0 不採集：以 min(now, 飽食歸零時刻) 為結算上界（簡化：飽食>0 才計）
+    // 飽食 0 不採集
     if ((Number(pet.satiety) || 0) <= 0) {
       pet.lastSettleAt = now;
       return pet;
     }
+    const mod = pet.gatherMod || DEFAULT_GATHER_MOD;
+    const intervalMin = GATHER_INTERVAL_MIN * (Number(mod.intervalMult) || 1);
     const elapsedMin = Math.max(0, (now - last) / 60_000);
-    const newItems = Math.floor(elapsedMin / GATHER_INTERVAL_MIN);
+    const newItems = Math.floor(elapsedMin / intervalMin);
     if (newItems <= 0) return pet;
 
     const room = Math.max(0, GATHER_CAP - pet.accruedItems.length);
     const toAdd = Math.min(newItems, room);
-    const tier = tierForPetLevel(pet.level || 1);
+    const baseTier = tierForPetLevel(pet.level || 1);
+    const gemBias = Number.isFinite(Number(mod.gemBias)) ? Number(mod.gemBias) : GEM_DROP_RATE;
+    const qualityUp = Number(mod.qualityUpChance) || 0;
     for (let i = 0; i < toAdd; i++) {
-      const kind = Math.random() < GEM_DROP_RATE ? "gem" : "equipment";
+      const kind = Math.random() < gemBias ? "gem" : "equipment";
+      const tier = (qualityUp > 0 && Math.random() < qualityUp) ? tierUp(baseTier) : baseTier;
       pet.accruedItems.push({ tier, kind });
     }
-    // 推進 lastSettleAt（只消耗已結算的時間，避免進位丟失）
-    pet.lastSettleAt = last + newItems * GATHER_INTERVAL_MIN * 60_000;
+    pet.lastSettleAt = last + newItems * intervalMin * 60_000;
     if (pet.accruedItems.length >= GATHER_CAP) pet.lastSettleAt = now; // 滿了就對齊
     return pet;
   }
@@ -140,9 +153,12 @@ class PetService {
     const hatchPct = pet.stage === "egg"
       ? Math.min(100, Math.round(((pet.hatchProgress || 0) / HATCH_THRESHOLD) * 100))
       : 100;
+    const mod = pet.gatherMod || DEFAULT_GATHER_MOD;
     return {
       uuid: pet.uuid,
-      petId: pet.petId,
+      petId: pet.petId || null,
+      species: pet.species || null,
+      speciesName: pet.stage === "egg" ? null : (pet.speciesName || null), // 蛋階段不揭曉種類
       nickname: pet.nickname || null,
       stage: pet.stage,
       level: pet.level || 1,
@@ -156,6 +172,10 @@ class PetService {
       gatherCount: Array.isArray(pet.accruedItems) ? pet.accruedItems.length : 0,
       gatherCap: GATHER_CAP,
       producesTier: tierForPetLevel(pet.level || 1),
+      // 採集特性（已孵化才有意義）
+      gatherIntervalMin: pet.stage === "grown" ? Math.round(GATHER_INTERVAL_MIN * (Number(mod.intervalMult) || 1)) : null,
+      gemBias: pet.stage === "grown" ? (Number.isFinite(Number(mod.gemBias)) ? Number(mod.gemBias) : GEM_DROP_RATE) : null,
+      qualityUpChance: pet.stage === "grown" ? (Number(mod.qualityUpChance) || 0) : null,
     };
   }
 
@@ -211,9 +231,11 @@ class PetService {
       fed++;
     }
 
-    // 孵化判定
+    // 孵化判定（達門檻 → 隨機開獎決定種類）
     let hatched = false;
+    let hatchedSpecies = null;
     if (pet.stage === "egg" && (pet.hatchProgress || 0) >= HATCH_THRESHOLD) {
+      const rolled = await this._rollSpecies();
       pet.stage = "grown";
       pet.level = 1;
       pet.growthExp = 0;
@@ -221,6 +243,14 @@ class PetService {
       pet.lastSatietyAt = nowMs();
       pet.lastSettleAt = nowMs();
       pet.accruedItems = [];
+      if (rolled) {
+        pet.petId = rolled.id;
+        pet.species = rolled.species;
+        pet.speciesName = rolled.name;
+        pet.gatherMod = rolled.gather || { ...DEFAULT_GATHER_MOD };
+        if (!pet.nickname) pet.nickname = rolled.name; // 預設用種類名
+        hatchedSpecies = rolled.name;
+      }
       hatched = true;
     }
 
@@ -239,9 +269,23 @@ class PetService {
     await this.progressRepository.save(progress);
 
     return {
-      fed, totalSatiety, totalGrowth, totalHatch, hatched, leveledTo,
+      fed, totalSatiety, totalGrowth, totalHatch, hatched, hatchedSpecies, leveledTo,
       pet: this._toView(pet),
     };
+  }
+
+  // ── 孵化開獎：依 hatchWeight 從 pets 種類隨機抽一種 ──
+  async _rollSpecies() {
+    const all = await this.petRepository.findAll();
+    const pool = (all || []).filter((p) => p && p.id);
+    if (pool.length === 0) return null;
+    const totalWeight = pool.reduce((s, p) => s + Math.max(0, Number(p.hatchWeight) || 1), 0);
+    let roll = Math.random() * totalWeight;
+    for (const p of pool) {
+      roll -= Math.max(0, Number(p.hatchWeight) || 1);
+      if (roll <= 0) return p;
+    }
+    return pool[pool.length - 1];
   }
 
   // ── 領取採集（含懶結算）→ 把累積道具寫進 inventory ──
@@ -354,12 +398,14 @@ class PetService {
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物蛋", 404);
     const egg = progress.inventory[idx];
 
-    // 蛋對應的寵物種類：egg.petId（建蛋時寫入），否則用 itemId 當 fallback
-    const petId = egg.petId || egg.itemId;
+    // 通用「神秘龍蛋」：孵化前不決定種類，petId 留 null，孵化達門檻時才 roll
     const now = nowMs();
     const petInstance = {
       uuid: crypto.randomUUID(),
-      petId,
+      petId: null,
+      species: null,
+      speciesName: null,
+      gatherMod: null,
       nickname: null,
       stage: "egg",
       level: 1,

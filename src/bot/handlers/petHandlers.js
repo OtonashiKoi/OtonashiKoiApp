@@ -52,11 +52,22 @@ function isPetModal(customId) {
 
 const STAGE_LABEL = { egg: "🥚 蛋", grown: "🐉 已孵化" };
 
+// 寵物在選單/訊息的顯示名（蛋階段不揭曉種類）
+function petDisplayName(p) {
+  if (p.stage === "egg") return "神秘龍蛋";
+  return p.nickname || p.speciesName || "未命名";
+}
+
 function petLine(p) {
   if (p.stage === "egg") {
-    return `🥚 ${p.nickname || "未命名蛋"}｜孵化進度 ${p.hatchPct}%（${p.hatchProgress}/${p.hatchThreshold}）`;
+    return `🥚 神秘龍蛋（孵化中 ${p.hatchPct}%｜${p.hatchProgress}/${p.hatchThreshold}）— 孵化後才揭曉品種`;
   }
-  return `🐉 ${p.nickname || "未命名"}｜Lv.${p.level}（exp ${p.growthExp}/${p.expToNext}）｜飽食 ${p.satiety}/${p.satietyMax}｜採集 ${p.gatherCount}/${p.gatherCap}（產 ${p.producesTier} 階）`;
+  const name = p.nickname || p.speciesName || "未命名";
+  const speed = p.gatherIntervalMin ? `每 ${p.gatherIntervalMin} 分採 1 個` : "";
+  const gemPct = p.gemBias != null ? `石 ${Math.round(p.gemBias * 100)}%` : "";
+  const quality = p.qualityUpChance ? `｜${Math.round(p.qualityUpChance * 100)}% 高一階` : "";
+  const trait = [speed, gemPct].filter(Boolean).join("、");
+  return `🐉 ${name}（${p.speciesName || "?"}）Lv.${p.level}（exp ${p.growthExp}/${p.expToNext}）｜飽食 ${p.satiety}/${p.satietyMax}｜採集 ${p.gatherCount}/${p.gatherCap}（產 ${p.producesTier} 階）\n     └ ${trait}${quality}`;
 }
 
 async function handlePetButton(interaction) {
@@ -92,7 +103,7 @@ async function handlePetButton(interaction) {
       if (r.totalHatch > 0) lines.push(`孵化進度 +${r.totalHatch}`);
       if (r.totalSatiety > 0) lines.push(`飽食度 +${Math.round(r.totalSatiety)}`);
       if (r.totalGrowth > 0) lines.push(`成長 exp +${r.totalGrowth}`);
-      if (r.hatched) lines.push("🎉 **孵化成功！**");
+      if (r.hatched) lines.push(`🎉 **孵化成功！開出了【${r.hatchedSpecies || "神秘龍"}】！**`);
       if (r.leveledTo) lines.push(`⬆️ 升到 **Lv.${r.leveledTo}**`);
       lines.push("", petLine(r.pet));
       await interaction.editReply(lines.join("\n"));
@@ -153,7 +164,7 @@ async function handlePetButton(interaction) {
     const state = await sc.petService.getPetState(discordId);
     if (state.pets.length === 0) { await interaction.editReply("你還沒有寵物。先孵一顆蛋。"); return; }
     const options = state.pets.slice(0, 25).map((p) => new StringSelectMenuOptionBuilder()
-      .setLabel(`${p.nickname || (p.stage === "egg" ? "未命名蛋" : "未命名")} (${STAGE_LABEL[p.stage]} Lv.${p.level})`)
+      .setLabel(`${petDisplayName(p)} (${STAGE_LABEL[p.stage]} Lv.${p.level})`)
       .setValue(`active|${p.uuid}`)
       .setDefault(p.uuid === state.activePetUuid));
     const select = new StringSelectMenuBuilder().setCustomId(`${PET_SELECT_PREFIX}active`)
@@ -176,7 +187,7 @@ async function handlePetButton(interaction) {
     const uuid = interaction.customId.slice(PET_RELEASE_CONFIRM_PREFIX.length);
     try {
       const r = await sc.petService.releasePet(discordId, uuid);
-      const name = r.released.nickname || (r.released.stage === "egg" ? "未命名蛋" : "未命名");
+      const name = petDisplayName(r.released);
       await interaction.editReply({ content: `🕊️ 已放生「**${name}**」。牠回到龍族之領自由了（無任何回饋）。`, components: [] });
     } catch (e) {
       await interaction.editReply({ content: `❌ ${e.message || "放生失敗"}`, components: [] });
@@ -189,7 +200,7 @@ async function handlePetButton(interaction) {
     const state = await sc.petService.getPetState(discordId);
     if (state.pets.length === 0) { await interaction.editReply("你還沒有寵物。"); return; }
     const options = state.pets.slice(0, 25).map((p) => new StringSelectMenuOptionBuilder()
-      .setLabel(`${p.nickname || (p.stage === "egg" ? "未命名蛋" : "未命名")} (${STAGE_LABEL[p.stage]} Lv.${p.level})`)
+      .setLabel(`${petDisplayName(p)} (${STAGE_LABEL[p.stage]} Lv.${p.level})`)
       .setValue(`release|${p.uuid}`));
     const select = new StringSelectMenuBuilder().setCustomId(`${PET_SELECT_PREFIX}release`)
       .setPlaceholder("選擇要放生的寵物").addOptions(options);
@@ -210,7 +221,7 @@ async function handlePetSelect(interaction) {
   try {
     if (action === "hatch") {
       const r = await sc.petService.hatchEggFromInventory(discordId, uuid);
-      await interaction.editReply(`🥚 開始孵化！\n${petLine(r.pet)}\n\n餵裝備累積孵化進度，約 20 件 D 裝可孵化。`);
+      await interaction.editReply(`🥚 開始孵化神秘龍蛋！\n${petLine(r.pet)}\n\n餵裝備累積孵化進度（約 20 件 D 裝），**孵化瞬間才會揭曉是哪種龍**。`);
     } else if (action === "active") {
       const r = await sc.petService.setActivePet(discordId, uuid);
       await interaction.editReply(`🐾 已設為出戰寵物：\n${petLine(r.pet)}`);
@@ -218,7 +229,7 @@ async function handlePetSelect(interaction) {
       // 選好後跳「確認放生」按鈕（二次確認避免誤點）
       const state = await sc.petService.getPetState(discordId);
       const target = state.pets.find((p) => p.uuid === uuid);
-      const name = target ? (target.nickname || (target.stage === "egg" ? "未命名蛋" : "未命名")) : "該寵物";
+      const name = target ? petDisplayName(target) : "該寵物";
       const confirmBtn = new ButtonBuilder()
         .setCustomId(`${PET_RELEASE_CONFIRM_PREFIX}${uuid}`)
         .setLabel(`確定放生「${name}」`).setStyle(ButtonStyle.Danger);

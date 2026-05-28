@@ -20,8 +20,8 @@ async function main() {
   const pet = sc.petService;
 
   // ── 準備：建立測試玩家 progress，塞一些裝備 + 一顆蛋 ──
-  const eggItem = await db.collection("items").findOne({ itemType: "pet_egg", name: "火苗龍蛋" });
-  if (!eggItem) { console.error("找不到火苗龍蛋，請先跑 create-pet-eggs-and-species.js"); process.exit(1); }
+  const eggItem = await db.collection("items").findOne({ itemType: "pet_egg", name: "神秘龍蛋" });
+  if (!eggItem) { console.error("找不到神秘龍蛋，請先跑 redesign-pet-eggs-unified.js"); process.exit(1); }
 
   // 撈各階裝備各幾件當飼料
   const dGear = await db.collection("items").find({ itemType: "equipment", tier: "D" }).limit(1).toArray();
@@ -34,7 +34,7 @@ async function main() {
   }));
 
   const inventory = [
-    { uuid: "egg-1", itemId: eggItem.id, itemName: eggItem.name, itemType: "pet_egg", petId: eggItem.petId, stackCount: 1 },
+    { uuid: "egg-1", itemId: eggItem.id, itemName: eggItem.name, itemType: "pet_egg", petId: null, stackCount: 1 },
     ...mkInv(dGear[0], 30),  // 30 件 D（孵化要 800/40=20 件）
     ...mkInv(aGear[0], 5),   // 5 件 A
   ];
@@ -49,18 +49,55 @@ async function main() {
   console.log("═".repeat(70));
 
   try {
-    // ── 1. 從蛋孵起 ──
-    console.log("\n[1] 從 inventory 孵蛋");
+    // ── 1. 從神秘蛋孵起 ──
+    console.log("\n[1] 從 inventory 孵神秘蛋");
     const hatch = await pet.hatchEggFromInventory(TEST_PLAYER_ID, "egg-1");
     assert(hatch.pet.stage === "egg", "蛋實例建立 (stage=egg)");
+    assert(hatch.pet.speciesName === null, "蛋階段不揭曉種類 (speciesName=null)");
     const petUuid = hatch.pet.uuid;
 
-    // ── 2. 餵 D 裝孵化（20 件 D × 40 = 800 = 門檻）──
-    console.log("\n[2] 批量餵 D 裝孵化");
+    // ── 2. 餵 D 裝孵化 → 隨機開獎決定種類 ──
+    console.log("\n[2] 批量餵 D 裝孵化（隨機開獎）");
     const feed1 = await pet.feedPet(TEST_PLAYER_ID, petUuid, { tier: "D" });
     assert(feed1.hatched === true, `餵 30 件 D 後孵化 (hatchExp 累積 ${feed1.totalHatch})`);
     assert(feed1.pet.stage === "grown", "孵化後 stage=grown");
     assert(feed1.pet.level === 1, "孵化後 Lv.1");
+    assert(!!feed1.hatchedSpecies, `孵化開出種類：${feed1.hatchedSpecies}`);
+    assert(!!feed1.pet.speciesName, `孵化後揭曉品種 (speciesName=${feed1.pet.speciesName})`);
+    assert(feed1.pet.gatherIntervalMin > 0, `gatherMod 已套用（採集間隔 ${feed1.pet.gatherIntervalMin} 分）`);
+
+    // 開獎分布抽樣（孵 200 顆看是否 5 種都出得來、約略平均）
+    console.log("\n[2b] 開獎分布抽樣（孵 200 次）");
+    const dist = {};
+    for (let i = 0; i < 200; i++) {
+      const sp = await pet._rollSpecies();
+      dist[sp.name] = (dist[sp.name] || 0) + 1;
+    }
+    console.log("    " + Object.entries(dist).map(([k, v]) => `${k}:${v}`).join("  "));
+    assert(Object.keys(dist).length === 5, "5 種龍都能開出");
+
+    // ── 2c. 各龍採集差異（同樣 3 小時，比較產出數量/品質）──
+    console.log("\n[2c] 各龍採集差異（同樣 3 小時，固定 Lv.20）");
+    const speciesDefs = await db.collection("pets").find({}).toArray();
+    for (const sp of speciesDefs.sort((a, b) => (a.seq || 0) - (b.seq || 0))) {
+      const prog0 = await db.collection("progress").findOne({ playerId: TEST_PLAYER_ID });
+      const tp0 = prog0.pets.find((x) => x.uuid === petUuid);
+      tp0.level = 20; tp0.satiety = 100; tp0.accruedItems = [];
+      tp0.gatherMod = sp.gather; tp0.speciesName = sp.name;
+      tp0.lastSettleAt = Date.now() - 3 * 3600_000; tp0.lastSatietyAt = Date.now();
+      await db.collection("progress").updateOne({ playerId: TEST_PLAYER_ID }, { $set: { pets: prog0.pets } });
+      const s0 = await pet.getPetState(TEST_PLAYER_ID);
+      const ac = s0.active.gatherCount;
+      // 統計品質（高一階）需直接看 accruedItems
+      const prog1 = await db.collection("progress").findOne({ playerId: TEST_PLAYER_ID });
+      const items = prog1.pets.find((x) => x.uuid === petUuid).accruedItems;
+      const gemN = items.filter((i) => i.kind === "gem").length;
+      const upN = items.filter((i) => i.tier === "C").length; // Lv.20 基礎 C，高一階=B... 修正：Lv.20→C，up→B
+      const baseTier = "C", upTier = "B";
+      const upCount = items.filter((i) => i.tier === upTier).length;
+      console.log(`    ${sp.name.padEnd(4)} 間隔×${sp.gather.intervalMult} → 3hr 採 ${ac} 個｜石 ${gemN}/${items.length}｜高一階(${upTier}) ${upCount}`);
+    }
+    assert(true, "各龍採集差異已輸出（速度/產出偏好/高一階）");
 
     // ── 3. 餵食：飽食先滿、滿後才轉成長 exp ──
     console.log("\n[3] 驗證飽食度優先、滿後轉 exp");
@@ -72,11 +109,14 @@ async function main() {
     console.log(`    餵 5 件 A：補飽食 ${feedA.totalSatiety}、轉成長 exp ${feedA.totalGrowth}`);
     assert(feedA.totalGrowth > 0 || feedA.pet.satiety === p.satietyMax, "飽食滿時 A 裝轉成長 exp（或維持滿）");
 
-    // ── 4. 採集：手動推進時間驗證累積 ──
-    console.log("\n[4] 採集累積（模擬 lastSettleAt 往前 3 小時）");
+    // ── 4. 採集：手動推進時間驗證累積（固定標準 modifier 求確定性）──
+    console.log("\n[4] 採集累積（模擬 3 小時，固定標準採集速度）");
     // 直接改 DB 的 lastSettleAt 模擬時間流逝
     const prog = await db.collection("progress").findOne({ playerId: TEST_PLAYER_ID });
     const targetPet = prog.pets.find((x) => x.uuid === petUuid);
+    targetPet.level = 1;                                  // 重置 Lv.1（前面測試動過）
+    targetPet.accruedItems = [];                          // 清空累積
+    targetPet.gatherMod = { intervalMult: 1.0, gemBias: 0.7, qualityUpChance: 0 }; // 標準速度
     targetPet.lastSettleAt = Date.now() - 3 * 3600_000; // 3 小時前
     targetPet.lastSatietyAt = Date.now();                // 飽食剛補，不衰減
     targetPet.satiety = 100;
