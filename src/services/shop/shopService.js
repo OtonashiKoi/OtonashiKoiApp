@@ -7,6 +7,21 @@ const crypto = require("crypto");
 
 // 各 tier 裝備販售價格
 const TIER_SELL_PRICE = { D: 200, C: 500, B: 1000, A: 10000 };
+
+// 分解：強化寶石 itemId（依階級）
+const GEM_ID_BY_TIER = {
+  D: "72fde92d-e33f-42fb-8d86-2e811d03f84d",
+  C: "556db9e1-b084-4b22-bab5-a66c2b586184",
+  B: "8fdfa7d9-f0fa-4e6a-a291-703b1e354072",
+  A: "a6ae293d-52fc-4af5-8770-891ddf842e35",
+};
+// 分解產物：裝備階級 → 降一階寶石 × 數量（D 為最低，給 1 顆 D 寶石保底）
+const DISMANTLE_YIELD = {
+  A: { tier: "B", count: 2 },
+  B: { tier: "C", count: 2 },
+  C: { tier: "D", count: 2 },
+  D: { tier: "D", count: 1 },
+};
 const TAIPEI_TIME_ZONE = "Asia/Taipei";
 const ARMOR_RANDOM_ENHANCE_BONUS = { D: 1, C: 1, B: 2, A: 3 };
 const STAT_LABEL_ZH = {
@@ -834,16 +849,64 @@ class ShopService {
     };
   }
 
+  // 分解裝備：移除該裝備，產出降階強化寶石（取代舊「丟棄」）
   async discardItem(discordId, entryUuid) {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
     const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
+
+    // 只有「裝備」可分解（含怪物卡/徽章嗎？→ 僅純裝備與卡片可分解，徽章/稱號不分解）
+    let gemsGranted = null;
+    const tier = String(entry.tier || "").toUpperCase();
+    const isEquipmentLike = entry.itemType === "equipment";
+    if (isEquipmentLike && DISMANTLE_YIELD[tier]) {
+      const y = DISMANTLE_YIELD[tier];
+      gemsGranted = { tier: y.tier, count: y.count };
+    }
+
+    // 先移除被分解的裝備
     progress.inventory.splice(idx, 1);
+
+    // 產出寶石（堆疊進背包）
+    if (gemsGranted) {
+      await this._grantGems(progress, gemsGranted.tier, gemsGranted.count);
+    }
+
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
-    return { itemName: entry.itemName };
+    return { itemName: entry.itemName, gems: gemsGranted };
+  }
+
+  // 把強化寶石加進背包（同 itemId 堆疊）
+  async _grantGems(progress, tier, count) {
+    if (!count || count <= 0) return;
+    const gemId = GEM_ID_BY_TIER[tier];
+    if (!gemId) return;
+    if (!Array.isArray(progress.inventory)) progress.inventory = [];
+    const existing = progress.inventory.find((e) => e && e.itemId === gemId);
+    if (existing) {
+      existing.stackCount = (existing.stackCount || 1) + count;
+      return;
+    }
+    // 從道具庫撈寶石原型建立背包項
+    let gemItem = null;
+    try { gemItem = await this.itemRepository.findById(gemId); } catch (_) {}
+    progress.inventory.push({
+      uuid: crypto.randomUUID(),
+      itemId: gemId,
+      itemName: gemItem?.name || `${tier}階寶石`,
+      itemEffect: gemItem?.effect || { type: "none", value: 0 },
+      useEffects: [], passiveEffects: [], procEffects: [], combatEffects: [],
+      itemType: "consumable",
+      imageUrl: gemItem?.imageUrl || null,
+      imageThumbnailUrl: gemItem?.imageThumbnailUrl || null,
+      equipSlot: null, equipStats: null, weaponType: null, isTwoHanded: false, atkStat: null,
+      tier, enhanceLevel: 0, stackCount: count,
+      source: "dismantle", grantedAt: new Date().toISOString(),
+      name: gemItem?.name || `${tier}階寶石`,
+    });
   }
 
   async equipItem(discordId, entryUuid, targetSlot = null) {

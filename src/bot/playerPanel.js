@@ -725,11 +725,11 @@ function buildInventoryRow(e, idx) {
         .setStyle(ButtonStyle.Danger)
     );
   } else {
-    // 其他物品：丟棄
+    // 裝備/卡片：分解（拆成降階強化寶石）
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_discard:${e.uuid}`)
-        .setLabel(`${prefix} 丟棄`)
+        .setLabel(`${prefix} 分解`)
         .setStyle(ButtonStyle.Danger)
     );
   }
@@ -1715,11 +1715,17 @@ async function handleBackpackAction(interaction, action, uuid) {
     if (slot === "job_eq") warns.push("這是**職業徽章**");
     if (slot === "title_eq") warns.push("這是**稱號**");
     if (hasFx) warns.push("帶有**特效**");
-    const warnLine = warns.length ? `\n\n🚨 **注意：${warns.join("、")}**，丟掉就沒了！` : "";
+    const warnLine = warns.length ? `\n\n🚨 **注意：${warns.join("、")}**，分解後就沒了！` : "";
+    // 分解產物預告（裝備才有；降階寶石）
+    const DISMANTLE_PREVIEW = { A: "2 顆 B 階寶石", B: "2 顆 C 階寶石", C: "2 顆 D 階寶石", D: "1 顆 D 階寶石" };
+    const tierU = String(entry.tier || "").toUpperCase();
+    const isEquip = entry.itemType === "equipment";
+    const yieldLine = (isEquip && DISMANTLE_PREVIEW[tierU]) ? `\n\n🔨 分解可得：**${DISMANTLE_PREVIEW[tierU]}**` : "";
+    const verb = (isEquip && DISMANTLE_PREVIEW[tierU]) ? "分解" : "丟棄";
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`backpack_discard_confirm:${uuid}`)
-        .setLabel(warns.length ? "我確定要丟（貴重物）" : "確定丟棄")
+        .setLabel(warns.length ? `我確定要${verb}（貴重物）` : `確定${verb}`)
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
         .setCustomId(`backpack_view:${uuid}`)
@@ -1727,7 +1733,7 @@ async function handleBackpackAction(interaction, action, uuid) {
         .setStyle(ButtonStyle.Secondary),
     );
     await safeEditReply(interaction, {
-      content: `⚠️ 確定要丟棄 **${entry.itemName}${enh}${stack}** 嗎？此操作**無法復原**！${warnLine}`,
+      content: `⚠️ 確定要${verb} **${entry.itemName}${enh}${stack}** 嗎？此操作**無法復原**！${yieldLine}${warnLine}`,
       components: [row],
       embeds: [],
       files: [],
@@ -1753,10 +1759,11 @@ async function handleBackpackDiscardConfirm(interaction, uuid) {
   try {
     const result = await serviceContext.shopService.discardItem(interaction.user.id, uuid);
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const msg = buildBackpackMessage(progress?.inventory || [], "item", `✅ 已丟棄 **${result.itemName}**。`);
+    const gemMsg = result.gems ? `🔨 分解 **${result.itemName}** → 獲得 **${result.gems.count} 顆 ${result.gems.tier} 階寶石**！` : `✅ 已丟棄 **${result.itemName}**。`;
+    const msg = buildBackpackMessage(progress?.inventory || [], "item", gemMsg);
     await safeEditReply(interaction, msg);
   } catch (err) {
-    await safeEditReply(interaction, { content: `❌ 丟棄失敗：${err.message}`, components: [] });
+    await safeEditReply(interaction, { content: `❌ 操作失敗：${err.message}`, components: [] });
   }
 }
 
