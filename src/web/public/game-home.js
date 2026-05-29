@@ -25,12 +25,20 @@ const ZONES = [
     tagline: '危險上升'
   },
   {
-    key: 'hard',
-    label: '高級區',
-    emoji: '🔥',
+    key: 'ancient_city',
+    label: '古城',
+    emoji: '🏰',
     minLevel: 20,
     maxLevel: null,
-    tagline: '強者才能存活'
+    tagline: '千年城牆，邪物棲居'
+  },
+  {
+    key: 'ancient_city_deep',
+    label: '古城深處',
+    emoji: '🕯️',
+    minLevel: 25,
+    maxLevel: null,
+    tagline: '守將與密術；廢都魔王盤踞於此'
   },
   {
     key: 'elite',

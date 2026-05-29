@@ -124,7 +124,14 @@
         const data = await request("/admin/channel-layout/sync-permissions", { method: "POST", body: "{}" });
         const granted = data.reduce((sum, r) => sum + r.granted, 0);
         const revoked = data.reduce((sum, r) => sum + r.revoked, 0);
-        log(`已同步 ${data.length} 個頻道：授予 ${granted} 個、移除 ${revoked} 個身分組讀取權限`);
+        const skipped = data.filter(r => r.skippedRoles).length;
+        if (data.length === 0) {
+          log("⚠️ 沒有可同步的頻道 — 請先設定頻道 ID 並勾選「啟用」再儲存");
+        } else if (skipped > 0 && granted === 0 && revoked === 0) {
+          log(`⚠️ 已同步 ${data.length} 個頻道，但沒有任何身分組/用戶異動 — 請先到「權限與白名單」設定玩家/管理員身分組`);
+        } else {
+          log(`✅ 已同步 ${data.length} 個頻道：授予 ${granted} 個、移除 ${revoked} 個身分組讀取權限`);
+        }
       } catch (error) {
         log(`同步頻道權限失敗：${error.message}`);
       } finally {

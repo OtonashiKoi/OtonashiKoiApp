@@ -673,6 +673,26 @@ select option { background: var(--surface); }
   gap: 16px;
 }
 
+.binding-group-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 4px;
+  border-bottom: 1px solid var(--line);
+  margin-top: 8px;
+}
+.binding-group-header:first-child {
+  margin-top: 0;
+}
+.binding-group-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .role-item, .binding-item {
   display: flex;
   align-items: center;

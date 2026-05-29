@@ -119,10 +119,12 @@ function createApiServer(discordClient) {
     }));
     // SPA fallback：任何不是 api / admin / static / uploads / health / *.html
     // 的 GET 請求，都回 index.html
-    app.get(/^(?!\/(api|admin|static|uploads|health)(\/|$)).*$/, (req, res, next) => {
+    const SPA_EXCLUDE = /^\/(api|admin|static|uploads|health)(\/|$)/;
+    const indexPath = path.join(webAppDir, "index.html");
+    app.use((req, res, next) => {
       if (req.method !== "GET") return next();
-      if (req.path.includes(".")) return next(); // 有副檔名的當作 asset，讓 static 已處理或 404
-      const indexPath = path.join(webAppDir, "index.html");
+      if (SPA_EXCLUDE.test(req.path)) return next();
+      if (req.path.includes(".")) return next(); // 有副檔名的，靜態 middleware 已處理 / 404
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {

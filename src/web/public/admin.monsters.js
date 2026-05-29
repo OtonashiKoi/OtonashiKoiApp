@@ -760,9 +760,13 @@
 
   function buildCalcHtml(m) {
     const d = calcDerived(m);
-    const defPct = Math.min(75, Number(m.def) || 0);
-    const effAtk = Math.round(d.atk * (1 - defPct / 100));
-    return `ATK:${d.atk} DEF:${defPct}% 實傷≈${effAtk} 閃:${d.dodge}%`;
+    const defPct = Math.min(75, Math.max(0, Number(m.def) || 0));
+    const level = Math.max(1, Number(m.level) || 1);
+    // flatDef：doc 有填就用，否則 level × 1（與 monsterService.effectiveCalc 對齊）
+    const flatDef = (Number.isFinite(Number(m.flatDef)) && m.flatDef !== "" && m.flatDef !== null) ? Math.max(0, Number(m.flatDef)) : level;
+    // 預覽用「被 Lv.{level} 怪打、玩家無 DEF」的視角，所以 effAtk 是怪 vs 0 防的玩家
+    const effAtk = Math.round(Math.max(0, d.atk - 0) * (1 - 0 / 100)); // 怪傷一個無防玩家
+    return `ATK:${d.atk}  flatDef:${flatDef}  pctDef:${defPct}%  實傷≈${effAtk}  閃:${d.dodge}%`;
   }
 
   function buildRow(m, isNew) {
@@ -823,7 +827,7 @@
       <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <label style="font-size:11px;color:var(--muted);">入場費</label>
-          <input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee ?? (activeZone === "elite" ? 5000 : 0)}" style="width:88px;text-align:center;" />
+          <input class="sheet-input" data-field="entryFee" type="number" min="0" value="${m.entryFee ?? ({elite:5000,nightmare:2000,abyss:8000,mythic:15000}[activeZone] ?? 0)}" style="width:88px;text-align:center;" />
           <label style="font-size:11px;color:var(--muted);">EXP</label>
           <input class="sheet-input" data-field="expReward" type="number" min="0" value="${m.expReward||0}" placeholder="建議:${sg.exp}" style="width:96px;text-align:center;" />
           <label style="font-size:11px;color:var(--muted);">金幣</label>
@@ -955,7 +959,7 @@
     const container = document.getElementById("monsters-tbody");
     if (!container) return;
     const nextSeq = monsters.length ? Math.max(...monsters.map(m => m.seq||1)) + 1 : 1;
-    const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, maxHp:1000, def:50, entryFee: activeZone === "elite" ? 5000 : 0, expReward:0, goldReward:0, spawnRate:10, isBoss:false, drops:[], enabled:true };
+    const blank = { id: "", seq: nextSeq, name: "", zone: activeZone, level: 1, str:5, agi:5, vit:5, int:5, dex:5, luk:5, maxHp:1000, def:50, entryFee: {elite:5000,nightmare:2000,abyss:8000,mythic:15000}[activeZone] ?? 0, expReward:0, goldReward:0, spawnRate:10, isBoss:false, drops:[], enabled:true };
     const card = buildRow(blank, true);
     container.appendChild(card);
     card.querySelector("[data-field=name]")?.focus();

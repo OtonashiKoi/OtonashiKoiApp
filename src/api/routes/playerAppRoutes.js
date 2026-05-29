@@ -1964,6 +1964,246 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   // ──────────────────────────────────────────────────
+  // 世界王（player 端唯讀狀態）
+  // ──────────────────────────────────────────────────
+  router.get("/api/worldboss/status", requireAuth, async (req, res, next) => {
+    try {
+      const wb = serviceContext.worldBossService;
+      if (!wb) {
+        return res.json(ok({ enabled: false, config: null, state: null, status: null }));
+      }
+      const data = await wb.getConfigWithStatus();
+      res.json(ok({
+        enabled: data.config?.enabled !== false,
+        config: {
+          bossName: data.config?.bossName || "世界王",
+          bossMaxHp: data.config?.bossMaxHp || 0,
+          respawnCooldownMinutes: data.config?.respawnCooldownMinutes || 0,
+          battleTimeLimitMinutes: data.config?.battleTimeLimitMinutes || 60,
+          imageUrl: data.config?.imageUrl || null,
+          rewards: data.config?.rewards || null,
+          enabled: data.config?.enabled !== false
+        },
+        state: {
+          weekKey: data.state?.weekKey || null,
+          currentHp: data.state?.currentHp ?? data.config?.bossMaxHp ?? 0,
+          hardKills: data.state?.hardKills || 0,
+          lastKilledAt: data.state?.lastKilledAt || null,
+          battleStartedAt: data.state?.battleStartedAt || null
+        },
+        status: data.status
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ──────────────────────────────────────────────────
+  // 拍賣行（DC 拍賣面板）
+  // ──────────────────────────────────────────────────
+  async function getMemberRoleIds(discordId) {
+    if (!discordClient) return [];
+    const guildId = config.discord?.guildId;
+    if (!guildId) return [];
+    try {
+      const guild = discordClient.guilds.cache.get(guildId)
+        || await discordClient.guilds.fetch(guildId).catch(() => null);
+      if (!guild) return [];
+      const member = await guild.members.fetch({ user: discordId, force: false }).catch(() => null);
+      if (!member) return [];
+      return Array.from(member.roles.cache.keys());
+    } catch (_) {
+      return [];
+    }
+  }
+
+  router.get("/api/auction/list", requireAuth, async (req, res, next) => {
+    try {
+      const { kind, currency } = req.query || {};
+      const filters = {};
+      if (kind && typeof kind === "string") filters.kind = kind;
+      if (currency && typeof currency === "string") filters.currency = currency;
+      const items = await serviceContext.auctionService.getActiveListings(filters);
+      const enabled = await serviceContext.auctionService.isEnabled();
+      res.json(ok({
+        enabled,
+        listings: (items || []).map((a) => ({
+          id: a.id || a._id?.toString(),
+          itemUuid: a.itemUuid,
+          itemName: a.itemName || a.item?.itemName,
+          itemType: a.itemType || a.item?.itemType,
+          tier: a.tier || a.item?.tier,
+          quantity: a.quantity || 1,
+          currency: a.currency,
+          price: a.price,
+          sellerId: a.sellerId,
+          sellerName: a.sellerName,
+          listedAt: a.listedAt || a.createdAt,
+          expiresAt: a.expiresAt,
+          status: a.status
+        }))
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/api/auction/my", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const my = await serviceContext.auctionService.getMyListings(discordId);
+      const roleIds = await getMemberRoleIds(discordId);
+      const maxListings = await serviceContext.auctionService.getMaxListings(roleIds);
+      const eligible = await serviceContext.auctionService.checkSellerEligibility(roleIds);
+      res.json(ok({
+        listings: (my || []).map((a) => ({
+          id: a.id || a._id?.toString(),
+          itemUuid: a.itemUuid,
+          itemName: a.itemName || a.item?.itemName,
+          itemType: a.itemType || a.item?.itemType,
+          tier: a.tier || a.item?.tier,
+          quantity: a.quantity || 1,
+          currency: a.currency,
+          price: a.price,
+          listedAt: a.listedAt || a.createdAt,
+          expiresAt: a.expiresAt,
+          status: a.status
+        })),
+        eligible,
+        maxListings,
+        activeCount: (my || []).filter((l) => l.status === "active").length
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/api/auction/list-item", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { itemUuid, currency, price, hours, quantity = 1 } = req.body || {};
+      if (!itemUuid || !currency || !price || !hours) {
+        return res.status(400).json(fail("INVALID_ARGUMENT", "itemUuid / currency / price / hours 必填"));
+      }
+      const roleIds = await getMemberRoleIds(discordId);
+      const result = await serviceContext.auctionService.listItem({
+        sellerId: discordId,
+        itemUuid,
+        currency,
+        price: Number(price),
+        hours: Number(hours),
+        quantity: Number(quantity) || 1,
+        memberRoleIds: roleIds
+      });
+      res.json(ok(result, "上架成功"));
+    } catch (err) {
+      if (err?.message) {
+        return res.status(400).json(fail("LIST_FAILED", err.message));
+      }
+      next(err);
+    }
+  });
+
+  router.post("/api/auction/buy/:id", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const auctionId = String(req.params.id);
+      const result = await serviceContext.auctionService.buyItem(discordId, auctionId);
+      res.json(ok(result, "購買成功"));
+    } catch (err) {
+      if (err?.message) {
+        return res.status(400).json(fail("BUY_FAILED", err.message));
+      }
+      next(err);
+    }
+  });
+
+  router.post("/api/auction/cancel/:id", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const auctionId = String(req.params.id);
+      const result = await serviceContext.auctionService.cancelListing(discordId, auctionId);
+      res.json(ok(result, "下架成功"));
+    } catch (err) {
+      if (err?.message) {
+        return res.status(400).json(fail("CANCEL_FAILED", err.message));
+      }
+      next(err);
+    }
+  });
+
+  // ──────────────────────────────────────────────────
+  // 交易紀錄（DC 玩家面板 → 交易紀錄）
+  // ──────────────────────────────────────────────────
+  router.get("/api/me/transactions", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+      const result = await serviceContext.transactionService.listRecentByDiscordId(discordId, displayName, limit);
+      const transactions = (result.transactions || []).map((tx) => ({
+        id: tx.id || tx._id?.toString(),
+        type: tx.type,
+        sourceTag: tx.sourceTag,
+        amount: tx.amount,
+        currency: tx.currency,
+        balanceAfter: tx.balanceAfter ?? null,
+        detail: tx.detail || null,
+        occurredAt: tx.occurredAt || tx.createdAt
+      }));
+      res.json(ok({ transactions, count: transactions.length }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ──────────────────────────────────────────────────
+  // 邀請碼系統（DC 玩家面板 → 🎟️ 我的邀請碼 / 🎁 輸入邀請碼）
+  // ──────────────────────────────────────────────────
+  router.get("/api/me/invite", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      await serviceContext.playerService.ensurePlayer(discordId, displayName);
+      const doc = await serviceContext.inviteService.getOrCreateCode(discordId);
+      res.json(ok({
+        code: doc.code,
+        useCount: (doc.uses || []).length,
+        uses: (doc.uses || []).slice(-10).map((u) => ({
+          inviteeId: u.inviteeId,
+          inviteeName: u.inviteeName,
+          usedAt: u.usedAt
+        }))
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/api/me/invite/use", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const rawCode = String(req.body?.code || "").trim().toUpperCase();
+      if (!/^[A-Z0-9]{8}$/.test(rawCode)) {
+        return res.status(400).json(fail("INVALID_ARGUMENT", "邀請碼格式錯誤（8 碼大寫英數）"));
+      }
+      await serviceContext.playerService.ensurePlayer(discordId, displayName);
+      const result = await serviceContext.inviteService.useCode(rawCode, discordId);
+      if (!result.ok) {
+        return res.status(400).json(fail("INVITE_REJECTED", result.reason || "邀請碼無效"));
+      }
+      res.json(ok({
+        inviterId: result.inviterId,
+        inviterName: result.inviterName,
+        rewards: result.rewards || {
+          gold: 50000,
+          gems: [{ tier: "D", count: 20 }, { tier: "C", count: 5 }]
+        }
+      }, "邀請碼兌換成功"));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ──────────────────────────────────────────────────
   // 打卡狀態查詢（DC 我的資料 → 📅 打卡狀態）
   // ──────────────────────────────────────────────────
   router.get("/api/me/checkin", requireAuth, async (req, res, next) => {

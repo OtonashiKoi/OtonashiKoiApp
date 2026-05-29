@@ -57,6 +57,7 @@
                 <button class="nav-link" data-target="section-weekly-quests">任務管理中心</button>
                 <button class="nav-link" data-target="section-weekly-summary">任務完成概況</button>
                 <button class="nav-link" data-target="section-idle-zones" hidden>放置掛機區</button>
+                <button class="nav-link" data-target="section-casino">命運轉盤</button>
               </div>
             </div>
 
@@ -477,8 +478,13 @@
                 <button data-zone="beginner" class="monsters-zone-tab">🌱 新手區</button>
                 <button data-zone="normal" class="monsters-zone-tab active">⚔️ 一般區</button>
                 <button data-zone="mid" class="monsters-zone-tab">✦ 中級區</button>
-                <button data-zone="hard" class="monsters-zone-tab">🔥 高級區</button>
+                <button data-zone="ancient_city" class="monsters-zone-tab">🏰 古城</button>
+                <button data-zone="ancient_city_deep" class="monsters-zone-tab">🕯️ 古城深處</button>
+                <button data-zone="wasteland_throne" class="monsters-zone-tab">👑 廢都王座</button>
                 <button data-zone="elite" class="monsters-zone-tab">💀 精英區</button>
+                <button data-zone="nightmare" class="monsters-zone-tab">🌑 噩夢區</button>
+                <button data-zone="abyss" class="monsters-zone-tab">🕳️ 深淵區</button>
+                <button data-zone="mythic" class="monsters-zone-tab">⚡ 神話區</button>
               </div>
               <input type="file" id="monsters-img-input" accept="image/*" style="display:none;" />
               <div id="monsters-tbody" style="display:flex;flex-direction:column;gap:12px;"></div>
@@ -690,6 +696,54 @@
             </div>
           </section>
 
+          <section id="section-casino" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Casino</p>
+                  <h2>命運轉盤管理</h2>
+                  <p class="hint">每 60 秒開一輪。可切換賭場啟用狀態，並把固定面板發布到指定頻道。</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button id="casino-refresh-btn" class="button">🔄 重新載入</button>
+                  <button id="casino-toggle-btn" class="button primary">⏸ 載入中…</button>
+                </div>
+              </div>
+
+              <div class="grid two-up" style="gap:12px;margin-top:12px;">
+                <div class="access-card">
+                  <h3 style="margin-bottom:8px;">⚙️ 面板狀態</h3>
+                  <p>啟用：<strong id="casino-enabled-flag">—</strong></p>
+                  <p>綁定頻道：<strong id="casino-channel-id">—</strong></p>
+                  <p>固定面板訊息：<strong id="casino-message-id">—</strong></p>
+                </div>
+                <div class="access-card">
+                  <h3 style="margin-bottom:8px;">🎰 當前回合</h3>
+                  <p>回合編號：<strong id="casino-round-id">—</strong></p>
+                  <p>狀態：<strong id="casino-round-status">—</strong></p>
+                  <p>本輪總彩池：<strong id="casino-round-pot">—</strong></p>
+                  <p>近期開獎：<strong id="casino-recent-results">—</strong></p>
+                </div>
+                <div class="access-card">
+                  <h3 style="margin-bottom:8px;">📊 今日數據</h3>
+                  <p>回合數：<strong id="casino-daily-rounds">—</strong></p>
+                  <p>總下注：<strong id="casino-daily-bet">—</strong></p>
+                  <p>總賠付：<strong id="casino-daily-payout">—</strong></p>
+                  <p>房屋抽水：<strong id="casino-daily-profit">—</strong></p>
+                </div>
+                <div class="access-card">
+                  <h3 style="margin-bottom:8px;">📨 發布面板</h3>
+                  <label style="display:block;margin-bottom:8px;">
+                    <span>頻道 ID</span>
+                    <input id="casino-publish-channel" type="text" placeholder="頻道 ID（從 Discord 右鍵複製）" />
+                  </label>
+                  <button id="casino-publish-btn" class="button primary">📨 發布／重發面板</button>
+                  <p class="hint" style="margin-top:8px;">會清空目標頻道訊息並發送新面板。重發時舊面板會刪除。</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section id="section-leaderboard" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -838,5 +892,6 @@
     <script src="/static/admin.leaderboard.js?v=6"></script>
     <script src="/static/admin.image-cropper.js?v=3"></script>
     <script src="/static/admin.auction.js?v=3"></script>
+    <script src="/static/admin.casino.js?v=1"></script>
   </body>
 </html>
