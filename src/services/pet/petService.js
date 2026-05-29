@@ -11,10 +11,49 @@ const GEM_ID_BY_TIER = {
   A: "a6ae293d-52fc-4af5-8770-891ddf842e35",
 };
 
-// 飼料 exp（依裝備階級）：D 最多、A 最少
-const FEED_EXP_BY_TIER = { D: 40, C: 25, B: 15, A: 8 };
-// 飽食度補充（依裝備階級）
-const FEED_SATIETY_BY_TIER = { D: 25, C: 18, B: 12, A: 8 };
+// 餵食基礎值（餵「對應寵物等級階級」的裝備時的滿額）
+const BASE_FEED_EXP = 40;       // 成長 exp / 孵化進度
+const BASE_FEED_SATIETY = 30;   // 飽食度
+// 階級符合度折扣：符合 100% / 低 1 階 60% / 低 2 階 30% / 低 3 階 15%
+const FEED_TIER_PENALTY = [1.0, 0.6, 0.3, 0.15];
+const TIER_RANK = { D: 0, C: 1, B: 2, A: 3 };
+
+// 寵物對應階級（依等級，與採集階級一致）：Lv1-10→D, 11-20→C, 21-40→B, 41-50→A
+function petMatchingTier(level) {
+  const lv = Math.max(1, Number(level) || 1);
+  if (lv <= 10) return "D";
+  if (lv <= 20) return "C";
+  if (lv <= 40) return "B";
+  return "A";
+}
+
+// 完全不可餵（非飼料本質）：怪物卡 / 職業徽章 / 稱號
+function isHardBlocked(item) {
+  if (!item) return true;
+  if (item.monsterCardOf) return true;
+  const slot = String(item.equipSlot || "");
+  return slot === "job_eq" || slot === "title_eq" || /^special/.test(slot);
+}
+// 可「單件手動餵」：真裝備（含強化過/特效），但排除卡片/徽章/稱號
+function isSingleFeedable(item) {
+  return !!item && item.itemType === "equipment" && !isHardBlocked(item);
+}
+// 可「一鍵批量餵」：素裝（+0）— 只有「有 +值」才需單件餵；特效與否不影響
+function isBatchFeedable(item) {
+  if (!isSingleFeedable(item)) return false;
+  if (Number(item.enhanceLevel) > 0) return false;               // 有 +值 → 只能單件餵
+  return true;                                                   // 素裝（含素的特效戒）→ 一鍵可餵
+}
+
+// 計算餵食倍率：null = 不能餵（裝備階級高於寵物對應階級）
+function feedMultiplier(gearTier, matchTier) {
+  const g = TIER_RANK[String(gearTier || "").toUpperCase()];
+  const m = TIER_RANK[matchTier];
+  if (g == null || m == null) return null;
+  if (g > m) return null;             // 高階裝備不能餵低等寵物
+  const diff = m - g;                 // 0=符合, 1=低1階...
+  return FEED_TIER_PENALTY[diff] ?? 0;
+}
 
 const MAX_LEVEL = 50;
 const HATCH_THRESHOLD = 800;            // 約 20 件 D 裝
@@ -162,6 +201,7 @@ class PetService {
       nickname: pet.nickname || null,
       stage: pet.stage,
       level: pet.level || 1,
+      feedTier: petMatchingTier(pet.stage === "egg" ? 1 : pet.level), // 餵食對應階級
       growthExp: pet.growthExp || 0,
       expToNext: LEVELUP_EXP_PER_LEVEL,
       satiety: Math.round(pet.satiety || 0),
@@ -188,17 +228,35 @@ class PetService {
 
     this._applyHungerDecay(pet);
 
+    // 寵物對應階級（蛋階段 level=1 → D）
+    const matchTier = petMatchingTier(pet.stage === "egg" ? 1 : pet.level);
+
     // 選出要餵的裝備（只接受 itemType==="equipment"）
     let feedTargets = [];
+    let protectedCount = 0; // 被保護（強化/特效/卡片等）而未餵的數量
     if (opts.inventoryUuid) {
       const it = progress.inventory.find((x) => x && x.uuid === opts.inventoryUuid);
       if (!it) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該道具", 404);
       if (it.itemType !== "equipment") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只能餵食裝備", 400);
+      if (!isSingleFeedable(it)) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "卡片 / 職業徽章 / 稱號不能當飼料", 400);
+      }
+      if (feedMultiplier(it.tier, matchTier) === null) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${String(it.tier).toUpperCase()} 階裝備太高級，餵不進對應 ${matchTier} 階的寵物（高階裝備不能餵低等寵物）`, 400);
+      }
       feedTargets = [it];
     } else if (opts.tier) {
       const tier = String(opts.tier).toUpperCase();
-      feedTargets = progress.inventory.filter((x) => x && x.itemType === "equipment" && String(x.tier).toUpperCase() === tier);
-      if (feedTargets.length === 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `背包沒有 ${tier} 階裝備可餵`, 400);
+      if (feedMultiplier(tier, matchTier) === null) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${tier} 階裝備太高級，餵不進對應 ${matchTier} 階的寵物`, 400);
+      }
+      const tierGear = progress.inventory.filter((x) => x && x.itemType === "equipment" && String(x.tier).toUpperCase() === tier);
+      feedTargets = tierGear.filter(isBatchFeedable);                // 一鍵只餵素裝（+0、非卡片徽章稱號）
+      protectedCount = tierGear.length - feedTargets.length;         // 有 +值 / 卡片徽章 → 保護
+      if (feedTargets.length === 0) {
+        const hint = protectedCount > 0 ? `（有 ${protectedCount} 件有 +值或為卡片徽章受保護，強化裝請單件餵）` : "";
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `背包沒有可一鍵餵的 ${tier} 階素裝${hint}`, 400);
+      }
     } else {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "未指定餵食對象", 400);
     }
@@ -207,8 +265,10 @@ class PetService {
     const consumedUuids = new Set();
     for (const it of feedTargets) {
       const tier = String(it.tier || "D").toUpperCase();
-      const satietyGain = FEED_SATIETY_BY_TIER[tier] ?? FEED_SATIETY_BY_TIER.D;
-      const expGain = FEED_EXP_BY_TIER[tier] ?? FEED_EXP_BY_TIER.D;
+      const mult = feedMultiplier(tier, matchTier);
+      if (mult === null) continue; // 高階裝備跳過（批量時保險）
+      const satietyGain = Math.round(BASE_FEED_SATIETY * mult);
+      const expGain = Math.round(BASE_FEED_EXP * mult);
 
       if (pet.stage === "egg") {
         // 蛋階段：餵食累積孵化進度（同時補飽食以免孵化期間餓死）
@@ -269,7 +329,7 @@ class PetService {
     await this.progressRepository.save(progress);
 
     return {
-      fed, totalSatiety, totalGrowth, totalHatch, hatched, hatchedSpecies, leveledTo,
+      fed, protectedCount, totalSatiety, totalGrowth, totalHatch, hatched, hatchedSpecies, leveledTo,
       pet: this._toView(pet),
     };
   }
@@ -429,4 +489,4 @@ class PetService {
   }
 }
 
-module.exports = { PetService, HATCH_THRESHOLD, MAX_LEVEL, FEED_EXP_BY_TIER, tierForPetLevel };
+module.exports = { PetService, HATCH_THRESHOLD, MAX_LEVEL, BASE_FEED_EXP, petMatchingTier, feedMultiplier, tierForPetLevel };

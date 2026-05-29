@@ -67,7 +67,7 @@ function petLine(p) {
   const gemPct = p.gemBias != null ? `石 ${Math.round(p.gemBias * 100)}%` : "";
   const quality = p.qualityUpChance ? `｜${Math.round(p.qualityUpChance * 100)}% 高一階` : "";
   const trait = [speed, gemPct].filter(Boolean).join("、");
-  return `🐉 ${name}（${p.speciesName || "?"}）Lv.${p.level}（exp ${p.growthExp}/${p.expToNext}）｜飽食 ${p.satiety}/${p.satietyMax}｜採集 ${p.gatherCount}/${p.gatherCap}（產 ${p.producesTier} 階）\n     └ ${trait}${quality}`;
+  return `🐉 ${name}（${p.speciesName || "?"}）Lv.${p.level}（exp ${p.growthExp}/${p.expToNext}）｜飽食 ${p.satiety}/${p.satietyMax}｜🍖餵 ${p.feedTier} 階｜採集 ${p.gatherCount}/${p.gatherCap}（產 ${p.producesTier} 階）\n     └ ${trait}${quality}`;
 }
 
 async function handlePetButton(interaction) {
@@ -100,6 +100,7 @@ async function handlePetButton(interaction) {
     try {
       const r = await sc.petService.feedPet(discordId, state.active.uuid, { tier });
       const lines = [`🍖 餵了 **${r.fed}** 件 ${tier} 階裝備`];
+      if (r.protectedCount > 0) lines.push(`🛡️ 已保護 **${r.protectedCount}** 件未餵（有 +值的請單件餵；卡片徽章不可餵）`);
       if (r.totalHatch > 0) lines.push(`孵化進度 +${r.totalHatch}`);
       if (r.totalSatiety > 0) lines.push(`飽食度 +${Math.round(r.totalSatiety)}`);
       if (r.totalGrowth > 0) lines.push(`成長 exp +${r.totalGrowth}`);
@@ -116,14 +117,20 @@ async function handlePetButton(interaction) {
   if (interaction.customId === PET_FEED_ID) {
     const state = await sc.petService.getPetState(discordId);
     if (!state.active) { await interaction.editReply("你目前沒有出戰中的寵物。先孵一隻並出戰。"); return; }
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`${PET_FEED_TIER_PREFIX}D`).setLabel("餵所有 D 階").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`${PET_FEED_TIER_PREFIX}C`).setLabel("餵所有 C 階").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`${PET_FEED_TIER_PREFIX}B`).setLabel("餵所有 B 階").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`${PET_FEED_TIER_PREFIX}A`).setLabel("餵所有 A 階").setStyle(ButtonStyle.Secondary),
-    );
+    // 只顯示「對應階級及以下」的餵食按鈕（高階裝備不能餵）
+    const TIERS = ["D", "C", "B", "A"];
+    const rank = { D: 0, C: 1, B: 2, A: 3 };
+    const feedTier = state.active.feedTier || "D";
+    const styleByDiff = [ButtonStyle.Success, ButtonStyle.Primary, ButtonStyle.Secondary, ButtonStyle.Secondary];
+    const btns = TIERS.filter((t) => rank[t] <= rank[feedTier]).map((t) => {
+      const diff = rank[feedTier] - rank[t];
+      const pctMap = [100, 60, 30, 15];
+      return new ButtonBuilder().setCustomId(`${PET_FEED_TIER_PREFIX}${t}`)
+        .setLabel(`餵 ${t} 階（${pctMap[diff]}%）`).setStyle(styleByDiff[diff] || ButtonStyle.Secondary);
+    });
+    const row = new ActionRowBuilder().addComponents(...btns);
     await interaction.editReply({
-      content: `對象：${petLine(state.active)}\n\n選擇要批量餵食的裝備階級（D 飼料最划算）：`,
+      content: `對象：${petLine(state.active)}\n\n你的寵物對應階級為 **${feedTier}**，餵 ${feedTier} 階最划算（100%）；低階仍可餵但效益遞減。高於 ${feedTier} 階的裝備餵不進去。\n🛡️ 一鍵只吃「素裝(+0)」；**有 +值的需單件餵、卡片徽章不可餵**。`,
       components: [row],
     });
     return;

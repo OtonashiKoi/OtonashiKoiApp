@@ -25,7 +25,9 @@ async function main() {
 
   // 撈各階裝備各幾件當飼料
   const dGear = await db.collection("items").find({ itemType: "equipment", tier: "D" }).limit(1).toArray();
-  const aGear = await db.collection("items").find({ itemType: "equipment", tier: "A" }).limit(1).toArray();
+  const bGear = await db.collection("items").find({ itemType: "equipment", tier: "B" }).limit(1).toArray();
+  const aGearArr = await db.collection("items").find({ itemType: "equipment", tier: "A" }).limit(1).toArray();
+  const aGear0 = aGearArr[0];
 
   const mkInv = (item, n) => Array.from({ length: n }, () => ({
     uuid: require("crypto").randomUUID(),
@@ -35,8 +37,8 @@ async function main() {
 
   const inventory = [
     { uuid: "egg-1", itemId: eggItem.id, itemName: eggItem.name, itemType: "pet_egg", petId: null, stackCount: 1 },
-    ...mkInv(dGear[0], 30),  // 30 件 D（孵化要 800/40=20 件）
-    ...mkInv(aGear[0], 5),   // 5 件 A
+    ...mkInv(dGear[0], 30),  // 30 件 D（孵化：蛋對應 D，餵 D 全額 40，800/40=20 件）
+    ...mkInv(bGear[0], 10),  // 10 件 B（Lv.40 寵物對應 B，測等級對應餵食）
   ];
 
   await db.collection("progress").updateOne(
@@ -99,15 +101,76 @@ async function main() {
     }
     assert(true, "各龍採集差異已輸出（速度/產出偏好/高一階）");
 
-    // ── 3. 餵食：飽食先滿、滿後才轉成長 exp ──
-    console.log("\n[3] 驗證飽食度優先、滿後轉 exp");
+    // ── 3. 等級對應餵食：把寵物拉到 Lv.40（對應 B），餵 B 全額、餵 D 折扣、餵 A 拒絕 ──
+    console.log("\n[3] 等級對應餵食（Lv.40 寵物對應 B 階）");
+    {
+      const prog = await db.collection("progress").findOne({ playerId: TEST_PLAYER_ID });
+      const tp = prog.pets.find((x) => x.uuid === petUuid);
+      tp.level = 40; tp.satiety = 0; // 飽食歸零，先看補飽食
+      // 補飼料（前面孵化已吃光），各階各 10 件
+      const crypto = require("crypto");
+      const mk = (item, n) => Array.from({ length: n }, () => ({ uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name, itemType: "equipment", tier: item.tier, equipSlot: item.equipSlot, enhanceLevel: 0 }));
+      prog.inventory.push(...mk(bGear[0], 10), ...mk(dGear[0], 10), ...mk(aGear0, 3));
+      await db.collection("progress").updateOne({ playerId: TEST_PLAYER_ID }, { $set: { pets: prog.pets, inventory: prog.inventory } });
+    }
     let st = await pet.getPetState(TEST_PLAYER_ID);
-    let p = st.active;
-    console.log(`    孵化後飽食=${p.satiety}/${p.satietyMax}（孵化給滿）`);
-    // 補一些 A 裝（孵化後 inventory 還有 5 件 A）
-    const feedA = await pet.feedPet(TEST_PLAYER_ID, petUuid, { tier: "A" });
-    console.log(`    餵 5 件 A：補飽食 ${feedA.totalSatiety}、轉成長 exp ${feedA.totalGrowth}`);
-    assert(feedA.totalGrowth > 0 || feedA.pet.satiety === p.satietyMax, "飽食滿時 A 裝轉成長 exp（或維持滿）");
+    assert(st.active.feedTier === "B", `Lv.40 對應餵食階級 = B（實際 ${st.active.feedTier}）`);
+    // 餵 B（對應，全額 40/30）
+    const feedB = await pet.feedPet(TEST_PLAYER_ID, petUuid, { tier: "B" });
+    console.log(`    餵 10 件 B：補飽食 ${feedB.totalSatiety}、成長 exp ${feedB.totalGrowth}（B=對應階級，每件 40exp/30飽食）`);
+    assert(feedB.totalSatiety > 0, "B 裝先補飽食度");
+    assert(feedB.totalGrowth > 0, "飽食滿後 B 裝轉成長 exp");
+    // 餵 D（低 2 階，30% 折扣）
+    const feedD = await pet.feedPet(TEST_PLAYER_ID, petUuid, { tier: "D" });
+    const perD = feedD.fed ? Math.round((feedD.totalGrowth + feedD.totalSatiety) / feedD.fed) : 0;
+    console.log(`    餵 D（低 2 階）：每件效益約 ${perD}（應為對應階的 30%）`);
+    assert(feedD.fed > 0, "低階 D 裝仍可餵（折扣後）");
+    // 餵 A（高於對應 B）→ 應拒絕（先固定回 Lv.40，避免前面餵 B 升級到對應 A）
+    {
+      const prog = await db.collection("progress").findOne({ playerId: TEST_PLAYER_ID });
+      prog.pets.find((x) => x.uuid === petUuid).level = 40;
+      await db.collection("progress").updateOne({ playerId: TEST_PLAYER_ID }, { $set: { pets: prog.pets } });
+    }
+    let aRejected = false;
+    try { await pet.feedPet(TEST_PLAYER_ID, petUuid, { tier: "A" }); }
+    catch (e) { aRejected = true; }
+    assert(aRejected, "高階 A 裝餵 Lv.40(對應B) 寵物被拒絕");
+
+    // ── 3b. 餵食保護：強化裝 / 特效裝 / 卡片不被一鍵餵到 ──
+    console.log("\n[3b] 一鍵餵食保護（強化/特效/卡片）");
+    {
+      const crypto = require("crypto");
+      const prog = await db.collection("progress").findOne({ playerId: TEST_PLAYER_ID });
+      // 清掉 B 裝避免干擾，放入：2 件純 B（可餵）+ 1 件 +5 B（強化保護）+ 1 件帶特效 B + 1 張 B 卡
+      prog.inventory = prog.inventory.filter((x) => !(x.itemType === "equipment" && x.tier === "B"));
+      const plain = (n) => Array.from({ length: n }, () => ({ uuid: crypto.randomUUID(), itemId: bGear[0].id, itemName: bGear[0].name, itemType: "equipment", tier: "B", equipSlot: bGear[0].equipSlot, enhanceLevel: 0 }));
+      prog.inventory.push(...plain(2));
+      prog.inventory.push({ uuid: "enh-1", itemId: bGear[0].id, itemName: bGear[0].name + "+5", itemType: "equipment", tier: "B", equipSlot: bGear[0].equipSlot, enhanceLevel: 5 });
+      prog.inventory.push({ uuid: "fx-1", itemId: "fx", itemName: "特效B戒", itemType: "equipment", tier: "B", equipSlot: "accessory_l", enhanceLevel: 0, passiveEffects: [{ key: "crit_rate_up", params: { value: 6 } }] });
+      prog.inventory.push({ uuid: "card-1", itemId: "card", itemName: "某B卡", itemType: "equipment", tier: "B", equipSlot: "special", monsterCardOf: "x" });
+      prog.pets.find((x) => x.uuid === petUuid).level = 40;
+      prog.pets.find((x) => x.uuid === petUuid).satiety = 0;
+      await db.collection("progress").updateOne({ playerId: TEST_PLAYER_ID }, { $set: { inventory: prog.inventory, pets: prog.pets } });
+    }
+    // 一鍵：素的特效戒(+0)也會被吃，只有 +值/卡片受保護
+    const feedProtect = await pet.feedPet(TEST_PLAYER_ID, petUuid, { tier: "B" });
+    console.log(`    一鍵餵 B：實餵 ${feedProtect.fed} 件、保護 ${feedProtect.protectedCount} 件`);
+    assert(feedProtect.fed === 3, "一鍵餵到 3 件素裝（2純 + 1素特效戒）");
+    assert(feedProtect.protectedCount === 2, "有+值/卡片共 2 件一鍵被保護");
+    // 確認被保護的（+5強化、卡片）還在背包
+    const after3b = await db.collection("progress").findOne({ playerId: TEST_PLAYER_ID });
+    const stillThere = ["enh-1", "card-1"].every((u) => after3b.inventory.some((x) => x.uuid === u));
+    assert(stillThere, "強化裝(+5)/卡片一鍵後仍保留在背包");
+    assert(!after3b.inventory.some((x) => x.uuid === "fx-1"), "素的特效戒(+0)一鍵被吃掉");
+
+    // ── 3c. 強化裝可「單件」餵；卡片單件仍拒絕 ──
+    console.log("\n[3c] 單件餵食：強化裝可餵、卡片拒絕");
+    const feedEnh = await pet.feedPet(TEST_PLAYER_ID, petUuid, { inventoryUuid: "enh-1" });
+    assert(feedEnh.fed === 1, "強化裝(+5)可單件手動餵");
+    let cardRejected = false;
+    try { await pet.feedPet(TEST_PLAYER_ID, petUuid, { inventoryUuid: "card-1" }); }
+    catch (e) { cardRejected = true; }
+    assert(cardRejected, "卡片單件餵仍被拒絕");
 
     // ── 4. 採集：手動推進時間驗證累積（固定標準 modifier 求確定性）──
     console.log("\n[4] 採集累積（模擬 3 小時，固定標準採集速度）");
@@ -123,7 +186,7 @@ async function main() {
     await db.collection("progress").updateOne({ playerId: TEST_PLAYER_ID }, { $set: { pets: prog.pets } });
 
     st = await pet.getPetState(TEST_PLAYER_ID);
-    p = st.active;
+    const p = st.active;
     console.log(`    3 小時 → 累積 ${p.gatherCount} 個（預期 9 = 3hr×3/hr）`);
     assert(p.gatherCount === 9, "3 小時累積 9 個");
     assert(p.producesTier === "D", "Lv.1 寵物採集階級 = D（依寵物等級非玩家等級）");
