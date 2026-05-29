@@ -3,7 +3,7 @@
 > 本文件覆蓋 2026-04 之後加入的系統，舊規格文件未補完前以此為準。
 > 設計細節仍建議直接讀對應程式檔；本文件提供「在哪裡找什麼」的入口。
 
-最後更新：2026-05-21（commit `91fe38a` / `b50b639` 之後）
+最後更新：2026-05-30（補上賭場 / 麻將 / 寵物採集三系統）
 
 ---
 
@@ -97,6 +97,52 @@
 
 ---
 
+## 賭場 / 命運轉盤（Casino Wheel）
+
+> 2026-05 新增。
+
+**入口**
+- Service：`src/services/casino/casinoService.js`、`src/services/casino/wheelConfig.js`
+- Discord 互動：`src/bot/handlers/casinoHandlers.js`、視圖：`src/bot/casinoView.js`
+- 後台：`src/web/public/admin.casino.js`；Admin API 在 `adminConsoleRoutes.js`（`/admin/casino/status`、`/admin/casino/enabled`、`/admin/channel-layout/publish-casino`）
+- 模擬/測試：`scripts/sim-casino-*.js`、`scripts/smoke-casino-round.js`、`scripts/setup-casino-channel.js`、`scripts/setup-casino-indexes.js`
+
+**特性**
+- 多色下注輪盤（`wheelConfig` 的 `COLOR_META` / `COLORS`，下注額 `BET_MIN`~`BET_MAX`）
+- 回合制：`getCurrentRound` + 近期開獎結果帶入面板
+- 面板按鈕 `casino:bet:<color>` + 下注 modal `casino:bet-modal:<color>`
+- featureKey `casino_wheel` 綁定頻道；`pm2:reset` 時自動重發面板（`client.js`）
+
+---
+
+## 麻將佇列（Mahjong Queue）
+
+> 程式存在但僅佇列層，玩法待補。
+
+**入口**
+- Service：`src/services/mahjong/mahjongQueue.js`
+- API：`src/api/routes/mahjongRoutes.js`（`createMahjongRoutes`，掛載於 `server.js`）
+- 直播相關互動參照 `src/bot/handlers/streamHandlers.js`
+
+---
+
+## 寵物採集系統（Pet）
+
+> 2026-05 新增（蛋孵化 / 餵食成長 / 掛機採集 / 放生）。
+
+**入口**
+- Service：`src/services/pet/petService.js`
+- Discord 互動：`src/bot/handlers/petHandlers.js`、視圖：`src/bot/petPanelView.js`
+- API：`src/api/routes/playerAppRoutes.js`（玩家端）、`adminConsoleRoutes.js`（後台）
+- 道具：`pet_egg` 類道具共 6 種龍蛋（火苗/雷鳴/霜鱗/黃金/黑曜/神秘）
+
+**特性**
+- 龍蛋孵化；神秘龍蛋開獎隨機品種
+- 各品種採集差異化（產出不同）
+- 餵食成長 + 等級對應餵食 + 餵食保護機制
+
+---
+
 ## 待補的設計規格
 
 下列系統目前**只有程式碼**，沒有獨立設計文件，建議優先補：
@@ -107,6 +153,9 @@
 | 爬塔結算分數 / 排行榜公式 | `towerHandlers.js` | 部分在 V1 checklist |
 | PK 下注賠率 / 結算 | `pkArenaHandlers.js` | 缺 |
 | 賭鬼強化機率表 | `enhanceService.js` | 缺（在程式內常數） |
+| 賭場輪盤賠率 / 抽水 | `casinoService.js` / `wheelConfig.js` | 缺（在程式內常數） |
+| 麻將完整玩法 | `mahjongQueue.js` | ❌ 缺（僅佇列層） |
+| 寵物採集產出 / 成長曲線 | `petService.js` | ❌ 缺 |
 
 ---
 
