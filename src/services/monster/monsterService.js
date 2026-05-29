@@ -16,24 +16,44 @@ function calcStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1 } = {}) {
 }
 
 // 合併資料庫存儲的 maxHp/def 與公式計算的其他數值
-// def 存的是百分比（0~75），戰鬥公式：傷害 = ATK * (1 - def/100)
+//
+// 新 DEF 模型（與玩家對稱）：
+//   def       = % 減傷（0~75）。doc.def 有填就用，否則 0。
+//   flatDef   = 純減固定值。doc.flatDef 有填就用，否則 level × 1。
+//   level     = 怪物等級（戰鬥時做等級壓制用）
+// 戰鬥公式：傷害 = max(1, (ATK × levelMult − flatDef) × (1 − def/100))
 function effectiveCalc(m) {
   const base = calcStats(m);
-  const def = (typeof m.def === 'number' && !isNaN(m.def)) ? Math.min(75, m.def) : base.def;
+  const level = (typeof m.level === 'number' && !isNaN(m.level)) ? Math.max(1, m.level) : 1;
+  const vitStat = (typeof m.vit === 'number' && !isNaN(m.vit)) ? Math.max(0, m.vit) : 0;
+  const def = (typeof m.def === 'number' && !isNaN(m.def)) ? Math.min(75, Math.max(0, m.def)) : 0;
+  // flatDef = level × 1 + VIT × 1（doc 有填 flatDef 就直接用，覆寫派生公式）
+  const flatDef = (typeof m.flatDef === 'number' && !isNaN(m.flatDef))
+    ? Math.max(0, m.flatDef)
+    : (level * 1) + (vitStat * 1);
+  // maxHp 派生：level × 800 + VIT × 200（doc.maxHp 有填就用）
+  const derivedMaxHp = level * 800 + vitStat * 200;
   const defIgnorePct = (typeof m.defIgnorePct === 'number' && !isNaN(m.defIgnorePct))
     ? Math.min(100, Math.max(0, m.defIgnorePct)) : 0;
   const luk = typeof m.luk === 'number' ? m.luk : 0;
   const agi = (typeof m.agi === 'number' && !isNaN(m.agi)) ? Math.max(1, Math.round(m.agi)) : base.agi;
+  const intStat = (typeof m.int === 'number' && !isNaN(m.int)) ? Math.max(0, m.int) : 0;
   return {
-    maxHp: (typeof m.maxHp === 'number' && !isNaN(m.maxHp)) ? m.maxHp : 100,
+    maxHp: (typeof m.maxHp === 'number' && !isNaN(m.maxHp)) ? m.maxHp : derivedMaxHp,
     agi,
+    int:   intStat,
     atk:   base.atk,
-    def,
+    def,           // % 減傷
+    flatDef,       // 固定值減傷
+    level,         // 等級壓制用
     defIgnorePct,
     dodge: base.dodge,
     hit:   base.hit,
     critRate:    Math.min(100, Math.round(luk * 0.3)),           // LUK → 爆擊%（同玩家公式）
-    comboChance: Math.min(80,  Math.round(3 + agi * 0.5)),      // AGI → 連擊%（同玩家公式）
+    comboChance: Math.min(80,  Math.round(3 + agi * 0.5)),       // AGI → 連擊%（同玩家公式）
+    // 傷害浮動：與玩家對齊，0.7 ~ 1.0；INT 每點 +0.01 抬高下限
+    dmgMin: Math.min(1.0, 0.7 + intStat * 0.01),
+    dmgMax: 1.0,
   };
 }
 

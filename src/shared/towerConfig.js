@@ -70,7 +70,8 @@ const TOWER_FLOOR_BUFFS = [
 const TOWER_MONSTER_ZONE_POOL = {
   "1-10":  { zone: "normal",  bossOnly: false },
   "11-20": { zone: "mid",     bossOnly: false },
-  "21-30": { zone: "hard",    bossOnly: false },
+  "21-25": { zone: "ancient_city",      bossOnly: false },
+  "26-30": { zone: "ancient_city_deep", bossOnly: false },
   "31-40": { zone: "elite",   bossOnly: false },
   "41":    { zone: "elite",   bossOnly: true  }, // 強制選 isBoss = true
 };

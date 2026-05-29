@@ -22,7 +22,10 @@ const CURRENCY_SOURCES = {
   IDLE_REWARD: "idle:reward",                        // 放置掛機：結算金幣獎勵
   DONATION_REWARD: "donation:reward",                // 直播斗內：鑽石獎勵
   ENHANCE: "enhance:cost",                           // 裝備強化：金幣消耗
-  TOWER_REWARD: "tower:reward"                       // 組隊爬塔：通關金幣獎勵
+  TOWER_REWARD: "tower:reward",                      // 組隊爬塔：通關金幣獎勵
+  CASINO_BET: "casino:bet",                          // 賭場：下注扣除
+  CASINO_BET_REFUND: "casino:bet-refund",            // 賭場：下注退還（鎖盤前撤注）
+  CASINO_PAYOUT: "casino:payout"                     // 賭場：結算中獎入帳
 };
 
 // 經驗值來源類型

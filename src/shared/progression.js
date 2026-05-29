@@ -1,4 +1,4 @@
-const MAX_LEVEL = 40;
+const MAX_LEVEL = 50;
 
 function expToNextLevel(level) {
   // 1-10 前期升快一點，讓新手更容易感受到成長
@@ -9,8 +9,12 @@ function expToNextLevel(level) {
   if (level <= 20) {
     return Math.round(340 * Math.pow(level, 1.62));
   }
-  // 21-40 後期再拉長，避免狂點太快畢業
-  return Math.round(500 * Math.pow(level, 1.68));
+  // 21-40 後期再拉長
+  if (level <= 40) {
+    return Math.round(500 * Math.pow(level, 1.68));
+  }
+  // 41-50 終局：龍族之領，再放寬一點點，但配合 A 階裝備掉落仍要花時間
+  return Math.round(620 * Math.pow(level, 1.72));
 }
 
 module.exports = {

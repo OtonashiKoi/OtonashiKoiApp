@@ -395,7 +395,8 @@ async function tryMatchPkQueue(trigger = "queue") {
         opts: {
           equipped: source.data.equipped,
           inventory: source.data.inventory,
-          activeEffects: source.data.activeEffects
+          activeEffects: source.data.activeEffects,
+          level: source.data.level || 1,
         }
       };
     }
@@ -1483,6 +1484,49 @@ async function publishPkArenaPanel(interaction) {
   await saveArenaState();
 }
 
+// 從後台呼叫：清空頻道後直接發送，不依賴 interaction
+async function publishPkArenaPanelToChannel(channelId, { cleanChannel = true } = {}) {
+  const { getBotClient } = require("../runtimeContext");
+  const client = getBotClient();
+  if (!client?.isReady()) throw new Error("Discord bot is not ready");
+
+  const channel = await client.channels.fetch(String(channelId).trim());
+  if (!channel || !channel.isTextBased || !channel.isTextBased()) {
+    throw new Error("target channel is not text-based");
+  }
+
+  // 清空頻道（保留 pinned）
+  if (cleanChannel) {
+    let lastId;
+    for (let i = 0; i < 20; i++) {
+      const batch = await channel.messages.fetch({ limit: 100, ...(lastId ? { before: lastId } : {}) }).catch(() => null);
+      if (!batch || batch.size === 0) break;
+      const deletable = batch.filter((m) => !m.pinned);
+      if (deletable.size === 0) break;
+      try { await channel.bulkDelete(deletable, true); }
+      catch (_) {
+        for (const m of deletable.values()) { await m.delete().catch(() => {}); }
+      }
+      lastId = batch.last()?.id;
+      if (batch.size < 100) break;
+    }
+  }
+
+  // 刪掉舊面板訊息（如果還活著）
+  if (persistedPanelMessageId && persistedPanelChannelId === channel.id) {
+    await channel.messages.fetch(persistedPanelMessageId).then((m) => m.delete()).catch(() => {});
+  }
+
+  await ensureArenaStateLoaded();
+  const ranking = await fetchPkRanking(10);
+  const sent = await channel.send(createPkArenaPanelMessage(arenaSlots, ranking, pkQueue));
+  panelMessage = sent;
+  persistedPanelChannelId = sent.channelId;
+  persistedPanelMessageId = sent.id;
+  await saveArenaState();
+  return { channelId: sent.channelId, messageId: sent.id };
+}
+
 // ── 路由判斷 ─────────────────────────────────────────────────
 function isPkArenaButton(customId) {
   return typeof customId === "string" && customId.startsWith("pk:");
@@ -1543,6 +1587,7 @@ module.exports = {
   handlePkArenaButton,
   handlePkArenaSelectMenu,
   publishPkArenaPanel,
+  publishPkArenaPanelToChannel,
   initPkArenaState,
   getPkArenaDiagnostics,
 };

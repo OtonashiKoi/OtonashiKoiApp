@@ -41,7 +41,7 @@ function toNum(v, fallback = 0) {
 
 const DEFAULT_CONFIG = {
   enabled: true,
-  targetZone: "hard",
+  targetZone: "ancient_city_deep",
   weeklyUnlockKillTarget: 300,
   battleTimeLimitMinutes: 60,
   respawnCooldownMinutes: 60,

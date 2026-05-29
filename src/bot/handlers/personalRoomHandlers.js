@@ -60,51 +60,6 @@ async function handlePublishPersonalRoom(interaction) {
   return true;
 }
 
-async function handleUnlockPersonalRoom(interaction) {
-  if (interaction.commandName !== "解鎖個人房間面板") return false;
-
-  if (!(await isAdmin(interaction))) {
-    await interaction.reply({ content: "❌ 你沒有管理員權限。", flags: MessageFlags.Ephemeral });
-    return true;
-  }
-
-  if (!interaction.channel || !interaction.guild) {
-    await interaction.reply({ content: "❌ 目前找不到要解鎖的聊天室。", flags: MessageFlags.Ephemeral });
-    return true;
-  }
-
-  try {
-    const access = await serviceContext.accessControlService.getAccessControl();
-    const adminRoleIds = access.discord.adminRoleIds || [];
-    const guild = interaction.guild;
-
-    try { await interaction.channel.permissionOverwrites.delete(guild.roles.everyone).catch(() => {}); } catch (_) {}
-
-    for (const roleId of adminRoleIds) {
-      try { await interaction.channel.permissionOverwrites.delete(roleId).catch(() => {}); } catch (_) {}
-    }
-
-    try {
-      const client = getBotClient();
-      if (client?.user?.id) {
-        const pinned = await interaction.channel.messages.fetchPinned();
-        for (const msg of pinned.values()) {
-          if (msg.author?.id === client.user.id) {
-            try { await msg.unpin().catch(() => {}); } catch (_) {}
-          }
-        }
-      }
-    } catch (_) {}
-
-    await interaction.reply({ content: "✅ 已解除個人房間鎖定並盡可能還原權限。", flags: MessageFlags.Ephemeral });
-  } catch (_) {
-    await interaction.reply({ content: "❌ 解鎖失敗，請稍後再試。", flags: MessageFlags.Ephemeral });
-  }
-
-  return true;
-}
-
 module.exports = {
-  handlePublishPersonalRoom,
-  handleUnlockPersonalRoom
+  handlePublishPersonalRoom
 };

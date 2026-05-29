@@ -242,9 +242,9 @@ async function updateThreadPanel(session, payload) {
 }
 
 // ── 選怪 ─────────────────────────────────────────────────────
-// 按 zone 順序（beginner→normal→mid→hard→elite）+ 同 zone 內 HP 低到高（boss 排後）
+// 按 zone 順序（beginner→normal→mid→ancient_city→ancient_city_deep→elite）+ 同 zone 內 HP 低到高（boss 排後）
 // 第 floor 層就取排序後第 floor 隻，每隻只打一次
-const TOWER_ZONE_ORDER = ["beginner", "normal", "mid", "hard", "elite"];
+const TOWER_ZONE_ORDER = ["beginner", "normal", "mid", "ancient_city", "ancient_city_deep", "elite"];
 
 let _cachedMonstersByZone = null;
 let _cachedBossMap = null;
@@ -262,9 +262,10 @@ const TOWER_FLOOR_BOSS = {
 
 const TOWER_FLOOR_ZONE = (floor) => {
   if (floor <= 10) return "beginner";
-  if (floor <= 20) return "normal";   // 11-19 用 normal
-  if (floor <= 30) return "mid";      // 21-29 用 mid
-  return "hard";                      // 31-40 用 hard（非boss）
+  if (floor <= 20) return "normal";          // 11-19 用 normal
+  if (floor <= 30) return "mid";             // 21-29 用 mid
+  if (floor <= 35) return "ancient_city";    // 31-35 古城
+  return "ancient_city_deep";                // 36-40 古城深處
 };
 
 // 排除不應出現在一般層的怪
@@ -609,18 +610,32 @@ function applyMonsterTeamAttack(session, mCalc, partyEffects, floor) {
   const monsterHit = Math.min(100, Math.max(0, Number(mCalc.hit || 80)));
   const isCrit    = Math.random() * 100 < critRate;
   const hits      = [];
+  const monsterLevel = Math.max(1, Number(mCalc.level || 1));
+
+  // 等級壓制（與 PvE/PvP 對齊；高打低 +0~+20%，低打高 -0~-50%）
+  const TOWER_LEVEL_DIFF_PCT = 2;
+  const TOWER_LEVEL_DIFF_CAP_UP = 20;
+  const TOWER_LEVEL_DIFF_CAP_DOWN = 50;
+  const levelMultFor = (atkLv, dstLv) => {
+    const diff = Math.max(1, atkLv || 1) - Math.max(1, dstLv || 1);
+    if (diff >= 0) return 1 + Math.min(TOWER_LEVEL_DIFF_CAP_UP, diff * TOWER_LEVEL_DIFF_PCT) / 100;
+    return 1 - Math.min(TOWER_LEVEL_DIFF_CAP_DOWN, -diff * TOWER_LEVEL_DIFF_PCT) / 100;
+  };
 
   for (const member of session.members) {
     if (!member || member.currentHp <= 0) continue;
     const stats   = getEffectiveMemberStats(member, partyEffects);
     const defPct  = Math.min(75, Math.max(0, Number(stats.def || 0)));
+    const flatDef = Math.max(0, Number(stats.flatDef || 0));
     const dodge   = Math.min(95, Math.max(0, Number(stats.dodge || 0)));
     const missChance = Math.max(0, dodge - monsterHit + 70); // 基準命中 70，超出部分才閃
     if (Math.random() * 100 < missChance) {
       hits.push({ name: member.name, damage: 0, dodged: true, hp: member.currentHp, maxHp: member.maxHp, dead: false });
       continue;
     }
-    let damage = baseAtk * (1 - defPct / 100);
+    // 新公式：(baseAtk × levelMult − flatDef) × (1 − defPct/100)
+    const lvMult = levelMultFor(monsterLevel, member.level);
+    let damage = Math.max(0, baseAtk * lvMult - flatDef) * (1 - defPct / 100);
     if (isCrit) damage *= Math.max(1, 1.5 - critReductionPct / 100);
     damage *= (1 - Math.min(90, Math.max(0, damageReductionPct)) / 100);
     damage = Math.max(1, Math.round(damage));
@@ -772,6 +787,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       startPlayerHp: m.currentHp,
       startRound: sharedRound,
       playerName: m.name,
+      playerLevel: m.level || 1,
       equipped: m.equipped,
       inventory: m.inventory || [],
       playerActiveEffects: Array.isArray(m.activeEffects) ? [...m.activeEffects] : [],
@@ -1555,20 +1571,27 @@ async function getStoredTowerHallPanelRef() {
 }
 
 async function saveTowerHallPanelRef(message) {
-  if (!message?.id || !message?.channelId || !serviceContext.channelLayoutRepository?.save) return;
-  const layout = await serviceContext.channelLayoutRepository.get().catch(() => ({ discord: { bindings: [] } }));
-  const discord = layout.discord || {};
-  await serviceContext.channelLayoutRepository.save({
-    ...layout,
-    discord: {
-      ...discord,
-      towerHallPanel: {
-        channelId: message.channelId,
-        messageId: message.id,
-        updatedAt: new Date().toISOString(),
+  if (!message?.id || !message?.channelId) return;
+  // 使用 MongoDB atomic update，只動 towerHallPanel 欄位，不重寫整份 layout，
+  // 避免跟 publishMonsterZonePanel / publishCoinShopPanel 等 read-modify-write 競爭
+  try {
+    const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+    const db = await getMongoDb();
+    await db.collection("channelLayout").updateOne(
+      { _id: "default" },
+      {
+        $set: {
+          "value.discord.towerHallPanel": {
+            channelId: message.channelId,
+            messageId: message.id,
+            updatedAt: new Date().toISOString(),
+          },
+          updatedAt: new Date().toISOString(),
+        },
       },
-    },
-  }).catch(() => {});
+      { upsert: true }
+    );
+  } catch (_) { /* swallow */ }
 }
 
 async function publishTowerHallPanel(interaction) {
@@ -1576,6 +1599,43 @@ async function publishTowerHallPanel(interaction) {
   await interaction.reply(createTowerHallMessage(ranking));
   const message = await interaction.fetchReply().catch(() => null);
   await saveTowerHallPanelRef(message);
+}
+
+// 從後台呼叫：清空頻道後直接發送
+async function publishTowerHallPanelToChannel(channelId, { cleanChannel = true } = {}) {
+  const client = getBotClient();
+  if (!client?.isReady()) throw new Error("Discord bot is not ready");
+
+  const channel = await client.channels.fetch(String(channelId).trim());
+  if (!channel || !channel.isTextBased || !channel.isTextBased()) {
+    throw new Error("target channel is not text-based");
+  }
+
+  if (cleanChannel) {
+    let lastId;
+    for (let i = 0; i < 20; i++) {
+      const batch = await channel.messages.fetch({ limit: 100, ...(lastId ? { before: lastId } : {}) }).catch(() => null);
+      if (!batch || batch.size === 0) break;
+      const deletable = batch.filter((m) => !m.pinned);
+      if (deletable.size === 0) break;
+      try { await channel.bulkDelete(deletable, true); }
+      catch (_) {
+        for (const m of deletable.values()) { await m.delete().catch(() => {}); }
+      }
+      lastId = batch.last()?.id;
+      if (batch.size < 100) break;
+    }
+  }
+
+  const storedRef = await getStoredTowerHallPanelRef();
+  if (storedRef.messageId && storedRef.channelId === channel.id) {
+    await channel.messages.fetch(storedRef.messageId).then((m) => m.delete()).catch(() => {});
+  }
+
+  const ranking = await fetchTowerHallRecords(5);
+  const sent = await channel.send(createTowerHallMessage(ranking));
+  await saveTowerHallPanelRef(sent);
+  return { channelId: sent.channelId, messageId: sent.id };
 }
 
 async function refreshHallPanel(hallMessage) {
@@ -2009,6 +2069,7 @@ module.exports = {
   isTowerSelectMenu,
   handleTowerSelectMenu,
   publishTowerHallPanel,
+  publishTowerHallPanelToChannel,
   restoreTowerSessions,
   getTowerDiagnostics,
 };
