@@ -224,8 +224,16 @@ function applyEffectsToStats(baseStats, effectRefs = [], context = {}) {
     }
 
     if (mapped.mode === "mul") {
-      const amount = Number.isFinite(scale) ? scale : mapped.amount;
-      result[mapped.stat] = (Number(result[mapped.stat]) || 0) * amount;
+      // 統一百分比制：params.value 視為「+X%」→ 乘以 (1 + X/100)
+      // 與 combatLoop 的 active-effect 路徑一致，避免「value=20 被當成 ×20」的爆炸
+      // 無 params.value 時退回預設倍率（mapped.amount 本身就是倍率，如 1.2）
+      let multiplier;
+      if (Number.isFinite(scale)) {
+        multiplier = 1 + scale / 100;
+      } else {
+        multiplier = mapped.amount;
+      }
+      result[mapped.stat] = (Number(result[mapped.stat]) || 0) * multiplier;
     }
   }
 
