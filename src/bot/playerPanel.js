@@ -1704,10 +1704,22 @@ async function handleBackpackAction(interaction, action, uuid) {
     }
     const enh = entry.enhanceLevel > 0 ? ` +${entry.enhanceLevel}` : "";
     const stack = entry.stackCount > 1 ? ` ×${entry.stackCount}` : "";
+    // 貴重物警告：有 +值 / 特效 / 卡片 / 徽章 / 稱號 → 加強提示，避免手滑丟掉
+    const slot = String(entry.equipSlot || "");
+    const hasFx = (Array.isArray(entry.passiveEffects) && entry.passiveEffects.length)
+      || (Array.isArray(entry.procEffects) && entry.procEffects.length)
+      || (Array.isArray(entry.combatEffects) && entry.combatEffects.length);
+    const warns = [];
+    if (Number(entry.enhanceLevel) > 0) warns.push(`已強化 **+${entry.enhanceLevel}**`);
+    if (entry.monsterCardOf || /^special/.test(slot)) warns.push("這是**怪物卡**");
+    if (slot === "job_eq") warns.push("這是**職業徽章**");
+    if (slot === "title_eq") warns.push("這是**稱號**");
+    if (hasFx) warns.push("帶有**特效**");
+    const warnLine = warns.length ? `\n\n🚨 **注意：${warns.join("、")}**，丟掉就沒了！` : "";
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`backpack_discard_confirm:${uuid}`)
-        .setLabel("確定丟棄")
+        .setLabel(warns.length ? "我確定要丟（貴重物）" : "確定丟棄")
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
         .setCustomId(`backpack_view:${uuid}`)
@@ -1715,7 +1727,7 @@ async function handleBackpackAction(interaction, action, uuid) {
         .setStyle(ButtonStyle.Secondary),
     );
     await safeEditReply(interaction, {
-      content: `⚠️ 確定要丟棄 **${entry.itemName}${enh}${stack}** 嗎？此操作**無法復原**！`,
+      content: `⚠️ 確定要丟棄 **${entry.itemName}${enh}${stack}** 嗎？此操作**無法復原**！${warnLine}`,
       components: [row],
       embeds: [],
       files: [],
