@@ -1353,6 +1353,7 @@ async function startBattle(idx, { recovered = false } = {}) {
         : result.winner === "B"
           ? (challFirst ? "defender" : "challenger")
           : null; // 平局
+    recordWebPkResult(idx, slot, result, winningSide); // 附加：存一份戰報給網頁端播動畫（不影響 Discord 流程）
     const totalBetAmount = Object.values(slot.bets || {})
       .reduce((sum, bet) => sum + Math.max(0, Number(bet?.amount || BET_AMOUNT)), 0);
 
@@ -1581,6 +1582,108 @@ async function initPkArenaState() {
   }, PK_BATTLE_WATCHDOG_MS);
 }
 
+// ════════════════════════════════════════════════════════════
+// 網頁端共用入口（與 Discord 同一擂台狀態；全為附加，不改既有流程）
+// ════════════════════════════════════════════════════════════
+const webPkLastResults = new Map(); // discordId -> 最近一場結算戰報（給網頁播動畫）
+
+function recordWebPkResult(idx, slot, result, winningSide) {
+  try {
+    const logs = result?.roundLogs || [];
+    const at = Date.now();
+    for (const side of ["challenger", "defender"]) {
+      const me = slot[side];
+      const opp = slot[side === "challenger" ? "defender" : "challenger"];
+      if (!me?.discordId) continue;
+      webPkLastResults.set(String(me.discordId), {
+        arenaIdx: idx, at, logs, winnerSide: winningSide,
+        youWon: winningSide ? side === winningSide : null,
+        youName: me.name, oppName: opp?.name || "對手",
+        youMaxHp: me.stats?.maxHp || 100, oppMaxHp: opp?.stats?.maxHp || 100,
+      });
+    }
+  } catch (_) {}
+}
+
+async function webGetArenaState(discordId) {
+  await ensureArenaStateLoaded();
+  const snap = getArenaStateSnapshot();
+  const did = discordId ? String(discordId) : null;
+  const slots = (snap.slots || []).map((s, idx) => {
+    if (!s) return { idx, state: "empty", challenger: null, defender: null, betDeadlineAt: null, odds: null, betCount: 0, myBet: null, isParticipant: false };
+    return {
+      idx, state: s.state,
+      challenger: s.challenger ? { name: s.challenger.name, level: s.challenger.level } : null,
+      defender: s.defender ? { name: s.defender.name, level: s.defender.level } : null,
+      betDeadlineAt: s.betDeadlineAt || null,
+      odds: s.state === "betting" ? { challenger: getSlotBetOdds(s, "challenger"), defender: getSlotBetOdds(s, "defender") } : null,
+      betCount: s.bets ? Object.keys(s.bets).length : 0,
+      myBet: did && s.bets && s.bets[did] ? { side: s.bets[did].side, amount: s.bets[did].amount, payout: s.bets[did].payout } : null,
+      isParticipant: did ? (s.challenger?.discordId === did || s.defender?.discordId === did) : false,
+    };
+  });
+  return {
+    slots, queueCount: (snap.queue || []).length,
+    inQueue: did ? findQueueIndex(did) >= 0 : false,
+    myArenaIdx: did ? findParticipantArenaIndex(did) : -1,
+    now: Date.now(),
+  };
+}
+
+async function webJoinQueue(discordId, name) {
+  await ensureArenaStateLoaded();
+  if (findParticipantArenaIndex(discordId) >= 0) return { ok: false, message: "你已在配對場次中，這場結束前不能重新排隊" };
+  const pData = await loadPlayerData(discordId);
+  if (!pData) return { ok: false, message: "無法讀取你的戰鬥數值" };
+  const bracket = getPkArenaBracketByIndex(0);
+  if (!isLevelInPkArenaBracket(pData.level, bracket)) return { ok: false, message: `PK 擂台需要 Lv.${bracket.minLevel} 以上（目前 Lv.${pData.level}）` };
+  if (findQueueIndex(discordId) >= 0) return { ok: true, queued: true, message: "你已在隊列中" };
+  pkQueue.push({ discordId, name, level: pData.level, queuedAt: Date.now() });
+  pkQueue = dedupePkQueue(pkQueue);
+  await saveArenaState();
+  await tryMatchPkQueue("web_join");
+  const matchedIdx = findParticipantArenaIndex(discordId);
+  await saveArenaState();
+  refreshPanel().catch(() => {});
+  return { ok: true, matched: matchedIdx >= 0, arenaIdx: matchedIdx };
+}
+
+async function webLeaveQueue(discordId) {
+  await ensureArenaStateLoaded();
+  const before = pkQueue.length;
+  pkQueue = pkQueue.filter((e) => String(e.discordId) !== String(discordId));
+  if (pkQueue.length === before) return { ok: false, message: "你不在隊列中" };
+  await saveArenaState();
+  refreshPanel().catch(() => {});
+  return { ok: true };
+}
+
+async function webPlaceBet({ discordId, name, arenaIdx, side, amount }) {
+  await ensureArenaStateLoaded();
+  const slot = arenaSlots[arenaIdx];
+  if (!slot || slot.state !== "betting") return { ok: false, message: "此擂台目前不在下注階段" };
+  if (slot.challenger?.discordId === discordId || slot.defender?.discordId === discordId) return { ok: false, message: "參賽者不能對自己的場次下注" };
+  if (slot.bets[discordId]) return { ok: false, message: "你已對此場下注，每場只能押一次" };
+  const betAmount = normalizePkBetAmount(amount);
+  const wallet = await serviceContext.walletRepository.findByPlayerId(discordId).catch(() => null);
+  if (!wallet || (wallet.gold ?? 0) < betAmount) return { ok: false, message: `金幣不足，下注需要 ${betAmount} 🪙` };
+  try {
+    await serviceContext.rewardService.grantCurrency({ discordId, displayName: name, currencyType: "gold", amount: -betAmount, source: CURRENCY_SOURCES.PK_BET, operator: "pk:bet" });
+  } catch (_) { return { ok: false, message: "扣款失敗，請稍後再試" }; }
+  const targetSide = side === "challenger" ? "challenger" : "defender";
+  const target = targetSide === "challenger" ? slot.challenger : slot.defender;
+  const odds = getSlotBetOdds(slot, targetSide);
+  const payout = Math.floor(betAmount * odds);
+  slot.bets[discordId] = { discordId, side: targetSide, targetDiscordId: target?.discordId || null, targetName: target?.name || "對手", amount: betAmount, odds, payout, name };
+  await saveArenaState();
+  refreshPanel().catch(() => {});
+  return { ok: true, payout, odds, targetName: target?.name };
+}
+
+function webGetLastResult(discordId) {
+  return webPkLastResults.get(String(discordId)) || null;
+}
+
 module.exports = {
   isPkArenaButton,
   isPkArenaSelectMenu,
@@ -1590,4 +1693,10 @@ module.exports = {
   publishPkArenaPanelToChannel,
   initPkArenaState,
   getPkArenaDiagnostics,
+  // 網頁端共用入口
+  webGetArenaState,
+  webJoinQueue,
+  webLeaveQueue,
+  webPlaceBet,
+  webGetLastResult,
 };

@@ -19,6 +19,7 @@ web-game/
 web-game-react/
 web-game-react-dist/
 tmp-test-out.gif
+tmp/
 
 # Local agent / tooling workspace
 .agents/

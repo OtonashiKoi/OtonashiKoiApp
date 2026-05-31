@@ -752,6 +752,32 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   // 1. OAuth2 Login
+  // 網頁 Discord 登入：導向 Discord OAuth（callback 回 game.html，前端再拿 code 換 JWT）
+  router.get("/api/auth/discord/login", (req, res) => {
+    try {
+      const auth = config.discord || {};
+      if (!auth.clientId || !auth.clientSecret) {
+        return res.status(500).send(renderAuthResultPage("登入失敗", [
+          "❌ Discord 登入尚未設定完成。",
+          "請補齊 DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET。"
+        ]));
+      }
+      const returnTo = String(req.query.returnTo || "/game.html");
+      const redirectUri = `${getPublicBaseUrl(req)}${returnTo}`;
+      const url = new URL("https://discord.com/api/oauth2/authorize");
+      url.search = new URLSearchParams({
+        client_id: auth.clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: "identify",
+        prompt: "consent"
+      }).toString();
+      return res.redirect(url.toString());
+    } catch (err) {
+      return res.status(400).send(renderAuthResultPage("登入失敗", [`❌ ${err.message || "無法啟動 Discord 登入"}`]));
+    }
+  });
+
   router.post("/api/auth/discord", async (req, res, next) => {
     try {
       const { code } = req.body;
@@ -763,6 +789,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.log("[PlayerApp] Development mode mock login");
         discordId = code.replace("mock:", "");
         if (discordId.length < 5) discordId = "1450019975031951370"; // Fallback test account for local development.
+        // 從 Discord 抓真實名稱（公會暱稱優先，其次帳號名），避免一律記成 "WebPlayer"
+        if (discordClient) {
+          try {
+            const guildId = require("../../config").discord?.guildId;
+            if (guildId) {
+              const guild = discordClient.guilds.cache.get(guildId) || await discordClient.guilds.fetch(guildId).catch(() => null);
+              const member = guild ? await guild.members.fetch({ user: discordId, force: false }).catch(() => null) : null;
+              if (member?.displayName) displayName = member.displayName;
+            }
+            if (displayName === "WebPlayer") {
+              const u = await discordClient.users.fetch(discordId).catch(() => null);
+              if (u) displayName = u.globalName || u.username || displayName;
+            }
+          } catch (_) {}
+        }
       } else {
         // Exchange the authorization code with Discord OAuth2.
         if (!process.env.DISCORD_CLIENT_SECRET) {
@@ -1996,6 +2037,239 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     } catch (err) {
       next(err);
     }
+  });
+
+  // ──────────────────────────────────────────────────
+  // 賭場 / 命運轉盤（玩家端；DC 賭場面板對應）
+  // ──────────────────────────────────────────────────
+  router.get("/api/casino/state", requireAuth, async (req, res, next) => {
+    try {
+      const cs = serviceContext.casinoService;
+      if (!cs) return res.json(ok({ enabled: false, round: null, recent: [], myBets: [] }));
+      const { discordId } = req.playerRecord;
+      const [round, recent] = await Promise.all([cs.getCurrentRound(), cs.getRecentRounds(12)]);
+      const myBets = round ? await cs.getPlayerBetsInRound(round.roundId, discordId) : [];
+      const { COLOR_META, BET_MIN, BET_MAX } = require("../../services/casino/wheelConfig");
+      res.json(ok({ enabled: true, round, recent, myBets, colors: COLOR_META, betMin: BET_MIN, betMax: BET_MAX, now: Date.now() }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/api/casino/bet", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const { color, amount } = req.body || {};
+      const result = await serviceContext.casinoService.placeBet({ discordId, displayName, color, amount });
+      res.json(ok(result, "下注成功"));
+    } catch (err) {
+      if (err?.message) return res.status(400).json(fail("BET_FAILED", err.message));
+      next(err);
+    }
+  });
+
+  // ──────────────────────────────────────────────────
+  // 寵物採集（玩家端；DC 寵物面板對應）
+  // ──────────────────────────────────────────────────
+  function petSvc(res) {
+    const s = serviceContext.petService;
+    if (!s) { res.json(ok({ pets: [], active: null, activePetUuid: null })); return null; }
+    return s;
+  }
+  router.get("/api/me/pets", requireAuth, async (req, res, next) => {
+    try { const s = petSvc(res); if (!s) return; res.json(ok(await s.getPetState(req.playerRecord.discordId))); }
+    catch (err) { next(err); }
+  });
+  router.post("/api/me/pets/feed", requireAuth, async (req, res, next) => {
+    try {
+      const { petUuid, inventoryUuid, tier } = req.body || {};
+      const r = await serviceContext.petService.feedPet(req.playerRecord.discordId, petUuid, { inventoryUuid, tier });
+      res.json(ok(r, r?.message || "餵食完成"));
+    } catch (err) { if (err?.message) return res.status(400).json(fail("PET_FEED_FAILED", err.message)); next(err); }
+  });
+  router.post("/api/me/pets/claim", requireAuth, async (req, res, next) => {
+    try { const r = await serviceContext.petService.claimGathering(req.playerRecord.discordId); res.json(ok(r, r?.message || "已收取採集物")); }
+    catch (err) { if (err?.message) return res.status(400).json(fail("PET_CLAIM_FAILED", err.message)); next(err); }
+  });
+  router.post("/api/me/pets/active", requireAuth, async (req, res, next) => {
+    try { const r = await serviceContext.petService.setActivePet(req.playerRecord.discordId, req.body?.petUuid); res.json(ok(r, "已設為出戰寵物")); }
+    catch (err) { if (err?.message) return res.status(400).json(fail("PET_ACTIVE_FAILED", err.message)); next(err); }
+  });
+  router.post("/api/me/pets/release", requireAuth, async (req, res, next) => {
+    try { const r = await serviceContext.petService.releasePet(req.playerRecord.discordId, req.body?.petUuid); res.json(ok(r, "已放生")); }
+    catch (err) { if (err?.message) return res.status(400).json(fail("PET_RELEASE_FAILED", err.message)); next(err); }
+  });
+  router.post("/api/me/pets/rename", requireAuth, async (req, res, next) => {
+    try { const r = await serviceContext.petService.renamePet(req.playerRecord.discordId, req.body?.petUuid, req.body?.nickname); res.json(ok(r, "已改名")); }
+    catch (err) { if (err?.message) return res.status(400).json(fail("PET_RENAME_FAILED", err.message)); next(err); }
+  });
+  router.post("/api/me/pets/hatch", requireAuth, async (req, res, next) => {
+    try { const r = await serviceContext.petService.hatchEggFromInventory(req.playerRecord.discordId, req.body?.inventoryUuid); res.json(ok(r, r?.message || "已放入孵化")); }
+    catch (err) { if (err?.message) return res.status(400).json(fail("PET_HATCH_FAILED", err.message)); next(err); }
+  });
+
+  // ──────────────────────────────────────────────────
+  // 爬塔（單人，網頁版；逐層挑戰、HP 帶入、繼續/撤退）
+  // 數值完全比照 src/shared/towerConfig.js（與 DC 組隊爬塔同源）
+  // ──────────────────────────────────────────────────
+  const towerSessions = new Map(); // discordId -> { floor, playerHp, playerMaxHp, baseAtk, equipped, used:Set, alive, settled, startedAt }
+  const TW = require("../../shared/towerConfig");
+
+  async function pickTowerMonster(floor, usedNames) {
+    const pool = TW.getTowerMonsterPool(floor); // { zone, bossOnly }
+    let mons = await serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: pool.zone }).catch(() => []);
+    if (pool.bossOnly) mons = mons.filter((m) => m.isBoss);
+    else mons = mons.filter((m) => m.name !== "廢都魔王(B)");
+    if (!mons.length) return null;
+    const fresh = mons.filter((m) => !usedNames.has(m.name));
+    const arr = fresh.length ? fresh : mons;
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  async function settleTower(discordId, displayName, s) {
+    if (s.settled) return s._reward || null;
+    s.settled = true;
+    const cleared = Math.max(0, s.floor - 1);
+    const reward = TW.calcTowerReward(cleared);
+    if (reward.gold > 0) await serviceContext.rewardService.grantCurrency({ discordId, displayName, currencyType: "gold", amount: reward.gold, source: "tower_web" }).catch(() => {});
+    if (reward.exp > 0 && serviceContext.progressService?.grantExp) await serviceContext.progressService.grantExp({ discordId, displayName, amount: reward.exp, source: "tower_web" }).catch(() => {});
+    try {
+      const prog = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (prog) {
+        const rec = prog.towerRecord || { bestFloor: 0, totalRuns: 0 };
+        rec.totalRuns = (rec.totalRuns || 0) + 1;
+        if (cleared > (rec.bestFloor || 0)) { rec.bestFloor = cleared; rec.bestAt = new Date().toISOString(); }
+        prog.towerRecord = rec; prog.updatedAt = new Date().toISOString();
+        await serviceContext.progressRepository.save(prog).catch(() => {});
+      }
+    } catch (_) {}
+    s._reward = { ...reward, clearedFloor: cleared };
+    return s._reward;
+  }
+
+  router.get("/api/tower/state", requireAuth, async (req, res, next) => {
+    try {
+      const s = towerSessions.get(req.playerRecord.discordId);
+      const prog = await serviceContext.progressRepository.findByPlayerId(req.playerRecord.discordId);
+      res.json(ok({
+        minLevel: TW.TOWER_MIN_LEVEL, totalFloors: TW.TOWER_TOTAL_FLOORS,
+        level: prog?.level || 1, bestFloor: prog?.towerRecord?.bestFloor || 0,
+        session: s && s.alive ? { floor: s.floor, playerHp: s.playerHp, playerMaxHp: s.playerMaxHp } : null,
+      }));
+    } catch (err) { next(err); }
+  });
+
+  router.post("/api/tower/start", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const prog = await serviceContext.progressRepository.findByPlayerId(discordId);
+      const level = prog?.level || 1;
+      if (level < TW.TOWER_MIN_LEVEL) return res.status(400).json(fail("LEVEL_TOO_LOW", `爬塔需要 Lv.${TW.TOWER_MIN_LEVEL} 以上（目前 Lv.${level}）`));
+      const { calcPlayerStats } = require("../../shared/combatStats");
+      const attrs = prog?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+      const equipped = await mergeEquippedFromLibrary(prog?.equipment || {}, serviceContext.itemRepository);
+      const ps = calcPlayerStats(attrs, equipped, prog?.activeEffects || [], prog?.inventory || []);
+      const bonus = TW.getCumulativePartyBonus(1);
+      const maxHp = Math.round((ps.maxHp || 100) * (1 + bonus.hpPct / 100));
+      const s = { floor: 1, playerHp: maxHp, playerMaxHp: maxHp, baseAtk: ps.atk || 1, baseStats: ps, equipped, inventory: prog?.inventory || [], used: new Set(), alive: true, settled: false, startedAt: Date.now() };
+      towerSessions.set(discordId, s);
+      res.json(ok({ floor: s.floor, playerHp: s.playerHp, playerMaxHp: s.playerMaxHp, totalFloors: TW.TOWER_TOTAL_FLOORS }));
+    } catch (err) { next(err); }
+  });
+
+  router.post("/api/tower/fight", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const s = towerSessions.get(discordId);
+      if (!s || !s.alive) return res.status(400).json(fail("NO_SESSION", "沒有進行中的爬塔，請先開始"));
+      const floor = s.floor;
+      const monster = await pickTowerMonster(floor, s.used);
+      if (!monster) return res.status(400).json(fail("NO_MONSTER", "找不到該層怪物"));
+      s.used.add(monster.name);
+
+      const baseHp = monster.calc?.maxHp || monster.maxHp || 200;
+      const baseAtk = monster.calc?.atk || 20;
+      const scaledHp = TW.scaleTowerMonsterHp(baseHp, floor);
+      const scaledAtk = TW.scaleTowerMonsterAtk(baseAtk, floor);
+      const bonus = TW.getCumulativePartyBonus(floor);
+      const ps = { ...s.baseStats, maxHp: s.playerMaxHp, atk: Math.round(s.baseAtk * (1 + bonus.atkPct / 100)) };
+      const mCalc = { ...(monster.calc || {}), maxHp: scaledHp, atk: scaledAtk, isBoss: Boolean(monster.isBoss) };
+
+      const { runCombatLoop } = require("../../shared/combatLoop");
+      const r = runCombatLoop(ps, mCalc, monster.name, scaledHp, TW.MAX_ROUNDS_PER_MEMBER, {
+        playerName: displayName, playerLevel: (await serviceContext.progressRepository.findByPlayerId(discordId))?.level || 1,
+        equipped: s.equipped, inventory: s.inventory, monsterIsBoss: Boolean(monster.isBoss),
+        startPlayerHp: s.playerHp,
+      });
+      s.playerHp = Math.max(0, r.finalPlayerHp);
+      const killed = (r.finalMonsterHp ?? 0) <= 0 && r.outcome === "win";
+      const died = s.playerHp <= 0;
+
+      let towerOver = false, reward = null, cleared = false;
+      if (killed) {
+        cleared = true; s.floor = floor + 1;
+        if (s.floor > TW.TOWER_TOTAL_FLOORS) { towerOver = true; reward = await settleTower(discordId, displayName, s); s.alive = false; }
+      } else {
+        // 未擊殺（陣亡或回合耗盡）→ 本次攻塔結束，結算
+        towerOver = true; s.alive = false; reward = await settleTower(discordId, displayName, s);
+      }
+
+      res.json(ok({
+        floor, cleared, towerOver, died,
+        monsterName: monster.name, monsterImageUrl: monster.imageUrl || null,
+        enemyMaxHp: scaledHp, logs: r.roundLogs, outcome: r.outcome,
+        finalPlayerHp: s.playerHp, finalMonsterHp: Math.max(0, r.finalMonsterHp ?? 0),
+        nextFloor: s.alive ? s.floor : null, playerMaxHp: s.playerMaxHp, reward,
+      }));
+    } catch (err) { next(err); }
+  });
+
+  router.post("/api/tower/retreat", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const s = towerSessions.get(discordId);
+      if (!s || !s.alive) return res.status(400).json(fail("NO_SESSION", "沒有進行中的爬塔"));
+      const reward = await settleTower(discordId, displayName, s);
+      s.alive = false;
+      res.json(ok({ retreated: true, reward }));
+    } catch (err) { next(err); }
+  });
+
+  // ──────────────────────────────────────────────────
+  // PK 擂台（網頁端；與 Discord 共用同一擂台狀態）
+  // ──────────────────────────────────────────────────
+  const pkArena = require("../../bot/handlers/pkArenaHandlers");
+  router.get("/api/pk/state", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await pkArena.webGetArenaState(req.playerRecord.discordId))); }
+    catch (err) { next(err); }
+  });
+  router.post("/api/pk/join", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const r = await pkArena.webJoinQueue(discordId, displayName);
+      if (!r.ok) return res.status(400).json(fail("PK_JOIN_FAILED", r.message));
+      res.json(ok(r, r.matched ? "已配對！" : "已加入排隊"));
+    } catch (err) { next(err); }
+  });
+  router.post("/api/pk/leave", requireAuth, async (req, res, next) => {
+    try {
+      const r = await pkArena.webLeaveQueue(req.playerRecord.discordId);
+      if (!r.ok) return res.status(400).json(fail("PK_LEAVE_FAILED", r.message));
+      res.json(ok(r, "已離開排隊"));
+    } catch (err) { next(err); }
+  });
+  router.post("/api/pk/bet", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const { arenaIdx, side, amount } = req.body || {};
+      const r = await pkArena.webPlaceBet({ discordId, name: displayName, arenaIdx: Number(arenaIdx), side, amount });
+      if (!r.ok) return res.status(400).json(fail("PK_BET_FAILED", r.message));
+      res.json(ok(r, `已押注 ${r.targetName}`));
+    } catch (err) { next(err); }
+  });
+  router.get("/api/pk/last-result", requireAuth, async (req, res, next) => {
+    try { res.json(ok(pkArena.webGetLastResult(req.playerRecord.discordId))); }
+    catch (err) { next(err); }
   });
 
   // ──────────────────────────────────────────────────

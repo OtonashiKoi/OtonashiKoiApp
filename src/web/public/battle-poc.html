@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>冒險 POC · equipmentGAME</title>
+<!--
+  ============================================================
+  Web 客戶端 POC v2
+  ------------------------------------------------------------
+  畫面：① 世界地圖選單  ② 區域(怪物清單 + 即時戰況)  ③ 戰鬥動畫
+  資料：ZONES 取自 src/shared/zones.js（真實 10 區）；
+        戰鬥用 genBattle() 即時產生「與 combatLoop 相同格式」的
+        roundLogs，再由解析器播成動畫。
+  接真資料：把 fetch 回來的 combatResult.roundLogs 丟進 playBattle()，
+            把即時戰況改成輪詢 /api 即可；目前伺服器沒開 → 離線示範。
+  ============================================================
+-->
+<style>
+  :root{
+    --bg-0:#0a0710; --bg-1:#160f24; --bg-2:#241636;
+    --gold:#f4c66a; --ink:#efe7ff; --ink-dim:#a596c4;
+    --hp:#43d17a; --hp-2:#1f9e57; --hp-low:#e0533b;
+    --dmg:#ffd84d; --dmg-crit:#ff7a3c; --heal:#5dffa0; --dot:#b06bff;
+    --panel:rgba(20,12,32,.72); --line:rgba(244,198,106,.28);
+    --font-title:"Cinzel","Noto Serif TC",serif;
+    --font-body:"Noto Sans TC",system-ui,"Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--font-body);color:var(--ink);
+    background:radial-gradient(1200px 700px at 50% -10%,#1d1330 0%,var(--bg-0) 60%);
+    display:flex;align-items:center;justify-content:center;min-height:100vh;padding:14px;}
+  .frame{width:min(1040px,100%);aspect-ratio:16/10;max-height:94vh;position:relative;
+    border-radius:18px;overflow:hidden;border:1px solid var(--line);
+    box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 0 120px rgba(0,0,0,.55);
+    background:linear-gradient(180deg,var(--bg-2),var(--bg-1) 55%,var(--bg-0));}
+  .screen{position:absolute;inset:0;opacity:0;pointer-events:none;
+    transition:opacity .35s;overflow:hidden}
+  .screen.active{opacity:1;pointer-events:auto}
+
+  /* 共用元件 */
+  .btn{cursor:pointer;border:1px solid var(--line);color:var(--ink);background:var(--panel);
+    border-radius:10px;padding:7px 13px;font-size:13px;backdrop-filter:blur(6px);
+    transition:.15s;font-family:var(--font-body)}
+  .btn:hover{border-color:var(--gold);color:var(--gold)}
+  .btn.active{background:rgba(244,198,106,.16);color:var(--gold);border-color:var(--gold)}
+  .pill{font-family:var(--font-title);letter-spacing:1.5px;font-size:12px;color:var(--gold);
+    background:var(--panel);border:1px solid var(--line);padding:5px 12px;border-radius:999px;}
+  .h-title{font-family:var(--font-title);letter-spacing:2px}
+  .scroll{overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  .scroll::-webkit-scrollbar{width:7px}
+  .scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+
+  /* 頂部玩家列 */
+  .hud{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;
+    justify-content:space-between;padding:11px 16px;}
+  .me{display:flex;align-items:center;gap:10px}
+  .me .av{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:20px;
+    border:2px solid var(--line);background:radial-gradient(circle at 50% 35%,rgba(94,169,255,.25),#0a0710 70%)}
+  .me .meta b{font-family:var(--font-title);letter-spacing:1px;font-size:14px}
+  .me .meta span{display:block;font-size:11px;color:var(--ink-dim)}
+  .wallet{display:flex;gap:8px;align-items:center}
+  .coin{font-size:12px;color:var(--gold);background:var(--panel);border:1px solid var(--line);
+    padding:5px 11px;border-radius:999px}
+
+  /* ── 地圖畫面 ── */
+  #mapScreen .body{position:absolute;inset:58px 16px 14px;display:grid;
+    grid-template-columns:1fr 290px;gap:14px}
+  .map-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;align-content:start;
+    padding-right:4px}
+  .zone{position:relative;border-radius:14px;padding:13px 13px 12px;cursor:pointer;
+    border:1px solid var(--line);min-height:104px;overflow:hidden;transition:.18s;
+    background:linear-gradient(160deg,var(--zc,#333) -40%,rgba(12,8,20,.85) 55%)}
+  .zone:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(0,0,0,.5);border-color:var(--gold)}
+  .zone .ze{font-size:30px;filter:drop-shadow(0 3px 6px rgba(0,0,0,.6))}
+  .zone .zl{font-family:var(--font-title);font-size:16px;letter-spacing:1px;margin-top:3px}
+  .zone .zt{font-size:11px;color:var(--ink-dim);margin-top:3px;line-height:1.4;min-height:30px}
+  .zone .zmeta{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+  .tag{font-size:10px;padding:2px 7px;border-radius:6px;background:rgba(0,0,0,.4);
+    border:1px solid rgba(255,255,255,.12);color:var(--ink-dim)}
+  .tag.fee{color:var(--gold)}
+  .zone .live{position:absolute;top:11px;right:12px;font-size:10px;color:#ff8aa0;
+    display:flex;align-items:center;gap:4px}
+  .zone .live .dot{width:6px;height:6px;border-radius:50%;background:#ff5c7a;
+    box-shadow:0 0 8px #ff5c7a;animation:pulse 1.2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .zone.locked{cursor:not-allowed;filter:grayscale(.7) brightness(.6)}
+  .zone.locked:hover{transform:none;border-color:var(--line);box-shadow:none}
+  .zone .lock{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;
+    background:rgba(6,4,12,.45);color:#ffd2d2;text-align:center;padding:0 16px;line-height:1.5}
+
+  /* 即時戰況面板 */
+  .live-panel{border:1px solid var(--line);border-radius:14px;background:var(--panel);
+    display:flex;flex-direction:column;overflow:hidden}
+  .live-head{padding:11px 14px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;justify-content:space-between}
+  .live-head .lt{font-family:var(--font-title);letter-spacing:1px;font-size:13px}
+  .badge-off{font-size:9px;color:#ffb3b3;border:1px solid rgba(255,120,120,.4);
+    border-radius:5px;padding:2px 6px;background:rgba(255,80,80,.08)}
+  .live-list{padding:8px;gap:8px;display:flex;flex-direction:column;overflow-y:auto;flex:1}
+  .lrow{border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px 10px;
+    background:rgba(0,0,0,.25);font-size:12px}
+  .lrow .l1{display:flex;justify-content:space-between;align-items:center}
+  .lrow .who{display:flex;align-items:center;gap:6px}
+  .lrow .who b{font-size:12.5px}
+  .lrow .rd{font-size:10px;color:var(--gold)}
+  .lrow .vs{font-size:11px;color:var(--ink-dim);margin:3px 0 6px}
+  .mini{height:6px;border-radius:4px;background:rgba(0,0,0,.5);overflow:hidden;margin-top:3px}
+  .mini i{display:block;height:100%;border-radius:4px;transition:width .6s ease}
+  .mini.p i{background:linear-gradient(90deg,var(--hp),var(--hp-2))}
+  .mini.e i{background:linear-gradient(90deg,#ff7a5c,var(--hp-low))}
+
+  /* ── 區域畫面 ── */
+  #zoneScreen .zhead{position:absolute;top:54px;left:16px;right:16px;display:flex;
+    align-items:center;gap:12px}
+  #zoneScreen .zhead .ze{font-size:30px}
+  #zoneScreen .zhead .zinfo b{font-family:var(--font-title);font-size:19px;letter-spacing:1px}
+  #zoneScreen .zhead .zinfo span{display:block;font-size:11px;color:var(--ink-dim);margin-top:2px}
+  #zoneScreen .body{position:absolute;inset:108px 16px 14px;display:grid;
+    grid-template-columns:1fr 290px;gap:14px}
+  .mon-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;align-content:start;
+    overflow-y:auto;padding-right:4px}
+  .mon{border:1px solid var(--line);border-radius:12px;padding:11px;cursor:pointer;
+    display:flex;gap:11px;align-items:center;transition:.16s;background:rgba(0,0,0,.22)}
+  .mon:hover{transform:translateY(-2px);border-color:var(--gold);background:rgba(244,198,106,.06)}
+  .mon .mport{width:52px;height:52px;border-radius:11px;display:grid;place-items:center;font-size:30px;
+    border:1px solid var(--line);background:radial-gradient(circle at 50% 35%,rgba(255,92,122,.2),#0a0710 70%);flex:none}
+  .mon .mname{font-family:var(--font-title);font-size:14.5px;display:flex;gap:6px;align-items:center}
+  .mon .mlv{font-size:10px;color:var(--gold);border:1px solid var(--line);border-radius:5px;padding:0 6px}
+  .mon .mhp{font-size:11px;color:var(--ink-dim);margin-top:3px}
+  .mon.boss{background:linear-gradient(160deg,rgba(244,198,106,.12),rgba(0,0,0,.25))}
+  .mon.boss .mname{color:var(--gold)}
+
+  /* ── 戰鬥畫面（沿用 v1） ── */
+  .bg-haze{position:absolute;inset:0}
+  .ground{position:absolute;left:0;right:0;bottom:0;height:38%;
+    background:linear-gradient(180deg,rgba(40,24,64,0),rgba(8,5,14,.9));border-top:1px solid rgba(244,198,106,.1)}
+  .topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;
+    justify-content:space-between;padding:12px 16px;z-index:6}
+  .controls{display:flex;gap:8px;align-items:center}
+  .fighter{position:absolute;bottom:20%;width:30%;max-width:230px;display:flex;flex-direction:column;
+    align-items:center;transition:transform .18s cubic-bezier(.34,1.56,.64,1)}
+  .fighter.player{left:6%}.fighter.enemy{right:6%}
+  .portrait{position:relative;width:140px;height:140px;border-radius:50%;display:grid;place-items:center;
+    font-size:74px;line-height:1;border:2px solid var(--line);
+    background:radial-gradient(circle at 50% 35%,rgba(94,169,255,.22),rgba(10,7,16,.9) 70%);
+    box-shadow:0 14px 40px rgba(0,0,0,.55),inset 0 0 30px rgba(0,0,0,.5);animation:breathe 3.2s ease-in-out infinite}
+  .enemy .portrait{background:radial-gradient(circle at 50% 35%,rgba(255,92,122,.22),rgba(10,7,16,.9) 70%)}
+  .portrait img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+  .shadow{width:120px;height:18px;margin-top:6px;border-radius:50%;
+    background:radial-gradient(closest-side,rgba(0,0,0,.55),transparent)}
+  @keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  .fighter.lunge-right{transform:translateX(38%) scale(1.04)}
+  .fighter.lunge-left{transform:translateX(-38%) scale(1.04)}
+  .portrait.hit{animation:hit .4s ease}
+  @keyframes hit{0%{filter:brightness(2.4) saturate(.4)}20%{filter:brightness(2.4) saturate(.4);transform:scale(.94)}100%{filter:none;transform:scale(1)}}
+  .portrait.heal-glow{animation:healg .8s ease}
+  @keyframes healg{0%,100%{filter:none}50%{filter:brightness(1.3) drop-shadow(0 0 18px #5dffa0)}}
+  .nameplate{position:absolute;z-index:5;width:34%;max-width:280px}
+  .nameplate.player{left:5%;top:16%}.nameplate.enemy{right:5%;top:16%;text-align:right}
+  .np-name{font-family:var(--font-title);font-size:16px;letter-spacing:1px;display:flex;gap:8px;align-items:center}
+  .nameplate.enemy .np-name{flex-direction:row-reverse}
+  .np-lv{font-size:11px;color:var(--gold);border:1px solid var(--line);border-radius:6px;padding:1px 7px;background:var(--panel)}
+  .hpbar{position:relative;height:16px;margin-top:7px;border-radius:9px;background:rgba(0,0,0,.55);
+    border:1px solid rgba(255,255,255,.12);overflow:hidden}
+  .hp-ghost{position:absolute;inset:0;width:100%;border-radius:9px;background:rgba(255,255,255,.55);transition:width .55s ease .15s}
+  .hp-fill{position:absolute;inset:0;width:100%;border-radius:9px;background:linear-gradient(180deg,var(--hp),var(--hp-2));
+    transition:width .3s cubic-bezier(.4,0,.2,1);box-shadow:0 0 12px rgba(67,209,122,.5) inset}
+  .hp-fill.low{background:linear-gradient(180deg,#ff7a5c,var(--hp-low))}
+  .hp-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;
+    text-shadow:0 1px 2px #000;font-variant-numeric:tabular-nums}
+  .statuses{display:flex;gap:4px;margin-top:6px;font-size:14px;min-height:18px}
+  .nameplate.enemy .statuses{justify-content:flex-end}
+  .st{filter:drop-shadow(0 1px 2px #000);animation:pop .3s ease}
+  .fx{position:absolute;inset:0;z-index:7;pointer-events:none}
+  .float{position:absolute;font-family:var(--font-title);font-weight:700;transform:translate(-50%,-50%);
+    text-shadow:0 2px 6px rgba(0,0,0,.8);animation:floatUp 1s ease forwards;white-space:nowrap}
+  .float.dmg{color:var(--dmg);font-size:34px}
+  .float.crit{color:var(--dmg-crit);font-size:50px;text-shadow:0 0 16px rgba(255,122,60,.9),0 2px 6px #000}
+  .float.heal{color:var(--heal);font-size:30px}.float.dot{font-size:24px}
+  .float.miss{color:#cdd6ff;font-size:30px;letter-spacing:2px}
+  @keyframes floatUp{0%{opacity:0;transform:translate(-50%,-10%) scale(.6)}
+    18%{opacity:1;transform:translate(-50%,-60%) scale(1.15)}35%{transform:translate(-50%,-75%) scale(1)}
+    100%{opacity:0;transform:translate(-50%,-150%) scale(1)}}
+  @keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.3)}100%{transform:scale(1)}}
+  .skill-banner{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%) scale(.8);z-index:8;
+    font-family:var(--font-title);font-size:30px;letter-spacing:4px;color:var(--gold);opacity:0;
+    pointer-events:none;white-space:nowrap;text-shadow:0 0 24px rgba(244,198,106,.7),0 3px 8px #000}
+  .skill-banner.show{animation:banner 1.1s ease}
+  @keyframes banner{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}
+    20%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}75%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(1.1)}}
+  canvas#particles{position:absolute;inset:0;z-index:7;pointer-events:none}
+  .logbox{position:absolute;left:16px;right:16px;bottom:14px;z-index:6;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:10px 14px;backdrop-filter:blur(8px);
+    min-height:44px;font-size:13.5px;line-height:1.5;color:var(--ink-dim)}
+  .logbox b{color:var(--ink)}
+  .result{position:absolute;inset:0;z-index:9;display:grid;place-items:center;opacity:0;
+    pointer-events:none;transition:.4s}
+  .result.show{opacity:1;background:rgba(6,4,12,.62);pointer-events:auto}
+  .result .big{font-family:var(--font-title);font-size:60px;letter-spacing:8px;transform:scale(.7);
+    transition:.5s cubic-bezier(.34,1.56,.64,1)}
+  .result.show .big{transform:scale(1)}
+  .result.win .big{color:var(--gold);text-shadow:0 0 40px rgba(244,198,106,.6)}
+  .result.lose .big{color:#ff5c7a;text-shadow:0 0 40px rgba(255,92,122,.5)}
+  .result .sub{margin-top:10px;color:var(--ink-dim);font-size:14px;text-align:center}
+  .result .acts{margin-top:18px;display:flex;gap:10px;justify-content:center}
+  .screen-shake{animation:shake .35s}
+  @keyframes shake{0%,100%{transform:translate(0,0)}20%{transform:translate(-7px,3px)}
+    40%{transform:translate(6px,-4px)}60%{transform:translate(-5px,-2px)}80%{transform:translate(4px,3px)}}
+  .flash{position:absolute;inset:0;z-index:8;background:#fff;opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="frame" id="frame">
+
+  <!-- 共用頂部玩家列 -->
+  <div class="hud" id="hud">
+    <div class="me">
+      <div class="av">🛡️</div>
+      <div class="meta"><b id="meName">音無の劍士</b><span id="meSub">Lv 40 · 劍士</span></div>
+    </div>
+    <div class="wallet">
+      <span class="pill" id="liveCount">⚔️ 全服 0 場進行中</span>
+      <span class="coin">🪙 128,400</span>
+    </div>
+  </div>
+
+  <!-- ① 地圖畫面 -->
+  <section class="screen active" id="mapScreen">
+    <div class="body">
+      <div class="map-grid scroll" id="mapGrid"></div>
+      <div class="live-panel">
+        <div class="live-head">
+          <span class="lt">⚔️ 全服即時戰況</span>
+          <span class="badge-off">離線示範</span>
+        </div>
+        <div class="live-list scroll" id="liveGlobal"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② 區域畫面 -->
+  <section class="screen" id="zoneScreen">
+    <div class="zhead">
+      <button class="btn" id="zoneBack">← 地圖</button>
+      <div class="ze" id="zHeadEmoji">🐉</div>
+      <div class="zinfo"><b id="zHeadName">龍族之領</b><span id="zHeadTag"></span></div>
+    </div>
+    <div class="body">
+      <div class="mon-grid scroll" id="monGrid"></div>
+      <div class="live-panel">
+        <div class="live-head">
+          <span class="lt">📡 本區即時戰況</span>
+          <span class="badge-off">離線示範</span>
+        </div>
+        <div class="live-list scroll" id="liveZone"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ 戰鬥畫面 -->
+  <section class="screen" id="battleScreen">
+    <div class="bg-haze"></div><div class="ground"></div>
+    <div class="flash" id="flash"></div>
+    <div class="topbar">
+      <span class="pill" id="roundPill">回合 0</span>
+      <div class="controls">
+        <button class="btn" id="btnFlee">← 撤退</button>
+        <button class="btn" id="btnPause">⏸ 暫停</button>
+        <button class="btn spd active" data-spd="1">1×</button>
+        <button class="btn spd" data-spd="2">2×</button>
+      </div>
+    </div>
+    <div class="nameplate player">
+      <div class="np-name"><span id="pName">音無の劍士</span><span class="np-lv">Lv 40</span></div>
+      <div class="hpbar"><div class="hp-ghost" id="pGhost"></div><div class="hp-fill" id="pHp"></div>
+        <div class="hp-text" id="pHpText"></div></div>
+      <div class="statuses" id="pStatus"></div>
+    </div>
+    <div class="nameplate enemy">
+      <div class="np-name"><span id="eName">古龍王</span><span class="np-lv" id="eLv">BOSS</span></div>
+      <div class="hpbar"><div class="hp-ghost" id="eGhost"></div><div class="hp-fill" id="eHp"></div>
+        <div class="hp-text" id="eHpText"></div></div>
+      <div class="statuses" id="eStatus"></div>
+    </div>
+    <div class="fighter player" id="fPlayer"><div class="portrait" id="pPort">🛡️</div><div class="shadow"></div></div>
+    <div class="fighter enemy" id="fEnemy"><div class="portrait" id="ePort">🐲</div><div class="shadow"></div></div>
+    <canvas id="particles"></canvas>
+    <div class="fx" id="fxLayer"></div>
+    <div class="skill-banner" id="banner"></div>
+    <div class="logbox" id="logbox">準備戰鬥…</div>
+    <div class="result" id="result"><div>
+      <div class="big" id="resultBig">VICTORY</div>
+      <div class="sub" id="resultSub"></div>
+      <div class="acts">
+        <button class="btn" id="btnAgain">↻ 再戰</button>
+        <button class="btn active" id="btnBackZone">← 回區域</button>
+      </div>
+    </div></div>
+  </section>
+</div>
+
+<script>
+/* ============================================================
+   資料層（取自 src/shared/zones.js + 擬真怪物）
+   ============================================================ */
+const PLAYER = { name:"音無の劍士", lv:40, job:"劍士", maxHp:6200, atk:1850, emoji:"🛡️",
+                 skill:"飛龍突刺" };
+
+const ZONES = [
+  {key:"beginner",label:"新手區",emoji:"🌱",tag:"踏出第一步，勇氣萬歲。",color:"#2ecc71",min:1,max:3,fee:0},
+  {key:"normal",label:"一般區",emoji:"⚔️",tag:"新手試煉，準備開打。",color:"#e74c3c",min:1,max:null,fee:0},
+  {key:"mid",label:"中級區",emoji:"✦",tag:"危險上升，獵物更強。",color:"#7c3aed",min:10,max:null,fee:0},
+  {key:"ancient_city",label:"古城",emoji:"🏰",tag:"千年城牆，邪物棲居。",color:"#f97316",min:20,max:30,fee:0},
+  {key:"ancient_city_deep",label:"古城深處",emoji:"🕯️",tag:"守將與密術，廢都魔王盤踞於此。",color:"#b45309",min:30,max:40,fee:0},
+  {key:"dragon_realm",label:"龍族之領",emoji:"🐉",tag:"古龍盤踞之地，秘銀甲冑由此而出。",color:"#9d174d",min:40,max:50,fee:0},
+  {key:"elite",label:"精英區",emoji:"💀",tag:"極限試煉，非凡之路。",color:"#ef4444",min:20,max:null,fee:5000},
+  {key:"nightmare",label:"噩夢區",emoji:"🌑",tag:"黑暗之中，無人生還。",color:"#6d28d9",min:30,max:null,fee:2000},
+  {key:"abyss",label:"深淵區",emoji:"🕳️",tag:"深淵回望，你是獵物。",color:"#1e3a5f",min:45,max:null,fee:8000},
+  {key:"mythic",label:"神話區",emoji:"⚡",tag:"神話之境，唯強者留名。",color:"#d97706",min:60,max:null,fee:15000},
+];
+
+// 每區怪物（擬真示範資料；接真資料時改撈 monsters collection）
+const MONSTERS = {
+  beginner:[{n:"史萊姆",e:"🟢",lv:1,hp:120,atk:40},{n:"野兔",e:"🐰",lv:2,hp:180,atk:55},{n:"哥布林",e:"👺",lv:3,hp:260,atk:80}],
+  normal:[{n:"森林狼",e:"🐺",lv:4,hp:520,atk:150},{n:"盜賊",e:"🗡️",lv:6,hp:780,atk:220},{n:"巨蜂",e:"🐝",lv:7,hp:640,atk:260}],
+  mid:[{n:"古樹精",e:"🌳",lv:11,hp:2400,atk:430},{n:"獵豹",e:"🐆",lv:13,hp:1900,atk:560},{n:"森林巫師",e:"🧙",lv:14,hp:2800,atk:620},{n:"小金怪",e:"🪙",lv:12,hp:1000,atk:300,gold:true}],
+  ancient_city:[{n:"城堡守衛",e:"🛡️",lv:22,hp:5200,atk:780},{n:"古城魔像(B)",e:"🗿",lv:28,hp:18000,atk:1120,boss:true},{n:"咒術師",e:"🔮",lv:25,hp:6400,atk:980}],
+  ancient_city_deep:[{n:"古城將軍(B)",e:"⚔️",lv:30,hp:22000,atk:1340,boss:true},{n:"密術守衛",e:"🕯️",lv:33,hp:9800,atk:1180},{n:"廢都魔王(B)",e:"👹",lv:35,hp:38000,atk:1680,boss:true}],
+  dragon_realm:[{n:"飛龍幼崽",e:"🦎",lv:41,hp:12000,atk:1500},{n:"火翼龍人",e:"🔥",lv:44,hp:16000,atk:1820},{n:"暗影龍將",e:"🐲",lv:47,hp:24000,atk:2100},{n:"古龍王(B)",e:"🐉",lv:50,hp:48000,atk:2600,boss:true}],
+  elite:[{n:"大史王(B)",e:"👑",lv:35,hp:95000,atk:2200,boss:true}],
+  nightmare:[{n:"夢魘獸",e:"🌑",lv:32,hp:14000,atk:1600},{n:"暗影主教",e:"🕸️",lv:38,hp:21000,atk:1900,boss:true}],
+  abyss:[{n:"深淵爬行者",e:"🕳️",lv:46,hp:28000,atk:2400},{n:"虛空之眼(B)",e:"👁️",lv:50,hp:60000,atk:3000,boss:true}],
+  mythic:[{n:"雷神使徒",e:"⚡",lv:62,hp:120000,atk:3600,boss:true}],
+};
+
+const FAKE_PLAYERS=["風之劍客","小櫻","闇影","Nokia","白銀騎士","茶茶丸","龍裔","月見","狂戰阿強","貓貓","星塵","老王"];
+
+/* ============================================================
+   戰鬥產生器：輸出與 combatLoop 相同格式的 roundLogs
+   ============================================================ */
+function genBattle(player, enemy){
+  let pHp=player.maxHp, eHp=enemy.hp, r=0;
+  const rounds=[];
+  while(eHp>0 && pHp>0 && r<16){
+    r++;
+    const L=["──── ⚔️ 你的回合 ────"];
+    const crit=Math.random()<0.24;
+    const dmg=Math.round(player.atk*(crit?2.0:1)*(0.85+Math.random()*0.3));
+    eHp=Math.max(0,eHp-dmg);
+    L.push(`${crit?"💥":"🗡️"} **${player.name}** ${crit?"會心一擊":"普通攻擊命中"}！造成 **${dmg}** 點傷害！（${enemy.n} 剩 ${eHp} HP）`);
+    if(eHp>0 && Math.random()<0.42){
+      const sd=Math.round(player.atk*1.7);
+      eHp=Math.max(0,eHp-sd);
+      L.push(`✨ **${player.name}** 發動【${player.skill}】追擊，對 ${enemy.n} 造成 **${sd}** 點傷害！（${enemy.n} 剩 ${eHp} HP）`);
+    }
+    if(eHp<=0){ L.push(`🏆 ${enemy.n} 已被擊敗！`); rounds.push(L.join("\n")); break; }
+    if(r===Math.ceil((enemy.boss?6:3)) && enemy.boss){ L.push(`${enemy.e} ${enemy.n} 進入第二階段，AGI 提升 **+10**！`); }
+    if(Math.random()<0.14){ L.push(`${enemy.e} ${enemy.n} 的攻擊未命中。`); }
+    else{
+      const ed=Math.round(enemy.atk*(0.8+Math.random()*0.45));
+      pHp=Math.max(0,pHp-ed);
+      L.push(`${enemy.e} ${enemy.n} 攻擊！造成 **${ed}** 點傷害！（你剩 ${pHp} HP）`);
+      if(pHp>0 && pHp<player.maxHp*0.4 && Math.random()<0.5){
+        const heal=Math.round(player.maxHp*0.35);
+        pHp=Math.min(player.maxHp,pHp+heal);
+        L.push(`🎴 **${player.name}** 發動【龍鱗護盾】！回復 **${heal}** HP！（你剩 ${pHp} HP）`);
+      }
+    }
+    rounds.push(L.join("\n"));
+  }
+  return { outcome:eHp<=0?"win":"lose", finalPlayerHp:pHp, roundLogs:rounds };
+}
+
+/* ============================================================
+   roundLogs 解析器 → 動畫事件
+   ============================================================ */
+let ENEMY_NAME="";
+const num=s=>s?parseInt(s.replace(/,/g,""),10):null;
+function parseLine(line){
+  if(/────/.test(line)) return {type:"round"};
+  const skill=line.match(/發動【(.+?)】/);
+  const dmg=line.match(/造成\s*\*\*([\d,]+)\*\*\s*點/);
+  const remainE=line.match(new RegExp("(?:"+ENEMY_NAME.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"|怪物)\\s*剩\\s*([\\d,]+)\\s*HP"));
+  const remainP=line.match(/你剩\s*([\d,]+)\s*HP/);
+  const healM=line.match(/(?:回復|恢復)\s*\*\*([\d,]+)\*\*\s*HP/);
+  const isCrit=/會心|爆擊|💥/.test(line);
+  const isMiss=/未命中|閃避|MISS/.test(line);
+  const isStun=/擊暈|😵/.test(line);
+  const isWin=/被擊敗|被擊殺|🏆/.test(line);
+  const isDot=/(燒傷|中毒|流血|感電|詛咒|灼燒|毒素)/.test(line);
+  const phase=/進入第.+階段|AGI 提升/.test(line);
+  const playerActor=/你的回合|^[🗡️✨⛓️🔥💥💀🎴]/.test(line)||line.includes(PLAYER.name);
+  if(healM && (remainP||line.includes(PLAYER.name))) return {type:"heal",target:"player",value:num(healM[1]),playerHp:remainP?num(remainP[1]):null,skill:skill?skill[1]:null};
+  if(isStun) return {type:"stun",target:"enemy"};
+  if(phase) return {type:"phase"};
+  if(dmg&&remainE) return {type:"hit",actor:"player",target:"enemy",value:num(dmg[1]),enemyHp:num(remainE[1]),crit:isCrit,skill:skill?skill[1]:null,dot:isDot&&!isCrit};
+  if(dmg&&remainP) return {type:"hit",actor:"enemy",target:"player",value:num(dmg[1]),playerHp:num(remainP[1]),dot:isDot};
+  if(isMiss) return {type:"miss",actor:playerActor?"player":"enemy",target:playerActor?"enemy":"player"};
+  if(isWin) return {type:"win"};
+  return {type:"info"};
+}
+function buildTimeline(roundLogs){
+  const ev=[];
+  roundLogs.forEach((round,ri)=>{
+    let started=false;
+    round.split("\n").map(s=>s.trim()).filter(Boolean).forEach(l=>{
+      const e=parseLine(l);
+      if(e.type==="round"){ev.push({type:"round",round:ri+1});started=true;return;}
+      if(!started){ev.push({type:"round",round:ri+1});started=true;}
+      e.raw=l; ev.push(e);
+    });
+  });
+  return ev;
+}
+
+/* ============================================================
+   戰鬥動畫播放器
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const frame=$("frame");
+const bs={pHp:0,eHp:0,pMax:0,eMax:0,speed:1,paused:false,playing:false,timer:null};
+const fmt=n=>n.toLocaleString("en-US");
+let CUR_ENEMY=null, CUR_ZONE=null, BATTLE=null, timeline=[], idx=0;
+
+function setupFighters(enemy){
+  ENEMY_NAME=enemy.n;
+  $("pName").textContent=PLAYER.name;
+  $("eName").textContent=enemy.n;
+  $("eLv").textContent=(enemy.boss?"BOSS ":"")+"Lv "+enemy.lv;
+  $("pPort").textContent=PLAYER.emoji; $("ePort").textContent=enemy.e;
+  bs.pMax=PLAYER.maxHp; bs.eMax=enemy.hp; bs.pHp=PLAYER.maxHp; bs.eHp=enemy.hp;
+  renderHp("player"); renderHp("enemy");
+}
+function renderHp(who){
+  const isP=who==="player", cur=isP?bs.pHp:bs.eHp, max=isP?bs.pMax:bs.eMax;
+  const pct=Math.max(0,Math.min(100,cur/max*100));
+  const fill=$(isP?"pHp":"eHp"), ghost=$(isP?"pGhost":"eGhost"), txt=$(isP?"pHpText":"eHpText");
+  fill.style.width=pct+"%"; fill.classList.toggle("low",pct<=30);
+  ghost.style.width=pct+"%"; txt.textContent=`${fmt(Math.max(0,cur))} / ${fmt(max)}`;
+}
+function floatText(who,text,cls){
+  const el=document.createElement("div"); el.className="float "+cls; el.textContent=text;
+  const r=frame.getBoundingClientRect(), p=$(who==="player"?"fPlayer":"fEnemy").getBoundingClientRect();
+  el.style.left=(p.left-r.left+p.width/2+(Math.random()*40-20))+"px";
+  el.style.top=(p.top-r.top+30)+"px";
+  $("fxLayer").appendChild(el); setTimeout(()=>el.remove(),1100);
+}
+function showBanner(t){const b=$("banner");b.textContent="【"+t+"】";b.classList.remove("show");void b.offsetWidth;b.classList.add("show");}
+function setStatus(who,emoji){const box=$(who==="player"?"pStatus":"eStatus");const el=document.createElement("span");el.className="st";el.textContent=emoji;box.innerHTML="";box.appendChild(el);setTimeout(()=>el.remove(),1800);}
+function shake(){frame.classList.remove("screen-shake");void frame.offsetWidth;frame.classList.add("screen-shake");}
+function flash(){const f=$("flash");f.style.transition="none";f.style.opacity=".55";requestAnimationFrame(()=>{f.style.transition="opacity .3s";f.style.opacity="0";});}
+function attack(who){const f=$(who==="player"?"fPlayer":"fEnemy");f.classList.add(who==="player"?"lunge-right":"lunge-left");setTimeout(()=>f.classList.remove("lunge-right","lunge-left"),220);}
+function hitReact(who){const p=$(who==="player"?"pPort":"ePort");p.classList.remove("hit");void p.offsetWidth;p.classList.add("hit");}
+
+const cv=$("particles"),ctx=cv.getContext("2d");let parts=[];
+function sizeCanvas(){cv.width=frame.clientWidth;cv.height=frame.clientHeight;}
+function burst(who,color,n=26,power=5){
+  const p=$(who==="player"?"fPlayer":"fEnemy").getBoundingClientRect(),r=frame.getBoundingClientRect();
+  const x=p.left-r.left+p.width/2,y=p.top-r.top+p.height*0.45;
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=Math.random()*power+1.5;
+    parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1,life:1,color,size:Math.random()*4+2});}
+}
+function tickParticles(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.life-=0.025;
+    ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,7);ctx.fill();});
+  parts=parts.filter(p=>p.life>0);ctx.globalAlpha=1;requestAnimationFrame(tickParticles);
+}
+function logLine(t){$("logbox").innerHTML=t.replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");}
+
+function applyEvent(ev){
+  if(ev.raw) logLine(ev.raw);
+  switch(ev.type){
+    case "round": $("roundPill").textContent="回合 "+ev.round; break;
+    case "hit":
+      attack(ev.actor);
+      setTimeout(()=>{
+        hitReact(ev.target);
+        if(ev.skill) showBanner(ev.skill);
+        if(ev.crit){floatText(ev.target,"-"+fmt(ev.value),"crit");shake();flash();burst(ev.target,"#ff7a3c",40,7);}
+        else if(ev.dot){floatText(ev.target,"-"+fmt(ev.value),"dot");burst(ev.target,"#b06bff",14,3);}
+        else{floatText(ev.target,"-"+fmt(ev.value),ev.skill?"crit":"dmg");burst(ev.target,ev.actor==="player"?"#ffd84d":"#ff5c7a",ev.skill?30:18,ev.skill?6:4);}
+        if(ev.target==="enemy"&&ev.enemyHp!=null) bs.eHp=ev.enemyHp;
+        if(ev.target==="player"&&ev.playerHp!=null) bs.pHp=ev.playerHp;
+        renderHp(ev.target);
+      },130); break;
+    case "heal":{
+      const p=$("pPort");p.classList.remove("heal-glow");void p.offsetWidth;p.classList.add("heal-glow");
+      if(ev.skill) showBanner(ev.skill);
+      floatText("player","+"+fmt(ev.value),"heal");burst("player","#5dffa0",24,4);
+      bs.pHp=ev.playerHp!=null?ev.playerHp:Math.min(bs.pMax,bs.pHp+ev.value);renderHp("player");break;}
+    case "miss": floatText(ev.target,"MISS","miss"); break;
+    case "stun": setStatus("enemy","😵"); showBanner("擊暈"); break;
+    case "phase": setStatus("enemy","🔺"); showBanner("階段轉換"); shake(); break;
+  }
+}
+const delayFor=ev=>(({round:520,hit:720,heal:820,stun:780,phase:900,miss:560,info:480}[ev.type]||500)/bs.speed);
+function step(){
+  if(bs.paused||!bs.playing) return;
+  if(idx>=timeline.length){ finish(); return; }
+  const ev=timeline[idx++]; applyEvent(ev); bs.timer=setTimeout(step,delayFor(ev));
+}
+function finish(){
+  bs.playing=false;
+  const win=BATTLE.outcome==="win", r=$("result");
+  $("resultBig").textContent=win?"VICTORY":"DEFEAT";
+  $("resultSub").textContent=win?`${CUR_ENEMY.n} 已被擊敗　·　剩餘 HP ${fmt(Math.max(0,bs.pHp))}`:"你已倒下　·　再接再厲";
+  r.className="result show "+(win?"win":"lose");
+  if(win){burst("enemy","#f4c66a",60,8);shake();}
+}
+function playBattle(enemy,zone){
+  CUR_ENEMY=enemy; CUR_ZONE=zone;
+  go("battleScreen");
+  $("result").className="result";
+  setupFighters(enemy);
+  BATTLE=genBattle(PLAYER,enemy);
+  timeline=buildTimeline(BATTLE.roundLogs); idx=0; bs.playing=true; bs.paused=false;
+  $("btnPause").textContent="⏸ 暫停"; $("btnPause").classList.remove("active");
+  clearTimeout(bs.timer); sizeCanvas(); setTimeout(step,450);
+}
+
+/* ============================================================
+   畫面切換 + 地圖 / 區域 渲染
+   ============================================================ */
+function go(id){document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("active",s.id===id));}
+
+function zoneLockReason(z){
+  if(z.min>1 && PLAYER.lv<z.min) return `需 Lv.${z.min} 以上`;
+  if(z.max!=null && PLAYER.lv>z.max) return `僅限 Lv.${z.max} 以下`;
+  return null;
+}
+function renderMap(){
+  const g=$("mapGrid"); g.innerHTML="";
+  ZONES.forEach(z=>{
+    const lock=zoneLockReason(z);
+    const liveN=(LIVE.filter(b=>b.zone===z.key).length);
+    const el=document.createElement("div");
+    el.className="zone"+(lock?" locked":"");
+    el.style.setProperty("--zc",z.color);
+    el.innerHTML=`
+      ${liveN&&!lock?`<div class="live"><span class="dot"></span>${liveN} 場進行中</div>`:""}
+      <div class="ze">${z.emoji}</div>
+      <div class="zl">${z.label}</div>
+      <div class="zt">${z.tag}</div>
+      <div class="zmeta">
+        <span class="tag">Lv ${z.min}${z.max?("–"+z.max):"+"}</span>
+        ${z.fee?`<span class="tag fee">入場 ${fmt(z.fee)}🪙</span>`:`<span class="tag">免費</span>`}
+      </div>
+      ${lock?`<div class="lock">🔒 ${lock}</div>`:""}`;
+    if(!lock) el.onclick=()=>openZone(z);
+    g.appendChild(el);
+  });
+}
+function openZone(z){
+  CUR_ZONE=z;
+  $("zHeadEmoji").textContent=z.emoji; $("zHeadName").textContent=z.label; $("zHeadTag").textContent=z.tag;
+  const mg=$("monGrid"); mg.innerHTML="";
+  (MONSTERS[z.key]||[]).forEach(m=>{
+    const el=document.createElement("div");
+    el.className="mon"+(m.boss?" boss":"");
+    el.innerHTML=`<div class="mport">${m.e}</div>
+      <div><div class="mname">${m.n} ${m.boss?"👑":""}<span class="mlv">Lv ${m.lv}</span></div>
+      <div class="mhp">❤️ ${fmt(m.hp)} HP　⚔️ ${fmt(m.atk)}</div></div>`;
+    el.onclick=()=>playBattle(m,z);
+    mg.appendChild(el);
+  });
+  renderLiveZone(z.key);
+  go("zoneScreen");
+}
+
+/* ============================================================
+   即時戰況（離線示範：模擬會動的進行中戰鬥）
+   ============================================================ */
+let LIVE=[];
+function spawnLive(){
+  const z=ZONES[Math.floor(Math.random()*6)]; // 集中在前段區域比較熱鬧
+  const mlist=MONSTERS[z.key]||[]; const m=mlist[Math.floor(Math.random()*mlist.length)];
+  if(!m) return null;
+  return { who:FAKE_PLAYERS[Math.floor(Math.random()*FAKE_PLAYERS.length)],
+    zone:z.key, mon:m.n, me:m.e, round:1, pPct:100, ePct:100 };
+}
+function seedLive(){ LIVE=[]; for(let i=0;i<7;i++){const b=spawnLive();if(b){b.round=1+Math.floor(Math.random()*4);b.pPct=40+Math.random()*60;b.ePct=20+Math.random()*70;LIVE.push(b);}} }
+function tickLive(){
+  LIVE.forEach(b=>{
+    b.round++; b.ePct=Math.max(0,b.ePct-(8+Math.random()*16)); b.pPct=Math.max(0,b.pPct-(3+Math.random()*9));
+  });
+  // 結束的換新場
+  LIVE=LIVE.map(b=>(b.ePct<=0||b.pPct<=0||b.round>14)?(spawnLive()||b):b);
+  $("liveCount").textContent=`⚔️ 全服 ${LIVE.length} 場進行中`;
+  renderLiveGlobal(); if($("zoneScreen").classList.contains("active")&&CUR_ZONE) renderLiveZone(CUR_ZONE.key);
+  renderMapLiveDots();
+}
+function liveRowHtml(b){
+  const z=ZONES.find(x=>x.key===b.zone);
+  return `<div class="lrow">
+    <div class="l1"><div class="who"><span>${z?z.emoji:""}</span><b>${b.who}</b></div><span class="rd">R${b.round}</span></div>
+    <div class="vs">${b.me} ${b.mon}　·　${z?z.label:""}</div>
+    <div class="mini p"><i style="width:${b.pPct}%"></i></div>
+    <div class="mini e"><i style="width:${b.ePct}%"></i></div>
+  </div>`;
+}
+function renderLiveGlobal(){ $("liveGlobal").innerHTML=LIVE.map(liveRowHtml).join("")||`<div style="color:var(--ink-dim);font-size:12px;padding:8px">目前沒有進行中的戰鬥</div>`; }
+function renderLiveZone(zk){
+  const rows=LIVE.filter(b=>b.zone===zk);
+  $("liveZone").innerHTML=rows.map(liveRowHtml).join("")||`<div style="color:var(--ink-dim);font-size:12px;padding:8px">本區目前無人挑戰，成為第一個吧！</div>`;
+}
+function renderMapLiveDots(){ if($("mapScreen").classList.contains("active")) renderMap(); }
+
+/* ============================================================
+   控制列 + 啟動
+   ============================================================ */
+$("zoneBack").onclick=()=>go("mapScreen");
+$("btnFlee").onclick=()=>{bs.playing=false;clearTimeout(bs.timer);go("zoneScreen");};
+$("btnBackZone").onclick=()=>{bs.playing=false;clearTimeout(bs.timer);go("zoneScreen");};
+$("btnAgain").onclick=()=>playBattle(CUR_ENEMY,CUR_ZONE);
+$("btnPause").onclick=()=>{bs.paused=!bs.paused;const b=$("btnPause");b.textContent=bs.paused?"▶ 繼續":"⏸ 暫停";b.classList.toggle("active",bs.paused);if(!bs.paused)step();};
+document.querySelectorAll(".btn.spd").forEach(b=>b.onclick=()=>{document.querySelectorAll(".btn.spd").forEach(x=>x.classList.remove("active"));b.classList.add("active");bs.speed=parseFloat(b.dataset.spd);});
+
+$("meName").textContent=PLAYER.name; $("meSub").textContent=`Lv ${PLAYER.lv} · ${PLAYER.job}`;
+window.addEventListener("resize",sizeCanvas);
+sizeCanvas(); tickParticles();
+seedLive(); renderMap(); renderLiveGlobal(); $("liveCount").textContent=`⚔️ 全服 ${LIVE.length} 場進行中`;
+setInterval(tickLive, 2200);
+
+/* 接真資料：
+   - 地圖/怪物：GET /api/zones, /api/zones/:key/monsters
+   - 即時戰況：輪詢 GET /api/live-battles（回 [{who,zone,mon,round,pPct,ePct}]）→ 取代 LIVE
+   - 進戰鬥：POST /api/me/battle → { outcome, roundLogs, finalPlayerHp, monsterMaxHp, playerMaxHp }
+            把 roundLogs 丟進 buildTimeline 即可（解析器已相容真實格式）
+*/
+</script>
+</body>
+</html>
