@@ -1,6 +1,6 @@
 "use strict";
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
-const { COLOR_META, COLORS, BET_MIN, BET_MAX } = require("../services/casino/wheelConfig");
+const { COLOR_META, COLORS, BET_MIN, BET_MAX, PAYOUT_CAP } = require("../services/casino/wheelConfig");
 
 // ── Button / Modal ID ─────────────────────────────────────────
 const CASINO_IDS = {
@@ -32,6 +32,8 @@ function createCasinoPanelMessage({ round = null, recentResults = [], lastResult
     .setTitle("🎰 命運轉盤")
     .setColor(0xf1c40f);
 
+  const canBet = Boolean(enabled && round && round.status === "open" && Date.now() < round.lockedAt);
+
   if (!enabled) {
     embed.setDescription("⚠️ 賭場目前**已關閉**，請稍候管理員開啟。");
   } else if (!round) {
@@ -49,7 +51,7 @@ function createCasinoPanelMessage({ round = null, recentResults = [], lastResult
     if (round.status === "open") {
       lines.push(`鎖盤 <t:${tsLock}:R>　・　開獎 <t:${tsEnd}:R>`);
     } else {
-      lines.push(`開獎 <t:${tsEnd}:R>`);
+      lines.push(`開獎 <t:${tsEnd}:R>　・　下一輪即將開始`);
     }
     lines.push("");
     for (const color of COLORS) {
@@ -79,17 +81,17 @@ function createCasinoPanelMessage({ round = null, recentResults = [], lastResult
     },
     {
       name: "📜 規則",
-      value: `每 60 秒一輪。下注 ${fmtGold(BET_MIN)}–${fmtGold(BET_MAX)} 金幣，押中色拿回「下注 × 倍率」並順便抽掉落池。`,
+      value: `每 60 秒一輪。下注 ${fmtGold(BET_MIN)}–${fmtGold(BET_MAX)} 金幣，押中色拿回「下注 × 倍率」（單注最多 ${fmtGold(PAYOUT_CAP)}）並順便抽掉落池。`,
     },
   );
   embed.setFooter({ text: "結算後會私訊通知中獎與獎勵明細。" });
 
   const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CASINO_IDS.betYellow).setLabel("🟡 押黃 ×2").setStyle(ButtonStyle.Primary).setDisabled(!enabled),
-    new ButtonBuilder().setCustomId(CASINO_IDS.betGreen ).setLabel("🟢 押綠 ×3").setStyle(ButtonStyle.Success).setDisabled(!enabled),
-    new ButtonBuilder().setCustomId(CASINO_IDS.betRed   ).setLabel("🔴 押紅 ×5").setStyle(ButtonStyle.Danger).setDisabled(!enabled),
-    new ButtonBuilder().setCustomId(CASINO_IDS.betBlue  ).setLabel("🔵 押藍 ×10").setStyle(ButtonStyle.Primary).setDisabled(!enabled),
-    new ButtonBuilder().setCustomId(CASINO_IDS.betPurple).setLabel("🟣 押紫 ×15").setStyle(ButtonStyle.Secondary).setDisabled(!enabled),
+    new ButtonBuilder().setCustomId(CASINO_IDS.betYellow).setLabel("🟡 押黃 ×2").setStyle(ButtonStyle.Primary).setDisabled(!canBet),
+    new ButtonBuilder().setCustomId(CASINO_IDS.betGreen ).setLabel("🟢 押綠 ×3").setStyle(ButtonStyle.Success).setDisabled(!canBet),
+    new ButtonBuilder().setCustomId(CASINO_IDS.betRed   ).setLabel("🔴 押紅 ×5").setStyle(ButtonStyle.Danger).setDisabled(!canBet),
+    new ButtonBuilder().setCustomId(CASINO_IDS.betBlue  ).setLabel("🔵 押藍 ×10").setStyle(ButtonStyle.Primary).setDisabled(!canBet),
+    new ButtonBuilder().setCustomId(CASINO_IDS.betPurple).setLabel("🟣 押紫 ×15").setStyle(ButtonStyle.Secondary).setDisabled(!canBet),
   );
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CASINO_IDS.myRecord).setLabel("📜 我的紀錄").setStyle(ButtonStyle.Secondary),

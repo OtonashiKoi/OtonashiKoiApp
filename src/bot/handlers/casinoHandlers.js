@@ -8,7 +8,7 @@ const {
   CASINO_IDS, CASINO_BET_MODAL_PREFIX, isCasinoButton, isCasinoModal,
   createCasinoPanelMessage,
 } = require("../casinoView");
-const { COLOR_META, BET_MIN, BET_MAX } = require("../../services/casino/wheelConfig");
+const { COLOR_META, BET_MIN, BET_MAX, PAYOUT_CAP } = require("../../services/casino/wheelConfig");
 
 let panelChannelId = null;
 let panelMessageId = null;
@@ -189,7 +189,7 @@ async function handleCasinoButton(interaction) {
   let goldHint = "";
   try {
     const wallet = await serviceContext.walletRepository.findByPlayerId(interaction.user.id);
-    if (wallet) goldHint = `（你目前 ${Number(wallet.gold || 0).toLocaleString("zh-TW")} 金幣）`;
+    if (wallet) goldHint = `你目前 ${Number(wallet.gold || 0).toLocaleString("zh-TW")} 金幣`;
   } catch (_) {}
 
   const meta = COLOR_META[color];
@@ -200,9 +200,9 @@ async function handleCasinoButton(interaction) {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("amount")
-          .setLabel(`金額（${BET_MIN}–${BET_MAX}）${goldHint}`)
+          .setLabel(`下注金額（${BET_MIN.toLocaleString("zh-TW")}–${BET_MAX.toLocaleString("zh-TW")}）`)
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder("輸入下注金幣")
+          .setPlaceholder(`${goldHint ? `${goldHint}｜` : ""}單注最多賠 ${PAYOUT_CAP.toLocaleString("zh-TW")}`)
           .setRequired(true)
           .setMinLength(1)
           .setMaxLength(8),
@@ -225,7 +225,7 @@ async function handleCasinoModal(interaction) {
     return;
   }
   if (amount > BET_MAX) {
-    await interaction.reply({ content: `❌ 單注上限 ${BET_MAX} 金幣。`, flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: `❌ 單注上限 ${BET_MAX.toLocaleString("zh-TW")} 金幣。`, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -238,7 +238,7 @@ async function handleCasinoModal(interaction) {
     });
     const meta = COLOR_META[color];
     await interaction.reply({
-      content: `✅ 已押 **${amount.toLocaleString("zh-TW")}** 金幣到 ${meta.emoji} ${meta.label} ×${meta.mult}（第 #${r.roundId} 輪）\n結算後會私訊通知結果。`,
+      content: `✅ 已押 **${amount.toLocaleString("zh-TW")}** 金幣到 ${meta.emoji} ${meta.label} ×${meta.mult}（第 #${r.roundId} 輪）\n結算後會私訊通知結果；若私訊關閉，可按【我的紀錄】查看最近結果。`,
       flags: MessageFlags.Ephemeral,
     });
   } catch (err) {
@@ -255,6 +255,18 @@ async function handleMyRecord(interaction) {
   const net = (stats.totalPay || 0) - (stats.totalBet || 0);
   const round = await serviceContext.casinoService.getCurrentRound();
   const myBets = round ? await serviceContext.casinoRepository.listBetsByRoundAndPlayer(round.roundId, interaction.user.id).catch(() => []) : [];
+  const recentRounds = await serviceContext.casinoRepository.listRecentRounds(8).catch(() => []);
+  const recentLines = [];
+  for (const rr of recentRounds) {
+    const bets = await serviceContext.casinoRepository.listBetsByRoundAndPlayer(rr.roundId, interaction.user.id).catch(() => []);
+    if (!bets.length) continue;
+    const meta = COLOR_META[rr.resultColor] || { emoji: "⚪", label: rr.resultColor || "?" };
+    const totalBet = bets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+    const totalPay = bets.reduce((sum, b) => sum + (Number(b.payout) || 0), 0);
+    const betText = bets.map((b) => `${COLOR_META[b.color]?.emoji || "⚪"}${Number(b.amount || 0).toLocaleString("zh-TW")}`).join("、");
+    recentLines.push(`#${rr.roundId} ${meta.emoji}${meta.label}｜${betText}｜${totalPay > 0 ? `+${totalPay.toLocaleString("zh-TW")}` : `-${totalBet.toLocaleString("zh-TW")}`}`);
+    if (recentLines.length >= 5) break;
+  }
 
   const embed = new EmbedBuilder()
     .setTitle("📜 我的賭場紀錄（近 7 天）")
@@ -273,6 +285,10 @@ async function handleMyRecord(interaction) {
       value: myBets.map((b) => `${COLOR_META[b.color]?.emoji || "⚪"} ${b.color} ${b.amount.toLocaleString("zh-TW")}`).join("\n"),
     });
   }
+  embed.addFields({
+    name: "最近下注結果",
+    value: recentLines.length ? recentLines.join("\n") : "近幾輪沒有已結算下注；若私訊關閉，可回來這裡看結果。",
+  });
   await interaction.editReply({ embeds: [embed] });
 }
 
@@ -289,7 +305,7 @@ async function handleRules(interaction) {
     "",
     "**回合節奏**：每 60 秒一輪，結算前 5 秒鎖盤。",
     "",
-    "**押注**：100–50,000 金幣，單注賠付上限 500,000。",
+    `**押注**：100–50,000 金幣，單注賠付上限 ${PAYOUT_CAP.toLocaleString("zh-TW")}。`,
     "**押中後額外抽道具**（依下注額解鎖）：",
     "・100–999：8%，僅 D 階",
     "・1,000–4,999：12%，至 C 階",
