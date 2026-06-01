@@ -1974,6 +1974,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerOnCritHealPct = 0;
     // ── 新效果：條件增傷 ──
     let playerBonusVsBossPct = 0;
+    let playerBonusVsDefBrokenPct = 0;
     let playerBonusVsBurningPct = 0;
     let playerBonusVsStunnedPct = 0;
     let playerBonusWhenHpHighPct = 0;
@@ -2064,6 +2065,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           playerBonusVsDebuffedPct += Math.abs(effValue);
         } else if (eff.key === 'bonus_vs_boss') {
           playerBonusVsBossPct += Math.abs(effValue);
+        } else if (eff.key === 'bonus_vs_def_broken') {
+          playerBonusVsDefBrokenPct += Math.abs(effValue);
         } else if (eff.key === 'bonus_vs_burning') {
           playerBonusVsBurningPct += Math.abs(effValue);
         } else if (eff.key === 'bonus_vs_stunned') {
@@ -2356,6 +2359,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         if (playerBonusVsBossPct > 0 && (options.monsterIsBoss || options.isBoss || options.isWorldBoss || mCalc?.isBoss)) {
           conditionalBonusMultiplier *= (1 + playerBonusVsBossPct / 100);
+        }
+        if (playerBonusVsDefBrokenPct > 0 && (isBreak || monsterActiveEffects.some(e => e.key === 'def_down' && effectIsActive(e, round)))) {
+          conditionalBonusMultiplier *= (1 + playerBonusVsDefBrokenPct / 100);
         }
         if (playerBonusWhenHpHighPct > 0) {
           const hpPctNow = (pStats.maxHp > 0) ? (pHp / pStats.maxHp) * 100 : 0;

@@ -54,7 +54,8 @@
   // 為方便使用者，若輸入像 1.1 這種小數（代表 1.1x），會自動轉為 percent = (1.1 - 1) * 100 => 10
   const PERCENT_EFFECT_KEYS = new Set([
     'gold_gain_up', 'exp_gain_up', 'drop_rate_up', 'rare_drop_rate_up', 'monster_reward_up', 'checkin_bonus_up', 'enhance_success_up', 'event_trigger_rate_up',
-    'party_damage_up', 'party_boss_damage_up', 'party_monster_def_down', 'party_agi_up', 'party_damage_reduction', 'party_crit_damage_reduction', 'party_exp_gain_up', 'party_gold_gain_up'
+    'party_damage_up', 'party_boss_damage_up', 'party_monster_def_down', 'party_agi_up', 'party_damage_reduction', 'party_crit_damage_reduction', 'party_exp_gain_up', 'party_gold_gain_up',
+    'bonus_vs_boss', 'bonus_vs_def_broken'
   ]);
 
   // 加值類效果的預設基準（與後端 `STAT_EFFECT_MAP` 的 add 類型對應）
@@ -153,7 +154,8 @@
     party_crit_damage_reduction: "隊伍受到暴擊傷害降低",
     party_exp_gain_up: "隊伍經驗加成",
     party_gold_gain_up: "隊伍金幣加成",
-    bonus_vs_boss: "對 Boss 增傷",
+    bonus_vs_boss: "BOSS特攻",
+    bonus_vs_def_broken: "破甲特攻",
     bonus_vs_poisoned: "對中毒目標增傷",
     bonus_vs_burning: "對燃燒目標增傷",
     bonus_vs_stunned: "對暈眩目標增傷",
