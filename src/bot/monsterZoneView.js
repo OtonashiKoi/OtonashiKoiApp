@@ -124,6 +124,13 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
       descLines.push("✅ 世界BOSS 可挑戰");
     }
     descLines.push("限制：開戰後 30 分鐘內未擊殺視為失敗");
+    descLines.push(
+      "",
+      "**部位機制（三區全破才算贏）**",
+      "🎯 頭部：怪物技能發動率↑（高風險）",
+      "⚔️ 軀幹：防禦極高、你的傷害被削減",
+      "🦵 下盤：怪物攻擊更兇（你受到傷害 ×1.3）"
+    );
   } else {
     descLines.push("點擊下方按鈕即可進入戰鬥");
   }

@@ -271,32 +271,36 @@ function parseWorldBossTargetPart(customId) {
 
 function getWorldBossTargetProfile(part) {
   if (part === "head") {
+    // 頭部：怪物技能發動率提高（高風險，技能更常觸發）
     return {
       label: "頭部",
-      playerAtkMultiplier: 1.15,
-      playerDexMultiplier: 0.9,
-      note: "高風險高輸出（傷害較高、命中略降）"
+      monsterSkillChanceBonus: 25,   // 怪物卡技能觸發率 +25%
+      note: "⚠️ 怪物技能發動率大幅提高（高風險）"
     };
   }
   if (part === "legs") {
+    // 下盤/尾巴：怪物攻擊更兇，終傷 ×1.3
     return {
       label: "下盤",
-      playerAtkMultiplier: 0.9,
-      playerAgiBonus: 6,
-      note: "壓制行動（傷害較低、速度較高）"
+      monsterDamageMult: 1.3,        // 怪物終傷 ×1.3
+      note: "⚠️ 怪物攻擊更兇（你受到的傷害 ×1.3）"
     };
   }
+  // 軀幹：防禦更高，且你的傷害被削減
   return {
     label: "軀幹",
-    playerAtkMultiplier: 1,
-    note: "穩定輸出（命中與傷害均衡）"
+    monsterFlatDefMult: 1.6,         // 固定防禦提高（不受 75% 上限限制）
+    playerAtkMultiplier: 0.8,        // 玩家傷害 -20%（實際透過 atk 折減，確實生效）
+    note: "🛡️ 防禦極高、你的傷害被削減"
   };
 }
 
 function applyWorldBossTargetToPlayerStats(playerStats, part) {
   const profile = getWorldBossTargetProfile(part);
   const next = { ...(playerStats || {}) };
-  next.atk = Math.max(1, Math.round((next.atk || 0) * (profile.playerAtkMultiplier || 1)));
+  if (profile.playerAtkMultiplier != null) {
+    next.atk = Math.max(1, Math.round((next.atk || 0) * profile.playerAtkMultiplier));
+  }
   if (profile.playerDexMultiplier != null) {
     next.dex = Math.max(1, Math.round((next.dex || 1) * profile.playerDexMultiplier));
   }
@@ -304,6 +308,32 @@ function applyWorldBossTargetToPlayerStats(playerStats, part) {
     next.agi = Math.max(1, Math.round((next.agi || 1) + profile.playerAgiBonus));
   }
   return { stats: next, profile };
+}
+
+// 依目標部位調整「怪物」：頭部技能率↑ / 軀幹防禦↑ / 尾巴攻擊↑
+//   回傳調整後的 { monsterStats, monsterEquipped }（皆 clone，不動原物件）
+function applyWorldBossTargetToMonster(monsterStats, monsterEquipped, part) {
+  const profile = getWorldBossTargetProfile(part);
+  const mStats = { ...(monsterStats || {}) };
+  let mEquip = monsterEquipped || {};
+
+  if (profile.monsterFlatDefMult) {
+    mStats.flatDef = Math.max(0, Math.round((Number(mStats.flatDef) || 0) * profile.monsterFlatDefMult));
+  }
+  if (profile.monsterDamageMult) {
+    mStats.atk = Math.max(1, Math.round((Number(mStats.atk) || 1) * profile.monsterDamageMult));
+  }
+  if (profile.monsterSkillChanceBonus) {
+    // clone special_1 卡，提高 monsterCardSkill.chance
+    mEquip = { ...mEquip };
+    const card = mEquip.special_1;
+    if (card && card.monsterCardSkill) {
+      const skill = { ...card.monsterCardSkill };
+      skill.chance = Math.min(100, (Number(skill.chance) || 30) + profile.monsterSkillChanceBonus);
+      mEquip.special_1 = { ...card, monsterCardSkill: skill, cardProcChance: skill.chance };
+    }
+  }
+  return { monsterStats: mStats, monsterEquipped: mEquip, profile };
 }
 
 function createWorldBossPartHpTemplate(totalMaxHp = 0) {
@@ -2568,23 +2598,29 @@ async function handleEnterBattle(interaction) {
       let currentEquipped = currentSnapshot.equipped;
 
       let battlePlayerStats = session.playerStats;
+      let battleMonsterStats = session.monsterStats;
+      let battleMonsterEquipped = buildMonsterEquipped(battleMonster);
       let battleTargetNote = null;
       if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
-        const adjusted = applyWorldBossTargetToPlayerStats(session.playerStats, session.worldBossTargetPart);
-        battlePlayerStats = adjusted.stats;
-        battleTargetNote = adjusted.profile?.note || null;
+        const part = session.worldBossTargetPart;
+        const adjP = applyWorldBossTargetToPlayerStats(session.playerStats, part);
+        battlePlayerStats = adjP.stats;
+        battleTargetNote = adjP.profile?.note || null;
+        const adjM = applyWorldBossTargetToMonster(session.monsterStats, battleMonsterEquipped, part);
+        battleMonsterStats = adjM.monsterStats;
+        battleMonsterEquipped = adjM.monsterEquipped;
       }
 
       const monsterHpBeforeBattle = session.monsterHp;
       const { runCombatLoop } = require("../../shared/combatLoop");
       let combatResult =
-        runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
+        runCombatLoop(battlePlayerStats, battleMonsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
           playerName: displayName,
           playerLevel: currentProg?.level || 1,
           equipped: currentEquipped,
           inventory: currentProg?.inventory || [],
           partyEffects,
-          monsterEquipped: buildMonsterEquipped(battleMonster),
+          monsterEquipped: battleMonsterEquipped,
           monsterIsBoss: Boolean(battleMonster?.isBoss),
           worldBossPhase: session.worldBossPhase || null
         });
@@ -2985,24 +3021,30 @@ async function handleStartFight(interaction) {
     let currentEquipped = currentSnapshot.equipped;
 
     let battlePlayerStats = session.playerStats;
+    let battleMonsterStats = session.monsterStats;
+    let battleMonsterEquipped = buildMonsterEquipped(monster);
     let battleTargetNote = null;
     if (isWorldBossZone(zoneKey) && monster?.isBoss) {
-      const adjusted = applyWorldBossTargetToPlayerStats(session.playerStats, session.worldBossTargetPart || "body");
-      battlePlayerStats = adjusted.stats;
-      battleTargetNote = adjusted.profile?.note || null;
-      session.worldBossTargetLabel = adjusted.profile?.label || session.worldBossTargetLabel || "軀幹";
+      const part = session.worldBossTargetPart || "body";
+      const adjP = applyWorldBossTargetToPlayerStats(session.playerStats, part);
+      battlePlayerStats = adjP.stats;
+      battleTargetNote = adjP.profile?.note || null;
+      session.worldBossTargetLabel = adjP.profile?.label || session.worldBossTargetLabel || "軀幹";
+      const adjM = applyWorldBossTargetToMonster(session.monsterStats, battleMonsterEquipped, part);
+      battleMonsterStats = adjM.monsterStats;
+      battleMonsterEquipped = adjM.monsterEquipped;
     }
 
     const monsterHpBeforeBattle = session.monsterHp;
     const { runCombatLoop } = require("../../shared/combatLoop");
     let combatResult =
-      runCombatLoop(battlePlayerStats, session.monsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
+      runCombatLoop(battlePlayerStats, battleMonsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
         playerName: displayName,
         playerLevel: currentProg?.level || 1,
         equipped: currentEquipped,
         inventory: currentProg?.inventory || [],
         partyEffects,
-        monsterEquipped: buildMonsterEquipped(monster),
+        monsterEquipped: battleMonsterEquipped,
         monsterIsBoss: Boolean(monster?.isBoss),
         worldBossPhase: session.worldBossPhase || null
       });
