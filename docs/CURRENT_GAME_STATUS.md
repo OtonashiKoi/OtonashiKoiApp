@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-06-01T08:55:33.903Z
+Generated at: 2026-06-01T09:24:19.103Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -12,7 +12,7 @@ Generated at: 2026-06-01T08:55:33.903Z
 | 進度資料 | 370 |
 | 怪物 | 52 |
 | 怪物狀態文件 | 8 |
-| 道具 | 321 |
+| 道具 | 325 |
 | 任務 | 37 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
@@ -59,7 +59,7 @@ Generated at: 2026-06-01T08:55:33.903Z
 | beginner | 3 | 蘑菇怪 | 2 | 700 | 200 | 87 | 0 | 否 | 11 |
 | beginner | 4 | 小史(中) | 3 | 900 | 250 | 102 | 0 | 否 | 11 |
 | beginner | 5 | 大野兔(B) | 3 | 3000 | 500 | 360 | 0 | 是 | 13 |
-| dragon_king_lair | 1 | 龍王(B) | 65 | 2400000 | 30000 | 50000 | 0 | 是 | 0 |
+| dragon_king_lair | 1 | 龍王(B) | 65 | 1770000 | 22000 | 45000 | 0 | 是 | 0 |
 | dragon_realm | 1 | 飛龍幼崽 | 40 | 12000 | 13000 | 1800 | 0 | 否 | 12 |
 | dragon_realm | 2 | 龍蜥武士 | 41 | 13500 | 14000 | 1950 | 0 | 否 | 12 |
 | dragon_realm | 3 | 火翼龍人 | 42 | 15000 | 15000 | 2100 | 0 | 否 | 11 |
@@ -98,7 +98,7 @@ Generated at: 2026-06-01T08:55:33.903Z
 | --- | --- |
 | collectible | 1 |
 | consumable | 17 |
-| equipment | 287 |
+| equipment | 291 |
 | job_badge | 10 |
 | pet_egg | 6 |
 
@@ -108,7 +108,7 @@ Generated at: 2026-06-01T08:55:33.903Z
 | B | 70 |
 | C | 71 |
 | D | 57 |
-| 無階級 | 33 |
+| 無階級 | 37 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -123,7 +123,7 @@ Generated at: 2026-06-01T08:55:33.903Z
 | shield | 8 |
 | shoes | 16 |
 | special | 52 |
-| title_eq | 3 |
+| title_eq | 7 |
 | weapon | 42 |
 | 無槽位 | 24 |
 
@@ -149,6 +149,10 @@ Generated at: 2026-06-01T08:55:33.903Z
 | 8fdfa7d9-f0fa-4e6a-a291-703b1e354072 | B階寶石 | consumable | B |  |  |  | none |
 | 556db9e1-b084-4b22-bab5-a66c2b586184 | C階寶石 | consumable | C |  |  |  | grant_gold |
 | 72fde92d-e33f-42fb-8d86-2e811d03f84d | D階寶石 | consumable | D |  |  |  | grant_gold |
+| title-2026-pk-throne-first-seat | PK王座・第一席 | equipment |  | title_eq |  | STR+2 VIT+2 LUK+2 | none |
+| title-2026-pk-throne-third-string | PK王座・第三弦 | equipment |  | title_eq |  | VIT+1 DEX+2 LUK+2 | none |
+| title-2026-pk-throne-second-blade | PK王座・第二刃 | equipment |  | title_eq |  | STR+2 VIT+1 LUK+2 | none |
+| title-2026-first-gen-climber | 初代攀登者 | equipment |  | title_eq |  | LUK+3 | none |
 | 65833876-d13e-4ca8-ac26-4eeb170726fc | 樂園CCB2勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | e290d286-bd45-4a32-b848-d52184fc88a0 | 樂園CCB勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | dc067571-4f8f-49af-b0c1-50f32c6941ab | 樂園最終CB勇者 | equipment |  | title_eq |  | LUK+3 | none |

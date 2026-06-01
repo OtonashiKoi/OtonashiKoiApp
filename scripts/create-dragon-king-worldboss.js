@@ -18,8 +18,9 @@ const BOSS_ID = "dragon-king-boss";
 const CARD_ID = "monster-card-dragon-king";
 const ZONE = "dragon_king_lair";
 
-const BOSS_HP = 2400000;     // 終局：約大史王(118萬)的 2 倍
+const BOSS_HP = 1770000;     // 終局：大史王(118萬) 的 1.5 倍
 
+// 龍焰：命中時造成自身攻擊力 200% 的雷焰額外傷害
 const lightningProc = {
   key: "lightning",
   target: "enemy",
@@ -28,14 +29,24 @@ const lightningProc = {
   sourcePhase: "proc",
   params: { value: 200, duration: { mode: "turns", value: 1 }, mode: "caster_atk_pct" },
 };
+// 破鱗：命中時使敵方防禦 -30%，持續 2 回合
+const defBreakProc = {
+  key: "def_down",
+  target: "enemy",
+  trigger: "on_hit",
+  chance: 100,
+  sourcePhase: "proc",
+  params: { value: 30, duration: { mode: "turns", value: 2 } },
+};
+const cardProcs = [lightningProc, defBreakProc];
 const cardSkill = {
   key: "dragon_king_breath",
-  name: "龍王逆鱗焰",
-  description: "噴吐龍焰，造成自身攻擊力 200% 的雷焰傷害。",
+  name: "龍王・逆鱗焚天",
+  description: "50% 機率噴吐龍焰，造成自身攻擊力 200% 的雷焰傷害，並破鱗使敵方防禦 -30%（2 回合）。",
   chance: 50,
   cooldownTurns: 0,
   trigger: "on_hit",
-  procEffects: [lightningProc],
+  procEffects: cardProcs,
 };
 
 const dragonKingCard = {
@@ -48,7 +59,7 @@ const dragonKingCard = {
   itemEffect: { type: "none", value: 0 },
   useEffects: [],
   passiveEffects: [],
-  procEffects: [lightningProc],
+  procEffects: cardProcs,
   combatEffects: [],
   equipStats: { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 },
   weaponType: null,
@@ -58,7 +69,7 @@ const dragonKingCard = {
   imageThumbnailUrl: null,
   monsterCardSkill: cardSkill,
   monsterCardOf: BOSS_ID,
-  description: "龍王逆鱗焰：50% 機率造成自身攻擊力 200% 的雷焰傷害。",
+  description: "龍王・逆鱗焚天：50% 機率造成自身攻擊力 200% 雷焰傷害，並使敵方防禦 -30%（2 回合）。",
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -69,12 +80,13 @@ const dragonKingMonster = {
   name: "龍王(B)",
   zone: ZONE,
   level: 65,
-  maxHp: BOSS_HP,
-  str: 65, agi: 45, vit: 75, int: 50, dex: 55, luk: 40,
-  def: 95,
-  defIgnorePct: 55,
-  expReward: 30000,
-  goldReward: 50000,
+  maxHp: BOSS_HP,                              // 1.5× 大史王(1.18M)
+  // 全面 1.5× 大史王（str45/agi35/vit55/int33/dex45/luk30、def70）
+  str: 68, agi: 53, vit: 83, int: 50, dex: 68, luk: 45,
+  def: 105,
+  defIgnorePct: 70,                            // 與大史王相同（% 值不倍增）
+  expReward: 22000,
+  goldReward: 45000,
   entryFee: 0,
   isBoss: true,
   enabled: true,
@@ -90,7 +102,7 @@ const dragonKingMonster = {
       itemEffect: { type: "none", value: 0 },
       useEffects: [],
       passiveEffects: [],
-      procEffects: [lightningProc],
+      procEffects: cardProcs,
       combatEffects: [],
       equipSlot: "special",
       equipStats: { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 },
@@ -138,7 +150,7 @@ async function main() {
   // 怪物
   await db.collection("monsters").deleteMany({ id: BOSS_ID });
   await db.collection("monsters").insertOne(dragonKingMonster);
-  console.log(`[OK] 建立怪物：龍王(B) Lv65 HP ${BOSS_HP.toLocaleString()} @ ${ZONE}`);
+  console.log(`[OK] 建立怪物：龍王(B) Lv${dragonKingMonster.level} HP ${BOSS_HP.toLocaleString()}（1.5× 大史王）@ ${ZONE}`);
 
   // 龍王卡
   await db.collection("items").deleteMany({ id: CARD_ID });
