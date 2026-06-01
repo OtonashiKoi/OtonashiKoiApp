@@ -2,6 +2,7 @@
 const fs = require("fs");
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, AttachmentBuilder } = require("discord.js");
 const { getZoneTheme, ZONE_BY_KEY, getZoneDefaultEntryFee } = require("../shared/zones");
+const { isWorldBossZone } = require("../services/worldBoss/worldBossService");
 
 const BUTTON_IDS = {
   enterBattle: "monster-zone:enter-battle",
@@ -42,7 +43,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const zoneTheme = getZoneTheme(zoneKey);
   const zoneBinding = options.zoneBinding || null;
   const showEliteWaitingState = (
-    zoneKey === "elite" &&
+    isWorldBossZone(zoneKey) &&
     worldBossStatus &&
     !worldBossStatus.battleStartedAt &&
     !worldBossStatus.canChallenge
@@ -72,7 +73,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, Math.round((hp / maxHp) * 100))) : 0;
   const hpLine = maxHp > 0 ? `${hp} / ${maxHp} (${hpPct}%)\n${hpBar}` : "尚未設定";
   let worldBossPartsLine = null;
-  if (zoneKey === "elite" && worldBossPartsHp && typeof worldBossPartsHp === "object") {
+  if (isWorldBossZone(zoneKey) && worldBossPartsHp && typeof worldBossPartsHp === "object") {
     const headHp = Math.max(0, Number(worldBossPartsHp.head || 0));
     const bodyHp = Math.max(0, Number(worldBossPartsHp.body || 0));
     const legsHp = Math.max(0, Number(worldBossPartsHp.legs || 0));
@@ -114,7 +115,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     `${zoneTheme.emoji} **${zoneTheme.label}**${levelTag}`,
     ""
   ];
-  if (zoneKey === "elite" && worldBossStatus) {
+  if (isWorldBossZone(zoneKey) && worldBossStatus) {
     if (worldBossStatus.cooldownRemainingMs > 0) {
       descLines.push(`⏳ 世界BOSS 冷卻中（剩餘 ${formatRemainingTime(worldBossStatus.cooldownRemainingMs)} 再現身）`);
     } else if (worldBossStatus.battleStartedAt) {
@@ -175,9 +176,9 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   }
   embed.addFields(...fields);
 
-  const canEnter = zoneKey !== "elite" || !worldBossStatus || worldBossStatus.canChallenge;
+  const canEnter = !isWorldBossZone(zoneKey) || !worldBossStatus || worldBossStatus.canChallenge;
   let components = [];
-  if (zoneKey === "elite" && canEnter) {
+  if (isWorldBossZone(zoneKey) && canEnter) {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(BUTTON_IDS.enterBattleHead)

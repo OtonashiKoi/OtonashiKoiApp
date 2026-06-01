@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-06-01T03:33:37.203Z
+Generated at: 2026-06-01T08:55:33.903Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -10,14 +10,14 @@ Generated at: 2026-06-01T03:33:37.203Z
 | --- | --- |
 | 玩家 | 366 |
 | 進度資料 | 370 |
-| 怪物 | 51 |
+| 怪物 | 52 |
 | 怪物狀態文件 | 8 |
-| 道具 | 324 |
+| 道具 | 321 |
 | 任務 | 37 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
-| 世界王設定 | 1 |
-| 世界王狀態 | 1 |
+| 世界王設定 | 2 |
+| 世界王狀態 | 2 |
 
 ## Zones
 
@@ -29,6 +29,7 @@ Generated at: 2026-06-01T03:33:37.203Z
 | ancient_city | 古城 | 20 | 30 | 8 | 8 | 1 |
 | ancient_city_deep | 古城深處 | 30 | 40 | 7 | 7 | 2 |
 | dragon_realm | 龍族之領 | 40 | 50 | 10 | 10 | 2 |
+| dragon_king_lair | 龍王巢穴 | 50 | 無上限 | 1 | 1 | 1 |
 | elite | 精英區 | 20 | 無上限 | 1 | 1 | 1 |
 | nightmare | 噩夢區 | 30 | 無上限 | 0 | 0 | 0 |
 | abyss | 深淵區 | 45 | 無上限 | 0 | 0 | 0 |
@@ -58,6 +59,7 @@ Generated at: 2026-06-01T03:33:37.203Z
 | beginner | 3 | 蘑菇怪 | 2 | 700 | 200 | 87 | 0 | 否 | 11 |
 | beginner | 4 | 小史(中) | 3 | 900 | 250 | 102 | 0 | 否 | 11 |
 | beginner | 5 | 大野兔(B) | 3 | 3000 | 500 | 360 | 0 | 是 | 13 |
+| dragon_king_lair | 1 | 龍王(B) | 65 | 2400000 | 30000 | 50000 | 0 | 是 | 0 |
 | dragon_realm | 1 | 飛龍幼崽 | 40 | 12000 | 13000 | 1800 | 0 | 否 | 12 |
 | dragon_realm | 2 | 龍蜥武士 | 41 | 13500 | 14000 | 1950 | 0 | 否 | 12 |
 | dragon_realm | 3 | 火翼龍人 | 42 | 15000 | 15000 | 2100 | 0 | 否 | 11 |
@@ -94,19 +96,19 @@ Generated at: 2026-06-01T03:33:37.203Z
 
 | 分類 | 數量 |
 | --- | --- |
-| collectible | 5 |
+| collectible | 1 |
 | consumable | 17 |
-| equipment | 286 |
+| equipment | 287 |
 | job_badge | 10 |
 | pet_egg | 6 |
 
 | 階級 | 數量 |
 | --- | --- |
-| A | 89 |
+| A | 90 |
 | B | 70 |
 | C | 71 |
 | D | 57 |
-| 無階級 | 37 |
+| 無階級 | 33 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -120,20 +122,16 @@ Generated at: 2026-06-01T03:33:37.203Z
 | job_eq | 10 |
 | shield | 8 |
 | shoes | 16 |
-| special | 51 |
+| special | 52 |
 | title_eq | 3 |
 | weapon | 42 |
-| 無槽位 | 28 |
+| 無槽位 | 24 |
 
 ## Items
 
 | ID | 名稱 | 類型 | 階級 | 槽位 | 武器類型 | 屬性 | 效果 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| b7f5ef58-79d3-41ef-b9d2-c726da22417b | 【圖片】音無 哭哭 錢錢飛走了 | collectible |  |  |  |  | none |
-| 50110bc1-9403-4ac2-a69f-27d8162d1a9e | 【圖片】音無2025年11月11日 | collectible |  |  |  |  | none |
-| c5db63c0-79f2-452a-a076-78f09093a65c | 【圖片】音無2025年1月新年會限圖 | collectible |  |  |  |  | none |
-| 9d3c7998-6b65-4d5a-81d5-4c34a8dc744e | 【圖片】音無2025年情人節會限圖 | collectible |  |  |  |  | none |
-| 9b8ef677-eda3-42bc-82d7-63c202b49cd2 | 【圖片】音無樂園限定CB圖 | collectible |  |  |  |  | none |
+| a0b83358-572b-45c0-997b-3fa93dff7a32 | 【圖片】龍族紀元-收藏用 | collectible |  |  |  |  | none |
 | 9b8ad195-9ec1-401b-9b7f-2c1033628cba | 【 我命由我不由天 】藥水 | consumable |  |  |  |  | level_down_random_attributes |
 | 4a3b928f-c86a-4f3e-b1be-8ca2828072ae | 【鯉市長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
 | 9d3f8e8a-3de6-40c4-a2a5-06793e83c7d5 | 【鯉民】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
@@ -230,6 +228,7 @@ Generated at: 2026-06-01T03:33:37.203Z
 | monster-card-a68402d9-d9cf-4927-9293-691164bcf1f1 | 黃金幼龍(稀)卡 | equipment | A | special |  |  | none |
 | monster-card-8e5ed991-335a-4b57-8c2d-29dcdb2d0429 | 黑曜龍騎卡 | equipment | A | special |  |  | none |
 | monster-card-35ec8cc7-9f0c-4d61-8a40-343d8857be2f | 黑焰巫師卡 | equipment | A | special |  |  | none |
+| monster-card-dragon-king | 龍王卡 | equipment | A | special |  |  |  |
 | monster-card-aece2657-19aa-407c-acaa-0b23246c0dc7 | 龍翼魔法師卡 | equipment | A | special |  |  | none |
 | monster-card-739cdb0a-5d59-4e52-bf77-cce0e33c2666 | 龍蜥武士卡 | equipment | A | special |  |  | none |
 | 5da1f2b3-ad07-46b5-9d24-eb2d849d3381 | 秘銀匕首 | equipment | A | weapon | dagger | STR+4 AGI+15 | none |

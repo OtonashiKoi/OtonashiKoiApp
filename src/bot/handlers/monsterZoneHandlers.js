@@ -3,6 +3,7 @@
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, getZoneTheme, getZoneDefaultEntryFee, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
+const { isWorldBossZone, WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
 
 // 這些效果的 params.value 代表百分比（percent），顯示時會特別格式化
 const PERCENT_EFFECT_KEYS = new Set([
@@ -209,7 +210,7 @@ function scheduleDisplayingSessionCleanup(discordId, displayEndsAtMs) {
 function clearQueuedEliteWorldBossSessions(reason = "世界BOSS 已結束，本次排隊已取消，請重新排隊。") {
   let cleared = 0;
   for (const [pid, session] of activeSessions.entries()) {
-    if (!session || session.zoneKey !== "elite") continue;
+    if (!session || !isWorldBossZone(session.zoneKey)) continue;
     if (!["starting", "waiting", "queued"].includes(session.state)) continue;
     if (cancelMonsterSession(pid, reason)) cleared += 1;
   }
@@ -436,7 +437,7 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
       };
 
       let worldBossPartsHp = null;
-      if (zoneKey === "elite" && nextMonster?.isBoss) {
+      if (isWorldBossZone(zoneKey) && nextMonster?.isBoss) {
         const partState = ensureWorldBossPartState({}, nextMonster.calc.maxHp);
         nextState.currentHp = partState.currentHp;
         nextState.worldBossPartsHp = partState.worldBossPartsHp;
@@ -456,7 +457,7 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
         worldBossPartsHp
       ).catch(() => {});
 
-      if (nextMonster.isBoss && zoneKey !== "elite" && BOSS_SPAWN_BROADCAST_ENABLED) {
+      if (nextMonster.isBoss && !isWorldBossZone(zoneKey) && BOSS_SPAWN_BROADCAST_ENABLED) {
         _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
       }
       } catch (e) {
@@ -525,7 +526,7 @@ async function _resolveExpiredMonsterTransition(sc, zoneKey) {
   };
 
   let worldBossPartsHp = null;
-  if (zoneKey === "elite" && nextMonster?.isBoss) {
+  if (isWorldBossZone(zoneKey) && nextMonster?.isBoss) {
     const partState = ensureWorldBossPartState({}, nextMonster.calc.maxHp);
     nextState.currentHp = partState.currentHp;
     nextState.worldBossPartsHp = partState.worldBossPartsHp;
@@ -545,7 +546,7 @@ async function _resolveExpiredMonsterTransition(sc, zoneKey) {
     worldBossPartsHp
   ).catch(() => {});
 
-  if (nextMonster.isBoss && zoneKey !== "elite" && BOSS_SPAWN_BROADCAST_ENABLED) {
+  if (nextMonster.isBoss && !isWorldBossZone(zoneKey) && BOSS_SPAWN_BROADCAST_ENABLED) {
     _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
   }
 
@@ -683,8 +684,8 @@ function compactAuraSourceNames(roundLogs = []) {
 }
 
 async function maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster) {
-  if (zoneKey !== "elite" || !sc.worldBossService || !monster?.isBoss) return { state, timedOut: false };
-  const info = await sc.worldBossService.getConfigWithStatus().catch(() => null);
+  if (!isWorldBossZone(zoneKey) || !sc.worldBossServiceFor(zoneKey) || !monster?.isBoss) return { state, timedOut: false };
+  const info = await sc.worldBossServiceFor(zoneKey).getConfigWithStatus().catch(() => null);
   if (!info?.status?.battleTimeoutReached) return { state, timedOut: false };
   const timer = worldBossTimeoutTimers.get(zoneKey);
   if (timer) {
@@ -703,7 +704,7 @@ async function maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster) {
     activeEvent: null
   };
   await sc.monsterService.saveState(resetState, zoneKey);
-  await sc.worldBossService.markBossFailedTimeout().catch(() => {});
+  await sc.worldBossServiceFor(zoneKey).markBossFailedTimeout().catch(() => {});
   for (const [pid, session] of activeSessions.entries()) {
     if (session?.zoneKey === zoneKey && session?.monsterId === monster.id) {
       if (session.timeoutId) clearTimeout(session.timeoutId);
@@ -744,8 +745,8 @@ async function maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster) {
 }
 
 async function scheduleEliteWorldBossTimeout(sc, zoneKey, monster) {
-  if (zoneKey !== "elite" || !sc?.worldBossService || !monster?.isBoss) return;
-  const info = await sc.worldBossService.getConfigWithStatus().catch(() => null);
+  if (!isWorldBossZone(zoneKey) || !sc.worldBossServiceFor(zoneKey) || !monster?.isBoss) return;
+  const info = await sc.worldBossServiceFor(zoneKey).getConfigWithStatus().catch(() => null);
   const remainingMs = Number(info?.status?.battleRemainingMs || 0);
   if (!info?.status?.battleStartedAt || remainingMs <= 0) return;
 
@@ -1080,10 +1081,10 @@ function getSessionQueueCountdownSeconds(session, discordId) {
 }
 
 async function getWorldBossQueueBlock(sc, zoneKey, monster) {
-  if (zoneKey !== "elite" || !monster?.isBoss || !sc?.worldBossService) {
+  if (!isWorldBossZone(zoneKey) || !monster?.isBoss || !sc.worldBossServiceFor(zoneKey)) {
     return null;
   }
-  const wb = await sc.worldBossService.getConfigWithStatus().catch(() => null);
+  const wb = await sc.worldBossServiceFor(zoneKey).getConfigWithStatus().catch(() => null);
   if (!wb?.config?.enabled) {
     return { disabled: true, cooldownRemainingMs: 0, waitMs: BATTLE_QUEUE_POLL_MS };
   }
@@ -1095,7 +1096,7 @@ async function getWorldBossQueueBlock(sc, zoneKey, monster) {
 }
 
 async function isWorldBossClosedForWrite(sc, zoneKey, monster, state) {
-  if (zoneKey !== "elite" || !monster?.isBoss || !sc?.worldBossService) return false;
+  if (!isWorldBossZone(zoneKey) || !monster?.isBoss || !sc.worldBossServiceFor(zoneKey)) return false;
   const claimedAtMs = Date.parse(state?.killClaimedAt);
   if (
     Number(state?.killClaimedSeq) === Number(monster.seq) &&
@@ -1104,7 +1105,7 @@ async function isWorldBossClosedForWrite(sc, zoneKey, monster, state) {
   ) {
     return true;
   }
-  const wb = await sc.worldBossService.getConfigWithStatus().catch(() => null);
+  const wb = await sc.worldBossServiceFor(zoneKey).getConfigWithStatus().catch(() => null);
   return Boolean(wb?.status?.cooldownRemainingMs > 0 && !wb?.status?.battleStartedAt);
 }
 
@@ -1120,7 +1121,7 @@ function isStaleMonsterBattleState(zoneKey, monster, state) {
   ) {
     return true;
   }
-  if (zoneKey !== "elite" && Number(state.currentHp || 0) <= 0) return true;
+  if (!isWorldBossZone(zoneKey) && Number(state.currentHp || 0) <= 0) return true;
   return false;
 }
 
@@ -1816,7 +1817,7 @@ async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount
       activeTransition = latestState?.activeTransition || activeMonsterTransitions.get(zoneKey) || null;
     }
     let partsHp = worldBossPartsHp;
-    if (!partsHp && zoneKey === "elite" && monster?.isBoss) {
+    if (!partsHp && isWorldBossZone(zoneKey) && monster?.isBoss) {
       const latest = await sc.monsterService.getState(zoneKey).catch(() => null);
       partsHp = latest?.worldBossPartsHp || null;
     }
@@ -2233,7 +2234,7 @@ async function handleEnterBattle(interaction) {
     if (await _resolveExpiredMonsterTransition(sc, zoneKey)) {
       state = await sc.monsterService.getState(zoneKey);
     }
-    if (zoneKey !== "elite" && Number(state?.currentHp || 0) <= 0 && !state?.activeEvent && !state?.activeTransition) {
+    if (!isWorldBossZone(zoneKey) && Number(state?.currentHp || 0) <= 0 && !state?.activeEvent && !state?.activeTransition) {
       await _doIdleRotate(sc, zoneKey).catch(() => {});
       state = await sc.monsterService.getState(zoneKey);
       monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
@@ -2253,7 +2254,7 @@ async function handleEnterBattle(interaction) {
     monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
     let monster = ready.monster;
 
-    if (zoneKey === "elite" && sc.worldBossService) {
+    if (isWorldBossZone(zoneKey) && sc.worldBossServiceFor(zoneKey)) {
       const boss = monsters.find((m) => m.isBoss) || monster;
       if (boss && monster?.id !== boss.id) {
         const bossPartState = ensureWorldBossPartState({}, boss.calc.maxHp);
@@ -2281,7 +2282,7 @@ async function handleEnterBattle(interaction) {
         return;
       }
 
-      const wb = await sc.worldBossService.getConfigWithStatus();
+      const wb = await sc.worldBossServiceFor(zoneKey).getConfigWithStatus();
       if (!wb.config.enabled || wb.status.cooldownRemainingMs > 0) {
         const queuedReady = await waitForBattleReady(sc, { discordId, zoneKey, interaction, session: activeSessions.get(discordId) });
         if (!queuedReady?.monster || !queuedReady?.state) {
@@ -2301,7 +2302,7 @@ async function handleEnterBattle(interaction) {
       }
     }
 
-    const monsterHp = (zoneKey === "elite" && monster?.isBoss)
+    const monsterHp = (isWorldBossZone(zoneKey) && monster?.isBoss)
       ? Math.max(0, Number(state?.worldBossPartsHp?.[selectedBossPart] || 0))
       : (state.currentHp != null ? state.currentHp : monster.calc.maxHp);
 
@@ -2362,7 +2363,7 @@ async function handleEnterBattle(interaction) {
     let battleState = battleReady.state;
     let battleMonster = battleReady.monster;
 
-    if (zoneKey === "elite" && sc.worldBossService) {
+    if (isWorldBossZone(zoneKey) && sc.worldBossServiceFor(zoneKey)) {
       const boss = battleMonster?.isBoss ? battleMonster : (monsters.find((m) => m.isBoss) || battleMonster);
       if (boss && battleMonster?.id !== boss.id) {
         battleMonster = boss;
@@ -2380,7 +2381,7 @@ async function handleEnterBattle(interaction) {
     session.monsterSeq = battleMonster.seq;
     session.monsterName = battleMonster.name;
     session.monsterMaxHp = battleMonster.calc.maxHp;
-    session.monsterHp = (zoneKey === "elite" && battleMonster?.isBoss)
+    session.monsterHp = (isWorldBossZone(zoneKey) && battleMonster?.isBoss)
       ? Math.max(0, Number(battleState?.worldBossPartsHp?.[selectedBossPart] || 0))
       : (battleState.currentHp != null ? battleState.currentHp : battleMonster.calc.maxHp);
     session.monsterStats = battleMonster.calc;
@@ -2418,8 +2419,8 @@ async function handleEnterBattle(interaction) {
     const participants = Array.isArray(battleState.participants) ? battleState.participants : [];
     if (!participants.includes(discordId)) {
       const newParticipants = [...participants, discordId];
-      if (zoneKey === "elite" && battleMonster?.isBoss && participants.length === 0) {
-        await sc.worldBossService?.startBossBattleIfNeeded().catch(() => {});
+      if (isWorldBossZone(zoneKey) && battleMonster?.isBoss && participants.length === 0) {
+        await sc.worldBossServiceFor(zoneKey)?.startBossBattleIfNeeded().catch(() => {});
         await scheduleEliteWorldBossTimeout(sc, zoneKey, battleMonster).catch(() => {});
         // 世界王開打公告
         try {
@@ -2437,13 +2438,13 @@ async function handleEnterBattle(interaction) {
       }
       await sc.monsterService.saveState({
         ...battleState,
-        currentHp: (zoneKey === "elite" && battleMonster?.isBoss) ? sumWorldBossPartHp(battleState.worldBossPartsHp) : session.monsterHp,
+        currentHp: (isWorldBossZone(zoneKey) && battleMonster?.isBoss) ? sumWorldBossPartHp(battleState.worldBossPartsHp) : session.monsterHp,
         participants: newParticipants,
         lastHitAt: new Date().toISOString()
       }, zoneKey);
       battleState = {
         ...battleState,
-        currentHp: (zoneKey === "elite" && battleMonster?.isBoss) ? sumWorldBossPartHp(battleState.worldBossPartsHp) : session.monsterHp,
+        currentHp: (isWorldBossZone(zoneKey) && battleMonster?.isBoss) ? sumWorldBossPartHp(battleState.worldBossPartsHp) : session.monsterHp,
         participants: newParticipants,
         lastHitAt: new Date().toISOString()
       };
@@ -2452,7 +2453,7 @@ async function handleEnterBattle(interaction) {
       const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === featureKey);
       if (binding?.channelId) {
         sc.adminConsoleService
-          .publishMonsterZonePanel(binding.channelId, battleMonster, (zoneKey === "elite" && battleMonster?.isBoss ? battleState.currentHp : session.monsterHp), {
+          .publishMonsterZonePanel(binding.channelId, battleMonster, (isWorldBossZone(zoneKey) && battleMonster?.isBoss ? battleState.currentHp : session.monsterHp), {
             participantCount: newParticipants.length,
             damageMap: battleState.damageMap || {},
             worldBossPartsHp: battleState.worldBossPartsHp || null
@@ -2495,7 +2496,7 @@ async function handleEnterBattle(interaction) {
         return;
       }
 
-      if (zoneKey === "elite" && battleMonster?.isBoss) {
+      if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
         const ensured = ensureWorldBossPartState(battleState, battleMonster.calc.maxHp);
         if (ensured.changed) {
           battleState = { ...battleState, ...ensured };
@@ -2505,10 +2506,10 @@ async function handleEnterBattle(interaction) {
         }
       }
 
-      session.monsterHp = (zoneKey === "elite" && battleMonster?.isBoss)
+      session.monsterHp = (isWorldBossZone(zoneKey) && battleMonster?.isBoss)
         ? Math.max(0, Number(battleState?.worldBossPartsHp?.[session.worldBossTargetPart || "body"] || 0))
         : (battleState.currentHp != null ? battleState.currentHp : session.monsterMaxHp);
-      if (zoneKey === "elite" && battleMonster?.isBoss && session.monsterHp <= 0) {
+      if (isWorldBossZone(zoneKey) && battleMonster?.isBoss && session.monsterHp <= 0) {
         deleteMonsterSession(discordId);
         await interaction.editReply({
           content: `✅ ${session.worldBossTargetLabel || "這個部位"}已被擊破，請重新選擇尚未擊破的部位。`,
@@ -2518,10 +2519,10 @@ async function handleEnterBattle(interaction) {
         return;
       }
 
-      if (zoneKey === "elite" && battleMonster?.isBoss && sc.worldBossService) {
-        const wbCfg = await sc.worldBossService.getConfig();
+      if (isWorldBossZone(zoneKey) && battleMonster?.isBoss && sc.worldBossServiceFor(zoneKey)) {
+        const wbCfg = await sc.worldBossServiceFor(zoneKey).getConfig();
         const hpPct = session.monsterMaxHp > 0 ? (session.monsterHp / session.monsterMaxHp) * 100 : 100;
-        const phase = sc.worldBossService.resolvePhase(wbCfg, hpPct);
+        const phase = sc.worldBossServiceFor(zoneKey).resolvePhase(wbCfg, hpPct);
         session.worldBossPhase = phase;
         session.monsterStats = applyWorldBossPhaseModifiers(battleMonster.calc, phase);
       } else {
@@ -2568,7 +2569,7 @@ async function handleEnterBattle(interaction) {
 
       let battlePlayerStats = session.playerStats;
       let battleTargetNote = null;
-      if (zoneKey === "elite" && battleMonster?.isBoss) {
+      if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
         const adjusted = applyWorldBossTargetToPlayerStats(session.playerStats, session.worldBossTargetPart);
         battlePlayerStats = adjusted.stats;
         battleTargetNote = adjusted.profile?.note || null;
@@ -2639,7 +2640,7 @@ async function handleEnterBattle(interaction) {
         session.monsterHp = nextHp;
         if (nextHp <= 0) outcome = "win";
         let nextState = { ...freshState, currentHp: nextHp, damageMap: updatedDamageMap, lastHitAt: new Date().toISOString() };
-        if (zoneKey === "elite" && battleMonster?.isBoss) {
+        if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
           const part = session.worldBossTargetPart || "body";
           const prevParts = ensureWorldBossPartState(freshState, battleMonster.calc.maxHp);
           const latestPartHp = Math.max(0, Number(prevParts.worldBossPartsHp?.[part] || 0));
@@ -2679,13 +2680,13 @@ async function handleEnterBattle(interaction) {
       let pendingDeathCooldown = false;
 
       if (staleBattleBeforeWrite || worldBossClosedBeforeWrite) {
-        embedTitle = zoneKey === "elite" && battleMonster?.isBoss ? "⏳ 世界BOSS 已結束" : "⏳ 怪物已更新";
+        embedTitle = isWorldBossZone(zoneKey) && battleMonster?.isBoss ? "⏳ 世界BOSS 已結束" : "⏳ 怪物已更新";
         embedColor = 0x64748b;
-        rewardLines = [zoneKey === "elite" && battleMonster?.isBoss
+        rewardLines = [isWorldBossZone(zoneKey) && battleMonster?.isBoss
           ? "世界BOSS 已被其他冒險者擊破並進入冷卻，本次排隊攻擊未寫入傷害，也不會重複結算獎勵。"
           : "這隻怪物已被其他冒險者擊破或正在轉場，本次排隊攻擊未寫入傷害，也不會重複結算獎勵。"];
       } else if (outcome === "win") {
-        if (zoneKey === "elite" && battleMonster?.isBoss && !allPartsDefeated) {
+        if (isWorldBossZone(zoneKey) && battleMonster?.isBoss && !allPartsDefeated) {
           embedTitle = "✅ 部位擊破";
           embedColor = 0x22c55e;
           rewardLines = ["目前僅擊破一個部位，需三部位全破才會結算世界王擊殺獎勵。"];
@@ -2702,7 +2703,7 @@ async function handleEnterBattle(interaction) {
           const freshState = await sc.monsterService.getState(zoneKey);
           await sc.monsterService.saveState({
             ...freshState,
-            currentHp: (zoneKey === "elite" && battleMonster?.isBoss)
+            currentHp: (isWorldBossZone(zoneKey) && battleMonster?.isBoss)
               ? sumWorldBossPartHp(freshState.worldBossPartsHp)
               : session.monsterHp,
             lastHitAt: new Date().toISOString()
@@ -2710,7 +2711,7 @@ async function handleEnterBattle(interaction) {
         } catch (e) {
           await sc.monsterService.saveState({
             ...battleState,
-            currentHp: (zoneKey === "elite" && battleMonster?.isBoss)
+            currentHp: (isWorldBossZone(zoneKey) && battleMonster?.isBoss)
               ? sumWorldBossPartHp(battleState.worldBossPartsHp)
               : session.monsterHp,
             lastHitAt: new Date().toISOString()
@@ -2732,7 +2733,7 @@ async function handleEnterBattle(interaction) {
           const freshState = await sc.monsterService.getState(zoneKey);
           await sc.monsterService.saveState({
             ...freshState,
-            currentHp: (zoneKey === "elite" && battleMonster?.isBoss)
+            currentHp: (isWorldBossZone(zoneKey) && battleMonster?.isBoss)
               ? sumWorldBossPartHp(freshState.worldBossPartsHp)
               : session.monsterHp,
             lastHitAt: new Date().toISOString()
@@ -2740,7 +2741,7 @@ async function handleEnterBattle(interaction) {
         } catch (e) {
           await sc.monsterService.saveState({
             ...battleState,
-            currentHp: (zoneKey === "elite" && battleMonster?.isBoss)
+            currentHp: (isWorldBossZone(zoneKey) && battleMonster?.isBoss)
               ? sumWorldBossPartHp(battleState.worldBossPartsHp)
               : session.monsterHp,
             lastHitAt: new Date().toISOString()
@@ -2757,7 +2758,7 @@ async function handleEnterBattle(interaction) {
       if (syncResult.notice) {
         rewardLines = [syncResult.notice, ...rewardLines];
       }
-      if (zoneKey === "elite" && battleMonster?.isBoss) {
+      if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
         rewardLines = [`🎯 鎖定部位：${session.worldBossTargetLabel}${battleTargetNote ? `（${battleTargetNote}）` : ""}`, ...rewardLines];
       }
 
@@ -2912,7 +2913,7 @@ async function handleStartFight(interaction) {
       return;
     }
 
-    if (zoneKey === "elite" && monster?.isBoss) {
+    if (isWorldBossZone(zoneKey) && monster?.isBoss) {
       const ensured = ensureWorldBossPartState(state, monster.calc.maxHp);
       if (ensured.changed) {
         state = { ...state, ...ensured };
@@ -2922,10 +2923,10 @@ async function handleStartFight(interaction) {
       }
     }
 
-    session.monsterHp = (zoneKey === "elite" && monster?.isBoss)
+    session.monsterHp = (isWorldBossZone(zoneKey) && monster?.isBoss)
       ? Math.max(0, Number(state?.worldBossPartsHp?.[session.worldBossTargetPart || "body"] || 0))
       : (state.currentHp != null ? state.currentHp : session.monsterMaxHp);
-    if (zoneKey === "elite" && monster?.isBoss && session.monsterHp <= 0) {
+    if (isWorldBossZone(zoneKey) && monster?.isBoss && session.monsterHp <= 0) {
       deleteMonsterSession(discordId);
       await interaction.editReply({
         content: `✅ ${session.worldBossTargetLabel || "這個部位"}已被擊破，請重新選擇尚未擊破的部位。`,
@@ -2934,10 +2935,10 @@ async function handleStartFight(interaction) {
       }).catch(() => {});
       return;
     }
-    if (zoneKey === "elite" && monster?.isBoss && sc.worldBossService) {
-      const wbCfg = await sc.worldBossService.getConfig();
+    if (isWorldBossZone(zoneKey) && monster?.isBoss && sc.worldBossServiceFor(zoneKey)) {
+      const wbCfg = await sc.worldBossServiceFor(zoneKey).getConfig();
       const hpPct = session.monsterMaxHp > 0 ? (session.monsterHp / session.monsterMaxHp) * 100 : 100;
-      const phase = sc.worldBossService.resolvePhase(wbCfg, hpPct);
+      const phase = sc.worldBossServiceFor(zoneKey).resolvePhase(wbCfg, hpPct);
       session.worldBossPhase = phase;
       session.monsterStats = applyWorldBossPhaseModifiers(monster.calc, phase);
     } else {
@@ -2985,7 +2986,7 @@ async function handleStartFight(interaction) {
 
     let battlePlayerStats = session.playerStats;
     let battleTargetNote = null;
-    if (zoneKey === "elite" && monster?.isBoss) {
+    if (isWorldBossZone(zoneKey) && monster?.isBoss) {
       const adjusted = applyWorldBossTargetToPlayerStats(session.playerStats, session.worldBossTargetPart || "body");
       battlePlayerStats = adjusted.stats;
       battleTargetNote = adjusted.profile?.note || null;
@@ -3058,7 +3059,7 @@ async function handleStartFight(interaction) {
       session.monsterHp = nextHp;
       if (nextHp <= 0) outcome = "win";
       let nextState = { ...freshState, currentHp: nextHp, damageMap: updatedDamageMap, lastHitAt: new Date().toISOString() };
-      if (zoneKey === "elite" && monster?.isBoss) {
+      if (isWorldBossZone(zoneKey) && monster?.isBoss) {
         const part = session.worldBossTargetPart || "body";
         const prevParts = ensureWorldBossPartState(freshState, monster.calc.maxHp);
         const latestPartHp = Math.max(0, Number(prevParts.worldBossPartsHp?.[part] || 0));
@@ -3076,7 +3077,7 @@ async function handleStartFight(interaction) {
       }
     await sc.monsterService.saveState(nextState, zoneKey);
     stateForSettlement = nextState;
-    const shouldTransitionAfterWin = outcome === "win" && !(zoneKey === "elite" && monster?.isBoss && !allPartsDefeated);
+    const shouldTransitionAfterWin = outcome === "win" && !(isWorldBossZone(zoneKey) && monster?.isBoss && !allPartsDefeated);
     if (!shouldTransitionAfterWin) {
       await _republishPanel(
         sc,
@@ -3101,13 +3102,13 @@ async function handleStartFight(interaction) {
     let pendingDeathCooldown = false;
 
     if (staleBattleBeforeWrite || worldBossClosedBeforeWrite) {
-      embedTitle = zoneKey === "elite" && monster?.isBoss ? "⏳ 世界BOSS 已結束" : "⏳ 怪物已更新";
+      embedTitle = isWorldBossZone(zoneKey) && monster?.isBoss ? "⏳ 世界BOSS 已結束" : "⏳ 怪物已更新";
       embedColor = 0x64748b;
-      rewardLines = [zoneKey === "elite" && monster?.isBoss
+      rewardLines = [isWorldBossZone(zoneKey) && monster?.isBoss
         ? "世界BOSS 已被其他冒險者擊破並進入冷卻，本次排隊攻擊未寫入傷害，也不會重複結算獎勵。"
         : "這隻怪物已被其他冒險者擊破或正在轉場，本次排隊攻擊未寫入傷害，也不會重複結算獎勵。"];
     } else if (outcome === "win") {
-      if (zoneKey === "elite" && monster?.isBoss && !allPartsDefeated) {
+      if (isWorldBossZone(zoneKey) && monster?.isBoss && !allPartsDefeated) {
         embedTitle = "✅ 部位擊破";
         embedColor = 0x22c55e;
         rewardLines = ["目前僅擊破一個部位，需三部位全破才會結算世界王擊殺獎勵。"];
@@ -3143,7 +3144,7 @@ async function handleStartFight(interaction) {
     if (syncResult.notice) {
       rewardLines = [syncResult.notice, ...rewardLines];
     }
-    if (zoneKey === "elite" && monster?.isBoss) {
+    if (isWorldBossZone(zoneKey) && monster?.isBoss) {
       rewardLines = [`🎯 鎖定部位：${session.worldBossTargetLabel || "軀幹"}${battleTargetNote ? `（${battleTargetNote}）` : ""}`, ...rewardLines];
     }
 
@@ -3232,7 +3233,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const sc = getServiceContext();
   const rewardLines = [];
 
-  if (zoneKey === "elite" && monster?.isBoss && !isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
+  if (isWorldBossZone(zoneKey) && monster?.isBoss && !isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
     rewardLines.push("目前僅擊破單一部位，世界王需三部位全破才會結算。");
     return rewardLines;
   }
@@ -3260,8 +3261,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const participants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
 
   // 世界王解鎖累計：原 hard 區拆成古城/古城深處，兩區擊殺都算
-  if ((zoneKey === "ancient_city" || zoneKey === "ancient_city_deep") && !monster?.isBoss && sc.worldBossService) {
-    await sc.worldBossService.recordHardZoneKill(1).catch(() => {});
+  if ((zoneKey === "ancient_city" || zoneKey === "ancient_city_deep") && !monster?.isBoss && sc.worldBossServiceFor(zoneKey)) {
+    await sc.worldBossServiceFor(zoneKey).recordHardZoneKill(1).catch(() => {});
   }
 
   // 任務勝利判定：怪物被擊殺時，全參戰者都算 1 次勝利。
@@ -3758,9 +3759,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const finalDamageMap = { ...(freshState.damageMap || {}), ...mergedDmg };
 
   // 世界 BOSS（精英區）擊殺後：同一隻進入冷卻，不切下一隻
-  if (zoneKey === "elite" && monster?.isBoss && sc.worldBossService) {
+  if (isWorldBossZone(zoneKey) && monster?.isBoss && sc.worldBossServiceFor(zoneKey)) {
     const resetParts = ensureWorldBossPartState({}, monster.calc.maxHp);
-    const wbConfig = await sc.worldBossService.getConfig().catch(() => null);
+    const wbConfig = await sc.worldBossServiceFor(zoneKey).getConfig().catch(() => null);
     const bossLockMs = Math.max(1, Number(wbConfig?.respawnCooldownMinutes || 60)) * 60 * 1000;
     const bossLockUntil = new Date(Date.now() + bossLockMs + 15 * 1000);
     const bossResetState = {
@@ -3779,7 +3780,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       activeEvent: null
     };
     await sc.monsterService.saveState(bossResetState, zoneKey);
-    await sc.worldBossService.markBossKilled().catch(() => {});
+    await sc.worldBossServiceFor(zoneKey).markBossKilled().catch(() => {});
     const clearedQueued = clearQueuedEliteWorldBossSessions();
     if (clearedQueued > 0) {
       console.log(`[WorldBoss] cleared queued elite sessions after kill: ${clearedQueued}`);
@@ -4498,14 +4499,14 @@ async function _doIdleRotate(sc, zoneKey) {
 
     // 精英區世界 Boss idle：重置三部位 HP
     // 只有「有人開戰但超時」才重置解鎖進度，純閒置不重置
-    if (zoneKey === "elite" && next.isBoss && sc.worldBossService) {
+    if (isWorldBossZone(zoneKey) && next.isBoss && sc.worldBossServiceFor(zoneKey)) {
       const partMax = createWorldBossPartHpTemplate(next.calc.maxHp);
       newState.worldBossPartsMaxHp = partMax;
       newState.worldBossPartsHp = { ...partMax };
-      const wbState = await sc.worldBossService._getStateEnsured().catch(() => null);
+      const wbState = await sc.worldBossServiceFor(zoneKey)._getStateEnsured().catch(() => null);
       if (wbState?.battleStartedAt) {
         // 有人曾開戰但沒打完，視為失敗，重置解鎖進度
-        await sc.worldBossService.markBossFailedTimeout().catch(() => {});
+        await sc.worldBossServiceFor(zoneKey).markBossFailedTimeout().catch(() => {});
       } else {
         // 純閒置，只重置部位 HP，不動解鎖進度
       }
@@ -4514,7 +4515,7 @@ async function _doIdleRotate(sc, zoneKey) {
     await sc.monsterService.saveState(newState, zoneKey);
     _republishPanel(sc, zoneKey, next, next.calc.maxHp, 0, {}).catch(() => {});
     // 精英區 Boss 由解鎖流程觸發廣播，idle rotate 不廣播
-  if (next.isBoss && zoneKey !== "elite" && BOSS_SPAWN_BROADCAST_ENABLED) _broadcastBossSpawn(sc, zoneKey, next).catch(() => {});
+  if (next.isBoss && !isWorldBossZone(zoneKey) && BOSS_SPAWN_BROADCAST_ENABLED) _broadcastBossSpawn(sc, zoneKey, next).catch(() => {});
 
     // 嗆聲廣播
     const { getBotClient } = require("../runtimeContext");
@@ -4571,32 +4572,35 @@ function startIdleRotateTimer() {
 }
 
 async function refreshEliteWorldBossPanel() {
-  try {
-    const sc = getServiceContext();
-    if (await _resolveExpiredMonsterTransition(sc, "elite")) return;
-    let eliteState = await sc.monsterService.getState("elite").catch(() => null);
-    const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: "elite" }).catch(() => []);
-    const monster = monsters.find((m) => Number(m.seq) === Number(eliteState?.activeMonsterSeq))
-      || monsters.find((m) => m.isBoss)
-      || null;
-    if (monster?.isBoss) {
-      const timeoutResult = await maybeHandleEliteWorldBossTimeout(sc, "elite", eliteState || {}, monster);
-      if (timeoutResult?.timedOut) {
-        eliteState = timeoutResult.state;
-      } else {
-        await scheduleEliteWorldBossTimeout(sc, "elite", monster).catch(() => {});
+  const sc = getServiceContext();
+  // 輪詢所有世界王 zone（大史王=elite、龍王=dragon_king_lair…）
+  for (const zoneKey of Object.keys(WORLD_BOSS_ZONES)) {
+    try {
+      if (await _resolveExpiredMonsterTransition(sc, zoneKey)) continue;
+      let zoneState = await sc.monsterService.getState(zoneKey).catch(() => null);
+      const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey }).catch(() => []);
+      const monster = monsters.find((m) => Number(m.seq) === Number(zoneState?.activeMonsterSeq))
+        || monsters.find((m) => m.isBoss)
+        || null;
+      if (monster?.isBoss) {
+        const timeoutResult = await maybeHandleEliteWorldBossTimeout(sc, zoneKey, zoneState || {}, monster);
+        if (timeoutResult?.timedOut) {
+          zoneState = timeoutResult.state;
+        } else {
+          await scheduleEliteWorldBossTimeout(sc, zoneKey, monster).catch(() => {});
+        }
       }
-    }
-    const monsterHp = monster ? (eliteState?.currentHp ?? monster.calc?.maxHp ?? 0) : null;
-    const damageMap = eliteState?.damageMap || {};
-    const participantCount = Array.isArray(eliteState?.participants) ? eliteState.participants.length : 0;
-    const activeEvent = eliteState?.activeEvent || null;
-    const worldBossPartsHp = eliteState?.worldBossPartsHp || null;
-    const activeTransition = eliteState?.activeTransition || null;
+      const monsterHp = monster ? (zoneState?.currentHp ?? monster.calc?.maxHp ?? 0) : null;
+      const damageMap = zoneState?.damageMap || {};
+      const participantCount = Array.isArray(zoneState?.participants) ? zoneState.participants.length : 0;
+      const activeEvent = zoneState?.activeEvent || null;
+      const worldBossPartsHp = zoneState?.worldBossPartsHp || null;
+      const activeTransition = zoneState?.activeTransition || null;
 
-    await _republishPanel(sc, "elite", monster, monsterHp, participantCount, damageMap, activeEvent, worldBossPartsHp, { activeTransition });
-  } catch (error) {
-    console.warn(`[ElitePanel] auto-refresh failed: ${error?.message || error}`);
+      await _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap, activeEvent, worldBossPartsHp, { activeTransition });
+    } catch (error) {
+      console.warn(`[WorldBossPanel] auto-refresh failed (${zoneKey}): ${error?.message || error}`);
+    }
   }
 }
 
@@ -4615,7 +4619,7 @@ async function refreshMonsterZonePanels() {
         if (await _resolveExpiredMonsterTransition(sc, zoneKey)) continue;
         const state = await sc.monsterService.getState(zoneKey).catch(() => null);
         const hasDeadState = Number(state?.currentHp || 0) <= 0 && !state?.activeTransition && !state?.activeEvent;
-        if (hasDeadState && zoneKey !== "elite") {
+        if (hasDeadState && !isWorldBossZone(zoneKey)) {
           await _doIdleRotate(sc, zoneKey).catch(() => {});
         }
         const freshState = hasDeadState ? await sc.monsterService.getState(zoneKey).catch(() => null) : state;

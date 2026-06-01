@@ -36,9 +36,19 @@ function createAdminMonsterRoutes(serviceContext) {
     }
   });
 
-  router.get("/admin/world-boss-config", async (_req, res, next) => {
+  // 依 zone 取對應世界王 service（找不到 fallback 大史王 default）
+  const pickWorldBossService = (zone) => {
+    if (zone && typeof serviceContext.worldBossServiceFor === "function") {
+      const svc = serviceContext.worldBossServiceFor(zone);
+      if (svc) return svc;
+    }
+    return serviceContext.worldBossService;
+  };
+
+  router.get("/admin/world-boss-config", async (req, res, next) => {
     try {
-      const data = await serviceContext.worldBossService.getConfigWithStatus();
+      const svc = pickWorldBossService(req.query.zone);
+      const data = await svc.getConfigWithStatus();
       res.json(ok(data, "world boss config fetched"));
     } catch (error) {
       next(error);
@@ -47,8 +57,10 @@ function createAdminMonsterRoutes(serviceContext) {
 
   router.put("/admin/world-boss-config", async (req, res, next) => {
     try {
-      const config = await serviceContext.worldBossService.saveConfig(req.body || {});
-      const data = await serviceContext.worldBossService.getConfigWithStatus();
+      const body = req.body || {};
+      const svc = pickWorldBossService(body.zone || req.query.zone);
+      const config = await svc.saveConfig(body);
+      const data = await svc.getConfigWithStatus();
       res.json(ok({ config, state: data.state, status: data.status }, "world boss config saved"));
     } catch (error) {
       next(error);

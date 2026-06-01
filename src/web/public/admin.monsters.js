@@ -23,8 +23,12 @@
       .replaceAll("'", "&#39;");
   }
 
-  async function fetchWorldBossConfig() {
-    const r = await fetch(BASE + "/world-boss-config", { headers: apiHeaders() });
+  // 哪些 zone 是世界王 zone（與後端 WORLD_BOSS_ZONES 對應）
+  const WORLD_BOSS_ZONE_KEYS = ["elite", "dragon_king_lair"];
+
+  async function fetchWorldBossConfig(zone) {
+    const q = zone ? ("?zone=" + encodeURIComponent(zone)) : "";
+    const r = await fetch(BASE + "/world-boss-config" + q, { headers: apiHeaders() });
     const j = await r.json();
     if (!r.ok || j.status !== "ok") throw new Error(j.message || "world boss config load failed");
     return j.data || null;
@@ -78,8 +82,9 @@
     `;
   }
 
-  async function saveWorldBossConfig() {
+  async function saveWorldBossConfig(zone) {
     const payload = {
+      zone: zone || undefined,
       enabled: document.getElementById("wb-enabled")?.value !== "false",
       weeklyUnlockKillTarget: Number(document.getElementById("wb-unlock-target")?.value || 300),
       battleTimeLimitMinutes: Number(document.getElementById("wb-battle-limit")?.value || 60),
@@ -644,8 +649,15 @@
       beginner: { label: "🌱 新手區", color: "#2ecc71", bg: "rgba(46,204,113,0.12)" },
       normal:   { label: "⚔️ 一般區", color: "var(--accent,#4ade80)", bg: "var(--accent-light)" },
       mid:      { label: "✦ 中級區",  color: "#7c3aed", bg: "rgba(124,58,237,0.12)" },
+      ancient_city:      { label: "🏰 古城", color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+      ancient_city_deep: { label: "🕯️ 古城深處", color: "#b45309", bg: "rgba(180,83,9,0.12)" },
+      dragon_realm:      { label: "🐉 龍族之領", color: "#9d174d", bg: "rgba(157,23,77,0.12)" },
+      dragon_king_lair:  { label: "👑 龍王巢穴", color: "#7f1d1d", bg: "rgba(127,29,29,0.14)" },
       hard:     { label: "🔥 高級區", color: "#f97316", bg: "rgba(249,115,22,0.12)" },
       elite:    { label: "💀 精英區", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+      nightmare: { label: "🌑 噩夢區", color: "#6d28d9", bg: "rgba(109,40,217,0.12)" },
+      abyss:    { label: "🕳️ 深淵區", color: "#1e3a5f", bg: "rgba(30,58,95,0.18)" },
+      mythic:   { label: "⚡ 神話區", color: "#d97706", bg: "rgba(217,119,6,0.12)" },
     };
     const zoneMeta = ZONE_META[activeZone] || ZONE_META.normal;
     area.style.borderColor = zoneMeta.color;
@@ -674,9 +686,9 @@
     const accentColor = zoneMeta.color;
 
     let worldBossHtml = "";
-    if (activeZone === "elite") {
+    if (WORLD_BOSS_ZONE_KEYS.includes(activeZone)) {
       try {
-        worldBossSnapshot = await fetchWorldBossConfig();
+        worldBossSnapshot = await fetchWorldBossConfig(activeZone);
         worldBossHtml = buildWorldBossConfigBlock(worldBossSnapshot);
       } catch (e) {
         worldBossHtml = `<div class="hint" style="margin-top:10px;color:#f87171;">❌ 世界BOSS設定載入失敗：${esc(e.message)}</div>`;
@@ -726,7 +738,7 @@
         wbSaveBtn.disabled = true;
         wbSaveBtn.textContent = "儲存中...";
         try {
-          await saveWorldBossConfig();
+          await saveWorldBossConfig(activeZone);
           document.getElementById("monsters-zone-msg").textContent = "世界BOSS設定已儲存✔";
           await loadState();
         } catch (e) {

@@ -73,7 +73,21 @@ function createServiceContext() {
     channelLayoutRepository: repositories.channelLayoutRepository,
     monsterService
   });
-  const worldBossService = new WorldBossService(repositories.worldBossRepository);
+  const worldBossService = new WorldBossService(repositories.worldBossRepository); // 大史王 (default)
+  // 龍王(B)：終局世界王，需先擊敗本週大史王才解鎖
+  const dragonKingBossService = new WorldBossService(repositories.worldBossRepository, {
+    bossKey: "dragon_king",
+    unlockRequiresBossKey: "default",
+    unlockServiceGetter: (key) => (key === "default" ? worldBossService : null),
+  });
+  // zone → 對應世界王 service（handler 用 zoneKey 取得正確 boss）
+  const { bossKeyForZone } = require("./worldBoss/worldBossService");
+  function worldBossServiceFor(zoneKey) {
+    const bk = bossKeyForZone(zoneKey);
+    if (bk === "dragon_king") return dragonKingBossService;
+    if (bk === "default") return worldBossService;
+    return null;
+  }
   const inviteService = new InviteService({
     inviteCodeRepository: repositories.inviteCodeRepository,
     playerRepository: repositories.playerRepository,
@@ -160,6 +174,8 @@ function createServiceContext() {
     auctionService,
     idleService,
     worldBossService,
+    dragonKingBossService,
+    worldBossServiceFor,
     inviteService,
     creatorTokenService,
     casinoService,

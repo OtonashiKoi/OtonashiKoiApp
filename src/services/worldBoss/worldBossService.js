@@ -92,28 +92,34 @@ function defaultStateForWeek(weekKey) {
 }
 
 class WorldBossService {
-  constructor(worldBossRepository) {
+  // options.bossKey：多隻世界王用（default = 大史王；dragon_king = 龍王(B)）
+  // options.unlockRequiresBossKey：需先擊殺某隻世界王才解鎖（例如龍王B需先電大史王）
+  // options.unlockServiceGetter：取得「前置 boss」service 的函式（避免循環依賴）
+  constructor(worldBossRepository, options = {}) {
     this.repo = worldBossRepository;
+    this.bossKey = options.bossKey || "default";
+    this.unlockRequiresBossKey = options.unlockRequiresBossKey || null;
+    this.unlockServiceGetter = typeof options.unlockServiceGetter === "function" ? options.unlockServiceGetter : null;
   }
 
   async getConfig() {
-    const stored = await this.repo.getConfig();
+    const stored = await this.repo.getConfig(this.bossKey);
     return normalizeConfig(stored || {});
   }
 
   async saveConfig(payload = {}) {
     const current = await this.getConfig();
     const merged = normalizeConfig({ ...current, ...(payload || {}) });
-    await this.repo.saveConfig(merged);
+    await this.repo.saveConfig(merged, this.bossKey);
     return merged;
   }
 
   async _getStateEnsured() {
     const weekKey = currentWeekLabelTW();
-    const raw = (await this.repo.getState()) || defaultStateForWeek(weekKey);
+    const raw = (await this.repo.getState(this.bossKey)) || defaultStateForWeek(weekKey);
     if (raw.weekKey !== weekKey) {
       const reset = defaultStateForWeek(weekKey);
-      await this.repo.saveState(reset);
+      await this.repo.saveState(reset, this.bossKey);
       return reset;
     }
     return {
@@ -122,10 +128,21 @@ class WorldBossService {
     };
   }
 
-  _buildStatus(config, state, now = Date.now()) {
-    const unlockTarget = 0;
+  // 前置世界王是否「本週已被擊殺」→ 決定本 boss 是否解鎖
+  async _isPrerequisiteCleared() {
+    if (!this.unlockRequiresBossKey || !this.unlockServiceGetter) return true;
+    const prereq = this.unlockServiceGetter(this.unlockRequiresBossKey);
+    if (!prereq) return true;
+    try {
+      const state = await prereq._getStateEnsured();
+      return Boolean(state.lastKilledAt);   // 本週擊殺過前置 boss（state 每週重置）
+    } catch (_) {
+      return false;
+    }
+  }
+
+  _buildStatus(config, state, now = Date.now(), unlocked = true) {
     const hardKills = Math.max(0, Number(state.hardKills || 0));
-    const unlocked = true;
     const lastKilledAtMs = state.lastKilledAt ? Date.parse(state.lastKilledAt) : NaN;
     const cooldownMs = Math.max(0, Number(config.respawnCooldownMinutes || 0) * 60 * 1000);
     const cooldownRemainingMs = Number.isFinite(lastKilledAtMs)
@@ -142,32 +159,37 @@ class WorldBossService {
     return {
       weekKey: state.weekKey,
       hardKills,
-      unlockTarget,
-      remainingUnlockKills: Math.max(0, unlockTarget - hardKills),
+      unlockTarget: 0,
+      remainingUnlockKills: 0,
       unlocked,
+      lockedReason: unlocked ? null : (this.unlockRequiresBossKey === "default" ? "需先擊敗本週的大史王，才能挑戰龍王" : "尚未解鎖"),
       cooldownRemainingMs,
       cooldownRemainingMinutes: Math.ceil(cooldownRemainingMs / 60000),
       battleStartedAt: state.battleStartedAt || null,
       battleRemainingMs,
       battleRemainingMinutes: Math.ceil(battleRemainingMs / 60000),
       battleTimeoutReached,
-      canChallenge: config.enabled && cooldownRemainingMs <= 0
+      canChallenge: config.enabled && cooldownRemainingMs <= 0 && unlocked
     };
   }
 
   async getConfigWithStatus() {
-    const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
+    const [config, state, unlocked] = await Promise.all([
+      this.getConfig(),
+      this._getStateEnsured(),
+      this._isPrerequisiteCleared()
+    ]);
     return {
       config,
       state,
-      status: this._buildStatus(config, state, Date.now())
+      status: this._buildStatus(config, state, Date.now(), unlocked)
     };
   }
 
   async recordHardZoneKill(count = 1) {
     const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
     const next = { ...state, hardKills: Math.max(0, Number(state.hardKills || 0) + Math.max(1, Math.floor(toNum(count, 1)))) };
-    await this.repo.saveState(next);
+    await this.repo.saveState(next, this.bossKey);
     return {
       state: next,
       status: this._buildStatus(config, next, Date.now())
@@ -178,7 +200,7 @@ class WorldBossService {
     const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
     if (!state.battleStartedAt) {
       state.battleStartedAt = new Date().toISOString();
-      await this.repo.saveState(state);
+      await this.repo.saveState(state, this.bossKey);
     }
     return {
       state,
@@ -191,7 +213,7 @@ class WorldBossService {
     const nowIso = new Date().toISOString();
     state.lastKilledAt = nowIso;
     state.battleStartedAt = null;
-    await this.repo.saveState(state);
+    await this.repo.saveState(state, this.bossKey);
     return {
       state,
       status: this._buildStatus(config, state, Date.now())
@@ -204,7 +226,7 @@ class WorldBossService {
     state.battleStartedAt = null;
     state.lastFailedAt = nowIso;
     state.lastKilledAt = nowIso; // 觸發冷卻計時，讓 boss 隔一段時間才再出現
-    await this.repo.saveState(state);
+    await this.repo.saveState(state, this.bossKey);
     return {
       state,
       status: this._buildStatus(config, state, Date.now())
@@ -226,8 +248,23 @@ class WorldBossService {
   }
 }
 
+// 世界王 zone 註冊表：zoneKey → bossKey（新增世界王只要在這裡加一條）
+const WORLD_BOSS_ZONES = {
+  elite: "default",            // 大史王
+  dragon_king_lair: "dragon_king", // 龍王(B)
+};
+function isWorldBossZone(zoneKey) {
+  return Object.prototype.hasOwnProperty.call(WORLD_BOSS_ZONES, zoneKey);
+}
+function bossKeyForZone(zoneKey) {
+  return WORLD_BOSS_ZONES[zoneKey] || null;
+}
+
 module.exports = {
   WorldBossService,
   normalizeConfig,
-  currentWeekLabelTW
+  currentWeekLabelTW,
+  WORLD_BOSS_ZONES,
+  isWorldBossZone,
+  bossKeyForZone
 };

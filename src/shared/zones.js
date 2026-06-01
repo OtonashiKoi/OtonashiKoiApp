@@ -72,6 +72,17 @@ const ZONE_DEFS = [
     defaultEntryFee: 0,
   },
   {
+    key:          "dragon_king_lair",
+    featureKey:   "monster_zone_dragon_king_lair",
+    label:        "龍王巢穴",
+    emoji:        "👑",
+    tagline:      "群龍之主沉眠之地，唯擊敗大史王者方得入內。",
+    color:        0x7f1d1d,
+    minLevel:     50,
+    maxLevel:     null,
+    defaultEntryFee: 0,
+  },
+  {
     key:          "elite",
     featureKey:   "monster_zone_elite",
     label:        "精英區",

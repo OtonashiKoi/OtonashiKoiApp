@@ -511,25 +511,26 @@ function createMongoRepositories() {
       }
     },
     worldBossRepository: {
-      async getConfig() {
-        const row = await (await collection("worldBossConfig")).findOne({ _id: "default" });
+      // bossKey 區分多隻世界王（default = 大史王；其餘如 dragon_king）
+      async getConfig(bossKey = "default") {
+        const row = await (await collection("worldBossConfig")).findOne({ _id: bossKey });
         return row?.value || null;
       },
-      async saveConfig(config) {
+      async saveConfig(config, bossKey = "default") {
         await (await collection("worldBossConfig")).updateOne(
-          { _id: "default" },
+          { _id: bossKey },
           { $set: { value: config, updatedAt: new Date().toISOString() } },
           { upsert: true }
         );
         return config;
       },
-      async getState() {
-        const row = await (await collection("worldBossState")).findOne({ _id: "default" });
+      async getState(bossKey = "default") {
+        const row = await (await collection("worldBossState")).findOne({ _id: bossKey });
         return row?.value || null;
       },
-      async saveState(state) {
+      async saveState(state, bossKey = "default") {
         await (await collection("worldBossState")).updateOne(
-          { _id: "default" },
+          { _id: bossKey },
           { $set: { value: state, updatedAt: new Date().toISOString() } },
           { upsert: true }
         );
