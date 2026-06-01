@@ -82,6 +82,7 @@ function createPetDashboardMessage(state, opts = {}) {
   const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
   const active = state?.active || null;
   const pets = Array.isArray(state?.pets) ? state.pets : [];
+  const eggCount = Math.max(0, Number(state?.eggCount) || 0);
   const statusLines = Array.isArray(opts.status) ? opts.status.filter(Boolean) : (opts.status ? [String(opts.status)] : []);
 
   const embed = new EmbedBuilder().setColor(0x9d174d).setFooter({ text: "寵物採集站" });
@@ -96,7 +97,7 @@ function createPetDashboardMessage(state, opts = {}) {
   if (!active) {
     embed.setTitle("🐾 我的寵物");
     if (pets.length === 0) {
-      descLines.push("（你目前沒有任何寵物）", "", "👉 去 **龍族之領** 打怪掉「寵物蛋」，再回來按【🥚 孵蛋】開始孵化。");
+      descLines.push("（你目前沒有任何寵物）", "", eggCount > 0 ? `你有 **${eggCount}** 顆寵物蛋，按【🥚 孵蛋】開始孵化。` : "👉 去 **龍族之領** 打怪掉「寵物蛋」，再回來按【🥚 孵蛋】開始孵化。");
     } else {
       descLines.push("（目前沒有出戰中的寵物）", "", `你有 **${pets.length}** 隻寵物，請按【🐾 出戰/更換】選一隻出戰才會開始採集。`);
     }
@@ -169,7 +170,7 @@ function createPetDashboardMessage(state, opts = {}) {
 
   const isEgg = active && active.stage === "egg";
   const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(PET_HATCH_ID).setLabel("🥚 孵蛋").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(PET_HATCH_ID).setLabel(eggCount > 0 ? `🥚 孵蛋 (${eggCount})` : "🥚 無蛋可孵").setStyle(ButtonStyle.Success).setDisabled(eggCount === 0),
     new ButtonBuilder().setCustomId(PET_FEED_ID).setLabel("🍖 餵食").setStyle(ButtonStyle.Primary).setDisabled(!active),
     new ButtonBuilder().setCustomId(PET_CLAIM_ID).setLabel("🎁 領取採集").setStyle(ButtonStyle.Primary).setDisabled(!active || isEgg),
   );

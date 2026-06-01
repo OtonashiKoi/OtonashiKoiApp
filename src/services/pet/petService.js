@@ -172,19 +172,24 @@ class PetService {
   // ── 對外：查詢寵物狀態（含懶結算） ──
   async getPetState(discordId) {
     const progress = await this._loadProgress(discordId);
+    const active = this._getActivePet(progress);
     let changed = false;
-    for (const pet of progress.pets) {
-      this._applyHungerDecay(pet);
-      this._settleGathering(pet);
+    if (active) {
+      this._applyHungerDecay(active);
+      this._settleGathering(active);
       changed = true;
     }
     if (changed) await this.progressRepository.save(progress);
 
-    const active = this._getActivePet(progress);
+    const eggCount = progress.inventory.reduce((sum, item) => {
+      if (!item || item.itemType !== "pet_egg") return sum;
+      return sum + Math.max(1, Number(item.stackCount) || 1);
+    }, 0);
     return {
       pets: progress.pets.map((p) => this._toView(p)),
       activePetUuid: progress.activePetUuid || null,
       active: active ? this._toView(active) : null,
+      eggCount,
     };
   }
 
@@ -461,9 +466,14 @@ class PetService {
     const progress = await this._loadProgress(discordId);
     const pet = this._findPet(progress, petUuid);
     if (!pet) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
+    const previousActive = this._getActivePet(progress);
+    if (previousActive && previousActive.uuid !== petUuid) {
+      this._applyHungerDecay(previousActive);
+      this._settleGathering(previousActive);
+    }
     progress.activePetUuid = petUuid;
-    // 出戰時重置採集計時起點
-    pet.lastSettleAt = nowMs();
+    // 切上前台後才開始計採集時間；既有累積物不清空。
+    if (!previousActive || previousActive.uuid !== petUuid) pet.lastSettleAt = nowMs();
     pet.lastSatietyAt = nowMs();
     await this.progressRepository.save(progress);
     return { activePetUuid: petUuid, pet: this._toView(pet) };
@@ -531,6 +541,13 @@ class PetService {
     // 孵蛋一律自動切換出戰到新蛋（舊寵物保留但停止採集，可由「出戰/更換」切回）
     const previousActiveUuid = progress.activePetUuid || null;
     const hadOtherActive = previousActiveUuid && previousActiveUuid !== petInstance.uuid;
+    if (hadOtherActive) {
+      const prev = progress.pets.find((p) => p && p.uuid === previousActiveUuid);
+      if (prev) {
+        this._applyHungerDecay(prev);
+        this._settleGathering(prev);
+      }
+    }
     progress.activePetUuid = petInstance.uuid;
     petInstance.lastSettleAt = now;
     petInstance.lastSatietyAt = now;
