@@ -191,6 +191,8 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
       // 確保 name / itemName 以 DB 為準（DB 欄位是 name，snapshot 可能只有 itemName）
       name:     lib.name     || entry.name     || entry.itemName || null,
       itemName: lib.name     || entry.itemName || entry.name     || null,
+      // 帶 DB 最新中文說明（snapshot 常缺 description，戒指特性等顯示要用）
+      description: lib.description ?? entry.description ?? null,
     };
   }
   return merged;

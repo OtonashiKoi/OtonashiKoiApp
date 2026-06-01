@@ -974,6 +974,7 @@ function groupEquipmentItems(items, tab) {
         tier,
         enhanceLevel: enh,
         equipStats: entry.equipStats || null,
+        passiveEffects: Array.isArray(entry.passiveEffects) ? entry.passiveEffects : [],
         sellPrice,
         imageUrl: entry.imageUrl || "",
         count: 0,
@@ -1176,7 +1177,7 @@ function buildPageRow(tab, subTab, page, totalPages, options = {}) {
 
 function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subTab = "all", options = {}) {
   const sectionMode = Boolean(options.sectionMode) || BACKPACK_SECTION_TABS.has(tab);
-  const showSectionSubTabs = sectionMode && tab === "weapon";
+  const showSectionSubTabs = sectionMode && (tab === "weapon" || tab === "armor");
   const rawFiltered = filterByTab(inventory, tab, subTab);
   const isEquipTab = tab === "equip" || tab === "weapon" || tab === "armor" || tab === "offhand" || tab === "special" || tab === "card" || tab === "badge";
   const filtered = isEquipTab ? groupEquipmentItems(rawFiltered, tab) : sortBackpackItems(rawFiltered, tab);
@@ -1232,9 +1233,12 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
       const slot = slotLabel ? `（${slotLabel}）` : "";
       const statStr = formatEquipStats(e.equipStats);
       const statsPart = statStr ? `｜${statStr}` : "";
+      const tierPart = e.tier ? ` [${String(e.tier).toUpperCase()}階]` : "";
+      const traitNames = (e.passiveEffects || []).map((pe) => EFFECT_NAME_ZH[pe?.key]).filter(Boolean);
+      const traitPart = traitNames.length ? `｜✨${traitNames.slice(0, 3).join("、")}` : "";
       const overMax = enhLv > MAX_ENHANCE_LEVEL ? ` ⚠️超過上限(+${MAX_ENHANCE_LEVEL})` : "";
       const price = e.sellPrice != null ? `售 ${e.sellPrice}💰/件` : "不可販售";
-      lines.push(`${offset + i + 1}. **${baseName}**${enh}${slot}${statsPart}｜${price}${overMax} ×${e.count}`);
+      lines.push(`${offset + i + 1}. **${baseName}**${enh}${tierPart}${slot}${statsPart}${traitPart}｜${price}${overMax} ×${e.count}`);
       return;
     }
 
