@@ -603,6 +603,25 @@ async function handleProfile(interaction) {
     }
   }
 
+  // ── 戒指特性說明（飾品欄有特性的戒指，穿上即顯示）──
+  let ringTraitSection = "";
+  const ringTraitLines = [];
+  for (const slot of ["accessory_l", "accessory_r"]) {
+    const ring = equipped[slot];
+    if (!ring || !Array.isArray(ring.passiveEffects) || ring.passiveEffects.length === 0) continue;
+    const ringName = ring.itemName || ring.name || "戒指";
+    const desc = (typeof ring.description === "string" && ring.description.trim())
+      ? ring.description.trim()
+      : (ring.passiveEffects || [])
+          .map((eff) => formatPassiveEffect(eff, { equipped, inventory: p.inventory || [], providerStats: cs }))
+          .filter(Boolean)
+          .join("、");
+    if (desc) ringTraitLines.push(`💍 ${ringName}：${desc}`);
+  }
+  if (ringTraitLines.length) {
+    ringTraitSection = `【戒指特性】\n${ringTraitLines.join("\n")}\n`;
+  }
+
   // ── 組合獨立區域 ──
   const cardSection = cardEffectLine ? `${cardEffectLine}\n==============\n` : "";
   const npcBuffSection = npcBuffAreaLine ? `${npcBuffAreaLine}\n==============\n` : "";
@@ -629,6 +648,7 @@ async function handleProfile(interaction) {
     `【裝備清單】\n` +
     equipLine + "\n" +
     (titleBonusSection ? titleBonusSection : "") +
+    (ringTraitSection || "") +
     `==============\n` +
     `【職業徽章】\n` +
     `${jobTraitAreaLine}\n` +
