@@ -192,21 +192,35 @@ function matchSellArmorSubTab(entry, subTab = "all") {
   return false;
 }
 
+// 上架選物排序：與背包一致 — 階級高 → +值高 優先
+function sortSellItems(list) {
+  const TIER_RANK = { A: 4, B: 3, C: 2, D: 1 };
+  return [...list].sort((a, b) => {
+    const aT = TIER_RANK[String(a.tier || "").toUpperCase()] || 0;
+    const bT = TIER_RANK[String(b.tier || "").toUpperCase()] || 0;
+    if (aT !== bT) return bT - aT;
+    const aE = Number(a.enhanceLevel || 0);
+    const bE = Number(b.enhanceLevel || 0);
+    if (aE !== bE) return bE - aE;
+    return String(a.itemName || "").localeCompare(String(b.itemName || ""), "zh-Hant");
+  });
+}
+
 function filterSellByTab(inventory, tab = "all", subTab = "all") {
   const sellable = inventory.filter(isSellableItem);
+  let filtered;
   if (tab === "weapon") {
-    return sellable.filter((entry) => SELL_WEAPON_SLOTS.has(entry.equipSlot) && matchSellWeaponSubTab(entry, subTab));
+    filtered = sellable.filter((entry) => SELL_WEAPON_SLOTS.has(entry.equipSlot) && matchSellWeaponSubTab(entry, subTab));
+  } else if (tab === "armor") {
+    filtered = sellable.filter((entry) => SELL_ARMOR_SLOTS.has(entry.equipSlot) && matchSellArmorSubTab(entry, subTab));
+  } else if (tab === "card") {
+    filtered = sellable.filter((entry) => entry.itemType === "monster_card" || Boolean(entry.monsterCardSkill));
+  } else if (tab === "gem") {
+    filtered = sellable.filter((entry) => ENHANCE_GEM_IDS.has(entry.itemId));
+  } else {
+    filtered = sellable;
   }
-  if (tab === "armor") {
-    return sellable.filter((entry) => SELL_ARMOR_SLOTS.has(entry.equipSlot) && matchSellArmorSubTab(entry, subTab));
-  }
-  if (tab === "card") {
-    return sellable.filter((entry) => entry.itemType === "monster_card" || Boolean(entry.monsterCardSkill));
-  }
-  if (tab === "gem") {
-    return sellable.filter((entry) => ENHANCE_GEM_IDS.has(entry.itemId));
-  }
-  return sellable;
+  return sortSellItems(filtered);
 }
 
 function buildSellMainTabRow(activeTab = "all") {

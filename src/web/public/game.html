@@ -633,10 +633,18 @@ function itemDetail(uuid){
   const it=INV_CACHE.inventory.find(i=>i.uuid===uuid); if(!it) return;
   const st=it.equipStats||{}; const statTxt=Object.entries(st).filter(([k,v])=>v).map(([k,v])=>`${k.toUpperCase()} +${v}`).join("　")||"—";
   const acts=[];
+  const safeName=(it.name||it.itemName).replace(/'/g,"");
+  const isMonsterCard=/^special/.test(it.equipSlot||"");
+  const isDismantleable=it.itemType==="equipment"&&!isMonsterCard;
   if(it.equipSlot) acts.push(`<button class="btn primary" onclick="doEquip('${uuid}')">裝備</button>`);
   if(it.itemType==="consumable") acts.push(`<button class="btn primary" onclick="doUse('${uuid}')">使用</button>`);
-  acts.push(`<button class="btn" onclick="doSell('${uuid}')">販售</button>`);
-  acts.push(`<button class="btn" onclick="doDiscard('${uuid}','${(it.name||it.itemName).replace(/'/g,"")}')">丟棄</button>`);
+  if(isDismantleable){
+    // 一般裝備：只走分解（拆成降階強化寶石），不再販售
+    acts.push(`<button class="btn" onclick="doDismantle('${uuid}','${safeName}')">分解</button>`);
+  } else {
+    acts.push(`<button class="btn" onclick="doSell('${uuid}')">販售</button>`);
+    if(it.itemType!=="equipment") acts.push(`<button class="btn" onclick="doDiscard('${uuid}','${safeName}')">丟棄</button>`);
+  }
   acts.push(`<button class="btn" onclick="closeModal()">關閉</button>`);
   openModal(`<h3>${itemThumb(it,"mthumb")} ${it.name||it.itemName}${it.enhanceLevel?` <span style="color:var(--gold)">+${it.enhanceLevel}</span>`:""}</h3>
     <div style="color:var(--ink-dim);font-size:12px;margin:6px 0 2px">${it.tier?("階級 "+it.tier+" · "):""}${it.equipSlot||it.itemType}</div>
@@ -647,6 +655,7 @@ async function itemAction(fn,okMsg){ try{ const r=await fn(); toast(r?.message||
 function doEquip(u){ itemAction(()=>api(`/api/me/inventory/equip/${u}`,{method:"POST",body:"{}"}),"已裝備"); }
 function doUse(u){ itemAction(()=>api(`/api/me/inventory/use/${u}`,{method:"POST",body:"{}"}),"已使用"); }
 function doDiscard(u,nm){ if(!confirm(`確定丟棄「${nm}」？此動作無法復原。`))return; itemAction(()=>api(`/api/me/inventory/discard/${u}`,{method:"POST",body:"{}"}),"已丟棄"); }
+function doDismantle(u,nm){ if(!confirm(`確定分解「${nm}」？有 50% 機率取得降階強化寶石，裝備會消失且無法復原。`))return; itemAction(()=>api(`/api/me/inventory/discard/${u}`,{method:"POST",body:"{}"}),"已分解"); }
 async function doSell(u){
   try{ const q=await api(`/api/me/inventory/sell/${u}`,{method:"POST",body:JSON.stringify({})});
     if(q.requiresConfirmation){ if(!confirm(q.message))return;

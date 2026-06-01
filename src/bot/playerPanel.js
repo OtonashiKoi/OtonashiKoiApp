@@ -724,10 +724,13 @@ function buildInventoryRow(e, idx) {
         .setLabel("丟棄")
         .setStyle(ButtonStyle.Danger)
     );
-  } else {
-    // 怪物卡不可分解；其餘裝備：分解（50% 機率拆成降階強化寶石）
-    const isMonsterCard = e.itemType === "monster_card" || e.monsterCardOf || /^special/.test(String(e.equipSlot || ""));
-    if (!isMonsterCard) {
+  }
+  // 怪物卡不可分解；其餘裝備：分解（50% 機率拆成降階強化寶石）
+  const isMonsterCard = e.itemType === "monster_card" || e.monsterCardOf || /^special/.test(String(e.equipSlot || ""));
+  // 可分解＝一般裝備（非寶石、非消耗品、非怪物卡）
+  const isDismantleable = !isEnhanceGem && itemType !== "consumable" && !isMonsterCard;
+  if (!isEnhanceGem && itemType !== "consumable") {
+    if (isDismantleable) {
       btns.push(
         new ButtonBuilder()
           .setCustomId(`backpack_discard:${e.uuid}`)
@@ -736,9 +739,10 @@ function buildInventoryRow(e, idx) {
       );
     }
   }
-  // 有 tier 的道具顯示販售按鈕
+  // 販售按鈕：只給「不能分解」但有 tier 的道具（強化寶石、怪物卡）；
+  // 一般裝備一律走分解、不再提供販售。
   const sellPrice = e.tier ? TIER_SELL_PRICE[String(e.tier).toUpperCase()] : null;
-  if (sellPrice != null) {
+  if (sellPrice != null && !isDismantleable) {
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_sell:${e.uuid}`)
@@ -862,6 +866,16 @@ function sortBackpackItems(items, tab) {
       return String(a.itemName || "").localeCompare(String(b.itemName || ""), "zh-Hant");
     }
 
+    // 裝備分頁：階級高 → +值高 優先（最強裝備排前面），同強度再照槽位/名稱
+    const TIER_RANK = { A: 4, B: 3, C: 2, D: 1 };
+    const aTier = TIER_RANK[String(a.tier || "").toUpperCase()] || 0;
+    const bTier = TIER_RANK[String(b.tier || "").toUpperCase()] || 0;
+    if (aTier !== bTier) return bTier - aTier;
+
+    const aEnh = Number(a.enhanceLevel || 0);
+    const bEnh = Number(b.enhanceLevel || 0);
+    if (aEnh !== bEnh) return bEnh - aEnh;
+
     const aSlot = a.equipSlot || "";
     const bSlot = b.equipSlot || "";
     const aOrd = EQ_SORT_ORDER_MAP[aSlot] ?? 999;
@@ -871,10 +885,6 @@ function sortBackpackItems(items, tab) {
     const an = normalizeName(a.itemName);
     const bn = normalizeName(b.itemName);
     if (an !== bn) return an.localeCompare(bn, "zh-Hant");
-
-    const aEnh = Number(a.enhanceLevel || 0);
-    const bEnh = Number(b.enhanceLevel || 0);
-    if (aEnh !== bEnh) return bEnh - aEnh;
 
     return String(a.uuid || "").localeCompare(String(b.uuid || ""));
   });
@@ -989,7 +999,24 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
     );
   }
 
-  if (group.sellPrice != null) {
+  // 分類：一般裝備走「分解」、怪物卡走「販售」、職業徽章/稱號「不可」
+  const slot = String(group.equipSlot || "");
+  const isMonsterCard = /^special/.test(slot);
+  const isJobBadge = slot === "job_eq";
+  const isTitle = slot === "title_eq";
+  const hasValidTierForSplit = group.tier && ["D", "C", "B", "A"].includes(String(group.tier || "").toUpperCase());
+  const isDismantleable = hasValidTierForSplit && !isMonsterCard && !isJobBadge && !isTitle;
+
+  if (isDismantleable) {
+    // 一般裝備：只給分解（50% 機率拆成降階強化寶石），不再販售
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_discard:${group.repUuid}`)
+        .setLabel("🔨 分解")
+        .setStyle(ButtonStyle.Danger)
+    );
+  } else if (group.sellPrice != null) {
+    // 怪物卡等可賣道具：保留販售
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_sell:${group.repUuid}:${tab}:${subTab}:${page}`)

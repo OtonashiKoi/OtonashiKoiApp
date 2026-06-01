@@ -772,6 +772,11 @@ class ShopService {
     if (refEntry.itemType === "job_badge" || refEntry.equipSlot === "job_eq") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章不可販售", 400);
     }
+    // 一般裝備一律走分解、不可販售（怪物卡 / 強化寶石(消耗品) 仍可賣）
+    const isMonsterCard = refEntry.itemType === "monster_card" || refEntry.monsterCardOf || /^special/.test(String(refEntry.equipSlot || ""));
+    if (refEntry.itemType === "equipment" && !isMonsterCard) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "裝備不可販售，請改用「分解」取得強化寶石", 400);
+    }
 
     // tier 查詢：同 sellItem，entry 沒有就查 library
     let tier = refEntry.tier ? String(refEntry.tier).toUpperCase() : null;
