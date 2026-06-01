@@ -725,13 +725,16 @@ function buildInventoryRow(e, idx) {
         .setStyle(ButtonStyle.Danger)
     );
   } else {
-    // 裝備/卡片：分解（拆成降階強化寶石）
-    btns.push(
-      new ButtonBuilder()
-        .setCustomId(`backpack_discard:${e.uuid}`)
-        .setLabel(`${prefix} 分解`)
-        .setStyle(ButtonStyle.Danger)
-    );
+    // 怪物卡不可分解；其餘裝備：分解（50% 機率拆成降階強化寶石）
+    const isMonsterCard = e.itemType === "monster_card" || e.monsterCardOf || /^special/.test(String(e.equipSlot || ""));
+    if (!isMonsterCard) {
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`backpack_discard:${e.uuid}`)
+          .setLabel(`${prefix} 分解`)
+          .setStyle(ButtonStyle.Danger)
+      );
+    }
   }
   // 有 tier 的道具顯示販售按鈕
   const sellPrice = e.tier ? TIER_SELL_PRICE[String(e.tier).toUpperCase()] : null;
@@ -1704,24 +1707,32 @@ async function handleBackpackAction(interaction, action, uuid) {
     }
     const enh = entry.enhanceLevel > 0 ? ` +${entry.enhanceLevel}` : "";
     const stack = entry.stackCount > 1 ? ` ×${entry.stackCount}` : "";
-    // 貴重物警告：有 +值 / 特效 / 卡片 / 徽章 / 稱號 → 加強提示，避免手滑丟掉
+    // 貴重物警告：有 +值 / 特效 / 徽章 / 稱號 → 加強提示，避免手滑丟掉
     const slot = String(entry.equipSlot || "");
+    const isMonsterCard = entry.itemType === "monster_card" || entry.monsterCardOf || /^special/.test(slot);
+    // 怪物卡不可分解，直接擋下（按鈕已不顯示，這裡再保險一層）
+    if (isMonsterCard) {
+      await safeEditReply(interaction, { content: "❌ 怪物卡無法分解。", components: [], embeds: [], files: [] });
+      return;
+    }
     const hasFx = (Array.isArray(entry.passiveEffects) && entry.passiveEffects.length)
       || (Array.isArray(entry.procEffects) && entry.procEffects.length)
       || (Array.isArray(entry.combatEffects) && entry.combatEffects.length);
     const warns = [];
     if (Number(entry.enhanceLevel) > 0) warns.push(`已強化 **+${entry.enhanceLevel}**`);
-    if (entry.monsterCardOf || /^special/.test(slot)) warns.push("這是**怪物卡**");
     if (slot === "job_eq") warns.push("這是**職業徽章**");
     if (slot === "title_eq") warns.push("這是**稱號**");
     if (hasFx) warns.push("帶有**特效**");
     const warnLine = warns.length ? `\n\n🚨 **注意：${warns.join("、")}**，分解後就沒了！` : "";
-    // 分解產物預告（裝備才有；降階寶石）
+    // 分解產物預告（裝備才有；降階寶石，50% 機率才會產出）
     const DISMANTLE_PREVIEW = { A: "2 顆 B 階寶石", B: "2 顆 C 階寶石", C: "2 顆 D 階寶石", D: "1 顆 D 階寶石" };
     const tierU = String(entry.tier || "").toUpperCase();
     const isEquip = entry.itemType === "equipment";
-    const yieldLine = (isEquip && DISMANTLE_PREVIEW[tierU]) ? `\n\n🔨 分解可得：**${DISMANTLE_PREVIEW[tierU]}**` : "";
-    const verb = (isEquip && DISMANTLE_PREVIEW[tierU]) ? "分解" : "丟棄";
+    const canDismantle = isEquip && !!DISMANTLE_PREVIEW[tierU];
+    const yieldLine = canDismantle
+      ? `\n\n🔨 有 **50%** 機率分解出：**${DISMANTLE_PREVIEW[tierU]}**（失敗則無產物，裝備一樣消失）`
+      : "";
+    const verb = canDismantle ? "分解" : "丟棄";
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`backpack_discard_confirm:${uuid}`)
@@ -1759,7 +1770,14 @@ async function handleBackpackDiscardConfirm(interaction, uuid) {
   try {
     const result = await serviceContext.shopService.discardItem(interaction.user.id, uuid);
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const gemMsg = result.gems ? `🔨 分解 **${result.itemName}** → 獲得 **${result.gems.count} 顆 ${result.gems.tier} 階寶石**！` : `✅ 已丟棄 **${result.itemName}**。`;
+    let gemMsg;
+    if (result.gems) {
+      gemMsg = `🔨 分解 **${result.itemName}** 成功 → 獲得 **${result.gems.count} 顆 ${result.gems.tier} 階寶石**！`;
+    } else if (result.dismantled) {
+      gemMsg = `💢 分解 **${result.itemName}** 失敗，未取得任何寶石…（裝備已消失）`;
+    } else {
+      gemMsg = `✅ 已丟棄 **${result.itemName}**。`;
+    }
     const msg = buildBackpackMessage(progress?.inventory || [], "item", gemMsg);
     await safeEditReply(interaction, msg);
   } catch (err) {

@@ -13,6 +13,8 @@ const {
   EmbedBuilder,
 } = require("discord.js");
 const {
+  PET_OPEN_ID,
+  PET_BACK_ID,
   PET_FEED_ID,
   PET_FEED_TIER_PREFIX,
   PET_HATCH_ID,
@@ -24,6 +26,7 @@ const {
   PET_RELEASE_CONFIRM_PREFIX,
   PET_SELECT_PREFIX,
   PET_RENAME_MODAL_ID,
+  createPetDashboardMessage,
 } = require("../petPanelView");
 
 function getServiceContext() {
@@ -32,6 +35,8 @@ function getServiceContext() {
 
 function isPetButton(customId) {
   return (
+    customId === PET_OPEN_ID ||
+    customId === PET_BACK_ID ||
     customId === PET_FEED_ID ||
     customId === PET_HATCH_ID ||
     customId === PET_ACTIVE_ID ||
@@ -70,9 +75,50 @@ function petLine(p) {
   return `🐉 ${name}（${p.speciesName || "?"}）Lv.${p.level}（exp ${p.growthExp}/${p.expToNext}）｜飽食 ${p.satiety}/${p.satietyMax}｜🍖餵 ${p.feedTier} 階｜採集 ${p.gatherCount}/${p.gatherCap}（產 ${p.producesTier} 階）\n     └ ${trait}${quality}`;
 }
 
+// 重繪主面板到「同一個 ephemeral 訊息」（動作完成後呼叫，帶結果訊息）
+async function refreshDashboard(interaction, status) {
+  const sc = getServiceContext();
+  const state = await sc.petService.getPetState(interaction.user.id);
+  await interaction.editReply(createPetDashboardMessage(state, { status }));
+}
+
+// 子面板共用的「返回面板」按鈕列
+function backRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(PET_BACK_ID).setLabel("🔙 返回面板").setStyle(ButtonStyle.Secondary)
+  );
+}
+
+// 餵食結果訊息行
+function buildFeedStatus(r, tierLabel) {
+  const lines = [tierLabel ? `🍖 餵了 **${r.fed}** 件 ${tierLabel} 階裝備` : "🍖 餵食完成！"];
+  if (r.protectedCount > 0) lines.push(`🛡️ 已保護 **${r.protectedCount}** 件未餵（有 +值的請單件餵；卡片徽章不可餵）`);
+  if (r.totalHatch > 0) lines.push(`孵化進度 +${r.totalHatch}`);
+  if (r.totalSatiety > 0) lines.push(`飽食度 +${Math.round(r.totalSatiety)}`);
+  if (r.totalGrowth > 0) lines.push(`成長 exp +${r.totalGrowth}`);
+  if (r.hatched) lines.push(`🎉 **孵化成功！開出了【${r.hatchedSpecies || "神秘龍"}】！**`);
+  if (r.leveledTo) lines.push(`⬆️ 升到 **Lv.${r.leveledTo}**`);
+  return lines;
+}
+
 async function handlePetButton(interaction) {
   const sc = getServiceContext();
   const discordId = interaction.user.id;
+
+  // 外層採集站「進入我的寵物區」→ 開新的 ephemeral（不可動到公共面板）
+  if (interaction.customId === PET_OPEN_ID) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const state = await sc.petService.getPetState(discordId);
+    await interaction.editReply(createPetDashboardMessage(state));
+    return;
+  }
+
+  // 返回主面板（子面板 → 主面板，原地編輯）
+  if (interaction.customId === PET_BACK_ID) {
+    await interaction.deferUpdate();
+    await refreshDashboard(interaction);
+    return;
+  }
 
   // 改名走 Modal（不能先 defer）
   if (interaction.customId === PET_RENAME_ID) {
@@ -90,48 +136,71 @@ async function handlePetButton(interaction) {
     return;
   }
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  // 其餘動作一律「編輯同一個面板」，不再開新訊息
+  await interaction.deferUpdate();
 
-  // 批量餵食某階
+  // 批量餵食某階 → 餵完直接重繪主面板
   if (interaction.customId.startsWith(PET_FEED_TIER_PREFIX)) {
     const tier = interaction.customId.slice(PET_FEED_TIER_PREFIX.length);
     const state = await sc.petService.getPetState(discordId);
-    if (!state.active) { await interaction.editReply("你目前沒有出戰中的寵物。先孵一隻並出戰。"); return; }
+    if (!state.active) { await refreshDashboard(interaction, "你目前沒有出戰中的寵物。先孵一隻並出戰。"); return; }
     try {
       const r = await sc.petService.feedPet(discordId, state.active.uuid, { tier });
-      const lines = [`🍖 餵了 **${r.fed}** 件 ${tier} 階裝備`];
-      if (r.protectedCount > 0) lines.push(`🛡️ 已保護 **${r.protectedCount}** 件未餵（有 +值的請單件餵；卡片徽章不可餵）`);
-      if (r.totalHatch > 0) lines.push(`孵化進度 +${r.totalHatch}`);
-      if (r.totalSatiety > 0) lines.push(`飽食度 +${Math.round(r.totalSatiety)}`);
-      if (r.totalGrowth > 0) lines.push(`成長 exp +${r.totalGrowth}`);
-      if (r.hatched) lines.push(`🎉 **孵化成功！開出了【${r.hatchedSpecies || "神秘龍"}】！**`);
-      if (r.leveledTo) lines.push(`⬆️ 升到 **Lv.${r.leveledTo}**`);
-      lines.push("", petLine(r.pet));
-      await interaction.editReply(lines.join("\n"));
+      await refreshDashboard(interaction, buildFeedStatus(r, tier));
     } catch (e) {
-      await interaction.editReply(`❌ ${e.message || "餵食失敗"}`);
+      await refreshDashboard(interaction, `❌ ${e.message || "餵食失敗"}`);
     }
     return;
   }
 
   if (interaction.customId === PET_FEED_ID) {
-    const state = await sc.petService.getPetState(discordId);
-    if (!state.active) { await interaction.editReply("你目前沒有出戰中的寵物。先孵一隻並出戰。"); return; }
-    // 只顯示「對應階級及以下」的餵食按鈕（高階裝備不能餵）
+    const { active, matchTier, items } = await sc.petService.listFeedableItems(discordId);
+    if (!active) { await interaction.editReply("你目前沒有出戰中的寵物。先孵一隻並出戰。"); return; }
+    // 只顯示「對應階級及以下」的批量餵食按鈕（高階裝備不能餵）
     const TIERS = ["D", "C", "B", "A"];
     const rank = { D: 0, C: 1, B: 2, A: 3 };
-    const feedTier = state.active.feedTier || "D";
+    const feedTier = active.feedTier || matchTier || "D";
     const styleByDiff = [ButtonStyle.Success, ButtonStyle.Primary, ButtonStyle.Secondary, ButtonStyle.Secondary];
     const btns = TIERS.filter((t) => rank[t] <= rank[feedTier]).map((t) => {
       const diff = rank[feedTier] - rank[t];
       const pctMap = [100, 60, 30, 15];
       return new ButtonBuilder().setCustomId(`${PET_FEED_TIER_PREFIX}${t}`)
-        .setLabel(`餵 ${t} 階（${pctMap[diff]}%）`).setStyle(styleByDiff[diff] || ButtonStyle.Secondary);
+        .setLabel(`一鍵餵 ${t} 階素裝（${pctMap[diff]}%）`).setStyle(styleByDiff[diff] || ButtonStyle.Secondary);
     });
-    const row = new ActionRowBuilder().addComponents(...btns);
+    const rows = [new ActionRowBuilder().addComponents(...btns)];
+
+    // ── 單件餵食選單（道具欄）：列出可餵的裝備，含 +值/特效裝 ──
+    const total = items.length;
+    if (total > 0) {
+      const options = items.slice(0, 25).map((it) => {
+        const plus = it.enhanceLevel > 0 ? ` +${it.enhanceLevel}` : "";
+        const special = it.hasSpecial ? " ✨" : "";
+        const label = `${it.itemName}${plus}${special}（${it.tier}階）`.slice(0, 100);
+        const desc = `餵食效益 ${it.pct}%${it.hasSpecial ? "｜含特效" : ""}${it.enhanceLevel > 0 ? `｜已強化 +${it.enhanceLevel}` : ""}`.slice(0, 100);
+        return new StringSelectMenuOptionBuilder().setLabel(label).setDescription(desc).setValue(`feed|${it.uuid}`);
+      });
+      const select = new StringSelectMenuBuilder()
+        .setCustomId(`${PET_SELECT_PREFIX}feed`)
+        .setPlaceholder(total > 25 ? `選擇單件餵食（共 ${total} 件，顯示前 25 件）` : `選擇單件餵食（共 ${total} 件）`)
+        .addOptions(options);
+      rows.push(new ActionRowBuilder().addComponents(select));
+    }
+
+    const feedNote = total > 0
+      ? "👇 下方選單可挑**單件**餵食（含 +值 / ✨特效裝，會被消耗，請謹慎）。"
+      : "（背包目前沒有可餵的裝備）";
+    rows.push(backRow());
     await interaction.editReply({
-      content: `對象：${petLine(state.active)}\n\n你的寵物對應階級為 **${feedTier}**，餵 ${feedTier} 階最划算（100%）；低階仍可餵但效益遞減。高於 ${feedTier} 階的裝備餵不進去。\n🛡️ 一鍵只吃「素裝(+0)」；**有 +值的需單件餵、卡片徽章不可餵**。`,
-      components: [row],
+      content: [
+        `🍖 **餵食** — 對象：${petLine(active)}`,
+        "",
+        `你的寵物對應階級為 **${matchTier}**，餵 ${matchTier} 階最划算（100%）；低階仍可餵但效益遞減。高於 ${matchTier} 階的裝備餵不進去。`,
+        "🛡️ 一鍵只吃「素裝(+0)」；**有 +值 / 特效的需從選單單件餵、卡片徽章稱號不可餵**。",
+        "",
+        feedNote,
+      ].join("\n"),
+      embeds: [],
+      components: rows,
     });
     return;
   }
@@ -139,16 +208,16 @@ async function handlePetButton(interaction) {
   if (interaction.customId === PET_CLAIM_ID) {
     try {
       const r = await sc.petService.claimGathering(discordId);
-      if (r.granted.length === 0) { await interaction.editReply("目前沒有可領取的採集物。"); return; }
+      if (r.granted.length === 0) { await refreshDashboard(interaction, "🎁 目前沒有可領取的採集物。"); return; }
       const summary = {};
       for (const g of r.granted) {
         const k = `${g.tier}${g.kind === "gem" ? "寶石" : "裝備"}`;
         summary[k] = (summary[k] || 0) + 1;
       }
-      const lines = Object.entries(summary).map(([k, n]) => `・${k} ×${n}`);
-      await interaction.editReply(`🎁 領取 **${r.granted.length}** 個採集物：\n${lines.join("\n")}`);
+      const detail = Object.entries(summary).map(([k, n]) => `${k}×${n}`).join("、");
+      await refreshDashboard(interaction, `🎁 領取 **${r.granted.length}** 個採集物：${detail}`);
     } catch (e) {
-      await interaction.editReply(`❌ ${e.message || "領取失敗"}`);
+      await refreshDashboard(interaction, `❌ ${e.message || "領取失敗"}`);
     }
     return;
   }
@@ -157,35 +226,35 @@ async function handlePetButton(interaction) {
     // 列出背包的蛋
     const progress = await sc.progressRepository.findByPlayerId(discordId);
     const eggs = (progress?.inventory || []).filter((x) => x && x.itemType === "pet_egg");
-    if (eggs.length === 0) { await interaction.editReply("背包沒有寵物蛋。去龍族之領打怪有機會掉落。"); return; }
+    if (eggs.length === 0) { await refreshDashboard(interaction, "🥚 背包沒有寵物蛋。去龍族之領打怪有機會掉落。"); return; }
     const options = eggs.slice(0, 25).map((e) => new StringSelectMenuOptionBuilder()
       .setLabel(`${e.itemName}${e.stackCount > 1 ? ` ×${e.stackCount}` : ""}`)
       .setValue(`hatch|${e.uuid}`));
     const select = new StringSelectMenuBuilder().setCustomId(`${PET_SELECT_PREFIX}hatch`)
       .setPlaceholder("選擇要孵化的蛋").addOptions(options);
-    await interaction.editReply({ content: "選擇要從哪顆蛋開始孵化：", components: [new ActionRowBuilder().addComponents(select)] });
+    await interaction.editReply({ content: "🥚 **孵蛋** — 選擇要孵化的蛋（孵化後會自動設為出戰）：", embeds: [], components: [new ActionRowBuilder().addComponents(select), backRow()] });
     return;
   }
 
   if (interaction.customId === PET_ACTIVE_ID) {
     const state = await sc.petService.getPetState(discordId);
-    if (state.pets.length === 0) { await interaction.editReply("你還沒有寵物。先孵一顆蛋。"); return; }
+    if (state.pets.length === 0) { await refreshDashboard(interaction, "你還沒有寵物。先孵一顆蛋。"); return; }
     const options = state.pets.slice(0, 25).map((p) => new StringSelectMenuOptionBuilder()
       .setLabel(`${petDisplayName(p)} (${STAGE_LABEL[p.stage]} Lv.${p.level})`)
       .setValue(`active|${p.uuid}`)
       .setDefault(p.uuid === state.activePetUuid));
     const select = new StringSelectMenuBuilder().setCustomId(`${PET_SELECT_PREFIX}active`)
       .setPlaceholder("選擇出戰寵物").addOptions(options);
-    await interaction.editReply({ content: "選擇要出戰（採集）的寵物：", components: [new ActionRowBuilder().addComponents(select)] });
+    await interaction.editReply({ content: "🐾 **出戰/更換** — 選擇要出戰（採集）的寵物：", embeds: [], components: [new ActionRowBuilder().addComponents(select), backRow()] });
     return;
   }
 
   if (interaction.customId === PET_DEX_ID) {
     const state = await sc.petService.getPetState(discordId);
-    const embed = new EmbedBuilder().setTitle("🐾 我的寵物").setColor(0x9d174d);
+    const embed = new EmbedBuilder().setTitle("📋 我的寵物圖鑑").setColor(0x9d174d);
     if (state.pets.length === 0) embed.setDescription("（尚無寵物，去龍族之領打蛋）");
     else embed.setDescription(state.pets.map((p) => (p.uuid === state.activePetUuid ? "⭐ " : "・") + petLine(p)).join("\n"));
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({ content: "", embeds: [embed], components: [backRow()] });
     return;
   }
 
@@ -195,9 +264,9 @@ async function handlePetButton(interaction) {
     try {
       const r = await sc.petService.releasePet(discordId, uuid);
       const name = petDisplayName(r.released);
-      await interaction.editReply({ content: `🕊️ 已放生「**${name}**」。牠回到龍族之領自由了（無任何回饋）。`, components: [] });
+      await refreshDashboard(interaction, `🕊️ 已放生「**${name}**」。牠回到龍族之領自由了（無任何回饋）。`);
     } catch (e) {
-      await interaction.editReply({ content: `❌ ${e.message || "放生失敗"}`, components: [] });
+      await refreshDashboard(interaction, `❌ ${e.message || "放生失敗"}`);
     }
     return;
   }
@@ -205,15 +274,16 @@ async function handlePetButton(interaction) {
   // 放生：列出寵物供選擇 → 選了之後跳確認
   if (interaction.customId === PET_RELEASE_ID) {
     const state = await sc.petService.getPetState(discordId);
-    if (state.pets.length === 0) { await interaction.editReply("你還沒有寵物。"); return; }
+    if (state.pets.length === 0) { await refreshDashboard(interaction, "你還沒有寵物。"); return; }
     const options = state.pets.slice(0, 25).map((p) => new StringSelectMenuOptionBuilder()
       .setLabel(`${petDisplayName(p)} (${STAGE_LABEL[p.stage]} Lv.${p.level})`)
       .setValue(`release|${p.uuid}`));
     const select = new StringSelectMenuBuilder().setCustomId(`${PET_SELECT_PREFIX}release`)
       .setPlaceholder("選擇要放生的寵物").addOptions(options);
     await interaction.editReply({
-      content: "⚠️ **放生會永久移除寵物，且沒有任何回饋**。請選擇要放生的對象：",
-      components: [new ActionRowBuilder().addComponents(select)],
+      content: "🕊️ **放生** — ⚠️ 放生會永久移除寵物，且**沒有任何回饋**。請選擇對象：",
+      embeds: [],
+      components: [new ActionRowBuilder().addComponents(select), backRow()],
     });
     return;
   }
@@ -222,16 +292,27 @@ async function handlePetButton(interaction) {
 async function handlePetSelect(interaction) {
   const sc = getServiceContext();
   const discordId = interaction.user.id;
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await interaction.deferUpdate();
   const value = interaction.values?.[0] || "";
   const [action, uuid] = value.split("|");
   try {
-    if (action === "hatch") {
+    if (action === "feed") {
+      const state = await sc.petService.getPetState(discordId);
+      if (!state.active) { await refreshDashboard(interaction, "你目前沒有出戰中的寵物。"); return; }
+      const r = await sc.petService.feedPet(discordId, state.active.uuid, { inventoryUuid: uuid });
+      await refreshDashboard(interaction, buildFeedStatus(r, null));
+    } else if (action === "hatch") {
       const r = await sc.petService.hatchEggFromInventory(discordId, uuid);
-      await interaction.editReply(`🥚 開始孵化神秘龍蛋！\n${petLine(r.pet)}\n\n餵裝備累積孵化進度（約 20 件 D 裝），**孵化瞬間才會揭曉是哪種龍**。`);
+      const lines = ["🥚 已開始孵化神秘龍蛋，並設為**出戰中**！"];
+      if (r.benchedPet) {
+        const benchedName = petDisplayName(r.benchedPet);
+        lines.push(`🔁 原本出戰的「**${benchedName}**」已被換下、暫停採集（可用【🐾 出戰/更換】切回）。`);
+      }
+      lines.push("餵裝備累積孵化進度（約 20 件 D 裝），孵化瞬間才揭曉品種。");
+      await refreshDashboard(interaction, lines);
     } else if (action === "active") {
       const r = await sc.petService.setActivePet(discordId, uuid);
-      await interaction.editReply(`🐾 已設為出戰寵物：\n${petLine(r.pet)}`);
+      await refreshDashboard(interaction, `🐾 已設為出戰：**${petDisplayName(r.pet)}**`);
     } else if (action === "release") {
       // 選好後跳「確認放生」按鈕（二次確認避免誤點）
       const state = await sc.petService.getPetState(discordId);
@@ -242,10 +323,11 @@ async function handlePetSelect(interaction) {
         .setLabel(`確定放生「${name}」`).setStyle(ButtonStyle.Danger);
       await interaction.editReply({
         content: `⚠️ 確定要放生「**${name}**」嗎？此操作**無法復原、沒有回饋**。`,
-        components: [new ActionRowBuilder().addComponents(confirmBtn)],
+        embeds: [],
+        components: [new ActionRowBuilder().addComponents(confirmBtn), backRow()],
       });
     } else {
-      await interaction.editReply("未知選項。");
+      await refreshDashboard(interaction, "未知選項。");
     }
   } catch (e) {
     await interaction.editReply(`❌ ${e.message || "操作失敗"}`);
@@ -255,8 +337,23 @@ async function handlePetSelect(interaction) {
 async function handlePetModal(interaction) {
   const sc = getServiceContext();
   const discordId = interaction.user.id;
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const nickname = interaction.fields.getTextInputValue("pet_nickname").trim();
+  // 改名 Modal 由面板按鈕觸發 → 可回編原本的面板訊息
+  const fromMessage = typeof interaction.isFromMessage === "function" && interaction.isFromMessage();
+  if (fromMessage) {
+    await interaction.deferUpdate();
+    try {
+      const state = await sc.petService.getPetState(discordId);
+      if (!state.active) { await refreshDashboard(interaction, "沒有出戰中的寵物。"); return; }
+      const r = await sc.petService.renamePet(discordId, state.active.uuid, nickname);
+      await refreshDashboard(interaction, `✏️ 暱稱已更新為「**${r.pet.nickname}**」`);
+    } catch (e) {
+      await refreshDashboard(interaction, `❌ ${e.message || "改名失敗"}`);
+    }
+    return;
+  }
+  // 後備：非面板來源 → 一般 ephemeral 回覆
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     const state = await sc.petService.getPetState(discordId);
     if (!state.active) { await interaction.editReply("沒有出戰中的寵物。"); return; }

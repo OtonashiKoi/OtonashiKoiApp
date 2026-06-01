@@ -198,6 +198,10 @@ class PetService {
       petId: pet.petId || null,
       species: pet.species || null,
       speciesName: pet.stage === "egg" ? null : (pet.speciesName || null), // 蛋階段不揭曉種類
+      // 蛋階段不揭曉圖片
+      imageUrl: pet.stage === "egg" ? null : (pet.imageUrl || null),
+      imageThumbnailUrl: pet.stage === "egg" ? null : (pet.imageThumbnailUrl || null),
+      rarity: pet.rarity || null,
       nickname: pet.nickname || null,
       stage: pet.stage,
       level: pet.level || 1,
@@ -307,6 +311,9 @@ class PetService {
         pet.petId = rolled.id;
         pet.species = rolled.species;
         pet.speciesName = rolled.name;
+        pet.imageUrl = rolled.imageUrl || null;
+        pet.imageThumbnailUrl = rolled.imageThumbnailUrl || null;
+        pet.rarity = rolled.rarity || null;
         pet.gatherMod = rolled.gather || { ...DEFAULT_GATHER_MOD };
         if (!pet.nickname) pet.nickname = rolled.name; // 預設用種類名
         hatchedSpecies = rolled.name;
@@ -332,6 +339,44 @@ class PetService {
       fed, protectedCount, totalSatiety, totalGrowth, totalHatch, hatched, hatchedSpecies, leveledTo,
       pet: this._toView(pet),
     };
+  }
+
+  // ── 列出「可單件餵給出戰寵物」的背包裝備（給選單面板用） ──
+  //   回傳 { active, matchTier, items: [{ uuid, itemName, tier, enhanceLevel, hasSpecial, multiplier, pct }] }
+  //   items 已過濾掉「階級太高餵不進去」與「卡片/徽章/稱號」，並依 階級↓ → +值↓ 排序。
+  async listFeedableItems(discordId) {
+    const progress = await this._loadProgress(discordId);
+    const active = this._getActivePet(progress);
+    if (!active) return { active: null, matchTier: null, items: [] };
+
+    this._applyHungerDecay(active);
+    const matchTier = petMatchingTier(active.stage === "egg" ? 1 : active.level);
+
+    const items = (progress.inventory || [])
+      .filter((it) => isSingleFeedable(it) && feedMultiplier(it.tier, matchTier) !== null)
+      .map((it) => {
+        const mult = feedMultiplier(it.tier, matchTier) || 0;
+        const hasSpecial =
+          (Array.isArray(it.passiveEffects) && it.passiveEffects.length > 0) ||
+          (Array.isArray(it.procEffects) && it.procEffects.length > 0) ||
+          (Array.isArray(it.combatEffects) && it.combatEffects.length > 0);
+        return {
+          uuid: it.uuid,
+          itemName: it.itemName || it.name || "未命名裝備",
+          tier: String(it.tier || "D").toUpperCase(),
+          enhanceLevel: Number(it.enhanceLevel) || 0,
+          hasSpecial,
+          multiplier: mult,
+          pct: Math.round(mult * 100),
+        };
+      })
+      .sort((a, b) => {
+        const tr = (TIER_RANK[b.tier] || 0) - (TIER_RANK[a.tier] || 0);
+        if (tr !== 0) return tr;
+        return b.enhanceLevel - a.enhanceLevel;
+      });
+
+    return { active: this._toView(active), matchTier, items };
   }
 
   // ── 孵化開獎：依 hatchWeight 從 pets 種類隨機抽一種 ──
@@ -483,9 +528,26 @@ class PetService {
     if ((egg.stackCount || 1) > 1) egg.stackCount = egg.stackCount - 1;
     else progress.inventory.splice(idx, 1);
 
-    if (!progress.activePetUuid) progress.activePetUuid = petInstance.uuid; // 第一隻自動出戰
+    // 孵蛋一律自動切換出戰到新蛋（舊寵物保留但停止採集，可由「出戰/更換」切回）
+    const previousActiveUuid = progress.activePetUuid || null;
+    const hadOtherActive = previousActiveUuid && previousActiveUuid !== petInstance.uuid;
+    progress.activePetUuid = petInstance.uuid;
+    petInstance.lastSettleAt = now;
+    petInstance.lastSatietyAt = now;
+
+    let benchedPet = null;
+    if (hadOtherActive) {
+      const prev = progress.pets.find((p) => p && p.uuid === previousActiveUuid);
+      if (prev) benchedPet = this._toView(prev);
+    }
+
     await this.progressRepository.save(progress);
-    return { pet: this._toView(petInstance) };
+    return {
+      pet: this._toView(petInstance),
+      becameActive: true,
+      benchedPet,              // 被換下來的舊寵物（null = 本來就沒有）
+      totalPets: progress.pets.length,
+    };
   }
 }
 

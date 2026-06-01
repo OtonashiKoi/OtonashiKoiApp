@@ -849,7 +849,8 @@ class ShopService {
     };
   }
 
-  // 分解裝備：移除該裝備，產出降階強化寶石（取代舊「丟棄」）
+  // 分解裝備：移除該裝備，50% 機率產出降階強化寶石（取代舊「丟棄」）
+  // 怪物卡不可分解；分解失敗時裝備照樣消失但無產物
   async discardItem(discordId, entryUuid) {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
@@ -857,13 +858,24 @@ class ShopService {
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
 
-    // 只有「裝備」可分解（含怪物卡/徽章嗎？→ 僅純裝備與卡片可分解，徽章/稱號不分解）
-    let gemsGranted = null;
+    // 怪物卡不可分解（背包中卡片可能 itemType=equipment，但帶 monsterCardOf 或 special 槽）
+    if (this._isMonsterCardEntry(entry)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "怪物卡無法分解", 400);
+    }
+
     const tier = String(entry.tier || "").toUpperCase();
     const isEquipmentLike = entry.itemType === "equipment";
-    if (isEquipmentLike && DISMANTLE_YIELD[tier]) {
-      const y = DISMANTLE_YIELD[tier];
-      gemsGranted = { tier: y.tier, count: y.count };
+    const canDismantle = isEquipmentLike && !!DISMANTLE_YIELD[tier];
+
+    // 50% 機率成功分解出產物；失敗則無產物（裝備仍消耗）
+    let gemsGranted = null;
+    let dismantled = false;
+    if (canDismantle) {
+      dismantled = true;
+      if (Math.random() < 0.5) {
+        const y = DISMANTLE_YIELD[tier];
+        gemsGranted = { tier: y.tier, count: y.count };
+      }
     }
 
     // 先移除被分解的裝備
@@ -876,7 +888,16 @@ class ShopService {
 
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
-    return { itemName: entry.itemName, gems: gemsGranted };
+    return { itemName: entry.itemName, gems: gemsGranted, dismantled };
+  }
+
+  // 判斷背包項是否為怪物卡（不可分解）
+  _isMonsterCardEntry(entry) {
+    if (!entry) return false;
+    if (entry.itemType === "monster_card") return true;
+    if (entry.monsterCardOf) return true;
+    if (/^special/.test(String(entry.equipSlot || ""))) return true;
+    return false;
   }
 
   // 把強化寶石加進背包（同 itemId 堆疊）
