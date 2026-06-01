@@ -216,6 +216,21 @@ function getArenaStateSnapshot() {
   };
 }
 
+// 持久化前剝除戰士背包：inventory 只在記憶體中的即時對戰需要，
+// 全量寫入會讓單一 pkArenaState 文件超過 MongoDB 16MB 上限導致存檔失敗。
+// 重啟還原時頂多少算背包被動，遠勝於整包狀態（slots/queue/bets）全部遺失。
+function stripStateForPersist(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.slots)) return snapshot;
+  for (const slot of snapshot.slots) {
+    if (!slot) continue;
+    for (const side of ["challenger", "defender"]) {
+      const opts = slot[side]?.opts;
+      if (opts && Array.isArray(opts.inventory)) opts.inventory = [];
+    }
+  }
+  return snapshot;
+}
+
 async function saveArenaState() {
   syncPkBattlePresence();
   const repo = serviceContext.pkArenaRepository;
@@ -223,7 +238,7 @@ async function saveArenaState() {
   const snapshot = getArenaStateSnapshot();
   persistedPanelChannelId = snapshot.panelChannelId;
   persistedPanelMessageId = snapshot.panelMessageId;
-  await repo.saveState(snapshot).catch((err) => {
+  await repo.saveState(stripStateForPersist(snapshot)).catch((err) => {
     console.warn("[PK] save arena state failed:", err?.message || err);
   });
 }

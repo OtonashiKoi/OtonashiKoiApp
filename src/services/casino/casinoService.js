@@ -146,6 +146,12 @@ class CasinoService {
     if (!round || round.status !== "open") throw new Error("本輪已鎖盤，請等下一輪");
     if (Date.now() >= round.lockedAt) throw new Error("本輪已鎖盤，請等下一輪");
 
+    // 下好離手：每人每輪限下一注，且不可更改或加注
+    const existingBets = await this.getPlayerBetsInRound(round.roundId, discordId);
+    if (Array.isArray(existingBets) && existingBets.length > 0) {
+      throw new Error("本輪你已經下注囉！下好離手、不能更改或加注，請等下一輪。");
+    }
+
     // 扣金幣（rewardService 已含 wallet 存量驗證）
     await this.rewardService.grantCurrency({
       discordId,
@@ -153,7 +159,8 @@ class CasinoService {
       currencyType: "gold",
       amount: -intAmount,
       source: CURRENCY_SOURCES.CASINO_BET,
-      sourceRef: `round:${round.roundId}:${color}`,
+      // 帶 discordId 確保每人每輪唯一，避免去重把不同玩家的扣款誤判為重複
+      sourceRef: `round:${round.roundId}:${color}:${discordId}`,
     });
 
     // 寫下注紀錄、更新本輪統計
@@ -229,7 +236,8 @@ class CasinoService {
           currencyType: "gold",
           amount: ps.totalPay,
           source: CURRENCY_SOURCES.CASINO_PAYOUT,
-          sourceRef: `round:${roundId}`,
+          // 帶 discordId 確保每人每輪唯一，避免去重把多名中獎者只發給第一位
+          sourceRef: `round:${roundId}:${ps.discordId}`,
         }).catch((err) => {
           console.warn(`[casino] payout failed for ${ps.discordId}:`, err?.message);
         });

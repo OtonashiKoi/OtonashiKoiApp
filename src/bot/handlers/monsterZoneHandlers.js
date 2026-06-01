@@ -641,10 +641,12 @@ const ENHANCE_GEM_IDS = {
 };
 // 參與獎勵寶石：依區域決定品階
 const ZONE_PARTICIPATION_GEM_TIER = {
-  beginner: 'D', normal: 'D', mid: 'C', hard: 'B', elite: 'A'
+  beginner: 'D', normal: 'D', mid: 'C', hard: 'B', elite: 'A',
+  ancient_city: 'B', ancient_city_deep: 'B',
+  dragon_realm: 'A', dragon_king_lair: 'A'
 };
 // 參與獎勵寶石掉落率（依品階）
-const GEM_PARTICIPATION_RATE = { D: 0.50, C: 0.50, B: 0.30, A: 0.30 };
+const GEM_PARTICIPATION_RATE = { D: 0.20, C: 0.20, B: 0.10, A: 0.03 };
 // 先不啟用雙掉
 const GEM_PARTICIPATION_DOUBLE_DROP_RATE = {};
 const GEM_TIER_ORDER = ["D", "C", "B", "A"];
@@ -1673,13 +1675,13 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
     const client = getBotClient();
     if (!client?.isReady()) return;
 
-    // 發送原本的廣播到 town_chat 或 monster_zone
+    // 掉落公告改發到「廣播公告頻道」(broadcast)，不再洗聊天大廳(town_chat)
     const layout = await sc.channelLayoutRepository.get();
     const allBindings = layout?.discord?.bindings || [];
-    const binding = allBindings.find((b) => b.featureKey === "town_chat") ||
-                    allBindings.find((b) => b.featureKey === "monster_zone");
-    if (binding?.channelId) {
-      const channel = await client.channels.fetch(binding.channelId).catch(() => null);
+    const broadcastBinding = allBindings.find((b) => b.featureKey === "broadcast");
+    const broadcastChannelId = broadcastBinding?.channelId || "1450062298076151952";
+    if (broadcastChannelId) {
+      const channel = await client.channels.fetch(broadcastChannelId).catch(() => null);
       if (channel?.isTextBased?.()) {
         const itemList = droppedItems.join("、");
         const taunt = pickTaunt(kind, monsterName);
@@ -1710,9 +1712,8 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
       return null;
     });
     if (notifChannel?.isTextBased?.()) {
-      // 過濾卡片和 A 階裝備（用 isMonsterCardItem 正確識別怪物卡）
+      // 過濾卡片（用 isMonsterCardItem 正確識別怪物卡）
       const cardDrops = droppedItemObjects.filter((item) => isMonsterCardItem(item));
-      const aEquipDrops = droppedItemObjects.filter((item) => String(item.tier || "").toUpperCase() === "A" && !isMonsterCardItem(item));
 
       // 發送卡片掉落公告（顯示卡片名稱）
       if (cardDrops.length > 0) {
@@ -1720,14 +1721,6 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
         await sendAnnouncementWebhook(notifChannel, `🃏 **${cardNames}**  <@${discordId}>`, {
           allowedMentions: { users: [discordId] },
           context: "card drop webhook"
-        });
-      }
-
-      // 發送 A 階裝備掉落公告
-      if (aEquipDrops.length > 0) {
-        await sendAnnouncementWebhook(notifChannel, `⚙️ A階裝備  <@${discordId}>`, {
-          allowedMentions: { users: [discordId] },
-          context: "A-tier drop webhook"
         });
       }
     } else {

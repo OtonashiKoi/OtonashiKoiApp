@@ -27,14 +27,15 @@ const COLOR_META = {
 
 // 押注限制
 const BET_MIN = 100;
-const BET_MAX = 50_000;
-const PAYOUT_CAP = 500_000;   // 單注單輪賠付上限
+const BET_MAX = 500_000;
+const PAYOUT_CAP = 7_500_000;   // 單注單輪賠付上限（滿注 500,000 × 最高倍 15，完全不砍）
 
 // 下注額 → 解鎖階級 + 抽中道具總機率
+//   1–5,000：D ／ 5,001–30,000：C ／ 30,001–100,000：B ／ 100,001–500,000：A
 function getBetTier(amount) {
-  if (amount >= 10_000) return { rate: 0.20, tier: 3, label: "A 階全解鎖" };
-  if (amount >= 5_000)  return { rate: 0.15, tier: 2, label: "解鎖至 B 階" };
-  if (amount >= 1_000)  return { rate: 0.12, tier: 1, label: "解鎖至 C 階" };
+  if (amount >= 100_001) return { rate: 0.20, tier: 3, label: "A 階全解鎖" };
+  if (amount >= 30_001)  return { rate: 0.15, tier: 2, label: "解鎖至 B 階" };
+  if (amount >= 5_001)   return { rate: 0.12, tier: 1, label: "解鎖至 C 階" };
   if (amount >= BET_MIN) return { rate: 0.08, tier: 0, label: "僅 D 階" };
   return { rate: 0, tier: -1, label: "不可下注" };
 }
