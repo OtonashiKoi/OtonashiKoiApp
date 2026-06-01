@@ -7,6 +7,7 @@ const { fail, ok } = require("../../shared/response");
 const { uploadImageLocally } = require("../../shared/localImageUpload");
 const { addEnhanceGemToInventory } = require("../../shared/inventoryStacking");
 const { featureKeyToZone } = require("../../shared/zones");
+const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
 
 // Upload image to temp directory first, then hand over to Cloudinary helper.
 const upload = multer({
@@ -212,7 +213,7 @@ function createAdminConsoleRoutes(serviceContext) {
       const result = await serviceContext.adminConsoleService.publishMonsterZonePanel(channelId, activeMonster, currentHp, {
         participantCount,
         damageMap: state.damageMap || {},
-        worldBossPartsHp: zone === "elite" ? (state.worldBossPartsHp || null) : null,
+        worldBossPartsHp: isWorldBossZone(zone) ? (state.worldBossPartsHp || null) : null,
         cleanChannel: true
       });
       res.json(ok(result, "monster zone panel published"));

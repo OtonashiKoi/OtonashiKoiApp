@@ -7,6 +7,7 @@ const v8 = require("node:v8");
 const { Client, GatewayIntentBits, Events, MessageFlags, PermissionsBitField, RESTEvents, Options } = require("discord.js");
 const config = require("../config");
 const { isAppError } = require("../shared/errors");
+const { isWorldBossZone } = require("../services/worldBoss/worldBossService");
 const { handleCommand, handleButton, handleSelectMenu, handleModal } = require("./commands");
 const { serviceContext, setBotClient, getBotClient } = require("./runtimeContext");
 const { startFetcher } = require("./commentFetcher");
@@ -340,7 +341,7 @@ async function resolveMonsterPanelState(zoneKey) {
   const participantCount = Array.isArray(state.participants) ? state.participants.length : 0;
   const damageMap = state.damageMap && typeof state.damageMap === "object" ? state.damageMap : {};
 
-  const worldBossPartsHp = zoneKey === "elite" ? (state.worldBossPartsHp || null) : null;
+  const worldBossPartsHp = isWorldBossZone(zoneKey) ? (state.worldBossPartsHp || null) : null;
   return { activeMonster, currentHp, participantCount, damageMap, worldBossPartsHp };
 }
 

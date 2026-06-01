@@ -38,7 +38,7 @@ const EQUIPPED_TIER_SLOTS = TIER_SET_SLOTS;
 /**
  * 依玩家基礎屬性與已裝備物品計算戰鬥數值。
  */
-function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = [], { pkRating } = {}) {
+function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = [], { pkRating, zone = null } = {}) {
   const tierSetBonuses = getEquipmentTierSetBonuses(equipped);
 
   // 裝備加成
@@ -194,7 +194,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     dwarfWarriorBonusVsStunnedPct,
   };
 
-  const effectContext = { equipped, inventory };
+  const effectContext = { equipped, inventory, zone };
   const equipmentEffects = collectEquipmentEffects(equipped, "passive", effectContext);
   const combinedEffects = [...equipmentEffects, ...(Array.isArray(activeEffects) ? activeEffects : [])];
   const nextStats = applyEffectsToStats(baseStats, combinedEffects, effectContext);

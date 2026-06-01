@@ -2,6 +2,7 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { createPlayerPanelMessage } = require("../../bot/playerPanelView");
 const config = require("../../config");
 const { featureKeyToZone, zoneToFeatureKey } = require("../../shared/zones");
+const { isWorldBossZone } = require("../worldBoss/worldBossService");
 
 const AVAILABLE_FEATURES = [
   // ─── 系統面板 ────────────────────────────────
@@ -34,6 +35,7 @@ const AVAILABLE_FEATURES = [
   { key: "monster_zone_ancient_city", label: "放怪區面板（古城）", description: "Lv.20 以上 — 古城地圖", category: "monster" },
   { key: "monster_zone_ancient_city_deep", label: "放怪區面板（古城深處）", description: "Lv.30-40 — 古城深處地圖", category: "monster" },
   { key: "monster_zone_dragon_realm", label: "放怪區面板（龍族之領）", description: "Lv.40-50 — 龍族之領，A 階秘銀裝備產地", category: "monster" },
+  { key: "monster_zone_dragon_king_lair", label: "世界王面板（龍王巢穴）", description: "Lv.40+ — 古龍王(B)，需先擊敗本週大史王才解鎖", category: "monster" },
   { key: "pet_panel", label: "寵物面板", description: "寵物孵化 / 餵食 / 採集站", category: "system" },
   { key: "monster_zone_wasteland_throne", label: "放怪區面板（廢都王座）", description: "Lv.30 以上 — 廢都王座地圖", category: "monster" },
   { key: "monster_zone_elite", label: "放怪區面板（精英）", description: "Lv.20 以上玩家可進入的精英戰鬥區", category: "monster" },
@@ -128,7 +130,7 @@ function _runOnLayoutMutex(fn, { skipIfBusy = false } = {}) {
 }
 
 class AdminConsoleService {
-  constructor(channelLayoutRepository, playerRepository, adminService, walletRepository, progressRepository, checkinRepository, worldBossService = null) {
+  constructor(channelLayoutRepository, playerRepository, adminService, walletRepository, progressRepository, checkinRepository, worldBossService = null, worldBossServiceFor = null) {
     this.channelLayoutRepository = channelLayoutRepository;
     this.playerRepository = playerRepository;
     this.adminService = adminService;
@@ -136,6 +138,8 @@ class AdminConsoleService {
     this.progressRepository = progressRepository;
     this.checkinRepository = checkinRepository;
     this.worldBossService = worldBossService;
+    // 依 zone 取對應世界王 service（多隻世界王用；無則退回 default）
+    this.worldBossServiceFor = worldBossServiceFor || (() => this.worldBossService);
   }
 
   async getChannelLayout() {
@@ -617,9 +621,12 @@ class AdminConsoleService {
 
     const finalZoneKey = resolvedZoneKey || featureKeyToZone(boundFeatureKey);
     let worldBossStatus = null;
-    if (finalZoneKey === "elite" && this.worldBossService) {
-      const wb = await this.worldBossService.getConfigWithStatus().catch(() => null);
-      worldBossStatus = wb?.status || null;
+    if (isWorldBossZone(finalZoneKey)) {
+      const wbService = this.worldBossServiceFor(finalZoneKey) || this.worldBossService;
+      if (wbService) {
+        const wb = await wbService.getConfigWithStatus().catch(() => null);
+        worldBossStatus = wb?.status || null;
+      }
     }
 
     const panelMsg = await createMonsterZonePanelMessage(

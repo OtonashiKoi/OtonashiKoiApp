@@ -18,7 +18,7 @@ const BOSS_ID = "dragon-king-boss";
 const CARD_ID = "monster-card-dragon-king";
 const ZONE = "dragon_king_lair";
 
-const BOSS_HP = 1770000;     // 終局：大史王(118萬) 的 1.5 倍
+const BOSS_HP = 2655000;     // 終局：強化後大史王(177萬) 的 1.5 倍（原始大史王 2.25×）
 
 // 龍焰：命中時造成自身攻擊力 200% 的雷焰額外傷害
 const lightningProc = {
@@ -79,14 +79,14 @@ const dragonKingMonster = {
   seq: 1,
   name: "龍王(B)",
   zone: ZONE,
-  level: 65,
-  maxHp: BOSS_HP,                              // 1.5× 大史王(1.18M)
-  // 全面 1.5× 大史王（str45/agi35/vit55/int33/dex45/luk30、def70）
-  str: 68, agi: 53, vit: 83, int: 50, dex: 68, luk: 45,
-  def: 105,
+  level: 70,
+  maxHp: BOSS_HP,                              // 強化後大史王(177萬) 的 1.5×（原始 2.25×）
+  // 強化後大史王的 1.5×（= 原始大史王 2.25×）
+  str: 101, agi: 79, vit: 124, int: 74, dex: 101, luk: 68,
+  def: 158,
   defIgnorePct: 70,                            // 與大史王相同（% 值不倍增）
-  expReward: 22000,
-  goldReward: 45000,
+  expReward: 30000,
+  goldReward: 60000,
   entryFee: 0,
   isBoss: true,
   enabled: true,
@@ -150,7 +150,7 @@ async function main() {
   // 怪物
   await db.collection("monsters").deleteMany({ id: BOSS_ID });
   await db.collection("monsters").insertOne(dragonKingMonster);
-  console.log(`[OK] 建立怪物：龍王(B) Lv${dragonKingMonster.level} HP ${BOSS_HP.toLocaleString()}（1.5× 大史王）@ ${ZONE}`);
+  console.log(`[OK] 建立怪物：龍王(B) Lv${dragonKingMonster.level} HP ${BOSS_HP.toLocaleString()}（強化後大史王 1.5× / 原始 2.25×）@ ${ZONE}`);
 
   // 龍王卡
   await db.collection("items").deleteMany({ id: CARD_ID });

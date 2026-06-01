@@ -2312,7 +2312,7 @@ async function handleEnterBattle(interaction) {
     const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
     let equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, sc.itemRepository);
-    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating });
+    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, zone: zoneKey });
     const participantCache = createBattleParticipantCache(sc);
     let currentSnapshot = {
       progress,
@@ -3232,6 +3232,14 @@ async function handleDeleteLog(interaction) {
 async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal" }) {
   const sc = getServiceContext();
   const rewardLines = [];
+
+  // 擊敗古龍王(B)（dragon_king_lair 世界王全破）→ 記錄屠龍任務進度
+  if (zoneKey === "dragon_king_lair" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
+    try {
+      const qs = sc?.questService || sc?.weeklyQuestService;
+      if (qs?.recordProgress) await qs.recordProgress(discordId, "kill_dragon_king", 1);
+    } catch (e) { console.error("[Quest] kill_dragon_king record error:", e.message); }
+  }
 
   if (isWorldBossZone(zoneKey) && monster?.isBoss && !isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
     rewardLines.push("目前僅擊破單一部位，世界王需三部位全破才會結算。");

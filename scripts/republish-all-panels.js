@@ -31,6 +31,7 @@ const PUBLISH_MAP = {
   monster_zone_ancient_city:      "/admin/channel-layout/publish-monster-zone",
   monster_zone_ancient_city_deep: "/admin/channel-layout/publish-monster-zone",
   monster_zone_dragon_realm:      "/admin/channel-layout/publish-monster-zone",
+  monster_zone_dragon_king_lair:  "/admin/channel-layout/publish-monster-zone",
   monster_zone_elite:             "/admin/channel-layout/publish-monster-zone",
 };
 

@@ -147,7 +147,8 @@ function createServiceContext() {
     repositories.walletRepository,
     repositories.progressRepository,
     repositories.checkinRepository,
-    worldBossService
+    worldBossService,
+    worldBossServiceFor   // 依 zone 取對應世界王 service（龍王巢穴用 dragon_king）
   );
 
   return {

@@ -99,6 +99,13 @@ function isEffectConditionMet(effectRef, context = {}) {
   if (!matchConditionValues(condition.equippedSlot, hasEquippedSlot)) return false;
   if (!matchConditionValues(condition.weaponType, hasWeaponType)) return false;
 
+  // zone 條件：限定在特定戰鬥區才生效（context.zone 由戰鬥端傳入；非戰鬥情境無 zone 則不符合）
+  if (condition.zone !== undefined && condition.zone !== null && condition.zone !== "") {
+    const ctxZone = context.zone ? String(context.zone) : null;
+    const matchZone = ctxZone !== null && matchConditionValues(condition.zone, (z) => z === ctxZone);
+    if (!matchZone) return false;
+  }
+
   if (!matchNotConditionValues(condition.notHasItemId, hasItemId)) return false;
   if (!matchNotConditionValues(condition.notEquippedItemId, hasEquippedItemId)) return false;
   if (!matchNotConditionValues(condition.notEquippedSlot, hasEquippedSlot)) return false;
