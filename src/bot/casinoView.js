@@ -1,6 +1,6 @@
 "use strict";
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
-const { COLOR_META, COLORS, BET_MIN, BET_MAX, PAYOUT_CAP } = require("../services/casino/wheelConfig");
+const { COLOR_META, COLORS, BET_MIN, BET_MAX, PAYOUT_CAP, WHEEL_SLOTS } = require("../services/casino/wheelConfig");
 
 // ── Button / Modal ID ─────────────────────────────────────────
 const CASINO_IDS = {
@@ -19,6 +19,14 @@ function isCasinoButton(customId) { return CASINO_BUTTONS.includes(customId); }
 function isCasinoModal(customId) { return typeof customId === "string" && customId.startsWith(CASINO_BET_MODAL_PREFIX); }
 
 function fmtGold(n) { return Number(n || 0).toLocaleString("zh-TW"); }
+
+// 各顏色中獎機率 = 該色格數 / 總格數（依 WHEEL_SLOTS 動態計算）
+const WHEEL_TOTAL = WHEEL_SLOTS.length;
+const SLOT_COUNT_BY_COLOR = WHEEL_SLOTS.reduce((m, s) => { m[s.color] = (m[s.color] || 0) + 1; return m; }, {});
+function fmtWinPct(color) {
+  const pct = WHEEL_TOTAL ? (SLOT_COUNT_BY_COLOR[color] || 0) / WHEEL_TOTAL * 100 : 0;
+  return (Number.isInteger(pct) ? String(pct) : pct.toFixed(1)) + "%";
+}
 
 // 把 recentResults 顯示成 emoji 序列
 function fmtRecentResults(results) {
@@ -57,7 +65,7 @@ function createCasinoPanelMessage({ round = null, recentResults = [], lastResult
     for (const color of COLORS) {
       const meta = COLOR_META[color];
       const amt = totals[color] || 0;
-      lines.push(`${meta.emoji} **${meta.label} ×${meta.mult}**　${fmtGold(amt)} 金幣`);
+      lines.push(`${meta.emoji} **${meta.label} ×${meta.mult}**・中獎 ${fmtWinPct(color)}　${fmtGold(amt)} 金幣`);
     }
     lines.push("");
     lines.push(`💰 本輪總彩池：**${fmtGold(totalPot)}** 金幣`);

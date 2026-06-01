@@ -7,12 +7,12 @@
 const ROUND_DURATION_MS = 60 * 1000;     // 60 秒一輪
 const LOCK_BEFORE_END_MS = 5 * 1000;     // 結算前 5 秒鎖盤
 
-// 20 格輪盤
+// 25 格輪盤（依倍率：×2=12 / ×3=6 / ×5=4 / ×10=2 / ×15=1）
 const WHEEL_SLOTS = [
-  ...Array(9).fill({ color: "yellow", mult: 2 }),
+  ...Array(12).fill({ color: "yellow", mult: 2 }),
   ...Array(6).fill({ color: "green",  mult: 3 }),
-  ...Array(3).fill({ color: "red",    mult: 5 }),
-  ...Array(1).fill({ color: "blue",   mult: 10 }),
+  ...Array(4).fill({ color: "red",    mult: 5 }),
+  ...Array(2).fill({ color: "blue",   mult: 10 }),
   ...Array(1).fill({ color: "purple", mult: 15 }),
 ];
 
