@@ -33,6 +33,9 @@ function getServiceContext() {
   return require("../runtimeContext").serviceContext;
 }
 
+const PET_FEED_PAGE_PREFIX = "pet:feedpage:";
+const FEED_PAGE_SIZE = 25;
+
 function isPetButton(customId) {
   return (
     customId === PET_OPEN_ID ||
@@ -45,6 +48,7 @@ function isPetButton(customId) {
     customId === PET_DEX_ID ||
     customId === PET_RELEASE_ID ||
     customId.startsWith(PET_FEED_TIER_PREFIX) ||
+    customId.startsWith(PET_FEED_PAGE_PREFIX) ||
     customId.startsWith(PET_RELEASE_CONFIRM_PREFIX)
   );
 }
@@ -101,6 +105,65 @@ function buildFeedStatus(r, tierLabel) {
   return lines;
 }
 
+function buildFeedMenu({ active, matchTier, items, page = 0 }) {
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / FEED_PAGE_SIZE));
+  const safePage = Math.max(0, Math.min(totalPages - 1, Number(page) || 0));
+  const pageItems = items.slice(safePage * FEED_PAGE_SIZE, (safePage + 1) * FEED_PAGE_SIZE);
+
+  const TIERS = ["D", "C", "B", "A"];
+  const rank = { D: 0, C: 1, B: 2, A: 3 };
+  const feedTier = active.feedTier || matchTier || "D";
+  const styleByDiff = [ButtonStyle.Success, ButtonStyle.Primary, ButtonStyle.Secondary, ButtonStyle.Secondary];
+  const btns = TIERS.filter((t) => rank[t] <= rank[feedTier]).map((t) => {
+    const diff = rank[feedTier] - rank[t];
+    const pctMap = [100, 60, 30, 15];
+    return new ButtonBuilder().setCustomId(`${PET_FEED_TIER_PREFIX}${t}`)
+      .setLabel(`一鍵餵 ${t} 階素裝（${pctMap[diff]}%）`).setStyle(styleByDiff[diff] || ButtonStyle.Secondary);
+  });
+  const rows = [new ActionRowBuilder().addComponents(...btns)];
+
+  if (pageItems.length > 0) {
+    const options = pageItems.map((it) => {
+      const plus = it.enhanceLevel > 0 ? ` +${it.enhanceLevel}` : "";
+      const special = it.hasSpecial ? " ✨" : "";
+      const label = `${it.itemName}${plus}${special}（${it.tier}階）`.slice(0, 100);
+      const desc = `餵食效益 ${it.pct}%${it.hasSpecial ? "｜含特效" : ""}${it.enhanceLevel > 0 ? `｜已強化 +${it.enhanceLevel}` : ""}`.slice(0, 100);
+      return new StringSelectMenuOptionBuilder().setLabel(label).setDescription(desc).setValue(`feed|${it.uuid}`);
+    });
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`${PET_SELECT_PREFIX}feed`)
+      .setPlaceholder(totalPages > 1 ? `選擇單件餵食（第 ${safePage + 1}/${totalPages} 頁，共 ${total} 件）` : `選擇單件餵食（共 ${total} 件）`)
+      .addOptions(options);
+    rows.push(new ActionRowBuilder().addComponents(select));
+  }
+
+  if (totalPages > 1) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`${PET_FEED_PAGE_PREFIX}${safePage - 1}`).setLabel("上一頁").setStyle(ButtonStyle.Secondary).setDisabled(safePage <= 0),
+      new ButtonBuilder().setCustomId(`${PET_FEED_PAGE_PREFIX}${safePage + 1}`).setLabel("下一頁").setStyle(ButtonStyle.Secondary).setDisabled(safePage >= totalPages - 1),
+    ));
+  }
+
+  const feedNote = total > 0
+    ? "👇 下方選單可挑**單件**餵食（含 +值 / ✨特效裝，會被消耗，請謹慎）。"
+    : "（背包目前沒有可餵的裝備）";
+  rows.push(backRow());
+
+  return {
+    content: [
+      `🍖 **餵食** — 對象：${petLine(active)}`,
+      "",
+      `你的寵物對應階級為 **${matchTier}**，餵 ${matchTier} 階最划算（100%）；低階仍可餵但效益遞減。高於 ${matchTier} 階的裝備餵不進去。`,
+      "🛡️ 一鍵只吃「素裝(+0)」；**有 +值 / 特效的需從選單單件餵、卡片徽章稱號不可餵**。",
+      "",
+      feedNote,
+    ].join("\n"),
+    embeds: [],
+    components: rows,
+  };
+}
+
 async function handlePetButton(interaction) {
   const sc = getServiceContext();
   const discordId = interaction.user.id;
@@ -153,55 +216,18 @@ async function handlePetButton(interaction) {
     return;
   }
 
+  if (interaction.customId.startsWith(PET_FEED_PAGE_PREFIX)) {
+    const page = Number(interaction.customId.slice(PET_FEED_PAGE_PREFIX.length)) || 0;
+    const { active, matchTier, items } = await sc.petService.listFeedableItems(discordId);
+    if (!active) { await refreshDashboard(interaction, "你目前沒有出戰中的寵物。先孵一隻並出戰。"); return; }
+    await interaction.editReply(buildFeedMenu({ active, matchTier, items, page }));
+    return;
+  }
+
   if (interaction.customId === PET_FEED_ID) {
     const { active, matchTier, items } = await sc.petService.listFeedableItems(discordId);
     if (!active) { await interaction.editReply("你目前沒有出戰中的寵物。先孵一隻並出戰。"); return; }
-    // 只顯示「對應階級及以下」的批量餵食按鈕（高階裝備不能餵）
-    const TIERS = ["D", "C", "B", "A"];
-    const rank = { D: 0, C: 1, B: 2, A: 3 };
-    const feedTier = active.feedTier || matchTier || "D";
-    const styleByDiff = [ButtonStyle.Success, ButtonStyle.Primary, ButtonStyle.Secondary, ButtonStyle.Secondary];
-    const btns = TIERS.filter((t) => rank[t] <= rank[feedTier]).map((t) => {
-      const diff = rank[feedTier] - rank[t];
-      const pctMap = [100, 60, 30, 15];
-      return new ButtonBuilder().setCustomId(`${PET_FEED_TIER_PREFIX}${t}`)
-        .setLabel(`一鍵餵 ${t} 階素裝（${pctMap[diff]}%）`).setStyle(styleByDiff[diff] || ButtonStyle.Secondary);
-    });
-    const rows = [new ActionRowBuilder().addComponents(...btns)];
-
-    // ── 單件餵食選單（道具欄）：列出可餵的裝備，含 +值/特效裝 ──
-    const total = items.length;
-    if (total > 0) {
-      const options = items.slice(0, 25).map((it) => {
-        const plus = it.enhanceLevel > 0 ? ` +${it.enhanceLevel}` : "";
-        const special = it.hasSpecial ? " ✨" : "";
-        const label = `${it.itemName}${plus}${special}（${it.tier}階）`.slice(0, 100);
-        const desc = `餵食效益 ${it.pct}%${it.hasSpecial ? "｜含特效" : ""}${it.enhanceLevel > 0 ? `｜已強化 +${it.enhanceLevel}` : ""}`.slice(0, 100);
-        return new StringSelectMenuOptionBuilder().setLabel(label).setDescription(desc).setValue(`feed|${it.uuid}`);
-      });
-      const select = new StringSelectMenuBuilder()
-        .setCustomId(`${PET_SELECT_PREFIX}feed`)
-        .setPlaceholder(total > 25 ? `選擇單件餵食（共 ${total} 件，顯示前 25 件）` : `選擇單件餵食（共 ${total} 件）`)
-        .addOptions(options);
-      rows.push(new ActionRowBuilder().addComponents(select));
-    }
-
-    const feedNote = total > 0
-      ? "👇 下方選單可挑**單件**餵食（含 +值 / ✨特效裝，會被消耗，請謹慎）。"
-      : "（背包目前沒有可餵的裝備）";
-    rows.push(backRow());
-    await interaction.editReply({
-      content: [
-        `🍖 **餵食** — 對象：${petLine(active)}`,
-        "",
-        `你的寵物對應階級為 **${matchTier}**，餵 ${matchTier} 階最划算（100%）；低階仍可餵但效益遞減。高於 ${matchTier} 階的裝備餵不進去。`,
-        "🛡️ 一鍵只吃「素裝(+0)」；**有 +值 / 特效的需從選單單件餵、卡片徽章稱號不可餵**。",
-        "",
-        feedNote,
-      ].join("\n"),
-      embeds: [],
-      components: rows,
-    });
+    await interaction.editReply(buildFeedMenu({ active, matchTier, items, page: 0 }));
     return;
   }
 
