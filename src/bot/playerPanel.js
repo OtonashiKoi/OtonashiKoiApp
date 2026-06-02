@@ -1032,10 +1032,19 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
     // 一般裝備：只給分解（50% 機率拆成降階強化寶石），不再販售
     btns.push(
       new ButtonBuilder()
-        .setCustomId(`backpack_discard:${group.repUuid}`)
+        .setCustomId(`backpack_discard:${group.repUuid}:${tab}:${subTab}:${page}`)
         .setLabel("🔨 分解")
         .setStyle(ButtonStyle.Danger)
     );
+    // 同款且未強化（enhanceLevel 0）的疊加 → 提供批量分解
+    if (group.count > 1 && Number(group.enhanceLevel || 0) === 0) {
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`backpack_discard_bulk:${group.repUuid}:${tab}:${subTab}:${page}`)
+          .setLabel(`🔨 批量分解 (共${group.count})`)
+          .setStyle(ButtonStyle.Danger)
+      );
+    }
   } else if (group.sellPrice != null) {
     // 怪物卡等可賣道具：保留販售
     btns.push(
@@ -1695,7 +1704,7 @@ async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0, su
   }
 }
 
-async function handleBackpackAction(interaction, action, uuid) {
+async function handleBackpackAction(interaction, action, uuid, tab = "item", page = 0, subTab = "all") {
   const serviceContext = getServiceContext();
 
   // 危險型消耗品需要確認
@@ -1786,7 +1795,7 @@ async function handleBackpackAction(interaction, action, uuid) {
     const verb = canDismantle ? "分解" : "丟棄";
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`backpack_discard_confirm:${uuid}`)
+        .setCustomId(`backpack_discard_confirm:${uuid}:${tab}:${subTab}:${page}`)
         .setLabel(warns.length ? `我確定要${verb}（貴重物）` : `確定${verb}`)
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
@@ -1815,7 +1824,7 @@ async function handleBackpackAction(interaction, action, uuid) {
   }
 }
 
-async function handleBackpackDiscardConfirm(interaction, uuid) {
+async function handleBackpackDiscardConfirm(interaction, uuid, tab = "item", page = 0, subTab = "all") {
   const serviceContext = getServiceContext();
   await interaction.deferUpdate();
   try {
@@ -1829,10 +1838,68 @@ async function handleBackpackDiscardConfirm(interaction, uuid) {
     } else {
       gemMsg = `✅ 已丟棄 **${result.itemName}**。`;
     }
-    const msg = buildBackpackMessage(progress?.inventory || [], "item", gemMsg);
+    const opts = BACKPACK_SECTION_TABS.has(tab) ? { sectionMode: true } : {};
+    const msg = buildBackpackMessage(progress?.inventory || [], tab, gemMsg, page, subTab, opts);
     await safeEditReply(interaction, msg);
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 操作失敗：${err.message}`, components: [] });
+  }
+}
+
+/** 批量分解：同款且未強化的裝備一起分解（確認） */
+async function handleBackpackDiscardBulk(interaction, uuid, tab = "item", page = 0, subTab = "all") {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+  const inv = progress?.inventory || [];
+  const ref = inv.find((e) => e.uuid === uuid) || inv.find((e) => e.itemId === uuid);
+  if (!ref) {
+    await safeEditReply(interaction, { content: "❌ 背包中找不到此物品。", components: [], embeds: [], files: [] });
+    return;
+  }
+  const isCard = (e) => e.itemType === "monster_card" || e.monsterCardOf || /^special/.test(String(e.equipSlot || ""));
+  const count = inv.filter((e) => e && e.itemType === "equipment" && e.itemId === ref.itemId
+    && Number(e.enhanceLevel || 0) === 0 && !isCard(e)).length;
+  if (count <= 0) {
+    await safeEditReply(interaction, { content: "❌ 沒有可批量分解的同款未強化裝備。", components: [], embeds: [], files: [] });
+    return;
+  }
+  const DISMANTLE_PREVIEW = { A: "2 顆 B 階寶石", B: "2 顆 C 階寶石", C: "2 顆 D 階寶石", D: "1 顆 D 階寶石" };
+  const tierU = String(ref.tier || "").toUpperCase();
+  const yieldLine = DISMANTLE_PREVIEW[tierU]
+    ? `\n🔨 每件有 **50%** 機率分解出：**${DISMANTLE_PREVIEW[tierU]}**（失敗則無產物）`
+    : "";
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`backpack_discard_bulk_confirm:${ref.uuid}:${tab}:${subTab}:${page}`)
+      .setLabel(`確定批量分解 ${count} 件`)
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`backpack_view:${ref.uuid}`)
+      .setLabel("取消")
+      .setStyle(ButtonStyle.Secondary),
+  );
+  await safeEditReply(interaction, {
+    content: `⚠️ 確定要把 **${ref.itemName}** 的 **${count} 件（未強化）** 一起分解嗎？此操作**無法復原**！${yieldLine}`,
+    components: [row], embeds: [], files: [],
+  });
+}
+
+/** 批量分解（執行） */
+async function handleBackpackDiscardBulkExecute(interaction, uuid, tab = "item", page = 0, subTab = "all") {
+  const serviceContext = getServiceContext();
+  await interaction.deferUpdate();
+  try {
+    const result = await serviceContext.shopService.discardItemBulk(interaction.user.id, uuid);
+    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
+    const msgText = result.gems
+      ? `🔨 批量分解 **${result.itemName}** ×${result.dismantledCount} → 成功 ${result.successCount} 件，共獲得 **${result.gems.count} 顆 ${result.gems.tier} 階寶石**！`
+      : `🔨 批量分解 **${result.itemName}** ×${result.dismantledCount} 完成，這次都沒分解出寶石…（裝備已消失）`;
+    const opts = BACKPACK_SECTION_TABS.has(tab) ? { sectionMode: true } : {};
+    const msg = buildBackpackMessage(progress?.inventory || [], tab, msgText, page, subTab, opts);
+    await safeEditReply(interaction, msg);
+  } catch (err) {
+    await safeEditReply(interaction, { content: `❌ 批量分解失敗：${err.message}`, components: [] });
   }
 }
 
@@ -2774,13 +2841,28 @@ async function handleButton(interaction) {
     return;
   }
   if (id.startsWith("backpack_discard_confirm:")) {
-    await handleBackpackDiscardConfirm(interaction, id.slice("backpack_discard_confirm:".length));
+    const parts = id.split(":");
+    await handleBackpackDiscardConfirm(interaction, parts[1], parts[2] || "item", parseInt(parts[4] ?? "0", 10) || 0, parts[3] || "all");
+    return;
+  }
+  if (id.startsWith("backpack_discard_bulk_confirm:")) {
+    const parts = id.split(":");
+    await handleBackpackDiscardBulkExecute(interaction, parts[1], parts[2] || "item", parseInt(parts[4] ?? "0", 10) || 0, parts[3] || "all");
+    return;
+  }
+  if (id.startsWith("backpack_discard_bulk:")) {
+    const parts = id.split(":");
+    await handleBackpackDiscardBulk(interaction, parts[1], parts[2] || "item", parseInt(parts[4] ?? "0", 10) || 0, parts[3] || "all");
     return;
   }
   if (id.startsWith("backpack_use:") || id.startsWith("backpack_discard:")) {
     const action = id.startsWith("backpack_use:") ? "use" : "discard";
-    const uuid = id.slice(id.indexOf(":") + 1);
-    await handleBackpackAction(interaction, action, uuid);
+    const parts = id.split(":");
+    const uuid = parts[1];
+    const tab = parts[2] || "item";
+    const subTab = parts[3] || "all";
+    const page = parseInt(parts[4] ?? "0", 10) || 0;
+    await handleBackpackAction(interaction, action, uuid, tab, page, subTab);
     return;
   }
   if (id.startsWith("backpack_sell_confirm:")) {
@@ -3140,14 +3222,14 @@ async function handleModal(interaction) {
     ? Math.min(totalPages, Math.max(1, parsedPage)) - 1
     : 0;
 
+  // 就地編輯原背包訊息（modal 由按鈕開啟，屬於 message component，可用 deferUpdate）
+  await interaction.deferUpdate();
   const serviceContext = getServiceContext();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
-  const msg = buildBackpackMessage(inventory, tab, undefined, targetPage, subTab);
-
-  await clearActiveReply(interaction);
-  await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
-  await rememberActiveReply(interaction, 120_000);
+  const opts = BACKPACK_SECTION_TABS.has(tab) ? { sectionMode: true } : {};
+  const msg = buildBackpackMessage(inventory, tab, undefined, targetPage, subTab, opts);
+  await safeEditReply(interaction, msg);
   return true;
 }
 

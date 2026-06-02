@@ -896,6 +896,60 @@ class ShopService {
     return { itemName: entry.itemName, gems: gemsGranted, dismantled };
   }
 
+  // 批量分解：把「同款、未強化(enhanceLevel 0)、非怪物卡」的同 itemId 裝備一起分解。
+  // 每件獨立判定 50% 機率產出降階寶石，一次讀寫存檔。
+  async discardItemBulk(discordId, entryUuid, qty = 0) {
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+    const inv = Array.isArray(progress.inventory) ? progress.inventory : [];
+    const ref = inv.find((e) => this._matchesInventoryEntryRef(e, entryUuid));
+    if (!ref) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+    if (this._isMonsterCardEntry(ref)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "怪物卡無法分解", 400);
+
+    // 收集同款、未強化、非怪物卡的裝備索引
+    const refItemId = ref.itemId;
+    const matchIdx = [];
+    inv.forEach((e, i) => {
+      if (!e || e.itemType !== "equipment") return;
+      if (this._isMonsterCardEntry(e)) return;
+      if (e.itemId !== refItemId) return;
+      if (Number(e.enhanceLevel || 0) !== 0) return;
+      matchIdx.push(i);
+    });
+    if (matchIdx.length === 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "沒有可分解的同款未強化裝備", 400);
+
+    const take = qty > 0 ? Math.min(qty, matchIdx.length) : matchIdx.length;
+    const tier = String(ref.tier || "").toUpperCase();
+    const canDismantle = !!DISMANTLE_YIELD[tier];
+
+    // 每件獨立擲 50%
+    let successCount = 0;
+    let totalGems = 0;
+    let gemTier = null;
+    for (let n = 0; n < take; n++) {
+      if (canDismantle && Math.random() < 0.5) {
+        const y = DISMANTLE_YIELD[tier];
+        gemTier = y.tier;
+        totalGems += y.count;
+        successCount += 1;
+      }
+    }
+
+    // 由大到小移除索引，避免位移錯亂
+    matchIdx.slice(0, take).sort((a, b) => b - a).forEach((i) => progress.inventory.splice(i, 1));
+    if (totalGems > 0 && gemTier) {
+      await this._grantGems(progress, gemTier, totalGems);
+    }
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+    return {
+      itemName: ref.itemName,
+      dismantledCount: take,
+      successCount,
+      gems: totalGems > 0 ? { tier: gemTier, count: totalGems } : null
+    };
+  }
+
   // 判斷背包項是否為怪物卡（不可分解）
   _isMonsterCardEntry(entry) {
     if (!entry) return false;
