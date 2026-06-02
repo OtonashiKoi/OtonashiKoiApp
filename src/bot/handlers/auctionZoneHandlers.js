@@ -52,6 +52,7 @@ function buildAuctionFilterRow(filter = {}) {
         { label: "⚔️ 裝備", value: "equipment" },
         { label: "🎴 卡片", value: "card" },
         { label: "💎 寶石", value: "gem" },
+        { label: "🥚 龍蛋", value: "pet_egg" },
         { label: "💰 金幣", value: "gold" },
         { label: "💎 鑽石", value: "diamond" },
       ].map((opt) => ({
@@ -95,16 +96,24 @@ function formatEquipStats(stats) {
 function fmtItem(item) {
   const statsText = item?.itemType === "equipment" ? formatEquipStats(item.equipStats) : "";
   const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
-  const stack = item.isGem && item.stackCount ? ` ×${item.stackCount}` : "";
+  const stack = (item.isGem || item.itemType === "pet_egg") && item.stackCount ? ` ×${item.stackCount}` : "";
   const stats = statsText ? `｜${statsText}` : "";
   const tier = item.tier ? `[${String(item.tier).toUpperCase()}] ` : "";
   return `${tier}${item.itemName}${enh}${stats}${stack}`;
 }
 
+function isPetEgg(item) {
+  return item?.itemType === "pet_egg";
+}
+
+function isStackableSellItem(item) {
+  return ENHANCE_GEM_IDS.has(item?.itemId) || isPetEgg(item);
+}
+
 function isSellableItem(item) {
   if (!item) return false;
   if (FORBIDDEN_ITEM_TYPES.has(item.itemType) || FORBIDDEN_EQUIP_SLOTS.has(item.equipSlot)) return false;
-  return item.itemType === "equipment" || item.itemType === "monster_card" || ENHANCE_GEM_IDS.has(item.itemId);
+  return item.itemType === "equipment" || item.itemType === "monster_card" || ENHANCE_GEM_IDS.has(item.itemId) || isPetEgg(item);
 }
 
 // ─── 拍賣列表面板 ────────────────────────────────────
@@ -166,6 +175,9 @@ function buildSellSelectDescription(item) {
   }
   if (ENHANCE_GEM_IDS.has(item.itemId)) {
     return `強化石 數量：${item.stackCount || 1}`;
+  }
+  if (isPetEgg(item)) {
+    return `龍蛋 數量：${item.stackCount || 1}`;
   }
   return item.itemName?.slice(0, 100) || "";
 }
@@ -356,6 +368,7 @@ async function handleAuctionFilterSelect(interaction) {
   if (selected === "equipment") filter.itemType = "equipment";
   else if (selected === "card") filter.itemType = "card";
   else if (selected === "gem") filter.itemType = "gem";
+  else if (selected === "pet_egg") filter.itemType = "pet_egg";
   else if (selected === "gold") filter.currency = "gold";
   else if (selected === "diamond") filter.currency = "diamond";
 
@@ -474,6 +487,7 @@ async function handleAuctionButton(interaction) {
     if (key === "equipment") filter.itemType = "equipment";
     else if (key === "card") filter.itemType = "card";
     else if (key === "gem") filter.itemType = "gem";
+    else if (key === "pet_egg") filter.itemType = "pet_egg";
     else if (key === "gold") filter.currency = "gold";
     else if (key === "diamond") filter.currency = "diamond";
     else if (key === "price_asc") filter.sort = "price_asc";
@@ -754,7 +768,7 @@ async function handleAuctionButton(interaction) {
       await interaction.reply({ content: "❌ 此物品無法上架。", flags: MessageFlags.Ephemeral });
       return;
     }
-    const isGem = ENHANCE_GEM_IDS.has(item.itemId);
+    const stackable = isStackableSellItem(item);
     const maxQty = Math.max(1, item.stackCount || 1);
 
     await interaction.showModal(
@@ -781,7 +795,7 @@ async function handleAuctionButton(interaction) {
           new ActionRowBuilder().addComponents(
             new TextInputBuilder()
               .setCustomId("quantity_input")
-              .setLabel(isGem ? `上架數量（1～${maxQty}）` : "上架數量（裝備固定為 1）")
+              .setLabel(stackable ? `上架數量（1～${maxQty}）` : "上架數量（裝備固定為 1）")
               .setStyle(TextInputStyle.Short)
               .setPlaceholder("例：1")
               .setValue("1")
@@ -822,21 +836,21 @@ async function handleAuctionModal(interaction) {
       await interaction.reply({ content: "❌ 找不到該物品。", flags: MessageFlags.Ephemeral });
       return true;
     }
-    const isGem = ENHANCE_GEM_IDS.has(item.itemId);
-    if (!isGem && quantity !== 1) {
+    const stackable = isStackableSellItem(item);
+    if (!stackable && quantity !== 1) {
       await interaction.reply({ content: "❌ 裝備每次只能上架 1 件。", flags: MessageFlags.Ephemeral });
       return true;
     }
-    if (isGem) {
+    if (stackable) {
       const curStack = Math.max(1, item.stackCount || 1);
       if (quantity > curStack) {
-        await interaction.reply({ content: `❌ 強化石數量不足，目前只有 ${curStack} 顆。`, flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: `❌ 數量不足，目前只有 ${curStack} 個。`, flags: MessageFlags.Ephemeral });
         return true;
       }
     }
 
     const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
-    const stack = isGem ? ` ×${quantity}` : "";
+    const stack = stackable ? ` ×${quantity}` : "";
     const itemLabel = `${item.itemName}${enh}${stack}`;
     const priceLabel = currency === "gold" ? `${price.toLocaleString()} 💰` : `${price.toLocaleString()} 💎`;
 
@@ -969,6 +983,7 @@ async function buildPublicAuctionPanel() {
   const auctionRulesText = [
     "📜 規則：",
     `• ${sellerRuleText}`,
+    "• 可上架：裝備、卡片、強化石、龍蛋",
     "• 上架上限：鯉民 3 件 / 鯉長 5 件 / 鯉市長 7 件",
     "• 上架後不可主動撤回，商品到期可領回"
   ].join("\n");

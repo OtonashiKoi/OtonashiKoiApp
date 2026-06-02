@@ -14,7 +14,7 @@ function createWeeklyQuestPanelMessage() {
   return {
     content: [
       "📅 **每週任務**",
-      "任務中心支援新手 / 職業 / 每日 / 每週任務。",
+      "任務中心支援新手 / 職業 / 每日 / 每週 / 賽季成就任務。",
       "每週一重置，點下方按鈕查看進度與領獎。"
     ].join("\n"),
     components: [row]

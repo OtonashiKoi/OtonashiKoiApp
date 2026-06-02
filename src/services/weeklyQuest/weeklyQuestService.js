@@ -1,6 +1,6 @@
 "use strict";
 
-const QUEST_CADENCES = ["onboarding", "job", "daily", "weekly"];
+const QUEST_CADENCES = ["onboarding", "job", "daily", "weekly", "season"];
 const QUEST_TYPES = {
   battle_count:      { label: "出戰次數",        unit: "次" },
   battle_with_sword: { label: "使用劍系出戰次數", unit: "次" },
@@ -27,7 +27,7 @@ const QUEST_TYPES = {
   kill_dragon_king:  { label: "擊敗古龍王(B) 次數", unit: "次" },
 };
 
-const CADENCE_ORDER = { onboarding: 1, job: 2, daily: 3, weekly: 4 };
+const CADENCE_ORDER = { onboarding: 1, job: 2, daily: 3, weekly: 4, season: 5 };
 const VALID_UNLOCK_ATTRS = ["str", "agi", "vit", "int", "dex", "luk"];
 
 function normalizeUnlockAttributes(def = {}) {
@@ -57,6 +57,7 @@ function normalizeCadence(cadence) {
 function resetPolicyByCadence(cadence) {
   if (cadence === "onboarding") return "once";
   if (cadence === "job") return "once";
+  if (cadence === "season") return "once";
   if (cadence === "daily") return "tw_daily";
   return "tw_weekly";
 }
@@ -104,6 +105,7 @@ function resolvePeriodKey(cadence) {
   const c = normalizeCadence(cadence);
   if (c === "onboarding") return "onboarding-v1";
   if (c === "job") return "job-v1";
+  if (c === "season") return "season-v1";
   if (c === "daily") return currentDayLabel();
   return currentWeekLabel();
 }

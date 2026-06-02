@@ -235,12 +235,13 @@ async function handlePetButton(interaction) {
     try {
       const r = await sc.petService.claimGathering(discordId);
       if (r.granted.length === 0) { await refreshDashboard(interaction, "🎁 目前沒有可領取的採集物。"); return; }
+      // 顯示實際獲得的道具名稱（同名合併計數）
       const summary = {};
       for (const g of r.granted) {
-        const k = `${g.tier}${g.kind === "gem" ? "寶石" : "裝備"}`;
-        summary[k] = (summary[k] || 0) + 1;
+        const name = g.itemName || `${g.tier}${g.kind === "gem" ? "寶石" : "裝備"}`;
+        summary[name] = (summary[name] || 0) + 1;
       }
-      const detail = Object.entries(summary).map(([k, n]) => `${k}×${n}`).join("、");
+      const detail = Object.entries(summary).map(([name, n]) => (n > 1 ? `${name}×${n}` : name)).join("、");
       await refreshDashboard(interaction, `🎁 領取 **${r.granted.length}** 個採集物：${detail}`);
     } catch (e) {
       await refreshDashboard(interaction, `❌ ${e.message || "領取失敗"}`);

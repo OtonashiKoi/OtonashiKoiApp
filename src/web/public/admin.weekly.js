@@ -23,6 +23,7 @@
     burn_trigger_count: "成功觸發燃燒次數",
     onboarding_complete_count: "完成全部新手任務",
     weekly_complete_count: "完成全部每週任務",
+    kill_dragon_king: "擊敗古龍王(B) 次數",
   };
   const QUEST_TYPE_UNITS = {
     battle_count:  "次",
@@ -47,12 +48,14 @@
     burn_trigger_count: "次",
     onboarding_complete_count: "項",
     weekly_complete_count: "項",
+    kill_dragon_king: "次",
   };
   const CADENCE_LABELS = {
     onboarding: "新手",
     job: "職業",
     daily: "每日",
-    weekly: "每週"
+    weekly: "每週",
+    season: "賽季成就"
   };
 
   let quests = [];
@@ -142,7 +145,7 @@
     const search = normalize(filters.search);
     return [...quests]
       .sort((a, b) => {
-        const cadenceRank = { onboarding: 1, job: 2, daily: 3, weekly: 4 };
+        const cadenceRank = { onboarding: 1, job: 2, daily: 3, weekly: 4, season: 5 };
         const ar = cadenceRank[a.cadence || "weekly"] || 99;
         const br = cadenceRank[b.cadence || "weekly"] || 99;
         if (ar !== br) return ar - br;

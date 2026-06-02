@@ -739,7 +739,7 @@ async function doEnhance(uuid){
 /* ── 任務中心 ── */
 async function renderQuests(main){
   const all=await api("/api/quests?cadence=all");
-  const cads=[["onboarding","新手"],["job","職業"],["daily","每日"],["weekly","每週"]];
+  const cads=[["onboarding","新手"],["job","職業"],["daily","每日"],["weekly","每週"],["season","賽季成就"]];
   const byCad={}; all.forEach(q=>{ (byCad[q.cadence]=byCad[q.cadence]||[]).push(q); });
   let tab=cads.find(c=>byCad[c[0]]&&byCad[c[0]].length)?.[0]||"daily";
   function draw(){

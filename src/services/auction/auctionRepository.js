@@ -26,7 +26,7 @@ const auctionRepository = {
 
   /**
    * 查詢所有上架中的拍賣（active）
-   * 支援篩選：itemType（"equipment" | "card" | "gem"）、currency（"gold" | "diamond"）、sort（"price_asc" | "price_desc" | "time_asc" | "time_desc"）
+   * 支援篩選：itemType（"equipment" | "card" | "gem" | "pet_egg"）、currency（"gold" | "diamond"）、sort（"price_asc" | "price_desc" | "time_asc" | "time_desc"）
    */
   async findActive({ itemType, currency, sort } = {}) {
     const col = await collection();
@@ -37,6 +37,7 @@ const auctionRepository = {
       { "item.monsterCardSkill": { $exists: true } }
     ];
     if (itemType === "gem") query["item.isGem"] = true;
+    if (itemType === "pet_egg") query["item.itemType"] = "pet_egg";
     if (currency) query.currency = currency;
 
     let cursor = col.find(query);

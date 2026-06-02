@@ -2460,7 +2460,8 @@ const QUEST_TAB_META = {
   onboarding: { label: "新手任務", emoji: "🌱", resetText: "一次性任務（不重置）" },
   job: { label: "職業任務", emoji: "🎖️", resetText: "符合條件時自動出現，完成後獲得職業徽章" },
   daily: { label: "每日任務", emoji: "🗓️", resetText: "台灣時間每日 00:00 重置" },
-  weekly: { label: "每週任務", emoji: "📅", resetText: "台灣時間每週一 00:00 重置" }
+  weekly: { label: "每週任務", emoji: "📅", resetText: "台灣時間每週一 00:00 重置" },
+  season: { label: "賽季成就", emoji: "🏆", resetText: "賽季期間累積，完成後可領取一次" }
 };
 
 function formatRewardWeaponSummary(item) {
@@ -2541,7 +2542,11 @@ function buildQuestTabRow(activeCadence = "weekly") {
     new ButtonBuilder()
       .setCustomId("quest_tab:weekly")
       .setLabel("📅 每週")
-      .setStyle(activeCadence === "weekly" ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setStyle(activeCadence === "weekly" ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId("quest_tab:season")
+      .setLabel("🏆 賽季")
+      .setStyle(activeCadence === "season" ? ButtonStyle.Primary : ButtonStyle.Secondary)
   );
 }
 
@@ -3137,7 +3142,13 @@ async function handleEquipmentSelect(interaction) {
       if (item?.equipSlot === "special" || item?.itemType === "monster_card") {
         const SPECIAL_SLOTS = ["special_1", "special_2", "special_3"];
         const equipped = progress?.equipment || {};
-        targetSlot = SPECIAL_SLOTS.find(s => !equipped[s]) || SPECIAL_SLOTS[0];
+        // 玩家從特定卡槽（eq_pick:special_N）切換 → 直接換到「該槽」，
+        // equipItem 會把該槽原本的卡換回背包；否則才找第一個空槽。
+        if (SPECIAL_SLOTS.includes(slot)) {
+          targetSlot = slot;
+        } else {
+          targetSlot = SPECIAL_SLOTS.find(s => !equipped[s]) || SPECIAL_SLOTS[0];
+        }
       }
 
       result = await serviceContext.shopService.equipItem(interaction.user.id, uuid, targetSlot);
