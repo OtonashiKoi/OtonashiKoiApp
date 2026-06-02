@@ -39,6 +39,8 @@ const EFFECT_NAME_ZH = {
   bonus_while_shielded: "護盾時增傷",
   stack_on_hit_offense: "出手疊攻擊",
   stack_on_taken_defense: "受擊疊防禦",
+  enemy_heal_reduction: "降低對方治療",
+  cleanse_self: "淨化負面狀態",
   mana_regen: "魔力恢復",
   stun: "眩暈",
   freeze: "凍結",

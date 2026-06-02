@@ -97,7 +97,8 @@ function fmtItem(item) {
   const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
   const stack = item.isGem && item.stackCount ? ` ×${item.stackCount}` : "";
   const stats = statsText ? `｜${statsText}` : "";
-  return `${item.itemName}${enh}${stats}${stack}`;
+  const tier = item.tier ? `[${String(item.tier).toUpperCase()}] ` : "";
+  return `${tier}${item.itemName}${enh}${stats}${stack}`;
 }
 
 function isSellableItem(item) {
@@ -138,14 +139,16 @@ function buildSellItemLabel(item) {
   const statsText = item?.itemType === "equipment" ? formatEquipStats(item.equipStats) : "";
   const stats = statsText ? `｜${statsText}` : "";
   const stack = item.stackCount ? ` ×${item.stackCount}` : "";
-  return `${item.itemName}${enh}${stats}${stack}`.slice(0, 80);
+  const tier = item.tier ? `[${String(item.tier).toUpperCase()}] ` : "";
+  return `${tier}${item.itemName}${enh}${stats}${stack}`.slice(0, 80);
 }
 
 // SelectMenu option label：道具名 + 加值 + 數量（最多 100 字）
 function buildSellSelectLabel(item) {
   const enh = item.enhanceLevel > 0 ? ` +${item.enhanceLevel}` : "";
   const stack = (item.stackCount && item.stackCount > 1) ? ` ×${item.stackCount}` : "";
-  return `${item.itemName}${enh}${stack}`.slice(0, 100);
+  const tier = item.tier ? `[${String(item.tier).toUpperCase()}] ` : "";
+  return `${tier}${item.itemName}${enh}${stack}`.slice(0, 100);
 }
 
 // SelectMenu option description：數值（最多 100 字）

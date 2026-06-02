@@ -920,6 +920,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
   } catch (_) { /* equipment 載入失敗不擋戰鬥 */ }
 
+  // 火翼龍人卡：降低「對方(怪物)」治療效率 %（在所有怪物回血點折減）
+  const playerEnemyHealReductionPct = Math.min(100, (options.playerActiveEffects || [])
+    .filter((e) => e && e.key === "enemy_heal_reduction")
+    .reduce((s, e) => s + Math.abs(Number(e?.params?.value) || 0), 0));
+  const reduceMonsterHeal = (h) => {
+    const n = Math.max(0, Math.round(Number(h) || 0));
+    return playerEnemyHealReductionPct > 0
+      ? Math.max(0, Math.round(n * (1 - playerEnemyHealReductionPct / 100)))
+      : n;
+  };
+  // 龍翼魔法師卡：每回合清除自身負面狀態
+  const playerCleanseSelf = (options.playerActiveEffects || []).some((e) => e && e.key === "cleanse_self");
+  const PLAYER_DEBUFF_KEYS = ['poison','burn','bleed','shock_dot','curse_dot','stun','freeze','sleep','silence','slow','blind','fear','root','disarm','confuse','charm','dark_curse','atk_down','def_down','hit_down'];
+
   const roundLogs = [];
   const tierDamageMultiplier = Math.max(0.1, Number(pStats.tierDamageMultiplier) || 1);
   const tierFinalDamageMultiplier = Math.max(0.1, Number(pStats.tierFinalDamageMultiplier) || 1);
@@ -978,7 +992,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const mode = String(healParams.mode || 'pct').toLowerCase();
           const val = Number(healParams.value ?? 0);
           if (!Number.isFinite(val) || val === 0) continue;
-          const heal = mode === 'pct' ? Math.max(0, Math.round(mHpInit * (val / 100))) : Math.max(0, Math.round(val));
+          const heal = reduceMonsterHeal(mode === 'pct' ? Math.max(0, Math.round(mHpInit * (val / 100))) : Math.max(0, Math.round(val)));
           if (heal > 0) {
             mHp = Math.min(mHpInit, mHp + heal);
             log.push(`💚 ${mName} 生命力逐漸恢復，回復 **${heal}** HP！（${mName} 剩 ${mHp} HP）`);
@@ -1132,6 +1146,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+
+    // ── 龍翼魔法師卡：每回合清除自身負面狀態 ──
+    if (playerCleanseSelf && Array.isArray(options.playerActiveEffects)) {
+      const beforeCleanse = options.playerActiveEffects.length;
+      options.playerActiveEffects = options.playerActiveEffects.filter((e) => e && !PLAYER_DEBUFF_KEYS.includes(e.key));
+      if (options.playerActiveEffects.length < beforeCleanse) {
+        log.push(`✨ 你身上的負面狀態被淨化了！`);
+      }
+    }
 
     // ── 應用玩家的 DOT 效果（如中毒） ──
     if (Array.isArray(options.playerActiveEffects)) {
@@ -1463,7 +1486,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             targetMaxHp: pStats.maxHp || pHp || 1,
             targetLabel: '你',
             applyTargetDamage: (damage) => { pHp -= damage; return pHp; },
-            applyOwnerHeal: (heal) => { mHp = Math.min(mHpInit, mHp + heal); return mHp; },
+            applyOwnerHeal: (heal) => { mHp = Math.min(mHpInit, mHp + reduceMonsterHeal(heal)); return mHp; },
           buffKeys: MONSTER_BUFF_KEYS,
           debuffKeys: MONSTER_DEBUFF_KEYS,
           sourceId: equippedCard.uuid || equippedCard.itemId || equippedCard.id || cardName,
@@ -1529,7 +1552,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             targetLabel: mName,
             sourceAtk: adjustedMCalc.atk || mCalc.atk || 1,
             targetMaxHp: mHpInit || mHp || 1,
-            applyTargetHeal: (heal) => { mHp = Math.min(mHpInit, mHp + heal); return mHp; },
+            applyTargetHeal: (heal) => { mHp = Math.min(mHpInit, mHp + reduceMonsterHeal(heal)); return mHp; },
             log
           })) {
             appliedAnyNormalProc = true;
@@ -1988,7 +2011,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 新效果：HOT（玩家側）──
     let playerHotPct = 0;
     let playerHotFlat = 0;
-    let playerLifeRegenPerRound = 0;
+    let playerLifeRegenPct = 0;            // 救護系：每 interval 回合回復 value% MaxHP
+    let playerLifeRegenInterval = 0;
     // ── 新效果：BUILD 變化對戒（2026-05）──
     let playerHpLowReductionPct = 0;          // 狂血右：HP 低時受傷減免
     let playerHpLowReductionThreshold = 50;
@@ -2109,7 +2133,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (effParams.mode === 'flat') playerHotFlat += Math.abs(effValue);
           else playerHotPct += Math.abs(effValue);
         } else if (eff.key === 'life_regen') {
-          playerLifeRegenPerRound += Math.abs(effValue);
+          // value 為 %MaxHP、每 interval 回合回一次（依戒指/卡片說明）
+          playerLifeRegenPct += Math.abs(effValue);
+          const iv = Math.max(1, Number(effParams.interval) || 1);
+          if (playerLifeRegenInterval === 0 || iv < playerLifeRegenInterval) playerLifeRegenInterval = iv;
         } else if (eff.key === 'execute_under_hp_pct') {
           playerExecuteUnderHpPct += Math.abs(effValue);
           const thr = Number(effParams.thresholdPct);
@@ -3039,7 +3066,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
                 const lifeParams = lifeEff.params || {};
                 const lifePercent = Number(lifeParams.value || 0);
                 const healAmount = Math.max(1, Math.round(dmg * (lifePercent / 100)));
-                mHp = Math.min(mHpInit, mHp + healAmount);
+                mHp = Math.min(mHpInit, mHp + reduceMonsterHeal(healAmount));
                 log.push(`💚 ${mName} 吸取生命力，恢復 **${healAmount}** HP！（${mName} 剩 ${mHp} HP）`);
               }
             }
@@ -3185,7 +3212,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       let totalHot = 0;
       if (playerHotPct > 0) totalHot += Math.round(pStats.maxHp * (playerHotPct / 100));
       if (playerHotFlat > 0) totalHot += Math.round(playerHotFlat);
-      if (playerLifeRegenPerRound > 0) totalHot += Math.round(playerLifeRegenPerRound);
+      if (playerLifeRegenPct > 0 && playerLifeRegenInterval > 0 && (round % playerLifeRegenInterval === 0)) {
+        totalHot += Math.round((pStats.maxHp || 0) * (playerLifeRegenPct / 100));
+      }
       if (totalHot > 0) {
         const before = pHp;
         pHp = Math.min(pStats.maxHp, pHp + totalHot);
