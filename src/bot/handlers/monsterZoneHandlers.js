@@ -3427,8 +3427,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           discordId: pid, displayName: pid === discordId ? displayName : pid,
           currencyType: "gold", amount: share,
           source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone",
-          // 擊殺已由 claimKill 保證一次性結算；sourceRef 提供冪等與帳務可追蹤
-          sourceRef: `kill:${killKey}:gold:${pid}`,
+          // 不可用以 monster.seq 為基礎的 sourceRef：seq 會隨怪物輪替重複出現，
+          // 重複擊殺同一隻怪會被誤判為重複交易而「不發金幣」。
+          // 一次性結算已由 claimKill(DB 原子) + killInProgress 保證，無需 sourceRef。
         });
         if (perPidRewards[pid]) perPidRewards[pid].gold = share;
       } catch (e) {
