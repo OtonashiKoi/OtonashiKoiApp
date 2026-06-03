@@ -232,6 +232,9 @@ const DISPLAYING_SESSION_CLEANUP_GRACE_MS = 15_000;
 const MONSTER_TRANSITION_MS = 500;   // 怪物轉場空窗：0.5 秒
 const BATTLE_QUEUE_POLL_MS = 500;    // 排隊等待輪詢：0.5 秒
 const DEATH_EXTRA_COOLDOWN_MS = 10 * 1000; // 死亡額外冷卻：在 15 回合基準時間外再加 10 秒
+// 世界王冷卻若超過此秒數，就不要把玩家鎖在佇列裡空等（避免「被王關起來」長達一小時無法戰鬥）；
+// 改為直接釋放並提示稍後再來。低於此值才維持短暫自動排隊（王即將重生，值得等）。
+const WORLD_BOSS_QUEUE_RELEASE_MS = 90 * 1000;
 
 // 金幣池採「怪物原始金幣」與「參戰人數保底」取高。
 // 這能保留傷害占比，同時避免多人共鬥時每個人分到的金幣太薄。
@@ -1192,6 +1195,21 @@ async function waitForBattleReady(sc, { discordId, zoneKey, interaction, session
     const monster = monsters.find((m) => Number(m.seq) === Number(state?.activeMonsterSeq)) || null;
     const worldBossBlock = await getWorldBossQueueBlock(sc, zoneKey, monster);
     const waitingForSpawn = !monster || !state?.activeMonsterSeq || Number(state?.currentHp || 0) <= 0;
+
+    // 世界王冷卻/未開放且等待過久：不要把玩家「關」在長佇列裡（最久會卡一小時且無法去別區戰鬥），
+    // 直接釋放 session 並提示稍後再來。冷卻很短（王即將重生）才維持下方的短暫自動排隊。
+    if (worldBossBlock) {
+      const cdMs = Number(worldBossBlock.cooldownRemainingMs || 0);
+      if (worldBossBlock.disabled || cdMs > WORLD_BOSS_QUEUE_RELEASE_MS) {
+        if (interaction) {
+          const msg = worldBossBlock.disabled
+            ? "🛌 世界王目前未開放，可以先去其他怪物區戰鬥，開放後再回來挑戰。"
+            : `🛌 世界王正在冷卻，約 ${formatQueueSeconds(Math.ceil(cdMs / 1000))} 後重生。\n期間請先去其他怪物區戰鬥，時間到再回來挑戰即可（不會把你卡在這裡）。`;
+          await interaction.editReply({ content: msg, embeds: [], components: [] }).catch(() => {});
+        }
+        return { state: null, monster: null, blocked: true, worldBossCooldown: true };
+      }
+    }
 
     if (cooldownRemaining <= 0 && !activeTransition && !eventWaitMs && !worldBossBlock && monster && Number(state?.currentHp || 0) > 0) {
       return { state, monster, blocked: false };
