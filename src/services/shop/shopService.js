@@ -6,7 +6,7 @@ const { withPlayerProgressLock } = require("../progress/progressLocks");
 const crypto = require("crypto");
 
 // 各 tier 裝備販售價格
-const TIER_SELL_PRICE = { D: 200, C: 500, B: 1000, A: 10000 };
+const TIER_SELL_PRICE = { D: 200, C: 500, B: 1000, A: 10000, S: 15000 };
 
 // 分解：強化寶石 itemId（依階級）
 const GEM_ID_BY_TIER = {
