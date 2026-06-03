@@ -2242,6 +2242,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     } catch (err) { next(err); }
   });
 
+  router.get("/api/tower/leaderboard", requireAuth, async (req, res, next) => {
+    try {
+      const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+      const rows = await serviceContext.progressRepository.findTopByTowerRecord(limit);
+      const list = (rows || []).map((r, i) => ({
+        rank: i + 1,
+        playerId: r.playerId,
+        name: r.displayName || r.playerId,
+        bestFloor: r.towerRecord?.bestFloor || 0,
+        bestAt: r.towerRecord?.bestAt || null
+      }));
+      res.json(ok({ list, totalFloors: TW.TOWER_TOTAL_FLOORS }));
+    } catch (err) { next(err); }
+  });
+
   // ──────────────────────────────────────────────────
   // PK 擂台（網頁端；與 Discord 共用同一擂台狀態）
   // ──────────────────────────────────────────────────
@@ -2277,6 +2292,29 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/pk/last-result", requireAuth, async (req, res, next) => {
     try { res.json(ok(pkArena.webGetLastResult(req.playerRecord.discordId))); }
     catch (err) { next(err); }
+  });
+
+  router.get("/api/pk/leaderboard", requireAuth, async (req, res, next) => {
+    try {
+      const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+      const rows = await serviceContext.progressRepository.findTopByPkRating(limit);
+      const list = (rows || []).map((r, i) => {
+        const wins = Number(r.pkWins) || 0;
+        const losses = Number(r.pkLosses) || 0;
+        const total = wins + losses;
+        return {
+          rank: i + 1,
+          playerId: r.playerId,
+          name: r.displayName || r.playerId,
+          rating: Math.round(Number(r.pkRating) || 0),
+          wins, losses,
+          winRate: total > 0 ? Math.round((wins / total) * 100) : 0,
+          level: r.level || 1,
+          jobName: r.jobName || ""
+        };
+      });
+      res.json(ok({ list }));
+    } catch (err) { next(err); }
   });
 
   // ──────────────────────────────────────────────────
