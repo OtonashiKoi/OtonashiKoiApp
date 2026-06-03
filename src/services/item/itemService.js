@@ -2,7 +2,7 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { normalizeEffectList } = require("../../shared/effectPayloads");
 
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes", "level_down_random_attributes"];
-const VALID_TIERS = ["D", "C", "B", "A"];
+const VALID_TIERS = ["D", "C", "B", "A", "S"];
 
 // 武器種類與對應的攻擊屬性
 const VALID_WEAPON_TYPES = ["sword_1h", "sword_2h", "dagger", "mace_1h", "mace_2h", "axe_1h", "axe_2h", "staff_1h", "staff_2h", "bow"];

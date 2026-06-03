@@ -269,6 +269,7 @@ function ensureItemPickerModal() {
           <option value="C">C</option>
           <option value="B">B</option>
           <option value="A">A</option>
+          <option value="S">S</option>
         </select>
       </div>
       <div class="item-picker-grid" data-role="grid"></div>
