@@ -2526,6 +2526,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // ── 戰意左：每次出手累積 stack（命中算一次）──
         if (stackOnHitValue > 0 && stackOnHitStacks < stackOnHitCap) {
           stackOnHitStacks = Math.min(stackOnHitCap, stackOnHitStacks + stackOnHitValue);
+          log.push(`🐉 **龍王戰意**：出手疊加！攻擊 **+${stackOnHitStacks}%**（最高 +${stackOnHitCap}%）`);
         }
         // ── 吸血右：擊殺回血（首次怪物 HP 歸零時觸發）──
         if (mHp <= 0 && playerOnKillHealPct > 0 && pHp > 0 && pStats.maxHp > 0) {
@@ -3039,6 +3040,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           // ── 戰意右：每次受擊累積 stack ──
           if (stackOnTakenValue > 0 && stackOnTakenStacks < stackOnTakenCap && dmg > 0) {
             stackOnTakenStacks = Math.min(stackOnTakenCap, stackOnTakenStacks + stackOnTakenValue);
+            log.push(`🐉 **龍王戰意**：受擊疊加！減傷 **+${Math.min(95, stackOnTakenStacks)}%**（最高 +${Math.min(95, stackOnTakenCap)}%）`);
           }
           monsterDmgThisRound += dmg;
           lastMonsterDmg = dmg;
