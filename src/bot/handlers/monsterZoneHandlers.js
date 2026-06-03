@@ -263,7 +263,12 @@ const calculateTickDelay = (agi = 1) => {
   return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
 };
 const RARE_TIERS = new Set(["A", "S", "SS", "SSR", "UR"]);
-const WORLD_BOSS_TARGET_PARTS = new Set(["head", "body", "legs"]);
+const WORLD_BOSS_TARGET_PARTS = new Set(["head", "body", "legs", "wings"]);
+// 古龍王巢穴採 4 部位(含龍翼)+ 破鱗削弱;其餘世界王維持 3 部位
+const DRAGON_KING_ZONE = "dragon_king_lair";
+function getWorldBossPartKeys(zoneKey) {
+  return zoneKey === DRAGON_KING_ZONE ? ["head", "body", "wings", "legs"] : ["head", "body", "legs"];
+}
 
 function parseWorldBossTargetPart(customId) {
   const raw = String(customId || "");
@@ -272,7 +277,12 @@ function parseWorldBossTargetPart(customId) {
   return WORLD_BOSS_TARGET_PARTS.has(part) ? part : "body";
 }
 
-function getWorldBossTargetProfile(part) {
+function getWorldBossTargetProfile(part, zoneKey = null) {
+  // 古龍王:採破鱗削弱(破部位永久削弱),攻擊當下不另加難度,只回部位標籤
+  if (zoneKey === DRAGON_KING_ZONE || part === "wings") {
+    const labels = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
+    return { label: labels[part] || "軀幹" };
+  }
   if (part === "head") {
     // 頭部：怪物技能發動率提高（高風險，技能更常觸發）
     return {
@@ -298,8 +308,8 @@ function getWorldBossTargetProfile(part) {
   };
 }
 
-function applyWorldBossTargetToPlayerStats(playerStats, part) {
-  const profile = getWorldBossTargetProfile(part);
+function applyWorldBossTargetToPlayerStats(playerStats, part, zoneKey = null) {
+  const profile = getWorldBossTargetProfile(part, zoneKey);
   const next = { ...(playerStats || {}) };
   if (profile.playerAtkMultiplier != null) {
     next.atk = Math.max(1, Math.round((next.atk || 0) * profile.playerAtkMultiplier));
@@ -315,8 +325,8 @@ function applyWorldBossTargetToPlayerStats(playerStats, part) {
 
 // 依目標部位調整「怪物」：頭部技能率↑ / 軀幹防禦↑ / 尾巴攻擊↑
 //   回傳調整後的 { monsterStats, monsterEquipped }（皆 clone，不動原物件）
-function applyWorldBossTargetToMonster(monsterStats, monsterEquipped, part) {
-  const profile = getWorldBossTargetProfile(part);
+function applyWorldBossTargetToMonster(monsterStats, monsterEquipped, part, zoneKey = null) {
+  const profile = getWorldBossTargetProfile(part, zoneKey);
   const mStats = { ...(monsterStats || {}) };
   let mEquip = monsterEquipped || {};
 
@@ -339,26 +349,63 @@ function applyWorldBossTargetToMonster(monsterStats, monsterEquipped, part) {
   return { monsterStats: mStats, monsterEquipped: mEquip, profile };
 }
 
-function createWorldBossPartHpTemplate(totalMaxHp = 0) {
+function createWorldBossPartHpTemplate(totalMaxHp = 0, zoneKey = null) {
   const maxHp = Math.max(1, Math.round(Number(totalMaxHp) || 1));
+  if (zoneKey === DRAGON_KING_ZONE) {
+    // 古龍王 4 部位:頭 30% / 軀幹 30% / 龍翼 20% / 下盤 20%
+    const head = Math.max(1, Math.round(maxHp * 0.3));
+    const body = Math.max(1, Math.round(maxHp * 0.3));
+    const wings = Math.max(1, Math.round(maxHp * 0.2));
+    const legs = Math.max(1, maxHp - head - body - wings);
+    return { head, body, wings, legs };
+  }
   const head = Math.max(1, Math.round(maxHp * 0.3));
   const body = Math.max(1, Math.round(maxHp * 0.4));
   const legs = Math.max(1, maxHp - head - body);
-  return {
-    head,
-    body,
-    legs
-  };
+  return { head, body, legs };
 }
 
+// 以下兩個改為「依 partsHp 實際部位」運作,自動支援 3 或 4 部位
 function sumWorldBossPartHp(partsHp) {
   if (!partsHp || typeof partsHp !== "object") return 0;
-  return ["head", "body", "legs"].reduce((sum, k) => sum + Math.max(0, Number(partsHp[k] || 0)), 0);
+  return Object.keys(partsHp).reduce((sum, k) => sum + Math.max(0, Number(partsHp[k] || 0)), 0);
 }
 
 function isWorldBossAllPartsDefeated(partsHp) {
   if (!partsHp || typeof partsHp !== "object") return false;
-  return ["head", "body", "legs"].every((k) => Number(partsHp[k] || 0) <= 0);
+  const keys = Object.keys(partsHp);
+  if (keys.length === 0) return false;
+  return keys.every((k) => Number(partsHp[k] || 0) <= 0);
+}
+
+// 古龍王破鱗削弱:依「已破壞部位」削弱 BOSS 攻擊面(不削防禦)。回傳 clone。
+//   下盤破→普攻−20% / 龍翼破→技能傷害−15% / 軀幹破→技能發動率→30% / 頭部破→無
+function applyDragonKingBreakWeaken(monsterStats, monsterEquipped, partsHp) {
+  const mStats = { ...(monsterStats || {}) };
+  let mEquip = monsterEquipped || {};
+  const broken = (k) => Number((partsHp || {})[k] ?? 1) <= 0;
+
+  if (broken("legs")) {
+    mStats.atk = Math.max(1, Math.round((Number(mStats.atk) || 1) * 0.8)); // 普攻 −20%
+  }
+  const card = mEquip.special_1;
+  if ((broken("wings") || broken("body")) && card && card.monsterCardSkill) {
+    mEquip = { ...mEquip };
+    const skill = { ...card.monsterCardSkill };
+    if (broken("body")) {
+      skill.chance = Math.min(Number(skill.chance) || 50, 30); // 發動率 → 30%
+    }
+    if (broken("wings") && Array.isArray(skill.procEffects)) {
+      // 技能傷害 −15%(雷擊 value × 0.85)
+      skill.procEffects = skill.procEffects.map((pe) =>
+        pe && pe.key === "lightning"
+          ? { ...pe, params: { ...(pe.params || {}), value: Math.max(1, Math.round((Number(pe.params?.value) || 0) * 0.85)) } }
+          : pe
+      );
+    }
+    mEquip.special_1 = { ...card, monsterCardSkill: skill, cardProcChance: skill.chance };
+  }
+  return { monsterStats: mStats, monsterEquipped: mEquip };
 }
 
 function getDynamicGoldPoolFloor(zoneKey, participantCount) {
@@ -471,7 +518,7 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
 
       let worldBossPartsHp = null;
       if (isWorldBossZone(zoneKey) && nextMonster?.isBoss) {
-        const partState = ensureWorldBossPartState({}, nextMonster.calc.maxHp);
+        const partState = ensureWorldBossPartState({}, nextMonster.calc.maxHp, zoneKey);
         nextState.currentHp = partState.currentHp;
         nextState.worldBossPartsHp = partState.worldBossPartsHp;
         nextState.worldBossPartsMaxHp = partState.worldBossPartsMaxHp;
@@ -560,7 +607,7 @@ async function _resolveExpiredMonsterTransition(sc, zoneKey) {
 
   let worldBossPartsHp = null;
   if (isWorldBossZone(zoneKey) && nextMonster?.isBoss) {
-    const partState = ensureWorldBossPartState({}, nextMonster.calc.maxHp);
+    const partState = ensureWorldBossPartState({}, nextMonster.calc.maxHp, zoneKey);
     nextState.currentHp = partState.currentHp;
     nextState.worldBossPartsHp = partState.worldBossPartsHp;
     nextState.worldBossPartsMaxHp = partState.worldBossPartsMaxHp;
@@ -607,22 +654,15 @@ function hasBlockingMonsterTransition(state, zoneKey) {
   return false;
 }
 
-function ensureWorldBossPartState(state, monsterMaxHp) {
-  const defaultMax = createWorldBossPartHpTemplate(monsterMaxHp);
-  const currentMax = (state && state.worldBossPartsMaxHp && typeof state.worldBossPartsMaxHp === "object")
-    ? {
-      head: Math.max(1, Number(state.worldBossPartsMaxHp.head || defaultMax.head)),
-      body: Math.max(1, Number(state.worldBossPartsMaxHp.body || defaultMax.body)),
-      legs: Math.max(1, Number(state.worldBossPartsMaxHp.legs || defaultMax.legs))
-    }
-    : defaultMax;
-  const hasCurrentHp = !!(state && state.worldBossPartsHp && typeof state.worldBossPartsHp === "object");
+function ensureWorldBossPartState(state, monsterMaxHp, zoneKey = null) {
+  const defaultMax = createWorldBossPartHpTemplate(monsterMaxHp, zoneKey);
+  const hasCurrentHp = !!(state && state.worldBossPartsHp && typeof state.worldBossPartsHp === "object" && Object.keys(state.worldBossPartsHp).length);
+  // 部位清單:沿用既有 state(自動支援 3 / 4 部位),否則用該區模板
+  const keys = hasCurrentHp ? Object.keys(state.worldBossPartsHp) : Object.keys(defaultMax);
+  const maxSrc = (state && state.worldBossPartsMaxHp && typeof state.worldBossPartsMaxHp === "object") ? state.worldBossPartsMaxHp : null;
+  const currentMax = Object.fromEntries(keys.map((k) => [k, Math.max(1, Number((maxSrc && maxSrc[k]) || defaultMax[k] || 1))]));
   const currentHp = hasCurrentHp
-    ? {
-      head: Math.max(0, Number(state.worldBossPartsHp.head || 0)),
-      body: Math.max(0, Number(state.worldBossPartsHp.body || 0)),
-      legs: Math.max(0, Number(state.worldBossPartsHp.legs || 0))
-    }
+    ? Object.fromEntries(keys.map((k) => [k, Math.max(0, Number(state.worldBossPartsHp[k] || 0))]))
     : { ...currentMax };
 
   const totalHp = sumWorldBossPartHp(currentHp);
@@ -727,7 +767,7 @@ async function maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster) {
     clearTimeout(timer);
     worldBossTimeoutTimers.delete(zoneKey);
   }
-  const partState = ensureWorldBossPartState({}, monster.calc.maxHp);
+  const partState = ensureWorldBossPartState({}, monster.calc.maxHp, zoneKey);
   const resetState = {
     ...state,
     currentHp: partState.currentHp,
@@ -2298,7 +2338,7 @@ async function handleEnterBattle(interaction) {
     if (isWorldBossZone(zoneKey) && sc.worldBossServiceFor(zoneKey)) {
       const boss = monsters.find((m) => m.isBoss) || monster;
       if (boss && monster?.id !== boss.id) {
-        const bossPartState = ensureWorldBossPartState({}, boss.calc.maxHp);
+        const bossPartState = ensureWorldBossPartState({}, boss.calc.maxHp, zoneKey);
         const switched = {
           ...state,
           activeMonsterSeq: boss.seq,
@@ -2614,12 +2654,18 @@ async function handleEnterBattle(interaction) {
       let battleTargetNote = null;
       if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
         const part = session.worldBossTargetPart;
-        const adjP = applyWorldBossTargetToPlayerStats(session.playerStats, part);
+        const adjP = applyWorldBossTargetToPlayerStats(session.playerStats, part, zoneKey);
         battlePlayerStats = adjP.stats;
         battleTargetNote = adjP.profile?.note || null;
-        const adjM = applyWorldBossTargetToMonster(session.monsterStats, battleMonsterEquipped, part);
+        const adjM = applyWorldBossTargetToMonster(session.monsterStats, battleMonsterEquipped, part, zoneKey);
         battleMonsterStats = adjM.monsterStats;
         battleMonsterEquipped = adjM.monsterEquipped;
+        // 古龍王:依「已破壞部位」套破鱗削弱(攻擊面;不削防禦)
+        if (zoneKey === DRAGON_KING_ZONE) {
+          const weakened = applyDragonKingBreakWeaken(battleMonsterStats, battleMonsterEquipped, battleState?.worldBossPartsHp);
+          battleMonsterStats = weakened.monsterStats;
+          battleMonsterEquipped = weakened.monsterEquipped;
+        }
       }
 
       const monsterHpBeforeBattle = session.monsterHp;
@@ -2736,7 +2782,7 @@ async function handleEnterBattle(interaction) {
         if (isWorldBossZone(zoneKey) && battleMonster?.isBoss && !allPartsDefeated) {
           embedTitle = "✅ 部位擊破";
           embedColor = 0x22c55e;
-          rewardLines = ["目前僅擊破一個部位，需三部位全破才會結算世界王擊殺獎勵。"];
+          rewardLines = ["目前僅擊破一個部位，需所有部位全破才會結算世界王擊殺獎勵。"];
         } else {
           session.monsterHp = 0;
           rewardLines = await handleMonsterKill({ discordId, displayName, session, monster, state: battleStateForSettlement, totalDamage, zoneKey });
@@ -2935,7 +2981,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   }
 
   if (isWorldBossZone(zoneKey) && monster?.isBoss && !isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
-    rewardLines.push("目前僅擊破單一部位，世界王需三部位全破才會結算。");
+    rewardLines.push("目前僅擊破單一部位，世界王需所有部位全破才會結算。");
     return rewardLines;
   }
 
@@ -3467,7 +3513,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // 世界 BOSS（精英區）擊殺後：同一隻進入冷卻，不切下一隻
   if (isWorldBossZone(zoneKey) && monster?.isBoss && sc.worldBossServiceFor(zoneKey)) {
-    const resetParts = ensureWorldBossPartState({}, monster.calc.maxHp);
+    const resetParts = ensureWorldBossPartState({}, monster.calc.maxHp, zoneKey);
     const wbConfig = await sc.worldBossServiceFor(zoneKey).getConfig().catch(() => null);
     const bossLockMs = Math.max(1, Number(wbConfig?.respawnCooldownMinutes || 60)) * 60 * 1000;
     const bossLockUntil = new Date(Date.now() + bossLockMs + 15 * 1000);
@@ -4263,7 +4309,7 @@ async function _doIdleRotate(sc, zoneKey) {
     // 精英區世界 Boss idle：重置三部位 HP
     // 只有「有人開戰但超時」才重置解鎖進度，純閒置不重置
     if (isWorldBossZone(zoneKey) && next.isBoss && sc.worldBossServiceFor(zoneKey)) {
-      const partMax = createWorldBossPartHpTemplate(next.calc.maxHp);
+      const partMax = createWorldBossPartHpTemplate(next.calc.maxHp, zoneKey);
       newState.worldBossPartsMaxHp = partMax;
       newState.worldBossPartsHp = { ...partMax };
       const wbState = await sc.worldBossServiceFor(zoneKey)._getStateEnsured().catch(() => null);

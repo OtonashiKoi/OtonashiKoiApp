@@ -8,8 +8,21 @@ const BUTTON_IDS = {
   enterBattle: "monster-zone:enter-battle",
   enterBattleHead: "monster-zone:enter-battle:head",
   enterBattleBody: "monster-zone:enter-battle:body",
-  enterBattleLegs: "monster-zone:enter-battle:legs"
+  enterBattleLegs: "monster-zone:enter-battle:legs",
+  enterBattleWings: "monster-zone:enter-battle:wings"
 };
+
+// 世界王部位顯示資料(支援 3 / 4 部位;龍翼僅古龍王有)
+const WORLD_BOSS_PART_META = {
+  head:  { hpLabel: "頭部", btnLabel: "🎯 打頭部", style: ButtonStyle.Danger },
+  body:  { hpLabel: "軀幹", btnLabel: "⚔️ 打軀幹", style: ButtonStyle.Primary },
+  wings: { hpLabel: "龍翼", btnLabel: "🪽 打龍翼", style: ButtonStyle.Success },
+  legs:  { hpLabel: "下盤", btnLabel: "🦵 打下盤", style: ButtonStyle.Secondary },
+};
+const WORLD_BOSS_PART_ORDER = ["head", "body", "wings", "legs"];
+function worldBossPartKeysOf(partsHp) {
+  return WORLD_BOSS_PART_ORDER.filter((k) => partsHp && Object.prototype.hasOwnProperty.call(partsHp, k));
+}
 
 function formatRemainingTime(ms) {
   const totalSeconds = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
@@ -74,16 +87,13 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const hpLine = maxHp > 0 ? `${hp} / ${maxHp} (${hpPct}%)\n${hpBar}` : "尚未設定";
   let worldBossPartsLine = null;
   if (isWorldBossZone(zoneKey) && worldBossPartsHp && typeof worldBossPartsHp === "object") {
-    const headHp = Math.max(0, Number(worldBossPartsHp.head || 0));
-    const bodyHp = Math.max(0, Number(worldBossPartsHp.body || 0));
-    const legsHp = Math.max(0, Number(worldBossPartsHp.legs || 0));
-    const totalHp = headHp + bodyHp + legsHp;
-    const doneCount = [headHp, bodyHp, legsHp].filter((v) => v <= 0).length;
+    const keys = worldBossPartKeysOf(worldBossPartsHp);
+    const hpOf = (k) => Math.max(0, Number(worldBossPartsHp[k] || 0));
+    const totalHp = keys.reduce((s, k) => s + hpOf(k), 0);
+    const doneCount = keys.filter((k) => hpOf(k) <= 0).length;
     worldBossPartsLine = [
-      `頭部：${Math.round(headHp)}`,
-      `軀幹：${Math.round(bodyHp)}`,
-      `下肢：${Math.round(legsHp)}`,
-      `總計：${Math.round(totalHp)}（已擊破 ${doneCount}/3）`
+      ...keys.map((k) => `${WORLD_BOSS_PART_META[k]?.hpLabel || k}：${Math.round(hpOf(k))}${hpOf(k) <= 0 ? " ✅" : ""}`),
+      `總計：${Math.round(totalHp)}（已擊破 ${doneCount}/${keys.length}）`
     ].join("\n");
   }
   const rewardLine = [
@@ -124,13 +134,27 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
       descLines.push("✅ 世界BOSS 可挑戰");
     }
     descLines.push("限制：開戰後 30 分鐘內未擊殺視為失敗");
-    descLines.push(
-      "",
-      "**部位機制（三區全破才算贏）**",
-      "🎯 頭部：怪物技能發動率↑（高風險）",
-      "⚔️ 軀幹：防禦極高、你的傷害被削減",
-      "🦵 下盤：怪物攻擊更兇（你受到傷害 ×1.3）"
-    );
+    const isDragonKing = !!(worldBossPartsHp && Object.prototype.hasOwnProperty.call(worldBossPartsHp, "wings"));
+    if (isDragonKing) {
+      descLines.push(
+        "",
+        "**破鱗・逆鱗（四部位俱破，方能屠龍）**",
+        "🐉 古龍王鱗甲如鐵，然其凶威，皆有所繫——",
+        "🦵 下盤：撼其根基，巨龍難再昂首逞凶",
+        "🪽 龍翼：折其雙翼，焚天之勢自消",
+        "⚔️ 軀幹：破其逆鱗，狂焰之怒漸趨黯淡",
+        "👑 頭顱：取其首級，傳說就此落幕",
+        "💭 古諺有云：「先斷翼、再破鱗，龍焰終成餘燼。」"
+      );
+    } else {
+      descLines.push(
+        "",
+        "**部位機制（三區全破才算贏）**",
+        "🎯 頭部：怪物技能發動率↑（高風險）",
+        "⚔️ 軀幹：防禦極高、你的傷害被削減",
+        "🦵 下盤：怪物攻擊更兇（你受到傷害 ×1.3）"
+      );
+    }
   } else {
     descLines.push("點擊下方按鈕即可進入戰鬥");
   }
@@ -186,21 +210,19 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const canEnter = !isWorldBossZone(zoneKey) || !worldBossStatus || worldBossStatus.canChallenge;
   let components = [];
   if (isWorldBossZone(zoneKey) && canEnter) {
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(BUTTON_IDS.enterBattleHead)
-        .setLabel("🎯 打頭部")
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId(BUTTON_IDS.enterBattleBody)
-        .setLabel("⚔️ 打軀幹")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(BUTTON_IDS.enterBattleLegs)
-        .setLabel("🦵 打下盤")
-        .setStyle(ButtonStyle.Secondary)
-    );
-    components = [row];
+    // 依實際部位渲染攻擊鈕(3 或 4 個);已破壞部位標 ✅ 並停用
+    const keys = worldBossPartsHp ? worldBossPartKeysOf(worldBossPartsHp) : [];
+    const partKeys = keys.length ? keys : ["head", "body", "legs"];
+    const btns = partKeys.map((k) => {
+      const meta = WORLD_BOSS_PART_META[k] || { btnLabel: k, style: ButtonStyle.Secondary };
+      const broken = Math.max(0, Number(worldBossPartsHp?.[k] || 0)) <= 0 && worldBossPartsHp;
+      return new ButtonBuilder()
+        .setCustomId(`${BUTTON_IDS.enterBattle}:${k}`)
+        .setLabel(broken ? `${meta.btnLabel} ✅` : meta.btnLabel)
+        .setStyle(meta.style)
+        .setDisabled(Boolean(broken));
+    });
+    components = [new ActionRowBuilder().addComponents(...btns)];
   } else {
     const enterLabel = canEnter ? "進入戰鬥" : "暫時無法挑戰";
     const row = new ActionRowBuilder().addComponents(

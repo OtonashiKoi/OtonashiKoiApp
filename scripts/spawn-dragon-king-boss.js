@@ -17,10 +17,12 @@ const ZONE = "dragon_king_lair";
   if (!boss) { console.error("找不到 dragon_king_lair 的 boss"); process.exit(1); }
 
   const maxHp = Math.max(1, Math.round(Number(boss.maxHp) || 1));
+  // 古龍王 4 部位:頭 30% / 軀幹 30% / 龍翼 20% / 下盤 20%(與 createWorldBossPartHpTemplate 一致)
   const head = Math.max(1, Math.round(maxHp * 0.3));
-  const body = Math.max(1, Math.round(maxHp * 0.4));
-  const legs = Math.max(1, maxHp - head - body);
-  const parts = { head, body, legs };
+  const body = Math.max(1, Math.round(maxHp * 0.3));
+  const wings = Math.max(1, Math.round(maxHp * 0.2));
+  const legs = Math.max(1, maxHp - head - body - wings);
+  const parts = { head, body, wings, legs };
   const now = new Date().toISOString();
 
   const state = {
@@ -54,6 +56,6 @@ const ZONE = "dragon_king_lair";
   );
 
   console.log(`已生成 ${boss.name} 到 ${ZONE}:seq=${boss.seq} maxHp=${maxHp}`);
-  console.log(`  三部位 → 頭 ${head} / 軀幹 ${body} / 下肢 ${legs}(合計 ${head + body + legs})`);
+  console.log(`  四部位 → 頭 ${head} / 軀幹 ${body} / 龍翼 ${wings} / 下盤 ${legs}(合計 ${head + body + wings + legs})`);
   process.exit(0);
 })().catch((e) => { console.error("失敗:", e); process.exit(1); });
