@@ -17,6 +17,7 @@ const GEM_ID_BY_TIER = {
 };
 // 分解產物：裝備階級 → 降一階寶石 × 數量（D 為最低，給 1 顆 D 寶石保底）
 const DISMANTLE_YIELD = {
+  S: { tier: "A", count: 1 },
   A: { tier: "B", count: 2 },
   B: { tier: "C", count: 2 },
   C: { tier: "D", count: 2 },

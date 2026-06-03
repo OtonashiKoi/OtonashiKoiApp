@@ -1794,7 +1794,7 @@ async function handleBackpackAction(interaction, action, uuid, tab = "item", pag
     if (hasFx) warns.push("帶有**特效**");
     const warnLine = warns.length ? `\n\n🚨 **注意：${warns.join("、")}**，分解後就沒了！` : "";
     // 分解產物預告（裝備才有；降階寶石，50% 機率才會產出）
-    const DISMANTLE_PREVIEW = { A: "2 顆 B 階寶石", B: "2 顆 C 階寶石", C: "2 顆 D 階寶石", D: "1 顆 D 階寶石" };
+    const DISMANTLE_PREVIEW = { S: "1 顆 A 階寶石", A: "2 顆 B 階寶石", B: "2 顆 C 階寶石", C: "2 顆 D 階寶石", D: "1 顆 D 階寶石" };
     const tierU = String(entry.tier || "").toUpperCase();
     const isEquip = entry.itemType === "equipment";
     const canDismantle = isEquip && !!DISMANTLE_PREVIEW[tierU];
@@ -1873,7 +1873,7 @@ async function handleBackpackDiscardBulk(interaction, uuid, tab = "item", page =
     await safeEditReply(interaction, { content: "❌ 沒有可批量分解的同款未強化裝備。", components: [], embeds: [], files: [] });
     return;
   }
-  const DISMANTLE_PREVIEW = { A: "2 顆 B 階寶石", B: "2 顆 C 階寶石", C: "2 顆 D 階寶石", D: "1 顆 D 階寶石" };
+  const DISMANTLE_PREVIEW = { S: "1 顆 A 階寶石", A: "2 顆 B 階寶石", B: "2 顆 C 階寶石", C: "2 顆 D 階寶石", D: "1 顆 D 階寶石" };
   const tierU = String(ref.tier || "").toUpperCase();
   const yieldLine = DISMANTLE_PREVIEW[tierU]
     ? `\n🔨 每件有 **50%** 機率分解出：**${DISMANTLE_PREVIEW[tierU]}**（失敗則無產物）`
