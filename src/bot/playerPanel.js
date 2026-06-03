@@ -2350,42 +2350,6 @@ async function handleEnhanceSelect(interaction, targetUuid, mode = ENHANCE_MODE_
   }
 }
 
-/** 強化步驟3：手動指定材料（保留相容） */
-async function handleEnhanceConfirm(interaction, targetUuid, materialUuid) {
-  const serviceContext = getServiceContext();
-  await interaction.deferUpdate();
-  try {
-    const result = await serviceContext.shopService.enhanceItem(interaction.user.id, targetUuid, materialUuid);
-    const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
-    const consumed = result.materialsConsumed
-      ? `（需求等價 ${result.materialsConsumed} 把，實際消耗 ${result.materialsConsumedItems || "?"} 件，等價總和 ${result.materialsConsumedUnits || "?"}）`
-      : "";
-    const appliedText = formatEnhanceAppliedStats(result);
-    const statsBeforeAfterText = formatEnhanceStatsBeforeAfter(result);
-    const goldText = Number(result.goldUsed || 0) > 0 ? `${result.goldUsed} 金幣` : "免費";
-    const equippedEntry = (progress?.inventory || []).find((item) => item?.uuid === targetUuid)
-      || Object.values(progress?.equipment || {}).find((item) => item?.uuid === targetUuid)
-      || null;
-    const currentStatsText = formatEquipStats(equippedEntry?.equipStats || result.currentEquipStats || null);
-    const notice = result.success
-      ? `✅ 強化成功！**${result.itemName}**\n📈 本次強化：${appliedText || "已提升"}${consumed}\n📊 強化前 → 後：${statsBeforeAfterText || currentStatsText || "無"}`
-      : `❌ 強化失敗！**${result.itemName}**\n📈 本次強化：${appliedText || "已提升"}${consumed}\n📊 強化前 → 後：${statsBeforeAfterText || currentStatsText || "無"}\n🧾 消耗：${result.gemsUsed} 顆 ${result.tier}階強化石 / ${goldText}`;
-    await safeEditReply(interaction, buildEnhanceEntryPayload(progress, notice));
-
-    if (result.success && (result.newLevel || 0) >= 3) {
-      _announceEnhance(interaction, {
-        ...result,
-        success: true,
-        beforeEquipStats: result.beforeEquipStats || null,
-        currentEquipStats: result.currentEquipStats || null
-      }).catch(() => {});
-    } else if (!result.success && (result.currentLevel || 0) >= 3) {
-      _announceEnhance(interaction, result).catch(() => {});
-    }
-  } catch (err) {
-    await safeEditReply(interaction, { content: `❌ 強化失敗：${err.message}`, components: [] });
-  }
-}
 
 async function handleEnhanceAuto(interaction, targetUuid, mode = ENHANCE_MODE_NORMAL) {
   const serviceContext = getServiceContext();
@@ -2763,10 +2727,6 @@ async function handleButton(interaction) {
   const id = interaction.customId;
 
   // 每週任務領取
-  if (id.startsWith("wq_claim:")) {
-    await handleWeeklyQuestClaim(interaction, id.slice("wq_claim:".length));
-    return;
-  }
   if (id.startsWith("quest_claim:")) {
     const [, questId = "", cadence = "weekly"] = id.split(":");
     await handleWeeklyQuestClaim(interaction, questId, cadence);
@@ -3298,6 +3258,5 @@ module.exports = {
   handleWeeklyQuestClaim,
   handleEnhanceEntry,
   handleEnhanceSelect,
-  handleEnhanceConfirm,
   handleModal,
 };

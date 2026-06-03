@@ -6,28 +6,8 @@ const { ARENA_COUNT, getPkArenaBracketByIndex, getBossBoostPct, getDropBoostPct,
 const PK_ARENA_IDS = {
   joinQueue: "pk:join-queue",
   leaveQueue: "pk:leave-queue",
-  join1:    "pk:join:1",
-  join2:    "pk:join:2",
-  join3:    "pk:join:3",
-  bet1win:  "pk:bet:1:win",   // 下注擂台1 — 挑戰者贏
-  bet2win:  "pk:bet:2:win",
-  bet3win:  "pk:bet:3:win",
-  bet1lose: "pk:bet:1:lose",  // 下注擂台1 — 挑戰者輸
-  bet2lose: "pk:bet:2:lose",
-  bet3lose: "pk:bet:3:lose",
   myRecord: "pk:my-record",
-  refresh:  "pk:refresh",
 };
-
-const PK_JOIN_IDS = [
-  "pk:join:1",
-  "pk:join:2",
-  "pk:join:3",
-  "pk:join:4",
-  "pk:join:5",
-  "pk:join:6",
-  "pk:join:7",
-];
 
 const ARENA_LABELS = ["①", "②", "③", "④", "⑤", "⑥", "⑦"];
 const BET_AMOUNTS = [10000, 20000, 30000];

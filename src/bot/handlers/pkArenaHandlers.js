@@ -108,19 +108,6 @@ function getPkArenaDiagnostics() {
   };
 }
 
-function getArenaIndex(customId) {
-  const m = customId.match(/^pk:join:(\d+)$/);
-  return m ? parseInt(m[1], 10) - 1 : -1;
-}
-
-function getBetInfo(customId) {
-  // pk:bet:<arenaIndex1based>:<side>
-  const m = customId.match(/^pk:bet:(\d+):(challenger|defender|win|lose)$/);
-  if (!m) return null;
-  const side = m[2] === "win" ? "challenger" : m[2] === "lose" ? "defender" : m[2];
-  return { arenaIdx: parseInt(m[1], 10) - 1, side };
-}
-
 function getBetSelectInfo(customId, values = []) {
   const idMatch = String(customId || "").match(/^pk:bet_select(?::(\d+))?$/);
   if (!idMatch) return null;
@@ -1324,10 +1311,6 @@ async function handleBetRequest(interaction, betInfo) {
   await refreshPanel();
 }
 
-async function handleBet(interaction) {
-  const betInfo = getBetInfo(interaction.customId);
-  await handleBetRequest(interaction, betInfo);
-}
 
 async function handleBetSelect(interaction) {
   const betInfo = getBetSelectInfo(interaction.customId, interaction.values);
@@ -1458,12 +1441,6 @@ async function startBattle(idx, { recovered = false } = {}) {
   }
 }
 
-// ── 重整面板 ─────────────────────────────────────────────────
-async function handleRefresh(interaction) {
-  await ensureArenaStateLoaded();
-  const ranking = await fetchPkRanking(10);
-  await interaction.update(createPkArenaPanelMessage(arenaSlots, ranking, pkQueue));
-}
 
 async function handleMyRecord(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -1565,20 +1542,16 @@ function isPkArenaSelectMenu(customId) {
 }
 
 async function handlePkArenaButton(interaction) {
-  if (interaction.customId === "pk:my-record" || interaction.customId === "pk:refresh") {
+  if (interaction.customId === "pk:my-record") {
     await handleMyRecord(interaction);
     return;
   }
-  if (interaction.customId === "pk:join-queue" || interaction.customId.startsWith("pk:join:")) {
+  if (interaction.customId === "pk:join-queue") {
     await handleJoin(interaction);
     return;
   }
   if (interaction.customId === "pk:leave-queue") {
     await handleLeaveQueue(interaction);
-    return;
-  }
-  if (interaction.customId.startsWith("pk:bet:")) {
-    await handleBet(interaction);
     return;
   }
 }
