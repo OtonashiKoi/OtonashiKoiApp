@@ -1,12 +1,30 @@
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
-const { withPlayerProgressLock } = require("../progress/progressLocks");
 const {
   ZONE_BY_KEY,
   featureKeyToZone,
   checkZoneLevelRequirementWithBinding
 } = require("../../shared/zones");
+
+// 掛機領取「專用」序列鎖：必須與 progress lock 分開。
+// 領取流程內部會呼叫 grantExp（grantExp 本身會取得 progress lock），
+// 若這裡也用同一把 progress lock 就會「重入死鎖」→ 領取永遠卡住領不出來。
+const idleClaimLocks = new Map();
+async function withIdleClaimLock(key, fn) {
+  const currentLock = idleClaimLocks.get(key) || Promise.resolve();
+  let releaseNext;
+  const nextLock = new Promise((resolve) => { releaseNext = resolve; });
+  const chainedLock = currentLock.then(() => nextLock);
+  idleClaimLocks.set(key, chainedLock);
+  try {
+    await currentLock;
+    return await fn();
+  } finally {
+    releaseNext();
+    if (idleClaimLocks.get(key) === chainedLock) idleClaimLocks.delete(key);
+  }
+}
 
 function toNumber(value, fallback = 0) {
   const n = Number(value);
@@ -259,8 +277,9 @@ class IdleService {
 
   async claimDiscordSession(discordId, displayName, reason = "manual_claim", options = {}) {
     await this.playerService.ensurePlayer(discordId, displayName);
-    // 以玩家序列鎖包住整段「讀 session → 發獎 → 清 session」，避免雙擊重複領取
-    return withPlayerProgressLock(discordId, () => this._claimDiscordSessionLocked(discordId, displayName, reason, options));
+    // 以掛機專用序列鎖包住整段「讀 session → 發獎 → 清 session」，避免雙擊重複領取
+    // （不可用 progress lock，否則內部 grantExp 取同一把鎖會重入死鎖）
+    return withIdleClaimLock(discordId, () => this._claimDiscordSessionLocked(discordId, displayName, reason, options));
   }
 
   async _claimDiscordSessionLocked(discordId, displayName, reason = "manual_claim", options = {}) {
@@ -637,8 +656,9 @@ class IdleService {
   }
 
   async claimSession(discordId, displayName, opts = {}) {
-    // 以玩家序列鎖包住整段結算，避免雙擊重複領取掉落/金幣
-    return withPlayerProgressLock(discordId, () => this._claimSessionLocked(discordId, displayName, opts));
+    // 以掛機專用序列鎖包住整段結算，避免雙擊重複領取掉落/金幣
+    // （不可用 progress lock，否則內部 grantExp 取同一把鎖會重入死鎖）
+    return withIdleClaimLock(discordId, () => this._claimSessionLocked(discordId, displayName, opts));
   }
 
   async _claimSessionLocked(discordId, displayName, { force = false } = {}) {
