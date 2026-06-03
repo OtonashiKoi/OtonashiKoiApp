@@ -64,6 +64,18 @@ const GATHER_CAP = 18;                  // 最多累積 18 個（6 小時量）
 const GEM_DROP_RATE = 0.7;              // 預設強化石比例（無 modifier 時 fallback）
 const LEVELUP_EXP_PER_LEVEL = 120;      // 每級所需成長 exp
 
+// 各階級的等級上限：D=10, C=20, B=40, A=50。
+// 餵食單次最多升到「目前等級之上最近的一個階級上限」，不可一次跨過整個階級；
+// 已在上限時再餵才會跨入下一階（跨階會重置飽食、清空採集，視為進化）。
+const TIER_LEVEL_CAPS = [10, 20, 40, MAX_LEVEL];
+function nextTierLevelCap(level) {
+  const lv = Math.max(1, Number(level) || 1);
+  for (const cap of TIER_LEVEL_CAPS) {
+    if (lv < cap) return cap;
+  }
+  return MAX_LEVEL;
+}
+
 // 採集階級順序（高一階用）
 const TIER_ORDER = ["D", "C", "B", "A"];
 function tierUp(tier) {
@@ -277,6 +289,12 @@ class PetService {
 
     let totalSatiety = 0, totalGrowth = 0, totalHatch = 0, fed = 0;
     const consumedUuids = new Set();
+    let leveledTo = null;
+    let tierCapReached = false;
+    // 餵食前的階級，與本次允許升到的等級上限（階級邊界卡點）
+    const startTier = petMatchingTier(pet.stage === "egg" ? 1 : (pet.level || 1));
+    const feedLevelCap = nextTierLevelCap(pet.level || 1);
+
     for (const it of feedTargets) {
       const tier = String(it.tier || "D").toUpperCase();
       const mult = feedMultiplier(tier, matchTier);
@@ -303,6 +321,25 @@ class PetService {
       }
       consumedUuids.add(it.uuid);
       fed++;
+
+      // 已孵化：即時升級，但升到本次「階級上限」就停止繼續吃，剩餘飼料留背包不浪費。
+      if (pet.stage === "grown") {
+        while (pet.level < feedLevelCap && pet.level < MAX_LEVEL && (pet.growthExp || 0) >= LEVELUP_EXP_PER_LEVEL) {
+          pet.growthExp -= LEVELUP_EXP_PER_LEVEL;
+          pet.level += 1;
+          leveledTo = pet.level;
+        }
+        if (pet.level >= feedLevelCap) {
+          tierCapReached = true;
+          break; // 到階級上限卡點 → 停止繼續餵，避免浪費飼料/經驗
+        }
+      }
+    }
+
+    if (pet.level >= MAX_LEVEL) {
+      pet.growthExp = 0; // 封頂
+    } else if (tierCapReached && (pet.growthExp || 0) > LEVELUP_EXP_PER_LEVEL) {
+      pet.growthExp = LEVELUP_EXP_PER_LEVEL; // 卡點不囤積跨階 exp，保留剛好可升一級
     }
 
     // 孵化判定（達門檻 → 隨機開獎決定種類）
@@ -331,22 +368,27 @@ class PetService {
       hatched = true;
     }
 
-    // 升級判定（成長 exp 滿一級就升，可連升）
-    let leveledTo = null;
-    while (pet.stage === "grown" && pet.level < MAX_LEVEL && (pet.growthExp || 0) >= LEVELUP_EXP_PER_LEVEL) {
-      pet.growthExp -= LEVELUP_EXP_PER_LEVEL;
-      pet.level += 1;
-      leveledTo = pet.level;
+    // 跨階事件：本次餵食讓寵物升入更高階級（進化）→ 飽食歸零、清空累積採集物。
+    // （孵化不算跨階；孵化本身已重置這些。）
+    let crossedTier = false;
+    let gatherCleared = 0;
+    const endTier = petMatchingTier(pet.level || 1);
+    if (pet.stage === "grown" && !hatched && TIER_RANK[endTier] > TIER_RANK[startTier]) {
+      crossedTier = true;
+      pet.satiety = 0;
+      gatherCleared = Array.isArray(pet.accruedItems) ? pet.accruedItems.length : 0;
+      pet.accruedItems = [];
+      pet.lastSettleAt = nowMs();
     }
-    if (pet.level >= MAX_LEVEL) pet.growthExp = 0; // 封頂
 
-    // 消耗 inventory 裝備
+    // 消耗 inventory 裝備（只消耗實際吃下去的）
     progress.inventory = progress.inventory.filter((x) => !(x && consumedUuids.has(x.uuid)));
     pet.lastSatietyAt = nowMs();
     await this.progressRepository.save(progress);
 
     return {
       fed, protectedCount, totalSatiety, totalGrowth, totalHatch, hatched, hatchedSpecies, leveledTo,
+      tierCapReached, crossedTier, gatherCleared, endTier,
       pet: this._toView(pet),
     };
   }

@@ -102,6 +102,13 @@ function buildFeedStatus(r, tierLabel) {
   if (r.totalGrowth > 0) lines.push(`成長 exp +${r.totalGrowth}`);
   if (r.hatched) lines.push(`🎉 **孵化成功！開出了【${r.hatchedSpecies || "神秘龍"}】！**`);
   if (r.leveledTo) lines.push(`⬆️ 升到 **Lv.${r.leveledTo}**`);
+  if (r.crossedTier) {
+    const clr = r.gatherCleared > 0 ? `、清空未領取採集物 **${r.gatherCleared}** 個` : "";
+    lines.push(`⬆️✨ **進化到 ${r.endTier} 階！** 飽食度已重置為 0${clr}，請重新餵食補飽食才能繼續採集。`);
+  } else if (r.tierCapReached) {
+    lines.push(`🛑 已達 **${r.endTier} 階上限**！剩餘飼料已保留在背包。再餵一次才會進化到下一階。`);
+    lines.push(`⚠️ 注意：進化的瞬間會「**清空飽食度與未領取的採集物**」，建議**先去領取採集**再進化。`);
+  }
   return lines;
 }
 
