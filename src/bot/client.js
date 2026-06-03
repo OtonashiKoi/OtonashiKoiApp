@@ -12,7 +12,7 @@ const { handleCommand, handleButton, handleSelectMenu, handleModal } = require("
 const { serviceContext, setBotClient, getBotClient } = require("./runtimeContext");
 const { startFetcher } = require("./commentFetcher");
 const { handleStreamComment } = require("./handlers/streamHandlers");
-const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels, _doIdleRotate } = require("./handlers/monsterZoneHandlers");
+const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels, _doIdleRotate, startWorldBossRespawnWatcher } = require("./handlers/monsterZoneHandlers");
 const { initPkArenaState } = require("./handlers/pkArenaHandlers");
 const { restoreTowerSessions } = require("./handlers/towerHandlers");
 const { isMonsterZoneFeatureKey, featureKeyToZone, MONSTER_ZONE_FEATURE_KEYS } = require("../shared/zones");
@@ -802,6 +802,8 @@ function createBotClient() {
     } else {
       startIdleRotateTimer();
     }
+    // 世界王逃跑→重生面板刷新監看（每 3 分，僅狀態變化時刷新）
+    try { startWorldBossRespawnWatcher(); } catch (e) { console.warn("[WorldBossWatcher] 啟動失敗:", e?.message || e); }
 
     if (welcomeAuditTimer) clearInterval(welcomeAuditTimer);
     auditMissingWelcomeAnnouncements(readyClient).catch(() => {});

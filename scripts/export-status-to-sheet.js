@@ -407,6 +407,7 @@ function questDesc(q, itemById) {
     job: "職業試煉",
     daily: "每日任務",
     weekly: "每週任務",
+    season: "賽季成就",
   })[q.cadence] || q.cadence || "任務";
   const action = questTypeStr(q.type, q.target);
   const reward = rewardStr(q, itemById);
