@@ -287,11 +287,15 @@ async function createEventPanelMessage(activeEvent, zoneTheme = { label: "怪物
     .setColor(zoneTheme.color)
     .setFooter({ text: `區域：${zoneTheme.label}${zoneKey ? ` · ${zoneKey}` : ""}` });
 
-  // 建立按鈕（每列最多 5 個按鈕）
+  // 建立按鈕（每列最多 5 個按鈕；Discord 一則訊息最多 5 列）
+  // 若會加「顯示個人化選項」按鈕，保留 1 列給它，選項列最多 4 列（20 個），否則 5 列（25 個），避免超列導致整個面板發不出來
+  const willAddPersonalRow = !viewerContext && conditionalCount > 0;
+  const maxOptionRows = willAddPersonalRow ? 4 : 5;
+  const cappedOpts = optList.slice(0, maxOptionRows * 5);
   const rows = [];
-  for (let i = 0; i < optList.length; i += 5) {
+  for (let i = 0; i < cappedOpts.length; i += 5) {
     const row = new ActionRowBuilder();
-    const chunk = optList.slice(i, i + 5);
+    const chunk = cappedOpts.slice(i, i + 5);
     for (const opt of chunk) {
       const label = String(opt.label || "選項").slice(0, 80);
       const btn = new ButtonBuilder()
@@ -304,7 +308,7 @@ async function createEventPanelMessage(activeEvent, zoneTheme = { label: "怪物
   }
 
   // 如果是對所有玩家的公開面板，且存在條件選項，加入「顯示個人化選項」按鈕（會回傳 ephemeral 個人面板）
-  if (!viewerContext && conditionalCount > 0) {
+  if (willAddPersonalRow) {
     const personalRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`monster-event:personal:${activeEvent.id}`)

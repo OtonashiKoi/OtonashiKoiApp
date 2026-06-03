@@ -137,7 +137,12 @@ async function rememberActiveReply(interaction) {
 }
 
 async function replyAndAutoDelete(interaction, content) {
-  await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  // 支援「已 defer」的情況：先 deferReply 過的 handler 走 editReply，否則才 reply
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply({ content });
+  } else {
+    await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  }
 }
 
 async function replyPlayerBlocked(interaction) {
@@ -334,6 +339,10 @@ async function getBindingRows(interaction) {
 
 async function handleProfile(interaction) {
   const serviceContext = getServiceContext();
+  // 履歷要讀多筆 DB（getProfile→fallback→mergeEquipped），先 defer 避免 3 秒未回應而「互動失敗」
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+  }
   let result = null;
   let fallbackUsed = false;
   try {
@@ -1669,7 +1678,7 @@ async function openBackpackSection(interaction, tab, page = 0, subTab = "all") {
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
   const msg = buildBackpackMessage(inventory, tab, undefined, page, subTab, { sectionMode: true });
-  await interaction.followUp({ ...msg, flags: MessageFlags.Ephemeral });
+  await safeEditReply(interaction, msg); // 就地更新，避免每次切分頁/分類都另開一個背包面板
 }
 
 async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0, subTab = "all") {
@@ -2796,7 +2805,7 @@ async function handleButton(interaction) {
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const inventory = progress?.inventory || [];
     const msg = buildBackpackMessage(inventory, "item");
-    await interaction.followUp({ ...msg, flags: MessageFlags.Ephemeral });
+    await safeEditReply(interaction, msg); // 就地更新，避免「返回背包」每次另開一個背包面板
     return;
   }
   if (id.startsWith("backpack_subtab:")) {

@@ -474,8 +474,26 @@ async function handleAuctionButton(interaction) {
 
   // 開啟拍賣場
   if (id === PFX.open) {
-    const panel = await buildAuctionPanel();
-    await interaction.reply({ ...panel, flags: MessageFlags.Ephemeral });
+    // 從「自己的暫時面板」內按返回 → 就地更新；從公開入口按 → 新開暫時面板。
+    // 兩種都先 defer 再 build，避免 build 慢於 3 秒逾時；並包 try/catch 避免載入失敗卡住。
+    const fromEphemeral = Boolean(interaction.message?.flags?.has?.(MessageFlags.Ephemeral));
+    try {
+      if (fromEphemeral) {
+        await interaction.deferUpdate();
+        const panel = await buildAuctionPanel();
+        await interaction.editReply(panel);
+      } else {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const panel = await buildAuctionPanel();
+        await interaction.editReply(panel);
+      }
+    } catch (e) {
+      console.error("[Auction] open failed:", e?.message || e);
+      try {
+        if (interaction.deferred || interaction.replied) await interaction.editReply({ content: "❌ 拍賣場載入失敗，請再試一次。", components: [], embeds: [] });
+        else await interaction.reply({ content: "❌ 拍賣場載入失敗，請再試一次。", flags: MessageFlags.Ephemeral });
+      } catch (_) {}
+    }
     return;
   }
 
@@ -617,27 +635,28 @@ async function handleAuctionButton(interaction) {
       const statusLabel = a.status === "active" ? `剩 ${fmtRemaining(a.expiresAt)}` : "⏰ 待領回";
       return `\`${i + 1}.\` **${item}** ─ ${price}　${statusLabel}`;
     });
-    // 領回按鈕（只顯示 expired 的）
+    // 領回按鈕（只顯示 expired 的）；領回與下架各自一列，避免合併後被 slice 截掉而漏按鈕
     const expiredListings = listings.filter(a => a.status === "expired");
-    const reclaimBtns = expiredListings.slice(0, 3).map(a =>
+    const reclaimBtns = expiredListings.slice(0, 5).map(a =>
       new ButtonBuilder()
         .setCustomId(`${PFX.reclaim}${a.id}`)
-        .setLabel(`領回 ${fmtItem(a.item)}`)
+        .setLabel(`領回 ${fmtItem(a.item)}`.slice(0, 80))
         .setStyle(ButtonStyle.Success)
     );
     const activeListings = listings.filter(a => a.status === "active");
-    const cancelBtns = activeListings.slice(0, 3).map(a =>
+    const cancelBtns = activeListings.slice(0, 5).map(a =>
       new ButtonBuilder()
         .setCustomId(`${PFX.cancel}${a.id}`)
-        .setLabel(`下架 ${fmtItem(a.item)}`)
+        .setLabel(`下架 ${fmtItem(a.item)}`.slice(0, 80))
         .setStyle(ButtonStyle.Danger)
     );
     const backBtn = new ButtonBuilder().setCustomId(PFX.open).setLabel("← 返回").setStyle(ButtonStyle.Secondary);
     const rows = [];
-    const actionBtns = [...reclaimBtns, ...cancelBtns];
-    if (actionBtns.length > 0) rows.push(new ActionRowBuilder().addComponents(...actionBtns.slice(0, 5)));
+    if (reclaimBtns.length > 0) rows.push(new ActionRowBuilder().addComponents(...reclaimBtns));
+    if (cancelBtns.length > 0) rows.push(new ActionRowBuilder().addComponents(...cancelBtns));
     rows.push(new ActionRowBuilder().addComponents(backBtn));
-    await interaction.editReply({ content: `📦 **我的上架**\n\n${lines.join("\n")}`, components: rows });
+    const moreNote = (expiredListings.length > 5 || activeListings.length > 5) ? "\n（按鈕僅顯示前 5 筆，處理後會刷新顯示其餘）" : "";
+    await interaction.editReply({ content: `📦 **我的上架**\n\n${lines.join("\n")}${moreNote}`, components: rows });
     return;
   }
 

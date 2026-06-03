@@ -172,6 +172,21 @@ function buildFeedMenu({ active, matchTier, items, page = 0 }) {
 }
 
 async function handlePetButton(interaction) {
+  try {
+    return await _handlePetButtonImpl(interaction);
+  } catch (e) {
+    console.error("[Pet] 按鈕處理失敗:", e?.message || e);
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: "❌ 寵物操作失敗，請再試一次。", embeds: [], components: [] });
+      } else {
+        await interaction.reply({ content: "❌ 寵物操作失敗，請再試一次。", flags: MessageFlags.Ephemeral });
+      }
+    } catch (_) { /* 連回覆都失敗就放棄 */ }
+  }
+}
+
+async function _handlePetButtonImpl(interaction) {
   const sc = getServiceContext();
   const discordId = interaction.user.id;
 
@@ -324,6 +339,21 @@ async function handlePetButton(interaction) {
 }
 
 async function handlePetSelect(interaction) {
+  try {
+    return await _handlePetSelectImpl(interaction);
+  } catch (e) {
+    console.error("[Pet] 選單處理失敗:", e?.message || e);
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: "❌ 寵物操作失敗，請再試一次。", embeds: [], components: [] });
+      } else {
+        await interaction.reply({ content: "❌ 寵物操作失敗，請再試一次。", flags: MessageFlags.Ephemeral });
+      }
+    } catch (_) { /* 連回覆都失敗就放棄 */ }
+  }
+}
+
+async function _handlePetSelectImpl(interaction) {
   const sc = getServiceContext();
   const discordId = interaction.user.id;
   await interaction.deferUpdate();

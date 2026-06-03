@@ -8,7 +8,7 @@ const {
   CASINO_IDS, CASINO_BET_MODAL_PREFIX, isCasinoButton, isCasinoModal,
   createCasinoPanelMessage,
 } = require("../casinoView");
-const { COLOR_META, BET_MIN, BET_MAX, PAYOUT_CAP } = require("../../services/casino/wheelConfig");
+const { COLOR_META, WHEEL_SLOTS, BET_MIN, BET_MAX, PAYOUT_CAP } = require("../../services/casino/wheelConfig");
 
 let panelChannelId = null;
 let panelMessageId = null;
@@ -293,15 +293,23 @@ async function handleMyRecord(interaction) {
 }
 
 async function handleRules(interaction) {
+  // 依輪盤設定動態產生格數/機率，避免與實際 WHEEL_SLOTS 不同步
+  const totalSlots = WHEEL_SLOTS.length;
+  const counts = {};
+  for (const s of WHEEL_SLOTS) counts[s.color] = (counts[s.color] || 0) + 1;
+  const slotLines = ["yellow", "green", "red", "blue", "purple"]
+    .filter((c) => counts[c])
+    .map((c) => {
+      const m = COLOR_META[c];
+      const n = counts[c];
+      const pct = Math.round((n / totalSlots) * 1000) / 10;
+      return `${m.emoji} ${m.label} ×${m.mult} — ${n} 格（${pct}%）`;
+    });
   const lines = [
     "🎰 **命運轉盤 詳細規則**",
     "",
-    "**輪盤格子（20 格）**",
-    "🟡 黃 ×2 — 9 格（45%）",
-    "🟢 綠 ×3 — 6 格（30%）",
-    "🔴 紅 ×5 — 3 格（15%）",
-    "🔵 藍 ×10 — 1 格（5%）",
-    "🟣 紫 ×15 — 1 格（5%）",
+    `**輪盤格子（${totalSlots} 格）**`,
+    ...slotLines,
     "",
     "**回合節奏**：每 60 秒一輪，結算前 5 秒鎖盤。",
     "",
