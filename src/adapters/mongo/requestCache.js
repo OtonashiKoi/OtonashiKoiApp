@@ -101,6 +101,13 @@ function withWalletCache(repo) {
       if (store) store.set(`wallet:${wallet.playerId}`, result);
       return result;
     },
+    async incBalance(playerId, currencyType, amount) {
+      const result = await repo.incBalance(playerId, currencyType, amount);
+      const store = storage.getStore();
+      // 原子變更後更新請求層快取，避免同一請求後續讀到舊餘額（失敗回 null 則不動快取）
+      if (store && result) store.set(`wallet:${playerId}`, result);
+      return result;
+    },
     async listAll() {
       return repo.listAll();
     }

@@ -1730,6 +1730,16 @@ async function restoreTowerSessions() {
       };
 
       activeSessions.set(session.threadId, session);
+      // lobby 狀態的隊伍重啟後若不重啟逾時計時器，會永遠不解散；補上重新武裝
+      if (session.state === "lobby") {
+        session.lobbyTimer = setTimeout(async () => {
+          const s = activeSessions.get(session.threadId);
+          if (s?.state === "lobby") {
+            disbandSession(session.threadId);
+            await thread.delete("等待逾時自動解散").catch(() => {});
+          }
+        }, TOWER_LOBBY_TIMEOUT_MS);
+      }
       for (const m of session.members) {
         playerThreadMap.set(m.discordId, session.threadId);
         setTowerPresence([m.discordId], true);

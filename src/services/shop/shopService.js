@@ -485,6 +485,8 @@ class ShopService {
       throw new AppError(ERROR_CODES.ITEM_OUT_OF_STOCK, `庫存不足，目前僅剩 ${item.stock} 個`, 400);
     }
 
+    // 以玩家序列鎖包住「讀進度→驗月購/持有上限→扣款→扣庫存→入背包→存檔」，避免併發購買造成超買或覆寫遺失
+    return withPlayerProgressLock(discordId, async () => {
     const maxPerMonth = item.maxPerMonth || 0;
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (maxPerMonth > 0) {
@@ -577,6 +579,7 @@ class ShopService {
     }
 
     return { item };
+    });
   }
 
   async useItem(discordId, entryUuid, displayName) {
@@ -743,7 +746,13 @@ class ShopService {
     const idx = this._findInventoryIndexForAction(progress, entryUuid);
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     const entry = progress.inventory[idx];
-    progress.inventory.splice(idx, 1);
+    // 堆疊型（強化石等消耗品）：賣 1 顆只扣 stackCount，不可整疊刪除
+    const stackCount = Number(entry.stackCount || 1);
+    if (stackCount > 1) {
+      progress.inventory[idx] = { ...entry, stackCount: stackCount - 1 };
+    } else {
+      progress.inventory.splice(idx, 1);
+    }
     progress.updatedAt = new Date().toISOString();
     const savedProgress = await this.progressRepository.save(progress);
     await this.rewardService.grantCurrency({

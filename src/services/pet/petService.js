@@ -136,7 +136,15 @@ class PetService {
     return pet;
   }
 
-  // ── 懶結算：採集累積（依該龍 gatherMod：速度 / 產出偏好 / 高一階）──
+  _rollGatherTierForClaim(pet) {
+    const mod = pet.gatherMod || DEFAULT_GATHER_MOD;
+    const baseTier = tierForPetLevel(pet.level || 1);
+    const qualityUp = Number(mod.qualityUpChance) || 0;
+    return (qualityUp > 0 && Math.random() < qualityUp) ? tierUp(baseTier) : baseTier;
+  }
+
+  // ── 懶結算：採集累積（依該龍 gatherMod：速度 / 產出偏好）──
+  // 階級在「領取時」依寵物當下等級決定，避免升級前累積的採集物卡在舊階級。
   _settleGathering(pet) {
     if (pet.stage !== "grown") return pet; // 未孵化不採集
     const now = nowMs();
@@ -156,13 +164,10 @@ class PetService {
 
     const room = Math.max(0, GATHER_CAP - pet.accruedItems.length);
     const toAdd = Math.min(newItems, room);
-    const baseTier = tierForPetLevel(pet.level || 1);
     const gemBias = Number.isFinite(Number(mod.gemBias)) ? Number(mod.gemBias) : GEM_DROP_RATE;
-    const qualityUp = Number(mod.qualityUpChance) || 0;
     for (let i = 0; i < toAdd; i++) {
       const kind = Math.random() < gemBias ? "gem" : "equipment";
-      const tier = (qualityUp > 0 && Math.random() < qualityUp) ? tierUp(baseTier) : baseTier;
-      pet.accruedItems.push({ tier, kind });
+      pet.accruedItems.push({ kind });
     }
     pet.lastSettleAt = last + newItems * intervalMin * 60_000;
     if (pet.accruedItems.length >= GATHER_CAP) pet.lastSettleAt = now; // 滿了就對齊
@@ -399,41 +404,62 @@ class PetService {
   }
 
   // ── 領取採集（含懶結算）→ 把累積道具寫進 inventory ──
+  // 以 CAS（saveIfUnchanged）重試：避免與其他 progress 寫入（戰鬥獎勵、其他分頁）併發時
+  // 整份覆寫互相覆蓋，導致「領取訊息顯示拿到，但實際背包沒有」的漏拿問題。
   async claimGathering(discordId) {
-    const progress = await this._loadProgress(discordId);
-    const active = this._getActivePet(progress);
-    if (!active) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目前沒有出戰寵物", 400);
-    this._applyHungerDecay(active);
-    this._settleGathering(active);
-
-    const items = Array.isArray(active.accruedItems) ? active.accruedItems : [];
-    if (items.length === 0) {
-      await this.progressRepository.save(progress);
-      return { granted: [], pet: this._toView(active) };
-    }
-
+    const CAS_MAX_RETRIES = 6;
     const allItems = await this.itemRepository.findAll();
-    const granted = [];
-    for (const acc of items) {
-      let entry = null;
-      if (acc.kind === "gem") {
-        const gemId = GEM_ID_BY_TIER[acc.tier] || GEM_ID_BY_TIER.D;
-        const gem = allItems.find((it) => it.id === gemId);
-        if (gem) entry = this._buildInventoryEntry(gem);
-      } else {
-        // 隨機該階裝備
-        const pool = allItems.filter((it) => it.itemType === "equipment" && String(it.tier).toUpperCase() === acc.tier);
-        if (pool.length) entry = this._buildInventoryEntry(pool[crypto.randomInt(0, pool.length)]);
+
+    for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
+      const progress = await this._loadProgress(discordId);
+      const prevUpdatedAt = progress.updatedAt;
+      const active = this._getActivePet(progress);
+      if (!active) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目前沒有出戰寵物", 400);
+      this._applyHungerDecay(active);
+      this._settleGathering(active);
+
+      const items = Array.isArray(active.accruedItems) ? active.accruedItems : [];
+      if (items.length === 0) {
+        // 沒有可領取的，仍以 CAS 寫回（settle/飽食可能有變動）；失敗就重試
+        const ok = typeof this.progressRepository.saveIfUnchanged === "function"
+          ? await this.progressRepository.saveIfUnchanged(progress, prevUpdatedAt)
+          : (await this.progressRepository.save(progress), true);
+        if (!ok) continue;
+        return { granted: [], pet: this._toView(active) };
       }
-      if (entry) {
-        progress.inventory.push(entry);
-        granted.push({ itemName: entry.itemName, tier: acc.tier, kind: acc.kind });
+
+      const granted = [];
+      for (const acc of items) {
+        const tier = this._rollGatherTierForClaim(active);
+        let entry = null;
+        if (acc.kind === "gem") {
+          const gemId = GEM_ID_BY_TIER[tier] || GEM_ID_BY_TIER.D;
+          const gem = allItems.find((it) => it.id === gemId);
+          if (gem) entry = this._buildInventoryEntry(gem);
+        } else {
+          // 隨機該階裝備
+          // 排除標記 noPetGather 的道具（世界王卡等不可由寵物採集取得）
+          const pool = allItems.filter((it) => it.itemType === "equipment" && String(it.tier).toUpperCase() === tier && !it.noPetGather);
+          if (pool.length) entry = this._buildInventoryEntry(pool[crypto.randomInt(0, pool.length)]);
+        }
+        if (entry) {
+          progress.inventory.push(entry);
+          granted.push({ itemName: entry.itemName, tier, kind: acc.kind });
+        }
       }
+      active.accruedItems = [];
+      active.lastSettleAt = nowMs();
+
+      // CAS 寫回：成功才回報 granted（確保訊息＝實際入包）；失敗代表被併發覆寫，重新載入重 roll
+      const ok = typeof this.progressRepository.saveIfUnchanged === "function"
+        ? await this.progressRepository.saveIfUnchanged(progress, prevUpdatedAt)
+        : (await this.progressRepository.save(progress), true);
+      if (!ok) continue;
+      return { granted, pet: this._toView(active) };
     }
-    active.accruedItems = [];
-    active.lastSettleAt = nowMs();
-    await this.progressRepository.save(progress);
-    return { granted, pet: this._toView(active) };
+
+    // 連續多次都被併發寫入卡住（罕見）：不謊報領取，請玩家重試
+    throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "領取忙線中，請稍候再按一次領取。", 409);
   }
 
   _buildInventoryEntry(item) {

@@ -3408,10 +3408,15 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         await sc.rewardService.grantCurrency({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
           currencyType: "gold", amount: share,
-          source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone"
+          source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone",
+          // 擊殺已由 claimKill 保證一次性結算；sourceRef 提供冪等與帳務可追蹤
+          sourceRef: `kill:${killKey}:gold:${pid}`,
         });
         if (perPidRewards[pid]) perPidRewards[pid].gold = share;
-      } catch (e) { console.error(`[MonsterZone] grantCurrency(gold) failed for ${pid}`, e); }
+      } catch (e) {
+        console.error(`[MonsterZone] grantCurrency(gold) failed for ${pid}`, e);
+        if (perPidRewards[pid]) perPidRewards[pid]._goldGrantFailed = true;
+      }
     }
 
     const myBaseShare = Math.max(1, Math.round(effectiveGoldReward * dmgRatio(discordId)));
@@ -4196,7 +4201,7 @@ async function handleMonsterEventChoice(interaction) {
       const wantEnh = Number(eff.payload?.enhanceLevel || 0);
       if (!wantId) continue;
       const inv = Array.isArray(progress?.inventory) ? progress.inventory : [];
-      const found = inv.find(it => (String(it.itemId || it.id) === String(wantId) || String(it.itemName || '').includes(wantId)) && (Number(it.enhanceLevel || it.enhance || 0) >= wantEnh));
+      const found = inv.find(it => String(it.itemId || it.id) === String(wantId) && (Number(it.enhanceLevel || it.enhance || 0) >= wantEnh));
       if (!found) {
         const itemObj = await sc.itemService.getItemById(wantId).catch(() => null);
         const displayName = itemObj ? itemObj.name : wantId;
@@ -4234,16 +4239,24 @@ async function handleMonsterEventChoice(interaction) {
         prog = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
       }
       if (!Array.isArray(prog.inventory)) prog.inventory = [];
-      const idx = prog.inventory.findIndex(it => (String(it.itemId || it.id) === String(wantId) || String(it.itemName || '').includes(wantId)) && (Number(it.enhanceLevel || it.enhance || 0) >= wantEnh));
+      const wantQty = Math.max(1, Number(eff.payload?.count ?? eff.payload?.qty ?? 1));
+      const idx = prog.inventory.findIndex(it => String(it.itemId || it.id) === String(wantId) && (Number(it.enhanceLevel || it.enhance || 0) >= wantEnh));
       if (idx === -1) {
         const itemObj = await sc.itemService.getItemById(wantId).catch(() => null);
         const displayName = itemObj ? itemObj.name : wantId;
         results.push(`你沒有我所需的 ${displayName}`);
       } else {
-        const removed = prog.inventory.splice(idx, 1)[0];
+        const entry = prog.inventory[idx];
+        const stackCount = Number(entry.stackCount || 1);
+        // 堆疊型只扣需求數量，不可整疊刪除
+        if (stackCount > wantQty) {
+          prog.inventory[idx] = { ...entry, stackCount: stackCount - wantQty };
+        } else {
+          prog.inventory.splice(idx, 1);
+        }
         prog.updatedAt = new Date().toISOString();
         await sc.progressRepository.save(prog);
-        results.push(`已移除 ${removed.itemName || removed.itemId || wantId}`);
+        results.push(`已移除 ${entry.itemName || entry.itemId || wantId}${wantQty > 1 ? ` ×${wantQty}` : ""}`);
       }
       continue;
     }
@@ -4455,10 +4468,58 @@ async function handleNpcDialog(interaction) {
     const reply = option.npcReply || "...";
     let responseMsg = `🎤 **${npc.name}**：${reply}`;
 
-    // 處理效果
+    // 處理效果（與怪物事件相同 schema：{ type, payload }），只回報實際發生的結果
     if (Array.isArray(option.effects) && option.effects.length > 0) {
-      // TODO: 實裝效果系統（給 buff / item）
-      responseMsg += "\n✨ 效果發動中...";
+      const dispName = interaction.member?.displayName || interaction.user.username || discordId;
+      const effectResults = [];
+      for (const eff of option.effects) {
+        try {
+          if (eff.type === "grant_currency") {
+            const amount = Number(eff.payload?.amount || 0);
+            const currencyType = eff.payload?.currencyType || "gold";
+            if (Number.isInteger(amount) && amount !== 0) {
+              await sc.rewardService.grantCurrency({
+                discordId, displayName: dispName, currencyType, amount,
+                source: CURRENCY_SOURCES.SHOP_PURCHASE, operator: "npc_dialog"
+              });
+              effectResults.push(`${currencyType === "diamond" ? "💎" : "🪙"} ${amount > 0 ? "+" : ""}${amount}`);
+            }
+          } else if (eff.type === "grant_item" || eff.type === "grant_equipment") {
+            const itemId = eff.payload?.itemId;
+            const item = itemId ? await sc.itemService.getItemById(itemId).catch(() => null) : null;
+            if (!item) { effectResults.push(`道具 ${itemId || "?"} 不存在`); continue; }
+            await sc.playerService.ensurePlayer(discordId, dispName).catch(() => {});
+            const prog = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+            if (prog) {
+              if (!Array.isArray(prog.inventory)) prog.inventory = [];
+              prog.inventory.push({
+                uuid: require("crypto").randomUUID(),
+                itemId: item.id, itemName: item.name,
+                itemEffect: item.effect || { type: "none", value: 0 },
+                useEffects: item.useEffects || [], passiveEffects: item.passiveEffects || [],
+                procEffects: item.procEffects || [], combatEffects: item.combatEffects || [],
+                itemType: item.itemType || "consumable",
+                imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
+                equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
+                weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+                atkStat: item.atkStat || null, tier: item.tier || null,
+                enhanceLevel: Number(eff.payload?.enhanceLevel || 0),
+                purchasedAt: new Date().toISOString()
+              });
+              prog.updatedAt = new Date().toISOString();
+              await sc.progressRepository.save(prog);
+              effectResults.push(`獲得 ${item.name}`);
+            }
+          } else {
+            console.warn(`[NPC Dialog] 未實作的效果類型：${eff.type}`);
+            effectResults.push(`效果 ${eff.type || "unknown"} 未實作`);
+          }
+        } catch (e) {
+          console.error(`[NPC Dialog] 效果處理失敗 (${eff.type}):`, e?.message || e);
+          effectResults.push(`效果 ${eff.type || "unknown"} 處理失敗`);
+        }
+      }
+      if (effectResults.length) responseMsg += `\n✨ ${effectResults.join("，")}`;
     }
 
     // 決定是否繼續對話
@@ -4685,8 +4746,40 @@ async function refreshMonsterZonePanels() {
   }
 }
 
+// 世界王重生監看：每 3 分檢查狀態，僅在「逃跑/重生/開戰」變化時刷新面板。
+// refreshEliteWorldBossPanel 已含逃跑判定、計時器重建、面板重發，所以變化時呼叫即可。
+const worldBossPanelSig = new Map();
+let worldBossWatcherTimer = null;
+async function worldBossRespawnTick() {
+  const sc = getServiceContext();
+  if (!sc) return;
+  let changed = false;
+  for (const zoneKey of Object.keys(WORLD_BOSS_ZONES)) {
+    try {
+      const svc = sc.worldBossServiceFor?.(zoneKey);
+      if (!svc) continue;
+      const info = await svc.getConfigWithStatus().catch(() => null);
+      const st = info?.status;
+      if (!st) continue;
+      const sig = `${!!st.canChallenge}|${!!st.battleTimeoutReached}|${!!st.battleStartedAt}`;
+      if (worldBossPanelSig.get(zoneKey) !== sig) { worldBossPanelSig.set(zoneKey, sig); changed = true; }
+    } catch (_) { /* 單一 zone 失敗不影響其他 */ }
+  }
+  if (changed) {
+    await refreshEliteWorldBossPanel().catch((e) => console.warn("[WorldBossWatcher] 刷新失敗:", e?.message || e));
+  }
+}
+function startWorldBossRespawnWatcher() {
+  if (worldBossWatcherTimer) return;
+  worldBossRespawnTick().catch(() => {});
+  worldBossWatcherTimer = setInterval(() => worldBossRespawnTick().catch(() => {}), 3 * 60 * 1000);
+  worldBossWatcherTimer.unref?.();
+  console.log("[WorldBossWatcher] 啟動：每 3 分檢查世界王逃跑/重生並刷新面板");
+}
+
 module.exports = {
   handleMonsterZoneButton,
+  startWorldBossRespawnWatcher,
   isMonsterZoneButton,
   isMonsterEventButton,
   isMonsterEventPersonalButton,

@@ -834,7 +834,7 @@ async function announceNewPkTop3Entrants(sc, beforeTop3Ids, beforeTop1Id = "") {
   }
 }
 
-async function grantPkBracketRewards(sc, slot, result, arenaIdx) {
+async function grantPkBracketRewards(sc, slot, result, arenaIdx, battleRef = null) {
   const rewards = [];
   const bracket = getPkArenaBracketByIndex(arenaIdx);
   const avgReward = await getPkBracketMonsterAverageReward(sc, bracket);
@@ -847,16 +847,23 @@ async function grantPkBracketRewards(sc, slot, result, arenaIdx) {
     if (participant.isGhost) continue;
     const displayName = participant.name || participant.discordId;
 
+    // 以金幣發放的 sourceRef 去重作為「本場是否已對此參賽者發過獎」的錨點；
+    // 回復(recovered)重跑時 grantCurrency 會回傳 duplicated，後續 EXP/石頭一併跳過避免雙發
+    let alreadyRewarded = false;
     if (rewardGold > 0) {
-      await sc.rewardService.grantCurrency({
+      const res = await sc.rewardService.grantCurrency({
         discordId: participant.discordId,
         displayName,
         currencyType: "gold",
         amount: rewardGold,
         source: CURRENCY_SOURCES.PK_BATTLE_REWARD,
         operator: "pk:battle_reward",
-      }).catch(() => {});
+        sourceRef: battleRef ? `${battleRef}:reward:${participant.discordId}` : "",
+      }).catch(() => null);
+      if (res?.duplicated) alreadyRewarded = true;
     }
+
+    if (alreadyRewarded) continue;
 
     if (rewardExp > 0) {
       await sc.progressService.grantExp({
@@ -1348,6 +1355,8 @@ async function startBattle(idx, { recovered = false } = {}) {
     await refreshPanel();
 
     const sc = serviceContext;
+    // 派彩冪等鍵：battleStartedAt 在回復(recovered)場景會被保留，重啟重跑時相同 sourceRef 可去重避免雙重派彩
+    const battleRef = `pk:${idx}:${arenaSlots[idx].battleStartedAt}`;
 
     // 先攻方決定
     const challFirst = slot.firstAttacker === "challenger";
@@ -1380,6 +1389,7 @@ async function startBattle(idx, { recovered = false } = {}) {
         discordId: bid, displayName: bet.name,
         currencyType: "gold", amount: refundAmount,
         source: CURRENCY_SOURCES.PK_BET_REFUND, operator: "pk:bet_refund",
+        sourceRef: `${battleRef}:refund:${bid}`,
       }).catch(() => {});
       betPayouts.push(`↩️ **${bet.name}** 退還 ${formatGold(refundAmount)} 🪙（平局）`);
     } else if (bet.side === winningSide) {
@@ -1390,6 +1400,7 @@ async function startBattle(idx, { recovered = false } = {}) {
           discordId: bid, displayName: bet.name,
           currencyType: "gold", amount: payout,
           source: CURRENCY_SOURCES.PK_BET_WIN, operator: "pk:bet_win",
+          sourceRef: `${battleRef}:win:${bid}`,
         }).catch(() => {});
         betPayouts.push(`🏆 **${bet.name}** 賠率 ${formatPkBetOdds(odds)}，返還 ${formatGold(payout)} 🪙`);
       }
@@ -1409,6 +1420,7 @@ async function startBattle(idx, { recovered = false } = {}) {
           amount: dividend,
           source: CURRENCY_SOURCES.PK_BET_DIVIDEND,
           operator: "pk:bet_dividend",
+          sourceRef: `${battleRef}:dividend:${winner.discordId}`,
         }).then(() => {
           betPayouts.push(`💰 **${winner.name || "勝者"}** 獲得下注熱度分紅 ${formatGold(dividend)} 🪙（總下注 ${formatGold(totalBetAmount)} 的 5%）`);
         }).catch((err) => {
@@ -1417,7 +1429,7 @@ async function startBattle(idx, { recovered = false } = {}) {
       }
     }
 
-    const battleRewardResult = await grantPkBracketRewards(sc, slot, result, idx).catch((err) => {
+    const battleRewardResult = await grantPkBracketRewards(sc, slot, result, idx, battleRef).catch((err) => {
       console.warn("[PK] battle reward grant failed:", err?.message || err);
       return { rewards: [] };
     });

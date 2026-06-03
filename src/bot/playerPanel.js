@@ -1046,21 +1046,21 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
       );
     }
   } else if (group.sellPrice != null) {
-    // 怪物卡等可賣道具：保留販售
+    // 可賣道具：堆疊型(count>1)以「輸入數量」為主要販售方式，避免誤賣整疊
+    if (group.count > 1) {
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`backpack_sell_bulk:${group.repUuid}:${tab}:${subTab}:${page}`)
+          .setLabel(`💰 賣出(輸入數量) 共${group.count}`)
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_sell:${group.repUuid}:${tab}:${subTab}:${page}`)
         .setLabel(`售 1件 (${group.sellPrice}💰)`)
         .setStyle(ButtonStyle.Secondary)
     );
-    if (group.count > 1) {
-      btns.push(
-        new ButtonBuilder()
-          .setCustomId(`backpack_sell_bulk:${group.repUuid}:${tab}:${subTab}:${page}`)
-          .setLabel(`批量售 (共${group.count}件)`)
-          .setStyle(ButtonStyle.Secondary)
-      );
-    }
   } else {
     btns.push(
       new ButtonBuilder()
@@ -2724,8 +2724,10 @@ async function handleWeeklyQuestClaim(interaction, questId, cadenceHint = "weekl
 
   try {
     await interaction.deferUpdate();
-    const reward = await questService.claimReward(discordId, questId);
-    await grantQuestRewardDiscord(serviceContext, discordId, displayName, reward);
+    // 發獎在 claimReward 鎖內、標記 claimed 之前執行；失敗則不標記，玩家可重領
+    const reward = await questService.claimReward(discordId, questId, (rw) =>
+      grantQuestRewardDiscord(serviceContext, discordId, displayName, rw)
+    );
 
     const rewardParts = [];
     if (reward.gold > 0) rewardParts.push(`${reward.gold} 🪙`);

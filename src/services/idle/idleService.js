@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
+const { withPlayerProgressLock } = require("../progress/progressLocks");
 const {
   ZONE_BY_KEY,
   featureKeyToZone,
@@ -258,6 +259,11 @@ class IdleService {
 
   async claimDiscordSession(discordId, displayName, reason = "manual_claim", options = {}) {
     await this.playerService.ensurePlayer(discordId, displayName);
+    // 以玩家序列鎖包住整段「讀 session → 發獎 → 清 session」，避免雙擊重複領取
+    return withPlayerProgressLock(discordId, () => this._claimDiscordSessionLocked(discordId, displayName, reason, options));
+  }
+
+  async _claimDiscordSessionLocked(discordId, displayName, reason = "manual_claim", options = {}) {
     const state = await this.idleRepository.findPlayerState(discordId);
     const session = state?.discordSession || null;
     if (!session) {
@@ -282,6 +288,7 @@ class IdleService {
         currencyType: "gold",
         amount: reward.gold,
         source: CURRENCY_SOURCES.IDLE_REWARD,
+        sourceRef: `idle:${discordId}:${session.startedAt}`,
         operator: "idle_zone"
       });
     }
@@ -629,7 +636,12 @@ class IdleService {
     };
   }
 
-  async claimSession(discordId, displayName, { force = false } = {}) {
+  async claimSession(discordId, displayName, opts = {}) {
+    // 以玩家序列鎖包住整段結算，避免雙擊重複領取掉落/金幣
+    return withPlayerProgressLock(discordId, () => this._claimSessionLocked(discordId, displayName, opts));
+  }
+
+  async _claimSessionLocked(discordId, displayName, { force = false } = {}) {
     const state = await this.idleRepository.findPlayerState(discordId);
     if (!state?.activeSession?.zoneId) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目前沒有進行中的掛機任務", 400);
@@ -679,6 +691,7 @@ class IdleService {
         currencyType: "gold",
         amount: reward.gold,
         source: CURRENCY_SOURCES.IDLE_REWARD,
+        sourceRef: `idle:${discordId}:${state.activeSession.startedAt}`,
         operator: "idle_zone"
       });
     }

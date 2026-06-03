@@ -906,11 +906,21 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (!ep || !ep.key) continue;
           if (STAT_FOLDED_KEYS.has(ep.key)) continue;
           // 整場戰鬥都有效（不設過期回合）
+          const epParams = { ...(ep.params || {}) }; // 不放 duration，整場有效
+          // 護盾/結界依設計為 %MaxHP，載入時換算成絕對吸收量（與 proc_shield 一致；mode:'flat' 則維持固定值）
+          if ((ep.key === "shield" || ep.key === "barrier") && epParams.mode !== "flat") {
+            const pct = Math.abs(Number(epParams.value) || 0);
+            if (pct > 0 && epParams.amount == null) {
+              const amt = Math.max(1, Math.round((pStats.maxHp || 0) * pct / 100));
+              epParams.amount = amt;
+              epParams.value = amt;
+            }
+          }
           options.playerActiveEffects.push({
             key: ep.key,
             target: ep.target || "self",
             trigger: ep.trigger || "passive",
-            params: { ...(ep.params || {}) }, // 不放 duration，整場有效
+            params: epParams,
             appliedAt: 0,
             sourceType: "equipment_passive",
             sourceId: "equipment_passive:" + ep.key,

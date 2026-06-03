@@ -32,22 +32,34 @@ class RewardService {
     }
 
     const { player, wallet } = await this.playerService.ensurePlayer(discordId, displayName);
-    const nextWallet = { ...wallet, updatedAt: new Date().toISOString() };
 
-    const currentBalance = currencyType === "diamond" ? nextWallet.diamond : nextWallet.gold;
-    const nextBalance = currentBalance + amount;
-    if (amount < 0 && nextBalance < 0) {
-      throw new AppError(ERROR_CODES.INSUFFICIENT_BALANCE, `${currencyType} balance is not enough`, 400);
-    }
-
-    if (currencyType === "diamond") {
-      nextWallet.diamond = nextBalance;
+    let nextWallet;
+    let balanceAfter;
+    if (typeof this.walletRepository.incBalance === "function") {
+      // 原子增減餘額，避免併發 read-modify-write 造成餘額覆寫遺失
+      const updated = await this.walletRepository.incBalance(player.discordId, currencyType, amount);
+      if (!updated) {
+        // 扣款時餘額不足（原子條件未命中）
+        throw new AppError(ERROR_CODES.INSUFFICIENT_BALANCE, `${currencyType} balance is not enough`, 400);
+      }
+      nextWallet = updated;
+      balanceAfter = currencyType === "diamond" ? updated.diamond : updated.gold;
     } else {
-      nextWallet.gold = nextBalance;
+      // 後備：repository 無原子方法時退回 read-modify-write
+      nextWallet = { ...wallet, updatedAt: new Date().toISOString() };
+      const currentBalance = currencyType === "diamond" ? nextWallet.diamond : nextWallet.gold;
+      const nextBalance = currentBalance + amount;
+      if (amount < 0 && nextBalance < 0) {
+        throw new AppError(ERROR_CODES.INSUFFICIENT_BALANCE, `${currencyType} balance is not enough`, 400);
+      }
+      if (currencyType === "diamond") {
+        nextWallet.diamond = nextBalance;
+      } else {
+        nextWallet.gold = nextBalance;
+      }
+      balanceAfter = currencyType === "diamond" ? nextWallet.diamond : nextWallet.gold;
+      await this.walletRepository.save(nextWallet);
     }
-
-    const balanceAfter = currencyType === "diamond" ? nextWallet.diamond : nextWallet.gold;
-    await this.walletRepository.save(nextWallet);
 
     const transaction = createTransactionLog({
       playerId: player.discordId,

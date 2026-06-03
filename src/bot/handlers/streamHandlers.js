@@ -653,22 +653,33 @@ async function handleDonation(comment) {
     console.error("[Donation] 無法取得 DB 連線");
     return false;
   }
-  const ledger = await db.collection("donationLedger").findOne({ discordId }) || { pendingTwd: 0, totalTwd: 0 };
+  const ledger = await db.collection("donationLedger").findOne({ discordId }) || { pendingTwd: 0, totalTwd: 0, processedRefs: [] };
+
+  // 冪等：同一筆斗內事件（sourceRef）若已處理過就略過，避免事件重觸發導致台帳重複累計
+  const processedRefs = Array.isArray(ledger.processedRefs) ? ledger.processedRefs : [];
+  if (donation.sourceRef && processedRefs.includes(donation.sourceRef)) {
+    console.log(`[Donation] 事件已處理過，略過：${displayName} sourceRef=${donation.sourceRef}`);
+    return true;
+  }
+
   const newPendingRaw = (ledger.pendingTwd || 0) + donation.twdAmount;
   const diamondsToGrant = Math.floor(newPendingRaw / 100);
   const newPending = newPendingRaw % 100;
   const newTotal = (ledger.totalTwd || 0) + donation.twdAmount;
   const now = new Date().toISOString();
+  // 只保留最近 200 筆已處理事件，避免無限增長
+  const nextRefs = donation.sourceRef ? [...processedRefs, donation.sourceRef].slice(-200) : processedRefs;
 
-  await db.collection("donationLedger").updateOne(
+  // 台帳寫入抽成函式：務必在「確認發鑽成功（或無需發鑽）」之後才呼叫，避免發放失敗卻已消耗零頭
+  const persistLedger = () => db.collection("donationLedger").updateOne(
     { discordId },
-    { $set: { discordId, pendingTwd: newPending, totalTwd: newTotal, updatedAt: now } },
+    { $set: { discordId, pendingTwd: newPending, totalTwd: newTotal, processedRefs: nextRefs, updatedAt: now } },
     { upsert: true }
   );
 
-  console.log(`[Donation] 台帳更新 ${displayName}：+TWD${donation.twdAmount} 累積=${newPendingRaw} 發鑽=${diamondsToGrant} 剩餘=${newPending}`);
-
   if (diamondsToGrant <= 0) {
+    await persistLedger();
+    console.log(`[Donation] 台帳更新 ${displayName}：+TWD${donation.twdAmount} 累積=${newPendingRaw} 發鑽=0 剩餘=${newPending}`);
     await sendDiscordDm(discordId, `💎 感謝你的 NT$${donation.twdAmount} 斗內！累積 NT$${newPendingRaw} 中（還差 NT$${100 - newPendingRaw} 達到 1 顆鑽石）`).catch(() => {});
     return true;
   }
@@ -684,6 +695,10 @@ async function handleDonation(comment) {
       operator: "stream:donation"
     });
 
+    // 發放成功（grantCurrency 以 sourceRef 冪等）後才寫台帳，失敗則零頭保留、下次重試
+    await persistLedger();
+    console.log(`[Donation] 台帳更新 ${displayName}：+TWD${donation.twdAmount} 累積=${newPendingRaw} 發鑽=${diamondsToGrant} 剩餘=${newPending}`);
+
     const duplicate = Boolean(result.duplicated);
     if (duplicate) {
       console.log(`[Donation] 重複發放，略過：${displayName} sourceRef=${donation.sourceRef}`);
@@ -694,7 +709,7 @@ async function handleDonation(comment) {
     }
     return true;
   } catch (err) {
-    console.error("[Donation] 發放失敗：", err?.message || err);
+    console.error("[Donation] 發放失敗（台帳未變動，下次重試）：", err?.message || err);
     return false;
   }
 }

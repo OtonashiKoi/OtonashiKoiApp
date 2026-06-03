@@ -458,7 +458,7 @@ class WeeklyQuestService {
     }
   }
 
-  async claimReward(discordId, questId) {
+  async claimReward(discordId, questId, grantFn = null) {
     const allDefs = await this.listDefinitions("all");
     const quest = allDefs.find((q) => q.id === questId && q.enabled);
     if (!quest) throw new Error("任務不存在或未啟用");
@@ -491,15 +491,7 @@ class WeeklyQuestService {
       }
       if (p.claimed || (quest.claimOnce && p.claimedOnce)) throw new Error("獎勵已領取");
 
-      p.claimed = true;
-      if (quest.claimOnce) {
-        p.claimedOnce = true;
-        p.claimedAt = p.claimedAt || new Date().toISOString();
-      }
-      playerPeriod[questId] = p;
-      await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, quest.cadence);
-
-      return {
+      const reward = {
         questTitle: quest.title,
         gold: Number(quest.rewardGold || 0),
         exp: Number(quest.rewardExp || 0),
@@ -508,6 +500,21 @@ class WeeklyQuestService {
         cadence: quest.cadence,
         periodKey
       };
+
+      // 先發獎（仍在鎖內、標記 claimed 之前）：發獎失敗就不標記，玩家可重新領取，避免領了卻沒拿到獎勵
+      if (typeof grantFn === "function") {
+        await grantFn(reward);
+      }
+
+      p.claimed = true;
+      if (quest.claimOnce) {
+        p.claimedOnce = true;
+        p.claimedAt = p.claimedAt || new Date().toISOString();
+      }
+      playerPeriod[questId] = p;
+      await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, quest.cadence);
+
+      return reward;
     } finally {
       this.claimLocks.delete(lockKey);
     }

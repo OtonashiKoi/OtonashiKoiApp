@@ -229,8 +229,9 @@ function createAdminWeeklyQuestRoutes(serviceContext) {
   router.post("/api/weekly-quests/:id/claim", async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
-      const reward = await questService.claimReward(discordId, req.params.id);
-      await grantQuestReward(serviceContext, { discordId, displayName, reward, sourceTag: "weekly_quest" });
+      const reward = await questService.claimReward(discordId, req.params.id, (rw) =>
+        grantQuestReward(serviceContext, { discordId, displayName, reward: rw, sourceTag: "weekly_quest" })
+      );
       res.json(ok(reward, "reward claimed"));
     } catch (err) {
       if (err.message && (err.message.includes("未完成") || err.message.includes("已領取") || err.message.includes("不存在") || err.message.includes("不足") || err.message.includes("領取中"))) {
@@ -255,8 +256,9 @@ function createAdminWeeklyQuestRoutes(serviceContext) {
   router.post("/api/quests/:id/claim", async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
-      const reward = await questService.claimReward(discordId, req.params.id);
-      await grantQuestReward(serviceContext, { discordId, displayName, reward, sourceTag: "quest" });
+      const reward = await questService.claimReward(discordId, req.params.id, (rw) =>
+        grantQuestReward(serviceContext, { discordId, displayName, reward: rw, sourceTag: "quest" })
+      );
       res.json(ok(reward, "reward claimed"));
     } catch (err) {
       if (err.message && (err.message.includes("未完成") || err.message.includes("已領取") || err.message.includes("不存在") || err.message.includes("不足") || err.message.includes("領取中"))) {

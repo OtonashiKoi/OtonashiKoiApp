@@ -162,6 +162,24 @@ function createMongoRepositories() {
         emitRealtimeInvalidate("wallet", wallet.playerId);
         return wallet;
       },
+      // 原子增減餘額：避免併發 read-modify-write 造成餘額覆寫遺失。
+      // 扣款（amount<0）以 $gte 條件守住餘額，不足則回傳 null（不會扣成負數）。
+      // 註：mongodb driver v6 的 findOneAndUpdate 直接回傳文件（或 null），不再包在 { value } 內。
+      async incBalance(playerId, currencyType, amount) {
+        const field = currencyType === "diamond" ? "diamond" : "gold";
+        const col = await collection("wallets");
+        const filter = amount < 0
+          ? { playerId, [field]: { $gte: -amount } }
+          : { playerId };
+        const updated = await col.findOneAndUpdate(
+          filter,
+          { $inc: { [field]: amount }, $set: { updatedAt: new Date().toISOString() } },
+          { returnDocument: "after" }
+        );
+        if (!updated) return null; // 找不到錢包或餘額不足
+        emitRealtimeInvalidate("wallet", playerId);
+        return updated;
+      },
       async listAll() {
         return (await collection("wallets")).find({}).toArray();
       }

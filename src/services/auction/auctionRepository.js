@@ -30,7 +30,8 @@ const auctionRepository = {
    */
   async findActive({ itemType, currency, sort } = {}) {
     const col = await collection();
-    const query = { status: "active" };
+    // 只回傳尚未到期的上架（清掃任務可能還沒把過期品翻成 expired，避免買方買到已過期的拍賣）
+    const query = { status: "active", expiresAt: { $gt: new Date().toISOString() } };
     if (itemType === "equipment") query["item.itemType"] = "equipment";
     if (itemType === "card") query.$or = [
       { "item.itemType": "monster_card" },

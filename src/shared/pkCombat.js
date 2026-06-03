@@ -780,6 +780,20 @@ function attackerTurn({
       log.push(`💚 **${atkName}** 吸取生命力！恢復 **${heal}** HP`);
     }
 
+    // 命中 / 暴擊回血（裝備被動，傷害基準，與 PvE combatLoop 對齊；先前 PvP 未套用）
+    const onHitHealPct = Number(atkOpts?._onHitHealPct || 0);
+    if (onHitHealPct > 0 && finalDamage > 0) {
+      const heal = Math.max(1, Math.round(finalDamage * onHitHealPct / 100));
+      atkHpRef.value = Math.min(atkStats.maxHp, atkHpRef.value + heal);
+      log.push(`💚 **${atkName}** 命中回血，恢復 **${heal}** HP`);
+    }
+    const onCritHealPct = Number(atkOpts?._onCritHealPct || 0);
+    if (isCrit && onCritHealPct > 0 && finalDamage > 0) {
+      const heal = Math.max(1, Math.round(finalDamage * onCritHealPct / 100));
+      atkHpRef.value = Math.min(atkStats.maxHp, atkHpRef.value + heal);
+      log.push(`💚✨ **${atkName}** 暴擊回血，恢復 **${heal}** HP`);
+    }
+
     if (defHpRef.value <= 0) { killed = true; }
 
     if (!killed && wasBlocked && defStats.blockCounter) {
@@ -1229,6 +1243,63 @@ function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, target
   return { dead, frozen, silenced, stunRoundsLeft };
 }
 
+// ── 裝備被動「治療類」效果擷取（PvP 對齊 PvE combatLoop）──────────────
+// 戒指/卡片/武具上的 life_regen / heal_over_time / on_hit_heal / on_crit_heal
+// 被動先前在 PvP 完全沒套用；此處折算成每位玩家的回血參數補上。
+// 注意：純 stat 類（atk_up 等）已由 calcPlayerStats 折進屬性，這裡略過不重複。
+const PK_PASSIVE_STAT_FOLDED = new Set([
+  "atk_up","def_up","mdef_up","crit_rate_up","crit_rate_down","crit_damage_up","crit_damage_down",
+  "speed_up","speed_down","atk_multiplier_up","def_multiplier_up","max_hp_multiplier_up",
+  "block_chance_up","combo_damage_up","combo_up","stun_chance_up","execute_chance_up",
+  "execute_threshold_up","final_damage_up","final_damage_down","hit_up","dodge_up","agi_up"
+]);
+function collectPkPassiveHeals(opts) {
+  const result = { lifeRegenPct: 0, lifeRegenInterval: 0, hotPct: 0, hotFlat: 0, onHitHealPct: 0, onCritHealPct: 0 };
+  try {
+    const equipped = opts?.equipped || {};
+    const ctx = { equipped, inventory: opts?.inventory || [] };
+    const effects = [
+      ...collectEquipmentEffects(equipped, "passive", ctx),
+      ...collectEquipmentEffects(equipped, "battle_start", ctx),
+    ];
+    for (const e of effects) {
+      if (!e || !e.key || PK_PASSIVE_STAT_FOLDED.has(e.key)) continue;
+      if (e.target && e.target !== "self") continue; // 只取作用於自身的回血
+      const p = e.params || {};
+      const v = Math.abs(Number(p.value) || 0);
+      if (e.key === "on_hit_heal") result.onHitHealPct += v;
+      else if (e.key === "on_crit_heal") result.onCritHealPct += v;
+      else if (e.key === "life_regen") {
+        result.lifeRegenPct += v;
+        const iv = Math.max(1, Number(p.interval) || 1);
+        if (result.lifeRegenInterval === 0 || iv < result.lifeRegenInterval) result.lifeRegenInterval = iv;
+      } else if (e.key === "heal_over_time") {
+        if (p.mode === "flat") result.hotFlat += Math.abs(Number(p.value) || 0);
+        else result.hotPct += v;
+      }
+    }
+  } catch (_) { /* 載入失敗不擋戰鬥 */ }
+  return result;
+}
+
+// 每回合結束時的裝備被動回血（HOT + life_regen），與 PvE combatLoop 規則一致：
+// life_regen 為 %MaxHP，每 interval 回合回一次；HOT 每回合回。死亡或滿血則不處理。
+function applyPkPassiveRegen(hpRef, maxHp, heals, round, name, log) {
+  if (!heals || hpRef.value <= 0 || hpRef.value >= maxHp) return;
+  let total = 0;
+  if (heals.hotPct > 0) total += Math.round(maxHp * heals.hotPct / 100);
+  if (heals.hotFlat > 0) total += Math.round(heals.hotFlat);
+  if (heals.lifeRegenPct > 0 && heals.lifeRegenInterval > 0 && (round % heals.lifeRegenInterval === 0)) {
+    total += Math.round(maxHp * heals.lifeRegenPct / 100);
+  }
+  if (total > 0) {
+    const before = hpRef.value;
+    hpRef.value = Math.min(maxHp, hpRef.value + total);
+    const actual = hpRef.value - before;
+    if (actual > 0) log.push(`💚 **${name}** 持續回復 **${actual}** HP（剩 ${hpRef.value} / ${maxHp}）`);
+  }
+}
+
 // ── 主要 PvP 迴圈 ────────────────────────────────────────────
 /**
  * @param {object} aStats  calcPlayerStats（先攻方）
@@ -1255,6 +1326,14 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
   bOpts._cardCooldowns = {};
   aOpts._jobSkillCooldowns = {};
   bOpts._jobSkillCooldowns = {};
+
+  // 裝備被動回血（PvP 先前未套用）：擷取一次，命中/暴擊回血交給 attackerTurn，HOT/regen 於回合尾結算
+  const aHeals = collectPkPassiveHeals(aOpts);
+  const bHeals = collectPkPassiveHeals(bOpts);
+  aOpts._onHitHealPct = aHeals.onHitHealPct;
+  aOpts._onCritHealPct = aHeals.onCritHealPct;
+  bOpts._onHitHealPct = bHeals.onHitHealPct;
+  bOpts._onCritHealPct = bHeals.onCritHealPct;
 
   const roundLogs = [];
   let winner = null;
@@ -1321,6 +1400,10 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
     } else {
       log.push(`⏸️ **${bName}** 無法行動！`);
     }
+
+    // ── 裝備被動 HOT / life_regen 每回合結算（雙方，PvP 對齊 PvE）──
+    applyPkPassiveRegen(aHpRef, aStats.maxHp, aHeals, round, aName, log);
+    applyPkPassiveRegen(bHpRef, bStats.maxHp, bHeals, round, bName, log);
 
     // 清理過期效果
     aActive = cleanExpiredEffects(aActive, round);
