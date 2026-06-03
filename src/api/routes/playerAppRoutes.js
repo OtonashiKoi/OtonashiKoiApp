@@ -2574,7 +2574,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/me/enhance/:itemUuid", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
-      const info = await serviceContext.enhanceService.getEnhanceInfo(discordId, req.params.itemUuid);
+      const info = await serviceContext.enhanceService.getEnhanceInfo(discordId, req.params.itemUuid, { mode: req.query.mode });
       if (!info) {
         return res.status(400).json({ error: "該道具無法強化" });
       }
@@ -2589,7 +2589,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.post("/api/me/enhance/:itemUuid", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
-      const result = await serviceContext.enhanceService.enhanceEquipment(discordId, req.params.itemUuid);
+      const result = await serviceContext.enhanceService.enhanceEquipment(discordId, req.params.itemUuid, { mode: req.body?.mode });
       res.json(ok(result, result.message));
     } catch (err) {
       next(err);
