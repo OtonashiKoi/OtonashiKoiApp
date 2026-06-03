@@ -2992,6 +2992,16 @@ async function handleButton(interaction) {
     return;
   }
 
+  // 換裝選單分頁（道具多時翻頁）
+  if (id.startsWith("eq_slot_page:")) {
+    const rest = id.slice("eq_slot_page:".length);
+    const lastColon = rest.lastIndexOf(":");
+    const slot = lastColon >= 0 ? rest.slice(0, lastColon) : rest;
+    const page = lastColon >= 0 ? parseInt(rest.slice(lastColon + 1), 10) || 0 : 0;
+    await handleEquipSlotButton(interaction, slot, page);
+    return;
+  }
+
   // 裝備分頁切換
   if (id.startsWith("eq_preset:")) {
     await handleEquipPresetSwitch(interaction, id.slice("eq_preset:".length));
@@ -3063,9 +3073,9 @@ async function handleButton(interaction) {
   }
 }
 
-async function handleEquipSlotButton(interaction, slot) {
+async function handleEquipSlotButton(interaction, slot, page = 0) {
   const serviceContext = getServiceContext();
-  await interaction.deferUpdate();
+  if (!interaction.deferred && !interaction.replied) await interaction.deferUpdate().catch(() => {});
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const equipped = progress?.equipment || {};
   const inventory = (progress?.inventory || []).filter((e) => {
@@ -3084,6 +3094,12 @@ async function handleEquipSlotButton(interaction, slot) {
 
   const getItemLabel = (item) => String(item?.itemName || item?.name || item?.itemId || item?.uuid || "未知道具");
 
+  // Discord 單一下拉選單上限 25 項；保留 1 給「卸下」，其餘分頁顯示，避免道具多時被截掉（卡片/特殊尤其常見）
+  const PER_PAGE = 24;
+  const totalPages = Math.max(1, Math.ceil(inventory.length / PER_PAGE));
+  const safePage = Math.max(0, Math.min(totalPages - 1, Number(page) || 0));
+  const pageItems = inventory.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
+
   const options = [];
   if (equipped[slot]) {
     const item = equipped[slot];
@@ -3093,12 +3109,13 @@ async function handleEquipSlotButton(interaction, slot) {
       value: `unequip:${slot}`
     });
   }
-  inventory.slice(0, 24).forEach(e => {
+  pageItems.forEach(e => {
     const stats = e.equipStats || {};
     const statStr = Object.entries(stats).filter(([,v])=>v).map(([k,v])=>`${k.toUpperCase()}${v>0?"+":""}${v}`).join(" ");
+    const cardStr = e.monsterCardSkill?.name ? `🎴 ${e.monsterCardSkill.name}` : "";
     options.push({
       label: getItemLabel(e).slice(0, 25),
-      description: (statStr || "點此裝備").slice(0, 50),
+      description: (statStr || cardStr || "點此裝備").slice(0, 50),
       value: `equip:${e.uuid}`
     });
   });
@@ -3113,9 +3130,25 @@ async function handleEquipSlotButton(interaction, slot) {
     .setPlaceholder(`${EQ_SLOT_LABELS[slot]} — 選擇動作…`)
     .addOptions(options);
 
+  const components = [new ActionRowBuilder().addComponents(picker)];
+  if (totalPages > 1) {
+    components.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`eq_slot_page:${slot}:${safePage - 1}`)
+        .setLabel("◀ 上一頁").setStyle(ButtonStyle.Secondary).setDisabled(safePage <= 0),
+      new ButtonBuilder()
+        .setCustomId(`eq_slot_page:${slot}:${safePage}`)
+        .setLabel(`${safePage + 1} / ${totalPages}`).setStyle(ButtonStyle.Primary).setDisabled(true),
+      new ButtonBuilder()
+        .setCustomId(`eq_slot_page:${slot}:${safePage + 1}`)
+        .setLabel("下一頁 ▶").setStyle(ButtonStyle.Secondary).setDisabled(safePage >= totalPages - 1)
+    ));
+  }
+
+  const pageNote = totalPages > 1 ? `（第 ${safePage + 1}/${totalPages} 頁，共 ${inventory.length} 件）` : "";
   await safeEditReply(interaction, {
-    content: `⚔️ **${EQ_SLOT_LABELS[slot]}** — 選擇裝備或卸下：`,
-    components: [new ActionRowBuilder().addComponents(picker)],
+    content: `⚔️ **${EQ_SLOT_LABELS[slot]}** — 選擇裝備或卸下：${pageNote}`,
+    components,
     files: []
   });
 }
