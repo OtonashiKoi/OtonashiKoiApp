@@ -481,6 +481,8 @@ class PetService {
       isTwoHanded: item.isTwoHanded || false,
       atkStat: item.atkStat || null,
       tier: item.tier || null,
+      // 帶上怪物卡技能欄位，否則寵物採集到的卡片會被歸到「特殊」而非「卡片」分類
+      monsterCardSkill: item.monsterCardSkill || null,
       enhanceLevel: 0,
       source: "pet_gathering",
       grantedAt: isoNow(),

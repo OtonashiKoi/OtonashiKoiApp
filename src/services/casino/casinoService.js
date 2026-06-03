@@ -355,6 +355,8 @@ class CasinoService {
       weaponType: item.weaponType || null,
       isTwoHanded: item.isTwoHanded || false,
       tier: item.tier || null,
+      // 帶上怪物卡技能欄位，否則賭盤掉到的卡片會被歸到「特殊」而非「卡片」分類
+      monsterCardSkill: item.monsterCardSkill || null,
       source: "casino_wheel",
       obtainedAt: new Date().toISOString(),
     });
