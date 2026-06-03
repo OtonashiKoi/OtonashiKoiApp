@@ -1167,6 +1167,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 應用玩家的 DOT 效果（如中毒） ──
+    // VIT(體質)對 DoT 的輕微抗性：DoT 像詛咒/毒/灼燒等持續侵蝕，由本體質(升等)VIT 抵抗。
+    // 每點 baseVit -0.5%，封頂 25%。DoT 原本完全無視防禦，這裡給高 VIT 玩家一點抗性，但不讓 DoT 失去威脅。
+    const dotResistPct = Math.min(25, Math.max(0, Number(pStats.baseVit || 0) * 0.5));
+    const mitigateDot = (dmg) => Math.max(1, Math.round(dmg * (1 - dotResistPct / 100)));
     if (Array.isArray(options.playerActiveEffects)) {
       for (const dotEffect of options.playerActiveEffects) {
         if (!dotEffect || !dotEffect.key) continue;
@@ -1199,6 +1203,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : (pStats.maxHp || 1);
           let dotDmg = Math.max(1, Math.round(dotBase * (damagePercent / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) dotDmg = Math.min(dotDmg, Number(dotParams.maxDamage));
+          dotDmg = mitigateDot(dotDmg);
           pHp -= dotDmg;
           log.push(`☠️ 中毒傷害！造成 **${dotDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
@@ -1211,6 +1216,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : (pStats.maxHp || 1);
           let bleedDmg = Math.max(1, Math.round(bleedBase * (bleedPct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) bleedDmg = Math.min(bleedDmg, Number(dotParams.maxDamage));
+          bleedDmg = mitigateDot(bleedDmg);
           pHp -= bleedDmg;
           log.push(`🩸 流血持續！你受到 **${bleedDmg}** 點流血傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
@@ -1223,6 +1229,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : (pStats.maxHp || 1);
           let burnDmg = Math.max(1, Math.round(burnBase * (burnPct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) burnDmg = Math.min(burnDmg, Number(dotParams.maxDamage));
+          burnDmg = mitigateDot(burnDmg);
           pHp -= burnDmg;
           log.push(`🔥 燒傷持續！你受到 **${burnDmg}** 點灼燒傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
@@ -1235,6 +1242,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : (pStats.maxHp || 1);
           let lightDmg = Math.max(1, Math.round(lightBase * (lightPct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) lightDmg = Math.min(lightDmg, Number(dotParams.maxDamage));
+          lightDmg = mitigateDot(lightDmg);
           pHp -= lightDmg;
           log.push(`⚡ 閃電傷害！你受到 **${lightDmg}** 點雷電傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
@@ -1248,6 +1256,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : (pStats.maxHp || 1);
           let shockDmg = Math.max(1, Math.round(shockBase * (shockPct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) shockDmg = Math.min(shockDmg, Number(dotParams.maxDamage));
+          shockDmg = mitigateDot(shockDmg);
           pHp -= shockDmg;
           log.push(`⚡ 震盪傷害！你受到 **${shockDmg}** 點震盪傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
@@ -1261,6 +1270,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : (pStats.maxHp || 1);
           let curseDmg = Math.max(1, Math.round(curseBase * (cursePct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) curseDmg = Math.min(curseDmg, Number(dotParams.maxDamage));
+          curseDmg = mitigateDot(curseDmg);
           pHp -= curseDmg;
           log.push(`🌑 詛咒傷害！你受到 **${curseDmg}** 點詛咒傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
