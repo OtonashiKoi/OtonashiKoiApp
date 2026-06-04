@@ -934,6 +934,44 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.warn("[profile] combatStats calc failed:", err?.message || err);
       }
 
+      // 聚合「身上特效」：裝備/卡片/職業/稱號的被動·戰鬥·觸發效果（僅列條件成立者）+ 暫時 buff
+      const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
+      const BODY_SLOT_ZH = {
+        weapon: "武器", shield: "副手", armor: "上衣", garment: "披風",
+        head_top: "頭部上", head_mid: "頭部中", head_low: "頭部下", shoes: "鞋子",
+        accessory_l: "飾品左", accessory_r: "飾品右", title_eq: "稱號", job_eq: "職業",
+        special_1: "特殊1", special_2: "特殊2", special_3: "特殊3"
+      };
+      const bodyEffects = [];
+      try {
+        const effCtx = { equipped: mergedEquipment, inventory: progress?.inventory || [] };
+        for (const [slot, item] of Object.entries(mergedEquipment || {})) {
+          if (!item || typeof item !== "object") continue;
+          const arrs = [].concat(item.passiveEffects || [], item.combatEffects || [], item.procEffects || []);
+          for (const eff of arrs) {
+            if (!eff || !eff.key) continue;
+            if (!isEffectConditionMet(eff, effCtx)) continue;
+            bodyEffects.push({
+              source: item.itemName || item.name || BODY_SLOT_ZH[slot] || slot,
+              slot,
+              name: EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key,
+              desc: eff.notes || "",
+              value: eff?.params?.value ?? null,
+              chance: eff.chance ?? 100,
+              trigger: eff.trigger || "passive"
+            });
+          }
+        }
+        for (const e of (progress?.activeEffects || [])) {
+          if (!e) continue;
+          bodyEffects.push({
+            source: "狀態", slot: "buff",
+            name: e.definitionName || EFFECT_NAME_ZH[e.key] || e.key,
+            desc: "", value: e?.params?.value ?? null, chance: 100, trigger: "buff", temporary: true
+          });
+        }
+      } catch (err) { console.warn("[profile] bodyEffects failed:", err?.message); }
+
       res.json(ok({
         player: {
           ...profileResult.player,
@@ -955,6 +993,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           equipment: mergedEquipment,
           combatStats,
           activeEffects: progress?.activeEffects || [],
+          bodyEffects,
           jobSpecialDisplay: buildJobSpecialDisplay(progress)
         }
       }));
