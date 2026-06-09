@@ -18,8 +18,15 @@ require("dotenv").config();
   const fmtFloor = (f) => {
     const flag = f.suspicious ? " ⚠️可疑" : "";
     const kill = f.monsterKilled ? "✅殺" : "✗未殺";
-    const top = f.topHit != null ? ` 單人最高=${f.topHit}` : "";
-    return `  F${String(f.floor).padStart(2)} ${f.monster}｜HP ${f.scaledHp}→${f.monsterHpFinal} ${kill}｜行動格 ${f.actions}｜存活 ${f.survivors}/${f.partySize}${top}${flag}`;
+    const top = f.topHit != null ? ` 單人最高貢獻=${f.topHit}` : "";
+    const md = Array.isArray(f.memberDamage) ? f.memberDamage : [];
+    const hardest = md.reduce((mx, m) => ((Number(m.maxHit) || 0) > (Number(mx && mx.maxHit) || 0) ? m : mx), null);
+    let hitInfo = "";
+    if (hardest && hardest.maxHit) {
+      const mult = hardest.atk ? (hardest.maxHit / hardest.atk).toFixed(1) : "?";
+      hitInfo = `\n        ↳ 最大單擊 ${hardest.maxHit}（${hardest.name} atk${hardest.atk} → ×${mult}）`;
+    }
+    return `  F${String(f.floor).padStart(2)} ${f.monster}｜HP ${f.scaledHp}→${f.monsterHpFinal} ${kill}｜行動格 ${f.actions}｜存活 ${f.survivors}/${f.partySize}${top}${flag}${hitInfo}`;
   };
   const printRun = (r, full) => {
     const party = (r.party || []).map((p) => p.name || p.discordId).join("、");

@@ -2677,7 +2677,8 @@ async function handleEnterBattle(interaction) {
           monsterEquipped: battleMonsterEquipped,
           monsterIsBoss: Boolean(battleMonster?.isBoss),
           worldBossPhase: session.worldBossPhase || null,
-          bestiaryBonusPct: _bestiaryBonusPct
+          bestiaryBonusPct: _bestiaryBonusPct,
+          zone: zoneKey // 讓裝備的 zone 條件特效生效(例：S 龍系武器在龍族之領/龍王巢穴 +20%)
         });
       const { roundLogs, finalPlayerHp } = combatResult;
       let combatStats = combatResult.combatStats;
@@ -3087,10 +3088,21 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   const rewardLines = [];
 
   // 擊敗古龍王(B)（dragon_king_lair 世界王全破）→ 記錄屠龍任務進度
+  // 有參與就算一隻：所有參戰者(含補刀者)各 +1，不是只記最後補刀的人
   if (zoneKey === "dragon_king_lair" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
     try {
       const qs = sc?.questService || sc?.weeklyQuestService;
-      if (qs?.recordProgress) await qs.recordProgress(discordId, "kill_dragon_king", 1);
+      if (qs?.recordProgress) {
+        // 參與者 = 對本王造成過傷害的人(damageMap) + 排隊參戰名單 + 補刀者
+        const slayers = [...new Set([
+          ...(state?.damageMap ? Object.keys(state.damageMap) : []),
+          ...(Array.isArray(state?.participants) ? state.participants : []),
+          discordId,
+        ].filter(Boolean))];
+        for (const pid of slayers) {
+          await qs.recordProgress(pid, "kill_dragon_king", 1);
+        }
+      }
     } catch (e) { console.error("[Quest] kill_dragon_king record error:", e.message); }
   }
 

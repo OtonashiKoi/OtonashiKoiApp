@@ -307,6 +307,12 @@ function buildWeaponEffectLines(cs, equipped = {}) {
   }
 
   if (parts.length > 0) lines.push(`⚙️ 武器效果：${parts.join("、")}`);
+  // 武器附帶的特殊被動（例：S 龍系武器「屠龍特攻」於龍族之領/龍王巢穴 +20%）
+  const weaponPassives = Array.isArray(equipped?.weapon?.passiveEffects) ? equipped.weapon.passiveEffects : [];
+  for (const pe of weaponPassives) {
+    const note = pe?.notes || pe?.description;
+    if (note) lines.push(`🐉 武器特效：${note}`);
+  }
   if (cs.hasDwarfWarriorBadge && weaponType.startsWith("mace")) {
     const highHpStun = Number(cs.stunChance || 0) + Number(cs.dwarfWarriorHighHpStunBoost || 0);
     if (highHpStun > Number(cs.stunChance || 0)) {

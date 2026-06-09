@@ -715,6 +715,14 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     m.currentHp = Math.max(0, Math.round(result.finalPlayerHp));
     addTowerStat(floorStats, m.discordId, "damageDealt", Math.max(0, beforeMonsterHp - monsterHp));
     addTowerStat(floorStats, m.discordId, "damageTaken", Math.max(0, beforePlayerHp - m.currentHp));
+    // 稽核採證：記錄該成員本層的有效攻擊力(含層段加成)與單次最大傷害,用來抓「傷害被異常放大」
+    {
+      const _row = floorStats.get(m.discordId);
+      if (_row) {
+        _row.atk = effStats.atk;
+        _row.maxHit = Math.max(Number(_row.maxHit) || 0, Math.max(0, beforeMonsterHp - monsterHp));
+      }
+    }
     m.activeEffects = Array.isArray(options.playerActiveEffects) ? options.playerActiveEffects : [];
     m.cardCooldowns = result.cardCooldowns || options.cardCooldowns || { player: {}, monster: {} };
     monsterActiveEffects = Array.isArray(result.monsterActiveEffects) ? result.monsterActiveEffects : [];
@@ -746,7 +754,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     actionOrder: initialActionOrder,
     summary: buildTowerFloorSummary(floorStats, floorAuraLines),
     // 稽核用：每人原始輸出（含溢傷，不被怪剩血夾住），用來抓「單人傷害爆量」的異常
-    memberDamage: [...floorStats.values()].map((s) => ({ discordId: s.discordId, name: s.name, damageDealt: Math.round(s.damageDealt || 0) })),
+    memberDamage: [...floorStats.values()].map((s) => ({ discordId: s.discordId, name: s.name, damageDealt: Math.round(s.damageDealt || 0), atk: Math.round(s.atk || 0), maxHit: Math.round(s.maxHit || 0) })),
   };
 }
 
