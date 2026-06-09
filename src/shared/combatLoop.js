@@ -1633,6 +1633,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
+    // 玩家被怪物即時技能（如王者雷擊）打到 HP <= 0 → 立刻判定戰敗，避免在負血狀態繼續行動/吸血
+    if (pHp <= 0 && outcome === null) {
+      outcome = "lose";
+      roundLogs.push(log.join("\n"));
+      break;
+    }
+
     // ── 世界王雷擊術（第二 / 第三階段）──
     if (worldBossHasLightning) {
       if (Math.random() * 100 < worldBossLightningHitChance) {
