@@ -8,7 +8,8 @@ const ENHANCE_GEMS = {
   D: '72fde92d-e33f-42fb-8d86-2e811d03f84d',
   C: '556db9e1-b084-4b22-bab5-a66c2b586184',
   B: '8fdfa7d9-f0fa-4e6a-a291-703b1e354072',
-  A: 'a6ae293d-52fc-4af5-8770-891ddf842e35'
+  A: 'a6ae293d-52fc-4af5-8770-891ddf842e35',
+  S: 'gem-s-tier'
 };
 
 /**
@@ -43,6 +44,13 @@ const ENHANCE_RULES = {
     '+3': { gems: 15, success: 60 },
     '+4': { gems: 30, success: 45 },
     '+5': { gems: 50, success: 30 }
+  },
+  S: {
+    '+1': { gems: 2, success: 100 },
+    '+2': { gems: 5, success: 75 },
+    '+3': { gems: 15, success: 55 },
+    '+4': { gems: 30, success: 40 },
+    '+5': { gems: 50, success: 25 }
   }
 };
 
@@ -74,6 +82,13 @@ const ENHANCE_GOLD_COST = {
     "+3": 15000,
     "+4": 50000,
     "+5": 100000
+  },
+  S: {
+    "+1": 5000,
+    "+2": 15000,
+    "+3": 40000,
+    "+4": 100000,
+    "+5": 200000
   }
 };
 

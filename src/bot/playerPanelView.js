@@ -10,7 +10,8 @@ const BUTTON_IDS = {
   weeklyQuests: "player-panel:weekly-quests",
   bindStream: "player-panel:bind-stream",
   invite: "player-panel:invite",
-  useInvite: "player-panel:use-invite"
+  useInvite: "player-panel:use-invite",
+  bestiary: "player-panel:bestiary"
 };
 
 function createPlayerPanelMessage() {
@@ -58,6 +59,12 @@ function createPlayerPanelMessage() {
         .setCustomId(BUTTON_IDS.useInvite)
         .setLabel("🎁 輸入邀請碼")
         .setStyle(ButtonStyle.Success)
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.bestiary)
+        .setLabel("📖 怪物圖鑑")
+        .setStyle(ButtonStyle.Primary)
     )
   ];
 

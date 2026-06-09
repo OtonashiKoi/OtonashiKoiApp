@@ -15,6 +15,9 @@ const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/ef
 const { calcScaledAuraValue, getSupportJobKey } = require("../shared/supportAuraScaling");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
 const { MAX_ENHANCE_LEVEL, getEnhanceCost } = require("../shared/enhanceConfig");
+const { bestiaryRequirement, bestiaryBonusPct } = require("../shared/bestiary");
+const { ALL_ZONE_KEYS, ZONE_BY_KEY } = require("../shared/zones");
+const { isWorldBossZone } = require("../services/worldBoss/worldBossService");
 
 const ACTIVE_REPLY_BY_USER = new Map();
 
@@ -668,6 +671,107 @@ async function handleProfile(interaction) {
     `💰 金幣: ${Number(wallet.gold || 0)}\n` +
     `💎 鑽石: ${Number(wallet.diamond || 0)}`
   );
+}
+
+// ────────────────────────────────────────────────
+// 怪物圖鑑（Bestiary）
+// ────────────────────────────────────────────────
+function _bestiaryKey(m) {
+  return String(m?.id || m?._id || m?.name || "");
+}
+function _bestiaryBar(ratio) {
+  const filled = Math.max(0, Math.min(10, Math.round(ratio * 10)));
+  return "▰".repeat(filled) + "▱".repeat(10 - filled);
+}
+async function _loadBestiaryData(interaction) {
+  const sc = getServiceContext();
+  const [monsters, progress] = await Promise.all([
+    sc.monsterService.listMonsters({ includeDisabled: false }).catch(() => []),
+    sc.progressRepository.findByPlayerId(interaction.user.id).catch(() => null)
+  ]);
+  const bestiary = progress?.bestiary || {};
+  const byZone = new Map();
+  for (const m of monsters) {
+    const z = m.zone || "normal";
+    if (!byZone.has(z)) byZone.set(z, []);
+    byZone.get(z).push(m);
+  }
+  return { byZone, bestiary };
+}
+function _bestiaryZoneOrder(byZone) {
+  const known = ALL_ZONE_KEYS.filter(z => byZone.has(z));
+  const extra = [...byZone.keys()].filter(z => !ALL_ZONE_KEYS.includes(z));
+  return [...known, ...extra];
+}
+function _buildBestiaryZoneSelect(byZone, bestiary, activeZone) {
+  const order = _bestiaryZoneOrder(byZone);
+  const options = order.slice(0, 25).map(z => {
+    const label = ZONE_BY_KEY[z]?.label || z;
+    const list = byZone.get(z) || [];
+    const isWB = isWorldBossZone(z);
+    const maxed = list.filter(m => (Number(bestiary[_bestiaryKey(m)]) || 0) >= bestiaryRequirement(m, isWB)).length;
+    return { label: String(label).slice(0, 25), value: z, description: `${list.length} 種怪 · 已收集滿 ${maxed}`, default: z === activeZone };
+  });
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder().setCustomId("bestiary_zone").setPlaceholder("選擇地圖查看圖鑑").addOptions(options)
+  );
+}
+function _buildBestiaryZoneContent(byZone, bestiary, zoneKey) {
+  const label = ZONE_BY_KEY[zoneKey]?.label || zoneKey;
+  const isWB = isWorldBossZone(zoneKey);
+  const list = (byZone.get(zoneKey) || []).slice().sort((a, b) => (a.calc?.level || a.level || 0) - (b.calc?.level || b.level || 0));
+  const header = `📖 **怪物圖鑑 — ${label}**\n` +
+    `打越多，對該怪傷害越高（一般 100｜BOSS 50｜世界王 10 隻 ＝ 滿 +30%）\n` +
+    `每場依造成傷害比例累積：打掉該怪 100% 血 ＝ 1 隻，可累積。\n` +
+    `==============\n`;
+  const lines = [];
+  let truncated = 0;
+  for (const m of list) {
+    if (lines.join("\n").length > 1700) { truncated = list.length - lines.length; break; }
+    const req = bestiaryRequirement(m, isWB);
+    const kills = Number(bestiary[_bestiaryKey(m)]) || 0;
+    const ratio = req > 0 ? Math.min(1, kills / req) : 0;
+    const bonus = bestiaryBonusPct(kills, req);
+    const tag = isWB ? "🌟" : (m.isBoss ? "👑" : "・");
+    const done = kills >= req ? " ✅滿" : "";
+    lines.push(
+      `${tag} **${m.name}**（Lv.${m.calc?.level || m.level || "?"}）${done}\n` +
+      `　${_bestiaryBar(ratio)} ${Math.round(kills * 10) / 10}/${req}｜傷害 +${Math.round(bonus * 10) / 10}%`
+    );
+  }
+  if (truncated > 0) lines.push(`…還有 ${truncated} 種怪未列出`);
+  return header + (lines.length ? lines.join("\n") : "（此地圖暫無怪物）");
+}
+async function handleBestiary(interaction) {
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+  }
+  const { byZone, bestiary } = await _loadBestiaryData(interaction);
+  const order = _bestiaryZoneOrder(byZone);
+  if (!order.length) {
+    await safeEditReply(interaction, { content: "目前沒有任何怪物資料。", components: [] });
+    return;
+  }
+  const activeZone = order[0];
+  await safeEditReply(interaction, {
+    content: _buildBestiaryZoneContent(byZone, bestiary, activeZone),
+    components: [_buildBestiaryZoneSelect(byZone, bestiary, activeZone)]
+  });
+}
+async function handleBestiaryZoneSelect(interaction) {
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferUpdate().catch(() => {});
+  }
+  const zoneKey = interaction.values?.[0];
+  const { byZone, bestiary } = await _loadBestiaryData(interaction);
+  if (!byZone.has(zoneKey)) {
+    await safeEditReply(interaction, { content: "找不到該地圖。", components: [] });
+    return;
+  }
+  await safeEditReply(interaction, {
+    content: _buildBestiaryZoneContent(byZone, bestiary, zoneKey),
+    components: [_buildBestiaryZoneSelect(byZone, bestiary, zoneKey)]
+  });
 }
 
 async function handleWallet(interaction) {
@@ -1713,6 +1817,20 @@ async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0, su
   }
 }
 
+// 世界王寶箱開箱公告：恭喜 X 使用 Y 開到了 Z（發到通知頻道）
+async function _announceChestOpen(displayName, chestReward) {
+  try {
+    if (!chestReward) return;
+    const { getBotClient } = require("./runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady?.()) return;
+    const channel = await client.channels.fetch("1498608950671839263").catch(() => null);
+    if (channel?.isTextBased?.()) {
+      await channel.send(`🎉 恭喜 **${displayName}** 使用 **${chestReward.chestName}** 開到了 **${chestReward.rewardItemName}**！`).catch(() => {});
+    }
+  } catch (_) { /* 公告失敗不影響開箱 */ }
+}
+
 async function handleBackpackAction(interaction, action, uuid, tab = "item", page = 0, subTab = "all") {
   const serviceContext = getServiceContext();
 
@@ -1824,6 +1942,9 @@ async function handleBackpackAction(interaction, action, uuid, tab = "item", pag
   await interaction.deferUpdate();
   try {
     const result = await serviceContext.shopService.useItem(interaction.user.id, uuid, interaction.user.displayName || interaction.user.username);
+    if (result.chestReward) {
+      _announceChestOpen(interaction.user.displayName || interaction.user.username, result.chestReward).catch(() => {});
+    }
     const extra = result.effectDesc ? `\n${result.effectDesc}` : "";
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const msg = buildBackpackMessage(progress?.inventory || [], "item", `✅ 已使用 **${result.itemName}**。${extra}`);
@@ -2971,6 +3092,15 @@ async function handleButton(interaction) {
     return;
   }
 
+  // 換裝候選排序切換（階級 ⇄ 穿脫時間，記住偏好後重排，回第一頁）
+  if (id.startsWith("eq_slot_sort:")) {
+    const slot = id.slice("eq_slot_sort:".length);
+    const cur = equipSortPref.get(interaction.user.id) || "tier";
+    equipSortPref.set(interaction.user.id, cur === "tier" ? "equip" : "tier");
+    await handleEquipSlotButton(interaction, slot, 0);
+    return;
+  }
+
   // 裝備分頁切換
   if (id.startsWith("eq_preset:")) {
     await handleEquipPresetSwitch(interaction, id.slice("eq_preset:".length));
@@ -2998,6 +3128,11 @@ async function handleButton(interaction) {
 
   if (id === BUTTON_IDS.profile) {
     await handleProfile(interaction);
+    return;
+  }
+
+  if (id === BUTTON_IDS.bestiary) {
+    await handleBestiary(interaction);
     return;
   }
 
@@ -3042,12 +3177,42 @@ async function handleButton(interaction) {
   }
 }
 
+// 換裝候選清單排序偏好（每人記住，重啟後回預設「階級」）
+const equipSortPref = new Map(); // discordId -> "tier" | "equip"
+const EQUIP_SORT_TIER_RANK = { SS: 7, S: 6, A: 5, B: 4, C: 3, D: 2, E: 1 };
+function _lastEquipTouchMs(it) {
+  const e = Date.parse(it?.equippedAt || "") || 0;
+  const u = Date.parse(it?.unequippedAt || "") || 0;
+  return Math.max(e, u);
+}
+function sortEquipCandidates(items, mode) {
+  const arr = [...items];
+  const byTier = (a, b) => {
+    const at = EQUIP_SORT_TIER_RANK[String(a?.tier || "").toUpperCase()] || 0;
+    const bt = EQUIP_SORT_TIER_RANK[String(b?.tier || "").toUpperCase()] || 0;
+    if (at !== bt) return bt - at;                       // 階級高 → 前
+    const ae = Number(a?.enhanceLevel || 0), be = Number(b?.enhanceLevel || 0);
+    if (ae !== be) return be - ae;                       // 強化高 → 前
+    return String(a?.itemName || a?.name || "").localeCompare(String(b?.itemName || b?.name || ""), "zh-Hant");
+  };
+  if (mode === "equip") {
+    arr.sort((a, b) => {
+      const at = _lastEquipTouchMs(a), bt = _lastEquipTouchMs(b);
+      if (at !== bt) return bt - at;                     // 最近穿/脫 → 前
+      return byTier(a, b);                               // 無穿脫紀錄 → 退回階級
+    });
+  } else {
+    arr.sort(byTier);
+  }
+  return arr;
+}
+
 async function handleEquipSlotButton(interaction, slot, page = 0) {
   const serviceContext = getServiceContext();
   if (!interaction.deferred && !interaction.replied) await interaction.deferUpdate().catch(() => {});
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const equipped = progress?.equipment || {};
-  const inventory = (progress?.inventory || []).filter((e) => {
+  let inventory = (progress?.inventory || []).filter((e) => {
     if (!e) return false;
     if (e.itemType === "job_badge") return e.equipSlot === slot;
     if (e.itemType === "equipment") {
@@ -3060,6 +3225,10 @@ async function handleEquipSlotButton(interaction, slot, page = 0) {
     }
     return false;
   });
+
+  // 依玩家排序偏好排列候選裝備（階級 / 穿脫時間）
+  const sortMode = equipSortPref.get(interaction.user.id) || "tier";
+  inventory = sortEquipCandidates(inventory, sortMode);
 
   const getItemLabel = (item) => String(item?.itemName || item?.name || item?.itemId || item?.uuid || "未知道具");
 
@@ -3113,6 +3282,14 @@ async function handleEquipSlotButton(interaction, slot, page = 0) {
         .setLabel("下一頁 ▶").setStyle(ButtonStyle.Secondary).setDisabled(safePage >= totalPages - 1)
     ));
   }
+
+  // 排序切換鈕（階級 ⇄ 穿脫時間），點一下切換並重排
+  components.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`eq_slot_sort:${slot}`)
+      .setLabel(`🔃 排序：${sortMode === "equip" ? "穿脫時間" : "階級"}（點切換）`)
+      .setStyle(ButtonStyle.Secondary)
+  ));
 
   const pageNote = totalPages > 1 ? `（第 ${safePage + 1}/${totalPages} 頁，共 ${inventory.length} 件）` : "";
   await safeEditReply(interaction, {
@@ -3192,7 +3369,10 @@ async function handleModal(interaction) {
     try {
       // 先減少堆疊數量，再調用使用邏輯
       for (let i = 0; i < quantity; i++) {
-        await serviceContext.shopService.useItem(interaction.user.id, uuid, interaction.user.displayName || interaction.user.username);
+        const r = await serviceContext.shopService.useItem(interaction.user.id, uuid, interaction.user.displayName || interaction.user.username);
+        if (r?.chestReward) {
+          _announceChestOpen(interaction.user.displayName || interaction.user.username, r.chestReward).catch(() => {});
+        }
       }
 
       // 重新載入背包
@@ -3254,6 +3434,7 @@ module.exports = {
   handleEquipmentSelect,
   handlePresetSwitchSelect,
   handleBackpackTabSelect,
+  handleBestiaryZoneSelect,
   handleWeeklyQuests,
   handleWeeklyQuestClaim,
   handleEnhanceEntry,

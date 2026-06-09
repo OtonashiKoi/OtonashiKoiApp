@@ -2,12 +2,15 @@
 
 // ── 組隊爬塔系統設定 ─────────────────────────────────────────────────────────
 // 最多 6 人，隊長發起，開始後鎖定成員
-// 共 41 關：1~40 層各打一隻怪，第 41 層打終焉魔王
+// 共 52 關：
+//   1~40 層 普通段（每 10 層段王）
+//   41~50 層 龍族之領（50 層段王＝龍王(B)）
+//   51 層 大史王（世界王）／52 層 古龍王(B)（終局世界王）
 // ────────────────────────────────────────────────────────────────────────────
 
 const TOWER_MAX_MEMBERS = 6;
-const TOWER_TOTAL_FLOORS = 41; // 1~40 普通層 + 41 魔王層
-const TOWER_BOSS_FLOOR = 41;
+const TOWER_TOTAL_FLOORS = 52; // 1~40 普通 + 41~50 龍族之領 + 51 大史王 + 52 古龍王
+const TOWER_BOSS_FLOOR = 52;   // 最終王（古龍王）
 
 // ── 樓層 Buff 區段 ────────────────────────────────────────────────────────────
 // 玩家打到該區段就會取得對應 Buff，累加不替換
@@ -55,25 +58,53 @@ const TOWER_FLOOR_BUFFS = [
   },
   {
     minFloor: 41,
-    maxFloor: 41,
-    label: "終焉魔王",
+    maxFloor: 50,
+    label: "龍族之領",
+    emoji: "🐲",
+    color: 0xc0392b,
+    partyBonus: { atkPct: 42, hpPct: 85 },
+    monsterScalePct: 350,    // 龍怪 base 12k~25k → 42k~87.5k；段王龍王(B) 100k → 350k
+    monsterAtkScalePct: 300,
+  },
+  {
+    minFloor: 51,
+    maxFloor: 52,
+    label: "終焉雙王",
     emoji: "👑",
     color: 0x1a1a2e,
-    partyBonus: { atkPct: 50, hpPct: 100 },
-    monsterScalePct: 100,
+    partyBonus: { atkPct: 55, hpPct: 110 },
+    monsterScalePct: 100,    // 世界王本身已巨大（大史王 177萬／古龍王 265萬），不再放大
     monsterAtkScalePct: 100,
   },
 ];
 
+// ── 固定王關（單一來源）────────────────────────────────────────────────────
+// DC 組隊爬塔與網頁版爬塔共用，避免兩邊各寫一份而分歧。
+// 廢都魔王(B) 強度過高不列入爬塔。
+const TOWER_FLOOR_BOSS = {
+  10: "大野兔(B)",
+  20: "米拉桑(B)",
+  30: "古城將軍(B)",
+  40: "城堡魔像(B)",
+  50: "龍王(B)",      // 龍族之領 段王
+  51: "大史王",        // 世界王
+  52: "古龍王(B)",     // 終局世界王
+};
+function getTowerFloorBossName(floor) {
+  return TOWER_FLOOR_BOSS[floor] || null;
+}
+
 // ── 怪物選取策略 ──────────────────────────────────────────────────────────────
-// 每層依樓層比例從 DB 怪物中選取（不重複），第41層強制選最強
+// 每層依樓層比例從 DB 怪物中選取，固定王關走 TOWER_FLOOR_BOSS
 const TOWER_MONSTER_ZONE_POOL = {
   "1-10":  { zone: "normal",  bossOnly: false },
   "11-20": { zone: "mid",     bossOnly: false },
   "21-25": { zone: "ancient_city",      bossOnly: false },
   "26-30": { zone: "ancient_city_deep", bossOnly: false },
   "31-40": { zone: "elite",   bossOnly: false },
-  "41":    { zone: "elite",   bossOnly: true  }, // 強制選 isBoss = true
+  "41-50": { zone: "dragon_realm", bossOnly: false }, // 龍族之領（50 層段王走 TOWER_FLOOR_BOSS）
+  "51":    { zone: "elite",            bossOnly: true }, // 大史王
+  "52":    { zone: "dragon_king_lair", bossOnly: true }, // 古龍王
 };
 
 // ── 隊伍行動軸規則 ──────────────────────────────────────────────────────────
@@ -172,11 +203,13 @@ function getTowerClearBuff(clearedFloor) {
 
 // ── 獎勵規則 ─────────────────────────────────────────────────────────────────
 const TOWER_FLOOR_REWARD = {
-  10:  { goldMultiplier: 1.0, expMultiplier: 1.0, bonusMsg: "突破初境！" },
-  20:  { goldMultiplier: 2.5, expMultiplier: 2.5, bonusMsg: "深淵征服！" },
-  30:  { goldMultiplier: 5.0, expMultiplier: 5.0, bonusMsg: "混沌突破！" },
+  10:  { goldMultiplier: 1.0,  expMultiplier: 1.0,  bonusMsg: "突破初境！" },
+  20:  { goldMultiplier: 2.5,  expMultiplier: 2.5,  bonusMsg: "深淵征服！" },
+  30:  { goldMultiplier: 5.0,  expMultiplier: 5.0,  bonusMsg: "混沌突破！" },
   40:  { goldMultiplier: 10.0, expMultiplier: 10.0, bonusMsg: "熔爐超越！" },
-  41:  { goldMultiplier: 20.0, expMultiplier: 20.0, bonusMsg: "🎉 終焉魔王討伐！傳說等級！" },
+  50:  { goldMultiplier: 18.0, expMultiplier: 18.0, bonusMsg: "🐲 龍族之領鎮壓！龍王伏誅！" },
+  51:  { goldMultiplier: 28.0, expMultiplier: 28.0, bonusMsg: "⚔️ 大史王討伐！" },
+  52:  { goldMultiplier: 45.0, expMultiplier: 45.0, bonusMsg: "🎉 古龍王討伐！傳說等級！" },
 };
 
 // 基礎獎勵（每通過一層）
@@ -190,9 +223,12 @@ function getTowerFloorBuff(floor) {
 }
 
 function getTowerMonsterPool(floor) {
-  if (floor >= 41) return TOWER_MONSTER_ZONE_POOL["41"];
+  if (floor >= 52) return TOWER_MONSTER_ZONE_POOL["52"];
+  if (floor >= 51) return TOWER_MONSTER_ZONE_POOL["51"];
+  if (floor >= 41) return TOWER_MONSTER_ZONE_POOL["41-50"];
   if (floor >= 31) return TOWER_MONSTER_ZONE_POOL["31-40"];
-  if (floor >= 21) return TOWER_MONSTER_ZONE_POOL["21-30"];
+  if (floor >= 26) return TOWER_MONSTER_ZONE_POOL["26-30"];
+  if (floor >= 21) return TOWER_MONSTER_ZONE_POOL["21-25"];
   if (floor >= 11) return TOWER_MONSTER_ZONE_POOL["11-20"];
   return TOWER_MONSTER_ZONE_POOL["1-10"];
 }
@@ -251,6 +287,8 @@ module.exports = {
   TOWER_MAX_MEMBERS,
   TOWER_TOTAL_FLOORS,
   TOWER_BOSS_FLOOR,
+  TOWER_FLOOR_BOSS,
+  getTowerFloorBossName,
   TOWER_FLOOR_BUFFS,
   TOWER_LOBBY_TIMEOUT_MS,
   MAX_ROUNDS_PER_MEMBER,

@@ -237,17 +237,6 @@ class WeeklyQuestService {
     if (quest.levelLimit && quest.levelLimit > level) return false;
     if (quest.unlockLevel && level < Number(quest.unlockLevel || 0)) return false;
 
-      if (
-        quest.hideIfRewardOwned &&
-        quest.rewardItemId &&
-        (
-          context?.equippedItemIds?.has(String(quest.rewardItemId)) ||
-          context?.inventoryItemIds?.has(String(quest.rewardItemId))
-        )
-      ) {
-        return false;
-      }
-
     if ((quest.unlockAttributes && quest.unlockAttributes.length > 0) || quest.unlockAttribute) {
       const total = getUnlockAttributeTotal(quest, context?.attributes || {});
       if (!(total > Number(quest.unlockAttributeMin || 0))) return false;

@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-06-01T09:24:19.103Z
+Generated at: 2026-06-08T02:02:53.102Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,12 +8,12 @@ Generated at: 2026-06-01T09:24:19.103Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 366 |
-| 進度資料 | 370 |
+| 玩家 | 369 |
+| 進度資料 | 373 |
 | 怪物 | 52 |
-| 怪物狀態文件 | 8 |
-| 道具 | 325 |
-| 任務 | 37 |
+| 怪物狀態文件 | 10 |
+| 道具 | 339 |
+| 任務 | 38 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
 | 世界王設定 | 2 |
@@ -59,7 +59,7 @@ Generated at: 2026-06-01T09:24:19.103Z
 | beginner | 3 | 蘑菇怪 | 2 | 700 | 200 | 87 | 0 | 否 | 11 |
 | beginner | 4 | 小史(中) | 3 | 900 | 250 | 102 | 0 | 否 | 11 |
 | beginner | 5 | 大野兔(B) | 3 | 3000 | 500 | 360 | 0 | 是 | 13 |
-| dragon_king_lair | 1 | 龍王(B) | 65 | 1770000 | 22000 | 45000 | 0 | 是 | 0 |
+| dragon_king_lair | 1 | 古龍王(B) | 60 | 2655000 | 30000 | 60000 | 10000 | 是 | 58 |
 | dragon_realm | 1 | 飛龍幼崽 | 40 | 12000 | 13000 | 1800 | 0 | 否 | 12 |
 | dragon_realm | 2 | 龍蜥武士 | 41 | 13500 | 14000 | 1950 | 0 | 否 | 12 |
 | dragon_realm | 3 | 火翼龍人 | 42 | 15000 | 15000 | 2100 | 0 | 否 | 11 |
@@ -69,8 +69,8 @@ Generated at: 2026-06-01T09:24:19.103Z
 | dragon_realm | 7 | 黃金幼龍(稀) | 46 | 10000 | 8000 | 9000 | 0 | 是 | 17 |
 | dragon_realm | 8 | 暗影龍將 | 47 | 23000 | 20000 | 2850 | 0 | 否 | 11 |
 | dragon_realm | 9 | 龍翼魔法師 | 48 | 25000 | 22000 | 3000 | 0 | 否 | 11 |
-| dragon_realm | 10 | 古龍王(B) | 50 | 100000 | 50000 | 15000 | 0 | 是 | 25 |
-| elite | 1 | 大史王 | 60 | 1180000 | 13000 | 27000 | 5000 | 是 | 60 |
+| dragon_realm | 10 | 龍王(B) | 50 | 100000 | 50000 | 15000 | 0 | 是 | 25 |
+| elite | 1 | 大史王 | 55 | 1770000 | 19500 | 40500 | 5000 | 是 | 71 |
 | mid | 1 | 甲蟹 | 14 | 2700 | 2800 | 828 | 0 | 否 | 16 |
 | mid | 2 | 牙牙狼 | 13 | 2400 | 2400 | 828 | 0 | 否 | 13 |
 | mid | 3 | 巨巨 | 16 | 3100 | 4000 | 828 | 0 | 否 | 14 |
@@ -97,8 +97,8 @@ Generated at: 2026-06-01T09:24:19.103Z
 | 分類 | 數量 |
 | --- | --- |
 | collectible | 1 |
-| consumable | 17 |
-| equipment | 291 |
+| consumable | 20 |
+| equipment | 302 |
 | job_badge | 10 |
 | pet_egg | 6 |
 
@@ -108,7 +108,8 @@ Generated at: 2026-06-01T09:24:19.103Z
 | B | 70 |
 | C | 71 |
 | D | 57 |
-| 無階級 | 37 |
+| S | 11 |
+| 無階級 | 40 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -123,9 +124,9 @@ Generated at: 2026-06-01T09:24:19.103Z
 | shield | 8 |
 | shoes | 16 |
 | special | 52 |
-| title_eq | 7 |
-| weapon | 42 |
-| 無槽位 | 24 |
+| title_eq | 8 |
+| weapon | 52 |
+| 無槽位 | 27 |
 
 ## Items
 
@@ -136,9 +137,11 @@ Generated at: 2026-06-01T09:24:19.103Z
 | 4a3b928f-c86a-4f3e-b1be-8ca2828072ae | 【鯉市長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
 | 9d3f8e8a-3de6-40c4-a2a5-06793e83c7d5 | 【鯉民】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
 | 14ee61e8-e9f0-44e4-9a32-f8dd0060cbe2 | 【鯉長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
+| chest-dragon-king | 古龍王寶箱 | consumable |  |  |  |  | open_world_boss_chest |
 | 97fbd546-e207-4130-b130-2fadd799703a | 回復藥水（中） | consumable |  |  |  |  | tower_heal_flat |
 | 3eb1d302-3d04-40a5-8335-1f9ed844dc27 | 回復藥水（大） | consumable |  |  |  |  | tower_heal_pct |
 | f56aefd0-faa8-45b5-8451-fbbae5810c74 | 回復藥水（小） | consumable |  |  |  |  | tower_heal_flat |
+| chest-daishi-king | 大史王寶箱 | consumable |  |  |  |  | open_world_boss_chest |
 | 87b281be-b175-40a0-8044-0accc88a0ee0 | 屬性重製藥水 | consumable |  |  |  |  | reroll_attributes |
 | c4794326-ced1-4efe-983d-17c14ee2f2f8 | 復活藥水（大） | consumable |  |  |  |  | tower_revive_pct |
 | 12bfb110-6489-4784-8537-f3f496759f8f | 復活藥水（小） | consumable |  |  |  |  | tower_revive_pct |
@@ -149,6 +152,7 @@ Generated at: 2026-06-01T09:24:19.103Z
 | 8fdfa7d9-f0fa-4e6a-a291-703b1e354072 | B階寶石 | consumable | B |  |  |  | none |
 | 556db9e1-b084-4b22-bab5-a66c2b586184 | C階寶石 | consumable | C |  |  |  | grant_gold |
 | 72fde92d-e33f-42fb-8d86-2e811d03f84d | D階寶石 | consumable | D |  |  |  | grant_gold |
+| gem-s-tier | S階寶石 | consumable | S |  |  |  | none |
 | title-2026-pk-throne-first-seat | PK王座・第一席 | equipment |  | title_eq |  | STR+2 VIT+2 LUK+2 | none |
 | title-2026-pk-throne-third-string | PK王座・第三弦 | equipment |  | title_eq |  | VIT+1 DEX+2 LUK+2 | none |
 | title-2026-pk-throne-second-blade | PK王座・第二刃 | equipment |  | title_eq |  | STR+2 VIT+1 LUK+2 | none |
@@ -156,6 +160,7 @@ Generated at: 2026-06-01T09:24:19.103Z
 | 65833876-d13e-4ca8-ac26-4eeb170726fc | 樂園CCB2勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | e290d286-bd45-4a32-b848-d52184fc88a0 | 樂園CCB勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | dc067571-4f8f-49af-b0c1-50f32c6941ab | 樂園最終CB勇者 | equipment |  | title_eq |  | LUK+3 | none |
+| f5d8903b-5d19-46d7-a1f5-3af1672ee833 | 龍王的零嘴們 | equipment |  | title_eq |  |  | none |
 | d03a42d6-a2cb-446b-be0c-135f28375136 | 吸血左之戒 | equipment | A | accessory_l |  | LUK+5 | none |
 | 08f14a4f-c534-4289-8632-0313570f8a9a | 守護左之戒 | equipment | A | accessory_l |  | VIT+5 | none |
 | 4d45bc35-4ee0-497b-b030-21c83a4a3a3c | 戰意左之戒 | equipment | A | accessory_l |  | DEX+5 | none |
@@ -215,7 +220,7 @@ Generated at: 2026-06-01T09:24:19.103Z
 | monster-card-f24bfc8c-4eba-4c10-85a0-73e77e4f6448 | 古城弓手卡 | equipment | A | special |  |  | none |
 | monster-card-2d0d3516-e7ef-4916-b966-b38145a18fd4 | 古城法師卡 | equipment | A | special |  |  | none |
 | monster-card-32a783be-798c-4640-bd2d-00af3e330313 | 古城狂戰士卡 | equipment | A | special |  |  | none |
-| monster-card-90df79f6-ce40-4f31-be32-f8d4d8f31c99 | 古龍王(B)卡 | equipment | A | special |  |  | none |
+| monster-card-dragon-king | 古龍王(B)卡 | equipment | A | special |  |  |  |
 | monster-card-5c20d4ba-5f38-4d6b-a724-369eb632ff1d | 城堡魔像(B)卡 | equipment | A | special |  |  | none |
 | monster-card-5152b379-9bdd-404a-acb4-b80935664aba | 城牆衛兵卡 | equipment | A | special |  |  | none |
 | monster-card-e5a4a7e58fb2e78e8be58da1 | 大史王卡 | equipment | A | special |  |  | none |
@@ -232,7 +237,7 @@ Generated at: 2026-06-01T09:24:19.103Z
 | monster-card-a68402d9-d9cf-4927-9293-691164bcf1f1 | 黃金幼龍(稀)卡 | equipment | A | special |  |  | none |
 | monster-card-8e5ed991-335a-4b57-8c2d-29dcdb2d0429 | 黑曜龍騎卡 | equipment | A | special |  |  | none |
 | monster-card-35ec8cc7-9f0c-4d61-8a40-343d8857be2f | 黑焰巫師卡 | equipment | A | special |  |  | none |
-| monster-card-dragon-king | 龍王卡 | equipment | A | special |  |  |  |
+| monster-card-90df79f6-ce40-4f31-be32-f8d4d8f31c99 | 龍王(B)卡 | equipment | A | special |  |  | none |
 | monster-card-aece2657-19aa-407c-acaa-0b23246c0dc7 | 龍翼魔法師卡 | equipment | A | special |  |  | none |
 | monster-card-739cdb0a-5d59-4e52-bf77-cce0e33c2666 | 龍蜥武士卡 | equipment | A | special |  |  | none |
 | 5da1f2b3-ad07-46b5-9d24-eb2d849d3381 | 秘銀匕首 | equipment | A | weapon | dagger | STR+4 AGI+15 | none |
@@ -440,6 +445,16 @@ Generated at: 2026-06-01T09:24:19.103Z
 | 2271e23c-9648-430e-944b-cea2107ee8ec | 木製雙手斧 | equipment | D | weapon | axe_2h | STR+5 LUK+1 | none |
 | 2fcf7576-4e74-4280-b1e6-0d7da7b58dda | 木製雙手槌 | equipment | D | weapon | mace_2h | STR+5 VIT+1 | none |
 | e3794447-e19d-41a2-9b0a-c5050dcdd9ea | 木製雙手法杖 | equipment | D | weapon | staff_2h | INT+5 LUK+1 | none |
+| s-dragon-axe_2h | 屠龍巨斧 | equipment | S | weapon | axe_2h | STR+20 LUK+5 | none |
+| s-dragon-sword_1h | 幼龍牙劍 | equipment | S | weapon | sword_1h | STR+19 | none |
+| s-dragon-axe_1h | 裂龍手斧 | equipment | S | weapon | axe_1h | STR+14 LUK+5 | none |
+| s-dragon-bow | 龍筋獵弓 | equipment | S | weapon | bow | AGI+4 DEX+19 | none |
+| s-dragon-staff_2h | 龍脈長杖 | equipment | S | weapon | staff_2h | INT+19 DEX+4 | none |
+| s-dragon-sword_2h | 龍脊巨劍 | equipment | S | weapon | sword_2h | STR+25 | none |
+| s-dragon-staff_1h | 龍語法杖 | equipment | S | weapon | staff_1h | INT+14 DEX+5 | none |
+| s-dragon-mace_1h | 龍顎戰錘 | equipment | S | weapon | mace_1h | STR+14 VIT+5 | none |
+| s-dragon-mace_2h | 龍骨碎天槌 | equipment | S | weapon | mace_2h | STR+20 VIT+5 | none |
+| s-dragon-dagger | 龍鱗短刃 | equipment | S | weapon | dagger | STR+4 AGI+15 | none |
 | job_swordsman_v1 | 劍士徽章 | job_badge |  | job_eq |  | STR+2 VIT+3 DEX+2 | none |
 | job_archer_v1 | 弓箭手徽章 | job_badge |  | job_eq |  | AGI+1 DEX+5 LUK+2 | none |
 | job_warrior_v1 | 戰士徽章 | job_badge |  | job_eq |  | STR+4 VIT+1 LUK+2 | none |
@@ -491,6 +506,7 @@ Generated at: 2026-06-01T09:24:19.103Z
 | onboarding | 140 | 達成 Lv.10 並獲得職業徽章 | level_10_job_badge | 1 | 啟用 | 300 金幣 + 150 EXP | 升到 Lv.10，並獲得任一職業徽章即可完成。 |
 | onboarding | 150 | 成功連擊20次 | combo_count | 20 | 啟用 | 500 金幣 + 220 EXP + 44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf | 同樣建議用匕首，配合高 AGI 與持續輸出，較容易把連擊堆高。 |
 | onboarding | 160 | 完成全部新手任務 | onboarding_complete_count | 1 | 啟用 | 屬性重製藥水 | 完成前面所有新手任務後，再回來領取最終獎勵。 |
+| season | 10 | 屠龍者の試煉 | kill_dragon_king | 10 | 啟用 | 龍王的零嘴們 | 擊敗世界王【古龍王(B)】10 次，獲得稱號「龍王的零嘴們」（龍族領地最終傷害 +5%）。 |
 | weekly | 10 | 每週出戰 30 次 | battle_count | 30 | 啟用 | 1200 金幣 + 500 EXP |  |
 | weekly | 20 | 每週贏得 20 場 | battle_win | 20 | 啟用 | 1500 金幣 + 700 EXP |  |
 | weekly | 30 | 每週累計 50000 傷害 | damage_total | 50000 | 啟用 | 1800 金幣 + 900 EXP |  |

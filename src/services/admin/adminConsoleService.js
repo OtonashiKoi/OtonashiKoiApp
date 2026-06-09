@@ -574,10 +574,11 @@ class AdminConsoleService {
   }
 
   async publishMonsterZonePanel(channelId, monster, currentHp, options = {}) {
-    // 自動更新 (no cleanChannel) 遇到忙碌時跳過；手動發布排隊執行
+    // 自動更新 (no cleanChannel) 遇到忙碌時跳過；手動發布或強制刷新 (forcePublish) 則排隊執行
+    // forcePublish 用於世界王冷卻結束等「少見但必須生效」的刷新，避免被忙碌的 layout mutex 靜默跳過。
     return _runOnLayoutMutex(
       () => this._doPublishMonsterZonePanel(channelId, monster, currentHp, options),
-      { skipIfBusy: !options.cleanChannel }
+      { skipIfBusy: !options.cleanChannel && options.forcePublish !== true }
     );
   }
 
@@ -658,7 +659,7 @@ class AdminConsoleService {
       // 找不到 → 不要送新的，直接放棄這次更新（等下次 refresh 再說）
       if (!existingMsg) {
         console.warn(`[MonsterPanel] auto-update skipped: panel message ${existingBinding?.panelMessageId || "(none)"} not found in channel ${targetChannelId}`);
-        return { channelId: targetChannelId, messageId: existingBinding?.panelMessageId || null };
+        return { channelId: targetChannelId, messageId: existingBinding?.panelMessageId || null, published: false };
       }
       message = await existingMsg.edit(panelMsg).catch((err) => {
         console.warn(`[MonsterPanel] edit failed channel=${targetChannelId} msg=${existingMsg.id}: ${err?.message || err}`);
@@ -666,11 +667,11 @@ class AdminConsoleService {
       });
       // edit 失敗也不送新，避免疊出新面板
       if (!message) {
-        return { channelId: targetChannelId, messageId: existingMsg.id };
+        return { channelId: targetChannelId, messageId: existingMsg.id, published: false };
       }
     }
 
-    if (!message) return { channelId: targetChannelId, messageId: null };
+    if (!message) return { channelId: targetChannelId, messageId: null, published: false };
 
     const updatedBindings = bindings.map((b) =>
       b.channelId === targetChannelId && b.featureKey === boundFeatureKey ? { ...b, panelMessageId: message.id } : b
@@ -680,7 +681,7 @@ class AdminConsoleService {
     }
     await this.channelLayoutRepository.save({ discord: { ...(stored.discord || {}), bindings: updatedBindings } });
 
-    return { channelId: targetChannelId, messageId: message.id };
+    return { channelId: targetChannelId, messageId: message.id, published: true };
   }
 
 

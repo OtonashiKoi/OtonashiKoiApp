@@ -18,6 +18,7 @@ const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = 
 const { getDropBoostPct } = require("../../shared/pkArenaConfig");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
 const { clearCurrentCache } = require("../../adapters/mongo/requestCache");
+const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
 const {
   isDiscordRestProtected,
   isTransientDiscordNetworkError,
@@ -1571,6 +1572,14 @@ async function _notifyKillRewards(monsterName, perPidRewards) {
         lines.push(expLine);
       }
       if (rewards.drops.length > 0) lines.push(`🎁 道具：**${rewards.drops.join("、")}**`);
+      if (rewards.bestiary) {
+        const b = rewards.bestiary;
+        const killsTxt = `${(Math.round(b.killsAfter * 10) / 10)}/${b.requirement} 隻`;
+        lines.push(`📖 圖鑑：**${b.monsterName}** +${b.gainPct}%（累積 ${killsTxt}，對該怪傷害 +${Math.round(b.bonusPctAfter * 10) / 10}%）`);
+      }
+      if (Array.isArray(rewards.chestAwarded) && rewards.chestAwarded.length) {
+        lines.push(`📦 世界王貢獻獎勵：**${rewards.chestAwarded.join("、")}**`);
+      }
       if (!lines.length) continue;
       const prefix = `⚔️ **${monsterName}** 已被擊倒，你的參戰獎勵：`;
       try {
@@ -1763,27 +1772,7 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
       }
     }
 
-    // 發送特殊物品公告到通知頻道 1498608950671839263
-    const notificationChannelId = "1498608950671839263";
-    const notifChannel = await client.channels.fetch(notificationChannelId).catch((err) => {
-      console.error(`[Drop Announce] Failed to fetch notification channel ${notificationChannelId}:`, err?.message);
-      return null;
-    });
-    if (notifChannel?.isTextBased?.()) {
-      // 過濾卡片（用 isMonsterCardItem 正確識別怪物卡）
-      const cardDrops = droppedItemObjects.filter((item) => isMonsterCardItem(item));
-
-      // 發送卡片掉落公告（顯示卡片名稱）
-      if (cardDrops.length > 0) {
-        const cardNames = cardDrops.map(c => c.name || c.itemName || "怪物卡").join("、");
-        await sendAnnouncementWebhook(notifChannel, `🃏 **${cardNames}**  <@${discordId}>`, {
-          allowedMentions: { users: [discordId] },
-          context: "card drop webhook"
-        });
-      }
-    } else {
-      console.error(`[Drop Announce] Notification channel ${notificationChannelId} not found or not text-based`);
-    }
+    // （已移除）原本會把稀有卡掉落公告 🃏 發到通知頻道 1498608950671839263（town/general chat），依需求停用。
   } catch (e) {
     console.error(`[Drop Announce] Unexpected error:`, e?.message || e);
   }
@@ -1902,7 +1891,7 @@ async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount
       const latest = await sc.monsterService.getState(zoneKey).catch(() => null);
       partsHp = latest?.worldBossPartsHp || null;
     }
-    await sc.adminConsoleService.publishMonsterZonePanel(
+    return await sc.adminConsoleService.publishMonsterZonePanel(
       binding.channelId,
       monster,
       monsterHp,
@@ -1912,10 +1901,12 @@ async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount
         activeEvent,
         activeTransition,
         worldBossPartsHp: partsHp,
-        fastUpdate: options.fastUpdate === true
+        fastUpdate: options.fastUpdate === true,
+        forcePublish: options.forcePublish === true
       }
     );
   }
+  return null;
 }
 
 function _scheduleZoneEventFinalize(sc, zoneKey, endsAt) {
@@ -2669,6 +2660,12 @@ async function handleEnterBattle(interaction) {
       }
 
       const monsterHpBeforeBattle = session.monsterHp;
+      // ── 怪物圖鑑：依玩家對「這隻怪」的累積擊殺,算出本場傷害加成(最高 +30%) ──
+      const _bestiaryIsWorldBoss = isWorldBossZone(zoneKey);
+      const _bestiaryMonsterId = String(battleMonster?.id || battleMonster?._id || session.monsterName || "");
+      const _bestiaryReq = bestiaryRequirement(battleMonster, _bestiaryIsWorldBoss);
+      const _bestiaryKillsBefore = Number(currentProg?.bestiary?.[_bestiaryMonsterId]) || 0;
+      const _bestiaryBonusPct = bestiaryBonusPct(_bestiaryKillsBefore, _bestiaryReq);
       const { runCombatLoop } = require("../../shared/combatLoop");
       let combatResult =
         runCombatLoop(battlePlayerStats, battleMonsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
@@ -2679,7 +2676,8 @@ async function handleEnterBattle(interaction) {
           partyEffects,
           monsterEquipped: battleMonsterEquipped,
           monsterIsBoss: Boolean(battleMonster?.isBoss),
-          worldBossPhase: session.worldBossPhase || null
+          worldBossPhase: session.worldBossPhase || null,
+          bestiaryBonusPct: _bestiaryBonusPct
         });
       const { roundLogs, finalPlayerHp } = combatResult;
       let combatStats = combatResult.combatStats;
@@ -2726,6 +2724,8 @@ async function handleEnterBattle(interaction) {
             name: displayName,
             damage: (prev[discordId]?.damage || 0) + totalDamage,
             taken: (prev[discordId]?.taken || 0) + totalTaken,
+            // 世界王貢獻寶箱：累計本王出戰花的入場費（花錢排名依據）
+            spent: (prev[discordId]?.spent || 0) + (Number(session.entryFee) || 0),
           }
         };
         const latestHp = Math.max(0, Number(freshState.currentHp ?? monsterHpBeforeBattle));
@@ -2762,6 +2762,29 @@ async function handleEnterBattle(interaction) {
           nextState.worldBossPartsHp || null,
           { fastUpdate: true }
         );
+        // ── 怪物圖鑑累積：本場(對該怪造成傷害 / 該怪最大HP，最多算 1 隻)原子累加 ──
+        try {
+          const _bMaxHp = Math.max(1, Number(battleMonster?.calc?.maxHp || session.monsterStats?.maxHp || monsterHpBeforeBattle || 1));
+          const _bGain = bestiaryGainFromDamage(totalDamage, _bMaxHp);
+          if (_bGain > 0 && _bestiaryMonsterId) {
+            const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+            const _db = await getMongoDb();
+            await _db.collection("progress").updateOne(
+              { playerId: discordId },
+              { $inc: { ["bestiary." + _bestiaryMonsterId]: _bGain } }
+            );
+            const _bTotalAfter = _bestiaryKillsBefore + _bGain;
+            session._bestiary = {
+              monsterName: session.monsterName || battleMonster?.name || "怪物",
+              gainPct: Math.round(_bGain * 1000) / 10,
+              killsAfter: _bTotalAfter,
+              requirement: _bestiaryReq,
+              bonusPctAfter: bestiaryBonusPct(_bTotalAfter, _bestiaryReq)
+            };
+          }
+        } catch (e) {
+          console.error("[Bestiary] credit failed:", e.message);
+        }
         }
       } catch (e) {
         console.error("[monsterZoneHandlers] 排行榜更新失敗:", e.message);
@@ -2968,6 +2991,97 @@ async function handleDeleteLog(interaction) {
 // ──────────────────────────────────────────────
 // 擊殺結算（發獎勵 + 推進怪物 + 重發面板）
 // ──────────────────────────────────────────────
+// ── 世界王貢獻寶箱 ───────────────────────────────────────────
+// 怪物 → 對應寶箱 itemId
+const WORLD_BOSS_CHEST_BY_MONSTER = {
+  "elite-daishi-king": "chest-daishi-king",
+  "dragon-king-boss": "chest-dragon-king",
+};
+function _resolveWorldBossChestId(monster, zoneKey) {
+  return WORLD_BOSS_CHEST_BY_MONSTER[monster?.id]
+    || (zoneKey === "elite" ? "chest-daishi-king"
+      : zoneKey === "dragon_king_lair" ? "chest-dragon-king" : null);
+}
+// 發一個寶箱給玩家（同款堆疊，CAS 重試）
+async function _grantChestToPlayer(sc, pid, chestItem, sourceMonsterId) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
+    if (!prog) return false;
+    const inv = Array.isArray(prog.inventory) ? prog.inventory.map((e) => ({ ...e })) : [];
+    const existing = inv.find((e) => e.itemId === chestItem.id);
+    if (existing) {
+      existing.stackCount = Math.max(1, Number(existing.stackCount) || 1) + 1;
+    } else {
+      inv.push({
+        uuid: crypto.randomUUID(), itemId: chestItem.id, itemName: chestItem.name,
+        itemEffect: chestItem.effect || { type: "none", value: 0 },
+        useEffects: chestItem.useEffects || [], passiveEffects: [], procEffects: [], combatEffects: [],
+        itemType: chestItem.itemType || "consumable",
+        imageUrl: chestItem.imageUrl || null, imageThumbnailUrl: chestItem.imageThumbnailUrl || null,
+        equipSlot: null, equipStats: {}, weaponType: null, isTwoHanded: false, atkStat: null,
+        tier: chestItem.tier || null, monsterCardSkill: null, enhanceLevel: 0, stackCount: 1,
+        source: "world_boss_contribution", sourceRef: sourceMonsterId || null,
+        purchasedAt: new Date().toISOString(),
+      });
+    }
+    const next = { ...prog, inventory: inv, updatedAt: new Date().toISOString() };
+    let saved;
+    if (typeof sc.progressRepository.saveIfUnchanged === "function") {
+      saved = await sc.progressRepository.saveIfUnchanged(next, prog.updatedAt);
+    } else {
+      await sc.progressRepository.save(next); saved = true;
+    }
+    if (saved) return true;
+  }
+  return false;
+}
+// 結算：傷害前3 + 花費(入場費)前3（排除已在傷害前3者，往下遞補）= 最多 6 位不同的人各得 1 箱
+async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap, perPidRewards) {
+  try {
+    const chestId = _resolveWorldBossChestId(monster, zoneKey);
+    if (!chestId) return;
+    const chestItem = await sc.itemRepository.findById(chestId).catch(() => null);
+    if (!chestItem) { console.warn(`[WorldBossChest] chest item ${chestId} not found`); return; }
+
+    const entries = Object.entries(damageMap || {}).map(([pid, d]) => ({
+      pid, name: d?.name || pid, damage: Number(d?.damage) || 0, spent: Number(d?.spent) || 0,
+    }));
+    const dmgRank = entries.filter((e) => e.damage > 0).sort((a, b) => b.damage - a.damage).slice(0, 3);
+    const dmgWinners = new Set(dmgRank.map((e) => e.pid));
+    const spendRank = entries.filter((e) => e.spent > 0 && !dmgWinners.has(e.pid)).sort((a, b) => b.spent - a.spent).slice(0, 3);
+
+    // 選人不變(傷害前3 + 花費前3遞補)，但對外只呈現「整體貢獻度前6名」單一清單
+    const mark = (pid) => {
+      if (perPidRewards && perPidRewards[pid]) {
+        perPidRewards[pid].chestAwarded = perPidRewards[pid].chestAwarded || [];
+        perPidRewards[pid].chestAwarded.push(chestItem.name);
+      }
+    };
+    const granted = [];
+    for (const w of [...dmgRank, ...spendRank]) {
+      if (await _grantChestToPlayer(sc, w.pid, chestItem, monster?.id)) { granted.push(w.name); mark(w.pid); }
+    }
+    if (!granted.length) return;
+
+    const rankLine = granted.map((n, i) => `${i + 1}. ${n}`).join("　");
+    const lines = [
+      `🎁 **${monster.name}** 討伐結算！`,
+      `🏆 整體貢獻度前 ${granted.length} 名，各獲得 **${chestItem.name}**：`,
+      rankLine,
+    ];
+    try {
+      const { getBotClient } = require("../runtimeContext");
+      const client = getBotClient();
+      if (client?.isReady?.()) {
+        const channel = await client.channels.fetch("1498608950671839263").catch(() => null);
+        if (channel?.isTextBased?.()) await channel.send(lines.join("\n")).catch(() => {});
+      }
+    } catch (_) { /* 公告失敗不影響發箱 */ }
+  } catch (e) {
+    console.error("[WorldBossChest] award failed:", e?.message || e);
+  }
+}
+
 async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal" }) {
   const sc = getServiceContext();
   const rewardLines = [];
@@ -3037,6 +3151,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // 每位參戰者的獎勵紀錄（用來最後 DM 通知）
   const perPidRewards = {};
   participants.forEach(pid => { perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [], healerGoldBonus: 0, healerExpBonus: 0, isHealer: false }; });
+  // 圖鑑：本次出手者(discordId)的「本場累積%」掛到他的獎勵紀錄,擊殺 DM 會顯示
+  if (session && session._bestiary && perPidRewards[discordId]) {
+    perPidRewards[discordId].bestiary = session._bestiary;
+  }
   const canSendRewardNotice = (pid) => !perPidRewards[pid]?._expGrantFailed;
 
   // 預載參戰者資料，用於個人化結算倍率（金幣 / EXP / 掉落）
@@ -3544,6 +3662,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       worldBossTimeoutTimers.delete(zoneKey);
     }
     _republishPanel(sc, zoneKey, monster, bossResetState.currentHp, 0, {}, null, bossResetState.worldBossPartsHp).catch(() => {});
+
+    // 世界王貢獻寶箱：傷害前3 + 入場費花費前3（遞補）= 最多 6 人各得 1 箱
+    await _awardWorldBossContributionChests(sc, zoneKey, monster, freshState.damageMap, perPidRewards);
 
     rewardLines.push(...buildPartyRewardSummary(perPidRewards, mergedDmg));
     _notifyKillRewards(monster.name, perPidRewards).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
@@ -4380,33 +4501,40 @@ function startIdleRotateTimer() {
   setInterval(checkIdleRotate, 60 * 1000); // 每分鐘檢查一次
 }
 
-async function refreshEliteWorldBossPanel() {
+// 刷新單一世界王 zone 面板；回傳 true 代表面板確實被重發/編輯成功（含逃跑轉場已處理）。
+// opts.force=true 時走強制排隊發布，不會因 layout mutex 忙碌而靜默跳過。
+async function refreshWorldBossPanelForZone(sc, zoneKey, opts = {}) {
+  if (await _resolveExpiredMonsterTransition(sc, zoneKey)) return true;
+  let zoneState = await sc.monsterService.getState(zoneKey).catch(() => null);
+  const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey }).catch(() => []);
+  const monster = monsters.find((m) => Number(m.seq) === Number(zoneState?.activeMonsterSeq))
+    || monsters.find((m) => m.isBoss)
+    || null;
+  if (monster?.isBoss) {
+    const timeoutResult = await maybeHandleEliteWorldBossTimeout(sc, zoneKey, zoneState || {}, monster);
+    if (timeoutResult?.timedOut) {
+      zoneState = timeoutResult.state;
+    } else {
+      await scheduleEliteWorldBossTimeout(sc, zoneKey, monster).catch(() => {});
+    }
+  }
+  const monsterHp = monster ? (zoneState?.currentHp ?? monster.calc?.maxHp ?? 0) : null;
+  const damageMap = zoneState?.damageMap || {};
+  const participantCount = Array.isArray(zoneState?.participants) ? zoneState.participants.length : 0;
+  const activeEvent = zoneState?.activeEvent || null;
+  const worldBossPartsHp = zoneState?.worldBossPartsHp || null;
+  const activeTransition = zoneState?.activeTransition || null;
+
+  const res = await _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap, activeEvent, worldBossPartsHp, { activeTransition, forcePublish: opts.force === true });
+  return res?.published === true;
+}
+
+async function refreshEliteWorldBossPanel(opts = {}) {
   const sc = getServiceContext();
   // 輪詢所有世界王 zone（大史王=elite、龍王=dragon_king_lair…）
   for (const zoneKey of Object.keys(WORLD_BOSS_ZONES)) {
     try {
-      if (await _resolveExpiredMonsterTransition(sc, zoneKey)) continue;
-      let zoneState = await sc.monsterService.getState(zoneKey).catch(() => null);
-      const monsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey }).catch(() => []);
-      const monster = monsters.find((m) => Number(m.seq) === Number(zoneState?.activeMonsterSeq))
-        || monsters.find((m) => m.isBoss)
-        || null;
-      if (monster?.isBoss) {
-        const timeoutResult = await maybeHandleEliteWorldBossTimeout(sc, zoneKey, zoneState || {}, monster);
-        if (timeoutResult?.timedOut) {
-          zoneState = timeoutResult.state;
-        } else {
-          await scheduleEliteWorldBossTimeout(sc, zoneKey, monster).catch(() => {});
-        }
-      }
-      const monsterHp = monster ? (zoneState?.currentHp ?? monster.calc?.maxHp ?? 0) : null;
-      const damageMap = zoneState?.damageMap || {};
-      const participantCount = Array.isArray(zoneState?.participants) ? zoneState.participants.length : 0;
-      const activeEvent = zoneState?.activeEvent || null;
-      const worldBossPartsHp = zoneState?.worldBossPartsHp || null;
-      const activeTransition = zoneState?.activeTransition || null;
-
-      await _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap, activeEvent, worldBossPartsHp, { activeTransition });
+      await refreshWorldBossPanelForZone(sc, zoneKey, opts);
     } catch (error) {
       console.warn(`[WorldBossPanel] auto-refresh failed (${zoneKey}): ${error?.message || error}`);
     }
@@ -4458,7 +4586,6 @@ let worldBossWatcherTimer = null;
 async function worldBossRespawnTick() {
   const sc = getServiceContext();
   if (!sc) return;
-  let changed = false;
   for (const zoneKey of Object.keys(WORLD_BOSS_ZONES)) {
     try {
       const svc = sc.worldBossServiceFor?.(zoneKey);
@@ -4467,11 +4594,14 @@ async function worldBossRespawnTick() {
       const st = info?.status;
       if (!st) continue;
       const sig = `${!!st.canChallenge}|${!!st.battleTimeoutReached}|${!!st.battleStartedAt}`;
-      if (worldBossPanelSig.get(zoneKey) !== sig) { worldBossPanelSig.set(zoneKey, sig); changed = true; }
+      if (worldBossPanelSig.get(zoneKey) === sig) continue;
+      // 狀態有變（例如冷卻結束 canChallenge:false→true）→ 強制刷新該 zone 面板。
+      // 關鍵：只有「確實刷新成功」才記住簽章；若被忙碌跳過或編輯失敗，保留舊簽章，下一輪自動重試，
+      // 避免冷卻結束時的那一次刷新被靜默吞掉後面板永遠卡在「冷卻中」。
+      const ok = await refreshWorldBossPanelForZone(sc, zoneKey, { force: true })
+        .catch((e) => { console.warn(`[WorldBossWatcher] 刷新失敗 (${zoneKey}):`, e?.message || e); return false; });
+      if (ok) worldBossPanelSig.set(zoneKey, sig);
     } catch (_) { /* 單一 zone 失敗不影響其他 */ }
-  }
-  if (changed) {
-    await refreshEliteWorldBossPanel().catch((e) => console.warn("[WorldBossWatcher] 刷新失敗:", e?.message || e));
   }
 }
 function startWorldBossRespawnWatcher() {

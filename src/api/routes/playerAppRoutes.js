@@ -2116,6 +2116,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   const TW = require("../../shared/towerConfig");
 
   async function pickTowerMonster(floor, usedNames) {
+    // 固定王關：直接取指定 boss（龍王(B)@50／大史王@51／古龍王(B)@52 等），與 DC 組隊爬塔同源
+    const bossName = TW.getTowerFloorBossName(floor);
+    if (bossName) {
+      const all = await serviceContext.monsterService.listMonsters({ includeDisabled: false }).catch(() => []);
+      const boss = all.find((m) => m.name === bossName);
+      if (boss) return boss;
+    }
     const pool = TW.getTowerMonsterPool(floor); // { zone, bossOnly }
     let mons = await serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: pool.zone }).catch(() => []);
     if (pool.bossOnly) mons = mons.filter((m) => m.isBoss);

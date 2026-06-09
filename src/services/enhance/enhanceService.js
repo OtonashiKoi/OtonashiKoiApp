@@ -21,21 +21,24 @@ const WEAPON_ENHANCE_BONUS_BY_TIER = {
   D: 1,
   C: 1.5,
   B: 2,
-  A: 2
+  A: 2,
+  S: 3
 };
 
 const ARMOR_ENHANCE_VIT_BY_TIER = {
   D: 1,
   C: 2,
   B: 3,
-  A: 3
+  A: 3,
+  S: 4
 };
 
 const ARMOR_RANDOM_ENHANCE_BONUS_BY_TIER = {
   D: 1,
   C: 1,
   B: 2,
-  A: 3
+  A: 3,
+  S: 4
 };
 
 const STAT_LABEL_ZH = {
@@ -109,7 +112,7 @@ class EnhanceService {
 
     // 驗證該物品是否為可強化的裝備（武器或防具）
     const tier = String(equipment.tier || "").toUpperCase();
-    if (!["D", "C", "B", "A"].includes(tier)) {
+    if (!["D", "C", "B", "A", "S"].includes(tier)) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "該道具無法強化", 400);
     }
 
@@ -508,7 +511,7 @@ class EnhanceService {
     }
     const preview = this._buildEnhancePreview(equipment, tier, currentLevel);
 
-    if (!["D", "C", "B", "A"].includes(tier)) {
+    if (!["D", "C", "B", "A", "S"].includes(tier)) {
       return null; // 無法強化的道具
     }
 

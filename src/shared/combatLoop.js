@@ -902,6 +902,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const allEquipmentEffects = [...equipmentPassives, ...battleStartEffects];
       if (allEquipmentEffects.length > 0) {
         if (!Array.isArray(options.playerActiveEffects)) options.playerActiveEffects = [];
+        // 先移除「上一輪注入的裝備被動」再重注入：
+        // 若呼叫端重用同一個 playerActiveEffects 陣列（例如爬塔每次行動都呼叫一次 runCombatLoop 並把 activeEffects 帶著），
+        // 原本的 push 會每次再複製一份裝備被動 → 無限累積（吸血%、首擊/高血增傷複利滾大，傷害爆表）。
+        // 改成每次呼叫都「清掉舊的 equipment_passive → 重塞當前裝備被動」：冪等、不累積，且仍保留多件裝備的疊加。
+        options.playerActiveEffects = options.playerActiveEffects.filter((e) => e && e.sourceType !== "equipment_passive");
         for (const ep of allEquipmentEffects) {
           if (!ep || !ep.key) continue;
           if (STAT_FOLDED_KEYS.has(ep.key)) continue;
@@ -931,9 +936,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   } catch (_) { /* equipment 載入失敗不擋戰鬥 */ }
 
   // 火翼龍人卡：降低「對方(怪物)」治療效率 %（在所有怪物回血點折減）
-  const playerEnemyHealReductionPct = Math.min(100, (options.playerActiveEffects || [])
+  // 降低怪物治療（火翼龍人卡 enemy_heal_reduction）：支援「隊伍光環」——
+  // 自身被動(playerActiveEffects)或隊友提供的光環(partyEffects)任一來源皆可生效。
+  // 各來源「組內加總」後「跨來源取最大」：保留同源多張疊加，又避免自身被動與自己的光環重複計算。
+  const _healRedSum = (arr) => (Array.isArray(arr) ? arr : [])
     .filter((e) => e && e.key === "enemy_heal_reduction")
-    .reduce((s, e) => s + Math.abs(Number(e?.params?.value) || 0), 0));
+    .reduce((s, e) => s + Math.abs(Number(e?.params?.value) || 0), 0);
+  const playerEnemyHealReductionPct = Math.min(100, Math.max(
+    _healRedSum(options.playerActiveEffects),
+    _healRedSum(options.partyEffects)
+  ));
   const reduceMonsterHeal = (h) => {
     const n = Math.max(0, Math.round(Number(h) || 0));
     return playerEnemyHealReductionPct > 0
@@ -943,6 +955,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 龍翼魔法師卡：每回合清除自身負面狀態
   const playerCleanseSelf = (options.playerActiveEffects || []).some((e) => e && e.key === "cleanse_self");
   const PLAYER_DEBUFF_KEYS = ['poison','burn','bleed','shock_dot','curse_dot','stun','freeze','sleep','silence','slow','blind','fear','root','disarm','confuse','charm','dark_curse','atk_down','def_down','hit_down'];
+  // debuff_immunity（免疫負面，例如冰鱗龍人卡）擋的「異常類」負面：含沈默/DOT/降攻防/緩速等；
+  // 硬控（stun/freeze/sleep/fear/root/blind/disarm/confuse/charm/taunt）仍由 control_immunity 處理。
+  const DEBUFF_IMMUNITY_KEYS = ['silence','poison','burn','bleed','shock_dot','curse_dot','slow','dark_curse','atk_down','def_down','hit_down','agi_down'];
+  const playerHasDebuffImmunityActive = (round) => (options.playerActiveEffects || []).some((e) => {
+    if (!e || e.key !== 'debuff_immunity') return false;
+    const d = e.params?.duration || {};
+    if (d.mode === 'turns') return round <= (e.appliedAt || 1) + (d.value || 1);
+    return true;
+  });
 
   const roundLogs = [];
   const tierDamageMultiplier = Math.max(0.1, Number(pStats.tierDamageMultiplier) || 1);
@@ -1163,6 +1184,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       options.playerActiveEffects = options.playerActiveEffects.filter((e) => e && !PLAYER_DEBUFF_KEYS.includes(e.key));
       if (options.playerActiveEffects.length < beforeCleanse) {
         log.push(`✨ 你身上的負面狀態被淨化了！`);
+      }
+    }
+
+    // ── 免疫負面（debuff_immunity，例如冰鱗龍人卡）：每回合濾掉異常類負面（沈默/中毒/燒傷/流血/降攻防/緩速等）──
+    // 在 DOT 結算與沈默判定「之前」濾除，等於這些異常完全不生效；硬控仍由 control_immunity 處理。
+    if (Array.isArray(options.playerActiveEffects) && playerHasDebuffImmunityActive(round)) {
+      const beforeImmune = options.playerActiveEffects.length;
+      options.playerActiveEffects = options.playerActiveEffects.filter((e) => e && !DEBUFF_IMMUNITY_KEYS.includes(e.key));
+      if (options.playerActiveEffects.length < beforeImmune) {
+        log.push(`🛡️ **免疫負面**！異常狀態被擋下。`);
       }
     }
 
@@ -1519,6 +1550,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (normalProcEffects.length > 0 && (cardCooldowns.monster[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
         if (Number(skill.cooldownTurns) > 0) cardCooldowns.monster[cooldownKey] = Number(skill.cooldownTurns);
         let appliedAnyNormalProc = false;
+        // 即時傷害/治療效果會自帶「發動【技能】…造成X傷害」的完整 log；
+        // 若有此類效果，回合結尾就不再補印通用「發動【技能】」行，避免同一技能顯示兩次（第二次無傷害）。
+        let loggedImmediateNormalProc = false;
 
         for (const procEffect of normalProcEffects) {
           if (!procEffect || !procEffect.key) continue;
@@ -1552,6 +1586,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             log
           })) {
             appliedAnyNormalProc = true;
+            loggedImmediateNormalProc = true;
             continue;
           }
           const effectEntry = makeCardEffectEntry(
@@ -1576,6 +1611,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             log
           })) {
             appliedAnyNormalProc = true;
+            loggedImmediateNormalProc = true;
             continue;
           }
           if (effectEntry.params.mode === 'caster_atk_pct') effectEntry.params.casterAtk = adjustedMCalc.atk || mCalc.atk || 1;
@@ -1591,7 +1627,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             appliedAnyNormalProc = true;
           }
         }
-        if (appliedAnyNormalProc) {
+        if (appliedAnyNormalProc && !loggedImmediateNormalProc) {
           log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
         }
       }
@@ -1994,6 +2030,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerDefDownPct = 0;
     let playerDefFlatBonus = 0;
     let playerDodgeBonus = 0;
+    let playerBlockBonus = 0;
     let playerHitPenalty = 0;
     let playerDefIgnorePct = 0;
     let playerDamageReductionPct = 0;
@@ -2093,6 +2130,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           playerDodgeBonus += Math.abs(effValue);
         } else if (eff.key === 'agi_up') {
           playerDodgeBonus += Math.abs(effValue) * 0.5;
+        } else if (eff.key === 'block_chance_up') {
+          // 主動技能臨時格擋率提升（例如劍士「舉步若堅」）
+          playerBlockBonus += Math.abs(effValue);
         } else if (eff.key === 'hit_down' || eff.key === 'hit_rate_down') {
           playerHitPenalty += Math.abs(effValue);
         } else if (eff.key === 'def_ignore') {
@@ -2392,6 +2432,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const finalDef = Math.max(0, effectiveDef * (1 - combinedBypassPct / 100));
 
         let conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
+        // 怪物圖鑑加成：對該怪累積擊殺愈多,傷害愈高（最高 +30%；由呼叫端依玩家進度計算後傳入）
+        const _bestiaryBonusPct = Math.max(0, Math.min(30, Number(options.bestiaryBonusPct) || 0));
+        if (_bestiaryBonusPct > 0) {
+          conditionalBonusMultiplier *= (1 + _bestiaryBonusPct / 100);
+        }
         if (playerBonusVsPoisonedPct > 0 && monsterActiveEffects.some(e => e.key === 'poison' && effectIsActive(e, round))) {
           conditionalBonusMultiplier *= (1 + playerBonusVsPoisonedPct / 100);
         }
@@ -2921,8 +2966,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const mForceHit = (mAtkTier === 'great' || mAtkTier === 'perfect');
 
       if (playerIsStunned || mForceHit || Math.random() * 100 < monsterHitChance) {
-        // 盾格擋判定
-        if (Math.random() * 100 < pStats.blockChance) {
+        // 盾格擋判定（含主動技能臨時格擋加成，例如劍士「舉步若堅」+25%，上限 95% 與被動一致）
+        if (Math.random() * 100 < Math.min(95, (pStats.blockChance || 0) + playerBlockBonus)) {
           blockedThisRound = true;
           combatStats.blockCount += 1;
           log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻擊被格擋，傷害降至 **1**！`);

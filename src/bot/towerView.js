@@ -3,7 +3,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const {
   TOWER_MAX_MEMBERS, TOWER_TOTAL_FLOORS, MAX_ROUNDS_PER_MEMBER,
-  getTowerFloorBuff, getCumulativePartyBonus,
+  getTowerFloorBuff, getCumulativePartyBonus, getTowerFloorBossName,
 } = require("../shared/towerConfig");
 
 // ── Button ID ─────────────────────────────────────────────────
@@ -92,7 +92,7 @@ function createTowerHallMessage(topRanking = []) {
     .setColor(0x5865f2)
     .setDescription(
       [
-        "**最多 6 人組隊，挑戰 41 層爬塔！**",
+        `**最多 6 人組隊，挑戰 ${TOWER_TOTAL_FLOORS} 層爬塔！**`,
         "按下開啟組隊後，論壇會自動建立你的隊伍貼文。",
         "其他冒險者進入貼文加入，隊長按開始後鎖定成員裝備。",
         "",
@@ -101,7 +101,8 @@ function createTowerHallMessage(topRanking = []) {
         "🔥 **11–20 層** 試煉深淵",
         "⚡ **21–30 層** 混沌邊境",
         "💀 **31–40 層** 滅世熔爐",
-        "👑 **41 層** 終焉魔王",
+        "🐲 **41–50 層** 龍族之領（50 層 龍王）",
+        "👑 **51 層** 大史王　**52 層** 古龍王",
         "",
         "**── 最高紀錄 ──**",
         ...rankLines,
@@ -151,7 +152,7 @@ function createTowerThreadLobbyMessage(session) {
         "> ⏳ 逾 10 分鐘無人開始自動解散",
       ].join("\n")
     )
-    .setFooter({ text: `共 ${TOWER_TOTAL_FLOORS} 層 · 第 41 層為終焉魔王` });
+    .setFooter({ text: `共 ${TOWER_TOTAL_FLOORS} 層 · 50 龍王 · 51 大史王 · 52 古龍王` });
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -245,7 +246,8 @@ function createTowerThreadBattleMessage(session) {
   const dispFloor  = Math.min(nextFloor, TOWER_TOTAL_FLOORS);
   const buff       = getTowerFloorBuff(dispFloor);
   const bonus      = getCumulativePartyBonus(nextFloor);
-  const isBossNext = nextFloor >= 41;
+  const nextBossName = getTowerFloorBossName(nextFloor);     // 龍王/大史王/古龍王...（非王關為 null）
+  const isBossNext = nextFloor >= 50;                        // 50/51/52 為龍王與雙世界王（高潮王關）
   const alreadyDone = clearedFloor >= TOWER_TOTAL_FLOORS;
   const isFighting  = state === "fighting";
 
@@ -294,7 +296,7 @@ function createTowerThreadBattleMessage(session) {
   const descLines = [
     `房間：\`${roomId}\`　已通關：**${clearedFloor} / ${TOWER_TOTAL_FLOORS}** 層`,
     !alreadyDone
-      ? `下一層：${isBossNext ? "👑 終焉魔王" : `${buff.emoji} **${buff.label}**`}　ATK +${bonus.atkPct}%・MaxHP +${bonus.hpPct}%`
+      ? `下一層：${isBossNext ? `👑 ${nextBossName || "終焉之王"}` : `${buff.emoji} **${buff.label}**`}　ATK +${bonus.atkPct}%・MaxHP +${bonus.hpPct}%`
       : "",
     "",
     "**── 隊伍成員 ──**",
@@ -320,7 +322,7 @@ function createTowerThreadBattleMessage(session) {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(TOWER_IDS.fightNext)
-      .setLabel(isBossNext ? "👑 挑戰終焉魔王！" : `⚔️ 攻略第 ${nextFloor} 層`)
+      .setLabel(isBossNext ? `👑 挑戰${nextBossName || "終焉之王"}！` : `⚔️ 攻略第 ${nextFloor} 層`)
       .setStyle(isBossNext ? ButtonStyle.Danger : ButtonStyle.Primary)
       .setDisabled(isFighting || alreadyDone),
     new ButtonBuilder()
@@ -403,7 +405,7 @@ function createTowerThreadResultMessage(session, reward) {
 function createTowerFloorReportMessage(floor, monster, scaledHp, fightResult, members) {
   const { rounds, monsterKilled, survived, monsterHpFinal } = fightResult;
   const buff    = getTowerFloorBuff(floor);
-  const isBoss  = floor >= 41;
+  const isBoss  = floor >= 50;
 
   // 每大回合格式化
   const roundLines = [];
@@ -499,8 +501,8 @@ function buildHpBar(cur, max, len = 8) {
 }
 
 function buildFloorProgress(cleared, current) {
-  const segs   = [[1, 10, "🌿"], [11, 20, "🔥"], [21, 30, "⚡"], [31, 40, "💀"], [41, 41, "👑"]];
-  const labels = ["初境", "深淵", "混沌", "熔爐", "魔王"];
+  const segs   = [[1, 10, "🌿"], [11, 20, "🔥"], [21, 30, "⚡"], [31, 40, "💀"], [41, 50, "🐲"], [51, 52, "👑"]];
+  const labels = ["初境", "深淵", "混沌", "熔爐", "龍領", "雙王"];
   return "進度：" + segs.map(([lo, hi, em], i) => {
     if (cleared >= hi) return `${em}${labels[i]}✅`;
     if (current >= lo) return `${em}${labels[i]}⚔️`;

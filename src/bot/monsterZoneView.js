@@ -160,9 +160,13 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   }
   const desc = descLines.join("\n");
 
+  // 世界王在標題顯示等級（一般區仍用 zone 等級限制 levelTag）
+  const bossLevelTag = (isWorldBossZone(zoneKey) && monster && Number(monster.level) > 0)
+    ? ` Lv.${Number(monster.level)}`
+    : "";
   const panelTitle = showEliteWaitingState
     ? `${zoneTheme.emoji} 世界BOSS 未現身`
-    : `${zoneTheme.emoji} ${monsterName}`;
+    : `${zoneTheme.emoji} ${monsterName}${bossLevelTag}`;
 
   const embed = new EmbedBuilder()
     .setTitle(panelTitle)

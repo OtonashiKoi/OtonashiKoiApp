@@ -129,19 +129,35 @@ class PetService {
     const elapsedHr = Math.max(0, (now - last) / 3_600_000);
     if (elapsedHr <= 0) return pet;
 
-    // 飽食度每小時下降固定量；滿值時前 12 小時為緩衝（不扣等）
-    const SATIETY_DECAY_PER_HOUR = SATIETY_MAX / HUNGER_GRACE_HOURS; // 12 小時掉光
-    const newSatiety = Math.max(0, (Number(pet.satiety) || 0) - elapsedHr * SATIETY_DECAY_PER_HOUR);
+    // 飽食度每小時下降固定量；滿值約撐 HUNGER_GRACE_HOURS 小時（這段飽食 > 0、不扣等）
+    const SATIETY_DECAY_PER_HOUR = SATIETY_MAX / HUNGER_GRACE_HOURS;
+    const prevSatiety = Number(pet.satiety) || 0;
+    const newSatiety = Math.max(0, prevSatiety - elapsedHr * SATIETY_DECAY_PER_HOUR);
 
-    // 飽食歸零後的「飢餓時數」→ 掉等
-    if (newSatiety <= 0 && (Number(pet.satiety) || 0) <= 0) {
-      // 已經餓著的期間，每小時掉 1 級（最低 Lv.1）
-      const starveHr = elapsedHr;
-      const levelsLost = Math.floor(starveHr);
-      if (levelsLost > 0 && pet.stage === "grown") {
-        pet.level = Math.max(1, (Number(pet.level) || 1) - levelsLost);
-        pet.growthExp = 0;
+    if (newSatiety <= 0) {
+      // 飽食歸零 → 以「starveSince（開始挨餓的時刻）」為基準，用『總挨餓時數』算掉等。
+      // 這樣不論玩家多常看面板/領採集（每次都會懶結算），都依實際餓置時間累計掉等，
+      // 不會再因為「每次結算間隔 < 1 小時、floor() = 0」而永遠不掉。
+      if (!pet.starveSince) {
+        // 飽食是在本區間內某一刻歸零的：prevSatiety 還能撐 hoursUntilEmpty 小時
+        const hoursUntilEmpty = SATIETY_DECAY_PER_HOUR > 0 ? (prevSatiety / SATIETY_DECAY_PER_HOUR) : 0;
+        pet.starveSince = last + hoursUntilEmpty * 3_600_000;
+        pet.starveLevelsLost = 0;
       }
+      if (pet.stage === "grown") {
+        const totalStarveHr = Math.max(0, (now - Number(pet.starveSince)) / 3_600_000);
+        const shouldHaveLost = Math.floor(totalStarveHr); // 每餓滿 1 小時掉 1 級
+        const newLoss = shouldHaveLost - (Number(pet.starveLevelsLost) || 0);
+        if (newLoss > 0) {
+          pet.level = Math.max(1, (Number(pet.level) || 1) - newLoss);
+          pet.growthExp = 0;
+          pet.starveLevelsLost = shouldHaveLost;
+        }
+      }
+    } else {
+      // 還有飽食 → 結束挨餓追蹤
+      pet.starveSince = null;
+      pet.starveLevelsLost = 0;
     }
     pet.satiety = newSatiety;
     pet.lastSatietyAt = now;
@@ -312,6 +328,7 @@ class PetService {
         const after = Math.min(SATIETY_MAX, before + satietyGain);
         const usedForSatiety = after - before;
         pet.satiety = after;
+        if (after > 0) { pet.starveSince = null; pet.starveLevelsLost = 0; } // 餵到有飽食 → 結束挨餓追蹤
         totalSatiety += usedForSatiety;
         if (after >= SATIETY_MAX) {
           // 飽食已滿 → 這件的成長 exp 生效

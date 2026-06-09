@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
-const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handlePresetSwitchSelect, handleBackpackTabSelect, handleWeeklyQuests, handleEnhanceSelect, handleModal: handlePlayerPanelModal } = require("./playerPanel");
+const { createPlayerPanelMessage, handleButton: handlePlayerPanelButton, handleEquipmentSelect, handlePresetSwitchSelect, handleBackpackTabSelect, handleBestiaryZoneSelect, handleWeeklyQuests, handleEnhanceSelect, handleModal: handlePlayerPanelModal } = require("./playerPanel");
 const { WEEKLY_QUEST_OPEN_ID, DAILY_QUEST_OPEN_ID } = require("./weeklyQuestView");
 const { createPlayerQueryPanelMessage, handlePlayerQueryButton } = require("./playerQueryPanelView");
 const { serviceContext, getBotClient } = require("./runtimeContext");
@@ -248,6 +248,10 @@ async function handleSelectMenu(interaction) {
   }
   if (interaction.customId.startsWith("backpack_tab_select:")) {
     await handleBackpackTabSelect(interaction);
+    return;
+  }
+  if (interaction.customId === "bestiary_zone") {
+    await handleBestiaryZoneSelect(interaction);
     return;
   }
   if (interaction.customId.startsWith("auction:filter_select:")) {

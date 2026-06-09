@@ -586,6 +586,7 @@ function attackerTurn({
   let defFlatBonus = 0;
   let damageRedPct = 0;
   let defDodgeBonus= 0;
+  let defBlockBonus= 0;
 
   for (const eff of defActive) {
     if (!eff || !effectIsActive(eff, round)) continue;
@@ -601,6 +602,7 @@ function attackerTurn({
       case 'agi_up':         defDodgeBonus += Math.abs(v) * 0.5; break;
       case 'dodge_down':     defDodgeBonus -= Math.abs(v); break;
       case 'agi_down':       defDodgeBonus -= Math.abs(v) * 0.5; break;
+      case 'block_chance_up': defBlockBonus += Math.abs(v); break; // 主動技能臨時格擋（劍士「舉步若堅」）
       case 'invincible_short': damageRedPct += 100; break;
       case 'damage_taken_up': damageRedPct -= Math.abs(v); break; // 被動增傷（負減免）
       case 'final_damage_down': damageRedPct += Math.abs(v); break;
@@ -717,7 +719,8 @@ function attackerTurn({
 
     let wasBlocked = false;
     let blockNote = "";
-    if (defStats.blockChance > 0 && Math.random() * 100 < defStats.blockChance) {
+    const effBlockChance = Math.min(95, (defStats.blockChance || 0) + defBlockBonus);
+    if (effBlockChance > 0 && Math.random() * 100 < effBlockChance) {
       wasBlocked = true;
       blockNote = `，但 **${defName}** ${rand(BLOCK_PHRASES)}`;
     }

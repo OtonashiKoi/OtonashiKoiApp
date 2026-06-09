@@ -12,6 +12,7 @@ const { setTowerPresence, isTowerBattleActive } = require("../../shared/battlePr
 const {
   TOWER_MAX_MEMBERS,
   TOWER_TOTAL_FLOORS,
+  TOWER_FLOOR_BOSS,
   TOWER_LOBBY_TIMEOUT_MS,
   MAX_ROUNDS_PER_MEMBER,
   TOWER_MIN_LEVEL,
@@ -57,6 +58,7 @@ function serializeSession(session) {
     clearedFloor:    session.clearedFloor,
     currentMonster:  session.currentMonster,
     lastFloorResult: session.lastFloorResult || null,
+    floorResults:    Array.isArray(session.floorResults) ? session.floorResults : [],
     failReason:      session.failReason || null,
     savedAt:         new Date().toISOString(),
   };
@@ -250,22 +252,14 @@ let _cachedMonstersByZone = null;
 let _cachedBossMap = null;
 
 // ── 爬塔怪物池 ──────────────────────────────────────────────────
-// 層段對應 zone，每段最後一層固定出指定 Boss
-// 廢都魔王(B) 強度過高不列入爬塔
-const TOWER_FLOOR_BOSS = {
-  10: "大野兔(B)",
-  20: "米拉桑(B)",
-  30: "古城將軍(B)",
-  40: "城堡魔像(B)",
-  41: "大史王",
-};
-
+// 層段對應 zone，每段最後一層固定出指定 Boss（TOWER_FLOOR_BOSS 來自 towerConfig 單一來源）
 const TOWER_FLOOR_ZONE = (floor) => {
   if (floor <= 10) return "beginner";
   if (floor <= 20) return "normal";          // 11-19 用 normal
   if (floor <= 30) return "mid";             // 21-29 用 mid
   if (floor <= 35) return "ancient_city";    // 31-35 古城
-  return "ancient_city_deep";                // 36-40 古城深處
+  if (floor <= 40) return "ancient_city_deep"; // 36-40 古城深處
+  return "dragon_realm";                     // 41-50 龍族之領（51 大史王／52 古龍王 走固定王關）
 };
 
 // 排除不應出現在一般層的怪
@@ -603,62 +597,6 @@ function buildTowerFloorSummary(stats, auraLines = []) {
   };
 }
 
-function applyMonsterTeamAttack(session, mCalc, partyEffects, floor) {
-  const { damageReductionPct, critReductionPct } = getTowerPartyDefense(partyEffects);
-  const baseAtk   = Math.max(1, Number(mCalc.atk || 1));
-  const critRate  = Math.max(0, Number(mCalc.critRate || 0));
-  const monsterHit = Math.min(100, Math.max(0, Number(mCalc.hit || 80)));
-  const isCrit    = Math.random() * 100 < critRate;
-  const hits      = [];
-  const monsterLevel = Math.max(1, Number(mCalc.level || 1));
-
-  // 等級壓制（與 PvE/PvP 對齊；高打低 +0~+20%，低打高 -0~-50%）
-  const TOWER_LEVEL_DIFF_PCT = 2;
-  const TOWER_LEVEL_DIFF_CAP_UP = 20;
-  const TOWER_LEVEL_DIFF_CAP_DOWN = 50;
-  const levelMultFor = (atkLv, dstLv) => {
-    const diff = Math.max(1, atkLv || 1) - Math.max(1, dstLv || 1);
-    if (diff >= 0) return 1 + Math.min(TOWER_LEVEL_DIFF_CAP_UP, diff * TOWER_LEVEL_DIFF_PCT) / 100;
-    return 1 - Math.min(TOWER_LEVEL_DIFF_CAP_DOWN, -diff * TOWER_LEVEL_DIFF_PCT) / 100;
-  };
-
-  for (const member of session.members) {
-    if (!member || member.currentHp <= 0) continue;
-    const stats   = getEffectiveMemberStats(member, partyEffects);
-    const defPct  = Math.min(75, Math.max(0, Number(stats.def || 0)));
-    const flatDef = Math.max(0, Number(stats.flatDef || 0));
-    const dodge   = Math.min(95, Math.max(0, Number(stats.dodge || 0)));
-    const missChance = Math.max(0, dodge - monsterHit + 70); // 基準命中 70，超出部分才閃
-    if (Math.random() * 100 < missChance) {
-      hits.push({ name: member.name, damage: 0, dodged: true, hp: member.currentHp, maxHp: member.maxHp, dead: false });
-      continue;
-    }
-    // 新公式：(baseAtk × levelMult − flatDef) × (1 − defPct/100)
-    const lvMult = levelMultFor(monsterLevel, member.level);
-    let damage = Math.max(0, baseAtk * lvMult - flatDef) * (1 - defPct / 100);
-    if (isCrit) damage *= Math.max(1, 1.5 - critReductionPct / 100);
-    damage *= (1 - Math.min(90, Math.max(0, damageReductionPct)) / 100);
-    damage = Math.max(1, Math.round(damage));
-    member.currentHp = Math.max(0, member.currentHp - damage);
-    hits.push({ name: member.name, damage, dodged: false, hp: member.currentHp, maxHp: member.maxHp, dead: member.currentHp <= 0 });
-  }
-
-  const hitSummary = hits
-    .map((h) => h.dodged ? `${h.name}閃避` : `${h.name}-${h.damage}${h.dead ? "💀" : ""}`)
-    .join("、");
-  return {
-    type: "monster",
-    name: "怪物",
-    floor,
-    isCrit,
-    damageReductionPct,
-    hits,
-    summary: hits.length
-      ? `怪物全隊攻擊${isCrit ? "（暴擊）" : ""}：${hitSummary}`
-      : "怪物行動，但沒有可攻擊的存活隊員。"
-  };
-}
-
 // ── 單層戰鬥結算（全職業完整邏輯） ──────────────────────────
 // 依 AGI 速度條輪流出手；高 AGI 會更快回到行動點。
 // 怪物殘血與怪物身上的 debuff / stun 會在全隊之間共享。
@@ -666,19 +604,14 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
   const floor  = session.currentFloor;
   const bonus  = getCumulativePartyBonus(floor);
 
-  // 怪物 calc 格式（runCombatLoop 需要 mCalc）
-  // 全部從 monster.calc 讀取（effectiveCalc 已計算完整屬性）
+  // 完整帶入 monster.calc：level / flatDef / int / dmgMin/dmgMax / dodge / hit / critRate / defIgnorePct … 全部沿用真實值，
+  // 只有 atk / maxHp 依樓層縮放。確保塔的攻防邏輯（等級壓制、固定減傷等）與世界王 / 一般 PvE 完全一致，
+  // 不再因為手挑欄位而漏掉 level（被當 1 級）或 flatDef（被當 0）。
   const calc = monster.calc || {};
   const mCalc = {
+    ...calc,
     atk:          scaledAtk,
-    def:          calc.def          ?? monster.def ?? 0,
-    agi:          calc.agi          ?? monster.agi ?? 1,
     maxHp:        scaledHp,
-    dodge:        calc.dodge        ?? 0,
-    hit:          calc.hit          ?? 80,
-    defIgnorePct: calc.defIgnorePct ?? 0,
-    critRate:     calc.critRate     ?? 0,
-    comboChance:  calc.comboChance  ?? 0,
     finalDamageMultiplier: 1,
   };
 
@@ -720,17 +653,10 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
             index,
           };
         }),
-      {
-        type: "monster",
-        id: "monster",
-        name: monster.name,
-        agi: Number(mCalc.agi || 0),
-        dex: Number(mCalc.dex || 0),
-        speed: 100 + Math.max(0, Number(mCalc.agi || 0)),
-        index: 999,
-      }
     ];
-    if (actors.length <= 1) break;
+    // 王不再單獨佔一個行動格；改為在「每位成員出戰」時，由 runCombatLoop 正常回擊該成員，
+    // 這樣攻、防兩個方向都走同一套引擎（與世界王 / 一般 PvE 完全一致）。行動軸（誰先動）不變。
+    if (actors.length === 0) break;
 
     const nextNeed = Math.min(...actors.map((actor) => (1000 - (gauges.get(actor.id) || 0)) / Math.max(1, actor.speed)));
     for (const actor of actors) gauges.set(actor.id, (gauges.get(actor.id) || 0) + actor.speed * nextNeed);
@@ -741,34 +667,6 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     gauges.set(actor.id, (gauges.get(actor.id) || 0) - 1000);
     totalActions += 1;
     tickTowerCardCooldowns(session.members);
-
-    if (actor.type === "monster") {
-      if (stunRoundsLeft > 0) {
-        stunRoundsLeft -= 1;
-        memberLogs.push({
-          type: "monster",
-          name: monster.name,
-          agi: actor.agi,
-          logs: [`😵 ${monster.name} 處於暈眩狀態，本次行動跳過。${stunRoundsLeft > 0 ? `（剩 ${stunRoundsLeft} 次）` : ""}`],
-          monsterHpAfter: monsterHp,
-          partyHpAfter: session.members.map((m) => ({ name: m.name, hp: m.currentHp, maxHp: m.maxHp })),
-        });
-        continue;
-      }
-      const attack = applyMonsterTeamAttack(session, mCalc, partyEffects, floor);
-      for (const hit of attack.hits || []) {
-        const target = session.members.find((member) => member.name === hit.name);
-        if (target) addTowerStat(floorStats, target.discordId, "damageTaken", hit.damage);
-      }
-      memberLogs.push({
-        ...attack,
-        agi: actor.agi,
-        logs: [attack.summary],
-        monsterHpAfter: monsterHp,
-        partyHpAfter: session.members.map((m) => ({ name: m.name, hp: m.currentHp, maxHp: m.maxHp })),
-      });
-      continue;
-    }
 
     const m = actor.member;
     const healed = applyTowerPartyHealing(session.members, partyEffects);
@@ -802,9 +700,10 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     };
     const beforeMonsterHp = monsterHp;
     const beforePlayerHp = m.currentHp;
+    // 同一套攻防：本回合該成員打王、王也回擊該成員（王用完整真實數值，含等級壓制/flatDef/破防/格擋/階級骰）
     const result = runCombatLoop(
       effStats,
-      { ...mCalc, atk: 0, monsterAttackCount: 0 },
+      mCalc,
       monster.name,
       scaledHp,
       1,
@@ -845,6 +744,8 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     monsterHpFinal: monsterHp,
     actionOrder: initialActionOrder,
     summary: buildTowerFloorSummary(floorStats, floorAuraLines),
+    // 稽核用：每人原始輸出（含溢傷，不被怪剩血夾住），用來抓「單人傷害爆量」的異常
+    memberDamage: [...floorStats.values()].map((s) => ({ discordId: s.discordId, name: s.name, damageDealt: Math.round(s.damageDealt || 0) })),
   };
 }
 
@@ -911,6 +812,35 @@ async function processNextFloor(session) {
     monsterHpFinal: fightResult.monsterHpFinal,
     summary:       fightResult.summary,
   };
+
+  // ── 攻塔稽核 LOG：每層累積一筆（可事後查「怪有沒有真的被打死」）──
+  if (!Array.isArray(session.floorResults)) session.floorResults = [];
+  {
+    const _hpFinal = Math.max(0, Math.round(Number(fightResult.monsterHpFinal) || 0));
+    const _hpDrained = Math.max(0, Math.round(scaledHp - (Number(fightResult.monsterHpFinal) || 0)));
+    const _memberDamage = Array.isArray(fightResult.memberDamage) ? fightResult.memberDamage : [];
+    const _topHit = _memberDamage.reduce((mx, d) => Math.max(mx, Number(d.damageDealt) || 0), 0);
+    const _actions = Number(fightResult.totalRounds) || 0;
+    const _killed = Boolean(fightResult.monsterKilled);
+    // 異常旗標：①宣稱擊殺但怪還有血(資料矛盾=怪沒死也通) ②高樓層卻在「行動格≤隊伍人數」內擊殺(一擊秒殺類)
+    const _suspicious = (_killed && _hpFinal > 0) ||
+      (_killed && floor >= 15 && _actions <= session.members.length);
+    session.floorResults.push({
+      floor,
+      monster: monster.name,
+      scaledHp: Math.round(scaledHp),
+      monsterHpFinal: _hpFinal,
+      hpDrained: _hpDrained,             // 實際扣掉的血(上限=scaledHp)
+      topHit: Math.round(_topHit),       // 單人最高貢獻
+      memberDamage: _memberDamage,       // 每人貢獻分佈(定位異常輸出者)
+      monsterKilled: _killed,
+      survived: Boolean(fightResult.survived),
+      actions: _actions,                 // 總行動格(合法高樓層需大量行動)
+      survivors: session.members.filter((m) => m.currentHp > 0).length,
+      partySize: session.members.length,
+      suspicious: _suspicious,
+    });
+  }
 
   if (!fightResult.monsterKilled || !fightResult.survived) {
     session.failReason = !fightResult.monsterKilled
@@ -1124,11 +1054,13 @@ async function settleTowerSession(session, reward) {
 
       // 發放過關 Buff（刷新模式，condition: zone=monster）
       if (clearBuff) {
+        // 過關祝福為限定時間增益，發放後在後續戰鬥皆生效。
+        // 註：原本帶 condition:{zone:["monster"]} 會在「發放當下（無戰鬥 context）」就被 isEffectConditionMet 判不符而整個跳過，
+        //     導致 buff 根本沒寫進 activeEffects；且 "monster" 並非任何真實 zone key。故移除該條件。
         const effectsToApply = clearBuff.effects.map((e) => ({
           ...e,
           duration: { mode: "seconds", value: clearBuff.durationSec },
           stackMode: "refresh",
-          condition: { zone: ["monster"] },
         }));
         prog.activeEffects = applyEffectInstances(
           prog.activeEffects || [],
@@ -1176,6 +1108,31 @@ async function settleTowerSession(session, reward) {
         floor: session.clearedFloor,
       });
     } catch (_e) { /* 寫入失敗不影響主流程 */ }
+  }
+
+  // ── 攻塔稽核 LOG：每次結束（通關或失敗）寫入完整逐層紀錄，可事後查證 ──
+  try {
+    const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+    const mongoDb = await getMongoDb();
+    const floors = Array.isArray(session.floorResults) ? session.floorResults : [];
+    const suspicious = floors.filter((f) => f.suspicious);
+    await mongoDb.collection("towerRunLogs").insertOne({
+      runId,
+      settledAt,
+      status: session.state,                 // done | failed
+      clearedFloor: session.clearedFloor,
+      totalFloors: TOWER_TOTAL_FLOORS,
+      failReason: session.failReason || null,
+      party: partySnapshot,
+      floors,
+      suspiciousCount: suspicious.length,     // >0 代表有「1 回合或傷害異常爆量」的可疑層，需人工複查
+      createdAt: new Date().toISOString(),
+    });
+    if (suspicious.length > 0) {
+      console.warn(`[Tower][AUDIT] runId=${runId} 有 ${suspicious.length} 層可疑（1回合或傷害爆量）：${suspicious.map((f) => `F${f.floor}`).join(",")}`);
+    }
+  } catch (e) {
+    console.error("[Tower] towerRunLogs write failed:", e?.message || e);
   }
 
   for (const m of session.members) {
@@ -1725,6 +1682,7 @@ async function restoreTowerSessions() {
         clearedFloor:    data.clearedFloor || 0,
         currentMonster:  data.currentMonster || null,
         lastFloorResult: data.lastFloorResult || null,
+        floorResults:    Array.isArray(data.floorResults) ? data.floorResults : [],
         failReason:      data.failReason || null,
         lobbyTimer:      null,
       };
@@ -2082,4 +2040,7 @@ module.exports = {
   publishTowerHallPanelToChannel,
   restoreTowerSessions,
   getTowerDiagnostics,
+  // 測試用(模擬塔)：暫時導出內部函式
+  fightFloor,
+  pickFloorMonster,
 };

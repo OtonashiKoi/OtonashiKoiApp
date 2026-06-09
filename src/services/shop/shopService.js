@@ -14,6 +14,7 @@ const GEM_ID_BY_TIER = {
   C: "556db9e1-b084-4b22-bab5-a66c2b586184",
   B: "8fdfa7d9-f0fa-4e6a-a291-703b1e354072",
   A: "a6ae293d-52fc-4af5-8770-891ddf842e35",
+  S: "gem-s-tier",
 };
 // 分解產物：裝備階級 → 降一階寶石 × 數量（D 為最低，給 1 顆 D 寶石保底）
 const DISMANTLE_YIELD = {
@@ -589,7 +590,8 @@ class ShopService {
       '72fde92d-e33f-42fb-8d86-2e811d03f84d', // D
       '556db9e1-b084-4b22-bab5-a66c2b586184', // C
       '8fdfa7d9-f0fa-4e6a-a291-703b1e354072', // B
-      'a6ae293d-52fc-4af5-8770-891ddf842e35'  // A
+      'a6ae293d-52fc-4af5-8770-891ddf842e35', // A
+      'gem-s-tier'                            // S
     ]);
     const CAS_MAX_RETRIES = 8;
 
@@ -597,10 +599,14 @@ class ShopService {
     let savedEffect = null;
     let savedUseEffects = [];
     let savedEffectDesc = "";
+    let savedChestReward = null;
     let casSuccess = false;
 
     // CAS 重試：避免與 grantExp、其他 progress 寫入衝突
     await withPlayerProgressLock(discordId, async () => {
+      // 世界王寶箱：抽中的獎勵只擲一次，CAS 重試時沿用同一結果（避免重試重抽不公平）
+      let chestRolledEntry = undefined;
+      let chestRewardInfo = null;
       for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
       const progress = await this.progressRepository.findByPlayerId(discordId);
       if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
@@ -678,6 +684,22 @@ class ShopService {
           ? dropped.map(({ key, amount }) => `${key.toUpperCase()}-${amount}`).join("、")
           : "沒有可再下降的屬性";
         effectDesc = `☯️ 等級下降至 Lv.${next.level}，並隨機失去 ${droppedText}。`;
+      } else if (effect.type === "open_world_boss_chest") {
+        // 世界王寶箱：依該世界王掉落率比重，隨機獲得一份掉落物（與該王即時掉落表同步）
+        if (chestRolledEntry === undefined) {
+          const rolled = await this._rollWorldBossChest(effect.monsterId);
+          if (!rolled) {
+            throw new AppError(ERROR_CODES.INTERNAL_ERROR, "寶箱掉落表讀取失敗，請稍後再試。", 500);
+          }
+          chestRolledEntry = rolled.entry;
+          chestRewardInfo = {
+            chestName: entry.itemName,
+            rewardItemName: rolled.entry.itemName,
+            bossName: effect.bossName || "世界王",
+          };
+        }
+        next.inventory.push({ ...chestRolledEntry });
+        effectDesc = `🎁 開啟 **${entry.itemName}**，獲得 **${chestRewardInfo.rewardItemName}**！`;
       }
 
       const autoRemovedJobBadge = this._autoUnequipJobBadgeIfNeeded(next);
@@ -704,6 +726,7 @@ class ShopService {
         savedEffect = effect;
         savedUseEffects = useEffects;
         savedEffectDesc = effectDesc;
+        savedChestReward = chestRewardInfo;
         casSuccess = true;
         break;
       }
@@ -737,7 +760,56 @@ class ShopService {
       savedEffectDesc = savedEffectDesc ? `${savedEffectDesc} / ${statusLine}` : statusLine;
     }
 
-    return { itemName: savedEntry.itemName, effectDesc: savedEffectDesc };
+    return { itemName: savedEntry.itemName, effectDesc: savedEffectDesc, chestReward: savedChestReward };
+  }
+
+  // 世界王寶箱抽獎：讀該世界王怪物的即時掉落表，依 chance 權重抽一份，建成背包 entry
+  async _rollWorldBossChest(monsterId) {
+    const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+    const db = await getMongoDb();
+    const mon = await db.collection("monsters").findOne({ id: monsterId });
+    // 寶箱獎池排除 S 階強化寶石（S 寶石只走世界王實戰掉落，維持稀有，不從寶箱大量產出）
+    const CHEST_EXCLUDE_IDS = new Set(["gem-s-tier"]);
+    const drops = Array.isArray(mon?.drops)
+      ? mon.drops.filter((d) => d && d.itemId && (Number(d.chance) > 0) && !CHEST_EXCLUDE_IDS.has(d.itemId))
+      : [];
+    if (!drops.length) return null;
+
+    const total = drops.reduce((s, d) => s + (Number(d.chance) || 0), 0);
+    let r = Math.random() * total;
+    let picked = drops[drops.length - 1];
+    for (const d of drops) {
+      r -= (Number(d.chance) || 0);
+      if (r <= 0) { picked = d; break; }
+    }
+
+    const item = await this.itemRepository.findById(picked.itemId).catch(() => null);
+    const equipStats = item?.equipStats ? { ...item.equipStats } : {};
+    const entry = {
+      uuid: crypto.randomUUID(),
+      itemId: item?.id || picked.itemId,
+      itemName: item?.name || picked.itemName || "神秘道具",
+      itemEffect: item?.effect || { type: "none", value: 0 },
+      useEffects: item?.useEffects || [],
+      passiveEffects: item?.passiveEffects || [],
+      procEffects: item?.procEffects || [],
+      combatEffects: item?.combatEffects || [],
+      itemType: item?.itemType || "consumable",
+      imageUrl: item?.imageUrl || null,
+      imageThumbnailUrl: item?.imageThumbnailUrl || null,
+      equipSlot: item?.equipSlot || null,
+      equipStats,
+      weaponType: item?.weaponType || null,
+      isTwoHanded: item?.isTwoHanded || false,
+      atkStat: item?.atkStat || null,
+      tier: item?.tier || null,
+      monsterCardSkill: item?.monsterCardSkill || null,
+      enhanceLevel: 0,
+      source: "world_boss_chest",
+      sourceRef: monsterId,
+      purchasedAt: new Date().toISOString(),
+    };
+    return { entry, itemName: entry.itemName };
   }
 
   async sellItem(discordId, entryUuid) {
@@ -1101,7 +1173,10 @@ class ShopService {
       }
     }
 
+    const _nowTs = new Date().toISOString();
     const current = progress.equipment[slot] || null;
+    if (current) current.unequippedAt = _nowTs;   // 被換下的裝備：記脫下時間（換裝排序用）
+    freshEntry.equippedAt = _nowTs;                // 換上的裝備：記穿上時間
     progress.inventory.splice(idx, 1);
     if (current) progress.inventory.push(current);
     progress.equipment[slot] = freshEntry;
@@ -1126,6 +1201,7 @@ class ShopService {
     const equipped = progress.equipment?.[slot];
     if (!equipped) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "此槽位沒有裝備", 404);
     if (!Array.isArray(progress.inventory)) progress.inventory = [];
+    equipped.unequippedAt = new Date().toISOString();   // 記脫下時間（換裝排序用）
     progress.inventory.push(equipped);
     progress.equipment[slot] = null;
     progress.updatedAt = new Date().toISOString();
