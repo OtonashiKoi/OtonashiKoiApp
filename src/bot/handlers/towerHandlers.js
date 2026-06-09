@@ -7,6 +7,7 @@ const { calcPlayerStats } = require("../../shared/combatStats");
 const { mergeEquippedFromLibrary, applyEffectInstances, applyEffectsToStats, collectEquipmentEffects, isEffectConditionMet } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffect } = require("../../shared/supportAuraScaling");
 const { runCombatLoop } = require("../../shared/combatLoop");
+const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { setTowerPresence, isTowerBattleActive } = require("../../shared/battlePresence");
 const {
@@ -908,6 +909,9 @@ async function awardFloorCardDrops(session, monster) {
   for (const drop of pool) {
     const item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
     if (!item) continue;
+    // S 階（S 裝備 / S 強化寶石）只走世界王機制：一般樓層不掉；
+    // 但塔內的「世界王樓層」(大史王 51 / 古龍王 52，zone elite / dragon_king_lair) 比照外面、照掉落表掉 S。
+    if (String(item.tier || "").toUpperCase() === "S" && !isWorldBossZone(monster?.zone)) continue;
     const finalChance = Math.min(100, Math.max(0, Number(drop.chance)));
     if (Math.random() * 100 < finalChance) {
       const equipStats = item.equipStats ? { ...item.equipStats } : {};
