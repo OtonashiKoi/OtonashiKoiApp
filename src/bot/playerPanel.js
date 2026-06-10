@@ -1094,6 +1094,7 @@ function groupEquipmentItems(items, tab) {
         enhanceLevel: enh,
         equipStats: entry.equipStats || null,
         passiveEffects: Array.isArray(entry.passiveEffects) ? entry.passiveEffects : [],
+        monsterCardSkill: entry.monsterCardSkill || null, // 保留卡片技能,供背包列表顯示效果說明
         sellPrice,
         imageUrl: entry.imageUrl || "",
         count: 0,
@@ -1364,9 +1365,13 @@ function buildBackpackMessage(inventory, tab = "item", prefixMsg, page = 0, subT
       const tierPart = e.tier ? ` [${String(e.tier).toUpperCase()}階]` : "";
       const traitNames = (e.passiveEffects || []).map((pe) => EFFECT_NAME_ZH[pe?.key]).filter(Boolean);
       const traitPart = traitNames.length ? `｜✨${traitNames.slice(0, 3).join("、")}` : "";
+      // 卡片：附上技能效果簡易說明(跟龍族卡一樣)
+      const cardSkill = e.monsterCardSkill || (Array.isArray(e.items) && e.items[0]?.monsterCardSkill) || null;
+      const cardDesc = cardSkill ? String(cardSkill.description || cardSkill.name || "") : "";
+      const cardPart = cardDesc ? `｜🎴 ${cardDesc.length > 60 ? cardDesc.slice(0, 59) + "…" : cardDesc}` : "";
       const overMax = enhLv > MAX_ENHANCE_LEVEL ? ` ⚠️超過上限(+${MAX_ENHANCE_LEVEL})` : "";
       const price = e.sellPrice != null ? `售 ${e.sellPrice}💰/件` : "不可販售";
-      lines.push(`${offset + i + 1}. **${baseName}**${enh}${tierPart}${slot}${statsPart}${traitPart}｜${price}${overMax} ×${e.count}`);
+      lines.push(`${offset + i + 1}. **${baseName}**${enh}${tierPart}${slot}${statsPart}${traitPart}${cardPart}｜${price}${overMax} ×${e.count}`);
       return;
     }
 
@@ -3256,10 +3261,14 @@ async function handleEquipSlotButton(interaction, slot, page = 0) {
   pageItems.forEach(e => {
     const stats = e.equipStats || {};
     const statStr = Object.entries(stats).filter(([,v])=>v).map(([k,v])=>`${k.toUpperCase()}${v>0?"+":""}${v}`).join(" ");
-    const cardStr = e.monsterCardSkill?.name ? `🎴 ${e.monsterCardSkill.name}` : "";
+    // 卡片：顯示技能效果簡易說明（跟已裝備區一樣），讓選裝時就看得到效果
+    const skill = e.monsterCardSkill || null;
+    const cardStr = skill
+      ? (skill.description ? `🎴 ${skill.description}` : (skill.name ? `🎴 ${skill.name}` : ""))
+      : "";
     options.push({
       label: getItemLabel(e).slice(0, 25),
-      description: (statStr || cardStr || "點此裝備").slice(0, 50),
+      description: (statStr || cardStr || "點此裝備").slice(0, 95),
       value: `equip:${e.uuid}`
     });
   });

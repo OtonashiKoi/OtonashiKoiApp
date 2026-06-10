@@ -12,20 +12,20 @@ const { runCombatLoop } = require("../src/shared/combatLoop");
 const { createServiceContext } = require("../src/services/createServiceContext");
 
 const MAX_ROUNDS = 15;   // 一場上限
-const PLV = 60;
-const BASE = 60, EXTRA = 120;
+const PLV = 50;          // 真實 Lv50 玩家
 
+// 全 10 職業,各配最適武器(主屬性對應)
 const WEAPONS = [
-  { wid: "s-dragon-sword_1h", label: "幼龍牙劍·單手劍", job: "job_swordsman_v1", jobName: "劍士", main: "str" },
-  { wid: "s-dragon-sword_2h", label: "龍脊巨劍·雙手劍", job: "job_swordsman_v1", jobName: "劍士", main: "str" },
-  { wid: "s-dragon-axe_1h", label: "裂龍手斧·單手斧", job: "job_warrior_v1", jobName: "戰士", main: "str" },
-  { wid: "s-dragon-axe_2h", label: "屠龍巨斧·雙手斧", job: "job_warrior_v1", jobName: "戰士", main: "str" },
-  { wid: "s-dragon-mace_1h", label: "龍顎戰錘·單手槌", job: "job_dwarf_warrior_v1", jobName: "矮人戰士", main: "str" },
-  { wid: "s-dragon-mace_2h", label: "龍骨碎天槌·雙手槌", job: "job_dwarf_warrior_v1", jobName: "矮人戰士", main: "str" },
-  { wid: "s-dragon-dagger", label: "龍鱗短刃·匕首", job: "job_rogue_v1", jobName: "盜賊", main: "str" },
-  { wid: "s-dragon-staff_1h", label: "龍語法杖·單手杖", job: "job_mage_v1", jobName: "法師", main: "int" },
-  { wid: "s-dragon-staff_2h", label: "龍脈長杖·雙手杖", job: "job_mage_v1", jobName: "法師", main: "int" },
-  { wid: "s-dragon-bow", label: "龍筋獵弓·弓", job: "job_archer_v1", jobName: "弓箭手", main: "dex" },
+  { wid: "s-dragon-sword_2h", label: "雙手劍", job: "job_swordsman_v1", jobName: "劍士", main: "str" },
+  { wid: "s-dragon-axe_2h", label: "雙手斧", job: "job_warrior_v1", jobName: "戰士", main: "str" },
+  { wid: "s-dragon-mace_2h", label: "雙手槌", job: "job_dwarf_warrior_v1", jobName: "矮人戰士", main: "str" },
+  { wid: "s-dragon-dagger", label: "匕首", job: "job_rogue_v1", jobName: "盜賊", main: "str" },
+  { wid: "s-dragon-staff_2h", label: "雙手杖", job: "job_mage_v1", jobName: "法師", main: "int" },
+  { wid: "s-dragon-bow", label: "弓", job: "job_archer_v1", jobName: "弓箭手", main: "dex" },
+  { wid: "s-dragon-staff_1h", label: "單手杖", job: "job_healer_v1", jobName: "治療師", main: "int" },
+  { wid: "s-dragon-bow", label: "弓", job: "job_tactician_v1", jobName: "軍師", main: "dex" },
+  { wid: "s-dragon-bow", label: "弓", job: "job_bard_v1", jobName: "詩人", main: "dex" },
+  { wid: "s-dragon-staff_1h", label: "單手杖", job: "job_barrier_mage_v1", jobName: "結界師", main: "int" },
 ];
 const DOT_CARD_IDS = [
   "monster-card-35ec8cc7-9f0c-4d61-8a40-343d8857be2f",
@@ -34,9 +34,10 @@ const DOT_CARD_IDS = [
 ];
 const ARMOR_SLOTS = ["head_top", "head_mid", "head_low", "armor", "shield", "garment", "shoes", "accessory_l", "accessory_r"];
 
+// 真實 Lv50 配點:總約 104 點(對照真人 Lv50 數據),主屬性集中 + 一些 VIT 生存
 function buildAttrs(main) {
-  const a = { str: BASE, agi: BASE, vit: BASE, int: BASE, dex: BASE, luk: BASE };
-  a[main] += EXTRA;
+  const a = { str: 8, agi: 8, vit: 22, int: 8, dex: 12, luk: 6 }; // 基礎 64
+  a[main] += 40; // 主屬性集中 → str/int 約 48、dex 約 52;總約 104
   return a;
 }
 
@@ -124,16 +125,23 @@ async function main() {
     return simFight(ps, equipped, boss, 40);
   }
 
+  // 職業本身跑分:武器 + 職業徽章(含職業技能),不加任何怪物卡。平均傷害已含死亡率(死亡打斷→均傷下降)。
   for (const boss of bosses) {
-    console.log(`\n【${boss.name}】Lv${boss.lv} HP${boss.hp.toLocaleString()} def${boss.calc.def}%`);
-    console.log("─".repeat(90));
-    console.log("職業/武器".padEnd(20) + "血量".padStart(6) + "│物理:死亡率 存活 單場 場數".padStart(30) + " │DOT:死亡率 存活 單場 場數".padStart(28));
-    console.log("─".repeat(90));
-    const rows = WEAPONS.map(w => ({ w, p: build(w, false, boss), d: build(w, true, boss) }));
-    rows.sort((a, b) => a.p.battles - b.p.battles);
-    const f = r => `${Math.round(r.deathRate * 100)}% ${r.avgDeathRound ? r.avgDeathRound.toFixed(0) + "r" : "活"} ${Math.round(r.perBattle).toLocaleString()} ${r.battles >= 999999 ? "∞" : r.battles + "場"}`;
-    for (const { w, p, d } of rows) {
-      console.log(`${w.jobName}/${w.label}`.padEnd(20) + String(p.hp).padStart(6) + " │ " + f(p).padEnd(26) + " │ " + f(d));
+    console.log(`\n【${boss.name}】Lv${boss.lv} HP${boss.hp.toLocaleString()} def${boss.calc.def}%  ── 職業本身(不加卡)`);
+    console.log("─".repeat(70));
+    console.log("職業/武器".padEnd(20) + "血量".padStart(6) + "平均傷害".padStart(12) + "死亡率".padStart(8) + "存活回合".padStart(9) + "擊殺場數".padStart(9));
+    console.log("─".repeat(70));
+    const rows = WEAPONS.map(w => ({ w, r: build(w, false, boss) }));
+    rows.sort((a, b) => b.r.perBattle - a.r.perBattle);
+    for (const { w, r } of rows) {
+      console.log(
+        `${w.jobName}/${w.label}`.padEnd(20) +
+        String(r.hp).padStart(6) +
+        Math.round(r.perBattle).toLocaleString().padStart(12) +
+        `${Math.round(r.deathRate * 100)}%`.padStart(8) +
+        (r.avgDeathRound ? `${r.avgDeathRound.toFixed(1)}r` : "整場").padStart(9) +
+        (r.battles >= 999999 ? "∞" : `${r.battles}場`).padStart(9)
+      );
     }
   }
   process.exit(0);
