@@ -2765,6 +2765,7 @@ async function handleEnterBattle(interaction) {
           { fastUpdate: true }
         );
         // ── 怪物圖鑑累積：本場(對該怪造成傷害 / 該怪最大HP，最多算 1 隻)原子累加 ──
+        session._bestiary = null; // 先清空,本場有累積才設(讓「每場通知」只反映本場)
         try {
           const _bMaxHp = Math.max(1, Number(battleMonster?.calc?.maxHp || session.monsterStats?.maxHp || monsterHpBeforeBattle || 1));
           const _bGain = bestiaryGainFromDamage(totalDamage, _bMaxHp);
@@ -2868,6 +2869,12 @@ async function handleEnterBattle(interaction) {
         embedTitle = "⏸️ 戰鬥超時";
         embedColor = 0x888888;
         rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。\n你造成了 **${totalDamage}** 點傷害。`];
+      }
+
+      // 圖鑑點數每場戰鬥都會累積;非擊殺(部位擊破/超時/失敗)也顯示本場圖鑑增益,避免「有時有通知有時沒有」
+      if (session._bestiary && embedTitle !== "🏆 勝利！") {
+        const b = session._bestiary;
+        rewardLines.push(`📖 圖鑑：**${b.monsterName}** +${b.gainPct}%（累積 ${Math.round(b.killsAfter * 10) / 10}/${b.requirement} 隻，對該怪傷害 +${Math.round(b.bonusPctAfter * 10) / 10}%）`);
       }
 
       if (idleSettleNotice) {
