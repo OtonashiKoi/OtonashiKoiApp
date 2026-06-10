@@ -475,6 +475,7 @@ function applyImmediateCardDamageEffect({
   sourceAtk = 1,
   targetMaxHp = 1,
   applyTargetDamage = null,
+  mitigate = null,
   log = []
 }) {
   if (!procEffect || !shouldApplyAsImmediateDamage(procEffect) || typeof applyTargetDamage !== "function") {
@@ -501,9 +502,11 @@ function applyImmediateCardDamageEffect({
       procEffect.key === "bleed" ? 0.1 :
       0.5
     );
-  const damage = params.mode === "flat"
+  const rawDamage = params.mode === "flat"
     ? Math.max(1, Math.round(Number.isFinite(Number(params.value)) ? Number(params.value) : 1))
     : Math.max(1, Math.round(base * (pct / 100)));
+  // 即時技能傷害也走目標防禦減免(由呼叫端提供 mitigate,例如 applyDefense)
+  const damage = typeof mitigate === "function" ? Math.max(1, Math.round(mitigate(rawDamage))) : rawDamage;
   applyTargetDamage(damage);
   log.push(`🎴 **${ownerLabel}** 發動【${skillName}】！${skillDescription || ""} 對 **${targetLabel}** 造成 **${damage}** 點${damageLabel}傷害！`);
   return true;
@@ -1605,6 +1608,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             sourceAtk: adjustedMCalc.atk || mCalc.atk || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
             applyTargetDamage: (damage) => { pHp -= damage; },
+            mitigate: (d) => applyDefense(d, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1), // 即時技能也吃玩家防禦
             log
           })) {
             appliedAnyNormalProc = true;
