@@ -58,11 +58,11 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
 
   // ── 新 DEF 模型（baseVit → flat 減傷；equipVit → % 減傷） ──
   // 前 VIT（升等的）：每點 -1 固定傷害
-  // 後 VIT（裝備的）：每點 -1% 傷害（封頂 75%）
+  // 後 VIT（裝備的）：每 2 點 -1% 傷害（封頂 85%）；怪物技能傷害也吃此 def%
   const baseVit = Math.max(0, vit);
   const equipVit = Math.max(0, bonus.vit + (tierSetBonuses.stats.vit || 0));
   const flatDef = baseVit * 1;
-  const pctDef = Math.min(75, equipVit * 1);
+  const pctDef = Math.min(85, equipVit / 2);
 
   const weapon  = equipped.weapon || null;
   const offhand = equipped.shield || null;
@@ -147,6 +147,8 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     // 基礎數值
     maxHp:    V * 15 + 50,
     atk,
+    weaponMainStat: baseStatKey,       // 武器主屬性名稱(str/int/dex)
+    weaponMainStatValue: baseStat,     // 武器主屬性數值(用於終傷後追加固定傷害)
     dmgMin,
     dmgMax,
     // ── DEF 新模型 ──
@@ -199,7 +201,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const combinedEffects = [...equipmentEffects, ...(Array.isArray(activeEffects) ? activeEffects : [])];
   const nextStats = applyEffectsToStats(baseStats, combinedEffects, effectContext);
 
-  nextStats.def = Math.min(75, Math.max(0, Number(nextStats.def) || 0));
+  nextStats.def = Math.min(85, Math.max(0, Number(nextStats.def) || 0));
   nextStats.flatDef = Math.max(0, Number(nextStats.flatDef) || 0);
   nextStats.dodge = Math.min(95, Math.max(0, Number(nextStats.dodge) || 0));
   nextStats.hit = Math.min(100, Math.max(0, Number(nextStats.hit) || 0));

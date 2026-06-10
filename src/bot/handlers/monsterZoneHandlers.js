@@ -2678,6 +2678,7 @@ async function handleEnterBattle(interaction) {
           monsterIsBoss: Boolean(battleMonster?.isBoss),
           worldBossPhase: session.worldBossPhase || null,
           bestiaryBonusPct: _bestiaryBonusPct,
+          isWorldBoss: isWorldBossZone(zoneKey) && Boolean(battleMonster?.isBoss), // 世界王:玩家 DOT 也吃王 def%
           zone: zoneKey // 讓裝備的 zone 條件特效生效(例：S 龍系武器在龍族之領/龍王巢穴 +20%)
         });
       const { roundLogs, finalPlayerHp } = combatResult;

@@ -858,6 +858,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     : pStats.maxHp;
   let outcome = null;
   let totalDamage = 0;
+  // 世界王:玩家 DOT 也要吃世界王 def%(含扣防後的有效值)。跨回合保留上一回合的扣防%,
+  // 因為玩家 DOT 在回合最前面結算(早於本回合扣防計算)。
+  const isWorldBossFight = Boolean(options.isWorldBoss);
+  let monsterDefDownCarry = 0;
+  // 武器主屬性追加傷害:終傷後 +(主屬性 × 1.5)固定點數。主攻擊/連擊/反擊各加一次。
+  const weaponMainBonus = Math.max(0, Math.round((pStats.weaponMainStatValue || 0) * 1.5));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
   const endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
   let stunRoundsLeft = Math.max(0, Math.floor(Number(options.stunRoundsLeft || 0))); // 怪物剩餘擊暈回合數
@@ -1034,6 +1040,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
+    // 世界王:玩家 DOT 吃世界王「扣防後的有效 def%」。adjustedMCalc.def 已折入玩家自身的 def_down
+    //（如詛咒祭司,同回合生效）;monsterDefDownCarry 再吃上一回合的隊伍光環扣防。非世界王維持原本(DOT 不吃防禦)。
+    const wbEffDef = isWorldBossFight
+      ? Math.max(0, Math.min(95, (adjustedMCalc.def || 0) * (1 - Math.min(95, monsterDefDownCarry) / 100)))
+      : 0;
+    const wbDotMult = 1 - wbEffDef / 100;
+
     // ── 應用怪物的 DOT 效果（燒傷/freeze/麻痺） ──
     let monsterFrozenThisRound = false;
     if (Array.isArray(monsterRoundEffects)) {
@@ -1056,7 +1069,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : (mParams.mode === 'current' ? mHp : mHpInit);
           let burnDmg = Math.max(1, Math.round(burnBase * (burnPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) burnDmg = Math.min(burnDmg, Number(mParams.maxDamage));
-          burnDmg = Math.max(1, Math.round(burnDmg * playerAttackLevelMult)); // DOT 也吃等級壓制
+          burnDmg = Math.max(1, Math.round(burnDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= burnDmg;
           totalDamage += burnDmg;
           log.push(`🔥 燒傷持續！${mName} 受到 **${burnDmg}** 點灼燒傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1071,7 +1084,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : mHpInit;
           let poisonDmg = Math.max(1, Math.round(poisonBase * (poisonPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) poisonDmg = Math.min(poisonDmg, Number(mParams.maxDamage));
-          poisonDmg = Math.max(1, Math.round(poisonDmg * playerAttackLevelMult)); // DOT 也吃等級壓制
+          poisonDmg = Math.max(1, Math.round(poisonDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= poisonDmg;
           totalDamage += poisonDmg;
           log.push(`☠️ 中毒持續！${mName} 受到 **${poisonDmg}** 點毒素傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1105,7 +1118,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : mHpInit;
           let bleedDmg = Math.max(1, Math.round(bleedBase * (bleedPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) bleedDmg = Math.min(bleedDmg, Number(mParams.maxDamage));
-          bleedDmg = Math.max(1, Math.round(bleedDmg * playerAttackLevelMult)); // DOT 也吃等級壓制
+          bleedDmg = Math.max(1, Math.round(bleedDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= bleedDmg;
           totalDamage += bleedDmg;
           log.push(`🩸 流血持續！${mName} 受到 **${bleedDmg}** 點流血傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1119,7 +1132,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : mHpInit;
           let shockDmg = Math.max(1, Math.round(shockBase * (shockPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) shockDmg = Math.min(shockDmg, Number(mParams.maxDamage));
-          shockDmg = Math.max(1, Math.round(shockDmg * playerAttackLevelMult)); // DOT 也吃等級壓制
+          shockDmg = Math.max(1, Math.round(shockDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= shockDmg;
           totalDamage += shockDmg;
           log.push(`⚡ 感電持續！${mName} 受到 **${shockDmg}** 點電擊傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1133,7 +1146,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : mHpInit;
           let curseDmg = Math.max(1, Math.round(curseBase * (cursePct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) curseDmg = Math.min(curseDmg, Number(mParams.maxDamage));
-          curseDmg = Math.max(1, Math.round(curseDmg * playerAttackLevelMult)); // DOT 也吃等級壓制
+          curseDmg = Math.max(1, Math.round(curseDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= curseDmg;
           totalDamage += curseDmg;
           log.push(`🕯️ 詛咒持續！${mName} 受到 **${curseDmg}** 點暗影傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1148,7 +1161,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : mHpInit;
           let lightDmg = Math.max(1, Math.round(lightBase * (lightPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) lightDmg = Math.min(lightDmg, Number(mParams.maxDamage));
-          lightDmg = Math.max(1, Math.round(lightDmg * playerAttackLevelMult)); // DOT 也吃等級壓制
+          lightDmg = Math.max(1, Math.round(lightDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= lightDmg;
           totalDamage += lightDmg;
           log.push(`⚡ 閃電持續！${mName} 受到 **${lightDmg}** 點雷電傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1163,7 +1176,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : mHpInit;
           let shockDmg = Math.max(1, Math.round(shockBase * (shockPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) shockDmg = Math.min(shockDmg, Number(mParams.maxDamage));
-          shockDmg = Math.max(1, Math.round(shockDmg * playerAttackLevelMult)); // DOT 也吃等級壓制
+          shockDmg = Math.max(1, Math.round(shockDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= shockDmg;
           totalDamage += shockDmg;
           log.push(`⚡ 震盪持續！${mName} 受到 **${shockDmg}** 點震盪傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1178,7 +1191,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             : mHpInit;
           let curseDmg = Math.max(1, Math.round(curseBase * (cursePct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) curseDmg = Math.min(curseDmg, Number(mParams.maxDamage));
-          curseDmg = Math.max(1, Math.round(curseDmg * playerAttackLevelMult)); // DOT 也吃等級壓制
+          curseDmg = Math.max(1, Math.round(curseDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= curseDmg;
           totalDamage += curseDmg;
           log.push(`🌑 詛咒持續！${mName} 受到 **${curseDmg}** 點詛咒傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1208,10 +1221,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 應用玩家的 DOT 效果（如中毒） ──
-    // VIT(體質)對 DoT 的輕微抗性：DoT 像詛咒/毒/灼燒等持續侵蝕，由本體質(升等)VIT 抵抗。
-    // 每點 baseVit -0.5%，封頂 25%。DoT 原本完全無視防禦，這裡給高 VIT 玩家一點抗性，但不讓 DoT 失去威脅。
-    const dotResistPct = Math.min(25, Math.max(0, Number(pStats.baseVit || 0) * 0.5));
-    const mitigateDot = (dmg) => Math.max(1, Math.round(dmg * (1 - dotResistPct / 100)));
+    // 怪物技能/DoT(雷擊/灼燒/流血/毒/詛咒…)對玩家的傷害，改成走玩家防禦(flatDef + def%)，
+    // 與普攻同一條 applyDefense 管線 → 堆防禦對技能也有效，不再無視防禦秒人。
+    const mitigateDot = (dmg) => applyDefense(dmg, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1);
     if (Array.isArray(options.playerActiveEffects)) {
       for (const dotEffect of options.playerActiveEffects) {
         if (!dotEffect || !dotEffect.key) continue;
@@ -2584,6 +2596,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 屠龍特攻等裝備「最終傷害%」：在防禦/爆擊/減傷全部算完後，對最終傷害整體乘上倍率（= 總傷害 ×120%）
         if (equipZoneFinalDmgMult !== 1 && finalDamage > 0) finalDamage = Math.max(1, Math.round(finalDamage * equipZoneFinalDmgMult));
 
+        // 武器主屬性追加傷害：終傷全部算完後，額外加上「武器主屬性 × 1.5」固定點數（不被防禦扣，補強物理）
+        if (finalDamage > 0) finalDamage += weaponMainBonus;
+
         dmg = finalDamage;
 
         // 採證：單次傷害異常爆量(> 攻擊力 ×10)時，把完整拆解印到後台 log，直指「傷害被放大」的兇手
@@ -2908,7 +2923,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         if (Math.random() * 100 < comboChance) {
           combatStats.comboCount += 1;
-          let cdmg = Math.max(1, Math.round(dmg * (pStats.comboDamageMultiplier || 1)));
+          // 連擊:用「未含追加值」的傷害乘連擊倍率,再額外加一次武器主屬性追加(固定,不被倍率縮放)
+          let cdmg = Math.max(1, Math.round(Math.max(1, dmg - weaponMainBonus) * (pStats.comboDamageMultiplier || 1)) + weaponMainBonus);
           mHp -= cdmg;
           totalDamage += cdmg;
           log.push(`⚡ **${rand(jobFlavor.combo)}** 連擊！再造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -3148,7 +3164,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               if (!cEff || cEff.key !== 'counter_attack') continue;
               const counterChance = Math.max(0, Number(cEff.params?.value ?? 0));
               if (Math.random() * 100 >= counterChance) continue;
-              const counterDmg = Math.max(1, Math.round((pStats.atk || 1) * 0.5));
+              const counterDmg = Math.max(1, Math.round((pStats.atk || 1) * 0.5)) + weaponMainBonus;
               mHp -= counterDmg;
               totalDamage += counterDmg;
               log.push(`⚔️ **反擊**！對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -3189,7 +3205,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const finalDef = Math.max(0, effectiveDef * (1 - counterBypassPct / 100));
             const conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
             const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * playerAttackLevelMult));
-            const counterDmg = Math.max(1, Math.round(rollDmg(applyDefense(counterBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk)) * equipZoneFinalDmgMult));
+            const counterDmg = Math.max(1, Math.round(rollDmg(applyDefense(counterBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk)) * equipZoneFinalDmgMult)) + weaponMainBonus;
             mHp -= counterDmg;
             totalDamage += counterDmg;
             log.push(`🏹 **閃避反擊**！你趁隙還擊，對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -3330,6 +3346,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       options.playerActiveEffects = cleanExpiredEffects(options.playerActiveEffects, round);
     }
 
+    monsterDefDownCarry = roundMonsterDefDownPct; // 保留本回合扣防%,供下一回合玩家 DOT 使用
     round++;
   }
 
