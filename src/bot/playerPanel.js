@@ -1006,7 +1006,7 @@ function sortBackpackItems(items, tab) {
     }
 
     // 裝備分頁：階級高 → +值高 優先（最強裝備排前面），同強度再照槽位/名稱
-    const TIER_RANK = { A: 4, B: 3, C: 2, D: 1 };
+    const TIER_RANK = { SS: 7, S: 6, A: 5, B: 4, C: 3, D: 2, E: 1 };
     const aTier = TIER_RANK[String(a.tier || "").toUpperCase()] || 0;
     const bTier = TIER_RANK[String(b.tier || "").toUpperCase()] || 0;
     if (aTier !== bTier) return bTier - aTier;

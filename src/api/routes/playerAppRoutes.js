@@ -2306,9 +2306,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (currency && typeof currency === "string") filters.currency = currency;
       const items = await serviceContext.auctionService.getActiveListings(filters);
       const enabled = await serviceContext.auctionService.isEnabled();
+      // 階級高的(S)排最前面,讓最高級裝備一開始就看得到;同階維持原順序(最新在前)
+      const TIER_RANK = { SS: 7, S: 6, A: 5, B: 4, C: 3, D: 2, E: 1 };
+      const sortedItems = [...(items || [])].sort((a, b) => {
+        const at = TIER_RANK[String(a.tier || a.item?.tier || "").toUpperCase()] || 0;
+        const bt = TIER_RANK[String(b.tier || b.item?.tier || "").toUpperCase()] || 0;
+        return bt - at;
+      });
       res.json(ok({
         enabled,
-        listings: (items || []).map((a) => ({
+        listings: (sortedItems || []).map((a) => ({
           id: a.id || a._id?.toString(),
           itemUuid: a.itemUuid,
           itemName: a.itemName || a.item?.itemName,
@@ -2336,8 +2343,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const roleIds = await getMemberRoleIds(discordId);
       const maxListings = await serviceContext.auctionService.getMaxListings(roleIds);
       const eligible = await serviceContext.auctionService.checkSellerEligibility(roleIds);
+      const TIER_RANK = { SS: 7, S: 6, A: 5, B: 4, C: 3, D: 2, E: 1 };
+      const sortedMy = [...(my || [])].sort((a, b) =>
+        (TIER_RANK[String(b.tier || b.item?.tier || "").toUpperCase()] || 0) -
+        (TIER_RANK[String(a.tier || a.item?.tier || "").toUpperCase()] || 0));
       res.json(ok({
-        listings: (my || []).map((a) => ({
+        listings: (sortedMy || []).map((a) => ({
           id: a.id || a._id?.toString(),
           itemUuid: a.itemUuid,
           itemName: a.itemName || a.item?.itemName,
