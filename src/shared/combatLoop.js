@@ -1673,7 +1673,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const lightningRaw = Math.max(1, Math.round(Math.max(1, pStats.maxHp || pHp) * (worldBossLightningHpPct / 100)));
         const lightningDmg = applyDefense(lightningRaw, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1);
         pHp -= lightningDmg;
-        log.push(`⚡ ${mName} 施放【雷擊術】命中！造成 **${lightningDmg}** 點傷害（最大生命 ${worldBossLightningHpPct}% 經防禦減免）！（你剩 ${Math.max(0, pHp)} HP）`);
+        log.push(`⚡ ${mName} 施放【雷擊術】命中！造成 **${lightningDmg}** 點傷害（最大生命 ${worldBossLightningHpPct}%）！（你剩 ${Math.max(0, pHp)} HP）`);
         if (pHp <= 0) {
           outcome = "lose";
           roundLogs.push(log.join("\n"));
