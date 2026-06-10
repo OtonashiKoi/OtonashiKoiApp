@@ -865,6 +865,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 因為玩家 DOT 在回合最前面結算(早於本回合扣防計算)。
   const isWorldBossFight = Boolean(options.isWorldBoss);
   let monsterDefDownCarry = 0;
+  let playerDefIgnoreCarry = 0; // 上一回合玩家無視防禦%(法師徽章/魔力爆炎等),供 DOT 穿防
   // 武器主屬性追加傷害:終傷後 +(主屬性 × 1.5)固定點數。主攻擊/連擊/反擊各加一次。
   const weaponMainBonus = Math.max(0, Math.round((pStats.weaponMainStatValue || 0) * 1.5));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
@@ -1043,10 +1044,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
-    // 世界王:玩家 DOT 吃世界王「扣防後的有效 def%」。adjustedMCalc.def 已折入玩家自身的 def_down
-    //（如詛咒祭司,同回合生效）;monsterDefDownCarry 再吃上一回合的隊伍光環扣防。非世界王維持原本(DOT 不吃防禦)。
+    // 世界王:玩家 DOT 吃世界王「扣防 + 無視防禦後的有效 def%」,與直接攻擊同一套。
+    //  adjustedMCalc.def 已折入玩家自身 def_down(如詛咒祭司);monsterDefDownCarry=上一回合隊伍光環扣防;
+    //  dotBypassPct = 法杖破防 + 法師徽章/魔力爆炎等無視防禦(playerDefIgnoreCarry,取上一回合值)。
+    //  → 有效 def = 王def ×(1−扣防)×(1−無視防禦)。非世界王維持原本(DOT 不吃防禦)。
+    const dotBypassPct = isWorldBossFight
+      ? Math.min(95, Math.max(0, (pStats.bypassMonsterDefPct || 0) + playerDefIgnoreCarry))
+      : 0;
     const wbEffDef = isWorldBossFight
-      ? Math.max(0, Math.min(95, (adjustedMCalc.def || 0) * (1 - Math.min(95, monsterDefDownCarry) / 100)))
+      ? Math.max(0, Math.min(95, (adjustedMCalc.def || 0) * (1 - Math.min(95, monsterDefDownCarry) / 100) * (1 - dotBypassPct / 100)))
       : 0;
     const wbDotMult = 1 - wbEffDef / 100;
 
@@ -3353,6 +3359,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     monsterDefDownCarry = roundMonsterDefDownPct; // 保留本回合扣防%,供下一回合玩家 DOT 使用
+    playerDefIgnoreCarry = (playerDefIgnorePct || 0) + (roundPartyDefIgnorePct || 0); // 保留本回合無視防禦%,供下一回合 DOT 穿防
     round++;
   }
 
