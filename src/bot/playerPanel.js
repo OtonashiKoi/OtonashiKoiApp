@@ -3241,6 +3241,21 @@ async function handleEquipSlotButton(interaction, slot, page = 0) {
   const sortMode = equipSortPref.get(interaction.user.id) || "tier";
   inventory = sortEquipCandidates(inventory, sortMode);
 
+  // 同款裝備/卡片合併成一項顯示(×N),裝備時用代表 uuid 只裝一張(尤其重複卡片)
+  {
+    const seen = new Map();
+    const grouped = [];
+    for (const e of inventory) {
+      const key = canonicalEquipmentKey(e);
+      const g = seen.get(key);
+      if (g) { g._stackCount += 1; continue; }
+      const ng = { ...e, _stackCount: 1 };
+      seen.set(key, ng);
+      grouped.push(ng);
+    }
+    inventory = grouped;
+  }
+
   const getItemLabel = (item) => String(item?.itemName || item?.name || item?.itemId || item?.uuid || "未知道具");
 
   // Discord 單一下拉選單上限 25 項；保留 1 給「卸下」，其餘分頁顯示，避免道具多時被截掉（卡片/特殊尤其常見）
@@ -3266,8 +3281,9 @@ async function handleEquipSlotButton(interaction, slot, page = 0) {
     const cardStr = skill
       ? (skill.description ? `🎴 ${skill.description}` : (skill.name ? `🎴 ${skill.name}` : ""))
       : "";
+    const countSuffix = e._stackCount > 1 ? ` ×${e._stackCount}` : "";
     options.push({
-      label: getItemLabel(e).slice(0, 25),
+      label: (getItemLabel(e) + countSuffix).slice(0, 40),
       description: (statStr || cardStr || "點此裝備").slice(0, 95),
       value: `equip:${e.uuid}`
     });
