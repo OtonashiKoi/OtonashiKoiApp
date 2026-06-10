@@ -1665,9 +1665,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 世界王雷擊術（第二 / 第三階段）──
     if (worldBossHasLightning) {
       if (Math.random() * 100 < worldBossLightningHitChance) {
-        const lightningDmg = Math.max(1, Math.round(Math.max(1, pStats.maxHp || pHp) * (worldBossLightningHpPct / 100)));
+        // 生命%傷：算完最大生命 × pct 後，也走玩家防禦(flatDef + def%)，不再無視防禦
+        const lightningRaw = Math.max(1, Math.round(Math.max(1, pStats.maxHp || pHp) * (worldBossLightningHpPct / 100)));
+        const lightningDmg = applyDefense(lightningRaw, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1);
         pHp -= lightningDmg;
-        log.push(`⚡ ${mName} 施放【雷擊術】命中！造成 **${lightningDmg}** 點傷害（最大生命 ${worldBossLightningHpPct}%）！（你剩 ${Math.max(0, pHp)} HP）`);
+        log.push(`⚡ ${mName} 施放【雷擊術】命中！造成 **${lightningDmg}** 點傷害（最大生命 ${worldBossLightningHpPct}% 經防禦減免）！（你剩 ${Math.max(0, pHp)} HP）`);
         if (pHp <= 0) {
           outcome = "lose";
           roundLogs.push(log.join("\n"));
