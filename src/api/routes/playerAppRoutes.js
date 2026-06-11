@@ -956,12 +956,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           for (const eff of arrs) {
             if (!eff || !eff.key) continue;
             if (!isEffectConditionMet(eff, effCtx)) continue;
+            // 數值顯示與 DC formatPassiveEffect 同規則：mode === "pct" 才帶 %，正值帶 +
+            const effVal = Number(eff?.params?.value);
+            const valueText = Number.isFinite(effVal)
+              ? `${effVal > 0 ? "+" : ""}${effVal}${eff?.params?.mode === "pct" ? "%" : ""}`
+              : "";
             bodyEffects.push({
               source: item.itemName || item.name || BODY_SLOT_ZH[slot] || slot,
               slot,
               name: EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key,
               desc: eff.notes || "",
               value: eff?.params?.value ?? null,
+              valueText,
               chance: eff.chance ?? 100,
               trigger: eff.trigger || "passive"
             });
@@ -969,10 +975,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
         for (const e of (progress?.activeEffects || [])) {
           if (!e) continue;
+          const buffVal = Number(e?.params?.value);
+          const buffValueText = Number.isFinite(buffVal)
+            ? `${buffVal > 0 ? "+" : ""}${buffVal}${e?.params?.mode === "pct" ? "%" : ""}`
+            : "";
           bodyEffects.push({
             source: "狀態", slot: "buff",
             name: e.definitionName || EFFECT_NAME_ZH[e.key] || e.key,
-            desc: "", value: e?.params?.value ?? null, chance: 100, trigger: "buff", temporary: true
+            desc: "", value: e?.params?.value ?? null, valueText: buffValueText,
+            chance: 100, trigger: "buff", temporary: true
           });
         }
       } catch (err) { console.warn("[profile] bodyEffects failed:", err?.message); }
