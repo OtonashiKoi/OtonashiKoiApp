@@ -4614,13 +4614,30 @@ async function worldBossRespawnTick() {
       const st = info?.status;
       if (!st) continue;
       const sig = `${!!st.canChallenge}|${!!st.battleTimeoutReached}|${!!st.battleStartedAt}`;
-      if (worldBossPanelSig.get(zoneKey) === sig) continue;
+      const prevSig = worldBossPanelSig.get(zoneKey) || null;
+      if (prevSig === sig) continue;
       // 狀態有變（例如冷卻結束 canChallenge:false→true）→ 強制刷新該 zone 面板。
       // 關鍵：只有「確實刷新成功」才記住簽章；若被忙碌跳過或編輯失敗，保留舊簽章，下一輪自動重試，
       // 避免冷卻結束時的那一次刷新被靜默吞掉後面板永遠卡在「冷卻中」。
       const ok = await refreshWorldBossPanelForZone(sc, zoneKey, { force: true })
         .catch((e) => { console.warn(`[WorldBossWatcher] 刷新失敗 (${zoneKey}):`, e?.message || e); return false; });
-      if (ok) worldBossPanelSig.set(zoneKey, sig);
+      if (ok) {
+        worldBossPanelSig.set(zoneKey, sig);
+        // 世界王重生（冷卻結束 canChallenge:false→true）→ 廣播網頁通知。
+        // prevSig 為 null（剛啟動）不發，避免每次重啟都誤報重生。
+        if (prevSig && prevSig.split("|")[0] === "false" && st.canChallenge) {
+          try {
+            const { notifyAllPlayers } = require("../../services/realtime/playerNotifyService");
+            const bossName = info?.config?.bossName || "世界王";
+            notifyAllPlayers({
+              type: "worldboss_respawn",
+              title: "世界王出現",
+              message: `${bossName} 已重生，快來挑戰！`,
+              meta: { zoneKey, bossName }
+            });
+          } catch (_) { /* 通知失敗不影響面板刷新 */ }
+        }
+      }
     } catch (_) { /* 單一 zone 失敗不影響其他 */ }
   }
 }

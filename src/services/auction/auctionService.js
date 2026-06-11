@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
+const { notifyPlayer } = require("../realtime/playerNotifyService");
 const { auctionRepository } = require("./auctionRepository");
 const { createTransactionLog } = require("../../domain/transaction/createTransactionLog");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
@@ -313,6 +314,21 @@ class AuctionService {
       soldAt: new Date().toISOString()
     });
 
+    // 通知賣家：物品售出（SSE + 輪詢佇列；DC 與網頁購買路徑都會經過這裡）
+    const currencyLabel = auction.currency === "gold" ? "金幣" : "鑽石";
+    notifyPlayer(auction.sellerId, {
+      type: "auction_sold",
+      title: "拍賣售出",
+      message: `你的「${auction.item.itemName}」已售出，獲得 ${auction.price} ${currencyLabel}。`,
+      meta: {
+        auctionId,
+        itemName: auction.item.itemName,
+        currency: auction.currency,
+        price: auction.price,
+        buyerId
+      }
+    });
+
     return { auction, itemName: auction.item.itemName };
   }
 
@@ -323,6 +339,13 @@ class AuctionService {
     const expired = await auctionRepository.findExpiredActive();
     for (const auction of expired) {
       await auctionRepository.updateStatus(auction.id, "expired");
+      // 通知賣家：拍賣到期未售出（物品需到拍賣行領回）
+      notifyPlayer(auction.sellerId, {
+        type: "auction_expired",
+        title: "拍賣到期",
+        message: `你的「${auction.item?.itemName || "商品"}」拍賣已到期未售出，請到拍賣行領回。`,
+        meta: { auctionId: auction.id, itemName: auction.item?.itemName || null }
+      });
     }
     return expired.length;
   }

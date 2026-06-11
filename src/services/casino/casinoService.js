@@ -6,6 +6,7 @@ const {
   BET_MIN, BET_MAX, PAYOUT_CAP, DROP_POOL, getBetTier, isBroadcastWorthy,
 } = require("./wheelConfig");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
+const { notifyPlayer } = require("../realtime/playerNotifyService");
 
 // 對齊「整 60 秒」邊界，PM2 重啟也能對齊節奏
 function alignedNextStartAt(now = Date.now()) {
@@ -255,6 +256,30 @@ class CasinoService {
 
       // 寄 DM（不論輸贏）
       this._dmPlayer(ps, { roundId, resultColor, resultMult }).catch(() => {});
+
+      // 網頁通知（SSE + 輪詢佇列；不論輸贏，含掉落明細）
+      try {
+        const colorLabel = COLOR_META[resultColor]?.label || resultColor;
+        const dropText = grantedItems.length
+          ? `，額外掉落：${grantedItems.map((d) => d.itemName).join("、")}`
+          : "";
+        notifyPlayer(ps.discordId, {
+          type: "casino_round",
+          title: `命運轉盤 #${roundId} 開獎`,
+          message: ps.totalPay > 0
+            ? `開出 ${colorLabel} ×${resultMult}！你押 ${ps.totalBet} 金幣，拿回 ${ps.totalPay} 金幣${dropText}。`
+            : `開出 ${colorLabel} ×${resultMult}，你押 ${ps.totalBet} 金幣，這輪未中獎${dropText}。`,
+          meta: {
+            roundId,
+            resultColor,
+            resultMult,
+            totalBet: ps.totalBet,
+            payout: ps.totalPay,
+            win: ps.totalPay > 0,
+            drops: grantedItems.map((d) => ({ itemName: d.itemName, label: d.label || null }))
+          }
+        });
+      } catch (_) { /* 通知失敗不影響結算 */ }
 
       // 大獎全頻道公告
       for (const d of grantedItems) {
