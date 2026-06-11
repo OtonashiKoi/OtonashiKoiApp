@@ -71,6 +71,13 @@
       "runtimeArgs": ["--prefix", "/Users/riuchen/Documents/equipmentGAME-app", "run", "dev"],
       "port": 5180,
       "description": "新版 React + Vite + Capacitor 前端（Mac 機器用）"
+    },
+    {
+      "name": "equipmentgame-app-prod-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/riuchen/Documents/equipmentGAME-app", "run", "preview", "--", "--port", "4173"],
+      "port": 4173,
+      "description": "正式版建置預覽（vite preview，等同 otonashikoi.org 對外版）"
     }
   ]
 }
