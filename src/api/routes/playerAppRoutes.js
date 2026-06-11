@@ -783,7 +783,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let displayName = "WebPlayer";
 
       // Development shortcut: treat codes prefixed with "mock:" as mock Discord logins.
+      // 安全鎖：只接受本機請求（vite dev proxy / 本機測試）。對外網域（cloudflared 轉發時
+      // Host 會是 otonashikoi.org）一律拒絕，避免任何人偽造任意玩家 JWT。
       if (code.startsWith("mock:")) {
+        const reqHost = String(req.headers.host || "");
+        const isLocalHost = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(reqHost);
+        if (!isLocalHost) {
+          return res.status(403).json({ status: "error", message: "Mock login is disabled." });
+        }
         console.log("[PlayerApp] Development mode mock login");
         discordId = code.replace("mock:", "");
         if (discordId.length < 5) discordId = "865264891991425055"; // Fallback test account for local development.
