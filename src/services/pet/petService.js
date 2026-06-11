@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
+const { notifyPlayer } = require("../realtime/playerNotifyService");
 
 // 強化寶石 itemId（依階級），採集產出用
 const GEM_ID_BY_TIER = {
@@ -202,6 +203,27 @@ class PetService {
     return pet;
   }
 
+  // ── 採集滿 18 個通知：剛到頂發一次，領取後（低於上限）重置旗標 ──
+  _maybeNotifyGatherCap(discordId, pet) {
+    try {
+      if (!pet || pet.stage !== "grown") return;
+      const count = Array.isArray(pet.accruedItems) ? pet.accruedItems.length : 0;
+      if (count >= GATHER_CAP) {
+        if (!pet.gatherCapNotified) {
+          pet.gatherCapNotified = true; // 旗標隨 progress 落地，避免重複通知
+          notifyPlayer(discordId, {
+            type: "pet_gather_full",
+            title: "寵物採集已滿",
+            message: `「${pet.nickname || pet.speciesName || "寵物"}」的採集已累積 ${count}/${GATHER_CAP} 個，記得來領取！`,
+            meta: { petUuid: pet.uuid, gatherCount: count, gatherCap: GATHER_CAP }
+          });
+        }
+      } else if (pet.gatherCapNotified) {
+        pet.gatherCapNotified = false; // 已領取（低於上限）→ 下次滿了再提醒一次
+      }
+    } catch (_) { /* 通知失敗不影響主流程 */ }
+  }
+
   // ── 對外：查詢寵物狀態（含懶結算） ──
   async getPetState(discordId) {
     const progress = await this._loadProgress(discordId);
@@ -210,6 +232,7 @@ class PetService {
     if (active) {
       this._applyHungerDecay(active);
       this._settleGathering(active);
+      this._maybeNotifyGatherCap(discordId, active);
       changed = true;
     }
     if (changed) await this.progressRepository.save(progress);
@@ -508,6 +531,7 @@ class PetService {
       }
       active.accruedItems = [];
       active.lastSettleAt = nowMs();
+      active.gatherCapNotified = false; // 已領取 → 重置滿載通知旗標
 
       // CAS 寫回：成功才回報 granted（確保訊息＝實際入包）；失敗代表被併發覆寫，重新載入重 roll
       const ok = typeof this.progressRepository.saveIfUnchanged === "function"
@@ -655,4 +679,4 @@ class PetService {
   }
 }
 
-module.exports = { PetService, HATCH_THRESHOLD, MAX_LEVEL, BASE_FEED_EXP, petMatchingTier, feedMultiplier, tierForPetLevel };
+module.exports = { PetService, HATCH_THRESHOLD, MAX_LEVEL, BASE_FEED_EXP, GATHER_INTERVAL_MIN, GATHER_CAP, petMatchingTier, feedMultiplier, tierForPetLevel };

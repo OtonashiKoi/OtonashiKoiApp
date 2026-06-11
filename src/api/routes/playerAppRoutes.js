@@ -1,13 +1,14 @@
 ﻿const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 const config = require("../../config");
-const { ok } = require("../../shared/response");
+const { ok, fail } = require("../../shared/response");
+const { requireAuth } = require("./requireAuth");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffects } = require("../../shared/supportAuraScaling");
-const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme } = require("../../shared/zones");
 const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 
 // Track per-player battle cooldowns.
@@ -409,20 +410,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }));
   };
 
-  // Middleware for checking JWT
-  const requireAuth = (req, res, next) => {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace("Bearer ", "");
-    if (!token) return res.status(401).json({ status: "error", message: "Missing token" });
-
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "super-secret-jwt-key");
-      req.playerRecord = decoded; // { discordId, displayName }
-      next();
-    } catch (err) {
-      return res.status(401).json({ status: "error", message: "Invalid or expired token" });
-    }
-  };
+  // JWT 驗證 middleware 已抽成共用模組 ./requireAuth（行為不變），供其他玩家端 route 檔共用
 
   router.get("/api/stream-auth/start", async (req, res) => {
     try {
@@ -1374,7 +1362,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   function pushRewardToPlayer(discordId, summary) {
     // 1. Always queue the notification for polling fallback.
     enqueueNotif(discordId, summary);
-    // 2. Push instantly to all active SSE clients for that player.
+    // 2. 同步推上 /api/me/stream 的 playerEventBus（網頁通知中心吃這條）
+    try {
+      const { playerEventBus } = require("../../services/realtime/playerEventBus");
+      playerEventBus.emit(discordId, { type: "notify", data: summary });
+    } catch (_) { /* 通知失敗不影響主流程 */ }
+    // 3. Push instantly to all active SSE clients for that player.
     const clients = sseClients.get(discordId);
     if (!clients || clients.size === 0) return;
     const dataStr = `event: reward\ndata: ${JSON.stringify(summary)}\n\n`;
@@ -1382,6 +1375,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   }
   // Attach helper hooks onto serviceContext so other modules can reuse them.
   serviceContext._pushRewardToPlayer = pushRewardToPlayer;
+  // 統一通知佇列 hook：給 services/realtime/playerNotifyService 走輪詢備援通道
+  serviceContext._enqueueNotif = enqueueNotif;
+  // 廣播版：發給所有「輪詢過通知」的玩家（notifQueue 既有 key；poll 後 key 仍保留）
+  serviceContext._enqueueNotifAll = (payload) => {
+    for (const discordId of notifQueue.keys()) enqueueNotif(discordId, payload);
+  };
   serviceContext._pushStreamPresence = (snapshot = getStreamPresenceSnapshot()) => {
     const dataStr = `event: stream_presence\ndata: ${JSON.stringify(snapshot)}\n\n`;
     streamPresenceClients.forEach((client) => {
@@ -1672,8 +1671,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const cooldown = playerBattleCooldowns.get(req.playerRecord.discordId);
         const nextBattleAt = (cooldown && cooldown.nextBattleAt > Date.now()) ? cooldown.nextBattleAt : null;
 
+        const theme = getZoneTheme(key);
+
         return {
           zone: key,
+          zoneLabel: theme.label,
+          zoneEmoji: theme.emoji,
+          zoneColor: `#${Number(theme.color || 0).toString(16).padStart(6, "0")}`,
           monsterId: activeMonster?.id || null,
           monsterName: activeMonster?.name || "Unknown",
           monsterImageUrl: activeMonster?.imageUrl || null,
@@ -2053,6 +2057,26 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return res.json(ok({ enabled: false, config: null, state: null, status: null }));
       }
       const data = await wb.getConfigWithStatus();
+
+      // 部位血量（網頁部位血條用）：從各世界王 zone state 取 worldBossPartsHp / MaxHp
+      const PART_LABELS = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
+      const PART_ORDER = ["head", "body", "wings", "legs"];
+      const { WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
+      const partsByZone = {};
+      await Promise.all(Object.keys(WORLD_BOSS_ZONES).map(async (zoneKey) => {
+        const st = await serviceContext.monsterService.getState(zoneKey).catch(() => null);
+        const hpMap = st?.worldBossPartsHp;
+        if (!hpMap || typeof hpMap !== "object") return;
+        const maxMap = st?.worldBossPartsMaxHp || {};
+        partsByZone[zoneKey] = PART_ORDER
+          .filter((k) => Object.prototype.hasOwnProperty.call(hpMap, k))
+          .map((k) => {
+            const hp = Math.max(0, Number(hpMap[k] || 0));
+            const max = Math.max(1, Math.round(Number(maxMap[k] || 0) || hp || 1));
+            return { key: k, name: PART_LABELS[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0 };
+          });
+      }));
+
       res.json(ok({
         enabled: data.config?.enabled !== false,
         config: {
@@ -2069,8 +2093,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           currentHp: data.state?.currentHp ?? data.config?.bossMaxHp ?? 0,
           hardKills: data.state?.hardKills || 0,
           lastKilledAt: data.state?.lastKilledAt || null,
-          battleStartedAt: data.state?.battleStartedAt || null
+          battleStartedAt: data.state?.battleStartedAt || null,
+          parts: partsByZone.elite || null
         },
+        partsByZone,
         status: data.status
       }));
     } catch (err) {

@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
+const { notifyPlayer } = require("../realtime/playerNotifyService");
 const {
   ZONE_BY_KEY,
   featureKeyToZone,
@@ -209,6 +210,29 @@ class IdleService {
     };
   }
 
+  // 掛機累積到頂通知（剛到 12 小時上限發一次；旗標隨 idle state 落地避免重複）
+  async _maybeNotifyIdleCap(discordId, state, session, elapsedMinutes, maxMinutes, sessionField) {
+    try {
+      if (!session || session.capNotified) return;
+      const cap = Math.max(1, Number(maxMinutes) || 0);
+      if (Number(elapsedMinutes || 0) < cap) return;
+      session.capNotified = true;
+      await this.idleRepository.savePlayerState(discordId, {
+        ...state,
+        playerId: discordId,
+        [sessionField]: session,
+        updatedAt: new Date().toISOString()
+      });
+      const capHours = Math.round((cap / 60) * 10) / 10;
+      notifyPlayer(discordId, {
+        type: "idle_cap",
+        title: "掛機收益已滿",
+        message: `掛機（${session.zoneLabel || session.zoneName || "掛機區"}）已累積滿 ${capHours} 小時上限，收益不再增加，記得領取結算！`,
+        meta: { zoneKey: session.zoneKey || session.zoneId || null, maxMinutes: cap }
+      });
+    } catch (_) { /* 通知失敗不影響查詢 */ }
+  }
+
   async getDiscordPanelStatus(discordId, displayName = "Player", options = {}) {
     const { progress } = await this.playerService.ensurePlayer(discordId, displayName);
     const level = Number(progress?.level || 1);
@@ -220,6 +244,12 @@ class IdleService {
     const zones = await this._buildDiscordZoneOptions(level);
     const session = state?.discordSession || null;
     const baseSummary = session ? this._computeDiscordSessionSummary(session, now) : null;
+    if (session && baseSummary) {
+      await this._maybeNotifyIdleCap(
+        discordId, state, session, baseSummary.elapsedMinutes,
+        Number(session.maxMinutes) || 12 * 60, "discordSession"
+      );
+    }
     const sessionSummary = baseSummary ? this._applyDailyLimitToSummary(baseSummary, {
       isMember: member.isMember,
       nonMemberClaimedMinutes: dailyClaim.nonMemberClaimedMinutes
@@ -584,6 +614,10 @@ class IdleService {
           playerLevel: level,
           now
         });
+        await this._maybeNotifyIdleCap(
+          discordId, state, state.activeSession, preview.elapsedMinutes,
+          Math.max(1, Number(activeZone.maxDurationMinutes || 480)), "activeSession"
+        );
         activeSession = {
           ...state.activeSession,
           zoneId: activeZone.id,

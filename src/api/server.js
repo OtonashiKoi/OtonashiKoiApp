@@ -15,6 +15,8 @@ const { createAdminIdleRoutes } = require("./routes/adminIdleRoutes");
 const { createAdminCreatorAuthRoutes } = require("./routes/adminCreatorAuthRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
+const { createPlayerCollectionRoutes } = require("./routes/playerCollectionRoutes");
+const { createPlayerForgeRoutes } = require("./routes/playerForgeRoutes");
 const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
 const { createMahjongRoutes } = require("./routes/mahjongRoutes");
 const { serviceContext: sharedServiceContext } = require("../bot/runtimeContext");
@@ -85,6 +87,8 @@ function createApiServer(discordClient) {
   app.use(createAdminIdleRoutes(serviceContext));
   app.use(createAdminCreatorAuthRoutes(serviceContext));
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
+  app.use(createPlayerCollectionRoutes(serviceContext));
+  app.use(createPlayerForgeRoutes(serviceContext));
   app.use(createPlayerIdleRoutes(serviceContext));
   app.use(createMahjongRoutes());
 

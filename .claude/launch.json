@@ -10,6 +10,13 @@
       "description": "主遊戲開發伺服器"
     },
     {
+      "name": "web-panel-api-only",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set", "API_ONLY=1&&node", "src/index.js"],
+      "port": 5566,
+      "description": "只開 Web/API（API_ONLY=1，不登入 Discord Bot、不註冊指令）"
+    },
+    {
       "name": "job-system-tests",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["test", "--", "--testPathPattern=job", "--watch"],
