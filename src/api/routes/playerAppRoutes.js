@@ -18,6 +18,16 @@ const playerBattleCooldowns = new Map();
 // 每回合動畫長度（ms）。可用 env `ROUND_MS` 覆寫。預設為 700 * 0.8
 const ROUND_MS = Number(process.env.ROUND_MS || Math.round(700 * 0.8));
 
+// AGI 攻速：與 DC 戰鬥相同公式（src/bot/handlers/monsterZoneHandlers.js calculateTickDelay）
+// AGI 1→1500ms/回合，AGI 40+→500ms/回合；網頁端用它播放逐回合動畫，速度才會跟 DC 一致
+const calculateTickDelay = (agi = 1) => {
+  const baseDelay = 1500;
+  const minDelay = 500;
+  const capAgi = 40;
+  const capped = Math.min(Math.max(1, agi), capAgi);
+  return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
+};
+
 // 與 Discord 戰鬥相同的低階區戰力同步規則。
 const ZONE_DAMAGE_SYNC_RULES = {
   beginner: { maxHpRatioPerBattle: 0.30 },
@@ -2021,7 +2031,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       // Cooldown duration matches the client-side animation timeline.
-      const animDurationMs = roundLogs.length * ROUND_MS + 2000;
+      // 回合節奏依玩家 AGI（同 DC），env ROUND_MS 仍可覆寫成固定值
+      const perRoundMs = process.env.ROUND_MS ? ROUND_MS : calculateTickDelay(pStats.agi || 1);
+      const animDurationMs = roundLogs.length * perRoundMs + 2000;
       const nextBattleAt = Date.now() + animDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
       // Clean up the cooldown map after the window has safely expired.
@@ -2040,6 +2052,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         finalPlayerHp: Math.max(0, finalPlayerHp),
         finalMonsterHp: Math.max(0, mHp),
         nextBattleAt,
+        // 每回合播放節奏（依玩家 AGI，與 DC 一致），前端逐回合動畫用
+        tickMs: calculateTickDelay(pStats.agi || 1),
       }));
 
     } catch (err) {
