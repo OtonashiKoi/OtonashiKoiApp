@@ -28,6 +28,38 @@ const calculateTickDelay = (agi = 1) => {
   return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
 };
 
+// 身上特效數值單位表 — 依 src/shared/combatLoop.js / effectEngine.js 引擎實際語意，
+// 只列「語意上明確是百分比」的 key（各種率、倍率、吸血、DOT、減傷）。
+// 有歧義的固定屬性（atk_up/def_up/str_up… 被動裝備是固定值）一律不加 %。
+const PCT_VALUE_EFFECT_KEYS = new Set([
+  // 倍率類（引擎 mode "mul"，value 視為 +X%）
+  "atk_multiplier_up", "def_multiplier_up", "max_hp_multiplier_up",
+  "final_damage_up", "final_damage_down", "damage_taken_up",
+  "crit_damage_up", "crit_damage_down",
+  // 率類（0~100 百分點）
+  "crit_rate_up", "crit_rate_down", "combo_up", "combo_damage_up",
+  "dodge_up", "dodge_down", "hit_up", "hit_down",
+  "block_chance_up", "execute_chance_up", "stun_chance_up",
+  // 比例類（佔傷害/血量百分比）
+  "lifesteal", "life_steal_strong", "counter",
+  "damage_reduction", "physical_damage_reduction", "magic_damage_reduction",
+  "def_ignore", "heal_over_time", "enemy_heal_reduction",
+  "bonus_vs_poisoned", "bonus_vs_debuffed", "bonus_vs_boss",
+  "bonus_vs_def_broken", "bonus_vs_burning"
+]);
+// 這些 key 引擎不使用 value（純開關/觸發），不顯示數字
+const NO_VALUE_EFFECT_KEYS = new Set(["invincible_short", "cleanse_self"]);
+
+// 顯示用數值格式化：依引擎語意決定 %；params.mode 明確指定時優先採用
+function formatEffectValueText(key, params = {}) {
+  if (NO_VALUE_EFFECT_KEYS.has(key)) return "";
+  const v = Number(params?.value);
+  if (!Number.isFinite(v)) return "";
+  if (params?.mode === "flat") return `${v > 0 ? "+" : ""}${v}`;
+  const isPct = params?.mode === "pct" || params?.mode === "mul" || PCT_VALUE_EFFECT_KEYS.has(key);
+  return `${v > 0 ? "+" : ""}${v}${isPct ? "%" : ""}`;
+}
+
 // 與 Discord 戰鬥相同的低階區戰力同步規則。
 const ZONE_DAMAGE_SYNC_RULES = {
   beginner: { maxHpRatioPerBattle: 0.30 },
@@ -956,11 +988,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           for (const eff of arrs) {
             if (!eff || !eff.key) continue;
             if (!isEffectConditionMet(eff, effCtx)) continue;
-            // 數值顯示與 DC formatPassiveEffect 同規則：mode === "pct" 才帶 %，正值帶 +
-            const effVal = Number(eff?.params?.value);
-            const valueText = Number.isFinite(effVal)
-              ? `${effVal > 0 ? "+" : ""}${effVal}${eff?.params?.mode === "pct" ? "%" : ""}`
-              : "";
+            // 數值顯示依引擎語意（PCT_VALUE_EFFECT_KEYS）：百分比效果帶 %、開關型不顯示數字
+            const valueText = formatEffectValueText(eff.key, eff?.params);
             bodyEffects.push({
               source: item.itemName || item.name || BODY_SLOT_ZH[slot] || slot,
               slot,
@@ -975,10 +1004,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
         for (const e of (progress?.activeEffects || [])) {
           if (!e) continue;
-          const buffVal = Number(e?.params?.value);
-          const buffValueText = Number.isFinite(buffVal)
-            ? `${buffVal > 0 ? "+" : ""}${buffVal}${e?.params?.mode === "pct" ? "%" : ""}`
-            : "";
+          const buffValueText = formatEffectValueText(e.key, e?.params);
           bodyEffects.push({
             source: "狀態", slot: "buff",
             name: e.definitionName || EFFECT_NAME_ZH[e.key] || e.key,
