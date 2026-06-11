@@ -63,7 +63,14 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": ["/c", "cd", "/d", "C:\\Users\\appsk\\Documents\\Github\\equipmentGAME-app", "&&", "npm", "run", "dev"],
       "port": 5180,
-      "description": "新版 React + Vite + Capacitor 前端（取代 archived player-web）"
+      "description": "新版 React + Vite + Capacitor 前端（Windows 機器用）"
+    },
+    {
+      "name": "equipmentgame-app-mac",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/riuchen/Documents/equipmentGAME-app", "run", "dev"],
+      "port": 5180,
+      "description": "新版 React + Vite + Capacitor 前端（Mac 機器用）"
     }
   ]
 }

@@ -19,3 +19,6 @@ const startCode = run("pm2", ["start", "ecosystem.config.cjs", "--only", process
 if (startCode !== 0) {
   process.exit(startCode);
 }
+
+// 確保對外 tunnel（otonashikoi.org）也活著；已在跑時 pm2 會報已存在，忽略即可
+run("pm2", ["start", "ecosystem.config.cjs", "--only", "cloudflared"]);

@@ -776,7 +776,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (code.startsWith("mock:")) {
         console.log("[PlayerApp] Development mode mock login");
         discordId = code.replace("mock:", "");
-        if (discordId.length < 5) discordId = "1450019975031951370"; // Fallback test account for local development.
+        if (discordId.length < 5) discordId = "865264891991425055"; // Fallback test account for local development.
         // 從 Discord 抓真實名稱（公會暱稱優先，其次帳號名），避免一律記成 "WebPlayer"
         if (discordClient) {
           try {
@@ -2628,6 +2628,50 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }));
     } catch (err) {
       next(err);
+    }
+  });
+
+  // ──────────────────────────────────────────────────
+  // 世界王鬧鐘（與 DC 共用同一個身分組，開戰通知 tag）
+  // ──────────────────────────────────────────────────
+
+  async function fetchAlarmMember(discordId) {
+    const { worldBossAlarmRoleId, guildId } = require("../../config").discord || {};
+    if (!worldBossAlarmRoleId || !guildId || !discordClient) return { roleId: null, member: null };
+    const guild = discordClient.guilds.cache.get(guildId)
+      || await discordClient.guilds.fetch(guildId).catch(() => null);
+    if (!guild) return { roleId: worldBossAlarmRoleId, member: null };
+    const member = await guild.members.fetch(discordId).catch(() => null);
+    return { roleId: worldBossAlarmRoleId, member };
+  }
+
+  router.get("/api/me/worldboss-alarm", requireAuth, async (req, res, next) => {
+    try {
+      const { roleId, member } = await fetchAlarmMember(req.playerRecord.discordId);
+      if (!roleId) return res.json(ok({ available: false, enabled: false, reason: "尚未設定世界王鬧鐘身分組" }));
+      if (!member) return res.json(ok({ available: false, enabled: false, reason: "找不到你的 Discord 伺服器成員資料" }));
+      res.json(ok({ available: true, enabled: member.roles.cache.has(roleId) }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/api/me/worldboss-alarm", requireAuth, async (req, res, next) => {
+    try {
+      const { roleId, member } = await fetchAlarmMember(req.playerRecord.discordId);
+      if (!roleId) return res.status(400).json({ status: "error", message: "尚未設定世界王鬧鐘身分組，請聯絡管理員。" });
+      if (!member) return res.status(400).json({ status: "error", message: "找不到你的 Discord 伺服器成員資料，請確認你在伺服器內。" });
+
+      const current = member.roles.cache.has(roleId);
+      const target = typeof req.body?.enabled === "boolean" ? req.body.enabled : !current;
+      if (target !== current) {
+        if (target) await member.roles.add(roleId);
+        else await member.roles.remove(roleId);
+      }
+      res.json(ok({ available: true, enabled: target }));
+    } catch (err) {
+      console.warn("[worldBossAlarm] 網頁切換身分組失敗:", err?.message || err);
+      res.status(500).json({ status: "error", message: "設定失敗，可能是機器人權限不足（需要「管理身分組」）。請聯絡管理員。" });
     }
   });
 
