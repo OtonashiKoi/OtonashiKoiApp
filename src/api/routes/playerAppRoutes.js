@@ -60,6 +60,36 @@ function formatEffectValueText(key, params = {}) {
   return `${v > 0 ? "+" : ""}${v}${isPct ? "%" : ""}`;
 }
 
+// 道具「特效簡易說明」列（背包詳細資料用）：
+// 卡片 → monsterCardSkill 技能名＋描述（同 DC 已裝備卡片區格式）；
+// 裝備 → passive/combat/proc 效果的中文名＋數值（優先用 notes 文案）
+function buildItemEffectLines(lib) {
+  const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
+  const lines = [];
+  const skill = lib?.monsterCardSkill;
+  if (skill?.name) {
+    lines.push(`🎴 ${skill.name}${skill.description ? `（${skill.description}）` : ""}`);
+  }
+  const TRIGGER_ZH = { passive: "被動", combat: "戰鬥", proc: "觸發" };
+  const groups = [
+    ["passive", lib?.passiveEffects],
+    ["combat", lib?.combatEffects],
+    ["proc", lib?.procEffects],
+  ];
+  for (const [trigger, arr] of groups) {
+    for (const eff of arr || []) {
+      if (!eff?.key) continue;
+      const name = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
+      const valueText = formatEffectValueText(eff.key, eff?.params);
+      const chance = Number(eff.chance ?? 100);
+      const chanceText = chance < 100 ? `（${chance}%機率）` : "";
+      const body = eff.notes || `${name}${valueText ? ` ${valueText}` : ""}`;
+      lines.push(`✦ ${TRIGGER_ZH[trigger] || trigger}：${body}${chanceText}`);
+    }
+  }
+  return lines;
+}
+
 // 與 Discord 戰鬥相同的低階區戰力同步規則。
 const ZONE_DAMAGE_SYNC_RULES = {
   beginner: { maxHpRatioPerBattle: 0.30 },
@@ -1204,9 +1234,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             ...it,
             imageUrl: lib.imageUrl || it.imageUrl || null,
             imageThumbnailUrl: lib.imageThumbnailUrl || it.imageThumbnailUrl || null,
+            description: lib.description ?? it.description ?? null,
+            monsterCardSkill: lib.monsterCardSkill || it.monsterCardSkill || null,
+            // 詳細資料面板的「特效說明」列（卡片技能 + 裝備效果，後端組好直接顯示）
+            effectLines: buildItemEffectLines(lib),
           };
         });
         equipped = await mergeEquippedFromLibrary(equipped, repo);
+        for (const [slot, entry] of Object.entries(equipped)) {
+          if (entry) equipped[slot] = { ...entry, effectLines: buildItemEffectLines(entry) };
+        }
       } catch (_) { /* 合併失敗時回原始快照，不擋背包 */ }
 
       res.json(ok({ inventory, equipped }));
