@@ -46,8 +46,31 @@ async function migrateDoc(db, collName, folder, doc, cache) {
   return { name: doc.name || doc.itemName || String(doc._id), from: localUrl, to: imageUrl };
 }
 
-(async () => {
-  const cli = new MongoClient(process.env.MONGODB_CLOUD_URI || process.env.MONGODB_URI);
+// 商店道具沒填圖時，從道具庫（itemLibraryId）補上（庫圖此時已是 Cloudinary）
+async function backfillShopImages(db) {
+  const shop = await db.collection("shopItems").find({
+    $and: [
+      { $or: [{ imageUrl: { $in: [null, ""] } }, { imageUrl: { $exists: false } }] },
+      { itemLibraryId: { $exists: true, $ne: null } },
+    ],
+  }).toArray();
+  let filled = 0;
+  for (const s of shop) {
+    const lib = await db.collection("items").findOne({ id: s.itemLibraryId });
+    if (!lib?.imageUrl) continue;
+    if (DRY) { filled++; console.log(`  ↪ (dry) 商店 ${s.name} ← 庫圖`); continue; }
+    await db.collection("shopItems").updateOne(
+      { _id: s._id },
+      { $set: { imageUrl: lib.imageUrl, imageThumbnailUrl: lib.imageThumbnailUrl || lib.imageUrl, updatedAt: new Date().toISOString() } }
+    );
+    filled++;
+    console.log(`  ↪ 商店 ${s.name} ← 庫圖 ${String(lib.imageUrl).slice(0, 70)}`);
+  }
+  return filled;
+}
+
+async function migrateOneDb(uri, label) {
+  const cli = new MongoClient(uri);
   await cli.connect();
   const db = cli.db("equipmentGame");
   const cache = new Map();
@@ -57,19 +80,28 @@ async function migrateDoc(db, collName, folder, doc, cache) {
     const docs = await db.collection(coll)
       .find({ $or: [{ imageUrl: /^\/uploads\// }, { imageThumbnailUrl: /^\/uploads\// }] })
       .toArray();
-    console.log(`\n=== ${coll}：${docs.length} 筆需要遷移 ===`);
+    if (docs.length) console.log(`\n[${label}] ${coll}：${docs.length} 筆 /uploads 需遷移`);
     for (const doc of docs) {
       try {
         const r = await migrateDoc(db, coll, folder, doc, cache);
-        if (r) { console.log(`  ✅ ${r.name} → ${String(r.to).slice(0, 80)}`); okCount++; }
+        if (r) { console.log(`  ✅ ${r.name} → ${String(r.to).slice(0, 70)}`); okCount++; }
       } catch (err) {
         console.error(`  ❌ ${doc.name || doc.itemName}: ${err.message}`);
         failCount++;
       }
     }
   }
-
-  console.log(`\n完成：成功 ${okCount} 筆、失敗 ${failCount} 筆${DRY ? "（dry-run，未實際變更）" : ""}`);
+  // 庫圖搬完再補商店空圖
+  const filled = await backfillShopImages(db);
+  console.log(`\n[${label}] 遷移 ${okCount} 筆、商店補圖 ${filled} 筆、失敗 ${failCount} 筆`);
   await cli.close();
-  process.exit(failCount > 0 ? 1 : 0);
+  return failCount;
+}
+
+(async () => {
+  let fails = 0;
+  fails += await migrateOneDb("mongodb://127.0.0.1:27017/equipmentGame", "本機");
+  if (process.env.MONGODB_CLOUD_URI) fails += await migrateOneDb(process.env.MONGODB_CLOUD_URI, "雲端");
+  console.log(`\n全部完成${DRY ? "（dry-run）" : ""}，總失敗 ${fails} 筆`);
+  process.exit(fails > 0 ? 1 : 0);
 })().catch((e) => { console.error("FATAL:", e.message); process.exit(1); });

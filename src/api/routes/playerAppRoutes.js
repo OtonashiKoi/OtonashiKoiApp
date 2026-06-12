@@ -1730,6 +1730,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/shop/items", requireAuth, async (req, res, next) => {
     try {
       const items = await serviceContext.shopService.listItems({ includeDisabled: false });
+      // 商店道具自己沒填圖時，退回道具庫（itemLibraryId）的圖（藥水等共用素材常只在庫裡有圖）
+      try {
+        const repo = serviceContext.itemRepository;
+        const needIds = [...new Set(items.filter((s) => !s.imageUrl && s.itemLibraryId).map((s) => s.itemLibraryId))];
+        if (needIds.length) {
+          const libs = await Promise.all(needIds.map((id) => repo.findById(id).catch(() => null)));
+          const libMap = {};
+          needIds.forEach((id, i) => { if (libs[i]) libMap[id] = libs[i]; });
+          for (const s of items) {
+            if (!s.imageUrl && s.itemLibraryId && libMap[s.itemLibraryId]) {
+              const lib = libMap[s.itemLibraryId];
+              s.imageUrl = lib.imageUrl || s.imageUrl || null;
+              s.imageThumbnailUrl = s.imageThumbnailUrl || lib.imageThumbnailUrl || null;
+            }
+          }
+        }
+      } catch (_) { /* 撈庫失敗時回原始商店資料，不擋商店 */ }
       res.json(ok(items));
     } catch (err) {
       next(err);
