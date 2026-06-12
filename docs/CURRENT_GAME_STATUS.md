@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-06-09T16:12:29.660Z
+Generated at: 2026-06-12T06:31:00.893Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,8 +8,8 @@ Generated at: 2026-06-09T16:12:29.660Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 370 |
-| 進度資料 | 374 |
+| 玩家 | 371 |
+| 進度資料 | 375 |
 | 怪物 | 52 |
 | 怪物狀態文件 | 10 |
 | 道具 | 339 |
@@ -23,7 +23,7 @@ Generated at: 2026-06-09T16:12:29.660Z
 
 | Zone | 名稱 | 最低等級 | 最高等級 | 怪物 | 啟用 | Boss |
 | --- | --- | --- | --- | --- | --- | --- |
-| beginner | 新手區 | 1 | 3 | 5 | 5 | 1 |
+| beginner | 新手區 | 1 | 無上限 | 5 | 5 | 1 |
 | normal | 一般區 | 1 | 無上限 | 8 | 8 | 2 |
 | mid | 中級區 | 10 | 無上限 | 12 | 12 | 2 |
 | ancient_city | 古城 | 20 | 30 | 8 | 8 | 1 |

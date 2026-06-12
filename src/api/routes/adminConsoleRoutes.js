@@ -4,7 +4,7 @@ const multer = require("multer");
 const os = require("os");
 const config = require("../../config");
 const { fail, ok } = require("../../shared/response");
-const { uploadImageLocally } = require("../../shared/localImageUpload");
+const { uploadImage } = require("../../shared/cloudinaryUpload");
 const { addEnhanceGemToInventory } = require("../../shared/inventoryStacking");
 const { featureKeyToZone } = require("../../shared/zones");
 const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
@@ -471,7 +471,7 @@ function createAdminConsoleRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "Please select an image file to upload."));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(req.file.path, "items", req.file.originalname, req.file.mimetype);
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "items");
       console.log(`[AdminItemImage] upload done id=${req.params.id} elapsed=${Date.now() - startedAt}ms`);
       const item = await serviceContext.itemService.updateItem(
         req.params.id,
@@ -514,7 +514,7 @@ function createAdminConsoleRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "Please select an image file to upload."));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(req.file.path, "shop_items", req.file.originalname, req.file.mimetype);
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "shop_items");
       console.log(`[AdminShopItemImage] upload done id=${req.params.id} elapsed=${Date.now() - startedAt}ms`);
       const item = await serviceContext.shopService.updateItem(req.params.id, { imageUrl, imageThumbnailUrl });
       console.log(`[AdminShopItemImage] item saved id=${req.params.id} elapsed=${Date.now() - startedAt}ms`);
@@ -570,7 +570,7 @@ function createAdminConsoleRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "Image file is required."));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(req.file.path, "battle_assets", req.file.originalname, req.file.mimetype);
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "battle_assets");
       res.json(ok({ imageUrl, imageThumbnailUrl }, "battle asset image uploaded"));
     } catch (error) {
       next(error);
@@ -629,7 +629,7 @@ function createAdminConsoleRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "Image file is required."));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(req.file.path, "animation_templates", req.file.originalname, req.file.mimetype);
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "animation_templates");
       res.json(ok({ imageUrl, imageThumbnailUrl }, "animation template image uploaded"));
     } catch (error) {
       next(error);

@@ -1186,8 +1186,29 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId } = req.playerRecord;
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
-      const inventory = progress?.inventory || [];
-      const equipped = progress?.equipment || {};
+      let inventory = progress?.inventory || [];
+      let equipped = progress?.equipment || {};
+
+      // 圖片等顯示欄位以道具庫最新為準：實例是取得當下的快照，
+      // 後台更新庫圖後舊實例會一直顯示舊圖（批次查詢，去重後通常只有幾十個 id）
+      try {
+        const repo = serviceContext.itemRepository;
+        const ids = [...new Set(inventory.map((it) => it?.itemId).filter(Boolean))];
+        const results = await Promise.all(ids.map((id) => repo.findById(id).catch(() => null)));
+        const libMap = {};
+        ids.forEach((id, i) => { if (results[i]) libMap[id] = results[i]; });
+        inventory = inventory.map((it) => {
+          const lib = it?.itemId ? libMap[it.itemId] : null;
+          if (!lib) return it;
+          return {
+            ...it,
+            imageUrl: lib.imageUrl || it.imageUrl || null,
+            imageThumbnailUrl: lib.imageThumbnailUrl || it.imageThumbnailUrl || null,
+          };
+        });
+        equipped = await mergeEquippedFromLibrary(equipped, repo);
+      } catch (_) { /* 合併失敗時回原始快照，不擋背包 */ }
+
       res.json(ok({ inventory, equipped }));
     } catch (err) {
       next(err);

@@ -193,6 +193,9 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
       itemName: lib.name     || entry.itemName || entry.name     || null,
       // 帶 DB 最新中文說明（snapshot 常缺 description，戒指特性等顯示要用）
       description: lib.description ?? entry.description ?? null,
+      // 圖片以道具庫最新為準（更新庫圖後，舊實例快照不再顯示舊圖）
+      imageUrl: lib.imageUrl || entry.imageUrl || null,
+      imageThumbnailUrl: lib.imageThumbnailUrl || entry.imageThumbnailUrl || null,
     };
   }
   return merged;

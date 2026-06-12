@@ -2,7 +2,7 @@ const { Router } = require("express");
 const multer = require("multer");
 const os = require("os");
 const { ok, fail } = require("../../shared/response");
-const { uploadImageLocally } = require("../../shared/localImageUpload");
+const { uploadImage } = require("../../shared/cloudinaryUpload");
 const { ALL_ZONE_KEYS, zoneToFeatureKey } = require("../../shared/zones");
 
 const upload = multer({
@@ -185,12 +185,8 @@ function createAdminMonsterRoutes(serviceContext) {
         res.status(400).json(fail("NO_FILE", "請選擇要上傳的圖片"));
         return;
       }
-      const { imageUrl, imageThumbnailUrl } = await uploadImageLocally(
-        req.file.path,
-        "monsters",
-        req.file.originalname,
-        req.file.mimetype
-      );
+      // 統一走 Cloudinary（與舊版一致）；本機 /uploads 版本曾造成圖片不同步
+      const { imageUrl, imageThumbnailUrl } = await uploadImage(req.file.path, "monsters");
       const monster = await serviceContext.monsterService.updateMonster(req.params.id, { imageUrl, imageThumbnailUrl });
       const linkedCards = await serviceContext.itemRepository?.findByMonsterCardOf?.(monster.id).catch(() => []);
       if (Array.isArray(linkedCards) && linkedCards.length > 0) {
