@@ -1985,7 +1985,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
-      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || []);
+      // 與 DC 一致：傳 pkRating + zone，讓裝備的區域條件特效生效（如龍系武器在龍族之領 +20%）
+      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, zone: zoneKey });
 
       // ── 共鬥光環系統 ──
       const freshStateForAura = await serviceContext.monsterService.getState(zoneKey);
@@ -2055,6 +2056,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 如果無法取得怪物卡片，繼續進行戰鬥
       }
 
+      // 與 DC 一致：圖鑑加成（依玩家對這隻怪的累積擊殺，最高 +30% 傷害）
+      const { bestiaryRequirement, bestiaryBonusPct } = require("../../shared/bestiary");
+      const _bestiaryMonsterId = String(monster?.id || monster?._id || monster.name || "");
+      const _bestiaryReq = bestiaryRequirement(monster, false);
+      const _bestiaryKillsBefore = Number(progress?.bestiary?.[_bestiaryMonsterId]) || 0;
+      const _bestiaryBonusPct = bestiaryBonusPct(_bestiaryKillsBefore, _bestiaryReq);
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
         runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial, undefined, {
@@ -2064,10 +2072,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           inventory: progress?.inventory || [],
           partyEffects,
           monsterEquipped,
-          monsterIsBoss: Boolean(monster?.isBoss)
+          monsterIsBoss: Boolean(monster?.isBoss),
+          bestiaryBonusPct: _bestiaryBonusPct, // 圖鑑傷害加成（同 DC）
+          zone: zoneKey // 裝備的區域條件特效（同 DC）
         });
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
-      const zoneDamageSyncApplied = ["beginner", "normal"].includes(zoneKey) && !isOnlyDTierEquipped(equipped);
+      // 與 DC 一致：戰力同步已停用（monsterZoneHandlers.js 也是寫死 false），
+      // 用原始傷害與真實 outcome，不再壓制低階區輸出
+      const zoneDamageSyncApplied = false;
       const syncResult = zoneDamageSyncApplied
         ? applyZoneDamageSync(
           zoneKey,
@@ -2133,11 +2145,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
 
         if (outcome === "lose") {
-          rewardLines = [`You were defeated by **${monster.name}**!`, (monster.entryFee ?? getZoneDefaultEntryFee(zoneKey)) > 0 ? "Entry fee consumed." : "Try again next time."];
+          rewardLines = [`你被 ${monster.name} 擊敗了…`];
         } else {
-          rewardLines = [`Survived ${MAX_ROUNDS} rounds and forced the monster to retreat.`];
+          // timeout：撐完回合但沒打死（怪物血量跨場累積，其他玩家也會接力）
+          rewardLines = [`激戰 ${MAX_ROUNDS} 回合，怪物殘血撤退（剩 ${Math.max(0, Math.round(mHp))} HP），下次再來補刀！`];
         }
-        rewardLines.push("Monster battle state has been updated in the zone panel.");
 
         // update panel（排行榜去重，最多 5 秒更新一次）
         _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
