@@ -293,8 +293,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     linkedSupportBadgeLabelsAtLink = []
   }) {
     const bindingRepo = serviceContext.streamAccountBindingRepository;
+    // 比對帳號是否相同時忽略歷史前綴差異（舊資料 youtube 存成 yt-UCxxx，新流程是 UCxxx）
+    // → 同一個帳號重新授權只更新資料；真的換成「不同帳號」才擋
+    const normId = (s) => String(s || "").replace(/^(yt-|youtube-|twitch-)/i, "").trim().toLowerCase();
     const existingSameProvider = await bindingRepo.findByDiscordAndPlatform(discordId, provider).catch(() => null);
-    if (existingSameProvider && existingSameProvider.platformUserId && existingSameProvider.platformUserId !== platformUserId) {
+    if (existingSameProvider && existingSameProvider.platformUserId
+        && normId(existingSameProvider.platformUserId) !== normId(platformUserId)) {
       throw new Error(`你的 ${provider === "youtube" ? "YouTube" : "Twitch"} 已綁定過，無法更換帳號。`);
     }
 
