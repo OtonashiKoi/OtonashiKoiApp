@@ -1098,6 +1098,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 2.35 發直播綁定碼（DC 同款）：玩家拿碼去直播聊天室輸入 `!綁定 碼` 完成綁定+會員偵測
+  router.post("/api/me/stream-bind-code", requireAuth, (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { createCode } = require("../../bot/bindingStore");
+      const code = createCode(discordId);
+      res.json(ok({
+        code,
+        command: `!綁定 ${code}`,
+        expiresInMinutes: 10,
+        youtubeUrl: config.streamMembership?.bindYoutubeUrl || null
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // 2.4 Issue stream-auth state token — 前端綁定流程的第一步
   router.post("/api/me/stream-auth/state", requireAuth, (req, res) => {
     const { discordId } = req.playerRecord;

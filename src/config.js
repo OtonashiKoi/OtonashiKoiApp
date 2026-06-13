@@ -25,6 +25,7 @@ module.exports = {
     playerRoleIds: parseCsv(process.env.PLAYER_ROLE_IDS), // 玩家角色 ID 陣列
     playerUserIds: parseCsv(process.env.PLAYER_USER_IDS), // 玩家用戶 ID 陣列
     personalRoomChannelId: process.env.PERSONAL_ROOM_CHANNEL_ID || "", // 個人房間頻道 ID
+    worldBossAlarmRoleId: process.env.WORLD_BOSS_ALARM_ROLE_ID || "1514513444899131424", // 世界王鬧鐘身分組 ID（個人房間按鈕訂閱＋開戰通知 TAG）
     pkArenaStartNoticeChannelId: process.env.PK_ARENA_START_NOTICE_CHANNEL_ID || "1498608950671839263", // PK 開戰通知頻道 ID
     pkArenaReportChannelId: process.env.PK_ARENA_REPORT_CHANNEL_ID || "1486423293044068392", // PK 戰報頻道 ID
     pkArenaForumChannelId: process.env.PK_ARENA_FORUM_CHANNEL_ID || "1501890000000913479", // PK 論壇戰報頻道 ID
@@ -77,6 +78,8 @@ module.exports = {
     adminUserIds: parseCsv(process.env.STREAM_ADMIN_USER_IDS || "865264891991425055"),
     youtubeChannel: process.env.STREAM_YOUTUBE_CHANNEL || "www.youtube.com/@音無恋",
     twitchChannel: process.env.STREAM_TWITCH_CHANNEL || "https://www.twitch.tv/otonashikoi",
+    // 綁定碼引導網址：玩家拿到綁定碼後要去這個直播聊天室輸入 `!綁定 碼`
+    bindYoutubeUrl: process.env.STREAM_BIND_YOUTUBE_URL || "https://www.youtube.com/watch?v=dwAGim_MnXw",
     youtubeTiers: {
       C: "鯉民",
       B: "鯉長",
