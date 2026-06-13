@@ -18,6 +18,10 @@ function createAdminMonsterRoutes(serviceContext) {
   const router = Router();
 
   router.use("/admin/", (req, res, next) => {
+    // creator-auth HTML 頁放行（頁內 API 另有 requireAdmin）；originalUrl 才是完整路徑
+    if (req.method === "GET" && req.originalUrl.split("?")[0] === "/admin/creator-auth") {
+      return next();
+    }
     const token = (req.header("Authorization") || "").replace("Bearer ", "");
     const config = require("../../config");
     if (token !== config.api.adminPassword) {

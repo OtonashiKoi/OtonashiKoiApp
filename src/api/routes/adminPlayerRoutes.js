@@ -20,6 +20,11 @@ function createAdminPlayerRoutes(serviceContext) {
   };
 
   router.use("/admin", (req, res, next) => {
+    // creator-auth 的 HTML 頁本身不需密碼（頁內 API 呼叫另有 requireAdmin 把關）
+    // router.use("/admin",...) 內 req.path 相對掛載點，要用 originalUrl 判斷
+    if (req.method === "GET" && req.originalUrl.split("?")[0] === "/admin/creator-auth") {
+      return next();
+    }
     const authHeader = req.header("Authorization") || "";
     const token = authHeader.replace("Bearer ", "");
 
