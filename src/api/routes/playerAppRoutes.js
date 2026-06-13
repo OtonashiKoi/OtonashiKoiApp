@@ -1137,40 +1137,26 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             };
           }
           if (b.platform === "youtube") {
-            // 用 broadcaster token 查單一頻道是否是會員
-            try {
-              const creatorAccessToken = await fetchGoogleCreatorAccessToken();
-              const memberRes = await fetch(
-                `https://www.googleapis.com/youtube/v3/members?part=snippet&filterByMemberChannelId=${encodeURIComponent(b.platformUserId)}&maxResults=1`,
-                { headers: { Authorization: `Bearer ${creatorAccessToken}` } }
-              );
-              const memberData = await memberRes.json().catch(() => ({}));
-              if (!memberRes.ok) {
-                throw new Error(memberData?.error?.message || "YouTube 會員查詢失敗");
+            // YouTube members API 是 Google 白名單限定（個人創作者拿不到），一律 403。
+            // 改用 DC 同款方案：會員狀態來自直播彈幕徽章（OneComme），綁定/留言當下偵測
+            // 並記在 binding 上（linkedSupportAtLink / playerTierAtLink / badge labels）。
+            const labels = Array.isArray(b.linkedSupportBadgeLabelsAtLink) ? b.linkedSupportBadgeLabelsAtLink : [];
+            const isMember = Boolean(b.linkedSupportAtLink) || Boolean(b.playerTierAtLink);
+            const levelName = labels.find(Boolean)
+              || (b.playerTierAtLink ? `會員位階 ${b.playerTierAtLink}` : null)
+              || (isMember ? "會員" : null);
+            return {
+              ...baseInfo,
+              membership: {
+                isMember,
+                tier: b.playerTierAtLink || null,
+                levelName,
+                checkedAt: b.linkedAt || new Date().toISOString(),
+                // 來源是直播彈幕偵測（非即時 API）；未偵測過會員時 isMember=false 但不是錯誤
+                source: "stream-chat",
+                hint: isMember ? null : "在直播聊天室以會員身分留言一次即可偵測"
               }
-              const member = memberData?.items?.[0] || null;
-              const levelName = member?.snippet?.membershipsDetails?.highestAccessibleLevelDisplayName || null;
-              return {
-                ...baseInfo,
-                membership: {
-                  isMember: Boolean(levelName),
-                  tier: null,
-                  levelName,
-                  checkedAt: new Date().toISOString(),
-                  source: "youtube-api"
-                }
-              };
-            } catch (err) {
-              return {
-                ...baseInfo,
-                membership: {
-                  isMember: false,
-                  checkedAt: new Date().toISOString(),
-                  source: "unavailable",
-                  error: err.message
-                }
-              };
-            }
+            };
           }
           return baseInfo;
         } catch (err) {
