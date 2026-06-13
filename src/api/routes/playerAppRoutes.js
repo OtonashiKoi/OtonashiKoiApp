@@ -187,13 +187,32 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       .replace(/'/g, "&#39;");
   }
 
-  function renderAuthResultPage(title, lines, buttons = []) {
+  function renderAuthResultPage(title, lines, buttons = [], opts = {}) {
     const buttonHtml = buttons.map((btn) => {
       const href = htmlEscape(btn.href);
       const label = htmlEscape(btn.label);
-      return `<a class="btn ${htmlEscape(btn.kind || "primary")}" href="${href}" target="_blank" rel="noreferrer">${label}</a>`;
+      // 同網域的回遊戲連結用同分頁開；外部連結才開新分頁
+      const target = String(btn.href || "").startsWith("/") ? "" : ' target="_blank" rel="noreferrer"';
+      return `<a class="btn ${htmlEscape(btn.kind || "primary")}" href="${href}"${target}>${label}</a>`;
     }).join("");
     const lineHtml = lines.map((line) => `<p>${htmlEscape(line)}</p>`).join("");
+    // 若在遊戲彈窗中開啟（window.opener 存在），成功時通知遊戲頁並自動關閉
+    const popupScript = opts.autoClose
+      ? `<script>
+  (function(){
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ type: "otonashi-stream-auth", ok: true, title: ${JSON.stringify(title)} }, "*");
+        var c=document.getElementById("closehint"); if(c) c.style.display="block";
+        setTimeout(function(){ window.close(); }, 1200);
+      }
+    } catch(e){}
+  })();
+</script>`
+      : "";
+    const closeHint = opts.autoClose
+      ? `<p class="muted" id="closehint" style="display:none">已完成，視窗即將自動關閉…</p>`
+      : "";
     return `<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -217,8 +236,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     <h1>${htmlEscape(title)}</h1>
     ${lineHtml}
     <div class="actions">${buttonHtml}</div>
-    <p class="muted">如果是從 Discord 進來，回到原本玩家面板再重新綁定即可。</p>
+    ${closeHint}
   </main>
+  ${popupScript}
 </body>
 </html>`;
   }
@@ -715,8 +735,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       await sendTierDm(state.discordId, lines);
 
       return res.send(renderAuthResultPage("Twitch 授權完成", lines, [
-        { label: "回到 Discord", href: config.discord.inviteUrl || "https://discord.gg/", kind: "secondary" }
-      ]));
+        { label: "回到遊戲", href: "/", kind: "primary" }
+      ], { autoClose: true }));
     } catch (err) {
       return res.status(400).send(renderAuthResultPage("Twitch 授權失敗", [
         `❌ ${err.message || "Twitch 授權失敗"}`
@@ -802,8 +822,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       await sendTierDm(state.discordId, lines);
 
       return res.send(renderAuthResultPage("YouTube 授權完成", lines, [
-        { label: "回到 Discord", href: config.discord.inviteUrl || "https://discord.gg/", kind: "secondary" }
-      ]));
+        { label: "回到遊戲", href: "/", kind: "primary" }
+      ], { autoClose: true }));
     } catch (err) {
       return res.status(400).send(renderAuthResultPage("YouTube 授權失敗", [
         `❌ ${err.message || "YouTube 授權失敗"}`
