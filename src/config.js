@@ -36,7 +36,7 @@ module.exports = {
     enhanceFailureAnnounceChannelId: process.env.ENHANCE_FAILURE_ANNOUNCE_CHANNEL_ID || "1450062298076151952", // 強化失敗公告頻道 ID
     welcomeAuditEnabled: process.env.ENABLE_WELCOME_AUDIT === "1" && process.env.DISABLE_WELCOME_AUDIT !== "1",
     welcomeAuditIntervalMs: Math.max(60_000, Number.parseInt(process.env.WELCOME_AUDIT_INTERVAL_MS || "1800000", 10) || 1_800_000),
-    inviteUrl: process.env.DISCORD_INVITE_URL || "https://discord.gg/your-invite" // 預設 Discord 邀請連結
+    inviteUrl: process.env.DISCORD_INVITE_URL || "https://discord.com/invite/EfpECVDJF6" // 預設 Discord 邀請連結
   },
   // API 伺服器設定
   api: {
