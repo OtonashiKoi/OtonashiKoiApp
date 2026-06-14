@@ -1613,7 +1613,26 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const titleEq = progress.equipment?.title_eq;
       const title = titleEq?.itemName || null;
 
-      return res.json({ found: true, level, title, displayName: player.displayName });
+      // 聊天室 overlay 顯示「Discord 身分名稱」而非直播平台暱稱：
+      // 公會暱稱優先 → Discord 全域名 → 帳號名 → 最後退回遊戲存檔暱稱。
+      let displayName = player.displayName;
+      try {
+        if (discordClient && player.discordId) {
+          const guildId = require("../../config").discord?.guildId;
+          const guild = guildId
+            ? (discordClient.guilds.cache.get(guildId) || await discordClient.guilds.fetch(guildId).catch(() => null))
+            : null;
+          const member = guild ? await guild.members.fetch({ user: player.discordId, force: false }).catch(() => null) : null;
+          if (member?.displayName) {
+            displayName = member.displayName;
+          } else {
+            const u = await discordClient.users.fetch(player.discordId).catch(() => null);
+            if (u) displayName = u.globalName || u.username || displayName;
+          }
+        }
+      } catch (_) { /* 抓不到 Discord 名稱時退回遊戲暱稱 */ }
+
+      return res.json({ found: true, level, title, displayName, discordId: player.discordId });
     } catch (_) {
       return res.json({ found: false });
     }
