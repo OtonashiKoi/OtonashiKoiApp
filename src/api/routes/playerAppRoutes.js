@@ -1971,6 +1971,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const secsLeft = Math.ceil((cd.nextBattleAt - Date.now()) / 1000);
         return res.status(429).json({ status: "error", message: `battle cooldown active, retry in ${secsLeft}s` });
       }
+
+      // 與 DC 一致：進入怪物區戰鬥時，自動結算並結束進行中的掛機（不阻擋戰鬥）
+      try {
+        await serviceContext.idleService?.settleDiscordSessionOnBattleStart?.(discordId, displayName);
+      } catch (e) {
+        console.warn("[PlayerApp] idle auto-settle on battle failed:", e.message);
+      }
       
       const [stateRaw, monsters] = await Promise.all([
         serviceContext.monsterService.getState(zoneKey),

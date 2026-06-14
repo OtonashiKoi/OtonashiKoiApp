@@ -24,10 +24,16 @@ function createPlayerIdleRoutes(serviceContext) {
     }
   });
 
+  // 與 DC 掛機同一套模型（getDiscordPanelStatus / *DiscordSession）：
+  //   收益＝該區非 BOSS 平均×10%、前 5 分鐘無獎勵、單次最多 12 小時、
+  //   非會員每日 6 小時(台北時區)、只給金幣與 EXP 不掉道具。
+  // 會員判定：未帶 memberRoleIds 時 _resolveMembership 會退回 progress.playerTier。
+  const errStatus = (error) => error.status || error.statusCode || null;
+
   router.get("/api/idle/status", async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
-      const status = await idleService.getPlayerStatus(discordId, displayName);
+      const status = await idleService.getDiscordPanelStatus(discordId, displayName);
       res.json(ok(status, "idle status fetched"));
     } catch (error) {
       next(error);
@@ -37,7 +43,7 @@ function createPlayerIdleRoutes(serviceContext) {
   router.get("/api/idle/zones", async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
-      const status = await idleService.getPlayerStatus(discordId, displayName);
+      const status = await idleService.getDiscordPanelStatus(discordId, displayName);
       res.json(ok(status.zones || [], "idle zones fetched"));
     } catch (error) {
       next(error);
@@ -47,16 +53,18 @@ function createPlayerIdleRoutes(serviceContext) {
   router.post("/api/idle/start", async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
-      const zoneId = String(req.body?.zoneId || "").trim();
-      if (!zoneId) {
-        res.status(400).json(fail("INVALID_ARGUMENT", "zoneId is required"));
+      // 前端傳 zoneKey（相容舊欄位 zoneId）
+      const zoneKey = String(req.body?.zoneKey || req.body?.zoneId || "").trim();
+      if (!zoneKey) {
+        res.status(400).json(fail("INVALID_ARGUMENT", "zoneKey is required"));
         return;
       }
-      const started = await idleService.startSession(discordId, displayName, zoneId);
+      const started = await idleService.startDiscordSession(discordId, displayName, zoneKey);
       res.json(ok(started, "idle session started"));
     } catch (error) {
-      if (error.status) {
-        res.status(error.status).json(fail(error.code || "IDLE_START_FAILED", error.message));
+      const st = errStatus(error);
+      if (st) {
+        res.status(st).json(fail(error.code || "IDLE_START_FAILED", error.message));
         return;
       }
       next(error);
@@ -67,11 +75,12 @@ function createPlayerIdleRoutes(serviceContext) {
     try {
       const { discordId, displayName } = req.playerRecord;
       const force = Boolean(req.body?.force);
-      const summary = await idleService.claimSession(discordId, displayName, { force });
+      const summary = await idleService.claimDiscordSession(discordId, displayName, "manual_claim", { force });
       res.json(ok(summary, "idle reward claimed"));
     } catch (error) {
-      if (error.status) {
-        res.status(error.status).json(fail(error.code || "IDLE_CLAIM_FAILED", error.message));
+      const st = errStatus(error);
+      if (st) {
+        res.status(st).json(fail(error.code || "IDLE_CLAIM_FAILED", error.message));
         return;
       }
       next(error);
@@ -80,12 +89,13 @@ function createPlayerIdleRoutes(serviceContext) {
 
   router.post("/api/idle/cancel", async (req, res, next) => {
     try {
-      const { discordId } = req.playerRecord;
-      const result = await idleService.cancelSession(discordId);
+      const { discordId, displayName } = req.playerRecord;
+      const result = await idleService.cancelDiscordSession(discordId, displayName);
       res.json(ok(result, "idle session canceled"));
     } catch (error) {
-      if (error.status) {
-        res.status(error.status).json(fail(error.code || "IDLE_CANCEL_FAILED", error.message));
+      const st = errStatus(error);
+      if (st) {
+        res.status(st).json(fail(error.code || "IDLE_CANCEL_FAILED", error.message));
         return;
       }
       next(error);
