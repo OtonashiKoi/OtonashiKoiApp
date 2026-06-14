@@ -154,7 +154,9 @@
   <div id="board"></div>
 
   <script>
-    const API = 'http://127.0.0.1:5566';
+    // 同源（空字串＝相對路徑）：本機開是 localhost、別台電腦開 otonashikoi.org 都能讀到。
+    // 原本寫死 127.0.0.1:5566，別台電腦會指向「自己的」localhost 而抓不到排隊資料。
+    const API = '';
     const boardEl = document.getElementById('board');
 
     let queueState = [];
