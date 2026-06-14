@@ -2225,6 +2225,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         logs: roundLogs,
         rewardLines,
         rewardSummary: rewardLines._summary || null,
+        // 本場掉落道具（結構化，給網頁漂浮道具氣泡 + 詳細視窗）
+        drops: Array.isArray(rewardLines._drops) ? rewardLines._drops : [],
         totalDamage,
         finalPlayerHp: Math.max(0, finalPlayerHp),
         finalMonsterHp: Math.max(0, mHp),

@@ -19,6 +19,7 @@ const { getDropBoostPct } = require("../../shared/pkArenaConfig");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
 const { clearCurrentCache } = require("../../adapters/mongo/requestCache");
 const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
+const config = require("../../config");
 const {
   isDiscordRestProtected,
   isTransientDiscordNetworkError,
@@ -723,6 +724,16 @@ function applyWorldBossPhaseModifiers(monsterStats, phase) {
     atk: Math.max(1, Math.round((monsterStats.atk || 0) * Math.max(0.1, Number(phase.atkMultiplier || 1)))),
     def: Math.max(0, Math.min(75, (monsterStats.def || 0) * Math.max(0.1, Number(phase.defMultiplier || 1))))
   };
+}
+
+// 光環來源顯示名：玩家 displayName 在 DB 多半被存成 Discord ID（純數字），
+// 改用 <@id> mention，讓 Discord 在戰報 embed 內顯示真實暱稱（embed 內的 mention 不會發出通知/ping）。
+function resolveAuraSourceName(name, discordId) {
+  const trimmed = name == null ? "" : String(name).trim();
+  if (!trimmed || /^\d{5,}$/.test(trimmed)) {
+    return discordId ? `<@${discordId}>` : "隊友";
+  }
+  return trimmed;
 }
 
 function compactAuraSourceNames(roundLogs = []) {
@@ -2501,7 +2512,12 @@ async function handleEnterBattle(interaction) {
           if (botClient?.isReady()) {
             const chatChannel = await botClient.channels.fetch("1498608950671839263").catch(() => null);
             if (chatChannel?.isTextBased?.()) {
-              await chatChannel.send(`⚔️ **世界BOSS 挑戰開始！**\n**${displayName}** 率先向 **${battleMonster.name}** 發起挑戰！\n前往高級區加入戰鬥，30 分鐘內未擊殺視為失敗。`);
+              const alarmRoleId = config.discord?.worldBossAlarmRoleId;
+              const alarmTag = alarmRoleId ? `\n<@&${alarmRoleId}> 世界王鬧鐘響囉！` : "";
+              await chatChannel.send({
+                content: `⚔️ **世界BOSS 挑戰開始！**\n**${displayName}** 率先向 **${battleMonster.name}** 發起挑戰！\n前往高級區加入戰鬥，30 分鐘內未擊殺視為失敗。${alarmTag}`,
+                allowedMentions: alarmRoleId ? { roles: [alarmRoleId] } : { parse: [] }
+              });
             }
           }
         } catch (e) {
@@ -2612,7 +2628,10 @@ async function handleEnterBattle(interaction) {
           const participant = await participantCache.get(pid, pid === discordId ? displayName : null);
           // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
           const refs = participant.refs || [];
-          const pidName = participant.displayName || (pid === discordId ? displayName : null);
+          const pidName = resolveAuraSourceName(
+            participant.displayName || (pid === discordId ? displayName : null),
+            pid
+          );
           const pidJobName = getJobNameFromEquipped(participant.equipped);
           for (const r of refs) {
             if (r && r.target === 'party') {
@@ -2631,7 +2650,7 @@ async function handleEnterBattle(interaction) {
       const aura = battleState.activeHealerAura;
       if (aura && aura.effects && !participants.includes(aura.discordId)) {
         for (const e of aura.effects) {
-          partyEffects.push({ ...e, sourceName: aura.displayName || null, sourceJobName: "治療師" });
+          partyEffects.push({ ...e, sourceName: resolveAuraSourceName(aura.displayName, aura.discordId), sourceJobName: "治療師" });
         }
       }
 
@@ -3091,6 +3110,32 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
   }
 }
 
+// 把掉落道具物件壓成網頁版需要的精簡欄位（漂浮氣泡 + 詳細視窗用）
+function toWebDrop(o) {
+  if (!o) return null;
+  return {
+    uuid: o.uuid,
+    itemId: o.itemId,
+    name: o.itemName,
+    image: o.imageThumbnailUrl || o.imageUrl || null,
+    imageUrl: o.imageUrl || null,
+    tier: o.tier || null,
+    itemType: o.itemType || null,
+    equipSlot: o.equipSlot || null,
+    equipStats: o.equipStats || {},
+    weaponType: o.weaponType || null,
+    isTwoHanded: !!o.isTwoHanded,
+    effect: o.itemEffect || null,
+    useEffects: o.useEffects || [],
+    passiveEffects: o.passiveEffects || [],
+    procEffects: o.procEffects || [],
+    combatEffects: o.combatEffects || [],
+    monsterCardSkill: o.monsterCardSkill || null,
+    source: o.source || "monster_drop",
+    sourceRef: o.sourceRef || null,
+  };
+}
+
 async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal" }) {
   const sc = getServiceContext();
   const rewardLines = [];
@@ -3448,6 +3493,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           if (canSendRewardNotice(luckyPid)) {
             if (isKiller) {
               rewardLines.push(`🎁 道具掉落：${allDropped.join("、")}`);
+              // 結構化掉落（給網頁版漂浮道具氣泡 + 詳細視窗用）
+              rewardLines._drops = [...(rewardLines._drops || []), ...allDroppedObjects.map(toWebDrop)];
               _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "kill").catch(() => {});
             } else {
               _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "group").catch(() => {});
