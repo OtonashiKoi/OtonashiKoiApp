@@ -311,7 +311,7 @@
 
     // ── 判斷 img 標籤是否為表情符號（emote）──
     function isEmote(imgTag) {
-      if (/class=["'][^"']*emote[^"']*["']/i.test(imgTag)) return true;   // class="emote"
+      if (/class=["'][^"']*(emote|emoji)[^"']*["']/i.test(imgTag)) return true;   // class="emote"/"emoji"（Twitch/YT）
       if (/data-custom-emoji=["']true["']/i.test(imgTag))  return true;   // YT 自訂表情
       if (/data-[a-z]+=["'][^"']*emoji[^"']*["']/i.test(imgTag)) return true; // 任何 data-*emoji
       if (/alt=["'][^"']{1,8}["']/.test(imgTag)) return true;             // alt 很短（貼圖縮寫）
@@ -351,7 +351,7 @@
 
     // ── 把 comment 渲染成安全的 HTML（emote 變小圖，其他標籤轉純文字）──
     function buildContentHtml(raw) {
-      if (!raw) return '';
+      if (!raw) return document.createDocumentFragment();
       // 把 <img> 處理：emote → 行內小圖；非 emote → 移除（已由 extractImages 獨立處理）
       const processed = raw.replace(/(<img[^>]+>)/gi, (tag) => {
         if (isEmote(tag)) {
@@ -366,21 +366,23 @@
         }
         return ''; // 非 emote img 移除（獨立顯示）
       });
-      // 移除其他 HTML 標籤、保留文字和 inline-emote img
-      // 用 DOMParser 安全解析
+      // 解析後遞迴走訪：保留文字節點與 inline-emote 圖（emote 可能巢狀在 <span> 內，
+      // 只看 top-level 會漏掉 → 用 walk 遞迴收集）
       const tmp = document.createElement('div');
       tmp.innerHTML = processed;
-      // 只保留文字節點和 img.inline-emote
       const frag = document.createDocumentFragment();
-      tmp.childNodes.forEach(node => {
-        if (node.nodeType === Node.TEXT_NODE) {
-          // 移除裸露的圖片 URL
-          const cleaned = node.textContent.replace(/https?:\/\/\S+\.(?:png|jpe?g|gif|webp|avif)(\?\S*)?/gi, '').trim();
-          if (cleaned) frag.appendChild(document.createTextNode(cleaned));
-        } else if (node.nodeName === 'IMG' && node.classList.contains('inline-emote')) {
-          frag.appendChild(node.cloneNode());
-        }
-      });
+      (function walk(node) {
+        node.childNodes.forEach((c) => {
+          if (c.nodeType === Node.TEXT_NODE) {
+            const cleaned = c.textContent.replace(/https?:\/\/\S+\.(?:png|jpe?g|gif|webp|avif)(\?\S*)?/gi, '');
+            if (cleaned.trim()) frag.appendChild(document.createTextNode(cleaned));
+          } else if (c.nodeName === 'IMG') {
+            if (c.classList.contains('inline-emote')) frag.appendChild(c.cloneNode());
+          } else {
+            walk(c);
+          }
+        });
+      })(tmp);
       return frag;
     }
 
@@ -399,9 +401,11 @@
       const rawName = d.displayName || d.name || d.author || '匿名';
       const rawText    = d.comment || d.body || '';
       const images     = extractImages(d);
-      const displayText = extractText(rawText);
+      // 內容片段（含行內 emote/emoji）；用它判斷有沒有東西可顯示，避免「只有貼圖/表情」被當空訊息丟掉
+      const contentFrag = buildContentHtml(rawText);
+      const hasContent  = contentFrag.childNodes.length > 0;
 
-      if (!displayText && images.length === 0) return null;
+      if (!hasContent && images.length === 0) return null;
 
       const platform = normPlatform(commentObj);
       const mStatus  = memberStatus(d);
@@ -442,9 +446,7 @@
       el.appendChild(header);
 
       // ── 文字內容（含行內 emote）──
-      const contentFrag = buildContentHtml(rawText);
-      const hasContentNodes = contentFrag.childNodes.length > 0;
-      if (hasContentNodes) {
+      if (hasContent) {
         const body = document.createElement('div');
         body.className = 'msg-content';
         body.appendChild(contentFrag);
