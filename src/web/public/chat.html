@@ -202,10 +202,27 @@
     }
     #ws-dot.on  { background: #50fa7b; box-shadow: 0 0 6px #50fa7b; }
     #ws-dot.off { background: #ff5555; box-shadow: 0 0 6px #ff5555; }
+
+    /* 設定狀態提示（OBS 內可見；正常連上後自動隱藏） */
+    #status {
+      position: fixed;
+      top: 10px; left: 12px;
+      font-size: 13px; font-weight: 700;
+      color: #ffd479;
+      background: rgba(8, 12, 28, 0.88);
+      padding: 6px 12px;
+      border: 1px solid rgba(255, 180, 90, 0.5);
+      border-radius: 4px;
+      max-width: 92vw;
+      text-shadow: 1px 1px 3px #000;
+      display: none;
+    }
+    #status.show { display: block; }
   </style>
 </head>
 <body>
   <div id="ws-dot"></div>
+  <div id="status"></div>
   <div id="chat-wrap"></div>
 
   <script>
@@ -495,19 +512,30 @@
       }
     }
 
+    // ── 設定狀態提示（OBS 內可見；正常連上後自動隱藏）──
+    const statusEl = document.getElementById('status');
+    function setStatus(msg) {
+      if (!msg) { statusEl.className = ''; statusEl.textContent = ''; }
+      else { statusEl.className = 'show'; statusEl.textContent = msg; }
+    }
+
     // ── 伺服器中繼留言 SSE（密碼保護）──
+    // OBS 無法跳出輸入框，密碼一律從網址 ?key= 帶入：
+    //   https://otonashikoi.org/chat.html?key=你的密碼
     let es;
+    let firstError = true;
     function connect() {
       if (!CHAT_KEY) {
-        CHAT_KEY = (prompt('請輸入聊天室密碼') || '').trim();
-        if (CHAT_KEY) localStorage.setItem('chat_overlay_key', CHAT_KEY);
+        dot.className = 'off';
+        setStatus('⚠ 請在網址結尾加上 ?key=你的密碼（OBS 來源網址也要帶）');
+        return;
       }
-      if (!CHAT_KEY) { dot.className = 'off'; return; }
 
       dot.className = '';
+      setStatus('● 連線中…');
       es = new EventSource(`${API_BASE}/api/chat/overlay-stream?key=${encodeURIComponent(CHAT_KEY)}`);
 
-      es.onopen = () => { dot.className = 'on'; };
+      es.onopen = () => { dot.className = 'on'; setStatus(''); firstError = true; };
       es.onmessage = (ev) => {
         try {
           const c = JSON.parse(ev.data);
@@ -517,9 +545,10 @@
       };
       es.onerror = () => {
         dot.className = 'off';
-        // 密碼錯誤(401)時 EventSource 會持續重試；清掉記住的密碼避免一直錯，下次重新詢問
+        // 連不上可能是密碼錯誤或網路；持續重試，並在畫面上顯示讓 OBS 也看得到
+        setStatus(firstError ? '✕ 連線失敗（密碼是否正確？），重試中…' : '✕ 連線中斷，重試中…');
+        firstError = false;
         es.close();
-        if (CHAT_KEY && !urlKey) { localStorage.removeItem('chat_overlay_key'); CHAT_KEY = ''; }
         setTimeout(connect, 5000);
       };
     }
