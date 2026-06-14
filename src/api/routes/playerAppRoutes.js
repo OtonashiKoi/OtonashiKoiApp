@@ -1662,6 +1662,26 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     });
   });
 
+  // 聊天室 overlay 即時留言 SSE（密碼保護；給 chat.html 跨電腦讀取用）。
+  // 網址：/api/chat/overlay-stream?key=密碼。密碼錯誤回 401，不外洩留言。
+  router.get("/api/chat/overlay-stream", (req, res) => {
+    const chatOverlayHub = require("../../services/chat/chatOverlayHub");
+    const expected = process.env.CHAT_OVERLAY_PASSWORD || "a65194702A";
+    const key = String(req.query.key || "");
+    if (!expected || key !== expected) {
+      return res.status(401).json(fail("UNAUTHORIZED", "聊天室 overlay 密碼錯誤"));
+    }
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+    res.write(`event: ready\ndata: {"ok":true}\n\n`);
+    chatOverlayHub.addSubscriber(res);
+    const hb = setInterval(() => { try { res.write(":\n\n"); } catch (_) {} }, 15000);
+    req.on("close", () => { clearInterval(hb); chatOverlayHub.removeSubscriber(res); });
+  });
+
   router.get("/api/stream/presence", requireAuth, (req, res) => {
     res.json(ok(getStreamPresenceSnapshot()));
   });

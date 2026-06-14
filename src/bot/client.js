@@ -794,8 +794,12 @@ function createBotClient() {
       console.warn("[Casino] init failed:", err?.message || err);
     }
 
-    // 啟動 OneComme 直播留言監聽
-    startFetcher(handleStreamComment);
+    // 啟動 OneComme 直播留言監聽（同時中繼給聊天室 overlay 的 SSE，讓別台電腦也能讀）
+    const { broadcastComment } = require("../services/chat/chatOverlayHub");
+    startFetcher((comment) => {
+      try { broadcastComment(comment); } catch (_) {}
+      handleStreamComment(comment);
+    });
     // 啟動閒置自動換怪計時器（可透過 DISABLE_AUTO_ROTATE=1 暫時停用）
     if (process.env.DISABLE_AUTO_ROTATE === '1') {
       console.log('[IdleRotate] disabled by DISABLE_AUTO_ROTATE');

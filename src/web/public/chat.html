@@ -209,10 +209,13 @@
   <div id="chat-wrap"></div>
 
   <script>
-    // 動態檢測 host（支援 localhost 和區域網路 IP）
-    const host = window.location.hostname || '127.0.0.1';
-    const API_BASE   = `http://${host}:5566`;
-    const WS_URL     = `ws://${host}:11180/sub`;
+    // 同源（相對路徑）：任何電腦從 otonashikoi.org/chat.html 都能讀。
+    // 留言改走伺服器中繼的 SSE（不再直連本機 OneComme），需帶密碼。
+    const API_BASE   = '';
+    // 密碼：優先取網址 ?key=，否則用上次記住的，再否則跳出輸入框。
+    const urlKey = new URLSearchParams(location.search).get('key');
+    let CHAT_KEY = urlKey || localStorage.getItem('chat_overlay_key') || '';
+    if (urlKey) localStorage.setItem('chat_overlay_key', urlKey);
     const MAX_MSGS   = 30;
     const STORE_KEY  = 'chat_history_v1';
     const CACHE_TTL  = 10 * 1000; // 10 秒內同一人不重複打 API
@@ -492,23 +495,32 @@
       }
     }
 
-    // ── WebSocket ──
-    let ws;
+    // ── 伺服器中繼留言 SSE（密碼保護）──
+    let es;
     function connect() {
+      if (!CHAT_KEY) {
+        CHAT_KEY = (prompt('請輸入聊天室密碼') || '').trim();
+        if (CHAT_KEY) localStorage.setItem('chat_overlay_key', CHAT_KEY);
+      }
+      if (!CHAT_KEY) { dot.className = 'off'; return; }
+
       dot.className = '';
-      ws = new WebSocket(WS_URL);
+      es = new EventSource(`${API_BASE}/api/chat/overlay-stream?key=${encodeURIComponent(CHAT_KEY)}`);
 
-      ws.onopen  = () => { dot.className = 'on'; };
-      ws.onclose = () => { dot.className = 'off'; setTimeout(connect, 5000); };
-      ws.onerror = () => ws.close();
-
-      ws.onmessage = (ev) => {
+      es.onopen = () => { dot.className = 'on'; };
+      es.onmessage = (ev) => {
         try {
-          const p = JSON.parse(ev.data);
-          if (p.type === 'comments' && p.data?.comments) {
-            p.data.comments.forEach(c => addMsg(c));
-          }
+          const c = JSON.parse(ev.data);
+          // 伺服器送 { data: <OneComme d> }，與舊 WS 單則留言同結構
+          if (c && (c.data || c.comment || c.name)) addMsg(c.data ? c : { data: c });
         } catch (_) {}
+      };
+      es.onerror = () => {
+        dot.className = 'off';
+        // 密碼錯誤(401)時 EventSource 會持續重試；清掉記住的密碼避免一直錯，下次重新詢問
+        es.close();
+        if (CHAT_KEY && !urlKey) { localStorage.removeItem('chat_overlay_key'); CHAT_KEY = ''; }
+        setTimeout(connect, 5000);
       };
     }
 
