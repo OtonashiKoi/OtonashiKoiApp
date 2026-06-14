@@ -2079,9 +2079,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       // 與 DC 一致：圖鑑加成（依玩家對這隻怪的累積擊殺，最高 +30% 傷害）
-      const { bestiaryRequirement, bestiaryBonusPct } = require("../../shared/bestiary");
+      const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
+      const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
       const _bestiaryMonsterId = String(monster?.id || monster?._id || monster.name || "");
-      const _bestiaryReq = bestiaryRequirement(monster, false);
+      // 需求數依怪物種類判定（同 DC）：世界王 10 / BOSS 50 / 一般 100
+      const _bestiaryReq = bestiaryRequirement(monster, isWorldBossZone(zoneKey));
       const _bestiaryKillsBefore = Number(progress?.bestiary?.[_bestiaryMonsterId]) || 0;
       const _bestiaryBonusPct = bestiaryBonusPct(_bestiaryKillsBefore, _bestiaryReq);
 
@@ -2121,6 +2123,33 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const outcome = syncResult.outcome;
       const totalDamage = syncResult.damage;
       const totalTaken = Math.max(0, (pStats.maxHp || 0) - Math.max(0, finalPlayerHp));
+
+      // ── 怪物圖鑑累積（同 DC）：本場對該怪造成傷害 / 該怪最大HP（最多算 1 隻）原子累加 ──
+      // 勝負/逃跑都累積（未擊殺也算），用本人 totalDamage。
+      let bestiaryInfo = null;
+      try {
+        const _bMaxHp = Math.max(1, Number(monster?.calc?.maxHp || monsterHpInitial || 1));
+        const _bGain = bestiaryGainFromDamage(totalDamage, _bMaxHp);
+        if (_bGain > 0 && _bestiaryMonsterId) {
+          const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+          const _db = await getMongoDb();
+          await _db.collection("progress").updateOne(
+            { playerId: discordId },
+            { $inc: { ["bestiary." + _bestiaryMonsterId]: _bGain } }
+          );
+          const _bTotalAfter = _bestiaryKillsBefore + _bGain;
+          bestiaryInfo = {
+            monsterName: monster.name,
+            gainPct: Math.round(_bGain * 1000) / 10,
+            killsAfter: Math.round(_bTotalAfter * 10) / 10,
+            requirement: _bestiaryReq,
+            bonusPctBefore: Math.round(_bestiaryBonusPct * 10) / 10,
+            bonusPctAfter: Math.round(bestiaryBonusPct(_bTotalAfter, _bestiaryReq) * 10) / 10
+          };
+        }
+      } catch (e) {
+        console.error("[Bestiary] web credit failed:", e.message);
+      }
 
       // 蝯?
       const { handleMonsterKill, _republishPanel, _republishPanelWithRankingDebounce, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
@@ -2241,12 +2270,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       }
 
+      // 圖鑑進度通知（同 DC 格式）：每場有累積就附在戰報尾端
+      if (bestiaryInfo) {
+        rewardLines.push(`📖 圖鑑：**${bestiaryInfo.monsterName}** +${bestiaryInfo.gainPct}%（累積 ${bestiaryInfo.killsAfter}/${bestiaryInfo.requirement} 隻，對該怪傷害 +${bestiaryInfo.bonusPctAfter}%）`);
+      }
+
       res.json(ok({
         outcome,
         monsterName: monster.name,
         logs: roundLogs,
         rewardLines,
         rewardSummary: rewardLines._summary || null,
+        // 圖鑑本場進度（結構化，給前端顯示）
+        bestiary: bestiaryInfo,
         // 本場掉落道具（結構化，給網頁漂浮道具氣泡 + 詳細視窗）
         drops: Array.isArray(rewardLines._drops) ? rewardLines._drops : [],
         totalDamage,
