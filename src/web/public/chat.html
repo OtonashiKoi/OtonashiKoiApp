@@ -240,6 +240,16 @@
     const wrap = document.getElementById('chat-wrap');
     const dot  = document.getElementById('ws-dot');
 
+    // https 頁面會擋 http 圖片(mixed content)→ 自動升級;本機 OneComme 圖片(localhost)無法跨機讀，維持原樣
+    function httpsify(u) {
+      if (typeof u !== 'string') return u;
+      if (u.startsWith('http://')) {
+        if (/^http:\/\/(localhost|127\.0\.0\.1)/i.test(u)) return u;
+        return 'https://' + u.slice(7);
+      }
+      return u;
+    }
+
     // ── 玩家資料快取 ──
     const profileCache = new Map();
 
@@ -348,7 +358,7 @@
           const srcMatch = tag.match(/src=["']([^"']+)["']/i);
           const altMatch = tag.match(/alt=["']([^"']*)["']/i);
           if (srcMatch) {
-            const src = srcMatch[1];
+            const src = httpsify(srcMatch[1]);
             const alt = altMatch ? altMatch[1] : '';
             return `<img src="${src}" alt="${alt}" class="inline-emote" onerror="this.remove()">`;
           }
@@ -447,7 +457,7 @@
         imgWrap.className = 'msg-images';
         images.forEach(url => {
           const img = document.createElement('img');
-          img.src = url;
+          img.src = httpsify(url);
           img.alt = '';
           img.loading = 'lazy';
           img.onerror = () => img.remove();
