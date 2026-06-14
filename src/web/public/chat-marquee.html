@@ -15,7 +15,8 @@
 
     /* 跑馬燈軌道：底部一條，內容由右往左「慢慢堆過去」 */
     #ticker { position: fixed; left: 0; right: 0; bottom: 22px; height: 48px; overflow: hidden; }
-    #track  { position: absolute; left: 0; bottom: 0; height: 44px; will-change: transform; }
+    #track  { position: absolute; left: 0; bottom: 0; height: 44px; will-change: transform;
+              transition: transform var(--step, 500ms) cubic-bezier(.22,.8,.24,1); }
 
     /* 單則訊息膠囊（星穹鐵道風橫向面板） */
     .tick {
@@ -82,9 +83,10 @@
     let CHAT_KEY = urlKey || localStorage.getItem('chat_overlay_key') || '';
     if (urlKey) localStorage.setItem('chat_overlay_key', urlKey);
 
-    // 慢慢堆過去：整條由右往左連續緩慢移動，新訊息從右側接上去堆積
-    const SPEED = 90;    // 像素/秒（越小越慢，可調）
-    const GAP   = 28;    // 訊息間距（像素）
+    // 一格一格往前堆：每來一則訊息就「推一步」，新的從右邊接上、整排往左挪一格，
+    // 沒新訊息時完全靜止（不是連續跑過去）。
+    const STEP_MS = 500;  // 每一步的動畫時間(ms)，越大越慢
+    const GAP     = 28;   // 訊息間距（像素）
     const CACHE_TTL = 10 * 1000;
 
     const track    = document.getElementById('track');
@@ -149,33 +151,33 @@
       return el;
     }
 
-    // ── 連續堆積 + 緩慢左移 ──
-    let offset = 0;            // 軌道往左位移量(px)
-    let writeX = innerWidth;   // 下一則訊息的左緣(軌道座標)；初始＝螢幕右緣
+    // ── 一格一格往前堆（離散推進，沒新訊息就靜止）──
+    track.style.setProperty('--step', STEP_MS + 'ms');
+    let writeX = 0;   // 下一則訊息的左緣（軌道座標，累加）
+    let shift  = 0;   // 軌道目前往左位移量(px)
     function place(el){
-      // 進場點：取 max(目前堆積尾端, 螢幕右緣)，冷清時從右緣進、忙碌時排在尾巴後面
-      const entryX = Math.max(writeX, offset + innerWidth);
-      el.style.left = entryX + 'px';
+      el.style.left = writeX + 'px';
       track.appendChild(el);
       const w = el.offsetWidth;
-      writeX = entryX + w + GAP;
+      writeX += w + GAP;
+      // 內容超出畫面才往左推一步；未滿時就從左往右排，不移動
+      shift = Math.max(0, writeX - innerWidth);
+      requestAnimationFrame(() => { track.style.transform = 'translateX(' + (-shift) + 'px)'; });
+      // 一步動畫結束後，清掉已滑出左邊的膠囊（絕對定位，移除不影響其他人位置）
+      setTimeout(() => {
+        let first;
+        while ((first = track.firstElementChild)) {
+          const right = parseFloat(first.style.left) + first.offsetWidth;
+          if (right - shift < -20) first.remove(); else break;
+        }
+        if (!track.firstElementChild) { // 冷清清空 → 無動畫歸零，避免數值無限增長
+          writeX = 0; shift = 0;
+          track.style.transition = 'none';
+          track.style.transform = 'translateX(0)';
+          requestAnimationFrame(() => { track.style.transition = ''; });
+        }
+      }, STEP_MS + 80);
     }
-    let last = performance.now();
-    function frame(now){
-      const dt = Math.min(0.1, (now - last) / 1000); last = now;
-      offset += SPEED * dt;
-      track.style.transform = 'translateX(' + (-offset) + 'px)';
-      // 移除已完全滑出左邊的膠囊
-      let first;
-      while ((first = track.firstElementChild)) {
-        const right = parseFloat(first.style.left) + first.offsetWidth;
-        if (right - offset < -10) first.remove(); else break;
-      }
-      // 全部清空（聊天冷清）→ 歸零，下一則重新從右緣進場，避免數值無限增長
-      if (!track.firstElementChild) { offset = 0; writeX = innerWidth; track.style.transform = 'translateX(0)'; }
-      requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
 
     async function enqueue(d){
       const platform = normPlatform(d), uid = d.userId || '';
