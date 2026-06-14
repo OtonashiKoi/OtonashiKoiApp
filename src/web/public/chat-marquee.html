@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>聊天室跑馬燈</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: transparent; overflow: hidden;
+      font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+    }
+
+    /* 跑馬燈軌道：底部一條，由右往左 */
+    #ticker {
+      position: fixed;
+      left: 0; right: 0; bottom: 22px;
+      height: 48px;
+      overflow: hidden;
+    }
+
+    /* 單則訊息膠囊（星穹鐵道風橫向面板） */
+    .tick {
+      position: absolute;
+      left: 0; bottom: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 44px;
+      padding: 0 16px 0 14px;
+      white-space: nowrap;
+      will-change: transform;
+      background: linear-gradient(100deg,
+        rgba(8,18,42,0.86) 0%, rgba(12,28,62,0.82) 60%, rgba(18,38,80,0.7) 100%);
+      border-top: 1px solid rgba(140,185,255,0.22);
+      border-bottom: 1px solid rgba(60,100,180,0.15);
+      border-left: 3px solid rgba(140,185,255,0.5);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+    }
+    .tick.run { animation: scrollLeft var(--dur) linear forwards; }
+    @keyframes scrollLeft {
+      from { transform: translateX(100vw); }
+      to   { transform: translateX(calc(-1 * var(--w))); }
+    }
+
+    /* 玩家（已綁定）：金色左線 + 金底 */
+    .tick.is-player {
+      border-left-color: rgba(212,175,80,0.75);
+      background: linear-gradient(100deg,
+        rgba(18,14,8,0.88) 0%, rgba(30,22,10,0.82) 60%, rgba(20,18,10,0.7) 100%);
+    }
+
+    .badge-lv {
+      font-size: 11px; font-weight: 700; letter-spacing: .5px;
+      padding: 2px 7px; color: #1a1100;
+      background: linear-gradient(135deg, #f5d060 0%, #c89a20 100%);
+      clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+    }
+    .author-name {
+      font-size: 16px; font-weight: 700; letter-spacing: .3px;
+      color: #c8deff;
+      text-shadow: 0 0 8px rgba(120,170,255,0.6), 1px 1px 3px rgba(0,0,0,0.9);
+    }
+    .tick.is-player .author-name { color: #f0d080; text-shadow: 0 0 10px rgba(220,170,60,0.7), 1px 1px 3px #000; }
+    .tick.is-member .author-name { color: #7eeaaa; text-shadow: 0 0 8px rgba(80,220,130,0.6), 1px 1px 3px #000; }
+    .tick.is-sub    .author-name { color: #d4a8ff; text-shadow: 0 0 8px rgba(180,120,255,0.6), 1px 1px 3px #000; }
+    .badge-title {
+      font-size: 11px; font-weight: 500; padding: 1px 8px;
+      color: #a8d8f8; background: rgba(40,80,160,0.5);
+      border: 1px solid rgba(120,180,255,0.35);
+    }
+    .sep { color: rgba(160,190,255,0.5); font-size: 14px; }
+    .msg-text {
+      font-size: 15px; font-weight: 400; color: #dde8ff;
+      text-shadow: 1px 1px 4px rgba(0,0,0,0.95);
+    }
+
+    #ws-dot {
+      position: fixed; top: 6px; right: 8px;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #888; transition: background 0.4s;
+    }
+    #ws-dot.on  { background: #50fa7b; box-shadow: 0 0 6px #50fa7b; }
+    #ws-dot.off { background: #ff5555; box-shadow: 0 0 6px #ff5555; }
+
+    #status {
+      position: fixed; top: 10px; left: 12px;
+      font-size: 13px; font-weight: 700; color: #ffd479;
+      background: rgba(8,12,28,0.88); padding: 6px 12px;
+      border: 1px solid rgba(255,180,90,0.5); border-radius: 4px;
+      max-width: 92vw; text-shadow: 1px 1px 3px #000; display: none;
+    }
+    #status.show { display: block; }
+  </style>
+</head>
+<body>
+  <div id="ws-dot"></div>
+  <div id="status"></div>
+  <div id="ticker"></div>
+
+  <script>
+    const API_BASE = '';
+    const urlKey = new URLSearchParams(location.search).get('key');
+    let CHAT_KEY = urlKey || localStorage.getItem('chat_overlay_key') || '';
+    if (urlKey) localStorage.setItem('chat_overlay_key', urlKey);
+
+    const SPEED = 150;   // 像素/秒（可調速度）
+    const GAP   = 70;    // 訊息間距（像素）
+    const CACHE_TTL = 10 * 1000;
+
+    const ticker   = document.getElementById('ticker');
+    const dot      = document.getElementById('ws-dot');
+    const statusEl = document.getElementById('status');
+    function setStatus(m){ if(!m){statusEl.className='';statusEl.textContent='';} else {statusEl.className='show';statusEl.textContent=m;} }
+
+    // ── 玩家資料（同 chat.html 的 viewer-profile）──
+    const profileCache = new Map();
+    async function fetchProfile(platform, userId){
+      const key = platform + '|' + userId;
+      const hit = profileCache.get(key);
+      if (hit && Date.now() - hit.at < CACHE_TTL) return hit.data;
+      try {
+        const r = await fetch(`${API_BASE}/api/chat/viewer-profile?platform=${encodeURIComponent(platform)}&userId=${encodeURIComponent(userId)}`);
+        if (!r.ok) return { found:false };
+        const j = await r.json();
+        profileCache.set(key, { data:j, at:Date.now() });
+        return j;
+      } catch(_) { return { found:false }; }
+    }
+
+    function normPlatform(d){
+      const svc = (d.service||'').toLowerCase();
+      const uid = (d.userId||'').toLowerCase();
+      if (svc.includes('youtube')||svc==='yt') return 'youtube';
+      if (svc.includes('twitch') ||svc==='tw') return 'twitch';
+      if (svc.includes('nico')) return 'niconico';
+      if (uid.startsWith('tw-')||uid.startsWith('twitch-')) return 'twitch';
+      if (uid.startsWith('uc')||uid.startsWith('yt-')||uid.startsWith('youtube-')) return 'youtube';
+      return svc || 'unknown';
+    }
+    function memberStatus(d){
+      if (d.isMember === true) return 'member';
+      if (d.isSubscriber === true) return 'sub';
+      if (d.badges?.some(b => /會員|member/i.test(b.label||''))) return 'member';
+      if (d.badges?.some(b => /訂閱|subscriber/i.test(b.label||''))) return 'sub';
+      return '';
+    }
+    function extractText(raw){
+      return String(raw||'')
+        .replace(/<img[^>]*>/gi,' ')
+        .replace(/<[^>]+>/g,'')
+        .replace(/https?:\/\/\S+\.(?:png|jpe?g|gif|webp|avif)(\?\S*)?/gi,'')
+        .trim();
+    }
+
+    function buildTick(d, profile){
+      const text = extractText(d.comment || d.body || '');
+      if (!text) return null;
+      const el = document.createElement('div');
+      el.className = 'tick';
+      const platform = normPlatform(d);
+      const m = memberStatus(d);
+      const isPlayer = profile.found;
+      if (isPlayer) el.classList.add('is-player');
+      else if (m === 'member') el.classList.add('is-member');
+      else if (m === 'sub') el.classList.add('is-sub');
+
+      if (isPlayer && profile.level != null){
+        const lv = document.createElement('span'); lv.className='badge-lv'; lv.textContent='Lv.'+profile.level; el.appendChild(lv);
+      }
+      const name = document.createElement('span'); name.className='author-name';
+      name.textContent = isPlayer ? (profile.displayName || d.displayName || d.name || '匿名') : (d.displayName || d.name || '匿名');
+      el.appendChild(name);
+      if (isPlayer && profile.title){
+        const t = document.createElement('span'); t.className='badge-title'; t.textContent=profile.title; el.appendChild(t);
+      }
+      const sep = document.createElement('span'); sep.className='sep'; sep.textContent='：'; el.appendChild(sep);
+      const msg = document.createElement('span'); msg.className='msg-text'; msg.textContent=text; el.appendChild(msg);
+      return el;
+    }
+
+    // ── 佇列 + 排程（單軌不重疊）──
+    const queue = [];
+    let nextFreeAt = 0;
+    async function enqueue(d){
+      const platform = normPlatform(d);
+      const uid = d.userId || '';
+      let profile = { found:false };
+      if (uid) profile = await fetchProfile(platform, uid);
+      const el = buildTick(d, profile);
+      if (el) queue.push(el);
+    }
+    function pump(){
+      const now = performance.now();
+      if (queue.length && now >= nextFreeAt){
+        const el = queue.shift();
+        ticker.appendChild(el);
+        const w = el.offsetWidth;
+        const dur = (window.innerWidth + w) / SPEED;
+        el.style.setProperty('--w', w + 'px');
+        el.style.setProperty('--dur', dur + 's');
+        el.classList.add('run');
+        nextFreeAt = now + ((w + GAP) / SPEED) * 1000;
+        setTimeout(() => el.remove(), dur * 1000 + 300);
+      }
+      requestAnimationFrame(pump);
+    }
+    requestAnimationFrame(pump);
+
+    // ── SSE（密碼保護，與 chat.html 同來源）──
+    let es, firstError = true;
+    function connect(){
+      if (!CHAT_KEY){ dot.className='off'; setStatus('⚠ 請在網址結尾加上 ?key=你的密碼（OBS 來源網址也要帶）'); return; }
+      dot.className=''; setStatus('● 連線中…');
+      es = new EventSource(`${API_BASE}/api/chat/overlay-stream?key=${encodeURIComponent(CHAT_KEY)}`);
+      es.onopen = () => { dot.className='on'; setStatus(''); firstError=true; };
+      es.onmessage = (ev) => {
+        try {
+          const c = JSON.parse(ev.data);
+          const d = c && c.data ? c.data : c;
+          if (d) enqueue(d);
+        } catch(_){}
+      };
+      es.onerror = () => {
+        dot.className='off';
+        setStatus(firstError ? '✕ 連線失敗（密碼是否正確？），重試中…' : '✕ 連線中斷，重試中…');
+        firstError=false; es.close(); setTimeout(connect, 5000);
+      };
+    }
+    connect();
+  </script>
+</body>
+</html>
