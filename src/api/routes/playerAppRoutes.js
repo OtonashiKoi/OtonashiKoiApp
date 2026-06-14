@@ -2200,6 +2200,25 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         if (entry && entry.nextBattleAt <= Date.now()) playerBattleCooldowns.delete(discordId);
       }, animDurationMs + 5000);
 
+      // ── 共鬥光環回傳資料（供前端戰鬥畫面顯示光環效果）──
+      // partyEffects 已由上方「共鬥光環系統」算好（不在此重算）；
+      // 這裡只把它組成人類可讀的中文描述。
+      const auraApplied = Array.isArray(partyEffects) && partyEffects.length > 0;
+      const auraLines = [];
+      if (auraApplied) {
+        // 提供者名稱：自身光環為當前玩家；他人光環從 effect.sourceName 取得
+        const providerName = hasPartyAura
+          ? displayName
+          : (partyEffects.find(e => e && e.sourceName)?.sourceName || null);
+        const auraPrefix = providerName ? `✨ ${providerName} 的共鬥光環：` : "✨ 共鬥光環：";
+        for (const eff of partyEffects) {
+          if (!eff?.key) continue;
+          const name = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
+          const valueText = formatEffectValueText(eff.key, eff?.params);
+          auraLines.push(`${auraPrefix}${name}${valueText ? ` ${valueText}` : ""}`);
+        }
+      }
+
       res.json(ok({
         outcome,
         monsterName: monster.name,
@@ -2209,7 +2228,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         totalDamage,
         finalPlayerHp: Math.max(0, finalPlayerHp),
         finalMonsterHp: Math.max(0, mHp),
+        // 進場瞬間怪物實際 HP 與滿血（共鬥怪可能非滿血，前端據此顯示血條）
+        monsterStartHp: Math.max(0, Math.round(Number(monsterHpInitial))),
+        monsterMaxHp: Math.max(1, Math.round(Number(monster.calc.maxHp))),
         nextBattleAt,
+        // 本場是否吃到共鬥光環，以及各光環效果的中文描述（前端顯示光環效果用）
+        auraApplied,
+        auraLines,
         // 每回合播放節奏（依玩家 AGI，與 DC 一致），前端逐回合動畫用
         tickMs: calculateTickDelay(pStats.agi || 1),
       }));
