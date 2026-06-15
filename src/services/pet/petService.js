@@ -310,6 +310,15 @@ class PetService {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${String(it.tier).toUpperCase()} 階裝備太高級，餵不進對應 ${matchTier} 階的寵物（高階裝備不能餵低等寵物）`, 400);
       }
       feedTargets = [it];
+    } else if (Array.isArray(opts.inventoryUuids) && opts.inventoryUuids.length) {
+      // 勾選餵食：只餵清單中、且可餵的裝備（排除卡片/徽章/階級太高）
+      const set = new Set(opts.inventoryUuids);
+      const picked = progress.inventory.filter((x) => x && set.has(x.uuid));
+      feedTargets = picked.filter((it) => isSingleFeedable(it) && feedMultiplier(it.tier, matchTier) !== null);
+      protectedCount = picked.length - feedTargets.length;
+      if (feedTargets.length === 0) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "所選道具都不能餵（卡片/徽章/階級太高）", 400);
+      }
     } else if (opts.tier) {
       const tier = String(opts.tier).toUpperCase();
       if (feedMultiplier(tier, matchTier) === null) {
