@@ -45,7 +45,10 @@ function createServiceContext() {
   const playerTierService = new PlayerTierService(repositories.playerTierRepository);
   const monsterService = new MonsterService(repositories.monsterRepository, repositories.itemRepository);
   const monsterEventService = new MonsterEventService(repositories.monsterEventRepository);
-  const questService = new WeeklyQuestService(repositories.weeklyQuestRepository, playerService);
+  const questService = new WeeklyQuestService(repositories.weeklyQuestRepository, playerService, {
+    streamAccountBindingRepository: repositories.streamAccountBindingRepository,
+    checkinRepository: repositories.checkinRepository
+  });
   const weeklyQuestService = questService; // backward-compatible alias
   const battleConfigService = new BattleConfigService(repositories.battleConfigRepository);
   const effectDefinitionService = new EffectDefinitionService(repositories.effectDefinitionRepository);

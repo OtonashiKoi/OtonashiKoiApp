@@ -115,9 +115,12 @@ function isJobBadgeItemId(itemId) {
 }
 
 class WeeklyQuestService {
-  constructor(weeklyQuestRepository, playerService) {
+  constructor(weeklyQuestRepository, playerService, options = {}) {
     this.repo = weeklyQuestRepository;
     this.playerService = playerService;
+    // 用來判定「實際已綁定直播 / 已打卡」,讓對應新手任務反映真實狀態(不只靠事件計數)
+    this.streamAccountBindingRepository = options.streamAccountBindingRepository || null;
+    this.checkinRepository = options.checkinRepository || null;
     this.claimLocks = new Set();
   }
 
@@ -190,11 +193,29 @@ class WeeklyQuestService {
       // ignore
     }
 
+    // 實際狀態:是否已綁定直播 / 是否曾打卡(讓對應新手任務反映真實狀態)
+    let hasStreamBinding = false;
+    let hasCheckin = false;
+    if (this.streamAccountBindingRepository?.listByDiscordId) {
+      try {
+        const bindings = await this.streamAccountBindingRepository.listByDiscordId(discordId);
+        hasStreamBinding = Array.isArray(bindings) && bindings.length > 0;
+      } catch (_) { /* ignore */ }
+    }
+    if (this.checkinRepository?.findLastByDiscordId) {
+      try {
+        const last = await this.checkinRepository.findLastByDiscordId(discordId);
+        hasCheckin = Boolean(last);
+      } catch (_) { /* ignore */ }
+    }
+
       return {
         level,
         attributes,
         equipment,
         inventory,
+        hasStreamBinding,
+        hasCheckin,
         weaponType: equipment?.weapon?.weaponType || null,
         inventoryItemIds: new Set(
           (Array.isArray(inventory) ? inventory : [])
@@ -267,6 +288,16 @@ class WeeklyQuestService {
         current: level >= 10 && hasJobBadge ? 1 : 0,
         target: 1
       };
+    }
+    // 新手任務「完成直播綁定 / 完成 1 次打卡」:以「實際是否已綁定/已打卡」為準,
+    // 避免已綁定/已打卡的玩家因事件計數沒累積而卡在進行中(只覆蓋 onboarding 的單次任務)
+    if (quest.cadence === "onboarding" && Number(quest.target || 1) <= 1) {
+      if (quest.type === "stream_bind_count") {
+        return { current: context?.hasStreamBinding ? 1 : 0, target: 1 };
+      }
+      if (quest.type === "checkin_count") {
+        return { current: context?.hasCheckin ? 1 : 0, target: 1 };
+      }
     }
     return null;
   }
@@ -472,12 +503,15 @@ class WeeklyQuestService {
         const completion = this._computeCompletionProgress(cadenceDefs, playerPeriod, quest.type);
         if (completion.current < completion.target) throw new Error("任務尚未完成");
         p.current = completion.current;
-      } else if (quest.type === "level_10_job_badge") {
+      } else {
+        // 有「實際狀態」型進度(等級+徽章 / 已綁定 / 已打卡)就以它為準,否則看累積計數
         const staticProgress = this._resolveStaticQuestProgress(quest, context);
-        p.current = staticProgress?.current || 0;
-        if (p.current < Number(quest.target || 1)) throw new Error("任務尚未完成");
-      } else if (Number(p.current || 0) < Number(quest.target || 1)) {
-        throw new Error("任務尚未完成");
+        if (staticProgress) {
+          p.current = staticProgress.current;
+          if (p.current < staticProgress.target) throw new Error("任務尚未完成");
+        } else if (Number(p.current || 0) < Number(quest.target || 1)) {
+          throw new Error("任務尚未完成");
+        }
       }
       if (p.claimed || (quest.claimOnce && p.claimedOnce)) throw new Error("獎勵已領取");
 
