@@ -3146,6 +3146,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const isMember = membership.isMember;
       const activePreset = progress?.activePreset || "A";
       const equipPresets = progress?.equipPresets || {};
+      const presetNames = progress?.equipPresetNames || {};
       const presets = PRESET_KEYS.map((key) => {
         // 目前使用中的方案：以身上裝備為準；其餘看快照
         const snapshot = key === activePreset
@@ -3154,6 +3155,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const summary = summarizePresetSnapshot(snapshot);
         return {
           key,
+          name: presetNames[key] || null, // 會員自訂名稱
           active: key === activePreset,
           locked: key !== "A" && !isMember,
           equipped: summary.count > 0,
@@ -3202,6 +3204,29 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
       const result = await serviceContext.shopService.saveEquipPreset(discordId, preset);
       res.json(ok({ preset: result.preset }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 會員自訂裝備方案名稱(存 progress.equipPresetNames)
+  router.post("/api/me/presets/rename", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const preset = String(req.body?.preset || "").toUpperCase();
+      const name = String(req.body?.name || "").trim().slice(0, 12);
+      if (!PRESET_KEYS.includes(preset)) {
+        return res.status(400).json(fail("INVALID_ARGUMENT", "無效分頁，請選擇 A / B / C"));
+      }
+      const membership = await resolveAuctionMembership(discordId);
+      if (!membership.isMember) {
+        return res.status(403).json(fail("NOT_MEMBER", "自訂方案名稱限會員使用"));
+      }
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (!progress) return res.status(404).json(fail("NOT_FOUND", "找不到角色資料"));
+      progress.equipPresetNames = { ...(progress.equipPresetNames || {}), [preset]: name || null };
+      await serviceContext.progressRepository.save(progress);
+      res.json(ok({ preset, name: name || null }));
     } catch (err) {
       next(err);
     }
