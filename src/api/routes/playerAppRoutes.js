@@ -2183,6 +2183,30 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           battleMonsterStats = weakened.monsterStats;
           battleMonsterEquipped = weakened.monsterEquipped;
         }
+
+        // 首位挑戰者（participants 為空）→ 與 DC 一致：標記開戰 + 發世界王開打公告到 DC 頻道
+        try {
+          const firstAttacker = !Array.isArray(stateForCombat.participants) || stateForCombat.participants.length === 0;
+          if (firstAttacker) {
+            const wbSvc = serviceContext.worldBossServiceFor?.(zoneKey);
+            const before = wbSvc ? await wbSvc.getConfigWithStatus().catch(() => null) : null;
+            const alreadyStarted = !!before?.status?.battleStartedAt;
+            if (wbSvc) await wbSvc.startBossBattleIfNeeded().catch(() => {});
+            if (!alreadyStarted && discordClient?.isReady?.()) {
+              const alarmRoleId = require("../../config").discord?.worldBossAlarmRoleId;
+              const alarmTag = alarmRoleId ? `\n<@&${alarmRoleId}> 世界王鬧鐘響囉！` : "";
+              const ch = await discordClient.channels.fetch("1498608950671839263").catch(() => null);
+              if (ch?.isTextBased?.()) {
+                await ch.send({
+                  content: `⚔️ **世界BOSS 挑戰開始！**\n**${displayName}** 率先向 **${monster.name}** 發起挑戰！\n前往挑戰加入戰鬥，30 分鐘內未擊殺視為失敗。${alarmTag}`,
+                  allowedMentions: alarmRoleId ? { roles: [alarmRoleId] } : { parse: [] }
+                }).catch(() => {});
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[worldBoss/web] 開打公告失敗:", e?.message || e);
+        }
       }
 
       const { runCombatLoop } = require("../../shared/combatLoop");
