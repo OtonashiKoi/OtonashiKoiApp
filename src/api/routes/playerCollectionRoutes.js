@@ -178,13 +178,24 @@ function createPlayerCollectionRoutes(serviceContext) {
       ]);
       const progressMap = Object.fromEntries(progresses.map((p) => [p.playerId, p]));
 
+      // 多數玩家沒有設定暱稱(displayName 就是純數字 Discord ID)→ 不要把 18 碼 ID 攤在排行榜上,
+      // 改顯示友善暱稱「玩家#末四碼」;有真實暱稱者照常顯示。
+      const prettyName = (displayName, discordId) => {
+        const dn = String(displayName || "").trim();
+        const id = String(discordId || "");
+        if (!dn || dn === id || /^\d{15,}$/.test(dn)) {
+          return id ? `玩家#${id.slice(-4)}` : "玩家";
+        }
+        return dn;
+      };
+
       const rows = players
         .filter((p) => p.status !== "disabled")
         .map((p) => {
           const prog = progressMap[p.discordId] || {};
           return {
             discordId: p.discordId,
-            name: p.displayName || p.discordId,
+            name: prettyName(p.displayName, p.discordId),
             level: prog.level ?? 1,
             exp: prog.exp ?? 0,
             jobName: prog.equipment?.job_eq?.itemName || prog.equipment?.job_eq?.name || ""
@@ -196,7 +207,7 @@ function createPlayerCollectionRoutes(serviceContext) {
       const myIdx = rows.findIndex((r) => r.discordId === discordId);
       const me = myIdx >= 0
         ? { rank: myIdx + 1, ...rows[myIdx] }
-        : { rank: null, discordId, name: req.playerRecord.displayName || discordId, level: 1, exp: 0, jobName: "" };
+        : { rank: null, discordId, name: prettyName(req.playerRecord.displayName, discordId), level: 1, exp: 0, jobName: "" };
 
       res.json(ok({ list, me, totalPlayers: rows.length }));
     } catch (err) {
