@@ -2133,17 +2133,70 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const _bestiaryKillsBefore = Number(progress?.bestiary?.[_bestiaryMonsterId]) || 0;
       const _bestiaryBonusPct = bestiaryBonusPct(_bestiaryKillsBefore, _bestiaryReq);
 
+      // ── 世界王部位戰鬥（還原 DC）：戰前調整玩家/怪物 stats + 部位血量初始化 ──
+      const {
+        parseWorldBossTargetPart,
+        applyWorldBossTargetToPlayerStats,
+        applyWorldBossTargetToMonster,
+        applyDragonKingBreakWeaken,
+        ensureWorldBossPartState: ensureWBPartState,
+        sumWorldBossPartHp: sumWBPartHp,
+        isWorldBossAllPartsDefeated: isWBAllDefeated,
+        DRAGON_KING_ZONE: WB_DRAGON_KING_ZONE
+      } = require("../../bot/handlers/monsterZoneHandlers");
+
+      const WB_VALID_PARTS = new Set(["head", "body", "wings", "legs"]);
+      const isWorldBoss = isWorldBossZone(zoneKey) && Boolean(monster?.isBoss);
+      // 部位：優先讀 req.body.part；不合法則 fallback "body"
+      let worldBossPart = "body";
+      if (isWorldBoss) {
+        const rawPart = String(req.body?.part || "").trim();
+        worldBossPart = WB_VALID_PARTS.has(rawPart) ? rawPart : "body";
+      }
+
+      let battlePStats = pStats;
+      let battleMonsterStats = monster.calc;
+      let battleMonsterEquipped = monsterEquipped;
+
+      if (isWorldBoss) {
+        // 確保 state 有部位血量；若沒有就先存回（與 DC 一致）
+        const ensured = ensureWBPartState(stateForCombat, monster.calc.maxHp, zoneKey);
+        if (ensured.changed) {
+          const seeded = {
+            ...stateForCombat,
+            worldBossPartsHp: ensured.worldBossPartsHp,
+            worldBossPartsMaxHp: ensured.worldBossPartsMaxHp,
+            currentHp: ensured.currentHp
+          };
+          await serviceContext.monsterService.saveState(seeded, zoneKey).catch(() => {});
+          stateForCombat = seeded;
+        }
+        // 玩家 stats 依部位調整
+        battlePStats = applyWorldBossTargetToPlayerStats(pStats, worldBossPart, zoneKey).stats;
+        // 怪物 stats / 卡片依部位調整
+        const adjM = applyWorldBossTargetToMonster(monster.calc, monsterEquipped, worldBossPart, zoneKey);
+        battleMonsterStats = adjM.monsterStats;
+        battleMonsterEquipped = adjM.monsterEquipped;
+        // 古龍王：依已破壞部位套破鱗削弱（攻擊面）
+        if (zoneKey === WB_DRAGON_KING_ZONE) {
+          const weakened = applyDragonKingBreakWeaken(battleMonsterStats, battleMonsterEquipped, stateForCombat.worldBossPartsHp);
+          battleMonsterStats = weakened.monsterStats;
+          battleMonsterEquipped = weakened.monsterEquipped;
+        }
+      }
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
-        runCombatLoop(pStats, monster.calc, monster.name, monsterHpInitial, undefined, {
+        runCombatLoop(battlePStats, battleMonsterStats, monster.name, monsterHpInitial, undefined, {
           playerName: displayName,
           playerLevel: progress?.level || 1,
           equipped,
           inventory: progress?.inventory || [],
           partyEffects,
-          monsterEquipped,
+          monsterEquipped: battleMonsterEquipped,
           monsterIsBoss: Boolean(monster?.isBoss),
           bestiaryBonusPct: _bestiaryBonusPct, // 圖鑑傷害加成（同 DC）
+          isWorldBoss, // 世界王：玩家 DOT 也吃王 def%（同 DC）
           zone: zoneKey // 裝備的區域條件特效（同 DC）
         });
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
@@ -2166,9 +2219,77 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           applied: false,
           notice: null
         };
-      const outcome = syncResult.outcome;
+      let outcome = syncResult.outcome;
       const totalDamage = syncResult.damage;
       const totalTaken = Math.max(0, (pStats.maxHp || 0) - Math.max(0, finalPlayerHp));
+
+      // ── 世界王部位戰鬥結算（還原 DC）：把本場傷害扣在被打的部位 ──
+      // 只有「全部位破壞」才視為真正擊殺（呼叫 handleMonsterKill → 觸發冷卻/發獎）；
+      // 部位破但王未全破：outcome 視該部位是否破，但不呼叫 handleMonsterKill。
+      let worldBossSettled = false;       // true → 已在此自行寫入 state，跳過下方一般結算的 state 寫入
+      let worldBossAllPartsDefeated = false;
+      let worldBossPartHpCurrent = 0;
+      let worldBossPartHpMax = 1;
+      let worldBossPartsForResp = null;
+      let worldBossPartBroken = false;
+      if (isWorldBoss) {
+        try {
+          const freshState = await serviceContext.monsterService.getState(zoneKey);
+          const prevParts = ensureWBPartState(freshState, monster.calc.maxHp, zoneKey);
+          const latestPartHp = Math.max(0, Number(prevParts.worldBossPartsHp?.[worldBossPart] || 0));
+          const nextPartHp = Math.max(0, latestPartHp - totalDamage);
+          const nextPartsHp = { ...prevParts.worldBossPartsHp, [worldBossPart]: nextPartHp };
+          const nextCurrentHp = sumWBPartHp(nextPartsHp);
+          worldBossAllPartsDefeated = isWBAllDefeated(nextPartsHp);
+          worldBossPartBroken = nextPartHp <= 0;
+          worldBossPartHpCurrent = nextPartHp;
+          worldBossPartHpMax = Math.max(1, Math.round(Number(prevParts.worldBossPartsMaxHp?.[worldBossPart] || 1)));
+
+          const prevDmg = freshState.damageMap || {};
+          const updatedDamageMap = {
+            ...prevDmg,
+            [discordId]: {
+              name: displayName,
+              damage: (prevDmg[discordId]?.damage || 0) + totalDamage,
+              taken: (prevDmg[discordId]?.taken || 0) + totalTaken,
+            }
+          };
+          const updatedParticipants = [...new Set([...(Array.isArray(freshState.participants) ? freshState.participants : []), discordId])];
+          const nextState = {
+            ...freshState,
+            currentHp: nextCurrentHp,
+            worldBossPartsHp: nextPartsHp,
+            worldBossPartsMaxHp: prevParts.worldBossPartsMaxHp,
+            damageMap: updatedDamageMap,
+            participants: updatedParticipants,
+            lastHitAt: new Date().toISOString()
+          };
+          await serviceContext.monsterService.saveState(nextState, zoneKey);
+          stateForCombat = nextState;
+          worldBossSettled = true;
+
+          // 部位血條（回傳給前端即時更新）
+          const PART_LABELS_RESP = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
+          const { getWorldBossPartKeys: wbPartKeys } = require("../../bot/handlers/monsterZoneHandlers");
+          worldBossPartsForResp = wbPartKeys(zoneKey)
+            .filter((k) => Object.prototype.hasOwnProperty.call(nextPartsHp, k))
+            .map((k) => {
+              const hp = Math.max(0, Number(nextPartsHp[k] || 0));
+              const max = Math.max(1, Math.round(Number(prevParts.worldBossPartsMaxHp?.[k] || 0) || hp || 1));
+              return { key: k, name: PART_LABELS_RESP[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0 };
+            });
+
+          // outcome：全破 → win（真正擊殺）；部位破但王未全破 → win（該部位戰勝，但不擊殺整王）；
+          // 否則沿用戰鬥結果（lose / timeout / win-by-rounds 轉成 timeout 因王還有血）
+          if (worldBossAllPartsDefeated) {
+            outcome = "win";
+          } else if (outcome !== "lose") {
+            outcome = worldBossPartBroken ? "win" : "timeout";
+          }
+        } catch (e) {
+          console.error("[WorldBoss] web part settlement failed:", e.message);
+        }
+      }
 
       // ── 怪物圖鑑累積（同 DC）：本場對該怪造成傷害 / 該怪最大HP（最多算 1 隻）原子累加 ──
       // 勝負/逃跑都累積（未擊殺也算），用本人 totalDamage。
@@ -2203,7 +2324,24 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let mHp = syncResult.monsterHp;
       const currentParticipants = Array.isArray(stateForCombat.participants) ? stateForCombat.participants : [];
 
-      if (outcome === "win") {
+      if (isWorldBoss) {
+        // ── 世界王：state 已由部位結算寫入；只有全部位破壞才呼叫 handleMonsterKill（觸發冷卻/發獎）──
+        mHp = stateForCombat.currentHp ?? 0;
+        const stateWithMe = stateForCombat;
+        if (worldBossAllPartsDefeated) {
+          const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee ?? getZoneDefaultEntryFee(zoneKey) };
+          // handleMonsterKill 內部對世界王會 markBossKilled() → 設 lastKilledAt → 進入冷卻
+          rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state: stateWithMe, totalDamage, zoneKey });
+        } else if (worldBossPartBroken) {
+          rewardLines = [`💥 已擊破 ${monster.name} 的${({ head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" })[worldBossPart] || "部位"}！繼續擊破其餘部位才能屠王。`];
+        } else if (outcome === "lose") {
+          rewardLines = [`你被 ${monster.name} 擊敗了…`];
+        } else {
+          rewardLines = [`激戰 ${MAX_ROUNDS} 回合，未能擊破部位（剩 ${Math.max(0, Math.round(worldBossPartHpCurrent))} HP），下次再來補刀！`];
+        }
+        // 部位戰報後即時更新面板（含部位血條）
+        _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, stateForCombat.currentHp, currentParticipants.length + 1, stateForCombat.damageMap || {}).catch(() => {});
+      } else if (outcome === "win") {
         mHp = 0;
         // Ensure this player is included in participants and damage map before kill handling.
         const stateWithMe = {
@@ -2343,6 +2481,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         auraLines,
         // 每回合播放節奏（依玩家 AGI，與 DC 一致），前端逐回合動畫用
         tickMs: calculateTickDelay(pStats.agi || 1),
+        // ── 世界王部位戰鬥（前端戰報後即時更新部位血條）──
+        targetPart: isWorldBoss ? worldBossPart : null,
+        partName: isWorldBoss ? (({ head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" })[worldBossPart] || null) : null,
+        partHp: isWorldBoss ? { current: Math.max(0, Math.round(worldBossPartHpCurrent)), max: worldBossPartHpMax } : null,
+        allPartsDefeated: isWorldBoss ? worldBossAllPartsDefeated : false,
+        partBroken: isWorldBoss ? worldBossPartBroken : false,
+        parts: isWorldBoss ? worldBossPartsForResp : null,
       }));
 
     } catch (err) {
@@ -2357,50 +2502,153 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const wb = serviceContext.worldBossService;
       if (!wb) {
-        return res.json(ok({ enabled: false, config: null, state: null, status: null }));
+        return res.json(ok({ enabled: false, config: null, state: null, status: null, bosses: [] }));
       }
-      const data = await wb.getConfigWithStatus();
 
-      // 部位血量（網頁部位血條用）：從各世界王 zone state 取 worldBossPartsHp / MaxHp
+      const {
+        WORLD_BOSS_ZONES,
+        bossKeyForZone
+      } = require("../../services/worldBoss/worldBossService");
+      const {
+        ensureWorldBossPartState,
+        getWorldBossPartKeys,
+        sumWorldBossPartHp
+      } = require("../../bot/handlers/monsterZoneHandlers");
+
       const PART_LABELS = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
-      const PART_ORDER = ["head", "body", "wings", "legs"];
-      const { WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
+      const DRAGON_KING_ZONE = "dragon_king_lair";
+
+      // 各世界王部位增減益說明（給前端顯示）
+      const PART_EFFECTS = {
+        elite: [
+          { key: "head", name: "頭部", desc: "怪物技能發動率↑（高風險）" },
+          { key: "body", name: "軀幹", desc: "防禦極高、你的傷害被削減" },
+          { key: "legs", name: "下盤", desc: "怪物攻擊更兇（你受到傷害 ×1.3）" }
+        ],
+        dragon_king_lair: [
+          { key: "head", name: "頭部", desc: "取其首級，傳說落幕（破頭無削弱）" },
+          { key: "body", name: "軀幹", desc: "破其逆鱗 → 王技能發動率降到 30%" },
+          { key: "wings", name: "龍翼", desc: "折其雙翼 → 王技能傷害 −15%" },
+          { key: "legs", name: "下盤", desc: "撼其根基 → 王普攻 −20%" }
+        ]
+      };
+
+      // 各世界王攻略提示
+      const PART_HINTS = {
+        elite: {
+          title: "擊破要害",
+          lines: [
+            "🗡️ 頭部：怪物技能發動率↑（高風險）",
+            "🛡️ 軀幹：防禦極高、你的傷害被削減",
+            "🦵 下盤：怪物攻擊更兇（你受到傷害 ×1.3）"
+          ]
+        },
+        dragon_king_lair: {
+          title: "破鱗・逆鱗（四部位俱破，方能屠龍）",
+          lines: [
+            "🐉 古龍王鱗甲如鐵，然其凶威，皆有所繫——",
+            "🦵 下盤：撼其根基，巨龍難再昂首逞凶",
+            "🪽 龍翼：折其雙翼，焚天之勢自消",
+            "⚔️ 軀幹：破其逆鱗，狂焰之怒漸趨黯淡",
+            "👑 頭顱：取其首級，傳說就此落幕",
+            "💭 古諺有云：「先斷翼、再破鱗，龍焰終成餘燼。」"
+          ]
+        }
+      };
+
       const partsByZone = {};
-      await Promise.all(Object.keys(WORLD_BOSS_ZONES).map(async (zoneKey) => {
-        const st = await serviceContext.monsterService.getState(zoneKey).catch(() => null);
-        const hpMap = st?.worldBossPartsHp;
-        if (!hpMap || typeof hpMap !== "object") return;
-        const maxMap = st?.worldBossPartsMaxHp || {};
-        partsByZone[zoneKey] = PART_ORDER
+      const bosses = await Promise.all(Object.keys(WORLD_BOSS_ZONES).map(async (zoneKey) => {
+        const svc = serviceContext.worldBossServiceFor(zoneKey);
+        const [info, st, monsters] = await Promise.all([
+          svc ? svc.getConfigWithStatus().catch(() => null) : Promise.resolve(null),
+          serviceContext.monsterService.getState(zoneKey).catch(() => null),
+          serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey }).catch(() => [])
+        ]);
+        const cfg = info?.config || {};
+        const status = info?.status || {};
+
+        // 該王怪物（取 boss；fallback 取當前 active / 第一隻）
+        const bossMonster =
+          (Array.isArray(monsters) ? monsters.find((m) => m?.isBoss) : null) ||
+          (Array.isArray(monsters) ? monsters.find((m) => m?.seq === st?.activeMonsterSeq) : null) ||
+          (Array.isArray(monsters) ? monsters[0] : null) ||
+          null;
+
+        const bossName = bossMonster?.name || cfg.bossName || "世界王";
+        const imageUrl = bossMonster?.imageUrl || cfg.imageUrl || null;
+        const bossMaxHp = Math.max(
+          1,
+          Math.round(Number(bossMonster?.calc?.maxHp || cfg.bossMaxHp || 0) || 1)
+        );
+
+        // 部位血量：state 沒有則用模板補上預設（讓前端顯示滿血部位）
+        const partState = ensureWorldBossPartState(st || {}, bossMaxHp, zoneKey);
+        const hpMap = partState.worldBossPartsHp;
+        const maxMap = partState.worldBossPartsMaxHp;
+
+        const partKeys = getWorldBossPartKeys(zoneKey);
+        const parts = partKeys
           .filter((k) => Object.prototype.hasOwnProperty.call(hpMap, k))
           .map((k) => {
             const hp = Math.max(0, Number(hpMap[k] || 0));
             const max = Math.max(1, Math.round(Number(maxMap[k] || 0) || hp || 1));
             return { key: k, name: PART_LABELS[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0 };
           });
+        partsByZone[zoneKey] = parts;
+
+        const currentHp = sumWorldBossPartHp(hpMap);
+
+        return {
+          zoneKey,
+          bossKey: bossKeyForZone(zoneKey),
+          bossName,
+          imageUrl,
+          bossMaxHp,
+          currentHp,
+          parts,
+          partEffects: PART_EFFECTS[zoneKey] || [],
+          hints: PART_HINTS[zoneKey] || null,
+          respawnCooldownMinutes: Number(cfg.respawnCooldownMinutes || 0),
+          battleTimeLimitMinutes: Number(cfg.battleTimeLimitMinutes || 60),
+          cooldownRemainingMs: Number(status.cooldownRemainingMs || 0),
+          cooldownRemainingMinutes: Number(status.cooldownRemainingMinutes || 0),
+          canChallenge: Boolean(status.canChallenge),
+          unlocked: status.unlocked !== false,
+          lockedReason: status.lockedReason || null,
+          lastKilledAt: info?.state?.lastKilledAt || null,
+          battleStartedAt: info?.state?.battleStartedAt || null,
+          battleRemainingMs: Number(status.battleRemainingMs || 0),
+          enabled: cfg.enabled !== false
+        };
       }));
 
+      // 舊欄位相容（仍給只看 elite 的舊前端）
+      const legacy = bosses.find((b) => b.zoneKey === "elite") || bosses[0] || null;
+
       res.json(ok({
-        enabled: data.config?.enabled !== false,
-        config: {
-          bossName: data.config?.bossName || "世界王",
-          bossMaxHp: data.config?.bossMaxHp || 0,
-          respawnCooldownMinutes: data.config?.respawnCooldownMinutes || 0,
-          battleTimeLimitMinutes: data.config?.battleTimeLimitMinutes || 60,
-          imageUrl: data.config?.imageUrl || null,
-          rewards: data.config?.rewards || null,
-          enabled: data.config?.enabled !== false
-        },
-        state: {
-          weekKey: data.state?.weekKey || null,
-          currentHp: data.state?.currentHp ?? data.config?.bossMaxHp ?? 0,
-          hardKills: data.state?.hardKills || 0,
-          lastKilledAt: data.state?.lastKilledAt || null,
-          battleStartedAt: data.state?.battleStartedAt || null,
-          parts: partsByZone.elite || null
-        },
+        bosses,
+        // ↓ 舊欄位相容
+        enabled: legacy ? legacy.enabled : false,
+        config: legacy ? {
+          bossName: legacy.bossName,
+          bossMaxHp: legacy.bossMaxHp,
+          respawnCooldownMinutes: legacy.respawnCooldownMinutes,
+          battleTimeLimitMinutes: legacy.battleTimeLimitMinutes,
+          imageUrl: legacy.imageUrl,
+          enabled: legacy.enabled
+        } : null,
+        state: legacy ? {
+          currentHp: legacy.currentHp,
+          lastKilledAt: legacy.lastKilledAt,
+          battleStartedAt: legacy.battleStartedAt,
+          parts: legacy.parts
+        } : null,
         partsByZone,
-        status: data.status
+        status: legacy ? {
+          cooldownRemainingMs: legacy.cooldownRemainingMs,
+          cooldownRemainingMinutes: legacy.cooldownRemainingMinutes,
+          canChallenge: legacy.canChallenge
+        } : null
       }));
     } catch (err) {
       next(err);

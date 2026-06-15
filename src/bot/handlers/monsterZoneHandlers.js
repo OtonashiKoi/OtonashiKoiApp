@@ -4716,5 +4716,17 @@ module.exports = {
   getMonsterZoneDiagnostics,
   startIdleRotateTimer,
   refreshEliteWorldBossPanel,
-  refreshMonsterZonePanels
+  refreshMonsterZonePanels,
+  // ── 世界王部位戰鬥（純函式）：給網頁端 quick-battle / status 還原 DC 邏輯用 ──
+  getWorldBossPartKeys,
+  getWorldBossTargetProfile,
+  applyWorldBossTargetToPlayerStats,
+  applyWorldBossTargetToMonster,
+  applyDragonKingBreakWeaken,
+  ensureWorldBossPartState,
+  sumWorldBossPartHp,
+  isWorldBossAllPartsDefeated,
+  createWorldBossPartHpTemplate,
+  parseWorldBossTargetPart,
+  DRAGON_KING_ZONE
 };
