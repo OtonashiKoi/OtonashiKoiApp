@@ -536,26 +536,52 @@ class ShopService {
         progress.shopMonthlyCount[itemId][ym] = ((progress.shopMonthlyCount[itemId][ym] || 0) + quantity);
       }
       // 添加 quantity 個物品到背包
-      for (let i = 0; i < quantity; i++) {
-        progress.inventory.push({
-          uuid: crypto.randomUUID(),
-          itemId: item.itemLibraryId || item.id,
-          itemName: item.name,
-          itemEffect: item.effect || { type: "none", value: 0 },
-          useEffects: libraryItem?.useEffects || item.useEffects || [],
-          passiveEffects: libraryItem?.passiveEffects || item.passiveEffects || [],
-          procEffects: libraryItem?.procEffects || item.procEffects || [],
-          combatEffects: libraryItem?.combatEffects || item.combatEffects || [],
-          itemType: item.itemType || "consumable",
-          imageUrl: item.imageUrl || null,
-          imageThumbnailUrl: item.imageThumbnailUrl || null,
-          equipSlot: item.equipSlot || null,
-          equipStats: libraryItem?.equipStats || item.equipStats || null,
-          weaponType: item.weaponType || null,
-          isTwoHanded: this._resolveIsTwoHanded({ weaponType: item.weaponType, isTwoHanded: item.isTwoHanded }),
-          tier: effectiveTier,
-          purchasedAt: new Date().toISOString()
-        });
+      const _itemId = item.itemLibraryId || item.id;
+      // 神祕蛋可堆疊：合併到既有同 itemId 的蛋堆，避免每顆各佔一格
+      if ((item.itemType || "") === "pet_egg") {
+        const existingEgg = progress.inventory.find((x) => x && x.itemType === "pet_egg" && x.itemId === _itemId);
+        if (existingEgg) {
+          existingEgg.stackCount = (Number(existingEgg.stackCount) || 1) + quantity;
+        } else {
+          progress.inventory.push({
+            uuid: crypto.randomUUID(),
+            itemId: _itemId,
+            itemName: item.name,
+            itemEffect: item.effect || { type: "none", value: 0 },
+            useEffects: libraryItem?.useEffects || item.useEffects || [],
+            passiveEffects: libraryItem?.passiveEffects || item.passiveEffects || [],
+            procEffects: libraryItem?.procEffects || item.procEffects || [],
+            combatEffects: libraryItem?.combatEffects || item.combatEffects || [],
+            itemType: "pet_egg",
+            imageUrl: item.imageUrl || null,
+            imageThumbnailUrl: item.imageThumbnailUrl || null,
+            tier: effectiveTier,
+            stackCount: quantity,
+            purchasedAt: new Date().toISOString()
+          });
+        }
+      } else {
+        for (let i = 0; i < quantity; i++) {
+          progress.inventory.push({
+            uuid: crypto.randomUUID(),
+            itemId: _itemId,
+            itemName: item.name,
+            itemEffect: item.effect || { type: "none", value: 0 },
+            useEffects: libraryItem?.useEffects || item.useEffects || [],
+            passiveEffects: libraryItem?.passiveEffects || item.passiveEffects || [],
+            procEffects: libraryItem?.procEffects || item.procEffects || [],
+            combatEffects: libraryItem?.combatEffects || item.combatEffects || [],
+            itemType: item.itemType || "consumable",
+            imageUrl: item.imageUrl || null,
+            imageThumbnailUrl: item.imageThumbnailUrl || null,
+            equipSlot: item.equipSlot || null,
+            equipStats: libraryItem?.equipStats || item.equipStats || null,
+            weaponType: item.weaponType || null,
+            isTwoHanded: this._resolveIsTwoHanded({ weaponType: item.weaponType, isTwoHanded: item.isTwoHanded }),
+            tier: effectiveTier,
+            purchasedAt: new Date().toISOString()
+          });
+        }
       }
 
       if (claimLimit === "once_per_player" && this.shopClaimRepository?.saveClaim) {
