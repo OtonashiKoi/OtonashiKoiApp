@@ -4696,9 +4696,61 @@ function startWorldBossRespawnWatcher() {
   console.log("[WorldBossWatcher] 啟動：每 3 分檢查世界王逃跑/重生並刷新面板");
 }
 
+// 卡住面板修復：只處理「轉場過期沒收尾」或「死了沒換怪」的 zone，
+// 並只在實際換了怪時才重發面板（健康的 zone 完全不動，避免 Discord PATCH 洗版）。
+// 解決：PM2 重載丟失記憶體 setTimeout 後，怪物被打死但面板卡在死怪不換的狀況。
+let monsterPanelSweepTimer = null;
+async function sweepStuckMonsterPanels() {
+  const sc = getServiceContext();
+  if (!sc) return;
+  const layout = await sc.channelLayoutRepository.get().catch(() => ({}));
+  const bindings = Array.isArray(layout?.discord?.bindings) ? layout.discord.bindings : [];
+  const targets = bindings.filter((b) => b?.enabled && b?.channelId
+    && String(b.featureKey || "").startsWith("monster_zone") && b.featureKey !== "monster_zone_elite");
+  for (const binding of targets) {
+    try {
+      const zoneKey = _featureKeyToZone(binding.featureKey);
+      if (isWorldBossZone(zoneKey)) continue; // 世界王有自己的 watcher
+      // 1) 轉場過期沒收尾 → 收尾並換下一隻
+      let changed = await _resolveExpiredMonsterTransition(sc, zoneKey).catch(() => false);
+      // 2) 死了(currentHp<=0)但沒有進行中的轉場/事件 → 直接換下一隻
+      const state = await sc.monsterService.getState(zoneKey).catch(() => null);
+      const deadNoTransition = Number(state?.currentHp || 0) <= 0 && !state?.activeTransition && !state?.activeEvent;
+      if (deadNoTransition) {
+        await _doIdleRotate(sc, zoneKey).catch(() => {});
+        changed = true;
+      }
+      if (!changed) continue; // 健康 zone：完全不動面板
+      const fresh = await sc.monsterService.getState(zoneKey).catch(() => null);
+      const monsters = await sc.monsterService.listMonsters({ includeDisabled: true, zone: zoneKey }).catch(() => []);
+      const monster = fresh?.currentMonster
+        || monsters.find((m) => m.seq === fresh?.activeMonsterSeq)
+        || (monsters.length ? monsters[0] : null);
+      const monsterHp = fresh?.currentHp != null ? fresh.currentHp : (monster?.calc?.maxHp ?? null);
+      await _republishPanel(sc, zoneKey, monster, monsterHp,
+        Array.isArray(fresh?.participants) ? fresh.participants.length : 0,
+        fresh?.damageMap || {}, fresh?.activeEvent || null,
+        fresh?.worldBossPartsHp || null,
+        { fastUpdate: true, activeTransition: fresh?.activeTransition || null }
+      ).catch(() => {});
+      console.log(`[MonsterSweep] 修復卡住面板 zone=${zoneKey}`);
+    } catch (_) { /* 單一 zone 失敗不影響其他 */ }
+  }
+}
+function startMonsterPanelSweep() {
+  if (monsterPanelSweepTimer) return;
+  const sec = Math.max(20, Number.parseInt(process.env.MONSTER_PANEL_SWEEP_SECONDS || "45", 10) || 45);
+  sweepStuckMonsterPanels().catch(() => {});
+  monsterPanelSweepTimer = setInterval(() => sweepStuckMonsterPanels().catch(() => {}), sec * 1000);
+  monsterPanelSweepTimer.unref?.();
+  console.log(`[MonsterSweep] 卡住面板自動修復已啟動（每 ${sec}s，只動需要換怪的 zone）`);
+}
+
 module.exports = {
   handleMonsterZoneButton,
   startWorldBossRespawnWatcher,
+  startMonsterPanelSweep,
+  sweepStuckMonsterPanels,
   isMonsterZoneButton,
   isMonsterEventButton,
   isMonsterEventPersonalButton,
