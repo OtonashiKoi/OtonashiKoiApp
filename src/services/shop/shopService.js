@@ -1273,6 +1273,21 @@ class ShopService {
     return { activePreset: targetPreset, equipment: progress.equipment };
   }
 
+  // 把目前身上的裝備存成指定分頁（不換裝、不動 inventory），純快照
+  async saveEquipPreset(discordId, targetPreset) {
+    const VALID_PRESETS = ["A", "B", "C"];
+    if (!VALID_PRESETS.includes(targetPreset)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "無效分頁，請選擇 A / B / C", 400);
+    }
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);
+    if (!progress.equipPresets) progress.equipPresets = {};
+    progress.equipPresets[targetPreset] = this._snapshotEquipment(progress.equipment || {});
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+    return { preset: targetPreset, snapshot: progress.equipPresets[targetPreset] };
+  }
+
   _snapshotEquipment(equipment = {}) {
     const snap = {};
     for (const [slot, item] of Object.entries(equipment)) {
