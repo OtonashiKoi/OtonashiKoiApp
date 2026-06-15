@@ -15,6 +15,14 @@ const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 // Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
 const playerBattleCooldowns = new Map();
 
+// webhook 訊息 id → 發送者 discordId（給引用 @ 原留言者用；webhook 訊息本身查不到真人）
+const webMsgAuthors = new Map();
+function rememberWebMsgAuthor(messageId, discordId) {
+  if (!messageId || !discordId) return;
+  webMsgAuthors.set(String(messageId), String(discordId));
+  if (webMsgAuthors.size > 1000) webMsgAuthors.delete(webMsgAuthors.keys().next().value);
+}
+
 // 每回合動畫長度（ms）。可用 env `ROUND_MS` 覆寫。預設為 700 * 0.8
 const ROUND_MS = Number(process.env.ROUND_MS || Math.round(700 * 0.8));
 
@@ -1398,13 +1406,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         throw new Error("Message cannot be empty");
       }
 
-      // 引用留言：webhook 無法做 Discord 原生回覆，改在內容前面加一行引用，
-      // DC/網頁兩邊都看得到（網頁也會把這行渲染成引用框）。
-      let outgoing = String(message);
+      // 引用留言：webhook 無法做 Discord 原生回覆。
+      //   1) 內文前加一行引用（DC 看 blockquote、網頁解析成精簡引用框）
+      //   2) 有原留言者 discordId → 加 <@id> 真正 tag 通知對方
+      const mention = (replyTo && replyTo.authorId) ? `<@${replyTo.authorId}> ` : "";
+      const body = mention + String(message);
+      let outgoing = body;
       if (replyTo && (replyTo.author || replyTo.content)) {
         const qAuthor = String(replyTo.author || "").slice(0, 40);
         const qText = String(replyTo.content || "").replace(/\n/g, " ").slice(0, 80);
-        outgoing = `> ↩ ${qAuthor}：${qText}\n${message}`;
+        outgoing = `> ↩ ${qAuthor}：${qText}\n${body}`;
       }
 
       // Resolve the bound Discord channel for town chat.
@@ -1432,14 +1443,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           } catch (_) {}
 
           if (webhook) {
-            await webhook.send({
+            const sent = await webhook.send({
               content: outgoing,
               username: displayName,
               ...(avatarURL ? { avatarURL } : {}),
             });
+            rememberWebMsgAuthor(sent?.id, discordId); // 記住這則 webhook 訊息是誰發的（給引用 @ 用）
           } else {
             // Fallback to a regular bot message if webhook creation fails.
-            await channel.send(`**${displayName}**: ${outgoing}`);
+            const sent = await channel.send(`**${displayName}**: ${outgoing}`);
+            rememberWebMsgAuthor(sent?.id, discordId);
           }
         } else {
           console.warn(`[PlayerApp] ?曆???Town Chat ?駁? (ID: ${townChatBinding.channelId})`);
@@ -1600,6 +1613,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const payload = {
           id: msg.id,
           author: msg.member?.displayName || msg.author.globalName || msg.author.username,
+          authorId: msg.webhookId ? (webMsgAuthors.get(String(msg.id)) || null) : (msg.author?.id || null),
           avatar: msg.author.displayAvatarURL(),
           content: await resolveMentions(content, msg.guild),
           timestamp: msg.createdTimestamp,
@@ -1781,6 +1795,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return {
           id: msg.id,
           author: msg.member?.displayName || msg.author.globalName || msg.author.username,
+          authorId: msg.webhookId ? (webMsgAuthors.get(String(msg.id)) || null) : (msg.author?.id || null),
           avatar: msg.author.displayAvatarURL(),
           content: resolvedContent,
           timestamp: msg.createdTimestamp,
