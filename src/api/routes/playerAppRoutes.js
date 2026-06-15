@@ -1590,6 +1590,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           } catch (_) {}
         }
 
+        // webhook 轉發的網頁引用：把內容開頭的「> ↩ 對方：原文」解析回 replyTo，
+        // 讓網頁顯示精簡引用框、內文不再攏長（DC 端仍看得到 blockquote）。
+        if (!replyTo) {
+          const rm = String(content).match(/^>\s*↩\s*([^\n：:]+)[：:]\s?([^\n]*)\n([\s\S]*)$/);
+          if (rm) { replyTo = { id: null, author: rm[1].trim(), content: rm[2].trim().slice(0, 80) }; content = rm[3]; }
+        }
+
         const payload = {
           id: msg.id,
           author: msg.member?.displayName || msg.author.globalName || msg.author.username,
@@ -1762,6 +1769,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               content: (replied.content || "").slice(0, 80),
             };
           }
+        }
+
+        // webhook 網頁引用：解析開頭引用行回 replyTo，內文去掉引用行（同 SSE）
+        if (!replyTo) {
+          const rm = String(content).match(/^>\s*↩\s*([^\n：:]+)[：:]\s?([^\n]*)\n([\s\S]*)$/);
+          if (rm) { replyTo = { id: null, author: rm[1].trim(), content: rm[2].trim().slice(0, 80) }; content = rm[3]; }
         }
 
         const resolvedContent = await resolveMentions(content, channel.guild);
