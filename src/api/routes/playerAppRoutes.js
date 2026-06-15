@@ -1607,7 +1607,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 讓網頁顯示精簡引用框、內文不再攏長（DC 端仍看得到 blockquote）。
         if (!replyTo) {
           const rm = String(content).match(/^>\s*↩\s*([^\n：:]+)[：:]\s?([^\n]*)\n([\s\S]*)$/);
-          if (rm) { replyTo = { id: null, author: rm[1].trim(), content: rm[2].trim().slice(0, 80) }; content = rm[3]; }
+          if (rm) { replyTo = { id: null, author: rm[1].trim(), content: rm[2].trim().slice(0, 80) }; content = rm[3].replace(/^<@!?\d+>\s*/, ""); }
         }
 
         const payload = {
@@ -1788,7 +1788,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // webhook 網頁引用：解析開頭引用行回 replyTo，內文去掉引用行（同 SSE）
         if (!replyTo) {
           const rm = String(content).match(/^>\s*↩\s*([^\n：:]+)[：:]\s?([^\n]*)\n([\s\S]*)$/);
-          if (rm) { replyTo = { id: null, author: rm[1].trim(), content: rm[2].trim().slice(0, 80) }; content = rm[3]; }
+          if (rm) { replyTo = { id: null, author: rm[1].trim(), content: rm[2].trim().slice(0, 80) }; content = rm[3].replace(/^<@!?\d+>\s*/, ""); }
         }
 
         const resolvedContent = await resolveMentions(content, channel.guild);
