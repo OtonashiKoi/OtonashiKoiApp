@@ -2829,8 +2829,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
   router.post("/api/me/pets/feed", requireAuth, async (req, res, next) => {
     try {
-      const { petUuid, inventoryUuid, tier } = req.body || {};
-      const r = await serviceContext.petService.feedPet(req.playerRecord.discordId, petUuid, { inventoryUuid, tier });
+      const { petUuid, inventoryUuid, tier, preview, includeEnhanced } = req.body || {};
+      const r = await serviceContext.petService.feedPet(req.playerRecord.discordId, petUuid, { inventoryUuid, tier, preview: Boolean(preview), includeEnhanced: Boolean(includeEnhanced) });
       res.json(ok(r, r?.message || "餵食完成"));
     } catch (err) { if (err?.message) return res.status(400).json(fail("PET_FEED_FAILED", err.message)); next(err); }
   });

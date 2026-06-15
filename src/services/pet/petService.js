@@ -316,11 +316,14 @@ class PetService {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${tier} 階裝備太高級，餵不進對應 ${matchTier} 階的寵物`, 400);
       }
       const tierGear = progress.inventory.filter((x) => x && x.itemType === "equipment" && String(x.tier).toUpperCase() === tier);
-      feedTargets = tierGear.filter(isBatchFeedable);                // 一鍵只餵素裝（+0、非卡片徽章稱號）
-      protectedCount = tierGear.length - feedTargets.length;         // 有 +值 / 卡片徽章 → 保護
+      // includeEnhanced=true：連有 +值的強化裝也餵（仍排除卡片/徽章/稱號）；否則只餵素裝
+      feedTargets = opts.includeEnhanced
+        ? tierGear.filter(isSingleFeedable)
+        : tierGear.filter(isBatchFeedable);
+      protectedCount = tierGear.length - feedTargets.length;         // 卡片徽章（或未含強化時的 +值裝）→ 保護
       if (feedTargets.length === 0) {
-        const hint = protectedCount > 0 ? `（有 ${protectedCount} 件有 +值或為卡片徽章受保護，強化裝請單件餵）` : "";
-        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `背包沒有可一鍵餵的 ${tier} 階素裝${hint}`, 400);
+        const hint = protectedCount > 0 ? `（有 ${protectedCount} 件受保護：卡片/徽章${opts.includeEnhanced ? "" : "或有 +值"}）` : "";
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `背包沒有可一鍵餵的 ${tier} 階裝備${hint}`, 400);
       }
     } else {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "未指定餵食對象", 400);
@@ -424,6 +427,19 @@ class PetService {
       pet.lastSettleAt = nowMs();
     }
 
+    // 預覽（dry-run）：不寫入 DB、不消耗背包，只回報「餵完後會變怎樣」
+    if (opts.preview) {
+      return {
+        preview: true,
+        willFeed: feedTargets.length, fed, protectedCount, totalSatiety, totalGrowth, totalHatch,
+        hatched, hatchedSpecies, leveledTo, tierCapReached, crossedTier, gatherCleared, endTier,
+        predictedLevel: pet.level || 1,
+        predictedSatiety: Math.round(pet.satiety || 0),
+        satietyMax: SATIETY_MAX,
+        pet: this._toView(pet),
+      };
+    }
+
     // 消耗 inventory 裝備（只消耗實際吃下去的）
     progress.inventory = progress.inventory.filter((x) => !(x && consumedUuids.has(x.uuid)));
     pet.lastSatietyAt = nowMs();
@@ -432,6 +448,7 @@ class PetService {
     return {
       fed, protectedCount, totalSatiety, totalGrowth, totalHatch, hatched, hatchedSpecies, leveledTo,
       tierCapReached, crossedTier, gatherCleared, endTier,
+      predictedLevel: pet.level || 1, predictedSatiety: Math.round(pet.satiety || 0), satietyMax: SATIETY_MAX,
       pet: this._toView(pet),
     };
   }
