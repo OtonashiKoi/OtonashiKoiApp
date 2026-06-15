@@ -58,6 +58,14 @@ const auctionRepository = {
   },
 
   /**
+   * 查詢某玩家的所有上架紀錄（所有狀態，供歷史紀錄頁）
+   */
+  async findAllBySeller(sellerId, limit = 50) {
+    const col = await collection();
+    return col.find({ sellerId }).sort({ createdAt: -1 }).limit(limit).toArray();
+  },
+
+  /**
    * 查詢所有到期且還是 active 的拍賣（供定時任務掃描）
    */
   async findExpiredActive() {

@@ -448,6 +448,10 @@ class AuctionService {
     return auctionRepository.findBySeller(sellerId);
   }
 
+  async getMyHistory(sellerId) {
+    return auctionRepository.findAllBySeller(sellerId);
+  }
+
   // 向下相容
   async getChannelConfig() { return auctionRepository.getSettings(); }
   async saveChannelConfig(cfg) {

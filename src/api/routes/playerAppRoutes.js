@@ -3342,6 +3342,49 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 歷史紀錄：該玩家所有上架紀錄（所有狀態），時間新到舊
+  router.get("/api/auction/history", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const history = await serviceContext.auctionService.getMyHistory(discordId);
+      const sorted = [...(history || [])].sort((a, b) =>
+        new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      res.json(ok({
+        history: sorted.map((a) => ({
+          id: a.id || a._id?.toString(),
+          itemName: a.itemName || a.item?.itemName,
+          itemType: a.itemType || a.item?.itemType,
+          tier: a.tier || a.item?.tier,
+          quantity: a.quantity || a.item?.stackCount || 1,
+          currency: a.currency,
+          price: a.price,
+          status: a.status,
+          listedAt: a.listedAt || a.createdAt,
+          expiresAt: a.expiresAt,
+          soldAt: a.soldAt || null,
+          reclaimedAt: a.reclaimedAt || null
+        }))
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 領回：到期未售的物品退回背包
+  router.post("/api/auction/reclaim/:id", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const auctionId = String(req.params.id);
+      const result = await serviceContext.auctionService.reclaimItem(discordId, auctionId);
+      res.json(ok(result, "領回成功"));
+    } catch (err) {
+      if (err?.message) {
+        return res.status(400).json(fail("RECLAIM_FAILED", err.message));
+      }
+      next(err);
+    }
+  });
+
   // ──────────────────────────────────────────────────
   // 交易紀錄（DC 玩家面板 → 交易紀錄）
   // ──────────────────────────────────────────────────
