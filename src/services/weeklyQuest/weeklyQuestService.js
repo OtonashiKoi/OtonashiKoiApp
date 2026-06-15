@@ -402,6 +402,7 @@ class WeeklyQuestService {
         periodKey,
         quest,
         current,
+        target, // 動態 target（完成型任務 = 基礎任務總數）；前端顯示分母用,別再用 quest.target
         claimed: Boolean(p.claimed || (quest.claimOnce && p.claimedOnce)),
         done: current >= target
       };
