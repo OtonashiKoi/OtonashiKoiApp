@@ -2426,7 +2426,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // Cooldown duration matches the client-side animation timeline.
       // 回合節奏依玩家 AGI（同 DC），env ROUND_MS 仍可覆寫成固定值
       const perRoundMs = process.env.ROUND_MS ? ROUND_MS : calculateTickDelay(pStats.agi || 1);
-      const animDurationMs = roundLogs.length * perRoundMs + 2000;
+      // 死亡額外冷卻：與 DC 一致，戰鬥死亡(lose)在基準動畫時間外再加 10 秒懲罰
+      const DEATH_EXTRA_COOLDOWN_MS = 10 * 1000;
+      const animDurationMs = roundLogs.length * perRoundMs + 2000 + (outcome === "lose" ? DEATH_EXTRA_COOLDOWN_MS : 0);
       const nextBattleAt = Date.now() + animDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
       // Clean up the cooldown map after the window has safely expired.
