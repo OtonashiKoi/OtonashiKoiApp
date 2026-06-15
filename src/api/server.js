@@ -13,6 +13,7 @@ const { createAdminMonsterEventRoutes } = require("./routes/adminMonsterEventRou
 const { createAdminWeeklyQuestRoutes } = require("./routes/adminWeeklyQuestRoutes");
 const { createAdminIdleRoutes } = require("./routes/adminIdleRoutes");
 const { createAdminCreatorAuthRoutes } = require("./routes/adminCreatorAuthRoutes");
+const { createAdminCombatCalculatorRoutes } = require("./routes/adminCombatCalculatorRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const { createPlayerCollectionRoutes } = require("./routes/playerCollectionRoutes");
@@ -77,7 +78,11 @@ function createApiServer(discordClient) {
       res.setHeader("Cache-Control", "no-store");
     }
   }));
-  app.use("/uploads", express.static(path.resolve(__dirname, "../web/public/uploads")));
+  // 上傳圖片長快取（ETag 仍會比對；內容變了 ETag 變、瀏覽器自然抓新圖；7 天內不重打）
+  app.use("/uploads", express.static(path.resolve(__dirname, "../web/public/uploads"), {
+    maxAge: "7d",
+    setHeaders(res) { res.setHeader("Cache-Control", "public, max-age=604800"); }
+  }));
   app.use(createHealthRoutes());
   app.use(createAdminConsoleRoutes(serviceContext));
   app.use(createAdminPlayerRoutes(serviceContext));
@@ -86,6 +91,7 @@ function createApiServer(discordClient) {
   app.use(createAdminWeeklyQuestRoutes(serviceContext));
   app.use(createAdminIdleRoutes(serviceContext));
   app.use(createAdminCreatorAuthRoutes(serviceContext));
+  app.use(createAdminCombatCalculatorRoutes(serviceContext));
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
   app.use(createPlayerCollectionRoutes(serviceContext));
   app.use(createPlayerForgeRoutes(serviceContext));
@@ -155,4 +161,3 @@ function createApiServer(discordClient) {
 module.exports = {
   createApiServer
 };
-
