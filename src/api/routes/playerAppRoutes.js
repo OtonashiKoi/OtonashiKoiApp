@@ -3112,16 +3112,24 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId, displayName } = req.playerRecord;
       const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
       const result = await serviceContext.transactionService.listRecentByDiscordId(discordId, displayName, limit);
-      const transactions = (result.transactions || []).map((tx) => ({
-        id: tx.id || tx._id?.toString(),
-        type: tx.type,
-        sourceTag: tx.sourceTag,
-        amount: tx.amount,
-        currency: tx.currency,
-        balanceAfter: tx.balanceAfter ?? null,
-        detail: tx.detail || null,
-        occurredAt: tx.occurredAt || tx.createdAt
-      }));
+      const { transactionSourceLabel } = require("../../shared/transactionLabels");
+      const transactions = (result.transactions || []).map((tx) => {
+        const direction = tx.direction === "debit" ? "debit" : "credit";
+        const rawAmount = Math.abs(Number(tx.amount) || 0);
+        const meta = transactionSourceLabel(tx.source);
+        return {
+          id: tx.id || tx._id?.toString(),
+          source: tx.source || null,
+          sourceTag: tx.source || null,
+          label: meta.label,      // 中文來源（前端直接顯示，不再是 ❓）
+          icon: meta.icon,
+          direction,              // credit=收入 / debit=支出
+          amount: direction === "debit" ? -rawAmount : rawAmount, // 帶正負號，前端據此分收入/支出
+          currency: tx.currencyType || tx.currency || "gold",     // DB 是 currencyType
+          balanceAfter: tx.balanceAfter ?? null,
+          occurredAt: tx.occurredAt || tx.createdAt
+        };
+      });
       res.json(ok({ transactions, count: transactions.length }));
     } catch (err) {
       next(err);

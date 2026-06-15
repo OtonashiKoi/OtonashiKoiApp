@@ -81,10 +81,12 @@ function formatTransactions(rows) {
     return "目前沒有交易紀錄。";
   }
 
+  const { transactionSourceLabel, currencyLabelZh } = require("../shared/transactionLabels");
   return rows
     .map((row) => {
       const sign = row.direction === "debit" ? "-" : "+";
-      return `${row.currencyType} ${sign}${Math.abs(row.amount)} | ${row.source} | ${row.balanceAfter}`;
+      const meta = transactionSourceLabel(row.source);
+      return `${meta.icon} ${meta.label}　${currencyLabelZh(row.currencyType)} ${sign}${Math.abs(row.amount).toLocaleString()}　餘額 ${Number(row.balanceAfter || 0).toLocaleString()}`;
     })
     .join("\n");
 }
@@ -615,6 +617,13 @@ async function handleProfile(interaction) {
       if (eff.key === 'gold_gain_up')  titleBonusParts.push(`金幣 +${v}%`);
       if (eff.key === 'exp_gain_up')   titleBonusParts.push(`經驗 +${v}%`);
       if (eff.key === 'drop_rate_up')  titleBonusParts.push(`掉落 +${v}%`);
+      if (eff.key === 'final_damage_up') {
+        const zones = []
+          .concat(eff?.condition?.zone || [])
+          .map((z) => ({ dragon_realm: "龍族之領", dragon_king_lair: "龍王巢穴" }[z] || z));
+        const zoneNote = zones.length ? `（${zones.join("／")}）` : "";
+        titleBonusParts.push(`最終傷害 +${v}%${zoneNote}`);
+      }
     }
     if (titleBonusParts.length) {
       titleBonusSection = `🏅 稱號加成：${titleBonusParts.join("、")}\n`;
@@ -2855,6 +2864,41 @@ function buildProgressBar(current, target, width = 10) {
   return "▓".repeat(filled) + "░".repeat(width - filled);
 }
 
+// 世界王鬧鐘：切換訂閱身分組（已有→取消、未有→訂閱）。開戰通知會 TAG 此身分組。
+async function handleWorldBossAlarmToggle(interaction) {
+  const roleId = config.discord?.worldBossAlarmRoleId;
+  if (!roleId) {
+    await interaction.reply({ content: "⚠️ 尚未設定世界王鬧鐘身分組，請聯絡管理員。", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (!interaction.guild) {
+    await interaction.reply({ content: "❌ 此功能只能在伺服器內使用。", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  try {
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    if (member.roles.cache.has(roleId)) {
+      await member.roles.remove(roleId);
+      await interaction.reply({
+        content: "🔕 已關閉 **世界王鬧鐘**，之後世界王開戰不會再 tag 你。再次點擊可重新開啟。",
+        flags: MessageFlags.Ephemeral
+      });
+    } else {
+      await member.roles.add(roleId);
+      await interaction.reply({
+        content: "⏰ 已開啟 **世界王鬧鐘**！之後有人發起世界王挑戰，開戰通知會 tag 你。再次點擊可關閉。",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+  } catch (err) {
+    console.warn("[worldBossAlarm] 切換身分組失敗:", err?.message || err);
+    await interaction.reply({
+      content: "❌ 設定失敗，可能是機器人權限不足（需要「管理身分組」，且機器人最高身分組要排在該身分組之上）。請聯絡管理員。",
+      flags: MessageFlags.Ephemeral
+    }).catch(() => {});
+  }
+}
+
 async function handleButton(interaction) {
   const id = interaction.customId;
 
@@ -3127,6 +3171,12 @@ async function handleButton(interaction) {
   }
 
   if (!Object.values(BUTTON_IDS).includes(id)) {
+    return;
+  }
+
+  // 世界王鬧鐘訂閱：純通知 opt-in，不需玩家權限即可使用
+  if (id === BUTTON_IDS.worldBossAlarm) {
+    await handleWorldBossAlarmToggle(interaction);
     return;
   }
 
