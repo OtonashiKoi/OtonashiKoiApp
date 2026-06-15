@@ -1153,7 +1153,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         code,
         command: `!綁定 ${code}`,
         expiresInMinutes: 10,
-        youtubeUrl: config.streamMembership?.bindYoutubeUrl || null
+        youtubeUrl: config.streamMembership?.bindYoutubeUrl || null,
+        twitchUrl: config.streamMembership?.twitchChannel || null
       }));
     } catch (err) {
       next(err);
