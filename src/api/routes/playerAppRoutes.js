@@ -15,6 +15,11 @@ const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 // Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
 const playerBattleCooldowns = new Map();
 
+// 聊天圖片上傳：記憶體暫存、8MB 上限（轉發為 Discord 附件，不落地、不佔 Cloudinary）
+const multer = require("multer");
+const chatImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+const chatImageCooldown = new Map(); // discordId -> 上次發圖時間（防洗版）
+
 // webhook 訊息 id → 發送者 discordId（給引用 @ 原留言者用；webhook 訊息本身查不到真人）
 const webMsgAuthors = new Map();
 function rememberWebMsgAuthor(messageId, discordId) {
@@ -1461,6 +1466,59 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       res.json(ok({ status: "sent", message }));
     } catch (err) {
+      next(err);
+    }
+  });
+
+  // 4b. 聊天傳圖：轉發為 Discord 附件（圖存 Discord CDN，不佔本機/Cloudinary）
+  router.post("/api/chat/lobby/image", requireAuth, chatImageUpload.single("image"), async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      if (!req.file || !req.file.buffer) return res.status(400).json(fail("INVALID_ARGUMENT", "缺少圖片"));
+      if (!/^image\//.test(req.file.mimetype || "")) return res.status(400).json(fail("INVALID_ARGUMENT", "只能傳圖片"));
+      // 發圖間隔（防洗版）：每人 3 秒一張
+      const now = Date.now();
+      if (now - (chatImageCooldown.get(discordId) || 0) < 3000) {
+        return res.status(429).json(fail("RATE_LIMITED", "發圖太快，請稍候再試"));
+      }
+
+      const layout = await serviceContext.channelLayoutRepository.get();
+      const townChatBinding = layout.discord.bindings.find(b => b.featureKey === "town_chat" && b.enabled);
+      if (!townChatBinding?.channelId || !discordClient) {
+        return res.status(503).json(fail("UNAVAILABLE", "城鎮頻道尚未設定"));
+      }
+      const channel = discordClient.channels.cache.get(townChatBinding.channelId);
+      if (!channel) return res.status(503).json(fail("UNAVAILABLE", "找不到城鎮頻道"));
+
+      let avatarURL = null;
+      try {
+        const u = await discordClient.users.fetch(discordId, { force: false });
+        avatarURL = u.displayAvatarURL({ size: 128, extension: "png" });
+      } catch (_) {}
+
+      let webhook = null;
+      try {
+        const webhooks = await channel.fetchWebhooks();
+        webhook = webhooks.find(w => w.name === "PlayerWebChat" && w.owner?.id === discordClient.user.id)
+          || await channel.createWebhook({ name: "PlayerWebChat", reason: "Player web chat proxy" });
+      } catch (_) {}
+
+      const ext = String(req.file.originalname || "").split(".").pop()?.toLowerCase();
+      const safeName = `chat_${now}.${/^(png|jpe?g|gif|webp)$/.test(ext || "") ? ext : "png"}`;
+      const caption = String(req.body?.caption || "").replace(/\n+/g, " ").slice(0, 300).trim();
+      const files = [{ attachment: req.file.buffer, name: safeName }];
+
+      let sent;
+      if (webhook) {
+        sent = await webhook.send({ content: caption || undefined, username: displayName, ...(avatarURL ? { avatarURL } : {}), files });
+      } else {
+        sent = await channel.send({ content: caption ? `**${displayName}**: ${caption}` : `**${displayName}** 傳了一張圖`, files });
+      }
+      rememberWebMsgAuthor(sent?.id, discordId);
+      chatImageCooldown.set(discordId, now);
+      res.json(ok({ status: "sent" }));
+    } catch (err) {
+      if (err?.code === "LIMIT_FILE_SIZE") return res.status(413).json(fail("FILE_TOO_LARGE", "圖片太大（上限 8MB）"));
       next(err);
     }
   });
