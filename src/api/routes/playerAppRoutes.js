@@ -11,6 +11,16 @@ const { scaleSupportPartyEffects } = require("../../shared/supportAuraScaling");
 const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme } = require("../../shared/zones");
 const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 
+// 排行榜顯示名稱:沒有真實暱稱(空 / 純數字 Discord ID)→ 顯示「玩家#末四碼」,不攤 18 碼 ID
+function prettyLeaderboardName(displayName, discordId) {
+  const dn = String(displayName || "").trim();
+  const id = String(discordId || "");
+  if (!dn || dn === id || /^\d{15,}$/.test(dn)) {
+    return id ? `玩家#${id.slice(-4)}` : "玩家";
+  }
+  return dn;
+}
+
 // Track per-player battle cooldowns.
 // Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
 const playerBattleCooldowns = new Map();
@@ -2983,10 +2993,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
       const rows = await serviceContext.progressRepository.findTopByTowerRecord(limit);
+      const players = await serviceContext.playerRepository.listAll();
+      const nameMap = Object.fromEntries((players || []).map((p) => [p.discordId, p.displayName]));
       const list = (rows || []).map((r, i) => ({
         rank: i + 1,
         playerId: r.playerId,
-        name: r.displayName || r.playerId,
+        name: prettyLeaderboardName(nameMap[r.playerId] || r.displayName, r.playerId),
         bestFloor: r.towerRecord?.bestFloor || 0,
         bestAt: r.towerRecord?.bestAt || null
       }));
@@ -3035,6 +3047,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
       const rows = await serviceContext.progressRepository.findTopByPkRating(limit);
+      const pkPlayers = await serviceContext.playerRepository.listAll();
+      const pkNameMap = Object.fromEntries((pkPlayers || []).map((p) => [p.discordId, p.displayName]));
       const list = (rows || []).map((r, i) => {
         const wins = Number(r.pkWins) || 0;
         const losses = Number(r.pkLosses) || 0;
@@ -3042,7 +3056,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return {
           rank: i + 1,
           playerId: r.playerId,
-          name: r.displayName || r.playerId,
+          name: prettyLeaderboardName(pkNameMap[r.playerId] || r.displayName, r.playerId),
           rating: Math.round(Number(r.pkRating) || 0),
           wins, losses,
           winRate: total > 0 ? Math.round((wins / total) * 100) : 0,
