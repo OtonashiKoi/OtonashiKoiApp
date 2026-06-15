@@ -1392,10 +1392,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.post("/api/chat/lobby", requireAuth, async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
-      const { message } = req.body;
-      
+      const { message, replyTo } = req.body;
+
       if (!message || message.trim() === "") {
         throw new Error("Message cannot be empty");
+      }
+
+      // 引用留言：webhook 無法做 Discord 原生回覆，改在內容前面加一行引用，
+      // DC/網頁兩邊都看得到（網頁也會把這行渲染成引用框）。
+      let outgoing = String(message);
+      if (replyTo && (replyTo.author || replyTo.content)) {
+        const qAuthor = String(replyTo.author || "").slice(0, 40);
+        const qText = String(replyTo.content || "").replace(/\n/g, " ").slice(0, 80);
+        outgoing = `> ↩ ${qAuthor}：${qText}\n${message}`;
       }
 
       // Resolve the bound Discord channel for town chat.
@@ -1424,13 +1433,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
           if (webhook) {
             await webhook.send({
-              content: message,
+              content: outgoing,
               username: displayName,
               ...(avatarURL ? { avatarURL } : {}),
             });
           } else {
             // Fallback to a regular bot message if webhook creation fails.
-            await channel.send(`**${displayName}**: ${message}`);
+            await channel.send(`**${displayName}**: ${outgoing}`);
           }
         } else {
           console.warn(`[PlayerApp] ?曆???Town Chat ?駁? (ID: ${townChatBinding.channelId})`);
