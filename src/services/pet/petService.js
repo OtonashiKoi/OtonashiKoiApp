@@ -497,7 +497,18 @@ class PetService {
         return b.enhanceLevel - a.enhanceLevel;
       });
 
-    return { active: this._toView(active), matchTier, items };
+    return {
+      active: this._toView(active),
+      matchTier,
+      items,
+      // 給前端算「剛好餵到下一個等級坎」的最少件數用
+      growthExp: Math.round(active.growthExp || 0),
+      levelupExp: LEVELUP_EXP_PER_LEVEL,
+      nextLevelCap: active.stage === "grown" ? nextTierLevelCap(active.level || 1) : MAX_LEVEL,
+      maxLevel: MAX_LEVEL,
+      baseFeedSatiety: BASE_FEED_SATIETY,
+      baseFeedExp: BASE_FEED_EXP
+    };
   }
 
   // ── 孵化開獎：依 hatchWeight 從 pets 種類隨機抽一種 ──
