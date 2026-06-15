@@ -2679,7 +2679,7 @@ function buildQuestCenterMessage(progressList, cadence = "weekly", claimPage = 0
     if (quest.rewardExp) rewards.push(`${quest.rewardExp} ⭐`);
     if (quest.rewardItemSummary) rewards.push(`＋${quest.rewardItemSummary}`);
     else if (quest.rewardItemName) rewards.push(`＋${quest.rewardItemName}`);
-    else if (quest.rewardItemId) rewards.push("＋道具");
+    // 解析不到道具名稱(資料中該道具已不存在)就不顯示幽靈「道具」
     const rewardStr = rewards.length ? ` ｜ 獎勵：${rewards.join(" ")}` : "";
     const descStr = quest.description ? `\n${quest.description}` : "";
     lines.push(`**${quest.title}** ${status}${descStr}\n${bar} ${current}／${quest.target}${rewardStr}`);
