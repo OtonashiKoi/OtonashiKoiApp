@@ -7,6 +7,7 @@ const {
   featureKeyToZone,
   checkZoneLevelRequirementWithBinding
 } = require("../../shared/zones");
+const { isWorldBossZone } = require("../worldBoss/worldBossService");
 
 // 掛機領取「專用」序列鎖：必須與 progress lock 分開。
 // 領取流程內部會呼叫 grantExp（grantExp 本身會取得 progress lock），
@@ -107,6 +108,7 @@ class IdleService {
       const zoneKey = featureKeyToZone(binding.featureKey);
       const zoneDef = ZONE_BY_KEY[zoneKey] || null;
       if (!zoneDef) continue;
+      if (isWorldBossZone(zoneKey)) continue; // 世界王區不可掛機，只能掛一般怪物區
       const lockedReason = checkZoneLevelRequirementWithBinding(zoneKey, level, binding);
       const reward = await this._getMonsterZoneAverageReward(zoneKey);
       options.push({
