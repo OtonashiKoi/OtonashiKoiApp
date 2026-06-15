@@ -371,7 +371,10 @@ class PetService {
         }
         if (pet.level >= feedLevelCap) {
           tierCapReached = true;
-          break; // 到階級上限卡點 → 停止繼續餵，避免浪費飼料/經驗
+          // 到等級上限（含 50 等封頂）：再餵的經驗會浪費，但「補飽食度」仍有意義（防挨餓掉等）。
+          // 因此只有在『飽食度已滿』時才停手；飽食未滿則繼續餵到滿為止。
+          // 修正:50 等卡點時無論飽食度多少都只能餵一件的問題。
+          if ((Number(pet.satiety) || 0) >= SATIETY_MAX) break;
         }
       }
     }
