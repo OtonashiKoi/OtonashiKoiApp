@@ -121,6 +121,8 @@ class WeeklyQuestService {
     // 用來判定「實際已綁定直播 / 已打卡」,讓對應新手任務反映真實狀態(不只靠事件計數)
     this.streamAccountBindingRepository = options.streamAccountBindingRepository || null;
     this.checkinRepository = options.checkinRepository || null;
+    this.itemRepository = options.itemRepository || null; // 解析獎勵道具名稱用
+    this._rewardItemNameCache = null;
     this.claimLocks = new Set();
   }
 
@@ -302,13 +304,29 @@ class WeeklyQuestService {
     return null;
   }
 
+  // 解析獎勵道具 id → 名稱(快取一份 id→name,避免每次都掃全表)
+  async _attachRewardItemNames(defs) {
+    const ids = [...new Set(defs.map((d) => d.rewardItemId).filter(Boolean).map(String))];
+    if (ids.length === 0 || !this.itemRepository?.findAll) return defs;
+    if (!this._rewardItemNameCache) {
+      try {
+        const all = await this.itemRepository.findAll();
+        this._rewardItemNameCache = new Map((all || []).map((it) => [String(it.id), it.name || it.itemName || null]));
+      } catch (_) { this._rewardItemNameCache = new Map(); }
+    }
+    return defs.map((d) => (d.rewardItemId
+      ? { ...d, rewardItemName: this._rewardItemNameCache.get(String(d.rewardItemId)) || null }
+      : d));
+  }
+
   async listDefinitions(cadence = "all") {
     const all = (await this.repo.listQuests()).map((q) => this._normalizeDefinition(q));
+    const enriched = await this._attachRewardItemNames(all);
     if (cadence && cadence !== "all") {
       const c = normalizeCadence(cadence);
-      return this._sortDefinitions(all.filter((q) => q.cadence === c));
+      return this._sortDefinitions(enriched.filter((q) => q.cadence === c));
     }
-    return this._sortDefinitions(all);
+    return this._sortDefinitions(enriched);
   }
 
   // legacy-compatible

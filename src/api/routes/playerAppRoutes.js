@@ -1160,6 +1160,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 直播頻道網址（給打卡教學「前往直播聊天室」用,與綁定同一處）
+  router.get("/api/stream-channels", requireAuth, (req, res) => {
+    const sm = config.streamMembership || {};
+    res.json(ok({
+      youtubeUrl: sm.bindYoutubeUrl || sm.youtubeChannel || null,
+      twitchUrl: sm.twitchChannel || null
+    }));
+  });
+
   // 2.4 Issue stream-auth state token — 前端綁定流程的第一步
   router.post("/api/me/stream-auth/state", requireAuth, (req, res) => {
     const { discordId } = req.playerRecord;
