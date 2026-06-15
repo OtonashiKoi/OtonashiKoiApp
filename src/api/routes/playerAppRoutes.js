@@ -2978,6 +2978,42 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   }
 
+  // 會員判定（任一符合即視為會員）：
+  //  1. 直播會員：streamAccountBinding 任一 isMember === true（或 linkedSupportAtLink / playerTierAtLink 有值）
+  //  2. Discord 身分組會員：progress.playerTier 有值（非 null/空）
+  async function resolveAuctionMembership(discordId) {
+    // 直播會員：查 bindings
+    let streamMember = false;
+    try {
+      const bindings = await serviceContext.streamAccountBindingRepository
+        .listByDiscordId(discordId)
+        .catch(() => []);
+      streamMember = (bindings || []).some((b) =>
+        b?.isMember === true
+        || b?.linkedSupportAtLink === true
+        || Boolean(b?.playerTierAtLink)
+      );
+    } catch (_) {
+      streamMember = false;
+    }
+
+    // Discord 身分組會員：progress.playerTier 有值
+    let tierMember = false;
+    try {
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      const tier = progress?.playerTier;
+      tierMember = tier != null && String(tier).trim() !== "";
+    } catch (_) {
+      tierMember = false;
+    }
+
+    return {
+      isMember: Boolean(streamMember || tierMember),
+      streamMember: Boolean(streamMember),
+      tierMember: Boolean(tierMember)
+    };
+  }
+
   router.get("/api/auction/list", requireAuth, async (req, res, next) => {
     try {
       const { kind, currency } = req.query || {};
@@ -3050,6 +3086,22 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 前端用：判斷是否顯示/啟用上架 UI（與後端上架同一套會員判定）
+  router.get("/api/auction/can-list", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const membership = await resolveAuctionMembership(discordId);
+      res.json(ok({
+        canList: membership.isMember,
+        reason: membership.isMember ? null : "只有會員才能上架商品",
+        streamMember: membership.streamMember,
+        tierMember: membership.tierMember
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post("/api/auction/list-item", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
@@ -3057,6 +3109,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (!itemUuid || !currency || !price || !hours) {
         return res.status(400).json(fail("INVALID_ARGUMENT", "itemUuid / currency / price / hours 必填"));
       }
+
+      // 會員 gate：直播會員(binding.isMember) 或 身分組會員(progress.playerTier) 任一即可
+      const membership = await resolveAuctionMembership(discordId);
+      if (!membership.isMember) {
+        return res.status(403).json(fail("NOT_MEMBER", "只有會員才能上架商品"));
+      }
+
       const roleIds = await getMemberRoleIds(discordId);
       const result = await serviceContext.auctionService.listItem({
         sellerId: discordId,
