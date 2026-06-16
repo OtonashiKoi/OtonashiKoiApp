@@ -39,6 +39,7 @@ const playerBattleCooldowns = new Map();
 const multer = require("multer");
 const chatImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const chatImageCooldown = new Map(); // discordId -> 上次發圖時間（防洗版）
+const chatTextCooldown = new Map(); // discordId -> 上次發文字時間（防洗版,1 秒冷卻）
 
 // webhook 訊息 id → 發送者 discordId（給引用 @ 原留言者用；webhook 訊息本身查不到真人）
 const webMsgAuthors = new Map();
@@ -1382,15 +1383,27 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId, displayName } = req.playerRecord;
       const { message, replyTo } = req.body;
 
-      if (!message || message.trim() === "") {
+      if (!message || String(message).trim() === "") {
         throw new Error("Message cannot be empty");
       }
 
-      // 引用留言：webhook 無法做 Discord 原生回覆。
-      //   1) 內文前加一行引用（DC 看 blockquote、網頁解析成精簡引用框）
-      //   2) 有原留言者 discordId → 加 <@id> 真正 tag 通知對方
-      const mention = (replyTo && replyTo.authorId) ? `<@${replyTo.authorId}> ` : "";
-      const body = mention + String(message);
+      // 防洗版:每位玩家送文字訊息冷卻 1 秒
+      const _lastChat = chatTextCooldown.get(discordId) || 0;
+      if (Date.now() - _lastChat < 1000) {
+        return res.status(429).json({ status: "error", message: "訊息太快了，請稍候再送。" });
+      }
+      chatTextCooldown.set(discordId, Date.now());
+
+      // 內容長度上限,避免超長訊息(>2000 會讓 webhook.send 直接失敗)
+      const safeMessage = String(message).slice(0, 500);
+
+      // 引用留言:只信任「伺服器記錄的原留言者」(webMsgAuthors),不信任前端傳來的 authorId;
+      // 且只接受合法 Discord snowflake,避免被拿來亂 tag。
+      const trackedAuthor = (replyTo && replyTo.id) ? webMsgAuthors.get(String(replyTo.id)) : null;
+      const clientAuthorId = (replyTo && /^\d{17,20}$/.test(String(replyTo.authorId || ""))) ? String(replyTo.authorId) : null;
+      const replyAuthorId = trackedAuthor || clientAuthorId || null;
+      const mention = replyAuthorId ? `<@${replyAuthorId}> ` : "";
+      const body = mention + safeMessage;
       let outgoing = body;
       if (replyTo && (replyTo.author || replyTo.content)) {
         const qAuthor = String(replyTo.author || "").slice(0, 40);
@@ -1427,11 +1440,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               content: outgoing,
               username: displayName,
               ...(avatarURL ? { avatarURL } : {}),
+              // 只允許 tag「被引用的原留言者」這一人;一律禁止 @everyone/@here/@role(防 mention 注入洗版)
+              allowedMentions: { parse: [], users: replyAuthorId ? [replyAuthorId] : [] },
             });
             rememberWebMsgAuthor(sent?.id, discordId); // 記住這則 webhook 訊息是誰發的（給引用 @ 用）
           } else {
             // Fallback to a regular bot message if webhook creation fails.
-            const sent = await channel.send(`**${displayName}**: ${outgoing}`);
+            const sent = await channel.send({
+              content: `**${displayName}**: ${outgoing}`,
+              allowedMentions: { parse: [], users: replyAuthorId ? [replyAuthorId] : [] },
+            });
             rememberWebMsgAuthor(sent?.id, discordId);
           }
         } else {
@@ -1484,10 +1502,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const files = [{ attachment: req.file.buffer, name: safeName }];
 
       let sent;
+      const _imgCaption = caption ? String(caption).slice(0, 300) : "";
       if (webhook) {
-        sent = await webhook.send({ content: caption || undefined, username: displayName, ...(avatarURL ? { avatarURL } : {}), files });
+        sent = await webhook.send({ content: _imgCaption || undefined, username: displayName, ...(avatarURL ? { avatarURL } : {}), files, allowedMentions: { parse: [] } });
       } else {
-        sent = await channel.send({ content: caption ? `**${displayName}**: ${caption}` : `**${displayName}** 傳了一張圖`, files });
+        sent = await channel.send({ content: _imgCaption ? `**${displayName}**: ${_imgCaption}` : `**${displayName}** 傳了一張圖`, files, allowedMentions: { parse: [] } });
       }
       rememberWebMsgAuthor(sent?.id, discordId);
       chatImageCooldown.set(discordId, now);

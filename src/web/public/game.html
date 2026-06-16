@@ -1241,11 +1241,16 @@ function auctionPriceModal(uuid){
 }
 
 /* ── 聊天（小鎮大廳）── */
+// 防 XSS:聊天內容(與 Discord 同步)可含惡意 HTML;一律先跳脫再做 emote/連結轉換。
+function escapeHtml(s){
+  return String(s==null?"":s).replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[ch]));
+}
 function chatContent(c){
-  return (c||"")
-    .replace(/<a?:(\w+):(\d+)>/g,'<img src="https://cdn.discordapp.com/emojis/$2.png?size=32" style="height:20px;vertical-align:-4px">')
-    .replace(/(https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp))(\?\S*)?/gi,'<br><img src="$1" style="max-width:180px;border-radius:8px;margin-top:4px">')
-    .replace(/(https?:\/\/\S+)/g,'<a href="$1" target="_blank" style="color:var(--mp)">連結</a>');
+  // 先 escape:之後 emote 比對改用跳脫後的 &lt;…&gt;,確保任何注入的標籤/事件處理器都失效
+  return escapeHtml(c)
+    .replace(/&lt;a?:(\w+):(\d+)&gt;/g,'<img src="https://cdn.discordapp.com/emojis/$2.png?size=32" style="height:20px;vertical-align:-4px" onerror="this.remove()">')
+    .replace(/(https?:\/\/[^\s<]+\.(?:png|jpg|jpeg|gif|webp))(\?\S*)?/gi,'<br><img src="$1" style="max-width:180px;border-radius:8px;margin-top:4px" onerror="this.remove()">')
+    .replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener noreferrer" style="color:var(--mp)">連結</a>');
 }
 async function renderChat(main){
   main.innerHTML=`<div class="sec-head"><div class="desc">小鎮大廳 · 與 Discord 同步的聊天</div></div>
@@ -1253,10 +1258,13 @@ async function renderChat(main){
     <div class="field"><input id="chatIn" placeholder="輸入訊息，與小鎮對話…" maxlength="300"><button class="btn primary" id="chatSend">送出</button></div>`;
   async function load(){
     try{ const h=await api("/api/chat/history?limit=40"); const box=main.querySelector("#chatBox");
-      box.innerHTML=h.map(m=>`<div style="display:flex;gap:9px;margin-bottom:11px">
-        <img src="${m.avatar}" style="width:30px;height:30px;border-radius:50%;flex:none" onerror="this.style.visibility='hidden'">
-        <div><div style="font-size:12px;color:${m.isBot?'var(--gold)':'var(--mp)'}">${m.author}<span style="color:var(--ink-dim);margin-left:7px">${new Date(m.timestamp).toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})}</span></div>
-        <div style="font-size:13.5px;margin-top:1px">${chatContent(m.content)}</div></div></div>`).join("");
+      box.innerHTML=h.map(m=>{
+        const av = /^https?:\/\//.test(String(m.avatar||"")) ? escapeHtml(m.avatar) : "";
+        return `<div style="display:flex;gap:9px;margin-bottom:11px">
+        <img src="${av}" style="width:30px;height:30px;border-radius:50%;flex:none" onerror="this.style.visibility='hidden'">
+        <div><div style="font-size:12px;color:${m.isBot?'var(--gold)':'var(--mp)'}">${escapeHtml(m.author)}<span style="color:var(--ink-dim);margin-left:7px">${new Date(m.timestamp).toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})}</span></div>
+        <div style="font-size:13.5px;margin-top:1px">${chatContent(m.content)}</div></div></div>`;
+      }).join("");
       box.scrollTop=box.scrollHeight;
     }catch(e){ main.querySelector("#chatBox").innerHTML=`<div class="empty-note">無法載入聊天：${e.message}</div>`; }
   }

@@ -1,5 +1,6 @@
 "use strict";
 const { randomUUID } = require("crypto");
+const { withPlayerProgressLock } = require("../progress/progressLocks");
 
 // 邀請獎勵道具 itemId
 const REWARD_ITEMS = [
@@ -47,6 +48,12 @@ class InviteService {
   }
 
   async useCode(code, newPlayerId) {
+    // 上鎖序列化(以新玩家為 key):防止同一新玩家同時用兩個不同邀請碼並發兌換,
+    // 兩個請求都通過「是否用過」檢查 → 雙領 50000 金幣+寶石 的複製漏洞。
+    return withPlayerProgressLock(newPlayerId, () => this._useCodeImpl(code, newPlayerId));
+  }
+
+  async _useCodeImpl(code, newPlayerId) {
     const now = new Date();
     const doc = await this.inviteCodeRepository.findByCode(code);
     if (!doc) return { ok: false, reason: "找不到邀請碼，請確認是否輸入正確。" };
