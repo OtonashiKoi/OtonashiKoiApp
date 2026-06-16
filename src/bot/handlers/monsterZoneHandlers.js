@@ -2099,20 +2099,30 @@ async function displaySettledBattleResult({
   }
 
   const logText = displayRoundLogs.join("\n\n");
-  let displayLog = logText.length > MAX_DESC
-    ? logText.slice(0, MAX_DESC) + "\n…（部分回合已省略）"
+  const resultBlock = rewardLines.length > 0 ? "\n\n" + rewardLines.join("\n") : "";
+
+  // Discord embed 描述上限 4096。之前 displayLog(最多 3800) + resultBlock 直接相接，
+  // 世界王戰報回合多、結算/掉落又長時，合起來會超過 4096，導致「勝負＋掉落」結尾被吃掉。
+  // 改為：先保留結算區(戰鬥結尾)的空間，回合 log 只填剩下的額度，確保結尾永遠看得到。
+  const HARD_LIMIT = 4096;
+  const SAFE_LIMIT = 4000;
+  let resultPart = resultBlock;
+  if (resultPart.length > 2400) resultPart = resultPart.slice(0, 2400) + "\n…（部分獎勵略）"; // 極端保護
+  const logBudget = Math.max(300, SAFE_LIMIT - resultPart.length);
+
+  let displayLog = logText.length > logBudget
+    ? logText.slice(0, logBudget) + "\n…（部分回合已省略）"
     : logText;
-  if (logText.length > MAX_DESC) {
+  if (logText.length > logBudget) {
     const highlights = buildCombatImportantHighlights(displayRoundLogs, displayLog);
     if (highlights) {
-      displayLog = (highlights + displayLog).slice(0, MAX_DESC) + "\n…（部分回合已省略）";
+      displayLog = (highlights + displayLog).slice(0, logBudget) + "\n…（部分回合已省略）";
     }
   }
-  const resultBlock = rewardLines.length > 0 ? "\n\n" + rewardLines.join("\n") : "";
 
   const embed = new EmbedBuilder()
     .setTitle(embedTitle)
-    .setDescription(displayLog + resultBlock)
+    .setDescription((displayLog + resultPart).slice(0, HARD_LIMIT))
     .setColor(embedColor);
 
   const row = new ActionRowBuilder().addComponents(
