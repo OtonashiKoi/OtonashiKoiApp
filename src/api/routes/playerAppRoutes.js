@@ -1594,23 +1594,27 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   function enqueueNotif(discordId, summary) {
     if (!notifQueue.has(discordId)) notifQueue.set(discordId, []);
     const q = notifQueue.get(discordId);
-    q.push({ ...summary, id: Date.now(), time: new Date().toLocaleTimeString("zh-TW") });
+    // 保留穩定 id 與 ts(事件時間):不覆蓋,讓 SSE 與輪詢佇列同一則用同一個 id,
+    // 前端才能跨「即時推播 / 輪詢 / 重整」去重,不會重複提示領過的通知。
+    q.push({ ...summary, id: summary.id || crypto.randomUUID(), ts: summary.ts || Date.now() });
     if (q.length > 50) q.splice(0, q.length - 50); // Keep only the latest 50 notifications.
   }
 
   // Exposed to monster zone handlers so battle rewards can reach the web app.
   function pushRewardToPlayer(discordId, summary) {
+    // 先補上穩定 id + ts,之後三條通道(佇列 / playerEventBus / SSE)都用同一份,id 一致才能去重。
+    const withId = { ...summary, id: summary.id || crypto.randomUUID(), ts: summary.ts || Date.now() };
     // 1. Always queue the notification for polling fallback.
-    enqueueNotif(discordId, summary);
+    enqueueNotif(discordId, withId);
     // 2. 同步推上 /api/me/stream 的 playerEventBus（網頁通知中心吃這條）
     try {
       const { playerEventBus } = require("../../services/realtime/playerEventBus");
-      playerEventBus.emit(discordId, { type: "notify", data: summary });
+      playerEventBus.emit(discordId, { type: "notify", data: withId });
     } catch (_) { /* 通知失敗不影響主流程 */ }
     // 3. Push instantly to all active SSE clients for that player.
     const clients = sseClients.get(discordId);
     if (!clients || clients.size === 0) return;
-    const dataStr = `event: reward\ndata: ${JSON.stringify(summary)}\n\n`;
+    const dataStr = `event: reward\ndata: ${JSON.stringify(withId)}\n\n`;
     clients.forEach(c => { try { c.res.write(dataStr); } catch (_) {} });
   }
   // Attach helper hooks onto serviceContext so other modules can reuse them.
