@@ -2340,6 +2340,28 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       }
 
+      // ── 世界王入場費(與 DC 一致):每次出戰(含排隊自動出擊)都收費,金幣不足擋下 ──
+      // 大史(elite)5000、龍王(dragon_king_lair)10000,以 zones.js 預設或怪物自訂為準。
+      let worldBossEntryFee = 0;
+      if (isWorldBoss) {
+        worldBossEntryFee = Math.max(0, Number(monster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0);
+        if (worldBossEntryFee > 0) {
+          const walletNow = await serviceContext.walletService.getWalletByDiscordId(discordId, displayName).catch(() => null);
+          const goldOwned = Math.max(0, Number(walletNow?.wallet?.gold ?? walletNow?.gold) || 0);
+          if (goldOwned < worldBossEntryFee) {
+            // 提早 return,鎖由下方 finally 釋放(lockHeldForAnim 仍為 false)
+            return res.status(400).json({
+              status: "error",
+              message: `挑戰 ${monster.name} 需要 ${worldBossEntryFee.toLocaleString()} 金幣，你目前只有 ${goldOwned.toLocaleString()} 金幣。`
+            });
+          }
+          await serviceContext.rewardService.grantCurrency({
+            discordId, displayName, currencyType: "gold", amount: -worldBossEntryFee,
+            source: "monster_zone:web_enter_battle", operator: "monster_zone:web_enter_battle"
+          });
+        }
+      }
+
       // 世界王:戰鬥用「當前被打部位的血量」當基準,讓 %型 DOT(中毒/流血等)與怪物自療
       // 都以部位血量計算,而非整隻王總血量(與 DC 端 session.monsterHp 一致)。
       const combatMonsterHp = isWorldBoss
@@ -2643,10 +2665,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         drops: Array.isArray(rewardLines._drops) ? rewardLines._drops : [],
         totalDamage,
         finalPlayerHp: Math.max(0, finalPlayerHp),
-        finalMonsterHp: Math.max(0, mHp),
+        // 世界王:血條顯示「當前所打部位」的血量(非整隻王總血量);一般怪維持整隻血量
+        finalMonsterHp: isWorldBoss ? Math.max(0, Math.round(worldBossPartHpCurrent)) : Math.max(0, mHp),
         // 進場瞬間怪物實際 HP 與滿血（共鬥怪可能非滿血，前端據此顯示血條）
-        monsterStartHp: Math.max(0, Math.round(Number(monsterHpInitial))),
-        monsterMaxHp: Math.max(1, Math.round(Number(monster.calc.maxHp))),
+        monsterStartHp: isWorldBoss ? Math.max(0, Math.round(Number(combatMonsterHp))) : Math.max(0, Math.round(Number(monsterHpInitial))),
+        monsterMaxHp: isWorldBoss ? Math.max(1, Math.round(Number(worldBossPartHpMax))) : Math.max(1, Math.round(Number(monster.calc.maxHp))),
         nextBattleAt,
         // 剩餘冷卻毫秒(=本場動畫長度);前端用自己的時鐘換算,免受裝置時間不準影響
         cooldownMs: animDurationMs,

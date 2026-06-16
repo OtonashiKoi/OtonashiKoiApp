@@ -80,7 +80,7 @@ const ZONE_DEFS = [
     color:        0x7f1d1d,
     minLevel:     50,
     maxLevel:     null,
-    defaultEntryFee: 0,
+    defaultEntryFee: 10000,
   },
   {
     key:          "elite",

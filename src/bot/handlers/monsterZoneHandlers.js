@@ -2665,11 +2665,28 @@ async function handleEnterBattle(interaction) {
         } catch (e) {}
       }));
 
-      // ── 治療師光環：若存在且不在 participants 中，疊加光環效果 ──
+      // ── 跨平台共通光環：本玩家若為輔助職（裝備帶 party 效果），寫入共享 activeHealerAura，
+      //    讓網頁端其他玩家也吃得到 DC 這邊的輔助職光環（網頁同樣會寫，DC 下方也會讀）。──
+      try {
+        const selfRawParty = (currentSnapshot.refs || []).filter((r) => r && r.target === "party");
+        const selfJobName = getJobNameFromEquipped(currentSnapshot.equipped);
+        if (selfRawParty.length > 0) {
+          const auraPayload = { discordId, displayName, effects: selfRawParty, jobName: selfJobName || null };
+          battleState = { ...battleState, activeHealerAura: auraPayload };
+          await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
+        } else if (battleState.activeHealerAura?.discordId === discordId) {
+          // 本玩家已不再具備 party 光環 → 清除自己留下的光環
+          battleState = { ...battleState, activeHealerAura: null };
+          await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
+        }
+      } catch (e) {}
+
+      // ── 共鬥光環：若存在且不在 participants 中，疊加光環效果（提供者可能來自網頁）──
       const aura = battleState.activeHealerAura;
-      if (aura && aura.effects && !participants.includes(aura.discordId)) {
+      if (aura && aura.effects && aura.discordId !== discordId && !participants.includes(aura.discordId)) {
+        const auraJobName = aura.jobName || getJobNameFromEquipped(aura.equipped) || "輔助";
         for (const e of aura.effects) {
-          partyEffects.push({ ...e, sourceName: resolveAuraSourceName(aura.displayName, aura.discordId), sourceJobName: "治療師" });
+          partyEffects.push({ ...e, sourceName: resolveAuraSourceName(aura.displayName, aura.discordId), sourceJobName: auraJobName });
         }
       }
 
