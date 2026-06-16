@@ -2762,6 +2762,7 @@ async function handleEnterBattle(interaction) {
           ...prev,
           [discordId]: {
             name: displayName,
+            level: currentProg?.level || 1,
             damage: (prev[discordId]?.damage || 0) + totalDamage,
             taken: (prev[discordId]?.taken || 0) + totalTaken,
             // 世界王貢獻寶箱：累計本王出戰花的入場費（花錢排名依據）

@@ -1990,7 +1990,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
 
         const dmgMap = state.damageMap || {};
-        const damageLeaderboard = Object.values(dmgMap)
+        const damageLeaderboard = Object.entries(dmgMap)
+          .map(([pid, e]) => ({
+            discordId: pid,
+            name: e?.name || pid,
+            level: Number(e?.level) || 0,
+            damage: Number(e?.damage) || 0,
+            taken: Number(e?.taken) || 0,
+          }))
           .sort((a, b) => b.damage - a.damage)
           .slice(0, 10);
 
@@ -2333,9 +2340,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       }
 
+      // 世界王:戰鬥用「當前被打部位的血量」當基準,讓 %型 DOT(中毒/流血等)與怪物自療
+      // 都以部位血量計算,而非整隻王總血量(與 DC 端 session.monsterHp 一致)。
+      const combatMonsterHp = isWorldBoss
+        ? Math.max(0, Number(stateForCombat.worldBossPartsHp?.[worldBossPart] || 0))
+        : monsterHpInitial;
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
-        runCombatLoop(battlePStats, battleMonsterStats, monster.name, monsterHpInitial, undefined, {
+        runCombatLoop(battlePStats, battleMonsterStats, monster.name, combatMonsterHp, undefined, {
           playerName: displayName,
           playerLevel: progress?.level || 1,
           equipped,
@@ -2398,6 +2411,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             ...prevDmg,
             [discordId]: {
               name: displayName,
+              level: progress?.level || 1,
               damage: (prevDmg[discordId]?.damage || 0) + totalDamage,
               taken: (prevDmg[discordId]?.taken || 0) + totalTaken,
             }
@@ -2499,6 +2513,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             ...(stateForCombat.damageMap || {}),
             [discordId]: {
               name: displayName,
+              level: progress?.level || 1,
               damage: (stateForCombat.damageMap?.[discordId]?.damage || 0) + totalDamage,
               taken: (stateForCombat.damageMap?.[discordId]?.taken || 0) + totalTaken,
             }
@@ -2516,6 +2531,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             ...prev,
             [discordId]: {
               name: displayName,
+              level: progress?.level || 1,
               damage: (prev[discordId]?.damage || 0) + totalDamage,
               taken: (prev[discordId]?.taken || 0) + totalTaken,
             }
@@ -2592,12 +2608,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // 這裡只把它組成人類可讀的中文描述。
       const auraApplied = Array.isArray(partyEffects) && partyEffects.length > 0;
       const auraLines = [];
-      if (auraApplied) {
-        // 提供者名稱：自身光環為當前玩家；他人光環從 effect.sourceName 取得
-        const providerName = hasPartyAura
+      // 提供者名稱：自身光環為當前玩家；他人光環從 effect.sourceName 取得
+      const auraProviderName = auraApplied
+        ? (hasPartyAura
           ? displayName
-          : (partyEffects.find(e => e && e.sourceName)?.sourceName || null);
-        const auraPrefix = providerName ? `✨ ${providerName} 的共鬥光環：` : "✨ 共鬥光環：";
+          : (partyEffects.find(e => e && e.sourceName)?.sourceName || null))
+        : null;
+      // 是否為「隊友」提供的光環（非本人）→ 前端要醒目顯示隊友名字
+      const auraFromTeammate = auraApplied && !hasPartyAura && !!auraProviderName;
+      if (auraApplied) {
+        const auraPrefix = auraProviderName ? `✨ ${auraProviderName} 的共鬥光環：` : "✨ 共鬥光環：";
         for (const eff of partyEffects) {
           if (!eff?.key) continue;
           const name = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
@@ -2633,6 +2653,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 本場是否吃到共鬥光環，以及各光環效果的中文描述（前端顯示光環效果用）
         auraApplied,
         auraLines,
+        auraProviderName,
+        auraFromTeammate,
         // 每回合播放節奏（依玩家 AGI，與 DC 一致），前端逐回合動畫用
         tickMs: calculateTickDelay(pStats.agi || 1),
         // ── 世界王部位戰鬥（前端戰報後即時更新部位血條）──
