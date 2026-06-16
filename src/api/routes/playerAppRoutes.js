@@ -2436,6 +2436,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               level: progress?.level || 1,
               damage: (prevDmg[discordId]?.damage || 0) + totalDamage,
               taken: (prevDmg[discordId]?.taken || 0) + totalTaken,
+              // 世界王貢獻寶箱:累計入場費(花費排名依據),與 DC 共用同一份 damageMap → 貢獻合併計算
+              spent: (prevDmg[discordId]?.spent || 0) + (Number(worldBossEntryFee) || 0),
             }
           };
           const updatedParticipants = [...new Set([...(Array.isArray(freshState.participants) ? freshState.participants : []), discordId])];
