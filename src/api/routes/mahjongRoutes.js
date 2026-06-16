@@ -1,5 +1,25 @@
 const { Router } = require('express');
+const crypto = require('crypto');
+const config = require('../../config');
 const { getState, joinQueue, removeFromQueue, moveQueueEntry, moveQueueEntryToIndex, dismissTeam, resetAll, subscribers } = require('../../services/mahjong/mahjongQueue');
+
+// 等長 constant-time 比對(避免時序側信道)
+function timingSafeEqualStr(a, b) {
+  const ba = Buffer.from(String(a || ''));
+  const bb = Buffer.from(String(b || ''));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+// 主持人/管理員守衛:狀態查詢(state/stream)維持公開,但所有「變更」操作需帶管理密碼。
+function requireAdmin(req, res, next) {
+  const auth = String(req.headers.authorization || '');
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : auth;
+  if (!config.api.adminPassword || !timingSafeEqualStr(token, config.api.adminPassword)) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  next();
+}
 
 function createMahjongRoutes() {
   const router = Router();
@@ -25,8 +45,8 @@ function createMahjongRoutes() {
     req.on('close', () => { clearInterval(hb); subscribers.delete(res); });
   });
 
-  // 手動加入（測試用）
-  router.post('/api/mahjong/join', (req, res) => {
+  // 手動加入（測試用，需主持人權限）
+  router.post('/api/mahjong/join', requireAdmin, (req, res) => {
     const { name, userId, platform } = req.body;
     if (!name) return res.status(400).json({ error: 'name required' });
     const result = joinQueue(name, userId || name, platform || 'manual');
@@ -34,21 +54,21 @@ function createMahjongRoutes() {
   });
 
   // 移除排隊者（管理員）
-  router.delete('/api/mahjong/queue/:userId', (req, res) => {
+  router.delete('/api/mahjong/queue/:userId', requireAdmin, (req, res) => {
     const { platform = 'unknown' } = req.query;
     removeFromQueue(req.params.userId, platform);
     res.json(getState());
   });
 
   // 調整排隊順序（主持人）
-  router.post('/api/mahjong/queue/:userId/move', (req, res) => {
+  router.post('/api/mahjong/queue/:userId/move', requireAdmin, (req, res) => {
     const { platform = 'unknown', direction } = req.body || {};
     if (!direction) return res.status(400).json({ error: 'direction required' });
     moveQueueEntry(req.params.userId, platform, direction);
     res.json(getState());
   });
 
-  router.post('/api/mahjong/queue/:userId/reorder', (req, res) => {
+  router.post('/api/mahjong/queue/:userId/reorder', requireAdmin, (req, res) => {
     const { platform = 'unknown', targetIndex } = req.body || {};
     if (!Number.isInteger(targetIndex)) return res.status(400).json({ error: 'targetIndex required' });
     moveQueueEntryToIndex(req.params.userId, platform, targetIndex);
@@ -56,13 +76,13 @@ function createMahjongRoutes() {
   });
 
   // 解散隊伍（管理員）
-  router.delete('/api/mahjong/team/:teamId', (req, res) => {
+  router.delete('/api/mahjong/team/:teamId', requireAdmin, (req, res) => {
     dismissTeam(Number(req.params.teamId));
     res.json(getState());
   });
 
   // 全部重置（管理員）
-  router.post('/api/mahjong/reset', (_req, res) => {
+  router.post('/api/mahjong/reset', requireAdmin, (_req, res) => {
     resetAll();
     res.json({ ok: true });
   });

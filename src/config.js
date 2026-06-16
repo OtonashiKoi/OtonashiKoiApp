@@ -13,7 +13,7 @@ function parseCsv(value) {
 }
 
 // 匯出所有設定，包含 Discord、API、儲存、工程參數
-module.exports = {
+const config = {
   // Discord 相關設定
   discord: {
     token: process.env.DISCORD_TOKEN || "", // Bot Token
@@ -42,6 +42,7 @@ module.exports = {
   api: {
     port: Number(process.env.API_PORT || 5566), // 監聽埠號
     adminPassword: process.env.ADMIN_PASSWORD || "admin123", // 管理後台密碼
+    jwtSecret: process.env.JWT_SECRET || "super-secret-jwt-key", // JWT 簽章密鑰(集中來源)
     allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS), // CORS 允許的來源，逗號分隔
     publicBaseUrl: process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ""
   },
@@ -104,3 +105,26 @@ module.exports = {
     youtubeCreatorChannelId: process.env.STREAM_YOUTUBE_CREATOR_CHANNEL_ID || ""
   }
 };
+
+// 啟動時安全檢查:正式環境(NODE_ENV=production)若關鍵密鑰未設或仍是程式內弱預設值 →
+// 直接中止啟動,避免用「公開在原始碼的預設密鑰」上線(可被自簽 token 冒充玩家 / admin123 接管後台)。
+// 開發環境僅警告,不擋。
+config.assertSecureConfig = function assertSecureConfig() {
+  const isProd = process.env.NODE_ENV === "production";
+  const problems = [];
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === "super-secret-jwt-key") {
+    problems.push("JWT_SECRET 未設或仍是預設值");
+  }
+  if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === "admin123") {
+    problems.push("ADMIN_PASSWORD 未設或仍是預設值 admin123");
+  }
+  if (problems.length) {
+    const msg = "[安全設定] " + problems.join("；");
+    if (isProd) {
+      throw new Error(msg + " — 正式環境拒絕以弱預設密鑰啟動,請在 .env 設定強隨機值。");
+    }
+    console.warn("⚠️  " + msg + "(開發環境僅警告)");
+  }
+};
+
+module.exports = config;

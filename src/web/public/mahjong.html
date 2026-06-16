@@ -166,18 +166,37 @@
       return `${entry.platform || 'unknown'}::${entry.userId}`;
     }
 
+    // 主持人管理密碼(變更操作需要)。第一次操作時詢問,存 localStorage。
+    function getAdminKey() {
+      let k = localStorage.getItem('mahjong.adminKey') || '';
+      if (!k) {
+        k = (prompt('請輸入主持人管理密碼：') || '').trim();
+        if (k) localStorage.setItem('mahjong.adminKey', k);
+      }
+      return k;
+    }
+
     async function api(path, options = {}) {
+      const method = options.method || 'GET';
+      const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+      if (method !== 'GET') headers['Authorization'] = `Bearer ${getAdminKey()}`;
       const response = await fetch(`${API}${path}`, {
-        method: options.method || 'GET',
-        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        method,
+        headers,
         body: options.body ? JSON.stringify(options.body) : undefined,
       });
+      if (response.status === 401) {
+        localStorage.removeItem('mahjong.adminKey');
+        alert('管理密碼錯誤，請重新整理後再試一次');
+        throw new Error('unauthorized');
+      }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json();
     }
 
     async function removeEntry(entry) {
-      await fetch(`${API}/api/mahjong/queue/${encodeURIComponent(entry.userId)}?platform=${encodeURIComponent(entry.platform || 'unknown')}`, {
+      // 走 api() 以帶上管理密碼
+      await api(`/api/mahjong/queue/${encodeURIComponent(entry.userId)}?platform=${encodeURIComponent(entry.platform || 'unknown')}`, {
         method: 'DELETE',
       });
     }

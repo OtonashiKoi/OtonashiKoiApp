@@ -3,6 +3,7 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getEnhanceCost, ENHANCE_GEMS, MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
+const { withPlayerProgressLock } = require("../progress/progressLocks");
 
 const WEAPON_MAIN_STAT_BY_TYPE = {
   staff_1h: "int",
@@ -78,6 +79,11 @@ class EnhanceService {
    * @returns {object} { success: boolean, newLevel: number, message: string }
    */
   async enhanceEquipment(discordId, inventoryUuid, options = {}) {
+    // 上鎖序列化：避免並發強化同一裝備造成寶石只扣一次卻多次強化/狀態交錯。
+    return withPlayerProgressLock(discordId, () => this._enhanceEquipmentImpl(discordId, inventoryUuid, options));
+  }
+
+  async _enhanceEquipmentImpl(discordId, inventoryUuid, options = {}) {
     const mode = normalizeEnhanceMode(options?.mode);
     const isGamble = mode === ENHANCE_MODES.GAMBLE;
     const costMultiplier = isGamble ? 0.5 : 1;

@@ -241,10 +241,12 @@ function createAdminMonsterRoutes(serviceContext) {
           }
         }
 
-        // 從 damageMap 取玩家名稱對應
+        // 從 damageMap 取玩家名稱對應。
+        // 此端點為公開監視,不外洩原始 Discord ID(只給遮罩後的識別碼當 key)。
+        const maskId = (pid) => `u#${String(pid || "").slice(-4)}`;
         const fighters = participants.map(pid => ({
-          id: pid,
-          name: damageMap[pid]?.name || pid,
+          id: maskId(pid),
+          name: damageMap[pid]?.name || maskId(pid),
           damage: damageMap[pid]?.damage || 0
         }));
 

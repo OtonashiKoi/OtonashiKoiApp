@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { notifyPlayer } = require("../realtime/playerNotifyService");
+const { withPlayerProgressLock } = require("../progress/progressLocks");
 
 // 強化寶石 itemId（依階級），採集產出用
 const GEM_ID_BY_TIER = {
@@ -287,6 +288,12 @@ class PetService {
   // ── 餵食（單件或批量；先補飽食，滿後轉成長 exp / 孵化進度） ──
   // opts: { inventoryUuid } 餵單件 | { tier } 餵 inventory 內所有該階裝備
   async feedPet(discordId, petUuid, opts = {}) {
+    // 預覽(dry-run)不寫入,不需上鎖；實際餵食上鎖序列化,避免並發餵食複製飼料/重複套加成。
+    if (opts.preview) return this._feedPetImpl(discordId, petUuid, opts);
+    return withPlayerProgressLock(discordId, () => this._feedPetImpl(discordId, petUuid, opts));
+  }
+
+  async _feedPetImpl(discordId, petUuid, opts = {}) {
     const progress = await this._loadProgress(discordId);
     const pet = this._findPet(progress, petUuid);
     if (!pet) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
@@ -659,6 +666,11 @@ class PetService {
 
   // ── 把 inventory 內的蛋變成 progress.pets[] 的蛋實例（從蛋孵起） ──
   async hatchEggFromInventory(discordId, inventoryUuid) {
+    // 上鎖序列化:避免並發孵化同一顆蛋 → 一顆蛋孵出兩隻寵物的複製。
+    return withPlayerProgressLock(discordId, () => this._hatchEggFromInventoryImpl(discordId, inventoryUuid));
+  }
+
+  async _hatchEggFromInventoryImpl(discordId, inventoryUuid) {
     const progress = await this._loadProgress(discordId);
     const idx = progress.inventory.findIndex((x) => x && x.uuid === inventoryUuid && x.itemType === "pet_egg");
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物蛋", 404);

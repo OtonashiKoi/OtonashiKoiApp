@@ -104,6 +104,14 @@ class AuctionService {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "貨幣類型無效", 400);
     }
 
+    // 價格正規化:必須是有限正整數。擋 NaN / 小數 / 字串,
+    // 否則 `Number("abc")=NaN` 會繞過下面的範圍比較(NaN 比較恆為 false),
+    // 上架 NaN 價後買家扣款會把錢包寫成 NaN、污染餘額。
+    price = Math.floor(Number(price));
+    if (!Number.isFinite(price) || price <= 0) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "定價必須是正整數", 400);
+    }
+
     // 驗證價格範圍
     if (currency === "gold") {
       if (price < GOLD_MIN || price > GOLD_MAX) {
@@ -244,6 +252,17 @@ class AuctionService {
       }
       buyerWallet.diamond = (buyerWallet.diamond || 0) - auction.price;
     }
+
+    // ── 原子搶單(防購買競態複製)：只有搶到「active→sold」的請求才能繼續扣款發貨 ──
+    const claimed = await auctionRepository.claimIfActive(auctionId, "sold", {
+      buyerId,
+      soldAt: new Date().toISOString()
+    });
+    if (!claimed) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "手腳慢了，此商品剛剛已被買走", 400);
+    }
+
+    try {
     await this.walletRepository.save(buyerWallet);
     if (this.transactionRepository) {
       await this.transactionRepository.append(createTransactionLog({
@@ -307,12 +326,11 @@ class AuctionService {
       buyerProgress.inventory.push(itemToGive);
     }
     await this.progressRepository.save(buyerProgress);
-
-    // 更新拍賣狀態
-    await auctionRepository.updateStatus(auctionId, "sold", {
-      buyerId,
-      soldAt: new Date().toISOString()
-    });
+    } catch (err) {
+      // 扣款/發貨中途失敗 → 還原成 active，避免「已標記售出卻沒成交」把商品鎖死
+      await auctionRepository.updateStatus(auctionId, "active", { buyerId: null, soldAt: null }).catch(() => {});
+      throw err;
+    }
 
     // 通知賣家：物品售出（SSE + 輪詢佇列；DC 與網頁購買路徑都會經過這裡）
     const currencyLabel = auction.currency === "gold" ? "金幣" : "鑽石";

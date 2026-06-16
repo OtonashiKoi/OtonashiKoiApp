@@ -840,34 +840,38 @@ class ShopService {
 
   async sellItem(discordId, entryUuid) {
     const quote = await this.getSellQuote(discordId, entryUuid, 1);
-    const progress = await this.progressRepository.findByPlayerId(discordId);
-    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
-    const idx = this._findInventoryIndexForAction(progress, entryUuid);
-    if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
-    const entry = progress.inventory[idx];
-    // 堆疊型（強化石等消耗品）：賣 1 顆只扣 stackCount，不可整疊刪除
-    const stackCount = Number(entry.stackCount || 1);
-    if (stackCount > 1) {
-      progress.inventory[idx] = { ...entry, stackCount: stackCount - 1 };
-    } else {
-      progress.inventory.splice(idx, 1);
-    }
-    progress.updatedAt = new Date().toISOString();
-    const savedProgress = await this.progressRepository.save(progress);
-    await this.rewardService.grantCurrency({
-      discordId,
-      displayName: discordId,
-      currencyType: "gold",
-      amount: quote.totalGold,
-      source: CURRENCY_SOURCES.ITEM_SELL,
-      operator: "shop:sell-item"
+    // 上鎖序列化:並發出售同一 uuid 時,第二個請求會在鎖內重讀背包、找不到物品而被擋,
+    // 避免「物品只扣一件卻領兩份金幣」的複製漏洞。
+    return withPlayerProgressLock(discordId, async () => {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+      const idx = this._findInventoryIndexForAction(progress, entryUuid);
+      if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+      const entry = progress.inventory[idx];
+      // 堆疊型（強化石等消耗品）：賣 1 顆只扣 stackCount，不可整疊刪除
+      const stackCount = Number(entry.stackCount || 1);
+      if (stackCount > 1) {
+        progress.inventory[idx] = { ...entry, stackCount: stackCount - 1 };
+      } else {
+        progress.inventory.splice(idx, 1);
+      }
+      progress.updatedAt = new Date().toISOString();
+      const savedProgress = await this.progressRepository.save(progress);
+      await this.rewardService.grantCurrency({
+        discordId,
+        displayName: discordId,
+        currencyType: "gold",
+        amount: quote.totalGold,
+        source: CURRENCY_SOURCES.ITEM_SELL,
+        operator: "shop:sell-item"
+      });
+      return {
+        itemName: entry.itemName,
+        tier: quote.tier,
+        price: quote.priceEach,
+        inventory: Array.isArray(savedProgress?.inventory) ? savedProgress.inventory : progress.inventory
+      };
     });
-    return {
-      itemName: entry.itemName,
-      tier: quote.tier,
-      price: quote.priceEach,
-      inventory: Array.isArray(savedProgress?.inventory) ? savedProgress.inventory : progress.inventory
-    };
   }
 
   async getSellQuote(discordId, entryUuid, qty = 1) {
@@ -917,96 +921,104 @@ class ShopService {
 
   async sellItemBulk(discordId, entryUuid, qty) {
     qty = Math.max(1, Math.floor(Number(qty) || 1));
-    const quote = await this.getSellQuote(discordId, entryUuid, qty);
-    const progress = await this.progressRepository.findByPlayerId(discordId);
-    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+    // 上鎖序列化(同 sellItem)：鎖內重算可賣數量並重讀背包，避免並發批量出售複製金幣。
+    return withPlayerProgressLock(discordId, async () => {
+      const quote = await this.getSellQuote(discordId, entryUuid, qty);
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
 
-    const refEntry = this._findInventoryEntryForAction(progress, entryUuid);
-    if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+      const refEntry = this._findInventoryEntryForAction(progress, entryUuid);
+      if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
 
-    const stackCount = refEntry.stackCount || 1;
-    const sellCount = quote.sellCount;
+      const stackCount = refEntry.stackCount || 1;
+      const sellCount = quote.sellCount;
 
-    if (stackCount > 1) {
-      // ── 堆疊型（消耗品）：從 stackCount 扣除 ──
-      const idx = this._findInventoryIndexForAction(progress, entryUuid);
-      if (sellCount >= stackCount) {
-        progress.inventory.splice(idx, 1);          // 全部賣完，移除紀錄
+      if (stackCount > 1) {
+        // ── 堆疊型（消耗品）：從 stackCount 扣除 ──
+        const idx = this._findInventoryIndexForAction(progress, entryUuid);
+        if (sellCount >= stackCount) {
+          progress.inventory.splice(idx, 1);          // 全部賣完，移除紀錄
+        } else {
+          progress.inventory[idx].stackCount = stackCount - sellCount;  // 部分賣，扣數量
+        }
       } else {
-        progress.inventory[idx].stackCount = stackCount - sellCount;  // 部分賣，扣數量
+        // ── 非堆疊型（裝備/寶石）：只賣同模板、同強化、同素質簽名的項目 ──
+        const matchingUuids = this._findBulkSellMatches(progress.inventory || [], refEntry, entryUuid)
+          .map(e => this._buildInventoryEntryRef(e));
+
+        const toRemove = new Set(matchingUuids.slice(0, sellCount));
+        progress.inventory = progress.inventory.filter(e => !toRemove.has(this._buildInventoryEntryRef(e)));
       }
-    } else {
-      // ── 非堆疊型（裝備/寶石）：只賣同模板、同強化、同素質簽名的項目 ──
-      const matchingUuids = this._findBulkSellMatches(progress.inventory || [], refEntry, entryUuid)
-        .map(e => this._buildInventoryEntryRef(e));
 
-      const toRemove = new Set(matchingUuids.slice(0, sellCount));
-      progress.inventory = progress.inventory.filter(e => !toRemove.has(this._buildInventoryEntryRef(e)));
-    }
+      progress.updatedAt = new Date().toISOString();
+      const savedProgress = await this.progressRepository.save(progress);
 
-    progress.updatedAt = new Date().toISOString();
-    const savedProgress = await this.progressRepository.save(progress);
+      await this.rewardService.grantCurrency({
+        discordId,
+        displayName: discordId,
+        currencyType: "gold",
+        amount: quote.totalGold,
+        source: CURRENCY_SOURCES.ITEM_SELL,
+        operator: "shop:sell-item-bulk"
+      });
 
-    await this.rewardService.grantCurrency({
-      discordId,
-      displayName: discordId,
-      currencyType: "gold",
-      amount: quote.totalGold,
-      source: CURRENCY_SOURCES.ITEM_SELL,
-      operator: "shop:sell-item-bulk"
+      return {
+        ...quote,
+        inventory: Array.isArray(savedProgress?.inventory) ? savedProgress.inventory : progress.inventory
+      };
     });
-
-    return {
-      ...quote,
-      inventory: Array.isArray(savedProgress?.inventory) ? savedProgress.inventory : progress.inventory
-    };
   }
 
   // 分解裝備：移除該裝備，50% 機率產出降階強化寶石（取代舊「丟棄」）
   // 怪物卡不可分解；分解失敗時裝備照樣消失但無產物
   async discardItem(discordId, entryUuid) {
-    const progress = await this.progressRepository.findByPlayerId(discordId);
-    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
-    const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
-    if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
-    const entry = progress.inventory[idx];
+    // 上鎖序列化：避免並發分解同一裝備，造成「裝備只扣一件卻產出兩份寶石」的複製。
+    return withPlayerProgressLock(discordId, async () => {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+      const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
+      if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+      const entry = progress.inventory[idx];
 
-    // 怪物卡不可分解（背包中卡片可能 itemType=equipment，但帶 monsterCardOf 或 special 槽）
-    if (this._isMonsterCardEntry(entry)) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "怪物卡無法分解", 400);
-    }
-
-    const tier = String(entry.tier || "").toUpperCase();
-    const isEquipmentLike = entry.itemType === "equipment";
-    const canDismantle = isEquipmentLike && !!DISMANTLE_YIELD[tier];
-
-    // 50% 機率成功分解出產物；失敗則無產物（裝備仍消耗）
-    let gemsGranted = null;
-    let dismantled = false;
-    if (canDismantle) {
-      dismantled = true;
-      if (Math.random() < 0.5) {
-        const y = DISMANTLE_YIELD[tier];
-        gemsGranted = { tier: y.tier, count: y.count };
+      // 怪物卡不可分解（背包中卡片可能 itemType=equipment，但帶 monsterCardOf 或 special 槽）
+      if (this._isMonsterCardEntry(entry)) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "怪物卡無法分解", 400);
       }
-    }
 
-    // 先移除被分解的裝備
-    progress.inventory.splice(idx, 1);
+      const tier = String(entry.tier || "").toUpperCase();
+      const isEquipmentLike = entry.itemType === "equipment";
+      const canDismantle = isEquipmentLike && !!DISMANTLE_YIELD[tier];
 
-    // 產出寶石（堆疊進背包）
-    if (gemsGranted) {
-      await this._grantGems(progress, gemsGranted.tier, gemsGranted.count);
-    }
+      // 50% 機率成功分解出產物；失敗則無產物（裝備仍消耗）
+      let gemsGranted = null;
+      let dismantled = false;
+      if (canDismantle) {
+        dismantled = true;
+        if (Math.random() < 0.5) {
+          const y = DISMANTLE_YIELD[tier];
+          gemsGranted = { tier: y.tier, count: y.count };
+        }
+      }
 
-    progress.updatedAt = new Date().toISOString();
-    await this.progressRepository.save(progress);
-    return { itemName: entry.itemName, gems: gemsGranted, dismantled };
+      // 先移除被分解的裝備
+      progress.inventory.splice(idx, 1);
+
+      // 產出寶石（堆疊進背包）
+      if (gemsGranted) {
+        await this._grantGems(progress, gemsGranted.tier, gemsGranted.count);
+      }
+
+      progress.updatedAt = new Date().toISOString();
+      await this.progressRepository.save(progress);
+      return { itemName: entry.itemName, gems: gemsGranted, dismantled };
+    });
   }
 
   // 批量分解：把「同款、未強化(enhanceLevel 0)、非怪物卡」的同 itemId 裝備一起分解。
   // 每件獨立判定 50% 機率產出降階寶石，一次讀寫存檔。
   async discardItemBulk(discordId, entryUuid, qty = 0) {
+    // 上鎖序列化：避免並發批量分解複製寶石。
+    return withPlayerProgressLock(discordId, async () => {
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
     const inv = Array.isArray(progress.inventory) ? progress.inventory : [];
@@ -1056,6 +1068,7 @@ class ShopService {
       successCount,
       gems: totalGems > 0 ? { tier: gemTier, count: totalGems } : null
     };
+    });
   }
 
   // 判斷背包項是否為怪物卡（不可分解）

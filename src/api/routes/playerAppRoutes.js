@@ -1660,8 +1660,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // Used by chat.html to look up a viewer's in-game level & title via OneComme platform ID.
   router.get("/api/chat/viewer-profile", async (req, res) => {
     try {
-      const { platform, userId } = req.query;
-      if (!platform || !userId) return res.json({ found: false });
+      // 強制字串化 + 白名單/字元驗證:防止 ?userId[$ne]= 之類把物件(含 $運算子)
+      // 注入 Mongo 查詢(此端點未認證,尤其需要硬化)。
+      const platform = String(req.query.platform || "").trim().toLowerCase();
+      const userId = String(req.query.userId || "").trim();
+      const PLATFORM_ALLOW = new Set(["youtube", "twitch"]);
+      if (!PLATFORM_ALLOW.has(platform) || !userId || userId.length > 128 || !/^[A-Za-z0-9_.\-:@]+$/.test(userId)) {
+        return res.json({ found: false });
+      }
 
       const player = await serviceContext.playerRepository.findByExternalId(platform, userId);
       if (!player) return res.json({ found: false });

@@ -85,6 +85,19 @@ const auctionRepository = {
   },
 
   /**
+   * 原子搶單：只有當前狀態仍為 active 才改成 newStatus。
+   * 回傳 true 表示「這次成功搶到」；false 表示已被別人買走/到期(防止購買競態複製物品)。
+   */
+  async claimIfActive(id, newStatus, extra = {}) {
+    const col = await collection();
+    const r = await col.updateOne(
+      { id, status: "active" },
+      { $set: { status: newStatus, ...extra, updatedAt: new Date().toISOString() } }
+    );
+    return r.modifiedCount === 1;
+  },
+
+  /**
    * 管理後台：查詢所有拍賣（支援分頁）
    */
   async findAll({ status, page = 0, limit = 30 } = {}) {

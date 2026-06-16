@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+// 啟動安全檢查:正式環境若關鍵密鑰仍是弱預設值就中止(防止用公開預設密鑰上線)
+require("./config").assertSecureConfig();
+
 async function maybeStartDevMirror() {
   if (process.env.DEV_MIRROR !== "1") return;
   const { startDevMirror } = require("./dev/devMirror");
