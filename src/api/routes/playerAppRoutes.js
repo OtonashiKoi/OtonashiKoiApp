@@ -2655,6 +2655,37 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         rewardLines.push(`📖 圖鑑：**${bestiaryInfo.monsterName}** +${bestiaryInfo.gainPct}%（累積 ${bestiaryInfo.killsAfter}/${bestiaryInfo.requirement} 隻，對該怪傷害 +${bestiaryInfo.bonusPctAfter}%）`);
       }
 
+      // ── 戰後即時排行榜 + 換怪同步（回傳給前端,免等 4 秒輪詢）──
+      // 解決:進地圖第一隻/排隊時自己的傷害排行常常沒顯示;擊殺後怪物換成下一隻要同步。
+      let postBattleLeaderboard = [];
+      let nextMonsterSync = null;
+      try {
+        const latestState = await serviceContext.monsterService.getState(zoneKey);
+        const dmgMap = latestState.damageMap || {};
+        postBattleLeaderboard = Object.entries(dmgMap)
+          .map(([pid, e]) => ({
+            discordId: pid, name: e?.name || pid,
+            level: Number(e?.level) || 0, damage: Number(e?.damage) || 0, taken: Number(e?.taken) || 0
+          }))
+          .sort((a, b) => b.damage - a.damage)
+          .slice(0, 10);
+        // 非世界王才回傳「目前實際怪物」(他人擊殺/補刀後可能已換);世界王不換怪
+        if (!isWorldBoss) {
+          const liveMonsters = await serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
+          const liveMon = liveMonsters.find((m) => m.seq === latestState.activeMonsterSeq) || liveMonsters[0] || null;
+          if (liveMon) {
+            nextMonsterSync = {
+              monsterId: liveMon.id || null,
+              monsterName: liveMon.name || "怪物",
+              monsterImageUrl: liveMon.imageUrl || null,
+              currentHp: latestState.currentHp != null ? latestState.currentHp : (liveMon.calc?.maxHp || 0),
+              maxHp: liveMon.calc?.maxHp || 0,
+              activeMonsterSeq: latestState.activeMonsterSeq
+            };
+          }
+        }
+      } catch (_) { /* 排行/換怪同步失敗不影響戰鬥結果 */ }
+
       res.json(ok({
         outcome,
         monsterName: monster.name,
@@ -2665,6 +2696,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         bestiary: bestiaryInfo,
         // 本場掉落道具（結構化，給網頁漂浮道具氣泡 + 詳細視窗）
         drops: Array.isArray(rewardLines._drops) ? rewardLines._drops : [],
+        // 戰後即時排行榜 + 目前實際怪物(換怪同步),前端立即更新免等輪詢
+        damageLeaderboard: postBattleLeaderboard,
+        nextMonster: nextMonsterSync,
         totalDamage,
         finalPlayerHp: Math.max(0, finalPlayerHp),
         // 世界王:血條顯示「當前所打部位」的血量(非整隻王總血量);一般怪維持整隻血量
