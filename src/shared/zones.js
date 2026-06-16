@@ -8,18 +8,18 @@ const ZONE_DEFS = [
   {
     key:          "beginner",
     featureKey:   "monster_zone_beginner",
-    label:        "新手區",
+    label:        "新手村外的草叢",
     emoji:        "🌱",
     tagline:      "踏出第一步，勇氣萬歲。",
     color:        0x2ecc71,
     minLevel:     1,   // 最低等級（包含）
-    maxLevel:     3,   // 最高等級（包含），null = 無上限
+    maxLevel:     null, // 最高等級（包含），null = 無上限
     defaultEntryFee: 0,
   },
   {
     key:          "normal",
     featureKey:   "monster_zone",
-    label:        "一般區",
+    label:        "起矢的草原",
     emoji:        "⚔️",
     tagline:      "新手試煉，準備開打。",
     color:        0xe74c3c,
@@ -30,7 +30,7 @@ const ZONE_DEFS = [
   {
     key:          "mid",
     featureKey:   "monster_zone_mid",
-    label:        "中級區",
+    label:        "陽光草原",
     emoji:        "✦",
     tagline:      "危險上升，獵物更強。",
     color:        0x7c3aed,

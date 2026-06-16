@@ -16,10 +16,14 @@
  *   - meta    附加結構化資料（可選）
  */
 
+const crypto = require("crypto");
 const { playerEventBus } = require("./playerEventBus");
 
 function _buildPayload(type, title, message, meta) {
+  // 帶穩定 id:同一則通知不論走 SSE 還是輪詢佇列,前端都用此 id 去重,
+  // 切換視窗/重連時不會再重複提示一次;ts 用送出當下(=事件/入庫時間)。
   return {
+    id: crypto.randomUUID(),
     type: String(type || "notice"),
     title: String(title || ""),
     message: String(message || ""),
