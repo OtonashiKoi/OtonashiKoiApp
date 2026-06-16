@@ -2,6 +2,7 @@
 
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
+const { buildItemEffectLines } = require("../../shared/itemEffectLines");
 const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, getZoneTheme, getZoneDefaultEntryFee, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
 const { isWorldBossZone, WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
 
@@ -3131,6 +3132,8 @@ function toWebDrop(o) {
     procEffects: o.procEffects || [],
     combatEffects: o.combatEffects || [],
     monsterCardSkill: o.monsterCardSkill || null,
+    // 卡片技能 + 裝備特效的中文說明列（給網頁掉落氣泡詳細視窗顯示，與背包同格式）
+    effectLines: buildItemEffectLines(o),
     source: o.source || "monster_drop",
     sourceRef: o.sourceRef || null,
   };
