@@ -10,6 +10,7 @@ const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, m
 const { scaleSupportPartyEffects } = require("../../shared/supportAuraScaling");
 const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme } = require("../../shared/zones");
 const { isOnlyDTierEquipped } = require("../../shared/combatStats");
+const { acquireSse } = require("../netGuards");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
 const { acquireWebBattle } = require("../../services/progress/battleLock");
 
@@ -1219,6 +1220,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     const discordId = String(playerRecord?.discordId || "").trim();
     if (!discordId) return res.status(400).json({ status: "error", message: "Missing discordId" });
 
+    const releaseSse = acquireSse(req); // SSE 連線數上限(防單一來源開大量連線耗盡記憶體)
+    if (!releaseSse) return res.status(503).json({ status: "error", message: "連線數已滿,請稍後再試" });
+
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
@@ -1246,6 +1250,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     req.on("close", () => {
       clearInterval(heartbeat);
       unsubscribe();
+      releaseSse();
     });
   });
 
@@ -1728,6 +1733,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
   // 6. SSE Stream
   router.get("/api/chat/stream", (req, res) => {
+    const releaseSse = acquireSse(req); // 公開端點:連線數上限,防匿名來源開大量連線
+    if (!releaseSse) return res.status(503).json({ status: "error", message: "連線數已滿,請稍後再試" });
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -1766,6 +1773,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const s = sseClients.get(discordId);
         if (s) { s.delete(client); if (s.size === 0) sseClients.delete(discordId); }
       }
+      releaseSse();
     });
   });
 
@@ -1778,6 +1786,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     if (!expected || key !== expected) {
       return res.status(401).json(fail("UNAUTHORIZED", "聊天室 overlay 密碼錯誤"));
     }
+    const releaseSse = acquireSse(req);
+    if (!releaseSse) return res.status(503).json(fail("TOO_MANY", "連線數已滿,請稍後再試"));
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -1786,7 +1796,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     res.write(`event: ready\ndata: {"ok":true}\n\n`);
     chatOverlayHub.addSubscriber(res);
     const hb = setInterval(() => { try { res.write(":\n\n"); } catch (_) {} }, 15000);
-    req.on("close", () => { clearInterval(hb); chatOverlayHub.removeSubscriber(res); });
+    req.on("close", () => { clearInterval(hb); chatOverlayHub.removeSubscriber(res); releaseSse(); });
   });
 
   router.get("/api/stream/presence", requireAuth, (req, res) => {

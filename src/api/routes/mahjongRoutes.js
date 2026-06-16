@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const crypto = require('crypto');
 const config = require('../../config');
+const { acquireSse } = require('../netGuards');
 const { getState, joinQueue, removeFromQueue, moveQueueEntry, moveQueueEntryToIndex, dismissTeam, resetAll, subscribers } = require('../../services/mahjong/mahjongQueue');
 
 // 等長 constant-time 比對(避免時序側信道)
@@ -31,6 +32,8 @@ function createMahjongRoutes() {
 
   // SSE 推播（mahjong.html 訂閱）
   router.get('/api/mahjong/stream', (req, res) => {
+    const releaseSse = acquireSse(req); // 公開端點:連線數上限,防匿名來源開大量連線
+    if (!releaseSse) return res.status(503).json({ error: 'too_many_connections' });
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -42,7 +45,7 @@ function createMahjongRoutes() {
     subscribers.add(res);
 
     const hb = setInterval(() => { try { res.write(':\n\n'); } catch (_) {} }, 15000);
-    req.on('close', () => { clearInterval(hb); subscribers.delete(res); });
+    req.on('close', () => { clearInterval(hb); subscribers.delete(res); releaseSse(); });
   });
 
   // 手動加入（測試用，需主持人權限）

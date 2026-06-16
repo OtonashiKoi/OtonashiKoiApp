@@ -54,6 +54,15 @@ function createApiServer(discordClient) {
 
   const serviceContext = sharedServiceContext;
 
+  // 全站速率限制(per-IP 固定視窗):擋腳本高頻灌爆 API/DB。
+  // SSE 長連線端點(/...stream)略過(單一長連線、本身另有連線數上限)。
+  const { createRateLimiter } = require("./netGuards");
+  const apiRateLimiter = createRateLimiter({ windowMs: 10_000, max: 300 });
+  app.use("/api", (req, res, next) => {
+    if (/stream$/.test(req.path)) return next(); // SSE 長連線端點(/...stream)略過
+    return apiRateLimiter(req, res, next);
+  });
+
   app.use(express.json());
 
   // Freeze API contract via response headers without changing existing payload shapes.
