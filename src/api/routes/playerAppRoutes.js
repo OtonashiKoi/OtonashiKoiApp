@@ -477,6 +477,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         activeMonsterSeq: state.activeMonsterSeq,
         damageLeaderboard,
         nextBattleAt,
+        // 剩餘冷卻「毫秒數」(伺服器算好);前端用自己的時鐘 Date.now()+cooldownMs,
+        // 避免裝置時間不準時拿絕對時間戳相減導致 CD 爆長/歸零。
+        cooldownMs: nextBattleAt ? Math.max(0, nextBattleAt - Date.now()) : 0,
       };
     }));
   };
@@ -1981,6 +1984,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           activeMonsterSeq: state.activeMonsterSeq,
           damageLeaderboard,
           nextBattleAt,
+          cooldownMs: nextBattleAt ? Math.max(0, nextBattleAt - Date.now()) : 0,
         };
       }));
       res.json(ok(results));
@@ -2591,6 +2595,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monsterStartHp: Math.max(0, Math.round(Number(monsterHpInitial))),
         monsterMaxHp: Math.max(1, Math.round(Number(monster.calc.maxHp))),
         nextBattleAt,
+        // 剩餘冷卻毫秒(=本場動畫長度);前端用自己的時鐘換算,免受裝置時間不準影響
+        cooldownMs: animDurationMs,
         // 本場是否吃到共鬥光環，以及各光環效果的中文描述（前端顯示光環效果用）
         auraApplied,
         auraLines,
