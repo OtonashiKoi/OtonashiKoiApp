@@ -16,6 +16,7 @@ const { getEquipmentTierSetBonuses } = require("../../shared/equipmentTierSetBon
 const { isEffectConditionMet, collectEquipmentEffects, mergeEquippedFromLibrary, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffect } = require("../../shared/supportAuraScaling");
 const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = require("../../shared/battlePresence");
+const { isWebBattleActive } = require("../../services/progress/battleLock");
 const { getDropBoostPct } = require("../../shared/pkArenaConfig");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
 const { clearCurrentCache } = require("../../adapters/mongo/requestCache");
@@ -2205,6 +2206,13 @@ async function handleEnterBattle(interaction) {
   if (isPkBattleActive(discordId)) {
     await interaction.editReply({
       content: "❌ 你目前正在進行 PK，不能同時挑戰怪物。"
+    }).catch(() => {});
+    return;
+  }
+  // 跨 DC/網頁/裝置互斥：網頁正在戰鬥 → 擋下 DC 出戰
+  if (isWebBattleActive(discordId)) {
+    await interaction.editReply({
+      content: "❌ 你正在網頁進行戰鬥，請先結束後再從 Discord 出戰。"
     }).catch(() => {});
     return;
   }

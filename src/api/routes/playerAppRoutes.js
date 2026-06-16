@@ -10,6 +10,16 @@ const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, m
 const { scaleSupportPartyEffects } = require("../../shared/supportAuraScaling");
 const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme } = require("../../shared/zones");
 const { isOnlyDTierEquipped } = require("../../shared/combatStats");
+const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
+const { acquireWebBattle } = require("../../services/progress/battleLock");
+
+// 跨 DC/網頁/裝置「同時只能一場戰鬥」：檢查 DC 端是否正在戰鬥（怪物/PK/塔）
+function describeDcBattle(discordId) {
+  if (isMonsterBattleActive(discordId)) return "你正在 Discord 進行怪物戰鬥";
+  if (isPkBattleActive(discordId)) return "你正在進行 PK 對戰";
+  if (isTowerBattleActive(discordId)) return "你正在進行爬塔挑戰";
+  return null;
+}
 
 // 排行榜顯示名稱:沒有真實暱稱(空 / 純數字 Discord ID)→ 顯示「玩家#末四碼」,不攤 18 碼 ID
 function prettyLeaderboardName(displayName, discordId) {
@@ -2057,6 +2067,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
   // 11. Quick Battle
   router.post("/api/combat/quick-battle", requireAuth, async (req, res, next) => {
+    let battleLock = null;   // 網頁戰鬥占用鎖
+    let lockHeldForAnim = false; // 戰鬥成功 → 占用保留到動畫結束，不在 finally 立即釋放
     try {
       const { discordId, displayName } = req.playerRecord;
       const zoneKey = normalizeZone(req.body.zone);
@@ -2066,6 +2078,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (cd && cd.nextBattleAt > Date.now()) {
         const secsLeft = Math.ceil((cd.nextBattleAt - Date.now()) / 1000);
         return res.status(429).json({ status: "error", message: `battle cooldown active, retry in ${secsLeft}s` });
+      }
+
+      // 跨 DC/網頁/裝置互斥：DC 端正在戰鬥 → 擋下網頁出戰
+      const dcBusy = describeDcBattle(discordId);
+      if (dcBusy) {
+        return res.status(409).json({ status: "error", message: `${dcBusy}，請先結束後再從網頁出戰。` });
+      }
+      // 網頁端已有一場戰鬥（含動畫期間）→ 擋下重複出戰
+      battleLock = acquireWebBattle(discordId, "web");
+      if (!battleLock.ok) {
+        battleLock = null;
+        return res.status(409).json({ status: "error", message: "你已經有一場戰鬥正在進行，請等結束後再開始。" });
       }
 
       // 與 DC 一致：進入怪物區戰鬥時，自動結算並結束進行中的掛機（不阻擋戰鬥）
@@ -2512,6 +2536,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const animDurationMs = roundLogs.length * perRoundMs + 2000 + (outcome === "lose" ? DEATH_EXTRA_COOLDOWN_MS : 0);
       const nextBattleAt = Date.now() + animDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
+      // 戰鬥已結算：把網頁占用鎖延續到動畫結束才自動失效，期間 DC/其他裝置都視為忙碌
+      if (battleLock) { battleLock.hold(animDurationMs); lockHeldForAnim = true; }
       // Clean up the cooldown map after the window has safely expired.
       setTimeout(() => {
         const entry = playerBattleCooldowns.get(discordId);
@@ -2575,6 +2601,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
     } catch (err) {
       next(err);
+    } finally {
+      // 戰鬥成功時鎖已 hold 到動畫結束；其餘情況（例外/提早 return）立即釋放占用
+      if (battleLock && !lockHeldForAnim) battleLock.release();
     }
   });
 
@@ -2888,10 +2917,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   router.post("/api/tower/fight", requireAuth, async (req, res, next) => {
+    let battleLock = null;
     try {
       const { discordId, displayName } = req.playerRecord;
       const s = towerSessions.get(discordId);
       if (!s || !s.alive) return res.status(400).json(fail("NO_SESSION", "沒有進行中的爬塔，請先開始"));
+
+      // 跨 DC/網頁/裝置互斥：DC 端正在戰鬥，或網頁已有一場戰鬥（含怪物戰動畫）→ 擋下爬塔出手
+      const dcBusy = describeDcBattle(discordId);
+      if (dcBusy) return res.status(409).json(fail("BATTLE_BUSY", `${dcBusy}，請先結束後再爬塔。`));
+      battleLock = acquireWebBattle(discordId, "tower");
+      if (!battleLock.ok) { battleLock = null; return res.status(409).json(fail("BATTLE_BUSY", "你已經有一場戰鬥正在進行，請等結束後再爬塔。")); }
+
       const floor = s.floor;
       const monster = await pickTowerMonster(floor, s.used);
       if (!monster) return res.status(400).json(fail("NO_MONSTER", "找不到該層怪物"));
@@ -2931,7 +2968,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         finalPlayerHp: s.playerHp, finalMonsterHp: Math.max(0, r.finalMonsterHp ?? 0),
         nextFloor: s.alive ? s.floor : null, playerMaxHp: s.playerMaxHp, reward,
       }));
-    } catch (err) { next(err); }
+    } catch (err) { next(err); } finally {
+      if (battleLock) battleLock.release();
+    }
   });
 
   router.post("/api/tower/retreat", requireAuth, async (req, res, next) => {
