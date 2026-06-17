@@ -2508,12 +2508,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { handleMonsterKill, _republishPanel, _republishPanelWithRankingDebounce, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
       let rewardLines = [];
       let mHp = syncResult.monsterHp;
+      // 排行榜要顯示「本場剛打的這隻怪」最終貢獻(含本場傷害);擊殺後王/怪雖換成下一隻,
+      // 仍回傳剛打那隻的累積排行,避免剛打死時排行歸零空白。
+      let boardDamageMap = null;
       const currentParticipants = Array.isArray(stateForCombat.participants) ? stateForCombat.participants : [];
 
       if (isWorldBoss) {
         // ── 世界王：state 已由部位結算寫入；只有全部位破壞才呼叫 handleMonsterKill（觸發冷卻/發獎）──
         mHp = stateForCombat.currentHp ?? 0;
         const stateWithMe = stateForCombat;
+        boardDamageMap = stateWithMe.damageMap || {};
         if (worldBossAllPartsDefeated) {
           const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee ?? getZoneDefaultEntryFee(zoneKey) };
           // handleMonsterKill 內部對世界王會 markBossKilled() → 設 lastKilledAt → 進入冷卻
@@ -2543,6 +2547,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             }
           }
         };
+        boardDamageMap = stateWithMe.damageMap;
         const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee ?? getZoneDefaultEntryFee(zoneKey) };
         rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state: stateWithMe, totalDamage, zoneKey });
       } else {
@@ -2566,6 +2571,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } catch (e) {
           await serviceContext.monsterService.saveState({ ...state, currentHp: mHp }, zoneKey);
         }
+        boardDamageMap = damageMap;
 
         if (outcome === "lose") {
           rewardLines = [`你被 ${monster.name} 擊敗了…`];
@@ -2661,7 +2667,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let nextMonsterSync = null;
       try {
         const latestState = await serviceContext.monsterService.getState(zoneKey);
-        const dmgMap = latestState.damageMap || {};
+        // 排行榜用「本場剛打那隻怪」的貢獻表(含本場傷害);若無則 fallback 現場狀態。
+        const dmgMap = (boardDamageMap && Object.keys(boardDamageMap).length) ? boardDamageMap : (latestState.damageMap || {});
         postBattleLeaderboard = Object.entries(dmgMap)
           .map(([pid, e]) => ({
             discordId: pid, name: e?.name || pid,
