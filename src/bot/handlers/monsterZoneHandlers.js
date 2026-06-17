@@ -2522,13 +2522,13 @@ async function handleEnterBattle(interaction) {
     if (!participants.includes(discordId)) {
       const newParticipants = [...participants, discordId];
       if (isWorldBossZone(zoneKey) && battleMonster?.isBoss && participants.length === 0) {
-        await sc.worldBossServiceFor(zoneKey)?.startBossBattleIfNeeded().catch(() => {});
+        const startRes = await sc.worldBossServiceFor(zoneKey)?.startBossBattleIfNeeded().catch(() => null);
         await scheduleEliteWorldBossTimeout(sc, zoneKey, battleMonster).catch(() => {});
-        // 世界王開打公告
+        // 世界王開打公告:只由「真正開戰(justStarted)」那一次發送,避免 web/DC 重複公告
         try {
           const { getBotClient } = require("../runtimeContext");
           const botClient = getBotClient();
-          if (botClient?.isReady()) {
+          if (startRes?.justStarted && botClient?.isReady()) {
             const chatChannel = await botClient.channels.fetch("1498608950671839263").catch(() => null);
             if (chatChannel?.isTextBased?.()) {
               const alarmRoleId = config.discord?.worldBossAlarmRoleId;

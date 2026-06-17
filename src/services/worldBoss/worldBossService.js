@@ -198,12 +198,15 @@ class WorldBossService {
 
   async startBossBattleIfNeeded() {
     const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
-    if (!state.battleStartedAt) {
+    // justStarted:本次呼叫是否真的把 battleStartedAt 從未設定 → 設定(供呼叫端只發一次開戰公告)
+    const justStarted = !state.battleStartedAt;
+    if (justStarted) {
       state.battleStartedAt = new Date().toISOString();
       await this.repo.saveState(state, this.bossKey);
     }
     return {
       state,
+      justStarted,
       status: this._buildStatus(config, state, Date.now())
     };
   }

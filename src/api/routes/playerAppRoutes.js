@@ -2340,15 +2340,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           battleMonsterEquipped = weakened.monsterEquipped;
         }
 
-        // 首位挑戰者（participants 為空）→ 與 DC 一致：標記開戰 + 發世界王開打公告到 DC 頻道
+        // 開戰公告:只由「真正把 battleStartedAt 從未設定→設定」的那一次發送(web/DC 共用同一旗標,避免重複)
         try {
-          const firstAttacker = !Array.isArray(stateForCombat.participants) || stateForCombat.participants.length === 0;
-          if (firstAttacker) {
-            const wbSvc = serviceContext.worldBossServiceFor?.(zoneKey);
-            const before = wbSvc ? await wbSvc.getConfigWithStatus().catch(() => null) : null;
-            const alreadyStarted = !!before?.status?.battleStartedAt;
-            if (wbSvc) await wbSvc.startBossBattleIfNeeded().catch(() => {});
-            if (!alreadyStarted && discordClient?.isReady?.()) {
+          const wbSvc = serviceContext.worldBossServiceFor?.(zoneKey);
+          const startRes = wbSvc ? await wbSvc.startBossBattleIfNeeded().catch(() => null) : null;
+          const justStarted = !!startRes?.justStarted;
+          if (justStarted) {
+            if (discordClient?.isReady?.()) {
               const alarmRoleId = require("../../config").discord?.worldBossAlarmRoleId;
               const alarmTag = alarmRoleId ? `\n<@&${alarmRoleId}> 世界王鬧鐘響囉！` : "";
               const ch = await discordClient.channels.fetch("1498608950671839263").catch(() => null);
