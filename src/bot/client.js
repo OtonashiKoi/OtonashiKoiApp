@@ -648,6 +648,19 @@ async function doMuteAndAnnounce(member, message, reason, key) {
 }
 
 // key: `${guildId}:${userId}`，value: { lastMsg, count, timestamps: [], lastMentionedId, consecutiveMentionCount }
+let _townChatId = null;
+let _townChatTs = 0;
+async function getTownChatChannelId() {
+  if (_townChatId && Date.now() - _townChatTs < 60000) return _townChatId;
+  try {
+    const layout = await serviceContext.channelLayoutRepository.get();
+    const b = (layout?.discord?.bindings || []).find((x) => x.featureKey === "town_chat" && x.enabled);
+    _townChatId = b?.channelId || null;
+    _townChatTs = Date.now();
+  } catch (_) { /* 解析失敗下次再試 */ }
+  return _townChatId;
+}
+
 async function checkSpam(message) {
   if (!message.guild) return;
   if (message.author.bot) return;
@@ -854,6 +867,15 @@ function createBotClient() {
 
   client.on(Events.MessageCreate, async (message) => {
     await checkSpam(message).catch((err) => console.error("[SpamGuard] error", err));
+    // 城鎮聊天大廳有真人發言 → 記錄「最近發言」(供戰鬥畫面玩家氣泡的講話圖示;只記有沒有講)
+    try {
+      if (!message.author?.bot && message.author?.id) {
+        const townId = await getTownChatChannelId();
+        if (townId && message.channelId === townId) {
+          require("../services/realtime/chatPresence").markSpoke(message.author.id);
+        }
+      }
+    } catch (_) { /* noop */ }
     const handled = await moderateRestrictedAnimatedEmoji(message).catch((err) => {
       console.error("[EmojiModeration] error", err);
       return false;

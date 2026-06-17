@@ -108,6 +108,8 @@ function applyZoneDamageSync(zoneKey, startMonsterHp, monsterMaxHp, rawDamage, r
 
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
+  // 頭像快取用同一個 discord client(玩家氣泡需要頭像)
+  try { require("../../services/realtime/avatarCache").setClient(discordClient); } catch (_) { /* noop */ }
   const STREAM_AUTH_STATE_TTL = "15m";
   const DISCORD_AUTH_STATE_TTL = "15m";
 
@@ -1407,6 +1409,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return res.status(429).json({ status: "error", message: "訊息太快了，請稍候再送。" });
       }
       chatTextCooldown.set(discordId, Date.now());
+      // 記錄「最近在聊天大廳發言」(供戰鬥畫面玩家氣泡顯示講話圖示)
+      try { require("../../services/realtime/chatPresence").markSpoke(discordId); } catch (_) { /* noop */ }
 
       // 內容長度上限,避免超長訊息(>2000 會讓 webhook.send 直接失敗)
       const safeMessage = String(message).slice(0, 500);
@@ -1999,6 +2003,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
 
         const dmgMap = state.damageMap || {};
+        const _avatarCache = require("../../services/realtime/avatarCache");
+        const _chatPresence = require("../../services/realtime/chatPresence");
         const damageLeaderboard = Object.entries(dmgMap)
           .map(([pid, e]) => ({
             discordId: pid,
@@ -2006,9 +2012,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             level: Number(e?.level) || 0,
             damage: Number(e?.damage) || 0,
             taken: Number(e?.taken) || 0,
+            avatarUrl: _avatarCache.get(pid),          // 玩家氣泡頭像(快取,沒有先回 null 並背景補抓)
+            speaking: _chatPresence.isSpeaking(pid),    // 最近是否在聊天大廳發言
           }))
           .sort((a, b) => b.damage - a.damage)
-          .slice(0, 10);
+          .slice(0, 20);
 
         const cooldown = playerBattleCooldowns.get(req.playerRecord.discordId);
         const nextBattleAt = (cooldown && cooldown.nextBattleAt > Date.now()) ? cooldown.nextBattleAt : null;
@@ -2678,13 +2686,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const latestState = await serviceContext.monsterService.getState(zoneKey);
         // 排行榜用「本場剛打那隻怪」的貢獻表(含本場傷害);若無則 fallback 現場狀態。
         const dmgMap = (boardDamageMap && Object.keys(boardDamageMap).length) ? boardDamageMap : (latestState.damageMap || {});
+        const _avatarCache2 = require("../../services/realtime/avatarCache");
+        const _chatPresence2 = require("../../services/realtime/chatPresence");
         postBattleLeaderboard = Object.entries(dmgMap)
           .map(([pid, e]) => ({
             discordId: pid, name: e?.name || pid,
-            level: Number(e?.level) || 0, damage: Number(e?.damage) || 0, taken: Number(e?.taken) || 0
+            level: Number(e?.level) || 0, damage: Number(e?.damage) || 0, taken: Number(e?.taken) || 0,
+            avatarUrl: _avatarCache2.get(pid), speaking: _chatPresence2.isSpeaking(pid)
           }))
           .sort((a, b) => b.damage - a.damage)
-          .slice(0, 10);
+          .slice(0, 20);
         // 非世界王才回傳「目前實際怪物」(他人擊殺/補刀後可能已換);世界王不換怪
         if (!isWorldBoss) {
           const liveMonsters = await serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
