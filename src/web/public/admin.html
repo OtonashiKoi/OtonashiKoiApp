@@ -292,6 +292,20 @@
             <div class="card">
               <div id="web-online-list" class="hint">點「重新整理」載入</div>
             </div>
+
+            <div class="card" style="margin-top:16px;">
+              <h2 style="margin:0 0 4px;font-size:1.05rem;">📢 全體公告 / 熱更新提示</h2>
+              <p class="hint" style="margin:0 0 12px;">發給所有在線網頁玩家。公告會同步到聊天大廳 + Discord；提示視窗讓玩家自己按「重新整理 / 重新登入」。</p>
+              <label style="display:block;margin-bottom:4px;font-size:13px;">聊天大廳公告內容（可空）</label>
+              <textarea id="broadcast-message" rows="2" placeholder="例：已更新升級提示功能，請大家重新整理 🎉"></textarea>
+              <label style="display:block;margin:10px 0 4px;font-size:13px;">彈窗內文（可空，留空用預設）</label>
+              <textarea id="broadcast-prompt-message" rows="2" placeholder="例：🔔 新增升級提示視窗！請點下方重新整理以套用更新。"></textarea>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+                <button id="broadcast-prompt-button" type="button" class="button primary">🔔 發送重整提示（玩家自己按）</button>
+                <button id="broadcast-force-button" type="button" class="button" style="background:#7f1d1d;border-color:#b91c1c;color:#fff;">⚡ 強制立即重整（不問玩家）</button>
+              </div>
+              <div id="broadcast-result" class="hint" style="margin-top:8px;"></div>
+            </div>
           </section>
 
           <section id="section-player-ops" class="panel-section">

@@ -1645,13 +1645,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     });
   };
 
-  // 全體強制重新整理：向所有目前在線的網頁玩家發送 force_reload 事件
-  serviceContext._broadcastForceReload = (reason = "admin_broadcast") => {
+  // 全體廣播給在線網頁玩家
+  //   mode = "force"  → force_reload(立即重整,不問玩家)
+  //   mode = "prompt" → update_prompt(彈出「有更新,請重整/重登」視窗,玩家自己按)
+  serviceContext._broadcastForceReload = (reason = "admin_broadcast", mode = "force", message = "") => {
     const { playerEventBus } = require("../../services/realtime/playerEventBus");
     const webPresence = require("../../services/realtime/webPresence");
     const ids = webPresence.list().map(p => p.discordId);
+    const type = mode === "prompt" ? "update_prompt" : "force_reload";
     for (const id of ids) {
-      try { playerEventBus.emit(id, { type: "force_reload", data: { reason, ts: new Date().toISOString() } }); } catch (_) {}
+      try { playerEventBus.emit(id, { type, data: { reason, message: message || undefined, ts: new Date().toISOString() } }); } catch (_) {}
     }
     return ids.length;
   };

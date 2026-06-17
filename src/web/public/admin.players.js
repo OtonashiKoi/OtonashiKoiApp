@@ -435,6 +435,29 @@
     }
   }
 
+  // ── 全體公告 / 熱更新提示 ──
+  async function submitBroadcast(mode) {
+    const resultBox = document.getElementById("broadcast-result");
+    const message = (document.getElementById("broadcast-message")?.value || "").trim();
+    const promptMessage = (document.getElementById("broadcast-prompt-message")?.value || "").trim();
+    if (mode === "force" && !window.confirm("確定要強制所有在線玩家「立即重新整理」？對方畫面會馬上刷新。")) return;
+    if (resultBox) resultBox.textContent = "發送中…";
+    try {
+      const data = await request("/admin/broadcast/announce-and-reload", {
+        method: "POST",
+        body: JSON.stringify({ mode, message, promptMessage })
+      });
+      const n = (data && data.notified) || 0;
+      const modeLabel = mode === "force" ? "強制重整" : "重整提示";
+      const msg = `已對 ${n} 位在線玩家發送「${modeLabel}」${message ? "，並公告到聊天大廳" : ""}`;
+      if (resultBox) resultBox.textContent = `✅ ${msg}`;
+      log(msg);
+    } catch (e) {
+      if (resultBox) resultBox.textContent = `❌ 發送失敗：${e.message}`;
+      log(`全體公告發送失敗：${e.message}`);
+    }
+  }
+
   async function webOnlineAction(act, discordId) {
     const map = { logout: "force-logout", reload: "force-reload", block: "block-web", unblock: "unblock-web" };
     const path = map[act];
@@ -467,6 +490,7 @@
   window.adminPlayers = {
     loadWebOnline,
     webOnlineAction,
+    submitBroadcast,
     submitSeasonReset,
     loadPlayers,
     renderPlayerList,

@@ -626,6 +626,7 @@ class ShopService {
     let savedUseEffects = [];
     let savedEffectDesc = "";
     let savedChestReward = null;
+    let savedStatChange = null; // 屬性重製 / 等級下降 → 供網頁彈窗顯示數值變化
     let casSuccess = false;
 
     // CAS 重試：避免與 grantExp、其他 progress 寫入衝突
@@ -721,6 +722,9 @@ class ShopService {
           chestRewardInfo = {
             chestName: entry.itemName,
             rewardItemName: rolled.entry.itemName,
+            rewardItemId: rolled.entry.itemId || null,
+            rewardImage: rolled.entry.imageUrl || rolled.entry.imageThumbnailUrl || null,
+            rewardTier: rolled.entry.tier || null,
             bossName: effect.bossName || "世界王",
           };
         }
@@ -753,6 +757,16 @@ class ShopService {
         savedUseEffects = useEffects;
         savedEffectDesc = effectDesc;
         savedChestReward = chestRewardInfo;
+        // 屬性重製 / 等級下降 → 記錄前後快照,稍後推播給網頁彈窗
+        if (effect.type === "reroll_attributes" || effect.type === "level_down_random_attributes") {
+          savedStatChange = {
+            kind: effect.type,
+            prevLevel: Math.max(1, Number(progress.level) || 1),
+            newLevel: Math.max(1, Number(next.level) || 1),
+            prevAttributes: { ...(progress.attributes || {}) },
+            newAttributes: { ...(next.attributes || {}) }
+          };
+        }
         casSuccess = true;
         break;
       }
@@ -784,6 +798,38 @@ class ShopService {
     if (savedUseEffects.length > 0) {
       const statusLine = `附加狀態 ${savedUseEffects.map((u) => u.definitionName || u.key).join("、")}`;
       savedEffectDesc = savedEffectDesc ? `${savedEffectDesc} / ${statusLine}` : statusLine;
+    }
+
+    // 屬性重製 / 等級下降 → 推播給網頁,彈出「數值變化」視窗(與升級視窗同款)
+    if (savedStatChange) {
+      try {
+        const { playerEventBus } = require("../realtime/playerEventBus");
+        const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
+        const ATTR_LABEL_ZH = {
+          str: "力量 STR", agi: "敏捷 AGI", vit: "體質 VIT",
+          int: "智力 INT", dex: "靈巧 DEX", luk: "幸運 LUK"
+        };
+        const sc = savedStatChange;
+        const attributesZh = ATTR_KEYS.map((key) => {
+          const prev = Number(sc.prevAttributes[key]) || 0;
+          const value = Number(sc.newAttributes[key]) || 0;
+          return { key, label: ATTR_LABEL_ZH[key] || key.toUpperCase(), prev, value, delta: value - prev };
+        });
+        const isReroll = sc.kind === "reroll_attributes";
+        playerEventBus.emit(String(discordId), {
+          type: "stat_change",
+          data: {
+            kind: sc.kind,
+            title: isReroll ? "屬性重製" : "等級下降",
+            icon: isReroll ? "🔮" : "☯️",
+            itemName: savedEntry.itemName,
+            prevLevel: sc.prevLevel,
+            newLevel: sc.newLevel,
+            attributesZh,
+            ts: new Date().toISOString()
+          }
+        });
+      } catch (_) { /* 推播失敗不影響使用結果 */ }
     }
 
     return { itemName: savedEntry.itemName, effectDesc: savedEffectDesc, chestReward: savedChestReward };

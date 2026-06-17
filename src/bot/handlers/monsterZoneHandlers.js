@@ -3069,18 +3069,21 @@ function _resolveWorldBossChestId(monster, zoneKey) {
     || (zoneKey === "elite" ? "chest-daishi-king"
       : zoneKey === "dragon_king_lair" ? "chest-dragon-king" : null);
 }
-// 發一個寶箱給玩家（同款堆疊，CAS 重試）
+// 發一個寶箱給玩家（同款堆疊，CAS 重試）→ 回傳 { ok, uuid }（uuid 供網頁開箱用）
 async function _grantChestToPlayer(sc, pid, chestItem, sourceMonsterId) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
-    if (!prog) return false;
+    if (!prog) return { ok: false, uuid: null };
     const inv = Array.isArray(prog.inventory) ? prog.inventory.map((e) => ({ ...e })) : [];
     const existing = inv.find((e) => e.itemId === chestItem.id);
+    let chestUuid;
     if (existing) {
       existing.stackCount = Math.max(1, Number(existing.stackCount) || 1) + 1;
+      chestUuid = existing.uuid;
     } else {
+      chestUuid = crypto.randomUUID();
       inv.push({
-        uuid: crypto.randomUUID(), itemId: chestItem.id, itemName: chestItem.name,
+        uuid: chestUuid, itemId: chestItem.id, itemName: chestItem.name,
         itemEffect: chestItem.effect || { type: "none", value: 0 },
         useEffects: chestItem.useEffects || [], passiveEffects: [], procEffects: [], combatEffects: [],
         itemType: chestItem.itemType || "consumable",
@@ -3098,9 +3101,9 @@ async function _grantChestToPlayer(sc, pid, chestItem, sourceMonsterId) {
     } else {
       await sc.progressRepository.save(next); saved = true;
     }
-    if (saved) return true;
+    if (saved) return { ok: true, uuid: chestUuid };
   }
-  return false;
+  return { ok: false, uuid: null };
 }
 // 結算：傷害前3 + 花費(入場費)前3（排除已在傷害前3者，往下遞補）= 最多 6 位不同的人各得 1 箱
 async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap, perPidRewards) {
@@ -3125,10 +3128,31 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
       }
     };
     const granted = [];
+    const grantedWinners = []; // { pid, name, uuid }
     for (const w of [...dmgRank, ...spendRank]) {
-      if (await _grantChestToPlayer(sc, w.pid, chestItem, monster?.id)) { granted.push(w.name); mark(w.pid); }
+      const r = await _grantChestToPlayer(sc, w.pid, chestItem, monster?.id);
+      if (r.ok) { granted.push(w.name); grantedWinners.push({ pid: w.pid, name: w.name, uuid: r.uuid }); mark(w.pid); }
     }
     if (!granted.length) return;
+
+    // 推播給每位獲箱者 → 網頁不論在哪都彈出「世界王寶箱」視窗（可當下開啟或先收進背包）
+    try {
+      const { playerEventBus } = require("../../services/realtime/playerEventBus");
+      for (const w of grantedWinners) {
+        playerEventBus.emit(String(w.pid), {
+          type: "world_boss_chest",
+          data: {
+            chestUuid: w.uuid,
+            chestItemId: chestItem.id,
+            chestName: chestItem.name,
+            chestImage: chestItem.imageUrl || chestItem.imageThumbnailUrl || null,
+            chestTier: chestItem.tier || null,
+            bossName: monster?.name || "世界王",
+            ts: new Date().toISOString()
+          }
+        });
+      }
+    } catch (_) { /* 推播失敗不影響發箱 */ }
 
     const rankLine = granted.map((n, i) => `${i + 1}. ${n}`).join("　");
     const lines = [

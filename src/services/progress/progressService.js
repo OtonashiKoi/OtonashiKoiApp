@@ -86,7 +86,43 @@ class ProgressService {
       next.updatedAt = new Date().toISOString();
 
       const saved = await this._saveProgressWithFallback(next, prevUpdatedAt);
-      if (saved) return { player, progress: next, levelUps, levelUpDetails };
+      if (saved) {
+        // 升級 → 透過玩家事件 bus 推播,讓網頁不論在哪個畫面都能彈出升級視窗
+        if (levelUps > 0) {
+          try {
+            const { playerEventBus } = require("../realtime/playerEventBus");
+            const prevLevel = next.level - levelUps;
+            // 彙總本次升級總共加了哪些屬性(跨多級累加)
+            const gained = {};
+            for (const lv of levelUpDetails) {
+              for (const key of (lv.attrs || [])) gained[key] = (gained[key] || 0) + 1;
+            }
+            playerEventBus.emit(String(discordId), {
+              type: "level_up",
+              data: {
+                prevLevel,
+                newLevel: next.level,
+                levelUps,
+                attributes: { ...next.attributes },
+                gained,
+                gainedZh: Object.entries(gained).map(([key, n]) => ({
+                  key,
+                  label: ATTR_LABEL_ZH[key] || key.toUpperCase(),
+                  amount: n
+                })),
+                attributesZh: ATTR_KEYS.map((key) => ({
+                  key,
+                  label: ATTR_LABEL_ZH[key] || key.toUpperCase(),
+                  value: next.attributes[key] || 0,
+                  gained: gained[key] || 0
+                })),
+                ts: new Date().toISOString()
+              }
+            });
+          } catch (_) { /* 推播失敗不影響經驗結算 */ }
+        }
+        return { player, progress: next, levelUps, levelUpDetails };
+      }
 
       // 文件已被其他操作修改，等一下重試
       if (attempt < CAS_MAX_RETRIES - 1) {

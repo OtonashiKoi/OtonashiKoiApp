@@ -289,6 +289,24 @@
     if (webOnlineRefresh) {
       webOnlineRefresh.addEventListener("click", () => window.adminPlayers?.loadWebOnline?.());
     }
+    // 全體公告 / 熱更新提示按鈕
+    const broadcastPromptBtn = document.getElementById("broadcast-prompt-button");
+    if (broadcastPromptBtn) {
+      broadcastPromptBtn.addEventListener("click", async () => {
+        broadcastPromptBtn.disabled = true;
+        try { await window.adminPlayers?.submitBroadcast?.("prompt"); }
+        finally { broadcastPromptBtn.disabled = false; }
+      });
+    }
+    const broadcastForceBtn = document.getElementById("broadcast-force-button");
+    if (broadcastForceBtn) {
+      broadcastForceBtn.addEventListener("click", async () => {
+        broadcastForceBtn.disabled = true;
+        try { await window.adminPlayers?.submitBroadcast?.("force"); }
+        finally { broadcastForceBtn.disabled = false; }
+      });
+    }
+
     const webOnlineList = document.getElementById("web-online-list");
     if (webOnlineList) {
       webOnlineList.addEventListener("click", async (e) => {

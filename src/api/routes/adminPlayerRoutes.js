@@ -259,17 +259,22 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
-  // 全體公告 + 強制重新整理
+  // 全體公告 + 重整/熱更新提示
+  //   body.mode = "force"  → 立即強制重整(不問玩家)
+  //   body.mode = "prompt" → 彈出「有更新,請重整/重登」視窗,玩家自己按(預設)
+  //   body.message         → 同步發到聊天大廳的公告(可空)
   router.post("/admin/broadcast/announce-and-reload", async (req, res, next) => {
     try {
       const message = String(req.body?.message || "").trim();
+      const mode = req.body?.mode === "force" ? "force" : "prompt";
+      const promptMessage = String(req.body?.promptMessage || "").trim();
       if (message && typeof serviceContext._announceTownChat === "function") {
         await serviceContext._announceTownChat(message);
       }
       const count = typeof serviceContext._broadcastForceReload === "function"
-        ? serviceContext._broadcastForceReload("admin_announce_reload")
+        ? serviceContext._broadcastForceReload("admin_announce_reload", mode, promptMessage)
         : 0;
-      res.json(ok({ reloaded: count, announced: !!message }, "broadcast done"));
+      res.json(ok({ notified: count, mode, announced: !!message }, "broadcast done"));
     } catch (error) { next(error); }
   });
 
