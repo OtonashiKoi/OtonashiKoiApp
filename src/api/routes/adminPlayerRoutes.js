@@ -217,6 +217,56 @@ function createAdminPlayerRoutes(serviceContext) {
     }
   });
 
+  // ── 網頁玩家管控:強制登出 / 強制重整 / 封鎖 / 解封 ──
+  const webBanStore = require("../../services/access/webBanStore");
+  const emitToPlayer = (discordId, type, reason) => {
+    try {
+      const { playerEventBus } = require("../../services/realtime/playerEventBus");
+      playerEventBus.emit(String(discordId), { type, data: { reason: reason || "admin_action", ts: new Date().toISOString() } });
+    } catch (_) { /* 推播失敗不影響後續 */ }
+  };
+
+  // 強制該玩家網頁登出(清 token 跳登入頁)
+  router.post("/admin/players/:discordId/force-logout", (req, res, next) => {
+    try {
+      emitToPlayer(req.params.discordId, "force_logout", req.body?.reason);
+      res.json(ok({ discordId: req.params.discordId }, "force logout sent"));
+    } catch (error) { next(error); }
+  });
+
+  // 強制該玩家網頁重新整理
+  router.post("/admin/players/:discordId/force-reload", (req, res, next) => {
+    try {
+      emitToPlayer(req.params.discordId, "force_reload", req.body?.reason);
+      res.json(ok({ discordId: req.params.discordId }, "force reload sent"));
+    } catch (error) { next(error); }
+  });
+
+  // 封鎖玩家網頁使用權(同時強制登出其現有連線)
+  router.post("/admin/players/:discordId/block-web", async (req, res, next) => {
+    try {
+      const ids = await webBanStore.block(req.params.discordId);
+      emitToPlayer(req.params.discordId, "force_logout", "web_blocked");
+      res.json(ok({ blocked: ids }, "player blocked from web"));
+    } catch (error) { next(error); }
+  });
+
+  // 解除封鎖
+  router.post("/admin/players/:discordId/unblock-web", async (req, res, next) => {
+    try {
+      const ids = await webBanStore.unblock(req.params.discordId);
+      res.json(ok({ blocked: ids }, "player unblocked from web"));
+    } catch (error) { next(error); }
+  });
+
+  // 目前封鎖名單
+  router.get("/admin/web-bans", async (_req, res, next) => {
+    try {
+      const ids = await webBanStore.list();
+      res.json(ok({ blocked: ids }, "web bans fetched"));
+    } catch (error) { next(error); }
+  });
+
   return router;
 }
 

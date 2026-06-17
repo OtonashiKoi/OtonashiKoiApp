@@ -259,6 +259,26 @@
       });
     }
 
+    // ── 網頁管控按鈕 ──
+    const wireWebCtrl = (id, fn, errLabel) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        try {
+          btn.disabled = true;
+          await window.adminPlayers[fn]?.();
+        } catch (error) {
+          log(`${errLabel}：${error.message}`);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    };
+    wireWebCtrl("web-force-logout-btn", "submitForceLogout", "強制登出失敗");
+    wireWebCtrl("web-force-reload-btn", "submitForceReload", "強制重整失敗");
+    wireWebCtrl("web-block-btn", "submitBlockWeb", "封鎖失敗");
+    wireWebCtrl("web-unblock-btn", "submitUnblockWeb", "解除封鎖失敗");
+
     elements.saveAdminRolesButton.addEventListener("click", async () => {
       try {
         if (window.adminBindings && typeof window.adminBindings.getSelectedRoleIds === 'function') {

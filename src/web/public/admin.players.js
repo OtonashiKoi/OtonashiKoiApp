@@ -162,6 +162,8 @@
     if (pickedPreview) {
       pickedPreview.textContent = `已選擇：${data.player.displayName || "Unknown"} (${data.player.discordId})`;
     }
+    // 更新該玩家的網頁封鎖狀態(非同步,不阻塞)
+    if (typeof refreshWebBanStatus === "function") refreshWebBanStatus();
   }
 
   function renderPlayerList() {
@@ -352,6 +354,53 @@
     log(`已發放「${itemName}」給 ${player.displayName}`);
   }
 
+  // ── 網頁管控:強制登出 / 重整 / 封鎖 / 解封 ──
+  async function refreshWebBanStatus() {
+    const el = document.getElementById("web-ban-status");
+    if (!el || !state.selectedPlayerData) return;
+    const player = state.selectedPlayerData.player;
+    try {
+      const data = await request("/admin/web-bans");
+      const blockedIds = ((data && data.blocked) || []).map(String);
+      const blocked = blockedIds.includes(String(player.discordId));
+      el.textContent = `封鎖狀態：${blocked ? "🚫 已封鎖網頁" : "✅ 正常"}`;
+      el.style.color = blocked ? "#f87171" : "";
+    } catch (e) {
+      el.textContent = `封鎖狀態：讀取失敗 (${e.message})`;
+    }
+  }
+
+  async function submitForceLogout() {
+    if (!state.selectedPlayerData) throw new Error("請先選擇一位玩家");
+    const player = state.selectedPlayerData.player;
+    await request(`/admin/players/${encodeURIComponent(player.discordId)}/force-logout`, { method: "POST", body: JSON.stringify({ reason: "admin_action" }) });
+    log(`已要求 ${player.displayName} 網頁強制登出`);
+  }
+
+  async function submitForceReload() {
+    if (!state.selectedPlayerData) throw new Error("請先選擇一位玩家");
+    const player = state.selectedPlayerData.player;
+    await request(`/admin/players/${encodeURIComponent(player.discordId)}/force-reload`, { method: "POST", body: JSON.stringify({ reason: "admin_action" }) });
+    log(`已要求 ${player.displayName} 網頁重新整理`);
+  }
+
+  async function submitBlockWeb() {
+    if (!state.selectedPlayerData) throw new Error("請先選擇一位玩家");
+    const player = state.selectedPlayerData.player;
+    if (!window.confirm(`確定要封鎖 ${player.displayName} 的網頁使用權？對方會立即被登出。`)) return;
+    await request(`/admin/players/${encodeURIComponent(player.discordId)}/block-web`, { method: "POST", body: "{}" });
+    await refreshWebBanStatus();
+    log(`已封鎖 ${player.displayName} 的網頁使用權`);
+  }
+
+  async function submitUnblockWeb() {
+    if (!state.selectedPlayerData) throw new Error("請先選擇一位玩家");
+    const player = state.selectedPlayerData.player;
+    await request(`/admin/players/${encodeURIComponent(player.discordId)}/unblock-web`, { method: "POST", body: "{}" });
+    await refreshWebBanStatus();
+    log(`已解除 ${player.displayName} 的網頁封鎖`);
+  }
+
   // expose players API used by bindings
   window.adminPlayers = {
     loadPlayers,
@@ -361,7 +410,12 @@
     submitCurrencyAction,
     submitExpAction,
     loadItemsForSelect,
-    submitGrantItem
+    submitGrantItem,
+    refreshWebBanStatus,
+    submitForceLogout,
+    submitForceReload,
+    submitBlockWeb,
+    submitUnblockWeb
   };
 
 })();

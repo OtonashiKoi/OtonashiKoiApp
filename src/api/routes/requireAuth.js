@@ -9,6 +9,7 @@
  */
 
 const jwt = require("jsonwebtoken");
+const { isBlocked } = require("../../services/access/webBanStore");
 
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -17,6 +18,10 @@ function requireAuth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "super-secret-jwt-key");
+    // 被管理員封鎖網頁使用權的玩家 → 一律擋下（回 403，前端清 token 跳登入）
+    if (isBlocked(decoded?.discordId)) {
+      return res.status(403).json({ status: "error", code: "WEB_BLOCKED", message: "你的帳號已被管理員封鎖網頁使用權限。" });
+    }
     req.playerRecord = decoded; // { discordId, displayName }
     next();
   } catch (err) {

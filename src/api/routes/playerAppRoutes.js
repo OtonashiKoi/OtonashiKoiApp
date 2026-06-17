@@ -1219,6 +1219,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
     const discordId = String(playerRecord?.discordId || "").trim();
     if (!discordId) return res.status(400).json({ status: "error", message: "Missing discordId" });
+    // 被封鎖的玩家不給開 SSE 串流
+    if (require("../../services/access/webBanStore").isBlocked(discordId)) {
+      return res.status(403).json({ status: "error", code: "WEB_BLOCKED", message: "你的帳號已被管理員封鎖網頁使用權限。" });
+    }
 
     const releaseSse = acquireSse(req); // SSE 連線數上限(防單一來源開大量連線耗盡記憶體)
     if (!releaseSse) return res.status(503).json({ status: "error", message: "連線數已滿,請稍後再試" });
