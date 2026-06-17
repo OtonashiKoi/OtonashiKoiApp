@@ -1246,6 +1246,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     const { playerEventBus } = require("../../services/realtime/playerEventBus");
     const unsubscribe = playerEventBus.subscribe(discordId, send);
 
+    // 記錄網頁在線狀態(供後台列出在線玩家)
+    const webPresence = require("../../services/realtime/webPresence");
+    webPresence.add(discordId, playerRecord?.displayName);
+
     // 每 25 秒送一個 heartbeat（避免被 proxy 斷線）
     const heartbeat = setInterval(() => {
       try { res.write(`: heartbeat ${Date.now()}\n\n`); } catch (_) {}
@@ -1254,6 +1258,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     req.on("close", () => {
       clearInterval(heartbeat);
       unsubscribe();
+      webPresence.remove(discordId);
       releaseSse();
     });
   });

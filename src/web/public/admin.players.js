@@ -401,8 +401,55 @@
     log(`已解除 ${player.displayName} 的網頁封鎖`);
   }
 
+  // ── 目前在線網頁玩家清單(可直接登出/重整/封鎖)──
+  async function loadWebOnline() {
+    const box = document.getElementById("web-online-list");
+    if (!box) return;
+    box.textContent = "載入中…";
+    try {
+      const data = await request("/admin/web-online");
+      const players = (data && data.players) || [];
+      if (!players.length) {
+        box.innerHTML = '<div style="opacity:.7;padding:6px 0;">目前沒有人在線上使用網頁。</div>';
+        return;
+      }
+      box.innerHTML = players.map((p) => {
+        const id = escapeHtml(p.discordId);
+        const name = escapeHtml(p.displayName || p.discordId);
+        const blockedTag = p.blocked ? '<span style="color:#f87171;"> · 已封鎖</span>' : '';
+        const conn = p.connections > 1 ? ` · ${p.connections} 連線` : '';
+        const blockBtn = p.blocked
+          ? `<button type="button" class="button" data-act="unblock" data-id="${id}" style="padding:2px 8px;">解封</button>`
+          : `<button type="button" class="button" data-act="block" data-id="${id}" style="padding:2px 8px;background:#7f1d1d;border-color:#b91c1c;color:#fff;">封鎖</button>`;
+        return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07);">
+          <div style="flex:1;min-width:0;">
+            <strong>${name}</strong>${blockedTag}<br><small style="opacity:.6;">${id}${conn}</small>
+          </div>
+          <button type="button" class="button" data-act="logout" data-id="${id}" style="padding:2px 8px;">登出</button>
+          <button type="button" class="button" data-act="reload" data-id="${id}" style="padding:2px 8px;">重整</button>
+          ${blockBtn}
+        </div>`;
+      }).join("");
+    } catch (e) {
+      box.innerHTML = `<div style="color:#f87171;">載入失敗：${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  async function webOnlineAction(act, discordId) {
+    const map = { logout: "force-logout", reload: "force-reload", block: "block-web", unblock: "unblock-web" };
+    const path = map[act];
+    if (!path || !discordId) return;
+    if (act === "block" && !window.confirm(`確定封鎖此玩家（${discordId}）的網頁使用權？對方會立即被登出。`)) return;
+    await request(`/admin/players/${encodeURIComponent(discordId)}/${path}`, { method: "POST", body: "{}" });
+    const label = { logout: "強制登出", reload: "強制重整", block: "封鎖網頁", unblock: "解除封鎖" }[act];
+    log(`已對 ${discordId} 執行「${label}」`);
+    await loadWebOnline();
+  }
+
   // expose players API used by bindings
   window.adminPlayers = {
+    loadWebOnline,
+    webOnlineAction,
     loadPlayers,
     renderPlayerList,
     loadPlayerDetail,

@@ -267,6 +267,16 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // 目前正在用網頁(SSE 在線)的玩家,附帶封鎖狀態
+  router.get("/admin/web-online", async (_req, res, next) => {
+    try {
+      const webPresence = require("../../services/realtime/webPresence");
+      const blocked = new Set(await webBanStore.list());
+      const players = webPresence.list().map((p) => ({ ...p, blocked: blocked.has(p.discordId) }));
+      res.json(ok({ players }, "online web players"));
+    } catch (error) { next(error); }
+  });
+
   return router;
 }
 

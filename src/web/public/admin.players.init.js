@@ -113,6 +113,10 @@
     for (const link of elements.navLinks) {
       link.addEventListener("click", () => {
         showSection(link.dataset.target);
+        // 進入「玩家操作中心」時自動載入在線網頁玩家清單
+        if (link.dataset.target === "section-player-ops") {
+          window.adminPlayers?.loadWebOnline?.();
+        }
       });
     }
 
@@ -278,6 +282,27 @@
     wireWebCtrl("web-force-reload-btn", "submitForceReload", "強制重整失敗");
     wireWebCtrl("web-block-btn", "submitBlockWeb", "封鎖失敗");
     wireWebCtrl("web-unblock-btn", "submitUnblockWeb", "解除封鎖失敗");
+
+    // ── 在線網頁玩家清單:重新整理按鈕 + 每列動作按鈕(事件委派)──
+    const webOnlineRefresh = document.getElementById("web-online-refresh");
+    if (webOnlineRefresh) {
+      webOnlineRefresh.addEventListener("click", () => window.adminPlayers?.loadWebOnline?.());
+    }
+    const webOnlineList = document.getElementById("web-online-list");
+    if (webOnlineList) {
+      webOnlineList.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-act]");
+        if (!btn) return;
+        btn.disabled = true;
+        try {
+          await window.adminPlayers?.webOnlineAction?.(btn.dataset.act, btn.dataset.id);
+        } catch (err) {
+          log(`操作失敗：${err.message}`);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
 
     elements.saveAdminRolesButton.addEventListener("click", async () => {
       try {

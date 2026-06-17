@@ -289,6 +289,14 @@
             </div>
             <div class="card" style="display:grid;gap:16px;">
               <article class="detail-card">
+                <h4>🟢 目前在線網頁玩家
+                  <button id="web-online-refresh" type="button" class="button" style="float:right;padding:2px 12px;">↻ 重新整理</button>
+                </h4>
+                <p class="hint" style="margin-top:0;">只列出此刻連著網頁(SSE)的人。每位後面可直接「登出 / 重整 / 封鎖」,不必先去選玩家。</p>
+                <div id="web-online-list" class="hint">點「重新整理」載入</div>
+              </article>
+
+              <article class="detail-card">
                 <h4>🎯 選擇操作目標玩家</h4>
                 <button id="player-ops-picker-open" type="button" class="button">選擇玩家（圖卡）</button>
                 <div id="player-ops-picked-preview" class="hint" style="margin-top:8px;">尚未選擇玩家</div>
