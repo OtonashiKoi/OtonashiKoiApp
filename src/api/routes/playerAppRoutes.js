@@ -1653,8 +1653,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     const webPresence = require("../../services/realtime/webPresence");
     const ids = webPresence.list().map(p => p.discordId);
     const type = mode === "prompt" ? "update_prompt" : "force_reload";
+    const noticeBody = message || "已更新，畫面將套用最新內容。";
     for (const id of ids) {
       try { playerEventBus.emit(id, { type, data: { reason, message: message || undefined, ts: new Date().toISOString() } }); } catch (_) {}
+      // 同步發網頁通知（force 模式重整後也能在通知中心看到；用佇列保證重整後補抓得到）
+      try {
+        const notif = { type: "system", title: "🔄 熱更優化", message: noticeBody, kind: "info", ts: Date.now() };
+        enqueueNotif(id, notif);
+        playerEventBus.emit(id, { type: "notify", data: notif });
+      } catch (_) {}
     }
     return ids.length;
   };
@@ -2727,6 +2734,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         await questService.recordProgress(discordId, "battle_count", 1);
         // battle_win is granted in handleMonsterKill to all participants on kill.
         await questService.recordProgress(discordId, "damage_total", totalDamage);
+        // 職業任務：依「出戰所持武器類型」累加（與 DC 端 recordQuestBattleProgress 對齊）
+        const _wt = String(equipped?.weapon?.weaponType || "");
+        const _weaponMetric =
+          (_wt === "sword_1h" || _wt === "sword_2h") ? "battle_with_sword"
+          : (_wt === "axe_1h" || _wt === "axe_2h") ? "battle_with_axe"
+          : (_wt === "mace_1h" || _wt === "mace_2h") ? "battle_with_mace"
+          : (_wt === "dagger") ? "battle_with_dagger"
+          : (_wt === "staff_1h" || _wt === "staff_2h") ? "battle_with_staff"
+          : (_wt === "bow") ? "battle_with_bow"
+          : null;
+        if (_weaponMetric) await questService.recordProgress(discordId, _weaponMetric, 1);
         if (outcome === "lose") {
           await questService.recordProgress(discordId, "death_count", 1);
         }
