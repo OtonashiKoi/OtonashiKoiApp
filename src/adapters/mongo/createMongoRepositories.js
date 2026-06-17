@@ -4,6 +4,7 @@ const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { createStreamAccountBindingRepository } = require("../streamBindings/createStreamAccountBindingRepository");
 const { createCreatorTokenRepository } = require("../creatorTokens/createCreatorTokenRepository");
 const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
+const { slimProgressForStorage } = require("../../shared/inventoryStorage");
 
 function emitRealtimeInvalidate(type, discordId) {
   if (!discordId) return;
@@ -196,7 +197,8 @@ function createMongoRepositories() {
         return normalized;
       },
       async save(progress) {
-        progress = normalizeProgressDocumentWithGemStacks(progress);
+        // 儲存前瘦身 inventory(去除可從道具庫還原的肥欄位),避免 progress 文件撐爆 16MB
+        progress = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
         let lastError = null;
         const maxRetries = 5;  // 增加重試次數
 
@@ -237,7 +239,7 @@ function createMongoRepositories() {
       },
       // CAS 寫入：只有 updatedAt 未被別人改過才成功，回傳是否成功
       async saveIfUnchanged(progress, prevUpdatedAt) {
-        progress = normalizeProgressDocumentWithGemStacks(progress);
+        progress = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
         const now = new Date().toISOString();
         const filter = prevUpdatedAt
           ? { playerId: progress.playerId, updatedAt: prevUpdatedAt }
