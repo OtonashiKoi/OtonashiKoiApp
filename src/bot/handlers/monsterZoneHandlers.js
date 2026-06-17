@@ -2775,7 +2775,7 @@ async function handleEnterBattle(interaction) {
           console.warn(`[MonsterZone] stale battle result skipped | player=${discordId} | zone=${zoneKey} | monster=${battleMonster?.name || "?"}`);
         } else {
         // 記錄 DC 玩家「目前在此區域戰鬥」的存在感(供網頁戰鬥畫面玩家氣泡;含 DC 玩家)
-        try { require("../../services/realtime/battlePresence").touch(discordId, { name: displayName, level: currentProg?.level, zone: zoneKey }); } catch (_) { /* noop */ }
+        try { require("../../services/realtime/battlePresence").touch(discordId, { name: displayName, level: currentProg?.level, zone: zoneKey, damage: totalDamage }); } catch (_) { /* noop */ }
         const prev = freshState.damageMap || {};
         const updatedDamageMap = {
           ...prev,

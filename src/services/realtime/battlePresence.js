@@ -7,20 +7,31 @@
  * 這讓戰鬥畫面的玩家氣泡比「當前怪物傷害名單」更持久、看起來更多人。
  */
 
-const players = new Map(); // discordId -> { discordId, name, level, zone, hasAura, auraLines, lastAt }
+const players = new Map(); // discordId -> { discordId, name, level, zone, hasAura, auraLines, hits, lastAt }
 const MAX = 5000;
+const DMG_WINDOW_MS = 10 * 60 * 1000; // 10 分鐘傷害統計窗口
 
-function touch(discordId, { name, level, zone, hasAura, auraLines } = {}) {
+function touch(discordId, { name, level, zone, hasAura, auraLines, damage } = {}) {
   const id = String(discordId || "").trim();
   if (!id || !zone) return;
+  const now = Date.now();
+  const z = String(zone);
+  const cur = players.get(id);
+  // 換區就重置傷害累計;同區則沿用(再剔除超過 10 分鐘的)
+  let hits = (cur && cur.zone === z && Array.isArray(cur.hits)) ? cur.hits : [];
+  const dmg = Math.max(0, Number(damage) || 0);
+  if (dmg > 0) hits = [...hits, { amount: dmg, at: now }];
+  const cutoff = now - DMG_WINDOW_MS;
+  hits = hits.filter((h) => h.at >= cutoff);
   players.set(id, {
     discordId: id,
     name: name || id,
     level: Number(level) || 1,
-    zone: String(zone),
+    zone: z,
     hasAura: !!hasAura,
     auraLines: Array.isArray(auraLines) ? auraLines : [],
-    lastAt: Date.now()
+    hits,
+    lastAt: now
   });
   if (players.size > MAX) {
     const cutoff = Date.now() - 10 * 60 * 1000;
@@ -32,9 +43,15 @@ function touch(discordId, { name, level, zone, hasAura, auraLines } = {}) {
 function listByZone(zone, windowMs = 3 * 60 * 1000, limit = 20) {
   const z = String(zone || "");
   const now = Date.now();
+  const cutoff = now - DMG_WINDOW_MS;
   const out = [];
   for (const v of players.values()) {
-    if (v.zone === z && now - v.lastAt < windowMs) out.push(v);
+    if (v.zone === z && now - v.lastAt < windowMs) {
+      const damage10m = (Array.isArray(v.hits) ? v.hits : [])
+        .filter((h) => h.at >= cutoff)
+        .reduce((s, h) => s + (Number(h.amount) || 0), 0);
+      out.push({ ...v, damage10m });
+    }
   }
   out.sort((a, b) => b.lastAt - a.lastAt);
   return out.slice(0, limit);

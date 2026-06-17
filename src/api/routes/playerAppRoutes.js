@@ -2120,6 +2120,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             speaking: _chatPresence.isSpeaking(p.discordId),
             hasAura: _auraLines.length > 0,
             auraLines: _auraLines,
+            damage10m: Number(p.damage10m) || 0,
           };
         });
 
@@ -2832,7 +2833,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       // 記錄玩家「目前在此區域戰鬥」的存在感(供戰鬥畫面玩家氣泡;3 分鐘或換區才消失)
-      try { require("../../services/realtime/battlePresence").touch(discordId, { name: displayName, level: progress?.level, zone: zoneKey, hasAura: hasPartyAura, auraLines: selfAuraLines }); } catch (_) { /* noop */ }
+      try { require("../../services/realtime/battlePresence").touch(discordId, { name: displayName, level: progress?.level, zone: zoneKey, hasAura: hasPartyAura, auraLines: selfAuraLines, damage: totalDamage }); } catch (_) { /* noop */ }
 
       // ── 戰後即時排行榜 + 換怪同步（回傳給前端,免等 4 秒輪詢）──
       // 解決:進地圖第一隻/排隊時自己的傷害排行常常沒顯示;擊殺後怪物換成下一隻要同步。
@@ -2860,7 +2861,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           return {
             discordId: p.discordId, name: p.name, level: Number(p.level) || 0,
             avatarUrl: _avatarCache2.get(p.discordId), speaking: _chatPresence2.isSpeaking(p.discordId),
-            hasAura: _auraLines.length > 0, auraLines: _auraLines
+            hasAura: _auraLines.length > 0, auraLines: _auraLines,
+            damage10m: Number(p.damage10m) || 0
           };
         });
         // 非世界王才回傳「目前實際怪物」(他人擊殺/補刀後可能已換);世界王不換怪
