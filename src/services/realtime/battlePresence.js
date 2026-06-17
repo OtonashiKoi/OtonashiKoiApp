@@ -7,10 +7,10 @@
  * 這讓戰鬥畫面的玩家氣泡比「當前怪物傷害名單」更持久、看起來更多人。
  */
 
-const players = new Map(); // discordId -> { discordId, name, level, zone, lastAt }
+const players = new Map(); // discordId -> { discordId, name, level, zone, hasAura, auraLines, lastAt }
 const MAX = 5000;
 
-function touch(discordId, { name, level, zone } = {}) {
+function touch(discordId, { name, level, zone, hasAura, auraLines } = {}) {
   const id = String(discordId || "").trim();
   if (!id || !zone) return;
   players.set(id, {
@@ -18,6 +18,8 @@ function touch(discordId, { name, level, zone } = {}) {
     name: name || id,
     level: Number(level) || 1,
     zone: String(zone),
+    hasAura: !!hasAura,
+    auraLines: Array.isArray(auraLines) ? auraLines : [],
     lastAt: Date.now()
   });
   if (players.size > MAX) {

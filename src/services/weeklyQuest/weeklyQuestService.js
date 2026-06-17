@@ -423,7 +423,12 @@ class WeeklyQuestService {
     const allDefs = await this.listDefinitions(c);
     const context = await this._getPlayerQuestContext(discordId);
     const playerLevel = context.level;
-    const defs = allDefs.filter((q) => this._isQuestVisibleForPlayer(q, context));
+    // 職業任務:未達解鎖條件也保留(前端顯示為鎖定灰色),其餘 cadence 維持原本「未解鎖就隱藏」
+    const defs = allDefs.filter((q) => {
+      if (!q?.enabled) return false;
+      if (this._isQuestVisibleForPlayer(q, context)) return true;
+      return c === "job";
+    });
     const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, c);
     const completionByType = {};
     if (c === "onboarding" && defs.some((q) => q.type === "onboarding_complete_count")) {
@@ -446,6 +451,8 @@ class WeeklyQuestService {
         : completion
           ? completion.target
           : Number(quest.target || 1);
+      // 鎖定資訊:職業任務未達 Lv/屬性條件時 locked=true,前端顯示灰色「Lv.N 解鎖」,不可領取/累積
+      const locked = !this._isQuestVisibleForPlayer(quest, context);
       return {
         cadence: c,
         periodKey,
@@ -453,7 +460,10 @@ class WeeklyQuestService {
         current,
         target, // 動態 target（完成型任務 = 基礎任務總數）；前端顯示分母用,別再用 quest.target
         claimed: Boolean(p.claimed || (quest.claimOnce && p.claimedOnce)),
-        done: current >= target
+        done: locked ? false : current >= target,
+        locked,
+        unlockLevel: Number(quest.unlockLevel || 0),
+        unlockHint: locked ? (quest.unlockLevel ? `Lv.${quest.unlockLevel} 解鎖` : "尚未解鎖") : null
       };
     });
   }

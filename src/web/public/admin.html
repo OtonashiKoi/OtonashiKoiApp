@@ -76,6 +76,7 @@
               </button>
               <div class="nav-group-links">
                 <button class="nav-link" data-target="section-players">玩家資料總覽</button>
+                <button class="nav-link" data-target="section-online-web">🟢 在線網頁玩家</button>
                 <button class="nav-link" data-target="section-player-ops">玩家操作中心</button>
                 <button class="nav-link" data-target="section-tiers">玩家等級設定</button>
               </div>
@@ -279,6 +280,20 @@
             </div>
           </section>
 
+          <section id="section-online-web" class="panel-section">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">Online Web</p>
+                <h2>🟢 目前在線網頁玩家</h2>
+                <p class="hint">只列出此刻連著網頁(SSE)的人。每位後面可直接「登出 / 重整 / 封鎖」,不必先去選玩家。</p>
+              </div>
+              <button id="web-online-refresh" type="button" class="button">↻ 重新整理</button>
+            </div>
+            <div class="card">
+              <div id="web-online-list" class="hint">點「重新整理」載入</div>
+            </div>
+          </section>
+
           <section id="section-player-ops" class="panel-section">
             <div class="section-head">
               <div>
@@ -288,14 +303,6 @@
               </div>
             </div>
             <div class="card" style="display:grid;gap:16px;">
-              <article class="detail-card">
-                <h4>🟢 目前在線網頁玩家
-                  <button id="web-online-refresh" type="button" class="button" style="float:right;padding:2px 12px;">↻ 重新整理</button>
-                </h4>
-                <p class="hint" style="margin-top:0;">只列出此刻連著網頁(SSE)的人。每位後面可直接「登出 / 重整 / 封鎖」,不必先去選玩家。</p>
-                <div id="web-online-list" class="hint">點「重新整理」載入</div>
-              </article>
-
               <article class="detail-card">
                 <h4>🎯 選擇操作目標玩家</h4>
                 <button id="player-ops-picker-open" type="button" class="button">選擇玩家（圖卡）</button>

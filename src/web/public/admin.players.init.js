@@ -113,8 +113,8 @@
     for (const link of elements.navLinks) {
       link.addEventListener("click", () => {
         showSection(link.dataset.target);
-        // 進入「玩家操作中心」時自動載入在線網頁玩家清單
-        if (link.dataset.target === "section-player-ops") {
+        // 進入「在線網頁玩家」分頁時自動載入清單
+        if (link.dataset.target === "section-online-web") {
           window.adminPlayers?.loadWebOnline?.();
         }
       });

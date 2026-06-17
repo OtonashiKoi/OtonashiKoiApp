@@ -259,6 +259,20 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // 全體公告 + 強制重新整理
+  router.post("/admin/broadcast/announce-and-reload", async (req, res, next) => {
+    try {
+      const message = String(req.body?.message || "").trim();
+      if (message && typeof serviceContext._announceTownChat === "function") {
+        await serviceContext._announceTownChat(message);
+      }
+      const count = typeof serviceContext._broadcastForceReload === "function"
+        ? serviceContext._broadcastForceReload("admin_announce_reload")
+        : 0;
+      res.json(ok({ reloaded: count, announced: !!message }, "broadcast done"));
+    } catch (error) { next(error); }
+  });
+
   // 目前封鎖名單
   router.get("/admin/web-bans", async (_req, res, next) => {
     try {

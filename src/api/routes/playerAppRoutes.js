@@ -1644,6 +1644,47 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       try { client.res.write(dataStr); } catch (_) {}
     });
   };
+
+  // 全體強制重新整理：向所有目前在線的網頁玩家發送 force_reload 事件
+  serviceContext._broadcastForceReload = (reason = "admin_broadcast") => {
+    const { playerEventBus } = require("../../services/realtime/playerEventBus");
+    const webPresence = require("../../services/realtime/webPresence");
+    const ids = webPresence.list().map(p => p.discordId);
+    for (const id of ids) {
+      try { playerEventBus.emit(id, { type: "force_reload", data: { reason, ts: new Date().toISOString() } }); } catch (_) {}
+    }
+    return ids.length;
+  };
+
+  // 發送系統公告到聊天大廳（Discord town_chat + SSE 直推）
+  serviceContext._announceTownChat = async (message) => {
+    // 1. 直接推到所有 SSE chat 客戶端（立即顯示，不等 Discord echo）
+    const sysPayload = {
+      id: `sys_${Date.now()}`,
+      author: "系統公告",
+      authorId: null,
+      avatar: null,
+      content: message,
+      timestamp: Date.now(),
+      isBot: true,
+      replyTo: null,
+    };
+    const dataStr = `data: ${JSON.stringify(sysPayload)}\n\n`;
+    sseClients.forEach(clients => clients.forEach(c => { try { c.res.write(dataStr); } catch (_) {} }));
+
+    // 2. 同時發到 Discord town_chat channel（讓 DC 端也看到公告）
+    if (discordClient) {
+      try {
+        const layout = await serviceContext.channelLayoutRepository.get();
+        const townChatBinding = (layout?.discord?.bindings || []).find(b => b.featureKey === "town_chat" && b.enabled);
+        if (townChatBinding?.channelId) {
+          const channel = discordClient.channels.cache.get(townChatBinding.channelId);
+          if (channel) await channel.send({ content: `📢 **系統公告**：${message}`, allowedMentions: { parse: [] } });
+        }
+      } catch (_) {}
+    }
+  };
+
   if (discordClient) {
     discordClient.on("messageCreate", async (msg) => {
       const hasContent = msg.content || msg.embeds.length > 0 || msg.stickers.size > 0 || msg.attachments.size > 0;
@@ -1957,6 +1998,26 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           }
         }
       } catch (_) { /* 撈庫失敗時回原始商店資料，不擋商店 */ }
+
+      // 依玩家狀態標記:會員資格不符(allowedTiers 不含玩家位階)、本月限量已購滿(maxPerMonth)
+      try {
+        const { discordId } = req.playerRecord;
+        const progress = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
+        const playerTier = progress?.playerTier || null;
+        const ym = serviceContext.shopService._currentYearMonth();
+        const monthlyCount = progress?.shopMonthlyCount || {};
+        for (const s of items) {
+          const allowed = Array.isArray(s.allowedTiers) ? s.allowedTiers : [];
+          const tierLocked = allowed.length > 0 && !allowed.includes(playerTier ?? "");
+          const maxPM = Math.max(0, Number(s.maxPerMonth || 0));
+          const usedPM = maxPM > 0 ? Number((monthlyCount[s.id] || {})[ym] || 0) : 0;
+          s.locked = tierLocked;                            // 會員資格不符
+          s.lockReason = tierLocked ? "資格不符" : null;
+          s.purchasedThisMonth = usedPM;
+          s.monthlyExhausted = maxPM > 0 && usedPM >= maxPM; // 本月限量已購滿
+        }
+      } catch (_) { /* 標記失敗不擋商店 */ }
+
       res.json(ok(items));
     } catch (err) {
       next(err);
@@ -2023,6 +2084,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           level: Number(p.level) || 0,
           avatarUrl: _avatarCache.get(p.discordId),
           speaking: _chatPresence.isSpeaking(p.discordId),
+          hasAura: !!p.hasAura,
+          auraLines: p.auraLines || [],
         }));
 
         const cooldown = playerBattleCooldowns.get(req.playerRecord.discordId);
@@ -2217,51 +2280,66 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       let stateForCombat = freshStateForAura;
       let partyEffects = [];
+      let selfAuraLines = []; // 本玩家提供給隊友的光環描述（供氣泡彈窗顯示）
       const rawPartyEffs = collectEquipmentEffects(equipped, "passive", { equipped, inventory: progress?.inventory || [] })
         .filter(e => e.target === "party");
       const partyEffs = scaleSupportPartyEffects(rawPartyEffs, { providerStats: pStats, equipped });
       const hasPartyAura = partyEffs.length > 0;
 
+      // 相容舊格式 activeHealerAura（單一物件）→ activeHealerAuras（陣列），支援多光環疊加
+      const prevAuras = Array.isArray(freshStateForAura.activeHealerAuras)
+        ? freshStateForAura.activeHealerAuras
+        : (freshStateForAura.activeHealerAura ? [{ ...freshStateForAura.activeHealerAura }] : []);
+
+      let newAuras = prevAuras;
       if (hasPartyAura) {
-        // 光環職業進入：收集 party 效果並記錄光環
-        const auraState = {
-          ...freshStateForAura,
-          activeHealerAura: {
-            discordId,
-            displayName,
-            effects: rawPartyEffs
-          }
-        };
-        await serviceContext.monsterService.saveState(auraState, zoneKey);
-        stateForCombat = auraState;
+        // 光環職業：更新或新增本玩家的光環項目
+        newAuras = [...prevAuras.filter(a => a.discordId !== discordId), { discordId, displayName, effects: rawPartyEffs }];
         partyEffects = partyEffs;
-      } else if (freshStateForAura.activeHealerAura?.discordId === discordId) {
-        // 同一玩家不再具備 party 光環 → 清除光環
-        const clearedState = {
-          ...freshStateForAura,
-          activeHealerAura: null
-        };
-        await serviceContext.monsterService.saveState(clearedState, zoneKey);
-        stateForCombat = clearedState;
-        partyEffects = [];
+        selfAuraLines = partyEffs.map(eff => {
+          const effName = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
+          const vt = formatEffectValueText(eff.key, eff?.params);
+          return `${effName}${vt ? ` ${vt}` : ""}`;
+        });
       } else {
-        // 其他玩家：享受光環效果（如果存在）
-        const aura = freshStateForAura.activeHealerAura;
-        let auraProviderStats = null;
-        let auraProviderEquipped = {};
-        if (aura?.discordId) {
+        // 非光環職業：從陣列移除本玩家（若曾在其中）
+        newAuras = prevAuras.filter(a => a.discordId !== discordId);
+      }
+
+      // 光環陣列有變動才重新存儲
+      const auraChanged = JSON.stringify(newAuras) !== JSON.stringify(prevAuras);
+      if (auraChanged) {
+        const updatedState = { ...freshStateForAura, activeHealerAuras: newAuras, activeHealerAura: null };
+        await serviceContext.monsterService.saveState(updatedState, zoneKey);
+        stateForCombat = updatedState;
+      }
+
+      // 非光環職業：堆疊區域內所有光環提供者的效果
+      if (!hasPartyAura && newAuras.length > 0) {
+        const allCollected = [];
+        for (const aura of newAuras) {
+          if (!aura?.discordId) continue;
           const auraProgress = await serviceContext.progressRepository.findByPlayerId(aura.discordId).catch(() => null);
-          if (auraProgress) {
-            auraProviderEquipped = await mergeEquippedFromLibrary(auraProgress.equipment || {}, serviceContext.itemRepository);
-            const auraAttrs = auraProgress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-            auraProviderStats = calcPlayerStats(auraAttrs, auraProviderEquipped, auraProgress.activeEffects || [], auraProgress.inventory || []);
-          }
+          if (!auraProgress) continue;
+          const auraProviderEquipped = await mergeEquippedFromLibrary(auraProgress.equipment || {}, serviceContext.itemRepository);
+          const auraAttrs = auraProgress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+          const auraProviderStats = calcPlayerStats(auraAttrs, auraProviderEquipped, auraProgress.activeEffects || [], auraProgress.inventory || []);
+          const scaled = scaleSupportPartyEffects(
+            (aura.effects || []).map(e => ({ ...e, sourceName: aura.displayName || null })),
+            { providerStats: auraProviderStats, equipped: auraProviderEquipped }
+          );
+          allCollected.push(...scaled);
         }
-        partyEffects = scaleSupportPartyEffects(
-          (aura?.effects || []).map(e => ({ ...e, sourceName: aura?.displayName || null })),
-          { providerStats: auraProviderStats || {}, equipped: auraProviderEquipped }
-        );
-        stateForCombat = freshStateForAura;
+        // 同一 effect key 不疊加：只取數值最高的那個提供者版本
+        const byKey = new Map();
+        for (const eff of allCollected) {
+          if (!eff?.key) continue;
+          const val = Number(eff?.params?.value ?? eff.value ?? 0);
+          const prev = byKey.get(eff.key);
+          const prevVal = prev ? Number(prev?.params?.value ?? prev.value ?? 0) : -Infinity;
+          if (val > prevVal) byKey.set(eff.key, eff);
+        }
+        partyEffects = Array.from(byKey.values());
       }
 
       // ── 為怪物自動裝備自己的卡片 ──
@@ -2327,6 +2405,25 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           await serviceContext.monsterService.saveState(seeded, zoneKey).catch(() => {});
           stateForCombat = seeded;
         }
+
+        // ── 開戰前確認世界王是否還活著 ──
+        // 王死亡後進冷卻/刷新時,排隊中的玩家不該再揍下一隻;部位已破也不該再打。
+        // 擋下時:不發公告、不收入場費、不扣血、不發提示,只回 409 讓前端安靜停止排隊。
+        let wbUnavailable = false;
+        try {
+          const wbSvc0 = serviceContext.worldBossServiceFor?.(zoneKey);
+          if (wbSvc0?.getConfigWithStatus) {
+            const cs = await wbSvc0.getConfigWithStatus();
+            if (cs?.status && cs.status.canChallenge === false) wbUnavailable = true; // 冷卻中/未解鎖/停用
+          }
+        } catch (_) {}
+        const _partHpNow = Math.max(0, Number(stateForCombat.worldBossPartsHp?.[worldBossPart] || 0));
+        if (_partHpNow <= 0) wbUnavailable = true;                 // 該部位已破
+        try { if (isWBAllDefeated(stateForCombat, zoneKey)) wbUnavailable = true; } catch (_) {} // 整王已全破
+        if (wbUnavailable) {
+          return res.status(409).json({ status: "error", code: "world_boss_unavailable", message: "世界王已被擊敗或進入冷卻,無法繼續挑戰。" });
+        }
+
         // 玩家 stats 依部位調整
         battlePStats = applyWorldBossTargetToPlayerStats(pStats, worldBossPart, zoneKey).stats;
         // 怪物 stats / 卡片依部位調整
@@ -2662,21 +2759,24 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // 這裡只把它組成人類可讀的中文描述。
       const auraApplied = Array.isArray(partyEffects) && partyEffects.length > 0;
       const auraLines = [];
-      // 提供者名稱：自身光環為當前玩家；他人光環從 effect.sourceName 取得
+      // 多光環：每個效果各自帶提供者名稱；自身光環顯示自己
+      const auraFromTeammate = auraApplied && !hasPartyAura && partyEffects.some(e => e && e.sourceName);
+      // 提供者名稱：多人時取第一位（前端 header 用），各行內已含各自名稱
+      const _auraNames = auraApplied && !hasPartyAura
+        ? [...new Set(partyEffects.filter(e => e?.sourceName).map(e => e.sourceName))]
+        : [];
       const auraProviderName = auraApplied
-        ? (hasPartyAura
-          ? displayName
-          : (partyEffects.find(e => e && e.sourceName)?.sourceName || null))
+        ? (hasPartyAura ? displayName : (_auraNames.length === 1 ? _auraNames[0] : (_auraNames.length > 1 ? "隊友" : null)))
         : null;
-      // 是否為「隊友」提供的光環（非本人）→ 前端要醒目顯示隊友名字
-      const auraFromTeammate = auraApplied && !hasPartyAura && !!auraProviderName;
       if (auraApplied) {
-        const auraPrefix = auraProviderName ? `✨ ${auraProviderName} 的共鬥光環：` : "✨ 共鬥光環：";
         for (const eff of partyEffects) {
           if (!eff?.key) continue;
           const name = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
           const valueText = formatEffectValueText(eff.key, eff?.params);
-          auraLines.push(`${auraPrefix}${name}${valueText ? ` ${valueText}` : ""}`);
+          const prefix = hasPartyAura
+            ? `✨ ${displayName} 的共鬥光環：`
+            : (eff.sourceName ? `✨ ${eff.sourceName} 的共鬥光環：` : "✨ 共鬥光環：");
+          auraLines.push(`${prefix}${name}${valueText ? ` ${valueText}` : ""}`);
         }
       }
 
@@ -2686,7 +2786,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       // 記錄玩家「目前在此區域戰鬥」的存在感(供戰鬥畫面玩家氣泡;3 分鐘或換區才消失)
-      try { require("../../services/realtime/battlePresence").touch(discordId, { name: displayName, level: progress?.level, zone: zoneKey }); } catch (_) { /* noop */ }
+      try { require("../../services/realtime/battlePresence").touch(discordId, { name: displayName, level: progress?.level, zone: zoneKey, hasAura: hasPartyAura, auraLines: selfAuraLines }); } catch (_) { /* noop */ }
 
       // ── 戰後即時排行榜 + 換怪同步（回傳給前端,免等 4 秒輪詢）──
       // 解決:進地圖第一隻/排隊時自己的傷害排行常常沒顯示;擊殺後怪物換成下一隻要同步。
@@ -2710,7 +2810,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const _battlePresence2 = require("../../services/realtime/battlePresence");
         postZonePlayers = _battlePresence2.listByZone(zoneKey).map((p) => ({
           discordId: p.discordId, name: p.name, level: Number(p.level) || 0,
-          avatarUrl: _avatarCache2.get(p.discordId), speaking: _chatPresence2.isSpeaking(p.discordId)
+          avatarUrl: _avatarCache2.get(p.discordId), speaking: _chatPresence2.isSpeaking(p.discordId),
+          hasAura: !!p.hasAura, auraLines: p.auraLines || []
         }));
         // 非世界王才回傳「目前實際怪物」(他人擊殺/補刀後可能已換);世界王不換怪
         if (!isWorldBoss) {
@@ -2732,6 +2833,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       res.json(ok({
         outcome,
         monsterName: monster.name,
+        monsterImageUrl: monster.imageUrl || null, // 本場實際對戰怪物的圖,讓前端圖片永遠對得上名字(不受區域換怪延遲影響)
         logs: roundLogs,
         rewardLines,
         rewardSummary: rewardLines._summary || null,
