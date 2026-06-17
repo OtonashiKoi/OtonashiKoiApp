@@ -2380,7 +2380,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           }
           await serviceContext.rewardService.grantCurrency({
             discordId, displayName, currencyType: "gold", amount: -worldBossEntryFee,
-            source: "monster_zone:web_enter_battle", operator: "monster_zone:web_enter_battle"
+            source: require("../../shared/sources").CURRENCY_SOURCES.MONSTER_ENTRY_FEE,
+            operator: "monster_zone:web_enter_battle"
           });
         }
       }
