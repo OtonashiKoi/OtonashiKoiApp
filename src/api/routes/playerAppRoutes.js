@@ -3778,26 +3778,73 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
-  // 新手指引「完成 1 次強化」步驟:自動補免費素材(2 顆 D 階寶石,足夠把木劍 +1)。每人只發一次。
-  router.post("/api/me/onboarding/grant-enhance-materials", requireAuth, async (req, res, next) => {
+  // 新手指引「完成 1 次強化」步驟:免費強化指定裝備一次(不扣寶石/金幣、必定成功)。每人只能用一次。
+  router.post("/api/me/onboarding/free-enhance/:itemUuid", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       if (!progress) return res.status(404).json({ status: "error", message: "找不到玩家進度" });
-      if (progress.flags?.onboardingEnhanceGranted) {
-        return res.json(ok({ alreadyGranted: true }, "免費強化素材已發放過"));
+      if (progress.flags?.onboardingFreeEnhanceUsed) {
+        return res.status(400).json({ status: "error", message: "免費強化已使用過" });
       }
-      const D_GEM_ID = "72fde92d-e33f-42fb-8d86-2e811d03f84d"; // D 階強化寶石
-      const gemItem = await serviceContext.itemRepository.findById(D_GEM_ID).catch(() => null);
-      if (!gemItem?.id) return res.status(500).json({ status: "error", message: "找不到 D 階寶石道具" });
-      const { addEnhanceGemToInventory } = require("../../shared/inventoryStacking");
-      const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
-      addEnhanceGemToInventory(inventory, gemItem, 2);
-      progress.inventory = inventory;
-      progress.flags = { ...(progress.flags || {}), onboardingEnhanceGranted: true };
-      progress.updatedAt = new Date().toISOString();
-      await serviceContext.progressRepository.save(progress);
-      res.json(ok({ granted: 2, gem: gemItem.name }, "已發放免費強化素材(2 顆 D 階寶石)"));
+      const result = await serviceContext.enhanceService.enhanceEquipment(discordId, req.params.itemUuid, { free: true });
+      // 標記已使用(重新讀取以避免覆蓋強化寫入的進度)
+      const fresh = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (fresh) {
+        fresh.flags = { ...(fresh.flags || {}), onboardingFreeEnhanceUsed: true };
+        fresh.updatedAt = new Date().toISOString();
+        await serviceContext.progressRepository.save(fresh);
+      }
+      res.json(ok(result, result.message || "免費強化完成"));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 新手指引第一步:確認武器(或任一裝備)已穿上 → 記錄 equip_count 讓該步完成。
+  // 賽季/新角色會自動裝備木劍,所以不需真的再裝一次,確認有穿即可。
+  router.post("/api/me/onboarding/confirm-equip", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (!progress) return res.status(404).json({ status: "error", message: "找不到玩家進度" });
+      const equipment = progress.equipment || {};
+      const hasWeapon = Boolean(equipment.weapon && equipment.weapon.uuid);
+      const hasAnyEquip = hasWeapon || Object.values(equipment).some((e) => e && e.uuid);
+      if (!hasAnyEquip) {
+        return res.status(400).json({ status: "error", message: "目前沒有裝備任何武器,請先到背包把武器裝備上" });
+      }
+      await serviceContext.questService.recordProgress(discordId, "equip_count", 1);
+      res.json(ok({ confirmed: true, hasWeapon }, "已確認武器已裝備"));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 新手指引全部完成 → 發放新手資金 1000 金幣(每人只發一次)
+  router.post("/api/me/onboarding/complete-reward", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (!progress) return res.status(404).json({ status: "error", message: "找不到玩家進度" });
+      const displayName = progress.displayName || progress.playerName || discordId;
+      if (progress.flags?.onboardingCompleteRewarded) {
+        return res.json(ok({ alreadyRewarded: true, gold: 0 }, "新手資金已領取過"));
+      }
+      const amount = 1000;
+      await serviceContext.rewardService.grantCurrency({
+        discordId, displayName, currencyType: "gold", amount,
+        source: require("../../shared/sources").CURRENCY_SOURCES.QUEST_REWARD,
+        operator: "onboarding:complete-reward"
+      });
+      // 重新讀取(grantCurrency 可能已改動進度),寫入已領取旗標
+      const fresh = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (fresh) {
+        fresh.flags = { ...(fresh.flags || {}), onboardingCompleteRewarded: true };
+        fresh.updatedAt = new Date().toISOString();
+        await serviceContext.progressRepository.save(fresh);
+      }
+      res.json(ok({ gold: amount }, "已領取新手資金 1000 金幣"));
     } catch (err) {
       next(err);
     }

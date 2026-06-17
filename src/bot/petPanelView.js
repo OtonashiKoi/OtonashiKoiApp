@@ -88,6 +88,7 @@ function createPetDashboardMessage(state, opts = {}) {
   const embed = new EmbedBuilder().setColor(0x9d174d).setFooter({ text: "寵物採集站" });
   const descLines = [];
   const fields = [];
+  const files = [];
 
   // 頂端動作結果訊息
   if (statusLines.length > 0) {
@@ -129,9 +130,20 @@ function createPetDashboardMessage(state, opts = {}) {
     else if (full) hints.push("✅ 寵物吃飽了，繼續餵會把多餘的轉成成長 EXP");
     if (hints.length > 0) descLines.push("", ...hints);
 
-    // 縮圖
-    if (active.imageThumbnailUrl || active.imageUrl) {
-      embed.setThumbnail(active.imageThumbnailUrl || active.imageUrl);
+    // 縮圖（支援 http 絕對網址與 /uploads 本地相對路徑）
+    const thumbUrl = String(active.imageThumbnailUrl || active.imageUrl || "").trim();
+    if (/^https?:\/\//i.test(thumbUrl)) {
+      embed.setThumbnail(thumbUrl);
+    } else if (thumbUrl) {
+      const fs = require("fs");
+      const path = require("path");
+      const imagePath = path.resolve(__dirname, "../web/public", thumbUrl.replace(/^\//, ""));
+      if (fs.existsSync(imagePath)) {
+        const { AttachmentBuilder } = require("discord.js");
+        const fileName = path.basename(imagePath);
+        files.push(new AttachmentBuilder(imagePath, { name: fileName }));
+        embed.setThumbnail(`attachment://${fileName}`);
+      }
     }
 
     const satietyBar = buildBar(active.satiety, active.satietyMax);
@@ -181,7 +193,7 @@ function createPetDashboardMessage(state, opts = {}) {
     new ButtonBuilder().setCustomId(PET_RELEASE_ID).setLabel("🕊️ 放生").setStyle(ButtonStyle.Danger).setDisabled(pets.length === 0),
   );
 
-  return { embeds: [embed], components: [row1, row2] };
+  return { embeds: [embed], components: [row1, row2], files };
 }
 
 module.exports = {

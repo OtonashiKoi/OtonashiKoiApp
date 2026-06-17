@@ -28,7 +28,7 @@ const AVAILABLE_FEATURES = [
   { key: "party_guide", label: "組隊攻略區", description: "組隊攻略與討論", category: "pk_party" },
 
   // ─── 怪物地圖 ────────────────────────────────
-  { key: "monster_zone_beginner", label: "放怪區面板（新手）", description: "Lv.1～3 新手專屬戰鬥區", category: "monster" },
+  { key: "monster_zone_beginner", label: "放怪區面板（新手）", description: "Lv.1 以上新手戰鬥區", category: "monster" },
   { key: "monster_zone", label: "放怪區面板（一般）", description: "Lv.1 以上玩家可進入的一般戰鬥區", category: "monster" },
   { key: "monster_zone_mid", label: "放怪區面板（中級）", description: "Lv.10 以上玩家可進入的中級戰鬥區", category: "monster" },
   { key: "monster_zone_hard", label: "放怪區面板（高級）", description: "Lv.20 以上玩家可進入的高級戰鬥區", category: "monster" },
@@ -72,6 +72,9 @@ function normalizeBinding(binding) {
   if (featureKey.startsWith("monster_zone")) {
     normalized.minLevel = normalizeLevelBound(binding?.minLevel);
     normalized.maxLevel = normalizeLevelBound(binding?.maxLevel);
+    if (featureKey === "monster_zone_beginner" && normalized.maxLevel === 3) {
+      normalized.maxLevel = null;
+    }
   }
 
   return normalized;

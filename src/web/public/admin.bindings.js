@@ -135,7 +135,7 @@
               value="${binding.maxLevel != null ? binding.maxLevel : ""}"
               placeholder="不限" style="width:100%;" />
           </label>
-          <p class="hint" style="margin:0;font-size:0.8em;color:var(--muted,#888);flex-basis:100%;">留空 = 沿用系統預設；填入數值可覆蓋預設限制</p>
+          <p class="hint" style="margin:0;font-size:0.8em;color:var(--muted,#888);flex-basis:100%;">留空 = 不限制；填入數值可設定等級門檻</p>
         </div>` : "";
 
       wrapper.innerHTML = `

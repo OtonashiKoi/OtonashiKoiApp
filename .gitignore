@@ -26,6 +26,7 @@ tmp/
 
 # DB exports & migration dumps (local-only)
 exports/
+backups/
 scripts/_migrate_data_dump.json
 
 # Env backups (含 secret，絕對不 commit)

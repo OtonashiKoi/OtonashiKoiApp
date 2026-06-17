@@ -1483,27 +1483,31 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
       }
 
-      // 第 1 回合輸出完整光環說明，後續回合略過
+      // 第 1 回合宣告全部光環加持（整理成單一區塊，每位提供者一行；後續回合略過）
       if (round === 1) {
+        const auraLines = [];
         for (const [sourceName, detail] of auraDetails) {
-          if (detail.heal > 0 || detail.dmgBoost !== 0 || detail.bossDmgBoost !== 0 || detail.eliteDmgBoost !== 0 || detail.highHpDmgBoost !== 0 || detail.stunnedDmgBoost !== 0 || detail.defDown > 0 || detail.defIgnore > 0 || detail.damageReduction > 0 || detail.critReduction > 0 || detail.agiBoost > 0 || detail.comboBoost > 0) {
-            const jobTag = detail.jobName ? `（${detail.jobName}）` : "";
-            const nameTag = sourceName !== "未知" ? ` ${sourceName}${jobTag}` : "";
-            const parts = [];
-            if (detail.dmgBoost !== 0) parts.push(`傷害提升 ${detail.dmgBoost}%`);
-            if (detail.bossDmgBoost !== 0) parts.push(`Boss 傷害提升 ${detail.bossDmgBoost}%`);
-            if (detail.eliteDmgBoost !== 0) parts.push(`精英傷害提升 ${detail.eliteDmgBoost}%`);
-            if (detail.highHpDmgBoost !== 0) parts.push(`對高血量怪物傷害提升 ${detail.highHpDmgBoost}%`);
-            if (detail.stunnedDmgBoost !== 0) parts.push(`對暈眩目標傷害提升 ${detail.stunnedDmgBoost}%`);
-            if (detail.defDown > 0) parts.push(`怪物防禦降低 ${detail.defDown}%`);
-            if (detail.defIgnore > 0) parts.push(`無視防禦 ${detail.defIgnore}%`);
-            if (detail.damageReduction > 0) parts.push(`受到傷害降低 ${detail.damageReduction}%`);
-            if (detail.critReduction > 0) parts.push(`被暴擊傷害降低 ${detail.critReduction}%`);
-            if (detail.agiBoost > 0) parts.push(`AGI +${detail.agiBoost}%（連擊/閃避提升）`);
-            if (detail.comboBoost > 0) parts.push(`連擊率 +${detail.comboBoost}%`);
-            if (detail.heal > 0) parts.push(`每回合回復 ${detail.heal} HP`);
-            if (parts.length > 0) log.push(`✨${nameTag} 加持：${parts.join("、")}`);
-          }
+          const parts = [];
+          if (detail.dmgBoost !== 0) parts.push(`傷害提升 ${detail.dmgBoost}%`);
+          if (detail.bossDmgBoost !== 0) parts.push(`Boss 傷害提升 ${detail.bossDmgBoost}%`);
+          if (detail.eliteDmgBoost !== 0) parts.push(`精英傷害提升 ${detail.eliteDmgBoost}%`);
+          if (detail.highHpDmgBoost !== 0) parts.push(`對高血量怪物傷害提升 ${detail.highHpDmgBoost}%`);
+          if (detail.stunnedDmgBoost !== 0) parts.push(`對暈眩目標傷害提升 ${detail.stunnedDmgBoost}%`);
+          if (detail.defDown > 0) parts.push(`怪物防禦降低 ${detail.defDown}%`);
+          if (detail.defIgnore > 0) parts.push(`無視防禦 ${detail.defIgnore}%`);
+          if (detail.damageReduction > 0) parts.push(`受到傷害降低 ${detail.damageReduction}%`);
+          if (detail.critReduction > 0) parts.push(`被暴擊傷害降低 ${detail.critReduction}%`);
+          if (detail.agiBoost > 0) parts.push(`AGI +${detail.agiBoost}%（連擊/閃避提升）`);
+          if (detail.comboBoost > 0) parts.push(`連擊率 +${detail.comboBoost}%`);
+          if (detail.heal > 0) parts.push(`每回合回復 ${detail.heal} HP`);
+          if (parts.length === 0) continue;
+          const jobTag = detail.jobName ? `（${detail.jobName}）` : "";
+          const who = (sourceName && sourceName !== "未知") ? `${sourceName}${jobTag}` : (detail.jobName || "光環");
+          auraLines.push(`　• ${who}：${parts.join("、")}`);
+        }
+        if (auraLines.length > 0) {
+          log.push("✨ **光環加持**");
+          for (const line of auraLines) log.push(line);
         }
       }
     } catch (e) {}

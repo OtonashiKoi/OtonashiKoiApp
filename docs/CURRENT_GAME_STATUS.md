@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-06-12T06:31:00.893Z
+Generated at: 2026-06-13T15:31:47.037Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,11 +8,11 @@ Generated at: 2026-06-12T06:31:00.893Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 371 |
-| 進度資料 | 375 |
+| 玩家 | 372 |
+| 進度資料 | 376 |
 | 怪物 | 52 |
 | 怪物狀態文件 | 10 |
-| 道具 | 339 |
+| 道具 | 334 |
 | 任務 | 38 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
@@ -100,7 +100,7 @@ Generated at: 2026-06-12T06:31:00.893Z
 | consumable | 20 |
 | equipment | 302 |
 | job_badge | 10 |
-| pet_egg | 6 |
+| pet_egg | 1 |
 
 | 階級 | 數量 |
 | --- | --- |
@@ -109,7 +109,7 @@ Generated at: 2026-06-12T06:31:00.893Z
 | C | 71 |
 | D | 57 |
 | S | 11 |
-| 無階級 | 40 |
+| 無階級 | 35 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -126,7 +126,7 @@ Generated at: 2026-06-12T06:31:00.893Z
 | special | 52 |
 | title_eq | 8 |
 | weapon | 52 |
-| 無槽位 | 27 |
+| 無槽位 | 22 |
 
 ## Items
 
@@ -465,12 +465,7 @@ Generated at: 2026-06-12T06:31:00.893Z
 | job_barrier_mage_v1 | 結界師徽章 | job_badge |  | job_eq |  | VIT+3 INT+3 DEX+2 | none |
 | job_bard_v1 | 詩人徽章 | job_badge |  | job_eq |  | AGI+2 DEX+4 LUK+2 | none |
 | job_tactician_v1 | 軍師徽章 | job_badge |  | job_eq |  | AGI+4 INT+2 DEX+2 | none |
-| a1f85977-09a7-4b2d-8486-e30eb353ed0c | 火苗龍蛋 | pet_egg |  |  |  |  | none |
 | 14205225-0e0f-4d83-8908-5d24f781bd69 | 神秘龍蛋 | pet_egg |  |  |  |  | none |
-| a5d2180c-97e7-4bd3-bb1a-935e9f742e31 | 雷鳴龍蛋 | pet_egg |  |  |  |  | none |
-| 47630381-5eb3-413e-b21b-5693b24ff56f | 霜鱗龍蛋 | pet_egg |  |  |  |  | none |
-| e1282c93-3823-49ec-bb3c-eacec71369b0 | 黃金龍蛋 | pet_egg |  |  |  |  | none |
-| 5b530c8d-a286-426e-8985-6914148bca3c | 黑曜龍蛋 | pet_egg |  |  |  |  | none |
 
 ## Quests
 
@@ -506,7 +501,7 @@ Generated at: 2026-06-12T06:31:00.893Z
 | onboarding | 140 | 達成 Lv.10 並獲得職業徽章 | level_10_job_badge | 1 | 啟用 | 300 金幣 + 150 EXP | 升到 Lv.10，並獲得任一職業徽章即可完成。 |
 | onboarding | 150 | 成功連擊20次 | combo_count | 20 | 啟用 | 500 金幣 + 220 EXP + 44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf | 同樣建議用匕首，配合高 AGI 與持續輸出，較容易把連擊堆高。 |
 | onboarding | 160 | 完成全部新手任務 | onboarding_complete_count | 1 | 啟用 | 屬性重製藥水 | 完成前面所有新手任務後，再回來領取最終獎勵。 |
-| season | 10 | 屠龍者の試煉 | kill_dragon_king | 10 | 啟用 | 龍王的零嘴們 | 擊敗世界王【古龍王(B)】10 次，獲得稱號「龍王的零嘴們」（龍族領地最終傷害 +5%）。 |
+| season | 10 | 屠龍者の試煉 | kill_dragon_king | 10 | 啟用 | 龍王的零嘴們 | 擊敗世界王【古龍王(B)】10 次，獲得稱號「龍王的零嘴們」（龍族之領／龍王巢穴最終傷害 +5%）。 |
 | weekly | 10 | 每週出戰 30 次 | battle_count | 30 | 啟用 | 1200 金幣 + 500 EXP |  |
 | weekly | 20 | 每週贏得 20 場 | battle_win | 20 | 啟用 | 1500 金幣 + 700 EXP |  |
 | weekly | 30 | 每週累計 50000 傷害 | damage_total | 50000 | 啟用 | 1800 金幣 + 900 EXP |  |

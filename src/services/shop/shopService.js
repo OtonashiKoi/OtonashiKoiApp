@@ -1222,7 +1222,8 @@ class ShopService {
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
     if (this.questService) {
-      this.questService.recordProgress(discordId, "equip_count", 1).catch(() => {});
+      // await:確保「裝備任一裝備」任務進度先寫入,新手引導刷新時才會立刻看到完成
+      try { await this.questService.recordProgress(discordId, "equip_count", 1); } catch (e) {}
     }
     return {
       itemName: entry.itemName,

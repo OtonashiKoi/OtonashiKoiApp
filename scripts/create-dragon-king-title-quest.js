@@ -1,7 +1,7 @@
 "use strict";
 /**
  * 建立「龍王的零嘴們」稱號 + 「擊敗古龍王(B) ×10」任務
- *  - 稱號：title_eq 裝備，效果 = 在龍族領地(dragon_realm) 最終傷害 +5%（zone 條件）
+ *  - 稱號：title_eq 裝備，效果 = 在龍族之領/龍王巢穴(dragon_realm/dragon_king_lair) 最終傷害 +5%（zone 條件）
  *  - 任務：cadence=weekly(可重複), type=kill_dragon_king, target=10, 獎勵=該稱號
  */
 require("dotenv").config();
@@ -22,7 +22,7 @@ async function main() {
   const titleDoc = {
     id: titleId,
     name: TITLE_NAME,
-    description: "擊敗古龍王(B) 十次的證明。在龍族領地戰鬥時，最終傷害 +5%。",
+    description: "擊敗古龍王(B) 十次的證明。在龍族之領或龍王巢穴戰鬥時，最終傷害 +5%。",
     itemType: "equipment",
     equipSlot: "title_eq",
     tier: null,
@@ -40,8 +40,8 @@ async function main() {
         stacks: 1,
         sourcePhase: "passive",
         params: { value: 5 },
-        condition: { zone: "dragon_realm" },   // 只在龍族領地生效
-        notes: "龍族領地最終傷害 +5%",
+        condition: { zone: ["dragon_realm", "dragon_king_lair"] },   // 龍族之領／龍王巢穴生效
+        notes: "龍族之領／龍王巢穴最終傷害 +5%",
         definitionName: "Final Damage Up",
       },
     ],
@@ -50,7 +50,7 @@ async function main() {
     createdAt: title?.createdAt || NOW,
     updatedAt: NOW,
   };
-  console.log(`${title ? "UPDATE" : "CREATE"} 稱號「${TITLE_NAME}」(id=${titleId.slice(0, 8)}) — 龍族領地最終傷害+5%`);
+  console.log(`${title ? "UPDATE" : "CREATE"} 稱號「${TITLE_NAME}」(id=${titleId.slice(0, 8)}) — 龍族之領／龍王巢穴最終傷害+5%`);
   if (!dryRun) await db.collection("items").updateOne({ id: titleId }, { $set: titleDoc }, { upsert: true });
 
   // ── 2. 任務 ──
@@ -61,7 +61,7 @@ async function main() {
     cadence: "weekly",            // 可每週重複挑戰（領過稱號後仍可刷，但稱號唯一）
     type: "kill_dragon_king",
     title: QUEST_TITLE,
-    description: "擊敗世界王【古龍王(B)】10 次，獲得稱號「龍王的零嘴們」（龍族領地最終傷害 +5%）。",
+    description: "擊敗世界王【古龍王(B)】10 次，獲得稱號「龍王的零嘴們」（龍族之領／龍王巢穴最終傷害 +5%）。",
     target: 10,
     rewardGold: 0,
     rewardDiamond: 0,

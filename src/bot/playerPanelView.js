@@ -11,7 +11,8 @@ const BUTTON_IDS = {
   bindStream: "player-panel:bind-stream",
   invite: "player-panel:invite",
   useInvite: "player-panel:use-invite",
-  bestiary: "player-panel:bestiary"
+  bestiary: "player-panel:bestiary",
+  worldBossAlarm: "player-panel:world-boss-alarm"
 };
 
 function createPlayerPanelMessage() {
@@ -64,7 +65,11 @@ function createPlayerPanelMessage() {
       new ButtonBuilder()
         .setCustomId(BUTTON_IDS.bestiary)
         .setLabel("📖 怪物圖鑑")
-        .setStyle(ButtonStyle.Primary)
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(BUTTON_IDS.worldBossAlarm)
+        .setLabel("⏰ 世界王鬧鐘")
+        .setStyle(ButtonStyle.Danger)
     )
   ];
 

@@ -87,6 +87,7 @@ class EnhanceService {
     const mode = normalizeEnhanceMode(options?.mode);
     const isGamble = mode === ENHANCE_MODES.GAMBLE;
     const costMultiplier = isGamble ? 0.5 : 1;
+    const isFree = options?.free === true; // 新手引導:免費強化一次(不扣寶石/金幣、必定成功)
 
     // 取得玩家進度
     const progress = await this.progressRepository.findByPlayerId(discordId);
@@ -164,10 +165,10 @@ class EnhanceService {
     if (!Number.isFinite(Number(baseGemsRequired)) || !Number.isFinite(Number(baseGoldRequired)) || !Number.isFinite(Number(successRate))) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備無法強化", 400);
     }
-    if (gemsOwned < gemsRequired) {
+    if (!isFree && gemsOwned < gemsRequired) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `寶石不足，需要 ${gemsRequired} 顆，目前擁有 ${gemsOwned} 顆`, 400);
     }
-    if (goldOwned < goldRequired) {
+    if (!isFree && goldOwned < goldRequired) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `金幣不足，需要 ${goldRequired} 金幣，目前擁有 ${goldOwned} 金幣`, 400);
     }
 
@@ -175,10 +176,12 @@ class EnhanceService {
     const displayName = progress.displayName || progress.playerName || discordId;
     const goldText = goldRequired > 0 ? `${goldRequired} 金幣` : "免費";
 
-    // 消耗寶石
-    this._consumeGemsFromInventory(inventory, gemItemId, gemsRequired);
-    if (goldRequired > 0) {
-      await this._consumeGold(discordId, displayName, goldRequired);
+    // 消耗寶石(免費強化不扣)
+    if (!isFree) {
+      this._consumeGemsFromInventory(inventory, gemItemId, gemsRequired);
+      if (goldRequired > 0) {
+        await this._consumeGold(discordId, displayName, goldRequired);
+      }
     }
 
     // 計算強化成功率加成（enhance_success_up）
@@ -200,9 +203,9 @@ class EnhanceService {
       }
     } catch (e) {}
 
-    // 計算是否強化成功
-    const effectiveSuccessRate = Math.min(100, successRate + enhanceBonusPct);
-    const isSuccess = Math.random() * 100 < effectiveSuccessRate;
+    // 計算是否強化成功(免費強化必定成功)
+    const effectiveSuccessRate = isFree ? 100 : Math.min(100, successRate + enhanceBonusPct);
+    const isSuccess = isFree ? true : Math.random() * 100 < effectiveSuccessRate;
     const isExploded = !isSuccess && isGamble && Math.random() < 0.5;
 
     // 更新裝備狀態
@@ -226,7 +229,8 @@ class EnhanceService {
     await this.progressRepository.save(progress);
 
     if (isSuccess && this.questService) {
-      this.questService.recordProgress(discordId, "enhance_count", 1).catch(() => {});
+      // await:確保「完成 1 次強化」任務進度先寫入,新手引導刷新時才會立刻看到完成
+      try { await this.questService.recordProgress(discordId, "enhance_count", 1); } catch (e) {}
     }
 
     // 強化完成後，同步該道具的最新 effects（如果有 itemId）
@@ -548,13 +552,14 @@ class EnhanceService {
       goldOwned,
       successRate: successRate > 0 ? successRate : null,
       nextLevel: isMaxed ? null : currentLevel + 1,
-      statBoosted: preview.statBoosted,
-      statBoostedZh: preview.statBoostedZh,
-      oldStatValue: preview.oldStatValue,
-      newStatValue: preview.newStatValue,
-      statDelta: preview.statDelta,
-      targetStatSummary: preview.targetStatSummary,
-      appliedStats: preview.appliedStats || null
+      // preview 可能為 null(該裝備無可強化屬性) → 用 ?. 防止崩潰
+      statBoosted: preview?.statBoosted ?? null,
+      statBoostedZh: preview?.statBoostedZh ?? null,
+      oldStatValue: preview?.oldStatValue ?? null,
+      newStatValue: preview?.newStatValue ?? null,
+      statDelta: preview?.statDelta ?? null,
+      targetStatSummary: preview?.targetStatSummary ?? null,
+      appliedStats: preview?.appliedStats || null
     };
   }
 }

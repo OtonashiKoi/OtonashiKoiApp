@@ -5,7 +5,7 @@ const ZONES = [
     label: '新手區',
     emoji: '🌱',
     minLevel: 1,
-    maxLevel: 3,
+    maxLevel: null,
     tagline: '踏出第一步'
   },
   {
