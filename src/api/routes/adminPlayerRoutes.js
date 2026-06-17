@@ -267,6 +267,36 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // 回歸賽季重製(固定工具):只留鑽石/稱號/收藏,其餘全部重置;會先寫一份備份到 backups/
+  router.post("/admin/players/:discordId/season-reset", async (req, res, next) => {
+    try {
+      const id = req.params.discordId;
+      const { seasonResetPlayer, buildSeasonResetBackup } = require("../../services/admin/seasonResetService");
+      try {
+        const fs = require("fs");
+        const path = require("path");
+        const dir = path.resolve(__dirname, "../../../backups");
+        fs.mkdirSync(dir, { recursive: true });
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const backup = await buildSeasonResetBackup(id);
+        fs.writeFileSync(path.join(dir, `season-reset-${id}-${stamp}.json`), JSON.stringify(backup));
+      } catch (e) {
+        return res.status(500).json(fail("BACKUP_FAILED", `備份失敗,已中止重製:${e.message}`));
+      }
+      const summary = await seasonResetPlayer(id, { dryRun: false });
+      res.json(ok(summary, "season reset done"));
+    } catch (error) { next(error); }
+  });
+
+  // 回歸賽季重製預覽(dry run,不寫入)
+  router.get("/admin/players/:discordId/season-reset/preview", async (req, res, next) => {
+    try {
+      const { seasonResetPlayer } = require("../../services/admin/seasonResetService");
+      const summary = await seasonResetPlayer(req.params.discordId, { dryRun: true });
+      res.json(ok(summary, "season reset preview"));
+    } catch (error) { next(error); }
+  });
+
   // 目前正在用網頁(SSE 在線)的玩家,附帶封鎖狀態
   router.get("/admin/web-online", async (_req, res, next) => {
     try {

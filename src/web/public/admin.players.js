@@ -446,10 +446,28 @@
     await loadWebOnline();
   }
 
+  // 回歸賽季重製(固定方案):只留鑽石/稱號/收藏,其餘全部重置
+  async function submitSeasonReset() {
+    if (!state.selectedPlayerData) throw new Error("請先選擇一位玩家");
+    const player = state.selectedPlayerData.player;
+    const p = await request(`/admin/players/${encodeURIComponent(player.discordId)}/season-reset/preview`);
+    const titles = (Number(p.keptTitlesInBag) || 0) + (Number(p.keptTitleEquipped) || 0);
+    const msg = `確定要對「${player.displayName}」執行回歸賽季重製？\n\n`
+      + `保留：鑽石 ${p.keptDiamond}、稱號 ${titles} 個、收藏 ${p.keptCollectibles} 個\n`
+      + `移除：背包 ${p.removedInventoryItems} 件、金幣 ${p.goldBefore} → 0、等級 ${p.levelBefore} → 1\n\n`
+      + `此操作不可復原（系統會先自動備份）。`;
+    if (!window.confirm(msg)) return;
+    const sum = await request(`/admin/players/${encodeURIComponent(player.discordId)}/season-reset`, { method: "POST", body: "{}" });
+    const t2 = (Number(sum.keptTitlesInBag) || 0) + (Number(sum.keptTitleEquipped) || 0);
+    log(`✅ 已對 ${player.displayName} 回歸賽季重製：保留鑽石 ${sum.keptDiamond}/稱號 ${t2}/收藏 ${sum.keptCollectibles}，移除背包 ${sum.removedInventoryItems} 件`);
+    await loadPlayerDetail(player.discordId);
+  }
+
   // expose players API used by bindings
   window.adminPlayers = {
     loadWebOnline,
     webOnlineAction,
+    submitSeasonReset,
     loadPlayers,
     renderPlayerList,
     loadPlayerDetail,
