@@ -2445,6 +2445,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // ── 開戰前確認世界王是否還活著 ──
         // 王死亡後進冷卻/刷新時,排隊中的玩家不該再揍下一隻;部位已破也不該再打。
         // 擋下時:不發公告、不收入場費、不扣血、不發提示,只回 409 讓前端安靜停止排隊。
+        // 真正「退場」才擋:冷卻中/未解鎖/停用,或整隻王全破。
         let wbUnavailable = false;
         try {
           const wbSvc0 = serviceContext.worldBossServiceFor?.(zoneKey);
@@ -2453,11 +2454,26 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             if (cs?.status && cs.status.canChallenge === false) wbUnavailable = true; // 冷卻中/未解鎖/停用
           }
         } catch (_) {}
-        const _partHpNow = Math.max(0, Number(stateForCombat.worldBossPartsHp?.[worldBossPart] || 0));
-        if (_partHpNow <= 0) wbUnavailable = true;                 // 該部位已破
         try { if (isWBAllDefeated(stateForCombat, zoneKey)) wbUnavailable = true; } catch (_) {} // 整王已全破
         if (wbUnavailable) {
           return res.status(409).json({ status: "error", code: "world_boss_unavailable", message: "世界王已被擊敗或進入冷卻,無法繼續挑戰。" });
+        }
+
+        // 目標部位已破但整隻王還活著 → 自動改打其他還活著的部位(不擋、不報退場)。
+        // 解決:打完一場/預約續戰時,剛把該部位打破,下一戰仍鎖該部位而誤跳「已退場」。
+        let _partHpNow = Math.max(0, Number(stateForCombat.worldBossPartsHp?.[worldBossPart] || 0));
+        if (_partHpNow <= 0) {
+          const _partsHp = stateForCombat.worldBossPartsHp || {};
+          let _partKeys = [];
+          try { _partKeys = require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartKeys(zoneKey) || []; } catch (_) {}
+          const _aliveKeys = _partKeys.filter((k) => Number(_partsHp[k] || 0) > 0);
+          if (_aliveKeys.length > 0) {
+            worldBossPart = _aliveKeys.includes("body") ? "body" : _aliveKeys[0];
+            _partHpNow = Math.max(0, Number(_partsHp[worldBossPart] || 0));
+          } else {
+            // 沒有任何活著的部位 = 整王已破 → 才真的擋
+            return res.status(409).json({ status: "error", code: "world_boss_unavailable", message: "世界王已被擊敗或進入冷卻,無法繼續挑戰。" });
+          }
         }
 
         // 玩家 stats 依部位調整
