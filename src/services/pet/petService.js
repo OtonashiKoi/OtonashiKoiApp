@@ -381,6 +381,9 @@ class PetService {
       consumedUuids.add(it.uuid);
       fed++;
 
+      // 蛋階段：累積到孵化門檻就停止繼續吃，剩餘飼料留背包不浪費(避免一口氣吃光裝備)。
+      if (pet.stage === "egg" && (pet.hatchProgress || 0) >= HATCH_THRESHOLD) break;
+
       // 已孵化：即時升級，但升到本次「階級上限」就停止繼續吃，剩餘飼料留背包不浪費。
       if (pet.stage === "grown") {
         while (pet.level < feedLevelCap && pet.level < MAX_LEVEL && (pet.growthExp || 0) >= LEVELUP_EXP_PER_LEVEL) {

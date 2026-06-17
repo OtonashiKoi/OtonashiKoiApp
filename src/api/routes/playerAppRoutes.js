@@ -41,6 +41,10 @@ const multer = require("multer");
 const chatImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const chatImageCooldown = new Map(); // discordId -> 上次發圖時間（防洗版）
 const chatTextCooldown = new Map(); // discordId -> 上次發文字時間（防洗版,1 秒冷卻）
+const zoneEmoteCooldown = new Map(); // discordId -> 上次發領域表情時間（防洗版）
+// 戰鬥領域快捷表情：固定用這幾個公會自訂 emoji/貼圖(依名稱),順序即顯示順序
+const ZONE_EMOTE_NAMES = ["2026031101", "10", "09", "04", "waitwait", "Group43", "NO", "QQ", "洽囉", "021", "01_23", "2026021203"];
+const ZONE_EMOTE_NAME_SET = new Set(ZONE_EMOTE_NAMES.map((n) => String(n)));
 
 // webhook 訊息 id → 發送者 discordId（給引用 @ 原留言者用；webhook 訊息本身查不到真人）
 const webMsgAuthors = new Map();
@@ -1412,6 +1416,65 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     } catch (err) {
       next(err);
     }
+  });
+
+  // 解析「戰鬥領域快捷表情」名稱 → 圖片 URL(從公會自訂 emoji + 貼圖找),依 ZONE_EMOTE_NAMES 順序
+  // 帶 30 秒快取,避免每次都打 Discord API
+  let _zoneEmoteCache = { at: 0, list: [] };
+  async function resolveZoneEmotes() {
+    if (Date.now() - _zoneEmoteCache.at < 30_000 && _zoneEmoteCache.list.length) return _zoneEmoteCache.list;
+    const guildId = require("../../config").discord.guildId;
+    if (!guildId || !discordClient) return _zoneEmoteCache.list;
+    const guild = discordClient.guilds.cache.get(guildId) || await discordClient.guilds.fetch(guildId).catch(() => null);
+    if (!guild) return _zoneEmoteCache.list;
+    const [emojis, stickers] = await Promise.all([
+      guild.emojis.fetch().catch(() => guild.emojis.cache),
+      guild.stickers.fetch().catch(() => guild.stickers.cache),
+    ]);
+    const byName = new Map();
+    for (const e of emojis.values()) {
+      byName.set(String(e.name), { name: String(e.name), url: `https://cdn.discordapp.com/emojis/${e.id}.${e.animated ? "gif" : "png"}`, animated: !!e.animated });
+    }
+    for (const s of stickers.values()) {
+      if (byName.has(String(s.name))) continue; // emoji 優先
+      byName.set(String(s.name), { name: String(s.name), url: s.format === 4 ? `https://media.discordapp.net/stickers/${s.id}.gif` : `https://media.discordapp.net/stickers/${s.id}.png`, animated: s.format === 4 });
+    }
+    const list = ZONE_EMOTE_NAMES.map((n) => byName.get(String(n))).filter(Boolean);
+    _zoneEmoteCache = { at: Date.now(), list };
+    return list;
+  }
+
+  // 取得戰鬥領域可用的快捷表情清單(給前端表情列渲染)
+  router.get("/api/combat/zone-emotes", requireAuth, async (_req, res, next) => {
+    try { res.json(ok({ emotes: await resolveZoneEmotes() })); } catch (e) { next(e); }
+  });
+
+  // 戰鬥領域快捷表情：只推給「目前在該領域戰鬥」的玩家(含自己),從泡泡上方冒出來
+  router.post("/api/combat/zone-emote", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const zone = String(req.body?.zone || "").trim();
+      const emote = String(req.body?.emote || "").trim();
+      if (!zone) return res.status(400).json({ status: "error", message: "缺少領域" });
+      if (!ZONE_EMOTE_NAME_SET.has(emote)) return res.status(400).json({ status: "error", message: "不支援的表情" });
+      // 防洗版:每位玩家 1.2 秒冷卻
+      const last = zoneEmoteCooldown.get(discordId) || 0;
+      if (Date.now() - last < 1200) return res.status(429).json({ status: "error", message: "太快了，稍候再發。" });
+      zoneEmoteCooldown.set(discordId, Date.now());
+
+      const resolved = (await resolveZoneEmotes()).find((e) => e.name === emote);
+      const url = resolved?.url || null;
+
+      const { playerEventBus } = require("../../services/realtime/playerEventBus");
+      const bp = require("../../services/realtime/battlePresence");
+      const ids = new Set(bp.listByZone(zone).map((p) => p.discordId));
+      ids.add(discordId); // 自己也看得到
+      const payload = { zone, discordId, name: displayName, emote, url, ts: new Date().toISOString() };
+      for (const id of ids) {
+        try { playerEventBus.emit(id, { type: "zone_emote", data: payload }); } catch (_) {}
+      }
+      res.json(ok({ delivered: ids.size }));
+    } catch (e) { next(e); }
   });
 
   // 4. Send Chat Lobby Message
