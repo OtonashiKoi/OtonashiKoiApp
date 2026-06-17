@@ -67,6 +67,27 @@ const calculateTickDelay = (agi = 1) => {
 // 與戰鬥掉落氣泡（monsterZoneHandlers.toWebDrop）共用同一份格式。
 const { formatEffectValueText, buildItemEffectLines } = require("../../shared/itemEffectLines");
 
+// 由地圖狀態的 activeHealerAuras 算出「每位光環提供者 → 中文效果列」。
+// 泡泡發光的真正來源（不論光環職在 DC 還是網頁戰鬥都通用），不依賴各自的 battlePresence.touch。
+function buildZoneAuraMap(state) {
+  const map = new Map();
+  const auras = Array.isArray(state?.activeHealerAuras)
+    ? state.activeHealerAuras
+    : (state?.activeHealerAura ? [state.activeHealerAura] : []);
+  for (const aura of auras) {
+    if (!aura?.discordId) continue;
+    const lines = (Array.isArray(aura.effects) ? aura.effects : [])
+      .filter((eff) => eff && eff.key)
+      .map((eff) => {
+        const effName = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
+        const vt = formatEffectValueText(eff.key, eff?.params);
+        return `${effName}${vt ? ` ${vt}` : ""}`;
+      });
+    map.set(String(aura.discordId), lines);
+  }
+  return map;
+}
+
 // 與 Discord 戰鬥相同的低階區戰力同步規則。
 const ZONE_DAMAGE_SYNC_RULES = {
   beginner: { maxHpRatioPerBattle: 0.30 },
@@ -2088,15 +2109,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const _avatarCache = require("../../services/realtime/avatarCache");
         const _chatPresence = require("../../services/realtime/chatPresence");
         const _battlePresence = require("../../services/realtime/battlePresence");
-        const zonePlayers = _battlePresence.listByZone(key).map((p) => ({
-          discordId: p.discordId,
-          name: p.name,
-          level: Number(p.level) || 0,
-          avatarUrl: _avatarCache.get(p.discordId),
-          speaking: _chatPresence.isSpeaking(p.discordId),
-          hasAura: !!p.hasAura,
-          auraLines: p.auraLines || [],
-        }));
+        const _auraMap = buildZoneAuraMap(state);
+        const zonePlayers = _battlePresence.listByZone(key).map((p) => {
+          const _auraLines = _auraMap.get(String(p.discordId)) || [];
+          return {
+            discordId: p.discordId,
+            name: p.name,
+            level: Number(p.level) || 0,
+            avatarUrl: _avatarCache.get(p.discordId),
+            speaking: _chatPresence.isSpeaking(p.discordId),
+            hasAura: _auraLines.length > 0,
+            auraLines: _auraLines,
+          };
+        });
 
         const cooldown = playerBattleCooldowns.get(req.playerRecord.discordId);
         const nextBattleAt = (cooldown && cooldown.nextBattleAt > Date.now()) ? cooldown.nextBattleAt : null;
@@ -2829,11 +2854,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const _avatarCache2 = require("../../services/realtime/avatarCache");
         const _chatPresence2 = require("../../services/realtime/chatPresence");
         const _battlePresence2 = require("../../services/realtime/battlePresence");
-        postZonePlayers = _battlePresence2.listByZone(zoneKey).map((p) => ({
-          discordId: p.discordId, name: p.name, level: Number(p.level) || 0,
-          avatarUrl: _avatarCache2.get(p.discordId), speaking: _chatPresence2.isSpeaking(p.discordId),
-          hasAura: !!p.hasAura, auraLines: p.auraLines || []
-        }));
+        const _auraMap2 = buildZoneAuraMap(latestState);
+        postZonePlayers = _battlePresence2.listByZone(zoneKey).map((p) => {
+          const _auraLines = _auraMap2.get(String(p.discordId)) || [];
+          return {
+            discordId: p.discordId, name: p.name, level: Number(p.level) || 0,
+            avatarUrl: _avatarCache2.get(p.discordId), speaking: _chatPresence2.isSpeaking(p.discordId),
+            hasAura: _auraLines.length > 0, auraLines: _auraLines
+          };
+        });
         // 非世界王才回傳「目前實際怪物」(他人擊殺/補刀後可能已換);世界王不換怪
         if (!isWorldBoss) {
           const liveMonsters = await serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
