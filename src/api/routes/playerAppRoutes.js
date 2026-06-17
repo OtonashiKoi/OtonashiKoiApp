@@ -3778,6 +3778,31 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 新手指引「完成 1 次強化」步驟:自動補免費素材(2 顆 D 階寶石,足夠把木劍 +1)。每人只發一次。
+  router.post("/api/me/onboarding/grant-enhance-materials", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (!progress) return res.status(404).json({ status: "error", message: "找不到玩家進度" });
+      if (progress.flags?.onboardingEnhanceGranted) {
+        return res.json(ok({ alreadyGranted: true }, "免費強化素材已發放過"));
+      }
+      const D_GEM_ID = "72fde92d-e33f-42fb-8d86-2e811d03f84d"; // D 階強化寶石
+      const gemItem = await serviceContext.itemRepository.findById(D_GEM_ID).catch(() => null);
+      if (!gemItem?.id) return res.status(500).json({ status: "error", message: "找不到 D 階寶石道具" });
+      const { addEnhanceGemToInventory } = require("../../shared/inventoryStacking");
+      const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
+      addEnhanceGemToInventory(inventory, gemItem, 2);
+      progress.inventory = inventory;
+      progress.flags = { ...(progress.flags || {}), onboardingEnhanceGranted: true };
+      progress.updatedAt = new Date().toISOString();
+      await serviceContext.progressRepository.save(progress);
+      res.json(ok({ granted: 2, gem: gemItem.name }, "已發放免費強化素材(2 顆 D 階寶石)"));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }
 
