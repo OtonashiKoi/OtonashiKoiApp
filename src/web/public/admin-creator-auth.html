@@ -94,8 +94,11 @@
     const pwdInput = document.getElementById("adminPwd");
     const toast = document.getElementById("toast");
 
-    function getPassword() { return localStorage.getItem(STORAGE_KEY) || ""; }
-    function setPassword(v) { if (v) localStorage.setItem(STORAGE_KEY, v); else localStorage.removeItem(STORAGE_KEY); }
+    // 後台密碼不再自動儲存:只放當前頁面記憶體,重整/重開要再輸入。同時清掉先前殘留的明碼。
+    try { localStorage.removeItem(STORAGE_KEY); } catch (_) { /* noop */ }
+    let _adminPwd = "";
+    function getPassword() { return _adminPwd; }
+    function setPassword(v) { _adminPwd = v || ""; try { localStorage.removeItem(STORAGE_KEY); } catch (_) { /* noop */ } }
 
     function showToast(msg, ms = 2400) {
       toast.textContent = msg;

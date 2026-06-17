@@ -70,12 +70,15 @@ function getHeaders() {
   return headers;
 }
 
+// 後台密碼不再自動儲存:只存在當前頁面記憶體,重新整理/重開就要再輸入。
+// 同時清掉先前可能已存在 localStorage 的明碼,避免殘留。
 function saveAuth() {
-  localStorage.setItem("admin-password", window.elements.adminPassword.value);
+  try { localStorage.removeItem("admin-password"); } catch (_) { /* noop */ }
 }
 
 function loadAuth() {
-  window.elements.adminPassword.value = localStorage.getItem("admin-password") || "";
+  try { localStorage.removeItem("admin-password"); } catch (_) { /* noop */ }
+  // 不自動帶入密碼,維持空白
 }
 
 function log(message) {
