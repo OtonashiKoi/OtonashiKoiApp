@@ -11,6 +11,15 @@ function setClient(client) { _client = client; }
 const cache = new Map();   // discordId -> { url, ts }
 const inflight = new Set();
 const TTL = 60 * 60 * 1000; // 1 小時
+const MAX = 3000;          // 上限,超過就汰除最舊(避免依不重複玩家數無限成長)
+function _setCache(id, val) {
+  cache.set(id, val);
+  if (cache.size > MAX) {
+    const drop = cache.size - MAX;
+    let i = 0;
+    for (const k of cache.keys()) { if (i++ >= drop) break; cache.delete(k); }
+  }
+}
 
 function getCached(discordId) {
   const id = String(discordId || "").trim();
@@ -25,8 +34,8 @@ function prime(discordId) {
   if (e && Date.now() - e.ts < TTL) return;
   inflight.add(id);
   Promise.resolve(_client.users.fetch(id, { force: false }))
-    .then((u) => { cache.set(id, { url: u.displayAvatarURL({ size: 128, extension: "png" }), ts: Date.now() }); })
-    .catch(() => { cache.set(id, { url: null, ts: Date.now() }); })
+    .then((u) => { _setCache(id, { url: u.displayAvatarURL({ size: 128, extension: "png" }), ts: Date.now() }); })
+    .catch(() => { _setCache(id, { url: null, ts: Date.now() }); })
     .finally(() => inflight.delete(id));
 }
 

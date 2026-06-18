@@ -46,6 +46,21 @@ const zoneEmoteCooldown = new Map(); // discordId -> 上次發領域表情時間
 const ZONE_EMOTE_NAMES = ["2026031101", "10", "09", "04", "waitwait", "Group43", "NO", "QQ", "洽囉", "021", "01_23", "2026021203"];
 const ZONE_EMOTE_NAME_SET = new Set(ZONE_EMOTE_NAMES.map((n) => String(n)));
 
+// 定時清理「只增不減」的防洗版冷卻 Map(每筆只是 timestamp,但避免依不重複玩家數無限累積)。
+// TTL 30 分鐘遠大於實際冷卻(1~3 秒),過期刪除完全安全。
+const _COOLDOWN_PRUNE_TTL_MS = 30 * 60 * 1000;
+const _cooldownMapSweep = setInterval(() => {
+  const now = Date.now();
+  for (const m of [chatImageCooldown, chatTextCooldown, zoneEmoteCooldown]) {
+    for (const [k, ts] of m) if (now - (Number(ts) || 0) > _COOLDOWN_PRUNE_TTL_MS) m.delete(k);
+  }
+  for (const [k, v] of playerBattleCooldowns) {
+    const t = Number(v?.nextBattleAt) || 0;
+    if (t && now - t > _COOLDOWN_PRUNE_TTL_MS) playerBattleCooldowns.delete(k);
+  }
+}, 10 * 60 * 1000);
+_cooldownMapSweep.unref?.();
+
 // webhook 訊息 id → 發送者 discordId（給引用 @ 原留言者用；webhook 訊息本身查不到真人）
 const webMsgAuthors = new Map();
 function rememberWebMsgAuthor(messageId, discordId) {
@@ -3263,6 +3278,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // 數值完全比照 src/shared/towerConfig.js（與 DC 組隊爬塔同源）
   // ──────────────────────────────────────────────────
   const towerSessions = new Map(); // discordId -> { floor, playerHp, playerMaxHp, baseAtk, equipped, used:Set, alive, settled, startedAt }
+  // 清理閒置/殘留的爬塔 session(每筆含 equipped + inventory 快照,不清會吃記憶體)：
+  // 結束的(alive=false)直接刪;超過 30 分鐘沒動作的中途離開 session 也刪。
+  const TOWER_SESSION_TTL_MS = 30 * 60 * 1000;
+  const _towerSessionSweep = setInterval(() => {
+    const now = Date.now();
+    for (const [id, s] of towerSessions) {
+      if (!s || s.alive === false || (now - (Number(s.startedAt) || 0)) > TOWER_SESSION_TTL_MS) {
+        towerSessions.delete(id);
+      }
+    }
+  }, 10 * 60 * 1000);
+  _towerSessionSweep.unref?.();
   const TW = require("../../shared/towerConfig");
 
   async function pickTowerMonster(floor, usedNames) {
@@ -3379,6 +3406,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         towerOver = true; s.alive = false; reward = await settleTower(discordId, displayName, s);
       }
 
+      // 本次攻塔已結束 → 立刻釋放 session(內含 equipped/inventory 快照)
+      if (!s.alive) towerSessions.delete(discordId);
+
       res.json(ok({
         floor, cleared, towerOver, died,
         monsterName: monster.name, monsterImageUrl: monster.imageUrl || null,
@@ -3398,6 +3428,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (!s || !s.alive) return res.status(400).json(fail("NO_SESSION", "沒有進行中的爬塔"));
       const reward = await settleTower(discordId, displayName, s);
       s.alive = false;
+      towerSessions.delete(discordId); // 撤退即釋放 session
       res.json(ok({ retreated: true, reward }));
     } catch (err) { next(err); }
   });
