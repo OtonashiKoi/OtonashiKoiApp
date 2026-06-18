@@ -283,6 +283,7 @@
     wireWebCtrl("web-block-btn", "submitBlockWeb", "封鎖失敗");
     wireWebCtrl("web-unblock-btn", "submitUnblockWeb", "解除封鎖失敗");
     wireWebCtrl("season-reset-btn", "submitSeasonReset", "回歸賽季重製失敗");
+    wireWebCtrl("season-reset-all-btn", "submitSeasonResetAll", "全體回歸賽季重製失敗");
 
     // ── 在線網頁玩家清單:重新整理按鈕 + 每列動作按鈕(事件委派)──
     const webOnlineRefresh = document.getElementById("web-online-refresh");

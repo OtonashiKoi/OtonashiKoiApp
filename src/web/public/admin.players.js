@@ -469,6 +469,20 @@
     await loadWebOnline();
   }
 
+  // 全體回歸賽季重製(所有帳號):需輸入確認字串
+  async function submitSeasonResetAll() {
+    const box = document.getElementById("season-reset-all-result");
+    const pv = await request("/admin/season-reset-all/preview").catch(() => ({ total: "?" }));
+    const total = pv.total;
+    const ans = window.prompt(`☢️ 全體回歸賽季重製\n\n將對「全部 ${total} 位玩家」執行重製（保留鑽石/稱號/收藏，其餘全清，含拍賣與交易）。\n此操作不可復原、影響全服，執行前會自動備份。\n\n確定請輸入：RESET-ALL`);
+    if (ans !== "RESET-ALL") { if (box) box.textContent = "已取消（確認字串不符）"; return; }
+    if (box) box.textContent = "執行中…（玩家多時需稍候）";
+    const sum = await request("/admin/season-reset-all", { method: "POST", body: JSON.stringify({ confirm: "RESET-ALL" }) });
+    const msg = `✅ 全體重製完成：成功 ${sum.succeeded}/${sum.total}、失敗 ${sum.failed}；移除拍賣 ${sum.removedAuctions} 筆、交易 ${sum.removedTransactions} 筆、背包 ${sum.removedInventoryItems} 件`;
+    if (box) box.textContent = msg;
+    log(msg);
+  }
+
   // 回歸賽季重製(固定方案):只留鑽石/稱號/收藏,其餘全部重置
   async function submitSeasonReset() {
     if (!state.selectedPlayerData) throw new Error("請先選擇一位玩家");
@@ -477,12 +491,13 @@
     const titles = (Number(p.keptTitlesInBag) || 0) + (Number(p.keptTitleEquipped) || 0);
     const msg = `確定要對「${player.displayName}」執行回歸賽季重製？\n\n`
       + `保留：鑽石 ${p.keptDiamond}、稱號 ${titles} 個、收藏 ${p.keptCollectibles} 個\n`
-      + `移除：背包 ${p.removedInventoryItems} 件、金幣 ${p.goldBefore} → 0、等級 ${p.levelBefore} → 1\n\n`
+      + `移除：背包 ${p.removedInventoryItems} 件、金幣 ${p.goldBefore} → 0、等級 ${p.levelBefore} → 1\n`
+      + `拍賣上架 ${p.removedAuctions || 0} 筆、交易紀錄 ${p.removedTransactions || 0} 筆\n\n`
       + `此操作不可復原（系統會先自動備份）。`;
     if (!window.confirm(msg)) return;
     const sum = await request(`/admin/players/${encodeURIComponent(player.discordId)}/season-reset`, { method: "POST", body: "{}" });
     const t2 = (Number(sum.keptTitlesInBag) || 0) + (Number(sum.keptTitleEquipped) || 0);
-    log(`✅ 已對 ${player.displayName} 回歸賽季重製：保留鑽石 ${sum.keptDiamond}/稱號 ${t2}/收藏 ${sum.keptCollectibles}，移除背包 ${sum.removedInventoryItems} 件`);
+    log(`✅ 已對 ${player.displayName} 回歸賽季重製：保留鑽石 ${sum.keptDiamond}/稱號 ${t2}/收藏 ${sum.keptCollectibles}，移除背包 ${sum.removedInventoryItems} 件、拍賣 ${sum.removedAuctions || 0} 筆、交易 ${sum.removedTransactions || 0} 筆`);
     await loadPlayerDetail(player.discordId);
   }
 
@@ -492,6 +507,7 @@
     webOnlineAction,
     submitBroadcast,
     submitSeasonReset,
+    submitSeasonResetAll,
     loadPlayers,
     renderPlayerList,
     loadPlayerDetail,

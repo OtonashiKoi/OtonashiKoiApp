@@ -20,17 +20,19 @@ function isCollectible(it) {
   return ["collectible", "collection"].includes(String(it?.itemType || "").toLowerCase());
 }
 
-/** 重置前的完整備份(progress / wallet / 任務 / 打卡),回傳物件供寫檔保存 */
+/** 重置前的完整備份(progress / wallet / 任務 / 打卡 / 拍賣上架 / 交易),回傳物件供寫檔保存 */
 async function buildSeasonResetBackup(discordId) {
   const id = String(discordId || "").trim();
   const db = await getMongoDb();
-  const [progress, wallet, quests, checkins] = await Promise.all([
+  const [progress, wallet, quests, checkins, auctions, transactions] = await Promise.all([
     db.collection("progress").findOne({ playerId: id }),
     db.collection("wallets").findOne({ playerId: id }),
     db.collection("weeklyQuestProgress").find({ $or: [{ discordId: id }, { playerId: id }] }).toArray().catch(() => []),
-    db.collection("checkins").find({ $or: [{ discordId: id }, { playerId: id }] }).toArray().catch(() => [])
+    db.collection("checkins").find({ $or: [{ discordId: id }, { playerId: id }] }).toArray().catch(() => []),
+    db.collection("auctions").find({ sellerId: id }).toArray().catch(() => []),
+    db.collection("transactions").find({ playerId: id }).toArray().catch(() => [])
   ]);
-  return { kind: "season-reset-backup", discordId: id, at: new Date().toISOString(), progress, wallet, quests, checkins };
+  return { kind: "season-reset-backup", discordId: id, at: new Date().toISOString(), progress, wallet, quests, checkins, auctions, transactions };
 }
 
 /**
@@ -51,6 +53,12 @@ async function seasonResetPlayer(discordId, { dryRun = false } = {}) {
   const keptInv = inv.filter((it) => isTitle(it) || isCollectible(it));
   const keptTitleEq = old.equipment?.title_eq || null;
 
+  // 拍賣上架(以賣家計) + 交易紀錄,一併清掉(全新賽季)
+  const [auctionCount, transactionCount] = await Promise.all([
+    db.collection("auctions").countDocuments({ sellerId: id }).catch(() => 0),
+    db.collection("transactions").countDocuments({ playerId: id }).catch(() => 0)
+  ]);
+
   const summary = {
     discordId: id,
     keptDiamond: Number(wallet?.diamond) || 0,
@@ -58,6 +66,8 @@ async function seasonResetPlayer(discordId, { dryRun = false } = {}) {
     keptTitleEquipped: keptTitleEq ? 1 : 0,
     keptCollectibles: keptInv.filter(isCollectible).length,
     removedInventoryItems: inv.length - keptInv.length,
+    removedAuctions: auctionCount,
+    removedTransactions: transactionCount,
     goldBefore: Number(wallet?.gold) || 0,
     levelBefore: Number(old.level) || 1,
     dryRun
@@ -78,8 +88,49 @@ async function seasonResetPlayer(discordId, { dryRun = false } = {}) {
   // 任務 / 打卡進度清空(全新賽季)
   await db.collection("weeklyQuestProgress").deleteMany({ $or: [{ discordId: id }, { playerId: id }] });
   await db.collection("checkins").deleteMany({ $or: [{ discordId: id }, { playerId: id }] });
+  // 拍賣上架(賣家) + 交易紀錄清空(避免殘留指向已清空道具的上架/舊交易)
+  await db.collection("auctions").deleteMany({ sellerId: id });
+  await db.collection("transactions").deleteMany({ playerId: id });
 
   return summary;
 }
 
-module.exports = { seasonResetPlayer, buildSeasonResetBackup };
+/** 列出所有有進度資料的玩家 id */
+async function listAllPlayerIds() {
+  const db = await getMongoDb();
+  const rows = await db.collection("progress").find({}, { projection: { playerId: 1 } }).toArray();
+  return rows.map((r) => String(r.playerId || "").trim()).filter(Boolean);
+}
+
+/**
+ * 全體回歸賽季重製。逐一備份 + 重製每位玩家,回傳彙總統計。
+ * @param {{ onBackup?: (allBackups:Array)=>Promise<void>, dryRun?: boolean }} options
+ */
+async function seasonResetAllPlayers({ onBackup = null, dryRun = false } = {}) {
+  const ids = await listAllPlayerIds();
+  if (dryRun) return { total: ids.length, dryRun: true };
+
+  // 先把所有玩家備份收集起來交給呼叫端寫檔(失敗就中止,不動任何資料)
+  if (typeof onBackup === "function") {
+    const backups = [];
+    for (const id of ids) backups.push(await buildSeasonResetBackup(id));
+    await onBackup(backups);
+  }
+
+  const agg = { total: ids.length, succeeded: 0, failed: 0, removedAuctions: 0, removedTransactions: 0, removedInventoryItems: 0, errors: [] };
+  for (const id of ids) {
+    try {
+      const s = await seasonResetPlayer(id, { dryRun: false });
+      agg.succeeded += 1;
+      agg.removedAuctions += Number(s.removedAuctions) || 0;
+      agg.removedTransactions += Number(s.removedTransactions) || 0;
+      agg.removedInventoryItems += Number(s.removedInventoryItems) || 0;
+    } catch (e) {
+      agg.failed += 1;
+      if (agg.errors.length < 20) agg.errors.push({ id, message: e.message });
+    }
+  }
+  return agg;
+}
+
+module.exports = { seasonResetPlayer, buildSeasonResetBackup, listAllPlayerIds, seasonResetAllPlayers };

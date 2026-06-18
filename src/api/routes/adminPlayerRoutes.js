@@ -316,6 +316,38 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // 全體回歸賽季重製預覽:回傳會被重製的玩家總數
+  router.get("/admin/season-reset-all/preview", async (_req, res, next) => {
+    try {
+      const { seasonResetAllPlayers } = require("../../services/admin/seasonResetService");
+      const summary = await seasonResetAllPlayers({ dryRun: true });
+      res.json(ok(summary, "season reset all preview"));
+    } catch (error) { next(error); }
+  });
+
+  // 全體回歸賽季重製(高破壞性):需在 body 帶 confirm:"RESET-ALL";先寫一份全體備份才執行
+  router.post("/admin/season-reset-all", async (req, res, next) => {
+    try {
+      if (String(req.body?.confirm || "") !== "RESET-ALL") {
+        return res.status(400).json(fail("CONFIRM_REQUIRED", '需要 confirm:"RESET-ALL" 才能執行全體重製'));
+      }
+      const { seasonResetAllPlayers } = require("../../services/admin/seasonResetService");
+      const summary = await seasonResetAllPlayers({
+        dryRun: false,
+        onBackup: async (allBackups) => {
+          const fs = require("fs");
+          const path = require("path");
+          const dir = path.resolve(__dirname, "../../../backups");
+          fs.mkdirSync(dir, { recursive: true });
+          const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+          fs.writeFileSync(path.join(dir, `season-reset-ALL-${stamp}.json`),
+            JSON.stringify({ kind: "season-reset-all-backup", at: new Date().toISOString(), count: allBackups.length, players: allBackups }));
+        }
+      });
+      res.json(ok(summary, "season reset all done"));
+    } catch (error) { next(error); }
+  });
+
   // 目前正在用網頁(SSE 在線)的玩家,附帶封鎖狀態
   router.get("/admin/web-online", async (_req, res, next) => {
     try {
