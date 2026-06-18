@@ -259,6 +259,18 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // 重啟/熱更新前預告:對在線玩家彈「即將短暫斷線」輕量提示(數秒後自動消失)
+  router.post("/admin/broadcast/maintenance", (req, res, next) => {
+    try {
+      const message = String(req.body?.message || "").trim();
+      const seconds = Number(req.body?.seconds) || 0;
+      const count = typeof serviceContext._broadcastMaintenance === "function"
+        ? serviceContext._broadcastMaintenance(message, seconds)
+        : 0;
+      res.json(ok({ notified: count }, "maintenance notice sent"));
+    } catch (error) { next(error); }
+  });
+
   // 全體公告 + 重整/熱更新提示
   //   body.mode = "force"  → 立即強制重整(不問玩家)
   //   body.mode = "prompt" → 彈出「有更新,請重整/重登」視窗,玩家自己按(預設)

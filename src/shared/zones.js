@@ -19,7 +19,7 @@ const ZONE_DEFS = [
   {
     key:          "normal",
     featureKey:   "monster_zone",
-    label:        "起矢的草原",
+    label:        "起始的草原",
     emoji:        "⚔️",
     tagline:      "新手試煉，準備開打。",
     color:        0xe74c3c,

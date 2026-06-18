@@ -1781,6 +1781,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     return ids.length;
   };
 
+  // 重啟/熱更新前的「即將短暫斷線」預告:彈出輕量提示,數秒後自動消失;不強制玩家做事
+  serviceContext._broadcastMaintenance = (message = "", seconds = 0) => {
+    const { playerEventBus } = require("../../services/realtime/playerEventBus");
+    const webPresence = require("../../services/realtime/webPresence");
+    const ids = webPresence.list().map(p => p.discordId);
+    const data = { message: message || "系統熱更新中，可能短暫斷線，數秒後會自動恢復，請稍候 🙏", seconds: Number(seconds) || 0, ts: new Date().toISOString() };
+    for (const id of ids) {
+      try { playerEventBus.emit(id, { type: "maintenance_notice", data }); } catch (_) {}
+    }
+    return ids.length;
+  };
+
   // 發送系統公告到聊天大廳（Discord town_chat + SSE 直推）
   serviceContext._announceTownChat = async (message) => {
     // 1. 直接推到所有 SSE chat 客戶端（立即顯示，不等 Discord echo）
