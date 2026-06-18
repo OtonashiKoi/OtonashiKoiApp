@@ -2353,7 +2353,22 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         await serviceContext.monsterService.saveState({ ...state, activeMonsterSeq: monster.seq, currentHp: initHp }, zoneKey);
         state = { ...state, activeMonsterSeq: monster.seq, currentHp: initHp };
       }
-      
+
+      // 防「鞭屍」：非世界王的怪若已死(currentHp<=0)但還沒換下一隻(轉場/sweep 尚未收尾)，
+      // 先立刻換成下一隻活怪再打，避免一直重複攻擊同一隻 0 血屍體。
+      const _isWBZone = require("../../services/worldBoss/worldBossService").isWorldBossZone;
+      if (!_isWBZone(zoneKey) && monster && Number(state.currentHp) <= 0) {
+        try {
+          const { _doIdleRotate } = require("../../bot/handlers/monsterZoneHandlers");
+          await _doIdleRotate(serviceContext, zoneKey);
+          const rotated = await serviceContext.monsterService.getState(zoneKey);
+          if (rotated && Number(rotated.currentHp) > 0) {
+            state = rotated;
+            monster = monsters.find(m => m.seq === state.activeMonsterSeq) || monster;
+          }
+        } catch (_) { /* 換怪失敗就照原狀，至少不崩 */ }
+      }
+
       const monsterHpInitial = state.currentHp != null ? state.currentHp : monster.calc.maxHp;
 
       // Check level — 優先讀 channel layout binding 的自訂限制，fallback 到靜態預設
