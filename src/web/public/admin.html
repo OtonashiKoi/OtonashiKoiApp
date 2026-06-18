@@ -306,6 +306,29 @@
               </div>
               <div id="broadcast-result" class="hint" style="margin-top:8px;"></div>
             </div>
+
+            <div class="card" style="margin-top:16px;">
+              <h2 style="margin:0 0 4px;font-size:1.05rem;">📣 首頁公告管理</h2>
+              <p class="hint" style="margin:0 0 12px;">發布到玩家首頁的公告版位（有標題＋已讀＋點開彈窗，可附圖片）。</p>
+              <label style="display:block;margin-bottom:4px;font-size:13px;">標題</label>
+              <input id="ann-title" type="text" placeholder="例：V 朋朋與實況主角色募集" />
+              <label style="display:block;margin:10px 0 4px;font-size:13px;">內文（支援換行）</label>
+              <textarea id="ann-body" rows="6" placeholder="公告內容…"></textarea>
+              <label style="display:block;margin:10px 0 4px;font-size:13px;">圖片網址（可空）</label>
+              <input id="ann-image" type="text" placeholder="https://…（可留空）" />
+              <div style="display:flex;gap:12px;align-items:center;margin-top:10px;flex-wrap:wrap;">
+                <label style="font-size:13px;"><input id="ann-pinned" type="checkbox" /> 置頂</label>
+                <label style="font-size:13px;"><input id="ann-enabled" type="checkbox" checked /> 啟用（顯示給玩家）</label>
+                <button id="ann-create-btn" type="button" class="button primary">＋ 發布公告</button>
+              </div>
+              <div id="ann-result" class="hint" style="margin-top:8px;"></div>
+              <hr style="margin:14px 0;border-color:rgba(255,255,255,.1);" />
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <strong style="font-size:13px;">現有公告</strong>
+                <button id="ann-refresh-btn" type="button" class="button" style="padding:2px 10px;">↻ 重新整理</button>
+              </div>
+              <div id="ann-list" class="hint" style="margin-top:8px;">點「重新整理」載入</div>
+            </div>
           </section>
 
           <section id="section-player-ops" class="panel-section">

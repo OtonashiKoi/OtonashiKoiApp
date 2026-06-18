@@ -1160,6 +1160,22 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // ── 公告（首頁版位）──
+  router.get("/api/announcements", requireAuth, async (req, res, next) => {
+    try {
+      const svc = require("../../services/announcement/announcementService");
+      const list = await svc.listForPlayer(req.playerRecord.discordId);
+      res.json(ok({ announcements: list }));
+    } catch (err) { next(err); }
+  });
+  router.post("/api/announcements/:id/read", requireAuth, async (req, res, next) => {
+    try {
+      const svc = require("../../services/announcement/announcementService");
+      await svc.markRead(req.playerRecord.discordId, req.params.id);
+      res.json(ok({ read: req.params.id }));
+    } catch (err) { next(err); }
+  });
+
   // 直播頻道網址（給打卡教學「前往直播聊天室」用,與綁定同一處）
   router.get("/api/stream-channels", requireAuth, (req, res) => {
     const sm = config.streamMembership || {};

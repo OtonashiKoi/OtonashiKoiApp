@@ -469,6 +469,54 @@
     await loadWebOnline();
   }
 
+  // ── 首頁公告管理 ──
+  async function loadAnnouncements() {
+    const box = document.getElementById("ann-list");
+    if (!box) return;
+    box.textContent = "載入中…";
+    try {
+      const data = await request("/admin/announcements");
+      const list = (data && data.announcements) || [];
+      if (!list.length) { box.innerHTML = '<div style="opacity:.7;padding:6px 0;">目前沒有公告。</div>'; return; }
+      box.innerHTML = list.map((a) => {
+        const id = escapeHtml(a.id);
+        const tags = `${a.pinned ? '📌 ' : ''}${a.enabled ? '' : '<span style="color:#f87171;">[已停用] </span>'}`;
+        return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07);">
+          <div style="flex:1;min-width:0;"><strong>${tags}${escapeHtml(a.title)}</strong><br><small style="opacity:.55;">${escapeHtml((a.createdAt||'').slice(0,16).replace('T',' '))}${a.imageUrl ? ' · 含圖片' : ''}</small></div>
+          <button type="button" class="button" data-ann="toggle" data-id="${id}" data-en="${a.enabled ? '1':'0'}" style="padding:2px 8px;">${a.enabled ? '停用' : '啟用'}</button>
+          <button type="button" class="button" data-ann="del" data-id="${id}" style="padding:2px 8px;background:#7f1d1d;border-color:#b91c1c;color:#fff;">刪除</button>
+        </div>`;
+      }).join("");
+    } catch (e) { box.innerHTML = `<div style="color:#f87171;">載入失敗：${escapeHtml(e.message)}</div>`; }
+  }
+  async function createAnnouncement() {
+    const box = document.getElementById("ann-result");
+    const title = (document.getElementById("ann-title")?.value || "").trim();
+    const body = (document.getElementById("ann-body")?.value || "");
+    const imageUrl = (document.getElementById("ann-image")?.value || "").trim();
+    const pinned = !!document.getElementById("ann-pinned")?.checked;
+    const enabled = !!document.getElementById("ann-enabled")?.checked;
+    if (!title) { if (box) box.textContent = "❌ 標題不可空白"; return; }
+    if (box) box.textContent = "發布中…";
+    await request("/admin/announcements", { method: "POST", body: JSON.stringify({ title, body, imageUrl, pinned, enabled }) });
+    if (box) box.textContent = "✅ 已發布";
+    document.getElementById("ann-title").value = "";
+    document.getElementById("ann-body").value = "";
+    document.getElementById("ann-image").value = "";
+    document.getElementById("ann-pinned").checked = false;
+    await loadAnnouncements();
+    log(`已發布公告：${title}`);
+  }
+  async function announcementAction(act, id, enabled) {
+    if (act === "del") {
+      if (!window.confirm("確定刪除這則公告？")) return;
+      await request(`/admin/announcements/${encodeURIComponent(id)}`, { method: "DELETE", body: "{}" });
+    } else if (act === "toggle") {
+      await request(`/admin/announcements/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ enabled: enabled !== "1" }) });
+    }
+    await loadAnnouncements();
+  }
+
   // 全體回歸賽季重製(所有帳號):需輸入確認字串
   async function submitSeasonResetAll() {
     const box = document.getElementById("season-reset-all-result");
@@ -508,6 +556,9 @@
     submitBroadcast,
     submitSeasonReset,
     submitSeasonResetAll,
+    loadAnnouncements,
+    createAnnouncement,
+    announcementAction,
     loadPlayers,
     renderPlayerList,
     loadPlayerDetail,

@@ -278,6 +278,36 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // ── 公告管理 ──
+  router.get("/admin/announcements", async (_req, res, next) => {
+    try {
+      const svc = require("../../services/announcement/announcementService");
+      res.json(ok({ announcements: await svc.listAll() }));
+    } catch (error) { next(error); }
+  });
+  router.post("/admin/announcements", async (req, res, next) => {
+    try {
+      const svc = require("../../services/announcement/announcementService");
+      const a = await svc.create({
+        title: req.body?.title, body: req.body?.body,
+        imageUrl: req.body?.imageUrl, enabled: req.body?.enabled, pinned: req.body?.pinned
+      });
+      res.json(ok(a, "announcement created"));
+    } catch (error) { next(error); }
+  });
+  router.patch("/admin/announcements/:id", async (req, res, next) => {
+    try {
+      const svc = require("../../services/announcement/announcementService");
+      res.json(ok(await svc.update(req.params.id, req.body || {}), "announcement updated"));
+    } catch (error) { next(error); }
+  });
+  router.delete("/admin/announcements/:id", async (req, res, next) => {
+    try {
+      const svc = require("../../services/announcement/announcementService");
+      res.json(ok(await svc.remove(req.params.id), "announcement removed"));
+    } catch (error) { next(error); }
+  });
+
   // 目前封鎖名單
   router.get("/admin/web-bans", async (_req, res, next) => {
     try {

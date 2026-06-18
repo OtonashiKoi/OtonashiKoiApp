@@ -285,6 +285,22 @@
     wireWebCtrl("season-reset-btn", "submitSeasonReset", "回歸賽季重製失敗");
     wireWebCtrl("season-reset-all-btn", "submitSeasonResetAll", "全體回歸賽季重製失敗");
 
+    // 公告管理
+    wireWebCtrl("ann-create-btn", "createAnnouncement", "發布公告失敗");
+    const annRefresh = document.getElementById("ann-refresh-btn");
+    if (annRefresh) annRefresh.addEventListener("click", () => window.adminPlayers?.loadAnnouncements?.());
+    const annList = document.getElementById("ann-list");
+    if (annList) {
+      annList.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-ann]");
+        if (!btn) return;
+        btn.disabled = true;
+        try { await window.adminPlayers?.announcementAction?.(btn.dataset.ann, btn.dataset.id, btn.dataset.en); }
+        catch (err) { log(`公告操作失敗：${err.message}`); }
+        finally { btn.disabled = false; }
+      });
+    }
+
     // ── 在線網頁玩家清單:重新整理按鈕 + 每列動作按鈕(事件委派)──
     const webOnlineRefresh = document.getElementById("web-online-refresh");
     if (webOnlineRefresh) {
