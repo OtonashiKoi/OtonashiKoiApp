@@ -300,6 +300,16 @@
         finally { btn.disabled = false; }
       });
     }
+    // 公告:Discord 表情選擇器
+    const annEmojiBtn = document.getElementById("ann-emoji-btn");
+    if (annEmojiBtn) annEmojiBtn.addEventListener("click", () => window.adminPlayers?.toggleAnnEmojiPanel?.());
+    const annEmojiPanel = document.getElementById("ann-emoji-panel");
+    if (annEmojiPanel) {
+      annEmojiPanel.addEventListener("click", (e) => {
+        const img = e.target.closest("img[data-code]");
+        if (img) window.adminPlayers?.insertAnnEmoji?.(img.dataset.code);
+      });
+    }
 
     // ── 在線網頁玩家清單:重新整理按鈕 + 每列動作按鈕(事件委派)──
     const webOnlineRefresh = document.getElementById("web-online-refresh");

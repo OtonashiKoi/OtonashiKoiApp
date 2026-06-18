@@ -312,8 +312,12 @@
               <p class="hint" style="margin:0 0 12px;">發布到玩家首頁的公告版位（有標題＋已讀＋點開彈窗，可附圖片）。</p>
               <label style="display:block;margin-bottom:4px;font-size:13px;">標題</label>
               <input id="ann-title" type="text" placeholder="例：V 朋朋與實況主角色募集" />
-              <label style="display:block;margin:10px 0 4px;font-size:13px;">內文（支援換行）</label>
+              <label style="display:block;margin:10px 0 4px;font-size:13px;">內文（支援換行；可插入 Discord 自訂表情）</label>
               <textarea id="ann-body" rows="6" placeholder="公告內容…"></textarea>
+              <div style="margin-top:6px;">
+                <button id="ann-emoji-btn" type="button" class="button" style="padding:2px 10px;">😀 插入 Discord 表情</button>
+                <div id="ann-emoji-panel" style="display:none;margin-top:6px;max-height:160px;overflow-y:auto;padding:6px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(0,0,0,.25);"></div>
+              </div>
               <label style="display:block;margin:10px 0 4px;font-size:13px;">圖片網址（可空）</label>
               <input id="ann-image" type="text" placeholder="https://…（可留空）" />
               <div style="display:flex;gap:12px;align-items:center;margin-top:10px;flex-wrap:wrap;">

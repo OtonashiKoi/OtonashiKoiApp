@@ -470,6 +470,18 @@
   }
 
   // ── 首頁公告管理 ──
+  let _annCache = [];
+  let _editingAnnId = null;
+  function _annResetForm() {
+    _editingAnnId = null;
+    document.getElementById("ann-title").value = "";
+    document.getElementById("ann-body").value = "";
+    document.getElementById("ann-image").value = "";
+    document.getElementById("ann-pinned").checked = false;
+    document.getElementById("ann-enabled").checked = true;
+    const btn = document.getElementById("ann-create-btn");
+    if (btn) btn.textContent = "＋ 發布公告";
+  }
   async function loadAnnouncements() {
     const box = document.getElementById("ann-list");
     if (!box) return;
@@ -477,12 +489,14 @@
     try {
       const data = await request("/admin/announcements");
       const list = (data && data.announcements) || [];
+      _annCache = list;
       if (!list.length) { box.innerHTML = '<div style="opacity:.7;padding:6px 0;">目前沒有公告。</div>'; return; }
       box.innerHTML = list.map((a) => {
         const id = escapeHtml(a.id);
         const tags = `${a.pinned ? '📌 ' : ''}${a.enabled ? '' : '<span style="color:#f87171;">[已停用] </span>'}`;
         return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07);">
           <div style="flex:1;min-width:0;"><strong>${tags}${escapeHtml(a.title)}</strong><br><small style="opacity:.55;">${escapeHtml((a.createdAt||'').slice(0,16).replace('T',' '))}${a.imageUrl ? ' · 含圖片' : ''}</small></div>
+          <button type="button" class="button" data-ann="edit" data-id="${id}" style="padding:2px 8px;">編輯</button>
           <button type="button" class="button" data-ann="toggle" data-id="${id}" data-en="${a.enabled ? '1':'0'}" style="padding:2px 8px;">${a.enabled ? '停用' : '啟用'}</button>
           <button type="button" class="button" data-ann="del" data-id="${id}" style="padding:2px 8px;background:#7f1d1d;border-color:#b91c1c;color:#fff;">刪除</button>
         </div>`;
@@ -497,15 +511,20 @@
     const pinned = !!document.getElementById("ann-pinned")?.checked;
     const enabled = !!document.getElementById("ann-enabled")?.checked;
     if (!title) { if (box) box.textContent = "❌ 標題不可空白"; return; }
-    if (box) box.textContent = "發布中…";
-    await request("/admin/announcements", { method: "POST", body: JSON.stringify({ title, body, imageUrl, pinned, enabled }) });
-    if (box) box.textContent = "✅ 已發布";
-    document.getElementById("ann-title").value = "";
-    document.getElementById("ann-body").value = "";
-    document.getElementById("ann-image").value = "";
-    document.getElementById("ann-pinned").checked = false;
+    const payload = JSON.stringify({ title, body, imageUrl, pinned, enabled });
+    if (_editingAnnId) {
+      if (box) box.textContent = "更新中…";
+      await request(`/admin/announcements/${encodeURIComponent(_editingAnnId)}`, { method: "PATCH", body: payload });
+      if (box) box.textContent = "✅ 已更新";
+      log(`已更新公告：${title}`);
+    } else {
+      if (box) box.textContent = "發布中…";
+      await request("/admin/announcements", { method: "POST", body: payload });
+      if (box) box.textContent = "✅ 已發布";
+      log(`已發布公告：${title}`);
+    }
+    _annResetForm();
     await loadAnnouncements();
-    log(`已發布公告：${title}`);
   }
   async function announcementAction(act, id, enabled) {
     if (act === "del") {
@@ -513,8 +532,52 @@
       await request(`/admin/announcements/${encodeURIComponent(id)}`, { method: "DELETE", body: "{}" });
     } else if (act === "toggle") {
       await request(`/admin/announcements/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ enabled: enabled !== "1" }) });
+    } else if (act === "edit") {
+      const a = _annCache.find((x) => x.id === id);
+      if (!a) return;
+      _editingAnnId = id;
+      document.getElementById("ann-title").value = a.title || "";
+      document.getElementById("ann-body").value = a.body || "";
+      document.getElementById("ann-image").value = a.imageUrl || "";
+      document.getElementById("ann-pinned").checked = !!a.pinned;
+      document.getElementById("ann-enabled").checked = a.enabled !== false;
+      const btn = document.getElementById("ann-create-btn");
+      if (btn) btn.textContent = "💾 更新公告";
+      const box = document.getElementById("ann-result");
+      if (box) box.textContent = `編輯中：${a.title}（按「更新公告」儲存）`;
+      document.getElementById("ann-title").scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
     }
     await loadAnnouncements();
+  }
+  // Discord 自訂表情選擇器:點一下把 <:name:id> 插入內文游標處
+  let _annEmojisLoaded = false;
+  async function toggleAnnEmojiPanel() {
+    const panel = document.getElementById("ann-emoji-panel");
+    if (!panel) return;
+    if (panel.style.display !== "none") { panel.style.display = "none"; return; }
+    panel.style.display = "block";
+    if (_annEmojisLoaded) return;
+    panel.textContent = "載入表情中…";
+    try {
+      const data = await request("/admin/guild-emojis");
+      const emojis = (data && data.emojis) || [];
+      if (!emojis.length) { panel.textContent = "（公會沒有自訂表情，或 Bot 未連線）"; return; }
+      panel.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + emojis.map((e) =>
+        `<img src="${escapeHtml(e.url)}" title="${escapeHtml(e.name)}" data-code="${escapeHtml(e.code)}" style="width:30px;height:30px;object-fit:contain;cursor:pointer;border-radius:4px;padding:2px;background:rgba(255,255,255,.05);" />`
+      ).join("") + '</div>';
+      _annEmojisLoaded = true;
+    } catch (e) { panel.textContent = "載入失敗：" + e.message; }
+  }
+  function insertAnnEmoji(code) {
+    const ta = document.getElementById("ann-body");
+    if (!ta) return;
+    const s = ta.selectionStart ?? ta.value.length;
+    const eN = ta.selectionEnd ?? ta.value.length;
+    ta.value = ta.value.slice(0, s) + code + ta.value.slice(eN);
+    const pos = s + code.length;
+    ta.focus();
+    ta.setSelectionRange(pos, pos);
   }
 
   // 全體回歸賽季重製(所有帳號):需輸入確認字串
@@ -559,6 +622,8 @@
     loadAnnouncements,
     createAnnouncement,
     announcementAction,
+    toggleAnnEmojiPanel,
+    insertAnnEmoji,
     loadPlayers,
     renderPlayerList,
     loadPlayerDetail,

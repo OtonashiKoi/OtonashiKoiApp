@@ -278,6 +278,24 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // 公會自訂 emoji 清單(給公告編輯器插入用),回傳 Discord 插入碼 <:name:id>
+  router.get("/admin/guild-emojis", async (_req, res, next) => {
+    try {
+      const guildId = config.discord?.guildId;
+      const client = require("../../bot/runtimeContext").getBotClient();
+      if (!guildId || !client) return res.json(ok({ emojis: [] }));
+      const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
+      if (!guild) return res.json(ok({ emojis: [] }));
+      const fetched = await guild.emojis.fetch().catch(() => guild.emojis.cache);
+      const emojis = [...fetched.values()].map((e) => ({
+        name: e.name, id: e.id, animated: !!e.animated,
+        url: `https://cdn.discordapp.com/emojis/${e.id}.${e.animated ? "gif" : "png"}`,
+        code: e.animated ? `<a:${e.name}:${e.id}>` : `<:${e.name}:${e.id}>`
+      }));
+      res.json(ok({ emojis }));
+    } catch (error) { next(error); }
+  });
+
   // ── 公告管理 ──
   router.get("/admin/announcements", async (_req, res, next) => {
     try {
