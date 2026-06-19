@@ -2665,30 +2665,52 @@ async function handleEnterBattle(interaction) {
         } catch (e) {}
       }));
 
-      // ── 跨平台共通光環：本玩家若為輔助職（裝備帶 party 效果），寫入共享 activeHealerAura，
-      //    讓網頁端其他玩家也吃得到 DC 這邊的輔助職光環（網頁同樣會寫，DC 下方也會讀）。──
+      // ── 跨平台共通光環：本玩家若為輔助職（裝備帶 party 效果），寫入共享 activeHealerAuras 陣列
+      //    （與網頁同格式），讓網頁/DC 其他玩家都吃得到；非輔助職則把自己從陣列移除。
+      //    註：實際「取最高／不疊加」由 combatLoop 統一處理，這裡只負責維護提供者名單。──
       try {
         const selfRawParty = (currentSnapshot.refs || []).filter((r) => r && r.target === "party");
         const selfJobName = getJobNameFromEquipped(currentSnapshot.equipped);
+        const prevAuras = Array.isArray(battleState.activeHealerAuras)
+          ? battleState.activeHealerAuras
+          : (battleState.activeHealerAura ? [{ ...battleState.activeHealerAura }] : []);
+        let nextAuras;
         if (selfRawParty.length > 0) {
-          const auraPayload = { discordId, displayName, effects: selfRawParty, jobName: selfJobName || null };
-          battleState = { ...battleState, activeHealerAura: auraPayload };
-          await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
-        } else if (battleState.activeHealerAura?.discordId === discordId) {
-          // 本玩家已不再具備 party 光環 → 清除自己留下的光環
-          battleState = { ...battleState, activeHealerAura: null };
+          nextAuras = [...prevAuras.filter((a) => a && a.discordId !== discordId), { discordId, displayName, effects: selfRawParty, jobName: selfJobName || null }];
+        } else {
+          nextAuras = prevAuras.filter((a) => a && a.discordId !== discordId);
+        }
+        if (JSON.stringify(nextAuras) !== JSON.stringify(prevAuras)) {
+          battleState = { ...battleState, activeHealerAuras: nextAuras, activeHealerAura: null };
           await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
         }
       } catch (e) {}
 
-      // ── 共鬥光環：若存在且不在 participants 中，疊加光環效果（提供者可能來自網頁）──
-      const aura = battleState.activeHealerAura;
-      if (aura && aura.effects && aura.discordId !== discordId && !participants.includes(aura.discordId)) {
-        const auraJobName = aura.jobName || getJobNameFromEquipped(aura.equipped) || "輔助";
-        for (const e of aura.effects) {
-          partyEffects.push({ ...e, sourceName: resolveAuraSourceName(aura.displayName, aura.discordId), sourceJobName: auraJobName });
-        }
-      }
+      // ── 共鬥光環（跨平台）：讀 activeHealerAuras 陣列（含網頁玩家寫入的提供者），
+      //    把不在本場 participants 內的提供者光環依其「當前數值」縮放後加入。
+      //    是否疊加 → 否；最終由 combatLoop 對同一效果取最高。──
+      const zoneAuras = Array.isArray(battleState.activeHealerAuras)
+        ? battleState.activeHealerAuras
+        : (battleState.activeHealerAura ? [battleState.activeHealerAura] : []);
+      await Promise.all(zoneAuras.map(async (aura) => {
+        try {
+          if (!aura || !Array.isArray(aura.effects) || !aura.discordId) return;
+          // 自己與已在場參戰者，前面 participant 迴圈已算過，避免重複收集
+          if (aura.discordId === discordId || participants.includes(aura.discordId)) return;
+          const provider = await participantCache.get(aura.discordId, aura.displayName || null);
+          const auraJobName = aura.jobName || getJobNameFromEquipped(provider.equipped) || "輔助";
+          const srcName = resolveAuraSourceName(aura.displayName || provider.displayName, aura.discordId);
+          for (const r of aura.effects) {
+            if (!r || r.target !== "party") continue;
+            const scaled = scaleSupportPartyEffect(r, {
+              providerStats: provider.stats || {},
+              jobName: auraJobName,
+              equipped: provider.equipped || {}
+            });
+            partyEffects.push({ ...scaled, sourceName: srcName, sourceJobName: auraJobName });
+          }
+        } catch (e) {}
+      }));
 
       let currentProg = currentSnapshot.progress;
       // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）

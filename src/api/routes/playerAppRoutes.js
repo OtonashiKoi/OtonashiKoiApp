@@ -2448,11 +2448,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         ? freshStateForAura.activeHealerAuras
         : (freshStateForAura.activeHealerAura ? [{ ...freshStateForAura.activeHealerAura }] : []);
 
+      // 本玩家職業名（供戰報標註「提供者（職業）」用）
+      const selfJobName = equipped?.job_eq?.itemName || null;
+
       let newAuras = prevAuras;
       if (hasPartyAura) {
         // 光環職業：更新或新增本玩家的光環項目
-        newAuras = [...prevAuras.filter(a => a.discordId !== discordId), { discordId, displayName, effects: rawPartyEffs }];
-        partyEffects = partyEffs;
+        newAuras = [...prevAuras.filter(a => a.discordId !== discordId), { discordId, displayName, effects: rawPartyEffs, jobName: selfJobName }];
+        // 自身光環掛上提供者名字＋職業，讓戰報「✨ 光環加持」顯示是誰提供（而非只顯示「光環」）
+        partyEffects = partyEffs.map(eff => ({ ...eff, sourceName: displayName, sourceJobName: selfJobName }));
         selfAuraLines = partyEffs.map(eff => {
           const effName = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
           const vt = formatEffectValueText(eff.key, eff?.params);
@@ -2950,7 +2954,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         ? [...new Set(partyEffects.filter(e => e?.sourceName).map(e => e.sourceName))]
         : [];
       const auraProviderName = auraApplied
-        ? (hasPartyAura ? displayName : (_auraNames.length === 1 ? _auraNames[0] : (_auraNames.length > 1 ? "隊友" : null)))
+        ? (hasPartyAura ? displayName : (_auraNames.length >= 1 ? _auraNames.join("、") : null))
         : null;
       if (auraApplied) {
         for (const eff of partyEffects) {

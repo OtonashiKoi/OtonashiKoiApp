@@ -1356,7 +1356,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let roundPartyAgiBoostPct = 0; // 詩人 party_agi_up：影響當回合連擊率與閃避
     let roundPartyComboBoostPct = 0;
     try {
-      const partyEffects = Array.isArray(options.partyEffects) ? options.partyEffects : [];
+      // 光環不疊加:同一效果(key)只保留數值最高的提供者版本(跨 DC/網頁一致),
+      // 連帶讓下方戰報「✨ 光環加持」也只列出最高的那個來源,不會每位提供者各列一行疊加。
+      const _rawPartyEffects = Array.isArray(options.partyEffects) ? options.partyEffects : [];
+      const _bestEffByKey = new Map();
+      for (const pe of _rawPartyEffects) {
+        if (!pe || !pe.key) continue;
+        const v = Math.abs(Number(pe.params?.value ?? pe.value ?? 0));
+        const prev = _bestEffByKey.get(pe.key);
+        const pv = prev ? Math.abs(Number(prev.params?.value ?? prev.value ?? 0)) : -Infinity;
+        if (v > pv) _bestEffByKey.set(pe.key, pe);
+      }
+      const partyEffects = Array.from(_bestEffByKey.values());
       const auraDetails = new Map(); // 依 sourceName 分組光環效果
 
       for (const pe of partyEffects) {
