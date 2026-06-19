@@ -550,6 +550,11 @@ class PetService {
       this._applyHungerDecay(active);
       this._settleGathering(active);
 
+      // 飽食歸零(餓壞了)不能領取採集物:必須先餵食。網頁與 DC 共用此方法 → 兩邊規則一致。
+      if ((Number(active.satiety) || 0) <= 0) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "寵物餓壞了，餵飽後才能領取採集物 🍖", 400);
+      }
+
       const items = Array.isArray(active.accruedItems) ? active.accruedItems : [];
       if (items.length === 0) {
         // 沒有可領取的，仍以 CAS 寫回（settle/飽食可能有變動）；失敗就重試
