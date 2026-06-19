@@ -129,12 +129,31 @@ function createMongoRepositories() {
         return (await collection("players")).findOne({ discordId });
       },
       async findByExternalId(platform, platformUserId) {
-        const binding = await repos.streamAccountBindingRepository.findByPlatformAndUserId(platform, platformUserId).catch(() => null);
-        if (binding?.discordId) {
-          const matched = await repos.playerRepository.findByDiscordId(binding.discordId);
-          if (matched) return matched;
+        // 格式容錯：OneComme 直播留言帶「tw-/yt-」前綴，網頁 OAuth 綁定存純 ID（無前綴），
+        // 兩種格式必須互相比對得到，否則網頁綁定的人在直播打卡/抖內會配對不到（靜默失敗）。
+        const raw = String(platformUserId || "").trim();
+        if (!raw) return null;
+        const bare = raw.replace(/^(tw-|twitch-|yt-|youtube-)/i, "");
+        const idCandidates = [...new Set(
+          [raw, bare, `tw-${bare}`, `twitch-${bare}`, `yt-${bare}`, `youtube-${bare}`].filter(Boolean)
+        )];
+        // 來源沒報平台（unknown）時，twitch / youtube 都試；同一 bare id 跨平台不可能撞號，無誤判風險。
+        const platformCandidates = (platform && platform !== "unknown") ? [platform] : ["twitch", "youtube"];
+        for (const p of platformCandidates) {
+          for (const id of idCandidates) {
+            const binding = await repos.streamAccountBindingRepository.findByPlatformAndUserId(p, id).catch(() => null);
+            if (binding?.discordId) {
+              const matched = await repos.playerRepository.findByDiscordId(binding.discordId);
+              if (matched) return matched;
+            }
+          }
         }
-        return (await collection("players")).findOne({ [`externalIds.${platform}`]: platformUserId });
+        // 後備：舊資料把外部 ID 內嵌在玩家文件 externalIds.<platform>
+        for (const p of platformCandidates) {
+          const m = await (await collection("players")).findOne({ [`externalIds.${p}`]: { $in: idCandidates } });
+          if (m) return m;
+        }
+        return null;
       },
       async save(player) {
         await (await collection("players")).updateOne(
