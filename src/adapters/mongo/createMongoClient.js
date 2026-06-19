@@ -36,6 +36,9 @@ async function ensureIndexes(db) {
           }
         }
       ),
+      // TTL:打怪相關高頻紀錄(掛 expireAt 的)到期自動刪除,避免 transactions 無限膨脹。
+      // 只有帶 expireAt 欄位的文件會被清,其他交易(賭場/商店/拍賣…)不受影響、永久保留。
+      db.collection("transactions").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 }),
       db.collection("adminActionLogs").createIndex({ createdAt: -1 }),
       db.collection("checkins").createIndex({ discordId: 1, occurredAt: -1 }),
       db.collection("weeklyQuestProgress").createIndex({ discordId: 1, cadence: 1, periodKey: 1 }, { unique: true }),
