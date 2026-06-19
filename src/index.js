@@ -55,6 +55,16 @@ async function bootstrap() {
       console.warn("[BOOT] API_ONLY=1 → 跳過 loginBot，Discord client 不會連線 gateway（避免搶 token）");
     }
 
+    // 輕量記憶體監控:每 5 分鐘印 RSS / heap,方便觀察是否有洩漏(配合 PM2 max_memory_restart 防 OOM)
+    const _memTimer = setInterval(() => {
+      try {
+        const m = process.memoryUsage();
+        const mb = (n) => Math.round(n / 1048576);
+        console.log(`[Mem] rss=${mb(m.rss)}MB heapUsed=${mb(m.heapUsed)}/${mb(m.heapTotal)}MB ext=${mb(m.external)}MB`);
+      } catch (_) { /* noop */ }
+    }, 5 * 60 * 1000);
+    _memTimer.unref?.();
+
     const app = createApiServer(client);
     app.listen(config.api.port, () => {
       console.log(`[API] listening on port ${config.api.port}${apiOnly ? " (API_ONLY mode)" : ""}`);

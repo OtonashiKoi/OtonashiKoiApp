@@ -17,7 +17,10 @@ module.exports = {
       cwd: ".",
       autorestart: true,
       watch: false,
-      max_restarts: 10,
+      // 記憶體逼近上限就先乾淨重啟,趕在硬 OOM 崩潰前,避免程序死掉卡住
+      max_memory_restart: "800M",
+      // 提高重啟容忍度:避免短時間內幾次崩潰就被 PM2 放棄(造成服務一直躺著)
+      max_restarts: 50,
       min_uptime: "10s",
       cron_restart: "0 18 * * *",
       env_file: ".env",
