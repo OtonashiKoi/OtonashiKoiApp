@@ -998,6 +998,35 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       }
 
+      // 測試站專屬登入閘（STAGING_ONLY_ADMIN_SS=1）：只放行 管理員 或 SS 階。
+      // 註：測試站跑 API_ONLY，Discord bot 不連線，上面的公會身分組閘會 fallback 放行，
+      //     所以這裡改用「不依賴 bot」的方式判定：設定檔 adminUserIds + DB 的 playerTier + 環境白名單。
+      if (process.env.STAGING_ONLY_ADMIN_SS === "1") {
+        let allow = false;
+        try {
+          const extraAllow = new Set(String(process.env.STAGING_EXTRA_ALLOW || "").split(/[,\s]+/).filter(Boolean));
+          if (extraAllow.has(discordId)) allow = true;
+          if (!allow) {
+            const access = await serviceContext.accessControlService.getAccessControl().catch(() => null);
+            const adminUserIds = new Set([...(access?.discord?.adminUserIds || [])].map(String));
+            if (adminUserIds.has(String(discordId))) allow = true;
+          }
+          if (!allow) {
+            const prog = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
+            if (String(prog?.playerTier || "").toUpperCase() === "SS") allow = true;
+          }
+        } catch (e) {
+          console.warn("[Staging] 登入閘判定失敗:", e.message);
+        }
+        if (!allow) {
+          return res.status(403).json({
+            status: "error", code: "STAGING_FORBIDDEN",
+            message: "🔒 測試站僅開放管理員與 SS 階玩家登入。"
+          });
+        }
+        console.log(`[Staging] 放行登入: ${displayName} (${discordId})`);
+      }
+
       // Ensure player profile exists before returning a JWT.
       await serviceContext.playerService.ensurePlayer(discordId, displayName);
 
