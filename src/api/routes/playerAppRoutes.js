@@ -1797,6 +1797,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     return ids.length;
   };
 
+  // 世界王開戰：跨平台通知所有在線網頁玩家「誰開始挑戰世界王」。
+  // 不論從 web 或 DC 開打都會呼叫此函式（與 Discord 頻道公告同步），讓沒看 DC 的網頁玩家也收到。
+  // 走既有 notify 通道（SSE 即時 + 佇列備援），前端通知中心直接吃，不需改前端。
+  serviceContext._broadcastWorldBossStart = (monsterName = "", starterName = "", starterId = "") => {
+    const { playerEventBus } = require("../../services/realtime/playerEventBus");
+    const webPresence = require("../../services/realtime/webPresence");
+    const ids = webPresence.list().map((p) => p.discordId).filter((id) => id && id !== String(starterId));
+    const notif = { type: "system", title: "⚔️ 世界王開戰", message: `${starterName || "有玩家"} 開始挑戰世界王 ${monsterName}！快去加入戰鬥 ⚔️`, kind: "info", ts: Date.now() };
+    for (const id of ids) {
+      try { enqueueNotif(id, notif); } catch (_) {}
+      try { playerEventBus.emit(id, { type: "notify", data: notif }); } catch (_) {}
+    }
+    return ids.length;
+  };
+
   // 發送系統公告到聊天大廳（Discord town_chat + SSE 直推）
   serviceContext._announceTownChat = async (message) => {
     // 1. 直接推到所有 SSE chat 客戶端（立即顯示，不等 Discord echo）
@@ -2624,6 +2639,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const startRes = wbSvc ? await wbSvc.startBossBattleIfNeeded().catch(() => null) : null;
           const justStarted = !!startRes?.justStarted;
           if (justStarted) {
+            // 跨平台：通知所有在線網頁玩家「誰開始挑戰世界王」（DC 端由下方頻道公告涵蓋）
+            try { serviceContext._broadcastWorldBossStart(monster.name, displayName, discordId); } catch (_) {}
             if (discordClient?.isReady?.()) {
               const alarmRoleId = require("../../config").discord?.worldBossAlarmRoleId;
               const alarmTag = alarmRoleId ? `\n<@&${alarmRoleId}> 世界王鬧鐘響囉！` : "";

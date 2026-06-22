@@ -2528,6 +2528,10 @@ async function handleEnterBattle(interaction) {
         try {
           const { getBotClient } = require("../runtimeContext");
           const botClient = getBotClient();
+          // 跨平台：DC 開王時也通知所有在線網頁玩家「誰開始挑戰世界王」
+          if (startRes?.justStarted) {
+            try { sc._broadcastWorldBossStart?.(battleMonster.name, displayName, discordId); } catch (_) {}
+          }
           if (startRes?.justStarted && botClient?.isReady()) {
             const chatChannel = await botClient.channels.fetch("1498608950671839263").catch(() => null);
             if (chatChannel?.isTextBased?.()) {
