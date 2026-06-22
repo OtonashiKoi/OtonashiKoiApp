@@ -1393,6 +1393,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId, displayName } = req.playerRecord;
       const { uuid } = req.params;
       const result = await serviceContext.shopService.useItem(discordId, uuid, displayName);
+      // 開箱成功 → 與 DC 端一致發 Discord 公告（網頁開箱原本漏發此通知）。失敗不影響開箱結果。
+      if (result?.chestReward) {
+        try { require("../../bot/playerPanel")._announceChestOpen(displayName, result.chestReward); } catch (_) { /* 公告失敗不影響開箱 */ }
+      }
       res.json(ok(result));
     } catch (err) {
       next(err);

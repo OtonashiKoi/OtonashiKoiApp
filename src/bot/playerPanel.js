@@ -3521,4 +3521,5 @@ module.exports = {
   handleEnhanceEntry,
   handleEnhanceSelect,
   handleModal,
+  _announceChestOpen, // 供網頁開箱路由共用，與 DC 端發同一則開箱公告
 };
