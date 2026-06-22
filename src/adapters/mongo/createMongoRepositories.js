@@ -921,7 +921,8 @@ function createMongoRepositories() {
       async appendRound(round) {
         await (await collection("casinoRounds")).updateOne(
           { roundId: round.roundId },
-          { $set: { ...round, createdAt: new Date().toISOString() } },
+          // expireAt：賭場局紀錄保留 30 天後由 TTL 索引自動刪除，防無限膨脹(每天約 700 筆)。
+          { $set: { ...round, createdAt: new Date().toISOString(), expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } },
           { upsert: true }
         );
       },
