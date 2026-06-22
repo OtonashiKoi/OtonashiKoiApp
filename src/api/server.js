@@ -26,6 +26,17 @@ const config = require("../config");
 function createApiServer(discordClient) {
   const app = express();
 
+  // www → 裸網域 301 轉址:避免玩家黏在 www.otonashikoi.org(頁面開得起來但 API 被 CORS 擋)。
+  // www 與裸網域都經 cloudflared 進到同一個 Express,在最前面攔 Host=www.* 的請求轉回裸網域 https。
+  // 只命中 www.* 前綴,不影響裸網域 / staging(test.) / localhost。
+  app.use((req, res, next) => {
+    const host = String(req.headers.host || "").toLowerCase();
+    if (host.startsWith("www.")) {
+      return res.redirect(301, `https://${host.slice(4)}${req.originalUrl}`);
+    }
+    next();
+  });
+
   const allowedOrigins = config.api.allowedOrigins || [];
   // PUBLIC_BASE_URL 自動加入 allow list（後端自己對外的 URL）
   const publicBaseOrigin = (() => {
