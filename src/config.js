@@ -42,7 +42,7 @@ const config = {
   api: {
     port: Number(process.env.API_PORT || 5566), // 監聽埠號
     adminPassword: process.env.ADMIN_PASSWORD || "admin123", // 管理後台密碼
-    jwtSecret: process.env.JWT_SECRET || "super-secret-jwt-key", // JWT 簽章密鑰(集中來源)
+    jwtSecret: process.env.JWT_SECRET, // JWT 簽章密鑰(集中來源)
     allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS), // CORS 允許的來源，逗號分隔
     publicBaseUrl: process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || ""
   },

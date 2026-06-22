@@ -16,7 +16,7 @@ function createPlayerIdleRoutes(serviceContext) {
       return;
     }
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "super-secret-jwt-key");
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.playerRecord = decoded;
       next();
     } catch (_) {

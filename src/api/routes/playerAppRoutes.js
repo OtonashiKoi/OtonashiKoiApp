@@ -185,7 +185,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         discordName: String(payload?.discordName || "").trim(),
         purpose: "discord-binding-audit"
       },
-      process.env.JWT_SECRET || "super-secret-jwt-key",
+      process.env.JWT_SECRET,
       { expiresIn: DISCORD_AUTH_STATE_TTL }
     );
   }
@@ -193,7 +193,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   function verifyDiscordAuthState(token) {
     return jwt.verify(
       String(token || ""),
-      process.env.JWT_SECRET || "super-secret-jwt-key"
+      process.env.JWT_SECRET
     );
   }
 
@@ -1002,7 +1002,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       await serviceContext.playerService.ensurePlayer(discordId, displayName);
 
       // Issue JWT for the web app session.
-      const token = jwt.sign({ discordId, displayName }, process.env.JWT_SECRET || "super-secret-jwt-key", { expiresIn: "7d" });
+      const token = jwt.sign({ discordId, displayName }, process.env.JWT_SECRET, { expiresIn: "7d" });
       res.json(ok({ token, discordId, displayName }));
 
     } catch (err) {
@@ -1271,7 +1271,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     const token = String(req.query.token || "").trim();
     let playerRecord;
     try {
-      playerRecord = jwt.verify(token, process.env.JWT_SECRET || "super-secret-jwt-key");
+      playerRecord = jwt.verify(token, process.env.JWT_SECRET);
     } catch (_) {
       return res.status(401).json({ status: "error", message: "Invalid or expired token" });
     }
@@ -1941,7 +1941,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const token = req.query.token || "";
       if (token) {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "super-secret-jwt-key");
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         discordId = decoded.discordId || null;
       }
     } catch (_) {}
@@ -1976,7 +1976,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // 網址：/api/chat/overlay-stream?key=密碼。密碼錯誤回 401，不外洩留言。
   router.get("/api/chat/overlay-stream", (req, res) => {
     const chatOverlayHub = require("../../services/chat/chatOverlayHub");
-    const expected = process.env.CHAT_OVERLAY_PASSWORD || "a65194702A";
+    const expected = process.env.CHAT_OVERLAY_PASSWORD;
     const key = String(req.query.key || "");
     if (!expected || key !== expected) {
       return res.status(401).json(fail("UNAUTHORIZED", "聊天室 overlay 密碼錯誤"));

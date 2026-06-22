@@ -17,7 +17,7 @@ function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ status: "error", message: "Missing token" });
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "super-secret-jwt-key");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     // 被管理員封鎖網頁使用權的玩家 → 一律擋下（回 403，前端清 token 跳登入）
     if (isBlocked(decoded?.discordId)) {
       return res.status(403).json({ status: "error", code: "WEB_BLOCKED", message: "你的帳號已被管理員封鎖網頁使用權限。" });

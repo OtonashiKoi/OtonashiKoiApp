@@ -207,7 +207,7 @@ function createAdminWeeklyQuestRoutes(serviceContext) {
     const token = authHeader.replace("Bearer ", "");
     if (!token) return res.status(401).json(fail("UNAUTHORIZED", "Missing token"));
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "super-secret-jwt-key");
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.playerRecord = decoded;
       next();
     } catch {
