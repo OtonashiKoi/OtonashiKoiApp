@@ -10,7 +10,7 @@ const { calcPlayerStats } = require("../shared/combatStats");
 
 const LEFT_SLOTS  = ["head_top", "armor",   "weapon",  "garment",     "accessory_l"];
 const RIGHT_SLOTS = ["head_mid", "head_low", "shield",  "shoes",       "accessory_r"];
-const COL3_SLOTS  = ["title_eq", "job_eq",  "special_1", "special_2", "special_3"];
+const COL3_SLOTS  = ["title_eq", "job_eq",  "special_1", "special_2", "special_3", "anchor"];
 
 const SLOT_LABELS = {
   head_top:    "頭上",     head_mid:    "頭中",
@@ -20,7 +20,8 @@ const SLOT_LABELS = {
   accessory_l: "飾品左",   accessory_r: "飾品右",
   title_eq:    "稱號",     job_eq:      "職業",
   special:     "怪物卡",
-  special_1:   "卡①",     special_2:   "卡②",     special_3:   "卡③"
+  special_1:   "卡①",     special_2:   "卡②",     special_3:   "卡③",
+  anchor:      "錨點"
 };
 
 const TIER_COLORS = {
@@ -296,7 +297,7 @@ async function renderEquipmentCard({ equipped, avatarUrl, publicDir, progress, p
 
   // 稱號 / 職業 / 卡①②③ 五個 64×64 徽章
   const badgeW = 60, badgeH = 60, badgeGap = 10;
-  const badgeRowW = 5 * badgeW + 4 * badgeGap;
+  const badgeRowW = COL3_SLOTS.length * badgeW + (COL3_SLOTS.length - 1) * badgeGap;
   const badgeStartX = COL_CENTER_X + (COL_CENTER_W - badgeRowW) / 2;
   const badgeY = jobY + 18;
 

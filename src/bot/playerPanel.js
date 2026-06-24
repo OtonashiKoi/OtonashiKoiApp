@@ -593,7 +593,7 @@ async function handleProfile(interaction) {
   const SLOT_ICONS = {
     weapon: "⚔️", shield: "🛡️", armor: "🥋", head_top: "🪖", head_mid: "🎭",
     head_low: "😷", garment: "🧣", shoes: "👟", accessory_l: "💍", accessory_r: "💍",
-    title_eq: "🏅", job_eq: "📖", special_1: "✨", special_2: "✨", special_3: "✨"
+    title_eq: "🏅", job_eq: "📖", special_1: "✨", special_2: "✨", special_3: "✨", anchor: "⚓"
   };
   const ALL_SLOTS = [...EQ_LEFT_SLOTS, ...EQ_RIGHT_SLOTS, ...EQ_COL3_SLOTS];
   const standardParts = ALL_SLOTS
@@ -918,7 +918,7 @@ function buildInventoryRow(e, idx) {
 const EQ_SPECIAL_SLOTS = new Set(EQ_COL3_SLOTS);
 const EQ_STANDARD_SLOTS = new Set([...EQ_LEFT_SLOTS, ...EQ_RIGHT_SLOTS]);
 const EQ_WEAPON_LIKE_SLOTS = new Set(["weapon", "shield"]);
-const EQ_SORT_ORDER = ["weapon","shield","head_top","head_mid","head_low","armor","garment","shoes","accessory_l","accessory_r","special_1","special_2","special_3"];
+const EQ_SORT_ORDER = ["weapon","shield","head_top","head_mid","head_low","armor","garment","shoes","accessory_l","accessory_r","special_1","special_2","special_3","anchor"];
 const EQ_SORT_ORDER_MAP = EQ_SORT_ORDER.reduce((acc, slot, idx) => ({ ...acc, [slot]: idx }), {});
 const BACKPACK_MAIN_TABS = [
   { tab: "item", label: "🎮 道具" },
@@ -1519,21 +1519,22 @@ function buildEquipmentViewPayload({ progress, player, wallet, imgBuffer, notice
   const equipped = progress?.equipment || {};
   const activePreset = progress?.activePreset || "A";
 
-  const rows = EQ_LEFT_SLOTS.map((leftSlot, i) => {
-    const rightSlot = EQ_RIGHT_SLOTS[i];
-    const col3Slot  = EQ_COL3_SLOTS[i];
-    const makeSlotBtn = (slot) => {
-      const item = equipped[slot];
-      const label = item ? (item.itemName || item.name || '').slice(0, 20) : EQ_SLOT_LABELS[slot];
-      return new ButtonBuilder()
-        .setCustomId(`eq_btn:${slot}`)
-        .setLabel(label)
-        .setStyle(item ? ButtonStyle.Success : ButtonStyle.Secondary);
-    };
-    return new ActionRowBuilder().addComponents(
-      makeSlotBtn(leftSlot), makeSlotBtn(rightSlot), makeSlotBtn(col3Slot)
-    );
-  });
+  const makeSlotBtn = (slot) => {
+    const item = equipped[slot];
+    const label = item ? (item.itemName || item.name || '').slice(0, 20) : (EQ_SLOT_LABELS[slot] || slot);
+    return new ButtonBuilder()
+      .setCustomId(`eq_btn:${slot}`)
+      .setLabel(label)
+      .setStyle(item ? ButtonStyle.Success : ButtonStyle.Secondary);
+  };
+  const rows = EQ_LEFT_SLOTS.map((leftSlot, i) => new ActionRowBuilder().addComponents(
+    makeSlotBtn(leftSlot), makeSlotBtn(EQ_RIGHT_SLOTS[i]), makeSlotBtn(EQ_COL3_SLOTS[i])
+  ));
+  // COL3 超出列數的槽位(如錨點,第6個)塞進最後一列當額外按鈕——
+  // Discord 一則訊息最多 5 個 ActionRow,不能再開新列,故併入最後一列(單列最多 5 顆)。
+  for (let i = EQ_LEFT_SLOTS.length; i < EQ_COL3_SLOTS.length; i++) {
+    rows[rows.length - 1].addComponents(makeSlotBtn(EQ_COL3_SLOTS[i]));
+  }
 
   const payload = { components: rows, flags: MessageFlags.Ephemeral };
   if (imgBuffer) {
