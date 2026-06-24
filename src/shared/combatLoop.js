@@ -902,6 +902,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 裝備被動的 final_damage_up/down（含 zone 條件，例：S 龍系武器「龍族之領/龍王巢穴 +20% 屠龍特攻」）的合計倍率，
   // 在所有計算(防禦/爆擊/減傷)之後對最終傷害整體乘上。（圖鑑加成不在此，維持原本在 conditionalBonusMultiplier）
   let equipZoneFinalDmgMult = 1;
+  // 逐回合縮放的 final_damage 效果（傳說裝「驟（前置）/滯（後置）」用）：
+  // 不折進靜態 equipZoneFinalDmgMult，改成每回合依回合數即時計算（base 帶正負號，每回合 +ramp / −decay，夾在 [min,max]）。
+  const roundScaledFinalDmg = [];
+  // 骰・命運之輪:方差大爆(放棄一般暴擊,改 LUK 縮放的低機率超高倍)。null = 未裝。
+  let varianceCrit = null;
+  const roundScaleMult = (rnd) => {
+    let m = 1;
+    for (const rs of roundScaledFinalDmg) {
+      let v = rs.base + rs.step * (Math.max(1, rnd) - 1);
+      v = Math.max(rs.minValue, Math.min(rs.maxValue, v));
+      m *= v >= 0 ? (1 + v / 100) : (1 - Math.min(95, Math.abs(v)) / 100);
+    }
+    return m;
+  };
   try {
     if (options.equipped) {
       // 帶上 zone：讓「限定龍族之領/龍王巢穴」之類的 zone 條件能被正確判定（context.zone 由戰鬥端傳入）
@@ -918,8 +932,27 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         options.playerActiveEffects = options.playerActiveEffects.filter((e) => e && e.sourceType !== "equipment_passive");
         for (const ep of allEquipmentEffects) {
           if (!ep || !ep.key) continue;
+          // 骰・命運之輪:登記方差大爆參數(每點 LUK 的大爆機率% + 倍率),實際擲骰在傷害結算處
+          if (ep.key === "variance_crit") {
+            varianceCrit = {
+              chancePerLuk: Number(ep.params?.chancePerLuk) || 0.3,
+              mult: Number(ep.params?.mult) || 4,
+            };
+            continue;
+          }
           // final_damage_up/down：折進 equipZoneFinalDmgMult（稍後乘進玩家傷害），讓裝備被動的最終傷害%實際生效
-          if (ep.key === "final_damage_up") { equipZoneFinalDmgMult *= (1 + Math.abs(Number(ep.params?.value) || 0) / 100); }
+          const _fp = ep.params || {};
+          const _isRoundScaled = (ep.key === "final_damage_up" || ep.key === "final_damage_down") && (_fp.decayPerRound != null || _fp.rampPerRound != null);
+          if (_isRoundScaled) {
+            // 逐回合縮放：用「帶正負號的 value」當起點，每回合 +rampPerRound / −decayPerRound，夾在 [minValue,maxValue]
+            roundScaledFinalDmg.push({
+              base: Number(_fp.value) || 0,
+              step: (Number(_fp.rampPerRound) || 0) - (Number(_fp.decayPerRound) || 0),
+              minValue: _fp.minValue != null ? Number(_fp.minValue) : -95,
+              maxValue: _fp.maxValue != null ? Number(_fp.maxValue) : 1000,
+            });
+          }
+          else if (ep.key === "final_damage_up") { equipZoneFinalDmgMult *= (1 + Math.abs(Number(ep.params?.value) || 0) / 100); }
           else if (ep.key === "final_damage_down") { equipZoneFinalDmgMult *= (1 - Math.min(95, Math.abs(Number(ep.params?.value) || 0)) / 100); }
           if (STAT_FOLDED_KEYS.has(ep.key)) continue;
           // 整場戰鬥都有效（不設過期回合）
@@ -2578,6 +2611,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         // Crit check
         let isCrit = false;
+        let isBigCrit = false; // 骰・命運之輪:本擊是否觸發方差大爆
 
         let wasBlocked = false;
         let blockNote = "";
@@ -2616,12 +2650,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (adjustedMCalc.damageTakenMultiplier > 1) {
           finalDamage = Math.max(1, Math.round(finalDamage * adjustedMCalc.damageTakenMultiplier));
         }
+        // 骰・命運之輪:方差大爆 — 一般暴擊已由 crit_rate_down 關閉,改用 LUK 縮放的低機率超高倍
+        if (varianceCrit && !isCrit && finalDamage > 0) {
+          const bigChance = (pStats.luk || 0) * varianceCrit.chancePerLuk;
+          if (Math.random() * 100 < bigChance) {
+            finalDamage = Math.max(1, Math.round(finalDamage * varianceCrit.mult));
+            isBigCrit = true;
+          }
+        }
         if (monsterActiveEffects.some(e => e.key === 'invincible_short' && effectIsActive(e, round))) {
           finalDamage = 0;
         }
 
         // 屠龍特攻等裝備「最終傷害%」：在防禦/爆擊/減傷全部算完後，對最終傷害整體乘上倍率（= 總傷害 ×120%）
-        if (equipZoneFinalDmgMult !== 1 && finalDamage > 0) finalDamage = Math.max(1, Math.round(finalDamage * equipZoneFinalDmgMult));
+        { const _ezm = equipZoneFinalDmgMult * roundScaleMult(round); if (_ezm !== 1 && finalDamage > 0) finalDamage = Math.max(1, Math.round(finalDamage * _ezm)); }
 
         // 武器主屬性追加傷害：終傷全部算完後，額外加上「武器主屬性 × 1.5」固定點數（不被防禦扣，補強物理）
         if (finalDamage > 0) finalDamage += weaponMainBonus;
@@ -3232,7 +3274,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const finalDef = Math.max(0, effectiveDef * (1 - counterBypassPct / 100));
             const conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
             const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * playerAttackLevelMult));
-            const counterDmg = Math.max(1, Math.round(rollDmg(applyDefense(counterBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk)) * equipZoneFinalDmgMult)) + weaponMainBonus;
+            const counterDmg = Math.max(1, Math.round(rollDmg(applyDefense(counterBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk)) * (equipZoneFinalDmgMult * roundScaleMult(round)))) + weaponMainBonus;
             mHp -= counterDmg;
             totalDamage += counterDmg;
             log.push(`🏹 **閃避反擊**！你趁隙還擊，對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -3331,7 +3373,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const isCrit = (counterAtkTier === 'perfect') || (Math.random() * 100 < pStats.crit);
         if (isCrit) dmg = Math.round(rollDmg(applyDefense(counterBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk)) * 2 * tierCritDamageMultiplier);
         if (adjustedMCalc.damageTakenMultiplier > 1) dmg = Math.max(1, Math.round(dmg * adjustedMCalc.damageTakenMultiplier));
-        if (equipZoneFinalDmgMult !== 1) dmg = Math.max(1, Math.round(dmg * equipZoneFinalDmgMult));
+        { const _ezm = equipZoneFinalDmgMult * roundScaleMult(round); if (_ezm !== 1) dmg = Math.max(1, Math.round(dmg * _ezm)); }
 
         let tierNote = "";
         if (counterAtkTier === 'great') tierNote = "⚡大成功 ";
