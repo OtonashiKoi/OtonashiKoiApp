@@ -76,11 +76,11 @@ function createTowerPartyRooms(serviceContext) {
     } : null;
   }
 
-  async function buildMember(discordId) {
+  async function buildMember(discordId, displayName) {
     const p = await tower().loadMemberData(discordId);
     if (!p) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到玩家資料", 404);
     return {
-      discordId, name: p.name, level: p.level,
+      discordId, name: displayName || p.name || "冒險者", level: p.level,
       stats: p.stats, equipped: p.equipped, inventory: p.inventory,
       activeEffects: p.activeEffects, towerRecord: p.towerRecord, job: p.job,
       currentHp: 0, maxHp: 0,
@@ -96,9 +96,9 @@ function createTowerPartyRooms(serviceContext) {
   const normPw = (pw) => String(pw || "").trim().slice(0, 20);
 
   // ── 大廳 ───────────────────────────────────────────
-  async function createRoom(discordId, password) {
+  async function createRoom(discordId, displayName, password) {
     if (playerRoom.has(discordId)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "你已在一個爬塔房內,請先離開", 400);
-    const member = await buildMember(discordId);
+    const member = await buildMember(discordId, displayName);
     assertLevel(member);
     let roomId; do { roomId = genRoomId(); } while (rooms.has(roomId));
     const room = {
@@ -111,14 +111,14 @@ function createTowerPartyRooms(serviceContext) {
     return roomView(room, discordId);
   }
 
-  async function joinRoom(discordId, roomId, password) {
+  async function joinRoom(discordId, displayName, roomId, password) {
     const room = rooms.get(String(roomId || "").toUpperCase().trim());
     if (!room) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該房間(房號是否正確?)", 404);
     if (room.status !== "lobby") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "該隊伍已經開始攻塔,無法加入", 400);
     if (room.password && room.password !== normPw(password)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "房間密碼錯誤", 403);
     if (room.members.length >= TW.TOWER_MAX_MEMBERS) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `隊伍已滿(最多 ${TW.TOWER_MAX_MEMBERS} 人)`, 400);
     if (playerRoom.has(discordId)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "你已在一個爬塔房內,請先離開", 400);
-    const member = await buildMember(discordId);
+    const member = await buildMember(discordId, displayName);
     assertLevel(member);
     room.members.push(member); playerRoom.set(discordId, roomId);
     room.lastActiveAt = Date.now();
