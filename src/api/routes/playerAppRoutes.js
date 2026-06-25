@@ -3539,6 +3539,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.post("/api/tower/party/kick", requireAuth, async (req, res, next) => {
     try { res.json(ok(towerParty.kickMember(req.playerRecord.discordId, req.body?.targetId))); } catch (err) { _tpErr(res, err, next); }
   });
+  router.get("/api/tower/party/items", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.listMyItems(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/use-item", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.usePartyItem(req.playerRecord.discordId, req.body?.itemId, req.body?.targetId))); } catch (err) { _tpErr(res, err, next); }
+  });
   router.post("/api/tower/party/leave", requireAuth, async (req, res, next) => {
     try { res.json(ok(towerParty.leaveRoom(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
   });

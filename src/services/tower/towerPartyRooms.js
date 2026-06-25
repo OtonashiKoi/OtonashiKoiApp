@@ -210,6 +210,9 @@ function createTowerPartyRooms(serviceContext) {
       room.lastFloorResult = {
         floor, monsterName: monster.name, survived: fr.survived, monsterKilled: fr.monsterKilled,
         members: room.members.map((m) => ({ name: m.name, hp: Math.max(0, Math.round(m.currentHp || 0)), maxHp: Math.round(m.maxHp || 0), alive: (m.currentHp || 0) > 0 })),
+        memberLogs: tower().compactTowerMemberLogs(fr.memberLogs || [], 12), // 戰報(逐員行動 log)
+        summary: fr.summary || null,
+        memberDamage: Array.isArray(fr.memberDamage) ? fr.memberDamage : [],
       };
 
       if (fr.monsterKilled) {
@@ -262,6 +265,82 @@ function createTowerPartyRooms(serviceContext) {
     return await finish(room, true);
   }
 
+  // ── 爬塔道具(回復/復活):層與層之間使用 ──────────────
+  async function listMyItems(discordId) {
+    if (!playerRoom.has(discordId)) return [];
+    const prog = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
+    const POT = tower().TOWER_POTION_IDS || {};
+    const merged = new Map();
+    for (const e of (prog?.inventory || [])) {
+      const info = POT[e.itemId];
+      if (!info) continue;
+      const cnt = Math.max(1, Number(e.stackCount) || 1);
+      const cur = merged.get(e.itemId);
+      if (cur) cur.count += cnt;
+      else merged.set(e.itemId, {
+        itemId: e.itemId, name: info.name, count: cnt,
+        kind: info.effect.type === "tower_revive_pct" ? "revive" : "heal",
+        effectType: info.effect.type, value: info.effect.value,
+      });
+    }
+    return [...merged.values()];
+  }
+
+  async function usePartyItem(discordId, itemId, targetId) {
+    const roomId = playerRoom.get(discordId);
+    const room = roomId ? rooms.get(roomId) : null;
+    if (!room) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "你不在任何爬塔房內", 404);
+    if (room.status !== "climbing") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只能在攻塔中、層與層之間使用道具", 400);
+    if (room._resolving) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "結算中,請稍候", 409);
+    const info = (tower().TOWER_POTION_IDS || {})[itemId];
+    if (!info) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "這不是可用的爬塔道具", 400);
+    const target = room.members.find((m) => m.discordId === (targetId || discordId));
+    if (!target) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到目標隊員", 404);
+    const eff = info.effect;
+    if ((eff.type === "tower_heal_flat" || eff.type === "tower_heal_pct") && target.currentHp <= 0)
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標已陣亡,請改用復活藥水", 400);
+    if (eff.type === "tower_revive_pct" && target.currentHp > 0)
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目標尚未陣亡,無需復活", 400);
+
+    // 消耗道具(CAS 重試,沿用 DC 做法)
+    const sc = serviceContext;
+    let consumed = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const prog = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+      if (!prog) break;
+      const idx = (prog.inventory || []).findIndex((e) => e.itemId === itemId);
+      if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中沒有這個道具", 404);
+      const entry = prog.inventory[idx];
+      const stack = Math.max(1, Number(entry.stackCount) || 1);
+      const newInv = stack <= 1 ? prog.inventory.filter((_, i) => i !== idx)
+        : prog.inventory.map((e, i) => (i === idx ? { ...e, stackCount: stack - 1 } : e));
+      const next = { ...prog, inventory: newInv, updatedAt: new Date().toISOString() };
+      try {
+        if (typeof sc.progressRepository.saveIfUnchanged === "function") {
+          if (await sc.progressRepository.saveIfUnchanged(next, prog.updatedAt)) { consumed = true; break; }
+        } else { await sc.progressRepository.save(next); consumed = true; break; }
+      } catch (_) {}
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 10 * (attempt + 1)));
+    }
+    if (!consumed) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具消耗失敗(可能已用完或同時被使用)", 400);
+
+    // 套用效果到房間成員 HP
+    let msg = "";
+    if (eff.type === "tower_heal_flat") {
+      const before = target.currentHp; target.currentHp = Math.min(target.maxHp, target.currentHp + eff.value);
+      msg = `💚 ${target.name} 回復 ${target.currentHp - before} HP`;
+    } else if (eff.type === "tower_heal_pct") {
+      const before = target.currentHp; target.currentHp = Math.min(target.maxHp, target.currentHp + Math.round(target.maxHp * eff.value / 100));
+      msg = `💚 ${target.name} 回復 ${target.currentHp - before} HP`;
+    } else if (eff.type === "tower_revive_pct") {
+      target.currentHp = Math.max(1, Math.round(target.maxHp * eff.value / 100));
+      msg = `✨ ${target.name} 復活，恢復 ${target.currentHp} HP`;
+    }
+    room.lastActiveAt = Date.now();
+    emitRoom(room, "tower_room_update", { ...roomView(room), itemMsg: msg });
+    return { ...roomView(room, discordId), itemMsg: msg };
+  }
+
   function requireLeaderRoom(discordId) {
     const roomId = playerRoom.get(discordId);
     const room = roomId ? rooms.get(roomId) : null;
@@ -270,7 +349,7 @@ function createTowerPartyRooms(serviceContext) {
     return room;
   }
 
-  return { createRoom, joinRoom, leaveRoom, getState, startRoom, advanceFloor, retreat, listOpenRooms, kickMember, _rooms: rooms };
+  return { createRoom, joinRoom, leaveRoom, getState, startRoom, advanceFloor, retreat, listOpenRooms, kickMember, listMyItems, usePartyItem, _rooms: rooms };
 }
 
 module.exports = { createTowerPartyRooms };
