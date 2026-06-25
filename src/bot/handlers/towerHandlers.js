@@ -2055,4 +2055,8 @@ module.exports = {
   // 測試用(模擬塔)：暫時導出內部函式
   fightFloor,
   pickFloorMonster,
+  // 網頁組隊爬塔重用：成員準備 / 每層前重算 MaxHP / 隊伍光環彙總
+  loadMemberData,
+  refreshTowerMemberMaxHp,
+  buildTowerPartyEffects,
 };

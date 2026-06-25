@@ -3331,6 +3331,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // 數值完全比照 src/shared/towerConfig.js（與 DC 組隊爬塔同源）
   // ──────────────────────────────────────────────────
   const towerSessions = new Map(); // discordId -> { floor, playerHp, playerMaxHp, baseAtk, equipped, used:Set, alive, settled, startedAt }
+  // 網頁組隊爬塔房間服務(重用 DC towerHandlers 戰鬥核心 + SSE 同步)
+  const towerParty = require("../../services/tower/towerPartyRooms").createTowerPartyRooms(serviceContext);
   // 清理閒置/殘留的爬塔 session(每筆含 equipped + inventory 快照,不清會吃記憶體)：
   // 結束的(alive=false)直接刪;超過 30 分鐘沒動作的中途離開 session 也刪。
   const TOWER_SESSION_TTL_MS = 30 * 60 * 1000;
@@ -3363,6 +3365,38 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     return arr[Math.floor(Math.random() * arr.length)];
   }
 
+  // 當層怪物預覽（給面板顯示「這層遇到誰」）：預抽後存進 session，fight 用同一隻，過關再抽下一層
+  function towerMonsterPreview(m, floor) {
+    if (!m) return null;
+    const baseHp = m.calc?.maxHp || m.maxHp || 0;
+    const baseAtk = m.calc?.atk || 0;
+    return {
+      name: m.name,
+      imageUrl: m.imageUrl || m.imageThumbnailUrl || null,
+      isBoss: Boolean(m.isBoss),
+      isFloorBoss: Boolean(TW.getTowerFloorBossName(floor)),
+      hp: TW.scaleTowerMonsterHp(baseHp, floor),   // 依樓層縮放後的實際 HP
+      atk: TW.scaleTowerMonsterAtk(baseAtk, floor), // 依樓層縮放後的實際 ATK
+    };
+  }
+
+  // 樓層段 + 隊伍加成 + 下一個王關 + 撤退可得獎勵(給面板顯示用)
+  function towerFloorInfo(floor) {
+    const buff = TW.getTowerFloorBuff(floor);
+    const bonus = TW.getCumulativePartyBonus(floor);
+    const BOSS_FLOORS = [10, 20, 30, 40, 50, 51, 52];
+    const nextBossFloor = BOSS_FLOORS.find((f) => f >= floor) || null;
+    const retreatReward = TW.calcTowerReward(Math.max(0, floor - 1)); // 現在撤退能拿的(已通關層)
+    return {
+      segmentLabel: buff?.label || null,
+      segmentEmoji: buff?.emoji || null,
+      partyBonus: { atkPct: bonus.atkPct, hpPct: bonus.hpPct },
+      nextBossFloor,
+      nextBossName: nextBossFloor ? TW.getTowerFloorBossName(nextBossFloor) : null,
+      retreatReward: { gold: retreatReward.gold, exp: retreatReward.exp },
+    };
+  }
+
   async function settleTower(discordId, displayName, s) {
     if (s.settled) return s._reward || null;
     s.settled = true;
@@ -3391,7 +3425,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       res.json(ok({
         minLevel: TW.TOWER_MIN_LEVEL, totalFloors: TW.TOWER_TOTAL_FLOORS,
         level: prog?.level || 1, bestFloor: prog?.towerRecord?.bestFloor || 0,
-        session: s && s.alive ? { floor: s.floor, playerHp: s.playerHp, playerMaxHp: s.playerMaxHp } : null,
+        session: s && s.alive ? { floor: s.floor, playerHp: s.playerHp, playerMaxHp: s.playerMaxHp, monster: towerMonsterPreview(s.upcoming, s.floor), ...towerFloorInfo(s.floor) } : null,
       }));
     } catch (err) { next(err); }
   });
@@ -3409,8 +3443,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const bonus = TW.getCumulativePartyBonus(1);
       const maxHp = Math.round((ps.maxHp || 100) * (1 + bonus.hpPct / 100));
       const s = { floor: 1, playerHp: maxHp, playerMaxHp: maxHp, baseAtk: ps.atk || 1, baseStats: ps, equipped, inventory: prog?.inventory || [], used: new Set(), alive: true, settled: false, startedAt: Date.now() };
+      s.upcoming = await pickTowerMonster(1, s.used); // 預抽第 1 層怪物供面板顯示
       towerSessions.set(discordId, s);
-      res.json(ok({ floor: s.floor, playerHp: s.playerHp, playerMaxHp: s.playerMaxHp, totalFloors: TW.TOWER_TOTAL_FLOORS }));
+      res.json(ok({ floor: s.floor, playerHp: s.playerHp, playerMaxHp: s.playerMaxHp, totalFloors: TW.TOWER_TOTAL_FLOORS, monster: towerMonsterPreview(s.upcoming, s.floor) }));
     } catch (err) { next(err); }
   });
 
@@ -3428,7 +3463,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (!battleLock.ok) { battleLock = null; return res.status(409).json(fail("BATTLE_BUSY", "你已經有一場戰鬥正在進行，請等結束後再爬塔。")); }
 
       const floor = s.floor;
-      const monster = await pickTowerMonster(floor, s.used);
+      const monster = s.upcoming || await pickTowerMonster(floor, s.used); // 用面板預覽的同一隻
       if (!monster) return res.status(400).json(fail("NO_MONSTER", "找不到該層怪物"));
       s.used.add(monster.name);
 
@@ -3454,6 +3489,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (killed) {
         cleared = true; s.floor = floor + 1;
         if (s.floor > TW.TOWER_TOTAL_FLOORS) { towerOver = true; reward = await settleTower(discordId, displayName, s); s.alive = false; }
+        else { s.upcoming = await pickTowerMonster(s.floor, s.used); } // 預抽下一層怪物供面板顯示
       } else {
         // 未擊殺（陣亡或回合耗盡）→ 本次攻塔結束，結算
         towerOver = true; s.alive = false; reward = await settleTower(discordId, displayName, s);
@@ -3484,6 +3520,30 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       towerSessions.delete(discordId); // 撤退即釋放 session
       res.json(ok({ retreated: true, reward }));
     } catch (err) { next(err); }
+  });
+
+  // ── 網頁組隊爬塔(房間/大廳/SSE 即時同步)──────────────────
+  const _tpErr = (res, err, next) => { if (err?.message) return res.status(err.status || 400).json(fail("TOWER_PARTY", err.message)); next(err); };
+  router.get("/api/tower/party/state", requireAuth, async (req, res, next) => {
+    try { res.json(ok(towerParty.getState(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/create", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.createRoom(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/join", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.joinRoom(req.playerRecord.discordId, req.body?.roomId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/leave", requireAuth, async (req, res, next) => {
+    try { res.json(ok(towerParty.leaveRoom(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/start", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.startRoom(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/fight", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.advanceFloor(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/retreat", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.retreat(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
   });
 
   router.get("/api/tower/leaderboard", requireAuth, async (req, res, next) => {
