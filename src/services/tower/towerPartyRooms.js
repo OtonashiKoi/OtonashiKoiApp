@@ -36,6 +36,7 @@ function createTowerPartyRooms(serviceContext) {
       clearedFloor: room.clearedFloor,
       totalFloors: TW.TOWER_TOTAL_FLOORS,
       isLeader: viewerId === room.leaderId,
+      hasPassword: Boolean(room.password),
       members: room.members.map((m) => ({
         discordId: m.discordId, name: m.name, level: m.level,
         job: m.job?.name || m.job || null, jobEmoji: m.job?.emoji || null,
@@ -92,14 +93,17 @@ function createTowerPartyRooms(serviceContext) {
     }
   }
 
+  const normPw = (pw) => String(pw || "").trim().slice(0, 20);
+
   // ── 大廳 ───────────────────────────────────────────
-  async function createRoom(discordId) {
+  async function createRoom(discordId, password) {
     if (playerRoom.has(discordId)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "你已在一個爬塔房內,請先離開", 400);
     const member = await buildMember(discordId);
     assertLevel(member);
     let roomId; do { roomId = genRoomId(); } while (rooms.has(roomId));
     const room = {
       roomId, leaderId: discordId, status: "lobby",
+      password: normPw(password) || null, // 有密碼=私約房(不進公開列表)
       members: [member], clearedFloor: 0, used: new Set(),
       createdAt: Date.now(), lastActiveAt: Date.now(), _resolving: false,
     };
@@ -107,10 +111,11 @@ function createTowerPartyRooms(serviceContext) {
     return roomView(room, discordId);
   }
 
-  async function joinRoom(discordId, roomId) {
+  async function joinRoom(discordId, roomId, password) {
     const room = rooms.get(String(roomId || "").toUpperCase().trim());
     if (!room) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該房間(房號是否正確?)", 404);
     if (room.status !== "lobby") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "該隊伍已經開始攻塔,無法加入", 400);
+    if (room.password && room.password !== normPw(password)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "房間密碼錯誤", 403);
     if (room.members.length >= TW.TOWER_MAX_MEMBERS) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `隊伍已滿(最多 ${TW.TOWER_MAX_MEMBERS} 人)`, 400);
     if (playerRoom.has(discordId)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "你已在一個爬塔房內,請先離開", 400);
     const member = await buildMember(discordId);
@@ -119,6 +124,37 @@ function createTowerPartyRooms(serviceContext) {
     room.lastActiveAt = Date.now();
     emitRoom(room, "tower_room_update", roomView(room));
     return roomView(room, discordId);
+  }
+
+  // 公開隊伍列表:大廳中、無密碼、未滿的房(私約房有密碼→不列出,只能用房號+密碼進)
+  function listOpenRooms() {
+    const out = [];
+    for (const room of rooms.values()) {
+      if (room.status !== "lobby" || room.password || room.members.length >= TW.TOWER_MAX_MEMBERS) continue;
+      const leader = room.members.find((m) => m.discordId === room.leaderId) || room.members[0];
+      out.push({
+        roomId: room.roomId,
+        leaderName: leader?.name || "?",
+        memberCount: room.members.length,
+        maxMembers: TW.TOWER_MAX_MEMBERS,
+        jobs: room.members.map((m) => m.job?.emoji || "❔"),
+      });
+    }
+    return out.sort((a, b) => b.memberCount - a.memberCount).slice(0, 30);
+  }
+
+  // 隊長踢人
+  function kickMember(leaderId, targetId) {
+    const room = requireLeaderRoom(leaderId);
+    if (room.status !== "lobby") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "攻塔開始後無法踢人", 400);
+    if (targetId === leaderId) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "不能踢自己", 400);
+    if (!room.members.some((m) => m.discordId === targetId)) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "該成員不在隊伍中", 404);
+    room.members = room.members.filter((m) => m.discordId !== targetId);
+    playerRoom.delete(targetId);
+    room.lastActiveAt = Date.now();
+    emitRoom(room, "tower_room_update", roomView(room));       // 通知剩餘成員
+    try { bus().emit(targetId, { type: "tower_room_update", data: null }); } catch (_) {} // 通知被踢者→其 state 變 null 退回單人
+    return roomView(room, leaderId);
   }
 
   function leaveRoom(discordId) {
@@ -234,7 +270,7 @@ function createTowerPartyRooms(serviceContext) {
     return room;
   }
 
-  return { createRoom, joinRoom, leaveRoom, getState, startRoom, advanceFloor, retreat, _rooms: rooms };
+  return { createRoom, joinRoom, leaveRoom, getState, startRoom, advanceFloor, retreat, listOpenRooms, kickMember, _rooms: rooms };
 }
 
 module.exports = { createTowerPartyRooms };

@@ -3527,11 +3527,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/tower/party/state", requireAuth, async (req, res, next) => {
     try { res.json(ok(towerParty.getState(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
   });
+  router.get("/api/tower/party/list", requireAuth, async (req, res, next) => {
+    try { res.json(ok(towerParty.listOpenRooms())); } catch (err) { _tpErr(res, err, next); }
+  });
   router.post("/api/tower/party/create", requireAuth, async (req, res, next) => {
-    try { res.json(ok(await towerParty.createRoom(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.createRoom(req.playerRecord.discordId, req.body?.password))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/join", requireAuth, async (req, res, next) => {
-    try { res.json(ok(await towerParty.joinRoom(req.playerRecord.discordId, req.body?.roomId))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.joinRoom(req.playerRecord.discordId, req.body?.roomId, req.body?.password))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/kick", requireAuth, async (req, res, next) => {
+    try { res.json(ok(towerParty.kickMember(req.playerRecord.discordId, req.body?.targetId))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/leave", requireAuth, async (req, res, next) => {
     try { res.json(ok(towerParty.leaveRoom(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
