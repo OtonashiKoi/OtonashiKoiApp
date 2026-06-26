@@ -126,9 +126,12 @@ class EnhanceService {
     const itemType = String(equipment.itemType || "").toLowerCase();
     const equipSlot = String(equipment.equipSlot || "");
 
-    // 檢查是否為特殊裝備
+    // 檢查是否為特殊裝備 / 錨點傳說裝(靠特效，不可強化)
     if (equipSlot === "special") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "特殊裝備無法強化", 400);
+    }
+    if (equipSlot === "anchor") {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "錨點傳說裝靠特效運作，無法強化", 400);
     }
 
     const isWeaponOrArmor = (itemType === "equipment");
@@ -513,6 +516,11 @@ class EnhanceService {
       }
     }
     if (!equipment) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該裝備（請檢查是否在背包或已裝備）", 404);
+
+    // 錨點傳說裝靠特效運作，不可強化(與 _enhanceEquipmentImpl 一致)
+    if (String(equipment.equipSlot || "") === "anchor") {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "錨點傳說裝靠特效運作，無法強化", 400);
+    }
 
     const tier = String(equipment.tier || "").toUpperCase();
     const currentLevel = Math.max(0, Number(equipment.enhanceLevel) || 0);
