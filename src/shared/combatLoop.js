@@ -1871,7 +1871,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             ownerMaxHp: pStats.maxHp || pHp || 1,
             targetMaxHp: mHpInit || mHp || 1,
             targetLabel: mName,
-            applyTargetDamage: (damage) => { mHp -= damage; return mHp; },
+            applyTargetDamage: (damage) => { mHp -= damage; totalDamage += Math.max(0, Number(damage) || 0); return mHp; }, // 玩家卡即時傷害要計入總傷害(否則世界王落地會回彈)
             applyOwnerHeal: (heal) => { pHp = Math.min(pStats.maxHp, pHp + heal); return pHp; },
             buffKeys: PLAYER_CARD_OFFENSIVE_KEYS,
             debuffKeys: PLAYER_CARD_OFFENSIVE_KEYS,
@@ -1996,7 +1996,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             targetLabel: mName,
             sourceAtk: pStats.atk || 1,
             targetMaxHp: mHpInit || mHp || 1,
-            applyTargetDamage: (damage) => { mHp -= damage; },
+            applyTargetDamage: (damage) => { mHp -= damage; totalDamage += Math.max(0, Number(damage) || 0); }, // 同上:即時傷害計入總傷害
             log
           })) {
             appliedAnyNormalProc = true;
