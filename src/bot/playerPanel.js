@@ -840,6 +840,25 @@ async function handleCheckinStatus(interaction) {
 
 const TIER_SELL_PRICE = { D: 200, C: 500, B: 1000, A: 10000 };
 
+// 背包項目圖片快取(itemId → imageUrl)。inventory 快照沒帶 imageUrl，
+// 在開背包時 warm 一次，buildInventoryRow 同步讀它補上「🖼️ 查看」按鈕(含圖片收藏品)。
+const _itemImgMap = new Map();
+let _itemImgMapReady = false;
+async function ensureItemImgMap() {
+  if (_itemImgMapReady) return;
+  try {
+    const all = await getServiceContext().itemRepository.getAll();
+    for (const it of (all || [])) {
+      const url = it.imageUrl || it.imageThumbnailUrl || "";
+      if (it.id && url) _itemImgMap.set(it.id, url);
+    }
+    _itemImgMapReady = true;
+  } catch (_) { /* warm 失敗就退回只用 entry.imageUrl */ }
+}
+function imgForEntry(e) {
+  return e?.imageUrl || _itemImgMap.get(e?.itemId) || "";
+}
+
 /** 根據 itemType 產生背包 ActionRow，idx 為顯示編號（0-based） */
 function buildInventoryRow(e, idx) {
   const itemType = e.itemType || "consumable";
@@ -904,11 +923,11 @@ function buildInventoryRow(e, idx) {
         .setStyle(ButtonStyle.Secondary)
     );
   }
-  if (e.imageUrl) {
+  if (imgForEntry(e)) {
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_view:${e.uuid}`)
-        .setLabel("🖼️")
+        .setLabel("🖼️ 查看")
         .setStyle(ButtonStyle.Secondary)
     );
   }
@@ -1105,13 +1124,13 @@ function groupEquipmentItems(items, tab) {
         passiveEffects: Array.isArray(entry.passiveEffects) ? entry.passiveEffects : [],
         monsterCardSkill: entry.monsterCardSkill || null, // 保留卡片技能,供背包列表顯示效果說明
         sellPrice,
-        imageUrl: entry.imageUrl || "",
+        imageUrl: imgForEntry(entry),
         count: 0,
       });
     }
     const g = groups.get(key);
     g.count += 1;
-    if (!g.imageUrl && entry.imageUrl) g.imageUrl = entry.imageUrl;
+    if (!g.imageUrl) g.imageUrl = imgForEntry(entry);
   }
 
   return [...groups.values()];
@@ -1510,6 +1529,7 @@ async function handleBackpack(interaction) {
   const serviceContext = getServiceContext();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
+  await ensureItemImgMap();
   const msg = buildBackpackMessage(inventory, "item");
   await interaction.reply({ ...msg, flags: MessageFlags.Ephemeral });
 }
@@ -1743,12 +1763,14 @@ async function handleBackpackView(interaction, uuid) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const entry = (progress?.inventory || []).find((e) => e.uuid === uuid);
-  if (!entry || !entry.imageUrl) {
+  await ensureItemImgMap();
+  const resolvedImg = imgForEntry(entry);
+  if (!entry || !resolvedImg) {
     await safeEditReply(interaction, { content: "此道具沒有圖片。" });
     return;
   }
   try {
-    const imageUrl = String(entry.imageUrl || "").trim();
+    const imageUrl = String(resolvedImg).trim();
     if (/^https?:\/\//i.test(imageUrl)) {
       const embed = new EmbedBuilder().setImage(imageUrl);
       await safeEditReply(interaction, {
@@ -1780,6 +1802,7 @@ async function handleBackpackTab(interaction, tab, page = 0, subTab = "all") {
   await interaction.deferUpdate();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
+  await ensureItemImgMap();
   const msg = buildBackpackMessage(inventory, tab, undefined, page, subTab);
   await safeEditReply(interaction, msg);
 }
@@ -1793,6 +1816,7 @@ async function handleBackpackTabSelect(interaction) {
     : "all";
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
+  await ensureItemImgMap();
   const msg = buildBackpackMessage(inventory, selectedTab, undefined, 0, activeSubTab, BACKPACK_SECTION_TABS.has(selectedTab) ? { sectionMode: true } : {});
   await safeEditReply(interaction, msg);
 }
@@ -1802,6 +1826,7 @@ async function openBackpackSection(interaction, tab, page = 0, subTab = "all") {
   await interaction.deferUpdate();
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const inventory = progress?.inventory || [];
+  await ensureItemImgMap();
   const msg = buildBackpackMessage(inventory, tab, undefined, page, subTab, { sectionMode: true });
   await safeEditReply(interaction, msg); // 就地更新，避免每次切分頁/分類都另開一個背包面板
 }
