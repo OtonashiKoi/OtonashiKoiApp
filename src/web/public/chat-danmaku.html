@@ -4,22 +4,22 @@
   <meta charset="UTF-8">
   <title>聊天室彈幕</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&display=swap');
+    @import url('https://cdn.jsdelivr.net/npm/@fontsource/lxgw-wenkai-tc@latest/index.css');
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       width: 100%; height: 100%;
       background: transparent; overflow: hidden;
-      font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+      font-family: 'LXGW WenKai TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
     }
 
     /* niconico 風彈幕：純文字、白字黑邊、由右往左等速飛過，無頭像/名字/等級等任何資訊 */
     .dm {
       position: fixed; left: 0; top: 0;
       white-space: nowrap; pointer-events: none; will-change: transform;
-      font-size: 46px; font-weight: 700; line-height: 1.2; color: #fff;
-      -webkit-text-stroke: 1.6px rgba(0,0,0,0.92);
-      text-shadow: 0 0 4px rgba(0,0,0,0.55), 1px 1px 2px rgba(0,0,0,0.9);
+      font-size: 48px; font-weight: 700; line-height: 1.2; color: #fff;
+      -webkit-text-stroke: 2px rgba(0,0,0,0.92);
+      text-shadow: 0 0 5px rgba(0,0,0,0.6), 1px 1px 2px rgba(0,0,0,0.95);
     }
 
     #ws-dot {
