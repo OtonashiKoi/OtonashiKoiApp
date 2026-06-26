@@ -3347,6 +3347,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   _towerSessionSweep.unref?.();
   const TW = require("../../shared/towerConfig");
 
+  // 單人塔:依當前樓層重算玩家 maxHp(樓層 HP 加成隨樓層成長);上限提高時等量補當前血。
+  // 與組隊塔 refreshTowerMemberMaxHp 同邏輯,確保單人/組隊一致。冪等:同層重複呼叫不重複補血。
+  function syncSoloTowerMaxHp(s, initialize = false) {
+    if (!s || !s.baseStats) return;
+    const bonus = TW.getCumulativePartyBonus(s.floor || 1);
+    const nextMax = Math.max(1, Math.round((s.baseStats.maxHp || 100) * (1 + (bonus.hpPct || 0) / 100)));
+    const beforeMax = Math.max(0, Number(s.playerMaxHp || 0));
+    const beforeHp = Math.max(0, Number(s.playerHp || 0));
+    s.playerMaxHp = nextMax;
+    if (initialize || beforeMax <= 0) s.playerHp = nextMax;
+    else if (nextMax > beforeMax) s.playerHp = Math.min(nextMax, beforeHp + (nextMax - beforeMax));
+    else s.playerHp = Math.min(beforeHp, nextMax);
+  }
+
   async function pickTowerMonster(floor, usedNames) {
     // 固定王關：直接取指定 boss（龍王(B)@50／大史王@51／古龍王(B)@52 等），與 DC 組隊爬塔同源
     const bossName = TW.getTowerFloorBossName(floor);
@@ -3421,6 +3435,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/tower/state", requireAuth, async (req, res, next) => {
     try {
       const s = towerSessions.get(req.playerRecord.discordId);
+      if (s && s.alive) syncSoloTowerMaxHp(s); // 顯示前確保 maxHp 與當前樓層一致(冪等)
       const prog = await serviceContext.progressRepository.findByPlayerId(req.playerRecord.discordId);
       res.json(ok({
         minLevel: TW.TOWER_MIN_LEVEL, totalFloors: TW.TOWER_TOTAL_FLOORS,
@@ -3440,9 +3455,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const attrs = prog?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = await mergeEquippedFromLibrary(prog?.equipment || {}, serviceContext.itemRepository);
       const ps = calcPlayerStats(attrs, equipped, prog?.activeEffects || [], prog?.inventory || []);
-      const bonus = TW.getCumulativePartyBonus(1);
-      const maxHp = Math.round((ps.maxHp || 100) * (1 + bonus.hpPct / 100));
-      const s = { floor: 1, playerHp: maxHp, playerMaxHp: maxHp, baseAtk: ps.atk || 1, baseStats: ps, equipped, inventory: prog?.inventory || [], used: new Set(), alive: true, settled: false, startedAt: Date.now() };
+      const s = { floor: 1, playerHp: 0, playerMaxHp: 0, baseAtk: ps.atk || 1, baseStats: ps, equipped, inventory: prog?.inventory || [], used: new Set(), alive: true, settled: false, startedAt: Date.now() };
+      syncSoloTowerMaxHp(s, true); // 第 1 層 maxHp(含樓層 HP 加成)+ 滿血開局
       s.upcoming = await pickTowerMonster(1, s.used); // 預抽第 1 層怪物供面板顯示
       towerSessions.set(discordId, s);
       res.json(ok({ floor: s.floor, playerHp: s.playerHp, playerMaxHp: s.playerMaxHp, totalFloors: TW.TOWER_TOTAL_FLOORS, monster: towerMonsterPreview(s.upcoming, s.floor) }));
@@ -3488,6 +3502,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let towerOver = false, reward = null, cleared = false;
       if (killed) {
         cleared = true; s.floor = floor + 1;
+        syncSoloTowerMaxHp(s); // 進到下一層→重算 maxHp(樓層 HP 加成隨樓層成長),上限提高等量補血
         if (s.floor > TW.TOWER_TOTAL_FLOORS) { towerOver = true; reward = await settleTower(discordId, displayName, s); s.alive = false; }
         else { s.upcoming = await pickTowerMonster(s.floor, s.used); } // 預抽下一層怪物供面板顯示
       } else {
