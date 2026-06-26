@@ -166,8 +166,13 @@
       return `${entry.platform || 'unknown'}::${entry.userId}`;
     }
 
-    // 主持人管理密碼(變更操作需要)。第一次操作時詢問,存 localStorage。
+    // 主持人管理密碼(變更操作需要)。優先用網址 ?key=,其次 localStorage,最後彈窗詢問。
     function getAdminKey() {
+      // 網址帶 ?key= 時直接採用(主持人連結),並記住供後續操作
+      try {
+        const urlKey = (new URLSearchParams(location.search).get('key') || '').trim();
+        if (urlKey) { localStorage.setItem('mahjong.adminKey', urlKey); return urlKey; }
+      } catch (_) {}
       let k = localStorage.getItem('mahjong.adminKey') || '';
       if (!k) {
         k = (prompt('請輸入主持人管理密碼：') || '').trim();
@@ -187,7 +192,13 @@
       });
       if (response.status === 401) {
         localStorage.removeItem('mahjong.adminKey');
-        alert('管理密碼錯誤，請重新整理後再試一次');
+        // 網址帶的 key 是錯的 → 從網址移除，避免一直用錯 key 撞 401
+        try {
+          const u = new URL(location.href);
+          if (u.searchParams.has('key')) { u.searchParams.delete('key'); history.replaceState(null, '', u.toString()); }
+        } catch (_) {}
+        const k = (prompt('管理密碼錯誤或未設定，請輸入正確的主持人管理密碼：') || '').trim();
+        if (k) localStorage.setItem('mahjong.adminKey', k);
         throw new Error('unauthorized');
       }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
