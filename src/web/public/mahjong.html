@@ -234,6 +234,10 @@
         removeBtn.className = 'remove';
         removeBtn.textContent = '✕';
         removeBtn.title = '移除';
+        removeBtn.draggable = false; // 避免按鈕本身被當拖曳起點
+        // 按下叉叉時先擋住卡片的拖曳啟動，否則 click 會被 dragstart 吃掉而「點不動」
+        removeBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+        removeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
         removeBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           await removeEntry(entry).catch(console.error);
@@ -244,6 +248,7 @@
         card.appendChild(removeBtn);
 
         card.addEventListener('dragstart', (e) => {
+          if (e.target && e.target.closest && e.target.closest('.remove')) { e.preventDefault(); return; } // 在叉叉上不啟動拖曳
           dragEntryKey = entryKey(entry);
           card.classList.add('dragging');
           e.dataTransfer.effectAllowed = 'move';
