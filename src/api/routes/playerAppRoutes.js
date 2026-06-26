@@ -1513,6 +1513,22 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   // 4. Send Chat Lobby Message
+  // 網頁聊天轉發到 DC 時的顯示名:Lv.等級 名字 【稱號】(webhook username 上限 80 字)
+  async function buildWebChatUsername(discordId, fallbackName) {
+    try {
+      const prog = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
+      const name = prog?.displayName || fallbackName || "玩家";
+      const lv = Math.max(1, Number(prog?.level || 1));
+      const t = prog?.equipment?.title_eq;
+      const title = String(t?.itemName || t?.name || "").trim();
+      let u = `Lv.${lv} ${name}`;
+      if (title) u += ` 【${title}】`;
+      return u.slice(0, 80) || String(name).slice(0, 80);
+    } catch (_) {
+      return String(fallbackName || "玩家").slice(0, 80);
+    }
+  }
+
   router.post("/api/chat/lobby", requireAuth, async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
@@ -1575,7 +1591,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (webhook) {
             const sent = await webhook.send({
               content: outgoing,
-              username: displayName,
+              username: await buildWebChatUsername(discordId, displayName),
               ...(avatarURL ? { avatarURL } : {}),
               // 只允許 tag「被引用的原留言者」這一人;一律禁止 @everyone/@here/@role(防 mention 注入洗版)
               allowedMentions: { parse: [], users: replyAuthorId ? [replyAuthorId] : [] },
@@ -1641,7 +1657,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let sent;
       const _imgCaption = caption ? String(caption).slice(0, 300) : "";
       if (webhook) {
-        sent = await webhook.send({ content: _imgCaption || undefined, username: displayName, ...(avatarURL ? { avatarURL } : {}), files, allowedMentions: { parse: [] } });
+        sent = await webhook.send({ content: _imgCaption || undefined, username: await buildWebChatUsername(discordId, displayName), ...(avatarURL ? { avatarURL } : {}), files, allowedMentions: { parse: [] } });
       } else {
         sent = await channel.send({ content: _imgCaption ? `**${displayName}**: ${_imgCaption}` : `**${displayName}** 傳了一張圖`, files, allowedMentions: { parse: [] } });
       }
