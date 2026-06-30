@@ -884,6 +884,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 公開：賽季結束維護狀態（無需登入，前端登入頁據此顯示賽季結束）
+  router.get("/api/maintenance", (req, res) => {
+    try {
+      const maintenance = require("../../services/access/maintenanceStore");
+      return res.json(ok(maintenance.getPublicInfo()));
+    } catch (_) {
+      return res.json(ok({ active: false }));
+    }
+  });
+
   router.post("/api/auth/discord", async (req, res, next) => {
     try {
       const { code } = req.body;
@@ -995,6 +1005,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } catch (err) {
           // 基礎設施錯誤（公會抓不到等）不鎖死所有人，記錄後放行
           console.warn("[PlayerApp] Guild/role gate check failed, allowing login:", err.message);
+        }
+      }
+
+      // 賽季結束維護中 → 非白名單玩家不發 token，回賽季結束頁（前端顯示 + DC 邀請）。
+      {
+        const maintenance = require("../../services/access/maintenanceStore");
+        if (maintenance.isActive() && !maintenance.isWhitelisted(discordId)) {
+          const info = maintenance.getPublicInfo();
+          return res.status(403).json({ status: "error", code: "SEASON_ENDED", message: info.message, title: info.title, inviteUrl: info.inviteUrl || inviteUrl });
         }
       }
 
@@ -2619,21 +2638,39 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           return res.status(409).json({ status: "error", code: "world_boss_unavailable", message: "世界王已被擊敗或進入冷卻,無法繼續挑戰。" });
         }
 
-        // 目標部位已破但整隻王還活著 → 自動改打其他還活著的部位(不擋、不報退場)。
-        // 解決:打完一場/預約續戰時,剛把該部位打破,下一戰仍鎖該部位而誤跳「已退場」。
-        let _partHpNow = Math.max(0, Number(stateForCombat.worldBossPartsHp?.[worldBossPart] || 0));
+        // 目標部位在出戰瞬間已被擊破(伺服器上 HP<=0)時:
+        //   不再「靜默自動轉打軀幹」(舊行為會讓玩家白花一場打到沒選的部位,觀感像「部位還沒破就亂跳」),
+        //   改為明確擋下並回傳最新部位血量,讓前端刷新血條 + 提示玩家重選部位。
+        //   只要部位還有血(未真的破)就絕不會被切走。
+        const _partsHp = stateForCombat.worldBossPartsHp || {};
+        const _partHpNow = Math.max(0, Number(_partsHp[worldBossPart] || 0));
         if (_partHpNow <= 0) {
-          const _partsHp = stateForCombat.worldBossPartsHp || {};
           let _partKeys = [];
           try { _partKeys = require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartKeys(zoneKey) || []; } catch (_) {}
           const _aliveKeys = _partKeys.filter((k) => Number(_partsHp[k] || 0) > 0);
-          if (_aliveKeys.length > 0) {
-            worldBossPart = _aliveKeys.includes("body") ? "body" : _aliveKeys[0];
-            _partHpNow = Math.max(0, Number(_partsHp[worldBossPart] || 0));
-          } else {
-            // 沒有任何活著的部位 = 整王已破 → 才真的擋
+          // 診斷:記錄每次「部位已破擋下」的當下伺服器狀態,日後若有 HP>0 卻被擋的反例可直接從 log 抓鐵證。
+          console.warn(`[WorldBossPart] blocked: zone=${zoneKey} part=${worldBossPart} serverHp=${_partHpNow} aliveKeys=${JSON.stringify(_aliveKeys)} partsHp=${JSON.stringify(_partsHp)}`);
+          if (_aliveKeys.length === 0) {
+            // 沒有任何活著的部位 = 整王已破 → 報退場
             return res.status(409).json({ status: "error", code: "world_boss_unavailable", message: "世界王已被擊敗或進入冷卻,無法繼續挑戰。" });
           }
+          // 還有其他活著的部位 → 明確告知該部位已破,附上最新部位血量供前端刷新 + 重選
+          const PART_LABELS_BLOCK = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
+          const maxMap = stateForCombat.worldBossPartsMaxHp || {};
+          const partsForResp = _partKeys
+            .filter((k) => Object.prototype.hasOwnProperty.call(_partsHp, k))
+            .map((k) => {
+              const hp = Math.max(0, Number(_partsHp[k] || 0));
+              const max = Math.max(1, Math.round(Number(maxMap[k] || 0) || hp || 1));
+              return { key: k, name: PART_LABELS_BLOCK[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0 };
+            });
+          return res.status(409).json({
+            status: "error",
+            code: "part_broken",
+            message: `${PART_LABELS_BLOCK[worldBossPart] || "該部位"}已被擊破,請重新選擇部位。`,
+            part: worldBossPart,
+            parts: partsForResp
+          });
         }
 
         // 玩家 stats 依部位調整

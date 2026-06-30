@@ -10,6 +10,7 @@
 
 const jwt = require("jsonwebtoken");
 const { isBlocked } = require("../../services/access/webBanStore");
+const maintenance = require("../../services/access/maintenanceStore");
 
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -21,6 +22,11 @@ function requireAuth(req, res, next) {
     // 被管理員封鎖網頁使用權的玩家 → 一律擋下（回 403，前端清 token 跳登入）
     if (isBlocked(decoded?.discordId)) {
       return res.status(403).json({ status: "error", code: "WEB_BLOCKED", message: "你的帳號已被管理員封鎖網頁使用權限。" });
+    }
+    // 賽季結束維護中 → 非白名單玩家一律擋下（前端顯示賽季結束頁 + DC 邀請）
+    if (maintenance.isActive() && !maintenance.isWhitelisted(decoded?.discordId)) {
+      const info = maintenance.getPublicInfo();
+      return res.status(403).json({ status: "error", code: "SEASON_ENDED", message: info.message, title: info.title, inviteUrl: info.inviteUrl });
     }
     req.playerRecord = decoded; // { discordId, displayName }
     next();

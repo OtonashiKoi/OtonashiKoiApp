@@ -838,6 +838,25 @@ function createBotClient() {
 
   client.on(Events.InteractionCreate, async (interaction) => {
     try {
+      // ── 賽季結束維護閘門 ──
+      // 維護生效時，非白名單玩家只保留「我的資料 / 裝備欄」兩顆按鈕，其餘互動一律擋下。
+      {
+        const maintenance = require("../services/access/maintenanceStore");
+        if (maintenance.isActive() && !maintenance.isWhitelisted(interaction.user?.id)) {
+          const MAINT_ALLOWED = new Set(["player-panel:profile", "player-panel:equipment"]);
+          const allowed = interaction.isButton() && MAINT_ALLOWED.has(interaction.customId);
+          if (!allowed) {
+            const info = maintenance.getPublicInfo();
+            const text = `🌙 **${info.title}**\n${info.message}\n${info.inviteUrl || ""}`;
+            try {
+              if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: text, ephemeral: true });
+              }
+            } catch (_) {}
+            return;
+          }
+        }
+      }
       if (interaction.isChatInputCommand()) { await handleCommand(interaction); return; }
       if (interaction.isButton()) { await handleButton(interaction); return; }
       if (interaction.isStringSelectMenu()) { await handleSelectMenu(interaction); return; }
