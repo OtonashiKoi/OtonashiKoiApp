@@ -64,6 +64,13 @@ function withProgressCache(repo) {
       if (store) store.delete(`progress:${playerId}`);
       return result;
     },
+    async addOrStackInventoryItem(playerId, itemId, newEntry) {
+      const result = await repo.addOrStackInventoryItem(playerId, itemId, newEntry);
+      // 原子寫入後清快取，後續讀取拿到含新道具的最新狀態
+      const store = storage.getStore();
+      if (store) store.delete(`progress:${playerId}`);
+      return result;
+    },
     async listAll() {
       return repo.listAll();
     },

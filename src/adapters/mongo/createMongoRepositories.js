@@ -4,7 +4,7 @@ const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { createStreamAccountBindingRepository } = require("../streamBindings/createStreamAccountBindingRepository");
 const { createCreatorTokenRepository } = require("../creatorTokens/createCreatorTokenRepository");
 const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
-const { slimProgressForStorage } = require("../../shared/inventoryStorage");
+const { slimProgressForStorage, slimInventoryEntry } = require("../../shared/inventoryStorage");
 
 function emitRealtimeInvalidate(type, discordId) {
   if (!discordId) return;
@@ -282,6 +282,42 @@ function createMongoRepositories() {
           { upsert: false }
         );
         emitRealtimeInvalidate("progress", playerId);
+      },
+      // 原子化「加一個道具進背包」：同款 itemId 疊加 stackCount，否則 $push 新項目。
+      // 不走 read-modify-write 整包背包，避免與玩家自身高頻存檔(刷怪/結算)競態，
+      // 杜絕 CAS 失敗造成的「靜默吞箱」。回傳 { ok, uuid, stacked }。
+      async addOrStackInventoryItem(playerId, itemId, newEntry) {
+        const coll = await collection("progress");
+        const slimEntry = slimInventoryEntry(newEntry);
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const now = new Date().toISOString();
+          // 1) 已有同款 → 原子 +1。positional projection 不能搭 after，取 before 即可
+          //    （堆疊不改 uuid，before 的 uuid 與 after 相同）
+          const inc = await coll.findOneAndUpdate(
+            { playerId, "inventory.itemId": itemId },
+            { $inc: { "inventory.$.stackCount": 1 }, $set: { updatedAt: now } },
+            { projection: { "inventory.$": 1 }, returnDocument: "before" }
+          );
+          const incDoc = inc && (inc.value !== undefined ? inc.value : inc);
+          if (incDoc && Array.isArray(incDoc.inventory) && incDoc.inventory[0]) {
+            emitRealtimeInvalidate("progress", playerId);
+            return { ok: true, uuid: incDoc.inventory[0].uuid || newEntry.uuid, stacked: true };
+          }
+          // 2) 沒有同款 → 原子 $push（$ne 防併發重複插入；玩家不存在則 matched 0）
+          const push = await coll.updateOne(
+            { playerId, "inventory.itemId": { $ne: itemId } },
+            { $push: { inventory: slimEntry }, $set: { updatedAt: now } },
+            { upsert: false }
+          );
+          if (push.matchedCount > 0) {
+            emitRealtimeInvalidate("progress", playerId);
+            return { ok: true, uuid: newEntry.uuid, stacked: false };
+          }
+          // matched 0：玩家不存在 → 直接失敗；否則是併發剛插入同款 → 下一輪回到疊加分支
+          const exists = await coll.countDocuments({ playerId }, { limit: 1 });
+          if (!exists) return { ok: false, uuid: null, stacked: false };
+        }
+        return { ok: false, uuid: null, stacked: false };
       },
       async listAll() {
         return (await collection("progress")).find({}).toArray();

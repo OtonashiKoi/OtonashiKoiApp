@@ -3095,8 +3095,33 @@ function _resolveWorldBossChestId(monster, zoneKey) {
     || (zoneKey === "elite" ? "chest-daishi-king"
       : zoneKey === "dragon_king_lair" ? "chest-dragon-king" : null);
 }
-// 發一個寶箱給玩家（同款堆疊，CAS 重試）→ 回傳 { ok, uuid }（uuid 供網頁開箱用）
+// 建一個寶箱背包項目（同款會堆疊，故 uuid 僅在「新項目」時生效）
+function _buildChestEntry(chestItem, sourceMonsterId) {
+  return {
+    uuid: crypto.randomUUID(), itemId: chestItem.id, itemName: chestItem.name,
+    itemEffect: chestItem.effect || { type: "none", value: 0 },
+    useEffects: chestItem.useEffects || [], passiveEffects: [], procEffects: [], combatEffects: [],
+    itemType: chestItem.itemType || "consumable",
+    imageUrl: chestItem.imageUrl || null, imageThumbnailUrl: chestItem.imageThumbnailUrl || null,
+    equipSlot: null, equipStats: {}, weaponType: null, isTwoHanded: false, atkStat: null,
+    tier: chestItem.tier || null, monsterCardSkill: null, enhanceLevel: 0, stackCount: 1,
+    source: "world_boss_contribution", sourceRef: sourceMonsterId || null,
+    purchasedAt: new Date().toISOString(),
+  };
+}
+// 發一個寶箱給玩家 → 回傳 { ok, uuid, stacked }（uuid 供網頁開箱用）
+// 改用原子操作（$inc 疊加 / $push 新增），避免與玩家自身高頻存檔競態導致 CAS 失敗而「靜默吞箱」。
 async function _grantChestToPlayer(sc, pid, chestItem, sourceMonsterId) {
+  const entry = _buildChestEntry(chestItem, sourceMonsterId);
+  if (typeof sc.progressRepository.addOrStackInventoryItem === "function") {
+    return sc.progressRepository
+      .addOrStackInventoryItem(pid, chestItem.id, entry)
+      .catch((e) => {
+        console.error(`[WorldBossChest] atomic grant error pid=${pid}:`, e?.message || e);
+        return { ok: false, uuid: null, stacked: false };
+      });
+  }
+  // 後備：舊式 read-modify-write CAS（僅在 repository 未提供原子方法時走）
   for (let attempt = 0; attempt < 3; attempt++) {
     const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
     if (!prog) return { ok: false, uuid: null };
@@ -3107,18 +3132,8 @@ async function _grantChestToPlayer(sc, pid, chestItem, sourceMonsterId) {
       existing.stackCount = Math.max(1, Number(existing.stackCount) || 1) + 1;
       chestUuid = existing.uuid;
     } else {
-      chestUuid = crypto.randomUUID();
-      inv.push({
-        uuid: chestUuid, itemId: chestItem.id, itemName: chestItem.name,
-        itemEffect: chestItem.effect || { type: "none", value: 0 },
-        useEffects: chestItem.useEffects || [], passiveEffects: [], procEffects: [], combatEffects: [],
-        itemType: chestItem.itemType || "consumable",
-        imageUrl: chestItem.imageUrl || null, imageThumbnailUrl: chestItem.imageThumbnailUrl || null,
-        equipSlot: null, equipStats: {}, weaponType: null, isTwoHanded: false, atkStat: null,
-        tier: chestItem.tier || null, monsterCardSkill: null, enhanceLevel: 0, stackCount: 1,
-        source: "world_boss_contribution", sourceRef: sourceMonsterId || null,
-        purchasedAt: new Date().toISOString(),
-      });
+      chestUuid = entry.uuid;
+      inv.push({ ...entry });
     }
     const next = { ...prog, inventory: inv, updatedAt: new Date().toISOString() };
     let saved;
@@ -3155,10 +3170,32 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
     };
     const granted = [];
     const grantedWinners = []; // { pid, name, uuid }
+    const auditRows = [];      // 每位得主的發箱結果（成功/失敗）
     for (const w of [...dmgRank, ...spendRank]) {
       const r = await _grantChestToPlayer(sc, w.pid, chestItem, monster?.id);
-      if (r.ok) { granted.push(w.name); grantedWinners.push({ pid: w.pid, name: w.name, uuid: r.uuid }); mark(w.pid); }
+      auditRows.push({ pid: w.pid, name: w.name, damage: w.damage, spent: w.spent, ok: !!r.ok, uuid: r.uuid || null, stacked: !!r.stacked });
+      if (r.ok) {
+        granted.push(w.name); grantedWinners.push({ pid: w.pid, name: w.name, uuid: r.uuid }); mark(w.pid);
+      } else {
+        console.error(`[WorldBossChest] grant FAILED pid=${w.pid} name=${w.name} chest=${chestItem.id}`);
+      }
     }
+
+    // 持久化發箱稽核 log（成功/失敗都記）→ 日後「沒拿到箱子」爭議可直接查 worldBossChestGrants
+    try {
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const db = await getMongoDb();
+      await db.collection("worldBossChestGrants").insertOne({
+        ts: new Date(), zoneKey, monsterId: monster?.id || null, monsterName: monster?.name || null,
+        chestId: chestItem.id, chestName: chestItem.name,
+        grantedCount: auditRows.filter((a) => a.ok).length,
+        failedCount: auditRows.filter((a) => !a.ok).length,
+        winners: auditRows,
+      });
+    } catch (e) {
+      console.error("[WorldBossChest] audit log write failed:", e?.message || e);
+    }
+
     if (!granted.length) return;
 
     // 推播給每位獲箱者 → 網頁不論在哪都彈出「世界王寶箱」視窗（可當下開啟或先收進背包）
