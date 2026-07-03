@@ -35,8 +35,9 @@
       ${btn("donations", "💸 斗內記錄")}
       ${btn("memberships", "👑 會員變動")}
       ${btn("status", "📋 會員現況")}
+      ${btn("events", "🎉 全服活動")}
       <button class="button" id="sr-refresh" style="margin-left:6px;">🔄 重新載入</button>
-      ${tab !== "donations" ? '<button class="button" id="sr-sync" style="margin-left:6px;">🔁 立即同步會員名單</button>' : ""}
+      ${(tab === "memberships" || tab === "status") ? '<button class="button" id="sr-sync" style="margin-left:6px;">🔁 立即同步會員名單</button>' : ""}
     </div>`;
   }
 
@@ -111,6 +112,65 @@
       </div>`;
   }
 
+  async function renderEvents() {
+    const [cfgWrap, buffs] = await Promise.all([
+      fetchJSON("/admin/stream-events/config"),
+      fetchJSON("/admin/stream-events/buffs")
+    ]);
+    const c = (cfgWrap && cfgWrap.donationBuff) || {};
+    const mod = buffs.modifiers || { dropPct: 0, goldPct: 0, expPct: 0 };
+    const active = buffs.active || [];
+    const num = (id, label, val, suffix) =>
+      `<label style="display:inline-flex;flex-direction:column;font-size:12px;margin:0 10px 8px 0;">${esc(label)}<input id="${id}" type="number" value="${esc(val)}" style="width:90px;padding:4px 6px;margin-top:3px;">${suffix ? `<span class="hint" style="font-size:10px;">${suffix}</span>` : ""}</label>`;
+    const activeRows = active.map((b) => `
+      <tr><td>${esc(b.label)}</td>
+        <td>${b.dropPct > 0 ? "掉寶+" + esc(b.dropPct) + "% " : ""}${b.goldPct > 0 ? "金幣+" + esc(b.goldPct) + "% " : ""}${b.expPct > 0 ? "經驗+" + esc(b.expPct) + "%" : ""}</td>
+        <td class="hint" style="font-size:11px;">${esc(b.source)}</td>
+        <td style="white-space:nowrap;">至 ${esc(fmtTime(b.endsAt))}</td>
+        <td><button class="button" data-buff-clear="${esc(b.id)}" style="padding:2px 8px;font-size:11px;">結束</button></td></tr>`).join("");
+
+    return `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        ${statCard("目前掉寶加成", "+" + (mod.dropPct || 0) + "%")}
+        ${statCard("目前金幣加成", "+" + (mod.goldPct || 0) + "%")}
+        ${statCard("目前經驗加成", "+" + (mod.expPct || 0) + "%")}
+        ${statCard("生效中 Buff", active.length)}
+      </div>
+
+      <div class="card" style="margin-bottom:14px;">
+        <h3 style="margin:0 0 4px;">⚡ 手動發全服 Buff（活動 / 測試）</h3>
+        <p class="hint" style="margin:0 0 10px;">立即對全服套用一個限時加成，馬上生效於所有戰鬥/掛機。</p>
+        <div>
+          <label style="display:inline-flex;flex-direction:column;font-size:12px;margin:0 10px 8px 0;">名稱<input id="mb-label" value="全服活動加成" style="width:160px;padding:4px 6px;margin-top:3px;"></label>
+          ${num("mb-drop", "掉寶 +%", 20)}
+          ${num("mb-gold", "金幣 +%", 0)}
+          ${num("mb-exp", "經驗 +%", 0)}
+          ${num("mb-dur", "持續(分)", 60)}
+          <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px;"><input id="mb-announce" type="checkbox" checked style="margin-right:4px;">全服廣播</label>
+        </div>
+        <button class="button primary" id="mb-send" style="margin-top:6px;">🚀 立即發送</button>
+        ${active.length ? '<button class="button" id="mb-clearall" style="margin-top:6px;margin-left:8px;">🧹 全部結束</button>' : ""}
+        ${active.length ? `<div style="overflow:auto;margin-top:12px;"><table class="admin-table" style="width:100%;font-size:13px;"><thead><tr><th>名稱</th><th>效果</th><th>來源</th><th>結束時間</th><th></th></tr></thead><tbody>${activeRows}</tbody></table></div>` : ""}
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 4px;">💸 斗內自動觸發設定</h3>
+        <p class="hint" style="margin:0 0 10px;">觀眾單筆斗內達門檻時，自動對全服套用加成。<b>先填好數字、勾「啟用」再儲存</b>；未啟用時斗內不會觸發（記錄照常）。</p>
+        <div>
+          <label style="display:inline-flex;align-items:center;font-size:13px;margin:0 14px 10px 0;font-weight:700;"><input id="db-enabled" type="checkbox" ${c.enabled ? "checked" : ""} style="margin-right:6px;">啟用斗內觸發</label>
+        </div>
+        <div>
+          ${num("db-min", "觸發門檻 NT$", c.minTwd, "單筆≥此金額")}
+          ${num("db-drop", "掉寶 +%", c.dropPct)}
+          ${num("db-gold", "金幣 +%", c.goldPct)}
+          ${num("db-exp", "經驗 +%", c.expPct)}
+          ${num("db-dur", "持續(分)", c.durationMinutes)}
+          <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px;"><input id="db-announce" type="checkbox" ${c.announce ? "checked" : ""} style="margin-right:4px;">全服廣播</label>
+        </div>
+        <button class="button primary" id="db-save" style="margin-top:6px;">💾 儲存設定</button>
+      </div>`;
+  }
+
   function statCard(label, value) {
     return `<div style="background:#171b2c;border:1px solid #2b3350;border-radius:12px;padding:10px 16px;min-width:110px;">
       <div class="hint" style="font-size:11px;">${esc(label)}</div>
@@ -124,6 +184,7 @@
       let body = "";
       if (tab === "donations") body = await renderDonations();
       else if (tab === "memberships") body = await renderMemberships();
+      else if (tab === "events") body = await renderEvents();
       else body = await renderStatus();
       root.innerHTML = tabBar() + body;
     } catch (e) {
@@ -147,12 +208,55 @@
     }
   }
 
+  async function postJSON(url, body) {
+    const res = await fetch(url, { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+    return data?.data ?? data;
+  }
+  const val = (id) => document.getElementById(id)?.value;
+  const chk = (id) => !!document.getElementById(id)?.checked;
+
+  async function sendManualBuff() {
+    try {
+      await postJSON("/admin/stream-events/buff", {
+        label: val("mb-label"), dropPct: Number(val("mb-drop")) || 0, goldPct: Number(val("mb-gold")) || 0,
+        expPct: Number(val("mb-exp")) || 0, durationMinutes: Number(val("mb-dur")) || 60, announce: chk("mb-announce")
+      });
+      alert("✅ 已發送全服 Buff！");
+      render();
+    } catch (e) { alert("發送失敗：" + e.message); }
+  }
+  async function clearBuffs(id) {
+    if (!confirm(id ? "確定結束這個 Buff？" : "確定結束所有生效中的 Buff？")) return;
+    try { await postJSON("/admin/stream-events/buff/clear", id ? { id } : {}); render(); }
+    catch (e) { alert("結束失敗：" + e.message); }
+  }
+  async function saveDonationCfg() {
+    try {
+      await postJSON("/admin/stream-events/config", {
+        donationBuff: {
+          enabled: chk("db-enabled"), minTwd: Number(val("db-min")) || 0, dropPct: Number(val("db-drop")) || 0,
+          goldPct: Number(val("db-gold")) || 0, expPct: Number(val("db-exp")) || 0,
+          durationMinutes: Number(val("db-dur")) || 60, announce: chk("db-announce")
+        }
+      });
+      alert("✅ 斗內觸發設定已儲存" + (chk("db-enabled") ? "（已啟用）" : "（目前未啟用）"));
+      render();
+    } catch (e) { alert("儲存失敗：" + e.message); }
+  }
+
   // 事件委派（nav 可能被搜尋重建）
   document.addEventListener("click", (e) => {
     const tabBtn = e.target.closest?.("[data-sr-tab]");
     if (tabBtn) { tab = tabBtn.dataset.srTab; render(); return; }
     if (e.target.closest?.("#sr-refresh")) { render(); return; }
     if (e.target.closest?.("#sr-sync")) { syncNow(); return; }
+    if (e.target.closest?.("#mb-send")) { sendManualBuff(); return; }
+    if (e.target.closest?.("#mb-clearall")) { clearBuffs(); return; }
+    if (e.target.closest?.("#db-save")) { saveDonationCfg(); return; }
+    const clr = e.target.closest?.("[data-buff-clear]");
+    if (clr) { clearBuffs(clr.dataset.buffClear); return; }
     if (e.target.closest?.('[data-target="section-stream-records"]')) setTimeout(render, 60);
   });
   const sec = document.getElementById("section-stream-records");

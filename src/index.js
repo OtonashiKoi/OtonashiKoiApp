@@ -65,6 +65,13 @@ async function bootstrap() {
     }, 5 * 60 * 1000);
     _memTimer.unref?.();
 
+    // 全服 Buff 快取初始化（直播連動事件）：載入生效中的 buff 到記憶體
+    try {
+      await require("./services/stream/globalBuffService").init();
+    } catch (e) {
+      console.warn("[GlobalBuff] init 失敗（不影響啟動）：", e?.message || e);
+    }
+
     const app = createApiServer(client);
     app.listen(config.api.port, () => {
       console.log(`[API] listening on port ${config.api.port}${apiOnly ? " (API_ONLY mode)" : ""}`);

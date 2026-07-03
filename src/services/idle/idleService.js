@@ -331,6 +331,12 @@ class IdleService {
       nonMemberClaimedMinutes: dailyClaim.nonMemberClaimedMinutes
     });
     const reward = { gold: summary.totalGold, exp: summary.totalExp };
+    // 全服 Buff（直播連動事件）：掛機金幣/經驗也吃全服加成
+    try {
+      const gb = require("../stream/globalBuffService").getActiveModifiers();
+      if (gb.goldPct > 0) reward.gold = Math.round(reward.gold * (1 + gb.goldPct / 100));
+      if (gb.expPct > 0) reward.exp = Math.round(reward.exp * (1 + gb.expPct / 100));
+    } catch (_) { /* buff 服務未就緒不影響結算 */ }
 
     if (reward.gold > 0) {
       await this.rewardService.grantCurrency({
@@ -732,6 +738,12 @@ class IdleService {
       exp: Math.max(0, Math.round(preview.effectiveMinutes * preview.rewardTier.expPerMinute)),
       items: []
     };
+    // 全服 Buff（直播連動事件）：網頁掛機金幣/經驗也吃全服加成
+    try {
+      const gb = require("../stream/globalBuffService").getActiveModifiers();
+      if (gb.goldPct > 0) reward.gold = Math.round(reward.gold * (1 + gb.goldPct / 100));
+      if (gb.expPct > 0) reward.exp = Math.round(reward.exp * (1 + gb.expPct / 100));
+    } catch (_) { /* buff 服務未就緒不影響結算 */ }
 
     const droppedItems = await this._rollAndGrantDrops({
       discordId,

@@ -662,6 +662,11 @@ async function handleDonation(comment) {
   const discordId = bindingPlayer.discordId;
   const displayName = bindingPlayer.displayName || donation.displayName;
 
+  // 斗內觸發全服 Buff（達門檻才觸發；冪等；best-effort）— 不影響下方發鑽流程
+  try {
+    await require("../../services/stream/donationBuffTrigger").maybeTriggerDonationBuff(donation, { discordId, displayName }, serviceContext);
+  } catch (_) { /* noop */ }
+
   // 累積台帳：累積未達 100 台幣的零頭
   const db = (await getMongoDb().catch(() => null));
   if (!db) {

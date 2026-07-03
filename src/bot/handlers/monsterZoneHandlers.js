@@ -1456,6 +1456,16 @@ function buildRewardModifiers(progress, partyRefs = []) {
   dropPct += tierSetBonuses.dropPct;
   dropPct += getDropBoostPct(Number(progress?.pkRating ?? 0));
 
+  // 全服 Buff（直播連動事件）：疊加到個人加成上。
+  // 此處是所有戰鬥獎勵的共用 chokepoint（Discord 打怪 / 網頁 quick-battle / 世界王都經過），
+  // 且回傳的 dropPct 會被 calculateFinalDropChance 使用，故金幣/經驗/掉寶一次覆蓋。
+  try {
+    const gb = require("../../services/stream/globalBuffService").getActiveModifiers();
+    expPct += gb.expPct;
+    goldPct += gb.goldPct;
+    dropPct += gb.dropPct;
+  } catch (_) { /* buff 服務未就緒不影響結算 */ }
+
   return {
     expPct,
     goldPct,

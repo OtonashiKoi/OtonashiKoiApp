@@ -10,6 +10,8 @@ const {
   listMembershipStatuses
 } = require("../../services/stream/streamRecordsService");
 const { reconcileMembership } = require("../../services/stream/membershipTracker");
+const globalBuff = require("../../services/stream/globalBuffService");
+const { getConfig, saveConfig } = require("../../services/stream/streamEventConfig");
 
 function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
   const router = Router();
@@ -78,6 +80,64 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
     } catch (err) {
       next(err);
     }
+  });
+
+  // ── 全服活動：斗內觸發 Buff 設定 + 手動發 Buff ──
+
+  router.get("/admin/stream-events/config", requireAdmin, async (_req, res, next) => {
+    try {
+      res.json(ok(await getConfig()));
+    } catch (err) { next(err); }
+  });
+
+  router.post("/admin/stream-events/config", requireAdmin, async (req, res, next) => {
+    try {
+      const next2 = await saveConfig({ donationBuff: req.body?.donationBuff || {} });
+      res.json(ok(next2, "config saved"));
+    } catch (err) { next(err); }
+  });
+
+  router.get("/admin/stream-events/buffs", requireAdmin, async (_req, res, next) => {
+    try {
+      const [active, recent] = [globalBuff.listActive(), await globalBuff.listRecent({ limit: 50 })];
+      res.json(ok({ active, recent, modifiers: globalBuff.getActiveModifiers() }));
+    } catch (err) { next(err); }
+  });
+
+  // 手動立即發一個全服 Buff（活動/測試用）
+  router.post("/admin/stream-events/buff", requireAdmin, async (req, res, next) => {
+    try {
+      const b = req.body || {};
+      const durationMinutes = Math.max(1, Number(b.durationMinutes) || 0);
+      const r = await globalBuff.applyBuff({
+        label: String(b.label || "管理員全服加成"),
+        source: "manual",
+        dropPct: Number(b.dropPct) || 0,
+        goldPct: Number(b.goldPct) || 0,
+        expPct: Number(b.expPct) || 0,
+        durationMs: durationMinutes * 60_000,
+        createdBy: "admin"
+      });
+      if (!r.applied) return res.status(400).json(fail("BUFF_NOT_APPLIED", `未套用：${r.reason || "未知"}`));
+      // 廣播（可選）
+      if (b.announce && typeof serviceContext._announceTownChat === "function") {
+        const parts = [];
+        if (r.buff.dropPct > 0) parts.push(`掉寶 +${r.buff.dropPct}%`);
+        if (r.buff.goldPct > 0) parts.push(`金幣 +${r.buff.goldPct}%`);
+        if (r.buff.expPct > 0) parts.push(`經驗 +${r.buff.expPct}%`);
+        try { serviceContext._announceTownChat(`🎉 全服活動！${parts.join("、")}，持續 ${durationMinutes} 分鐘！`); } catch (_) {}
+      }
+      res.json(ok(r.buff, "buff applied"));
+    } catch (err) { next(err); }
+  });
+
+  // 結束 buff：帶 id 結束單一，否則全清
+  router.post("/admin/stream-events/buff/clear", requireAdmin, async (req, res, next) => {
+    try {
+      const id = String(req.body?.id || "").trim();
+      const r = id ? await globalBuff.clearBuff(id) : await globalBuff.clearAll();
+      res.json(ok(r, "cleared"));
+    } catch (err) { next(err); }
   });
 
   return router;
