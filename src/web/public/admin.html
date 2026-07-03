@@ -109,6 +109,7 @@
               </button>
               <div class="nav-group-links">
                 <button class="nav-link" data-target="section-leaderboard">排行榜</button>
+                <button class="nav-link" data-target="section-stream-records">📺 直播記錄</button>
                 <button class="nav-link" data-target="section-log">操作紀錄</button>
               </div>
             </div>
@@ -1034,6 +1035,19 @@
             </div>
           </section>
 
+          <section id="section-stream-records" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Stream Records</p>
+                  <h2>直播記錄</h2>
+                  <p class="hint">斗內每一筆自動記錄（含未綁定、未滿百的零頭累積），以及會員(等級身分組)加入／到期／升降級。這是「直播連動事件」的資料底層，先確認記錄有進來，之後再接觸發功能。</p>
+                </div>
+              </div>
+              <div id="stream-records-root"><p class="hint">點選左側「📺 直播記錄」載入。</p></div>
+            </div>
+          </section>
+
           <section id="section-log" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -1103,5 +1117,6 @@
     <script src="/static/admin.auction.js?v=3"></script>
     <script src="/static/admin.casino.js?v=1"></script>
     <script src="/static/admin.story.js?v=12"></script>
+    <script src="/static/admin.stream-records.js?v=1"></script>
   </body>
 </html>

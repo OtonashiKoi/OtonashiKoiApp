@@ -914,6 +914,12 @@ function createBotClient() {
     if (!wasAllowed && isAllowed) {
       await ensureWelcomeAnnouncement(newMember, "guild-member-update");
     }
+    // 會員(tier 身分組)加入/到期/升降級 → 寫進記錄層(best-effort，不影響上面流程)
+    try {
+      await require("../services/stream/membershipTracker").trackMembershipChange(oldMember, newMember, serviceContext);
+    } catch (err) {
+      console.warn("[Membership] update hook error:", err?.message || err);
+    }
   });
 
   return client;

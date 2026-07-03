@@ -50,6 +50,17 @@ async function ensureIndexes(db) {
       db.collection("monsters").createIndex({ zone: 1, enabled: 1, spawnRate: -1 }),
       db.collection("monsters").createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $type: "string" } } }),
 
+      // 直播記錄層（斗內事件流水 / 會員變動）
+      db.collection("donationEvents").createIndex({ createdAt: -1 }),
+      db.collection("donationEvents").createIndex(
+        { sourceRef: 1 },
+        { unique: true, partialFilterExpression: { sourceRef: { $type: "string" } } }
+      ),
+      db.collection("membershipEvents").createIndex({ at: -1 }),
+      db.collection("membershipEvents").createIndex({ discordId: 1, at: -1 }),
+      db.collection("membershipStatus").createIndex({ discordId: 1 }, { unique: true }),
+      db.collection("membershipStatus").createIndex({ isMember: 1, lastChangedAt: -1 }),
+
       // 主線故事
       db.collection("storyChapters").createIndex({ id: 1 }, { unique: true }),
       db.collection("storyChapters").createIndex({ enabled: 1, order: 1 }),

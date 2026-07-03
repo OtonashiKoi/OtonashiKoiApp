@@ -121,6 +121,14 @@
 ### 📺 直播綁定 / 抖內換鑽石
 - 後端：`services/stream/`、`services/creatorAuth/creatorTokenService.js`；OneComme 留言 `bot/commentFetcher.js`、`onecommeSender.js`
 - 綁定 ID 格式坑見 [[stream-binding-id-prefix]]；Collections：`streamAccountBindings`、`creatorTokens`
+- 斗內管線：OneComme→`bot/handlers/streamHandlers.js` `handleDonation()`（NT$/100 換鑽、零頭累積 `donationLedger`、`transactions` 冪等）
+
+### 📊 直播記錄層（直播連動事件的資料底層）— 2026-07 新建
+- 見記憶 [[stream-records-layer]]。後端 `services/stream/streamRecordsService.js`（記錄+查詢）、`services/stream/membershipTracker.js`（Discord tier 身分組 diff）
+- 掛點：斗內→`streamHandlers.js handleDonation`（每筆記 `donationEvents`，含未綁定/未滿百）；會員→`bot/client.js` GuildMemberUpdate→trackMembershipChange
+- 後台：`admin.stream-records.js`（admin.html「📺 直播記錄」，監控與紀錄群組）；API `routes/adminStreamRecordsRoutes.js`
+- Collections：`donationEvents`(逐筆斗內)、`membershipEvents`(會員變動流水)、`membershipStatus`(會員現況表)
+- ⚠️ 續約(renew)Discord 抓不到，需後續接 YouTube 會員 API 到期日；觸發後功能(buff/解鎖/限定王)尚未做
 
 ### 💬 聊天大廳 Chat（網頁 ↔ DC town_chat）
 - 後端：`services/chat/`；SSE + Discord 同步在 `playerAppRoutes.js`（`_announceTownChat`）

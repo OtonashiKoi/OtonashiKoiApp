@@ -10,6 +10,7 @@ const { recordComment } = require("../../services/stream/streamPresence");
 const { joinQueue } = require("../../services/mahjong/mahjongQueue");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+const { recordDonationEvent } = require("../../services/stream/streamRecordsService");
 
 // 可自訂偵測的指令關鍵字
 const STREAM_COMMANDS = {
@@ -638,9 +639,23 @@ async function handleDonation(comment) {
     return false;
   }
 
+  // 斗內事件記錄用的共同欄位（記錄層 best-effort，與發鑽流程解耦）
+  const support = inferStreamSupportSnapshot(comment);
+  const donationEventBase = {
+    sourceRef: donation.sourceRef,
+    platform: donation.platform,
+    platformUserId: donation.platformUserId,
+    displayName: donation.displayName,
+    twdAmount: donation.twdAmount,
+    currency: String(raw.currency || "").toUpperCase() || null,
+    isMember: support.supportDetected,
+    supportKind: support.supportKind || null
+  };
+
   const bindingPlayer = await serviceContext.playerRepository.findByExternalId(donation.platform, donation.platformUserId).catch(() => null);
   if (!bindingPlayer?.discordId) {
     console.log(`[Donation] 未找到綁定玩家，略過發放：platform=${donation.platform} userId=${donation.platformUserId} amount=${donation.twdAmount}`);
+    await recordDonationEvent({ ...donationEventBase, bound: false, discordId: null, diamondsGranted: 0, note: "unbound" }).catch(() => {});
     return false;
   }
 
@@ -680,6 +695,7 @@ async function handleDonation(comment) {
   if (diamondsToGrant <= 0) {
     await persistLedger();
     console.log(`[Donation] 台帳更新 ${displayName}：+TWD${donation.twdAmount} 累積=${newPendingRaw} 發鑽=0 剩餘=${newPending}`);
+    await recordDonationEvent({ ...donationEventBase, displayName, bound: true, discordId, diamondsGranted: 0, pendingAfter: newPending, note: "accumulate" }).catch(() => {});
     await sendDiscordDm(discordId, `💎 感謝你的 NT$${donation.twdAmount} 斗內！累積 NT$${newPendingRaw} 中（還差 NT$${100 - newPendingRaw} 達到 1 顆鑽石）`).catch(() => {});
     return true;
   }
@@ -698,6 +714,7 @@ async function handleDonation(comment) {
     // 發放成功（grantCurrency 以 sourceRef 冪等）後才寫台帳，失敗則零頭保留、下次重試
     await persistLedger();
     console.log(`[Donation] 台帳更新 ${displayName}：+TWD${donation.twdAmount} 累積=${newPendingRaw} 發鑽=${diamondsToGrant} 剩餘=${newPending}`);
+    await recordDonationEvent({ ...donationEventBase, displayName, bound: true, discordId, diamondsGranted: diamondsToGrant, pendingAfter: newPending, note: "granted" }).catch(() => {});
 
     const duplicate = Boolean(result.duplicated);
     if (duplicate) {

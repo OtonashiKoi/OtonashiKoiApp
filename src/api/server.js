@@ -14,6 +14,7 @@ const { createAdminWeeklyQuestRoutes } = require("./routes/adminWeeklyQuestRoute
 const { createAdminIdleRoutes } = require("./routes/adminIdleRoutes");
 const { createAdminCreatorAuthRoutes } = require("./routes/adminCreatorAuthRoutes");
 const { createAdminCombatCalculatorRoutes } = require("./routes/adminCombatCalculatorRoutes");
+const { createAdminStreamRecordsRoutes } = require("./routes/adminStreamRecordsRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const { createPlayerCollectionRoutes } = require("./routes/playerCollectionRoutes");
@@ -118,6 +119,7 @@ function createApiServer(discordClient) {
   app.use(createAdminIdleRoutes(serviceContext));
   app.use(createAdminCreatorAuthRoutes(serviceContext));
   app.use(createAdminCombatCalculatorRoutes(serviceContext));
+  app.use(createAdminStreamRecordsRoutes());
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
   app.use(createPlayerCollectionRoutes(serviceContext));
   app.use(createPlayerForgeRoutes(serviceContext));
