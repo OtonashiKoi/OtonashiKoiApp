@@ -127,8 +127,14 @@
 - 見記憶 [[stream-records-layer]]。後端 `services/stream/streamRecordsService.js`（記錄+查詢）、`services/stream/membershipTracker.js`（Discord tier 身分組 diff）
 - 掛點：斗內→`streamHandlers.js handleDonation`（每筆記 `donationEvents`，含未綁定/未滿百）；會員→`bot/client.js` GuildMemberUpdate→trackMembershipChange
 - 後台：`admin.stream-records.js`（admin.html「📺 直播記錄」，監控與紀錄群組）；API `routes/adminStreamRecordsRoutes.js`
-- Collections：`donationEvents`(逐筆斗內)、`membershipEvents`(會員變動流水)、`membershipStatus`(會員現況表)
-- ⚠️ 續約(renew)Discord 抓不到，需後續接 YouTube 會員 API 到期日；觸發後功能(buff/解鎖/限定王)尚未做
+- Collections：`donationEvents`(逐筆斗內)、`membershipEvents`(會員變動流水)、`membershipStatus`(會員現況表)、`serverBuffs`、`serverEventConfig`
+- 會員到期＝快照比對 `membershipTracker.reconcileMembership`(每12h+後台「🔁立即同步」)，不改身分組；⚠️續約(renew)需後續接 YouTube 會員 API
+
+### 🎉 全服 Buff / 直播觸發（第二階段模組0+A，2026-07 上線）
+- 核心：`services/stream/globalBuffService.js`(記憶體快取全服掉寶/金幣/經驗%加成，index.js啟動init)
+- 注入 chokepoint：`buildRewardModifiers()`(monsterZoneHandlers ~1458，涵蓋Discord/網頁/世界王) + `idleService.js`掛機兩處
+- 斗內觸發：`donationBuffTrigger.js`掛 handleDonation；設定 `streamEventConfig.js`(預設關)；後台「🎉全服活動」分頁 + adminStreamRecordsRoutes `/admin/stream-events/*`
+- SC累積解鎖、直播限定王尚未做
 
 ### 💬 聊天大廳 Chat（網頁 ↔ DC town_chat）
 - 後端：`services/chat/`；SSE + Discord 同步在 `playerAppRoutes.js`（`_announceTownChat`）
