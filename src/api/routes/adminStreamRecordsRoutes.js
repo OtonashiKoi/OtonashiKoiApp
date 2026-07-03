@@ -9,8 +9,9 @@ const {
   listMembershipEvents,
   listMembershipStatuses
 } = require("../../services/stream/streamRecordsService");
+const { reconcileMembership } = require("../../services/stream/membershipTracker");
 
-function createAdminStreamRecordsRoutes() {
+function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
   const router = Router();
 
   function requireAdmin(req, res, next) {
@@ -42,6 +43,25 @@ function createAdminStreamRecordsRoutes() {
       const limit = Number(req.query.limit) || 100;
       const events = await listMembershipEvents({ limit });
       res.json(ok({ events }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 立即快照比對會員名單（不改動任何身分組；補齊現有會員 + 抓出被拔身分組的到期者）
+  router.post("/admin/stream-records/reconcile", requireAdmin, async (_req, res, next) => {
+    try {
+      const config = require("../../config");
+      if (!discordClient?.isReady?.()) {
+        return res.status(503).json(fail("BOT_NOT_READY", "Discord Bot 尚未就緒，稍後再試。"));
+      }
+      if (!config.discord.guildId) {
+        return res.status(400).json(fail("NO_GUILD", "尚未設定 DISCORD_GUILD_ID。"));
+      }
+      const guild = await discordClient.guilds.fetch(config.discord.guildId).catch(() => null);
+      if (!guild) return res.status(400).json(fail("GUILD_NOT_FOUND", "找不到伺服器。"));
+      const summary = await reconcileMembership(guild, serviceContext, { source: "manual-reconcile" });
+      res.json(ok(summary, "reconcile done"));
     } catch (err) {
       next(err);
     }

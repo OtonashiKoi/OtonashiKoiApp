@@ -40,6 +40,7 @@ const MEMORY_HEAPSNAPSHOT_COOLDOWN_MS = Math.max(60_000, Number(process.env.MEMO
 
 let welcomeAuditTimer = null;
 let welcomeAuditRunning = false;
+let membershipReconcileTimer = null;
 let runtimeCachePruneTimer = null;
 let memoryAuditTimer = null;
 let lastMemoryHeapSnapshotAt = 0;
@@ -833,6 +834,22 @@ function createBotClient() {
       console.log(`[Discord] welcome audit timer started (${WELCOME_AUDIT_INTERVAL_MS}ms)`);
     } else {
       console.log("[Discord] welcome audit disabled");
+    }
+
+    // 會員名單定期快照比對（首次上線後 90 秒跑一次補齊現有會員，之後每 12 小時；不改動任何身分組）
+    try {
+      const { reconcileMembership } = require("../services/stream/membershipTracker");
+      const runReconcile = async () => {
+        if (!config.discord.guildId) return;
+        const guild = await readyClient.guilds.fetch(config.discord.guildId).catch(() => null);
+        if (guild) await reconcileMembership(guild, serviceContext, { source: "reconcile" });
+      };
+      setTimeout(() => { runReconcile().catch(() => {}); }, 90_000).unref?.();
+      if (membershipReconcileTimer) clearInterval(membershipReconcileTimer);
+      membershipReconcileTimer = setInterval(() => { runReconcile().catch(() => {}); }, 12 * 60 * 60 * 1000);
+      console.log("[Membership] 會員快照比對排程已啟動（每 12 小時）");
+    } catch (e) {
+      console.warn("[Membership] 快照排程啟動失敗：", e?.message || e);
     }
   });
 

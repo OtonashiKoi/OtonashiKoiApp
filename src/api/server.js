@@ -119,7 +119,7 @@ function createApiServer(discordClient) {
   app.use(createAdminIdleRoutes(serviceContext));
   app.use(createAdminCreatorAuthRoutes(serviceContext));
   app.use(createAdminCombatCalculatorRoutes(serviceContext));
-  app.use(createAdminStreamRecordsRoutes());
+  app.use(createAdminStreamRecordsRoutes(serviceContext, discordClient));
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
   app.use(createPlayerCollectionRoutes(serviceContext));
   app.use(createPlayerForgeRoutes(serviceContext));

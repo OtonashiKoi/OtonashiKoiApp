@@ -36,6 +36,7 @@
       ${btn("memberships", "👑 會員變動")}
       ${btn("status", "📋 會員現況")}
       <button class="button" id="sr-refresh" style="margin-left:6px;">🔄 重新載入</button>
+      ${tab !== "donations" ? '<button class="button" id="sr-sync" style="margin-left:6px;">🔁 立即同步會員名單</button>' : ""}
     </div>`;
   }
 
@@ -130,11 +131,28 @@
     }
   }
 
+  async function syncNow() {
+    const btn = document.getElementById("sr-sync");
+    if (btn) { btn.disabled = true; btn.textContent = "同步中…"; }
+    try {
+      const res = await fetch("/admin/stream-records/reconcile", { method: "POST", headers: headers() });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+      const s = data?.data || {};
+      alert(`✅ 同步完成\n目前會員：${s.currentMembers ?? "?"} 人\n新捕捉加入：${s.joins ?? 0}\n等級變動：${s.changes ?? 0}\n到期(掉身分組)：${s.expiries ?? 0}`);
+      render();
+    } catch (e) {
+      alert("同步失敗：" + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = "🔁 立即同步會員名單"; }
+    }
+  }
+
   // 事件委派（nav 可能被搜尋重建）
   document.addEventListener("click", (e) => {
     const tabBtn = e.target.closest?.("[data-sr-tab]");
     if (tabBtn) { tab = tabBtn.dataset.srTab; render(); return; }
     if (e.target.closest?.("#sr-refresh")) { render(); return; }
+    if (e.target.closest?.("#sr-sync")) { syncNow(); return; }
     if (e.target.closest?.('[data-target="section-stream-records"]')) setTimeout(render, 60);
   });
   const sec = document.getElementById("section-stream-records");

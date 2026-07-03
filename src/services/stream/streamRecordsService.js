@@ -151,6 +151,8 @@ async function recordMembershipChange(change) {
     lastEvent: event,
     lastChangedAt: iso
   };
+  // 只要目前是會員，就同步「最後確認為會員」的時間戳（供時間判斷用）
+  if (isMember) set.lastMemberConfirmedAt = iso;
   const setOnInsert = { firstSeenAt: iso };
   const inc = {};
   if (event === "join" || event === "rejoin") {
@@ -169,6 +171,36 @@ async function recordMembershipChange(change) {
     await db.collection("membershipStatus").updateOne({ discordId }, update, { upsert: true });
   } catch (err) {
     console.warn("[StreamRecords] membershipStatus 更新失敗：", err?.message || err);
+  }
+}
+
+/**
+ * 快照確認：某人「這次掃描仍是會員、且等級沒變」時呼叫。
+ * 只更新「最後確認時間」與現況，不寫事件流水（避免每次快照都灌 log）。
+ */
+async function touchMemberConfirmed({ discordId, displayName, tier, label }) {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return;
+  const iso = new Date().toISOString();
+  const did = String(discordId || "");
+  if (!did) return;
+  try {
+    await db.collection("membershipStatus").updateOne(
+      { discordId: did },
+      {
+        $set: {
+          displayName: displayName || null,
+          currentTier: tier || null,
+          currentLabel: label || null,
+          isMember: true,
+          lastMemberConfirmedAt: iso
+        },
+        $setOnInsert: { firstSeenAt: iso, firstJoinedAt: iso }
+      },
+      { upsert: true }
+    );
+  } catch (err) {
+    console.warn("[StreamRecords] touchMemberConfirmed 失敗：", err?.message || err);
   }
 }
 
@@ -236,6 +268,7 @@ module.exports = {
   diffTier,
   recordDonationEvent,
   recordMembershipChange,
+  touchMemberConfirmed,
   listDonationEvents,
   getDonationSummary,
   listMembershipEvents,
