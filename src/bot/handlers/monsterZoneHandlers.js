@@ -2294,6 +2294,16 @@ async function handleEnterBattle(interaction) {
         await interaction.editReply({ content: `🔒 ${levelError}` });
         return;
       }
+      // 主線閘門：未看完該區主線 → DC 也不能刷（引導去網頁看劇情），與網頁同規則
+      try {
+        const storyGate = await sc.storyService?.checkZoneStoryGate(cachedProgress, zoneKey);
+        if (storyGate) {
+          await interaction.editReply({ content: `📖 需先到網頁版閱讀主線「${storyGate.chapterTitle}」，才能在此區域行動。` });
+          return;
+        }
+      } catch (e) {
+        console.warn("[Story] DC zone gate check failed:", e?.message || e);
+      }
     }
 
     // 若玩家正在掛機，進戰鬥時自動先結算一次並結束掛機

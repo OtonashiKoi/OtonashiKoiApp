@@ -144,6 +144,8 @@ function createServiceContext() {
     itemRepository: repositories.itemRepository,
     petRepository: repositories.petRepository,
   });
+  const { StoryService } = require("./story/storyService");
+  const storyService = new StoryService(repositories.storyRepository, repositories.progressRepository, monsterService);
   const adminConsoleService = new AdminConsoleService(
     repositories.channelLayoutRepository,
     repositories.playerRepository,
@@ -184,7 +186,8 @@ function createServiceContext() {
     inviteService,
     creatorTokenService,
     casinoService,
-    petService
+    petService,
+    storyService
   };
 }
 

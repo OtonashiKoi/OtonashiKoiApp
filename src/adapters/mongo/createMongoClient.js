@@ -50,6 +50,12 @@ async function ensureIndexes(db) {
       db.collection("monsters").createIndex({ zone: 1, enabled: 1, spawnRate: -1 }),
       db.collection("monsters").createIndex({ id: 1 }, { unique: true, partialFilterExpression: { id: { $type: "string" } } }),
 
+      // 主線故事
+      db.collection("storyChapters").createIndex({ id: 1 }, { unique: true }),
+      db.collection("storyChapters").createIndex({ enabled: 1, order: 1 }),
+      db.collection("storyChapters").createIndex({ zoneKey: 1 }),
+      db.collection("storyNpcs").createIndex({ id: 1 }, { unique: true }),
+
       // 商店和道具
       db.collection("shopItems").createIndex({ id: 1 }, { unique: true }),
       db.collection("items").createIndex({ id: 1 }, { unique: true })

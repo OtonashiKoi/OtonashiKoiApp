@@ -69,6 +69,16 @@
               </div>
             </div>
 
+            <div class="nav-group is-open" data-nav-group="story">
+              <button class="nav-group-toggle" type="button" aria-expanded="true">
+                <span>🎬 主線劇情</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-story">📖 劇本編輯工具</button>
+              </div>
+            </div>
+
             <div class="nav-group" data-nav-group="playerops">
               <button class="nav-group-toggle" type="button" aria-expanded="false">
                 <span>玩家營運</span>
@@ -877,6 +887,22 @@
             </div>
           </section>
 
+          <section id="section-story" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Story</p>
+                  <h2>主線劇情編輯</h2>
+                  <p class="hint">文字冒險章節：一章綁一張地圖，玩家沒看完該章就不能在該地圖戰鬥/掛機；章節依「順序」一章一章解鎖。NPC 立繪與背景圖走 Cloudinary。</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button id="story-refresh-btn" class="button">🔄 重新載入</button>
+                </div>
+              </div>
+              <div id="story-editor-root"><p class="hint">點選左側「主線劇情編輯」或按重新載入以載入資料。</p></div>
+            </div>
+          </section>
+
           <section id="section-casino" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -1076,5 +1102,6 @@
     <script src="/static/admin.image-cropper.js?v=3"></script>
     <script src="/static/admin.auction.js?v=3"></script>
     <script src="/static/admin.casino.js?v=1"></script>
+    <script src="/static/admin.story.js?v=12"></script>
   </body>
 </html>

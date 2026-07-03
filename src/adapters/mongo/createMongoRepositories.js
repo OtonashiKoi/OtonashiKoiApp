@@ -1005,6 +1005,37 @@ function createMongoRepositories() {
         ]).toArray();
         return agg[0] || { totalBet: 0, totalPayout: 0, houseProfit: 0, rounds: 0 };
       }
+    },
+    // 主線故事：章節（storyChapters）+ NPC（storyNpcs）
+    storyRepository: {
+      async listChapters() {
+        return (await collection("storyChapters")).find({}).toArray();
+      },
+      async findChapterById(id) {
+        return (await collection("storyChapters")).findOne({ id }) || null;
+      },
+      async saveChapter(doc) {
+        const { _id, ...rest } = doc;
+        await (await collection("storyChapters")).updateOne({ id: doc.id }, { $set: rest }, { upsert: true });
+        return doc;
+      },
+      async deleteChapter(id) {
+        await (await collection("storyChapters")).deleteOne({ id });
+      },
+      async listNpcs() {
+        return (await collection("storyNpcs")).find({}).toArray();
+      },
+      async findNpcById(id) {
+        return (await collection("storyNpcs")).findOne({ id }) || null;
+      },
+      async saveNpc(doc) {
+        const { _id, ...rest } = doc;
+        await (await collection("storyNpcs")).updateOne({ id: doc.id }, { $set: rest }, { upsert: true });
+        return doc;
+      },
+      async deleteNpc(id) {
+        await (await collection("storyNpcs")).deleteOne({ id });
+      }
     }
   };
 

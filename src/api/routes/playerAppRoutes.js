@@ -2479,6 +2479,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return res.status(400).json({ status: "error", message: levelError });
       }
 
+      // 主線閘門：該區有主線章節且未看完 → 等級到了也不能刷（回章節資訊供前端導去劇情頁）
+      try {
+        const storyGate = await serviceContext.storyService.checkZoneStoryGate(progress, zoneKey);
+        if (storyGate) {
+          return res.status(403).json({
+            status: "error",
+            code: "story_required",
+            message: `需先閱讀主線「${storyGate.chapterTitle}」才能在此區域行動。`,
+            chapterId: storyGate.chapterId,
+            chapterTitle: storyGate.chapterTitle
+          });
+        }
+      } catch (e) {
+        // 閘門故障不鎖死玩法（fail-open），僅記錄
+        console.warn("[Story] zone gate check failed:", e?.message || e);
+      }
+
       // Calc player stats（永遠從 DB 讀取最新 effects，不使用 snapshot 裡的舊值）
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };

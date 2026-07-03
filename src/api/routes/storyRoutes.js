@@ -1,0 +1,198 @@
+"use strict";
+/**
+ * 主線故事路由。
+ * 玩家端（requireAuth JWT）：
+ *   GET  /api/story/chapters           章節目錄（含 locked/available/completed 狀態）
+ *   GET  /api/story/chapters/:id       章節內容（nodes 附 NPC 名字/立繪）
+ *   POST /api/story/chapters/:id/complete  完成章節（body.skipped=true 代表按 SKIP）
+ * 後台（Bearer adminPassword，同其他 /admin 路由）：
+ *   GET/POST /admin/story/chapters、DELETE /admin/story/chapters/:id
+ *   GET/POST /admin/story/npcs、DELETE /admin/story/npcs/:id
+ *   POST /admin/story/npcs/:id/portrait  立繪上傳（Cloudinary，同怪物圖片流程）
+ */
+
+const { Router } = require("express");
+const fs = require("fs");
+const multer = require("multer");
+const { ok, fail } = require("../../shared/response");
+const { requireAuth } = require("./requireAuth");
+const config = require("../../config");
+
+const upload = multer({
+  dest: "/tmp/story-uploads/",
+  limits: { fileSize: 8 * 1024 * 1024 }
+});
+
+function createStoryRoutes(serviceContext) {
+  const router = Router();
+  const storyService = serviceContext.storyService;
+
+  // ── 玩家端 ──
+
+  router.get("/api/story/chapters", requireAuth, async (req, res, next) => {
+    try {
+      const list = await storyService.listChaptersForPlayer(req.playerRecord.discordId);
+      res.json(ok(list, "story chapters fetched"));
+    } catch (error) { next(error); }
+  });
+
+  router.get("/api/story/chapters/:id", requireAuth, async (req, res, next) => {
+    try {
+      const chapter = await storyService.getChapterForPlayer(req.playerRecord.discordId, req.params.id);
+      res.json(ok(chapter, "story chapter fetched"));
+    } catch (error) { next(error); }
+  });
+
+  router.post("/api/story/chapters/:id/complete", requireAuth, async (req, res, next) => {
+    try {
+      const result = await storyService.completeChapter(req.playerRecord.discordId, req.params.id, {
+        skipped: req.body?.skipped === true
+      });
+      res.json(ok(result, "story chapter completed"));
+    } catch (error) { next(error); }
+  });
+
+  // 劇情戰鬥：打章節裡指定的怪。無入場費、無獎勵、不動區域狀態；勝利才記錄通過。
+  router.post("/api/story/battle", requireAuth, async (req, res, next) => {
+    try {
+      const discordId = req.playerRecord.discordId;
+      const chapterId = String(req.body?.chapterId || "");
+      const nodeIndex = Number(req.body?.nodeIndex);
+      const battleNode = await storyService.getBattleNode(discordId, chapterId, nodeIndex);
+      const monster = await serviceContext.monsterService.getMonsterById(battleNode.monsterId);
+      if (!monster) {
+        res.status(400).json(fail("INVALID_ARGUMENT", "該戰鬥節點指定的怪物不存在"));
+        return;
+      }
+
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      const { calcPlayerStats } = require("../../shared/combatStats");
+      const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
+      const { runCombatLoop } = require("../../shared/combatLoop");
+      const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+      const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
+      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating });
+
+      const result = runCombatLoop(pStats, monster.calc, monster.name, monster.calc.maxHp, undefined, {
+        playerName: req.playerRecord.displayName || "我",
+        playerLevel: progress?.level || 1,
+        equipped,
+        inventory: progress?.inventory || [],
+        monsterEquipped: monster.equipped || {},
+        monsterIsBoss: Boolean(monster?.isBoss)
+      });
+
+      const won = result.outcome === "win";
+      if (won) await storyService.recordBattleWin(discordId, chapterId, nodeIndex).catch(() => {});
+
+      res.json(ok({
+        won,
+        outcome: result.outcome,
+        mustWin: battleNode.mustWin,
+        logs: result.roundLogs || [],
+        finalPlayerHp: result.finalPlayerHp,
+        playerMaxHp: pStats.maxHp,
+        monster: { name: monster.name, imageUrl: monster.imageUrl || null, maxHp: monster.calc.maxHp },
+        finalMonsterHp: result.finalMonsterHp
+      }, "story battle resolved"));
+    } catch (error) { next(error); }
+  });
+
+  // ── 後台 ──
+
+  router.use("/admin/story", (req, res, next) => {
+    const authHeader = req.header("Authorization") || "";
+    const token = authHeader.replace("Bearer ", "");
+    if (token !== config.api.adminPassword) {
+      res.status(401).json(fail("ADMIN_UNAUTHORIZED", "Invalid admin password."));
+      return;
+    }
+    next();
+  });
+
+  router.get("/admin/story/chapters", async (req, res, next) => {
+    try { res.json(ok(await storyService.adminListChapters(), "chapters listed")); }
+    catch (error) { next(error); }
+  });
+
+  router.post("/admin/story/chapters", async (req, res, next) => {
+    try { res.json(ok(await storyService.adminSaveChapter(req.body || {}), "chapter saved")); }
+    catch (error) { next(error); }
+  });
+
+  router.delete("/admin/story/chapters/:id", async (req, res, next) => {
+    try { res.json(ok(await storyService.adminDeleteChapter(req.params.id), "chapter deleted")); }
+    catch (error) { next(error); }
+  });
+
+  router.get("/admin/story/npcs", async (req, res, next) => {
+    try { res.json(ok(await storyService.adminListNpcs(), "npcs listed")); }
+    catch (error) { next(error); }
+  });
+
+  router.post("/admin/story/npcs", async (req, res, next) => {
+    try { res.json(ok(await storyService.adminSaveNpc(req.body || {}), "npc saved")); }
+    catch (error) { next(error); }
+  });
+
+  router.delete("/admin/story/npcs/:id", async (req, res, next) => {
+    try { res.json(ok(await storyService.adminDeleteNpc(req.params.id), "npc deleted")); }
+    catch (error) { next(error); }
+  });
+
+  // 編輯器用：怪物清單（下拉選戰鬥節點的怪，含 BOSS）
+  router.get("/admin/story/monsters", async (req, res, next) => {
+    try {
+      const list = await serviceContext.monsterService.listMonsters({ includeDisabled: false });
+      const slim = list.map((m) => ({ id: m.id, name: m.name, zone: m.zone, level: m.level, isBoss: Boolean(m.isBoss), imageUrl: m.imageUrl || null }))
+        .sort((a, b) => String(a.zone || "").localeCompare(String(b.zone || "")) || (a.level || 0) - (b.level || 0));
+      res.json(ok(slim, "monsters listed"));
+    } catch (error) { next(error); }
+  });
+
+  // 編輯器用：zone 下拉選單（單一來源 src/shared/zones.js）
+  router.get("/admin/story/zones", (req, res) => {
+    const { ALL_ZONE_KEYS, getZoneTheme } = require("../../shared/zones");
+    const zones = ALL_ZONE_KEYS.map((key) => ({ key, label: getZoneTheme(key)?.label || key }));
+    res.json(ok(zones, "zones listed"));
+  });
+
+  // 通用圖片上傳（章節/節點背景圖用）：統一走 Cloudinary
+  router.post("/admin/story/upload", upload.single("image"), async (req, res, next) => {
+    try {
+      if (!req.file) {
+        res.status(400).json(fail("INVALID_ARGUMENT", "image file is required"));
+        return;
+      }
+      const { uploadImage } = require("../../shared/cloudinaryUpload");
+      const { imageUrl } = await uploadImage(req.file.path, "story-backgrounds");
+      res.json(ok({ imageUrl }, "image uploaded"));
+    } catch (error) {
+      next(error);
+    } finally {
+      if (req.file?.path) fs.unlink(req.file.path, () => {});
+    }
+  });
+
+  // NPC 立繪上傳：統一走 Cloudinary（與怪物圖片同流程）
+  router.post("/admin/story/npcs/:id/portrait", upload.single("image"), async (req, res, next) => {
+    try {
+      if (!req.file) {
+        res.status(400).json(fail("INVALID_ARGUMENT", "image file is required"));
+        return;
+      }
+      const { uploadImage } = require("../../shared/cloudinaryUpload");
+      const { imageUrl } = await uploadImage(req.file.path, "story-npcs");
+      const npc = await storyService.adminSaveNpc({ id: req.params.id, name: undefined, portraitUrl: imageUrl });
+      res.json(ok({ portraitUrl: imageUrl, npc }, "portrait uploaded"));
+    } catch (error) {
+      next(error);
+    } finally {
+      if (req.file?.path) fs.unlink(req.file.path, () => {});
+    }
+  });
+
+  return router;
+}
+
+module.exports = { createStoryRoutes };

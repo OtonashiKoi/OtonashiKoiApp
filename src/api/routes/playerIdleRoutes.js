@@ -59,6 +59,20 @@ function createPlayerIdleRoutes(serviceContext) {
         res.status(400).json(fail("INVALID_ARGUMENT", "zoneKey is required"));
         return;
       }
+      // 主線閘門：未看完該區主線 → 不能在該區掛機（與戰鬥同規則）
+      try {
+        const storyGate = await serviceContext.storyService.checkZoneStoryGate(discordId, zoneKey);
+        if (storyGate) {
+          res.status(403).json({
+            status: "error", code: "story_required",
+            message: `需先閱讀主線「${storyGate.chapterTitle}」才能在此區域掛機。`,
+            chapterId: storyGate.chapterId, chapterTitle: storyGate.chapterTitle
+          });
+          return;
+        }
+      } catch (e) {
+        console.warn("[Story] idle zone gate check failed:", e?.message || e);
+      }
       const started = await idleService.startDiscordSession(discordId, displayName, zoneKey);
       res.json(ok(started, "idle session started"));
     } catch (error) {

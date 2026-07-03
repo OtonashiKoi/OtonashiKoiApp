@@ -19,6 +19,7 @@ const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const { createPlayerCollectionRoutes } = require("./routes/playerCollectionRoutes");
 const { createPlayerForgeRoutes } = require("./routes/playerForgeRoutes");
 const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
+const { createStoryRoutes } = require("./routes/storyRoutes");
 const { createMahjongRoutes } = require("./routes/mahjongRoutes");
 const { serviceContext: sharedServiceContext } = require("../bot/runtimeContext");
 const config = require("../config");
@@ -121,6 +122,7 @@ function createApiServer(discordClient) {
   app.use(createPlayerCollectionRoutes(serviceContext));
   app.use(createPlayerForgeRoutes(serviceContext));
   app.use(createPlayerIdleRoutes(serviceContext));
+  app.use(createStoryRoutes(serviceContext));
   app.use(createMahjongRoutes());
 
   // === Web 前端 SPA 靜態服務 ===
