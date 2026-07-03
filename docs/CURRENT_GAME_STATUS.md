@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-06-13T15:31:47.037Z
+Generated at: 2026-07-02T03:40:17.357Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,11 +8,11 @@ Generated at: 2026-06-13T15:31:47.037Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 372 |
-| 進度資料 | 376 |
+| 玩家 | 411 |
+| 進度資料 | 415 |
 | 怪物 | 52 |
 | 怪物狀態文件 | 10 |
-| 道具 | 334 |
+| 道具 | 345 |
 | 任務 | 38 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
@@ -23,9 +23,9 @@ Generated at: 2026-06-13T15:31:47.037Z
 
 | Zone | 名稱 | 最低等級 | 最高等級 | 怪物 | 啟用 | Boss |
 | --- | --- | --- | --- | --- | --- | --- |
-| beginner | 新手區 | 1 | 無上限 | 5 | 5 | 1 |
-| normal | 一般區 | 1 | 無上限 | 8 | 8 | 2 |
-| mid | 中級區 | 10 | 無上限 | 12 | 12 | 2 |
+| beginner | 新手村外的草叢 | 1 | 無上限 | 5 | 5 | 1 |
+| normal | 起始的草原 | 1 | 無上限 | 8 | 8 | 2 |
+| mid | 陽光草原 | 10 | 無上限 | 12 | 12 | 2 |
 | ancient_city | 古城 | 20 | 30 | 8 | 8 | 1 |
 | ancient_city_deep | 古城深處 | 30 | 40 | 7 | 7 | 2 |
 | dragon_realm | 龍族之領 | 40 | 50 | 10 | 10 | 2 |
@@ -96,9 +96,9 @@ Generated at: 2026-06-13T15:31:47.037Z
 
 | 分類 | 數量 |
 | --- | --- |
-| collectible | 1 |
+| collectible | 6 |
 | consumable | 20 |
-| equipment | 302 |
+| equipment | 308 |
 | job_badge | 10 |
 | pet_egg | 1 |
 
@@ -108,13 +108,14 @@ Generated at: 2026-06-13T15:31:47.037Z
 | B | 70 |
 | C | 71 |
 | D | 57 |
-| S | 11 |
-| 無階級 | 35 |
+| S | 17 |
+| 無階級 | 40 |
 
 | 槽位 | 數量 |
 | --- | --- |
 | accessory_l | 43 |
 | accessory_r | 43 |
+| anchor | 6 |
 | armor | 16 |
 | garment | 16 |
 | head_low | 16 |
@@ -126,12 +127,17 @@ Generated at: 2026-06-13T15:31:47.037Z
 | special | 52 |
 | title_eq | 8 |
 | weapon | 52 |
-| 無槽位 | 22 |
+| 無槽位 | 27 |
 
 ## Items
 
 | ID | 名稱 | 類型 | 階級 | 槽位 | 武器類型 | 屬性 | 效果 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| b7f5ef58-79d3-41ef-b9d2-c726da22417b | 【圖片】音無 哭哭 錢錢飛走了 | collectible |  |  |  |  | none |
+| 50110bc1-9403-4ac2-a69f-27d8162d1a9e | 【圖片】音無2025年11月11日 | collectible |  |  |  |  | none |
+| c5db63c0-79f2-452a-a076-78f09093a65c | 【圖片】音無2025年1月新年會限圖 | collectible |  |  |  |  | none |
+| 9d3c7998-6b65-4d5a-81d5-4c34a8dc744e | 【圖片】音無2025年情人節會限圖 | collectible |  |  |  |  | none |
+| 9b8ef677-eda3-42bc-82d7-63c202b49cd2 | 【圖片】音無樂園限定CB圖 | collectible |  |  |  |  | none |
 | a0b83358-572b-45c0-997b-3fa93dff7a32 | 【圖片】龍族紀元-收藏用 | collectible |  |  |  |  | none |
 | 9b8ad195-9ec1-401b-9b7f-2c1033628cba | 【 我命由我不由天 】藥水 | consumable |  |  |  |  | level_down_random_attributes |
 | 4a3b928f-c86a-4f3e-b1be-8ca2828072ae | 【鯉市長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
@@ -445,6 +451,12 @@ Generated at: 2026-06-13T15:31:47.037Z
 | 2271e23c-9648-430e-944b-cea2107ee8ec | 木製雙手斧 | equipment | D | weapon | axe_2h | STR+5 LUK+1 | none |
 | 2fcf7576-4e74-4280-b1e6-0d7da7b58dda | 木製雙手槌 | equipment | D | weapon | mace_2h | STR+5 VIT+1 | none |
 | e3794447-e19d-41a2-9b0a-c5050dcdd9ea | 木製雙手法杖 | equipment | D | weapon | staff_2h | INT+5 LUK+1 | none |
+| s-legend-linger | 滯・後勢之刃 | equipment | S | anchor |  | STR+19 | none |
+| s-legend-bond | 繫絆・共鳴之鏈 | equipment | S | anchor |  | AGI+8 VIT+8 INT+8 | none |
+| s-legend-reverse-scale | 逆鱗・反擊之衣 | equipment | S | anchor |  | VIT+18 | none |
+| s-legend-mirror | 鏡裝・攻守倒置 | equipment | S | anchor |  |  | none |
+| s-legend-burst | 驟・先機之刃 | equipment | S | anchor |  | STR+19 | none |
+| s-legend-dice | 骰・命運之輪 | equipment | S | anchor |  | LUK+20 | none |
 | s-dragon-axe_2h | 屠龍巨斧 | equipment | S | weapon | axe_2h | STR+20 LUK+5 | none |
 | s-dragon-sword_1h | 幼龍牙劍 | equipment | S | weapon | sword_1h | STR+19 | none |
 | s-dragon-axe_1h | 裂龍手斧 | equipment | S | weapon | axe_1h | STR+14 LUK+5 | none |
@@ -485,21 +497,21 @@ Generated at: 2026-06-13T15:31:47.037Z
 | job | 80 | 軍師試煉 | battle_with_sword | 10 | 啟用 | 500 金幣 + 軍師徽章 | 出現條件：Lv.10，基礎 AGI + INT + DEX > 10。進度武器：單手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與軍師徽章。 |
 | job | 90 | 詩人試煉 | battle_with_bow | 10 | 啟用 | 500 金幣 + 詩人徽章 | 出現條件：Lv.10，基礎 DEX + AGI + LUK > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與詩人徽章。 |
 | job | 100 | 結界師試煉 | battle_with_staff | 10 | 啟用 | 500 金幣 + 結界師徽章 | 出現條件：Lv.10，基礎 INT + VIT + DEX > 10。進度武器：單手法杖或雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與結界師徽章。 |
-| onboarding | 10 | 完成直播綁定 | stream_bind_count | 1 | 啟用 | 200 金幣 + 80 EXP + 布帽 | 先完成直播綁定，讓系統認得你的直播帳號。 |
-| onboarding | 20 | 首次出戰 | battle_count | 1 | 啟用 | 120 金幣 + 60 EXP + 木製單手劍 | 進入任一戰鬥完成 1 次出戰即可。 |
-| onboarding | 30 | 首次勝利 | battle_win | 1 | 啟用 | 180 金幣 + 90 EXP + 木盾 | 用任一武器打贏 1 場戰鬥即可。 |
+| onboarding | 1 | 裝備任一裝備 1 次 | equip_count | 1 | 啟用 | 200 金幣 + 90 EXP + 木製單手斧 | 任意裝備一件裝備即可完成。 |
+| onboarding | 2 | 首次出戰 | battle_count | 1 | 啟用 | 120 金幣 + 60 EXP + 木製單手劍 | 在新手村外的草叢戰鬥一次即可。 |
+| onboarding | 3 | 完成 1 次打卡 | checkin_count | 1 | 啟用 | 150 金幣 + 60 EXP | 到打卡功能完成 1 次打卡即可。 |
+| onboarding | 3 | 首次勝利 | battle_win | 1 | 啟用 | 180 金幣 + 90 EXP + 木盾 | 用任一武器打贏 1 場戰鬥即可。 |
+| onboarding | 4 | 完成 1 次強化 | enhance_count | 1 | 啟用 | 240 金幣 + 120 EXP + 布披風 | 對任一裝備進行 1 次強化即可。 |
+| onboarding | 5 | 完成直播綁定 | stream_bind_count | 1 | 啟用 | 200 金幣 + 80 EXP + 布帽 | 先完成直播綁定，讓系統認得你的直播帳號。 |
 | onboarding | 40 | 累計造成 500 傷害 | damage_total | 500 | 啟用 | 200 金幣 + 100 EXP + 布衣 | 持續出戰、累積輸出，總傷害達到 500 即可。 |
-| onboarding | 50 | 完成 1 次打卡 | checkin_count | 1 | 啟用 | 150 金幣 + 60 EXP + 8c9ac7c4-e00d-44fb-9582-8c68b99c2357 | 到打卡功能完成 1 次打卡即可。 |
-| onboarding | 60 | 裝備任一裝備 1 次 | equip_count | 1 | 啟用 | 200 金幣 + 90 EXP + 木製單手斧 | 任意裝備一件裝備即可完成。 |
-| onboarding | 70 | 完成 1 次強化 | enhance_count | 1 | 啟用 | 240 金幣 + 120 EXP + 布披風 | 對任一裝備進行 1 次強化即可。 |
 | onboarding | 80 | 出戰 10 次 | battle_count | 10 | 啟用 | 400 金幣 + 160 EXP + 木製雙手劍 | 重複出戰累積到 10 次即可。 |
 | onboarding | 90 | 成功連擊3次 | combo_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製匕首 | 建議使用匕首，連擊率最高；搭配高 AGI 會更容易累積連擊。 |
 | onboarding | 100 | 成功迴避3次 | dodge_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製弓 | 提升 AGI，或使用弓這類偏閃躲的配置來提高迴避機會。 |
 | onboarding | 110 | 成功格擋3次 | block_count | 3 | 啟用 | 220 金幣 + 100 EXP + 木製單手槌 | 裝備盾牌即可格擋；若想兼顧格擋後反擊，建議單手劍 + 盾。 |
 | onboarding | 120 | 成功擊暈3次 | stun_count | 3 | 啟用 | 260 金幣 + 120 EXP + 木製雙手槌 | 建議使用槌類武器，尤其是雙手槌，擊暈機率更高。 |
-| onboarding | 130 | 角色死亡3次 | death_count | 3 | 啟用 | 260 金幣 + 120 EXP + 33d319ec-cb62-4826-8bcc-82a6fe52b8fa | 在戰鬥中累積死亡 3 次即可。 |
+| onboarding | 130 | 角色死亡3次 | death_count | 3 | 啟用 | 260 金幣 + 120 EXP | 在戰鬥中累積死亡 3 次即可。 |
 | onboarding | 140 | 達成 Lv.10 並獲得職業徽章 | level_10_job_badge | 1 | 啟用 | 300 金幣 + 150 EXP | 升到 Lv.10，並獲得任一職業徽章即可完成。 |
-| onboarding | 150 | 成功連擊20次 | combo_count | 20 | 啟用 | 500 金幣 + 220 EXP + 44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf | 同樣建議用匕首，配合高 AGI 與持續輸出，較容易把連擊堆高。 |
+| onboarding | 150 | 成功連擊20次 | combo_count | 20 | 啟用 | 500 金幣 + 220 EXP | 同樣建議用匕首，配合高 AGI 與持續輸出，較容易把連擊堆高。 |
 | onboarding | 160 | 完成全部新手任務 | onboarding_complete_count | 1 | 啟用 | 屬性重製藥水 | 完成前面所有新手任務後，再回來領取最終獎勵。 |
 | season | 10 | 屠龍者の試煉 | kill_dragon_king | 10 | 啟用 | 龍王的零嘴們 | 擊敗世界王【古龍王(B)】10 次，獲得稱號「龍王的零嘴們」（龍族之領／龍王巢穴最終傷害 +5%）。 |
 | weekly | 10 | 每週出戰 30 次 | battle_count | 30 | 啟用 | 1200 金幣 + 500 EXP |  |
