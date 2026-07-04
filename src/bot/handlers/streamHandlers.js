@@ -662,11 +662,6 @@ async function handleDonation(comment) {
   const discordId = bindingPlayer.discordId;
   const displayName = bindingPlayer.displayName || donation.displayName;
 
-  // 斗內觸發全服 Buff（達門檻才觸發；冪等；best-effort）— 不影響下方發鑽流程
-  try {
-    await require("../../services/stream/donationBuffTrigger").maybeTriggerDonationBuff(donation, { discordId, displayName }, serviceContext);
-  } catch (_) { /* noop */ }
-
   // 累積台帳：累積未達 100 台幣的零頭
   const db = (await getMongoDb().catch(() => null));
   if (!db) {
@@ -681,6 +676,16 @@ async function handleDonation(comment) {
     console.log(`[Donation] 事件已處理過，略過：${displayName} sourceRef=${donation.sourceRef}`);
     return true;
   }
+
+  // 直播連動事件觸發（確認是全新斗內事件後、發鑽前）— best-effort，不影響發鑽
+  //   1) 斗內觸發全服 Buff（達門檻）
+  //   2) SC 累積條 +金額（達里程碑則解鎖）
+  try {
+    await require("../../services/stream/donationBuffTrigger").maybeTriggerDonationBuff(donation, { discordId, displayName }, serviceContext);
+  } catch (_) { /* noop */ }
+  try {
+    await require("../../services/stream/scBarService").addDonation(donation.twdAmount, { discordId, displayName }, serviceContext);
+  } catch (_) { /* noop */ }
 
   const newPendingRaw = (ledger.pendingTwd || 0) + donation.twdAmount;
   const diamondsToGrant = Math.floor(newPendingRaw / 100);

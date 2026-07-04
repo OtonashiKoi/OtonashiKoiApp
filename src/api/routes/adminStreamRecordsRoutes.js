@@ -11,6 +11,7 @@ const {
 } = require("../../services/stream/streamRecordsService");
 const { reconcileMembership } = require("../../services/stream/membershipTracker");
 const globalBuff = require("../../services/stream/globalBuffService");
+const scBar = require("../../services/stream/scBarService");
 const { getConfig, saveConfig } = require("../../services/stream/streamEventConfig");
 
 function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
@@ -92,8 +93,33 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
 
   router.post("/admin/stream-events/config", requireAdmin, async (req, res, next) => {
     try {
-      const next2 = await saveConfig({ donationBuff: req.body?.donationBuff || {} });
+      const patch = {};
+      if (req.body?.donationBuff !== undefined) patch.donationBuff = req.body.donationBuff;
+      if (req.body?.scBar !== undefined) patch.scBar = req.body.scBar;
+      const next2 = await saveConfig(patch);
       res.json(ok(next2, "config saved"));
+    } catch (err) { next(err); }
+  });
+
+  // SC 累積條：目前進度（後台）
+  router.get("/admin/stream-events/sc-bar", requireAdmin, async (_req, res, next) => {
+    try {
+      res.json(ok(await scBar.getPublicProgress()));
+    } catch (err) { next(err); }
+  });
+
+  // SC 累積條：手動重置（清除方法之一；archive 到 scBarHistory）
+  router.post("/admin/stream-events/sc-bar/reset", requireAdmin, async (req, res, next) => {
+    try {
+      const r = await scBar.reset({ archive: true, periodLabel: req.body?.periodLabel || null });
+      res.json(ok(r, "sc bar reset"));
+    } catch (err) { next(err); }
+  });
+
+  // 公開：SC 累積條進度（給玩家端進度條用，免登入）
+  router.get("/api/stream/sc-bar", async (_req, res, next) => {
+    try {
+      res.json(ok(await scBar.getPublicProgress()));
     } catch (err) { next(err); }
   });
 

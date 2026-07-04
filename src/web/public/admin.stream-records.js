@@ -113,11 +113,13 @@
   }
 
   async function renderEvents() {
-    const [cfgWrap, buffs] = await Promise.all([
+    const [cfgWrap, buffs, scp] = await Promise.all([
       fetchJSON("/admin/stream-events/config"),
-      fetchJSON("/admin/stream-events/buffs")
+      fetchJSON("/admin/stream-events/buffs"),
+      fetchJSON("/admin/stream-events/sc-bar")
     ]);
     const c = (cfgWrap && cfgWrap.donationBuff) || {};
+    const scCfg = (cfgWrap && cfgWrap.scBar) || { enabled: false, milestones: [] };
     const mod = buffs.modifiers || { dropPct: 0, goldPct: 0, expPct: 0 };
     const active = buffs.active || [];
     const num = (id, label, val, suffix) =>
@@ -168,6 +170,49 @@
           <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px;"><input id="db-announce" type="checkbox" ${c.announce ? "checked" : ""} style="margin-right:4px;">全服廣播</label>
         </div>
         <button class="button primary" id="db-save" style="margin-top:6px;">💾 儲存設定</button>
+      </div>
+
+      ${scBarCard(scp, scCfg)}`;
+  }
+
+  function scBarCard(scp, cfg) {
+    const total = scp.total || 0;
+    const maxT = scp.maxThreshold || 0;
+    const pct = maxT > 0 ? Math.min(100, Math.round((total / maxT) * 100)) : 0;
+    const markers = (scp.milestones || []).map((m) => {
+      const left = maxT > 0 ? Math.min(100, (m.threshold / maxT) * 100) : 0;
+      return `<div title="${esc(m.label)} (NT$${esc(m.threshold)})" style="position:absolute;left:${left}%;top:-2px;transform:translateX(-50%);font-size:14px;">${m.claimed ? "✅" : "🔒"}</div>`;
+    }).join("");
+    const rows = (cfg.milestones || []).map((m, i) => `
+      <tr data-ms-row="${i}" data-ms-id="${esc(m.id || "")}">
+        <td><input data-ms="threshold" type="number" value="${esc(m.threshold)}" style="width:80px;"></td>
+        <td><input data-ms="label" value="${esc(m.label || "")}" style="width:120px;"></td>
+        <td><input data-ms="dropPct" type="number" value="${esc(m.dropPct || 0)}" style="width:56px;"></td>
+        <td><input data-ms="goldPct" type="number" value="${esc(m.goldPct || 0)}" style="width:56px;"></td>
+        <td><input data-ms="expPct" type="number" value="${esc(m.expPct || 0)}" style="width:56px;"></td>
+        <td><input data-ms="durationMinutes" type="number" value="${esc(m.durationMinutes || 60)}" style="width:56px;"></td>
+        <td><button class="button" data-ms-del="${i}" style="padding:2px 8px;font-size:11px;">✕</button></td>
+      </tr>`).join("");
+    return `
+      <div class="card" style="margin-top:14px;">
+        <h3 style="margin:0 0 4px;">📊 SC 累積條</h3>
+        <p class="hint" style="margin:0 0 10px;">全服斗內累積，跨里程碑就解鎖全服加成。<b>累積永遠會計算+顯示</b>；勾「啟用」後跨門檻才真的發獎。清除用下方「重置」（之後可再改自動清除策略）。</p>
+        <div style="margin:6px 0 4px;font-weight:800;font-size:15px;">目前累積：NT$${esc(total)} ${maxT ? `<span class="hint" style="font-weight:400;">/ 最高 NT$${esc(maxT)}（${pct}%）</span>` : ""}</div>
+        <div style="position:relative;height:14px;background:#20273c;border-radius:8px;margin:14px 0 10px;">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:linear-gradient(90deg,#5b67ff,#a26bff);border-radius:8px;"></div>
+          ${markers}
+        </div>
+        ${scp.nextMilestone ? `<p class="hint">下一目標：NT$${esc(scp.nextMilestone.threshold)}（還差 NT$${esc(scp.nextMilestone.threshold - total)}）→ ${esc(scp.nextMilestone.label)}</p>` : '<p class="hint">已達最高里程碑（或尚未設定里程碑）。</p>'}
+        <label style="display:inline-flex;align-items:center;font-size:13px;margin:6px 0 8px;font-weight:700;"><input id="sc-enabled" type="checkbox" ${cfg.enabled ? "checked" : ""} style="margin-right:6px;">啟用里程碑發獎</label>
+        <div style="overflow:auto;">
+          <table class="admin-table" id="sc-ms-table" style="width:100%;font-size:12px;">
+            <thead><tr><th>門檻NT$</th><th>名稱</th><th>掉寶%</th><th>金幣%</th><th>經驗%</th><th>時長(分)</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <button class="button" id="sc-add" style="margin-top:6px;">➕ 新增里程碑</button>
+        <button class="button primary" id="sc-save" style="margin-top:6px;">💾 儲存里程碑</button>
+        <button class="button" id="sc-reset" style="margin-top:6px;margin-left:8px;">🧹 重置累積條</button>
       </div>`;
   }
 
@@ -246,6 +291,51 @@
     } catch (e) { alert("儲存失敗：" + e.message); }
   }
 
+  function addMilestoneRow() {
+    const tb = document.querySelector("#sc-ms-table tbody");
+    if (!tb) return;
+    const tr = document.createElement("tr");
+    tr.setAttribute("data-ms-id", "");
+    tr.innerHTML = `
+      <td><input data-ms="threshold" type="number" value="1000" style="width:80px;"></td>
+      <td><input data-ms="label" value="新里程碑" style="width:120px;"></td>
+      <td><input data-ms="dropPct" type="number" value="0" style="width:56px;"></td>
+      <td><input data-ms="goldPct" type="number" value="0" style="width:56px;"></td>
+      <td><input data-ms="expPct" type="number" value="0" style="width:56px;"></td>
+      <td><input data-ms="durationMinutes" type="number" value="60" style="width:56px;"></td>
+      <td><button class="button" data-ms-del="new" style="padding:2px 8px;font-size:11px;">✕</button></td>`;
+    tb.appendChild(tr);
+  }
+  function collectMilestones() {
+    const rows = [...document.querySelectorAll("#sc-ms-table tbody tr")];
+    return rows.map((tr) => {
+      const g = (k) => tr.querySelector(`[data-ms="${k}"]`)?.value;
+      return {
+        id: tr.getAttribute("data-ms-id") || undefined,
+        threshold: Number(g("threshold")) || 0,
+        label: g("label") || "",
+        dropPct: Number(g("dropPct")) || 0,
+        goldPct: Number(g("goldPct")) || 0,
+        expPct: Number(g("expPct")) || 0,
+        durationMinutes: Number(g("durationMinutes")) || 60
+      };
+    }).filter((m) => m.threshold > 0);
+  }
+  async function saveScBar() {
+    try {
+      await postJSON("/admin/stream-events/config", {
+        scBar: { enabled: chk("sc-enabled"), milestones: collectMilestones() }
+      });
+      alert("✅ SC 累積條設定已儲存" + (chk("sc-enabled") ? "（里程碑已啟用）" : "（里程碑未啟用）"));
+      render();
+    } catch (e) { alert("儲存失敗：" + e.message); }
+  }
+  async function resetScBar() {
+    if (!confirm("確定把 SC 累積條歸零？（會存檔到歷史）")) return;
+    try { await postJSON("/admin/stream-events/sc-bar/reset", {}); render(); }
+    catch (e) { alert("重置失敗：" + e.message); }
+  }
+
   // 事件委派（nav 可能被搜尋重建）
   document.addEventListener("click", (e) => {
     const tabBtn = e.target.closest?.("[data-sr-tab]");
@@ -255,6 +345,11 @@
     if (e.target.closest?.("#mb-send")) { sendManualBuff(); return; }
     if (e.target.closest?.("#mb-clearall")) { clearBuffs(); return; }
     if (e.target.closest?.("#db-save")) { saveDonationCfg(); return; }
+    if (e.target.closest?.("#sc-add")) { addMilestoneRow(); return; }
+    if (e.target.closest?.("#sc-save")) { saveScBar(); return; }
+    if (e.target.closest?.("#sc-reset")) { resetScBar(); return; }
+    const msDel = e.target.closest?.("[data-ms-del]");
+    if (msDel) { msDel.closest("tr")?.remove(); return; }
     const clr = e.target.closest?.("[data-buff-clear]");
     if (clr) { clearBuffs(clr.dataset.buffClear); return; }
     if (e.target.closest?.('[data-target="section-stream-records"]')) setTimeout(render, 60);
