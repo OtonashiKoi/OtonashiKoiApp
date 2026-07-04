@@ -134,7 +134,8 @@
 - 核心：`services/stream/globalBuffService.js`(記憶體快取全服掉寶/金幣/經驗%加成，index.js啟動init)
 - 注入 chokepoint：`buildRewardModifiers()`(monsterZoneHandlers ~1458，涵蓋Discord/網頁/世界王) + `idleService.js`掛機兩處
 - 斗內觸發：`donationBuffTrigger.js`掛 handleDonation；設定 `streamEventConfig.js`(預設關)；後台「🎉全服活動」分頁 + adminStreamRecordsRoutes `/admin/stream-events/*`
-- SC累積解鎖、直播限定王尚未做
+- **SC累積條**：`scBarService.js`(collection `scAccumulator`+`scBarHistory`)，斗內累積跨里程碑解鎖全服buff；後台「🎉全服活動」進度條+里程碑編輯+重置；公開 `GET /api/stream/sc-bar`。玩家端進度條組件待做
+- 直播限定王尚未做
 
 ### 💬 聊天大廳 Chat（網頁 ↔ DC town_chat）
 - 後端：`services/chat/`；SSE + Discord 同步在 `playerAppRoutes.js`（`_announceTownChat`）
