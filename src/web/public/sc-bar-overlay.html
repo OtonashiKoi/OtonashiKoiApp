@@ -3,134 +3,174 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>SC 累積條 · OBS Overlay</title>
+<title>直播 Overlay · 會員 + SC 累積</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=M+PLUS+Rounded+1c:wght@700;900&display=swap" rel="stylesheet" />
 <style>
-  :root { --scale: 1; --accent1: #7b5cff; --accent2: #ff5ea8; }
+  :root { --scale: 1; --sc1: #7b5cff; --sc2: #ff5ea8; --mem1: #29c7a8; --mem2: #5fd0ff; }
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; background: transparent; overflow: hidden;
     font-family: "M PLUS Rounded 1c", "Mochiy Pop One", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  /* OBS 建議來源尺寸約 640×150；用 --scale 微調 */
+  /* OBS 建議來源尺寸：兩條約 720×280；單條約 720×150 */
   #wrap {
-    width: 620px; transform: scale(var(--scale)); transform-origin: top left;
-    padding: 14px 18px 16px; color: #fff;
+    width: 700px; transform: scale(var(--scale)); transform-origin: top left;
+    padding: 16px 24px 18px; color: #fff;
     background: linear-gradient(180deg, rgba(28,20,52,0.86), rgba(16,12,32,0.92));
-    border: 2px solid rgba(196,167,245,0.55); border-radius: 18px;
+    border: 2px solid rgba(196,167,245,0.55); border-radius: 20px;
     box-shadow: 0 8px 34px rgba(123,92,255,0.35), inset 0 0 22px rgba(123,92,255,0.12);
   }
   #wrap.hidden { display: none; }
-  #head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 12px; }
-  #title { font-family: "Mochiy Pop One", sans-serif; font-size: 20px; letter-spacing: .5px;
-    color: #ffe7a8; text-shadow: 0 2px 0 #6b3f2a, 0 0 14px rgba(255,180,90,.4); }
-  #total { font-family: "Mochiy Pop One", sans-serif; font-size: 24px; color: #fff;
-    text-shadow: 0 0 14px rgba(255,120,200,.7); }
-  #total small { font-size: 14px; opacity: .8; }
-  #track { position: relative; height: 22px; border-radius: 12px; margin: 20px 0 8px;
-    background: rgba(255,255,255,0.10); box-shadow: inset 0 2px 6px rgba(0,0,0,.4); overflow: visible; }
-  #fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 12px;
-    background: linear-gradient(90deg, var(--accent1), var(--accent2));
-    box-shadow: 0 0 16px rgba(255,94,168,.7); transition: width 1s cubic-bezier(.22,1,.36,1); }
-  #fill::after { content: ""; position: absolute; inset: 0; border-radius: 12px;
+  .line + .line { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(196,167,245,0.18); }
+  .line.hidden { display: none; }
+
+  .lhead { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 8px; }
+  .ltitle { font-family: "Mochiy Pop One", sans-serif; font-size: 19px; letter-spacing: .5px; }
+  .lval { font-family: "Mochiy Pop One", sans-serif; font-size: 25px; white-space: nowrap; }
+  .lval small { font-size: 14px; opacity: .7; }
+  #memberLine .ltitle { color: #b6f2e4; text-shadow: 0 0 12px rgba(41,199,168,.4); }
+  #memberLine .lval { color: #fff; text-shadow: 0 0 14px rgba(95,208,255,.6); }
+  #scLine .ltitle { color: #ffe7a8; text-shadow: 0 2px 0 #6b3f2a, 0 0 14px rgba(255,180,90,.4); }
+  #scLine .lval { color: #fff; text-shadow: 0 0 14px rgba(255,120,200,.7); }
+
+  .track { position: relative; height: 20px; border-radius: 11px; margin: 6px 2px 0;
+    background: rgba(255,255,255,0.10); box-shadow: inset 0 2px 6px rgba(0,0,0,.4); }
+  .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 11px;
+    transition: width 1s cubic-bezier(.22,1,.36,1); }
+  .fill::after { content: ""; position: absolute; inset: 0; border-radius: 11px;
     background: linear-gradient(180deg, rgba(255,255,255,.35), transparent 60%); }
-  .marker { position: absolute; top: -6px; transform: translateX(-50%); text-align: center; }
-  .marker .dot { width: 16px; height: 16px; margin: 0 auto; border-radius: 50%;
-    background: #2a2350; border: 2px solid rgba(196,167,245,.7); transition: all .3s; }
-  .marker.hit .dot { background: #ffd257; border-color: #fff; box-shadow: 0 0 12px #ffd257; }
-  .marker .lbl { margin-top: 16px; font-size: 11px; font-weight: 900; white-space: nowrap;
-    color: #d7defc; opacity: .85; }
-  .marker.hit .lbl { color: #ffe7a8; opacity: 1; }
-  .marker .amt { font-size: 10px; opacity: .6; }
-  #next { margin-top: 26px; font-size: 14px; font-weight: 700; color: #e7defc; text-align: center; }
-  #next b { color: #ffd257; }
-  @keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.06)} 100%{transform:scale(1)} }
-  #wrap.celebrate { animation: pop .6s ease; }
-  #wrap.celebrate #fill { box-shadow: 0 0 30px rgba(255,215,87,.95); }
+  #memberFill { background: linear-gradient(90deg, var(--mem1), var(--mem2)); box-shadow: 0 0 14px rgba(95,208,255,.6); }
+  #scFill { background: linear-gradient(90deg, var(--sc1), var(--sc2)); box-shadow: 0 0 16px rgba(255,94,168,.7); }
+
+  .dot { position: absolute; top: 50%; width: 16px; height: 16px; margin-top: -8px; margin-left: -8px;
+    border-radius: 50%; background: #2a2350; border: 2px solid rgba(196,167,245,.7); transition: all .3s; z-index: 2; }
+  .dot.hit { background: #ffd257; border-color: #fff; box-shadow: 0 0 12px #ffd257; }
+
+  #scLabels { position: relative; height: 34px; margin-top: 10px; }
+  .lbl { position: absolute; top: 0; max-width: 200px; line-height: 1.25; }
+  .lbl .name { font-size: 12px; font-weight: 900; white-space: nowrap; color: #d7defc; }
+  .lbl .amt { font-size: 11px; font-weight: 700; color: #9b8cc0; }
+  .lbl.hit .name { color: #ffe7a8; }
+  .lbl.hit .amt { color: #ffd257; }
+
+  .sub { margin-top: 8px; font-size: 14px; font-weight: 700; text-align: center; white-space: nowrap; }
+  #memberSub { color: #cfeeff; }
+  #scNext { color: #e7defc; }
+  .sub b { color: #ffd257; }
+
+  @keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.05)} 100%{transform:scale(1)} }
+  .celebrate { animation: pop .6s ease; }
 </style>
 </head>
 <body>
   <div id="wrap" class="hidden">
-    <div id="head">
-      <span id="title">🎁 全服斗內累積</span>
-      <span id="total">NT$0</span>
+    <div class="line" id="memberLine">
+      <div class="lhead"><span class="ltitle">👥 目前會員</span><span class="lval" id="memberVal">— 人</span></div>
+      <div class="track"><div class="fill" id="memberFill"></div></div>
+      <div class="sub" id="memberSub"></div>
     </div>
-    <div id="track"><div id="fill"></div></div>
-    <div id="next"></div>
+    <div class="line" id="scLine">
+      <div class="lhead"><span class="ltitle">🎁 全服斗內累積</span><span class="lval" id="scVal">NT$0</span></div>
+      <div class="track" id="scTrack"><div class="fill" id="scFill"></div></div>
+      <div id="scLabels"></div>
+      <div class="sub" id="scNext"></div>
+    </div>
   </div>
 
 <script>
 (function () {
   var params = new URLSearchParams(location.search);
   var root = document.documentElement;
+  var setVar = function (k, v) { if (v) root.style.setProperty(k, "#" + v.replace(/[^0-9a-f]/gi, "")); };
   if (params.get("scale")) root.style.setProperty("--scale", String(Math.max(0.3, Math.min(4, parseFloat(params.get("scale")) || 1))));
-  if (params.get("accent1")) root.style.setProperty("--accent1", "#" + params.get("accent1").replace(/[^0-9a-f]/gi, ""));
-  if (params.get("accent2")) root.style.setProperty("--accent2", "#" + params.get("accent2").replace(/[^0-9a-f]/gi, ""));
-  var wrap = document.getElementById("wrap");
-  var titleEl = document.getElementById("title");
-  var totalEl = document.getElementById("total");
-  var fillEl = document.getElementById("fill");
-  var trackEl = document.getElementById("track");
-  var nextEl = document.getElementById("next");
-  if (params.get("title")) titleEl.textContent = params.get("title");
-  // hideEmpty=1 → 累積為 0 時整條隱藏（不想開播就有空條可加）
-  var hideEmpty = params.get("hideEmpty") === "1";
+  setVar("--sc1", params.get("sc1")); setVar("--sc2", params.get("sc2"));
+  setVar("--mem1", params.get("mem1")); setVar("--mem2", params.get("mem2"));
+
+  // show = both | members | sc  → 可當單獨 OBS 來源
+  var show = (params.get("show") || "both").toLowerCase();
+  var showMembers = show !== "sc";
+  var showSc = show !== "members";
+  var memberGoalParam = parseInt(params.get("memberGoal"), 10) || 0;   // 固定會員目標(選填)
+  var memberStep = Math.max(1, parseInt(params.get("memberStep"), 10) || 10); // 無固定目標時自動抓下一個整數關卡
   var pollMs = Math.max(2000, parseInt(params.get("poll"), 10) || 4000);
 
-  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
-  var fmt = function (n) { return "NT$" + (Number(n) || 0).toLocaleString("en-US"); };
-  var lastClaimed = -1;
+  var wrap = document.getElementById("wrap");
+  var memberLine = document.getElementById("memberLine");
+  var scLine = document.getElementById("scLine");
+  if (!showMembers) memberLine.classList.add("hidden");
+  if (!showSc) scLine.classList.add("hidden");
 
-  function renderMarkers(data) {
-    // 移除舊 marker（保留 #fill）
-    [].slice.call(trackEl.querySelectorAll(".marker")).forEach(function (m) { m.remove(); });
-    var maxT = data.maxThreshold || 0;
-    if (!maxT) return;
-    (data.milestones || []).forEach(function (m) {
-      var left = Math.min(100, (m.threshold / maxT) * 100);
-      var el = document.createElement("div");
-      el.className = "marker" + (m.claimed ? " hit" : "");
-      el.style.left = left + "%";
-      el.innerHTML = '<div class="dot"></div><div class="lbl">' + (m.claimed ? "✅ " : "🔒 ") + esc(m.label || "") + '<div class="amt">' + fmt(m.threshold) + "</div></div>";
-      trackEl.appendChild(el);
-    });
+  var memberVal = document.getElementById("memberVal");
+  var memberFill = document.getElementById("memberFill");
+  var memberSub = document.getElementById("memberSub");
+  var scVal = document.getElementById("scVal");
+  var scFill = document.getElementById("scFill");
+  var scTrack = document.getElementById("scTrack");
+  var scLabels = document.getElementById("scLabels");
+  var scNext = document.getElementById("scNext");
+
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  var ntd = function (n) { return "NT$" + (Number(n) || 0).toLocaleString("en-US"); };
+  var lastClaimed = -1, lastMembers = -1;
+
+  function renderMembers(m) {
+    var count = Number(m && m.count) || 0;
+    memberVal.innerHTML = count + " <small>人</small>";
+    var goal = memberGoalParam > 0 ? memberGoalParam : Math.max(memberStep, Math.ceil((count + 1) / memberStep) * memberStep);
+    var pct = goal > 0 ? Math.min(100, (count / goal) * 100) : 0;
+    memberFill.style.width = pct + "%";
+    var diff = Math.max(0, goal - count);
+    memberSub.innerHTML = "目標 <b>" + goal + " 人</b>　還差 <b>" + diff + " 位</b>";
+    if (lastMembers >= 0 && count > lastMembers) { memberLine.classList.remove("celebrate"); void memberLine.offsetWidth; memberLine.classList.add("celebrate"); }
+    lastMembers = count;
   }
 
-  function render(data) {
-    var total = Number(data.total) || 0;
-    if (hideEmpty && total <= 0) { wrap.classList.add("hidden"); return; }
-    wrap.classList.remove("hidden");
-
-    totalEl.innerHTML = fmt(total);
-    var maxT = data.maxThreshold || 0;
+  function renderSc(d) {
+    var total = Number(d.total) || 0;
+    scVal.innerHTML = ntd(total);
+    var maxT = d.maxThreshold || 0;
     var pct = maxT > 0 ? Math.min(100, (total / maxT) * 100) : 0;
-    fillEl.style.width = pct + "%";
-    renderMarkers(data);
+    scFill.style.width = pct + "%";
 
-    if (data.nextMilestone) {
-      var diff = Math.max(0, data.nextMilestone.threshold - total);
-      nextEl.innerHTML = "下一目標 <b>" + esc(data.nextMilestone.label || "") + "</b>　還差 <b>" + fmt(diff) + "</b>";
-    } else if (maxT > 0) {
-      nextEl.innerHTML = "🎉 全部里程碑已達成！";
-    } else {
-      nextEl.innerHTML = "";
+    [].slice.call(scTrack.querySelectorAll(".dot")).forEach(function (x) { x.remove(); });
+    scLabels.innerHTML = "";
+    if (maxT > 0) {
+      (d.milestones || []).forEach(function (ms) {
+        var left = Math.min(100, Math.max(0, (ms.threshold / maxT) * 100));
+        var dot = document.createElement("div");
+        dot.className = "dot" + (ms.claimed ? " hit" : ""); dot.style.left = left + "%";
+        scTrack.appendChild(dot);
+        var lbl = document.createElement("div");
+        lbl.className = "lbl" + (ms.claimed ? " hit" : "");
+        if (left <= 12) { lbl.style.left = "0"; lbl.style.textAlign = "left"; }
+        else if (left >= 88) { lbl.style.right = "0"; lbl.style.textAlign = "right"; }
+        else { lbl.style.left = left + "%"; lbl.style.transform = "translateX(-50%)"; lbl.style.textAlign = "center"; }
+        lbl.innerHTML = '<div class="name">' + (ms.claimed ? "✅ " : "🔒 ") + esc(ms.label || "") + '</div><div class="amt">' + ntd(ms.threshold) + "</div>";
+        scLabels.appendChild(lbl);
+      });
     }
 
-    // 有新里程碑解鎖 → 慶祝動畫
-    var claimed = (data.milestones || []).filter(function (m) { return m.claimed; }).length;
-    if (lastClaimed >= 0 && claimed > lastClaimed) {
-      wrap.classList.remove("celebrate"); void wrap.offsetWidth; wrap.classList.add("celebrate");
-    }
+    if (d.nextMilestone) {
+      scNext.innerHTML = "下一目標 <b>" + esc(d.nextMilestone.label || "") + "</b>　還差 <b>" + ntd(Math.max(0, d.nextMilestone.threshold - total)) + "</b>";
+    } else if (maxT > 0) { scNext.innerHTML = "🎉 全部里程碑已達成！"; } else { scNext.innerHTML = ""; }
+
+    var claimed = (d.milestones || []).filter(function (x) { return x.claimed; }).length;
+    if (lastClaimed >= 0 && claimed > lastClaimed) { scLine.classList.remove("celebrate"); void scLine.offsetWidth; scLine.classList.add("celebrate"); }
     lastClaimed = claimed;
   }
 
   function tick() {
-    fetch("/api/stream/sc-bar", { cache: "no-store" })
+    fetch("/api/stream/overlay", { cache: "no-store" })
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j && j.data) render(j.data); })
+      .then(function (j) {
+        var d = j && j.data; if (!d) return;
+        wrap.classList.remove("hidden");
+        if (showMembers) renderMembers(d.members || { count: 0 });
+        if (showSc) renderSc(d.sc || {});
+      })
       .catch(function () { /* 靜默重試 */ });
   }
   tick();

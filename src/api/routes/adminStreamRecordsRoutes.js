@@ -13,6 +13,7 @@ const { reconcileMembership } = require("../../services/stream/membershipTracker
 const globalBuff = require("../../services/stream/globalBuffService");
 const scBar = require("../../services/stream/scBarService");
 const { getConfig, saveConfig } = require("../../services/stream/streamEventConfig");
+const { countActiveMembers } = require("../../services/stream/streamRecordsService");
 
 function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
   const router = Router();
@@ -120,6 +121,14 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
   router.get("/api/stream/sc-bar", async (_req, res, next) => {
     try {
       res.json(ok(await scBar.getPublicProgress()));
+    } catch (err) { next(err); }
+  });
+
+  // 公開：OBS overlay 用（會員數 + SC 累積，一次拿）
+  router.get("/api/stream/overlay", async (_req, res, next) => {
+    try {
+      const [sc, memberCount] = await Promise.all([scBar.getPublicProgress(), countActiveMembers()]);
+      res.json(ok({ members: { count: memberCount }, sc }));
     } catch (err) { next(err); }
   });
 

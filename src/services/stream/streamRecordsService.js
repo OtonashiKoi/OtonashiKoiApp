@@ -252,6 +252,12 @@ async function listMembershipEvents({ limit = 100 } = {}) {
     .toArray();
 }
 
+async function countActiveMembers() {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return 0;
+  return db.collection("membershipStatus").countDocuments({ isMember: true }).catch(() => 0);
+}
+
 async function listMembershipStatuses({ activeOnly = false, limit = 500 } = {}) {
   const db = await getMongoDb().catch(() => null);
   if (!db) return [];
@@ -272,5 +278,6 @@ module.exports = {
   listDonationEvents,
   getDonationSummary,
   listMembershipEvents,
-  listMembershipStatuses
+  listMembershipStatuses,
+  countActiveMembers
 };
