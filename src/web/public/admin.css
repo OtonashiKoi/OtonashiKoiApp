@@ -234,7 +234,16 @@ body {
   overflow-y: auto;
   padding-right: 4px;
   margin-right: -4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-dim) transparent;
 }
+.sidebar-nav::-webkit-scrollbar { width: 7px; }
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: var(--accent-dim);
+  border-radius: 4px;
+}
+.sidebar-nav::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
 
 .nav-title {
   font-size: 9px;
@@ -2080,8 +2089,14 @@ select option { background: var(--surface); }
   .hero {
     width: 100%; border-right: 0;
     border-bottom: 1px solid var(--line);
-    padding: 14px 20px; height: auto; max-height: 280px;
+    padding: 14px 20px;
+    /* 用 flex 讓中間的 sidebar-nav 成為有界的捲動區（grid+height:auto 時 1fr 拿不到確定高度會改成裁切） */
+    height: auto; max-height: 56vh;
+    display: flex; flex-direction: column; gap: 12px;
   }
+  .hero > div:first-child { flex: 0 0 auto; }
+  .hero .sidebar-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .hero .hero-card { flex: 0 0 auto; }
   .player-grid { flex-direction: column; height: auto; }
   .player-list-section { width: 100%; max-height: 380px; }
   .player-body-grid { grid-template-columns: 1fr; }
