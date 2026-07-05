@@ -847,7 +847,11 @@
       if (nn.clearStage) Object.keys(st).forEach((k) => delete st[k]);
       if (nn.exitSide === "all") Object.keys(st).forEach((k) => delete st[k]); else if (nn.exitSide) { delete st[nn.exitSide]; delete pos[nn.exitSide]; }
       if (nn.stagePos) for (const s of Object.keys(nn.stagePos)) { pos[s] = nn.stagePos[s]; if (st[s]) st[s].pos = nn.stagePos[s]; }
-      if (nn.type === "dialogue") { const u = portraitUrlOfNode(nn); if (u) { const s = nn.side || "center"; st[s] = { url: u, fx: nn.portraitFx, pos: pos[s] || null }; } }
+      if (nn.type === "dialogue") {
+        const s = nn.side || "center";
+        if (nn.npcId === "player") { st[s] = { url: null, player: true, fx: nn.portraitFx, pos: pos[s] || null }; } // 主角＝登入者頭像(編輯器用佔位)
+        else { const u = portraitUrlOfNode(nn); if (u) { st[s] = { url: u, player: false, fx: nn.portraitFx, pos: pos[s] || null }; } }
+      }
     }
     return st;
   }
@@ -873,9 +877,13 @@
       const tx = side === "center" ? -50 : 0; const dx = p.pos?.x || 0, dy = p.pos?.y || 0;
       const transform = `transform:translate(calc(${tx}% + ${dx}%), ${dy}%);`;
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
-      // 每個立繪一個 wrapper：內含可拖曳的 img + 右上角 ✕ 移除鈕（直觀退場）
+      // 主角(玩家)立繪：編輯器不知道誰登入，用佔位框標示「出現位置」，一樣可拖曳/✕移除；玩家端會換成 DC 頭像
+      const inner = p.player
+        ? `<div data-drag-portrait="${side}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:120px;height:200px;${dim}background:linear-gradient(180deg,rgba(196,167,245,.28),rgba(60,42,104,.4));border:2px dashed #c4a7f5;border-radius:12px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;"><div style="font-size:36px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:4px;">玩家立繪</div><div style="font-size:9px;opacity:.8;">(登入者 DC 頭像)</div></div>`
+        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:266px;max-width:202px;object-fit:contain;cursor:grab;touch-action:none;">`;
+      // 每個立繪一個 wrapper：內含可拖曳的圖/佔位 + 右上角 ✕ 移除鈕（直觀退場）
       return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:7rem;${baseLeft}${transform}z-index:${speaking ? 3 : 1};">
-        <img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:266px;max-width:202px;object-fit:contain;cursor:grab;touch-action:none;">
+        ${inner}
         ${speaking ? "" : `<button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:#ff5577;color:#fff;border:1.5px solid #1a1030;font-size:12px;line-height:1;cursor:pointer;z-index:6;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.5);">✕</button>`}
       </div>`;
     }).join("");
