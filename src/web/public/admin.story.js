@@ -31,7 +31,8 @@
   const BGM_OPTS = [
     ["", "🎵 BGM（不變）"], ["zone", "🗺️ 恢復地圖曲"], ["silence", "🔇 靜音"],
     ["home", "主頁曲"], ["beginner", "新手村"], ["normal", "起始草原"], ["mid", "陽光草原"],
-    ["ancient", "古城"], ["ancient_deep", "古城深淵"], ["daishi", "大史王"], ["dragon_king", "古龍王"]
+    ["ancient", "古城"], ["ancient_deep", "古城深淵"], ["dragon_realm", "龍族之領"], ["daishi", "大史王"], ["dragon_king", "古龍王"],
+    ["push_while_you_can", "🎼 趁能推的時候推"]
   ];
   const SFX_OPTS = [
     ["", "🔊 音效（無）"], ["win", "🎉 勝利"], ["crit", "💥 衝擊"], ["lightning", "⚡ 雷"], ["freeze", "❄️ 冰"],
@@ -48,9 +49,10 @@
   const optionsHtml = (opts, sel) => opts.map(([v, l]) => `<option value="${esc(v)}" ${sel === v ? "selected" : ""}>${esc(l)}</option>`).join("");
   const BGM_SRC = {
     home: "/bgm/bgm-home.m4a", beginner: "/bgm/bgm-beginner.m4a", normal: "/bgm/bgm-normal.m4a", mid: "/bgm/bgm-mid.m4a",
-    ancient: "/bgm/bgm-ancient.m4a", ancient_deep: "/bgm/bgm-ancient-deep.mp3", daishi: "/bgm/bgm-daishi.mp3", dragon_king: "/bgm/bgm-dragon-king.mp3"
+    ancient: "/bgm/bgm-ancient.m4a", ancient_deep: "/bgm/bgm-ancient-deep.mp3", dragon_realm: "/bgm/bgm-dragon-realm.mp3",
+    daishi: "/bgm/bgm-daishi.mp3", dragon_king: "/bgm/bgm-dragon-king.mp3", push_while_you_can: "/bgm/bgm-push-while-you-can.mp3"
   };
-  const ZONE_BGM = { beginner: "beginner", normal: "normal", mid: "mid", ancient_city: "ancient", ancient_city_deep: "ancient_deep", elite: "daishi", dragon_king_lair: "dragon_king" };
+  const ZONE_BGM = { beginner: "beginner", normal: "normal", mid: "mid", ancient_city: "ancient", ancient_city_deep: "ancient_deep", dragon_realm: "dragon_realm", elite: "daishi", dragon_king_lair: "dragon_king" };
   const FX_ANIM = { pop: "stFxPop .4s", shake: "stFxShake .5s", bounce: "stFxBounce .6s", pulse: "stFxPulse .5s", dim: "stFxDefault .3s", "": "stFxDefault .3s" };
 
   function headers(json = true) {
@@ -785,6 +787,7 @@
   // ── 即時預覽（右側面板，跟著正在編輯的節點；背景走「往回找最近一張」與正式閱讀器一致） ──
   let livePreviewIdx = 0;
   let livePreviewOn = true;
+  let liveBgmTrack = null; // 即時預覽目前實際在播的曲目 key(避免每次重繪重啟音樂)
   function buildStageHTML(nodes, idx) {
     const npcById = Object.fromEntries(npcs.map((n) => [n.id, n]));
     const chapterBg = editing?.backgroundUrl || (editing?.zoneKey ? `/uploads/zones/${editing.zoneKey}.webp` : null);
@@ -836,10 +839,11 @@
   function renderLivePreview() {
     let panel = document.getElementById("story-live-preview");
     let showBtn = document.getElementById("story-live-show");
-    if (!editing) { if (panel) panel.style.display = "none"; if (showBtn) showBtn.style.display = "none"; setEditorReserve(false); return; }
+    if (!editing) { if (panel) panel.style.display = "none"; if (showBtn) showBtn.style.display = "none"; setEditorReserve(false); stopLiveBgm(); return; }
     if (!livePreviewOn) {
       if (panel) panel.style.display = "none";
       setEditorReserve(false);
+      stopLiveBgm();
       if (!showBtn) { showBtn = document.createElement("button"); showBtn.id = "story-live-show"; showBtn.className = "button"; showBtn.textContent = "👁 開預覽"; showBtn.style.cssText = "position:fixed;top:64px;right:14px;z-index:41;padding:4px 10px;"; showBtn.addEventListener("click", () => { livePreviewOn = true; renderLivePreview(); }); document.body.appendChild(showBtn); }
       showBtn.style.display = "block";
       return;
@@ -856,7 +860,21 @@
       </div>
       <div style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx)}</div>`;
     panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
+
+    // 即時預覽：真的播出 BGM（與畫面上的 🎵 徽章一致）。只有「解析後的曲目」變了才重播，避免每次打字重啟。
+    // 本章預覽 modal 開著時不搶音樂（兩者共用同一個 previewAudio）。
+    if (!document.getElementById("pv-stage")) {
+      let curBgm = ""; for (let i = idx; i >= 0; i--) { if (nodes[i]?.bgm) { curBgm = nodes[i].bgm; break; } }
+      const zoneTrack = ZONE_BGM[editing.zoneKey] || "home";
+      const resolved = !curBgm ? null : curBgm === "silence" ? "silence" : curBgm === "zone" ? zoneTrack : curBgm;
+      if (resolved !== liveBgmTrack) {
+        liveBgmTrack = resolved;
+        if (!resolved || resolved === "silence") stopPreviewAudio();
+        else playPreviewBgm(resolved);
+      }
+    }
   }
+  function stopLiveBgm() { liveBgmTrack = null; stopPreviewAudio(); }
 
   // ── 本章預覽 modal ──
   let previewAudio = null;
@@ -946,7 +964,7 @@
       }
     }
     function advance() { clearInterval(stage._tw); if (idx < nodes.length) idx++; renderNode(); }
-    function close() { clearInterval(stage._tw); stopPreviewAudio(); ov.remove(); }
+    function close() { clearInterval(stage._tw); stopPreviewAudio(); liveBgmTrack = null; ov.remove(); renderLivePreview(); }
 
     stage.addEventListener("click", advance);
     ov.querySelector("#pv-close").addEventListener("click", (e) => { e.stopPropagation(); close(); });
