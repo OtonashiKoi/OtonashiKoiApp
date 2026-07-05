@@ -3,6 +3,23 @@
   const UPLOAD_URL = window.ADMIN_IMAGE_UPLOAD_URL || '/api/admin/upload-image';
   let currentInput = null;
   let cropper = null;
+  let sourceHasAlpha = false; // 來源圖是否含透明（去背立繪）→ 匯出不可用 JPEG
+
+  function detectAlpha(dataUrl) {
+    sourceHasAlpha = false;
+    try {
+      const probe = new Image();
+      probe.onload = () => {
+        try {
+          const s = 64, c = document.createElement('canvas'); c.width = s; c.height = s;
+          const cx = c.getContext('2d'); cx.clearRect(0, 0, s, s); cx.drawImage(probe, 0, 0, s, s);
+          const d = cx.getImageData(0, 0, s, s).data;
+          for (let i = 3; i < d.length; i += 4) { if (d[i] < 250) { sourceHasAlpha = true; break; } }
+        } catch (_) { /* 跨域等讀不到就當無透明 */ }
+      };
+      probe.src = dataUrl;
+    } catch (_) { /* noop */ }
+  }
 
   function shouldSkipCropper(input) {
     if (!input) return true;
@@ -15,6 +32,7 @@
     const img = document.getElementById('cropper-image');
     const status = document.getElementById('cropper-status');
     img.src = dataUrl;
+    detectAlpha(dataUrl);
     modal.style.display = 'flex';
     status.textContent = '準備裁切';
     if (cropper) { cropper.destroy(); cropper = null; }
@@ -32,10 +50,12 @@
   async function uploadCropped() {
     const w = parseInt(document.getElementById('cropper-width').value,10) || 400;
     const h = parseInt(document.getElementById('cropper-height').value,10) || 400;
-    const mime = document.getElementById('cropper-format').value || 'image/jpeg';
+    let mime = document.getElementById('cropper-format').value || 'image/jpeg';
+    // 去背立繪：JPEG 不支援透明會被填黑 → 自動改用 PNG 保留透明
+    if (sourceHasAlpha && mime === 'image/jpeg') mime = 'image/png';
     const status = document.getElementById('cropper-status');
     status.textContent = '產生檔案...';
-    const canvas = cropper.getCroppedCanvas({ width: w, height: h, imageSmoothingQuality: 'high' });
+    const canvas = cropper.getCroppedCanvas({ width: w, height: h, imageSmoothingQuality: 'high', fillColor: 'transparent' });
     if (!canvas) { status.textContent = '取得裁切影像失敗'; return; }
 
     return new Promise((resolve, reject) => {
@@ -44,7 +64,9 @@
         status.textContent = '準備傳回 input...';
         try {
           // create a File and place it into the original input.files so existing handlers will upload it
-          const name = (currentInput && currentInput.files && currentInput.files[0] && currentInput.files[0].name) || 'cropped.jpg';
+          const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+          const baseName = (currentInput && currentInput.files && currentInput.files[0] && currentInput.files[0].name || 'cropped').replace(/\.[^.]+$/, '');
+          const name = `${baseName}.${ext}`;
           const file = new File([blob], name, { type: mime });
           const dataTransfer = new DataTransfer();
           dataTransfer.items.add(file);
