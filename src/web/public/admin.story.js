@@ -87,7 +87,7 @@
       fetchJSON("/admin/story/chapters", { headers: headers() }),
       fetchJSON("/admin/story/monsters", { headers: headers() })
     ]);
-    loadAssets(); // 劇情圖庫（背景/CG/立繪，非阻斷）
+    loadAssets().then(() => backfillAssets()); // 劇情圖庫：先載入，再把既有背景/CG 補進圖庫（非阻斷）
     render();
   }
   async function uploadImage(file) {
@@ -99,16 +99,33 @@
   let storyAssets = [];
   async function loadAssets() { try { storyAssets = (await fetchJSON("/admin/story/assets")) || []; } catch (_) { storyAssets = []; } }
   async function saveAsset(name, url, kind) {
+    if (!url) return null;
+    if (storyAssets.some((a) => a.url === url && a.kind === kind)) return null; // 已在圖庫→不重複存
     try { const a = await fetchJSON("/admin/story/assets", { method: "POST", headers: headers(), body: JSON.stringify({ name, url, kind }) }); if (a) storyAssets.unshift(a); return a; } catch (_) { return null; }
   }
-  // 上傳並命名存進圖庫（回傳 url）
+  // 上傳存進圖庫（回傳 url）：一律進圖庫，之後其它演出可直接選；命名可留空/取消（用檔名）
   async function uploadNamed(file, kind) {
     const url = await uploadImage(file);
     if (!url) return url;
-    const suggest = (file.name || "").replace(/\.[^.]+$/, "");
-    const name = prompt("為這張圖命名（下次可直接從圖庫選，不用重傳）：", suggest);
-    if (name && name.trim()) await saveAsset(name.trim(), url, kind);
+    const base = (file.name || "").replace(/\.[^.]+$/, "").trim();
+    const input = prompt("為這張圖命名（下次可從 📁 圖庫直接選）。留空＝用檔名：", base);
+    const name = (input && input.trim()) || base || (kind + "-" + Date.now());
+    await saveAsset(name, url, kind); // 即使取消命名也會進圖庫
     return url;
+  }
+  // 把過去在各節點/章節上傳過、但沒進圖庫的背景/CG 補登進圖庫（讓「別處上傳的背景」在其它演出也選得到）
+  async function backfillAssets() {
+    try {
+      const seen = new Set(storyAssets.map((a) => a.kind + "|" + a.url));
+      const nameFromUrl = (u) => { try { const s = decodeURIComponent(String(u).split("?")[0].split("/").pop() || "").replace(/\.[^.]+$/, ""); return s || "背景"; } catch (_) { return "背景"; } };
+      const jobs = [];
+      const add = (url, kind) => { if (!url) return; const k = kind + "|" + url; if (seen.has(k)) return; seen.add(k); jobs.push(saveAsset(nameFromUrl(url), url, kind)); };
+      (chapters || []).forEach((ch) => {
+        add(ch.backgroundUrl, "background");
+        (ch.nodes || []).forEach((n) => { add(n.backgroundUrl, "background"); add(n.cgUrl, "cg"); });
+      });
+      if (jobs.length) await Promise.all(jobs);
+    } catch (_) {}
   }
   // 圖庫選擇 modal
   function pickAsset(kind, cb) {
