@@ -44,9 +44,17 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   // 裝備加成
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
   for (const item of Object.values(equipped)) {
-    if (!item?.equipStats) continue;
-    for (const [k, v] of Object.entries(item.equipStats)) {
-      if (k in bonus) bonus[k] += (v || 0);
+    if (item?.equipStats) {
+      for (const [k, v] of Object.entries(item.equipStats)) {
+        if (k in bonus) bonus[k] += (v || 0);
+      }
+    }
+    // 附魔：基礎屬性詞條(力/敏/體/智/技/幸)直接加進屬性加成，自然驅動所有衍生數值。
+    // （爆擊/爆傷/連擊/吸血/減傷/命中/迴避/攻擊/最大生命等衍生詞條另以專門對應處理，避免 flat/% 混淆）
+    if (Array.isArray(item?.enchantments)) {
+      for (const en of item.enchantments) {
+        if (en && en.key in bonus) bonus[en.key] += (Number(en.value) || 0);
+      }
     }
   }
   const S = str + bonus.str + tierSetBonuses.stats.str;
