@@ -690,7 +690,7 @@ const ENHANCE_GEM_IDS = {
 const ZONE_PARTICIPATION_GEM_TIER = {
   beginner: 'D', normal: 'D', mid: 'C', hard: 'B', elite: 'A',
   ancient_city: 'B', ancient_city_deep: 'B',
-  dragon_realm: 'A', dragon_king_lair: 'A'
+  dragon_realm: 'A', dragon_king_lair: 'A', hellfire_depths: 'A'
 };
 // 參與獎勵寶石掉落率（依品階）
 const GEM_PARTICIPATION_RATE = { D: 0.20, C: 0.20, B: 0.10, A: 0.03 };
@@ -3109,11 +3109,13 @@ async function handleDeleteLog(interaction) {
 const WORLD_BOSS_CHEST_BY_MONSTER = {
   "elite-daishi-king": "chest-daishi-king",
   "dragon-king-boss": "chest-dragon-king",
+  "0393acee-9851-4bcb-a8f5-fdb60a9968f1": "chest-hellfang-king", // 地獄狼牙王
 };
 function _resolveWorldBossChestId(monster, zoneKey) {
   return WORLD_BOSS_CHEST_BY_MONSTER[monster?.id]
     || (zoneKey === "elite" ? "chest-daishi-king"
-      : zoneKey === "dragon_king_lair" ? "chest-dragon-king" : null);
+      : zoneKey === "dragon_king_lair" ? "chest-dragon-king"
+      : zoneKey === "hellfire_depths" ? "chest-hellfang-king" : null);
 }
 // 建一個寶箱背包項目（同款會堆疊，故 uuid 僅在「新項目」時生效）
 function _buildChestEntry(chestItem, sourceMonsterId) {

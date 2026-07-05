@@ -24,6 +24,7 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 const NODE_TYPES = new Set(["narration", "dialogue", "battle", "cg"]);
 const TEXT_SPEEDS = new Set(["slow", "normal", "fast"]);
 const SCREEN_FX = new Set(["", "shake", "flash", "fadeblack"]);
+const EXIT_SIDES = new Set(["left", "center", "right", "all"]); // 立繪退場位置
 
 // B1:從 NPC 表情差分取指定表情的圖（取不到回 null，呼叫端退回預設立繪）
 function resolveExpression(npc, exprName) {
@@ -152,9 +153,10 @@ class StoryService {
           sfx: n.sfx || null
         };
       }
-      // 共用演出欄位（B2 清台 / B3 畫面效果·文字節奏）
+      // 共用演出欄位（B2 清台/退場 / B3 畫面效果·文字節奏）
       const common = {
         clearStage: n.clearStage === true,               // B2:進此節點前清掉台上其他立繪
+        exitSide: EXIT_SIDES.has(n.exitSide) ? n.exitSide : null, // 讓某位置立繪退場(left/center/right/all)
         screenFx: SCREEN_FX.has(n.screenFx) ? (n.screenFx || null) : null, // B3:震動/閃白/漸黑
         textSpeed: TEXT_SPEEDS.has(n.textSpeed) ? n.textSpeed : null,      // B3:文字節奏
         backgroundUrl: n.backgroundUrl || null,
@@ -174,7 +176,7 @@ class StoryService {
       return {
         type: NODE_TYPES.has(n.type) ? n.type : "narration",
         text: fillPlayerName(n.text, playerName),
-        side: n.side === "center" ? "center" : (n.side === "right" ? "right" : "left"),
+        side: n.side === "left" ? "left" : (n.side === "right" ? "right" : "center"), // 預設置中
         // B2:舞台狀態要靠 npcId 判斷同角色；主角統一給 sentinel "player"
         npcId: isDlg ? (isPlayer ? PLAYER_NPC_ID : (n.npcId || null)) : null,
         npcName: isDlg ? (isPlayer ? (playerName || "冒險者") : (n.nameOverride || npc?.name || "???")) : null,
@@ -309,6 +311,7 @@ class StoryService {
       // 共用演出欄位
       const common = {
         clearStage: n?.clearStage === true, // B2
+        exitSide: EXIT_SIDES.has(n?.exitSide) ? n.exitSide : null, // 立繪退場
         screenFx: SCREEN_FX.has(n?.screenFx) ? (n.screenFx || null) : null, // B3
         textSpeed: TEXT_SPEEDS.has(n?.textSpeed) ? n.textSpeed : null, // B3
         backgroundUrl: n?.backgroundUrl ? String(n.backgroundUrl) : null,
@@ -331,7 +334,7 @@ class StoryService {
         type,
         npcId: n?.npcId ? String(n.npcId) : null,
         nameOverride: n?.nameOverride ? String(n.nameOverride).slice(0, 40) : null,
-        side: n?.side === "center" ? "center" : (n?.side === "right" ? "right" : "left"),
+        side: n?.side === "left" ? "left" : (n?.side === "right" ? "right" : "center"), // 預設置中
         portraitFx: n?.portraitFx ? String(n.portraitFx) : null,
         expression: n?.expression ? String(n.expression).slice(0, 40) : null, // B1
         text: String(n?.text || "").slice(0, 2000),

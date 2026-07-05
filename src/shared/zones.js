@@ -87,7 +87,7 @@ const ZONE_DEFS = [
     featureKey:   "monster_zone_hellfire",
     label:        "地獄火焰",
     emoji:        "🔥",
-    tagline:      "烈焰焚盡之地，狼牙王嗥於火海。",
+    tagline:      "烈焰焚盡之地，餘燼裡潛伏著群焰之獸。",
     color:        0xdc2626,
     minLevel:     50,
     maxLevel:     60,

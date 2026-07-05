@@ -32,6 +32,7 @@
     ["", "🎵 BGM（不變）"], ["zone", "🗺️ 恢復地圖曲"], ["silence", "🔇 靜音"],
     ["home", "主頁曲"], ["beginner", "新手村"], ["normal", "起始草原"], ["mid", "陽光草原"],
     ["ancient", "古城"], ["ancient_deep", "古城深淵"], ["dragon_realm", "龍族之領"], ["daishi", "大史王"], ["dragon_king", "古龍王"],
+    ["hellfire", "地獄火焰"], ["hellfang_king", "地獄狼牙王"],
     ["push_while_you_can", "🎼 趁能推的時候推"], ["swordsman_village", "🎼 劍士村莊"],
     ["adventure_journey", "🎼 冒險之途"], ["central_city", "🎼 中央主城"]
   ];
@@ -41,6 +42,8 @@
     ["chest", "🎁 寶箱"], ["item", "✨ 道具"], ["equip", "⚔️ 金屬"]
   ];
   const SIDE_OPTS = [["left", "⬅️ 左"], ["center", "⏺️ 中"], ["right", "➡️ 右"]];
+  // 退場：進此節點時把某位置的立繪移除（換人/角色離場用）；all＝全部移除
+  const EXIT_OPTS = [["", "🚪 退場（無）"], ["left", "🚪 左退場"], ["center", "🚪 中退場"], ["right", "🚪 右退場"], ["all", "🚪 全部退場"]];
   const FX_OPTS = [
     ["", "立繪演出（預設淡入）"], ["pop", "💥 彈入"], ["shake", "🫨 晃動"],
     ["bounce", "⤴️ 彈跳"], ["pulse", "💗 脈動"], ["dim", "🌑 變暗(背景角色)"]
@@ -52,9 +55,10 @@
     home: "/bgm/bgm-home.m4a", beginner: "/bgm/bgm-beginner.m4a", normal: "/bgm/bgm-normal.m4a", mid: "/bgm/bgm-mid.m4a",
     ancient: "/bgm/bgm-ancient.m4a", ancient_deep: "/bgm/bgm-ancient-deep.mp3", dragon_realm: "/bgm/bgm-dragon-realm.mp3",
     daishi: "/bgm/bgm-daishi.mp3", dragon_king: "/bgm/bgm-dragon-king.mp3", push_while_you_can: "/bgm/bgm-push-while-you-can.mp3",
-    swordsman_village: "/bgm/bgm-swordsman-village.mp3", adventure_journey: "/bgm/bgm-adventure-journey.mp3", central_city: "/bgm/bgm-central-city.mp3"
+    swordsman_village: "/bgm/bgm-swordsman-village.mp3", adventure_journey: "/bgm/bgm-adventure-journey.mp3", central_city: "/bgm/bgm-central-city.mp3",
+    hellfire: "/bgm/bgm-hellfire.mp3", hellfang_king: "/bgm/bgm-hellfang-king.mp3"
   };
-  const ZONE_BGM = { beginner: "beginner", normal: "normal", mid: "mid", ancient_city: "ancient", ancient_city_deep: "ancient_deep", dragon_realm: "dragon_realm", elite: "daishi", dragon_king_lair: "dragon_king" };
+  const ZONE_BGM = { beginner: "beginner", normal: "normal", mid: "mid", ancient_city: "ancient", ancient_city_deep: "ancient_deep", dragon_realm: "dragon_realm", elite: "daishi", dragon_king_lair: "dragon_king", hellfire: "hellfire", hellfire_depths: "hellfang_king" };
   const FX_ANIM = { pop: "stFxPop .4s", shake: "stFxShake .5s", bounce: "stFxBounce .6s", pulse: "stFxPulse .5s", dim: "stFxDefault .3s", "": "stFxDefault .3s" };
 
   function headers(json = true) {
@@ -213,7 +217,7 @@
         const npc = npcs.find((x) => x.name === name);
         if (!npc) unknownNpc.add(name);
         if (npc) lastNpcId = npc.id;
-        out.push({ type: "dialogue", npcId: npc?.id || null, nameOverride: npc ? null : name, side: "left", portraitFx: "", text: speech, backgroundUrl: null, bgm: "", sfx: "" });
+        out.push({ type: "dialogue", npcId: npc?.id || null, nameOverride: npc ? null : name, side: "center", portraitFx: "", text: speech, backgroundUrl: null, bgm: "", sfx: "" });
         continue;
       }
       out.push({ type: "narration", text: line, backgroundUrl: null, bgm: "", sfx: "" });
@@ -471,7 +475,7 @@
         <div style="border-top:1px dashed #2c3350;margin-top:8px;padding-top:8px;">
           ${isDlg ? `<div style="${ROW}margin-bottom:6px;">
             <span class="hint" style="margin:0;">🎭 立繪：</span>
-            <select data-node="${i}" data-field="side">${optionsHtml(SIDE_OPTS, n.side || "left")}</select>
+            <select data-node="${i}" data-field="side">${optionsHtml(SIDE_OPTS, n.side || "center")}</select>
             <select data-node="${i}" data-field="portraitFx">${optionsHtml(FX_OPTS, n.portraitFx || "")}</select>
           </div>` : ""}
           <div style="${ROW}margin-bottom:6px;">
@@ -485,10 +489,11 @@
           <div style="${ROW}margin-bottom:0;">
             <select data-node="${i}" data-field="screenFx">${optionsHtml(SCREENFX_OPTS, n.screenFx || "")}</select>
             <select data-node="${i}" data-field="textSpeed">${optionsHtml(SPEED_OPTS, n.textSpeed || "")}</select>
+            <select data-node="${i}" data-field="exitSide" title="讓某個位置的立繪退場(移除)；換人時舊角色不會自動消失，用這個把他移掉">${optionsHtml(EXIT_OPTS, n.exitSide || "")}</select>
             <label style="font-size:12px;" title="進場前清掉台上其他立繪(換場/獨白用)"><input type="checkbox" data-node="${i}" data-field="clearStage" ${n.clearStage ? "checked" : ""}> 🧹 清空其他立繪</label>
           </div>
         </div>` : "";
-      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", (n.screenFx && n.screenFx !== "") && "🎞️", n.clearStage && "🧹"].filter(Boolean).join(" ");
+      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹"].filter(Boolean).join(" ");
 
       return `
       <div class="st-node-card" data-node-card="${i}" style="${BOX}background:rgba(28,32,56,0.6);">
@@ -711,7 +716,7 @@
     // 加節點（對話自動沿用上一位說話者）
     const addNode = (node) => { syncEditingFromDom(); pushUndo(); editing.nodes.push(node); render(); };
     root.querySelector("#story-node-add-narration")?.addEventListener("click", () => addNode({ type: "narration", text: "", backgroundUrl: null, bgm: "", sfx: "" }));
-    root.querySelector("#story-node-add-dialogue")?.addEventListener("click", () => addNode({ type: "dialogue", text: "", side: "left", portraitFx: "", npcId: lastSpeakerNpcId(), nameOverride: null, backgroundUrl: null, bgm: "", sfx: "" }));
+    root.querySelector("#story-node-add-dialogue")?.addEventListener("click", () => addNode({ type: "dialogue", text: "", side: "center", portraitFx: "", npcId: lastSpeakerNpcId(), nameOverride: null, backgroundUrl: null, bgm: "", sfx: "" }));
     root.querySelector("#story-node-add-battle")?.addEventListener("click", () => addNode({ type: "battle", monsterId: monsters[0]?.id || null, mustWin: true, backgroundUrl: null, bgm: "", sfx: "" }));
     root.querySelector("#story-node-add-cg")?.addEventListener("click", () => addNode({ type: "cg", cgUrl: null, text: "", backgroundUrl: null, bgm: "", sfx: "", screenFx: "", textSpeed: "", clearStage: false }));
 
@@ -734,7 +739,7 @@
       syncEditingFromDom(); pushUndo();
       const i = Number(b.dataset.nodeInsert), cur = editing.nodes[i];
       const fresh = cur.type === "dialogue"
-        ? { type: "dialogue", text: "", side: cur.side || "left", portraitFx: "", npcId: cur.npcId || lastSpeakerNpcId(), nameOverride: null, backgroundUrl: null, bgm: "", sfx: "" }
+        ? { type: "dialogue", text: "", side: cur.side || "center", portraitFx: "", npcId: cur.npcId || lastSpeakerNpcId(), nameOverride: null, backgroundUrl: null, bgm: "", sfx: "" }
         : cur.type === "battle"
           ? { type: "battle", monsterId: monsters[0]?.id || null, mustWin: true, backgroundUrl: null, bgm: "", sfx: "" }
           : { type: "narration", text: "", backgroundUrl: null, bgm: "", sfx: "" };
@@ -784,7 +789,7 @@
       syncEditingFromDom(); pushUndo();
       const i = Number(ta.dataset.node), cur = editing.nodes[i];
       const fresh = cur.type === "dialogue"
-        ? { type: "dialogue", text: "", side: cur.side || "left", portraitFx: "", npcId: cur.npcId || null, nameOverride: cur.nameOverride || null, backgroundUrl: null, bgm: "", sfx: "" }
+        ? { type: "dialogue", text: "", side: cur.side || "center", portraitFx: "", npcId: cur.npcId || null, nameOverride: cur.nameOverride || null, backgroundUrl: null, bgm: "", sfx: "" }
         : { type: "narration", text: "", backgroundUrl: null, bgm: "", sfx: "" };
       editing.nodes.splice(i + 1, 0, fresh);
       render();
@@ -816,7 +821,7 @@
     const exprUrl = (npc, name) => { const e = (npc?.expressions || []).find((x) => x && x.name === name); return e?.url || null; };
     const nodePortrait = (nn) => { const npc = npcById[nn.npcId]; return exprUrl(npc, nn.expression) || npc?.portraitUrl || null; };
     const st = {};
-    for (let i = 0; i <= idx; i++) { const nn = nodes[i]; if (!nn) continue; if (nn.clearStage) Object.keys(st).forEach((k) => delete st[k]); if (nn.type === "dialogue" && nodePortrait(nn)) st[nn.side || "left"] = { url: nodePortrait(nn), fx: nn.portraitFx }; }
+    for (let i = 0; i <= idx; i++) { const nn = nodes[i]; if (!nn) continue; if (nn.clearStage) Object.keys(st).forEach((k) => delete st[k]); if (nn.exitSide === "all") Object.keys(st).forEach((k) => delete st[k]); else if (nn.exitSide) delete st[nn.exitSide]; if (nn.type === "dialogue" && nodePortrait(nn)) st[nn.side || "center"] = { url: nodePortrait(nn), fx: nn.portraitFx }; }
     const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
     const npc = isDlg ? npcById[n.npcId] : null;
     const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || npc?.name || "???")) : "";
@@ -931,7 +936,7 @@
     function nodePortrait(n) { const npc = npcById[n.npcId]; return (exprUrl(npc, n.expression) || npc?.portraitUrl || null); }
     function computeStage(upto) {
       const st = {};
-      for (let i = 0; i <= upto; i++) { const n = nodes[i]; if (!n) continue; if (n.clearStage) Object.keys(st).forEach((k) => delete st[k]); if (n.type === "dialogue" && nodePortrait(n)) st[n.side || "left"] = { url: nodePortrait(n), fx: n.portraitFx }; }
+      for (let i = 0; i <= upto; i++) { const n = nodes[i]; if (!n) continue; if (n.clearStage) Object.keys(st).forEach((k) => delete st[k]); if (n.exitSide === "all") Object.keys(st).forEach((k) => delete st[k]); else if (n.exitSide) delete st[n.exitSide]; if (n.type === "dialogue" && nodePortrait(n)) st[n.side || "center"] = { url: nodePortrait(n), fx: n.portraitFx }; }
       return st;
     }
     const SPEED = { slow: 2.1, normal: 1, fast: 0.45 };

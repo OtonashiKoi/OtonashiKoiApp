@@ -3206,6 +3206,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           { key: "body", name: "軀幹", desc: "破其逆鱗 → 王技能發動率降到 30%" },
           { key: "wings", name: "龍翼", desc: "折其雙翼 → 王技能傷害 −15%" },
           { key: "legs", name: "下盤", desc: "撼其根基 → 王普攻 −20%" }
+        ],
+        hellfire_depths: [
+          { key: "head", name: "頭部", desc: "狼牙王技能發動率↑（高風險）" },
+          { key: "body", name: "軀幹", desc: "熔岩硬甲、你的傷害被削減" },
+          { key: "legs", name: "下盤", desc: "狼王撲擊更兇（你受到傷害 ×1.3）" }
         ]
       };
 
@@ -3228,6 +3233,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             "⚔️ 軀幹：破其逆鱗，狂焰之怒漸趨黯淡",
             "👑 頭顱：取其首級，傳說就此落幕",
             "💭 古諺有云：「先斷翼、再破鱗，龍焰終成餘燼。」"
+          ]
+        },
+        hellfire_depths: {
+          title: "擊破要害（三部位俱破，方能誅王）",
+          lines: [
+            "🐺 地獄狼牙王一身烈焰熔甲，唯破其要害方可壓制——",
+            "🦵 下盤：撼其四肢，狂撲之勢自減",
+            "🛡️ 軀幹：碎其熔岩硬甲，傷害不再被吞",
+            "🔥 頭部：轟其首級，煉獄咆哮終息",
+            "💭 火獄有言：「先斷其足、再破其甲，狼焰終成餘燼。」"
           ]
         }
       };

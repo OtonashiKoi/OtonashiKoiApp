@@ -32,5 +32,7 @@
 
 | 19 | 2026-07-06 | 主線閱讀器版面 + 新BGM | 閱讀器縮進上下BAR內不溢出(立繪完整顯示)、離開/SKIP/章節名改懸浮小UI、只顯示章節名不顯頁碼、「點擊繼續」釘對話框右下；後台裁切器去背立繪自動改PNG不再被填黑；龍族之領BGM + 劇情曲「趁能推的時候推」入庫；後台即時預覽真的播BGM | 樣式/工具 | ✅ | 0610ebbc / 604633ac / 9778a1b0 |
 | 20 | 2026-07-06 | 主線主角＝登入玩家 | 進主線時主角自動換成玩家的 DC 顯示名(文中 ___ 佔位符替換)＋DC頭像當立繪；後台speaker可選「🧑玩家(主角)」。⚠️目前賽季維護中,下季開服生效 | 新功能 | ✅ | a2e0e3ab |
+| 21 | 2026-07-06 | 地獄火焰 12 怪立繪 | 用 HIGGSFIELD(gpt_image_2)依風格參考(火翼龍人)生成地獄火焰全 12 隻怪像素風立繪(火焰/熔岩主題)，上 Cloudinary 寫回 monsters.imageUrl/imageThumbnailUrl | 新內容 | ✅ | (本次) land_monster_images |
+| 22 | 2026-07-06 | 地獄狼牙王升格世界王 + 新地圖焰獄深處 | 接續 #15 待辦：新 zone `hellfire_depths`(焰獄深處 Lv60+/進場費15000/解鎖=先屠本週古龍王)；地獄狼牙王搬入(seq1)並強化成新終局(L65/HP320萬/破防70%/三階段1.0-1.35-1.75)；狼牙王卡(A階特殊槽·煉獄咬噬220%火焰+破防35%)+地獄狼牙王寶箱；後端 worldBossService/createServiceContext 註冊解鎖鏈+status部位提示；後台 admin(monsters分頁/combat-calc/story BGM)；前端 sound.ts 兩曲(地獄火焰/地獄狼牙王)+ZONE_BGM；BGM 檔入庫。⚠️需重啟後端生效 | 新功能 | ✅ | (本次) create-hellfang-king-worldboss.js | 
 
 <!-- 新增修改請往下加列，或插入對應功能 -->

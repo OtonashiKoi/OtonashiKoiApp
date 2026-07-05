@@ -24,7 +24,7 @@
   }
 
   // 哪些 zone 是世界王 zone（與後端 WORLD_BOSS_ZONES 對應）
-  const WORLD_BOSS_ZONE_KEYS = ["elite", "dragon_king_lair"];
+  const WORLD_BOSS_ZONE_KEYS = ["elite", "dragon_king_lair", "hellfire_depths"];
 
   async function fetchWorldBossConfig(zone) {
     const q = zone ? ("?zone=" + encodeURIComponent(zone)) : "";
@@ -653,6 +653,8 @@
       ancient_city_deep: { label: "🕯️ 古城深處", color: "#b45309", bg: "rgba(180,83,9,0.12)" },
       dragon_realm:      { label: "🐉 龍族之領", color: "#9d174d", bg: "rgba(157,23,77,0.12)" },
       dragon_king_lair:  { label: "👑 龍王巢穴", color: "#7f1d1d", bg: "rgba(127,29,29,0.14)" },
+      hellfire:          { label: "🔥 地獄火焰", color: "#dc2626", bg: "rgba(220,38,38,0.12)" },
+      hellfire_depths:   { label: "🌋 焰獄深處", color: "#991b1b", bg: "rgba(153,27,27,0.16)" },
       hard:     { label: "🔥 高級區", color: "#f97316", bg: "rgba(249,115,22,0.12)" },
       elite:    { label: "💀 精英區", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
       nightmare: { label: "🌑 噩夢區", color: "#6d28d9", bg: "rgba(109,40,217,0.12)" },

@@ -197,7 +197,7 @@
 
   function updateWorldBossVisibility() {
     const monster = selectedMonster();
-    const visible = Boolean(monster?.isBoss && ["elite", "dragon_king_lair"].includes(monster.zone));
+    const visible = Boolean(monster?.isBoss && ["elite", "dragon_king_lair", "hellfire_depths"].includes(monster.zone));
     $("combat-calc-world-boss").hidden = !visible;
     const wings = $("combat-calc-wb-part")?.querySelector('option[value="wings"]');
     if (wings) wings.hidden = monster?.zone !== "dragon_king_lair";

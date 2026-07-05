@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-07-05T18:13:26.555Z
+Generated at: 2026-07-05T18:45:31.460Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -12,12 +12,12 @@ Generated at: 2026-07-05T18:13:26.555Z
 | 進度資料 | 415 |
 | 怪物 | 64 |
 | 怪物狀態文件 | 10 |
-| 道具 | 346 |
+| 道具 | 348 |
 | 任務 | 38 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
-| 世界王設定 | 2 |
-| 世界王狀態 | 2 |
+| 世界王設定 | 3 |
+| 世界王狀態 | 3 |
 
 ## Zones
 
@@ -30,7 +30,8 @@ Generated at: 2026-07-05T18:13:26.555Z
 | ancient_city_deep | 古城深處 | 30 | 40 | 7 | 7 | 2 |
 | dragon_realm | 龍族之領 | 40 | 50 | 10 | 10 | 2 |
 | dragon_king_lair | 龍王巢穴 | 50 | 無上限 | 1 | 1 | 1 |
-| hellfire | 地獄火焰 | 50 | 60 | 12 | 12 | 1 |
+| hellfire | 地獄火焰 | 50 | 60 | 11 | 11 | 0 |
+| hellfire_depths | 焰獄深處 | 60 | 無上限 | 1 | 1 | 1 |
 | elite | 精英區 | 20 | 無上限 | 1 | 1 | 1 |
 | nightmare | 噩夢區 | 30 | 無上限 | 0 | 0 | 0 |
 | abyss | 深淵區 | 45 | 無上限 | 0 | 0 | 0 |
@@ -83,7 +84,7 @@ Generated at: 2026-07-05T18:13:26.555Z
 | hellfire | 9 | 岩漿巨蟲 | 56 | 210000 | 42000 | 4600 | 0 | 否 | 3 |
 | hellfire | 10 | 烈焰狼 | 58 | 190000 | 45000 | 4800 | 0 | 否 | 3 |
 | hellfire | 11 | 煉獄烈焰狼王 | 59 | 450000 | 90000 | 12000 | 0 | 否 | 4 |
-| hellfire | 12 | 地獄狼牙王 | 60 | 2000000 | 200000 | 30000 | 0 | 是 | 1 |
+| hellfire_depths | 1 | 地獄狼牙王 | 65 | 3200000 | 30000 | 60000 | 0 | 是 | 1 |
 | mid | 1 | 甲蟹 | 14 | 4968 | 2800 | 828 | 0 | 否 | 16 |
 | mid | 2 | 牙牙狼 | 13 | 4416 | 2400 | 828 | 0 | 否 | 13 |
 | mid | 3 | 巨巨 | 16 | 5704 | 4000 | 828 | 0 | 否 | 14 |
@@ -110,19 +111,19 @@ Generated at: 2026-07-05T18:13:26.555Z
 | 分類 | 數量 |
 | --- | --- |
 | collectible | 6 |
-| consumable | 21 |
-| equipment | 308 |
+| consumable | 22 |
+| equipment | 309 |
 | job_badge | 10 |
 | pet_egg | 1 |
 
 | 階級 | 數量 |
 | --- | --- |
-| A | 90 |
+| A | 91 |
 | B | 70 |
 | C | 71 |
 | D | 57 |
 | S | 17 |
-| 無階級 | 41 |
+| 無階級 | 42 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -137,10 +138,10 @@ Generated at: 2026-07-05T18:13:26.555Z
 | job_eq | 10 |
 | shield | 8 |
 | shoes | 16 |
-| special | 52 |
+| special | 53 |
 | title_eq | 8 |
 | weapon | 52 |
-| 無槽位 | 28 |
+| 無槽位 | 29 |
 
 ## Items
 
@@ -160,6 +161,7 @@ Generated at: 2026-07-05T18:13:26.555Z
 | 97fbd546-e207-4130-b130-2fadd799703a | 回復藥水（中） | consumable |  |  |  |  | tower_heal_flat |
 | 3eb1d302-3d04-40a5-8335-1f9ed844dc27 | 回復藥水（大） | consumable |  |  |  |  | tower_heal_pct |
 | f56aefd0-faa8-45b5-8451-fbbae5810c74 | 回復藥水（小） | consumable |  |  |  |  | tower_heal_flat |
+| chest-hellfang-king | 地獄狼牙王寶箱 | consumable |  |  |  |  | open_world_boss_chest |
 | chest-daishi-king | 大史王寶箱 | consumable |  |  |  |  | open_world_boss_chest |
 | 87b281be-b175-40a0-8044-0accc88a0ee0 | 屬性重製藥水 | consumable |  |  |  |  | reroll_attributes |
 | c4794326-ced1-4efe-983d-17c14ee2f2f8 | 復活藥水（大） | consumable |  |  |  |  | tower_revive_pct |
@@ -249,6 +251,7 @@ Generated at: 2026-07-05T18:13:26.555Z
 | monster-card-e1c17a26-dd0e-4869-9ce8-7c4b12b8e2c2 | 暗影龍將卡 | equipment | A | special |  |  | none |
 | monster-card-139df36b-f838-4875-b3f0-2d9003fc6f8f | 毒霧蜘蛛卡 | equipment | A | special |  |  | none |
 | monster-card-29e2458c-8e7f-4c4f-a7bf-5f978a5067d4 | 火翼龍人卡 | equipment | A | special |  |  | none |
+| monster-card-hellfang-king | 狼牙王卡 | equipment | A | special |  |  |  |
 | monster-card-814f097c-283e-4c35-98b5-7aaa8b08dd7c | 石像鬼卡 | equipment | A | special |  |  | none |
 | monster-card-9a0ac6a5-4f2e-4186-a66a-73a6de9cb5e2 | 詛咒祭司卡 | equipment | A | special |  |  | none |
 | monster-card-8eea80b7-c836-413b-8912-7c3ce6a899a7 | 鐵甲衛將卡 | equipment | A | special |  |  | none |

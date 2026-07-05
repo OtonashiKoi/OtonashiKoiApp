@@ -84,10 +84,17 @@ function createServiceContext() {
     unlockRequiresBossKey: "default",
     unlockServiceGetter: (key) => (key === "default" ? worldBossService : null),
   });
+  // 地獄狼牙王：新終局世界王，需先擊敗本週古龍王才解鎖
+  const hellfangKingBossService = new WorldBossService(repositories.worldBossRepository, {
+    bossKey: "hellfang_king",
+    unlockRequiresBossKey: "dragon_king",
+    unlockServiceGetter: (key) => (key === "dragon_king" ? dragonKingBossService : null),
+  });
   // zone → 對應世界王 service（handler 用 zoneKey 取得正確 boss）
   const { bossKeyForZone } = require("./worldBoss/worldBossService");
   function worldBossServiceFor(zoneKey) {
     const bk = bossKeyForZone(zoneKey);
+    if (bk === "hellfang_king") return hellfangKingBossService;
     if (bk === "dragon_king") return dragonKingBossService;
     if (bk === "default") return worldBossService;
     return null;

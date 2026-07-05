@@ -162,7 +162,11 @@ class WorldBossService {
       unlockTarget: 0,
       remainingUnlockKills: 0,
       unlocked,
-      lockedReason: unlocked ? null : (this.unlockRequiresBossKey === "default" ? "需先擊敗本週的大史王，才能挑戰龍王" : "尚未解鎖"),
+      lockedReason: unlocked ? null : (
+        this.unlockRequiresBossKey === "default" ? "需先擊敗本週的大史王，才能挑戰龍王"
+        : this.unlockRequiresBossKey === "dragon_king" ? "需先擊敗本週的古龍王，才能挑戰地獄狼牙王"
+        : "尚未解鎖"
+      ),
       cooldownRemainingMs,
       cooldownRemainingMinutes: Math.ceil(cooldownRemainingMs / 60000),
       battleStartedAt: state.battleStartedAt || null,
@@ -255,6 +259,7 @@ class WorldBossService {
 const WORLD_BOSS_ZONES = {
   elite: "default",            // 大史王
   dragon_king_lair: "dragon_king", // 龍王(B)
+  hellfire_depths: "hellfang_king", // 地獄狼牙王（終局）
 };
 function isWorldBossZone(zoneKey) {
   return Object.prototype.hasOwnProperty.call(WORLD_BOSS_ZONES, zoneKey);
