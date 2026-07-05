@@ -1,7 +1,6 @@
 "use strict";
 const { collectEquipmentEffects, applyEffectsToStats } = require("./effectEngine");
 const { getEquipmentTierSetBonuses, TIER_SET_SLOTS } = require("./equipmentTierSetBonuses");
-const { toEffectInstances: toEnchantEffectInstances } = require("./enchantEngine");
 const { getBossBoostPct, PK_RATING_DEFAULT } = require("./pkArenaConfig");
 
 // ─────────────────────────────────────────────
@@ -206,13 +205,9 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   };
 
   const effectContext = { equipped, inventory, zone };
+  // 裝備 passive 效果（已含附魔衍生詞條——collectEffectRefsFromEntry 會把 entry.enchantments 轉成效果）
   const equipmentEffects = collectEquipmentEffects(equipped, "passive", effectContext);
-  // 附魔的衍生詞條(爆擊/爆傷/連擊/攻擊/防禦/命中/迴避/最大生命…)→ 轉成效果實例餵進效果引擎
-  const enchantEffects = [];
-  for (const item of Object.values(equipped)) {
-    if (Array.isArray(item?.enchantments)) enchantEffects.push(...toEnchantEffectInstances(item.enchantments));
-  }
-  const combinedEffects = [...equipmentEffects, ...enchantEffects, ...(Array.isArray(activeEffects) ? activeEffects : [])];
+  const combinedEffects = [...equipmentEffects, ...(Array.isArray(activeEffects) ? activeEffects : [])];
   const nextStats = applyEffectsToStats(baseStats, combinedEffects, effectContext);
 
   nextStats.def = Math.min(85, Math.max(0, Number(nextStats.def) || 0));

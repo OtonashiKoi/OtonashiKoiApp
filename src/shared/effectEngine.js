@@ -116,11 +116,19 @@ function isEffectConditionMet(effectRef, context = {}) {
 
 function collectEffectRefsFromEntry(entry, trigger = null, context = {}) {
   if (!entry || typeof entry !== "object") return [];
+  // 附魔的衍生詞條(有 effectKey 的)→ 視為裝備 passive 效果，一併進入效果管線
+  // （基礎屬性詞條無 effectKey，不在此，另在 calcPlayerStats 直接加屬性）
+  const enchantEffects = Array.isArray(entry.enchantments)
+    ? entry.enchantments
+        .filter((e) => e && e.effectKey)
+        .map((e) => ({ key: e.effectKey, trigger: "passive", params: { value: Number(e.value) || 0 }, source: "enchant" }))
+    : [];
   const buckets = [
     ...(Array.isArray(entry.passiveEffects) ? entry.passiveEffects : []),
     ...(Array.isArray(entry.procEffects) ? entry.procEffects : []),
     ...(Array.isArray(entry.useEffects) ? entry.useEffects : []),
-    ...(Array.isArray(entry.combatEffects) ? entry.combatEffects : [])
+    ...(Array.isArray(entry.combatEffects) ? entry.combatEffects : []),
+    ...enchantEffects
   ];
   return buckets.filter((effect) => {
     if (!effect || typeof effect !== "object") return false;
