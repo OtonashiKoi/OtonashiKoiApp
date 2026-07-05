@@ -85,11 +85,57 @@
       fetchJSON("/admin/story/chapters", { headers: headers() }),
       fetchJSON("/admin/story/monsters", { headers: headers() })
     ]);
+    loadAssets(); // 劇情圖庫（背景/CG/立繪，非阻斷）
     render();
   }
   async function uploadImage(file) {
     const fd = new FormData(); fd.append("image", file);
     return (await fetchJSON("/admin/story/upload", { method: "POST", headers: headers(false), body: fd })).imageUrl;
+  }
+
+  // ── 劇情圖庫：上傳一次命名，之後直接選 ──
+  let storyAssets = [];
+  async function loadAssets() { try { storyAssets = (await fetchJSON("/admin/story/assets")) || []; } catch (_) { storyAssets = []; } }
+  async function saveAsset(name, url, kind) {
+    try { const a = await fetchJSON("/admin/story/assets", { method: "POST", headers: headers(), body: JSON.stringify({ name, url, kind }) }); if (a) storyAssets.unshift(a); return a; } catch (_) { return null; }
+  }
+  // 上傳並命名存進圖庫（回傳 url）
+  async function uploadNamed(file, kind) {
+    const url = await uploadImage(file);
+    if (!url) return url;
+    const suggest = (file.name || "").replace(/\.[^.]+$/, "");
+    const name = prompt("為這張圖命名（下次可直接從圖庫選，不用重傳）：", suggest);
+    if (name && name.trim()) await saveAsset(name.trim(), url, kind);
+    return url;
+  }
+  // 圖庫選擇 modal
+  function pickAsset(kind, cb) {
+    const list = storyAssets.filter((a) => !kind || a.kind === kind);
+    const ov = document.createElement("div");
+    ov.style.cssText = "position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:20px;";
+    ov.innerHTML = `<div style="background:#141122;border:1px solid #c4a7f5;border-radius:14px;padding:16px;max-width:740px;width:100%;max-height:82vh;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><b style="color:#c4a7f5;">📁 圖庫 · ${esc(kind)}</b><button class="button" id="pa-close">✕ 關閉</button></div>
+      ${list.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;">${list.map((a) => `
+        <div class="pa-item" data-pa-url="${esc(a.url)}" style="cursor:pointer;border:1px solid #2a2f45;border-radius:8px;overflow:hidden;position:relative;">
+          <img src="${esc(a.url)}" style="width:100%;height:78px;object-fit:cover;display:block;">
+          <div style="font-size:11px;padding:4px 6px;color:#cdbce8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.name)}</div>
+          <button class="button" data-pa-del="${esc(a.id)}" title="從圖庫刪除" style="position:absolute;top:2px;right:2px;padding:0 5px;font-size:11px;">🗑</button>
+        </div>`).join("")}</div>` : '<p class="hint">圖庫還是空的。先在下面「上傳」一張並命名，之後就會出現在這裡。</p>'}
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector("#pa-close").addEventListener("click", () => ov.remove());
+    ov.addEventListener("click", (e) => { if (e.target === ov) ov.remove(); });
+    ov.querySelectorAll(".pa-item").forEach((el) => el.addEventListener("click", (e) => {
+      if (e.target.closest("[data-pa-del]")) return;
+      cb(el.dataset.paUrl); ov.remove();
+    }));
+    ov.querySelectorAll("[data-pa-del]").forEach((b) => b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm("從圖庫移除這張？（不影響已用到的節點）")) return;
+      await fetchJSON(`/admin/story/assets/${b.dataset.paDel}`, { method: "DELETE", headers: headers() }).catch(() => {});
+      storyAssets = storyAssets.filter((a) => a.id !== b.dataset.paDel);
+      b.closest(".pa-item")?.remove();
+    }));
   }
 
   // ── Undo / Redo（結構性操作前呼叫 pushUndo）──
@@ -390,6 +436,7 @@
         : isCG
           ? `<div style="${ROW}margin-bottom:4px;">
                <label class="button" style="cursor:pointer;">🖼 CG 事件圖<input type="file" accept="image/*" data-node-cg="${i}" style="display:none;"></label>
+               <button class="button" data-node-cg-pick="${i}" title="從圖庫選">📁 圖庫</button>
                ${n.cgUrl ? `<img src="${esc(n.cgUrl)}" style="height:44px;border-radius:6px;"><button class="button" data-node-cg-clear="${i}">✖</button>` : '<span class="hint" style="margin:0;color:#ff9a8f;">尚未上傳 CG 圖</span>'}
              </div>
              <textarea data-node="${i}" data-field="text" rows="2" style="width:100%;box-sizing:border-box;" placeholder="CG 字幕（選填，留空＝純圖）">${esc(n.text || "")}</textarea>`
@@ -408,6 +455,7 @@
           </div>` : ""}
           <div style="${ROW}margin-bottom:6px;">
             <label class="button" style="cursor:pointer;">🏞 背景<input type="file" accept="image/*" data-node-bg="${i}" style="display:none;"></label>
+            <button class="button" data-node-bg-pick="${i}" title="從圖庫選">📁 圖庫</button>
             ${n.backgroundUrl ? `<img src="${esc(n.backgroundUrl)}" style="height:30px;border-radius:6px;"><button class="button" data-node-bg-clear="${i}">✖</button>` : '<span class="hint" style="margin:0;">未設＝沿用前景</span>'}
             <span style="flex:1;"></span>
             <select data-node="${i}" data-field="bgm">${optionsHtml(BGM_OPTS, n.bgm || "")}</select>
@@ -462,6 +510,7 @@
           <label>地圖 <select id="story-f-zone">${zoneOpts}</select></label>
           <label><input type="checkbox" id="story-f-enabled" ${editing.enabled !== false ? "checked" : ""}> 啟用</label>
           <label class="button" style="cursor:pointer;">🖼 章節背景<input type="file" accept="image/*" id="story-f-bg" style="display:none;"></label>
+          <button class="button" id="story-f-bg-pick" title="從圖庫選">📁 圖庫</button>
           ${editing.backgroundUrl ? `<img src="${esc(editing.backgroundUrl)}" style="height:32px;border-radius:6px;"><button class="button" id="story-f-bg-clear">✖</button>` : '<span class="hint" style="margin:0;">未設＝用地圖背景</span>'}
         </div>
         <div style="${ROW}margin-bottom:0;">
@@ -588,7 +637,8 @@
       clearDraft(); stopDraft(); editing = null; fxOpen.clear(); undoStack = []; redoStack = []; render();
     });
     root.querySelector("#story-ch-preview")?.addEventListener("click", () => { syncEditingFromDom(); openPreview(); });
-    root.querySelector("#story-f-bg")?.addEventListener("change", async (e) => { if (!e.target.files?.[0]) return; syncEditingFromDom(); pushUndo(); editing.backgroundUrl = await uploadImage(e.target.files[0]); render(); });
+    root.querySelector("#story-f-bg")?.addEventListener("change", async (e) => { if (!e.target.files?.[0]) return; syncEditingFromDom(); pushUndo(); editing.backgroundUrl = await uploadNamed(e.target.files[0], "background"); render(); });
+    root.querySelector("#story-f-bg-pick")?.addEventListener("click", () => pickAsset("background", (url) => { syncEditingFromDom(); pushUndo(); editing.backgroundUrl = url; render(); }));
     root.querySelector("#story-f-bg-clear")?.addEventListener("click", () => { syncEditingFromDom(); pushUndo(); editing.backgroundUrl = null; render(); });
 
     // 搜尋：直接過濾 DOM，不 re-render（保留輸入焦點）
@@ -697,10 +747,12 @@
       });
     });
     // 背景上傳/清除
-    root.querySelectorAll("[data-node-bg]").forEach((inp) => inp.addEventListener("change", async () => { if (!inp.files?.[0]) return; syncEditingFromDom(); pushUndo(); editing.nodes[Number(inp.dataset.nodeBg)].backgroundUrl = await uploadImage(inp.files[0]); render(); }));
+    root.querySelectorAll("[data-node-bg]").forEach((inp) => inp.addEventListener("change", async () => { if (!inp.files?.[0]) return; syncEditingFromDom(); pushUndo(); editing.nodes[Number(inp.dataset.nodeBg)].backgroundUrl = await uploadNamed(inp.files[0], "background"); render(); }));
+    root.querySelectorAll("[data-node-bg-pick]").forEach((b) => b.addEventListener("click", () => pickAsset("background", (url) => { syncEditingFromDom(); pushUndo(); editing.nodes[Number(b.dataset.nodeBgPick)].backgroundUrl = url; render(); })));
     root.querySelectorAll("[data-node-bg-clear]").forEach((b) => b.addEventListener("click", () => { syncEditingFromDom(); pushUndo(); editing.nodes[Number(b.dataset.nodeBgClear)].backgroundUrl = null; render(); }));
     // CG 上傳/清除
-    root.querySelectorAll("[data-node-cg]").forEach((inp) => inp.addEventListener("change", async () => { if (!inp.files?.[0]) return; syncEditingFromDom(); pushUndo(); editing.nodes[Number(inp.dataset.nodeCg)].cgUrl = await uploadImage(inp.files[0]); render(); }));
+    root.querySelectorAll("[data-node-cg]").forEach((inp) => inp.addEventListener("change", async () => { if (!inp.files?.[0]) return; syncEditingFromDom(); pushUndo(); editing.nodes[Number(inp.dataset.nodeCg)].cgUrl = await uploadNamed(inp.files[0], "cg"); render(); }));
+    root.querySelectorAll("[data-node-cg-pick]").forEach((b) => b.addEventListener("click", () => pickAsset("cg", (url) => { syncEditingFromDom(); pushUndo(); editing.nodes[Number(b.dataset.nodeCgPick)].cgUrl = url; render(); })));
     root.querySelectorAll("[data-node-cg-clear]").forEach((b) => b.addEventListener("click", () => { syncEditingFromDom(); pushUndo(); editing.nodes[Number(b.dataset.nodeCgClear)].cgUrl = null; render(); }));
     // 換 NPC → 重繪(讓表情差分下拉跟著換)
     root.querySelectorAll('select[data-field="npcId"]').forEach((sel) => sel.addEventListener("change", () => { syncEditingFromDom(); render(); }));

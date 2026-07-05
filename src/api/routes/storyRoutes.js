@@ -174,6 +174,35 @@ function createStoryRoutes(serviceContext) {
     }
   });
 
+  // 劇情圖庫：上傳過的圖存起來(命名)，下次直接選、不用重傳（背景/CG/立繪共用）
+  router.get("/admin/story/assets", async (req, res, next) => {
+    try {
+      const db = await require("../../adapters/mongo/createMongoClient").getMongoDb();
+      const kind = String(req.query.kind || "").trim();
+      const list = await db.collection("storyAssets").find(kind ? { kind } : {}).sort({ createdAt: -1 }).limit(500).toArray();
+      res.json(ok(list, "assets listed"));
+    } catch (e) { next(e); }
+  });
+  router.post("/admin/story/assets", async (req, res, next) => {
+    try {
+      const db = await require("../../adapters/mongo/createMongoClient").getMongoDb();
+      const name = String(req.body?.name || "").trim();
+      const url = String(req.body?.url || "").trim();
+      const kind = String(req.body?.kind || "background").trim();
+      if (!name || !url) return res.status(400).json(fail("INVALID_ARGUMENT", "name and url required"));
+      const doc = { id: require("crypto").randomUUID(), name, url, kind, createdAt: new Date().toISOString() };
+      await db.collection("storyAssets").insertOne(doc);
+      res.json(ok(doc, "asset saved"));
+    } catch (e) { next(e); }
+  });
+  router.delete("/admin/story/assets/:id", async (req, res, next) => {
+    try {
+      const db = await require("../../adapters/mongo/createMongoClient").getMongoDb();
+      await db.collection("storyAssets").deleteOne({ id: req.params.id });
+      res.json(ok({ deleted: true }, "asset deleted"));
+    } catch (e) { next(e); }
+  });
+
   // NPC 立繪上傳：統一走 Cloudinary（與怪物圖片同流程）
   router.post("/admin/story/npcs/:id/portrait", upload.single("image"), async (req, res, next) => {
     try {
