@@ -452,7 +452,9 @@ body {
 }
 
 .nav-group.is-open .nav-group-links {
-  max-height: 460px;
+  /* 用大一點的上限，避免群組項目多了超過上限被裁切（項目消失）；
+     整欄捲動交給 .sidebar-nav 的 overflow-y:auto */
+  max-height: 100vh;
   opacity: 1;
 }
 
@@ -2085,18 +2087,21 @@ select option { background: var(--surface); }
    RESPONSIVE
    ══════════════════════════════════════════════ */
 @media (max-width: 1200px) {
-  .shell { flex-direction: column; }
+  /* 手機/窄視窗：改成「整頁自然捲動」。側欄完整展開、群組再多也不裁切，捲動交給頁面捲軸。
+     （原本是固定 100vh app-shell + 側欄內部捲動，展開後會在捲動摺點把項目切一半，看起來像消失） */
+  html, body { height: auto; min-height: 100%; overflow-y: auto; overflow-x: hidden; }
+  .game-window { height: auto; min-height: 100vh; }
+  .window-top { position: sticky; top: 0; z-index: 30; }
+  .shell { flex-direction: column; height: auto; min-height: 0; }
   .hero {
     width: 100%; border-right: 0;
     border-bottom: 1px solid var(--line);
     padding: 14px 20px;
-    /* 用 flex 讓中間的 sidebar-nav 成為有界的捲動區（grid+height:auto 時 1fr 拿不到確定高度會改成裁切） */
-    height: auto; max-height: 56vh;
-    display: flex; flex-direction: column; gap: 12px;
+    height: auto; max-height: none; overflow: visible;
+    display: block;
   }
-  .hero > div:first-child { flex: 0 0 auto; }
-  .hero .sidebar-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-  .hero .hero-card { flex: 0 0 auto; }
+  .hero .sidebar-nav { overflow: visible; min-height: 0; }
+  .panel { flex: none; height: auto; overflow: visible; padding: 20px; }
   .player-grid { flex-direction: column; height: auto; }
   .player-list-section { width: 100%; max-height: 380px; }
   .player-body-grid { grid-template-columns: 1fr; }
