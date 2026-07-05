@@ -6,41 +6,42 @@ const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 // 屬性池分「詞條組(band)」；每個屬性帶數值範圍(min~max)與單位。
 // key 盡量對應戰鬥用的 stat key，方便之後套進戰鬥計算。
 const DEFAULTS = {
+  // 統一數值：基礎屬性 +1~7 點(flat)、衍生詞條 +1~7%(mapped 到效果引擎的 effectKey)
   bands: {
     D: {
       label: "基礎",
       attrs: [
-        { key: "str", label: "力量", unit: "", min: 1, max: 3 },
-        { key: "agi", label: "敏捷", unit: "", min: 1, max: 3 },
-        { key: "vit", label: "體力", unit: "", min: 1, max: 3 },
-        { key: "int", label: "智力", unit: "", min: 1, max: 3 },
-        { key: "dex", label: "技巧", unit: "", min: 1, max: 3 },
-        { key: "luk", label: "幸運", unit: "", min: 1, max: 3 },
-        { key: "def", label: "防禦", unit: "", min: 1, max: 4 }
+        { key: "str", label: "力量", unit: "", min: 1, max: 7 },
+        { key: "agi", label: "敏捷", unit: "", min: 1, max: 7 },
+        { key: "vit", label: "體力", unit: "", min: 1, max: 7 },
+        { key: "int", label: "智力", unit: "", min: 1, max: 7 },
+        { key: "dex", label: "技巧", unit: "", min: 1, max: 7 },
+        { key: "luk", label: "幸運", unit: "", min: 1, max: 7 },
+        { key: "def", label: "防禦", unit: "%", effectKey: "def_up", min: 1, max: 7 }
       ]
     },
     C: {
       label: "進階",
       attrs: [
-        { key: "hit", label: "命中", unit: "", min: 2, max: 6 },
-        { key: "dodge", label: "迴避", unit: "", min: 2, max: 5 },
-        { key: "maxHp", label: "最大生命", unit: "", min: 10, max: 30 }
+        { key: "hit", label: "命中", unit: "%", effectKey: "hit_up", min: 1, max: 7 },
+        { key: "dodge", label: "迴避", unit: "%", effectKey: "dodge_up", min: 1, max: 7 },
+        { key: "maxHp", label: "最大生命", unit: "%", effectKey: "max_hp_multiplier_up", min: 1, max: 7 }
       ]
     },
     B: {
       label: "強力",
       attrs: [
-        { key: "crit", label: "爆擊率", unit: "%", min: 1, max: 4 },
-        { key: "atk", label: "攻擊力", unit: "", min: 3, max: 8 }
+        { key: "crit", label: "爆擊率", unit: "%", effectKey: "crit_rate_up", min: 1, max: 7 },
+        { key: "atk", label: "攻擊力", unit: "%", effectKey: "atk_multiplier_up", min: 1, max: 7 }
       ]
     },
     AS: {
       label: "頂級(A/S 專屬)",
       attrs: [
-        { key: "critDmg", label: "爆傷", unit: "%", min: 5, max: 15 },
-        { key: "multiHit", label: "連擊率", unit: "%", min: 1, max: 4 },
-        { key: "lifesteal", label: "吸血", unit: "%", min: 1, max: 4 },
-        { key: "dmgReduce", label: "傷害減免", unit: "%", min: 1, max: 4 }
+        { key: "critDmg", label: "爆傷", unit: "%", effectKey: "crit_damage_up", min: 1, max: 7 },
+        { key: "multiHit", label: "連擊率", unit: "%", effectKey: "combo_up", min: 1, max: 7 },
+        { key: "lifesteal", label: "吸血", unit: "%", effectKey: "lifesteal", min: 1, max: 7 },
+        { key: "dmgReduce", label: "傷害減免", unit: "%", effectKey: "damage_reduction", min: 1, max: 7 }
       ]
     }
   },

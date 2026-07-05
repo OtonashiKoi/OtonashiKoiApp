@@ -54,6 +54,7 @@ function rollEnchantments(tier, config) {
       key: attr.key,
       label: attr.label,
       unit: attr.unit || "",
+      effectKey: attr.effectKey || null,
       band: attr.band,
       value: randInt(attr.min, attr.max)
     });
@@ -72,4 +73,19 @@ function sumEnchantStats(enchantments) {
   return out;
 }
 
-module.exports = { rollEnchantments, rollablePool, sumEnchantStats, randInt };
+/**
+ * 把「有 effectKey 的附魔詞條」轉成戰鬥效果實例（餵給效果引擎 applyEffectsToStats）。
+ * 基礎屬性(無 effectKey)不在此列——它們另在 calcPlayerStats 直接加進屬性加成。
+ * @param {Array} enchantments
+ * @returns {Array<{key,params:{value},source}>}
+ */
+function toEffectInstances(enchantments) {
+  const out = [];
+  if (!Array.isArray(enchantments)) return out;
+  for (const e of enchantments) {
+    if (e && e.effectKey) out.push({ key: e.effectKey, params: { value: Number(e.value) || 0 }, source: "enchant" });
+  }
+  return out;
+}
+
+module.exports = { rollEnchantments, rollablePool, sumEnchantStats, toEffectInstances, randInt };
