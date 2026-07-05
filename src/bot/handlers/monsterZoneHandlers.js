@@ -3609,6 +3609,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       }
 
       if (droppedItems.length > 0) {
+        // 背包容量：裝備滿了就不再撿多出來的裝備（素材/寶石/蛋照收），依會員等級決定上限
+        let equipCap = Infinity;
+        try { equipCap = (await require("../../services/backpack/backpackService").resolveCapacity(luckyPid)).cap; } catch (_) { /* 解析失敗不擋 */ }
+        const skippedByFullBag = [];
         let savedDrop = false;
         for (let attempt = 0; attempt < 3 && !savedDrop; attempt++) {
           const latestLuckyProg = await sc.progressRepository.findByPlayerId(luckyPid);
@@ -3620,7 +3624,18 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               ? latestLuckyProg.inventory.map((entry) => ({ ...entry }))
               : []
           };
-          nextLuckyProg.inventory.push(...droppedItemObjects.map((entry) => ({ ...entry })));
+          // 依容量過濾：裝備超過上限就跳過（其他類不受限）
+          let room = Math.max(0, equipCap - nextLuckyProg.inventory.filter((e) => e && e.itemType === "equipment").length);
+          const toAdd = [];
+          for (const entry of droppedItemObjects) {
+            if (entry.itemType === "equipment") {
+              if (room > 0) { toAdd.push(entry); room -= 1; }
+              else if (attempt === 0) skippedByFullBag.push(entry.itemName);
+            } else {
+              toAdd.push(entry);
+            }
+          }
+          nextLuckyProg.inventory.push(...toAdd.map((entry) => ({ ...entry })));
           nextLuckyProg.updatedAt = new Date().toISOString();
 
           if (typeof sc.progressRepository.saveIfUnchanged === "function") {
@@ -3644,6 +3659,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           if (canSendRewardNotice(luckyPid)) {
             if (isKiller) {
               rewardLines.push(`🎁 道具掉落：${allDropped.join("、")}`);
+              if (skippedByFullBag.length > 0) {
+                rewardLines.push(`⚠️ 背包已滿，未拾取裝備：${skippedByFullBag.join("、")}（整理背包或升級會員可擴充上限）`);
+              }
               // 結構化掉落（給網頁版漂浮道具氣泡 + 詳細視窗用）
               rewardLines._drops = [...(rewardLines._drops || []), ...allDroppedObjects.map(toWebDrop)];
               _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "kill").catch(() => {});

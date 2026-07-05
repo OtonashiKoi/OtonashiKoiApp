@@ -1375,7 +1375,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       } catch (_) { /* 合併失敗時回原始快照，不擋背包 */ }
 
-      res.json(ok({ inventory, equipped }));
+      // 背包容量（裝備佔格；依會員等級）
+      let backpack = null;
+      try {
+        const bp = require("../../services/backpack/backpackService");
+        const { cap, label, tier } = await bp.resolveCapacity(discordId);
+        backpack = { equipmentCount: bp.countEquipment(inventory), capacity: cap, tier, tierLabel: label };
+      } catch (_) { /* 容量解析失敗不擋背包 */ }
+
+      res.json(ok({ inventory, equipped, backpack }));
     } catch (err) {
       next(err);
     }
