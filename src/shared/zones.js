@@ -83,6 +83,17 @@ const ZONE_DEFS = [
     defaultEntryFee: 10000,
   },
   {
+    key:          "hellfire",
+    featureKey:   "monster_zone_hellfire",
+    label:        "地獄火焰",
+    emoji:        "🔥",
+    tagline:      "烈焰焚盡之地，狼牙王嗥於火海。",
+    color:        0xdc2626,
+    minLevel:     50,
+    maxLevel:     60,
+    defaultEntryFee: 12000,
+  },
+  {
     key:          "elite",
     featureKey:   "monster_zone_elite",
     label:        "精英區",
