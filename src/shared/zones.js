@@ -94,6 +94,17 @@ const ZONE_DEFS = [
     defaultEntryFee: 12000,
   },
   {
+    key:          "hellfire_depths",
+    featureKey:   "monster_zone_hellfire_depths",
+    label:        "焰獄深處",
+    emoji:        "🌋",
+    tagline:      "烈焰最深處，狼牙王咆哮於火獄核心；唯屠本週古龍者，方可踏入。",
+    color:        0x991b1b,
+    minLevel:     60,
+    maxLevel:     null,
+    defaultEntryFee: 15000,
+  },
+  {
     key:          "elite",
     featureKey:   "monster_zone_elite",
     label:        "精英區",

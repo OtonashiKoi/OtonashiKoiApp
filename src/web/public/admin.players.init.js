@@ -98,6 +98,11 @@
       });
     }
 
+    // 登入成功才顯示左側功能分類（登入前隱藏，避免未登入就看到功能）
+    document.addEventListener("adminConnected", () => {
+      document.body.classList.add("admin-authed");
+    });
+
     elements.connectButton.addEventListener("click", async () => {
       try {
         if (window.adminBindings && typeof window.adminBindings.bootstrapConsole === 'function') {

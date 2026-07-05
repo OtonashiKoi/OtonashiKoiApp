@@ -7,6 +7,14 @@
     <title>Equipment Game Admin</title>
     <link rel="stylesheet" href="/static/admin.css?v=12" />
     <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css" />
+    <style>
+      /* 登入前隱藏左側功能分類（搜尋 + 各分類），避免未登入就看到有哪些功能；只留登入提示。登入成功(adminConnected)才顯示。 */
+      body:not(.admin-authed) #nav-search,
+      body:not(.admin-authed) #nav-search-empty,
+      body:not(.admin-authed) .sidebar-nav .nav-group { display: none !important; }
+      .nav-locked-hint { display: none; margin: 8px 0 0; padding: 10px 12px; font-size: 13px; line-height: 1.6; color: #a1a1aa; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.16); border-radius: 8px; }
+      body:not(.admin-authed) .nav-locked-hint { display: block; }
+    </style>
   </head>
   <body>
     <div class="game-window">
@@ -30,6 +38,7 @@
           </div>
 
           <nav class="sidebar-nav" aria-label="後台功能導覽">
+            <p class="nav-locked-hint" id="nav-locked-hint">🔒 請先在右側輸入管理員密碼並「連線」，登入後才會顯示功能分類。</p>
             <div class="nav-search" id="nav-search">
               <span class="nav-search-icon" aria-hidden="true">🔍</span>
               <input id="nav-search-input" type="search" placeholder="搜尋功能…" autocomplete="off" aria-label="搜尋後台功能" />
@@ -1107,7 +1116,7 @@
     <script src="/static/admin.effect-modules.js?v=1"></script>
     <script src="/static/admin.bindings.js?v=8"></script>
     <script src="/static/admin.players.js?v=6"></script>
-    <script src="/static/admin.players.init.js?v=6"></script>
+    <script src="/static/admin.players.init.js?v=7"></script>
     <script src="/static/admin.nav-search.js?v=1"></script>
     <script src="/static/admin.tiers.js?v=6"></script>
     <script src="/static/admin.shop.js?v=7"></script>

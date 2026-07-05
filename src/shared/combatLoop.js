@@ -2986,17 +2986,22 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         if (mHp <= 0) { outcome = "win"; break; }
 
-        // 連擊（AGI驅動）── 簡化：觸發後同一次傷害再扣一次（× 2 效果）
+        // 連擊（AGI驅動）── 可同回合連續觸發：第 1 次吃完整連擊率，之後每次機率為前一次的 1/5，單回合最多 5 連擊
         let comboChance = pStats.combo * (1 + roundPartyAgiBoostPct / 100) + roundPartyComboBoostPct;
         comboChance = Math.min(100, Math.max(0, comboChance));
 
-        if (Math.random() * 100 < comboChance) {
+        const MAX_COMBO_PER_ROUND = 5;
+        let comboHitsThisAttack = 0;
+        let comboKilled = false;
+        while (comboHitsThisAttack < MAX_COMBO_PER_ROUND && Math.random() * 100 < comboChance) {
+          comboHitsThisAttack += 1;
           combatStats.comboCount += 1;
           // 連擊:用「未含追加值」的傷害乘連擊倍率,再額外加一次武器主屬性追加(固定,不被倍率縮放)
           let cdmg = Math.max(1, Math.round(Math.max(1, dmg - weaponMainBonus) * (pStats.comboDamageMultiplier || 1)) + weaponMainBonus);
           mHp -= cdmg;
           totalDamage += cdmg;
-          log.push(`⚡ **${rand(jobFlavor.combo)}** 連擊！再造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          const comboLabel = comboHitsThisAttack >= 2 ? `${comboHitsThisAttack} 連擊` : "連擊";
+          log.push(`⚡ **${rand(jobFlavor.combo)}** ${comboLabel}！再造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
 
           if (mHp > 0 && pStats.executeChance > 0 && pStats.executeThresholdPct > 0) {
             const thresholdHp = Math.max(1, Math.floor(mHpInit * (pStats.executeThresholdPct / 100)));
@@ -3008,8 +3013,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             }
           }
 
-          if (mHp <= 0) { outcome = "win"; break; }
+          if (mHp <= 0) { comboKilled = true; break; }
+          // 下一次連擊機率遞減為前一次的 1/5
+          comboChance = comboChance / 5;
         }
+
+        if (comboKilled) { outcome = "win"; break; }
       } else {
         log.push(`💨 ${mName} ${rand(jobFlavor.dodge)}，你的攻擊落空了！`);
       }
