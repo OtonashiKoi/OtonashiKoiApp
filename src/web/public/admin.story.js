@@ -764,16 +764,31 @@
         </div>`}
       </div>`;
   }
+  const PREVIEW_RESERVE = 312; // 為預覽保留的右側空間(px)
+  function setEditorReserve(on) {
+    // 幫編輯區內容留出右側空間，預覽坐在留白裡、不擋節點按鈕（視窗夠寬才留）
+    if (root) root.style.marginRight = (on && window.innerWidth > 960) ? PREVIEW_RESERVE + "px" : "";
+  }
   function renderLivePreview() {
     let panel = document.getElementById("story-live-preview");
-    if (!livePreviewOn || !editing) { if (panel) panel.style.display = "none"; return; }
+    let showBtn = document.getElementById("story-live-show");
+    if (!editing) { if (panel) panel.style.display = "none"; if (showBtn) showBtn.style.display = "none"; setEditorReserve(false); return; }
+    if (!livePreviewOn) {
+      if (panel) panel.style.display = "none";
+      setEditorReserve(false);
+      if (!showBtn) { showBtn = document.createElement("button"); showBtn.id = "story-live-show"; showBtn.className = "button"; showBtn.textContent = "👁 開預覽"; showBtn.style.cssText = "position:fixed;top:64px;right:14px;z-index:41;padding:4px 10px;"; showBtn.addEventListener("click", () => { livePreviewOn = true; renderLivePreview(); }); document.body.appendChild(showBtn); }
+      showBtn.style.display = "block";
+      return;
+    }
+    if (showBtn) showBtn.style.display = "none";
+    setEditorReserve(true);
     if (!panel) { panel = document.createElement("div"); panel.id = "story-live-preview"; panel.style.cssText = "position:fixed;top:64px;right:14px;width:288px;z-index:40;"; document.body.appendChild(panel); }
     panel.style.display = "block";
     const nodes = (editing.nodes) || [];
     const idx = Math.max(0, Math.min(livePreviewIdx, Math.max(0, nodes.length - 1)));
     panel.innerHTML = `
       <div style="font-size:11px;color:#c4a7f5;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
-        <span>👁 即時預覽 · #${idx + 1}</span><button class="button" id="story-live-hide" style="padding:1px 7px;">✕</button>
+        <span>👁 即時預覽 · #${idx + 1}</span><button class="button" id="story-live-hide" style="padding:1px 7px;">✕ 收起</button>
       </div>
       <div style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx)}</div>`;
     panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
@@ -894,9 +909,17 @@
     if (e.target.closest?.("#story-refresh-btn")) { stopDraft(); editing = null; npcForm = null; fxOpen.clear(); undoStack = []; redoStack = []; safeLoad(true); }
   });
   // 分頁被切成 active（class 變動）→ 自動載入一次
+  function hideLivePreviewChrome() {
+    const p = document.getElementById("story-live-preview"); if (p) p.style.display = "none";
+    const b = document.getElementById("story-live-show"); if (b) b.style.display = "none";
+    if (root) root.style.marginRight = "";
+  }
   const sec = document.getElementById("section-story");
   if (sec) {
-    const obs = new MutationObserver(() => { if (sec.classList.contains("active")) safeLoad(false); });
+    const obs = new MutationObserver(() => {
+      if (sec.classList.contains("active")) safeLoad(false);
+      else hideLivePreviewChrome(); // 離開劇情頁 → 收掉即時預覽與右側留白，不擋別的頁
+    });
     obs.observe(sec, { attributes: true, attributeFilter: ["class"] });
     if (sec.classList.contains("active")) safeLoad(false);
   }
