@@ -805,15 +805,27 @@
     }).join("");
     const cgHtml = isCG && n.cgUrl ? `<div style="position:absolute;inset:0;background:url('${esc(n.cgUrl)}') center/cover;"></div>` : "";
     const noBox = isCG && !String(n.text || "").trim();
+    // 畫面效果 / 音效 / BGM（BGM 走「往回找最近一句設的」與正式閱讀器一致）
+    const fxOverlay = n.screenFx === "flash" ? `<div style="position:absolute;inset:0;background:#fff;z-index:8;animation:stPvFlash .45s forwards;"></div>`
+      : n.screenFx === "fadeblack" ? `<div style="position:absolute;inset:0;background:#000;z-index:8;animation:stPvFade .9s forwards;"></div>` : "";
+    const shakeAnim = n.screenFx === "shake" ? "animation:stPvShake .4s;" : "";
+    let curBgm = ""; for (let i = idx; i >= 0; i--) { if (nodes[i]?.bgm) { curBgm = nodes[i].bgm; break; } }
+    const badges = [
+      curBgm ? `🎵 ${esc(curBgm === "zone" ? "地圖曲" : curBgm)}` : "",
+      n.sfx ? `🔊 ${esc(n.sfx)}` : "",
+      n.screenFx ? `🎞️ ${esc(n.screenFx)}` : ""
+    ].filter(Boolean).join("　");
     return `
-      <div style="position:absolute;inset:0;">
+      <div style="position:absolute;inset:0;${shakeAnim}">
         ${bg ? `<div style="position:absolute;inset:0;background:url('${esc(bg)}') center/cover;"></div><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,6,14,.25),rgba(8,6,14,.8));"></div>` : ""}
         ${cgHtml}${portraitsHtml}
+        ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
         <div style="position:absolute;left:8px;right:8px;bottom:8px;padding:12px;min-height:5rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
           ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div>`
             : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
         </div>`}
+        ${fxOverlay}
       </div>`;
   }
   const PREVIEW_RESERVE = 312; // 為預覽保留的右側空間(px)
