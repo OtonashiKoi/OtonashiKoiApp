@@ -178,7 +178,7 @@ body {
   border-right: 1px solid var(--line);
   background: var(--surface);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
   flex-shrink: 0;
   overflow: hidden;
@@ -403,6 +403,9 @@ body {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
   overflow: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  /* 關鍵：側欄是 flex 直排，群組預設 flex-shrink:1 會在內容超高時被「壓扁成一條」而非讓整欄捲動。
+     設 0 → 群組保持自然高度，超出由 .sidebar-nav 的 overflow-y:auto 捲動。 */
+  flex-shrink: 0;
 }
 
 .nav-group-toggle {
