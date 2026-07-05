@@ -96,13 +96,16 @@
   function onFileChange(e) {
     const input = e.target;
     if (!input.files || input.files.length === 0) return;
-    if (shouldSkipCropper(input)) return;
-    if (input.dataset.cropped === '1') {
+    if (shouldSkipCropper(input)) return;              // 跳過的 input：交給頁面原本 handler
+    if (input.dataset.cropped === '1') {               // 裁切後回填的那一次：放行，讓上傳 handler 跑
       delete input.dataset.cropped;
       return;
     }
     const file = input.files[0];
-    if (!file.type.startsWith('image/')) return;
+    if (!file.type.startsWith('image/')) return;       // 非圖片：不攔
+    // 到這裡＝使用者剛選圖（尚未裁切）。攔下這次 change，先開裁切視窗；
+    // 不能讓頁面自己的上傳 handler 這時把「原圖」傳上去（否則會多傳一次未裁切的）。
+    e.stopImmediatePropagation();
     const reader = new FileReader();
     reader.onload = () => showModal(reader.result, input);
     reader.readAsDataURL(file);
@@ -113,7 +116,9 @@
     inputs.forEach(inp => {
       // avoid double-binding
       if (inp.dataset.cropbound === '1') return;
-      inp.addEventListener('change', onFileChange);
+      // 用「捕獲階段」綁定：搶在頁面自己的 change handler(冒泡階段)之前攔截，
+      // 才能在未裁切時擋掉原圖上傳；裁切後回填的那次不擋、正常放行。
+      inp.addEventListener('change', onFileChange, true);
       inp.dataset.cropbound = '1';
     });
   }
