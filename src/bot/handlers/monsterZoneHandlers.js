@@ -3586,7 +3586,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           if (Math.random() * 100 < finalChance) {
             const equipStats = item.equipStats ? { ...item.equipStats } : {};
             droppedItems.push(item.name);
-            droppedItemObjects.push({
+            const droppedEntry = {
               uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
               itemEffect: item.effect || { type: "none", value: 0 },
               useEffects: item.useEffects || [],
@@ -3600,7 +3600,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
               enhanceLevel: 0, source: "monster_drop", sourceRef: monster.name,
               purchasedAt: new Date().toISOString()
-            });
+            };
+            // 獲得瞬間骰附魔（只骰一次，寫進 droppedItemObjects 後續 retry 不會重骰）
+            try { require("../../services/enchant/enchantService").rollForEntry(droppedEntry); } catch (_) { /* noop */ }
+            droppedItemObjects.push(droppedEntry);
           }
         }
       }

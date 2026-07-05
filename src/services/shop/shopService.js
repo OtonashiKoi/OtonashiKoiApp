@@ -562,7 +562,7 @@ class ShopService {
         }
       } else {
         for (let i = 0; i < quantity; i++) {
-          progress.inventory.push({
+          const boughtEntry = {
             uuid: crypto.randomUUID(),
             itemId: _itemId,
             itemName: item.name,
@@ -580,7 +580,10 @@ class ShopService {
             isTwoHanded: this._resolveIsTwoHanded({ weaponType: item.weaponType, isTwoHanded: item.isTwoHanded }),
             tier: effectiveTier,
             purchasedAt: new Date().toISOString()
-          });
+          };
+          // 獲得瞬間骰附魔（僅裝備、且尚未有附魔時）
+          try { require("../enchant/enchantService").rollForEntry(boughtEntry); } catch (_) { /* noop */ }
+          progress.inventory.push(boughtEntry);
         }
       }
 
@@ -728,7 +731,10 @@ class ShopService {
             bossName: effect.bossName || "世界王",
           };
         }
-        next.inventory.push({ ...chestRolledEntry });
+        const chestEntryToAdd = { ...chestRolledEntry };
+        // 獲得瞬間骰附魔（僅裝備、且尚未有附魔時）
+        try { require("../enchant/enchantService").rollForEntry(chestEntryToAdd); } catch (_) { /* noop */ }
+        next.inventory.push(chestEntryToAdd);
         effectDesc = `🎁 開啟 **${entry.itemName}**，獲得 **${chestRewardInfo.rewardItemName}**！`;
       }
 

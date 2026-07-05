@@ -322,6 +322,8 @@ class AuctionService {
       itemToGive.uuid = crypto.randomUUID();
       itemToGive.source = "auction_buy";
       delete itemToGive.isGem;
+      // 交易補附魔：若是舊裝備尚無附魔，買家獲得瞬間補骰（已有附魔的保留賣家的）
+      try { require("../enchant/enchantService").rollForEntry(itemToGive); } catch (_) { /* noop */ }
       buyerProgress.inventory = buyerProgress.inventory || [];
       buyerProgress.inventory.push(itemToGive);
     }

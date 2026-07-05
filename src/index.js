@@ -72,6 +72,13 @@ async function bootstrap() {
       console.warn("[GlobalBuff] init 失敗（不影響啟動）：", e?.message || e);
     }
 
+    // 附魔設定快取初始化（發裝時骰附魔用）
+    try {
+      await require("./services/enchant/enchantService").init();
+    } catch (e) {
+      console.warn("[Enchant] init 失敗（不影響啟動）：", e?.message || e);
+    }
+
     const app = createApiServer(client);
     app.listen(config.api.port, () => {
       console.log(`[API] listening on port ${config.api.port}${apiOnly ? " (API_ONLY mode)" : ""}`);
