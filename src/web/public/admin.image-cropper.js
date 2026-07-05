@@ -47,6 +47,14 @@
     currentInput = null;
   }
 
+  // 大圖用途（劇情背景/CG/立繪/表情）：不縮到 400x400，改用裁切區原始解析度（避免模糊），上限 2560。
+  function isHiResTarget(input) {
+    if (!input) return false;
+    if (input.id === 'story-f-bg' || input.id === 'npc-form-portrait') return true;
+    if (input.hasAttribute && (input.hasAttribute('data-node-bg') || input.hasAttribute('data-node-cg') || input.hasAttribute('data-expr-file'))) return true;
+    return false;
+  }
+
   async function uploadCropped() {
     const w = parseInt(document.getElementById('cropper-width').value,10) || 400;
     const h = parseInt(document.getElementById('cropper-height').value,10) || 400;
@@ -55,7 +63,10 @@
     if (sourceHasAlpha && mime === 'image/jpeg') mime = 'image/png';
     const status = document.getElementById('cropper-status');
     status.textContent = '產生檔案...';
-    const canvas = cropper.getCroppedCanvas({ width: w, height: h, imageSmoothingQuality: 'high', fillColor: 'transparent' });
+    // 劇情背景/CG/立繪：保留原始解析度（只限最大邊 2560）；其餘沿用寬高欄位
+    const canvas = isHiResTarget(currentInput)
+      ? cropper.getCroppedCanvas({ maxWidth: 2560, maxHeight: 2560, imageSmoothingQuality: 'high', fillColor: 'transparent' })
+      : cropper.getCroppedCanvas({ width: w, height: h, imageSmoothingQuality: 'high', fillColor: 'transparent' });
     if (!canvas) { status.textContent = '取得裁切影像失敗'; return; }
 
     return new Promise((resolve, reject) => {
