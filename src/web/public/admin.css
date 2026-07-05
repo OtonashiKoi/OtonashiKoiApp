@@ -452,9 +452,10 @@ body {
 }
 
 .nav-group.is-open .nav-group-links {
-  /* 用大一點的上限，避免群組項目多了超過上限被裁切（項目消失）；
-     整欄捲動交給 .sidebar-nav 的 overflow-y:auto */
-  max-height: 100vh;
+  /* 展開時完全不裁切：max-height:none + overflow:visible，子項一定全部露出。
+     整欄超出高度時由 .sidebar-nav 的 overflow-y:auto 提供捲動。 */
+  max-height: none;
+  overflow: visible;
   opacity: 1;
 }
 
