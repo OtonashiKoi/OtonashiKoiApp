@@ -886,7 +886,7 @@
         ? `<div data-drag-portrait="${side}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:120px;height:200px;${dim}background:linear-gradient(180deg,rgba(196,167,245,.28),rgba(60,42,104,.4));border:2px dashed #c4a7f5;border-radius:12px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;"><div style="font-size:36px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:4px;">玩家立繪</div><div style="font-size:9px;opacity:.8;">(登入者 DC 頭像)</div></div>`
         : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:266px;max-width:202px;object-fit:contain;cursor:grab;touch-action:none;">`;
       // 每個立繪一個 wrapper：內含可拖曳的圖/佔位 + 右上角 ✕ 移除鈕（直觀退場）
-      return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:7rem;${baseLeft}${transform}z-index:${speaking ? 3 : 1};">
+      return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:5rem;${baseLeft}${transform}z-index:${speaking ? 3 : 1};">
         ${inner}
         ${speaking ? "" : `<button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:#ff5577;color:#fff;border:1.5px solid #1a1030;font-size:12px;line-height:1;cursor:pointer;z-index:6;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.5);">✕</button>`}
       </div>`;
@@ -909,7 +909,7 @@
         ${cgHtml}${portraitsHtml}
         ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
-        <div style="position:absolute;left:8px;right:8px;bottom:8px;padding:12px;min-height:5rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
+        <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:5rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
           ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div>`
             : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
         </div>`}
@@ -1082,7 +1082,7 @@
         const anim = FX_ANIM[p.fx || ""] || FX_ANIM[""];
         const speaking = isDlg && n.side === side;
         const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
-        return `<img src="${esc(p.url)}" style="position:absolute;bottom:8rem;${pos}${dim}max-height:52%;max-width:70%;object-fit:contain;animation:${anim};z-index:${speaking ? 3 : 1};">`;
+        return `<img src="${esc(p.url)}" style="position:absolute;bottom:5rem;${pos}${dim}max-height:52%;max-width:70%;object-fit:contain;animation:${anim};z-index:${speaking ? 3 : 1};">`;
       }).join("");
       const cgHtml = isCG && n.cgUrl ? `<div style="position:absolute;inset:0;background:url('${esc(n.cgUrl)}') center/cover;"></div>` : "";
       // B3:畫面效果
@@ -1097,7 +1097,7 @@
           ${cgHtml}
           ${portraitsHtml}
           ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">點擊繼續 ▼</div>` : `
-          <div style="position:absolute;left:8px;right:8px;bottom:8px;padding:12px;min-height:6rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
+          <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:6rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
             ${isBattle
               ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥${n.mustWin !== false ? "（必勝）" : ""}</div><div style="text-align:center;color:#f3ecff;font-weight:900;margin-top:4px;">${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div><div class="hint" style="text-align:center;margin-top:6px;">（預覽不實際戰鬥）點擊繼續 ▶</div>`
               : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div id="pv-text" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}line-height:1.6;white-space:pre-wrap;"></div><div style="text-align:right;color:#9b8cc0;font-size:11px;margin-top:4px;">點擊繼續 ▼</div>`}
