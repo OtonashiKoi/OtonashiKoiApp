@@ -32,4 +32,17 @@ function rollForEntry(entry) {
   return entry;
 }
 
-module.exports = { init, refresh, getCachedConfig, rollForEntry };
+/**
+ * 強制重骰一件裝備的附魔（無視已有附魔）——給「附魔重骰藥水」用。
+ * @returns {{ok:boolean, before?:Array, after?:Array, reason?:string}}
+ */
+function rerollEntryEnchant(entry) {
+  if (!entry || entry.itemType !== "equipment") return { ok: false, reason: "not-equipment" };
+  const tier = String(entry.tier || "").toUpperCase();
+  if (!ENCHANTABLE_TIERS.includes(tier)) return { ok: false, reason: "no-tier" };
+  const before = Array.isArray(entry.enchantments) ? entry.enchantments : [];
+  entry.enchantments = rollEnchantments(tier, getCachedConfig());
+  return { ok: true, before, after: entry.enchantments };
+}
+
+module.exports = { init, refresh, getCachedConfig, rollForEntry, rerollEntryEnchant };

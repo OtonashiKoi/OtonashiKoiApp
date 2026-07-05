@@ -19,6 +19,7 @@ const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const { createPlayerCollectionRoutes } = require("./routes/playerCollectionRoutes");
 const { createPlayerForgeRoutes } = require("./routes/playerForgeRoutes");
+const { createPlayerEnchantRoutes } = require("./routes/playerEnchantRoutes");
 const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
 const { createStoryRoutes } = require("./routes/storyRoutes");
 const { createMahjongRoutes } = require("./routes/mahjongRoutes");
@@ -123,6 +124,7 @@ function createApiServer(discordClient) {
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
   app.use(createPlayerCollectionRoutes(serviceContext));
   app.use(createPlayerForgeRoutes(serviceContext));
+  app.use(createPlayerEnchantRoutes(serviceContext));
   app.use(createPlayerIdleRoutes(serviceContext));
   app.use(createStoryRoutes(serviceContext));
   app.use(createMahjongRoutes());
