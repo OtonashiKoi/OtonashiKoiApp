@@ -35,4 +35,6 @@
 | 21 | 2026-07-06 | 地獄火焰 12 怪立繪 | 用 HIGGSFIELD(gpt_image_2)依風格參考(火翼龍人)生成地獄火焰全 12 隻怪像素風立繪(火焰/熔岩主題)，上 Cloudinary 寫回 monsters.imageUrl/imageThumbnailUrl | 新內容 | ✅ | (本次) land_monster_images |
 | 22 | 2026-07-06 | 地獄狼牙王升格世界王 + 新地圖焰獄深處 | 接續 #15 待辦：新 zone `hellfire_depths`(焰獄深處 Lv60+/進場費15000/解鎖=先屠本週古龍王)；地獄狼牙王搬入(seq1)並強化成新終局(L65/HP320萬/破防70%/三階段1.0-1.35-1.75)；狼牙王卡(A階特殊槽·煉獄咬噬220%火焰+破防35%)+地獄狼牙王寶箱；後端 worldBossService/createServiceContext 註冊解鎖鏈+status部位提示；後台 admin(monsters分頁/combat-calc/story BGM)；前端 sound.ts 兩曲(地獄火焰/地獄狼牙王)+ZONE_BGM；BGM 檔入庫。⚠️需重啟後端生效 | 新功能 | ✅ | (本次) create-hellfang-king-worldboss.js | 
 
+| 23 | 2026-07-06 | 劇本：立繪退場 + 對話立繪預設置中 | 演出面板新增「🚪退場」(左/中/右/全部)：換人時舊角色不再自動殘留，可指定移除；對話立繪 side 預設改置中(新節點/快速解析/reader/serve)，既有序章11個對話節點一併置中。多首劇情曲入庫(劍士村莊/冒險之途/中央主城)。上傳背景/CG一律進圖庫+補登既有(別處上傳也選得到)。裁切器只上傳裁切後的圖(不再多傳原圖)。後台登入前隱藏功能分類 | 新功能/工具 | ✅ | e380ce79 / 6e934a5(app) |
+
 <!-- 新增修改請往下加列，或插入對應功能 -->
