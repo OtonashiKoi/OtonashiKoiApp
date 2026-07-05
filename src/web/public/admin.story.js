@@ -717,6 +717,66 @@
       render();
       root.querySelector(`textarea[data-node="${i + 1}"][data-field="text"]`)?.focus();
     }));
+    // ── 即時預覽：焦點在哪一句 → 右側預覽跟著換；邊打字邊更新 ──
+    root.querySelectorAll("[data-node]").forEach((el) => el.addEventListener("focusin", () => {
+      const i = Number(el.dataset.node);
+      if (!Number.isNaN(i)) { livePreviewIdx = i; renderLivePreview(); }
+    }));
+    root.querySelectorAll("textarea[data-node][data-field='text']").forEach((ta) => ta.addEventListener("input", () => {
+      const i = Number(ta.dataset.node);
+      if (editing.nodes[i]) editing.nodes[i].text = ta.value;
+      livePreviewIdx = i; renderLivePreview();
+    }));
+    renderLivePreview();
+  }
+
+  // ── 即時預覽（右側面板，跟著正在編輯的節點；背景走「往回找最近一張」與正式閱讀器一致） ──
+  let livePreviewIdx = 0;
+  let livePreviewOn = true;
+  function buildStageHTML(nodes, idx) {
+    const npcById = Object.fromEntries(npcs.map((n) => [n.id, n]));
+    const chapterBg = editing?.backgroundUrl || (editing?.zoneKey ? `/uploads/zones/${editing.zoneKey}.webp` : null);
+    const n = nodes[idx];
+    if (!n) return `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c4a7f5;">📖 章節結束</div>`;
+    let bg = chapterBg; for (let i = idx; i >= 0; i--) { if (nodes[i]?.backgroundUrl) { bg = nodes[i].backgroundUrl; break; } }
+    const exprUrl = (npc, name) => { const e = (npc?.expressions || []).find((x) => x && x.name === name); return e?.url || null; };
+    const nodePortrait = (nn) => { const npc = npcById[nn.npcId]; return exprUrl(npc, nn.expression) || npc?.portraitUrl || null; };
+    const st = {};
+    for (let i = 0; i <= idx; i++) { const nn = nodes[i]; if (!nn) continue; if (nn.clearStage) Object.keys(st).forEach((k) => delete st[k]); if (nn.type === "dialogue" && nodePortrait(nn)) st[nn.side || "left"] = { url: nodePortrait(nn), fx: nn.portraitFx }; }
+    const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
+    const npc = isDlg ? npcById[n.npcId] : null;
+    const name = isDlg ? (n.nameOverride || npc?.name || "???") : "";
+    const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
+      const pos = side === "center" ? "left:50%;transform:translateX(-50%);" : side === "right" ? "right:4%;" : "left:4%;";
+      const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
+      return `<img src="${esc(p.url)}" style="position:absolute;bottom:7rem;${pos}${dim}max-height:52%;max-width:70%;object-fit:contain;z-index:${speaking ? 3 : 1};">`;
+    }).join("");
+    const cgHtml = isCG && n.cgUrl ? `<div style="position:absolute;inset:0;background:url('${esc(n.cgUrl)}') center/cover;"></div>` : "";
+    const noBox = isCG && !String(n.text || "").trim();
+    return `
+      <div style="position:absolute;inset:0;">
+        ${bg ? `<div style="position:absolute;inset:0;background:url('${esc(bg)}') center/cover;"></div><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,6,14,.25),rgba(8,6,14,.8));"></div>` : ""}
+        ${cgHtml}${portraitsHtml}
+        ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
+        <div style="position:absolute;left:8px;right:8px;bottom:8px;padding:12px;min-height:5rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
+          ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div>`
+            : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
+        </div>`}
+      </div>`;
+  }
+  function renderLivePreview() {
+    let panel = document.getElementById("story-live-preview");
+    if (!livePreviewOn || !editing) { if (panel) panel.style.display = "none"; return; }
+    if (!panel) { panel = document.createElement("div"); panel.id = "story-live-preview"; panel.style.cssText = "position:fixed;top:64px;right:14px;width:288px;z-index:40;"; document.body.appendChild(panel); }
+    panel.style.display = "block";
+    const nodes = (editing.nodes) || [];
+    const idx = Math.max(0, Math.min(livePreviewIdx, Math.max(0, nodes.length - 1)));
+    panel.innerHTML = `
+      <div style="font-size:11px;color:#c4a7f5;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+        <span>👁 即時預覽 · #${idx + 1}</span><button class="button" id="story-live-hide" style="padding:1px 7px;">✕</button>
+      </div>
+      <div style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx)}</div>`;
+    panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
   }
 
   // ── 本章預覽 modal ──
@@ -788,7 +848,7 @@
 
       stage.innerHTML = `
         <div style="position:absolute;inset:0;${shakeAnim}">
-          ${bg && !isCG ? `<div style="position:absolute;inset:0;background:url('${esc(bg)}') center/cover;"></div><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,6,14,.25),rgba(8,6,14,.8));"></div>` : ""}
+          ${bg ? `<div style="position:absolute;inset:0;background:url('${esc(bg)}') center/cover;"></div><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,6,14,.25),rgba(8,6,14,.8));"></div>` : ""}
           ${cgHtml}
           ${portraitsHtml}
           ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">點擊繼續 ▼</div>` : `
