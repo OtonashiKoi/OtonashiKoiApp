@@ -189,7 +189,7 @@ class StoryService {
         sfx: n.sfx || null
       };
       if (n.type === "cg") {
-        return { type: "cg", cgUrl: n.cgUrl || null, text: fillPlayerName(n.text, playerName), ...common };
+        return { type: "cg", cgUrl: n.cgUrl || null, cgPos: sanitizeBgPos(n.cgPos), text: fillPlayerName(n.text, playerName), ...common };
       }
       const isDlg = n.type === "dialogue";
       const isPlayer = isDlg && isPlayerSpeaker(n); // 主角＝登入玩家 → 換 DC 名字+頭像立繪
@@ -355,7 +355,7 @@ class StoryService {
         };
       }
       if (type === "cg") {
-        return { type: "cg", cgUrl: n?.cgUrl ? String(n.cgUrl) : null, text: String(n?.text || "").slice(0, 2000), ...common };
+        return { type: "cg", cgUrl: n?.cgUrl ? String(n.cgUrl) : null, cgPos: sanitizeBgPos(n?.cgPos), text: String(n?.text || "").slice(0, 2000), ...common };
       }
       return {
         type,
