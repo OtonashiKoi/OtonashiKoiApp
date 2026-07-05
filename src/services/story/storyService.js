@@ -32,6 +32,19 @@ function resolveExpression(npc, exprName) {
   return e?.url || null;
 }
 
+// 主角＝登入玩家：這些 sentinel 代表玩家本人 → 出場時換成玩家的 DC 名字 + DC 頭像立繪
+const PLAYER_NPC_ID = "player";
+const PLAYER_NAME_TOKENS = new Set(["玩家", "主角", "你"]); // 舊劇本用 nameOverride 標主角
+function isPlayerSpeaker(n) {
+  if (n && n.npcId === PLAYER_NPC_ID) return true;
+  return Boolean(n && !n.npcId && PLAYER_NAME_TOKENS.has(String(n.nameOverride || "").trim()));
+}
+// 文字裡的名字佔位符（___ / ＿＿＿ 連續 2 個以上底線）換成玩家 DC 名
+function fillPlayerName(text, name) {
+  const nm = String(name || "冒險者").trim() || "冒險者";
+  return String(text == null ? "" : text).replace(/[_＿]{2,}/g, nm);
+}
+
 class StoryService {
   constructor(storyRepository, progressRepository, monsterService = null) {
     this.storyRepository = storyRepository;
@@ -99,7 +112,9 @@ class StoryService {
   }
 
   /** 章節完整內容（nodes 附 NPC 名字/立繪）。鎖定中不可讀。 */
-  async getChapterForPlayer(discordId, chapterId) {
+  async getChapterForPlayer(discordId, chapterId, player = {}) {
+    const playerName = player?.name || null;          // 玩家 DC 顯示名（替換 ___ / 主角名）
+    const playerAvatarUrl = player?.avatarUrl || null; // 玩家 DC 頭像（做主角立繪）
     const [chapters, progress] = await Promise.all([
       this._enabledChapters(),
       this.progressRepository.findByPlayerId(discordId).catch(() => null)
@@ -147,22 +162,25 @@ class StoryService {
         sfx: n.sfx || null
       };
       if (n.type === "cg") {
-        return { type: "cg", cgUrl: n.cgUrl || null, text: String(n.text || ""), ...common };
+        return { type: "cg", cgUrl: n.cgUrl || null, text: fillPlayerName(n.text, playerName), ...common };
       }
-      const npc = n.npcId ? npcOf[n.npcId] : null;
+      const isDlg = n.type === "dialogue";
+      const isPlayer = isDlg && isPlayerSpeaker(n); // 主角＝登入玩家 → 換 DC 名字+頭像立繪
+      const npc = (!isPlayer && n.npcId) ? npcOf[n.npcId] : null;
       // B1:表情差分 — 依 node.expression 從 NPC 的 expressions 取圖，取不到退回預設立繪
-      const exprUrl = (n.type === "dialogue" && npc)
-        ? (resolveExpression(npc, n.expression) || npc.portraitUrl || null)
-        : null;
+      const exprUrl = isPlayer
+        ? (playerAvatarUrl || null)
+        : (isDlg && npc ? (resolveExpression(npc, n.expression) || npc.portraitUrl || null) : null);
       return {
         type: NODE_TYPES.has(n.type) ? n.type : "narration",
-        text: String(n.text || ""),
+        text: fillPlayerName(n.text, playerName),
         side: n.side === "center" ? "center" : (n.side === "right" ? "right" : "left"),
-        npcId: n.type === "dialogue" ? (n.npcId || null) : null, // B2:舞台狀態要靠 npcId 判斷同角色
-        npcName: n.type === "dialogue" ? (n.nameOverride || npc?.name || "???") : null,
+        // B2:舞台狀態要靠 npcId 判斷同角色；主角統一給 sentinel "player"
+        npcId: isDlg ? (isPlayer ? PLAYER_NPC_ID : (n.npcId || null)) : null,
+        npcName: isDlg ? (isPlayer ? (playerName || "冒險者") : (n.nameOverride || npc?.name || "???")) : null,
         npcPortraitUrl: exprUrl,
-        expression: n.type === "dialogue" ? (n.expression || null) : null,
-        portraitFx: n.type === "dialogue" ? (n.portraitFx || null) : null, // 立繪演出(彈入/晃動/…)
+        expression: (isDlg && !isPlayer) ? (n.expression || null) : null,
+        portraitFx: isDlg ? (n.portraitFx || null) : null, // 立繪演出(彈入/晃動/…)
         ...common
       };
     }));

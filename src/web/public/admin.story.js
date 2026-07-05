@@ -414,7 +414,7 @@
   function renderChapterEditor() {
     const zoneOpts = ['<option value="">（不綁定地圖：純劇情章）</option>']
       .concat(zones.map((z) => `<option value="${esc(z.key)}" ${editing.zoneKey === z.key ? "selected" : ""}>${esc(z.label)}（${esc(z.key)}）</option>`)).join("");
-    const npcOpts = (sel) => ['<option value="">（選 NPC）</option>']
+    const npcOpts = (sel) => ['<option value="">（選 NPC）</option>', `<option value="player" ${sel === "player" ? "selected" : ""}>🧑 玩家（主角，登入者DC名+頭像）</option>`]
       .concat(orderedNpcs().map((n) => `<option value="${esc(n.id)}" ${sel === n.id ? "selected" : ""}>${esc(n.name)}</option>`)).join("");
     const monsterOpts = (sel) => ['<option value="">（選怪物）</option>']
       .concat(monsters.map((m) => `<option value="${esc(m.id)}" ${sel === m.id ? "selected" : ""}>${m.isBoss ? "👑 " : ""}${esc(m.name)}（${esc(m.zone || "?")} Lv${m.level ?? "?"}）</option>`)).join("");
@@ -800,7 +800,7 @@
     for (let i = 0; i <= idx; i++) { const nn = nodes[i]; if (!nn) continue; if (nn.clearStage) Object.keys(st).forEach((k) => delete st[k]); if (nn.type === "dialogue" && nodePortrait(nn)) st[nn.side || "left"] = { url: nodePortrait(nn), fx: nn.portraitFx }; }
     const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
     const npc = isDlg ? npcById[n.npcId] : null;
-    const name = isDlg ? (n.nameOverride || npc?.name || "???") : "";
+    const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || npc?.name || "???")) : "";
     const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
       const pos = side === "center" ? "left:50%;transform:translateX(-50%);" : side === "right" ? "right:4%;" : "left:4%;";
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
@@ -925,7 +925,7 @@
       const bg = curBg();
       const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
       const npc = isDlg ? npcById[n.npcId] : null;
-      const name = isDlg ? (n.nameOverride || npc?.name || "???") : "";
+      const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || npc?.name || "???")) : "";
       const sfxTag = n.sfx ? `<div style="position:absolute;top:34px;right:10px;font-size:11px;color:#9b8cc0;z-index:6;">🔊 ${esc(n.sfx)}</div>` : "";
       // B2:台上立繪
       const st = computeStage(idx);

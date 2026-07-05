@@ -128,7 +128,7 @@ function createApiServer(discordClient) {
   app.use(createPlayerForgeRoutes(serviceContext));
   app.use(createPlayerEnchantRoutes(serviceContext));
   app.use(createPlayerIdleRoutes(serviceContext));
-  app.use(createStoryRoutes(serviceContext));
+  app.use(createStoryRoutes(serviceContext, discordClient));
   app.use(createMahjongRoutes());
 
   // === Web 前端 SPA 靜態服務 ===

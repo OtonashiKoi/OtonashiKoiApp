@@ -23,9 +23,26 @@ const upload = multer({
   limits: { fileSize: 8 * 1024 * 1024 }
 });
 
-function createStoryRoutes(serviceContext) {
+function createStoryRoutes(serviceContext, discordClient) {
   const router = Router();
   const storyService = serviceContext.storyService;
+
+  // 主角＝玩家：登入者的 DC 頭像（做立繪）。短期快取避免每次開章節都打 Discord。
+  const _avatarCache = new Map(); // discordId → { url, ts }
+  const AVATAR_TTL = 10 * 60 * 1000;
+  async function playerAvatarUrl(discordId) {
+    if (!discordClient) return null;
+    const hit = _avatarCache.get(discordId);
+    if (hit && Date.now() - hit.ts < AVATAR_TTL) return hit.url;
+    try {
+      const u = await discordClient.users.fetch(discordId, { force: false });
+      const url = u.displayAvatarURL({ size: 256, extension: "png" });
+      _avatarCache.set(discordId, { url, ts: Date.now() });
+      return url;
+    } catch (_) {
+      return hit?.url || null;
+    }
+  }
 
   // ── 玩家端 ──
 
@@ -38,7 +55,12 @@ function createStoryRoutes(serviceContext) {
 
   router.get("/api/story/chapters/:id", requireAuth, async (req, res, next) => {
     try {
-      const chapter = await storyService.getChapterForPlayer(req.playerRecord.discordId, req.params.id);
+      const { discordId, displayName } = req.playerRecord;
+      const avatarUrl = await playerAvatarUrl(discordId);
+      const chapter = await storyService.getChapterForPlayer(discordId, req.params.id, {
+        name: displayName || null,
+        avatarUrl
+      });
       res.json(ok(chapter, "story chapter fetched"));
     } catch (error) { next(error); }
   });
