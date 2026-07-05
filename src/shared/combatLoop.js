@@ -2578,6 +2578,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
         }
         // ── 戰意左：攻擊累積 STR/DEX → 直接灌進 atk multiplier（1 stack ≈ 1% 攻擊）──
+        // 記下本次主攻擊套用的層數：連擊傷害以此為基準往上疊（主攻擊命中後那一層算給第一段連擊）
+        const attackStackPctBase = stackOnHitStacks;
         if (stackOnHitStacks > 0) {
           const offBonusPct = stackOnHitStacks;
           conditionalBonusMultiplier *= (1 + offBonusPct / 100);
@@ -2996,12 +2998,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         while (comboHitsThisAttack < MAX_COMBO_PER_ROUND && Math.random() * 100 < comboChance) {
           comboHitsThisAttack += 1;
           combatStats.comboCount += 1;
-          // 連擊:用「未含追加值」的傷害乘連擊倍率,再額外加一次武器主屬性追加(固定,不被倍率縮放)
-          let cdmg = Math.max(1, Math.round(Math.max(1, dmg - weaponMainBonus) * (pStats.comboDamageMultiplier || 1)) + weaponMainBonus);
+          // 龍王戰意：連擊傷害吃「目前已疊加、超出主攻擊基準」的攻擊層數（含主攻擊命中那一層），連擊愈多愈痛
+          const comboStackEscalationPct = Math.max(0, stackOnHitStacks - attackStackPctBase);
+          // 連擊:用「未含追加值」的傷害乘連擊倍率 ×龍王戰意疊加成長,再額外加一次武器主屬性追加(固定,不被倍率縮放)
+          let cdmg = Math.max(1, Math.round(Math.max(1, dmg - weaponMainBonus) * (pStats.comboDamageMultiplier || 1) * (1 + comboStackEscalationPct / 100)) + weaponMainBonus);
           mHp -= cdmg;
           totalDamage += cdmg;
           const comboLabel = comboHitsThisAttack >= 2 ? `${comboHitsThisAttack} 連擊` : "連擊";
           log.push(`⚡ **${rand(jobFlavor.combo)}** ${comboLabel}！再造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+
+          // 這一段連擊也算一次出手 → 往上疊加攻擊層數，讓下一段連擊更痛（上限同 stackOnHitCap）
+          if (stackOnHitValue > 0 && stackOnHitStacks < stackOnHitCap) {
+            stackOnHitStacks = Math.min(stackOnHitCap, stackOnHitStacks + stackOnHitValue);
+            log.push(`🐉 **龍王戰意**：連擊疊加！攻擊 **+${stackOnHitStacks}%**（最高 +${stackOnHitCap}%）`);
+          }
 
           if (mHp > 0 && pStats.executeChance > 0 && pStats.executeThresholdPct > 0) {
             const thresholdHp = Math.max(1, Math.floor(mHpInit * (pStats.executeThresholdPct / 100)));
@@ -3014,8 +3024,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
 
           if (mHp <= 0) { comboKilled = true; break; }
-          // 下一次連擊機率遞減為前一次的 1/5
-          comboChance = comboChance / 5;
+          // 下一次連擊機率遞減為前一次的 1/3（例：30% → 10% → 3.33% → 1.11%…）
+          comboChance = comboChance / 3;
         }
 
         if (comboKilled) { outcome = "win"; break; }

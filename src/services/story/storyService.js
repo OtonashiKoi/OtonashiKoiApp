@@ -26,6 +26,29 @@ const TEXT_SPEEDS = new Set(["slow", "normal", "fast"]);
 const SCREEN_FX = new Set(["", "shake", "flash", "fadeblack"]);
 const EXIT_SIDES = new Set(["left", "center", "right", "all"]); // 立繪退場位置
 
+// 背景平移 {x,y}（background-position %，0~100）
+function sanitizeBgPos(v) {
+  if (!v || typeof v !== "object") return null;
+  const x = Number(v.x), y = Number(v.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x: Math.max(0, Math.min(100, Math.round(x))), y: Math.max(0, Math.min(100, Math.round(y))) };
+}
+// 立繪位移 { left/center/right: {x,y} }（相對立繪大小 %，可負，限 ±300 避免離譜）
+function sanitizeStagePos(v) {
+  if (!v || typeof v !== "object") return null;
+  const out = {};
+  for (const s of ["left", "center", "right"]) {
+    const p = v[s];
+    if (p && typeof p === "object") {
+      const x = Number(p.x), y = Number(p.y);
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        out[s] = { x: Math.max(-300, Math.min(300, Math.round(x))), y: Math.max(-300, Math.min(300, Math.round(y))) };
+      }
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 // B1:從 NPC 表情差分取指定表情的圖（取不到回 null，呼叫端退回預設立繪）
 function resolveExpression(npc, exprName) {
   if (!exprName || !Array.isArray(npc?.expressions)) return null;
@@ -157,6 +180,8 @@ class StoryService {
       const common = {
         clearStage: n.clearStage === true,               // B2:進此節點前清掉台上其他立繪
         exitSide: EXIT_SIDES.has(n.exitSide) ? n.exitSide : null, // 讓某位置立繪退場(left/center/right/all)
+        bgPos: sanitizeBgPos(n.bgPos),                   // 背景平移
+        stagePos: sanitizeStagePos(n.stagePos),          // 立繪位移(每側)
         screenFx: SCREEN_FX.has(n.screenFx) ? (n.screenFx || null) : null, // B3:震動/閃白/漸黑
         textSpeed: TEXT_SPEEDS.has(n.textSpeed) ? n.textSpeed : null,      // B3:文字節奏
         backgroundUrl: n.backgroundUrl || null,
@@ -312,6 +337,8 @@ class StoryService {
       const common = {
         clearStage: n?.clearStage === true, // B2
         exitSide: EXIT_SIDES.has(n?.exitSide) ? n.exitSide : null, // 立繪退場
+        bgPos: sanitizeBgPos(n?.bgPos),       // 背景平移
+        stagePos: sanitizeStagePos(n?.stagePos), // 立繪位移
         screenFx: SCREEN_FX.has(n?.screenFx) ? (n.screenFx || null) : null, // B3
         textSpeed: TEXT_SPEEDS.has(n?.textSpeed) ? n.textSpeed : null, // B3
         backgroundUrl: n?.backgroundUrl ? String(n.backgroundUrl) : null,
