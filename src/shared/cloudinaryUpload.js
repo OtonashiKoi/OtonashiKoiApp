@@ -8,12 +8,24 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+/** 在 Cloudinary URL 的 /upload/ 後插入最佳化參數（已有則不動）。非 Cloudinary URL 原樣回傳。
+ *  opts.trim=true 會加 e_trim（裁掉透明邊→立繪貼齊角色框，顯示才會真正置中）。*/
+function withAutoOptimize(url, opts = {}) {
+  if (!url || typeof url !== "string") return url;
+  if (!url.includes("res.cloudinary.com") || !url.includes("/upload/")) return url;
+  if (/\/upload\/[^/]*(f_auto|q_auto|e_trim)/.test(url)) return url; // 已有轉換就不重複
+  const t = opts.trim ? "e_trim," : "";
+  return url.replace("/upload/", `/upload/${t}f_auto,q_auto/`);
+}
+
 /**
  * 上傳圖片到 Cloudinary，回傳 { imageUrl, imageThumbnailUrl }
+ * imageUrl 自動套 f_auto,q_auto（+ e_trim 當 opts.trim，供立繪去背貼齊）。
  * @param {string} filePath - multer 存到本機的暫存路徑
  * @param {string} folder   - Cloudinary 資料夾，例如 "items" 或 "monsters"
+ * @param {{trim?:boolean}} [opts] - trim=立繪去背裁邊置中
  */
-async function uploadImage(filePath, folder) {
+async function uploadImage(filePath, folder, opts = {}) {
   // 上傳原圖
   const result = await cloudinary.uploader.upload(filePath, {
     folder: `equipment-game/${folder}`,
@@ -38,9 +50,9 @@ async function uploadImage(filePath, folder) {
   await fsp.unlink(filePath).catch(() => {});
 
   return {
-    imageUrl: result.secure_url,
+    imageUrl: withAutoOptimize(result.secure_url, opts),
     imageThumbnailUrl: thumbResult.secure_url,
   };
 }
 
-module.exports = { uploadImage };
+module.exports = { uploadImage, withAutoOptimize };

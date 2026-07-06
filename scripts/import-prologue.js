@@ -66,7 +66,7 @@ const NPC_DEFS = [
     if (isDialogue) {
       const npcId = npcByName[speaker] || null;
       nodes.push({
-        type: "dialogue", text, side: "left", portraitFx: "", expression: null,
+        type: "dialogue", text, side: "center", portraitFx: "", expression: null,
         npcId, nameOverride: npcId ? null : (speaker || null),
         backgroundUrl: null, bgm: "", sfx: "", sceneTag: scene || null
       });

@@ -240,7 +240,7 @@ function createStoryRoutes(serviceContext, discordClient) {
         return;
       }
       const { uploadImage } = require("../../shared/cloudinaryUpload");
-      const { imageUrl } = await uploadImage(req.file.path, "story-npcs");
+      const { imageUrl } = await uploadImage(req.file.path, "story-npcs", { trim: true }); // 立繪去背裁邊置中
       const npc = await storyService.adminSaveNpc({ id: req.params.id, name: undefined, portraitUrl: imageUrl });
       res.json(ok({ portraitUrl: imageUrl, npc }, "portrait uploaded"));
     } catch (error) {
