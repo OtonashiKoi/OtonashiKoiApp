@@ -68,7 +68,9 @@
   const SFX_OPTS = [
     ["", "🔊 音效（無）"], ["win", "🎉 勝利"], ["crit", "💥 衝擊"], ["lightning", "⚡ 雷"], ["freeze", "❄️ 冰"],
     ["burn", "🔥 火"], ["poison", "☠️ 毒"], ["heal", "💚 治療"], ["block", "🛡️ 格擋"], ["lose", "💀 沉重"],
-    ["chest", "🎁 寶箱"], ["item", "✨ 道具"], ["equip", "⚔️ 金屬"]
+    ["chest", "🎁 寶箱"], ["item", "✨ 道具"], ["equip", "⚔️ 金屬"],
+    ["hit_sword", "🗡️ 揮刀"], ["hit_bow", "🏹 射箭"], ["hit_axe", "🪓 揮斧"], ["hit_mace", "🔨 錘擊"],
+    ["hit_dagger", "🔪 匕首"], ["hit_staff", "🪄 法杖"], ["hit_crit", "💢 暴擊命中"], ["hit_monster", "👹 怪物攻擊"]
   ];
   const SIDE_OPTS = [["left", "⬅️ 左"], ["center", "⏺️ 中"], ["right", "➡️ 右"]];
   // 退場：進此節點時把某位置的立繪移除（換人/角色離場用）；all＝全部移除
@@ -1111,6 +1113,8 @@
   }
   function playPreviewSfx(key) {
     if (!key) return;
+    // 武器打擊音（檔案，/sfx/hit/*）
+    if (key.indexOf("hit_") === 0) { try { const a = new Audio(`/sfx/hit/${key.slice(4)}.mp3`); a.volume = 0.9; a.play().catch(() => {}); } catch (_) {} return; }
     // 檔案音效
     if (key === "chest") { try { const a = new Audio("/sfx/treasure-chest.mp3"); a.volume = 0.8; a.play().catch(() => {}); } catch (_) {} return; }
     if (key === "item") { try { const a = new Audio("/sfx/item-get.mp3"); a.volume = 0.9; a.play().catch(() => {}); } catch (_) {} return; }
