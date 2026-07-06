@@ -147,6 +147,7 @@ class StoryService {
       zoneKey: c.zoneKey || null,
       title: c.title || "(未命名章節)",
       nodeCount: Array.isArray(c.nodes) ? c.nodes.length : 0,
+      isPrologue: Boolean(c.isPrologue),
       status: this._chapterStatus(c, chapters, completed),
       skipped: Boolean(completed[c.id]?.skipped)
     }));

@@ -81,6 +81,8 @@ async function run() {
             cond: { $ne: ["$$item.itemType", "equipment"] }
           }
         },
+        // 賽季重製：清空主線劇情進度 → 序章回到未完成，下次登入自動強制重看
+        storyProgress: { completed: {} },
         updatedAt: new Date().toISOString()
       }
     }
