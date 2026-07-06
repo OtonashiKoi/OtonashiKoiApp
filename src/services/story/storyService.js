@@ -26,6 +26,7 @@ const TEXT_SPEEDS = new Set(["slow", "normal", "fast"]);
 const SCREEN_FX = new Set(["", "shake", "flash", "fadeblack"]);
 const EXIT_SIDES = new Set(["left", "center", "right", "all"]); // 立繪退場位置
 const TEXT_SIZES = new Set(["small", "large"]); // 文字大小(空=標準)
+const TEXT_FX = new Set(["shake", "glow", "pulse", "wave"]); // 文字演出效果
 
 // 背景平移 {x,y}（background-position %，0~100）
 function sanitizeBgPos(v) {
@@ -197,6 +198,7 @@ class StoryService {
         clearStage: n.clearStage === true,               // B2:進此節點前清掉台上其他立繪
         exitSide: EXIT_SIDES.has(n.exitSide) ? n.exitSide : null, // 讓某位置立繪退場(left/center/right/all)
         textSize: TEXT_SIZES.has(n.textSize) ? n.textSize : null, // 文字大小
+        textFx: TEXT_FX.has(n.textFx) ? n.textFx : null,          // 文字演出效果
         bgPos: sanitizeBgPos(n.bgPos),                   // 背景平移
         stagePos: sanitizeStagePos(n.stagePos),          // 立繪位移(每側)
         screenFx: SCREEN_FX.has(n.screenFx) ? (n.screenFx || null) : null, // B3:震動/閃白/漸黑
@@ -355,6 +357,7 @@ class StoryService {
         clearStage: n?.clearStage === true, // B2
         exitSide: EXIT_SIDES.has(n?.exitSide) ? n.exitSide : null, // 立繪退場
         textSize: TEXT_SIZES.has(n?.textSize) ? n.textSize : null, // 文字大小
+        textFx: TEXT_FX.has(n?.textFx) ? n.textFx : null,          // 文字演出效果
         bgPos: sanitizeBgPos(n?.bgPos),       // 背景平移
         stagePos: sanitizeStagePos(n?.stagePos), // 立繪位移
         screenFx: SCREEN_FX.has(n?.screenFx) ? (n.screenFx || null) : null, // B3

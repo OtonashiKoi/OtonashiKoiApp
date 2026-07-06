@@ -23,6 +23,17 @@
       .st-node-card.st-drag-over { outline: 2px dashed #7ce0ff; outline-offset: 2px; }
       .st-drag-handle { cursor: grab; user-select: none; color: #6b7399; }
       .st-drag-handle:active { cursor: grabbing; }
+      /* 演出面板的小下拉：不要被 select{width:100%} 撐滿整行 */
+      select.st-sel { width: 132px !important; min-width: 0; flex: 0 0 auto; font-size: 12px; padding: 3px 6px !important; }
+      /* 文字演出效果（預覽用） */
+      @keyframes stTxtShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-1.5px)} 75%{transform:translateX(1.5px)} }
+      @keyframes stTxtGlow { 0%,100%{text-shadow:0 0 3px rgba(196,167,245,.4)} 50%{text-shadow:0 0 11px rgba(196,167,245,.95)} }
+      @keyframes stTxtPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+      @keyframes stTxtWave { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
+      .st-txt-shake{animation:stTxtShake .16s infinite}
+      .st-txt-glow{animation:stTxtGlow 1.4s ease-in-out infinite}
+      .st-txt-pulse{animation:stTxtPulse 1.2s ease-in-out infinite;transform-origin:left center}
+      .st-txt-wave{animation:stTxtWave 1s ease-in-out infinite}
     `;
     document.head.appendChild(s);
   }
@@ -61,6 +72,8 @@
   const EXIT_OPTS = [["", "🚪 退場（無）"], ["left", "🚪 左退場"], ["center", "🚪 中退場"], ["right", "🚪 右退場"], ["all", "🚪 全部退場"]];
   // 文字大小（玩家端台詞字體）：空＝標準
   const TEXTSIZE_OPTS = [["", "🔤 標準"], ["small", "🔡 小"], ["large", "🔠 大"]];
+  // 文字演出效果（台詞本身的動態）：空＝無
+  const TEXTFX_OPTS = [["", "✨ 文字效果（無）"], ["shake", "💢 顫抖"], ["glow", "🌟 發光"], ["pulse", "💗 脈動"], ["wave", "🌊 波浪"]];
   const FX_OPTS = [
     ["", "立繪演出（預設淡入）"], ["pop", "💥 彈入"], ["shake", "🫨 晃動"],
     ["bounce", "⤴️ 彈跳"], ["pulse", "💗 脈動"], ["dim", "🌑 變暗(背景角色)"]
@@ -494,27 +507,24 @@
           : `<textarea data-node="${i}" data-field="text" rows="2" style="width:100%;box-sizing:border-box;" placeholder="旁白敘述…（Ctrl+Enter＝下方接一句旁白）">${esc(n.text || "")}</textarea>`;
       const fxPanel = showFx ? `
         <div style="border-top:1px dashed #2c3350;margin-top:8px;padding-top:8px;">
-          ${isDlg ? `<div style="${ROW}margin-bottom:6px;">
-            <span class="hint" style="margin:0;">🎭 立繪：</span>
-            <select data-node="${i}" data-field="side">${optionsHtml(SIDE_OPTS, n.side || "center")}</select>
-            <select data-node="${i}" data-field="portraitFx">${optionsHtml(FX_OPTS, n.portraitFx || "")}</select>
-          </div>` : ""}
           <div style="${ROW}margin-bottom:6px;">
             <label class="button" style="cursor:pointer;">🏞 背景<input type="file" accept="image/*" data-node-bg="${i}" style="display:none;"></label>
             <button class="button" data-node-bg-pick="${i}" title="從圖庫選">📁 圖庫</button>
             ${n.backgroundUrl ? `<img src="${esc(n.backgroundUrl)}" style="height:30px;border-radius:6px;"><button class="button" data-node-bg-clear="${i}">✖</button>` : '<span class="hint" style="margin:0;">未設＝沿用前景</span>'}
-            <span style="flex:1;"></span>
-            <select data-node="${i}" data-field="bgm">${optionsHtml(BGM_OPTS, n.bgm || "")}</select>
-            <select data-node="${i}" data-field="sfx">${optionsHtml(SFX_OPTS, n.sfx || "")}</select>
           </div>
           <div style="${ROW}margin-bottom:0;">
-            <select data-node="${i}" data-field="screenFx">${optionsHtml(SCREENFX_OPTS, n.screenFx || "")}</select>
-            <select data-node="${i}" data-field="textSpeed">${optionsHtml(SPEED_OPTS, n.textSpeed || "")}</select>
-            <select data-node="${i}" data-field="exitSide" title="讓某個位置的立繪退場(移除)；換人時舊角色不會自動消失，用這個把他移掉">${optionsHtml(EXIT_OPTS, n.exitSide || "")}</select>
+            ${isDlg ? `<select class="st-sel" data-node="${i}" data-field="side" title="立繪位置">${optionsHtml(SIDE_OPTS, n.side || "center")}</select>
+            <select class="st-sel" data-node="${i}" data-field="portraitFx" title="立繪演出">${optionsHtml(FX_OPTS, n.portraitFx || "")}</select>` : ""}
+            <select class="st-sel" data-node="${i}" data-field="bgm">${optionsHtml(BGM_OPTS, n.bgm || "")}</select>
+            <select class="st-sel" data-node="${i}" data-field="sfx">${optionsHtml(SFX_OPTS, n.sfx || "")}</select>
+            <select class="st-sel" data-node="${i}" data-field="screenFx">${optionsHtml(SCREENFX_OPTS, n.screenFx || "")}</select>
+            <select class="st-sel" data-node="${i}" data-field="textFx" title="文字演出效果">${optionsHtml(TEXTFX_OPTS, n.textFx || "")}</select>
+            <select class="st-sel" data-node="${i}" data-field="textSpeed">${optionsHtml(SPEED_OPTS, n.textSpeed || "")}</select>
+            <select class="st-sel" data-node="${i}" data-field="exitSide" title="讓某個位置的立繪退場(移除)；換人時舊角色不會自動消失，用這個把他移掉">${optionsHtml(EXIT_OPTS, n.exitSide || "")}</select>
             <label style="font-size:12px;" title="進場前清掉台上其他立繪(換場/獨白用)"><input type="checkbox" data-node="${i}" data-field="clearStage" ${n.clearStage ? "checked" : ""}> 🧹 清空其他立繪</label>
           </div>
         </div>` : "";
-      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹"].filter(Boolean).join(" ");
+      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", (n.textFx && n.textFx !== "") && "✨", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹"].filter(Boolean).join(" ");
 
       return `
       <div class="st-node-card" data-node-card="${i}" style="${BOX}background:rgba(28,32,56,0.6);">
@@ -914,7 +924,7 @@
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
         <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:5rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
           ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div>`
-            : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
+            : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
         </div>`}
         ${fxOverlay}
       </div>`;
@@ -1103,7 +1113,7 @@
           <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:6rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
             ${isBattle
               ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥${n.mustWin !== false ? "（必勝）" : ""}</div><div style="text-align:center;color:#f3ecff;font-weight:900;margin-top:4px;">${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div><div class="hint" style="text-align:center;margin-top:6px;">（預覽不實際戰鬥）點擊繼續 ▶</div>`
-              : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div id="pv-text" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;"></div><div style="text-align:right;color:#9b8cc0;font-size:11px;margin-top:4px;">點擊繼續 ▼</div>`}
+              : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div id="pv-text" class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;"></div><div style="text-align:right;color:#9b8cc0;font-size:11px;margin-top:4px;">點擊繼續 ▼</div>`}
           </div>`}
         </div>
         ${sfxTag}${fxOverlay}`;
