@@ -483,7 +483,7 @@
           ? `<div style="${ROW}margin-bottom:4px;">
                <label class="button" style="cursor:pointer;">🖼 CG 事件圖<input type="file" accept="image/*" data-node-cg="${i}" style="display:none;"></label>
                <button class="button" data-node-cg-pick="${i}" title="從圖庫選">📁 圖庫</button>
-               ${n.cgUrl ? `<img src="${esc(n.cgUrl)}" style="height:44px;border-radius:6px;"><button class="button" data-node-cg-clear="${i}">✖</button>` : '<span class="hint" style="margin:0;color:#ff9a8f;">尚未上傳 CG 圖</span>'}
+               ${n.cgUrl ? `<img src="${esc(n.cgUrl)}" style="height:44px;border-radius:6px;"><button class="button" data-node-cg-clear="${i}">✖</button>` : ""}
              </div>
              <textarea data-node="${i}" data-field="text" rows="2" style="width:100%;box-sizing:border-box;" placeholder="CG 字幕（選填，留空＝純圖）">${esc(n.text || "")}</textarea>`
         : isDlg
