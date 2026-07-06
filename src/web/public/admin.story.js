@@ -517,7 +517,12 @@
       const mainArea = isBattle
         ? `<div style="${ROW}">
              <select data-node="${i}" data-field="monsterId" style="min-width:220px;">${monsterOpts(n.monsterId)}</select>
-             <label style="font-size:12px;"><input type="checkbox" data-node="${i}" data-field="mustWin" ${n.mustWin !== false ? "checked" : ""}> 必須打贏才能過</label>
+             <select data-node="${i}" data-field="forcedOutcome" title="劇情殺：不管實際打贏打輸，強制指定結局，故事照劇本走" style="min-width:150px;">
+               <option value="" ${!n.forcedOutcome ? "selected" : ""}>⚔️ 正常戰鬥</option>
+               <option value="win" ${n.forcedOutcome === "win" ? "selected" : ""}>🎬 劇情殺·必勝</option>
+               <option value="lose" ${n.forcedOutcome === "lose" ? "selected" : ""}>💀 劇情殺·必敗</option>
+             </select>
+             <label style="font-size:12px;" title="劇情殺時此項無效"><input type="checkbox" data-node="${i}" data-field="mustWin" ${n.mustWin !== false ? "checked" : ""} ${n.forcedOutcome ? "disabled" : ""}> 必須打贏才能過</label>
            </div>`
         : isCG
           ? `<div style="${ROW}margin-bottom:4px;">
@@ -571,7 +576,7 @@
           <button class="button" data-node-down="${i}" ${i === (editing.nodes.length - 1) ? "disabled" : ""} style="padding:3px 8px;">↓</button>
           <button class="button" data-node-del="${i}" style="padding:3px 8px;">🗑</button>
         </div>
-        ${isBattle ? `<div class="hint" style="margin:0 0 6px;">⚔️ 玩家讀到此需擊敗指定怪${n.mustWin !== false ? "（必勝、SKIP 不可繞）" : "（戰敗也可續）"}</div>` : ""}
+        ${isBattle ? `<div class="hint" style="margin:0 0 6px;">${n.forcedOutcome === "win" ? "🎬 劇情殺·必勝：動畫照打，但一定贏、繼續劇情" : n.forcedOutcome === "lose" ? "💀 劇情殺·必敗：動畫照打，但一定輸，之後劇情照走（建議選較強的怪讓過程合理）" : `⚔️ 玩家讀到此需擊敗指定怪${n.mustWin !== false ? "（必勝、SKIP 不可繞）" : "（戰敗也可續）"}`}</div>` : ""}
         ${mainArea}
         ${fxPanel}
       </div>`;

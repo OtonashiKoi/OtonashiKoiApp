@@ -192,7 +192,9 @@ class StoryService {
           monsterName: m?.name || "（怪物不存在）",
           monsterImageUrl: m?.imageUrl || null,
           monsterLevel: m?.level ?? null,
-          mustWin: n.mustWin !== false,
+          // 劇情殺·必敗時 mustWin 一律視為 false(否則玩家會卡關)；其餘照設定
+          mustWin: n.forcedOutcome === "lose" ? false : n.mustWin !== false,
+          forcedOutcome: (n.forcedOutcome === "win" || n.forcedOutcome === "lose") ? n.forcedOutcome : null,
           won: battlesWon.includes(i), // 玩家是否已通過此戰
           backgroundUrl: n.backgroundUrl || null,
           bgm: n.bgm || null,
@@ -330,7 +332,11 @@ class StoryService {
     if (!node || node.type !== "battle") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "該節點不是戰鬥節點", 400);
     }
-    return { monsterId: node.monsterId || null, mustWin: node.mustWin !== false };
+    return {
+      monsterId: node.monsterId || null,
+      mustWin: node.forcedOutcome === "lose" ? false : node.mustWin !== false,
+      forcedOutcome: (node.forcedOutcome === "win" || node.forcedOutcome === "lose") ? node.forcedOutcome : null
+    };
   }
 
   /** 記錄玩家通過某章某戰鬥節點（冪等）。 */
@@ -378,10 +384,12 @@ class StoryService {
         ...reserved
       };
       if (type === "battle") {
+        const forcedOutcome = (n?.forcedOutcome === "win" || n?.forcedOutcome === "lose") ? n.forcedOutcome : null; // 劇情殺
         return {
           type: "battle",
           monsterId: n?.monsterId ? String(n.monsterId) : null,
           mustWin: n?.mustWin !== false, // 預設必勝
+          forcedOutcome, // 劇情殺：win=一定贏 / lose=一定輸(劇情照走) / null=正常
           backgroundUrl: common.backgroundUrl, bgm: common.bgm, sfx: common.sfx, ...reserved
         };
       }

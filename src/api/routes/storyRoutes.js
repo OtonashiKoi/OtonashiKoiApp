@@ -111,18 +111,29 @@ function createStoryRoutes(serviceContext, discordClient) {
         monsterIsBoss: Boolean(monster?.isBoss)
       });
 
-      const won = result.outcome === "win";
-      if (won) await storyService.recordBattleWin(discordId, chapterId, nodeIndex).catch(() => {});
+      // 劇情殺：不管實際結果，強制指定結局（動畫仍播真實回合日誌，最終血量/勝負覆寫）
+      const forced = battleNode.forcedOutcome; // "win" | "lose" | null
+      let won, outcome, finalPlayerHp, finalMonsterHp;
+      if (forced === "win") {
+        won = true; outcome = "win"; finalMonsterHp = 0; finalPlayerHp = Math.max(1, Math.round(result.finalPlayerHp));
+      } else if (forced === "lose") {
+        won = false; outcome = "lose"; finalPlayerHp = 0; finalMonsterHp = Math.max(1, Math.round(result.finalMonsterHp ?? monster.calc.maxHp));
+      } else {
+        won = result.outcome === "win"; outcome = result.outcome; finalPlayerHp = result.finalPlayerHp; finalMonsterHp = result.finalMonsterHp;
+      }
+      // 通過記錄：正常勝利 或 劇情殺(必勝/必敗都算「已解決」→劇情往下、重玩不再擋)
+      if (won || forced) await storyService.recordBattleWin(discordId, chapterId, nodeIndex).catch(() => {});
 
       res.json(ok({
         won,
-        outcome: result.outcome,
+        outcome,
         mustWin: battleNode.mustWin,
+        forcedOutcome: forced,
         logs: result.roundLogs || [],
-        finalPlayerHp: result.finalPlayerHp,
+        finalPlayerHp,
         playerMaxHp: pStats.maxHp,
         monster: { name: monster.name, imageUrl: monster.imageUrl || null, maxHp: monster.calc.maxHp },
-        finalMonsterHp: result.finalMonsterHp,
+        finalMonsterHp,
         // 動畫戰鬥場景用：玩家名/頭像/武器種類(打擊音效)
         playerName: req.playerRecord.displayName || "我",
         playerAvatarUrl: await playerAvatarUrl(discordId).catch(() => null),
