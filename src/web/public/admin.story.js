@@ -887,7 +887,7 @@
       // 主角(玩家)立繪：編輯器不知道誰登入，用佔位框標示「出現位置」，一樣可拖曳/✕移除；玩家端會換成 DC 頭像
       const inner = p.player
         ? `<div data-drag-portrait="${side}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:120px;height:200px;${dim}background:linear-gradient(180deg,rgba(196,167,245,.28),rgba(60,42,104,.4));border:2px dashed #c4a7f5;border-radius:12px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;"><div style="font-size:36px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:4px;">玩家立繪</div><div style="font-size:9px;opacity:.8;">(登入者 DC 頭像)</div></div>`
-        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:266px;max-width:202px;object-fit:contain;cursor:grab;touch-action:none;">`;
+        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:256px;max-width:144px;object-fit:contain;cursor:grab;touch-action:none;">`;
       // 每個立繪一個 wrapper：內含可拖曳的圖/佔位 + 右上角 ✕ 移除鈕（直觀退場）
       return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:5rem;${baseLeft}${transform}z-index:${speaking ? 3 : 1};">
         ${inner}
@@ -1085,7 +1085,7 @@
         const anim = FX_ANIM[p.fx || ""] || FX_ANIM[""];
         const speaking = isDlg && n.side === side;
         const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
-        return `<img src="${esc(p.url)}" style="position:absolute;bottom:5rem;${pos}${dim}max-height:52%;max-width:70%;object-fit:contain;animation:${anim};z-index:${speaking ? 3 : 1};">`;
+        return `<img src="${esc(p.url)}" style="position:absolute;bottom:5rem;${pos}${dim}max-height:50%;max-width:50%;object-fit:contain;animation:${anim};z-index:${speaking ? 3 : 1};">`;
       }).join("");
       const cgHtml = isCG && n.cgUrl ? `<div style="position:absolute;inset:0;background:url('${esc(n.cgUrl)}') center/cover;"></div>` : "";
       // B3:畫面效果
