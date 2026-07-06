@@ -826,7 +826,9 @@
           e.preventDefault();
           target.focus({ preventScroll: true });
           const v = target.value; try { target.setSelectionRange(v.length, v.length); } catch (_) {}
-          try { target.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_) { target.scrollIntoView(); }
+          // 捲整張節點卡到畫面上方(含演出/角色列)，方便考慮演出與內容
+          const card = target.closest(".st-node-card") || target;
+          try { card.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_) { card.scrollIntoView(); }
         }
         return;
       }
