@@ -917,8 +917,8 @@
     const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || npc?.name || "???")) : "";
     const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
       const baseLeft = side === "center" ? "left:50%;" : side === "right" ? "right:4%;" : "left:4%;";
-      const tx = side === "center" ? -50 : 0; const dx = p.pos?.x || 0, dy = p.pos?.y || 0;
-      const transform = `transform:translate(calc(${tx}% + ${dx}%), ${dy}%);`;
+      const tx = side === "center" ? -50 : 0; const dx = p.pos?.x || 0, dy = p.pos?.y || 0, ps = p.pos?.s || 1;
+      const transform = `transform:translate(calc(${tx}% + ${dx}%), ${dy}%) scale(${ps});transform-origin:bottom center;`;
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
       // 主角(玩家)立繪：編輯器不知道誰登入，用佔位框標示「出現位置」，一樣可拖曳/✕移除；玩家端會換成 DC 頭像
       const inner = p.player
@@ -930,7 +930,7 @@
         ${speaking ? "" : `<button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:#ff5577;color:#fff;border:1.5px solid #1a1030;font-size:12px;line-height:1;cursor:pointer;z-index:6;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.5);">✕</button>`}
       </div>`;
     }).join("");
-    const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};cursor:grab;touch-action:none;"></div>` : "";
+    const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
     const noBox = isCG && !String(n.text || "").trim();
     // 畫面效果 / 音效 / BGM（BGM 走「往回找最近一句設的」與正式閱讀器一致）
     const fxOverlay = n.screenFx === "flash" ? `<div style="position:absolute;inset:0;background:#fff;z-index:8;animation:stPvFlash .45s forwards;"></div>`
@@ -944,7 +944,7 @@
     ].filter(Boolean).join("　");
     return `
       <div style="position:absolute;inset:0;${shakeAnim}">
-        ${bg ? `<div data-drag-bg style="position:absolute;inset:0;background-image:url('${esc(bg)}');background-size:cover;background-position:${bgPos ? `${bgPos.x}% ${bgPos.y}%` : "center"};cursor:grab;touch-action:none;"></div>` : ""}
+        ${bg ? `<div data-drag-bg style="position:absolute;inset:0;background-image:url('${esc(bg)}');background-size:cover;background-position:${bgPos ? `${bgPos.x}% ${bgPos.y}%` : "center"};${bgPos && bgPos.z ? `transform:scale(${bgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : ""}
         ${cgHtml}${portraitsHtml}
         ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
@@ -984,7 +984,7 @@
       </div>
       <div style="font-size:10px;color:#8b93b8;margin-bottom:2px;">📱 直式（手機預設）</div>
       <div class="st-stage" style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: false })}</div>
-      <p class="hint" style="margin:4px 0 0;font-size:10px;">🖐 拖曳背景／立繪調整位置；立繪右上角 ✕ ＝移除該角色（從這句起退場）；放開自動存，Ctrl+Z 復原</p>
+      <p class="hint" style="margin:4px 0 0;font-size:10px;">🖐 拖曳＝移動位置、🖱 滾輪＝縮放大小（背景/立繪/CG 都可）；立繪右上角 ✕ ＝移除該角色；放開自動存，Ctrl+Z 復原</p>
       <div style="font-size:10px;color:#8b93b8;margin:8px 0 2px;">🖥 橫式 16:9（網頁／手機橫放全螢幕）</div>
       <div style="position:relative;width:288px;height:162px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: true })}</div>`;
     panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
@@ -1040,18 +1040,45 @@
       if (drag.kind === "bg" || drag.kind === "cg") {
         const x = Math.max(0, Math.min(100, Math.round(drag.base.x - ddx / drag.sw * 100)));
         const y = Math.max(0, Math.min(100, Math.round(drag.base.y - ddy / drag.sh * 100)));
-        nd[drag.field] = { x, y }; drag.el.style.backgroundPosition = `${x}% ${y}%`;
+        nd[drag.field] = drag.base.z ? { x, y, z: drag.base.z } : { x, y }; // 保留縮放
+        drag.el.style.backgroundPosition = `${x}% ${y}%`;
       } else {
         const x = Math.round(drag.base.x + ddx / drag.ow * 100);
         const y = Math.round(drag.base.y + ddy / drag.oh * 100);
-        nd.stagePos[drag.side] = { x, y };
-        if (drag.wrap) drag.wrap.style.transform = `translate(calc(${drag.tx}% + ${x}%), ${y}%)`;
+        const s = drag.base.s || 1;
+        nd.stagePos[drag.side] = s !== 1 ? { x, y, s } : { x, y }; // 保留縮放
+        if (drag.wrap) { drag.wrap.style.transformOrigin = "bottom center"; drag.wrap.style.transform = `translate(calc(${drag.tx}% + ${x}%), ${y}%) scale(${s})`; }
       }
     };
     const onUp = () => { if (!drag) return; drag = null; writeDraft(); renderLivePreview(); };
-    stage.querySelectorAll("[data-drag-bg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "bg", null, el)));
-    stage.querySelectorAll("[data-drag-cg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "cg", null, el)));
-    stage.querySelectorAll("[data-drag-portrait]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "portrait", el.getAttribute("data-drag-portrait"), el)));
+
+    // 滾輪縮放：在立繪/背景/CG 上滾動 → 放大縮小顯示（上滾放大）。連續滾動只存一次 undo。
+    let wheelUndo = false, wheelTimer = null;
+    const onWheel = (e, kind, side, el) => {
+      e.preventDefault(); e.stopPropagation();
+      const nd = node(); if (!nd) return;
+      if (!wheelUndo) { pushUndo(); wheelUndo = true; }
+      const step = e.deltaY < 0 ? 0.06 : -0.06;
+      if (kind === "portrait") {
+        const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || { x: 0, y: 0 };
+        const s = Math.max(0.3, Math.min(3, Math.round(((base.s || 1) + step) * 100) / 100));
+        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = { x: base.x || 0, y: base.y || 0, s };
+        const wrap = el.parentElement, tx = side === "center" ? -50 : 0;
+        if (wrap) { wrap.style.transformOrigin = "bottom center"; wrap.style.transform = `translate(calc(${tx}% + ${nd.stagePos[side].x}%), ${nd.stagePos[side].y}%) scale(${s})`; }
+      } else {
+        const field = kind === "cg" ? "cgPos" : "bgPos";
+        const base = nd[field] || (kind === "cg" ? { x: 50, y: 50 } : (bgPosAt(editing.nodes, idx) || { x: 50, y: 50 }));
+        const z = Math.max(0.5, Math.min(3, Math.round(((base.z || 1) + step) * 100) / 100));
+        nd[field] = { x: base.x, y: base.y, z };
+        el.style.transformOrigin = "center"; el.style.transform = `scale(${z})`;
+      }
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => { wheelUndo = false; writeDraft(); renderLivePreview(); }, 350);
+    };
+
+    stage.querySelectorAll("[data-drag-bg]").forEach((el) => { el.addEventListener("pointerdown", (e) => onDown(e, "bg", null, el)); el.addEventListener("wheel", (e) => onWheel(e, "bg", null, el), { passive: false }); });
+    stage.querySelectorAll("[data-drag-cg]").forEach((el) => { el.addEventListener("pointerdown", (e) => onDown(e, "cg", null, el)); el.addEventListener("wheel", (e) => onWheel(e, "cg", null, el), { passive: false }); });
+    stage.querySelectorAll("[data-drag-portrait]").forEach((el) => { el.addEventListener("pointerdown", (e) => onDown(e, "portrait", el.getAttribute("data-drag-portrait"), el)); el.addEventListener("wheel", (e) => onWheel(e, "portrait", el.getAttribute("data-drag-portrait"), el), { passive: false }); });
     // ✕ 直觀移除立繪：把該側設為退場（從這句起消失）；再點同側可取消，點到不同側→全部退場
     stage.querySelectorAll("[data-remove-portrait]").forEach((b) => {
       b.addEventListener("pointerdown", (e) => e.stopPropagation());

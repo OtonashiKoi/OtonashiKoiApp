@@ -28,14 +28,17 @@ const EXIT_SIDES = new Set(["left", "center", "right", "all"]); // 立繪退場�
 const TEXT_SIZES = new Set(["small", "large"]); // 文字大小(空=標準)
 const TEXT_FX = new Set(["shake", "quake", "glow", "pulse", "wave"]); // 文字演出效果
 
-// 背景平移 {x,y}（background-position %，0~100）
+const clampNum = (n, lo, hi, dflt) => (Number.isFinite(Number(n)) ? Math.max(lo, Math.min(hi, Number(n))) : dflt);
+// 背景平移+縮放 {x,y,z}（background-position %；z=縮放倍率 0.5~3，1=原本cover）
 function sanitizeBgPos(v) {
   if (!v || typeof v !== "object") return null;
   const x = Number(v.x), y = Number(v.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { x: Math.max(0, Math.min(100, Math.round(x))), y: Math.max(0, Math.min(100, Math.round(y))) };
+  const out = { x: Math.max(0, Math.min(100, Math.round(x))), y: Math.max(0, Math.min(100, Math.round(y))) };
+  if (v.z != null) { const z = clampNum(v.z, 0.5, 3, 1); if (Math.abs(z - 1) > 0.001) out.z = Math.round(z * 100) / 100; }
+  return out;
 }
-// 立繪位移 { left/center/right: {x,y} }（相對立繪大小 %，可負，限 ±300 避免離譜）
+// 立繪位移+縮放 { left/center/right: {x,y,s} }（x/y 相對立繪大小 %；s=縮放 0.3~3，1=原本）
 function sanitizeStagePos(v) {
   if (!v || typeof v !== "object") return null;
   const out = {};
@@ -44,7 +47,9 @@ function sanitizeStagePos(v) {
     if (p && typeof p === "object") {
       const x = Number(p.x), y = Number(p.y);
       if (Number.isFinite(x) && Number.isFinite(y)) {
-        out[s] = { x: Math.max(-300, Math.min(300, Math.round(x))), y: Math.max(-300, Math.min(300, Math.round(y))) };
+        const e = { x: Math.max(-300, Math.min(300, Math.round(x))), y: Math.max(-300, Math.min(300, Math.round(y))) };
+        if (p.s != null) { const sc = clampNum(p.s, 0.3, 3, 1); if (Math.abs(sc - 1) > 0.001) e.s = Math.round(sc * 100) / 100; }
+        out[s] = e;
       }
     }
   }
