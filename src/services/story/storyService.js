@@ -40,17 +40,17 @@ function sanitizeBgPos(v) {
 }
 // 立繪位移+縮放 { left/center/right: {x,y,s} }（x/y 相對立繪大小 %；s=縮放 0.3~3，1=原本）
 function sanitizeStagePos(v) {
+  // 立繪只保留「垂直位移 y(%)＋縮放 s」；水平一律由 side(左/中/右)決定，不存 x → 避免不同視窗寬度飄移。
   if (!v || typeof v !== "object") return null;
   const out = {};
   for (const s of ["left", "center", "right"]) {
     const p = v[s];
     if (p && typeof p === "object") {
-      const x = Number(p.x), y = Number(p.y);
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        const e = { x: Math.max(-300, Math.min(300, Math.round(x))), y: Math.max(-300, Math.min(300, Math.round(y))) };
-        if (p.s != null) { const sc = clampNum(p.s, 0.3, 3, 1); if (Math.abs(sc - 1) > 0.001) e.s = Math.round(sc * 100) / 100; }
-        out[s] = e;
-      }
+      const e = {};
+      const y = Number(p.y);
+      if (Number.isFinite(y) && Math.abs(y) > 0.5) e.y = Math.max(-90, Math.min(90, Math.round(y)));
+      if (p.s != null) { const sc = clampNum(p.s, 0.3, 3, 1); if (Math.abs(sc - 1) > 0.001) e.s = Math.round(sc * 100) / 100; }
+      if (Object.keys(e).length) out[s] = e;
     }
   }
   return Object.keys(out).length ? out : null;

@@ -7,6 +7,13 @@
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // 角色卡縮圖：Cloudinary 臉部裁切(e_trim 去透明邊 → c_fill 1:1 對臉 g_face)，直接看到臉不是全身。
+  const faceThumb = (u) => {
+    if (!u || typeof u !== "string" || !u.includes("res.cloudinary.com") || !u.includes("/upload/")) return u;
+    if (!/\/upload\/(?:[^/]+\/)*?v\d+\//.test(u)) return u; // 沒有版本段就不動，避免裁到錯位置
+    return u.replace(/\/upload\/(?:[^/]+\/)*?(v\d+\/)/, "/upload/e_trim/c_fill,ar_1:1,g_face,w_120,f_auto,q_auto/$1");
+  };
+
   // 立繪演出動畫（CSS keyframes；預覽用）+ 拖曳視覺
   if (!document.getElementById("story-fx-style")) {
     const s = document.createElement("style");
@@ -397,7 +404,7 @@
   function renderLists() {
     const npcRows = npcs.map((n) => `
       <div style="${ROW}border-bottom:1px dashed #2c3350;padding-bottom:8px;">
-        ${n.portraitUrl ? `<img src="${esc(n.portraitUrl)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;border-radius:8px;background:#232945;display:flex;align-items:center;justify-content:center;">🎭</div>`}
+        ${n.portraitUrl ? `<img src="${esc(faceThumb(n.portraitUrl))}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;border-radius:8px;background:#232945;display:flex;align-items:center;justify-content:center;">🎭</div>`}
         <div style="flex:1;min-width:120px;">
           <div><b>${esc(n.name)}</b></div>
           <div class="hint" style="margin:0;">${esc(n.description || "")}</div>
@@ -423,7 +430,7 @@
         </div>
         <div style="${ROW}">
           <span class="hint" style="margin:0;">預設立繪：</span>
-          ${npcForm.portraitUrl ? `<img src="${esc(npcForm.portraitUrl)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;border-radius:8px;background:#232945;display:flex;align-items:center;justify-content:center;">🎭</div>`}
+          ${npcForm.portraitUrl ? `<img src="${esc(faceThumb(npcForm.portraitUrl))}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;border-radius:8px;background:#232945;display:flex;align-items:center;justify-content:center;">🎭</div>`}
           <label class="button" style="cursor:pointer;">🖼 上傳<input type="file" accept="image/*" id="npc-form-portrait" style="display:none;"></label>
         </div>
         <div style="border-top:1px dashed #2c3350;margin-top:6px;padding-top:6px;">
@@ -918,14 +925,15 @@
     // 立繪：與玩家端 reader「完全相同」的排版(flex 佔滿舞台依 side 靠齊、max-height=舞台%、貼底、位移/縮放上 transform)
     // → 預覽=實際。✕/⤢ 握把不放這裡，改由 JS 依立繪實際框位置疊上去(見 attachPreviewDrag)。
     const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
-      const ps = p.pos?.s || 1; // 只縮放；位置一律由 side(flex)決定＝置中/靠邊，不自由位移
+      const ps = p.pos?.s || 1; // 縮放；水平由 side(flex)決定＝置中/靠邊
+      const oy = p.pos?.y || 0;  // 垂直位移(%)：正值往下（拖立繪本身上下移動）
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
       const justify = side === "center" ? "center" : side === "right" ? "flex-end" : "flex-start";
       const tf = `transform:scale(${ps});transform-origin:bottom center;`;
       const el = p.player
-        ? `<div data-drag-portrait="${side}" style="height:${P.phH};aspect-ratio:1;box-sizing:border-box;${dim}${tf}display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(196,167,245,.3),rgba(60,42,104,.45));border:2px dashed #c4a7f5;border-radius:14px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;pointer-events:auto;"><div style="font-size:34px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:6px;white-space:nowrap;">玩家立繪</div></div>`
-        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="max-height:100%;max-width:${P.portW};flex:0 0 auto;${dim}${tf}cursor:default;pointer-events:auto;">`;
-      return `<div data-portrait-side="${side}" style="position:absolute;left:3%;right:3%;top:0;bottom:${P.portBottom};display:flex;align-items:flex-end;justify-content:${justify};z-index:${speaking ? 3 : 1};pointer-events:none;">${el}</div>`;
+        ? `<div data-drag-portrait="${side}" style="height:${P.phH};aspect-ratio:1;box-sizing:border-box;${dim}${tf}display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(196,167,245,.3),rgba(60,42,104,.45));border:2px dashed #c4a7f5;border-radius:14px;color:#efe7ff;cursor:ns-resize;touch-action:none;text-align:center;pointer-events:auto;"><div style="font-size:34px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:6px;white-space:nowrap;">玩家立繪</div></div>`
+        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="max-height:100%;max-width:${P.portW};flex:0 0 auto;${dim}${tf}cursor:ns-resize;touch-action:none;pointer-events:auto;">`;
+      return `<div data-portrait-side="${side}" style="position:absolute;left:3%;right:3%;top:0;bottom:${P.portBottom};display:flex;align-items:flex-end;justify-content:${justify};z-index:${speaking ? 3 : 1};pointer-events:none;${oy ? `transform:translateY(${oy}%);` : ""}">${el}</div>`;
     }).join("");
     const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
     const noBox = isCG && !String(n.text || "").trim();
@@ -982,9 +990,11 @@
       </div>
       <div style="font-size:10px;color:#8b93b8;margin-bottom:2px;">📱 直式（手機預設）</div>
       <div class="st-stage" style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: false })}</div>
-      <p class="hint" style="margin:4px 0 0;font-size:10px;">立繪一律置中(位置改用「🎭立繪：左/中/右」下拉)；藍 ⤢ 拉動＝改大小(往上放大)、✕＝移除；背景/CG 可拖曳移動。放開自動存，Ctrl+Z 復原</p>
+      <p class="hint" style="margin:4px 0 0;font-size:10px;">立繪左右＝用「🎭立繪：左/中/右」下拉；直接拖立繪＝上下移動；藍 ⤢＝改大小(往上放大)、✕＝移除；背景/CG 可拖曳移動。放開自動存，Ctrl+Z 復原</p>
       <div style="font-size:10px;color:#8b93b8;margin:8px 0 2px;">🖥 橫式 16:9（網頁／手機橫放全螢幕）</div>
-      <div style="position:relative;width:288px;height:162px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: true })}</div>`;
+      <div style="position:relative;width:288px;height:162px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;width:640px;height:360px;transform:scale(0.45);transform-origin:top left;">${buildStageHTML(nodes, idx, { landscape: true })}</div>
+      </div>`;
     panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
     attachPreviewDrag(panel, idx);
 
@@ -1055,10 +1065,17 @@
       const nd = node(); if (!nd) return;
       e.preventDefault(); e.stopPropagation();
       pushUndo();
-      if (kind === "presize") {                       // 立繪縮放
-        const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || { x: 0, y: 0 };
-        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = { x: base.x || 0, y: base.y || 0, s: base.s || 1 };
-        drag = { kind, side, el, sy: e.clientY, base: { ...base } };
+      if (kind === "presize") {                       // 立繪縮放（保留垂直位移 y）
+        const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || {};
+        const y = Number(base.y) || 0, s0 = Number(base.s) || 1;
+        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = y ? { s: s0, y } : { s: s0 };
+        drag = { kind, side, el, sy: e.clientY, base: { y, s: s0 } };
+      } else if (kind === "pmoveY") {                 // 立繪：只上下移動（左右由 side 下拉決定，避免水平飄移）
+        const wrap = el.closest("[data-portrait-side]");
+        const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || {};
+        const y = Number(base.y) || 0, s0 = Number(base.s) || 1;
+        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = s0 !== 1 ? { y, s: s0 } : (y ? { y } : {});
+        drag = { kind, side, el, wrap, sy: e.clientY, base: { y, s: s0 }, wh: (wrap && wrap.getBoundingClientRect().height) || stage.clientHeight || 400 };
       } else if (kind === "lresize") {                // 背景/CG 縮放
         const field = side, layer = stage.querySelector(field === "bgPos" ? "[data-drag-bg]" : "[data-drag-cg]");
         const base = nd[field] || (field === "cgPos" ? { x: 50, y: 50 } : (bgPosAt(editing.nodes, idx) || { x: 50, y: 50 }));
@@ -1069,11 +1086,6 @@
         const base = (kind === "cg" ? nd.cgPos : bgPosAt(editing.nodes, idx)) || { x: 50, y: 50 };
         nd[field] = base.z ? { x: base.x, y: base.y, z: base.z } : { x: base.x, y: base.y };
         drag = { kind, field, el, sx: e.clientX, sy: e.clientY, base: { ...base }, sw: stage.clientWidth || 288, sh: stage.clientHeight || 512 };
-      } else {                                        // 立繪移動
-        const base = effectivePortraitPos(editing.nodes, idx, side);
-        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = base.s ? { x: base.x, y: base.y, s: base.s } : { x: base.x, y: base.y };
-        const r = el.getBoundingClientRect(), s = base.s || 1;
-        drag = { kind: "portrait", side, el, sx: e.clientX, sy: e.clientY, base: { ...base }, ow: (r.width || 1) / s, oh: (r.height || 1) / s };
       }
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
     };
@@ -1082,8 +1094,15 @@
       const ddx = e.clientX - drag.sx, ddy = e.clientY - drag.sy;
       if (drag.kind === "presize") {
         const s = Math.max(0.3, Math.min(3, Math.round(((drag.base.s || 1) - (e.clientY - drag.sy) / 160) * 100) / 100));
-        nd.stagePos[drag.side] = { s };
+        const y = drag.base.y || 0;
+        nd.stagePos[drag.side] = y ? { s, y } : { s };
         drag.el.style.transform = `scale(${s})`;
+        positionHandles();
+      } else if (drag.kind === "pmoveY") {              // 立繪上下移動（正值往下）
+        const y = Math.max(-90, Math.min(90, Math.round(drag.base.y + ddy / drag.wh * 100)));
+        const s = drag.base.s || 1;
+        nd.stagePos[drag.side] = s !== 1 ? { y, s } : { y };
+        if (drag.wrap) drag.wrap.style.transform = y ? `translateY(${y}%)` : "";
         positionHandles();
       } else if (drag.kind === "lresize") {
         const z = Math.max(0.5, Math.min(3, Math.round(((drag.base.z || 1) - (e.clientY - drag.sy) / 220) * 100) / 100));
@@ -1094,20 +1113,14 @@
         const y = Math.max(0, Math.min(100, Math.round(drag.base.y - ddy / drag.sh * 100)));
         nd[drag.field] = drag.base.z ? { x, y, z: drag.base.z } : { x, y };
         drag.el.style.backgroundPosition = `${x}% ${y}%`;
-      } else {                                        // 立繪移動
-        const x = Math.round(drag.base.x + ddx / drag.ow * 100);
-        const y = Math.round(drag.base.y + ddy / drag.oh * 100);
-        const s = drag.base.s || 1;
-        nd.stagePos[drag.side] = s !== 1 ? { x, y, s } : { x, y };
-        drag.el.style.transform = `translate(${x}%, ${y}%) scale(${s})`;
-        positionHandles();
       }
     };
     const onUp = () => { if (!drag) return; drag = null; writeDraft(); renderLivePreview(); };
 
     stage.querySelectorAll("[data-drag-bg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "bg", null, el)));
     stage.querySelectorAll("[data-drag-cg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "cg", null, el)));
-    // 立繪不自由拖移(位置由 side 下拉決定)；只留 ⤢ 縮放 + ✕ 移除
+    // 立繪：水平不自由拖(由 side 下拉決定)，只允許「上下拖移」＋ ⤢ 縮放 ＋ ✕ 移除
+    stage.querySelectorAll("[data-drag-portrait]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "pmoveY", el.getAttribute("data-drag-portrait"), el)));
     stage.querySelectorAll("[data-resize-bg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "lresize", "bgPos", el)));
     stage.querySelectorAll("[data-resize-cg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "lresize", "cgPos", el)));
     stage.addEventListener("pointermove", onMove);
