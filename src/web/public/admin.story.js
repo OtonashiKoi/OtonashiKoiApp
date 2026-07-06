@@ -861,6 +861,7 @@
   let livePreviewIdx = 0;
   let livePreviewOn = true;
   let liveBgmTrack = null; // 即時預覽目前實際在播的曲目 key(避免每次重繪重啟音樂)
+  let lastSfxIdx = -1;     // 即時預覽上次播音效的節點(切節點才播一次)
 
   // 立繪/背景位置解析（與正式閱讀器一致）：
   //   stagePos[side]={x,y}（相對立繪自身大小的 % 位移，跨節點沿用）；bgPos={x,y}（background-position %）
@@ -998,6 +999,11 @@
         if (!resolved || resolved === "silence") stopPreviewAudio();
         else playPreviewBgm(resolved);
       }
+      // 一次性音效：只有「切到不同節點」才播（打字不重播）
+      if (lastSfxIdx !== idx) {
+        lastSfxIdx = idx;
+        if (nodes[idx] && nodes[idx].sfx) playPreviewSfx(nodes[idx].sfx);
+      }
     }
   }
   function stopLiveBgm() { liveBgmTrack = null; stopPreviewAudio(); }
@@ -1074,6 +1080,58 @@
     previewAudio.play().catch(() => {});
   }
 
+  // ── 預覽用音效（移植前端 sound.ts：合成音 + 檔案音，讓預覽也聽得到 SFX）──
+  let _actx = null;
+  function actx() {
+    if (!_actx) { try { _actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return null; } }
+    if (_actx.state === "suspended") _actx.resume().catch(() => {});
+    return _actx;
+  }
+  function tone(o) {
+    const c = actx(); if (!c) return;
+    const t0 = c.currentTime + (o.delay || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || "triangle";
+    osc.frequency.setValueAtTime(o.freq, t0);
+    if (o.toFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.toFreq), t0 + o.dur);
+    const peak = Math.max(0.0001, o.gain * 0.6);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
+    osc.connect(g); g.connect(c.destination); osc.start(t0); osc.stop(t0 + o.dur + 0.02);
+  }
+  function noise(o) {
+    const c = actx(); if (!c) return;
+    const len = Math.floor(c.sampleRate * o.dur), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const g = c.createGain(); g.gain.value = Math.max(0.0001, o.gain * 0.6);
+    const hp = c.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = o.hp || 800;
+    src.connect(hp); hp.connect(g); g.connect(c.destination); src.start();
+  }
+  function playPreviewSfx(key) {
+    if (!key) return;
+    // 檔案音效
+    if (key === "chest") { try { const a = new Audio("/sfx/treasure-chest.mp3"); a.volume = 0.8; a.play().catch(() => {}); } catch (_) {} return; }
+    if (key === "item") { try { const a = new Audio("/sfx/item-get.mp3"); a.volume = 0.9; a.play().catch(() => {}); } catch (_) {} return; }
+    if (key === "equip") { try { const a = new Audio("/sfx/equip.mp3"); a.volume = 0.85; a.play().catch(() => {}); } catch (_) {} return; }
+    // 合成音效（與前端 sound.ts playSfx 一致）
+    switch (key) {
+      case "hit": noise({ dur: 0.12, gain: 0.3, hp: 700 }); tone({ freq: 180, toFreq: 90, type: "square", dur: 0.1, gain: 0.12 }); break;
+      case "crit": noise({ dur: 0.2, gain: 0.45, hp: 500 }); tone({ freq: 240, toFreq: 80, type: "sawtooth", dur: 0.22, gain: 0.2 }); tone({ freq: 660, toFreq: 330, type: "square", dur: 0.12, gain: 0.12, delay: 0.02 }); break;
+      case "lightning": noise({ dur: 0.18, gain: 0.4, hp: 2500 }); tone({ freq: 1200, toFreq: 200, type: "sawtooth", dur: 0.18, gain: 0.12 }); break;
+      case "burn": noise({ dur: 0.3, gain: 0.18, hp: 1200 }); break;
+      case "freeze": tone({ freq: 1400, toFreq: 2000, type: "sine", dur: 0.25, gain: 0.12 }); tone({ freq: 1800, toFreq: 2400, type: "sine", dur: 0.2, gain: 0.08, delay: 0.04 }); break;
+      case "poison": tone({ freq: 320, toFreq: 180, type: "sine", dur: 0.3, gain: 0.12 }); break;
+      case "heal": tone({ freq: 520, toFreq: 780, type: "sine", dur: 0.18, gain: 0.16 }); tone({ freq: 780, toFreq: 1040, type: "sine", dur: 0.18, gain: 0.12, delay: 0.06 }); break;
+      case "block": noise({ dur: 0.1, gain: 0.28, hp: 400 }); tone({ freq: 150, type: "square", dur: 0.08, gain: 0.14 }); break;
+      case "dodge": tone({ freq: 900, toFreq: 1500, type: "sine", dur: 0.1, gain: 0.1 }); break;
+      case "win": tone({ freq: 523, type: "triangle", dur: 0.16, gain: 0.2 }); tone({ freq: 659, type: "triangle", dur: 0.16, gain: 0.2, delay: 0.14 }); tone({ freq: 784, type: "triangle", dur: 0.28, gain: 0.2, delay: 0.28 }); break;
+      case "lose": tone({ freq: 400, toFreq: 160, type: "sawtooth", dur: 0.5, gain: 0.18 }); break;
+      default: break;
+    }
+  }
+
   function openPreview(startIdx = 0) {
     const nodes = editing.nodes || [];
     const zoneTrack = ZONE_BGM[editing.zoneKey] || "home";
@@ -1109,6 +1167,7 @@
       titleEl.textContent = `${editing.title || "(未命名)"}　${idx + 1}/${nodes.length}`;
       if (!n) { stage.innerHTML = `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c4a7f5;font-weight:900;">📖 章節結束</div>`; stopPreviewAudio(); return; }
       if (n.bgm) playPreviewBgm(n.bgm === "zone" ? zoneTrack : n.bgm);
+      if (n.sfx) playPreviewSfx(n.sfx);
       const bg = curBg();
       const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
       const npc = isDlg ? npcById[n.npcId] : null;
