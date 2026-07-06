@@ -918,13 +918,13 @@
     // 立繪：與玩家端 reader「完全相同」的排版(flex 佔滿舞台依 side 靠齊、max-height=舞台%、貼底、位移/縮放上 transform)
     // → 預覽=實際。✕/⤢ 握把不放這裡，改由 JS 依立繪實際框位置疊上去(見 attachPreviewDrag)。
     const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
-      const dx = p.pos?.x || 0, dy = p.pos?.y || 0, ps = p.pos?.s || 1;
+      const ps = p.pos?.s || 1; // 只縮放；位置一律由 side(flex)決定＝置中/靠邊，不自由位移
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
       const justify = side === "center" ? "center" : side === "right" ? "flex-end" : "flex-start";
-      const tf = `transform:translate(${dx}%, ${dy}%) scale(${ps});transform-origin:bottom center;`;
+      const tf = `transform:scale(${ps});transform-origin:bottom center;`;
       const el = p.player
         ? `<div data-drag-portrait="${side}" style="height:${P.phH};aspect-ratio:1;box-sizing:border-box;${dim}${tf}display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(196,167,245,.3),rgba(60,42,104,.45));border:2px dashed #c4a7f5;border-radius:14px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;pointer-events:auto;"><div style="font-size:34px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:6px;white-space:nowrap;">玩家立繪</div></div>`
-        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="max-height:100%;max-width:${P.portW};flex:0 0 auto;${dim}${tf}cursor:grab;touch-action:none;pointer-events:auto;">`;
+        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="max-height:100%;max-width:${P.portW};flex:0 0 auto;${dim}${tf}cursor:default;pointer-events:auto;">`;
       return `<div data-portrait-side="${side}" style="position:absolute;left:3%;right:3%;top:0;bottom:${P.portBottom};display:flex;align-items:flex-end;justify-content:${justify};z-index:${speaking ? 3 : 1};pointer-events:none;">${el}</div>`;
     }).join("");
     const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
@@ -982,7 +982,7 @@
       </div>
       <div style="font-size:10px;color:#8b93b8;margin-bottom:2px;">📱 直式（手機預設）</div>
       <div class="st-stage" style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: false })}</div>
-      <p class="hint" style="margin:4px 0 0;font-size:10px;">🖐 圖上拖曳＝移動；藍色 ⤢ 拉動＝改大小（往上放大）；立繪右上 ✕ ＝移除該角色；放開自動存，Ctrl+Z 復原</p>
+      <p class="hint" style="margin:4px 0 0;font-size:10px;">立繪一律置中(位置改用「🎭立繪：左/中/右」下拉)；藍 ⤢ 拉動＝改大小(往上放大)、✕＝移除；背景/CG 可拖曳移動。放開自動存，Ctrl+Z 復原</p>
       <div style="font-size:10px;color:#8b93b8;margin:8px 0 2px;">🖥 橫式 16:9（網頁／手機橫放全螢幕）</div>
       <div style="position:relative;width:288px;height:162px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: true })}</div>`;
     panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
@@ -1082,8 +1082,8 @@
       const ddx = e.clientX - drag.sx, ddy = e.clientY - drag.sy;
       if (drag.kind === "presize") {
         const s = Math.max(0.3, Math.min(3, Math.round(((drag.base.s || 1) - (e.clientY - drag.sy) / 160) * 100) / 100));
-        nd.stagePos[drag.side] = { x: drag.base.x || 0, y: drag.base.y || 0, s };
-        drag.el.style.transform = `translate(${drag.base.x || 0}%, ${drag.base.y || 0}%) scale(${s})`;
+        nd.stagePos[drag.side] = { s };
+        drag.el.style.transform = `scale(${s})`;
         positionHandles();
       } else if (drag.kind === "lresize") {
         const z = Math.max(0.5, Math.min(3, Math.round(((drag.base.z || 1) - (e.clientY - drag.sy) / 220) * 100) / 100));
@@ -1107,7 +1107,7 @@
 
     stage.querySelectorAll("[data-drag-bg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "bg", null, el)));
     stage.querySelectorAll("[data-drag-cg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "cg", null, el)));
-    stage.querySelectorAll("[data-drag-portrait]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "portrait", el.getAttribute("data-drag-portrait"), el)));
+    // 立繪不自由拖移(位置由 side 下拉決定)；只留 ⤢ 縮放 + ✕ 移除
     stage.querySelectorAll("[data-resize-bg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "lresize", "bgPos", el)));
     stage.querySelectorAll("[data-resize-cg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "lresize", "cgPos", el)));
     stage.addEventListener("pointermove", onMove);
