@@ -923,11 +923,15 @@
       const inner = p.player
         ? `<div data-drag-portrait="${side}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:${P.phSquare};height:${P.phSquare};${dim}background:linear-gradient(180deg,rgba(196,167,245,.3),rgba(60,42,104,.45));border:2px dashed #c4a7f5;border-radius:14px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;box-sizing:border-box;"><div style="font-size:34px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:6px;white-space:nowrap;">玩家立繪</div></div>`
         : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:${P.portMaxH};max-width:${P.portMaxW};object-fit:contain;cursor:grab;touch-action:none;">`;
-      // 外層 wrapper=位置(translate)；內層=縮放(scale)；✕(移除) + ⤢(拉動改大小) 掛在外層，恆定大小不隨縮放
+      // 外層=位置(translate)；內層=縮放(scale)。✕/⤢ 掛在「內層角落」→ 跟著立繪縮放位置移動；
+      // 但各自反向縮放(scale 1/ps)→ 視覺大小恆定不變。這樣放大縮小握把都貼在角色角上、不會跑掉。
+      const inv = Math.round((1 / ps) * 1000) / 1000;
       return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:${P.portBottom};${baseLeft}transform:translate(calc(${tx}% + ${dx}%), ${dy}%);z-index:${speaking ? 3 : 1};">
-        <div data-portrait-scale style="transform:scale(${ps});transform-origin:bottom center;">${inner}</div>
-        <button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:-12px;right:-12px;width:26px;height:26px;border-radius:50%;background:#ff5577;color:#fff;border:2px solid #1a1030;font-size:15px;line-height:1;cursor:pointer;z-index:7;padding:0;box-shadow:0 1px 6px rgba(0,0,0,.6);">✕</button>
-        <div data-resize-portrait="${side}" title="拉動改變大小" style="position:absolute;top:-12px;left:-12px;width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:24px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:7;box-shadow:0 1px 6px rgba(0,0,0,.6);">⤢</div>
+        <div data-portrait-scale style="position:relative;transform:scale(${ps});transform-origin:bottom center;">
+          ${inner}
+          <button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:0;right:0;transform:scale(${inv});transform-origin:top right;width:26px;height:26px;border-radius:50%;background:#ff5577;color:#fff;border:2px solid #1a1030;font-size:15px;line-height:22px;text-align:center;cursor:pointer;z-index:7;padding:0;box-shadow:0 1px 6px rgba(0,0,0,.6);">✕</button>
+          <div data-resize-portrait="${side}" title="拉動改變大小" style="position:absolute;top:0;left:0;transform:scale(${inv});transform-origin:top left;width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:22px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:7;box-shadow:0 1px 6px rgba(0,0,0,.6);">⤢</div>
+        </div>
       </div>`;
     }).join("");
     const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
@@ -1022,7 +1026,7 @@
       e.preventDefault(); e.stopPropagation();
       pushUndo(); // 拉動前存快照
       if (kind === "presize") {                       // 立繪：拉動改大小
-        const wrap = el.parentElement, scaleEl = wrap && wrap.querySelector("[data-portrait-scale]");
+        const scaleEl = el.parentElement; // ⤢ 是 scale div 的直接子元素
         const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || { x: 0, y: 0 };
         nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = { x: base.x || 0, y: base.y || 0, s: base.s || 1 };
         drag = { kind, side, scaleEl, sy: e.clientY, base: { ...base } };
@@ -1052,7 +1056,11 @@
         const dy = e.clientY - drag.sy;
         const s = Math.max(0.3, Math.min(3, Math.round(((drag.base.s || 1) - dy / 160) * 100) / 100));
         nd.stagePos[drag.side] = { x: drag.base.x || 0, y: drag.base.y || 0, s };
-        if (drag.scaleEl) { drag.scaleEl.style.transformOrigin = "bottom center"; drag.scaleEl.style.transform = `scale(${s})`; }
+        if (drag.scaleEl) {
+          drag.scaleEl.style.transformOrigin = "bottom center"; drag.scaleEl.style.transform = `scale(${s})`;
+          const inv = Math.round((1 / s) * 1000) / 1000; // 握把反向縮放→視覺大小恆定、位置貼角
+          drag.scaleEl.querySelectorAll("[data-remove-portrait],[data-resize-portrait]").forEach((h) => { h.style.transform = `scale(${inv})`; });
+        }
       } else if (drag.kind === "lresize") {            // 背景/CG 縮放
         const dy = e.clientY - drag.sy;
         const z = Math.max(0.5, Math.min(3, Math.round(((drag.base.z || 1) - dy / 220) * 100) / 100));
