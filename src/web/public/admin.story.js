@@ -27,6 +27,8 @@
       select.st-sel { width: 132px !important; min-width: 0; flex: 0 0 auto; font-size: 12px; padding: 3px 6px !important; }
       /* 文字演出效果（預覽用） */
       @keyframes stTxtShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-1.5px)} 75%{transform:translateX(1.5px)} }
+      @keyframes stTxtQuake { 0%{transform:translate(0,0)} 12%{transform:translate(-5px,2px)} 24%{transform:translate(5px,-2px)} 36%{transform:translate(-5px,1px)} 48%{transform:translate(4px,-2px)} 62%{transform:translate(-3px,1px)} 78%{transform:translate(2px,-1px)} 100%{transform:translate(0,0)} }
+      .st-txt-quake{animation:stTxtQuake .5s ease-out both}
       @keyframes stTxtGlow { 0%,100%{text-shadow:0 0 3px rgba(196,167,245,.4)} 50%{text-shadow:0 0 11px rgba(196,167,245,.95)} }
       @keyframes stTxtPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
       @keyframes stTxtWave { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
@@ -73,7 +75,7 @@
   // 文字大小（玩家端台詞字體）：空＝標準
   const TEXTSIZE_OPTS = [["", "🔤 標準"], ["small", "🔡 小"], ["large", "🔠 大"]];
   // 文字演出效果（台詞本身的動態）：空＝無
-  const TEXTFX_OPTS = [["", "✨ 文字效果（無）"], ["shake", "💢 顫抖"], ["glow", "🌟 發光"], ["pulse", "💗 脈動"], ["wave", "🌊 波浪"]];
+  const TEXTFX_OPTS = [["", "✨ 文字效果（無）"], ["shake", "💢 顫抖"], ["quake", "💥 震動(用力幾下)"], ["glow", "🌟 發光"], ["pulse", "💗 脈動"], ["wave", "🌊 波浪"]];
   const FX_OPTS = [
     ["", "立繪演出（預設淡入）"], ["pop", "💥 彈入"], ["shake", "🫨 晃動"],
     ["bounce", "⤴️ 彈跳"], ["pulse", "💗 脈動"], ["dim", "🌑 變暗(背景角色)"]
@@ -924,7 +926,7 @@
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
         <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:5rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
           ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div>`
-            : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
+            : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;font-size:14px;margin-bottom:4px;">${esc(name)}</div>` : ""}<div class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
         </div>`}
         ${fxOverlay}
       </div>`;
@@ -1113,7 +1115,7 @@
           <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:6rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
             ${isBattle
               ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥${n.mustWin !== false ? "（必勝）" : ""}</div><div style="text-align:center;color:#f3ecff;font-weight:900;margin-top:4px;">${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div><div class="hint" style="text-align:center;margin-top:6px;">（預覽不實際戰鬥）點擊繼續 ▶</div>`
-              : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div id="pv-text" class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;"></div><div style="text-align:right;color:#9b8cc0;font-size:11px;margin-top:4px;">點擊繼續 ▼</div>`}
+              : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;font-size:14px;margin-bottom:4px;">${esc(name)}</div>` : ""}<div id="pv-text" class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;"></div><div style="text-align:right;color:#9b8cc0;font-size:11px;margin-top:4px;">點擊繼續 ▼</div>`}
           </div>`}
         </div>
         ${sfxTag}${fxOverlay}`;

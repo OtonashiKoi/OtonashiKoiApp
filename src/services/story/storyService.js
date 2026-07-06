@@ -26,7 +26,7 @@ const TEXT_SPEEDS = new Set(["slow", "normal", "fast"]);
 const SCREEN_FX = new Set(["", "shake", "flash", "fadeblack"]);
 const EXIT_SIDES = new Set(["left", "center", "right", "all"]); // 立繪退場位置
 const TEXT_SIZES = new Set(["small", "large"]); // 文字大小(空=標準)
-const TEXT_FX = new Set(["shake", "glow", "pulse", "wave"]); // 文字演出效果
+const TEXT_FX = new Set(["shake", "quake", "glow", "pulse", "wave"]); // 文字演出效果
 
 // 背景平移 {x,y}（background-position %，0~100）
 function sanitizeBgPos(v) {
