@@ -218,20 +218,24 @@ class StoryService {
       }
       const isDlg = n.type === "dialogue";
       const isPlayer = isDlg && isPlayerSpeaker(n); // 主角＝登入玩家 → 換 DC 名字+頭像立繪
-      const npc = (!isPlayer && n.npcId) ? npcOf[n.npcId] : null;
+      // 立繪來源可為怪物庫：npcId="mon:<id>" → 用怪物圖當立繪（與 NPC 立繪一樣獨立擺台）
+      const monId = (isDlg && !isPlayer && typeof n.npcId === "string" && n.npcId.startsWith("mon:")) ? n.npcId.slice(4) : null;
+      const mon = monId ? await getMonster(monId) : null;
+      const npc = (!isPlayer && !monId && n.npcId) ? npcOf[n.npcId] : null;
       // B1:表情差分 — 依 node.expression 從 NPC 的 expressions 取圖，取不到退回預設立繪
       const exprUrl = isPlayer
         ? (playerAvatarUrl || null)
-        : (isDlg && npc ? (resolveExpression(npc, n.expression) || npc.portraitUrl || null) : null);
+        : mon ? (mon.imageUrl || null)
+          : (isDlg && npc ? (resolveExpression(npc, n.expression) || npc.portraitUrl || null) : null);
       return {
         type: NODE_TYPES.has(n.type) ? n.type : "narration",
         text: fillPlayerName(n.text, playerName),
         side: n.side === "left" ? "left" : (n.side === "right" ? "right" : "center"), // 預設置中
-        // B2:舞台狀態要靠 npcId 判斷同角色；主角統一給 sentinel "player"
+        // B2:舞台狀態要靠 npcId 判斷同角色；主角統一給 sentinel "player"；怪物保留 "mon:<id>" 當識別碼
         npcId: isDlg ? (isPlayer ? PLAYER_NPC_ID : (n.npcId || null)) : null,
-        npcName: isDlg ? (isPlayer ? (playerName || "冒險者") : (n.nameOverride || npc?.name || "???")) : null,
+        npcName: isDlg ? (isPlayer ? (playerName || "冒險者") : (n.nameOverride || mon?.name || npc?.name || "???")) : null,
         npcPortraitUrl: exprUrl,
-        expression: (isDlg && !isPlayer) ? (n.expression || null) : null,
+        expression: (isDlg && !isPlayer && !mon) ? (n.expression || null) : null,
         portraitFx: isDlg ? (n.portraitFx || null) : null, // 立繪演出(彈入/晃動/…)
         ...common
       };

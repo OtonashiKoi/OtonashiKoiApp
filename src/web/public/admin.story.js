@@ -120,6 +120,10 @@
 
   // ── 狀態 ──
   let npcs = [], zones = [], chapters = [], monsters = [];
+  // 立繪來源可為 NPC 或「怪物庫」：怪物立繪把 npcId 存成 "mon:<怪物id>"，與人物立繪一樣獨立擺台、依地圖分類挑選。
+  const isMonRef = (id) => typeof id === "string" && id.startsWith("mon:");
+  const monOf = (id) => (isMonRef(id) ? (monsters.find((m) => m.id === id.slice(4)) || null) : null);
+  const zoneLabelOf = (k) => (zones.find((z) => z.key === k)?.label) || k || "其他";
   let editing = null;       // 編輯中的章節（working copy）
   let npcForm = null;       // 內嵌 NPC 表單
   const fxOpen = new Set(); // 展開「演出」的節點 index
@@ -484,8 +488,18 @@
   function renderChapterEditor() {
     const zoneOpts = ['<option value="">（不綁定地圖：純劇情章）</option>']
       .concat(zones.map((z) => `<option value="${esc(z.key)}" ${editing.zoneKey === z.key ? "selected" : ""}>${esc(z.label)}（${esc(z.key)}）</option>`)).join("");
-    const npcOpts = (sel) => ['<option value="">（選 NPC）</option>', `<option value="player" ${sel === "player" ? "selected" : ""}>🧑 玩家（主角，登入者DC名+頭像）</option>`]
-      .concat(orderedNpcs().map((n) => `<option value="${esc(n.id)}" ${sel === n.id ? "selected" : ""}>${esc(n.name)}</option>`)).join("");
+    const npcOpts = (sel) => {
+      const head = ['<option value="">（選 NPC / 怪物）</option>', `<option value="player" ${sel === "player" ? "selected" : ""}>🧑 玩家（主角，登入者DC名+頭像）</option>`]
+        .concat(orderedNpcs().map((n) => `<option value="${esc(n.id)}" ${sel === n.id ? "selected" : ""}>${esc(n.name)}</option>`)).join("");
+      // 怪物庫立繪：依地圖(zone)用 optgroup 分類，value 存 "mon:<id>"
+      const byZone = {};
+      monsters.forEach((m) => { const z = m.zone || "其他"; (byZone[z] = byZone[z] || []).push(m); });
+      const orderKeys = zones.map((z) => z.key).filter((k) => byZone[k]).concat(Object.keys(byZone).filter((k) => !zones.some((z) => z.key === k)));
+      const groups = orderKeys.map((zk) => `<optgroup label="🗺 ${esc(zoneLabelOf(zk))}">`
+        + byZone[zk].map((m) => { const v = "mon:" + m.id; return `<option value="${esc(v)}" ${sel === v ? "selected" : ""}>${m.isBoss ? "👑 " : "👹 "}${esc(m.name)}（Lv${m.level ?? "?"}）</option>`; }).join("")
+        + "</optgroup>").join("");
+      return head + groups;
+    };
     const monsterOpts = (sel) => ['<option value="">（選怪物）</option>']
       .concat(monsters.map((m) => `<option value="${esc(m.id)}" ${sel === m.id ? "selected" : ""}>${m.isBoss ? "👑 " : ""}${esc(m.name)}（${esc(m.zone || "?")} Lv${m.level ?? "?"}）</option>`)).join("");
     const typeBtn = (i, t, cur, label) => `<button type="button" class="button ${cur === t ? "primary" : ""}" data-node-settype="${i}" data-settype="${t}" style="padding:3px 10px;">${label}</button>`;
@@ -876,6 +890,7 @@
   // 立繪/背景位置解析（與正式閱讀器一致）：
   //   stagePos[side]={x,y}（相對立繪自身大小的 % 位移，跨節點沿用）；bgPos={x,y}（background-position %）
   function portraitUrlOfNode(nn) {
+    const mon = monOf(nn.npcId); if (mon) return mon.imageUrl || null; // 怪物立繪
     const npc = npcs.find((x) => x.id === nn.npcId);
     if (!npc) return null;
     const e = (npc.expressions || []).find((x) => x && x.name === nn.expression);
@@ -919,11 +934,11 @@
     let bg = chapterBg; for (let i = idx; i >= 0; i--) { if (nodes[i]?.backgroundUrl) { bg = nodes[i].backgroundUrl; break; } }
     const bgPos = bgPosAt(nodes, idx); // 背景平移(往回找最近設定)
     const exprUrl = (npc, name) => { const e = (npc?.expressions || []).find((x) => x && x.name === name); return e?.url || null; };
-    const nodePortrait = (nn) => { const npc = npcById[nn.npcId]; return exprUrl(npc, nn.expression) || npc?.portraitUrl || null; };
+    const nodePortrait = (nn) => { const m = monOf(nn.npcId); if (m) return m.imageUrl || null; const npc = npcById[nn.npcId]; return exprUrl(npc, nn.expression) || npc?.portraitUrl || null; };
     const st = stageAt(nodes, idx); // { side: {url,fx,pos} }（含位移，pos 跨節點沿用）
     const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
     const npc = isDlg ? npcById[n.npcId] : null;
-    const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || npc?.name || "???")) : "";
+    const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || monOf(n.npcId)?.name || npc?.name || "???")) : "";
     // 立繪：與玩家端 reader「完全相同」的排版(flex 佔滿舞台依 side 靠齊、max-height=舞台%、貼底、位移/縮放上 transform)
     // → 預覽=實際。✕/⤢ 握把不放這裡，改由 JS 依立繪實際框位置疊上去(見 attachPreviewDrag)。
     const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
@@ -1218,7 +1233,7 @@
     function curBg() { for (let i = idx; i >= 0; i--) { if (nodes[i]?.backgroundUrl) return nodes[i].backgroundUrl; } return chapterBg; }
     // B1:表情差分取圖  B2:重播算出台上立繪
     function exprUrl(npc, name) { const e = (npc?.expressions || []).find((x) => x && x.name === name); return e?.url || null; }
-    function nodePortrait(n) { const npc = npcById[n.npcId]; return (exprUrl(npc, n.expression) || npc?.portraitUrl || null); }
+    function nodePortrait(n) { const m = monOf(n.npcId); if (m) return m.imageUrl || null; const npc = npcById[n.npcId]; return (exprUrl(npc, n.expression) || npc?.portraitUrl || null); }
     function computeStage(upto) {
       const st = {};
       for (let i = 0; i <= upto; i++) { const n = nodes[i]; if (!n) continue; if (n.clearStage) Object.keys(st).forEach((k) => delete st[k]); if (n.exitSide === "all") Object.keys(st).forEach((k) => delete st[k]); else if (n.exitSide) delete st[n.exitSide]; if (n.type === "dialogue" && nodePortrait(n)) st[n.side || "center"] = { url: nodePortrait(n), fx: n.portraitFx }; }
@@ -1235,7 +1250,7 @@
       const bg = curBg();
       const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
       const npc = isDlg ? npcById[n.npcId] : null;
-      const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || npc?.name || "???")) : "";
+      const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || monOf(n.npcId)?.name || npc?.name || "???")) : "";
       const sfxTag = n.sfx ? `<div style="position:absolute;top:34px;right:10px;font-size:11px;color:#9b8cc0;z-index:6;">🔊 ${esc(n.sfx)}</div>` : "";
       // B2:台上立繪
       const st = computeStage(idx);
