@@ -176,7 +176,8 @@
     } catch (_) {}
   }
   // 圖庫選擇 modal
-  function pickAsset(kind, cb) {
+  async function pickAsset(kind, cb) {
+    await loadAssets().catch(() => {}); // 每次開圖庫都重抓最新，不看舊快取(地圖/去重才會即時反映)
     const list = storyAssets.filter((a) => !kind || a.kind === kind);
     const ov = document.createElement("div");
     ov.style.cssText = "position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:20px;";

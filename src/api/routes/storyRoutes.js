@@ -219,6 +219,9 @@ function createStoryRoutes(serviceContext, discordClient) {
       const url = String(req.body?.url || "").trim();
       const kind = String(req.body?.kind || "background").trim();
       if (!name || !url) return res.status(400).json(fail("INVALID_ARGUMENT", "name and url required"));
+      // 去重：同一 url+kind 已存在就直接回傳既有，不再新增（backfill/重載都不會再長重複）
+      const existing = await db.collection("storyAssets").findOne({ url, kind });
+      if (existing) { res.json(ok(existing, "asset exists")); return; }
       const doc = { id: require("crypto").randomUUID(), name, url, kind, createdAt: new Date().toISOString() };
       await db.collection("storyAssets").insertOne(doc);
       res.json(ok(doc, "asset saved"));
