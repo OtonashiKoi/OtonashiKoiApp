@@ -525,7 +525,7 @@
           ${typeBtn(i, "dialogue", n.type === "dialogue", "💬 對話")}
           ${typeBtn(i, "battle", n.type === "battle", "⚔️ 戰鬥")}
           ${typeBtn(i, "cg", n.type === "cg", "🖼 CG")}
-          ${n.type !== "battle" ? `<select data-node="${i}" data-field="textSize" title="文字大小(玩家端台詞字體)" style="padding:3px 6px;">${optionsHtml(TEXTSIZE_OPTS, n.textSize || "")}</select>` : ""}
+          ${n.type !== "battle" ? `<select data-node="${i}" data-field="textSize" title="文字大小(玩家端台詞字體)" style="width:84px;flex:0 0 auto;padding:2px 6px;font-size:12px;">${optionsHtml(TEXTSIZE_OPTS, n.textSize || "")}</select>` : ""}
           <span style="flex:1;"></span>
           <button class="button ${showFx ? "primary" : ""}" data-node-fx="${i}" style="padding:3px 8px;">🎬 演出${fxHint ? " " + fxHint : ""}</button>
           <button class="button" data-node-insert="${i}" style="padding:3px 8px;" title="下方插入同型節點">⤵</button>
