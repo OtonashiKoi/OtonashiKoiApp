@@ -899,8 +899,8 @@
   function buildStageHTML(nodes, idx, opts) {
     const ls = !!(opts && opts.landscape); // 橫向預覽：立繪更高更窄、對話框更矮
     const P = {
-      portMaxH: ls ? "82%" : "50%", portMaxW: ls ? "40%" : "50%",
-      phSquare: ls ? "116px" : "150px", // 玩家立繪佔位＝正方形(對應 DC 方形頭像)，約半窗
+      portW: ls ? "46%" : "58%",      // 立繪最大寬(相對舞台)，與玩家端 reader 一致
+      phH: ls ? "50%" : "40%",        // 玩家立繪佔位高度(相對舞台)，正方形
       portBottom: ls ? "2.6rem" : "5rem", boxMinH: ls ? "2.4rem" : "5rem"
     };
     const npcById = Object.fromEntries(npcs.map((n) => [n.id, n]));
@@ -915,24 +915,17 @@
     const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
     const npc = isDlg ? npcById[n.npcId] : null;
     const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || npc?.name || "???")) : "";
+    // 立繪：與玩家端 reader「完全相同」的排版(flex 佔滿舞台依 side 靠齊、max-height=舞台%、貼底、位移/縮放上 transform)
+    // → 預覽=實際。✕/⤢ 握把不放這裡，改由 JS 依立繪實際框位置疊上去(見 attachPreviewDrag)。
     const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
-      const baseLeft = side === "center" ? "left:50%;" : side === "right" ? "right:4%;" : "left:4%;";
-      const tx = side === "center" ? -50 : 0; const dx = p.pos?.x || 0, dy = p.pos?.y || 0, ps = p.pos?.s || 1;
+      const dx = p.pos?.x || 0, dy = p.pos?.y || 0, ps = p.pos?.s || 1;
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
-      // 主角(玩家)立繪：編輯器不知道誰登入，用佔位框標示「出現位置」，一樣可拖曳/✕移除；玩家端會換成 DC 頭像
-      const inner = p.player
-        ? `<div data-drag-portrait="${side}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:${P.phSquare};height:${P.phSquare};${dim}background:linear-gradient(180deg,rgba(196,167,245,.3),rgba(60,42,104,.45));border:2px dashed #c4a7f5;border-radius:14px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;box-sizing:border-box;"><div style="font-size:34px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:6px;white-space:nowrap;">玩家立繪</div></div>`
-        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:${P.portMaxH};max-width:${P.portMaxW};object-fit:contain;cursor:grab;touch-action:none;">`;
-      // 外層=位置(translate)；內層=縮放(scale)。✕/⤢ 掛在「內層角落」→ 跟著立繪縮放位置移動；
-      // 但各自反向縮放(scale 1/ps)→ 視覺大小恆定不變。這樣放大縮小握把都貼在角色角上、不會跑掉。
-      const inv = Math.round((1 / ps) * 1000) / 1000;
-      return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:${P.portBottom};${baseLeft}transform:translate(calc(${tx}% + ${dx}%), ${dy}%);z-index:${speaking ? 3 : 1};line-height:0;">
-        <div data-portrait-scale style="position:relative;display:inline-block;transform:scale(${ps});transform-origin:bottom center;">
-          ${inner}
-          <button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:0;right:0;transform:scale(${inv});transform-origin:top right;width:26px;height:26px;border-radius:50%;background:#ff5577;color:#fff;border:2px solid #1a1030;font-size:15px;line-height:22px;text-align:center;cursor:pointer;z-index:7;padding:0;box-shadow:0 1px 6px rgba(0,0,0,.6);">✕</button>
-          <div data-resize-portrait="${side}" title="拉動改變大小" style="position:absolute;top:0;left:0;transform:scale(${inv});transform-origin:top left;width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:22px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:7;box-shadow:0 1px 6px rgba(0,0,0,.6);">⤢</div>
-        </div>
-      </div>`;
+      const justify = side === "center" ? "center" : side === "right" ? "flex-end" : "flex-start";
+      const tf = `transform:translate(${dx}%, ${dy}%) scale(${ps});transform-origin:bottom center;`;
+      const el = p.player
+        ? `<div data-drag-portrait="${side}" style="height:${P.phH};aspect-ratio:1;box-sizing:border-box;${dim}${tf}display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(196,167,245,.3),rgba(60,42,104,.45));border:2px dashed #c4a7f5;border-radius:14px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;pointer-events:auto;"><div style="font-size:34px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:6px;white-space:nowrap;">玩家立繪</div></div>`
+        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="max-height:100%;max-width:${P.portW};flex:0 0 auto;${dim}${tf}cursor:grab;touch-action:none;pointer-events:auto;">`;
+      return `<div data-portrait-side="${side}" style="position:absolute;left:3%;right:3%;top:0;bottom:${P.portBottom};display:flex;align-items:flex-end;justify-content:${justify};z-index:${speaking ? 3 : 1};pointer-events:none;">${el}</div>`;
     }).join("");
     const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
     const noBox = isCG && !String(n.text || "").trim();
@@ -1020,50 +1013,80 @@
   function attachPreviewDrag(panel, idx) {
     const stage = panel.querySelector(".st-stage"); if (!stage) return;
     const node = () => editing && editing.nodes && editing.nodes[idx];
+
+    // ── ✕(移除)/⤢(改大小) 握把：疊在舞台上、依立繪「實際框」定位、固定大小(不隨縮放)。
+    function positionHandles() {
+      const sr = stage.getBoundingClientRect();
+      stage.querySelectorAll("[data-drag-portrait]").forEach((el) => {
+        if (!el._rm) return;
+        const r = el.getBoundingClientRect();
+        const top = Math.max(2, r.top - sr.top + 2); // 貼在立繪內側上緣，避免被舞台 overflow 切掉
+        el._rm.style.left = (r.right - sr.left - 28) + "px"; el._rm.style.top = top + "px";
+        el._rz.style.left = (r.left - sr.left + 2) + "px"; el._rz.style.top = top + "px";
+      });
+    }
+    function doRemove(side) {
+      const nd = node(); if (!nd) return;
+      pushUndo();
+      if (nd.exitSide === side) nd.exitSide = null;
+      else if (!nd.exitSide) nd.exitSide = side;
+      else nd.exitSide = "all";
+      writeDraft(); render(); renderLivePreview();
+    }
+    function makeHandles() {
+      stage.querySelectorAll(".st-phandle").forEach((h) => h.remove());
+      stage.querySelectorAll("[data-drag-portrait]").forEach((el) => {
+        const side = el.getAttribute("data-drag-portrait");
+        const rm = document.createElement("button"); rm.className = "st-phandle"; rm.textContent = "✕"; rm.title = "移除此立繪(從這句起退場)";
+        rm.style.cssText = "position:absolute;width:26px;height:26px;border-radius:50%;background:#ff5577;color:#fff;border:2px solid #1a1030;font-size:15px;line-height:22px;text-align:center;cursor:pointer;z-index:8;padding:0;box-shadow:0 1px 6px rgba(0,0,0,.6);";
+        const rz = document.createElement("div"); rz.className = "st-phandle"; rz.textContent = "⤢"; rz.title = "拉動改變大小(往上放大)";
+        rz.style.cssText = "position:absolute;width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:22px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:8;box-shadow:0 1px 6px rgba(0,0,0,.6);";
+        stage.appendChild(rm); stage.appendChild(rz); el._rm = rm; el._rz = rz;
+        rm.addEventListener("pointerdown", (e) => e.stopPropagation());
+        rm.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); doRemove(side); });
+        rz.addEventListener("pointerdown", (e) => onDown(e, "presize", side, el));
+        if (el.tagName === "IMG" && !el.complete) el.addEventListener("load", positionHandles, { once: true });
+      });
+      positionHandles();
+    }
+
     let drag = null;
     const onDown = (e, kind, side, el) => {
       const nd = node(); if (!nd) return;
       e.preventDefault(); e.stopPropagation();
-      pushUndo(); // 拉動前存快照
-      if (kind === "presize") {                       // 立繪：拉動改大小
-        const scaleEl = el.parentElement; // ⤢ 是 scale div 的直接子元素
+      pushUndo();
+      if (kind === "presize") {                       // 立繪縮放
         const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || { x: 0, y: 0 };
         nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = { x: base.x || 0, y: base.y || 0, s: base.s || 1 };
-        drag = { kind, side, scaleEl, sy: e.clientY, base: { ...base } };
-      } else if (kind === "lresize") {                // 背景/CG：拉動改大小(side=欄位名)
+        drag = { kind, side, el, sy: e.clientY, base: { ...base } };
+      } else if (kind === "lresize") {                // 背景/CG 縮放
         const field = side, layer = stage.querySelector(field === "bgPos" ? "[data-drag-bg]" : "[data-drag-cg]");
         const base = nd[field] || (field === "cgPos" ? { x: 50, y: 50 } : (bgPosAt(editing.nodes, idx) || { x: 50, y: 50 }));
         nd[field] = { x: base.x, y: base.y, z: base.z || 1 };
         drag = { kind, field, layer, sy: e.clientY, base: { ...base } };
-      } else if (kind === "bg" || kind === "cg") {    // 背景/CG：拉動移動位置
+      } else if (kind === "bg" || kind === "cg") {    // 背景/CG 移動
         const field = kind === "cg" ? "cgPos" : "bgPos";
         const base = (kind === "cg" ? nd.cgPos : bgPosAt(editing.nodes, idx)) || { x: 50, y: 50 };
         nd[field] = base.z ? { x: base.x, y: base.y, z: base.z } : { x: base.x, y: base.y };
         drag = { kind, field, el, sx: e.clientX, sy: e.clientY, base: { ...base }, sw: stage.clientWidth || 288, sh: stage.clientHeight || 512 };
-      } else {                                        // 立繪：拉動移動位置
+      } else {                                        // 立繪移動
         const base = effectivePortraitPos(editing.nodes, idx, side);
         nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = base.s ? { x: base.x, y: base.y, s: base.s } : { x: base.x, y: base.y };
-        const r = el.getBoundingClientRect();
-        drag = { kind, side, el, wrap: el.parentElement && el.parentElement.parentElement, sx: e.clientX, sy: e.clientY, base: { ...base }, ow: r.width || 1, oh: r.height || 1, tx: side === "center" ? -50 : 0 };
+        const r = el.getBoundingClientRect(), s = base.s || 1;
+        drag = { kind: "portrait", side, el, sx: e.clientX, sy: e.clientY, base: { ...base }, ow: (r.width || 1) / s, oh: (r.height || 1) / s };
       }
-      el.style.cursor = kind === "presize" || kind === "lresize" ? "nwse-resize" : "grabbing";
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
     };
     const onMove = (e) => {
       if (!drag) return; const nd = node(); if (!nd) return;
       const ddx = e.clientX - drag.sx, ddy = e.clientY - drag.sy;
-      if (drag.kind === "presize") {                  // 立繪縮放：往上拉放大
-        const dy = e.clientY - drag.sy;
-        const s = Math.max(0.3, Math.min(3, Math.round(((drag.base.s || 1) - dy / 160) * 100) / 100));
+      if (drag.kind === "presize") {
+        const s = Math.max(0.3, Math.min(3, Math.round(((drag.base.s || 1) - (e.clientY - drag.sy) / 160) * 100) / 100));
         nd.stagePos[drag.side] = { x: drag.base.x || 0, y: drag.base.y || 0, s };
-        if (drag.scaleEl) {
-          drag.scaleEl.style.transformOrigin = "bottom center"; drag.scaleEl.style.transform = `scale(${s})`;
-          const inv = Math.round((1 / s) * 1000) / 1000; // 握把反向縮放→視覺大小恆定、位置貼角
-          drag.scaleEl.querySelectorAll("[data-remove-portrait],[data-resize-portrait]").forEach((h) => { h.style.transform = `scale(${inv})`; });
-        }
-      } else if (drag.kind === "lresize") {            // 背景/CG 縮放
-        const dy = e.clientY - drag.sy;
-        const z = Math.max(0.5, Math.min(3, Math.round(((drag.base.z || 1) - dy / 220) * 100) / 100));
+        drag.el.style.transform = `translate(${drag.base.x || 0}%, ${drag.base.y || 0}%) scale(${s})`;
+        positionHandles();
+      } else if (drag.kind === "lresize") {
+        const z = Math.max(0.5, Math.min(3, Math.round(((drag.base.z || 1) - (e.clientY - drag.sy) / 220) * 100) / 100));
         nd[drag.field] = { x: drag.base.x, y: drag.base.y, z };
         if (drag.layer) { drag.layer.style.transformOrigin = "center"; drag.layer.style.transform = `scale(${z})`; }
       } else if (drag.kind === "bg" || drag.kind === "cg") {
@@ -1071,12 +1094,13 @@
         const y = Math.max(0, Math.min(100, Math.round(drag.base.y - ddy / drag.sh * 100)));
         nd[drag.field] = drag.base.z ? { x, y, z: drag.base.z } : { x, y };
         drag.el.style.backgroundPosition = `${x}% ${y}%`;
-      } else {
+      } else {                                        // 立繪移動
         const x = Math.round(drag.base.x + ddx / drag.ow * 100);
         const y = Math.round(drag.base.y + ddy / drag.oh * 100);
         const s = drag.base.s || 1;
         nd.stagePos[drag.side] = s !== 1 ? { x, y, s } : { x, y };
-        if (drag.wrap) drag.wrap.style.transform = `translate(calc(${drag.tx}% + ${x}%), ${y}%)`;
+        drag.el.style.transform = `translate(${x}%, ${y}%) scale(${s})`;
+        positionHandles();
       }
     };
     const onUp = () => { if (!drag) return; drag = null; writeDraft(); renderLivePreview(); };
@@ -1084,26 +1108,12 @@
     stage.querySelectorAll("[data-drag-bg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "bg", null, el)));
     stage.querySelectorAll("[data-drag-cg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "cg", null, el)));
     stage.querySelectorAll("[data-drag-portrait]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "portrait", el.getAttribute("data-drag-portrait"), el)));
-    stage.querySelectorAll("[data-resize-portrait]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "presize", el.getAttribute("data-resize-portrait"), el)));
     stage.querySelectorAll("[data-resize-bg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "lresize", "bgPos", el)));
     stage.querySelectorAll("[data-resize-cg]").forEach((el) => el.addEventListener("pointerdown", (e) => onDown(e, "lresize", "cgPos", el)));
-    // ✕ 直觀移除立繪：把該側設為退場（從這句起消失）；再點同側可取消，點到不同側→全部退場
-    stage.querySelectorAll("[data-remove-portrait]").forEach((b) => {
-      b.addEventListener("pointerdown", (e) => e.stopPropagation());
-      b.addEventListener("click", (e) => {
-        e.stopPropagation(); e.preventDefault();
-        const nd = node(); if (!nd) return;
-        const s = b.getAttribute("data-remove-portrait");
-        pushUndo();
-        if (nd.exitSide === s) nd.exitSide = null;
-        else if (!nd.exitSide) nd.exitSide = s;
-        else nd.exitSide = "all";
-        writeDraft(); render(); renderLivePreview();
-      });
-    });
     stage.addEventListener("pointermove", onMove);
     stage.addEventListener("pointerup", onUp);
     stage.addEventListener("pointercancel", onUp);
+    makeHandles();
   }
 
   // ── 本章預覽 modal ──
