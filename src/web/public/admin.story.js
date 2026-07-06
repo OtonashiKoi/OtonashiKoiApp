@@ -822,7 +822,12 @@
       if (e.key === "Tab") {
         const i = Number(ta.dataset.node);
         const target = root.querySelector(`textarea[data-node="${e.shiftKey ? i - 1 : i + 1}"][data-field="text"]`);
-        if (target) { e.preventDefault(); target.focus(); const v = target.value; try { target.setSelectionRange(v.length, v.length); } catch (_) {} }
+        if (target) {
+          e.preventDefault();
+          target.focus({ preventScroll: true });
+          const v = target.value; try { target.setSelectionRange(v.length, v.length); } catch (_) {}
+          try { target.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) { target.scrollIntoView(); }
+        }
         return;
       }
       if (!(e.key === "Enter" && (e.ctrlKey || e.metaKey))) return;
