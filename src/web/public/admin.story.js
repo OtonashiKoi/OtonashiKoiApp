@@ -893,7 +893,13 @@
   // 拉動起始位置（沿用當前實際顯示的位移，避免第一下跳位）
   function effectivePortraitPos(nodes, idx, side) { const st = stageAt(nodes, idx); return (st[side] && st[side].pos) || { x: 0, y: 0 }; }
 
-  function buildStageHTML(nodes, idx) {
+  function buildStageHTML(nodes, idx, opts) {
+    const ls = !!(opts && opts.landscape); // 橫向預覽：立繪更高更窄、對話框更矮
+    const P = {
+      portMaxH: ls ? "82%" : "50%", portMaxW: ls ? "40%" : "50%",
+      phW: ls ? "24%" : "40%", phH: ls ? "76%" : "40%",
+      portBottom: ls ? "2.6rem" : "5rem", boxMinH: ls ? "2.4rem" : "5rem"
+    };
     const npcById = Object.fromEntries(npcs.map((n) => [n.id, n]));
     const chapterBg = editing?.backgroundUrl || (editing?.zoneKey ? `/uploads/zones/${editing.zoneKey}.webp` : null);
     const n = nodes[idx];
@@ -913,10 +919,10 @@
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
       // 主角(玩家)立繪：編輯器不知道誰登入，用佔位框標示「出現位置」，一樣可拖曳/✕移除；玩家端會換成 DC 頭像
       const inner = p.player
-        ? `<div data-drag-portrait="${side}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:120px;height:200px;${dim}background:linear-gradient(180deg,rgba(196,167,245,.28),rgba(60,42,104,.4));border:2px dashed #c4a7f5;border-radius:12px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;"><div style="font-size:36px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:4px;">玩家立繪</div><div style="font-size:9px;opacity:.8;">(登入者 DC 頭像)</div></div>`
-        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:256px;max-width:144px;object-fit:contain;cursor:grab;touch-action:none;">`;
+        ? `<div data-drag-portrait="${side}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:${P.phW};height:${P.phH};${dim}background:linear-gradient(180deg,rgba(196,167,245,.28),rgba(60,42,104,.4));border:2px dashed #c4a7f5;border-radius:12px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;"><div style="font-size:30px;line-height:1;">🧑</div><div style="font-size:10px;font-weight:900;margin-top:4px;">玩家立繪</div></div>`
+        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:${P.portMaxH};max-width:${P.portMaxW};object-fit:contain;cursor:grab;touch-action:none;">`;
       // 每個立繪一個 wrapper：內含可拖曳的圖/佔位 + 右上角 ✕ 移除鈕（直觀退場）
-      return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:5rem;${baseLeft}${transform}z-index:${speaking ? 3 : 1};">
+      return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:${P.portBottom};${baseLeft}${transform}z-index:${speaking ? 3 : 1};">
         ${inner}
         ${speaking ? "" : `<button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:#ff5577;color:#fff;border:1.5px solid #1a1030;font-size:12px;line-height:1;cursor:pointer;z-index:6;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.5);">✕</button>`}
       </div>`;
@@ -939,7 +945,7 @@
         ${cgHtml}${portraitsHtml}
         ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
-        <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:5rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
+        <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:${ls ? "7px 10px" : "12px"};min-height:${P.boxMinH};background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
           ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div>`
             : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;font-size:14px;margin-bottom:4px;">${esc(name)}</div>` : ""}<div class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
         </div>`}
@@ -973,8 +979,11 @@
       <div style="font-size:11px;color:#c4a7f5;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
         <span>👁 即時預覽 · #${idx + 1}</span><button class="button" id="story-live-hide" style="padding:1px 7px;">✕ 收起</button>
       </div>
-      <div class="st-stage" style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx)}</div>
-      <p class="hint" style="margin:4px 0 0;font-size:10px;">🖐 拖曳背景／立繪調整位置；立繪右上角 ✕ ＝移除該角色（從這句起退場）；放開自動存，Ctrl+Z 復原</p>`;
+      <div style="font-size:10px;color:#8b93b8;margin-bottom:2px;">📱 直式（手機預設）</div>
+      <div class="st-stage" style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: false })}</div>
+      <p class="hint" style="margin:4px 0 0;font-size:10px;">🖐 拖曳背景／立繪調整位置；立繪右上角 ✕ ＝移除該角色（從這句起退場）；放開自動存，Ctrl+Z 復原</p>
+      <div style="font-size:10px;color:#8b93b8;margin:8px 0 2px;">🖥 橫式（網頁／手機橫放全螢幕）</div>
+      <div style="position:relative;width:288px;height:150px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: true })}</div>`;
     panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
     attachPreviewDrag(panel, idx);
 
