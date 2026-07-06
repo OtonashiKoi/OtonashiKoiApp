@@ -119,6 +119,21 @@ class StoryService {
   // ── 玩家端 ──
 
   /** 章節清單（不含 nodes 內文，供目錄頁）。 */
+  // 登入時預先下載用：所有啟用章節會用到的背景/CG 圖 + BGM 曲目 key（去重）
+  async listPreloadAssets() {
+    const chapters = await this._enabledChapters();
+    const images = new Set(), bgm = new Set();
+    for (const ch of chapters) {
+      if (ch.backgroundUrl) images.add(ch.backgroundUrl);
+      for (const n of (Array.isArray(ch.nodes) ? ch.nodes : [])) {
+        if (n.backgroundUrl) images.add(n.backgroundUrl);
+        if (n.cgUrl) images.add(n.cgUrl);
+        if (n.bgm && n.bgm !== "silence" && n.bgm !== "zone") bgm.add(n.bgm);
+      }
+    }
+    return { images: Array.from(images), bgm: Array.from(bgm) };
+  }
+
   async listChaptersForPlayer(discordId) {
     const [chapters, progress] = await Promise.all([
       this._enabledChapters(),

@@ -53,6 +53,13 @@ function createStoryRoutes(serviceContext, discordClient) {
     } catch (error) { next(error); }
   });
 
+  // 登入時預抓：回傳劇情會用到的背景/CG 圖 + BGM 曲目 key，前端背景預先下載
+  router.get("/api/story/preload", requireAuth, async (req, res, next) => {
+    try {
+      res.json(ok(await storyService.listPreloadAssets(), "story preload assets"));
+    } catch (error) { next(error); }
+  });
+
   router.get("/api/story/chapters/:id", requireAuth, async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
