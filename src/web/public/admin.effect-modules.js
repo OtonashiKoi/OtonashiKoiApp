@@ -411,13 +411,17 @@
       const data = await fetchJson('/admin/effect-modules');
       modules = Array.isArray(data) ? data : [];
       renderList();
-    }catch(e){ alert('載入模組失敗：'+e.message); }
+    }catch(e){
+      // 未登入(密碼錯/401)時不彈窗打擾；其餘錯誤才提示
+      if (/password|401|unauthor/i.test(String(e && e.message))) { return; }
+      alert('載入模組失敗：'+e.message);
+    }
   }
 
   newBtn.onclick = ()=> openEditor(null);
   refreshBtn.onclick = ()=> loadModules();
 
-  // initial load
-  setTimeout(()=>{ if (document.readyState === 'complete') loadModules(); else window.addEventListener('load', loadModules); },0);
+  // 等後台登入成功(adminConnected)才載入，避免未輸入密碼時跳「Invalid admin password」
+  document.addEventListener('adminConnected', loadModules);
 
 })();
