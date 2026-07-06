@@ -826,7 +826,7 @@
           e.preventDefault();
           target.focus({ preventScroll: true });
           const v = target.value; try { target.setSelectionRange(v.length, v.length); } catch (_) {}
-          try { target.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) { target.scrollIntoView(); }
+          try { target.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_) { target.scrollIntoView(); }
         }
         return;
       }
