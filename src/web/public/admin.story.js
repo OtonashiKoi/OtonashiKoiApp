@@ -818,6 +818,13 @@
     root.querySelectorAll('select[data-field="npcId"]').forEach((sel) => sel.addEventListener("change", () => { syncEditingFromDom(); render(); }));
     // Ctrl+Enter＝下方接一句（同型、同角色）
     root.querySelectorAll("textarea[data-node][data-field='text']").forEach((ta) => ta.addEventListener("keydown", (e) => {
+      // Tab：跳到下一句的文字框（Shift+Tab 跳上一句）；沒有就維持原生行為
+      if (e.key === "Tab") {
+        const i = Number(ta.dataset.node);
+        const target = root.querySelector(`textarea[data-node="${e.shiftKey ? i - 1 : i + 1}"][data-field="text"]`);
+        if (target) { e.preventDefault(); target.focus(); const v = target.value; try { target.setSelectionRange(v.length, v.length); } catch (_) {} }
+        return;
+      }
       if (!(e.key === "Enter" && (e.ctrlKey || e.metaKey))) return;
       e.preventDefault();
       syncEditingFromDom(); pushUndo();
