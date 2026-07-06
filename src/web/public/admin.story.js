@@ -145,7 +145,7 @@
 
   // ── 劇情圖庫：上傳一次命名，之後直接選 ──
   let storyAssets = [];
-  async function loadAssets() { try { storyAssets = (await fetchJSON("/admin/story/assets")) || []; } catch (_) { storyAssets = []; } }
+  async function loadAssets() { try { storyAssets = (await fetchJSON("/admin/story/assets", { headers: headers() })) || []; } catch (_) { storyAssets = []; } }
   async function saveAsset(name, url, kind) {
     if (!url) return null;
     if (storyAssets.some((a) => a.url === url && a.kind === kind)) return null; // 已在圖庫→不重複存
