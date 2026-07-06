@@ -906,7 +906,8 @@
   function buildStageHTML(nodes, idx, opts) {
     const ls = !!(opts && opts.landscape); // 橫向預覽：立繪更高更窄、對話框更矮
     const P = {
-      portW: ls ? "46%" : "58%",      // 立繪最大寬(相對舞台)，與玩家端 reader 一致
+      portW: ls ? "40%" : "58%",      // 立繪最大寬(相對舞台)，與玩家端 reader 一致
+      portH: ls ? "78%" : "100%",     // 立繪最大高：橫式限高留頭頂空間，避免頂到上緣被切
       phH: ls ? "50%" : "40%",        // 玩家立繪佔位高度(相對舞台)，正方形
       portBottom: ls ? "2.6rem" : "5rem", boxMinH: ls ? "2.4rem" : "5rem"
     };
@@ -932,7 +933,7 @@
       const tf = `transform:scale(${ps});transform-origin:bottom center;`;
       const el = p.player
         ? `<div data-drag-portrait="${side}" style="height:${P.phH};aspect-ratio:1;box-sizing:border-box;${dim}${tf}display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(196,167,245,.3),rgba(60,42,104,.45));border:2px dashed #c4a7f5;border-radius:14px;color:#efe7ff;cursor:ns-resize;touch-action:none;text-align:center;pointer-events:auto;"><div style="font-size:34px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:6px;white-space:nowrap;">玩家立繪</div></div>`
-        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="max-height:100%;max-width:${P.portW};flex:0 0 auto;${dim}${tf}cursor:ns-resize;touch-action:none;pointer-events:auto;">`;
+        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="max-height:${P.portH};max-width:${P.portW};flex:0 0 auto;${dim}${tf}cursor:ns-resize;touch-action:none;pointer-events:auto;">`;
       return `<div data-portrait-side="${side}" style="position:absolute;left:3%;right:3%;top:0;bottom:${P.portBottom};display:flex;align-items:flex-end;justify-content:${justify};z-index:${speaking ? 3 : 1};pointer-events:none;${oy ? `transform:translateY(${oy}%);` : ""}">${el}</div>`;
     }).join("");
     const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
