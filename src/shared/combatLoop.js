@@ -3024,8 +3024,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
 
           if (mHp <= 0) { comboKilled = true; break; }
-          // 下一次連擊機率遞減為前一次的 1/3（例：30% → 10% → 3.33% → 1.11%…）
-          comboChance = comboChance / 3;
+          // 下一次連擊機率遞減為前一次的 1/2（例：30% → 15% → 7.5% → 3.75%…）
+          comboChance = comboChance / 2;
         }
 
         if (comboKilled) { outcome = "win"; break; }

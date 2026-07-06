@@ -59,6 +59,8 @@
   const SIDE_OPTS = [["left", "⬅️ 左"], ["center", "⏺️ 中"], ["right", "➡️ 右"]];
   // 退場：進此節點時把某位置的立繪移除（換人/角色離場用）；all＝全部移除
   const EXIT_OPTS = [["", "🚪 退場（無）"], ["left", "🚪 左退場"], ["center", "🚪 中退場"], ["right", "🚪 右退場"], ["all", "🚪 全部退場"]];
+  // 文字大小（玩家端台詞字體）：空＝標準
+  const TEXTSIZE_OPTS = [["", "🔤 標準"], ["small", "🔡 小"], ["large", "🔠 大"]];
   const FX_OPTS = [
     ["", "立繪演出（預設淡入）"], ["pop", "💥 彈入"], ["shake", "🫨 晃動"],
     ["bounce", "⤴️ 彈跳"], ["pulse", "💗 脈動"], ["dim", "🌑 變暗(背景角色)"]
@@ -523,6 +525,7 @@
           ${typeBtn(i, "dialogue", n.type === "dialogue", "💬 對話")}
           ${typeBtn(i, "battle", n.type === "battle", "⚔️ 戰鬥")}
           ${typeBtn(i, "cg", n.type === "cg", "🖼 CG")}
+          ${n.type !== "battle" ? `<select data-node="${i}" data-field="textSize" title="文字大小(玩家端台詞字體)" style="padding:3px 6px;">${optionsHtml(TEXTSIZE_OPTS, n.textSize || "")}</select>` : ""}
           <span style="flex:1;"></span>
           <button class="button ${showFx ? "primary" : ""}" data-node-fx="${i}" style="padding:3px 8px;">🎬 演出${fxHint ? " " + fxHint : ""}</button>
           <button class="button" data-node-insert="${i}" style="padding:3px 8px;" title="下方插入同型節點">⤵</button>
@@ -911,7 +914,7 @@
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
         <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:5rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
           ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div>`
-            : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
+            : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
         </div>`}
         ${fxOverlay}
       </div>`;
@@ -1100,7 +1103,7 @@
           <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:6rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
             ${isBattle
               ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥${n.mustWin !== false ? "（必勝）" : ""}</div><div style="text-align:center;color:#f3ecff;font-weight:900;margin-top:4px;">${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div><div class="hint" style="text-align:center;margin-top:6px;">（預覽不實際戰鬥）點擊繼續 ▶</div>`
-              : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div id="pv-text" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}line-height:1.6;white-space:pre-wrap;"></div><div style="text-align:right;color:#9b8cc0;font-size:11px;margin-top:4px;">點擊繼續 ▼</div>`}
+              : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;margin-bottom:4px;">${esc(name)}</div>` : ""}<div id="pv-text" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;"></div><div style="text-align:right;color:#9b8cc0;font-size:11px;margin-top:4px;">點擊繼續 ▼</div>`}
           </div>`}
         </div>
         ${sfxTag}${fxOverlay}`;
