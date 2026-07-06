@@ -122,7 +122,11 @@ function createStoryRoutes(serviceContext, discordClient) {
         finalPlayerHp: result.finalPlayerHp,
         playerMaxHp: pStats.maxHp,
         monster: { name: monster.name, imageUrl: monster.imageUrl || null, maxHp: monster.calc.maxHp },
-        finalMonsterHp: result.finalMonsterHp
+        finalMonsterHp: result.finalMonsterHp,
+        // 動畫戰鬥場景用：玩家名/頭像/武器種類(打擊音效)
+        playerName: req.playerRecord.displayName || "我",
+        playerAvatarUrl: await playerAvatarUrl(discordId).catch(() => null),
+        weaponType: equipped?.weapon?.weaponType || null
       }, "story battle resolved"));
     } catch (error) { next(error); }
   });
