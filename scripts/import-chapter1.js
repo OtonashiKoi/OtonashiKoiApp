@@ -85,7 +85,7 @@ const NPC_DEFS = [
     { id: CHAPTER_ID },
     {
       $set: {
-        id: CHAPTER_ID, order: 1, zoneKey: null, title: "第一章", enabled: true, isPrologue: false,
+        id: CHAPTER_ID, order: 1, zoneKey: "beginner", title: "第一章", enabled: true, isPrologue: false,
         backgroundUrl: null, scriptDraft: "", nodes, updatedAt: new Date().toISOString()
       },
       $setOnInsert: { createdAt: new Date().toISOString() }
