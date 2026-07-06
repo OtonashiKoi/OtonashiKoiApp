@@ -918,16 +918,15 @@
     const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
       const baseLeft = side === "center" ? "left:50%;" : side === "right" ? "right:4%;" : "left:4%;";
       const tx = side === "center" ? -50 : 0; const dx = p.pos?.x || 0, dy = p.pos?.y || 0, ps = p.pos?.s || 1;
-      const transform = `transform:translate(calc(${tx}% + ${dx}%), ${dy}%) scale(${ps});transform-origin:bottom center;`;
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
       // 主角(玩家)立繪：編輯器不知道誰登入，用佔位框標示「出現位置」，一樣可拖曳/✕移除；玩家端會換成 DC 頭像
       const inner = p.player
         ? `<div data-drag-portrait="${side}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:${P.phW};height:${P.phH};${dim}background:linear-gradient(180deg,rgba(196,167,245,.28),rgba(60,42,104,.4));border:2px dashed #c4a7f5;border-radius:12px;color:#efe7ff;cursor:grab;touch-action:none;text-align:center;"><div style="font-size:30px;line-height:1;">🧑</div><div style="font-size:10px;font-weight:900;margin-top:4px;">玩家立繪</div></div>`
         : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="display:block;${dim}max-height:${P.portMaxH};max-width:${P.portMaxW};object-fit:contain;cursor:grab;touch-action:none;">`;
-      // 每個立繪一個 wrapper：內含可拖曳的圖/佔位 + 右上角 ✕ 移除鈕（直觀退場）
-      return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:${P.portBottom};${baseLeft}${transform}z-index:${speaking ? 3 : 1};">
-        ${inner}
-        ${speaking ? "" : `<button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:#ff5577;color:#fff;border:1.5px solid #1a1030;font-size:12px;line-height:1;cursor:pointer;z-index:6;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.5);">✕</button>`}
+      // 外層 wrapper=位置(translate)；內層=縮放(scale)；✕ 掛在外層(不隨立繪縮放，恆定大小)
+      return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:${P.portBottom};${baseLeft}transform:translate(calc(${tx}% + ${dx}%), ${dy}%);z-index:${speaking ? 3 : 1};">
+        <div data-portrait-scale style="transform:scale(${ps});transform-origin:bottom center;">${inner}</div>
+        ${speaking ? "" : `<button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:-12px;right:-12px;width:26px;height:26px;border-radius:50%;background:#ff5577;color:#fff;border:2px solid #1a1030;font-size:15px;line-height:1;cursor:pointer;z-index:6;padding:0;box-shadow:0 1px 6px rgba(0,0,0,.6);">✕</button>`}
       </div>`;
     }).join("");
     const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
@@ -1023,13 +1022,13 @@
       if (kind === "bg" || kind === "cg") {
         const field = kind === "cg" ? "cgPos" : "bgPos";
         const base = (kind === "cg" ? nd.cgPos : bgPosAt(editing.nodes, idx)) || { x: 50, y: 50 };
-        nd[field] = { x: base.x, y: base.y };
+        nd[field] = base.z ? { x: base.x, y: base.y, z: base.z } : { x: base.x, y: base.y };
         drag = { kind, field, el, sx: e.clientX, sy: e.clientY, base: { ...base }, sw: stage.clientWidth || 288, sh: stage.clientHeight || 512 };
       } else {
         const base = effectivePortraitPos(editing.nodes, idx, side);
-        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = { x: base.x, y: base.y };
+        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = base.s ? { x: base.x, y: base.y, s: base.s } : { x: base.x, y: base.y };
         const r = el.getBoundingClientRect();
-        drag = { kind, side, el, wrap: el.parentElement, sx: e.clientX, sy: e.clientY, base: { ...base }, ow: r.width || 1, oh: r.height || 1, tx: side === "center" ? -50 : 0 };
+        drag = { kind, side, el, wrap: el.parentElement && el.parentElement.parentElement, sx: e.clientX, sy: e.clientY, base: { ...base }, ow: r.width || 1, oh: r.height || 1, tx: side === "center" ? -50 : 0 };
       }
       el.style.cursor = "grabbing";
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
@@ -1046,8 +1045,8 @@
         const x = Math.round(drag.base.x + ddx / drag.ow * 100);
         const y = Math.round(drag.base.y + ddy / drag.oh * 100);
         const s = drag.base.s || 1;
-        nd.stagePos[drag.side] = s !== 1 ? { x, y, s } : { x, y }; // 保留縮放
-        if (drag.wrap) { drag.wrap.style.transformOrigin = "bottom center"; drag.wrap.style.transform = `translate(calc(${drag.tx}% + ${x}%), ${y}%) scale(${s})`; }
+        nd.stagePos[drag.side] = s !== 1 ? { x, y, s } : { x, y }; // 保留縮放(縮放在內層 scale div，這裡只動外層位置)
+        if (drag.wrap) drag.wrap.style.transform = `translate(calc(${drag.tx}% + ${x}%), ${y}%)`;
       }
     };
     const onUp = () => { if (!drag) return; drag = null; writeDraft(); renderLivePreview(); };
@@ -1063,8 +1062,8 @@
         const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || { x: 0, y: 0 };
         const s = Math.max(0.3, Math.min(3, Math.round(((base.s || 1) + step) * 100) / 100));
         nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = { x: base.x || 0, y: base.y || 0, s };
-        const wrap = el.parentElement, tx = side === "center" ? -50 : 0;
-        if (wrap) { wrap.style.transformOrigin = "bottom center"; wrap.style.transform = `translate(calc(${tx}% + ${nd.stagePos[side].x}%), ${nd.stagePos[side].y}%) scale(${s})`; }
+        const scaleEl = el.parentElement; // 內層 scale div（縮放放這，✕ 在外層不受影響）
+        if (scaleEl) { scaleEl.style.transformOrigin = "bottom center"; scaleEl.style.transform = `scale(${s})`; }
       } else {
         const field = kind === "cg" ? "cgPos" : "bgPos";
         const base = nd[field] || (kind === "cg" ? { x: 50, y: 50 } : (bgPosAt(editing.nodes, idx) || { x: 50, y: 50 }));
