@@ -982,8 +982,8 @@
       <div style="font-size:10px;color:#8b93b8;margin-bottom:2px;">📱 直式（手機預設）</div>
       <div class="st-stage" style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: false })}</div>
       <p class="hint" style="margin:4px 0 0;font-size:10px;">🖐 拖曳背景／立繪調整位置；立繪右上角 ✕ ＝移除該角色（從這句起退場）；放開自動存，Ctrl+Z 復原</p>
-      <div style="font-size:10px;color:#8b93b8;margin:8px 0 2px;">🖥 橫式（網頁／手機橫放全螢幕）</div>
-      <div style="position:relative;width:288px;height:150px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: true })}</div>`;
+      <div style="font-size:10px;color:#8b93b8;margin:8px 0 2px;">🖥 橫式 16:9（網頁／手機橫放全螢幕）</div>
+      <div style="position:relative;width:288px;height:162px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: true })}</div>`;
     panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
     attachPreviewDrag(panel, idx);
 
