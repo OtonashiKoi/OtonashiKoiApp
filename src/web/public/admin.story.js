@@ -20,6 +20,7 @@
       @keyframes stPvFlash { from{opacity:.9} to{opacity:0} }
       @keyframes stPvFade { 0%{opacity:0} 50%{opacity:1} 100%{opacity:0} }
       @keyframes stPvShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-9px)} 40%{transform:translateX(9px)} 60%{transform:translateX(-7px)} 80%{transform:translateX(7px)} }
+      .st-node-card { scroll-margin-top: 3px; } /* Tab 捲上去時，卡片上緣留一點空隙不貼頂 */
       .st-node-card.st-drag-over { outline: 2px dashed #7ce0ff; outline-offset: 2px; }
       .st-drag-handle { cursor: grab; user-select: none; color: #6b7399; }
       .st-drag-handle:active { cursor: grabbing; }
