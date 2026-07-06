@@ -926,8 +926,8 @@
       // 外層=位置(translate)；內層=縮放(scale)。✕/⤢ 掛在「內層角落」→ 跟著立繪縮放位置移動；
       // 但各自反向縮放(scale 1/ps)→ 視覺大小恆定不變。這樣放大縮小握把都貼在角色角上、不會跑掉。
       const inv = Math.round((1 / ps) * 1000) / 1000;
-      return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:${P.portBottom};${baseLeft}transform:translate(calc(${tx}% + ${dx}%), ${dy}%);z-index:${speaking ? 3 : 1};">
-        <div data-portrait-scale style="position:relative;transform:scale(${ps});transform-origin:bottom center;">
+      return `<div data-portrait-wrap="${side}" style="position:absolute;bottom:${P.portBottom};${baseLeft}transform:translate(calc(${tx}% + ${dx}%), ${dy}%);z-index:${speaking ? 3 : 1};line-height:0;">
+        <div data-portrait-scale style="position:relative;display:inline-block;transform:scale(${ps});transform-origin:bottom center;">
           ${inner}
           <button type="button" data-remove-portrait="${side}" title="移除此立繪(從這句起退場)" style="position:absolute;top:0;right:0;transform:scale(${inv});transform-origin:top right;width:26px;height:26px;border-radius:50%;background:#ff5577;color:#fff;border:2px solid #1a1030;font-size:15px;line-height:22px;text-align:center;cursor:pointer;z-index:7;padding:0;box-shadow:0 1px 6px rgba(0,0,0,.6);">✕</button>
           <div data-resize-portrait="${side}" title="拉動改變大小" style="position:absolute;top:0;left:0;transform:scale(${inv});transform-origin:top left;width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:22px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:7;box-shadow:0 1px 6px rgba(0,0,0,.6);">⤢</div>
