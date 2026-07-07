@@ -1697,6 +1697,11 @@
     if (e.target.closest?.('[data-target="section-story"]')) setTimeout(() => safeLoad(false), 60);
     if (e.target.closest?.("#story-refresh-btn")) { stopDraft(); editing = null; npcForm = null; fxOpen.clear(); undoStack = []; redoStack = []; safeLoad(true); }
   });
+  // 頂欄 Reload：重新抓劇本資料(NPC/章節/道具…)並重繪；正在編輯就保留 editing、不整頁重載＝不用重打密碼
+  document.addEventListener("admin:reload", () => {
+    const sec = document.getElementById("section-story");
+    if (hasLoaded && sec && sec.classList.contains("active")) loadAll().catch(() => {});
+  });
   // 分頁被切成 active（class 變動）→ 自動載入一次
   function hideLivePreviewChrome() {
     const p = document.getElementById("story-live-preview"); if (p) p.style.display = "none";

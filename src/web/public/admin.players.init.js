@@ -409,15 +409,20 @@
 
     if (elements.topRefresh) {
       elements.topRefresh.addEventListener("click", async () => {
+        elements.topRefresh.disabled = true;
         try {
-          elements.refreshPlayersButton.disabled = true;
-          elements.topRefresh.disabled = true;
-          await window.adminPlayers.loadPlayers();
-          log("頂欄：已重新載入玩家列表");
+          // 廣播「重新載入」給所有模組(各自判斷自己的分頁是不是開著)，不整頁重載＝不用重打密碼
+          document.dispatchEvent(new CustomEvent("admin:reload"));
+          // 玩家列表(存在才載，避免未載入時報錯)
+          if (window.adminPlayers && typeof window.adminPlayers.loadPlayers === "function") {
+            if (elements.refreshPlayersButton) elements.refreshPlayersButton.disabled = true;
+            await window.adminPlayers.loadPlayers().catch(() => {});
+            if (elements.refreshPlayersButton) elements.refreshPlayersButton.disabled = false;
+          }
+          log("頂欄：已重新載入目前頁面資料");
         } catch (err) {
-          log(`重新載入玩家列表失敗：${err.message}`);
+          log(`重新載入失敗：${err.message}`);
         } finally {
-          elements.refreshPlayersButton.disabled = false;
           elements.topRefresh.disabled = false;
         }
       });
