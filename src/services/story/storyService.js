@@ -49,7 +49,10 @@ function sanitizeStagePos(v) {
       const e = {};
       const hy = Number(p.hy);
       if (Number.isFinite(hy)) e.hy = Math.max(-20, Math.min(95, Math.round(hy)));
+      const lhy = Number(p.lhy); // 橫式專用頭頂錨點(覆寫 hy)；只有立繪位置分直/橫兩軌
+      if (Number.isFinite(lhy)) e.lhy = Math.max(-20, Math.min(95, Math.round(lhy)));
       if (p.s != null) { const sc = clampNum(p.s, 0.3, 3, 1); if (Math.abs(sc - 1) > 0.001) e.s = Math.round(sc * 100) / 100; }
+      if (p.ls != null) { const sc = clampNum(p.ls, 0.3, 3, 1); if (Math.abs(sc - 1) > 0.001) e.ls = Math.round(sc * 100) / 100; } // 橫式專用縮放
       if (Object.keys(e).length) out[s] = e;
     }
   }

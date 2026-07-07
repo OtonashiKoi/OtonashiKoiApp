@@ -960,8 +960,8 @@
     // 立繪：與玩家端 reader「完全相同」的排版(flex 佔滿舞台依 side 靠齊、max-height=舞台%、貼底、位移/縮放上 transform)
     // → 預覽=實際。✕/⤢ 握把不放這裡，改由 JS 依立繪實際框位置疊上去(見 attachPreviewDrag)。
     const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
-      const ps = p.pos?.s || 1; // 縮放
-      const hy = p.pos?.hy;      // 頭頂錨點：占舞台高%(undefined=預設貼底)
+      const ps = (ls ? (p.pos?.ls ?? p.pos?.s) : p.pos?.s) || 1; // 縮放(橫式用 ls，沒設沿用 s)
+      const hy = ls ? (p.pos?.lhy ?? p.pos?.hy) : p.pos?.hy;      // 頭頂錨點(橫式用 lhy，沒設沿用 hy)
       const headMode = typeof hy === "number";
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
       const justify = side === "center" ? "center" : side === "right" ? "flex-end" : "flex-start";
@@ -1032,13 +1032,14 @@
       </div>
       <div style="font-size:10px;color:#8b93b8;margin-bottom:2px;">📱 直式（手機預設）</div>
       <div class="st-stage" style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: false })}</div>
-      <p class="hint" style="margin:4px 0 0;font-size:10px;">立繪左右＝用「🎭立繪：左/中/右」下拉；直接拖立繪＝上下移動；藍 ⤢＝改大小(往上放大)、✕＝移除；背景/CG 可拖曳移動。放開自動存，Ctrl+Z 復原</p>
-      <div style="font-size:10px;color:#8b93b8;margin:8px 0 2px;">🖥 橫式 16:9（網頁／手機橫放全螢幕）</div>
-      <div style="position:relative;width:288px;height:162px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">
+      <p class="hint" style="margin:4px 0 0;font-size:10px;">立繪左右＝「🎭立繪」下拉；拖立繪＝上下移動、⤢＝大小、✕＝移除；背景/CG 可拖曳。<b style="color:#c4a7f5;">直式和橫式的立繪位置各自獨立</b>(在哪個框拖就只動那個框)，背景等其他演出兩邊共用。放開自動存，Ctrl+Z 復原</p>
+      <div style="font-size:10px;color:#8b93b8;margin:8px 0 2px;">🖥 橫式 16:9（可各別調立繪位置）</div>
+      <div class="st-stage-land" style="position:relative;width:288px;height:162px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">
         <div style="position:absolute;top:0;left:0;width:640px;height:360px;transform:scale(0.45);transform-origin:top left;">${buildStageHTML(nodes, idx, { landscape: true })}</div>
       </div>`;
     panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
-    attachPreviewDrag(panel, idx);
+    attachStageDrag(panel.querySelector(".st-stage"), idx, false);
+    attachStageDrag(panel.querySelector(".st-stage-land"), idx, true);
 
     // 即時預覽：真的播出 BGM（與畫面上的 🎵 徽章一致）。只有「解析後的曲目」變了才重播，避免每次打字重啟。
     // 本章預覽 modal 開著時不搶音樂（兩者共用同一個 previewAudio）。
@@ -1062,8 +1063,10 @@
 
   // 即時預覽拖曳：拖背景→改該節點 bgPos(%)；拖立繪→改該節點 stagePos[side](相對立繪大小 %)。
   // 按下先 pushUndo(→Ctrl+Z 可回)，放開自動寫草稿並重繪。
-  function attachPreviewDrag(panel, idx) {
-    const stage = panel.querySelector(".st-stage"); if (!stage) return;
+  // 一個舞台的拖曳設定。landscape=true → 立繪位置存到橫式專用欄(lhy/ls)，直式存 hy/s；其餘(背景/CG)共用。
+  function attachStageDrag(stage, idx, landscape) {
+    if (!stage) return;
+    const HK = landscape ? "lhy" : "hy", SK = landscape ? "ls" : "s";
     const node = () => editing && editing.nodes && editing.nodes[idx];
 
     // ── ✕(移除)/⤢(改大小) 握把：疊在舞台上、依立繪「實際框」定位、固定大小(不隨縮放)。
@@ -1107,17 +1110,15 @@
       const nd = node(); if (!nd) return;
       e.preventDefault(); e.stopPropagation();
       pushUndo();
-      if (kind === "presize") {                       // 立繪縮放（保留頭頂錨點 hy）
+      if (kind === "presize") {                       // 立繪縮放（只改該軌 SK；保留其他欄）
         const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || {};
-        const hy = base.hy, s0 = Number(base.s) || 1;
-        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = (typeof hy === "number") ? { s: s0, hy } : { s: s0 };
-        drag = { kind, side, el, sy: e.clientY, base: { hy, s: s0 } };
-      } else if (kind === "pmoveY") {                 // 立繪上下移動：改用「頭頂錨點 hy(占舞台高%)」→ 直式/橫式一致
+        const s0 = Number(landscape ? (base.ls ?? base.s) : base.s) || 1;
+        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = { ...(nd.stagePos[side] || {}), [SK]: s0 };
+        drag = { kind, side, el, sy: e.clientY, base: { s: s0 } };
+      } else if (kind === "pmoveY") {                 // 立繪上下移動：頭頂錨點(占舞台高%)，存到該軌 HK
         const wrap = el.closest("[data-portrait-side]");
-        const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || {};
-        const s0 = Number(base.s) || 1;
         const sr = stage.getBoundingClientRect(), er = el.getBoundingClientRect();
-        const startHy = (er.top - sr.top) / (sr.height || 1) * 100; // 目前頭頂占舞台高
+        const startHy = (er.top - sr.top) / (sr.height || 1) * 100; // 目前頭頂占舞台高(以可見框量測，縮放預覽也正確)
         // 切成絕對定位的頭頂錨點模式，之後 onMove 只改 top
         wrap.style.bottom = "0";
         el.style.position = "absolute"; el.style.top = startHy + "%"; el.style.bottom = "auto";
@@ -1125,8 +1126,8 @@
         else if (side === "right") { el.style.right = "0"; el.style.left = "auto"; }
         else { el.style.left = "0"; el.style.right = "auto"; }
         el.style.transformOrigin = "top center";
-        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = s0 !== 1 ? { hy: Math.round(startHy), s: s0 } : { hy: Math.round(startHy) };
-        drag = { kind, side, el, sy: e.clientY, base: { hy: startHy, s: s0 }, sh: sr.height || 400 };
+        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = { ...(nd.stagePos[side] || {}), [HK]: Math.round(startHy) };
+        drag = { kind, side, el, sy: e.clientY, base: { hy: startHy }, sh: sr.height || 400 };
       } else if (kind === "lresize") {                // 背景/CG 縮放
         const field = side, layer = stage.querySelector(field === "bgPos" ? "[data-drag-bg]" : "[data-drag-cg]");
         const base = nd[field] || (field === "cgPos" ? { x: 50, y: 50 } : (bgPosAt(editing.nodes, idx) || { x: 50, y: 50 }));
@@ -1145,14 +1146,12 @@
       const ddx = e.clientX - drag.sx, ddy = e.clientY - drag.sy;
       if (drag.kind === "presize") {
         const s = Math.max(0.3, Math.min(3, Math.round(((drag.base.s || 1) - (e.clientY - drag.sy) / 160) * 100) / 100));
-        const hy = drag.base.hy;
-        nd.stagePos[drag.side] = (typeof hy === "number") ? { s, hy } : { s };
+        nd.stagePos[drag.side] = { ...(nd.stagePos[drag.side] || {}), [SK]: s };
         drag.el.style.transform = `scale(${s})`;
         positionHandles();
       } else if (drag.kind === "pmoveY") {              // 立繪頭頂錨點：改 top(占舞台高%)
         const hy = Math.max(-20, Math.min(95, Math.round(drag.base.hy + ddy / drag.sh * 100)));
-        const s = drag.base.s || 1;
-        nd.stagePos[drag.side] = s !== 1 ? { hy, s } : { hy };
+        nd.stagePos[drag.side] = { ...(nd.stagePos[drag.side] || {}), [HK]: hy };
         drag.el.style.top = hy + "%";
         positionHandles();
       } else if (drag.kind === "lresize") {
