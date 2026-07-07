@@ -487,6 +487,9 @@ class StoryService {
 
   _validateNodes(nodes) {
     if (!Array.isArray(nodes)) return [];
+    // 瘦身：丟掉 null/undefined/空字串 的欄位不存(讀取端都有預設值)。避免每個節點都灌十幾個空欄位。
+    // side/type/mustWin 等有意義的預設(含 false)保留。
+    const strip = (o) => { for (const k of Object.keys(o)) { const v = o[k]; if (v === null || v === undefined || v === "") delete o[k]; } return o; };
     return nodes.map((n) => {
       const type = NODE_TYPES.has(n?.type) ? n.type : "narration";
       // Phase C 預留：label(節點標籤)/jumpTo(跳轉目標)，供未來選項分支用；目前僅存不讀。
@@ -557,7 +560,7 @@ class StoryService {
         text: String(n?.text || "").slice(0, 2000),
         ...common
       };
-    });
+    }).map(strip);
   }
 
   async adminSaveChapter(input) {
