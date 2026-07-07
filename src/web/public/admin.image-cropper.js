@@ -51,7 +51,8 @@
   function isHiResTarget(input) {
     if (!input) return false;
     if (input.id === 'story-f-bg' || input.id === 'npc-form-portrait') return true;
-    if (input.hasAttribute && (input.hasAttribute('data-node-bg') || input.hasAttribute('data-node-cg') || input.hasAttribute('data-expr-file'))) return true;
+    // data-npc-portrait＝現有 NPC 的🖼立繪上傳(編輯既有角色)；漏掉會被縮成 400x400 → 立繪變糊。立繪/背景/CG/表情一律保留高解析。
+    if (input.hasAttribute && (input.hasAttribute('data-node-bg') || input.hasAttribute('data-node-cg') || input.hasAttribute('data-expr-file') || input.hasAttribute('data-npc-portrait'))) return true;
     return false;
   }
 
