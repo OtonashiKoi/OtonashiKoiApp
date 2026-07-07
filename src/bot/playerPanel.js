@@ -8,7 +8,7 @@ const config = require("../config");
 const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
 const { calcPlayerStats, getWeaponConfig } = require("../shared/combatStats");
-const { pushBonusWeaponToInventory } = require("../shared/jobBadgeBonus");
+const { pushBonusWeaponToInventory, pushRewardItemsToInventory } = require("../shared/jobBadgeBonus");
 const { TIER_SET_SLOTS } = require("../shared/equipmentTierSetBonuses");
 const { getEquippedSetInfo } = require("../shared/equipmentSetBonuses");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
@@ -2791,6 +2791,21 @@ async function grantQuestRewardDiscord(serviceContext, discordId, displayName, r
       }
       reward.rewardItemName = item.name;
       reward.rewardItemSummary = formatRewardItemLabel(item);
+    }
+  }
+  // 多道具＋數量獎勵（rewardItems: [{itemId, qty}]）— 獨立於 rewardItemId，任一皆可
+  if (Array.isArray(reward.rewardItems) && reward.rewardItems.length) {
+    const prog = await serviceContext.progressRepository.findByPlayerId(discordId);
+    if (prog) {
+      const granted = await pushRewardItemsToInventory({
+        progress: prog, itemRepository: serviceContext.itemRepository,
+        rewardItems: reward.rewardItems, source: "quest",
+      });
+      if (granted.length) {
+        prog.updatedAt = new Date().toISOString();
+        await serviceContext.progressRepository.save(prog);
+        reward.rewardItemsGranted = granted;
+      }
     }
   }
 }

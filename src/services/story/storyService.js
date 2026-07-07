@@ -268,8 +268,17 @@ class StoryService {
           ...flow
         };
       }
+      // 🧍立繪擺台(不當說話者)：任何節點可指定一角色立繪放上台。解析 id→圖(玩家頭像/NPC立繪/怪物圖)
+      let stagePortraitUrl = null;
+      if (n.stageNpcId) {
+        if (n.stageNpcId === PLAYER_NPC_ID || n.stageNpcId === "player") stagePortraitUrl = playerAvatarUrl || null;
+        else if (typeof n.stageNpcId === "string" && n.stageNpcId.startsWith("mon:")) { const sm = await getMonster(n.stageNpcId.slice(4)); stagePortraitUrl = sm ? (sm.imageUrl || null) : null; }
+        else { const sn = npcOf[n.stageNpcId]; stagePortraitUrl = sn ? (sn.portraitUrl || null) : null; }
+      }
       // 共用演出欄位（B2 清台/退場 / B3 畫面效果·文字節奏）
       const common = {
+        stageNpcId: n.stageNpcId || null,       // 🧍立繪擺台角色 id(供舞台記位置)
+        stagePortraitUrl,                        // 🧍立繪擺台圖(解析後)；null=沒設
         clearStage: n.clearStage === true,               // B2:進此節點前清掉台上其他立繪
         exitSide: EXIT_SIDES.has(n.exitSide) ? n.exitSide : null, // 讓某位置立繪退場(left/center/right/all)
         textSize: TEXT_SIZES.has(n.textSize) ? n.textSize : null, // 文字大小
@@ -523,6 +532,7 @@ class StoryService {
         sfx: n?.sfx ? String(n.sfx) : null,
         grantItemId: n?.grantItemId ? String(n.grantItemId) : null, // 🎁 讀到此節點發指定道具(一次)
         voiceUrl: n?.voiceUrl ? String(n.voiceUrl) : null,          // 🎤 配音(顯示此節點時播放)
+        stageNpcId: n?.stageNpcId ? String(n.stageNpcId).slice(0, 60) : null, // 🧍立繪擺台(不當說話者)：任何節點可放一個角色立繪上台(id=player/npc/mon:<id>)
         cond,                                                        // 🔒 顯示條件
         ...reserved
       };

@@ -25,6 +25,8 @@ const QUEST_TYPES = {
   onboarding_complete_count: { label: "完成全部新手任務", unit: "項" },
   weekly_complete_count: { label: "完成全部每週任務", unit: "項" },
   kill_dragon_king:  { label: "擊敗古龍王(B) 次數", unit: "次" },
+  kill_hellfang_king:{ label: "擊敗地獄狼牙王 次數", unit: "次" },
+  enhance_a5_count:  { label: "A 裝強化至 +5 累積", unit: "件" },
 };
 
 const CADENCE_ORDER = { onboarding: 1, job: 2, daily: 3, weekly: 4, season: 5 };
@@ -549,6 +551,7 @@ class WeeklyQuestService {
         exp: Number(quest.rewardExp || 0),
         diamond: 0,
         rewardItemId: quest.rewardItemId || null,
+        rewardItems: Array.isArray(quest.rewardItems) ? quest.rewardItems : [],
         cadence: quest.cadence,
         periodKey
       };

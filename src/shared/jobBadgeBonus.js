@@ -83,8 +83,52 @@ async function pushBonusWeaponToInventory({ progress, itemRepository, badge, sou
   return weapon;
 }
 
+/**
+ * 把「多道具＋數量」的獎勵 push 到玩家 inventory（不會自動儲存 prog）。
+ * rewardItems: [{ itemId, qty }]。消耗品比照商店：一單位一筆（不用 stackCount）。
+ * 回傳實際發出的清單 [{ name, qty }]（找不到的道具跳過並警告）。
+ */
+async function pushRewardItemsToInventory({ progress, itemRepository, rewardItems, source = "quest" }) {
+  if (!progress || !itemRepository || !Array.isArray(rewardItems) || !rewardItems.length) return [];
+  if (!Array.isArray(progress.inventory)) progress.inventory = [];
+  const granted = [];
+  for (const spec of rewardItems) {
+    const itemId = spec && spec.itemId;
+    const qty = Math.max(1, Number(spec && spec.qty) || 1);
+    if (!itemId) continue;
+    const item = await itemRepository.findById(itemId).catch(() => null);
+    if (!item) { console.warn(`[questReward] 找不到獎勵道具 ${itemId}，跳過`); continue; }
+    const rewardItemType = item.equipSlot === "job_eq" ? "job_badge" : (item.itemType || "consumable");
+    for (let i = 0; i < qty; i++) {
+      progress.inventory.push({
+        uuid: crypto.randomUUID(),
+        itemId: item.id,
+        itemName: item.name,
+        itemEffect: item.effect || { type: "none", value: 0 },
+        useEffects: item.useEffects || [],
+        passiveEffects: item.passiveEffects || [],
+        procEffects: item.procEffects || [],
+        combatEffects: item.combatEffects || [],
+        itemType: rewardItemType,
+        imageUrl: item.imageUrl || null,
+        imageThumbnailUrl: item.imageThumbnailUrl || null,
+        equipSlot: item.equipSlot || null,
+        equipStats: item.equipStats || null,
+        weaponType: item.weaponType || null,
+        isTwoHanded: item.isTwoHanded || false,
+        tier: item.tier || null,
+        source,
+        obtainedAt: new Date().toISOString(),
+      });
+    }
+    granted.push({ name: item.name, qty });
+  }
+  return granted;
+}
+
 module.exports = {
   BADGE_TO_WEAPON_NAME,
   getBonusWeaponNameForBadge,
   pushBonusWeaponToInventory,
+  pushRewardItemsToInventory,
 };

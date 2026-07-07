@@ -10,7 +10,7 @@ require("dotenv").config();
 const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
 const NOW = new Date().toISOString();
 
-const GOLD_FACTOR = 0.4;
+const GOLD_FACTOR = 0.2;      // 金幣 ×0.2 of 原始（目標一趟練完累積 ~5-6M）
 const HELLFIRE_EXP_FACTOR = 0.5;
 
 async function main() {
@@ -26,10 +26,11 @@ async function main() {
     const back = m._econBackup || { goldReward: m.goldReward, expReward: m.expReward };
     let changed = false, note = [];
     if (!isBoss) {
-      const g = Math.max(1, Math.round((Number(m.goldReward) || 0) * GOLD_FACTOR));
+      // 一律以「原始備份值」為基準計算，冪等（重跑不會疊乘）
+      const g = Math.max(1, Math.round((Number(back.goldReward) || 0) * GOLD_FACTOR));
       if (g !== m.goldReward) { set.goldReward = g; note.push(`金幣 ${m.goldReward}→${g}`); goldN++; changed = true; }
       if (m.zone === "hellfire") {
-        const e = Math.max(1, Math.round((Number(m.expReward) || 0) * HELLFIRE_EXP_FACTOR));
+        const e = Math.max(1, Math.round((Number(back.expReward) || 0) * HELLFIRE_EXP_FACTOR));
         if (e !== m.expReward) { set.expReward = e; note.push(`經驗 ${m.expReward}→${e}`); expN++; changed = true; }
       }
     }

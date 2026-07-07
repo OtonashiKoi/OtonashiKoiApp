@@ -1555,6 +1555,10 @@ class ShopService {
 
     if (this.questService) {
       this.questService.recordProgress(discordId, "enhance_count", 1).catch(() => {});
+      // A 裝(材料強化)成功到 +5 → 記錄賽季任務「千錘百鍊」進度
+      if (tier === "A" && newLevel === 5) {
+        this.questService.recordProgress(discordId, "enhance_a5_count", 1).catch(() => {});
+      }
     }
 
     // 強化完成後，同步該道具的最新 effects（如果有 itemId）

@@ -3311,6 +3311,23 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     } catch (e) { console.error("[Quest] kill_dragon_king record error:", e.message); }
   }
 
+  // 擊敗地獄狼牙王（hellfire_depths 世界王全破）→ 記錄屠狼任務進度（比照古龍王：所有參戰者各 +1）
+  if (zoneKey === "hellfire_depths" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
+    try {
+      const qs = sc?.questService || sc?.weeklyQuestService;
+      if (qs?.recordProgress) {
+        const slayers = [...new Set([
+          ...(state?.damageMap ? Object.keys(state.damageMap) : []),
+          ...(Array.isArray(state?.participants) ? state.participants : []),
+          discordId,
+        ].filter(Boolean))];
+        for (const pid of slayers) {
+          await qs.recordProgress(pid, "kill_hellfang_king", 1);
+        }
+      }
+    } catch (e) { console.error("[Quest] kill_hellfang_king record error:", e.message); }
+  }
+
   if (isWorldBossZone(zoneKey) && monster?.isBoss && !isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
     rewardLines.push("目前僅擊破單一部位，世界王需所有部位全破才會結算。");
     return rewardLines;

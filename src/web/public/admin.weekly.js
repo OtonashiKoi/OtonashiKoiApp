@@ -24,6 +24,8 @@
     onboarding_complete_count: "完成全部新手任務",
     weekly_complete_count: "完成全部每週任務",
     kill_dragon_king: "擊敗古龍王(B) 次數",
+    kill_hellfang_king: "擊敗地獄狼牙王 次數",
+    enhance_a5_count: "A 裝強化至 +5 累積",
   };
   const QUEST_TYPE_UNITS = {
     battle_count:  "次",
@@ -49,6 +51,8 @@
     onboarding_complete_count: "項",
     weekly_complete_count: "項",
     kill_dragon_king: "次",
+    kill_hellfang_king: "次",
+    enhance_a5_count: "件",
   };
   const CADENCE_LABELS = {
     onboarding: "新手",

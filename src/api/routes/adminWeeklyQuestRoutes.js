@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { ok, fail } = require("../../shared/response");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
-const { pushBonusWeaponToInventory } = require("../../shared/jobBadgeBonus");
+const { pushBonusWeaponToInventory, pushRewardItemsToInventory } = require("../../shared/jobBadgeBonus");
 
 async function grantQuestReward(serviceContext, { discordId, displayName, reward, sourceTag = "quest" }) {
   if (reward.gold > 0) {
@@ -78,6 +78,23 @@ async function grantQuestReward(serviceContext, { discordId, displayName, reward
     } catch (_) {
       // ignore item grant fallback errors
     }
+  }
+  // 多道具＋數量獎勵（rewardItems: [{itemId, qty}]）
+  if (Array.isArray(reward.rewardItems) && reward.rewardItems.length) {
+    try {
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (progress) {
+        const granted = await pushRewardItemsToInventory({
+          progress, itemRepository: serviceContext.itemRepository,
+          rewardItems: reward.rewardItems, source: sourceTag,
+        });
+        if (granted.length) {
+          progress.updatedAt = new Date().toISOString();
+          await serviceContext.progressRepository.save(progress);
+          reward.rewardItemsGranted = granted;
+        }
+      }
+    } catch (_) { /* ignore */ }
   }
 }
 

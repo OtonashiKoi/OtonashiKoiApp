@@ -234,6 +234,10 @@ class EnhanceService {
     if (isSuccess && this.questService) {
       // await:確保「完成 1 次強化」任務進度先寫入,新手引導刷新時才會立刻看到完成
       try { await this.questService.recordProgress(discordId, "enhance_count", 1); } catch (e) {}
+      // A 裝成功強化到 +5 → 記錄賽季任務「千錘百鍊」進度（每件 +1）
+      if (String(tier).toUpperCase() === "A" && Number(nextLevel) === 5) {
+        try { await this.questService.recordProgress(discordId, "enhance_a5_count", 1); } catch (e) {}
+      }
     }
 
     // 強化完成後，同步該道具的最新 effects（如果有 itemId）

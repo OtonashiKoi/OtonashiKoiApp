@@ -16,42 +16,22 @@ const ENHANCE_GEMS = {
  * 強化規則配置
  * tier: { +1: { gems: 消耗寶石數, success: 成功率% }, ... }
  */
+// V0.4 重調：石數 2/5/8/12/25、成功率 100/85/70/30/10%。
+// +1~+3 便宜好推（軟上限 +3），+4/+5 大幅拉低成功率成為長線追求（+5 期望約 309 顆）。
+// 全品階同表；S 的稀缺改由「S 石只從世界王掉」把關，不再另壓成功率。
+const ENHANCE_STEPS = {
+  '+1': { gems: 2, success: 100 },
+  '+2': { gems: 5, success: 85 },
+  '+3': { gems: 8, success: 70 },
+  '+4': { gems: 12, success: 30 },
+  '+5': { gems: 25, success: 10 }
+};
 const ENHANCE_RULES = {
-  D: {
-    '+1': { gems: 2, success: 100 },
-    '+2': { gems: 5, success: 80 },
-    '+3': { gems: 15, success: 60 },
-    '+4': { gems: 30, success: 45 },
-    '+5': { gems: 50, success: 30 }
-  },
-  C: {
-    '+1': { gems: 2, success: 100 },
-    '+2': { gems: 5, success: 80 },
-    '+3': { gems: 15, success: 60 },
-    '+4': { gems: 30, success: 45 },
-    '+5': { gems: 50, success: 30 }
-  },
-  B: {
-    '+1': { gems: 2, success: 100 },
-    '+2': { gems: 5, success: 80 },
-    '+3': { gems: 15, success: 60 },
-    '+4': { gems: 30, success: 45 },
-    '+5': { gems: 50, success: 30 }
-  },
-  A: {
-    '+1': { gems: 2, success: 100 },
-    '+2': { gems: 5, success: 80 },
-    '+3': { gems: 15, success: 60 },
-    '+4': { gems: 30, success: 45 },
-    '+5': { gems: 50, success: 30 }
-  },
-  S: {
-    '+1': { gems: 2, success: 100 },
-    '+2': { gems: 5, success: 75 },
-    '+3': { gems: 15, success: 55 },
-    '+4': { gems: 30, success: 40 },
-    '+5': { gems: 50, success: 25 }
-  }
+  D: { ...ENHANCE_STEPS },
+  C: { ...ENHANCE_STEPS },
+  B: { ...ENHANCE_STEPS },
+  A: { ...ENHANCE_STEPS },
+  S: { ...ENHANCE_STEPS }
 };
 
 const ENHANCE_GOLD_COST = {

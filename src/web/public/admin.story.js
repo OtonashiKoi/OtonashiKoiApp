@@ -633,6 +633,8 @@
 
     const nodeRows = (editing.nodes || []).map((n, i) => {
       const isBattle = n.type === "battle", isDlg = n.type === "dialogue", isCG = n.type === "cg", isChoice = n.type === "choice";
+      const isNarr = !isBattle && !isDlg && !isCG && !isChoice; // 旁白：可用「立繪擺台(不當說話者)」
+
       const showFx = fxOpen.has(n._uid);
       const choiceArea = isChoice ? `
         <textarea data-node="${i}" data-field="text" rows="1" style="width:100%;box-sizing:border-box;margin-bottom:6px;" placeholder="提問（選填，例：要跟她走嗎？）">${esc(n.text || "")}</textarea>
@@ -684,6 +686,9 @@
           <div style="${ROW}margin-bottom:0;">
             ${isDlg ? `<select class="st-sel" data-node="${i}" data-field="side" title="立繪位置">${optionsHtml(SIDE_OPTS, n.side || "center")}</select>
             <select class="st-sel" data-node="${i}" data-field="portraitFx" title="立繪演出">${optionsHtml(FX_OPTS, n.portraitFx || "")}</select>` : ""}
+            ${isNarr ? `<label style="font-size:12px;" title="立繪擺台：旁白也能讓一個角色立繪站在台上(不會有名字/不算說話者)">🧍立繪 ${lazySel(`data-node="${i}" data-field="stageNpcId" style="min-width:130px;"`, "npc", n.stageNpcId, npcLabelOf(n.stageNpcId))}</label>
+            <select class="st-sel" data-node="${i}" data-field="side" title="立繪位置">${optionsHtml(SIDE_OPTS, n.side || "center")}</select>
+            <select class="st-sel" data-node="${i}" data-field="portraitFx" title="立繪演出">${optionsHtml(FX_OPTS, n.portraitFx || "")}</select>` : ""}
             <select class="st-sel" data-node="${i}" data-field="bgm">${optionsHtml(BGM_OPTS, n.bgm || "")}</select>
             <select class="st-sel" data-node="${i}" data-field="sfx">${optionsHtml(SFX_OPTS, n.sfx || "")}</select>
             <select class="st-sel" data-node="${i}" data-field="screenFx">${optionsHtml(SCREENFX_OPTS, n.screenFx || "")}</select>
@@ -704,7 +709,7 @@
             <select data-cond="${i}:title" title="🔒 稱號限定(持有即可)" style="max-width:150px;">${condTitleOpts(n.cond?.title || "")}</select>
           </div>
         </div>` : "";
-      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", (n.textFx && n.textFx !== "") && "✨", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹", n.grantItemId && "🎁", n.voiceUrl && "🎤", (n.cond && Object.keys(n.cond).length) && "🔒"].filter(Boolean).join(" ");
+      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", n.stageNpcId && "🧍", (n.textFx && n.textFx !== "") && "✨", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹", n.grantItemId && "🎁", n.voiceUrl && "🎤", (n.cond && Object.keys(n.cond).length) && "🔒"].filter(Boolean).join(" ");
 
       // 分支視覺：🏷標籤(彩色) / ⤳跳轉徽章(點了捲到目標) / 被跳入的節點左框上色
       const jumpTargetIdx = n.jumpTo ? allLabels.find((x) => x.label === n.jumpTo)?.i : null;
@@ -1226,6 +1231,12 @@
         occ[s] = id;
         if (id === "player") { st[s] = { url: null, player: true, fx: nn.portraitFx, pos: null }; } // 主角＝登入者頭像(編輯器用佔位)
         else { const u = portraitUrlOfNode(nn); if (u) { st[s] = { url: u, player: false, fx: nn.portraitFx, pos: null }; } }
+      } else if (nn.stageNpcId) {
+        // 🧍立繪擺台(不當說話者)：任何節點放一個角色立繪上台
+        const s = nn.side || "center", id = nn.stageNpcId;
+        occ[s] = id;
+        if (id === "player") { st[s] = { url: null, player: true, fx: nn.portraitFx, pos: null }; }
+        else { const m = monOf(id); const npc = npcs.find((x) => x.id === id); const u = m ? (m.imageUrl || null) : (npc ? (npc.portraitUrl || null) : null); if (u) st[s] = { url: u, player: false, fx: nn.portraitFx, pos: null }; }
       }
       // 本節點自訂位置 → 記到「目前站該位置的角色」身上（拖曳存 node.stagePos[side]，歸該角色）
       const own = nn.stagePos || {};
