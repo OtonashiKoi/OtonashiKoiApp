@@ -1133,21 +1133,24 @@
   function stageAt(nodes, idx, path) {
     // path 給了＝照「實際走過的節點順序」重播(分支/跳轉用，本章預覽)；沒給＝線性 0..idx(編輯視角)
     const seq = Array.isArray(path) ? path : Array.from({ length: idx + 1 }, (_, k) => k);
-    const st = {}, pos = {}, occ = {}; // occ[side]=目前站該位置的角色 id（換人就把位移歸零＝置中）
-    const clearAll = () => { [st, pos, occ].forEach((o) => Object.keys(o).forEach((k) => delete o[k])); };
+    // 立繪位置/縮放「依角色記憶」：每個角色記住自己的值，該角色再出現就沿用自己的，不同角色互不影響。
+    const st = {}, occ = {}, charPos = {}; // occ[side]=該側目前角色id；charPos[角色id]=該角色記住的位置
+    const clearStage = () => { [st, occ].forEach((o) => Object.keys(o).forEach((k) => delete o[k])); }; // 清台不清角色記憶
     for (const i of seq) {
       const nn = nodes[i]; if (!nn) continue;
-      if (nn.clearStage) clearAll();
-      if (nn.exitSide === "all") clearAll(); else if (nn.exitSide) { delete st[nn.exitSide]; delete pos[nn.exitSide]; delete occ[nn.exitSide]; }
-      const own = nn.stagePos || {};
-      if (nn.stagePos) for (const s of Object.keys(nn.stagePos)) { pos[s] = nn.stagePos[s]; if (st[s]) st[s].pos = nn.stagePos[s]; }
+      if (nn.clearStage) clearStage();
+      if (nn.exitSide === "all") clearStage(); else if (nn.exitSide) { delete st[nn.exitSide]; delete occ[nn.exitSide]; }
       if (nn.type === "dialogue") {
         const s = nn.side || "center", id = nn.npcId || "";
-        // 立繪位置/縮放「一路沿用」：換人也繼承上一個調過的值(除非本節點自訂)，設一次後面都跟著→省得每個角色重調
         occ[s] = id;
-        if (id === "player") { st[s] = { url: null, player: true, fx: nn.portraitFx, pos: pos[s] || null }; } // 主角＝登入者頭像(編輯器用佔位)
-        else { const u = portraitUrlOfNode(nn); if (u) { st[s] = { url: u, player: false, fx: nn.portraitFx, pos: pos[s] || null }; } }
+        if (id === "player") { st[s] = { url: null, player: true, fx: nn.portraitFx, pos: null }; } // 主角＝登入者頭像(編輯器用佔位)
+        else { const u = portraitUrlOfNode(nn); if (u) { st[s] = { url: u, player: false, fx: nn.portraitFx, pos: null }; } }
       }
+      // 本節點自訂位置 → 記到「目前站該位置的角色」身上（拖曳存 node.stagePos[side]，歸該角色）
+      const own = nn.stagePos || {};
+      for (const s of Object.keys(own)) { const cid = occ[s]; if (cid != null) charPos[cid] = own[s]; }
+      // 台上每個立繪的位置＝該側角色記住的值
+      for (const s of Object.keys(st)) { const cid = occ[s]; st[s].pos = (cid != null ? charPos[cid] : null) || null; }
     }
     return st;
   }
