@@ -170,12 +170,33 @@ class StoryService {
   async listPreloadAssets() {
     const chapters = await this._enabledChapters();
     const images = new Set(), bgm = new Set();
+    // 立繪要跟著預抓 → 先備妥 NPC 表(含表情差分)＋怪物圖快取，逐節點解析立繪來源
+    const npcs = await this.storyRepository.listNpcs().catch(() => []);
+    const npcOf = Object.fromEntries((npcs || []).map((n) => [n.id, n]));
+    const monImg = {}; // 怪物 id → imageUrl(快取，避免重複查)
+    const monImageOf = async (id) => {
+      if (!id) return null;
+      if (!(id in monImg)) { const m = await this.monsterService?.getMonsterById(id).catch(() => null); monImg[id] = m ? (m.imageUrl || null) : null; }
+      return monImg[id];
+    };
+    // 把某個立繪來源 id(player/npc/mon:) 解析成圖 URL 加進 images
+    const addPortrait = async (id, expression) => {
+      if (!id || id === "player") return; // 玩家立繪＝各自 DC 頭像，非固定資產，跳過
+      if (typeof id === "string" && id.startsWith("mon:")) { const u = await monImageOf(id.slice(4)); if (u) images.add(u); return; }
+      const npc = npcOf[id]; if (!npc) return;
+      if (npc.portraitUrl) images.add(npc.portraitUrl);
+      const e = (npc.expressions || []).find((x) => x && x.name === expression);
+      if (e && e.url) images.add(e.url);
+    };
     for (const ch of chapters) {
       if (ch.backgroundUrl) images.add(ch.backgroundUrl);
       for (const n of (Array.isArray(ch.nodes) ? ch.nodes : [])) {
         if (n.backgroundUrl) images.add(n.backgroundUrl);
         if (n.cgUrl) images.add(n.cgUrl);
         if (n.bgm && n.bgm !== "silence" && n.bgm !== "zone") bgm.add(n.bgm);
+        if (n.type === "dialogue" && n.npcId) await addPortrait(n.npcId, n.expression); // 對話立繪+表情差分
+        if (n.type === "battle" && n.monsterId) { const u = await monImageOf(n.monsterId); if (u) images.add(u); } // 戰鬥怪物圖
+        if (n.stageNpcId) await addPortrait(n.stageNpcId, null); // 🧍立繪擺台
       }
     }
     return { images: Array.from(images), bgm: Array.from(bgm) };
