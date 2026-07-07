@@ -1154,7 +1154,16 @@
     }
     return st;
   }
-  function bgPosAt(nodes, idx) { for (let i = idx; i >= 0; i--) { if (nodes[i] && nodes[i].bgPos) return nodes[i].bgPos; } return null; }
+  // 背景位置「依地圖(背景圖)記憶」：每張背景圖記住自己的位移，同一張再出現就沿用它的、不同圖互不影響。
+  //   回傳 { url:目前背景, pos:該圖記住的位移 }。seq 給了照實際走過的順序(分支預覽)，否則線性 0..idx。
+  function bgStateAt(nodes, idx, seq) {
+    const order = Array.isArray(seq) ? seq : Array.from({ length: idx + 1 }, (_, k) => k);
+    let url = editing?.backgroundUrl || (editing?.zoneKey ? `/uploads/zones/${editing.zoneKey}.webp` : null);
+    const map = {};
+    for (const i of order) { const nn = nodes[i]; if (!nn) continue; if (nn.backgroundUrl) url = nn.backgroundUrl; if (nn.bgPos && url) map[url] = nn.bgPos; }
+    return { url, pos: url ? (map[url] || null) : null };
+  }
+  function bgPosAt(nodes, idx) { return bgStateAt(nodes, idx).pos; }
   // 拉動起始位置（沿用當前實際顯示的位移，避免第一下跳位）
   function effectivePortraitPos(nodes, idx, side) { const st = stageAt(nodes, idx); return (st[side] && st[side].pos) || {}; }
 
@@ -1173,8 +1182,9 @@
     // 往回找「最近設定」：有 path(分支預覽)照實際走過的順序，否則線性
     const seq = (opts && Array.isArray(opts.path)) ? opts.path : Array.from({ length: idx + 1 }, (_, k) => k);
     const lookback = (pick) => { for (let k = seq.length - 1; k >= 0; k--) { const v = pick(nodes[seq[k]]); if (v) return v; } return null; };
-    const bg = lookback((x) => x?.backgroundUrl) || chapterBg;
-    const bgPos = lookback((x) => x?.bgPos); // 背景平移(往回找最近設定)
+    const bgState = bgStateAt(nodes, idx, seq); // 背景「依地圖記憶」位移
+    const bg = bgState.url || chapterBg;
+    const bgPos = bgState.pos; // 該背景圖記住的平移
     const exprUrl = (npc, name) => { const e = (npc?.expressions || []).find((x) => x && x.name === name); return e?.url || null; };
     const nodePortrait = (nn) => { const m = monOf(nn.npcId); if (m) return m.imageUrl || null; const npc = npcById[nn.npcId]; return exprUrl(npc, nn.expression) || npc?.portraitUrl || null; };
     const st = stageAt(nodes, idx, opts && opts.path); // { side: {url,fx,pos} }（含位移，pos 跨節點沿用）
