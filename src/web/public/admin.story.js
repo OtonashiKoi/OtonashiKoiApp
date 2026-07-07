@@ -775,7 +775,7 @@
         <div style="${ROW}">
           <label>順序 <input type="number" id="story-f-order" value="${Number(editing.order) || 0}" style="width:64px;"></label>
           <label>標題 <input type="text" id="story-f-title" value="${esc(editing.title || "")}" style="width:200px;" placeholder="例：草原的呼喚"></label>
-          <label>地圖 <select id="story-f-zone">${zoneOpts}</select></label>
+          <label title="綁了區域＝玩家要先看完此章才能在該區戰鬥/掛機(區域閘門)。留空＝不綁。⚠️改章節時別把這裡清成空的，否則閘門會失效！">🔒閘門地圖 <select id="story-f-zone">${zoneOpts}</select></label>
           <label><input type="checkbox" id="story-f-enabled" ${editing.enabled !== false ? "checked" : ""}> 啟用</label>
           <label class="button" style="cursor:pointer;">🖼 章節背景<input type="file" accept="image/*" id="story-f-bg" style="display:none;"></label>
           <button class="button" id="story-f-bg-pick" title="從圖庫選">📁 圖庫</button>
