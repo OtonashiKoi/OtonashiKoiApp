@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-07-07T09:06:15.473Z
+Generated at: 2026-07-07T10:25:36.015Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -12,8 +12,8 @@ Generated at: 2026-07-07T09:06:15.473Z
 | 進度資料 | 415 |
 | 怪物 | 64 |
 | 怪物狀態文件 | 10 |
-| 道具 | 407 |
-| 任務 | 38 |
+| 道具 | 408 |
+| 任務 | 43 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
 | 世界王設定 | 3 |
@@ -112,7 +112,7 @@ Generated at: 2026-07-07T09:06:15.473Z
 | --- | --- |
 | collectible | 6 |
 | consumable | 22 |
-| equipment | 368 |
+| equipment | 369 |
 | job_badge | 10 |
 | pet_egg | 1 |
 
@@ -123,7 +123,7 @@ Generated at: 2026-07-07T09:06:15.473Z
 | C | 71 |
 | D | 57 |
 | S | 28 |
-| 無階級 | 42 |
+| 無階級 | 43 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -139,7 +139,7 @@ Generated at: 2026-07-07T09:06:15.473Z
 | shield | 11 |
 | shoes | 19 |
 | special | 64 |
-| title_eq | 8 |
+| title_eq | 9 |
 | weapon | 72 |
 | 無槽位 | 29 |
 
@@ -182,6 +182,7 @@ Generated at: 2026-07-07T09:06:15.473Z
 | 65833876-d13e-4ca8-ac26-4eeb170726fc | 樂園CCB2勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | e290d286-bd45-4a32-b848-d52184fc88a0 | 樂園CCB勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | dc067571-4f8f-49af-b0c1-50f32c6941ab | 樂園最終CB勇者 | equipment |  | title_eq |  | LUK+3 | none |
+| b4f8c3f3-39f2-4c5e-9c30-61812156a936 | 狼王的磨牙棒 | equipment |  | title_eq |  |  | none |
 | f5d8903b-5d19-46d7-a1f5-3af1672ee833 | 龍王的零嘴們 | equipment |  | title_eq |  |  | none |
 | d03a42d6-a2cb-446b-be0c-135f28375136 | 吸血左之戒 | equipment | A | accessory_l |  | LUK+5 | none |
 | 08f14a4f-c534-4289-8632-0313570f8a9a | 守護左之戒 | equipment | A | accessory_l |  | VIT+5 | none |
@@ -589,7 +590,12 @@ Generated at: 2026-07-07T09:06:15.473Z
 | onboarding | 140 | 達成 Lv.10 並獲得職業徽章 | level_10_job_badge | 1 | 啟用 | 300 金幣 + 150 EXP | 升到 Lv.10，並獲得任一職業徽章即可完成。 |
 | onboarding | 150 | 成功連擊20次 | combo_count | 20 | 啟用 | 500 金幣 + 220 EXP | 同樣建議用匕首，配合高 AGI 與持續輸出，較容易把連擊堆高。 |
 | onboarding | 160 | 完成全部新手任務 | onboarding_complete_count | 1 | 啟用 | 屬性重製藥水 | 完成前面所有新手任務後，再回來領取最終獎勵。 |
-| season | 10 | 屠龍者の試煉 | kill_dragon_king | 10 | 啟用 | 龍王的零嘴們 | 擊敗世界王【古龍王(B)】10 次，獲得稱號「龍王的零嘴們」（龍族之領／龍王巢穴最終傷害 +5%）。 |
+| season | 10 | 屠龍者の試煉 | kill_dragon_king | 10 | 啟用 | 龍王的零嘴們 | 擊敗世界王【古龍王(B)】10 次，獲得稱號「龍王的零嘴們」（龍族之領／龍王巢穴最終傷害 +5%）＋附魔重骰藥水 ×5＋屬性重製藥水 ×1。 |
+| season | 20 | 屠狼者の試煉 | kill_hellfang_king | 10 | 啟用 | 狼王的磨牙棒 | 擊敗世界王【地獄狼牙王】10 次，獲得稱號「狼王的磨牙棒」（地獄火焰／焰獄深處最終傷害 +5%）＋附魔重骰藥水 ×5＋屬性重製藥水 ×1。 |
+| season | 30 | 焰獄審判 | burn_trigger_count | 1000 | 啟用 | 150000 金幣 + 100000 EXP | 在戰鬥中累計觸發燃燒 1000 次（地獄火焰怪、火焰流派卡最容易累積）。獎勵：150,000 金幣 + 100,000 經驗。 |
+| season | 40 | 千錘百鍊 | enhance_a5_count | 10 | 啟用 | 150000 金幣 + 100000 EXP | 把 A 階裝備強化到 +5 累積 10 件，鍛鍊出一身頂裝。獎勵：150,000 金幣 + 100,000 經驗。 |
+| season | 50 | 百戰之證 | battle_win | 1500 | 啟用 | 200000 金幣 + 150000 EXP | 累計戰鬥勝利 1500 場，久經沙場之證。獎勵：200,000 金幣 + 150,000 經驗。 |
+| season | 60 | 連擊宗師 | combo_count | 3000 | 啟用 | 150000 金幣 + 100000 EXP | 累計成功連擊 3000 次（匕首／高 AGI 最易累積）。獎勵：150,000 金幣 + 100,000 經驗。 |
 | weekly | 10 | 每週出戰 30 次 | battle_count | 30 | 啟用 | 1200 金幣 + 500 EXP |  |
 | weekly | 20 | 每週贏得 20 場 | battle_win | 20 | 啟用 | 1500 金幣 + 700 EXP |  |
 | weekly | 30 | 每週累計 50000 傷害 | damage_total | 50000 | 啟用 | 1800 金幣 + 900 EXP |  |
