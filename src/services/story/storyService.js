@@ -21,7 +21,7 @@
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 
-const NODE_TYPES = new Set(["narration", "dialogue", "battle", "cg"]);
+const NODE_TYPES = new Set(["narration", "dialogue", "battle", "cg", "choice"]);
 const TEXT_SPEEDS = new Set(["slow", "normal", "fast"]);
 const SCREEN_FX = new Set(["", "shake", "flash", "fadeblack"]);
 const EXIT_SIDES = new Set(["left", "center", "right", "all"]); // 立繪退場位置
@@ -101,11 +101,36 @@ class StoryService {
 
   /** 章節裡「必勝」戰鬥節點的 index 清單。 */
   _mustWinBattleIndexes(chapter) {
-    const out = [];
-    (Array.isArray(chapter.nodes) ? chapter.nodes : []).forEach((n, i) => {
-      if (n.type === "battle" && n.mustWin !== false) out.push(i);
-    });
+    // 分支章節：只強制「第一個選項節點之前、必經路線上」的必勝戰。分支內/之後的戰鬥
+    // 可能在玩家沒走的線上，不能擋完成（閱讀中前端仍會就地強制必勝）。
+    const nodes = Array.isArray(chapter.nodes) ? chapter.nodes : [];
+    const labelIdx = {};
+    nodes.forEach((n, i) => { if (n && n.label) labelIdx[n.label] = i; });
+    const out = [], seen = new Set();
+    let i = 0;
+    while (i >= 0 && i < nodes.length && !seen.has(i)) {
+      seen.add(i);
+      const n = nodes[i];
+      if (!n) break;
+      if (n.type === "choice") break; // 進入分支 → 之後不強制
+      if (n.type === "battle" && n.mustWin !== false && n.forcedOutcome !== "lose") out.push(i);
+      i = (n.jumpTo && labelIdx[n.jumpTo] != null) ? labelIdx[n.jumpTo] : i + 1;
+    }
     return out;
+  }
+
+  /** 🔒 節點條件是否滿足（等級/職業/稱號）。cond 空＝一律顯示。 */
+  _condMet(cond, progress) {
+    if (!cond || typeof cond !== "object") return true;
+    if (cond.minLevel != null && (Number(progress?.level) || 1) < Number(cond.minLevel)) return false;
+    if (cond.job && String(progress?.job || "") !== String(cond.job)) return false;
+    if (cond.title) {
+      const want = String(cond.title);
+      const pool = [...(progress?.inventory || []), ...Object.values(progress?.equipment || {})];
+      const has = pool.some((it) => it && it.equipSlot === "title_eq" && (it.itemName === want || it.name === want));
+      if (!has) return false;
+    }
+    return true;
   }
 
   /** 全部 enabled 章節，依 order 升冪。 */
@@ -187,7 +212,17 @@ class StoryService {
       return monsterCache[id];
     };
     const rawNodes = Array.isArray(chapter.nodes) ? chapter.nodes : [];
+    // 分支：label→index 對照，前端拿 jumpToIndex 直接跳（不用自己解析 label）
+    const labelIdx = {};
+    rawNodes.forEach((n, i) => { if (n && n.label) labelIdx[n.label] = i; });
+    const jumpIdxOf = (jumpTo) => (jumpTo && labelIdx[jumpTo] != null) ? labelIdx[jumpTo] : null;
     const nodes = await Promise.all(rawNodes.map(async (n, i) => {
+      // 分支/條件共用欄位（含戰鬥節點）
+      const flow = {
+        label: n.label || null,
+        jumpToIndex: jumpIdxOf(n.jumpTo),                 // 此節點看完後跳去哪(null=下一句)
+        condSkip: !this._condMet(n.cond, progress)        // 🔒 條件不符→前端跳過此節點
+      };
       if (n.type === "battle") {
         const m = await getMonster(n.monsterId);
         return {
@@ -202,7 +237,21 @@ class StoryService {
           won: battlesWon.includes(i), // 玩家是否已通過此戰
           backgroundUrl: n.backgroundUrl || null,
           bgm: n.bgm || null,
-          sfx: n.sfx || null
+          sfx: n.sfx || null,
+          grantItemId: n.grantItemId || null,
+          ...flow
+        };
+      }
+      if (n.type === "choice") {
+        // ❓ 選項分支：選項各自跳到 label(前端拿 index)
+        return {
+          type: "choice",
+          text: fillPlayerName(n.text, playerName),
+          options: (n.options || []).map((o) => ({ text: fillPlayerName(o.text, playerName), jumpToIndex: jumpIdxOf(o.jumpTo) })),
+          backgroundUrl: n.backgroundUrl || null,
+          bgm: n.bgm || null, sfx: n.sfx || null,
+          voiceUrl: n.voiceUrl || null,
+          ...flow
         };
       }
       // 共用演出欄位（B2 清台/退場 / B3 畫面效果·文字節奏）
@@ -218,7 +267,9 @@ class StoryService {
         backgroundUrl: n.backgroundUrl || null,
         bgm: n.bgm || null,
         sfx: n.sfx || null,
-        grantItemId: n.grantItemId || null // 🎁 發道具(讀到即給，前端呼叫 /grant)
+        grantItemId: n.grantItemId || null, // 🎁 發道具(讀到即給，前端呼叫 /grant)
+        voiceUrl: n.voiceUrl || null,       // 🎤 配音
+        ...flow
       };
       if (n.type === "cg") {
         return { type: "cg", cgUrl: n.cgUrl || null, cgPos: sanitizeBgPos(n.cgPos), text: fillPlayerName(n.text, playerName), ...common };
@@ -429,6 +480,16 @@ class StoryService {
         label: n?.label ? String(n.label).slice(0, 40) : null,
         jumpTo: n?.jumpTo ? String(n.jumpTo).slice(0, 40) : null
       };
+      // 🔒 條件（等級/職業/稱號；不滿足→玩家端跳過此節點）
+      let cond = null;
+      if (n?.cond && typeof n.cond === "object") {
+        const c = {};
+        const lv = Number(n.cond.minLevel);
+        if (Number.isFinite(lv) && lv > 1) c.minLevel = Math.min(999, Math.round(lv));
+        if (n.cond.job) c.job = String(n.cond.job).slice(0, 40);
+        if (n.cond.title) c.title = String(n.cond.title).slice(0, 60);
+        if (Object.keys(c).length) cond = c;
+      }
       // 共用演出欄位
       const common = {
         clearStage: n?.clearStage === true, // B2
@@ -443,8 +504,17 @@ class StoryService {
         bgm: n?.bgm ? String(n.bgm) : null,
         sfx: n?.sfx ? String(n.sfx) : null,
         grantItemId: n?.grantItemId ? String(n.grantItemId) : null, // 🎁 讀到此節點發指定道具(一次)
+        voiceUrl: n?.voiceUrl ? String(n.voiceUrl) : null,          // 🎤 配音(顯示此節點時播放)
+        cond,                                                        // 🔒 顯示條件
         ...reserved
       };
+      if (type === "choice") {
+        // ❓ 選項分支：2~4 個選項，各自跳到某個 label（空＝順著往下）
+        const options = (Array.isArray(n?.options) ? n.options : []).slice(0, 4)
+          .map((o) => ({ text: String(o?.text || "").slice(0, 80), jumpTo: o?.jumpTo ? String(o.jumpTo).slice(0, 40) : null }))
+          .filter((o) => o.text.trim());
+        return { type: "choice", text: String(n?.text || "").slice(0, 400), options, ...common };
+      }
       if (type === "battle") {
         const forcedOutcome = (n?.forcedOutcome === "win" || n?.forcedOutcome === "lose") ? n.forcedOutcome : null; // 劇情殺
         const mr = Number(n?.maxRounds); // 回合上限(1~30)；無效/空＝null(用預設)
@@ -455,7 +525,8 @@ class StoryService {
           mustWin: n?.mustWin !== false, // 預設必勝
           forcedOutcome, // 劇情殺：win=一定贏 / lose=一定輸(劇情照走) / null=正常
           maxRounds,     // 戰鬥回合上限(讓劇情戰鬥更快)
-          backgroundUrl: common.backgroundUrl, bgm: common.bgm, sfx: common.sfx, ...reserved
+          backgroundUrl: common.backgroundUrl, bgm: common.bgm, sfx: common.sfx,
+          grantItemId: common.grantItemId, cond: common.cond, ...reserved
         };
       }
       if (type === "cg") {

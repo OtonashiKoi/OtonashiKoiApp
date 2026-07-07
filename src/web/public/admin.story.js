@@ -54,10 +54,13 @@
     window.__storyKeybound = true;
     document.addEventListener("keydown", (e) => {
       if (!editing) return;
-      const t = e.target, tag = t && t.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable)) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = String(e.key || "").toLowerCase();
+      // Ctrl+S＝儲存章節（在輸入框裡也吃，擋掉瀏覽器另存）
+      if (k === "s") { e.preventDefault(); saveChapter().catch((err) => alert("儲存失敗：" + err.message)); return; }
+      // 復原/重做：輸入框內讓瀏覽器原生 undo 處理（打字回復）；框外才是編輯器整體復原
+      const t = e.target, tag = t && t.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable)) return;
       if (k === "z" && !e.shiftKey) { e.preventDefault(); doUndo(); }
       else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); doRedo(); }
     });
@@ -119,28 +122,40 @@
   const logMsg = (m) => { try { window.log ? window.log(`[劇情] ${m}`) : console.log(m); } catch (_) { console.log(m); } };
 
   // ── 狀態 ──
-  let npcs = [], zones = [], chapters = [], monsters = [], items = [];
+  let npcs = [], zones = [], chapters = [], monsters = [], items = [], jobs = [];
+  let assetsLoadedOk = false;   // 圖庫是否載入成功（失敗時不跑 backfill，避免灌重複請求）
+  let previewZoom = 1;          // 即時預覽放大倍率(1 / 1.5)
+  let npcSearch = "";           // NPC 清單搜尋字
+  let outlineOpen = false;      // 📑 大綱面板
+  // 節點穩定識別碼：演出面板展開狀態、跳轉徽章都認 uid（插入/刪除/排序不會跟錯人）
+  let _uidSeq = 1;
+  const ensureUids = (nodes) => (nodes || []).forEach((n) => { if (n && !n._uid) n._uid = "u" + (_uidSeq++); });
+  // 分支標籤顏色（label → 穩定色相），讓「這條線」有視覺辨識
+  const labelHue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+  const labelColor = (s) => `hsl(${labelHue(s)},70%,62%)`;
   // 立繪來源可為 NPC 或「怪物庫」：怪物立繪把 npcId 存成 "mon:<怪物id>"，與人物立繪一樣獨立擺台、依地圖分類挑選。
   const isMonRef = (id) => typeof id === "string" && id.startsWith("mon:");
   const monOf = (id) => (isMonRef(id) ? (monsters.find((m) => m.id === id.slice(4)) || null) : null);
   const zoneLabelOf = (k) => (zones.find((z) => z.key === k)?.label) || k || "其他";
   let editing = null;       // 編輯中的章節（working copy）
   let npcForm = null;       // 內嵌 NPC 表單
-  const fxOpen = new Set(); // 展開「演出」的節點 index
+  const fxOpen = new Set(); // 展開「演出」的節點（存 uid，插入/刪除/排序不會跟錯）
   let quickOpen = false;    // 快速編寫面板展開
   let undoStack = [], redoStack = [];
   let dragIdx = null;       // 拖曳中的節點 index
   let draftTimer = null;
 
   async function loadAll() {
-    [npcs, zones, chapters, monsters, items] = await Promise.all([
+    [npcs, zones, chapters, monsters, items, jobs] = await Promise.all([
       fetchJSON("/admin/story/npcs", { headers: headers() }),
       fetchJSON("/admin/story/zones", { headers: headers() }),
       fetchJSON("/admin/story/chapters", { headers: headers() }),
       fetchJSON("/admin/story/monsters", { headers: headers() }),
-      fetchJSON("/admin/story/items", { headers: headers() }).catch(() => [])
+      fetchJSON("/admin/story/items", { headers: headers() }).catch(() => []),
+      fetchJSON("/admin/story/jobs", { headers: headers() }).catch(() => ["Novice"])
     ]);
-    loadAssets().then(() => backfillAssets()); // 劇情圖庫：先載入，再把既有背景/CG 補進圖庫（非阻斷）
+    // 圖庫載入成功才 backfill（失敗＝清單是空的，跑 backfill 會把每個節點背景都重 POST 一輪）
+    loadAssets().then(() => { if (assetsLoadedOk) return backfillAssets(); });
     render();
   }
   async function uploadImage(file) {
@@ -150,7 +165,7 @@
 
   // ── 劇情圖庫：上傳一次命名，之後直接選 ──
   let storyAssets = [];
-  async function loadAssets() { try { storyAssets = (await fetchJSON("/admin/story/assets", { headers: headers() })) || []; } catch (_) { storyAssets = []; } }
+  async function loadAssets() { try { storyAssets = (await fetchJSON("/admin/story/assets", { headers: headers() })) || []; assetsLoadedOk = true; } catch (_) { storyAssets = []; assetsLoadedOk = false; } }
   async function saveAsset(name, url, kind) {
     if (!url) return null;
     if (storyAssets.some((a) => a.url === url && a.kind === kind)) return null; // 已在圖庫→不重複存
@@ -323,14 +338,33 @@
   // ── 儲存前檢查 ──
   function validateChapter() {
     const errors = [], warns = [];
-    (editing.nodes || []).forEach((n, i) => {
+    const nodes = editing.nodes || [];
+    // 分支：標籤重複/跳轉目標不存在 → 錯誤（存進去玩家會斷線）
+    const labelAt = {};
+    nodes.forEach((n, i) => {
+      if (!n.label) return;
+      if (labelAt[n.label] != null) errors.push(`#${i + 1} 標籤「${n.label}」重複（#${labelAt[n.label] + 1} 已用）`);
+      else labelAt[n.label] = i;
+    });
+    const checkJump = (jumpTo, where) => { if (jumpTo && labelAt[jumpTo] == null) errors.push(`${where} ⤳ 跳轉目標「${jumpTo}」不存在`); };
+    nodes.forEach((n, i) => {
+      checkJump(n.jumpTo, `#${i + 1}`);
       if (n.type === "battle") {
         if (!n.monsterId || !monsters.find((m) => m.id === n.monsterId)) errors.push(`#${i + 1} 戰鬥節點未指定有效怪物`);
+        const mr = Number(n.maxRounds);
+        if (n.maxRounds != null && n.maxRounds !== "" && (!Number.isFinite(mr) || mr < 1 || mr > 30)) warns.push(`#${i + 1} 回合上限要 1~30（會自動修正）`);
+      } else if (n.type === "choice") {
+        const opts = (n.options || []).filter((o) => String(o.text || "").trim());
+        if (opts.length < 2) errors.push(`#${i + 1} 選項節點至少要 2 個有文字的選項`);
+        (n.options || []).forEach((o, j) => checkJump(o.jumpTo, `#${i + 1} 選項${j + 1}`));
       } else {
-        if (!String(n.text || "").trim()) warns.push(`#${i + 1} ${n.type === "dialogue" ? "對話" : "旁白"}內容是空的`);
-        if (n.type === "dialogue" && n.npcId && !npcs.find((x) => x.id === n.npcId)) warns.push(`#${i + 1} 對話的 NPC 已不存在（會顯示 ???）`);
+        if (n.type === "cg" && !n.cgUrl) warns.push(`#${i + 1} CG 節點沒放事件圖（玩家會看到黑畫面）`);
+        if (!String(n.text || "").trim() && n.type !== "cg") warns.push(`#${i + 1} ${n.type === "dialogue" ? "對話" : "旁白"}內容是空的`);
+        if (n.type === "dialogue" && n.npcId && n.npcId !== "player" && !String(n.npcId).startsWith("mon:") && !npcs.find((x) => x.id === n.npcId)) warns.push(`#${i + 1} 對話的 NPC 已不存在（會顯示 ???）`);
+        if (n.type === "dialogue" && String(n.npcId || "").startsWith("mon:") && !monsters.find((m) => m.id === String(n.npcId).slice(4))) warns.push(`#${i + 1} 怪物立繪的怪已不存在`);
         if (n.type === "dialogue" && !n.npcId && !n.nameOverride) warns.push(`#${i + 1} 對話沒有選 NPC 也沒有名字覆寫（會顯示 ???）`);
       }
+      if (n.grantItemId && !items.find((it) => it.id === n.grantItemId)) errors.push(`#${i + 1} 🎁 指定的道具已不存在`);
     });
     return { errors, warns };
   }
@@ -338,14 +372,20 @@
   // ── 章節 ──
   async function saveChapter() {
     if (!editing) return;
+    syncEditingFromDom();
     const { errors, warns } = validateChapter();
     if (errors.length) { alert("儲存被擋下，請先修正：\n" + errors.join("\n")); return; }
     if (warns.length && !confirm("有些小提醒：\n" + warns.join("\n") + "\n\n仍要儲存嗎？")) return;
     const saved = await fetchJSON("/admin/story/chapters", { method: "POST", headers: headers(), body: JSON.stringify(editing) });
     bumpRecentNpcs([...new Set((editing.nodes || []).filter((n) => n.npcId).map((n) => n.npcId))]);
     logMsg(`章節「${saved.title}」已儲存（${saved.nodes.length} 節點）`);
-    clearDraft(); stopDraft(); editing = null; fxOpen.clear(); undoStack = []; redoStack = [];
-    await loadAll();
+    // 存檔後「留在編輯器」（不再踢回列表）；接住後端配發的 id，之後再存是更新不是新增
+    clearDraft();
+    editing.id = saved.id || editing.id;
+    chapters = await fetchJSON("/admin/story/chapters", { headers: headers() }).catch(() => chapters);
+    const btn = document.getElementById("story-ch-save");
+    if (btn) { const orig = btn.textContent; btn.textContent = "✅ 已儲存"; setTimeout(() => { const b2 = document.getElementById("story-ch-save"); if (b2) b2.textContent = orig; }, 1600); }
+    render();
   }
   async function deleteChapter(id, title) {
     if (!confirm(`刪除章節「${title}」？綁定區域的閘門會解除。`)) return;
@@ -408,7 +448,8 @@
 
   // ── 目錄畫面 ──
   function renderLists() {
-    const npcRows = npcs.map((n) => `
+    const npcFiltered = npcSearch ? npcs.filter((n) => (n.name || "").includes(npcSearch) || (n.description || "").includes(npcSearch)) : npcs;
+    const npcRows = npcFiltered.map((n) => `
       <div style="${ROW}border-bottom:1px dashed #2c3350;padding-bottom:8px;">
         ${n.portraitUrl ? `<img src="${esc(faceThumb(n.portraitUrl))}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;border-radius:8px;background:#232945;display:flex;align-items:center;justify-content:center;">🎭</div>`}
         <div style="flex:1;min-width:120px;">
@@ -466,10 +507,13 @@
       <div style="${BOX}">
         <div style="${ROW}justify-content:space-between;">
           <h3 style="margin:0;">🎭 NPC 人物卡（${npcs.length}）</h3>
-          <button class="button primary" id="story-npc-add">➕ 新增 NPC</button>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="search" id="npc-search" placeholder="🔍 找角色…" value="${esc(npcSearch)}" style="width:140px;">
+            <button class="button primary" id="story-npc-add">➕ 新增 NPC</button>
+          </div>
         </div>
         <p class="hint">做一次人物卡（名字＋立繪），寫對話時選了就自動出立繪＋名字。</p>
-        ${npcRows || '<p class="hint">尚無 NPC。</p>'}
+        ${npcRows || `<p class="hint">${npcSearch ? "沒有符合「" + esc(npcSearch) + "」的角色。" : "尚無 NPC。"}</p>`}
         ${npcFormHtml}
       </div>
       <div style="${BOX}">
@@ -487,6 +531,7 @@
 
   // ── 章節編輯器 ──
   function renderChapterEditor() {
+    ensureUids(editing.nodes); // 每次渲染補齊節點 uid（演出面板/跳轉徽章都認 uid，不會因插入/排序跟錯）
     const zoneOpts = ['<option value="">（不綁定地圖：純劇情章）</option>']
       .concat(zones.map((z) => `<option value="${esc(z.key)}" ${editing.zoneKey === z.key ? "selected" : ""}>${esc(z.label)}（${esc(z.key)}）</option>`)).join("");
     const npcOpts = (sel) => {
@@ -522,10 +567,31 @@
       return ['<option value="">（預設立繪）</option>']
         .concat(exprs.map((e) => `<option value="${esc(e.name)}" ${sel === e.name ? "selected" : ""}>😊 ${esc(e.name)}</option>`)).join("");
     };
+    // 分支：所有已命名標籤（跳轉目標下拉用）
+    const allLabels = (editing.nodes || []).map((n, i) => ({ label: n.label, i })).filter((x) => x.label);
+    const jumpOpts = (sel) => ['<option value="">（順著往下）</option>']
+      .concat(allLabels.map((x) => `<option value="${esc(x.label)}" ${sel === x.label ? "selected" : ""}>⤳ #${x.i + 1} 🏷${esc(x.label)}</option>`)).join("");
+    const condJobOpts = (sel) => ['<option value="">（不限職業）</option>']
+      .concat((jobs || []).map((j) => `<option value="${esc(j)}" ${sel === j ? "selected" : ""}>${esc(j)}</option>`)).join("");
+    const condTitleOpts = (sel) => ['<option value="">（不限稱號）</option>']
+      .concat((items || []).filter((it) => it.equipSlot === "title_eq").map((it) => `<option value="${esc(it.name)}" ${sel === it.name ? "selected" : ""}>👑 ${esc(it.name)}</option>`)).join("");
+
     const nodeRows = (editing.nodes || []).map((n, i) => {
-      const isBattle = n.type === "battle", isDlg = n.type === "dialogue", isCG = n.type === "cg";
-      const showFx = fxOpen.has(i);
-      const mainArea = isBattle
+      const isBattle = n.type === "battle", isDlg = n.type === "dialogue", isCG = n.type === "cg", isChoice = n.type === "choice";
+      const showFx = fxOpen.has(n._uid);
+      const choiceArea = isChoice ? `
+        <textarea data-node="${i}" data-field="text" rows="1" style="width:100%;box-sizing:border-box;margin-bottom:6px;" placeholder="提問（選填，例：要跟她走嗎？）">${esc(n.text || "")}</textarea>
+        ${(n.options || []).map((o, j) => `
+          <div style="${ROW}margin-bottom:4px;">
+            <span style="color:#c4a7f5;font-weight:900;font-size:12px;">${j + 1}.</span>
+            <input type="text" data-opt="${i}:${j}:text" value="${esc(o.text || "")}" placeholder="選項文字" style="flex:1;min-width:120px;">
+            <select data-opt="${i}:${j}:jumpTo" title="選了跳去哪(空=順著往下)" style="max-width:170px;">${jumpOpts(o.jumpTo || "")}</select>
+            <span class="st-jump-handle" data-jump-drag="${i}:${j}" title="按住拉到目標節點＝設定跳轉" style="cursor:grab;font-size:16px;color:#7ce0ff;touch-action:none;user-select:none;">⤳</span>
+            <button class="button" data-opt-del="${i}:${j}" style="padding:2px 7px;">🗑</button>
+          </div>`).join("")}
+        ${(n.options || []).length < 4 ? `<button class="button" data-opt-add="${i}" style="padding:3px 10px;">➕ 加選項</button>` : ""}
+        <p class="hint" style="margin:4px 0 0;font-size:10px;">💡 ⤳ 可以直接「拉」到下面/上面的節點卡片放開＝設定跳轉；目標節點會自動取得 🏷標籤。分支走完想拉回主線＝把該線最後一句的 ⤳ 拉回主線節點。</p>` : "";
+      const mainArea = isChoice ? choiceArea : isBattle
         ? `<div style="${ROW}">
              <select data-node="${i}" data-field="monsterId" style="min-width:220px;">${monsterOpts(n.monsterId)}</select>
              <select data-node="${i}" data-field="forcedOutcome" title="劇情殺：不管實際打贏打輸，強制指定結局，故事照劇本走" style="min-width:150px;">
@@ -566,13 +632,28 @@
             <select class="st-sel" data-node="${i}" data-field="textSpeed">${optionsHtml(SPEED_OPTS, n.textSpeed || "")}</select>
             <select class="st-sel" data-node="${i}" data-field="exitSide" title="讓某個位置的立繪退場(移除)；換人時舊角色不會自動消失，用這個把他移掉">${optionsHtml(EXIT_OPTS, n.exitSide || "")}</select>
             <label style="font-size:12px;" title="進場前清掉台上其他立繪(換場/獨白用)"><input type="checkbox" data-node="${i}" data-field="clearStage" ${n.clearStage ? "checked" : ""}> 🧹 清空其他立繪</label>
-            ${!isBattle ? `<label style="font-size:12px;" title="讀到此節點自動發指定道具給玩家(每人只發一次)">🎁 給道具 <select class="st-sel" data-node="${i}" data-field="grantItemId">${itemOpts(n.grantItemId)}</select></label>` : ""}
+            <label style="font-size:12px;" title="讀到此節點自動發指定道具給玩家(每人只發一次)">🎁 給道具 <select class="st-sel" data-node="${i}" data-field="grantItemId">${itemOpts(n.grantItemId)}</select></label>
+          </div>
+          <div style="${ROW}margin:8px 0 0;">
+            <label style="font-size:12px;" title="分支標籤：讓別的節點/選項可以 ⤳ 跳到這裡">🏷 <input type="text" data-node="${i}" data-field="label" value="${esc(n.label || "")}" placeholder="標籤(跳轉目標)" style="width:110px;"></label>
+            ${!isChoice ? `<label style="font-size:12px;" title="此節點看完後跳去哪(合流/跳段用)；空=順著往下">⤳ <select class="st-sel" data-node="${i}" data-field="jumpTo">${jumpOpts(n.jumpTo || "")}</select></label>` : ""}
+            <label class="button" style="cursor:pointer;font-size:12px;" title="配音：顯示此節點時播放(mp3/m4a/wav)">🎤 配音<input type="file" accept="audio/*" data-node-voice="${i}" style="display:none;"></label>
+            ${n.voiceUrl ? `<button class="button" data-voice-play="${i}" style="padding:2px 8px;">▶</button><button class="button" data-node-voice-clear="${i}" style="padding:2px 8px;">✖🎤</button>` : ""}
+            <span style="flex:0 0 8px;"></span>
+            <label style="font-size:12px;" title="🔒 顯示條件：不滿足的玩家會直接跳過此節點">🔒 Lv≥<input type="number" data-cond="${i}:minLevel" value="${n.cond?.minLevel || ""}" min="2" max="999" placeholder="-" style="width:52px;"></label>
+            <select data-cond="${i}:job" title="🔒 職業限定" style="max-width:110px;">${condJobOpts(n.cond?.job || "")}</select>
+            <select data-cond="${i}:title" title="🔒 稱號限定(持有即可)" style="max-width:150px;">${condTitleOpts(n.cond?.title || "")}</select>
           </div>
         </div>` : "";
-      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", (n.textFx && n.textFx !== "") && "✨", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹", n.grantItemId && "🎁"].filter(Boolean).join(" ");
+      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", (n.textFx && n.textFx !== "") && "✨", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹", n.grantItemId && "🎁", n.voiceUrl && "🎤", (n.cond && Object.keys(n.cond).length) && "🔒"].filter(Boolean).join(" ");
 
+      // 分支視覺：🏷標籤(彩色) / ⤳跳轉徽章(點了捲到目標) / 被跳入的節點左框上色
+      const jumpTargetIdx = n.jumpTo ? allLabels.find((x) => x.label === n.jumpTo)?.i : null;
+      const jumpBadge = n.jumpTo ? `<button class="button" data-goto-node="${jumpTargetIdx ?? ""}" title="點了捲到目標節點" style="padding:1px 7px;font-size:11px;color:${esc(labelColor(n.jumpTo))};border-color:${esc(labelColor(n.jumpTo))};">⤳ ${jumpTargetIdx != null ? "#" + (jumpTargetIdx + 1) : "?"} 🏷${esc(n.jumpTo)}</button>` : "";
+      const labelBadge = n.label ? `<span style="font-size:11px;font-weight:900;color:${esc(labelColor(n.label))};">🏷${esc(n.label)}</span>` : "";
+      const borderCss = n.label ? `border-left:3px solid ${esc(labelColor(n.label))};` : (isChoice ? "border-left:3px solid #ffd166;" : "");
       return `
-      <div class="st-node-card" data-node-card="${i}" style="${BOX}background:rgba(28,32,56,0.6);">
+      <div class="st-node-card" data-node-card="${i}" style="${BOX}${borderCss}background:rgba(28,32,56,0.6);">
         <div style="${ROW}margin-bottom:6px;">
           <span class="st-drag-handle" draggable="true" data-drag="${i}" title="拖曳排序">⠿</span>
           <b style="color:#8b93b8;">#${i + 1}</b>
@@ -580,8 +661,11 @@
           ${typeBtn(i, "dialogue", n.type === "dialogue", "💬 對話")}
           ${typeBtn(i, "battle", n.type === "battle", "⚔️ 戰鬥")}
           ${typeBtn(i, "cg", n.type === "cg", "🖼 CG")}
-          ${n.type !== "battle" ? `<select data-node="${i}" data-field="textSize" title="文字大小(玩家端台詞字體)" style="width:84px;flex:0 0 auto;padding:2px 6px;font-size:12px;">${optionsHtml(TEXTSIZE_OPTS, n.textSize || "")}</select>` : ""}
+          ${typeBtn(i, "choice", isChoice, "❓ 選項")}
+          ${(!isBattle && !isChoice) ? `<select data-node="${i}" data-field="textSize" title="文字大小(玩家端台詞字體)" style="width:84px;flex:0 0 auto;padding:2px 6px;font-size:12px;">${optionsHtml(TEXTSIZE_OPTS, n.textSize || "")}</select>` : ""}
+          ${labelBadge}${jumpBadge}
           <span style="flex:1;"></span>
+          ${!isChoice ? `<span class="st-jump-handle" data-jump-drag="${i}:-1" title="按住拉到目標節點＝此節點看完後跳過去(合流/跳段)" style="cursor:grab;font-size:16px;color:#7ce0ff;touch-action:none;user-select:none;padding:0 4px;">⤳</span>` : ""}
           <button class="button ${showFx ? "primary" : ""}" data-node-fx="${i}" style="padding:3px 8px;">🎬 演出${fxHint ? " " + fxHint : ""}</button>
           <button class="button" data-node-insert="${i}" style="padding:3px 8px;" title="下方插入同型節點">⤵</button>
           <button class="button" data-node-dup="${i}" style="padding:3px 8px;" title="複製此節點(含演出)">⿻</button>
@@ -600,13 +684,29 @@
         <div style="${ROW}justify-content:space-between;">
           <h3 style="margin:0;">${editing.id ? "✏️ 編輯章節" : "➕ 新增章節"}</h3>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="button ${outlineOpen ? "primary" : ""}" id="story-outline-btn" title="章節大綱：場景/戰鬥/CG/分支一覽，點了跳過去">📑 大綱</button>
             <button class="button" id="story-undo" ${undoStack.length ? "" : "disabled"} title="復原">↩️</button>
             <button class="button" id="story-redo" ${redoStack.length ? "" : "disabled"} title="重做">↪️</button>
             <button class="button" id="story-ch-preview">▶ 本章預覽</button>
             <button class="button" id="story-ch-cancel">取消</button>
-            <button class="button primary" id="story-ch-save">💾 儲存章節</button>
+            <button class="button primary" id="story-ch-save" title="Ctrl+S">💾 儲存章節</button>
           </div>
         </div>
+        ${outlineOpen ? `<div id="story-outline" style="max-height:220px;overflow:auto;border:1px dashed #2c3350;border-radius:8px;padding:6px 8px;margin:6px 0;display:flex;flex-direction:column;gap:2px;">
+          ${(editing.nodes || []).map((n, i) => {
+            const marks = [];
+            if (n.label) marks.push(`<b style="color:${esc(labelColor(n.label))};">🏷${esc(n.label)}</b>`);
+            if (n.type === "choice") marks.push(`<b style="color:#ffd166;">❓${(n.options || []).length}選項</b>`);
+            if (n.type === "battle") marks.push("⚔️" + esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "?") + (n.forcedOutcome ? (n.forcedOutcome === "lose" ? "(必敗)" : "(必勝)") : ""));
+            if (n.type === "cg") marks.push("🖼CG");
+            if (n.backgroundUrl) marks.push("🏞換景");
+            if (n.jumpTo) marks.push(`<span style="color:${esc(labelColor(n.jumpTo))};">⤳${esc(n.jumpTo)}</span>`);
+            if (n.grantItemId) marks.push("🎁");
+            if (n.cond) marks.push("🔒");
+            if (!marks.length) return "";
+            return `<button class="button" data-outline-go="${i}" style="justify-content:flex-start;text-align:left;padding:2px 8px;font-size:11px;display:flex;gap:6px;align-items:center;"><span style="color:#8b93b8;">#${i + 1}</span> ${marks.join("　")} <span style="color:#9b8cc0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:340px;">${esc((n.text || "").slice(0, 26))}</span></button>`;
+          }).filter(Boolean).join("") || '<span class="hint" style="margin:0;">（還沒有場景/戰鬥/分支等地標）</span>'}
+        </div>` : ""}
         <div style="${ROW}">
           <label>順序 <input type="number" id="story-f-order" value="${Number(editing.order) || 0}" style="width:64px;"></label>
           <label>標題 <input type="text" id="story-f-title" value="${esc(editing.title || "")}" style="width:200px;" placeholder="例：草原的呼喚"></label>
@@ -662,7 +762,28 @@
     root.querySelectorAll("[data-node][data-field]").forEach((el) => {
       const i = Number(el.dataset.node), f = el.dataset.field;
       if (!editing.nodes[i]) return;
-      editing.nodes[i][f] = el.type === "checkbox" ? el.checked : el.value;
+      let v = el.type === "checkbox" ? el.checked : el.value;
+      if (f === "maxRounds") v = v === "" ? null : Number(v) || null; // 數字欄位存數字
+      editing.nodes[i][f] = v;
+    });
+    // ❓選項欄位（data-opt="i:j:field"）
+    root.querySelectorAll("[data-opt]").forEach((el) => {
+      const [i, j, f] = el.dataset.opt.split(":");
+      const n = editing.nodes[Number(i)];
+      if (!n) return;
+      n.options = Array.isArray(n.options) ? n.options : [];
+      if (!n.options[Number(j)]) n.options[Number(j)] = { text: "", jumpTo: "" };
+      n.options[Number(j)][f] = el.value;
+    });
+    // 🔒條件欄位（data-cond="i:field"）；全空 → cond=null
+    root.querySelectorAll("[data-cond]").forEach((el) => {
+      const [i, f] = el.dataset.cond.split(":");
+      const n = editing.nodes[Number(i)];
+      if (!n) return;
+      n.cond = n.cond && typeof n.cond === "object" ? n.cond : {};
+      const v = f === "minLevel" ? (el.value === "" ? null : Number(el.value) || null) : (el.value || null);
+      if (v == null) delete n.cond[f]; else n.cond[f] = v;
+      if (!Object.keys(n.cond).length) n.cond = null;
     });
   }
 
@@ -703,6 +824,13 @@
     }
 
     // ── 章節目錄 ──
+    // 🔍 NPC 搜尋（重繪後把焦點放回輸入框）
+    root.querySelector("#npc-search")?.addEventListener("input", (e) => {
+      npcSearch = e.target.value || "";
+      render();
+      const inp = root.querySelector("#npc-search");
+      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    });
     root.querySelector("#story-ch-add")?.addEventListener("click", () => {
       const maxOrder = chapters.reduce((m, c) => Math.max(m, Number(c.order) || 0), 0);
       openEditor({ order: maxOrder + 1, title: "", zoneKey: null, enabled: true, backgroundUrl: null, nodes: [], scriptDraft: "" });
@@ -735,6 +863,11 @@
       if (!editing.title?.trim()) { alert("請輸入章節標題"); return; }
       try { await saveChapter(); } catch (e) { alert("儲存失敗：" + e.message); }
     });
+    // 📑 大綱
+    root.querySelector("#story-outline-btn")?.addEventListener("click", () => { syncEditingFromDom(); outlineOpen = !outlineOpen; render(); });
+    root.querySelectorAll("[data-outline-go]").forEach((b) => b.addEventListener("click", () => {
+      root.querySelector(`[data-node-card="${b.dataset.outlineGo}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }));
     root.querySelector("#story-ch-cancel")?.addEventListener("click", () => {
       if (!confirm("放棄未儲存的變更？（自動草稿也會一併刪除）")) return;
       clearDraft(); stopDraft(); editing = null; fxOpen.clear(); undoStack = []; redoStack = []; render();
@@ -805,11 +938,87 @@
       if (t === "dialogue") { if (!n.npcId) n.npcId = lastSpeakerNpcId(); if (!n.side) n.side = "left"; }
       if (t === "battle") { if (n.monsterId === undefined || n.monsterId === null) n.monsterId = monsters[0]?.id || null; if (n.mustWin === undefined) n.mustWin = true; }
       if (t === "cg" && n.cgUrl === undefined) n.cgUrl = null;
+      if (t === "choice" && !Array.isArray(n.options)) n.options = [{ text: "", jumpTo: "" }, { text: "", jumpTo: "" }];
       render();
+    }));
+    // ❓選項：加/刪選項
+    root.querySelectorAll("[data-opt-add]").forEach((b) => b.addEventListener("click", () => {
+      syncEditingFromDom(); pushUndo();
+      const n = editing.nodes[Number(b.dataset.optAdd)];
+      n.options = Array.isArray(n.options) ? n.options : [];
+      if (n.options.length < 4) n.options.push({ text: "", jumpTo: "" });
+      render();
+    }));
+    root.querySelectorAll("[data-opt-del]").forEach((b) => b.addEventListener("click", () => {
+      syncEditingFromDom(); pushUndo();
+      const [i, j] = b.dataset.optDel.split(":").map(Number);
+      editing.nodes[i]?.options?.splice(j, 1);
+      render();
+    }));
+    // ⤳ 跳轉徽章：捲到目標
+    root.querySelectorAll("[data-goto-node]").forEach((b) => b.addEventListener("click", () => {
+      const t = Number(b.dataset.gotoNode);
+      if (!Number.isFinite(t)) return;
+      root.querySelector(`[data-node-card="${t}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }));
+    // 🎤 配音上傳/播放/清除
+    root.querySelectorAll("[data-node-voice]").forEach((inp) => inp.addEventListener("change", async () => {
+      if (!inp.files?.[0]) return;
+      syncEditingFromDom(); pushUndo();
+      const fd = new FormData(); fd.append("audio", inp.files[0]);
+      try {
+        const r = await fetchJSON("/admin/story/upload-voice", { method: "POST", headers: headers(false), body: fd });
+        editing.nodes[Number(inp.dataset.nodeVoice)].voiceUrl = r.audioUrl;
+        render();
+      } catch (e) { alert("配音上傳失敗：" + (e?.message || e)); }
+    }));
+    root.querySelectorAll("[data-voice-play]").forEach((b) => b.addEventListener("click", () => {
+      const u = editing.nodes[Number(b.dataset.voicePlay)]?.voiceUrl; if (!u) return;
+      stopPreviewAudio(); previewAudio = new Audio(u); previewAudio.volume = 0.9; previewAudio.play().catch(() => {});
+    }));
+    root.querySelectorAll("[data-node-voice-clear]").forEach((b) => b.addEventListener("click", () => {
+      syncEditingFromDom(); pushUndo(); editing.nodes[Number(b.dataset.nodeVoiceClear)].voiceUrl = null; render();
+    }));
+    // ⤳ 拖曳連線：按住把手拉到另一張節點卡片放開＝設定跳轉（目標沒有標籤就自動取名）
+    root.querySelectorAll("[data-jump-drag]").forEach((h) => h.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const [srcI, optJ] = h.dataset.jumpDrag.split(":").map(Number);
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.style.cssText = "position:fixed;inset:0;z-index:9998;pointer-events:none;";
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("stroke", "#7ce0ff"); line.setAttribute("stroke-width", "2.5"); line.setAttribute("stroke-dasharray", "6 4");
+      svg.appendChild(line); document.body.appendChild(svg);
+      const hr = h.getBoundingClientRect(), sx = hr.left + hr.width / 2, sy = hr.top + hr.height / 2;
+      line.setAttribute("x1", sx); line.setAttribute("y1", sy); line.setAttribute("x2", sx); line.setAttribute("y2", sy);
+      let hoverCard = null;
+      const onMove = (ev) => {
+        line.setAttribute("x2", ev.clientX); line.setAttribute("y2", ev.clientY);
+        const card = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.("[data-node-card]");
+        if (hoverCard && hoverCard !== card) hoverCard.style.outline = "";
+        hoverCard = card || null;
+        if (hoverCard) hoverCard.style.outline = "2px dashed #7ce0ff";
+        // 靠近視窗上/下緣自動捲動，方便拉到很遠的節點
+        if (ev.clientY < 70) window.scrollBy(0, -18); else if (ev.clientY > innerHeight - 70) window.scrollBy(0, 18);
+      };
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove); document.removeEventListener("pointerup", onUp);
+        svg.remove();
+        if (hoverCard) hoverCard.style.outline = "";
+        const targetI = hoverCard ? Number(hoverCard.dataset.nodeCard) : null;
+        if (targetI == null || targetI === srcI) return;
+        syncEditingFromDom(); pushUndo();
+        const target = editing.nodes[targetI];
+        if (!target.label) target.label = "L" + (targetI + 1); // 目標自動取得標籤
+        if (optJ >= 0) { const o = editing.nodes[srcI]?.options?.[optJ]; if (o) o.jumpTo = target.label; }
+        else editing.nodes[srcI].jumpTo = target.label;
+        writeDraft(); render();
+      };
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
     }));
     // 演出收合
     root.querySelectorAll("[data-node-fx]").forEach((b) => b.addEventListener("click", () => {
-      syncEditingFromDom(); const i = Number(b.dataset.nodeFx); fxOpen.has(i) ? fxOpen.delete(i) : fxOpen.add(i); render();
+      syncEditingFromDom(); const i = Number(b.dataset.nodeFx); const uid = editing.nodes[i]?._uid; if (uid) { fxOpen.has(uid) ? fxOpen.delete(uid) : fxOpen.add(uid); } render();
     }));
     // 下方插入（同型；對話沿用同角色）
     root.querySelectorAll("[data-node-insert]").forEach((b) => b.addEventListener("click", () => {
@@ -819,7 +1028,9 @@
         ? { type: "dialogue", text: "", side: cur.side || "center", portraitFx: "", npcId: cur.npcId || lastSpeakerNpcId(), nameOverride: null, backgroundUrl: null, bgm: "", sfx: "" }
         : cur.type === "battle"
           ? { type: "battle", monsterId: monsters[0]?.id || null, mustWin: true, backgroundUrl: null, bgm: "", sfx: "" }
-          : { type: "narration", text: "", backgroundUrl: null, bgm: "", sfx: "" };
+          : cur.type === "choice"
+            ? { type: "choice", text: "", options: [{ text: "", jumpTo: "" }, { text: "", jumpTo: "" }], backgroundUrl: null, bgm: "", sfx: "" }
+            : { type: "narration", text: "", backgroundUrl: null, bgm: "", sfx: "" };
       editing.nodes.splice(i + 1, 0, fresh); render();
     }));
     // 複製節點（含演出）
@@ -829,7 +1040,12 @@
       editing.nodes.splice(i + 1, 0, JSON.parse(JSON.stringify(editing.nodes[i]))); render();
     }));
     // 排序/刪除
-    root.querySelectorAll("[data-node-del]").forEach((b) => b.addEventListener("click", () => { syncEditingFromDom(); pushUndo(); editing.nodes.splice(Number(b.dataset.nodeDel), 1); render(); }));
+    root.querySelectorAll("[data-node-del]").forEach((b) => b.addEventListener("click", () => {
+      const i = Number(b.dataset.nodeDel), n = editing.nodes[i];
+      const brief = (n?.text || (n?.type === "battle" ? "戰鬥節點" : n?.type === "choice" ? "選項節點" : "")).slice(0, 20);
+      if (!confirm(`刪除 #${i + 1}${brief ? "「" + brief + "…」" : ""}？（可用 ↩️ 復原）`)) return;
+      syncEditingFromDom(); pushUndo(); editing.nodes.splice(i, 1); render();
+    }));
     root.querySelectorAll("[data-node-up]").forEach((b) => b.addEventListener("click", () => { syncEditingFromDom(); pushUndo(); const i = Number(b.dataset.nodeUp); [editing.nodes[i - 1], editing.nodes[i]] = [editing.nodes[i], editing.nodes[i - 1]]; render(); }));
     root.querySelectorAll("[data-node-down]").forEach((b) => b.addEventListener("click", () => { syncEditingFromDom(); pushUndo(); const i = Number(b.dataset.nodeDown); [editing.nodes[i + 1], editing.nodes[i]] = [editing.nodes[i], editing.nodes[i + 1]]; render(); }));
     // 拖曳排序
@@ -914,10 +1130,12 @@
     const e = (npc.expressions || []).find((x) => x && x.name === nn.expression);
     return (e && e.url) || npc.portraitUrl || null;
   }
-  function stageAt(nodes, idx) {
+  function stageAt(nodes, idx, path) {
+    // path 給了＝照「實際走過的節點順序」重播(分支/跳轉用，本章預覽)；沒給＝線性 0..idx(編輯視角)
+    const seq = Array.isArray(path) ? path : Array.from({ length: idx + 1 }, (_, k) => k);
     const st = {}, pos = {}, occ = {}; // occ[side]=目前站該位置的角色 id（換人就把位移歸零＝置中）
     const clearAll = () => { [st, pos, occ].forEach((o) => Object.keys(o).forEach((k) => delete o[k])); };
-    for (let i = 0; i <= idx; i++) {
+    for (const i of seq) {
       const nn = nodes[i]; if (!nn) continue;
       if (nn.clearStage) clearAll();
       if (nn.exitSide === "all") clearAll(); else if (nn.exitSide) { delete st[nn.exitSide]; delete pos[nn.exitSide]; delete occ[nn.exitSide]; }
@@ -935,7 +1153,7 @@
   }
   function bgPosAt(nodes, idx) { for (let i = idx; i >= 0; i--) { if (nodes[i] && nodes[i].bgPos) return nodes[i].bgPos; } return null; }
   // 拉動起始位置（沿用當前實際顯示的位移，避免第一下跳位）
-  function effectivePortraitPos(nodes, idx, side) { const st = stageAt(nodes, idx); return (st[side] && st[side].pos) || { x: 0, y: 0 }; }
+  function effectivePortraitPos(nodes, idx, side) { const st = stageAt(nodes, idx); return (st[side] && st[side].pos) || {}; }
 
   function buildStageHTML(nodes, idx, opts) {
     const ls = !!(opts && opts.landscape); // 橫向預覽：立繪更高更窄、對話框更矮
@@ -949,11 +1167,14 @@
     const chapterBg = editing?.backgroundUrl || (editing?.zoneKey ? `/uploads/zones/${editing.zoneKey}.webp` : null);
     const n = nodes[idx];
     if (!n) return `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c4a7f5;">📖 章節結束</div>`;
-    let bg = chapterBg; for (let i = idx; i >= 0; i--) { if (nodes[i]?.backgroundUrl) { bg = nodes[i].backgroundUrl; break; } }
-    const bgPos = bgPosAt(nodes, idx); // 背景平移(往回找最近設定)
+    // 往回找「最近設定」：有 path(分支預覽)照實際走過的順序，否則線性
+    const seq = (opts && Array.isArray(opts.path)) ? opts.path : Array.from({ length: idx + 1 }, (_, k) => k);
+    const lookback = (pick) => { for (let k = seq.length - 1; k >= 0; k--) { const v = pick(nodes[seq[k]]); if (v) return v; } return null; };
+    const bg = lookback((x) => x?.backgroundUrl) || chapterBg;
+    const bgPos = lookback((x) => x?.bgPos); // 背景平移(往回找最近設定)
     const exprUrl = (npc, name) => { const e = (npc?.expressions || []).find((x) => x && x.name === name); return e?.url || null; };
     const nodePortrait = (nn) => { const m = monOf(nn.npcId); if (m) return m.imageUrl || null; const npc = npcById[nn.npcId]; return exprUrl(npc, nn.expression) || npc?.portraitUrl || null; };
-    const st = stageAt(nodes, idx); // { side: {url,fx,pos} }（含位移，pos 跨節點沿用）
+    const st = stageAt(nodes, idx, opts && opts.path); // { side: {url,fx,pos} }（含位移，pos 跨節點沿用）
     const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
     const npc = isDlg ? npcById[n.npcId] : null;
     const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || monOf(n.npcId)?.name || npc?.name || "???")) : "";
@@ -983,11 +1204,16 @@
     const fxOverlay = n.screenFx === "flash" ? `<div style="position:absolute;inset:0;background:#fff;z-index:8;animation:stPvFlash .45s forwards;"></div>`
       : n.screenFx === "fadeblack" ? `<div style="position:absolute;inset:0;background:#000;z-index:8;animation:stPvFade .9s forwards;"></div>` : "";
     const shakeAnim = n.screenFx === "shake" ? "animation:stPvShake .4s;" : "";
-    let curBgm = ""; for (let i = idx; i >= 0; i--) { if (nodes[i]?.bgm) { curBgm = nodes[i].bgm; break; } }
+    const curBgm = lookback((x) => x?.bgm) || "";
+    const bgmLabel = (k) => (BGM_OPTS.find((o) => o[0] === k)?.[1] || k).replace(/^🎵\s*|^🎼\s*/, ""); // 顯示中文曲名
+    const grantName = n.grantItemId ? (items.find((it) => it.id === n.grantItemId)?.name || "?") : "";
     const badges = [
-      curBgm ? `🎵 ${esc(curBgm === "zone" ? "地圖曲" : curBgm)}` : "",
+      curBgm ? `🎵 ${esc(curBgm === "zone" ? "地圖曲" : bgmLabel(curBgm))}` : "",
       n.sfx ? `🔊 ${esc(n.sfx)}` : "",
-      n.screenFx ? `🎞️ ${esc(n.screenFx)}` : ""
+      n.screenFx ? `🎞️ ${esc(n.screenFx)}` : "",
+      n.voiceUrl ? "🎤配音" : "",
+      grantName ? `🎁${esc(grantName)}` : "",
+      n.cond ? `🔒${n.cond.minLevel ? "Lv" + n.cond.minLevel : ""}${n.cond.job ? " " + esc(n.cond.job) : ""}${n.cond.title ? " 👑" : ""}` : ""
     ].filter(Boolean).join("　");
     return `
       <div style="position:absolute;inset:0;${shakeAnim}">
@@ -996,17 +1222,19 @@
         ${(bg || (isCG && n.cgUrl)) ? `<div data-resize-${isCG && n.cgUrl ? "cg" : "bg"} title="拉動改變${isCG && n.cgUrl ? "CG" : "背景"}大小" style="position:absolute;top:50%;right:6px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:24px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:6;box-shadow:0 1px 6px rgba(0,0,0,.6);">⤢</div>` : ""}
         ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
-        <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:${ls ? "10px 12px" : "12px"};min-height:${P.boxMinH};background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
-          ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div>`
-            : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;font-size:14px;margin-bottom:4px;">${esc(name)}</div>` : ""}<div class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
+        <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:${ls ? "10px 12px" : "12px"};min-height:${P.boxMinH};background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : n.type === "choice" ? "#ffd166" : "#c4a7f5"};border-radius:10px;">
+          ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}${n.forcedOutcome === "win" ? "（劇情殺·必勝）" : n.forcedOutcome === "lose" ? "（劇情殺·必敗）" : ""}${n.maxRounds ? `　⏱${esc(String(n.maxRounds))}回合` : ""}</div>`
+            : n.type === "choice" ? `${String(n.text || "").trim() ? `<div data-pv-text style="color:#f3ecff;font-size:13px;margin-bottom:6px;white-space:pre-wrap;">${esc(n.text)}</div>` : ""}
+              ${(n.options || []).map((o, oi) => `<div data-pv-opt="${oi}" style="border:1.5px solid #ffd166;border-radius:8px;padding:6px 10px;margin-top:4px;color:#ffe9b3;font-size:13px;font-weight:700;text-align:center;cursor:pointer;">${esc(o.text || "（空選項）")}${o.jumpTo ? ` <span style="font-size:10px;color:${esc(labelColor(o.jumpTo))};">⤳${esc(o.jumpTo)}</span>` : ""}</div>`).join("")}`
+            : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;font-size:14px;margin-bottom:4px;">${esc(name)}</div>` : ""}<div data-pv-text class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
         </div>`}
         ${fxOverlay}
       </div>`;
   }
-  const PREVIEW_RESERVE = 312; // 為預覽保留的右側空間(px)
   function setEditorReserve(on) {
-    // 幫編輯區內容留出右側空間，預覽坐在留白裡、不擋節點按鈕（視窗夠寬才留）
-    if (root) root.style.marginRight = (on && window.innerWidth > 960) ? PREVIEW_RESERVE + "px" : "";
+    // 幫編輯區內容留出右側空間，預覽坐在留白裡、不擋節點按鈕（視窗夠寬才留）；寬度隨 🔍 倍率
+    const w = Math.round(288 * previewZoom) + 24;
+    if (root) root.style.marginRight = (on && window.innerWidth > 960) ? w + "px" : "";
   }
   function renderLivePreview() {
     let panel = document.getElementById("story-live-preview");
@@ -1022,22 +1250,35 @@
     }
     if (showBtn) showBtn.style.display = "none";
     setEditorReserve(true);
-    if (!panel) { panel = document.createElement("div"); panel.id = "story-live-preview"; panel.style.cssText = "position:fixed;top:64px;right:14px;width:288px;z-index:40;"; document.body.appendChild(panel); }
+    if (!panel) { panel = document.createElement("div"); panel.id = "story-live-preview"; panel.style.cssText = "position:fixed;top:64px;right:14px;z-index:40;"; document.body.appendChild(panel); }
     panel.style.display = "block";
+    const Z = previewZoom, PW = Math.round(288 * Z);
+    panel.style.width = PW + "px";
     const nodes = (editing.nodes) || [];
     const idx = Math.max(0, Math.min(livePreviewIdx, Math.max(0, nodes.length - 1)));
     panel.innerHTML = `
-      <div style="font-size:11px;color:#c4a7f5;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
-        <span>👁 即時預覽 · #${idx + 1}</span><button class="button" id="story-live-hide" style="padding:1px 7px;">✕ 收起</button>
+      <div style="font-size:11px;color:#c4a7f5;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:4px;">
+        <span style="display:flex;gap:4px;align-items:center;">
+          <button class="button" id="story-live-prev" ${idx <= 0 ? "disabled" : ""} style="padding:1px 7px;" title="上一句">◀</button>
+          <b>#${idx + 1}</b>
+          <button class="button" id="story-live-next" ${idx >= nodes.length - 1 ? "disabled" : ""} style="padding:1px 7px;" title="下一句">▶</button>
+        </span>
+        <span style="display:flex;gap:4px;">
+          <button class="button ${Z > 1 ? "primary" : ""}" id="story-live-zoom" style="padding:1px 7px;" title="放大/縮小預覽">🔍${Z > 1 ? "1x" : "1.5x"}</button>
+          <button class="button" id="story-live-hide" style="padding:1px 7px;">✕</button>
+        </span>
       </div>
       <div style="font-size:10px;color:#8b93b8;margin-bottom:2px;">📱 直式（手機預設）</div>
-      <div class="st-stage" style="position:relative;width:288px;height:512px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: false })}</div>
-      <p class="hint" style="margin:4px 0 0;font-size:10px;">立繪左右＝「🎭立繪」下拉；拖立繪＝上下移動、⤢＝大小、✕＝移除；背景/CG 可拖曳。<b style="color:#c4a7f5;">直式和橫式的立繪位置各自獨立</b>(在哪個框拖就只動那個框)，背景等其他演出兩邊共用。放開自動存，Ctrl+Z 復原</p>
+      <div class="st-stage" style="position:relative;width:${PW}px;height:${Math.round(512 * Z)}px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: false })}</div>
+      <p class="hint" style="margin:4px 0 0;font-size:10px;">立繪左右＝「🎭立繪」下拉；拖立繪＝上下移動、⤢＝大小、✕＝移除；背景/CG 可拖曳。<b style="color:#c4a7f5;">直式和橫式的立繪位置各自獨立</b>，其他演出兩邊共用。放開自動存；復原＝↩️鈕(或游標不在輸入框時 Ctrl+Z)；Ctrl+S 儲存</p>
       <div style="font-size:10px;color:#8b93b8;margin:8px 0 2px;">🖥 橫式 16:9（可各別調立繪位置）</div>
-      <div class="st-stage-land" style="position:relative;width:288px;height:162px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">
-        <div style="position:absolute;top:0;left:0;width:640px;height:360px;transform:scale(0.45);transform-origin:top left;">${buildStageHTML(nodes, idx, { landscape: true })}</div>
+      <div class="st-stage-land" style="position:relative;width:${PW}px;height:${Math.round(162 * Z)}px;background:#0a0712;border:1px solid #6b7399;border-radius:10px;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;width:640px;height:360px;transform:scale(${0.45 * Z});transform-origin:top left;">${buildStageHTML(nodes, idx, { landscape: true })}</div>
       </div>`;
     panel.querySelector("#story-live-hide")?.addEventListener("click", () => { livePreviewOn = false; renderLivePreview(); });
+    panel.querySelector("#story-live-prev")?.addEventListener("click", () => { livePreviewIdx = Math.max(0, idx - 1); lastSfxIdx = -9; renderLivePreview(); });
+    panel.querySelector("#story-live-next")?.addEventListener("click", () => { livePreviewIdx = Math.min(nodes.length - 1, idx + 1); lastSfxIdx = -9; renderLivePreview(); });
+    panel.querySelector("#story-live-zoom")?.addEventListener("click", () => { previewZoom = previewZoom > 1 ? 1 : 1.5; setEditorReserve(true); renderLivePreview(); });
     attachStageDrag(panel.querySelector(".st-stage"), idx, false);
     attachStageDrag(panel.querySelector(".st-stage-land"), idx, true);
 
@@ -1056,10 +1297,15 @@
       if (lastSfxIdx !== idx) {
         lastSfxIdx = idx;
         if (nodes[idx] && nodes[idx].sfx) playPreviewSfx(nodes[idx].sfx);
+        // 🎤 配音：切到不同節點才播一次（打字不重播）
+        stopLiveVoice();
+        if (nodes[idx] && nodes[idx].voiceUrl) { liveVoice = new Audio(nodes[idx].voiceUrl); liveVoice.volume = 0.9; liveVoice.play().catch(() => {}); }
       }
     }
   }
-  function stopLiveBgm() { liveBgmTrack = null; stopPreviewAudio(); }
+  let liveVoice = null;
+  function stopLiveVoice() { if (liveVoice) { try { liveVoice.pause(); } catch (_) {} liveVoice = null; } }
+  function stopLiveBgm() { liveBgmTrack = null; stopPreviewAudio(); stopLiveVoice(); }
 
   // 即時預覽拖曳：拖背景→改該節點 bgPos(%)；拖立繪→改該節點 stagePos[side](相對立繪大小 %)。
   // 按下先 pushUndo(→Ctrl+Z 可回)，放開自動寫草稿並重繪。
@@ -1244,89 +1490,89 @@
     }
   }
 
+  // ▶ 本章預覽：與即時預覽/玩家端共用 buildStageHTML(排版永遠一致)。
+  // 支援：分支(選項可點、⤳跳轉照走、舞台依實際路徑重播)、直/橫切換、打字機、配音、🎁/🔒/劇情殺徽章。
   function openPreview(startIdx = 0) {
     const nodes = editing.nodes || [];
     const zoneTrack = ZONE_BGM[editing.zoneKey] || "home";
-    const chapterBg = editing.backgroundUrl || (editing.zoneKey ? `/uploads/zones/${editing.zoneKey}.webp` : null);
+    const labelIdx = {}; nodes.forEach((n, i) => { if (n && n.label) labelIdx[n.label] = i; });
+    const jumpIdx = (t) => (t && labelIdx[t] != null) ? labelIdx[t] : null;
     let idx = Math.max(0, Math.min(startIdx, nodes.length));
-    const npcById = Object.fromEntries(npcs.map((n) => [n.id, n]));
+    let path = [];        // 實際走過的節點（分支/跳轉的舞台重播用）
+    let pvLand = false;   // 直式/橫式
+    let voiceA = null;
+    const stopVoice = () => { if (voiceA) { try { voiceA.pause(); } catch (_) {} voiceA = null; } };
+    const SPEED = { slow: 2.1, normal: 1, fast: 0.45 };
 
     const ov = document.createElement("div");
     ov.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;";
-    ov.innerHTML = `<div style="position:relative;width:min(420px,94vw);height:min(760px,92vh);background:#0a0712;border:1px solid #c4a7f5;border-radius:14px;overflow:hidden;">
-      <div style="position:absolute;top:0;left:0;right:0;z-index:5;display:flex;justify-content:space-between;padding:8px 12px;font-size:12px;color:#cbb3f2;">
-        <span id="pv-title"></span><button id="pv-close" class="button" style="padding:2px 10px;">✕ 關閉</button>
-      </div>
-      <div id="pv-stage" style="position:absolute;inset:0;cursor:pointer;background:#0a0712;"></div>
-    </div>`;
     document.body.appendChild(ov);
-    const stage = ov.querySelector("#pv-stage");
-    const titleEl = ov.querySelector("#pv-title");
+    let stage = null, titleEl = null;
 
-    function curBg() { for (let i = idx; i >= 0; i--) { if (nodes[i]?.backgroundUrl) return nodes[i].backgroundUrl; } return chapterBg; }
-    // B1:表情差分取圖  B2:重播算出台上立繪
-    function exprUrl(npc, name) { const e = (npc?.expressions || []).find((x) => x && x.name === name); return e?.url || null; }
-    function nodePortrait(n) { const m = monOf(n.npcId); if (m) return m.imageUrl || null; const npc = npcById[n.npcId]; return (exprUrl(npc, n.expression) || npc?.portraitUrl || null); }
-    function computeStage(upto) {
-      const st = {};
-      for (let i = 0; i <= upto; i++) { const n = nodes[i]; if (!n) continue; if (n.clearStage) Object.keys(st).forEach((k) => delete st[k]); if (n.exitSide === "all") Object.keys(st).forEach((k) => delete st[k]); else if (n.exitSide) delete st[n.exitSide]; if (n.type === "dialogue" && nodePortrait(n)) st[n.side || "center"] = { url: nodePortrait(n), fx: n.portraitFx }; }
-      return st;
+    function buildShell() {
+      const dims = pvLand
+        ? "width:min(880px,94vw);aspect-ratio:16/9;max-height:92vh;"
+        : "width:min(420px,94vw);height:min(760px,92vh);";
+      ov.innerHTML = `<div style="position:relative;${dims}background:#0a0712;border:1px solid #c4a7f5;border-radius:14px;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;right:0;z-index:9;display:flex;justify-content:space-between;align-items:center;padding:6px 10px;font-size:12px;color:#cbb3f2;pointer-events:none;">
+          <span id="pv-title"></span>
+          <span style="display:flex;gap:6px;pointer-events:auto;">
+            <button id="pv-orient" class="button" style="padding:2px 10px;">${pvLand ? "📱 直式" : "🖥 橫式"}</button>
+            <button id="pv-close" class="button" style="padding:2px 10px;">✕ 關閉</button>
+          </span>
+        </div>
+        <div id="pv-stage" style="position:absolute;inset:0;cursor:pointer;background:#0a0712;"></div>
+      </div>`;
+      stage = ov.querySelector("#pv-stage");
+      titleEl = ov.querySelector("#pv-title");
+      stage.addEventListener("click", advance);
+      ov.querySelector("#pv-close").addEventListener("click", (e) => { e.stopPropagation(); close(); });
+      ov.querySelector("#pv-orient").addEventListener("click", (e) => { e.stopPropagation(); pvLand = !pvLand; buildShell(); renderNode(); });
     }
-    const SPEED = { slow: 2.1, normal: 1, fast: 0.45 };
 
+    function goTo(t) {
+      clearInterval(stage._tw);
+      path.push(idx);
+      if (path.length > nodes.length * 4) { idx = nodes.length; renderNode(); return; } // 跳轉迴圈保險
+      idx = t;
+      renderNode();
+    }
+    function advance() {
+      const n = nodes[idx];
+      if (!n) { close(); return; }
+      if (n.type === "choice") return; // 選項節點要點選項才走
+      const j = jumpIdx(n.jumpTo);
+      goTo(j != null ? j : idx + 1);
+    }
     function renderNode() {
       const n = nodes[idx];
-      titleEl.textContent = `${editing.title || "(未命名)"}　${idx + 1}/${nodes.length}`;
-      if (!n) { stage.innerHTML = `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c4a7f5;font-weight:900;">📖 章節結束</div>`; stopPreviewAudio(); return; }
+      titleEl.textContent = `${editing.title || "(未命名)"}　#${idx + 1}/${nodes.length}${path.length ? `（走過 ${path.length} 句）` : ""}`;
+      clearInterval(stage._tw);
+      stopVoice();
+      if (!n) { stage.innerHTML = `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c4a7f5;font-weight:900;">📖 章節結束（點 ✕ 關閉）</div>`; stopPreviewAudio(); return; }
       if (n.bgm) playPreviewBgm(n.bgm === "zone" ? zoneTrack : n.bgm);
       if (n.sfx) playPreviewSfx(n.sfx);
-      const bg = curBg();
-      const isDlg = n.type === "dialogue", isBattle = n.type === "battle", isCG = n.type === "cg";
-      const npc = isDlg ? npcById[n.npcId] : null;
-      const name = isDlg ? (n.npcId === "player" ? "（玩家）" : (n.nameOverride || monOf(n.npcId)?.name || npc?.name || "???")) : "";
-      const sfxTag = n.sfx ? `<div style="position:absolute;top:34px;right:10px;font-size:11px;color:#9b8cc0;z-index:6;">🔊 ${esc(n.sfx)}</div>` : "";
-      // B2:台上立繪
-      const st = computeStage(idx);
-      const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
-        const pos = side === "center" ? "left:50%;transform:translateX(-50%);" : side === "right" ? "right:4%;" : "left:4%;";
-        const anim = FX_ANIM[p.fx || ""] || FX_ANIM[""];
-        const speaking = isDlg && n.side === side;
-        const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
-        return `<img src="${esc(p.url)}" style="position:absolute;bottom:5rem;${pos}${dim}max-height:50%;max-width:50%;object-fit:contain;animation:${anim};z-index:${speaking ? 3 : 1};">`;
-      }).join("");
-      const cgHtml = isCG && n.cgUrl ? `<div style="position:absolute;inset:0;background:url('${esc(n.cgUrl)}') center/cover;"></div>` : "";
-      // B3:畫面效果
-      const fxOverlay = n.screenFx === "flash" ? `<div style="position:absolute;inset:0;background:#fff;z-index:8;animation:stPvFlash .45s forwards;"></div>`
-        : n.screenFx === "fadeblack" ? `<div style="position:absolute;inset:0;background:#000;z-index:8;animation:stPvFade .9s forwards;"></div>` : "";
-      const shakeAnim = n.screenFx === "shake" ? "animation:stPvShake .4s;" : "";
-      const noBox = isCG && !String(n.text || "").trim();
-
-      stage.innerHTML = `
-        <div style="position:absolute;inset:0;${shakeAnim}">
-          ${bg ? `<div style="position:absolute;inset:0;background:url('${esc(bg)}') center/cover;"></div>` : ""}
-          ${cgHtml}
-          ${portraitsHtml}
-          ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">點擊繼續 ▼</div>` : `
-          <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:12px;min-height:6rem;background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
-            ${isBattle
-              ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥${n.mustWin !== false ? "（必勝）" : ""}</div><div style="text-align:center;color:#f3ecff;font-weight:900;margin-top:4px;">${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div><div class="hint" style="text-align:center;margin-top:6px;">（預覽不實際戰鬥）點擊繼續 ▶</div>`
-              : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;font-size:14px;margin-bottom:4px;">${esc(name)}</div>` : ""}<div id="pv-text" class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;"></div><div style="text-align:right;color:#9b8cc0;font-size:11px;margin-top:4px;">點擊繼續 ▼</div>`}
-          </div>`}
-        </div>
-        ${sfxTag}${fxOverlay}`;
-
-      if (!isBattle) {
-        const txt = String(n.text || ""), tEl = stage.querySelector("#pv-text"); let k = 0;
-        clearInterval(stage._tw);
-        if (tEl) stage._tw = setInterval(() => { k++; tEl.textContent = txt.slice(0, k); if (k >= txt.length) clearInterval(stage._tw); }, 28 * (SPEED[n.textSpeed] || 1));
+      if (n.voiceUrl) { voiceA = new Audio(n.voiceUrl); voiceA.volume = 0.9; voiceA.play().catch(() => {}); }
+      // 與即時預覽/玩家端同一份排版；path 讓分支後的台上立繪/背景/BGM 徽章都照實際走過的路重播
+      stage.innerHTML = buildStageHTML(nodes, idx, { landscape: pvLand, path: path.concat(idx) });
+      // 預覽不拖曳：立繪把手事件沒綁，點擊會冒泡到 stage 前進，維持「點畫面＝下一句」
+      // ❓ 選項可點
+      stage.querySelectorAll("[data-pv-opt]").forEach((el) => el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const o = (n.options || [])[Number(el.dataset.pvOpt)];
+        const j = o ? jumpIdx(o.jumpTo) : null;
+        goTo(j != null ? j : idx + 1);
+      }));
+      // 打字機（narration/dialogue/cg 字幕）
+      if (n.type !== "battle" && n.type !== "choice") {
+        const txt = String(n.text || ""), tEl = stage.querySelector("[data-pv-text]"); let k = 0;
+        if (tEl) { tEl.textContent = ""; stage._tw = setInterval(() => { k++; tEl.textContent = txt.slice(0, k); if (k >= txt.length) clearInterval(stage._tw); }, 28 * (SPEED[n.textSpeed] || 1)); }
       }
     }
-    function advance() { clearInterval(stage._tw); if (idx < nodes.length) idx++; renderNode(); }
-    function close() { clearInterval(stage._tw); stopPreviewAudio(); liveBgmTrack = null; ov.remove(); renderLivePreview(); }
+    function close() { clearInterval(stage._tw); stopPreviewAudio(); stopVoice(); liveBgmTrack = null; ov.remove(); renderLivePreview(); }
 
-    stage.addEventListener("click", advance);
-    ov.querySelector("#pv-close").addEventListener("click", (e) => { e.stopPropagation(); close(); });
     ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+    buildShell();
     renderNode();
   }
 

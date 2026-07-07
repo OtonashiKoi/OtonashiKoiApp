@@ -55,4 +55,17 @@ async function uploadImage(filePath, folder, opts = {}) {
   };
 }
 
-module.exports = { uploadImage, withAutoOptimize };
+/**
+ * 上傳音訊（配音/語音）到 Cloudinary，回傳 { audioUrl }。
+ * Cloudinary 的音訊走 resource_type "video"。
+ */
+async function uploadAudio(filePath, folder) {
+  const result = await cloudinary.uploader.upload(filePath, {
+    folder: `equipment-game/${folder}`,
+    resource_type: "video"
+  });
+  await fsp.unlink(filePath).catch(() => {});
+  return { audioUrl: result.secure_url };
+}
+
+module.exports = { uploadImage, uploadAudio, withAutoOptimize };

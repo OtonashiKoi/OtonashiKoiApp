@@ -206,14 +206,41 @@ function createStoryRoutes(serviceContext, discordClient) {
     } catch (error) { next(error); }
   });
 
-  // 編輯器用：道具清單（🎁 發道具節點下拉）
+  // 編輯器用：道具清單（🎁 發道具下拉；含 equipSlot 供 🔒 稱號條件篩 title_eq）
   router.get("/admin/story/items", async (req, res, next) => {
     try {
       const list = await serviceContext.itemRepository.findAll();
-      const slim = (list || []).map((it) => ({ id: it.id, name: it.name, itemType: it.itemType || "consumable", tier: it.tier || null, imageUrl: it.imageUrl || null }))
+      const slim = (list || []).map((it) => ({ id: it.id, name: it.name, itemType: it.itemType || "consumable", tier: it.tier || null, imageUrl: it.imageUrl || null, equipSlot: it.equipSlot || null }))
         .sort((a, b) => String(a.itemType).localeCompare(String(b.itemType)) || String(a.name).localeCompare(String(b.name)));
       res.json(ok(slim, "items listed"));
     } catch (error) { next(error); }
+  });
+
+  // 編輯器用：職業清單（🔒 職業條件下拉；取玩家資料中出現過的職業）
+  router.get("/admin/story/jobs", async (req, res, next) => {
+    try {
+      const db = await require("../../adapters/mongo/createMongoClient").getMongoDb();
+      const jobs = (await db.collection("progress").distinct("job")).filter(Boolean);
+      if (!jobs.includes("Novice")) jobs.unshift("Novice");
+      res.json(ok(jobs, "jobs listed"));
+    } catch (error) { next(error); }
+  });
+
+  // 🎤 配音上傳（mp3/m4a/wav…；Cloudinary 音訊）
+  router.post("/admin/story/upload-voice", upload.single("audio"), async (req, res, next) => {
+    try {
+      if (!req.file) {
+        res.status(400).json(fail("INVALID_ARGUMENT", "audio file is required"));
+        return;
+      }
+      const { uploadAudio } = require("../../shared/cloudinaryUpload");
+      const { audioUrl } = await uploadAudio(req.file.path, "story-voice");
+      res.json(ok({ audioUrl }, "voice uploaded"));
+    } catch (error) {
+      next(error);
+    } finally {
+      if (req.file?.path) fs.unlink(req.file.path, () => {});
+    }
   });
 
   // 編輯器用：zone 下拉選單（單一來源 src/shared/zones.js）
