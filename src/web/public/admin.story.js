@@ -1321,9 +1321,13 @@
       stage.querySelectorAll("[data-drag-portrait]").forEach((el) => {
         if (!el._rm) return;
         const r = el.getBoundingClientRect();
-        const top = Math.max(2, r.top - sr.top + 2); // 貼在立繪內側上緣，避免被舞台 overflow 切掉
-        el._rm.style.left = (r.right - sr.left - 28) + "px"; el._rm.style.top = top + "px";
-        el._rz.style.left = (r.left - sr.left + 2) + "px"; el._rz.style.top = top + "px";
+        // ✕/⤢ 疊在立繪左右緣、垂直放在「可見部分的中間」→ 立繪很高頂到框外時也永遠抓得到、不被 BGM 徽章擋
+        const visTop = Math.max(0, r.top - sr.top), visBot = Math.min(sr.height, r.bottom - sr.top);
+        const top = Math.max(2, Math.min(sr.height - 28, (visTop + visBot) / 2 - 13));
+        const leftEdge = Math.max(2, r.left - sr.left + 2);
+        const rightEdge = Math.min(sr.width - 28, r.right - sr.left - 28);
+        el._rm.style.left = rightEdge + "px"; el._rm.style.top = top + "px";
+        el._rz.style.left = leftEdge + "px"; el._rz.style.top = top + "px";
       });
     }
     function doRemove(side) {
