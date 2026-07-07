@@ -705,7 +705,7 @@
       const labelBadge = n.label ? `<span style="font-size:11px;font-weight:900;color:${esc(labelColor(n.label))};">🏷${esc(n.label)}</span>` : "";
       const borderCss = n.label ? `border-left:3px solid ${esc(labelColor(n.label))};` : (isChoice ? "border-left:3px solid #ffd166;" : "");
       return `
-      <div class="st-node-card" data-node-card="${i}" style="${BOX}${borderCss}background:rgba(28,32,56,0.6);scroll-margin-top:3px;">
+      <div class="st-node-card" data-node-card="${i}" style="${BOX}${borderCss}background:rgba(28,32,56,0.6);scroll-margin-top:3px;content-visibility:auto;contain-intrinsic-size:auto 140px;">
         <div style="${ROW}margin-bottom:6px;">
           <span class="st-drag-handle" draggable="true" data-drag="${i}" title="拖曳排序">⠿</span>
           <b style="color:#8b93b8;">#${i + 1}</b>
