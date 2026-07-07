@@ -943,7 +943,7 @@
       portW: ls ? "40%" : "58%",      // 立繪最大寬(相對舞台)，與玩家端 reader 一致
       portH: ls ? "78%" : "100%",     // 立繪最大高：橫式限高留頭頂空間，避免頂到上緣被切
       phH: ls ? "50%" : "40%",        // 玩家立繪佔位高度(相對舞台)，正方形
-      portBottom: ls ? "2.6rem" : "5rem", boxMinH: ls ? "2.4rem" : "5rem"
+      portBottom: ls ? "4.8rem" : "5rem", boxMinH: ls ? "4.6rem" : "5rem"
     };
     const npcById = Object.fromEntries(npcs.map((n) => [n.id, n]));
     const chapterBg = editing?.backgroundUrl || (editing?.zoneKey ? `/uploads/zones/${editing.zoneKey}.webp` : null);
@@ -996,7 +996,7 @@
         ${(bg || (isCG && n.cgUrl)) ? `<div data-resize-${isCG && n.cgUrl ? "cg" : "bg"} title="拉動改變${isCG && n.cgUrl ? "CG" : "背景"}大小" style="position:absolute;top:50%;right:6px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:24px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:6;box-shadow:0 1px 6px rgba(0,0,0,.6);">⤢</div>` : ""}
         ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
-        <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:${ls ? "7px 10px" : "12px"};min-height:${P.boxMinH};background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
+        <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:${ls ? "10px 12px" : "12px"};min-height:${P.boxMinH};background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : "#c4a7f5"};border-radius:10px;">
           ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}</div>`
             : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;font-size:14px;margin-bottom:4px;">${esc(name)}</div>` : ""}<div class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
         </div>`}
