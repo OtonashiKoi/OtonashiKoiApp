@@ -135,6 +135,13 @@
     if (Math.abs(d) < 1) return;
     const sc = scrollParent(card); if (sc) sc.scrollTop += d;
   }
+  // 把某張節點卡捲到捲動區「最上面」(留 margin px)，方便展開演出後直接編輯
+  function scrollCardToTop(i, margin) {
+    const card = root.querySelector(`[data-node-card="${i}"]`); if (!card) return;
+    const sc = scrollParent(card);
+    const scTop = (sc === document.scrollingElement || sc === document.documentElement || sc === document.body || !sc.getBoundingClientRect) ? 0 : sc.getBoundingClientRect().top;
+    sc.scrollTop += (card.getBoundingClientRect().top - scTop) - (margin || 0);
+  }
   async function fetchJSON(url, init) {
     const res = await fetch(url, init);
     const text = await res.text();
@@ -698,7 +705,7 @@
       const labelBadge = n.label ? `<span style="font-size:11px;font-weight:900;color:${esc(labelColor(n.label))};">🏷${esc(n.label)}</span>` : "";
       const borderCss = n.label ? `border-left:3px solid ${esc(labelColor(n.label))};` : (isChoice ? "border-left:3px solid #ffd166;" : "");
       return `
-      <div class="st-node-card" data-node-card="${i}" style="${BOX}${borderCss}background:rgba(28,32,56,0.6);content-visibility:auto;contain-intrinsic-size:auto 120px;">
+      <div class="st-node-card" data-node-card="${i}" style="${BOX}${borderCss}background:rgba(28,32,56,0.6);scroll-margin-top:3px;">
         <div style="${ROW}margin-bottom:6px;">
           <span class="st-drag-handle" draggable="true" data-drag="${i}" title="拖曳排序">⠿</span>
           <b style="color:#8b93b8;">#${i + 1}</b>
@@ -1075,9 +1082,14 @@
     root.querySelectorAll("[data-node-fx]").forEach((b) => b.addEventListener("click", () => {
       const i = Number(b.dataset.nodeFx);
       const card = b.closest("[data-node-card]");
-      const beforeTop = card ? card.getBoundingClientRect().top : 0; // 記住點擊前這張卡在畫面的位置
-      syncEditingFromDom(); const uid = editing.nodes[i]?._uid; if (uid) { fxOpen.has(uid) ? fxOpen.delete(uid) : fxOpen.add(uid); } render();
-      keepCardInPlace(i, beforeTop); // 重繪後把同一張卡捲回原本畫面位置(在原地展開，不飛走)
+      const beforeTop = card ? card.getBoundingClientRect().top : 0;
+      syncEditingFromDom();
+      const uid = editing.nodes[i]?._uid;
+      let opened = false;
+      if (uid) { if (fxOpen.has(uid)) fxOpen.delete(uid); else { fxOpen.add(uid); opened = true; } }
+      render();
+      // 展開演出 → 把這格捲到最上面(留 3px)方便編輯；收合 → 留在原位不跳
+      if (opened) scrollCardToTop(i, 3); else keepCardInPlace(i, beforeTop);
     }));
     // 下方插入（同型；對話沿用同角色）
     root.querySelectorAll("[data-node-insert]").forEach((b) => b.addEventListener("click", () => {
