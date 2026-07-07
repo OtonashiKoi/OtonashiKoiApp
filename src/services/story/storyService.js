@@ -40,15 +40,15 @@ function sanitizeBgPos(v) {
 }
 // 立繪位移+縮放 { left/center/right: {x,y,s} }（x/y 相對立繪大小 %；s=縮放 0.3~3，1=原本）
 function sanitizeStagePos(v) {
-  // 立繪只保留「垂直位移 y(%)＋縮放 s」；水平一律由 side(左/中/右)決定，不存 x → 避免不同視窗寬度飄移。
+  // 立繪保留「頭頂錨點 hy(占舞台高%)＋縮放 s」；水平由 side 決定。hy 以整個舞台高為基準 → 直式/橫式一致。
   if (!v || typeof v !== "object") return null;
   const out = {};
   for (const s of ["left", "center", "right"]) {
     const p = v[s];
     if (p && typeof p === "object") {
       const e = {};
-      const y = Number(p.y);
-      if (Number.isFinite(y) && Math.abs(y) > 0.5) e.y = Math.max(-90, Math.min(90, Math.round(y)));
+      const hy = Number(p.hy);
+      if (Number.isFinite(hy)) e.hy = Math.max(-20, Math.min(95, Math.round(hy)));
       if (p.s != null) { const sc = clampNum(p.s, 0.3, 3, 1); if (Math.abs(sc - 1) > 0.001) e.s = Math.round(sc * 100) / 100; }
       if (Object.keys(e).length) out[s] = e;
     }
@@ -332,10 +332,12 @@ class StoryService {
     if (!node || node.type !== "battle") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "該節點不是戰鬥節點", 400);
     }
+    const mr = Number(node.maxRounds);
     return {
       monsterId: node.monsterId || null,
       mustWin: node.forcedOutcome === "lose" ? false : node.mustWin !== false,
-      forcedOutcome: (node.forcedOutcome === "win" || node.forcedOutcome === "lose") ? node.forcedOutcome : null
+      forcedOutcome: (node.forcedOutcome === "win" || node.forcedOutcome === "lose") ? node.forcedOutcome : null,
+      maxRounds: Number.isFinite(mr) && mr >= 1 ? Math.min(30, Math.round(mr)) : null
     };
   }
 
@@ -385,11 +387,14 @@ class StoryService {
       };
       if (type === "battle") {
         const forcedOutcome = (n?.forcedOutcome === "win" || n?.forcedOutcome === "lose") ? n.forcedOutcome : null; // 劇情殺
+        const mr = Number(n?.maxRounds); // 回合上限(1~30)；無效/空＝null(用預設)
+        const maxRounds = Number.isFinite(mr) && mr >= 1 ? Math.min(30, Math.round(mr)) : null;
         return {
           type: "battle",
           monsterId: n?.monsterId ? String(n.monsterId) : null,
           mustWin: n?.mustWin !== false, // 預設必勝
           forcedOutcome, // 劇情殺：win=一定贏 / lose=一定輸(劇情照走) / null=正常
+          maxRounds,     // 戰鬥回合上限(讓劇情戰鬥更快)
           backgroundUrl: common.backgroundUrl, bgm: common.bgm, sfx: common.sfx, ...reserved
         };
       }

@@ -102,7 +102,7 @@ function createStoryRoutes(serviceContext, discordClient) {
       const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
       const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating });
 
-      const result = runCombatLoop(pStats, monster.calc, monster.name, monster.calc.maxHp, undefined, {
+      const result = runCombatLoop(pStats, monster.calc, monster.name, monster.calc.maxHp, battleNode.maxRounds || undefined, {
         playerName: req.playerRecord.displayName || "我",
         playerLevel: progress?.level || 1,
         equipped,

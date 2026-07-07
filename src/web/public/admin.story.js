@@ -523,6 +523,7 @@
                <option value="lose" ${n.forcedOutcome === "lose" ? "selected" : ""}>💀 劇情殺·必敗</option>
              </select>
              <label style="font-size:12px;" title="劇情殺時此項無效"><input type="checkbox" data-node="${i}" data-field="mustWin" ${n.mustWin !== false ? "checked" : ""} ${n.forcedOutcome ? "disabled" : ""}> 必須打贏才能過</label>
+             <label style="font-size:12px;" title="限制戰鬥回合數(1~30)，讓劇情戰鬥更快結束；留空＝預設15回合"><input type="number" data-node="${i}" data-field="maxRounds" value="${n.maxRounds || ""}" min="1" max="30" placeholder="15" style="width:52px;"> 回合上限</label>
            </div>`
         : isCG
           ? `<div style="${ROW}margin-bottom:4px;">
@@ -947,15 +948,22 @@
     // 立繪：與玩家端 reader「完全相同」的排版(flex 佔滿舞台依 side 靠齊、max-height=舞台%、貼底、位移/縮放上 transform)
     // → 預覽=實際。✕/⤢ 握把不放這裡，改由 JS 依立繪實際框位置疊上去(見 attachPreviewDrag)。
     const portraitsHtml = isCG ? "" : Object.entries(st).map(([side, p]) => {
-      const ps = p.pos?.s || 1; // 縮放；水平由 side(flex)決定＝置中/靠邊
-      const oy = p.pos?.y || 0;  // 垂直位移(%)：正值往下（拖立繪本身上下移動）
+      const ps = p.pos?.s || 1; // 縮放
+      const hy = p.pos?.hy;      // 頭頂錨點：占舞台高%(undefined=預設貼底)
+      const headMode = typeof hy === "number";
       const speaking = isDlg && n.side === side; const dim = (isDlg && !speaking) || p.fx === "dim" ? "filter:brightness(.5);" : "";
       const justify = side === "center" ? "center" : side === "right" ? "flex-end" : "flex-start";
-      const tf = `transform:scale(${ps});transform-origin:bottom center;`;
+      const tf = `transform:scale(${ps});transform-origin:${headMode ? "top center" : "bottom center"};`;
+      // 頭頂錨點：立繪絕對定位、頭頂固定在 hy%(相對整個舞台)→直式/橫式一致；否則維持原本貼底 flex。
+      const hpos = side === "center" ? "left:0;right:0;margin-left:auto;margin-right:auto;" : side === "right" ? "right:0;" : "left:0;";
+      const absPos = headMode ? `position:absolute;${hpos}top:${hy}%;` : "";
       const el = p.player
-        ? `<div data-drag-portrait="${side}" style="height:${P.phH};aspect-ratio:1;box-sizing:border-box;${dim}${tf}display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(196,167,245,.3),rgba(60,42,104,.45));border:2px dashed #c4a7f5;border-radius:14px;color:#efe7ff;cursor:ns-resize;touch-action:none;text-align:center;pointer-events:auto;"><div style="font-size:34px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:6px;white-space:nowrap;">玩家立繪</div></div>`
-        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="max-height:${P.portH};max-width:${P.portW};flex:0 0 auto;${dim}${tf}cursor:ns-resize;touch-action:none;pointer-events:auto;">`;
-      return `<div data-portrait-side="${side}" style="position:absolute;left:3%;right:3%;top:0;bottom:${P.portBottom};display:flex;align-items:flex-end;justify-content:${justify};z-index:${speaking ? 3 : 1};pointer-events:none;${oy ? `transform:translateY(${oy}%);` : ""}">${el}</div>`;
+        ? `<div data-drag-portrait="${side}" style="${absPos}height:${P.phH};aspect-ratio:1;box-sizing:border-box;${dim}${tf}display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(196,167,245,.3),rgba(60,42,104,.45));border:2px dashed #c4a7f5;border-radius:14px;color:#efe7ff;cursor:ns-resize;touch-action:none;text-align:center;pointer-events:auto;"><div style="font-size:34px;line-height:1;">🧑</div><div style="font-size:11px;font-weight:900;margin-top:6px;white-space:nowrap;">玩家立繪</div></div>`
+        : `<img data-drag-portrait="${side}" src="${esc(p.url)}" style="${absPos || "flex:0 0 auto;"}max-height:${P.portH};max-width:${P.portW};${dim}${tf}cursor:ns-resize;touch-action:none;pointer-events:auto;">`;
+      const wrap = headMode
+        ? `position:absolute;left:3%;right:3%;top:0;bottom:0;z-index:${speaking ? 3 : 1};pointer-events:none;`
+        : `position:absolute;left:3%;right:3%;top:0;bottom:${P.portBottom};display:flex;align-items:flex-end;justify-content:${justify};z-index:${speaking ? 3 : 1};pointer-events:none;`;
+      return `<div data-portrait-side="${side}" style="${wrap}">${el}</div>`;
     }).join("");
     const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
     const noBox = isCG && !String(n.text || "").trim();
@@ -1087,17 +1095,26 @@
       const nd = node(); if (!nd) return;
       e.preventDefault(); e.stopPropagation();
       pushUndo();
-      if (kind === "presize") {                       // 立繪縮放（保留垂直位移 y）
+      if (kind === "presize") {                       // 立繪縮放（保留頭頂錨點 hy）
         const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || {};
-        const y = Number(base.y) || 0, s0 = Number(base.s) || 1;
-        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = y ? { s: s0, y } : { s: s0 };
-        drag = { kind, side, el, sy: e.clientY, base: { y, s: s0 } };
-      } else if (kind === "pmoveY") {                 // 立繪：只上下移動（左右由 side 下拉決定，避免水平飄移）
+        const hy = base.hy, s0 = Number(base.s) || 1;
+        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = (typeof hy === "number") ? { s: s0, hy } : { s: s0 };
+        drag = { kind, side, el, sy: e.clientY, base: { hy, s: s0 } };
+      } else if (kind === "pmoveY") {                 // 立繪上下移動：改用「頭頂錨點 hy(占舞台高%)」→ 直式/橫式一致
         const wrap = el.closest("[data-portrait-side]");
         const base = (nd.stagePos && nd.stagePos[side]) || effectivePortraitPos(editing.nodes, idx, side) || {};
-        const y = Number(base.y) || 0, s0 = Number(base.s) || 1;
-        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = s0 !== 1 ? { y, s: s0 } : (y ? { y } : {});
-        drag = { kind, side, el, wrap, sy: e.clientY, base: { y, s: s0 }, wh: (wrap && wrap.getBoundingClientRect().height) || stage.clientHeight || 400 };
+        const s0 = Number(base.s) || 1;
+        const sr = stage.getBoundingClientRect(), er = el.getBoundingClientRect();
+        const startHy = (er.top - sr.top) / (sr.height || 1) * 100; // 目前頭頂占舞台高
+        // 切成絕對定位的頭頂錨點模式，之後 onMove 只改 top
+        wrap.style.bottom = "0";
+        el.style.position = "absolute"; el.style.top = startHy + "%"; el.style.bottom = "auto";
+        if (side === "center") { el.style.left = "0"; el.style.right = "0"; el.style.marginLeft = "auto"; el.style.marginRight = "auto"; }
+        else if (side === "right") { el.style.right = "0"; el.style.left = "auto"; }
+        else { el.style.left = "0"; el.style.right = "auto"; }
+        el.style.transformOrigin = "top center";
+        nd.stagePos = nd.stagePos || {}; nd.stagePos[side] = s0 !== 1 ? { hy: Math.round(startHy), s: s0 } : { hy: Math.round(startHy) };
+        drag = { kind, side, el, sy: e.clientY, base: { hy: startHy, s: s0 }, sh: sr.height || 400 };
       } else if (kind === "lresize") {                // 背景/CG 縮放
         const field = side, layer = stage.querySelector(field === "bgPos" ? "[data-drag-bg]" : "[data-drag-cg]");
         const base = nd[field] || (field === "cgPos" ? { x: 50, y: 50 } : (bgPosAt(editing.nodes, idx) || { x: 50, y: 50 }));
@@ -1116,15 +1133,15 @@
       const ddx = e.clientX - drag.sx, ddy = e.clientY - drag.sy;
       if (drag.kind === "presize") {
         const s = Math.max(0.3, Math.min(3, Math.round(((drag.base.s || 1) - (e.clientY - drag.sy) / 160) * 100) / 100));
-        const y = drag.base.y || 0;
-        nd.stagePos[drag.side] = y ? { s, y } : { s };
+        const hy = drag.base.hy;
+        nd.stagePos[drag.side] = (typeof hy === "number") ? { s, hy } : { s };
         drag.el.style.transform = `scale(${s})`;
         positionHandles();
-      } else if (drag.kind === "pmoveY") {              // 立繪上下移動（正值往下）
-        const y = Math.max(-90, Math.min(90, Math.round(drag.base.y + ddy / drag.wh * 100)));
+      } else if (drag.kind === "pmoveY") {              // 立繪頭頂錨點：改 top(占舞台高%)
+        const hy = Math.max(-20, Math.min(95, Math.round(drag.base.hy + ddy / drag.sh * 100)));
         const s = drag.base.s || 1;
-        nd.stagePos[drag.side] = s !== 1 ? { y, s } : { y };
-        if (drag.wrap) drag.wrap.style.transform = y ? `translateY(${y}%)` : "";
+        nd.stagePos[drag.side] = s !== 1 ? { hy, s } : { hy };
+        drag.el.style.top = hy + "%";
         positionHandles();
       } else if (drag.kind === "lresize") {
         const z = Math.max(0.5, Math.min(3, Math.round(((drag.base.z || 1) - (e.clientY - drag.sy) / 220) * 100) / 100));
