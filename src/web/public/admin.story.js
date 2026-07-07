@@ -1204,9 +1204,12 @@
     // 往回找「最近設定」：有 path(分支預覽)照實際走過的順序，否則線性
     const seq = (opts && Array.isArray(opts.path)) ? opts.path : Array.from({ length: idx + 1 }, (_, k) => k);
     const lookback = (pick) => { for (let k = seq.length - 1; k >= 0; k--) { const v = pick(nodes[seq[k]]); if (v) return v; } return null; };
-    const bgState = bgStateAt(nodes, idx, seq); // 背景「依地圖記憶」位移
+    const bgState = bgStateAt(nodes, idx, seq); // 目前背景圖(往回找最近換景)
     const bg = bgState.url || chapterBg;
-    const bgPos = bgState.pos; // 該背景圖記住的平移
+    // 背景位置「章節級每圖一份」：editing.bgSettings[url]={x,y,z,fit}。舊資料 fallback 到節點 bgPos。
+    const bgSet = (bg && editing?.bgSettings && editing.bgSettings[bg]) || null;
+    const bgPos = bgSet || bgState.pos;
+    const bgFit = bgSet && bgSet.fit === "contain" ? "contain" : "cover"; // contain＝完整不裁切(留黑邊)
     const exprUrl = (npc, name) => { const e = (npc?.expressions || []).find((x) => x && x.name === name); return e?.url || null; };
     const nodePortrait = (nn) => { const m = monOf(nn.npcId); if (m) return m.imageUrl || null; const npc = npcById[nn.npcId]; return exprUrl(npc, nn.expression) || npc?.portraitUrl || null; };
     const st = stageAt(nodes, idx, opts && opts.path); // { side: {url,fx,pos} }（含位移，pos 跨節點沿用）
@@ -1252,7 +1255,7 @@
     ].filter(Boolean).join("　");
     return `
       <div style="position:absolute;inset:0;${shakeAnim}">
-        ${bg ? `<div data-drag-bg style="position:absolute;inset:0;background-image:url('${esc(bg)}');background-size:cover;background-position:${bgPos ? `${bgPos.x}% ${bgPos.y}%` : "center"};${bgPos && bgPos.z ? `transform:scale(${bgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : ""}
+        ${bg ? `<div data-drag-bg style="position:absolute;inset:0;background-image:url('${esc(bg)}');background-size:${bgFit};background-repeat:no-repeat;background-position:${bgPos ? `${bgPos.x}% ${bgPos.y}%` : "center"};${bgPos && bgPos.z ? `transform:scale(${bgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : ""}
         ${cgHtml}${portraitsHtml}
         ${(bg || (isCG && n.cgUrl)) ? `<div data-resize-${isCG && n.cgUrl ? "cg" : "bg"} title="拉動改變${isCG && n.cgUrl ? "CG" : "背景"}大小" style="position:absolute;top:50%;right:6px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:24px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:6;box-shadow:0 1px 6px rgba(0,0,0,.6);">⤢</div>` : ""}
         ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;pointer-events:none;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
@@ -1291,6 +1294,8 @@
     panel.style.width = PW + "px";
     const nodes = (editing.nodes) || [];
     const idx = Math.max(0, Math.min(livePreviewIdx, Math.max(0, nodes.length - 1)));
+    const curBgUrl = bgStateAt(nodes, idx).url; // 目前這格的背景圖(給重設/裁切用)
+    const curBgSet = (curBgUrl && editing.bgSettings && editing.bgSettings[curBgUrl]) || null;
     panel.innerHTML = `
       <div style="font-size:11px;color:#c4a7f5;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:4px;">
         <span style="display:flex;gap:4px;align-items:center;">
@@ -1303,6 +1308,11 @@
           <button class="button" id="story-live-hide" style="padding:1px 7px;">✕</button>
         </span>
       </div>
+      ${curBgUrl ? `<div style="font-size:10px;color:#8b93b8;margin-bottom:3px;display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+        🏞 這張背景：
+        <button class="button" id="bg-fit-toggle" title="填滿(裁切邊緣) / 完整顯示(留黑邊)" style="padding:1px 7px;">${curBgSet && curBgSet.fit === "contain" ? "🖼 完整" : "✂️ 填滿"}</button>
+        <button class="button" id="bg-pos-reset" ${curBgSet ? "" : "disabled"} title="把這張背景的位置/縮放清成預設" style="padding:1px 7px;">↺ 位置重設</button>
+      </div>` : ""}
       <div style="font-size:10px;color:#8b93b8;margin-bottom:2px;">📱 直式（手機預設）</div>
       <div class="st-stage" style="position:relative;width:${PW}px;height:${Math.round(512 * Z)}px;background:#0a0712;border:1px solid #c4a7f5;border-radius:12px;overflow:hidden;">${buildStageHTML(nodes, idx, { landscape: false })}</div>
       <p class="hint" style="margin:4px 0 0;font-size:10px;">立繪左右＝「🎭立繪」下拉；拖立繪＝上下移動、⤢＝大小、✕＝移除；背景/CG 可拖曳。<b style="color:#c4a7f5;">直式和橫式的立繪位置各自獨立</b>，其他演出兩邊共用。放開自動存；復原＝↩️鈕(或游標不在輸入框時 Ctrl+Z)；Ctrl+S 儲存</p>
@@ -1314,6 +1324,20 @@
     panel.querySelector("#story-live-prev")?.addEventListener("click", () => { livePreviewIdx = Math.max(0, idx - 1); lastSfxIdx = -9; renderLivePreview(); });
     panel.querySelector("#story-live-next")?.addEventListener("click", () => { livePreviewIdx = Math.min(nodes.length - 1, idx + 1); lastSfxIdx = -9; renderLivePreview(); });
     panel.querySelector("#story-live-zoom")?.addEventListener("click", () => { previewZoom = previewZoom > 1 ? 1 : 1.5; setEditorReserve(true); renderLivePreview(); });
+    // 🏞 這張背景：填滿/完整 切換、位置重設(章節級每圖一份)
+    panel.querySelector("#bg-fit-toggle")?.addEventListener("click", () => {
+      if (!curBgUrl) return; pushUndo();
+      editing.bgSettings = editing.bgSettings || {};
+      const s = editing.bgSettings[curBgUrl] || {};
+      const fit = s.fit === "contain" ? "cover" : "contain";
+      editing.bgSettings[curBgUrl] = { ...s, fit };
+      writeDraft(); renderLivePreview();
+    });
+    panel.querySelector("#bg-pos-reset")?.addEventListener("click", () => {
+      if (!curBgUrl || !editing.bgSettings) return; pushUndo();
+      delete editing.bgSettings[curBgUrl];
+      writeDraft(); renderLivePreview();
+    });
     attachStageDrag(panel.querySelector(".st-stage"), idx, false);
     attachStageDrag(panel.querySelector(".st-stage-land"), idx, true);
 
@@ -1415,14 +1439,24 @@
         drag = { kind, side, el, sy: e.clientY, base: { hy: startHy }, sh: sr.height || 400 };
       } else if (kind === "lresize") {                // 背景/CG 縮放
         const field = side, layer = stage.querySelector(field === "bgPos" ? "[data-drag-bg]" : "[data-drag-cg]");
-        const base = nd[field] || (field === "cgPos" ? { x: 50, y: 50 } : (bgPosAt(editing.nodes, idx) || { x: 50, y: 50 }));
-        nd[field] = { x: base.x, y: base.y, z: base.z || 1 };
-        drag = { kind, field, layer, sy: e.clientY, base: { ...base } };
+        if (field === "bgPos") {                       // 背景：章節級每圖一份 editing.bgSettings[url]
+          const bs = bgStateAt(editing.nodes, idx), url = bs.url;
+          const base = (editing.bgSettings && editing.bgSettings[url]) || bs.pos || { x: 50, y: 50 };
+          drag = { kind, field, layer, sy: e.clientY, base: { ...base }, bgUrl: url };
+        } else {                                       // CG：仍存在節點上
+          const base = nd.cgPos || { x: 50, y: 50 };
+          drag = { kind, field, layer, sy: e.clientY, base: { ...base } };
+        }
       } else if (kind === "bg" || kind === "cg") {    // 背景/CG 移動
-        const field = kind === "cg" ? "cgPos" : "bgPos";
-        const base = (kind === "cg" ? nd.cgPos : bgPosAt(editing.nodes, idx)) || { x: 50, y: 50 };
-        nd[field] = base.z ? { x: base.x, y: base.y, z: base.z } : { x: base.x, y: base.y };
-        drag = { kind, field, el, sx: e.clientX, sy: e.clientY, base: { ...base }, sw: stage.clientWidth || 288, sh: stage.clientHeight || 512 };
+        if (kind === "bg") {
+          const bs = bgStateAt(editing.nodes, idx), url = bs.url;
+          const base = (editing.bgSettings && editing.bgSettings[url]) || bs.pos || { x: 50, y: 50 };
+          drag = { kind, el, sx: e.clientX, sy: e.clientY, base: { ...base }, sw: stage.clientWidth || 288, sh: stage.clientHeight || 512, bgUrl: url };
+        } else {
+          const base = nd.cgPos || { x: 50, y: 50 };
+          nd.cgPos = base.z ? { x: base.x, y: base.y, z: base.z } : { x: base.x, y: base.y };
+          drag = { kind, field: "cgPos", el, sx: e.clientX, sy: e.clientY, base: { ...base }, sw: stage.clientWidth || 288, sh: stage.clientHeight || 512 };
+        }
       }
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
     };
@@ -1441,12 +1475,14 @@
         positionHandles();
       } else if (drag.kind === "lresize") {
         const z = Math.max(0.5, Math.min(3, Math.round(((drag.base.z || 1) - (e.clientY - drag.sy) / 220) * 100) / 100));
-        nd[drag.field] = { x: drag.base.x, y: drag.base.y, z };
+        if (drag.bgUrl) { const p = editing.bgSettings && editing.bgSettings[drag.bgUrl]; editing.bgSettings = editing.bgSettings || {}; editing.bgSettings[drag.bgUrl] = { x: drag.base.x, y: drag.base.y, z, ...(p && p.fit ? { fit: p.fit } : {}) }; }
+        else nd.cgPos = { x: drag.base.x, y: drag.base.y, z };
         if (drag.layer) { drag.layer.style.transformOrigin = "center"; drag.layer.style.transform = `scale(${z})`; }
       } else if (drag.kind === "bg" || drag.kind === "cg") {
         const x = Math.max(0, Math.min(100, Math.round(drag.base.x - ddx / drag.sw * 100)));
         const y = Math.max(0, Math.min(100, Math.round(drag.base.y - ddy / drag.sh * 100)));
-        nd[drag.field] = drag.base.z ? { x, y, z: drag.base.z } : { x, y };
+        if (drag.bgUrl) { const p = editing.bgSettings && editing.bgSettings[drag.bgUrl]; editing.bgSettings = editing.bgSettings || {}; editing.bgSettings[drag.bgUrl] = drag.base.z ? { x, y, z: drag.base.z, ...(p && p.fit ? { fit: p.fit } : {}) } : { x, y, ...(p && p.fit ? { fit: p.fit } : {}) }; }
+        else nd.cgPos = drag.base.z ? { x, y, z: drag.base.z } : { x, y };
         drag.el.style.backgroundPosition = `${x}% ${y}%`;
       }
     };

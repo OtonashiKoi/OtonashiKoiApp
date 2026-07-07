@@ -38,6 +38,18 @@ function sanitizeBgPos(v) {
   if (v.z != null) { const z = clampNum(v.z, 0.5, 3, 1); if (Math.abs(z - 1) > 0.001) out.z = Math.round(z * 100) / 100; }
   return out;
 }
+// 🏞 章節級「每張背景圖」的位置/縮放/裁切：{ [url]: {x,y,z,fit} }
+function sanitizeBgSettings(v) {
+  if (!v || typeof v !== "object") return null;
+  const out = {};
+  for (const url of Object.keys(v)) {
+    const p = v[url]; if (!p || typeof p !== "object" || !url) continue;
+    const e = sanitizeBgPos(p) || {};
+    if (p.fit === "contain") e.fit = "contain";
+    if (Object.keys(e).length) out[String(url).slice(0, 400)] = e;
+  }
+  return Object.keys(out).length ? out : null;
+}
 // 立繪位移+縮放 { left/center/right: {x,y,s} }（x/y 相對立繪大小 %；s=縮放 0.3~3，1=原本）
 function sanitizeStagePos(v) {
   // 立繪保留「頭頂錨點 hy(占舞台高%)＋縮放 s」；水平由 side 決定。hy 以整個舞台高為基準 → 直式/橫式一致。
@@ -301,6 +313,7 @@ class StoryService {
     return {
       id: chapter.id, order: chapter.order, zoneKey: chapter.zoneKey || null, title: chapter.title, status,
       backgroundUrl: chapter.backgroundUrl || null, // 章節預設背景
+      bgSettings: chapter.bgSettings || null,       // 🏞 每張背景圖的位置/縮放/裁切
       nodes
     };
   }
@@ -558,6 +571,7 @@ class StoryService {
       backgroundUrl: input.backgroundUrl ? String(input.backgroundUrl) : null,
       // 快速編寫的「原始劇本文字」草稿：跟章節一起存，下次打開帶回，確認後才解析成節點（不影響玩家端）
       scriptDraft: input.scriptDraft !== undefined ? String(input.scriptDraft || "").slice(0, 40000) : (existing?.scriptDraft || ""),
+      bgSettings: sanitizeBgSettings(input.bgSettings) || existing?.bgSettings || null, // 🏞 每張背景圖的位置/縮放/裁切(章節級一份)
       nodes: this._validateNodes(input.nodes),
       createdAt: existing?.createdAt || now,
       updatedAt: now
