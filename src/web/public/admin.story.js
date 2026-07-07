@@ -1110,10 +1110,13 @@
     root.querySelectorAll("textarea[data-node][data-field='text']").forEach((ta) => ta.addEventListener("input", () => {
       const i = Number(ta.dataset.node);
       if (editing.nodes[i]) editing.nodes[i].text = ta.value;
-      livePreviewIdx = i; renderLivePreview();
+      livePreviewIdx = i; renderLivePreviewSoon(); // 打字防抖：不要每個字都重建預覽(節點多會卡)
     }));
     renderLivePreview();
   }
+  // 即時預覽防抖：連續打字時最多每 220ms 才重建一次(重建會走整條節點陣列+重掛拖曳，節點多很吃效能)
+  let _lpTimer = null;
+  function renderLivePreviewSoon(delay = 220) { clearTimeout(_lpTimer); _lpTimer = setTimeout(() => { _lpTimer = null; renderLivePreview(); }, delay); }
 
   // ── 即時預覽（右側面板，跟著正在編輯的節點；背景走「往回找最近一張」與正式閱讀器一致） ──
   let livePreviewIdx = 0;
