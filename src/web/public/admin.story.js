@@ -558,7 +558,7 @@
         + "</optgroup>").join("");
       return '<option value="">（不發道具）</option>' + groups;
     };
-    const typeBtn = (i, t, cur, label) => `<button type="button" class="button ${cur === t ? "primary" : ""}" data-node-settype="${i}" data-settype="${t}" style="padding:3px 10px;">${label}</button>`;
+    const typeBtn = (i, t, cur, label) => `<button type="button" class="button ${cur ? "primary" : ""}" data-node-settype="${i}" data-settype="${t}" style="padding:3px 10px;">${label}</button>`;
 
     // 某 NPC 的表情下拉（預設 + 各表情名）
     const exprOpts = (npcId, sel) => {
@@ -1143,7 +1143,7 @@
       if (nn.stagePos) for (const s of Object.keys(nn.stagePos)) { pos[s] = nn.stagePos[s]; if (st[s]) st[s].pos = nn.stagePos[s]; }
       if (nn.type === "dialogue") {
         const s = nn.side || "center", id = nn.npcId || "";
-        if (occ[s] !== id && !own[s]) delete pos[s]; // 選了新立繪(換人)→回置中，除非本節點自訂了位置
+        // 立繪位置/縮放「一路沿用」：換人也繼承上一個調過的值(除非本節點自訂)，設一次後面都跟著→省得每個角色重調
         occ[s] = id;
         if (id === "player") { st[s] = { url: null, player: true, fx: nn.portraitFx, pos: pos[s] || null }; } // 主角＝登入者頭像(編輯器用佔位)
         else { const u = portraitUrlOfNode(nn); if (u) { st[s] = { url: u, player: false, fx: nn.portraitFx, pos: pos[s] || null }; } }
