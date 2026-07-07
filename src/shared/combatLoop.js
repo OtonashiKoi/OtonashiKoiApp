@@ -870,7 +870,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const weaponMainBonus = Math.max(0, Math.round((pStats.weaponMainStatValue || 0) * 1.5));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
   const endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
-  let stunRoundsLeft = Math.max(0, Math.floor(Number(options.stunRoundsLeft || 0))); // 怪物剩餘擊暈回合數
+  // BOSS 單位判定（世界王/區域王）：暈眩抗性與格擋規則會用到
+  const monsterIsBossUnit = Boolean(options.monsterIsBoss || options.isBoss || options.isWorldBoss || mCalc?.isBoss);
+  // BOSS 暈眩抗性：被擊暈最多 1 回合（防多段/永暈鏈）；一般怪不受影響
+  const capMonsterStun = (v) => (monsterIsBossUnit ? Math.min(v, 1) : v);
+  let stunRoundsLeft = capMonsterStun(Math.max(0, Math.floor(Number(options.stunRoundsLeft || 0)))); // 怪物剩餘擊暈回合數
   let monsterActiveEffects = Array.isArray(options.monsterActiveEffects)
     ? options.monsterActiveEffects.map((effect) => ({ ...effect, params: { ...(effect.params || {}) } }))
     : []; // 怪物的 active effects（Buff/Debuff）
@@ -1148,7 +1152,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           // appliedAt 回合起持續 stunTurns 回合
           const stunEnd = (mEff.appliedAt || 1) + stunTurns;
           if (round <= stunEnd && stunRoundsLeft < stunTurns) {
-            stunRoundsLeft = Math.max(stunRoundsLeft, stunEnd - round + 1);
+            stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunEnd - round + 1));
           }
         }
 
@@ -1885,7 +1889,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const appliedStun = result.targetActiveEffects.find(e => e.key === 'stun' && e.appliedAt === round);
             if (appliedStun) {
               const stunDur = Number(appliedStun.params?.duration?.value ?? 1);
-              stunRoundsLeft = Math.max(stunRoundsLeft, stunDur);
+              stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
             }
           }
         }
@@ -2033,7 +2037,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             appliedAnyNormalProc = true;
             if (effectEntry.key === 'stun') {
               const stunDur = Number(effectEntry.params?.duration?.value ?? 1);
-              stunRoundsLeft = Math.max(stunRoundsLeft, stunDur);
+              stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
             }
           } else {
             if (!options.playerActiveEffects) options.playerActiveEffects = [];
@@ -2091,7 +2095,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, entry);
               if (entry.key === 'stun') {
                 const stunDur = Number(entry.params?.duration?.value ?? 1);
-                stunRoundsLeft = Math.max(stunRoundsLeft, stunDur);
+                stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
               }
             } else {
               if (!options.playerActiveEffects) options.playerActiveEffects = [];
@@ -2171,6 +2175,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let stackOnTakenValue = 0;                // 戰意右：每次受擊累積
     let stackOnTakenCap = 0;
     let stackOnTakenStacks = 0;
+    let playerEchoChance = 0;                 // 繫・初鳴之晶：共鳴殘影追擊觸發率(%)
+    let playerEchoPct = 0;                     // 殘影追擊傷害＝該次傷害的 %
     if (Array.isArray(options.playerActiveEffects)) {
       for (const eff of options.playerActiveEffects) {
         if (!eff) continue;
@@ -2315,6 +2321,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           stackOnTakenValue += Math.abs(effValue);
           const cap = Number(effParams.cap);
           if (Number.isFinite(cap) && cap > stackOnTakenCap) stackOnTakenCap = cap;
+        } else if (eff.key === 'echo_strike') {
+          // 繫・初鳴之晶：共鳴殘影追擊（獨立於連擊，造成該次傷害的 value%，chance% 觸發）
+          const ch = Number(effParams.chance ?? 0);
+          if (ch > playerEchoChance) playerEchoChance = ch;
+          if (effValue > playerEchoPct) playerEchoPct = effValue;
         }
       }
     }
@@ -2403,7 +2414,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             log.push(`☠️ 匕首淬毒！${mName} 中毒（每回合最大 HP ${newPct.toFixed(2)}% 毒傷）！`);
           } else if (pe.key === 'proc_stun') {
             const stunDur = Number(dur?.value ?? 3);
-            stunRoundsLeft = Math.max(stunRoundsLeft, stunDur);
+            stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
             monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
               key: 'stun', params: { value: 100, duration: { mode: 'turns', value: stunDur } },
               appliedAt: round, sourceType: 'job_proc', sourceId: 'badge:stun'
@@ -2769,7 +2780,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
             } else if (pe.key === 'proc_stun') {
               const stunDur = Number(dur?.value ?? 3);
-              stunRoundsLeft = Math.max(stunRoundsLeft, stunDur);
+              stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
               monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
                 key: 'stun', params: { value: 100, duration: { mode: 'turns', value: stunDur } },
                 appliedAt: round, sourceType: 'job_proc', sourceId: 'badge:stun'
@@ -2988,6 +2999,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         if (mHp <= 0) { outcome = "win"; break; }
 
+        // ── 繫・初鳴之晶：共鳴殘影追擊（獨立於連擊、不佔連擊段數；chance% 造成該次傷害的 echoPct%）──
+        if (mHp > 0 && playerEchoChance > 0 && Math.random() * 100 < playerEchoChance) {
+          const echoDmg = Math.max(1, Math.round(dmg * (playerEchoPct / 100)));
+          mHp -= echoDmg;
+          totalDamage += echoDmg;
+          log.push(`✨ **未登錄的殘影**與你共鳴，追擊一閃！再造成 **${echoDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          if (mHp <= 0) { outcome = "win"; break; }
+        }
+
         // 連擊（AGI驅動）── 可同回合連續觸發：第 1 次吃完整連擊率，之後每次機率為前一次的 1/5，單回合最多 5 連擊
         let comboChance = pStats.combo * (1 + roundPartyAgiBoostPct / 100) + roundPartyComboBoostPct;
         comboChance = Math.min(100, Math.max(0, comboChance));
@@ -3104,8 +3124,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (Math.random() * 100 < Math.min(95, (pStats.blockChance || 0) + playerBlockBonus)) {
           blockedThisRound = true;
           combatStats.blockCount += 1;
-          log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻擊被格擋，傷害降至 **1**！`);
-          pHp -= 1;
+          if (monsterIsBossUnit) {
+            // BOSS 攻勢沉重：格擋不再降至 1，改為卸去 70% 傷害（用未爆擊的基礎傷害計算）
+            const bMonsterDefIgnorePct = Math.min(100, Math.max(0, Number(adjustedMCalc.defIgnorePct || 0)));
+            const bEffectivePlayerDef = Math.min(95, Math.max(0, ((pStats.def * (1 + playerDefBonusPct / 100) * (1 - playerDefDownPct / 100)) + playerDefFlatBonus) * (1 - bMonsterDefIgnorePct / 100)));
+            const bMonsterBaseAtk = Math.max(1, Math.round(adjustedMCalc.atk * (adjustedMCalc.finalDamageMultiplier || 1) * monsterAttackLevelMult));
+            const bBaseDmg = playerInvincible ? 0 : rollMDmg(applyDefense(bMonsterBaseAtk, pStats.flatDef || 0, bEffectivePlayerDef, adjustedMCalc.atk));
+            const blockedDmg = Math.max(1, Math.round(bBaseDmg * 0.3));
+            log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻勢沉重，格擋卸去 70% 傷害，仍受到 **${blockedDmg}** 點！`);
+            pHp -= blockedDmg;
+          } else {
+            log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻擊被格擋，傷害降至 **1**！`);
+            pHp -= 1;
+          }
           if (pHp <= 0) { outcome = "lose"; break; }
         } else {
           const monsterDefIgnorePct = Math.min(100, Math.max(0, Number(adjustedMCalc.defIgnorePct || 0)));

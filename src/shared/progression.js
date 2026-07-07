@@ -1,23 +1,28 @@
 const MAX_LEVEL = 50;
 
-// 目標節奏：1→50 約需 40 小時實際戰鬥時間（以每場約 35 秒、含偶爾失敗估算）。
-// 配合真實戰鬥流程（高等怪常需多場擊殺）設定，而不是只看單次擊殺數。
-// 係數較最初版放大約 2.8×，把滿等拉長到 40 小時帶。
+// 目標節奏（V0.4 重調）：1→50 約需 48 小時手動戰鬥時間（含多人 Buff 空間預留）。
+// 三段式，且「越後面越慢」，段界為溫和升階（約 2.2×，是難度上台階不是懸崖）：
+//   ≤12   前期最快：新手一路衝到 12（總 ~0.4h），快速感受成長。
+//   13-25 仍偏快：陽光帶推進（總 ~3h），比後段快很多。
+//   26-50 整個慢下來：古城 + 三條 A 路線是主要耕作期（古城 ~20h / A 區 ~24h）。
+// 曲線由「錨點反解 power 函數」而來，錨點即設計意圖；改節奏改錨點即可。
+function solvePower(x1, v1, x2, v2) {
+  const p = Math.log(v2 / v1) / Math.log(x2 / x1);
+  return { p, A: v1 / Math.pow(x1, p) };
+}
+// 錨點：(等級, 該級→下一級所需經驗)
+const SEG1 = solvePower(1, 460, 12, 15000);        // ≤12
+const SEG2 = solvePower(13, 34000, 25, 720000);    // 13-25
+const SEG3 = solvePower(26, 1600000, 49, 18000000); // 26-50
+
 function expToNextLevel(level) {
-  // 1-10 前期升快一點，讓新手更容易感受到成長
-  if (level <= 10) {
-    return Math.round(810 * Math.pow(level, 1.55));
+  if (level <= 12) {
+    return Math.round(SEG1.A * Math.pow(level, SEG1.p));
   }
-  // 11-20 中期明顯拉長，讓一般玩家需要更多天數推進
-  if (level <= 20) {
-    return Math.round(1150 * Math.pow(level, 1.62));
+  if (level <= 25) {
+    return Math.round(SEG2.A * Math.pow(level, SEG2.p));
   }
-  // 21-40 後期再拉長
-  if (level <= 40) {
-    return Math.round(1680 * Math.pow(level, 1.68));
-  }
-  // 41-50 終局：龍族之領，再放寬一點點，但配合 A 階裝備掉落仍要花時間
-  return Math.round(2090 * Math.pow(level, 1.72));
+  return Math.round(SEG3.A * Math.pow(level, SEG3.p));
 }
 
 module.exports = {

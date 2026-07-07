@@ -6,6 +6,7 @@ const { notifyPlayer } = require("../realtime/playerNotifyService");
 const { auctionRepository } = require("./auctionRepository");
 const { createTransactionLog } = require("../../domain/transaction/createTransactionLog");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
+const { isBoundItemId } = require("../../shared/boundItems");
 
 // 強化寶石 itemId 集合
 const ENHANCE_GEM_IDS = new Set([
@@ -153,6 +154,9 @@ class AuctionService {
     const isStackable = isGem || isPetEgg; // 可堆疊上架的類型
     if (FORBIDDEN_ITEM_TYPES.has(item.itemType) || FORBIDDEN_EQUIP_SLOTS.has(item.equipSlot)) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章與稱號不可上架", 400);
+    }
+    if (isBoundItemId(item.itemId)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品為靈魂綁定，無法上架交易", 400);
     }
     if (item.itemType !== "equipment" && item.itemType !== "monster_card" && !isGem && !isPetEgg) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有裝備、卡片、強化寶石與寵物蛋可以上架", 400);

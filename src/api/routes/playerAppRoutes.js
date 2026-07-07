@@ -1082,7 +1082,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           weaponType: cs.weaponType || null,
           isTwoHanded: Boolean(cs.isTwoHanded),
           isDualWield: Boolean(cs.isDualWield),
-          tierSetBonuses: cs.tierSetBonuses || null
+          tierSetBonuses: cs.tierSetBonuses || null,
+          sets: require("../../shared/equipmentSetBonuses").getEquippedSetInfo(mergedEquipment)
         };
       } catch (err) {
         console.warn("[profile] combatStats calc failed:", err?.message || err);
@@ -2582,17 +2583,24 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         partyEffects = Array.from(byKey.values());
       }
 
-      // ── 為怪物自動裝備自己的卡片 ──
+      // ── 為怪物自動裝備自己的技能卡 ──
+      // 優先用「怪物自己掛的技能卡」(monster.equipment.special_1，例如世界王/已實裝技能怪)；
+      // 其 monsterCardSkill 才是怪物專用攻擊招(無武器條件)。撈不到才 fallback 用道具名「<怪名>卡」。
       let monsterEquipped = {};
       try {
-        const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-        const db = await getMongoDb();
-        const monsterCard = await db.collection("items").findOne({
-          name: { $regex: monster.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '卡' },
-          equipSlot: 'special'
-        });
-        if (monsterCard) {
-          monsterEquipped.special_1 = monsterCard;
+        const ownSkillCard = monster.equipment && monster.equipment.special_1;
+        if (ownSkillCard && ownSkillCard.monsterCardSkill && ownSkillCard.monsterCardSkill.key) {
+          monsterEquipped.special_1 = ownSkillCard;
+        } else {
+          const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+          const db = await getMongoDb();
+          const monsterCard = await db.collection("items").findOne({
+            name: { $regex: monster.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '卡' },
+            equipSlot: 'special'
+          });
+          if (monsterCard) {
+            monsterEquipped.special_1 = monsterCard;
+          }
         }
       } catch (e) {
         // 如果無法取得怪物卡片，繼續進行戰鬥

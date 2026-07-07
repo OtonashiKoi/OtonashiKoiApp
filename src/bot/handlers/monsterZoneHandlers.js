@@ -689,11 +689,13 @@ const ENHANCE_GEM_IDS = {
 // 參與獎勵寶石：依區域決定品階
 const ZONE_PARTICIPATION_GEM_TIER = {
   beginner: 'D', normal: 'D', mid: 'C', hard: 'B', elite: 'A',
-  ancient_city: 'B', ancient_city_deep: 'B',
-  dragon_realm: 'A', dragon_king_lair: 'A', hellfire_depths: 'A'
+  ancient_city: 'B',
+  // A 階三區(40開放)統一給 A 石：秘銀(深處)/龍鱗(龍族)/焚獄(火焰)
+  ancient_city_deep: 'A', dragon_realm: 'A', hellfire: 'A',
+  dragon_king_lair: 'A', hellfire_depths: 'A'
 };
-// 參與獎勵寶石掉落率（依品階）
-const GEM_PARTICIPATION_RATE = { D: 0.20, C: 0.20, B: 0.10, A: 0.03 };
+// 參與獎勵寶石掉落率（依品階）。S 石不進參與制，只由世界王/世界王寶箱產出。
+const GEM_PARTICIPATION_RATE = { D: 0.20, C: 0.20, B: 0.12, A: 0.06 };
 // 先不啟用雙掉
 const GEM_PARTICIPATION_DOUBLE_DROP_RATE = {};
 const GEM_TIER_ORDER = ["D", "C", "B", "A"];

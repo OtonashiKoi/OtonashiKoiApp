@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-07-05T19:05:09.045Z
+Generated at: 2026-07-07T08:50:16.871Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -12,7 +12,7 @@ Generated at: 2026-07-05T19:05:09.045Z
 | 進度資料 | 415 |
 | 怪物 | 64 |
 | 怪物狀態文件 | 10 |
-| 道具 | 348 |
+| 道具 | 407 |
 | 任務 | 38 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
@@ -25,12 +25,12 @@ Generated at: 2026-07-05T19:05:09.045Z
 | --- | --- | --- | --- | --- | --- | --- |
 | beginner | 新手村外的草叢 | 1 | 無上限 | 5 | 5 | 1 |
 | normal | 起始的草原 | 1 | 無上限 | 8 | 8 | 2 |
-| mid | 陽光草原 | 10 | 無上限 | 12 | 12 | 2 |
-| ancient_city | 古城 | 20 | 30 | 8 | 8 | 1 |
-| ancient_city_deep | 古城深處 | 30 | 40 | 7 | 7 | 2 |
-| dragon_realm | 龍族之領 | 40 | 50 | 10 | 10 | 2 |
+| mid | 陽光草原 | 10 | 25 | 12 | 12 | 2 |
+| ancient_city | 古城 | 25 | 40 | 8 | 8 | 1 |
+| ancient_city_deep | 古城深處 | 40 | 無上限 | 7 | 7 | 2 |
+| dragon_realm | 龍族之領 | 40 | 無上限 | 10 | 10 | 2 |
 | dragon_king_lair | 龍王巢穴 | 50 | 無上限 | 1 | 1 | 1 |
-| hellfire | 地獄火焰 | 50 | 60 | 11 | 11 | 0 |
+| hellfire | 地獄火焰 | 40 | 無上限 | 11 | 11 | 0 |
 | hellfire_depths | 焰獄深處 | 60 | 無上限 | 1 | 1 | 1 |
 | elite | 精英區 | 20 | 無上限 | 1 | 1 | 1 |
 | nightmare | 噩夢區 | 30 | 無上限 | 0 | 0 | 0 |
@@ -49,42 +49,42 @@ Generated at: 2026-07-05T19:05:09.045Z
 | ancient_city | 9 | 古城刺客 | 25 | 11760 | 10500 | 1512 | 0 | 否 | 13 |
 | ancient_city | 10 | 毒霧蜘蛛 | 21 | 10080 | 10200 | 1512 | 0 | 否 | 10 |
 | ancient_city | 13 | 城堡魔像(B) | 30 | 45150 | 22500 | 7200 | 0 | 是 | 31 |
-| ancient_city_deep | 1 | 城牆衛兵 | 32 | 15696 | 6750 | 1512 | 0 | 否 | 12 |
-| ancient_city_deep | 6 | 冰封騎士 | 38 | 18576 | 10500 | 1512 | 0 | 否 | 12 |
-| ancient_city_deep | 8 | 鐵甲衛將 | 36 | 17280 | 11250 | 1512 | 0 | 否 | 12 |
-| ancient_city_deep | 11 | 古城狂戰士 | 34 | 16704 | 13500 | 1512 | 0 | 否 | 11 |
-| ancient_city_deep | 12 | 黑焰巫師 | 30 | 13824 | 12750 | 1512 | 0 | 否 | 11 |
-| ancient_city_deep | 14 | 古城將軍(B) | 39 | 58320 | 27000 | 8280 | 0 | 是 | 24 |
-| ancient_city_deep | 15 | 廢都魔王(B) | 40 | 114480 | 37500 | 9360 | 0 | 是 | 28 |
+| ancient_city_deep | 1 | 城牆衛兵 | 41 | 22947 | 6750 | 1512 | 0 | 否 | 14 |
+| ancient_city_deep | 6 | 冰封騎士 | 45 | 27158 | 10500 | 1512 | 0 | 否 | 13 |
+| ancient_city_deep | 8 | 鐵甲衛將 | 44 | 25263 | 11250 | 1512 | 0 | 否 | 14 |
+| ancient_city_deep | 11 | 古城狂戰士 | 43 | 24421 | 13500 | 1512 | 0 | 否 | 13 |
+| ancient_city_deep | 12 | 黑焰巫師 | 40 | 20211 | 12750 | 1512 | 0 | 否 | 13 |
+| ancient_city_deep | 14 | 古城將軍(B) | 46 | 58320 | 27000 | 8280 | 0 | 是 | 24 |
+| ancient_city_deep | 15 | 廢都魔王(B) | 46 | 114480 | 37500 | 9360 | 0 | 是 | 28 |
 | beginner | 1 | 小史(小) | 1 | 300 | 100 | 72 | 0 | 否 | 12 |
 | beginner | 2 | 野兔 | 1 | 400 | 150 | 78 | 0 | 否 | 11 |
 | beginner | 3 | 蘑菇怪 | 2 | 700 | 200 | 87 | 0 | 否 | 11 |
 | beginner | 4 | 小史(中) | 3 | 900 | 250 | 102 | 0 | 否 | 11 |
 | beginner | 5 | 大野兔(B) | 3 | 3000 | 500 | 360 | 0 | 是 | 13 |
 | dragon_king_lair | 1 | 古龍王(B) | 60 | 2655000 | 30000 | 60000 | 10000 | 是 | 58 |
-| dragon_realm | 1 | 飛龍幼崽 | 40 | 36000 | 13000 | 1800 | 0 | 否 | 12 |
-| dragon_realm | 2 | 龍蜥武士 | 41 | 40500 | 14000 | 1950 | 0 | 否 | 12 |
-| dragon_realm | 3 | 火翼龍人 | 42 | 45000 | 15000 | 2100 | 0 | 否 | 11 |
-| dragon_realm | 4 | 冰鱗龍人 | 43 | 49500 | 16000 | 2250 | 0 | 否 | 11 |
+| dragon_realm | 1 | 飛龍幼崽 | 40 | 36000 | 13000 | 1800 | 0 | 否 | 10 |
+| dragon_realm | 2 | 龍蜥武士 | 41 | 40500 | 14000 | 1950 | 0 | 否 | 7 |
+| dragon_realm | 3 | 火翼龍人 | 42 | 45000 | 15000 | 2100 | 0 | 否 | 7 |
+| dragon_realm | 4 | 冰鱗龍人 | 43 | 49500 | 16000 | 2250 | 0 | 否 | 9 |
 | dragon_realm | 5 | 雷霆飛龍 | 44 | 54000 | 17000 | 2400 | 0 | 否 | 11 |
 | dragon_realm | 6 | 黑曜龍騎 | 45 | 60000 | 18000 | 2550 | 0 | 否 | 11 |
 | dragon_realm | 7 | 黃金幼龍(稀) | 46 | 30000 | 8000 | 9000 | 0 | 是 | 17 |
-| dragon_realm | 8 | 暗影龍將 | 47 | 69000 | 20000 | 2850 | 0 | 否 | 11 |
-| dragon_realm | 9 | 龍翼魔法師 | 48 | 75000 | 22000 | 3000 | 0 | 否 | 11 |
+| dragon_realm | 8 | 暗影龍將 | 47 | 69000 | 20000 | 2850 | 0 | 否 | 6 |
+| dragon_realm | 9 | 龍翼魔法師 | 48 | 75000 | 22000 | 3000 | 0 | 否 | 6 |
 | dragon_realm | 10 | 龍王(B) | 50 | 300000 | 50000 | 15000 | 0 | 是 | 25 |
 | elite | 1 | 大史王 | 55 | 1770000 | 19500 | 40500 | 5000 | 是 | 57 |
-| hellfire | 1 | 焰爪幼狼 | 50 | 150000 | 30000 | 3500 | 0 | 否 | 3 |
-| hellfire | 2 | 灰燼豺 | 51 | 160000 | 32000 | 3700 | 0 | 否 | 3 |
-| hellfire | 3 | 熔岩犬 | 52 | 175000 | 35000 | 4000 | 0 | 否 | 3 |
-| hellfire | 4 | 硫火蝙蝠 | 52 | 155000 | 33000 | 3800 | 0 | 否 | 3 |
-| hellfire | 5 | 焦炎蜥 | 53 | 180000 | 36000 | 4100 | 0 | 否 | 3 |
-| hellfire | 6 | 火髓魔蟲 | 54 | 200000 | 40000 | 4300 | 0 | 否 | 3 |
-| hellfire | 7 | 餘燼骷髏 | 54 | 165000 | 37000 | 4200 | 0 | 否 | 3 |
-| hellfire | 8 | 炙炎鴉 | 55 | 158000 | 38000 | 4300 | 0 | 否 | 3 |
-| hellfire | 9 | 岩漿巨蟲 | 56 | 210000 | 42000 | 4600 | 0 | 否 | 3 |
-| hellfire | 10 | 烈焰狼 | 58 | 190000 | 45000 | 4800 | 0 | 否 | 3 |
-| hellfire | 11 | 煉獄烈焰狼王 | 59 | 450000 | 90000 | 12000 | 0 | 否 | 4 |
-| hellfire_depths | 1 | 地獄狼牙王 | 65 | 3200000 | 30000 | 60000 | 0 | 是 | 1 |
+| hellfire | 1 | 焰爪幼狼 | 42 | 40629 | 30000 | 3500 | 0 | 否 | 3 |
+| hellfire | 2 | 灰燼豺 | 43 | 43338 | 32000 | 3700 | 0 | 否 | 3 |
+| hellfire | 3 | 熔岩犬 | 43 | 47401 | 35000 | 4000 | 0 | 否 | 3 |
+| hellfire | 4 | 硫火蝙蝠 | 43 | 41984 | 33000 | 3800 | 0 | 否 | 3 |
+| hellfire | 5 | 焦炎蜥 | 44 | 48755 | 36000 | 4100 | 0 | 否 | 3 |
+| hellfire | 6 | 火髓魔蟲 | 45 | 54172 | 40000 | 4300 | 0 | 否 | 3 |
+| hellfire | 7 | 餘燼骷髏 | 45 | 44692 | 37000 | 4200 | 0 | 否 | 3 |
+| hellfire | 8 | 炙炎鴉 | 45 | 42796 | 38000 | 4300 | 0 | 否 | 3 |
+| hellfire | 9 | 岩漿巨蟲 | 46 | 56881 | 42000 | 4600 | 0 | 否 | 3 |
+| hellfire | 10 | 烈焰狼 | 47 | 51464 | 45000 | 4800 | 0 | 否 | 3 |
+| hellfire | 11 | 煉獄烈焰狼王 | 48 | 121888 | 90000 | 12000 | 0 | 否 | 12 |
+| hellfire_depths | 1 | 地獄狼牙王 | 65 | 3200000 | 30000 | 60000 | 0 | 是 | 13 |
 | mid | 1 | 甲蟹 | 14 | 4968 | 2800 | 828 | 0 | 否 | 16 |
 | mid | 2 | 牙牙狼 | 13 | 4416 | 2400 | 828 | 0 | 否 | 13 |
 | mid | 3 | 巨巨 | 16 | 5704 | 4000 | 828 | 0 | 否 | 14 |
@@ -112,35 +112,35 @@ Generated at: 2026-07-05T19:05:09.045Z
 | --- | --- |
 | collectible | 6 |
 | consumable | 22 |
-| equipment | 309 |
+| equipment | 368 |
 | job_badge | 10 |
 | pet_egg | 1 |
 
 | 階級 | 數量 |
 | --- | --- |
-| A | 91 |
+| A | 139 |
 | B | 70 |
 | C | 71 |
 | D | 57 |
-| S | 17 |
+| S | 28 |
 | 無階級 | 42 |
 
 | 槽位 | 數量 |
 | --- | --- |
-| accessory_l | 43 |
-| accessory_r | 43 |
-| anchor | 6 |
-| armor | 16 |
-| garment | 16 |
-| head_low | 16 |
-| head_mid | 16 |
-| head_top | 16 |
+| accessory_l | 46 |
+| accessory_r | 46 |
+| anchor | 7 |
+| armor | 19 |
+| garment | 19 |
+| head_low | 19 |
+| head_mid | 19 |
+| head_top | 19 |
 | job_eq | 10 |
-| shield | 8 |
-| shoes | 16 |
-| special | 53 |
+| shield | 11 |
+| shoes | 19 |
+| special | 64 |
 | title_eq | 8 |
-| weapon | 52 |
+| weapon | 72 |
 | 無槽位 | 29 |
 
 ## Items
@@ -188,53 +188,80 @@ Generated at: 2026-07-05T19:05:09.045Z
 | 4d45bc35-4ee0-497b-b030-21c83a4a3a3c | 戰意左之戒 | equipment | A | accessory_l |  | DEX+5 | none |
 | 057bd3b6-ab04-4449-b4e8-717bc855b7a1 | 救護左之戒 | equipment | A | accessory_l |  | INT+5 | none |
 | f579720d-08da-446b-b86b-48020a4ccdd2 | 智紋金戒指(左) | equipment | A | accessory_l |  | INT+5 LUK+2 | none |
+| fire-a-arm-accessory_l | 焰紋戒指(左) | equipment | A | accessory_l |  | STR+3 LUK+2 | none |
 | ea424726-9958-44dd-8a71-8fa8db571200 | 狂血左之戒 | equipment | A | accessory_l |  | LUK+5 | none |
 | ca025e02-370d-4a8f-b56f-f230da30966b | 獵手左之戒 | equipment | A | accessory_l |  | LUK+5 | none |
 | 8a5db376-20fa-495f-a075-109aea276490 | 疾風左之戒 | equipment | A | accessory_l |  | AGI+5 | none |
+| mithril-arm-accessory_l | 秘銀戒指(左) | equipment | A | accessory_l |  | STR+3 LUK+2 | none |
 | ab7ae63e-f2c9-4d1d-9418-f332f80033ab | 迅紋金戒指(左) | equipment | A | accessory_l |  | DEX+5 LUK+2 | none |
 | e24a419d-dec7-4e9b-8438-8e9519f53c0e | 重擊左之戒 | equipment | A | accessory_l |  | STR+5 AGI+-5 | none |
 | 82c89915-2b11-49bf-8557-e7cd544a86fd | 金戒指(左) | equipment | A | accessory_l |  | AGI+3 VIT+3 LUK+3 | none |
 | f1a34a79-223f-440e-b6ec-ca17aa49b224 | 鏡映左之戒 | equipment | A | accessory_l |  | INT+5 | none |
 | 46514870-8bb0-4cf1-a3a4-b13fe158eb29 | 鬥紋金戒指(左) | equipment | A | accessory_l |  | STR+5 LUK+2 | none |
+| dragonscale-arm-accessory_l | 龍紋戒指(左) | equipment | A | accessory_l |  | STR+3 LUK+2 | none |
 | e95e37ac-96a5-41ea-9a85-0d63bd8bdcaf | 吸血右之戒 | equipment | A | accessory_r |  | LUK+5 | none |
 | dd770ac0-6b4d-4654-9bad-86ee2d917199 | 守護右之戒 | equipment | A | accessory_r |  | VIT+5 | none |
 | 41271fb1-8160-43ee-8f8a-68c45e2b0e35 | 戰意右之戒 | equipment | A | accessory_r |  | DEX+5 | none |
 | 9e2f286c-1ed6-42bb-bda8-c685c7e8970a | 救護右之戒 | equipment | A | accessory_r |  | INT+5 | none |
 | 6979ee0e-f7c2-4b11-805e-0d2fd05fb40f | 智紋金戒指(右) | equipment | A | accessory_r |  | INT+5 LUK+2 | none |
+| fire-a-arm-accessory_r | 焰紋戒指(右) | equipment | A | accessory_r |  | STR+3 VIT+2 | none |
 | e4d353b5-33ca-4d26-bfdb-d7e5eeb85e57 | 狂血右之戒 | equipment | A | accessory_r |  | LUK+5 | none |
 | cc468629-2d79-4077-8b1e-5615cfaaea77 | 獵手右之戒 | equipment | A | accessory_r |  | LUK+5 | none |
 | 5b5414e3-6059-4080-b6b2-dcc8d20a2330 | 疾風右之戒 | equipment | A | accessory_r |  | AGI+5 | none |
+| mithril-arm-accessory_r | 秘銀戒指(右) | equipment | A | accessory_r |  | STR+3 VIT+2 | none |
 | c46e57fe-2636-436c-9e5b-ffca8ee9f9b3 | 迅紋金戒指(右) | equipment | A | accessory_r |  | STR+2 DEX+5 | none |
 | 85946efa-f325-4fd4-b60f-1df267bc8967 | 重擊右之戒 | equipment | A | accessory_r |  | STR+5 AGI+-5 | none |
 | 6041efc9-f493-4e7d-9d78-df8aaa3763a9 | 金戒指(右) | equipment | A | accessory_r |  | AGI+3 VIT+3 LUK+3 | none |
 | e843b12f-e9fb-47c4-b5a8-c3e1fc1d84cc | 鏡映右之戒 | equipment | A | accessory_r |  | INT+5 | none |
 | 7be81010-a486-4c77-b912-7e811e94b9d7 | 鬥紋金戒指(右) | equipment | A | accessory_r |  | STR+5 LUK+2 | none |
+| dragonscale-arm-accessory_r | 龍紋戒指(右) | equipment | A | accessory_r |  | STR+3 VIT+2 | none |
 | 0d9d737a-15af-4a3f-a62b-2417c44b41b2 | 智紋鋼鐵袍 | equipment | A | armor |  | VIT+5 INT+9 DEX+1 | none |
+| fire-a-arm-armor | 焰鱗甲 | equipment | A | armor |  | VIT+15 | none |
+| mithril-arm-armor | 秘銀鎧 | equipment | A | armor |  | VIT+15 | none |
 | 0cfdadac-6b8c-4f92-9621-cbc5b6e7281d | 迅紋鋼鐵甲 | equipment | A | armor |  | AGI+1 VIT+9 DEX+5 | none |
 | a192dd6c-8de2-4421-a8b3-04e0d60c5041 | 鋼鐵甲 | equipment | A | armor |  | VIT+15 | none |
 | 121cbe5e-5adf-4600-93bb-cb5cf68bd5e7 | 鬥紋鋼鐵甲 | equipment | A | armor |  | STR+4 VIT+9 LUK+2 | none |
+| dragonscale-arm-armor | 龍鱗鎧 | equipment | A | armor |  | VIT+15 | none |
 | 40116efc-f44e-48cd-ab0f-56f63ff838c9 | 智紋鋼鐵披風 | equipment | A | garment |  | VIT+7 INT+5 | none |
+| fire-a-arm-garment | 焰鱗披風 | equipment | A | garment |  | AGI+1 VIT+11 | none |
+| mithril-arm-garment | 秘銀披風 | equipment | A | garment |  | AGI+1 VIT+11 | none |
 | 457fd983-b4f1-48c3-bca4-963bebe1fbb2 | 迅紋鋼鐵披肩 | equipment | A | garment |  | VIT+7 DEX+5 | none |
 | 4359a991-d4ee-4783-b6f3-4aed0d9a1fc5 | 鋼鐵披風 | equipment | A | garment |  | AGI+1 VIT+11 | none |
 | bd515bca-77d7-4c6b-a5bc-54fd66ab61d5 | 鬥紋鋼鐵披肩 | equipment | A | garment |  | STR+5 VIT+7 | none |
+| dragonscale-arm-garment | 龍翼披風 | equipment | A | garment |  | AGI+1 VIT+11 | none |
 | c1345f1a-8b68-4ec5-9f14-1b7d4cb39837 | 智紋鋼鐵口飾 | equipment | A | head_low |  | VIT+7 INT+4 LUK+3 | none |
+| fire-a-arm-head_low | 焰鱗口罩 | equipment | A | head_low |  | STR+2 VIT+9 | none |
+| mithril-arm-head_low | 秘銀護面 | equipment | A | head_low |  | STR+2 VIT+9 | none |
 | 9c7b7e3f-bd2e-4056-9b38-4c3dd235670b | 迅紋鋼鐵面罩 | equipment | A | head_low |  | VIT+7 DEX+4 LUK+3 | none |
 | 5c72b89a-f20c-4df1-b1ce-f6fb7d011eaf | 鋼鐵口罩 | equipment | A | head_low |  | STR+2 VIT+9 | none |
 | 6ef4eed9-d62f-4f3b-af22-9ca7488504e0 | 鬥紋鋼鐵面甲 | equipment | A | head_low |  | STR+4 VIT+7 LUK+3 | none |
+| dragonscale-arm-head_low | 龍頷護面 | equipment | A | head_low |  | STR+2 VIT+9 | none |
 | 195d08bf-fd36-431f-88b7-4a3dbdceac0a | 智紋鋼鐵鏡片 | equipment | A | head_mid |  | VIT+5 INT+5 DEX+3 | none |
+| fire-a-arm-head_mid | 焰鱗護目 | equipment | A | head_mid |  | STR+3 VIT+9 | none |
+| mithril-arm-head_mid | 秘銀護目 | equipment | A | head_mid |  | STR+3 VIT+9 | none |
 | 083da513-8b25-4b33-8932-7405ca9489fa | 迅紋鋼鐵護目 | equipment | A | head_mid |  | VIT+5 DEX+8 | none |
 | cef73b6e-e86c-4c82-8df7-6831fc03cd11 | 鋼鐵護目鏡 | equipment | A | head_mid |  | STR+3 VIT+10 | none |
 | 22e3c6e5-fdee-45b7-a9ac-a362d8b2b3ae | 鬥紋鋼鐵護目 | equipment | A | head_mid |  | STR+3 VIT+5 DEX+5 | none |
+| dragonscale-arm-head_mid | 龍瞳護目 | equipment | A | head_mid |  | STR+3 VIT+9 | none |
 | 0139abbe-ea30-4213-9b5a-781b6136ac79 | 智紋鋼鐵帽 | equipment | A | head_top |  | VIT+5 INT+8 | none |
+| fire-a-arm-head_top | 焰鱗盔 | equipment | A | head_top |  | VIT+13 | none |
+| mithril-arm-head_top | 秘銀盔 | equipment | A | head_top |  | VIT+13 | none |
 | af331293-1ade-4da8-a53b-dc0bcdbcf645 | 迅紋鋼鐵帽 | equipment | A | head_top |  | VIT+5 DEX+8 | none |
 | 371b770c-e03a-4eaf-b028-d9a5989bc3e5 | 鋼鐵帽 | equipment | A | head_top |  | VIT+13 | none |
 | 9d3a61d5-4e98-4ab1-ac47-42f049b6d54a | 鬥紋鋼鐵盔 | equipment | A | head_top |  | STR+8 VIT+5 | none |
+| dragonscale-arm-head_top | 龍首盔 | equipment | A | head_top |  | VIT+13 | none |
+| fire-a-arm-shield | 焰鱗盾 | equipment | A | shield |  | VIT+14 | none |
 | 585ad0b3-2c75-462a-ade6-882e5929831b | 秘銀盾 | equipment | A | shield |  | VIT+14 | none |
+| mithril-arm-shield | 秘銀盾甲 | equipment | A | shield |  | VIT+14 | none |
 | afa8d955-ad56-4d49-9ee8-0b845f489997 | 秘銀短匕(副手) | equipment | A | shield | offhand_dagger | AGI+9 LUK+3 | none |
+| dragonscale-arm-shield | 龍鱗盾牌 | equipment | A | shield |  | VIT+14 | none |
 | 38f310e3-1959-4717-b031-bae1e390a8db | 智紋鋼鐵靴 | equipment | A | shoes |  | VIT+7 INT+6 | none |
+| fire-a-arm-shoes | 焰鱗戰靴 | equipment | A | shoes |  | AGI+5 VIT+8 | none |
+| mithril-arm-shoes | 秘銀戰靴 | equipment | A | shoes |  | AGI+5 VIT+8 | none |
 | dd86252c-57b8-49a2-91a3-158b179f59be | 迅紋鋼鐵靴 | equipment | A | shoes |  | VIT+7 DEX+6 | none |
 | b4b5d9fa-6c55-466d-aa43-64b22837e8b3 | 鋼鐵靴 | equipment | A | shoes |  | AGI+5 VIT+8 | none |
 | c20f00f1-e114-4975-a0f9-88347d6e5e81 | 鬥紋鋼鐵靴 | equipment | A | shoes |  | STR+6 VIT+7 | none |
+| dragonscale-arm-shoes | 龍爪戰靴 | equipment | A | shoes |  | AGI+5 VIT+8 | none |
 | monster-card-53fdc9ee-b719-4f8c-a93e-3ab5a0a3ce09 | 冰封騎士卡 | equipment | A | special |  |  | none |
 | monster-card-6650c823-8f3d-4032-a38b-a5ecc76fb3a9 | 冰鱗龍人卡 | equipment | A | special |  |  | none |
 | monster-card-4a46dd14-b74c-4a5d-9cde-b7d0f270ce0f | 古城刺客卡 | equipment | A | special |  |  | none |
@@ -246,23 +273,44 @@ Generated at: 2026-07-05T19:05:09.045Z
 | monster-card-5c20d4ba-5f38-4d6b-a724-369eb632ff1d | 城堡魔像(B)卡 | equipment | A | special |  |  | none |
 | monster-card-5152b379-9bdd-404a-acb4-b80935664aba | 城牆衛兵卡 | equipment | A | special |  |  | none |
 | monster-card-e5a4a7e58fb2e78e8be58da1 | 大史王卡 | equipment | A | special |  |  | none |
+| monster-card-702f6cd9-28ed-4944-a605-fbb6d6a3c300 | 岩漿巨蟲卡 | equipment | A | special |  |  | none |
 | monster-card-388a118f-b839-4287-ba02-0c7a12cd0c06 | 廢墟蠍兵卡 | equipment | A | special |  |  | none |
 | monster-card-0496ea5d-786e-4b07-ba65-30949c1afe31 | 廢都魔王(B)卡 | equipment | A | special |  |  | none |
 | monster-card-e1c17a26-dd0e-4869-9ce8-7c4b12b8e2c2 | 暗影龍將卡 | equipment | A | special |  |  | none |
 | monster-card-139df36b-f838-4875-b3f0-2d9003fc6f8f | 毒霧蜘蛛卡 | equipment | A | special |  |  | none |
 | monster-card-29e2458c-8e7f-4c4f-a7bf-5f978a5067d4 | 火翼龍人卡 | equipment | A | special |  |  | none |
+| monster-card-18681a29-c89d-45e2-ab65-60869a45ec20 | 火髓魔蟲卡 | equipment | A | special |  |  | none |
+| monster-card-ddae3f15-ee44-4bd1-993e-16dd43904315 | 灰燼豺卡 | equipment | A | special |  |  | none |
+| monster-card-edc29959-6809-4ce3-a349-fc800bb063aa | 炙炎鴉卡 | equipment | A | special |  |  | none |
+| monster-card-77f6600a-87b3-4e38-b960-152c5b61c519 | 烈焰狼卡 | equipment | A | special |  |  | none |
+| monster-card-15a8b4c8-9859-4fd9-8b48-28eadae73f10 | 焦炎蜥卡 | equipment | A | special |  |  | none |
+| monster-card-150109cb-0e5f-4bdd-97a8-aab294296a6e | 焰爪幼狼卡 | equipment | A | special |  |  | none |
+| monster-card-b6525c8f-304c-4cdb-ba0e-df0350d0b19d | 煉獄烈焰狼王卡 | equipment | A | special |  |  | none |
+| monster-card-74742135-a75d-46cc-9732-5cf60eab48fb | 熔岩犬卡 | equipment | A | special |  |  | none |
 | monster-card-hellfang-king | 狼牙王卡 | equipment | A | special |  |  |  |
 | monster-card-814f097c-283e-4c35-98b5-7aaa8b08dd7c | 石像鬼卡 | equipment | A | special |  |  | none |
+| monster-card-8ee733e7-667d-4222-b1e1-4e867e99092d | 硫火蝙蝠卡 | equipment | A | special |  |  | none |
 | monster-card-9a0ac6a5-4f2e-4186-a66a-73a6de9cb5e2 | 詛咒祭司卡 | equipment | A | special |  |  | none |
 | monster-card-8eea80b7-c836-413b-8912-7c3ce6a899a7 | 鐵甲衛將卡 | equipment | A | special |  |  | none |
 | monster-card-895e616e-a218-4445-86d6-e52c74b68018 | 雷霆飛龍卡 | equipment | A | special |  |  | none |
 | monster-card-249a4c73-01fd-44a4-9a81-abfc26a2b93e | 飛龍幼崽卡 | equipment | A | special |  |  | none |
+| monster-card-34743b1d-b2c5-4610-b068-7d8191e3b181 | 餘燼骷髏卡 | equipment | A | special |  |  | none |
 | monster-card-a68402d9-d9cf-4927-9293-691164bcf1f1 | 黃金幼龍(稀)卡 | equipment | A | special |  |  | none |
 | monster-card-8e5ed991-335a-4b57-8c2d-29dcdb2d0429 | 黑曜龍騎卡 | equipment | A | special |  |  | none |
 | monster-card-35ec8cc7-9f0c-4d61-8a40-343d8857be2f | 黑焰巫師卡 | equipment | A | special |  |  | none |
 | monster-card-90df79f6-ce40-4f31-be32-f8d4d8f31c99 | 龍王(B)卡 | equipment | A | special |  |  | none |
 | monster-card-aece2657-19aa-407c-acaa-0b23246c0dc7 | 龍翼魔法師卡 | equipment | A | special |  |  | none |
 | monster-card-739cdb0a-5d59-4e52-bf77-cce0e33c2666 | 龍蜥武士卡 | equipment | A | special |  |  | none |
+| fire-a-wpn-axe_1h | 烈焰單手斧 | equipment | A | weapon | axe_1h | STR+14 LUK+5 | none |
+| fire-a-wpn-axe_2h | 烈焰雙手斧 | equipment | A | weapon | axe_2h | STR+20 LUK+5 | none |
+| fire-a-wpn-dagger | 焰刃匕首 | equipment | A | weapon | dagger | STR+4 AGI+15 | none |
+| fire-a-wpn-staff_1h | 焰心單手法杖 | equipment | A | weapon | staff_1h | INT+14 DEX+5 | none |
+| fire-a-wpn-staff_2h | 焰心雙手法杖 | equipment | A | weapon | staff_2h | INT+19 DEX+4 | none |
+| fire-a-wpn-sword_1h | 焰紋單手劍 | equipment | A | weapon | sword_1h | STR+19 | none |
+| fire-a-wpn-sword_2h | 焰紋雙手劍 | equipment | A | weapon | sword_2h | STR+25 | none |
+| fire-a-wpn-bow | 焰羽獵弓 | equipment | A | weapon | bow | AGI+4 DEX+19 | none |
+| fire-a-wpn-mace_1h | 熔火單手槌 | equipment | A | weapon | mace_1h | STR+14 VIT+5 | none |
+| fire-a-wpn-mace_2h | 熔火雙手槌 | equipment | A | weapon | mace_2h | STR+20 VIT+5 | none |
 | 5da1f2b3-ad07-46b5-9d24-eb2d849d3381 | 秘銀匕首 | equipment | A | weapon | dagger | STR+4 AGI+15 | none |
 | 99d23a47-89a6-4291-9b03-8f15e7356eec | 秘銀單手劍 | equipment | A | weapon | sword_1h | STR+19 | none |
 | b24ee5cd-c74b-409e-9326-14bd056d9af8 | 秘銀單手斧 | equipment | A | weapon | axe_1h | STR+14 LUK+5 | none |
@@ -469,6 +517,7 @@ Generated at: 2026-07-05T19:05:09.045Z
 | 2fcf7576-4e74-4280-b1e6-0d7da7b58dda | 木製雙手槌 | equipment | D | weapon | mace_2h | STR+5 VIT+1 | none |
 | e3794447-e19d-41a2-9b0a-c5050dcdd9ea | 木製雙手法杖 | equipment | D | weapon | staff_2h | INT+5 LUK+1 | none |
 | s-legend-linger | 滯・後勢之刃 | equipment | S | anchor |  | STR+19 | none |
+| s-legend-resonance | 繫・初鳴之晶 | equipment | S | anchor |  |  | none |
 | s-legend-bond | 繫絆・共鳴之鏈 | equipment | S | anchor |  | AGI+8 VIT+8 INT+8 | none |
 | s-legend-reverse-scale | 逆鱗・反擊之衣 | equipment | S | anchor |  | VIT+18 | none |
 | s-legend-mirror | 鏡裝・攻守倒置 | equipment | S | anchor |  |  | none |
@@ -476,6 +525,16 @@ Generated at: 2026-07-05T19:05:09.045Z
 | s-legend-dice | 骰・命運之輪 | equipment | S | anchor |  | LUK+20 | none |
 | s-dragon-axe_2h | 屠龍巨斧 | equipment | S | weapon | axe_2h | STR+20 LUK+5 | none |
 | s-dragon-sword_1h | 幼龍牙劍 | equipment | S | weapon | sword_1h | STR+19 | none |
+| fire-s-wpn-mace_2h | 獄焰・崩地槌 | equipment | S | weapon | mace_2h | STR+20 VIT+5 | none |
+| fire-s-wpn-axe_1h | 獄焰・撕裂手斧 | equipment | S | weapon | axe_1h | STR+14 LUK+5 | none |
+| fire-s-wpn-bow | 獄焰・炎狼獵弓 | equipment | S | weapon | bow | AGI+4 DEX+19 | none |
+| fire-s-wpn-axe_2h | 獄焰・焚天巨斧 | equipment | S | weapon | axe_2h | STR+20 LUK+5 | none |
+| fire-s-wpn-staff_2h | 獄焰・煉獄長杖 | equipment | S | weapon | staff_2h | INT+19 DEX+4 | none |
+| fire-s-wpn-sword_1h | 獄焰・狼牙劍 | equipment | S | weapon | sword_1h | STR+19 | none |
+| fire-s-wpn-dagger | 獄焰・狼牙短刃 | equipment | S | weapon | dagger | STR+4 AGI+15 | none |
+| fire-s-wpn-mace_1h | 獄焰・碎顱槌 | equipment | S | weapon | mace_1h | STR+14 VIT+5 | none |
+| fire-s-wpn-sword_2h | 獄焰・裂天巨劍 | equipment | S | weapon | sword_2h | STR+25 | none |
+| fire-s-wpn-staff_1h | 獄焰・魂焚法杖 | equipment | S | weapon | staff_1h | INT+14 DEX+5 | none |
 | s-dragon-axe_1h | 裂龍手斧 | equipment | S | weapon | axe_1h | STR+14 LUK+5 | none |
 | s-dragon-bow | 龍筋獵弓 | equipment | S | weapon | bow | AGI+4 DEX+19 | none |
 | s-dragon-staff_2h | 龍脈長杖 | equipment | S | weapon | staff_2h | INT+19 DEX+4 | none |

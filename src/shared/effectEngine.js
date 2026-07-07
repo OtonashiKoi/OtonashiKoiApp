@@ -138,7 +138,18 @@ function collectEffectRefsFromEntry(entry, trigger = null, context = {}) {
 }
 
 function collectEquipmentEffects(equipped, trigger = null, context = {}) {
-  return Object.values(equipped || {}).flatMap((entry) => collectEffectRefsFromEntry(entry, trigger, context));
+  const itemEffects = Object.values(equipped || {}).flatMap((entry) => collectEffectRefsFromEntry(entry, trigger, context));
+  // 具名套裝效果（達門檻才產生；帶 condition，交由 isEffectConditionMet 判定 zone 等）
+  let setEffects = [];
+  try {
+    const { getSetEffects } = require("./equipmentSetBonuses");
+    setEffects = getSetEffects(equipped).filter((effect) => {
+      if (!effect || typeof effect !== "object") return false;
+      if (trigger && effect.trigger !== trigger) return false;
+      return isEffectConditionMet(effect, context);
+    });
+  } catch (_) { /* 套裝模組缺失時不影響戰鬥 */ }
+  return [...itemEffects, ...setEffects];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

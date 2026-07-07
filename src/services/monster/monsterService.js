@@ -11,7 +11,7 @@ function calcStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1 } = {}) {
     def:   Math.round(vit),
     mdef:  Math.round(INT * 2),
     dodge: Math.min(50, Math.round(agi * 0.5 * 10) / 10),
-    hit:   Math.min(100, 80 + dex)
+    hit:   Math.min(100, 85 + dex) // 80→85 補償命中公式常數 75→62，使怪打玩家命中維持原水準
   };
 }
 
@@ -38,6 +38,8 @@ function effectiveCalc(m) {
   const luk = typeof m.luk === 'number' ? m.luk : 0;
   const agi = (typeof m.agi === 'number' && !isNaN(m.agi)) ? Math.max(1, Math.round(m.agi)) : base.agi;
   const intStat = (typeof m.int === 'number' && !isNaN(m.int)) ? Math.max(0, m.int) : 0;
+  // 敏影怪：dodgeBonus 可突破 AGI 迴避 cap 50（總迴避上限 75；命中公式 floor 20% 為最終保底）
+  const dodgeBonus = (typeof m.dodgeBonus === 'number' && !isNaN(m.dodgeBonus)) ? Math.max(0, m.dodgeBonus) : 0;
   return {
     maxHp: (typeof m.maxHp === 'number' && !isNaN(m.maxHp)) ? m.maxHp : derivedMaxHp,
     agi,
@@ -47,7 +49,8 @@ function effectiveCalc(m) {
     flatDef,       // 固定值減傷
     level,         // 等級壓制用
     defIgnorePct,
-    dodge: base.dodge,
+    isBoss: Boolean(m.isBoss), // 供戰鬥端 BOSS 規則(暈眩抗性/格擋改制/對BOSS傷害)判定
+    dodge: Math.min(75, base.dodge + dodgeBonus),
     hit:   base.hit,
     critRate:    Math.min(100, Math.round(luk * 0.3)),           // LUK → 爆擊%（同玩家公式）
     comboChance: Math.min(80,  Math.round(3 + agi * 0.5)),       // AGI → 連擊%（同玩家公式）

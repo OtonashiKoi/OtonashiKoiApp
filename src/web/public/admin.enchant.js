@@ -3,7 +3,9 @@
   const root = document.getElementById("enchant-config-root");
   if (!root) return;
 
-  const headers = () => ({ Authorization: "Bearer " + (window.elements?.adminPassword?.value?.trim() || "") });
+  // 與其他後台頁一致：用官方 getAdminToken()（登入後的密碼來源）
+  const adminToken = () => (window.getAdminToken ? window.getAdminToken() : (window.elements?.adminPassword?.value?.trim() || ""));
+  const headers = () => ({ Authorization: "Bearer " + adminToken() });
   async function fetchJSON(url, init) {
     const res = await fetch(url, init);
     const text = await res.text();
@@ -18,6 +20,11 @@
   let cfg = null;
 
   function render() {
+    // 未登入(無 token)不要硬打 API 造成「Invalid admin password」；提示先登入。
+    if (!adminToken()) {
+      root.innerHTML = '<p class="hint">請先到「基礎設定 → 登入連線」輸入管理員密碼並連線，登入後本頁會自動載入。</p>';
+      return;
+    }
     root.innerHTML = '<p class="hint">載入中…</p>';
     fetchJSON("/admin/enchant/config").then((c) => {
       cfg = c;
@@ -88,6 +95,8 @@
     if (e.target.closest?.("#enchant-save")) { save(); return; }
     if (e.target.closest?.('[data-target="section-enchant"]')) setTimeout(render, 60);
   });
+  // 登入成功後自動載入（與其他後台頁一致）
+  document.addEventListener("adminConnected", () => { if (document.getElementById("section-enchant")?.classList.contains("active")) render(); });
   const sec = document.getElementById("section-enchant");
   if (sec) {
     const obs = new MutationObserver(() => { if (sec.classList.contains("active")) render(); });

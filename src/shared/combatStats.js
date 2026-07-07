@@ -1,6 +1,7 @@
 "use strict";
 const { collectEquipmentEffects, applyEffectsToStats } = require("./effectEngine");
 const { getEquipmentTierSetBonuses, TIER_SET_SLOTS } = require("./equipmentTierSetBonuses");
+const { getSetNumericBonuses } = require("./equipmentSetBonuses");
 const { getBossBoostPct, PK_RATING_DEFAULT } = require("./pkArenaConfig");
 
 // ─────────────────────────────────────────────
@@ -40,6 +41,14 @@ const EQUIPPED_TIER_SLOTS = TIER_SET_SLOTS;
  */
 function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = [], { pkRating, zone = null } = {}) {
   const tierSetBonuses = getEquipmentTierSetBonuses(equipped);
+  // 併入具名套裝(秘銀/火焰…)的數值加成，讓下游倍率與顯示一併吃到
+  const _setNumeric = getSetNumericBonuses(equipped);
+  tierSetBonuses.stats.str += _setNumeric.stats.str;
+  tierSetBonuses.stats.int += _setNumeric.stats.int;
+  tierSetBonuses.stats.dex += _setNumeric.stats.dex;
+  for (const _k of ["hitPct", "dodgePct", "critRatePct", "critDamagePct", "damagePct", "finalDamagePct", "bossDamagePct", "goldPct", "expPct", "dropPct"]) {
+    tierSetBonuses[_k] += _setNumeric[_k];
+  }
 
   // 裝備加成
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
@@ -167,8 +176,8 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     baseVit,
     equipVit,
     dodge:    Math.min(50, A * 0.5) + (cfg.dodgeBonus ?? 0) + tierSetBonuses.dodgePct,
-    hit:      Math.min(100, 70 + D) + tierSetBonuses.hitPct,
-    crit:     Math.min(100, L * 0.3 + (cfg.critBonus ?? 0)) + tierSetBonuses.critRatePct,
+    hit:      Math.min(100, 70 + D) + tierSetBonuses.hitPct, // 命中基礎維持 70+DEX；命中曲線改由 hitChance 常數(75→62)+各區迴避帶驅動，避免前期被砍過頭
+    crit:     Math.min(100, L * 0.5 + (cfg.critBonus ?? 0)) + tierSetBonuses.critRatePct, // LUK 每點爆擊 0.3→0.5(V0.4 平衡:LUK 補值)
     combo:    Math.min(80, 3 + A * 0.5 + (cfg.comboBonus ?? 0)),
     comboDamageMultiplier: 1,
     tierSetBonuses,

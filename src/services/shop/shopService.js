@@ -1,4 +1,5 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
+const { isBoundItemId } = require("../../shared/boundItems");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { applyEffectInstances } = require("../../shared/effectEngine");
 const { MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
@@ -1036,6 +1037,10 @@ class ShopService {
       if (this._isMonsterCardEntry(entry)) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "怪物卡無法分解", 400);
       }
+      // 靈魂綁定道具不可丟棄/分解（例：繫・初鳴之晶）
+      if (isBoundItemId(entry.itemId)) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品為靈魂綁定，無法分解丟棄", 400);
+      }
 
       const tier = String(entry.tier || "").toUpperCase();
       const isEquipmentLike = entry.itemType === "equipment";
@@ -1077,6 +1082,7 @@ class ShopService {
     const ref = inv.find((e) => this._matchesInventoryEntryRef(e, entryUuid));
     if (!ref) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
     if (this._isMonsterCardEntry(ref)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "怪物卡無法分解", 400);
+    if (isBoundItemId(ref.itemId)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品為靈魂綁定，無法分解丟棄", 400);
 
     // 收集同款、未強化、非怪物卡的裝備索引
     const refItemId = ref.itemId;
@@ -1286,7 +1292,7 @@ class ShopService {
   }
 
   async unequipItem(discordId, slot) {
-    const VALID_SLOTS = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r","title_eq","job_eq","special_1","special_2","special_3"];
+    const VALID_SLOTS = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r","title_eq","job_eq","special_1","special_2","special_3","anchor"];
     if (!VALID_SLOTS.includes(slot)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "無效槽位", 400);
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);

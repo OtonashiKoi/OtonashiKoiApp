@@ -10,6 +10,7 @@ const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SL
 const { calcPlayerStats, getWeaponConfig } = require("../shared/combatStats");
 const { pushBonusWeaponToInventory } = require("../shared/jobBadgeBonus");
 const { TIER_SET_SLOTS } = require("../shared/equipmentTierSetBonuses");
+const { getEquippedSetInfo } = require("../shared/equipmentSetBonuses");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
 const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
 const { calcScaledAuraValue, getSupportJobKey } = require("../shared/supportAuraScaling");
@@ -415,41 +416,15 @@ async function handleProfile(interaction) {
   const effectLineParts = buildWeaponEffectLines(cs, equipped);
   const effectLine = effectLineParts.length ? "\n" + effectLineParts.join("\n") : "";
   const tierSetBonuses = cs.tierSetBonuses || { tierCounts: {} };
-  const tierSetLines = [];
-  const tierCounts = tierSetBonuses.tierCounts || {};
-  const tierItems = { D: [], C: [], B: [], A: [] };
-  for (const slot of TIER_SET_SLOTS) {
-    const item = equipped?.[slot];
-    const tier = String(item?.tier || "").toUpperCase();
-    if (tierItems[tier]) {
-      tierItems[tier].push(`${EQ_SLOT_LABELS[slot] || slot}:${item.itemName || item.name || item.id}`);
-    }
-  }
-  if ((tierCounts.D || 0) >= 3) {
-    const parts = ["3件：STR/INT/DEX +3"];
-    if (tierCounts.D >= 5) parts.push("5件：金幣 +10%");
-    if (tierCounts.D >= 7) parts.push("7件：EXP +10%");
-    tierSetLines.push(`D階 ${tierCounts.D}件 - ${parts.join("、")}\n　計算裝備：${tierItems.D.join("、")}`);
-  }
-  if ((tierCounts.C || 0) >= 3) {
-    const parts = ["3件：迴避 +10%"];
-    if (tierCounts.C >= 5) parts.push("5件：傷害 +5%");
-    if (tierCounts.C >= 7) parts.push("7件：命中 +15%");
-    tierSetLines.push(`C階 ${tierCounts.C}件 - ${parts.join("、")}\n　計算裝備：${tierItems.C.join("、")}`);
-  }
-  if ((tierCounts.B || 0) >= 3) {
-    const parts = ["3件：傷害 +10%"];
-    if (tierCounts.B >= 5) parts.push("5件：暴擊率 +5%");
-    if (tierCounts.B >= 7) parts.push("7件：暴擊傷害 +10%");
-    tierSetLines.push(`B階 ${tierCounts.B}件 - ${parts.join("、")}\n　計算裝備：${tierItems.B.join("、")}`);
-  }
-  if ((tierCounts.A || 0) >= 3) {
-    const parts = ["3件：最終傷害 +5%"];
-    if (tierCounts.A >= 5) parts.push("5件：Boss傷害 +10%");
-    if (tierCounts.A >= 7) parts.push("7件：掉落率 +10%");
-    tierSetLines.push(`A階 ${tierCounts.A}件 - ${parts.join("、")}\n　計算裝備：${tierItems.A.join("、")}`);
-  }
-  const tierSetLine = tierSetLines.length ? `\n【階級套裝】\n${tierSetLines.join("\n")}` : "";
+  // D/C/B/A 只作品階顯示，不再有「階級套裝」加成（改由具名套裝提供）。
+  const tierSetLine = "";
+  // 具名套裝（秘銀套/火焰套…）：顯示歸屬 + 每階效果 + 目前進度
+  const namedSetInfo = getEquippedSetInfo(equipped);
+  const namedSetLines = namedSetInfo.map((s) => {
+    const tierTxt = s.tiers.map((t) => `${t.active ? "✅" : "▫️"}${t.count}件:${t.desc}`).join("　");
+    return `👕 ${s.name}（${s.count}件）${s.note ? " " + s.note : ""}\n　${tierTxt}`;
+  });
+  const namedSetLine = namedSetLines.length ? `\n【套裝】\n${namedSetLines.join("\n")}` : "";
   const tierSummaryParts = [
     tierSetBonuses.damagePct ? `傷害 ${formatSignedPct(tierSetBonuses.damagePct)}` : null,
     tierSetBonuses.finalDamagePct ? `最終傷害 ${formatSignedPct(tierSetBonuses.finalDamagePct)}` : null,
@@ -671,6 +646,7 @@ async function handleProfile(interaction) {
     `🎯 命中: ${calcHit}%　🟢 迴避: ${calcDodge}%　🪨 格擋: ${calcBlock}%　💥 暴擊: ${calcCrit}%　⚡ 連擊: ${calcCombo}%` +
     tierSummaryLine +
     effectLine + "\n" +
+    namedSetLine + (namedSetLine ? "\n" : "") +
     tierSetLine + (tierSetLine ? "\n" : "") +
     `【裝備清單】\n` +
     equipLine + "\n" +

@@ -33,7 +33,10 @@ function countEquippedTiers(equipped = {}) {
   if (!equipped || typeof equipped !== "object") return counts;
 
   for (const slot of TIER_SET_SLOTS) {
-    const tier = String(equipped?.[slot]?.tier || "").toUpperCase();
+    const it = equipped?.[slot];
+    // 帶 setKey/setKeys 的件歸具名套裝，不併入階級套裝計數（避免雙算）
+    if (it && (it.setKey || (Array.isArray(it.setKeys) && it.setKeys.length))) continue;
+    const tier = String(it?.tier || "").toUpperCase();
     if (tier in counts) counts[tier] += 1;
   }
   return counts;
@@ -56,25 +59,9 @@ function getEquipmentTierSetBonuses(equipped = {}) {
     dropPct: 0
   };
 
-  if (tierCounts.D >= 3) {
-    bonuses.stats.str += 3;
-    bonuses.stats.int += 3;
-    bonuses.stats.dex += 3;
-  }
-  if (tierCounts.D >= 5) bonuses.goldPct += 10;
-  if (tierCounts.D >= 7) bonuses.expPct += 10;
-
-  if (tierCounts.C >= 3) bonuses.dodgePct += 10;
-  if (tierCounts.C >= 5) bonuses.damagePct += 5;
-  if (tierCounts.C >= 7) bonuses.hitPct += 15;
-
-  if (tierCounts.B >= 3) bonuses.damagePct += 10;
-  if (tierCounts.B >= 5) bonuses.critRatePct += 5;
-  if (tierCounts.B >= 7) bonuses.critDamagePct += 10;
-
-  if (tierCounts.A >= 3) bonuses.finalDamagePct += 5;
-  if (tierCounts.A >= 5) bonuses.bossDamagePct += 10;
-  if (tierCounts.A >= 7) bonuses.dropPct += 10;
+  // D/C/B/A 通用「階級套裝」加成已停用：階級(D/C/B/A)只作為裝備品階顯示，
+  // 所有套裝加成一律改由「具名套裝」提供（秘銀套/火焰套…見 equipmentSetBonuses.js）。
+  // tierCounts 仍保留供顯示/統計用途。
 
   return bonuses;
 }
