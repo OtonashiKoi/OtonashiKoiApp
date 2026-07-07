@@ -43,7 +43,7 @@ function createPlayerEnchantRoutes(serviceContext) {
 
       const r = rerollEntryEnchant(target);
       if (!r.ok) {
-        const msg = r.reason === "no-tier" ? "這件裝備沒有階級，無法附魔" : "這件裝備無法重骰附魔";
+        const msg = r.reason === "story-item" ? "主線劇情裝備為固定數值，無法附魔" : r.reason === "no-tier" ? "這件裝備沒有階級，無法附魔" : "這件裝備無法重骰附魔";
         return res.status(400).json(fail("REROLL_FAILED", msg));
       }
 

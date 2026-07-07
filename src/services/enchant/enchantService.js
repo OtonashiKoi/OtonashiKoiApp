@@ -18,6 +18,11 @@ function getCachedConfig() {
 
 const ENCHANTABLE_TIERS = ["D", "C", "B", "A", "S"];
 
+// 主線劇情發的裝備一律不可附魔（劇情道具＝固定數值，不參與附魔玩法）
+function isStoryItem(entry) {
+  return Boolean(entry && entry.source === "story");
+}
+
 /**
  * 若這個背包條目是「可附魔的裝備、且尚未有附魔」→ 就地骰出附魔並寫入 entry.enchantments。
  * 已有 enchantments 的不動（保留玩家既有/交易帶來的）。回傳同一個 entry。
@@ -25,6 +30,7 @@ const ENCHANTABLE_TIERS = ["D", "C", "B", "A", "S"];
 function rollForEntry(entry) {
   if (!entry || typeof entry !== "object") return entry;
   if (entry.itemType !== "equipment") return entry;              // 只附魔「裝備」
+  if (isStoryItem(entry)) return entry;                          // 主線發的裝備不附魔
   if (Array.isArray(entry.enchantments)) return entry;           // 已有就不重骰
   const tier = String(entry.tier || "").toUpperCase();
   if (!ENCHANTABLE_TIERS.includes(tier)) return entry;           // 沒階級不骰
@@ -38,6 +44,7 @@ function rollForEntry(entry) {
  */
 function rerollEntryEnchant(entry) {
   if (!entry || entry.itemType !== "equipment") return { ok: false, reason: "not-equipment" };
+  if (isStoryItem(entry)) return { ok: false, reason: "story-item" }; // 主線裝備不可附魔
   const tier = String(entry.tier || "").toUpperCase();
   if (!ENCHANTABLE_TIERS.includes(tier)) return { ok: false, reason: "no-tier" };
   const before = Array.isArray(entry.enchantments) ? entry.enchantments : [];
