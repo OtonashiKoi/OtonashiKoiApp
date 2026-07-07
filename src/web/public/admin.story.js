@@ -1201,8 +1201,8 @@
     const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
     const noBox = isCG && !String(n.text || "").trim();
     // 畫面效果 / 音效 / BGM（BGM 走「往回找最近一句設的」與正式閱讀器一致）
-    const fxOverlay = n.screenFx === "flash" ? `<div style="position:absolute;inset:0;background:#fff;z-index:8;animation:stPvFlash .45s forwards;"></div>`
-      : n.screenFx === "fadeblack" ? `<div style="position:absolute;inset:0;background:#000;z-index:8;animation:stPvFade .9s forwards;"></div>` : "";
+    const fxOverlay = n.screenFx === "flash" ? `<div style="position:absolute;inset:0;background:#fff;z-index:8;pointer-events:none;animation:stPvFlash .45s forwards;"></div>`
+      : n.screenFx === "fadeblack" ? `<div style="position:absolute;inset:0;background:#000;z-index:8;pointer-events:none;animation:stPvFade .9s forwards;"></div>` : "";
     const shakeAnim = n.screenFx === "shake" ? "animation:stPvShake .4s;" : "";
     const curBgm = lookback((x) => x?.bgm) || "";
     const bgmLabel = (k) => (BGM_OPTS.find((o) => o[0] === k)?.[1] || k).replace(/^🎵\s*|^🎼\s*/, ""); // 顯示中文曲名
@@ -1220,7 +1220,7 @@
         ${bg ? `<div data-drag-bg style="position:absolute;inset:0;background-image:url('${esc(bg)}');background-size:cover;background-position:${bgPos ? `${bgPos.x}% ${bgPos.y}%` : "center"};${bgPos && bgPos.z ? `transform:scale(${bgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : ""}
         ${cgHtml}${portraitsHtml}
         ${(bg || (isCG && n.cgUrl)) ? `<div data-resize-${isCG && n.cgUrl ? "cg" : "bg"} title="拉動改變${isCG && n.cgUrl ? "CG" : "背景"}大小" style="position:absolute;top:50%;right:6px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:24px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:6;box-shadow:0 1px 6px rgba(0,0,0,.6);">⤢</div>` : ""}
-        ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
+        ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;pointer-events:none;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
         <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:${ls ? "10px 12px" : "12px"};min-height:${P.boxMinH};background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : n.type === "choice" ? "#ffd166" : "#c4a7f5"};border-radius:10px;">
           ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}${n.forcedOutcome === "win" ? "（劇情殺·必勝）" : n.forcedOutcome === "lose" ? "（劇情殺·必敗）" : ""}${n.maxRounds ? `　⏱${esc(String(n.maxRounds))}回合` : ""}</div>`
