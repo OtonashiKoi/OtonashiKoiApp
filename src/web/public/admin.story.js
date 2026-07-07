@@ -119,7 +119,7 @@
   const logMsg = (m) => { try { window.log ? window.log(`[劇情] ${m}`) : console.log(m); } catch (_) { console.log(m); } };
 
   // ── 狀態 ──
-  let npcs = [], zones = [], chapters = [], monsters = [];
+  let npcs = [], zones = [], chapters = [], monsters = [], items = [];
   // 立繪來源可為 NPC 或「怪物庫」：怪物立繪把 npcId 存成 "mon:<怪物id>"，與人物立繪一樣獨立擺台、依地圖分類挑選。
   const isMonRef = (id) => typeof id === "string" && id.startsWith("mon:");
   const monOf = (id) => (isMonRef(id) ? (monsters.find((m) => m.id === id.slice(4)) || null) : null);
@@ -133,11 +133,12 @@
   let draftTimer = null;
 
   async function loadAll() {
-    [npcs, zones, chapters, monsters] = await Promise.all([
+    [npcs, zones, chapters, monsters, items] = await Promise.all([
       fetchJSON("/admin/story/npcs", { headers: headers() }),
       fetchJSON("/admin/story/zones", { headers: headers() }),
       fetchJSON("/admin/story/chapters", { headers: headers() }),
-      fetchJSON("/admin/story/monsters", { headers: headers() })
+      fetchJSON("/admin/story/monsters", { headers: headers() }),
+      fetchJSON("/admin/story/items", { headers: headers() }).catch(() => [])
     ]);
     loadAssets().then(() => backfillAssets()); // 劇情圖庫：先載入，再把既有背景/CG 補進圖庫（非阻斷）
     render();
@@ -502,6 +503,16 @@
     };
     const monsterOpts = (sel) => ['<option value="">（選怪物）</option>']
       .concat(monsters.map((m) => `<option value="${esc(m.id)}" ${sel === m.id ? "selected" : ""}>${m.isBoss ? "👑 " : ""}${esc(m.name)}（${esc(m.zone || "?")} Lv${m.level ?? "?"}）</option>`)).join("");
+    // 🎁 發道具下拉：依道具類型 optgroup 分組
+    const ITEM_TYPE_ZH = { consumable: "消耗品", equipment: "裝備", collectible: "收藏品", job_badge: "職業徽章", pet_egg: "寵物蛋", pet: "寵物" };
+    const itemOpts = (sel) => {
+      const byType = {};
+      (items || []).forEach((it) => { const t = it.itemType || "consumable"; (byType[t] = byType[t] || []).push(it); });
+      const groups = Object.keys(byType).map((t) => `<optgroup label="${esc(ITEM_TYPE_ZH[t] || t)}">`
+        + byType[t].map((it) => `<option value="${esc(it.id)}" ${sel === it.id ? "selected" : ""}>${it.tier ? `[${esc(it.tier)}] ` : ""}${esc(it.name)}</option>`).join("")
+        + "</optgroup>").join("");
+      return '<option value="">（不發道具）</option>' + groups;
+    };
     const typeBtn = (i, t, cur, label) => `<button type="button" class="button ${cur === t ? "primary" : ""}" data-node-settype="${i}" data-settype="${t}" style="padding:3px 10px;">${label}</button>`;
 
     // 某 NPC 的表情下拉（預設 + 各表情名）
@@ -555,9 +566,10 @@
             <select class="st-sel" data-node="${i}" data-field="textSpeed">${optionsHtml(SPEED_OPTS, n.textSpeed || "")}</select>
             <select class="st-sel" data-node="${i}" data-field="exitSide" title="讓某個位置的立繪退場(移除)；換人時舊角色不會自動消失，用這個把他移掉">${optionsHtml(EXIT_OPTS, n.exitSide || "")}</select>
             <label style="font-size:12px;" title="進場前清掉台上其他立繪(換場/獨白用)"><input type="checkbox" data-node="${i}" data-field="clearStage" ${n.clearStage ? "checked" : ""}> 🧹 清空其他立繪</label>
+            ${!isBattle ? `<label style="font-size:12px;" title="讀到此節點自動發指定道具給玩家(每人只發一次)">🎁 給道具 <select class="st-sel" data-node="${i}" data-field="grantItemId">${itemOpts(n.grantItemId)}</select></label>` : ""}
           </div>
         </div>` : "";
-      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", (n.textFx && n.textFx !== "") && "✨", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹"].filter(Boolean).join(" ");
+      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", (n.textFx && n.textFx !== "") && "✨", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹", n.grantItemId && "🎁"].filter(Boolean).join(" ");
 
       return `
       <div class="st-node-card" data-node-card="${i}" style="${BOX}background:rgba(28,32,56,0.6);">

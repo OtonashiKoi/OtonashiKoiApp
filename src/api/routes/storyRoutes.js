@@ -142,6 +142,18 @@ function createStoryRoutes(serviceContext, discordClient) {
     } catch (error) { next(error); }
   });
 
+  // 🎁 讀到某節點發指定道具（冪等，每章每節點只發一次）
+  router.post("/api/story/grant", requireAuth, async (req, res, next) => {
+    try {
+      const result = await storyService.grantNodeItem(
+        req.playerRecord.discordId,
+        String(req.body?.chapterId || ""),
+        Number(req.body?.nodeIndex)
+      );
+      res.json(ok(result, "story item grant"));
+    } catch (error) { next(error); }
+  });
+
   // ── 後台 ──
 
   router.use("/admin/story", (req, res, next) => {
@@ -191,6 +203,16 @@ function createStoryRoutes(serviceContext, discordClient) {
       const slim = list.map((m) => ({ id: m.id, name: m.name, zone: m.zone, level: m.level, isBoss: Boolean(m.isBoss), imageUrl: m.imageUrl || null }))
         .sort((a, b) => String(a.zone || "").localeCompare(String(b.zone || "")) || (a.level || 0) - (b.level || 0));
       res.json(ok(slim, "monsters listed"));
+    } catch (error) { next(error); }
+  });
+
+  // 編輯器用：道具清單（🎁 發道具節點下拉）
+  router.get("/admin/story/items", async (req, res, next) => {
+    try {
+      const list = await serviceContext.itemRepository.findAll();
+      const slim = (list || []).map((it) => ({ id: it.id, name: it.name, itemType: it.itemType || "consumable", tier: it.tier || null, imageUrl: it.imageUrl || null }))
+        .sort((a, b) => String(a.itemType).localeCompare(String(b.itemType)) || String(a.name).localeCompare(String(b.name)));
+      res.json(ok(slim, "items listed"));
     } catch (error) { next(error); }
   });
 

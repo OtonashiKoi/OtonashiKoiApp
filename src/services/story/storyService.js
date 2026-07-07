@@ -77,10 +77,11 @@ function fillPlayerName(text, name) {
 }
 
 class StoryService {
-  constructor(storyRepository, progressRepository, monsterService = null) {
+  constructor(storyRepository, progressRepository, monsterService = null, itemRepository = null) {
     this.storyRepository = storyRepository;
     this.progressRepository = progressRepository;
     this.monsterService = monsterService; // 供戰鬥節點載入指定怪 + 補怪物名稱/圖
+    this.itemRepository = itemRepository;  // 供 🎁 發道具節點解析道具
   }
 
   // ── 內部工具 ──
@@ -213,7 +214,8 @@ class StoryService {
         textSpeed: TEXT_SPEEDS.has(n.textSpeed) ? n.textSpeed : null,      // B3:文字節奏
         backgroundUrl: n.backgroundUrl || null,
         bgm: n.bgm || null,
-        sfx: n.sfx || null
+        sfx: n.sfx || null,
+        grantItemId: n.grantItemId || null // 🎁 發道具(讀到即給，前端呼叫 /grant)
       };
       if (n.type === "cg") {
         return { type: "cg", cgUrl: n.cgUrl || null, cgPos: sanitizeBgPos(n.cgPos), text: fillPlayerName(n.text, playerName), ...common };
@@ -354,6 +356,60 @@ class StoryService {
     await this.progressRepository.save(progress);
   }
 
+  /** 🎁 讀到某節點時發指定道具（冪等：每章每節點只發一次）。 */
+  async grantNodeItem(discordId, chapterId, nodeIndex) {
+    const chapters = await this._enabledChapters();
+    const chapter = chapters.find((c) => c.id === chapterId);
+    if (!chapter) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該章節", 404);
+    if (this._chapterStatus(chapter, chapters, this._completedMap(await this.progressRepository.findByPlayerId(discordId).catch(() => null))) === "locked") {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "請先完成前面的章節", 403);
+    }
+    const node = (chapter.nodes || [])[nodeIndex];
+    const wantId = node && node.grantItemId ? String(node.grantItemId) : null;
+    if (!wantId) return { granted: false, reason: "no_grant" };
+    const libraryItem = this.itemRepository ? await this.itemRepository.findById(wantId).catch(() => null) : null;
+    if (!libraryItem) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "指定道具不存在", 400);
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到玩家進度", 404);
+    const sp = progress.storyProgress || {};
+    const grantedMap = { ...(sp.grantedItems && typeof sp.grantedItems === "object" ? sp.grantedItems : {}) };
+    const key = `${chapterId}:${nodeIndex}`;
+    const item = libraryItem;
+    const brief = { name: item.name, imageUrl: item.imageUrl || null, tier: item.tier || null, itemType: item.itemType || "consumable" };
+    if (grantedMap[key]) return { granted: false, alreadyGranted: true, item: brief };
+
+    const crypto = require("crypto");
+    const entry = {
+      uuid: crypto.randomUUID(),
+      itemId: String(item.id),
+      itemName: item.name,
+      itemEffect: item.effect || { type: "none", value: 0 },
+      useEffects: item.useEffects || [],
+      passiveEffects: item.passiveEffects || [],
+      procEffects: item.procEffects || [],
+      combatEffects: item.combatEffects || [],
+      itemType: item.itemType || "consumable",
+      imageUrl: item.imageUrl || null,
+      imageThumbnailUrl: item.imageThumbnailUrl || null,
+      equipSlot: item.equipSlot || null,
+      equipStats: item.equipStats || null,
+      weaponType: item.weaponType || null,
+      isTwoHanded: Boolean(item.isTwoHanded),
+      tier: item.tier || null,
+      source: "story",
+      sourceRef: chapterId,
+      purchasedAt: new Date().toISOString()
+    };
+    try { require("../enchant/enchantService").rollForEntry(entry); } catch (_) { /* noop */ }
+    progress.inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
+    progress.inventory.push(entry);
+    grantedMap[key] = new Date().toISOString();
+    progress.storyProgress = { ...sp, grantedItems: grantedMap };
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+    return { granted: true, item: brief };
+  }
+
   // ── 後台（Admin）──
 
   async adminListChapters() {
@@ -383,6 +439,7 @@ class StoryService {
         backgroundUrl: n?.backgroundUrl ? String(n.backgroundUrl) : null,
         bgm: n?.bgm ? String(n.bgm) : null,
         sfx: n?.sfx ? String(n.sfx) : null,
+        grantItemId: n?.grantItemId ? String(n.grantItemId) : null, // 🎁 讀到此節點發指定道具(一次)
         ...reserved
       };
       if (type === "battle") {
