@@ -694,6 +694,7 @@
             <select class="st-sel" data-node="${i}" data-field="screenFx">${optionsHtml(SCREENFX_OPTS, n.screenFx || "")}</select>
             <select class="st-sel" data-node="${i}" data-field="textFx" title="文字演出效果">${optionsHtml(TEXTFX_OPTS, n.textFx || "")}</select>
             <select class="st-sel" data-node="${i}" data-field="textSpeed">${optionsHtml(SPEED_OPTS, n.textSpeed || "")}</select>
+            <label style="font-size:12px;" title="進場停頓：一到此格短時間內擋住點擊(文字照跑)，等音樂/演出進來才能往下。換曲的節點會自動停頓約0.7秒；這裡可再加長(秒)"><input type="number" data-node="${i}" data-field="holdSec" value="${n.holdSec || ""}" min="0" max="10" step="0.1" placeholder="0" style="width:44px;"> ⏱停頓秒</label>
             <select class="st-sel" data-node="${i}" data-field="exitSide" title="讓某個位置的立繪退場(移除)；換人時舊角色不會自動消失，用這個把他移掉">${optionsHtml(EXIT_OPTS, n.exitSide || "")}</select>
             <label style="font-size:12px;" title="進場前清掉台上其他立繪(換場/獨白用)"><input type="checkbox" data-node="${i}" data-field="clearStage" ${n.clearStage ? "checked" : ""}> 🧹 清空其他立繪</label>
             <label style="font-size:12px;" title="讀到此節點自動發指定道具給玩家(每人只發一次)">🎁 給道具 ${lazySel(`class="st-sel" data-node="${i}" data-field="grantItemId"`, "item", n.grantItemId, itemLabelOf(n.grantItemId))}</label>
@@ -709,7 +710,7 @@
             <select data-cond="${i}:title" title="🔒 稱號限定(持有即可)" style="max-width:150px;">${condTitleOpts(n.cond?.title || "")}</select>
           </div>
         </div>` : "";
-      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", n.stageNpcId && "🧍", (n.textFx && n.textFx !== "") && "✨", (n.screenFx && n.screenFx !== "") && "🎞️", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹", n.grantItemId && "🎁", n.voiceUrl && "🎤", (n.cond && Object.keys(n.cond).length) && "🔒"].filter(Boolean).join(" ");
+      const fxHint = [n.backgroundUrl && "🏞", (n.bgm && n.bgm !== "") && "🎵", (n.sfx && n.sfx !== "") && "🔊", (isDlg && n.portraitFx) && "🎭", n.stageNpcId && "🧍", (n.textFx && n.textFx !== "") && "✨", (n.screenFx && n.screenFx !== "") && "🎞️", (Number(n.holdSec) > 0) && "⏱", (n.exitSide && n.exitSide !== "") && "🚪", n.clearStage && "🧹", n.grantItemId && "🎁", n.voiceUrl && "🎤", (n.cond && Object.keys(n.cond).length) && "🔒"].filter(Boolean).join(" ");
 
       // 分支視覺：🏷標籤(彩色) / ⤳跳轉徽章(點了捲到目標) / 被跳入的節點左框上色
       const jumpTargetIdx = n.jumpTo ? allLabels.find((x) => x.label === n.jumpTo)?.i : null;
@@ -828,7 +829,7 @@
       const i = Number(el.dataset.node), f = el.dataset.field;
       if (!editing.nodes[i]) return;
       let v = el.type === "checkbox" ? el.checked : el.value;
-      if (f === "maxRounds") v = v === "" ? null : Number(v) || null; // 數字欄位存數字
+      if (f === "maxRounds" || f === "holdSec") v = v === "" ? null : Number(v) || null; // 數字欄位存數字
       editing.nodes[i][f] = v;
     });
     // ❓選項欄位（data-opt="i:j:field"）

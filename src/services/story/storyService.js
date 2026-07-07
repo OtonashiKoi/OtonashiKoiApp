@@ -313,6 +313,7 @@ class StoryService {
         sfx: n.sfx || null,
         grantItemId: n.grantItemId || null, // 🎁 發道具(讀到即給，前端呼叫 /grant)
         voiceUrl: n.voiceUrl || null,       // 🎤 配音
+        holdSec: Number(n.holdSec) > 0 ? Number(n.holdSec) : null, // ⏱進場停頓秒
         ...flow
       };
       if (n.type === "cg") {
@@ -554,6 +555,7 @@ class StoryService {
         grantItemId: n?.grantItemId ? String(n.grantItemId) : null, // 🎁 讀到此節點發指定道具(一次)
         voiceUrl: n?.voiceUrl ? String(n.voiceUrl) : null,          // 🎤 配音(顯示此節點時播放)
         stageNpcId: n?.stageNpcId ? String(n.stageNpcId).slice(0, 60) : null, // 🧍立繪擺台(不當說話者)：任何節點可放一個角色立繪上台(id=player/npc/mon:<id>)
+        holdSec: (() => { const s = Number(n?.holdSec); return Number.isFinite(s) && s > 0 ? Math.min(10, Math.round(s * 10) / 10) : null; })(), // ⏱進場停頓秒(0~10)：擋點擊等音樂/演出進來
         cond,                                                        // 🔒 顯示條件
         ...reserved
       };
