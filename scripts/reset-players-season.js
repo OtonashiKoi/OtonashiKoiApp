@@ -19,7 +19,8 @@
  *   - 稽核：progress.idleRewardReversal
  *
  * 重製：等級/經驗/職業/屬性/裝備(非稱號)/背包(非收藏非稱號)/金幣/buff/
- *      寵物/爬塔/PK/equipPresets/flags，並刪除 weeklyQuestProgress、checkins
+ *      寵物/爬塔/PK/equipPresets/flags/storyProgress(劇情進度→序章重播)，
+ *      並刪除 weeklyQuestProgress、checkins
  */
 require("dotenv").config();
 const { randomUUID } = require("node:crypto");
@@ -107,7 +108,10 @@ async function main() {
       updatedAt: NOW,
     };
     // 用 unset 讓 ?? 預設值生效（PK 1500、無爬塔紀錄）
-    const unsetFields = { pkRating: "", towerRecord: "" };
+    // storyProgress 一併清掉 → 序章回到未完成，玩家下次登入會被 PrologueGate 強制重播一次；
+    // 同時故事區域閘門/🎁劇情發道具冪等紀錄重置，配合新賽季從頭走劇情。
+    const unsetFields = { pkRating: "", towerRecord: "", storyProgress: "" };
+    const storyDone = Object.keys(p.storyProgress?.completed || {}).length;
 
     // 金幣歸 0，鑽石保留
     const wallet = await walletsCol.findOne({ playerId: pid });
@@ -122,7 +126,7 @@ async function main() {
     }
 
     const invBefore = (p.inventory || []).length;
-    console.log(`[${APPLY ? "DONE" : "DRY"}] ${pid}｜Lv ${p.level}→1｜金幣 ${goldBefore}→0（鑽石保留 ${diamondKeep}）｜背包 ${invBefore}→${keepInv.length}（留稱號 ${titleCount}+裝備中${equippedTitle ? 1 : 0}、收藏 ${collCount}）｜寵物 ${(p.pets || []).length}→0`);
+    console.log(`[${APPLY ? "DONE" : "DRY"}] ${pid}｜Lv ${p.level}→1｜金幣 ${goldBefore}→0（鑽石保留 ${diamondKeep}）｜背包 ${invBefore}→${keepInv.length}（留稱號 ${titleCount}+裝備中${equippedTitle ? 1 : 0}、收藏 ${collCount}）｜寵物 ${(p.pets || []).length}→0｜劇情進度 ${storyDone}→0(序章重播)`);
     resetCount++;
   }
 
