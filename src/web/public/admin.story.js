@@ -465,9 +465,19 @@
   const ROW = "display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;";
   const zoneName = (k) => zones.find((z) => z.key === k)?.label || k || "(未綁定)";
 
+  let _lastRenderEditor = false;
   function render() {
-    root.innerHTML = editing ? renderChapterEditor() : renderLists();
+    // 保留捲動位置：整塊 innerHTML 換掉會讓捲動被夾到頂/亂跳，記住再還原→點任何東西都不跳離正在編輯的地方。
+    // 只有「同一種畫面(編輯→編輯)」才還原；切到目錄則從頭。
+    const nowEditor = !!editing, same = nowEditor === _lastRenderEditor;
+    const sc = scrollParent(root);
+    const st = sc ? sc.scrollTop : 0;
+    const af = document.activeElement, afSel = same && af && af.dataset && af.dataset.node != null ? `[data-node="${af.dataset.node}"][data-field="${af.dataset.field || ""}"]` : null;
+    root.innerHTML = nowEditor ? renderChapterEditor() : renderLists();
     bind();
+    if (sc && same) sc.scrollTop = st; // 還原捲動
+    if (afSel) { const el = root.querySelector(afSel); if (el && el !== document.activeElement) { try { el.focus({ preventScroll: true }); if (el.setSelectionRange && el.value != null) el.setSelectionRange(el.value.length, el.value.length); } catch (_) {} } }
+    _lastRenderEditor = nowEditor;
   }
 
   // ── 目錄畫面 ──
@@ -723,7 +733,8 @@
             <button class="button" id="story-undo" ${undoStack.length ? "" : "disabled"} title="復原">↩️</button>
             <button class="button" id="story-redo" ${redoStack.length ? "" : "disabled"} title="重做">↪️</button>
             <button class="button" id="story-ch-preview">▶ 本章預覽</button>
-            <button class="button" id="story-ch-cancel">取消</button>
+            <button class="button" id="story-ch-back" title="回章節清單(未存的變更會留成草稿，下次打開可還原)">📋 返回目錄</button>
+            <button class="button" id="story-ch-cancel" title="放棄變更並回目錄(連草稿一起刪)">✖ 放棄</button>
             <button class="button primary" id="story-ch-save" title="Ctrl+S">💾 儲存章節</button>
           </div>
         </div>
@@ -903,9 +914,15 @@
     root.querySelectorAll("[data-outline-go]").forEach((b) => b.addEventListener("click", () => {
       root.querySelector(`[data-node-card="${b.dataset.outlineGo}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }));
+    // 📋 返回目錄：回章節清單。未存的變更留成草稿(下次打開可還原)，不會丟。
+    root.querySelector("#story-ch-back")?.addEventListener("click", () => {
+      syncEditingFromDom(); writeDraft(); stopDraft();
+      editing = null; npcForm = null; fxOpen.clear(); undoStack = []; redoStack = [];
+      render(); renderLivePreview(); // 收起即時預覽面板
+    });
     root.querySelector("#story-ch-cancel")?.addEventListener("click", () => {
       if (!confirm("放棄未儲存的變更？（自動草稿也會一併刪除）")) return;
-      clearDraft(); stopDraft(); editing = null; fxOpen.clear(); undoStack = []; redoStack = []; render();
+      clearDraft(); stopDraft(); editing = null; fxOpen.clear(); undoStack = []; redoStack = []; render(); renderLivePreview();
     });
     root.querySelector("#story-ch-preview")?.addEventListener("click", () => { syncEditingFromDom(); openPreview(); });
     root.querySelector("#story-f-bg")?.addEventListener("change", async (e) => { if (!e.target.files?.[0]) return; syncEditingFromDom(); pushUndo(); editing.backgroundUrl = await uploadNamed(e.target.files[0], "background"); render(); });
