@@ -78,7 +78,7 @@ function createApiServer(discordClient) {
     return apiRateLimiter(req, res, next);
   });
 
-  app.use(express.json());
+  app.use(express.json({ limit: "8mb" })); // 劇情章節(數百節點+演出+草稿)存檔 JSON 會超過預設 100kb
 
   // Freeze API contract via response headers without changing existing payload shapes.
   app.use((_req, res, next) => {

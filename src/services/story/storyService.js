@@ -240,6 +240,7 @@ class StoryService {
         return {
           type: "battle",
           monsterId: n.monsterId || null,
+          text: fillPlayerName(n.text, playerName), // 戰鬥前的旁白/描述
           monsterName: m?.name || "（怪物不存在）",
           monsterImageUrl: m?.imageUrl || null,
           monsterLevel: m?.level ?? null,
@@ -535,6 +536,7 @@ class StoryService {
         return {
           type: "battle",
           monsterId: n?.monsterId ? String(n.monsterId) : null,
+          text: String(n?.text || "").slice(0, 2000), // 戰鬥前的旁白/描述
           mustWin: n?.mustWin !== false, // 預設必勝
           forcedOutcome, // 劇情殺：win=一定贏 / lose=一定輸(劇情照走) / null=正常
           maxRounds,     // 戰鬥回合上限(讓劇情戰鬥更快)

@@ -620,7 +620,8 @@
              </select>
              <label style="font-size:12px;" title="劇情殺時此項無效"><input type="checkbox" data-node="${i}" data-field="mustWin" ${n.mustWin !== false ? "checked" : ""} ${n.forcedOutcome ? "disabled" : ""}> 必須打贏才能過</label>
              <label style="font-size:12px;" title="限制戰鬥回合數(1~30)，讓劇情戰鬥更快結束；留空＝預設15回合"><input type="number" data-node="${i}" data-field="maxRounds" value="${n.maxRounds || ""}" min="1" max="30" placeholder="15" style="width:52px;"> 回合上限</label>
-           </div>`
+           </div>
+           <textarea data-node="${i}" data-field="text" rows="2" style="width:100%;box-sizing:border-box;margin-top:6px;" placeholder="戰鬥前的旁白/描述（選填，顯示在戰鬥框、點『出戰』前）">${esc(n.text || "")}</textarea>`
         : isCG
           ? `<div style="${ROW}margin-bottom:4px;">
                <label class="button" style="cursor:pointer;">🖼 CG 事件圖<input type="file" accept="image/*" data-node-cg="${i}" style="display:none;"></label>
@@ -1236,6 +1237,11 @@
         : `position:absolute;left:3%;right:3%;top:0;bottom:${P.portBottom};display:flex;align-items:flex-end;justify-content:${justify};z-index:${speaking ? 3 : 1};pointer-events:none;`;
       return `<div data-portrait-side="${side}" style="${wrap}">${el}</div>`;
     }).join("");
+    // ⚔️ 戰鬥節點：把「該場怪物」的立繪擺上台(置中、貼底)，讓玩家看到要打誰
+    const battleMon = isBattle ? monsters.find((m) => m.id === n.monsterId) : null;
+    const battlePortrait = (battleMon && battleMon.imageUrl)
+      ? `<div style="position:absolute;left:3%;right:3%;top:0;bottom:${P.portBottom};display:flex;align-items:flex-end;justify-content:center;z-index:2;pointer-events:none;"><img src="${esc(battleMon.imageUrl)}" style="max-height:${P.portH};max-width:${P.portW};flex:0 0 auto;"></div>`
+      : "";
     const cgHtml = isCG && n.cgUrl ? `<div data-drag-cg style="position:absolute;inset:0;background-image:url('${esc(n.cgUrl)}');background-size:cover;background-position:${n.cgPos ? `${n.cgPos.x}% ${n.cgPos.y}%` : "center"};${n.cgPos && n.cgPos.z ? `transform:scale(${n.cgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : "";
     const noBox = isCG && !String(n.text || "").trim();
     // 畫面效果 / 音效 / BGM（BGM 走「往回找最近一句設的」與正式閱讀器一致）
@@ -1256,12 +1262,12 @@
     return `
       <div style="position:absolute;inset:0;${shakeAnim}">
         ${bg ? `<div data-drag-bg style="position:absolute;inset:0;background-image:url('${esc(bg)}');background-size:${bgFit};background-repeat:no-repeat;background-position:${bgPos ? `${bgPos.x}% ${bgPos.y}%` : "center"};${bgPos && bgPos.z ? `transform:scale(${bgPos.z});transform-origin:center;` : ""}cursor:grab;touch-action:none;"></div>` : ""}
-        ${cgHtml}${portraitsHtml}
+        ${cgHtml}${battlePortrait}${portraitsHtml}
         ${(bg || (isCG && n.cgUrl)) ? `<div data-resize-${isCG && n.cgUrl ? "cg" : "bg"} title="拉動改變${isCG && n.cgUrl ? "CG" : "背景"}大小" style="position:absolute;top:50%;right:6px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:#7ce0ff;color:#08222e;border:2px solid #1a1030;font-size:14px;line-height:24px;text-align:center;cursor:nwse-resize;touch-action:none;z-index:6;box-shadow:0 1px 6px rgba(0,0,0,.6);">⤢</div>` : ""}
         ${badges ? `<div style="position:absolute;top:6px;left:6px;right:6px;z-index:7;pointer-events:none;font-size:10px;color:#cbb3f2;background:rgba(6,8,18,.6);padding:2px 6px;border-radius:6px;">${badges}</div>` : ""}
         ${noBox ? `<div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;color:#fff;font-size:12px;">（CG 無字幕）</div>` : `
         <div style="position:absolute;left:8px;right:8px;bottom:8px;z-index:5;padding:${ls ? "10px 12px" : "12px"};min-height:${P.boxMinH};background:linear-gradient(180deg,${isBattle ? "rgba(58,24,34,.96),rgba(24,12,20,.98)" : "rgba(30,24,58,.96),rgba(16,12,32,.98)"});border:1.5px solid ${isBattle ? "#ff5577" : n.type === "choice" ? "#ffd166" : "#c4a7f5"};border-radius:10px;">
-          ${isBattle ? `<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}${n.forcedOutcome === "win" ? "（劇情殺·必勝）" : n.forcedOutcome === "lose" ? "（劇情殺·必敗）" : ""}${n.maxRounds ? `　⏱${esc(String(n.maxRounds))}回合` : ""}</div>`
+          ${isBattle ? `${String(n.text || "").trim() ? `<div style="color:#f3ecff;font-size:13px;margin-bottom:6px;white-space:pre-wrap;">${esc(n.text)}</div>` : ""}<div style="text-align:center;color:#ff8a4a;font-weight:900;">⚔️ 戰鬥 ${esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "（未選怪）")}${n.forcedOutcome === "win" ? "（劇情殺·必勝）" : n.forcedOutcome === "lose" ? "（劇情殺·必敗）" : ""}${n.maxRounds ? `　⏱${esc(String(n.maxRounds))}回合` : ""}</div>`
             : n.type === "choice" ? `${String(n.text || "").trim() ? `<div data-pv-text style="color:#f3ecff;font-size:13px;margin-bottom:6px;white-space:pre-wrap;">${esc(n.text)}</div>` : ""}
               ${(n.options || []).map((o, oi) => `<div data-pv-opt="${oi}" style="border:1.5px solid #ffd166;border-radius:8px;padding:6px 10px;margin-top:4px;color:#ffe9b3;font-size:13px;font-weight:700;text-align:center;cursor:pointer;">${esc(o.text || "（空選項）")}${o.jumpTo ? ` <span style="font-size:10px;color:${esc(labelColor(o.jumpTo))};">⤳${esc(o.jumpTo)}</span>` : ""}</div>`).join("")}`
             : `${isDlg ? `<div style="color:#c4a7f5;font-weight:900;font-size:14px;margin-bottom:4px;">${esc(name)}</div>` : ""}<div data-pv-text class="${n.textFx ? "st-txt-" + esc(n.textFx) : ""}" style="color:${isDlg ? "#f3ecff" : "#cdbce8"};${isDlg ? "" : "font-style:italic;"}font-size:${n.textSize === "small" ? 12 : n.textSize === "large" ? 18 : 14}px;line-height:1.6;white-space:pre-wrap;">${esc(n.text || "")}</div>`}
