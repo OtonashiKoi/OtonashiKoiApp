@@ -20,7 +20,7 @@
  *
  * 重製：等級/經驗/職業/屬性/裝備(非稱號)/背包(非收藏非稱號)/金幣/buff/
  *      寵物/爬塔/PK/equipPresets/flags/storyProgress(劇情進度→序章重播)，
- *      並刪除 weeklyQuestProgress、checkins
+ *      並刪除 weeklyQuestProgress、checkins、idlePlayerStates(掛機狀態→避免高階掛機殘留爆經驗)
  */
 require("dotenv").config();
 const { randomUUID } = require("node:crypto");
@@ -77,6 +77,7 @@ async function main() {
   const walletsCol = db.collection("wallets");
   const wqpCol = db.collection("weeklyQuestProgress");
   const checkinsCol = db.collection("checkins");
+  const idleCol = db.collection("idlePlayerStates"); // 掛機狀態(含進行中 session + 上次結算)
 
   const query = PLAYER_ID ? { playerId: PLAYER_ID } : {};
   const players = await progressCol.find(query).toArray();
@@ -125,8 +126,13 @@ async function main() {
       await checkinsCol.deleteMany({ playerId: pid });
     }
 
+    // 掛機狀態整份清掉：避免「賽季前在高階區掛機的 session」殘留，重置後一結算爆一批高階經驗(等級瞬跳)。
+    const idleState = await idleCol.findOne({ playerId: pid });
+    const hadIdle = Boolean(idleState && (idleState.discordSession || idleState.lastClaimSummary || idleState.dailyClaim));
+    if (APPLY) await idleCol.deleteMany({ playerId: pid });
+
     const invBefore = (p.inventory || []).length;
-    console.log(`[${APPLY ? "DONE" : "DRY"}] ${pid}｜Lv ${p.level}→1｜金幣 ${goldBefore}→0（鑽石保留 ${diamondKeep}）｜背包 ${invBefore}→${keepInv.length}（留稱號 ${titleCount}+裝備中${equippedTitle ? 1 : 0}、收藏 ${collCount}）｜寵物 ${(p.pets || []).length}→0｜劇情進度 ${storyDone}→0(序章重播)`);
+    console.log(`[${APPLY ? "DONE" : "DRY"}] ${pid}｜Lv ${p.level}→1｜金幣 ${goldBefore}→0（鑽石保留 ${diamondKeep}）｜背包 ${invBefore}→${keepInv.length}（留稱號 ${titleCount}+裝備中${equippedTitle ? 1 : 0}、收藏 ${collCount}）｜寵物 ${(p.pets || []).length}→0｜劇情進度 ${storyDone}→0(序章重播)｜掛機${hadIdle ? "狀態清除" : "無"}`);
     resetCount++;
   }
 
