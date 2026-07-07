@@ -123,6 +123,18 @@
     if (json) h["Content-Type"] = "application/json";
     return h;
   }
+  // 找可捲動的祖先(否則回頁面本身)；render() 會整個重繪，用來把某張卡「捲回原位」不飛走
+  function scrollParent(el) {
+    let p = el && el.parentElement;
+    while (p) { const s = getComputedStyle(p).overflowY; if ((s === "auto" || s === "scroll" || s === "overlay") && p.scrollHeight > p.clientHeight + 2) return p; p = p.parentElement; }
+    return document.scrollingElement || document.documentElement;
+  }
+  function keepCardInPlace(i, beforeTop) {
+    const card = root.querySelector(`[data-node-card="${i}"]`); if (!card) return;
+    const d = card.getBoundingClientRect().top - beforeTop;
+    if (Math.abs(d) < 1) return;
+    const sc = scrollParent(card); if (sc) sc.scrollTop += d;
+  }
   async function fetchJSON(url, init) {
     const res = await fetch(url, init);
     const text = await res.text();
@@ -955,14 +967,17 @@
 
     // 型別切換
     root.querySelectorAll("[data-node-settype]").forEach((b) => b.addEventListener("click", () => {
+      const i = Number(b.dataset.nodeSettype), t = b.dataset.settype;
+      const beforeTop = (b.closest("[data-node-card]") || {}).getBoundingClientRect?.().top ?? 0;
       syncEditingFromDom(); pushUndo();
-      const i = Number(b.dataset.nodeSettype), t = b.dataset.settype, n = editing.nodes[i];
+      const n = editing.nodes[i];
       n.type = t;
       if (t === "dialogue") { if (!n.npcId) n.npcId = lastSpeakerNpcId(); if (!n.side) n.side = "left"; }
       if (t === "battle") { if (n.monsterId === undefined || n.monsterId === null) n.monsterId = monsters[0]?.id || null; if (n.mustWin === undefined) n.mustWin = true; }
       if (t === "cg" && n.cgUrl === undefined) n.cgUrl = null;
       if (t === "choice" && !Array.isArray(n.options)) n.options = [{ text: "", jumpTo: "" }, { text: "", jumpTo: "" }];
       render();
+      keepCardInPlace(i, beforeTop);
     }));
     // ❓選項：加/刪選項
     root.querySelectorAll("[data-opt-add]").forEach((b) => b.addEventListener("click", () => {
@@ -1041,7 +1056,11 @@
     }));
     // 演出收合
     root.querySelectorAll("[data-node-fx]").forEach((b) => b.addEventListener("click", () => {
-      syncEditingFromDom(); const i = Number(b.dataset.nodeFx); const uid = editing.nodes[i]?._uid; if (uid) { fxOpen.has(uid) ? fxOpen.delete(uid) : fxOpen.add(uid); } render();
+      const i = Number(b.dataset.nodeFx);
+      const card = b.closest("[data-node-card]");
+      const beforeTop = card ? card.getBoundingClientRect().top : 0; // 記住點擊前這張卡在畫面的位置
+      syncEditingFromDom(); const uid = editing.nodes[i]?._uid; if (uid) { fxOpen.has(uid) ? fxOpen.delete(uid) : fxOpen.add(uid); } render();
+      keepCardInPlace(i, beforeTop); // 重繪後把同一張卡捲回原本畫面位置(在原地展開，不飛走)
     }));
     // 下方插入（同型；對話沿用同角色）
     root.querySelectorAll("[data-node-insert]").forEach((b) => b.addEventListener("click", () => {
