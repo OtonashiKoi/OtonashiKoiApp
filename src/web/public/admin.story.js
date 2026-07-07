@@ -64,7 +64,19 @@
       if (k === "z" && !e.shiftKey) { e.preventDefault(); doUndo(); }
       else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); doRedo(); }
     });
+    // 重下拉延遲建立：聚焦時才把整份清單灌進去(初始每個 select 只放目前那顆)。
+    // 對話立繪(74怪+NPC)×近百節點＝上萬 option，全部先建會很卡；改成點了才建。
+    document.addEventListener("focusin", (e) => {
+      const sel = e.target && e.target.closest && e.target.closest("select[data-lazy]");
+      if (!sel || sel.dataset.ready) return;
+      const kind = sel.dataset.lazy, i = Number(sel.dataset.node), n = editing && editing.nodes && editing.nodes[i];
+      const build = _lazyBuilders[kind]; if (!build) return;
+      const cur = sel.value;
+      sel.innerHTML = kind === "npc" ? build(n && n.npcId) : kind === "mon" ? build(n && n.monsterId) : kind === "item" ? build(n && n.grantItemId) : "";
+      sel.value = cur; sel.dataset.ready = "1";
+    });
   }
+  let _lazyBuilders = {}; // 重下拉的 option 建立器(renderChapterEditor 內填入，聚焦時取用)
 
   // 演出選項（需與前端 sound.ts / story.tsx 一致）
   const BGM_OPTS = [
@@ -560,6 +572,13 @@
     };
     const typeBtn = (i, t, cur, label) => `<button type="button" class="button ${cur ? "primary" : ""}" data-node-settype="${i}" data-settype="${t}" style="padding:3px 10px;">${label}</button>`;
 
+    // ── 重下拉「延遲建立」：初始只放目前那顆(顯示正確標籤)，聚焦才由 focusin 灌全部 ──
+    _lazyBuilders = { npc: npcOpts, mon: monsterOpts, item: itemOpts };
+    const npcNameById = Object.fromEntries(npcs.map((x) => [x.id, x.name]));
+    const npcLabelOf = (v) => !v ? "（選 NPC / 怪物）" : v === "player" ? "🧑 玩家（主角）" : isMonRef(v) ? ("👹 " + (monOf(v)?.name || "怪物")) : (npcNameById[v] || "?");
+    const monLabelOf = (v) => (monsters.find((m) => m.id === v)?.name) || "（選怪物）";
+    const itemLabelOf = (v) => { const it = items.find((x) => x.id === v); return it ? (it.tier ? `[${it.tier}] ` : "") + it.name : "（不發道具）"; };
+    const lazySel = (attrs, kind, val, label) => `<select ${attrs} data-lazy="${esc(kind)}"><option value="${esc(val || "")}" selected>${esc(label)}</option></select>`;
     // 某 NPC 的表情下拉（預設 + 各表情名）
     const exprOpts = (npcId, sel) => {
       const npc = npcs.find((x) => x.id === npcId);
@@ -593,7 +612,7 @@
         <p class="hint" style="margin:4px 0 0;font-size:10px;">💡 ⤳ 可以直接「拉」到下面/上面的節點卡片放開＝設定跳轉；目標節點會自動取得 🏷標籤。分支走完想拉回主線＝把該線最後一句的 ⤳ 拉回主線節點。</p>` : "";
       const mainArea = isChoice ? choiceArea : isBattle
         ? `<div style="${ROW}">
-             <select data-node="${i}" data-field="monsterId" style="min-width:220px;">${monsterOpts(n.monsterId)}</select>
+             ${lazySel(`data-node="${i}" data-field="monsterId" style="min-width:220px;"`, "mon", n.monsterId, monLabelOf(n.monsterId))}
              <select data-node="${i}" data-field="forcedOutcome" title="劇情殺：不管實際打贏打輸，強制指定結局，故事照劇本走" style="min-width:150px;">
                <option value="" ${!n.forcedOutcome ? "selected" : ""}>⚔️ 正常戰鬥</option>
                <option value="win" ${n.forcedOutcome === "win" ? "selected" : ""}>🎬 劇情殺·必勝</option>
@@ -610,7 +629,7 @@
              </div>
              <textarea data-node="${i}" data-field="text" rows="2" style="width:100%;box-sizing:border-box;" placeholder="CG 字幕（選填，留空＝純圖）">${esc(n.text || "")}</textarea>`
         : isDlg
-          ? `<div style="${ROW}margin-bottom:4px;"><select data-node="${i}" data-field="npcId" style="min-width:140px;">${npcOpts(n.npcId)}</select>
+          ? `<div style="${ROW}margin-bottom:4px;">${lazySel(`data-node="${i}" data-field="npcId" style="min-width:140px;"`, "npc", n.npcId, npcLabelOf(n.npcId))}
                <select data-node="${i}" data-field="expression" title="表情差分" style="min-width:110px;">${exprOpts(n.npcId, n.expression)}</select>
                <input type="text" data-node="${i}" data-field="nameOverride" placeholder="名字覆寫(選填)" value="${esc(n.nameOverride || "")}" style="width:120px;"></div>
              <textarea data-node="${i}" data-field="text" rows="2" style="width:100%;box-sizing:border-box;" placeholder="角色台詞…（Ctrl+Enter＝下方接一句同角色）">${esc(n.text || "")}</textarea>`
@@ -632,7 +651,7 @@
             <select class="st-sel" data-node="${i}" data-field="textSpeed">${optionsHtml(SPEED_OPTS, n.textSpeed || "")}</select>
             <select class="st-sel" data-node="${i}" data-field="exitSide" title="讓某個位置的立繪退場(移除)；換人時舊角色不會自動消失，用這個把他移掉">${optionsHtml(EXIT_OPTS, n.exitSide || "")}</select>
             <label style="font-size:12px;" title="進場前清掉台上其他立繪(換場/獨白用)"><input type="checkbox" data-node="${i}" data-field="clearStage" ${n.clearStage ? "checked" : ""}> 🧹 清空其他立繪</label>
-            <label style="font-size:12px;" title="讀到此節點自動發指定道具給玩家(每人只發一次)">🎁 給道具 <select class="st-sel" data-node="${i}" data-field="grantItemId">${itemOpts(n.grantItemId)}</select></label>
+            <label style="font-size:12px;" title="讀到此節點自動發指定道具給玩家(每人只發一次)">🎁 給道具 ${lazySel(`class="st-sel" data-node="${i}" data-field="grantItemId"`, "item", n.grantItemId, itemLabelOf(n.grantItemId))}</label>
           </div>
           <div style="${ROW}margin:8px 0 0;">
             <label style="font-size:12px;" title="分支標籤：讓別的節點/選項可以 ⤳ 跳到這裡">🏷 <input type="text" data-node="${i}" data-field="label" value="${esc(n.label || "")}" placeholder="標籤(跳轉目標)" style="width:110px;"></label>
@@ -653,7 +672,7 @@
       const labelBadge = n.label ? `<span style="font-size:11px;font-weight:900;color:${esc(labelColor(n.label))};">🏷${esc(n.label)}</span>` : "";
       const borderCss = n.label ? `border-left:3px solid ${esc(labelColor(n.label))};` : (isChoice ? "border-left:3px solid #ffd166;" : "");
       return `
-      <div class="st-node-card" data-node-card="${i}" style="${BOX}${borderCss}background:rgba(28,32,56,0.6);">
+      <div class="st-node-card" data-node-card="${i}" style="${BOX}${borderCss}background:rgba(28,32,56,0.6);content-visibility:auto;contain-intrinsic-size:auto 120px;">
         <div style="${ROW}margin-bottom:6px;">
           <span class="st-drag-handle" draggable="true" data-drag="${i}" title="拖曳排序">⠿</span>
           <b style="color:#8b93b8;">#${i + 1}</b>
