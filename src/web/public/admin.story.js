@@ -591,13 +591,20 @@
       .concat(monsters.map((m) => `<option value="${esc(m.id)}" ${sel === m.id ? "selected" : ""}>${m.isBoss ? "👑 " : ""}${esc(m.name)}（${esc(m.zone || "?")} Lv${m.level ?? "?"}）</option>`)).join("");
     // 🎁 發道具下拉：依道具類型 optgroup 分組
     const ITEM_TYPE_ZH = { consumable: "消耗品", equipment: "裝備", collectible: "收藏品", job_badge: "職業徽章", pet_egg: "寵物蛋", pet: "寵物" };
+    // 裝備太多(369件)全擠一組找不到 → 依裝備槽再細分；⚓錨點(附魔裝備)獨立一組並排最前面
+    const EQUIP_SLOT_ZH = { weapon: "武器", armor: "盔甲", shield: "盾牌", garment: "披風", shoes: "鞋子", head_top: "頭上", head_mid: "臉中", head_low: "嘴部", accessory_r: "右飾品", accessory_l: "左飾品", special: "特殊", anchor: "⚓錨點", job_eq: "職業徽章", title_eq: "稱號" };
     const itemOpts = (sel) => {
-      const byType = {};
-      (items || []).forEach((it) => { const t = it.itemType || "consumable"; (byType[t] = byType[t] || []).push(it); });
-      const groups = Object.keys(byType).map((t) => `<optgroup label="${esc(ITEM_TYPE_ZH[t] || t)}">`
-        + byType[t].map((it) => `<option value="${esc(it.id)}" ${sel === it.id ? "selected" : ""}>${it.tier ? `[${esc(it.tier)}] ` : ""}${esc(it.name)}</option>`).join("")
+      const groups = {};
+      (items || []).forEach((it) => {
+        const t = it.itemType || "consumable";
+        const key = t === "equipment" ? `裝備·${EQUIP_SLOT_ZH[it.equipSlot] || it.equipSlot || "其他"}` : (ITEM_TYPE_ZH[t] || t);
+        (groups[key] = groups[key] || []).push(it);
+      });
+      const keys = Object.keys(groups).sort((a, b) => (b.includes("錨點") ? 1 : 0) - (a.includes("錨點") ? 1 : 0)); // 錨點置頂
+      const html = keys.map((k) => `<optgroup label="${esc(k)}">`
+        + groups[k].map((it) => `<option value="${esc(it.id)}" ${sel === it.id ? "selected" : ""}>${it.tier ? `[${esc(it.tier)}] ` : ""}${esc(it.name)}</option>`).join("")
         + "</optgroup>").join("");
-      return '<option value="">（不發道具）</option>' + groups;
+      return '<option value="">（不發道具）</option>' + html;
     };
     const typeBtn = (i, t, cur, label) => `<button type="button" class="button ${cur ? "primary" : ""}" data-node-settype="${i}" data-settype="${t}" style="padding:3px 10px;">${label}</button>`;
 
