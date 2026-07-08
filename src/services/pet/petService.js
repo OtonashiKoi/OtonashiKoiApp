@@ -20,6 +20,14 @@ const BASE_FEED_SATIETY = 30;   // 飽食度
 const FEED_TIER_PENALTY = [1.0, 0.6, 0.3, 0.15];
 const TIER_RANK = { D: 0, C: 1, B: 2, A: 3 };
 
+// Model A：孵化時「位階」獨立 roll（決定強度；品種只決定外觀/被動）。無 S。可調。
+const PET_TIER_ROLL = [["D", 60], ["C", 27], ["B", 10], ["A", 3]];
+function rollPetTier() {
+  let r = Math.random() * 100;
+  for (const [t, w] of PET_TIER_ROLL) { r -= w; if (r <= 0) return t; }
+  return "D";
+}
+
 // V0.4 改版：寵物階級「孵化時就定死」＝物種稀有度（D/C/B/A），沒有等級/進化系統。
 // 蛋階段一律視為 D（餵便宜的 D 裝孵化）。
 function petTierOf(pet) {
@@ -114,6 +122,31 @@ class PetService {
     return this._findPet(progress, progress.activePetUuid);
   }
 
+  // 🐾寵物圖鑑（Model A：品種 × 位階 網格）＋ 收集分數/里程碑加成。以永久登錄 progress.petDex 為準。
+  async getPetDex(discordId) {
+    const { PET_TIERS, DEX_MILESTONES, computeDexBonuses } = require("../../shared/petDex");
+    const progress = await this._loadProgress(discordId);
+    const petDex = (progress.petDex && typeof progress.petDex === "object") ? progress.petDex : {};
+    const allSpecies = await this.petRepository.findAll().catch(() => []);
+    const species = (allSpecies || [])
+      .slice()
+      .sort((a, b) => (a.seq || 0) - (b.seq || 0))
+      .map((sp) => {
+        const tiers = PET_TIERS.map((t) => ({ tier: t, collected: Boolean(petDex[`${sp.id}:${t}`]) }));
+        const any = tiers.some((t) => t.collected);
+        return {
+          id: sp.id, seq: sp.seq || 0, eggType: sp.eggType || "dragon",
+          // 收集過任一位階才揭曉品種名/圖；完全沒收集 → 前端顯示 ???
+          name: any ? sp.name : null,
+          imageUrl: any ? (sp.imageUrl || null) : null,
+          imageThumbnailUrl: any ? (sp.imageThumbnailUrl || null) : null,
+          tiers
+        };
+      });
+    const dex = computeDexBonuses(petDex, (allSpecies || []).length);
+    return { species, milestones: DEX_MILESTONES, ...dex };
+  }
+
   // ── 懶結算：飽食度衰減 + 飢餓掉等 ──
   // 規則：餵飽（飽食滿）後可放置 12 小時不掉等；超過後飽食歸零、開始掉 level/exp
   _applyHungerDecay(pet) {
@@ -158,7 +191,16 @@ class PetService {
 
   // ── 懶結算：採集累積（依該龍 gatherMod：速度 / 產出偏好）──
   // 階級在「領取時」依寵物當下等級決定，避免升級前累積的採集物卡在舊階級。
-  _settleGathering(pet) {
+  // 🐾圖鑑收集里程碑 → 採集加成倍率（採集量%+採集速度% 都化成「間隔縮短」）。只看 petDex 分數，不查 DB。
+  _dexGatherMult(progress) {
+    try {
+      const { computeDexBonuses } = require("../../shared/petDex");
+      const { bonus } = computeDexBonuses(progress?.petDex || {});
+      return 1 + ((Number(bonus.gatherPct) || 0) + (Number(bonus.gatherSpeedPct) || 0)) / 100;
+    } catch (_) { return 1; }
+  }
+
+  _settleGathering(pet, gatherMult = 1) {
     if (pet.stage !== "grown") return pet; // 未孵化不採集
     const now = nowMs();
     const last = Number(pet.lastSettleAt || now);
@@ -170,7 +212,8 @@ class PetService {
       return pet;
     }
     const mod = pet.gatherMod || DEFAULT_GATHER_MOD;
-    const intervalMin = GATHER_INTERVAL_MIN * (Number(mod.intervalMult) || 1);
+    // 圖鑑里程碑加成：倍率越高 → 間隔越短 → 採集越多越快
+    const intervalMin = GATHER_INTERVAL_MIN * (Number(mod.intervalMult) || 1) / Math.max(0.1, Number(gatherMult) || 1);
     const elapsedMin = Math.max(0, (now - last) / 60_000);
     const newItems = Math.floor(elapsedMin / intervalMin);
     if (newItems <= 0) return pet;
@@ -228,7 +271,7 @@ class PetService {
     let changed = false;
     if (active) {
       this._applyHungerDecay(active);
-      this._settleGathering(active);
+      this._settleGathering(active, this._dexGatherMult(progress));
       this._maybeNotifyGatherCap(discordId, active);
       changed = true;
     }
@@ -419,11 +462,15 @@ class PetService {
         pet.speciesName = rolled.name;
         pet.imageUrl = rolled.imageUrl || null;
         pet.imageThumbnailUrl = rolled.imageThumbnailUrl || null;
-        pet.rarity = rolled.rarity || null;
+        pet.rarity = rollPetTier(); // Model A：位階獨立 roll，決定強度（品種決定外觀/被動）
         pet.gatherMod = rolled.gather || { ...DEFAULT_GATHER_MOD };
         pet.combatPassives = Array.isArray(rolled.combatPassives) && rolled.combatPassives.length ? rolled.combatPassives : null; // 狼系戰鬥夥伴被動
         if (!pet.nickname) pet.nickname = rolled.name; // 預設用種類名
         hatchedSpecies = rolled.name;
+        // 🐾圖鑑登錄：品種×位階，孵到就永久登錄（賣掉/放生都還在，只加不減）
+        progress.petDex = (progress.petDex && typeof progress.petDex === "object") ? progress.petDex : {};
+        const _dexKey = `${rolled.id}:${pet.rarity}`;
+        if (!progress.petDex[_dexKey]) progress.petDex[_dexKey] = new Date().toISOString();
       }
       hatched = true;
     }
@@ -537,7 +584,7 @@ class PetService {
       const active = this._getActivePet(progress);
       if (!active) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目前沒有出戰寵物", 400);
       this._applyHungerDecay(active);
-      this._settleGathering(active);
+      this._settleGathering(active, this._dexGatherMult(progress));
 
       // 飽食歸零(餓壞了)不能領取採集物:必須先餵食。網頁與 DC 共用此方法 → 兩邊規則一致。
       if ((Number(active.satiety) || 0) <= 0) {
@@ -670,7 +717,7 @@ class PetService {
     const previousActive = this._getActivePet(progress);
     if (previousActive && previousActive.uuid !== petUuid) {
       this._applyHungerDecay(previousActive);
-      this._settleGathering(previousActive);
+      this._settleGathering(previousActive, this._dexGatherMult(progress));
     }
     progress.activePetUuid = petUuid;
     // 切上前台後才開始計採集時間；既有累積物不清空。
@@ -678,6 +725,19 @@ class PetService {
     pet.lastSatietyAt = nowMs();
     await this.progressRepository.save(progress);
     return { activePetUuid: petUuid, pet: this._toView(pet) };
+  }
+
+  // ── 取消出戰（變成沒有出戰寵物） ──
+  async deactivatePet(discordId) {
+    const progress = await this._loadProgress(discordId);
+    const previousActive = this._getActivePet(progress);
+    if (previousActive) {
+      this._applyHungerDecay(previousActive);
+      this._settleGathering(previousActive, this._dexGatherMult(progress));
+    }
+    progress.activePetUuid = null;
+    await this.progressRepository.save(progress);
+    return { activePetUuid: null };
   }
 
   // ── 放生（移除寵物，無任何回饋） ──
@@ -762,7 +822,7 @@ class PetService {
       const prev = progress.pets.find((p) => p && p.uuid === previousActiveUuid);
       if (prev) {
         this._applyHungerDecay(prev);
-        this._settleGathering(prev);
+        this._settleGathering(prev, this._dexGatherMult(progress));
       }
     }
     progress.activePetUuid = petInstance.uuid;

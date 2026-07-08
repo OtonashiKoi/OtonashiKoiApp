@@ -109,53 +109,12 @@ function createPlayerCollectionRoutes(serviceContext) {
   router.get("/api/me/pets/dex", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
-      const [state, allSpecies] = await Promise.all([
-        serviceContext.petService.getPetState(discordId),
-        serviceContext.petRepository.findAll().catch(() => [])
+      const [dex, state] = await Promise.all([
+        serviceContext.petService.getPetDex(discordId),        // 品種×位階網格 + 收集分數/里程碑
+        serviceContext.petService.getPetState(discordId)       // 我的寵物清單
       ]);
-
-      // 已孵化品種＝目前持有的 grown 寵物對應品種（蛋不揭曉、放生即不再持有）
-      const ownedPetIds = new Set();
-      const ownedSpeciesNames = new Set();
-      for (const p of state.pets || []) {
-        if (p.stage !== "grown") continue;
-        if (p.petId) ownedPetIds.add(p.petId);
-        if (p.speciesName) ownedSpeciesNames.add(p.speciesName);
-      }
-
-      const species = (allSpecies || []).map((sp) => {
-        const unlocked = ownedPetIds.has(sp.id) || ownedSpeciesNames.has(sp.name);
-        if (!unlocked) {
-          // 未孵化品種：隱藏內容，僅保留佔位（前端顯示「？？？」）
-          return { id: sp.id, seq: sp.seq || 0, unlocked: false };
-        }
-        const gather = sp.gather || {};
-        const intervalMult = Number(gather.intervalMult) || 1;
-        return {
-          id: sp.id,
-          seq: sp.seq || 0,
-          unlocked: true,
-          name: sp.name,
-          species: sp.species || null,
-          rarity: sp.rarity || null,
-          description: sp.description || "",
-          imageUrl: sp.imageUrl || null,
-          imageThumbnailUrl: sp.imageThumbnailUrl || null,
-          maxLevel: sp.maxLevel || 50,
-          // 採集特性（與 petService._toView 同算法）
-          traits: {
-            gatherIntervalMin: Math.round(GATHER_INTERVAL_MIN * intervalMult),
-            gemBias: Number.isFinite(Number(gather.gemBias)) ? Number(gather.gemBias) : null,
-            qualityUpChance: Number(gather.qualityUpChance) || 0
-          }
-        };
-      }).sort((a, b) => (a.seq || 0) - (b.seq || 0));
-
       res.json(ok({
-        unlockedCount: species.filter((s) => s.unlocked).length,
-        totalCount: species.length,
-        species,
-        // 我的寵物清單（同 DC 圖鑑內容；蛋顯示為神秘龍蛋）
+        ...dex, // species(grid) / score / maxScore / collected / totalSlots / pct / bonus / milestones / unlockedCount
         pets: state.pets || [],
         activePetUuid: state.activePetUuid || null
       }));
