@@ -58,11 +58,21 @@ async function resolveByCode(code) {
   return did ? { discordId: String(did), displayName: p.displayName || null } : null;
 }
 
-/** 從留言字串抽出所有可能的斗內碼（大寫、去重）。 */
+/**
+ * 從留言抽出所有可能的斗內碼（大寫、去重）。
+ * 玩家可以正常留言、把碼夾在句子裡任何位置；這裡掃出所有「連續合法字元」區段，
+ * 再用滑動視窗取出其中每一段 6 碼子字串當候選（碼黏在其他字裡也抓得到）。
+ */
 function extractCodes(note) {
   const up = String(note || "").toUpperCase();
-  const found = up.match(CODE_RE) || [];
-  return [...new Set(found)];
+  const runs = up.match(new RegExp(`[${ALPHABET}]{${CODE_LEN},}`, "g")) || [];
+  const cands = new Set();
+  for (const run of runs) {
+    for (let i = 0; i + CODE_LEN <= run.length && cands.size < 60; i++) {
+      cands.add(run.slice(i, i + CODE_LEN));
+    }
+  }
+  return [...cands];
 }
 
 /**
