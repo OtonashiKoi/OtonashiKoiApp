@@ -11,6 +11,7 @@ const { calcPlayerStats, getWeaponConfig } = require("../shared/combatStats");
 const { pushBonusWeaponToInventory, pushRewardItemsToInventory } = require("../shared/jobBadgeBonus");
 const { TIER_SET_SLOTS } = require("../shared/equipmentTierSetBonuses");
 const { getEquippedSetInfo } = require("../shared/equipmentSetBonuses");
+const { summarizeEquippedEnchantments } = require("../shared/enchantEngine");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
 const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
 const { calcScaledAuraValue, getSupportJobKey } = require("../shared/supportAuraScaling");
@@ -439,6 +440,16 @@ async function handleProfile(interaction) {
   ].filter(Boolean);
   const tierSummaryLine = tierSummaryParts.length ? `\n📦 套裝總加成：${tierSummaryParts.join("、")}` : "";
 
+  // ── 附魔總和（全身裝備附魔跨件加總；屬性類/效果類分列）──
+  const fmtEnch = (e) => `${e.label} ${e.value >= 0 ? "+" : ""}${e.value}${e.unit || ""}`;
+  const enchTotals = summarizeEquippedEnchantments(equipped);
+  const enchAttrTxt = enchTotals.filter((e) => !e.isEffect).map(fmtEnch);
+  const enchEffTxt = enchTotals.filter((e) => e.isEffect).map(fmtEnch);
+  const enchantLines = [];
+  if (enchAttrTxt.length) enchantLines.push(`　屬性：${enchAttrTxt.join("、")}`);
+  if (enchEffTxt.length) enchantLines.push(`　效果：${enchEffTxt.join("、")}`);
+  const enchantTotalLine = enchantLines.length ? `\n🔮 附魔總和\n${enchantLines.join("\n")}` : "";
+
   // ── 職業區（只顯示職業名稱）──
   const jobAreaLine = `職業：${p.job || "Novice"} (Job ${p.jobLevel || 1})`;
 
@@ -647,6 +658,7 @@ async function handleProfile(interaction) {
     tierSummaryLine +
     effectLine + "\n" +
     namedSetLine + (namedSetLine ? "\n" : "") +
+    enchantTotalLine + (enchantTotalLine ? "\n" : "") +
     tierSetLine + (tierSetLine ? "\n" : "") +
     `【裝備清單】\n` +
     equipLine + "\n" +

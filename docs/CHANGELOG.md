@@ -76,6 +76,7 @@
 
 | 49 | 2026-07-08 | 修：會員數口徑不一致（遊戲內是會員、後台/里程碑卻不算） | 玩家遊戲內綁定Twitch/YT顯示✅會員，後台會員名單卻顯示不是會員、斗內會員里程碑也少算。根因：#46~#47 的**會員數(`countActiveMembers`)只數 Discord 身分組(`membershipStatus`/reconcile)**，但遊戲內「會員」判定是**直播綁定(`streamAccountBindings`)∪身分組任一即可**——兩套來源不同(綁定57 vs 身分組13)。修法：`countActiveMembers` 改數兩套**聯集不重複人數**(新增 `listActiveMemberIds`)，斗內會員里程碑/sc-bar/overlay 全自動同步；後台「會員現況表」改用新 `listMemberDirectory`(綁定會員也列出、綁定即覆蓋身分組 tracker 的 false、標 source=綁定/身分組/both)。實測聯集=63人(原13)、音無恋正確顯示會員 SS。⚠️需重啟後端 | 修正 | ✅ | (本次) streamRecordsService/adminStreamRecordsRoutes |
 | 50 | 2026-07-08 | 修：賽季任務整頁空白（被 Lv.40 門檻藏掉） | 「任務→賽季」頁顯示「目前沒有賽季任務」，但 6 個賽季任務其實都在 DB(enabled)。根因：seed 時給 6 個賽季任務都設了 `levelLimit:40`，`_isQuestVisibleForPlayer`/`_canAccrueProgress` 判定「未達 40 級→隱藏且不累積」，而賽季頁又不像職業頁會顯示鎖定任務→賽季剛重置、帳號未滿 40 就整頁空。這些是整季累積型成就(1500勝/3000連擊/A+5×10…)，40 級前進度不算並不合理。修法：**移除等級門檻(levelLimit→0)**，6 個賽季任務從 Lv.1 就可見、進度全季累積(世界王擊殺類自然靠進入王區為門檻)。DB 即時生效免重啟；seed 腳本同步改。實測 Lv.1 玩家正確回傳 6 筆 locked=false | 修正 | ✅ | (本次) seed-season-quests-v04.js + DB |
+| 51 | 2026-07-08 | 個人頁/DC面板顯示「附魔總和」 | 新增全身裝備附魔跨件加總顯示（原本附魔只看得到單件、綜合收益沒地方看）。enchantEngine 新增 `summarizeEquippedEnchantments`：合併同 key、屬性類(力/敏/體/智/技/幸)排前、效果類(爆擊/火焰終傷…)排後。**網頁個人頁**戰力報告下加「🔮 附魔總和」區(屬性/效果分列，藍/橘配色)；**DC 個人面板**套裝下加「🔮 附魔總和」兩行(屬性/效果)。API `combatStats.enchantTotals`。實測音無恋正確顯示 智力+4／爆擊+16%等。⚠️需重啟後端＋app已build部署 | 新功能 | ✅ | (本次) enchantEngine/playerAppRoutes/playerPanel/index.tsx |
 <!-- 新增修改請往下加列，或插入對應功能 -->
 
 ## V0.4 · 後台/工具（玩家端無感）

@@ -1083,7 +1083,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           isTwoHanded: Boolean(cs.isTwoHanded),
           isDualWield: Boolean(cs.isDualWield),
           tierSetBonuses: cs.tierSetBonuses || null,
-          sets: require("../../shared/equipmentSetBonuses").getEquippedSetInfo(mergedEquipment)
+          sets: require("../../shared/equipmentSetBonuses").getEquippedSetInfo(mergedEquipment),
+          enchantTotals: require("../../shared/enchantEngine").summarizeEquippedEnchantments(mergedEquipment)
         };
       } catch (err) {
         console.warn("[profile] combatStats calc failed:", err?.message || err);

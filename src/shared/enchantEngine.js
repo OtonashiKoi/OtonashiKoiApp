@@ -88,4 +88,35 @@ function toEffectInstances(enchantments) {
   return out;
 }
 
-module.exports = { rollEnchantments, rollablePool, sumEnchantStats, toEffectInstances, randInt };
+/**
+ * 把「整套已裝備」的所有附魔詞條跨件加總成顯示用清單（同 key 合併，保留 label/unit/effectKey）。
+ * 屬性類（無 effectKey：力/敏/體/智/技/幸）排前、效果類（有 effectKey：火焰終傷、爆擊…）排後。
+ * @param {object} equipment 已 merge 的裝備物件（slot → item）
+ * @returns {Array<{key,label,value,unit,isEffect}>}
+ */
+function summarizeEquippedEnchantments(equipment) {
+  const map = new Map();
+  const items = equipment && typeof equipment === "object" ? Object.values(equipment) : [];
+  for (const item of items) {
+    if (!item || !Array.isArray(item.enchantments)) continue;
+    for (const e of item.enchantments) {
+      if (!e || !e.key) continue;
+      const k = String(e.key);
+      const cur = map.get(k) || { key: k, label: e.label || k, unit: e.unit || "", effectKey: e.effectKey || null, value: 0 };
+      cur.value += Number(e.value) || 0;
+      if ((!cur.label || cur.label === k) && e.label) cur.label = e.label;
+      if (!cur.unit && e.unit) cur.unit = e.unit;
+      if (!cur.effectKey && e.effectKey) cur.effectKey = e.effectKey;
+      map.set(k, cur);
+    }
+  }
+  const list = [...map.values()].filter((x) => x.value !== 0);
+  list.sort((a, b) => {
+    const ae = a.effectKey ? 1 : 0, be = b.effectKey ? 1 : 0;
+    if (ae !== be) return ae - be;              // 屬性類在前
+    return Math.abs(b.value) - Math.abs(a.value); // 各區內數值大者在前
+  });
+  return list.map((x) => ({ key: x.key, label: x.label, value: x.value, unit: x.unit || "", isEffect: Boolean(x.effectKey) }));
+}
+
+module.exports = { rollEnchantments, rollablePool, sumEnchantStats, toEffectInstances, summarizeEquippedEnchantments, randInt };
