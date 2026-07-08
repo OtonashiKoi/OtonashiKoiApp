@@ -870,7 +870,18 @@ function resolveWeaponQuestMetric(weaponType = "") {
   return null;
 }
 
-async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null) {
+// 輔助職業(徽章)判定：治療師/軍師/詩人/結界師
+const SUPPORT_JOB_KEYS = new Set(["healer", "tactician", "bard", "barrier_mage"]);
+function isSupportJobBadge(jobEq) {
+  if (!jobEq) return false;
+  try {
+    const { getSupportJobKey } = require("../../shared/supportAuraScaling");
+    const key = getSupportJobKey({ jobKey: jobEq.itemId || jobEq.id, jobName: jobEq.itemName || jobEq.name });
+    return SUPPORT_JOB_KEYS.has(key);
+  } catch (_) { return false; }
+}
+
+async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null, jobEq = null) {
   // 通行證點數：打怪(非落敗)依地圖階級加點
   if (outcome !== "lose" && sc?.passService?.addPointsForKill) {
     const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", dragon_king_lair: "S", hellfire_depths: "S" };
@@ -884,6 +895,10 @@ async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, co
   const weaponMetric = resolveWeaponQuestMetric(weaponType);
   if (weaponMetric) {
     await questService.recordProgress(discordId, weaponMetric, 1);
+  }
+  // 用輔助職業(徽章)出戰 → 記錄一場（供隱藏賽季任務「共鳴之鏈」用）
+  if (isSupportJobBadge(jobEq)) {
+    await questService.recordProgress(discordId, "battle_with_support_job", 1);
   }
   if (outcome === "lose") {
     await questService.recordProgress(discordId, "death_count", 1);
@@ -3018,7 +3033,7 @@ async function handleEnterBattle(interaction) {
         }
       }
       try {
-        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null, zoneKey);
+        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null, zoneKey, currentProg?.equipment?.job_eq || null);
       } catch (e) {
         console.error("[Quest] recordProgress error:", e.message);
       }

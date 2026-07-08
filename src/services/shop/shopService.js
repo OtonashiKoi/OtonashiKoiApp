@@ -720,7 +720,7 @@ class ShopService {
         if (chestRolledEntry === undefined) {
           // 大史王寶箱限定：3% 唯一傳說錨點（先機/後勢），擁有過就不再開出
           const legendary = effect.monsterId === "elite-daishi-king"
-            ? await this._tryRollDaishiLegendaryChest(discordId).catch(() => null)
+            ? await this._tryRollDaishiLegendaryChest(discordId, displayName).catch(() => null)
             : null;
           if (legendary) {
             chestRolledEntry = legendary.entry;
@@ -885,7 +885,7 @@ class ShopService {
    * 大史王寶箱限定：先機/後勢各 3% 唯一傳說錨點。抽中一件即回傳其背包 entry；否則 null（走一般掉落）。
    * 已擁有過的（uniqueGrant）不會再開出。每次開箱最多一件傳說。
    */
-  async _tryRollDaishiLegendaryChest(discordId) {
+  async _tryRollDaishiLegendaryChest(discordId, displayName = null) {
     const uniqueGrant = require("../uniqueGrant/uniqueGrantService");
     const candidates = ["s-legend-burst", "s-legend-linger"];
     for (const itemId of candidates) {
@@ -908,6 +908,10 @@ class ShopService {
         source: "boss_chest:daishi", obtainedAt: new Date().toISOString(),
       };
       console.log(`[shop] 🎉 大史王寶箱開出唯一傳說錨點 ${item.name} → ${discordId}`);
+      const who = displayName || "某位勇者";
+      require("../../shared/announceTownChat").announceTownChat(
+        `📦✨ **${who}** 開啟大史王寶箱，獲得傳說錨點【**${item.name}**】！全服唯一，得來不易！`
+      ).catch(() => {});
       return { entry };
     }
     return null;

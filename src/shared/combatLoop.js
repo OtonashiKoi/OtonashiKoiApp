@@ -859,6 +859,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let pHp = options.startPlayerHp != null
     ? Math.max(0, Math.min(pStats.maxHp, Number(options.startPlayerHp) || 0))
     : pStats.maxHp;
+  // 隊伍光環 party_max_hp_up（如錨點「共鳴之鏈」）：戰鬥開始一次性提高本人 MaxHP 與當前 HP（不逐回合疊加）
+  try {
+    const _pmh = (Array.isArray(options.partyEffects) ? options.partyEffects : [])
+      .filter((pe) => pe && pe.key === "party_max_hp_up")
+      .reduce((mx, pe) => Math.max(mx, Number(pe.params?.value ?? pe.value ?? 0) || 0), 0);
+    if (_pmh > 0 && pStats.maxHp > 0) {
+      const _mult = 1 + _pmh / 100;
+      pStats.maxHp = Math.round(pStats.maxHp * _mult);
+      pHp = Math.round(pHp * _mult);
+    }
+  } catch (_) { /* noop */ }
   let outcome = null;
   let totalDamage = 0;
   // 世界王:玩家 DOT 也要吃世界王 def%(含扣防後的有效值)。跨回合保留上一回合的扣防%,

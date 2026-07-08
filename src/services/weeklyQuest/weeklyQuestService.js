@@ -9,6 +9,7 @@ const QUEST_TYPES = {
   battle_with_dagger:{ label: "使用匕首出戰次數", unit: "次" },
   battle_with_staff: { label: "使用法杖出戰次數", unit: "次" },
   battle_with_bow:   { label: "使用弓出戰次數",   unit: "次" },
+  battle_with_support_job: { label: "用輔助職業出戰次數", unit: "次" },
   battle_win:        { label: "戰鬥勝利次數",     unit: "次" },
   damage_total:      { label: "累計造成傷害",     unit: "點" },
   level_10_job_badge:{ label: "達成 Lv.10 並獲得職業徽章", unit: "項" },
@@ -165,9 +166,23 @@ class WeeklyQuestService {
       unlockAttribute,
       unlockAttribute2,
       unlockAttributeMin: Math.max(0, Number(def?.unlockAttributeMin || 0)),
+      // 隱藏 gate：玩家必須「全部擁有」這些 itemId(背包或已裝備)才看得到/才累積。
+      // 用於「集齊全部輔助職徽章才解鎖的隱藏賽季任務」。
+      unlockRequireItemIds: Array.isArray(def?.unlockRequireItemIds)
+        ? def.unlockRequireItemIds.map((v) => String(v || "").trim()).filter(Boolean)
+        : [],
       hideIfRewardOwned: def?.hideIfRewardOwned !== false,
       claimOnce: Boolean(def?.claimOnce)
     };
+  }
+
+  // 玩家是否「全部擁有」quest.unlockRequireItemIds（背包 ∪ 已裝備）
+  _hasAllRequiredItems(quest, context) {
+    const need = Array.isArray(quest?.unlockRequireItemIds) ? quest.unlockRequireItemIds : [];
+    if (need.length === 0) return true;
+    const inv = context?.inventoryItemIds instanceof Set ? context.inventoryItemIds : new Set();
+    const eq = context?.equippedItemIds instanceof Set ? context.equippedItemIds : new Set();
+    return need.every((id) => inv.has(id) || eq.has(id));
   }
 
   async _getPlayerLevel(discordId) {
@@ -246,6 +261,7 @@ class WeeklyQuestService {
     const level = Number(context?.level || 1);
     if (quest.levelLimit && quest.levelLimit > level) return false;
     if (quest.unlockLevel && level < Number(quest.unlockLevel || 0)) return false;
+    if (!this._hasAllRequiredItems(quest, context)) return false;
     if (Array.isArray(quest.unlockWeaponTypes) && quest.unlockWeaponTypes.length > 0) {
       const weaponType = String(context?.weaponType || "");
       if (!quest.unlockWeaponTypes.includes(weaponType)) return false;
@@ -262,6 +278,8 @@ class WeeklyQuestService {
     const level = Number(context?.level || 1);
     if (quest.levelLimit && quest.levelLimit > level) return false;
     if (quest.unlockLevel && level < Number(quest.unlockLevel || 0)) return false;
+    // 隱藏 gate：未集齊指定道具(如全部輔助職徽章) → 這任務完全不顯示
+    if (!this._hasAllRequiredItems(quest, context)) return false;
 
     if ((quest.unlockAttributes && quest.unlockAttributes.length > 0) || quest.unlockAttribute) {
       const total = getUnlockAttributeTotal(quest, context?.attributes || {});
@@ -569,6 +587,24 @@ class WeeklyQuestService {
       }
       playerPeriod[questId] = p;
       await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, quest.cadence);
+
+      // 領到傳說錨點 → 聊天大廳廣播
+      const ANCHOR_NAMES = {
+        "s-legend-bond": "繫絆・共鳴之鏈", "s-legend-burst": "驟・先機之刃",
+        "s-legend-linger": "滯・後勢之刃", "s-legend-dice": "骰・命運之輪",
+      };
+      if (reward.rewardItemId && ANCHOR_NAMES[reward.rewardItemId]) {
+        let who = "某位勇者";
+        try {
+          const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+          const db = await getMongoDb();
+          const pl = await db.collection("players").findOne({ discordId }, { projection: { displayName: 1 } });
+          if (pl?.displayName) who = pl.displayName;
+        } catch (_) { /* 查名失敗就用預設 */ }
+        require("../../shared/announceTownChat").announceTownChat(
+          `🔗✨ **${who}** 完成了隱藏試煉「${quest.title}」，獲得傳說錨點【**${ANCHOR_NAMES[reward.rewardItemId]}**】！輔助者的羈絆之證！`
+        ).catch(() => {});
+      }
 
       return reward;
     } finally {
