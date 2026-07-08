@@ -48,20 +48,23 @@ async function applyAndGetMultiplier(discordId, nowMs) {
   }
 }
 
-/** 供顯示/除錯：查目前連續耕作時長(ms)與是否疲勞，不寫入。 */
+/**
+ * 供顯示/除錯：查目前連續耕作時長(ms)與是否疲勞，不寫入。
+ * recoverAtMs = 最後打怪時間 + 30 分：停手到此時間點、連續耕作重置 → 疲勞解除（前端可倒數）。
+ */
 async function peek(discordId, nowMs) {
-  if (!discordId) return { streakMs: 0, penalized: false };
+  if (!discordId) return { streakMs: 0, penalized: false, recoverAtMs: 0 };
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   try {
     const db = await getMongoDb();
     const doc = await db.collection("farmFatigue").findOne({ discordId });
     const last = Number(doc?.last) || 0;
     let start = Number(doc?.start) || 0;
-    if (!start || !last || (now - last) >= RESET_GAP_MS) return { streakMs: 0, penalized: false };
+    if (!start || !last || (now - last) >= RESET_GAP_MS) return { streakMs: 0, penalized: false, recoverAtMs: 0 };
     const streakMs = now - start;
-    return { streakMs, penalized: streakMs >= SIX_HOURS_MS };
+    return { streakMs, penalized: streakMs >= SIX_HOURS_MS, lastMs: last, recoverAtMs: last + RESET_GAP_MS };
   } catch (_) {
-    return { streakMs: 0, penalized: false };
+    return { streakMs: 0, penalized: false, recoverAtMs: 0 };
   }
 }
 

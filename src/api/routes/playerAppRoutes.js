@@ -1162,7 +1162,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           streakMs: Number(pk.streakMs) || 0,        // 目前連續耕作時長
           thresholdMs: ff.SIX_HOURS_MS,              // 觸發門檻(6h)
           penaltyPct: Math.round((1 - ff.PENALTY_MULT) * 100), // 減幅(80)
-          pausedByBuff                               // 全服短期加成期間 → 疲勞暫停(此時不扣)
+          pausedByBuff,                              // 全服短期加成期間 → 疲勞暫停(此時不扣)
+          restGapMs: ff.RESET_GAP_MS,                // 停手多久會恢復(30分)
+          recoverAt: pk.recoverAtMs ? new Date(pk.recoverAtMs).toISOString() : null // 停手到此時間點即恢復（前端倒數）
         };
       } catch (_) { /* 疲勞查詢失敗不影響 profile */ }
 
@@ -1247,10 +1249,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     res.json(ok({ state, expiresIn: STREAM_AUTH_STATE_TTL }));
   });
 
-  // YT creator token 壞掉時，避免每次載入都去 Google 重試拖慢頁面：失敗後冷卻 5 分鐘只走存檔
-  let _ytLiveCheckCooldownUntil = 0;
-
-  // 2.5 Fetch Stream Bindings + 即時會員狀態（用 broadcaster token 查）
+  // 2.5 Fetch Stream Bindings + 會員狀態（YT：聊天室徽章 is-member ＋ Discord 身分組位階；不靠 API）
   router.get("/api/me/bindings", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
@@ -1282,65 +1281,33 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             };
           }
           if (b.platform === "youtube") {
-            // 即時查 YouTube 會員 API（用 creator token；與綁定流程同一支）。
-            // 查得到 → 更新 binding 位階＋刷新檢查時間；查不到(頻道沒開會員/quota/token失效)
-            // 才退回「直播彈幕徽章偵測」的存檔值。
+            // 做法（玩家定案）：不靠 YouTube API/creator token（會過期）。
+            //  ①「是不是會員」→ 直播聊天室徽章偵測(OneComme)，綁定/留言當下記在 linkedSupportAtLink。
+            //  ②「位階」    → 以玩家的 Discord 身分組為準(progress.playerTier，membershipTracker 即時同步)。
             const nowIso = new Date().toISOString();
-            let liveLevel = null, liveErr = null;
-            try {
-              if (Date.now() < _ytLiveCheckCooldownUntil) throw new Error("creator-token-cooldown");
-              const creatorAccessToken = await fetchGoogleCreatorAccessToken();
-              const chId = String(b.platformUserId || "").replace(/^(yt-|youtube-)/i, "");
-              const ctrl = new AbortController();
-              const t = setTimeout(() => ctrl.abort(), 6000);
-              const mres = await fetch(`https://www.googleapis.com/youtube/v3/members?part=snippet&filterByMemberChannelId=${encodeURIComponent(chId)}&maxResults=1`, {
-                headers: { Authorization: `Bearer ${creatorAccessToken}` }, signal: ctrl.signal
-              });
-              clearTimeout(t);
-              const mdata = await mres.json().catch(() => ({}));
-              if (mres.ok) liveLevel = mdata?.items?.[0]?.snippet?.membershipsDetails?.highestAccessibleLevelDisplayName || null;
-              else liveErr = mdata?.error?.message || mdata?.error?.errors?.[0]?.message || `${mres.status} ${mres.statusText}`;
-            } catch (e) {
-              liveErr = e?.message || String(e);
-              // creator token 失效/拿不到 → 冷卻 5 分鐘，避免每次載入都重試 Google
-              if (liveErr !== "creator-token-cooldown") _ytLiveCheckCooldownUntil = Date.now() + 5 * 60_000;
+            const progress = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
+            const discordTier = progress?.playerTier || null;
+            const chatMember = Boolean(b.linkedSupportAtLink);
+            const tier = discordTier || b.playerTierAtLink || null;
+            const isMember = chatMember || Boolean(discordTier);
+            // 位階以 DC 身分組為準；有變就寫回 binding（讓拍賣/會員數等各處一致）
+            if (tier && tier !== b.playerTierAtLink) {
+              try {
+                await serviceContext.streamAccountBindingRepository.save({
+                  platform: "youtube", platformUserId: b.platformUserId, discordId, displayName: b.displayName,
+                  linkedAt: b.linkedAt, playerTierAtLink: tier, memberRoleIdsAtLink: b.memberRoleIdsAtLink || [],
+                  linkedSupportAtLink: b.linkedSupportAtLink, linkedSupportKindAtLink: b.linkedSupportKindAtLink,
+                  linkedSupportBadgeLabelsAtLink: b.linkedSupportBadgeLabelsAtLink || [], updatedAt: nowIso,
+                });
+              } catch (_) { /* 寫回失敗不影響回傳 */ }
             }
-
-            if (liveLevel) {
-              const mappedTier = mapYoutubeLevelToPlayerTier(liveLevel);
-              const newTier = pickHigherTier(mappedTier, b.playerTierAtLink) || mappedTier || b.playerTierAtLink || null;
-              // 有變才寫回 DB（省寫入）
-              if (newTier !== b.playerTierAtLink || !b.linkedSupportAtLink) {
-                try {
-                  await serviceContext.streamAccountBindingRepository.save({
-                    platform: "youtube", platformUserId: b.platformUserId, discordId, displayName: b.displayName,
-                    linkedAt: b.linkedAt, playerTierAtLink: newTier, memberRoleIdsAtLink: b.memberRoleIdsAtLink || [],
-                    linkedSupportAtLink: true, linkedSupportKindAtLink: "member",
-                    linkedSupportBadgeLabelsAtLink: [`會員等級:${liveLevel}`], updatedAt: nowIso,
-                  });
-                } catch (_) { /* 寫回失敗不影響回傳 */ }
-              }
-              return {
-                ...baseInfo, playerTierAtLink: newTier,
-                membership: { isMember: true, tier: newTier, levelName: `會員等級 ${liveLevel}`, checkedAt: nowIso, source: "youtube-api" }
-              };
-            }
-
-            // 查不到 → 退回直播彈幕偵測的存檔值（但檢查時間更新為現在）
-            const labels = Array.isArray(b.linkedSupportBadgeLabelsAtLink) ? b.linkedSupportBadgeLabelsAtLink : [];
-            const isMember = Boolean(b.linkedSupportAtLink) || Boolean(b.playerTierAtLink);
-            const levelName = labels.find(Boolean)
-              || (b.playerTierAtLink ? `會員位階 ${b.playerTierAtLink}` : null)
-              || (isMember ? "會員" : null);
+            const levelName = tier ? `會員位階 ${tier}` : (isMember ? "會員" : null);
             return {
-              ...baseInfo,
+              ...baseInfo, playerTierAtLink: tier,
               membership: {
-                isMember,
-                tier: b.playerTierAtLink || null,
-                levelName,
-                checkedAt: nowIso,
-                source: "stream-chat",
-                hint: isMember ? null : (liveErr ? `即時查詢暫時無法（${liveErr}）；可在直播聊天室以會員身分留言偵測` : "在直播聊天室以會員身分留言一次即可偵測")
+                isMember, tier, levelName, checkedAt: nowIso,
+                source: discordTier ? "discord-role" : "stream-chat",
+                hint: isMember ? null : "在直播聊天室以會員身分留言一次確認會員身分（位階以 Discord 身分組為準）"
               }
             };
           }
