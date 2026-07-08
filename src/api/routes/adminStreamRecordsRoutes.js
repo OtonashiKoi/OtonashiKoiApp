@@ -208,7 +208,8 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
         if (r.buff.dropPct > 0) parts.push(`掉寶 +${r.buff.dropPct}%`);
         if (r.buff.goldPct > 0) parts.push(`金幣 +${r.buff.goldPct}%`);
         if (r.buff.expPct > 0) parts.push(`經驗 +${r.buff.expPct}%`);
-        try { serviceContext._announceTownChat(`🎉 全服活動！${parts.join("、")}，持續 ${durationMinutes} 分鐘！`); } catch (_) {}
+        const hm = (d) => { try { return new Date(d).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour12: false, hour: "2-digit", minute: "2-digit" }); } catch (_) { return ""; } };
+        try { serviceContext._announceTownChat(`🎉 全服活動！${parts.join("、")}，生效時間 ${hm(Date.now())}～${hm(r.buff?.endsAt || (Date.now() + durationMinutes * 60_000))}（${durationMinutes} 分鐘）！`); } catch (_) {}
       }
       res.json(ok(r.buff, "buff applied"));
     } catch (err) { next(err); }

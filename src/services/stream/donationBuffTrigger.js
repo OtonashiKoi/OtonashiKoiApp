@@ -5,6 +5,13 @@
 const { applyBuff } = require("./globalBuffService");
 const { getConfig } = require("./streamEventConfig");
 
+// 台灣時間 HH:MM
+function fmtHM(dateOrIso) {
+  try {
+    return new Date(dateOrIso).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour12: false, hour: "2-digit", minute: "2-digit" });
+  } catch (_) { return ""; }
+}
+
 function pickTier(tiers, twd) {
   let picked = null;
   for (const t of tiers) {
@@ -43,8 +50,10 @@ async function maybeTriggerDonationBuff(donation, meta, serviceContext) {
       if (tier.goldPct > 0) parts.push(`金幣 +${tier.goldPct}%`);
       if (tier.expPct > 0) parts.push(`經驗 +${tier.expPct}%`);
       const eff = parts.join("、") || "全服加成";
+      const startHM = fmtHM(Date.now());
+      const endHM = fmtHM(r.buff?.endsAt || (Date.now() + Number(tier.durationMinutes) * 60_000));
       try {
-        serviceContext._announceTownChat(`🎉 感謝 ${name} 斗內 NT$${twd}！全服 ${eff}，持續 ${tier.durationMinutes} 分鐘！`);
+        serviceContext._announceTownChat(`🎉 感謝 ${name} 斗內 NT$${twd}！全服 ${eff}，生效時間 ${startHM}～${endHM}（${tier.durationMinutes} 分鐘）！`);
       } catch (_) { /* 廣播失敗不影響 buff */ }
     }
     return { triggered: true, buff: r.buff, tier: tier.label };

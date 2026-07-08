@@ -52,7 +52,10 @@ async function check(serviceContext) {
       });
       if (r.applied) {
         result.celebrated = true;
-        if (cfg.announce) announce(`🎉 綁定會員突破 ${newMultiple} 人！全服短時加成，感謝大家一起撐場！`);
+        const mins = Math.max(1, Number(sb.durationMinutes) || 30);
+        const hm = (d) => { try { return new Date(d).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour12: false, hour: "2-digit", minute: "2-digit" }); } catch (_) { return ""; } };
+        const eff = [sb.dropPct > 0 && `掉寶 +${sb.dropPct}%`, sb.goldPct > 0 && `金幣 +${sb.goldPct}%`, sb.expPct > 0 && `經驗 +${sb.expPct}%`].filter(Boolean).join("、");
+        if (cfg.announce) announce(`🎉 綁定會員突破 ${newMultiple} 人！全服 ${eff}，生效時間 ${hm(Date.now())}～${hm(r.buff?.endsAt || (Date.now() + mins * 60_000))}（${mins} 分鐘），感謝大家一起撐場！`);
       }
     }
 

@@ -976,30 +976,47 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const guild = discordClient.guilds.cache.get(guildId)
             || await discordClient.guilds.fetch(guildId).catch(() => null);
           if (guild) {
-            const member = await guild.members.fetch({ user: discordId, force: true }).catch(() => null);
-            // 1) 不是伺服器成員 → 給邀請連結
+            // 先用快取(快)；沒有再「限時」force fetch。
+            // ⚠️ Discord 限流時 members.fetch 會排隊卡到數百秒，會把真實玩家鎖在登入門外，
+            // 故：只有 Discord 明確回「不是成員(10007)」才擋；限流/超時 → fail-open(放行)。
+            let member = guild.members.cache.get(discordId) || null;
             if (!member) {
-              return res.status(403).json({
-                status: "error", code: "NOT_GUILD_MEMBER", inviteUrl,
-                message: "請先加入 Discord 伺服器才能使用網頁遊戲。"
-              });
+              try {
+                member = await Promise.race([
+                  guild.members.fetch({ user: discordId, force: true }),
+                  new Promise((_, reject) => setTimeout(() => reject(new Error("__member_fetch_timeout__")), 2500)),
+                ]);
+              } catch (e) {
+                const code = e?.code ?? e?.rawError?.code;
+                if (code === 10007) {
+                  // 1) Discord 明確：不是伺服器成員 → 給邀請連結
+                  return res.status(403).json({
+                    status: "error", code: "NOT_GUILD_MEMBER", inviteUrl,
+                    message: "請先加入 Discord 伺服器才能使用網頁遊戲。"
+                  });
+                }
+                console.warn("[PlayerApp] 成員驗證超時/限流，放行登入:", e?.message);
+                member = null;
+              }
             }
-            // Prefer guild nickname over OAuth profile name.
-            displayName = member.displayName || displayName;
+            // 只有「確定拿到 member」時才做身分組閘門；限流拿不到 → 放行不擋（避免鎖死）。
+            if (member) {
+              // Prefer guild nickname over OAuth profile name.
+              displayName = member.displayName || displayName;
 
-            // 2) 是成員但沒有「玩家」身分組 → 擋下並引導取得身分組
-            //    （取設定的玩家/管理員身分組；未設定任何身分組時退回「僅需成員」）
-            const access = await serviceContext.accessControlService.getAccessControl().catch(() => null);
-            const d = access?.discord || cfg;
-            const gateRoleIds = [...new Set([...(d.playerRoleIds || []), ...(d.adminRoleIds || [])])];
-            const allowUserIds = new Set([...(d.adminUserIds || []), ...(d.playerUserIds || [])]);
-            const hasGateRole = gateRoleIds.length === 0
-              || gateRoleIds.some((roleId) => member.roles.cache.has(roleId));
-            if (!hasGateRole && !allowUserIds.has(discordId)) {
-              return res.status(403).json({
-                status: "error", code: "NO_PLAYER_ROLE", inviteUrl,
-                message: "你已在伺服器，但尚未取得「玩家」身分組，請依伺服器指引領取後再登入。"
-              });
+              // 2) 是成員但沒有「玩家」身分組 → 擋下並引導取得身分組
+              const access = await serviceContext.accessControlService.getAccessControl().catch(() => null);
+              const d = access?.discord || cfg;
+              const gateRoleIds = [...new Set([...(d.playerRoleIds || []), ...(d.adminRoleIds || [])])];
+              const allowUserIds = new Set([...(d.adminUserIds || []), ...(d.playerUserIds || [])]);
+              const hasGateRole = gateRoleIds.length === 0
+                || gateRoleIds.some((roleId) => member.roles.cache.has(roleId));
+              if (!hasGateRole && !allowUserIds.has(discordId)) {
+                return res.status(403).json({
+                  status: "error", code: "NO_PLAYER_ROLE", inviteUrl,
+                  message: "你已在伺服器，但尚未取得「玩家」身分組，請依伺服器指引領取後再登入。"
+                });
+              }
             }
           }
         } catch (err) {

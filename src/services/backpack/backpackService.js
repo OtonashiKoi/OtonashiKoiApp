@@ -48,7 +48,8 @@ async function resolveCapacity(discordId) {
     const guildId = config.discord.guildId;
     if (client?.isReady?.() && guildId) {
       const guild = await client.guilds.fetch(guildId).catch(() => null);
-      const member = guild ? await guild.members.fetch({ user: discordId, force: false }).catch(() => null) : null;
+      const { fetchGuildMemberSafe } = require("../../shared/discordMemberFetch");
+      const member = guild ? await fetchGuildMemberSafe(guild, discordId, { force: false }) : null;
       if (member) {
         const roleIds = [...member.roles.cache.keys()];
         tier = await serviceContext.playerTierService.resolveHighestTier(roleIds).catch(() => null);
