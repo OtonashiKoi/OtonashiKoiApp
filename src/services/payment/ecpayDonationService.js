@@ -112,7 +112,8 @@ async function processLiveNotify(body, serviceContext) {
     merchantId: body?.MerchantID || null,
     transCode: body?.TransCode ?? null,
     transMsg: body?.TransMsg || null,
-    checkMacValue: body?.CheckMacValue || null
+    checkMacValue: body?.CheckMacValue || null,
+    rawData: body?.Data || null // 保留密文供解密除錯（正式穩定後可移除）
   };
 
   if (!cfg.enabled) {
@@ -134,11 +135,13 @@ async function processLiveNotify(body, serviceContext) {
     return { ack: ACK, handled: false, reason: "decrypt_failed" };
   }
 
-  const tradeNo = String(payload.TradeNo || "");
-  const merchantTradeNo = String(payload.MerchantTradeNo || "");
-  const twdAmount = num(payload.TradeAmt);
+  // 交易明細在 OrderInfo 內（實際回呼格式）；相容舊文件的平鋪格式 → fallback 到 payload
+  const oi = (payload.OrderInfo && typeof payload.OrderInfo === "object") ? payload.OrderInfo : payload;
+  const tradeNo = String(oi.TradeNo || "");
+  const merchantTradeNo = String(oi.MerchantTradeNo || "");
+  const twdAmount = num(oi.TradeAmt);
   const rtnOk = num(payload.RtnCode) === 1;
-  const paid = String(payload.TradeStatus) === "1";
+  const paid = String(oi.TradeStatus) === "1";
   const simulate = num(payload.SimulatePaid) === 1;
   const patronName = payload.PatronName || null;
   const patronNote = payload.PatronNote || "";
@@ -147,11 +150,11 @@ async function processLiveNotify(body, serviceContext) {
     ...rawDoc,
     tradeNo, merchantTradeNo, twdAmount,
     rtnCode: num(payload.RtnCode), rtnMsg: payload.RtnMsg || null,
-    tradeStatus: payload.TradeStatus ?? null,
-    paymentType: payload.PaymentType || null,
-    paymentDate: payload.PaymentDate || null,
-    tradeDate: payload.TradeDate || null,
-    chargeFee: num(payload.ChargeFee),
+    tradeStatus: oi.TradeStatus ?? null,
+    paymentType: oi.PaymentType || null,
+    paymentDate: oi.PaymentDate || null,
+    tradeDate: oi.TradeDate || null,
+    chargeFee: num(oi.ChargeFee),
     patronName, patronNote,
     donateUrl: payload.DonateURL || null,
     livestreamUrl: payload.LivestreamURL || null,
