@@ -196,6 +196,26 @@
                 </div>
               </div>
             </div>
+            <div class="card" style="margin-top:16px;">
+              <div class="section-head"><div><p class="section-kicker">Schedule</p><h2>🕒 開／關服排程</h2></div></div>
+              <div style="display:flex;flex-direction:column;gap:10px;max-width:660px;">
+                <div id="maint-phase" style="font-weight:900;font-size:15px;"></div>
+                <label>🟢 開服時間（此時間<b>前</b>擋登入、顯示「未開服」訊息；空=不限）
+                  <input type="datetime-local" id="maint-openAt" style="display:block;margin-top:4px;"></label>
+                <label>🔴 關服時間（此時間<b>到</b>＝賽季結束、擋登入；空=不限）
+                  <input type="datetime-local" id="maint-activateAt" style="display:block;margin-top:4px;"></label>
+                <label><input type="checkbox" id="maint-enabled"> ⚙️ 強制維護（不論時間都擋，只有白名單能進）</label>
+                <label>未開服・標題 <input type="text" id="maint-openTitle" style="width:100%;box-sizing:border-box;"></label>
+                <label>未開服・訊息 <textarea id="maint-openMessage" rows="2" style="width:100%;box-sizing:border-box;"></textarea></label>
+                <label>已關服・標題 <input type="text" id="maint-title" style="width:100%;box-sizing:border-box;"></label>
+                <label>已關服・訊息 <textarea id="maint-message" rows="2" style="width:100%;box-sizing:border-box;"></textarea></label>
+                <div style="display:flex;gap:8px;">
+                  <button id="maint-save" class="button primary">💾 儲存排程</button>
+                  <button id="maint-reload" class="button">↻ 重新讀取</button>
+                </div>
+                <p class="hint" id="maint-status" style="margin:0;">白名單（音無恋/音無醬）不受時間限制，隨時可進。</p>
+              </div>
+            </div>
           </section>
 
           <section id="section-players" class="panel-section">
@@ -1136,5 +1156,6 @@
     <script src="/static/admin.story.js?v=76"></script>
     <script src="/static/admin.stream-records.js?v=4"></script>
     <script src="/static/admin.enchant.js?v=1"></script>
+    <script src="/static/admin.maintenance.js?v=1"></script>
   </body>
 </html>

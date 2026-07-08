@@ -271,6 +271,23 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // 開/關服排程設定（讀）：openAt(未到=尚未開服)、activateAt(到了=賽季結束)、目前 phase
+  router.get("/admin/maintenance/config", async (req, res, next) => {
+    try {
+      const maintenance = require("../../services/access/maintenanceStore");
+      await maintenance.ensureLoaded();
+      res.json(ok(maintenance.getRawState(), "maintenance config"));
+    } catch (error) { next(error); }
+  });
+  // 開/關服排程設定（寫）：body 可帶 enabled/openAt/activateAt/title/message/openTitle/openMessage/whitelist
+  router.post("/admin/maintenance/config", async (req, res, next) => {
+    try {
+      const maintenance = require("../../services/access/maintenanceStore");
+      const saved = await maintenance.setState(req.body || {});
+      res.json(ok(saved, "maintenance config saved"));
+    } catch (error) { next(error); }
+  });
+
   // 全體公告 + 重整/熱更新提示
   //   body.mode = "force"  → 立即強制重整(不問玩家)
   //   body.mode = "prompt" → 彈出「有更新,請重整/重登」視窗,玩家自己按(預設)
