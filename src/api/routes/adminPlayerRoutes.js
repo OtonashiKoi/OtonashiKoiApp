@@ -355,6 +355,47 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // ── 綠界斗內：對帳 / 補發 ──
+  // 列出最近的綠界收單（含未對應到玩家的 unbound、驗簽失敗 mac_failed 等）
+  router.get("/admin/ecpay/donations", async (req, res, next) => {
+    try {
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const db = await getMongoDb();
+      const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+      const status = req.query.status ? { status: String(req.query.status) } : {};
+      const donations = await db.collection("ecpayDonations")
+        .find(status).sort({ receivedAt: -1 }).limit(limit).toArray();
+      res.json(ok({ donations }, "ecpay donations"));
+    } catch (error) { next(error); }
+  });
+
+  // 人工指派某筆收單給玩家並補發（給留言沒填/填錯碼的情況）
+  router.post("/admin/ecpay/donations/:tradeNo/assign", async (req, res, next) => {
+    try {
+      const tradeNo = String(req.params.tradeNo || "");
+      const discordId = String(req.body?.discordId || "").trim();
+      if (!discordId) return res.status(400).json(fail("INVALID_ARGUMENT", "請提供 discordId"));
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const { settleForPlayer } = require("../../services/payment/ecpayDonationService");
+      const db = await getMongoDb();
+      const rec = await db.collection("ecpayDonations").findOne({ tradeNo });
+      if (!rec) return res.status(404).json(fail("NOT_FOUND", "找不到這筆收單"));
+      if (rec.status === "granted") return res.status(400).json(fail("ALREADY_GRANTED", "這筆已發放過"));
+      const player = await serviceContext.progressRepository.findByPlayerId(discordId);
+      const r = await settleForPlayer({
+        discordId,
+        displayName: player?.displayName || rec.patronName || "斗內者",
+        twdAmount: Number(rec.twdAmount) || 0,
+        sourceRef: `ecpay:${tradeNo}`
+      }, serviceContext);
+      await db.collection("ecpayDonations").updateOne(
+        { tradeNo },
+        { $set: { status: "granted", reason: "manual-assign", matchedDiscordId: discordId, diamondsGranted: r.diamonds || 0, processedAt: new Date().toISOString() } }
+      );
+      res.json(ok({ granted: r.diamonds || 0, duplicated: r.duplicated || false }, "assigned"));
+    } catch (error) { next(error); }
+  });
+
   // 目前封鎖名單
   router.get("/admin/web-bans", async (_req, res, next) => {
     try {

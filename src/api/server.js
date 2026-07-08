@@ -24,6 +24,7 @@ const { createPlayerEnchantRoutes } = require("./routes/playerEnchantRoutes");
 const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
 const { createStoryRoutes } = require("./routes/storyRoutes");
 const { createMahjongRoutes } = require("./routes/mahjongRoutes");
+const { createEcpayRoutes } = require("./routes/ecpayRoutes");
 const { serviceContext: sharedServiceContext } = require("../bot/runtimeContext");
 const config = require("../config");
 
@@ -75,6 +76,7 @@ function createApiServer(discordClient) {
   const apiRateLimiter = createRateLimiter({ windowMs: 10_000, max: 300 });
   app.use("/api", (req, res, next) => {
     if (/stream$/.test(req.path)) return next(); // SSE 長連線端點(/...stream)略過
+    if (/ecpay\/live-notify$/.test(req.path)) return next(); // 綠界金流回呼不可被限流(需回 1|OK)
     return apiRateLimiter(req, res, next);
   });
 
@@ -130,6 +132,7 @@ function createApiServer(discordClient) {
   app.use(createPlayerIdleRoutes(serviceContext));
   app.use(createStoryRoutes(serviceContext, discordClient));
   app.use(createMahjongRoutes());
+  app.use(createEcpayRoutes(serviceContext));
 
   // === Web 前端 SPA 靜態服務 ===
   // equipmentGAME-app 經過 `npm run deploy` 後產出在 src/web/public/app/

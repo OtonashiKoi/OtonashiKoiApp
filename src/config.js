@@ -103,6 +103,25 @@ const config = {
     youtubeClientSecret: process.env.YOUTUBE_CLIENT_SECRET || "",
     youtubeCreatorRefreshToken: process.env.STREAM_YOUTUBE_CREATOR_REFRESH_TOKEN || "",
     youtubeCreatorChannelId: process.env.STREAM_YOUTUBE_CREATOR_CHANNEL_ID || ""
+  },
+  // 綠界「直播主收款」金流：ReturnURL 收單 → 依留言斗內碼發鑽
+  //   測試特店(綠界官方 stage)：MerchantID 3002607 / HashKey pwFHCqoQZGmho4w6 / HashIV EkRm7iFT261dpevs
+  //   正式上線請在 .env 覆蓋為你自己的特店資料，並把 ECPAY_AUTO_GRANT 設 true。
+  ecpay: {
+    enabled: String(process.env.ECPAY_ENABLED || "true") !== "false",
+    merchantId: process.env.ECPAY_MERCHANT_ID || "3002607",
+    hashKey: process.env.ECPAY_HASH_KEY || "pwFHCqoQZGmho4w6",
+    hashIV: process.env.ECPAY_HASH_IV || "EkRm7iFT261dpevs",
+    // 驗簽通過後是否自動發鑽。預設 false：因為沙盒 HashKey/HashIV 是公開的，
+    // 若在正式站以公開沙盒金鑰自動發鑽，任何人都能偽造合法簽章換免費鑽。
+    // 請在 .env 填入「你自己的正式特店金鑰」後，再設 ECPAY_AUTO_GRANT=true。
+    autoGrant: String(process.env.ECPAY_AUTO_GRANT || "false") === "true",
+    // 綠界斗內是否同樣觸發全服 Buff / SC 累積條（與 YouTube SC 同待遇）
+    triggerStreamEvents: String(process.env.ECPAY_TRIGGER_STREAM_EVENTS || "true") !== "false",
+    // 每 N 元台幣兌 1 鑽（與 SC 斗內同口徑）
+    twdPerDiamond: Number(process.env.ECPAY_TWD_PER_DIAMOND || 100),
+    // 綠界後台產生的「直播主收款」收款網址；填了前端才顯示「前往斗內」按鈕
+    donateUrl: process.env.ECPAY_DONATE_URL || ""
   }
 };
 
