@@ -870,7 +870,12 @@ function resolveWeaponQuestMetric(weaponType = "") {
   return null;
 }
 
-async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null) {
+async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null) {
+  // 通行證點數：打怪(非落敗)依地圖階級加點
+  if (outcome !== "lose" && sc?.passService?.addPointsForKill) {
+    const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", dragon_king_lair: "S", hellfire_depths: "S" };
+    sc.passService.addPointsForKill(discordId, PASS_TIER[zoneKey] || "D").catch(() => {});
+  }
   const questService = sc?.questService || sc?.weeklyQuestService;
   if (!questService || typeof questService.recordProgress !== "function") return;
 
@@ -1542,6 +1547,11 @@ function createBattleParticipantCache(sc) {
 
         const displayName = player?.displayName || displayNameFallback || null;
         const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, sc.itemRepository);
+        // 狼系寵物戰鬥夥伴（多人參戰快取同樣注入,與單人一致）
+        try {
+          const petEntry = sc.petService?.buildPetCombatEntry?.(progress);
+          if (petEntry) equipped.pet_companion = petEntry;
+        } catch (_) { /* noop */ }
         const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
         const inventory = Array.isArray(progress?.inventory) ? progress.inventory : [];
         const refs = collectEquipmentEffects(equipped, null, {
@@ -2436,6 +2446,11 @@ async function handleEnterBattle(interaction) {
     const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
     let equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, sc.itemRepository);
+    // 狼系寵物戰鬥夥伴：出戰寵物(有 combatPassives 且沒餓壞)以虛擬裝備注入
+    try {
+      const petEntry = sc.petService?.buildPetCombatEntry?.(progress);
+      if (petEntry) equipped = { ...equipped, pet_companion: petEntry };
+    } catch (_) { /* 寵物加成失敗不影響戰鬥 */ }
     const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, zone: zoneKey });
     const participantCache = createBattleParticipantCache(sc);
     let currentSnapshot = {
@@ -3002,7 +3017,7 @@ async function handleEnterBattle(interaction) {
         }
       }
       try {
-        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null);
+        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null, zoneKey);
       } catch (e) {
         console.error("[Quest] recordProgress error:", e.message);
       }
@@ -3311,6 +3326,23 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     } catch (e) { console.error("[Quest] kill_dragon_king record error:", e.message); }
   }
 
+  // 擊敗大史王（elite 世界王全破）→ 記錄屠史任務進度（比照古龍王：所有參戰者各 +1）
+  if (zoneKey === "elite" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
+    try {
+      const qs = sc?.questService || sc?.weeklyQuestService;
+      if (qs?.recordProgress) {
+        const slayers = [...new Set([
+          ...(state?.damageMap ? Object.keys(state.damageMap) : []),
+          ...(Array.isArray(state?.participants) ? state.participants : []),
+          discordId,
+        ].filter(Boolean))];
+        for (const pid of slayers) {
+          await qs.recordProgress(pid, "kill_slime_king", 1);
+        }
+      }
+    } catch (e) { console.error("[Quest] kill_slime_king record error:", e.message); }
+  }
+
   // 擊敗地獄狼牙王（hellfire_depths 世界王全破）→ 記錄屠狼任務進度（比照古龍王：所有參戰者各 +1）
   if (zoneKey === "hellfire_depths" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
     try {
@@ -3449,6 +3481,19 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
   }
 
+  // ── 耕作疲勞：一般區域連續打怪滿6h → 該玩家經驗/金幣 ×0.2（世界王不算）。每位參戰者各自算。
+  const _isWorldBossKill = isWorldBossZone(zoneKey) && Boolean(monster?.isBoss);
+  const fatigueMultByPid = {};
+  if (!_isWorldBossKill) {
+    const farmFatigue = require("../../services/farmFatigue/farmFatigueService");
+    const _now = Date.now();
+    for (const pid of participants) {
+      fatigueMultByPid[pid] = await farmFatigue.applyAndGetMultiplier(pid, _now).catch(() => 1);
+    }
+  }
+  const fatMul = (pid) => fatigueMultByPid[pid] ?? 1;
+  if (fatMul(discordId) < 1) rewardLines.push("🥱 連續耕作已滿 6 小時，經驗/金幣暫時 −80%（停打一般區域 30 分鐘即恢復）");
+
   // ── 金幣依比例分配 ──
   // 依玩家各自對「怪物完整血量」的傷害比例結算
   const dynamicGoldPool = getDynamicGoldPoolFloor(zoneKey, participants.length);
@@ -3459,7 +3504,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     for (const pid of participants) {
       const baseShare = Math.max(1, Math.round(effectiveGoldReward * dmgRatio(pid)));
       const mod = rewardModsByPid[pid] || { goldMultiplier: 1 };
-      const share = Math.max(1, Math.round(baseShare * mod.goldMultiplier));
+      const share = Math.max(1, Math.round(baseShare * mod.goldMultiplier * fatMul(pid)));
       try {
         await sc.rewardService.grantCurrency({
           discordId: pid, displayName: pid === discordId ? displayName : pid,
@@ -3479,7 +3524,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const myBaseShare = Math.max(1, Math.round(effectiveGoldReward * dmgRatio(discordId)));
     myBaseGoldShare = myBaseShare;
     const myMod = rewardModsByPid[discordId] || { goldMultiplier: 1, goldPct: 0 };
-    const myShare = Math.max(1, Math.round(myBaseShare * myMod.goldMultiplier));
+    const myShare = Math.max(1, Math.round(myBaseShare * myMod.goldMultiplier * fatMul(discordId)));
     const pct = `${Math.round(dmgRatio(discordId) * 100)}%`;
     const poolNote = dynamicGoldPool > (monster.goldReward || 0) ? `（動態金幣池）` : "";
     const modNote = myMod.goldPct > 0 ? `，個人加成 +${Math.round(myMod.goldPct)}%` : "";
@@ -3500,12 +3545,12 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const myBaseShare = Math.max(1, Math.round(effectiveExpReward * dmgRatio(discordId)));
     myBaseExpShare = myBaseShare;
     const myMod = rewardModsByPid[discordId] || { expMultiplier: 1, expPct: 0 };
-    const myShare = Math.max(1, Math.round(myBaseShare * myMod.expMultiplier));
+    const myShare = Math.max(1, Math.round(myBaseShare * myMod.expMultiplier * fatMul(discordId)));
     let killerLvLine = "";
     for (const pid of participants) {
       const baseShare = Math.max(1, Math.round(effectiveExpReward * dmgRatio(pid)));
       const mod = rewardModsByPid[pid] || { expMultiplier: 1 };
-      const share = Math.max(1, Math.round(baseShare * mod.expMultiplier));
+      const share = Math.max(1, Math.round(baseShare * mod.expMultiplier * fatMul(pid)));
       try {
         const expResult = await sc.progressService.grantExp({
           discordId: pid, displayName: pid === discordId ? displayName : pid,

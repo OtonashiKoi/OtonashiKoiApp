@@ -129,7 +129,10 @@ async function main() {
     // 掛機狀態整份清掉：避免「賽季前在高階區掛機的 session」殘留，重置後一結算爆一批高階經驗(等級瞬跳)。
     const idleState = await idleCol.findOne({ playerId: pid });
     const hadIdle = Boolean(idleState && (idleState.discordSession || idleState.lastClaimSummary || idleState.dailyClaim));
-    if (APPLY) await idleCol.deleteMany({ playerId: pid });
+    if (APPLY) {
+      await idleCol.deleteMany({ playerId: pid });
+      await db.collection("farmFatigue").deleteMany({ discordId: pid }); // 耕作疲勞狀態一併清
+    }
 
     const invBefore = (p.inventory || []).length;
     console.log(`[${APPLY ? "DONE" : "DRY"}] ${pid}｜Lv ${p.level}→1｜金幣 ${goldBefore}→0（鑽石保留 ${diamondKeep}）｜背包 ${invBefore}→${keepInv.length}（留稱號 ${titleCount}+裝備中${equippedTitle ? 1 : 0}、收藏 ${collCount}）｜寵物 ${(p.pets || []).length}→0｜劇情進度 ${storyDone}→0(序章重播)｜掛機${hadIdle ? "狀態清除" : "無"}`);
