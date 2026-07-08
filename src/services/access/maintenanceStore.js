@@ -14,7 +14,7 @@ const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 
 const COLLECTION = "maintenanceState";
 const DOC_ID = "default";
-const REFRESH_MS = 15 * 1000;
+const REFRESH_MS = 60 * 1000; // 背景刷新只為「後台改設定不用重啟就生效」；到點自動開/關服是即時現算，不靠這個
 
 // 預設值（DB 沒有文件時的後備）。實際值以 DB 文件為準。
 const DEFAULTS = {
