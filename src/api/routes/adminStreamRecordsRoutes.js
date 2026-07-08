@@ -121,6 +121,7 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
       const r = await gb.resetSeason();
       await scBar.reset({ archive: true }).catch(() => {});
       await require("../../services/stream/memberEventsService").resetSeason().catch(() => {});
+      await require("../../services/stream/viewerService").resetSeason().catch(() => {});
       res.json(ok(r, "season reset"));
     } catch (err) { next(err); }
   });
@@ -161,11 +162,21 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
     } catch (err) { next(err); }
   });
 
-  // 公開：OBS overlay 用（會員數 + SC 累積，一次拿）
+  // 公開：即時觀看人數（OBS/後台/App 用）
+  router.get("/api/stream/viewers", async (_req, res, next) => {
+    try {
+      res.json(ok(await require("../../services/stream/viewerService").getPublicState()));
+    } catch (err) { next(err); }
+  });
+
+  // 公開：OBS overlay 用（會員數 + SC 累積 + 觀看人數，一次拿）
   router.get("/api/stream/overlay", async (_req, res, next) => {
     try {
-      const [sc, memberCount] = await Promise.all([scBar.getPublicProgress(), countActiveMembers()]);
-      res.json(ok({ members: { count: memberCount }, sc }));
+      const viewerService = require("../../services/stream/viewerService");
+      const [sc, memberCount, viewers] = await Promise.all([
+        scBar.getPublicProgress(), countActiveMembers(), viewerService.getPublicState()
+      ]);
+      res.json(ok({ members: { count: memberCount }, sc, viewers }));
     } catch (err) { next(err); }
   });
 

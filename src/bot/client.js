@@ -810,9 +810,13 @@ function createBotClient() {
 
     // 啟動 OneComme 直播留言監聽（同時中繼給聊天室 overlay 的 SSE，讓別台電腦也能讀）
     const { broadcastComment } = require("../services/chat/chatOverlayHub");
+    const viewerService = require("../services/stream/viewerService");
     startFetcher((comment) => {
       try { broadcastComment(comment); } catch (_) {}
       handleStreamComment(comment);
+    }, (meta) => {
+      // OneComme meta → 更新即時觀看人數（第四線基礎）
+      try { viewerService.update(meta).catch(() => {}); } catch (_) {}
     });
     // 啟動閒置自動換怪計時器（可透過 DISABLE_AUTO_ROTATE=1 暫時停用）
     if (process.env.DISABLE_AUTO_ROTATE === '1') {
