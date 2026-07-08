@@ -671,9 +671,20 @@ async function checkSpam(message) {
   if (await serviceContext.accessControlService.isDiscordPlayerWhitelisted(member)) return;
   if (member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
 
+  // @everyone / @here 標註全體 → 直接禁言（管理員/白名單已於上方豁免）
+  if (message.mentions?.everyone) {
+    await doMuteAndAnnounce(member, message, "亂用 @everyone／@here 標註全體", `${message.guild.id}:${message.author.id}`);
+    return;
+  }
+
   const key = `${message.guild.id}:${message.author.id}`;
   const now = Date.now();
-  const content = (message.content || "").trim().toLowerCase();
+  // 訊息「簽章」＝文字＋附件檔名/URL＋貼圖ID → 同句/同圖重複才算刷屏；不同圖不會誤判
+  const attachSig = message.attachments?.size
+    ? [...message.attachments.values()].map((a) => a.name || a.url || "").sort().join(",")
+    : "";
+  const stickerSig = message.stickers?.size ? [...message.stickers.keys()].sort().join(",") : "";
+  const content = [(message.content || "").trim().toLowerCase(), attachSig, stickerSig].join("|");
 
   let state = spamTracker.get(key);
   if (!state) {

@@ -61,7 +61,7 @@ const config = {
   // Moderation / SpamGuard 設定（可由 .env 調整）
   moderation: {
     muteDurationMs: Number(process.env.MOD_MUTE_MS || 12 * 60 * 60 * 1000),
-    sameMsgLimit: Number(process.env.SAME_MSG_LIMIT || 4),
+    sameMsgLimit: Number(process.env.SAME_MSG_LIMIT || 3),
     burstLimit: Number(process.env.BURST_LIMIT || 6),
     burstWindowMs: Number(process.env.BURST_WINDOW_MS || 3000),
     spamAnnounceChannelId: process.env.SPAM_ANNOUNCE_CHANNEL_ID || "1292448143946027039",
