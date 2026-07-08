@@ -335,6 +335,45 @@ class PetService {
     return parts.length ? parts.join("、") : null;
   }
 
+  // 種族特性清單（逐項寫出，像戰鬥屬性一樣）：定位 / 戰鬥被動 / 採集偏好 / 速度 / 品質
+  _speciesTraits(pet) {
+    const mod = pet.gatherMod || DEFAULT_GATHER_MOD;
+    const out = [];
+    const hasCombat = Array.isArray(pet.combatPassives) && pet.combatPassives.length;
+    const eggType = String(pet.eggType || "").toLowerCase();
+    // 定位
+    if (hasCombat) out.push({ icon: "⚔️", label: "定位", value: "戰鬥夥伴（出戰時生效）" });
+    else out.push({ icon: "🌾", label: "定位", value: eggType === "slime" ? "採集型（金幣／雜項）" : "採集型（強化石／裝備）" });
+    // 戰鬥被動（狼系）
+    if (hasCombat) {
+      const c = this._combatSummary(pet);
+      if (c) out.push({ icon: "💥", label: "戰鬥被動", value: c });
+    }
+    // 採集偏好
+    const KIND = { gold: "金幣", gem: "強化石", equipment: "裝備", curse: "詛咒藥水" };
+    if (Array.isArray(mod.lootTable) && mod.lootTable.length) {
+      const total = mod.lootTable.reduce((s, e) => s + Math.max(0, Number(e.weight) || 0), 0) || 1;
+      const parts = mod.lootTable.map((e) => `${KIND[e.kind] || e.kind} ${Math.round((Number(e.weight) || 0) / total * 100)}%`);
+      out.push({ icon: "🎁", label: "採集偏好", value: parts.join(" / ") });
+    } else if (Number.isFinite(Number(mod.gemBias))) {
+      const gem = Math.round(Number(mod.gemBias) * 100);
+      out.push({ icon: "🎁", label: "採集偏好", value: `強化石 ${gem}% / 裝備 ${100 - gem}%` });
+    }
+    // 採集速度（真實速度＝1/間隔倍率；間隔 2× → 半速 −50%）
+    const spd = Number(mod.intervalMult) || 1;
+    if (spd !== 1) {
+      const speedPct = Math.round((1 / spd - 1) * 100);
+      out.push({ icon: speedPct > 0 ? "⚡" : "🐢", label: "採集速度", value: `${speedPct > 0 ? "+" : "−"}${Math.abs(speedPct)}%（${speedPct > 0 ? "快" : "慢"}）` });
+    }
+    // 產出品質
+    if (Number(mod.qualityUpChance) > 0) {
+      out.push({ icon: "✨", label: "產出品質", value: `${Math.round(Number(mod.qualityUpChance) * 100)}% 機率高一階` });
+    }
+    // 產出階級（採集物階級 = 寵物階級含以下）
+    out.push({ icon: "🏷️", label: "產出階級", value: `≤ ${petTierOf(pet)} 階` });
+    return out;
+  }
+
   _toView(pet) {
     const hatchPct = pet.stage === "egg"
       ? Math.min(100, Math.round(((pet.hatchProgress || 0) / HATCH_THRESHOLD) * 100))
@@ -345,6 +384,7 @@ class PetService {
       petId: pet.petId || null,
       eggType: String(pet.eggType || "dragon").toLowerCase(), // 蛋種：dragon/slime/wolf（決定 emoji）
       combatBonus: pet.stage === "grown" ? this._combatSummary(pet) : null, // 狼系戰鬥加成摘要
+      traits: pet.stage === "grown" ? this._speciesTraits(pet) : null, // 種族特性清單（逐項）
       species: pet.species || null,
       speciesName: pet.stage === "egg" ? null : (pet.speciesName || null), // 蛋階段不揭曉種類
       // 蛋階段不揭曉圖片

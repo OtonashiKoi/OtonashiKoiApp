@@ -36,12 +36,12 @@ function petLine(p) {
     return `${eggEmoji(p)} ${eggName(p)}（孵化中 ${p.hatchPct}%｜${p.hatchProgress}/${p.hatchThreshold}）— 孵化後才揭曉品種`;
   }
   const name = p.nickname || p.speciesName || "未命名";
-  const speed = p.gatherIntervalMin ? `每 ${p.gatherIntervalMin} 分採 1 個` : "";
-  const gemPct = p.gemBias != null ? `石 ${Math.round(p.gemBias * 100)}%` : "";
-  const quality = p.qualityUpChance ? `｜${Math.round(p.qualityUpChance * 100)}% 高一階` : "";
-  const combat = p.combatBonus ? `｜⚔️ ${p.combatBonus}` : "";
-  const trait = [speed, gemPct].filter(Boolean).join("、");
-  return `${eggEmoji(p)} ${name}（${p.tier} 階）｜飽食 ${p.satiety}/${p.satietyMax}（可撐 ${p.satietyHours}h）｜採集 ${p.gatherCount}/${p.gatherCap}（產 ≤${p.producesTier} 階）${combat}\n     └ ${trait}${quality}`;
+  const speedTxt = p.gatherIntervalMin ? `每 ${p.gatherIntervalMin} 分採 1 個` : "";
+  // 種族特性逐項（後端 traits）；退回舊欄位以防萬一
+  const traitList = Array.isArray(p.traits) && p.traits.length
+    ? p.traits.map((t) => `${t.icon} ${t.label}：${t.value}`).join("｜")
+    : [speedTxt, p.combatBonus ? `⚔️ ${p.combatBonus}` : ""].filter(Boolean).join("｜");
+  return `${eggEmoji(p)} ${name}（${p.tier} 階）｜飽食 ${p.satiety}/${p.satietyMax}（可撐 ${p.satietyHours}h）｜採集 ${p.gatherCount}/${p.gatherCap}\n     └ 🧬 ${traitList}${speedTxt ? `｜⏱️ ${speedTxt}` : ""}`;
 }
 
 // ─── 外層：公共「寵物採集站」（介紹 + 一顆按鈕進入個人區） ───

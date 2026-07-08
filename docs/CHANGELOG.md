@@ -85,6 +85,7 @@
 | 57 | 2026-07-09 | 拍賣卡片顯示裝備數值＋點擊看詳情 | 承 #56：拍賣卡片除附魔外再加**「📊 裝備數值」**行(力量+10、體質+5…)；卡片**可點(🔍)開詳情彈窗** AuctionDetailModal(大圖/階級/強化+N/裝備數值/附魔屬性+效果分區/賣家/武器/價格)。browse＋我的上架皆可點。後端 equipStats 已於 #56 補齊，本次純前端。app 已 build 部署 | 新功能 | ✅ | (本次) auction.tsx |
 | 58 | 2026-07-09 | 修：YT刷新會員位階改真的即時查API + 診斷token失效 | 「刷新會員位階」對YT沒作用。根因兩層：(1)`/api/me/bindings` YT分支寫死「一律讀存檔不查API」(過時註解)→改成用 creator token 即時查 members API、查到就更新binding位階+刷新檢查時間、查不到才退回直播彈幕存檔(附 creator-token 失敗5分鐘冷卻避免每次載入都重試Google)。(2)**真正blocker：YT creator refresh token 已失效**(Google回 invalid_grant/Bad Request，status=expired since 6/13)→需到 /admin/creator-auth 重新授權YT。程式已就緒，token 重授權後刷新即生效 | 修正 | ✅ | (本次) playerAppRoutes |
 | 59 | 2026-07-09 | YT會員刷新改「聊天室is-member＋Discord身分組位階」不靠API | 承 #58：YT creator token 會反覆過期，改用玩家定案做法——**不查 YouTube API**。`/api/me/bindings` YT分支改：①是不是會員=直播聊天室徽章偵測(linkedSupportAtLink，OneComme 綁定/留言當下記)②位階=玩家 Discord 身分組(progress.playerTier，membershipTracker 同步)。刷新時重新解析、有變寫回 binding、checkedAt 更新為現在(時間會刷新)。移除 #58 的 members API 呼叫＋冷卻。實測音無恋 isMember=true/SS/來源DC身分組。前端刷新鈕本就重抓此API，免改app | 修正 | ✅ | (本次) playerAppRoutes |
+| 60 | 2026-07-09 | 寵物「種族特性」逐項寫出(像戰鬥屬性) | 每種寵物特性本就不同(龍/史萊姆採集偏好差異、狼系戰鬥被動)但只有狼的加成有寫出來。新增 petService `_speciesTraits`：把 gatherMod/combatPassives 轉成可讀清單——定位/戰鬥被動/採集偏好(掉落表%或石裝%)/採集速度(1/間隔真實速度)/產出品質(高一階%)/產出階級。回傳 `traits`。網頁寵物卡加「🧬種族特性」區塊逐項列、DC面板petLine同步。實測雷鳴龍(石70%/速+43%)、黃金龍(慢/30%高階)、月影狼王(最終傷害+5%+咬擊)等各不同 | 新功能 | ✅ | (本次) petService/petPanelView/pets.tsx/usePets.ts |
 <!-- 新增修改請往下加列，或插入對應功能 -->
 
 ## V0.4 · 後台/工具（玩家端無感）
