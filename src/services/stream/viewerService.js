@@ -38,24 +38,30 @@ async function _persistPeak(nowIso) {
   } catch (_) { /* noop */ }
 }
 
-// 目前總觀看數（只加總「未過期」的直播枠）
+// 目前總觀看數（只加總「未過期」且「正在直播(isLive)」的直播枠）
 function _currentTotal(nowMs) {
   let total = 0;
   for (const s of byService.values()) {
-    if (nowMs - s.updatedAt <= STALE_MS) total += Number(s.viewer) || 0;
+    if (s.isLive && nowMs - s.updatedAt <= STALE_MS) total += Number(s.viewer) || 0;
   }
   return total;
 }
 
 /**
  * 收到 OneComme meta → 更新某直播枠觀看數。
- * @param {{ service?: string, id?: string, viewer: number, likes?: number }} info
+ * @param {{ service?: string, id?: string, viewer: number, likes?: number, isLive?: boolean }} info
  */
 async function update(info) {
   await _loadPeakOnce();
   const nowMs = Date.now();
-  const key = String(info.service || info.id || "default");
-  byService.set(key, { viewer: Number(info.viewer) || 0, likes: Number(info.likes) || 0, updatedAt: nowMs });
+  const key = String(info.id || info.service || "default"); // id 穩定，優先當 key
+  byService.set(key, {
+    service: info.service || key,
+    viewer: Number(info.viewer) || 0,
+    likes: Number(info.likes) || 0,
+    isLive: info.isLive === true,
+    updatedAt: nowMs,
+  });
 
   const total = _currentTotal(nowMs);
   if (total > peak) {
@@ -70,10 +76,11 @@ async function update(info) {
 async function getPublicState() {
   await _loadPeakOnce();
   const nowMs = Date.now();
-  const services = [...byService.entries()].map(([service, s]) => ({
-    service,
+  const services = [...byService.entries()].map(([key, s]) => ({
+    service: s.service || key,
     viewer: Number(s.viewer) || 0,
     likes: Number(s.likes) || 0,
+    isLive: s.isLive === true,
     stale: nowMs - s.updatedAt > STALE_MS,
     updatedAt: new Date(s.updatedAt).toISOString(),
   }));
@@ -82,7 +89,7 @@ async function getPublicState() {
     current,
     peak: Math.max(peak, current),
     peakAt,
-    live: services.some((x) => !x.stale && x.viewer > 0),
+    live: services.some((x) => x.isLive && !x.stale),
     services,
   };
 }

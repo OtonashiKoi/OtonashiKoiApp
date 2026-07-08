@@ -10,7 +10,7 @@ const { isAppError } = require("../shared/errors");
 const { isWorldBossZone } = require("../services/worldBoss/worldBossService");
 const { handleCommand, handleButton, handleSelectMenu, handleModal } = require("./commands");
 const { serviceContext, setBotClient, getBotClient } = require("./runtimeContext");
-const { startFetcher } = require("./commentFetcher");
+const { startFetcher, startViewerPoller } = require("./commentFetcher");
 const { handleStreamComment } = require("./handlers/streamHandlers");
 const { startIdleRotateTimer, refreshEliteWorldBossPanel, refreshMonsterZonePanels, _doIdleRotate, startWorldBossRespawnWatcher, startMonsterPanelSweep } = require("./handlers/monsterZoneHandlers");
 const { initPkArenaState } = require("./handlers/pkArenaHandlers");
@@ -815,9 +815,11 @@ function createBotClient() {
       try { broadcastComment(comment); } catch (_) {}
       handleStreamComment(comment);
     }, (meta) => {
-      // OneComme meta → 更新即時觀看人數（第四線基礎）
+      // OneComme WS meta → 更新即時觀看人數（第四線基礎）
       try { viewerService.update(meta).catch(() => {}); } catch (_) {}
     });
+    // 另外每 20 秒輪詢 OneComme REST /api/services（觀看數的可靠來源）
+    startViewerPoller((info) => { try { viewerService.update(info).catch(() => {}); } catch (_) {} }, 20_000);
     // 啟動閒置自動換怪計時器（可透過 DISABLE_AUTO_ROTATE=1 暫時停用）
     if (process.env.DISABLE_AUTO_ROTATE === '1') {
       console.log('[IdleRotate] disabled by DISABLE_AUTO_ROTATE');

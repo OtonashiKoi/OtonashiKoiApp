@@ -22,16 +22,45 @@ function pickNumber(...vals) {
   }
   return null;
 }
-// 從 OneComme 一個「直播枠(service/meta)」物件抽出觀看數
+// 從 OneComme 一個「直播枠」物件抽出觀看數。
+// 相容兩種來源：REST /api/services 的 service 物件(有 .meta)、WS meta 的 data({type, service})。
+// 實測欄位：service.meta.viewer / service.meta.isLive / service.meta.upVote(讚) / service.name。
 function extractViewerInfo(o) {
   if (!o || typeof o !== "object") return null;
-  const meta = o.meta || o.data || o;
-  const viewer = pickNumber(meta.viewer, meta.viewers, meta.viewCount, meta.watching, o.viewer, o.viewers);
-  const likes = pickNumber(meta.likes, meta.like, o.likes);
-  const service = o.service || o.platform || meta.service || null;
-  const id = o.id || meta.id || null;
+  const svc = (o.service && typeof o.service === "object") ? o.service : o;
+  const meta = svc.meta || o.meta || {};
+  const viewer = pickNumber(meta.viewer, meta.viewers, meta.viewCount, svc.viewer, o.viewer);
+  const likes = pickNumber(meta.upVote, meta.likes, meta.like);
+  const isLive = meta.isLive === true;
+  const service = o.type || svc.name || meta.service || null; // "twitch"/"youtube" 或 "#TWITCH"
+  const id = svc.id || o.id || meta.id || null;
   if (viewer == null && likes == null) return null;
-  return { service, id, viewer, likes };
+  return { service, id, viewer, likes, isLive };
+}
+
+// REST 輪詢：直接讀 OneComme /api/services（schema 已確認，比 WS meta 可靠）
+const ONECOMME_API_BASE = process.env.ONECOMME_API_BASE || "http://127.0.0.1:11180";
+async function pollServicesOnce(onMeta) {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(`${ONECOMME_API_BASE}/api/services`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) return;
+    const services = await res.json();
+    if (!Array.isArray(services)) return;
+    for (const svc of services) {
+      const info = extractViewerInfo(svc);
+      if (info && info.viewer != null) { try { onMeta(info); } catch (_) { /* noop */ } }
+    }
+  } catch (_) { /* OneComme 未開/沒開台，靜默略過 */ }
+}
+function startViewerPoller(onMeta, intervalMs = 20_000) {
+  if (typeof onMeta !== "function") return null;
+  pollServicesOnce(onMeta);
+  const timer = setInterval(() => pollServicesOnce(onMeta), intervalMs);
+  timer.unref?.();
+  return timer;
 }
 
 let _metaRawLogged = false;
@@ -128,4 +157,4 @@ function startFetcher(onComment, onMeta) {
   });
 }
 
-module.exports = { startFetcher };
+module.exports = { startFetcher, startViewerPoller, pollServicesOnce };
