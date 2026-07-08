@@ -200,6 +200,19 @@ function createMongoRepositories() {
         emitRealtimeInvalidate("wallet", playerId);
         return updated;
       },
+      // 原子購買背包格：條件扣 diamondCost 顆鑽（$gte 守餘額）並加 slotsAdd 格永久背包格。
+      // 鑽石不足 → 回傳 null（不會扣成負數，也不會加格）。
+      async purchaseBackpackSlots(playerId, diamondCost, slotsAdd) {
+        const col = await collection("wallets");
+        const updated = await col.findOneAndUpdate(
+          { playerId, diamond: { $gte: diamondCost } },
+          { $inc: { diamond: -diamondCost, bonusBackpackSlots: slotsAdd }, $set: { updatedAt: new Date().toISOString() } },
+          { returnDocument: "after" }
+        );
+        if (!updated) return null; // 鑽石不足
+        emitRealtimeInvalidate("wallet", playerId);
+        return updated;
+      },
       async listAll() {
         return (await collection("wallets")).find({}).toArray();
       }

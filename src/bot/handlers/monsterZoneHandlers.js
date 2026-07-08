@@ -3677,7 +3677,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       if (droppedItems.length > 0) {
         // 背包容量：裝備滿了就不再撿多出來的裝備（素材/寶石/蛋照收），依會員等級決定上限
         let equipCap = Infinity;
-        try { equipCap = (await require("../../services/backpack/backpackService").resolveCapacity(luckyPid)).cap; } catch (_) { /* 解析失敗不擋 */ }
+        try { equipCap = (await require("../../services/backpack/backpackService").resolveEffectiveCapacity(luckyPid)).cap; } catch (_) { /* 解析失敗不擋 */ }
         const skippedByFullBag = [];
         let savedDrop = false;
         for (let attempt = 0; attempt < 3 && !savedDrop; attempt++) {

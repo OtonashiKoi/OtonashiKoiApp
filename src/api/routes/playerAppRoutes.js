@@ -1376,15 +1376,38 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       } catch (_) { /* 合併失敗時回原始快照，不擋背包 */ }
 
-      // 背包容量（裝備佔格；依會員等級）
+      // 背包容量（裝備佔格；依會員等級 + 花鑽購買的永久格）
       let backpack = null;
       try {
         const bp = require("../../services/backpack/backpackService");
-        const { cap, label, tier } = await bp.resolveCapacity(discordId);
-        backpack = { equipmentCount: bp.countEquipment(inventory), capacity: cap, tier, tierLabel: label };
+        const eff = await bp.resolveEffectiveCapacity(discordId);
+        backpack = {
+          equipmentCount: bp.countEquipment(inventory),
+          capacity: eff.cap,
+          tier: eff.tier,
+          tierLabel: eff.label,
+          tierCap: eff.tierCap,
+          bonusSlots: eff.bonusSlots,
+          maxCapacity: bp.MAX_CAPACITY,
+          canBuyMore: eff.canBuyMore,
+          slotDiamondCost: bp.DIAMOND_COST_PER_PURCHASE,
+          slotsPerPurchase: bp.SLOTS_PER_PURCHASE,
+        };
       } catch (_) { /* 容量解析失敗不擋背包 */ }
 
       res.json(ok({ inventory, equipped, backpack }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 3.0b 花 1 鑽永久 +20 背包格（上限 2000）
+  router.post("/api/me/backpack/purchase-slots", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const bp = require("../../services/backpack/backpackService");
+      const result = await bp.purchaseSlots(discordId);
+      res.json(ok(result, `背包永久 +${bp.SLOTS_PER_PURCHASE} 格`));
     } catch (err) {
       next(err);
     }
