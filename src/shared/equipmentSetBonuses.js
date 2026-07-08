@@ -65,6 +65,15 @@ const SET_DEFS = {
       { count: 7, desc: "掉落率 +10%", numeric: { dropPct: 10 } },
     ],
   },
+  steel: {
+    name: "鋼鐵套裝",
+    note: "定位：A 階防禦肉盾（6 件防具）",
+    tiers: [
+      { count: 3, desc: "受到傷害 -6%", effects: () => [passiveEff("damage_reduction", 6)] },
+      { count: 5, desc: "最大生命 +10%", effects: () => [passiveEff("max_hp_multiplier_up", 10)] },
+      { count: 6, desc: "受到傷害 -6%（疊加）", effects: () => [passiveEff("damage_reduction", 6)] },
+    ],
+  },
   hellfire: {
     name: "焚獄套裝",
     note: "定位：基礎傷害 + 火焰區防禦",
