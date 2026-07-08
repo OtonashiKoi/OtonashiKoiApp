@@ -169,6 +169,9 @@ function createApiServer(discordClient) {
       if (SPA_EXCLUDE.test(req.path)) return next();
       if (req.path.includes(".")) return next(); // 有副檔名的，靜態 middleware 已處理 / 404
       if (fs.existsSync(indexPath)) {
+        // index.html 永不快取：確保開根網址/SPA 路由時，永遠抓到最新 index →
+        // 指向最新 hash 過的 JS/CSS（否則瀏覽器/Cloudflare 會卡在舊版，選單/功能停在舊狀態）
+        res.setHeader("Cache-Control", "no-store, must-revalidate");
         res.sendFile(indexPath);
       } else {
         next();

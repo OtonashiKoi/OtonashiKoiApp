@@ -100,7 +100,7 @@ function createStoryRoutes(serviceContext, discordClient) {
       const { runCombatLoop } = require("../../shared/combatLoop");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
-      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating });
+      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
 
       const result = runCombatLoop(pStats, monster.calc, monster.name, monster.calc.maxHp, battleNode.maxRounds || undefined, {
         playerName: req.playerRecord.displayName || "我",

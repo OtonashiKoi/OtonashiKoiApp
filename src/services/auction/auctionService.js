@@ -266,7 +266,8 @@ class AuctionService {
     if (pIdx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
     const pet = pets[pIdx];
     if (pet.stage !== "grown") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "蛋還沒孵化，不能上架（未孵化的蛋可從背包上架）", 400);
-    if (progress.activePetUuid === petUuid) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "出戰中的寵物不能上架，請先切換出戰寵物", 400);
+    // 出戰中的寵物上架：自動取消出戰（託管即離場），玩家不必先手動切換。
+    if (progress.activePetUuid === petUuid) progress.activePetUuid = null;
 
     // 託管：從 pets[] 移除
     pets.splice(pIdx, 1);

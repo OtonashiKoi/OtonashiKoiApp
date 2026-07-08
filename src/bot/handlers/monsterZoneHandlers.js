@@ -1558,7 +1558,7 @@ function createBattleParticipantCache(sc) {
           equipped,
           inventory
         });
-        const stats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], inventory, { pkRating: progress?.pkRating });
+        const stats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], inventory, { pkRating: progress?.pkRating, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
 
         return {
           progress,
@@ -1733,7 +1733,14 @@ function pickTaunt(kind, monsterName) {
 }
 
 // 等級里程碑廣播（10 / 15 等）
-const LEVEL_MILESTONES = new Set([10, 15]);
+// 關鍵等級里程碑：對齊實際遊戲門檻（轉職 / 組隊爬塔 / 世界王 / 終局世界王）
+const LEVEL_MILESTONE_MSG = {
+  10: (m, n) => `🎉 恭喜 ${m} **${n}** 升上 **Lv.10**！已達**轉職門檻**——快去完成職業試煉、選定你的職業吧！⚔️`,
+  30: (m, n) => `🗼 恭喜 ${m} **${n}** 升上 **Lv.30**！**組隊爬塔**開放——揪隊挑戰六人攻塔！🤝`,
+  40: (m, n) => `👑 恭喜 ${m} **${n}** 升上 **Lv.40**！三條路線開放，挑戰**大史王**吧！🔥`,
+  50: (m, n) => `🐉 恭喜 ${m} **${n}** 升上 **Lv.50**！踏入終局——挑戰世界王 **古龍王 / 地獄狼牙王**！⚔️`,
+};
+const LEVEL_MILESTONES = new Set(Object.keys(LEVEL_MILESTONE_MSG).map(Number));
 async function _announceLevelMilestone(sc, discordId, displayName, prevLevel, newLevel) {
   try {
     const hit = [];
@@ -1754,19 +1761,13 @@ async function _announceLevelMilestone(sc, discordId, displayName, prevLevel, ne
     if (!channel?.isTextBased?.()) return;
 
     for (const lv of hit) {
-      if (lv === 10) {
-        await sendAnnouncementWebhook(
-          channel,
-          `🎉 恭喜 <@${discordId}> **${displayName}** 升上 **Lv.10**！踏入中級冒險者的行列！⚔️`,
-          { allowedMentions: { users: [discordId] }, context: "level milestone webhook" }
-        );
-      } else if (lv === 15) {
-        await sendAnnouncementWebhook(
-          channel,
-          `🌟 恭喜 <@${discordId}> **${displayName}** 達到 **Lv.15**！精英冒險者降臨！🔥`,
-          { allowedMentions: { users: [discordId] }, context: "level milestone webhook" }
-        );
-      }
+      const build = LEVEL_MILESTONE_MSG[lv];
+      if (!build) continue;
+      await sendAnnouncementWebhook(
+        channel,
+        build(`<@${discordId}>`, displayName),
+        { allowedMentions: { users: [discordId] }, context: "level milestone webhook" }
+      );
     }
   } catch (_) {}
 }
@@ -2451,7 +2452,7 @@ async function handleEnterBattle(interaction) {
       const petEntry = sc.petService?.buildPetCombatEntry?.(progress);
       if (petEntry) equipped = { ...equipped, pet_companion: petEntry };
     } catch (_) { /* 寵物加成失敗不影響戰鬥 */ }
-    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, zone: zoneKey });
+    const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, zone: zoneKey, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
     const participantCache = createBattleParticipantCache(sc);
     let currentSnapshot = {
       progress,

@@ -1062,7 +1062,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       try {
         const { calcPlayerStats } = require("../../shared/combatStats");
         mergedEquipment = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
-        const cs = calcPlayerStats(attrs, mergedEquipment, progress?.activeEffects || [], progress?.inventory || []);
+        const cs = calcPlayerStats(attrs, mergedEquipment, progress?.activeEffects || [], progress?.inventory || [], { petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
         // 計算裝備屬性加成
         for (const item of Object.values(mergedEquipment)) {
           if (!item?.equipStats) continue;
@@ -2539,7 +2539,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         if (petEntry) equipped.pet_companion = petEntry;
       } catch (_) { /* 寵物加成失敗不影響戰鬥 */ }
       // 與 DC 一致：傳 pkRating + zone，讓裝備的區域條件特效生效（如龍系武器在龍族之領 +20%）
-      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, zone: zoneKey });
+      const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, zone: zoneKey, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
 
       // ── 共鬥光環系統 ──
       const freshStateForAura = await serviceContext.monsterService.getState(zoneKey);
@@ -2593,7 +2593,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (!auraProgress) continue;
           const auraProviderEquipped = await mergeEquippedFromLibrary(auraProgress.equipment || {}, serviceContext.itemRepository);
           const auraAttrs = auraProgress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-          const auraProviderStats = calcPlayerStats(auraAttrs, auraProviderEquipped, auraProgress.activeEffects || [], auraProgress.inventory || []);
+          const auraProviderStats = calcPlayerStats(auraAttrs, auraProviderEquipped, auraProgress.activeEffects || [], auraProgress.inventory || [], { petStat: require("../../shared/petDex").statBonusOf(auraProgress?.petDex) });
           const scaled = scaleSupportPartyEffects(
             (aura.effects || []).map(e => ({ ...e, sourceName: aura.displayName || null })),
             { providerStats: auraProviderStats, equipped: auraProviderEquipped }
@@ -3448,6 +3448,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try { const r = await serviceContext.petService.setActivePet(req.playerRecord.discordId, req.body?.petUuid); res.json(ok(r, "已設為出戰寵物")); }
     catch (err) { if (err?.message) return res.status(400).json(fail("PET_ACTIVE_FAILED", err.message)); next(err); }
   });
+  router.post("/api/me/pets/deactivate", requireAuth, async (req, res, next) => {
+    try { const r = await serviceContext.petService.deactivatePet(req.playerRecord.discordId); res.json(ok(r, "已取消出戰")); }
+    catch (err) { if (err?.message) return res.status(400).json(fail("PET_DEACTIVATE_FAILED", err.message)); next(err); }
+  });
   router.post("/api/me/pets/release", requireAuth, async (req, res, next) => {
     try { const r = await serviceContext.petService.releasePet(req.playerRecord.discordId, req.body?.petUuid); res.json(ok(r, "已放生")); }
     catch (err) { if (err?.message) return res.status(400).json(fail("PET_RELEASE_FAILED", err.message)); next(err); }
@@ -3605,7 +3609,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = prog?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = await mergeEquippedFromLibrary(prog?.equipment || {}, serviceContext.itemRepository);
-      const ps = calcPlayerStats(attrs, equipped, prog?.activeEffects || [], prog?.inventory || []);
+      const ps = calcPlayerStats(attrs, equipped, prog?.activeEffects || [], prog?.inventory || [], { petStat: require("../../shared/petDex").statBonusOf(prog?.petDex) });
       const s = { floor: 1, playerHp: 0, playerMaxHp: 0, baseAtk: ps.atk || 1, baseStats: ps, equipped, inventory: prog?.inventory || [], used: new Set(), alive: true, settled: false, startedAt: Date.now() };
       syncSoloTowerMaxHp(s, true); // 第 1 層 maxHp(含樓層 HP 加成)+ 滿血開局
       s.upcoming = await pickTowerMonster(1, s.used); // 預抽第 1 層怪物供面板顯示

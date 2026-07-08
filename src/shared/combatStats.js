@@ -39,7 +39,9 @@ const EQUIPPED_TIER_SLOTS = TIER_SET_SLOTS;
 /**
  * 依玩家基礎屬性與已裝備物品計算戰鬥數值。
  */
-function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = [], { pkRating, zone = null } = {}) {
+function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = [], { pkRating, zone = null, petStat = 0 } = {}) {
+  // 🐾寵物圖鑑收集里程碑：全屬性 +N（當作基礎屬性加成，驅動所有衍生數值）
+  const _petStat = Math.max(0, Number(petStat) || 0);
   const tierSetBonuses = getEquipmentTierSetBonuses(equipped);
   // 併入具名套裝(秘銀/火焰…)的數值加成，讓下游倍率與顯示一併吃到
   const _setNumeric = getSetNumericBonuses(equipped);
@@ -66,17 +68,17 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
       }
     }
   }
-  const S = str + bonus.str + tierSetBonuses.stats.str;
-  const A = agi + bonus.agi;
-  const V = vit + bonus.vit;
-  const I = INT + bonus.int + tierSetBonuses.stats.int;
-  const D = dex + bonus.dex + tierSetBonuses.stats.dex;
-  const L = luk + bonus.luk;
+  const S = str + bonus.str + tierSetBonuses.stats.str + _petStat;
+  const A = agi + bonus.agi + _petStat;
+  const V = vit + bonus.vit + _petStat;
+  const I = INT + bonus.int + tierSetBonuses.stats.int + _petStat;
+  const D = dex + bonus.dex + tierSetBonuses.stats.dex + _petStat;
+  const L = luk + bonus.luk + _petStat;
 
   // ── 新 DEF 模型（baseVit → flat 減傷；equipVit → % 減傷） ──
   // 前 VIT（升等的）：每點 -1 固定傷害
   // 後 VIT（裝備的）：每 2 點 -1% 傷害（封頂 85%）；怪物技能傷害也吃此 def%
-  const baseVit = Math.max(0, vit);
+  const baseVit = Math.max(0, vit + _petStat); // 收集加成的 VIT 當基礎 → 給 flat 減傷
   const equipVit = Math.max(0, bonus.vit + (tierSetBonuses.stats.vit || 0));
   const flatDef = baseVit * 1;
   const pctDef = Math.min(85, equipVit / 2);

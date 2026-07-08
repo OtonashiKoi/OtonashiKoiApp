@@ -46,4 +46,9 @@ function computeDexBonuses(petDex, totalSpecies = 0) {
   return { score, maxScore, collected, totalSlots, pct: Math.round(pct), bonus, unlockedCount: unlocked.length };
 }
 
-module.exports = { RARITY_SCORE, PET_TIERS, PER_SPECIES_MAX, DEX_MILESTONES, scoreOf, computeDexBonuses };
+/** 圖鑑收集里程碑的「全屬性 +N」（傳給 calcPlayerStats 的 petStat）。 */
+function statBonusOf(petDex) {
+  return computeDexBonuses(petDex).bonus.statBonus || 0;
+}
+
+module.exports = { RARITY_SCORE, PET_TIERS, PER_SPECIES_MAX, DEX_MILESTONES, scoreOf, computeDexBonuses, statBonusOf };

@@ -392,7 +392,7 @@ async function handleProfile(interaction) {
     fallbackUsed = true;
     console.warn("[PlayerPanel] mergeEquippedFromLibrary failed, using snapshot equipment:", err?.message || err);
   }
-  const cs = calcPlayerStats(attrs, equipped, p.activeEffects || [], p.inventory || []);
+  const cs = calcPlayerStats(attrs, equipped, p.activeEffects || [], p.inventory || [], { petStat: require("../shared/petDex").statBonusOf(p?.petDex) });
   const calcHp    = Math.ceil(cs.maxHp);
   const calcAtk   = Math.ceil(cs.atk);
   const calcDef   = Math.ceil(cs.def);

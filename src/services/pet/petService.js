@@ -21,7 +21,7 @@ const FEED_TIER_PENALTY = [1.0, 0.6, 0.3, 0.15];
 const TIER_RANK = { D: 0, C: 1, B: 2, A: 3 };
 
 // Model A：孵化時「位階」獨立 roll（決定強度；品種只決定外觀/被動）。無 S。可調。
-const PET_TIER_ROLL = [["D", 60], ["C", 27], ["B", 10], ["A", 3]];
+const PET_TIER_ROLL = [["D", 60], ["C", 29], ["B", 10], ["A", 1]];
 function rollPetTier() {
   let r = Math.random() * 100;
   for (const [t, w] of PET_TIER_ROLL) { r -= w; if (r <= 0) return t; }
@@ -145,6 +145,31 @@ class PetService {
       });
     const dex = computeDexBonuses(petDex, (allSpecies || []).length);
     return { species, milestones: DEX_MILESTONES, ...dex };
+  }
+
+  // 全收集(分數達滿=title 里程碑) → 發「馴獸大師」稱號到背包（冪等：已有就不發）。
+  async _grantPetMasterTitleIfComplete(progress) {
+    try {
+      const { computeDexBonuses } = require("../../shared/petDex");
+      if (!computeDexBonuses(progress.petDex).bonus.title) return false;
+      if (!Array.isArray(progress.inventory)) progress.inventory = [];
+      if (progress.inventory.some((x) => x && x.itemId === "title-pet-master")) return false;
+      const item = await this.itemRepository.findById("title-pet-master").catch(() => null);
+      if (!item) return false;
+      progress.inventory.push({
+        uuid: require("crypto").randomUUID(),
+        itemId: item.id, itemName: item.name,
+        itemEffect: item.effect || { type: "none", value: 0 },
+        useEffects: item.useEffects || [], passiveEffects: item.passiveEffects || [],
+        procEffects: item.procEffects || [], combatEffects: item.combatEffects || [],
+        itemType: item.itemType || "equipment",
+        imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
+        equipSlot: item.equipSlot || "title_eq", equipStats: item.equipStats || null,
+        weaponType: null, isTwoHanded: false, tier: item.tier || null,
+        source: "pet_dex_complete", sourceRef: "pet-master", purchasedAt: new Date().toISOString()
+      });
+      return true;
+    } catch (_) { return false; }
   }
 
   // ── 懶結算：飽食度衰減 + 飢餓掉等 ──
@@ -471,6 +496,7 @@ class PetService {
         progress.petDex = (progress.petDex && typeof progress.petDex === "object") ? progress.petDex : {};
         const _dexKey = `${rolled.id}:${pet.rarity}`;
         if (!progress.petDex[_dexKey]) progress.petDex[_dexKey] = new Date().toISOString();
+        await this._grantPetMasterTitleIfComplete(progress); // 全收集 → 發「馴獸大師」稱號(冪等)
       }
       hatched = true;
     }

@@ -1136,7 +1136,7 @@ async function loadPlayerData(discordId) {
   const equipped = await mergeEquippedFromLibrary(progress.equipment || {}, sc.itemRepository);
   const inventory     = Array.isArray(progress.inventory) ? progress.inventory : [];
   const activeEffects = Array.isArray(progress.activeEffects) ? progress.activeEffects : [];
-  const pStats   = calcPlayerStats(attrs, equipped, activeEffects, inventory);
+  const pStats   = calcPlayerStats(attrs, equipped, activeEffects, inventory, { petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
   return {
     stats: pStats,
     equipped,

@@ -200,7 +200,7 @@ async function loadMemberData(discordId) {
   const inventory     = Array.isArray(progress.inventory)     ? progress.inventory     : [];
   const activeEffects = Array.isArray(progress.activeEffects) ? progress.activeEffects : [];
   const pStats = calcPlayerStats(attrs, equipped, activeEffects, inventory,
-    { pkRating: progress.pkRating });
+    { pkRating: progress.pkRating, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
   return {
     stats: pStats, equipped, inventory, activeEffects,
     level: Math.max(1, Number(progress.level || 1)),
