@@ -333,6 +333,7 @@ async function listMemberDirectory({ activeOnly = false, limit = 1000 } = {}) {
       isMember: Boolean(s.isMember) || Boolean(bind),         // 綁定會員覆蓋身分組 tracker 的 false
       currentTier: s.currentTier || bind?.tier || null,
       displayName: s.displayName || bind?.displayName || id,
+      firstJoinedAt: s.firstJoinedAt || bind?.linkedAt || null,
       source: bind ? "both" : "role",
       bindingPlatforms: bind ? bind.platforms : []
     });
@@ -346,6 +347,7 @@ async function listMemberDirectory({ activeOnly = false, limit = 1000 } = {}) {
       isMember: true,
       currentTier: bind.tier || null,
       currentLabel: bind.tier || null,
+      firstJoinedAt: bind.linkedAt || null,
       lastConfirmedAt: bind.linkedAt || null,
       lastChangedAt: bind.linkedAt || null,
       source: "binding",

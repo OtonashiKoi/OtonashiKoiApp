@@ -91,13 +91,24 @@
 
   async function renderStatus() {
     const { statuses, activeCount, total } = await fetchJSON("/admin/stream-records/membership-status?limit=1000");
+    // 「最後事件」依聯集後的實際狀態＋來源顯示，不再直接吐舊的身分組 lastEvent（會出現「會員卻顯示到期」的矛盾）
+    const statusCell = (s) => {
+      if (s.isMember) {
+        const via = s.source === "binding" ? "綁定會員"
+          : s.source === "both" ? "綁定＋身分組"
+            : "身分組會員";
+        const roleLapsed = s.source === "both" && (s.lastEvent === "expire" || s.lastEvent === "leave");
+        return `<span style="color:#7ee0a0;">🟢 ${via}</span>${roleLapsed ? '<span class="hint" style="font-size:11px;margin-left:6px;">（身分組已到期）</span>' : ""}`;
+      }
+      return `<span style="color:#ff8f88;">${EVENT_LABEL[s.lastEvent] || esc(s.lastEvent || "非會員")}</span>`;
+    };
     const rows = (statuses || []).map((s) => `
       <tr>
         <td>${esc(s.displayName || s.discordId)}</td>
         <td>${s.isMember ? '<span style="color:#7ee0a0;">' + esc(s.currentLabel || s.currentTier || "會員") + "</span>" : '<span class="hint">非會員</span>'}</td>
         <td style="white-space:nowrap;">${esc(fmtTime(s.firstJoinedAt))}</td>
         <td style="white-space:nowrap;">${esc(fmtTime(s.lastChangedAt))}</td>
-        <td>${EVENT_LABEL[s.lastEvent] || esc(s.lastEvent || "")}</td>
+        <td>${statusCell(s)}</td>
       </tr>`).join("");
     return `
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
@@ -106,7 +117,7 @@
       </div>
       <div style="overflow:auto;">
       <table class="admin-table" style="width:100%;font-size:13px;">
-        <thead><tr><th>成員</th><th>目前等級</th><th>首次加入</th><th>最後變動</th><th>最後事件</th></tr></thead>
+        <thead><tr><th>成員</th><th>目前等級</th><th>首次加入</th><th>最後變動</th><th>狀態（來源）</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="5" class="hint">尚無會員現況資料。</td></tr>'}</tbody>
       </table>
       </div>`;
