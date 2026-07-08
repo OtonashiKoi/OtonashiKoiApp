@@ -1150,12 +1150,29 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       } catch (err) { console.warn("[profile] bodyEffects failed:", err?.message); }
 
+      // 耕作疲勞狀態（供個人頁顯示；peek 不寫入）
+      let fatigue = null;
+      try {
+        const ff = require("../../services/farmFatigue/farmFatigueService");
+        const pk = await ff.peek(discordId);
+        let pausedByBuff = false;
+        try { pausedByBuff = require("../../services/stream/globalBuffService").isShortTermBuffActive(); } catch (_) { /* noop */ }
+        fatigue = {
+          penalized: Boolean(pk.penalized),          // 已連續打滿 6 小時 → 進入疲勞
+          streakMs: Number(pk.streakMs) || 0,        // 目前連續耕作時長
+          thresholdMs: ff.SIX_HOURS_MS,              // 觸發門檻(6h)
+          penaltyPct: Math.round((1 - ff.PENALTY_MULT) * 100), // 減幅(80)
+          pausedByBuff                               // 全服短期加成期間 → 疲勞暫停(此時不扣)
+        };
+      } catch (_) { /* 疲勞查詢失敗不影響 profile */ }
+
       res.json(ok({
         player: {
           ...profileResult.player,
           ...(avatarUrl ? { avatarUrl } : {}),
         },
         wallet: walletResult.wallet,
+        fatigue,
         progress: {
           level: lv,
           maxLevel: MAX_LEVEL,
