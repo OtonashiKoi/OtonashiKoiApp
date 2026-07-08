@@ -44,6 +44,8 @@ async function ensureIndexes(db) {
       db.collection("adminActionLogs").createIndex({ createdAt: -1 }),
       db.collection("checkins").createIndex({ discordId: 1, occurredAt: -1 }),
       db.collection("weeklyQuestProgress").createIndex({ discordId: 1, cadence: 1, periodKey: 1 }, { unique: true }),
+      // 唯一道具發放：一個玩家對一個 itemId 一生只發一次（原子搶佔靠此唯一索引）
+      db.collection("uniqueItemGrants").createIndex({ discordId: 1, itemId: 1 }, { unique: true }),
       db.collection("weeklyQuestProgress").createIndex({ cadence: 1, periodKey: 1 }),
       db.collection("weeklyQuestProgress").createIndex({ weekLabel: 1 }),
       db.collection("monsterState").createIndex({ _id: 1 }),

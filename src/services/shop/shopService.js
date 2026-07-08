@@ -718,19 +718,36 @@ class ShopService {
       } else if (effect.type === "open_world_boss_chest") {
         // 世界王寶箱：依該世界王掉落率比重，隨機獲得一份掉落物（與該王即時掉落表同步）
         if (chestRolledEntry === undefined) {
-          const rolled = await this._rollWorldBossChest(effect.monsterId);
-          if (!rolled) {
-            throw new AppError(ERROR_CODES.INTERNAL_ERROR, "寶箱掉落表讀取失敗，請稍後再試。", 500);
+          // 大史王寶箱限定：3% 唯一傳說錨點（先機/後勢），擁有過就不再開出
+          const legendary = effect.monsterId === "elite-daishi-king"
+            ? await this._tryRollDaishiLegendaryChest(discordId).catch(() => null)
+            : null;
+          if (legendary) {
+            chestRolledEntry = legendary.entry;
+            chestRewardInfo = {
+              chestName: entry.itemName,
+              rewardItemName: legendary.entry.itemName,
+              rewardItemId: legendary.entry.itemId || null,
+              rewardImage: legendary.entry.imageUrl || legendary.entry.imageThumbnailUrl || null,
+              rewardTier: legendary.entry.tier || "S",
+              bossName: effect.bossName || "大史王",
+              legendary: true,
+            };
+          } else {
+            const rolled = await this._rollWorldBossChest(effect.monsterId);
+            if (!rolled) {
+              throw new AppError(ERROR_CODES.INTERNAL_ERROR, "寶箱掉落表讀取失敗，請稍後再試。", 500);
+            }
+            chestRolledEntry = rolled.entry;
+            chestRewardInfo = {
+              chestName: entry.itemName,
+              rewardItemName: rolled.entry.itemName,
+              rewardItemId: rolled.entry.itemId || null,
+              rewardImage: rolled.entry.imageUrl || rolled.entry.imageThumbnailUrl || null,
+              rewardTier: rolled.entry.tier || null,
+              bossName: effect.bossName || "世界王",
+            };
           }
-          chestRolledEntry = rolled.entry;
-          chestRewardInfo = {
-            chestName: entry.itemName,
-            rewardItemName: rolled.entry.itemName,
-            rewardItemId: rolled.entry.itemId || null,
-            rewardImage: rolled.entry.imageUrl || rolled.entry.imageThumbnailUrl || null,
-            rewardTier: rolled.entry.tier || null,
-            bossName: effect.bossName || "世界王",
-          };
         }
         const chestEntryToAdd = { ...chestRolledEntry };
         // 獲得瞬間骰附魔（僅裝備、且尚未有附魔時）
@@ -864,6 +881,38 @@ class ShopService {
   }
 
   // 世界王寶箱抽獎：讀該世界王怪物的即時掉落表，依 chance 權重抽一份，建成背包 entry
+  /**
+   * 大史王寶箱限定：先機/後勢各 3% 唯一傳說錨點。抽中一件即回傳其背包 entry；否則 null（走一般掉落）。
+   * 已擁有過的（uniqueGrant）不會再開出。每次開箱最多一件傳說。
+   */
+  async _tryRollDaishiLegendaryChest(discordId) {
+    const uniqueGrant = require("../uniqueGrant/uniqueGrantService");
+    const candidates = ["s-legend-burst", "s-legend-linger"];
+    for (const itemId of candidates) {
+      if (Math.random() >= 0.03) continue;                 // 各 3%
+      const first = await uniqueGrant.claim(discordId, itemId, "boss_chest:daishi").catch(() => false);
+      if (!first) continue;                                // 已擁有過 → 跳過（不再開出）
+      const item = await this.itemRepository.findById(itemId).catch(() => null);
+      if (!item) { await uniqueGrant.release(discordId, itemId).catch(() => {}); continue; }
+      const entry = {
+        uuid: crypto.randomUUID(),
+        itemId: item.id, itemName: item.name,
+        itemEffect: item.effect || { type: "none", value: 0 },
+        useEffects: item.useEffects || [], passiveEffects: item.passiveEffects || [],
+        procEffects: item.procEffects || [], combatEffects: item.combatEffects || [],
+        itemType: item.itemType || "equipment",
+        imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
+        equipSlot: item.equipSlot || "anchor", equipStats: item.equipStats || null,
+        weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+        tier: item.tier || "S",
+        source: "boss_chest:daishi", obtainedAt: new Date().toISOString(),
+      };
+      console.log(`[shop] 🎉 大史王寶箱開出唯一傳說錨點 ${item.name} → ${discordId}`);
+      return { entry };
+    }
+    return null;
+  }
+
   async _rollWorldBossChest(monsterId) {
     const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
     const db = await getMongoDb();

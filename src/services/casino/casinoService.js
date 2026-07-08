@@ -7,6 +7,11 @@ const {
 } = require("./wheelConfig");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { notifyPlayer } = require("../realtime/playerNotifyService");
+const uniqueGrant = require("../uniqueGrant/uniqueGrantService");
+
+// 傳說錨點「命運之輪」— 任何中獎都有極低機率抽中，唯一（一生一次）
+const DICE_JACKPOT_ITEM_ID = "s-legend-dice";
+const DICE_JACKPOT_CHANCE = 0.001; // 0.1% / 每次「中獎的輪」，抽中即唯一
 
 // 對齊「整 60 秒」邊界，PM2 重啟也能對齊節奏
 function alignedNextStartAt(now = Date.now()) {
@@ -252,6 +257,14 @@ class CasinoService {
         });
         if (grantedName) grantedItems.push({ ...d, itemName: grantedName });
       }
+      // 命運之輪唯一大獎：有中獎就擲極低機率
+      if (ps.hits.length > 0) {
+        const jackpot = await this._tryGrantDiceJackpot(ps.discordId).catch(() => null);
+        if (jackpot) {
+          grantedItems.push(jackpot);
+          this._broadcast({ roundId, resultColor, resultMult, ps, drop: { key: "s-legend-dice", label: jackpot.label, itemName: jackpot.itemName } }).catch(() => {});
+        }
+      }
       ps.grantedItems = grantedItems;
 
       // 寄 DM（不論輸贏）
@@ -388,6 +401,45 @@ class CasinoService {
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
     return item.name;
+  }
+
+  /**
+   * 命運之輪唯一大獎：任何中獎都有極低機率抽中；抽中且從未擁有過 → 發放（一生一次）。
+   * @returns {Promise<{itemName:string,label:string,jackpot:true}|null>}
+   */
+  async _tryGrantDiceJackpot(discordId) {
+    if (Math.random() >= DICE_JACKPOT_CHANCE) return null;
+    // 原子搶佔：已領過 → claim 回 false → 不發（機率照樣消耗，符合「獲得過不能再獲得」）
+    const first = await uniqueGrant.claim(discordId, DICE_JACKPOT_ITEM_ID, "casino_jackpot").catch(() => false);
+    if (!first) return null;
+    try {
+      const item = await this.itemRepository.findById(DICE_JACKPOT_ITEM_ID);
+      if (!item) { await uniqueGrant.release(discordId, DICE_JACKPOT_ITEM_ID); return null; }
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (!progress) { await uniqueGrant.release(discordId, DICE_JACKPOT_ITEM_ID); return null; }
+      if (!Array.isArray(progress.inventory)) progress.inventory = [];
+      progress.inventory.push({
+        uuid: crypto.randomUUID(),
+        itemId: item.id, itemName: item.name,
+        itemEffect: item.effect || { type: "none", value: 0 },
+        useEffects: item.useEffects || [], passiveEffects: item.passiveEffects || [],
+        procEffects: item.procEffects || [], combatEffects: item.combatEffects || [],
+        itemType: item.itemType || "equipment",
+        imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
+        equipSlot: item.equipSlot || "anchor", equipStats: item.equipStats || null,
+        weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
+        tier: item.tier || "S",
+        source: "casino_jackpot", obtainedAt: new Date().toISOString(),
+      });
+      progress.updatedAt = new Date().toISOString();
+      await this.progressRepository.save(progress);
+      console.log(`[casino] 🎉 命運之輪唯一大獎發放給 ${discordId}`);
+      return { itemName: item.name, label: "傳說錨點·唯一", jackpot: true };
+    } catch (e) {
+      await uniqueGrant.release(discordId, DICE_JACKPOT_ITEM_ID).catch(() => {});
+      console.warn("[casino] dice jackpot 發放失敗，已撤回搶佔:", e?.message || e);
+      return null;
+    }
   }
 
   // ─── 通知 ─────────────────────────────────────────────────────────────

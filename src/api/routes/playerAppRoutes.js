@@ -1247,6 +1247,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     res.json(ok({ state, expiresIn: STREAM_AUTH_STATE_TTL }));
   });
 
+  // YT creator token 壞掉時，避免每次載入都去 Google 重試拖慢頁面：失敗後冷卻 5 分鐘只走存檔
+  let _ytLiveCheckCooldownUntil = 0;
+
   // 2.5 Fetch Stream Bindings + 即時會員狀態（用 broadcaster token 查）
   router.get("/api/me/bindings", requireAuth, async (req, res, next) => {
     try {
@@ -1279,9 +1282,51 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             };
           }
           if (b.platform === "youtube") {
-            // YouTube members API 是 Google 白名單限定（個人創作者拿不到），一律 403。
-            // 改用 DC 同款方案：會員狀態來自直播彈幕徽章（OneComme），綁定/留言當下偵測
-            // 並記在 binding 上（linkedSupportAtLink / playerTierAtLink / badge labels）。
+            // 即時查 YouTube 會員 API（用 creator token；與綁定流程同一支）。
+            // 查得到 → 更新 binding 位階＋刷新檢查時間；查不到(頻道沒開會員/quota/token失效)
+            // 才退回「直播彈幕徽章偵測」的存檔值。
+            const nowIso = new Date().toISOString();
+            let liveLevel = null, liveErr = null;
+            try {
+              if (Date.now() < _ytLiveCheckCooldownUntil) throw new Error("creator-token-cooldown");
+              const creatorAccessToken = await fetchGoogleCreatorAccessToken();
+              const chId = String(b.platformUserId || "").replace(/^(yt-|youtube-)/i, "");
+              const ctrl = new AbortController();
+              const t = setTimeout(() => ctrl.abort(), 6000);
+              const mres = await fetch(`https://www.googleapis.com/youtube/v3/members?part=snippet&filterByMemberChannelId=${encodeURIComponent(chId)}&maxResults=1`, {
+                headers: { Authorization: `Bearer ${creatorAccessToken}` }, signal: ctrl.signal
+              });
+              clearTimeout(t);
+              const mdata = await mres.json().catch(() => ({}));
+              if (mres.ok) liveLevel = mdata?.items?.[0]?.snippet?.membershipsDetails?.highestAccessibleLevelDisplayName || null;
+              else liveErr = mdata?.error?.message || mdata?.error?.errors?.[0]?.message || `${mres.status} ${mres.statusText}`;
+            } catch (e) {
+              liveErr = e?.message || String(e);
+              // creator token 失效/拿不到 → 冷卻 5 分鐘，避免每次載入都重試 Google
+              if (liveErr !== "creator-token-cooldown") _ytLiveCheckCooldownUntil = Date.now() + 5 * 60_000;
+            }
+
+            if (liveLevel) {
+              const mappedTier = mapYoutubeLevelToPlayerTier(liveLevel);
+              const newTier = pickHigherTier(mappedTier, b.playerTierAtLink) || mappedTier || b.playerTierAtLink || null;
+              // 有變才寫回 DB（省寫入）
+              if (newTier !== b.playerTierAtLink || !b.linkedSupportAtLink) {
+                try {
+                  await serviceContext.streamAccountBindingRepository.save({
+                    platform: "youtube", platformUserId: b.platformUserId, discordId, displayName: b.displayName,
+                    linkedAt: b.linkedAt, playerTierAtLink: newTier, memberRoleIdsAtLink: b.memberRoleIdsAtLink || [],
+                    linkedSupportAtLink: true, linkedSupportKindAtLink: "member",
+                    linkedSupportBadgeLabelsAtLink: [`會員等級:${liveLevel}`], updatedAt: nowIso,
+                  });
+                } catch (_) { /* 寫回失敗不影響回傳 */ }
+              }
+              return {
+                ...baseInfo, playerTierAtLink: newTier,
+                membership: { isMember: true, tier: newTier, levelName: `會員等級 ${liveLevel}`, checkedAt: nowIso, source: "youtube-api" }
+              };
+            }
+
+            // 查不到 → 退回直播彈幕偵測的存檔值（但檢查時間更新為現在）
             const labels = Array.isArray(b.linkedSupportBadgeLabelsAtLink) ? b.linkedSupportBadgeLabelsAtLink : [];
             const isMember = Boolean(b.linkedSupportAtLink) || Boolean(b.playerTierAtLink);
             const levelName = labels.find(Boolean)
@@ -1293,10 +1338,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
                 isMember,
                 tier: b.playerTierAtLink || null,
                 levelName,
-                checkedAt: b.linkedAt || new Date().toISOString(),
-                // 來源是直播彈幕偵測（非即時 API）；未偵測過會員時 isMember=false 但不是錯誤
+                checkedAt: nowIso,
                 source: "stream-chat",
-                hint: isMember ? null : "在直播聊天室以會員身分留言一次即可偵測"
+                hint: isMember ? null : (liveErr ? `即時查詢暫時無法（${liveErr}）；可在直播聊天室以會員身分留言偵測` : "在直播聊天室以會員身分留言一次即可偵測")
               }
             };
           }
