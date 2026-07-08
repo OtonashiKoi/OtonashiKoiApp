@@ -737,6 +737,27 @@ class ShopService {
         try { require("../enchant/enchantService").rollForEntry(chestEntryToAdd); } catch (_) { /* noop */ }
         next.inventory.push(chestEntryToAdd);
         effectDesc = `🎁 開啟 **${entry.itemName}**，獲得 **${chestRewardInfo.rewardItemName}**！`;
+      } else if (effect.type === "open_random_weapon") {
+        // 武器抽選箱：從指定階級的所有武器中等機率隨機開出一把（沿用寶箱開箱動畫）
+        if (chestRolledEntry === undefined) {
+          const rolled = await this._rollRandomWeapon(effect.tier || "A");
+          if (!rolled) {
+            throw new AppError(ERROR_CODES.INTERNAL_ERROR, "武器抽選箱獎池讀取失敗，請稍後再試。", 500);
+          }
+          chestRolledEntry = rolled.entry;
+          chestRewardInfo = {
+            chestName: entry.itemName,
+            rewardItemName: rolled.entry.itemName,
+            rewardItemId: rolled.entry.itemId || null,
+            rewardImage: rolled.entry.imageUrl || rolled.entry.imageThumbnailUrl || null,
+            rewardTier: rolled.entry.tier || null,
+            // 不設 bossName → 前端顯示「📦 開啟寶箱」，但沿用同一套開箱特效
+          };
+        }
+        const chestEntryToAdd = { ...chestRolledEntry };
+        try { require("../enchant/enchantService").rollForEntry(chestEntryToAdd); } catch (_) { /* noop */ }
+        next.inventory.push(chestEntryToAdd);
+        effectDesc = `🎁 開啟 **${entry.itemName}**，獲得 **${chestRewardInfo.rewardItemName}**！`;
       }
 
       const autoRemovedJobBadge = this._autoUnequipJobBadgeIfNeeded(next);
@@ -886,6 +907,45 @@ class ShopService {
       enhanceLevel: 0,
       source: "world_boss_chest",
       sourceRef: monsterId,
+      purchasedAt: new Date().toISOString(),
+    };
+    return { entry, itemName: entry.itemName };
+  }
+
+  // 武器抽選箱：從指定階級的所有武器等機率抽一把，建成背包 entry
+  async _rollRandomWeapon(tier = "A") {
+    const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+    const db = await getMongoDb();
+    const weapons = await db.collection("items")
+      .find({ itemType: "equipment", tier, weaponType: { $ne: null } })
+      .toArray();
+    if (!weapons.length) return null;
+    const item = weapons[Math.floor(Math.random() * weapons.length)];
+    const equipStats = item?.equipStats ? { ...item.equipStats } : {};
+    const entry = {
+      uuid: crypto.randomUUID(),
+      itemId: item.id,
+      itemName: item.name || "神秘武器",
+      itemEffect: item?.effect || { type: "none", value: 0 },
+      useEffects: item?.useEffects || [],
+      passiveEffects: item?.passiveEffects || [],
+      procEffects: item?.procEffects || [],
+      combatEffects: item?.combatEffects || [],
+      itemType: "equipment",
+      imageUrl: item?.imageUrl || null,
+      imageThumbnailUrl: item?.imageThumbnailUrl || null,
+      equipSlot: item?.equipSlot || null,
+      equipStats,
+      weaponType: item?.weaponType || null,
+      isTwoHanded: item?.isTwoHanded || false,
+      atkStat: item?.atkStat || null,
+      tier: item?.tier || tier,
+      setKey: item?.setKey || null,
+      setKeys: Array.isArray(item?.setKeys) ? item.setKeys : (item?.setKey ? [item.setKey] : []),
+      monsterCardSkill: null,
+      enhanceLevel: 0,
+      source: "weapon_chest",
+      sourceRef: `chest:${tier}:weapon`,
       purchasedAt: new Date().toISOString(),
     };
     return { entry, itemName: entry.itemName };

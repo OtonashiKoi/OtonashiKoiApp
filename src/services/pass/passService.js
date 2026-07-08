@@ -24,7 +24,7 @@ const EGG_WOLF = "27c8b251-42c7-42cf-98a3-ee40408503db";
 const REROLL = "enchant_reroll_potion";
 const RESPEC = "87b281be-b175-40a0-8044-0accc88a0ee0";
 const GOLDBAG_L = "1854a2b1-a569-4604-802d-9171f480a9ae";
-const A_GEAR = "99d23a47-89a6-4291-9b03-8f15e7356eec"; // 秘銀單手劍（頂獎 A 裝）
+const A_WEAPON_CHEST = "chest-a-weapon-select"; // A階武器抽選箱（頂獎，開箱隨機一把 A 階武器）
 
 // 產生 30 級雙軌獎勵表
 function buildLevels() {
@@ -50,7 +50,7 @@ function buildLevels() {
     if (L === 18) paid.items.push({ itemId: REROLL, qty: 1 });       // 附魔重骰
     if (L === 22) paid.items.push({ itemId: RESPEC, qty: 1 });       // 洗點
     if (L === 25) paid.diamond = 1;                                  // 回鑽 2/2
-    if (L === 30) paid.items.push({ itemId: A_GEAR, qty: 1 });       // 頂獎 A 裝
+    if (L === 30) paid.items.push({ itemId: A_WEAPON_CHEST, qty: 1 }); // 頂獎：A階武器抽選箱
 
     levels.push({ level: L, free, paid });
   }
