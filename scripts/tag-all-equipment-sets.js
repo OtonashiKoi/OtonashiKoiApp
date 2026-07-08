@@ -15,13 +15,14 @@ const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
 const { SET_SLOTS, SET_DEFS } = require("../src/shared/equipmentSetBonuses");
 const NOW = new Date().toISOString();
 
-// 材質套裝依「名稱材質」歸屬（不再依 tier 亂塞；A 階的鋼鐵/秘銀是不同套）
+// 歸屬規則：
+//   D/C/B → 依 tier 的階級套裝（該階所有防具/武器都算，件數才夠湊 7 件）
+//   A     → 依「名稱材質」分套（同 A 階的鋼鐵 / 秘銀是不同套）
+//   戒指  → 只算自己的之誓/紋套；秘銀戒指算秘銀套；雜牌戒無套
+const BASIC_BY_TIER = { D: "basic_d", C: "basic_c", B: "basic_b" }; // A 不在此(改用名稱)
 const MATERIAL_BY_NAME = [
   [/^秘銀/, "mithril"],   // 秘銀套裝（含秘銀戒指）
   [/^鋼鐵/, "steel"],     // 鋼鐵套裝
-  [/^鋼製/, "basic_b"],   // 鋼製套裝
-  [/^皮甲|^皮鐵/, "basic_c"], // 皮鐵套裝
-  [/^新手|^布/, "basic_d"],   // 新手套裝
 ];
 const materialSet = (name) => { for (const [re, k] of MATERIAL_BY_NAME) if (re.test(name || "")) return k; return null; };
 const RUNE_MAP = { "迅紋": "swift", "鬥紋": "might", "智紋": "sage" };
@@ -50,10 +51,11 @@ async function main() {
 
     const rune = Object.keys(RUNE_MAP).find((p) => n.startsWith(p));
     const ringTheme = Object.keys(RING_MAP).find((p) => n.includes(p));
-    // 紋套(armor+ring 都只掛紋套)；效果戒只掛自己的之誓套；其餘依「材質名稱」歸材質套(含秘銀戒指)
-    if (rune) keys = [RUNE_MAP[rune]];
-    else if (ringTheme && isRing) keys = [RING_MAP[ringTheme]];
-    else keys = [materialSet(n)];
+    if (rune) keys = [RUNE_MAP[rune]];                       // 紋套(armor+ring 都只掛紋套)
+    else if (ringTheme && isRing) keys = [RING_MAP[ringTheme]]; // 效果戒只掛自己的之誓套
+    else if (isRing) keys = [materialSet(n)];                // 一般戒：秘銀戒指→秘銀套，雜牌戒→無
+    else if (it.tier === "A") keys = [materialSet(n)];       // A 階防具/武器：鋼鐵→steel、秘銀→mithril
+    else keys = [BASIC_BY_TIER[it.tier]];                    // D/C/B：整階算階級套裝(件數才夠)
 
     keys = keys.filter(Boolean);
     if (!keys.length) { skipped++; continue; }
