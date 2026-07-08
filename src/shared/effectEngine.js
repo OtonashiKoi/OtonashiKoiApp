@@ -207,6 +207,11 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
       weaponType:     lib.weaponType     || entry.weaponType || null,
       isTwoHanded:    lib.isTwoHanded    ?? entry.isTwoHanded ?? false,
       monsterCardSkill: lib.monsterCardSkill || entry.monsterCardSkill || null,
+      // 套裝歸屬以 DB 最新為準（setKey 標記在 library；舊快照沒有時要 backfill，否則套裝不顯示/不生效）
+      setKey:  lib.setKey  ?? entry.setKey  ?? null,
+      setKeys: (Array.isArray(lib.setKeys) && lib.setKeys.length) ? lib.setKeys
+             : (Array.isArray(entry.setKeys) && entry.setKeys.length) ? entry.setKeys
+             : (lib.setKey ? [lib.setKey] : (entry.setKey ? [entry.setKey] : [])),
       // 確保 name / itemName 以 DB 為準（DB 欄位是 name，snapshot 可能只有 itemName）
       name:     lib.name     || entry.name     || entry.itemName || null,
       itemName: lib.name     || entry.itemName || entry.name     || null,

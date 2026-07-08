@@ -118,8 +118,12 @@
       fetchJSON("/admin/stream-events/buffs"),
       fetchJSON("/admin/stream-events/sc-bar")
     ]);
-    const c = (cfgWrap && cfgWrap.donationBuff) || {};
+    const dt = (cfgWrap && cfgWrap.donationTiers) || { enabled: false, announce: true, tiers: [] };
     const scCfg = (cfgWrap && cfgWrap.scBar) || { enabled: false, milestones: [] };
+    const me = (cfgWrap && cfgWrap.memberEvents) || { enabled: false, announce: true, shortBuff: {}, milestones: [] };
+    const capPct = (cfgWrap && cfgWrap.shortTermCapPct) || 30;
+    const scbarPub = await fetch("/api/stream/sc-bar").then((r) => r.json()).then((d) => d.data || {}).catch(() => ({}));
+    const mep = scbarPub.memberProgress || { count: scbarPub.memberCount || 0 };
     const mod = buffs.modifiers || { dropPct: 0, goldPct: 0, expPct: 0 };
     const active = buffs.active || [];
     const num = (id, label, val, suffix) =>
@@ -155,24 +159,82 @@
         ${active.length ? `<div style="overflow:auto;margin-top:12px;"><table class="admin-table" style="width:100%;font-size:13px;"><thead><tr><th>名稱</th><th>效果</th><th>來源</th><th>結束時間</th><th></th></tr></thead><tbody>${activeRows}</tbody></table></div>` : ""}
       </div>
 
-      <div class="card">
-        <h3 style="margin:0 0 4px;">💸 斗內自動觸發設定</h3>
-        <p class="hint" style="margin:0 0 10px;">觀眾單筆斗內達門檻時，自動對全服套用加成。<b>先填好數字、勾「啟用」再儲存</b>；未啟用時斗內不會觸發（記錄照常）。</p>
-        <div>
-          <label style="display:inline-flex;align-items:center;font-size:13px;margin:0 14px 10px 0;font-weight:700;"><input id="db-enabled" type="checkbox" ${c.enabled ? "checked" : ""} style="margin-right:6px;">啟用斗內觸發</label>
-        </div>
-        <div>
-          ${num("db-min", "觸發門檻 NT$", c.minTwd, "單筆≥此金額")}
-          ${num("db-drop", "掉寶 +%", c.dropPct)}
-          ${num("db-gold", "金幣 +%", c.goldPct)}
-          ${num("db-exp", "經驗 +%", c.expPct)}
-          ${num("db-dur", "持續(分)", c.durationMinutes)}
-          <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px;"><input id="db-announce" type="checkbox" ${c.announce ? "checked" : ""} style="margin-right:4px;">全服廣播</label>
-        </div>
-        <button class="button primary" id="db-save" style="margin-top:6px;">💾 儲存設定</button>
-      </div>
+      ${donationTiersCard(dt, capPct)}
+      ${scBarCard(scp, scCfg)}
+      ${memberEventsCard(mep, me)}
+      <div class="card" style="margin-top:14px;border-color:#5a2b2b;">
+        <h3 style="margin:0 0 4px;">🌱 換季重置</h3>
+        <p class="hint" style="margin:0 0 10px;">開新賽季時按一次：清空<b>全服永久底盤</b>＋<b>SC 累積</b>＋<b>會員里程碑進度</b>＋<b>通行證全員</b>（設定/門檻不動）。短期 buff 會自己過期。</p>
+        <button class="button" id="ev-reset-season" style="border-color:#a04040;color:#ffb0b0;">🧹 一鍵換季重置</button>
+      </div>`;
+  }
 
-      ${scBarCard(scp, scCfg)}`;
+  // ── 斗內即時分級 buff（短期，模式A疊加，每類型上限 capPct）──
+  function donationTiersCard(cfg, capPct) {
+    const rows = (cfg.tiers || []).map((t, i) => `
+      <tr data-dt-row="${i}">
+        <td><input data-dt="minTwd" type="number" value="${esc(t.minTwd || 0)}" style="width:80px;"></td>
+        <td><input data-dt="label" value="${esc(t.label || "")}" style="width:110px;"></td>
+        <td><input data-dt="dropPct" type="number" value="${esc(t.dropPct || 0)}" style="width:52px;"></td>
+        <td><input data-dt="goldPct" type="number" value="${esc(t.goldPct || 0)}" style="width:52px;"></td>
+        <td><input data-dt="expPct" type="number" value="${esc(t.expPct || 0)}" style="width:52px;"></td>
+        <td><input data-dt="durationMinutes" type="number" value="${esc(t.durationMinutes || 60)}" style="width:56px;"></td>
+        <td><button class="button" data-dt-del="${i}" style="padding:2px 8px;font-size:11px;">✕</button></td>
+      </tr>`).join("");
+    return `
+      <div class="card">
+        <h3 style="margin:0 0 4px;">💸 斗內即時加成（短期・分級）</h3>
+        <p class="hint" style="margin:0 0 10px;">單筆斗內金額 → 挑「達到的最高一級」→ 全服<b>短期</b>加成（模式A疊加）。<b>勾「啟用」才會觸發</b>。</p>
+        <label style="display:inline-flex;align-items:center;font-size:13px;margin:0 14px 8px 0;font-weight:700;"><input id="dt-enabled" type="checkbox" ${cfg.enabled ? "checked" : ""} style="margin-right:6px;">啟用斗內觸發</label>
+        <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;"><input id="dt-announce" type="checkbox" ${cfg.announce !== false ? "checked" : ""} style="margin-right:4px;">全服廣播</label>
+        <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;">短期每類型上限%<input id="dt-cap" type="number" value="${esc(capPct)}" style="width:60px;margin-left:6px;"></label>
+        <div style="overflow:auto;">
+          <table class="admin-table" id="dt-table" style="width:100%;font-size:12px;">
+            <thead><tr><th>門檻NT$≥</th><th>名稱</th><th>掉寶%</th><th>金幣%</th><th>經驗%</th><th>時長(分)</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <button class="button" id="dt-add" style="margin-top:6px;">➕ 新增分級</button>
+        <button class="button primary" id="dt-save" style="margin-top:6px;">💾 儲存斗內設定</button>
+      </div>`;
+  }
+
+  // ── 會員事件（短期慶祝 + 賽季永久里程碑）──
+  function memberEventsCard(mep, cfg) {
+    const sb = cfg.shortBuff || {};
+    const rows = (cfg.milestones || []).map((m, i) => `
+      <tr data-me-row="${i}" data-me-id="${esc(m.id || "")}">
+        <td><input data-me="count" type="number" value="${esc(m.count || 0)}" style="width:70px;"></td>
+        <td><input data-me="label" value="${esc(m.label || "")}" style="width:110px;"></td>
+        <td><input data-me="dropPct" type="number" value="${esc(m.dropPct || 0)}" style="width:52px;"></td>
+        <td><input data-me="goldPct" type="number" value="${esc(m.goldPct || 0)}" style="width:52px;"></td>
+        <td><input data-me="expPct" type="number" value="${esc(m.expPct || 0)}" style="width:52px;"></td>
+        <td><button class="button" data-me-del="${i}" style="padding:2px 8px;font-size:11px;">✕</button></td>
+      </tr>`).join("");
+    const cur = (mep && mep.count) || 0;
+    return `
+      <div class="card" style="margin-top:14px;">
+        <h3 style="margin:0 0 4px;">👥 會員事件（目前 ${esc(cur)} 位綁定會員）</h3>
+        <p class="hint" style="margin:0 0 10px;">綁定會員數：每突破 N 的倍數→<b>短期慶祝</b>；達門檻→<b>賽季永久</b>底盤（疊加，換季清）。里程碑數值＝該階「新增」多少。</p>
+        <label style="display:inline-flex;align-items:center;font-size:13px;margin:0 14px 8px 0;font-weight:700;"><input id="me-enabled" type="checkbox" ${cfg.enabled ? "checked" : ""} style="margin-right:6px;">啟用會員事件</label>
+        <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;"><input id="me-announce" type="checkbox" ${cfg.announce !== false ? "checked" : ""} style="margin-right:4px;">全服廣播</label>
+        <div style="margin:6px 0;padding:8px;background:#171b2c;border-radius:8px;">
+          <b style="font-size:12px;">短期慶祝：</b>
+          <label style="font-size:12px;margin-left:8px;">每+<input id="me-every" type="number" value="${esc(sb.everyN || 5)}" style="width:48px;">位</label>
+          <label style="font-size:12px;margin-left:8px;">掉<input id="me-sb-drop" type="number" value="${esc(sb.dropPct || 0)}" style="width:44px;"></label>
+          <label style="font-size:12px;margin-left:6px;">金<input id="me-sb-gold" type="number" value="${esc(sb.goldPct || 0)}" style="width:44px;"></label>
+          <label style="font-size:12px;margin-left:6px;">經<input id="me-sb-exp" type="number" value="${esc(sb.expPct || 0)}" style="width:44px;"></label>
+          <label style="font-size:12px;margin-left:6px;">分<input id="me-sb-dur" type="number" value="${esc(sb.durationMinutes || 30)}" style="width:48px;"></label>
+        </div>
+        <div style="overflow:auto;">
+          <table class="admin-table" id="me-table" style="width:100%;font-size:12px;">
+            <thead><tr><th>會員數≥</th><th>名稱</th><th>掉寶%</th><th>金幣%</th><th>經驗%</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <button class="button" id="me-add" style="margin-top:6px;">➕ 新增里程碑</button>
+        <button class="button primary" id="me-save" style="margin-top:6px;">💾 儲存會員設定</button>
+      </div>`;
   }
 
   function scBarCard(scp, cfg) {
@@ -190,13 +252,12 @@
         <td><input data-ms="dropPct" type="number" value="${esc(m.dropPct || 0)}" style="width:56px;"></td>
         <td><input data-ms="goldPct" type="number" value="${esc(m.goldPct || 0)}" style="width:56px;"></td>
         <td><input data-ms="expPct" type="number" value="${esc(m.expPct || 0)}" style="width:56px;"></td>
-        <td><input data-ms="durationMinutes" type="number" value="${esc(m.durationMinutes || 60)}" style="width:56px;"></td>
         <td><button class="button" data-ms-del="${i}" style="padding:2px 8px;font-size:11px;">✕</button></td>
       </tr>`).join("");
     return `
       <div class="card" style="margin-top:14px;">
-        <h3 style="margin:0 0 4px;">📊 SC 累積條</h3>
-        <p class="hint" style="margin:0 0 10px;">全服斗內累積，跨里程碑就解鎖全服加成。<b>累積永遠會計算+顯示</b>；勾「啟用」後跨門檻才真的發獎。清除用下方「重置」（之後可再改自動清除策略）。</p>
+        <h3 style="margin:0 0 4px;">📊 SC 累積里程碑（賽季永久・疊加）</h3>
+        <p class="hint" style="margin:0 0 10px;">全服斗內累積跨門檻→解鎖<b>賽季永久</b>底盤（疊加保留，換季清）。數值＝該階「新增」多少。<b>勾「啟用」才發獎</b>。</p>
         <div style="margin:6px 0 4px;font-weight:800;font-size:15px;">目前累積：NT$${esc(total)} ${maxT ? `<span class="hint" style="font-weight:400;">/ 最高 NT$${esc(maxT)}（${pct}%）</span>` : ""}</div>
         <div style="position:relative;height:14px;background:#20273c;border-radius:8px;margin:14px 0 10px;">
           <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:linear-gradient(90deg,#5b67ff,#a26bff);border-radius:8px;"></div>
@@ -206,7 +267,7 @@
         <label style="display:inline-flex;align-items:center;font-size:13px;margin:6px 0 8px;font-weight:700;"><input id="sc-enabled" type="checkbox" ${cfg.enabled ? "checked" : ""} style="margin-right:6px;">啟用里程碑發獎</label>
         <div style="overflow:auto;">
           <table class="admin-table" id="sc-ms-table" style="width:100%;font-size:12px;">
-            <thead><tr><th>門檻NT$</th><th>名稱</th><th>掉寶%</th><th>金幣%</th><th>經驗%</th><th>時長(分)</th><th></th></tr></thead>
+            <thead><tr><th>門檻NT$</th><th>名稱</th><th>掉寶%</th><th>金幣%</th><th>經驗%</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -277,20 +338,6 @@
     try { await postJSON("/admin/stream-events/buff/clear", id ? { id } : {}); render(); }
     catch (e) { alert("結束失敗：" + e.message); }
   }
-  async function saveDonationCfg() {
-    try {
-      await postJSON("/admin/stream-events/config", {
-        donationBuff: {
-          enabled: chk("db-enabled"), minTwd: Number(val("db-min")) || 0, dropPct: Number(val("db-drop")) || 0,
-          goldPct: Number(val("db-gold")) || 0, expPct: Number(val("db-exp")) || 0,
-          durationMinutes: Number(val("db-dur")) || 60, announce: chk("db-announce")
-        }
-      });
-      alert("✅ 斗內觸發設定已儲存" + (chk("db-enabled") ? "（已啟用）" : "（目前未啟用）"));
-      render();
-    } catch (e) { alert("儲存失敗：" + e.message); }
-  }
-
   function addMilestoneRow() {
     const tb = document.querySelector("#sc-ms-table tbody");
     if (!tb) return;
@@ -302,7 +349,6 @@
       <td><input data-ms="dropPct" type="number" value="0" style="width:56px;"></td>
       <td><input data-ms="goldPct" type="number" value="0" style="width:56px;"></td>
       <td><input data-ms="expPct" type="number" value="0" style="width:56px;"></td>
-      <td><input data-ms="durationMinutes" type="number" value="60" style="width:56px;"></td>
       <td><button class="button" data-ms-del="new" style="padding:2px 8px;font-size:11px;">✕</button></td>`;
     tb.appendChild(tr);
   }
@@ -316,10 +362,73 @@
         label: g("label") || "",
         dropPct: Number(g("dropPct")) || 0,
         goldPct: Number(g("goldPct")) || 0,
-        expPct: Number(g("expPct")) || 0,
-        durationMinutes: Number(g("durationMinutes")) || 60
+        expPct: Number(g("expPct")) || 0
       };
     }).filter((m) => m.threshold > 0);
+  }
+  // 斗內分級
+  function addTierRow() {
+    const tb = document.querySelector("#dt-table tbody"); if (!tb) return;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><input data-dt="minTwd" type="number" value="100" style="width:80px;"></td>
+      <td><input data-dt="label" value="斗內加成" style="width:110px;"></td>
+      <td><input data-dt="dropPct" type="number" value="5" style="width:52px;"></td>
+      <td><input data-dt="goldPct" type="number" value="5" style="width:52px;"></td>
+      <td><input data-dt="expPct" type="number" value="5" style="width:52px;"></td>
+      <td><input data-dt="durationMinutes" type="number" value="60" style="width:56px;"></td>
+      <td><button class="button" data-dt-del="new" style="padding:2px 8px;font-size:11px;">✕</button></td>`;
+    tb.appendChild(tr);
+  }
+  function collectTiers() {
+    return [...document.querySelectorAll("#dt-table tbody tr")].map((tr) => {
+      const g = (k) => tr.querySelector(`[data-dt="${k}"]`)?.value;
+      return { minTwd: Number(g("minTwd")) || 0, label: g("label") || "", dropPct: Number(g("dropPct")) || 0, goldPct: Number(g("goldPct")) || 0, expPct: Number(g("expPct")) || 0, durationMinutes: Number(g("durationMinutes")) || 60 };
+    }).filter((t) => t.dropPct > 0 || t.goldPct > 0 || t.expPct > 0);
+  }
+  async function saveDonationTiers() {
+    try {
+      await postJSON("/admin/stream-events/config", {
+        shortTermCapPct: Number(val("dt-cap")) || 30,
+        donationTiers: { enabled: chk("dt-enabled"), announce: chk("dt-announce"), tiers: collectTiers() }
+      });
+      alert("✅ 斗內即時加成已儲存" + (chk("dt-enabled") ? "（已啟用）" : "（未啟用）")); render();
+    } catch (e) { alert("儲存失敗：" + e.message); }
+  }
+  // 會員事件
+  function addMemberRow() {
+    const tb = document.querySelector("#me-table tbody"); if (!tb) return;
+    const tr = document.createElement("tr");
+    tr.setAttribute("data-me-id", "");
+    tr.innerHTML = `<td><input data-me="count" type="number" value="25" style="width:70px;"></td>
+      <td><input data-me="label" value="會員獎勵" style="width:110px;"></td>
+      <td><input data-me="dropPct" type="number" value="0" style="width:52px;"></td>
+      <td><input data-me="goldPct" type="number" value="3" style="width:52px;"></td>
+      <td><input data-me="expPct" type="number" value="0" style="width:52px;"></td>
+      <td><button class="button" data-me-del="new" style="padding:2px 8px;font-size:11px;">✕</button></td>`;
+    tb.appendChild(tr);
+  }
+  function collectMemberMs() {
+    return [...document.querySelectorAll("#me-table tbody tr")].map((tr) => {
+      const g = (k) => tr.querySelector(`[data-me="${k}"]`)?.value;
+      return { id: tr.getAttribute("data-me-id") || undefined, count: Number(g("count")) || 0, label: g("label") || "", dropPct: Number(g("dropPct")) || 0, goldPct: Number(g("goldPct")) || 0, expPct: Number(g("expPct")) || 0 };
+    }).filter((m) => m.count > 0);
+  }
+  async function saveMemberEvents() {
+    try {
+      await postJSON("/admin/stream-events/config", {
+        memberEvents: {
+          enabled: chk("me-enabled"), announce: chk("me-announce"),
+          shortBuff: { everyN: Number(val("me-every")) || 5, dropPct: Number(val("me-sb-drop")) || 0, goldPct: Number(val("me-sb-gold")) || 0, expPct: Number(val("me-sb-exp")) || 0, durationMinutes: Number(val("me-sb-dur")) || 30 },
+          milestones: collectMemberMs()
+        }
+      });
+      alert("✅ 會員事件已儲存" + (chk("me-enabled") ? "（已啟用）" : "（未啟用）")); render();
+    } catch (e) { alert("儲存失敗：" + e.message); }
+  }
+  async function resetSeason() {
+    if (!confirm("確定一鍵換季重置？\n清空：全服永久底盤 + SC累積 + 會員里程碑 + 通行證全員。\n（設定門檻不動，此動作無法復原）")) return;
+    try { await postJSON("/admin/stream-events/reset-season", {}); alert("✅ 已換季重置"); render(); }
+    catch (e) { alert("重置失敗：" + e.message); }
   }
   async function saveScBar() {
     try {
@@ -344,10 +453,18 @@
     if (e.target.closest?.("#sr-sync")) { syncNow(); return; }
     if (e.target.closest?.("#mb-send")) { sendManualBuff(); return; }
     if (e.target.closest?.("#mb-clearall")) { clearBuffs(); return; }
-    if (e.target.closest?.("#db-save")) { saveDonationCfg(); return; }
+    if (e.target.closest?.("#dt-add")) { addTierRow(); return; }
+    if (e.target.closest?.("#dt-save")) { saveDonationTiers(); return; }
     if (e.target.closest?.("#sc-add")) { addMilestoneRow(); return; }
     if (e.target.closest?.("#sc-save")) { saveScBar(); return; }
     if (e.target.closest?.("#sc-reset")) { resetScBar(); return; }
+    if (e.target.closest?.("#me-add")) { addMemberRow(); return; }
+    if (e.target.closest?.("#me-save")) { saveMemberEvents(); return; }
+    if (e.target.closest?.("#ev-reset-season")) { resetSeason(); return; }
+    const dtDel = e.target.closest?.("[data-dt-del]");
+    if (dtDel) { dtDel.closest("tr")?.remove(); return; }
+    const meDel = e.target.closest?.("[data-me-del]");
+    if (meDel) { meDel.closest("tr")?.remove(); return; }
     const msDel = e.target.closest?.("[data-ms-del]");
     if (msDel) { msDel.closest("tr")?.remove(); return; }
     const clr = e.target.closest?.("[data-buff-clear]");

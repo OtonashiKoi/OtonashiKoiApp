@@ -14,25 +14,34 @@ const PET_RELEASE_CONFIRM_PREFIX = "pet:release_confirm:"; // 放生確認 pet:r
 const PET_SELECT_PREFIX = "pet:select:"; // 選單前綴（孵蛋/出戰選擇）
 const PET_RENAME_MODAL_ID = "pet:rename_modal";
 
-const STAGE_LABEL = { egg: "🥚 蛋", grown: "🐉 已孵化" };
+const STAGE_LABEL = { egg: "🥚 蛋", grown: "🐾 已孵化" };
+
+// 蛋種 emoji / 蛋名（三線）
+const EGG_EMOJI = { dragon: "🐉", slime: "🟢", wolf: "🐺" };
+const EGG_NAME = { dragon: "神秘龍蛋", slime: "神秘史萊姆蛋", wolf: "神秘狼牙蛋" };
+function eggEmoji(p) { return EGG_EMOJI[p?.eggType] || "🥚"; }
+function eggName(p) { return EGG_NAME[p?.eggType] || "神秘寵物蛋"; }
+// 階級星星
+function tierStars(t) { return { D: "★☆☆☆", C: "★★☆☆", B: "★★★☆", A: "★★★★" }[t] || t || "?"; }
 
 function petDisplayName(p) {
   if (!p) return "未命名";
-  if (p.stage === "egg") return "神秘龍蛋";
+  if (p.stage === "egg") return eggName(p);
   return p.nickname || p.speciesName || "未命名";
 }
 
 function petLine(p) {
   if (!p) return "";
   if (p.stage === "egg") {
-    return `🥚 神秘龍蛋（孵化中 ${p.hatchPct}%｜${p.hatchProgress}/${p.hatchThreshold}）— 孵化後才揭曉品種`;
+    return `${eggEmoji(p)} ${eggName(p)}（孵化中 ${p.hatchPct}%｜${p.hatchProgress}/${p.hatchThreshold}）— 孵化後才揭曉品種`;
   }
   const name = p.nickname || p.speciesName || "未命名";
   const speed = p.gatherIntervalMin ? `每 ${p.gatherIntervalMin} 分採 1 個` : "";
   const gemPct = p.gemBias != null ? `石 ${Math.round(p.gemBias * 100)}%` : "";
   const quality = p.qualityUpChance ? `｜${Math.round(p.qualityUpChance * 100)}% 高一階` : "";
+  const combat = p.combatBonus ? `｜⚔️ ${p.combatBonus}` : "";
   const trait = [speed, gemPct].filter(Boolean).join("、");
-  return `🐉 ${name}（${p.speciesName || "?"}）Lv.${p.level}（exp ${p.growthExp}/${p.expToNext}）｜飽食 ${p.satiety}/${p.satietyMax}｜🍖餵 ${p.feedTier} 階｜採集 ${p.gatherCount}/${p.gatherCap}（產 ${p.producesTier} 階）\n     └ ${trait}${quality}`;
+  return `${eggEmoji(p)} ${name}（${p.tier} 階）｜飽食 ${p.satiety}/${p.satietyMax}（可撐 ${p.satietyHours}h）｜採集 ${p.gatherCount}/${p.gatherCap}（產 ≤${p.producesTier} 階）${combat}\n     └ ${trait}${quality}`;
 }
 
 // ─── 外層：公共「寵物採集站」（介紹 + 一顆按鈕進入個人區） ───
@@ -43,18 +52,22 @@ function createPetPanelMessage() {
   );
   return {
     content: [
-      "🐉 **寵物採集站**",
-      "在龍族之領打怪有機會掉落「寵物蛋」，餵裝備孵化後，寵物會自動幫你採集素材。",
+      "🐾 **寵物採集站**",
+      "打怪有機會掉落「寵物蛋」，餵裝備孵化後，寵物會幫你採集或並肩作戰。",
+      "",
+      "🥚 **三種蛋**（孵出的階級＝抽到的稀有度，D～A）",
+      "・🟢 史萊姆蛋（史萊姆家族／大史王）— 採集**金幣袋＋強化石**，偶爾撿到怪東西",
+      "・🐉 龍蛋（龍族之領）— 採集**裝備＋強化石**",
+      "・🐺 狼牙蛋（地獄火焰／地獄狼牙王）— **戰鬥夥伴**，出戰時給你戰鬥加成",
       "",
       "📘 **規則**",
-      "・🥚 餵裝備累積孵化（約 20 件 D 裝），孵化後開始採集",
-      "・🍖 餵食先補飽食度，飽食滿後再餵才會升級（D 飼料最划算）",
-      "・🐾 前台同時只能出戰 1 隻，出戰中的寵物才會採集",
-      "・🎁 每小時採 3 個（強化石為主），最多累積 18 個，記得來領",
-      "・⚠️ 餵飽可放 12 小時；餓肚子停止採集，餓太久會掉等",
-      "・採集產出階級依寵物等級：Lv1-10→D｜11-20→C｜21-40→B｜40-50→A",
+      "・🥚 餵裝備累積孵化（約 20 件 D 裝），孵化瞬間才揭曉品種與階級",
+      "・🍖 餵食＝補飽食度（沒有等級／不會進化）；階級越高越會吃",
+      "・🐾 同時只能出戰 1 隻，出戰中才會採集／給戰鬥加成",
+      "・🎁 採集只撿得到「自身階級含以下」的一般裝備（不會撿到卡片）",
+      "・⚠️ 餓肚子會停止採集＋戰鬥加成失效（餵飽即可，不會掉等）",
       "",
-      "👇 點下方按鈕進入「我的寵物」面板查看自己的寵物狀態與操作。",
+      "👇 點下方按鈕進入「我的寵物」面板。",
     ].join("\n"),
     components: [row],
   };
@@ -104,21 +117,20 @@ function createPetDashboardMessage(state, opts = {}) {
     }
   } else if (active.stage === "egg") {
     // ── 蛋階段 ──
-    embed.setTitle("🥚 神秘龍蛋（孵化中）");
-    descLines.push("孵化後才會揭曉品種，並自動開始採集。", "", "👉 持續餵裝備累積孵化進度。");
+    embed.setTitle(`${eggEmoji(active)} ${eggName(active)}（孵化中）`);
+    descLines.push("孵化瞬間才揭曉品種與階級（D～A），並自動開始採集/作戰。", "", "👉 持續餵裝備累積孵化進度。");
     const hatchBar = buildBar(active.hatchProgress, active.hatchThreshold);
     fields.push(
       { name: "孵化進度", value: `${hatchBar} ${active.hatchPct}%\n${active.hatchProgress} / ${active.hatchThreshold}`, inline: false },
-      { name: "餵食對應階級", value: `${active.feedTier} 階`, inline: true },
+      { name: "🍴 餵食對應階級", value: `${active.feedTier} 階`, inline: true },
     );
   } else {
     // ── 已孵化：完整屬性面板 ──
     const name = active.nickname || active.speciesName || "未命名";
-    const rt = rarityText(active.rarity);
-    embed.setTitle(`🐉 ${name}`);
-    const subParts = [`${active.speciesName || "?"} 種`, `Lv.${active.level}`];
-    if (rt) subParts.push(rt);
-    descLines.push(`💀 **${subParts.join("　·　")}**`);
+    embed.setTitle(`${eggEmoji(active)} ${name}`);
+    const subParts = [`${active.speciesName || "?"} 種`, `${active.tier} 階 ${tierStars(active.tier)}`];
+    descLines.push(`✨ **${subParts.join("　·　")}**`);
+    if (active.combatBonus) descLines.push(`⚔️ **戰鬥夥伴**：出戰時 ${active.combatBonus}`);
 
     // 情境提示
     const hungry = active.satiety <= 0;
@@ -126,8 +138,8 @@ function createPetDashboardMessage(state, opts = {}) {
     const cap = active.gatherCount >= active.gatherCap;
     const hints = [];
     if (cap) hints.push("⚠️ 採集已滿，請按【🎁 領取採集】清空後才會繼續採");
-    if (hungry) hints.push("⚠️ 寵物餓壞了！採集已停止，請【🍖 餵食】");
-    else if (full) hints.push("✅ 寵物吃飽了，繼續餵會把多餘的轉成成長 EXP");
+    if (hungry) hints.push(`⚠️ 寵物餓壞了！採集${active.combatBonus ? "與戰鬥加成" : ""}已停止，請【🍖 餵食】`);
+    else if (full) hints.push("✅ 寵物吃飽了（滿飽食即可，餵多了不會浪費也不會升級）");
     if (hints.length > 0) descLines.push("", ...hints);
 
     // 縮圖（支援 http 絕對網址與 /uploads 本地相對路徑）
@@ -147,19 +159,19 @@ function createPetDashboardMessage(state, opts = {}) {
     }
 
     const satietyBar = buildBar(active.satiety, active.satietyMax);
-    const expBar = buildBar(active.growthExp, active.expToNext);
     const gatherBar = buildBar(active.gatherCount, active.gatherCap);
     const traitParts = [];
     if (active.gatherIntervalMin) traitParts.push(`每 ${active.gatherIntervalMin} 分採 1 個`);
     if (active.gemBias != null) traitParts.push(`強化石率 ${Math.round(active.gemBias * 100)}%`);
     if (active.qualityUpChance) traitParts.push(`${Math.round(active.qualityUpChance * 100)}% 機率高一階`);
+    if (active.combatBonus) traitParts.push(`⚔️ ${active.combatBonus}`);
 
     fields.push(
-      { name: "🍖 飽食度", value: `${satietyBar}\n${active.satiety} / ${active.satietyMax}${hungry ? "（餓壞了）" : full ? "（已吃飽）" : ""}`, inline: true },
-      { name: `⬆️ 成長 EXP（Lv.${active.level}→${active.level + 1}）`, value: `${expBar}\n${active.growthExp} / ${active.expToNext}`, inline: true },
-      { name: "📦 採集進度", value: `${gatherBar}\n${active.gatherCount} / ${active.gatherCap}（產 ${active.producesTier} 階）`, inline: false },
-      { name: "✨ 採集特性", value: traitParts.length ? traitParts.join("\n") : "—", inline: true },
+      { name: "⭐ 階級", value: `${active.tier} 階 ${tierStars(active.tier)}`, inline: true },
+      { name: "🍖 飽食度", value: `${satietyBar}\n${active.satiety} / ${active.satietyMax}${hungry ? "（餓壞了）" : full ? "（已吃飽）" : `　可撐 ${active.satietyHours}h`}`, inline: true },
       { name: "🍴 餵食對應階級", value: `${active.feedTier} 階最划算`, inline: true },
+      { name: "📦 採集進度", value: `${gatherBar}\n${active.gatherCount} / ${active.gatherCap}（產 ≤${active.producesTier} 階一般裝備）`, inline: false },
+      { name: "✨ 採集特性", value: traitParts.length ? traitParts.join("\n") : "—", inline: false },
     );
   }
 
@@ -168,14 +180,17 @@ function createPetDashboardMessage(state, opts = {}) {
     const rosterLines = pets.slice(0, 12).map((p) => {
       const mark = p.uuid === activeUuid ? "⭐" : "・";
       if (p.stage === "egg") {
-        return `${mark} 🥚 神秘龍蛋（孵化中 ${p.hatchPct}%）`;
+        return `${mark} ${eggEmoji(p)} ${eggName(p)}（孵化中 ${p.hatchPct}%）`;
       }
       const nm = p.nickname || p.speciesName || "未命名";
-      return `${mark} 🐉 ${nm}　Lv.${p.level}｜飽食 ${p.satiety}/${p.satietyMax}｜採 ${p.gatherCount}/${p.gatherCap}`;
+      const cb = p.combatBonus ? "｜⚔️" : "";
+      return `${mark} ${eggEmoji(p)} ${nm}　${p.tier} 階｜飽食 ${p.satiety}/${p.satietyMax}｜採 ${p.gatherCount}/${p.gatherCap}${cb}`;
     });
     if (pets.length > 12) rosterLines.push(`…還有 ${pets.length - 12} 隻`);
     rosterLines.push("", "⭐ = 出戰中（只有出戰中的寵物會採集／可餵食）");
-    fields.push({ name: `🐾 寵物總覽（共 ${pets.length} 隻）`, value: rosterLines.join("\n"), inline: false });
+    const maxPets = state?.maxPets || 20;
+    const capTxt = pets.length >= maxPets ? `（已滿，放生或上架交易才能再孵）` : "";
+    fields.push({ name: `🐾 寵物總覽（${pets.length} / ${maxPets} 隻）${capTxt}`, value: rosterLines.join("\n"), inline: false });
   }
   embed.setDescription(descLines.join("\n") || "​");
   if (fields.length > 0) embed.addFields(...fields);

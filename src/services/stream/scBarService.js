@@ -8,7 +8,8 @@
 // 里程碑設定：streamEventConfig.scBar.milestones（見 streamEventConfig.js）
 
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-const { applyBuff } = require("./globalBuffService");
+const globalBuff = require("./globalBuffService");
+const { applyBuff } = globalBuff;
 const { getConfig } = require("./streamEventConfig");
 
 const DOC_ID = "current";
@@ -43,41 +44,38 @@ async function addDonation(twdAmount, meta, serviceContext) {
 
   const cfg = (await getConfig()).scBar;
   const unlocked = [];
-  // 里程碑只在「啟用」時才會發獎；未啟用時只累積、不解鎖（獎勵之後再定）
+  // 里程碑只在「啟用」時才會發獎；未啟用時只累積、不解鎖
   if (cfg.enabled && Array.isArray(cfg.milestones)) {
     const claimed = new Set(Array.isArray(state.claimedMilestoneIds) ? state.claimedMilestoneIds : []);
-    const reached = cfg.milestones
+    // 本次累積後「新達成」的里程碑（用於逐一廣播）
+    const newly = cfg.milestones
       .filter((m) => m && Number(m.threshold) > 0 && total >= Number(m.threshold) && !claimed.has(m.id))
       .sort((a, b) => Number(a.threshold) - Number(b.threshold));
 
-    for (const m of reached) {
-      // 原子搶佔：只有把 id 加進 claimed 的那一次(modifiedCount=1)才發獎，避免併發重複觸發
+    for (const m of newly) {
+      // 原子搶佔：只有把 id 加進 claimed 的那一次才發獎，避免併發重複觸發
       const claim = await db.collection("scAccumulator").updateOne(
         { _id: DOC_ID, claimedMilestoneIds: { $ne: m.id } },
         { $addToSet: { claimedMilestoneIds: m.id } }
       );
       if (!claim.modifiedCount) continue;
-
-      const durationMs = Number(m.durationMinutes || 0) * 60_000;
-      let buffApplied = false;
-      if (durationMs > 0 && (Number(m.dropPct) > 0 || Number(m.goldPct) > 0 || Number(m.expPct) > 0)) {
-        const r = await applyBuff({
-          label: `SC 累積解鎖：${m.label || ("NT$" + m.threshold)}`,
+      // 疊加式：每階各自套一個「賽季永久」buff，全部相加、永久保留（換季 resetSeason 清）
+      if (Number(m.dropPct) > 0 || Number(m.goldPct) > 0 || Number(m.expPct) > 0) {
+        await applyBuff({
+          label: `賽季永久 · SC累積：${m.label || ("NT$" + m.threshold)}`,
           source: "sc_milestone",
-          sourceRef: `scms:${state.startedAt || nowIso}:${m.id}`, // 同一期同里程碑冪等
+          sourceRef: `scms:season:${m.id}`, // 每階唯一、可共存疊加
           dropPct: Number(m.dropPct) || 0, goldPct: Number(m.goldPct) || 0, expPct: Number(m.expPct) || 0,
-          durationMs, createdBy: "stream:sc-bar"
-        });
-        buffApplied = r.applied;
+          seasonPermanent: true, createdBy: "stream:sc-bar",
+        }).catch(() => {});
       }
-      unlocked.push({ id: m.id, threshold: m.threshold, label: m.label, buffApplied });
-
+      unlocked.push({ id: m.id, threshold: m.threshold, label: m.label });
       if (m.announce !== false && typeof serviceContext?._announceTownChat === "function") {
         const parts = [];
         if (Number(m.dropPct) > 0) parts.push(`掉寶 +${m.dropPct}%`);
         if (Number(m.goldPct) > 0) parts.push(`金幣 +${m.goldPct}%`);
         if (Number(m.expPct) > 0) parts.push(`經驗 +${m.expPct}%`);
-        const eff = parts.length ? `全服 ${parts.join("、")}，持續 ${m.durationMinutes} 分鐘！` : "";
+        const eff = parts.length ? `全服 ${parts.join("、")}（本賽季永久保留）！` : "";
         try {
           serviceContext._announceTownChat(`🔓 全服 SC 累積達 NT$${m.threshold}！解鎖「${m.label || ""}」${eff}`);
         } catch (_) { /* noop */ }

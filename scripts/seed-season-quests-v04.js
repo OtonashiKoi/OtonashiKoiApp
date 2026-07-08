@@ -16,6 +16,7 @@ const REROLL_POTION = "enchant_reroll_potion";                         // 附魔
 const RESPEC_POTION = "87b281be-b175-40a0-8044-0accc88a0ee0";          // 屬性重製藥水（洗點）
 const DRAGON_TITLE  = "f5d8903b-5d19-46d7-a1f5-3af1672ee833";          // 龍王的零嘴們（既有稱號）
 const WOLF_TITLE_ID = "b4f8c3f3-39f2-4c5e-9c30-61812156a936";          // 狼王的磨牙棒（本腳本建立）
+const SLIME_TITLE_ID = "0aa0f96b-2ada-482f-87b7-55ffedc0bc36";         // 大史王的黏液球（本腳本建立）
 
 // 狼王稱號道具（比照龍王的零嘴們）
 const WOLF_TITLE_ITEM = {
@@ -49,8 +50,45 @@ const WOLF_TITLE_ITEM = {
   ],
 };
 
+// 大史王稱號（三世界王最入門者；買一條 A 路線傷害＝古城深處/秘銀線，與龍/火三線對稱）
+const SLIME_TITLE_ITEM = {
+  id: SLIME_TITLE_ID,
+  name: "大史王的黏液球",
+  itemType: "equipment",
+  equipSlot: "title_eq",
+  description: "擊敗世界王【大史王】十次的證明。在古城深處或大史王試煉之地戰鬥時，最終傷害 +5%。",
+  effect: { type: "none", value: 0 },
+  equipStats: null,
+  atkStat: null,
+  tier: null,
+  dropable: false,
+  tradeable: false,
+  isTwoHanded: false,
+  weaponType: null,
+  imageUrl: null,
+  imageThumbnailUrl: null,
+  useEffects: [],
+  procEffects: [],
+  combatEffects: [],
+  passiveEffects: [
+    {
+      key: "final_damage_up", category: "offense", target: "self", trigger: "passive",
+      chance: 100, stacks: 1, sourcePhase: "passive",
+      params: { value: 5 },
+      condition: { zone: ["ancient_city_deep", "elite"] },
+      notes: "古城深處／大史王試煉最終傷害 +5%",
+      definitionName: "Final Damage Up",
+    },
+  ],
+};
+
+const TITLE_ITEMS = [WOLF_TITLE_ITEM, SLIME_TITLE_ITEM];
+
 // title, type, target, sortOrder, gold, exp, rewardItemId(稱號/主獎), rewardItems, description
 const QUESTS = [
+  ["屠史者の試煉", "kill_slime_king", 10, 5, 0, 0, SLIME_TITLE_ID,
+    [{ itemId: REROLL_POTION, qty: 5 }, { itemId: RESPEC_POTION, qty: 1 }],
+    "擊敗世界王【大史王】10 次，獲得稱號「大史王的黏液球」（古城深處／大史王試煉最終傷害 +5%）＋附魔重骰藥水 ×5＋屬性重製藥水 ×1。"],
   ["屠龍者の試煉", "kill_dragon_king", 10, 10, 0, 0, DRAGON_TITLE,
     [{ itemId: REROLL_POTION, qty: 5 }, { itemId: RESPEC_POTION, qty: 1 }],
     "擊敗世界王【古龍王(B)】10 次，獲得稱號「龍王的零嘴們」（龍族之領／龍王巢穴最終傷害 +5%）＋附魔重骰藥水 ×5＋屬性重製藥水 ×1。"],
@@ -73,13 +111,15 @@ async function main() {
   const items = db.collection("items");
   const col = db.collection("weeklyQuests");
 
-  // 1) 稱號道具
-  const existTitle = await items.findOne({ id: WOLF_TITLE_ID });
-  console.log(`稱號道具「狼王的磨牙棒」：${existTitle ? "已存在→更新" : "新建"}`);
-  if (!dry) {
-    await items.updateOne({ id: WOLF_TITLE_ID },
-      { $set: { ...WOLF_TITLE_ITEM, updatedAt: NOW }, $setOnInsert: { createdAt: NOW } },
-      { upsert: true });
+  // 1) 稱號道具（狼王／大史王）
+  for (const t of TITLE_ITEMS) {
+    const existTitle = await items.findOne({ id: t.id });
+    console.log(`稱號道具「${t.name}」：${existTitle ? "已存在→更新" : "新建"}`);
+    if (!dry) {
+      await items.updateOne({ id: t.id },
+        { $set: { ...t, updatedAt: NOW }, $setOnInsert: { createdAt: NOW } },
+        { upsert: true });
+    }
   }
 
   // 2) 賽季任務

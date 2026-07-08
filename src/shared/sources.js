@@ -25,7 +25,9 @@ const CURRENCY_SOURCES = {
   TOWER_REWARD: "tower:reward",                      // 組隊爬塔：通關金幣獎勵
   CASINO_BET: "casino:bet",                          // 賭場：下注扣除
   CASINO_BET_REFUND: "casino:bet-refund",            // 賭場：下注退還（鎖盤前撤注）
-  CASINO_PAYOUT: "casino:payout"                     // 賭場：結算中獎入帳
+  CASINO_PAYOUT: "casino:payout",                    // 賭場：結算中獎入帳
+  PASS_UNLOCK: "pass:unlock",                        // 通行證：3 鑽開通付費軌
+  PASS_REWARD: "pass:reward"                         // 通行證：領取獎勵（金幣/鑽石）
 };
 
 // 經驗值來源類型

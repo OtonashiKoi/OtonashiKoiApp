@@ -59,24 +59,29 @@ function isPetModal(customId) {
   return customId === PET_RENAME_MODAL_ID;
 }
 
-const STAGE_LABEL = { egg: "🥚 蛋", grown: "🐉 已孵化" };
+const STAGE_LABEL = { egg: "🥚 蛋", grown: "🐾 已孵化" };
+const EGG_EMOJI = { dragon: "🐉", slime: "🟢", wolf: "🐺" };
+const EGG_NAME = { dragon: "神秘龍蛋", slime: "神秘史萊姆蛋", wolf: "神秘狼牙蛋" };
+const eggEmoji = (p) => EGG_EMOJI[p?.eggType] || "🥚";
+const eggName = (p) => EGG_NAME[p?.eggType] || "神秘寵物蛋";
 
 // 寵物在選單/訊息的顯示名（蛋階段不揭曉種類）
 function petDisplayName(p) {
-  if (p.stage === "egg") return "神秘龍蛋";
+  if (p.stage === "egg") return eggName(p);
   return p.nickname || p.speciesName || "未命名";
 }
 
 function petLine(p) {
   if (p.stage === "egg") {
-    return `🥚 神秘龍蛋（孵化中 ${p.hatchPct}%｜${p.hatchProgress}/${p.hatchThreshold}）— 孵化後才揭曉品種`;
+    return `${eggEmoji(p)} ${eggName(p)}（孵化中 ${p.hatchPct}%｜${p.hatchProgress}/${p.hatchThreshold}）— 孵化後才揭曉品種`;
   }
   const name = p.nickname || p.speciesName || "未命名";
   const speed = p.gatherIntervalMin ? `每 ${p.gatherIntervalMin} 分採 1 個` : "";
   const gemPct = p.gemBias != null ? `石 ${Math.round(p.gemBias * 100)}%` : "";
   const quality = p.qualityUpChance ? `｜${Math.round(p.qualityUpChance * 100)}% 高一階` : "";
+  const combat = p.combatBonus ? `｜⚔️ ${p.combatBonus}` : "";
   const trait = [speed, gemPct].filter(Boolean).join("、");
-  return `🐉 ${name}（${p.speciesName || "?"}）Lv.${p.level}（exp ${p.growthExp}/${p.expToNext}）｜飽食 ${p.satiety}/${p.satietyMax}｜🍖餵 ${p.feedTier} 階｜採集 ${p.gatherCount}/${p.gatherCap}（產 ${p.producesTier} 階）\n     └ ${trait}${quality}`;
+  return `${eggEmoji(p)} ${name}（${p.tier} 階）｜飽食 ${p.satiety}/${p.satietyMax}（撐 ${p.satietyHours}h）｜採集 ${p.gatherCount}/${p.gatherCap}（產 ≤${p.producesTier} 階）${combat}\n     └ ${trait}${quality}`;
 }
 
 // 重繪主面板到「同一個 ephemeral 訊息」（動作完成後呼叫，帶結果訊息）
@@ -99,15 +104,12 @@ function buildFeedStatus(r, tierLabel) {
   if (r.protectedCount > 0) lines.push(`🛡️ 已保護 **${r.protectedCount}** 件未餵（有 +值的請單件餵；卡片徽章不可餵）`);
   if (r.totalHatch > 0) lines.push(`孵化進度 +${r.totalHatch}`);
   if (r.totalSatiety > 0) lines.push(`飽食度 +${Math.round(r.totalSatiety)}`);
-  if (r.totalGrowth > 0) lines.push(`成長 exp +${r.totalGrowth}`);
-  if (r.hatched) lines.push(`🎉 **孵化成功！開出了【${r.hatchedSpecies || "神秘龍"}】！**`);
-  if (r.leveledTo) lines.push(`⬆️ 升到 **Lv.${r.leveledTo}**`);
-  if (r.crossedTier) {
-    const clr = r.gatherCleared > 0 ? `、清空未領取採集物 **${r.gatherCleared}** 個` : "";
-    lines.push(`⬆️✨ **進化到 ${r.endTier} 階！** 飽食度已重置為 0${clr}，請重新餵食補飽食才能繼續採集。`);
-  } else if (r.tierCapReached) {
-    lines.push(`🛑 已達 **${r.endTier} 階上限**！剩餘飼料已保留在背包。再餵一次才會進化到下一階。`);
-    lines.push(`⚠️ 注意：進化的瞬間會「**清空飽食度與未領取的採集物**」，建議**先去領取採集**再進化。`);
+  if (r.hatched) {
+    lines.push(`🎉 **孵化成功！開出了【${r.hatchedSpecies || "神秘寵物"}】（${r.pet?.tier || "?"} 階）！**`);
+    if (r.pet?.combatBonus) lines.push(`⚔️ 這是**戰鬥夥伴**：出戰時 ${r.pet.combatBonus}`);
+  }
+  if (!r.hatched && r.pet?.stage === "grown" && (Number(r.pet.satiety) || 0) >= (Number(r.pet.satietyMax) || 100)) {
+    lines.push(`✅ 已餵飽（滿飽食即可，餵多了不會浪費）`);
   }
   return lines;
 }
@@ -289,7 +291,7 @@ async function _handlePetButtonImpl(interaction) {
     const state = await sc.petService.getPetState(discordId);
     if (state.pets.length === 0) { await refreshDashboard(interaction, "你還沒有寵物。先孵一顆蛋。"); return; }
     const options = state.pets.slice(0, 25).map((p) => new StringSelectMenuOptionBuilder()
-      .setLabel(`${petDisplayName(p)} (${STAGE_LABEL[p.stage]} Lv.${p.level})`)
+      .setLabel(`${petDisplayName(p)} (${STAGE_LABEL[p.stage]}${p.stage === "grown" ? " " + p.tier + " 階" : ""})`)
       .setValue(`active|${p.uuid}`)
       .setDefault(p.uuid === state.activePetUuid));
     const select = new StringSelectMenuBuilder().setCustomId(`${PET_SELECT_PREFIX}active`)
@@ -301,7 +303,7 @@ async function _handlePetButtonImpl(interaction) {
   if (interaction.customId === PET_DEX_ID) {
     const state = await sc.petService.getPetState(discordId);
     const embed = new EmbedBuilder().setTitle("📋 我的寵物圖鑑").setColor(0x9d174d);
-    if (state.pets.length === 0) embed.setDescription("（尚無寵物，去龍族之領打蛋）");
+    if (state.pets.length === 0) embed.setDescription("（尚無寵物，打怪掉蛋：史萊姆家族→史萊姆蛋、龍族之領→龍蛋、地獄火焰→狼牙蛋）");
     else embed.setDescription(state.pets.map((p) => (p.uuid === state.activePetUuid ? "⭐ " : "・") + petLine(p)).join("\n"));
     await interaction.editReply({ content: "", embeds: [embed], components: [backRow()] });
     return;
@@ -325,7 +327,7 @@ async function _handlePetButtonImpl(interaction) {
     const state = await sc.petService.getPetState(discordId);
     if (state.pets.length === 0) { await refreshDashboard(interaction, "你還沒有寵物。"); return; }
     const options = state.pets.slice(0, 25).map((p) => new StringSelectMenuOptionBuilder()
-      .setLabel(`${petDisplayName(p)} (${STAGE_LABEL[p.stage]} Lv.${p.level})`)
+      .setLabel(`${petDisplayName(p)} (${STAGE_LABEL[p.stage]}${p.stage === "grown" ? " " + p.tier + " 階" : ""})`)
       .setValue(`release|${p.uuid}`));
     const select = new StringSelectMenuBuilder().setCustomId(`${PET_SELECT_PREFIX}release`)
       .setPlaceholder("選擇要放生的寵物").addOptions(options);
@@ -367,7 +369,7 @@ async function _handlePetSelectImpl(interaction) {
       await refreshDashboard(interaction, buildFeedStatus(r, null));
     } else if (action === "hatch") {
       const r = await sc.petService.hatchEggFromInventory(discordId, uuid);
-      const lines = ["🥚 已開始孵化神秘龍蛋，並設為**出戰中**！"];
+      const lines = [`🥚 已開始孵化${eggName(r.pet)}，並設為**出戰中**！`];
       if (r.benchedPet) {
         const benchedName = petDisplayName(r.benchedPet);
         lines.push(`🔁 原本出戰的「**${benchedName}**」已被換下、暫停採集（可用【🐾 出戰/更換】切回）。`);

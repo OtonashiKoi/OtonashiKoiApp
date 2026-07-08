@@ -103,10 +103,58 @@ async function listAllPlayerIds() {
 }
 
 /**
- * 全體回歸賽季重製。逐一備份 + 重製每位玩家,回傳彙總統計。
+ * 賽季重置：各區域怪物歸位到「第一隻」(該區最小 seq)、血量補滿(currentHp=null 即滿血),
+ * 並清掉 killCount 與殘留的 transition/damageMap。寫入 monsters collection(_id: `monsterState:<zone>`)
+ * 與 legacy monsterState collection(維持相容)。
+ */
+async function resetAllZoneMonsters(monsterService = null) {
+  const db = await getMongoDb();
+  // 取各區怪物(帶 calc.maxHp)：優先走 monsterService，取不到才退回直讀 collection。
+  let mons;
+  if (monsterService && typeof monsterService.listMonsters === "function") {
+    mons = await monsterService.listMonsters({ includeDisabled: false });
+  } else {
+    mons = await db.collection("monsters").find({ seq: { $exists: true } }).toArray();
+  }
+  // 每區挑「第一隻」= 最小 seq 的怪。
+  const firstByZone = {};
+  for (const m of mons) {
+    if (!m.zone || typeof m.seq !== "number") continue;
+    if (!firstByZone[m.zone] || m.seq < firstByZone[m.zone].seq) firstByZone[m.zone] = m;
+  }
+  const now = new Date().toISOString();
+  const zones = [];
+  for (const z of Object.keys(firstByZone)) {
+    const first = firstByZone[z];
+    // 純世界王巢穴(第一隻即 BOSS)交給 worldBossState 管，不在此重置。
+    if (first.isBoss || first.calc?.isBoss) continue;
+    const maxHp = first.calc?.maxHp ?? first.maxHp;
+    // ⚠️ currentHp 必須是滿血「正數」；設 null/0 會被面板判定成死怪 → 觸發自動換怪。
+    const clean = {
+      activeMonsterSeq: first.seq,
+      currentHp: (typeof maxHp === "number" && maxHp > 0) ? maxHp : 1,
+      killCount: {},
+    };
+    if (monsterService && typeof monsterService.saveState === "function") {
+      await monsterService.saveState(clean, z);
+    } else {
+      await db.collection("monsters").updateOne(
+        { _id: `monsterState:${z}` }, { $set: { value: clean, updatedAt: now } }, { upsert: true }
+      );
+      await db.collection("monsterState").updateOne(
+        { _id: z }, { $set: { value: clean, updatedAt: now } }, { upsert: true }
+      );
+    }
+    zones.push(z);
+  }
+  return { zonesReset: zones.length };
+}
+
+/**
+ * 全體回歸賽季重製。逐一備份 + 重製每位玩家 + 各區怪物歸位第一隻滿血,回傳彙總統計。
  * @param {{ onBackup?: (allBackups:Array)=>Promise<void>, dryRun?: boolean }} options
  */
-async function seasonResetAllPlayers({ onBackup = null, dryRun = false } = {}) {
+async function seasonResetAllPlayers({ onBackup = null, dryRun = false, monsterService = null } = {}) {
   const ids = await listAllPlayerIds();
   if (dryRun) return { total: ids.length, dryRun: true };
 
@@ -130,7 +178,14 @@ async function seasonResetAllPlayers({ onBackup = null, dryRun = false } = {}) {
       if (agg.errors.length < 20) agg.errors.push({ id, message: e.message });
     }
   }
+  // 各區域怪物歸位到第一隻＋滿血（全新賽季，全服共用狀態，只需做一次）
+  try {
+    const mz = await resetAllZoneMonsters(monsterService);
+    agg.zonesReset = mz.zonesReset;
+  } catch (e) {
+    agg.zonesResetError = e.message;
+  }
   return agg;
 }
 
-module.exports = { seasonResetPlayer, buildSeasonResetBackup, listAllPlayerIds, seasonResetAllPlayers };
+module.exports = { seasonResetPlayer, buildSeasonResetBackup, listAllPlayerIds, seasonResetAllPlayers, resetAllZoneMonsters };

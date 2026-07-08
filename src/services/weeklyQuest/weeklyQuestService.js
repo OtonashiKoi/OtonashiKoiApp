@@ -24,6 +24,7 @@ const QUEST_TYPES = {
   burn_trigger_count:{ label: "成功觸發燃燒次數", unit: "次" },
   onboarding_complete_count: { label: "完成全部新手任務", unit: "項" },
   weekly_complete_count: { label: "完成全部每週任務", unit: "項" },
+  kill_slime_king:   { label: "擊敗大史王 次數",     unit: "次" },
   kill_dragon_king:  { label: "擊敗古龍王(B) 次數", unit: "次" },
   kill_hellfang_king:{ label: "擊敗地獄狼牙王 次數", unit: "次" },
   enhance_a5_count:  { label: "A 裝強化至 +5 累積", unit: "件" },

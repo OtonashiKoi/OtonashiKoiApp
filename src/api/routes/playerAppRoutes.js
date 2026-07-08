@@ -2509,6 +2509,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
+      // 狼系寵物戰鬥夥伴：出戰寵物(有 combatPassives 且沒餓壞)以虛擬裝備注入,數值/咬擊走現成引擎
+      try {
+        const petEntry = serviceContext.petService?.buildPetCombatEntry?.(progress);
+        if (petEntry) equipped.pet_companion = petEntry;
+      } catch (_) { /* 寵物加成失敗不影響戰鬥 */ }
       // 與 DC 一致：傳 pkRating + zone，讓裝備的區域條件特效生效（如龍系武器在龍族之領 +20%）
       const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, zone: zoneKey });
 
@@ -3029,6 +3034,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (combatStats.stunCount > 0) await questService.recordProgress(discordId, "stun_count", combatStats.stunCount);
           if (combatStats.burnTriggerCount > 0) await questService.recordProgress(discordId, "burn_trigger_count", combatStats.burnTriggerCount);
         }
+        // 通行證點數：打怪(非落敗)依地圖階級加點
+        if (outcome !== "lose") {
+          const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", dragon_king_lair: "S", hellfire_depths: "S" };
+          serviceContext.passService?.addPointsForKill?.(discordId, PASS_TIER[zoneKey] || "D").catch(() => {});
+        }
       } catch (e) {
         console.error("[WeeklyQuest] recordProgress error:", e.message);
       }
@@ -3425,6 +3435,22 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.post("/api/me/pets/hatch", requireAuth, async (req, res, next) => {
     try { const r = await serviceContext.petService.hatchEggFromInventory(req.playerRecord.discordId, req.body?.inventoryUuid); res.json(ok(r, r?.message || "已放入孵化")); }
     catch (err) { if (err?.message) return res.status(400).json(fail("PET_HATCH_FAILED", err.message)); next(err); }
+  });
+
+  // ── 賽季通行證 ──
+  router.get("/api/me/pass", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await serviceContext.passService.getState(req.playerRecord.discordId))); }
+    catch (err) { next(err); }
+  });
+  router.post("/api/me/pass/unlock", requireAuth, async (req, res, next) => {
+    try { const r = await serviceContext.passService.unlock(req.playerRecord.discordId, req.playerRecord.displayName); res.json(ok(r, "通行證已開通！")); }
+    catch (err) { if (err?.message) return res.status(400).json(fail("PASS_UNLOCK_FAILED", err.message)); next(err); }
+  });
+  router.post("/api/me/pass/claim", requireAuth, async (req, res, next) => {
+    try {
+      const r = await serviceContext.passService.claim(req.playerRecord.discordId, req.playerRecord.displayName, req.body?.level, req.body?.track);
+      res.json(ok(r, `已領取 Lv.${r.level} 獎勵`));
+    } catch (err) { if (err?.message) return res.status(400).json(fail("PASS_CLAIM_FAILED", err.message)); next(err); }
   });
 
   // ──────────────────────────────────────────────────
@@ -3948,7 +3974,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           sellerName: a.sellerName,
           listedAt: a.listedAt || a.createdAt,
           expiresAt: a.expiresAt,
-          status: a.status
+          status: a.status,
+          isPet: Boolean(a.item?.__pet),
+          eggType: a.item?.eggType || null,
+          combatBonus: a.item?.combatBonus || null
         }))
       }));
     } catch (err) {
@@ -3980,7 +4009,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           price: a.price,
           listedAt: a.listedAt || a.createdAt,
           expiresAt: a.expiresAt,
-          status: a.status
+          status: a.status,
+          isPet: Boolean(a.item?.__pet),
+          eggType: a.item?.eggType || null,
+          combatBonus: a.item?.combatBonus || null
         })),
         eligible,
         maxListings,
@@ -4036,6 +4068,30 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (err?.message) {
         return res.status(400).json(fail("LIST_FAILED", err.message));
       }
+      next(err);
+    }
+  });
+
+  // 上架「已孵化的寵物」（從 pets[] 託管）
+  router.post("/api/auction/list-pet", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { petUuid, currency, price, hours } = req.body || {};
+      if (!petUuid || !currency || !price || !hours) {
+        return res.status(400).json(fail("INVALID_ARGUMENT", "petUuid / currency / price / hours 必填"));
+      }
+      const membership = await resolveAuctionMembership(discordId);
+      if (!membership.isMember) {
+        return res.status(403).json(fail("NOT_MEMBER", "只有會員才能上架商品"));
+      }
+      const roleIds = await getMemberRoleIds(discordId);
+      const result = await serviceContext.auctionService.listPet({
+        sellerId: discordId, petUuid, currency,
+        price: Number(price), hours: Number(hours), memberRoleIds: roleIds,
+      });
+      res.json(ok(result, "寵物上架成功"));
+    } catch (err) {
+      if (err?.message) return res.status(400).json(fail("LIST_FAILED", err.message));
       next(err);
     }
   });

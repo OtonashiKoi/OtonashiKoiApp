@@ -7,6 +7,7 @@ const { auctionRepository } = require("./auctionRepository");
 const { createTransactionLog } = require("../../domain/transaction/createTransactionLog");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { isBoundItemId } = require("../../shared/boundItems");
+const { MAX_PETS } = require("../pet/petService");
 
 // 強化寶石 itemId 集合
 const ENHANCE_GEM_IDS = new Set([
@@ -17,6 +18,7 @@ const ENHANCE_GEM_IDS = new Set([
 ]);
 
 const ALLOWED_HOURS = [1, 6, 12, 24];
+const AUCTION_TAX_RATE = 0.10; // 拍賣手續費：金幣交易抽 10%（鑽石不抽）
 const GOLD_MIN = 5000;
 const GOLD_MAX = 10_000_000;
 const DIAMOND_MIN = 1;
@@ -26,6 +28,21 @@ const MAX_LISTINGS_BY_TIER = { E: 0, D: 0, C: 3, B: 5, A: 7, S: 7, SS: 7 };
 const DEFAULT_MAX_LISTINGS = 3;
 const FORBIDDEN_EQUIP_SLOTS = new Set(["job_eq", "title_eq"]);
 const FORBIDDEN_ITEM_TYPES = new Set(["job_badge", "title"]);
+
+// 狼系寵物戰鬥加成 → 中文摘要（上架時算好給買家看；與 petService._combatSummary 同義）
+function summarizePetCombat(combatPassives) {
+  if (!Array.isArray(combatPassives) || !combatPassives.length) return null;
+  const LABEL = {
+    atk_up: "攻擊", final_damage_up: "最終傷害", crit_rate_up: "爆擊率", combo_up: "連擊率",
+    dodge_up: "迴避", physical_damage_reduction: "物理減傷", magic_damage_reduction: "魔法減傷",
+  };
+  const parts = [];
+  for (const e of combatPassives) {
+    if (e.key === "echo_strike") parts.push(`${e.params?.chance || 0}% 咬擊追打（${e.params?.value || 0}%）`);
+    else if (LABEL[e.key]) parts.push(`${LABEL[e.key]} +${e.params?.value || 0}${/reduction|final_damage|atk_up/.test(e.key) ? "%" : ""}`);
+  }
+  return parts.length ? parts.join("、") : null;
+}
 
 class AuctionService {
   constructor(progressRepository, walletRepository, playerTierService, transactionRepository) {
@@ -216,6 +233,72 @@ class AuctionService {
     return auction;
   }
 
+  // 把拍賣快照的寵物還原到某玩家的 pets[]（買家成交 / 賣家領回 / 下架共用）
+  _restorePetToInventory(progress, petSnap, source) {
+    if (!Array.isArray(progress.pets)) progress.pets = [];
+    const clone = { ...petSnap };
+    delete clone.__pet; delete clone.isGem; delete clone.itemName;
+    clone.uuid = crypto.randomUUID();
+    clone.tradeSource = source;
+    progress.pets.push(clone);
+  }
+
+  // ─────────────────────────────────────────────
+  //  上架「已孵化的寵物」（從 progress.pets[] 託管；蛋仍走 listItem 背包路線）
+  // ─────────────────────────────────────────────
+  async listPet({ sellerId, petUuid, currency, price, hours, memberRoleIds = [] }) {
+    if (!await this.isEnabled()) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "拍賣場目前已關閉", 400);
+    if (!["gold", "diamond"].includes(currency)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "貨幣類型無效", 400);
+    price = Math.floor(Number(price));
+    if (!Number.isFinite(price) || price <= 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "定價必須是正整數", 400);
+    if (currency === "gold" && (price < GOLD_MIN || price > GOLD_MAX)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `金幣定價範圍：${GOLD_MIN.toLocaleString()} ～ ${GOLD_MAX.toLocaleString()}`, 400);
+    if (currency === "diamond" && (price < DIAMOND_MIN || price > DIAMOND_MAX)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `鑽石定價範圍：${DIAMOND_MIN} ～ ${DIAMOND_MAX.toLocaleString()}`, 400);
+    if (!ALLOWED_HOURS.includes(hours)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "上架時間只能選 1、6、12、24 小時", 400);
+
+    const activeCount = await this.getActiveListingCount(sellerId);
+    const maxListings = await this.getMaxListings(memberRoleIds);
+    if (activeCount >= maxListings) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `你目前已有上架中的商品，最多同時上架 ${maxListings} 件`, 400);
+
+    const progress = await this.progressRepository.findByPlayerId(sellerId);
+    if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家資料不存在", 404);
+    const pets = Array.isArray(progress.pets) ? progress.pets : [];
+    const pIdx = pets.findIndex((p) => p && p.uuid === petUuid);
+    if (pIdx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
+    const pet = pets[pIdx];
+    if (pet.stage !== "grown") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "蛋還沒孵化，不能上架（未孵化的蛋可從背包上架）", 400);
+    if (progress.activePetUuid === petUuid) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "出戰中的寵物不能上架，請先切換出戰寵物", 400);
+
+    // 託管：從 pets[] 移除
+    pets.splice(pIdx, 1);
+    progress.pets = pets;
+    await this.progressRepository.save(progress);
+
+    const petName = pet.nickname || pet.speciesName || "寵物";
+    const now = new Date();
+    const auction = {
+      id: crypto.randomUUID(),
+      sellerId,
+      item: {
+        ...pet,
+        __pet: true,
+        itemType: "pet",
+        itemName: petName,
+        tier: pet.rarity || null,
+        eggType: pet.eggType || "dragon",
+        combatBonus: summarizePetCombat(pet.combatPassives), // 買家看得到的戰鬥加成摘要
+        imageUrl: pet.imageUrl || null,
+        imageThumbnailUrl: pet.imageThumbnailUrl || null,
+      },
+      currency, price, hours,
+      status: "active",
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + hours * 3600 * 1000).toISOString(),
+      updatedAt: now.toISOString(),
+    };
+    await auctionRepository.create(auction);
+    return auction;
+  }
+
   // ─────────────────────────────────────────────
   //  購買
   // ─────────────────────────────────────────────
@@ -239,6 +322,14 @@ class AuctionService {
     }
     if (auction.sellerId === buyerId) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "不能購買自己上架的商品", 400);
+    }
+
+    // 寵物商品：扣款前先擋「買家寵物已滿」，避免付了錢卻收不到
+    if (auction.item?.__pet) {
+      const bp = await this.progressRepository.findByPlayerId(buyerId);
+      if (bp && Array.isArray(bp.pets) && bp.pets.length >= MAX_PETS) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `你的寵物已達上限 ${MAX_PETS} 隻，請先放生或上架一隻再購買`, 400);
+      }
     }
 
     // 扣款
@@ -281,25 +372,28 @@ class AuctionService {
       }));
     }
 
-    // 賣家收款
+    // 賣家收款（抽稅：金幣交易抽 10% 手續費，鑽石不抽 → 回收金幣、抑制通膨）
+    const tax = auction.currency === "gold" ? Math.floor(auction.price * AUCTION_TAX_RATE) : 0;
+    const sellerNet = auction.price - tax;
     const sellerWallet = await this.walletRepository.findByPlayerId(auction.sellerId);
     if (sellerWallet) {
       if (auction.currency === "gold") {
-        sellerWallet.gold = (sellerWallet.gold || 0) + auction.price;
+        sellerWallet.gold = (sellerWallet.gold || 0) + sellerNet;
       } else {
-        sellerWallet.diamond = (sellerWallet.diamond || 0) + auction.price;
+        sellerWallet.diamond = (sellerWallet.diamond || 0) + sellerNet;
       }
       await this.walletRepository.save(sellerWallet);
       if (this.transactionRepository) {
         await this.transactionRepository.append(createTransactionLog({
           playerId: auction.sellerId,
           currencyType: auction.currency,
-          amount: auction.price,
+          amount: sellerNet,
           direction: "credit",
           source: CURRENCY_SOURCES.AUCTION_SALE,
           sourceRef: auctionId,
           balanceAfter: auction.currency === "gold" ? (sellerWallet.gold || 0) : (sellerWallet.diamond || 0),
-          operator: "system:auction"
+          operator: "system:auction",
+          note: tax > 0 ? `拍賣成交 ${auction.price}，扣手續費 ${tax}（${Math.round(AUCTION_TAX_RATE * 100)}%）` : undefined,
         }));
       }
     }
@@ -309,6 +403,10 @@ class AuctionService {
     if (!buyerProgress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "找不到買家進度", 404);
 
     const itemToGive = { ...auction.item };
+    // 寵物：進買家 pets[]（非背包）
+    if (auction.item.__pet) {
+      this._restorePetToInventory(buyerProgress, auction.item, "auction_buy");
+    } else
     // 寶石：嘗試堆疊
     if (itemToGive.isGem && itemToGive.itemId) {
       const listedCount = Math.max(1, itemToGive.stackCount || 1);
@@ -340,15 +438,18 @@ class AuctionService {
 
     // 通知賣家：物品售出（SSE + 輪詢佇列；DC 與網頁購買路徑都會經過這裡）
     const currencyLabel = auction.currency === "gold" ? "金幣" : "鑽石";
+    const taxNote = tax > 0 ? `（成交 ${auction.price}，扣手續費 ${tax}）` : "";
     notifyPlayer(auction.sellerId, {
       type: "auction_sold",
       title: "拍賣售出",
-      message: `你的「${auction.item.itemName}」已售出，獲得 ${auction.price} ${currencyLabel}。`,
+      message: `你的「${auction.item.itemName}」已售出，實得 ${sellerNet} ${currencyLabel}${taxNote}。`,
       meta: {
         auctionId,
         itemName: auction.item.itemName,
         currency: auction.currency,
         price: auction.price,
+        net: sellerNet,
+        tax,
         buyerId
       }
     });
@@ -393,7 +494,9 @@ class AuctionService {
     progress.inventory = progress.inventory || [];
     const itemToReturn = { ...auction.item };
 
-    if (itemToReturn.isGem && itemToReturn.itemId) {
+    if (itemToReturn.__pet) {
+      this._restorePetToInventory(progress, auction.item, "auction_reclaim"); // 寵物回 pets[]（放生上限外，本來就是他的）
+    } else if (itemToReturn.isGem && itemToReturn.itemId) {
       const listedCount = Math.max(1, itemToReturn.stackCount || 1);
       const existingGem = progress.inventory.find(i => i.itemId === itemToReturn.itemId);
       if (existingGem) {
@@ -433,7 +536,9 @@ class AuctionService {
     progress.inventory = progress.inventory || [];
     const itemToReturn = { ...auction.item };
 
-    if (itemToReturn.isGem && itemToReturn.itemId) {
+    if (itemToReturn.__pet) {
+      this._restorePetToInventory(progress, auction.item, "auction_cancel"); // 寵物回 pets[]
+    } else if (itemToReturn.isGem && itemToReturn.itemId) {
       const listedCount = Math.max(1, itemToReturn.stackCount || 1);
       const existingGem = progress.inventory.find(i => i.itemId === itemToReturn.itemId);
       if (existingGem) {

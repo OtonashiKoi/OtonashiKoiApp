@@ -12,12 +12,20 @@ const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 
 const COLLECTION = "serverBuffs";
 const REFRESH_MS = 5 * 60 * 1000;
+const FAR_FUTURE = "2099-12-31T00:00:00.000Z"; // 賽季永久 buff 的 endsAt（實質不過期，換季才由 resetSeason 清）
 
 let cache = [];            // 目前 DB 裡「尚未過期」的 buff 快照
 let refreshTimer = null;
 let loaded = false;
+let shortTermCapPct = 30;  // 短期 buff 每類型加成上限（config 可調，init/saveConfig 時經 setShortTermCapPct 注入）
 
 function now() { return Date.now(); }
+
+/** 設定短期 buff 每類型上限（斗內即時尖峰用；賽季永久底盤不受此限） */
+function setShortTermCapPct(n) {
+  const v = Number(n);
+  if (Number.isFinite(v) && v > 0) shortTermCapPct = v;
+}
 
 function isActive(buff) {
   const ends = buff?.endsAt ? Date.parse(buff.endsAt) : 0;
@@ -53,16 +61,36 @@ async function init() {
  * @returns {{ dropPct:number, goldPct:number, expPct:number, buffs:Array }}
  */
 function getActiveModifiers() {
-  let dropPct = 0, goldPct = 0, expPct = 0;
+  // 兩層相加：賽季永久底盤(不封頂) + 短期尖峰(每類型封頂 shortTermCapPct)
+  let pDrop = 0, pGold = 0, pExp = 0;   // 永久底盤
+  let sDrop = 0, sGold = 0, sExp = 0;   // 短期
   const active = [];
   for (const b of cache) {
     if (!isActive(b)) continue;
-    dropPct += Number(b.dropPct) || 0;
-    goldPct += Number(b.goldPct) || 0;
-    expPct += Number(b.expPct) || 0;
     active.push(b);
+    if (b.seasonPermanent) {
+      pDrop += Number(b.dropPct) || 0; pGold += Number(b.goldPct) || 0; pExp += Number(b.expPct) || 0;
+    } else {
+      sDrop += Number(b.dropPct) || 0; sGold += Number(b.goldPct) || 0; sExp += Number(b.expPct) || 0;
+    }
   }
-  return { dropPct, goldPct, expPct, buffs: active };
+  // 短期尖峰封頂
+  sDrop = Math.min(sDrop, shortTermCapPct);
+  sGold = Math.min(sGold, shortTermCapPct);
+  sExp = Math.min(sExp, shortTermCapPct);
+  // 短期 buff 最晚結束時間（給前端倒數：歸零＝倒數完；有人續斗→這個時間往後延）
+  let shortTermEndsAt = null;
+  for (const b of active) {
+    if (b.seasonPermanent) continue;
+    if (!shortTermEndsAt || b.endsAt > shortTermEndsAt) shortTermEndsAt = b.endsAt;
+  }
+  return {
+    dropPct: pDrop + sDrop, goldPct: pGold + sGold, expPct: pExp + sExp,
+    permanent: { dropPct: pDrop, goldPct: pGold, expPct: pExp },
+    shortTerm: { dropPct: sDrop, goldPct: sGold, expPct: sExp, endsAt: shortTermEndsAt },
+    capPct: shortTermCapPct,
+    buffs: active,
+  };
 }
 
 /**
@@ -81,16 +109,17 @@ function getActiveModifiers() {
 async function applyBuff(p) {
   const db = await getMongoDb().catch(() => null);
   if (!db) return { applied: false, reason: "no-db" };
+  const isPerm = p.seasonPermanent === true;   // 賽季永久底盤：不計時，換季才清
   const durationMs = Number(p.durationMs) || 0;
-  if (durationMs <= 0) return { applied: false, reason: "bad-duration" };
+  if (!isPerm && durationMs <= 0) return { applied: false, reason: "bad-duration" };
   const drop = Number(p.dropPct) || 0, gold = Number(p.goldPct) || 0, exp = Number(p.expPct) || 0;
   if (drop <= 0 && gold <= 0 && exp <= 0) return { applied: false, reason: "no-effect" };
 
   const nowMs = now();
   const nowIso = new Date(nowMs).toISOString();
-  const endsAt = new Date(nowMs + durationMs).toISOString();
+  const endsAt = isPerm ? FAR_FUTURE : new Date(nowMs + durationMs).toISOString();
 
-  // 冪等：同 sourceRef 且仍生效中 → 不重複套用（斗內事件重觸發保護）
+  // 冪等：同 sourceRef 且仍生效中 → 不重複套用（斗內事件重觸發／里程碑重複達成保護）
   if (p.sourceRef) {
     const dup = await db.collection(COLLECTION).findOne({ sourceRef: p.sourceRef, endsAt: { $gt: nowIso } });
     if (dup) return { applied: false, reason: "duplicate", buff: dup };
@@ -102,6 +131,8 @@ async function applyBuff(p) {
     source: String(p.source || "manual"),
     sourceRef: p.sourceRef || null,
     dropPct: drop, goldPct: gold, expPct: exp,
+    seasonPermanent: isPerm,
+    seasonKey: p.seasonKey || null,
     startedAt: nowIso,
     endsAt,
     createdBy: p.createdBy || null
@@ -148,11 +179,33 @@ async function clearAll() {
   return { cleared: r.modifiedCount || 0 };
 }
 
+/** 清掉某來源的賽季永久底盤（階梯取代用：升階前先清舊底盤，再套新的最高階）。 */
+async function clearBySource(source) {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return { cleared: 0 };
+  const r = await db.collection(COLLECTION).deleteMany({ source: String(source), seasonPermanent: true });
+  await refresh();
+  return { cleared: r.deletedCount || 0 };
+}
+
+/** 換季重置：清掉所有「賽季永久」底盤 buff（短期的會自己過期）。SC累積/會員里程碑進度另由各自 service 重置。 */
+async function resetSeason() {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return { cleared: 0 };
+  const r = await db.collection(COLLECTION).deleteMany({ seasonPermanent: true });
+  await refresh();
+  console.log(`[GlobalBuff] 換季重置：清除 ${r.deletedCount || 0} 個賽季永久底盤`);
+  return { cleared: r.deletedCount || 0 };
+}
+
 module.exports = {
   init,
   refresh,
   getActiveModifiers,
   applyBuff,
+  setShortTermCapPct,
+  clearBySource,
+  resetSeason,
   listActive,
   listRecent,
   clearBuff,

@@ -68,6 +68,12 @@ async function bootstrap() {
     // 全服 Buff 快取初始化（直播連動事件）：載入生效中的 buff 到記憶體
     try {
       await require("./services/stream/globalBuffService").init();
+      await require("./services/stream/streamEventConfig").syncRuntimeConfig(); // 注入短期 buff 上限
+      // 會員里程碑檢查：每 3 分鐘看會員數有無創新高 → 短期慶祝 / 賽季永久里程碑
+      const memberEvents = require("./services/stream/memberEventsService");
+      memberEvents.check(serviceContext).catch(() => {});
+      const _memberTimer = setInterval(() => { memberEvents.check(serviceContext).catch(() => {}); }, 3 * 60 * 1000);
+      _memberTimer.unref?.();
     } catch (e) {
       console.warn("[GlobalBuff] init 失敗（不影響啟動）：", e?.message || e);
     }

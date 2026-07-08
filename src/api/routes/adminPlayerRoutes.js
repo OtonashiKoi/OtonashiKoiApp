@@ -394,6 +394,7 @@ function createAdminPlayerRoutes(serviceContext) {
       const { seasonResetAllPlayers } = require("../../services/admin/seasonResetService");
       const summary = await seasonResetAllPlayers({
         dryRun: false,
+        monsterService: serviceContext.monsterService,
         onBackup: async (allBackups) => {
           const fs = require("fs");
           const path = require("path");

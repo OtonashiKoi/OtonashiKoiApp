@@ -95,10 +95,32 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
   router.post("/admin/stream-events/config", requireAdmin, async (req, res, next) => {
     try {
       const patch = {};
-      if (req.body?.donationBuff !== undefined) patch.donationBuff = req.body.donationBuff;
-      if (req.body?.scBar !== undefined) patch.scBar = req.body.scBar;
+      for (const k of ["shortTermCapPct", "donationTiers", "scBar", "memberEvents"]) {
+        if (req.body?.[k] !== undefined) patch[k] = req.body[k];
+      }
       const next2 = await saveConfig(patch);
       res.json(ok(next2, "config saved"));
+    } catch (err) { next(err); }
+  });
+
+  // 通行證：後台加點數（測試用）body { discordId, points, set? }
+  router.post("/admin/pass/add-points", requireAdmin, async (req, res, next) => {
+    try {
+      const { discordId, points, set } = req.body || {};
+      if (!discordId) return res.status(400).json(fail("INVALID_ARGUMENT", "discordId 必填"));
+      const r = await serviceContext.passService.adminAddPoints(String(discordId), Number(points) || 0, { set: Boolean(set) });
+      res.json(ok(r, "通行證點數已更新"));
+    } catch (err) { if (err?.message) return res.status(400).json(fail("PASS_POINTS_FAILED", err.message)); next(err); }
+  });
+
+  // 換季重置：清賽季永久底盤 + SC累積 + 會員里程碑 claimed（維護/開新賽季用）
+  router.post("/admin/stream-events/reset-season", requireAdmin, async (_req, res, next) => {
+    try {
+      const gb = require("../../services/stream/globalBuffService");
+      const r = await gb.resetSeason();
+      await scBar.reset({ archive: true }).catch(() => {});
+      await require("../../services/stream/memberEventsService").resetSeason().catch(() => {});
+      res.json(ok(r, "season reset"));
     } catch (err) { next(err); }
   });
 
@@ -120,7 +142,21 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
   // 公開：SC 累積條進度（給玩家端進度條用，免登入）
   router.get("/api/stream/sc-bar", async (_req, res, next) => {
     try {
-      res.json(ok(await scBar.getPublicProgress()));
+      const memberEvents = require("../../services/stream/memberEventsService");
+      const gb = require("../../services/stream/globalBuffService");
+      const [sc, memberCount, memberProgress] = await Promise.all([
+        scBar.getPublicProgress(), countActiveMembers(), memberEvents.getPublicProgress(),
+      ]);
+      const mods = gb.getActiveModifiers();
+      res.json(ok({
+        ...sc,
+        memberCount,
+        memberProgress,                 // 會員里程碑進度
+        activeBuff: {                   // 目前生效總加成（底盤+短期）
+          dropPct: mods.dropPct, goldPct: mods.goldPct, expPct: mods.expPct,
+          permanent: mods.permanent, shortTerm: mods.shortTerm,
+        },
+      }));
     } catch (err) { next(err); }
   });
 
