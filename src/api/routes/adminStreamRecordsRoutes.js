@@ -7,7 +7,7 @@ const {
   listDonationEvents,
   getDonationSummary,
   listMembershipEvents,
-  listMembershipStatuses
+  listMemberDirectory
 } = require("../../services/stream/streamRecordsService");
 const { reconcileMembership } = require("../../services/stream/membershipTracker");
 const globalBuff = require("../../services/stream/globalBuffService");
@@ -75,8 +75,9 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
   router.get("/admin/stream-records/membership-status", requireAdmin, async (req, res, next) => {
     try {
       const activeOnly = String(req.query.activeOnly || "") === "1";
-      const limit = Number(req.query.limit) || 500;
-      const statuses = await listMembershipStatuses({ activeOnly, limit });
+      const limit = Number(req.query.limit) || 1000;
+      // 口徑＝遊戲內一致：Discord 身分組 ∪ 直播綁定，任一即會員
+      const statuses = await listMemberDirectory({ activeOnly, limit });
       const activeCount = statuses.filter((s) => s.isMember).length;
       res.json(ok({ statuses, activeCount, total: statuses.length }));
     } catch (err) {

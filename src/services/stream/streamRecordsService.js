@@ -252,10 +252,35 @@ async function listMembershipEvents({ limit = 100 } = {}) {
     .toArray();
 }
 
-async function countActiveMembers() {
+// 綁定會員判定條件（遊戲內 resolveAuctionMembership 同口徑）：
+//   streamAccountBindings 任一 isMember / linkedSupportAtLink / playerTierAtLink 有值
+const BINDING_MEMBER_QUERY = {
+  $or: [
+    { isMember: true },
+    { linkedSupportAtLink: true },
+    { playerTierAtLink: { $nin: [null, ""] } }
+  ]
+};
+
+/**
+ * 目前活躍會員的「不重複 discordId 清單」。
+ * 口徑＝遊戲內一致：直播綁定(streamAccountBindings) ∪ Discord 身分組(membershipStatus)，任一即會員。
+ */
+async function listActiveMemberIds() {
   const db = await getMongoDb().catch(() => null);
-  if (!db) return 0;
-  return db.collection("membershipStatus").countDocuments({ isMember: true }).catch(() => 0);
+  if (!db) return [];
+  const [boundIds, roleIds] = await Promise.all([
+    db.collection("streamAccountBindings").distinct("discordId", BINDING_MEMBER_QUERY).catch(() => []),
+    db.collection("membershipStatus").distinct("discordId", { isMember: true }).catch(() => [])
+  ]);
+  const set = new Set();
+  for (const id of boundIds) if (id != null && String(id).trim() !== "") set.add(String(id));
+  for (const id of roleIds) if (id != null && String(id).trim() !== "") set.add(String(id));
+  return [...set];
+}
+
+async function countActiveMembers() {
+  return (await listActiveMemberIds()).length;
 }
 
 async function listMembershipStatuses({ activeOnly = false, limit = 500 } = {}) {
@@ -269,6 +294,71 @@ async function listMembershipStatuses({ activeOnly = false, limit = 500 } = {}) 
     .toArray();
 }
 
+/**
+ * 後台顯示用「會員總表」：Discord 身分組(membershipStatus) ∪ 直播綁定(streamAccountBindings)。
+ * 口徑跟遊戲內一致 —— 綁定會員即使沒有 Discord 身分組也會出現、也算會員；反之亦然。
+ * - source: "role"（只身分組）/ "binding"（只綁定）/ "both"（兩者都有）
+ * - 綁定會員只要任一平台達標，isMember 一律 true（覆蓋身分組 tracker 的 false）
+ */
+async function listMemberDirectory({ activeOnly = false, limit = 1000 } = {}) {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return [];
+  const [statuses, bindings] = await Promise.all([
+    db.collection("membershipStatus").find({}).toArray().catch(() => []),
+    db.collection("streamAccountBindings")
+      .find(BINDING_MEMBER_QUERY, { projection: { discordId: 1, displayName: 1, platform: 1, playerTierAtLink: 1, linkedAt: 1, linkedSupportAtLink: 1 } })
+      .toArray().catch(() => [])
+  ]);
+
+  // 綁定會員 → 依 discordId 聚合（一人可能多平台）
+  const bindMap = new Map();
+  for (const b of bindings) {
+    const id = b.discordId != null ? String(b.discordId) : "";
+    if (!id) continue;
+    const cur = bindMap.get(id) || { platforms: [], displayName: null, tier: null, linkedAt: null };
+    cur.platforms.push(b.platform);
+    if (!cur.displayName && b.displayName) cur.displayName = b.displayName;
+    if (!cur.tier && b.playerTierAtLink) cur.tier = b.playerTierAtLink;
+    if (b.linkedAt && (!cur.linkedAt || b.linkedAt > cur.linkedAt)) cur.linkedAt = b.linkedAt;
+    bindMap.set(id, cur);
+  }
+
+  const rows = new Map();
+  for (const s of statuses) {
+    const id = String(s.discordId || "");
+    if (!id) continue;
+    const bind = bindMap.get(id);
+    rows.set(id, {
+      ...s,
+      isMember: Boolean(s.isMember) || Boolean(bind),         // 綁定會員覆蓋身分組 tracker 的 false
+      currentTier: s.currentTier || bind?.tier || null,
+      displayName: s.displayName || bind?.displayName || id,
+      source: bind ? "both" : "role",
+      bindingPlatforms: bind ? bind.platforms : []
+    });
+  }
+  // 只在綁定、身分組名單沒有的人 → 補進來
+  for (const [id, bind] of bindMap) {
+    if (rows.has(id)) continue;
+    rows.set(id, {
+      discordId: id,
+      displayName: bind.displayName || id,
+      isMember: true,
+      currentTier: bind.tier || null,
+      currentLabel: bind.tier || null,
+      lastConfirmedAt: bind.linkedAt || null,
+      lastChangedAt: bind.linkedAt || null,
+      source: "binding",
+      bindingPlatforms: bind.platforms
+    });
+  }
+
+  let list = [...rows.values()];
+  if (activeOnly) list = list.filter((r) => r.isMember);
+  list.sort((a, b) => String(b.lastChangedAt || "").localeCompare(String(a.lastChangedAt || "")));
+  return list.slice(0, Math.min(Math.max(Number(limit) || 1000, 1), 2000));
+}
+
 module.exports = {
   TIER_ORDER,
   diffTier,
@@ -279,5 +369,7 @@ module.exports = {
   getDonationSummary,
   listMembershipEvents,
   listMembershipStatuses,
+  listMemberDirectory,
+  listActiveMemberIds,
   countActiveMembers
 };
