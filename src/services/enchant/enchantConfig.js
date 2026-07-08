@@ -13,7 +13,7 @@ const DEFAULTS = {
       attrs: [
         { key: "str", label: "力量", unit: "", min: 1, max: 7 },
         { key: "agi", label: "敏捷", unit: "", min: 1, max: 7 },
-        { key: "vit", label: "體力", unit: "", min: 1, max: 7 },
+        { key: "vit", label: "體質", unit: "", min: 1, max: 7 },
         { key: "int", label: "智力", unit: "", min: 1, max: 7 },
         { key: "dex", label: "技巧", unit: "", min: 1, max: 7 },
         { key: "luk", label: "幸運", unit: "", min: 1, max: 7 },
