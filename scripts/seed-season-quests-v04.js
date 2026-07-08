@@ -129,7 +129,8 @@ async function main() {
     const existing = await col.findOne({ cadence: "season", title });
     const doc = {
       cadence: "season", type, target, sortOrder, title, description, enabled: true,
-      groupKey: "season_achievements_v1", levelLimit: 40, resetPolicy: "once",
+      // 整季累積型成就：不設等級門檻，從 Lv.1 就可見、進度全季累積（世界王擊殺類自然靠進入王區為門檻）
+      groupKey: "season_achievements_v1", levelLimit: 0, resetPolicy: "once",
       rewardGold: gold, rewardExp: exp, rewardDiamond: 0,
       rewardItemId: rewardItemId || null, rewardItems: rewardItems || [],
       updatedAt: NOW,

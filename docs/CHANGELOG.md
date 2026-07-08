@@ -75,6 +75,7 @@
 | 48 | 2026-07-08 | 賽季通行證（30級·雙軌） | 新增賽季通行證：**30級、打怪累積點數升級**(依地圖階級給點 D1/C2/B3/A5/S6、每級100點)。**免費軌**所有人領(金幣+D~B強化石+素材)、**付費軌 3鑽開通**(整條回2鑽+史萊姆蛋+頂獎A裝秘銀劍+A/B石+重骰/洗點藥水，佛心中等非P2W)。新 passService(點數/等級/開通/領獎/防重領原子搶佔/換季重置)+API(/api/me/pass get/unlock/claim)+點數 hook(DC+web戰鬥勝利加點)+App「🎟️通行證」頁(等級進度條+30級雙軌+開通/領取)+nav入口+CURRENCY_SOURCES加pass來源。端到端smoke測試通過(打A區100隻=Lv5、領獎發金幣道具、防重領、付費軌未開通擋)。⚠️後台調獎勵UI待補(獎勵表在passService程式碼可改) | 新系統 | ✅ | (本次) passService/createServiceContext/playerAppRoutes/monsterZoneHandlers/pass.tsx |
 
 | 49 | 2026-07-08 | 修：會員數口徑不一致（遊戲內是會員、後台/里程碑卻不算） | 玩家遊戲內綁定Twitch/YT顯示✅會員，後台會員名單卻顯示不是會員、斗內會員里程碑也少算。根因：#46~#47 的**會員數(`countActiveMembers`)只數 Discord 身分組(`membershipStatus`/reconcile)**，但遊戲內「會員」判定是**直播綁定(`streamAccountBindings`)∪身分組任一即可**——兩套來源不同(綁定57 vs 身分組13)。修法：`countActiveMembers` 改數兩套**聯集不重複人數**(新增 `listActiveMemberIds`)，斗內會員里程碑/sc-bar/overlay 全自動同步；後台「會員現況表」改用新 `listMemberDirectory`(綁定會員也列出、綁定即覆蓋身分組 tracker 的 false、標 source=綁定/身分組/both)。實測聯集=63人(原13)、音無恋正確顯示會員 SS。⚠️需重啟後端 | 修正 | ✅ | (本次) streamRecordsService/adminStreamRecordsRoutes |
+| 50 | 2026-07-08 | 修：賽季任務整頁空白（被 Lv.40 門檻藏掉） | 「任務→賽季」頁顯示「目前沒有賽季任務」，但 6 個賽季任務其實都在 DB(enabled)。根因：seed 時給 6 個賽季任務都設了 `levelLimit:40`，`_isQuestVisibleForPlayer`/`_canAccrueProgress` 判定「未達 40 級→隱藏且不累積」，而賽季頁又不像職業頁會顯示鎖定任務→賽季剛重置、帳號未滿 40 就整頁空。這些是整季累積型成就(1500勝/3000連擊/A+5×10…)，40 級前進度不算並不合理。修法：**移除等級門檻(levelLimit→0)**，6 個賽季任務從 Lv.1 就可見、進度全季累積(世界王擊殺類自然靠進入王區為門檻)。DB 即時生效免重啟；seed 腳本同步改。實測 Lv.1 玩家正確回傳 6 筆 locked=false | 修正 | ✅ | (本次) seed-season-quests-v04.js + DB |
 <!-- 新增修改請往下加列，或插入對應功能 -->
 
 ## V0.4 · 後台/工具（玩家端無感）
