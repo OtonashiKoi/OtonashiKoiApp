@@ -11,6 +11,7 @@
 const jwt = require("jsonwebtoken");
 const { isBlocked } = require("../../services/access/webBanStore");
 const maintenance = require("../../services/access/maintenanceStore");
+const sessionCutoff = require("../../services/access/sessionCutoffStore");
 
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -19,6 +20,11 @@ function requireAuth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // 全服強制重新登入：token 發出時間早於門檻 → 作廢，回 401（前端清 token 跳登入）
+    const cutoff = sessionCutoff.getCutoff();
+    if (cutoff && decoded?.iat && decoded.iat < cutoff) {
+      return res.status(401).json({ status: "error", code: "SESSION_RESET", message: "系統已要求重新登入，請重新登入。" });
+    }
     // 被管理員封鎖網頁使用權的玩家 → 一律擋下（回 403，前端清 token 跳登入）
     if (isBlocked(decoded?.discordId)) {
       return res.status(403).json({ status: "error", code: "WEB_BLOCKED", message: "你的帳號已被管理員封鎖網頁使用權限。" });
