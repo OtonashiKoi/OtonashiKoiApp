@@ -22,7 +22,19 @@ function effectiveCap(tierCap, bonusSlots) {
 
 const TIER_LABEL = { C: "鯉民", B: "鯉長", A: "鯉市長", S: "S級", SS: "SS級" };
 
-// 解析結果快取（避免每次都打 Discord），TTL 10 分鐘
+// 會員位階由低到高；用來在多個來源間取「最高位階」。E/D 不算會員(→150)。
+const TIER_ORDER = ["E", "D", "C", "B", "A", "S", "SS"];
+function higherTier(a, b) {
+  const ia = TIER_ORDER.indexOf(a || ""); const ib = TIER_ORDER.indexOf(b || "");
+  return ib > ia ? b : a;
+}
+function highestTier(list) {
+  let best = null;
+  for (const t of list) { if (t && TIER_ORDER.includes(t)) best = higherTier(best, t); }
+  return best;
+}
+
+// 解析結果快取（避免每次都查 DB / 打 Discord），TTL 10 分鐘。
 const _cache = new Map(); // discordId -> { tier, cap, label, at }
 const TTL_MS = 10 * 60 * 1000;
 
@@ -36,27 +48,52 @@ function countEquipment(inventory) {
   return inventory.filter((e) => e && e.itemType === "equipment").length;
 }
 
-/** 解析玩家的裝備格上限（含快取）。回傳 { tier, cap, label }。 */
+/**
+ * 解析玩家的裝備格上限（含快取）。回傳 { tier, cap, label }。
+ * 依據＝「設定頁確認的綁定會員位階」為主（streamAccountBindings.playerTierAtLink / linkedSupportAtLink），
+ * 這是最可靠、玩家自己看得到的來源。另外把 progress.playerTier 與即時 Discord 身分組也納入，
+ * 三者取「最高位階」——只加不減，不會因為某一路暫時抓不到就把會員背包縮回 150。
+ */
 async function resolveCapacity(discordId) {
   const now = Date.now();
   const hit = _cache.get(discordId);
   if (hit && (now - hit.at) < TTL_MS) return { tier: hit.tier, cap: hit.cap, label: hit.label };
 
-  let tier = null;
+  const tiers = [];
+
+  // 1) 綁定會員位階（設定頁「✓會員 / 會員位階」的來源；確定有綁定即認列）
+  try {
+    const binds = await serviceContext.streamAccountBindingRepository.listByDiscordId(discordId).catch(() => []);
+    for (const b of binds || []) {
+      const isMember = Boolean(b.linkedSupportAtLink) || Boolean(b.playerTierAtLink);
+      if (isMember) tiers.push(b.playerTierAtLink || "C"); // 是會員但未帶明確位階 → 至少最低會員階 C
+    }
+  } catch (_) { /* 綁定讀取失敗 → 略過此來源 */ }
+
+  // 2) 遊戲記錄的會員位階
+  try {
+    const prog = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
+    if (prog?.playerTier) tiers.push(prog.playerTier);
+  } catch (_) { /* 略過 */ }
+
+  // 3) 即時 Discord 身分組（有查到就加分；失敗完全不影響上面兩個來源）
   try {
     const client = getBotClient();
     const guildId = config.discord.guildId;
     if (client?.isReady?.() && guildId) {
       const guild = await client.guilds.fetch(guildId).catch(() => null);
-      const { fetchGuildMemberSafe } = require("../../shared/discordMemberFetch");
-      const member = guild ? await fetchGuildMemberSafe(guild, discordId, { force: false }) : null;
-      if (member) {
-        const roleIds = [...member.roles.cache.keys()];
-        tier = await serviceContext.playerTierService.resolveHighestTier(roleIds).catch(() => null);
+      if (guild) {
+        const { fetchGuildMemberSafe } = require("../../shared/discordMemberFetch");
+        const member = await fetchGuildMemberSafe(guild, discordId, { force: false }).catch(() => null);
+        if (member) {
+          const roleTier = await serviceContext.playerTierService.resolveHighestTier([...member.roles.cache.keys()]).catch(() => null);
+          if (roleTier) tiers.push(roleTier);
+        }
       }
     }
-  } catch (_) { /* 解析失敗 → 當非會員 */ }
+  } catch (_) { /* 略過 */ }
 
+  const tier = highestTier(tiers);
   const cap = capForTier(tier);
   const label = tier ? (TIER_LABEL[tier] || tier) : "非會員";
   _cache.set(discordId, { tier, cap, label, at: now });
