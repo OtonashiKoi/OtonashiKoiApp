@@ -35,10 +35,11 @@ async function applyAndGetMultiplier(discordId, nowMs) {
     const streakMs = now - start;
     await col.updateOne({ discordId }, { $set: { discordId, start, last: now } }, { upsert: true });
     if (streakMs < SIX_HOURS_MS) return 1;
-    // 斗內全服 buff 生效期間 → 暫停疲勞懲罰（連續時數照常累計，buff 結束才恢復）
+    // 任何短期全服 buff（斗內／手動活動／會員慶祝…）生效期間 → 暫停疲勞懲罰
+    //（連續時數照常累計，buff 結束才恢復；賽季永久底盤不算，否則疲勞永遠失效）
     try {
-      const { isDonationBuffActive } = require("../stream/globalBuffService");
-      if (isDonationBuffActive()) return 1;
+      const { isShortTermBuffActive } = require("../stream/globalBuffService");
+      if (isShortTermBuffActive()) return 1;
     } catch (_) { /* 判斷失敗就照原本疲勞規則 */ }
     return PENALTY_MULT;
   } catch (e) {

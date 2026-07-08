@@ -207,9 +207,22 @@ function getDonationSession() {
   return cache.find((b) => b.source === DONATION_SESSION_SOURCE && Date.parse(b.endsAt) > nowMs) || null;
 }
 
-/** 斗內全服 buff 是否生效中（疲勞系統用來暫停懲罰）。 */
+/** 斗內全服 buff 是否生效中。 */
 function isDonationBuffActive() {
   return !!getDonationSession();
+}
+
+/**
+ * 是否有「任何短期全服 buff」生效中（疲勞系統用來暫停懲罰）。
+ * 涵蓋斗內 session、手動全服活動、會員短期慶祝等；不含賽季永久底盤
+ * （永久底盤一直在，若也算就會讓防肝疲勞系統永遠失效）。
+ */
+function isShortTermBuffActive() {
+  const nowMs = now();
+  return cache.some((b) =>
+    b && !b.seasonPermanent && Date.parse(b.endsAt) > nowMs &&
+    ((Number(b.dropPct) || 0) > 0 || (Number(b.goldPct) || 0) > 0 || (Number(b.expPct) || 0) > 0)
+  );
 }
 
 /**
@@ -260,5 +273,6 @@ module.exports = {
   clearAll,
   getDonationSession,
   isDonationBuffActive,
+  isShortTermBuffActive,
   setDonationSessionBuff
 };
