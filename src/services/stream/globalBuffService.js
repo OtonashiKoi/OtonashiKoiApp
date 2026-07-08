@@ -198,6 +198,54 @@ async function resetSeason() {
   return { cleared: r.deletedCount || 0 };
 }
 
+// ── 斗內累積 session buff（單一、覆寫式；不走 applyBuff 的疊加）──
+const DONATION_SESSION_SOURCE = "donation-session";
+
+/** 目前生效中的斗內累積 session（單一 buff），無則 null。 */
+function getDonationSession() {
+  const nowMs = now();
+  return cache.find((b) => b.source === DONATION_SESSION_SOURCE && Date.parse(b.endsAt) > nowMs) || null;
+}
+
+/** 斗內全服 buff 是否生效中（疲勞系統用來暫停懲罰）。 */
+function isDonationBuffActive() {
+  return !!getDonationSession();
+}
+
+/**
+ * 覆寫式設定斗內累積 session buff（取代舊的，各類型同 pct）。
+ * @param {{ pct:number, endsAtMs:number, cumTwd:number, label?:string, processedRefs?:string[] }} p
+ */
+async function setDonationSessionBuff(p) {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return { applied: false, reason: "no-db" };
+  const pct = Math.max(0, Math.round(Number(p.pct) || 0));
+  if (pct <= 0 || !(Number(p.endsAtMs) > now())) return { applied: false, reason: "no-effect" };
+  const nowMs = now();
+  const buff = {
+    id: `donsess_${nowMs}`,
+    label: String(p.label || "斗內全服加成"),
+    source: DONATION_SESSION_SOURCE,
+    sourceRef: DONATION_SESSION_SOURCE,
+    dropPct: pct, goldPct: pct, expPct: pct,
+    seasonPermanent: false,
+    startedAt: new Date(nowMs).toISOString(),
+    endsAt: new Date(Number(p.endsAtMs)).toISOString(),
+    cumTwd: Math.max(0, Math.round(Number(p.cumTwd) || 0)),
+    processedRefs: Array.isArray(p.processedRefs) ? p.processedRefs.slice(-50) : [],
+    createdBy: "stream:donation-session",
+  };
+  try {
+    await db.collection(COLLECTION).deleteMany({ source: DONATION_SESSION_SOURCE });
+    await db.collection(COLLECTION).insertOne(buff);
+  } catch (err) {
+    console.warn("[GlobalBuff] setDonationSessionBuff 失敗：", err?.message || err);
+    return { applied: false, reason: "write-failed" };
+  }
+  await refresh();
+  return { applied: true, buff };
+}
+
 module.exports = {
   init,
   refresh,
@@ -209,5 +257,8 @@ module.exports = {
   listActive,
   listRecent,
   clearBuff,
-  clearAll
+  clearAll,
+  getDonationSession,
+  isDonationBuffActive,
+  setDonationSessionBuff
 };

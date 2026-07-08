@@ -34,7 +34,13 @@ async function applyAndGetMultiplier(discordId, nowMs) {
     if (!start || !last || (now - last) >= RESET_GAP_MS) start = now;
     const streakMs = now - start;
     await col.updateOne({ discordId }, { $set: { discordId, start, last: now } }, { upsert: true });
-    return streakMs >= SIX_HOURS_MS ? PENALTY_MULT : 1;
+    if (streakMs < SIX_HOURS_MS) return 1;
+    // 斗內全服 buff 生效期間 → 暫停疲勞懲罰（連續時數照常累計，buff 結束才恢復）
+    try {
+      const { isDonationBuffActive } = require("../stream/globalBuffService");
+      if (isDonationBuffActive()) return 1;
+    } catch (_) { /* 判斷失敗就照原本疲勞規則 */ }
+    return PENALTY_MULT;
   } catch (e) {
     console.warn("[farmFatigue] 疲勞查詢失敗，本場照常發獎:", e?.message || e);
     return 1;

@@ -81,6 +81,7 @@
 | 53 | 2026-07-08 | 依聊天回報修：VIT命名統一體質＋火焰裝套裝計數 | 玩家聊天回報：(1)附魔的 VIT 叫「體力」但個體素質叫「體質」→ 統一成**體質**(enchantConfig DEFAULTS+DB+既有19位玩家239條詞條標籤遷移)。(2)焰紋戒指 setKeys 缺失不算焚獄套→補齊；順帶修 27 件火焰裝(焰紋/獄焰/熔火/烈焰)setKey有值但缺 setKeys 陣列→本來不算焚獄套現補齊。※另兩個回報(背包不同附魔堆疊/卡片附魔)音無已於 app repo 自行修掉(53171bc/cba0e40)並上線 | 修正 | ✅ | (本次) enchantConfig + DB |
 | 54 | 2026-07-08 | 全服加成公告加註生效時段(台灣時間) | 斗內/會員/管理員手動的全服加成公告，除了原本同時發**遊戲內SSE＋DC town_chat**外，文案從「持續N分鐘」改成明確**「生效時間 HH:MM～HH:MM（N分鐘）」**(Asia/Taipei)。三處：donationBuffTrigger/memberEventsService/adminStreamRecordsRoutes手動buff。※手動打斗內若走獨立腳本(無_announceTownChat)不會自動廣播，需由伺服器流程或補發 | 樣式 | ✅ | (本次) donationBuffTrigger/memberEventsService/adminStreamRecordsRoutes |
 | 55 | 2026-07-08 | 新增「A階武器抽選箱」＋放進通行證頂獎 | 新寶箱道具 `A階武器抽選箱`(consumable)：開啟後從 21 把 A 階武器(秘銀11+火焰10)等機率隨機開一把，**沿用世界王寶箱的開箱動畫**(回傳同一套 chestReward→ChestOpeningModal，非boss顯示「📦開啟寶箱」)、開出瞬間骰附魔。shopService 新增 effect type `open_random_weapon`＋`_rollRandomWeapon(tier)`。**通行證高級軌 L30 頂獎**從固定秘銀單手劍改成此抽選箱。前端不需改(modal 通吃 chestReward)、免 rebuild。實測開箱隨機正常、L30 顯示正確。⚠️寶箱圖暫沿用世界王寶箱圖可再換 | 新功能 | ✅ | (本次) shopService/passService + DB |
+| 56 | 2026-07-09 | 修：拍賣場道具卡片顯示附魔屬性 | 拍賣看不到附魔。快照本就含 enchantments，但 `/api/auction/list` 的 map 只投影特定欄位、把附魔濾掉了→前端收不到。修法：list API 補回 enchantments/equipStats/enhanceLevel/weaponType；app 拍賣卡片(ListingCard)加「🔮 附魔」行(力量+6、敏捷+5…)。實測迅紋銀戒指正確帶出附魔。⚠️後端需重啟＋app已build部署 | 修正 | ✅ | (本次) playerAppRoutes/auction.tsx/useAuction.ts |
 <!-- 新增修改請往下加列，或插入對應功能 -->
 
 ## V0.4 · 後台/工具（玩家端無感）

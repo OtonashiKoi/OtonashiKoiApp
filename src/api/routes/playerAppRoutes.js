@@ -4022,7 +4022,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           status: a.status,
           isPet: Boolean(a.item?.__pet),
           eggType: a.item?.eggType || null,
-          combatBonus: a.item?.combatBonus || null
+          combatBonus: a.item?.combatBonus || null,
+          enhanceLevel: a.item?.enhanceLevel || 0,
+          weaponType: a.item?.weaponType || null,
+          equipStats: a.item?.equipStats || null,
+          enchantments: Array.isArray(a.item?.enchantments) ? a.item.enchantments : []
         }))
       }));
     } catch (err) {
