@@ -51,9 +51,11 @@ async function resolveByCode(code) {
   if (!db) return null;
   const p = await db.collection("progress").findOne(
     { donateCode: c },
-    { projection: { discordId: 1, displayName: 1, donateCode: 1 } }
+    { projection: { playerId: 1, discordId: 1, displayName: 1, donateCode: 1 } }
   ).catch(() => null);
-  return p ? { discordId: p.discordId, displayName: p.displayName || null } : null;
+  // progress 以 playerId 為主鍵，其值即 Discord 使用者 ID（發鑽用）。
+  const did = p ? (p.discordId || p.playerId) : null;
+  return did ? { discordId: String(did), displayName: p.displayName || null } : null;
 }
 
 /** 從留言字串抽出所有可能的斗內碼（大寫、去重）。 */
