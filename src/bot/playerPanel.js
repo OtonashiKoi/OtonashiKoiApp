@@ -1851,10 +1851,14 @@ async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0, su
   }
 }
 
-// 世界王寶箱開箱公告：恭喜 X 使用 Y 開到了 Z（發到通知頻道）
+// 開箱/卡包公告：恭喜 X 使用 Y 開到了 Z（發到通知頻道）
+// 只公告「B 級以上」的獎勵（D/C 階裝備、無階級的藥水等不洗頻道；工作人員卡=D 不公告）。
+const _ANNOUNCE_TIERS = new Set(["B", "A", "S", "SS"]);
 async function _announceChestOpen(displayName, chestReward) {
   try {
     if (!chestReward) return;
+    const tier = String(chestReward.rewardTier || "").toUpperCase();
+    if (!_ANNOUNCE_TIERS.has(tier)) return; // 未達 B 級 → 不公告
     const { getBotClient } = require("./runtimeContext");
     const client = getBotClient();
     if (!client?.isReady?.()) return;

@@ -34,8 +34,19 @@ function extractViewerInfo(o) {
   const isLive = meta.isLive === true;
   const service = o.type || svc.name || meta.service || null; // "twitch"/"youtube" 或 "#TWITCH"
   const id = svc.id || o.id || meta.id || null;
-  if (viewer == null && likes == null) return null;
-  return { service, id, viewer, likes, isLive };
+  // 平台判定：枠名(#TWITCH 等)不可靠，優先用直播枠 url 判 youtube / twitch
+  const url = String(svc.url || meta.url || o.url || "").toLowerCase();
+  let platform = null;
+  if (/youtube\.com|youtu\.be/.test(url)) platform = "youtube";
+  else if (/twitch\.tv/.test(url)) platform = "twitch";
+  if (!platform) {
+    const hint = String(o.type || svc.name || "").toLowerCase();
+    if (hint.indexOf("youtube") >= 0 || hint.indexOf("yt") >= 0) platform = "youtube";
+    else if (hint.indexOf("twitch") >= 0) platform = "twitch";
+  }
+  // 有平台就保留(即使 Twitch 沒回同接數，也讓它帶 0 進來，overlay 才能常駐顯示)
+  if (viewer == null && likes == null && !platform) return null;
+  return { service, platform, id, viewer, likes, isLive };
 }
 
 // REST 輪詢：直接讀 OneComme /api/services（schema 已確認，比 WS meta 可靠）
@@ -51,7 +62,8 @@ async function pollServicesOnce(onMeta) {
     if (!Array.isArray(services)) return;
     for (const svc of services) {
       const info = extractViewerInfo(svc);
-      if (info && info.viewer != null) { try { onMeta(info); } catch (_) { /* noop */ } }
+      // 有同接數、或至少判得出平台(Twitch 常無同接數)就更新，讓 overlay 能常駐顯示各平台
+      if (info && (info.viewer != null || info.platform)) { try { onMeta(info); } catch (_) { /* noop */ } }
     }
   } catch (_) { /* OneComme 未開/沒開台，靜默略過 */ }
 }

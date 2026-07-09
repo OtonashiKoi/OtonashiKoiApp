@@ -15,7 +15,7 @@
     font-family: "M PLUS Rounded 1c", "Mochiy Pop One", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  /* OBS 建議來源尺寸：兩條約 720×280；單條約 720×150 */
+  /* OBS 建議來源尺寸：兩條+觀看列約 720×340；單條約 720×150 */
   #wrap {
     width: 700px; transform: scale(var(--scale)); transform-origin: top left;
     padding: 16px 24px 18px; color: #fff;
@@ -26,6 +26,19 @@
   #wrap.hidden { display: none; }
   .line + .line { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(196,167,245,0.18); }
   .line.hidden { display: none; }
+
+  /* 即時觀看人數列（YT / Twitch / 合計） */
+  #viewerRow { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; padding-bottom: 12px;
+    border-bottom: 1px solid rgba(196,167,245,0.18); font-family: "Mochiy Pop One", sans-serif; }
+  #viewerRow.hidden { display: none; }
+  .vitem { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; color: #e7defc; white-space: nowrap; transition: opacity .3s; }
+  .vitem b { font-size: 21px; color: #fff; }
+  .vitem .vdot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; box-shadow: 0 0 9px currentColor; }
+  .vitem.yt { color: #ff5c6b; }
+  .vitem.tw { color: #b98cff; }
+  .vitem.tot { margin-left: auto; color: #ffe7a8; }
+  .vitem.tot b { text-shadow: 0 0 12px rgba(255,120,200,.6); }
+  .vitem.off { opacity: .38; }
 
   .lhead { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 8px; }
   .ltitle { font-family: "Mochiy Pop One", sans-serif; font-size: 19px; letter-spacing: .5px; }
@@ -67,6 +80,11 @@
 </head>
 <body>
   <div id="wrap" class="hidden">
+    <div id="viewerRow" class="hidden">
+      <span class="vitem yt"><span class="vdot"></span>YouTube <b id="ytVal">—</b></span>
+      <span class="vitem tw"><span class="vdot"></span>Twitch <b id="twVal">—</b></span>
+      <span class="vitem tot">👁 合計 <b id="totVal">—</b> 人</span>
+    </div>
     <div class="line" id="memberLine">
       <div class="lhead"><span class="ltitle">👥 目前會員</span><span class="lval" id="memberVal">— 人</span></div>
       <div class="track"><div class="fill" id="memberFill"></div></div>
@@ -97,11 +115,21 @@
   var memberStep = Math.max(1, parseInt(params.get("memberStep"), 10) || 10); // 無固定目標時自動抓下一個整數關卡
   var pollMs = Math.max(2000, parseInt(params.get("poll"), 10) || 4000);
 
+  var showViewers = params.get("viewers") !== "0"; // viewers=0 可關閉觀看人數列
+
   var wrap = document.getElementById("wrap");
   var memberLine = document.getElementById("memberLine");
   var scLine = document.getElementById("scLine");
   if (!showMembers) memberLine.classList.add("hidden");
   if (!showSc) scLine.classList.add("hidden");
+
+  var viewerRow = document.getElementById("viewerRow");
+  var ytItem = document.querySelector(".vitem.yt");
+  var twItem = document.querySelector(".vitem.tw");
+  var ytVal = document.getElementById("ytVal");
+  var twVal = document.getElementById("twVal");
+  var totVal = document.getElementById("totVal");
+  if (!showViewers && viewerRow) viewerRow.remove();
 
   var memberVal = document.getElementById("memberVal");
   var memberFill = document.getElementById("memberFill");
@@ -115,6 +143,30 @@
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
   var ntd = function (n) { return "NT$" + (Number(n) || 0).toLocaleString("en-US"); };
   var lastClaimed = -1, lastMembers = -1;
+
+  function renderViewers(v) {
+    if (!showViewers || !viewerRow) return;
+    var services = (v && v.services) || [];
+    var yt = 0, tw = 0, ytHas = false, twHas = false;
+    services.forEach(function (s) {
+      if (!s || s.stale) return;                 // 只跳過過期枠；沒開台(isLive:false)仍顯示
+      var p = s.platform || "";
+      if (!p) {                                  // 後端沒帶 platform 時，退回用枠名猜
+        var name = String(s.service || "").toLowerCase();
+        if (name.indexOf("youtube") >= 0 || name.indexOf("yt") >= 0) p = "youtube";
+        else if (name.indexOf("twitch") >= 0) p = "twitch";
+      }
+      var n = Number(s.viewer) || 0;
+      if (p === "youtube") { yt += n; ytHas = true; }
+      else if (p === "twitch") { tw += n; twHas = true; }
+    });
+    viewerRow.classList.remove("hidden");        // 常駐顯示，沒開台也不消失
+    ytItem.classList.toggle("off", !ytHas);      // 該平台完全沒枠時才變暗
+    twItem.classList.toggle("off", !twHas);
+    ytVal.textContent = yt.toLocaleString("en-US");
+    twVal.textContent = tw.toLocaleString("en-US");
+    totVal.textContent = (yt + tw).toLocaleString("en-US");
+  }
 
   function renderMembers(m) {
     var count = Number(m && m.count) || 0;
@@ -168,6 +220,7 @@
       .then(function (j) {
         var d = j && j.data; if (!d) return;
         wrap.classList.remove("hidden");
+        renderViewers(d.viewers || {});
         if (showMembers) renderMembers(d.members || { count: 0 });
         if (showSc) renderSc(d.sc || {});
       })

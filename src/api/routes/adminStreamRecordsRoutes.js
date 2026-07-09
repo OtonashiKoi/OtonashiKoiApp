@@ -96,11 +96,19 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
   router.post("/admin/stream-events/config", requireAdmin, async (req, res, next) => {
     try {
       const patch = {};
-      for (const k of ["shortTermCapPct", "donationTiers", "scBar", "memberEvents"]) {
+      for (const k of ["shortTermCapPct", "donationTiers", "scBar", "memberEvents", "viewerTiers"]) {
         if (req.body?.[k] !== undefined) patch[k] = req.body[k];
       }
       const next2 = await saveConfig(patch);
       res.json(ok(next2, "config saved"));
+    } catch (err) { next(err); }
+  });
+
+  // 觀看人數：立即宣傳目前人數與加成狀態（重發廣播，不改動 buff）
+  router.post("/admin/stream-events/viewer-announce", requireAdmin, async (_req, res, next) => {
+    try {
+      const r = await require("../../services/stream/viewerEventsService").announceCurrent();
+      res.json(ok(r, "viewer announce sent"));
     } catch (err) { next(err); }
   });
 

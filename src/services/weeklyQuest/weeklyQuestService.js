@@ -28,6 +28,7 @@ const QUEST_TYPES = {
   burn_trigger_count:{ label: "成功觸發燃燒次數", unit: "次" },
   onboarding_complete_count: { label: "完成全部新手任務", unit: "項" },
   weekly_complete_count: { label: "完成全部每週任務", unit: "項" },
+  daily_complete_count: { label: "完成全部每日任務", unit: "項" },
   kill_slime_king:   { label: "擊敗大史王 次數",     unit: "次" },
   kill_dragon_king:  { label: "擊敗古龍王(B) 次數", unit: "次" },
   kill_hellfang_king:{ label: "擊敗地獄狼牙王 次數", unit: "次" },
@@ -506,6 +507,9 @@ class WeeklyQuestService {
     if (c === "weekly" && defs.some((q) => q.type === "weekly_complete_count")) {
       completionByType.weekly_complete_count = this._computeCompletionProgress(defs, playerPeriod, "weekly_complete_count");
     }
+    if (c === "daily" && defs.some((q) => q.type === "daily_complete_count")) {
+      completionByType.daily_complete_count = this._computeCompletionProgress(defs, playerPeriod, "daily_complete_count");
+    }
     return defs.map((quest) => {
       const p = playerPeriod[quest.id] || { current: 0, claimed: false };
       const completion = completionByType[quest.type] || null;
@@ -608,8 +612,8 @@ class WeeklyQuestService {
       // 錨點隱藏任務 gate：未解鎖(進度門檻/本季斗內/連續簽到) → 不可領取（防以 questId 直接領）
       const _rawForGate = this._resolveStaticQuestProgress(quest, context)?.current ?? Number(p.current || 0);
       if (!this._isQuestUnlocked(quest, _rawForGate, context)) throw new Error("任務尚未解鎖");
-      if (quest.type === "onboarding_complete_count" || quest.type === "weekly_complete_count") {
-        const targetCadence = quest.cadence === "weekly" ? "weekly" : "onboarding";
+      if (quest.type === "onboarding_complete_count" || quest.type === "weekly_complete_count" || quest.type === "daily_complete_count") {
+        const targetCadence = quest.cadence === "weekly" ? "weekly" : quest.cadence === "daily" ? "daily" : "onboarding";
         const cadenceDefs = (await this.listDefinitions(targetCadence))
           .filter((q) => this._isQuestVisibleForPlayer(q, context) || Boolean((playerPeriod[q.id] || {}).claimed));
         const completion = this._computeCompletionProgress(cadenceDefs, playerPeriod, quest.type);
@@ -745,6 +749,8 @@ class WeeklyQuestService {
       { cadence: "daily", title: "每日贏得 3 場", type: "battle_win", target: 3, rewardGold: 300, rewardExp: 140, rewardDiamond: 0, sortOrder: 20, groupKey: "seed_v1" },
       { cadence: "daily", title: "每日累計 3000 傷害", type: "damage_total", target: 3000, rewardGold: 320, rewardExp: 160, rewardDiamond: 0, sortOrder: 30, groupKey: "seed_v1" },
       { cadence: "daily", title: "每日完成打卡", type: "checkin_count", target: 1, rewardGold: 180, rewardExp: 100, rewardDiamond: 0, sortOrder: 40, groupKey: "seed_v1" },
+      { cadence: "daily", title: "每日出戰 15 場", description: "每日出戰 15 場戰鬥。", type: "battle_count", target: 15, rewardGold: 500, rewardExp: 200, rewardDiamond: 0, sortOrder: 50, groupKey: "anchor_v1" },
+      { cadence: "daily", title: "每日全清獎勵", description: "完成上面全部每日任務後，領取 1 包記憶錨定卡包。", type: "daily_complete_count", target: 1, rewardGold: 0, rewardExp: 0, rewardDiamond: 0, rewardItemId: "chest-anchor-pack", sortOrder: 60, groupKey: "anchor_v1" },
 
       // weekly (6)
       { cadence: "weekly", title: "每週出戰 30 次", type: "battle_count", target: 30, rewardGold: 1200, rewardExp: 500, rewardDiamond: 0, sortOrder: 10, groupKey: "seed_v1" },

@@ -132,6 +132,7 @@
     const dt = (cfgWrap && cfgWrap.donationTiers) || { enabled: false, announce: true, tiers: [] };
     const scCfg = (cfgWrap && cfgWrap.scBar) || { enabled: false, milestones: [] };
     const me = (cfgWrap && cfgWrap.memberEvents) || { enabled: false, announce: true, shortBuff: {}, milestones: [] };
+    const vt = (cfgWrap && cfgWrap.viewerTiers) || { enabled: false, announce: true, streamUrl: "", tiers: [] };
     const capPct = (cfgWrap && cfgWrap.shortTermCapPct) || 30;
     const scbarPub = await fetch("/api/stream/sc-bar").then((r) => r.json()).then((d) => d.data || {}).catch(() => ({}));
     const mep = scbarPub.memberProgress || { count: scbarPub.memberCount || 0 };
@@ -171,6 +172,7 @@
       </div>
 
       ${donationTiersCard(dt, capPct)}
+      ${viewerTiersCard(vt)}
       ${scBarCard(scp, scCfg)}
       ${memberEventsCard(mep, me)}
       <div class="card" style="margin-top:14px;border-color:#5a2b2b;">
@@ -207,6 +209,40 @@
         </div>
         <button class="button" id="dt-add" style="margin-top:6px;">➕ 新增分級</button>
         <button class="button primary" id="dt-save" style="margin-top:6px;">💾 儲存斗內設定</button>
+      </div>`;
+  }
+
+  // ── 觀看人數即時觸發（短期・單一覆寫升級）──
+  function viewerTiersCard(cfg) {
+    const rows = (cfg.tiers || []).map((t, i) => `
+      <tr data-vt-row="${i}">
+        <td><input data-vt="minViewers" type="number" value="${esc(t.minViewers || 0)}" style="width:76px;"></td>
+        <td><input data-vt="label" value="${esc(t.label || "")}" style="width:110px;"></td>
+        <td><input data-vt="dropPct" type="number" value="${esc(t.dropPct || 0)}" style="width:52px;"></td>
+        <td><input data-vt="goldPct" type="number" value="${esc(t.goldPct || 0)}" style="width:52px;"></td>
+        <td><input data-vt="expPct" type="number" value="${esc(t.expPct || 0)}" style="width:52px;"></td>
+        <td><button class="button" data-vt-del="${i}" style="padding:2px 8px;font-size:11px;">✕</button></td>
+      </tr>`).join("");
+    return `
+      <div class="card" style="margin-top:14px;">
+        <h3 style="margin:0 0 4px;">📺 觀看人數即時加成（直播中持續）</h3>
+        <p class="hint" style="margin:0 0 10px;">同時觀看總人數(YT+Twitch) → 挑「達到的最高一級」→ 全服加成。<b>單一覆寫升級</b>：爬到更高階換成高階、<b>不疊加</b>；人數暫掉不降階。<b>直播中持續有效</b>，直播結束後再維持「保留分鐘」才消失。<b>勾「啟用」才會觸發</b>。</p>
+        <label style="display:inline-flex;align-items:center;font-size:13px;margin:0 14px 8px 0;font-weight:700;"><input id="vt-enabled" type="checkbox" ${cfg.enabled ? "checked" : ""} style="margin-right:6px;">啟用觀看人數觸發</label>
+        <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;"><input id="vt-announce" type="checkbox" ${cfg.announce !== false ? "checked" : ""} style="margin-right:4px;">全服廣播</label>
+        <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;">直播結束後保留<input id="vt-grace" type="number" value="${esc(cfg.graceMinutes || 60)}" style="width:56px;margin:0 4px;">分鐘</label>
+        <div style="margin:6px 0;">
+          <label style="display:inline-flex;flex-direction:column;font-size:12px;">直播連結（廣播會附上，每場可換；建議用 頻道/live 永久轉址）
+            <input id="vt-url" value="${esc(cfg.streamUrl || "")}" placeholder="https://www.youtube.com/@頻道/live" style="width:100%;max-width:520px;padding:5px 8px;margin-top:3px;"></label>
+        </div>
+        <div style="overflow:auto;">
+          <table class="admin-table" id="vt-table" style="width:100%;font-size:12px;">
+            <thead><tr><th>觀看數≥</th><th>名稱</th><th>掉寶%</th><th>金幣%</th><th>經驗%</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <button class="button" id="vt-add" style="margin-top:6px;">➕ 新增分級</button>
+        <button class="button primary" id="vt-save" style="margin-top:6px;">💾 儲存觀看人數設定</button>
+        <button class="button" id="vt-announce" style="margin-top:6px;margin-left:8px;">📣 立即宣傳目前人數</button>
       </div>`;
   }
 
@@ -405,6 +441,38 @@
       alert("✅ 斗內即時加成已儲存" + (chk("dt-enabled") ? "（已啟用）" : "（未啟用）")); render();
     } catch (e) { alert("儲存失敗：" + e.message); }
   }
+  // 觀看人數分級
+  function addViewerTierRow() {
+    const tb = document.querySelector("#vt-table tbody"); if (!tb) return;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><input data-vt="minViewers" type="number" value="30" style="width:76px;"></td>
+      <td><input data-vt="label" value="觀看熱度" style="width:110px;"></td>
+      <td><input data-vt="dropPct" type="number" value="5" style="width:52px;"></td>
+      <td><input data-vt="goldPct" type="number" value="5" style="width:52px;"></td>
+      <td><input data-vt="expPct" type="number" value="5" style="width:52px;"></td>
+      <td><button class="button" data-vt-del="new" style="padding:2px 8px;font-size:11px;">✕</button></td>`;
+    tb.appendChild(tr);
+  }
+  function collectViewerTiers() {
+    return [...document.querySelectorAll("#vt-table tbody tr")].map((tr) => {
+      const g = (k) => tr.querySelector(`[data-vt="${k}"]`)?.value;
+      return { minViewers: Number(g("minViewers")) || 0, label: g("label") || "", dropPct: Number(g("dropPct")) || 0, goldPct: Number(g("goldPct")) || 0, expPct: Number(g("expPct")) || 0 };
+    }).filter((t) => t.minViewers > 0 && (t.dropPct > 0 || t.goldPct > 0 || t.expPct > 0));
+  }
+  async function saveViewerTiers() {
+    try {
+      await postJSON("/admin/stream-events/config", {
+        viewerTiers: { enabled: chk("vt-enabled"), announce: chk("vt-announce"), streamUrl: val("vt-url") || "", graceMinutes: Number(val("vt-grace")) || 60, tiers: collectViewerTiers() }
+      });
+      alert("✅ 觀看人數即時加成已儲存" + (chk("vt-enabled") ? "（已啟用）" : "（未啟用）")); render();
+    } catch (e) { alert("儲存失敗：" + e.message); }
+  }
+  async function announceViewerNow() {
+    try {
+      const r = await postJSON("/admin/stream-events/viewer-announce", {});
+      alert("📣 已宣傳！目前觀看 " + (r?.current ?? "?") + " 人");
+    } catch (e) { alert("宣傳失敗：" + e.message); }
+  }
   // 會員事件
   function addMemberRow() {
     const tb = document.querySelector("#me-table tbody"); if (!tb) return;
@@ -466,6 +534,9 @@
     if (e.target.closest?.("#mb-clearall")) { clearBuffs(); return; }
     if (e.target.closest?.("#dt-add")) { addTierRow(); return; }
     if (e.target.closest?.("#dt-save")) { saveDonationTiers(); return; }
+    if (e.target.closest?.("#vt-add")) { addViewerTierRow(); return; }
+    if (e.target.closest?.("#vt-save")) { saveViewerTiers(); return; }
+    if (e.target.closest?.("#vt-announce")) { announceViewerNow(); return; }
     if (e.target.closest?.("#sc-add")) { addMilestoneRow(); return; }
     if (e.target.closest?.("#sc-save")) { saveScBar(); return; }
     if (e.target.closest?.("#sc-reset")) { resetScBar(); return; }
@@ -474,6 +545,8 @@
     if (e.target.closest?.("#ev-reset-season")) { resetSeason(); return; }
     const dtDel = e.target.closest?.("[data-dt-del]");
     if (dtDel) { dtDel.closest("tr")?.remove(); return; }
+    const vtDel = e.target.closest?.("[data-vt-del]");
+    if (vtDel) { vtDel.closest("tr")?.remove(); return; }
     const meDel = e.target.closest?.("[data-me-del]");
     if (meDel) { meDel.closest("tr")?.remove(); return; }
     const msDel = e.target.closest?.("[data-ms-del]");

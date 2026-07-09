@@ -775,6 +775,30 @@ class ShopService {
         try { require("../enchant/enchantService").rollForEntry(chestEntryToAdd); } catch (_) { /* noop */ }
         next.inventory.push(chestEntryToAdd);
         effectDesc = `🎁 開啟 **${entry.itemName}**，獲得 **${chestRewardInfo.rewardItemName}**！`;
+      } else if (effect.type === "open_anchor_pack") {
+        // 記憶錨定卡包：加權抽 1 份 — 主線 NPC 卡(A 特別稀有)混入 C/D 階裝備（沿用寶箱開箱動畫）
+        if (chestRolledEntry === undefined) {
+          const rolled = await this._rollAnchorPack();
+          if (!rolled) {
+            throw new AppError(ERROR_CODES.INTERNAL_ERROR, "卡包獎池讀取失敗，請稍後再試。", 500);
+          }
+          chestRolledEntry = rolled.entry;
+          chestRewardInfo = {
+            chestName: entry.itemName,
+            rewardItemName: rolled.entry.itemName,
+            rewardItemId: rolled.entry.itemId || null,
+            rewardImage: rolled.entry.imageUrl || rolled.entry.imageThumbnailUrl || null,
+            rewardTier: rolled.entry.tier || null,
+            isCard: !!rolled.isCard,
+          };
+        }
+        const chestEntryToAdd = { ...chestRolledEntry };
+        // 卡片(special 槽)不骰附魔；只有一般裝備才骰
+        if (!chestEntryToAdd.isNpcCard) {
+          try { require("../enchant/enchantService").rollForEntry(chestEntryToAdd); } catch (_) { /* noop */ }
+        }
+        next.inventory.push(chestEntryToAdd);
+        effectDesc = `🎁 開啟 **${entry.itemName}**，獲得 **${chestRewardInfo.rewardItemName}**！`;
       }
 
       const autoRemovedJobBadge = this._autoUnequipJobBadgeIfNeeded(next);
@@ -825,6 +849,36 @@ class ShopService {
 
     if (!casSuccess) {
       throw new AppError(ERROR_CODES.INTERNAL_ERROR, `useItem CAS failed after ${CAS_MAX_RETRIES} retries for ${discordId}`, 500);
+    }
+
+    // 開箱/開包 → 個人小鈴鐺通知（進通知中心；每次開箱都有，不論階級）
+    if (savedChestReward && savedChestReward.rewardItemName) {
+      try {
+        const tierLabel = savedChestReward.rewardTier ? `${String(savedChestReward.rewardTier).toUpperCase()} 階` : "";
+        require("../realtime/playerNotifyService").notifyPlayer(discordId, {
+          type: "chest_open",
+          title: "🎁 開箱獲得",
+          message: `開啟「${savedChestReward.chestName || "寶箱"}」，獲得${tierLabel ? ` ${tierLabel}` : ""}【${savedChestReward.rewardItemName}】！`,
+          meta: {
+            itemId: savedChestReward.rewardItemId || null,
+            tier: savedChestReward.rewardTier || null,
+            image: savedChestReward.rewardImage || null,
+            isCard: !!savedChestReward.isCard,
+          },
+        });
+      } catch (_) { /* 通知失敗不影響開箱結果 */ }
+    }
+
+    // 記憶錨定卡包：抽到「卡片」且 B 級以上(S/A/B) → 全服廣播；C/D 卡與 C/D 裝備只留個人獲得紀錄，不廣播。
+    if (savedChestReward && savedChestReward.isCard
+      && ["S", "A", "B"].includes(String(savedChestReward.rewardTier || "").toUpperCase())) {
+      try {
+        const tc = require("../../shared/announceTownChat");
+        const who = await tc.resolveDiscordName(discordId).catch(() => (displayName || "某位勇者"));
+        tc.announceTownChat(
+          `🎴✨ **${who}** 開啟記憶錨定卡包，抽中 **${String(savedChestReward.rewardTier).toUpperCase()} 階**【**${savedChestReward.rewardItemName}**】！`
+        ).catch(() => {});
+      } catch (_) { /* 廣播失敗不影響開包結果 */ }
     }
 
     // 獨立的 side-effects（wallet / 另一支 progress CAS 自己處理併發）
@@ -1003,6 +1057,83 @@ class ShopService {
       purchasedAt: new Date().toISOString(),
     };
     return { entry, itemName: entry.itemName };
+  }
+
+  // 把一份 item 文件轉成背包 entry（保留卡片技能/被動等所有欄位）
+  _buildEntryFromItem(item, source, sourceRef) {
+    return {
+      uuid: crypto.randomUUID(),
+      itemId: item.id,
+      itemName: item.name || "神秘物品",
+      itemEffect: item?.effect || { type: "none", value: 0 },
+      useEffects: item?.useEffects || [],
+      passiveEffects: item?.passiveEffects || [],
+      procEffects: item?.procEffects || [],
+      combatEffects: item?.combatEffects || [],
+      itemType: item?.itemType || "equipment",
+      imageUrl: item?.imageUrl || null,
+      imageThumbnailUrl: item?.imageThumbnailUrl || null,
+      equipSlot: item?.equipSlot || null,
+      equipStats: item?.equipStats ? { ...item.equipStats } : {},
+      weaponType: item?.weaponType || null,
+      isTwoHanded: item?.isTwoHanded || false,
+      atkStat: item?.atkStat || null,
+      tier: item?.tier || null,
+      setKey: item?.setKey || null,
+      setKeys: Array.isArray(item?.setKeys) ? item.setKeys : (item?.setKey ? [item.setKey] : []),
+      monsterCardSkill: item?.monsterCardSkill || null,
+      isNpcCard: item?.isNpcCard || false,
+      npcCardOf: item?.npcCardOf || null,
+      enhanceLevel: 0,
+      source,
+      sourceRef,
+      purchasedAt: new Date().toISOString(),
+    };
+  }
+
+  // 記憶錨定卡包抽獎：加權表(總權重 1000)
+  //   NPC 卡 530‰(A 僅 10‰=1%)，其餘 470‰ 為 C/D 階一般裝備。
+  async _rollAnchorPack() {
+    const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+    const db = await getMongoDb();
+    const TABLE = [
+      { kind: "card", id: "npc-card-npc-ch1-examiner",   w: 10 },  // A 1.0%
+      { kind: "card", id: "npc-card-npc-player-sister",  w: 40 },  // B 4.0%
+      { kind: "card", id: "npc-card-npc-ikea-koi",       w: 40 },  // B 4.0%
+      { kind: "card", id: "npc-card-npc-ch1-registrar",  w: 80 },  // C 8.0%
+      { kind: "card", id: "npc-card-npc-ch1-student",    w: 90 },  // D 9.0%
+      { kind: "card", id: "npc-card-npc-ch1-passerby-a", w: 90 },  // D 9.0%
+      { kind: "card", id: "npc-card-npc-ch1-passerby-b", w: 90 },  // D 9.0%
+      { kind: "card", id: "npc-card-npc-ch1-staff",      w: 90 },  // D 9.0%
+      { kind: "equip", tier: "C", w: 170 },                        // C 階裝備 17.0%
+      { kind: "equip", tier: "D", w: 300 },                        // D 階裝備 30.0%
+    ];
+    const total = TABLE.reduce((a, b) => a + b.w, 0);
+    let r = Math.random() * total;
+    let pick = TABLE[TABLE.length - 1];
+    for (const row of TABLE) { if ((r -= row.w) < 0) { pick = row; break; } }
+
+    if (pick.kind === "card") {
+      const item = await db.collection("items").findOne({ id: pick.id });
+      if (!item) return null;
+      return { entry: this._buildEntryFromItem(item, "anchor_pack", `pack:card:${pick.id}`), itemName: item.name, isCard: true };
+    }
+    // 一般裝備：該階可掉的裝備(排除卡片/職業徽章/不可掉落)，等機率抽一件
+    const pool = await db.collection("items").find({
+      itemType: "equipment",
+      tier: pick.tier,
+      equipSlot: { $nin: ["special", "job_eq"] },
+      isNpcCard: { $ne: true },
+      monsterCardOf: { $exists: false },
+    }).toArray();
+    if (!pool.length) {
+      // 保底：該階無裝備時退回抽一張 D 卡，避免整包失敗
+      const fallback = await db.collection("items").findOne({ id: "npc-card-npc-ch1-staff" });
+      if (!fallback) return null;
+      return { entry: this._buildEntryFromItem(fallback, "anchor_pack", "pack:fallback"), itemName: fallback.name, isCard: true };
+    }
+    const item = pool[Math.floor(Math.random() * pool.length)];
+    return { entry: this._buildEntryFromItem(item, "anchor_pack", `pack:equip:${pick.tier}`), itemName: item.name, isCard: false };
   }
 
   async sellItem(discordId, entryUuid) {

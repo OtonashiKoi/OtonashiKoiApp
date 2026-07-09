@@ -35,6 +35,18 @@ const DEFAULTS = {
     ],
   },
 
+  // 4) 觀看人數即時觸發（短期）：同時觀看數跨門檻→發全服 buff（單一、覆寫升級、不疊加）
+  viewerTiers: {
+    enabled: false,
+    announce: true,
+    streamUrl: "", // 廣播時附上的直播連結（每場可換；建議用 頻道/live 永久轉址）
+    graceMinutes: 60, // 直播中持續有效；直播結束後再維持幾分鐘才消失
+    tiers: [
+      { minViewers: 30, label: "觀看熱度 I", goldPct: 5, dropPct: 5, expPct: 5, durationMinutes: 30 },
+      { minViewers: 50, label: "觀看熱度 II", goldPct: 10, dropPct: 10, expPct: 10, durationMinutes: 30 },
+    ],
+  },
+
   // 3) 會員事件
   memberEvents: {
     enabled: false,
@@ -98,6 +110,27 @@ function mergeScBar(raw) {
     : DEFAULTS.scBar.milestones.map((m) => ({ ...m }));
   return base;
 }
+function sanitizeViewerTiers(list) {
+  const src = Array.isArray(list) ? list : DEFAULTS.viewerTiers.tiers;
+  return src
+    .map((t) => ({
+      minViewers: Math.max(1, num(t?.minViewers, 0)),
+      label: String(t?.label || ""),
+      goldPct: pct(t?.goldPct), dropPct: pct(t?.dropPct), expPct: pct(t?.expPct),
+      durationMinutes: Math.max(1, num(t?.durationMinutes, 30)),
+    }))
+    .filter((t) => t.minViewers > 0 && (t.goldPct > 0 || t.dropPct > 0 || t.expPct > 0))
+    .sort((a, b) => a.minViewers - b.minViewers);
+}
+function mergeViewerTiers(raw) {
+  const base = { ...DEFAULTS.viewerTiers, ...(raw || {}) };
+  base.enabled = Boolean(base.enabled);
+  base.announce = base.announce !== false;
+  base.streamUrl = String(base.streamUrl || "").trim().slice(0, 300);
+  base.graceMinutes = Math.max(1, num(base.graceMinutes, 60));
+  base.tiers = raw && raw.tiers !== undefined ? sanitizeViewerTiers(raw.tiers) : DEFAULTS.viewerTiers.tiers.map((t) => ({ ...t }));
+  return base;
+}
 function mergeMemberEvents(raw) {
   const base = { ...DEFAULTS.memberEvents, ...(raw || {}) };
   base.enabled = Boolean(base.enabled);
@@ -122,6 +155,7 @@ async function getConfig() {
     donationTiers: mergeDonationTiers(doc?.donationTiers),
     scBar: mergeScBar(doc?.scBar),
     memberEvents: mergeMemberEvents(doc?.memberEvents),
+    viewerTiers: mergeViewerTiers(doc?.viewerTiers),
   };
 }
 
@@ -133,6 +167,7 @@ async function saveConfig(patch = {}) {
   if (patch.donationTiers !== undefined) set.donationTiers = mergeDonationTiers({ ...cur.donationTiers, ...(patch.donationTiers || {}) });
   if (patch.scBar !== undefined) set.scBar = mergeScBar({ ...cur.scBar, ...(patch.scBar || {}) });
   if (patch.memberEvents !== undefined) set.memberEvents = mergeMemberEvents({ ...cur.memberEvents, ...(patch.memberEvents || {}) });
+  if (patch.viewerTiers !== undefined) set.viewerTiers = mergeViewerTiers({ ...cur.viewerTiers, ...(patch.viewerTiers || {}) });
   await db.collection("serverEventConfig").updateOne({ _id: "default" }, { $set: set }, { upsert: true });
   const next = await getConfig();
   await syncRuntimeConfig(next); // 讓引擎的短期上限即時跟上

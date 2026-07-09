@@ -1,0 +1,27 @@
+[
+  {
+    "id": "chest-daishi-king",
+    "name": "大史王寶箱",
+    "oldDescription": "開啟後，依大史王的掉落比重隨機獲得一份其掉落物。"
+  },
+  {
+    "id": "chest-dragon-king",
+    "name": "古龍王寶箱",
+    "oldDescription": "開啟後，依古龍王的掉落比重隨機獲得一份其掉落物。"
+  },
+  {
+    "id": "chest-hellfang-king",
+    "name": "地獄狼牙王寶箱",
+    "oldDescription": "開啟後，依地獄狼牙王的掉落比重隨機獲得一份其掉落物。"
+  },
+  {
+    "id": "chest-a-weapon-select",
+    "name": "A階武器抽選箱",
+    "oldDescription": "開啟後隨機獲得一把 A 階武器（秘銀／火焰系共 21 種）！"
+  },
+  {
+    "id": "chest-anchor-pack",
+    "name": "記憶錨定卡包",
+    "oldDescription": "開啟後隨機獲得 1 份：主線角色卡(測驗教官 1%／妹妹・IK※A鯉鯉 各4%／報到人員 8%／路人學員・A・B・工作人員 各9%)，或 C/D 階裝備。A 階「測驗教官卡」特別稀有。"
+  }
+]

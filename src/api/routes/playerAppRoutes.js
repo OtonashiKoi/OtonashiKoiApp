@@ -1790,10 +1790,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         
         // 1. Prefer the guild member display name when available.
         if (guild) {
-          try {
-            const member = await guild.members.fetch(userId);
-            if (member) playerName = member.displayName;
-          } catch (e) { /* ignore guild member lookup errors */ }
+          // 限時抓成員：Discord 限流時不卡住(超時→null→改用下方玩家記錄名稱)
+          const { fetchGuildMemberSafe } = require("../../shared/discordMemberFetch");
+          const member = await fetchGuildMemberSafe(guild, userId, { force: false });
+          if (member) playerName = member.displayName;
         }
 
         // 2. Fall back to stored player/profile records.
@@ -2155,7 +2155,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const history = await Promise.all([...messages.values()].map(async (msg) => {
         // Resolve missing guild member data on demand when cache misses.
         if (!msg.member && !msg.author.bot) {
-          try { await channel.guild.members.fetch(msg.author.id); } catch (_) {}
+          // 限時抓成員：Discord 限流時不卡住整個聊天歷史（超時→用帳號名 fallback）
+          const { fetchGuildMemberSafe } = require("../../shared/discordMemberFetch");
+          await fetchGuildMemberSafe(channel.guild, msg.author.id, { force: false });
         }
         let content = msg.content || "";
         if (msg.stickers.size > 0) {

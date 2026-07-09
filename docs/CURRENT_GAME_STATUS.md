@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-07-07T15:22:35.846Z
+Generated at: 2026-07-09T09:18:36.762Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,12 +8,12 @@ Generated at: 2026-07-07T15:22:35.846Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 411 |
-| 進度資料 | 415 |
+| 玩家 | 414 |
+| 進度資料 | 418 |
 | 怪物 | 64 |
-| 怪物狀態文件 | 10 |
-| 道具 | 411 |
-| 任務 | 43 |
+| 怪物狀態文件 | 12 |
+| 道具 | 427 |
+| 任務 | 50 |
 | 職業徽章 | 10 |
 | 職業任務 | 10 |
 | 世界王設定 | 3 |
@@ -61,7 +61,7 @@ Generated at: 2026-07-07T15:22:35.846Z
 | beginner | 3 | 蘑菇怪 | 2 | 700 | 200 | 17 | 0 | 否 | 11 |
 | beginner | 4 | 小史(中) | 3 | 900 | 250 | 20 | 0 | 否 | 12 |
 | beginner | 5 | 大野兔(B) | 3 | 3000 | 500 | 360 | 0 | 是 | 13 |
-| dragon_king_lair | 1 | 古龍王(B) | 60 | 2655000 | 30000 | 60000 | 10000 | 是 | 58 |
+| dragon_king_lair | 1 | 古龍王(B) | 60 | 2655000 | 30000 | 60000 | 10000 | 是 | 59 |
 | dragon_realm | 1 | 飛龍幼崽 | 40 | 36000 | 13000 | 360 | 0 | 否 | 10 |
 | dragon_realm | 2 | 龍蜥武士 | 41 | 40500 | 14000 | 390 | 0 | 否 | 7 |
 | dragon_realm | 3 | 火翼龍人 | 42 | 45000 | 15000 | 420 | 0 | 否 | 7 |
@@ -71,8 +71,8 @@ Generated at: 2026-07-07T15:22:35.846Z
 | dragon_realm | 7 | 黃金幼龍(稀) | 46 | 30000 | 8000 | 9000 | 0 | 是 | 17 |
 | dragon_realm | 8 | 暗影龍將 | 47 | 69000 | 20000 | 570 | 0 | 否 | 6 |
 | dragon_realm | 9 | 龍翼魔法師 | 48 | 75000 | 22000 | 600 | 0 | 否 | 6 |
-| dragon_realm | 10 | 龍王(B) | 50 | 300000 | 50000 | 15000 | 0 | 是 | 25 |
-| elite | 1 | 大史王 | 55 | 1770000 | 19500 | 40500 | 5000 | 是 | 58 |
+| dragon_realm | 10 | 龍王(B) | 50 | 300000 | 50000 | 15000 | 0 | 是 | 26 |
+| elite | 1 | 大史王 | 55 | 1770000 | 19500 | 40500 | 5000 | 是 | 59 |
 | hellfire | 1 | 焰爪幼狼 | 42 | 40629 | 15000 | 700 | 0 | 否 | 4 |
 | hellfire | 2 | 灰燼豺 | 43 | 43338 | 16000 | 740 | 0 | 否 | 3 |
 | hellfire | 3 | 熔岩犬 | 43 | 47401 | 17500 | 800 | 0 | 否 | 3 |
@@ -84,7 +84,7 @@ Generated at: 2026-07-07T15:22:35.846Z
 | hellfire | 9 | 岩漿巨蟲 | 46 | 56881 | 21000 | 920 | 0 | 否 | 3 |
 | hellfire | 10 | 烈焰狼 | 47 | 51464 | 22500 | 960 | 0 | 否 | 4 |
 | hellfire | 11 | 煉獄烈焰狼王 | 48 | 121888 | 45000 | 2400 | 0 | 否 | 13 |
-| hellfire_depths | 1 | 地獄狼牙王 | 65 | 3200000 | 30000 | 60000 | 0 | 是 | 14 |
+| hellfire_depths | 1 | 地獄狼牙王 | 65 | 3200000 | 30000 | 60000 | 0 | 是 | 15 |
 | mid | 1 | 甲蟹 | 14 | 4968 | 2800 | 166 | 0 | 否 | 16 |
 | mid | 2 | 牙牙狼 | 13 | 4416 | 2400 | 166 | 0 | 否 | 13 |
 | mid | 3 | 巨巨 | 16 | 5704 | 4000 | 166 | 0 | 否 | 14 |
@@ -110,49 +110,51 @@ Generated at: 2026-07-07T15:22:35.846Z
 
 | 分類 | 數量 |
 | --- | --- |
-| collectible | 6 |
-| consumable | 22 |
-| equipment | 370 |
+| collectible | 7 |
+| consumable | 24 |
+| equipment | 383 |
 | job_badge | 10 |
 | pet_egg | 3 |
 
 | 階級 | 數量 |
 | --- | --- |
-| A | 139 |
-| B | 70 |
-| C | 71 |
-| D | 57 |
-| S | 28 |
-| 無階級 | 46 |
+| A | 140 |
+| B | 72 |
+| C | 72 |
+| D | 61 |
+| S | 32 |
+| 無階級 | 50 |
 
 | 槽位 | 數量 |
 | --- | --- |
 | accessory_l | 46 |
 | accessory_r | 46 |
-| anchor | 7 |
+| anchor | 11 |
 | armor | 19 |
 | garment | 19 |
 | head_low | 19 |
 | head_mid | 19 |
 | head_top | 19 |
 | job_eq | 10 |
-| shield | 11 |
+| shield | 10 |
 | shoes | 19 |
-| special | 64 |
-| title_eq | 10 |
-| weapon | 72 |
-| 無槽位 | 31 |
+| special | 72 |
+| title_eq | 11 |
+| weapon | 73 |
+| 無槽位 | 34 |
 
 ## Items
 
 | ID | 名稱 | 類型 | 階級 | 槽位 | 武器類型 | 屬性 | 效果 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1aebca81-70f9-463d-85fa-215f2e62a1d3 | 【圖片】記憶錨點-收藏用 | collectible |  |  |  |  | none |
 | b7f5ef58-79d3-41ef-b9d2-c726da22417b | 【圖片】音無 哭哭 錢錢飛走了 | collectible |  |  |  |  | none |
 | 50110bc1-9403-4ac2-a69f-27d8162d1a9e | 【圖片】音無2025年11月11日 | collectible |  |  |  |  | none |
 | c5db63c0-79f2-452a-a076-78f09093a65c | 【圖片】音無2025年1月新年會限圖 | collectible |  |  |  |  | none |
 | 9d3c7998-6b65-4d5a-81d5-4c34a8dc744e | 【圖片】音無2025年情人節會限圖 | collectible |  |  |  |  | none |
 | 9b8ef677-eda3-42bc-82d7-63c202b49cd2 | 【圖片】音無樂園限定CB圖 | collectible |  |  |  |  | none |
 | a0b83358-572b-45c0-997b-3fa93dff7a32 | 【圖片】龍族紀元-收藏用 | collectible |  |  |  |  | none |
+| chest-a-weapon-select | A階武器抽選箱 | consumable |  |  |  |  | open_random_weapon |
 | 9b8ad195-9ec1-401b-9b7f-2c1033628cba | 【 我命由我不由天 】藥水 | consumable |  |  |  |  | level_down_random_attributes |
 | 4a3b928f-c86a-4f3e-b1be-8ca2828072ae | 【鯉市長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
 | 9d3f8e8a-3de6-40c4-a2a5-06793e83c7d5 | 【鯉民】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
@@ -166,6 +168,7 @@ Generated at: 2026-07-07T15:22:35.846Z
 | 87b281be-b175-40a0-8044-0accc88a0ee0 | 屬性重製藥水 | consumable |  |  |  |  | reroll_attributes |
 | c4794326-ced1-4efe-983d-17c14ee2f2f8 | 復活藥水（大） | consumable |  |  |  |  | tower_revive_pct |
 | 12bfb110-6489-4784-8537-f3f496759f8f | 復活藥水（小） | consumable |  |  |  |  | tower_revive_pct |
+| chest-anchor-pack | 記憶錨定卡包 | consumable |  |  |  |  | open_anchor_pack |
 | 71aaa3a2-abb9-4b01-b024-16e553b08840 | 金幣袋子(中) | consumable |  |  |  |  | grant_gold |
 | 1854a2b1-a569-4604-802d-9171f480a9ae | 金幣袋子(大) | consumable |  |  |  |  | grant_gold |
 | 63ca559b-ca12-4835-a48d-2150e366f60e | 金幣袋子(小) | consumable |  |  |  |  | grant_gold |
@@ -184,6 +187,7 @@ Generated at: 2026-07-07T15:22:35.846Z
 | e290d286-bd45-4a32-b848-d52184fc88a0 | 樂園CCB勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | dc067571-4f8f-49af-b0c1-50f32c6941ab | 樂園最終CB勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | b4f8c3f3-39f2-4c5e-9c30-61812156a936 | 狼王的磨牙棒 | equipment |  | title_eq |  |  | none |
+| title-pet-master | 馴獸大師 | equipment |  | title_eq |  | DEX+5 LUK+5 | none |
 | f5d8903b-5d19-46d7-a1f5-3af1672ee833 | 龍王的零嘴們 | equipment |  | title_eq |  |  | none |
 | d03a42d6-a2cb-446b-be0c-135f28375136 | 吸血左之戒 | equipment | A | accessory_l |  | LUK+5 | none |
 | 08f14a4f-c534-4289-8632-0313570f8a9a | 守護左之戒 | equipment | A | accessory_l |  | VIT+5 | none |
@@ -254,7 +258,6 @@ Generated at: 2026-07-07T15:22:35.846Z
 | dragonscale-arm-head_top | 龍首盔 | equipment | A | head_top |  | VIT+13 | none |
 | fire-a-arm-shield | 焰鱗盾 | equipment | A | shield |  | VIT+14 | none |
 | 585ad0b3-2c75-462a-ade6-882e5929831b | 秘銀盾 | equipment | A | shield |  | VIT+14 | none |
-| mithril-arm-shield | 秘銀盾甲 | equipment | A | shield |  | VIT+14 | none |
 | afa8d955-ad56-4d49-9ee8-0b845f489997 | 秘銀短匕(副手) | equipment | A | shield | offhand_dagger | AGI+9 LUK+3 | none |
 | dragonscale-arm-shield | 龍鱗盾牌 | equipment | A | shield |  | VIT+14 | none |
 | 38f310e3-1959-4717-b031-bae1e390a8db | 智紋鋼鐵靴 | equipment | A | shoes |  | VIT+7 INT+6 | none |
@@ -280,6 +283,7 @@ Generated at: 2026-07-07T15:22:35.846Z
 | monster-card-0496ea5d-786e-4b07-ba65-30949c1afe31 | 廢都魔王(B)卡 | equipment | A | special |  |  | none |
 | monster-card-e1c17a26-dd0e-4869-9ce8-7c4b12b8e2c2 | 暗影龍將卡 | equipment | A | special |  |  | none |
 | monster-card-139df36b-f838-4875-b3f0-2d9003fc6f8f | 毒霧蜘蛛卡 | equipment | A | special |  |  | none |
+| npc-card-npc-ch1-examiner | 測驗教官卡 | equipment | A | special |  | STR+5 DEX+4 | none |
 | monster-card-29e2458c-8e7f-4c4f-a7bf-5f978a5067d4 | 火翼龍人卡 | equipment | A | special |  |  | none |
 | monster-card-18681a29-c89d-45e2-ab65-60869a45ec20 | 火髓魔蟲卡 | equipment | A | special |  |  | none |
 | monster-card-ddae3f15-ee44-4bd1-993e-16dd43904315 | 灰燼豺卡 | equipment | A | special |  |  | none |
@@ -303,6 +307,7 @@ Generated at: 2026-07-07T15:22:35.846Z
 | monster-card-90df79f6-ce40-4f31-be32-f8d4d8f31c99 | 龍王(B)卡 | equipment | A | special |  |  | none |
 | monster-card-aece2657-19aa-407c-acaa-0b23246c0dc7 | 龍翼魔法師卡 | equipment | A | special |  |  | none |
 | monster-card-739cdb0a-5d59-4e52-bf77-cce0e33c2666 | 龍蜥武士卡 | equipment | A | special |  |  | none |
+| sanyuanpai-a-dagger | 三元牌 | equipment | A | weapon | dagger | STR+12 AGI+7 VIT+2 LUK+-2 | none |
 | fire-a-wpn-axe_1h | 烈焰單手斧 | equipment | A | weapon | axe_1h | STR+14 LUK+5 | none |
 | fire-a-wpn-axe_2h | 烈焰雙手斧 | equipment | A | weapon | axe_2h | STR+20 LUK+5 | none |
 | fire-a-wpn-dagger | 焰刃匕首 | equipment | A | weapon | dagger | STR+4 AGI+15 | none |
@@ -375,12 +380,14 @@ Generated at: 2026-07-07T15:22:35.846Z
 | 184d4cc9-81cf-494d-809e-7704a1b73e59 | 迅紋鐵靴 | equipment | B | shoes |  | VIT+3 DEX+4 | none |
 | d9e16875-14cb-45b1-91eb-da46b6972698 | 鐵靴 | equipment | B | shoes |  | AGI+3 VIT+4 | none |
 | 8693f1d9-aa26-4c08-9d1f-9908a4b81281 | 鬥紋鐵靴 | equipment | B | shoes |  | STR+4 VIT+3 | none |
+| npc-card-npc-ikea-koi | IK※A鯉鯉卡 | equipment | B | special |  | STR+3 DEX+2 LUK+1 | none |
 | night-leopard-card | 暗夜獵豹卡 | equipment | B | special |  |  | none |
 | forest-spirit-card | 林地妖靈卡 | equipment | B | special |  |  | none |
 | forest-beast-card | 森林之獸卡 | equipment | B | special |  |  | none |
 | forest-tree-card | 森林古樹卡 | equipment | B | special |  |  | none |
 | forest-wizard-card | 森林巫師卡 | equipment | B | special |  |  | none |
 | forest-rogue-card | 森林盜賊卡 | equipment | B | special |  |  | none |
+| npc-card-npc-player-sister | 玩家妹妹卡 | equipment | B | special |  | VIT+3 INT+2 LUK+1 | none |
 | cfcbde64-96cb-4f8d-9aed-7011b9fe7e20 | 立直棒-跳滿手 | equipment | B | weapon | staff_1h | AGI+1 VIT+2 INT+15 DEX+3 LUK+-6 | none |
 | 46df8bac-c8c1-4e31-8689-7a602bafd7b5 | 鋼製匕首 | equipment | B | weapon | dagger | STR+4 AGI+7 | none |
 | 9807c319-abbd-43ad-808c-dcfb9313d7ba | 鋼製單手劍 | equipment | B | weapon | sword_1h | STR+11 | none |
@@ -445,6 +452,7 @@ Generated at: 2026-07-07T15:22:35.846Z
 | bf1dc51e-84f1-4314-b95e-3446aa3d0df0 | 迅紋皮靴 | equipment | C | shoes |  | VIT+2 DEX+2 | none |
 | c8252c6f-0d78-447b-b082-ca0960dfb45d | 鬥紋皮靴 | equipment | C | shoes |  | STR+2 VIT+2 | none |
 | monster-card-3065b7ca-8839-4be4-9d02-0821932cd408 | 中金(稀)卡 | equipment | C | special |  |  | none |
+| npc-card-npc-ch1-registrar | 報到人員卡 | equipment | C | special |  | AGI+1 DEX+3 | none |
 | monster-card-03c93103-eddb-4265-96ca-a8a76bb82a02 | 小金(稀)卡 | equipment | C | special |  |  | none |
 | giant-card | 巨巨卡 | equipment | C | special |  |  | none |
 | fang-wolf-card | 牙牙狼卡 | equipment | C | special |  |  | none |
@@ -503,9 +511,13 @@ Generated at: 2026-07-07T15:22:35.846Z
 | xiaoshi-small-card | 小史(小)卡 | equipment | D | special |  |  | none |
 | monster-card-c39bdddd-a33d-4e34-8019-d17020a8083b | 小史卡 | equipment | D | special |  |  | none |
 | xiaolang-card | 小狼卡 | equipment | D | special |  |  | none |
+| npc-card-npc-ch1-staff | 工作人員卡 | equipment | D | special |  | VIT+2 | none |
 | stone-card | 石頭卡 | equipment | D | special |  |  | none |
 | green-wolf-card | 綠野狼卡 | equipment | D | special |  |  | none |
 | monster-card-5606a251-bea4-4d4c-bd37-d985a7d7a6d3 | 蘑菇怪卡 | equipment | D | special |  |  | none |
+| npc-card-npc-ch1-passerby-a | 路人A卡 | equipment | D | special |  | STR+2 | none |
+| npc-card-npc-ch1-passerby-b | 路人B卡 | equipment | D | special |  | DEX+1 LUK+1 | none |
+| npc-card-npc-ch1-student | 路人學員卡 | equipment | D | special |  | INT+1 LUK+1 | none |
 | monster-card-ac87e4b7-2c1c-4d6c-8fa8-c873fc26039f | 野兔卡 | equipment | D | special |  |  | none |
 | grass-goblin-card | 青草地精卡 | equipment | D | special |  |  | none |
 | 421196aa-83e4-4f2e-82f6-dc05077b115a | 木製匕首 | equipment | D | weapon | dagger | STR+1 AGI+3 | none |
@@ -518,9 +530,13 @@ Generated at: 2026-07-07T15:22:35.846Z
 | 2271e23c-9648-430e-944b-cea2107ee8ec | 木製雙手斧 | equipment | D | weapon | axe_2h | STR+5 LUK+1 | none |
 | 2fcf7576-4e74-4280-b1e6-0d7da7b58dda | 木製雙手槌 | equipment | D | weapon | mace_2h | STR+5 VIT+1 | none |
 | e3794447-e19d-41a2-9b0a-c5050dcdd9ea | 木製雙手法杖 | equipment | D | weapon | staff_2h | INT+5 LUK+1 | none |
+| s-legend-thirst | 對鮮血的渴望 | equipment | S | anchor |  |  | none |
+| s-legend-timelord | 時間管理大師 | equipment | S | anchor |  |  | none |
+| s-legend-endure | 沒苦硬吃 | equipment | S | anchor |  |  | none |
 | s-legend-linger | 滯・後勢之刃 | equipment | S | anchor |  | STR+19 | none |
 | s-legend-resonance | 繫・初鳴之晶 | equipment | S | anchor |  |  | none |
 | s-legend-bond | 繫絆・共鳴之鏈 | equipment | S | anchor |  | AGI+8 VIT+8 INT+8 | none |
+| s-legend-saint | 聖人就是比拳頭大小 | equipment | S | anchor |  |  | none |
 | s-legend-reverse-scale | 逆鱗・反擊之衣 | equipment | S | anchor |  | VIT+18 | none |
 | s-legend-mirror | 鏡裝・攻守倒置 | equipment | S | anchor |  |  | none |
 | s-legend-burst | 驟・先機之刃 | equipment | S | anchor |  | STR+19 | none |
@@ -567,6 +583,8 @@ Generated at: 2026-07-07T15:22:35.846Z
 | daily | 20 | 每日贏得 3 場 | battle_win | 3 | 啟用 | 300 金幣 + 140 EXP |  |
 | daily | 30 | 每日累計 3000 傷害 | damage_total | 3000 | 啟用 | 320 金幣 + 160 EXP |  |
 | daily | 40 | 每日完成打卡 | checkin_count | 1 | 啟用 | 180 金幣 + 100 EXP |  |
+| daily | 50 | 每日出戰 15 場 | battle_count | 15 | 啟用 | 500 金幣 + 200 EXP | 每日出戰 15 場戰鬥。 |
+| daily | 60 | 每日全清獎勵 | daily_complete_count | 1 | 啟用 | 記憶錨定卡包 | 完成上面全部每日任務後，領取 1 包記憶錨定卡包。 |
 | job | 10 | 劍士試煉 | battle_with_sword | 10 | 啟用 | 500 金幣 + 劍士徽章 | 出現條件：Lv.10，基礎 STR + DEX > 10。進度武器：單手劍或雙手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與劍士徽章。 |
 | job | 20 | 戰士試煉 | battle_with_axe | 10 | 啟用 | 500 金幣 + 戰士徽章 | 出現條件：Lv.10，基礎 STR + VIT > 10。進度武器：單手斧或雙手斧；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與戰士徽章。 |
 | job | 30 | 矮人戰士試煉 | battle_with_mace | 10 | 啟用 | 500 金幣 + 矮人戰士徽章 | 出現條件：Lv.10，基礎 VIT + STR > 10。進度武器：單手槌或雙手槌；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與矮人戰士徽章。 |
@@ -599,6 +617,11 @@ Generated at: 2026-07-07T15:22:35.846Z
 | season | 40 | 千錘百鍊 | enhance_a5_count | 10 | 啟用 | 150000 金幣 + 100000 EXP | 把 A 階裝備強化到 +5 累積 10 件，鍛鍊出一身頂裝。獎勵：150,000 金幣 + 100,000 經驗。 |
 | season | 50 | 百戰之證 | battle_win | 1500 | 啟用 | 200000 金幣 + 150000 EXP | 累計戰鬥勝利 1500 場，久經沙場之證。獎勵：200,000 金幣 + 150,000 經驗。 |
 | season | 60 | 連擊宗師 | combo_count | 3000 | 啟用 | 150000 金幣 + 100000 EXP | 累計成功連擊 3000 次（匕首／高 AGI 最易累積）。獎勵：150,000 金幣 + 100,000 經驗。 |
+| season | 900 | 🔗 共鳴・輔助者的試煉 | battle_with_support_job | 2000 | 啟用 | 繫絆・共鳴之鏈 | 【隱藏賽季任務】唯有集齊全部輔助職業徽章（治療師／軍師／詩人／結界師）者，才會看見此試煉。裝著任一輔助職徽章出戰累積 2000 場，證明你與夥伴的羈絆。獎勵：傳說錨點【繫絆・共鳴之鏈】。 |
+| season | 910 | 🛡️ 沒苦硬吃・硬撐者的試煉 | damage_taken | 100000 | 啟用 | 沒苦硬吃 | 【隱藏賽季任務】累積承受傷害達 5 萬後現身；解鎖後再硬吃 5 萬點傷害，證明你扛得住。獎勵：傳說錨點【沒苦硬吃】。 |
+| season | 911 | 🩸 對鮮血的渴望・嗜血者的試煉 | damage_total | 1000000 | 啟用 | 對鮮血的渴望 | 【隱藏賽季任務】累積造成傷害達 50 萬後現身；解鎖後再造成 50 萬傷害，浸透鮮血。獎勵：傳說錨點【對鮮血的渴望】。 |
+| season | 912 | ✝️ 聖人的試煉 | heal_done | 50000 | 啟用 | 聖人就是比拳頭大小 | 【隱藏賽季任務】本季斗內贊助過的人才會看見此試煉；累積回血量 5 萬點，以給予之心成聖。獎勵：傳說錨點【聖人就是比拳頭大小】。 |
+| season | 913 | ⏳ 時間管理大師的試煉 | checkin_streak | 7 | 啟用 | 時間管理大師 | 【隱藏賽季任務】連續簽到 3 天後現身；連續簽到滿 7 天，掌握時間者得之。獎勵：傳說錨點【時間管理大師】。 |
 | weekly | 10 | 每週出戰 30 次 | battle_count | 30 | 啟用 | 1200 金幣 + 500 EXP |  |
 | weekly | 20 | 每週贏得 20 場 | battle_win | 20 | 啟用 | 1500 金幣 + 700 EXP |  |
 | weekly | 30 | 每週累計 50000 傷害 | damage_total | 50000 | 啟用 | 1800 金幣 + 900 EXP |  |

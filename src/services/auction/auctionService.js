@@ -24,8 +24,8 @@ const GOLD_MAX = 10_000_000;
 const DIAMOND_MIN = 1;
 const DIAMOND_MAX = 200_000;
 const TIER_RANKS = ["E", "D", "C", "B", "A", "S", "SS"];
-const MAX_LISTINGS_BY_TIER = { E: 0, D: 0, C: 3, B: 5, A: 7, S: 7, SS: 7 };
-const DEFAULT_MAX_LISTINGS = 3;
+const MAX_LISTINGS_BY_TIER = { E: 0, D: 0, C: 5, B: 7, A: 10, S: 10, SS: 10 };
+const DEFAULT_MAX_LISTINGS = 5;
 const FORBIDDEN_EQUIP_SLOTS = new Set(["job_eq", "title_eq"]);
 const FORBIDDEN_ITEM_TYPES = new Set(["job_badge", "title"]);
 

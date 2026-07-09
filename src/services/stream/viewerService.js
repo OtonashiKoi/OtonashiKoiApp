@@ -49,7 +49,7 @@ function _currentTotal(nowMs) {
 
 /**
  * 收到 OneComme meta → 更新某直播枠觀看數。
- * @param {{ service?: string, id?: string, viewer: number, likes?: number, isLive?: boolean }} info
+ * @param {{ service?: string, platform?: string, id?: string, viewer: number, likes?: number, isLive?: boolean }} info
  */
 async function update(info) {
   await _loadPeakOnce();
@@ -57,6 +57,7 @@ async function update(info) {
   const key = String(info.id || info.service || "default"); // id 穩定，優先當 key
   byService.set(key, {
     service: info.service || key,
+    platform: info.platform || null,
     viewer: Number(info.viewer) || 0,
     likes: Number(info.likes) || 0,
     isLive: info.isLive === true,
@@ -78,6 +79,7 @@ async function getPublicState() {
   const nowMs = Date.now();
   const services = [...byService.entries()].map(([key, s]) => ({
     service: s.service || key,
+    platform: s.platform || null,
     viewer: Number(s.viewer) || 0,
     likes: Number(s.likes) || 0,
     isLive: s.isLive === true,

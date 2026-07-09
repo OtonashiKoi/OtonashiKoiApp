@@ -259,11 +259,59 @@ async function setDonationSessionBuff(p) {
   return { applied: true, buff };
 }
 
+// ── 觀看人數 session buff（單一、覆寫式；只保留當前最高階觀看熱度 buff，不疊加）──
+const VIEWER_SESSION_SOURCE = "viewer-session";
+
+/** 目前生效中的觀看熱度 session（單一 buff），無則 null。 */
+function getViewerSession() {
+  const nowMs = now();
+  return cache.find((b) => b.source === VIEWER_SESSION_SOURCE && Date.parse(b.endsAt) > nowMs) || null;
+}
+
+/**
+ * 覆寫式設定觀看熱度 session buff（取代舊的，升級/重新計時用）。
+ * @param {{ dropPct:number, goldPct:number, expPct:number, endsAtMs:number, tierMin:number, label?:string }} p
+ */
+async function setViewerSessionBuff(p) {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return { applied: false, reason: "no-db" };
+  const drop = Math.max(0, Math.round(Number(p.dropPct) || 0));
+  const gold = Math.max(0, Math.round(Number(p.goldPct) || 0));
+  const exp = Math.max(0, Math.round(Number(p.expPct) || 0));
+  if (drop <= 0 && gold <= 0 && exp <= 0) return { applied: false, reason: "no-effect" };
+  if (!(Number(p.endsAtMs) > now())) return { applied: false, reason: "bad-duration" };
+  const nowMs = now();
+  const buff = {
+    id: `viewsess_${nowMs}`,
+    label: String(p.label || "觀看熱度加成"),
+    source: VIEWER_SESSION_SOURCE,
+    sourceRef: VIEWER_SESSION_SOURCE,
+    dropPct: drop, goldPct: gold, expPct: exp,
+    seasonPermanent: false,
+    startedAt: new Date(nowMs).toISOString(),
+    endsAt: new Date(Number(p.endsAtMs)).toISOString(),
+    tierMin: Math.max(0, Math.round(Number(p.tierMin) || 0)),
+    createdBy: "stream:viewer-session",
+  };
+  try {
+    await db.collection(COLLECTION).deleteMany({ source: VIEWER_SESSION_SOURCE });
+    await db.collection(COLLECTION).insertOne(buff);
+  } catch (err) {
+    console.warn("[GlobalBuff] setViewerSessionBuff 失敗：", err?.message || err);
+    return { applied: false, reason: "write-failed" };
+  }
+  await refresh();
+  console.log(`[GlobalBuff] 觀看熱度 ${buff.label}（掉寶+${drop}/金幣+${gold}/經驗+${exp}%，${Math.round(Number(p.endsAtMs) - nowMs) / 60000 | 0}分）`);
+  return { applied: true, buff };
+}
+
 module.exports = {
   init,
   refresh,
   getActiveModifiers,
   applyBuff,
+  getViewerSession,
+  setViewerSessionBuff,
   setShortTermCapPct,
   clearBySource,
   resetSeason,
