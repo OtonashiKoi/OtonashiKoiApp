@@ -88,6 +88,7 @@
 | 60 | 2026-07-09 | 寵物「種族特性」逐項寫出(像戰鬥屬性) | 每種寵物特性本就不同(龍/史萊姆採集偏好差異、狼系戰鬥被動)但只有狼的加成有寫出來。新增 petService `_speciesTraits`：把 gatherMod/combatPassives 轉成可讀清單——定位/戰鬥被動/採集偏好(掉落表%或石裝%)/採集速度(1/間隔真實速度)/產出品質(高一階%)/產出階級。回傳 `traits`。網頁寵物卡加「🧬種族特性」區塊逐項列、DC面板petLine同步。實測雷鳴龍(石70%/速+43%)、黃金龍(慢/30%高階)、月影狼王(最終傷害+5%+咬擊)等各不同 | 新功能 | ✅ | (本次) petService/petPanelView/pets.tsx/usePets.ts |
 | 61 | 2026-07-09 | 防刷屏強化：同句3次/@everyone/圖片簽章 | 依需求調整音無醬自動禁言：①同句/同圖連發門檻 4→**3 次**就禁 ②新增**@everyone／@here 標註全體→直接禁言**(管理員/白名單除外) ③「同一則」判定改用**訊息簽章**(文字＋附件檔名/URL＋貼圖ID)：同圖重複才算刷屏、不同圖不再誤判(修掉貼圖區貼多張不同圖被誤禁)。跨頻道本就以「人」為單位計數(不綁頻道)故不同頻道講同句也算。禁言時長1h/6h/12h累犯、burst 3秒>6則不變 | 修正 | ✅ | (本次) config.js/client.js |
 | 62 | 2026-07-09 | 修：隱藏賽季任務「共鳴・輔助者」網頁端不累積 | 玩家反映用治癒師出戰、隱藏任務「🔗共鳴・輔助者的試煉」(battle_with_support_job 2000)不累積。根因：**DC端**戰鬥有記 battle_with_support_job(isSupportJobBadge)，但**網頁端** playerAppRoutes 戰鬥記錄漏了這條(只記武器metric)→網頁打的輔助職場次全沒算。修法：網頁端補上 getSupportJobKey 判定(healer/tactician/bard/barrier_mage)→recordProgress battle_with_support_job，與DC對齊。實測KK裝治療師徽章判定正確。⚠️過去網頁場次無法回溯，需手動補 | 修正 | ✅ | (本次) playerAppRoutes.js |
+| 63 | 2026-07-09 | 彩蛋裝備「三元牌」A階匕首(固定三連擊) | 麻將主題彩蛋武器：**三元牌**(A階匕首，白發中)。新戰鬥機制 `triple_strike`：**固定每回合攻擊3段、每段為原本的1/3傷害**(總傷不變、分成3段)，每段算進連擊數(貢獻連擊宗師)。combatLoop 主擊除以N＋補打N-1段(照 echo_strike 模式，走 playerActiveOffects 裝備passive)。實測3段各27點=原本81、comboCount正常累加、連擊仍可疊在上面。⚠️目前僅建立道具、尚無取得管道(需之後接掉落/商店/獎勵) | 新功能 | ✅ | (本次) combatLoop.js + DB |
 <!-- 新增修改請往下加列，或插入對應功能 -->
 
 ## V0.4 · 後台/工具（玩家端無感）

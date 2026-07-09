@@ -2232,6 +2232,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let stackOnTakenStacks = 0;
     let playerEchoChance = 0;                 // 繫・初鳴之晶：共鳴殘影追擊觸發率(%)
     let playerEchoPct = 0;                     // 殘影追擊傷害＝該次傷害的 %
+    let playerTripleStrike = 0;               // 三元牌：固定 N 段攻擊、每段 1/N 傷害（0=不啟用）
     if (Array.isArray(options.playerActiveEffects)) {
       for (const eff of options.playerActiveEffects) {
         if (!eff) continue;
@@ -2381,6 +2382,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const ch = Number(effParams.chance ?? 0);
           if (ch > playerEchoChance) playerEchoChance = ch;
           if (effValue > playerEchoPct) playerEchoPct = effValue;
+        } else if (eff.key === 'triple_strike') {
+          // 三元牌：固定每回合攻擊 N 段、每段傷害為原本的 1/N（走連擊系統，算連擊數）
+          const n = Math.max(2, Math.round(Number(effValue) || Number(effParams.hits) || 3));
+          if (n > playerTripleStrike) playerTripleStrike = n;
         }
       }
     }
@@ -2748,6 +2753,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
         } catch (_) { /* 採證失敗不影響戰鬥 */ }
 
+        // 三元牌：主擊改為 1/N（之後固定補 N-1 段，各 1/N）→ 總傷不變、分成 N 段（算連擊）
+        if (playerTripleStrike >= 2) dmg = Math.max(1, Math.round(dmg / playerTripleStrike));
+
         mHp -= dmg;
         totalDamage += dmg;
         // ── 戰意左：每次出手累積 stack（命中算一次）──
@@ -2782,6 +2790,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         else if (defTier === 'graze') defTierNote = "🌬️擦傷！";
 
         log.push(`⚔️ ${atkTierNote}${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害${defTierNote ? `（${defTierNote.replace(/[!！]$/, "")}）` : ""}！（怪物剩 ${Math.max(0, mHp)} HP）`);
+
+        // ── 三元牌：固定補打 N-1 段（各與主擊同為 1/N 傷害；算連擊、可致命）──
+        if (playerTripleStrike >= 2 && mHp > 0) {
+          const _sanyuan = ["白", "發", "中"];
+          for (let _ts = 1; _ts < playerTripleStrike && mHp > 0; _ts++) {
+            mHp -= dmg;
+            totalDamage += dmg;
+            combatStats.comboCount += 1;
+            const _pai = _sanyuan[_ts % _sanyuan.length];
+            log.push(`🀄 **三元・${_pai}**！再造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          }
+          if (mHp <= 0) { outcome = "win"; break; }
+        }
 
         // 擊暈判定（爆擊不觸發）
         let stunBonus = extraHighHpStun;
