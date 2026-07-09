@@ -89,6 +89,7 @@
 | 61 | 2026-07-09 | 防刷屏強化：同句3次/@everyone/圖片簽章 | 依需求調整音無醬自動禁言：①同句/同圖連發門檻 4→**3 次**就禁 ②新增**@everyone／@here 標註全體→直接禁言**(管理員/白名單除外) ③「同一則」判定改用**訊息簽章**(文字＋附件檔名/URL＋貼圖ID)：同圖重複才算刷屏、不同圖不再誤判(修掉貼圖區貼多張不同圖被誤禁)。跨頻道本就以「人」為單位計數(不綁頻道)故不同頻道講同句也算。禁言時長1h/6h/12h累犯、burst 3秒>6則不變 | 修正 | ✅ | (本次) config.js/client.js |
 | 62 | 2026-07-09 | 修：隱藏賽季任務「共鳴・輔助者」網頁端不累積 | 玩家反映用治癒師出戰、隱藏任務「🔗共鳴・輔助者的試煉」(battle_with_support_job 2000)不累積。根因：**DC端**戰鬥有記 battle_with_support_job(isSupportJobBadge)，但**網頁端** playerAppRoutes 戰鬥記錄漏了這條(只記武器metric)→網頁打的輔助職場次全沒算。修法：網頁端補上 getSupportJobKey 判定(healer/tactician/bard/barrier_mage)→recordProgress battle_with_support_job，與DC對齊。實測KK裝治療師徽章判定正確。⚠️過去網頁場次無法回溯，需手動補 | 修正 | ✅ | (本次) playerAppRoutes.js |
 | 63 | 2026-07-09 | 彩蛋裝備「三元牌」A階匕首(固定三連擊) | 麻將主題彩蛋武器：**三元牌**(A階匕首，白發中)。新戰鬥機制 `triple_strike`：**固定每回合攻擊3段、每段為原本的1/3傷害**(總傷不變、分成3段)，每段算進連擊數(貢獻連擊宗師)。combatLoop 主擊除以N＋補打N-1段(照 echo_strike 模式，走 playerActiveOffects 裝備passive)。實測3段各27點=原本81、comboCount正常累加、連擊仍可疊在上面。⚠️目前僅建立道具、尚無取得管道(需之後接掉落/商店/獎勵) | 新功能 | ✅ | (本次) combatLoop.js + DB |
+| 64 | 2026-07-09 | 聖者錨點規則調整：自己治療轉傷害/隊友外部光環取消 | 依定案調整聖者(heal_to_damage×7)：**自己的治療(含自我光環)照轉×7傷害**、**隊友外部治療光環直接取消**(聖者下不補血也不轉傷害，關掉「治療師餵×7給聖者」的爆表組合)、吸血維持不轉。combatLoop party_heal 用 `pe.isSelfAura===false` 判外部→聖者下 continue；playerAppRoutes(自己光環標isSelfAura:true、隊友false)＋monsterZoneHandlers(pid===discordId)標來源。實測自己53HP→371傷害、隊友光環取消。⚠️戰報「光環加持」對自己仍顯示「回復X HP」(實際轉傷害)，顯示文字待polish | 修正 | ✅ | (本次) combatLoop/playerAppRoutes/monsterZoneHandlers |
 <!-- 新增修改請往下加列，或插入對應功能 -->
 
 ## V0.4 · 後台/工具（玩家端無感）
