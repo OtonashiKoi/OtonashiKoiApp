@@ -168,13 +168,27 @@ class IdleService {
   }
 
   async _resolveMembership(discordId, memberRoleIds = []) {
+    // 1) 即時 Discord 身分組（若呼叫端有傳入 roleIds；網頁端通常拿不到）
     if (this.playerTierService?.resolveHighestTier && Array.isArray(memberRoleIds) && memberRoleIds.length > 0) {
       const tier = await this.playerTierService.resolveHighestTier(memberRoleIds).catch(() => null);
       if (tier) return { isMember: true, tier };
     }
+    // 2) 遊戲記錄的會員位階
     const progress = await this.progressRepository.findByPlayerId(discordId).catch(() => null);
-    const tier = progress?.playerTier || null;
-    return { isMember: !!tier, tier };
+    if (progress?.playerTier) return { isMember: true, tier: progress.playerTier };
+    // 3) 綁定會員 ∪ 會員現況表（與遊戲其他處一致；避免只認 Discord 身分組而誤把綁定會員當非會員）
+    try {
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const db = await getMongoDb();
+      const bind = await db.collection("streamAccountBindings").findOne({
+        discordId: String(discordId),
+        $or: [{ isMember: true }, { linkedSupportAtLink: true }, { playerTierAtLink: { $nin: [null, ""] } }]
+      });
+      if (bind) return { isMember: true, tier: bind.playerTierAtLink || "C" };
+      const ms = await db.collection("membershipStatus").findOne({ discordId: String(discordId), isMember: true });
+      if (ms) return { isMember: true, tier: ms.currentTier || "C" };
+    } catch (_) { /* 查不到就當非會員 */ }
+    return { isMember: false, tier: null };
   }
 
   _applyDailyLimitToSummary(summary, dailyClaimInfo) {
