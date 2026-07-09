@@ -2680,7 +2680,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 如果無法取得怪物卡片，繼續進行戰鬥
       }
 
-      // 與 DC 一致：圖鑑加成（依玩家對這隻怪的累積擊殺，最高 +30% 傷害）
+      // 與 DC 一致：圖鑑加成（依玩家對這隻怪的累積擊殺，最高 +25% 傷害）
       const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
       const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
       const _bestiaryMonsterId = String(monster?.id || monster?._id || monster.name || "");

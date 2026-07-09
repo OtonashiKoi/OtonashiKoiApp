@@ -2794,7 +2794,7 @@ async function handleEnterBattle(interaction) {
       }
 
       const monsterHpBeforeBattle = session.monsterHp;
-      // ── 怪物圖鑑：依玩家對「這隻怪」的累積擊殺,算出本場傷害加成(最高 +30%) ──
+      // ── 怪物圖鑑：依玩家對「這隻怪」的累積擊殺,算出本場傷害加成(最高 +25%) ──
       const _bestiaryIsWorldBoss = isWorldBossZone(zoneKey);
       const _bestiaryMonsterId = String(battleMonster?.id || battleMonster?._id || session.monsterName || "");
       const _bestiaryReq = bestiaryRequirement(battleMonster, _bestiaryIsWorldBoss);

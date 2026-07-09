@@ -20,7 +20,7 @@ function bestiaryRequirement(monster, isWorldBoss = false) {
   return REQ_NORMAL;
 }
 
-// 依累積隻數算對該怪的傷害加成%（0 ~ 30，線性，達需求即封頂 30）
+// 依累積隻數算對該怪的傷害加成%（0 ~ 25，線性，達需求即封頂 25）
 function bestiaryBonusPct(effectiveKills, requirement) {
   const k = Math.max(0, Number(effectiveKills) || 0);
   const req = Math.max(1, Number(requirement) || 1);

@@ -2543,8 +2543,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const finalDef = Math.max(0, effectiveDef * (1 - combinedBypassPct / 100));
 
         let conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
-        // 怪物圖鑑加成：對該怪累積擊殺愈多,傷害愈高（最高 +30%；由呼叫端依玩家進度計算後傳入）
-        const _bestiaryBonusPct = Math.max(0, Math.min(30, Number(options.bestiaryBonusPct) || 0));
+        // 怪物圖鑑加成：對該怪累積擊殺愈多,傷害愈高（最高 +25%；由呼叫端依玩家進度計算後傳入）
+        const _bestiaryBonusPct = Math.max(0, Math.min(25, Number(options.bestiaryBonusPct) || 0));
         if (_bestiaryBonusPct > 0) {
           conditionalBonusMultiplier *= (1 + _bestiaryBonusPct / 100);
         }

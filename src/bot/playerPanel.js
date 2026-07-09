@@ -724,7 +724,7 @@ function _buildBestiaryZoneContent(byZone, bestiary, zoneKey) {
   const isWB = isWorldBossZone(zoneKey);
   const list = (byZone.get(zoneKey) || []).slice().sort((a, b) => (a.calc?.level || a.level || 0) - (b.calc?.level || b.level || 0));
   const header = `📖 **怪物圖鑑 — ${label}**\n` +
-    `打越多，對該怪傷害越高（一般 100｜BOSS 50｜世界王 10 隻 ＝ 滿 +30%）\n` +
+    `打越多，對該怪傷害越高（一般 100｜BOSS 50｜世界王 10 隻 ＝ 滿 +25%）\n` +
     `每場依造成傷害比例累積：打掉該怪 100% 血 ＝ 1 隻，可累積。\n` +
     `==============\n`;
   const lines = [];

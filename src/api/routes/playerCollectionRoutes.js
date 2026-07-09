@@ -24,7 +24,7 @@ function createPlayerCollectionRoutes(serviceContext) {
 
   // ──────────────────────────────────────────────────
   // 怪物圖鑑：各區域怪物清單、累積擊殺、完成度與傷害加成
-  // 規則（shared/bestiary.js）：一般 100｜BOSS 50｜世界王 10 隻＝滿 +30% 對該怪傷害
+  // 規則（shared/bestiary.js）：一般 100｜BOSS 50｜世界王 10 隻＝滿 +25% 對該怪傷害
   // ──────────────────────────────────────────────────
   router.get("/api/bestiary", requireAuth, async (req, res, next) => {
     try {
@@ -72,7 +72,7 @@ function createPlayerCollectionRoutes(serviceContext) {
             unlocked: kills > 0,
             done: kills >= requirement,
             progressRatio: requirement > 0 ? Math.min(1, kills / requirement) : 0,
-            // 完成度帶來的「對該怪傷害」加成（線性，封頂 +30%）
+            // 完成度帶來的「對該怪傷害」加成（線性，封頂 +25%）
             damageBonusPct: Math.round(bonusPct * 10) / 10
           };
         });
@@ -92,7 +92,7 @@ function createPlayerCollectionRoutes(serviceContext) {
 
       res.json(ok({
         maxBonusPct: MAX_BONUS_PCT,
-        rule: "打越多，對該怪傷害越高（一般 100｜BOSS 50｜世界王 10 隻＝滿 +30%）。每場依造成傷害比例累積：打掉該怪 100% 血＝1 隻，可累積。",
+        rule: `打越多，對該怪傷害越高（一般 100｜BOSS 50｜世界王 10 隻＝滿 +${MAX_BONUS_PCT}%）。每場依造成傷害比例累積：打掉該怪 100% 血＝1 隻，可累積。`,
         totalMonsters,
         totalMaxed,
         zones
