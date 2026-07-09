@@ -1505,9 +1505,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             // 聖者（heal_to_damage）：外部隊友的治療光環直接「取消」（不回血也不轉傷害）；
             // 自己的治療光環則照走 _healPlayer → 在聖者下轉成 ×7 傷害。
             if (_healToDamage > 0 && pe.isSelfAura === false) continue;
+            const _mBefore = mHp;
             pHp = _healPlayer(heal);
             const detail = auraDetails.get(sourceName);
-            detail.heal = heal;
+            if (_healToDamage > 0) {
+              // 聖者：自己的治療化為傷害 → 戰報明講（避免玩家看到「回復」誤會）
+              const _dealt = _mBefore - mHp;
+              if (_dealt > 0) log.push(`🩸 **聖者・回血化刃**！${sourceName} 的治療 **${heal}** 化為 **${_dealt}** 傷害（×${_healToDamage}）！（怪物剩 ${Math.max(0, mHp)} HP）`);
+              detail.healToDmg = (detail.healToDmg || 0) + Math.max(0, _dealt);
+            } else {
+              detail.heal = heal;
+            }
           }
         }
         // 支援隊伍傷害加成（每回合生效）
@@ -1618,6 +1626,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (detail.agiBoost > 0) parts.push(`AGI +${detail.agiBoost}%（連擊/閃避提升）`);
           if (detail.comboBoost > 0) parts.push(`連擊率 +${detail.comboBoost}%`);
           if (detail.heal > 0) parts.push(`每回合回復 ${detail.heal} HP`);
+          if (detail.healToDmg > 0) parts.push(`🩸 聖者：回血化為傷害（本回合 ${detail.healToDmg}）`);
           if (parts.length === 0) continue;
           const jobTag = detail.jobName ? `（${detail.jobName}）` : "";
           const who = (sourceName && sourceName !== "未知") ? `${sourceName}${jobTag}` : (detail.jobName || "光環");
