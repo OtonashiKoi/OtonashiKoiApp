@@ -3093,6 +3093,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           : (_wt === "bow") ? "battle_with_bow"
           : null;
         if (_weaponMetric) await questService.recordProgress(discordId, _weaponMetric, 1);
+        // 隱藏賽季任務「共鳴・輔助者」：用輔助職業(徽章)出戰記一場（與 DC 端 recordQuestBattleProgress 對齊；網頁端原本漏記）
+        try {
+          const _jobEq = equipped?.job_eq;
+          if (_jobEq) {
+            const { getSupportJobKey } = require("../../shared/supportAuraScaling");
+            const _jk = getSupportJobKey({ jobKey: _jobEq.itemId || _jobEq.id, jobName: _jobEq.itemName || _jobEq.name });
+            if (["healer", "tactician", "bard", "barrier_mage"].includes(_jk)) {
+              await questService.recordProgress(discordId, "battle_with_support_job", 1);
+            }
+          }
+        } catch (_) { /* noop */ }
         if (outcome === "lose") {
           await questService.recordProgress(discordId, "death_count", 1);
         }

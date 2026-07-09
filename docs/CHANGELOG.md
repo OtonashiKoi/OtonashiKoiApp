@@ -87,6 +87,7 @@
 | 59 | 2026-07-09 | YT會員刷新改「聊天室is-member＋Discord身分組位階」不靠API | 承 #58：YT creator token 會反覆過期，改用玩家定案做法——**不查 YouTube API**。`/api/me/bindings` YT分支改：①是不是會員=直播聊天室徽章偵測(linkedSupportAtLink，OneComme 綁定/留言當下記)②位階=玩家 Discord 身分組(progress.playerTier，membershipTracker 同步)。刷新時重新解析、有變寫回 binding、checkedAt 更新為現在(時間會刷新)。移除 #58 的 members API 呼叫＋冷卻。實測音無恋 isMember=true/SS/來源DC身分組。前端刷新鈕本就重抓此API，免改app | 修正 | ✅ | (本次) playerAppRoutes |
 | 60 | 2026-07-09 | 寵物「種族特性」逐項寫出(像戰鬥屬性) | 每種寵物特性本就不同(龍/史萊姆採集偏好差異、狼系戰鬥被動)但只有狼的加成有寫出來。新增 petService `_speciesTraits`：把 gatherMod/combatPassives 轉成可讀清單——定位/戰鬥被動/採集偏好(掉落表%或石裝%)/採集速度(1/間隔真實速度)/產出品質(高一階%)/產出階級。回傳 `traits`。網頁寵物卡加「🧬種族特性」區塊逐項列、DC面板petLine同步。實測雷鳴龍(石70%/速+43%)、黃金龍(慢/30%高階)、月影狼王(最終傷害+5%+咬擊)等各不同 | 新功能 | ✅ | (本次) petService/petPanelView/pets.tsx/usePets.ts |
 | 61 | 2026-07-09 | 防刷屏強化：同句3次/@everyone/圖片簽章 | 依需求調整音無醬自動禁言：①同句/同圖連發門檻 4→**3 次**就禁 ②新增**@everyone／@here 標註全體→直接禁言**(管理員/白名單除外) ③「同一則」判定改用**訊息簽章**(文字＋附件檔名/URL＋貼圖ID)：同圖重複才算刷屏、不同圖不再誤判(修掉貼圖區貼多張不同圖被誤禁)。跨頻道本就以「人」為單位計數(不綁頻道)故不同頻道講同句也算。禁言時長1h/6h/12h累犯、burst 3秒>6則不變 | 修正 | ✅ | (本次) config.js/client.js |
+| 62 | 2026-07-09 | 修：隱藏賽季任務「共鳴・輔助者」網頁端不累積 | 玩家反映用治癒師出戰、隱藏任務「🔗共鳴・輔助者的試煉」(battle_with_support_job 2000)不累積。根因：**DC端**戰鬥有記 battle_with_support_job(isSupportJobBadge)，但**網頁端** playerAppRoutes 戰鬥記錄漏了這條(只記武器metric)→網頁打的輔助職場次全沒算。修法：網頁端補上 getSupportJobKey 判定(healer/tactician/bard/barrier_mage)→recordProgress battle_with_support_job，與DC對齊。實測KK裝治療師徽章判定正確。⚠️過去網頁場次無法回溯，需手動補 | 修正 | ✅ | (本次) playerAppRoutes.js |
 <!-- 新增修改請往下加列，或插入對應功能 -->
 
 ## V0.4 · 後台/工具（玩家端無感）
