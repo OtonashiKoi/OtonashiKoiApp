@@ -1502,6 +1502,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (!Number.isFinite(val) || val === 0) continue;
           const heal = mode === 'pct' ? Math.max(0, Math.round((pStats.maxHp || 0) * (val / 100))) : Math.max(0, Math.round(val));
           if (heal > 0) {
+            // 聖者（heal_to_damage）：外部隊友的治療光環直接「取消」（不回血也不轉傷害）；
+            // 自己的治療光環則照走 _healPlayer → 在聖者下轉成 ×7 傷害。
+            if (_healToDamage > 0 && pe.isSelfAura === false) continue;
             pHp = _healPlayer(heal);
             const detail = auraDetails.get(sourceName);
             detail.heal = heal;

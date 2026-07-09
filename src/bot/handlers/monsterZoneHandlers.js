@@ -2722,7 +2722,7 @@ async function handleEnterBattle(interaction) {
                 jobName: pidJobName,
                 equipped: participant.equipped || {}
               });
-              partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: pidJobName });
+              partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: pidJobName, isSelfAura: pid === discordId });
             }
           }
         } catch (e) {}
