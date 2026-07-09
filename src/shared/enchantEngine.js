@@ -18,6 +18,19 @@ function randFloat(min, max, decimals = 1) {
   return Math.round((lo + Math.random() * (hi - lo)) * p) / p;
 }
 
+// 附魔數值（偏低分布）：value = min + (max−min)×random^SKEW。
+//   SKEW=2 時 [1,7] 平均＝3，高值越來越稀有（P(≥4)≈29%、P(≥6)≈9%）。
+//   期望值公式：min + (max−min)/(SKEW+1)。想更稀有就把 SKEW 調大。
+const ENCHANT_VALUE_SKEW = 2;
+function randSkewed(min, max, skew = ENCHANT_VALUE_SKEW, decimals = 1) {
+  const lo = Number(min) || 0;
+  const hi = Number(max) || 0;
+  if (hi <= lo) return lo;
+  const r = Math.pow(Math.random(), Math.max(1, Number(skew) || 1));
+  const p = Math.pow(10, Math.max(0, decimals));
+  return Math.round((lo + r * (hi - lo)) * p) / p;
+}
+
 function shuffle(arr) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -65,7 +78,7 @@ function rollEnchantments(tier, config) {
       unit: attr.unit || "",
       effectKey: attr.effectKey || null,
       band: attr.band,
-      value: randFloat(attr.min, attr.max, 1)
+      value: randSkewed(attr.min, attr.max, ENCHANT_VALUE_SKEW, 1)
     });
   }
   return picks;
