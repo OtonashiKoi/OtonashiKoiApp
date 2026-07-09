@@ -881,7 +881,7 @@ function isSupportJobBadge(jobEq) {
   } catch (_) { return false; }
 }
 
-async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null, jobEq = null) {
+async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null, jobEq = null, damageTaken = 0, healDone = 0) {
   // 通行證點數：打怪(非落敗)依地圖階級加點
   if (outcome !== "lose" && sc?.passService?.addPointsForKill) {
     const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", dragon_king_lair: "S", hellfire_depths: "S" };
@@ -892,6 +892,9 @@ async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, co
 
   await questService.recordProgress(discordId, "battle_count", 1);
   await questService.recordProgress(discordId, "damage_total", totalDamage);
+  // 錨點隱藏任務指標：承受傷害(沒苦硬吃)、回血量(聖人)
+  if (Number(damageTaken) > 0) await questService.recordProgress(discordId, "damage_taken", Math.round(Number(damageTaken)));
+  if (Number(healDone) > 0) await questService.recordProgress(discordId, "heal_done", Math.round(Number(healDone)));
   const weaponMetric = resolveWeaponQuestMetric(weaponType);
   if (weaponMetric) {
     await questService.recordProgress(discordId, weaponMetric, 1);
@@ -3036,7 +3039,7 @@ async function handleEnterBattle(interaction) {
         }
       }
       try {
-        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null, zoneKey, currentProg?.equipment?.job_eq || null);
+        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null, zoneKey, currentProg?.equipment?.job_eq || null, combatResult?.damageTaken || 0, combatResult?.healDone || 0);
       } catch (e) {
         console.error("[Quest] recordProgress error:", e.message);
       }

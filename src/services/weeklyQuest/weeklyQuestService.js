@@ -12,6 +12,9 @@ const QUEST_TYPES = {
   battle_with_support_job: { label: "用輔助職業出戰次數", unit: "次" },
   battle_win:        { label: "戰鬥勝利次數",     unit: "次" },
   damage_total:      { label: "累計造成傷害",     unit: "點" },
+  damage_taken:      { label: "累計承受傷害",     unit: "點" },
+  heal_done:         { label: "累計回血量",       unit: "點" },
+  checkin_streak:    { label: "連續簽到天數",     unit: "天" },
   level_10_job_badge:{ label: "達成 Lv.10 並獲得職業徽章", unit: "項" },
   checkin_count:     { label: "打卡次數",        unit: "次" },
   stream_bind_count: { label: "直播綁定次數",     unit: "次" },
@@ -171,6 +174,10 @@ class WeeklyQuestService {
       unlockRequireItemIds: Array.isArray(def?.unlockRequireItemIds)
         ? def.unlockRequireItemIds.map((v) => String(v || "").trim()).filter(Boolean)
         : [],
+      // 錨點隱藏任務 gate：累積進度達 N 才現身(解鎖後重數)、本季有斗內、連續簽到達 N 天
+      unlockProgressAtLeast: Math.max(0, Number(def?.unlockProgressAtLeast || 0)),
+      unlockRequireSeasonDonation: Boolean(def?.unlockRequireSeasonDonation),
+      unlockCheckinStreak: Math.max(0, Number(def?.unlockCheckinStreak || 0)),
       hideIfRewardOwned: def?.hideIfRewardOwned !== false,
       claimOnce: Boolean(def?.claimOnce)
     };
@@ -229,6 +236,31 @@ class WeeklyQuestService {
       } catch (_) { /* ignore */ }
     }
 
+    // 錨點任務 gate 資料：本季斗內(donationLedger 累積>0)、連續簽到天數(由近期簽到算)
+    let hasSeasonDonation = false;
+    let checkinStreak = 0;
+    try {
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const db = await getMongoDb();
+      const led = await db.collection("donationLedger").findOne({ discordId: String(discordId) }, { projection: { totalTwd: 1 } });
+      hasSeasonDonation = Number(led?.totalTwd || 0) > 0;
+    } catch (_) { /* ignore */ }
+    if (this.checkinRepository?.listRecentByDiscordId) {
+      try {
+        const recent = await this.checkinRepository.listRecentByDiscordId(discordId, 60);
+        const twDay = (t) => { const d = new Date(t); return Number.isNaN(d.getTime()) ? null : new Date(d.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10); };
+        const days = [...new Set((recent || []).map((c) => twDay(c.occurredAt || c.createdAt || c.at)).filter(Boolean))].sort().reverse();
+        if (days.length) {
+          checkinStreak = 1;
+          for (let i = 1; i < days.length; i++) {
+            const prev = Date.parse(days[i - 1] + "T00:00:00Z");
+            const cur = Date.parse(days[i] + "T00:00:00Z");
+            if (prev - cur === 86400000) checkinStreak++; else break;
+          }
+        }
+      } catch (_) { /* ignore */ }
+    }
+
       return {
         level,
         attributes,
@@ -236,6 +268,8 @@ class WeeklyQuestService {
         inventory,
         hasStreamBinding,
         hasCheckin,
+        hasSeasonDonation,
+        checkinStreak,
         weaponType: equipment?.weapon?.weaponType || null,
         inventoryItemIds: new Set(
           (Array.isArray(inventory) ? inventory : [])
@@ -289,6 +323,16 @@ class WeeklyQuestService {
     return true;
   }
 
+  // 錨點隱藏任務綜合解鎖判定：既有 gate(等級/屬性/道具) + 累積進度門檻 / 本季斗內 / 連續簽到
+  //   current = 該任務的「原始累積值」(未做解鎖後重數的偏移)
+  _isQuestUnlocked(quest, current, context) {
+    if (!this._isQuestVisibleForPlayer(quest, context)) return false;
+    if (quest.unlockRequireSeasonDonation && !context?.hasSeasonDonation) return false;
+    if (Number(quest.unlockProgressAtLeast) > 0 && Number(current || 0) < Number(quest.unlockProgressAtLeast)) return false;
+    if (Number(quest.unlockCheckinStreak) > 0 && Number(context?.checkinStreak || 0) < Number(quest.unlockCheckinStreak)) return false;
+    return true;
+  }
+
   _computeCompletionProgress(defs, playerPeriod, completionType) {
     const baseDefs = defs.filter((q) => q.type !== completionType);
     const doneOrClaimedBase = baseDefs.filter((q) => {
@@ -304,6 +348,10 @@ class WeeklyQuestService {
 
   _resolveStaticQuestProgress(quest, context) {
     if (!quest?.enabled) return null;
+    // 時間管理大師：進度＝目前連續簽到天數（靜態，不靠戰鬥累積）
+    if (quest.type === "checkin_streak") {
+      return { current: Number(context?.checkinStreak || 0), target: Math.max(1, Number(quest.target || 1)) };
+    }
     if (quest.type === "level_10_job_badge") {
       const level = Number(context?.level || 1);
       const hasJobBadge = Boolean(context?.hasJobBadge);
@@ -473,18 +521,30 @@ class WeeklyQuestService {
           ? completion.target
           : Number(quest.target || 1);
       // 鎖定資訊:職業任務未達 Lv/屬性條件時 locked=true,前端顯示灰色「Lv.N 解鎖」,不可領取/累積
-      const locked = !this._isQuestVisibleForPlayer(quest, context);
+      const locked = !this._isQuestUnlocked(quest, current, context);
+      // 解鎖後重數：目標其實是 2X，任務頁只顯示「解鎖後的進度」(current−門檻)/(target−門檻)
+      const thr = Number(quest.unlockProgressAtLeast || 0);
+      const dispCurrent = thr > 0 ? Math.max(0, current - thr) : current;
+      const dispTarget = thr > 0 ? Math.max(1, target - thr) : target;
+      let unlockHint = null;
+      if (locked) {
+        if (quest.unlockLevel) unlockHint = `Lv.${quest.unlockLevel} 解鎖`;
+        else if (quest.unlockRequireSeasonDonation) unlockHint = "本季斗內後解鎖";
+        else if (quest.unlockCheckinStreak) unlockHint = `連續簽到 ${quest.unlockCheckinStreak} 天解鎖`;
+        else if (thr > 0) unlockHint = "隱藏任務（達成條件後現身）";
+        else unlockHint = "尚未解鎖";
+      }
       return {
         cadence: c,
         periodKey,
         quest,
-        current,
-        target, // 動態 target（完成型任務 = 基礎任務總數）；前端顯示分母用,別再用 quest.target
+        current: dispCurrent,
+        target: dispTarget, // 動態 target（完成型任務 = 基礎任務總數）；前端顯示分母用,別再用 quest.target
         claimed: Boolean(p.claimed || (quest.claimOnce && p.claimedOnce)),
         done: locked ? false : current >= target,
         locked,
         unlockLevel: Number(quest.unlockLevel || 0),
-        unlockHint: locked ? (quest.unlockLevel ? `Lv.${quest.unlockLevel} 解鎖` : "尚未解鎖") : null
+        unlockHint
       };
     });
   }
@@ -545,6 +605,9 @@ class WeeklyQuestService {
       const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, quest.cadence);
       const p = playerPeriod[questId] || { current: 0, claimed: false };
       const context = await this._getPlayerQuestContext(discordId);
+      // 錨點隱藏任務 gate：未解鎖(進度門檻/本季斗內/連續簽到) → 不可領取（防以 questId 直接領）
+      const _rawForGate = this._resolveStaticQuestProgress(quest, context)?.current ?? Number(p.current || 0);
+      if (!this._isQuestUnlocked(quest, _rawForGate, context)) throw new Error("任務尚未解鎖");
       if (quest.type === "onboarding_complete_count" || quest.type === "weekly_complete_count") {
         const targetCadence = quest.cadence === "weekly" ? "weekly" : "onboarding";
         const cadenceDefs = (await this.listDefinitions(targetCadence))
@@ -592,6 +655,8 @@ class WeeklyQuestService {
       const ANCHOR_NAMES = {
         "s-legend-bond": "繫絆・共鳴之鏈", "s-legend-burst": "驟・先機之刃",
         "s-legend-linger": "滯・後勢之刃", "s-legend-dice": "骰・命運之輪",
+        "s-legend-endure": "沒苦硬吃", "s-legend-saint": "聖人就是比拳頭大小",
+        "s-legend-thirst": "對鮮血的渴望", "s-legend-timelord": "時間管理大師",
       };
       if (reward.rewardItemId && ANCHOR_NAMES[reward.rewardItemId]) {
         let who = "某位勇者";

@@ -877,13 +877,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let _healToDamage = 0;    // 聖人比拳頭：回血→對敵傷害倍率(0=關)
   let _healImmune = false;  // 對鮮血的渴望：無法被治療(自身吸血除外)
   let _extendRounds = 0;    // 時間管理大師：回合上限改為此值(0=不變)
+  let _totalHealDone = 0;   // 聖人任務指標 heal_done：實際回血量累計
   const _hurt = (d) => { const x = Math.max(0, Number(d) || 0); pHp = pHp - x; _totalDmgTaken += x; };
   const _healPlayer = (h, opts) => {
     const amt = Math.max(0, Number(h) || 0);
     if (amt <= 0) return pHp;
-    if (opts && opts.lifesteal) { pHp = Math.min(pStats.maxHp, pHp + amt); return pHp; } // 吸血是自身機制，不受治療攔截影響
+    if (opts && opts.lifesteal) { _totalHealDone += amt; pHp = Math.min(pStats.maxHp, pHp + amt); return pHp; } // 吸血是自身機制，不受治療攔截影響
     if (_healImmune) return pHp;                          // 對鮮血的渴望：外部治療一律無效
     if (_healToDamage > 0) { const dmg = Math.round(amt * _healToDamage); mHp -= dmg; totalDamage += dmg; return pHp; } // 聖人：回血轉為對敵傷害、不回血
+    _totalHealDone += amt;
     pHp = Math.min(pStats.maxHp, pHp + amt); return pHp;
   };
   let outcome = null;
@@ -3574,7 +3576,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     monsterActiveEffects,
     stunRoundsLeft,
     cardCooldowns,
-    nextRound: round
+    nextRound: round,
+    damageTaken: _totalDmgTaken,  // 沒苦硬吃任務指標
+    healDone: _totalHealDone       // 聖人任務指標
   };
 }
 

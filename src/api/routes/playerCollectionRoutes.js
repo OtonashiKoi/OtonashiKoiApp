@@ -124,6 +124,46 @@ function createPlayerCollectionRoutes(serviceContext) {
   });
 
   // ──────────────────────────────────────────────────
+  // 錨點圖鑑：列出全部錨點(equipSlot anchor)＋是否已取得(背包/裝備 或 曾領過)
+  // ──────────────────────────────────────────────────
+  router.get("/api/me/anchors", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const db = await getMongoDb();
+      const [items, progress, grants] = await Promise.all([
+        db.collection("items").find({ equipSlot: "anchor" }).toArray().catch(() => []),
+        serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null),
+        db.collection("uniqueItemGrants").find({ discordId: String(discordId) }, { projection: { itemId: 1 } }).toArray().catch(() => []),
+      ]);
+      const owned = new Set();
+      for (const e of (progress?.inventory || [])) if (e?.itemId) owned.add(String(e.itemId));
+      for (const e of Object.values(progress?.equipment || {})) if (e?.itemId) owned.add(String(e.itemId));
+      for (const g of grants) if (g?.itemId) owned.add(String(g.itemId));
+
+      const anchors = items
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+        .map((it) => {
+          const obtained = owned.has(String(it.id));
+          return {
+            id: it.id,
+            obtained,
+            // 未取得只回名稱與剪影提示，效果保密（保留探索感）；已取得回完整說明
+            name: obtained ? it.name : "？？？",
+            description: obtained ? (it.description || "") : "尚未取得——找到它的獲得管道來解鎖這件傳說錨點。",
+            tier: it.tier || "S",
+            imageUrl: obtained ? (it.imageUrl || null) : null,
+          };
+        });
+      res.json(ok({
+        anchors,
+        total: anchors.length,
+        collected: anchors.filter((a) => a.obtained).length,
+      }));
+    } catch (err) { next(err); }
+  });
+
+  // ──────────────────────────────────────────────────
   // 等級排行榜 TOP N + 自己名次
   // 排序規則與 adminConsoleService.getLeaderboard 一致：level desc → exp desc
   // ──────────────────────────────────────────────────

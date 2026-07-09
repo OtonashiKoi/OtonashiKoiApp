@@ -3082,6 +3082,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         await questService.recordProgress(discordId, "battle_count", 1);
         // battle_win is granted in handleMonsterKill to all participants on kill.
         await questService.recordProgress(discordId, "damage_total", totalDamage);
+        // 錨點隱藏任務指標：承受傷害(沒苦硬吃)、回血量(聖人)
+        if (Number(combatResult?.damageTaken) > 0) await questService.recordProgress(discordId, "damage_taken", Math.round(Number(combatResult.damageTaken)));
+        if (Number(combatResult?.healDone) > 0) await questService.recordProgress(discordId, "heal_done", Math.round(Number(combatResult.healDone)));
         // 職業任務：依「出戰所持武器類型」累加（與 DC 端 recordQuestBattleProgress 對齊）
         const _wt = String(equipped?.weapon?.weaponType || "");
         const _weaponMetric =
