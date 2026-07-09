@@ -870,6 +870,22 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       pHp = Math.round(pHp * _mult);
     }
   } catch (_) { /* noop */ }
+  // ── build 錨點共用：承傷累積 / 回血攔截。預設路徑＝與原本完全相同，未裝這些錨點者不受任何影響。──
+  let _totalDmgTaken = 0;   // 沒苦硬吃：累積承受總傷害
+  let _endureBurst = null;  // 沒苦硬吃：{ round, mult }
+  let _endureFired = false;
+  let _healToDamage = 0;    // 聖人比拳頭：回血→對敵傷害倍率(0=關)
+  let _healImmune = false;  // 對鮮血的渴望：無法被治療(自身吸血除外)
+  let _extendRounds = 0;    // 時間管理大師：回合上限改為此值(0=不變)
+  const _hurt = (d) => { const x = Math.max(0, Number(d) || 0); pHp = pHp - x; _totalDmgTaken += x; };
+  const _healPlayer = (h, opts) => {
+    const amt = Math.max(0, Number(h) || 0);
+    if (amt <= 0) return pHp;
+    if (opts && opts.lifesteal) { pHp = Math.min(pStats.maxHp, pHp + amt); return pHp; } // 吸血是自身機制，不受治療攔截影響
+    if (_healImmune) return pHp;                          // 對鮮血的渴望：外部治療一律無效
+    if (_healToDamage > 0) { const dmg = Math.round(amt * _healToDamage); mHp -= dmg; totalDamage += dmg; return pHp; } // 聖人：回血轉為對敵傷害、不回血
+    pHp = Math.min(pStats.maxHp, pHp + amt); return pHp;
+  };
   let outcome = null;
   let totalDamage = 0;
   // 世界王:玩家 DOT 也要吃世界王 def%(含扣防後的有效值)。跨回合保留上一回合的扣防%,
@@ -880,7 +896,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 武器主屬性追加傷害:終傷後 +(主屬性 × 1.5)固定點數。主攻擊/連擊/反擊各加一次。
   const weaponMainBonus = Math.max(0, Math.round((pStats.weaponMainStatValue || 0) * 1.5));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
-  const endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
+  let endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
   // BOSS 單位判定（世界王/區域王）：暈眩抗性與格擋規則會用到
   const monsterIsBossUnit = Boolean(options.monsterIsBoss || options.isBoss || options.isWorldBoss || mCalc?.isBoss);
   // BOSS 暈眩抗性：被擊暈最多 1 回合（防多段/永暈鏈）；一般怪不受影響
@@ -953,6 +969,23 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               chancePerLuk: Number(ep.params?.chancePerLuk) || 0.3,
               mult: Number(ep.params?.mult) || 4,
             };
+            continue;
+          }
+          // build 錨點四件（沒苦硬吃 / 聖人比拳頭 / 對鮮血的渴望 / 時間管理大師）
+          if (ep.key === "endure_burst") {
+            _endureBurst = { round: Math.max(1, Number(ep.params?.round) || 14), mult: Math.max(1, Number(ep.params?.mult) || 5) };
+            continue;
+          }
+          if (ep.key === "heal_to_damage") {
+            _healToDamage = Math.max(0, Number(ep.params?.mult) || 0);
+            continue;
+          }
+          if (ep.key === "heal_immune") {
+            _healImmune = true;
+            continue;
+          }
+          if (ep.key === "extend_rounds") {
+            _extendRounds = Math.max(0, Number(ep.params?.rounds) || 0);
             continue;
           }
           // final_damage_up/down：折進 equipZoneFinalDmgMult（稍後乘進玩家傷害），讓裝備被動的最終傷害%實際生效
@@ -1031,8 +1064,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const tierBossDamageMultiplier = options.monsterIsBoss ? Math.max(0.1, Number(pStats.tierBossDamageMultiplier) || 1) : 1;
   const tierCritDamageMultiplier = Math.max(0.1, Number(pStats.tierCritDamageMultiplier) || 1);
 
+  // 時間管理大師：回合上限改為指定值（例 30）
+  if (_extendRounds > 0) endRound = round + Math.max(1, Math.floor(_extendRounds)) - 1;
+
   while (round <= endRound && outcome === null) {
     const log = [`**【第 ${round} 回合】**`];
+    // 沒苦硬吃：扛到指定回合仍不死 → 對敵爆發「累積承受總傷害 × 倍率」
+    if (_endureBurst && !_endureFired && round >= _endureBurst.round && pHp > 0 && _totalDmgTaken > 0) {
+      _endureFired = true;
+      const _burst = Math.round(_totalDmgTaken * _endureBurst.mult);
+      mHp -= _burst;
+      totalDamage += _burst;
+      log.push(`💥【沒苦硬吃】扛過 ${_endureBurst.round} 回合的痛，全數奉還！造成 **${_burst}** 爆發傷害（承受總傷 ${_totalDmgTaken} × ${_endureBurst.mult}）`);
+    }
     if (options.tickCardCooldowns !== false) {
       for (const bucket of Object.values(cardCooldowns)) {
         for (const key of Object.keys(bucket)) {
@@ -1301,7 +1345,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             ? Math.max(0, Math.round(healPct))
             : Math.max(0, Math.round((pStats.maxHp || 1) * (healPct / 100)));
           if (heal > 0) {
-            pHp = Math.min(pStats.maxHp, pHp + heal);
+            pHp = _healPlayer(heal);
             log.push(`💚 回復效果發動！你恢復 **${heal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
           }
         }
@@ -1314,7 +1358,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let dotDmg = Math.max(1, Math.round(dotBase * (damagePercent / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) dotDmg = Math.min(dotDmg, Number(dotParams.maxDamage));
           dotDmg = mitigateDot(dotDmg);
-          pHp -= dotDmg;
+          _hurt(dotDmg);
           log.push(`☠️ 中毒傷害！造成 **${dotDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
@@ -1327,7 +1371,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let bleedDmg = Math.max(1, Math.round(bleedBase * (bleedPct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) bleedDmg = Math.min(bleedDmg, Number(dotParams.maxDamage));
           bleedDmg = mitigateDot(bleedDmg);
-          pHp -= bleedDmg;
+          _hurt(bleedDmg);
           log.push(`🩸 流血持續！你受到 **${bleedDmg}** 點流血傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
@@ -1340,7 +1384,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let burnDmg = Math.max(1, Math.round(burnBase * (burnPct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) burnDmg = Math.min(burnDmg, Number(dotParams.maxDamage));
           burnDmg = mitigateDot(burnDmg);
-          pHp -= burnDmg;
+          _hurt(burnDmg);
           log.push(`🔥 燒傷持續！你受到 **${burnDmg}** 點灼燒傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
@@ -1353,7 +1397,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let lightDmg = Math.max(1, Math.round(lightBase * (lightPct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) lightDmg = Math.min(lightDmg, Number(dotParams.maxDamage));
           lightDmg = mitigateDot(lightDmg);
-          pHp -= lightDmg;
+          _hurt(lightDmg);
           log.push(`⚡ 閃電傷害！你受到 **${lightDmg}** 點雷電傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
@@ -1367,7 +1411,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let shockDmg = Math.max(1, Math.round(shockBase * (shockPct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) shockDmg = Math.min(shockDmg, Number(dotParams.maxDamage));
           shockDmg = mitigateDot(shockDmg);
-          pHp -= shockDmg;
+          _hurt(shockDmg);
           log.push(`⚡ 震盪傷害！你受到 **${shockDmg}** 點震盪傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
@@ -1381,7 +1425,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let curseDmg = Math.max(1, Math.round(curseBase * (cursePct / 100)));
           if (Number.isFinite(Number(dotParams.maxDamage))) curseDmg = Math.min(curseDmg, Number(dotParams.maxDamage));
           curseDmg = mitigateDot(curseDmg);
-          pHp -= curseDmg;
+          _hurt(curseDmg);
           log.push(`🌑 詛咒傷害！你受到 **${curseDmg}** 點詛咒傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
@@ -1446,7 +1490,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (!Number.isFinite(val) || val === 0) continue;
           const heal = mode === 'pct' ? Math.max(0, Math.round((pStats.maxHp || 0) * (val / 100))) : Math.max(0, Math.round(val));
           if (heal > 0) {
-            pHp = Math.min(pStats.maxHp, pHp + heal);
+            pHp = _healPlayer(heal);
             const detail = auraDetails.get(sourceName);
             detail.heal = heal;
           }
@@ -1630,7 +1674,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             ownerMaxHp: mHpInit || mHp || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
             targetLabel: '你',
-            applyTargetDamage: (damage) => { pHp -= damage; return pHp; },
+            applyTargetDamage: (damage) => { _hurt(damage); return pHp; },
             applyOwnerHeal: (heal) => { mHp = Math.min(mHpInit, mHp + reduceMonsterHeal(heal)); return mHp; },
           buffKeys: MONSTER_BUFF_KEYS,
           debuffKeys: MONSTER_DEBUFF_KEYS,
@@ -1676,7 +1720,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             targetLabel: '你',
             sourceAtk: adjustedMCalc.atk || mCalc.atk || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
-            applyTargetDamage: (damage) => { pHp -= damage; },
+            applyTargetDamage: (damage) => { _hurt(damage); },
             mitigate: (d) => applyDefense(d, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1), // 即時技能也吃玩家防禦
             log
           })) {
@@ -1741,7 +1785,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 生命%傷：算完最大生命 × pct 後，也走玩家防禦(flatDef + def%)，不再無視防禦
         const lightningRaw = Math.max(1, Math.round(Math.max(1, pStats.maxHp || pHp) * (worldBossLightningHpPct / 100)));
         const lightningDmg = applyDefense(lightningRaw, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1);
-        pHp -= lightningDmg;
+        _hurt(lightningDmg);
         log.push(`⚡ ${mName} 施放【雷擊術】命中！造成 **${lightningDmg}** 點傷害（最大生命 ${worldBossLightningHpPct}%）！（你剩 ${Math.max(0, pHp)} HP）`);
         if (pHp <= 0) {
           outcome = "lose";
@@ -1887,7 +1931,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             targetMaxHp: mHpInit || mHp || 1,
             targetLabel: mName,
             applyTargetDamage: (damage) => { mHp -= damage; totalDamage += Math.max(0, Number(damage) || 0); return mHp; }, // 玩家卡即時傷害要計入總傷害(否則世界王落地會回彈)
-            applyOwnerHeal: (heal) => { pHp = Math.min(pStats.maxHp, pHp + heal); return pHp; },
+            applyOwnerHeal: (heal) => { pHp = _healPlayer(heal); return pHp; },
             buffKeys: PLAYER_CARD_OFFENSIVE_KEYS,
             debuffKeys: PLAYER_CARD_OFFENSIVE_KEYS,
             sourceId: slotItem.uuid || slotItem.itemId || slotItem.id || cardName,
@@ -1987,7 +2031,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
           if (procEffect.key === 'proc_heal') {
             const healAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 5) / 100)));
-            pHp = Math.min(pStats.maxHp, pHp + healAmt);
+            pHp = _healPlayer(healAmt);
             log.push(`💚 **${playerBattleName}** 發動【${skill.name || cardName}】恢復 **${healAmt}** HP！（剩 ${pHp}）`);
             appliedAnyNormalProc = true;
             continue;
@@ -2035,7 +2079,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             targetLabel: playerBattleName,
             sourceAtk: pStats.atk || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
-            applyTargetHeal: (heal) => { pHp = Math.min(pStats.maxHp, pHp + heal); return pHp; },
+            applyTargetHeal: (heal) => { pHp = _healPlayer(heal); return pHp; },
             log
           })) {
             appliedAnyNormalProc = true;
@@ -2095,7 +2139,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               const base = params.mode === 'max_hp_pct' || params.mode === 'pct'
                 ? pStats.maxHp : (params.mode === 'current_hp' ? pHp : pStats.maxHp);
               const heal = Math.max(1, Math.round(base * ((Number(params.value) || 10) / 100)));
-              pHp = Math.min(pStats.maxHp, pHp + heal);
+              pHp = _healPlayer(heal);
               log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${chosen.name}】！回復 **${heal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
               skillApplied = true;
               continue;
@@ -2385,7 +2429,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (atkTier === 'critFail') {
         const selfBase = Math.max(1, Math.round((pStats.atk || 1) * playerAttackLevelMult));
         const selfDmg = Math.max(1, Math.round(selfBase * 0.3 * (0.7 + Math.random() * 0.3)));
-        pHp -= selfDmg;
+        _hurt(selfDmg);
         log.push(`💥 **大失敗**！你揮拳失手砸到自己，受到 **${selfDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
         if (pHp <= 0) { outcome = "lose"; break; }
         continue;
@@ -2485,7 +2529,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             }
           } else if (pe.key === 'proc_heal') {
             const healAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 5) / 100)));
-            pHp = Math.min(pStats.maxHp, pHp + healAmt);
+            pHp = _healPlayer(healAmt);
             log.push(`💚 戰鬥回復！恢復 **${healAmt}** HP！（你剩 ${pHp}）`);
           } else if (pe.key === 'proc_shield') {
             const shieldAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 10) / 100)));
@@ -2715,7 +2759,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (mHp <= 0 && playerOnKillHealPct > 0 && pHp > 0 && pStats.maxHp > 0) {
           const healAmt = Math.max(1, Math.round(pStats.maxHp * (playerOnKillHealPct / 100)));
           const before = pHp;
-          pHp = Math.min(pStats.maxHp, pHp + healAmt);
+          pHp = _healPlayer(healAmt);
           const actual = pHp - before;
           if (actual > 0) log.push(`💀 **擊殺回血**！回復 **${actual}** HP！（你剩 ${pHp} HP）`);
           // 避免重複觸發
@@ -2878,7 +2922,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
             } else if (pe.key === 'proc_heal') {
               const healAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 5) / 100)));
-              pHp = Math.min(pStats.maxHp, pHp + healAmt);
+              pHp = _healPlayer(healAmt);
               log.push(`💚 戰鬥回復！恢復 **${healAmt}** HP！（你剩 ${pHp}）`);
 
             } else if (pe.key === 'proc_shield') {
@@ -2929,12 +2973,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // ── on_hit_heal / on_crit_heal（戰鬥內回血）──
         if (mHp >= 0 && playerOnHitHealPct > 0) {
           const healAmt = Math.max(1, Math.round(dmg * (playerOnHitHealPct / 100)));
-          pHp = Math.min(pStats.maxHp, pHp + healAmt);
+          pHp = _healPlayer(healAmt);
           log.push(`💚 命中回血！恢復 **${healAmt}** HP！`);
         }
         if (isCrit && playerOnCritHealPct > 0) {
           const healAmt = Math.max(1, Math.round(dmg * (playerOnCritHealPct / 100)));
-          pHp = Math.min(pStats.maxHp, pHp + healAmt);
+          pHp = _healPlayer(healAmt);
           log.push(`💚✨ 暴擊回血！恢復 **${healAmt}** HP！`);
         }
         // ── 強制斬殺（execute_under_hp_pct）──
@@ -2953,13 +2997,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // ── 玩家吸血效果（來自卡片技能）──
         if (playerLifestealPct > 0) {
           const healAmt = Math.max(1, Math.round(dmg * (playerLifestealPct / 100)));
-          pHp = Math.min(pStats.maxHp, pHp + healAmt);
+          pHp = _healPlayer(healAmt, { lifesteal: true });
           log.push(`💚 吸取生命力！恢復 **${healAmt}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
         }
         // ── 強力吸血效果（林地妖靈卡）──
         if (playerLifestealStrongPct > 0) {
           const sHeal = Math.max(1, Math.round(dmg * (playerLifestealStrongPct / 100)));
-          pHp = Math.min(pStats.maxHp, pHp + sHeal);
+          pHp = _healPlayer(sHeal, { lifesteal: true });
           log.push(`💜 強力吸血！恢復 **${sHeal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
         }
 
@@ -2970,7 +3014,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               const reflectParams = reflectEff.params || {};
               const reflectPercent = Number(reflectParams.reflectPercent ?? reflectParams.value ?? 50);
               const reflectDmg = Math.max(1, Math.round(dmg * (reflectPercent / 100)));
-              pHp -= reflectDmg;
+              _hurt(reflectDmg);
               log.push(`🛡️ ${mName} 的甲殼反彈！你受到 **${reflectDmg}** 點反彈傷害！（你剩 ${Math.max(0, pHp)} HP）`);
               if (pHp <= 0) { outcome = "lose"; break; }
             }
@@ -2990,7 +3034,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (Math.random() * 100 < counterChance) {
               const counterDmgPct = Number(ctParams.counterDamagePct ?? 20);
               const counterDmg = Math.max(1, Math.round(dmg * (counterDmgPct / 100)));
-              pHp -= counterDmg;
+              _hurt(counterDmg);
               log.push(`🦀 ${mName} **反擊**！以受到傷害的 ${counterDmgPct}% 回擊，造成 **${counterDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
               if (pHp <= 0) { outcome = "lose"; }
             }
@@ -3143,7 +3187,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const bBaseDmg = playerInvincible ? 0 : rollMDmg(applyDefense(bMonsterBaseAtk, pStats.flatDef || 0, bEffectivePlayerDef, adjustedMCalc.atk));
             const blockedDmg = Math.max(1, Math.round(bBaseDmg * 0.3));
             log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻勢沉重，格擋卸去 70% 傷害，仍受到 **${blockedDmg}** 點！`);
-            pHp -= blockedDmg;
+            _hurt(blockedDmg);
           } else {
             log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻擊被格擋，傷害降至 **1**！`);
             pHp -= 1;
@@ -3253,9 +3297,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             deathPreventUsed = true;
             log.push(`✨ **死亡迴避**！你保留了最後 1 HP！`);
           }
-          pHp -= dmg;
+          _hurt(dmg);
           if (damageToHealAmount > 0) {
-            pHp = Math.min(pStats.maxHp, pHp + damageToHealAmount);
+            pHp = _healPlayer(damageToHealAmount);
             log.push(`💗 受傷反饋！回復 **${damageToHealAmount}** HP！（你剩 ${Math.max(0, pHp)} HP）`);
           }
           // ── 戰意右：每次受擊累積 stack ──
@@ -3352,7 +3396,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (monsterComboChance > 0 && !skipMonsterAttackReason && outcome === null && lastMonsterDmg > 0) {
       if (Math.random() * 100 < monsterComboChance) {
         const comboDmg = lastMonsterDmg;
-        pHp -= comboDmg;
+        _hurt(comboDmg);
         monsterDmgThisRound += comboDmg;
         log.push(`⚡ **${mName} 連擊**！再造成 **${comboDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
         if (pHp <= 0) { outcome = "lose"; }
@@ -3407,7 +3451,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (counterAtkTier === 'critFail') {
         const selfBase = Math.max(1, Math.round((pStats.atk || 1) * playerAttackLevelMult));
         const selfDmg = Math.max(1, Math.round(selfBase * 0.3 * (0.7 + Math.random() * 0.3)));
-        pHp -= selfDmg;
+        _hurt(selfDmg);
         log.push(`💥 **盾反大失敗**！你揮空砸到自己，受到 **${selfDmg}** 點傷害！`);
         if (pHp <= 0) { outcome = "lose"; }
       } else if (counterAtkTier === 'fail') {
@@ -3461,7 +3505,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
       if (totalHot > 0) {
         const before = pHp;
-        pHp = Math.min(pStats.maxHp, pHp + totalHot);
+        pHp = _healPlayer(totalHot);
         const actual = pHp - before;
         if (actual > 0) log.push(`💚 持續回復！回復 **${actual}** HP！（你剩 ${pHp} HP）`);
       }
@@ -3494,7 +3538,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   if (outcome === "win" && finalPostBattleHealPct > 0 && pHp > 0 && pStats.maxHp > 0) {
     const healAmt = Math.max(1, Math.round(pStats.maxHp * (finalPostBattleHealPct / 100)));
     const before = pHp;
-    pHp = Math.min(pStats.maxHp, pHp + healAmt);
+    pHp = _healPlayer(healAmt);
     const actual = pHp - before;
     if (actual > 0) roundLogs.push(`💖 **戰後回血**！回復 **${actual}** HP！（你剩 ${pHp} HP）`);
   }

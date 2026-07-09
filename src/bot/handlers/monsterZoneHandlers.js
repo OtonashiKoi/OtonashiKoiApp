@@ -2105,7 +2105,8 @@ async function displaySettledBattleResult({
   embedColor,
   pendingDeathCooldown = false,
   battleStartedAt = Date.now(),
-  playerAgi = 1
+  playerAgi = 1,
+  deathCooldownMult = 1
 }) {
   const delay = (ms) => new Promise((r) => setTimeout(r, ms));
   const MAX_DESC = 3800;
@@ -2124,7 +2125,9 @@ async function displaySettledBattleResult({
   }
 
   if (pendingDeathCooldown) {
-    const availableAt = Number(battleStartedAt || Date.now()) + getBattleBaselineDurationMs(playerAgi ?? 1) + DEATH_EXTRA_COOLDOWN_MS;
+    // 時間管理大師：死亡延長時間 ×deathCooldownMult（例 3 倍）
+    const _deathDur = (getBattleBaselineDurationMs(playerAgi ?? 1) + DEATH_EXTRA_COOLDOWN_MS) * Math.max(1, Number(deathCooldownMult) || 1);
+    const availableAt = Number(battleStartedAt || Date.now()) + _deathDur;
     recordDeathCooldown(discordId, availableAt);
     const remainingCooldown = getRemainingCooldown(discordId);
     rewardLines = rewardLines.map((line) => (
@@ -3039,6 +3042,8 @@ async function handleEnterBattle(interaction) {
       }
       participantCache.clear();
       partyEffects.length = 0;
+      // 時間管理大師：死亡延長時間 ×3（需在清空 equipment 前先擷取）
+      const _deathCdMult = (currentProg?.equipment?.anchor?.itemId === "s-legend-timelord") ? 3 : 1;
       if (currentProg) {
         currentProg.inventory = [];
         currentProg.equipment = {};
@@ -3087,7 +3092,8 @@ async function handleEnterBattle(interaction) {
         embedColor,
         pendingDeathCooldown,
         battleStartedAt: battleStartedAtForDisplay,
-        playerAgi: playerAgiForDisplay
+        playerAgi: playerAgiForDisplay,
+        deathCooldownMult: _deathCdMult
       });
       deleteMonsterSession(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
     } catch (err) {
