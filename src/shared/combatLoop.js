@@ -877,6 +877,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let _healToDamage = 0;    // 聖人比拳頭：回血→對敵傷害倍率(0=關)
   let _healImmune = false;  // 對鮮血的渴望：無法被治療(自身吸血除外)
   let _extendRounds = 0;    // 時間管理大師：回合上限改為此值(0=不變)
+  let _noPlayerAtk = false; // 沒苦硬吃：無法造成一般攻擊傷害(只靠 endure_burst 反彈)
   let _totalHealDone = 0;   // 聖人任務指標 heal_done：實際回血量累計
   const _hurt = (d) => { const x = Math.max(0, Number(d) || 0); pHp = pHp - x; _totalDmgTaken += x; };
   const _healPlayer = (h, opts) => {
@@ -988,6 +989,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
           if (ep.key === "extend_rounds") {
             _extendRounds = Math.max(0, Number(ep.params?.rounds) || 0);
+            continue;
+          }
+          if (ep.key === "no_normal_attack") { // 沒苦硬吃：完全無法造成一般攻擊傷害
+            _noPlayerAtk = true;
             continue;
           }
           // final_damage_up/down：折進 equipZoneFinalDmgMult（稍後乘進玩家傷害），讓裝備被動的最終傷害%實際生效
@@ -1173,6 +1178,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let burnDmg = Math.max(1, Math.round(burnBase * (burnPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) burnDmg = Math.min(burnDmg, Number(mParams.maxDamage));
           burnDmg = Math.max(1, Math.round(burnDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
+          if (_noPlayerAtk) burnDmg = 0;
           mHp -= burnDmg;
           totalDamage += burnDmg;
           log.push(`🔥 燒傷持續！${mName} 受到 **${burnDmg}** 點灼燒傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1188,6 +1194,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let poisonDmg = Math.max(1, Math.round(poisonBase * (poisonPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) poisonDmg = Math.min(poisonDmg, Number(mParams.maxDamage));
           poisonDmg = Math.max(1, Math.round(poisonDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
+          if (_noPlayerAtk) poisonDmg = 0;
           mHp -= poisonDmg;
           totalDamage += poisonDmg;
           log.push(`☠️ 中毒持續！${mName} 受到 **${poisonDmg}** 點毒素傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1222,6 +1229,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let bleedDmg = Math.max(1, Math.round(bleedBase * (bleedPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) bleedDmg = Math.min(bleedDmg, Number(mParams.maxDamage));
           bleedDmg = Math.max(1, Math.round(bleedDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
+          if (_noPlayerAtk) bleedDmg = 0;
           mHp -= bleedDmg;
           totalDamage += bleedDmg;
           log.push(`🩸 流血持續！${mName} 受到 **${bleedDmg}** 點流血傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1236,6 +1244,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let shockDmg = Math.max(1, Math.round(shockBase * (shockPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) shockDmg = Math.min(shockDmg, Number(mParams.maxDamage));
           shockDmg = Math.max(1, Math.round(shockDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
+          if (_noPlayerAtk) shockDmg = 0;
           mHp -= shockDmg;
           totalDamage += shockDmg;
           log.push(`⚡ 感電持續！${mName} 受到 **${shockDmg}** 點電擊傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1280,6 +1289,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let shockDmg = Math.max(1, Math.round(shockBase * (shockPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) shockDmg = Math.min(shockDmg, Number(mParams.maxDamage));
           shockDmg = Math.max(1, Math.round(shockDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
+          if (_noPlayerAtk) shockDmg = 0;
           mHp -= shockDmg;
           totalDamage += shockDmg;
           log.push(`⚡ 震盪持續！${mName} 受到 **${shockDmg}** 點震盪傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -2758,6 +2768,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 三元牌：主擊改為 1/N（之後固定補 N-1 段，各 1/N）→ 總傷不變、分成 N 段（算連擊）
         if (playerTripleStrike >= 2) dmg = Math.max(1, Math.round(dmg / playerTripleStrike));
 
+        if (_noPlayerAtk) dmg = 0; // 沒苦硬吃：一般攻擊(＋衍生連擊/三元補打)最終傷害歸零
         mHp -= dmg;
         totalDamage += dmg;
         // ── 戰意左：每次出手累積 stack（命中算一次）──
@@ -3100,6 +3111,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const comboStackEscalationPct = Math.max(0, stackOnHitStacks - attackStackPctBase);
           // 連擊:用「未含追加值」的傷害乘連擊倍率 ×龍王戰意疊加成長,再額外加一次武器主屬性追加(固定,不被倍率縮放)
           let cdmg = Math.max(1, Math.round(Math.max(1, dmg - weaponMainBonus) * (pStats.comboDamageMultiplier || 1) * (1 + comboStackEscalationPct / 100)) + weaponMainBonus);
+          if (_noPlayerAtk) cdmg = 0; // 沒苦硬吃：連擊也不造成傷害
           mHp -= cdmg;
           totalDamage += cdmg;
           const comboLabel = comboHitsThisAttack >= 2 ? `${comboHitsThisAttack} 連擊` : "連擊";
