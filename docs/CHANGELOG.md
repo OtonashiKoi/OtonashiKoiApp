@@ -91,6 +91,7 @@
 | 63 | 2026-07-09 | 彩蛋裝備「三元牌」A階匕首(固定三連擊) | 麻將主題彩蛋武器：**三元牌**(A階匕首，白發中)。新戰鬥機制 `triple_strike`：**固定每回合攻擊3段、每段為原本的1/3傷害**(總傷不變、分成3段)，每段算進連擊數(貢獻連擊宗師)。combatLoop 主擊除以N＋補打N-1段(照 echo_strike 模式，走 playerActiveOffects 裝備passive)。實測3段各27點=原本81、comboCount正常累加、連擊仍可疊在上面。⚠️目前僅建立道具、尚無取得管道(需之後接掉落/商店/獎勵) | 新功能 | ✅ | (本次) combatLoop.js + DB |
 | 64 | 2026-07-09 | 聖者錨點規則調整：自己治療轉傷害/隊友外部光環取消 | 依定案調整聖者(heal_to_damage×7)：**自己的治療(含自我光環)照轉×7傷害**、**隊友外部治療光環直接取消**(聖者下不補血也不轉傷害，關掉「治療師餵×7給聖者」的爆表組合)、吸血維持不轉。combatLoop party_heal 用 `pe.isSelfAura===false` 判外部→聖者下 continue；playerAppRoutes(自己光環標isSelfAura:true、隊友false)＋monsterZoneHandlers(pid===discordId)標來源。實測自己53HP→371傷害、隊友光環取消。⚠️戰報「光環加持」對自己仍顯示「回復X HP」(實際轉傷害)，顯示文字待polish | 修正 | ✅ | (本次) combatLoop/playerAppRoutes/monsterZoneHandlers |
 | 65 | 2026-07-09 | 三元牌上掉落：龍王(B) 0.3% | 承 #63：把彩蛋武器「三元牌」掛到 **龍王(B)**(dragon_realm，Lv.50，非古龍王) 掉落表，機率 **0.3%**(稀有幸運掉)。古龍王(B) 確認不掉。DB drops 更新、已重啟 | 新功能 | ✅ | (本次) DB monsters |
+| 66 | 2026-07-09 | 匕首傷害倍率 ×2→×3 | 匕首基礎傷害倍率從全武器最低的 ×2 提到 **×3**(主屬性維持STR)，**全部匕首**受惠；配合匕首連擊率+20%強度合理化。實測STR30→atk90 | 調整 | ✅ | (本次) combatStats.js |
 <!-- 新增修改請往下加列，或插入對應功能 -->
 
 ## V0.4 · 後台/工具（玩家端無感）
