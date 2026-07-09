@@ -9,6 +9,15 @@ function randInt(min, max) {
   return lo + Math.floor(Math.random() * (hi - lo + 1));
 }
 
+// 附魔數值：連續小數（預設 1 位），例 min~max 之間骰出 3.4、5.9…（期望值與整數版相同，只是更細）
+function randFloat(min, max, decimals = 1) {
+  const lo = Number(min) || 0;
+  const hi = Number(max) || 0;
+  if (hi <= lo) return lo;
+  const p = Math.pow(10, Math.max(0, decimals));
+  return Math.round((lo + Math.random() * (hi - lo)) * p) / p;
+}
+
 function shuffle(arr) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -56,7 +65,7 @@ function rollEnchantments(tier, config) {
       unit: attr.unit || "",
       effectKey: attr.effectKey || null,
       band: attr.band,
-      value: randInt(attr.min, attr.max)
+      value: randFloat(attr.min, attr.max, 1)
     });
   }
   return picks;
