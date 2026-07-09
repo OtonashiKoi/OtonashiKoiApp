@@ -11,12 +11,12 @@ const DEFAULTS = {
     D: {
       label: "基礎",
       attrs: [
-        { key: "str", label: "力量", unit: "", min: 1, max: 7 },
-        { key: "agi", label: "敏捷", unit: "", min: 1, max: 7 },
-        { key: "vit", label: "體質", unit: "", min: 1, max: 7 },
-        { key: "int", label: "智力", unit: "", min: 1, max: 7 },
-        { key: "dex", label: "技巧", unit: "", min: 1, max: 7 },
-        { key: "luk", label: "幸運", unit: "", min: 1, max: 7 },
+        { key: "str", label: "STR", unit: "", min: 1, max: 7 },
+        { key: "agi", label: "AGI", unit: "", min: 1, max: 7 },
+        { key: "vit", label: "VIT", unit: "", min: 1, max: 7 },
+        { key: "int", label: "INT", unit: "", min: 1, max: 7 },
+        { key: "dex", label: "DEX", unit: "", min: 1, max: 7 },
+        { key: "luk", label: "LUK", unit: "", min: 1, max: 7 },
         { key: "def", label: "防禦", unit: "%", effectKey: "def_up", min: 1, max: 7 }
       ]
     },
