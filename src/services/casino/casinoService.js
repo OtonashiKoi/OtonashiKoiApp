@@ -434,8 +434,9 @@ class CasinoService {
       progress.updatedAt = new Date().toISOString();
       await this.progressRepository.save(progress);
       console.log(`[casino] 🎉 命運之輪唯一大獎發放給 ${discordId}`);
-      const who = progress.displayName || (await this.playerService?.getDisplayName?.(discordId).catch(() => null)) || "某位勇者";
-      require("../../shared/announceTownChat").announceTownChat(
+      const tc = require("../../shared/announceTownChat");
+      const who = await tc.resolveDiscordName(discordId).catch(() => "某位勇者");
+      tc.announceTownChat(
         `🎰🎉 **${who}** 在命運轉盤抽中了傳說錨點【**${item.name}**】！全服唯一，命運眷顧之人！`
       ).catch(() => {});
       return { itemName: item.name, label: "傳說錨點·唯一", jackpot: true };

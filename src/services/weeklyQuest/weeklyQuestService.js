@@ -651,23 +651,23 @@ class WeeklyQuestService {
       playerPeriod[questId] = p;
       await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, quest.cadence);
 
-      // 領到傳說錨點 → 聊天大廳廣播
-      const ANCHOR_NAMES = {
-        "s-legend-bond": "繫絆・共鳴之鏈", "s-legend-burst": "驟・先機之刃",
-        "s-legend-linger": "滯・後勢之刃", "s-legend-dice": "骰・命運之輪",
-        "s-legend-endure": "沒苦硬吃", "s-legend-saint": "聖人就是比拳頭大小",
-        "s-legend-thirst": "對鮮血的渴望", "s-legend-timelord": "時間管理大師",
+      // 領到傳說錨點 → 聊天大廳廣播（每件錨點各自一句台詞）
+      const ANCHOR_INFO = {
+        "s-legend-bond":    { name: "繫絆・共鳴之鏈",       flavor: "羈絆化為力量，輔助者的證明！" },
+        "s-legend-burst":   { name: "驟・先機之刃",         flavor: "先手制敵，鋒芒畢露！" },
+        "s-legend-linger":  { name: "滯・後勢之刃",         flavor: "後發制人，越戰越強！" },
+        "s-legend-dice":    { name: "骰・命運之輪",         flavor: "命運眷顧，孤注一擲！" },
+        "s-legend-endure":  { name: "沒苦硬吃",             flavor: "硬撐到底，痛過才知強！" },
+        "s-legend-saint":   { name: "聖人就是比拳頭大小",   flavor: "以拳傳道，聖人降臨！" },
+        "s-legend-thirst":  { name: "對鮮血的渴望",         flavor: "浸透鮮血，嗜血成性！" },
+        "s-legend-timelord":{ name: "時間管理大師",         flavor: "掌控時間者，加冕於此！" },
       };
-      if (reward.rewardItemId && ANCHOR_NAMES[reward.rewardItemId]) {
-        let who = "某位勇者";
-        try {
-          const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-          const db = await getMongoDb();
-          const pl = await db.collection("players").findOne({ discordId }, { projection: { displayName: 1 } });
-          if (pl?.displayName) who = pl.displayName;
-        } catch (_) { /* 查名失敗就用預設 */ }
-        require("../../shared/announceTownChat").announceTownChat(
-          `🔗✨ **${who}** 完成了隱藏試煉「${quest.title}」，獲得傳說錨點【**${ANCHOR_NAMES[reward.rewardItemId]}**】！輔助者的羈絆之證！`
+      const _anchorInfo = reward.rewardItemId && ANCHOR_INFO[reward.rewardItemId];
+      if (_anchorInfo) {
+        const tc = require("../../shared/announceTownChat");
+        const who = await tc.resolveDiscordName(discordId).catch(() => "某位勇者");
+        tc.announceTownChat(
+          `🔱✨ **${who}** 完成了隱藏試煉「${quest.title}」，獲得傳說錨點【**${_anchorInfo.name}**】！${_anchorInfo.flavor}`
         ).catch(() => {});
       }
 

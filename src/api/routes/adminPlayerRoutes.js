@@ -355,6 +355,35 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
+  // 一次性：把今天大廳公告裡露出的生 Discord ID → 改成 DC 名稱（用執行中的 bot 編輯自己發的訊息）
+  router.post("/admin/townchat/fix-mentions", async (req, res, next) => {
+    try {
+      const client = require("../../bot/runtimeContext").getBotClient();
+      if (!client?.isReady?.()) return res.status(503).json(fail("BOT_NOT_READY", "bot 未就緒"));
+      const layout = await serviceContext.channelLayoutRepository.get();
+      const binding = (layout?.discord?.bindings || []).find((b) => b.featureKey === "town_chat" && b.enabled);
+      if (!binding?.channelId) return res.status(404).json(fail("NO_CHANNEL", "找不到 town_chat 頻道"));
+      const channel = client.channels.cache.get(binding.channelId) || await client.channels.fetch(binding.channelId).catch(() => null);
+      if (!channel?.messages) return res.status(404).json(fail("NO_CHANNEL", "頻道抓取失敗"));
+      const { resolveDiscordName } = require("../../shared/announceTownChat");
+      const msgs = await channel.messages.fetch({ limit: 100 });
+      const dayMs = 24 * 60 * 60 * 1000;
+      const sinceMs = Number(req.body?.sinceMs) || (Date.now() - dayMs); // 預設近 24 小時
+      let edited = 0; const details = [];
+      for (const [, m] of msgs) {
+        if (m.author?.id !== client.user.id) continue;          // 只改 bot 自己發的
+        if (m.createdTimestamp < sinceMs) continue;
+        if (!/系統公告|傳說錨點|試煉|斗內|轉盤|寶箱/.test(m.content || "")) continue;
+        const ids = [...new Set((m.content.match(/\b\d{17,20}\b/g) || []))];
+        if (!ids.length) continue;
+        let content = m.content;
+        for (const id of ids) { const name = await resolveDiscordName(id).catch(() => null); if (name && !/^\d+$/.test(name)) content = content.split(id).join(name); }
+        if (content !== m.content) { await m.edit({ content, allowedMentions: { parse: [] } }).catch(() => {}); edited++; details.push({ msgId: m.id }); }
+      }
+      res.json(ok({ edited, details }, "town chat mentions fixed"));
+    } catch (error) { next(error); }
+  });
+
   // ── 綠界斗內：對帳 / 補發 ──
   // 列出最近的綠界收單（含未對應到玩家的 unbound、驗簽失敗 mac_failed 等）
   router.get("/admin/ecpay/donations", async (req, res, next) => {

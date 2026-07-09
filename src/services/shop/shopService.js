@@ -908,8 +908,9 @@ class ShopService {
         source: "boss_chest:daishi", obtainedAt: new Date().toISOString(),
       };
       console.log(`[shop] 🎉 大史王寶箱開出唯一傳說錨點 ${item.name} → ${discordId}`);
-      const who = displayName || "某位勇者";
-      require("../../shared/announceTownChat").announceTownChat(
+      const tc = require("../../shared/announceTownChat");
+      const who = await tc.resolveDiscordName(discordId).catch(() => "某位勇者");
+      tc.announceTownChat(
         `📦✨ **${who}** 開啟大史王寶箱，獲得傳說錨點【**${item.name}**】！全服唯一，得來不易！`
       ).catch(() => {});
       return { entry };
