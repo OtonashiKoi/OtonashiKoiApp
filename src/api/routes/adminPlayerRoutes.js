@@ -292,6 +292,18 @@ function createAdminPlayerRoutes(serviceContext) {
   //   body.mode = "force"  → 立即強制重整(不問玩家)
   //   body.mode = "prompt" → 彈出「有更新,請重整/重登」視窗,玩家自己按(預設)
   //   body.message         → 同步發到聊天大廳的公告(可空)
+  // 純系統公告（DC 城鎮頻道 + 網頁聊天），不強制/提示重整。用於「上架商品、活動預告」等純通知。
+  router.post("/admin/broadcast/announce", async (req, res, next) => {
+    try {
+      const message = String(req.body?.message || "").trim();
+      if (!message) return res.status(400).json(fail("INVALID_ARGUMENT", "message is required"));
+      if (typeof serviceContext._announceTownChat === "function") {
+        await serviceContext._announceTownChat(message);
+      }
+      res.json(ok({ announced: true }, "announced"));
+    } catch (error) { next(error); }
+  });
+
   router.post("/admin/broadcast/announce-and-reload", async (req, res, next) => {
     try {
       const message = String(req.body?.message || "").trim();

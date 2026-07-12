@@ -2778,6 +2778,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 武器主屬性追加傷害：終傷全部算完後，額外加上「武器主屬性 × 1.5」固定點數（不被防禦扣，補強物理）
         if (finalDamage > 0) finalDamage += weaponMainBonus;
 
+        // 每擊傷害上限（金錢袋怪等「必定格擋、每擊只扣N」）：所有加成/爆擊算完後硬性夾住上限
+        if (adjustedMCalc.incomingDamageCap > 0 && finalDamage > adjustedMCalc.incomingDamageCap) {
+          finalDamage = adjustedMCalc.incomingDamageCap;
+        }
+
         dmg = finalDamage;
 
         // 採證：單次傷害異常爆量(> 攻擊力 ×10)時，把完整拆解印到後台 log，直指「傷害被放大」的兇手
@@ -3159,6 +3164,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             cdmg = 1;
             comboBlockNote = `，但 ${mName} ${rand(BLOCK_PHRASES)}，傷害降至 **1**`;
           }
+          // 每擊傷害上限（同主攻擊）：連擊段也夾住上限
+          if (adjustedMCalc.incomingDamageCap > 0 && cdmg > adjustedMCalc.incomingDamageCap) cdmg = adjustedMCalc.incomingDamageCap;
           if (_noPlayerAtk) cdmg = 0; // 沒苦硬吃：連擊也不造成傷害
           mHp -= cdmg;
           totalDamage += cdmg;

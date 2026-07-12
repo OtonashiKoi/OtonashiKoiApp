@@ -1874,7 +1874,7 @@ async function _announceLevelMilestone(sc, discordId, displayName, prevLevel, ne
   } catch (_) {}
 }
 
-async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, droppedItemObjects = [], kind = "fight") {
+async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, droppedItemObjects = [], kind = "fight", isWorldBossKill = false) {
   try {
     const { getBotClient } = require("../runtimeContext");
     const client = getBotClient();
@@ -1910,7 +1910,20 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
       }
     }
 
-    // （已移除）原本會把稀有卡掉落公告 🃏 發到通知頻道 1498608950671839263（town/general chat），依需求停用。
+    // （一般怪的稀有卡公告仍停用，避免洗頻）
+    // 世界王卡：只有「世界王擊殺」掉到的怪物卡才顯眼廣播到聊天大廳＋DC城鎮頻道（比照寶箱/單人世界王）
+    if (isWorldBossKill && Array.isArray(droppedItemObjects)) {
+      const cardDrops = droppedItemObjects.filter((o) => o && o.monsterCardSkill);
+      if (cardDrops.length > 0) {
+        try {
+          const tc = require("../../shared/announceTownChat");
+          const who = await tc.resolveDiscordName(discordId).catch(() => (displayName || "某位勇者"));
+          for (const o of cardDrops) {
+            tc.announceTownChat(`🃏✨ **${who}** 討伐世界王 **${monsterName}**，打到了世界王卡【**${o.itemName}**】！稀有難得！`).catch(() => {});
+          }
+        } catch (_) { /* 公告失敗不影響掉落 */ }
+      }
+    }
   } catch (e) {
     console.error(`[Drop Announce] Unexpected error:`, e?.message || e);
   }
@@ -2422,16 +2435,7 @@ async function handleEnterBattle(interaction) {
         await interaction.editReply({ content: `🔒 ${levelError}` });
         return;
       }
-      // 主線閘門：未看完該區主線 → DC 也不能刷（引導去網頁看劇情），與網頁同規則
-      try {
-        const storyGate = await sc.storyService?.checkZoneStoryGate(cachedProgress, zoneKey);
-        if (storyGate) {
-          await interaction.editReply({ content: `📖 需先到網頁版閱讀主線「${storyGate.chapterTitle}」，才能在此區域行動。` });
-          return;
-        }
-      } catch (e) {
-        console.warn("[Story] DC zone gate check failed:", e?.message || e);
-      }
+      // 主線閘門：DC 不鎖（依使用者要求，DC 玩家不需先到網頁看劇情才能行動；劇情僅在網頁引導、不擋 DC 進度）
     }
 
     // 若玩家正在掛機，進戰鬥時自動先結算一次並結束掛機
@@ -3858,9 +3862,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               }
               // 結構化掉落（給網頁版漂浮道具氣泡 + 詳細視窗用）
               rewardLines._drops = [...(rewardLines._drops || []), ...allDroppedObjects.map(toWebDrop)];
-              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "kill").catch(() => {});
+              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "kill", isWorldBossZone(zoneKey) && !!monster?.isBoss).catch(() => {});
             } else {
-              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "group").catch(() => {});
+              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "group", isWorldBossZone(zoneKey) && !!monster?.isBoss).catch(() => {});
             }
           } else {
             console.warn(`[MonsterZone] skip drop DM for ${luckyPid} because EXP was not committed`);
@@ -3961,7 +3965,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...allBonusDropped];
         const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
         if (canSendRewardNotice(bonusPid)) {
-          _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, allBonusDroppedObjects, kind).catch(() => {});
+          _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, allBonusDroppedObjects, kind, isWorldBossZone(zoneKey) && !!monster?.isBoss).catch(() => {});
         } else {
           console.warn(`[MonsterZone] skip bonus drop DM for ${bonusPid} because EXP was not committed`);
         }
@@ -5023,6 +5027,34 @@ async function worldBossRespawnTick() {
       const info = await svc.getConfigWithStatus().catch(() => null);
       const st = info?.status;
       if (!st) continue;
+
+      // ── 自癒：偵測「部位全破但沒結算就卡死」──
+      //   根因：擊殺時 saveState(部位全0) 與 handleMonsterKill(結算) 非原子；中間被打斷(重啟/崩潰/例外)
+      //   就會「已存全0卻沒結算」，且沒有任何機制會再回來收尾→boss 永遠 0 血、不重生、不進冷卻。
+      //   判定：部位全破 + 靜止 > 90 秒(避免擊殺瞬間誤觸) + 不在冷卻(正常擊殺會進冷卻)→ 視為卡死 → 重生滿血。
+      try {
+        const heal = await sc.monsterService.getState(zoneKey).catch(() => null);
+        if (heal && isWorldBossAllPartsDefeated(heal.worldBossPartsHp)) {
+          const lastHit = heal.lastHitAt ? Date.parse(heal.lastHitAt) : 0;
+          const staleMs = Date.now() - (Number.isFinite(lastHit) ? lastHit : 0);
+          if (staleMs > 90 * 1000 && !(Number(st.cooldownRemainingMs) > 0)) {
+            const mons = await sc.monsterService.listMonsters({ includeDisabled: true, zone: zoneKey }).catch(() => []);
+            const boss = mons.find((m) => m.seq === heal.activeMonsterSeq) || mons.find((m) => m.isBoss) || mons[0];
+            const maxHp = Number(boss?.calc?.maxHp) || 0;
+            if (maxHp > 0) {
+              const fullParts = createWorldBossPartHpTemplate(maxHp, zoneKey);
+              const fresh = { ...heal, currentHp: sumWorldBossPartHp(fullParts), worldBossPartsHp: fullParts, worldBossPartsMaxHp: fullParts, participants: [], damageMap: {} };
+              delete fresh.activeTransition;
+              await sc.monsterService.saveState(fresh, zoneKey);
+              worldBossPanelSig.delete(zoneKey);
+              console.warn(`[WorldBoss自癒] ${zoneKey} 偵測到「部位全破卻未結算」卡死(靜止 ${Math.round(staleMs / 1000)} 秒) → 已重生滿血`);
+              await refreshWorldBossPanelForZone(sc, zoneKey, { force: true }).catch(() => {});
+              continue; // 本輪已處理，跳過下面的常規刷新
+            }
+          }
+        }
+      } catch (e) { console.warn(`[WorldBoss自癒] ${zoneKey} 檢查失敗:`, e?.message || e); }
+
       const sig = `${!!st.canChallenge}|${!!st.battleTimeoutReached}|${!!st.battleStartedAt}`;
       const prevSig = worldBossPanelSig.get(zoneKey) || null;
       if (prevSig === sig) continue;

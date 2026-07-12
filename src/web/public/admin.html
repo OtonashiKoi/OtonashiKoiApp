@@ -66,6 +66,7 @@
               <div class="nav-group-links">
                 <button class="nav-link" data-target="section-items">道具庫管理</button>
                 <button class="nav-link" data-target="section-shop">金幣商店管理</button>
+                <button class="nav-link" data-target="section-merch">🛍️ 周邊商城</button>
                 <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
                 <button class="nav-link" data-target="section-combat-calculator">傷害測試工具</button>
                 <button class="nav-link" data-target="section-monster-cards">怪物卡片庫</button>
@@ -912,6 +913,51 @@
             </div>
           </section>
 
+          <section id="section-merch" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Economy</p>
+                  <h2>🛍️ 周邊商城（實體商品）</h2>
+                </div>
+                <button id="merch-item-new" class="button primary">＋ 新增周邊</button>
+              </div>
+              <p class="hint" style="margin:0 0 8px 0;">實體商品：可設現金價(NT$)、鑽石價，兩者可擇一或都開。庫存 -1 = 無限。收件資訊由玩家在網頁下單時填寫。</p>
+              <div style="overflow-x:auto;">
+                <table class="shop-table">
+                  <thead id="merch-item-head"></thead>
+                  <tbody id="merch-item-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card" style="margin-top:16px;">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Orders</p>
+                  <h2>周邊訂單</h2>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <select id="merch-order-filter" class="sheet-input" style="width:140px;">
+                    <option value="">全部狀態</option>
+                    <option value="pending_payment">待付款</option>
+                    <option value="paid">已付款(待出貨)</option>
+                    <option value="shipped">已出貨</option>
+                    <option value="done">完成</option>
+                    <option value="cancelled">取消</option>
+                  </select>
+                  <button id="merch-order-refresh" class="button">🔄 重新整理</button>
+                  <a id="merch-order-csv" class="button" href="#">⬇ 匯出收件 CSV</a>
+                </div>
+              </div>
+              <div style="overflow-x:auto;">
+                <table class="shop-table">
+                  <thead id="merch-order-head"></thead>
+                  <tbody id="merch-order-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
           <section id="section-story" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -1142,6 +1188,7 @@
     <script src="/static/admin.nav-search.js?v=1"></script>
     <script src="/static/admin.tiers.js?v=6"></script>
     <script src="/static/admin.shop.js?v=7"></script>
+    <script src="/static/admin.merch.js?v=4"></script>
     <script src="/static/admin.monsters.js?v=6"></script>
     <script src="/static/admin.combat-calculator.js?v=2"></script>
     <script src="/static/admin.monster-cards.js?v=1"></script>

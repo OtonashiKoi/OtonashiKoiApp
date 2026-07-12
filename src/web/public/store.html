@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>音無恋 周邊商城</title>
+<meta name="theme-color" content="#0f1020">
+<style>
+  :root{
+    --bg:#0f1020; --bg2:#15132b; --surface:#1b1a38; --surface2:#232145;
+    --line:rgba(255,143,191,.22); --text:#f3ecf5; --muted:#9a93b0;
+    --pink:#ff8fbf; --pink-d:#e06a9e; --gold:#ffd166; --green:#6ee7b7;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(255,143,191,.14), transparent 60%),
+      linear-gradient(180deg,var(--bg),#0b0b16 80%);
+    color:var(--text); min-height:100dvh;
+    font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:0 14px 80px}
+  header.top{text-align:center;padding:34px 12px 22px}
+  header.top .kicker{font-size:12px;letter-spacing:.32em;color:var(--pink);text-transform:uppercase;font-weight:800}
+  header.top h1{margin:.35em 0 .1em;font-size:30px;font-weight:900;letter-spacing:.02em;
+    background:linear-gradient(90deg,var(--pink),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+  header.top p{margin:0;color:var(--muted);font-size:13px}
+  .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+  .badge{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:rgba(255,255,255,.02)}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:8px}
+  @media(min-width:560px){.grid{grid-template-columns:repeat(3,1fr)}}
+  .card{background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s}
+  .card:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(255,143,191,.14)}
+  .card .imgbox{aspect-ratio:1;background:#0c0c18;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .card .imgbox img{width:100%;height:100%;object-fit:cover}
+  .card .imgbox .ph{font-size:38px;opacity:.5}
+  .card .body{padding:10px 11px 12px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .card .name{font-weight:800;font-size:14px;line-height:1.3}
+  .card .desc{font-size:11px;color:var(--muted);line-height:1.45;white-space:pre-wrap;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .card .price{font-weight:900;color:var(--gold);font-size:15px}
+  .modal .desc-full{font-size:13px;color:var(--text);opacity:.9;line-height:1.6;white-space:pre-wrap;
+    background:rgba(6,6,16,.4);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:12px}
+  .card .stock{font-size:11px;color:var(--muted)}
+  .card .stock.out{color:var(--pink)}
+  .btn{border:0;cursor:pointer;font-weight:800;border-radius:9px;transition:filter .15s,transform .1s;font-family:inherit}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.buy{margin-top:auto;background:linear-gradient(180deg,var(--pink),var(--pink-d));color:#20101a;padding:9px;font-size:13px}
+  .btn.pay{width:100%;background:linear-gradient(180deg,var(--green),#3fae86);color:#04160f;padding:13px;font-size:15px}
+  .btn.ghost{background:transparent;color:var(--muted);padding:10px;width:100%}
+  .btn.gold{background:linear-gradient(180deg,var(--gold),#d9a93c);color:#231a05}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .loading{padding:60px 0;text-align:center;color:var(--muted)}
+  .section-title{display:flex;align-items:center;gap:8px;margin:26px 4px 12px;font-weight:900;font-size:15px}
+  .section-title::before{content:"";flex:1 0 14px;height:1px;background:var(--line)}
+  .section-title::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  /* modal */
+  .ov{position:fixed;inset:0;background:rgba(4,4,12,.86);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;padding:16px;z-index:50;overflow-y:auto}
+  .ov.show{display:flex}
+  .modal{background:linear-gradient(180deg,var(--surface2),var(--bg2));border:1.5px solid var(--pink);border-radius:16px;
+    width:100%;max-width:440px;padding:18px;margin:24px 0;box-shadow:0 0 40px rgba(255,143,191,.28)}
+  .modal h3{margin:0 0 4px;font-size:17px;font-weight:900;color:var(--pink)}
+  .modal .sub{color:var(--muted);font-size:12px;margin-bottom:12px}
+  .qty{display:flex;align-items:center;gap:10px;justify-content:center;margin:6px 0 14px}
+  .qty button{width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text);font-size:18px;font-weight:900;cursor:pointer}
+  .qty .n{min-width:34px;text-align:center;font-weight:900;font-size:17px}
+  label.f{display:block;margin-bottom:9px}
+  label.f span{font-size:11px;color:var(--muted)}
+  label.f span b{color:var(--pink)}
+  label.f input,label.f textarea{width:100%;margin-top:3px;background:rgba(6,6,16,.7);border:1px solid var(--line);border-radius:8px;
+    color:var(--text);padding:9px 10px;font-size:14px;font-family:inherit}
+  label.f input:focus,label.f textarea:focus{outline:0;border-color:var(--pink)}
+  .total{text-align:center;font-weight:900;font-size:16px;margin:6px 0 12px}
+  .total b{color:var(--gold)}
+  .note{font-size:11px;color:var(--muted);line-height:1.6;margin:10px 0}
+  .banner{background:rgba(110,231,183,.1);border:1px solid rgba(110,231,183,.4);color:var(--green);border-radius:10px;padding:12px;font-size:13px;margin:14px 0;text-align:center}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;padding:11px 16px;border-radius:10px;font-weight:800;font-size:13px;display:none}
+  .toast.show{display:block}
+  .lookup{background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+  .lookup .row{display:flex;gap:8px;flex-wrap:wrap}
+  .lookup input{flex:1;min-width:120px;background:rgba(6,6,16,.7);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:9px 10px;font-size:13px;font-family:inherit}
+  .status-pill{display:inline-block;font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;border:1px solid currentColor}
+  footer{text-align:center;color:var(--muted);font-size:11px;padding:30px 12px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="kicker">Otonashikoi Store</div>
+    <h1>音無恋 周邊商城</h1>
+    <p>官方實體周邊・線上訂購</p>
+    <div class="badges">
+      <span class="badge">💳 綠界安全付款</span>
+      <span class="badge">📦 官方寄送</span>
+      <span class="badge">🔎 訂單編號可查詢</span>
+    </div>
+  </header>
+
+  <div id="return-banner"></div>
+
+  <div id="grid" class="grid"></div>
+  <div id="loading" class="loading">載入商品中…</div>
+
+  <div class="section-title">🔎 訂單查詢</div>
+  <div class="lookup">
+    <p class="muted" style="margin:0 0 10px;font-size:12px">用「訂單編號 + 下單時填的 Email」查詢出貨狀態。</p>
+    <div class="row">
+      <input id="lk-no" placeholder="訂單編號（例 M...）">
+      <input id="lk-email" placeholder="Email" type="email">
+      <button class="btn gold" style="padding:9px 16px" onclick="lookup()">查詢</button>
+    </div>
+    <div id="lk-result" style="margin-top:12px"></div>
+  </div>
+
+  <footer>
+    購買前請確認收件資訊正確。實體商品由官方寄送，付款成功後開始備貨。<br>
+    如有問題請洽官方 Discord。© 音無恋
+  </footer>
+</div>
+
+<!-- 購買 modal -->
+<div class="ov" id="ov">
+  <div class="modal" id="modal"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s,el=document)=>el.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let ITEMS = [];
+
+function toast(msg, ok=false){
+  const t=$("#toast"); t.textContent=msg;
+  t.style.background = ok?"rgba(20,40,24,.96)":"rgba(46,18,26,.96)";
+  t.style.color = ok?"#6ee7b7":"#ff9ec4";
+  t.style.border = "1px solid "+(ok?"#6ee7b7":"#ff5577");
+  t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3200);
+}
+
+async function loadItems(){
+  try{
+    const r = await fetch("/api/merch/items");
+    const j = await r.json();
+    // 訪客只能現金購買 → 只顯示有現金價的商品
+    ITEMS = ((j.data&&j.data.items)||[]).filter(it=>Number(it.priceTwd)>0);
+    render();
+  }catch(e){ $("#loading").textContent="商品載入失敗，請稍後再試。"; }
+}
+
+function render(){
+  $("#loading").style.display="none";
+  const g = $("#grid");
+  if(!ITEMS.length){ g.innerHTML = '<div class="loading" style="grid-column:1/-1">目前沒有開放現金購買的周邊，敬請期待～</div>'; return; }
+  g.innerHTML = ITEMS.map((it,i)=>{
+    const out = it.stock===0;
+    return `<div class="card">
+      <div class="imgbox">${it.imageUrl?`<img src="${esc(it.imageUrl)}" alt="${esc(it.name)}">`:'<span class="ph">🎁</span>'}</div>
+      <div class="body">
+        <div class="name">${esc(it.name)}</div>
+        ${it.description?`<div class="desc">${esc(it.description)}</div>`:""}
+        <div class="price">NT$${it.priceTwd}</div>
+        ${it.stock>=0?`<div class="stock ${out?"out":""}">${out?"已售完":"庫存 "+it.stock}</div>`:""}
+        <button class="btn buy" ${out?"disabled":""} onclick="openBuy(${i})">${out?"已售完":"購買"}</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+let curItem=null, curQty=1;
+function openBuy(i){
+  curItem = ITEMS[i]; curQty = 1;
+  const maxQ = Math.max(1, Math.min(curItem.maxPerOrder||1, curItem.stock===-1?99:(curItem.stock||1)));
+  $("#modal").innerHTML = `
+    <h3>🛍️ 購買「${esc(curItem.name)}」</h3>
+    <div class="sub">單價 NT$${curItem.priceTwd}・綠界信用卡/超商/ATM 付款</div>
+    ${curItem.description?`<div class="desc-full">${esc(curItem.description)}</div>`:""}
+    <div class="qty">
+      <button onclick="stepQ(-1,${maxQ})">−</button>
+      <span class="n" id="qn">1</span>
+      <button onclick="stepQ(1,${maxQ})">＋</button>
+      <span class="muted" style="font-size:11px">上限 ${maxQ}</span>
+    </div>
+    <div style="font-weight:900;color:var(--pink);font-size:12px;margin-bottom:6px">📮 收件資訊</div>
+    <label class="f"><span>收件人姓名<b> *</b></span><input id="s-name" placeholder="王小明"></label>
+    <label class="f"><span>手機號碼<b> *</b></span><input id="s-phone" placeholder="0912345678" inputmode="numeric"></label>
+    <label class="f"><span>Email（收據 / 查訂單用）<b> *</b></span><input id="s-email" type="email" placeholder="you@example.com"></label>
+    <label class="f"><span>郵遞區號</span><input id="s-zip" placeholder="100" inputmode="numeric"></label>
+    <label class="f"><span>地址<b> *</b></span><input id="s-address" placeholder="台北市中正區…"></label>
+    <label class="f"><span>備註（尺寸/顏色等，選填）</span><textarea id="s-note" rows="2"></textarea></label>
+    <div class="total">應付：<b id="ttl">NT$${curItem.priceTwd}</b></div>
+    <button class="btn pay" id="paybtn" onclick="pay()">💳 前往綠界付款</button>
+    <div class="note">⚠️ 實體商品，付款成功後由官方寄送。信用卡資料只在綠界頁面輸入，本站不會經手。</div>
+    <button class="btn ghost" onclick="closeOv()">取消</button>`;
+  $("#ov").classList.add("show");
+}
+function stepQ(d,maxQ){
+  curQty = Math.min(maxQ, Math.max(1, curQty+d));
+  $("#qn").textContent = curQty;
+  $("#ttl").textContent = "NT$"+(curItem.priceTwd*curQty);
+}
+function closeOv(){ $("#ov").classList.remove("show"); }
+$("#ov").addEventListener("click",e=>{ if(e.target.id==="ov") closeOv(); });
+
+async function pay(){
+  const shipping = {
+    name:$("#s-name").value.trim(), phone:$("#s-phone").value.trim(), email:$("#s-email").value.trim(),
+    zip:$("#s-zip").value.trim(), address:$("#s-address").value.trim(), note:$("#s-note").value.trim()
+  };
+  if(!shipping.name||!shipping.phone||!shipping.email||!shipping.address){ toast("請填寫姓名/手機/Email/地址"); return; }
+  const btn=$("#paybtn"); btn.disabled=true; btn.textContent="前往綠界…";
+  try{
+    const r = await fetch("/api/merch/guest/order/ecpay",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({itemId:curItem.id, qty:curQty, shipping})});
+    const j = await r.json();
+    if(j.status!=="ok"){ toast(j.message||"下單失敗"); btn.disabled=false; btn.textContent="💳 前往綠界付款"; return; }
+    // 記住訂單編號，付款回來可自動查
+    try{ localStorage.setItem("otonashi_last_order", j.data.orderNo); localStorage.setItem("otonashi_last_email", shipping.email); }catch(_){}
+    submitEcpay(j.data.checkout);
+  }catch(e){ toast("下單失敗，請稍後再試"); btn.disabled=false; btn.textContent="💳 前往綠界付款"; }
+}
+function submitEcpay(checkout){
+  const f=document.createElement("form"); f.method="POST"; f.action=checkout.action; f.style.display="none";
+  Object.entries(checkout.params).forEach(([k,v])=>{ const i=document.createElement("input"); i.type="hidden"; i.name=k; i.value=String(v); f.appendChild(i); });
+  document.body.appendChild(f); f.submit();
+}
+
+const STATUS = {pending_payment:["待付款","#ff9f45"],paid:["已付款・備貨中","#7ce0ff"],shipped:["已出貨","#6ee7b7"],done:["完成","#9a93b0"],cancelled:["已取消","#ff5577"]};
+async function lookup(){
+  const no=$("#lk-no").value.trim(), email=$("#lk-email").value.trim();
+  const box=$("#lk-result");
+  if(!no||!email){ box.innerHTML='<span class="muted" style="font-size:12px">請輸入訂單編號與 Email。</span>'; return; }
+  box.innerHTML='<span class="muted" style="font-size:12px">查詢中…</span>';
+  try{
+    const r=await fetch(`/api/merch/guest/order?orderNo=${encodeURIComponent(no)}&email=${encodeURIComponent(email)}`);
+    const j=await r.json();
+    if(j.status!=="ok"){ box.innerHTML=`<span style="color:var(--pink);font-size:13px">${esc(j.message||"查無此訂單")}</span>`; return; }
+    const o=j.data.order; const st=STATUS[o.status]||STATUS.pending_payment;
+    box.innerHTML=`<div style="background:rgba(6,6,16,.5);border:1px solid var(--line);border-radius:10px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <b>${esc(o.itemName)} ×${o.qty}</b>
+        <span class="status-pill" style="color:${st[1]}">${st[0]}</span>
+      </div>
+      <div class="muted" style="font-size:12px;line-height:1.8">
+        訂單編號 ${esc(o.orderNo)}<br>
+        金額 NT$${o.amount}｜下單 ${tpe(o.createdAt)}
+        ${o.trackingNo?`<br><span style="color:var(--green)">物流單號 ${esc(o.trackingNo)}</span>`:""}
+      </div></div>`;
+  }catch(e){ box.innerHTML='<span style="color:var(--pink);font-size:13px">查詢失敗，請稍後再試</span>'; }
+}
+function tpe(iso){ try{ return new Intl.DateTimeFormat("zh-TW",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(iso)).replace(/\//g,"-"); }catch(_){ return (iso||"").slice(0,16).replace("T"," "); } }
+
+// 綠界付款完成導回：顯示提示 + 自動帶入查詢
+(function initReturn(){
+  const q=new URLSearchParams(location.search);
+  if(q.get("ecpayReturn")){
+    const no=q.get("orderNo")||localStorage.getItem("otonashi_last_order")||"";
+    const email=localStorage.getItem("otonashi_last_email")||"";
+    $("#return-banner").innerHTML=`<div class="banner">✅ 已從綠界返回。若付款完成，訂單狀態會在數秒內更新為「已付款・備貨中」。<br>訂單編號：<b>${esc(no)}</b></div>`;
+    if(no) $("#lk-no").value=no;
+    if(email) $("#lk-email").value=email;
+    if(no&&email) setTimeout(lookup,800);
+  }
+})();
+loadItems();
+</script>
+</body>
+</html>

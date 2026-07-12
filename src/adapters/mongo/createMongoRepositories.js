@@ -536,6 +536,42 @@ function createMongoRepositories() {
         return claim;
       }
     },
+    // 周邊（實體商品）品項：與虛擬商店分離，含雙價(現金/鑽石)、實體庫存
+    merchItemRepository: {
+      async findAll() {
+        return (await collection("merchItems")).find({}).sort({ sortOrder: 1, createdAt: 1 }).toArray();
+      },
+      async findById(id) {
+        return (await collection("merchItems")).findOne({ id }) || null;
+      },
+      async save(item) {
+        await (await collection("merchItems")).updateOne({ id: item.id }, { $set: item }, { upsert: true });
+        return item;
+      },
+      async delete(id) {
+        await (await collection("merchItems")).deleteOne({ id });
+      }
+    },
+    // 周邊訂單：收件資訊(PII) + 付款/出貨狀態
+    merchOrderRepository: {
+      async findByOrderNo(orderNo) {
+        return (await collection("merchOrders")).findOne({ orderNo }) || null;
+      },
+      async findByMerchantTradeNo(merchantTradeNo) {
+        return (await collection("merchOrders")).findOne({ "ecpay.merchantTradeNo": merchantTradeNo }) || null;
+      },
+      async save(order) {
+        await (await collection("merchOrders")).updateOne({ orderNo: order.orderNo }, { $set: order }, { upsert: true });
+        return order;
+      },
+      async listByDiscordId(discordId, limit = 50) {
+        return (await collection("merchOrders")).find({ discordId }).sort({ createdAt: -1 }).limit(limit).toArray();
+      },
+      async listAll({ status = null, limit = 500 } = {}) {
+        const q = status ? { status } : {};
+        return (await collection("merchOrders")).find(q).sort({ createdAt: -1 }).limit(limit).toArray();
+      }
+    },
     itemRepository: {
       async findAll() {
         return (await collection("items")).find({}).toArray();

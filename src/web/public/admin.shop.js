@@ -16,9 +16,9 @@
     return true;
   }
   const TIER_RANKS=["E","D","C","B","A","S","SS"];
-  const COLS=["seq","img","item","price","currency","stock","monthLimit","claimLimit","tiers","sale","enabled","actions"];
-  const COL_HEADERS={seq:"#",img:"圖片",item:"道具名稱",price:"售價",currency:"幣種",stock:"庫存(-1=無限)",monthLimit:"月上限(0=無限)",claimLimit:"會員紀錄",tiers:"限定等級(空=全部)",sale:"優惠",enabled:"上架",actions:"操作"};
-  const COL_WIDTHS={seq:"36px",img:"52px",item:"220px",price:"72px",currency:"90px",stock:"90px",monthLimit:"100px",claimLimit:"112px",tiers:"210px",sale:"48px",enabled:"52px",actions:"100px"};
+  const COLS=["seq","img","item","price","currency","stock","monthLimit","dayLimit","claimLimit","tiers","sale","enabled","actions"];
+  const COL_HEADERS={seq:"#",img:"圖片",item:"道具名稱",price:"售價",currency:"幣種",stock:"庫存(-1=無限)",monthLimit:"月上限(0=無限)",dayLimit:"日上限(0=無限)",claimLimit:"會員紀錄",tiers:"限定等級(空=全部)",sale:"優惠",enabled:"上架",actions:"操作"};
+  const COL_WIDTHS={seq:"36px",img:"52px",item:"220px",price:"72px",currency:"90px",stock:"90px",monthLimit:"100px",dayLimit:"100px",claimLimit:"112px",tiers:"210px",sale:"48px",enabled:"52px",actions:"100px"};
   function auth(){return{Authorization:`Bearer ${window.getAdminToken?window.getAdminToken():""}` };}
   function jsonH(){return{"Content-Type":"application/json",...auth()};}
   async function loadShop(){const res=await fetch("/admin/shop/items",{headers:auth()});const json=await res.json();if(json.status==="ok"){shopItems=json.data||[];renderAll();}else{window.logActivity&&window.logActivity("❌ 無法載入商品："+(json.message||""));}}
@@ -190,6 +190,7 @@
       currency:`<td><select class="sheet-input" data-field="currency" style="width:100%;"><option value="gold"${(item.currency||"gold")==="gold"?" selected":""}>💰 金幣</option><option value="diamond"${item.currency==="diamond"?" selected":""}>💎 鑽石</option></select></td>`,
       stock:`<td><input class="sheet-input" data-field="stock" type="number" value="${esc(String(item.stock??-1))}" style="width:100%;text-align:right;"></td>`,
       monthLimit:`<td><input class="sheet-input" data-field="monthLimit" type="number" min="0" value="${esc(String(item.maxPerMonth??0))}" style="width:100%;text-align:right;"></td>`,
+      dayLimit:`<td><input class="sheet-input" data-field="dayLimit" type="number" min="0" value="${esc(String(item.maxPerDay??0))}" style="width:100%;text-align:right;"></td>`,
       claimLimit:`<td><select class="sheet-input" data-field="claimLimit" style="width:100%;"><option value="none"${(item.claimLimit||"none")==="none"?" selected":""}>無</option><option value="once_per_player"${item.claimLimit==="once_per_player"?" selected":""}>每人一次</option></select></td>`,
       tiers:`<td style="white-space:nowrap;">${TIER_RANKS.map(r=>`<span class="tier-chip${(item.allowedTiers||[]).includes(r)?" active":""}" data-tier="${r}">${r}</span>`).join("")}</td>`,
       sale:`<td style="text-align:center;"><input type="checkbox" data-field="sale"${item.isSale?" checked":""}></td>`,
@@ -254,7 +255,7 @@
     const get=f=>tr.querySelector(`[data-field="${f}"]`)?.value??"";
     const chk=f=>tr.querySelector(`[data-field="${f}"]`)?.checked??false;
     const allowedTiers=[...tr.querySelectorAll(".tier-chip.active")].map(c=>c.dataset.tier);
-    return{itemLibraryId:get("item"),price:Number(get("price"))||0,currency:get("currency")||"gold",stock:Number(get("stock"))||-1,maxPerMonth:Number(get("monthLimit"))||0,claimLimit:get("claimLimit")||"none",allowedTiers,isSale:chk("sale"),enabled:chk("enabled")};
+    return{itemLibraryId:get("item"),price:Number(get("price"))||0,currency:get("currency")||"gold",stock:Number(get("stock"))||-1,maxPerMonth:Number(get("monthLimit"))||0,maxPerDay:Number(get("dayLimit"))||0,claimLimit:get("claimLimit")||"none",allowedTiers,isSale:chk("sale"),enabled:chk("enabled")};
   }
   async function saveRow(tr){
     const id=tr.dataset.shopId,payload=getPayload(tr);
@@ -277,7 +278,7 @@
     if(!tbody)return;
     const ph=tbody.querySelector("td[colspan]");
     if(ph)ph.closest("tr").remove();
-    const ei={id:"__new__",itemLibraryId:"",price:100,currency:"gold",stock:-1,maxPerMonth:0,claimLimit:"none",allowedTiers:[],isSale:false,enabled:true};
+    const ei={id:"__new__",itemLibraryId:"",price:100,currency:"gold",stock:-1,maxPerMonth:0,maxPerDay:0,claimLimit:"none",allowedTiers:[],isSale:false,enabled:true};
     const tmp=document.createElement("tbody");
     tmp.innerHTML=buildRow(ei,true);
     const nr=tmp.firstElementChild;

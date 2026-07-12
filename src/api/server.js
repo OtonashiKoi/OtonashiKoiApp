@@ -21,10 +21,12 @@ const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const { createPlayerCollectionRoutes } = require("./routes/playerCollectionRoutes");
 const { createPlayerForgeRoutes } = require("./routes/playerForgeRoutes");
 const { createPlayerEnchantRoutes } = require("./routes/playerEnchantRoutes");
+const { createSoloBossRoutes } = require("./routes/soloBossRoutes");
 const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
 const { createStoryRoutes } = require("./routes/storyRoutes");
 const { createMahjongRoutes } = require("./routes/mahjongRoutes");
 const { createEcpayRoutes } = require("./routes/ecpayRoutes");
+const { createMerchRoutes } = require("./routes/merchRoutes");
 const { serviceContext: sharedServiceContext } = require("../bot/runtimeContext");
 const config = require("../config");
 
@@ -129,10 +131,12 @@ function createApiServer(discordClient) {
   app.use(createPlayerCollectionRoutes(serviceContext));
   app.use(createPlayerForgeRoutes(serviceContext));
   app.use(createPlayerEnchantRoutes(serviceContext));
+  app.use(createSoloBossRoutes(serviceContext));
   app.use(createPlayerIdleRoutes(serviceContext));
   app.use(createStoryRoutes(serviceContext, discordClient));
   app.use(createMahjongRoutes());
   app.use(createEcpayRoutes(serviceContext));
+  app.use(createMerchRoutes(serviceContext));
 
   // === Web 前端 SPA 靜態服務 ===
   // equipmentGAME-app 經過 `npm run deploy` 後產出在 src/web/public/app/

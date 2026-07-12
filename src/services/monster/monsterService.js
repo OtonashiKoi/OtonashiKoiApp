@@ -40,7 +40,13 @@ function effectiveCalc(m) {
   const intStat = (typeof m.int === 'number' && !isNaN(m.int)) ? Math.max(0, m.int) : 0;
   // 敏影怪：dodgeBonus 可突破 AGI 迴避 cap 50（總迴避上限 75；命中公式 floor 20% 為最終保底）
   const dodgeBonus = (typeof m.dodgeBonus === 'number' && !isNaN(m.dodgeBonus)) ? Math.max(0, m.dodgeBonus) : 0;
+  // 格擋率：doc.blockChance(0~100) 有填就用。命中時觸發 → 傷害降至 1（玩家爆擊可穿防）；金錢怪等「必定格擋」設 100。
+  const blockChance = (typeof m.blockChance === 'number' && !isNaN(m.blockChance)) ? Math.min(100, Math.max(0, m.blockChance)) : 0;
+  // 每擊傷害上限：doc.incomingDamageCap>0 時，主攻擊/連擊每擊最多只扣這麼多（金錢袋怪設 1＝爆擊也只扣 1）
+  const incomingDamageCap = (typeof m.incomingDamageCap === 'number' && !isNaN(m.incomingDamageCap) && m.incomingDamageCap > 0) ? Math.max(1, Math.floor(m.incomingDamageCap)) : 0;
   return {
+    blockChance,
+    incomingDamageCap,
     maxHp: (typeof m.maxHp === 'number' && !isNaN(m.maxHp)) ? m.maxHp : derivedMaxHp,
     agi,
     int:   intStat,
@@ -76,7 +82,16 @@ class MonsterService {
   async listMonsters({ includeDisabled = false, zone = null } = {}) {
     const monsters = await this.monsterRepository.findAll();
     let list = includeDisabled ? monsters : monsters.filter((m) => m.enabled);
-    if (zone) list = list.filter((m) => (m.zone || "normal") === zone);
+    if (zone) {
+      // allZones 怪物（如金錢袋怪）出現在所有一般怪物區；世界王區（elite/dragon_king_lair/hellfire_depths）一律除外，
+      // 另可用 doc.allZonesExclude 逐區排除（如惡夢/深淵/神話終局區）。
+      const { isWorldBossZone } = require("../worldBoss/worldBossService");
+      const zoneIsWorldBoss = isWorldBossZone(zone);
+      list = list.filter((m) => {
+        const excluded = Array.isArray(m.allZonesExclude) && m.allZonesExclude.includes(zone);
+        return (m.allZones === true && !zoneIsWorldBoss && !excluded) || (m.zone || "normal") === zone;
+      });
+    }
     return list.map((m) => ({ ...m, calc: effectiveCalc(m) }));
   }
 

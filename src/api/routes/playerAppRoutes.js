@@ -1530,6 +1530,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 3.3b Use Item (bulk) — 一鍵批量使用同款純發放消耗品(金幣/鑽石/經驗袋)
+  router.post("/api/me/inventory/use-bulk", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId, displayName } = req.playerRecord;
+      const uuids = Array.isArray(req.body?.uuids) ? req.body.uuids : [];
+      const result = await serviceContext.shopService.useConsumableBulk(discordId, uuids, displayName);
+      res.json(ok(result));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // 3.4 Discard Item
   router.post("/api/me/inventory/discard/:uuid", requireAuth, async (req, res, next) => {
     try {
@@ -3330,6 +3342,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         nextMonster: nextMonsterSync,
         totalDamage,
         finalPlayerHp: Math.max(0, finalPlayerHp),
+        // 玩家本場「實際 MaxHP」(含戰鬥開始的隊伍光環 party_max_hp_up 等加成)→ 前端血條上限用這個,避免 current>顯示上限
+        playerMaxHp: Math.max(1, Math.round(Number(battlePStats.maxHp) || 0)),
         // 世界王:血條顯示「當前所打部位」的血量(非整隻王總血量);一般怪維持整隻血量
         finalMonsterHp: isWorldBoss ? Math.max(0, Math.round(worldBossPartHpCurrent)) : Math.max(0, mHp),
         // 進場瞬間怪物實際 HP 與滿血（共鬥怪可能非滿血，前端據此顯示血條）

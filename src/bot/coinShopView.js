@@ -32,6 +32,16 @@ function getTaipeiYearMonth() {
   return `${year}-${month}`;
 }
 
+// 台北今日日期鍵（YYYY-MM-DD），供「每日限購」徽章
+function getTaipeiDate() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TAIPEI_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+}
+
 // 等級由低到高
 const TIER_ORDER = ["E", "D", "C", "B", "A", "S", "SS"];
 
@@ -73,7 +83,7 @@ function formatCurrencyAmount(value) {
   return Number.isFinite(num) ? num.toLocaleString("en-US") : "0";
 }
 
-function formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet) {
+function formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet, dailyCount = {}, dk = "") {
   const badges = [];
   if (item.stock === 0) badges.push("❌售完");
   else if (item.stock > 0) badges.push(`📦${item.stock}`);
@@ -81,6 +91,11 @@ function formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet) {
     const used = (monthlyCount[item.id] || {})[ym] || 0;
     if (used >= item.maxPerMonth) badges.push("⛔上限");
     else if (used > 0) badges.push(`🔄${used}/${item.maxPerMonth}`);
+  }
+  if (item.maxPerDay > 0) {
+    const usedToday = (dailyCount[item.id] || {})[dk] || 0;
+    if (usedToday >= item.maxPerDay) badges.push(`⛔今日上限(${item.maxPerDay})`);
+    else badges.push(`📅今日 ${usedToday}/${item.maxPerDay}`);
   }
   if (item.claimLimit === "once_per_player" && claimedSet.has(item.id)) {
     badges.push("🎫已領");
@@ -92,8 +107,8 @@ function formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet) {
   return badges.length ? `  ${badges.join("  ")}` : "";
 }
 
-function buildShopItemLabel(item, playerTier, inventory, monthlyCount, ym, claimedSet) {
-  const badges = formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet);
+function buildShopItemLabel(item, playerTier, inventory, monthlyCount, ym, claimedSet, dailyCount = {}, dk = "") {
+  const badges = formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet, dailyCount, dk);
   const price = item.price === 0 ? "免費" : `${item.price} ${item.currency === "diamond" ? "💎 鑽石" : "💰 金幣"}`;
   const tierOk = canBuyTier(playerTier, item.allowedTiers);
   const base = `${item.currency === "diamond" ? "💎" : "💰"} ${item.name}`.slice(0, 60);
@@ -109,6 +124,8 @@ function createShopMainMessage(items, progress, activeCategory = "all", claimedI
   const ym = getTaipeiYearMonth();
   const inventory = progress?.inventory || [];
   const monthlyCount = progress?.shopMonthlyCount || {};
+  const dailyCount = progress?.shopDailyCount || {};
+  const dk = getTaipeiDate();
   const claimedSet = new Set(claimedItemIds || []);
   const goldBalance = formatCurrencyAmount(wallet?.gold ?? 0);
   const diamondBalance = formatCurrencyAmount(wallet?.diamond ?? 0);
@@ -171,7 +188,7 @@ function createShopMainMessage(items, progress, activeCategory = "all", claimedI
           const canBuy = canBuyTier(playerTier, item.allowedTiers) && item.stock !== 0 && !(item.claimLimit === "once_per_player" && claimedSet.has(item.id));
           return new ButtonBuilder()
             .setCustomId(shopBuyId(item.id))
-            .setLabel(buildShopItemLabel(item, playerTier, inventory, monthlyCount, ym, claimedSet))
+            .setLabel(buildShopItemLabel(item, playerTier, inventory, monthlyCount, ym, claimedSet, dailyCount, dk))
             .setStyle(canBuy ? ButtonStyle.Primary : ButtonStyle.Secondary)
             .setDisabled(!canBuy);
         })
@@ -214,7 +231,7 @@ function createShopMainMessage(items, progress, activeCategory = "all", claimedI
   const lines = pageItems.length
     ? pageItems.map((item, index) => {
         const price = item.price === 0 ? "免費" : `${item.price} ${item.currency === "diamond" ? "💎 鑽石" : "💰 金幣"}`;
-        const badges = formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet);
+        const badges = formatShopItemBadge(item, inventory, monthlyCount, ym, claimedSet, dailyCount, dk);
         const desc = item.description ? `\n   *${item.description}*` : "";
         return `${safePage * pageSize + index + 1}. **${item.name}** — ${price}${badges}${desc}`;
       })

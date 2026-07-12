@@ -9,6 +9,7 @@ const { WalletService } = require("./wallet/walletService");
 const { RewardService } = require("./reward/rewardService");
 const { CheckinService } = require("./checkin/checkinService");
 const { ShopService } = require("./shop/shopService");
+const { MerchService } = require("./merch/merchService");
 const { ItemService } = require("./item/itemService");
 const { PlayerTierService } = require("./playerTier/playerTierService");
 const { MonsterService } = require("./monster/monsterService");
@@ -119,6 +120,13 @@ function createServiceContext() {
     repositories.shopClaimRepository,
     repositories.streamAccountBindingRepository
   );
+  const merchService = new MerchService(
+    repositories.merchItemRepository,
+    repositories.merchOrderRepository,
+    walletService,
+    rewardService,
+    playerService
+  );
   const transactionService = new TransactionService(playerService, repositories.transactionRepository);
   const adminService = new AdminService(
     playerService,
@@ -183,6 +191,7 @@ function createServiceContext() {
     walletService,
     checkinService,
     shopService,
+    merchService,
     itemService,
     playerTierService,
     monsterService,

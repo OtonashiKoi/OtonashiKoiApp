@@ -8,6 +8,8 @@ const crypto = require("crypto");
 
 // 各 tier 裝備販售價格
 const TIER_SELL_PRICE = { D: 200, C: 500, B: 1000, A: 10000, S: 15000 };
+// 強化寶石售價（獨立低價，定位「清庫存」而非收入；不套用一般裝備的 TIER_SELL_PRICE）
+const GEM_SELL_PRICE = { D: 50, C: 150, B: 400, A: 1200, S: 3000 };
 
 // 分解：強化寶石 itemId（依階級）
 const GEM_ID_BY_TIER = {
@@ -29,12 +31,12 @@ function isProtectedSlotEntry(entry) {
   const slot = String(entry?.equipSlot || "");
   return slot === "anchor" || slot === "title_eq" || slot === "job_eq";
 }
-// 分解產物：裝備階級 → 強化寶石 × 數量（S→S 同階、A~C→降一階、D→D 保底；玩家預告 playerPanel 由此表動態產生）
+// 分解產物：裝備階級 → 同階強化寶石 × 1（D→D、C→C、B→B、A→A、S→S；玩家預告 playerPanel 由此表動態產生）
 const DISMANTLE_YIELD = {
   S: { tier: "S", count: 1 },
-  A: { tier: "B", count: 2 },
-  B: { tier: "C", count: 2 },
-  C: { tier: "D", count: 2 },
+  A: { tier: "A", count: 1 },
+  B: { tier: "B", count: 1 },
+  C: { tier: "C", count: 1 },
   D: { tier: "D", count: 1 },
 };
 const TAIPEI_TIME_ZONE = "Asia/Taipei";
@@ -329,7 +331,7 @@ class ShopService {
     return item;
   }
 
-  async createItem({ itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, claimLimit }) {
+  async createItem({ itemLibraryId, price, currency, stock, enabled, isSale, allowedTiers, maxPerMonth, maxPerDay, claimLimit }) {
     if (!itemLibraryId) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "請從道具庫選擇道具", 400);
     if (!this.itemRepository) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "itemRepository 未初始化", 500);
     const libraryItem = await this.itemRepository.findById(itemLibraryId);
@@ -346,6 +348,7 @@ class ShopService {
       isSale: Boolean(isSale),
       allowedTiers: Array.isArray(allowedTiers) ? allowedTiers.map(String).filter(Boolean) : [],
       maxPerMonth: Math.max(0, Number(maxPerMonth) || 0),
+      maxPerDay: Math.max(0, Number(maxPerDay) || 0),
       claimLimit: this._normalizeClaimLimit(claimLimit),
       itemType: libraryItem.itemType || "consumable",
       effect: libraryItem.effect || { type: "none", value: 0 },
@@ -399,6 +402,7 @@ class ShopService {
     if (fields.isSale !== undefined) updated.isSale = Boolean(fields.isSale);
     if (fields.allowedTiers !== undefined) updated.allowedTiers = Array.isArray(fields.allowedTiers) ? fields.allowedTiers.map(String).filter(Boolean) : [];
     if (fields.maxPerMonth !== undefined) updated.maxPerMonth = Math.max(0, Number(fields.maxPerMonth) || 0);
+    if (fields.maxPerDay !== undefined) updated.maxPerDay = Math.max(0, Number(fields.maxPerDay) || 0);
     if (fields.claimLimit !== undefined) updated.claimLimit = this._normalizeClaimLimit(fields.claimLimit);
     if (fields.imageUrl !== undefined) updated.imageUrl = fields.imageUrl || null;
     if (fields.imageThumbnailUrl !== undefined) updated.imageThumbnailUrl = fields.imageThumbnailUrl || null;
@@ -439,6 +443,17 @@ class ShopService {
     const year = parts.find((part) => part.type === "year")?.value || "0000";
     const month = parts.find((part) => part.type === "month")?.value || "00";
     return `${year}-${month}`;
+  }
+
+  // 台北時區今日日期鍵（YYYY-MM-DD），供「每日限購」(maxPerDay) 計數用
+  _currentTaipeiDate() {
+    // en-CA 格式即 YYYY-MM-DD
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: TAIPEI_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date());
   }
 
   async purchase(discordId, displayName, itemId, memberRoleIds = [], quantity = 1) {
@@ -513,6 +528,17 @@ class ShopService {
       }
     }
 
+    // 每日限購（maxPerDay）：以台北日期為界，隔日重置
+    const maxPerDay = item.maxPerDay || 0;
+    if (maxPerDay > 0) {
+      const dk = this._currentTaipeiDate();
+      const dcounts = (progress?.shopDailyCount || {});
+      const usedToday = (dcounts[itemId] || {})[dk] || 0;
+      if (usedToday + quantity > maxPerDay) {
+        throw new AppError(ERROR_CODES.FORBIDDEN, `此商品今日購買已達上限（今日已購 ${usedToday}/${maxPerDay}，明日重置）`, 403);
+      }
+    }
+
     // 背包持有上限（maxOwn）：限定類消耗品（如爬塔藥水）每種最多持有 N 罐
     const maxOwn = item.maxOwn || 0;
     if (maxOwn > 0 && progress) {
@@ -547,6 +573,12 @@ class ShopService {
         const ym = this._currentYearMonth();
         if (!progress.shopMonthlyCount[itemId]) progress.shopMonthlyCount[itemId] = {};
         progress.shopMonthlyCount[itemId][ym] = ((progress.shopMonthlyCount[itemId][ym] || 0) + quantity);
+      }
+      if ((item.maxPerDay || 0) > 0) {
+        if (!progress.shopDailyCount) progress.shopDailyCount = {};
+        const dk = this._currentTaipeiDate();
+        if (!progress.shopDailyCount[itemId]) progress.shopDailyCount[itemId] = {};
+        progress.shopDailyCount[itemId][dk] = ((progress.shopDailyCount[itemId][dk] || 0) + quantity);
       }
       // 添加 quantity 個物品到背包
       const _itemId = item.itemLibraryId || item.id;
@@ -960,6 +992,100 @@ class ShopService {
     return { itemName: savedEntry.itemName, effectDesc: savedEffectDesc, chestReward: savedChestReward };
   }
 
+  /**
+   * 一鍵批量使用同一種「純發放型」消耗品：一次消耗多個、效果加總、只發放一次。
+   * 支援 grant_gold / grant_diamond / grant_exp（全用）與 add_backpack_slots（依剩餘空間只用得到的量、不浪費）。
+   * 寶箱/卡包(開箱揭曉)、藥水/屬性重製等需逐一結算的道具不走批量。
+   */
+  async useConsumableBulk(discordId, uuids, displayName) {
+    const CURRENCY_EFFECTS = new Set(["grant_gold", "grant_diamond", "grant_exp"]);
+    const BULK_SAFE = new Set([...CURRENCY_EFFECTS, "add_backpack_slots"]);
+    const uuidList = [...new Set((Array.isArray(uuids) ? uuids : []).map((s) => String(s).trim()).filter(Boolean))];
+    if (uuidList.length === 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "沒有指定要使用的物品", 400);
+
+    const CAS_MAX_RETRIES = 8;
+    let out = null;
+    let casSuccess = false;
+    await withPlayerProgressLock(discordId, async () => {
+      for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
+        const progress = await this.progressRepository.findByPlayerId(discordId);
+        if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+        const inv = Array.isArray(progress.inventory) ? progress.inventory : [];
+        const isMatch = (e) => uuidList.some((u) => this._matchesInventoryEntryRef(e, u));
+        const matched = inv.filter(isMatch);
+        if (matched.length === 0) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到這些物品", 404);
+        const first = matched[0];
+        const effType = String(first.itemEffect?.type || "");
+        if ((first.itemType || "consumable") !== "consumable" || !BULK_SAFE.has(effType)) {
+          throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不支援一鍵批量使用", 400);
+        }
+        if (!matched.every((e) => e.itemId === first.itemId && String(e.itemEffect?.type || "") === effType)) {
+          throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "一次只能批量使用同一種物品", 400);
+        }
+        const perValue = Number(first.itemEffect?.value) || 0;
+        let availCount = 0;
+        for (const e of matched) availCount += Math.max(1, Number(e.stackCount) || 1);
+
+        // 決定實際要消耗幾個：純發放型全用；背包擴充依「剩餘空間」只用得到的量(不浪費)
+        let useCount = availCount;
+        if (effType === "add_backpack_slots") {
+          const bp = require("../backpack/backpackService");
+          const eff = await bp.resolveEffectiveCapacity(discordId).catch(() => null);
+          const room = eff ? Math.max(0, bp.MAX_CAPACITY - eff.cap) : 0;
+          const per = perValue > 0 ? perValue : (bp.SLOTS_PER_PURCHASE || 20);
+          useCount = Math.max(0, Math.min(availCount, Math.ceil(room / per)));
+          if (useCount <= 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `背包已達上限 ${bp.MAX_CAPACITY} 格，無法再擴充`, 400);
+        }
+
+        // 依 useCount 從 matched 逐件累加 stackCount，選出要移除/部分扣減的 entry
+        const toRemove = new Set();
+        let partialUuid = null, partialKeep = 0, acc = 0;
+        for (const e of matched) {
+          if (acc >= useCount) break;
+          const sc = Math.max(1, Number(e.stackCount) || 1);
+          const need = useCount - acc;
+          if (sc <= need) { toRemove.add(String(e.uuid)); acc += sc; }
+          else { partialUuid = String(e.uuid); partialKeep = sc - need; acc += need; }
+        }
+        const nextInv = [];
+        for (const e of inv) {
+          const u = String(e.uuid);
+          if (toRemove.has(u)) continue;
+          if (u === partialUuid) { nextInv.push({ ...e, stackCount: partialKeep }); continue; }
+          nextInv.push({ ...e });
+        }
+        const next = { ...progress, inventory: nextInv, updatedAt: new Date().toISOString() };
+        const saved = await this._saveProgressWithFallback(next, progress.updatedAt);
+        if (saved) {
+          out = { itemId: first.itemId, itemName: first.itemName || first.name || "道具", effType, useCount, perValue };
+          casSuccess = true;
+          break;
+        }
+        if (attempt < CAS_MAX_RETRIES - 1) await new Promise((r) => setTimeout(r, 10 * (attempt + 1)));
+      }
+    });
+    if (!casSuccess || !out) throw new AppError(ERROR_CODES.INTERNAL_ERROR, "批量使用失敗，請稍後再試", 500);
+
+    const dn = displayName || "";
+    const totalValue = out.perValue * out.useCount;
+    let effectDesc = "";
+    if (out.effType === "grant_gold") {
+      await this.rewardService.grantCurrency({ discordId, displayName: dn, currencyType: "gold", amount: totalValue, source: CURRENCY_SOURCES.ITEM_USE, operator: "shop:use-item-bulk" });
+      effectDesc = `💰 +${totalValue} 金幣`;
+    } else if (out.effType === "grant_diamond") {
+      await this.rewardService.grantCurrency({ discordId, displayName: dn, currencyType: "diamond", amount: totalValue, source: CURRENCY_SOURCES.ITEM_USE, operator: "shop:use-item-bulk" });
+      effectDesc = `💎 +${totalValue} 鑽石`;
+    } else if (out.effType === "grant_exp" && this.progressService) {
+      await this.progressService.grantExp({ discordId, displayName: dn, amount: totalValue, source: EXP_SOURCES.ITEM_USE_EXP });
+      effectDesc = `✨ +${totalValue} 經驗值`;
+    } else if (out.effType === "add_backpack_slots") {
+      const bp = require("../backpack/backpackService");
+      const r = await bp.grantSlots(discordId, totalValue).catch(() => null);
+      effectDesc = r ? `🎒 本季背包 +${r.added} 格（目前上限 ${r.capacity}）` : "🎒 背包擴充";
+    }
+    return { itemName: out.itemName, count: out.useCount, totalValue, effectType: out.effType, effectDesc };
+  }
+
   // 世界王寶箱抽獎：讀該世界王怪物的即時掉落表，依 chance 權重抽一份，建成背包 entry
   /**
    * 大史王寶箱限定：先機/後勢各 3% 唯一傳說錨點。抽中一件即回傳其背包 entry；否則 null（走一般掉落）。
@@ -1209,11 +1335,8 @@ class ShopService {
     if (refEntry.itemType === "job_badge" || refEntry.equipSlot === "job_eq") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章不可販售", 400);
     }
-    // 強化寶石不可販售（只能用於強化裝備）
-    if (isGemEntry(refEntry)) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石不可販售，只能用於強化裝備", 400);
-    }
-    // 一般裝備一律走分解、不可販售（怪物卡仍可賣；強化寶石已於上方擋下）
+    const isGem = isGemEntry(refEntry);
+    // 一般裝備一律走分解、不可販售（怪物卡、強化寶石可賣）
     const isMonsterCard = refEntry.itemType === "monster_card" || refEntry.monsterCardOf || /^special/.test(String(refEntry.equipSlot || ""));
     if (refEntry.itemType === "equipment" && !isMonsterCard) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "裝備不可販售，請改用「分解」取得強化寶石", 400);
@@ -1225,7 +1348,7 @@ class ShopService {
       const libItem = await this.itemRepository.findById(refEntry.itemId).catch(() => null);
       tier = libItem?.tier ? String(libItem.tier).toUpperCase() : null;
     }
-    const price = TIER_SELL_PRICE[tier] ?? null;
+    const price = isGem ? (GEM_SELL_PRICE[tier] ?? null) : (TIER_SELL_PRICE[tier] ?? null);
     if (price === null) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品沒有設定階級，無法販售", 400);
 
     const stackCount = refEntry.stackCount || 1;
@@ -1299,7 +1422,7 @@ class ShopService {
     });
   }
 
-  // 分解裝備：移除該裝備，50% 機率產出降階強化寶石（取代舊「丟棄」）
+  // 分解裝備：移除該裝備，50% 機率產出同階強化寶石（取代舊「丟棄」）
   // 怪物卡不可分解；分解失敗時裝備照樣消失但無產物
   async discardItem(discordId, entryUuid) {
     // 上鎖序列化：避免並發分解同一裝備，造成「裝備只扣一件卻產出兩份寶石」的複製。
@@ -1393,7 +1516,7 @@ class ShopService {
   }
 
   // 批量分解：把「同款、未強化(enhanceLevel 0)、非怪物卡」的同 itemId 裝備一起分解。
-  // 每件獨立判定 50% 機率產出降階寶石，一次讀寫存檔。
+  // 每件獨立判定 50% 機率產出同階寶石，一次讀寫存檔。
   async discardItemBulk(discordId, entryUuid, qty = 0) {
     // 上鎖序列化：避免並發批量分解複製寶石。
     return withPlayerProgressLock(discordId, async () => {

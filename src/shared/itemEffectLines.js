@@ -58,6 +58,20 @@ function buildItemEffectLines(lib) {
       lines.push(`✦ ${TRIGGER_ZH[trigger] || trigger}：${body}${chanceText}`);
     }
   }
+  // 職業徽章主動技能（踢到桌腳/死亡意志等）— DC 個人資料有列，網頁比照補上，
+  // 讓玩家不用把徽章裝上去再開 DC 才看得到技能詳情。
+  const jobSkills = Array.isArray(lib?.jobSkills) ? lib.jobSkills : [];
+  if (jobSkills.length > 0) {
+    lines.push(`⚔️ 主動技能（每回合約 35% 從可用技能中發動 1 個）：`);
+    for (const sk of jobSkills) {
+      if (!sk?.name) continue;
+      const cd = Number(sk.cooldownTurns) > 0 ? `（CD ${sk.cooldownTurns} 回合）` : "";
+      const wt = sk?.condition?.weaponType;
+      const need = wt ? `〔需${Array.isArray(wt) ? wt.join("/") : wt}〕` : "";
+      const desc = sk.description ? String(sk.description).trim() : "";
+      lines.push(`・${sk.name}${need}：${desc}${cd}`);
+    }
+  }
   return lines;
 }
 

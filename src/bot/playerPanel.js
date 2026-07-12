@@ -977,6 +977,8 @@ async function handleCheckinStatus(interaction) {
 }
 
 const TIER_SELL_PRICE = { D: 200, C: 500, B: 1000, A: 10000 };
+// 強化寶石售價（與 shopService.GEM_SELL_PRICE 同步；獨立低價）
+const GEM_SELL_PRICE = { D: 50, C: 150, B: 400, A: 1200, S: 3000 };
 
 // 背包項目圖片快取(itemId → imageUrl)。inventory 快照沒帶 imageUrl，
 // 在開背包時 warm 一次，buildInventoryRow 同步讀它補上「🖼️ 查看」按鈕(含圖片收藏品)。
@@ -1034,7 +1036,7 @@ function buildInventoryRow(e, idx) {
         .setStyle(ButtonStyle.Danger)
     );
   }
-  // 怪物卡不可分解；其餘裝備：分解（50% 機率拆成降階強化寶石）
+  // 怪物卡不可分解；其餘裝備：分解（50% 機率拆成同階強化寶石）
   const isMonsterCard = e.itemType === "monster_card" || e.monsterCardOf || /^special/.test(String(e.equipSlot || ""));
   // 可分解＝一般裝備（非寶石、非消耗品、非怪物卡）
   const isDismantleable = !isEnhanceGem && itemType !== "consumable" && !isMonsterCard;
@@ -1051,7 +1053,8 @@ function buildInventoryRow(e, idx) {
   // 販售按鈕：只給「不能分解」但有 tier 的道具（怪物卡）；
   // 一般裝備一律走分解、強化寶石不可販售(只能強化)、皆不提供販售鈕。
   const _isGem = isGemEntryForSell(e);
-  const sellPrice = (e.tier && !_isGem) ? TIER_SELL_PRICE[String(e.tier).toUpperCase()] : null;
+  const _tierU = String(e.tier || "").toUpperCase();
+  const sellPrice = _isGem ? (GEM_SELL_PRICE[_tierU] ?? null) : (e.tier ? TIER_SELL_PRICE[_tierU] : null);
   if (sellPrice != null && !isDismantleable) {
     btns.push(
       new ButtonBuilder()
@@ -1266,7 +1269,7 @@ function groupEquipmentItems(items, tab) {
 
     if (!groups.has(key)) {
       const _isGemGrp = isGemEntryForSell(entry);
-      const sellPrice = (tier && !_isGemGrp) ? TIER_SELL_PRICE[tier] : null;
+      const sellPrice = _isGemGrp ? (GEM_SELL_PRICE[tier] ?? null) : (tier ? TIER_SELL_PRICE[tier] : null);
       groups.set(key, {
         key,
         repUuid: entry.uuid,
@@ -1331,7 +1334,7 @@ function buildEquipmentGroupRow(group, idx, opts = {}) {
   const isDismantleable = hasValidTierForSplit && !isMonsterCard && !isJobBadge && !isTitle;
 
   if (isDismantleable) {
-    // 一般裝備：只給分解（50% 機率拆成降階強化寶石），不再販售
+    // 一般裝備：只給分解（50% 機率拆成同階強化寶石），不再販售
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_discard:${group.repUuid}:${tab}:${subTab}:${page}`)
@@ -2115,7 +2118,7 @@ async function handleBackpackAction(interaction, action, uuid, tab = "item", pag
     if (slot === "title_eq") warns.push("這是**稱號**");
     if (hasFx) warns.push("帶有**特效**");
     const warnLine = warns.length ? `\n\n🚨 **注意：${warns.join("、")}**，分解後就沒了！` : "";
-    // 分解產物預告（裝備才有；50% 機率產出，產物階級依 shopService.DISMANTLE_YIELD 為準：S→S、A→B、B→C、C→D、D→D）
+    // 分解產物預告（裝備才有；50% 機率產出，產物階級依 shopService.DISMANTLE_YIELD 為準：同階 D→D/C→C/B→B/A→A/S→S）
     const tierU = String(entry.tier || "").toUpperCase();
     const isEquip = entry.itemType === "equipment";
     const _dY = DISMANTLE_YIELD[tierU];
