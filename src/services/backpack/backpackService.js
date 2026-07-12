@@ -42,10 +42,24 @@ function capForTier(rank) {
   return CAPACITY_BY_TIER[rank] || NON_MEMBER_CAP;
 }
 
-/** 目前背包裡「裝備」數量（佔格數）。 */
+// 佔背包容量的「主要穿戴裝備」槽位；卡片(special)/錨點/職業徽章/稱號等收藏‧功能格不佔容量。
+const CAPACITY_GEAR_SLOTS = new Set([
+  "head_top", "head_mid", "head_low", "armor", "weapon", "shield",
+  "garment", "shoes", "accessory_l", "accessory_r"
+]);
+/** 這件是否佔背包容量（只有主要穿戴裝備算；卡片/錨點/徽章/稱號、素材/寶石/蛋等不算）。 */
+function countsTowardCapacity(e) {
+  if (!e || e.itemType !== "equipment") return false;
+  const slot = String(e.equipSlot || "");
+  if (slot.startsWith("special") || slot === "anchor" || slot === "job_eq" || slot === "title_eq") return false;
+  if (e.isNpcCard || e.monsterCardOf || e.monsterCardSkill) return false; // 卡片保險判定
+  return CAPACITY_GEAR_SLOTS.has(slot) || (!slot); // 有槽位就依清單；無槽位的舊資料保守算佔格
+}
+
+/** 目前背包裡「佔格裝備」數量。 */
 function countEquipment(inventory) {
   if (!Array.isArray(inventory)) return 0;
-  return inventory.filter((e) => e && e.itemType === "equipment").length;
+  return inventory.filter(countsTowardCapacity).length;
 }
 
 /**
@@ -110,13 +124,12 @@ function invalidate(discordId) { _cache.delete(discordId); }
  */
 async function resolveEffectiveCapacity(discordId, wallet = null) {
   const { tier, cap: tierCap, label } = await resolveCapacity(discordId);
-  let bonus = Number(wallet?.bonusBackpackSlots) || 0;
-  if (!wallet) {
-    const w = await serviceContext.walletRepository.findByPlayerId(discordId).catch(() => null);
-    bonus = Number(w?.bonusBackpackSlots) || 0;
-  }
-  const cap = effectiveCap(tierCap, bonus);
-  return { tier, tierCap, bonusSlots: bonus, cap, label, canBuyMore: cap < MAX_CAPACITY };
+  let w = wallet;
+  if (!w) w = await serviceContext.walletRepository.findByPlayerId(discordId).catch(() => null);
+  const bonus = Number(w?.bonusBackpackSlots) || 0;   // 花鑽永久格
+  const season = Number(w?.seasonBackpackSlots) || 0; // 賽季格（圖鑑券等，換季清零）
+  const cap = effectiveCap(tierCap, bonus + season);
+  return { tier, tierCap, bonusSlots: bonus, seasonSlots: season, cap, label, canBuyMore: cap < MAX_CAPACITY };
 }
 
 /**
@@ -130,7 +143,8 @@ async function purchaseSlots(discordId) {
 
   const { cap: tierCap, tier } = await resolveCapacity(discordId);
   const curBonus = Number(wallet.bonusBackpackSlots) || 0;
-  if (effectiveCap(tierCap, curBonus) >= MAX_CAPACITY) {
+  const curSeason = Number(wallet.seasonBackpackSlots) || 0;
+  if (effectiveCap(tierCap, curBonus + curSeason) >= MAX_CAPACITY) {
     throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `背包已達上限 ${MAX_CAPACITY} 格，無法再擴充`, 400);
   }
   if ((Number(wallet.diamond) || 0) < DIAMOND_COST_PER_PURCHASE) {
@@ -142,13 +156,36 @@ async function purchaseSlots(discordId) {
 
   const newBonus = Number(updated.bonusBackpackSlots) || 0;
   return {
-    capacity: effectiveCap(tierCap, newBonus),
+    capacity: effectiveCap(tierCap, newBonus + curSeason),
     bonusSlots: newBonus,
     diamond: Number(updated.diamond) || 0,
     tier,
     tierCap,
     maxCapacity: MAX_CAPACITY,
   };
+}
+
+/**
+ * 純發放背包格（不扣鑽；消耗品/獎勵用）。自動封頂到 MAX_CAPACITY。
+ * @returns {Promise<{ capacity:number, bonusSlots:number, added:number, maxCapacity:number }>}
+ */
+async function grantSlots(discordId, slots = SLOTS_PER_PURCHASE) {
+  const walletRepo = serviceContext.walletRepository;
+  const wallet = await walletRepo.findByPlayerId(discordId);
+  if (!wallet) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "找不到錢包資料", 404);
+  const { cap: tierCap } = await resolveCapacity(discordId);
+  const curBonus = Number(wallet.bonusBackpackSlots) || 0;
+  const curSeason = Number(wallet.seasonBackpackSlots) || 0;
+  const curCap = effectiveCap(tierCap, curBonus + curSeason);
+  const room = Math.max(0, MAX_CAPACITY - curCap);
+  const add = Math.max(0, Math.min(Number(slots) || 0, room));
+  if (add <= 0) {
+    return { capacity: curCap, seasonSlots: curSeason, added: 0, maxCapacity: MAX_CAPACITY };
+  }
+  const updated = await walletRepo.grantBackpackSlots(discordId, add); // 加到賽季格
+  const newSeason = Number(updated?.seasonBackpackSlots) || (curSeason + add);
+  invalidate(discordId);
+  return { capacity: effectiveCap(tierCap, curBonus + newSeason), seasonSlots: newSeason, added: add, maxCapacity: MAX_CAPACITY };
 }
 
 module.exports = {
@@ -160,6 +197,8 @@ module.exports = {
   capForTier,
   effectiveCap,
   countEquipment,
+  countsTowardCapacity,
+  grantSlots,
   resolveCapacity,
   resolveEffectiveCapacity,
   purchaseSlots,

@@ -17,9 +17,21 @@ const GEM_ID_BY_TIER = {
   A: "a6ae293d-52fc-4af5-8770-891ddf842e35",
   S: "gem-s-tier",
 };
-// 分解產物：裝備階級 → 降一階寶石 × 數量（D 為最低，給 1 顆 D 寶石保底）
+// 強化寶石本身不可分解（分解只吃裝備；寶石送進來會無產物卻照樣被移除＝白白消失）
+const GEM_ID_SET = new Set(Object.values(GEM_ID_BY_TIER));
+function isGemEntry(entry) {
+  return !!entry && (GEM_ID_SET.has(entry.itemId) || entry.itemType === "gem");
+}
+// 特殊/收藏槽位不可分解：錨點(唯一傳說)、稱號、職業徽章。
+// （special 卡由 _isMonsterCardEntry 另外擋）這些是 itemType==="equipment" 但珍貴/功能性，
+// 原本會被當一般裝分解掉（錨點 S 階 → 變 A 寶石、稱號 → 直接消失）。
+function isProtectedSlotEntry(entry) {
+  const slot = String(entry?.equipSlot || "");
+  return slot === "anchor" || slot === "title_eq" || slot === "job_eq";
+}
+// 分解產物：裝備階級 → 強化寶石 × 數量（S→S 同階、A~C→降一階、D→D 保底；玩家預告 playerPanel 由此表動態產生）
 const DISMANTLE_YIELD = {
-  S: { tier: "A", count: 1 },
+  S: { tier: "S", count: 1 },
   A: { tier: "B", count: 2 },
   B: { tier: "C", count: 2 },
   C: { tier: "D", count: 2 },
@@ -159,7 +171,7 @@ class ShopService {
   _findBulkSellMatches(inventory, refEntry, entryUuid) {
     const refSignature = this._getBulkSellSignature(refEntry);
     const matches = (Array.isArray(inventory) ? inventory : [])
-      .filter((entry) => this._getBulkSellSignature(entry) === refSignature);
+      .filter((entry) => !entry?.locked && this._getBulkSellSignature(entry) === refSignature);
     return matches.sort((a, b) => {
       const aIsRef = this._matchesInventoryEntryRef(a, entryUuid) ? 0 : 1;
       const bIsRef = this._matchesInventoryEntryRef(b, entryUuid) ? 0 : 1;
@@ -651,6 +663,10 @@ class ShopService {
       if (ENHANCE_GEM_IDS.has(entry.itemId)) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石只能用於強化裝備，無法直接使用", 400);
       }
+      // 附魔重骰藥水不能直接使用(其效果需指定裝備目標；直接用會被當無效果消耗＝浪費)。請在「裝備」上重骰。
+      if (entry.itemId === "enchant_reroll_potion" || String(entry.itemEffect?.type || "") === "reroll_enchant") {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "附魔重骰藥水請在「裝備」上使用（裝備詳情 → 重骰附魔），不能直接使用", 400);
+      }
 
       const effect = entry.itemEffect || { type: "none", value: 0 };
       const useEffects = Array.isArray(entry.useEffects) ? entry.useEffects : [];
@@ -892,6 +908,16 @@ class ShopService {
     } else if (savedEffect.type === "grant_exp" && this.progressService) {
       await this.progressService.grantExp({ discordId, displayName: dn, amount: savedEffect.value, source: EXP_SOURCES.ITEM_USE_EXP });
       savedEffectDesc = `✨ +${savedEffect.value} 經驗值`;
+    } else if (savedEffect.type === "add_backpack_slots") {
+      const slots = Math.max(1, Number(savedEffect.value) || 20);
+      try {
+        const r = await require("../backpack/backpackService").grantSlots(discordId, slots);
+        savedEffectDesc = r.added > 0
+          ? `🎒 本季背包 +${r.added} 格（目前上限 ${r.capacity}，換季歸零）`
+          : `🎒 背包已達上限 ${r.maxCapacity} 格，無法再擴充`;
+      } catch (e) {
+        savedEffectDesc = "🎒 背包擴充失敗，請稍後再試";
+      }
     }
 
     if (savedUseEffects.length > 0) {
@@ -965,7 +991,7 @@ class ShopService {
       const tc = require("../../shared/announceTownChat");
       const who = await tc.resolveDiscordName(discordId).catch(() => "某位勇者");
       tc.announceTownChat(
-        `📦✨ **${who}** 開啟大史王寶箱，獲得傳說錨點【**${item.name}**】！全服唯一，得來不易！`
+        `📦✨ **${who}** 開啟大史王寶箱，獲得傳說錨點【**${item.name}**】！得來不易！`
       ).catch(() => {});
       return { entry };
     }
@@ -1146,6 +1172,7 @@ class ShopService {
       const idx = this._findInventoryIndexForAction(progress, entryUuid);
       if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
       const entry = progress.inventory[idx];
+      if (entry.locked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備已鎖定，請先解鎖再出售", 400);
       // 堆疊型（強化石等消耗品）：賣 1 顆只扣 stackCount，不可整疊刪除
       const stackCount = Number(entry.stackCount || 1);
       if (stackCount > 1) {
@@ -1182,7 +1209,11 @@ class ShopService {
     if (refEntry.itemType === "job_badge" || refEntry.equipSlot === "job_eq") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章不可販售", 400);
     }
-    // 一般裝備一律走分解、不可販售（怪物卡 / 強化寶石(消耗品) 仍可賣）
+    // 強化寶石不可販售（只能用於強化裝備）
+    if (isGemEntry(refEntry)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石不可販售，只能用於強化裝備", 400);
+    }
+    // 一般裝備一律走分解、不可販售（怪物卡仍可賣；強化寶石已於上方擋下）
     const isMonsterCard = refEntry.itemType === "monster_card" || refEntry.monsterCardOf || /^special/.test(String(refEntry.equipSlot || ""));
     if (refEntry.itemType === "equipment" && !isMonsterCard) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "裝備不可販售，請改用「分解」取得強化寶石", 400);
@@ -1227,6 +1258,7 @@ class ShopService {
 
       const refEntry = this._findInventoryEntryForAction(progress, entryUuid);
       if (!refEntry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+      if (refEntry.locked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備已鎖定，請先解鎖再出售", 400);
 
       const stackCount = refEntry.stackCount || 1;
       const sellCount = quote.sellCount;
@@ -1278,6 +1310,10 @@ class ShopService {
       if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
       const entry = progress.inventory[idx];
 
+      // 已鎖定的裝備不可分解/丟棄（玩家保留用；先解鎖才能處理）
+      if (entry.locked) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備已鎖定，請先解鎖再分解／丟棄", 400);
+      }
       // 怪物卡不可分解（背包中卡片可能 itemType=equipment，但帶 monsterCardOf 或 special 槽）
       if (this._isMonsterCardEntry(entry)) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "怪物卡無法分解", 400);
@@ -1285,6 +1321,14 @@ class ShopService {
       // 靈魂綁定道具不可丟棄/分解（例：繫・初鳴之晶）
       if (isBoundItemId(entry.itemId)) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品為靈魂綁定，無法分解丟棄", 400);
+      }
+      // 強化寶石不可分解
+      if (isGemEntry(entry)) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石無法分解", 400);
+      }
+      // 錨點/稱號/職業徽章不可分解（珍貴收藏‧功能裝）
+      if (isProtectedSlotEntry(entry)) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "錨點／稱號／職業徽章無法分解", 400);
       }
 
       const tier = String(entry.tier || "").toUpperCase();
@@ -1316,6 +1360,38 @@ class ShopService {
     });
   }
 
+  /**
+   * 切換背包裝備的「鎖定」狀態（鎖定後不可分解/丟棄/出售，避免誤刪保留的好附魔件）。
+   * @returns {Promise<{ uuid:string, itemName:string, locked:boolean }>}
+   */
+  async toggleItemLock(discordId, entryUuid, want = null) {
+    return withPlayerProgressLock(discordId, async () => {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+
+      // 先找背包，找不到再找「身上已裝備」(equipment[slot])——已裝備的也要能直接鎖，不用先卸下
+      const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
+      let entry = idx !== -1 ? progress.inventory[idx] : null;
+      let equippedSlot = null;
+      if (!entry) {
+        const eq = progress.equipment || {};
+        for (const [slot, e] of Object.entries(eq)) {
+          if (e && String(e.uuid || "") === String(entryUuid)) { entry = e; equippedSlot = slot; break; }
+        }
+      }
+      if (!entry) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+      if (entry.itemType !== "equipment") {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有裝備可以鎖定", 400);
+      }
+      const next = (want === null || want === undefined) ? !entry.locked : Boolean(want);
+      if (equippedSlot) progress.equipment[equippedSlot] = { ...entry, locked: next };
+      else progress.inventory[idx] = { ...entry, locked: next };
+      progress.updatedAt = new Date().toISOString();
+      await this.progressRepository.save(progress);
+      return { uuid: entry.uuid, itemName: entry.itemName, locked: next };
+    });
+  }
+
   // 批量分解：把「同款、未強化(enhanceLevel 0)、非怪物卡」的同 itemId 裝備一起分解。
   // 每件獨立判定 50% 機率產出降階寶石，一次讀寫存檔。
   async discardItemBulk(discordId, entryUuid, qty = 0) {
@@ -1326,8 +1402,11 @@ class ShopService {
     const inv = Array.isArray(progress.inventory) ? progress.inventory : [];
     const ref = inv.find((e) => this._matchesInventoryEntryRef(e, entryUuid));
     if (!ref) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
+    if (ref.locked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備已鎖定，請先解鎖再分解", 400);
     if (this._isMonsterCardEntry(ref)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "怪物卡無法分解", 400);
     if (isBoundItemId(ref.itemId)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品為靈魂綁定，無法分解丟棄", 400);
+    if (isGemEntry(ref)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石無法分解", 400);
+    if (isProtectedSlotEntry(ref)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "錨點／稱號／職業徽章無法分解", 400);
 
     // 收集同款、未強化、非怪物卡的裝備索引
     const refItemId = ref.itemId;
@@ -1337,9 +1416,10 @@ class ShopService {
       if (this._isMonsterCardEntry(e)) return;
       if (e.itemId !== refItemId) return;
       if (Number(e.enhanceLevel || 0) !== 0) return;
+      if (e.locked) return;                                 // 鎖定件不批量分解（保留）
       matchIdx.push(i);
     });
-    if (matchIdx.length === 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "沒有可分解的同款未強化裝備", 400);
+    if (matchIdx.length === 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "沒有可分解的同款未強化裝備（鎖定件已排除）", 400);
 
     const take = qty > 0 ? Math.min(qty, matchIdx.length) : matchIdx.length;
     const tier = String(ref.tier || "").toUpperCase();
@@ -1575,7 +1655,7 @@ class ShopService {
     // 套用目標分頁的裝備
     const inventory = progress.inventory || [];
     const savedPreset = progress.equipPresets[targetPreset] || {};
-    const ALL_SLOTS = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r","title_eq","job_eq","special_1","special_2","special_3"];
+    const ALL_SLOTS = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r","title_eq","job_eq","special_1","special_2","special_3","anchor"];
 
     // 先把目前全部裝備卸回背包
     for (const slot of ALL_SLOTS) {
@@ -1856,4 +1936,4 @@ class ShopService {
   }
 }
 
-module.exports = { ShopService };
+module.exports = { ShopService, isGemEntry, DISMANTLE_YIELD };

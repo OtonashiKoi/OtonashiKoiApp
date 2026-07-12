@@ -162,9 +162,9 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
         ...sc,
         memberCount,
         memberProgress,                 // 會員里程碑進度
-        activeBuff: {                   // 目前生效總加成（底盤+短期）
+        activeBuff: {                   // 目前生效總加成（底盤 + 斗內/手動短期 + 觀看熱度，三桶相加）
           dropPct: mods.dropPct, goldPct: mods.goldPct, expPct: mods.expPct,
-          permanent: mods.permanent, shortTerm: mods.shortTerm,
+          permanent: mods.permanent, shortTerm: mods.shortTerm, viewer: mods.viewer,
         },
       }));
     } catch (err) { next(err); }

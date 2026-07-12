@@ -6,8 +6,8 @@
  *     body { uuid, bulk: true, qty? }   同款未強化批量分解（shopService.discardItemBulk，同 DC 批量分解按鈕）
  *     body { uuids: [uuid, ...] }       多件逐一分解（每件獨立判定，單件失敗不中斷其他）
  *
- * 產物規則完全由 shopService 決定（50% 機率產出降階強化寶石；
- * S→1 顆 A 階、A→2 顆 B 階、B→2 顆 C 階、C→2 顆 D 階、D→1 顆 D 階；怪物卡不可分解）。
+ * 產物規則完全由 shopService.DISMANTLE_YIELD 決定（50% 機率產出強化寶石；
+ * S→1 顆 S 階、A→2 顆 B 階、B→2 顆 C 階、C→2 顆 D 階、D→1 顆 D 階；怪物卡不可分解）。
  */
 
 const { Router } = require("express");

@@ -61,33 +61,42 @@ async function init() {
  * @returns {{ dropPct:number, goldPct:number, expPct:number, buffs:Array }}
  */
 function getActiveModifiers() {
-  // 兩層相加：賽季永久底盤(不封頂) + 短期尖峰(每類型封頂 shortTermCapPct)
+  // 三層相加：賽季永久底盤(不封頂) + 斗內/手動短期尖峰(自己一桶,每類型封頂) + 觀看熱度(自己一桶,獨立封頂)。
+  // 觀看熱度與斗內拆成兩個獨立封頂桶 → 兩者可疊加(斗內封頂 30% 後,觀看再加上去不會被砍掉)。
   let pDrop = 0, pGold = 0, pExp = 0;   // 永久底盤
-  let sDrop = 0, sGold = 0, sExp = 0;   // 短期
+  let sDrop = 0, sGold = 0, sExp = 0;   // 斗內 + 手動活動 + 里程碑等短期
+  let vDrop = 0, vGold = 0, vExp = 0;   // 觀看熱度(viewer-session)
   const active = [];
   for (const b of cache) {
     if (!isActive(b)) continue;
     active.push(b);
     if (b.seasonPermanent) {
       pDrop += Number(b.dropPct) || 0; pGold += Number(b.goldPct) || 0; pExp += Number(b.expPct) || 0;
+    } else if (b.source === VIEWER_SESSION_SOURCE) {
+      vDrop += Number(b.dropPct) || 0; vGold += Number(b.goldPct) || 0; vExp += Number(b.expPct) || 0;
     } else {
       sDrop += Number(b.dropPct) || 0; sGold += Number(b.goldPct) || 0; sExp += Number(b.expPct) || 0;
     }
   }
-  // 短期尖峰封頂
+  // 斗內/手動短期尖峰封頂（各類型）
   sDrop = Math.min(sDrop, shortTermCapPct);
   sGold = Math.min(sGold, shortTermCapPct);
   sExp = Math.min(sExp, shortTermCapPct);
-  // 短期 buff 最晚結束時間（給前端倒數：歸零＝倒數完；有人續斗→這個時間往後延）
+  // 觀看熱度獨立封頂（各類型；tier 設定本身就低,這裡只是防呆上限）
+  vDrop = Math.min(vDrop, shortTermCapPct);
+  vGold = Math.min(vGold, shortTermCapPct);
+  vExp = Math.min(vExp, shortTermCapPct);
+  // 斗內/手動短期 buff 最晚結束時間（給前端斗內倒數；觀看熱度另計,不污染斗內倒數）
   let shortTermEndsAt = null;
   for (const b of active) {
-    if (b.seasonPermanent) continue;
+    if (b.seasonPermanent || b.source === VIEWER_SESSION_SOURCE) continue;
     if (!shortTermEndsAt || b.endsAt > shortTermEndsAt) shortTermEndsAt = b.endsAt;
   }
   return {
-    dropPct: pDrop + sDrop, goldPct: pGold + sGold, expPct: pExp + sExp,
+    dropPct: pDrop + sDrop + vDrop, goldPct: pGold + sGold + vGold, expPct: pExp + sExp + vExp,
     permanent: { dropPct: pDrop, goldPct: pGold, expPct: pExp },
     shortTerm: { dropPct: sDrop, goldPct: sGold, expPct: sExp, endsAt: shortTermEndsAt },
+    viewer: { dropPct: vDrop, goldPct: vGold, expPct: vExp },
     capPct: shortTermCapPct,
     buffs: active,
   };

@@ -213,6 +213,17 @@ function createMongoRepositories() {
         emitRealtimeInvalidate("wallet", playerId);
         return updated;
       },
+      // 純發放「賽季背包格」（不扣鑽，供消耗品/圖鑑獎勵用；換季會清零，與花鑽的永久格分開）
+      async grantBackpackSlots(playerId, slotsAdd) {
+        const col = await collection("wallets");
+        const updated = await col.findOneAndUpdate(
+          { playerId },
+          { $inc: { seasonBackpackSlots: Math.max(0, Number(slotsAdd) || 0) }, $set: { updatedAt: new Date().toISOString() } },
+          { returnDocument: "after" }
+        );
+        if (updated) emitRealtimeInvalidate("wallet", playerId);
+        return updated;
+      },
       async listAll() {
         return (await collection("wallets")).find({}).toArray();
       }
@@ -431,6 +442,14 @@ function createMongoRepositories() {
       },
       async listByDiscordId(discordId) {
         return (await collection("checkins")).find({ discordId }).toArray();
+      },
+      // 近期簽到（新→舊，限筆數）：連續簽到天數計算用（時間管理大師等 checkin_streak 任務）
+      async listRecentByDiscordId(discordId, limit = 60) {
+        return (await collection("checkins"))
+          .find({ discordId })
+          .sort({ occurredAt: -1 })
+          .limit(Number(limit) || 60)
+          .toArray();
       },
       async findLastByPlatformUserId(platform, platformUserId) {
         if (!platform || !platformUserId) return null;

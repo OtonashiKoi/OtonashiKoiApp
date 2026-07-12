@@ -1091,10 +1091,11 @@ async function settleTowerSession(session, reward) {
         }).catch(() => {});
       }
       if (reward.exp > 0) {
-        await sc.progressService.grantExp({
+        const _r = await sc.progressService.grantExp({
           discordId: m.discordId, displayName: m.name,
           amount: reward.exp, source: EXP_SOURCES.TOWER_REWARD_EXP,
-        }).catch(() => {});
+        }).catch(() => null);
+        m._overflowGold = _r ? (Number(_r.overflowGold) || 0) : 0; // 滿等溢出→金幣(給DM戰報)
       }
     } catch (e) { /* ignore per-member errors */ }
   }
@@ -1158,6 +1159,7 @@ async function settleTowerSession(session, reward) {
           const rewardLines = [
             reward.gold > 0 ? `💰 金幣 +${reward.gold}` : null,
             reward.exp  > 0 ? `✨ EXP +${reward.exp}`   : null,
+            (Number(m._overflowGold) > 0) ? `💰 已滿等，溢出經驗轉為 ${m._overflowGold} 金幣` : null,
             reward.bonusMsg  || null,
           ].filter(Boolean).join("\n");
 

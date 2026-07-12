@@ -267,10 +267,20 @@ const calculateTickDelay = (agi = 1) => {
   return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
 };
 const RARE_TIERS = new Set(["A", "S", "SS", "SSR", "UR"]);
-const WORLD_BOSS_TARGET_PARTS = new Set(["head", "body", "legs", "wings"]);
+const WORLD_BOSS_TARGET_PARTS = new Set(["head", "body", "legs", "wings", "upper_body", "lower_body", "tail"]);
 // 古龍王巢穴採 4 部位(含龍翼)+ 破鱗削弱;其餘世界王維持 3 部位
 const DRAGON_KING_ZONE = "dragon_king_lair";
+// 地獄狼牙王(牙狼)：5 部位 + 部位傷害類型弱點 + 適應性狀態
+const HELLFANG_ZONE = "hellfire_depths";
+// 牙狼五部位弱點：物理(頭/尾/腿) vs 法系(上/下軀幹)；打對流派全額、打錯 ×0.2
+const HELLFANG_PART_WEAKNESS = { head: "physical", upper_body: "magic", lower_body: "magic", tail: "physical", legs: "physical" };
+const HELLFANG_WRONG_TYPE_MULT = 0.2;   // 打錯流派 → 傷害 ×0.2
+const HELLFANG_ADAPT_MULT = 0.1;        // 被適應的流派 → 傷害 ×0.1
+const HELLFANG_ADAPT_THRESHOLD = 1 / 3; // 某流派佔比 ≥1/3 且為當下主力 → 適應該流派
+const HELLFANG_ADAPT_DURATION_MS = 10 * 60 * 1000; // 適應持續 10 分鐘
+const HELLFANG_PART_LABELS = { head: "頭部", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴", legs: "腿部" };
 function getWorldBossPartKeys(zoneKey) {
+  if (zoneKey === HELLFANG_ZONE) return ["head", "upper_body", "lower_body", "tail", "legs"];
   return zoneKey === DRAGON_KING_ZONE ? ["head", "body", "wings", "legs"] : ["head", "body", "legs"];
 }
 
@@ -355,6 +365,15 @@ function applyWorldBossTargetToMonster(monsterStats, monsterEquipped, part, zone
 
 function createWorldBossPartHpTemplate(totalMaxHp = 0, zoneKey = null) {
   const maxHp = Math.max(1, Math.round(Number(totalMaxHp) || 1));
+  if (zoneKey === HELLFANG_ZONE) {
+    // 牙狼 5 部位：頭 20% / 上軀幹 20% / 下軀幹 20% / 尾巴 15% / 腿 25%
+    const head = Math.max(1, Math.round(maxHp * 0.20));
+    const upper_body = Math.max(1, Math.round(maxHp * 0.20));
+    const lower_body = Math.max(1, Math.round(maxHp * 0.20));
+    const tail = Math.max(1, Math.round(maxHp * 0.15));
+    const legs = Math.max(1, maxHp - head - upper_body - lower_body - tail);
+    return { head, upper_body, lower_body, tail, legs };
+  }
   if (zoneKey === DRAGON_KING_ZONE) {
     // 古龍王 4 部位:頭 30% / 軀幹 30% / 龍翼 20% / 下盤 20%
     const head = Math.max(1, Math.round(maxHp * 0.3));
@@ -367,6 +386,63 @@ function createWorldBossPartHpTemplate(totalMaxHp = 0, zoneKey = null) {
   const body = Math.max(1, Math.round(maxHp * 0.4));
   const legs = Math.max(1, maxHp - head - body);
   return { head, body, legs };
+}
+
+// ═══ 牙狼(地獄狼牙王) 適應性傷害機制 純函式 ═══
+// 玩家攻擊流派：法杖=法系，其餘(劍/斧/槌/匕/弓)=物理
+function hellfangPlayerSchool(weaponType) {
+  return String(weaponType || "").startsWith("staff") ? "magic" : "physical";
+}
+// 世界王部位弱點類型(給前端顯示)：牙狼各部位 physical/magic；其餘世界王 null
+function getWorldBossPartWeakness(zoneKey, partKey) {
+  if (zoneKey === HELLFANG_ZONE) return HELLFANG_PART_WEAKNESS[partKey] || null;
+  return null;
+}
+// 這場玩家對牙狼的傷害倍率＝部位弱點 × 適應狀態
+//  - 打對部位弱點流派 ×1、打錯 ×0.2
+//  - 打到「當下被適應的流派」再 ×0.1
+function hellfangDamageMult(state, part, weaponType, now = Date.now()) {
+  const school = hellfangPlayerSchool(weaponType);
+  const weakness = HELLFANG_PART_WEAKNESS[part] || null;
+  const weakMult = (weakness && school === weakness) ? 1 : HELLFANG_WRONG_TYPE_MULT;
+  const adaptUntil = state?.hellfangAdaptUntil ? Date.parse(state.hellfangAdaptUntil) : 0;
+  const adapted = (Number.isFinite(adaptUntil) && now < adaptUntil) ? state.hellfangAdaptSchool : null;
+  const adaptMult = (adapted && adapted === school) ? HELLFANG_ADAPT_MULT : 1;
+  return { school, weakness, adapted, weakMult, adaptMult, mult: weakMult * adaptMult };
+}
+// 戰後更新適應狀態：記錄本場流派傷害(衰減式滾動→以當下為主)、動態切換為當下主力流派。
+// 回傳文案事件 {type:'enter'|'switch', school} 或 null。
+function hellfangUpdateAdaptation(state, school, rawDamage, now = Date.now()) {
+  if (!state) return null;
+  const DECAY = 0.6; // 舊紀錄每場衰減 → 讓「當下」主導
+  let phys = (Number(state.hellfangDmgPhys) || 0) * DECAY;
+  let magic = (Number(state.hellfangDmgMagic) || 0) * DECAY;
+  const dmg = Math.max(0, Number(rawDamage) || 0);
+  if (school === "magic") magic += dmg; else phys += dmg;
+  state.hellfangDmgPhys = phys;
+  state.hellfangDmgMagic = magic;
+  const total = phys + magic;
+  const adaptUntilPrev = state.hellfangAdaptUntil ? Date.parse(state.hellfangAdaptUntil) : 0;
+  const prevAdapt = (Number.isFinite(adaptUntilPrev) && now < adaptUntilPrev) ? state.hellfangAdaptSchool : null;
+  let event = null;
+  if (total > 0) {
+    const dom = phys >= magic ? "physical" : "magic";
+    const share = Math.max(phys, magic) / total;
+    if (share >= HELLFANG_ADAPT_THRESHOLD) {
+      state.hellfangAdaptSchool = dom;
+      state.hellfangAdaptUntil = new Date(now + HELLFANG_ADAPT_DURATION_MS).toISOString();
+      if (prevAdapt !== dom) event = { type: prevAdapt ? "switch" : "enter", school: dom };
+    }
+  }
+  return event;
+}
+// 適應性狀態的戰報文案
+function hellfangAdaptLines(event) {
+  if (!event) return [];
+  const zh = event.school === "magic" ? "法術" : "物理";
+  const cover = event.school === "magic" ? "魔紋覆體" : "皮肉硬化";
+  if (event.type === "switch") return [`🔁 地獄狼牙王重新適應了攻勢——這次改為抵禦${zh}傷害！（${zh}傷害大幅降低，10 分鐘）`];
+  return [`⚠️ 地獄狼牙王進入【適應性狀態】——${cover}抵禦${zh}！${zh}傷害大幅降低（10 分鐘）`];
 }
 
 // 以下兩個改為「依 partsHp 實際部位」運作,自動支援 3 或 4 部位
@@ -641,7 +717,13 @@ const _staleTransitionLogAt = new Map();
 const STALE_TRANSITION_LOG_THROTTLE_MS = 60_000;
 
 function hasBlockingMonsterTransition(state, zoneKey) {
-  if (state?.activeTransition) return true;
+  const t = state?.activeTransition;
+  if (t) {
+    // 只有「尚未過期」的切換動畫才擋玩家；過期殘留(例如切換途中伺服器重啟→記憶體 timer 消失、
+    // DB 的 transition 變孤兒)不再凍死整個領域。實際清除交給 _resolveExpiredMonsterTransition。
+    const endAtMs = t.endsAt ? Date.parse(t.endsAt) : NaN;
+    if (!Number.isFinite(endAtMs) || endAtMs > Date.now()) return true;
+  }
   if (!activeMonsterTransitions.has(zoneKey)) return false;
 
   // DB 狀態是權威資料；若 DB 已經沒有 transition，記憶體殘留不能繼續卡玩家排隊。
@@ -980,6 +1062,7 @@ async function buildMonsterDropPool(sc, monster) {
 
   const existingCardDropIndex = pool.findIndex((drop) => drop?.itemId === cardItemId);
   if (existingCardDropIndex >= 0) {
+    // 卡片已列在掉落表 → 掉率統一寫死 1%（覆蓋 DB 值），補上來源標記
     pool[existingCardDropIndex] = {
       ...pool[existingCardDropIndex],
       chance: 1,
@@ -988,6 +1071,7 @@ async function buildMonsterDropPool(sc, monster) {
     return pool;
   }
 
+  // 掉落表沒列到卡片 → 補一個 1% 保底，讓卡片可掉出
   pool.push({
     itemId: card.id,
     chance: 1,
@@ -2878,11 +2962,18 @@ async function handleEnterBattle(interaction) {
         session.monsterHp = nextHp;
         if (nextHp <= 0) outcome = "win";
         let nextState = { ...freshState, currentHp: nextHp, damageMap: updatedDamageMap, lastHitAt: new Date().toISOString() };
+        let hellfangEventDC = null; // 牙狼適應性狀態變化(給DC戰報)
         if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
           const part = session.worldBossTargetPart || "body";
           const prevParts = ensureWorldBossPartState(freshState, battleMonster.calc.maxHp);
           const latestPartHp = Math.max(0, Number(prevParts.worldBossPartsHp?.[part] || 0));
-          const nextPartHp = Math.max(0, latestPartHp - totalDamage);
+          // 牙狼(hellfire_depths)適應性傷害：本場傷害 ×(部位弱點×適應)；其餘世界王照原樣
+          let wbDamage = totalDamage;
+          if (zoneKey === HELLFANG_ZONE) {
+            const _hf = hellfangDamageMult(freshState, part, session.playerStats?.weaponType, Date.now());
+            wbDamage = Math.max(0, Math.round(totalDamage * _hf.mult));
+          }
+          const nextPartHp = Math.max(0, latestPartHp - wbDamage);
           session.monsterHp = nextPartHp;
           if (nextPartHp <= 0) outcome = "win";
           const nextPartsHp = { ...prevParts.worldBossPartsHp, [part]: nextPartHp };
@@ -2892,6 +2983,11 @@ async function handleEnterBattle(interaction) {
             worldBossPartsMaxHp: prevParts.worldBossPartsMaxHp,
             currentHp: sumWorldBossPartHp(nextPartsHp)
           };
+          // 牙狼：貢獻榜改用有效傷害(避免被適應的玻璃砲空刷排名)＋以原始傷害更新適應狀態
+          if (zoneKey === HELLFANG_ZONE) {
+            nextState.damageMap = { ...nextState.damageMap, [discordId]: { ...nextState.damageMap[discordId], damage: (prev[discordId]?.damage || 0) + wbDamage } };
+            hellfangEventDC = hellfangUpdateAdaptation(nextState, hellfangPlayerSchool(session.playerStats?.weaponType), totalDamage, Date.now());
+          }
           allPartsDefeated = isWorldBossAllPartsDefeated(nextPartsHp);
         }
         await sc.monsterService.saveState(nextState, zoneKey);
@@ -3572,6 +3668,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const myMod = rewardModsByPid[discordId] || { expMultiplier: 1, expPct: 0 };
     const myShare = Math.max(1, Math.round(myBaseShare * myMod.expMultiplier * fatMul(discordId)));
     let killerLvLine = "";
+    let killerOverflowGold = 0; // 滿等溢出經驗轉的金幣（給戰報顯示）
     for (const pid of participants) {
       const baseShare = Math.max(1, Math.round(effectiveExpReward * dmgRatio(pid)));
       const mod = rewardModsByPid[pid] || { expMultiplier: 1 };
@@ -3583,12 +3680,14 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         });
         if (perPidRewards[pid]) {
           perPidRewards[pid].exp = share;
+          perPidRewards[pid].overflowGold = Number(expResult.overflowGold) || 0; // 滿等溢出→金幣(給網頁戰報)
           if (expResult.levelUps > 0) {
             perPidRewards[pid].levelUps = expResult.levelUps;
             perPidRewards[pid].newLevel = expResult.progress?.level ?? 0;
             perPidRewards[pid].levelUpDetails = expResult.levelUpDetails || [];
           }
         }
+        if (pid === discordId) killerOverflowGold = Number(expResult.overflowGold) || 0;
         if (expResult.levelUps > 0) {
           const prevLevel = (expResult.progress?.level ?? 0) - expResult.levelUps;
           const pidName = pid === discordId ? displayName : (mergedDmg[pid]?.name || pid);
@@ -3615,6 +3714,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const modNote = myMod.expPct > 0 ? `，個人加成 +${Math.round(myMod.expPct)}%` : "";
     if (canSendRewardNotice(discordId)) {
       rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}，共 ${effectiveExpReward}${partyMult > 1 ? ` 原${monster.expReward}` : ""}${modNote}）${partyNote}${killerLvLine}`);
+      if (killerOverflowGold > 0) {
+        rewardLines.push(`💰 已滿等，溢出經驗轉為 ${killerOverflowGold} 金幣`);
+      }
     } else {
       console.warn(`[MonsterZone] skip EXP line for ${discordId} because EXP was not committed`);
     }
@@ -3715,15 +3817,16 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               ? latestLuckyProg.inventory.map((entry) => ({ ...entry }))
               : []
           };
-          // 依容量過濾：裝備超過上限就跳過（其他類不受限）
-          let room = Math.max(0, equipCap - nextLuckyProg.inventory.filter((e) => e && e.itemType === "equipment").length);
+          // 依容量過濾：只有「主要穿戴裝備」佔格、超上限就跳過；卡片/錨點/徽章/稱號、素材/寶石/蛋不受限
+          const countsCap = require("../../services/backpack/backpackService").countsTowardCapacity;
+          let room = Math.max(0, equipCap - nextLuckyProg.inventory.filter(countsCap).length);
           const toAdd = [];
           for (const entry of droppedItemObjects) {
-            if (entry.itemType === "equipment") {
+            if (countsCap(entry)) {
               if (room > 0) { toAdd.push(entry); room -= 1; }
               else if (attempt === 0) skippedByFullBag.push(entry.itemName);
             } else {
-              toAdd.push(entry);
+              toAdd.push(entry); // 卡片/收藏/素材照收，不佔容量
             }
           }
           nextLuckyProg.inventory.push(...toAdd.map((entry) => ({ ...entry })));
@@ -5026,6 +5129,8 @@ module.exports = {
   _doIdleRotate,
   activeSessions,
   getMonsterZoneDiagnostics,
+  _resolveExpiredMonsterTransition,
+  hellfangPlayerSchool, hellfangDamageMult, hellfangUpdateAdaptation, hellfangAdaptLines, getWorldBossPartWeakness,
   startIdleRotateTimer,
   refreshEliteWorldBossPanel,
   refreshMonsterZonePanels,

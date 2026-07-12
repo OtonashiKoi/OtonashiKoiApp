@@ -61,7 +61,7 @@ class ItemService {
   }
 
   _normalizeEquipSlot(slot) {
-    const VALID = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r","title_eq","job_eq","special","special_1","special_2","special_3"];
+    const VALID = ["head_top","head_mid","head_low","armor","weapon","shield","garment","shoes","accessory_l","accessory_r","title_eq","job_eq","special","special_1","special_2","special_3","anchor"];
     return VALID.includes(slot) ? slot : null;
   }
 

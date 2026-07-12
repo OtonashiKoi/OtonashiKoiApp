@@ -57,26 +57,49 @@ const SET_DEFS = {
       { count: 7, desc: "爆擊傷害 +10%", numeric: { critDamagePct: 10 } },
     ],
   },
-  mithril: {
-    name: "秘銀套裝",
+  // 秘銀(A)拆「物/法」兩版：物理武器+物理防具→_p，法杖+INT法袍→_m。
+  // 舊秘銀的「最終傷/對Boss/掉落」通用值已移去「A 階級套」(equipmentTierSetBonuses.js)，這裡只放法/物風味。
+  mithril_p: {
+    name: "秘銀套裝·物",
+    note: "定位：A 階物理輸出",
     tiers: [
-      { count: 3, desc: "最終傷害 +5%", numeric: { finalDamagePct: 5 } },
-      { count: 5, desc: "對 Boss 傷害 +10%", numeric: { bossDamagePct: 10 } },
-      { count: 7, desc: "掉落率 +10%", numeric: { dropPct: 10 } },
+      { count: 3, desc: "STR +8、傷害 +8%", numeric: { stats: { str: 8 }, damagePct: 8 } },
+      { count: 5, desc: "爆擊傷害 +15%", numeric: { critDamagePct: 15 } },
+      { count: 7, desc: "無視防禦 +12%、對 Boss 傷害 +8%", numeric: { bossDamagePct: 8 }, effects: () => [passiveEff("def_ignore", 12)] },
     ],
   },
-  steel: {
-    name: "鋼鐵套裝",
-    note: "定位：A 階防禦肉盾（6 件防具）",
+  mithril_m: {
+    name: "秘銀套裝·法",
+    note: "定位：A 階法師輸出",
+    tiers: [
+      { count: 3, desc: "INT +8、最終傷害 +5%", numeric: { stats: { int: 8 }, finalDamagePct: 5 } },
+      { count: 5, desc: "無視防禦(魔穿) +15%", effects: () => [passiveEff("def_ignore", 15)] },
+      { count: 7, desc: "INT +12、對 Boss 傷害 +8%", numeric: { stats: { int: 12 }, bossDamagePct: 8 } },
+    ],
+  },
+  // ── 鋼鐵(A)拆物/法：純 6 件防具套，故門檻 3/5/6 ──
+  steel_p: {
+    name: "鋼鐵套裝·物",
+    note: "定位：A 階防禦肉盾（6 防具 + 鋼鐵盾）",
     tiers: [
       { count: 3, desc: "受到傷害 -6%", effects: () => [passiveEff("damage_reduction", 6)] },
       { count: 5, desc: "最大生命 +10%", effects: () => [passiveEff("max_hp_multiplier_up", 10)] },
-      { count: 6, desc: "受到傷害 -6%（疊加）", effects: () => [passiveEff("damage_reduction", 6)] },
+      { count: 7, desc: "受到傷害 -6%（疊加）", effects: () => [passiveEff("damage_reduction", 6)] },
     ],
   },
-  hellfire: {
-    name: "焚獄套裝",
-    note: "定位：基礎傷害 + 火焰區防禦",
+  steel_m: {
+    name: "鋼鐵套裝·法",
+    note: "定位：A 階法師肉盾（6 法袍 + 法典副手）",
+    tiers: [
+      { count: 3, desc: "INT +8、受到傷害 -5%", numeric: { stats: { int: 8 } }, effects: () => [passiveEff("damage_reduction", 5)] },
+      { count: 5, desc: "最大生命 +8%", effects: () => [passiveEff("max_hp_multiplier_up", 8)] },
+      { count: 7, desc: "INT +10、受到傷害 -6%", numeric: { stats: { int: 10 } }, effects: () => [passiveEff("damage_reduction", 6)] },
+    ],
+  },
+  // ── 焚獄(A)拆物/法：有法杖(焰心法杖)故法版 3/5/7 ──
+  hellfire_p: {
+    name: "焚獄套裝·物",
+    note: "定位：物理傷害 + 火焰區防禦",
     tiers: [
       { count: 3, desc: "傷害 +13%", numeric: { damagePct: 13 } },
       { count: 5, desc: "爆擊傷害 +10%", numeric: { critDamagePct: 10 } },
@@ -86,8 +109,21 @@ const SET_DEFS = {
       ] },
     ],
   },
-  dragonscale: {
-    name: "龍鱗套裝",
+  hellfire_m: {
+    name: "焚獄套裝·法",
+    note: "定位：法師傷害 + 火焰區防禦",
+    tiers: [
+      { count: 3, desc: "INT +10、最終傷害 +6%", numeric: { stats: { int: 10 }, finalDamagePct: 6 } },
+      { count: 5, desc: "無視防禦(魔穿) +12%", effects: () => [passiveEff("def_ignore", 12)] },
+      { count: 7, desc: "地獄火焰／焰獄深處 受傷 -15%", effects: () => [
+        passiveEff("physical_damage_reduction", 15, { zone: HELLFIRE_ZONES }),
+        passiveEff("magic_damage_reduction", 15, { zone: HELLFIRE_ZONES }),
+      ] },
+    ],
+  },
+  // ── 龍鱗(A)拆物/法：物版有盾+戒可達7；法版僅6法袍故 3/5/6 ──
+  dragonscale_p: {
+    name: "龍鱗套裝·物",
     note: "定位：連擊 + 龍族區防禦",
     tiers: [
       { count: 3, desc: "連擊率 +8", effects: () => [passiveEff("combo_up", 8)] },
@@ -98,6 +134,26 @@ const SET_DEFS = {
       ] },
     ],
   },
+  dragonscale_m: {
+    name: "龍鱗套裝·法",
+    note: "定位：法師 + 龍族區防禦（6 法袍 + 法典副手）",
+    tiers: [
+      { count: 3, desc: "INT +8、最終傷害 +5%", numeric: { stats: { int: 8 }, finalDamagePct: 5 } },
+      { count: 5, desc: "無視防禦(魔穿) +12%", effects: () => [passiveEff("def_ignore", 12)] },
+      { count: 7, desc: "龍族之領／龍王巢穴 受傷 -15%", effects: () => [
+        passiveEff("physical_damage_reduction", 15, { zone: DRAGON_ZONES }),
+        passiveEff("magic_damage_reduction", 15, { zone: DRAGON_ZONES }),
+      ] },
+    ],
+  },
+  // ── 三元套：單件成套（三元牌一件即觸發；麻將三元 白發中）──
+  sanyuan: {
+    name: "三元套裝",
+    note: "定位：三元牌單件即成套",
+    tiers: [
+      { count: 1, desc: "🀄 固定每回合攻擊 3 次，每擊為原本的 1/3（算連擊）", effects: () => [passiveEff("triple_strike", 3)] },
+    ],
+  },
 
   // ═══ 三紋流派套（跨階通算 D~A；戒指同時計入所屬階級基礎套）═══
   swift: {
@@ -105,7 +161,7 @@ const SET_DEFS = {
     tiers: [
       { count: 3, desc: "迴避 +5%", numeric: { dodgePct: 5 } },
       { count: 5, desc: "連擊率 +6", effects: () => [passiveEff("combo_up", 6)] },
-      { count: 7, desc: "迴避 +8%、速度 +10", numeric: { dodgePct: 8 }, effects: () => [passiveEff("speed_up", 10)] },
+      { count: 7, desc: "迴避 +8%、速度 +10（＝迴避 +30）", numeric: { dodgePct: 8 }, effects: () => [passiveEff("speed_up", 10)] },
     ],
   },
   might: {

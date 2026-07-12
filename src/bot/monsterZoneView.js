@@ -12,16 +12,26 @@ const BUTTON_IDS = {
   enterBattleWings: "monster-zone:enter-battle:wings"
 };
 
-// 世界王部位顯示資料(支援 3 / 4 部位;龍翼僅古龍王有)
+// 世界王部位顯示資料(牙狼5 / 古龍王4 / 一般3;龍翼僅古龍王、上下軀幹+尾巴僅牙狼)
 const WORLD_BOSS_PART_META = {
-  head:  { hpLabel: "頭部", btnLabel: "🎯 打頭部", style: ButtonStyle.Danger },
-  body:  { hpLabel: "軀幹", btnLabel: "⚔️ 打軀幹", style: ButtonStyle.Primary },
-  wings: { hpLabel: "龍翼", btnLabel: "🪽 打龍翼", style: ButtonStyle.Success },
-  legs:  { hpLabel: "下盤", btnLabel: "🦵 打下盤", style: ButtonStyle.Secondary },
+  head:       { hpLabel: "頭部", btnLabel: "🎯 打頭部", style: ButtonStyle.Danger },
+  upper_body: { hpLabel: "上軀幹", btnLabel: "🔮 上軀幹", style: ButtonStyle.Primary },
+  lower_body: { hpLabel: "下軀幹", btnLabel: "🔮 下軀幹", style: ButtonStyle.Primary },
+  body:       { hpLabel: "軀幹", btnLabel: "⚔️ 打軀幹", style: ButtonStyle.Primary },
+  wings:      { hpLabel: "龍翼", btnLabel: "🪽 打龍翼", style: ButtonStyle.Success },
+  tail:       { hpLabel: "尾巴", btnLabel: "🐾 打尾巴", style: ButtonStyle.Secondary },
+  legs:       { hpLabel: "下盤", btnLabel: "🦵 打下盤", style: ButtonStyle.Secondary },
 };
-const WORLD_BOSS_PART_ORDER = ["head", "body", "wings", "legs"];
+// 牙狼(5) > 古龍王(4) > 一般(3)；worldBossPartKeysOf 只保留 partsHp 內實際存在的鍵
+const WORLD_BOSS_PART_ORDER = ["head", "upper_body", "lower_body", "body", "wings", "tail", "legs"];
 function worldBossPartKeysOf(partsHp) {
   return WORLD_BOSS_PART_ORDER.filter((k) => partsHp && Object.prototype.hasOwnProperty.call(partsHp, k));
+}
+// 未開戰(無 partsHp)時，依 zone 決定要顯示幾個部位鈕
+function defaultWorldBossPartKeys(zoneKey) {
+  if (zoneKey === "hellfire_depths") return ["head", "upper_body", "lower_body", "tail", "legs"];
+  if (zoneKey === "dragon_king_lair") return ["head", "body", "wings", "legs"];
+  return ["head", "body", "legs"];
 }
 
 function formatRemainingTime(ms) {
@@ -134,7 +144,8 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
       descLines.push("✅ 世界BOSS 可挑戰");
     }
     descLines.push("限制：開戰後 30 分鐘內未擊殺視為失敗");
-    const isDragonKing = !!(worldBossPartsHp && Object.prototype.hasOwnProperty.call(worldBossPartsHp, "wings"));
+    const isDragonKing = zoneKey === "dragon_king_lair" || !!(worldBossPartsHp && Object.prototype.hasOwnProperty.call(worldBossPartsHp, "wings"));
+    const isHellfang = zoneKey === "hellfire_depths" || !!(worldBossPartsHp && Object.prototype.hasOwnProperty.call(worldBossPartsHp, "tail"));
     if (isDragonKing) {
       descLines.push(
         "",
@@ -145,6 +156,15 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
         "⚔️ 軀幹：破其逆鱗，狂焰之怒漸趨黯淡",
         "👑 頭顱：取其首級，傳說就此落幕",
         "💭 古諺有云：「先斷翼、再破鱗，龍焰終成餘燼。」"
+      );
+    } else if (isHellfang) {
+      descLines.push(
+        "",
+        "**部位機制（五部位俱破才算贏 — 牙狼血肉各有弱點）**",
+        "🎯 頭部 ・ 🐾 尾巴 ・ 🦵 下盤 → 吃「物理」傷害（法系打上去只剩 20%）",
+        "🔮 上軀幹 ・ 🔮 下軀幹 → 吃「法系」傷害（物理打上去只剩 20%）",
+        "🗡️ 流派判定：法杖＝法系；劍／斧／槌／匕／弓＝物理",
+        "⚠️ 適應性：一直用同一流派猛攻，牙狼會適應該流派 → 對牠傷害驟降至 10%（約 10 分鐘）。物理／法系交替上陣才是正解！"
       );
     } else {
       descLines.push(
@@ -216,7 +236,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   if (isWorldBossZone(zoneKey) && canEnter) {
     // 依實際部位渲染攻擊鈕(3 或 4 個);已破壞部位標 ✅ 並停用
     const keys = worldBossPartsHp ? worldBossPartKeysOf(worldBossPartsHp) : [];
-    const partKeys = keys.length ? keys : ["head", "body", "legs"];
+    const partKeys = keys.length ? keys : defaultWorldBossPartKeys(zoneKey);
     const btns = partKeys.map((k) => {
       const meta = WORLD_BOSS_PART_META[k] || { btnLabel: k, style: ButtonStyle.Secondary };
       const broken = Math.max(0, Number(worldBossPartsHp?.[k] || 0)) <= 0 && worldBossPartsHp;

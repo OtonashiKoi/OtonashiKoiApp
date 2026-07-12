@@ -1,5 +1,5 @@
 const { randomUUID } = require("crypto");
-const { normalizeActiveEffect, normalizeActiveEffectList } = require("./effectPayloads");
+const { normalizeActiveEffect, normalizeActiveEffectList, isActiveEffectExpired } = require("./effectPayloads");
 
 const STAT_EFFECT_MAP = {
   max_hp_up: { stat: "maxHp", mode: "add", amount: 50 },
@@ -20,8 +20,9 @@ const STAT_EFFECT_MAP = {
   crit_rate_down: { stat: "crit", mode: "add", amount: -5 },
   crit_damage_up: { stat: "critDamage", mode: "mul", amount: 1.2 },
   crit_damage_down: { stat: "critDamage", mode: "mul", amount: 0.85 },
-  speed_up: { stat: "speed", mode: "add", amount: 10 },
-  speed_down: { stat: "speed", mode: "add", amount: -10 },
+  // 「速度」＝迴避率加成（直接進面板顯示的迴避、戰鬥同步生效）。換算 1 速度 = 3 迴避，故速度 +10 → 迴避 +30。
+  speed_up: { stat: "dodge", mode: "add", amount: 10, perUnit: 3 },
+  speed_down: { stat: "dodge", mode: "add", amount: -10, perUnit: 3 },
   atk_multiplier_up: { stat: "atk", mode: "mul", amount: 1.2 },
   def_multiplier_up: { stat: "def", mode: "mul", amount: 1.1 },
   max_hp_multiplier_up: { stat: "maxHp", mode: "mul", amount: 1.1 },
@@ -248,13 +249,15 @@ function applyEffectsToStats(baseStats, effectRefs = [], context = {}) {
   if (!Number.isFinite(result.executeThresholdPct)) result.executeThresholdPct = 0;
 
   for (const effect of effectRefs) {
+    if (isActiveEffectExpired(effect)) continue; // 限時 buff 已過真實時間 → 不再套用（如攻塔祝福到期）
     if (!isEffectConditionMet(effect, context)) continue;
     const mapped = STAT_EFFECT_MAP[effect?.key];
     if (!mapped) continue;
 
     const scale = Number(effect?.params?.value);
     if (mapped.mode === "add") {
-      const amount = Number.isFinite(scale) ? scale : mapped.amount;
+      const base = Number.isFinite(scale) ? scale : mapped.amount;
+      const amount = base * (mapped.perUnit || 1); // perUnit：每 1 點換算幾點目標屬性（如速度 1=迴避 3）
       result[mapped.stat] = (Number(result[mapped.stat]) || 0) + amount;
       continue;
     }

@@ -530,20 +530,35 @@ class WeeklyQuestService {
       const thr = Number(quest.unlockProgressAtLeast || 0);
       const dispCurrent = thr > 0 ? Math.max(0, current - thr) : current;
       const dispTarget = thr > 0 ? Math.max(1, target - thr) : target;
+      // 隱藏任務(軟鎖:本季斗內/累積傷害/連續簽到)未解鎖：
+      //  - 保留任務名稱(title)；只遮「說明 + 獎勵 + 進度數字」(連 API 都不吐，防劇透/datamine)
+      //  - 解鎖提示一律用通用文案「達成條件後現身」，不透露是斗內/簽到/傷害哪一種
+      const isHiddenGated = Number(quest.unlockProgressAtLeast) > 0
+        || Boolean(quest.unlockRequireSeasonDonation)
+        || Number(quest.unlockCheckinStreak) > 0;
+      const maskHidden = locked && isHiddenGated;
+
       let unlockHint = null;
       if (locked) {
-        if (quest.unlockLevel) unlockHint = `Lv.${quest.unlockLevel} 解鎖`;
-        else if (quest.unlockRequireSeasonDonation) unlockHint = "本季斗內後解鎖";
-        else if (quest.unlockCheckinStreak) unlockHint = `連續簽到 ${quest.unlockCheckinStreak} 天解鎖`;
-        else if (thr > 0) unlockHint = "隱藏任務（達成條件後現身）";
+        if (maskHidden) unlockHint = "隱藏任務（達成條件後現身）"; // 通用，不洩漏解鎖條件
+        else if (quest.unlockLevel) unlockHint = `Lv.${quest.unlockLevel} 解鎖`;
         else unlockHint = "尚未解鎖";
       }
+      const outQuest = maskHidden
+        ? {
+            ...quest,
+            // 保留任務名稱(title)；只遮說明與獎勵
+            description: "達成隱藏條件後，此試煉才會現身……",
+            rewardItemId: null, rewardItemName: null,
+            rewardGold: 0, rewardExp: 0, rewardDiamond: 0, rewardItems: []
+          }
+        : quest;
       return {
         cadence: c,
         periodKey,
-        quest,
-        current: dispCurrent,
-        target: dispTarget, // 動態 target（完成型任務 = 基礎任務總數）；前端顯示分母用,別再用 quest.target
+        quest: outQuest,
+        current: maskHidden ? 0 : dispCurrent,
+        target: maskHidden ? 1 : dispTarget, // 動態 target（完成型任務 = 基礎任務總數）；前端顯示分母用,別再用 quest.target
         claimed: Boolean(p.claimed || (quest.claimOnce && p.claimedOnce)),
         done: locked ? false : current >= target,
         locked,

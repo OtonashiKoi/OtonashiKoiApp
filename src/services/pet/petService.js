@@ -46,8 +46,9 @@ function isHardBlocked(item) {
   const slot = String(item.equipSlot || "");
   return slot === "job_eq" || slot === "title_eq" || /^special/.test(slot);
 }
-// 可「單件手動餵」：真裝備（含強化過/特效），但排除卡片/徽章/稱號
+// 可「單件手動餵」：真裝備（含強化過/特效），但排除卡片/徽章/稱號、以及「鎖定」裝備
 function isSingleFeedable(item) {
+  if (item?.locked) return false; // 鎖定裝備不可餵（與分解/丟棄/出售一致的保護）
   return !!item && item.itemType === "equipment" && !isHardBlocked(item);
 }
 // 可「一鍵批量餵」：素裝（+0）— 只有「有 +值」才需單件餵；特效與否不影響
@@ -65,6 +66,19 @@ function feedMultiplier(gearTier, matchTier) {
   if (g > m) return null;             // 高階裝備不能餵低等寵物
   const diff = m - g;                 // 0=符合, 1=低1階...
   return FEED_TIER_PENALTY[diff] ?? 0;
+}
+
+// 蛋孵化：接受「全階級」D/C/B/A 裝，各階給不同孵化進度。
+// 高階給多一點但不至於秒孵；門檻 800 → D 約 20 件 / C 約 13 / B 約 9 / A 約 7。
+const EGG_HATCH_EXP = { D: 40, C: 60, B: 90, A: 120 };
+function isEggPet(pet) { return !!pet && pet.stage === "egg"; }
+function eggHatchExp(gearTier) {
+  return EGG_HATCH_EXP[String(gearTier || "").toUpperCase()] ?? null;
+}
+// 這件裝備能不能餵這隻寵物：蛋接受全階級；已孵化寵物沿用 feedMultiplier 的階級規則
+function canFeed(gearTier, pet) {
+  if (isEggPet(pet)) return eggHatchExp(gearTier) != null;
+  return feedMultiplier(gearTier, petTierOf(pet)) !== null;
 }
 
 const MAX_LEVEL = 50;                   // legacy（V0.4 起無等級系統，僅供舊資料相容）
@@ -216,34 +230,48 @@ class PetService {
 
   // ── 懶結算：採集累積（依該龍 gatherMod：速度 / 產出偏好）──
   // 階級在「領取時」依寵物當下等級決定，避免升級前累積的採集物卡在舊階級。
-  // 🐾圖鑑收集里程碑 → 採集加成倍率（採集量%+採集速度% 都化成「間隔縮短」）。只看 petDex 分數，不查 DB。
-  _dexGatherMult(progress) {
+  // 🐾圖鑑收集里程碑 → 採集加成。只看 petDex 分數，不查 DB。
+  //  - 採集速度%(gatherSpeedPct) → speedMult：縮短採集間隔（撿更快）
+  //  - 採集量%(gatherPct)       → cap：提高累積上限（18 → 18×(1+%)，四捨五入）
+  _dexGatherParams(progress) {
     try {
       const { computeDexBonuses } = require("../../shared/petDex");
       const { bonus } = computeDexBonuses(progress?.petDex || {});
-      return 1 + ((Number(bonus.gatherPct) || 0) + (Number(bonus.gatherSpeedPct) || 0)) / 100;
-    } catch (_) { return 1; }
+      const speedMult = 1 + (Number(bonus.gatherSpeedPct) || 0) / 100;
+      const cap = Math.round(GATHER_CAP * (1 + (Number(bonus.gatherPct) || 0) / 100));
+      return { speedMult, cap: Math.max(GATHER_CAP, cap) };
+    } catch (_) { return { speedMult: 1, cap: GATHER_CAP }; }
   }
 
-  _settleGathering(pet, gatherMult = 1) {
+  _settleGathering(pet, speedMult = 1, cap = GATHER_CAP) {
     if (pet.stage !== "grown") return pet; // 未孵化不採集
     const now = nowMs();
     const last = Number(pet.lastSettleAt || now);
     if (!Array.isArray(pet.accruedItems)) pet.accruedItems = [];
 
-    // 飽食 0 不採集
-    if ((Number(pet.satiety) || 0) <= 0) {
+    // 飽食＝0（上次結算當下就已餓壞）→ 不採集。
+    // ⚠️ 本方法須在 _applyHungerDecay「之前」呼叫，pet.satiety 才代表「上次結算當下的飽食」。
+    const satietyAtLast = Number(pet.satiety) || 0;
+    if (satietyAtLast <= 0) {
       pet.lastSettleAt = now;
       return pet;
     }
     const mod = pet.gatherMod || DEFAULT_GATHER_MOD;
-    // 圖鑑里程碑加成：倍率越高 → 間隔越短 → 採集越多越快
-    const intervalMin = GATHER_INTERVAL_MIN * (Number(mod.intervalMult) || 1) / Math.max(0.1, Number(gatherMult) || 1);
+    // 採集速度%：speedMult 越高 → 間隔越短 → 採集越快
+    const intervalMin = GATHER_INTERVAL_MIN * (Number(mod.intervalMult) || 1) / Math.max(0.1, Number(speedMult) || 1);
+    // 只在「有飽食的時間內」採集：飽食可撐的分鐘數 = 目前飽食 ÷ 每分鐘衰減量。
+    // 修：原本只要「當下」飽食歸零就整段放棄 → 餵飽睡 6h 醒來變 0/18；
+    //     改成採集累積到「餓壞的那一刻」為止（餓壞前該採的照算，餓壞後才停）。
+    const graceHours = HUNGER_GRACE_HOURS_BY_TIER[petTierOf(pet)] || HUNGER_GRACE_HOURS;
+    const decayPerMin = SATIETY_MAX / (Math.max(0.1, graceHours) * 60);
+    const satietyMin = decayPerMin > 0 ? satietyAtLast / decayPerMin : Infinity;
     const elapsedMin = Math.max(0, (now - last) / 60_000);
-    const newItems = Math.floor(elapsedMin / intervalMin);
+    const effectiveMin = Math.min(elapsedMin, satietyMin); // 餓壞之後不再累積
+    const newItems = Math.floor(effectiveMin / intervalMin);
     if (newItems <= 0) return pet;
 
-    const room = Math.max(0, GATHER_CAP - pet.accruedItems.length);
+    // 採集量%：cap 為提高後的累積上限
+    const room = Math.max(0, cap - pet.accruedItems.length);
     const toAdd = Math.min(newItems, room);
     // lootTable 模式（史萊姆/狼系）：[{kind, weight}] 加權抽；無 lootTable 走舊 gemBias（龍系）
     const lootTable = Array.isArray(mod.lootTable) && mod.lootTable.length ? mod.lootTable : null;
@@ -264,23 +292,23 @@ class PetService {
       pet.accruedItems.push({ kind });
     }
     pet.lastSettleAt = last + newItems * intervalMin * 60_000;
-    if (pet.accruedItems.length >= GATHER_CAP) pet.lastSettleAt = now; // 滿了就對齊
+    if (pet.accruedItems.length >= cap) pet.lastSettleAt = now; // 滿了就對齊
     return pet;
   }
 
   // ── 採集滿 18 個通知：剛到頂發一次，領取後（低於上限）重置旗標 ──
-  _maybeNotifyGatherCap(discordId, pet) {
+  _maybeNotifyGatherCap(discordId, pet, cap = GATHER_CAP) {
     try {
       if (!pet || pet.stage !== "grown") return;
       const count = Array.isArray(pet.accruedItems) ? pet.accruedItems.length : 0;
-      if (count >= GATHER_CAP) {
+      if (count >= cap) {
         if (!pet.gatherCapNotified) {
           pet.gatherCapNotified = true; // 旗標隨 progress 落地，避免重複通知
           notifyPlayer(discordId, {
             type: "pet_gather_full",
             title: "寵物採集已滿",
-            message: `「${pet.nickname || pet.speciesName || "寵物"}」的採集已累積 ${count}/${GATHER_CAP} 個，記得來領取！`,
-            meta: { petUuid: pet.uuid, gatherCount: count, gatherCap: GATHER_CAP }
+            message: `「${pet.nickname || pet.speciesName || "寵物"}」的採集已累積 ${count}/${cap} 個，記得來領取！`,
+            meta: { petUuid: pet.uuid, gatherCount: count, gatherCap: cap }
           });
         }
       } else if (pet.gatherCapNotified) {
@@ -293,11 +321,13 @@ class PetService {
   async getPetState(discordId) {
     const progress = await this._loadProgress(discordId);
     const active = this._getActivePet(progress);
+    const dex = this._dexGatherParams(progress);
     let changed = false;
     if (active) {
+      // 先結算採集(需衰減前的飽食算窗口)，再衰減飽食
+      this._settleGathering(active, dex.speedMult, dex.cap);
       this._applyHungerDecay(active);
-      this._settleGathering(active, this._dexGatherMult(progress));
-      this._maybeNotifyGatherCap(discordId, active);
+      this._maybeNotifyGatherCap(discordId, active, dex.cap);
       changed = true;
     }
     if (changed) await this.progressRepository.save(progress);
@@ -307,9 +337,9 @@ class PetService {
       return sum + Math.max(1, Number(item.stackCount) || 1);
     }, 0);
     return {
-      pets: progress.pets.map((p) => this._toView(p)),
+      pets: progress.pets.map((p) => this._toView(p, dex)),
       activePetUuid: progress.activePetUuid || null,
-      active: active ? this._toView(active) : null,
+      active: active ? this._toView(active, dex) : null,
       eggCount,
       totalPets: Array.isArray(progress.pets) ? progress.pets.length : 0,
       maxPets: MAX_PETS,
@@ -374,11 +404,13 @@ class PetService {
     return out;
   }
 
-  _toView(pet) {
+  _toView(pet, dex = { speedMult: 1, cap: GATHER_CAP }) {
     const hatchPct = pet.stage === "egg"
       ? Math.min(100, Math.round(((pet.hatchProgress || 0) / HATCH_THRESHOLD) * 100))
       : 100;
     const mod = pet.gatherMod || DEFAULT_GATHER_MOD;
+    const gCap = Number(dex?.cap) || GATHER_CAP;
+    const gSpeed = Math.max(0.1, Number(dex?.speedMult) || 1);
     return {
       uuid: pet.uuid,
       petId: pet.petId || null,
@@ -405,10 +437,10 @@ class PetService {
       hatchProgress: pet.hatchProgress || 0,
       hatchThreshold: HATCH_THRESHOLD,
       gatherCount: Array.isArray(pet.accruedItems) ? pet.accruedItems.length : 0,
-      gatherCap: GATHER_CAP,
+      gatherCap: gCap,
       producesTier: petTierOf(pet),
-      // 採集特性（已孵化才有意義）
-      gatherIntervalMin: pet.stage === "grown" ? Math.round(GATHER_INTERVAL_MIN * (Number(mod.intervalMult) || 1)) : null,
+      // 採集特性（已孵化才有意義）：間隔已含採集速度%（speedMult）
+      gatherIntervalMin: pet.stage === "grown" ? Math.round(GATHER_INTERVAL_MIN * (Number(mod.intervalMult) || 1) / gSpeed) : null,
       gemBias: pet.stage === "grown" ? (Number.isFinite(Number(mod.gemBias)) ? Number(mod.gemBias) : GEM_DROP_RATE) : null,
       qualityUpChance: pet.stage === "grown" ? (Number(mod.qualityUpChance) || 0) : null,
     };
@@ -439,10 +471,13 @@ class PetService {
       const it = progress.inventory.find((x) => x && x.uuid === opts.inventoryUuid);
       if (!it) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該道具", 404);
       if (it.itemType !== "equipment") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只能餵食裝備", 400);
+      if (it.locked) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備已鎖定，請先解鎖再餵食", 400);
+      }
       if (!isSingleFeedable(it)) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "卡片 / 職業徽章 / 稱號不能當飼料", 400);
       }
-      if (feedMultiplier(it.tier, matchTier) === null) {
+      if (!canFeed(it.tier, pet)) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${String(it.tier).toUpperCase()} 階裝備太高級，餵不進對應 ${matchTier} 階的寵物（高階裝備不能餵低等寵物）`, 400);
       }
       feedTargets = [it];
@@ -450,14 +485,14 @@ class PetService {
       // 勾選餵食：只餵清單中、且可餵的裝備（排除卡片/徽章/階級太高）
       const set = new Set(opts.inventoryUuids);
       const picked = progress.inventory.filter((x) => x && set.has(x.uuid));
-      feedTargets = picked.filter((it) => isSingleFeedable(it) && feedMultiplier(it.tier, matchTier) !== null);
+      feedTargets = picked.filter((it) => isSingleFeedable(it) && canFeed(it.tier, pet));
       protectedCount = picked.length - feedTargets.length;
       if (feedTargets.length === 0) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "所選道具都不能餵（卡片/徽章/階級太高）", 400);
       }
     } else if (opts.tier) {
       const tier = String(opts.tier).toUpperCase();
-      if (feedMultiplier(tier, matchTier) === null) {
+      if (!canFeed(tier, pet)) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${tier} 階裝備太高級，餵不進對應 ${matchTier} 階的寵物`, 400);
       }
       const tierGear = progress.inventory.filter((x) => x && x.itemType === "equipment" && String(x.tier).toUpperCase() === tier);
@@ -482,13 +517,11 @@ class PetService {
 
     for (const it of feedTargets) {
       const tier = String(it.tier || "D").toUpperCase();
-      const mult = feedMultiplier(tier, matchTier);
-      if (mult === null) continue; // 高階裝備跳過（批量時保險）
-      const satietyGain = Math.round(BASE_FEED_SATIETY * mult);
-      const expGain = Math.round(BASE_FEED_EXP * mult);
 
       if (pet.stage === "egg") {
-        // 蛋階段：餵食累積孵化進度
+        // 蛋階段：全階級皆可餵，各階給不同孵化進度（高階多、但不秒孵）
+        const expGain = eggHatchExp(tier);
+        if (expGain === null) continue;
         pet.hatchProgress = (pet.hatchProgress || 0) + expGain;
         totalHatch += expGain;
         consumedUuids.add(it.uuid);
@@ -496,9 +529,12 @@ class PetService {
         // 累積到孵化門檻就停止繼續吃，剩餘飼料留背包不浪費
         if ((pet.hatchProgress || 0) >= HATCH_THRESHOLD) break;
       } else {
-        // 已孵化：只補飽食度；已滿就不再吃（不浪費裝備）
+        // 已孵化：只補飽食度，沿用階級折扣（高階裝備餵不進 → 跳過）
+        const mult = feedMultiplier(tier, matchTier);
+        if (mult === null) continue;
         const before = Number(pet.satiety) || 0;
         if (before >= SATIETY_MAX) break;
+        const satietyGain = Math.round(BASE_FEED_SATIETY * mult);
         const after = Math.min(SATIETY_MAX, before + satietyGain);
         pet.satiety = after;
         pet.starveSince = null; pet.starveLevelsLost = 0;
@@ -555,7 +591,7 @@ class PetService {
         predictedLevel: pet.level || 1,
         predictedSatiety: Math.round(pet.satiety || 0),
         satietyMax: SATIETY_MAX,
-        pet: this._toView(pet),
+        pet: this._toView(pet, this._dexGatherParams(progress)),
       };
     }
 
@@ -568,7 +604,7 @@ class PetService {
       fed, protectedCount, totalSatiety, totalGrowth, totalHatch, hatched, hatchedSpecies, leveledTo,
       tierCapReached, crossedTier, gatherCleared, endTier,
       predictedLevel: pet.level || 1, predictedSatiety: Math.round(pet.satiety || 0), satietyMax: SATIETY_MAX,
-      pet: this._toView(pet),
+      pet: this._toView(pet, this._dexGatherParams(progress)),
     };
   }
 
@@ -582,11 +618,16 @@ class PetService {
 
     this._applyHungerDecay(active);
     const matchTier = petTierOf(active);
+    const isEgg = isEggPet(active);
 
     const items = (progress.inventory || [])
-      .filter((it) => isSingleFeedable(it) && feedMultiplier(it.tier, matchTier) !== null)
+      .filter((it) => isSingleFeedable(it) && canFeed(it.tier, active))
       .map((it) => {
-        const mult = feedMultiplier(it.tier, matchTier) || 0;
+        // 蛋：各階孵化進度換算成「相對 D 素裝」倍率(D=1/C=1.5/B=2.25/A=3)，供前端估算件數；
+        // 已孵化：沿用階級折扣飽食倍率。
+        const mult = isEgg
+          ? (eggHatchExp(it.tier) || 0) / BASE_FEED_EXP
+          : (feedMultiplier(it.tier, matchTier) || 0);
         const hasSpecial =
           (Array.isArray(it.passiveEffects) && it.passiveEffects.length > 0) ||
           (Array.isArray(it.procEffects) && it.procEffects.length > 0) ||
@@ -608,7 +649,7 @@ class PetService {
       });
 
     return {
-      active: this._toView(active),
+      active: this._toView(active, this._dexGatherParams(progress)),
       matchTier,
       items,
       // 給前端算「剛好餵到下一個等級坎」的最少件數用
@@ -649,8 +690,10 @@ class PetService {
       const prevUpdatedAt = progress.updatedAt;
       const active = this._getActivePet(progress);
       if (!active) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "目前沒有出戰寵物", 400);
+      const dex = this._dexGatherParams(progress);
+      // 先結算採集(需衰減前的飽食算窗口)，再衰減飽食
+      this._settleGathering(active, dex.speedMult, dex.cap);
       this._applyHungerDecay(active);
-      this._settleGathering(active, this._dexGatherMult(progress));
 
       // 飽食歸零(餓壞了)不能領取採集物:必須先餵食。網頁與 DC 共用此方法 → 兩邊規則一致。
       if ((Number(active.satiety) || 0) <= 0) {
@@ -664,7 +707,7 @@ class PetService {
           ? await this.progressRepository.saveIfUnchanged(progress, prevUpdatedAt)
           : (await this.progressRepository.save(progress), true);
         if (!ok) continue;
-        return { granted: [], pet: this._toView(active) };
+        return { granted: [], pet: this._toView(active, dex) };
       }
 
       const granted = [];
@@ -697,6 +740,8 @@ class PetService {
           if (pool.length) entry = this._buildInventoryEntry(pool[crypto.randomInt(0, pool.length)]);
         }
         if (entry) {
+          // 跟一般怪物掉落一致：採集到的「一般裝備」也骰附魔（金幣袋/寶石/詛咒藥非裝備 → rollForEntry 自動 no-op）
+          try { require("../enchant/enchantService").rollForEntry(entry); } catch (_) { /* 附魔服務未就緒不影響領取 */ }
           progress.inventory.push(entry);
           granted.push({ itemName: entry.itemName, tier, kind: acc.kind });
         }
@@ -710,7 +755,7 @@ class PetService {
         ? await this.progressRepository.saveIfUnchanged(progress, prevUpdatedAt)
         : (await this.progressRepository.save(progress), true);
       if (!ok) continue;
-      return { granted, pet: this._toView(active) };
+      return { granted, pet: this._toView(active, dex) };
     }
 
     // 連續多次都被併發寫入卡住（罕見）：不謊報領取，請玩家重試
@@ -781,16 +826,17 @@ class PetService {
     const pet = this._findPet(progress, petUuid);
     if (!pet) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
     const previousActive = this._getActivePet(progress);
+    const dex = this._dexGatherParams(progress);
     if (previousActive && previousActive.uuid !== petUuid) {
+      this._settleGathering(previousActive, dex.speedMult, dex.cap);
       this._applyHungerDecay(previousActive);
-      this._settleGathering(previousActive, this._dexGatherMult(progress));
     }
     progress.activePetUuid = petUuid;
     // 切上前台後才開始計採集時間；既有累積物不清空。
     if (!previousActive || previousActive.uuid !== petUuid) pet.lastSettleAt = nowMs();
     pet.lastSatietyAt = nowMs();
     await this.progressRepository.save(progress);
-    return { activePetUuid: petUuid, pet: this._toView(pet) };
+    return { activePetUuid: petUuid, pet: this._toView(pet, dex) };
   }
 
   // ── 取消出戰（變成沒有出戰寵物） ──
@@ -798,8 +844,9 @@ class PetService {
     const progress = await this._loadProgress(discordId);
     const previousActive = this._getActivePet(progress);
     if (previousActive) {
+      const dex = this._dexGatherParams(progress);
+      this._settleGathering(previousActive, dex.speedMult, dex.cap);
       this._applyHungerDecay(previousActive);
-      this._settleGathering(previousActive, this._dexGatherMult(progress));
     }
     progress.activePetUuid = null;
     await this.progressRepository.save(progress);
@@ -811,7 +858,7 @@ class PetService {
     const progress = await this._loadProgress(discordId);
     const pet = this._findPet(progress, petUuid);
     if (!pet) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
-    const released = this._toView(pet);
+    const released = this._toView(pet, this._dexGatherParams(progress));
     progress.pets = progress.pets.filter((p) => p && p.uuid !== petUuid);
     if (progress.activePetUuid === petUuid) {
       // 出戰中被放生 → 自動換成剩下第一隻（沒有就清空）
@@ -830,7 +877,7 @@ class PetService {
     if (!name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "暱稱不可為空", 400);
     pet.nickname = name;
     await this.progressRepository.save(progress);
-    return { pet: this._toView(pet) };
+    return { pet: this._toView(pet, this._dexGatherParams(progress)) };
   }
 
   // ── 把 inventory 內的蛋變成 progress.pets[] 的蛋實例（從蛋孵起） ──
@@ -884,11 +931,12 @@ class PetService {
     // 孵蛋一律自動切換出戰到新蛋（舊寵物保留但停止採集，可由「出戰/更換」切回）
     const previousActiveUuid = progress.activePetUuid || null;
     const hadOtherActive = previousActiveUuid && previousActiveUuid !== petInstance.uuid;
+    const dex = this._dexGatherParams(progress);
     if (hadOtherActive) {
       const prev = progress.pets.find((p) => p && p.uuid === previousActiveUuid);
       if (prev) {
+        this._settleGathering(prev, dex.speedMult, dex.cap);
         this._applyHungerDecay(prev);
-        this._settleGathering(prev, this._dexGatherMult(progress));
       }
     }
     progress.activePetUuid = petInstance.uuid;
@@ -898,12 +946,12 @@ class PetService {
     let benchedPet = null;
     if (hadOtherActive) {
       const prev = progress.pets.find((p) => p && p.uuid === previousActiveUuid);
-      if (prev) benchedPet = this._toView(prev);
+      if (prev) benchedPet = this._toView(prev, dex);
     }
 
     await this.progressRepository.save(progress);
     return {
-      pet: this._toView(petInstance),
+      pet: this._toView(petInstance, dex),
       becameActive: true,
       benchedPet,              // 被換下來的舊寵物（null = 本來就沒有）
       totalPets: progress.pets.length,

@@ -107,8 +107,12 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const isDualWield = !cfg.isTwoHanded && wt && offhand?.weaponType != null && OFFHAND_WEAPON_TYPES.has(offhand.weaponType);
 
   // baseStat
-  const baseStatKey = cfg.baseStat || "str";
-  const baseStat = baseStatKey === "int" ? I : baseStatKey === "dex" ? D : S;
+  let baseStatKey = cfg.baseStat || "str";
+  let baseStat = baseStatKey === "int" ? I : baseStatKey === "dex" ? D : S;
+
+  // 盜賊徽章 + 匕首：ATK 改看 AGI（倍率仍用匕首的 ×3）
+  const rogueDagger = hasRogueBadge && wt === "dagger";
+  if (rogueDagger) { baseStatKey = "agi"; baseStat = A; }
 
   // 空手倍率 ×1
   const mult = wt ? cfg.mult : 1;
@@ -180,7 +184,8 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     dodge:    Math.min(50, A * 0.5) + (cfg.dodgeBonus ?? 0) + tierSetBonuses.dodgePct,
     hit:      Math.min(100, 70 + D) + tierSetBonuses.hitPct, // 命中基礎維持 70+DEX；命中曲線改由 hitChance 常數(75→62)+各區迴避帶驅動，避免前期被砍過頭
     crit:     Math.min(100, L * 0.5 + (cfg.critBonus ?? 0)) + tierSetBonuses.critRatePct, // LUK 每點爆擊 0.3→0.5(V0.4 平衡:LUK 補值)
-    combo:    Math.min(80, 3 + A * 0.5 + (cfg.comboBonus ?? 0)),
+    // 連擊率上限：非盜賊維持封頂 80%；盜賊徽章可突破 100%（由 AGI 驅動、不設上限）
+    combo:    hasRogueBadge ? (3 + A * 0.5 + (cfg.comboBonus ?? 0)) : Math.min(80, 3 + A * 0.5 + (cfg.comboBonus ?? 0)),
     comboDamageMultiplier: 1,
     tierSetBonuses,
     tierDamageMultiplier: 1 + tierSetBonuses.damagePct / 100,
@@ -208,6 +213,9 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     counterChance,
     counterInheritStun,
     counterInheritBreak,
+
+    // 盜賊（連擊率可破 100%）
+    hasRogueBadge,
 
     // 矮人戰士
     hasDwarfWarriorBadge,

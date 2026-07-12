@@ -1,7 +1,7 @@
 "use strict";
 /**
- * 斗內碼：每位玩家一組專屬短碼，綠界抖內時填在留言(PatronNote)，
- * 回傳通知時解析留言 → 對應到遊戲帳號發鑽。
+ * 斗內碼：每位玩家一組專屬短碼，綠界抖內時填在「留言(PatronNote)」或「姓名/暱稱(PatronName)」皆可，
+ * 回傳通知時把兩格併起來一起解析 → 對應到遊戲帳號發鑽（代碼是唯一鍵，填哪格都收得到）。
  * 儲存在 progress.donateCode。
  */
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");

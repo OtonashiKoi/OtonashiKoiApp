@@ -83,8 +83,8 @@ async function seasonResetPlayer(discordId, { dryRun = false } = {}) {
 
   // replaceOne:整份取代,確保 pets/bestiary/pkWins/playerTier 等舊欄位一併消失
   await db.collection("progress").replaceOne({ playerId: id }, fresh);
-  // 金幣歸 0、鑽石保留
-  await db.collection("wallets").updateOne({ playerId: id }, { $set: { gold: 0, updatedAt: new Date().toISOString() } });
+  // 金幣歸 0、鑽石保留；賽季背包格(圖鑑券等)歸零，花鑽永久格(bonusBackpackSlots)保留
+  await db.collection("wallets").updateOne({ playerId: id }, { $set: { gold: 0, seasonBackpackSlots: 0, updatedAt: new Date().toISOString() } });
   // 任務 / 打卡進度清空(全新賽季)
   await db.collection("weeklyQuestProgress").deleteMany({ $or: [{ discordId: id }, { playerId: id }] });
   await db.collection("checkins").deleteMany({ $or: [{ discordId: id }, { playerId: id }] });

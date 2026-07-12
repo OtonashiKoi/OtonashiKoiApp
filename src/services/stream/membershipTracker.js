@@ -134,13 +134,58 @@ async function reconcileMembership(guild, serviceContext, opts = {}) {
     }
 
     // 上次是會員、這次沒掃到 → 到期
-    for (const s of prevActive) {
-      if (seen.has(String(s.discordId))) continue;
-      await recordMembershipChange({
-        discordId: s.discordId, displayName: s.displayName, event: "expire",
-        fromTier: s.currentTier, toTier: null, fromLabel: s.currentLabel || null, source
-      });
-      expiries += 1;
+    // 防呆：批次 guild.members.fetch() 若因 Discord 限流/不完整回傳過少成員，會把一堆現任會員誤判「到期」，
+    //       下次又「回鍋」→ 到期↔回鍋來回跳、tier 一直歸零害背包容量掉。
+    //   (1) 掃到的成員數比上次會員名單還少 → 批次明顯壞掉，整輪不判到期。
+    //   (2) 逐一「單獨強制抓一次」二次確認：還有會員身分組→補確認不判；確定退群/拔組才判到期；抓失敗(限流)保守略過。
+    // 用「寬限期」避免限流/批次不完整誤判：最近 EXPIRE_GRACE_MS 內確認過的會員，單次沒掃到不判到期。
+    // （不逐一 force-fetch——那會打爆已被 Discord 限流的 /guilds/:id/members/:id 單一成員路由，反而更慘。）
+    const EXPIRE_GRACE_MS = 6 * 60 * 60 * 1000; // 6 小時
+    const nowMs = Date.now();
+    if (guild.members.cache.size < prevActive.length) {
+      console.warn(`[Membership] 批次成員不完整(掃到${guild.members.cache.size}<會員${prevActive.length})，本輪跳過到期判定`);
+    } else {
+      // 二次確認上限：只對「批次沒掃到」的少數人單獨強制抓，避免整批壞掉時打爆單一成員路由
+      const MAX_FORCE_RECHECK = 30;
+      let forceRechecks = 0;
+      for (const s of prevActive) {
+        if (seen.has(String(s.discordId))) continue;
+        const lastConf = s.lastMemberConfirmedAt ? Date.parse(s.lastMemberConfirmedAt) : 0;
+        // 最近才確認過會員 → 這次沒掃到多半是批次/限流問題，先不判到期（等連續 6h 都沒掃到才算真到期）
+        if (lastConf && nowMs - lastConf < EXPIRE_GRACE_MS) continue;
+        // 二次確認：批次 guild.members.fetch() 會系統性漏掉部分成員（同幾位反覆被誤判到期，且因永遠沒被掃到→
+        //   lastMemberConfirmedAt 永不刷新→寬限期一過就每輪都到期）。判到期前對這少數人單獨強制抓一次：
+        //   仍掛著 tier 身分組 → 補確認+刷新時間戳(必要時補記升降級)、不判到期；
+        //   確定沒有 tier 身分組/退群 → 才真判到期；抓失敗(限流/未知) → 保守略過不判。
+        if (forceRechecks < MAX_FORCE_RECHECK) {
+          forceRechecks += 1;
+          const fresh = await guild.members.fetch({ user: String(s.discordId), force: true }).catch(() => null);
+          if (!fresh) continue; // 抓不到(限流/暫時性) → 不判到期
+          const freshRoleIds = [...fresh.roles.cache.keys()];
+          if (freshRoleIds.some((id) => allTierRoleIds.has(String(id)))) {
+            // 其實還是會員，批次漏掉而已 → 補確認、刷新 lastMemberConfirmedAt，不判到期
+            const freshRank = await playerTierService.resolveHighestTier(freshRoleIds).catch(() => null);
+            if (freshRank) {
+              await touchMemberConfirmed({ discordId: s.discordId, displayName: s.displayName, tier: freshRank, label: tiers[freshRank]?.label || null });
+              if (s.currentTier !== freshRank) {
+                await recordMembershipChange({
+                  discordId: s.discordId, displayName: s.displayName, event: diffTier(s.currentTier, freshRank) || "role_change",
+                  fromTier: s.currentTier, toTier: freshRank, fromLabel: s.currentLabel || null, toLabel: tiers[freshRank]?.label || null, source
+                });
+              }
+              continue;
+            }
+          }
+          // fresh 抓到了、且確定沒有 tier 身分組 → 往下真判到期
+        } else {
+          continue; // 超過二次確認上限 → 本輪保守不判(等下輪)
+        }
+        await recordMembershipChange({
+          discordId: s.discordId, displayName: s.displayName, event: "expire",
+          fromTier: s.currentTier, toTier: null, fromLabel: s.currentLabel || null, source
+        });
+        expiries += 1;
+      }
     }
 
     const summary = { scanned: guild.members.cache.size, currentMembers, joins, changes, touched, expiries, at: new Date().toISOString() };

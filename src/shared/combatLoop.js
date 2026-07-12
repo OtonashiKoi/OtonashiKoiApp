@@ -786,6 +786,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const playerAttackLevelMult = calcLevelMult(playerLevel, monsterLevel);
   const monsterAttackLevelMult = calcLevelMult(monsterLevel, playerLevel);
 
+  // 🐺 狼王・連牙亂舞：連段卡技 → 每段傷害 90%（開戰前一次縮放 atk，段數由下方連段控制）
+  const _hellfangCombo = options.monsterEquipped?.special_1?.monsterCardSkill?.key === "hellfang_combo";
+  if (_hellfangCombo && mCalc && Number(mCalc.atk) > 0) {
+    mCalc = { ...mCalc, atk: Math.max(1, Math.round(Number(mCalc.atk) * 0.9)) };
+  }
+
   // 傷害浮動：min~1.3，INT 縮小下限
   const rollDmg = (base) => {
     const roll = pStats.dmgMin + Math.random() * (pStats.dmgMax - pStats.dmgMin);
@@ -1181,6 +1187,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (_noPlayerAtk) burnDmg = 0;
           mHp -= burnDmg;
           totalDamage += burnDmg;
+          combatStats.burnTriggerCount += 1; // 焰獄審判任務:玩家施加給怪的燃燒每跳一次算「觸發燃燒」1 次
           log.push(`🔥 燒傷持續！${mName} 受到 **${burnDmg}** 點灼燒傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
           if (mHp <= 0) { outcome = "win"; break; }
         }
@@ -1921,7 +1928,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const specialSlots = ['special_1', 'special_2', 'special_3'];
     for (const slot of specialSlots) {
       const slotItem = options.equipped?.[slot];
-      if (!playerIsSilenced && slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key) {
+      if (!playerIsSilenced && slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key
+          && slotItem.monsterCardSkill.trigger !== 'on_dodge') { // on_dodge 卡改在「玩家閃避」時觸發，不在此回合觸發
         const skill = slotItem.monsterCardSkill;
         const cardName = slotItem.itemName || slotItem.name || '卡片';
         const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
@@ -2257,6 +2265,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerEchoChance = 0;                 // 繫・初鳴之晶：共鳴殘影追擊觸發率(%)
     let playerEchoPct = 0;                     // 殘影追擊傷害＝該次傷害的 %
     let playerTripleStrike = 0;               // 三元牌：固定 N 段攻擊、每段 1/N 傷害（0=不啟用）
+    let playerGuaranteedCombo = 0;            // 狼牙王卡：連擊「首 N 段必定連上」（不看連擊率、必中），之後回到自身連擊率
     if (Array.isArray(options.playerActiveEffects)) {
       for (const eff of options.playerActiveEffects) {
         if (!eff) continue;
@@ -2410,6 +2419,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           // 三元牌：固定每回合攻擊 N 段、每段傷害為原本的 1/N（走連擊系統，算連擊數）
           const n = Math.max(2, Math.round(Number(effValue) || Number(effParams.hits) || 3));
           if (n > playerTripleStrike) playerTripleStrike = n;
+        } else if (eff.key === 'guaranteed_combo') {
+          // 狼牙王卡：連擊首 N 段必定連上（不看連擊率、必中），之後回到自身連擊率
+          const n = Math.max(0, Math.round(Number(effValue) || Number(effParams.hits) || 0));
+          if (n > playerGuaranteedCombo) playerGuaranteedCombo = n;
         }
       }
     }
@@ -2777,8 +2790,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
         } catch (_) { /* 採證失敗不影響戰鬥 */ }
 
-        // 三元牌：主擊改為 1/N（之後固定補 N-1 段，各 1/N）→ 總傷不變、分成 N 段（算連擊）
-        if (playerTripleStrike >= 2) dmg = Math.max(1, Math.round(dmg / playerTripleStrike));
+        // 三元牌：主擊改為 1/N 並吃連擊增傷（連擊戒/龍鱗）→ 分成 N 段（算連擊；補打段見下方各自獨立擲爆擊）
+        if (playerTripleStrike >= 2) dmg = Math.max(1, Math.round(dmg / playerTripleStrike * (pStats.comboDamageMultiplier || 1)));
 
         if (_noPlayerAtk) dmg = 0; // 沒苦硬吃：一般攻擊(＋衍生連擊/三元補打)最終傷害歸零
         mHp -= dmg;
@@ -2816,15 +2829,23 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         log.push(`⚔️ ${atkTierNote}${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害${defTierNote ? `（${defTierNote.replace(/[!！]$/, "")}）` : ""}！（怪物剩 ${Math.max(0, mHp)} HP）`);
 
-        // ── 三元牌：固定補打 N-1 段（各與主擊同為 1/N 傷害；算連擊、可致命）──
+        // ── 三元牌：固定補打 N-1 段（每段獨立擲爆擊、吃連擊增傷、吃地圖特攻；算連擊、可致命）──
         if (playerTripleStrike >= 2 && mHp > 0) {
           const _sanyuan = ["白", "發", "中"];
+          // 每段基底＝未爆擊 1/N ×（地圖特攻/最終傷害%）→ 避免疊到主擊爆擊；再逐段各自吃連擊增傷+獨立爆擊
+          const _tsCleanBase = Math.max(1, Math.round(nonCritDamageBase / playerTripleStrike * (equipZoneFinalDmgMult * roundScaleMult(round))));
           for (let _ts = 1; _ts < playerTripleStrike && mHp > 0; _ts++) {
-            mHp -= dmg;
-            totalDamage += dmg;
+            let tsDmg = Math.max(1, Math.round(_tsCleanBase * (pStats.comboDamageMultiplier || 1)));
+            const tsCrit = (Math.random() * 100 < effectiveCrit);
+            if (tsCrit) tsDmg = Math.max(1, Math.round(tsDmg * 2 * playerCritDamageMultiplier * tierCritDamageMultiplier));
+            if (weaponMainBonus > 0) tsDmg += weaponMainBonus;
+            if (_noPlayerAtk) tsDmg = 0;
+            mHp -= tsDmg;
+            totalDamage += tsDmg;
             combatStats.comboCount += 1;
             const _pai = _sanyuan[_ts % _sanyuan.length];
-            log.push(`🀄 **三元・${_pai}**！再造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+            const _tsCritNote = tsCrit ? `✨**${rand(critPhrases)}**！` : "";
+            log.push(`🀄 ${_tsCritNote}**三元・${_pai}**！再造成 **${tsDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
           }
           if (mHp <= 0) { outcome = "win"; break; }
         }
@@ -3109,25 +3130,40 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
-        // 連擊（AGI驅動）── 可同回合連續觸發：第 1 次吃完整連擊率，之後每次機率為前一次的 1/5，單回合最多 5 連擊
+        // 連擊（AGI驅動）── 第 1 次吃完整連擊率，之後每次機率為前一次的 1/2，單回合最多 7 連擊；
+        // 且每一段都要重新判定命中：被迴避/未命中即中斷連段；被格檔則該段傷害壓到 1（不中斷連段）。
         let comboChance = pStats.combo * (1 + roundPartyAgiBoostPct / 100) + roundPartyComboBoostPct;
-        comboChance = Math.min(100, Math.max(0, comboChance));
+        // 連擊率上限：非盜賊封頂 100%；盜賊徽章可突破 100%（上限 300% 防呆，>100 代表首段必中、後續段仍高）
+        const _comboRateCap = pStats.hasRogueBadge ? 300 : 100;
+        comboChance = Math.min(_comboRateCap, Math.max(0, comboChance));
 
-        const MAX_COMBO_PER_ROUND = 5;
+        const MAX_COMBO_PER_ROUND = 7;
         let comboHitsThisAttack = 0;
         let comboKilled = false;
-        while (comboHitsThisAttack < MAX_COMBO_PER_ROUND && Math.random() * 100 < comboChance) {
+        while (comboHitsThisAttack < MAX_COMBO_PER_ROUND && (comboHitsThisAttack < playerGuaranteedCombo || Math.random() * 100 < comboChance)) {
+          // 連擊逐段命中判定：被迴避/未命中 → 立即中斷連段（怪被暈時無法閃避、必中；不吃主擊的大成功/完美必中）
+          const comboConnects = comboHitsThisAttack < playerGuaranteedCombo || monsterIsStunned || Math.random() * 100 < hitChance;
+          if (!comboConnects) {
+            log.push(`💨 ${mName} ${rand(jobFlavor.dodge)}，連擊被閃開，連段中斷！`);
+            break;
+          }
           comboHitsThisAttack += 1;
           combatStats.comboCount += 1;
           // 龍王戰意：連擊傷害吃「目前已疊加、超出主攻擊基準」的攻擊層數（含主攻擊命中那一層），連擊愈多愈痛
           const comboStackEscalationPct = Math.max(0, stackOnHitStacks - attackStackPctBase);
           // 連擊:用「未含追加值」的傷害乘連擊倍率 ×龍王戰意疊加成長,再額外加一次武器主屬性追加(固定,不被倍率縮放)
           let cdmg = Math.max(1, Math.round(Math.max(1, dmg - weaponMainBonus) * (pStats.comboDamageMultiplier || 1) * (1 + comboStackEscalationPct / 100)) + weaponMainBonus);
+          // 連擊逐段格檔判定：被格檔不中斷連段，只把該段傷害壓到 1（連擊為非爆擊，不走爆擊破格）
+          let comboBlockNote = "";
+          if (adjustedMCalc.blockChance > 0 && Math.random() * 100 < adjustedMCalc.blockChance) {
+            cdmg = 1;
+            comboBlockNote = `，但 ${mName} ${rand(BLOCK_PHRASES)}，傷害降至 **1**`;
+          }
           if (_noPlayerAtk) cdmg = 0; // 沒苦硬吃：連擊也不造成傷害
           mHp -= cdmg;
           totalDamage += cdmg;
           const comboLabel = comboHitsThisAttack >= 2 ? `${comboHitsThisAttack} 連擊` : "連擊";
-          log.push(`⚡ **${rand(jobFlavor.combo)}** ${comboLabel}！再造成 **${cdmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          log.push(`⚡ **${rand(jobFlavor.combo)}** ${comboLabel}！再造成 **${cdmg}** 點傷害${comboBlockNote}！（怪物剩 ${Math.max(0, mHp)} HP）`);
 
           // 這一段連擊也算一次出手 → 往上疊加攻擊層數，讓下一段連擊更痛（上限同 stackOnHitCap）
           if (stackOnHitValue > 0 && stackOnHitStacks < stackOnHitCap) {
@@ -3177,6 +3213,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       skipMonsterAttackReason = "agi_slowed";
     } else {
       monsterAttackCount = pStats.monsterAttackCount || 1;
+      // 🐺 連牙亂舞：保底 2 段 + 機率追加(第3段55%→第4段30%→第5段12%，依序遇失敗停)，最多 5 段
+      if (_hellfangCombo) {
+        let hits = 2;
+        if (Math.random() < 0.55) { hits++; if (Math.random() < 0.30) { hits++; if (Math.random() < 0.12) hits++; } }
+        monsterAttackCount = hits;
+      }
     }
 
     if (skipMonsterAttackReason === "stun") {
@@ -3204,24 +3246,29 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const mAtkTierProbs = calcAttackTierProbs(adjustedMCalc.dex || 0, adjustedMCalc.luk || 0);
       const mAtkTier = rollAttackTier(mAtkTierProbs);
 
-      // 大失敗：怪自殘 30%，跳過本次怪攻
-      if (mAtkTier === 'critFail') {
+      // 🐺 狼王・連牙亂舞：前 2 段必定命中且必連(無視玩家迴避與怪物自身失誤)；第 3 段起「任何未命中」(玩家迴避 or 怪物自己揮空/大失敗)都打斷剩餘連段
+      const hellfangGuaranteedSeg = _hellfangCombo && ma < 2;
+
+      // 大失敗：怪自殘 30%，跳過本次怪攻(狼王保底段不會失誤)
+      if (mAtkTier === 'critFail' && !hellfangGuaranteedSeg) {
         const mSelfBase = Math.max(1, Math.round((adjustedMCalc.atk || 1) * monsterAttackLevelMult));
         const mSelfDmg = Math.max(1, Math.round(mSelfBase * 0.3 * (0.7 + Math.random() * 0.3)));
         mHp -= mSelfDmg;
         totalDamage += mSelfDmg;
         log.push(`💥 **${mName} 大失敗**！自亂招式砸到自己，受到 **${mSelfDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
         if (mHp <= 0) { outcome = "win"; break; }
+        if (_hellfangCombo) break; // 🐺 第3段起自己大失敗也打斷連段
         continue;
       }
-      // 失敗：強制 miss
-      if (mAtkTier === 'fail') {
+      // 失敗：強制 miss(狼王保底段不會失誤)
+      if (mAtkTier === 'fail' && !hellfangGuaranteedSeg) {
         log.push(`❌ **${mName} 失敗**！揮空了！`);
+        if (_hellfangCombo) break; // 🐺 第3段起自己揮空也打斷連段
         continue;
       }
       const mForceHit = (mAtkTier === 'great' || mAtkTier === 'perfect');
 
-      if (playerIsStunned || mForceHit || Math.random() * 100 < monsterHitChance) {
+      if (playerIsStunned || mForceHit || hellfangGuaranteedSeg || Math.random() * 100 < monsterHitChance) {
         // 盾格擋判定（含主動技能臨時格擋加成，例如劍士「舉步若堅」+25%，上限 95% 與被動一致）
         if (Math.random() * 100 < Math.min(95, (pStats.blockChance || 0) + playerBlockBonus)) {
           blockedThisRound = true;
@@ -3412,6 +3459,37 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         combatStats.dodgeCount += 1;
         log.push(`🛡️ ${mName} 猛撲而來，你${rand(jobFlavor.dodge)}，躲過了攻擊！`);
 
+        // ── 卡片「閃避後觸發」（trigger: on_dodge，如魅影潛襲者【暗影急襲】迴避後爆擊率提升）──
+        if (!playerIsSilenced && outcome === null) {
+          for (const dSlot of ['special_1', 'special_2', 'special_3']) {
+            const dItem = options.equipped?.[dSlot];
+            const dSkill = dItem?.monsterCardSkill;
+            if (!dSkill || !dSkill.key || dSkill.trigger !== 'on_dodge') continue;
+            const dChance = Math.min(100, Math.max(0, Number(dSkill.chance ?? 20)));
+            if (Math.random() * 100 >= dChance) continue;
+            const dRes = applyCardProcEffects({
+              procEffects: Array.isArray(dSkill.procEffects) ? dSkill.procEffects : [],
+              ownerHpPct: pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100,
+              targetHpPct: mHpInit > 0 ? (mHp / mHpInit) * 100 : 100,
+              round, sourceType: 'player_card',
+              cardName: dItem.itemName || dItem.name || '卡片',
+              skillName: dSkill.name || '', skillDescription: dSkill.description || '',
+              cooldownBucket: cardCooldowns.player, cooldownKey: dItem.itemId || dItem.id || dSlot,
+              cooldownTurns: Number(dSkill.cooldownTurns) || 0,
+              ownerActiveEffects: options.playerActiveEffects || [],
+              targetActiveEffects: monsterActiveEffects,
+              ownerLabel: playerBattleName, sourceAtk: pStats.atk || 1,
+              ownerMaxHp: pStats.maxHp || pHp || 1, targetMaxHp: mHpInit || mHp || 1, targetLabel: mName,
+              applyTargetDamage: (d) => { mHp -= d; totalDamage += Math.max(0, Number(d) || 0); return mHp; },
+              applyOwnerHeal: (h) => { pHp = _healPlayer(h); return pHp; },
+              buffKeys: PLAYER_CARD_OFFENSIVE_KEYS, debuffKeys: PLAYER_CARD_OFFENSIVE_KEYS,
+              sourceId: dItem.uuid || dItem.itemId || dItem.id, log,
+            });
+            options.playerActiveEffects = dRes.ownerActiveEffects;
+            monsterActiveEffects = dRes.targetActiveEffects;
+          }
+        }
+
         // ── 弓箭手閃避反擊（counter_on_dodge）──
         const hasCounterOnDodge = jobProfile.activeJobEffects.some(e => e.key === 'counter_on_dodge');
         if (hasCounterOnDodge && outcome === null) {
@@ -3435,12 +3513,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             log.push(`🏹 閃避後出箭，但 ${mName} ${rand(dodgePhrases)}！`);
           }
         }
+        // 🐺 狼王：第 3 段(含)起被玩家迴避 → 打斷剩餘連段(前 2 段必中不受此限)
+        if (_hellfangCombo && ma >= 2) break;
       }
     }
 
     // ── 怪物連擊（AGI 驅動）── 簡化：觸發後同一次傷害再扣一次（× 2 效果）
     const monsterComboChance = adjustedMCalc.comboChance || 0;
-    if (monsterComboChance > 0 && !skipMonsterAttackReason && outcome === null && lastMonsterDmg > 0) {
+    // 🐺 狼王：連擊由「連牙亂舞」段數機制負責(含迴避打斷)，關掉這套 AGI 額外連擊避免雙重連擊架空打斷
+    if (monsterComboChance > 0 && !skipMonsterAttackReason && outcome === null && lastMonsterDmg > 0 && !_hellfangCombo) {
       if (Math.random() * 100 < monsterComboChance) {
         const comboDmg = lastMonsterDmg;
         _hurt(comboDmg);

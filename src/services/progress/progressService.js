@@ -14,10 +14,14 @@ const ATTR_LABEL_ZH = {
 };
 const CAS_MAX_RETRIES = 8;
 
+// 滿等溢出經驗轉金幣：溢出 EXP ÷ 此除數 = 金幣（可調；20 = 1/20）。
+const MAX_LEVEL_EXP_TO_GOLD_DIVISOR = 20;
+
 class ProgressService {
-  constructor(playerService, progressRepository) {
+  constructor(playerService, progressRepository, rewardService = null) {
     this.playerService = playerService;
     this.progressRepository = progressRepository;
+    this.rewardService = rewardService; // 滿等溢出經驗轉金幣用；未注入則跳過轉換
   }
 
   async _saveProgressWithFallback(progress, prevUpdatedAt) {
@@ -82,7 +86,14 @@ class ProgressService {
           attrsZh: gainedAttrs.map((key) => ATTR_LABEL_ZH[key] || key.toUpperCase())
         });
       }
-      if (next.level >= MAX_LEVEL) next.exp = 0;
+      // 滿等：溢出經驗不再丟掉，改成 ÷10 轉金幣（存檔成功後才實際發放，避免 CAS 重試重複發）
+      let overflowExp = 0;
+      let overflowGold = 0;
+      if (next.level >= MAX_LEVEL) {
+        overflowExp = Math.max(0, next.exp || 0);
+        overflowGold = Math.floor(overflowExp / MAX_LEVEL_EXP_TO_GOLD_DIVISOR);
+        next.exp = 0;
+      }
       next.updatedAt = new Date().toISOString();
 
       const saved = await this._saveProgressWithFallback(next, prevUpdatedAt);
@@ -121,7 +132,17 @@ class ProgressService {
             });
           } catch (_) { /* 推播失敗不影響經驗結算 */ }
         }
-        return { player, progress: next, levelUps, levelUpDetails };
+        // 滿等溢出經驗 → 金幣（存檔已成功，這裡發放一次；失敗只記 log 不影響經驗結算）
+        if (overflowGold > 0 && typeof this.rewardService?.grantCurrency === "function") {
+          try {
+            await this.rewardService.grantCurrency({
+              discordId, displayName, currencyType: "gold", amount: overflowGold, source: "level:exp-overflow"
+            });
+          } catch (err) {
+            console.warn(`[grantExp] 滿等溢出轉金幣發放失敗 ${discordId}: ${err?.message || err}`);
+          }
+        }
+        return { player, progress: next, levelUps, levelUpDetails, overflowExp, overflowGold };
       }
 
       // 文件已被其他操作修改，等一下重試

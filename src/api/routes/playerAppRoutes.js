@@ -146,6 +146,21 @@ function applyZoneDamageSync(zoneKey, startMonsterHp, monsterMaxHp, rawDamage, r
   };
 }
 
+// 拍賣商品分類（前端篩選用）：pet / weapon / armor / accessory / card / consumable / other
+const _ARMOR_SLOTS = new Set(["armor", "head_top", "head_mid", "head_low", "garment", "shoes", "shield"]);
+function classifyAuctionCategory(item) {
+  if (!item) return "other";
+  if (item.__pet) return "pet";
+  const slot = String(item.equipSlot || "");
+  if (slot.startsWith("special") || item.isNpcCard || item.monsterCardOf || item.monsterCardSkill) return "card";
+  if (item.weaponType) return "weapon";
+  if (slot === "accessory_l" || slot === "accessory_r") return "accessory";
+  if (_ARMOR_SLOTS.has(slot)) return "armor";
+  if (slot === "anchor") return "anchor";
+  if (item.itemType === "consumable") return "consumable";
+  return "other";
+}
+
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
   // 頭像快取用同一個 discord client(玩家氣泡需要頭像)
@@ -1067,6 +1082,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
 
+      // 卡片圖鑑：曾擁有就永久登錄——在常被載入的 profile 補登，確保「拿到卡(掉落/開包/拍賣/交易)後就算」，
+      // 即使玩家沒打開圖鑑、之後又把卡賣掉/交易掉，圖鑑進度也保留。
+      if (progress) {
+        try {
+          const cardDexMod = require("../../shared/cardDex");
+          const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+          const registry = await cardDexMod.getCardRegistry(await getMongoDb());
+          if (cardDexMod.syncCardDexFromInventory(progress, registry)) {
+            progress.updatedAt = new Date().toISOString();
+            await serviceContext.progressRepository.save(progress).catch(() => {});
+          }
+        } catch (_) { /* 圖鑑補登失敗不影響 profile */ }
+      }
+
       const { expToNextLevel, MAX_LEVEL } = require("../../shared/progression");
       const lv = progress?.level || 1;
       const isMaxLevel = lv >= MAX_LEVEL;
@@ -1101,6 +1130,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           isDualWield: Boolean(cs.isDualWield),
           tierSetBonuses: cs.tierSetBonuses || null,
           sets: require("../../shared/equipmentSetBonuses").getEquippedSetInfo(mergedEquipment),
+          tierSets: require("../../shared/equipmentTierSetBonuses").getTierSetInfo(mergedEquipment),
           enchantTotals: require("../../shared/enchantEngine").summarizeEquippedEnchantments(mergedEquipment)
         };
       } catch (err) {
@@ -1518,19 +1548,40 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId } = req.playerRecord;
       const { uuid } = req.params;
       const confirm = req.body?.confirm === true || req.body?.confirm === "true";
+      // 批量販售：bulk=true 時賣「同款可賣物」；qty 省略＝全賣(getSellQuote 會夾到可賣上限)。裝備/寶石/徽章仍由 getSellQuote 擋下。
+      const bulk = req.body?.bulk === true || req.body?.bulk === "true";
+      const qty = bulk ? Math.max(1, Math.floor(Number(req.body?.qty) || 9999)) : 1;
       if (!confirm) {
-        const quote = await serviceContext.shopService.getSellQuote(discordId, uuid, 1);
+        const quote = await serviceContext.shopService.getSellQuote(discordId, uuid, qty);
         return res.json(ok({
           requiresConfirmation: true,
           confirmField: "confirm",
+          bulk,
           itemName: quote.itemName,
           sellCount: quote.sellCount,
           priceEach: quote.priceEach,
           totalGold: quote.totalGold,
-          message: `你確定要販售 ${quote.itemName} 嗎？販售總價值 ${quote.totalGold} 金幣。`
+          message: bulk
+            ? `你確定要批量販售 ${quote.itemName} ×${quote.sellCount} 嗎？販售總價值 ${quote.totalGold} 金幣。`
+            : `你確定要販售 ${quote.itemName} 嗎？販售總價值 ${quote.totalGold} 金幣。`
         }));
       }
-      const result = await serviceContext.shopService.sellItem(discordId, uuid);
+      const result = bulk
+        ? await serviceContext.shopService.sellItemBulk(discordId, uuid, qty)
+        : await serviceContext.shopService.sellItem(discordId, uuid);
+      res.json(ok(result));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 切換裝備鎖定（鎖定後不可分解/丟棄/出售）。body.locked 可指定要鎖或解，省略＝切換。
+  router.post("/api/me/inventory/:uuid/lock", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const { uuid } = req.params;
+      const want = (req.body && "locked" in req.body) ? Boolean(req.body.locked) : null;
+      const result = await serviceContext.shopService.toggleItemLock(discordId, uuid, want);
       res.json(ok(result));
     } catch (err) {
       next(err);
@@ -2139,19 +2190,27 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   // 8. Get Chat History
+  // 城鎮頻道歷史短快取：所有玩家共用（前端每 10s 輪詢），避免每次都去 Discord 逐則撈成員/提及（慢、又吃限流）。
+  // 即時新訊息本來就走 SSE 推播，這裡的歷史短暫(8s)過期完全可接受。
+  let _chatHistoryCache = { data: null, at: 0 };
+  let _chatHistoryInflight = null;
+  const CHAT_HISTORY_TTL_MS = 8000;
+
   router.get("/api/chat/history", requireAuth, async (req, res, next) => {
     try {
-      const layout = await serviceContext.channelLayoutRepository.get();
-      const townChatBinding = layout.discord.bindings.find(b => b.featureKey === "town_chat" && b.enabled);
-      
-      if (!townChatBinding || !townChatBinding.channelId || !discordClient) {
-        return res.json(ok([]));
+      // 命中新鮮快取 → 直接回，不打 Discord
+      if (_chatHistoryCache.data && Date.now() - _chatHistoryCache.at < CHAT_HISTORY_TTL_MS) {
+        return res.json(ok(_chatHistoryCache.data));
       }
-      
-      const channel = discordClient.channels.cache.get(townChatBinding.channelId);
-      if (!channel) return res.json(ok([]));
-      
-      const messages = await channel.messages.fetch({ limit: 50 });
+      // 併發防護：同時多人載入只實際打一次 Discord，其餘等同一個 promise
+      if (!_chatHistoryInflight) {
+        _chatHistoryInflight = (async () => {
+          const layout = await serviceContext.channelLayoutRepository.get();
+          const townChatBinding = layout.discord.bindings.find(b => b.featureKey === "town_chat" && b.enabled);
+          if (!townChatBinding || !townChatBinding.channelId || !discordClient) return [];
+          const channel = discordClient.channels.cache.get(townChatBinding.channelId);
+          if (!channel) return [];
+          const messages = await channel.messages.fetch({ limit: 50 });
       const history = await Promise.all([...messages.values()].map(async (msg) => {
         // Resolve missing guild member data on demand when cache misses.
         if (!msg.member && !msg.author.bot) {
@@ -2200,7 +2259,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           replyTo,
         };
       }));
-      res.json(ok(history.reverse()));
+          return history.reverse();
+        })().finally(() => { _chatHistoryInflight = null; });
+      }
+      const result = await _chatHistoryInflight;
+      _chatHistoryCache = { data: result, at: Date.now() };
+      res.json(ok(result));
     } catch (err) {
       next(err);
     }
@@ -2513,12 +2577,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.warn("[PlayerApp] idle auto-settle on battle failed:", e.message);
       }
       
+      // 自癒：清掉「過期殘留的切換動畫」(例如切換途中重啟→DB transition 變孤兒、currentHp 停在前一隻殘血)，
+      // 否則整個領域會卡住打不死。過期才會動作，未過期不影響正常切換。
+      try {
+        const { _resolveExpiredMonsterTransition } = require("../../bot/handlers/monsterZoneHandlers");
+        await _resolveExpiredMonsterTransition(serviceContext, zoneKey);
+      } catch (_) { /* 自癒失敗不阻擋戰鬥 */ }
+
       const [stateRaw, monsters] = await Promise.all([
         serviceContext.monsterService.getState(zoneKey),
         serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey })
       ]);
       let state = stateRaw;
-      
+
       if (!monsters.length) {
         return res.status(400).json({ status: "error", message: "No enabled monster in this zone." });
       }
@@ -2703,13 +2774,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         DRAGON_KING_ZONE: WB_DRAGON_KING_ZONE
       } = require("../../bot/handlers/monsterZoneHandlers");
 
-      const WB_VALID_PARTS = new Set(["head", "body", "wings", "legs"]);
+      // 部位依 zone 動態(牙狼5部位/古龍王4/其餘3)
+      const _wbPartKeys = require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartKeys(zoneKey) || ["head", "body", "legs"];
+      const WB_VALID_PARTS = new Set(_wbPartKeys);
+      const _wbPartFallback = WB_VALID_PARTS.has("body") ? "body" : _wbPartKeys[0];
       const isWorldBoss = isWorldBossZone(zoneKey) && Boolean(monster?.isBoss);
-      // 部位：優先讀 req.body.part；不合法則 fallback "body"
-      let worldBossPart = "body";
+      // 部位：優先讀 req.body.part；不合法則 fallback
+      let worldBossPart = _wbPartFallback;
       if (isWorldBoss) {
         const rawPart = String(req.body?.part || "").trim();
-        worldBossPart = WB_VALID_PARTS.has(rawPart) ? rawPart : "body";
+        worldBossPart = WB_VALID_PARTS.has(rawPart) ? rawPart : _wbPartFallback;
       }
 
       let battlePStats = pStats;
@@ -2764,14 +2838,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             return res.status(409).json({ status: "error", code: "world_boss_unavailable", message: "世界王已被擊敗或進入冷卻,無法繼續挑戰。" });
           }
           // 還有其他活著的部位 → 明確告知該部位已破,附上最新部位血量供前端刷新 + 重選
-          const PART_LABELS_BLOCK = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
+          const PART_LABELS_BLOCK = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
           const maxMap = stateForCombat.worldBossPartsMaxHp || {};
           const partsForResp = _partKeys
             .filter((k) => Object.prototype.hasOwnProperty.call(_partsHp, k))
             .map((k) => {
               const hp = Math.max(0, Number(_partsHp[k] || 0));
               const max = Math.max(1, Math.round(Number(maxMap[k] || 0) || hp || 1));
-              return { key: k, name: PART_LABELS_BLOCK[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0 };
+              return { key: k, name: PART_LABELS_BLOCK[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartWeakness(zoneKey, k) };
             });
           return res.status(409).json({
             status: "error",
@@ -2896,12 +2970,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let worldBossPartHpMax = 1;
       let worldBossPartsForResp = null;
       let worldBossPartBroken = false;
+      let hellfangEvent = null; // 牙狼適應性狀態變化(給戰報文案)
+      const _mzHellfang = require("../../bot/handlers/monsterZoneHandlers");
       if (isWorldBoss) {
         try {
           const freshState = await serviceContext.monsterService.getState(zoneKey);
           const prevParts = ensureWBPartState(freshState, monster.calc.maxHp, zoneKey);
           const latestPartHp = Math.max(0, Number(prevParts.worldBossPartsHp?.[worldBossPart] || 0));
-          const nextPartHp = Math.max(0, latestPartHp - totalDamage);
+          // 牙狼(hellfire_depths)適應性傷害：本場傷害 ×(部位弱點 × 適應)；其餘世界王照原樣
+          let wbDamage = totalDamage;
+          if (zoneKey === "hellfire_depths") {
+            const _hf = _mzHellfang.hellfangDamageMult(freshState, worldBossPart, pStats.weaponType, Date.now());
+            wbDamage = Math.max(0, Math.round(totalDamage * _hf.mult));
+          }
+          const nextPartHp = Math.max(0, latestPartHp - wbDamage);
           const nextPartsHp = { ...prevParts.worldBossPartsHp, [worldBossPart]: nextPartHp };
           const nextCurrentHp = sumWBPartHp(nextPartsHp);
           worldBossAllPartsDefeated = isWBAllDefeated(nextPartsHp);
@@ -2915,7 +2997,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             [discordId]: {
               name: displayName,
               level: progress?.level || 1,
-              damage: (prevDmg[discordId]?.damage || 0) + totalDamage,
+              damage: (prevDmg[discordId]?.damage || 0) + wbDamage,
               taken: (prevDmg[discordId]?.taken || 0) + totalTaken,
               // 世界王貢獻寶箱:累計入場費(花費排名依據),與 DC 共用同一份 damageMap → 貢獻合併計算
               spent: (prevDmg[discordId]?.spent || 0) + (Number(worldBossEntryFee) || 0),
@@ -2931,19 +3013,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             participants: updatedParticipants,
             lastHitAt: new Date().toISOString()
           };
+          // 牙狼：用「原始傷害＋流派」更新適應狀態(動態切換抗物理/抗法)；記在 nextState 一起存
+          if (zoneKey === "hellfire_depths") {
+            hellfangEvent = _mzHellfang.hellfangUpdateAdaptation(nextState, _mzHellfang.hellfangPlayerSchool(pStats.weaponType), totalDamage, Date.now());
+          }
           await serviceContext.monsterService.saveState(nextState, zoneKey);
           stateForCombat = nextState;
           worldBossSettled = true;
 
           // 部位血條（回傳給前端即時更新）
-          const PART_LABELS_RESP = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
+          const PART_LABELS_RESP = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
           const { getWorldBossPartKeys: wbPartKeys } = require("../../bot/handlers/monsterZoneHandlers");
           worldBossPartsForResp = wbPartKeys(zoneKey)
             .filter((k) => Object.prototype.hasOwnProperty.call(nextPartsHp, k))
             .map((k) => {
               const hp = Math.max(0, Number(nextPartsHp[k] || 0));
               const max = Math.max(1, Math.round(Number(prevParts.worldBossPartsMaxHp?.[k] || 0) || hp || 1));
-              return { key: k, name: PART_LABELS_RESP[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0 };
+              return { key: k, name: PART_LABELS_RESP[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartWeakness(zoneKey, k) };
             });
 
           // outcome：全破 → win（真正擊殺）；部位破但王未全破 → win（該部位戰勝，但不擊殺整王）；
@@ -3004,12 +3090,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           // handleMonsterKill 內部對世界王會 markBossKilled() → 設 lastKilledAt → 進入冷卻
           rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state: stateWithMe, totalDamage, zoneKey });
         } else if (worldBossPartBroken) {
-          rewardLines = [`💥 已擊破 ${monster.name} 的${({ head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" })[worldBossPart] || "部位"}！繼續擊破其餘部位才能屠王。`];
+          rewardLines = [`💥 已擊破 ${monster.name} 的${({ head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" })[worldBossPart] || "部位"}！繼續擊破其餘部位才能屠王。`];
         } else if (outcome === "lose") {
           rewardLines = [`你被 ${monster.name} 擊敗了…`];
         } else {
           rewardLines = [`激戰 ${MAX_ROUNDS} 回合，未能擊破部位（剩 ${Math.max(0, Math.round(worldBossPartHpCurrent))} HP），下次再來補刀！`];
         }
+        // 牙狼：適應性狀態變化 → 戰報加提示
+        if (hellfangEvent) rewardLines = [...(Array.isArray(rewardLines) ? rewardLines : []), ..._mzHellfang.hellfangAdaptLines(hellfangEvent)];
         // 部位戰報後即時更新面板（含部位血條）
         _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, stateForCombat.currentHp, currentParticipants.length + 1, stateForCombat.damageMap || {}).catch(() => {});
       } else if (outcome === "win") {
@@ -3259,7 +3347,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         tickMs: calculateTickDelay(pStats.agi || 1),
         // ── 世界王部位戰鬥（前端戰報後即時更新部位血條）──
         targetPart: isWorldBoss ? worldBossPart : null,
-        partName: isWorldBoss ? (({ head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" })[worldBossPart] || null) : null,
+        partName: isWorldBoss ? (({ head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" })[worldBossPart] || null) : null,
         partHp: isWorldBoss ? { current: Math.max(0, Math.round(worldBossPartHpCurrent)), max: worldBossPartHpMax } : null,
         allPartsDefeated: isWorldBoss ? worldBossAllPartsDefeated : false,
         partBroken: isWorldBoss ? worldBossPartBroken : false,
@@ -3294,7 +3382,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         sumWorldBossPartHp
       } = require("../../bot/handlers/monsterZoneHandlers");
 
-      const PART_LABELS = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
+      const PART_LABELS = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
       const DRAGON_KING_ZONE = "dragon_king_lair";
 
       // 各世界王部位增減益說明（給前端顯示）
@@ -3311,9 +3399,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           { key: "legs", name: "下盤", desc: "撼其根基 → 王普攻 −20%" }
         ],
         hellfire_depths: [
-          { key: "head", name: "頭部", desc: "狼牙王技能發動率↑（高風險）" },
-          { key: "body", name: "軀幹", desc: "熔岩硬甲、你的傷害被削減" },
-          { key: "legs", name: "下盤", desc: "狼王撲擊更兇（你受到傷害 ×1.3）" }
+          { key: "head", name: "頭部", desc: "唯剛猛血肉之搏能撼其骨" },
+          { key: "upper_body", name: "上軀幹", desc: "唯咒印靈焰之術能灼穿" },
+          { key: "lower_body", name: "下軀幹", desc: "唯咒印靈焰之術能灼穿" },
+          { key: "tail", name: "尾巴", desc: "唯剛猛血肉之搏能撼其骨" },
+          { key: "legs", name: "腿部", desc: "唯剛猛血肉之搏能撼其骨" }
         ]
       };
 
@@ -3339,13 +3429,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           ]
         },
         hellfire_depths: {
-          title: "擊破要害（三部位俱破，方能誅王）",
+          title: "會學習的血肉（五要害俱破，方能誅王）",
           lines: [
-            "🐺 地獄狼牙王一身烈焰熔甲，唯破其要害方可壓制——",
-            "🦵 下盤：撼其四肢，狂撲之勢自減",
-            "🛡️ 軀幹：碎其熔岩硬甲，傷害不再被吞",
-            "🔥 頭部：轟其首級，煉獄咆哮終息",
-            "💭 火獄有言：「先斷其足、再破其甲，狼焰終成餘燼。」"
+            "🐺 地獄狼牙王的血肉會『記憶』——同一種力量捶打得太久，牠便悄悄長出對應的硬殼，你的攻勢自此如隔靴搔癢。",
+            "🔥 頭顱・尾・後肢：唯『剛猛血肉之搏』能撼動其骨。",
+            "🌀 上軀・下軀：唯『咒印靈焰之術』能灼穿其甲。",
+            "💭 火獄低語：「執一而攻者，終遭熔甲反噬；剛柔輪替、眾力交織，狼焰方化餘燼。」"
           ]
         }
       };
@@ -3386,7 +3475,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           .map((k) => {
             const hp = Math.max(0, Number(hpMap[k] || 0));
             const max = Math.max(1, Math.round(Number(maxMap[k] || 0) || hp || 1));
-            return { key: k, name: PART_LABELS[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0 };
+            return { key: k, name: PART_LABELS[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartWeakness(zoneKey, k) };
           });
         partsByZone[zoneKey] = parts;
 
@@ -3633,7 +3722,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     const cleared = Math.max(0, s.floor - 1);
     const reward = TW.calcTowerReward(cleared);
     if (reward.gold > 0) await serviceContext.rewardService.grantCurrency({ discordId, displayName, currencyType: "gold", amount: reward.gold, source: "tower_web" }).catch(() => {});
-    if (reward.exp > 0 && serviceContext.progressService?.grantExp) await serviceContext.progressService.grantExp({ discordId, displayName, amount: reward.exp, source: "tower_web" }).catch(() => {});
+    if (reward.exp > 0 && serviceContext.progressService?.grantExp) {
+      const _r = await serviceContext.progressService.grantExp({ discordId, displayName, amount: reward.exp, source: "tower_web" }).catch(() => null);
+      reward.overflowGold = _r ? (Number(_r.overflowGold) || 0) : 0; // 滿等溢出→金幣
+      if (reward.overflowGold > 0) {
+        try { require("../../services/realtime/playerNotifyService").notifyPlayer(discordId, { type: "level_overflow_gold", title: "滿等溢出轉金幣", message: `爬塔結算：已滿等，溢出經驗轉為 ${reward.overflowGold} 金幣 💰` }); } catch (_) { /* noop */ }
+      }
+    }
+    // 通關限時「攻塔祝福」增益(atk_multiplier_up 等；與 DC/組隊塔一致)。之前單人網頁塔漏發→玩家「沒感覺」。
+    const clearBuff = TW.getTowerClearBuff(cleared);
     try {
       const prog = await serviceContext.progressRepository.findByPlayerId(discordId);
       if (prog) {
@@ -3641,10 +3738,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         rec.totalRuns = (rec.totalRuns || 0) + 1;
         if (cleared > (rec.bestFloor || 0)) { rec.bestFloor = cleared; rec.bestAt = new Date().toISOString(); }
         prog.towerRecord = rec; prog.updatedAt = new Date().toISOString();
+        if (clearBuff) {
+          const { applyEffectInstances } = require("../../shared/effectEngine");
+          const effectsToApply = clearBuff.effects.map((e) => ({ ...e, duration: { mode: "seconds", value: clearBuff.durationSec }, stackMode: "refresh" }));
+          prog.activeEffects = applyEffectInstances(prog.activeEffects || [], effectsToApply, { source: "tower_buff", sourceType: "tower_buff" });
+        }
         await serviceContext.progressRepository.save(prog).catch(() => {});
       }
     } catch (_) {}
-    s._reward = { ...reward, clearedFloor: cleared };
+    s._reward = {
+      ...reward,
+      clearedFloor: cleared,
+      clearBuff: clearBuff ? { label: clearBuff.label, durationLabel: clearBuff.durationSec >= 3600 ? "1 小時" : "30 分鐘", effects: clearBuff.effects.map((e) => ({ key: e.key, value: e.params?.value })) } : null,
+    };
     return s._reward;
   }
 
@@ -4069,6 +4175,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           combatBonus: a.item?.combatBonus || null,
           enhanceLevel: a.item?.enhanceLevel || 0,
           weaponType: a.item?.weaponType || null,
+          equipSlot: a.item?.equipSlot || null,
+          category: classifyAuctionCategory(a.item),
           equipStats: a.item?.equipStats || null,
           enchantments: Array.isArray(a.item?.enchantments) ? a.item.enchantments : []
         }))
@@ -4517,6 +4625,80 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     } catch (err) {
       next(err);
     }
+  });
+
+  // ── 卡片圖鑑：查詢收集狀態 ──
+  router.get("/api/me/card-dex", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const cardDexMod = require("../../shared/cardDex");
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const db = await getMongoDb();
+      const registry = await cardDexMod.getCardRegistry(db);
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (!progress) return res.status(404).json(fail("NOT_FOUND", "找不到玩家進度", 404));
+      // lazy-sync：背包/裝備中現有卡片補登進圖鑑（永久登錄）
+      const changed = cardDexMod.syncCardDexFromInventory(progress, registry);
+      if (changed) {
+        progress.updatedAt = new Date().toISOString();
+        await serviceContext.progressRepository.save(progress).catch(() => {});
+      }
+      const state = cardDexMod.computeCardDexState(progress.cardDex || {}, progress.cardDexClaims || {}, registry);
+      res.json(ok({ ...state, generatedAt: registry.generatedAt }, "card dex"));
+    } catch (err) { next(err); }
+  });
+
+  // ── 卡片圖鑑：領取獎勵（單區集滿 / 里程碑 / NPC 全集）──
+  router.post("/api/me/card-dex/claim", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const claimKey = String(req.body?.claimKey || "").trim();
+      if (!claimKey) return res.status(400).json(fail("INVALID_ARGUMENT", "缺少 claimKey", 400));
+      const cardDexMod = require("../../shared/cardDex");
+      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+      const { pushRewardItemsToInventory } = require("../../shared/jobBadgeBonus");
+      const db = await getMongoDb();
+      const registry = await cardDexMod.getCardRegistry(db);
+      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      if (!progress) return res.status(404).json(fail("NOT_FOUND", "找不到玩家進度", 404));
+      const displayName = progress.displayName || progress.playerName || discordId;
+      cardDexMod.syncCardDexFromInventory(progress, registry);
+      const claims = progress.cardDexClaims || {};
+      const resolved = cardDexMod.resolveClaim(progress.cardDex || {}, claims, registry, claimKey);
+      if (!resolved.ok) return res.status(400).json(fail("CLAIM_FAILED", resolved.reason, 400));
+
+      // 先發金幣（side-effect，會動 wallet/progress）
+      const _rewardSrc = require("../../shared/sources").CURRENCY_SOURCES.QUEST_REWARD;
+      if (resolved.reward.gold > 0) {
+        await serviceContext.rewardService.grantCurrency({
+          discordId, displayName, currencyType: "gold", amount: resolved.reward.gold,
+          source: _rewardSrc, operator: `card-dex:${claimKey}`,
+        });
+      }
+      // 重新讀取後發道具(消耗品/稱號)＋標記已領
+      const fresh = await serviceContext.progressRepository.findByPlayerId(discordId);
+      cardDexMod.syncCardDexFromInventory(fresh, registry); // 保留登錄
+      const rewardItems = [
+        ...(resolved.reward.items || []).map((i) => ({ itemId: i.itemId, qty: i.qty || 1 })),
+        ...(resolved.reward.title ? [{ itemId: resolved.reward.title, qty: 1 }] : []),
+      ];
+      let grantedItems = [];
+      if (rewardItems.length) {
+        grantedItems = await pushRewardItemsToInventory({
+          progress: fresh, itemRepository: serviceContext.itemRepository, rewardItems, source: "card_dex",
+        }).catch(() => []);
+      }
+      fresh.cardDexClaims = { ...(fresh.cardDexClaims || {}), [claimKey]: new Date().toISOString() };
+      fresh.updatedAt = new Date().toISOString();
+      await serviceContext.progressRepository.save(fresh);
+
+      const state = cardDexMod.computeCardDexState(fresh.cardDex || {}, fresh.cardDexClaims || {}, registry);
+      res.json(ok({
+        claimKey, reward: resolved.reward,
+        grantedItems: grantedItems.map((g) => g.name || g.itemName).filter(Boolean),
+        state,
+      }, "領取成功"));
+    } catch (err) { next(err); }
   });
 
   return router;

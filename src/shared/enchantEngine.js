@@ -138,7 +138,8 @@ function summarizeEquippedEnchantments(equipment) {
     if (ae !== be) return ae - be;              // 屬性類在前
     return Math.abs(b.value) - Math.abs(a.value); // 各區內數值大者在前
   });
-  return list.map((x) => ({ key: x.key, label: x.label, value: x.value, unit: x.unit || "", isEffect: Boolean(x.effectKey) }));
+  // 附魔值為 1 位小數，跨件加總會有浮點長尾(如 21.400000000000002)→ 統一四捨五入到小數點後 1 位
+  return list.map((x) => ({ key: x.key, label: x.label, value: Math.round(x.value * 10) / 10, unit: x.unit || "", isEffect: Boolean(x.effectKey) }));
 }
 
 module.exports = { rollEnchantments, rollablePool, sumEnchantStats, toEffectInstances, summarizeEquippedEnchantments, randInt };

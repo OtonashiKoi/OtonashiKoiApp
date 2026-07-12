@@ -8,8 +8,9 @@ const config = require("../config");
 const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
 const { calcPlayerStats, getWeaponConfig } = require("../shared/combatStats");
+const { isGemEntry: isGemEntryForSell, DISMANTLE_YIELD } = require("../services/shop/shopService");
 const { pushBonusWeaponToInventory, pushRewardItemsToInventory } = require("../shared/jobBadgeBonus");
-const { TIER_SET_SLOTS } = require("../shared/equipmentTierSetBonuses");
+const { TIER_SET_SLOTS, getTierSetInfo } = require("../shared/equipmentTierSetBonuses");
 const { getEquippedSetInfo } = require("../shared/equipmentSetBonuses");
 const { summarizeEquippedEnchantments } = require("../shared/enchantEngine");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
@@ -202,6 +203,7 @@ const WEAPON_TYPE_LABELS = {
 
 const BASE_STAT_LABELS = {
   str: "STR",
+  agi: "AGI",
   int: "INT",
   dex: "DEX"
 };
@@ -294,7 +296,9 @@ function buildWeaponEffectLines(cs, equipped = {}) {
 
   const cfg = getWeaponConfig(weaponType) || {};
   const weaponName = equipped?.weapon?.itemName || equipped?.weapon?.name || WEAPON_TYPE_LABELS[weaponType] || "武器";
-  const baseStat = BASE_STAT_LABELS[cfg.baseStat || "str"] || String(cfg.baseStat || "str").toUpperCase();
+  // 主屬性優先用戰鬥計算後的動態值(cs.weaponMainStat)，才能反映盜賊+匕首→AGI 等徽章加成
+  const mainStatKey = cs.weaponMainStat || cfg.baseStat || "str";
+  const baseStat = BASE_STAT_LABELS[mainStatKey] || String(mainStatKey).toUpperCase();
   const lines = [`🔸 武器：${weaponName}（${WEAPON_TYPE_LABELS[weaponType] || weaponType}，主屬性 ${baseStat}）`];
 
   const parts = [];
@@ -417,8 +421,13 @@ async function handleProfile(interaction) {
   const effectLineParts = buildWeaponEffectLines(cs, equipped);
   const effectLine = effectLineParts.length ? "\n" + effectLineParts.join("\n") : "";
   const tierSetBonuses = cs.tierSetBonuses || { tierCounts: {} };
-  // D/C/B/A 只作品階顯示，不再有「階級套裝」加成（改由具名套裝提供）。
-  const tierSetLine = "";
+  // 階級套裝（D/C/B/A）：按身上同階件數給加成，與具名套裝「同時生效、疊加」。
+  const tierSetInfo = getTierSetInfo(equipped);
+  const tierSetLines = tierSetInfo.map((s) => {
+    const tierTxt = s.tiers.map((t) => `${t.active ? "✅" : "▫️"}${t.count}件:${t.desc}`).join("　");
+    return `🏅 ${s.name}（${s.count}件）\n　${tierTxt}`;
+  });
+  const tierSetLine = tierSetLines.length ? `\n【階級套裝】\n${tierSetLines.join("\n")}` : "";
   // 具名套裝（秘銀套/火焰套…）：顯示歸屬 + 每階效果 + 目前進度
   const namedSetInfo = getEquippedSetInfo(equipped);
   const namedSetLines = namedSetInfo.map((s) => {
@@ -777,6 +786,147 @@ async function handleBestiaryZoneSelect(interaction) {
   });
 }
 
+// ────────────────────────────────────────────────
+// 卡片圖鑑（Card Dex）— 收集狀態 + 領獎（目前限管理員預覽，未對外）
+// ────────────────────────────────────────────────
+async function _loadCardDexData(discordId) {
+  const sc = getServiceContext();
+  const cardDex = require("../shared/cardDex");
+  const { getMongoDb } = require("../adapters/mongo/createMongoClient");
+  const db = await getMongoDb();
+  const registry = await cardDex.getCardRegistry(db);
+  const progress = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+  if (progress) {
+    const changed = cardDex.syncCardDexFromInventory(progress, registry);
+    if (changed) { progress.updatedAt = new Date().toISOString(); await sc.progressRepository.save(progress).catch(() => {}); }
+  }
+  const state = cardDex.computeCardDexState(progress?.cardDex || {}, progress?.cardDexClaims || {}, registry);
+  return { registry, state };
+}
+function _cardDexOverviewText(state) {
+  const bar = (c, t) => { const f = t ? Math.round((c / t) * 10) : 0; return "▰".repeat(f) + "▱".repeat(10 - f); };
+  const lines = [
+    `🃏 **卡片圖鑑** — ${state.totalCollected}/${state.totalCards}（${state.pct}%）`,
+    `${bar(state.totalCollected, state.totalCards)}`,
+    `──────────────`,
+  ];
+  for (const z of state.zones) {
+    const tag = z.complete ? "✅" : (z.claimable ? "🎁" : "");
+    lines.push(`${z.label}：${z.collected}/${z.total} ${z.claimed ? "（已領）" : tag}`);
+  }
+  const npc = state.npc;
+  lines.push(`👤 ${npc.label}：${npc.collected}/${npc.total} ${npc.claimed ? "（已領）" : (npc.complete ? "🎁" : "")}`);
+  lines.push(`──────────────`);
+  const msDone = state.milestones.filter(m => m.reached).map(m => m.label);
+  lines.push(`🏁 里程碑達成：${msDone.length ? msDone.join("、") : "尚無"}`);
+  const claimable = [...state.zones, npc, ...state.milestones].filter(x => x.claimable);
+  if (claimable.length) lines.push(`\n🎁 **有 ${claimable.length} 項獎勵可領取**（下方按鈕）`);
+  return lines.join("\n");
+}
+function _cardDexComponents(state, activeZone = null) {
+  const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require("discord.js");
+  const rows = [];
+  // 區域選單（含 NPC）
+  const opts = [
+    ...state.zones.map(z => ({ label: `${z.label} (${z.collected}/${z.total})`.slice(0, 25), value: `zone:${z.key}`, default: activeZone === `zone:${z.key}` })),
+    { label: `${state.npc.label} (${state.npc.collected}/${state.npc.total})`.slice(0, 25), value: "npc", default: activeZone === "npc" },
+  ].slice(0, 25);
+  rows.push(new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder().setCustomId("carddex_zone").setPlaceholder("選擇區域查看卡片明細").addOptions(opts)
+  ));
+  // 領獎按鈕（僅可領取項，最多 2 列 × 5）
+  const claimable = [...state.zones, state.npc, ...state.milestones].filter(x => x.claimable).slice(0, 10);
+  for (let i = 0; i < claimable.length; i += 5) {
+    const row = new ActionRowBuilder();
+    for (const c of claimable.slice(i, i + 5)) {
+      const r = c.reward || {};
+      const parts = [];
+      if (r.gold) parts.push(`+${r.gold}💰`);
+      for (const it of (r.items || [])) parts.push(`${it.name || "道具"}${it.qty > 1 ? "×" + it.qty : ""}`);
+      if (r.title) parts.push(`稱號`);
+      row.addComponents(new ButtonBuilder()
+        .setCustomId(`carddex_claim:${c.claimKey}`)
+        .setLabel(`領 ${(c.label || c.claimKey).slice(0, 12)} ${parts.join(" ")}`.slice(0, 80))
+        .setStyle(ButtonStyle.Success));
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+function _cardDexZoneDetail(state, activeZone) {
+  const group = activeZone === "npc" ? state.npc : state.zones.find(z => `zone:${z.key}` === activeZone);
+  if (!group) return null;
+  const lines = [`🃏 **${group.label}** — ${group.collected}/${group.total}`];
+  if (group.reward?.gold || (group.reward?.items || []).length || group.reward?.title) {
+    const rw = [group.reward.gold ? `+${group.reward.gold}💰` : "", ...(group.reward.items || []).map((i) => `${i.name}${i.qty > 1 ? "×" + i.qty : ""}`), group.reward.title ? "稱號" : ""].filter(Boolean).join(" ");
+    lines.push(group.claimed ? "（集滿獎勵已領）" : `集滿獎勵：${rw}`);
+  }
+  lines.push("──────────────");
+  for (const c of group.cards) {
+    const t = c.tier ? `[${c.tier}]` : "";
+    lines.push(c.owned ? `✅ ${t} ${c.name}` : `🔒 ${t} ？？？`);
+  }
+  return lines.join("\n").slice(0, 1900);
+}
+async function handleCardDex(interaction) {
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+  }
+  const { state } = await _loadCardDexData(interaction.user.id);
+  await safeEditReply(interaction, { content: _cardDexOverviewText(state), components: _cardDexComponents(state) });
+}
+async function handleCardDexZoneSelect(interaction) {
+  if (!interaction.deferred && !interaction.replied) await interaction.deferUpdate().catch(() => {});
+  const activeZone = interaction.values?.[0];
+  const { state } = await _loadCardDexData(interaction.user.id);
+  const detail = _cardDexZoneDetail(state, activeZone) || _cardDexOverviewText(state);
+  await safeEditReply(interaction, { content: detail, components: _cardDexComponents(state, activeZone) });
+}
+async function handleCardDexClaim(interaction) {
+  if (!interaction.deferred && !interaction.replied) await interaction.deferUpdate().catch(() => {});
+  const sc = getServiceContext();
+  const cardDex = require("../shared/cardDex");
+  const { getMongoDb } = require("../adapters/mongo/createMongoClient");
+  const { pushRewardItemsToInventory } = require("../shared/jobBadgeBonus");
+  const claimKey = String(interaction.customId.split(":").slice(1).join(":") || "");
+  const db = await getMongoDb();
+  const registry = await cardDex.getCardRegistry(db);
+  const discordId = interaction.user.id;
+  const progress = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
+  if (!progress) { await safeEditReply(interaction, { content: "找不到玩家進度。", components: [] }); return; }
+  const displayName = progress.displayName || progress.playerName || discordId;
+  cardDex.syncCardDexFromInventory(progress, registry);
+  const resolved = cardDex.resolveClaim(progress.cardDex || {}, progress.cardDexClaims || {}, registry, claimKey);
+  if (!resolved.ok) {
+    const { state } = await _loadCardDexData(discordId);
+    await safeEditReply(interaction, { content: `⚠️ ${resolved.reason}\n\n` + _cardDexOverviewText(state), components: _cardDexComponents(state) });
+    return;
+  }
+  const _rewardSrc = require("../shared/sources").CURRENCY_SOURCES.QUEST_REWARD;
+  if (resolved.reward.gold > 0) {
+    await sc.rewardService.grantCurrency({
+      discordId, displayName, currencyType: "gold", amount: resolved.reward.gold,
+      source: _rewardSrc, operator: `card-dex:${claimKey}`,
+    }).catch(() => {});
+  }
+  const fresh = await sc.progressRepository.findByPlayerId(discordId);
+  cardDex.syncCardDexFromInventory(fresh, registry);
+  const rewardItems = [
+    ...(resolved.reward.items || []).map((i) => ({ itemId: i.itemId, qty: i.qty || 1 })),
+    ...(resolved.reward.title ? [{ itemId: resolved.reward.title, qty: 1 }] : []),
+  ];
+  let granted = [];
+  if (rewardItems.length) granted = await pushRewardItemsToInventory({ progress: fresh, itemRepository: sc.itemRepository, rewardItems, source: "card_dex" }).catch(() => []);
+  fresh.cardDexClaims = { ...(fresh.cardDexClaims || {}), [claimKey]: new Date().toISOString() };
+  fresh.updatedAt = new Date().toISOString();
+  await sc.progressRepository.save(fresh);
+  const state = cardDex.computeCardDexState(fresh.cardDex || {}, fresh.cardDexClaims || {}, registry);
+  const got = [];
+  if (resolved.reward.gold) got.push(`+${resolved.reward.gold}💰`);
+  for (const g of granted) got.push(g.name || g.itemName);
+  await safeEditReply(interaction, { content: `🎉 領取成功：${got.join("、")}\n\n` + _cardDexOverviewText(state), components: _cardDexComponents(state) });
+}
+
 async function handleWallet(interaction) {
   const serviceContext = getServiceContext();
   const result = await serviceContext.walletService.getWalletByDiscordId(
@@ -853,26 +1003,30 @@ function buildInventoryRow(e, idx) {
   const prefix = ["①","②","③","④","⑤"][idx] ?? `${idx+1}.`;
   const btns = [];
 
-  // 強化寶石不能使用（只能用於強化）
-  const ENHANCE_GEM_IDS = new Set([
-    '72fde92d-e33f-42fb-8d86-2e811d03f84d', // D
-    '556db9e1-b084-4b22-bab5-a66c2b586184', // C
-    '8fdfa7d9-f0fa-4e6a-a291-703b1e354072', // B
-    'a6ae293d-52fc-4af5-8770-891ddf842e35'  // A
-  ]);
-  const isEnhanceGem = ENHANCE_GEM_IDS.has(e.itemId);
+  // 強化寶石：不能使用/強化/分解/販售（含 D/C/B/A/S，用共用 isGemEntry 單一真相）
+  const isEnhanceGem = isGemEntryForSell(e);
 
   if (isEnhanceGem) {
-    // 強化寶石：只有販售和丟棄（寶石本身不能強化）
-    // 販售按鈕會在下面的 tier 判斷加上
-  } else if (itemType === "consumable") {
-    // 普通消耗品：使用、丟棄
+    // 強化寶石只能「丟棄」多餘的；一定要至少一個按鈕，否則會產生空的 ActionRow 讓整頁渲染失敗
     btns.push(
       new ButtonBuilder()
-        .setCustomId(`backpack_use:${e.uuid}`)
-        .setLabel(`${prefix} 使用`)
-        .setStyle(ButtonStyle.Success)
+        .setCustomId(`backpack_discard:${e.uuid}`)
+        .setLabel(`${prefix} 丟棄`)
+        .setStyle(ButtonStyle.Danger)
     );
+  } else if (itemType === "consumable") {
+    // 附魔重骰藥水不可直接使用(會浪費)：只能從裝備端重骰，不給「使用」鈕
+    const isEnchantPotion = e.itemId === "enchant_reroll_potion"
+      || String(e.itemEffect?.type || e.effect?.type || "") === "reroll_enchant";
+    // 普通消耗品：使用、丟棄；附魔藥水：只丟棄
+    if (!isEnchantPotion) {
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`backpack_use:${e.uuid}`)
+          .setLabel(`${prefix} 使用`)
+          .setStyle(ButtonStyle.Success)
+      );
+    }
     btns.push(
       new ButtonBuilder()
         .setCustomId(`backpack_discard:${e.uuid}`)
@@ -894,9 +1048,10 @@ function buildInventoryRow(e, idx) {
       );
     }
   }
-  // 販售按鈕：只給「不能分解」但有 tier 的道具（強化寶石、怪物卡）；
-  // 一般裝備一律走分解、不再提供販售。
-  const sellPrice = e.tier ? TIER_SELL_PRICE[String(e.tier).toUpperCase()] : null;
+  // 販售按鈕：只給「不能分解」但有 tier 的道具（怪物卡）；
+  // 一般裝備一律走分解、強化寶石不可販售(只能強化)、皆不提供販售鈕。
+  const _isGem = isGemEntryForSell(e);
+  const sellPrice = (e.tier && !_isGem) ? TIER_SELL_PRICE[String(e.tier).toUpperCase()] : null;
   if (sellPrice != null && !isDismantleable) {
     btns.push(
       new ButtonBuilder()
@@ -917,6 +1072,16 @@ function buildInventoryRow(e, idx) {
         .setCustomId(`backpack_view:${e.uuid}`)
         .setLabel("🖼️ 查看")
         .setStyle(ButtonStyle.Secondary)
+    );
+  }
+  // 防呆：任何情況都不能回傳空按鈕列（Discord 會拒絕空 ActionRow → 整頁渲染失敗）
+  if (btns.length === 0) {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`backpack_noop:${e.uuid}`)
+        .setLabel("—")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true)
     );
   }
   return new ActionRowBuilder().addComponents(btns);
@@ -1100,7 +1265,8 @@ function groupEquipmentItems(items, tab) {
     const key = canonicalEquipmentKey(entry);
 
     if (!groups.has(key)) {
-      const sellPrice = tier ? TIER_SELL_PRICE[tier] : null;
+      const _isGemGrp = isGemEntryForSell(entry);
+      const sellPrice = (tier && !_isGemGrp) ? TIER_SELL_PRICE[tier] : null;
       groups.set(key, {
         key,
         repUuid: entry.uuid,
@@ -1949,13 +2115,13 @@ async function handleBackpackAction(interaction, action, uuid, tab = "item", pag
     if (slot === "title_eq") warns.push("這是**稱號**");
     if (hasFx) warns.push("帶有**特效**");
     const warnLine = warns.length ? `\n\n🚨 **注意：${warns.join("、")}**，分解後就沒了！` : "";
-    // 分解產物預告（裝備才有；降階寶石，50% 機率才會產出）
-    const DISMANTLE_PREVIEW = { S: "1 顆 A 階寶石", A: "2 顆 B 階寶石", B: "2 顆 C 階寶石", C: "2 顆 D 階寶石", D: "1 顆 D 階寶石" };
+    // 分解產物預告（裝備才有；50% 機率產出，產物階級依 shopService.DISMANTLE_YIELD 為準：S→S、A→B、B→C、C→D、D→D）
     const tierU = String(entry.tier || "").toUpperCase();
     const isEquip = entry.itemType === "equipment";
-    const canDismantle = isEquip && !!DISMANTLE_PREVIEW[tierU];
+    const _dY = DISMANTLE_YIELD[tierU];
+    const canDismantle = isEquip && !!_dY;
     const yieldLine = canDismantle
-      ? `\n\n🔨 有 **50%** 機率分解出：**${DISMANTLE_PREVIEW[tierU]}**（失敗則無產物，裝備一樣消失）`
+      ? `\n\n🔨 有 **50%** 機率分解出：**${_dY.count} 顆 ${_dY.tier} 階寶石**（失敗則無產物，裝備一樣消失）`
       : "";
     const verb = canDismantle ? "分解" : "丟棄";
     const row = new ActionRowBuilder().addComponents(

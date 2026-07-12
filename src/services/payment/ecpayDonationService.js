@@ -175,8 +175,10 @@ async function processLiveNotify(body, serviceContext) {
     return { ack: ACK, handled: false, reason: "not_paid" };
   }
 
-  // 對應玩家
-  const player = await matchPlayerFromNote(patronNote).catch(() => null);
+  // 對應玩家：代碼不管玩家填在「留言」還是「姓名/暱稱(ID欄)」都能收到 → 兩格併起來一起掃代碼。
+  const player = await matchPlayerFromNote(
+    [patronNote, patronName].filter(Boolean).join(" ")
+  ).catch(() => null);
 
   // 驗簽未過、或找不到玩家、或關閉自動發鑽 → 記錄待處理，不發鑽
   let status = "granted";

@@ -853,12 +853,15 @@ async function grantPkBracketRewards(sc, slot, result, arenaIdx, battleRef = nul
     if (alreadyRewarded) continue;
 
     if (rewardExp > 0) {
-      await sc.progressService.grantExp({
+      const _r = await sc.progressService.grantExp({
         discordId: participant.discordId,
         displayName,
         amount: rewardExp,
         source: EXP_SOURCES.PK_BATTLE_REWARD_EXP,
-      }).catch(() => {});
+      }).catch(() => null);
+      if (_r && Number(_r.overflowGold) > 0) {
+        rewards.push(`💰 **${displayName}** 已滿等，溢出經驗轉為 ${_r.overflowGold} 金幣`);
+      }
     }
 
     if (stoneDropRate > 0 && Math.random() < stoneDropRate) {

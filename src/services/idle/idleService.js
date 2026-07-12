@@ -364,12 +364,19 @@ class IdleService {
       });
     }
     if (reward.exp > 0) {
-      await this.progressService.grantExp({
+      const _r = await this.progressService.grantExp({
         discordId,
         displayName,
         amount: reward.exp,
         source: EXP_SOURCES.IDLE_REWARD_EXP
       });
+      reward.overflowGold = _r ? (Number(_r.overflowGold) || 0) : 0; // 滿等溢出→金幣(給掛機結算報告)
+      if (reward.overflowGold > 0) {
+        notifyPlayer(discordId, {
+          type: "level_overflow_gold", title: "滿等溢出轉金幣",
+          message: `掛機結算：已滿等，溢出經驗轉為 ${reward.overflowGold} 金幣 💰`
+        });
+      }
     }
 
     const endedAt = now.toISOString();
@@ -779,12 +786,19 @@ class IdleService {
     }
 
     if (reward.exp > 0) {
-      await this.progressService.grantExp({
+      const _r = await this.progressService.grantExp({
         discordId,
         displayName,
         amount: reward.exp,
         source: EXP_SOURCES.IDLE_REWARD_EXP
       });
+      reward.overflowGold = _r ? (Number(_r.overflowGold) || 0) : 0; // 滿等溢出→金幣(給掛機結算報告)
+      if (reward.overflowGold > 0) {
+        notifyPlayer(discordId, {
+          type: "level_overflow_gold", title: "滿等溢出轉金幣",
+          message: `掛機結算：已滿等，溢出經驗轉為 ${reward.overflowGold} 金幣 💰`
+        });
+      }
     }
 
     const cooldownUntil = new Date(

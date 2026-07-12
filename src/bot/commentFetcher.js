@@ -44,9 +44,11 @@ function extractViewerInfo(o) {
     if (hint.indexOf("youtube") >= 0 || hint.indexOf("yt") >= 0) platform = "youtube";
     else if (hint.indexOf("twitch") >= 0) platform = "twitch";
   }
+  // 直播標題：辨識「永久看板/打卡枠」(標題含 看板/打卡專用)，這種枠 isLive 可能永遠 true，不算真的開台
+  const title = String(meta.title || svc.title || o.title || "").slice(0, 200);
   // 有平台就保留(即使 Twitch 沒回同接數，也讓它帶 0 進來，overlay 才能常駐顯示)
   if (viewer == null && likes == null && !platform) return null;
-  return { service, platform, id, viewer, likes, isLive };
+  return { service, platform, id, viewer, likes, isLive, title };
 }
 
 // REST 輪詢：直接讀 OneComme /api/services（schema 已確認，比 WS meta 可靠）

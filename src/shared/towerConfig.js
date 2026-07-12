@@ -131,13 +131,15 @@ const TOWER_HOURLY_WINDOW_MS = 60 * 60 * 1000; // 1 小時滑動窗口
 // ── 過關 Buff（僅限怪物區，刷新不疊加） ─────────────────────
 // key: 每個 buff 的唯一 sourceId，用於 refresh 判斷
 // effects 可包含多個 effect ref
+// ⚠️ params.value 走「百分比制」：applyEffectsToStats 的 mul 分支算 ×(1 + value/100)。
+// 故 value 要填「百分比數字」(5=+5%)，不能填倍率(1.05 會變 +1.05%≈沒效果)。
 const TOWER_CLEAR_BUFFS = [
   {
     minFloor: 15,
     label: "攻塔祝福 Lv.1",
     durationSec: 1800,
     effects: [
-      { key: "atk_multiplier_up", params: { value: 1.05 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
+      { key: "atk_multiplier_up", params: { value: 5 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
     ],
   },
   {
@@ -145,7 +147,7 @@ const TOWER_CLEAR_BUFFS = [
     label: "攻塔祝福 Lv.2",
     durationSec: 1800,
     effects: [
-      { key: "atk_multiplier_up", params: { value: 1.07 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
+      { key: "atk_multiplier_up", params: { value: 7 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
     ],
   },
   {
@@ -153,7 +155,7 @@ const TOWER_CLEAR_BUFFS = [
     label: "攻塔祝福 Lv.3",
     durationSec: 1800,
     effects: [
-      { key: "atk_multiplier_up", params: { value: 1.10 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
+      { key: "atk_multiplier_up", params: { value: 10 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
     ],
   },
   {
@@ -161,8 +163,8 @@ const TOWER_CLEAR_BUFFS = [
     label: "攻塔祝福 Lv.4",
     durationSec: 3600,
     effects: [
-      { key: "atk_multiplier_up", params: { value: 1.10 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
-      { key: "def_multiplier_up", params: { value: 1.05 }, sourceType: "tower_buff", sourceId: "tower_def_buff" },
+      { key: "atk_multiplier_up", params: { value: 10 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
+      { key: "def_multiplier_up", params: { value: 5 }, sourceType: "tower_buff", sourceId: "tower_def_buff" },
     ],
   },
   {
@@ -170,8 +172,8 @@ const TOWER_CLEAR_BUFFS = [
     label: "攻塔祝福 Lv.5",
     durationSec: 3600,
     effects: [
-      { key: "atk_multiplier_up", params: { value: 1.12 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
-      { key: "def_multiplier_up", params: { value: 1.08 }, sourceType: "tower_buff", sourceId: "tower_def_buff" },
+      { key: "atk_multiplier_up", params: { value: 12 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
+      { key: "def_multiplier_up", params: { value: 8 }, sourceType: "tower_buff", sourceId: "tower_def_buff" },
     ],
   },
   {
@@ -179,8 +181,8 @@ const TOWER_CLEAR_BUFFS = [
     label: "攻塔祝福 Lv.6",
     durationSec: 3600,
     effects: [
-      { key: "atk_multiplier_up", params: { value: 1.15 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
-      { key: "def_multiplier_up", params: { value: 1.10 }, sourceType: "tower_buff", sourceId: "tower_def_buff" },
+      { key: "atk_multiplier_up", params: { value: 15 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
+      { key: "def_multiplier_up", params: { value: 10 }, sourceType: "tower_buff", sourceId: "tower_def_buff" },
     ],
   },
   {
@@ -188,9 +190,9 @@ const TOWER_CLEAR_BUFFS = [
     label: "攻塔祝福 Lv.7（終焉）",
     durationSec: 3600,
     effects: [
-      { key: "atk_multiplier_up", params: { value: 1.15 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
-      { key: "def_multiplier_up", params: { value: 1.10 }, sourceType: "tower_buff", sourceId: "tower_def_buff" },
-      { key: "max_hp_multiplier_up", params: { value: 1.15 }, sourceType: "tower_buff", sourceId: "tower_hp_buff" },
+      { key: "atk_multiplier_up", params: { value: 15 }, sourceType: "tower_buff", sourceId: "tower_atk_buff" },
+      { key: "def_multiplier_up", params: { value: 10 }, sourceType: "tower_buff", sourceId: "tower_def_buff" },
+      { key: "max_hp_multiplier_up", params: { value: 15 }, sourceType: "tower_buff", sourceId: "tower_hp_buff" },
     ],
   },
 ];

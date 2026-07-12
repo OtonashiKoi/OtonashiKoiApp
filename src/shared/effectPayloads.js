@@ -96,19 +96,33 @@ function normalizeActiveEffect(rawEffect = {}) {
   });
   if (!normalized) return null;
 
+  const remaining = normalizeDuration(rawEffect.remaining || rawEffect.duration, normalized.duration.mode, normalized.duration.value);
+  // seconds 時效 buff：建立時蓋 expiresAt(一次，之後保留)，讓「限時」buff 能按真實時間到期消失。
+  let expiresAt = rawEffect.expiresAt ? Number(rawEffect.expiresAt) : null;
+  if (!expiresAt && remaining.mode === "seconds" && remaining.value > 0) {
+    expiresAt = Date.now() + remaining.value * 1000;
+  }
+
   return {
     ...normalized,
     id: String(rawEffect.id || `${normalized.key}_${Date.now()}`).trim(),
     sourceType: rawEffect.sourceType ? String(rawEffect.sourceType) : "system",
     sourceId: rawEffect.sourceId ? String(rawEffect.sourceId) : null,
-    remaining: normalizeDuration(rawEffect.remaining || rawEffect.duration, normalized.duration.mode, normalized.duration.value),
+    remaining,
+    ...(expiresAt ? { expiresAt } : {}),
     createdAt: rawEffect.createdAt || new Date().toISOString()
   };
 }
 
+/** 限時 buff 是否已過期（有 expiresAt 且已過真實時間）。 */
+function isActiveEffectExpired(effect) {
+  return Boolean(effect && effect.expiresAt && Date.now() >= Number(effect.expiresAt));
+}
+
 function normalizeActiveEffectList(rawList) {
   if (!Array.isArray(rawList)) return [];
-  return rawList.map((entry) => normalizeActiveEffect(entry)).filter(Boolean);
+  // 順便濾掉「已過期的限時 buff」→ 每次讀取/存回都會自動清掉過期項（如攻塔祝福到時消失）
+  return rawList.map((entry) => normalizeActiveEffect(entry)).filter(Boolean).filter((e) => !isActiveEffectExpired(e));
 }
 
 module.exports = {
@@ -120,5 +134,6 @@ module.exports = {
   normalizeMonsterSkill,
   normalizeMonsterSkillList,
   normalizeActiveEffect,
-  normalizeActiveEffectList
+  normalizeActiveEffectList,
+  isActiveEffectExpired
 };

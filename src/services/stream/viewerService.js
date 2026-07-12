@@ -7,6 +7,12 @@ const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 
 const DOC_ID = "default";
 const STALE_MS = 90_000; // 某直播枠超過 90 秒沒更新 → 視為已結束，不計入目前人數
+// 「永久看板/打卡枠」辨識：這種枠(如 YouTube @頻道 24hr 打卡看板)即使 isLive=true 也不算真的在直播，
+// 否則 live 永遠 true → 觀看 Buff 永不過期。用直播標題判斷(開真節目時標題會變、不含這些字)。
+const BOARD_TITLE_RE = /看板|打卡專用|打卡聊天|待機中?|standby/i;
+function _isBoard(s) {
+  return !!s && BOARD_TITLE_RE.test(String(s.title || ""));
+}
 
 // 各直播枠即時狀態：service → { viewer, likes, updatedAt(ms) }
 const byService = new Map();
@@ -38,11 +44,11 @@ async function _persistPeak(nowIso) {
   } catch (_) { /* noop */ }
 }
 
-// 目前總觀看數（只加總「未過期」且「正在直播(isLive)」的直播枠）
+// 目前總觀看數（只加總「未過期」「正在直播(isLive)」且「非看板/打卡枠」的直播枠）
 function _currentTotal(nowMs) {
   let total = 0;
   for (const s of byService.values()) {
-    if (s.isLive && nowMs - s.updatedAt <= STALE_MS) total += Number(s.viewer) || 0;
+    if (s.isLive && !_isBoard(s) && nowMs - s.updatedAt <= STALE_MS) total += Number(s.viewer) || 0;
   }
   return total;
 }
@@ -58,6 +64,7 @@ async function update(info) {
   byService.set(key, {
     service: info.service || key,
     platform: info.platform || null,
+    title: info.title || "",
     viewer: Number(info.viewer) || 0,
     likes: Number(info.likes) || 0,
     isLive: info.isLive === true,
@@ -80,6 +87,8 @@ async function getPublicState() {
   const services = [...byService.entries()].map(([key, s]) => ({
     service: s.service || key,
     platform: s.platform || null,
+    title: s.title || "",
+    board: _isBoard(s), // 永久看板/打卡枠 → 不算真的在直播、不計入人數
     viewer: Number(s.viewer) || 0,
     likes: Number(s.likes) || 0,
     isLive: s.isLive === true,
@@ -91,7 +100,8 @@ async function getPublicState() {
     current,
     peak: Math.max(peak, current),
     peakAt,
-    live: services.some((x) => x.isLive && !x.stale),
+    // 真的在直播 = 有非看板枠正在 live（看板枠 isLive 永遠 true，排除掉才不會誤判）
+    live: services.some((x) => x.isLive && !x.stale && !x.board),
     services,
   };
 }

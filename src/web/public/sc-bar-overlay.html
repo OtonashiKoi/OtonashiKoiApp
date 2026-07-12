@@ -149,7 +149,7 @@
     var services = (v && v.services) || [];
     var yt = 0, tw = 0, ytHas = false, twHas = false;
     services.forEach(function (s) {
-      if (!s || s.stale) return;                 // 只跳過過期枠；沒開台(isLive:false)仍顯示
+      if (!s || s.stale || s.board) return;      // 跳過過期枠與看板/打卡枠；沒開台(isLive:false)仍顯示
       var p = s.platform || "";
       if (!p) {                                  // 後端沒帶 platform 時，退回用枠名猜
         var name = String(s.service || "").toLowerCase();

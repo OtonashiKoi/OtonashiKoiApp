@@ -627,8 +627,20 @@ async function handleDonation(comment) {
   const raw = comment?.raw || {};
   const rawType = String(raw.type || raw.payload?.type || "").toLowerCase();
   const looksLikeSC = rawType === "superchat" || raw.isSuperChat === true || raw.isPaid === true || raw.hasDonation === true || raw.isDonation === true;
-  if (looksLikeSC) {
-    console.log(`[Donation] SC 事件收到：userId=${comment?.userId} name=${comment?.name} type=${rawType} amount=${raw.purchaseAmount ?? raw.amount ?? raw.price ?? "?"} currency=${raw.currency} displayString=${raw.displayString}`);
+  // 幣別診斷：放寬觸發——只要有任何付費跡象就 dump 完整 raw（不限 superchat 旗標）。
+  // 因為外幣/小額 SC 可能沒設 isSuperChat、或金額在非預期欄位，用嚴格條件會漏抓。可日後移除。
+  const paidish = looksLikeSC
+    || raw.hasGift === true || raw.giftType != null
+    || [raw.amount, raw.amountValue, raw.purchaseAmount, raw.price].some((v) => parsePositiveNumber(v) > 0)
+    || (raw.paidText != null && raw.paidText !== "")
+    || (raw.unit != null && raw.unit !== "")
+    || /[¥$₩฿€£]|MYR|RM|USD|JPY|HKD|KRW|SGD|TWD|NT\$/i.test(String(raw.displayString || raw.comment || comment?.text || ""));
+  if (paidish) {
+    console.log(`[Donation] SC 事件收到：userId=${comment?.userId} name=${comment?.name} type=${rawType} amount=${raw.purchaseAmount ?? raw.amount ?? raw.price ?? "?"} currency=${raw.currency} unit=${raw.unit} paidText=${raw.paidText} displayString=${raw.displayString}`);
+    try {
+      console.log(`[Donation] 🔎幣別診斷 rawKeys=${Object.keys(raw).join(",")}`);
+      console.log(`[Donation] 🔎幣別診斷 完整raw=${JSON.stringify(raw).slice(0, 1500)}`);
+    } catch (_) { /* noop */ }
   }
 
   const donation = inferDonationReward(comment);

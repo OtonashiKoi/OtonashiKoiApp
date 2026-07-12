@@ -100,7 +100,7 @@ const ZONE_DEFS = [
     emoji:        "🌋",
     tagline:      "烈焰最深處，狼牙王咆哮於火獄核心；唯屠本週古龍者，方可踏入。",
     color:        0x991b1b,
-    minLevel:     60,
+    minLevel:     50,
     maxLevel:     null,
     defaultEntryFee: 15000,
   },

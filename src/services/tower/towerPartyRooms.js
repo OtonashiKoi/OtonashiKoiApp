@@ -5,6 +5,7 @@
 // 即時同步走現有 playerEventBus(SSE),前端用 /api/me/stream 收 tower_room_* 事件。
 // 房間目前存記憶體(單一 PM2 instance);重啟會掉房——持久化列為後續增強。
 const TW = require("../../shared/towerConfig");
+const { applyEffectInstances } = require("../../shared/effectEngine");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 
 function genRoomId() {
@@ -235,6 +236,8 @@ function createTowerPartyRooms(serviceContext) {
   async function finish(room, success) {
     room.status = "ended";
     const reward = TW.calcTowerReward(room.clearedFloor);
+    // 通關限時「攻塔祝福」增益(限怪物區、按爬到的層數給；與 DC 塔一致)。之前網頁組隊塔漏發，玩家反映「傷害buff沒了」。
+    const clearBuff = success ? TW.getTowerClearBuff(room.clearedFloor) : null;
     // 每位在場成員發獎(金幣/EXP)+ 更新個人最高層(沿用單人 web 塔的發法)
     for (const m of room.members) {
       try {
@@ -246,11 +249,33 @@ function createTowerPartyRooms(serviceContext) {
           rec.totalRuns = (rec.totalRuns || 0) + 1;
           if (room.clearedFloor > (rec.bestFloor || 0)) { rec.bestFloor = room.clearedFloor; rec.bestAt = new Date().toISOString(); }
           prog.towerRecord = rec; prog.updatedAt = new Date().toISOString();
+          // 發限時攻塔祝福(atk_multiplier_up 等；seconds 時效、stackMode refresh，與 DC 塔同寫法)
+          if (clearBuff) {
+            const effectsToApply = clearBuff.effects.map((e) => ({
+              ...e,
+              duration: { mode: "seconds", value: clearBuff.durationSec },
+              stackMode: "refresh",
+            }));
+            prog.activeEffects = applyEffectInstances(
+              prog.activeEffects || [],
+              effectsToApply,
+              { source: "tower_buff", sourceType: "tower_buff" },
+            );
+          }
           await serviceContext.progressRepository.save(prog).catch(() => {});
         }
       } catch (_) {}
     }
-    room.reward = { ...reward, clearedFloor: room.clearedFloor };
+    room.reward = {
+      ...reward,
+      clearedFloor: room.clearedFloor,
+      clearBuff: clearBuff ? {
+        label: clearBuff.label,
+        durationSec: clearBuff.durationSec,
+        durationLabel: clearBuff.durationSec >= 3600 ? "1 小時" : "30 分鐘",
+        effects: clearBuff.effects.map((e) => ({ key: e.key, value: e.params?.value })),
+      } : null,
+    };
     emitRoom(room, "tower_room_ended", roomView(room));
     // 清房
     for (const m of room.members) playerRoom.delete(m.discordId);
