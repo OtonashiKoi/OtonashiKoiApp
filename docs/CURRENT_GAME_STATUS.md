@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-07-12T05:02:36.269Z
+Generated at: 2026-07-14T06:42:57.347Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,8 +8,8 @@ Generated at: 2026-07-12T05:02:36.269Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 417 |
-| 進度資料 | 421 |
+| 玩家 | 419 |
+| 進度資料 | 423 |
 | 怪物 | 69 |
 | 怪物狀態文件 | 12 |
 | 道具 | 487 |
@@ -36,6 +36,8 @@ Generated at: 2026-07-12T05:02:36.269Z
 | nightmare | 噩夢區 | 30 | 無上限 | 0 | 0 | 0 |
 | abyss | 深淵區 | 45 | 無上限 | 0 | 0 | 0 |
 | mythic | 神話區 | 60 | 無上限 | 0 | 0 | 0 |
+| event_1 | 限定活動關卡 | 1 | 無上限 | 0 | 0 | 0 |
+| event_boss | 限定活動 世界王 | 1 | 無上限 | 0 | 0 | 0 |
 
 ## Monsters
 
@@ -66,7 +68,7 @@ Generated at: 2026-07-12T05:02:36.269Z
 | beginner | 3 | 蘑菇怪 | 2 | 700 | 200 | 17 | 0 | 否 | 11 |
 | beginner | 4 | 小史(中) | 3 | 900 | 250 | 20 | 0 | 否 | 12 |
 | beginner | 5 | 大野兔(B) | 3 | 3000 | 500 | 360 | 0 | 是 | 13 |
-| dragon_king_lair | 1 | 古龍王(B) | 60 | 2655000 | 30000 | 60000 | 10000 | 是 | 72 |
+| dragon_king_lair | 1 | 古龍王(B) | 60 | 2655000 | 30000 | 60000 | 10000 | 是 | 71 |
 | dragon_realm | 1 | 飛龍幼崽 | 40 | 36000 | 13000 | 360 | 0 | 否 | 15 |
 | dragon_realm | 2 | 龍蜥武士 | 41 | 40500 | 14000 | 390 | 0 | 否 | 14 |
 | dragon_realm | 3 | 火翼龍人 | 42 | 45000 | 15000 | 420 | 0 | 否 | 14 |
@@ -77,7 +79,7 @@ Generated at: 2026-07-12T05:02:36.269Z
 | dragon_realm | 8 | 暗影龍將 | 47 | 69000 | 20000 | 570 | 0 | 否 | 13 |
 | dragon_realm | 9 | 龍翼魔法師 | 48 | 75000 | 22000 | 600 | 0 | 否 | 11 |
 | dragon_realm | 10 | 龍王(B) | 50 | 300000 | 50000 | 15000 | 0 | 是 | 43 |
-| elite | 1 | 大史王 | 60 | 1770000 | 19500 | 40500 | 5000 | 是 | 71 |
+| elite | 1 | 大史王 | 60 | 1770000 | 19500 | 40500 | 5000 | 是 | 81 |
 | hellfire | 1 | 焰爪幼狼 | 42 | 40629 | 15000 | 700 | 0 | 否 | 11 |
 | hellfire | 2 | 灰燼豺 | 43 | 43338 | 16000 | 740 | 0 | 否 | 12 |
 | hellfire | 3 | 熔岩犬 | 43 | 47401 | 17500 | 800 | 0 | 否 | 13 |
@@ -95,13 +97,13 @@ Generated at: 2026-07-12T05:02:36.269Z
 | mid | 3 | 巨巨 | 16 | 5704 | 4000 | 166 | 0 | 否 | 14 |
 | mid | 4 | 黑暗弓手 | 16 | 5152 | 3000 | 166 | 0 | 否 | 13 |
 | mid | 5 | 米拉桑(B) | 19 | 18400 | 7000 | 3060 | 0 | 是 | 21 |
-| mid | 6 | 中金(稀) | 18 | 14720 | 2400 | 2700 | 0 | 是 | 11 |
 | mid | 106 | 林地妖靈(樹樹) | 11 | 3864 | 2240 | 166 | 0 | 否 | 12 |
 | mid | 107 | 森林古樹 | 12 | 4600 | 2680 | 166 | 0 | 否 | 13 |
 | mid | 108 | 暗夜獵豹 | 10 | 3680 | 2360 | 166 | 0 | 否 | 12 |
 | mid | 109 | 森林巫師 | 13 | 4416 | 2880 | 166 | 0 | 否 | 11 |
 | mid | 110 | 森林盜賊 | 12 | 4232 | 2480 | 166 | 0 | 否 | 12 |
 | mid | 111 | 森林之獸 | 15 | 5336 | 5120 | 166 | 0 | 否 | 11 |
+| mid | 500 | 中金(稀) | 18 | 35 | 2400 | 2700 | 0 | 是 | 4 |
 | normal | 1 | 小史 | 4 | 1165 | 250 | 36 | 0 | 否 | 11 |
 | normal | 2 | 哥布 | 5 | 1631 | 400 | 40 | 0 | 否 | 12 |
 | normal | 3 | 小狼 | 5 | 1398 | 350 | 40 | 0 | 否 | 12 |
@@ -631,7 +633,7 @@ Generated at: 2026-07-12T05:02:36.269Z
 | job_warrior_v1 | 戰士徽章 | job_badge |  | job_eq |  | STR+4 VIT+1 LUK+2 | none |
 | job_healer_v1 | 治療師徽章 | job_badge |  | job_eq |  | VIT+2 INT+4 DEX+2 | none |
 | job_mage_v1 | 法師徽章 | job_badge |  | job_eq |  | VIT+1 INT+5 LUK+2 | none |
-| job_rogue_v1 | 盜賊徽章 | job_badge |  | job_eq |  | STR+2 AGI+4 LUK+2 | none |
+| job_rogue_v1 | 盜賊徽章 | job_badge |  | job_eq |  | AGI+4 DEX+2 LUK+2 | none |
 | job_dwarf_warrior_v1 | 矮人戰士徽章 | job_badge |  | job_eq |  | STR+1 VIT+5 DEX+2 | none |
 | job_barrier_mage_v1 | 結界師徽章 | job_badge |  | job_eq |  | VIT+3 INT+3 DEX+2 | none |
 | job_bard_v1 | 詩人徽章 | job_badge |  | job_eq |  | AGI+2 DEX+4 LUK+2 | none |
@@ -704,7 +706,7 @@ Generated at: 2026-07-12T05:02:36.269Z
 | job_warrior_v1 | 戰士徽章 |  | 戰士試煉 | 啟用 | 10 | axe_1h, axe_2h | STR + VIT > 10 | STR+4 VIT+1 LUK+2 |
 | job_healer_v1 | 治療師徽章 |  | 治療師試煉 | 啟用 | 10 | staff_1h | INT + VIT > 10 | VIT+2 INT+4 DEX+2 |
 | job_mage_v1 | 法師徽章 |  | 法師試煉 | 啟用 | 10 | staff_2h | INT + AGI > 10 | VIT+1 INT+5 LUK+2 |
-| job_rogue_v1 | 盜賊徽章 |  | 盜賊試煉 | 啟用 | 10 | dagger | AGI + DEX > 10 | STR+2 AGI+4 LUK+2 |
+| job_rogue_v1 | 盜賊徽章 |  | 盜賊試煉 | 啟用 | 10 | dagger | AGI + DEX > 10 | AGI+4 DEX+2 LUK+2 |
 | job_dwarf_warrior_v1 | 矮人戰士徽章 |  | 矮人戰士試煉 | 啟用 | 10 | mace_1h, mace_2h | VIT + STR > 10 | STR+1 VIT+5 DEX+2 |
 | job_barrier_mage_v1 | 結界師徽章 |  | 結界師試煉 | 啟用 | 10 | staff_1h, staff_2h | INT + VIT + DEX > 10 | VIT+3 INT+3 DEX+2 |
 | job_bard_v1 | 詩人徽章 |  | 詩人試煉 | 啟用 | 10 | bow | DEX + AGI + LUK > 10 | AGI+2 DEX+4 LUK+2 |

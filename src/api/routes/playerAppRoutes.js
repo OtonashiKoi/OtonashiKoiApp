@@ -8,7 +8,7 @@ const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/strea
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffects } = require("../../shared/supportAuraScaling");
-const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme, getZoneGroup, ZONE_BY_KEY } = require("../../shared/zones");
 const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { acquireSse } = require("../netGuards");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
@@ -2453,6 +2453,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           zoneLabel: theme.label,
           zoneEmoji: theme.emoji,
           zoneColor: `#${Number(theme.color || 0).toString(16).padStart(6, "0")}`,
+          group: getZoneGroup(key),                        // "normal" | "event"
+          worldBoss: Boolean(ZONE_BY_KEY[key]?.worldBoss), // 活動世界王槽位標記
+          zoneTagline: theme.tagline || null,
           monsterId: activeMonster?.id || null,
           monsterName: activeMonster?.name || "Unknown",
           monsterImageUrl: activeMonster?.imageUrl || null,
@@ -2896,6 +2899,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const weakened = applyDragonKingBreakWeaken(battleMonsterStats, battleMonsterEquipped, stateForCombat.worldBossPartsHp);
           battleMonsterStats = weakened.monsterStats;
           battleMonsterEquipped = weakened.monsterEquipped;
+        }
+        // 牙狼分階段(王側)：剩 3~2 部位「狂亂」→ 迴避大增 + 王攻擊減半（同 DC）
+        if (zoneKey === "hellfire_depths") {
+          const ph = require("../../bot/handlers/monsterZoneHandlers").hellfangBossPhaseMods(stateForCombat);
+          if (ph.dodgeBonus || ph.dmgMult !== 1) {
+            battleMonsterStats = {
+              ...battleMonsterStats,
+              dodge: Math.min(95, (Number(battleMonsterStats.dodge) || 0) + ph.dodgeBonus),
+              finalDamageMultiplier: (Number(battleMonsterStats.finalDamageMultiplier) || 1) * ph.dmgMult
+            };
+          }
         }
 
         // 開戰公告:只由「真正把 battleStartedAt 從未設定→設定」的那一次發送(web/DC 共用同一旗標,避免重複)
@@ -3444,8 +3458,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         hellfire_depths: [
           { key: "head", name: "頭部", desc: "唯剛猛血肉之搏能撼其骨" },
           { key: "upper_body", name: "上軀幹", desc: "唯咒印靈焰之術能灼穿" },
-          { key: "lower_body", name: "下軀幹", desc: "唯咒印靈焰之術能灼穿" },
-          { key: "tail", name: "尾巴", desc: "唯剛猛血肉之搏能撼其骨" },
+          { key: "lower_body", name: "下軀幹", desc: "唯剛猛血肉之搏能撼其骨" },
+          { key: "tail", name: "尾巴", desc: "唯咒印靈焰之術能灼穿" },
           { key: "legs", name: "腿部", desc: "唯剛猛血肉之搏能撼其骨" }
         ]
       };
@@ -3474,10 +3488,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         hellfire_depths: {
           title: "會學習的血肉（五要害俱破，方能誅王）",
           lines: [
-            "🐺 地獄狼牙王的血肉會『記憶』——同一種力量捶打得太久，牠便悄悄長出對應的硬殼，你的攻勢自此如隔靴搔癢。",
-            "🔥 頭顱・尾・後肢：唯『剛猛血肉之搏』能撼動其骨。",
-            "🌀 上軀・下軀：唯『咒印靈焰之術』能灼穿其甲。",
-            "💭 火獄低語：「執一而攻者，終遭熔甲反噬；剛柔輪替、眾力交織，狼焰方化餘燼。」"
+            "🐺 五要害各有弱點——頭顱・下軀・後肢唯『剛猛血肉之搏』能撼；上軀・尾唯『咒印靈焰之術』能灼。",
+            "🔁 每部位受到傷害，將會學習「用比較多的攻擊」，600 間隙後復原、不再翻轉。",
+            "💢 破到剩三要害：狼焰陷入狂亂，身法飄忽極難命中，但爪牙威力減半。",
+            "🖤 破到剩最後一要害：狼王收束心神全力應戰，迴避與攻勢回歸常態；此最終核心物法皆可傷、不再變化，然其已淬成鐵石。",
+            "💭 火獄低語：「剛柔輪替、眾力交織，狼焰方化餘燼。」"
           ]
         }
       };

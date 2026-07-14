@@ -148,6 +148,36 @@ const ZONE_DEFS = [
     maxLevel:     null,
     defaultEntryFee: 15000,
   },
+
+  // ── 期間限定活動（空殼 / scaffold）──────────────────────────────────────────
+  // group:"event" 的區只出現在戰鬥頁「期間限定活動」分頁，與常態討伐/世界王分開。
+  // 目前無怪物、無世界王設定（＝準備中）；之後在後台把怪物 zone 指到這裡、
+  // 並另行架設活動世界王內容即可點亮。做法與常態區完全相同。
+  {
+    key:          "event_1",
+    featureKey:   "monster_zone_event_1",
+    label:        "限定活動關卡",
+    emoji:        "⏳",
+    tagline:      "期間限定，內容準備中。",
+    color:        0xff9ec4,
+    minLevel:     1,
+    maxLevel:     null,
+    defaultEntryFee: 0,
+    group:        "event",
+  },
+  {
+    key:          "event_boss",
+    featureKey:   "monster_zone_event_boss",
+    label:        "限定活動 世界王",
+    emoji:        "🎪",
+    tagline:      "期間限定世界王，內容準備中。",
+    color:        0xffd166,
+    minLevel:     1,
+    maxLevel:     null,
+    defaultEntryFee: 0,
+    group:        "event",
+    worldBoss:    true,   // 活動世界王槽位（前端標示用；實際世界王接線於架設內容時再做）
+  },
 ];
 
 // ─── 快速查詢表 ───────────────────────────────────────────────────────────────
@@ -231,6 +261,16 @@ function checkZoneLevelRequirementWithBinding(zoneKey, playerLevel, binding) {
   return null;
 }
 
+/** zone 分組：預設 "normal"（常態討伐/世界王），"event" = 期間限定活動。 */
+function getZoneGroup(zoneKey) {
+  const def = ZONE_BY_KEY[zoneKey];
+  return (def && def.group) || "normal";
+}
+/** 是否為期間限定活動區。 */
+function isEventZone(zoneKey) {
+  return getZoneGroup(zoneKey) === "event";
+}
+
 module.exports = {
   ZONE_DEFS,
   ALL_ZONE_KEYS,
@@ -244,6 +284,8 @@ module.exports = {
   isMonsterZoneFeatureKey,
   getZoneTheme,
   getZoneDefaultEntryFee,
+  getZoneGroup,
+  isEventZone,
   checkZoneLevelRequirement,
   checkZoneLevelRequirementWithBinding,
 };

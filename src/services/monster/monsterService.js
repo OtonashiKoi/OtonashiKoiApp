@@ -83,13 +83,17 @@ class MonsterService {
     const monsters = await this.monsterRepository.findAll();
     let list = includeDisabled ? monsters : monsters.filter((m) => m.enabled);
     if (zone) {
-      // allZones 怪物（如金錢袋怪）出現在所有一般怪物區；世界王區（elite/dragon_king_lair/hellfire_depths）一律除外，
-      // 另可用 doc.allZonesExclude 逐區排除（如惡夢/深淵/神話終局區）。
+      // allZones 怪物（如金錢袋怪）出現在所有一般怪物區；下列一律除外：
+      //   ‧ 世界王區（elite/dragon_king_lair/hellfire_depths）
+      //   ‧ 期間限定活動區（group:"event"）→ 活動只放你明確指定 zone 的怪，不吃全圖怪
+      //   ‧ doc.allZonesExclude 逐區排除（如惡夢/深淵/神話終局區）
       const { isWorldBossZone } = require("../worldBoss/worldBossService");
+      const { isEventZone } = require("../../shared/zones");
       const zoneIsWorldBoss = isWorldBossZone(zone);
+      const zoneIsEvent = isEventZone(zone);
       list = list.filter((m) => {
         const excluded = Array.isArray(m.allZonesExclude) && m.allZonesExclude.includes(zone);
-        return (m.allZones === true && !zoneIsWorldBoss && !excluded) || (m.zone || "normal") === zone;
+        return (m.allZones === true && !zoneIsWorldBoss && !zoneIsEvent && !excluded) || (m.zone || "normal") === zone;
       });
     }
     return list.map((m) => ({ ...m, calc: effectiveCalc(m) }));

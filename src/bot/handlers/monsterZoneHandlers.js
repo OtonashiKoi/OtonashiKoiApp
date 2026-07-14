@@ -276,7 +276,12 @@ const HELLFANG_ZONE = "hellfire_depths";
 const HELLFANG_PART_WEAKNESS = { head: "physical", upper_body: "magic", lower_body: "physical", tail: "magic", legs: "physical" };
 const HELLFANG_WRONG_TYPE_MULT = 0.3;   // 打錯流派 → 最多 30%
 const HELLFANG_FLIP_FRACTION = 1 / 3;   // 部位累積受創達 1/3 HP → 翻面(一生一次)
-const HELLFANG_FLIP_DURATION_MS = 10 * 60 * 1000; // 翻面持續 10 分鐘後復原
+const HELLFANG_FLIP_DURATION_MS = 10 * 60 * 1000; // 翻面持續 10 分鐘(=600秒/「600間隙」)後復原
+// 分階段(依存活部位數)：
+//  剩 3~2 部位「狂亂閃避」→ 迴避大增 + 王攻擊減半；剩 1 部位「最終核心」→ 迴避/王攻回正常、物法皆可打但玩家傷害×0.7
+const HELLFANG_FRENZY_DODGE_BONUS = 40;  // 狂亂期迴避 +40(命中牠約 -24%)
+const HELLFANG_FRENZY_DMG_MULT = 0.5;    // 狂亂期王攻擊 ×0.5
+const HELLFANG_CORE_PLAYER_MULT = 0.7;   // 最終核心：玩家對它傷害 ×0.7(物法皆可、不再翻面)
 const HELLFANG_PART_LABELS = { head: "頭部", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴", legs: "腿部" };
 function getWorldBossPartKeys(zoneKey) {
   if (zoneKey === HELLFANG_ZONE) return ["head", "upper_body", "lower_body", "tail", "legs"];
@@ -392,10 +397,24 @@ function createWorldBossPartHpTemplate(totalMaxHp = 0, zoneKey = null) {
 function hellfangPlayerSchool(weaponType) {
   return String(weaponType || "").startsWith("staff") ? "magic" : "physical";
 }
-// 世界王部位「當前弱點」類型(給面板顯示)：牙狼翻面窗口內回翻面弱點、否則原生；其餘世界王 null
+// 牙狼「存活部位數」(HP>0)：分階段機制的依據
+function hellfangAlivePartCount(state) {
+  const hp = state?.worldBossPartsHp;
+  if (!hp || typeof hp !== "object") return 5;
+  return getWorldBossPartKeys(HELLFANG_ZONE).filter((k) => Number(hp[k] || 0) > 0).length;
+}
+// 牙狼「王側」分階段修正(給戰鬥設定調 battleMonsterStats)：
+//  剩 3~2 部位 → 狂亂：迴避 +40、王攻擊 ×0.5；其餘(5~4 或最終 1) → 正常。回 {dodgeBonus, dmgMult, phase}
+function hellfangBossPhaseMods(state) {
+  const alive = hellfangAlivePartCount(state);
+  if (alive === 3 || alive === 2) return { dodgeBonus: HELLFANG_FRENZY_DODGE_BONUS, dmgMult: HELLFANG_FRENZY_DMG_MULT, phase: "frenzy", alive };
+  return { dodgeBonus: 0, dmgMult: 1, phase: alive <= 1 ? "core" : "normal", alive };
+}
+// 世界王部位「當前弱點」類型(給面板顯示)：牙狼翻面窗口內回翻面弱點、否則原生；最終核心(剩1)→null(物法皆可)；其餘世界王 null
 function getWorldBossPartWeakness(zoneKey, partKey, state = null, now = Date.now()) {
-  if (zoneKey === HELLFANG_ZONE) return hellfangPartCurrentWeak(state, partKey, now);
-  return null;
+  if (zoneKey !== HELLFANG_ZONE) return null;
+  if (hellfangAlivePartCount(state) <= 1) return null; // 最終核心：物法皆可，不標弱點
+  return hellfangPartCurrentWeak(state, partKey, now);
 }
 // 牙狼部位「翻面剩餘毫秒」(給面板倒數)：翻面中回剩餘 ms、否則 0
 function getHellfangFlipRemainingMs(state, partKey, now = Date.now()) {
@@ -408,9 +427,11 @@ function hellfangPartCurrentWeak(state, part, now = Date.now()) {
   if (Number.isFinite(until) && until > 0 && now < until && state?.hellfangFlipWeak?.[part]) return state.hellfangFlipWeak[part];
   return HELLFANG_PART_WEAKNESS[part] || "physical";
 }
-// 這場玩家對牙狼的傷害倍率：同流派 100%、不同流派最多 30%
+// 這場玩家對牙狼的傷害倍率：
+//  最終核心(剩1部位)→物法皆可、但玩家傷害 ×0.7；否則→同流派 100%、不同流派最多 30%
 function hellfangDamageMult(state, part, weaponType, now = Date.now()) {
   const school = hellfangPlayerSchool(weaponType);
+  if (hellfangAlivePartCount(state) <= 1) return { school, weak: null, mult: HELLFANG_CORE_PLAYER_MULT };
   const weak = hellfangPartCurrentWeak(state, part, now);
   const mult = (school === weak) ? 1 : HELLFANG_WRONG_TYPE_MULT;
   return { school, weak, mult };
@@ -433,6 +454,8 @@ function hellfangPartAccrue(state, part, partMaxHp, school, effDamage, now = Dat
   else state.hellfangDmgPhys[part] = (state.hellfangDmgPhys[part] || 0) + eff;
   const phys = state.hellfangDmgPhys[part] || 0;
   const magic = state.hellfangDmgMagic[part] || 0;
+  // 最終核心(剩1部位)：不再翻面(物法皆可、不再變化)
+  if (hellfangAlivePartCount(state) <= 1) return null;
   if (!state.hellfangFlipped[part] && (phys + magic) >= (Number(partMaxHp) || 0) * HELLFANG_FLIP_FRACTION) {
     const majority = phys >= magic ? "physical" : "magic";           // 你用比較多的那系
     const newWeak = majority === "physical" ? "magic" : "physical";  // 翻成抵禦該系(弱點變另一種)
@@ -2905,6 +2928,17 @@ async function handleEnterBattle(interaction) {
           battleMonsterStats = weakened.monsterStats;
           battleMonsterEquipped = weakened.monsterEquipped;
         }
+        // 牙狼分階段(王側)：剩 3~2 部位「狂亂」→ 迴避大增 + 王攻擊減半；最終核心/正常 → 不變
+        if (zoneKey === HELLFANG_ZONE) {
+          const ph = hellfangBossPhaseMods(battleState);
+          if (ph.dodgeBonus || ph.dmgMult !== 1) {
+            battleMonsterStats = {
+              ...battleMonsterStats,
+              dodge: Math.min(95, (Number(battleMonsterStats.dodge) || 0) + ph.dodgeBonus),
+              finalDamageMultiplier: (Number(battleMonsterStats.finalDamageMultiplier) || 1) * ph.dmgMult
+            };
+          }
+        }
       }
 
       const monsterHpBeforeBattle = session.monsterHp;
@@ -5189,7 +5223,7 @@ module.exports = {
   activeSessions,
   getMonsterZoneDiagnostics,
   _resolveExpiredMonsterTransition,
-  hellfangPlayerSchool, hellfangDamageMult, hellfangPartAccrue, hellfangFlipLines, hellfangPartCurrentWeak, getHellfangFlipRemainingMs, getWorldBossPartWeakness,
+  hellfangPlayerSchool, hellfangDamageMult, hellfangPartAccrue, hellfangFlipLines, hellfangPartCurrentWeak, getHellfangFlipRemainingMs, getWorldBossPartWeakness, hellfangBossPhaseMods, hellfangAlivePartCount,
   startIdleRotateTimer,
   refreshEliteWorldBossPanel,
   refreshMonsterZonePanels,
