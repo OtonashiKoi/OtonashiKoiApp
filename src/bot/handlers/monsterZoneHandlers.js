@@ -633,6 +633,7 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
         nextState.worldBossPartsHp = partState.worldBossPartsHp;
         nextState.worldBossPartsMaxHp = partState.worldBossPartsMaxHp;
         worldBossPartsHp = partState.worldBossPartsHp;
+        Object.assign(nextState, freshHellfangFields()); // 牙狼重生：清翻面/累積
       }
 
       await sc.monsterService.saveState(nextState, zoneKey);
@@ -722,6 +723,7 @@ async function _resolveExpiredMonsterTransition(sc, zoneKey) {
     nextState.worldBossPartsHp = partState.worldBossPartsHp;
     nextState.worldBossPartsMaxHp = partState.worldBossPartsMaxHp;
     worldBossPartsHp = partState.worldBossPartsHp;
+    Object.assign(nextState, freshHellfangFields()); // 牙狼重生：清翻面/累積
   }
 
   await sc.monsterService.saveState(nextState, zoneKey);
@@ -789,6 +791,13 @@ function ensureWorldBossPartState(state, monsterMaxHp, zoneKey = null) {
     currentHp: totalHp,
     changed
   };
+}
+
+// 世界王重生/換王時，牙狼翻面與累積欄位必須清空。
+// 否則重生後滿血王會繼承上一輪的翻面狀態(hellfangFlipped=true 亦擋住重新翻面)，
+// 使面板弱點與原生相反、玩家照攻略打卻打成錯流派(30%)→「滿血卻好怪、物理打法系部位反而高」。
+function freshHellfangFields() {
+  return { hellfangFlipUntil: {}, hellfangFlipWeak: {}, hellfangFlipped: {}, hellfangDmgPhys: {}, hellfangDmgMagic: {} };
 }
 
 // 強化寶石 ID 對應表
@@ -898,11 +907,14 @@ async function maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster) {
   const partState = ensureWorldBossPartState({}, monster.calc.maxHp, zoneKey);
   const resetState = {
     ...state,
+    ...freshHellfangFields(), // 牙狼重生：清翻面/累積
     currentHp: partState.currentHp,
     worldBossPartsHp: partState.worldBossPartsHp,
     worldBossPartsMaxHp: partState.worldBossPartsMaxHp,
     participants: [],
     damageMap: {},
+    // 保留上一輪傷害排行(超時失敗也算一輪結束)
+    lastDamageMap: (state.damageMap && Object.keys(state.damageMap).length > 0) ? state.damageMap : (state.lastDamageMap || {}),
     lastHitAt: new Date().toISOString(),
     activeEvent: null
   };
@@ -2547,6 +2559,7 @@ async function handleEnterBattle(interaction) {
         const bossPartState = ensureWorldBossPartState({}, boss.calc.maxHp, zoneKey);
         const switched = {
           ...state,
+          ...freshHellfangFields(), // 牙狼重生：清翻面/累積
           activeMonsterSeq: boss.seq,
           currentHp: bossPartState.currentHp,
           worldBossPartsHp: bossPartState.worldBossPartsHp,
@@ -4132,6 +4145,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     const bossLockUntil = new Date(Date.now() + bossLockMs + 15 * 1000);
     const bossResetState = {
       ...freshState,
+      ...freshHellfangFields(), // 牙狼重生：清翻面/累積
       currentHp: resetParts.currentHp,
       worldBossPartsHp: resetParts.worldBossPartsHp,
       worldBossPartsMaxHp: resetParts.worldBossPartsMaxHp,
@@ -4139,6 +4153,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       killCount: newKillCount,
       participants: [],
       damageMap: {},
+      // 保留「上一隻」的傷害排行：冷卻期間網頁/DC 仍顯示剛擊殺這隻王的排行，下一隻被打才換新
+      lastDamageMap: (freshState.damageMap && Object.keys(freshState.damageMap).length > 0) ? freshState.damageMap : (freshState.lastDamageMap || {}),
       killClaimedSeq: monster.seq,
       killClaimedAt: bossLockUntil,
       killClaimedBy: "elite-boss-cooldown",

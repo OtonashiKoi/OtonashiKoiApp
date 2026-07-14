@@ -3541,6 +3541,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
         const currentHp = sumWorldBossPartHp(hpMap);
 
+        // 傷害排行(對這隻王的累積貢獻)：讓網頁世界王面板也看得到「誰打了多少」(同 DC 面板)
+        const _wbPretty = (nm, id) => {
+          const s = String(nm || "").trim();
+          const sid = String(id || "");
+          if (!s || s === sid || /^\d{15,}$/.test(s)) return sid ? `玩家#${sid.slice(-4)}` : "玩家";
+          return s;
+        };
+        // 目前這輪有人打就用現況；還沒人打(冷卻中/剛重生)則顯示「上一隻」的排行，直到下一隻被打才換新
+        const _rankSrc = (st?.damageMap && Object.keys(st.damageMap).length > 0) ? st.damageMap : (st?.lastDamageMap || {});
+        const ranking = Object.entries(_rankSrc)
+          .map(([pid, d]) => ({ name: _wbPretty(d?.name, pid), damage: Math.max(0, Math.round(Number(d?.damage) || 0)) }))
+          .filter((d) => d.damage > 0)
+          .sort((a, b) => b.damage - a.damage)
+          .slice(0, 20);
+
         return {
           zoneKey,
           bossKey: bossKeyForZone(zoneKey),
@@ -3549,6 +3564,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           bossMaxHp,
           currentHp,
           parts,
+          ranking,
           entryFee: Math.max(0, Number(bossMonster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0),
           partEffects: PART_EFFECTS[zoneKey] || [],
           hints: PART_HINTS[zoneKey] || null,
