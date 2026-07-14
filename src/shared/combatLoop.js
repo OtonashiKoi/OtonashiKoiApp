@@ -904,6 +904,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let playerDefIgnoreCarry = 0; // 上一回合玩家無視防禦%(法師徽章/魔力爆炎等),供 DOT 穿防
   // 武器主屬性追加傷害:終傷後 +(主屬性 × 1.5)固定點數。主攻擊/連擊/反擊各加一次。
   const weaponMainBonus = Math.max(0, Math.round((pStats.weaponMainStatValue || 0) * 1.5));
+  // 世界王部位弱點倍率：玩家對王「每一擊」的傷害倍率(牙狼:同流派×1、不同×0.3)。預設 1 不影響其他戰鬥。
+  // 直接乘在玩家傷害上→戰報數字=真實傷害、部位血正常遞減、戰鬥在真的打死時才結束(不提早中止)。
+  const bossVulnMult = (options.bossVulnMult != null && Number(options.bossVulnMult) >= 0) ? Number(options.bossVulnMult) : 1;
+  const applyBossVuln = (raw) => (bossVulnMult === 1 ? raw : Math.max(0, Math.round((Number(raw) || 0) * bossVulnMult)));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
   let endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
   // BOSS 單位判定（世界王/區域王）：暈眩抗性與格擋規則會用到
@@ -1184,7 +1188,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let burnDmg = Math.max(1, Math.round(burnBase * (burnPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) burnDmg = Math.min(burnDmg, Number(mParams.maxDamage));
           burnDmg = Math.max(1, Math.round(burnDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
-          if (_noPlayerAtk) burnDmg = 0;
+          if (_noPlayerAtk) burnDmg = 0; burnDmg = applyBossVuln(burnDmg); // 世界王部位弱點倍率(牙狼)
           mHp -= burnDmg;
           totalDamage += burnDmg;
           combatStats.burnTriggerCount += 1; // 焰獄審判任務:玩家施加給怪的燃燒每跳一次算「觸發燃燒」1 次
@@ -1201,7 +1205,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let poisonDmg = Math.max(1, Math.round(poisonBase * (poisonPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) poisonDmg = Math.min(poisonDmg, Number(mParams.maxDamage));
           poisonDmg = Math.max(1, Math.round(poisonDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
-          if (_noPlayerAtk) poisonDmg = 0;
+          if (_noPlayerAtk) poisonDmg = 0; poisonDmg = applyBossVuln(poisonDmg); // 世界王部位弱點倍率(牙狼)
           mHp -= poisonDmg;
           totalDamage += poisonDmg;
           log.push(`☠️ 中毒持續！${mName} 受到 **${poisonDmg}** 點毒素傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1236,7 +1240,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let bleedDmg = Math.max(1, Math.round(bleedBase * (bleedPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) bleedDmg = Math.min(bleedDmg, Number(mParams.maxDamage));
           bleedDmg = Math.max(1, Math.round(bleedDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
-          if (_noPlayerAtk) bleedDmg = 0;
+          if (_noPlayerAtk) bleedDmg = 0; bleedDmg = applyBossVuln(bleedDmg); // 世界王部位弱點倍率(牙狼)
           mHp -= bleedDmg;
           totalDamage += bleedDmg;
           log.push(`🩸 流血持續！${mName} 受到 **${bleedDmg}** 點流血傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1251,7 +1255,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let shockDmg = Math.max(1, Math.round(shockBase * (shockPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) shockDmg = Math.min(shockDmg, Number(mParams.maxDamage));
           shockDmg = Math.max(1, Math.round(shockDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
-          if (_noPlayerAtk) shockDmg = 0;
+          if (_noPlayerAtk) shockDmg = 0; shockDmg = applyBossVuln(shockDmg); // 世界王部位弱點倍率(牙狼)
           mHp -= shockDmg;
           totalDamage += shockDmg;
           log.push(`⚡ 感電持續！${mName} 受到 **${shockDmg}** 點電擊傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -1296,7 +1300,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           let shockDmg = Math.max(1, Math.round(shockBase * (shockPct / 100)));
           if (Number.isFinite(Number(mParams.maxDamage))) shockDmg = Math.min(shockDmg, Number(mParams.maxDamage));
           shockDmg = Math.max(1, Math.round(shockDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
-          if (_noPlayerAtk) shockDmg = 0;
+          if (_noPlayerAtk) shockDmg = 0; shockDmg = applyBossVuln(shockDmg); // 世界王部位弱點倍率(牙狼)
           mHp -= shockDmg;
           totalDamage += shockDmg;
           log.push(`⚡ 震盪持續！${mName} 受到 **${shockDmg}** 點震盪傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -2783,7 +2787,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           finalDamage = adjustedMCalc.incomingDamageCap;
         }
 
-        dmg = finalDamage;
+        dmg = applyBossVuln(finalDamage); // 世界王部位弱點倍率算進終傷(牙狼不同流派×0.3)
 
         // 採證：單次傷害異常爆量(> 攻擊力 ×10)時，把完整拆解印到後台 log，直指「傷害被放大」的兇手
         try {

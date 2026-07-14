@@ -181,7 +181,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   function signStreamAuthState(discordId) {
     return jwt.sign(
       { discordId: String(discordId || "").trim() },
-      config.streamAuth?.stateSecret || process.env.JWT_SECRET || "stream-auth-secret",
+      config.streamAuth?.stateSecret || process.env.JWT_SECRET,
       { expiresIn: STREAM_AUTH_STATE_TTL }
     );
   }
@@ -189,7 +189,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   function verifyStreamAuthState(token) {
     return jwt.verify(
       String(token || ""),
-      config.streamAuth?.stateSecret || process.env.JWT_SECRET || "stream-auth-secret"
+      config.streamAuth?.stateSecret || process.env.JWT_SECRET
     );
   }
 
@@ -2026,6 +2026,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const townChatBinding = layout.discord.bindings.find(b => b.featureKey === "town_chat" && b.enabled);
 
       if (townChatBinding && msg.channelId === townChatBinding.channelId) {
+        // 系統公告（📢系統公告：…）已由 _announceTownChat 直接推給 SSE 網頁大廳，
+        // 這裡不再把它的 DC 回音二次推播，避免網頁大廳同一則系統公告出現兩次。
+        if (msg.author?.id === discordClient.user?.id && /^📢\s*\*\*系統公告\*\*/.test(msg.content || "")) return;
         let content = msg.content || "";
         if (msg.stickers.size > 0) {
           const stickerUrls = [...msg.stickers.values()].map(s => `https://media.discordapp.net/stickers/${s.id}.png`);
@@ -2692,10 +2695,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       let newAuras = prevAuras;
       if (hasPartyAura) {
-        // 光環職業：更新或新增本玩家的光環項目
+        // 光環職業：更新或新增本玩家的光環項目（自己也留在陣列裡，下面一起收）
         newAuras = [...prevAuras.filter(a => a.discordId !== discordId), { discordId, displayName, effects: rawPartyEffs, jobName: selfJobName }];
-        // 自身光環掛上提供者名字＋職業，讓戰報「✨ 光環加持」顯示是誰提供（而非只顯示「光環」）
-        partyEffects = partyEffs.map(eff => ({ ...eff, sourceName: displayName, sourceJobName: selfJobName, isSelfAura: true }));
         selfAuraLines = partyEffs.map(eff => {
           const effName = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
           const vt = formatEffectValueText(eff.key, eff?.params);
@@ -2714,18 +2715,32 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         stateForCombat = updatedState;
       }
 
-      // 非光環職業：堆疊區域內所有光環提供者的效果
-      if (!hasPartyAura && newAuras.length > 0) {
+      // 堆疊區域內「所有」光環提供者的效果（含自己，若自己是輔助職）→ 對齊 DC。
+      // 舊 bug：自己一發動光環就只吃自己的、收不到別人的（輔助職互相吃不到、治療回血沒發生）。
+      if (newAuras.length > 0) {
         const allCollected = [];
         for (const aura of newAuras) {
           if (!aura?.discordId) continue;
-          const auraProgress = await serviceContext.progressRepository.findByPlayerId(aura.discordId).catch(() => null);
-          if (!auraProgress) continue;
-          const auraProviderEquipped = await mergeEquippedFromLibrary(auraProgress.equipment || {}, serviceContext.itemRepository);
-          const auraAttrs = auraProgress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-          const auraProviderStats = calcPlayerStats(auraAttrs, auraProviderEquipped, auraProgress.activeEffects || [], auraProgress.inventory || [], { petStat: require("../../shared/petDex").statBonusOf(auraProgress?.petDex) });
+          const isSelf = aura.discordId === discordId;
+          let auraProviderStats, auraProviderEquipped;
+          if (isSelf) {
+            // 自己：直接用本場已算好的 pStats / equipped，省一次 DB
+            auraProviderStats = pStats;
+            auraProviderEquipped = equipped;
+          } else {
+            const auraProgress = await serviceContext.progressRepository.findByPlayerId(aura.discordId).catch(() => null);
+            if (!auraProgress) continue;
+            auraProviderEquipped = await mergeEquippedFromLibrary(auraProgress.equipment || {}, serviceContext.itemRepository);
+            const auraAttrs = auraProgress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+            auraProviderStats = calcPlayerStats(auraAttrs, auraProviderEquipped, auraProgress.activeEffects || [], auraProgress.inventory || [], { petStat: require("../../shared/petDex").statBonusOf(auraProgress?.petDex) });
+          }
           const scaled = scaleSupportPartyEffects(
-            (aura.effects || []).map(e => ({ ...e, sourceName: aura.displayName || null, isSelfAura: false })),
+            (aura.effects || []).map(e => ({
+              ...e,
+              sourceName: isSelf ? displayName : (aura.displayName || null),
+              sourceJobName: isSelf ? selfJobName : (aura.jobName || null),
+              isSelfAura: isSelf
+            })),
             { providerStats: auraProviderStats, equipped: auraProviderEquipped }
           );
           allCollected.push(...scaled);
@@ -2852,12 +2867,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           // 還有其他活著的部位 → 明確告知該部位已破,附上最新部位血量供前端刷新 + 重選
           const PART_LABELS_BLOCK = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
           const maxMap = stateForCombat.worldBossPartsMaxHp || {};
+          const { getWorldBossPartWeakness: _wbWeakB, getHellfangFlipRemainingMs: _wbFlipMsB } = require("../../bot/handlers/monsterZoneHandlers");
+          const _wbNowB = Date.now();
           const partsForResp = _partKeys
             .filter((k) => Object.prototype.hasOwnProperty.call(_partsHp, k))
             .map((k) => {
               const hp = Math.max(0, Number(_partsHp[k] || 0));
               const max = Math.max(1, Math.round(Number(maxMap[k] || 0) || hp || 1));
-              return { key: k, name: PART_LABELS_BLOCK[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartWeakness(zoneKey, k) };
+              return { key: k, name: PART_LABELS_BLOCK[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: _wbWeakB(zoneKey, k, stateForCombat, _wbNowB), flipRemainMs: _wbFlipMsB(stateForCombat, k, _wbNowB) };
             });
           return res.status(409).json({
             status: "error",
@@ -2935,6 +2952,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         ? Math.max(0, Number(stateForCombat.worldBossPartsHp?.[worldBossPart] || 0))
         : monsterHpInitial;
 
+      // 牙狼(hellfire_depths)：部位弱點倍率「每擊」乘進終傷(與 DC 同步)。
+      //   絕不可只在結算時 ×倍率——那會讓戰鬥迴圈用原始傷害提早把部位打 0、之後結算再打折→
+      //   部位其實沒死卻中止戰鬥(玩家回報的「收不掉殘血」)。故在此算好倍率、per-hit 帶進 combatLoop。
+      let webBossVulnMult = 1;
+      if (isWorldBoss && zoneKey === "hellfire_depths") {
+        try {
+          webBossVulnMult = require("../../bot/handlers/monsterZoneHandlers")
+            .hellfangDamageMult(stateForCombat, worldBossPart, pStats.weaponType, Date.now()).mult;
+        } catch (_) { webBossVulnMult = 1; }
+      }
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
         runCombatLoop(battlePStats, battleMonsterStats, monster.name, combatMonsterHp, undefined, {
@@ -2947,7 +2975,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           monsterIsBoss: Boolean(monster?.isBoss),
           bestiaryBonusPct: _bestiaryBonusPct, // 圖鑑傷害加成（同 DC）
           isWorldBoss, // 世界王：玩家 DOT 也吃王 def%（同 DC）
-          zone: zoneKey // 裝備的區域條件特效（同 DC）
+          zone: zoneKey, // 裝備的區域條件特效（同 DC）
+          bossVulnMult: webBossVulnMult // 牙狼弱點倍率(每擊)；其餘世界王＝1 無影響
         });
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
       // 與 DC 一致：戰力同步已停用（monsterZoneHandlers.js 也是寫死 false），
@@ -2989,12 +3018,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const freshState = await serviceContext.monsterService.getState(zoneKey);
           const prevParts = ensureWBPartState(freshState, monster.calc.maxHp, zoneKey);
           const latestPartHp = Math.max(0, Number(prevParts.worldBossPartsHp?.[worldBossPart] || 0));
-          // 牙狼(hellfire_depths)適應性傷害：本場傷害 ×(部位弱點 × 適應)；其餘世界王照原樣
-          let wbDamage = totalDamage;
-          if (zoneKey === "hellfire_depths") {
-            const _hf = _mzHellfang.hellfangDamageMult(freshState, worldBossPart, pStats.weaponType, Date.now());
-            wbDamage = Math.max(0, Math.round(totalDamage * _hf.mult));
-          }
+          // 牙狼弱點倍率已在戰鬥迴圈 per-hit 乘進終傷(bossVulnMult)，此處不可再乘一次。
+          const wbDamage = totalDamage;
           const nextPartHp = Math.max(0, latestPartHp - wbDamage);
           const nextPartsHp = { ...prevParts.worldBossPartsHp, [worldBossPart]: nextPartHp };
           const nextCurrentHp = sumWBPartHp(nextPartsHp);
@@ -3025,9 +3050,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             participants: updatedParticipants,
             lastHitAt: new Date().toISOString()
           };
-          // 牙狼：用「原始傷害＋流派」更新適應狀態(動態切換抗物理/抗法)；記在 nextState 一起存
+          // 牙狼：累積本部位受創，達 1/3 HP 首次翻面(抵禦你用比較多的那系,10分鐘,一生一次)；記在 nextState 一起存
           if (zoneKey === "hellfire_depths") {
-            hellfangEvent = _mzHellfang.hellfangUpdateAdaptation(nextState, _mzHellfang.hellfangPlayerSchool(pStats.weaponType), totalDamage, Date.now());
+            hellfangEvent = _mzHellfang.hellfangPartAccrue(
+              nextState, worldBossPart, worldBossPartHpMax,
+              _mzHellfang.hellfangPlayerSchool(pStats.weaponType), wbDamage, Date.now()
+            );
           }
           await serviceContext.monsterService.saveState(nextState, zoneKey);
           stateForCombat = nextState;
@@ -3035,13 +3063,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
           // 部位血條（回傳給前端即時更新）
           const PART_LABELS_RESP = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
-          const { getWorldBossPartKeys: wbPartKeys } = require("../../bot/handlers/monsterZoneHandlers");
+          const { getWorldBossPartKeys: wbPartKeys, getWorldBossPartWeakness: _wbWeak, getHellfangFlipRemainingMs: _wbFlipMs } = require("../../bot/handlers/monsterZoneHandlers");
+          const _wbNow = Date.now();
           worldBossPartsForResp = wbPartKeys(zoneKey)
             .filter((k) => Object.prototype.hasOwnProperty.call(nextPartsHp, k))
             .map((k) => {
               const hp = Math.max(0, Number(nextPartsHp[k] || 0));
               const max = Math.max(1, Math.round(Number(prevParts.worldBossPartsMaxHp?.[k] || 0) || hp || 1));
-              return { key: k, name: PART_LABELS_RESP[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartWeakness(zoneKey, k) };
+              return { key: k, name: PART_LABELS_RESP[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: _wbWeak(zoneKey, k, nextState, _wbNow), flipRemainMs: _wbFlipMs(nextState, k, _wbNow) };
             });
 
           // outcome：全破 → win（真正擊殺）；部位破但王未全破 → win（該部位戰勝，但不擊殺整王）；
@@ -3108,8 +3137,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } else {
           rewardLines = [`激戰 ${MAX_ROUNDS} 回合，未能擊破部位（剩 ${Math.max(0, Math.round(worldBossPartHpCurrent))} HP），下次再來補刀！`];
         }
-        // 牙狼：適應性狀態變化 → 戰報加提示
-        if (hellfangEvent) rewardLines = [...(Array.isArray(rewardLines) ? rewardLines : []), ..._mzHellfang.hellfangAdaptLines(hellfangEvent)];
+        // 牙狼：部位弱點翻面 → 戰報加提示
+        if (hellfangEvent) rewardLines = [...(Array.isArray(rewardLines) ? rewardLines : []), ..._mzHellfang.hellfangFlipLines(hellfangEvent)];
         // 部位戰報後即時更新面板（含部位血條）
         _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, stateForCombat.currentHp, currentParticipants.length + 1, stateForCombat.damageMap || {}).catch(() => {});
       } else if (outcome === "win") {
@@ -3484,12 +3513,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const maxMap = partState.worldBossPartsMaxHp;
 
         const partKeys = getWorldBossPartKeys(zoneKey);
+        const { getWorldBossPartWeakness: _wbWeakS, getHellfangFlipRemainingMs: _wbFlipMsS } = require("../../bot/handlers/monsterZoneHandlers");
+        const _wbNowS = Date.now();
         const parts = partKeys
           .filter((k) => Object.prototype.hasOwnProperty.call(hpMap, k))
           .map((k) => {
             const hp = Math.max(0, Number(hpMap[k] || 0));
             const max = Math.max(1, Math.round(Number(maxMap[k] || 0) || hp || 1));
-            return { key: k, name: PART_LABELS[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartWeakness(zoneKey, k) };
+            return { key: k, name: PART_LABELS[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: _wbWeakS(zoneKey, k, partState, _wbNowS), flipRemainMs: _wbFlipMsS(partState, k, _wbNowS) };
           });
         partsByZone[zoneKey] = parts;
 
@@ -3503,6 +3534,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           bossMaxHp,
           currentHp,
           parts,
+          entryFee: Math.max(0, Number(bossMonster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0),
           partEffects: PART_EFFECTS[zoneKey] || [],
           hints: PART_HINTS[zoneKey] || null,
           respawnCooldownMinutes: Number(cfg.respawnCooldownMinutes || 0),

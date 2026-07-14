@@ -216,10 +216,26 @@ function createAdminConsoleRoutes(serviceContext) {
       }
       const currentHp = state.currentHp != null ? state.currentHp : (activeMonster?.calc?.maxHp ?? null);
       const participantCount = Array.isArray(state.participants) ? state.participants.length : 0;
+      // 牙狼：每部位當前弱點(物/法)＋翻面倒數
+      let hellfangPartInfo = null;
+      if (zone === "hellfire_depths" && activeMonster?.isBoss) {
+        try {
+          const mzh = require("../../bot/handlers/monsterZoneHandlers");
+          hellfangPartInfo = {};
+          const _now = Date.now();
+          for (const p of mzh.getWorldBossPartKeys ? mzh.getWorldBossPartKeys(zone) : ["head","upper_body","lower_body","tail","legs"]) {
+            hellfangPartInfo[p] = {
+              weakZh: mzh.hellfangPartCurrentWeak(state, p, _now) === "magic" ? "法" : "物",
+              flipRemainMs: mzh.getHellfangFlipRemainingMs(state, p, _now),
+            };
+          }
+        } catch (_) { hellfangPartInfo = null; }
+      }
       const result = await serviceContext.adminConsoleService.publishMonsterZonePanel(channelId, activeMonster, currentHp, {
         participantCount,
         damageMap: state.damageMap || {},
         worldBossPartsHp: isWorldBossZone(zone) ? (state.worldBossPartsHp || null) : null,
+        hellfangPartInfo,
         cleanChannel: true
       });
       res.json(ok(result, "monster zone panel published"));

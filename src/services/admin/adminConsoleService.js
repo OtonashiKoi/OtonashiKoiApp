@@ -646,6 +646,7 @@ class AdminConsoleService {
         zoneBinding: existingBinding || null,
         worldBossStatus,
         worldBossPartsHp: options?.worldBossPartsHp || null,
+        hellfangPartInfo: options?.hellfangPartInfo || null,
         fastUpdate: options?.fastUpdate === true
       }
     );

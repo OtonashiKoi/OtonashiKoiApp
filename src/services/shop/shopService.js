@@ -39,6 +39,8 @@ const DISMANTLE_YIELD = {
   C: { tier: "C", count: 1 },
   D: { tier: "D", count: 1 },
 };
+// 分解成功率單一來源(前端顯示改用回傳的 successRatePct，不再各自硬編碼 50%)
+const DISMANTLE_SUCCESS_RATE = 0.5;
 const TAIPEI_TIME_ZONE = "Asia/Taipei";
 const ARMOR_RANDOM_ENHANCE_BONUS = { D: 1, C: 1, B: 2, A: 3 };
 const STAT_LABEL_ZH = {
@@ -1463,7 +1465,7 @@ class ShopService {
       let dismantled = false;
       if (canDismantle) {
         dismantled = true;
-        if (Math.random() < 0.5) {
+        if (Math.random() < DISMANTLE_SUCCESS_RATE) {
           const y = DISMANTLE_YIELD[tier];
           gemsGranted = { tier: y.tier, count: y.count };
         }
@@ -1479,7 +1481,7 @@ class ShopService {
 
       progress.updatedAt = new Date().toISOString();
       await this.progressRepository.save(progress);
-      return { itemName: entry.itemName, gems: gemsGranted, dismantled };
+      return { itemName: entry.itemName, gems: gemsGranted, dismantled, successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100) };
     });
   }
 
@@ -1553,7 +1555,7 @@ class ShopService {
     let totalGems = 0;
     let gemTier = null;
     for (let n = 0; n < take; n++) {
-      if (canDismantle && Math.random() < 0.5) {
+      if (canDismantle && Math.random() < DISMANTLE_SUCCESS_RATE) {
         const y = DISMANTLE_YIELD[tier];
         gemTier = y.tier;
         totalGems += y.count;
@@ -1572,7 +1574,8 @@ class ShopService {
       itemName: ref.itemName,
       dismantledCount: take,
       successCount,
-      gems: totalGems > 0 ? { tier: gemTier, count: totalGems } : null
+      gems: totalGems > 0 ? { tier: gemTier, count: totalGems } : null,
+      successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100)
     };
     });
   }

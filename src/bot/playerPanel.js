@@ -2026,6 +2026,8 @@ const _ANNOUNCE_TIERS = new Set(["B", "A", "S", "SS"]);
 async function _announceChestOpen(displayName, chestReward) {
   try {
     if (!chestReward) return;
+    // 傳說錨點（大史王寶箱 3% 唯一）已有專屬廣播「📦✨…得來不易！」，不再發通用開箱公告，避免同一件洗頻。
+    if (chestReward.legendary) return;
     const tier = String(chestReward.rewardTier || "").toUpperCase();
     if (!_ANNOUNCE_TIERS.has(tier)) return; // 未達 B 級 → 不公告
     const { getBotClient } = require("./runtimeContext");

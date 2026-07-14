@@ -188,6 +188,14 @@ function createPlayerCollectionRoutes(serviceContext) {
         return dn;
       };
 
+      // 達成時間排序用：有記錄→毫秒；沒有(此功能上線前就達成該級的老玩家)→視為「最早」(0),
+      // 因為他們確實比任何上線後才升到此級的人更早達成。
+      const reachedMs = (iso) => {
+        if (!iso) return 0;
+        const t = Date.parse(iso);
+        return Number.isFinite(t) ? t : 0;
+      };
+
       const rows = players
         .filter((p) => p.status !== "disabled")
         .map((p) => {
@@ -197,16 +205,22 @@ function createPlayerCollectionRoutes(serviceContext) {
             name: prettyName(p.displayName, p.discordId),
             level: prog.level ?? 1,
             exp: prog.exp ?? 0,
+            levelReachedAt: prog.levelReachedAt || null,
             jobName: prog.equipment?.job_eq?.itemName || prog.equipment?.job_eq?.name || ""
           };
         })
-        .sort((a, b) => b.level - a.level || b.exp - a.exp);
+        // 等級高→前；同級「越早達成該級」→前；再平手才比經驗。
+        .sort((a, b) =>
+          b.level - a.level ||
+          reachedMs(a.levelReachedAt) - reachedMs(b.levelReachedAt) ||
+          b.exp - a.exp
+        );
 
       const list = rows.slice(0, limit).map((r, i) => ({ rank: i + 1, ...r }));
       const myIdx = rows.findIndex((r) => r.discordId === discordId);
       const me = myIdx >= 0
         ? { rank: myIdx + 1, ...rows[myIdx] }
-        : { rank: null, discordId, name: prettyName(req.playerRecord.displayName, discordId), level: 1, exp: 0, jobName: "" };
+        : { rank: null, discordId, name: prettyName(req.playerRecord.displayName, discordId), level: 1, exp: 0, levelReachedAt: null, jobName: "" };
 
       res.json(ok({ list, me, totalPlayers: rows.length }));
     } catch (err) {

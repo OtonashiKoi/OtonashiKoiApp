@@ -95,7 +95,8 @@ const config = {
   },
   // 直播 OAuth / 即時會員查詢設定
   streamAuth: {
-    stateSecret: process.env.STREAM_AUTH_SECRET || process.env.JWT_SECRET || "stream-auth-secret",
+    // 安全：不再用已公開的弱預設字串當簽章密鑰；缺 secret 時留空→JWT 驗證會失敗(fail-loud)而非用可預測密鑰
+    stateSecret: process.env.STREAM_AUTH_SECRET || process.env.JWT_SECRET || "",
     twitchClientId: process.env.TWITCH_CLIENT_ID || "",
     twitchClientSecret: process.env.TWITCH_CLIENT_SECRET || "",
     twitchBroadcasterId: process.env.TWITCH_BROADCASTER_ID || "",

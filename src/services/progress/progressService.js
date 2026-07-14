@@ -95,6 +95,9 @@ class ProgressService {
         next.exp = 0;
       }
       next.updatedAt = new Date().toISOString();
+      // 等級排行榜「達成時間」：只在本次真的升等時，記下抵達「目前等級」的時刻。
+      // 同級比誰先達成 → 越早排越前。未升等(只加經驗)不動此欄，保留最初達成該級的時間。
+      if (levelUps > 0) next.levelReachedAt = next.updatedAt;
 
       const saved = await this._saveProgressWithFallback(next, prevUpdatedAt);
       if (saved) {

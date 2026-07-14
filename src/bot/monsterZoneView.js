@@ -101,8 +101,16 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     const hpOf = (k) => Math.max(0, Number(worldBossPartsHp[k] || 0));
     const totalHp = keys.reduce((s, k) => s + hpOf(k), 0);
     const doneCount = keys.filter((k) => hpOf(k) <= 0).length;
+    // 牙狼：每部位標當前弱點(物/法)＋翻面倒數（options.hellfangPartInfo 由 handler 依 state 算好）
+    const hpInfo = options.hellfangPartInfo || null;
+    const partSuffix = (k) => {
+      const info = hpInfo && hpInfo[k];
+      if (!info) return "";
+      const flip = Number(info.flipRemainMs) > 0 ? `·翻面 ${formatRemainingTime(info.flipRemainMs)}` : "";
+      return `（${info.weakZh}${flip}）`;
+    };
     worldBossPartsLine = [
-      ...keys.map((k) => `${WORLD_BOSS_PART_META[k]?.hpLabel || k}：${Math.round(hpOf(k))}${hpOf(k) <= 0 ? " ✅" : ""}`),
+      ...keys.map((k) => `${WORLD_BOSS_PART_META[k]?.hpLabel || k}${partSuffix(k)}：${Math.round(hpOf(k))}${hpOf(k) <= 0 ? " ✅" : ""}`),
       `總計：${Math.round(totalHp)}（已擊破 ${doneCount}/${keys.length}）`
     ].join("\n");
   }
@@ -160,11 +168,11 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     } else if (isHellfang) {
       descLines.push(
         "",
-        "**部位機制（五部位俱破才算贏 — 牙狼血肉各有弱點）**",
-        "🎯 頭部 ・ 🐾 尾巴 ・ 🦵 下盤 → 吃「物理」傷害（法系打上去只剩 20%）",
-        "🔮 上軀幹 ・ 🔮 下軀幹 → 吃「法系」傷害（物理打上去只剩 20%）",
+        "**部位機制（五部位俱破才算贏 — 3 物 2 法，弱點會翻面）**",
+        "🎯 頭部 ・ 🦵 下軀幹 ・ 🦵 下盤（物）→ 吃「物理」傷害（法系打上去只剩 30%）",
+        "🔮 上軀幹 ・ 🐾 尾巴（法）→ 吃「法系」傷害（物理打上去只剩 30%）",
         "🗡️ 流派判定：法杖＝法系；劍／斧／槌／匕／弓＝物理",
-        "⚠️ 適應性：一直用同一流派猛攻，牙狼會適應該流派 → 對牠傷害驟降至 10%（約 10 分鐘）。物理／法系交替上陣才是正解！"
+        "🔁 翻面：每個部位被打掉 1/3 血時，會反過來抵禦你「用比較多的那系」10 分鐘（弱點暫時翻面、下方部位名稱會標示與倒數）→ 逼你換流派；10 分鐘後復原、之後不再翻。"
       );
     } else {
       descLines.push(

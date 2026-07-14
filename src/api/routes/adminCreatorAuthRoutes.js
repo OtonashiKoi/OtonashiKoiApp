@@ -6,7 +6,7 @@ const { ok, fail } = require("../../shared/response");
 const STATE_TTL = "10m";
 
 function getJwtSecret() {
-  return config.streamAuth?.stateSecret || process.env.JWT_SECRET || "creator-auth-secret";
+  return config.streamAuth?.stateSecret || process.env.JWT_SECRET;
 }
 
 function getPublicBaseUrl(req) {
