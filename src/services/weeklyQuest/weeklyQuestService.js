@@ -1,5 +1,7 @@
 "use strict";
 
+const jobAdvancement = require("../../shared/jobAdvancement");
+
 const QUEST_CADENCES = ["onboarding", "job", "daily", "weekly", "season"];
 const QUEST_TYPES = {
   battle_count:      { label: "出戰次數",        unit: "次" },
@@ -11,6 +13,13 @@ const QUEST_TYPES = {
   battle_with_bow:   { label: "使用弓出戰次數",   unit: "次" },
   battle_with_dice:  { label: "使用骰子出戰次數", unit: "次" },
   battle_with_support_job: { label: "用輔助職業出戰次數", unit: "次" },
+  // 二轉試煉：裝備某一轉徽章出戰的次數（由 jobAdvancement 產生，避免兩邊清單走鐘）
+  ...Object.fromEntries(
+    Object.entries(require("../../shared/jobAdvancement").BASE_JOBS).map(([key, def]) => [
+      require("../../shared/jobAdvancement").battleMetricFor(key),
+      { label: `以${def.name}出戰次數`, unit: "次" }
+    ])
+  ),
   battle_win:        { label: "戰鬥勝利次數",     unit: "次" },
   damage_total:      { label: "累計造成傷害",     unit: "點" },
   damage_taken:      { label: "累計承受傷害",     unit: "點" },
@@ -171,6 +180,8 @@ class WeeklyQuestService {
       unlockAttribute,
       unlockAttribute2,
       unlockAttributeMin: Math.max(0, Number(def?.unlockAttributeMin || 0)),
+      // 二轉試煉旗標：套用 Lv.35 門檻、持有上限 3 個、同時只能進行 1 條、要求遞增 x1/x2.5/x5
+      isT2Trial: Boolean(def?.isT2Trial),
       // 隱藏 gate：玩家必須「全部擁有」這些 itemId(背包或已裝備)才看得到/才累積。
       // 用於「集齊全部輔助職徽章才解鎖的隱藏賽季任務」。
       unlockRequireItemIds: Array.isArray(def?.unlockRequireItemIds)
@@ -186,6 +197,43 @@ class WeeklyQuestService {
   }
 
   // 玩家是否「全部擁有」quest.unlockRequireItemIds（背包 ∪ 已裝備）
+  /**
+   * 二轉試煉的專屬閘門（在既有的等級/道具/屬性 gate 之外再加一層）：
+   *   - 已持有的二轉徽章數 < 3
+   *   - 已經拿到這個分支的徽章 → 不再顯示
+   * 「同時只能進行 1 條」不在這裡判定：它需要看其他二轉試煉的進度，
+   * 由 _applyT2Gates 在組清單時處理（那裡才拿得到 playerPeriod）。
+   */
+  _passesT2Gate(quest, context) {
+    if (!quest?.isT2Trial) return true;
+    const owned = Number(context?.ownedT2Count || 0);
+    if (owned >= jobAdvancement.T2_MAX_OWNED) return false;
+    // 同一個一轉職業的分支只能選一個：已經二轉過這個職業 → 其他分支永久鎖住。
+    // 職業從任務的前置徽章推導（unlockRequireItemIds 帶的就是該一轉徽章）。
+    const baseKey = this._t2BaseKeyOf(quest);
+    if (baseKey && context?.ownedT2BaseKeys instanceof Set && context.ownedT2BaseKeys.has(baseKey)) {
+      return false;
+    }
+    return true;
+  }
+
+  /** 二轉試煉屬於哪個一轉職業（由前置徽章推導，分支表還沒填時也能用） */
+  _t2BaseKeyOf(quest) {
+    const need = Array.isArray(quest?.unlockRequireItemIds) ? quest.unlockRequireItemIds : [];
+    for (const id of need) {
+      const key = jobAdvancement.getBaseKeyByBadgeId(id);
+      if (key) return key;
+    }
+    return null;
+  }
+
+  /** 二轉試煉的實際要求＝基礎值 × 第 N 個的倍率（x1 / x2.5 / x5） */
+  _t2TargetFor(quest, context) {
+    if (!quest?.isT2Trial) return null;
+    // 目標由「已持有第幾個」決定（350 / 700 / 1000），不看任務自己的 target
+    return jobAdvancement.trialTargetFor(Number(context?.ownedT2Count || 0));
+  }
+
   _hasAllRequiredItems(quest, context) {
     const need = Array.isArray(quest?.unlockRequireItemIds) ? quest.unlockRequireItemIds : [];
     if (need.length === 0) return true;
@@ -263,6 +311,11 @@ class WeeklyQuestService {
       } catch (_) { /* ignore */ }
     }
 
+      const _allOwnedItemIds = [
+        ...(Array.isArray(inventory) ? inventory : []),
+        ...Object.values(equipment || {})
+      ].map((item) => String(item?.itemId || "")).filter(Boolean);
+
       return {
         level,
         attributes,
@@ -286,7 +339,11 @@ class WeeklyQuestService {
         hasJobBadge: [
           ...(Array.isArray(inventory) ? inventory : []),
           ...Object.values(equipment || {})
-        ].some((item) => isJobBadgeItemId(item?.itemId))
+        ].some((item) => isJobBadgeItemId(item?.itemId)),
+        // 二轉：目前已持有的二轉徽章數（背包＋已裝備都算，因為一轉徽章不銷毀、可自由換裝）
+        ownedT2Count: jobAdvancement.countOwnedT2(_allOwnedItemIds),
+        // 二轉：已經二轉過的一轉職業（同職業分支只能選一個）
+        ownedT2BaseKeys: jobAdvancement.ownedT2BaseKeys(_allOwnedItemIds)
     };
   }
 
@@ -298,6 +355,7 @@ class WeeklyQuestService {
     if (quest.levelLimit && quest.levelLimit > level) return false;
     if (quest.unlockLevel && level < Number(quest.unlockLevel || 0)) return false;
     if (!this._hasAllRequiredItems(quest, context)) return false;
+    if (!this._passesT2Gate(quest, context)) return false;
     if (Array.isArray(quest.unlockWeaponTypes) && quest.unlockWeaponTypes.length > 0) {
       const weaponType = String(context?.weaponType || "");
       if (!quest.unlockWeaponTypes.includes(weaponType)) return false;
@@ -316,6 +374,7 @@ class WeeklyQuestService {
     if (quest.unlockLevel && level < Number(quest.unlockLevel || 0)) return false;
     // 隱藏 gate：未集齊指定道具(如全部輔助職徽章) → 這任務完全不顯示
     if (!this._hasAllRequiredItems(quest, context)) return false;
+    if (!this._passesT2Gate(quest, context)) return false;
 
     if ((quest.unlockAttributes && quest.unlockAttributes.length > 0) || quest.unlockAttribute) {
       const total = getUnlockAttributeTotal(quest, context?.attributes || {});
@@ -511,6 +570,19 @@ class WeeklyQuestService {
     if (c === "daily" && defs.some((q) => q.type === "daily_complete_count")) {
       completionByType.daily_complete_count = this._computeCompletionProgress(defs, playerPeriod, "daily_complete_count");
     }
+    // 二轉「同時只能進行 1 條試煉」：
+    //   已經有進度(current>0)且尚未領取的二轉試煉 → 視為「進行中」，
+    //   其餘二轉試煉一律鎖住，玩家要放棄（進度歸零）才能改接別條。
+    const t2InProgressId = (() => {
+      for (const q of defs) {
+        if (!q?.isT2Trial) continue;
+        const pp = playerPeriod[q.id];
+        if (!pp || pp.claimed) continue;
+        if (Number(pp.current || 0) > 0) return q.id;
+      }
+      return null;
+    })();
+
     return defs.map((quest) => {
       const p = playerPeriod[quest.id] || { current: 0, claimed: false };
       const completion = completionByType[quest.type] || null;
@@ -520,13 +592,15 @@ class WeeklyQuestService {
         : completion
           ? completion.current
           : Number(p.current || 0);
+      const t2Target = this._t2TargetFor(quest, context);
       const target = staticProgress
         ? staticProgress.target
         : completion
           ? completion.target
-          : Number(quest.target || 1);
+          : (t2Target != null ? t2Target : Number(quest.target || 1));
       // 鎖定資訊:職業任務未達 Lv/屬性條件時 locked=true,前端顯示灰色「Lv.N 解鎖」,不可領取/累積
-      const locked = !this._isQuestUnlocked(quest, current, context);
+      const t2Blocked = Boolean(quest.isT2Trial && t2InProgressId && t2InProgressId !== quest.id);
+      const locked = t2Blocked || !this._isQuestUnlocked(quest, current, context);
       // 解鎖後重數：目標其實是 2X，任務頁只顯示「解鎖後的進度」(current−門檻)/(target−門檻)
       const thr = Number(quest.unlockProgressAtLeast || 0);
       const dispCurrent = thr > 0 ? Math.max(0, current - thr) : current;
@@ -542,6 +616,16 @@ class WeeklyQuestService {
       let unlockHint = null;
       if (locked) {
         if (maskHidden) unlockHint = "隱藏任務（達成條件後現身）"; // 通用，不洩漏解鎖條件
+        else if (t2Blocked) unlockHint = "已有進行中的二轉試煉（同時只能進行 1 條）";
+        else if (quest.isT2Trial && Number(context?.ownedT2Count || 0) >= jobAdvancement.T2_MAX_OWNED) {
+          unlockHint = `二轉徽章已達上限（${jobAdvancement.T2_MAX_OWNED} 個）`;
+        }
+        else if (quest.isT2Trial && (() => {
+          const bk = this._t2BaseKeyOf(quest);
+          return bk && context?.ownedT2BaseKeys instanceof Set && context.ownedT2BaseKeys.has(bk);
+        })()) {
+          unlockHint = "此職業已完成二轉（同職業分支只能選一個）";
+        }
         else if (quest.unlockLevel) unlockHint = `Lv.${quest.unlockLevel} 解鎖`;
         else unlockHint = "尚未解鎖";
       }
@@ -598,10 +682,30 @@ class WeeklyQuestService {
 
       const periodKey = resolvePeriodKey(cadence);
       const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, cadence);
+      // 二轉「同時只能進行 1 條試煉」：用 allDefs 掃(不是 defs)，因為進行中的那條
+      // 可能是別的職業、metric 不同，被上面的 type 過濾掉了。
+      const t2InProgressId = (() => {
+        for (const q of allDefs) {
+          if (!q?.isT2Trial) continue;
+          const pp = playerPeriod[q.id];
+          if (!pp || pp.claimed || pp.claimedOnce) continue;
+          if (Number(pp.current || 0) > 0) return q.id;
+        }
+        return null;
+      })();
+      // 本次呼叫內也要鎖：第一次累積時兩條都還是 0 進度，若不鎖會同時開始跑。
+      let t2Lock = t2InProgressId;
       for (const q of defs) {
+        // 已有別條二轉試煉在進行中 → 這條不累積（玩家要放棄那條才能改接）
+        if (q.isT2Trial && t2Lock && t2Lock !== q.id) continue;
+        if (q.isT2Trial && !t2Lock) t2Lock = q.id;
         if (!playerPeriod[q.id]) playerPeriod[q.id] = { current: 0, claimed: false };
         if (!playerPeriod[q.id].claimed && !playerPeriod[q.id].claimedOnce) {
-          playerPeriod[q.id].current = Math.min(Number(q.target || 1), Number(playerPeriod[q.id].current || 0) + inc);
+          // 二轉試煉的上限要用「依已持有數遞增後」的目標，不能用靜態 target
+          const cap = q.isT2Trial
+            ? (this._t2TargetFor(q, context) ?? Number(q.target || 1))
+            : Number(q.target || 1);
+          playerPeriod[q.id].current = Math.min(cap, Number(playerPeriod[q.id].current || 0) + inc);
         }
       }
       await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, cadence);
@@ -641,8 +745,22 @@ class WeeklyQuestService {
         if (staticProgress) {
           p.current = staticProgress.current;
           if (p.current < staticProgress.target) throw new Error("任務尚未完成");
-        } else if (Number(p.current || 0) < Number(quest.target || 1)) {
-          throw new Error("任務尚未完成");
+        } else {
+          // 二轉試煉的完成門檻要用「依已持有數遞增後」的目標（x1 / x2.5 / x5）
+          const need = quest.isT2Trial
+            ? (this._t2TargetFor(quest, context) ?? Number(quest.target || 1))
+            : Number(quest.target || 1);
+          if (Number(p.current || 0) < need) throw new Error("任務尚未完成");
+        }
+      }
+      // 二轉：領取當下再確認一次上限與同職業限制
+      if (quest.isT2Trial) {
+        if (Number(context?.ownedT2Count || 0) >= jobAdvancement.T2_MAX_OWNED) {
+          throw new Error(`二轉徽章已達上限（${jobAdvancement.T2_MAX_OWNED} 個）`);
+        }
+        const _bk = this._t2BaseKeyOf(quest);
+        if (_bk && context?.ownedT2BaseKeys instanceof Set && context.ownedT2BaseKeys.has(_bk)) {
+          throw new Error("此職業已完成二轉，同職業分支只能選一個");
         }
       }
       if (p.claimed || (quest.claimOnce && p.claimedOnce)) throw new Error("獎勵已領取");

@@ -995,6 +995,17 @@ function resolveWeaponQuestMetric(weaponType = "") {
   return null;
 }
 
+// 二轉試煉：裝備某一轉徽章出戰時要累積的指標（找不到對應職業回 null）
+function resolveJobBattleMetric(jobEq) {
+  if (!jobEq) return null;
+  try {
+    const ja = require("../../shared/jobAdvancement");
+    const id = String(jobEq.itemId || jobEq.id || "");
+    const baseKey = ja.getBaseKeyByBadgeId(id);
+    return baseKey ? ja.battleMetricFor(baseKey) : null;
+  } catch (_) { return null; }
+}
+
 // 輔助職業(徽章)判定：治療師/軍師/詩人/結界師
 const SUPPORT_JOB_KEYS = new Set(["healer", "tactician", "bard", "barrier_mage"]);
 function isSupportJobBadge(jobEq) {
@@ -1027,6 +1038,11 @@ async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, co
   // 用輔助職業(徽章)出戰 → 記錄一場（供隱藏賽季任務「共鳴之鏈」用）
   if (isSupportJobBadge(jobEq)) {
     await questService.recordProgress(discordId, "battle_with_support_job", 1);
+  }
+  // 二轉試煉：以該一轉職業出戰一場
+  {
+    const _jobMetric = resolveJobBattleMetric(jobEq);
+    if (_jobMetric) await questService.recordProgress(discordId, _jobMetric, 1);
   }
   if (outcome === "lose") {
     await questService.recordProgress(discordId, "death_count", 1);

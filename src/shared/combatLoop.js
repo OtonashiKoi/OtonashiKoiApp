@@ -14,7 +14,8 @@
 const { collectEquipmentEffects, isEffectConditionMet } = require("./effectEngine");
 const { calcHitChance } = require("./hitChance");
 const {
-  normalizeElement, resolvePlayerElement, getElementMultiplier, describeElementMatchup,
+  normalizeElement, normalizeElementLevel, getElementMultiplier, describeElementMatchup,
+  resolveWeaponElement, resolveArmorElement, getElementDamageReduction,
 } = require("./elementSystem");
 const {
   calcAttackTierProbs,
@@ -911,6 +912,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let _noPlayerAtk = false; // 沒苦硬吃：無法造成一般攻擊傷害(只靠 endure_burst 反彈)
   let _totalHealDone = 0;   // 聖人任務指標 heal_done：實際回血量累計
   const _hurt = (d) => { const x = Math.max(0, Number(d) || 0); pHp = pHp - x; _totalDmgTaken += x; };
+  // 屬性防具減免：只在「我方防具屬性剋制該怪」時 >0。
+  // ⚠️ 必須在「算完傷害、印進戰報之前」就套用，不能藏在 _hurt 裡——
+  //    各處都是 log.push(`造成 ${dmg} 點傷害`) 搭配 _hurt(dmg)，
+  //    若在 _hurt 內偷偷打折，戰報數字會與實際扣血不符（＝騙人的戰報）。
+  const _applyElementDR = (raw) => {
+    const x = Math.max(0, Number(raw) || 0);
+    if (elementDmgReduction <= 0 || x <= 0) return x;
+    return Math.max(1, Math.round(x * (1 - elementDmgReduction)));
+  };
   const _healPlayer = (h, opts) => {
     const amt = Math.max(0, Number(h) || 0);
     if (amt <= 0) return pHp;
@@ -959,14 +969,27 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 直接乘在玩家傷害上→戰報數字=真實傷害、部位血正常遞減、戰鬥在真的打死時才結束(不提早中止)。
   const bossVulnMult = (options.bossVulnMult != null && Number(options.bossVulnMult) >= 0) ? Number(options.bossVulnMult) : 1;
 
-  // ── 屬性相剋（土火水木金日月）──
-  // 玩家屬性由裝備決定(武器優先)，怪物屬性讀 monster.element。任一方無屬性 → 倍率 1，
-  // 現有 69 隻怪/487 件道具都沒有 element 欄位，故既有內容完全不受影響。
+  // ── 屬性相剋（土火水木金日月，濃度 1~4 級，每級 10%）──
+  // 攻擊側＝武器＋副手的屬性等級加總（封頂4）→ 決定打出去的相剋倍率
+  // 防禦側＝防具＋飾品的屬性等級加總（封頂4）→ 只在「我方屬性剋制該怪」時提供受傷減免
+  // 任一方無屬性/等級 0 → 不生效；現有 69 隻怪與 487 件道具都沒有 element 欄位，既有內容零影響。
+  const _weaponEl = resolveWeaponElement(options.equipped || {});
   const playerElement = options.playerElement !== undefined
     ? normalizeElement(options.playerElement)
-    : resolvePlayerElement(options.equipped || {});
+    : _weaponEl.element;
+  const playerElementLevel = options.playerElementLevel !== undefined
+    ? normalizeElementLevel(options.playerElementLevel)
+    : _weaponEl.level;
   const monsterElement = normalizeElement(options.monsterElement);
-  const elementMult = getElementMultiplier(playerElement, monsterElement);
+  const elementMult = getElementMultiplier(playerElement, monsterElement, playerElementLevel);
+
+  // 防具側：受傷減免（0~0.4）
+  const _armorEl = resolveArmorElement(options.equipped || {});
+  const armorElement = options.armorElement !== undefined ? normalizeElement(options.armorElement) : _armorEl.element;
+  const armorElementLevel = options.armorElementLevel !== undefined
+    ? normalizeElementLevel(options.armorElementLevel)
+    : _armorEl.level;
+  const elementDmgReduction = getElementDamageReduction(armorElement, monsterElement, armorElementLevel);
 
   // 裝備/卡片的「對特定屬性怪物增傷」(bonus_vs_element)。
   // 只來自裝備被動、整場不變，故在此一次算好；與相剋同層(終傷)相乘，
@@ -1171,7 +1194,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     _curLog = log;   // 讓 _healLogged 能把回血/回血化刃寫進「當回合」的戰報
     // 屬性相剋提示：只在第一回合印一次（每回合印會洗版）
     if (round === (Number(options.startRound) || 1)) {
-      const elementLine = describeElementMatchup(playerElement, monsterElement);
+      const elementLine = describeElementMatchup(playerElement, monsterElement, playerElementLevel, elementDmgReduction);
       if (elementLine) log.push(elementLine);
     }
     // 沒苦硬吃：扛到指定回合仍不死 → 對敵爆發「累積承受總傷害 × 倍率」
@@ -1435,7 +1458,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 應用玩家的 DOT 效果（如中毒） ──
     // 怪物技能/DoT(雷擊/灼燒/流血/毒/詛咒…)對玩家的傷害，改成走玩家防禦(flatDef + def%)，
     // 與普攻同一條 applyDefense 管線 → 堆防禦對技能也有效，不再無視防禦秒人。
-    const mitigateDot = (dmg) => applyDefense(dmg, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1);
+    // DOT 也走玩家防禦管線；末端再套屬性防具減免（各處都是 mitigateDot 後才 log，故戰報數字正確）
+    const mitigateDot = (dmg) => _applyElementDR(applyDefense(dmg, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1));
     if (Array.isArray(options.playerActiveEffects)) {
       for (const dotEffect of options.playerActiveEffects) {
         if (!dotEffect || !dotEffect.key) continue;
@@ -3620,6 +3644,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (!playerInvincible && roundPartyDamageReductionPct > 0) {
             dmg = Math.max(1, Math.round(dmg * (1 - Math.min(95, roundPartyDamageReductionPct) / 100)));
           }
+          // 屬性防具減免（我方防具屬性剋制該怪時，每級 -10%）：與其他減傷同層，
+          // 且在寫進戰報之前套用 → 戰報數字＝實際扣血。
+          if (!playerInvincible) dmg = _applyElementDR(dmg);
 
           // 構建傷害敘述
           let mAtkNote = "";

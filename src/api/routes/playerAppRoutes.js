@@ -3256,6 +3256,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             }
           }
         } catch (_) { /* noop */ }
+        // 二轉試煉：以該一轉職業出戰一場（與 DC 端 resolveJobBattleMetric 對齊）
+        try {
+          const _jobEq2 = equipped?.job_eq;
+          if (_jobEq2) {
+            const ja = require("../../shared/jobAdvancement");
+            const _baseKey = ja.getBaseKeyByBadgeId(String(_jobEq2.itemId || _jobEq2.id || ""));
+            if (_baseKey) await questService.recordProgress(discordId, ja.battleMetricFor(_baseKey), 1);
+          }
+        } catch (_) { /* noop */ }
         if (outcome === "lose") {
           await questService.recordProgress(discordId, "death_count", 1);
         }
