@@ -149,6 +149,7 @@ const EFFECT_DEFINITIONS = [
   defineEffect("bonus_vs_boss", "BOSS特攻", "conditional", ["equipment", "passive", "skill"], "replace", ["battle", "permanent"], "Deal more damage to bosses."),
   defineEffect("bonus_vs_def_broken", "破甲特攻", "conditional", ["equipment", "passive", "skill"], "replace", ["battle", "permanent"], "Deal more damage when the target defense is broken or reduced."),
   defineEffect("bonus_vs_poisoned", "Bonus vs Poisoned", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Conditional damage against poisoned targets."),
+  defineEffect("bonus_vs_element", "Bonus vs Element", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Conditional damage against monsters of a specific element (params: { element, value })."),
   defineEffect("bonus_vs_burning", "Bonus vs Burning", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Conditional damage against burning targets."),
   defineEffect("bonus_vs_stunned", "Bonus vs Stunned", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Conditional damage against stunned targets."),
   defineEffect("bonus_vs_debuffed", "Bonus vs Debuffed", "conditional", ["equipment", "skill"], "replace", ["battle", "permanent"], "Conditional damage against any debuffed target."),

@@ -968,10 +968,26 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const monsterElement = normalizeElement(options.monsterElement);
   const elementMult = getElementMultiplier(playerElement, monsterElement);
 
-  // 玩家每一擊的總倍率 = 世界王部位弱點 × 屬性相剋。
-  // 兩者都是「乘進每一擊終傷」的同類機制，合併成一個乘數即可涵蓋主擊/連擊/三元/各DOT
-  //   （函式名沿用 applyBossVuln 以免動到既有 6 處呼叫點）。
-  const playerHitMult = bossVulnMult * elementMult;
+  // 裝備/卡片的「對特定屬性怪物增傷」(bonus_vs_element)。
+  // 只來自裝備被動、整場不變，故在此一次算好；與相剋同層(終傷)相乘，
+  // 讓卡片寫 +20% 就真的是 +20%（放在防禦前那層會被稀釋成約 +10%，兩個屬性機制強度不一致）。
+  let elementBonusPct = 0;
+  if (monsterElement && options.equipped) {
+    try {
+      const _elemCtx = { equipped: options.equipped, inventory: options.inventory || [], zone: options.zone || null };
+      for (const ef of collectEquipmentEffects(options.equipped, "passive", _elemCtx)) {
+        if (!ef || ef.key !== "bonus_vs_element") continue;
+        if (normalizeElement(ef.params?.element) !== monsterElement) continue;
+        elementBonusPct += Math.abs(Number(ef.params?.value) || 0);
+      }
+    } catch (_) { /* 取不到裝備效果時視為 0，不影響戰鬥 */ }
+  }
+  const elementBonusMult = 1 + elementBonusPct / 100;
+
+  // 玩家每一擊的總倍率 = 世界王部位弱點 × 屬性相剋 × 對屬性增傷。
+  // 三者都是「乘進每一擊終傷」的同類機制，合併成一個乘數即可涵蓋主擊/連擊/三元/反擊/各DOT
+  //   （函式名沿用 applyBossVuln 以免動到既有呼叫點）。
+  const playerHitMult = bossVulnMult * elementMult * elementBonusMult;
   const applyBossVuln = (raw) => (playerHitMult === 1 ? raw : Math.max(0, Math.round((Number(raw) || 0) * playerHitMult)));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
   let endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
@@ -1918,6 +1934,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 玩家攻擊 ──
     log.push(`──── ⚔️ 你的回合 ────`);
     const attackCount = pStats.isDualWield ? 2 : 1;
+    // 雙持副手那一擊的傷害倍率。原本副手是「完整第二次攻擊」(等於傷害 ×2)，
+    // 實測輸出是單手劍+盾的 1.55 倍，遠勝雙手大劍的 1.10 倍 → 副手打折。
+    // 倍率套在 attackBase 與武器主屬性追加傷害上，因此主擊/連擊/爆擊/多段全部一起縮放。
+    const OFFHAND_DAMAGE_MULT = 0.6;
     // 擊暈中：怪物無法閃避
 
     // ── 檢查玩家受到的狀態效果（怪物施加的 debuff）──
@@ -2320,9 +2340,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerInvincible = false;
     let playerBonusVsPoisonedPct = 0;
     let playerBonusVsDebuffedPct = 0;
-    // 對「特定屬性怪物」增傷（bonus_vs_element，params: { element:"fire", value:20 }）
-    // 只在怪物屬性相符時生效；怪物無屬性 → 不生效（現有 69 隻怪都不受影響）。
-    let playerBonusVsElementPct = 0;
     let playerHitBonus = 0;
     // ── 新效果：防禦層 ──
     let playerPhysDrPct = 0;
@@ -2442,11 +2459,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           playerInvincible = true;
         } else if (eff.key === 'bonus_vs_poisoned') {
           playerBonusVsPoisonedPct += Math.abs(effValue);
-        } else if (eff.key === 'bonus_vs_element') {
-          // 只有 params.element 與這隻怪的屬性相符才累加
-          if (normalizeElement(effParams.element) && normalizeElement(effParams.element) === monsterElement) {
-            playerBonusVsElementPct += Math.abs(effValue);
-          }
         } else if (eff.key === 'bonus_vs_debuffed') {
           playerBonusVsDebuffedPct += Math.abs(effValue);
         } else if (eff.key === 'bonus_vs_boss') {
@@ -2594,7 +2606,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const roundAtkFlatBonus = Math.round(_dMain * _wMult);
       const roundCritStatBonus = (playerStatBonus.luk || 0) * 0.5;
       const roundHitStatBonus = playerStatBonus.dex || 0;
-      const weaponMainBonusRound = Math.max(0, weaponMainBonus + Math.round(_dMain * 1.5));
+      // 副手那一擊：武器主屬性追加傷害也一起打折（否則固定加成不受倍率影響）
+      const _offhandMultRound = (a >= 1 && pStats.isDualWield) ? OFFHAND_DAMAGE_MULT : 1;
+      const weaponMainBonusRound = Math.max(0, Math.round((weaponMainBonus + Math.round(_dMain * 1.5)) * _offhandMultRound));
 
       // ── 擲攻擊階級（5 階：大失敗/失敗/成功/大成功/完美）──
       const atkTierProbs = calcAttackTierProbs(
@@ -2831,6 +2845,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (playerBonusVsPoisonedPct > 0 && monsterActiveEffects.some(e => e.key === 'poison' && effectIsActive(e, round))) {
           conditionalBonusMultiplier *= (1 + playerBonusVsPoisonedPct / 100);
         }
+        // ※ bonus_vs_element（對特定屬性怪物增傷）**不在這層**：
+        //   它與「屬性相剋」同屬屬性系統，若放這層會先被防禦稀釋（+20% 實測只剩約 +10%），
+        //   而相剋 ×1.3 是在終傷層＝真的 +30%，兩個都叫「屬性」卻差很多、玩家無法從描述判斷。
+        //   故一併移到終傷層（見 playerHitMult），讓卡片寫 +20% 就真的是 +20%。
         if (playerBonusVsDebuffedPct > 0 && hasAnyDebuff(monsterActiveEffects, round)) {
           conditionalBonusMultiplier *= (1 + playerBonusVsDebuffedPct / 100);
         }
@@ -2894,7 +2912,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         const attackBase = Math.max(
           1,
-          Math.round((pStats.atk + roundAtkFlatBonus) * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * playerAttackLevelMult)
+          Math.round((pStats.atk + roundAtkFlatBonus) * _offhandMultRound * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * playerAttackLevelMult)
         );
         // 新公式 B：flatDef 在 ATK 階段壓制（傳 pStats.atk 作為 rawAtk）
         let dmg = rollDmg(applyDefense(attackBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk));
@@ -3683,7 +3701,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               if (!cEff || cEff.key !== 'counter_attack') continue;
               const counterChance = Math.max(0, Number(cEff.params?.value ?? 0));
               if (Math.random() * 100 >= counterChance) continue;
-              const counterDmg = Math.max(1, Math.round((pStats.atk || 1) * 0.5)) + weaponMainBonus;
+              const counterDmg = applyBossVuln(Math.max(1, Math.round((pStats.atk || 1) * 0.5)) + weaponMainBonus); // 部位弱點/屬性相剋
               mHp -= counterDmg;
               totalDamage += counterDmg;
               log.push(`⚔️ **反擊**！對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -3758,7 +3776,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const finalDef = Math.max(0, effectiveDef * (1 - counterBypassPct / 100));
             const conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
             const counterBase = Math.max(1, Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * playerAttackLevelMult));
-            const counterDmg = Math.max(1, Math.round(rollDmg(applyDefense(counterBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk)) * (equipZoneFinalDmgMult * roundScaleMult(round)))) + weaponMainBonus;
+            const counterDmg = applyBossVuln(Math.max(1, Math.round(rollDmg(applyDefense(counterBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk)) * (equipZoneFinalDmgMult * roundScaleMult(round)))) + weaponMainBonus); // 部位弱點/屬性相剋
             mHp -= counterDmg;
             totalDamage += counterDmg;
             log.push(`🏹 **閃避反擊**！你趁隙還擊，對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -3795,7 +3813,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const triggerChance = Number(cp.value ?? 100);
         if (monsterDmgThisRound > 0 && Math.random() * 100 < triggerChance) {
           const counterDmgPct = Number(cp.counterDamagePct ?? 30);
-          const counterDmg = Math.max(1, Math.round(monsterDmgThisRound * (counterDmgPct / 100)));
+          const counterDmg = applyBossVuln(Math.max(1, Math.round(monsterDmgThisRound * (counterDmgPct / 100)))); // 部位弱點/屬性相剋
           mHp -= counterDmg;
           totalDamage += counterDmg;
           log.push(`🦀 **反擊**！以受到傷害的 ${counterDmgPct}% 回擊，對 ${mName} 造成 **${counterDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -3811,7 +3829,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (Math.random() * 100 < triggerChance) {
               const counterParams = slotItem.procEffects.find(e => e.key === 'counter')?.params || {};
               const counterDmgPct = Number(counterParams.counterDamagePct ?? 20);
-              const counterDmg = Math.max(1, Math.round(monsterDmgThisRound * (counterDmgPct / 100)));
+              const counterDmg = applyBossVuln(Math.max(1, Math.round(monsterDmgThisRound * (counterDmgPct / 100)))); // 部位弱點/屬性相剋
               mHp -= counterDmg;
               totalDamage += counterDmg;
               const counterLabel = slotItem.monsterCardSkill?.name || slotItem.itemName || slotItem.name || "反擊";
@@ -3866,6 +3884,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (counterAtkTier === 'great') tierNote = "⚡大成功 ";
         else if (counterAtkTier === 'perfect') tierNote = "🌟完美 ";
 
+        dmg = applyBossVuln(dmg); // 部位弱點/屬性相剋（盾反也一致套用）
         mHp -= dmg;
         totalDamage += dmg;
         log.push(`⚔️✨ **${tierNote}盾反**！${rand(jobFlavor.counter)}，對 ${mName} 造成 **${dmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);

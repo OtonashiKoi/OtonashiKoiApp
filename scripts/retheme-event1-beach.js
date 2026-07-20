@@ -26,15 +26,15 @@ const self = (key, params, trigger = "on_hit") =>
 const foe = (key, params, trigger = "on_hit") =>
   ({ key, target: "enemy", trigger, chance: 100, sourcePhase: "proc", params });
 
-/** seq → 新主題（數值不動，只換皮） */
+/** seq → 新主題（依使用者 2026-07-20 定案的數值）*/
 const RETHEME = {
   1: {
     name: "貝貝寄居蟹",
     flavor: "背著撿來的大貝殼走來走去，被嚇到就咻一下縮進去。",
     cardName: "貝貝寄居蟹卡",
     skill: {
-      key: "shell_hideaway", name: "縮進殼殼", chance: 25, trigger: "on_hit", cooldownTurns: 0,
-      description: "發動率25%：咻一下縮進殼殼裡，受到傷害-15%，還會把撞上來的傷害反彈30%，持續2回合。",
+      key: "shell_hideaway", name: "縮進殼殼", chance: 100, trigger: "on_hit", cooldownTurns: 0,
+      description: "咻一下縮進殼殼裡，受到傷害-15%，還會把撞上來的傷害反彈30%，持續2回合。",
     },
     procEffects: [
       self("damage_reduction", { value: 15, duration: turns(2) }),
@@ -45,12 +45,12 @@ const RETHEME = {
     name: "溜溜沙蟹",
     flavor: "在沙灘上橫著咻咻跑，一眨眼就溜得不見蹤影。",
     cardName: "溜溜沙蟹卡",
+    // 依定案：拿掉對敵人的持續傷害，只留自身迴避
     skill: {
-      key: "sand_dash", name: "沙沙溜走", chance: 25, trigger: "on_dodge", cooldownTurns: 0,
-      description: "發動率25%：閃過攻擊時踢起一陣沙沙迷住對手（持續傷害），自己溜得更快、迴避+15，持續3回合。",
+      key: "sand_dash", name: "沙沙溜走", chance: 100, trigger: "on_dodge", cooldownTurns: 0,
+      description: "閃過攻擊時踢起一陣沙沙迷住對手，自己溜得更快、迴避+15，持續3回合。",
     },
     procEffects: [
-      foe("proc_poison", { value: 0.7, mode: "pct", duration: turns(3) }, "on_dodge"),
       self("dodge_up", { value: 15, duration: turns(3) }, "on_dodge"),
     ],
   },
@@ -59,10 +59,10 @@ const RETHEME = {
     flavor: "撿到一片貝殼就當成劍，揮得可認真了的小蝦兵。",
     cardName: "蝦蝦劍士卡",
     skill: {
-      key: "shrimp_flurry", name: "蝦蝦連刺", chance: 25, trigger: "on_hit", cooldownTurns: 0,
-      description: "發動率25%：命中時再補一記小突刺，造成55%攻擊力（獨立傷害、不吃連擊率）。常駐：對中毒的敵人傷害+15%。",
+      key: "shrimp_flurry", name: "蝦蝦連刺", chance: 50, trigger: "on_hit", cooldownTurns: 0,
+      description: "發動率50%：命中時再補一記小突刺，造成45%攻擊力（獨立傷害、不吃連擊率）。常駐：對中毒的敵人傷害+15%。",
     },
-    procEffects: [foe("proc_extra_hit", { damageMultiplier: 0.55 })],
+    procEffects: [foe("proc_extra_hit", { damageMultiplier: 0.45 })],
     passiveEffects: [
       { key: "bonus_vs_poisoned", target: "self", trigger: "passive", chance: 100, sourcePhase: "passive",
         params: { value: 15 } },
@@ -72,37 +72,41 @@ const RETHEME = {
     name: "墨墨章魚",
     flavor: "一生氣就噗噗噴墨汁，把整片海水弄得黑漆漆。",
     cardName: "墨墨章魚卡",
+    // 依定案：緩速(proc_slow) 改為 AGI-10；疊加上限 40 → 30
     skill: {
-      key: "ink_splash", name: "噗噗墨汁", chance: 20, trigger: "on_hit", cooldownTurns: 2,
-      description: "發動率20%：噗一聲噴墨汁糊住對手，使其緩速並DEF-10（可疊加，上限-40），持續3回合；冷卻2回合。",
+      key: "ink_splash", name: "噗噗墨汁", chance: 50, trigger: "on_hit", cooldownTurns: 2,
+      description: "發動率50%：噗一聲噴墨汁糊住對手，使其AGI-10並DEF-10（可疊加，上限-30），持續3回合；冷卻2回合。",
     },
     procEffects: [
-      foe("proc_slow", { duration: turns(3) }),
-      foe("proc_def_down", { value: 10, duration: turns(3), stackMode: "stack_value", stackAdd: 10, maxValue: 40 }),
+      foe("agi_down", { value: 10, duration: turns(3), stackMode: "stack_value", stackAdd: 10, maxValue: 30 }),
+      foe("proc_def_down", { value: 10, duration: turns(3), stackMode: "stack_value", stackAdd: 10, maxValue: 30 }),
     ],
   },
   5: {
     name: "椰椰大蟹",
     flavor: "大螯咔嚓一下就把椰子夾成兩半，沙灘小小大力士。",
     cardName: "椰椰大蟹卡",
+    // 依定案：改為常駐屬性增傷（水剋火 → 拿去打地獄火焰/焰獄深處）
     skill: {
-      key: "coconut_crush", name: "咔嚓大夾", chance: 25, trigger: "on_hit", cooldownTurns: 0,
-      description: "發動率25%：咔嚓一記大夾，吸血+12%；血量低於50%時會夾得更用力、攻擊力+20%，持續2回合。",
+      key: "coconut_crush", name: "咔嚓大夾", chance: 100, trigger: "passive", cooldownTurns: 0,
+      description: "常駐：對火屬性的怪物傷害增加20%。",
     },
-    procEffects: [
-      self("lifesteal", { value: 12, duration: turns(2) }),
-      self("atk_up", { value: 20, duration: turns(2), ownerHpBelowPct: 50 }),
+    procEffects: [],
+    passiveEffects: [
+      { key: "bonus_vs_element", target: "self", trigger: "passive", chance: 100, sourcePhase: "passive",
+        params: { element: "fire", value: 20 } },
     ],
   },
   6: {
     name: "鼓鼓河豚",
     flavor: "一被嚇到就鼓成圓滾滾一顆，然後啵啵啵把刺射出去。",
     cardName: "鼓鼓河豚卡",
+    // 依定案：流血 → 中毒(餵給蝦蝦劍士的「對中毒+15%」)；持續 1 回合；加冷卻 3 回
     skill: {
-      key: "spine_volley", name: "啵啵毒刺", chance: 20, trigger: "on_hit", cooldownTurns: 0,
-      description: "發動率20%：啵啵射出小毒刺造成流血，持續3回合。常駐：對已中負面狀態的敵人傷害+18%。",
+      key: "spine_volley", name: "啵啵毒刺", chance: 80, trigger: "on_hit", cooldownTurns: 3,
+      description: "發動率80%：啵啵射出小毒刺造成中毒效果，持續1回合；冷卻3回合。常駐：對已中負面狀態的敵人傷害+18%。",
     },
-    procEffects: [foe("proc_bleed", { value: 0.6, mode: "pct", duration: turns(3) })],
+    procEffects: [foe("proc_poison", { value: 0.7, mode: "pct", duration: turns(1) })],
     passiveEffects: [
       { key: "bonus_vs_debuffed", target: "self", trigger: "passive", chance: 100, sourcePhase: "passive",
         params: { value: 18 } },
@@ -112,10 +116,9 @@ const RETHEME = {
     name: "龜龜大將",
     flavor: "沙灘上最年長的居民，慢吞吞的，可是龜殼硬得連浪都推不動。",
     cardName: "龜龜大將卡",
-    // 原本是 freeze(凍結)——海灘主題不該有冰凍，改成龜殼猛撞的「撞暈」
     skill: {
-      key: "shell_bash", name: "龜龜衝撞", chance: 20, trigger: "on_hit", cooldownTurns: 3,
-      description: "發動率20%：用硬邦邦的龜殼撞過去讓敵人暈頭轉向；血量高於70%時格擋率+15%，持續2回合；冷卻3回合。",
+      key: "shell_bash", name: "龜龜衝撞", chance: 40, trigger: "on_hit", cooldownTurns: 3,
+      description: "發動率40%：用硬邦邦的龜殼撞過去讓敵人暈頭轉向；血量高於70%時格擋率+15%，持續2回合；冷卻3回合。",
     },
     procEffects: [
       foe("proc_stun", { duration: turns(1), bossImmune: true }),
