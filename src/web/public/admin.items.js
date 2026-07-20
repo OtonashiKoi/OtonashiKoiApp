@@ -39,7 +39,8 @@ level_down_random_attributes:"☯️ 降等扣屬性"
     axe_1h:'斧(單)',   axe_2h:'斧(雙)',
     dagger:'匕首',
     staff_1h:'杖(單)', staff_2h:'杖(雙)',
-    bow:'弓'
+    bow:'弓',
+    dice:'骰子'
   };
   const OFFHAND_WEAPON_TYPE_LABELS={offhand_sword:'副手劍',offhand_dagger:'副手匕首',offhand_mace:'副手鎚'};
   function wepTypeHtml(item){

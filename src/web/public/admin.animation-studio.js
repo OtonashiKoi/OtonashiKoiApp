@@ -11,6 +11,7 @@
     ["staff_1h", "單手杖"],
     ["staff_2h", "雙手杖"],
     ["bow", "弓"],
+    ["dice", "骰子"],
   ];
 
   const OFFHAND_MODE_OPTIONS = [

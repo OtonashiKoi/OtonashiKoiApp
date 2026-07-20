@@ -380,6 +380,7 @@
       dagger:'匕首',
       staff_1h:'杖(單)', staff_2h:'杖(雙)',
       bow:'弓',
+      dice:'骰子',
     };
     const TIER_COLORS = { D:'#8899aa', C:'#44cc88', B:'#6699ff', A:'#ffcc44' };
 

@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ARPG 測試關卡</title>
+<style>
+  :root{ --bg:#0b0b14; --ui:#e8e2f0; --accent:#ffd166; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);height:100%;overflow:hidden;
+    font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif; color:var(--ui);
+    touch-action:none; overscroll-behavior:none;}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;}
+  #touch{position:fixed;inset:0;pointer-events:none;z-index:5;}
+  .tbtn{position:absolute;pointer-events:auto;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-weight:900;color:#fff;user-select:none;-webkit-user-select:none;
+    background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.25);}
+  #btnAtk{right:max(18px,env(safe-area-inset-right));bottom:calc(84px + env(safe-area-inset-bottom));width:72px;height:72px;font-size:26px;}
+  #btnDodge{right:calc(96px + env(safe-area-inset-right));bottom:calc(28px + env(safe-area-inset-bottom));width:58px;height:58px;font-size:20px;}
+  #stick{left:max(18px,env(safe-area-inset-left));bottom:calc(28px + env(safe-area-inset-bottom));width:120px;height:120px;pointer-events:auto;position:absolute;
+    border-radius:50%;background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.18);}
+  #knob{position:absolute;left:50%;top:50%;width:48px;height:48px;border-radius:50%;transform:translate(-50%,-50%);
+    background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.4);}
+  #hint{position:fixed;top:calc(8px + env(safe-area-inset-top));left:0;right:0;text-align:center;z-index:6;
+    font-size:11px;color:#9a93b0;pointer-events:none;text-shadow:0 1px 2px #000;}
+  .desktop #touch{display:none;}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv"></canvas></div>
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <div class="tbtn" id="btnAtk">⚔️</div>
+  <div class="tbtn" id="btnDodge">💨</div>
+</div>
+<div id="hint">WASD/方向鍵移動 ‧ J/滑鼠左鍵攻擊 ‧ K/空白鍵翻滾（手機用搖桿+按鈕）</div>
+
+<script>
+"use strict";
+/* ============================================================
+   ARPG 活動關卡 — Phase 1.5：CC0 像素素材版
+   素材: "Zelda-like tilesets and sprites" by ArMM1998 (CC0)
+   ============================================================ */
+
+// ---------- 基準解析度 ----------
+const VW = 400, VH = 240;
+const TILE = 16;
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+function fit() {
+  const s = Math.max(1, Math.floor(Math.min(innerWidth / VW, innerHeight / VH)));
+  cv.width = VW; cv.height = VH;
+  cv.style.width = VW * s + "px"; cv.style.height = VH * s + "px";
+}
+addEventListener("resize", fit); fit();
+ctx.imageSmoothingEnabled = false;
+
+// ---------- 素材載入 ----------
+const IMG = {};
+let assetsReady = false;
+(function loadAssets() {
+  const files = { hero: "character.png", log: "log.png", ow: "Overworld.png" };
+  let left = Object.keys(files).length + 1;
+  const done = () => { if (--left === 0) assetsReady = true; };
+  for (const [k, f] of Object.entries(files)) {
+    const im = new Image();
+    im.onload = done;
+    im.onerror = done; // 失敗也放行(退回色塊)
+    im.src = "/static/arpg-assets/" + f;
+    IMG[k] = im;
+  }
+  // BOSS：遊戲本尊的大史王立繪（Cloudinary；crossOrigin 保持畫布乾淨）
+  const b = new Image();
+  b.crossOrigin = "anonymous";
+  b.onload = done; b.onerror = done;
+  b.src = "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1775897923/equipment-game/monsters/ciehckcf9jsbeu9vdvo6.png";
+  IMG.boss = b;
+})();
+// 受擊閃白：離屏白色剪影
+const flashCv = document.createElement("canvas"); flashCv.width = 96; flashCv.height = 96;
+const flashCtx = flashCv.getContext("2d");
+function drawFlashed(img, sx, sy, sw, sh, dx, dy, dw, dh) {
+  flashCtx.clearRect(0, 0, 96, 96);
+  flashCtx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  flashCtx.globalCompositeOperation = "source-in";
+  flashCtx.fillStyle = "#ffffff";
+  flashCtx.fillRect(0, 0, sw, sh);
+  flashCtx.globalCompositeOperation = "source-over";
+  ctx.drawImage(flashCv, 0, 0, sw, sh, dx, dy, dw, dh);
+}
+
+// ---------- 幀表（由圖集掃描定位） ----------
+// character.png：走路 16x32×4幀，band: 0下 1左 2上 3右（y=band*32,x=幀*16）
+// 攻擊 32x32×4幀，y=128+band*32：band 0下 1上 2右 3左
+// 遊戲 dir: 0上 1右 2下 3左
+const WALK_BAND = { 0: 2, 1: 1, 2: 0, 3: 3 }; // 素材列序=下/右/上/左（使用者實測 L/R 修正）
+const ATK_BAND  = { 0: 1, 1: 2, 2: 0, 3: 3 };
+// log.png：32x32×6幀走路，band: 0下 1上 2左 3右
+const LOG_BAND  = { 0: 1, 1: 3, 2: 0, 3: 2 };
+// Overworld.png 地磚（16px 格座標）
+const T = {
+  grass: [0, 0],
+  tuft1: [0, 8], tuft2: [1, 8], tuft3: [0, 8], // 小草芽貼花(透明底)
+  rock1: [7, 5], rock2: [8, 5], rock3: [9, 5],
+};
+
+// ---------- 主遊戲屬性掛鉤 ----------
+const stats = { name: "旅人", level: 0, hearts: 5, dmgMul: 1, spdMul: 1, loaded: false };
+(async () => {
+  try {
+    const jwt = localStorage.getItem("equipmentgame.jwt");
+    if (!jwt) return;
+    const r = await fetch("/api/me/profile", { headers: { Authorization: "Bearer " + jwt } });
+    const j = await r.json();
+    const p = j?.data || j;
+    const cs = p?.progress?.combatStats || p?.combatStats || {};
+    const attrs = p?.progress?.attributes || {};
+    const eqB = p?.progress?.equipBonus || {};
+    const atk = Number(cs.atk) || 0, hp = Number(cs.maxHp) || 0;
+    const agi = (Number(attrs.agi) || 0) + (Number(eqB.agi) || 0);
+    stats.hearts = Math.max(5, Math.min(8, 5 + Math.floor(hp / 1200)));
+    stats.dmgMul = Math.max(0.9, Math.min(1.2, 1 + (atk - 600) / 3000));
+    stats.spdMul = Math.max(0.95, Math.min(1.15, 1 + (agi - 30) / 500));
+    stats.name = p?.player?.displayName || "旅人";
+    stats.level = Number(p?.progress?.level) || 0;
+    stats.loaded = true;
+    player.maxHp = stats.hearts * 2; player.hp = player.maxHp;
+  } catch (_) { /* 未登入用預設 */ }
+})();
+
+// ---------- 輸入（攻擊/翻滾用 keydown 邊緣觸發，避免快速點按掉幀漏判） ----------
+const keys = {};
+const input = { mx: 0, my: 0, atk: false, dodge: false };
+addEventListener("keydown", e => {
+  keys[e.code] = true;
+  if (e.code === "KeyJ") input.atk = true;
+  if (e.code === "KeyK" || e.code === "Space") input.dodge = true;
+  if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
+});
+addEventListener("keyup", e => { keys[e.code] = false; });
+addEventListener("mousedown", () => { input.atk = true; });
+const isTouch = matchMedia("(pointer:coarse)").matches;
+if (!isTouch) document.body.classList.add("desktop");
+const stick = document.getElementById("stick"), knob = document.getElementById("knob");
+let stickId = null;
+function stickMove(t) {
+  const r = stick.getBoundingClientRect();
+  let dx = t.clientX - (r.left + r.width / 2), dy = t.clientY - (r.top + r.height / 2);
+  const len = Math.hypot(dx, dy), max = r.width / 2 - 10;
+  if (len > max) { dx = dx / len * max; dy = dy / len * max; }
+  knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  const dead = 8;
+  input.mx = Math.abs(dx) > dead ? dx / max : 0;
+  input.my = Math.abs(dy) > dead ? dy / max : 0;
+}
+stick.addEventListener("touchstart", e => { stickId = e.changedTouches[0].identifier; stickMove(e.changedTouches[0]); e.preventDefault(); });
+addEventListener("touchmove", e => { for (const t of e.changedTouches) if (t.identifier === stickId) stickMove(t); }, { passive: false });
+addEventListener("touchend", e => { for (const t of e.changedTouches) if (t.identifier === stickId) { stickId = null; input.mx = input.my = 0; knob.style.transform = "translate(-50%,-50%)"; } });
+document.getElementById("btnAtk").addEventListener("touchstart", e => { input.atk = true; e.preventDefault(); });
+document.getElementById("btnDodge").addEventListener("touchstart", e => { input.dodge = true; e.preventDefault(); });
+
+// ---------- 地圖 ----------
+const MW = Math.floor(VW / TILE), MH = Math.floor(VH / TILE);
+const map = [];
+for (let y = 0; y < MH; y++) { map[y] = []; for (let x = 0; x < MW; x++) {
+  map[y][x] = (x === 0 || y === 0 || x === MW - 1 || y === MH - 1) ? 1 : 0;
+}}
+[[6,4],[6,10],[18,4],[18,10],[12,7]].forEach(([x,y]) => { map[y][x] = 2; });
+// 地板裝飾（決定性隨機：草叢點綴）
+const deco = [];
+for (let y = 1; y < MH - 1; y++) for (let x = 1; x < MW - 1; x++) {
+  const h = (x * 73856093 ^ y * 19349663) % 100;
+  if (map[y][x] === 0 && h < 7) deco.push([x, y, h % 3]);
+}
+function solid(x, y) { const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE); return (map[ty]?.[tx] ?? 1) > 0; }
+function rectHitsWall(x, y, w, h) {
+  return solid(x, y) || solid(x + w, y) || solid(x, y + h) || solid(x + w, y + h) || solid(x + w / 2, y) || solid(x + w / 2, y + h) || solid(x, y + h / 2) || solid(x + w, y + h / 2);
+}
+
+// ---------- 玩家 ----------
+const player = {
+  x: VW / 2 - 6, y: VH / 2 + 30, w: 10, h: 10,
+  dir: 2, fx: 0, fy: 1,
+  spd: 78,
+  hp: 10, maxHp: 10,
+  atkCd: 0, atkT: 0,
+  dodgeT: 0, dodgeCd: 0,
+  inv: 0, kx: 0, ky: 0, flash: 0,
+  walkT: 0, moving: false,
+};
+
+// ---------- 怪物（木樁怪） ----------
+const slimes = [];
+function spawnSlime(x, y, big = false) {
+  slimes.push({
+    x, y, w: big ? 16 : 11, h: big ? 14 : 9,
+    hp: big ? 70 : 30, maxHp: big ? 70 : 30,
+    spd: big ? 26 : 34 + Math.random() * 10,
+    t: Math.random() * 10,
+    kx: 0, ky: 0, flash: 0, big,
+    dead: 0, dir: 0, animT: Math.random() * 2,
+  });
+}
+let wave = 0, kills = 0, timeAlive = 0, gameOver = false, started = false, victory = false;
+let banner = null; // { text, t }
+function showBanner(text, sec = 1.6) { banner = { text, t: sec }; }
+function spawnWaveMobs(n, withBig) {
+  for (let i = 0; i < n; i++) {
+    const corner = i % 4;
+    const cx = corner % 2 === 0 ? TILE * 2 : VW - TILE * 3;
+    const cy = corner < 2 ? TILE * 2 : VH - TILE * 3;
+    spawnSlime(cx + Math.random() * 24 - 12, cy + Math.random() * 24 - 12, withBig && i === 0);
+  }
+}
+function nextWave() {
+  if (boss.active) return;          // BOSS 戰中不再出波（BOSS 自己會召喚）
+  wave++;
+  if (wave === 1) { spawnWaveMobs(4, false); showBanner("WAVE 1"); }
+  else if (wave === 2) { spawnWaveMobs(6, true); showBanner("WAVE 2"); }
+  else spawnBoss();
+}
+
+// ---------- BOSS：大史王 ----------
+const boss = {
+  active: false, dead: false,
+  x: VW / 2 - 18, y: TILE * 2, w: 36, h: 28,
+  hp: 300, maxHp: 300, phase: 1,
+  state: "enter", t: 0,          // enter/idle/tele_charge/charge/stun/tele_slam/summon
+  vx: 0, vy: 0, flash: 0, enraged: false,
+};
+function spawnBoss() {
+  boss.active = true; boss.dead = false;
+  boss.hp = boss.maxHp = Math.round(300 * (0.9 + 0.2 * Math.random()));
+  boss.x = VW / 2 - boss.w / 2; boss.y = TILE * 1.5;
+  boss.state = "enter"; boss.t = 1.2; boss.phase = 1; boss.enraged = false;
+  shake = 6;
+  showBanner("⚠️ 大史王 出現！", 2);
+}
+function bossCenter() { return { x: boss.x + boss.w / 2, y: boss.y + boss.h / 2 }; }
+const SLAM_R = () => (boss.phase === 2 ? 62 : 52);
+function updateBoss(dt) {
+  if (!boss.active || boss.dead) return;
+  boss.t -= dt; boss.flash -= dt;
+  const bc = bossCenter();
+  const pc = { x: player.x + 5, y: player.y + 5 };
+  // 狂暴（50%）
+  if (!boss.enraged && boss.hp <= boss.maxHp / 2) {
+    boss.enraged = true; boss.phase = 2;
+    boss.state = "idle"; boss.t = 0.5;
+    shake = 8; hitstop = 0.1;
+    burst(bc.x, bc.y, "#ff5577", 24, 120);
+    showBanner("🔥 大史王 狂暴化！", 2);
+  }
+  switch (boss.state) {
+    case "enter":
+      if (boss.t <= 0) { boss.state = "idle"; boss.t = 0.8; }
+      break;
+    case "idle": {
+      // 緩慢逼近玩家
+      const d = Math.hypot(pc.x - bc.x, pc.y - bc.y) || 1;
+      const spd = boss.phase === 2 ? 34 : 26;
+      const nx = boss.x + (pc.x - bc.x) / d * spd * dt;
+      const ny = boss.y + (pc.y - bc.y) / d * spd * dt;
+      if (!rectHitsWall(nx, boss.y, boss.w, boss.h)) boss.x = nx;
+      if (!rectHitsWall(boss.x, ny, boss.w, boss.h)) boss.y = ny;
+      if (boss.t <= 0) {
+        const minions = slimes.filter(s => !s.dead).length;
+        const r = Math.random();
+        if (r < 0.4) { boss.state = "tele_charge"; boss.t = boss.phase === 2 ? 0.4 : 0.55; }
+        else if (r < 0.72) { boss.state = "tele_slam"; boss.t = boss.phase === 2 ? 0.5 : 0.62; }
+        else if (minions < 4) { boss.state = "summon"; boss.t = 0.7; }
+        else { boss.state = "tele_charge"; boss.t = 0.55; }
+      }
+      break;
+    }
+    case "tele_charge":
+      if (boss.t <= 0) {
+        const d = Math.hypot(pc.x - bc.x, pc.y - bc.y) || 1;
+        const spd = boss.phase === 2 ? 285 : 235;
+        boss.vx = (pc.x - bc.x) / d * spd; boss.vy = (pc.y - bc.y) / d * spd;
+        boss.state = "charge"; boss.t = 1.4; // 保險上限
+      }
+      break;
+    case "charge": {
+      const nx = boss.x + boss.vx * dt, ny = boss.y + boss.vy * dt;
+      const hitX = rectHitsWall(nx, boss.y, boss.w, boss.h);
+      const hitY = rectHitsWall(boss.x, ny, boss.w, boss.h);
+      if (!hitX) boss.x = nx;
+      if (!hitY) boss.y = ny;
+      if (hitX || hitY || boss.t <= 0) {
+        boss.state = "stun"; boss.t = boss.phase === 2 ? 0.8 : 1.0;
+        shake = Math.max(shake, 6); hitstop = Math.max(hitstop, 0.05);
+        burst(bc.x, bc.y, "#c8935a", 16, 110);
+      }
+      break;
+    }
+    case "stun":
+      if (boss.t <= 0) { boss.state = "idle"; boss.t = boss.phase === 2 ? 0.7 : 1.1; }
+      break;
+    case "tele_slam":
+      if (boss.t <= 0) {
+        // 落地震波：圈內未翻滾/未無敵 → 2 傷
+        const d = Math.hypot(pc.x - bc.x, pc.y - bc.y);
+        shake = Math.max(shake, 7); hitstop = Math.max(hitstop, 0.06);
+        burst(bc.x, bc.y, "#ffd166", 26, 140);
+        if (d <= SLAM_R()) hurtPlayer(bc.x, bc.y, 2);
+        boss.state = "idle"; boss.t = boss.phase === 2 ? 0.7 : 1.1;
+      }
+      break;
+    case "summon":
+      if (boss.t <= 0) {
+        const n = boss.phase === 2 ? 3 : 2;
+        for (let i = 0; i < n; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const sx = Math.min(VW - TILE * 2, Math.max(TILE + 2, bc.x + Math.cos(a) * 30));
+          const sy = Math.min(VH - TILE * 2, Math.max(TILE + 2, bc.y + Math.sin(a) * 30));
+          spawnSlime(sx, sy, false);
+          burst(sx, sy, "#8a5f3a", 8, 60);
+        }
+        boss.state = "idle"; boss.t = boss.phase === 2 ? 0.8 : 1.2;
+      }
+      break;
+  }
+  // 觸碰傷害（衝撞中較痛）
+  if (Math.abs(bc.x - pc.x) < (boss.w + player.w) / 2 - 2 &&
+      Math.abs(bc.y - pc.y) < (boss.h + player.h) / 2 - 2) {
+    hurtPlayer(bc.x, bc.y, boss.state === "charge" ? 2 : 1);
+  }
+}
+function hurtBoss(dmg, fromA) {
+  if (!boss.active || boss.dead || boss.state === "enter") return false;
+  const bonus = boss.state === "stun" ? 1.5 : 1;
+  const final = Math.round(dmg * bonus);
+  boss.hp -= final; boss.flash = 0.12;
+  const bc = bossCenter();
+  dmgNum(bc.x, bc.y - boss.h / 2 - 4, final, bonus > 1 ? "#ffd166" : "#fff");
+  burst(bc.x + Math.cos(fromA) * 10, bc.y + Math.sin(fromA) * 10, "#ffd166", 6, 60);
+  if (boss.hp <= 0) {
+    boss.dead = true; victory = true;
+    shake = 10; hitstop = 0.15;
+    burst(bc.x, bc.y, "#ffd166", 40, 160);
+    burst(bc.x, bc.y, "#ff5577", 30, 120);
+  }
+  return true;
+}
+
+// ---------- 特效 ----------
+let shake = 0, hitstop = 0;
+const parts = [];
+function burst(x, y, color, n = 8, spd = 60) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = spd * (0.4 + Math.random() * 0.8);
+    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.35 + Math.random() * 0.25, color, r: 1 + Math.random() * 2 });
+  }
+}
+const floats = [];
+function dmgNum(x, y, v, color = "#fff") { floats.push({ x, y, v: String(v), life: 0.6, color }); }
+
+// ---------- 攻擊 ----------
+function doAttack() {
+  if (player.atkCd > 0 || player.dodgeT > 0) return;
+  player.atkCd = 0.34; player.atkT = 0.16;
+  const range = 20, arc = Math.PI * 0.85;
+  const pa = Math.atan2(player.fy, player.fx);
+  const px = player.x + player.w / 2, py = player.y + player.h / 2;
+  let hitAny = false;
+  for (const s of slimes) {
+    if (s.dead) continue;
+    const sx = s.x + s.w / 2, sy = s.y + s.h / 2;
+    const d = Math.hypot(sx - px, sy - py);
+    if (d > range + s.w / 2) continue;
+    let da = Math.atan2(sy - py, sx - px) - pa;
+    while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+    if (Math.abs(da) > arc / 2 && d > 10) continue;
+    const dmg = Math.round(10 * stats.dmgMul * (0.9 + Math.random() * 0.2));
+    s.hp -= dmg; s.flash = 0.12;
+    const kb = 140;
+    s.kx = Math.cos(pa) * kb; s.ky = Math.sin(pa) * kb;
+    dmgNum(sx, sy - 6, dmg);
+    burst(sx, sy, "#c8935a", 6, 50);
+    hitAny = true;
+    if (s.hp <= 0 && !s.dead) { s.dead = 0.25; kills++; burst(sx, sy, "#8a5f3a", 14, 90); shake = Math.max(shake, 3); }
+  }
+  // BOSS 也吃劍（同一套範圍/弧判定）
+  if (boss.active && !boss.dead) {
+    const bc = bossCenter();
+    const d = Math.hypot(bc.x - px, bc.y - py);
+    if (d <= range + boss.w / 2) {
+      let da = Math.atan2(bc.y - py, bc.x - px) - pa;
+      while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+      if (Math.abs(da) <= arc / 2 || d <= 12) {
+        const dmg = Math.round(10 * stats.dmgMul * (0.9 + Math.random() * 0.2));
+        if (hurtBoss(dmg, pa)) hitAny = true;
+      }
+    }
+  }
+  if (hitAny) { hitstop = 0.05; shake = Math.max(shake, 2); }
+}
+
+// ---------- 受擊 ----------
+function hurtPlayer(fromX, fromY, dmg = 1) {
+  if (player.inv > 0 || player.dodgeT > 0 || gameOver) return;
+  player.hp -= dmg; player.inv = 0.9; player.flash = 0.15;
+  const a = Math.atan2(player.y - fromY, player.x - fromX);
+  player.kx = Math.cos(a) * 170; player.ky = Math.sin(a) * 170;
+  shake = 5; hitstop = 0.08;
+  burst(player.x + 5, player.y + 5, "#ff8899", 10, 70);
+  if (player.hp <= 0) { gameOver = true; }
+}
+
+// ---------- 更新 ----------
+let last = performance.now();
+function update(dt) {
+  timeAlive += dt;
+  let ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+  let iy = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
+  if (ix === 0 && iy === 0) { ix = input.mx; iy = input.my; }
+  const il = Math.hypot(ix, iy);
+  if (il > 1) { ix /= il; iy /= il; }
+  player.moving = il > 0.1;
+  if (player.moving) {
+    player.fx = ix / (il || 1); player.fy = iy / (il || 1);
+    player.dir = Math.abs(ix) > Math.abs(iy) ? (ix > 0 ? 1 : 3) : (iy > 0 ? 2 : 0);
+    player.walkT += dt;
+  }
+
+  if (input.atk) { doAttack(); }
+  input.atk = false;
+  if (input.dodge && player.dodgeCd <= 0 && player.dodgeT <= 0) {
+    player.dodgeT = 0.26; player.dodgeCd = 0.55;
+    burst(player.x + 5, player.y + 9, "#cfd8ff", 5, 30);
+  }
+  input.dodge = false;
+
+  let vx = 0, vy = 0;
+  if (player.dodgeT > 0) {
+    const dspd = 205;
+    vx = player.fx * dspd; vy = player.fy * dspd;
+    player.dodgeT -= dt;
+  } else {
+    const spd = player.spd * stats.spdMul * (player.atkT > 0 ? 0.35 : 1);
+    vx = ix * spd; vy = iy * spd;
+  }
+  vx += player.kx; vy += player.ky;
+  player.kx *= Math.pow(0.0008, dt); player.ky *= Math.pow(0.0008, dt);
+
+  let nx = player.x + vx * dt;
+  if (!rectHitsWall(nx, player.y, player.w, player.h)) player.x = nx;
+  let ny = player.y + vy * dt;
+  if (!rectHitsWall(player.x, ny, player.w, player.h)) player.y = ny;
+
+  player.atkCd -= dt; player.atkT -= dt; player.dodgeCd -= dt; player.inv -= dt; player.flash -= dt;
+
+  for (const s of slimes) {
+    if (s.dead) { s.dead -= dt; continue; }
+    s.t += dt; s.animT += dt;
+    const px = player.x + 5 - (s.x + s.w / 2), py = player.y + 5 - (s.y + s.h / 2);
+    const d = Math.hypot(px, py) || 1;
+    const hop = (Math.sin(s.t * (s.big ? 4 : 6)) + 1) / 2;
+    const chase = hop > 0.3 ? 1 : 0.15;
+    let mvx = (px / d) * s.spd * chase, mvy = (py / d) * s.spd * chase;
+    s.dir = Math.abs(px) > Math.abs(py) ? (px > 0 ? 1 : 3) : (py > 0 ? 2 : 0); // 面向玩家
+    mvx += s.kx; mvy += s.ky;
+    s.kx *= Math.pow(0.001, dt); s.ky *= Math.pow(0.001, dt);
+    let sx = s.x + mvx * dt;
+    if (!rectHitsWall(sx, s.y, s.w, s.h)) s.x = sx;
+    let sy = s.y + mvy * dt;
+    if (!rectHitsWall(s.x, sy, s.w, s.h)) s.y = sy;
+    s.flash -= dt;
+    if (Math.abs((s.x + s.w / 2) - (player.x + 5)) < (s.w + player.w) / 2 - 1 &&
+        Math.abs((s.y + s.h / 2) - (player.y + 5)) < (s.h + player.h) / 2 - 1) {
+      hurtPlayer(s.x + s.w / 2, s.y + s.h / 2, s.big ? 2 : 1);
+    }
+  }
+  for (let i = slimes.length - 1; i >= 0; i--) if (slimes[i].dead && slimes[i].dead <= 0) slimes.splice(i, 1);
+  if (slimes.length === 0 && !gameOver && !boss.active) nextWave();
+
+  updateBoss(dt);
+  if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
+
+  for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt; if (p.life <= 0) parts.splice(i, 1); }
+  for (let i = floats.length - 1; i >= 0; i--) { const f = floats[i]; f.y -= 22 * dt; f.life -= dt; if (f.life <= 0) floats.splice(i, 1); }
+  shake = Math.max(0, shake - dt * 18);
+}
+
+// ---------- 繪製 ----------
+function px2(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); }
+function tile(name, dx, dy) {
+  const [tx, ty] = T[name];
+  ctx.drawImage(IMG.ow, tx * 16, ty * 16, 16, 16, dx, dy, 16, 16);
+}
+function drawMap() {
+  const owOk = IMG.ow.complete && IMG.ow.naturalWidth > 0;
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const t = map[y][x];
+    if (owOk) {
+      tile("grass", x * TILE, y * TILE);
+      if (t === 1) tile(["rock1","rock2","rock3"][(x + y) % 3], x * TILE, y * TILE);
+      else if (t === 2) tile("rock2", x * TILE, y * TILE);
+    } else {
+      px2(x * TILE, y * TILE, TILE, TILE, t ? "#3b3f5c" : ((x + y) % 2 ? "#1d2438" : "#1a2033"));
+    }
+  }
+  if (owOk) for (const [x, y, v] of deco) tile(["tuft1","tuft2","tuft3"][v], x * TILE, y * TILE);
+}
+function drawPlayer() {
+  const inv = player.inv > 0 && Math.floor(player.inv * 12) % 2 === 0;
+  if (inv && player.dodgeT <= 0) return;
+  const heroOk = IMG.hero.complete && IMG.hero.naturalWidth > 0;
+  const X = Math.round(player.x), Y = Math.round(player.y);
+  px2(X + 1, Y + 8, 8, 3, "rgba(0,0,0,0.3)"); // 影子
+  if (!heroOk) { px2(X, Y, 10, 10, "#7ce0ff"); return; }
+  const flash = player.flash > 0;
+  if (player.atkT > 0) {
+    // 攻擊：32x32 幀，4 幀掃完
+    const band = ATK_BAND[player.dir];
+    const f = Math.min(3, Math.floor((1 - player.atkT / 0.16) * 4));
+    const sx = f * 32, sy = 128 + band * 32;
+    const dx = X - 11, dy = Y - 19;
+    if (flash) drawFlashed(IMG.hero, sx, sy, 32, 32, dx, dy, 32, 32);
+    else ctx.drawImage(IMG.hero, sx, sy, 32, 32, dx, dy, 32, 32);
+  } else {
+    // 走路/待機：16x32，走路循環 4 幀
+    const band = WALK_BAND[player.dir];
+    const f = player.moving && player.dodgeT <= 0 ? Math.floor(player.walkT * 8) % 4 : 0;
+    const sx = f * 16, sy = band * 32;
+    const dx = X - 3, dy = Y - 19;
+    if (player.dodgeT > 0) ctx.globalAlpha = 0.75; // 翻滾殘影感
+    if (flash) drawFlashed(IMG.hero, sx, sy, 16, 32, dx, dy, 16, 32);
+    else ctx.drawImage(IMG.hero, sx, sy, 16, 32, dx, dy, 16, 32);
+    ctx.globalAlpha = 1;
+  }
+  // 揮擊弧特效（疊在 sprite 上，打擊感）
+  if (player.atkT > 0) {
+    const pa = Math.atan2(player.fy, player.fx);
+    const prog = 1 - player.atkT / 0.16;
+    const swing = pa - Math.PI * 0.5 + prog * Math.PI;
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(X + 5, Y + 5, 13, swing - 0.5, swing + 0.15);
+    ctx.stroke();
+  }
+}
+function drawSlime(s) {
+  const logOk = IMG.log.complete && IMG.log.naturalWidth > 0;
+  if (s.dead) {
+    const p = s.dead / 0.25;
+    ctx.globalAlpha = p;
+    if (logOk) {
+      const sc = s.big ? 1.5 : 1;
+      ctx.drawImage(IMG.log, 0, LOG_BAND[2] * 32, 32, 32, s.x - (32 * sc - s.w) / 2, s.y - (32 * sc - s.h) + s.h * (1 - p), 32 * sc, 32 * sc * p);
+    } else px2(s.x, s.y, s.w, s.h, "#8a5f3a");
+    ctx.globalAlpha = 1;
+    return;
+  }
+  px2(s.x + 1, s.y + s.h - 2, s.w - 2, 3, "rgba(0,0,0,0.3)");
+  if (!logOk) { px2(s.x, s.y, s.w, s.h, s.flash > 0 ? "#fff" : "#8a5f3a"); return; }
+  const band = LOG_BAND[s.dir];
+  const f = Math.floor(s.animT * 8) % 6;
+  const sc = s.big ? 1.5 : 1;
+  const dw = 32 * sc, dh = 32 * sc;
+  const dx = s.x + s.w / 2 - dw / 2, dy = s.y + s.h - dh + 2;
+  if (s.flash > 0) drawFlashed(IMG.log, f * 32, band * 32, 32, 32, dx, dy, dw, dh);
+  else ctx.drawImage(IMG.log, f * 32, band * 32, 32, 32, dx, dy, dw, dh);
+  if (s.hp < s.maxHp) {
+    px2(s.x, s.y - 5, s.w, 2, "#331");
+    px2(s.x, s.y - 5, s.w * Math.max(0, s.hp / s.maxHp), 2, "#ff5577");
+  }
+}
+function drawBossTelegraph() {
+  if (!boss.active || boss.dead) return;
+  const bc = bossCenter();
+  if (boss.state === "tele_slam") {
+    const total = boss.phase === 2 ? 0.5 : 0.62;
+    const prog = Math.min(1, Math.max(0, 1 - boss.t / total));
+    ctx.strokeStyle = `rgba(255,80,90,${0.4 + prog * 0.5})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(bc.x, bc.y, SLAM_R() * prog, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,80,90,0.35)";
+    ctx.beginPath(); ctx.arc(bc.x, bc.y, SLAM_R(), 0, Math.PI * 2); ctx.stroke();
+  }
+}
+function drawBoss() {
+  if (!boss.active) return;
+  const bc = bossCenter();
+  const bOk = IMG.boss.complete && IMG.boss.naturalWidth > 0;
+  const SZ = 48;
+  const dx = bc.x - SZ / 2, dy = boss.y + boss.h - SZ + 4;
+  // 影子
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath(); ctx.ellipse(bc.x, boss.y + boss.h + 2, boss.w / 2 + 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+  // 入場：淡入
+  if (boss.state === "enter") ctx.globalAlpha = Math.min(1, 1 - boss.t / 1.2 + 0.2);
+  // 衝撞預警：紅色抖動
+  const teleShakeX = boss.state === "tele_charge" ? (Math.random() - 0.5) * 3 : 0;
+  if (bOk) {
+    if (boss.flash > 0) {
+      flashCtx.clearRect(0, 0, 96, 96);
+      flashCtx.drawImage(IMG.boss, 0, 0, IMG.boss.naturalWidth, IMG.boss.naturalHeight, 0, 0, SZ, SZ);
+      flashCtx.globalCompositeOperation = "source-in";
+      flashCtx.fillStyle = "#fff"; flashCtx.fillRect(0, 0, SZ, SZ);
+      flashCtx.globalCompositeOperation = "source-over";
+      ctx.drawImage(flashCv, 0, 0, SZ, SZ, dx + teleShakeX, dy, SZ, SZ);
+    } else {
+      ctx.drawImage(IMG.boss, dx + teleShakeX, dy, SZ, SZ);
+      if (boss.state === "tele_charge") {
+        ctx.globalAlpha = 0.35 + Math.random() * 0.25;
+        flashCtx.clearRect(0, 0, 96, 96);
+        flashCtx.drawImage(IMG.boss, 0, 0, IMG.boss.naturalWidth, IMG.boss.naturalHeight, 0, 0, SZ, SZ);
+        flashCtx.globalCompositeOperation = "source-in";
+        flashCtx.fillStyle = "#ff4455"; flashCtx.fillRect(0, 0, SZ, SZ);
+        flashCtx.globalCompositeOperation = "source-over";
+        ctx.drawImage(flashCv, 0, 0, SZ, SZ, dx + teleShakeX, dy, SZ, SZ);
+        ctx.globalAlpha = 1;
+      }
+    }
+  } else {
+    ctx.fillStyle = boss.flash > 0 ? "#fff" : "#a0522d";
+    ctx.fillRect(dx + teleShakeX, dy, SZ, SZ);
+  }
+  ctx.globalAlpha = 1;
+  // 暈眩標示
+  if (boss.state === "stun") {
+    ctx.font = "bold 10px monospace"; ctx.textAlign = "center";
+    ctx.fillStyle = "#ffd166";
+    ctx.fillText("💫", bc.x + Math.sin(timeAlive * 10) * 5, dy - 2);
+    ctx.textAlign = "left";
+  }
+}
+function drawBossBar() {
+  if (!boss.active || boss.dead) return;
+  const w = 170, x = (VW - w) / 2, y = 8;
+  ctx.fillStyle = "rgba(5,5,12,0.7)"; ctx.fillRect(x - 2, y - 2, w + 4, 10);
+  ctx.fillStyle = "#40121e"; ctx.fillRect(x, y, w, 6);
+  const pct = Math.max(0, boss.hp / boss.maxHp);
+  ctx.fillStyle = boss.phase === 2 ? "#ff5577" : "#ffd166";
+  ctx.fillRect(x, y, w * pct, 6);
+  ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+  ctx.fillStyle = "#fff"; ctx.shadowColor = "#000"; ctx.shadowBlur = 2;
+  ctx.fillText(`👑 大史王${boss.phase === 2 ? "（狂暴）" : ""}`, VW / 2, y + 16);
+  ctx.shadowBlur = 0; ctx.textAlign = "left";
+}
+function drawBanner() {
+  if (!banner) return;
+  ctx.globalAlpha = Math.min(1, banner.t * 2);
+  ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd166"; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
+  ctx.fillText(banner.text, VW / 2, VH / 2 - 40);
+  ctx.shadowBlur = 0; ctx.textAlign = "left"; ctx.globalAlpha = 1;
+}
+function heart(x, y) {
+  ctx.beginPath();
+  ctx.moveTo(x + 4.5, y + 8.5);
+  ctx.bezierCurveTo(x - 2, y + 3, x + 1, y - 1.5, x + 4.5, y + 2);
+  ctx.bezierCurveTo(x + 8, y - 1.5, x + 11, y + 3, x + 4.5, y + 8.5);
+  ctx.fill();
+}
+function drawHUD() {
+  for (let i = 0; i < player.maxHp / 2; i++) {
+    const full = player.hp >= (i + 1) * 2, half = player.hp === i * 2 + 1;
+    const x = 6 + i * 11, y = 6;
+    ctx.fillStyle = "rgba(20,6,10,0.75)"; heart(x, y);
+    if (full) { ctx.fillStyle = "#ff4d6d"; heart(x, y); }
+    else if (half) { ctx.fillStyle = "#ff4d6d"; ctx.save(); ctx.beginPath(); ctx.rect(x, y, 4.5, 9); ctx.clip(); heart(x, y); ctx.restore(); }
+  }
+  ctx.fillStyle = "#fff"; ctx.font = "bold 8px monospace"; ctx.textAlign = "right";
+  ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 2;
+  ctx.fillText(`WAVE ${wave}`, VW - 6, 12);
+  ctx.fillText(`擊殺 ${kills}`, VW - 6, 22);
+  ctx.fillText(`${timeAlive.toFixed(0)}s`, VW - 6, 32);
+  ctx.textAlign = "left";
+  if (stats.loaded) { ctx.fillStyle = "#e8e2f0"; ctx.fillText(`${stats.name} Lv${stats.level} ‧ 傷x${stats.dmgMul.toFixed(2)} 速x${stats.spdMul.toFixed(2)}`, 6, VH - 6); }
+  else { ctx.fillStyle = "#b0a8c5"; ctx.fillText("未登入：預設屬性", 6, VH - 6); }
+  ctx.shadowBlur = 0;
+}
+function draw() {
+  ctx.save();
+  if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+  drawMap();
+  drawBossTelegraph(); // 預警圈畫在角色底下
+  // y-sort：底部 y 較小者先畫（偽 3D 遮擋）
+  const drawables = [...slimes.filter(s => true).map(s => ({ y: s.y + s.h, fn: () => drawSlime(s) })), { y: player.y + player.h, fn: drawPlayer }];
+  if (boss.active && !boss.dead) drawables.push({ y: boss.y + boss.h, fn: drawBoss });
+  drawables.sort((a, b) => a.y - b.y);
+  for (const d of drawables) d.fn();
+  for (const p of parts) { ctx.globalAlpha = Math.min(1, p.life * 3); px2(p.x, p.y, p.r, p.r, p.color); ctx.globalAlpha = 1; }
+  ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+  for (const f of floats) { ctx.globalAlpha = Math.min(1, f.life * 2.5); ctx.fillStyle = f.color; ctx.shadowColor = "#000"; ctx.shadowBlur = 2; ctx.fillText(f.v, f.x, f.y); ctx.shadowBlur = 0; ctx.globalAlpha = 1; }
+  ctx.textAlign = "left";
+  drawHUD();
+  drawBossBar();
+  drawBanner();
+  ctx.restore();
+  if (!assetsReady) { overlay("⏳ 載入素材中…", "", ""); return; }
+  if (!started) overlay("⚔️ 大史王的草原試煉", "清掉 2 波木樁怪 ‧ 討伐大史王", "按 攻擊鍵 開始");
+  else if (victory) overlay("🏆 討伐成功！", `用時 ${timeAlive.toFixed(0)} 秒 ‧ 擊殺小怪 ${kills} 隻`, "按 攻擊鍵 再挑戰一次");
+  else if (gameOver) overlay("💀 你倒下了", `撐了 ${timeAlive.toFixed(0)} 秒 ‧ ${boss.active ? "敗給大史王" : "WAVE " + wave} ‧ 擊殺 ${kills}`, "按 攻擊鍵 再來一場");
+}
+function overlay(t1, t2, t3) {
+  ctx.fillStyle = "rgba(5,5,12,0.72)"; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd166"; ctx.font = "bold 16px monospace"; ctx.fillText(t1, VW / 2, VH / 2 - 18);
+  ctx.fillStyle = "#e8e2f0"; ctx.font = "bold 9px monospace"; ctx.fillText(t2, VW / 2, VH / 2 + 2);
+  ctx.fillStyle = "#9a93b0"; ctx.font = "bold 8px monospace"; ctx.fillText(t3, VW / 2, VH / 2 + 18);
+  ctx.textAlign = "left";
+}
+function reset() {
+  slimes.length = 0; parts.length = 0; floats.length = 0;
+  player.x = VW / 2 - 6; player.y = VH / 2 + 30; player.hp = player.maxHp;
+  player.kx = player.ky = 0; player.inv = 1;
+  wave = 0; kills = 0; timeAlive = 0; gameOver = false; victory = false;
+  boss.active = false; boss.dead = false; banner = null;
+  nextWave();
+}
+
+// ---------- 主迴圈 ----------
+function loop(now) {
+  requestAnimationFrame(loop);
+  let dt = Math.min(0.033, (now - last) / 1000); last = now;
+  if (!started || gameOver || victory) {
+    if (assetsReady && input.atk) {
+      if (!started) started = true;
+      reset();
+    }
+    input.atk = false;
+    draw(); return;
+  }
+  if (hitstop > 0) { hitstop -= dt; draw(); return; }
+  update(dt);
+  draw();
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

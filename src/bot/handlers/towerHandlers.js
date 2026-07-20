@@ -98,6 +98,7 @@ const JOB_TRAITS = {
   tactician:    { key: "tactician", name: "軍師",   emoji: "♟️",  traits: ["爬塔光環：隊伍傷害+5%", "Boss傷害+5%", "戰術指揮"] },
   bard:         { key: "bard", name: "詩人",   emoji: "🎼",  traits: ["爬塔光環：隊伍AGI+15%", "連擊率+5%", "行動軸支援"] },
   barrier_mage: { key: "barrier_mage", name: "結界師", emoji: "🛡️", traits: ["爬塔光環：隊伍減傷-10%", "MaxHP+8%", "防護結界"] },
+  gambler:      { key: "gambler", name: "賭徒",   emoji: "🎲",  traits: ["爬塔光環：隊伍爆擊率+5%", "骰子吃 LUK", "高方差爆發"] },
   default:      { key: "default", name: "冒險者", emoji: "🧑",  traits: ["無職業加成"] },
 };
 
@@ -117,6 +118,7 @@ function detectJob(equipped = {}) {
   if (has("barrier") || has("結界"))    return JOB_TRAITS.barrier_mage;
   if (has("mage") || has("法師"))      return JOB_TRAITS.mage;
   if (has("rogue") || has("盜賊"))     return JOB_TRAITS.rogue;
+  if (has("gambler") || has("賭徒"))   return JOB_TRAITS.gambler;
   return JOB_TRAITS.default;
 }
 
@@ -175,6 +177,8 @@ function getTowerJobAuraEffects(member) {
         towerPartyEffect(member, "party_damage_reduction", 10, "爬塔：隊伍受到傷害 -10%"),
         towerPartyEffect(member, "party_max_hp_up", 8, "爬塔：隊伍 MaxHP +8%"),
       ];
+    case "gambler":
+      return [towerPartyEffect(member, "party_crit_rate_up", 5, "爬塔：隊伍爆擊率 +5%")];
     default:
       return [];
   }
@@ -696,6 +700,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       monsterEquipped: buildMonsterEquipped(monster),
       monsterIsBoss: Boolean(monster.isBoss),
       monsterIsElite: monster.zone === "elite",
+      monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
       monsterActiveEffects,
       stunRoundsLeft,
     };

@@ -102,6 +102,7 @@ function backRow() {
 function buildFeedStatus(r, tierLabel) {
   const lines = [tierLabel ? `🍖 餵了 **${r.fed}** 件 ${tierLabel} 階裝備` : "🍖 餵食完成！"];
   if (r.protectedCount > 0) lines.push(`🛡️ 已保護 **${r.protectedCount}** 件未餵（有 +值的請單件餵；卡片徽章不可餵）`);
+  if (r.lockedCount > 0) lines.push(`🔒 已排除 **${r.lockedCount}** 件鎖定裝備，絕不會餵食。`);
   if (r.totalHatch > 0) lines.push(`孵化進度 +${r.totalHatch}`);
   if (r.totalSatiety > 0) lines.push(`飽食度 +${Math.round(r.totalSatiety)}`);
   if (r.hatched) {

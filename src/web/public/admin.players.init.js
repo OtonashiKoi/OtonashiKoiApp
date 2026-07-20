@@ -294,6 +294,11 @@
     wireWebCtrl("ann-create-btn", "createAnnouncement", "發布公告失敗");
     const annRefresh = document.getElementById("ann-refresh-btn");
     if (annRefresh) annRefresh.addEventListener("click", () => window.adminPlayers?.loadAnnouncements?.());
+    const annCategorySel = document.getElementById("ann-category");
+    if (annCategorySel) annCategorySel.addEventListener("change", () => window.adminPlayers?.onAnnCategoryChange?.());
+    document.querySelectorAll(".ann-filter-btn").forEach((btn) => {
+      btn.addEventListener("click", () => window.adminPlayers?.setAnnFilter?.(btn.dataset.annFilter));
+    });
     const annList = document.getElementById("ann-list");
     if (annList) {
       annList.addEventListener("click", async (e) => {

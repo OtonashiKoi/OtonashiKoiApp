@@ -349,7 +349,8 @@ function createAdminPlayerRoutes(serviceContext) {
       const svc = require("../../services/announcement/announcementService");
       const a = await svc.create({
         title: req.body?.title, body: req.body?.body,
-        imageUrl: req.body?.imageUrl, enabled: req.body?.enabled, pinned: req.body?.pinned
+        imageUrl: req.body?.imageUrl, category: req.body?.category,
+        enabled: req.body?.enabled, pinned: req.body?.pinned
       });
       res.json(ok(a, "announcement created"));
     } catch (error) { next(error); }

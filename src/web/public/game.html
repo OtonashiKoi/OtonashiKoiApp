@@ -517,7 +517,7 @@ const TABS=[
 const HUBS={
   adventure:{items:["zones","idle","tower","pk","worldboss"]},
   grow:{items:["profile","inventory","equip","enhance","quests","checkin"]},
-  market:{items:["shop","auction","casino","pet","txn"]},
+  market:{items:["shop","auction","casino","pet","txn","chat","invite","bind"]},
 };
 const TAB_OF={home:"home"};
 Object.entries(HUBS).forEach(([tab,info])=>info.items.forEach(s=>{TAB_OF[s]=tab;}));
@@ -542,7 +542,7 @@ const SECTIONS={
   inventory:renderInventory, equip:renderEquip, enhance:renderEnhance,
   quests:renderQuests, checkin:renderCheckin, invite:renderInvite, txn:renderTxn,
   zones:renderZones, idle:renderIdle, worldboss:renderWorldboss,
-  shop:renderShop, auction:renderAuction, chat:renderChat,
+  shop:renderShop, auction:renderAuction, chat:renderChat, bind:renderBind,
   casino:renderCasino, pet:renderPet, tower:renderTower, pk:renderPk,
 };
 let CUR_SEC="home";
@@ -792,6 +792,45 @@ async function renderInvite(main){
       toast(`兌換成功！邀請人：${r.inviterName||r.inviterId}`,"ok"); await refreshProfile(); renderInvite(main);
     }catch(e){ toast(e.message,"err"); }
   };
+}
+
+/* ── 直播帳號綁定 ── */
+async function renderBind(main){
+  main.innerHTML=`<div class="loading">載入綁定資訊…</div>`;
+  try{
+    const data=await api("/api/me/bindings");
+    const bindings=data.bindings||[];
+    main.innerHTML=`<div class="narrow" style="max-width:680px">
+      <div class="sec-head"><div class="desc">綁定直播帳號後，聊天室互動與會員身分會同步至遊戲。</div></div>
+      <div class="card"><h3>🔗 已綁定帳號</h3>
+        ${bindings.length?bindings.map(b=>`<div class="listrow"><div><div>${b.platform==="youtube"?"YouTube":"Twitch"} · ${b.displayName||b.platformUserId||"—"}</div>
+          <div class="desc">${b.membership?.isMember?(b.membership.levelName||"會員已驗證"):(b.membership?.hint||"已綁定")}</div></div>
+          <span class="tag" style="color:${b.membership?.isMember?"var(--hp)":"var(--ink-dim)"}">${b.membership?.isMember?"已驗證":"已連結"}</span></div>`).join(""):`<div class="empty-note">尚未綁定任何直播帳號</div>`}
+      </div>
+      <div class="card" style="margin-top:16px"><h3>➕ 綁定新帳號</h3>
+        <div class="desc">選擇平台後會開啟官方授權頁面；完成後回到遊戲重新整理即可看到狀態。</div>
+        <div class="acts"><button class="btn primary" data-stream-provider="youtube">YouTube 綁定</button><button class="btn" data-stream-provider="twitch">Twitch 綁定</button></div>
+      </div>
+      <div class="card" style="margin-top:16px"><h3>💬 聊天室綁定碼</h3>
+        <div class="desc">若直播主使用聊天室綁定，產生代碼後在直播聊天室輸入指定指令。</div>
+        <div id="bindCode"><button class="btn" id="newBindCode">產生綁定碼</button></div>
+      </div>
+    </div>`;
+    main.querySelectorAll("[data-stream-provider]").forEach(b=>b.onclick=async()=>{
+      try{
+        const r=await api("/api/me/stream-auth/state",{method:"POST",body:"{}"});
+        window.location.href=`/api/stream-auth/start?provider=${encodeURIComponent(b.dataset.streamProvider)}&state=${encodeURIComponent(r.state)}`;
+      }catch(e){ toast(e.message,"err"); }
+    });
+    main.querySelector("#newBindCode").onclick=async()=>{
+      try{
+        const r=await api("/api/me/stream-bind-code",{method:"POST",body:"{}"});
+        main.querySelector("#bindCode").innerHTML=`<div class="code-box" title="點擊複製">${r.code}</div><div class="desc" style="margin-top:8px">在聊天室輸入：<b>${r.command}</b>　·　${r.expiresInMinutes} 分鐘內有效</div>`;
+        const code=main.querySelector("#bindCode .code-box");
+        code.onclick=()=>{ navigator.clipboard?.writeText(r.command); toast("已複製聊天室指令","ok"); };
+      }catch(e){ toast(e.message,"err"); }
+    };
+  }catch(e){ main.innerHTML=`<div class="empty-note">無法載入綁定資訊：${e.message}</div>`; }
 }
 
 /* ── 交易紀錄 ── */

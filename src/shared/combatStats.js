@@ -24,10 +24,29 @@ const WEAPON_CONFIG = {
   mace_2h:  { mult: 4, isTwoHanded: true, stunChance: 8, stunDuration: 3 },
   axe_1h:   { mult: 3, armorBreak: 15, critBonus: 10 },
   axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15, critBonus: 20 },
-  dagger:   { mult: 3, comboBonus: 20 },
+  dagger:   { mult: 3, baseStat: "agi", comboBonus: 20 },
   staff_1h: { mult: 3, baseStat: "int", bypassDefPct: 15 },
   staff_2h: { mult: 4, baseStat: "int", isTwoHanded: true, bypassDefPct: 25 },
   bow:      { mult: 4, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
+  // 骰子：全遊戲唯一以 LUK 為攻擊屬性的武器（賭徒本命），雙手武器。
+  // LUK 本身已有三重收益（爆擊率 ×0.5、攻擊擲骰階級、防禦擲骰階級），
+  // 所以不給 critBonus——爆擊率完全由玩家自己堆的 LUK 決定。
+  // attackSegments：每回合固定攻擊 N 段（倍率已對半），每段各自擲爆擊/攻擊階級，不計入連擊。
+  // faceMultipliers：每段各擲一顆 d6，骰面決定該段傷害倍率（純運氣、不看屬性）。
+  //   平均 (0.5+0.75+1+1+1.25+1.5)/6 = 1.0 → 不影響整體平衡，只放大方差。
+  //   骰面在攻擊一開始就全部擲出，命中/迴避對整輪只判定一次（迴避＝兩擲一起被閃）。
+  // allMinMult / allMaxMult：全 1 / 全 6（雙骰各 1/36）時，把每段倍率改寫成這個值。
+  //   全 1 → 每段 0.5，整輪＝基準的 50%（與骰面原值相同，寫出來讓規則明確）。
+  //   全 6 → 每段 2.5，整輪＝基準的 250%。
+  dice: {
+    mult: 1.5,
+    baseStat: "luk",
+    isTwoHanded: true,
+    attackSegments: 2,
+    faceMultipliers: [0.5, 0.75, 1.0, 1.0, 1.25, 1.5],
+    allMinMult: 0.5,
+    allMaxMult: 2.5,
+  },
 };
 
 // 副手武器種類（可雙持）
@@ -107,12 +126,13 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const isDualWield = !cfg.isTwoHanded && wt && offhand?.weaponType != null && OFFHAND_WEAPON_TYPES.has(offhand.weaponType);
 
   // baseStat
-  let baseStatKey = cfg.baseStat || "str";
-  let baseStat = baseStatKey === "int" ? I : baseStatKey === "dex" ? D : S;
-
-  // 盜賊徽章 + 匕首：ATK 改看 AGI（倍率仍用匕首的 ×3）
-  const rogueDagger = hasRogueBadge && wt === "dagger";
-  if (rogueDagger) { baseStatKey = "agi"; baseStat = A; }
+  // 匕首自 V0.4 起一律吃 AGI（原本只有盜賊徽章才改吃 AGI，現統一由 WEAPON_CONFIG 決定）
+  const baseStatKey = cfg.baseStat || "str";
+  const baseStat = baseStatKey === "int" ? I
+    : baseStatKey === "dex" ? D
+      : baseStatKey === "agi" ? A
+        : baseStatKey === "luk" ? L
+          : S;
 
   // 空手倍率 ×1
   const mult = wt ? cfg.mult : 1;
@@ -201,6 +221,10 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     isDualWield,
     bypassMonsterDefPct: cfg.bypassDefPct ?? 0,
     monsterAttackCount:cfg.monsterAtk ?? 1,
+    attackSegments:    cfg.attackSegments ?? 1,   // 每回合固定攻擊段數（骰子＝2），不計入連擊
+    faceMultipliers:   Array.isArray(cfg.faceMultipliers) ? cfg.faceMultipliers : null, // d6 骰面傷害倍率
+    allMinMult:        cfg.allMinMult ?? null,    // 全骰面皆為 1 時，每段改用此倍率
+    allMaxMult:        cfg.allMaxMult ?? null,    // 全骰面皆為最大值時，每段改用此倍率
     stunChance,
     stunDuration: cfg.stunDuration ?? 3,
     armorBreakChance,
@@ -228,6 +252,39 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const equipmentEffects = collectEquipmentEffects(equipped, "passive", effectContext);
   const combinedEffects = [...equipmentEffects, ...(Array.isArray(activeEffects) ? activeEffects : [])];
   const nextStats = applyEffectsToStats(baseStats, combinedEffects, effectContext);
+
+  // ── 基礎屬性 buff 的衍生值重推導 ──────────────────────────────────────
+  // baseStats 在上面就已經把 atk / crit / dodge / combo / maxHp / hit 等「由基礎屬性推導的值」算死了，
+  // 而 applyEffectsToStats 只會去加 nextStats.agi / nextStats.luk 這類「已經被用完的原始屬性」。
+  // 結果是戰鬥中的 str_up / agi_up / luk_up 等效果只改面板數字，對 ATK、爆擊率完全無效
+  // （例：詩人「激昂旋律」的 AGI+8 對匕首系的 ATK 一直是沒作用的）。
+  // 這裡用「屬性差值」補推導：只補 buff 造成的增量，不重算整體，
+  // 才不會跟 applyEffectsToStats 已處理的 crit_rate_up / dodge_up / combo_up 重複計算。
+  {
+    const before = { str: S, agi: A, vit: V, int: I, dex: D, luk: L };
+    const d = {};
+    let changed = false;
+    for (const k of ["str", "agi", "vit", "int", "dex", "luk"]) {
+      d[k] = (Number(nextStats[k]) || 0) - before[k];
+      if (d[k] !== 0) changed = true;
+    }
+    if (changed) {
+      // ATK：武器主屬性的增量 × 武器倍率
+      const dMain = d[baseStatKey] || 0;
+      if (dMain !== 0) {
+        nextStats.atk = (Number(nextStats.atk) || 0) + Math.round(dMain * mult);
+        // 武器主屬性追加傷害（終傷後 +主屬性×1.5）也要跟著動
+        nextStats.weaponMainStatValue = Math.max(0, (Number(nextStats.weaponMainStatValue) || 0) + dMain);
+      }
+      if (d.luk !== 0) nextStats.crit = (Number(nextStats.crit) || 0) + d.luk * 0.5;
+      if (d.agi !== 0) {
+        nextStats.dodge = (Number(nextStats.dodge) || 0) + d.agi * 0.5;
+        nextStats.combo = (Number(nextStats.combo) || 0) + d.agi * 0.5;
+      }
+      if (d.vit !== 0) nextStats.maxHp = (Number(nextStats.maxHp) || 0) + d.vit * 15;
+      if (d.dex !== 0) nextStats.hit = (Number(nextStats.hit) || 0) + d.dex;
+    }
+  }
 
   nextStats.def = Math.min(85, Math.max(0, Number(nextStats.def) || 0));
   nextStats.flatDef = Math.max(0, Number(nextStats.flatDef) || 0);

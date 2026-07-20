@@ -68,6 +68,10 @@ async function bootstrap() {
     // 全服 Buff 快取初始化（直播連動事件）：載入生效中的 buff 到記憶體
     try {
       await require("./services/stream/globalBuffService").init();
+      // 重啟自癒：清掉殘留的觀看熱度 session buff。它只該在直播當下存在，重啟後沒有直播上下文，
+      // 殘留會卡在最高階（不降階＋每輪續命→永不過期，且擋掉之後「達標開啟加成」的廣播）。
+      // 清掉後 evaluate() 會依當下實際人數重新觸發，isNew=true 廣播正常。
+      await require("./services/stream/globalBuffService").clearViewerSession();
       await require("./services/stream/streamEventConfig").syncRuntimeConfig(); // 注入短期 buff 上限
       // 會員里程碑檢查：每 3 分鐘看會員數有無創新高 → 短期慶祝 / 賽季永久里程碑
       const memberEvents = require("./services/stream/memberEventsService");

@@ -14,12 +14,16 @@
 const { collectEquipmentEffects, isEffectConditionMet } = require("./effectEngine");
 const { calcHitChance } = require("./hitChance");
 const {
+  normalizeElement, resolvePlayerElement, getElementMultiplier, describeElementMatchup,
+} = require("./elementSystem");
+const {
   calcAttackTierProbs,
   calcDefenseTierProbs,
   rollAttackTier,
   rollDefenseTier,
   ATTACK_TIER_MULT,
   DEFENSE_TIER_MULT,
+  getWeaponConfig,
 } = require("./combatStats");
 
 const WEAPON_PHRASE_BANK = {
@@ -32,8 +36,10 @@ const WEAPON_PHRASE_BANK = {
   axe_1h: ["斧刃劈砍", "破甲一擊", "側身橫斬", "旋身揮砍", "碎盾斜切", "怒斧下劈"],
   axe_2h: ["巨斧狂劈", "雙手劈落", "開山斬擊", "裂地重砍", "狂暴橫掃", "全力破陣"],
   staff: ["施展魔法", "吟唱咒語", "釋放法術", "引導魔力", "凝聚咒陣", "驅使元素"],
-  bow: ["拉弓射擊", "瞄準放箭", "急速連射", "精準狙擊", "拉弦破空", "連珠齊射"]
+  bow: ["拉弓射擊", "瞄準放箭", "急速連射", "精準狙擊", "拉弦破空", "連珠齊射"],
+  dice: ["擲出命運之骰", "甩手一擲", "骰子在空中翻轉落下", "把運氣賭上這一擊", "指尖彈出骰子", "隨手一擲定生死"]
 };
+const DICE_PIPS = ["【1】", "【2】", "【3】", "【4】", "【5】", "【6】"];
 const CRIT_PHRASES = ["會心一擊", "致命一擊", "弱點命中", "完美命中", "要害洞穿", "破綻捕捉"];
 const COMBO_PHRASES = ["連擊！", "殘影連斬！", "急速追打！", "趁勢猛攻！", "流暢追擊！", "壓迫連段！"];
 const DODGE_PHRASES = ["身形一閃", "靈巧側移", "急速後撤", "俐落閃身", "錯步避開", "滑步拉開距離"];
@@ -54,6 +60,7 @@ function pickWeaponPhrases(weaponType) {
   if (!weaponType) return WEAPON_PHRASE_BANK.default;
   if (weaponType.startsWith("staff")) return WEAPON_PHRASE_BANK.staff;
   if (weaponType === "bow") return WEAPON_PHRASE_BANK.bow;
+  if (weaponType === "dice") return WEAPON_PHRASE_BANK.dice;
   if (weaponType === "dagger") return WEAPON_PHRASE_BANK.dagger;
   if (weaponType === "mace_1h") return WEAPON_PHRASE_BANK.mace_1h;
   if (weaponType === "mace_2h") return WEAPON_PHRASE_BANK.mace_2h;
@@ -85,9 +92,11 @@ function detectJobBattleProfile(equipped = {}, inventory = []) {
   else if (has("healer")) archetype = "healer";
   else if (has("mage")) archetype = "mage";
   else if (has("rogue")) archetype = "rogue";
+  else if (has("gambler") || has("賭徒")) archetype = "gambler";
   else {
     const weaponType = equipped?.weapon?.weaponType || "";
     if (weaponType.startsWith("staff")) archetype = activeJobEffects.some((e) => e.target === "party") ? "healer" : "mage";
+    else if (weaponType === "dice") archetype = "gambler";
     else if (weaponType === "bow") archetype = "archer";
     else if (weaponType === "dagger") archetype = "rogue";
     else if (weaponType.startsWith("mace")) archetype = "dwarf_warrior";
@@ -191,6 +200,17 @@ const JOB_FLAVOR = {
     counter: ["從背後補上一刀", "順著空隙反咬", "一口氣把距離吃回來"],
     execute: ["乾淨地收尾", "匕首落下，戰鬥停在這裡", "影子直接劃開終局"],
     lowHp: ["越危險越冷靜", "本能進入狩獵狀態", "殺意反而更靜了"]
+  },
+  gambler: {
+    intro: ["骰子在掌心轉了一圈。", "賭桌已經開了，籌碼是命。", "運氣站在誰那邊，擲了才知道。"],
+    hit: ["骰面翻出一個好數字", "把賠率壓在這一擊上", "運氣順著手勁砸過去"],
+    crit: ["六點朝上，全押命中", "骰子停在最狠的那一面", "這一把賭贏了，代價由對方付"],
+    combo: ["連續開出大點", "手氣正燙，停不下來", "一把接一把地翻牌"],
+    dodge: ["運氣替你擋了一下", "剛好賭對了方向", "骰子偏了半格，你活下來了"],
+    block: ["賭一把硬接", "壓下注碼吃住這擊", "拿運氣頂在前面"],
+    counter: ["莊家翻臉，反手加注", "把輸的一把立刻討回來", "換你發牌了"],
+    execute: ["一把梭哈收場", "骰子落定，牌局結束", "運氣在最後一刻站到你這邊"],
+    lowHp: ["越輸越敢押", "把剩下的全部推上桌", "沒有退路的賭局最好玩"]
   }
 };
 
@@ -626,11 +646,16 @@ function applyCardProcEffects({
   buffKeys = new Set(),
   debuffKeys = new Set(),
   sourceId = null,
+  // 本函式原本只負責「帶血量門檻」的效果(on_hit 路徑會先把效果拆兩堆,一般效果走別的分支)。
+  // on_dodge 路徑沒有那個分支、把全部效果丟進來 → 沒帶血量條件的效果被這裡靜默丟棄
+  //   (魅影潛襲者卡【暗影急襲】crit_rate_up 因此完全不生效,實測 60 場 0 觸發)。
+  // 加這個開關讓 on_dodge 能把一般效果也交給本函式處理；預設 true 保持既有呼叫端行為不變。
+  requireHpGate = true,
   log = []
 }) {
   let nextOwnerActiveEffects = Array.isArray(ownerActiveEffects) ? ownerActiveEffects : [];
   let nextTargetActiveEffects = Array.isArray(targetActiveEffects) ? targetActiveEffects : [];
-  const hpGatedEffects = procEffects.filter(effectHasHpThreshold);
+  const hpGatedEffects = requireHpGate ? procEffects.filter(effectHasHpThreshold) : procEffects;
   if (hpGatedEffects.length === 0) {
     return {
       ownerActiveEffects: nextOwnerActiveEffects,
@@ -891,9 +916,35 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (amt <= 0) return pHp;
     if (opts && opts.lifesteal) { _totalHealDone += amt; pHp = Math.min(pStats.maxHp, pHp + amt); return pHp; } // 吸血是自身機制，不受治療攔截影響
     if (_healImmune) return pHp;                          // 對鮮血的渴望：外部治療一律無效
-    if (_healToDamage > 0) { const dmg = Math.round(amt * _healToDamage); mHp -= dmg; totalDamage += dmg; return pHp; } // 聖人：回血轉為對敵傷害、不回血
+    if (_healToDamage > 0) {
+      // 怪已經死了才觸發的回血(擊殺回血/戰後回血)：轉傷害只會灌 totalDamage、汙染世界王傷害榜，
+      // 對戰鬥結果毫無意義 → 直接不轉(聖人本來就吃不到這兩種回血)。
+      if (opts && opts.postMortem) return pHp;
+      const dmg = Math.round(amt * _healToDamage); mHp -= dmg; totalDamage += dmg; return pHp; // 聖人：回血轉為對敵傷害、不回血
+    }
     _totalHealDone += amt;
     pHp = Math.min(pStats.maxHp, pHp + amt); return pHp;
+  };
+  // 回血 + 戰報（統一出口）。直接寫「回復 N HP」會騙人：聖人(_healToDamage)會把治療轉成傷害、
+  // 對鮮血的渴望(_healImmune)會整個吃掉、滿血時也回不進去。這裡一律用「實際回了多少」來決定怎麼寫。
+  //   onHealed(actual) → 該情境自己的文案（保留各處原本的措辭/emoji）
+  // log 是每回合才建立的區域變數，這裡拿不到 → 由迴圈每回合把當回合的 log 掛上來。
+  let _curLog = null;
+  const _healLogged = (h, onHealed) => {
+    const amt = Math.max(0, Number(h) || 0);
+    const beforeHp = pHp;
+    const beforeMHp = mHp;
+    pHp = _healPlayer(amt);
+    const actual = pHp - beforeHp;
+    if (actual > 0) { if (_curLog) _curLog.push(onHealed(actual)); return actual; }
+    if (_healToDamage > 0) {
+      const dealt = beforeMHp - mHp;
+      if (dealt > 0 && _curLog) {
+        _curLog.push(`🩸 **聖者・回血化刃**！治療 **${amt}** 化為 **${dealt}** 傷害（×${_healToDamage}）！（怪物剩 ${Math.max(0, mHp)} HP）`);
+      }
+    }
+    // 其餘(滿血/治療免疫)：不印，避免洗出一堆「恢復 0 HP」
+    return 0;
   };
   let outcome = null;
   let totalDamage = 0;
@@ -907,7 +958,21 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 世界王部位弱點倍率：玩家對王「每一擊」的傷害倍率(牙狼:同流派×1、不同×0.3)。預設 1 不影響其他戰鬥。
   // 直接乘在玩家傷害上→戰報數字=真實傷害、部位血正常遞減、戰鬥在真的打死時才結束(不提早中止)。
   const bossVulnMult = (options.bossVulnMult != null && Number(options.bossVulnMult) >= 0) ? Number(options.bossVulnMult) : 1;
-  const applyBossVuln = (raw) => (bossVulnMult === 1 ? raw : Math.max(0, Math.round((Number(raw) || 0) * bossVulnMult)));
+
+  // ── 屬性相剋（土火水木金日月）──
+  // 玩家屬性由裝備決定(武器優先)，怪物屬性讀 monster.element。任一方無屬性 → 倍率 1，
+  // 現有 69 隻怪/487 件道具都沒有 element 欄位，故既有內容完全不受影響。
+  const playerElement = options.playerElement !== undefined
+    ? normalizeElement(options.playerElement)
+    : resolvePlayerElement(options.equipped || {});
+  const monsterElement = normalizeElement(options.monsterElement);
+  const elementMult = getElementMultiplier(playerElement, monsterElement);
+
+  // 玩家每一擊的總倍率 = 世界王部位弱點 × 屬性相剋。
+  // 兩者都是「乘進每一擊終傷」的同類機制，合併成一個乘數即可涵蓋主擊/連擊/三元/各DOT
+  //   （函式名沿用 applyBossVuln 以免動到既有 6 處呼叫點）。
+  const playerHitMult = bossVulnMult * elementMult;
+  const applyBossVuln = (raw) => (playerHitMult === 1 ? raw : Math.max(0, Math.round((Number(raw) || 0) * playerHitMult)));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
   let endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
   // BOSS 單位判定（世界王/區域王）：暈眩抗性與格擋規則會用到
@@ -923,6 +988,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     monster: { ...(options.cardCooldowns?.monster || {}) },
   };
   const jobSkillCooldowns = {}; // { [skillKey]: remainingTurns }
+  let forceMonsterCritFail = false; // 賭徒「千術」：本回合敵方攻擊必定大失敗
   let jobSkillUsedThisRound = false;
   const combatStats = {
     comboCount: 0,
@@ -1086,6 +1152,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
   while (round <= endRound && outcome === null) {
     const log = [`**【第 ${round} 回合】**`];
+    _curLog = log;   // 讓 _healLogged 能把回血/回血化刃寫進「當回合」的戰報
+    // 屬性相剋提示：只在第一回合印一次（每回合印會洗版）
+    if (round === (Number(options.startRound) || 1)) {
+      const elementLine = describeElementMatchup(playerElement, monsterElement);
+      if (elementLine) log.push(elementLine);
+    }
     // 沒苦硬吃：扛到指定回合仍不死 → 對敵爆發「累積承受總傷害 × 倍率」
     if (_endureBurst && !_endureFired && round >= _endureBurst.round && pHp > 0 && _totalDmgTaken > 0) {
       _endureFired = true;
@@ -1362,16 +1434,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
 
         // 應用 DOT 傷害
-        if (dotEffect.key === 'heal_over_time') {
-          const healPct = Number(dotParams.value ?? 0);
-          const heal = dotParams.mode === 'flat'
-            ? Math.max(0, Math.round(healPct))
-            : Math.max(0, Math.round((pStats.maxHp || 1) * (healPct / 100)));
-          if (heal > 0) {
-            pHp = _healPlayer(heal);
-            log.push(`💚 回復效果發動！你恢復 **${heal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
-          }
-        }
+        // heal_over_time 一律不在這裡結算：
+        //   • target=party（治療師徽章）→ 只走「支援光環」路徑(依 INT 縮放到上限)，
+        //     在這裡再算一次的話，光環提供者自己會多吃一份未縮放的 base%。
+        //   • target=self（鐵甲衛將卡/城堡魔像卡）→ 統一交給回合末的 playerHotPct 彙總，
+        //     那邊有滿血守衛、會和 life_regen 合併成一條戰報。兩邊都算＝卡片效果變成兩倍。
+        // 舊版兩條路徑都跑，導致 5%→實際10%、15%→實際30%。
 
         if (dotEffect.key === 'poison') {
           const damagePercent = Number(dotParams.damagePercent ?? dotParams.value ?? 5);
@@ -1470,6 +1538,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let roundPartyCritDamageReductionPct = 0;
     let roundPartyAgiBoostPct = 0; // 詩人 party_agi_up：影響當回合連擊率與閃避
     let roundPartyComboBoostPct = 0;
+    let roundPartyCritRateBoostPct = 0; // 賭徒 party_crit_rate_up：影響當回合爆擊率
     try {
       // 光環不疊加:同一效果(key)只保留數值最高的提供者版本(跨 DC/網頁一致),
       // 連帶讓下方戰報「✨ 光環加持」也只列出最高的那個來源,不會每位提供者各列一行疊加。
@@ -1502,7 +1571,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             damageReduction: 0,
             critReduction: 0,
             agiBoost: 0,
-            comboBoost: 0
+            comboBoost: 0,
+            critRateBoost: 0
           });
         }
 
@@ -1618,6 +1688,14 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             detail.comboBoost = val;
           }
         }
+        if (pe.key === 'party_crit_rate_up') {
+          const val = Number(pe.params?.value ?? pe.value ?? 0);
+          if (Number.isFinite(val) && val !== 0) {
+            roundPartyCritRateBoostPct += val;
+            const detail = auraDetails.get(sourceName);
+            detail.critRateBoost = val;
+          }
+        }
       }
 
       // 第 1 回合宣告全部光環加持（整理成單一區塊，每位提供者一行；後續回合略過）
@@ -1636,6 +1714,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (detail.critReduction > 0) parts.push(`被暴擊傷害降低 ${detail.critReduction}%`);
           if (detail.agiBoost > 0) parts.push(`AGI +${detail.agiBoost}%（連擊/閃避提升）`);
           if (detail.comboBoost > 0) parts.push(`連擊率 +${detail.comboBoost}%`);
+          if (detail.critRateBoost > 0) parts.push(`爆擊率 +${detail.critRateBoost}%`);
           if (detail.heal > 0) parts.push(`每回合回復 ${detail.heal} HP`);
           if (detail.healToDmg > 0) parts.push(`🩸 聖者：回血化為傷害（本回合 ${detail.healToDmg}）`);
           if (parts.length === 0) continue;
@@ -2067,8 +2146,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
           if (procEffect.key === 'proc_heal') {
             const healAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 5) / 100)));
-            pHp = _healPlayer(healAmt);
-            log.push(`💚 **${playerBattleName}** 發動【${skill.name || cardName}】恢復 **${healAmt}** HP！（剩 ${pHp}）`);
+            _healLogged(healAmt, (actual) => `💚 **${playerBattleName}** 發動【${skill.name || cardName}】恢復 **${actual}** HP！（剩 ${pHp}）`);
             appliedAnyNormalProc = true;
             continue;
           }
@@ -2145,8 +2223,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     // ── 職業技能觸發（35% 機率，每回合限一次，回合開頭讀取 HP 條件後發動）──
     if (!jobSkillUsedThisRound && !playerIsStunned && !playerIsFrozen && outcome === null) {
-      const jobSkills = Array.isArray(options.equipped?.job_eq?.jobSkills)
-        ? options.equipped.job_eq.jobSkills : [];
+      // 帶自訂 trigger 的技能（賭徒骰子系）走自己的觸發條件，不吃 35% 閘門、也不佔隨機池
+      const jobSkills = (Array.isArray(options.equipped?.job_eq?.jobSkills)
+        ? options.equipped.job_eq.jobSkills : []).filter((sk) => !sk?.trigger);
       if (jobSkills.length > 0 && Math.random() < 0.35) {
         const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
         const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
@@ -2175,8 +2254,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               const base = params.mode === 'max_hp_pct' || params.mode === 'pct'
                 ? pStats.maxHp : (params.mode === 'current_hp' ? pHp : pStats.maxHp);
               const heal = Math.max(1, Math.round(base * ((Number(params.value) || 10) / 100)));
-              pHp = _healPlayer(heal);
-              log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${chosen.name}】！回復 **${heal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+              _healLogged(heal, (actual) => `✨ **(${jobProfile.jobName || '職業技能'})** 發動【${chosen.name}】！回復 **${actual}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
               skillApplied = true;
               continue;
             }
@@ -2204,9 +2282,29 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
+    // ── 自訂觸發：round_start_chance（回合開始擲自己的機率，不吃 35% 閘門）──
+    //    目前用於賭徒「千術」：讓敵方本回合攻擊必定大失敗（自傷並跳過該次攻擊）。
+    forceMonsterCritFail = false;
+    if (!playerIsStunned && !playerIsFrozen && outcome === null) {
+      const _customSkills = (Array.isArray(options.equipped?.job_eq?.jobSkills)
+        ? options.equipped.job_eq.jobSkills : []).filter((sk) => sk?.trigger === 'round_start_chance');
+      for (const sk of _customSkills) {
+        if (!sk.key || (jobSkillCooldowns[sk.key] || 0) > 0) continue;
+        const ch = Number.isFinite(Number(sk.chance)) ? Number(sk.chance) : 100;
+        if (Math.random() * 100 >= ch) continue;
+        if (Number(sk.cooldownTurns) > 0) jobSkillCooldowns[sk.key] = Number(sk.cooldownTurns);
+        if ((sk.procEffects || []).some((pe) => pe?.key === 'force_crit_fail')) forceMonsterCritFail = true;
+        log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${sk.name}】！${sk.description || ''}`);
+      }
+    }
+
     // ── 計算玩家主動效果倍率 ──
     let playerAtkMultiplier = 1;
     let playerCritRateBonus = 0;
+    // 戰鬥中的基礎屬性加成（str_up / agi_up / luk_up …）。
+    // 這些效果不走 calcPlayerStats（那是開場算一次），必須在這裡即時換算成衍生值，
+    // 否則「LUK+15」之類的技能只會改面板數字、對 ATK 與爆擊率毫無作用。
+    const playerStatBonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
     let playerCritDamageMultiplier = 1;
     let playerLifestealPct = 0;
     let playerLifestealStrongPct = 0;
@@ -2222,6 +2320,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerInvincible = false;
     let playerBonusVsPoisonedPct = 0;
     let playerBonusVsDebuffedPct = 0;
+    // 對「特定屬性怪物」增傷（bonus_vs_element，params: { element:"fire", value:20 }）
+    // 只在怪物屬性相符時生效；怪物無屬性 → 不生效（現有 69 隻怪都不受影響）。
+    let playerBonusVsElementPct = 0;
     let playerHitBonus = 0;
     // ── 新效果：防禦層 ──
     let playerPhysDrPct = 0;
@@ -2252,8 +2353,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 新效果：HOT（玩家側）──
     let playerHotPct = 0;
     let playerHotFlat = 0;
-    let playerLifeRegenPct = 0;            // 救護系：每 interval 回合回復 value% MaxHP
-    let playerLifeRegenInterval = 0;
+    // 救護系：每 interval 回合回復 value% MaxHP。
+    // 每個來源各自保留自己的 interval——舊寫法「% 全加總、interval 取最小」會讓
+    // 黃金幼龍卡(每3回合10%)搭到火髓魔蟲卡(每回合3%)時被壓成「每回合13%」，玩家要的三回大爆發就消失了。
+    const playerLifeRegens = [];           // [{ pct, interval }]
     // ── 新效果：BUILD 變化對戒（2026-05）──
     let playerHpLowReductionPct = 0;          // 狂血右：HP 低時受傷減免
     let playerHpLowReductionThreshold = 50;
@@ -2294,6 +2397,14 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         } else if (eff.key === 'dark_curse') {
           // 黑暗詛咒（森林盜賊）：玩家攻擊力降低 |value|%
           playerAtkMultiplier *= (1 - Math.abs(effValue) / 100);
+        } else if (eff.key === 'str_up' || eff.key === 'agi_up' || eff.key === 'vit_up'
+                   || eff.key === 'int_up' || eff.key === 'dex_up' || eff.key === 'luk_up') {
+          playerStatBonus[eff.key.slice(0, 3)] += Math.abs(effValue);
+          if (eff.key === 'agi_up') playerDodgeBonus += Math.abs(effValue) * 0.5;
+        } else if (eff.key === 'str_down' || eff.key === 'agi_down' || eff.key === 'vit_down'
+                   || eff.key === 'int_down' || eff.key === 'dex_down' || eff.key === 'luk_down') {
+          playerStatBonus[eff.key.slice(0, 3)] -= Math.abs(effValue);
+          if (eff.key === 'agi_down') playerDodgeBonus -= Math.abs(effValue) * 0.5;
         } else if (eff.key === 'crit_rate_up') {
           // 玩家爆擊率提升（來自玩家卡片技能）
           playerCritRateBonus += effValue;
@@ -2316,8 +2427,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           playerDamageReductionPct += Math.abs(effValue);
         } else if (eff.key === 'dodge_up') {
           playerDodgeBonus += Math.abs(effValue);
-        } else if (eff.key === 'agi_up') {
-          playerDodgeBonus += Math.abs(effValue) * 0.5;
         } else if (eff.key === 'block_chance_up') {
           // 主動技能臨時格擋率提升（例如劍士「舉步若堅」）
           playerBlockBonus += Math.abs(effValue);
@@ -2333,6 +2442,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           playerInvincible = true;
         } else if (eff.key === 'bonus_vs_poisoned') {
           playerBonusVsPoisonedPct += Math.abs(effValue);
+        } else if (eff.key === 'bonus_vs_element') {
+          // 只有 params.element 與這隻怪的屬性相符才累加
+          if (normalizeElement(effParams.element) && normalizeElement(effParams.element) === monsterElement) {
+            playerBonusVsElementPct += Math.abs(effValue);
+          }
         } else if (eff.key === 'bonus_vs_debuffed') {
           playerBonusVsDebuffedPct += Math.abs(effValue);
         } else if (eff.key === 'bonus_vs_boss') {
@@ -2378,13 +2492,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         } else if (eff.key === 'on_crit_heal') {
           playerOnCritHealPct += Math.abs(effValue);
         } else if (eff.key === 'heal_over_time') {
-          if (effParams.mode === 'flat') playerHotFlat += Math.abs(effValue);
-          else playerHotPct += Math.abs(effValue);
+          // 同 DOT 迴圈：target=party 的治療光環只由「支援光環」路徑結算(會依 INT 縮放)，
+          // 這裡再累加一次的話，光環提供者自己會多吃一份未縮放的 base%。
+          if (eff.target !== 'party') {
+            if (effParams.mode === 'flat') playerHotFlat += Math.abs(effValue);
+            else playerHotPct += Math.abs(effValue);
+          }
         } else if (eff.key === 'life_regen') {
-          // value 為 %MaxHP、每 interval 回合回一次（依戒指/卡片說明）
-          playerLifeRegenPct += Math.abs(effValue);
-          const iv = Math.max(1, Number(effParams.interval) || 1);
-          if (playerLifeRegenInterval === 0 || iv < playerLifeRegenInterval) playerLifeRegenInterval = iv;
+          // value 為 %MaxHP、每 interval 回合回一次（依戒指/卡片說明）；各來源獨立，不互相干擾節奏
+          const pct = Math.abs(effValue);
+          if (pct > 0) playerLifeRegens.push({ pct, interval: Math.max(1, Number(effParams.interval) || 1) });
         } else if (eff.key === 'execute_under_hp_pct') {
           playerExecuteUnderHpPct += Math.abs(effValue);
           const thr = Number(effParams.thresholdPct);
@@ -2467,8 +2584,23 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         min: 20,
       });
 
+      // ── 基礎屬性 buff → 本回合衍生值（與 calcPlayerStats 的推導係數保持一致）──
+      //    ATK：武器主屬性增量 × 武器倍率；爆擊率：LUK×0.5；命中：DEX×1；
+      //    武器主屬性追加傷害：主屬性增量 ×1.5。（迴避已在效果鏈直接加進 playerDodgeBonus）
+      const _mainStatKey = pStats.weaponMainStat || "str";
+      const _dMain = playerStatBonus[_mainStatKey] || 0;
+      const _wCfg = getWeaponConfig(pStats.weaponType) || {};
+      const _wMult = pStats.weaponType ? (Number(_wCfg.mult) || 1) : 1;
+      const roundAtkFlatBonus = Math.round(_dMain * _wMult);
+      const roundCritStatBonus = (playerStatBonus.luk || 0) * 0.5;
+      const roundHitStatBonus = playerStatBonus.dex || 0;
+      const weaponMainBonusRound = Math.max(0, weaponMainBonus + Math.round(_dMain * 1.5));
+
       // ── 擲攻擊階級（5 階：大失敗/失敗/成功/大成功/完美）──
-      const atkTierProbs = calcAttackTierProbs(pStats.dex || 0, pStats.luk || 0);
+      const atkTierProbs = calcAttackTierProbs(
+        (pStats.dex || 0) + (playerStatBonus.dex || 0),
+        (pStats.luk || 0) + (playerStatBonus.luk || 0)
+      );
       const atkTier = rollAttackTier(atkTierProbs);
 
       // 大失敗：自殘 30%，跳過本次攻擊
@@ -2485,6 +2617,65 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         log.push(`❌ **失敗**！你手滑揮空，沒打到 ${mName}！`);
         continue;
       }
+
+      // ── 骰子武器：本回合一次擲出全部骰子（雙 6 加倍需先知道所有骰面）──
+      //    每段各對應一顆 d6，骰面決定該段傷害倍率（純運氣、不看屬性值）。
+      const _faceMults = pStats.faceMultipliers;
+      const _segCount = Math.max(1, Number(pStats.attackSegments) || 1);
+      let diceRolls = null;
+      let diceOverride = null;   // 全 1 / 全 6 時，每段改用的固定倍率
+      if (Array.isArray(_faceMults) && _faceMults.length > 0) {
+        const faces = _faceMults.length;
+        diceRolls = Array.from({ length: _segCount }, () => 1 + Math.floor(Math.random() * faces));
+        // ── 自訂觸發：on_dice_one（賭徒「將大局逆轉吧」）──
+        //    骰出 1 就必定發動（不吃 35% 閘門、不擲機率），只重骰那些 1，並套用技能的 procEffects。
+        if (diceRolls.some((f) => f === 1)) {
+          const _reroll = (Array.isArray(options.equipped?.job_eq?.jobSkills)
+            ? options.equipped.job_eq.jobSkills : []).find((sk) => sk?.trigger === 'on_dice_one');
+          if (_reroll && _reroll.key && (jobSkillCooldowns[_reroll.key] || 0) <= 0) {
+            const _beforePips = diceRolls.map((f) => DICE_PIPS[f - 1] || `【${f}】`).join("");
+            for (let _i = 0; _i < diceRolls.length; _i++) {
+              if (diceRolls[_i] === 1) diceRolls[_i] = 1 + Math.floor(Math.random() * faces);
+            }
+            if (Number(_reroll.cooldownTurns) > 0) jobSkillCooldowns[_reroll.key] = Number(_reroll.cooldownTurns);
+            // 重骰後才判定全 1 / 全 6
+            const _afterPips = diceRolls.map((f) => DICE_PIPS[f - 1] || `【${f}】`).join("");
+            log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${_reroll.name}】！${_beforePips} → **${_afterPips}**`);
+            // 套用技能自身的增益（例如 LUK+15）
+            for (const pe of (Array.isArray(_reroll.procEffects) ? _reroll.procEffects : [])) {
+              if (!pe || !pe.key) continue;
+              const entry = makeCardEffectEntry(pe, round - 1, 'job_skill', {}, `job:${_reroll.key}:${pe.key}`);
+              entry.params.sourceName = jobProfile.jobName || '職業技能';
+              if (!options.playerActiveEffects) options.playerActiveEffects = [];
+              options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, entry);
+            }
+          }
+        }
+        // 重骰可能改變全 1 / 全 6，故在此重新判定
+        const allMin2 = diceRolls.every((f) => f === 1);
+        const allMax2 = diceRolls.every((f) => f === faces);
+        diceOverride = null;
+        if (allMax2 && pStats.allMaxMult != null) diceOverride = Number(pStats.allMaxMult);
+        else if (allMin2 && pStats.allMinMult != null) diceOverride = Number(pStats.allMinMult);
+        const allMin = allMin2, allMax = allMax2;
+
+        const _pips = diceRolls.map((f) => DICE_PIPS[f - 1] || `【${f}】`).join("");
+        if (allMax && diceOverride != null) {
+          log.push(`🎲 **擲出 ${_pips}　—　全六！命運之骰全開，本回合傷害 ${Math.round(diceOverride * 100)}%！**`);
+        } else if (allMin && diceOverride != null) {
+          log.push(`🎲 擲出 ${_pips}　—　全一…手氣爛透了，本回合傷害只剩 ${Math.round(diceOverride * 100)}%。`);
+        } else {
+          log.push(`🎲 擲出 ${_pips}`);
+        }
+      }
+      // 取第 n 段（0-indexed）的骰面倍率
+      const diceMultFor = (idx) => {
+        if (!diceRolls || !Array.isArray(_faceMults)) return 1;
+        if (diceOverride != null) return diceOverride;
+        const face = diceRolls[idx];
+        if (!face) return 1;
+        return Number(_faceMults[face - 1]) || 1;
+      };
 
       // ── on_attack 觸發：武器附加狀態類職業 proc（揮擊即判定，閃避也算；揮空 critFail/fail 已跳過）──
       //    這些 proc 不依賴命中、也不依賴傷害數值（毒/暈/燒/冰/降命中/降攻防/緩速/護盾/治療/淨化/驅散/增益/斬殺）。
@@ -2575,8 +2766,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             }
           } else if (pe.key === 'proc_heal') {
             const healAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 5) / 100)));
-            pHp = _healPlayer(healAmt);
-            log.push(`💚 戰鬥回復！恢復 **${healAmt}** HP！（你剩 ${pHp}）`);
+            _healLogged(healAmt, (actual) => `💚 戰鬥回復！恢復 **${actual}** HP！（你剩 ${pHp}）`);
           } else if (pe.key === 'proc_shield') {
             const shieldAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 10) / 100)));
             options.playerActiveEffects = options.playerActiveEffects || [];
@@ -2704,7 +2894,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         const attackBase = Math.max(
           1,
-          Math.round(pStats.atk * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * playerAttackLevelMult)
+          Math.round((pStats.atk + roundAtkFlatBonus) * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * playerAttackLevelMult)
         );
         // 新公式 B：flatDef 在 ATK 階段壓制（傳 pStats.atk 作為 rawAtk）
         let dmg = rollDmg(applyDefense(attackBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk));
@@ -2714,6 +2904,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (atkTier !== 'perfect' && atkTierMult !== 1.0) {
           dmg = Math.max(1, Math.round(dmg * atkTierMult));
         }
+
 
         // ── 擲防禦階級（4 階）──
         const defTierProbs = calcDefenseTierProbs(adjustedMCalc.dex || 0, adjustedMCalc.luk || 0);
@@ -2738,7 +2929,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const nonCritDamageBase = dmg;
 
         // 爆擊判定：完美攻擊階級 = 必爆擊；否則照原本爆擊率
-        const effectiveCrit = Math.min(100, (pStats.crit || 0) + playerCritRateBonus + extraHighHpCrit);
+        const effectiveCrit = Math.min(100, (pStats.crit || 0) + playerCritRateBonus + extraHighHpCrit + roundPartyCritRateBoostPct + roundCritStatBonus);
         isCrit = (atkTier === 'perfect') || (Math.random() * 100 < effectiveCrit);
 
         let finalDamage = dmg;
@@ -2780,7 +2971,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         { const _ezm = equipZoneFinalDmgMult * roundScaleMult(round); if (_ezm !== 1 && finalDamage > 0) finalDamage = Math.max(1, Math.round(finalDamage * _ezm)); }
 
         // 武器主屬性追加傷害：終傷全部算完後，額外加上「武器主屬性 × 1.5」固定點數（不被防禦扣，補強物理）
-        if (finalDamage > 0) finalDamage += weaponMainBonus;
+        if (finalDamage > 0) finalDamage += weaponMainBonusRound;
+
+        // ── 骰子武器：主擊吃第 1 顆骰的骰面倍率 ──
+        //    刻意放在最尾端（含爆擊與武器主屬性固定加成之後），讓骰面確實縮放「整擊傷害」。
+        //    若放在前面，爆擊路徑會從 attackBase 重算而丟失骰面，固定加成也不會被縮放，
+        //    結果是骰面幾乎影響不到最終數字（實測 1+1 只掉到 84%、6+6 只到 144%）。
+        {
+          const _mainDiceMult = diceMultFor(0);
+          if (_mainDiceMult !== 1 && finalDamage > 0) finalDamage = Math.max(1, Math.round(finalDamage * _mainDiceMult));
+        }
 
         // 每擊傷害上限（金錢袋怪等「必定格擋、每擊只扣N」）：所有加成/爆擊算完後硬性夾住上限
         if (adjustedMCalc.incomingDamageCap > 0 && finalDamage > adjustedMCalc.incomingDamageCap) {
@@ -2814,7 +3014,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (mHp <= 0 && playerOnKillHealPct > 0 && pHp > 0 && pStats.maxHp > 0) {
           const healAmt = Math.max(1, Math.round(pStats.maxHp * (playerOnKillHealPct / 100)));
           const before = pHp;
-          pHp = _healPlayer(healAmt);
+          pHp = _healPlayer(healAmt, { postMortem: true });   // 怪已死：聖人不轉傷害(不灌傷害榜)
           const actual = pHp - before;
           if (actual > 0) log.push(`💀 **擊殺回血**！回復 **${actual}** HP！（你剩 ${pHp} HP）`);
           // 避免重複觸發
@@ -2855,6 +3055,49 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const _pai = _sanyuan[_ts % _sanyuan.length];
             const _tsCritNote = tsCrit ? `✨**${rand(critPhrases)}**！` : "";
             log.push(`🀄 ${_tsCritNote}**三元・${_pai}**！再造成 **${tsDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          }
+          if (mHp <= 0) { outcome = "win"; break; }
+        }
+
+        // ── 武器固定多段攻擊（骰子＝2 段）──
+        //    與三元牌的差異：倍率已在 WEAPON_CONFIG 對半，所以這裡「不再除以段數」，
+        //    而且**不計入連擊**（不加 comboCount、不吃連擊增傷、不受連擊率影響）。
+        //    每段各自擲攻擊階級與爆擊，並各自吃一次武器主屬性追加傷害。
+        const _weaponSegments = Math.max(1, Number(pStats.attackSegments) || 1);
+        if (_weaponSegments >= 2 && mHp > 0) {
+          for (let _seg = 1; _seg < _weaponSegments && mHp > 0; _seg++) {
+            // 命中/揮空/迴避在攻擊一開始就判定完畢（見上方 hitChance 與攻擊階級），
+            // 所以各段共用主擊的攻擊階級——不會出現「全六卻有一擲落空」這種矛盾。
+            // 從 attackBase 重算（不沿用主擊的 nonCritDamageBase，否則會重複套用階級/防禦擲骰）
+            let segDmg = rollDmg(applyDefense(attackBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk));
+            const segTier = atkTier;
+            const segTierMult = ATTACK_TIER_MULT[segTier] ?? 1.0;
+            if (segTier !== 'perfect' && segTierMult !== 1.0) segDmg = Math.max(1, Math.round(segDmg * segTierMult));
+            // 該段獨立擲防禦階級
+            const segDefTier = rollDefenseTier(calcDefenseTierProbs(adjustedMCalc.dex || 0, adjustedMCalc.luk || 0));
+            const segDefMult = DEFENSE_TIER_MULT[segDefTier] ?? 1.0;
+            if (segDefMult !== 1.0) segDmg = Math.max(1, Math.round(segDmg * segDefMult));
+            // 該段獨立擲爆擊
+            const segCrit = (segTier === 'perfect') || (Math.random() * 100 < effectiveCrit);
+            if (segCrit) segDmg = Math.max(1, Math.round(segDmg * 2 * playerCritDamageMultiplier * tierCritDamageMultiplier));
+            // 減傷 → 地圖特攻/逐回合縮放 → 屬性相剋/世界王部位弱點 → 武器主屬性追加
+            if (adjustedMCalc.damageReductionPct > 0) {
+              segDmg = Math.max(1, Math.round(segDmg * (1 - Math.min(95, adjustedMCalc.damageReductionPct) / 100)));
+            }
+            const _segEzm = equipZoneFinalDmgMult * roundScaleMult(round);
+            if (_segEzm !== 1) segDmg = Math.max(1, Math.round(segDmg * _segEzm));
+            segDmg = applyBossVuln(segDmg);
+            if (weaponMainBonusRound > 0) segDmg += weaponMainBonusRound;
+            // 該段對應的骰面倍率（同主擊，放在最尾端縮放整擊）
+            const _segDiceMult = diceMultFor(_seg);
+            if (_segDiceMult !== 1) segDmg = Math.max(1, Math.round(segDmg * _segDiceMult));
+            if (_noPlayerAtk) segDmg = 0;
+            mHp -= segDmg;
+            totalDamage += segDmg;
+            const segCritNote = segCrit ? `✨**${rand(critPhrases)}**！` : "";
+            const segTierNote = segTier === 'great' ? "⚡**大成功**！" : segTier === 'perfect' ? "🌟**完美**！" : "";
+            const segPip = diceRolls ? `${DICE_PIPS[diceRolls[_seg] - 1] || ""}` : "";
+            log.push(`🎲 ${segPip}${segTierNote}${segCritNote}**第 ${_seg + 1} 擲**！再造成 **${segDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
           }
           if (mHp <= 0) { outcome = "win"; break; }
         }
@@ -2998,8 +3241,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
             } else if (pe.key === 'proc_heal') {
               const healAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 5) / 100)));
-              pHp = _healPlayer(healAmt);
-              log.push(`💚 戰鬥回復！恢復 **${healAmt}** HP！（你剩 ${pHp}）`);
+              _healLogged(healAmt, (actual) => `💚 戰鬥回復！恢復 **${actual}** HP！（你剩 ${pHp}）`);
 
             } else if (pe.key === 'proc_shield') {
               const shieldAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 10) / 100)));
@@ -3049,13 +3291,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // ── on_hit_heal / on_crit_heal（戰鬥內回血）──
         if (mHp >= 0 && playerOnHitHealPct > 0) {
           const healAmt = Math.max(1, Math.round(dmg * (playerOnHitHealPct / 100)));
-          pHp = _healPlayer(healAmt);
-          log.push(`💚 命中回血！恢復 **${healAmt}** HP！`);
+          _healLogged(healAmt, (actual) => `💚 命中回血！恢復 **${actual}** HP！`);
         }
         if (isCrit && playerOnCritHealPct > 0) {
           const healAmt = Math.max(1, Math.round(dmg * (playerOnCritHealPct / 100)));
-          pHp = _healPlayer(healAmt);
-          log.push(`💚✨ 暴擊回血！恢復 **${healAmt}** HP！`);
+          _healLogged(healAmt, (actual) => `💚✨ 暴擊回血！恢復 **${actual}** HP！`);
         }
         // ── 強制斬殺（execute_under_hp_pct）──
         if (mHp > 0 && playerExecuteUnderHpPct > 0) {
@@ -3255,7 +3495,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
       // ── 怪物擲攻擊階級 ──
       const mAtkTierProbs = calcAttackTierProbs(adjustedMCalc.dex || 0, adjustedMCalc.luk || 0);
-      const mAtkTier = rollAttackTier(mAtkTierProbs);
+      const mAtkTier = forceMonsterCritFail ? 'critFail' : rollAttackTier(mAtkTierProbs);
 
       // 🐺 狼王・連牙亂舞：前 2 段必定命中且必連(無視玩家迴避與怪物自身失誤)；第 3 段起「任何未命中」(玩家迴避 or 怪物自己揮空/大失敗)都打斷剩餘連段
       const hellfangGuaranteedSeg = _hellfangCombo && ma < 2;
@@ -3480,6 +3720,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (Math.random() * 100 >= dChance) continue;
             const dRes = applyCardProcEffects({
               procEffects: Array.isArray(dSkill.procEffects) ? dSkill.procEffects : [],
+              // on_dodge 卡沒有「一般效果」的另一條分支，故不強制血量門檻，
+              // 否則像 crit_rate_up 這種無條件自我增益會被丟棄＝整張卡失效。
+              requireHpGate: false,
               ownerHpPct: pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100,
               targetHpPct: mHpInit > 0 ? (mHp / mHpInit) * 100 : 100,
               round, sourceType: 'player_card',
@@ -3635,18 +3878,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // 副手追擊機制已移除（2026-05-26）
 
     // ── 玩家 HOT/life_regen 結算（每回合結束）──
-    if (outcome === null && pHp > 0 && pHp < pStats.maxHp) {
+    // 滿血時本來就跳過(回不進去、也不用洗「恢復 0 HP」)；但聖人(回血化刃)會把治療轉成傷害，
+    // 滿血反而正是要結算的時候——不放行的話滿血聖人等於整組 life_regen/HOT 裝備全廢(玩家實測回報)。
+    if (outcome === null && pHp > 0 && (pHp < pStats.maxHp || _healToDamage > 0)) {
       let totalHot = 0;
       if (playerHotPct > 0) totalHot += Math.round(pStats.maxHp * (playerHotPct / 100));
       if (playerHotFlat > 0) totalHot += Math.round(playerHotFlat);
-      if (playerLifeRegenPct > 0 && playerLifeRegenInterval > 0 && (round % playerLifeRegenInterval === 0)) {
-        totalHot += Math.round((pStats.maxHp || 0) * (playerLifeRegenPct / 100));
+      // 各來源各自看自己的 interval：黃金幼龍卡只在第 3/6/9… 回合爆發，火髓魔蟲卡每回合都回
+      for (const lr of playerLifeRegens) {
+        if (round % lr.interval === 0) totalHot += Math.round((pStats.maxHp || 0) * (lr.pct / 100));
       }
       if (totalHot > 0) {
-        const before = pHp;
-        pHp = _healPlayer(totalHot);
-        const actual = pHp - before;
-        if (actual > 0) log.push(`💚 持續回復！回復 **${actual}** HP！（你剩 ${pHp} HP）`);
+        _healLogged(totalHot, (actual) => `💚 持續回復！回復 **${actual}** HP！（你剩 ${pHp} HP）`);
       }
     }
 
@@ -3677,7 +3920,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   if (outcome === "win" && finalPostBattleHealPct > 0 && pHp > 0 && pStats.maxHp > 0) {
     const healAmt = Math.max(1, Math.round(pStats.maxHp * (finalPostBattleHealPct / 100)));
     const before = pHp;
-    pHp = _healPlayer(healAmt);
+    pHp = _healPlayer(healAmt, { postMortem: true });   // 戰鬥已結束：聖人不轉傷害(不灌傷害榜)
     const actual = pHp - before;
     if (actual > 0) roundLogs.push(`💖 **戰後回血**！回復 **${actual}** HP！（你剩 ${pHp} HP）`);
   }

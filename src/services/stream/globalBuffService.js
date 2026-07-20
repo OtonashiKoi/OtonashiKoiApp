@@ -278,6 +278,20 @@ function getViewerSession() {
 }
 
 /**
+ * 清掉觀看熱度 session buff。
+ * 開機時呼叫：觀看 buff 只該在直播當下存在，重啟後沒有直播上下文，殘留的 session 會卡在最高階
+ * （不降階 + 每輪續命 → 永不過期、且擋掉之後的「開啟加成」廣播）。開機清掉，讓 evaluate() 依當下人數重新觸發。
+ */
+async function clearViewerSession() {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return { cleared: 0 };
+  const r = await db.collection(COLLECTION).deleteMany({ source: VIEWER_SESSION_SOURCE });
+  await refresh();
+  if (r.deletedCount) console.log(`[GlobalBuff] 開機清除殘留觀看熱度 session ${r.deletedCount} 筆`);
+  return { cleared: r.deletedCount || 0 };
+}
+
+/**
  * 覆寫式設定觀看熱度 session buff（取代舊的，升級/重新計時用）。
  * @param {{ dropPct:number, goldPct:number, expPct:number, endsAtMs:number, tierMin:number, label?:string }} p
  */
@@ -320,6 +334,7 @@ module.exports = {
   getActiveModifiers,
   applyBuff,
   getViewerSession,
+  clearViewerSession,
   setViewerSessionBuff,
   setShortTermCapPct,
   clearBySource,

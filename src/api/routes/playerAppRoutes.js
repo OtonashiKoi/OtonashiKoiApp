@@ -527,6 +527,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monsterName: activeMonster?.name || "未設定",
         monsterImageUrl: activeMonster?.imageUrl || null,
         monsterLevel: activeMonster?.level || 0,
+        monsterElement: activeMonster?.element || null, // 屬性徽章用；無屬性怪回 null，前端不顯示
         expReward: activeMonster?.expReward || 0,
         goldReward: activeMonster?.goldReward || 0,
         drops: (activeMonster?.drops || []).map((d) => d.itemName),
@@ -2460,6 +2461,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           monsterName: activeMonster?.name || "Unknown",
           monsterImageUrl: activeMonster?.imageUrl || null,
           monsterLevel: activeMonster?.level || 0,
+          monsterElement: activeMonster?.element || null, // 屬性徽章用；無屬性怪回 null，前端不顯示
           expReward: activeMonster?.expReward || 0,
           goldReward: activeMonster?.goldReward || 0,
           drops: (activeMonster?.drops || []).map(d => d.itemName),
@@ -2990,7 +2992,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           bestiaryBonusPct: _bestiaryBonusPct, // 圖鑑傷害加成（同 DC）
           isWorldBoss, // 世界王：玩家 DOT 也吃王 def%（同 DC）
           zone: zoneKey, // 裝備的區域條件特效（同 DC）
-          bossVulnMult: webBossVulnMult // 牙狼弱點倍率(每擊)；其餘世界王＝1 無影響
+          bossVulnMult: webBossVulnMult, // 牙狼弱點倍率(每擊)；其餘世界王＝1 無影響
+          monsterElement: monster?.element || null // 屬性相剋；怪物無 element 則不參與（現有怪皆是）
         });
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
       // 與 DC 一致：戰力同步已停用（monsterZoneHandlers.js 也是寫死 false），
@@ -3239,6 +3242,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           : (_wt === "dagger") ? "battle_with_dagger"
           : (_wt === "staff_1h" || _wt === "staff_2h") ? "battle_with_staff"
           : (_wt === "bow") ? "battle_with_bow"
+          : (_wt === "dice") ? "battle_with_dice"
           : null;
         if (_weaponMetric) await questService.recordProgress(discordId, _weaponMetric, 1);
         // 隱藏賽季任務「共鳴・輔助者」：用輔助職業(徽章)出戰記一場（與 DC 端 recordQuestBattleProgress 對齊；網頁端原本漏記）
@@ -3893,6 +3897,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         playerName: displayName, playerLevel: (await serviceContext.progressRepository.findByPlayerId(discordId))?.level || 1,
         equipped: s.equipped, inventory: s.inventory, monsterIsBoss: Boolean(monster.isBoss),
         startPlayerHp: s.playerHp,
+        monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
       });
       s.playerHp = Math.max(0, r.finalPlayerHp);
       const killed = (r.finalMonsterHp ?? 0) <= 0 && r.outcome === "win";

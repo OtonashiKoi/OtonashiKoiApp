@@ -467,6 +467,7 @@ class PetService {
     // 選出要餵的裝備（只接受 itemType==="equipment"）
     let feedTargets = [];
     let protectedCount = 0; // 被保護（強化/特效/卡片等）而未餵的數量
+    let lockedCount = 0;    // 鎖定保護數量（回傳給 UI 明確告知，避免玩家誤會）
     if (opts.inventoryUuid) {
       const it = progress.inventory.find((x) => x && x.uuid === opts.inventoryUuid);
       if (!it) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該道具", 404);
@@ -482,9 +483,18 @@ class PetService {
       }
       feedTargets = [it];
     } else if (Array.isArray(opts.inventoryUuids) && opts.inventoryUuids.length) {
-      // 勾選餵食：只餵清單中、且可餵的裝備（排除卡片/徽章/階級太高）
+      // 勾選餵食：鎖定裝備採 fail-closed；只要清單含鎖定件就整批拒絕。
+      // 不默默略過，以免玩家以為「鎖定裝備也被寵物吃掉」或誤判實際消耗清單。
       const set = new Set(opts.inventoryUuids);
       const picked = progress.inventory.filter((x) => x && set.has(x.uuid));
+      const lockedItems = picked.filter((it) => it.locked);
+      if (lockedItems.length) {
+        throw new AppError(
+          ERROR_CODES.INVALID_ARGUMENT,
+          `所選道具包含 ${lockedItems.length} 件鎖定裝備，已取消餵食；請先取消勾選或解鎖後再操作`,
+          400
+        );
+      }
       feedTargets = picked.filter((it) => isSingleFeedable(it) && canFeed(it.tier, pet));
       protectedCount = picked.length - feedTargets.length;
       if (feedTargets.length === 0) {
@@ -496,6 +506,7 @@ class PetService {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `${tier} 階裝備太高級，餵不進對應 ${matchTier} 階的寵物`, 400);
       }
       const tierGear = progress.inventory.filter((x) => x && x.itemType === "equipment" && String(x.tier).toUpperCase() === tier);
+      lockedCount = tierGear.filter((it) => it.locked).length;
       // includeEnhanced=true：連有 +值的強化裝也餵（仍排除卡片/徽章/稱號）；否則只餵素裝
       feedTargets = opts.includeEnhanced
         ? tierGear.filter(isSingleFeedable)
@@ -586,7 +597,7 @@ class PetService {
     if (opts.preview) {
       return {
         preview: true,
-        willFeed: feedTargets.length, fed, protectedCount, totalSatiety, totalGrowth, totalHatch,
+        willFeed: feedTargets.length, fed, protectedCount, lockedCount, totalSatiety, totalGrowth, totalHatch,
         hatched, hatchedSpecies, leveledTo, tierCapReached, crossedTier, gatherCleared, endTier,
         predictedLevel: pet.level || 1,
         predictedSatiety: Math.round(pet.satiety || 0),
@@ -601,7 +612,7 @@ class PetService {
     await this.progressRepository.save(progress);
 
     return {
-      fed, protectedCount, totalSatiety, totalGrowth, totalHatch, hatched, hatchedSpecies, leveledTo,
+      fed, protectedCount, lockedCount, totalSatiety, totalGrowth, totalHatch, hatched, hatchedSpecies, leveledTo,
       tierCapReached, crossedTier, gatherCleared, endTier,
       predictedLevel: pet.level || 1, predictedSatiety: Math.round(pet.satiety || 0), satietyMax: SATIETY_MAX,
       pet: this._toView(pet, this._dexGatherParams(progress)),

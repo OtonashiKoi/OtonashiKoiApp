@@ -991,6 +991,7 @@ function resolveWeaponQuestMetric(weaponType = "") {
   if (wt === "dagger") return "battle_with_dagger";
   if (wt === "staff_1h" || wt === "staff_2h") return "battle_with_staff";
   if (wt === "bow") return "battle_with_bow";
+  if (wt === "dice") return "battle_with_dice";
   return null;
 }
 
@@ -2982,7 +2983,8 @@ async function handleEnterBattle(interaction) {
           bestiaryBonusPct: _bestiaryBonusPct,
           isWorldBoss: isWorldBossZone(zoneKey) && Boolean(battleMonster?.isBoss), // 世界王:玩家 DOT 也吃王 def%
           bossVulnMult: session.hellfangMult, // 牙狼部位弱點倍率:玩家每擊終傷×此值(其他戰鬥=1不影響)
-          zone: zoneKey // 讓裝備的 zone 條件特效生效(例：S 龍系武器在龍族之領/龍王巢穴 +20%)
+          zone: zoneKey, // 讓裝備的 zone 條件特效生效(例：S 龍系武器在龍族之領/龍王巢穴 +20%)
+          monsterElement: battleMonster?.element || null // 屬性相剋；怪物無 element 則不參與(現有怪皆是)
         });
       const { roundLogs, finalPlayerHp } = combatResult;
       let combatStats = combatResult.combatStats;

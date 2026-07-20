@@ -138,6 +138,23 @@ function createApiServer(discordClient) {
   app.use(createEcpayRoutes(serviceContext));
   app.use(createMerchRoutes(serviceContext));
 
+  // UI 改版測試入口：沿用正式 game.html 的所有玩家流程與 API，
+  // 僅在 /test 注入獨立視覺樣式，不影響既有 /game.html 或 SPA 正式版。
+  const fs = require("fs");
+  const testGamePath = path.resolve(__dirname, "../web/public/game.html");
+  app.get("/test", (_req, res, next) => {
+    try {
+      const gameHtml = fs.readFileSync(testGamePath, "utf8");
+      const themedHtml = gameHtml
+        .replace("</head>", '  <link rel="stylesheet" href="/static/test-ui.css">\\n</head>')
+        .replace("<body>", '<body class="test-mode">');
+      res.setHeader("Cache-Control", "no-store");
+      res.type("html").send(themedHtml);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // === Web 前端 SPA 靜態服務 ===
   // equipmentGAME-app 經過 `npm run deploy` 後產出在 src/web/public/app/
   // 提供：
@@ -145,7 +162,6 @@ function createApiServer(discordClient) {
   //   /assets/* / /index.html / 等 → web app build 產物
   //   /(其他任何 SPA 路徑) → 回 index.html（HTML5 history 路由）
   const webAppDir = path.resolve(__dirname, "../web/public/app");
-  const fs = require("fs");
   if (fs.existsSync(webAppDir)) {
     // 靜態檔：assets / favicon 等
     app.use(express.static(webAppDir, {

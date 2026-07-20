@@ -9,9 +9,9 @@ const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { notifyPlayer } = require("../realtime/playerNotifyService");
 const uniqueGrant = require("../uniqueGrant/uniqueGrantService");
 
-// 傳說錨點「命運之輪」— 任何中獎都有極低機率抽中，唯一（一生一次）
+// 傳說錨點「命運之輪」— 每次下注結算都有機率抽中（不論輸贏），每人一生一次
 const DICE_JACKPOT_ITEM_ID = "s-legend-dice";
-const DICE_JACKPOT_CHANCE = 0.001; // 0.1% / 每次「中獎的輪」，抽中即唯一
+const DICE_JACKPOT_CHANCE = 0.01; // 1% / 每位下注者每輪（不限中獎），抽中即該玩家唯一
 
 // 對齊「整 60 秒」邊界，PM2 重啟也能對齊節奏
 function alignedNextStartAt(now = Date.now()) {
@@ -257,8 +257,8 @@ class CasinoService {
         });
         if (grantedName) grantedItems.push({ ...d, itemName: grantedName });
       }
-      // 命運之輪唯一大獎：有中獎就擲極低機率
-      if (ps.hits.length > 0) {
+      // 命運之輪唯一大獎：每位有下注者（不論該輪輸贏）都擲 1% 機率
+      if (ps.totalBet > 0) {
         const jackpot = await this._tryGrantDiceJackpot(ps.discordId).catch(() => null);
         if (jackpot) {
           grantedItems.push(jackpot);
@@ -404,7 +404,7 @@ class CasinoService {
   }
 
   /**
-   * 命運之輪唯一大獎：任何中獎都有極低機率抽中；抽中且從未擁有過 → 發放（一生一次）。
+   * 命運之輪唯一大獎：每位下注者（不論輸贏）都有 1% 機率抽中；抽中且該玩家從未擁有過 → 發放（每人一生一次）。
    * @returns {Promise<{itemName:string,label:string,jackpot:true}|null>}
    */
   async _tryGrantDiceJackpot(discordId) {

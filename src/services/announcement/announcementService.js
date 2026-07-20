@@ -1,15 +1,22 @@
 "use strict";
 /**
  * 公告系統:首頁公告版位 + 後台發布。
- * - announcements：公告本體 { id, title, body, imageUrl, enabled, pinned, createdAt, updatedAt }
+ * - announcements：公告本體 { id, title, body, imageUrl, category, enabled, pinned, createdAt, updatedAt }
+ *   category："general"(一般公告，預設) | "update"(更新公告，記錄 FIX/熱更修正，預設不啟用)
  * - announcementReads：每位玩家已讀的公告 id { _id: discordId, readIds: [] }
  */
 
 const crypto = require("crypto");
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 
+const CATEGORIES = ["general", "update"];
+
 async function _col() { return (await getMongoDb()).collection("announcements"); }
 async function _reads() { return (await getMongoDb()).collection("announcementReads"); }
+
+function _cleanCategory(c) {
+  return CATEGORIES.includes(c) ? c : "general";
+}
 
 function _clean(a) {
   if (!a) return null;
@@ -18,6 +25,7 @@ function _clean(a) {
     title: a.title || "",
     body: a.body || "",
     imageUrl: a.imageUrl || null,
+    category: _cleanCategory(a.category),
     enabled: a.enabled !== false,
     pinned: !!a.pinned,
     createdAt: a.createdAt || null,
@@ -54,16 +62,22 @@ async function listAll() {
   return _sort((await col.find({}).toArray()).map(_clean));
 }
 
-/** 後台:新增公告 */
-async function create({ title, body, imageUrl = null, enabled = true, pinned = false }) {
+/** 後台:新增公告
+ * category="update"(更新公告) 時，若沒有明確傳 enabled=true，預設不啟用，
+ * 由後台自行挑選哪些更新公告要顯示給玩家。
+ */
+async function create({ title, body, imageUrl = null, category = "general", enabled, pinned = false }) {
   if (!String(title || "").trim()) throw new Error("公告標題不可空白");
+  const cat = _cleanCategory(category);
   const now = new Date().toISOString();
+  const resolvedEnabled = enabled === undefined ? cat !== "update" : enabled !== false;
   const doc = {
     id: crypto.randomUUID(),
     title: String(title).trim(),
     body: String(body || ""),
     imageUrl: imageUrl ? String(imageUrl).trim() : null,
-    enabled: enabled !== false,
+    category: cat,
+    enabled: resolvedEnabled,
     pinned: !!pinned,
     createdAt: now,
     updatedAt: now
@@ -78,6 +92,7 @@ async function update(id, fields = {}) {
   if (fields.title !== undefined) set.title = String(fields.title).trim();
   if (fields.body !== undefined) set.body = String(fields.body || "");
   if (fields.imageUrl !== undefined) set.imageUrl = fields.imageUrl ? String(fields.imageUrl).trim() : null;
+  if (fields.category !== undefined) set.category = _cleanCategory(fields.category);
   if (fields.enabled !== undefined) set.enabled = fields.enabled !== false;
   if (fields.pinned !== undefined) set.pinned = !!fields.pinned;
   await (await _col()).updateOne({ id: String(id) }, { $set: set });

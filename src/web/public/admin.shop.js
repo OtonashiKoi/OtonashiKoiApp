@@ -30,7 +30,7 @@
 
   // ── Item Picker Modal（與怪物掉落物相同風格）──
   const PICKER_TABS=[{key:"all",label:"全部"},{key:"weapon",label:"⚔️ 武器"},{key:"defense",label:"🛡️ 防具/盾"},{key:"head",label:"🪖 頭部"},{key:"accessory",label:"💍 飾品"},{key:"consumable",label:"🧪 消耗品"},{key:"collectible",label:"📦 收藏品"},{key:"job_badge",label:"📖 職業徽章"}];
-  const WEAPON_TYPE_LABELS={sword_1h:'劍(單)',sword_2h:'劍(雙)',mace_1h:'鎚(單)',mace_2h:'鎚(雙)',axe_1h:'斧(單)',axe_2h:'斧(雙)',dagger:'匕首',staff_1h:'杖(單)',staff_2h:'杖(雙)',bow:'弓'};
+  const WEAPON_TYPE_LABELS={sword_1h:'劍(單)',sword_2h:'劍(雙)',mace_1h:'鎚(單)',mace_2h:'鎚(雙)',axe_1h:'斧(單)',axe_2h:'斧(雙)',dagger:'匕首',staff_1h:'杖(單)',staff_2h:'杖(雙)',bow:'弓',dice:'骰子'};
   const TIER_COLORS={D:'#8899aa',C:'#44cc88',B:'#6699ff',A:'#ffcc44'};
   function getItemTab(it){
     if(it.itemType==='consumable')return 'consumable';

@@ -9,6 +9,7 @@ const QUEST_TYPES = {
   battle_with_dagger:{ label: "使用匕首出戰次數", unit: "次" },
   battle_with_staff: { label: "使用法杖出戰次數", unit: "次" },
   battle_with_bow:   { label: "使用弓出戰次數",   unit: "次" },
+  battle_with_dice:  { label: "使用骰子出戰次數", unit: "次" },
   battle_with_support_job: { label: "用輔助職業出戰次數", unit: "次" },
   battle_win:        { label: "戰鬥勝利次數",     unit: "次" },
   damage_total:      { label: "累計造成傷害",     unit: "點" },
@@ -747,7 +748,7 @@ class WeeklyQuestService {
       { cadence: "onboarding", title: "成功連擊20次", description: "同樣建議用匕首，配合高 AGI 與持續輸出，較容易把連擊堆高。", type: "combo_count", target: 20, rewardGold: 500, rewardExp: 220, rewardDiamond: 0, rewardItemId: "44bda7cc-5b9e-4ce1-95cc-c4a7a413d8cf", sortOrder: 150, groupKey: "seed_v1" },
       { cadence: "onboarding", title: "完成全部新手任務", description: "完成前面所有新手任務後，再回來領取最終獎勵。", type: "onboarding_complete_count", target: 1, rewardGold: 0, rewardExp: 0, rewardDiamond: 0, rewardItemId: "87b281be-b175-40a0-8044-0accc88a0ee0", sortOrder: 160, groupKey: "seed_v1" },
 
-      // job (10)
+      // job (11)
       { cadence: "job", title: "劍士試煉", description: "出現條件：Lv.10，基礎 STR + DEX > 10。進度武器：單手劍或雙手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與劍士徽章。", type: "battle_with_sword", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_swordsman_v1", sortOrder: 10, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["sword_1h", "sword_2h"], unlockAttributes: ["str", "dex"], unlockAttributeMin: 10, hideIfRewardOwned: true },
       { cadence: "job", title: "戰士試煉", description: "出現條件：Lv.10，基礎 STR + VIT > 10。進度武器：單手斧或雙手斧；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與戰士徽章。", type: "battle_with_axe", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_warrior_v1", sortOrder: 20, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["axe_1h", "axe_2h"], unlockAttributes: ["str", "vit"], unlockAttributeMin: 10, hideIfRewardOwned: true },
       { cadence: "job", title: "矮人戰士試煉", description: "出現條件：Lv.10，基礎 VIT + STR > 10。進度武器：單手槌或雙手槌；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與矮人戰士徽章。", type: "battle_with_mace", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_dwarf_warrior_v1", sortOrder: 30, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["mace_1h", "mace_2h"], unlockAttributes: ["vit", "str"], unlockAttributeMin: 10, hideIfRewardOwned: true },
@@ -758,6 +759,7 @@ class WeeklyQuestService {
       { cadence: "job", title: "軍師試煉", description: "出現條件：Lv.10，基礎 AGI + INT + DEX > 10。進度武器：單手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與軍師徽章。", type: "battle_with_sword", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_tactician_v1", sortOrder: 80, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["sword_1h"], unlockAttributes: ["agi", "int", "dex"], unlockAttributeMin: 10, hideIfRewardOwned: true },
       { cadence: "job", title: "詩人試煉", description: "出現條件：Lv.10，基礎 DEX + AGI + LUK > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與詩人徽章。", type: "battle_with_bow", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_bard_v1", sortOrder: 90, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["bow"], unlockAttributes: ["dex", "agi", "luk"], unlockAttributeMin: 10, hideIfRewardOwned: true },
       { cadence: "job", title: "結界師試煉", description: "出現條件：Lv.10，基礎 INT + VIT + DEX > 10。進度武器：單手法杖或雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與結界師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_barrier_mage_v1", sortOrder: 100, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_1h", "staff_2h"], unlockAttributes: ["int", "vit", "dex"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      { cadence: "job", title: "賭徒試煉", description: "出現條件：Lv.10，基礎 LUK + AGI > 10。進度武器：骰子；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與賭徒徽章。", type: "battle_with_dice", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_gambler_v1", sortOrder: 110, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["dice"], unlockAttributes: ["luk", "agi"], unlockAttributeMin: 10, hideIfRewardOwned: true },
 
       // daily (4)
       { cadence: "daily", title: "每日出戰 5 次", type: "battle_count", target: 5, rewardGold: 250, rewardExp: 120, rewardDiamond: 0, sortOrder: 10, groupKey: "seed_v1" },

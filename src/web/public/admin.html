@@ -344,7 +344,12 @@
             <div class="card" style="margin-top:16px;">
               <h2 style="margin:0 0 4px;font-size:1.05rem;">📣 首頁公告管理</h2>
               <p class="hint" style="margin:0 0 12px;">發布到玩家首頁的公告版位（有標題＋已讀＋點開彈窗，可附圖片）。</p>
-              <label style="display:block;margin-bottom:4px;font-size:13px;">標題</label>
+              <label style="display:block;margin-bottom:4px;font-size:13px;">公告類型</label>
+              <select id="ann-category">
+                <option value="general">一般公告</option>
+                <option value="update">更新公告（FIX / 熱更修正紀錄，預設不啟用）</option>
+              </select>
+              <label style="display:block;margin:10px 0 4px;font-size:13px;">標題</label>
               <input id="ann-title" type="text" placeholder="例：V 朋朋與實況主角色募集" />
               <label style="display:block;margin:10px 0 4px;font-size:13px;">內文（支援換行；可插入 Discord 自訂表情）</label>
               <textarea id="ann-body" rows="6" placeholder="公告內容…"></textarea>
@@ -361,8 +366,13 @@
               </div>
               <div id="ann-result" class="hint" style="margin-top:8px;"></div>
               <hr style="margin:14px 0;border-color:rgba(255,255,255,.1);" />
-              <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <strong style="font-size:13px;">現有公告</strong>
+                <div style="display:flex;gap:4px;">
+                  <button type="button" class="button ann-filter-btn active" data-ann-filter="all" style="padding:2px 10px;background:var(--accent, #3b82f6);color:#fff;">全部</button>
+                  <button type="button" class="button ann-filter-btn" data-ann-filter="general" style="padding:2px 10px;">一般公告</button>
+                  <button type="button" class="button ann-filter-btn" data-ann-filter="update" style="padding:2px 10px;">更新公告</button>
+                </div>
                 <button id="ann-refresh-btn" type="button" class="button" style="padding:2px 10px;">↻ 重新整理</button>
               </div>
               <div id="ann-list" class="hint" style="margin-top:8px;">點「重新整理」載入</div>

@@ -16,10 +16,11 @@
     mace_2h: { label: "雙手槌", mult: 4, main: "str", stun: 8, stunDuration: 3, block: 0 },
     axe_1h: { label: "單手斧", mult: 3, main: "str", armorBreak: 15, crit: 10 },
     axe_2h: { label: "雙手斧", mult: 5, main: "str", armorBreak: 15, crit: 20 },
-    dagger: { label: "匕首", mult: 2, main: "str", combo: 20 },
+    dagger: { label: "匕首", mult: 3, main: "agi", combo: 20 },
     staff_1h: { label: "單手杖", mult: 3, main: "int", bypass: 15 },
     staff_2h: { label: "雙手杖", mult: 4, main: "int", bypass: 25 },
     bow: { label: "弓", mult: 4, main: "dex", dodge: 20 },
+    dice: { label: "骰子", mult: 1.5, main: "luk", segments: 2 },
   };
 
   const tierOptions = {
@@ -224,11 +225,12 @@
     const totalStats = addStats(baseStats, equipStats, cardStats, titleStats, tierStats);
     const weaponType = $("combat-custom-weapon-type")?.value || "none";
     const weapon = weaponConfig[weaponType] || weaponConfig.none;
-    const mainStatValue = totalStats[weapon.main] || totalStats.str || 0;
+    // 主屬性為 0 時不可 fallback 到 STR（骰子吃 LUK、匕首吃 AGI 會被算錯）
+    const mainStatValue = Number(totalStats[weapon.main] ?? totalStats.str ?? 0) || 0;
     const atkPct = numberValue("combat-custom-card-atk-pct") + numberValue("combat-custom-title-atk-pct");
     const atk = Math.max(1, Math.round((mainStatValue * weapon.mult) * (1 + atkPct / 100) + numberValue("combat-custom-extra-atk")));
     const equipVit = Math.max(0, equipStats.vit + cardStats.vit + titleStats.vit);
-    const hasShield = Boolean($("combat-custom-has-shield")?.checked) && !["sword_2h", "mace_2h", "axe_2h", "staff_2h", "bow"].includes(weaponType);
+    const hasShield = Boolean($("combat-custom-has-shield")?.checked) && !["sword_2h", "mace_2h", "axe_2h", "staff_2h", "bow", "dice"].includes(weaponType);
     const blockBase = (hasShield ? 20 : 0) + (weapon.block || 0);
 
     return {
@@ -239,7 +241,7 @@
       flatDef: Math.max(0, baseStats.vit + numberValue("combat-custom-extra-flat-def")),
       dodge: clamp(totalStats.agi * 0.5 + (weapon.dodge || 0) + (tier.dodge || 0) + numberValue("combat-custom-dodge-bonus"), 0, 95),
       hit: clamp(70 + totalStats.dex + (tier.hit || 0) + numberValue("combat-custom-hit-bonus"), 0, 100),
-      crit: clamp(totalStats.luk * 0.3 + (weapon.crit || 0) + (tier.crit || 0) + numberValue("combat-custom-card-crit-rate") + numberValue("combat-custom-title-crit-rate"), 0, 100),
+      crit: clamp(totalStats.luk * 0.5 + (weapon.crit || 0) + (tier.crit || 0) + numberValue("combat-custom-card-crit-rate") + numberValue("combat-custom-title-crit-rate"), 0, 100),
       combo: clamp(3 + totalStats.agi * 0.5 + (weapon.combo || 0) + numberValue("combat-custom-combo-bonus"), 0, 100),
       comboDamageMultiplier: 1,
       blockChance: clamp(blockBase + numberValue("combat-custom-block-bonus"), 0, 95),

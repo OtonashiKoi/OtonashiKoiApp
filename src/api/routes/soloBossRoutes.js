@@ -176,6 +176,7 @@ function createSoloBossRoutes(serviceContext) {
       const r = runCombatLoop(pStats, battleMonsterStats, monster.name, Math.max(1, partHpNow), undefined, {
         monsterEquipped: battleMonsterEquipped, playerLevel: progress.level, monsterLevel: battleMonsterStats.level,
         equipped, inventory: progress.inventory || [], playerActiveEffects: progress.activeEffects || [],
+        monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
       });
       const newPartHp = Math.max(0, Number(r.finalMonsterHp) || 0);
       const partsHp = { ...st.worldBossPartsHp, [part]: newPartHp };

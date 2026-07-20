@@ -472,15 +472,55 @@
   // ── 首頁公告管理 ──
   let _annCache = [];
   let _editingAnnId = null;
+  let _annFilter = "all";
+  const ANN_CATEGORY_LABEL = { general: "一般公告", update: "更新公告" };
   function _annResetForm() {
     _editingAnnId = null;
     document.getElementById("ann-title").value = "";
     document.getElementById("ann-body").value = "";
     document.getElementById("ann-image").value = "";
+    document.getElementById("ann-category").value = "general";
     document.getElementById("ann-pinned").checked = false;
     document.getElementById("ann-enabled").checked = true;
     const btn = document.getElementById("ann-create-btn");
     if (btn) btn.textContent = "＋ 發布公告";
+  }
+  // 新增(非編輯中)時,切換公告類型會連動預設是否啟用:更新公告預設不開,一般公告預設開
+  function onAnnCategoryChange() {
+    if (_editingAnnId) return;
+    const cat = document.getElementById("ann-category")?.value || "general";
+    const enabledBox = document.getElementById("ann-enabled");
+    if (enabledBox) enabledBox.checked = cat !== "update";
+  }
+  function setAnnFilter(filter) {
+    _annFilter = filter || "all";
+    document.querySelectorAll(".ann-filter-btn").forEach((b) => {
+      const active = b.dataset.annFilter === _annFilter;
+      b.classList.toggle("active", active);
+      b.style.background = active ? "var(--accent, #3b82f6)" : "";
+      b.style.color = active ? "#fff" : "";
+    });
+    _renderAnnList();
+  }
+  function _renderAnnList() {
+    const box = document.getElementById("ann-list");
+    if (!box) return;
+    const list = _annFilter === "all" ? _annCache : _annCache.filter((a) => (a.category || "general") === _annFilter);
+    if (!list.length) { box.innerHTML = '<div style="opacity:.7;padding:6px 0;">目前沒有公告。</div>'; return; }
+    box.innerHTML = list.map((a) => {
+      const id = escapeHtml(a.id);
+      const cat = a.category === "update" ? "update" : "general";
+      const catTag = cat === "update"
+        ? '<span style="color:#38bdf8;">[更新公告] </span>'
+        : "";
+      const tags = `${catTag}${a.pinned ? '📌 ' : ''}${a.enabled ? '' : '<span style="color:#f87171;">[已停用] </span>'}`;
+      return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07);">
+        <div style="flex:1;min-width:0;"><strong>${tags}${escapeHtml(a.title)}</strong><br><small style="opacity:.55;">${escapeHtml((a.createdAt||'').slice(0,16).replace('T',' '))}${a.imageUrl ? ' · 含圖片' : ''}</small></div>
+        <button type="button" class="button" data-ann="edit" data-id="${id}" style="padding:2px 8px;">編輯</button>
+        <button type="button" class="button" data-ann="toggle" data-id="${id}" data-en="${a.enabled ? '1':'0'}" style="padding:2px 8px;">${a.enabled ? '停用' : '啟用'}</button>
+        <button type="button" class="button" data-ann="del" data-id="${id}" style="padding:2px 8px;background:#7f1d1d;border-color:#b91c1c;color:#fff;">刪除</button>
+      </div>`;
+    }).join("");
   }
   async function loadAnnouncements() {
     const box = document.getElementById("ann-list");
@@ -488,19 +528,8 @@
     box.textContent = "載入中…";
     try {
       const data = await request("/admin/announcements");
-      const list = (data && data.announcements) || [];
-      _annCache = list;
-      if (!list.length) { box.innerHTML = '<div style="opacity:.7;padding:6px 0;">目前沒有公告。</div>'; return; }
-      box.innerHTML = list.map((a) => {
-        const id = escapeHtml(a.id);
-        const tags = `${a.pinned ? '📌 ' : ''}${a.enabled ? '' : '<span style="color:#f87171;">[已停用] </span>'}`;
-        return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07);">
-          <div style="flex:1;min-width:0;"><strong>${tags}${escapeHtml(a.title)}</strong><br><small style="opacity:.55;">${escapeHtml((a.createdAt||'').slice(0,16).replace('T',' '))}${a.imageUrl ? ' · 含圖片' : ''}</small></div>
-          <button type="button" class="button" data-ann="edit" data-id="${id}" style="padding:2px 8px;">編輯</button>
-          <button type="button" class="button" data-ann="toggle" data-id="${id}" data-en="${a.enabled ? '1':'0'}" style="padding:2px 8px;">${a.enabled ? '停用' : '啟用'}</button>
-          <button type="button" class="button" data-ann="del" data-id="${id}" style="padding:2px 8px;background:#7f1d1d;border-color:#b91c1c;color:#fff;">刪除</button>
-        </div>`;
-      }).join("");
+      _annCache = (data && data.announcements) || [];
+      _renderAnnList();
     } catch (e) { box.innerHTML = `<div style="color:#f87171;">載入失敗：${escapeHtml(e.message)}</div>`; }
   }
   async function createAnnouncement() {
@@ -508,10 +537,11 @@
     const title = (document.getElementById("ann-title")?.value || "").trim();
     const body = (document.getElementById("ann-body")?.value || "");
     const imageUrl = (document.getElementById("ann-image")?.value || "").trim();
+    const category = document.getElementById("ann-category")?.value || "general";
     const pinned = !!document.getElementById("ann-pinned")?.checked;
     const enabled = !!document.getElementById("ann-enabled")?.checked;
     if (!title) { if (box) box.textContent = "❌ 標題不可空白"; return; }
-    const payload = JSON.stringify({ title, body, imageUrl, pinned, enabled });
+    const payload = JSON.stringify({ title, body, imageUrl, category, pinned, enabled });
     if (_editingAnnId) {
       if (box) box.textContent = "更新中…";
       await request(`/admin/announcements/${encodeURIComponent(_editingAnnId)}`, { method: "PATCH", body: payload });
@@ -539,6 +569,7 @@
       document.getElementById("ann-title").value = a.title || "";
       document.getElementById("ann-body").value = a.body || "";
       document.getElementById("ann-image").value = a.imageUrl || "";
+      document.getElementById("ann-category").value = a.category === "update" ? "update" : "general";
       document.getElementById("ann-pinned").checked = !!a.pinned;
       document.getElementById("ann-enabled").checked = a.enabled !== false;
       const btn = document.getElementById("ann-create-btn");
@@ -622,6 +653,8 @@
     loadAnnouncements,
     createAnnouncement,
     announcementAction,
+    setAnnFilter,
+    onAnnCategoryChange,
     toggleAnnEmojiPanel,
     insertAnnEmoji,
     loadPlayers,

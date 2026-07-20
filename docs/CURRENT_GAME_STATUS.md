@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-07-14T06:42:57.347Z
+Generated at: 2026-07-20T06:33:03.624Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -10,12 +10,12 @@ Generated at: 2026-07-14T06:42:57.347Z
 | --- | --- |
 | 玩家 | 419 |
 | 進度資料 | 423 |
-| 怪物 | 69 |
+| 怪物 | 76 |
 | 怪物狀態文件 | 12 |
-| 道具 | 487 |
-| 任務 | 50 |
-| 職業徽章 | 10 |
-| 職業任務 | 10 |
+| 道具 | 497 |
+| 任務 | 51 |
+| 職業徽章 | 11 |
+| 職業任務 | 11 |
 | 世界王設定 | 3 |
 | 世界王狀態 | 3 |
 
@@ -36,7 +36,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | nightmare | 噩夢區 | 30 | 無上限 | 0 | 0 | 0 |
 | abyss | 深淵區 | 45 | 無上限 | 0 | 0 | 0 |
 | mythic | 神話區 | 60 | 無上限 | 0 | 0 | 0 |
-| event_1 | 限定活動關卡 | 1 | 無上限 | 0 | 0 | 0 |
+| event_1 | 限定活動關卡 | 1 | 無上限 | 7 | 0 | 0 |
 | event_boss | 限定活動 世界王 | 1 | 無上限 | 0 | 0 | 0 |
 
 ## Monsters
@@ -51,24 +51,24 @@ Generated at: 2026-07-14T06:42:57.347Z
 | ancient_city | 9 | 古城刺客 | 25 | 11760 | 10500 | 302 | 0 | 否 | 13 |
 | ancient_city | 10 | 毒霧蜘蛛 | 21 | 10080 | 10200 | 302 | 0 | 否 | 10 |
 | ancient_city | 13 | 城堡魔像(B) | 30 | 45150 | 22500 | 7200 | 0 | 是 | 31 |
-| ancient_city_deep | 1 | 城牆衛兵 | 41 | 22947 | 6750 | 302 | 0 | 否 | 9 |
-| ancient_city_deep | 6 | 冰封騎士 | 45 | 27158 | 10500 | 302 | 0 | 否 | 11 |
-| ancient_city_deep | 8 | 鐵甲衛將 | 44 | 25263 | 11250 | 302 | 0 | 否 | 11 |
-| ancient_city_deep | 11 | 古城狂戰士 | 43 | 24421 | 13500 | 302 | 0 | 否 | 12 |
-| ancient_city_deep | 12 | 黑焰巫師 | 40 | 20211 | 12750 | 302 | 0 | 否 | 11 |
+| ancient_city_deep | 1 | 城牆衛兵 | 41 | 22947 | 12520 | 351 | 0 | 否 | 9 |
+| ancient_city_deep | 6 | 冰封騎士 | 45 | 27158 | 16400 | 459 | 0 | 否 | 11 |
+| ancient_city_deep | 8 | 鐵甲衛將 | 44 | 25263 | 15430 | 432 | 0 | 否 | 11 |
+| ancient_city_deep | 11 | 古城狂戰士 | 43 | 24421 | 14460 | 405 | 0 | 否 | 12 |
+| ancient_city_deep | 12 | 黑焰巫師 | 40 | 20211 | 11550 | 324 | 0 | 否 | 11 |
 | ancient_city_deep | 14 | 古城將軍(B) | 46 | 58320 | 27000 | 8280 | 0 | 是 | 24 |
 | ancient_city_deep | 15 | 廢都魔王(B) | 46 | 114480 | 37500 | 9360 | 0 | 是 | 28 |
-| ancient_city_deep | 20 | 枯骨劍士 | 43 | 24000 | 6900 | 310 | 0 | 否 | 9 |
-| ancient_city_deep | 21 | 古城遊魂弓手 | 42 | 21500 | 6800 | 305 | 0 | 否 | 8 |
-| ancient_city_deep | 22 | 魅影潛襲者 | 41 | 19800 | 6700 | 300 | 0 | 否 | 7 |
-| ancient_city_deep | 23 | 鏽蝕巨斧兵 | 44 | 26000 | 7000 | 320 | 0 | 否 | 7 |
-| ancient_city_deep | 24 | 古城咒術師 | 40 | 20000 | 6600 | 295 | 0 | 否 | 7 |
+| ancient_city_deep | 20 | 枯骨劍士 | 43 | 24000 | 14460 | 405 | 0 | 否 | 9 |
+| ancient_city_deep | 21 | 古城遊魂弓手 | 42 | 21500 | 13490 | 378 | 0 | 否 | 8 |
+| ancient_city_deep | 22 | 魅影潛襲者 | 41 | 19800 | 12520 | 351 | 0 | 否 | 7 |
+| ancient_city_deep | 23 | 鏽蝕巨斧兵 | 44 | 26000 | 15430 | 432 | 0 | 否 | 7 |
+| ancient_city_deep | 24 | 古城咒術師 | 40 | 20000 | 11550 | 324 | 0 | 否 | 7 |
 | beginner | 1 | 小史(小) | 1 | 300 | 100 | 14 | 0 | 否 | 13 |
 | beginner | 2 | 野兔 | 1 | 400 | 150 | 16 | 0 | 否 | 11 |
 | beginner | 3 | 蘑菇怪 | 2 | 700 | 200 | 17 | 0 | 否 | 11 |
 | beginner | 4 | 小史(中) | 3 | 900 | 250 | 20 | 0 | 否 | 12 |
 | beginner | 5 | 大野兔(B) | 3 | 3000 | 500 | 360 | 0 | 是 | 13 |
-| dragon_king_lair | 1 | 古龍王(B) | 60 | 2655000 | 30000 | 60000 | 10000 | 是 | 71 |
+| dragon_king_lair | 1 | 古龍王(B) | 60 | 2655000 | 30000 | 60000 | 10000 | 是 | 70 |
 | dragon_realm | 1 | 飛龍幼崽 | 40 | 36000 | 13000 | 360 | 0 | 否 | 15 |
 | dragon_realm | 2 | 龍蜥武士 | 41 | 40500 | 14000 | 390 | 0 | 否 | 14 |
 | dragon_realm | 3 | 火翼龍人 | 42 | 45000 | 15000 | 420 | 0 | 否 | 14 |
@@ -80,6 +80,13 @@ Generated at: 2026-07-14T06:42:57.347Z
 | dragon_realm | 9 | 龍翼魔法師 | 48 | 75000 | 22000 | 600 | 0 | 否 | 11 |
 | dragon_realm | 10 | 龍王(B) | 50 | 300000 | 50000 | 15000 | 0 | 是 | 43 |
 | elite | 1 | 大史王 | 60 | 1770000 | 19500 | 40500 | 5000 | 是 | 81 |
+| event_1 | 1 | 潮汐守衛 | 41 | 23000 | 12520 | 351 | 0 | 否 | 6 |
+| event_1 | 2 | 溺影潛伏者 | 41 | 19900 | 12520 | 351 | 0 | 否 | 5 |
+| event_1 | 3 | 珊瑚劍士 | 43 | 24000 | 14460 | 405 | 0 | 否 | 5 |
+| event_1 | 4 | 潮鳴咒師 | 40 | 20000 | 11550 | 324 | 0 | 否 | 5 |
+| event_1 | 5 | 鎧鱗龍人 | 44 | 26000 | 15430 | 432 | 0 | 否 | 5 |
+| event_1 | 6 | 碧波弓手 | 42 | 21500 | 13490 | 378 | 0 | 否 | 5 |
+| event_1 | 7 | 寒淵騎士 | 45 | 27000 | 16400 | 459 | 0 | 否 | 6 |
 | hellfire | 1 | 焰爪幼狼 | 42 | 40629 | 15000 | 700 | 0 | 否 | 11 |
 | hellfire | 2 | 灰燼豺 | 43 | 43338 | 16000 | 740 | 0 | 否 | 12 |
 | hellfire | 3 | 熔岩犬 | 43 | 47401 | 17500 | 800 | 0 | 否 | 13 |
@@ -91,7 +98,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | hellfire | 9 | 岩漿巨蟲 | 46 | 56881 | 21000 | 920 | 0 | 否 | 9 |
 | hellfire | 10 | 烈焰狼 | 47 | 51464 | 22500 | 960 | 0 | 否 | 9 |
 | hellfire | 11 | 煉獄烈焰狼王(B) | 48 | 121888 | 45000 | 2400 | 0 | 是 | 19 |
-| hellfire_depths | 1 | 地獄狼牙王 | 65 | 4000000 | 30000 | 60000 | 15000 | 是 | 57 |
+| hellfire_depths | 1 | 地獄狼牙王 | 65 | 4000000 | 30000 | 60000 | 15000 | 是 | 56 |
 | mid | 1 | 甲蟹 | 14 | 4968 | 2800 | 166 | 0 | 否 | 16 |
 | mid | 2 | 牙牙狼 | 13 | 4416 | 2400 | 166 | 0 | 否 | 13 |
 | mid | 3 | 巨巨 | 16 | 5704 | 4000 | 166 | 0 | 否 | 14 |
@@ -119,18 +126,18 @@ Generated at: 2026-07-14T06:42:57.347Z
 | --- | --- |
 | collectible | 7 |
 | consumable | 25 |
-| equipment | 442 |
-| job_badge | 10 |
+| equipment | 451 |
+| job_badge | 11 |
 | pet_egg | 3 |
 
 | 階級 | 數量 |
 | --- | --- |
-| A | 187 |
-| B | 72 |
-| C | 72 |
-| D | 61 |
-| S | 42 |
-| 無階級 | 53 |
+| A | 190 |
+| B | 73 |
+| C | 73 |
+| D | 62 |
+| S | 45 |
+| 無階級 | 54 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -142,12 +149,12 @@ Generated at: 2026-07-14T06:42:57.347Z
 | head_low | 23 |
 | head_mid | 23 |
 | head_top | 23 |
-| job_eq | 10 |
+| job_eq | 11 |
 | shield | 18 |
 | shoes | 23 |
 | special | 77 |
 | title_eq | 13 |
-| weapon | 93 |
+| weapon | 102 |
 | 無槽位 | 35 |
 
 ## Items
@@ -365,6 +372,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | dragon-a-wpn-dagger | 亞龍短刃 | equipment | A | weapon | dagger | STR+4 AGI+15 | none |
 | dragon-a-wpn-mace_2h | 亞龍碎槌 | equipment | A | weapon | mace_2h | STR+20 VIT+5 | none |
 | dragon-a-wpn-staff_2h | 亞龍長杖 | equipment | A | weapon | staff_2h | INT+19 DEX+4 | none |
+| dragon-a-wpn-dice | 亞龍骨骰 | equipment | A | weapon | dice | AGI+4 LUK+19 | none |
 | fire-a-wpn-axe_1h | 烈焰單手斧 | equipment | A | weapon | axe_1h | STR+14 LUK+5 | none |
 | fire-a-wpn-axe_2h | 烈焰雙手斧 | equipment | A | weapon | axe_2h | STR+20 LUK+5 | none |
 | fire-a-wpn-dagger | 焰刃匕首 | equipment | A | weapon | dagger | STR+4 AGI+15 | none |
@@ -372,6 +380,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | fire-a-wpn-staff_2h | 焰心雙手法杖 | equipment | A | weapon | staff_2h | INT+19 DEX+4 | none |
 | fire-a-wpn-sword_1h | 焰紋單手劍 | equipment | A | weapon | sword_1h | STR+19 | none |
 | fire-a-wpn-sword_2h | 焰紋雙手劍 | equipment | A | weapon | sword_2h | STR+25 | none |
+| fire-a-wpn-dice | 焰紋骰子 | equipment | A | weapon | dice | AGI+4 LUK+19 | none |
 | fire-a-wpn-bow | 焰羽獵弓 | equipment | A | weapon | bow | AGI+4 DEX+19 | none |
 | fire-a-wpn-mace_1h | 熔火單手槌 | equipment | A | weapon | mace_1h | STR+14 VIT+5 | none |
 | fire-a-wpn-mace_2h | 熔火雙手槌 | equipment | A | weapon | mace_2h | STR+20 VIT+5 | none |
@@ -385,6 +394,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | 8c1782df-9823-405c-ade8-423c854a467e | 秘銀雙手斧 | equipment | A | weapon | axe_2h | STR+20 LUK+5 | none |
 | 0635861a-8bb0-4516-b16d-0351539ba5e7 | 秘銀雙手槌 | equipment | A | weapon | mace_2h | STR+20 VIT+5 | none |
 | 5947532d-7960-420c-99e7-5bdd02635a0a | 秘銀雙手法杖 | equipment | A | weapon | staff_2h | INT+19 DEX+4 | none |
+| c015029e-543f-43fc-9fa0-54d69a356ae3 | 秘銀骰子 | equipment | A | weapon | dice | AGI+4 LUK+19 | none |
 | eac8dea3-396b-4e9c-8ce3-8bfbd0989583 | 吸血左之戒 | equipment | B | accessory_l |  | LUK+3 | none |
 | 05c2a16c-e504-44f3-839f-e72969a81a82 | 守護左之戒 | equipment | B | accessory_l |  | VIT+3 | none |
 | 27f2deaf-d1cc-45b6-bec7-66659ab10de6 | 戰意左之戒 | equipment | B | accessory_l |  | DEX+3 | none |
@@ -456,6 +466,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | 94ca2b06-b149-4527-ae09-0106904a7dff | 鋼製雙手斧 | equipment | B | weapon | axe_2h | STR+12 LUK+3 | none |
 | 3b0d9f3f-dc9d-43d2-a3ec-c9a284ba1eb6 | 鋼製雙手槌 | equipment | B | weapon | mace_2h | STR+12 VIT+3 | none |
 | dc12e5e5-ced0-4e7b-923e-9897ddc9b7ce | 鋼製雙手法杖 | equipment | B | weapon | staff_2h | INT+12 LUK+3 | none |
+| 5e8f9908-df30-4b6b-916c-078df884d96d | 鋼製骰子 | equipment | B | weapon | dice | AGI+3 LUK+12 | none |
 | 8e662d64-161b-4489-9b33-569b1d24cdd4 | 吸血左之戒 | equipment | C | accessory_l |  | LUK+2 | none |
 | 175e57e1-d0fa-426f-adf6-f5b37cae7911 | 守護左之戒 | equipment | C | accessory_l |  | VIT+2 | none |
 | 2b1524d1-afef-4153-9752-28f743bffb8a | 戰意左之戒 | equipment | C | accessory_l |  | DEX+2 | none |
@@ -527,6 +538,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | ab533d4a-3d07-4d41-8a40-511a8e6a455d | 鐵製雙手斧 | equipment | C | weapon | axe_2h | STR+7 LUK+2 | none |
 | 1f04c0db-e5cb-4b84-9a43-e7150799eecb | 鐵製雙手槌 | equipment | C | weapon | mace_2h | STR+7 VIT+2 | none |
 | 7e983a31-a7ea-452b-882d-4d0fcd92253a | 鐵製雙手法杖 | equipment | C | weapon | staff_2h | INT+8 LUK+1 | none |
+| 79eabe9f-e3c5-4b4a-b1a8-66770bf3549a | 鐵製骰子 | equipment | C | weapon | dice | AGI+2 LUK+5 | none |
 | 0e2ede69-4bd1-4ce1-9ec8-fe4df6463dfa | 智紋銅戒指(左) | equipment | D | accessory_l |  | INT+1 | none |
 | 5a29d084-2e5c-42d6-8613-3cef6bc294e9 | 迅紋銅戒指(左) | equipment | D | accessory_l |  | DEX+1 | none |
 | 19e24aca-92f5-4f81-8ab9-cc4f8ba73a72 | 銅戒指(左) | equipment | D | accessory_l |  | AGI+1 | none |
@@ -587,6 +599,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | 2271e23c-9648-430e-944b-cea2107ee8ec | 木製雙手斧 | equipment | D | weapon | axe_2h | STR+5 LUK+1 | none |
 | 2fcf7576-4e74-4280-b1e6-0d7da7b58dda | 木製雙手槌 | equipment | D | weapon | mace_2h | STR+5 VIT+1 | none |
 | e3794447-e19d-41a2-9b0a-c5050dcdd9ea | 木製雙手法杖 | equipment | D | weapon | staff_2h | INT+5 LUK+1 | none |
+| 7cce6865-9993-4d74-a255-e108d2f38e08 | 木製骰子 | equipment | D | weapon | dice | AGI+1 LUK+2 | none |
 | s-legend-thirst | 對鮮血的渴望 | equipment | S | anchor |  |  | none |
 | s-legend-timelord | 時間管理大師 | equipment | S | anchor |  |  | none |
 | s-legend-endure | 沒苦硬吃 | equipment | S | anchor |  |  | none |
@@ -600,9 +613,11 @@ Generated at: 2026-07-14T06:42:57.347Z
 | s-legend-dice | 骰・命運之輪 | equipment | S | anchor |  | LUK+20 | none |
 | s-dragon-axe_2h | 屠龍巨斧 | equipment | S | weapon | axe_2h | STR+20 LUK+5 | none |
 | s-dragon-sword_1h | 幼龍牙劍 | equipment | S | weapon | sword_1h | STR+19 | none |
+| s-dragon-dice | 幼龍骨骰 | equipment | S | weapon | dice | AGI+4 LUK+19 | none |
 | fire-s-wpn-mace_2h | 獄焰・崩地槌 | equipment | S | weapon | mace_2h | STR+20 VIT+5 | none |
 | fire-s-wpn-axe_1h | 獄焰・撕裂手斧 | equipment | S | weapon | axe_1h | STR+14 LUK+5 | none |
 | fire-s-wpn-bow | 獄焰・炎狼獵弓 | equipment | S | weapon | bow | AGI+4 DEX+19 | none |
+| fire-s-wpn-dice | 獄焰・炎狼骰 | equipment | S | weapon | dice | AGI+4 LUK+19 | none |
 | fire-s-wpn-axe_2h | 獄焰・焚天巨斧 | equipment | S | weapon | axe_2h | STR+20 LUK+5 | none |
 | fire-s-wpn-staff_2h | 獄焰・煉獄長杖 | equipment | S | weapon | staff_2h | INT+19 DEX+4 | none |
 | fire-s-wpn-sword_1h | 獄焰・狼牙劍 | equipment | S | weapon | sword_1h | STR+19 | none |
@@ -620,6 +635,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | mithril-s-wpn-axe_2h | 真銀雙手斧 | equipment | S | weapon | axe_2h | STR+20 LUK+5 | none |
 | mithril-s-wpn-mace_2h | 真銀雙手槌 | equipment | S | weapon | mace_2h | STR+20 VIT+5 | none |
 | mithril-s-wpn-staff_2h | 真銀雙手法杖 | equipment | S | weapon | staff_2h | INT+19 DEX+4 | none |
+| mithril-s-wpn-dice | 真銀骰子 | equipment | S | weapon | dice | AGI+4 LUK+19 | none |
 | s-dragon-axe_1h | 裂龍手斧 | equipment | S | weapon | axe_1h | STR+14 LUK+5 | none |
 | s-dragon-bow | 龍筋獵弓 | equipment | S | weapon | bow | AGI+4 DEX+19 | none |
 | s-dragon-staff_2h | 龍脈長杖 | equipment | S | weapon | staff_2h | INT+19 DEX+4 | none |
@@ -637,6 +653,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | job_dwarf_warrior_v1 | 矮人戰士徽章 | job_badge |  | job_eq |  | STR+1 VIT+5 DEX+2 | none |
 | job_barrier_mage_v1 | 結界師徽章 | job_badge |  | job_eq |  | VIT+3 INT+3 DEX+2 | none |
 | job_bard_v1 | 詩人徽章 | job_badge |  | job_eq |  | AGI+2 DEX+4 LUK+2 | none |
+| job_gambler_v1 | 賭徒徽章 | job_badge |  | job_eq |  | AGI+2 DEX+1 LUK+5 | none |
 | job_tactician_v1 | 軍師徽章 | job_badge |  | job_eq |  | AGI+4 INT+2 DEX+2 | none |
 | 1fb1f325-7d73-43c7-a55f-3f51752870b0 | 神秘史萊姆蛋 | pet_egg |  |  |  |  | none |
 | 27c8b251-42c7-42cf-98a3-ee40408503db | 神秘狼牙蛋 | pet_egg |  |  |  |  | none |
@@ -662,6 +679,7 @@ Generated at: 2026-07-14T06:42:57.347Z
 | job | 80 | 軍師試煉 | battle_with_sword | 10 | 啟用 | 500 金幣 + 軍師徽章 | 出現條件：Lv.10，基礎 AGI + INT + DEX > 10。進度武器：單手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與軍師徽章。 |
 | job | 90 | 詩人試煉 | battle_with_bow | 10 | 啟用 | 500 金幣 + 詩人徽章 | 出現條件：Lv.10，基礎 DEX + AGI + LUK > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與詩人徽章。 |
 | job | 100 | 結界師試煉 | battle_with_staff | 10 | 啟用 | 500 金幣 + 結界師徽章 | 出現條件：Lv.10，基礎 INT + VIT + DEX > 10。進度武器：單手法杖或雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與結界師徽章。 |
+| job | 110 | 賭徒試煉 | battle_with_dice | 10 | 啟用 | 500 金幣 + 賭徒徽章 | 出現條件：Lv.10，基礎 LUK + AGI > 10。進度武器：骰子；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與賭徒徽章。 |
 | onboarding | 1 | 裝備任一裝備 1 次 | equip_count | 1 | 啟用 | 200 金幣 + 90 EXP + 木製單手斧 | 任意裝備一件裝備即可完成。 |
 | onboarding | 2 | 首次出戰 | battle_count | 1 | 啟用 | 120 金幣 + 60 EXP + 木製單手劍 | 在新手村外的草叢戰鬥一次即可。 |
 | onboarding | 3 | 完成 1 次打卡 | checkin_count | 1 | 啟用 | 150 金幣 + 60 EXP | 到打卡功能完成 1 次打卡即可。 |
@@ -710,5 +728,6 @@ Generated at: 2026-07-14T06:42:57.347Z
 | job_dwarf_warrior_v1 | 矮人戰士徽章 |  | 矮人戰士試煉 | 啟用 | 10 | mace_1h, mace_2h | VIT + STR > 10 | STR+1 VIT+5 DEX+2 |
 | job_barrier_mage_v1 | 結界師徽章 |  | 結界師試煉 | 啟用 | 10 | staff_1h, staff_2h | INT + VIT + DEX > 10 | VIT+3 INT+3 DEX+2 |
 | job_bard_v1 | 詩人徽章 |  | 詩人試煉 | 啟用 | 10 | bow | DEX + AGI + LUK > 10 | AGI+2 DEX+4 LUK+2 |
+| job_gambler_v1 | 賭徒徽章 |  | 賭徒試煉 | 啟用 | 10 | dice | LUK + AGI > 10 | AGI+2 DEX+1 LUK+5 |
 | job_tactician_v1 | 軍師徽章 |  | 軍師試煉 | 啟用 | 10 | sword_1h | AGI + INT + DEX > 10 | AGI+4 INT+2 DEX+2 |
 

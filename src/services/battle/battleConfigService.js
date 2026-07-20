@@ -8,7 +8,8 @@ const VALID_WEAPON_TYPES = [
   "axe_2h",
   "staff_1h",
   "staff_2h",
-  "bow"
+  "bow",
+  "dice"
 ];
 
 const ASSET_CATEGORIES = ["backgrounds", "monsters", "characters", "effects", "ui"];
@@ -53,7 +54,8 @@ const DEFAULT_WEAPON_RULES = {
   axe_2h: { preferredRange: 162, minRange: 102, maxRange: 220, laneBias: 0, xOffset: 8, yOffset: 0 },
   staff_1h: { preferredRange: 250, minRange: 190, maxRange: 340, laneBias: 1, xOffset: -6, yOffset: 0 },
   staff_2h: { preferredRange: 265, minRange: 205, maxRange: 360, laneBias: 1, xOffset: -8, yOffset: 0 },
-  bow: { preferredRange: 300, minRange: 240, maxRange: 390, laneBias: 1, xOffset: -14, yOffset: 0 }
+  bow: { preferredRange: 300, minRange: 240, maxRange: 390, laneBias: 1, xOffset: -14, yOffset: 0 },
+  dice: { preferredRange: 285, minRange: 225, maxRange: 375, laneBias: 1, xOffset: -12, yOffset: 0 }
 };
 
 function clampNumber(value, min, max, fallback) {

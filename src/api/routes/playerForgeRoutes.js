@@ -34,7 +34,7 @@ function createPlayerForgeRoutes(serviceContext) {
         const gemTotals = {}; // tier → count
         for (const u of uuids.slice(0, MAX_UUIDS_PER_REQUEST)) {
           try {
-            const r = await serviceContext.shopService.discardItem(discordId, u);
+            const r = await serviceContext.shopService.discardItem(discordId, u, { mode: "dismantle" });
             if (r.gems) gemTotals[r.gems.tier] = (gemTotals[r.gems.tier] || 0) + r.gems.count;
             items.push({ uuid: u, ok: true, itemName: r.itemName, dismantled: r.dismantled, gems: r.gems });
           } catch (e) {
@@ -66,7 +66,7 @@ function createPlayerForgeRoutes(serviceContext) {
       }
 
       // 單件分解（同 DC「🔨 分解」按鈕）
-      const r = await serviceContext.shopService.discardItem(discordId, uuid);
+      const r = await serviceContext.shopService.discardItem(discordId, uuid, { mode: "dismantle" });
       const message = r.gems
         ? `分解 ${r.itemName} 成功，獲得 ${r.gems.count} 顆 ${r.gems.tier} 階強化寶石`
         : (r.dismantled

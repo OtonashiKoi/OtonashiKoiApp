@@ -196,6 +196,7 @@ const WEAPON_TYPE_LABELS = {
   staff_1h: "單手法杖",
   staff_2h: "雙手法杖",
   bow: "弓",
+  dice: "骰子",
   offhand_sword: "副手劍",
   offhand_dagger: "副手匕首",
   offhand_mace: "副手槌"
@@ -229,7 +230,8 @@ function formatEffectCondition(condition = {}) {
     dagger: "匕首",
     staff_1h: "單手法杖",
     staff_2h: "雙手法杖",
-    bow: "弓"
+    bow: "弓",
+    dice: "骰子"
   };
   const weaponTypes = [];
   if (condition.weaponType) weaponTypes.push(condition.weaponType);
@@ -480,6 +482,7 @@ async function handleProfile(interaction) {
     const isTacticianJob = Boolean(cs.hasTacticianBadge || jobId.includes("tactician") || jobName.includes("軍師"));
     const isBardJob = Boolean(cs.hasBardBadge || jobId.includes("bard") || jobName.includes("詩人"));
     const isBarrierMageJob = Boolean(cs.hasBarrierMageBadge || jobId.includes("barrier_mage") || jobName.includes("結界"));
+    const isGamblerJob = Boolean(jobId.includes("gambler") || jobName.includes("賭徒"));
 
     const jobDisplayName = jobEq.itemName || jobEq.name || "未知職業";
     const jobStatLine = formatEquipStats(jobEq.equipStats)
@@ -494,6 +497,7 @@ async function handleProfile(interaction) {
       if (eff.key === 'gold_gain_up')  jobBonusParts.push(`金幣 +${v}%`);
       if (eff.key === 'exp_gain_up')   jobBonusParts.push(`經驗 +${v}%`);
       if (eff.key === 'drop_rate_up')  jobBonusParts.push(`掉落 +${v}%`);
+      if (eff.key === 'rare_drop_rate_up') jobBonusParts.push(`稀有掉落 +${v}%`);
     }
     const jobBonusLine = jobBonusParts.length ? `\n結算加成：${jobBonusParts.join("、")}` : "";
 
@@ -526,6 +530,9 @@ async function handleProfile(interaction) {
     }
     if (isArcherJob && wt === "bow") {
       mechanicLines.push(`・弓系機動：目前迴避 ${Math.ceil(cs.dodge || 0)}%`);
+    }
+    if (isGamblerJob && wt === "dice") {
+      mechanicLines.push(`・骰子賭運：ATK 吃 LUK（目前 ${cs.luk}）；目前爆擊 ${Math.ceil(cs.crit || 0)}%`);
     }
     if (isMageJob && wt && wt.startsWith("staff") && Number(cs.bypassMonsterDefPct || 0) > 0) {
       mechanicLines.push(`・法杖魔法：無視怪物 DEF ${cs.bypassMonsterDefPct}%`);
@@ -1160,7 +1167,7 @@ function weaponFamily(entry) {
   const wt = String(entry?.weaponType || "").toLowerCase();
   if (!wt) return "other";
   if (wt.startsWith("staff")) return "magic";
-  if (wt === "bow") return "ranged";
+  if (wt === "bow" || wt === "dice") return "ranged";
   if (wt === "dagger") return "melee1";
   if (wt.startsWith("sword_1h") || wt.startsWith("axe_1h") || wt.startsWith("mace_1h")) return "melee1";
   if (wt.startsWith("sword_2h") || wt.startsWith("axe_2h") || wt.startsWith("mace_2h")) return "melee2";
@@ -2021,8 +2028,9 @@ async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0, su
 }
 
 // 開箱/卡包公告：恭喜 X 使用 Y 開到了 Z（發到通知頻道）
-// 只公告「B 級以上」的獎勵（D/C 階裝備、無階級的藥水等不洗頻道；工作人員卡=D 不公告）。
-const _ANNOUNCE_TIERS = new Set(["B", "A", "S", "SS"]);
+// 只公告 S 級以上：A/B 階在世界王寶箱裡佔絕大多數(大史王獎池 A 68 件 vs S 11 件)，
+// 每開必公告會把頻道洗掉，S 才有「稀有值得恭喜」的份量。D/C 階與無階級藥水本來就不公告。
+const _ANNOUNCE_TIERS = new Set(["S", "SS"]);
 async function _announceChestOpen(displayName, chestReward) {
   try {
     if (!chestReward) return;
@@ -2197,8 +2205,13 @@ async function handleBackpackDiscardBulk(interaction, uuid, tab = "item", page =
     return;
   }
   const isCard = (e) => e.itemType === "monster_card" || e.monsterCardOf || /^special/.test(String(e.equipSlot || ""));
-  const count = inv.filter((e) => e && e.itemType === "equipment" && e.itemId === ref.itemId
-    && Number(e.enhanceLevel || 0) === 0 && !isCard(e)).length;
+  // 預覽數量必須與 ShopService.discardItemBulk 的真正刪除條件一致。
+  // 否則鎖定件雖然後端會保留，確認視窗卻仍顯示在「共 N 件」中，
+  // 會讓玩家誤以為鎖定保護沒有生效。
+  const matching = inv.filter((e) => e && e.itemType === "equipment" && e.itemId === ref.itemId
+    && Number(e.enhanceLevel || 0) === 0 && !isCard(e));
+  const lockedCount = matching.filter((e) => e.locked).length;
+  const count = matching.filter((e) => !e.locked).length;
   if (count <= 0) {
     await safeEditReply(interaction, { content: "❌ 沒有可批量分解的同款未強化裝備。", components: [], embeds: [], files: [] });
     return;
@@ -2219,7 +2232,7 @@ async function handleBackpackDiscardBulk(interaction, uuid, tab = "item", page =
       .setStyle(ButtonStyle.Secondary),
   );
   await safeEditReply(interaction, {
-    content: `⚠️ 確定要把 **${ref.itemName}** 的 **${count} 件（未強化）** 一起分解嗎？此操作**無法復原**！${yieldLine}`,
+    content: `⚠️ 確定要把 **${ref.itemName}** 的 **${count} 件（未強化、未鎖定）** 一起分解嗎？此操作**無法復原**！${lockedCount ? `\n🛡️ 已排除 **${lockedCount} 件鎖定裝備**，不會分解。` : ""}${yieldLine}`,
     components: [row], embeds: [], files: [],
   });
 }

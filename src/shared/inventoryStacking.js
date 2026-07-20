@@ -7,6 +7,26 @@ function isEnhanceGemItemId(itemId) {
   return ENHANCE_GEM_IDS.has(String(itemId || ""));
 }
 
+// 可疊加消耗品（藥水）：同款自動合併成一堆(stackCount)，省背包格。
+// 藥水無 per-instance 狀態(不可強化/鎖定/裝備)，合併安全。新增藥水記得加進來。
+const STACKABLE_CONSUMABLE_IDS = new Set([
+  "87b281be-b175-40a0-8044-0accc88a0ee0", // 屬性重製藥水
+  "9b8ad195-9ec1-401b-9b7f-2c1033628cba", // 【我命由我不由天】藥水
+  "f56aefd0-faa8-45b5-8451-fbbae5810c74", // 回復藥水（小）
+  "97fbd546-e207-4130-b130-2fadd799703a", // 回復藥水（中）
+  "3eb1d302-3d04-40a5-8335-1f9ed844dc27", // 回復藥水（大）
+  "12bfb110-6489-4784-8537-f3f496759f8f", // 復活藥水（小）
+  "c4794326-ced1-4efe-983d-17c14ee2f2f8", // 復活藥水（大）
+  "enchant_reroll_potion",                // 附魔重骰藥水
+]);
+function isStackableConsumableId(itemId) {
+  return STACKABLE_CONSUMABLE_IDS.has(String(itemId || ""));
+}
+// 可疊加(合併)判斷：強化寶石 + 藥水
+function isStackMergeable(itemId) {
+  return isEnhanceGemItemId(itemId) || isStackableConsumableId(itemId);
+}
+
 function buildEnhanceGemEntry(item, quantity = 1, extraFields = {}) {
   if (!item || !item.id) return null;
   const stackCount = Math.max(1, Math.trunc(Number(quantity) || 1));
@@ -80,17 +100,18 @@ function normalizeEnhanceGemStacks(inventory) {
   if (!Array.isArray(inventory) || inventory.length === 0) return Array.isArray(inventory) ? inventory : [];
 
   const merged = [];
-  const gemByItemId = new Map();
+  const byItemId = new Map();
 
   for (const entry of inventory) {
-    if (!entry || typeof entry !== "object" || !isEnhanceGemItemId(entry.itemId)) {
+    // 強化寶石 + 藥水才合併；鎖定件保險起見不合併(藥水本不可鎖，防呆)
+    if (!entry || typeof entry !== "object" || entry.locked || !isStackMergeable(entry.itemId)) {
       merged.push(entry);
       continue;
     }
 
     const itemId = String(entry.itemId);
     const count = Math.max(1, Math.trunc(Number(entry.stackCount) || 1));
-    const existing = gemByItemId.get(itemId);
+    const existing = byItemId.get(itemId);
     if (existing) {
       existing.stackCount = Math.max(1, Number(existing.stackCount) || 1) + count;
       continue;
@@ -100,7 +121,7 @@ function normalizeEnhanceGemStacks(inventory) {
       ...entry,
       stackCount: count
     };
-    gemByItemId.set(itemId, normalized);
+    byItemId.set(itemId, normalized);
     merged.push(normalized);
   }
 
@@ -110,6 +131,9 @@ function normalizeEnhanceGemStacks(inventory) {
 module.exports = {
   ENHANCE_GEM_IDS,
   isEnhanceGemItemId,
+  STACKABLE_CONSUMABLE_IDS,
+  isStackableConsumableId,
+  isStackMergeable,
   buildEnhanceGemEntry,
   syncEnhanceGemEntry,
   addEnhanceGemToInventory,

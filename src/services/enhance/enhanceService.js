@@ -5,11 +5,13 @@ const { getEnhanceCost, ENHANCE_GEMS, MAX_ENHANCE_LEVEL } = require("../../share
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { withPlayerProgressLock } = require("../progress/progressLocks");
 
+// 需與 src/shared/combatStats.js 的 WEAPON_CONFIG.baseStat 保持一致
 const WEAPON_MAIN_STAT_BY_TYPE = {
   staff_1h: "int",
   staff_2h: "int",
   bow: "dex",
   dagger: "agi",
+  dice: "luk",
   sword_1h: "str",
   sword_2h: "str",
   axe_1h: "str",

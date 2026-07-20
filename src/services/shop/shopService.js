@@ -53,7 +53,7 @@ const STAT_LABEL_ZH = {
 };
 
 const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes", "level_down_random_attributes"];
-const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow"]);
+const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow", "dice"]);
 const VALID_CLAIM_LIMITS = new Set(["none", "once_per_player"]);
 
 class ShopService {
@@ -1018,7 +1018,8 @@ class ShopService {
         if (matched.length === 0) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到這些物品", 404);
         const first = matched[0];
         const effType = String(first.itemEffect?.type || "");
-        if ((first.itemType || "consumable") !== "consumable" || !BULK_SAFE.has(effType)) {
+        const LEVEL_DOWN = "level_down_random_attributes"; // 我命由我：批量＝連續降 N 級(逐次套用)
+        if ((first.itemType || "consumable") !== "consumable" || !(BULK_SAFE.has(effType) || effType === LEVEL_DOWN)) {
           throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不支援一鍵批量使用", 400);
         }
         if (!matched.every((e) => e.itemId === first.itemId && String(e.itemEffect?.type || "") === effType)) {
@@ -1038,6 +1039,22 @@ class ShopService {
           useCount = Math.max(0, Math.min(availCount, Math.ceil(room / per)));
           if (useCount <= 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `背包已達上限 ${bp.MAX_CAPACITY} 格，無法再擴充`, 400);
         }
+        // 我命由我(降級)：最多只能降到 Lv.1，故消耗量 = min(持有, 目前等級-1)；逐次套用累計掉屬性
+        let levelDownFields = null, levelDownInfo = null;
+        if (effType === LEVEL_DOWN) {
+          const curLv = Math.max(1, Number(progress.level) || 1);
+          useCount = Math.min(availCount, curLv - 1);
+          if (useCount <= 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "等級已是 1，無法再降低。", 400);
+          let attrs = { ...(progress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 }) };
+          const totalDropped = {};
+          for (let i = 0; i < useCount; i++) {
+            const rolled = this._rollRandomAttributeDrops(attrs, 2);
+            attrs = rolled.nextAttributes;
+            for (const d of (rolled.dropped || [])) totalDropped[d.key] = (totalDropped[d.key] || 0) + d.amount;
+          }
+          levelDownFields = { level: Math.max(1, curLv - useCount), exp: 0, attributes: attrs };
+          levelDownInfo = { newLevel: levelDownFields.level, dropped: totalDropped };
+        }
 
         // 依 useCount 從 matched 逐件累加 stackCount，選出要移除/部分扣減的 entry
         const toRemove = new Set();
@@ -1056,10 +1073,10 @@ class ShopService {
           if (u === partialUuid) { nextInv.push({ ...e, stackCount: partialKeep }); continue; }
           nextInv.push({ ...e });
         }
-        const next = { ...progress, inventory: nextInv, updatedAt: new Date().toISOString() };
+        const next = { ...progress, ...(levelDownFields || {}), inventory: nextInv, updatedAt: new Date().toISOString() };
         const saved = await this._saveProgressWithFallback(next, progress.updatedAt);
         if (saved) {
-          out = { itemId: first.itemId, itemName: first.itemName || first.name || "道具", effType, useCount, perValue };
+          out = { itemId: first.itemId, itemName: first.itemName || first.name || "道具", effType, useCount, perValue, levelDown: levelDownInfo };
           casSuccess = true;
           break;
         }
@@ -1084,6 +1101,11 @@ class ShopService {
       const bp = require("../backpack/backpackService");
       const r = await bp.grantSlots(discordId, totalValue).catch(() => null);
       effectDesc = r ? `🎒 本季背包 +${r.added} 格（目前上限 ${r.capacity}）` : "🎒 背包擴充";
+    } else if (out.effType === "level_down_random_attributes") {
+      const dropText = (out.levelDown?.dropped && Object.keys(out.levelDown.dropped).length)
+        ? Object.entries(out.levelDown.dropped).map(([k, v]) => `${k.toUpperCase()}-${v}`).join("、")
+        : "無";
+      effectDesc = `☯️ 連續下降 ${out.useCount} 級 → Lv.${out.levelDown?.newLevel}，隨機失去 ${dropText}`;
     }
     return { itemName: out.itemName, count: out.useCount, totalValue, effectType: out.effType, effectDesc };
   }
@@ -1344,14 +1366,18 @@ class ShopService {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "裝備不可販售，請改用「分解」取得強化寶石", 400);
     }
 
-    // tier 查詢：同 sellItem，entry 沒有就查 library
+    // tier 查詢 + 自訂售價(sellPrice)查詢：同 sellItem，entry 沒有就查 library
+    // 藥水等無 tier 的消耗品可用 item.sellPrice 直接定價(不套 TIER_SELL_PRICE)
     let tier = refEntry.tier ? String(refEntry.tier).toUpperCase() : null;
-    if (!tier && this.itemRepository && refEntry.itemId) {
+    let customSell = (refEntry.sellPrice != null && Number.isFinite(Number(refEntry.sellPrice))) ? Number(refEntry.sellPrice) : null;
+    if ((!tier || customSell === null) && this.itemRepository && refEntry.itemId) {
       const libItem = await this.itemRepository.findById(refEntry.itemId).catch(() => null);
-      tier = libItem?.tier ? String(libItem.tier).toUpperCase() : null;
+      if (!tier) tier = libItem?.tier ? String(libItem.tier).toUpperCase() : null;
+      if (customSell === null && libItem?.sellPrice != null && Number.isFinite(Number(libItem.sellPrice))) customSell = Number(libItem.sellPrice);
     }
-    const price = isGem ? (GEM_SELL_PRICE[tier] ?? null) : (TIER_SELL_PRICE[tier] ?? null);
-    if (price === null) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品沒有設定階級，無法販售", 400);
+    const price = customSell !== null ? Math.max(0, Math.round(customSell))
+      : (isGem ? (GEM_SELL_PRICE[tier] ?? null) : (TIER_SELL_PRICE[tier] ?? null));
+    if (price === null) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品沒有設定售價，無法販售", 400);
 
     const stackCount = refEntry.stackCount || 1;
     let sellCount = 0;
@@ -1426,7 +1452,9 @@ class ShopService {
 
   // 分解裝備：移除該裝備，50% 機率產出同階強化寶石（取代舊「丟棄」）
   // 怪物卡不可分解；分解失敗時裝備照樣消失但無產物
-  async discardItem(discordId, entryUuid) {
+  // opts.mode："dismantle"＝分解（只准裝備，消耗品擋下）；預設/"discard"＝丟棄（允許刪消耗品，玩家主動丟東西是合法的）
+  async discardItem(discordId, entryUuid, opts = {}) {
+    const mode = opts.mode === "dismantle" ? "dismantle" : "discard";
     // 上鎖序列化：避免並發分解同一裝備，造成「裝備只扣一件卻產出兩份寶石」的複製。
     return withPlayerProgressLock(discordId, async () => {
       const progress = await this.progressRepository.findByPlayerId(discordId);
@@ -1434,6 +1462,12 @@ class ShopService {
       const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
       if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
       const entry = progress.inventory[idx];
+
+      // 分解模式：只有裝備能分解。消耗品（金幣袋／藥水等 itemType=consumable）走到分解會被「無產物刪除」＝白白消失，
+      // 這裡明確擋下（批量分解時此件被略過、不刪）。玩家真的要丟消耗品請走「丟棄」（mode=discard 不受此限）。
+      if (mode === "dismantle" && entry.itemType !== "equipment") {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "只有裝備可以分解，消耗品／其他道具請改用「丟棄」", 400);
+      }
 
       // 已鎖定的裝備不可分解/丟棄（玩家保留用；先解鎖才能處理）
       if (entry.locked) {
