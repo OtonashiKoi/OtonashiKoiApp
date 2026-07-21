@@ -973,18 +973,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 攻擊側＝武器＋副手的屬性等級加總（封頂4）→ 決定打出去的相剋倍率
   // 防禦側＝防具＋飾品的屬性等級加總（封頂4）→ 只在「我方屬性剋制該怪」時提供受傷減免
   // 任一方無屬性/等級 0 → 不生效；現有 69 隻怪與 487 件道具都沒有 element 欄位，既有內容零影響。
-  const _weaponEl = resolveWeaponElement(options.equipped || {});
+  const monsterElement = normalizeElement(options.monsterElement);
+  // 武器多屬性並存(水3火2...)：依「這場打的怪」動態挑出身上哪個屬性生效，見 elementSystem._pickAgainstDefender
+  const _weaponEl = resolveWeaponElement(options.equipped || {}, monsterElement);
   const playerElement = options.playerElement !== undefined
     ? normalizeElement(options.playerElement)
     : _weaponEl.element;
   const playerElementLevel = options.playerElementLevel !== undefined
     ? normalizeElementLevel(options.playerElementLevel)
     : _weaponEl.level;
-  const monsterElement = normalizeElement(options.monsterElement);
   const elementMult = getElementMultiplier(playerElement, monsterElement, playerElementLevel);
 
   // 防具側：受傷減免（0~0.4）
-  const _armorEl = resolveArmorElement(options.equipped || {});
+  const _armorEl = resolveArmorElement(options.equipped || {}, monsterElement);
   const armorElement = options.armorElement !== undefined ? normalizeElement(options.armorElement) : _armorEl.element;
   const armorElementLevel = options.armorElementLevel !== undefined
     ? normalizeElementLevel(options.armorElementLevel)
@@ -1007,10 +1008,30 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   }
   const elementBonusMult = 1 + elementBonusPct / 100;
 
+  // ── 戰鬥姿態（聖劍士等二轉）──────────────────────────────────────────
+  // 開打前選定，整場適用。設定表在 jobAdvancement.T2_BRANCHES[*].stances，
+  // 這裡只讀表、不寫死職業判斷。options.stance 沒給 → battleStance = null → 行為完全同現況。
+  let battleStance = null;
+  try {
+    battleStance = require("./jobAdvancement").resolveStance(options.equipped?.job_eq, options.stance);
+  } catch (_) { battleStance = null; }
+
+  // 攻擊姿態：依「對手被剋制的屬性」出手，也就是保證站在相剋優勢方。
+  // 武器已有屬性濃度(>=upgradeFromWeaponLevel) → 直接用 upgradedLevel，否則 baseLevel。
+  // 怪物沒有屬性時不生效（無從判斷誰剋誰），維持 ×1。
+  let stanceElementMult = null;
+  if (battleStance?.guaranteedElement && monsterElement) {
+    const ge = battleStance.guaranteedElement;
+    const lv = playerElementLevel >= Number(ge.upgradeFromWeaponLevel || 2)
+      ? Number(ge.upgradedLevel || 4)
+      : Number(ge.baseLevel || 2);
+    stanceElementMult = 1 + normalizeElementLevel(lv) * 0.10;
+  }
+
   // 玩家每一擊的總倍率 = 世界王部位弱點 × 屬性相剋 × 對屬性增傷。
   // 三者都是「乘進每一擊終傷」的同類機制，合併成一個乘數即可涵蓋主擊/連擊/三元/反擊/各DOT
   //   （函式名沿用 applyBossVuln 以免動到既有呼叫點）。
-  const playerHitMult = bossVulnMult * elementMult * elementBonusMult;
+  const playerHitMult = bossVulnMult * (stanceElementMult ?? elementMult) * elementBonusMult;
   const applyBossVuln = (raw) => (playerHitMult === 1 ? raw : Math.max(0, Math.round((Number(raw) || 0) * playerHitMult)));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
   let endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
@@ -2280,6 +2301,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (Number.isFinite(Number(c.ownerHpAbovePct)) && playerHpPct <= Number(c.ownerHpAbovePct)) return false;
           if (Number.isFinite(Number(c.ownerHpBelowPct)) && playerHpPct >= Number(c.ownerHpBelowPct)) return false;
           if (Number.isFinite(Number(c.targetHpBelowPct)) && monsterHpPct >= Number(c.targetHpBelowPct)) return false;
+          // 姿態專屬技能：只有在對應姿態下才進入隨機池（沒選姿態 → 這類技能一律不可用）
+          if (c.stance && c.stance !== battleStance?.key) return false;
           return true;
         });
         if (available.length > 0) {
@@ -2352,6 +2375,23 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerCritDamageMultiplier = 1;
     let playerLifestealPct = 0;
     let playerLifestealStrongPct = 0;
+    // 吸血結算（主擊／副手／三元／武器多段／連擊共用）。
+    // 錨點「對鮮血的渴望」寫的是「造成傷害的 20% 回血」，但舊版只結算主擊那一下的 dmg，
+    // 三元補打／骰子多段／連擊全部漏掉（玩家回報「只會算第一下」）。改成各段結算完一起吸，
+    // 每個來源合併成一行戰報（避免 7 連擊洗出 7 行）。
+    const _applyLifesteal = (dealt, srcLabel = "") => {
+      if (!(dealt > 0)) return;
+      if (playerLifestealPct > 0) {
+        const healAmt = Math.max(1, Math.round(dealt * (playerLifestealPct / 100)));
+        pHp = _healPlayer(healAmt, { lifesteal: true });
+        log.push(`💚 吸取生命力${srcLabel}！恢復 **${healAmt}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+      }
+      if (playerLifestealStrongPct > 0) {
+        const sHeal = Math.max(1, Math.round(dealt * (playerLifestealStrongPct / 100)));
+        pHp = _healPlayer(sHeal, { lifesteal: true });
+        log.push(`💜 強力吸血${srcLabel}！恢復 **${sHeal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+      }
+    };
     let playerDefBonusPct = 0;
     let playerDefDownPct = 0;
     let playerDefFlatBonus = 0;
@@ -3082,6 +3122,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         // ── 三元牌：固定補打 N-1 段（每段獨立擲爆擊、吃連擊增傷、吃地圖特攻；算連擊、可致命）──
         if (playerTripleStrike >= 2 && mHp > 0) {
+          let _tsLifestealDmg = 0; // 三元補打累計傷害 → 迴圈結束一起吸血
           const _sanyuan = ["白", "發", "中"];
           // 每段基底＝未爆擊 1/N ×（地圖特攻/最終傷害%）→ 避免疊到主擊爆擊；再逐段各自吃連擊增傷+獨立爆擊
           const _tsCleanBase = Math.max(1, Math.round(nonCritDamageBase / playerTripleStrike * (equipZoneFinalDmgMult * roundScaleMult(round))));
@@ -3093,11 +3134,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (_noPlayerAtk) tsDmg = 0;
             mHp -= tsDmg;
             totalDamage += tsDmg;
+            _tsLifestealDmg += tsDmg;
             combatStats.comboCount += 1;
             const _pai = _sanyuan[_ts % _sanyuan.length];
             const _tsCritNote = tsCrit ? `✨**${rand(critPhrases)}**！` : "";
             log.push(`🀄 ${_tsCritNote}**三元・${_pai}**！再造成 **${tsDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
           }
+          _applyLifesteal(_tsLifestealDmg, "（三元）");
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -3107,6 +3150,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         //    每段各自擲攻擊階級與爆擊，並各自吃一次武器主屬性追加傷害。
         const _weaponSegments = Math.max(1, Number(pStats.attackSegments) || 1);
         if (_weaponSegments >= 2 && mHp > 0) {
+          let _segLifestealDmg = 0; // 武器多段(骰子)累計傷害 → 迴圈結束一起吸血
           for (let _seg = 1; _seg < _weaponSegments && mHp > 0; _seg++) {
             // 命中/揮空/迴避在攻擊一開始就判定完畢（見上方 hitChance 與攻擊階級），
             // 所以各段共用主擊的攻擊階級——不會出現「全六卻有一擲落空」這種矛盾。
@@ -3136,11 +3180,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (_noPlayerAtk) segDmg = 0;
             mHp -= segDmg;
             totalDamage += segDmg;
+            _segLifestealDmg += segDmg;
             const segCritNote = segCrit ? `✨**${rand(critPhrases)}**！` : "";
             const segTierNote = segTier === 'great' ? "⚡**大成功**！" : segTier === 'perfect' ? "🌟**完美**！" : "";
             const segPip = diceRolls ? `${DICE_PIPS[diceRolls[_seg] - 1] || ""}` : "";
             log.push(`🎲 ${segPip}${segTierNote}${segCritNote}**第 ${_seg + 1} 擲**！再造成 **${segDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
           }
+          _applyLifesteal(_segLifestealDmg, "（多段）");
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -3352,18 +3398,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // 計數一次攻擊
         combatStats.attackCount += 1;
 
-        // ── 玩家吸血效果（來自卡片技能）──
-        if (playerLifestealPct > 0) {
-          const healAmt = Math.max(1, Math.round(dmg * (playerLifestealPct / 100)));
-          pHp = _healPlayer(healAmt, { lifesteal: true });
-          log.push(`💚 吸取生命力！恢復 **${healAmt}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
-        }
-        // ── 強力吸血效果（林地妖靈卡）──
-        if (playerLifestealStrongPct > 0) {
-          const sHeal = Math.max(1, Math.round(dmg * (playerLifestealStrongPct / 100)));
-          pHp = _healPlayer(sHeal, { lifesteal: true });
-          log.push(`💜 強力吸血！恢復 **${sHeal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
-        }
+        // ── 玩家吸血效果（主擊／副手；卡片技能與鮮血錨點共用）──
+        _applyLifesteal(dmg);
 
         // ── 檢查怪物反彈傷害效果 ──
         if (Array.isArray(monsterActiveEffects)) {
@@ -3431,6 +3467,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const MAX_COMBO_PER_ROUND = 7;
         let comboHitsThisAttack = 0;
         let comboKilled = false;
+        let _comboLifestealDmg = 0; // 連擊累計傷害 → 連段結束一起吸血（玩家回報「連擊不吸血」）
         while (comboHitsThisAttack < MAX_COMBO_PER_ROUND && (comboHitsThisAttack < playerGuaranteedCombo || Math.random() * 100 < comboChance)) {
           // 連擊逐段命中判定：被迴避/未命中 → 立即中斷連段（怪被暈時無法閃避、必中；不吃主擊的大成功/完美必中）
           const comboConnects = comboHitsThisAttack < playerGuaranteedCombo || monsterIsStunned || Math.random() * 100 < hitChance;
@@ -3455,6 +3492,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (_noPlayerAtk) cdmg = 0; // 沒苦硬吃：連擊也不造成傷害
           mHp -= cdmg;
           totalDamage += cdmg;
+          _comboLifestealDmg += cdmg;
           const comboLabel = comboHitsThisAttack >= 2 ? `${comboHitsThisAttack} 連擊` : "連擊";
           log.push(`⚡ **${rand(jobFlavor.combo)}** ${comboLabel}！再造成 **${cdmg}** 點傷害${comboBlockNote}！（怪物剩 ${Math.max(0, mHp)} HP）`);
 
@@ -3479,6 +3517,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           comboChance = comboChance / 2;
         }
 
+        _applyLifesteal(_comboLifestealDmg, "（連擊）");
         if (comboKilled) { outcome = "win"; break; }
       } else {
         log.push(`💨 ${mName} ${rand(jobFlavor.dodge)}，你的攻擊落空了！`);
@@ -3563,7 +3602,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
       if (playerIsStunned || mForceHit || hellfangGuaranteedSeg || Math.random() * 100 < monsterHitChance) {
         // 盾格擋判定（含主動技能臨時格擋加成，例如劍士「舉步若堅」+25%，上限 95% 與被動一致）
-        if (Math.random() * 100 < Math.min(95, (pStats.blockChance || 0) + playerBlockBonus)) {
+        // 姿態有指定格擋率時以姿態為準（技能/裝備的臨時加成仍疊上去）
+        const _stanceBlock = Number(battleStance?.blockChance);
+        const _blockPct = Number.isFinite(_stanceBlock)
+          ? Math.min(95, _stanceBlock + playerBlockBonus)
+          : Math.min(95, (pStats.blockChance || 0) + playerBlockBonus);
+        if (Math.random() * 100 < _blockPct) {
           blockedThisRound = true;
           combatStats.blockCount += 1;
           if (monsterIsBossUnit) {
@@ -3872,6 +3916,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
 
     // ── 盾格擋反擊（單手劍+盾，必中）── 走獨立階級擲骰
+    // 防禦姿態：格擋成功 → 追加盾擊（ATK 的 shieldBashPct%），與原本的格擋反擊並存
+    if (blockedThisRound && Number(battleStance?.shieldBashPct) > 0 && outcome === null) {
+      const bashRaw = Math.max(1, Math.round((pStats.atk || 1) * (Number(battleStance.shieldBashPct) / 100) * playerAttackLevelMult));
+      const bashDefIgnore = Math.min(100, Math.max(0, (pStats.bypassMonsterDefPct ?? 0) + playerDefIgnorePct + roundPartyDefIgnorePct));
+      const bashDef = Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100) * (1 - bashDefIgnore / 100));
+      let bashDmg = Math.max(1, Math.round(applyDefense(bashRaw, adjustedMCalc.flatDef || 0, bashDef, pStats.atk)));
+      bashDmg = applyBossVuln(bashDmg);
+      if (_noPlayerAtk) bashDmg = 0;
+      mHp -= bashDmg;
+      totalDamage += bashDmg;
+      log.push(`🛡️ **盾擊**！以盾緣重擊 ${mName}，造成 **${bashDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+      if (mHp <= 0) { outcome = "win"; }
+    }
     if (blockedThisRound && pStats.blockCounter && outcome === null) {
       const counterAtkTier = rollAttackTier(calcAttackTierProbs(pStats.dex || 0, pStats.luk || 0));
       // 大失敗 / 失敗 階級時，反擊也會出包

@@ -172,8 +172,17 @@ function createSoloBossRoutes(serviceContext) {
       const battleMonsterEquipped = adjM.monsterEquipped || monster.equipment || {};
 
       // 戰鬥：以「該部位當前血量」為基準（同現行）
+      // 戰鬥姿態（同 quick-battle）
+      let battleStanceKey = null;
+      try {
+        battleStanceKey = require("../../shared/battleStance").resolveRequestedStance(equipped, req.body?.stance);
+      } catch (stanceErr) {
+        return res.status(stanceErr.statusCode || 400).json({ status: "error", message: stanceErr.message });
+      }
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const r = runCombatLoop(pStats, battleMonsterStats, monster.name, Math.max(1, partHpNow), undefined, {
+        stance: battleStanceKey,
         monsterEquipped: battleMonsterEquipped, playerLevel: progress.level, monsterLevel: battleMonsterStats.level,
         equipped, inventory: progress.inventory || [], playerActiveEffects: progress.activeEffects || [],
         monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與

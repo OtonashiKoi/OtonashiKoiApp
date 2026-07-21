@@ -2990,6 +2990,11 @@ async function handleEnterBattle(interaction) {
         runCombatLoop(battlePlayerStats, battleMonsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
           playerName: displayName,
           playerLevel: currentProg?.level || 1,
+          // DC 端不做姿態按鈕 → 有姿態系統的職業一律視為攻擊姿態（無姿態系統的職業回 null，不受影響）
+          stance: (() => {
+            try { return require("../../shared/battleStance").resolveRequestedStance(currentEquipped, "attack"); }
+            catch (_) { return null; }
+          })(),
           equipped: currentEquipped,
           inventory: currentProg?.inventory || [],
           partyEffects,
@@ -3892,6 +3897,17 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
             };
             // 獲得瞬間骰附魔（只骰一次，寫進 droppedItemObjects 後續 retry 不會重骰）
             try { require("../../services/enchant/enchantService").rollForEntry(droppedEntry); } catch (_) { /* noop */ }
+            // 屬性附魔：由「掉落這件的怪」決定屬性，等級上限＝該怪的濃度（活動區小怪＝水1）。
+            // 不建新道具，只在這一件實例標 element/elementLevel；飾品與卡片不附（見 elementDropRoll）。
+            try {
+              if (monster?.element) {
+                require("../../shared/elementDropRoll").rollElementForEntry(droppedEntry, {
+                  element: monster.element,
+                  maxLevel: monster.elementLevel || 1,
+                  zone: zoneKey,        // 只有活動區會實際附上
+                });
+              }
+            } catch (_) { /* noop */ }
             droppedItemObjects.push(droppedEntry);
           }
         }

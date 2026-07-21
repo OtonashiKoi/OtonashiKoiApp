@@ -1,5 +1,11 @@
 "use strict";
 
+// 🗼 爬塔總開關：false = 暫停開放。
+//   已經貼在頻道的常駐面板不用刪，玩家點按鈕/選單會收到「暫停開放」的私訊提示。
+//   戰鬥核心、房間、排行等程式碼全部保留（網頁組隊爬塔也共用這裡的核心），
+//   要重新開放把這裡改回 true、並把 app 的 battle.tsx / leaderboard.tsx 的 TOWER_ENABLED 一起改 true。
+const TOWER_ENABLED = false;
+
 const { MessageFlags, ActionRowBuilder, StringSelectMenuBuilder } = require("discord.js");
 const config = require("../../config");
 const { serviceContext, getBotClient } = require("../runtimeContext");
@@ -1999,7 +2005,17 @@ async function handleApplyPotion(interaction) {
   });
 }
 
+/** 爬塔暫停開放時，對點面板的玩家回一則私訊提示（不改動面板本身）。 */
+async function replyTowerClosed(interaction) {
+  const payload = { content: "🗼 爬塔目前暫停開放，敬請期待後續公告。", flags: MessageFlags.Ephemeral };
+  try {
+    if (interaction.deferred || interaction.replied) await interaction.followUp(payload);
+    else await interaction.reply(payload);
+  } catch (_) { /* 互動已過期就算了 */ }
+}
+
 async function handleTowerButton(interaction) {
+  if (!TOWER_ENABLED) return replyTowerClosed(interaction);
   switch (interaction.customId) {
   case TOWER_IDS.openLobby:  return handleOpenLobby(interaction);
   case TOWER_IDS.join:       return handleJoin(interaction);
@@ -2021,6 +2037,7 @@ function isTowerSelectMenu(customId) {
 }
 
 async function handleTowerSelectMenu(interaction) {
+  if (!TOWER_ENABLED) return replyTowerClosed(interaction);
   if (interaction.customId === "tower:use_item_pick_potion") return handlePickPotion(interaction);
   if (interaction.customId === "tower:use_item_pick_target") return handleApplyPotion(interaction);
 }
@@ -2051,6 +2068,7 @@ function getTowerDiagnostics() {
 }
 
 module.exports = {
+  TOWER_ENABLED, // 🗼 總開關（playerAppRoutes 的 /api/tower 守衛會讀這個）
   isTowerButton,
   handleTowerButton,
   isTowerSelectMenu,

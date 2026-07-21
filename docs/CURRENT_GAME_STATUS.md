@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-07-20T06:33:03.624Z
+Generated at: 2026-07-21T03:42:55.278Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -8,11 +8,11 @@ Generated at: 2026-07-20T06:33:03.624Z
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 419 |
-| 進度資料 | 423 |
+| 玩家 | 420 |
+| 進度資料 | 424 |
 | 怪物 | 76 |
 | 怪物狀態文件 | 12 |
-| 道具 | 497 |
+| 道具 | 504 |
 | 任務 | 51 |
 | 職業徽章 | 11 |
 | 職業任務 | 11 |
@@ -80,13 +80,13 @@ Generated at: 2026-07-20T06:33:03.624Z
 | dragon_realm | 9 | 龍翼魔法師 | 48 | 75000 | 22000 | 600 | 0 | 否 | 11 |
 | dragon_realm | 10 | 龍王(B) | 50 | 300000 | 50000 | 15000 | 0 | 是 | 43 |
 | elite | 1 | 大史王 | 60 | 1770000 | 19500 | 40500 | 5000 | 是 | 81 |
-| event_1 | 1 | 潮汐守衛 | 41 | 23000 | 12520 | 351 | 0 | 否 | 6 |
-| event_1 | 2 | 溺影潛伏者 | 41 | 19900 | 12520 | 351 | 0 | 否 | 5 |
-| event_1 | 3 | 珊瑚劍士 | 43 | 24000 | 14460 | 405 | 0 | 否 | 5 |
-| event_1 | 4 | 潮鳴咒師 | 40 | 20000 | 11550 | 324 | 0 | 否 | 5 |
-| event_1 | 5 | 鎧鱗龍人 | 44 | 26000 | 15430 | 432 | 0 | 否 | 5 |
-| event_1 | 6 | 碧波弓手 | 42 | 21500 | 13490 | 378 | 0 | 否 | 5 |
-| event_1 | 7 | 寒淵騎士 | 45 | 27000 | 16400 | 459 | 0 | 否 | 6 |
+| event_1 | 1 | 貝貝寄居蟹 | 41 | 23000 | 12520 | 351 | 0 | 否 | 6 |
+| event_1 | 2 | 溜溜沙蟹 | 41 | 19900 | 12520 | 351 | 0 | 否 | 5 |
+| event_1 | 3 | 蝦蝦劍士 | 43 | 24000 | 14460 | 405 | 0 | 否 | 5 |
+| event_1 | 4 | 墨墨章魚 | 40 | 20000 | 11550 | 324 | 0 | 否 | 5 |
+| event_1 | 5 | 椰椰大蟹 | 44 | 26000 | 15430 | 432 | 0 | 否 | 5 |
+| event_1 | 6 | 鼓鼓河豚 | 42 | 21500 | 13490 | 378 | 0 | 否 | 5 |
+| event_1 | 7 | 龜龜大將 | 45 | 27000 | 16400 | 459 | 0 | 否 | 6 |
 | hellfire | 1 | 焰爪幼狼 | 42 | 40629 | 15000 | 700 | 0 | 否 | 11 |
 | hellfire | 2 | 灰燼豺 | 43 | 43338 | 16000 | 740 | 0 | 否 | 12 |
 | hellfire | 3 | 熔岩犬 | 43 | 47401 | 17500 | 800 | 0 | 否 | 13 |
@@ -125,7 +125,7 @@ Generated at: 2026-07-20T06:33:03.624Z
 | 分類 | 數量 |
 | --- | --- |
 | collectible | 7 |
-| consumable | 25 |
+| consumable | 32 |
 | equipment | 451 |
 | job_badge | 11 |
 | pet_egg | 3 |
@@ -137,7 +137,7 @@ Generated at: 2026-07-20T06:33:03.624Z
 | C | 73 |
 | D | 62 |
 | S | 45 |
-| 無階級 | 54 |
+| 無階級 | 61 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -155,7 +155,7 @@ Generated at: 2026-07-20T06:33:03.624Z
 | special | 77 |
 | title_eq | 13 |
 | weapon | 102 |
-| 無槽位 | 35 |
+| 無槽位 | 42 |
 
 ## Items
 
@@ -177,13 +177,20 @@ Generated at: 2026-07-20T06:33:03.624Z
 | 97fbd546-e207-4130-b130-2fadd799703a | 回復藥水（中） | consumable |  |  |  |  | tower_heal_flat |
 | 3eb1d302-3d04-40a5-8335-1f9ed844dc27 | 回復藥水（大） | consumable |  |  |  |  | tower_heal_pct |
 | f56aefd0-faa8-45b5-8451-fbbae5810c74 | 回復藥水（小） | consumable |  |  |  |  | tower_heal_flat |
+| element-stone-earth | 土屬性石 | consumable |  |  |  |  | none |
 | chest-hellfang-king | 地獄狼牙王寶箱 | consumable |  |  |  |  | open_world_boss_chest |
 | chest-daishi-king | 大史王寶箱 | consumable |  |  |  |  | open_world_boss_chest |
 | 87b281be-b175-40a0-8044-0accc88a0ee0 | 屬性重製藥水 | consumable |  |  |  |  | reroll_attributes |
 | c4794326-ced1-4efe-983d-17c14ee2f2f8 | 復活藥水（大） | consumable |  |  |  |  | tower_revive_pct |
 | 12bfb110-6489-4784-8537-f3f496759f8f | 復活藥水（小） | consumable |  |  |  |  | tower_revive_pct |
+| element-stone-sun | 日屬性石 | consumable |  |  |  |  | none |
+| element-stone-moon | 月屬性石 | consumable |  |  |  |  | none |
+| element-stone-wood | 木屬性石 | consumable |  |  |  |  | none |
+| element-stone-water | 水屬性石 | consumable |  |  |  |  | none |
+| element-stone-fire | 火屬性石 | consumable |  |  |  |  | none |
 | ticket-bag-expand | 背包擴充券（消耗品·本季+20格） | consumable |  |  |  |  | add_backpack_slots |
 | chest-anchor-pack | 記憶錨定卡包 | consumable |  |  |  |  | open_anchor_pack |
+| element-stone-metal | 金屬性石 | consumable |  |  |  |  | none |
 | 71aaa3a2-abb9-4b01-b024-16e553b08840 | 金幣袋子(中) | consumable |  |  |  |  | grant_gold |
 | 1854a2b1-a569-4604-802d-9171f480a9ae | 金幣袋子(大) | consumable |  |  |  |  | grant_gold |
 | 63ca559b-ca12-4835-a48d-2150e366f60e | 金幣袋子(小) | consumable |  |  |  |  | grant_gold |
@@ -679,7 +686,7 @@ Generated at: 2026-07-20T06:33:03.624Z
 | job | 80 | 軍師試煉 | battle_with_sword | 10 | 啟用 | 500 金幣 + 軍師徽章 | 出現條件：Lv.10，基礎 AGI + INT + DEX > 10。進度武器：單手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與軍師徽章。 |
 | job | 90 | 詩人試煉 | battle_with_bow | 10 | 啟用 | 500 金幣 + 詩人徽章 | 出現條件：Lv.10，基礎 DEX + AGI + LUK > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與詩人徽章。 |
 | job | 100 | 結界師試煉 | battle_with_staff | 10 | 啟用 | 500 金幣 + 結界師徽章 | 出現條件：Lv.10，基礎 INT + VIT + DEX > 10。進度武器：單手法杖或雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與結界師徽章。 |
-| job | 110 | 賭徒試煉 | battle_with_dice | 10 | 啟用 | 500 金幣 + 賭徒徽章 | 出現條件：Lv.10，基礎 LUK + AGI > 10。進度武器：骰子；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與賭徒徽章。 |
+| job | 110 | 賭徒試煉 | battle_with_dice | 10 | 停用 | 500 金幣 + 賭徒徽章 | 出現條件：Lv.10，基礎 LUK + AGI > 10。進度武器：骰子；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與賭徒徽章。 |
 | onboarding | 1 | 裝備任一裝備 1 次 | equip_count | 1 | 啟用 | 200 金幣 + 90 EXP + 木製單手斧 | 任意裝備一件裝備即可完成。 |
 | onboarding | 2 | 首次出戰 | battle_count | 1 | 啟用 | 120 金幣 + 60 EXP + 木製單手劍 | 在新手村外的草叢戰鬥一次即可。 |
 | onboarding | 3 | 完成 1 次打卡 | checkin_count | 1 | 啟用 | 150 金幣 + 60 EXP | 到打卡功能完成 1 次打卡即可。 |
@@ -728,6 +735,6 @@ Generated at: 2026-07-20T06:33:03.624Z
 | job_dwarf_warrior_v1 | 矮人戰士徽章 |  | 矮人戰士試煉 | 啟用 | 10 | mace_1h, mace_2h | VIT + STR > 10 | STR+1 VIT+5 DEX+2 |
 | job_barrier_mage_v1 | 結界師徽章 |  | 結界師試煉 | 啟用 | 10 | staff_1h, staff_2h | INT + VIT + DEX > 10 | VIT+3 INT+3 DEX+2 |
 | job_bard_v1 | 詩人徽章 |  | 詩人試煉 | 啟用 | 10 | bow | DEX + AGI + LUK > 10 | AGI+2 DEX+4 LUK+2 |
-| job_gambler_v1 | 賭徒徽章 |  | 賭徒試煉 | 啟用 | 10 | dice | LUK + AGI > 10 | AGI+2 DEX+1 LUK+5 |
+| job_gambler_v1 | 賭徒徽章 |  | 賭徒試煉 | 停用 | 10 | dice | LUK + AGI > 10 | AGI+2 DEX+1 LUK+5 |
 | job_tactician_v1 | 軍師徽章 |  | 軍師試煉 | 啟用 | 10 | sword_1h | AGI + INT + DEX > 10 | AGI+4 INT+2 DEX+2 |
 

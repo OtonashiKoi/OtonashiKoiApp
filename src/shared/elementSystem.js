@@ -38,8 +38,41 @@ const COUNTERS = {
  *  無屬性或等級 0 → ×1（現有內容不受影響）
  */
 const PCT_PER_LEVEL = 0.10;
-const MAX_ELEMENT_LEVEL = 4;
+// 5：對齊「屬性洞」系統的頂點——S 階武器 5 洞全押同屬性 = 濃度5（+50%/-50%）
+const MAX_ELEMENT_LEVEL = 5;
 const MULT_NEUTRAL = 1;
+
+/** 屬性洞數：依裝備「階級」決定，不是強化等級。D1/C2/B3/A4/S5。 */
+const ELEMENT_SOCKET_COUNT_BY_TIER = { D: 1, C: 2, B: 3, A: 4, S: 5 };
+
+function getElementSocketCapacity(tier) {
+  return ELEMENT_SOCKET_COUNT_BY_TIER[String(tier || "").toUpperCase()] || 0;
+}
+
+/**
+ * 讀出一件裝備實例目前身上的屬性分佈（元素 → 濃度），支援兩種格式：
+ *   ‧ 新格式 entry.elements = { water: 3, fire: 2 }（屬性洞系統，多屬性並存）
+ *   ‧ 舊格式 entry.element/entry.elementLevel（活動區掉落附魔，單一屬性）
+ * 兩者不會同時出現在同一件實例上（洞位系統一旦補洞就會把舊格式併入 elements）。
+ */
+function resolveElementsMap(entry) {
+  const map = Object.create(null);
+  if (!entry || typeof entry !== "object") return map;
+  if (entry.elements && typeof entry.elements === "object") {
+    for (const [key, lv] of Object.entries(entry.elements)) {
+      const el = normalizeElement(key);
+      const n = Math.floor(Number(lv)) || 0;
+      if (el && n > 0) map[el] = (map[el] || 0) + n;
+    }
+    return map;
+  }
+  const el = normalizeElement(entry.element);
+  if (el) {
+    const lv = normalizeElementLevel(entry.elementLevel ?? 1);
+    if (lv > 0) map[el] = lv;
+  }
+  return map;
+}
 
 /** 把等級正規化到 0~4 的整數（0＝沒有屬性強度） */
 function normalizeElementLevel(value) {
@@ -112,50 +145,59 @@ const ARMOR_SLOTS = [
   "accessory_l", "accessory_r",
 ];
 
-function _readSlot(equipped, slot) {
-  const item = equipped?.[slot];
-  if (!item) return null;
-  const key = normalizeElement(item.element);
-  if (!key) return null;
-  // 沒寫 elementLevel 的舊資料 → 視為 1 級（有屬性就至少有最低濃度）
-  const lv = normalizeElementLevel(item.elementLevel ?? 1);
-  return lv > 0 ? { element: key, level: lv } : null;
-}
-
-/** 同一組槽位裡，各屬性的等級加總（封頂 4），回傳最強的那個屬性 */
-function _aggregate(equipped, slots) {
+/** 同一組槽位裡，各屬性的濃度加總（跨裝備件），回傳 { water: 3, fire: 2, ... } */
+function _aggregateElementsMap(equipped, slots) {
   const totals = new Map();
   for (const slot of slots) {
-    const got = _readSlot(equipped, slot);
-    if (!got) continue;
-    totals.set(got.element, (totals.get(got.element) || 0) + got.level);
+    const item = equipped?.[slot];
+    if (!item) continue;
+    for (const [el, lv] of Object.entries(resolveElementsMap(item))) {
+      totals.set(el, (totals.get(el) || 0) + lv);
+    }
   }
-  if (totals.size === 0) return { element: null, level: 0 };
-  // 依 ELEMENTS 固定順序走訪 → 等級相同時結果穩定，不會忽上忽下
-  let best = null, bestLv = 0;
-  for (const key of ELEMENTS) {
-    const lv = totals.get(key) || 0;
-    if (lv > bestLv) { best = key; bestLv = lv; }
-  }
-  return { element: best, level: normalizeElementLevel(bestLv) };  // 封頂 4
+  return totals;
 }
 
 /**
- * 玩家「攻擊側」屬性（武器＋副手）：決定打出去的相剋倍率。
- * @returns {{ element: string|null, level: number }}
+ * 多屬性裝備「打這隻怪要看哪個屬性」的挑選邏輯（單一屬性剋制只會對到一個屬性，
+ * 相剋環是一對一映射，不會有兩個屬性同時剋同一隻怪，所以不需要疊加不同屬性）：
+ *   例：身上水3火2 → 打火屬性怪，水剋火 → 看水3；打金屬性怪，火剋金 → 看火2。
+ * 優先找「我方剋怪」的那個屬性；沒有的話才退而求其次看「怪剋我方」的那個屬性（劣勢）；
+ * 兩者都沒有 → 無相剋，回傳空。
  */
-function resolveWeaponElement(equipped = {}) {
-  if (!equipped || typeof equipped !== "object") return { element: null, level: 0 };
-  return _aggregate(equipped, WEAPON_SLOTS);
+function _pickAgainstDefender(totals, defenderElement) {
+  const defender = normalizeElement(defenderElement);
+  if (!defender || totals.size === 0) return { element: null, level: 0 };
+
+  const advantageElement = ELEMENTS.find((el) => COUNTERS[el] === defender);
+  if (advantageElement && totals.get(advantageElement) > 0) {
+    return { element: advantageElement, level: normalizeElementLevel(totals.get(advantageElement)) };
+  }
+  const disadvantageElement = COUNTERS[defender];
+  if (disadvantageElement && totals.get(disadvantageElement) > 0) {
+    return { element: disadvantageElement, level: normalizeElementLevel(totals.get(disadvantageElement)) };
+  }
+  return { element: null, level: 0 };
 }
 
 /**
- * 玩家「防禦側」屬性（防具＋飾品）：決定受傷減免。等級總和封頂 4。
+ * 玩家「攻擊側」屬性（武器＋副手）：依「這場打的怪」動態挑出身上哪個屬性生效。
+ * @param {object} equipped 目前裝備
+ * @param {string} defenderElement 這場戰鬥怪物的屬性；沒給就回傳無相剋（不生效）
  * @returns {{ element: string|null, level: number }}
  */
-function resolveArmorElement(equipped = {}) {
+function resolveWeaponElement(equipped = {}, defenderElement = null) {
   if (!equipped || typeof equipped !== "object") return { element: null, level: 0 };
-  return _aggregate(equipped, ARMOR_SLOTS);
+  return _pickAgainstDefender(_aggregateElementsMap(equipped, WEAPON_SLOTS), defenderElement);
+}
+
+/**
+ * 玩家「防禦側」屬性（防具＋飾品）：依「這場打的怪」動態挑出身上哪個屬性生效。
+ * @returns {{ element: string|null, level: number }}
+ */
+function resolveArmorElement(equipped = {}, defenderElement = null) {
+  if (!equipped || typeof equipped !== "object") return { element: null, level: 0 };
+  return _pickAgainstDefender(_aggregateElementsMap(equipped, ARMOR_SLOTS), defenderElement);
 }
 
 /**
@@ -205,4 +247,7 @@ module.exports = {
   getElementMultiplier,
   resolvePlayerElement,
   describeElementMatchup,
+  ELEMENT_SOCKET_COUNT_BY_TIER,
+  getElementSocketCapacity,
+  resolveElementsMap,
 };

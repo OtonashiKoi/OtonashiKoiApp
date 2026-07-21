@@ -21,8 +21,23 @@ const GEM_ID_BY_TIER = {
 };
 // 強化寶石本身不可分解（分解只吃裝備；寶石送進來會無產物卻照樣被移除＝白白消失）
 const GEM_ID_SET = new Set(Object.values(GEM_ID_BY_TIER));
+
+// 分解：屬性石 itemId（依屬性）。由 scripts/seed-element-stones.js 建立，id 是固定字串不是 UUID。
+const ELEMENT_STONE_ID_BY_ELEMENT = {
+  water: "element-stone-water", fire: "element-stone-fire", wood: "element-stone-wood",
+  earth: "element-stone-earth", metal: "element-stone-metal",
+  sun: "element-stone-sun", moon: "element-stone-moon",
+};
+// 分解帶屬性的裝備時，**獨立於強化寶石**再擲一次（兩者可同時獲得，也可能都槓龜）。
+// 顆數＝屬性濃度：水1 給 1 顆、水4 給 4 顆，讓高濃度裝備拆起來才划算。
+const ELEMENT_STONE_RATE = 0.5;
 function isGemEntry(entry) {
   return !!entry && (GEM_ID_SET.has(entry.itemId) || entry.itemType === "gem");
+}
+// 屬性石：不可分解（走上面 canDismantle 的 itemType==="equipment" 判斷已天然擋掉）、
+// 不可販售給系統（見 getSellQuote），但可以上架拍賣（見 auctionService.ELEMENT_STONE_IDS）。
+function isElementStoneEntry(entry) {
+  return !!entry && Object.values(ELEMENT_STONE_ID_BY_ELEMENT).includes(entry.itemId);
 }
 // 特殊/收藏槽位不可分解：錨點(唯一傳說)、稱號、職業徽章。
 // （special 卡由 _isMonsterCardEntry 另外擋）這些是 itemType==="equipment" 但珍貴/功能性，
@@ -1359,6 +1374,10 @@ class ShopService {
     if (refEntry.itemType === "job_badge" || refEntry.equipSlot === "job_eq") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "職業徽章不可販售", 400);
     }
+    // 屬性石不可販售給系統（想換錢請上拍賣行，賣給玩家而不是變相把屬性石消耗掉換金幣）
+    if (isElementStoneEntry(refEntry)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "屬性石無法販售，可以上架拍賣行交易", 400);
+    }
     const isGem = isGemEntry(refEntry);
     // 一般裝備一律走分解、不可販售（怪物卡、強化寶石可賣）
     const isMonsterCard = refEntry.itemType === "monster_card" || refEntry.monsterCardOf || /^special/.test(String(refEntry.equipSlot || ""));
@@ -1513,9 +1532,23 @@ class ShopService {
         await this._grantGems(progress, gemsGranted.tier, gemsGranted.count);
       }
 
+      // 屬性石：帶屬性的裝備才有，機率獨立於上面的強化寶石
+      let stonesGranted = null;
+      if (canDismantle && entry.element && ELEMENT_STONE_ID_BY_ELEMENT[entry.element]) {
+        if (Math.random() < ELEMENT_STONE_RATE) {
+          const count = Math.max(1, Number(entry.elementLevel) || 1);
+          stonesGranted = { element: entry.element, count };
+          await this._grantElementStones(progress, entry.element, count);
+        }
+      }
+
       progress.updatedAt = new Date().toISOString();
       await this.progressRepository.save(progress);
-      return { itemName: entry.itemName, gems: gemsGranted, dismantled, successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100) };
+      return {
+        itemName: entry.itemName, gems: gemsGranted, dismantled,
+        elementStones: stonesGranted,
+        successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100)
+      };
     });
   }
 
@@ -1585,22 +1618,33 @@ class ShopService {
     const canDismantle = !!DISMANTLE_YIELD[tier];
 
     // 每件獨立擲 50%
+    const takenIdx = matchIdx.slice(0, take);
+    // 屬性是「掉落瞬間附在該件實例上」的，所以同款 itemId 底下每件的 element/elementLevel 可能都不同
+    //（例：3 把秘銀劍裡只有 1 把是水1）→ 屬性石必須逐件看實例，不能像強化寶石那樣用 ref 的 tier 一次算。
+    const takenEntries = takenIdx.map((i) => inv[i]);
     let successCount = 0;
     let totalGems = 0;
     let gemTier = null;
-    for (let n = 0; n < take; n++) {
+    const stoneTotals = {};                                   // element → count
+    for (const e of takenEntries) {
       if (canDismantle && Math.random() < DISMANTLE_SUCCESS_RATE) {
         const y = DISMANTLE_YIELD[tier];
         gemTier = y.tier;
         totalGems += y.count;
         successCount += 1;
       }
+      if (canDismantle && e?.element && ELEMENT_STONE_ID_BY_ELEMENT[e.element] && Math.random() < ELEMENT_STONE_RATE) {
+        stoneTotals[e.element] = (stoneTotals[e.element] || 0) + Math.max(1, Number(e.elementLevel) || 1);
+      }
     }
 
     // 由大到小移除索引，避免位移錯亂
-    matchIdx.slice(0, take).sort((a, b) => b - a).forEach((i) => progress.inventory.splice(i, 1));
+    takenIdx.slice().sort((a, b) => b - a).forEach((i) => progress.inventory.splice(i, 1));
     if (totalGems > 0 && gemTier) {
       await this._grantGems(progress, gemTier, totalGems);
+    }
+    for (const [el, count] of Object.entries(stoneTotals)) {
+      await this._grantElementStones(progress, el, count);
     }
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);
@@ -1609,6 +1653,7 @@ class ShopService {
       dismantledCount: take,
       successCount,
       gems: totalGems > 0 ? { tier: gemTier, count: totalGems } : null,
+      elementStones: Object.keys(stoneTotals).length > 0 ? stoneTotals : null,
       successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100)
     };
     });
@@ -1650,6 +1695,38 @@ class ShopService {
       tier, enhanceLevel: 0, stackCount: count,
       source: "dismantle", grantedAt: new Date().toISOString(),
       name: gemItem?.name || `${tier}階寶石`,
+    });
+  }
+
+  // 把屬性石加進背包（同 itemId 堆疊）。結構比照 _grantGems，差別是多帶 element 給前端徽章用。
+  async _grantElementStones(progress, element, count) {
+    if (!count || count <= 0) return;
+    const stoneId = ELEMENT_STONE_ID_BY_ELEMENT[element];
+    if (!stoneId) return;
+    if (!Array.isArray(progress.inventory)) progress.inventory = [];
+    const existing = progress.inventory.find((e) => e && e.itemId === stoneId);
+    if (existing) {
+      existing.stackCount = (existing.stackCount || 1) + count;
+      return;
+    }
+    let stoneItem = null;
+    try { stoneItem = await this.itemRepository.findById(stoneId); } catch (_) {}
+    const name = stoneItem?.name || `${element}屬性石`;
+    progress.inventory.push({
+      uuid: crypto.randomUUID(),
+      itemId: stoneId,
+      itemName: name,
+      itemEffect: stoneItem?.effect || { type: "none", value: 0 },
+      useEffects: [], passiveEffects: [], procEffects: [], combatEffects: [],
+      itemType: "consumable",
+      imageUrl: stoneItem?.imageUrl || null,
+      imageThumbnailUrl: stoneItem?.imageThumbnailUrl || null,
+      equipSlot: null, equipStats: null, weaponType: null, isTwoHanded: false, atkStat: null,
+      tier: null, enhanceLevel: 0, stackCount: count,
+      element,                                   // 讓背包直接顯示屬性徽章
+      sellPrice: stoneItem?.sellPrice ?? 500,    // 帶著走，避免售價回退去查 tier
+      source: "dismantle", grantedAt: new Date().toISOString(),
+      name,
     });
   }
 

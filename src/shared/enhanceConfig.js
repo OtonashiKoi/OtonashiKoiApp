@@ -78,6 +78,27 @@ const ENHANCE_GOLD_COST = {
 const MAX_ENHANCE_LEVEL = 5;
 
 /**
+ * 屬性洞強化（補洞）配置。
+ *
+ * 難度看「這件裝備上這個屬性目前已經疊了幾顆」，跟第幾個洞無關——
+ * 混搭不同屬性彼此獨立、互不干擾，只有「同屬性疊更多」才會變貴變難。
+ * 素材量比照強化寶石表(2/5/8/12/25)的量級；成功率用 70/50/30/10（無 100% 保底，第一顆就要賭）。
+ * @key 該屬性目前已有的顆數(0~4) → 補上「下一顆」的花費/成功率
+ */
+const ELEMENT_SOCKET_STEPS = {
+  0: { stones: 2, gold: 1000, success: 70 },   // 補上該屬性的第 1 顆
+  1: { stones: 5, gold: 3000, success: 50 },   // 第 2 顆（同屬性疊加，變難）
+  2: { stones: 8, gold: 8000, success: 30 },   // 第 3 顆
+  3: { stones: 12, gold: 20000, success: 10 }, // 第 4 顆
+  4: { stones: 25, gold: 50000, success: 10 }, // 第 5 顆（只有 S 階 5 洞全押同屬性才會走到）
+};
+
+function getElementSocketCost(existingCountOfElement = 0) {
+  const key = Math.max(0, Math.min(4, Math.floor(Number(existingCountOfElement) || 0)));
+  return ELEMENT_SOCKET_STEPS[key] || null;
+}
+
+/**
  * 獲取強化所需的寶石數量
  * @param {string} tier 裝備品階 (D/C/B/A)
  * @param {number} currentLevel 目前強化等級
@@ -182,5 +203,7 @@ module.exports = {
   getSuccessRate,
   getGoldRequired,
   getEnhanceCost,
-  validateEnhance
+  validateEnhance,
+  ELEMENT_SOCKET_STEPS,
+  getElementSocketCost,
 };

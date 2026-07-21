@@ -16,6 +16,13 @@ const ENHANCE_GEM_IDS = new Set([
   '8fdfa7d9-f0fa-4e6a-a291-703b1e354072', // B
   'a6ae293d-52fc-4af5-8770-891ddf842e35'  // A
 ]);
+// 屬性石 itemId 集合（scripts/seed-element-stones.js 建立的固定 id）
+// 併入 isGem 判定：可堆疊、可上架，走跟強化寶石同一套「疊加歸還」邏輯（見 isGem 相關程式碼），
+// 不另外寫一套——玩家角度屬性石本來就是寶石分類的一種。
+const ELEMENT_STONE_IDS = new Set([
+  "element-stone-water", "element-stone-fire", "element-stone-wood",
+  "element-stone-earth", "element-stone-metal", "element-stone-sun", "element-stone-moon"
+]);
 
 const ALLOWED_HOURS = [1, 6, 12, 24];
 const AUCTION_TAX_RATE = 0.10; // 拍賣手續費：金幣交易抽 10%（鑽石不抽）
@@ -165,8 +172,8 @@ class AuctionService {
 
     const item = inventory[itemIdx];
 
-    // 只允許上架裝備 / 卡片 / 強化寶石 / 寵物蛋，且禁止職業徽章/稱號
-    const isGem = ENHANCE_GEM_IDS.has(item.itemId);
+    // 只允許上架裝備 / 卡片 / 強化寶石 / 屬性石 / 寵物蛋，且禁止職業徽章/稱號
+    const isGem = ENHANCE_GEM_IDS.has(item.itemId) || ELEMENT_STONE_IDS.has(item.itemId);
     const isPetEgg = item.itemType === "pet_egg";
     const isStackable = isGem || isPetEgg; // 可堆疊上架的類型
     if (FORBIDDEN_ITEM_TYPES.has(item.itemType) || FORBIDDEN_EQUIP_SLOTS.has(item.equipSlot)) {

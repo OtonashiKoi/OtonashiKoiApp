@@ -301,6 +301,146 @@ class EnhanceService {
   }
 
   /**
+   * 查詢一件武器/副手的屬性洞現況（給前端畫面用：目前洞位、每種屬性的下一步花費/成功率）。
+   * @returns {object|null} 非武器側裝備回傳 null
+   */
+  async getElementSocketInfo(discordId, inventoryUuid) {
+    const { ELEMENTS, getElementSocketCapacity, resolveElementsMap, WEAPON_SLOTS } = require("../../shared/elementSystem");
+    const { getElementSocketCost } = require("../../shared/enhanceConfig");
+
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家未找到", 404);
+
+    const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
+    let equipment = inventory.find((item) => item.uuid === inventoryUuid);
+    if (!equipment) {
+      for (const slotItem of Object.values(progress.equipment || {})) {
+        if (slotItem && slotItem.uuid === inventoryUuid) { equipment = slotItem; break; }
+      }
+    }
+    if (!equipment || !WEAPON_SLOTS.includes(String(equipment.equipSlot || ""))) return null;
+
+    const tier = String(equipment.tier || "").toUpperCase();
+    const capacity = getElementSocketCapacity(tier);
+    if (capacity <= 0) return null;
+
+    const elementsMap = resolveElementsMap(equipment);
+    const socketsFilled = Object.values(elementsMap).reduce((a, b) => a + b, 0);
+
+    const perElement = ELEMENTS.map((el) => {
+      const existingCount = elementsMap[el] || 0;
+      const owned = this._countGemsInInventory(inventory, `element-stone-${el}`);
+      const full = socketsFilled >= capacity;
+      const nextCost = full ? null : getElementSocketCost(existingCount);
+      return { element: el, existingCount, owned, nextCost };
+    });
+
+    return { itemName: equipment.itemName, tier, capacity, socketsFilled, elements: elementsMap, perElement };
+  }
+
+  /**
+   * 屬性洞補洞（把屬性石打進武器/副手的屬性洞）。
+   * 洞數依裝備「階級」(D1/C2/B3/A4/S5)；難度看「這個屬性目前已疊幾顆」，跟第幾洞無關——
+   * 混搭不同屬性彼此獨立不干擾，只有同屬性疊更多才變貴變難。失敗只吃素材，洞位維持空的。
+   * @param {string} discordId
+   * @param {string} inventoryUuid 背包/身上的武器 uuid
+   * @param {string} element 要補的屬性（water/fire/wood/earth/metal/sun/moon）
+   */
+  async fillElementSocket(discordId, inventoryUuid, element) {
+    return withPlayerProgressLock(discordId, () => this._fillElementSocketImpl(discordId, inventoryUuid, element));
+  }
+
+  async _fillElementSocketImpl(discordId, inventoryUuid, element) {
+    const { normalizeElement, getElementLabel, getElementSocketCapacity, resolveElementsMap, WEAPON_SLOTS } = require("../../shared/elementSystem");
+    const { getElementSocketCost } = require("../../shared/enhanceConfig");
+
+    const el = normalizeElement(element);
+    if (!el) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "無效的屬性", 400);
+    const elLabel = getElementLabel(el);
+
+    const progress = await this.progressRepository.findByPlayerId(discordId);
+    if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家未找到", 404);
+
+    const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
+    let equipment = null;
+    let equipmentSlotKey = null;
+    const equipmentIndex = inventory.findIndex((item) => item.uuid === inventoryUuid);
+    if (equipmentIndex !== -1) {
+      equipment = inventory[equipmentIndex];
+    } else {
+      for (const [slotKey, slotItem] of Object.entries(progress.equipment || {})) {
+        if (slotItem && slotItem.uuid === inventoryUuid) { equipment = slotItem; equipmentSlotKey = slotKey; break; }
+      }
+    }
+    if (!equipment) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "未找到該裝備", 404);
+
+    // 屬性洞只開放武器側（武器＋副手），跟戰鬥引擎「打出去看武器側」的定義一致
+    if (!WEAPON_SLOTS.includes(String(equipment.equipSlot || ""))) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "屬性洞只能用在武器/副手上", 400);
+    }
+
+    const tier = String(equipment.tier || "").toUpperCase();
+    const capacity = getElementSocketCapacity(tier);
+    if (capacity <= 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此裝備無法附加屬性", 400);
+
+    const elementsMap = resolveElementsMap(equipment);
+    const totalFilled = Object.values(elementsMap).reduce((a, b) => a + b, 0);
+    if (totalFilled >= capacity) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `此${tier}階裝備的屬性洞已全滿（共 ${capacity} 洞）`, 400);
+    }
+
+    const existingCountOfThisElement = elementsMap[el] || 0;
+    const cost = getElementSocketCost(existingCountOfThisElement);
+    if (!cost) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此屬性已無法再疊加", 400);
+
+    const stoneItemId = `element-stone-${el}`;
+    const stonesOwned = this._countGemsInInventory(inventory, stoneItemId);
+    if (stonesOwned < cost.stones) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `屬性石不足，需要 ${cost.stones} 顆，目前擁有 ${stonesOwned} 顆`, 400);
+    }
+    const wallet = this.walletRepository ? await this.walletRepository.findByPlayerId(discordId).catch(() => null) : null;
+    const goldOwned = Math.max(0, Number(wallet?.gold) || 0);
+    if (goldOwned < cost.gold) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `金幣不足，需要 ${cost.gold} 金幣，目前擁有 ${goldOwned} 金幣`, 400);
+    }
+
+    // 素材無論成敗都扣（跟一般強化同規則：失敗只吃材料，洞位維持空的，裝備不會壞）
+    this._consumeGemsFromInventory(inventory, stoneItemId, cost.stones);
+    const displayName = progress.displayName || progress.playerName || discordId;
+    if (cost.gold > 0) await this._consumeGold(discordId, displayName, cost.gold);
+
+    const isSuccess = Math.random() * 100 < cost.success;
+    let newLevel = existingCountOfThisElement;
+    if (isSuccess) {
+      newLevel = existingCountOfThisElement + 1;
+      elementsMap[el] = newLevel;
+      equipment.elements = elementsMap;
+      // 舊格式併入新格式後就不再需要，避免兩套資料同時存在造成 resolveElementsMap 判斷混淆
+      delete equipment.element;
+      delete equipment.elementLevel;
+    }
+
+    progress.updatedAt = new Date().toISOString();
+    await this.progressRepository.save(progress);
+
+    return {
+      success: isSuccess,
+      element: el,
+      previousLevel: existingCountOfThisElement,
+      newLevel,
+      stonesUsed: cost.stones,
+      goldUsed: cost.gold,
+      successRate: cost.success,
+      socketsFilled: totalFilled + (isSuccess ? 1 : 0),
+      socketsTotal: capacity,
+      itemName: equipment.itemName,
+      message: isSuccess
+        ? `✅ 鑲嵌成功！消耗 ${cost.stones} 顆${elLabel}屬性石、${cost.gold} 金幣`
+        : `❌ 鑲嵌失敗，消耗了 ${cost.stones} 顆${elLabel}屬性石、${cost.gold} 金幣（洞位仍是空的）`,
+    };
+  }
+
+  /**
    * 統計背包中特定寶石的數量（考慮堆疊）
    */
   _countGemsInInventory(inventory, gemItemId) {

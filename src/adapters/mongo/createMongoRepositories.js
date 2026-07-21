@@ -313,6 +313,33 @@ function createMongoRepositories() {
       async addOrStackInventoryItem(playerId, itemId, newEntry) {
         const coll = await collection("progress");
         const slimEntry = slimInventoryEntry(newEntry);
+
+        // 只有「真正可堆疊」的道具(消耗品/寵物蛋，含寶石與寶箱)才併進既有 entry。
+        // 裝備與怪物卡每一件都有自己的附魔／強化值，一旦被 $inc 併成 stackCount 會出三個問題：
+        //   ① 新那件的附魔/強化被整個丟掉（只留最早那件的數值）
+        //   ② 前端 groupStacks 只算 entry 數 → 玩家覺得「打到卻沒進背包」
+        //   ③ _uuids 只有一個 → 分解/賣出一次就刪掉整疊（回報:分解一件消失兩件）
+        // 2026-07 玩家(漢格/宇田川冰/Eric Huang)回報的根因，見 CHANGELOG #177。
+        const _type = String(newEntry?.itemType || "");
+        const _slot = String(newEntry?.equipSlot || "");
+        const _isCard = Boolean(newEntry?.monsterCardSkill || newEntry?.monsterCardOf)
+          || _type === "monster_card" || _slot.startsWith("special");
+        const _stackable = !_isCard && (_type === "consumable" || _type === "pet_egg");
+
+        if (!_stackable) {
+          // 裝備/卡片：一律新增獨立 entry（保住各自的附魔與 uuid）
+          const push = await coll.updateOne(
+            { playerId },
+            { $push: { inventory: slimEntry }, $set: { updatedAt: new Date().toISOString() } },
+            { upsert: false }
+          );
+          if (push.matchedCount > 0) {
+            emitRealtimeInvalidate("progress", playerId);
+            return { ok: true, uuid: newEntry.uuid, stacked: false };
+          }
+          return { ok: false, uuid: null, stacked: false };
+        }
+
         for (let attempt = 0; attempt < 4; attempt++) {
           const now = new Date().toISOString();
           // 1) 已有同款 → 原子 +1。positional projection 不能搭 after，取 before 即可
@@ -328,9 +355,14 @@ function createMongoRepositories() {
             return { ok: true, uuid: incDoc.inventory[0].uuid || newEntry.uuid, stacked: true };
           }
           // 2) 沒有同款 → 原子 $push（$ne 防併發重複插入；玩家不存在則 matched 0）
+          //    必須顯式帶 stackCount，否則下次 $inc 在「沒有這個欄位」的 entry 上只會得到 1（0+1）
+          //    → 第二個消耗品(例如世界王寶箱)會被吃掉。
           const push = await coll.updateOne(
             { playerId, "inventory.itemId": { $ne: itemId } },
-            { $push: { inventory: slimEntry }, $set: { updatedAt: now } },
+            {
+              $push: { inventory: { ...slimEntry, stackCount: Math.max(1, Number(newEntry?.stackCount) || 1) } },
+              $set: { updatedAt: now }
+            },
             { upsert: false }
           );
           if (push.matchedCount > 0) {

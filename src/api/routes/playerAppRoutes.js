@@ -2394,7 +2394,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       } catch (_) {}
 
-      const result = await serviceContext.shopService.purchase(discordId, displayName, itemId, memberRoleIds);
+      // 購買數量（消耗品可一次買多個；shopService.purchase 內會夾 1~999 並驗證
+      // 每日/每月/持有上限、庫存與總價，超限一律整筆擋下不扣款）
+      const quantity = Math.max(1, Math.min(999, parseInt(req.body?.quantity, 10) || 1));
+      const result = await serviceContext.shopService.purchase(discordId, displayName, itemId, memberRoleIds, quantity);
       res.json(ok(result));
     } catch (err) {
       next(err);
@@ -2979,11 +2982,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } catch (_) { webBossVulnMult = 1; }
       }
 
+      // 戰鬥姿態（聖劍士等二轉）：沒有姿態系統的職業回 null＝走現況；防禦姿態沒帶盾直接拒絕
+      let battleStanceKey = null;
+      try {
+        battleStanceKey = require("../../shared/battleStance").resolveRequestedStance(equipped, req.body?.stance);
+      } catch (stanceErr) {
+        return res.status(stanceErr.statusCode || 400).json({ status: "error", message: stanceErr.message });
+      }
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
         runCombatLoop(battlePStats, battleMonsterStats, monster.name, combatMonsterHp, undefined, {
           playerName: displayName,
           playerLevel: progress?.level || 1,
+          stance: battleStanceKey,
           equipped,
           inventory: progress?.inventory || [],
           partyEffects,
@@ -3844,6 +3856,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     return s._reward;
   }
 
+  // 🗼 爬塔暫停開放：一道 middleware 擋掉所有 /api/tower/*（單人塔＋組隊房）。
+  //    前端分頁已隱藏，這裡再擋一層，避免舊分頁／直接打 API 還能開房。
+  //    要重新開放：把 towerHandlers.js 的 TOWER_ENABLED 改 true，這裡會跟著解除。
+  router.use("/api/tower", (req, res, next) => {
+    let enabled = false;
+    try { enabled = require("../../bot/handlers/towerHandlers").TOWER_ENABLED === true; } catch (_) { enabled = false; }
+    if (enabled) return next();
+    return res.status(403).json(fail("FEATURE_DISABLED", "爬塔目前暫停開放"));
+  });
+
   router.get("/api/tower/state", requireAuth, async (req, res, next) => {
     try {
       const s = towerSessions.get(req.playerRecord.discordId);
@@ -4269,7 +4291,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           equipSlot: a.item?.equipSlot || null,
           category: classifyAuctionCategory(a.item),
           equipStats: a.item?.equipStats || null,
-          enchantments: Array.isArray(a.item?.enchantments) ? a.item.enchantments : []
+          enchantments: Array.isArray(a.item?.enchantments) ? a.item.enchantments : [],
+          // 屬性洞/屬性附魔：跟背包詳情頁同一套欄位，讓拍賣詳情視窗也能顯示屬性徽章
+          element: a.item?.element || null,
+          elementLevel: a.item?.elementLevel || null,
+          elements: a.item?.elements || null
         }))
       }));
     } catch (err) {
@@ -4304,7 +4330,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           status: a.status,
           isPet: Boolean(a.item?.__pet),
           eggType: a.item?.eggType || null,
-          combatBonus: a.item?.combatBonus || null
+          combatBonus: a.item?.combatBonus || null,
+          element: a.item?.element || null,
+          elementLevel: a.item?.elementLevel || null,
+          elements: a.item?.elements || null
         })),
         eligible,
         maxListings,
@@ -4640,6 +4669,29 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId } = req.playerRecord;
       const result = await serviceContext.enhanceService.enhanceEquipment(discordId, req.params.itemUuid, { mode: req.body?.mode });
+      res.json(ok(result, result.message));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/me/enhance/:itemUuid/element - 查詢屬性洞現況（非武器側裝備回傳 null）
+  router.get("/api/me/enhance/:itemUuid/element", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const info = await serviceContext.enhanceService.getElementSocketInfo(discordId, req.params.itemUuid);
+      res.json(ok(info, "屬性洞資訊"));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /api/me/enhance/:itemUuid/element - 屬性洞補洞（用屬性石，跟寶石強化是分開的流程）
+  router.post("/api/me/enhance/:itemUuid/element", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const element = String(req.body?.element || "").trim();
+      const result = await serviceContext.enhanceService.fillElementSocket(discordId, req.params.itemUuid, element);
       res.json(ok(result, result.message));
     } catch (err) {
       next(err);

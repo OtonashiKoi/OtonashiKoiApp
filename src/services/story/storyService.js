@@ -132,8 +132,12 @@ class StoryService {
   }
 
   /** 🔒 節點條件是否滿足（等級/職業/稱號）。cond 空＝一律顯示。 */
-  _condMet(cond, progress) {
+  _condMet(cond, progress, ctx = {}) {
     if (!cond || typeof cond !== "object") return true;
+    // 🎫 會員限定分支：cond.member === true → 只有會員看得到；=== false → 只有非會員看得到。
+    //    會員判定不能只看 progress.playerTier（實測 424 人中只有 29 人有值、實際會員 81 人，
+    //    binding/progress 不同步是既知的坑），所以由呼叫端用 backpackService 解析聯集後傳進來。
+    if (cond.member != null && Boolean(ctx.isMember) !== Boolean(cond.member)) return false;
     if (cond.minLevel != null && (Number(progress?.level) || 1) < Number(cond.minLevel)) return false;
     if (cond.job && String(progress?.job || "") !== String(cond.job)) return false;
     if (cond.title) {
@@ -237,6 +241,16 @@ class StoryService {
     const npcs = await this.storyRepository.listNpcs();
     const npcOf = Object.fromEntries(npcs.map((n) => [n.id, n]));
     const battlesWon = this._battlesWonMap(progress)[chapterId] || [];
+    // 🎫 會員判定（給 cond.member 用）：走 backpackService 的聯集口徑
+    //    （綁定 playerTierAtLink/linkedSupportAtLink ＋ progress.playerTier ＋ DC 身分組，取最高、只加不減），
+    //    它自帶快取；解析失敗一律當非會員，確保只會「少給」不會誤放會員限定內容。
+    let isMember = false;
+    try {
+      const bp = require("../backpack/backpackService");
+      const eff = await bp.resolveCapacity(discordId);
+      isMember = Boolean(eff && eff.tier);
+    } catch (_) { isMember = false; }
+    const condCtx = { isMember };
     // 戰鬥節點：補上怪物名稱/圖（供閱讀器顯示）
     const monsterCache = {};
     const getMonster = async (id) => {
@@ -254,7 +268,7 @@ class StoryService {
       const flow = {
         label: n.label || null,
         jumpToIndex: jumpIdxOf(n.jumpTo),                 // 此節點看完後跳去哪(null=下一句)
-        condSkip: !this._condMet(n.cond, progress)        // 🔒 條件不符→前端跳過此節點
+        condSkip: !this._condMet(n.cond, progress, condCtx) // 🔒 條件不符→前端跳過此節點
       };
       if (n.type === "battle") {
         const m = await getMonster(n.monsterId);

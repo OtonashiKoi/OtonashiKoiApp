@@ -16,7 +16,7 @@
  *   - 每位玩家最多持有 3 個二轉徽章
  *   - 同時只能進行 1 條二轉試煉
  *   - 第 1／2／3 個二轉的試煉要求＝出戰 350 ／ 700 ／ 1000 場
- *   - 同一個一轉職業的分支只能選一個（選了劍聖就不能再拿大劍）
+ *   - 同一個一轉職業的分支只能選一個（選了聖劍士就不能再拿大劍）
  */
 
 /** 二轉門檻等級 */
@@ -65,15 +65,41 @@ function allBattleMetrics() {
  * ⚠️ 目前是空的——地基先蓋好，各職業的二轉內容逐一設計後才填進來。
  * 分支物件格式：
  *   {
- *     id:        "job_swordmaster_t2_v1",   // 徽章 itemId，必須以 job_ 開頭、含 _t2_
- *     key:       "swordmaster",
- *     name:      "劍聖",
+ *     id:        "job_holyblade_t2_v1",     // 徽章 itemId，必須以 job_ 開頭、含 _t2_
+ *     key:       "holyblade",
+ *     name:      "聖劍士",
  *     theme:     "盾牌格擋反擊",              // 一句話定位，給後台/文件看
  *     towerAura: { key: "party_damage_reduction", value: 8, notes: "爬塔：隊伍受到傷害 -8%" },
+ *     stances:   { ... }                      // 選配：戰鬥姿態（見聖劍士）
  *   }
  */
 const T2_BRANCHES = {
-  swordsman: [],
+  swordsman: [
+    {
+      id: "job_holyblade_t2_v1",
+      key: "holyblade",
+      name: "聖劍士",
+      theme: "攻守姿態切換",
+      towerAura: { key: "party_damage_reduction", value: 8, notes: "爬塔：隊伍受到傷害 -8%" },
+      // 戰鬥姿態：開打前選一個，整場適用（戰鬥是一次跑完 15 回合，中途無法切換）。
+      // combatLoop 只認這張表，不寫死職業判斷 → 之後別的二轉要做姿態照同格式填即可。
+      stances: {
+        attack: {
+          label: "攻擊",
+          blockChance: 30,          // 覆寫格擋率（劍士原本 60）
+          // 保證站在屬性相剋的優勢方：武器屬性等級 < upgradeFromWeaponLevel → baseLevel，否則 upgradedLevel
+          guaranteedElement: { baseLevel: 2, upgradedLevel: 4, upgradeFromWeaponLevel: 2 },
+        },
+        defense: {
+          label: "防禦",
+          blockChance: 70,
+          shieldBashPct: 60,        // 格擋成功時追加盾擊＝ATK 的 60%
+          requiresShield: true,
+        },
+      },
+    },
+    // B 分支「大劍」待設計
+  ],
   warrior: [],
   dwarf_warrior: [],
   rogue: [],
@@ -146,7 +172,7 @@ function trialTargetFor(ownedCount) {
 
 /**
  * 玩家已經二轉過的一轉職業集合。
- * 用於「同一個一轉職業的分支只能選一個」——選了劍聖就永遠不能再拿大劍。
+ * 用於「同一個一轉職業的分支只能選一個」——選了聖劍士就永遠不能再拿大劍。
  */
 function ownedT2BaseKeys(itemIds) {
   const ids = itemIds instanceof Set ? itemIds : new Set(Array.isArray(itemIds) ? itemIds : []);
@@ -156,6 +182,25 @@ function ownedT2BaseKeys(itemIds) {
     if (branch && branch.baseKey) keys.add(branch.baseKey);
   }
   return keys;
+}
+
+/**
+ * 解析玩家這場戰鬥要套用的姿態設定。
+ * @param {object} jobEq      已裝備的職業徽章（progress.equipment.job_eq）
+ * @param {string} stanceKey  玩家選的姿態（"attack" / "defense"）
+ * @returns {object|null}     姿態設定；徽章沒有姿態系統或 key 不存在 → null（＝完全走現況）
+ */
+function resolveStance(jobEq, stanceKey) {
+  if (!jobEq || !stanceKey) return null;
+  const branch = getT2Branch(String(jobEq.itemId || jobEq.id || ""));
+  const stance = branch && branch.stances ? branch.stances[String(stanceKey)] : null;
+  return stance ? { ...stance, key: String(stanceKey), jobName: branch.name } : null;
+}
+
+/** 這個徽章有沒有姿態系統（前端要不要渲染兩顆按鈕） */
+function getStances(jobEq) {
+  const branch = getT2Branch(String(jobEq?.itemId || jobEq?.id || ""));
+  return branch && branch.stances ? branch.stances : null;
 }
 
 module.exports = {
@@ -173,4 +218,6 @@ module.exports = {
   countOwnedT2,
   ownedT2BaseKeys,
   trialTargetFor,
+  resolveStance,
+  getStances,
 };

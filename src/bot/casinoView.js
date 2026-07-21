@@ -89,7 +89,7 @@ function createCasinoPanelMessage({ round = null, recentResults = [], lastResult
     },
     {
       name: "📜 規則",
-      value: `每 60 秒一輪。下注 ${fmtGold(BET_MIN)}–${fmtGold(BET_MAX)} 金幣，押中色拿回「下注 × 倍率」（單注最多 ${fmtGold(PAYOUT_CAP)}）並順便抽掉落池。\n**每輪限下一注，下好離手、不能更改或加注。**`,
+      value: `每 120 秒開獎一輪（開獎前 5 秒鎖盤）。下注 ${fmtGold(BET_MIN)}–${fmtGold(BET_MAX)} 金幣，押中色拿回「下注 × 倍率」（單注最多 ${fmtGold(PAYOUT_CAP)}）並順便抽掉落池。\n**每輪限下一注，下好離手、不能更改或加注。**`,
     },
   );
   embed.setFooter({ text: "結算後會私訊通知中獎與獎勵明細。" });

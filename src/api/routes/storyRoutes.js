@@ -103,6 +103,11 @@ function createStoryRoutes(serviceContext, discordClient) {
       const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
 
       const result = runCombatLoop(pStats, monster.calc, monster.name, monster.calc.maxHp, battleNode.maxRounds || undefined, {
+        // 劇情戰鬥固定攻擊姿態（無姿態系統的職業回 null，不受影響）
+        stance: (() => {
+          try { return require("../../shared/battleStance").resolveRequestedStance(equipped, "attack"); }
+          catch (_) { return null; }
+        })(),
         playerName: req.playerRecord.displayName || "我",
         playerLevel: progress?.level || 1,
         equipped,

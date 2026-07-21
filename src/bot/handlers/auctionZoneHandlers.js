@@ -11,6 +11,13 @@ const ENHANCE_GEM_IDS = new Set([
   '8fdfa7d9-f0fa-4e6a-a291-703b1e354072',
   'a6ae293d-52fc-4af5-8770-891ddf842e35'
 ]);
+// 屬性石（scripts/seed-element-stones.js 建立的固定 id）：跟強化寶石一樣可堆疊上架，
+// 跟 web 端 auctionService.js 的 ELEMENT_STONE_IDS 保持一致
+const ELEMENT_STONE_IDS = new Set([
+  "element-stone-water", "element-stone-fire", "element-stone-wood",
+  "element-stone-earth", "element-stone-metal", "element-stone-sun", "element-stone-moon"
+]);
+const AUCTIONABLE_GEM_IDS = new Set([...ENHANCE_GEM_IDS, ...ELEMENT_STONE_IDS]);
 const FORBIDDEN_EQUIP_SLOTS = new Set(["job_eq", "title_eq"]);
 const FORBIDDEN_ITEM_TYPES = new Set(["job_badge", "title"]);
 
@@ -107,13 +114,13 @@ function isPetEgg(item) {
 }
 
 function isStackableSellItem(item) {
-  return ENHANCE_GEM_IDS.has(item?.itemId) || isPetEgg(item);
+  return AUCTIONABLE_GEM_IDS.has(item?.itemId) || isPetEgg(item);
 }
 
 function isSellableItem(item) {
   if (!item) return false;
   if (FORBIDDEN_ITEM_TYPES.has(item.itemType) || FORBIDDEN_EQUIP_SLOTS.has(item.equipSlot)) return false;
-  return item.itemType === "equipment" || item.itemType === "monster_card" || ENHANCE_GEM_IDS.has(item.itemId) || isPetEgg(item);
+  return item.itemType === "equipment" || item.itemType === "monster_card" || AUCTIONABLE_GEM_IDS.has(item.itemId) || isPetEgg(item);
 }
 
 // ─── 拍賣列表面板 ────────────────────────────────────
@@ -124,7 +131,7 @@ const SELL_MAIN_TABS = [
   { tab: "weapon", label: "⚔️ 武器" },
   { tab: "armor", label: "🛡️ 防裝" },
   { tab: "card", label: "🎴 卡片" },
-  { tab: "gem", label: "💎 強化石" },
+  { tab: "gem", label: "💎 寶石" },
 ];
 const SELL_WEAPON_SUBTABS = [
   { subTab: "all", label: "📦 全部" },
@@ -231,7 +238,7 @@ function filterSellByTab(inventory, tab = "all", subTab = "all") {
   } else if (tab === "card") {
     filtered = sellable.filter((entry) => entry.itemType === "monster_card" || Boolean(entry.monsterCardSkill));
   } else if (tab === "gem") {
-    filtered = sellable.filter((entry) => ENHANCE_GEM_IDS.has(entry.itemId));
+    filtered = sellable.filter((entry) => AUCTIONABLE_GEM_IDS.has(entry.itemId));
   } else {
     filtered = sellable;
   }

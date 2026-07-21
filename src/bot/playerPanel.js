@@ -12,6 +12,7 @@ const { isGemEntry: isGemEntryForSell, DISMANTLE_YIELD } = require("../services/
 const { pushBonusWeaponToInventory, pushRewardItemsToInventory } = require("../shared/jobBadgeBonus");
 const { TIER_SET_SLOTS, getTierSetInfo } = require("../shared/equipmentTierSetBonuses");
 const { getEquippedSetInfo } = require("../shared/equipmentSetBonuses");
+const { getElementLabel } = require("../shared/elementSystem");
 const { summarizeEquippedEnchantments } = require("../shared/enchantEngine");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
 const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
@@ -2185,6 +2186,11 @@ async function handleBackpackDiscardConfirm(interaction, uuid, tab = "item", pag
     } else {
       gemMsg = `✅ 已丟棄 **${result.itemName}**。`;
     }
+    // 屬性石是獨立判定，可能「寶石槓龜但屬性石中了」，所以另起一行接在後面而不是併進上面的三選一
+    if (result.elementStones) {
+      const el = getElementLabel(result.elementStones.element) || result.elementStones.element;
+      gemMsg += `\n💠 另外獲得 **${result.elementStones.count} 顆 ${el}屬性石**！`;
+    }
     const opts = BACKPACK_SECTION_TABS.has(tab) ? { sectionMode: true } : {};
     const msg = buildBackpackMessage(progress?.inventory || [], tab, gemMsg, page, subTab, opts);
     await safeEditReply(interaction, msg);
@@ -2247,8 +2253,14 @@ async function handleBackpackDiscardBulkExecute(interaction, uuid, tab = "item",
     const msgText = result.gems
       ? `🔨 批量分解 **${result.itemName}** ×${result.dismantledCount} → 成功 ${result.successCount} 件，共獲得 **${result.gems.count} 顆 ${result.gems.tier} 階寶石**！`
       : `🔨 批量分解 **${result.itemName}** ×${result.dismantledCount} 完成，這次都沒分解出寶石…（裝備已消失）`;
+    // 批量時每件的屬性可能不同（同款劍有的水1有的沒屬性），所以是 element→顆數 的表
+    const stoneText = result.elementStones
+      ? Object.entries(result.elementStones)
+        .map(([el, n]) => `${n} 顆 ${getElementLabel(el) || el}屬性石`).join("、")
+      : "";
+    const msgText2 = stoneText ? `${msgText}\n💠 另外獲得 **${stoneText}**！` : msgText;
     const opts = BACKPACK_SECTION_TABS.has(tab) ? { sectionMode: true } : {};
-    const msg = buildBackpackMessage(progress?.inventory || [], tab, msgText, page, subTab, opts);
+    const msg = buildBackpackMessage(progress?.inventory || [], tab, msgText2, page, subTab, opts);
     await safeEditReply(interaction, msg);
   } catch (err) {
     await safeEditReply(interaction, { content: `❌ 批量分解失敗：${err.message}`, components: [] });
