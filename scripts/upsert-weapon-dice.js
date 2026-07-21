@@ -87,6 +87,8 @@ function toDocument(spec) {
     weaponType: "dice",
     isTwoHanded: true,   // 骰子是雙手武器（不可配盾/副手）
     atkStat: "luk",
+    noPetGather: true,   // ⚠️本季不開放：排除寵物採集池（骰子 setKey 與新手套裝共用，否則會被採集撈到而外洩）
+    noDropPool: true,    // 保險：一併標記不進掉落池（下一季開放時再拿掉這兩個旗標）
     tier: spec.tier,
     setKey: spec.setKey,
     setKeys: [spec.setKey],
