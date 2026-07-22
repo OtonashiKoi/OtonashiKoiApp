@@ -111,16 +111,23 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   const jobEq = equipped.job_eq || null;
   const jobId = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
   const jobName = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
-  const hasArcherBadge = jobEq && (jobId.includes("archer") || jobName.includes("弓箭手"));
-  const hasSwordsmanBadge = jobEq && (jobId.includes("swordsman") || jobName.includes("劍士"));
-  const hasWarriorBadge = jobEq && (jobId === "job_warrior_v1" || (jobName.includes("戰士") && !jobName.includes("矮人")));
-  const hasDwarfWarriorBadge = jobEq && (jobId === "job_dwarf_warrior_v1" || jobName.includes("矮人戰士"));
-  const hasRogueBadge = jobEq && (jobId.includes("rogue") || jobName.includes("盜賊"));
-  const hasMageBadge = jobEq && (jobId.includes("mage") && !jobId.includes("barrier") || jobName.includes("法師") && !jobName.includes("結界"));
-  const hasHealerBadge = jobEq && (jobId.includes("healer") || jobName.includes("治療"));
-  const hasTacticianBadge = jobEq && (jobId.includes("tactician") || jobName.includes("軍師"));
-  const hasBardBadge = jobEq && (jobId.includes("bard") || jobName.includes("詩人"));
-  const hasBarrierMageBadge = jobEq && (jobId.includes("barrier_mage") || jobName.includes("結界"));
+  // ⭐ 職業判定一律走 jobAdvancement.resolveJobKey（唯一入口）：
+  //    一轉徽章 → 自己的 key；二轉徽章 → 它的一轉 key（自動繼承所有程式碼內建加成）。
+  //    以前各檔案自己 `id.includes("swordsman") || name.includes("劍士")`，
+  //    劍鬼（id swordoni／名「劍鬼」）兩個都不中 → 少了格擋反擊，實測比一轉還弱 10%。
+  let _jobKey = null;
+  try { _jobKey = require("./jobAdvancement").resolveJobKey(jobEq); } catch (_) { _jobKey = null; }
+  const isJobKey = (k) => Boolean(jobEq) && _jobKey === k;
+  const hasArcherBadge = isJobKey("archer");
+  const hasSwordsmanBadge = isJobKey("swordsman");
+  const hasWarriorBadge = isJobKey("warrior");
+  const hasDwarfWarriorBadge = isJobKey("dwarf_warrior");
+  const hasRogueBadge = isJobKey("rogue");
+  const hasMageBadge = isJobKey("mage");
+  const hasHealerBadge = isJobKey("healer");
+  const hasTacticianBadge = isJobKey("tactician");
+  const hasBardBadge = isJobKey("bard");
+  const hasBarrierMageBadge = isJobKey("barrier_mage");
 
   // 雙持判定：主手非雙手武器 + 副手是武器類型
   const isDualWield = !cfg.isTwoHanded && wt && offhand?.weaponType != null && OFFHAND_WEAPON_TYPES.has(offhand.weaponType);

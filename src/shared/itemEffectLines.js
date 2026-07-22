@@ -62,20 +62,104 @@ function buildItemEffectLines(lib) {
   // 讓玩家不用把徽章裝上去再開 DC 才看得到技能詳情。
   const jobSkills = Array.isArray(lib?.jobSkills) ? lib.jobSkills : [];
   if (jobSkills.length > 0) {
-    lines.push(`⚔️ 主動技能（每回合約 35% 從可用技能中發動 1 個）：`);
-    for (const sk of jobSkills) {
-      if (!sk?.name) continue;
+    const normal = jobSkills.filter((sk) => sk?.name && !sk.trigger);
+    const custom = jobSkills.filter((sk) => sk?.name && sk.trigger);
+    const fmt = (sk) => {
       const cd = Number(sk.cooldownTurns) > 0 ? `（CD ${sk.cooldownTurns} 回合）` : "";
       const wt = sk?.condition?.weaponType;
       const need = wt ? `〔需${Array.isArray(wt) ? wt.join("/") : wt}〕` : "";
+      const stunOnly = sk?.condition?.targetStunned ? "〔敵方暈眩中〕" : "";
+      const stance = sk?.condition?.stance ? `〔${sk.condition.stance === "defense" ? "防禦" : "攻擊"}姿態〕` : "";
       const desc = sk.description ? String(sk.description).trim() : "";
-      lines.push(`・${sk.name}${need}：${desc}${cd}`);
+      return `・${sk.name}${need}${stance}${stunOnly}：${desc}${cd}`;
+    };
+    if (normal.length > 0) {
+      lines.push(`⚔️ 主動技能（每回合約 35% 從可用技能中發動 1 個）：`);
+      for (const sk of normal) lines.push(fmt(sk));
+    }
+    // 帶自訂 trigger 的技能不吃 35% 閘門，條件成立就必定發動 → 分開說明，避免玩家誤會
+    if (custom.length > 0) {
+      lines.push(`💥 特殊技能（條件成立必定發動，不佔上面的隨機名額）：`);
+      for (const sk of custom) lines.push(fmt(sk));
     }
   }
+  // 二轉專屬機制（姿態／連段／集氣／暈眩專精）——這些不在 passiveEffects 也不在 jobSkills，
+  // 而是寫在 jobAdvancement 的分支設定裡，不特別撈出來玩家就完全看不到。
+  for (const line of buildT2MechanicLines(lib)) lines.push(line);
   return lines;
 }
 
+/**
+ * 二轉徽章的專屬機制說明。
+ * 資料來源是 jobAdvancement 的分支設定（不是道具欄位），所以要另外組。
+ * 非二轉徽章回空陣列。
+ */
+function buildT2MechanicLines(lib) {
+  const id = String(lib?.itemId || lib?.id || "");
+  if (!id) return [];
+  let branch = null;
+  try {
+    branch = require("./jobAdvancement").getT2Branch(id);
+  } catch (_) { return []; }
+  if (!branch) return [];
+
+  const out = [`🔱 二轉專屬（${branch.name}）：`];
+
+  // 戰鬥姿態（聖劍士）
+  if (branch.stances) {
+    out.push(`・開打前選擇姿態，整場適用（戰鬥畫面兩顆按鈕）`);
+    for (const [key, st] of Object.entries(branch.stances)) {
+      const bits = [];
+      if (Number.isFinite(Number(st.blockChance))) bits.push(`格擋率 ${st.blockChance}%`);
+      if (st.guaranteedElement) bits.push(`保證取得屬性相剋優勢`);
+      if (Number(st.shieldBashPct) > 0) bits.push(`格擋成功追加盾擊（ATK ${st.shieldBashPct}%）`);
+      if (st.requiresShield) bits.push(`需裝備盾牌`);
+      out.push(`　◦ ${st.label || key}：${bits.join("、")}`);
+    }
+  }
+
+  // 區域連段（劍鬼）
+  if (branch.combo) {
+    try {
+      const zc = require("./zoneCombo");
+      out.push(`・區域連段（COMBO）：同一區每打完一場 +1，換區／陣亡／10 分鐘沒打歸零`);
+      out.push(`　◦ 階梯加成（${zc.COMBO_BUFF_MAX_AT} 段吃滿）：${zc.COMBO_TIERS.map((t) => `${t.at}→${t.label}`).join("、")}`);
+      out.push(`　◦ 斬：連段 ≥${zc.BURST_MIN_COMBO} 時戰鬥畫面出現按鈕，消耗全部連段，第 1 回合打出無視防禦與等級差的一擊（仍可爆擊）`);
+      out.push(`　◦ 不屈：第一次陣亡連段減半，連續第二次才歸零`);
+    } catch (_) { /* 模組讀不到就略過 */ }
+  }
+
+  // 血怒／血祭／戰意集氣（狂戰士）
+  if (branch.bloodRage) {
+    out.push(`・血怒（被動）：每缺 1% HP → 攻擊力 +${branch.bloodRage.perMissPct}%，最高 +${branch.bloodRage.capPct}%`);
+  }
+  if (branch.sacrifice) {
+    out.push(`・血祭（戰鬥畫面按鈕）：開場自傷最大 HP 的 ${branch.sacrifice.hpCostPct}%，換整場攻擊力 +${branch.sacrifice.atkUpPct}%`);
+  }
+  if (branch.gauge) {
+    out.push(`・戰意集氣（被動）：每打完一場 +1 格，集滿 ${branch.gauge.max} 格的下一戰爆擊率 +${branch.gauge.critRateBonus}，之後歸零重集`);
+  }
+
+  // 暈眩專精（矮人戰士長）
+  if (branch.stunMastery) {
+    out.push(`・山碎（被動）：對暈眩中的目標無視防禦（固定防禦仍在）`);
+    out.push(`・巨神之握（被動）：世界王對你的暈眩上限 1 → ${branch.stunMastery.bossStunCap} 回合`);
+  }
+  if (branch.stunGauge) {
+    try {
+      const dsg = require("./dwarfStunGauge");
+      out.push(`・巨神震擊（被動・團隊）：只有你敲得動世界王的暈眩條，敲擊量＝該場實際有攻擊到的回合數`);
+      out.push(`　◦ 敲滿 ${dsg.DEFAULT_THRESHOLD} → 全服 ${Math.round(dsg.STUN_WINDOW_MS / 1000)} 秒內出戰的人整場免傷，之後王免疫 ${Math.round(dsg.IMMUNE_MS / 60000)} 分鐘`);
+    } catch (_) { /* noop */ }
+  }
+
+  // 爬塔光環
+  if (branch.towerAura?.notes) out.push(`・${branch.towerAura.notes}`);
+  return out.length > 1 ? out : [];
+}
+
 module.exports = {
+  buildT2MechanicLines,
   PCT_VALUE_EFFECT_KEYS,
   NO_VALUE_EFFECT_KEYS,
   formatEffectValueText,

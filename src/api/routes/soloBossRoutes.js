@@ -180,13 +180,47 @@ function createSoloBossRoutes(serviceContext) {
         return res.status(stanceErr.statusCode || 400).json({ status: "error", message: stanceErr.message });
       }
 
+      // 戰意集氣＋血祭（狂戰士，同 quick-battle；單人王也是「打一次怪」）
+      const _bg = require("../../shared/berserkGauge");
+      const _ja = require("../../shared/jobAdvancement");
+      const gaugeCfg = _ja.getGauge(equipped?.job_eq);
+      const sacrificeCfg = _ja.getSacrifice(equipped?.job_eq);
+      const gaugeBefore = gaugeCfg ? _bg.read(progress, gaugeCfg) : 0;
+      const gaugeFull = Boolean(gaugeCfg && _bg.isFull(gaugeBefore, gaugeCfg));
+      const berserkEffects = gaugeFull ? _bg.buffs(gaugeCfg) : [];
+      let sacrificeOn = false;
+      if (req.body?.sacrifice === true) {
+        if (!sacrificeCfg) {
+          return res.status(400).json({ status: "error", message: "此職業無法使用「血祭」" });
+        }
+        sacrificeOn = true;
+        berserkEffects.push(..._bg.sacrificeBuffs(sacrificeCfg));
+      }
+
+      // ── 暈眩條（矮人戰士長・巨神震擊）── 單人王＝世界王簡化版，每人自己一條
+      const _dsg = require("../../shared/dwarfStunGauge");
+      const stunGaugeKey = _dsg.gaugeKeyForSolo(discordId, boss.key);
+      const stunStateBefore = await _dsg.read(stunGaugeKey, boss.zone).catch(() => null);
+      const teamStunOn = Boolean(stunStateBefore?.stunned);
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const r = runCombatLoop(pStats, battleMonsterStats, monster.name, Math.max(1, partHpNow), undefined, {
         stance: battleStanceKey,
+        teamStunRounds: teamStunOn ? 999 : 0,
         monsterEquipped: battleMonsterEquipped, playerLevel: progress.level, monsterLevel: battleMonsterStats.level,
-        equipped, inventory: progress.inventory || [], playerActiveEffects: progress.activeEffects || [],
+        equipped, inventory: progress.inventory || [],
+        playerActiveEffects: [...(progress.activeEffects || []), ...berserkEffects],
         monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
+        sacrificeHpCostPct: sacrificeOn ? sacrificeCfg.hpCostPct : 0,
+        sacrificeAtkUpPct: sacrificeOn ? sacrificeCfg.atkUpPct : 0,
+        warGaugeCritBonus: gaugeFull ? gaugeCfg.critRateBonus : 0,
       });
+      // 戰後存氣（updateFields 只動這個欄位）
+      if (gaugeCfg) {
+        const _nextGauge = _bg.next(gaugeBefore, gaugeCfg, { consumed: gaugeFull });
+        progress.berserkGauge = _nextGauge;
+        await serviceContext.progressRepository.updateFields(discordId, { berserkGauge: _nextGauge }).catch(() => {});
+      }
       const newPartHp = Math.max(0, Number(r.finalMonsterHp) || 0);
       const partsHp = { ...st.worldBossPartsHp, [part]: newPartHp };
       const partBroken = newPartHp <= 0 && partHpNow > 0;
@@ -194,6 +228,19 @@ function createSoloBossRoutes(serviceContext) {
 
       const rewardLines = [];
       const drops = [];
+      // 敲暈眩條（只有矮人戰士長敲得動）；單人王不發全服公告。
+      // ⚠️ 必須放在 rewardLines 宣告之後——之前插在前面造成 TDZ ReferenceError（單人王整個開不了）
+      let stunKnock = null;
+      if (_dsg.canKnock(equipped?.job_eq)) {
+        stunKnock = await _dsg
+          .knock(stunGaugeKey, boss.zone, r?.combatStats?.attackRounds || 0, displayName || "")
+          .catch(() => null);
+        if (stunKnock?.triggered) {
+          rewardLines.push(`⛰️ **巨神震擊**！**${monster.name}** 應聲倒地——接下來 ${Math.round(_dsg.STUN_WINDOW_MS / 1000)} 秒出戰全程免傷！`);
+        } else if (stunKnock?.knocked > 0) {
+          rewardLines.push(`🔨 暈眩值 +${stunKnock.knocked}（${stunKnock.gauge} / ${stunKnock.threshold}）`);
+        }
+      }
       let killsToday = st.killsToday;
       let nextPartsHp = partsHp;
       const nextPartsMax = st.worldBossPartsMaxHp;
@@ -302,6 +349,7 @@ function createSoloBossRoutes(serviceContext) {
       return res.json(ok({
         outcome: allDefeated ? "win" : r.outcome,
         monsterName: monster.name, monsterImageUrl: monster.imageUrl || null,
+        monsterElement: monster?.element || null,
         logs: r.roundLogs || [], rewardLines, drops,
         totalDamage: r.totalDamage, finalPlayerHp: Math.max(0, r.finalPlayerHp || 0),
         playerMaxHp: Math.max(1, Math.round(Number(pStats.maxHp) || 0)),
@@ -315,6 +363,16 @@ function createSoloBossRoutes(serviceContext) {
         partBroken, allPartsDefeated: allDefeated, parts: respParts,
         // 單人王狀態
         soloBoss: { key: boss.key, killsToday, killsLeft, killedFull: allDefeated, chestGranted: allDefeated },
+        // 戰意集氣（狂戰士）：戰後最新氣量；非狂戰士回 null
+        berserkGauge: gaugeCfg ? { ..._bg.view(progress, gaugeCfg), unleashed: gaugeFull, sacrificed: sacrificeOn } : null,
+        // 暈眩條（矮人戰士長）：戰後最新狀態＋本場是否吃到免傷
+        bossStun: {
+          ..._dsg.view(await _dsg.read(stunGaugeKey, boss.zone).catch(() => null)),
+          immune: teamStunOn,
+          knocked: stunKnock?.knocked || 0,
+          triggeredByMe: Boolean(stunKnock?.triggered),
+          canKnock: _dsg.canKnock(equipped?.job_eq),
+        },
       }));
     } catch (err) {
       next(err);

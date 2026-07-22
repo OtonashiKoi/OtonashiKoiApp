@@ -81,20 +81,15 @@ function detectJobBattleProfile(equipped = {}, inventory = []) {
     ...(Array.isArray(jobEq?.combatEffects) ? jobEq.combatEffects : [])
   ];
   const activeJobEffects = allJobEffects.filter((effect) => isEffectConditionMet(effect, context));
-  const id = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
-  const name = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
-
-  const has = (needle) => id.includes(needle) || name.includes(needle);
+  // ⭐ 戰報敘述用的職業原型：一律走 jobAdvancement.resolveJobKey（唯一入口），
+  //    二轉徽章會解析回一轉 key（劍鬼→swordsman、狂戰士→warrior…），敘述才不會變成 default。
+  //    只採用 JOB_FLAVOR 真的有敘述庫的 key（軍師/詩人/結界師沒有 → 落回武器判斷）。
   let archetype = "default";
-  if (has("swordsman")) archetype = "swordsman";
-  else if (has("warrior") && has("dwarf")) archetype = "dwarf_warrior";
-  else if (has("warrior")) archetype = "warrior";
-  else if (has("archer")) archetype = "archer";
-  else if (has("healer")) archetype = "healer";
-  else if (has("mage")) archetype = "mage";
-  else if (has("rogue")) archetype = "rogue";
-  else if (has("gambler") || has("賭徒")) archetype = "gambler";
-  else {
+  try {
+    const k = require("./jobAdvancement").resolveJobKey(jobEq);
+    if (k && Object.prototype.hasOwnProperty.call(JOB_FLAVOR, k)) archetype = k;
+  } catch (_) { archetype = "default"; }
+  if (archetype === "default") {
     const weaponType = equipped?.weapon?.weaponType || "";
     if (weaponType.startsWith("staff")) archetype = activeJobEffects.some((e) => e.target === "party") ? "healer" : "mage";
     else if (weaponType === "dice") archetype = "gambler";
@@ -1016,6 +1011,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     battleStance = require("./jobAdvancement").resolveStance(options.equipped?.job_eq, options.stance);
   } catch (_) { battleStance = null; }
 
+  // ── 血怒（狂戰士二轉被動）────────────────────────────────────────────
+  // 每缺 1% HP → 該回合 ATK +perMissPct%，封頂 capPct%。逐回合看「當下」HP，
+  // 設定表在 jobAdvancement.T2_BRANCHES[*].bloodRage，沒有徽章 → null → 完全走現況。
+  let bloodRage = null;
+  try {
+    bloodRage = require("./jobAdvancement").getBloodRage(options.equipped?.job_eq);
+  } catch (_) { bloodRage = null; }
+  let _bloodRageAnnounced = false;
+  let _berserkAnnounced = false;
+
   // 攻擊姿態：依「對手被剋制的屬性」出手，也就是保證站在相剋優勢方。
   // 武器已有屬性濃度(>=upgradeFromWeaponLevel) → 直接用 upgradedLevel，否則 baseLevel。
   // 怪物沒有屬性時不生效（無從判斷誰剋誰），維持 ×1。
@@ -1038,8 +1043,50 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // BOSS 單位判定（世界王/區域王）：暈眩抗性與格擋規則會用到
   const monsterIsBossUnit = Boolean(options.monsterIsBoss || options.isBoss || options.isWorldBoss || mCalc?.isBoss);
   // BOSS 暈眩抗性：被擊暈最多 1 回合（防多段/永暈鏈）；一般怪不受影響
-  const capMonsterStun = (v) => (monsterIsBossUnit ? Math.min(v, 1) : v);
+  // 暈眩專精（矮人戰士長）：設定表在 jobAdvancement.T2_BRANCHES[*].stunMastery，
+  // 這裡只讀表、不寫死職業。沒有徽章 → null → 行為完全同現況。
+  let stunMastery = null;
+  try {
+    stunMastery = require("./jobAdvancement").getStunMastery(options.equipped?.job_eq);
+  } catch (_) { stunMastery = null; }
+
+  // ── 世界王的暈眩規則（使用者定案）────────────────────────────────
+  //   ① 任何職業（拿槌等）都能暈王，但**最多 1 回合**
+  //   ② 暈完之後王進入**暈眩免疫**，免疫期間再怎麼觸發都暈不動
+  //   ③ 矮人戰士長的被動「巨神之握」把自己的上限提高到 **2 回合**（免疫規則相同）
+  // 一般怪不受這套限制（維持原本的 3 回合暈眩、無免疫）。
+  const _bossStunCap = Math.max(1, Math.floor(Number(stunMastery?.bossStunCap) || 1));
+  /** 暈完之後王免疫幾回合（只對 boss 生效） */
+  const BOSS_STUN_IMMUNE_ROUNDS = Math.max(0, Math.floor(Number(options.bossStunImmuneRounds ?? 3)));
+  const capMonsterStun = (v) => (monsterIsBossUnit ? Math.min(v, _bossStunCap) : v);
+  /** 王的暈眩免疫到第幾回合為止（含）；0 = 沒有免疫中 */
+  let monsterStunImmuneUntil = 0;
   let stunRoundsLeft = capMonsterStun(Math.max(0, Math.floor(Number(options.stunRoundsLeft || 0)))); // 怪物剩餘擊暈回合數
+  // 團隊暈眩（矮人戰士長・巨神震擊）：暈眩窗口內開打 → 怪物整場不出手。
+  // 這條**不受上限與免疫管制**——是全服合力敲滿暈眩條換來的 20 秒窗口，
+  // 且窗口外有 2 分鐘免疫，與單場戰鬥內的暈眩節奏是兩套獨立機制。
+  const _teamStunRounds = Math.max(0, Math.floor(Number(options.teamStunRounds || 0)));
+  if (_teamStunRounds > 0) stunRoundsLeft = Math.max(stunRoundsLeft, _teamStunRounds);
+
+  /**
+   * 對怪物上暈眩的唯一入口。
+   * 回傳 true = 真的暈到了；false = 被免疫擋下。
+   * 以前各處各自 `stunRoundsLeft = capMonsterStun(...)`，其中武器 proc 那條還漏了沒 cap，
+   * 導致「boss 最多暈 1 回合」形同虛設 → 統一收斂到這裡。
+   */
+  const applyMonsterStun = (rawRounds, curRound) => {
+    const want = Math.max(0, Math.floor(Number(rawRounds) || 0));
+    if (want <= 0) return false;
+    if (monsterIsBossUnit && curRound <= monsterStunImmuneUntil) return false; // 免疫中
+    const dur = capMonsterStun(want);
+    if (dur <= 0) return false;
+    stunRoundsLeft = Math.max(stunRoundsLeft, dur);
+    if (monsterIsBossUnit && BOSS_STUN_IMMUNE_ROUNDS > 0) {
+      // 暈眩結束的那一回合之後開始免疫
+      monsterStunImmuneUntil = curRound + dur - 1 + BOSS_STUN_IMMUNE_ROUNDS;
+    }
+    return true;
+  };
   let monsterActiveEffects = Array.isArray(options.monsterActiveEffects)
     ? options.monsterActiveEffects.map((effect) => ({ ...effect, params: { ...(effect.params || {}) } }))
     : []; // 怪物的 active effects（Buff/Debuff）
@@ -1049,15 +1096,27 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   };
   const jobSkillCooldowns = {}; // { [skillKey]: remainingTurns }
   let forceMonsterCritFail = false; // 賭徒「千術」：本回合敵方攻擊必定大失敗
+  let _burstUsed = false;           // 劍鬼「斬」：一場只發動一次
   let jobSkillUsedThisRound = false;
+  // 「目標現在是不是暈眩中」——全遊戲統一口徑：
+  //   stunRoundsLeft         ＝ 武器 proc／震地重擊／巨神震擊(時間暈眩) 都寫這裡
+  //   monsterActiveEffects   ＝ 卡片/技能掛上去的 stun 效果
+  // 以前三處判定各寫各的（矮人那條只查後者），導致巨神震擊時矮人吃不到自己的加成。
+  const _targetStunnedNow = (round) => stunRoundsLeft > 0
+    || (Array.isArray(monsterActiveEffects) && monsterActiveEffects.some((e) => e && e.key === 'stun' && effectIsActive(e, round)));
+
   const combatStats = {
     comboCount: 0,
     dodgeCount: 0,
     blockCount: 0,
     stunCount: 0,
     burnTriggerCount: 0,
-    attackCount: 0
+    attackCount: 0,
+    // 「實際有攻擊到的回合數」（同一回合打幾下都只算 1）——
+    // 矮人戰士長敲世界王暈眩條用；attackCount 是每一擊都 +1（雙持/骰子會 +2），不能拿來當回合數
+    attackRounds: 0
   };
+  let _attackRoundMark = 0; // 上一次計入 attackRounds 的回合，避免同回合重複累加
   // ── 一次性效果旗標（一場戰鬥只觸發一次）──
   let deathPreventUsed = false;
 
@@ -1237,6 +1296,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       jobSkillCooldowns[key] = Math.max(0, Number(jobSkillCooldowns[key] || 0) - 1);
     }
     jobSkillUsedThisRound = false;
+    // ── 血祭（狂戰士）：開場真的砍自己一刀 ──
+    // 以前用 options.startPlayerHp 讓戰鬥「從 70% 開始」，但前端血條是從滿血播的、
+    // 伺服器也沒發出扣血事件 → 玩家看不到扣血、數字還對不上。改成第 1 回合實際扣，
+    // 並用「你受到 N 點 …（你剩 X / Y）」這種前端時間軸解析得了的格式輸出。
+    if (round === 1 && Number(options.sacrificeHpCostPct) > 0 && pStats.maxHp > 0) {
+      const _cost = Math.max(1, Math.round(pStats.maxHp * (Number(options.sacrificeHpCostPct) / 100)));
+      const _actual = Math.min(_cost, Math.max(0, pHp - 1)); // 保底留 1 滴血，不會因血祭直接死
+      if (_actual > 0) {
+        _hurt(_actual);
+        log.push(`🩸 **血祭**！你剖開自己獻上祭品——你受到 **${_actual}** 點自傷，整場攻擊力 **+${Math.round(Number(options.sacrificeAtkUpPct) || 0)}%**！（你剩 ${Math.max(0, pHp)} / ${pStats.maxHp}）`);
+      }
+    }
     if (round === 1 && jobProfile.jobName) {
       log.push(`✨ ${jobProfile.jobName} ${rand(jobFlavor.intro)}`);
     }
@@ -1359,7 +1430,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           // appliedAt 回合起持續 stunTurns 回合
           const stunEnd = (mEff.appliedAt || 1) + stunTurns;
           if (round <= stunEnd && stunRoundsLeft < stunTurns) {
-            stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunEnd - round + 1));
+            applyMonsterStun(stunEnd - round + 1, round);
           }
         }
 
@@ -1796,9 +1867,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (roundHighHpDmgBoostPct > 0 && mHp > mHpInit * 0.5) {
         multiplier *= (1 + roundHighHpDmgBoostPct / 100);
       }
-      if (roundStunnedDmgBoostPct > 0) {
-        const targetIsStunned = stunRoundsLeft > 0 || monsterActiveEffects.some(e => e.key === 'stun' && effectIsActive(e, round));
-        if (targetIsStunned) multiplier *= (1 + roundStunnedDmgBoostPct / 100);
+      if (roundStunnedDmgBoostPct > 0 && _targetStunnedNow(round)) {
+        multiplier *= (1 + roundStunnedDmgBoostPct / 100);
       }
       return multiplier;
     };
@@ -2124,7 +2194,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const appliedStun = result.targetActiveEffects.find(e => e.key === 'stun' && e.appliedAt === round);
             if (appliedStun) {
               const stunDur = Number(appliedStun.params?.duration?.value ?? 1);
-              stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
+              applyMonsterStun(stunDur, round);
             }
           }
         }
@@ -2271,7 +2341,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             appliedAnyNormalProc = true;
             if (effectEntry.key === 'stun') {
               const stunDur = Number(effectEntry.params?.duration?.value ?? 1);
-              stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
+              applyMonsterStun(stunDur, round);
             }
           } else {
             if (!options.playerActiveEffects) options.playerActiveEffects = [];
@@ -2303,6 +2373,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (Number.isFinite(Number(c.targetHpBelowPct)) && monsterHpPct >= Number(c.targetHpBelowPct)) return false;
           // 姿態專屬技能：只有在對應姿態下才進入隨機池（沒選姿態 → 這類技能一律不可用）
           if (c.stance && c.stance !== battleStance?.key) return false;
+          // 暈眩專屬技能（矮人戰士長「餘震」）：目標暈眩中才進池；兩種暈眩都算
+          if (c.targetStunned === true && !_targetStunnedNow(round)) return false;
           return true;
         });
         if (available.length > 0) {
@@ -2331,7 +2403,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, entry);
               if (entry.key === 'stun') {
                 const stunDur = Number(entry.params?.duration?.value ?? 1);
-                stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
+                applyMonsterStun(stunDur, round);
               }
             } else {
               if (!options.playerActiveEffects) options.playerActiveEffects = [];
@@ -2362,6 +2434,42 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (Number(sk.cooldownTurns) > 0) jobSkillCooldowns[sk.key] = Number(sk.cooldownTurns);
         if ((sk.procEffects || []).some((pe) => pe?.key === 'force_crit_fail')) forceMonsterCritFail = true;
         log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${sk.name}】！${sk.description || ''}`);
+      }
+    }
+
+    // ── 自訂觸發：on_target_stunned（目標暈眩中必定發動，不吃 35% 閘門）──
+    //    用於矮人戰士長「崩山」：把「打暈 → 爆發」變成穩定連段而不是碰運氣。
+    //    效果照一般 procEffects 掛到玩家身上（final_damage_up 等），由既有效果鏈結算。
+    if (!playerIsStunned && !playerIsFrozen && outcome === null && _targetStunnedNow(round)) {
+      const _stunSkills = (Array.isArray(options.equipped?.job_eq?.jobSkills)
+        ? options.equipped.job_eq.jobSkills : []).filter((sk) => sk?.trigger === 'on_target_stunned');
+      for (const sk of _stunSkills) {
+        if (!sk.key || (jobSkillCooldowns[sk.key] || 0) > 0) continue;
+        const ch = Number.isFinite(Number(sk.chance)) ? Number(sk.chance) : 100;
+        if (Math.random() * 100 >= ch) continue;
+        if (Number(sk.cooldownTurns) > 0) jobSkillCooldowns[sk.key] = Number(sk.cooldownTurns);
+        if (!options.playerActiveEffects) options.playerActiveEffects = [];
+        for (const pe of (sk.procEffects || [])) {
+          if (!pe || !pe.key) continue;
+          const p = pe.params || {};
+          const entry = {
+            key: pe.key,
+            target: pe.target || 'self',
+            trigger: 'passive',
+            chance: 100,
+            params: { ...p },
+            duration: p.duration || { mode: 'turns', value: 1 },
+            appliedAt: round,
+            sourceType: 'job_skill',
+            sourceId: `dwarflord:${sk.key}`,
+          };
+          if (entry.target === 'enemy') {
+            monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, entry);
+          } else {
+            options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, entry);
+          }
+        }
+        log.push(`⛰️ **(${jobProfile.jobName || '職業技能'})** 發動【${sk.name}】！${sk.description || ''}`);
       }
     }
 
@@ -2784,12 +2892,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             log.push(`☠️ 匕首淬毒！${mName} 中毒（每回合最大 HP ${newPct.toFixed(2)}% 毒傷）！`);
           } else if (pe.key === 'proc_stun') {
             const stunDur = Number(dur?.value ?? 3);
-            stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
-            monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
-              key: 'stun', params: { value: 100, duration: { mode: 'turns', value: stunDur } },
-              appliedAt: round, sourceType: 'job_proc', sourceId: 'badge:stun'
-            });
-            log.push(`😵 ${mName} 被重擊擊暈！接下來 ${stunDur} 回合無法攻擊！`);
+            if (applyMonsterStun(stunDur, round)) {
+              const _d = stunRoundsLeft;
+              monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                key: 'stun', params: { value: 100, duration: { mode: 'turns', value: _d } },
+                appliedAt: round, sourceType: 'job_proc', sourceId: 'badge:stun'
+              });
+              log.push(`😵 ${mName} 被重擊擊暈！接下來 ${_d} 回合無法攻擊！`);
+            } else if (monsterIsBossUnit) {
+              log.push(`🛡️ ${mName} 暫時對擊暈免疫。`);
+            }
           } else if (pe.key === 'burn') {
             monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
               key: 'burn', params: { value: Number(pp.value ?? 0.8), mode: pp.mode || 'pct', duration: dur },
@@ -2897,7 +3009,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const effectiveDef = isBreak ? 0 : Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
         // 法杖無視怪物 DEF 的 bypassMonsterDefPct%（預設0，法杖50）
         const bypassPct = pStats.bypassMonsterDefPct ?? 0;
-        const combinedBypassPct = Math.min(100, Math.max(0, bypassPct + playerDefIgnorePct + roundPartyDefIgnorePct));
+        // 被動「山碎」（矮人戰士長）：對暈眩中的目標無視防禦%。
+        // 兩種暈眩都算——回合暈眩(stunRoundsLeft) 與 巨神震擊的時間暈眩。
+        const _stunBypassPct = (stunMastery && _targetStunnedNow(round))
+          ? Math.max(0, Number(stunMastery.defIgnoreVsStunned) || 0)
+          : 0;
+        const combinedBypassPct = Math.min(100, Math.max(0, bypassPct + playerDefIgnorePct + roundPartyDefIgnorePct + _stunBypassPct));
         const finalDef = Math.max(0, effectiveDef * (1 - combinedBypassPct / 100));
 
         let conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
@@ -2919,7 +3036,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (playerBonusVsBurningPct > 0 && monsterActiveEffects.some(e => e.key === 'burn' && effectIsActive(e, round))) {
           conditionalBonusMultiplier *= (1 + playerBonusVsBurningPct / 100);
         }
-        if (playerBonusVsStunnedPct > 0 && (stunRoundsLeft > 0 || monsterActiveEffects.some(e => e.key === 'stun' && effectIsActive(e, round)))) {
+        if (playerBonusVsStunnedPct > 0 && _targetStunnedNow(round)) {
           conditionalBonusMultiplier *= (1 + playerBonusVsStunnedPct / 100);
         }
         if (playerBonusVsBossPct > 0 && (options.monsterIsBoss || options.isBoss || options.isWorldBoss || mCalc?.isBoss)) {
@@ -2969,17 +3086,49 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           conditionalBonusMultiplier *= (1 + offBonusPct / 100);
         }
         if (pStats.hasDwarfWarriorBadge && pStats.weaponType && pStats.weaponType.startsWith("mace")) {
-          const monsterIsStunned = Array.isArray(monsterActiveEffects) && monsterActiveEffects.some((e) => e && e.key === 'stun' && effectIsActive(e, round));
-          if (monsterIsStunned && Number.isFinite(Number(pStats.dwarfWarriorBonusVsStunnedPct)) && Number(pStats.dwarfWarriorBonusVsStunnedPct) > 0) {
+          if (_targetStunnedNow(round) && Number.isFinite(Number(pStats.dwarfWarriorBonusVsStunnedPct)) && Number(pStats.dwarfWarriorBonusVsStunnedPct) > 0) {
             conditionalBonusMultiplier *= (1 + Number(pStats.dwarfWarriorBonusVsStunnedPct) / 100);
           }
         }
+        // ── 狂戰士開場宣告（血祭／戰意全開）：第一次真正出手時說一次。
+        //    不能綁「第 1 回合第一擊」——那一擊若落空會提前 continue，宣告永遠不會出現。
+        if (!_berserkAnnounced) {
+          _berserkAnnounced = true;
+          // 血祭的宣告與扣血在回合開頭已處理，這裡只留戰意全開
+          if (Number(options.warGaugeCritBonus) > 0) {
+            log.push(`🔥 **戰意全開**！集滿的鬥氣轟然炸裂——本場爆擊率 **+${Math.round(Number(options.warGaugeCritBonus))}**！`);
+          }
+        }
+        // ── 血怒（狂戰士）：依「當下」HP 缺口加攻，乘進條件乘數 →
+        //    attackBase/爆擊路徑自然繼承，不需要各處另算 ──
+        if (bloodRage && pStats.maxHp > 0) {
+          const _missPct = Math.max(0, 100 - (pHp / pStats.maxHp) * 100);
+          const _ragePct = Math.min(Number(bloodRage.capPct) || 50, _missPct * (Number(bloodRage.perMissPct) || 0.6));
+          if (_ragePct >= 1) {
+            conditionalBonusMultiplier *= (1 + _ragePct / 100);
+            if (!_bloodRageAnnounced && _ragePct >= 15) {
+              _bloodRageAnnounced = true;
+              log.push(`🩸 傷口在燃燒——**血怒** 甦醒，攻擊力隨失血高漲（此刻 **+${Math.round(_ragePct)}%**）！`);
+            }
+          }
+        }
+        // 劍鬼「斬」：消耗全部連段，第 1 回合的第一擊打出 comboBurstMult 倍。
+        // 一場只發動一次（用 _burstUsed 記），之後回合恢復正常。
+        let _burstMult = 1;
+        if (!_burstUsed && Number(options.comboBurstMult) > 1 && round === 1 && a === 0) {
+          _burstMult = Number(options.comboBurstMult);
+          _burstUsed = true;
+          log.push(`🗡️ **斬**！連段盡數傾瀉於這一擊——傷害 **×${_burstMult.toFixed(1)}**！`);
+        }
+        // 一刀流：斬不吃等級壓制（下面另外也跳過防禦計算）
+        const _lvMultForHit = _burstMult > 1 ? 1 : playerAttackLevelMult;
         const attackBase = Math.max(
           1,
-          Math.round((pStats.atk + roundAtkFlatBonus) * _offhandMultRound * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * playerAttackLevelMult)
+          Math.round((pStats.atk + roundAtkFlatBonus) * _burstMult * _offhandMultRound * playerAtkMultiplier * roundDmgMultiplier * roundBossDmgMultiplier * roundEliteDmgMultiplier * playerFinalDamageMultiplier * tierDamageMultiplier * tierFinalDamageMultiplier * tierBossDamageMultiplier * conditionalBonusMultiplier * _lvMultForHit)
         );
         // 新公式 B：flatDef 在 ATK 階段壓制（傳 pStats.atk 作為 rawAtk）
-        let dmg = rollDmg(applyDefense(attackBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk));
+        // 一刀流：斬「無視防禦與等級差」，只算自己的攻擊力 × 倍率（仍可爆擊，見下方爆擊判定）
+        let dmg = _burstMult > 1 ? rollDmg(attackBase) : rollDmg(applyDefense(attackBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk));
 
         // ── 套攻擊階級乘數（成功 ×1.0 / 大成功 ×1.3；完美走爆擊另算）──
         const atkTierMult = ATTACK_TIER_MULT[atkTier] ?? 1.0;
@@ -2990,7 +3139,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         // ── 擲防禦階級（4 階）──
         const defTierProbs = calcDefenseTierProbs(adjustedMCalc.dex || 0, adjustedMCalc.luk || 0);
-        const defTier = rollDefenseTier(defTierProbs);
+        const defTier = _burstMult > 1 ? 'hit' : rollDefenseTier(defTierProbs);   // 一刀流：斬不吃對方的防禦擲骰
         const defTierMult = DEFENSE_TIER_MULT[defTier] ?? 1.0;
         if (defTierMult !== 1.0) {
           dmg = Math.max(1, Math.round(dmg * defTierMult));
@@ -3016,7 +3165,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         let finalDamage = dmg;
         if (isCrit) {
-          const critPostDef = applyDefense(attackBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk);
+          // 一刀流：斬爆擊時同樣無視防禦
+          const critPostDef = _burstMult > 1
+            ? attackBase
+            : applyDefense(attackBase, adjustedMCalc.flatDef || 0, finalDef, pStats.atk);
           const critMultiplier = 2 * playerCritDamageMultiplier * tierCritDamageMultiplier;
           finalDamage = Math.round(rollDmg(critPostDef) * critMultiplier);
         }
@@ -3200,17 +3352,23 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         const effectiveStunChance = (Number(pStats.stunChance) || 0) + stunBonus;
         if (!isCrit && Math.random() * 100 < effectiveStunChance) {
+          // 走統一入口：世界王吃上限(1 回合／矮人戰士長 2 回合)與暈眩免疫，一般怪維持 3 回合。
+          // 以前這裡直接 `stunRoundsLeft = weaponStunDur`，完全繞過上限 →「boss 最多暈 1 回合」形同虛設。
           const weaponStunDur = pStats.stunDuration || 3;
-          stunRoundsLeft = weaponStunDur;
-          monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
-            key: 'stun',
-            params: { value: 100, duration: { mode: 'turns', value: weaponStunDur } },
-            appliedAt: round,
-            sourceType: 'job_proc',
-            sourceId: 'dwarf_warrior:stun'
-          });
-          combatStats.stunCount += 1;
-          log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 ${weaponStunDur} 回合無法攻擊！`);
+          if (applyMonsterStun(weaponStunDur, round)) {
+            const _dur = stunRoundsLeft;
+            monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+              key: 'stun',
+              params: { value: 100, duration: { mode: 'turns', value: _dur } },
+              appliedAt: round,
+              sourceType: 'job_proc',
+              sourceId: 'dwarf_warrior:stun'
+            });
+            combatStats.stunCount += 1;
+            log.push(`😵 ${mName} ${rand(stunPhrases)}！接下來 ${_dur} 回合無法攻擊！`);
+          } else if (monsterIsBossUnit) {
+            log.push(`🛡️ ${mName} 的巨軀仍在震盪的餘韻中，暫時對擊暈免疫。`);
+          }
         }
 
         // ── Badge on_hit 效果觸發（僅 B 類：需要本擊 dmg 數值的 proc_extra_hit / proc_chain_hit）──
@@ -3242,12 +3400,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
             } else if (pe.key === 'proc_stun') {
               const stunDur = Number(dur?.value ?? 3);
-              stunRoundsLeft = capMonsterStun(Math.max(stunRoundsLeft, stunDur));
-              monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
-                key: 'stun', params: { value: 100, duration: { mode: 'turns', value: stunDur } },
-                appliedAt: round, sourceType: 'job_proc', sourceId: 'badge:stun'
-              });
-              log.push(`😵 ${mName} 被重擊擊暈！接下來 ${stunDur} 回合無法攻擊！`);
+              if (applyMonsterStun(stunDur, round)) {
+                const _d = stunRoundsLeft;
+                monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+                  key: 'stun', params: { value: 100, duration: { mode: 'turns', value: _d } },
+                  appliedAt: round, sourceType: 'job_proc', sourceId: 'badge:stun'
+                });
+                log.push(`😵 ${mName} 被重擊擊暈！接下來 ${_d} 回合無法攻擊！`);
+              } else if (monsterIsBossUnit) {
+                log.push(`🛡️ ${mName} 暫時對擊暈免疫。`);
+              }
 
             } else if (pe.key === 'burn') {
               monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
@@ -3397,6 +3559,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         // 計數一次攻擊
         combatStats.attackCount += 1;
+        // 這一回合有打到 → 回合數 +1（同回合多擊只算一次）
+        if (_attackRoundMark !== round) { _attackRoundMark = round; combatStats.attackRounds += 1; }
 
         // ── 玩家吸血效果（主擊／副手；卡片技能與鮮血錨點共用）──
         _applyLifesteal(dmg);
@@ -3554,7 +3718,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     if (skipMonsterAttackReason === "stun") {
-      log.push(`😵 ${mName} 仍處於擊暈狀態，無法攻擊！`);
+      // 團隊暈眩（巨神震擊）用專屬敘述，讓玩家知道這場的免傷是誰換來的
+      log.push(_teamStunRounds > 0
+        ? `⛰️ **巨神震擊**餘威未散——${mName} 癱倒在地，動彈不得！`
+        : `😵 ${mName} 仍處於擊暈狀態，無法攻擊！`);
     } else if (skipMonsterAttackReason === "freeze") {
       log.push(`🧊 ${mName} 被冰凍住，此回合無法攻擊！`);
     } else if (skipMonsterAttackReason === "agi_first_strike") {

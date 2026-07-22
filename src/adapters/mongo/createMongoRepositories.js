@@ -4,7 +4,7 @@ const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { createStreamAccountBindingRepository } = require("../streamBindings/createStreamAccountBindingRepository");
 const { createCreatorTokenRepository } = require("../creatorTokens/createCreatorTokenRepository");
 const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
-const { slimProgressForStorage, slimInventoryEntry } = require("../../shared/inventoryStorage");
+const { slimProgressForStorage, slimInventoryEntry, slimInventoryArray } = require("../../shared/inventoryStorage");
 
 function emitRealtimeInvalidate(type, discordId) {
   if (!discordId) return;
@@ -91,6 +91,88 @@ function createMongoRepositories() {
       ...normalized,
       inventory: normalizeEnhanceGemStacks(normalized.inventory)
     };
+  };
+
+  /**
+   * 背包基準戳記：讀取當下把「背包簽章 + uuid 集合」掛成不可列舉屬性。
+   * save() 靠它分辨兩件事：
+   *   1. 這次呼叫到底有沒有動背包 → 沒動就完全不寫 inventory 欄位
+   *   2. 就算有動，哪些 entry 是「讀取之後才被別的流程原子塞進來的」→ 合併保留
+   * 這是「獎勵憑空消失」的源頭修法——不再依賴每個呼叫點自律。
+   */
+  const INV_BASELINE_KEY = "__invBaseline";
+  const stampInventoryBaseline = (doc) => {
+    if (!doc || typeof doc !== "object") return doc;
+    try {
+      const slim = slimInventoryArray(Array.isArray(doc.inventory) ? doc.inventory : []);
+      const uuids = [];
+      const scByUuid = {}; // uuid → 讀取當下的堆疊數（消耗品競態合併用）
+      for (const e of slim) {
+        if (!e || !e.uuid) continue;
+        const u = String(e.uuid);
+        uuids.push(u);
+        scByUuid[u] = Math.max(1, Number(e.stackCount) || 1);
+      }
+      Object.defineProperty(doc, INV_BASELINE_KEY, {
+        value: { sig: JSON.stringify(slim), uuids, scByUuid },
+        enumerable: false,
+        writable: true,
+        configurable: true
+      });
+    } catch (_) {
+      // 戳記失敗 → save() 自動退回舊的整份覆寫路徑，行為不變
+    }
+    return doc;
+  };
+
+  /**
+   * 背包差異合併：呼叫方的版本為準（刪除/改裝生效），但把「讀取之後」
+   * 別的流程原子塞進來的東西補回來：
+   *   - DB 有、基準沒有的 uuid → 讀取後新增的 entry（新掉落/寶箱）→ 保留
+   *   - 同 uuid 的堆疊數比基準多 → 讀取後被 $inc 疊加（同款消耗品）→ 差額加回
+   *   - 呼叫方刪光了某 entry 但期間又被疊了 N 個 → 以差額重建 entry
+   */
+  const mergeInventories = (outInv, dbInv, baseline) => {
+    const db = Array.isArray(dbInv) ? dbInv : [];
+    const base = baseline && baseline.scByUuid ? baseline.scByUuid : {};
+    const known = new Set(baseline && baseline.uuids ? baseline.uuids : []);
+    const outUuids = new Set();
+    for (const e of outInv) if (e && e.uuid) outUuids.add(String(e.uuid));
+
+    const dbByUuid = new Map();
+    for (const d of db) if (d && d.uuid) dbByUuid.set(String(d.uuid), d);
+
+    const merged = outInv.map((o) => {
+      if (!o || !o.uuid) return o;
+      const u = String(o.uuid);
+      const d = dbByUuid.get(u);
+      // 基準裡沒有 → 呼叫方自己新增的 entry，以呼叫方為準
+      if (!d || !(u in base)) return o;
+      const dSc = Math.max(1, Number(d.stackCount) || 1);
+      const delta = dSc - base[u];
+      if (delta > 0) {
+        // 讀取後被別的流程疊加了 delta 個 → 加回呼叫方的版本上
+        return { ...o, stackCount: Math.max(1, Number(o.stackCount) || 1) + delta };
+      }
+      return o;
+    });
+
+    for (const d of db) {
+      if (!d || !d.uuid) continue; // 無 uuid 的舊資料視為已由呼叫方版本涵蓋
+      const u = String(d.uuid);
+      if (outUuids.has(u)) continue;
+      if (!known.has(u)) {
+        // 讀取後才出現的新 entry（原子發放）→ 保留
+        merged.push(d);
+        continue;
+      }
+      // 呼叫方刪掉的 entry；但若期間又被疊加過，差額不能跟著陪葬
+      const dSc = Math.max(1, Number(d.stackCount) || 1);
+      if (u in base && dSc > base[u]) {
+        merged.push({ ...d, stackCount: dSc - base[u] });
+      }
+    }
+    return merged;
   };
 
   const repos = {
@@ -237,21 +319,90 @@ function createMongoRepositories() {
           // 永遠從 DB 讀取最新 effects，所有呼叫方自動拿到最新設計值
           normalized.equipment = await mergeEquippedFromLibrary(normalized.equipment, repos.itemRepository).catch(() => normalized.equipment);
         }
-        return normalized;
+        return stampInventoryBaseline(normalized);
       },
       async save(progress) {
+        // 讀取當下的背包基準（findByPlayerId 蓋的戳記）；沒有就走舊路徑
+        const baseline = progress ? progress[INV_BASELINE_KEY] : null;
         // 儲存前瘦身 inventory(去除可從道具庫還原的肥欄位),避免 progress 文件撐爆 16MB
         progress = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        const outInv = Array.isArray(progress.inventory) ? progress.inventory : [];
+        // 呼叫方這次到底有沒有動背包？（簽章比對讀取當下 vs 現在）
+        const invUntouched = Boolean(baseline && typeof baseline.sig === "string"
+          && baseline.sig === JSON.stringify(outInv));
         let lastError = null;
         const maxRetries = 5;  // 增加重試次數
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
-            const result = await (await collection("progress")).updateOne(
-              { playerId: progress.playerId },
-              { $set: { ...progress, updatedAt: new Date().toISOString() } },
-              { upsert: true }
-            );
+            const coll = await collection("progress");
+            const now = new Date().toISOString();
+            let result;
+
+            if (baseline && invUntouched) {
+              // ① 背包沒動 → 完全不寫 inventory 欄位。
+              //    期間被原子塞進來的獎勵（世界王寶箱/掉落/拍賣到貨…）原封不動。
+              const { inventory: _omit, ...rest } = progress;
+              result = await coll.updateOne(
+                { playerId: progress.playerId },
+                { $set: { ...rest, updatedAt: now } },
+                { upsert: false }
+              );
+            } else if (baseline) {
+              // ② 背包有動 → 讀最新背包做差異合併，CAS 寫回（updatedAt 沒被
+              //    別人改過才成功）；失敗就重讀重合併，確保競態發放不被吃掉。
+              const { inventory: _omit, ...rest } = progress;
+              let casOk = false;
+              let casMatched = false;
+              for (let casTry = 0; casTry < 5; casTry++) {
+                const cur = await coll.findOne(
+                  { playerId: progress.playerId },
+                  { projection: { inventory: 1, updatedAt: 1 } }
+                );
+                if (!cur) break; // 文件不見了 → 交給下方 fallback
+                casMatched = true;
+                const merged = mergeInventories(outInv, cur.inventory, baseline);
+                const cas = await coll.updateOne(
+                  { playerId: progress.playerId, updatedAt: cur.updatedAt },
+                  { $set: { ...rest, inventory: merged, updatedAt: now } },
+                  { upsert: false }
+                );
+                if (cas.matchedCount > 0) { casOk = true; break; }
+              }
+              if (casMatched && !casOk) {
+                // CAS 連續失敗（極高併發）→ 最後一次用剛讀到的最新狀態直接寫，
+                // 仍然是合併後的結果，不是呼叫方的整份舊資料
+                const cur = await coll.findOne(
+                  { playerId: progress.playerId },
+                  { projection: { inventory: 1 } }
+                );
+                const merged = mergeInventories(outInv, cur ? cur.inventory : [], baseline);
+                const forced = await coll.updateOne(
+                  { playerId: progress.playerId },
+                  { $set: { ...rest, inventory: merged, updatedAt: now } },
+                  { upsert: false }
+                );
+                casOk = forced.matchedCount > 0;
+                console.warn(`[ProgressRepository] Inventory merge CAS exhausted for ${progress.playerId}, forced write`);
+              }
+              result = { matchedCount: casOk ? 1 : 0, upsertedCount: 0 };
+            } else {
+              // ③ 沒有基準（新建文件、或經過序列化丟失戳記）→ 舊行為：整份覆寫
+              result = await coll.updateOne(
+                { playerId: progress.playerId },
+                { $set: { ...progress, updatedAt: now } },
+                { upsert: true }
+              );
+            }
+
+            // 有基準但文件不見了（極罕見：期間被刪）→ 退回整份 upsert
+            if (baseline && result.matchedCount === 0) {
+              result = await coll.updateOne(
+                { playerId: progress.playerId },
+                { $set: { ...progress, updatedAt: now } },
+                { upsert: true }
+              );
+            }
 
             if (result.matchedCount === 0 && result.upsertedCount === 0) {
               console.warn(`[ProgressRepository] Save had no effect for ${progress.playerId}`);
@@ -261,7 +412,8 @@ function createMongoRepositories() {
               console.info(`[ProgressRepository] Save succeeded for ${progress.playerId} on attempt ${attempt}`);
             }
             emitRealtimeInvalidate("progress", progress.playerId);
-            return progress;
+            // 回傳物件蓋上新的基準：之後若再拿同一份來 save，比對基準是「這次存進去的版本」
+            return stampInventoryBaseline(progress);
           } catch (err) {
             lastError = err;
             const isLastAttempt = attempt === maxRetries;
@@ -279,6 +431,25 @@ function createMongoRepositories() {
         // 重試多次仍失敗，拋出錯誤
         console.error(`[ProgressRepository] CRITICAL: Failed to save progress for ${progress.playerId} after ${maxRetries} attempts. Data loss risk!`, lastError);
         throw lastError;
+      },
+      /**
+       * 只更新指定欄位（不碰 inventory / equipment 等）。
+       *
+       * 為什麼需要這個：save() 是 `$set: {...整份 progress}`，會把讀取當下的
+       * inventory 整個寫回去。若在「讀取 → 運算 → 寫回」這段期間有別的流程
+       * 原子塞了東西進背包（世界王寶箱、掉落、拍賣到貨…），那次整份覆寫就會
+       * 把它抹掉——這是獎勵憑空消失的主因。
+       * 只改單一小欄位時一律用這個，不要用 save()。
+       */
+      async updateFields(playerId, fields) {
+        if (!playerId || !fields || typeof fields !== "object") return false;
+        const result = await (await collection("progress")).updateOne(
+          { playerId: String(playerId) },
+          { $set: { ...fields, updatedAt: new Date().toISOString() } },
+          { upsert: false }
+        );
+        if (result.matchedCount > 0) emitRealtimeInvalidate("progress", String(playerId));
+        return result.matchedCount > 0;
       },
       // CAS 寫入：只有 updatedAt 未被別人改過才成功，回傳是否成功
       async saveIfUnchanged(progress, prevUpdatedAt) {

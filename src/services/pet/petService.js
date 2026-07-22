@@ -330,7 +330,8 @@ class PetService {
       this._maybeNotifyGatherCap(discordId, active, dex.cap);
       changed = true;
     }
-    if (changed) await this.progressRepository.save(progress);
+    // 只改 pets（採集/飽食結算）→ 不整份覆寫，避免抹掉同時段發放的道具
+    if (changed) await this.progressRepository.updateFields(progress.playerId, { pets: progress.pets });
 
     const eggCount = progress.inventory.reduce((sum, item) => {
       if (!item || item.itemType !== "pet_egg") return sum;
@@ -846,7 +847,7 @@ class PetService {
     // 切上前台後才開始計採集時間；既有累積物不清空。
     if (!previousActive || previousActive.uuid !== petUuid) pet.lastSettleAt = nowMs();
     pet.lastSatietyAt = nowMs();
-    await this.progressRepository.save(progress);
+    await this.progressRepository.updateFields(progress.playerId, { pets: progress.pets, activePetUuid: petUuid });
     return { activePetUuid: petUuid, pet: this._toView(pet, dex) };
   }
 
@@ -860,7 +861,7 @@ class PetService {
       this._applyHungerDecay(previousActive);
     }
     progress.activePetUuid = null;
-    await this.progressRepository.save(progress);
+    await this.progressRepository.updateFields(progress.playerId, { pets: progress.pets, activePetUuid: null });
     return { activePetUuid: null };
   }
 

@@ -881,6 +881,12 @@ class WeeklyQuestService {
       // ⚠️ 未開放內容一律 enabled:false，要開放是使用者的決定
       { cadence: "job", title: "聖劍士試煉", description: "劍士二轉．攻守之道。出現條件：Lv.35 且持有劍士徽章。以劍士出戰累積場次即可完成。獎勵：聖劍士徽章。", type: "battle_as_swordsman", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_holyblade_t2_v1", sortOrder: 210, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_swordsman_v1"], hideIfRewardOwned: true },
 
+      { cadence: "job", title: "劍鬼試煉", description: "劍士二轉．連段之道。出現條件：Lv.35 且持有劍士徽章。以劍士出戰累積場次即可完成。獎勵：劍鬼徽章。", type: "battle_as_swordsman", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_swordoni_t2_v1", sortOrder: 211, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_swordsman_v1"], hideIfRewardOwned: true },
+
+      { cadence: "job", title: "狂戰士試煉", description: "戰士二轉．血之道。出現條件：Lv.35 且持有戰士徽章。以戰士出戰累積場次即可完成。獎勵：狂戰士徽章。", type: "battle_as_warrior", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_berserker_t2_v1", sortOrder: 212, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_warrior_v1"], hideIfRewardOwned: true },
+
+      { cadence: "job", title: "矮人戰士長試煉", description: "矮人戰士二轉．巨神之道。出現條件：Lv.35 且持有矮人戰士徽章。以矮人戰士出戰累積場次即可完成。獎勵：矮人戰士長徽章。", type: "battle_as_dwarf_warrior", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_dwarflord_t2_v1", sortOrder: 213, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_dwarf_warrior_v1"], hideIfRewardOwned: true },
+
       { cadence: "job", title: "賭徒試煉", description: "出現條件：Lv.10，基礎 LUK + AGI > 10。進度武器：骰子；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與賭徒徽章。", type: "battle_with_dice", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_gambler_v1", sortOrder: 110, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["dice"], unlockAttributes: ["luk", "agi"], unlockAttributeMin: 10, hideIfRewardOwned: true, enabled: false }, // ⚠️本季不開放：下一季開服再改 enabled:true（骰子外洩事件後關閉，見 SEASON_V0.4.5_PLAN）
 
       // daily (4)
@@ -915,7 +921,9 @@ class WeeklyQuestService {
       }
       const row = await this.createDefinition({
         ...def,
-        enabled: true,
+        // ⚠️ 尊重種子的 enabled:false——未開放內容一律預設關閉（賭徒外洩事件教訓）。
+        //    以前這裡硬寫 enabled:true，會把種子上的關閉旗標蓋掉。
+        enabled: def.enabled !== false,
         levelLimit: 0,
         resetPolicy: resetPolicyByCadence(def.cadence)
       });

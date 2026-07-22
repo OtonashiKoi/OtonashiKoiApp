@@ -230,6 +230,17 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     fields.push(...statusFields);
   } else {
     fields.push({ name: "HP", value: hpLine, inline: false });
+    // 巨神震擊（矮人戰士長）：暈眩條三態，由 handler 讀 dwarfStunGauge 後傳進來
+    const bs = options.bossStun || null;
+    if (bs && bs.phase) {
+      const secs = (ms) => Math.max(0, Math.ceil(Number(ms || 0) / 1000));
+      const stunLine = bs.phase === "stunned"
+        ? `⛰️💥 **暈眩中！現在出戰全程免傷**（剩 ${secs(bs.stunnedRemainMs)} 秒）`
+        : bs.phase === "immune"
+        ? `🛡️ 王已免疫，${secs(bs.immuneRemainMs)} 秒後暈眩條重新出現`
+        : `⛰️ 暈眩值 ${bs.gauge} / ${bs.threshold}（只有矮人戰士長敲得動）`;
+      fields.push({ name: "巨神震擊", value: stunLine, inline: false });
+    }
     if (worldBossPartsLine) {
       fields.push({ name: "世界王部位血量", value: worldBossPartsLine, inline: false });
     }

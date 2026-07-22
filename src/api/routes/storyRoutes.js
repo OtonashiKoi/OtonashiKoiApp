@@ -138,7 +138,7 @@ function createStoryRoutes(serviceContext, discordClient) {
         logs: result.roundLogs || [],
         finalPlayerHp,
         playerMaxHp: pStats.maxHp,
-        monster: { name: monster.name, imageUrl: monster.imageUrl || null, maxHp: monster.calc.maxHp },
+        monster: { name: monster.name, imageUrl: monster.imageUrl || null, maxHp: monster.calc.maxHp, element: monster?.element || null },
         finalMonsterHp,
         // 動畫戰鬥場景用：玩家名/頭像/武器種類(打擊音效)
         playerName: req.playerRecord.displayName || "我",

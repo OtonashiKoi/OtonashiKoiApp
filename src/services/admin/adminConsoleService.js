@@ -37,7 +37,7 @@ const AVAILABLE_FEATURES = [
   { key: "monster_zone_dragon_realm", label: "放怪區面板（龍族之領）", description: "Lv.40-50 — 龍族之領，A 階秘銀裝備產地", category: "monster" },
   { key: "monster_zone_dragon_king_lair", label: "世界王面板（龍王巢穴）", description: "Lv.40+ — 古龍王(B)，需先擊敗本週大史王才解鎖", category: "monster" },
   { key: "monster_zone_hellfire", label: "放怪區面板（地獄火焰）", description: "Lv.40+ — 地獄火焰，A 階焰系裝備產地", category: "monster" },
-  { key: "monster_zone_hellfire_depths", label: "世界王面板（焰獄深處）", description: "Lv.50+ — 地獄狼牙王，需先擊敗本週古龍王才解鎖", category: "monster" },
+  { key: "monster_zone_hellfire_depths", label: "世界王面板（焰獄深處）", description: "Lv.40+ — 地獄狼牙王，需先擊敗本週古龍王才解鎖", category: "monster" },
   { key: "pet_panel", label: "寵物面板", description: "寵物孵化 / 餵食 / 採集站", category: "system" },
   { key: "monster_zone_wasteland_throne", label: "放怪區面板（廢都王座）", description: "Lv.30 以上 — 廢都王座地圖", category: "monster" },
   { key: "monster_zone_elite", label: "放怪區面板（精英）", description: "Lv.20 以上玩家可進入的精英戰鬥區", category: "monster" },
@@ -647,6 +647,7 @@ class AdminConsoleService {
         worldBossStatus,
         worldBossPartsHp: options?.worldBossPartsHp || null,
         hellfangPartInfo: options?.hellfangPartInfo || null,
+        bossStun: options?.bossStun || null,   // 巨神震擊（矮人戰士長）暈眩條
         fastUpdate: options?.fastUpdate === true
       }
     );

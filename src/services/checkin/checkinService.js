@@ -50,8 +50,8 @@ class CheckinService {
         grantAmount = Math.round(grantAmount * multiplier);
         appliedMultiplier = multiplier;
         progress.flags.checkinMultiplier = null;
-        progress.updatedAt = new Date().toISOString();
-        await this.progressRepository.save(progress);
+        // 只改 flags → 不整份覆寫
+        await this.progressRepository.updateFields(progress.playerId, { flags: progress.flags });
       }
       // checkin_bonus_up：裝備/Buff 提供的打卡加成
       try {

@@ -58,6 +58,12 @@ function withProgressCache(repo) {
       if (store) store.delete(`progress:${progress.playerId}`);
       return saved;
     },
+    async updateFields(playerId, fields) {
+      const result = await repo.updateFields(playerId, fields);
+      const store = storage.getStore();
+      if (store) store.delete(`progress:${playerId}`);
+      return result;
+    },
     async updatePkStats(playerId, stats) {
       const result = await repo.updatePkStats(playerId, stats);
       const store = storage.getStore();

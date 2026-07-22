@@ -17,16 +17,11 @@ function getSupportJobKey({ jobKey = null, jobName = null, equipped = {} } = {})
   const rawKey = String(jobKey || equipped?.job_eq?.itemId || equipped?.job_eq?.id || "").toLowerCase();
   const rawName = String(jobName || equipped?.job_eq?.itemName || equipped?.job_eq?.name || "");
 
-  if (rawKey.includes("healer") || rawName.includes("治療")) return "healer";
-  if (rawKey.includes("tactician") || rawName.includes("軍師")) return "tactician";
-  if (rawKey.includes("bard") || rawName.includes("詩人")) return "bard";
-  if (rawKey.includes("barrier_mage") || rawName.includes("結界師")) return "barrier_mage";
-  if (rawKey.includes("swordsman") || rawName.includes("劍士")) return "swordsman";
-  if (rawKey.includes("dwarf") || rawName.includes("矮人")) return "dwarf_warrior";
-  if (rawKey.includes("warrior") || rawName.includes("戰士")) return "warrior";
-  if (rawKey.includes("archer") || rawName.includes("弓箭手")) return "archer";
-  if (rawKey.includes("rogue") || rawName.includes("盜賊")) return "rogue";
-  if (rawKey.includes("mage") || rawName.includes("法師")) return "mage";
+  // ⭐ 一律走 jobAdvancement.resolveJobKey（唯一入口）；二轉徽章會解析回一轉 key
+  try {
+    const k = require("./jobAdvancement").resolveJobKey({ itemId: rawKey, itemName: rawName });
+    if (k) return k;
+  } catch (_) { /* 模組讀不到 → 回 null，行為與找不到職業相同 */ }
   return null;
 }
 

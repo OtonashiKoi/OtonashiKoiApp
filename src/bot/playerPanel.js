@@ -473,17 +473,23 @@ async function handleProfile(interaction) {
     const jobId = String(jobEq.itemId || jobEq.id || "").toLowerCase();
     const jobName = String(jobEq.itemName || jobEq.name || "").toLowerCase();
     const wt = cs.weaponType;
-    const isArcherJob = Boolean(cs.hasArcherBadge || jobId.includes("archer") || jobName.includes("弓箭手"));
-    const isSwordsmanJob = Boolean(cs.hasSwordsmanBadge || jobId.includes("swordsman") || jobName.includes("劍士"));
-    const isWarriorJob = Boolean(cs.hasWarriorBadge || jobId === "job_warrior_v1" || (jobName.includes("戰士") && !jobName.includes("矮人")));
-    const isDwarfJob = Boolean(cs.hasDwarfWarriorBadge || jobId === "job_dwarf_warrior_v1" || jobName.includes("矮人戰士"));
-    const isRogueJob = Boolean(cs.hasRogueBadge || jobId.includes("rogue") || jobName.includes("盜賊"));
-    const isMageJob = Boolean(cs.hasMageBadge || ((jobId.includes("mage") && !jobId.includes("barrier")) || (jobName.includes("法師") && !jobName.includes("結界"))));
-    const isHealerJob = Boolean(cs.hasHealerBadge || jobId.includes("healer") || jobName.includes("治療"));
-    const isTacticianJob = Boolean(cs.hasTacticianBadge || jobId.includes("tactician") || jobName.includes("軍師"));
-    const isBardJob = Boolean(cs.hasBardBadge || jobId.includes("bard") || jobName.includes("詩人"));
-    const isBarrierMageJob = Boolean(cs.hasBarrierMageBadge || jobId.includes("barrier_mage") || jobName.includes("結界"));
-    const isGamblerJob = Boolean(jobId.includes("gambler") || jobName.includes("賭徒"));
+    // ⭐ 職業判定一律走 jobAdvancement.resolveJobKey（唯一入口）：
+    //    二轉徽章會解析回一轉 key，個人資料才會顯示正確的職業說明
+    //    （劍鬼 id 是 swordoni、名字沒有「劍士」，舊的字串比對會整組落空）。
+    const _jk = (() => {
+      try { return require("../shared/jobAdvancement").resolveJobKey(jobEq); } catch (_) { return null; }
+    })();
+    const isArcherJob = _jk === "archer";
+    const isSwordsmanJob = _jk === "swordsman";
+    const isWarriorJob = _jk === "warrior";
+    const isDwarfJob = _jk === "dwarf_warrior";
+    const isRogueJob = _jk === "rogue";
+    const isMageJob = _jk === "mage";
+    const isHealerJob = _jk === "healer";
+    const isTacticianJob = _jk === "tactician";
+    const isBardJob = _jk === "bard";
+    const isBarrierMageJob = _jk === "barrier_mage";
+    const isGamblerJob = _jk === "gambler";
 
     const jobDisplayName = jobEq.itemName || jobEq.name || "未知職業";
     const jobStatLine = formatEquipStats(jobEq.equipStats)

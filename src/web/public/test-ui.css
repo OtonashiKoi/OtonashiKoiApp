@@ -1,0 +1,527 @@
+/*
+ * /test 專用的玩家 Web UI 視覺系統。
+ * 維持 game.html 的 DOM、登入方式與所有 API 行為；只改變呈現層。
+ */
+:root {
+  --bg-0: #070a12;
+  --bg-1: #0f1625;
+  --bg-2: #17243b;
+  --panel: rgba(13, 20, 34, .84);
+  --panel-strong: rgba(20, 32, 51, .94);
+  --line: rgba(147, 193, 255, .18);
+  --line-soft: rgba(255, 255, 255, .075);
+  --gold: #f6cd70;
+  --ink: #f3f7ff;
+  --ink-dim: #9dabc1;
+  --hp: #5ee38d;
+  --mp: #65afff;
+  --danger: #ff817a;
+  --radius: 16px;
+  --font-title: "Noto Serif TC", "Noto Sans TC", serif;
+}
+
+body.test-mode {
+  background-color: var(--bg-0);
+  background-image:
+    radial-gradient(900px 520px at 50% -130px, rgba(79, 135, 224, .22), transparent 70%),
+    radial-gradient(680px 540px at 3% 34%, rgba(70, 211, 168, .08), transparent 65%),
+    radial-gradient(760px 520px at 98% 85%, rgba(240, 174, 81, .10), transparent 65%),
+    linear-gradient(150deg, #070a12, #0b1322 52%, #070a12);
+}
+body.test-mode::before {
+  content: "TEST UI";
+  position: fixed;
+  z-index: 100;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 0;
+  padding: 3px 12px 4px;
+  border: 1px solid rgba(246, 205, 112, .35);
+  border-top: 0;
+  border-radius: 0 0 9px 9px;
+  color: rgba(246, 205, 112, .82);
+  background: rgba(7, 10, 18, .88);
+  font: 700 10px/1 var(--font-body);
+  letter-spacing: .16em;
+  pointer-events: none;
+}
+
+/* Application frame */
+body.test-mode #app {
+  max-width: 1280px;
+  grid-template-columns: 250px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "top top" "tabbar main";
+  border-left: 1px solid var(--line-soft);
+  border-right: 1px solid var(--line-soft);
+  background: rgba(5, 9, 16, .48);
+  box-shadow: 0 0 80px rgba(0, 0, 0, .34);
+}
+body.test-mode .topbar {
+  min-height: 74px;
+  padding: 0 26px;
+  background: linear-gradient(90deg, rgba(12, 20, 35, .98), rgba(18, 30, 49, .85));
+  border-bottom-color: var(--line);
+}
+body.test-mode .topbar .sec-name {
+  font: 700 19px/1 var(--font-title);
+  letter-spacing: .08em;
+}
+body.test-mode .wallet { gap: 8px; }
+body.test-mode .chip {
+  padding: 7px 12px;
+  background: rgba(255,255,255,.035);
+  border-color: var(--line);
+  font-variant-numeric: tabular-nums;
+}
+body.test-mode .me { padding-left: 12px; border-left: 1px solid var(--line); }
+body.test-mode .me img, body.test-mode .me .av { border-color: rgba(246,205,112,.65); }
+body.test-mode .me-menu { background: #152238; border-color: var(--line); }
+
+/* Desktop navigation becomes a deliberate side rail. */
+body.test-mode .tabbar {
+  grid-area: tabbar;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 18px 14px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(10, 17, 29, .95), rgba(8, 13, 23, .98));
+  box-shadow: none;
+}
+body.test-mode .tab-item {
+  max-width: none;
+  min-height: 58px;
+  flex: 0 0 auto;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 14px;
+  text-align: left;
+}
+body.test-mode .tab-item .ti-ic { font-size: 22px; }
+body.test-mode .tab-item.active {
+  color: #172237;
+  border-color: transparent;
+  background: linear-gradient(120deg, #f8d988, #eebd58);
+  box-shadow: 0 8px 22px rgba(236, 180, 73, .18), inset 0 1px rgba(255,255,255,.5);
+}
+body.test-mode .tab-item.active .ti-ic { filter: none; }
+body.test-mode .subnav {
+  position: absolute;
+  top: 74px;
+  left: 250px;
+  right: 0;
+  z-index: 5;
+  min-height: 48px;
+  padding: 8px 26px;
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(9, 15, 25, .82);
+  backdrop-filter: blur(14px);
+}
+body.test-mode .subnav:not(:empty) + main { padding-top: 78px; }
+body.test-mode .subtab { border-color: var(--line); background: rgba(255,255,255,.025); }
+body.test-mode .subtab.active { color: var(--gold); border-color: rgba(246,205,112,.7); background: rgba(246,205,112,.10); }
+body.test-mode main { padding: 28px 34px 42px; }
+
+/* Common component language */
+body.test-mode .btn {
+  border-radius: 10px;
+  border-color: var(--line);
+  background: rgba(31, 48, 76, .72);
+  box-shadow: inset 0 1px rgba(255,255,255,.07);
+}
+body.test-mode .btn:hover { border-color: var(--gold); background: rgba(55, 72, 103, .85); }
+body.test-mode .btn.primary {
+  color: #1b2738;
+  background: linear-gradient(180deg, #ffe59d, #f2bf58 55%, #d89d35);
+  box-shadow: 0 3px 0 #956720, 0 8px 20px rgba(240, 180, 66, .22), inset 0 1px rgba(255,255,255,.65);
+}
+body.test-mode .card, body.test-mode .quest, body.test-mode .listrow,
+body.test-mode .zcard, body.test-mode .idle-card, body.test-mode .auction-card {
+  border-color: var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, rgba(27, 43, 68, .84), rgba(13, 20, 34, .91));
+  box-shadow: inset 0 1px rgba(255,255,255,.055), 0 14px 34px rgba(0,0,0,.18);
+}
+body.test-mode .card::before { background: linear-gradient(90deg, transparent, rgba(120, 185, 255, .6), transparent); }
+body.test-mode .card h3 { font-family: var(--font-title); color: #eaf2ff; }
+body.test-mode .desc, body.test-mode .qds, body.test-mode .mrew { color: var(--ink-dim); }
+body.test-mode .tag { border-color: var(--line); background: rgba(255,255,255,.035); }
+body.test-mode .tabs { border-bottom-color: var(--line); }
+body.test-mode .tab { border-radius: 9px 9px 0 0; }
+body.test-mode .tab.active { color: var(--gold); background: rgba(246,205,112,.10); border-color: rgba(246,205,112,.45); }
+body.test-mode .empty-note, body.test-mode .loading { border-radius: var(--radius); border-color: var(--line); background: rgba(14, 24, 39, .58); }
+
+/* Home: one mission-focused command centre. */
+body.test-mode .lobby {
+  min-height: 610px;
+  justify-content: center;
+  padding: 40px 180px 124px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background:
+    radial-gradient(420px 330px at 50% 45%, rgba(73, 144, 231, .17), transparent 72%),
+    linear-gradient(145deg, rgba(29,48,78,.75), rgba(10,16,28,.86));
+  box-shadow: inset 0 1px rgba(255,255,255,.07), 0 22px 50px rgba(0,0,0,.24);
+}
+body.test-mode .lobby::before { content: "ADVENTURER'S HUB"; position: absolute; top: 22px; font: 700 11px/1 var(--font-body); letter-spacing: .22em; color: rgba(157,171,193,.75); }
+body.test-mode .rail { top: 76px; gap: 18px; }
+body.test-mode .rail.left { left: 22px; }
+body.test-mode .rail.right { right: 22px; }
+body.test-mode .lobby-ic { width: 72px; color: var(--ink-dim); }
+body.test-mode .lobby-ic .ic, body.test-mode .cta-mini .cm-ic {
+  width: 62px; height: 62px; border-radius: 18px; border-color: var(--line);
+  background: linear-gradient(145deg, rgba(42,64,98,.85), rgba(16,26,44,.95));
+}
+body.test-mode .hero-portrait { width: clamp(150px, 19vw, 210px); border-color: #85bdff; box-shadow: 0 0 0 8px rgba(117,180,255,.09), 0 0 52px rgba(92,166,255,.24), inset 0 0 32px rgba(0,0,0,.6); }
+body.test-mode .hero-name { font-size: 30px; }
+body.test-mode .hero-tags { margin-top: 1px; }
+body.test-mode .cta-dock { bottom: 28px; gap: 24px; }
+body.test-mode .cta-main { min-width: 220px; border-radius: 14px; }
+body.test-mode .exp .bar, body.test-mode .qbar, body.test-mode .mhpbar { border-color: var(--line); background: rgba(0,0,0,.42); }
+body.test-mode .exp .bar i { background: linear-gradient(90deg, #62b1ff, #9ed0ff); box-shadow: 0 0 12px rgba(90,169,255,.5); }
+
+/* Character, inventory and equipment */
+body.test-mode .hero { border-color: var(--line); border-radius: 20px; background: linear-gradient(125deg, rgba(34,58,91,.88), rgba(15,23,39,.92)); }
+body.test-mode .hero .pic { border-radius: 50%; border: 2px solid #88c1ff; box-shadow: 0 0 0 6px rgba(112,180,255,.1), 0 0 28px rgba(107,177,255,.24); }
+body.test-mode .hero .nm { font-size: 30px; }
+body.test-mode .grid2 { gap: 18px; }
+body.test-mode .attr, body.test-mode .stat-row { border-color: var(--line-soft); background: rgba(0,0,0,.13); }
+body.test-mode .item-grid { gap: 12px; }
+body.test-mode .icard { border-color: var(--line); border-radius: 13px; background: linear-gradient(145deg, rgba(42,62,94,.78), rgba(15,23,39,.96)); box-shadow: inset 0 1px rgba(255,255,255,.07); }
+body.test-mode .icard:hover { border-color: var(--gold); transform: translateY(-3px); }
+body.test-mode .slot { border-color: var(--line); border-radius: 13px; background: rgba(18,29,47,.8); }
+body.test-mode .slot.filled { border-left-color: #7eb9ff; }
+
+/* Adventure activities */
+body.test-mode .sec-head { border-bottom-color: var(--line); margin-bottom: 18px; }
+body.test-mode .zone-grid { gap: 16px; }
+body.test-mode .zcard { overflow: hidden; border-left: 3px solid var(--zc, #6caeff); }
+body.test-mode .zcard.reco { border-color: rgba(246,205,112,.7); box-shadow: 0 0 0 1px rgba(246,205,112,.22), 0 14px 34px rgba(0,0,0,.2); }
+body.test-mode .zreco { background: linear-gradient(90deg, #ffe49c, #dca53c); color: #263044; }
+body.test-mode .ztop { border-bottom-color: var(--line-soft); }
+body.test-mode .mpic, body.test-mode .zd-pic { border-color: var(--line); background: rgba(8,14,25,.55); }
+body.test-mode .difftag { background: rgba(0,0,0,.20); }
+body.test-mode .mhpbar i, body.test-mode .zd-hpbar i { background: linear-gradient(90deg, #ff7c72, #ffb26a); }
+body.test-mode .zdetail { border-radius: 20px; border-color: var(--line); background: linear-gradient(145deg, rgba(32,50,79,.9), rgba(13,20,34,.95)); }
+
+/* Long list pages, market and modals */
+body.test-mode .listrow { margin-bottom: 8px; padding: 13px 15px; }
+body.test-mode .quest { margin-bottom: 12px; padding: 16px; }
+body.test-mode .qbar i { background: linear-gradient(90deg, #5aaeff, #83d6c0); }
+body.test-mode .shop-grid, body.test-mode .auction-grid { gap: 16px; }
+body.test-mode .shop-card, body.test-mode .auction-card { border-color: var(--line); border-radius: var(--radius); background: linear-gradient(145deg, rgba(29,46,73,.88), rgba(13,20,34,.96)); }
+body.test-mode .modal-bg { background: rgba(2,5,11,.73); backdrop-filter: blur(7px); }
+body.test-mode .modal { border-color: rgba(126,185,255,.38); border-radius: 20px; background: linear-gradient(145deg, #1b2c47, #101a2b); box-shadow: 0 28px 80px rgba(0,0,0,.55); }
+body.test-mode input, body.test-mode select { border-color: var(--line); background: rgba(4,9,17,.55); color: var(--ink); }
+body.test-mode .toast { border-radius: 11px; border-color: var(--line); background: #192942; }
+
+@media (max-width: 760px) {
+  body.test-mode #app { max-width: none; grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; grid-template-areas: "top" "sub" "main" "tabbar"; border: 0; }
+  body.test-mode .topbar { min-height: 58px; padding: 0 13px; }
+  body.test-mode .topbar .sec-name { font-size: 15px; }
+  body.test-mode .wallet { gap: 4px; }
+  body.test-mode .chip { padding: 5px 7px; font-size: 11px; }
+  body.test-mode .me { padding-left: 7px; }
+  body.test-mode .me .nm { display: none; }
+  body.test-mode .tabbar { flex-direction: row; justify-content: space-around; gap: 3px; padding: 6px 7px max(6px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); border-right: 0; }
+  body.test-mode .tab-item { min-height: 48px; flex: 1; flex-direction: column; justify-content: center; gap: 3px; padding: 5px 2px; font-size: 10px; text-align: center; }
+  body.test-mode .tab-item .ti-ic { font-size: 20px; }
+  body.test-mode .subnav { position: static; padding: 8px 12px; }
+  body.test-mode .subnav:not(:empty) + main { padding-top: 16px; }
+  body.test-mode main { padding: 16px 12px 22px; }
+  body.test-mode .lobby { min-height: 590px; padding: 40px 82px 110px; border-radius: 18px; }
+  body.test-mode .rail { top: 76px; gap: 13px; }
+  body.test-mode .rail.left { left: 8px; } body.test-mode .rail.right { right: 8px; }
+  body.test-mode .lobby-ic { width: 58px; font-size: 9px; }
+  body.test-mode .lobby-ic .ic { width: 48px; height: 48px; border-radius: 14px; font-size: 21px; }
+  body.test-mode .hero-name { font-size: 23px; }
+  body.test-mode .cta-dock { bottom: 20px; gap: 10px; }
+  body.test-mode .cta-main { min-width: 145px; padding: 13px 12px; font-size: 15px; }
+  body.test-mode .cta-mini .cm-ic { width: 44px; height: 44px; border-radius: 13px; font-size: 19px; }
+  body.test-mode .cta-mini { font-size: 10px; }
+  body.test-mode .hero { grid-template-columns: 76px 1fr; gap: 15px; padding: 17px; }
+  body.test-mode .hero .pic { width: 76px; height: 76px; font-size: 34px; }
+  body.test-mode .hero .nm { font-size: 22px; }
+}
+
+/* ── v3: original anime tactical-command UI ──────────────────
+   Tactical dossier layout: dark navy chassis, hazard amber, cyan telemetry,
+   and hard cut panels for a combat-centric collection RPG. */
+body.test-mode {
+  --gold: #ffc45a;
+  --ink: #edf5ff;
+  --ink-dim: #a2b2c7;
+  --line: rgba(124, 168, 208, .34);
+  --hp: #6ee7ad;
+  --mp: #72c7ff;
+  --panel: rgba(11, 19, 31, .93);
+  --panel-strong: rgba(18, 30, 46, .98);
+  background-color: #050a11;
+  background-image: linear-gradient(120deg, rgba(6,11,19,.96), rgba(13,22,36,.91));
+}
+body.test-mode #app { max-width: 1520px; grid-template-columns: 92px minmax(0,1fr); background: #080f18; }
+body.test-mode .topbar {
+  min-height: 58px; padding: 0 22px;
+  background: linear-gradient(90deg, #111e2d, #16293b 42%, #0c1724);
+  border-bottom-color: rgba(121,178,222,.48);
+}
+body.test-mode .topbar .sec-name { font-family: var(--font-body); font-size: 13px; font-weight: 800; letter-spacing: .16em; }
+body.test-mode .topbar .sec-name::before { content: "MISSION / "; font-size: 9px; color: #73c8ed; }
+body.test-mode .wallet { margin-left: auto; }
+body.test-mode .chip { font-size: 12px; border: 0; border-left: 1px solid rgba(140,184,221,.28); }
+body.test-mode .me { padding-left: 10px; }
+body.test-mode .tabbar { width: 92px; padding: 13px 9px; gap: 9px; align-items: center; background: linear-gradient(180deg, #0c1623, #070d15); }
+body.test-mode .tabbar::before { content: "CMD"; padding: 4px 0 8px; font-size: 9px; letter-spacing: .08em; }
+body.test-mode .tab-item { width: 64px; min-height: 64px; padding: 7px 2px; flex-direction: column; justify-content: center; gap: 4px; border: 1px solid transparent; color: #8fa1b7; font-size: 9px; text-align: center; clip-path: polygon(0 8px, 8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%); }
+body.test-mode .tab-item::after { top: 0; bottom: auto; left: 0; right: 0; height: 2px; width: auto; }
+body.test-mode .tab-item .ti-ic { font-size: 22px; }
+body.test-mode .tab-item.active { color: #1a2530; background: linear-gradient(145deg, #dff5ff, #78c4e4); box-shadow: 0 0 18px rgba(84,196,236,.24); }
+body.test-mode .tab-item.active::after { background: var(--gold); }
+body.test-mode .subnav { top: 58px; left: 92px; min-height: 40px; padding: 5px 28px; background: rgba(8,16,27,.94); border-bottom-color: rgba(111,163,205,.28); }
+body.test-mode .subnav:not(:empty) + main { padding-top: 57px; }
+body.test-mode .subtab { padding: 6px 12px; font-size: 11px; color: #94a9c1; }
+body.test-mode .subtab.active { color: #e8f6ff; border-bottom-color: #73d1f4; background: rgba(74,176,218,.11); }
+body.test-mode main { padding: 25px 30px 45px; background: linear-gradient(115deg, rgba(8,16,26,.96), rgba(12,22,35,.90)); }
+
+body.test-mode .btn {
+  min-height: 34px; border-color: rgba(113,183,224,.58); color: #eaf6ff;
+  background: linear-gradient(135deg, #244763, #142b42); font-size: 12px;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+body.test-mode .btn.primary { color: #18232c; background: linear-gradient(135deg, #ffe2a0, #f0a636); box-shadow: inset 0 1px rgba(255,255,255,.85), 0 0 17px rgba(241,161,47,.17); }
+body.test-mode .card, body.test-mode .quest, body.test-mode .listrow, body.test-mode .zcard, body.test-mode .shop-card, body.test-mode .auction-card {
+  position: relative; border-color: rgba(102,155,199,.36); background: linear-gradient(135deg, rgba(29,51,73,.94), rgba(11,20,32,.97));
+  clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 13px 100%, 0 calc(100% - 13px));
+}
+body.test-mode .card::after, body.test-mode .zcard::after { content: ""; position: absolute; top: 0; left: 0; width: 34px; height: 2px; background: #72cdf1; }
+body.test-mode .card h3 { font-family: var(--font-body); font-size: 13px; letter-spacing: .14em; }
+body.test-mode .card h3::before { content: "["; color: var(--gold); margin: 0 4px 0 0; }
+body.test-mode .card h3::after { content: "]"; color: var(--gold); margin-left: 4px; }
+body.test-mode .tag { border-radius: 0; border-color: rgba(113,183,224,.38); background: rgba(77,143,186,.12); }
+body.test-mode .empty-note, body.test-mode .loading { border-radius: 0; border-color: rgba(102,155,199,.34); background: rgba(18,33,50,.76); }
+
+/* Command centre: the world is the canvas, actions are pinned as tactical HUD. */
+body.test-mode .lobby {
+  min-height: calc(100vh - 98px); margin: -25px -30px -45px; padding: 16vh 18vw 145px 20vw;
+  border: 0; border-radius: 0;
+  background:
+    linear-gradient(90deg, rgba(4,10,17,.94) 0%, rgba(5,12,20,.62) 26%, rgba(5,12,20,.12) 62%, rgba(4,10,17,.85) 100%),
+    linear-gradient(0deg, rgba(3,8,14,.98) 0%, rgba(4,10,17,0) 43%),
+    url("/static/app/bg/home.webp") center / cover;
+}
+body.test-mode .lobby::before { content: "BASE // OTONASHI TACTICAL NETWORK"; top: 22px; left: 32px; color: #80d5f5; font-family: var(--font-body); font-size: 10px; letter-spacing: .16em; }
+body.test-mode .lobby::after { background: linear-gradient(90deg, transparent 49.8%, rgba(125,202,233,.13) 50%, transparent 50.2%), linear-gradient(0deg, transparent 49.8%, rgba(125,202,233,.10) 50%, transparent 50.2%); opacity: .55; }
+body.test-mode .stage { align-items: flex-start; text-align: left; max-width: 395px; padding: 23px 28px 18px 92px; border-left: 2px solid #73d1f4; background: linear-gradient(90deg, rgba(6,15,25,.72), rgba(6,15,25,.04)); }
+body.test-mode .stage::before { content: "OPERATIVE PROFILE / ACTIVE"; color: #73d1f4; font-size: 9px; letter-spacing: .16em; }
+body.test-mode .hero-portrait { width: 78px; height: 78px; left: 10px; top: 34px; border-radius: 0; border: 1px solid #85d9f8; box-shadow: 0 0 0 3px rgba(93,202,239,.13), 0 9px 22px rgba(0,0,0,.5); }
+body.test-mode .hero-name { font-family: var(--font-body); font-size: 30px; font-weight: 800; letter-spacing: .1em; }
+body.test-mode .hero-tags { color: #cad9e8; font-size: 12px; }
+body.test-mode .hero-exp { width: 100%; margin-top: 13px; }
+body.test-mode .exp .bar { height: 6px; border-radius: 0; border: 0; background: rgba(3,8,14,.72); }
+body.test-mode .exp .bar i { border-radius: 0; background: linear-gradient(90deg, #3db6e5, #b6ecff); box-shadow: 0 0 9px rgba(77,193,234,.62); }
+body.test-mode .rail { z-index: 2; top: auto; bottom: 126px; gap: 8px; }
+body.test-mode .rail.left { left: 28px; } body.test-mode .rail.right { right: 28px; }
+body.test-mode .lobby-ic { width: 68px; color: #deeff9; font-size: 9px; }
+body.test-mode .lobby-ic .ic { width: 50px; height: 50px; border-radius: 0; border-color: rgba(129,203,234,.78); background: linear-gradient(145deg, rgba(36,83,112,.88), rgba(9,22,36,.95)); clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%); }
+body.test-mode .cta-dock { left: 28px; right: 28px; bottom: 28px; justify-content: flex-start; gap: 12px; }
+body.test-mode .cta-mini { min-width: 130px; flex-direction: row; color: #e6f3fb; font-size: 11px; }
+body.test-mode .cta-mini .cm-ic { width: 38px; height: 38px; border-radius: 0; }
+body.test-mode .cta-main { min-width: 250px; border-radius: 0; letter-spacing: .15em; }
+
+/* Mission, collection and economy data surfaces. */
+body.test-mode .hero { border-radius: 0; border-left: 3px solid #76d0f2; background: linear-gradient(100deg, rgba(32,65,91,.98), rgba(11,20,32,.98)); }
+body.test-mode .hero .pic { border-radius: 0; border-color: #8bdcf8; }
+body.test-mode .hero .nm { font-family: var(--font-body); font-weight: 800; }
+body.test-mode .icard { border-radius: 0; border-color: rgba(102,155,199,.42); background: linear-gradient(145deg, rgba(35,62,88,.96), rgba(12,22,35,.98)); clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%); }
+body.test-mode .icard:hover { border-color: #80d6f5; box-shadow: 0 0 0 1px rgba(128,214,245,.42), 0 12px 24px rgba(0,0,0,.27); }
+body.test-mode .zcard { border-left: 3px solid var(--zc, #73d1f4); }
+body.test-mode .zcard.reco { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(255,196,90,.38), 0 13px 25px rgba(0,0,0,.28); }
+body.test-mode .zreco { background: linear-gradient(90deg, #ffe3a3, #edaa42); }
+body.test-mode .mhpbar i, body.test-mode .zd-hpbar i { background: linear-gradient(90deg, #f46c58, #ffc454); }
+body.test-mode .modal { border-radius: 0; border-color: rgba(116,194,231,.6); background: linear-gradient(145deg, #213c58, #0c1727); }
+
+@media (max-width: 760px) {
+  body.test-mode #app { grid-template-columns: 1fr; }
+  body.test-mode .tabbar { width: auto; padding: 5px 7px max(6px, env(safe-area-inset-bottom)); gap: 3px; }
+  body.test-mode .tab-item { width: auto; min-height: 48px; }
+  body.test-mode .subnav { left: auto; top: auto; }
+  body.test-mode main { padding: 16px 12px 22px; }
+  body.test-mode .lobby { min-height: calc(100vh - 145px); margin: -16px -12px -22px; padding: 15vh 20px 124px 107px; background-position: 55% center; }
+  body.test-mode .lobby::before { top: 17px; left: 15px; font-size: 8px; }
+  body.test-mode .stage { max-width: 240px; padding: 16px 12px 16px 70px; }
+  body.test-mode .stage::before { font-size: 7px; }
+  body.test-mode .hero-portrait { width: 56px; height: 56px; left: 8px; top: 32px; }
+  body.test-mode .hero-name { font-size: 23px; }
+  body.test-mode .hero-tags { font-size: 10px; line-height: 1.6; }
+  body.test-mode .rail { top: 67px; bottom: auto; flex-direction: column; gap: 7px; }
+  body.test-mode .rail.left { left: 7px; } body.test-mode .rail.right { right: 6px; }
+  body.test-mode .lobby-ic { width: 46px; font-size: 7px; }
+  body.test-mode .lobby-ic .ic { width: 39px; height: 39px; font-size: 17px; }
+  body.test-mode .cta-dock { left: 14px; right: 14px; bottom: 17px; gap: 6px; justify-content: center; }
+  body.test-mode .cta-mini { min-width: auto; font-size: 0; }
+  body.test-mode .cta-mini .cm-ic { width: 39px; height: 39px; }
+  body.test-mode .cta-main { min-width: 184px; padding: 12px 10px; font-size: 13px; }
+}
+
+/* ── v2: cinematic mobile-RPG direction ──────────────────────
+   A scene-led HUD with technical edge treatments.  This is an
+   original composition; it deliberately does not reproduce another game's UI. */
+body.test-mode {
+  --gold: #f3cf7c;
+  --line: rgba(191, 218, 255, .30);
+  --ink: #f7fbff;
+  --ink-dim: #b8c7dc;
+  background: #070b14;
+}
+body.test-mode .login-card {
+  position: relative;
+  overflow: hidden;
+  width: min(940px, 94vw);
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 62px 8%;
+  text-align: left;
+  border: 1px solid rgba(230, 241, 255, .35);
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, rgba(5, 10, 21, .98) 0%, rgba(7, 12, 25, .88) 36%, rgba(7, 12, 25, .22) 72%, rgba(7, 12, 25, .05)),
+    url("/static/app/login-bg.webp") 78% 35% / cover;
+  box-shadow: 0 34px 100px rgba(0,0,0,.62);
+}
+body.test-mode .login-card::before,
+body.test-mode .login-card::after {
+  content: ""; position: absolute; pointer-events: none;
+  border-color: rgba(243, 207, 124, .85); border-style: solid;
+}
+body.test-mode .login-card::before { inset: 14px; border-width: 1px 0; opacity: .65; }
+body.test-mode .login-card::after { top: 0; left: 0; width: 164px; height: 8px; border-width: 0 0 1px 0; background: linear-gradient(90deg, var(--gold), transparent); }
+body.test-mode .login-card > * { position: relative; z-index: 1; width: min(355px, 100%); }
+body.test-mode .login-card .logo { font-size: 28px; color: var(--gold); }
+body.test-mode .login-card h1 { font-size: clamp(28px, 4vw, 43px); letter-spacing: .12em; margin: 9px 0; }
+body.test-mode .login-card p { font-size: 14px; letter-spacing: .08em; }
+body.test-mode .login-card .btn { text-align: center; clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); border-radius: 0; }
+
+/* Site chrome: compact, metallic and intentionally quiet. */
+body.test-mode #app {
+  max-width: 1440px;
+  background: #090f1b;
+  border-color: rgba(222,238,255,.16);
+}
+body.test-mode .topbar {
+  min-height: 68px;
+  background: linear-gradient(90deg, #0c1422, #16243a 55%, #0b1220);
+  box-shadow: inset 0 -1px rgba(190,218,255,.22), 0 8px 22px rgba(0,0,0,.2);
+}
+body.test-mode .topbar .sec-name { font-size: 18px; letter-spacing: .18em; }
+body.test-mode .topbar .sec-name::before { content: "// "; color: var(--gold); }
+body.test-mode .chip { border-radius: 0; border-width: 0 0 1px; background: transparent; }
+body.test-mode .me { border-left-color: rgba(190,218,255,.3); }
+body.test-mode .me img, body.test-mode .me .av { border-radius: 3px; border-color: #a8cdfb; }
+
+body.test-mode .tabbar { width: 230px; padding: 18px 12px; }
+body.test-mode .tabbar::before { content: "OTONASHI / COMMAND"; color: rgba(184,199,220,.55); font-size: 9px; letter-spacing: .16em; padding: 5px 11px 17px; }
+body.test-mode .tab-item { min-height: 54px; border-radius: 0; position: relative; overflow: hidden; color: #b5c2d6; }
+body.test-mode .tab-item::after { content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: 2px; background: transparent; }
+body.test-mode .tab-item.active { color: #151f2f; border: 0; background: linear-gradient(100deg, #e4efff, #9ebee7); box-shadow: none; clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%); }
+body.test-mode .tab-item.active::after { background: var(--gold); }
+body.test-mode .subnav { top: 68px; left: 230px; min-height: 46px; padding: 7px 28px; background: rgba(10,17,29,.88); }
+body.test-mode .subnav:not(:empty) + main { padding-top: 72px; }
+body.test-mode .subtab { border-radius: 0; border-color: transparent; background: transparent; font-size: 12px; }
+body.test-mode .subtab.active { border-color: transparent; border-bottom: 2px solid var(--gold); background: linear-gradient(180deg, transparent, rgba(243,207,124,.11)); }
+body.test-mode main { padding: 28px 42px 50px; }
+
+/* Building blocks: sharp technical panels, hierarchy comes from glow and whitespace. */
+body.test-mode .btn { min-height: 38px; border-radius: 0; border-color: rgba(180,210,248,.48); background: linear-gradient(135deg, rgba(73,107,153,.72), rgba(25,42,69,.92)); clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%); box-shadow: inset 0 1px rgba(255,255,255,.14); }
+body.test-mode .btn.primary { background: linear-gradient(135deg, #fff0b8, #e5b75e 54%, #b8802d); box-shadow: inset 0 1px rgba(255,255,255,.82), 0 0 20px rgba(230,181,82,.2); }
+body.test-mode .card, body.test-mode .quest, body.test-mode .listrow, body.test-mode .zcard, body.test-mode .shop-card, body.test-mode .auction-card {
+  border-radius: 0;
+  border-color: rgba(184,213,250,.28);
+  background: linear-gradient(135deg, rgba(36,57,88,.78), rgba(13,22,38,.94));
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+  box-shadow: inset 0 1px rgba(255,255,255,.09), 0 13px 28px rgba(0,0,0,.2);
+}
+body.test-mode .card h3 { letter-spacing: .11em; }
+body.test-mode .card h3::before { content: "◆"; color: #83bfff; font-size: 10px; margin-right: 7px; }
+body.test-mode .tag { border-radius: 0; border-color: rgba(184,213,250,.28); }
+body.test-mode .tabs { gap: 5px; border-bottom: 1px solid rgba(184,213,250,.26); }
+body.test-mode .tab { border-radius: 0; }
+body.test-mode .tab.active { border-color: transparent; border-bottom: 2px solid var(--gold); background: rgba(243,207,124,.09); }
+
+/* Main lobby becomes a single cinematic tableau. */
+body.test-mode .lobby {
+  isolation: isolate;
+  min-height: calc(100vh - 135px);
+  margin: -28px -42px -50px;
+  padding: 13vh 18vw 142px;
+  border: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, rgba(4,10,19,.79) 0%, rgba(6,14,26,.18) 38%, rgba(6,14,26,.13) 65%, rgba(4,10,19,.80) 100%),
+    linear-gradient(0deg, rgba(4,10,18,.98) 0%, rgba(4,10,18,0) 38%),
+    url("/static/app/bg/home.webp") center / cover;
+  box-shadow: none;
+}
+body.test-mode .lobby::before { content: "OTONASHI PARADISE  /  CENTRAL SQUARE"; top: 34px; left: 42px; color: rgba(235,244,255,.76); font-size: 10px; }
+body.test-mode .lobby::after { content: ""; z-index: -1; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 99px, rgba(208,229,255,.04) 100px); pointer-events: none; }
+body.test-mode .stage { position: relative; align-items: flex-start; text-align: left; padding: 24px 30px 24px 0; max-width: 440px; }
+body.test-mode .stage::before { content: "CURRENT OPERATIVE"; color: #9cc7ff; font-size: 10px; font-weight: 700; letter-spacing: .2em; margin-bottom: 6px; }
+body.test-mode .hero-portrait { width: 112px; height: 112px; position: absolute; left: -135px; top: 38px; border-radius: 0; border-color: #dcecff; background: linear-gradient(145deg, #5583c5, #101c30); box-shadow: 0 0 0 5px rgba(194,221,255,.18), 0 18px 38px rgba(0,0,0,.38); }
+body.test-mode .hero-name { font-size: clamp(28px, 3vw, 40px); letter-spacing: .10em; }
+body.test-mode .hero-tags { color: #d3dfed; font-size: 13px; }
+body.test-mode .hero-exp { width: min(340px, 70vw); margin-top: 14px; }
+body.test-mode .exp .bar { height: 8px; border-radius: 0; }
+body.test-mode .exp .bar i { border-radius: 0; background: linear-gradient(90deg, #73aef0, #d5edff); }
+body.test-mode .rail { top: auto; bottom: 135px; flex-direction: row; gap: 9px; }
+body.test-mode .rail.left { left: 42px; }
+body.test-mode .rail.right { right: 42px; }
+body.test-mode .lobby-ic { width: 78px; font-size: 10px; color: #eff5fd; text-shadow: 0 2px 7px #000; }
+body.test-mode .lobby-ic .ic { width: 58px; height: 58px; border-radius: 0; border-color: rgba(222,238,255,.62); background: linear-gradient(145deg, rgba(45,77,118,.9), rgba(10,20,37,.92)); clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
+body.test-mode .cta-dock { left: 42px; right: 42px; bottom: 32px; justify-content: flex-start; gap: 15px; }
+body.test-mode .cta-mini { flex-direction: row; gap: 8px; min-width: 124px; color: #edf5ff; }
+body.test-mode .cta-mini .cm-ic { width: 40px; height: 40px; border-radius: 0; }
+body.test-mode .cta-main { min-width: 245px; border-radius: 0; font-size: 17px; letter-spacing: .12em; }
+
+/* Adventure and collection pages retain the same premium material language. */
+body.test-mode .hero { border-radius: 0; background: linear-gradient(100deg, rgba(38,66,106,.96), rgba(13,21,36,.93)); clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%); }
+body.test-mode .hero .pic { border-radius: 2px; }
+body.test-mode .icard { border-radius: 0; border-color: rgba(177,209,248,.28); background: linear-gradient(145deg, rgba(42,68,106,.86), rgba(15,25,43,.96)); clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); }
+body.test-mode .zcard { border-left: 3px solid var(--zc, #80b8ff); }
+body.test-mode .zcard.reco { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(243,207,124,.35), 0 16px 35px rgba(0,0,0,.22); }
+body.test-mode .zreco { border-radius: 0; background: linear-gradient(90deg, #f8df98, #d89f3e); }
+body.test-mode .modal { border-radius: 0; background: linear-gradient(145deg, #263e62, #101b2d); clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px)); }
+
+@media (max-width: 760px) {
+  body.test-mode .login-card { min-height: 100vh; width: 100vw; padding: 48vh 10vw 40px; background-position: 68% 0; }
+  body.test-mode #app { grid-template-rows: auto auto 1fr auto; }
+  body.test-mode .topbar { min-height: 56px; }
+  body.test-mode .tabbar { width: auto; }
+  body.test-mode .tabbar::before { display: none; }
+  body.test-mode .tab-item { border-radius: 0; }
+  body.test-mode .tab-item.active { clip-path: polygon(4px 0, calc(100% - 4px) 0, 100% 100%, 0 100%); }
+  body.test-mode .subnav { top: auto; left: auto; }
+  body.test-mode main { padding: 16px 12px 22px; }
+  body.test-mode .lobby { min-height: calc(100vh - 154px); margin: -16px -12px -22px; padding: 16vh 22px 124px 136px; background-position: 56% center; }
+  body.test-mode .lobby::before { top: 20px; left: 18px; font-size: 8px; }
+  body.test-mode .stage { padding: 18px 0; max-width: 225px; }
+  body.test-mode .stage::before { font-size: 8px; }
+  body.test-mode .hero-portrait { width: 86px; height: 86px; left: -103px; top: 35px; }
+  body.test-mode .hero-name { font-size: 26px; }
+  body.test-mode .hero-tags { font-size: 11px; line-height: 1.7; }
+  body.test-mode .rail { bottom: auto; top: 70px; flex-direction: column; gap: 8px; }
+  body.test-mode .rail.left { left: 9px; } body.test-mode .rail.right { right: 8px; }
+  body.test-mode .lobby-ic { width: 50px; font-size: 8px; }
+  body.test-mode .lobby-ic .ic { width: 42px; height: 42px; font-size: 18px; }
+  body.test-mode .cta-dock { left: 17px; right: 17px; bottom: 20px; justify-content: center; gap: 7px; }
+  body.test-mode .cta-mini { min-width: auto; font-size: 0; }
+  body.test-mode .cta-mini .cm-ic { width: 42px; height: 42px; }
+  body.test-mode .cta-main { min-width: 190px; padding: 13px 12px; font-size: 14px; }
+}

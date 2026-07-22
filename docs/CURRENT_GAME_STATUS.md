@@ -1,6 +1,6 @@
 # Current Game Status
 
-Generated at: 2026-07-21T03:42:55.278Z
+Generated at: 2026-07-22T06:43:55.369Z
 
 > This file is generated from MongoDB. Run `npm run status:update` to refresh it.
 
@@ -12,10 +12,10 @@ Generated at: 2026-07-21T03:42:55.278Z
 | 進度資料 | 424 |
 | 怪物 | 76 |
 | 怪物狀態文件 | 12 |
-| 道具 | 504 |
-| 任務 | 51 |
-| 職業徽章 | 11 |
-| 職業任務 | 11 |
+| 道具 | 508 |
+| 任務 | 55 |
+| 職業徽章 | 15 |
+| 職業任務 | 15 |
 | 世界王設定 | 3 |
 | 世界王狀態 | 3 |
 
@@ -29,9 +29,9 @@ Generated at: 2026-07-21T03:42:55.278Z
 | ancient_city | 古城 | 25 | 40 | 8 | 8 | 1 |
 | ancient_city_deep | 古城深處 | 40 | 無上限 | 12 | 12 | 2 |
 | dragon_realm | 龍族之領 | 40 | 無上限 | 10 | 10 | 2 |
-| dragon_king_lair | 龍王巢穴 | 50 | 無上限 | 1 | 1 | 1 |
+| dragon_king_lair | 龍王巢穴 | 40 | 無上限 | 1 | 1 | 1 |
 | hellfire | 地獄火焰 | 40 | 無上限 | 11 | 11 | 1 |
-| hellfire_depths | 焰獄深處 | 50 | 無上限 | 1 | 1 | 1 |
+| hellfire_depths | 焰獄深處 | 40 | 無上限 | 1 | 1 | 1 |
 | elite | 精英區 | 20 | 無上限 | 1 | 1 | 1 |
 | nightmare | 噩夢區 | 30 | 無上限 | 0 | 0 | 0 |
 | abyss | 深淵區 | 45 | 無上限 | 0 | 0 | 0 |
@@ -127,7 +127,7 @@ Generated at: 2026-07-21T03:42:55.278Z
 | collectible | 7 |
 | consumable | 32 |
 | equipment | 451 |
-| job_badge | 11 |
+| job_badge | 15 |
 | pet_egg | 3 |
 
 | 階級 | 數量 |
@@ -137,7 +137,7 @@ Generated at: 2026-07-21T03:42:55.278Z
 | C | 73 |
 | D | 62 |
 | S | 45 |
-| 無階級 | 61 |
+| 無階級 | 65 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -149,7 +149,7 @@ Generated at: 2026-07-21T03:42:55.278Z
 | head_low | 23 |
 | head_mid | 23 |
 | head_top | 23 |
-| job_eq | 11 |
+| job_eq | 15 |
 | shield | 18 |
 | shoes | 23 |
 | special | 77 |
@@ -652,13 +652,17 @@ Generated at: 2026-07-21T03:42:55.278Z
 | s-dragon-mace_2h | 龍骨碎天槌 | equipment | S | weapon | mace_2h | STR+20 VIT+5 | none |
 | s-dragon-dagger | 龍鱗短刃 | equipment | S | weapon | dagger | STR+4 AGI+15 | none |
 | job_swordsman_v1 | 劍士徽章 | job_badge |  | job_eq |  | STR+2 VIT+3 DEX+2 | none |
+| job_swordoni_t2_v1 | 劍鬼徽章 | job_badge |  | job_eq |  | STR+7 VIT+3 DEX+2 | none |
 | job_archer_v1 | 弓箭手徽章 | job_badge |  | job_eq |  | AGI+1 DEX+5 LUK+2 | none |
 | job_warrior_v1 | 戰士徽章 | job_badge |  | job_eq |  | STR+4 VIT+1 LUK+2 | none |
 | job_healer_v1 | 治療師徽章 | job_badge |  | job_eq |  | VIT+2 INT+4 DEX+2 | none |
 | job_mage_v1 | 法師徽章 | job_badge |  | job_eq |  | VIT+1 INT+5 LUK+2 | none |
+| job_berserker_t2_v1 | 狂戰士徽章 | job_badge |  | job_eq |  | STR+7 VIT+4 LUK+1 | none |
 | job_rogue_v1 | 盜賊徽章 | job_badge |  | job_eq |  | AGI+4 DEX+2 LUK+2 | none |
 | job_dwarf_warrior_v1 | 矮人戰士徽章 | job_badge |  | job_eq |  | STR+1 VIT+5 DEX+2 | none |
+| job_dwarflord_t2_v1 | 矮人戰士長徽章 | job_badge |  | job_eq |  | STR+3 VIT+7 DEX+2 | none |
 | job_barrier_mage_v1 | 結界師徽章 | job_badge |  | job_eq |  | VIT+3 INT+3 DEX+2 | none |
+| job_holyblade_t2_v1 | 聖劍士徽章 | job_badge |  | job_eq |  | STR+5 VIT+5 DEX+2 | none |
 | job_bard_v1 | 詩人徽章 | job_badge |  | job_eq |  | AGI+2 DEX+4 LUK+2 | none |
 | job_gambler_v1 | 賭徒徽章 | job_badge |  | job_eq |  | AGI+2 DEX+1 LUK+5 | none |
 | job_tactician_v1 | 軍師徽章 | job_badge |  | job_eq |  | AGI+4 INT+2 DEX+2 | none |
@@ -687,6 +691,10 @@ Generated at: 2026-07-21T03:42:55.278Z
 | job | 90 | 詩人試煉 | battle_with_bow | 10 | 啟用 | 500 金幣 + 詩人徽章 | 出現條件：Lv.10，基礎 DEX + AGI + LUK > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與詩人徽章。 |
 | job | 100 | 結界師試煉 | battle_with_staff | 10 | 啟用 | 500 金幣 + 結界師徽章 | 出現條件：Lv.10，基礎 INT + VIT + DEX > 10。進度武器：單手法杖或雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與結界師徽章。 |
 | job | 110 | 賭徒試煉 | battle_with_dice | 10 | 停用 | 500 金幣 + 賭徒徽章 | 出現條件：Lv.10，基礎 LUK + AGI > 10。進度武器：骰子；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與賭徒徽章。 |
+| job | 210 | 聖劍士試煉 | battle_as_swordsman | 350 | 停用 | 3000 金幣 + 聖劍士徽章 | 劍士二轉．攻守之道。出現條件：Lv.35 且持有劍士徽章。以劍士出戰累積場次即可完成。獎勵：聖劍士徽章。 |
+| job | 211 | 劍鬼試煉 | battle_as_swordsman | 350 | 停用 | 3000 金幣 + 劍鬼徽章 | 劍士二轉．連段之道。出現條件：Lv.35 且持有劍士徽章。以劍士出戰累積場次即可完成。獎勵：劍鬼徽章。 |
+| job | 212 | 狂戰士試煉 | battle_as_warrior | 350 | 停用 | 3000 金幣 + 狂戰士徽章 | 戰士二轉．血之道。出現條件：Lv.35 且持有戰士徽章。以戰士出戰累積場次即可完成。獎勵：狂戰士徽章。 |
+| job | 213 | 矮人戰士長試煉 | battle_as_dwarf_warrior | 350 | 停用 | 3000 金幣 + 矮人戰士長徽章 | 矮人戰士二轉．巨神之道。出現條件：Lv.35 且持有矮人戰士徽章。以矮人戰士出戰累積場次即可完成。獎勵：矮人戰士長徽章。 |
 | onboarding | 1 | 裝備任一裝備 1 次 | equip_count | 1 | 啟用 | 200 金幣 + 90 EXP + 木製單手斧 | 任意裝備一件裝備即可完成。 |
 | onboarding | 2 | 首次出戰 | battle_count | 1 | 啟用 | 120 金幣 + 60 EXP + 木製單手劍 | 在新手村外的草叢戰鬥一次即可。 |
 | onboarding | 3 | 完成 1 次打卡 | checkin_count | 1 | 啟用 | 150 金幣 + 60 EXP | 到打卡功能完成 1 次打卡即可。 |
@@ -727,13 +735,17 @@ Generated at: 2026-07-21T03:42:55.278Z
 | 徽章ID | 職業徽章 | 階級 | 任務 | 任務狀態 | 解鎖等級 | 武器條件 | 基礎屬性條件 | 徽章屬性 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | job_swordsman_v1 | 劍士徽章 |  | 劍士試煉 | 啟用 | 10 | sword_1h, sword_2h | STR + DEX > 10 | STR+2 VIT+3 DEX+2 |
+| job_swordoni_t2_v1 | 劍鬼徽章 |  | 劍鬼試煉 | 停用 | 35 |  |  | STR+7 VIT+3 DEX+2 |
 | job_archer_v1 | 弓箭手徽章 |  | 弓箭手試煉 | 啟用 | 10 | bow | DEX + AGI > 10 | AGI+1 DEX+5 LUK+2 |
 | job_warrior_v1 | 戰士徽章 |  | 戰士試煉 | 啟用 | 10 | axe_1h, axe_2h | STR + VIT > 10 | STR+4 VIT+1 LUK+2 |
 | job_healer_v1 | 治療師徽章 |  | 治療師試煉 | 啟用 | 10 | staff_1h | INT + VIT > 10 | VIT+2 INT+4 DEX+2 |
 | job_mage_v1 | 法師徽章 |  | 法師試煉 | 啟用 | 10 | staff_2h | INT + AGI > 10 | VIT+1 INT+5 LUK+2 |
+| job_berserker_t2_v1 | 狂戰士徽章 |  | 狂戰士試煉 | 停用 | 35 |  |  | STR+7 VIT+4 LUK+1 |
 | job_rogue_v1 | 盜賊徽章 |  | 盜賊試煉 | 啟用 | 10 | dagger | AGI + DEX > 10 | AGI+4 DEX+2 LUK+2 |
 | job_dwarf_warrior_v1 | 矮人戰士徽章 |  | 矮人戰士試煉 | 啟用 | 10 | mace_1h, mace_2h | VIT + STR > 10 | STR+1 VIT+5 DEX+2 |
+| job_dwarflord_t2_v1 | 矮人戰士長徽章 |  | 矮人戰士長試煉 | 停用 | 35 |  |  | STR+3 VIT+7 DEX+2 |
 | job_barrier_mage_v1 | 結界師徽章 |  | 結界師試煉 | 啟用 | 10 | staff_1h, staff_2h | INT + VIT + DEX > 10 | VIT+3 INT+3 DEX+2 |
+| job_holyblade_t2_v1 | 聖劍士徽章 |  | 聖劍士試煉 | 停用 | 35 |  |  | STR+5 VIT+5 DEX+2 |
 | job_bard_v1 | 詩人徽章 |  | 詩人試煉 | 啟用 | 10 | bow | DEX + AGI + LUK > 10 | AGI+2 DEX+4 LUK+2 |
 | job_gambler_v1 | 賭徒徽章 |  | 賭徒試煉 | 停用 | 10 | dice | LUK + AGI > 10 | AGI+2 DEX+1 LUK+5 |
 | job_tactician_v1 | 軍師徽章 |  | 軍師試煉 | 啟用 | 10 | sword_1h | AGI + INT + DEX > 10 | AGI+4 INT+2 DEX+2 |

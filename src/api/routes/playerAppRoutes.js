@@ -359,8 +359,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       if (progress && progress.playerTier !== tier) {
         progress.playerTier = tier;
-        progress.updatedAt = new Date().toISOString();
-        await serviceContext.progressRepository.save(progress);
+        // 只改 playerTier → 用 updateFields，避免整份覆寫抹掉同時段發放的道具
+        await serviceContext.progressRepository.updateFields(progress.playerId, { playerTier: tier });
       }
     }
 
@@ -1091,8 +1091,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
           const registry = await cardDexMod.getCardRegistry(await getMongoDb());
           if (cardDexMod.syncCardDexFromInventory(progress, registry)) {
-            progress.updatedAt = new Date().toISOString();
-            await serviceContext.progressRepository.save(progress).catch(() => {});
+            // ⚠️ profile 是前端高頻輪詢的端點，這裡只改 cardDex；
+            // 用整份 save 會把讀取當下的 inventory 寫回去，抹掉同時段原子發放的道具。
+            await serviceContext.progressRepository
+              .updateFields(progress.playerId, { cardDex: progress.cardDex })
+              .catch(() => {});
           }
         } catch (_) { /* 圖鑑補登失敗不影響 profile */ }
       }
@@ -1117,6 +1120,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             if (k in equipBonus) equipBonus[k] += (Number(v) || 0);
           }
         }
+        // 已裝備道具補上中文效果說明（被動/觸發/技能/二轉專屬機制）——
+        // 首頁的「職業徽章」卡片原本只印屬性數字，玩家看不到自己的職業到底有什麼能力。
+        mergedEquipment = Object.fromEntries(
+          Object.entries(mergedEquipment).map(([slot, item]) => [
+            slot,
+            item ? { ...item, effectLines: (() => { try { return buildItemEffectLines(item); } catch (_) { return []; } })() } : item,
+          ])
+        );
         combatStats = {
           maxHp: Math.ceil(cs.maxHp),
           atk: Math.ceil(cs.atk),
@@ -1204,6 +1215,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           ...profileResult.player,
           ...(avatarUrl ? { avatarUrl } : {}),
         },
+        // 戰鬥畫面的行動按鈕（依已裝備的職業徽章決定，最多 4 顆、槽位固定）
+        // 前端只照 slot 排、認 label/icon/tone/kind → 之後新增職業不用改前端
+        battleActions: require("../../shared/jobAdvancement").getBattleActions(progress?.equipment?.job_eq),
+        // 戰意集氣（狂戰士）：血條下方的集氣條；非狂戰士回 null 前端不渲染
+        berserkGauge: (() => {
+          try {
+            const cfg = require("../../shared/jobAdvancement").getGauge(progress?.equipment?.job_eq);
+            return cfg ? require("../../shared/berserkGauge").view(progress, cfg) : null;
+          } catch (_) { return null; }
+        })(),
         wallet: walletResult.wallet,
         fatigue,
         progress: {
@@ -2982,6 +3003,28 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } catch (_) { webBossVulnMult = 1; }
       }
 
+      // ── 區域連段（Zone COMBO）──
+      // 每位玩家都有計數器；目前只有劍鬼把它換成戰力（benefitsFromCombo）。
+      // 加成用「新陣列」丟給 runCombatLoop，不會污染 progress.activeEffects。
+      const _zc = require("../../shared/zoneCombo");
+      const comboBefore = _zc.readCombo(progress, zoneKey);
+      const comboBenefits = _zc.benefitsFromCombo(equipped?.job_eq);
+      const comboEffects = comboBenefits ? _zc.comboBuffs(comboBefore) : [];
+      // 劍鬼「斬」：消耗全部連段換第 1 回合的大爆發。前端送 burst=true 才發動。
+      let comboBurstMult = 1;
+      let comboConsumed = false;
+      if (req.body?.burst === true) {
+        const _bi = _zc.burstInfo(comboBefore);
+        if (!comboBenefits) {
+          return res.status(400).json({ status: "error", message: "此職業無法使用「斬」" });
+        }
+        if (!_bi.ready) {
+          return res.status(400).json({ status: "error", message: `「斬」需要連段達 ${_bi.minCombo}（目前 ${comboBefore}）` });
+        }
+        comboBurstMult = _bi.multiplier;
+        comboConsumed = true;
+      }
+
       // 戰鬥姿態（聖劍士等二轉）：沒有姿態系統的職業回 null＝走現況；防禦姿態沒帶盾直接拒絕
       let battleStanceKey = null;
       try {
@@ -2990,12 +3033,47 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return res.status(stanceErr.statusCode || 400).json({ status: "error", message: stanceErr.message });
       }
 
+      // ── 戰意集氣＋血祭（狂戰士）──
+      // 集氣：每場 +1、滿氣自動觸發該場爆擊加成後清空（模組見 berserkGauge.js）。
+      // 血祭：前端送 sacrifice=true 才發動，付當前 HP 30% 換整場 ATK+15%（設定走 jobAdvancement 表）。
+      const _bg = require("../../shared/berserkGauge");
+      const _ja = require("../../shared/jobAdvancement");
+      const gaugeCfg = _ja.getGauge(equipped?.job_eq);
+      const sacrificeCfg = _ja.getSacrifice(equipped?.job_eq);
+      const gaugeBefore = gaugeCfg ? _bg.read(progress, gaugeCfg) : 0;
+      const gaugeFull = Boolean(gaugeCfg && _bg.isFull(gaugeBefore, gaugeCfg));
+      const berserkEffects = gaugeFull ? _bg.buffs(gaugeCfg) : [];
+      let sacrificeOn = false;
+      if (req.body?.sacrifice === true) {
+        if (!sacrificeCfg) {
+          return res.status(400).json({ status: "error", message: "此職業無法使用「血祭」" });
+        }
+        sacrificeOn = true;
+        berserkEffects.push(..._bg.sacrificeBuffs(sacrificeCfg));
+      }
+
+      // ── 世界王暈眩條（矮人戰士長・巨神震擊）──
+      // 出戰瞬間看時鐘：還在 20 秒窗口內 → 這場怪物整場不出手（全程免傷）。
+      // 只有世界王區才有暈眩條；一般區域完全不受影響。
+      const _dsg = require("../../shared/dwarfStunGauge");
+      const _stunZoneOn = isWorldBoss;
+      const stunGaugeKey = _stunZoneOn ? _dsg.gaugeKeyForZone(zoneKey) : null;
+      const stunStateBefore = stunGaugeKey ? await _dsg.read(stunGaugeKey, zoneKey).catch(() => null) : null;
+      const teamStunOn = Boolean(stunStateBefore?.stunned);
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
         runCombatLoop(battlePStats, battleMonsterStats, monster.name, combatMonsterHp, undefined, {
+          // 團隊暈眩：整場（給滿 999，實際會被戰鬥回合數自然截斷）
+          teamStunRounds: teamStunOn ? 999 : 0,
           playerName: displayName,
           playerLevel: progress?.level || 1,
           stance: battleStanceKey,
+          playerActiveEffects: [...comboEffects, ...berserkEffects],
+          comboBurstMult,
+          sacrificeHpCostPct: sacrificeOn ? sacrificeCfg.hpCostPct : 0,
+          sacrificeAtkUpPct: sacrificeOn ? sacrificeCfg.atkUpPct : 0,
+          warGaugeCritBonus: gaugeFull ? gaugeCfg.critRateBonus : 0,
           equipped,
           inventory: progress?.inventory || [],
           partyEffects,
@@ -3227,12 +3305,45 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         rewardLines = [syncResult.notice, ...rewardLines];
       }
 
-      if (progress && Array.isArray(progress.activeEffects) && progress.activeEffects.length > 0) {
-        const nextActiveEffects = decrementActiveEffects(progress.activeEffects, "battle", 1);
-        if (nextActiveEffects.length !== progress.activeEffects.length) {
-          progress.activeEffects = nextActiveEffects;
-          progress.updatedAt = new Date().toISOString();
-          await serviceContext.progressRepository.save(progress).catch(() => {});
+      // 區域連段 + activeEffects：**只更新這兩個欄位**，不做整份覆寫。
+      // 整份 save() 會把讀取當下的 inventory 寫回去，抹掉戰鬥期間原子塞進背包的
+      // 東西（世界王寶箱等）→ 這是獎勵消失的主因，改用 updateFields。
+      if (progress) {
+        const _fields = {
+          zoneCombo: _zc.nextCombo(comboBefore, zoneKey, outcome, Date.now(), {
+            hasDeathGuard: comboBenefits,
+            diedOnce: _zc.readDiedOnce(progress, zoneKey),
+            consumed: comboConsumed,
+          })
+        };
+        progress.zoneCombo = _fields.zoneCombo;
+        // 戰意集氣（狂戰士）：每場 +1；滿氣開打的那場結束後清空重集
+        if (gaugeCfg) {
+          _fields.berserkGauge = _bg.next(gaugeBefore, gaugeCfg, { consumed: gaugeFull });
+          progress.berserkGauge = _fields.berserkGauge;
+        }
+        if (Array.isArray(progress.activeEffects) && progress.activeEffects.length > 0) {
+          const nextActiveEffects = decrementActiveEffects(progress.activeEffects, "battle", 1);
+          if (nextActiveEffects.length !== progress.activeEffects.length) {
+            progress.activeEffects = nextActiveEffects;
+            _fields.activeEffects = nextActiveEffects;
+          }
+        }
+        await serviceContext.progressRepository.updateFields(progress.playerId, _fields).catch(() => {});
+      }
+
+      // ── 敲世界王暈眩條（只有矮人戰士長敲得動）──
+      // 敲擊量＝這場實際有攻擊到的回合數；原子 $inc，多個矮人同時敲不會掉數字。
+      let stunKnock = null;
+      if (stunGaugeKey && _dsg.canKnock(equipped?.job_eq)) {
+        stunKnock = await _dsg
+          .knock(stunGaugeKey, zoneKey, combatResult?.combatStats?.attackRounds || 0, displayName)
+          .catch(() => null);
+        if (stunKnock?.triggered) {
+          _dsg.announceStun({ byName: displayName, monsterName: monster.name });
+          rewardLines.push(`⛰️ **巨神震擊**！你把 **${monster.name}** 敲暈了——全體 ${Math.round(_dsg.STUN_WINDOW_MS / 1000)} 秒免傷！`);
+        } else if (stunKnock?.knocked > 0) {
+          rewardLines.push(`🔨 暈眩值 +${stunKnock.knocked}（${stunKnock.gauge} / ${stunKnock.threshold}）`);
         }
       }
 
@@ -3395,8 +3506,31 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       res.json(ok({
         outcome,
+        // 區域連段：戰後的最新值 + 這場開打時實際生效的段數（前端常駐顯示用）
+        zoneCombo: {
+          count: progress?.zoneCombo?.count ?? 0,
+          applied: comboBefore,
+          benefits: comboBenefits,
+          next: _zc.nextMilestone(progress?.zoneCombo?.count ?? 0),
+          // 前端第三顆按鈕：達門檻才顯示；burst 用掉後這場就是 ready=false
+          burst: comboBenefits ? _zc.burstInfo(progress?.zoneCombo?.count ?? 0) : null,
+          burstUsed: comboConsumed
+        },
+        // 戰意集氣（狂戰士）：戰後最新氣量；本場是否戰意全開／血祭（前端集氣條＋演出用）
+        berserkGauge: gaugeCfg ? { ..._bg.view(progress, gaugeCfg), unleashed: gaugeFull, sacrificed: sacrificeOn } : null,
+        // 世界王暈眩條（矮人戰士長）：戰後最新狀態＋本場是否吃到免傷／是否由我敲滿
+        bossStun: stunGaugeKey
+          ? {
+            ..._dsg.view(await _dsg.read(stunGaugeKey, zoneKey).catch(() => null)),
+            immune: teamStunOn,          // 本場整場免傷
+            knocked: stunKnock?.knocked || 0,
+            triggeredByMe: Boolean(stunKnock?.triggered),
+            canKnock: _dsg.canKnock(equipped?.job_eq),
+          }
+          : null,
         monsterName: monster.name,
         monsterImageUrl: monster.imageUrl || null, // 本場實際對戰怪物的圖,讓前端圖片永遠對得上名字(不受區域換怪延遲影響)
+        monsterElement: monster?.element || null, // 屬性徽章用；戰鬥畫面(BattleLayer)要顯示需要前端也接住這個欄位
         logs: roundLogs,
         rewardLines,
         rewardSummary: rewardLines._summary || null,
@@ -3839,13 +3973,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const rec = prog.towerRecord || { bestFloor: 0, totalRuns: 0 };
         rec.totalRuns = (rec.totalRuns || 0) + 1;
         if (cleared > (rec.bestFloor || 0)) { rec.bestFloor = cleared; rec.bestAt = new Date().toISOString(); }
-        prog.towerRecord = rec; prog.updatedAt = new Date().toISOString();
+        prog.towerRecord = rec;
+        const _fields = { towerRecord: rec };
         if (clearBuff) {
           const { applyEffectInstances } = require("../../shared/effectEngine");
           const effectsToApply = clearBuff.effects.map((e) => ({ ...e, duration: { mode: "seconds", value: clearBuff.durationSec }, stackMode: "refresh" }));
           prog.activeEffects = applyEffectInstances(prog.activeEffects || [], effectsToApply, { source: "tower_buff", sourceType: "tower_buff" });
+          _fields.activeEffects = prog.activeEffects;
         }
-        await serviceContext.progressRepository.save(prog).catch(() => {});
+        // 只改 towerRecord / activeEffects → 不整份覆寫（保護同時段發放的道具）
+        await serviceContext.progressRepository.updateFields(prog.playerId, _fields).catch(() => {});
       }
     } catch (_) {}
     s._reward = {
@@ -4244,7 +4381,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       if (!progress) return res.status(404).json(fail("NOT_FOUND", "找不到角色資料"));
       progress.equipPresetNames = { ...(progress.equipPresetNames || {}), [preset]: name || null };
-      await serviceContext.progressRepository.save(progress);
+      await serviceContext.progressRepository.updateFields(progress.playerId, { equipPresetNames: progress.equipPresetNames });
       res.json(ok({ preset, name: name || null }));
     } catch (err) {
       next(err);
@@ -4712,8 +4849,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const fresh = await serviceContext.progressRepository.findByPlayerId(discordId);
       if (fresh) {
         fresh.flags = { ...(fresh.flags || {}), onboardingFreeEnhanceUsed: true };
-        fresh.updatedAt = new Date().toISOString();
-        await serviceContext.progressRepository.save(fresh);
+        // 只改 flags → 不整份覆寫（強化剛寫過 inventory，整份寫回會蓋掉）
+        await serviceContext.progressRepository.updateFields(fresh.playerId, { flags: fresh.flags });
       }
       res.json(ok(result, result.message || "免費強化完成"));
     } catch (err) {
@@ -4783,8 +4920,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // lazy-sync：背包/裝備中現有卡片補登進圖鑑（永久登錄）
       const changed = cardDexMod.syncCardDexFromInventory(progress, registry);
       if (changed) {
-        progress.updatedAt = new Date().toISOString();
-        await serviceContext.progressRepository.save(progress).catch(() => {});
+        // 只改 cardDex → 不整份覆寫（保護同時段發放的道具）
+        await serviceContext.progressRepository
+          .updateFields(progress.playerId, { cardDex: progress.cardDex })
+          .catch(() => {});
       }
       const state = cardDexMod.computeCardDexState(progress.cardDex || {}, progress.cardDexClaims || {}, registry);
       res.json(ok({ ...state, generatedAt: registry.generatedAt }, "card dex"));

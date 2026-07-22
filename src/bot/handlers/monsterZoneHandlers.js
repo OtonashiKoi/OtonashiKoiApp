@@ -1661,16 +1661,12 @@ function getJobNameFromEquipped(equipped = {}) {
   if (!jobEq) return null;
   const id = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
   const name = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
-  if (id.includes("barrier_mage") || name.includes("結界")) return "結界師";
-  if (id.includes("dwarf") || name.includes("矮人")) return "矮人戰士";
-  if (id.includes("swordsman") || name.includes("劍士")) return "劍士";
-  if (id.includes("warrior") || name.includes("戰士")) return "戰士";
-  if (id.includes("archer") || name.includes("弓箭手")) return "弓箭手";
-  if (id.includes("tactician") || name.includes("軍師")) return "軍師";
-  if (id.includes("bard") || name.includes("詩人")) return "詩人";
-  if (id.includes("healer") || name.includes("治療")) return "治療師";
-  if (id.includes("mage") || name.includes("法師")) return "法師";
-  if (id.includes("rogue") || name.includes("盜賊")) return "盜賊";
+  // ⭐ 一律走 jobAdvancement（唯一入口）：二轉徽章解析回一轉中文名
+  try {
+    const ja = require("../../shared/jobAdvancement");
+    const zh = ja.jobDisplayName(ja.resolveJobKey({ itemId: id, itemName: name }));
+    if (zh) return zh;
+  } catch (_) { /* 讀不到就往下走原本的預設值 */ }
   return jobEq?.itemName || jobEq?.name || null;
 }
 
@@ -1791,7 +1787,7 @@ async function _notifyKillRewards(monsterName, perPidRewards) {
         const jobEq = prog?.equipment?.job_eq;
         const jobId = String(jobEq?.itemId || jobEq?.id || "").toLowerCase();
         const jobName = String(jobEq?.itemName || jobEq?.name || "").toLowerCase();
-        if (jobId.includes("healer") || jobName.includes("治療")) {
+        if ((() => { try { return require("../../shared/jobAdvancement").resolveJobKey({ itemId: jobId, itemName: jobName }) === "healer"; } catch (_) { return false; } })()) {
           const goldBonus = rewards.gold > 0 ? Math.max(1, Math.round(rewards.gold / 11)) : 0;
           const expBonus  = rewards.exp  > 0 ? Math.max(1, Math.round(rewards.exp  / 11)) : 0;
           const parts = [];
@@ -2113,6 +2109,14 @@ async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount
         }
       }
     }
+    // 巨神震擊（矮人戰士長）：世界王面板顯示暈眩條三態
+    let bossStun = null;
+    if (isWorldBossZone(zoneKey) && monster?.isBoss) {
+      try {
+        const _dsg = require("../../shared/dwarfStunGauge");
+        bossStun = _dsg.view(await _dsg.read(_dsg.gaugeKeyForZone(zoneKey), zoneKey));
+      } catch (_) { bossStun = null; }
+    }
     return await sc.adminConsoleService.publishMonsterZonePanel(
       binding.channelId,
       monster,
@@ -2124,6 +2128,7 @@ async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount
         activeTransition,
         worldBossPartsHp: partsHp,
         hellfangPartInfo,
+        bossStun,
         fastUpdate: options.fastUpdate === true,
         forcePublish: options.forcePublish === true
       }
@@ -2985,11 +2990,34 @@ async function handleEnterBattle(interaction) {
       const _bestiaryReq = bestiaryRequirement(battleMonster, _bestiaryIsWorldBoss);
       const _bestiaryKillsBefore = Number(currentProg?.bestiary?.[_bestiaryMonsterId]) || 0;
       const _bestiaryBonusPct = bestiaryBonusPct(_bestiaryKillsBefore, _bestiaryReq);
+      // ── 區域連段（Zone COMBO）── 與網頁共用同一份狀態，DC 出戰一樣累積
+      const _zc = require("../../shared/zoneCombo");
+      const comboBefore = _zc.readCombo(currentProg, zoneKey);
+      const comboBenefits = _zc.benefitsFromCombo(currentEquipped?.job_eq);
+      const comboEffects = comboBenefits ? _zc.comboBuffs(comboBefore) : [];
+
+      // ── 戰意集氣（狂戰士）── 與網頁共用；DC 沒有血祭按鈕，但集氣照累、滿氣照自動觸發
+      const _bg = require("../../shared/berserkGauge");
+      const _gaugeCfg = require("../../shared/jobAdvancement").getGauge(currentEquipped?.job_eq);
+      const gaugeBefore = _gaugeCfg ? _bg.read(currentProg, _gaugeCfg) : 0;
+      const gaugeFull = Boolean(_gaugeCfg && _bg.isFull(gaugeBefore, _gaugeCfg));
+      const berserkEffects = gaugeFull ? _bg.buffs(_gaugeCfg) : [];
+
+      // ── 世界王暈眩條（矮人戰士長・巨神震擊）── 與網頁共用同一條
+      const _dsg = require("../../shared/dwarfStunGauge");
+      const _stunZoneOn = isWorldBossZone(zoneKey) && Boolean(battleMonster?.isBoss);
+      const stunGaugeKey = _stunZoneOn ? _dsg.gaugeKeyForZone(zoneKey) : null;
+      const stunStateBefore = stunGaugeKey ? await _dsg.read(stunGaugeKey, zoneKey).catch(() => null) : null;
+      const teamStunOn = Boolean(stunStateBefore?.stunned);
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       let combatResult =
         runCombatLoop(battlePlayerStats, battleMonsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
           playerName: displayName,
+          teamStunRounds: teamStunOn ? 999 : 0,
           playerLevel: currentProg?.level || 1,
+          playerActiveEffects: [...comboEffects, ...berserkEffects],
+          warGaugeCritBonus: gaugeFull ? _gaugeCfg.critRateBonus : 0,
           // DC 端不做姿態按鈕 → 有姿態系統的職業一律視為攻擊姿態（無姿態系統的職業回 null，不受影響）
           stance: (() => {
             try { return require("../../shared/battleStance").resolveRequestedStance(currentEquipped, "attack"); }
@@ -3227,12 +3255,41 @@ async function handleEnterBattle(interaction) {
         rewardLines = [`🎯 鎖定部位：${session.worldBossTargetLabel}${battleTargetNote ? `（${battleTargetNote}）` : ""}`, ...rewardLines];
       }
 
-      if (currentProg && Array.isArray(currentProg.activeEffects) && currentProg.activeEffects.length > 0) {
-        const nextActiveEffects = decrementActiveEffects(currentProg.activeEffects, "battle", 1);
-        if (nextActiveEffects.length !== currentProg.activeEffects.length) {
-          currentProg.activeEffects = nextActiveEffects;
-          currentProg.updatedAt = new Date().toISOString();
-          await sc.progressRepository.save(currentProg);
+      // 區域連段 + activeEffects：只更新這兩個欄位，不做整份覆寫（見網頁端同段註解）
+      if (currentProg) {
+        // DC 端沒有「斬」的按鈕，但「不屈」死亡保護一樣生效
+        const _fields = {
+          zoneCombo: _zc.nextCombo(comboBefore, zoneKey, outcome, Date.now(), {
+            hasDeathGuard: comboBenefits,
+            diedOnce: _zc.readDiedOnce(currentProg, zoneKey),
+          })
+        };
+        currentProg.zoneCombo = _fields.zoneCombo;
+        // 戰意集氣（狂戰士）：每場 +1；滿氣開打的那場結束後清空重集
+        if (_gaugeCfg) {
+          _fields.berserkGauge = _bg.next(gaugeBefore, _gaugeCfg, { consumed: gaugeFull });
+          currentProg.berserkGauge = _fields.berserkGauge;
+        }
+        if (Array.isArray(currentProg.activeEffects) && currentProg.activeEffects.length > 0) {
+          const nextActiveEffects = decrementActiveEffects(currentProg.activeEffects, "battle", 1);
+          if (nextActiveEffects.length !== currentProg.activeEffects.length) {
+            currentProg.activeEffects = nextActiveEffects;
+            _fields.activeEffects = nextActiveEffects;
+          }
+        }
+        await sc.progressRepository.updateFields(currentProg.playerId, _fields).catch(() => {});
+      }
+
+      // ── 敲世界王暈眩條（只有矮人戰士長敲得動）── 與網頁同一條、同規則
+      if (stunGaugeKey && _dsg.canKnock(currentEquipped?.job_eq)) {
+        const _knock = await _dsg
+          .knock(stunGaugeKey, zoneKey, combatResult?.combatStats?.attackRounds || 0, displayName)
+          .catch(() => null);
+        if (_knock?.triggered) {
+          _dsg.announceStun({ byName: displayName, monsterName: session.monsterName });
+          rewardLines.push(`⛰️ **巨神震擊**！你把 **${session.monsterName}** 敲暈了——全體 ${Math.round(_dsg.STUN_WINDOW_MS / 1000)} 秒免傷！`);
+        } else if (_knock?.knocked > 0) {
+          rewardLines.push(`🔨 暈眩值 +${_knock.knocked}（${_knock.gauge} / ${_knock.threshold}）`);
         }
       }
       try {
@@ -3407,7 +3464,20 @@ async function _grantChestToPlayer(sc, pid, chestItem, sourceMonsterId) {
   }
   return { ok: false, uuid: null };
 }
-// 結算：傷害前3 + 花費(入場費)前3（排除已在傷害前3者，往下遞補）= 最多 6 位不同的人各得 1 箱
+// 貢獻度混合排名：傷害名次 × 0.7 + 花費(入場費)名次 × 0.3，分數越小名次越前。
+// 取代舊版「傷害前3 + 花費前3遞補」的兩層邏輯——花費現在會影響 1~3 名內部排序，不再只是遞補 4~6 名的备胎名單。
+const CONTRIBUTION_RANK_WEIGHT = { damage: 0.7, spent: 0.3 };
+
+// 每個名次的寶箱數：1(保底) + ⌊(總參與人數 − (名次−1)) ÷ 3⌋，各名次分別封頂（1st→4箱/2nd→3箱/3rd→2箱），4~6名固定1箱。
+// 名次越前起漲人數越早：1st滿3人就開始漲、2nd滿4人、3rd滿5人；封頂依名次遞減，維持 1st≥2nd≥3rd≥1 不會被追平。
+function _worldBossChestCountForRank(rank, totalParticipants) {
+  if (rank >= 4) return 1;
+  const bonusCap = 4 - rank; // rank1→3, rank2→2, rank3→1
+  const bonus = Math.max(0, Math.min(bonusCap, Math.floor((totalParticipants - (rank - 1)) / 3)));
+  return 1 + bonus;
+}
+
+// 結算：貢獻度混合排名前 6 名，依名次領 1~4 箱不等（見 _worldBossChestCountForRank）
 async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap, perPidRewards) {
   try {
     const chestId = _resolveWorldBossChestId(monster, zoneKey);
@@ -3417,29 +3487,49 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
 
     const entries = Object.entries(damageMap || {}).map(([pid, d]) => ({
       pid, name: d?.name || pid, damage: Number(d?.damage) || 0, spent: Number(d?.spent) || 0,
-    }));
-    const dmgRank = entries.filter((e) => e.damage > 0).sort((a, b) => b.damage - a.damage).slice(0, 3);
-    const dmgWinners = new Set(dmgRank.map((e) => e.pid));
-    const spendRank = entries.filter((e) => e.spent > 0 && !dmgWinners.has(e.pid)).sort((a, b) => b.spent - a.spent).slice(0, 3);
+    })).filter((e) => e.damage > 0 || e.spent > 0);
+    if (entries.length === 0) return;
 
-    // 選人不變(傷害前3 + 花費前3遞補)，但對外只呈現「整體貢獻度前6名」單一清單
+    // 名次越小分數越好：分別依傷害/花費由高到低排，取陣列位置(0-based)+1 當名次
+    const byDamage = [...entries].sort((a, b) => b.damage - a.damage);
+    const bySpent = [...entries].sort((a, b) => b.spent - a.spent);
+    const dmgRankOf = new Map(byDamage.map((e, i) => [e.pid, i + 1]));
+    const spentRankOf = new Map(bySpent.map((e, i) => [e.pid, i + 1]));
+
+    const totalParticipants = entries.length;
+    const blended = entries
+      .map((e) => ({
+        ...e,
+        blendScore: dmgRankOf.get(e.pid) * CONTRIBUTION_RANK_WEIGHT.damage + spentRankOf.get(e.pid) * CONTRIBUTION_RANK_WEIGHT.spent,
+      }))
+      .sort((a, b) => a.blendScore - b.blendScore)
+      .slice(0, 6);
+
     const mark = (pid) => {
       if (perPidRewards && perPidRewards[pid]) {
         perPidRewards[pid].chestAwarded = perPidRewards[pid].chestAwarded || [];
         perPidRewards[pid].chestAwarded.push(chestItem.name);
       }
     };
-    const granted = [];
-    const grantedWinners = []; // { pid, name, uuid }
-    const auditRows = [];      // 每位得主的發箱結果（成功/失敗）
-    for (const w of [...dmgRank, ...spendRank]) {
-      const r = await _grantChestToPlayer(sc, w.pid, chestItem, monster?.id);
-      auditRows.push({ pid: w.pid, name: w.name, damage: w.damage, spent: w.spent, ok: !!r.ok, uuid: r.uuid || null, stacked: !!r.stacked });
-      if (r.ok) {
-        granted.push(w.name); grantedWinners.push({ pid: w.pid, name: w.name, uuid: r.uuid }); mark(w.pid);
-      } else {
-        console.error(`[WorldBossChest] grant FAILED pid=${w.pid} name=${w.name} chest=${chestItem.id}`);
+    const granted = [];       // { name, count }
+    const grantedWinners = []; // { pid, name, uuid }（推播用，每箱各一筆）
+    const auditRows = [];      // 每位得主的發箱結果（成功/失敗，含應得箱數）
+
+    for (let i = 0; i < blended.length; i++) {
+      const w = blended[i];
+      const rank = i + 1;
+      const boxCount = _worldBossChestCountForRank(rank, totalParticipants);
+      let successCount = 0;
+      for (let n = 0; n < boxCount; n++) {
+        const r = await _grantChestToPlayer(sc, w.pid, chestItem, monster?.id);
+        if (r.ok) { successCount++; grantedWinners.push({ pid: w.pid, name: w.name, uuid: r.uuid }); }
+        else console.error(`[WorldBossChest] grant FAILED pid=${w.pid} name=${w.name} chest=${chestItem.id}`);
       }
+      auditRows.push({
+        pid: w.pid, name: w.name, rank, damage: w.damage, spent: w.spent,
+        blendScore: Math.round(w.blendScore * 100) / 100, boxCount, successCount,
+      });
+      if (successCount > 0) { granted.push({ name: w.name, count: successCount }); mark(w.pid); }
     }
 
     // 持久化發箱稽核 log（成功/失敗都記）→ 日後「沒拿到箱子」爭議可直接查 worldBossChestGrants
@@ -3449,8 +3539,9 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
       await db.collection("worldBossChestGrants").insertOne({
         ts: new Date(), zoneKey, monsterId: monster?.id || null, monsterName: monster?.name || null,
         chestId: chestItem.id, chestName: chestItem.name,
-        grantedCount: auditRows.filter((a) => a.ok).length,
-        failedCount: auditRows.filter((a) => !a.ok).length,
+        totalParticipants,
+        grantedCount: auditRows.reduce((s, a) => s + a.successCount, 0),
+        failedCount: auditRows.reduce((s, a) => s + (a.boxCount - a.successCount), 0),
         winners: auditRows,
       });
     } catch (e) {
@@ -3478,7 +3569,7 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
       }
     } catch (_) { /* 推播失敗不影響發箱 */ }
 
-    const rankLine = granted.map((n, i) => `${i + 1}. ${n}`).join("　");
+    const rankLine = granted.map((g, i) => `${i + 1}. ${g.name}${g.count > 1 ? ` ×${g.count}` : ""}`).join("　");
     const lines = [
       `🎁 **${monster.name}** 討伐結算！`,
       `🏆 整體貢獻度前 ${granted.length} 名，各獲得 **${chestItem.name}**：`,
@@ -4208,7 +4299,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
     _republishPanel(sc, zoneKey, monster, bossResetState.currentHp, 0, {}, null, bossResetState.worldBossPartsHp).catch(() => {});
 
-    // 世界王貢獻寶箱：傷害前3 + 入場費花費前3（遞補）= 最多 6 人各得 1 箱
+    // 世界王貢獻寶箱：傷害/花費混合排名前 6 名，依名次領 1~4 箱（見 _awardWorldBossContributionChests）
     await _awardWorldBossContributionChests(sc, zoneKey, monster, freshState.damageMap, perPidRewards);
 
     rewardLines.push(...buildPartyRewardSummary(perPidRewards, mergedDmg));
@@ -5253,6 +5344,11 @@ function startMonsterPanelSweep() {
 }
 
 module.exports = {
+  // 平衡測試用（scripts/lib/simWorldBoss.js）：讓模擬器能套上與線上完全相同的部位/破鱗修正
+  applyWorldBossTargetToPlayerStats,
+  applyWorldBossTargetToMonster,
+  applyDragonKingBreakWeaken,
+  applyWorldBossPhaseModifiers,
   handleMonsterZoneButton,
   startWorldBossRespawnWatcher,
   startMonsterPanelSweep,
