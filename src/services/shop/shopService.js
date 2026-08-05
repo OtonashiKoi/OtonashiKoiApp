@@ -30,7 +30,17 @@ const ELEMENT_STONE_ID_BY_ELEMENT = {
 };
 // 分解帶屬性的裝備時，**獨立於強化寶石**再擲一次（兩者可同時獲得，也可能都槓龜）。
 // 顆數＝屬性濃度：水1 給 1 顆、水4 給 4 顆，讓高濃度裝備拆起來才划算。
-const ELEMENT_STONE_RATE = 0.5;
+//
+// 機率依「裝備階級」分級（2026-08-01，原本不分階級一律 50%）：
+//   低階拆一堆也出不了幾顆、高階才是主要產出口 → 逼玩家拆好裝而不是拿垃圾裝洗石。
+//   總量相對舊制略減並向高階集中；配合鑲嵌成本（0→1 要 2 顆、疊到 3 級累計 15 顆）不會太快通膨。
+const ELEMENT_STONE_RATE_BY_TIER = {
+  D: 0.25, C: 0.35, B: 0.50, A: 0.65, S: 0.85,
+};
+/** 該階級裝備分解出屬性石的機率（0~1）；未知階級一律 0（分解流程本來就只吃 D~S）。 */
+function getElementStoneRate(tier) {
+  return ELEMENT_STONE_RATE_BY_TIER[String(tier || "").toUpperCase()] || 0;
+}
 function isGemEntry(entry) {
   return !!entry && (GEM_ID_SET.has(entry.itemId) || entry.itemType === "gem");
 }
@@ -1208,6 +1218,12 @@ class ShopService {
       sourceRef: monsterId,
       purchasedAt: new Date().toISOString(),
     };
+    // 活動限定裝：道具自帶 elementDrop → 從寶箱開出來也要帶屬性（否則限定裝的賣點在寶箱這條路上會失效）
+    try {
+      if (item?.elementDrop) {
+        require("../../shared/elementDropRoll").rollElementForEntry(entry, { override: item.elementDrop });
+      }
+    } catch (_) { /* noop */ }
     return { entry, itemName: entry.itemName };
   }
 
@@ -1535,7 +1551,7 @@ class ShopService {
       // 屬性石：帶屬性的裝備才有，機率獨立於上面的強化寶石
       let stonesGranted = null;
       if (canDismantle && entry.element && ELEMENT_STONE_ID_BY_ELEMENT[entry.element]) {
-        if (Math.random() < ELEMENT_STONE_RATE) {
+        if (Math.random() < getElementStoneRate(tier)) {
           const count = Math.max(1, Number(entry.elementLevel) || 1);
           stonesGranted = { element: entry.element, count };
           await this._grantElementStones(progress, entry.element, count);
@@ -1547,7 +1563,9 @@ class ShopService {
       return {
         itemName: entry.itemName, gems: gemsGranted, dismantled,
         elementStones: stonesGranted,
-        successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100)
+        successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100),
+        // 屬性石機率依階級而異（帶屬性的裝備才用得到；前端顯示改讀這個值不要硬編碼）
+        elementStoneRatePct: Math.round(getElementStoneRate(tier) * 100)
       };
     });
   }
@@ -1633,7 +1651,7 @@ class ShopService {
         totalGems += y.count;
         successCount += 1;
       }
-      if (canDismantle && e?.element && ELEMENT_STONE_ID_BY_ELEMENT[e.element] && Math.random() < ELEMENT_STONE_RATE) {
+      if (canDismantle && e?.element && ELEMENT_STONE_ID_BY_ELEMENT[e.element] && Math.random() < getElementStoneRate(tier)) {
         stoneTotals[e.element] = (stoneTotals[e.element] || 0) + Math.max(1, Number(e.elementLevel) || 1);
       }
     }
@@ -1654,8 +1672,149 @@ class ShopService {
       successCount,
       gems: totalGems > 0 ? { tier: gemTier, count: totalGems } : null,
       elementStones: Object.keys(stoneTotals).length > 0 ? stoneTotals : null,
-      successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100)
+      successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100),
+      elementStoneRatePct: Math.round(getElementStoneRate(tier) * 100)
     };
+    });
+  }
+
+  // 批次處理背包（網頁「🧹 整理」多選出售/丟棄/分解）：
+  // 一次讀存檔 → 整批在記憶體處理 → 一次寫回 + 一筆金幣發放。
+  // 取代前端逐件打單件端點（1200 件＝1200 次網路往返、每件都全量讀寫存檔）。
+  // 守門規則與單件端點一致：sell 同 getSellQuote/sellItem；discard/dismantle 同 discardItem。
+  // 單件不合規只略過該件（回報原因），不中斷整批。
+  async processInventoryBatch(discordId, action, uuids) {
+    if (!["sell", "discard", "dismantle"].includes(action)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "不支援的批次動作", 400);
+    }
+    const list = [...new Set((Array.isArray(uuids) ? uuids : []).map((u) => String(u || "").trim()).filter(Boolean))];
+    if (!list.length) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "請提供要處理的物品清單", 400);
+
+    return withPlayerProgressLock(discordId, async () => {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到背包資料", 404);
+      const inv = Array.isArray(progress.inventory) ? progress.inventory : (progress.inventory = []);
+
+      // uuid → index 建表一次（逐件 findIndex 在千件背包會是 N²）
+      const idxByUuid = new Map();
+      inv.forEach((e, i) => { if (e?.uuid) idxByUuid.set(String(e.uuid), i); });
+      const findIdx = (ref) => {
+        const hit = idxByUuid.get(ref);
+        if (hit !== undefined) return hit;
+        return inv.findIndex((e) => this._matchesInventoryEntryRef(e, ref)); // key: 格式後備
+      };
+
+      // sell 需要查道具庫補 tier/售價的，先批次撈齊，迴圈內不打 DB
+      const libByItemId = new Map();
+      if (action === "sell") {
+        const needIds = new Set();
+        for (const u of list) {
+          const i = findIdx(u);
+          const e = i >= 0 ? inv[i] : null;
+          if (e?.itemId && (!e.tier || e.sellPrice == null)) needIds.add(e.itemId);
+        }
+        await Promise.all([...needIds].map(async (id) => {
+          const it = await this.itemRepository?.findById(id).catch(() => null);
+          if (it) libByItemId.set(id, it);
+        }));
+      }
+
+      const removeIdx = new Set();
+      const failReasons = {};            // 原因 → 件數（給前端彙總顯示）
+      let okCount = 0;
+      let sellGold = 0;
+      let dismSuccess = 0;               // 有出強化寶石的件數
+      const gemTotals = {};              // 寶石 tier → 顆數
+      const stoneTotals = {};            // 屬性 element → 顆數
+      const failItem = (reason) => { failReasons[reason] = (failReasons[reason] || 0) + 1; };
+
+      for (const u of list) {
+        const i = findIdx(u);
+        if (i < 0 || removeIdx.has(i)) { failItem("背包中找不到此物品"); continue; }
+        const entry = inv[i];
+        if (entry.locked) { failItem("已鎖定"); continue; }
+
+        if (action === "sell") {
+          // ── 同 getSellQuote 守門與定價 ──
+          if (entry.itemType === "job_badge" || entry.equipSlot === "job_eq") { failItem("職業徽章不可販售"); continue; }
+          if (isElementStoneEntry(entry)) { failItem("屬性石無法販售"); continue; }
+          const isGem = isGemEntry(entry);
+          const isMonsterCard = entry.itemType === "monster_card" || entry.monsterCardOf || /^special/.test(String(entry.equipSlot || ""));
+          if (entry.itemType === "equipment" && !isMonsterCard) { failItem("裝備不可販售（請改用分解）"); continue; }
+          const lib = entry.itemId ? libByItemId.get(entry.itemId) : null;
+          const tier = entry.tier ? String(entry.tier).toUpperCase()
+            : (lib?.tier ? String(lib.tier).toUpperCase() : null);
+          const customSell = (entry.sellPrice != null && Number.isFinite(Number(entry.sellPrice))) ? Number(entry.sellPrice)
+            : (lib?.sellPrice != null && Number.isFinite(Number(lib.sellPrice))) ? Number(lib.sellPrice) : null;
+          const price = customSell !== null ? Math.max(0, Math.round(customSell))
+            : (isGem ? (GEM_SELL_PRICE[tier] ?? null) : (TIER_SELL_PRICE[tier] ?? null));
+          if (price === null) { failItem("此物品沒有設定售價"); continue; }
+          // 堆疊型每個 uuid 只賣 1 顆（同單件 sellItem 行為）
+          const stackCount = Number(entry.stackCount || 1);
+          if (stackCount > 1) inv[i] = { ...entry, stackCount: stackCount - 1 };
+          else removeIdx.add(i);
+          sellGold += price;
+          okCount++;
+        } else {
+          // ── discard / dismantle：同 discardItem 守門 ──
+          if (action === "dismantle" && entry.itemType !== "equipment") { failItem("只有裝備可以分解"); continue; }
+          if (this._isMonsterCardEntry(entry)) { failItem("怪物卡無法分解／丟棄"); continue; }
+          if (isBoundItemId(entry.itemId)) { failItem("靈魂綁定物品無法分解丟棄"); continue; }
+          if (isGemEntry(entry)) { failItem("強化寶石無法分解／丟棄"); continue; }
+          if (isProtectedSlotEntry(entry)) { failItem("錨點／稱號／職業徽章無法分解"); continue; }
+          if (action === "dismantle") {
+            const tier = String(entry.tier || "").toUpperCase();
+            const canDismantle = entry.itemType === "equipment" && !!DISMANTLE_YIELD[tier];
+            if (canDismantle && Math.random() < DISMANTLE_SUCCESS_RATE) {
+              const y = DISMANTLE_YIELD[tier];
+              gemTotals[y.tier] = (gemTotals[y.tier] || 0) + y.count;
+              dismSuccess++;
+            }
+            // 屬性石獨立判定（屬性是逐件實例的，逐件看 element/elementLevel）
+            if (canDismantle && entry.element && ELEMENT_STONE_ID_BY_ELEMENT[entry.element] && Math.random() < getElementStoneRate(tier)) {
+              stoneTotals[entry.element] = (stoneTotals[entry.element] || 0) + Math.max(1, Number(entry.elementLevel) || 1);
+            }
+          }
+          removeIdx.add(i);
+          okCount++;
+        }
+      }
+
+      // 一次移除（索引由大到小，避免位移錯亂）
+      [...removeIdx].sort((a, b) => b - a).forEach((i) => progress.inventory.splice(i, 1));
+      for (const [tier, count] of Object.entries(gemTotals)) {
+        await this._grantGems(progress, tier, count);
+      }
+      for (const [el, count] of Object.entries(stoneTotals)) {
+        await this._grantElementStones(progress, el, count);
+      }
+      progress.updatedAt = new Date().toISOString();
+      await this.progressRepository.save(progress);
+
+      if (sellGold > 0) {
+        await this.rewardService.grantCurrency({
+          discordId,
+          displayName: discordId,
+          currencyType: "gold",
+          amount: sellGold,
+          source: CURRENCY_SOURCES.ITEM_SELL,
+          operator: `shop:batch-${action}`
+        });
+      }
+
+      const failCount = list.length - okCount;
+      return {
+        action,
+        requested: list.length,
+        okCount,
+        failCount,
+        failReasons: failCount > 0 ? failReasons : null,
+        sellGold,
+        dismantleSuccessCount: dismSuccess,
+        gemTotals: Object.keys(gemTotals).length ? gemTotals : null,
+        stoneTotals: Object.keys(stoneTotals).length ? stoneTotals : null,
+        successRatePct: Math.round(DISMANTLE_SUCCESS_RATE * 100)
+      };
     });
   }
 
@@ -2173,4 +2332,7 @@ class ShopService {
   }
 }
 
-module.exports = { ShopService, isGemEntry, DISMANTLE_YIELD };
+module.exports = {
+  ShopService, isGemEntry, DISMANTLE_YIELD, DISMANTLE_SUCCESS_RATE,
+  ELEMENT_STONE_RATE_BY_TIER, getElementStoneRate,
+};

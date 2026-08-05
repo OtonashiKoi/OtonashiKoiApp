@@ -835,6 +835,8 @@ function createBotClient() {
     const viewerEventsService = require("../services/stream/viewerEventsService");
     const viewerEvalTimer = setInterval(() => { viewerEventsService.evaluate().catch(() => {}); }, 20_000);
     viewerEvalTimer.unref?.();
+    // YT 訂閱數里程碑輪詢（alert.html 用；每 5 分鐘，門檻步距見 streamAlertService.YT_SUBS_STEP）
+    try { require("../services/stream/streamAlertService").startYtSubscriberPoller(serviceContext); } catch (e) { console.warn("[StreamAlert] 啟動失敗:", e?.message || e); }
     // 啟動閒置自動換怪計時器（可透過 DISABLE_AUTO_ROTATE=1 暫時停用）
     if (process.env.DISABLE_AUTO_ROTATE === '1') {
       console.log('[IdleRotate] disabled by DISABLE_AUTO_ROTATE');

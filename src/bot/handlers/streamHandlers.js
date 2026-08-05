@@ -171,6 +171,41 @@ function parsePositiveNumber(value) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+// ── 外幣 → 台幣換算（2026-08-04 使用者定案：日幣 ÷5；其餘常見幣別用粗略固定匯率）──
+// 背景：harkun ¥5000 被當 NT$5000 記錄，灌爆累計金額（見 memory: stream-donation-currency-bug）。
+// 固定匯率就好——斗內金額本來就是粗粒度（每 NT$100 = 1 鑽），不需要即時匯率的精度。
+const TWD_PER_UNIT = {
+  TWD: 1, NTD: 1,
+  JPY: 0.2,          // ¥5 = NT$1（使用者定案「日幣 /5」）
+  USD: 30, MYR: 7, HKD: 4, KRW: 0.022, EUR: 33, GBP: 38,
+  SGD: 23, PHP: 0.55, THB: 0.9, CNY: 4.2, AUD: 20, CAD: 22,
+};
+/**
+ * 判定幣別。優先看 raw.currency 的明確代碼/符號；再從顯示文字嗅探。
+ * ⚠️ 單獨的「$」一律視為台幣：台灣觀眾為主，YT 的 NT$ 常被 OneComme 縮成 $，
+ *    當美金會 ×30 爆炸（2026-07-25 的 $30/$75 實證就是台幣）。要當美金必須明寫 USD/US$。
+ */
+function sniffDonationCurrency(rawCurrency, text) {
+  const c = String(rawCurrency || "").toUpperCase().trim();
+  if (["TWD", "NTD", "NT$", "TWD$", "$"].includes(c)) return "TWD";
+  if (TWD_PER_UNIT[c]) return c;
+  if (c === "¥" || c === "￥") return "JPY";
+  if (c === "₩") return "KRW";
+  if (c === "€") return "EUR";
+  if (c === "£") return "GBP";
+  const t = String(text || "").toUpperCase();
+  if (/NT\$|TWD|NTD|新台幣|台幣/.test(t)) return "TWD";
+  if (/JPY|[¥￥円]/.test(t)) return "JPY";
+  if (/US\$|USD/.test(t)) return "USD";
+  if (/MYR|(^|\s)RM\d/.test(t)) return "MYR";
+  if (/HK\$|HKD/.test(t)) return "HKD";
+  if (/KRW|₩/.test(t)) return "KRW";
+  if (/EUR|€/.test(t)) return "EUR";
+  if (/GBP|£/.test(t)) return "GBP";
+  if (/SG\$|SGD/.test(t)) return "SGD";
+  return "TWD";
+}
+
 function inferDonationReward(comment) {
   const raw = comment?.raw || {};
   const platform = normalizePlatform(comment?.service, comment?.userId || raw.userId || "");
@@ -214,11 +249,20 @@ function inferDonationReward(comment) {
 
   if (!looksLikeTwd) return null;
 
-  const twdAmount = amount > 0 ? amount : parsePositiveNumber(displayString);
-  if (!twdAmount) return null;
+  const rawAmount = amount > 0 ? amount : parsePositiveNumber(displayString);
+  if (!rawAmount) return null;
 
+  // 外幣換算：¥5000 → NT$1000（÷5）；台幣與未知幣別維持原值
+  const detectedCurrency = sniffDonationCurrency(currency, `${raw.paidText || ""} ${displayString}`);
+  const twdRate = TWD_PER_UNIT[detectedCurrency] || 1;
+  const twdAmount = Math.max(1, Math.round(rawAmount * twdRate));
+  if (detectedCurrency !== "TWD") {
+    console.log(`[Donation] 💱 外幣換算：${detectedCurrency} ${rawAmount} → NT$${twdAmount}（匯率 ${twdRate}）`);
+  }
+
+  // 小額（<100）不再提前丟棄：下游台帳本來就會累積零頭、記錄層設計就是「未滿百也完整保存」。
+  // 舊的 `diamondAmount <= 0 → return null` 讓小額 SC 連記錄和警報都消失（2026-07-25 直播 $30/$75 實證）。
   const diamondAmount = Math.floor(twdAmount / 100);
-  if (diamondAmount <= 0) return null;
 
   const sourceId = String(
     raw._id ||
@@ -235,6 +279,9 @@ function inferDonationReward(comment) {
     displayName: comment?.name || raw.displayName || raw.name || "未知用戶",
     twdAmount,
     diamondAmount,
+    // 外幣資訊（記錄層用；台幣時 originalCurrency 也是 TWD、originalAmount = twdAmount）
+    originalCurrency: detectedCurrency,
+    originalAmount: rawAmount,
     sourceRef: `youtube:${sourceId || `${comment?.userId || raw.userId || "unknown"}:${twdAmount}:${displayString}`}`,
     donationLabel: raw.displayString || raw.message || displayString
   };
@@ -659,7 +706,8 @@ async function handleDonation(comment) {
     platformUserId: donation.platformUserId,
     displayName: donation.displayName,
     twdAmount: donation.twdAmount,
-    currency: String(raw.currency || "").toUpperCase() || null,
+    currency: donation.originalCurrency || String(raw.currency || "").toUpperCase() || null,
+    originalAmount: donation.originalAmount ?? donation.twdAmount,   // 外幣原始金額（¥5000 之類）；台幣＝twdAmount
     isMember: support.supportDetected,
     supportKind: support.supportKind || null
   };
@@ -767,6 +815,9 @@ async function handleQuery(comment) {
  */
 async function handleStreamComment(comment) {
   if (comment.raw?._onecommeHistory) return;
+
+  // 直播警報事件偵測（Twitch 訂閱/Raid、YT 會員加入）→ alert.html 用；不影響主流程
+  try { require("../../services/stream/streamAlertService").ingestComment(comment); } catch (_) {}
 
   // 斗內事件：不受 text 限制（SC 可能沒有留言文字）
   if (await handleDonation(comment).catch((err) => {

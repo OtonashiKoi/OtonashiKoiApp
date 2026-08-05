@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>直播轉盤</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=M+PLUS+Rounded+1c:wght@700;900&family=Noto+Sans+TC:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  /* ── 星穹鐵道風（與聊天室 overlay 同語彙）：深藍半透明 + 金色 + 斜角 + ◆ ── */
+  :root {
+    --gold-1: #f5d060;
+    --gold-2: #c89a20;
+    --star-line: rgba(140, 185, 255, 0.45);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: transparent;               /* OBS 透明背景 */
+    overflow: hidden;
+    font-family: 'Mochiy Pop One', 'M PLUS Rounded 1c', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+    user-select: none;
+  }
+  body.solid-bg { background: #0a0f22; }   /* ?bg=1 預覽用 */
+
+  #stage {
+    position: relative;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px;
+  }
+
+  /* 標題徽章（金色斜角，同聊天室等級徽章語彙） */
+  #title {
+    font-size: 22px; font-weight: 900; letter-spacing: 2px;
+    color: #1a1100;
+    background: linear-gradient(135deg, var(--gold-1) 0%, var(--gold-2) 100%);
+    padding: 4px 26px;
+    clip-path: polygon(12px 0%, 100% 0%, calc(100% - 12px) 100%, 0% 100%);
+    text-shadow: none;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+  }
+
+  #wheelWrap { position: relative; }
+  #wheel { display: block; filter: drop-shadow(0 6px 18px rgba(0,0,0,0.55)); cursor: pointer; }
+
+  /* 指針（頂端向下的金色菱形箭頭） */
+  #pointer {
+    position: absolute; top: -6px; left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 16px solid transparent;
+    border-right: 16px solid transparent;
+    border-top: 30px solid var(--gold-1);
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+    z-index: 3;
+    transform-origin: 50% 0%;
+  }
+  #pointer.tick { animation: ptick 0.09s ease-out; }
+  @keyframes ptick {
+    0% { transform: translateX(-50%) rotate(0deg); }
+    45% { transform: translateX(-50%) rotate(-14deg); }
+    100% { transform: translateX(-50%) rotate(0deg); }
+  }
+
+  /* 中央按鈕（深藍星穹面板） */
+  #hub {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 92px; height: 92px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(30, 52, 110, 0.98), rgba(8, 18, 42, 0.98));
+    border: 3px solid var(--gold-1);
+    box-shadow: 0 0 14px rgba(245, 208, 96, 0.35), inset 0 0 12px rgba(140,185,255,0.25);
+    display: flex; align-items: center; justify-content: center;
+    color: #ffe9a8; font-size: 17px; font-weight: 900; letter-spacing: 3px;
+    cursor: pointer; z-index: 2;
+  }
+  #hub .diamond { font-size: 9px; color: var(--star-line); letter-spacing: 2px; }
+
+  /* 結果面板（聊天室訊息卡同款：深藍漸層 + 左金線 + 斜角 + ◆） */
+  #result {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    min-width: 320px; max-width: 82vw;
+    padding: 22px 44px 26px;
+    text-align: center;
+    background: linear-gradient(100deg, rgba(18,14,8,0.92) 0%, rgba(30,22,10,0.9) 60%, rgba(20,18,10,0.85) 100%);
+    border-top: 1px solid rgba(245, 208, 96, 0.4);
+    border-bottom: 1px solid rgba(200, 154, 32, 0.25);
+    border-left: 3px solid rgba(212, 175, 80, 0.85);
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+    z-index: 5;
+  }
+  #result::after {
+    content: '◆ ◆ ◆';
+    position: absolute; top: 6px; right: 12px;
+    font-size: 8px; color: rgba(212, 175, 80, 0.5); letter-spacing: 3px;
+  }
+  #result.show { animation: pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  @keyframes pop {
+    from { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+    to   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+  #result .r-label { font-size: 13px; color: #cfe0ff; letter-spacing: 4px; margin-bottom: 8px; }
+  #result .r-text  {
+    font-size: 42px; font-weight: 900; line-height: 1.25;
+    background: linear-gradient(180deg, #ffe9a8 20%, var(--gold-1) 55%, var(--gold-2) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));
+    word-break: break-word;
+  }
+  #result .r-hint { margin-top: 10px; font-size: 11px; color: rgba(200, 210, 240, 0.5); letter-spacing: 2px; }
+
+  /* 歷史紀錄（左下角，小卡） */
+  #history {
+    position: absolute; left: 14px; bottom: 12px;
+    display: flex; flex-direction: column-reverse; gap: 5px;
+    z-index: 1;
+  }
+  .h-item {
+    font-size: 12px; font-weight: 700; color: #dce8ff;
+    background: linear-gradient(100deg, rgba(8,18,42,0.8) 0%, rgba(18,38,80,0.6) 100%);
+    border-left: 2px solid var(--star-line);
+    padding: 3px 12px 3px 9px;
+    clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
+    animation: hslide 0.3s ease-out both;
+    opacity: 0.85;
+  }
+  @keyframes hslide { from { opacity: 0; transform: translateX(-10px); } to { opacity: 0.85; transform: none; } }
+
+  #confetti { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+  #err {
+    color: #ffb0b0; font-size: 15px; font-weight: 700; text-align: center;
+    background: rgba(40, 10, 14, 0.85); padding: 10px 20px; border-left: 3px solid #ff5577;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="title">🎡 轉盤</div>
+  <div id="wheelWrap">
+    <div id="pointer"></div>
+    <canvas id="wheel"></canvas>
+    <canvas id="confetti"></canvas>
+    <div id="hub"><div>SPIN<div class="diamond">◆ ◆ ◆</div></div></div>
+    <div id="result"><div class="r-label">─ 抽選結果 ─</div><div class="r-text"></div><div class="r-hint">點擊任意處關閉</div></div>
+  </div>
+  <div id="err"></div>
+  <div id="history"></div>
+</div>
+<script>
+(function () {
+  const qs = new URLSearchParams(location.search);
+  if (qs.get("bg") === "1") document.body.classList.add("solid-bg");
+  const wheelId = qs.get("id") || "";
+
+  // 星穹系預設調色盤（後台沒指定顏色時輪流用）
+  const PALETTE = ["#3b5fd0", "#f5d060", "#7ce0ff", "#ff8ab8", "#6ee7b7", "#c4b5fd", "#ff8a4a", "#8fb6ff", "#ffd166", "#5eead4"];
+
+  const canvas = document.getElementById("wheel");
+  const ctx = canvas.getContext("2d");
+  const confettiCv = document.getElementById("confetti");
+  const cctx = confettiCv.getContext("2d");
+  const pointerEl = document.getElementById("pointer");
+  const resultEl = document.getElementById("result");
+  const resultText = resultEl.querySelector(".r-text");
+  const historyEl = document.getElementById("history");
+  const titleEl = document.getElementById("title");
+  const errEl = document.getElementById("err");
+
+  let cfg = null;          // 後台設定
+  let segs = [];           // [{label,color,a0,a1,weight}] 弧度（權重比例分配角度）
+  let angle = 0;           // 目前轉盤角度（rad）
+  let spinning = false;
+  let lastSegIdx = -1;     // 指針經過段落 → 撥片音效式抖動
+  const history = [];
+
+  function sizeCanvas() {
+    const s = Math.min(window.innerWidth, window.innerHeight - 90) - 24;
+    const size = Math.max(280, Math.min(640, s));
+    for (const cv of [canvas, confettiCv]) {
+      cv.width = size * devicePixelRatio; cv.height = size * devicePixelRatio;
+      cv.style.width = size + "px"; cv.style.height = size + "px";
+    }
+    confettiCv.style.position = "absolute";
+    confettiCv.style.left = "0"; confettiCv.style.top = "0";
+    draw();
+  }
+
+  function buildSegs() {
+    const items = (cfg?.items || []).filter((it) => it.label);
+    const total = items.reduce((s, it) => s + (it.weight || 1), 0) || 1;
+    let acc = -Math.PI / 2; // 從正上方（指針位置）開始
+    segs = items.map((it, i) => {
+      const span = (it.weight || 1) / total * Math.PI * 2;
+      const seg = { label: it.label, weight: it.weight || 1, color: it.color || PALETTE[i % PALETTE.length], a0: acc, a1: acc + span };
+      acc += span;
+      return seg;
+    });
+  }
+
+  function draw() {
+    if (!segs.length) return;
+    const size = canvas.width; // device px
+    const r = size / 2;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    ctx.translate(r, r);
+    ctx.rotate(angle);
+
+    for (const seg of segs) {
+      // 扇形
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, r - 6 * devicePixelRatio, seg.a0, seg.a1);
+      ctx.closePath();
+      ctx.fillStyle = seg.color;
+      ctx.globalAlpha = 0.92;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(8, 12, 28, 0.9)";
+      ctx.lineWidth = 3 * devicePixelRatio;
+      ctx.stroke();
+
+      // 文字（沿半徑向外）
+      const mid = (seg.a0 + seg.a1) / 2;
+      ctx.save();
+      ctx.rotate(mid);
+      const fs = Math.max(13, Math.min(24, (seg.a1 - seg.a0) * 46)) * devicePixelRatio;
+      ctx.font = `900 ${fs}px 'Mochiy Pop One','M PLUS Rounded 1c','Noto Sans TC',sans-serif`;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#0a0f22";
+      ctx.strokeStyle = "rgba(255,255,255,0.75)";
+      ctx.lineWidth = 3 * devicePixelRatio;
+      const label = seg.label.length > 12 ? seg.label.slice(0, 12) + "…" : seg.label;
+      ctx.strokeText(label, r - 20 * devicePixelRatio, 0);
+      ctx.fillText(label, r - 20 * devicePixelRatio, 0);
+      ctx.restore();
+    }
+
+    // 外框金環 + 星點
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 5 * devicePixelRatio, 0, Math.PI * 2);
+    ctx.strokeStyle = "#c89a20";
+    ctx.lineWidth = 4 * devicePixelRatio;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 10 * devicePixelRatio, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(245, 208, 96, 0.55)";
+    ctx.lineWidth = 1.5 * devicePixelRatio;
+    ctx.stroke();
+
+    // 指針經過段落偵測（撥片抖動）
+    const idx = segAtPointer();
+    if (idx !== lastSegIdx && spinning) {
+      lastSegIdx = idx;
+      pointerEl.classList.remove("tick");
+      void pointerEl.offsetWidth;
+      pointerEl.classList.add("tick");
+    }
+  }
+
+  // 指針（正上方 = -PI/2 世界角）目前落在哪一段
+  function segAtPointer() {
+    const world = -Math.PI / 2;
+    let local = (world - angle) % (Math.PI * 2);
+    while (local < -Math.PI / 2) local += Math.PI * 2;
+    while (local >= Math.PI * 1.5) local -= Math.PI * 2;
+    for (let i = 0; i < segs.length; i++) {
+      if (local >= segs[i].a0 && local < segs[i].a1) return i;
+    }
+    return 0;
+  }
+
+  // 加權抽選 → 回傳中選 index
+  function pickWeighted() {
+    const total = segs.reduce((s, x) => s + x.weight, 0);
+    let rnd = Math.random() * total;
+    for (let i = 0; i < segs.length; i++) {
+      if ((rnd -= segs[i].weight) < 0) return i;
+    }
+    return segs.length - 1;
+  }
+
+  function spin() {
+    if (spinning || !segs.length) return;
+    hideResult();
+    spinning = true;
+    const winner = pickWeighted();
+    const seg = segs[winner];
+    // 目標：讓中選段的隨機一點落在指針下；多轉 5~7 圈
+    const margin = (seg.a1 - seg.a0) * 0.12;
+    const landLocal = seg.a0 + margin + Math.random() * ((seg.a1 - seg.a0) - margin * 2);
+    const targetAngle = -Math.PI / 2 - landLocal;
+    const turns = 5 + Math.floor(Math.random() * 3);
+    const from = angle;
+    let to = targetAngle - Math.PI * 2 * turns;
+    // 對齊到「往負方向轉最近的等價角」，避免起點不同造成圈數飄移
+    while (to > from - Math.PI * 2 * turns) to -= Math.PI * 2;
+
+    const dur = (cfg?.spinSeconds || 6) * 1000;
+    const t0 = performance.now();
+    function frame(t) {
+      const p = Math.min(1, (t - t0) / dur);
+      const ease = 1 - Math.pow(1 - p, 4); // easeOutQuart：先快後慢，尾段有懸念
+      angle = from + (to - from) * ease;
+      draw();
+      if (p < 1) requestAnimationFrame(frame);
+      else { spinning = false; showResult(seg.label); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function showResult(label) {
+    resultText.textContent = label;
+    resultEl.classList.add("show");
+    burstConfetti();
+    history.push(label);
+    if (history.length > 5) history.shift();
+    if (cfg?.showHistory !== false) {
+      historyEl.innerHTML = history.map((h) => `<div class="h-item">◆ ${esc(h)}</div>`).join("");
+    }
+  }
+  function hideResult() { resultEl.classList.remove("show"); }
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // ── 彩帶粒子 ──
+  let confetti = [];
+  let confettiRunning = false;
+  function burstConfetti() {
+    const size = confettiCv.width;
+    confetti = Array.from({ length: 90 }, () => ({
+      x: size / 2, y: size / 2,
+      vx: (Math.random() - 0.5) * 14 * devicePixelRatio,
+      vy: (Math.random() * -11 - 3) * devicePixelRatio,
+      g: 0.35 * devicePixelRatio,
+      w: (Math.random() * 6 + 4) * devicePixelRatio,
+      h: (Math.random() * 3 + 2) * devicePixelRatio,
+      rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+      color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
+      life: 90 + Math.random() * 40
+    }));
+    if (!confettiRunning) { confettiRunning = true; requestAnimationFrame(confettiFrame); }
+  }
+  function confettiFrame() {
+    cctx.setTransform(1, 0, 0, 1, 0, 0);
+    cctx.clearRect(0, 0, confettiCv.width, confettiCv.height);
+    confetti = confetti.filter((c) => c.life > 0);
+    for (const c of confetti) {
+      c.x += c.vx; c.y += c.vy; c.vy += c.g; c.rot += c.vr; c.life -= 1;
+      cctx.save();
+      cctx.translate(c.x, c.y);
+      cctx.rotate(c.rot);
+      cctx.globalAlpha = Math.min(1, c.life / 40);
+      cctx.fillStyle = c.color;
+      cctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
+      cctx.restore();
+    }
+    if (confetti.length > 0) requestAnimationFrame(confettiFrame);
+    else confettiRunning = false;
+  }
+
+  // ── 設定載入（後台改完，overlay 閒置時每 30 秒自動吃到新設定）──
+  async function loadConfig(silent = false) {
+    try {
+      const res = await fetch("/api/wheel/config" + (wheelId ? "?id=" + encodeURIComponent(wheelId) : ""));
+      const json = await res.json();
+      if (json.status !== "ok") throw new Error(json.message || "載入失敗");
+      const fresh = json.data;
+      if (!cfg || fresh.updatedAt !== cfg.updatedAt) {
+        cfg = fresh;
+        titleEl.textContent = "🎡 " + (cfg.name || "轉盤");
+        buildSegs();
+        draw();
+      }
+      errEl.style.display = "none";
+    } catch (e) {
+      if (!silent) { errEl.textContent = "⚠️ " + e.message; errEl.style.display = "block"; }
+    }
+  }
+
+  // 互動：點轉盤/中央鈕/空白鍵旋轉；結果面板點任意處關閉；R 重新載入設定
+  document.getElementById("hub").addEventListener("click", spin);
+  canvas.addEventListener("click", spin);
+  resultEl.addEventListener("click", hideResult);
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space") { e.preventDefault(); resultEl.classList.contains("show") ? hideResult() : spin(); }
+    if (e.key === "r" || e.key === "R") loadConfig();
+  });
+  window.addEventListener("resize", sizeCanvas);
+  setInterval(() => { if (!spinning) loadConfig(true); }, 30_000);
+
+  loadConfig().then(sizeCanvas);
+})();
+</script>
+</body>
+</html>

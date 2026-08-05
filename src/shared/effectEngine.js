@@ -141,11 +141,18 @@ function collectEffectRefsFromEntry(entry, trigger = null, context = {}) {
     ...(Array.isArray(entry.combatEffects) ? entry.combatEffects : []),
     ...enchantEffects
   ];
-  return buckets.filter((effect) => {
-    if (!effect || typeof effect !== "object") return false;
-    if (trigger && effect.trigger !== trigger) return false;
-    return isEffectConditionMet(effect, context);
-  });
+  // srcItem＝這條效果來自哪件裝備（給戰報標註來源用，例：光環加持標「繫絆・共鳴之鏈」而非職業徽章）。
+  // 回傳淺拷貝、不動 items 庫的原物件。
+  const _srcItem = entry.itemName || entry.name || null;
+  // 註：職業徽章的等級成長**只影響屬性值（equipStats）**，效果百分比全程完整生效。
+  // 縮放實作在 combatStats.calcPlayerStats（見 shared/jobBadgeLevel.js）。
+  return buckets
+    .filter((effect) => {
+      if (!effect || typeof effect !== "object") return false;
+      if (trigger && effect.trigger !== trigger) return false;
+      return isEffectConditionMet(effect, context);
+    })
+    .map((effect) => (_srcItem ? { ...effect, srcItem: _srcItem } : effect));
 }
 
 function collectEquipmentEffects(equipped, trigger = null, context = {}) {

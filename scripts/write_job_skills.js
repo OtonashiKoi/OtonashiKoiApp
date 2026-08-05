@@ -50,12 +50,13 @@ const JOB_SKILLS = {
     {
       key: "warrior_death_will",
       name: "死亡意志",
-      description: "HP低於35%時發動：免疫傷害1回合並ATK+50%，持續1回合。",
+      // 2026-07-22 使用者定案：拿掉 ATK+50%——保命技不該同時是輸出技（瀕死應是危機不是爆發時機）。
+      // 實測影響：戰士世界王 -8%、狂戰士 -5.4%（狂戰士徽章沿用此技能，兩邊同步改）。
+      description: "HP低於35%時發動：免疫傷害1回合。",
       cooldownTurns: 5,
       condition: {"ownerHpBelowPct":35},
       procEffects: [
-        {"key":"invincible_short","target":"self","params":{"value":100,"duration":{"mode":"turns","value":1}}},
-        {"key":"atk_up","target":"self","params":{"value":50,"duration":{"mode":"turns","value":1}}}
+        {"key":"invincible_short","target":"self","params":{"value":100,"duration":{"mode":"turns","value":1}}}
       ]
     }
   ],

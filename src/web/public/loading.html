@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>直播載入中</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Cormorant+Garamond:ital,wght@1,500&family=Noto+Sans+TC:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* ── 音無風・白×薰衣草載入畫面 ──
+     角色語彙：白軍帽金線、紫藤花飾、紫水晶胸針、蕾絲層裙、◆/✦ 裝飾、淡藍眼眸 */
+  :root {
+    --paper: #f7f6fc;          /* 雪紡白 */
+    --lav-1: #e6e3f5;          /* 淡薰衣草 */
+    --lav-2: #c9c3ea;
+    --lav-3: #9d93d8;          /* 髮絲紫 */
+    --wisteria: #7d6fc9;       /* 紫藤 */
+    --wisteria-deep: #5d4fae;
+    --gold: #c9a44c;           /* 帽簷金線 */
+    --gold-soft: #e3c987;
+    --ink: #3a3654;            /* 帽帶黑（柔化） */
+    --eye: #7ec3e8;            /* 眼眸藍 */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(ellipse 90% 70% at 50% 38%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 60%),
+      radial-gradient(circle at 50% 45%, var(--paper) 0%, var(--lav-1) 55%, var(--lav-2) 100%);
+    font-family: 'M PLUS Rounded 1c', 'Noto Sans TC', sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none;
+  }
+  body.transparent { background: transparent; }
+
+  /* ── 背景光環線圈（畫裡的大圓底紋）── */
+  .halo {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -52%);
+    border-radius: 50%;
+    border: 1px solid rgba(157, 147, 216, 0.28);
+    pointer-events: none;
+  }
+  .halo.h1 { width: 78vmin; height: 78vmin; border-width: 1.5px; }
+  .halo.h2 { width: 66vmin; height: 66vmin; border-style: dashed; opacity: 0.7; animation: slowspin 90s linear infinite; }
+  .halo.h3 { width: 88vmin; height: 88vmin; opacity: 0.45; }
+  .halo.h2::after {
+    content: '✦'; position: absolute; top: -9px; left: 50%;
+    color: var(--gold); font-size: 14px;
+  }
+  @keyframes slowspin { to { transform: translate(-50%, -52%) rotate(360deg); } }
+
+  /* ── 中央徽章（帽章＝蕾絲圈＋紫花）── */
+  #emblem { position: relative; width: 300px; height: 300px; margin-top: -6vh; }
+  #emblem svg { position: absolute; inset: 0; overflow: visible; }
+  .ring-outer { animation: spin 24s linear infinite; transform-origin: 150px 150px; }
+  .ring-dash  { animation: spinrev 16s linear infinite; transform-origin: 150px 150px; }
+  .ring-lace  { animation: spin 48s linear infinite; transform-origin: 150px 150px; }
+  @keyframes spin    { to { transform: rotate(360deg); } }
+  @keyframes spinrev { to { transform: rotate(-360deg); } }
+
+  /* 中央花朵：呼吸 */
+  .flower { animation: bloom 3.2s ease-in-out infinite; transform-origin: 150px 150px; }
+  @keyframes bloom {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.07); }
+  }
+
+  /* 軌道星芒 */
+  .orbit { position: absolute; inset: 0; animation: spin 10s linear infinite; }
+  .orbit.o2 { animation: spinrev 14s linear infinite; }
+  .orbit .star {
+    position: absolute; left: 50%; top: -8px;
+    transform: translateX(-50%);
+    font-size: 18px; color: var(--gold);
+    text-shadow: 0 0 8px rgba(227, 201, 135, 0.8);
+    animation: twinkle 1.8s ease-in-out infinite;
+  }
+  .orbit.o2 .star { color: var(--eye); font-size: 13px; top: auto; bottom: 2px; text-shadow: 0 0 8px rgba(126,195,232,0.8); animation-delay: 0.7s; }
+  @keyframes twinkle { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  /* ── 紫藤花串（掛在圈右上，輕輕搖）── */
+  #wisteria {
+    position: absolute; top: 8px; right: 30px;
+    transform-origin: top center;
+    animation: sway 4.5s ease-in-out infinite;
+  }
+  @keyframes sway {
+    0%, 100% { transform: rotate(-6deg); }
+    50%      { transform: rotate(7deg); }
+  }
+  #wisteria .bead {
+    width: 11px; height: 14px; margin: 2px auto;
+    background: linear-gradient(160deg, var(--lav-3), var(--wisteria-deep));
+    border-radius: 50% 50% 55% 55%;
+    opacity: 0.95;
+  }
+  #wisteria .bead:nth-child(2) { width: 10px; }
+  #wisteria .bead:nth-child(3) { width: 9px; }
+  #wisteria .bead:nth-child(4) { width: 7px; height: 12px; }
+  #wisteria .bead:nth-child(5) { width: 5px; height: 10px; }
+
+  /* ── 文字區 ── */
+  #caption { position: absolute; left: 50%; top: 50%; transform: translate(-50%, 118px); text-align: center; width: max-content; }
+  #loadtext {
+    font-size: 26px; font-weight: 800; letter-spacing: 10px; padding-left: 10px;
+    color: var(--ink);
+  }
+  #loadtext .dots span {
+    display: inline-block; letter-spacing: 2px;
+    animation: dotup 1.4s ease-in-out infinite;
+    color: var(--wisteria);
+  }
+  #loadtext .dots span:nth-child(2) { animation-delay: 0.18s; }
+  #loadtext .dots span:nth-child(3) { animation-delay: 0.36s; }
+  @keyframes dotup { 0%, 60%, 100% { transform: none; } 30% { transform: translateY(-7px); } }
+  #subtext {
+    margin-top: 6px;
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 14px; letter-spacing: 5px; color: var(--lav-3);
+  }
+
+  /* 進度絲帶：金線流光（帽簷金邊語彙） */
+  #ribbon {
+    margin: 14px auto 0; width: 260px; height: 4px; border-radius: 2px;
+    background: rgba(157, 147, 216, 0.25);
+    overflow: hidden; position: relative;
+  }
+  #ribbon::before, #ribbon::after { content: ''; position: absolute; top: 0; bottom: 0; }
+  #ribbon::before {
+    left: -40%; width: 40%;
+    background: linear-gradient(90deg, transparent, var(--gold-soft), var(--gold), var(--gold-soft), transparent);
+    animation: flow 2.2s cubic-bezier(0.4, 0, 0.4, 1) infinite;
+  }
+  @keyframes flow { to { left: 100%; } }
+  #ribbon .gem {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 9px; height: 9px;
+    background: linear-gradient(135deg, var(--lav-3), var(--wisteria-deep));
+    box-shadow: 0 0 8px rgba(125, 111, 201, 0.8);
+    animation: gempulse 2.2s ease-in-out infinite;
+  }
+  @keyframes gempulse { 0%,100% { box-shadow: 0 0 5px rgba(125,111,201,0.5); } 50% { box-shadow: 0 0 14px rgba(125,111,201,1); } }
+
+  /* ── 角落 ◆ 裝飾（畫框感）── */
+  .corner { position: absolute; font-size: 11px; letter-spacing: 4px; color: rgba(125, 111, 201, 0.55); }
+  .corner.tl { top: 18px; left: 22px; }
+  .corner.br { bottom: 16px; right: 22px; }
+
+  /* ── 飄落花瓣 ── */
+  .petal {
+    position: absolute; top: -30px;
+    border-radius: 60% 40% 55% 45%;
+    background: linear-gradient(160deg, rgba(201, 195, 234, 0.9), rgba(125, 111, 201, 0.75));
+    animation: fall linear infinite;
+    pointer-events: none;
+  }
+  @keyframes fall {
+    0%   { transform: translateY(-4vh) rotate(0deg) translateX(0); opacity: 0; }
+    8%   { opacity: 0.9; }
+    100% { transform: translateY(108vh) rotate(320deg) translateX(9vw); opacity: 0.25; }
+  }
+</style>
+</head>
+<body>
+  <div class="halo h1"></div>
+  <div class="halo h2"></div>
+  <div class="halo h3"></div>
+
+  <div id="emblem">
+    <svg viewBox="0 0 300 300">
+      <!-- 外圈：金細環（帽簷金線） -->
+      <g class="ring-outer">
+        <circle cx="150" cy="150" r="128" fill="none" stroke="#c9a44c" stroke-width="1.6" opacity="0.9"/>
+        <circle cx="150" cy="150" r="122" fill="none" stroke="#c9a44c" stroke-width="0.6" opacity="0.5"/>
+        <!-- 圈上四顆 ◆ -->
+        <g fill="#7d6fc9">
+          <rect x="146.5" y="18.5" width="7" height="7" transform="rotate(45 150 22)"/>
+          <rect x="146.5" y="274.5" width="7" height="7" transform="rotate(45 150 278)"/>
+          <rect x="18.5" y="146.5" width="7" height="7" transform="rotate(45 22 150)"/>
+          <rect x="274.5" y="146.5" width="7" height="7" transform="rotate(45 278 150)"/>
+        </g>
+      </g>
+      <!-- 中圈：虛線環（反轉） -->
+      <g class="ring-dash">
+        <circle cx="150" cy="150" r="104" fill="none" stroke="#9d93d8" stroke-width="1.4" stroke-dasharray="3 9" opacity="0.85"/>
+      </g>
+      <!-- 蕾絲扇形圈（層裙荷葉邊語彙） -->
+      <g class="ring-lace" opacity="0.6">
+        <circle cx="150" cy="150" r="88" fill="none" stroke="#c9c3ea" stroke-width="10"
+                stroke-dasharray="2 16" stroke-linecap="round"/>
+      </g>
+      <!-- 中央紫花（髮飾花） -->
+      <g class="flower">
+        <g transform="translate(150 150)">
+          <!-- 五瓣 -->
+          <g fill="#7d6fc9" stroke="#5d4fae" stroke-width="1.5">
+            <ellipse cx="0" cy="-26" rx="13" ry="19"/>
+            <ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(72)"/>
+            <ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(144)"/>
+            <ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(216)"/>
+            <ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(288)"/>
+          </g>
+          <!-- 內瓣高光 -->
+          <g fill="rgba(230,227,245,0.55)">
+            <ellipse cx="0" cy="-24" rx="6" ry="10"/>
+            <ellipse cx="0" cy="-24" rx="6" ry="10" transform="rotate(72)"/>
+            <ellipse cx="0" cy="-24" rx="6" ry="10" transform="rotate(144)"/>
+            <ellipse cx="0" cy="-24" rx="6" ry="10" transform="rotate(216)"/>
+            <ellipse cx="0" cy="-24" rx="6" ry="10" transform="rotate(288)"/>
+          </g>
+          <!-- 金蕊 + 藍寶石心（眼眸藍） -->
+          <circle r="10" fill="#c9a44c"/>
+          <circle r="6.5" fill="#7ec3e8"/>
+          <circle r="6.5" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="1.2"/>
+          <circle cx="-2" cy="-2.5" r="1.8" fill="rgba(255,255,255,0.9)"/>
+        </g>
+      </g>
+    </svg>
+    <!-- 軌道星芒 -->
+    <div class="orbit"><span class="star">✦</span></div>
+    <div class="orbit o2"><span class="star">✦</span></div>
+    <!-- 紫藤花串 -->
+    <div id="wisteria">
+      <div class="bead"></div><div class="bead"></div><div class="bead"></div><div class="bead"></div><div class="bead"></div>
+    </div>
+  </div>
+
+  <div id="caption">
+    <div id="loadtext">LOADING<span class="dots"><span>.</span><span>.</span><span>.</span></span></div>
+    <div id="subtext">─ ✦ please wait a moment ✦ ─</div>
+    <div id="ribbon"><div class="gem"></div></div>
+  </div>
+
+  <div class="corner tl">◆ ◇ ◆</div>
+  <div class="corner br">◆ ◇ ◆</div>
+
+<script>
+(function () {
+  // 參數：?text=準備中 換主文字｜?sub=文字 換副標｜?bg=0 透明背景（疊在自己的直播背景上）
+  const qs = new URLSearchParams(location.search);
+  const text = (qs.get("text") || "").trim();
+  if (text) {
+    document.getElementById("loadtext").firstChild.textContent = text;
+  }
+  const sub = (qs.get("sub") || "").trim();
+  if (sub) document.getElementById("subtext").textContent = `─ ✦ ${sub} ✦ ─`;
+  if (qs.get("bg") === "0") document.body.classList.add("transparent");
+
+  // 飄落花瓣（隨機大小/速度/位置，數量固定 14 片，GPU 友善只動 transform/opacity）
+  for (let i = 0; i < 14; i++) {
+    const p = document.createElement("div");
+    p.className = "petal";
+    const s = 6 + Math.random() * 8;
+    p.style.width = s + "px";
+    p.style.height = s * 0.8 + "px";
+    p.style.left = Math.random() * 100 + "vw";
+    p.style.animationDuration = (7 + Math.random() * 8) + "s";
+    p.style.animationDelay = (-Math.random() * 14) + "s";
+    p.style.opacity = 0.4 + Math.random() * 0.5;
+    document.body.appendChild(p);
+  }
+})();
+</script>
+</body>
+</html>

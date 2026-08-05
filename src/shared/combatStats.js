@@ -24,7 +24,11 @@ const WEAPON_CONFIG = {
   mace_2h:  { mult: 4, isTwoHanded: true, stunChance: 8, stunDuration: 3 },
   axe_1h:   { mult: 3, armorBreak: 15, critBonus: 10 },
   axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15, critBonus: 20 },
-  dagger:   { mult: 3, baseStat: "agi", comboBonus: 20 },
+  // 匕首（2026-08-03 下季平衡，兩刀）：
+  //   mult 3→2：壓低單擊，價值集中到連擊身分。
+  //   comboBonus 20→10：真實玩家條件（隨機配點、AGI~20）下，這個不吃屬性的固定加成
+  //   是盜賊輸出 173% 的單一最大來源——攻擊次數是乘法結構，+20% 次數放大所有其他加成。
+  dagger:   { mult: 2, baseStat: "agi", comboBonus: 10 },
   staff_1h: { mult: 3, baseStat: "int", bypassDefPct: 15 },
   staff_2h: { mult: 4, baseStat: "int", isTwoHanded: true, bypassDefPct: 25 },
   bow:      { mult: 4, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
@@ -46,6 +50,9 @@ const WEAPON_CONFIG = {
     faceMultipliers: [0.5, 0.75, 1.0, 1.0, 1.25, 1.5],
     allMinMult: 0.5,
     allMaxMult: 2.5,
+    // 魔法傷害判定（使用者定案 2026-07-24）：骰子傷害視為魔法——常駐無視 25% DEF，
+    // 與雙手法杖同級（賭徒線本季封存中，此改動無現役玩家受影響）
+    bypassDefPct: 25,
   },
 };
 
@@ -74,8 +81,14 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   // 裝備加成
   const bonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
   for (const item of Object.values(equipped)) {
-    if (item?.equipStats) {
-      for (const [k, v] of Object.entries(item.equipStats)) {
+    // 職業徽章的屬性值隨徽章等級成長（Lv1~9 半量／Lv10~19 帳面值／Lv20 超越 1.5 倍）。
+    // 效果百分比（攻擊+50% 那些）不受等級影響，全程完整生效。見 shared/jobBadgeLevel.js。
+    let _stats = item?.equipStats;
+    if (_stats) {
+      try { _stats = require("./jobBadgeLevel").effectiveStatsForEntry(item) || _stats; } catch (_) { /* 模組缺失時用原值 */ }
+    }
+    if (_stats) {
+      for (const [k, v] of Object.entries(_stats)) {
         if (k in bonus) bonus[k] += (v || 0);
       }
     }
@@ -195,7 +208,10 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     luk: L,
 
     // 基礎數值
-    maxHp:    V * 15 + 50,
+    // G1（V0.5 生存地基・2026-08-01 賽季空窗實裝）：VIT×15+50 → VIT×25+200。
+    // 舊制 Lv50 標配血池 575 vs 終局王每回合承傷 546（差 14.4 倍不可能活滿 15 回合），
+    // 全設計反推見 docs/SEASON_NEXT_SURVIVAL_15R_DESIGN.md。
+    maxHp:    V * 25 + 200,
     atk,
     weaponMainStat: baseStatKey,       // 武器主屬性名稱(str/int/dex)
     weaponMainStatValue: baseStat,     // 武器主屬性數值(用於終傷後追加固定傷害)
@@ -211,8 +227,10 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     dodge:    Math.min(50, A * 0.5) + (cfg.dodgeBonus ?? 0) + tierSetBonuses.dodgePct,
     hit:      Math.min(100, 70 + D) + tierSetBonuses.hitPct, // 命中基礎維持 70+DEX；命中曲線改由 hitChance 常數(75→62)+各區迴避帶驅動，避免前期被砍過頭
     crit:     Math.min(100, L * 0.5 + (cfg.critBonus ?? 0)) + tierSetBonuses.critRatePct, // LUK 每點爆擊 0.3→0.5(V0.4 平衡:LUK 補值)
-    // 連擊率上限：非盜賊維持封頂 80%；盜賊徽章可突破 100%（由 AGI 驅動、不設上限）
-    combo:    hasRogueBadge ? (3 + A * 0.5 + (cfg.comboBonus ?? 0)) : Math.min(80, 3 + A * 0.5 + (cfg.comboBonus ?? 0)),
+    // 連擊率上限：全職業統一封頂 100%（2026-08-03）。
+    // 舊制是「非盜賊 80%、盜賊不設上限」——不設上限讓盜賊的攻擊次數隨 AGI 無限成長，
+    // 而攻擊次數是乘法結構（次數 ×2 → 爆擊/附魔/屬性的效益全部 ×2），高等時會失控。
+    combo:    Math.min(100, 3 + A * 0.5 + (cfg.comboBonus ?? 0)),
     comboDamageMultiplier: 1,
     tierSetBonuses,
     tierDamageMultiplier: 1 + tierSetBonuses.damagePct / 100,

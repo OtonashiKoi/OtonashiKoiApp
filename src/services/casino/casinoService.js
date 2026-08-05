@@ -11,7 +11,7 @@ const uniqueGrant = require("../uniqueGrant/uniqueGrantService");
 
 // 傳說錨點「命運之輪」— 每次下注結算都有機率抽中（不論輸贏），每人一生一次
 const DICE_JACKPOT_ITEM_ID = "s-legend-dice";
-const DICE_JACKPOT_CHANCE = 0.01; // 1% / 每位下注者每輪（不限中獎），抽中即該玩家唯一
+const DICE_JACKPOT_CHANCE = 0.03; // 3% / 每位下注者每輪（不限中獎），抽中即該玩家唯一（2026-08-04：1%→3%）
 
 // 對齊「整 60 秒」邊界，PM2 重啟也能對齊節奏
 function alignedNextStartAt(now = Date.now()) {

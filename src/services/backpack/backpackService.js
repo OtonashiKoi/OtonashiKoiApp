@@ -188,6 +188,28 @@ async function grantSlots(discordId, slots = SLOTS_PER_PURCHASE) {
   return { capacity: effectiveCap(tierCap, curBonus + newSeason), seasonSlots: newSeason, added: add, maxCapacity: MAX_CAPACITY };
 }
 
+/**
+ * 出戰前的「背包已滿」檢查（2026-07-25 起：滿了就不能戰鬥，取代舊的「掉落不撿」白白流失）。
+ * @param {string} discordId
+ * @param {Array}  [inventory] 呼叫端已有 progress.inventory 可直接傳入，省一次查詢。
+ * @returns {Promise<null | { count:number, cap:number, message:string }>} null＝未滿可出戰。
+ */
+async function checkBackpackFullForBattle(discordId, inventory = null) {
+  const eff = await resolveEffectiveCapacity(discordId);
+  let inv = inventory;
+  if (!Array.isArray(inv)) {
+    const prog = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
+    inv = prog?.inventory || [];
+  }
+  const count = countEquipment(inv);
+  if (count < eff.cap) return null;
+  return {
+    count,
+    cap: eff.cap,
+    message: `🎒 背包已滿（${count}/${eff.cap}），請先用「🧹 整理」分解或出售裝備再出戰！升級會員或購買格數也可擴充上限。`
+  };
+}
+
 module.exports = {
   CAPACITY_BY_TIER,
   NON_MEMBER_CAP,
@@ -198,6 +220,7 @@ module.exports = {
   effectiveCap,
   countEquipment,
   countsTowardCapacity,
+  checkBackpackFullForBattle,
   grantSlots,
   resolveCapacity,
   resolveEffectiveCapacity,

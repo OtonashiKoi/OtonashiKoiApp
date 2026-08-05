@@ -14,6 +14,29 @@ function compactLogText(value) {
   return `${text.slice(0, LOG_TEXT_LIMIT)}...`;
 }
 
+function resolveCommentService(wrapper, data) {
+  const explicit = String(data?.service || wrapper?.service || "").trim().toLowerCase();
+  if (explicit) return explicit;
+
+  const userId = String(data?.userId || "").trim().toLowerCase();
+  if (userId.startsWith("tw-") || userId.startsWith("twitch-")) return "twitch";
+  if (userId.startsWith("yt-") || userId.startsWith("youtube-") || userId.startsWith("uc")) return "youtube";
+  return "unknown";
+}
+
+function parseCommentTimestamp(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 1e12 ? value * 1000 : value;
+  }
+  const raw = String(value || "").trim();
+  if (!raw) return NaN;
+  if (/^\d+$/.test(raw)) {
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric)) return numeric < 1e12 ? numeric * 1000 : numeric;
+  }
+  return Date.parse(raw);
+}
+
 // OneComme meta 觀看數欄位名各平台/版本可能不同，容錯抓取
 function pickNumber(...vals) {
   for (const v of vals) {
@@ -35,10 +58,13 @@ function extractViewerInfo(o) {
   const service = o.type || svc.name || meta.service || null; // "twitch"/"youtube" 或 "#TWITCH"
   const id = svc.id || o.id || meta.id || null;
   // 平台判定：枠名(#TWITCH 等)不可靠，優先用直播枠 url 判 youtube / twitch
-  const url = String(svc.url || meta.url || o.url || "").toLowerCase();
+  // meta.url 通常是當場 YouTube watch?v=...；svc.url 則可能只是頻道首頁。
+  // 廣播開台通知時優先使用當場網址，同時保留其他網址作平台判定。
+  const liveUrl = String(meta.url || svc.url || o.url || "").trim();
+  const urlHint = `${liveUrl} ${String(svc.url || "")} ${String(o.url || "")}`.toLowerCase();
   let platform = null;
-  if (/youtube\.com|youtu\.be/.test(url)) platform = "youtube";
-  else if (/twitch\.tv/.test(url)) platform = "twitch";
+  if (/youtube\.com|youtu\.be/.test(urlHint)) platform = "youtube";
+  else if (/twitch\.tv/.test(urlHint)) platform = "twitch";
   if (!platform) {
     const hint = String(o.type || svc.name || "").toLowerCase();
     if (hint.indexOf("youtube") >= 0 || hint.indexOf("yt") >= 0) platform = "youtube";
@@ -46,9 +72,11 @@ function extractViewerInfo(o) {
   }
   // 直播標題：辨識「永久看板/打卡枠」(標題含 看板/打卡專用)，這種枠 isLive 可能永遠 true，不算真的開台
   const title = String(meta.title || svc.title || o.title || "").slice(0, 200);
+  // 開始時間(ms)：預約枠/待機室的 startTime 在未來，這種枠 isLive 會忽真忽假，不算真的開台
+  const startTime = pickNumber(meta.startTime, svc.startTime, o.startTime);
   // 有平台就保留(即使 Twitch 沒回同接數，也讓它帶 0 進來，overlay 才能常駐顯示)
   if (viewer == null && likes == null && !platform) return null;
-  return { service, platform, id, viewer, likes, isLive, title };
+  return { service, platform, id, url: liveUrl, viewer, likes, isLive, title, startTime };
 }
 
 // REST 輪詢：直接讀 OneComme /api/services（schema 已確認，比 WS meta 可靠）
@@ -104,17 +132,21 @@ function startFetcher(onComment, onMeta) {
         for (const c of comments) {
           const d = c.data;
           if (!d) continue;
-          const ts = Date.parse(d.timestamp || d.createdAt || "");
+          const ts = parseCommentTimestamp(d.timestamp || d.createdAt);
           const isHistory = payload.type !== "comments" && Number.isFinite(ts) && ts < connectedAt - 30_000;
+          const service = resolveCommentService(c, d);
 
           const comment = {
             id: d.id || "",
             name: d.displayName || d.name || "未知用戶",
             userId: d.userId || "",
             text: d.comment || "",
-            service: d.service || "unknown",
+            service,
             raw: {
               ...d,
+              service,
+              _onecommeServiceId: c.id || null,
+              _onecommeServiceName: c.name || null,
               _onecommeEventType: payload.type,
               _onecommeHistory: isHistory
             }
@@ -171,4 +203,10 @@ function startFetcher(onComment, onMeta) {
   });
 }
 
-module.exports = { startFetcher, startViewerPoller, pollServicesOnce };
+module.exports = {
+  startFetcher,
+  startViewerPoller,
+  pollServicesOnce,
+  resolveCommentService,
+  parseCommentTimestamp
+};

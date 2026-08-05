@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>直播警報</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;900&family=Cormorant+Garamond:ital,wght@1,500&family=Noto+Sans+TC:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  /* ── 斗內警報 + 會員入場動畫：白×薰衣草×金 角色風外框 ── */
+  :root {
+    --paper: rgba(249, 248, 253, 0.96);
+    --lav-2: #c9c3ea;
+    --lav-3: #9d93d8;
+    --wisteria: #7d6fc9;
+    --wisteria-deep: #5d4fae;
+    --gold: #c9a44c;
+    --gold-soft: #e3c987;
+    --ink: #3a3654;
+    --eye: #7ec3e8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent;
+    font-family: 'M PLUS Rounded 1c', 'Noto Sans TC', sans-serif; user-select: none; pointer-events: none; }
+  body.testbg { background: #24203a; }
+
+  #stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+
+  /* OBS(CEF) 殘影修正：近乎隱形的全幀動畫，強制瀏覽器來源每幀整幀重繪，
+     否則透明背景上的陰影/光暈動畫會留殘像 */
+  #repaint {
+    position: fixed; inset: 0; pointer-events: none; z-index: 99;
+    background: rgba(255, 255, 255, 0.002);
+    animation: repaintTick 0.5s steps(2) infinite;
+  }
+  @keyframes repaintTick { 50% { opacity: 0.4; } }
+
+  /* ── 警報卡（角色風外框：白底、金雙線、蕾絲虛線、四角◆、頂上小花、紫藤垂串）── */
+  #card {
+    position: relative;
+    width: min(460px, 92vw);
+    padding: 34px 30px 26px;
+    background: var(--paper);
+    border-radius: 16px;
+    box-shadow: 0 10px 36px rgba(93, 79, 174, 0.3), 0 0 0 1px rgba(157, 147, 216, 0.35);
+    opacity: 0; transform: scale(0.6) translateY(30px);
+    text-align: center;
+  }
+  #card.in { animation: cardin 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  #card.out { animation: cardout 0.45s ease-in both; }
+  @keyframes cardin  { from { opacity: 0; transform: scale(0.6) translateY(30px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  @keyframes cardout { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.85) translateY(-16px); } }
+
+  #card::before { content: ''; position: absolute; inset: 7px; border: 1.8px solid var(--gold); border-radius: 11px; pointer-events: none; }
+  #card::after  { content: ''; position: absolute; inset: 13px; border: 1px dashed var(--lav-2); border-radius: 8px; pointer-events: none; }
+  .cdia { position: absolute; width: 10px; height: 10px; transform: rotate(45deg);
+    background: linear-gradient(135deg, var(--lav-3), var(--wisteria-deep)); z-index: 2; }
+  .cdia.c1 { top: 2px; left: 2px; } .cdia.c2 { top: 2px; right: 2px; }
+  .cdia.c3 { bottom: 2px; left: 2px; } .cdia.c4 { bottom: 2px; right: 2px; }
+
+  /* 會員卡變體：外框轉紫、徽章變皇冠感 */
+  #card.member::before { border-color: var(--wisteria); }
+  #card.member .cdia { background: linear-gradient(135deg, var(--gold-soft), var(--gold)); }
+  /* 訂閱卡變體：眼眸藍 */
+  #card.sub::before { border-color: var(--eye); }
+  #card.sub .cdia { background: linear-gradient(135deg, #a8d8f0, var(--eye)); }
+  /* Raid 降落卡變體：深紫大陣仗 */
+  #card.raid::before { border-color: var(--wisteria-deep); border-width: 2.4px; }
+  #card.raid { box-shadow: 0 10px 40px rgba(93, 79, 174, 0.5), 0 0 26px rgba(125, 111, 201, 0.45), 0 0 0 1px rgba(157, 147, 216, 0.4); }
+
+  #emblem { position: absolute; top: -27px; left: 50%; transform: translateX(-50%);
+    width: 54px; height: 54px; z-index: 3;
+    filter: drop-shadow(0 3px 7px rgba(93, 79, 174, 0.4)); }
+
+  #wisteria { position: absolute; top: -6px; right: 30px; z-index: 3;
+    transform-origin: top center; animation: sway 4.5s ease-in-out infinite; }
+  @keyframes sway { 0%,100% { transform: rotate(-6deg); } 50% { transform: rotate(7deg); } }
+  #wisteria .bead { width: 10px; height: 13px; margin: 2px auto;
+    background: linear-gradient(160deg, var(--lav-3), var(--wisteria-deep));
+    border-radius: 50% 50% 55% 55%; }
+  #wisteria .bead:nth-child(2) { width: 8px; }
+  #wisteria .bead:nth-child(3) { width: 6px; height: 11px; }
+  #wisteria .bead:nth-child(4) { width: 4px; height: 9px; }
+
+  /* 類型徽章（金＝斗內 / 紫＝會員） */
+  #kind {
+    display: inline-block; margin-bottom: 12px;
+    font-size: 14px; font-weight: 900; letter-spacing: 4px; padding: 4px 24px;
+    background: linear-gradient(135deg, var(--gold-soft), var(--gold)); color: #3a2c08;
+    clip-path: polygon(11px 0%, 100% 0%, calc(100% - 11px) 100%, 0% 100%);
+  }
+  #card.member #kind { background: linear-gradient(135deg, var(--lav-3), var(--wisteria-deep)); color: #fff; }
+  #card.sub #kind { background: linear-gradient(135deg, #a8d8f0, var(--eye)); color: #123a52; }
+  #card.raid #kind { background: linear-gradient(135deg, var(--wisteria), #3f3480); color: #fff; }
+
+  #who {
+    font-size: 30px; font-weight: 900; color: var(--ink);
+    line-height: 1.3; word-break: break-word;
+    max-height: 2.6em; overflow: hidden;
+  }
+  #what {
+    margin-top: 8px;
+    font-size: 24px; font-weight: 900; letter-spacing: 1px;
+    background: linear-gradient(180deg, #b98e2e 10%, var(--gold) 55%, #8a6a1c 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  #card.member #what {
+    background: linear-gradient(180deg, var(--lav-3) 10%, var(--wisteria) 55%, var(--wisteria-deep) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  #card.sub #what {
+    background: linear-gradient(180deg, #6fb8de 10%, #4a97c4 55%, #2f7096 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  #card.raid #what {
+    background: linear-gradient(180deg, var(--wisteria) 10%, var(--wisteria-deep) 55%, #352b6e 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  #msg {
+    margin-top: 10px;
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 13px; letter-spacing: 3px; color: var(--lav-3);
+  }
+
+  /* 星芒爆發 */
+  .burst { position: absolute; left: 50%; top: 50%;
+    color: var(--gold); text-shadow: 0 0 8px currentColor;
+    animation: burst 1s ease-out both; z-index: 4; pointer-events: none; }
+  @keyframes burst {
+    from { opacity: 1; transform: translate(-50%, -50%) scale(0.4); }
+    to   { opacity: 0; transform: translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) scale(1.2) rotate(60deg); }
+  }
+</style>
+</head>
+<body>
+<div id="repaint"></div>
+<div id="stage">
+  <div id="card">
+    <div class="cdia c1"></div><div class="cdia c2"></div><div class="cdia c3"></div><div class="cdia c4"></div>
+    <svg id="emblem" viewBox="0 0 50 50">
+      <circle cx="25" cy="25" r="23" fill="rgba(249,248,253,0.97)" stroke="#c9a44c" stroke-width="1.4"/>
+      <circle cx="25" cy="25" r="19" fill="none" stroke="#c9c3ea" stroke-width="1" stroke-dasharray="2 5"/>
+      <g transform="translate(25 25)">
+        <g fill="#7d6fc9" stroke="#5d4fae" stroke-width="0.8">
+          <ellipse cx="0" cy="-8.5" rx="4.4" ry="6.4"/>
+          <ellipse cx="0" cy="-8.5" rx="4.4" ry="6.4" transform="rotate(72)"/>
+          <ellipse cx="0" cy="-8.5" rx="4.4" ry="6.4" transform="rotate(144)"/>
+          <ellipse cx="0" cy="-8.5" rx="4.4" ry="6.4" transform="rotate(216)"/>
+          <ellipse cx="0" cy="-8.5" rx="4.4" ry="6.4" transform="rotate(288)"/>
+        </g>
+        <circle r="3.6" fill="#c9a44c"/>
+        <circle r="2.3" fill="#7ec3e8"/>
+      </g>
+    </svg>
+    <div id="wisteria"><div class="bead"></div><div class="bead"></div><div class="bead"></div><div class="bead"></div></div>
+    <div><span id="kind">💎 DONATION</span></div>
+    <div id="who">—</div>
+    <div id="what">—</div>
+    <div id="msg">─ ✦ thank you so much ✦ ─</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // 參數：
+  //   ?types=donation,member  只播哪些類型（預設兩種都播；分開做兩個 OBS 來源就各帶一種）
+  //   ?hold=7                 每則停留秒數（3~20，預設 7）
+  //   ?minamount=0            斗內金額門檻（低於不彈）
+  //   ?demo=1                 示範模式：輪播假事件看樣式
+  //   ?bg=1                   測試深底
+  //   ?sound=0                關閉通知音效｜?vol=0.7 音量(0~1，預設 0.8)
+  const qs = new URLSearchParams(location.search);
+  if (qs.get("bg") === "1") document.body.classList.add("testbg");
+  const types = new Set(String(qs.get("types") || "donation,member,sub,raid,milestone").split(",").map((s) => s.trim()).filter(Boolean));
+  const holdMs = Math.max(3, Math.min(20, Number(qs.get("hold")) || 7)) * 1000;
+  const minAmount = Math.max(0, Number(qs.get("minamount")) || 0);
+  const demo = qs.get("demo") === "1";
+
+  const card = document.getElementById("card");
+  const kindEl = document.getElementById("kind");
+  const whoEl = document.getElementById("who");
+  const whatEl = document.getElementById("what");
+  const stage = document.getElementById("stage");
+
+  const queue = [];
+  let showing = false;
+
+  // 通知音效（使用者提供的 OGG；OBS 瀏覽器來源允許自動播放）
+  const soundOn = qs.get("sound") !== "0";
+  const soundVol = Math.max(0, Math.min(1, Number(qs.get("vol")) || 0.8));
+  function playNotify() {
+    if (!soundOn) return;
+    try {
+      const a = new Audio("/static/sfx/alert-notify.ogg");
+      a.volume = soundVol;
+      a.play().catch(() => {}); // 瀏覽器擋自動播放時靜默略過（OBS 不會擋）
+    } catch (_) {}
+  }
+
+  function burst() {
+    for (let i = 0; i < 14; i++) {
+      const s = document.createElement("div");
+      s.className = "burst";
+      s.textContent = i % 3 === 0 ? "✧" : "✦";
+      s.style.fontSize = 12 + Math.random() * 16 + "px";
+      s.style.color = i % 2 ? "#c9a44c" : "#9d93d8";
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 120 + Math.random() * 140;
+      s.style.setProperty("--bx", Math.cos(ang) * dist + "px");
+      s.style.setProperty("--by", Math.sin(ang) * dist + "px");
+      stage.appendChild(s);
+      setTimeout(() => s.remove(), 1100);
+    }
+  }
+
+  // 各類型卡面：徽章文字 / 主標 / 副標
+  const KINDS = {
+    donation:  (e) => ({ kind: "💎 DONATION",  who: e.name, what: `NT$ ${Number(e.amount).toLocaleString()}` }),
+    member:    (e) => ({ kind: "👑 WELCOME",   who: e.name, what: `${e.eventText || "加入會員"}${e.label ? "・" + e.label : ""}！` }),
+    sub:       (e) => ({ kind: "🔔 SUBSCRIBE", who: e.name, what: e.gift ? "贈送了訂閱！" : (e.months > 1 ? `續訂 ${e.months} 個月！` : "訂閱了頻道！") }),
+    raid:      (e) => ({ kind: "🛬 RAID",      who: e.name, what: `帶著 ${Number(e.viewers || 0).toLocaleString()} 位旅人降落！` }),
+    milestone: (e) => ({ kind: "🎉 MILESTONE", who: "頻道訂閱數", what: `突破 ${Number(e.milestone || e.count).toLocaleString()} 人！` }),
+  };
+
+  function show(evt) {
+    showing = true;
+    card.classList.remove("in", "out", "member", "sub", "raid");
+    if (evt.type === "member") card.classList.add("member");
+    if (evt.type === "sub") card.classList.add("sub");
+    if (evt.type === "raid" || evt.type === "milestone") card.classList.add("raid");
+    const view = (KINDS[evt.type] || KINDS.donation)(evt);
+    kindEl.textContent = view.kind;
+    whoEl.textContent = view.who;
+    whatEl.textContent = view.what;
+    void card.offsetWidth;
+    card.classList.add("in");
+    burst();
+    playNotify();
+    setTimeout(() => {
+      card.classList.remove("in");
+      card.classList.add("out");
+      setTimeout(() => { showing = false; pump(); }, 500);
+    }, holdMs);
+  }
+
+  function pump() {
+    if (showing) return;
+    const evt = queue.shift();
+    if (evt) show(evt);
+  }
+
+  function accept(evt) {
+    if (!types.has(evt.type)) return;
+    if (evt.type === "donation" && Number(evt.amount) < minAmount) return;
+    if (queue.length >= 12) return; // 保險：爆量時丟棄尾端，不無限堆
+    queue.push(evt);
+    pump();
+  }
+
+  // ── 輪詢增量事件（開頁先對時，之後只播新事件；連線失敗自動重試）──
+  let cursor = null;
+  async function poll() {
+    try {
+      const url = "/api/stream-overlay/feed" + (cursor ? "?since=" + encodeURIComponent(cursor) : "");
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.status !== "ok") return;
+      cursor = json.data.now;
+      for (const evt of json.data.events || []) accept(evt);
+    } catch (_) { /* 下一輪再試 */ }
+  }
+
+  if (demo) {
+    // 示範模式：不打 API，輪播假事件
+    const samples = [
+      { type: "donation", name: "音無鯉魚王", amount: 520 },
+      { type: "member", name: "夜空的星星", eventText: "加入會員", label: "鯉民" },
+      { type: "sub", name: "推しの旅人", months: 3 },
+      { type: "raid", name: "隔壁的勇者台", viewers: 87 },
+      { type: "member", name: "鯉魚衛隊長", eventText: "會員升級", label: "鯉市長" },
+      { type: "milestone", milestone: 1500, count: 1503 },
+    ];
+    let i = 0;
+    accept(samples[0]);
+    setInterval(() => { i = (i + 1) % samples.length; accept(samples[i]); }, holdMs + 2500);
+  } else {
+    poll();
+    setInterval(poll, 4000);
+  }
+})();
+</script>
+</body>
+</html>

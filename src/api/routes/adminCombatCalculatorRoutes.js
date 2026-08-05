@@ -311,7 +311,7 @@ function createAdminCombatCalculatorRoutes(serviceContext) {
             worldBossPhase: phase,
             isWorldBoss: worldBoss,
             zone,
-            bestiaryBonusPct: clamp(toNumber(body.bestiaryBonusPct), 0, 30),
+            bestiaryBonusPct: clamp(toNumber(body.bestiaryBonusPct), 0, 30),   // 上限留 30 容納兵聖知彼放大後的值
           }
         ));
       }

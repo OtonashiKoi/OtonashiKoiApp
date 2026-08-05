@@ -33,7 +33,7 @@ const JOBS = [
   ["一轉 劍士",     "job_swordsman_v1",      "sword_2h", "str"],
   ["一轉 戰士",     "job_warrior_v1",        "axe_2h",   "str"],
   ["一轉 矮人戰士", "job_dwarf_warrior_v1",  "mace_2h",  "str"],
-  ["一轉 盜賊",     "job_rogue_v1",          "dagger",   "agi"],
+  ["一轉 盜賊",     "job_rogue_v1",          "dagger",   "agi", { _dualDagger: true }],
   ["一轉 法師",     "job_mage_v1",           "staff_2h", "int"],
   ["一轉 治療師",   "job_healer_v1",         "staff_1h", "int"],
   ["一轉 弓箭手",   "job_archer_v1",         "bow",      "dex"],
@@ -50,6 +50,9 @@ const JOBS = [
     playerActiveEffects: [{ key: "atk_up", target: "self", trigger: "passive", chance: 100,
       params: { value: 25 }, duration: { mode: "battle", value: 1 }, appliedAt: 1, sourceType: "sim" }] }],
   ["二轉 矮人戰士長", "job_dwarflord_t2_v1",  "mace_2h",  "str"],
+  // 影舞者：連擊氣條（單場從 0 累氣,滿格→下回合固定5連擊）；影襲=每場開場7連擊(理想化:每場都有5連段可耗)
+  ["二轉 影舞者",     "job_shadowdancer_t2_v1", "dagger",  "agi", { _dualDagger: true }],
+  ["二轉 影舞者(影襲)", "job_shadowdancer_t2_v1", "dagger", "agi", { _dualDagger: true, shadowRushHits: 7 }],
 ];
 
 // 巨神震擊是**給全隊的免傷窗口**，不是矮人專屬 buff。
@@ -77,6 +80,11 @@ async function main() {
     eq.weapon = { ...weapon, itemId: weapon.id, itemName: weapon.name, uuid: "sim-weapon", enhanceLevel: 0 };
     // 雙手武器不可配副手/盾；單手武器統一不配（避免雙持讓某些職業佔便宜）
     delete eq.offhand; delete eq.shield;
+    // 例外：盜賊系配雙持匕首（線上 12 位盜賊全是雙持,單刀不是真實玩法;副手裝在 shield 槽）
+    if (extra._dualDagger) {
+      const off = await items.findOne({ weaponType: "offhand_dagger", tier: "A" });
+      if (off) eq.shield = { ...off, itemId: off.id, itemName: off.name, uuid: "sim-off", enhanceLevel: 0 };
+    }
     // 例外：聖劍士防禦姿態強制需要盾（後端會擋沒帶盾的請求）
     if (extra._shield) {
       const shield = await items.findOne({ equipSlot: "shield", tier: "A", weaponType: null });
@@ -98,7 +106,7 @@ async function main() {
     }
 
     const progress = { ...base, attributes: buildAttrs(mainStat), equipment: eq };
-    const { playerActiveEffects, _shield, ...restExtra } = extra;
+    const { playerActiveEffects, _shield, _dualDagger, ...restExtra } = extra;
     const baseOpts = { ...restExtra, ...(playerActiveEffects ? { playerActiveEffects } : {}) };
     const normal = sim.run(progress, { runs: RUNS, equipment: eq, extraOptions: baseOpts });
     // 巨神震擊窗口內：怪物整場不出手（全隊都吃得到）

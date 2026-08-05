@@ -1,0 +1,66 @@
+NB	STYLE	character	text	branch	SCENE	Character Art	VOICE	effect	BGM	other
+1	MONOLOGUE(獨白)	玩家	你開始覺得有人在跟著你。							
+2	MONOLOGUE(獨白)	玩家	不是感覺——是證據。你留在客棧的行李被翻過，但什麼都沒少，連順序都放回去了。							
+3	MONOLOGUE(獨白)	玩家	第三天，你在巷子裡故意繞了一圈想甩掉對方。							
+4	MONOLOGUE(獨白)	玩家	繞完之後，你回到原點，發現自己的徽章不在胸前。							
+5	MONOLOGUE(獨白)	玩家	它在巷子另一頭的牆上，被一根短刃釘著。							
+6	DIALOGUE(對話)	影七	你剛剛回頭三次。			影七				
+7	MONOLOGUE(獨白)	玩家	聲音從你背後傳來。你沒有聽到任何腳步聲。							
+8	DIALOGUE(對話)	你	——！							
+9	DIALOGUE(對話)	影七	太多了。			影七				
+10	DIALOGUE(對話)	影七	回頭一次是確認。第二次是不安。第三次的時候，你已經在告訴別人你怕什麼了。			影七				
+11	DIALOGUE(對話)	你	你是誰。							
+12	DIALOGUE(對話)	影七	影七。			影七				
+13	DIALOGUE(對話)	你	把徽章還我。							
+14	DIALOGUE(對話)	影七	我沒有拿走它。我只是把它放在你看得到的地方。			影七				
+15	MONOLOGUE(獨白)	玩家	他從牆上把短刃抽下來，徽章掉進你手裡。還是溫的。							
+16	DIALOGUE(對話)	你	你跟了我多久？							
+17	DIALOGUE(對話)	影七	從你開始發燙的那天。			影七				
+18	DIALOGUE(對話)	你	為什麼？							
+19	DIALOGUE(對話)	影七	因為那天它叫我來。			影七				
+20	DIALOGUE(對話)	你	徽章？							
+21	DIALOGUE(對話)	影七	……不知道。可能是。			影七				
+22	MONOLOGUE(獨白)	玩家	他說「不知道」的時候，第一次沒有立刻接下一句。							
+23	DIALOGUE(對話)	影七	你偷過東西嗎？			影七				
+24	DIALOGUE(對話)	你	……那要看你怎麼定義。							
+25	DIALOGUE(對話)	影七	好。那你算是懂了一半。			影七				
+26	DIALOGUE(對話)	影七	另一半是——你打算偷什麼。			影七				
+27	DIALOGUE(對話)	影七	有人偷東西。有人偷時間。有人偷的是別人身上他自己沒有的那個部分。			影七				
+28	DIALOGUE(對話)	影七	你要走哪一種，現在講。			影七				
+29	CHOICE(選項)		（你握著還溫著的徽章。）							選項：我要快到沒有人看得見我 → dancer ／ 選項：我要拿走他們身上我沒有的東西 → thief
+30	DIALOGUE(對話)	你	我要快到沒有人看得見我。	dancer						
+31	DIALOGUE(對話)	影七	那你要先學會不看自己。	dancer		影七				
+32	DIALOGUE(對話)	你	什麼意思？	dancer						
+33	DIALOGUE(對話)	影七	快的人不會確認自己有多快。一確認就慢了。	dancer		影七				
+34	MONOLOGUE(獨白)	玩家	他退進陰影裡。你看得見他站在那裡，但眼睛就是抓不住他的輪廓。	dancer						
+35	DIALOGUE(對話)	影七	來。抓我一次。	dancer		影七				
+36	BATTLE(戰鬥)	影七	⚔️ 戰鬥：影七　你朝那個位置出手——那裡已經沒有人了。	dancer						必勝(mustWin)
+37	MONOLOGUE(獨白)	玩家	你停下來，喘著。他從你左邊走出來，沒有一點聲音。	dancer						
+38	DIALOGUE(對話)	影七	三十七次。	dancer		影七				
+39	DIALOGUE(對話)	你	什麼？	dancer						
+40	DIALOGUE(對話)	影七	你這場出手三十七次，只有最後一次沒有先看我在哪。	dancer		影七				
+41	DIALOGUE(對話)	影七	那一次打中了。	dancer		影七				
+42	MONOLOGUE(獨白)	玩家	手裡的徽章燙起來，開始變形。	dancer						
+43	MONOLOGUE(獨白)	玩家	它變薄了，邊緣削出你不熟悉的弧度。	dancer						
+44	TRANSFER(轉職)		✨ 徽章進化：它靜下來的時候，輕得像沒有東西在你手上。	dancer						換發：job_shadowdancer_t2_v1　消耗一轉徽章＋變更登記費
+45	DIALOGUE(對話)	影七	拿好。它會比你先動，你要習慣。	dancer		影七				
+46	DIALOGUE(對話)	你	我要拿走他們身上我沒有的東西。	thief						
+47	MONOLOGUE(獨白)	玩家	影七沉默了比剛才更久。	thief						
+48	DIALOGUE(對話)	影七	……你知道那不是偷東西吧。	thief		影七				
+49	DIALOGUE(對話)	你	我知道。	thief						
+50	DIALOGUE(對話)	影七	那東西拿了不會還。	thief		影七				
+51	DIALOGUE(對話)	你	我知道。	thief						
+52	DIALOGUE(對話)	影七	好。	thief		影七				
+53	MONOLOGUE(獨白)	玩家	他把短刃收起來，第一次正面站到你面前。	thief						
+54	DIALOGUE(對話)	影七	那我不擋你。但我要先確認一件事。	thief		影七				
+55	DIALOGUE(對話)	影七	你拿得動嗎？	thief		影七				
+56	BATTLE(戰鬥)	影七	⚔️ 戰鬥：影七　他站在原地不動。「來拿。」	thief						必勝(mustWin)
+57	MONOLOGUE(獨白)	玩家	你收手。他低頭看了看自己的手臂，那裡有一道剛出現的痕跡。	thief						
+58	DIALOGUE(對話)	影七	……可以。	thief		影七				
+59	DIALOGUE(對話)	影七	你拿走了一點東西。我感覺得到。	thief		影七				
+60	MONOLOGUE(獨白)	玩家	手裡的徽章燙起來，開始變形。	thief						
+61	MONOLOGUE(獨白)	玩家	它變重了。重得不像原本的材質。	thief						
+62	TRANSFER(轉職)		✨ 徽章進化：它靜下來的時候，你說不出它是什麼做的。	thief						換發：job_spiritthief_t2_v1　消耗一轉徽章＋變更登記費
+63	DIALOGUE(對話)	影七	拿好。它以後會替你拿。	thief		影七				
+64	MONOLOGUE(獨白)	玩家	巷子還是那條巷子。牆上沒有刃痕，地上沒有腳印。							
+65	MONOLOGUE(獨白)	玩家	『職業變更已登錄。變更登記費已自動結算。』							

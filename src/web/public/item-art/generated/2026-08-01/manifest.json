@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-08-01",
+  "generator": "built-in imagegen",
+  "style": "polished retro pixel art RPG inventory icons, dark navy background, crisp silhouettes, no text",
+  "size": "256x256",
+  "items": [
+    { "id": "7cce6865-9993-4d74-a255-e108d2f38e08", "name": "木製骰子", "file": "dice-wood.png" },
+    { "id": "79eabe9f-e3c5-4b4a-b1a8-66770bf3549a", "name": "鐵製骰子", "file": "dice-iron.png" },
+    { "id": "5e8f9908-df30-4b6b-916c-078df884d96d", "name": "鋼製骰子", "file": "dice-steel.png" },
+    { "id": "c015029e-543f-43fc-9fa0-54d69a356ae3", "name": "秘銀骰子", "file": "dice-mithril.png" },
+    { "id": "fire-a-wpn-dice", "name": "焰紋骰子", "file": "dice-fire-a.png" },
+    { "id": "dragon-a-wpn-dice", "name": "亞龍骨骰", "file": "dice-dragon-a.png" },
+    { "id": "mithril-s-wpn-dice", "name": "真銀骰子", "file": "dice-true-silver.png" },
+    { "id": "fire-s-wpn-dice", "name": "獄焰・炎狼骰", "file": "dice-fire-wolf-s.png" },
+    { "id": "s-dragon-dice", "name": "幼龍骨骰", "file": "dice-dragon-bone-s.png" },
+    { "id": "job_gambler_v1", "name": "賭徒徽章", "file": "badge-gambler.png" },
+    { "id": "job_holyblade_t2_v1", "name": "聖劍士徽章", "file": "badge-holyblade.png" },
+    { "id": "job_swordoni_t2_v1", "name": "劍鬼徽章", "file": "badge-swordoni.png" },
+    { "id": "job_berserker_t2_v1", "name": "狂戰士徽章", "file": "badge-berserker.png" },
+    { "id": "job_dwarflord_t2_v1", "name": "矮人戰士長徽章", "file": "badge-dwarflord.png" },
+    { "id": "job_shadowdancer_t2_v1", "name": "影舞者徽章", "file": "badge-shadowdancer.png" },
+    { "id": "job_elementalist_t2_v1", "name": "元素師徽章", "file": "badge-elementalist.png" },
+    { "id": "job_spiritmaster_t2_v1", "name": "聖靈師徽章", "file": "badge-spiritmaster.png" },
+    { "id": "job_sniper_t2_v1", "name": "神射手徽章", "file": "badge-sniper.png" },
+    { "id": "job_sage_t2_v1", "name": "兵聖徽章", "file": "badge-sage.png" },
+    { "id": "job_minstrel_t2_v1", "name": "吟遊詩人徽章", "file": "badge-minstrel.png" },
+    { "id": "job_sanctum_t2_v1", "name": "聖域師徽章", "file": "badge-sanctum.png" },
+    { "id": "job_dicegod_t2_v1", "name": "賭神徽章", "file": "badge-dicegod.png" },
+    { "id": "job_spiritthief_t2_v1", "name": "盜靈徽章", "file": "badge-spiritthief.png" },
+    { "id": "chest-island-turtle", "name": "島島寶箱", "file": "chest-island-turtle.png" },
+    { "id": "monster-card-island-turtle", "name": "島島龜王卡", "file": "monster-card-island-turtle.png" }
+  ]
+}

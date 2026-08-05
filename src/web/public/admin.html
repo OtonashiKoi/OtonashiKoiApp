@@ -121,6 +121,7 @@
               <div class="nav-group-links">
                 <button class="nav-link" data-target="section-leaderboard">排行榜</button>
                 <button class="nav-link" data-target="section-stream-records">📺 直播記錄</button>
+                <button class="nav-link" data-target="section-wheel">🎡 直播轉盤</button>
                 <button class="nav-link" data-target="section-log">操作紀錄</button>
               </div>
             </div>
@@ -1128,6 +1129,18 @@
             </div>
           </section>
 
+          <section id="section-wheel" class="panel-section">
+            <div class="panel-block">
+              <div class="panel-block-head">
+                <div>
+                  <h2>🎡 直播轉盤</h2>
+                  <p class="hint">VTuber 抽選轉盤：內容存資料庫，OBS 瀏覽器來源直接嵌 overlay 網址。</p>
+                </div>
+              </div>
+              <div id="wheel-admin-root"><p class="hint">載入中…</p></div>
+            </div>
+          </section>
+
           <section id="section-stream-records" class="panel-section">
             <div class="card">
               <div class="section-head">
@@ -1212,7 +1225,22 @@
     <script src="/static/admin.casino.js?v=1"></script>
     <script src="/static/admin.story.js?v=76"></script>
     <script src="/static/admin.stream-records.js?v=4"></script>
+    <script src="/static/admin.wheel.js?v=1"></script>
     <script src="/static/admin.enchant.js?v=1"></script>
     <script src="/static/admin.maintenance.js?v=1"></script>
+    <script>
+      // 深連結：/admin#section-wheel 之類的 hash 直接開對應分頁（直播控制台的管理捷徑用）
+      (function () {
+        function openFromHash() {
+          const id = (location.hash || "").replace(/^#/, "");
+          if (!id.startsWith("section-")) return;
+          const btn = document.querySelector('.nav-link[data-target="' + id + '"]');
+          if (btn) btn.click();
+        }
+        window.addEventListener("hashchange", openFromHash);
+        // 等各模組掛完事件再開
+        window.addEventListener("load", () => setTimeout(openFromHash, 50));
+      })();
+    </script>
   </body>
 </html>

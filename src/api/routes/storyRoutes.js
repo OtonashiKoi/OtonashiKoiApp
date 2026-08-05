@@ -160,6 +160,18 @@ function createStoryRoutes(serviceContext, discordClient) {
     } catch (error) { next(error); }
   });
 
+  // ⚔️ 轉職節點：消耗一轉徽章＋金幣 → 換發二轉徽章（冪等，同一節點只會成功一次）
+  router.post("/api/story/transfer", requireAuth, async (req, res, next) => {
+    try {
+      const result = await storyService.transferJobAtNode(
+        req.playerRecord.discordId,
+        String(req.body?.chapterId || ""),
+        Number(req.body?.nodeIndex)
+      );
+      res.json(ok(result, "story job transfer"));
+    } catch (error) { next(error); }
+  });
+
   // ── 後台 ──
 
   router.use("/admin/story", (req, res, next) => {

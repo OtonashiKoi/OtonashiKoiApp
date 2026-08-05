@@ -121,6 +121,43 @@ function getElementMultiplier(attacker, defender, level = 0) {
   }
 }
 
+/** ── 七屬性抗性（V0.5 生存系統・2026-08-02 使用者定案）──
+ * 「火抗火、水抗水」：防具側**同屬性**濃度＝對該屬性怪物攻擊的抗性，**雙向**：
+ *   ‧ 濃度 0（沒準備對應屬性裝）→ 承傷加重 penaltyPct
+ *   ‧ 每級濃度 −perLevelPct，減免封頂 maxReducePct
+ * 無屬性怪不觸發（±0，舊內容完全不受影響）。
+ * 與「防具剋制減免」(getElementDamageReduction) 是兩套不同投資，可並存疊乘：
+ *   打火王 → 水石走相剋環減免、火石走同屬性抗性。
+ * ⚠️ 數值是保守初版，實際疼痛度用 balance-survival-matrix 調（機制先上、數字後調）。
+ */
+const SAME_ELEMENT_RESIST = {
+  penaltyPct: 0.15,     // 抗性 0%：承傷 ×1.15
+  perLevelPct: 0.05,    // 每級（每顆石）承傷 −5%（3 顆打平懲罰）
+  maxReducePct: 0.35,   // 減免封頂 −35%＝滿抗
+  fullLevel: 10,        // 滿抗所需濃度：10 級＝抗性 100%（每級＝+10% 抗性值，刻度與攻擊側一致）
+};
+
+/**
+ * 玩家對「這隻怪的屬性」的同屬性抗性。
+ * @param {object} equipped 目前裝備
+ * @param {string} monsterElement 怪物屬性；無屬性 → 不觸發（mult 1）
+ * @returns {{ level: number, pct: number, mult: number }}
+ *   pct  ＝ 抗性值 0~100（每級 +10%，10 級滿；給 UI/戰報顯示用的統一刻度）
+ *   mult ＝ 承傷倍率（>1 加重、<1 減輕）
+ */
+function getSameElementResist(equipped = {}, monsterElement = null) {
+  const el = normalizeElement(monsterElement);
+  if (!el) return { level: 0, pct: 0, mult: 1 };
+  const totals = _aggregateElementsMap(equipped, ARMOR_SLOTS);
+  // 抗性濃度不吃 MAX_ELEMENT_LEVEL 封頂（那是相剋用的），自己以 fullLevel 為滿
+  const level = Math.min(SAME_ELEMENT_RESIST.fullLevel, Math.max(0, Math.floor(Number(totals.get(el)) || 0)));
+  const pct = Math.round((level / SAME_ELEMENT_RESIST.fullLevel) * 100);
+  const raw = 1 + SAME_ELEMENT_RESIST.penaltyPct - level * SAME_ELEMENT_RESIST.perLevelPct;
+  // 修整浮點殘渣（0.9999…→1），避免「減輕 0%」的廢話提示與 !==1 誤判
+  const mult = Math.round(Math.max(1 - SAME_ELEMENT_RESIST.maxReducePct, raw) * 10000) / 10000;
+  return { level, pct, mult };
+}
+
 /**
  * 防具屬性帶來的「受傷減免」比例（0~1，0.4 = 減傷 40%）。
  * 依定案：只有「我方防具屬性剋制該怪屬性」才減免（與攻擊相剋對稱），
@@ -144,6 +181,10 @@ const ARMOR_SLOTS = [
   "head_top", "head_mid", "head_low", "armor", "garment", "shoes",
   "accessory_l", "accessory_r",
 ];
+// 可以鑲嵌屬性石的槽位＝戰鬥引擎會讀屬性的所有槽位（武器側＋防具側）。
+// 洞數一律由階級決定（D1/C2/B3/A4/S5），掉落時自帶的屬性算已填的洞。
+// 特殊槽（卡片 special/稱號/職業徽章/錨點）不在此列，不參與屬性系統。
+const ELEMENT_SOCKET_SLOTS = [...WEAPON_SLOTS, ...ARMOR_SLOTS];
 
 /** 同一組槽位裡，各屬性的濃度加總（跨裝備件），回傳 { water: 3, fire: 2, ... } */
 function _aggregateElementsMap(equipped, slots) {
@@ -232,12 +273,15 @@ module.exports = {
   ELEMENTS,
   PCT_PER_LEVEL,
   MAX_ELEMENT_LEVEL,
+  SAME_ELEMENT_RESIST,
+  getSameElementResist,
   normalizeElementLevel,
   getElementDamageReduction,
   resolveWeaponElement,
   resolveArmorElement,
   WEAPON_SLOTS,
   ARMOR_SLOTS,
+  ELEMENT_SOCKET_SLOTS,
   ELEMENT_LABELS,
   COUNTERS,
   MULT_NEUTRAL,

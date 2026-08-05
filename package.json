@@ -26,6 +26,7 @@
     "pm2:status": "npx pm2 status",
     "sync:npc-templates": "node scripts/sync-active-npc-to-templates.js",
     "fix:tier": "node scripts/backfill-tier-values.js",
+    "fix:golive-spam": "node scripts/cleanup-golive-spam.js --url=yVrTkWi3 --all --apply && node scripts/cleanup-golive-spam.js --apply",
     "home": "node scripts/launch-home.js",
     "auto-home": "node scripts/auto-home.js",
     "go-live": "node scripts/go-live.js",
@@ -44,6 +45,7 @@
   },
   "dependencies": {
     "cloudinary": "^2.9.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "discord.js": "^14.19.3",
     "dotenv": "^16.6.1",

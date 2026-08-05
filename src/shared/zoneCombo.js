@@ -17,31 +17,42 @@
 /** 計數上限（加成在 99 就吃滿，之後只是數字好看／給日後內容用） */
 const COMBO_COUNT_MAX = 999;
 
-/** 加成吃滿的門檻 */
-const COMBO_BUFF_MAX_AT = 99;
+/** 加成吃滿的門檻（2026-07-22 使用者定案：30 段封頂；計數本身仍可累到 999） */
+const COMBO_BUFF_MAX_AT = 30;
 
 /** 多久沒打就斷（與靈氣一致） */
 const COMBO_IDLE_MS = 10 * 60 * 1000;
 
-/** 「斬」可施放的最低連段 */
-const BURST_MIN_COMBO = 30;
-
-/** 「斬」的倍率係數：普通攻擊 ×(1 + COMBO×係數)。99 段約 ×10.9 */
+/** 斬（2026-07-22 改版）：不再手動消耗連段，改為戰鬥內「氣力 3 格自動施放」（見 combatLoop）。
+ *  倍率＝1 + 0.1 × min(當前連段, 30) → 連段決定斬多痛、氣力決定何時斬。 */
+const ONI_GAUGE_MAX = 3;
+const BURST_MIN_COMBO = 30;        // 舊制殘留：僅供舊客戶端相容檢查
 const BURST_MULT_PER_COMBO = 0.1;
+
+/** 斬的倍率：吃「當前連段」，30 段封頂 ×4 */
+function oniBurstMult(comboCount) {
+  return 1 + BURST_MULT_PER_COMBO * Math.max(0, Math.min(COMBO_BUFF_MAX_AT, Number(comboCount) || 0));
+}
 
 /**
  * 階梯：兩輪制——第一輪四個屬性各給一半，第二輪補滿。
  * 同一個 key 出現多次時取「已達成的最高階」，不是累加。
  */
+// 2026-07-22 改版：舊階梯 5~99 太慢熱（第一口甜頭要 5 場、45 段以後多數玩家沒體驗過）。
+// 新階梯 1~30：第 1 場就有感、30 場吃滿；吸血放壓軸（滿段獎勵——
+// 狂戰士教訓：吸血在打不死你的場合是死詞條，放前面沒意義）。
+// 數值經穩態掃描定案（連段30滿・世界王實測）：本組＝41.5k，
+// 比第二名影舞者(33.5k)高一檔——ramp 職業付出 30 場爬坡＋高陣亡的代價，峰值理應最高；
+// 初版(30/25/30/15)會到 54k 全表翻倍 → 砍到本組。斬保留 ×4（爽感核心不動）。
 const COMBO_TIERS = [
+  { at: 1,  key: "atk_up",         value: 10, label: "攻擊力 +10%" },
+  { at: 3,  key: "crit_rate_up",   value: 10, label: "爆擊率 +10" },
   { at: 5,  key: "atk_up",         value: 15, label: "攻擊力 +15%" },
-  { at: 10, key: "lifesteal",      value: 7,  label: "吸血 +7%" },
-  { at: 20, key: "crit_rate_up",   value: 15, label: "爆擊率 +15" },
-  { at: 30, key: "crit_damage_up", value: 15, label: "爆擊傷害 +15%" },
-  { at: 45, key: "atk_up",         value: 30, label: "攻擊力 +30%（滿）" },
-  { at: 60, key: "lifesteal",      value: 15, label: "吸血 +15%（滿）" },
-  { at: 80, key: "crit_rate_up",   value: 30, label: "爆擊率 +30（滿）" },
-  { at: 99, key: "crit_damage_up", value: 30, label: "爆擊傷害 +30%（滿）" },
+  { at: 10, key: "crit_damage_up", value: 10, label: "爆擊傷害 +10%" },
+  { at: 15, key: "atk_up",         value: 20, label: "攻擊力 +20%（滿）" },
+  { at: 20, key: "crit_rate_up",   value: 15, label: "爆擊率 +15（滿）" },
+  { at: 25, key: "crit_damage_up", value: 20, label: "爆擊傷害 +20%（滿）" },
+  { at: 30, key: "lifesteal",      value: 10, label: "吸血 +10%（滿段獎勵）" },
 ];
 
 /** 哪些二轉徽章吃 COMBO 加成（之後有別的職業要吃就加進來） */
@@ -76,9 +87,10 @@ function readCombo(progress, zone, now = Date.now()) {
  * @param {number} now
  */
 function nextCombo(current, zone, outcome, now = Date.now(), opts = {}) {
-  const { hasDeathGuard = false, diedOnce = false, consumed = false } = opts;
+  const { hasDeathGuard = false, diedOnce = false, consumed = false, spend = 0 } = opts;
   const died = String(outcome || "") === "lose";
-  const cur = Math.max(0, Number(current) || 0);
+  // spend：固定扣點（影舞者「影襲」耗 5 點；與劍鬼「斬」的 consumed=全部消耗 不同）
+  const cur = Math.max(0, (Number(current) || 0) - Math.max(0, Number(spend) || 0));
 
   // 「斬」已消耗掉全部連段 → 這場結束直接歸零（沒死的話下一場從 0 重新累）
   if (consumed) {
@@ -95,9 +107,17 @@ function nextCombo(current, zone, outcome, now = Date.now(), opts = {}) {
     };
   }
 
-  // 陣亡。劍鬼的「不屈」：第一次只減半，連續第二次才歸零。
-  if (hasDeathGuard && !diedOnce) {
-    return { zone: String(zone || ""), count: Math.floor(cur / 2), updatedAt: now, diedOnce: true };
+  // 陣亡。劍鬼的「死鬥」（2026-07-22 使用者定案 A 案）：**打完就 +1，不論生死**——
+  // 被王打死是修羅的修行。只有換區/10 分鐘閒置歸零。
+  // （「死了只保留不+1」的版本在世界王陣亡率 99% 下連段永遠卡 0~2，
+  //   滿檔 41.8k 只存在理論上；改成陣亡也+1 後世界王 30 場約 8 分鐘爬滿。）
+  if (hasDeathGuard) {
+    return {
+      zone: String(zone || ""),
+      count: Math.min(COMBO_COUNT_MAX, cur + 1),
+      updatedAt: now,
+      diedOnce: false,
+    };
   }
   return { zone: String(zone || ""), count: 0, updatedAt: now, diedOnce: false };
 }
@@ -168,6 +188,8 @@ function nextMilestone(count) {
 }
 
 module.exports = {
+  ONI_GAUGE_MAX,
+  oniBurstMult,
   COMBO_COUNT_MAX,
   BURST_MIN_COMBO,
   BURST_MULT_PER_COMBO,

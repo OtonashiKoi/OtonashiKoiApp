@@ -132,6 +132,23 @@ function createSoloBossRoutes(serviceContext) {
 
       const progress = await repo.findByPlayerId(discordId);
       if (!progress) return res.status(404).json(fail("PLAYER_NOT_FOUND", "找不到玩家進度"));
+
+      // 背包已滿 → 不能出戰（在收入場費之前擋下）
+      {
+        const bagFull = await require("../../services/backpack/backpackService")
+          .checkBackpackFullForBattle(discordId, progress.inventory).catch(() => null);
+        if (bagFull) {
+          return res.status(409).json({ status: "error", code: "bag_full", message: bagFull.message });
+        }
+      }
+
+      // 續航偵測：與 DC／一般討伐共用同一份連續遊玩計時，避免換入口繞過驗證
+      {
+        const humanCheck = require("../../services/humanCheck/humanCheckService");
+        const gate = await humanCheck.guard(discordId);
+        if (!gate.ok) return res.status(429).json(humanCheck.webPayload(gate));
+      }
+
       const st = readState(progress, boss);
       if (st.killsToday >= boss.killsPerDay) {
         return res.status(400).json(fail("NO_KILLS", `今日已擊敗 ${boss.killsPerDay} 隻${boss.monsterName}，明天再來！`));
@@ -180,6 +197,39 @@ function createSoloBossRoutes(serviceContext) {
         return res.status(stanceErr.statusCode || 400).json({ status: "error", message: stanceErr.message });
       }
 
+      // 連擊氣條（影舞者）：單人王＝世界王簡化版,氣條照累、滿格照觸發；
+      // 影襲不開放（它消耗「區域連段」,單人王沒有連段計數）
+      const _sg = require("../../shared/shadowGauge");
+      const shadowOn = _sg.hasGauge(equipped?.job_eq);
+      const shadowGridsBefore = shadowOn ? _sg.read(progress, boss.zone) : 0;
+      // 氣力格（劍鬼）：與網頁共用同一份狀態（同區跨場沿用）
+      const _og = require("../../shared/oniGauge");
+      const oniOn = _og.hasGauge(equipped?.job_eq);
+      const oniGridsBefore = oniOn ? _og.read(progress, boss.zone) : 0;
+      // 日之精靈（聖靈師）：跨場沿用
+      const _ssp = require("../../shared/sunSpirit");
+      const spiritOn = _ssp.hasSpirit(equipped?.job_eq);
+      const spiritPctBefore = spiritOn ? _ssp.read(progress, boss.zone) : 0;
+      // 震盪值（神射手）：跨場沿用（單人王沒有掩護射擊——沒有隊友可掩護）
+      const _sng = require("../../shared/sniperGauge");
+      const sniperOn = _sng.hasGauge(equipped?.job_eq);
+      const sniperGridsBefore = sniperOn ? _sng.read(progress, boss.zone) : 0;
+      // 命運骰＋手氣（賭神）
+      const _dgg = require("../../shared/diceGauge");
+      const diceGodOn = _dgg.hasGauge(equipped?.job_eq);
+      const diceGridsBefore = diceGodOn ? _dgg.read(progress, boss.zone) : 0;
+      const diceLuckBefore = diceGodOn ? _dgg.readLuck(progress) : 0;
+      // 計謀值（兵聖）：跨場沿用
+      const _sag = require("../../shared/sageGauge");
+      const sageOn = _sag.hasGauge(equipped?.job_eq);
+      const sageGridsBefore = sageOn ? _sag.read(progress, boss.zone) : 0;
+      // 演奏判定（吟遊詩人）
+      const _bs = require("../../shared/bardSong");
+      const bardOn = _bs.hasSong(equipped?.job_eq);
+      const bardResult = bardOn
+        ? _bs.scorePerformance(progress?.bardScore || null, req.body?.bardInput || null, _bs.readStreak(progress, boss.zone))
+        : null;
+
       // 戰意集氣＋血祭（狂戰士，同 quick-battle；單人王也是「打一次怪」）
       const _bg = require("../../shared/berserkGauge");
       const _ja = require("../../shared/jobAdvancement");
@@ -203,10 +253,24 @@ function createSoloBossRoutes(serviceContext) {
       const stunStateBefore = await _dsg.read(stunGaugeKey, boss.zone).catch(() => null);
       const teamStunOn = Boolean(stunStateBefore?.stunned);
 
+      // ── 區域冰凍值（元素師・凍霜）── 單人王每人自己一條；與暈眩條完全分開
+      const _zfg = require("../../shared/zoneFreezeGauge");
+      const freezeGaugeKey = _zfg.gaugeKeyForSolo(discordId, boss.key);
+      const freezeStateBefore = await _zfg.read(freezeGaugeKey, boss.zone).catch(() => null);
+      const zoneFrozenOn = Boolean(freezeStateBefore?.frozen);
+
+      // ── 區域聖域值（聖域師）── 單人王每人自己一條；窗口內出戰受傷減半＋每回合回血
+      const _scg = require("../../shared/sanctumGauge");
+      const sanctumGaugeKey = _scg.gaugeKeyForSolo(discordId, boss.key);
+      const sanctumStateBefore = await _scg.read(sanctumGaugeKey, boss.zone).catch(() => null);
+      const zoneSanctumOn = Boolean(sanctumStateBefore?.sanctum);
+      const _SANCTUM_DEF = require("../../shared/jobAdvancement").getSanctum({ itemId: "job_sanctum_t2_v1" });
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const r = runCombatLoop(pStats, battleMonsterStats, monster.name, Math.max(1, partHpNow), undefined, {
         stance: battleStanceKey,
-        teamStunRounds: teamStunOn ? 999 : 0,
+        teamStunRounds: (teamStunOn || zoneFrozenOn) ? 999 : 0,
+        teamStunStyle: (!teamStunOn && zoneFrozenOn) ? "freeze" : undefined,
         monsterEquipped: battleMonsterEquipped, playerLevel: progress.level, monsterLevel: battleMonsterStats.level,
         equipped, inventory: progress.inventory || [],
         playerActiveEffects: [...(progress.activeEffects || []), ...berserkEffects],
@@ -214,7 +278,73 @@ function createSoloBossRoutes(serviceContext) {
         sacrificeHpCostPct: sacrificeOn ? sacrificeCfg.hpCostPct : 0,
         sacrificeAtkUpPct: sacrificeOn ? sacrificeCfg.atkUpPct : 0,
         warGaugeCritBonus: gaugeFull ? gaugeCfg.critRateBonus : 0,
+        shadowGaugeGrids: shadowGridsBefore, // 連擊氣條（影舞者）
+        oniGaugeGrids: oniGridsBefore,       // 氣力格（劍鬼）
+        sunSpiritHpPct: spiritOn ? spiritPctBefore : undefined, // 日之精靈（聖靈師）
+        sniperGaugeGrids: sniperGridsBefore, // 震盪值（神射手）
+        sageGaugeGrids: sageGridsBefore,     // 計謀值（兵聖）
+        diceGaugeGrids: diceGridsBefore,     // 命運骰（賭神）
+        diceLuckStacks: diceLuckBefore,      // 手氣正旺（賭神）
+        bardDamageMult: bardResult?.dmgMult, // 演奏判定（吟遊詩人）
+        bardChordPct: bardResult?.chordPct,
+        bardPerformNote: bardResult?.note,
+        // 聖域窗口（聖域師）：本場受傷減免＋每回合回血
+        sanctuaryCutPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumDamageCutPct) || 50) : 0,
+        sanctuaryHealPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumHealPct) || 3) : 0,
       });
+      // 連擊氣條（影舞者）：戰後氣量落地
+      if (shadowOn) {
+        const _nextShadow = _sg.next(r?.shadowGauge ?? shadowGridsBefore, boss.zone);
+        progress.shadowGauge = _nextShadow;
+        await serviceContext.progressRepository.updateFields(discordId, { shadowGauge: _nextShadow }).catch(() => {});
+      }
+      // 氣力格（劍鬼）：戰後氣量落地
+      if (oniOn) {
+        const _nextOni = _og.next(r?.oniGauge ?? oniGridsBefore, boss.zone);
+        progress.oniGauge = _nextOni;
+        await serviceContext.progressRepository.updateFields(discordId, { oniGauge: _nextOni }).catch(() => {});
+      }
+      // 日之精靈（聖靈師）：戰後血量落地
+      if (spiritOn) {
+        const _nextSpirit = _ssp.next(r?.sunSpirit?.hpPct ?? spiritPctBefore, boss.zone);
+        progress.sunSpirit = _nextSpirit;
+        await serviceContext.progressRepository.updateFields(discordId, { sunSpirit: _nextSpirit }).catch(() => {});
+      }
+      // 震盪值（神射手）：戰後格數落地
+      if (sniperOn) {
+        const _nextSniper = _sng.next(r?.sniperGauge ?? sniperGridsBefore, boss.zone);
+        progress.sniperGauge = _nextSniper;
+        await serviceContext.progressRepository.updateFields(discordId, { sniperGauge: _nextSniper }).catch(() => {});
+      }
+      // 計謀值（兵聖）：戰後格數落地
+      if (sageOn) {
+        const _nextSage = _sag.next(r?.sageGauge ?? sageGridsBefore, boss.zone);
+        progress.sageGauge = _nextSage;
+        await serviceContext.progressRepository.updateFields(discordId, { sageGauge: _nextSage }).catch(() => {});
+      }
+      // 命運骰＋手氣（賭神）：戰後格數與手氣層落地
+      if (diceGodOn) {
+        const _nextDice = _dgg.next(r?.diceGauge ?? diceGridsBefore, boss.zone);
+        const _nextLuck = _dgg.nextLuck(r?.diceLuck ?? diceLuckBefore);
+        progress.diceGauge = _nextDice;
+        progress.diceLuck = _nextLuck;
+        await serviceContext.progressRepository.updateFields(discordId, { diceGauge: _nextDice, diceLuck: _nextLuck }).catch(() => {});
+      }
+      // 演奏判定（吟遊詩人）：連奏落地＋出下一題（陣亡＝連奏歸零；難度依戰後連奏）
+      if (bardOn) {
+        const _bardDied = r?.outcome === "lose";
+        const _bardStreakAfter = _bardDied ? 0 : (bardResult?.streak || 0);
+        // 難度階梯：完美→照連奏爬升；沒全對→降一級（困難→普通→簡單）；陣亡/換區/閒置→回簡單
+        const _lvBefore = _bs.readLevel(progress, boss.zone);
+        const _lvAfter = _bardDied
+          ? 0
+          : (_bardStreakAfter > 0 ? Math.max(_lvBefore, _bs.levelFromStreak(_bardStreakAfter)) : Math.max(0, _lvBefore - 1));
+        const _nextStreak = _bs.nextStreak(_bardStreakAfter, boss.zone, _lvAfter);
+        const _nextChallenge = _bs.newChallenge(_lvAfter);
+        progress.bardStreak = _nextStreak;
+        progress.bardScore = _nextChallenge;
+        await serviceContext.progressRepository.updateFields(discordId, { bardStreak: _nextStreak, bardScore: _nextChallenge }).catch(() => {});
+      }
       // 戰後存氣（updateFields 只動這個欄位）
       if (gaugeCfg) {
         const _nextGauge = _bg.next(gaugeBefore, gaugeCfg, { consumed: gaugeFull });
@@ -223,6 +353,21 @@ function createSoloBossRoutes(serviceContext) {
       }
       const newPartHp = Math.max(0, Number(r.finalMonsterHp) || 0);
       const partsHp = { ...st.worldBossPartsHp, [part]: newPartHp };
+      // ── 炎圈（元素師）：單人王也是「所有部位一起受傷」── 其他尚存部位鏡射炎圈總傷
+      let fcMirrorTotal = 0;
+      {
+        const _fcDmg = Math.max(0, Math.round(Number(r?.combatStats?.fireCircleDamage) || 0));
+        if (_fcDmg > 0) {
+          for (const _pk of Object.keys(partsHp)) {
+            if (_pk === part) continue;
+            const _cur = Math.max(0, Number(partsHp[_pk] || 0));
+            if (_cur <= 0) continue;
+            const _dealt = Math.min(_cur, _fcDmg);
+            partsHp[_pk] = _cur - _dealt;
+            fcMirrorTotal += _dealt;
+          }
+        }
+      }
       const partBroken = newPartHp <= 0 && partHpNow > 0;
       const allDefeated = isWorldBossAllPartsDefeated(partsHp);
 
@@ -239,6 +384,32 @@ function createSoloBossRoutes(serviceContext) {
           rewardLines.push(`⛰️ **巨神震擊**！**${monster.name}** 應聲倒地——接下來 ${Math.round(_dsg.STUN_WINDOW_MS / 1000)} 秒出戰全程免傷！`);
         } else if (stunKnock?.knocked > 0) {
           rewardLines.push(`🔨 暈眩值 +${stunKnock.knocked}（${stunKnock.gauge} / ${stunKnock.threshold}）`);
+        }
+      }
+      // 炎圈鏡射戰報行＋累積冰凍值（元素師・凍霜姿態；不廣播）
+      if (fcMirrorTotal > 0) {
+        rewardLines.push(`🔥 **炎圈**延燒全身——其他部位共受到 **${fcMirrorTotal.toLocaleString()}** 點灼燒！`);
+      }
+      let freezeKnock = null;
+      if (_zfg.canKnock(equipped?.job_eq) && battleStanceKey === "frost") {
+        // 累積量＝戰鬥回合數（不論命中）
+        freezeKnock = await _zfg
+          .knock(freezeGaugeKey, boss.zone, Math.max(0, (Number(r?.nextRound) || 1) - 1), displayName || "")
+          .catch(() => null);
+        if (freezeKnock?.triggered) {
+          rewardLines.push(`🧊 **區域冰封**！**${monster.name}** 被凍結——接下來 ${Math.round(_zfg.FREEZE_WINDOW_MS / 1000)} 秒出戰全程免傷！`);
+        } else if (freezeKnock?.knocked > 0) {
+          rewardLines.push(`❄️ 冰凍值 +${freezeKnock.knocked}（${freezeKnock.gauge} / ${freezeKnock.threshold}）`);
+        }
+      }
+      // ── 累積區域聖域值（只有聖域師）── 每場 +1；不廣播
+      let sanctumKnock = null;
+      if (_scg.canKnock(equipped?.job_eq)) {
+        sanctumKnock = await _scg.knock(sanctumGaugeKey, boss.zone, 1, displayName || "").catch(() => null);
+        if (sanctumKnock?.triggered) {
+          rewardLines.push(`🏛️ **聖域展開**！聖光籠罩戰場——${Math.round(_scg.SANCTUM_WINDOW_MS / 1000)} 秒內出戰受傷減半、每回合回血！`);
+        } else if (sanctumKnock?.knocked > 0) {
+          rewardLines.push(`✨ 聖域值 +${sanctumKnock.knocked}（${sanctumKnock.gauge} / ${sanctumKnock.threshold}）`);
         }
       }
       let killsToday = st.killsToday;
@@ -365,6 +536,23 @@ function createSoloBossRoutes(serviceContext) {
         soloBoss: { key: boss.key, killsToday, killsLeft, killedFull: allDefeated, chestGranted: allDefeated },
         // 戰意集氣（狂戰士）：戰後最新氣量；非狂戰士回 null
         berserkGauge: gaugeCfg ? { ..._bg.view(progress, gaugeCfg), unleashed: gaugeFull, sacrificed: sacrificeOn } : null,
+        // 連擊氣條（影舞者）：戰後氣量
+        shadowGauge: shadowOn ? _sg.view(r?.shadowGauge ?? shadowGridsBefore) : null,
+        // 氣力格（劍鬼）：戰後氣量
+        oniGauge: oniOn ? _og.view(r?.oniGauge ?? oniGridsBefore) : null,
+        // 日之精靈（聖靈師）：戰後精靈血量
+        sunSpirit: spiritOn ? (r?.sunSpirit || null) : null,
+        // 震盪值（神射手）：戰後格數
+        sniperGauge: sniperOn ? _sng.view(r?.sniperGauge ?? sniperGridsBefore) : null,
+        diceGauge: diceGodOn ? _dgg.view(r?.diceGauge ?? diceGridsBefore, r?.diceLuck ?? diceLuckBefore) : null,
+        // 計謀值（兵聖）：戰後格數
+        sageGauge: sageOn ? _sag.view(r?.sageGauge ?? sageGridsBefore) : null,
+        // 演奏判定（吟遊詩人）：下一題＋演奏結果
+        bardSong: bardOn ? {
+          ..._bs.viewChallenge(progress.bardScore),
+          streak: bardResult?.streak || 0,
+          last: bardResult?.played ? { correct: bardResult.correct, wrong: bardResult.wrong, perfect: bardResult.perfect, mult: bardResult.dmgMult } : null,
+        } : null,
         // 暈眩條（矮人戰士長）：戰後最新狀態＋本場是否吃到免傷
         bossStun: {
           ..._dsg.view(await _dsg.read(stunGaugeKey, boss.zone).catch(() => null)),
@@ -372,6 +560,22 @@ function createSoloBossRoutes(serviceContext) {
           knocked: stunKnock?.knocked || 0,
           triggeredByMe: Boolean(stunKnock?.triggered),
           canKnock: _dsg.canKnock(equipped?.job_eq),
+        },
+        // 區域冰凍值（元素師・凍霜）：單人王每人自己一條
+        zoneFreeze: {
+          ..._zfg.view(await _zfg.read(freezeGaugeKey, boss.zone).catch(() => null)),
+          immune: zoneFrozenOn,
+          knocked: freezeKnock?.knocked || 0,
+          triggeredByMe: Boolean(freezeKnock?.triggered),
+          canKnock: _zfg.canKnock(equipped?.job_eq),
+        },
+        // 區域聖域值（聖域師）：單人王每人自己一條
+        zoneSanctum: {
+          ..._scg.view(await _scg.read(sanctumGaugeKey, boss.zone).catch(() => null)),
+          active: zoneSanctumOn,
+          knocked: sanctumKnock?.knocked || 0,
+          triggeredByMe: Boolean(sanctumKnock?.triggered),
+          canKnock: _scg.canKnock(equipped?.job_eq),
         },
       }));
     } catch (err) {

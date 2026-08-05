@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎛️ 直播控制台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;900&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  /* ── 直播控制台：深色控制室（第二螢幕友善），星穹藍+金 ── */
+  :root {
+    --bg: #0c1024;
+    --panel: rgba(16, 24, 52, 0.85);
+    --line: rgba(140, 185, 255, 0.22);
+    --txt: #dce6ff;
+    --muted: #8494c0;
+    --gold: #f0c873;
+    --green: #50fa7b;
+    --red: #ff5577;
+    --lav: #9d93d8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--txt);
+    font-family: 'M PLUS Rounded 1c', 'Noto Sans TC', sans-serif;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  h1 { font-size: 18px; letter-spacing: 3px; margin-bottom: 12px; color: var(--gold); }
+  h2 { font-size: 13px; letter-spacing: 2px; color: var(--muted); margin: 0 0 10px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; max-width: 1200px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 2px solid rgba(140, 185, 255, 0.45);
+    padding: 14px 16px;
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  }
+
+  /* 數據卡 */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+  .stat {
+    background: rgba(8, 12, 28, 0.6); padding: 10px 12px; border: 1px solid var(--line);
+  }
+  .stat .k { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+  .stat .v { font-size: 24px; font-weight: 900; margin-top: 2px; }
+  .stat .v.live { color: var(--green); }
+  .stat .v.off { color: var(--muted); }
+  .stat .v.gold { color: var(--gold); }
+  .stat .sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* 世界王血條 */
+  .wb { margin-top: 8px; }
+  .wb .row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+  .wb .bar { height: 8px; background: rgba(8,12,28,0.8); border: 1px solid var(--line); }
+  .wb .bar > div { height: 100%; background: linear-gradient(90deg, #ff5577, #ff8a4a); transition: width 0.5s; }
+
+  /* 按鈕 */
+  button {
+    font-family: inherit; font-size: 13px; font-weight: 700;
+    color: var(--txt); background: rgba(30, 45, 90, 0.8);
+    border: 1px solid var(--line); padding: 9px 14px;
+    cursor: pointer; letter-spacing: 1px;
+    clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+    transition: background 0.15s;
+  }
+  button:hover { background: rgba(50, 70, 130, 0.9); }
+  button:active { transform: translateY(1px); }
+  button.gold { background: linear-gradient(135deg, #b98e2e, #8a6a1c); color: #fff2d0; }
+  button.gold:hover { background: linear-gradient(135deg, #d0a83c, #a07d22); }
+  button:disabled { opacity: 0.4; cursor: wait; }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  textarea, input[type=password], input[type=text] {
+    font-family: inherit; font-size: 13px; color: var(--txt);
+    background: rgba(8, 12, 28, 0.8); border: 1px solid var(--line);
+    padding: 8px 10px; width: 100%; resize: vertical;
+  }
+  textarea:focus, input:focus { outline: 1px solid var(--gold); }
+
+  .urlrow { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 12px; }
+  .urlrow .lbl { min-width: 96px; color: var(--muted); }
+  .urlrow code { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    background: rgba(8,12,28,0.6); padding: 4px 8px; color: #a8c2f0; }
+  .urlrow button { padding: 4px 10px; font-size: 11px; }
+
+  #toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: rgba(20, 34, 70, 0.95); border: 1px solid var(--gold);
+    color: var(--gold); font-weight: 700; letter-spacing: 1px;
+    padding: 10px 26px; display: none; z-index: 9;
+  }
+  #login { max-width: 420px; margin: 15vh auto; }
+  #main { display: none; }
+  .muted { color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+<!-- 登入（密碼記在瀏覽器，之後免輸入） -->
+<div id="login" class="panel">
+  <h2>🎛️ 直播控制台</h2>
+  <input type="password" id="pw" placeholder="後台密碼" autocomplete="current-password">
+  <div style="margin-top:10px"><button class="gold" id="loginBtn">進入</button></div>
+</div>
+
+<div id="main">
+  <h1>🎛️ 直播控制台 <span id="clock" class="muted"></span>
+    <button id="soundToggle" style="float:right; font-size:12px;">🔔 音效監聽：開</button>
+  </h1>
+  <div class="grid">
+
+    <div class="panel" style="grid-column: 1 / -1;">
+      <h2>📊 即時數據（10 秒自動刷新）</h2>
+      <div class="stats" id="stats">載入中…</div>
+      <div class="wb" id="wb"></div>
+    </div>
+
+    <div class="panel">
+      <h2>🧪 測試警報（發到 OBS 警報 overlay）</h2>
+      <div class="btnrow">
+        <button data-alert="donation">💎 斗內</button>
+        <button data-alert="member">👑 會員</button>
+        <button data-alert="sub">🔔 訂閱</button>
+        <button data-alert="raid">🛬 Raid</button>
+        <button data-alert="milestone">🎉 里程碑</button>
+      </div>
+      <p class="muted" style="margin-top:8px">測試事件不會進斗內對帳與感謝名單。</p>
+    </div>
+
+    <div class="panel">
+      <h2>⚙️ 開台前檢查</h2>
+      <div id="tokenStatus" class="muted" style="margin-bottom:8px">授權狀態載入中…</div>
+      <div class="btnrow">
+        <button id="syncMembers">🔁 立即同步會員名單</button>
+        <button id="refreshOverlays">🔄 廣播重整提示</button>
+        <button id="reauthYt">🔑 重新授權 YouTube</button>
+        <button id="reauthTw">🔑 重新授權 Twitch</button>
+      </div>
+      <p class="muted" style="margin-top:8px">同步會員可先清掉入場動畫的積壓事件；授權會開新分頁到 Google/Twitch 同意畫面，完成後回來按重新整理狀態。</p>
+    </div>
+
+    <div class="panel">
+      <h2>📢 發公告（聊天大廳 + DC 城鎮頻道）</h2>
+      <textarea id="announceText" rows="2" placeholder="公告內容…"></textarea>
+      <div class="btnrow" style="margin-top:8px">
+        <button class="gold" id="announceBtn">送出公告</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>🀄 麻將排隊</h2>
+      <div id="mahjongState" class="muted">載入中…</div>
+      <div class="btnrow" style="margin-top:8px">
+        <button id="mahjongReset">🗑 清空排隊</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>🛠 管理頁捷徑（開新分頁直達分頁）</h2>
+      <div class="btnrow">
+        <button data-goto="section-wheel">🎡 轉盤設定</button>
+        <button data-goto="section-stream-records">📺 直播記錄</button>
+        <button data-goto="section-monsters">👾 怪物管理</button>
+        <button data-goto="section-players">👥 玩家管理</button>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column: 1 / -1;">
+      <h2>🔗 Overlay 網址（點複製 → 貼進 OBS 瀏覽器來源）</h2>
+      <div id="urls"></div>
+    </div>
+
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  const $ = (s) => document.querySelector(s);
+  const PW_KEY = "live.adminPassword";
+  let pw = localStorage.getItem(PW_KEY) || "";
+
+  const toast = (msg) => {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.style.display = "block";
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { t.style.display = "none"; }, 2600);
+  };
+
+  async function api(method, path, body = null) {
+    const res = await fetch(path, {
+      method,
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + pw },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const json = await res.json().catch(() => null);
+    if (res.status === 401) { localStorage.removeItem(PW_KEY); throw new Error("密碼錯誤"); }
+    if (!res.ok || (json && json.status && json.status !== "ok")) throw new Error(json?.message || `HTTP ${res.status}`);
+    return json?.data ?? json;
+  }
+  const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // ── 登入 ──
+  async function tryLogin() {
+    try {
+      await api("GET", "/admin/live/stats");
+      $("#login").style.display = "none";
+      $("#main").style.display = "block";
+      localStorage.setItem(PW_KEY, pw);
+      startDashboard();
+    } catch (e) {
+      toast("❌ " + e.message);
+    }
+  }
+  $("#loginBtn").addEventListener("click", () => { pw = $("#pw").value.trim(); tryLogin(); });
+  $("#pw").addEventListener("keydown", (e) => { if (e.key === "Enter") { pw = $("#pw").value.trim(); tryLogin(); } });
+  if (pw) tryLogin();
+
+  // ── 數據刷新 ──
+  async function refreshStats() {
+    try {
+      const d = await api("GET", "/admin/live/stats");
+      const s = d.stream || {};
+      const t = d.today || {};
+      $("#clock").textContent = new Date().toLocaleTimeString("zh-TW", { hour12: false });
+      $("#stats").innerHTML = `
+        <div class="stat"><div class="k">直播狀態</div><div class="v ${s.isLive ? "live" : "off"}">${s.isLive ? "● LIVE" : "○ 離線"}</div></div>
+        <div class="stat"><div class="k">觀看人數</div><div class="v">${s.viewerCount}</div><div class="sub">打卡 ${s.checkedInCount} 人</div></div>
+        <div class="stat"><div class="k">今日斗內</div><div class="v gold">NT$ ${Number(t.donationTotal || 0).toLocaleString()}</div><div class="sub">${t.donationCount} 筆</div></div>
+        <div class="stat"><div class="k">今日新會員</div><div class="v">${t.newMembers}</div></div>
+        <div class="stat"><div class="k">在線網頁玩家</div><div class="v">${d.webOnlinePlayers}</div></div>
+        <div class="stat"><div class="k">YT 訂閱數</div><div class="v">${d.ytSubscribers == null ? "—" : Number(d.ytSubscribers).toLocaleString()}</div></div>
+        ${d.scBar ? `<div class="stat"><div class="k">SC 累積條</div><div class="v gold">${Number(d.scBar.current ?? d.scBar.total ?? 0).toLocaleString()}</div><div class="sub">${esc(d.scBar.nextMilestoneLabel || d.scBar.next || "")}</div></div>` : ""}
+      `;
+      $("#wb").innerHTML = (d.worldBosses || []).map((w) => {
+        const pct = Math.max(0, Math.min(100, w.currentHp / Math.max(1, w.maxHp) * 100));
+        return `<div class="row"><span>👑 ${esc(w.name)}</span><span>${w.currentHp.toLocaleString()} / ${w.maxHp.toLocaleString()}</span></div>
+                <div class="bar"><div style="width:${pct}%"></div></div>`;
+      }).join("");
+    } catch (e) { /* 下一輪再試 */ }
+  }
+  let statsTimer = null;
+
+  // ── 操作 ──
+  function bindOps() {
+    document.querySelectorAll("[data-alert]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          await api("POST", "/admin/live/test-alert", { type: btn.dataset.alert });
+          toast("🧪 已發射：" + btn.textContent.trim() + "（OBS 4 秒內彈出）");
+        } catch (e) { toast("❌ " + e.message); }
+        btn.disabled = false;
+      });
+    });
+    $("#syncMembers").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      try {
+        await api("POST", "/admin/stream-records/reconcile");
+        toast("🔁 會員名單同步完成");
+      } catch (err) { toast("❌ " + err.message); }
+      e.target.disabled = false;
+    });
+    $("#refreshOverlays").addEventListener("click", async (e) => {
+      if (!confirm("對在線玩家廣播「請重整頁面」提示？")) return;
+      e.target.disabled = true;
+      try {
+        const r = await api("POST", "/admin/broadcast/announce-and-reload", { mode: "prompt", promptMessage: "內容已更新，請重新整理頁面 🔄" });
+        toast(`🔄 已通知 ${r.notified} 位在線玩家`);
+      } catch (err) { toast("❌ " + err.message); }
+      e.target.disabled = false;
+    });
+    // 重新授權（YouTube/Twitch）：同步先開空白分頁（避免 popup 擋），拿到授權網址再導過去
+    async function reauth(provider, btn) {
+      const win = window.open("about:blank", "_blank");
+      btn.disabled = true;
+      try {
+        const r = await api("POST", "/admin/creator-auth/start", { provider });
+        if (win) win.location = r.url; else location.href = r.url;
+        toast("🔑 已開啟授權頁，完成後回來看狀態");
+        setTimeout(refreshTokenStatus, 15_000); // 給使用者一點時間完成授權後自動刷新
+      } catch (err) {
+        if (win) win.close();
+        toast("❌ " + err.message);
+      }
+      btn.disabled = false;
+    }
+    $("#reauthYt").addEventListener("click", (e) => reauth("youtube", e.target));
+    $("#reauthTw").addEventListener("click", (e) => reauth("twitch", e.target));
+
+    $("#announceBtn").addEventListener("click", async (e) => {
+      const msg = $("#announceText").value.trim();
+      if (!msg) return toast("公告內容不能是空的");
+      if (!confirm(`發出公告：「${msg}」？`)) return;
+      e.target.disabled = true;
+      try {
+        await api("POST", "/admin/broadcast/announce", { message: msg });
+        $("#announceText").value = "";
+        toast("📢 公告已送出");
+      } catch (err) { toast("❌ " + err.message); }
+      e.target.disabled = false;
+    });
+  }
+
+  // ── Overlay 網址表 ──
+  async function renderUrls() {
+    const base = location.origin + "/static/";
+    const fixed = [
+      ["💬 聊天室", base + "chat.html"],
+      ["💨 聊天彈幕", base + "chat-danmaku.html"],
+      ["📜 聊天跑馬燈", base + "chat-marquee.html"],
+      ["🌈 彈幕強化版", base + "danmaku.html"],
+      ["🀄 麻將排隊框", base + "mahjong.html"],
+      ["💎 SC 累積條", base + "sc-bar-overlay.html"],
+      ["🔥 互動值條", base + "emotion-sc-meter-obs.html"],
+      ["⚔️ 戰鬥監視", base + "combat-monitor.html"],
+      ["⏳ 載入頁", base + "loading.html"],
+      ["✨ 柔光濾鏡", base + "filter.html?mode=add"],
+      ["🙏 感謝名單", base + "thanks.html"],
+      ["🚨 警報(全部+音效)", base + "alert.html"],
+      ["💎 警報(僅斗內)", base + "alert.html?types=donation"],
+      ["👑 警報(僅會員)", base + "alert.html?types=member,sub,raid,milestone"],
+    ];
+    let wheels = [];
+    try { wheels = await api("GET", "/admin/wheel/list"); } catch (_) {}
+    const rows = [...fixed, ...wheels.map((w) => ["🎡 " + w.name, base + "wheel.html?id=" + w.id])];
+    $("#urls").innerHTML = rows.map(([label, url]) => `
+      <div class="urlrow">
+        <span class="lbl">${esc(label)}</span>
+        <code>${esc(url)}</code>
+        <button data-copy="${esc(url)}">複製</button>
+      </div>`).join("");
+    document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => {
+      navigator.clipboard.writeText(b.dataset.copy).then(() => toast("📋 已複製"));
+    }));
+  }
+
+  // ── 授權狀態（YT/Twitch broadcaster token 健康度）──
+  async function refreshTokenStatus() {
+    try {
+      const st = await api("GET", "/admin/creator-auth/status");
+      const row = (p, label) => {
+        const rec = st?.[p] || {};
+        const okState = rec.status === "active" && rec.accessTokenValid !== false;
+        const color = okState ? "var(--green)" : "var(--red)";
+        const text = rec.status
+          ? (okState ? "正常" : `⚠️ ${rec.status === "revoked" ? "已撤銷" : "異常/過期"}，請重新授權`)
+          : "未設定";
+        return `<span style="margin-right:16px">${label}：<b style="color:${color}">${text}</b></span>`;
+      };
+      $("#tokenStatus").innerHTML = row("youtube", "YouTube") + row("twitch", "Twitch");
+    } catch (_) {
+      $("#tokenStatus").textContent = "授權狀態讀取失敗";
+    }
+  }
+
+  // ── 警報音效監聽：控制台本身跟著警報事件響（OBS 不開監聽也聽得到）──
+  // 事件來源與 OBS 警報 overlay 同一條 feed；此處只播音效+跳提示，不影響 overlay 播放
+  const SOUND_KEY = "live.soundMonitor";
+  let soundMonitor = localStorage.getItem(SOUND_KEY) !== "0";
+  let feedCursor = null;
+  const EVENT_LABELS = {
+    donation: (e) => `💎 ${e.name} 斗內 NT$ ${Number(e.amount).toLocaleString()}`,
+    member: (e) => `👑 ${e.name} ${e.eventText || "加入會員"}${e.label ? "・" + e.label : ""}`,
+    sub: (e) => `🔔 ${e.name} ${e.gift ? "贈訂" : "訂閱"}`,
+    raid: (e) => `🛬 ${e.name} 帶 ${e.viewers} 人降落`,
+    milestone: (e) => `🎉 訂閱數突破 ${Number(e.milestone || e.count).toLocaleString()}`
+  };
+  function renderSoundToggle() {
+    $("#soundToggle").textContent = soundMonitor ? "🔔 音效監聽：開" : "🔕 音效監聽：關";
+  }
+  async function pollAlertFeed() {
+    try {
+      const url = "/api/stream-overlay/feed" + (feedCursor ? "?since=" + encodeURIComponent(feedCursor) : "");
+      const json = await (await fetch(url)).json();
+      if (json.status !== "ok") return;
+      feedCursor = json.data.now;
+      const events = json.data.events || [];
+      if (!events.length) return;
+      for (const e of events.slice(0, 3)) {
+        const label = (EVENT_LABELS[e.type] || (() => e.type))(e);
+        toast(label);
+      }
+      if (soundMonitor) {
+        const a = new Audio("/static/sfx/alert-notify.ogg");
+        a.volume = 0.8;
+        a.play().catch(() => toast("🔇 瀏覽器擋自動播放：點頁面任意處一次即可解鎖音效"));
+      }
+    } catch (_) { /* 下一輪再試 */ }
+  }
+
+  // ── 麻將排隊 ──
+  async function refreshMahjong() {
+    try {
+      const st = await (await fetch("/api/mahjong/state")).json();
+      const q = Array.isArray(st.queue) ? st.queue : [];
+      const teams = Array.isArray(st.teams) ? st.teams : [];
+      $("#mahjongState").innerHTML =
+        `排隊中 <b style="color:var(--gold)">${q.length}</b> 人` +
+        (teams.length ? `｜成團 ${teams.length} 桌` : "") +
+        (q.length ? `<div class="muted" style="margin-top:4px">${q.slice(0, 6).map((p) => esc(p.name)).join("、")}${q.length > 6 ? "…" : ""}</div>` : "");
+    } catch (_) { $("#mahjongState").textContent = "排隊狀態讀取失敗"; }
+  }
+
+  function bindExtras() {
+    $("#mahjongReset").addEventListener("click", async (e) => {
+      if (!confirm("清空整個麻將排隊與成團名單？此動作無法復原。")) return;
+      e.target.disabled = true;
+      try {
+        await api("POST", "/api/mahjong/reset");
+        toast("🀄 排隊已清空");
+        refreshMahjong();
+      } catch (err) { toast("❌ " + err.message); }
+      e.target.disabled = false;
+    });
+    // 管理頁捷徑：帶 hash 深連結直達 admin 對應分頁
+    document.querySelectorAll("[data-goto]").forEach((b) =>
+      b.addEventListener("click", () => window.open("/admin#" + b.dataset.goto, "_blank")));
+    // 音效監聽開關（記憶設定）
+    renderSoundToggle();
+    $("#soundToggle").addEventListener("click", () => {
+      soundMonitor = !soundMonitor;
+      localStorage.setItem(SOUND_KEY, soundMonitor ? "1" : "0");
+      renderSoundToggle();
+      if (soundMonitor) { const a = new Audio("/static/sfx/alert-notify.ogg"); a.volume = 0.5; a.play().catch(() => {}); }
+    });
+  }
+
+  function startDashboard() {
+    bindOps();
+    bindExtras();
+    renderUrls();
+    refreshStats();
+    refreshTokenStatus();
+    refreshMahjong();
+    if (statsTimer) clearInterval(statsTimer);
+    statsTimer = setInterval(refreshStats, 10_000);
+    setInterval(refreshTokenStatus, 60_000);
+    setInterval(refreshMahjong, 15_000);
+    pollAlertFeed();
+    setInterval(pollAlertFeed, 4_000);
+  }
+})();
+</script>
+</body>
+</html>

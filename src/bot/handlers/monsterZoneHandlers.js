@@ -14,7 +14,7 @@ const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { calcPlayerStats, isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { getEquipmentTierSetBonuses } = require("../../shared/equipmentTierSetBonuses");
 const { isEffectConditionMet, collectEquipmentEffects, mergeEquippedFromLibrary, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
-const { scaleSupportPartyEffect } = require("../../shared/supportAuraScaling");
+const { scaleSupportPartyEffect, filterActiveAuras } = require("../../shared/supportAuraScaling");
 const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = require("../../shared/battlePresence");
 const { isWebBattleActive } = require("../../services/progress/battleLock");
 const { getDropBoostPct } = require("../../shared/pkArenaConfig");
@@ -224,7 +224,8 @@ function clearQueuedEliteWorldBossSessions(reason = "世界BOSS 已結束，本�
 const BTN = {
   enterBattle: "monster-zone:enter-battle",
   enterBattlePrefix: "monster-zone:enter-battle:",
-  deleteLog:   "monster-zone:delete-log"
+  deleteLog:   "monster-zone:delete-log",
+  humanCheckPrefix: "monster-zone:human-check:" // <token>:<選項index>
 };
 
 const MAX_ROUNDS = 15;
@@ -270,6 +271,7 @@ const RARE_TIERS = new Set(["A", "S", "SS", "SSR", "UR"]);
 const WORLD_BOSS_TARGET_PARTS = new Set(["head", "body", "legs", "wings", "upper_body", "lower_body", "tail"]);
 // 古龍王巢穴採 4 部位(含龍翼)+ 破鱗削弱;其餘世界王維持 3 部位
 const DRAGON_KING_ZONE = "dragon_king_lair";
+const TURTLE_ZONE = "event_boss"; // 島島龜王（活動）：潮汐/海嘯在 shared/turtleTide.js
 // 地獄狼牙王(牙狼)：5 部位(3物2法) + 部位翻面機制
 const HELLFANG_ZONE = "hellfire_depths";
 // 牙狼五部位「原生弱點」(吃 100% 的流派)：法系(上軀幹/尾巴) vs 物理(頭/下軀幹/腿)
@@ -285,6 +287,7 @@ const HELLFANG_CORE_PLAYER_MULT = 0.7;   // 最終核心：玩家對它傷害 ×
 const HELLFANG_PART_LABELS = { head: "頭部", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴", legs: "腿部" };
 function getWorldBossPartKeys(zoneKey) {
   if (zoneKey === HELLFANG_ZONE) return ["head", "upper_body", "lower_body", "tail", "legs"];
+  if (zoneKey === TURTLE_ZONE) return ["head", "body", "wings", "legs"]; // 龜首/島背/左鰭/右鰭
   return zoneKey === DRAGON_KING_ZONE ? ["head", "body", "wings", "legs"] : ["head", "body", "legs"];
 }
 
@@ -296,6 +299,11 @@ function parseWorldBossTargetPart(customId) {
 }
 
 function getWorldBossTargetProfile(part, zoneKey = null) {
+  // 島島龜王：難度全由潮汐/海嘯機制驅動（turtleTide.battleMods），部位本身不加料
+  if (zoneKey === TURTLE_ZONE) {
+    const labels = { head: "龜首", body: "島背", wings: "左鰭", legs: "右鰭" };
+    return { label: labels[part] || "島背" };
+  }
   // 古龍王:採破鱗削弱(破部位永久削弱),攻擊當下不另加難度,只回部位標籤
   if (zoneKey === DRAGON_KING_ZONE || part === "wings") {
     const labels = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
@@ -383,6 +391,14 @@ function createWorldBossPartHpTemplate(totalMaxHp = 0, zoneKey = null) {
     const head = Math.max(1, Math.round(maxHp * 0.3));
     const body = Math.max(1, Math.round(maxHp * 0.3));
     const wings = Math.max(1, Math.round(maxHp * 0.2));
+    const legs = Math.max(1, maxHp - head - body - wings);
+    return { head, body, wings, legs };
+  }
+  if (zoneKey === TURTLE_ZONE) {
+    // 島島龜王 4 部位:龜首 25% / 島背 40%(就是一座島) / 左鰭 17.5% / 右鰭 17.5%
+    const head = Math.max(1, Math.round(maxHp * 0.25));
+    const body = Math.max(1, Math.round(maxHp * 0.4));
+    const wings = Math.max(1, Math.round(maxHp * 0.175));
     const legs = Math.max(1, maxHp - head - body - wings);
     return { head, body, wings, legs };
   }
@@ -1044,6 +1060,11 @@ async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, co
     const _jobMetric = resolveJobBattleMetric(jobEq);
     if (_jobMetric) await questService.recordProgress(discordId, _jobMetric, 1);
   }
+  // 職業徽章熟練度 +1（裝備中的徽章才累積）。
+  // 練滿 Lv20 **不廣播**——它只是讓職業任務亮起來；真正值得全服知道的是「轉職成功」。
+  try {
+    await serviceContext.jobBadgeService?.grantBattleProficiency(discordId, 1);
+  } catch (_) { /* 熟練度失敗不影響戰鬥結算 */ }
   if (outcome === "lose") {
     await questService.recordProgress(discordId, "death_count", 1);
   }
@@ -2422,6 +2443,54 @@ async function safeBattleResultReply(interaction, payload, fallbackContent) {
 // ──────────────────────────────────────────────
 // 出戰（入場）— 顯示準備畫面 + 開始戰鬥按鈕
 // ──────────────────────────────────────────────
+// 人機驗證：把 guard/verify 的結果組成 Discord 回覆（題目按鈕 or 封鎖說明）
+function buildHumanCheckReply(gate) {
+  if (gate.kind === "challenge") {
+    const row = new ActionRowBuilder().addComponents(
+      ...gate.options.map((n, i) => new ButtonBuilder()
+        .setCustomId(`${BTN.humanCheckPrefix}${gate.token}:${i}`)
+        .setLabel(String(n))
+        .setStyle(ButtonStyle.Secondary))
+    );
+    return {
+      content: `🧩 **稍等一下**\n你已經連續遊玩很長一段時間了，請完成一次確認再繼續。\n\n${gate.prompt}\n-# 3 分鐘內作答；答對就能馬上繼續出戰。`,
+      embeds: [],
+      components: [row],
+    };
+  }
+  const mins = Math.max(1, Math.ceil((Number(gate.untilMs) - Date.now()) / 60000));
+  return {
+    content: `⛔ **暫時無法出戰**\n人機驗證未通過，請 ${mins} 分鐘後再試。\n-# 若你是本人操作，休息一下再回來即可；重複未通過會拉長等待時間。`,
+    embeds: [],
+    components: [],
+  };
+}
+
+async function handleHumanCheck(interaction) {
+  const raw = String(interaction.customId || "").slice(BTN.humanCheckPrefix.length);
+  const [token, idxRaw] = raw.split(":");
+  const svc = require("../../services/humanCheck/humanCheckService");
+  const result = await svc.verify(interaction.user.id, token, Number(idxRaw));
+  if (result.ok) {
+    await interaction.update({
+      content: "✅ 確認完成，可以繼續出戰了。",
+      embeds: [], components: [],
+    }).catch(() => {});
+    return;
+  }
+  if (result.kind === "none") {
+    await interaction.update({
+      content: "⚠️ 這題已經失效了，請重新按一次出戰。", embeds: [], components: [],
+    }).catch(() => {});
+    return;
+  }
+  const mins = Math.max(1, Math.ceil((Number(result.untilMs) - Date.now()) / 60000));
+  const head = result.kind === "expired" ? "⌛ 超過作答時間" : "❌ 選錯了";
+  await interaction.update({
+    content: `${head}\n請 ${mins} 分鐘後再出戰。`, embeds: [], components: [],
+  }).catch(() => {});
+}
+
 async function handleEnterBattle(interaction) {
   const discordId = interaction.user.id;
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -2443,6 +2512,22 @@ async function handleEnterBattle(interaction) {
       content: "❌ 你正在網頁進行戰鬥，請先結束後再從 Discord 出戰。"
     }).catch(() => {});
     return;
+  }
+  // 背包已滿 → 不能出戰（與網頁一致；先擋下省得白付入場費）
+  try {
+    const bagFull = await require("../../services/backpack/backpackService").checkBackpackFullForBattle(discordId);
+    if (bagFull) {
+      await interaction.editReply({ content: bagFull.message }).catch(() => {});
+      return;
+    }
+  } catch (_) { /* 檢查失敗不阻擋戰鬥 */ }
+  // 續航偵測：連續遊玩過久 → 出戰前先過一題人機驗證（正常玩家幾乎不會遇到）
+  {
+    const gate = await require("../../services/humanCheck/humanCheckService").guard(discordId);
+    if (!gate.ok) {
+      await interaction.editReply(buildHumanCheckReply(gate)).catch(() => {});
+      return;
+    }
   }
   const sc = getServiceContext();
   const displayName = interaction.member?.displayName || interaction.user.username;
@@ -2875,12 +2960,47 @@ async function handleEnterBattle(interaction) {
         try {
           const participant = await participantCache.get(pid, pid === discordId ? displayName : null);
           // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
-          const refs = participant.refs || [];
+          let refs = participant.refs || [];
+          // 聖靈師參戰者：精靈在場 → 其隊伍光環 ×2（progress 缺失時不翻倍，避免誤判）
+          try {
+            const _sspB = require("../../shared/sunSpirit");
+            if (participant.progress && _sspB.hasSpirit(participant.equipped?.job_eq) && _sspB.read(participant.progress, zoneKey) > 0) {
+              const _am2 = Number(require("../../shared/jobAdvancement").getSunSpirit(participant.equipped?.job_eq)?.auraMult) || 2;
+              refs = refs.map((e) => (e && e.target === "party") ? ({
+                ...e,
+                value: e.value != null ? Number(e.value) * _am2 : e.value,
+                params: { ...(e.params || {}), value: (Number(e.params?.value ?? e.value ?? 0)) * _am2 },
+              }) : e);
+            }
+          } catch (_) { /* noop */ }
+          // 吟遊詩人參戰者：演奏加持 → 隊伍光環 ×(1＋連奏×20%)（與網頁端同規則）
+          try {
+            const _bsB = require("../../shared/bardSong");
+            if (participant.progress && _bsB.hasSong(participant.equipped?.job_eq)) {
+              const _bm2 = _bsB.auraMult(_bsB.readStreak(participant.progress, zoneKey));
+              if (_bm2 > 1) refs = refs.map((e) => (e && e.target === "party") ? ({
+                ...e,
+                value: e.value != null ? Number(e.value) * _bm2 : e.value,
+                params: { ...(e.params || {}), value: (Number(e.params?.value ?? e.value ?? 0)) * _bm2 },
+              }) : e);
+            }
+          } catch (_) { /* noop */ }
           const pidName = resolveAuraSourceName(
             participant.displayName || (pid === discordId ? displayName : null),
             pid
           );
           const pidJobName = getJobNameFromEquipped(participant.equipped);
+          // 神射手參戰者：合成掩護射擊（吃該參戰者當下的 ATK/爆擊）
+          try {
+            const _snP = require("../../shared/jobAdvancement").getSniper(participant.equipped?.job_eq);
+            if (_snP) {
+              refs = [...refs, {
+                key: "support_shot", target: "party", trigger: "passive", chance: 100,
+                params: { value: Number(_snP.supportShotPct) || 50, casterAtk: Math.round(participant.stats?.atk || 0), casterCrit: Math.round(participant.stats?.crit || 0) },
+                srcItem: "神射手徽章", sourceDiscordId: pid,
+              }];
+            }
+          } catch (_) { /* noop */ }
           for (const r of refs) {
             if (r && r.target === 'party') {
               const scaled = scaleSupportPartyEffect(r, {
@@ -2888,7 +3008,8 @@ async function handleEnterBattle(interaction) {
                 jobName: pidJobName,
                 equipped: participant.equipped || {}
               });
-              partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: pidJobName, isSelfAura: pid === discordId });
+              // 光環標籤：優先標「來源道具」，沒有才標職業徽章（與網頁一致）
+              partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: r.srcItem || pidJobName, isSelfAura: pid === discordId });
             }
           }
         } catch (e) {}
@@ -2898,18 +3019,56 @@ async function handleEnterBattle(interaction) {
       //    （與網頁同格式），讓網頁/DC 其他玩家都吃得到；非輔助職則把自己從陣列移除。
       //    註：實際「取最高／不疊加」由 combatLoop 統一處理，這裡只負責維護提供者名單。──
       try {
-        const selfRawParty = (currentSnapshot.refs || []).filter((r) => r && r.target === "party");
+        let selfRawParty = (currentSnapshot.refs || []).filter((r) => r && r.target === "party");
+        // 聖靈師：精靈在場（依存檔血量%）→ 寫進共享狀態的光環值 ×2（與網頁同規則）
+        try {
+          const _sspA = require("../../shared/sunSpirit");
+          if (_sspA.hasSpirit(currentSnapshot.equipped?.job_eq) && _sspA.read(currentSnapshot.progress, zoneKey) > 0) {
+            const _am = Number(require("../../shared/jobAdvancement").getSunSpirit(currentSnapshot.equipped?.job_eq)?.auraMult) || 2;
+            selfRawParty = selfRawParty.map((e) => ({
+              ...e,
+              value: e.value != null ? Number(e.value) * _am : e.value,
+              params: { ...(e.params || {}), value: (Number(e.params?.value ?? e.value ?? 0)) * _am },
+            }));
+          }
+        } catch (_) { /* 精靈判定失敗不影響光環 */ }
+        // 吟遊詩人：演奏加持 → 寫進共享狀態的光環值 ×(1＋連奏×20%)（與網頁同規則）
+        try {
+          const _bsA = require("../../shared/bardSong");
+          if (_bsA.hasSong(currentSnapshot.equipped?.job_eq)) {
+            const _bm = _bsA.auraMult(_bsA.readStreak(currentSnapshot.progress, zoneKey));
+            if (_bm > 1) selfRawParty = selfRawParty.map((e) => ({
+              ...e,
+              value: e.value != null ? Number(e.value) * _bm : e.value,
+              params: { ...(e.params || {}), value: (Number(e.params?.value ?? e.value ?? 0)) * _bm },
+            }));
+          }
+        } catch (_) { /* 演奏判定失敗不影響光環 */ }
+        // 神射手：合成掩護射擊（傷害型光環）寫進共享狀態，與網頁同規則
+        try {
+          const _snC = require("../../shared/jobAdvancement").getSniper(currentSnapshot.equipped?.job_eq);
+          if (_snC) {
+            selfRawParty = [...selfRawParty, {
+              key: "support_shot", target: "party", trigger: "passive", chance: 100,
+              params: { value: Number(_snC.supportShotPct) || 50, casterAtk: Math.round(currentSnapshot.stats?.atk || 0), casterCrit: Math.round(currentSnapshot.stats?.crit || 0) },
+              srcItem: "神射手徽章", sourceDiscordId: discordId,
+            }];
+          }
+        } catch (_) { /* noop */ }
         const selfJobName = getJobNameFromEquipped(currentSnapshot.equipped);
-        const prevAuras = Array.isArray(battleState.activeHealerAuras)
+        const prevAurasRaw = Array.isArray(battleState.activeHealerAuras)
           ? battleState.activeHealerAuras
           : (battleState.activeHealerAura ? [{ ...battleState.activeHealerAura }] : []);
+        // 過期剔除：提供者超過 3 分鐘沒在本區出戰＝離場（與網頁端同規則）
+        const prevAuras = filterActiveAuras(prevAurasRaw);
         let nextAuras;
         if (selfRawParty.length > 0) {
-          nextAuras = [...prevAuras.filter((a) => a && a.discordId !== discordId), { discordId, displayName, effects: selfRawParty, jobName: selfJobName || null }];
+          nextAuras = [...prevAuras.filter((a) => a && a.discordId !== discordId), { discordId, displayName, effects: selfRawParty, jobName: selfJobName || null, lastAt: Date.now() }];
         } else {
           nextAuras = prevAuras.filter((a) => a && a.discordId !== discordId);
         }
-        if (JSON.stringify(nextAuras) !== JSON.stringify(prevAuras)) {
+        // 與原始陣列比對：過期項被剔除時也要落地，狀態裡才不會殘留殭屍光環
+        if (JSON.stringify(nextAuras) !== JSON.stringify(prevAurasRaw)) {
           battleState = { ...battleState, activeHealerAuras: nextAuras, activeHealerAura: null };
           await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
         }
@@ -2918,9 +3077,10 @@ async function handleEnterBattle(interaction) {
       // ── 共鬥光環（跨平台）：讀 activeHealerAuras 陣列（含網頁玩家寫入的提供者），
       //    把不在本場 participants 內的提供者光環依其「當前數值」縮放後加入。
       //    是否疊加 → 否；最終由 combatLoop 對同一效果取最高。──
-      const zoneAuras = Array.isArray(battleState.activeHealerAuras)
+      // 過期剔除：只套用最近 3 分鐘內有出戰的提供者光環
+      const zoneAuras = filterActiveAuras(Array.isArray(battleState.activeHealerAuras)
         ? battleState.activeHealerAuras
-        : (battleState.activeHealerAura ? [battleState.activeHealerAura] : []);
+        : (battleState.activeHealerAura ? [battleState.activeHealerAura] : []));
       await Promise.all(zoneAuras.map(async (aura) => {
         try {
           if (!aura || !Array.isArray(aura.effects) || !aura.discordId) return;
@@ -2936,7 +3096,7 @@ async function handleEnterBattle(interaction) {
               jobName: auraJobName,
               equipped: provider.equipped || {}
             });
-            partyEffects.push({ ...scaled, sourceName: srcName, sourceJobName: auraJobName });
+            partyEffects.push({ ...scaled, sourceName: srcName, sourceJobName: r.srcItem || auraJobName });
           }
         } catch (e) {}
       }));
@@ -2984,12 +3144,47 @@ async function handleEnterBattle(interaction) {
         const _part = session.worldBossTargetPart || "body";
         session.hellfangMult = hellfangDamageMult(battleState, _part, session.playerStats?.weaponType, Date.now()).mult;
       }
+      // ── 島島龜王（活動）：潮汐/海嘯修正——推進詠唱狀態機後取本場修正 ──
+      session.turtleTsunami = false;
+      if (zoneKey === TURTLE_ZONE && battleMonster?.isBoss) {
+        const _tt = require("../../shared/turtleTide");
+        const _part = session.worldBossTargetPart || "body";
+        const _partsHp = battleState?.worldBossPartsHp || {};
+        const _tpl = createWorldBossPartHpTemplate(battleMonster.calc.maxHp, zoneKey);
+        const _totMax = Object.values(_tpl).reduce((s, v) => s + v, 0);
+        const _totCur = getWorldBossPartKeys(zoneKey).reduce((s, k) => s + Math.max(0, Number(_partsHp[k] ?? _tpl[k]) || 0), 0);
+        const _pct = _totMax > 0 ? (_totCur / _totMax) * 100 : 100;
+        const _events = _tt.ensureCast(battleState, _pct, Date.now());
+        if (_events.length) await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
+        const _mods = _tt.battleMods(battleState, _part, Date.now());
+        if (_mods.headBlocked) {
+          deleteMonsterSession(discordId);
+          await interaction.editReply({
+            content: "🌊 漲潮中——龜首縮回殼裡打不到！等退潮再攻頭部（其他部位照常）。",
+            embeds: [], components: []
+          }).catch(() => {});
+          return;
+        }
+        session.turtleTsunami = _mods.tsunami;
+        session.hellfangMult = session.hellfangMult * _mods.mult; // 共用終傷通道（其他王不受影響）
+        session.turtleForceHit = _mods.forceHitHead;
+      }
       // ── 怪物圖鑑：依玩家對「這隻怪」的累積擊殺,算出本場傷害加成(最高 +25%) ──
       const _bestiaryIsWorldBoss = isWorldBossZone(zoneKey);
       const _bestiaryMonsterId = String(battleMonster?.id || battleMonster?._id || session.monsterName || "");
       const _bestiaryReq = bestiaryRequirement(battleMonster, _bestiaryIsWorldBoss);
       const _bestiaryKillsBefore = Number(currentProg?.bestiary?.[_bestiaryMonsterId]) || 0;
-      const _bestiaryBonusPct = bestiaryBonusPct(_bestiaryKillsBefore, _bestiaryReq);
+      let _bestiaryBonusPct = bestiaryBonusPct(_bestiaryKillsBefore, _bestiaryReq);
+      // 知彼（兵聖）：圖鑑傷害加成 ×knowledgeMult（上限同步放大）
+      let _bestiaryCapPct;
+      try {
+        const _sgK = require("../../shared/jobAdvancement").getSage(currentEquipped?.job_eq);
+        if (_sgK) {
+          const _km = Number(_sgK.knowledgeMult) || 2;
+          _bestiaryBonusPct *= _km;
+          _bestiaryCapPct = 25 * _km;
+        }
+      } catch (_) { /* noop */ }
       // ── 區域連段（Zone COMBO）── 與網頁共用同一份狀態，DC 出戰一樣累積
       const _zc = require("../../shared/zoneCombo");
       const comboBefore = _zc.readCombo(currentProg, zoneKey);
@@ -3002,6 +3197,31 @@ async function handleEnterBattle(interaction) {
       const gaugeBefore = _gaugeCfg ? _bg.read(currentProg, _gaugeCfg) : 0;
       const gaugeFull = Boolean(_gaugeCfg && _bg.isFull(gaugeBefore, _gaugeCfg));
       const berserkEffects = gaugeFull ? _bg.buffs(_gaugeCfg) : [];
+      // ── 連擊氣條（影舞者）── 與網頁共用同一份狀態；DC 沒有影襲按鈕，氣條照累、滿格照觸發
+      const _sg = require("../../shared/shadowGauge");
+      const shadowOn = _sg.hasGauge(currentEquipped?.job_eq);
+      const shadowGridsBefore = shadowOn ? _sg.read(currentProg, zoneKey) : 0;
+      // ── 氣力格（劍鬼）── 與網頁共用同一份狀態；氣條照累、滿格照自動斬
+      const _og = require("../../shared/oniGauge");
+      const oniOn = _og.hasGauge(currentEquipped?.job_eq);
+      const oniGridsBefore = oniOn ? _og.read(currentProg, zoneKey) : 0;
+      // ── 日之精靈（聖靈師）── 與網頁共用同一份狀態
+      const _ssp = require("../../shared/sunSpirit");
+      const spiritOn = _ssp.hasSpirit(currentEquipped?.job_eq);
+      const spiritPctBefore = spiritOn ? _ssp.read(currentProg, zoneKey) : 0;
+      // ── 震盪值（神射手）── 與網頁共用同一份狀態
+      const _sng = require("../../shared/sniperGauge");
+      const sniperOn = _sng.hasGauge(currentEquipped?.job_eq);
+      const sniperGridsBefore = sniperOn ? _sng.read(currentProg, zoneKey) : 0;
+      // 命運骰＋手氣（賭神）
+      const _dgg = require("../../shared/diceGauge");
+      const diceGodOn = _dgg.hasGauge(currentEquipped?.job_eq);
+      const diceGridsBefore = diceGodOn ? _dgg.read(currentProg, zoneKey) : 0;
+      const diceLuckBefore = diceGodOn ? _dgg.readLuck(currentProg) : 0;
+      // ── 計謀值（兵聖）── 與網頁共用同一份狀態
+      const _sag = require("../../shared/sageGauge");
+      const sageOn = _sag.hasGauge(currentEquipped?.job_eq);
+      const sageGridsBefore = sageOn ? _sag.read(currentProg, zoneKey) : 0;
 
       // ── 世界王暈眩條（矮人戰士長・巨神震擊）── 與網頁共用同一條
       const _dsg = require("../../shared/dwarfStunGauge");
@@ -3010,14 +3230,41 @@ async function handleEnterBattle(interaction) {
       const stunStateBefore = stunGaugeKey ? await _dsg.read(stunGaugeKey, zoneKey).catch(() => null) : null;
       const teamStunOn = Boolean(stunStateBefore?.stunned);
 
+      // ── 區域冰凍值（元素師・凍霜）── DC 玩家也吃冰封窗口（DC 沒姿態鈕、走預設嵐暴 → 不累積，只受惠）
+      const _zfg = require("../../shared/zoneFreezeGauge");
+      const freezeStateBefore = await _zfg.read(_zfg.gaugeKeyForZone(zoneKey), zoneKey).catch(() => null);
+      const zoneFrozenOn = Boolean(freezeStateBefore?.frozen);
+
+      // ── 區域聖域值（聖域師）── DC 玩家也吃聖域窗口（受傷減半＋回血）；聖域師在 DC 出戰也累積。
+      //    使用者定案：DC 不發任何公告，效果照吃。
+      const _scg = require("../../shared/sanctumGauge");
+      const _dcSanctumKey = _scg.gaugeKeyForZone(zoneKey);
+      const sanctumStateBefore = await _scg.read(_dcSanctumKey, zoneKey).catch(() => null);
+      const zoneSanctumOn = Boolean(sanctumStateBefore?.sanctum);
+      const _SANCTUM_DEF = require("../../shared/jobAdvancement").getSanctum({ itemId: "job_sanctum_t2_v1" });
+
+      // DC 沒有姿態按鈕 → 一律走該職業的預設姿態（聖劍士=攻擊、元素師=嵐暴；非姿態職業=null 完全同現況）
+      let dcStanceKey = null;
+      try { dcStanceKey = require("../../shared/battleStance").resolveRequestedStance(currentEquipped, undefined); } catch (_) { dcStanceKey = null; }
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       let combatResult =
         runCombatLoop(battlePlayerStats, battleMonsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
           playerName: displayName,
-          teamStunRounds: teamStunOn ? 999 : 0,
+          stance: dcStanceKey,
+          teamStunRounds: (teamStunOn || zoneFrozenOn) ? 999 : 0,
+          teamStunStyle: (!teamStunOn && zoneFrozenOn) ? "freeze" : undefined,
           playerLevel: currentProg?.level || 1,
           playerActiveEffects: [...comboEffects, ...berserkEffects],
           warGaugeCritBonus: gaugeFull ? _gaugeCfg.critRateBonus : 0,
+          shadowGaugeGrids: shadowGridsBefore, // 連擊氣條（影舞者）
+          oniGaugeGrids: oniGridsBefore,       // 氣力格（劍鬼）
+          sunSpiritHpPct: spiritOn ? spiritPctBefore : undefined, // 日之精靈（聖靈師）
+          sniperGaugeGrids: sniperGridsBefore, // 震盪值（神射手）
+          sageGaugeGrids: sageGridsBefore,     // 計謀值（兵聖）
+          diceGaugeGrids: diceGridsBefore,     // 命運骰（賭神）
+          diceLuckStacks: diceLuckBefore,      // 手氣正旺（賭神）
+          zoneComboCount: comboBefore, // 劍鬼斬的倍率來源
           // DC 端不做姿態按鈕 → 有姿態系統的職業一律視為攻擊姿態（無姿態系統的職業回 null，不受影響）
           stance: (() => {
             try { return require("../../shared/battleStance").resolveRequestedStance(currentEquipped, "attack"); }
@@ -3030,11 +3277,21 @@ async function handleEnterBattle(interaction) {
           monsterIsBoss: Boolean(battleMonster?.isBoss),
           worldBossPhase: session.worldBossPhase || null,
           bestiaryBonusPct: _bestiaryBonusPct,
+          bestiaryBonusCapPct: _bestiaryCapPct, // 知彼（兵聖）上限放大；一般職業 undefined＝25
           isWorldBoss: isWorldBossZone(zoneKey) && Boolean(battleMonster?.isBoss), // 世界王:玩家 DOT 也吃王 def%
-          bossVulnMult: session.hellfangMult, // 牙狼部位弱點倍率:玩家每擊終傷×此值(其他戰鬥=1不影響)
+          bossVulnMult: session.hellfangMult, // 牙狼弱點/龜王潮汐倍率:玩家每擊終傷×此值(其他戰鬥=1不影響)
+          tsunamiDeath: session.turtleTsunami || false, // 海嘯（島島龜王）：出戰即死
+          forcePlayerHit: session.turtleForceHit || false, // 退潮打龜首必中
           zone: zoneKey, // 讓裝備的 zone 條件特效生效(例：S 龍系武器在龍族之領/龍王巢穴 +20%)
-          monsterElement: battleMonster?.element || null // 屬性相剋；怪物無 element 則不參與(現有怪皆是)
+          monsterElement: battleMonster?.element || null, // 屬性相剋；怪物無 element 則不參與(現有怪皆是)
+          // 聖域窗口（聖域師區域條滿）：本場受傷減免＋每回合回血（DC 玩家照吃、不公告）
+          sanctuaryCutPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumDamageCutPct) || 50) : 0,
+          sanctuaryHealPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumHealPct) || 3) : 0,
         });
+      // 聖域師在 DC 出戰 → 累積聖域值（每場 +1；靜默，不公告）
+      if (_scg.canKnock(currentEquipped?.job_eq)) {
+        await _scg.knock(_dcSanctumKey, zoneKey, 1, displayName).catch(() => null);
+      }
       const { roundLogs, finalPlayerHp } = combatResult;
       let combatStats = combatResult.combatStats;
       const zoneDamageSyncApplied = false;
@@ -3076,17 +3333,31 @@ async function handleEnterBattle(interaction) {
         // 記錄 DC 玩家「目前在此區域戰鬥」的存在感(供網頁戰鬥畫面玩家氣泡;含 DC 玩家)
         try { require("../../services/realtime/battlePresence").touch(discordId, { name: displayName, level: currentProg?.level, zone: zoneKey, damage: totalDamage }); } catch (_) { /* noop */ }
         const prev = freshState.damageMap || {};
+        // 掩護射擊歸戶：箭傷從出戰者的貢獻拆出、記給提供箭的神射手（與網頁同規則）
+        const _supportBySrc = combatResult?.combatStats?.supportShotBySource || {};
+        let _supportTotal = 0;
+        for (const _v of Object.values(_supportBySrc)) _supportTotal += Math.max(0, Math.round(Number(_v) || 0));
         const updatedDamageMap = {
           ...prev,
           [discordId]: {
             name: displayName,
             level: currentProg?.level || 1,
-            damage: (prev[discordId]?.damage || 0) + totalDamage,
+            damage: (prev[discordId]?.damage || 0) + Math.max(0, totalDamage - _supportTotal),
             taken: (prev[discordId]?.taken || 0) + totalTaken,
             // 世界王貢獻寶箱：累計本王出戰花的入場費（花錢排名依據）
             spent: (prev[discordId]?.spent || 0) + (Number(session.entryFee) || 0),
           }
         };
+        for (const [_srcId, _amt] of Object.entries(_supportBySrc)) {
+          if (!_srcId || _srcId === discordId) continue;
+          const _add = Math.max(0, Math.round(Number(_amt) || 0));
+          if (_add <= 0) continue;
+          const _auraName = (Array.isArray(freshState.activeHealerAuras)
+            ? freshState.activeHealerAuras.find((a) => a && a.discordId === _srcId)?.displayName
+            : null) || prev[_srcId]?.name || "神射手";
+          const _prevEntry = updatedDamageMap[_srcId] || { name: _auraName, level: prev[_srcId]?.level || 1, damage: 0, taken: 0, spent: 0 };
+          updatedDamageMap[_srcId] = { ..._prevEntry, name: _prevEntry.name || _auraName, damage: (_prevEntry.damage || 0) + _add };
+        }
         const latestHp = Math.max(0, Number(freshState.currentHp ?? monsterHpBeforeBattle));
         const nextHp = Math.max(0, latestHp - totalDamage);
         session.monsterHp = nextHp;
@@ -3111,7 +3382,7 @@ async function handleEnterBattle(interaction) {
           };
           if (zoneKey === HELLFANG_ZONE) {
             // 貢獻榜改用有效傷害(避免打錯流派的玻璃砲空刷排名)
-            nextState.damageMap = { ...nextState.damageMap, [discordId]: { ...nextState.damageMap[discordId], damage: (prev[discordId]?.damage || 0) + wbDamage } };
+            nextState.damageMap = { ...nextState.damageMap, [discordId]: { ...nextState.damageMap[discordId], damage: (prev[discordId]?.damage || 0) + Math.max(0, wbDamage - _supportTotal) } };
             // 翻面累積：依玩家流派歸屬本場有效傷害；該部位達 1/3 HP 首次觸發翻面(抵禦你用比較多的那系,10分,一生一次)
             const _partMax = Number(prevParts.worldBossPartsMaxHp?.[part]) || Number(battleMonster.calc.maxHp) || 0;
             hellfangEventDC = hellfangPartAccrue(nextState, part, _partMax, hellfangPlayerSchool(session.playerStats?.weaponType), wbDamage, Date.now());
@@ -3270,6 +3541,38 @@ async function handleEnterBattle(interaction) {
           _fields.berserkGauge = _bg.next(gaugeBefore, _gaugeCfg, { consumed: gaugeFull });
           currentProg.berserkGauge = _fields.berserkGauge;
         }
+        // 連擊氣條（影舞者）：戰後氣量落地
+        if (shadowOn) {
+          _fields.shadowGauge = _sg.next(combatResult?.shadowGauge ?? shadowGridsBefore, zoneKey);
+          currentProg.shadowGauge = _fields.shadowGauge;
+        }
+        // 氣力格（劍鬼）：戰後氣量落地
+        if (oniOn) {
+          _fields.oniGauge = _og.next(combatResult?.oniGauge ?? oniGridsBefore, zoneKey);
+          currentProg.oniGauge = _fields.oniGauge;
+        }
+        // 日之精靈（聖靈師）：戰後血量落地
+        if (spiritOn) {
+          _fields.sunSpirit = _ssp.next(combatResult?.sunSpirit?.hpPct ?? spiritPctBefore, zoneKey);
+          currentProg.sunSpirit = _fields.sunSpirit;
+        }
+        // 震盪值（神射手）：戰後格數落地
+        if (sniperOn) {
+          _fields.sniperGauge = _sng.next(combatResult?.sniperGauge ?? sniperGridsBefore, zoneKey);
+          currentProg.sniperGauge = _fields.sniperGauge;
+        }
+        // 計謀值（兵聖）：戰後格數落地
+        if (sageOn) {
+          _fields.sageGauge = _sag.next(combatResult?.sageGauge ?? sageGridsBefore, zoneKey);
+          currentProg.sageGauge = _fields.sageGauge;
+        }
+        // 命運骰＋手氣（賭神）：戰後格數與手氣層落地
+        if (diceGodOn) {
+          _fields.diceGauge = _dgg.next(combatResult?.diceGauge ?? diceGridsBefore, zoneKey);
+          _fields.diceLuck = _dgg.nextLuck(combatResult?.diceLuck ?? diceLuckBefore);
+          currentProg.diceGauge = _fields.diceGauge;
+          currentProg.diceLuck = _fields.diceLuck;
+        }
         if (Array.isArray(currentProg.activeEffects) && currentProg.activeEffects.length > 0) {
           const nextActiveEffects = decrementActiveEffects(currentProg.activeEffects, "battle", 1);
           if (nextActiveEffects.length !== currentProg.activeEffects.length) {
@@ -3288,6 +3591,17 @@ async function handleEnterBattle(interaction) {
         if (_knock?.triggered) {
           _dsg.announceStun({ byName: displayName, monsterName: session.monsterName });
           rewardLines.push(`⛰️ **巨神震擊**！你把 **${session.monsterName}** 敲暈了——全體 ${Math.round(_dsg.STUN_WINDOW_MS / 1000)} 秒免傷！`);
+          // 島島龜王：暈眩觸發＝打斷海嘯詠唱（唯二打斷手段之一）
+          if (zoneKey === TURTLE_ZONE) {
+            try {
+              const _tt = require("../../shared/turtleTide");
+              const _fs = await sc.monsterService.getState(zoneKey);
+              if (_tt.interrupt(_fs, `${displayName}（巨神震擊）`)) {
+                await sc.monsterService.saveState(_fs, zoneKey).catch(() => {});
+                rewardLines.push(`⚡ **海洋的引力被斬斷了！** 海嘯詠唱被你打斷——${Math.round(_tt.BREACH_MS / 1000)} 秒破綻期，全員傷害 ×${_tt.BREACH_MULT}！`);
+              }
+            } catch (_) { /* 打斷失敗不影響戰鬥結算 */ }
+          }
         } else if (_knock?.knocked > 0) {
           rewardLines.push(`🔨 暈眩值 +${_knock.knocked}（${_knock.gauge} / ${_knock.threshold}）`);
         }
@@ -3406,12 +3720,14 @@ const WORLD_BOSS_CHEST_BY_MONSTER = {
   "elite-daishi-king": "chest-daishi-king",
   "dragon-king-boss": "chest-dragon-king",
   "0393acee-9851-4bcb-a8f5-fdb60a9968f1": "chest-hellfang-king", // 地獄狼牙王
+  "event-island-turtle": "chest-island-turtle",                  // 島島龜王（期間限定活動）
 };
 function _resolveWorldBossChestId(monster, zoneKey) {
   return WORLD_BOSS_CHEST_BY_MONSTER[monster?.id]
     || (zoneKey === "elite" ? "chest-daishi-king"
       : zoneKey === "dragon_king_lair" ? "chest-dragon-king"
-      : zoneKey === "hellfire_depths" ? "chest-hellfang-king" : null);
+      : zoneKey === "hellfire_depths" ? "chest-hellfang-king"
+      : zoneKey === "event_boss" ? "chest-island-turtle" : null);
 }
 // 建一個寶箱背包項目（同款會堆疊，故 uuid 僅在「新項目」時生效）
 function _buildChestEntry(chestItem, sourceMonsterId) {
@@ -3991,11 +4307,13 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
             // 屬性附魔：由「掉落這件的怪」決定屬性，等級上限＝該怪的濃度（活動區小怪＝水1）。
             // 不建新道具，只在這一件實例標 element/elementLevel；飾品與卡片不附（見 elementDropRoll）。
             try {
-              if (monster?.element) {
+              // 活動限定裝自帶 item.elementDrop（100% 必中、濃度區間自訂）→ 蓋過怪物的 30% 骰
+              if (item.elementDrop || monster?.element) {
                 require("../../shared/elementDropRoll").rollElementForEntry(droppedEntry, {
-                  element: monster.element,
-                  maxLevel: monster.elementLevel || 1,
-                  zone: zoneKey,        // 只有活動區會實際附上
+                  element: monster?.element,
+                  maxLevel: monster?.elementLevel || 1,
+                  zone: zoneKey,        // 只有活動區會實際附上（限定裝的 override 不受此限）
+                  override: item.elementDrop || null,
                 });
               }
             } catch (_) { /* noop */ }
@@ -4561,7 +4879,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 async function handleMonsterZoneButton(interaction) {
   const { customId } = interaction;
   if (!isMonsterZoneButton(customId)) return false;
-  if (customId === BTN.enterBattle || String(customId).startsWith(BTN.enterBattlePrefix)) {
+  if (String(customId).startsWith(BTN.humanCheckPrefix)) {
+    await handleHumanCheck(interaction);
+  }
+  else if (customId === BTN.enterBattle || String(customId).startsWith(BTN.enterBattlePrefix)) {
     await handleEnterBattle(interaction);
   }
   else if (customId === BTN.deleteLog)  await handleDeleteLog(interaction);

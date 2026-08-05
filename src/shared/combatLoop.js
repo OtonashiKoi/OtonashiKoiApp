@@ -13,9 +13,14 @@
  */
 const { collectEquipmentEffects, isEffectConditionMet } = require("./effectEngine");
 const { calcHitChance } = require("./hitChance");
+
+// 吸血總量上限（2026-08-04）：吸血來源可疊加（A階吸血戒 15＋錨點 15＋怪物卡…），
+// 舊制無上限時理論可疊到 75%＝造成傷害的四分之三變回血。
+const LIFESTEAL_CAP_PCT = 25;
 const {
   normalizeElement, normalizeElementLevel, getElementMultiplier, describeElementMatchup,
   resolveWeaponElement, resolveArmorElement, getElementDamageReduction,
+  getSameElementResist, getElementLabel, getElementRelation,
 } = require("./elementSystem");
 const {
   calcAttackTierProbs,
@@ -482,6 +487,13 @@ function shouldSuppressImmediateLog(procEffect) {
   return shouldApplyAsImmediateDamage(procEffect) || shouldApplyAsImmediateHeal(procEffect);
 }
 
+// G6（V0.5 生存地基）：終局王單發拆段。
+// 門檻＝25% 標準血池（Lv50 中庸配 G1 後約 1075 → 270）。
+// 一刀 500 對「格擋/減傷/回復」的數學無意義（半條命直接消失）；拆成 2~3 段各自
+// 獨立判定後，這些生存機制才有介入空間。只砍怪物端，玩家輸出不設任何上限。
+const G6_SEG_REF = 270;
+const G6_MAX_SEGS = 3;
+
 function applyImmediateCardDamageEffect({
   procEffect,
   ownerLabel = "怪物",
@@ -492,6 +504,7 @@ function applyImmediateCardDamageEffect({
   targetMaxHp = 1,
   applyTargetDamage = null,
   mitigate = null,
+  g6 = null,
   log = []
 }) {
   if (!procEffect || !shouldApplyAsImmediateDamage(procEffect) || typeof applyTargetDamage !== "function") {
@@ -521,6 +534,27 @@ function applyImmediateCardDamageEffect({
   const rawDamage = params.mode === "flat"
     ? Math.max(1, Math.round(Number.isFinite(Number(params.value)) ? Number(params.value) : 1))
     : Math.max(1, Math.round(base * (pct / 100)));
+  // G6（V0.5 生存地基）：怪物技能巨額單發拆段——技能核彈原本無格擋無迴避一口氣落下
+  // （古龍王逆鱗焚天 200% ATK ≈ 540＝半條命），拆段後各段獨立格擋（同 BOSS 格擋規則：
+  // 擋住卸去 70%）、各段獨立吃 flatDef → 格擋/重甲的數學對技能傷害也成立。
+  // 只有「怪物→玩家」的呼叫端會傳 g6；玩家打怪的即時傷害不拆（拉底不壓頂）。
+  if (g6 && rawDamage > (Number(g6.threshold) || 0)) {
+    const segs = Math.min(Number(g6.maxSegs) || 3, Math.max(2, Math.ceil(rawDamage / (Number(g6.threshold) || 1))));
+    let total = 0, blockedSegs = 0;
+    for (let i = 0; i < segs; i++) {
+      let part = Math.max(1, Math.round(rawDamage / segs));
+      if (typeof mitigate === "function") part = Math.max(1, Math.round(mitigate(part)));
+      if (Number(g6.blockChance) > 0 && Math.random() * 100 < Number(g6.blockChance)) {
+        part = Math.max(1, Math.round(part * 0.3));
+        blockedSegs++;
+      }
+      applyTargetDamage(part);
+      total += part;
+    }
+    const blockNote = blockedSegs > 0 ? `，🛡️ 其中 **${blockedSegs} 段**被格擋卸去 70%` : "";
+    log.push(`🎴 **${ownerLabel}** 發動【${skillName}】！${skillDescription || ""} 威能拆成 **${segs} 段**襲來${blockNote}，共對 **${targetLabel}** 造成 **${total}** 點${damageLabel}傷害！`);
+    return true;
+  }
   // 即時技能傷害也走目標防禦減免(由呼叫端提供 mitigate,例如 applyDefense)
   const damage = typeof mitigate === "function" ? Math.max(1, Math.round(mitigate(rawDamage))) : rawDamage;
   applyTargetDamage(damage);
@@ -796,16 +830,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   //   低打高：-0% ~ -CAP_DOWN%（最低 50%）
   const LEVEL_DIFF_PCT = 2;
   const LEVEL_DIFF_CAP_UP = 20;
+  // G5（V0.5 生存地基）：怪打玩家方向的等級壓制上限單獨壓到 +10%
+  // （終局怪全都比玩家高 10 級以上＝全額吃滿；玩家打低級怪的 +20% 不動）
+  const LEVEL_DIFF_CAP_UP_MONSTER = 10;
   const LEVEL_DIFF_CAP_DOWN = 50;
-  const calcLevelMult = (atkLv, dstLv) => {
+  const calcLevelMult = (atkLv, dstLv, capUp = LEVEL_DIFF_CAP_UP) => {
     const diff = Math.max(1, atkLv || 1) - Math.max(1, dstLv || 1);
-    if (diff >= 0) return 1 + Math.min(LEVEL_DIFF_CAP_UP, diff * LEVEL_DIFF_PCT) / 100;
+    if (diff >= 0) return 1 + Math.min(capUp, diff * LEVEL_DIFF_PCT) / 100;
     return 1 - Math.min(LEVEL_DIFF_CAP_DOWN, -diff * LEVEL_DIFF_PCT) / 100;
   };
   const playerLevel = Math.max(1, Number(options.playerLevel || pStats.level || 1));
   const monsterLevel = Math.max(1, Number(mCalc?.level || options.monsterLevel || 1));
   const playerAttackLevelMult = calcLevelMult(playerLevel, monsterLevel);
-  const monsterAttackLevelMult = calcLevelMult(monsterLevel, playerLevel);
+  const monsterAttackLevelMult = calcLevelMult(monsterLevel, playerLevel, LEVEL_DIFF_CAP_UP_MONSTER); // G5
 
   // 🐺 狼王・連牙亂舞：連段卡技 → 每段傷害 90%（開戰前一次縮放 atk，段數由下方連段控制）
   const _hellfangCombo = options.monsterEquipped?.special_1?.monsterCardSkill?.key === "hellfang_combo";
@@ -819,9 +856,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     return Math.max(1, Math.round(base * roll));
   };
   // 怪物攻擊浮動：與玩家對齊，0.7~1.0；怪 INT 每點 +0.01 抬高下限
+  // G4（V0.5 生存地基）：INT 抬浮動下限 cap 1.0 → 0.85——
+  // 終局怪 INT 70+ 原本把下限頂滿＝每刀都是理論最大值，玩家零波動保命空間
   const mDmgMin = (typeof mCalc?.dmgMin === 'number')
     ? mCalc.dmgMin
-    : Math.min(1.0, 0.7 + Math.max(0, Number(mCalc?.int) || 0) * 0.01);
+    : Math.min(0.85, 0.7 + Math.max(0, Number(mCalc?.int) || 0) * 0.01);
   const mDmgMax = (typeof mCalc?.dmgMax === 'number') ? mCalc.dmgMax : 1.0;
   const rollMDmg = (base) => Math.max(1, Math.round(base * (mDmgMin + Math.random() * Math.max(0, mDmgMax - mDmgMin))));
 
@@ -899,22 +938,138 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   } catch (_) { /* noop */ }
   // ── build 錨點共用：承傷累積 / 回血攔截。預設路徑＝與原本完全相同，未裝這些錨點者不受任何影響。──
   let _totalDmgTaken = 0;   // 沒苦硬吃：累積承受總傷害
-  let _endureBurst = null;  // 沒苦硬吃：{ round, mult }
-  let _endureFired = false;
+  let _endureBurst = null;  // 沒苦硬吃：{ everyRounds, mult }——每 N 回合反彈一次期間累積承傷
+  let _endureTakenSinceBurst = 0;  // 上次反彈之後累積的承受傷害
   let _healToDamage = 0;    // 聖人比拳頭：回血→對敵傷害倍率(0=關)
   let _healImmune = false;  // 對鮮血的渴望：無法被治療(自身吸血除外)
   let _extendRounds = 0;    // 時間管理大師：回合上限改為此值(0=不變)
   let _noPlayerAtk = false; // 沒苦硬吃：無法造成一般攻擊傷害(只靠 endure_burst 反彈)
   let _totalHealDone = 0;   // 聖人任務指標 heal_done：實際回血量累計
-  const _hurt = (d) => { const x = Math.max(0, Number(d) || 0); pHp = pHp - x; _totalDmgTaken += x; };
+  // ── 聖域師（結界師二轉）────────────────────────────────────────────
+  // 符文結界：開場展開，厚度＝maxHp×basePct% + INT×perInt；所有受傷先扣結界（_hurt 內）。
+  // 吸收累積 → 共鳴反爆（回合尾三時機引爆，見回合結尾區塊）。
+  // 聖域窗口（區域聖域值滿）：options.sanctuaryCutPct/sanctuaryHealPct——任何職業都吃得到。
+  let sanctumCfg = null;
+  try { sanctumCfg = require("./jobAdvancement").getSanctum(options.equipped?.job_eq); } catch (_) { sanctumCfg = null; }
+  const _sanctumMax = sanctumCfg
+    ? Math.max(1, Math.round(
+      (pStats.maxHp || 1) * (Number(sanctumCfg.barrierBasePct) || 25) / 100
+      + Math.max(0, Number(pStats.int) || 0) * (Number(sanctumCfg.barrierPerInt) || 25)
+    ))
+    : 0;
+  let _sanctumBarrier = _sanctumMax;
+  let _sanctumAcc = 0;          // 本場吸收累積（反爆基數）
+  let _sanctumRoundAbsorb = 0;  // 本回合吸收（戰報行用）
+  let _sanctumBroke = false;    // 結界剛被打爆 → 回合尾破碎引爆
+  let _sanctumDetonated = false;
+  const _sanctuaryCutPct = Math.max(0, Math.min(90, Number(options.sanctuaryCutPct) || 0));
+  const _sanctuaryHealPct = Math.max(0, Math.min(50, Number(options.sanctuaryHealPct) || 0));
+
+  // ── 龜甲庇護（島島龜王卡・兩段式）────────────────────────────────
+  // 殼在：受傷 −drPct%＋先扣殼；殼破：破殼而出，剩餘戰鬥傷害 +breakDmgPct%（使用者定案 2026-07-29）
+  let _tshellCfg = null;      // 由裝備效果 key "turtle_shell" 註冊（見效果註冊迴圈）
+  let _tshellMax = 0, _tshellHp = 0;
+  let _tshellBroken = false;      // 破殼＝傷害加成開啟（打到就生效）
+  let _tshellBrokeThisRound = false; // 回合尾宣告用
+
+  // ── 賭神（賭徒二轉）────────────────────────────────────────────────
+  // 命運骰：6 格（有攻擊的回合 +1），滿的那回合改丟 3 顆——第三顆骰出 N ＝ 當回合 N 連擊；
+  // 手氣正旺：兩顆傷害骰平均 >3 → +1 層（每層 +2%）、<3 → 歸零、=3 → 維持；跨場由呼叫端持久化。
+  let diceGodCfg = null;
+  try { diceGodCfg = require("./jobAdvancement").getDiceGod(options.equipped?.job_eq); } catch (_) { diceGodCfg = null; }
+  const _diceGaugeMax = diceGodCfg ? Math.max(1, Number(diceGodCfg.gaugeMax) || 6) : 6;
+  const _diceLuckCap = diceGodCfg ? Math.max(1, Number(diceGodCfg.luckMaxStacks) || 25) : 25;
+  const _diceLuckPct = diceGodCfg ? Math.max(0, Number(diceGodCfg.luckPerStackPct) || 2) : 2;
+  let _diceGrids = diceGodCfg ? Math.max(0, Math.min(_diceGaugeMax, Math.floor(Number(options.diceGaugeGrids) || 0))) : 0;
+  let _diceLuck = diceGodCfg ? Math.max(0, Math.min(_diceLuckCap, Math.floor(Number(options.diceLuckStacks) || 0))) : 0;
+  const _hurt = (d) => {
+    let x = Math.max(0, Number(d) || 0);
+    // 聖域護佑：受傷減免（先減再給結界吃，兩者可疊）
+    if (_sanctuaryCutPct > 0 && x > 0) x = Math.max(0, Math.round(x * (1 - _sanctuaryCutPct / 100)));
+    // 龜甲庇護（最外層的殼）：殼在＝受傷減免＋先扣殼；殼破＝開啟破殼而出
+    if (_tshellCfg && _tshellHp > 0 && x > 0) {
+      x = Math.max(0, Math.round(x * (1 - _tshellCfg.drPct / 100)));
+      const eat = Math.min(_tshellHp, x);
+      _tshellHp -= eat;
+      x -= eat;
+      if (_tshellHp <= 0) { _tshellBroken = true; _tshellBrokeThisRound = true; }
+    }
+    // 符文結界：先扣結界再扣血；吸收量累積成反爆基數
+    if (_sanctumBarrier > 0 && x > 0) {
+      const eat = Math.min(_sanctumBarrier, x);
+      _sanctumBarrier -= eat;
+      _sanctumAcc += eat;
+      _sanctumRoundAbsorb += eat;
+      if (_sanctumBarrier <= 0) _sanctumBroke = true;
+      x -= eat;
+    }
+    pHp = pHp - x;
+    _totalDmgTaken += x;
+    _endureTakenSinceBurst += x;   // 沒苦硬吃：累積到下次反彈
+    // 最大單發承傷（爆發條件「單發 ≤ 40% maxHp」的量測欄；含自傷成本，量測時自行留意）
+    if (x > _maxHitTaken) _maxHitTaken = x;
+  };
+  let _maxHitTaken = 0;
+
+  // ── 日之精靈（聖靈師二轉）────────────────────────────────────────────
+  // 代承怪物攻勢（主人的護盾/免死/反傷/受傷回血在精靈代承時不觸發）；
+  // 血量＝主人 maxHp、跨場沿用由呼叫端持久化（options.sunSpiritHpPct 進、result.sunSpirit 出）。
+  let sunSpiritCfg = null;
+  try { sunSpiritCfg = require("./jobAdvancement").getSunSpirit(options.equipped?.job_eq); } catch (_) { sunSpiritCfg = null; }
+  const _spiritMaxHp = sunSpiritCfg ? Math.max(1, Math.round(pStats.maxHp || 1)) : 0;
+  let _spiritHp = sunSpiritCfg
+    ? Math.max(0, Math.min(_spiritMaxHp, Math.round(_spiritMaxHp * Math.max(0, Math.min(100, Number(options.sunSpiritHpPct ?? 100))) / 100)))
+    : 0;
+  const _spiritAbsorb = (d) => {
+    if (!sunSpiritCfg || _spiritHp <= 0) return false;
+    _spiritHp = Math.max(0, _spiritHp - Math.max(0, Number(d) || 0));
+    return true;
+  };
+
+  // ── 神射手（弓箭手二轉）────────────────────────────────────────────
+  // 神速反擊：這回合對手沒打到你（揮空/被閃/來不及出手/被暈眩/被冰封）→ 多一箭；
+  // 震盪值：4 格、每個有攻擊的回合 +1，滿 4 → 立刻震盪射擊＋下回合對手構不到你。
+  let sniperCfg = null;
+  try { sniperCfg = require("./jobAdvancement").getSniper(options.equipped?.job_eq); } catch (_) { sniperCfg = null; }
+  let _sniperGrids = sniperCfg
+    ? Math.max(0, Math.min(4, Math.floor(Number(options.sniperGaugeGrids) || 0)))
+    : 0;
+  let _monsterKnockbackRound = 0;
+
+  // ── 兵聖（軍師二轉）────────────────────────────────────────────────
+  // 計謀值 3 格（有攻擊的回合 +1），滿 → 隨機施展一計；狀態旗標由各計設定。
+  let sageCfg = null;
+  try { sageCfg = require("./jobAdvancement").getSage(options.equipped?.job_eq); } catch (_) { sageCfg = null; }
+  let _sageGrids = sageCfg
+    ? Math.max(0, Math.min(3, Math.floor(Number(options.sageGaugeGrids) || 0)))
+    : 0;
+  // 盜靈（盜賊二轉 B）：巧手＝大成功倍率覆寫；得手＝大成功以上判定盜取。
+  // 設定表在 jobAdvancement.T2_BRANCHES.rogue[1]，沒有徽章 → null → 完全走現況。
+  // ⚠️ 每隻怪只能偷一次：呼叫端傳 options.stealUsed（該玩家對「這隻怪」是否已偷過），
+  //    戰鬥內偷成功時把 combatStats.stealTriggered 設 true，由呼叫端負責發物品與落地狀態。
+  let spiritThiefCfg = null;
+  try { spiritThiefCfg = require("./jobAdvancement").getSpiritThief(options.equipped?.job_eq); } catch (_) { spiritThiefCfg = null; }
+  let _stealUsed = options.stealUsed === true;
+
+  let _sageMistRound = 0;    // 瞞天過海：這回合怪必打空、你必中
+  let _sageChainRound = 0;   // 連環之計：這回合固定 3 連擊
+  let _sageAllInFrom = 0;    // 破釜沉舟：區間內傷害×mult、受傷×takenMult、不可閃避格擋
+  let _sageAllInUntil = 0;
+  // 追加打擊的基準：最近一次主擊的「未爆擊基底」（含武器/徽章/最終傷害等整條倍率鏈）。
+  // 沒有這個基準時（開場還沒出手）退回裸 ATK 管線——修正前追加箭少乘半條鏈、只有真擊一半威力。
+  let _lastMainBase = 0;
   // 屬性防具減免：只在「我方防具屬性剋制該怪」時 >0。
   // ⚠️ 必須在「算完傷害、印進戰報之前」就套用，不能藏在 _hurt 裡——
   //    各處都是 log.push(`造成 ${dmg} 點傷害`) 搭配 _hurt(dmg)，
   //    若在 _hurt 內偷偷打折，戰報數字會與實際扣血不符（＝騙人的戰報）。
   const _applyElementDR = (raw) => {
     const x = Math.max(0, Number(raw) || 0);
-    if (elementDmgReduction <= 0 || x <= 0) return x;
-    return Math.max(1, Math.round(x * (1 - elementDmgReduction)));
+    if (x <= 0) return x;
+    let mult = 1;
+    if (elementDmgReduction > 0) mult *= (1 - elementDmgReduction);
+    if (sameElementResist.mult !== 1) mult *= sameElementResist.mult; // 七屬性抗性（雙向，無抗性 >1）
+    if (mult === 1) return x;
+    return Math.max(1, Math.round(x * mult));
   };
   const _healPlayer = (h, opts) => {
     const amt = Math.max(0, Number(h) || 0);
@@ -969,14 +1124,36 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 防禦側＝防具＋飾品的屬性等級加總（封頂4）→ 只在「我方屬性剋制該怪」時提供受傷減免
   // 任一方無屬性/等級 0 → 不生效；現有 69 隻怪與 487 件道具都沒有 element 欄位，既有內容零影響。
   const monsterElement = normalizeElement(options.monsterElement);
+  // ── 戰鬥姿態（聖劍士／元素師等二轉）：提前到屬性計算之前解析——
+  //    元素師的姿態自帶屬性（炎圈火2/凍霜水2），要參與下方的武器屬性疊加。
+  //    options.stance 沒給 → battleStance = null → 行為完全同現況。
+  let battleStance = null;
+  try {
+    battleStance = require("./jobAdvancement").resolveStance(options.equipped?.job_eq, options.stance);
+  } catch (_) { battleStance = null; }
   // 武器多屬性並存(水3火2...)：依「這場打的怪」動態挑出身上哪個屬性生效，見 elementSystem._pickAgainstDefender
   const _weaponEl = resolveWeaponElement(options.equipped || {}, monsterElement);
-  const playerElement = options.playerElement !== undefined
+  let playerElement = options.playerElement !== undefined
     ? normalizeElement(options.playerElement)
     : _weaponEl.element;
-  const playerElementLevel = options.playerElementLevel !== undefined
+  let playerElementLevel = options.playerElementLevel !== undefined
     ? normalizeElementLevel(options.playerElementLevel)
     : _weaponEl.level;
+  // 姿態自帶屬性（元素師）：與武器屬性**同屬性 → 等級相加（封頂4）**、**不同屬性 → 取等級高的那邊**
+  if (battleStance?.stanceElement) {
+    const _se = battleStance.stanceElement;
+    const _seEl = normalizeElement(_se.element);
+    const _seLv = normalizeElementLevel(_se.level);
+    if (_seEl && _seLv > 0) {
+      if (!playerElement || playerElementLevel <= 0) {
+        playerElement = _seEl; playerElementLevel = _seLv;
+      } else if (playerElement === _seEl) {
+        playerElementLevel = normalizeElementLevel(playerElementLevel + _seLv);
+      } else if (_seLv > playerElementLevel) {
+        playerElement = _seEl; playerElementLevel = _seLv;
+      }
+    }
+  }
   const elementMult = getElementMultiplier(playerElement, monsterElement, playerElementLevel);
 
   // 防具側：受傷減免（0~0.4）
@@ -986,6 +1163,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     ? normalizeElementLevel(options.armorElementLevel)
     : _armorEl.level;
   const elementDmgReduction = getElementDamageReduction(armorElement, monsterElement, armorElementLevel);
+
+  // 七屬性抗性（V0.5 生存系統）：防具側「同屬性」濃度 vs 怪物屬性，雙向——
+  // 沒對應抗性承傷加重、有則減輕。與上面的剋制減免可並存（不同投資），同一個漏斗疊乘。
+  const sameElementResist = getSameElementResist(options.equipped || {}, monsterElement);
 
   // 裝備/卡片的「對特定屬性怪物增傷」(bonus_vs_element)。
   // 只來自裝備被動、整場不變，故在此一次算好；與相剋同層(終傷)相乘，
@@ -1003,13 +1184,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   }
   const elementBonusMult = 1 + elementBonusPct / 100;
 
-  // ── 戰鬥姿態（聖劍士等二轉）──────────────────────────────────────────
-  // 開打前選定，整場適用。設定表在 jobAdvancement.T2_BRANCHES[*].stances，
-  // 這裡只讀表、不寫死職業判斷。options.stance 沒給 → battleStance = null → 行為完全同現況。
-  let battleStance = null;
-  try {
-    battleStance = require("./jobAdvancement").resolveStance(options.equipped?.job_eq, options.stance);
-  } catch (_) { battleStance = null; }
+  // ── 戰鬥姿態的非屬性接點（battleStance 已在上方屬性區之前解析）──────
+  // 元素師三姿態：炎圈（每回合 MATK% 火傷）／嵐暴（固定 3 段法術）／凍霜（區域冰凍值，累積在呼叫端）
+  const fireCircleCfg = battleStance?.fireCircle || null;    // { matkPct }
+  const stormVolleyCfg = battleStance?.stormVolley || null;  // { hits, pctPerHit }
 
   // ── 血怒（狂戰士二轉被動）────────────────────────────────────────────
   // 每缺 1% HP → 該回合 ATK +perMissPct%，封頂 capPct%。逐回合看「當下」HP，
@@ -1036,7 +1214,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 玩家每一擊的總倍率 = 世界王部位弱點 × 屬性相剋 × 對屬性增傷。
   // 三者都是「乘進每一擊終傷」的同類機制，合併成一個乘數即可涵蓋主擊/連擊/三元/反擊/各DOT
   //   （函式名沿用 applyBossVuln 以免動到既有呼叫點）。
-  const playerHitMult = bossVulnMult * (stanceElementMult ?? elementMult) * elementBonusMult;
+  // 演奏加成（吟遊詩人）：上一場的演奏結果 → 本場全部輸出 ×0.7~1.8（乘進 playerHitMult＝主擊/連擊/DOT 全吃）
+  const _bardMult = Math.max(0.1, Number(options.bardDamageMult) || 1);
+  const playerHitMult = bossVulnMult * (stanceElementMult ?? elementMult) * elementBonusMult * _bardMult;
   const applyBossVuln = (raw) => (playerHitMult === 1 ? raw : Math.max(0, Math.round((Number(raw) || 0) * playerHitMult)));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
   let endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
@@ -1095,9 +1275,79 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     monster: { ...(options.cardCooldowns?.monster || {}) },
   };
   const jobSkillCooldowns = {}; // { [skillKey]: remainingTurns }
+  // ── 職業技能「成本」通用機制（2026-07-28 新增，所有職業共用）──
+  //   技能可帶 cost: { type: "combo" | "hp", value: N }
+  //     combo — 消耗區域連段（跨場資源、陣亡歸零）；戰鬥內只累計消耗量，
+  //             由呼叫端拿 result.jobSkillComboSpent 扣除並落地（同影襲 RUSH_COMBO_COST 的作法）
+  //     hp    — 消耗當前 HP 的 N%（場內資源，立即扣）
+  //   不夠付 → 技能不進池／不觸發（不會欠帳）。
+  let _jobSkillComboSpent = 0;
+  //   另有通用欄位 oncePerBattle: true —— 一場只發動一次（消耗型技能用，避免一場吃掉數倍資源）
+  const _skillUsedThisBattle = new Set();
+  const _comboAvailable = () => Math.max(0, (Number(options.zoneComboCount) || 0) - _jobSkillComboSpent);
+  /** 這個技能現在付得起嗎（不扣款） */
+  const _canAffordSkill = (sk) => {
+    if (sk?.oncePerBattle && _skillUsedThisBattle.has(sk.key)) return false;
+    const c = sk?.cost;
+    if (!c || !(Number(c.value) > 0)) return true;
+    if (c.type === "combo") return _comboAvailable() >= Number(c.value);
+    if (c.type === "hp") return pHp > Math.max(1, Math.round(pStats.maxHp * (Number(c.value) / 100)));
+    return true;
+  };
+  /** 實際扣款（發動時呼叫）；回傳給戰報用的敘述片段 */
+  const _paySkillCost = (sk) => {
+    if (sk?.key) _skillUsedThisBattle.add(sk.key);
+    const c = sk?.cost;
+    if (!c || !(Number(c.value) > 0)) return "";
+    if (c.type === "combo") {
+      _jobSkillComboSpent += Number(c.value);
+      return `（消耗 ${c.value} 連段）`;
+    }
+    if (c.type === "hp") {
+      const cost = Math.max(1, Math.round(pStats.maxHp * (Number(c.value) / 100)));
+      _hurt(cost);
+      return `（消耗 ${cost} HP）`;
+    }
+    return "";
+  };
   let forceMonsterCritFail = false; // 賭徒「千術」：本回合敵方攻擊必定大失敗
+  let _greatChanceBonusRound = 0;   // 盜靈「探囊」：本回合大成功機率 +N（不是必定大成功）
   let _burstUsed = false;           // 劍鬼「斬」：一場只發動一次
   let jobSkillUsedThisRound = false;
+  // ── 連擊氣條（影舞者・盜賊二轉）────────────────────────────────────
+  // 設定走 jobAdvancement 表；沒有徽章 → null → 行為完全同現況。
+  //   累氣：本回合有出現連擊 → +1 格（每回合最多 1）；滿 5 格 → 下一回合固定 5 連擊（該回合不累氣）
+  //   影襲（options.shadowRushHits）：第一回合固定 7 連擊、會累氣
+  //   氣量跨場沿用由呼叫端持久化（options.shadowGaugeGrids 進、result.shadowGauge 出）
+  let shadowCfg = null;
+  try {
+    const _br = require("./jobAdvancement").getT2Branch(String(options.equipped?.job_eq?.itemId || options.equipped?.job_eq?.id || ""));
+    if (_br && _br.shadowGauge) shadowCfg = require("./shadowGauge");
+  } catch (_) { shadowCfg = null; }
+  let _shadowGrids = shadowCfg ? Math.max(0, Math.min(shadowCfg.GAUGE_MAX, Number(options.shadowGaugeGrids) || 0)) : 0;
+  let _shadowBurstNext = false;
+  // 帶著滿格進場（上一場滿在結尾）→ 第一回合就是殘影亂舞
+  if (shadowCfg && _shadowGrids >= shadowCfg.GAUGE_MAX) { _shadowBurstNext = true; _shadowGrids = 0; }
+  let _shadowForcedHits = 0;      // 本回合的固定連擊段數（0 = 無）
+  let _shadowChargeThisRound = true; // 殘影亂舞的回合不累氣
+  let _shadowChargeRoundMark = 0;    // 本回合已累過氣（每回合最多 +1 格；雙持副手連擊不重複吃）
+
+  // ── 氣力格（劍鬼・斬 2026-07-22 改版）────────────────────────────
+  // 3 格、戰鬥內累積：每回合有攻擊到對手 +1 格（每回合最多 1 格），
+  // 滿 3 格 → 下一回合**自動施放斬**（無視防禦與等級差、可爆擊），氣力歸零重積。
+  // 斬的倍率＝1 + 0.1 × min(當前區域連段, 30)——連段決定斬多痛、氣力決定何時斬。
+  let oniCfg = null;
+  try {
+    const _obr = require("./jobAdvancement").getT2Branch(String(options.equipped?.job_eq?.itemId || options.equipped?.job_eq?.id || ""));
+    if (_obr && _obr.combo) oniCfg = require("./zoneCombo");
+  } catch (_) { oniCfg = null; }
+  // 跨場沿用（A 案）：呼叫端用 options.oniGaugeGrids 帶入上一場剩餘氣量（同區/10 分鐘內），
+  // 帶滿格（＝上一場滿了但先結束）→ 第 1 回合就自動斬；戰後由 result.oniGauge 帶出去持久化。
+  let _oniGrids = oniCfg ? Math.max(0, Math.min(oniCfg.ONI_GAUGE_MAX, Number(options.oniGaugeGrids) || 0)) : 0;
+  let _oniBurstNext = false;
+  if (oniCfg && _oniGrids >= oniCfg.ONI_GAUGE_MAX) { _oniGrids = 0; _oniBurstNext = true; }
+  const _oniMult = oniCfg ? oniCfg.oniBurstMult(Number(options.zoneComboCount) || 0) : 1;
+
   // 「目標現在是不是暈眩中」——全遊戲統一口徑：
   //   stunRoundsLeft         ＝ 武器 proc／震地重擊／巨神震擊(時間暈眩) 都寫這裡
   //   monsterActiveEffects   ＝ 卡片/技能掛上去的 stun 效果
@@ -1111,6 +1361,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     blockCount: 0,
     stunCount: 0,
     burnTriggerCount: 0,
+    supportShotBySource: {}, // 掩護射擊（神射手）：提供者 → 本場箭傷合計（世界王結算歸戶用）
+    stealTriggered: false,   // 盜靈「得手」：本場是否成功盜取（呼叫端據此發物品＋標記該怪已被偷）
+    greatHitCount: 0,        // 大成功以上的攻擊次數（盜靈數值驗證用）
     attackCount: 0,
     // 「實際有攻擊到的回合數」（同一回合打幾下都只算 1）——
     // 矮人戰士長敲世界王暈眩條用；attackCount 是每一擊都 +1（雙持/骰子會 +2），不能拿來當回合數
@@ -1169,9 +1422,25 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             };
             continue;
           }
+          // 龜甲庇護（島島龜王卡）：兩段式——殼在減傷、殼破增傷
+          if (ep.key === "turtle_shell") {
+            _tshellCfg = {
+              shellPct: Math.max(1, Number(ep.params?.shellPct) || 20),
+              drPct: Math.max(0, Math.min(80, Number(ep.params?.drPct) || 25)),
+              breakDmgPct: Math.max(0, Number(ep.params?.breakDmgPct) || 20),
+            };
+            _tshellMax = Math.max(1, Math.round((pStats.maxHp || 1) * _tshellCfg.shellPct / 100));
+            _tshellHp = _tshellMax;
+            continue;
+          }
           // build 錨點四件（沒苦硬吃 / 聖人比拳頭 / 對鮮血的渴望 / 時間管理大師）
           if (ep.key === "endure_burst") {
-            _endureBurst = { round: Math.max(1, Number(ep.params?.round) || 14), mult: Math.max(1, Number(ep.params?.mult) || 5) };
+            // 2026-08-04 改制：原本「撐到第 15 回合一次反彈 ×5」→ 改成「每 N 回合反彈一次」，
+            // 反彈的是「上次反彈之後累積的承傷」，不是整場總和（不然會越滾越誇張）。
+            _endureBurst = {
+              everyRounds: Math.max(1, Number(ep.params?.everyRounds ?? ep.params?.round) || 3),
+              mult: Math.max(1, Number(ep.params?.mult) || 5),
+            };
             continue;
           }
           if (ep.key === "heal_to_damage") {
@@ -1224,6 +1493,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             appliedAt: 0,
             sourceType: "equipment_passive",
             sourceId: "equipment_passive:" + ep.key,
+            // 保留來源標記：附魔衍生的詞條要跟裝備本身的效果分開（例如吸血上限只作用在裝備效果）
+            source: ep.source || null,
           });
         }
       }
@@ -1273,17 +1544,33 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const log = [`**【第 ${round} 回合】**`];
     _curLog = log;   // 讓 _healLogged 能把回血/回血化刃寫進「當回合」的戰報
     // 屬性相剋提示：只在第一回合印一次（每回合印會洗版）
+    // 開場狀態列（戰報重整：相剋/護甲/抗性壓成一行；「無抗性」警告因具教學作用保留獨立一行）
     if (round === (Number(options.startRound) || 1)) {
-      const elementLine = describeElementMatchup(playerElement, monsterElement, playerElementLevel, elementDmgReduction);
-      if (elementLine) log.push(elementLine);
+      const _openParts = [];
+      const _rel = getElementRelation(playerElement, monsterElement);
+      const _aL = getElementLabel(playerElement);
+      const _dL = getElementLabel(monsterElement);
+      if (playerElementLevel > 0 && _rel === "advantage") {
+        _openParts.push(`攻：${_aL}${playerElementLevel}剋${_dL} +${Math.round(playerElementLevel * 10)}%`);
+      } else if (playerElementLevel > 0 && _rel === "disadvantage") {
+        _openParts.push(`攻：${_dL}剋${_aL}${playerElementLevel} −${Math.round(playerElementLevel * 10)}%`);
+      }
+      const _defBits = [];
+      if (elementDmgReduction > 0) _defBits.push(`剋制減免 ${Math.round(elementDmgReduction * 100)}%`);
+      if (sameElementResist.mult < 1) _defBits.push(`${_dL}抗 ${sameElementResist.pct}%（−${Math.round((1 - sameElementResist.mult) * 100)}%承傷）${sameElementResist.pct >= 100 ? "滿抗" : ""}`);
+      if (_defBits.length) _openParts.push(`防：${_defBits.join("・")}`);
+      if (_openParts.length) log.push(`⚜️ 開戰｜${_openParts.join("｜")}`);
+      if (sameElementResist.mult > 1) {
+        log.push(`⚠️ 你沒有 **${_dL}屬性抗性**——${mName} 的${_dL}屬性攻勢加重 **${Math.round((sameElementResist.mult - 1) * 100)}%**！（防具鑲嵌${_dL}屬性石可抵禦，每顆 +10% 抗性）`);
+      }
     }
-    // 沒苦硬吃：扛到指定回合仍不死 → 對敵爆發「累積承受總傷害 × 倍率」
-    if (_endureBurst && !_endureFired && round >= _endureBurst.round && pHp > 0 && _totalDmgTaken > 0) {
-      _endureFired = true;
-      const _burst = Math.round(_totalDmgTaken * _endureBurst.mult);
+    // 沒苦硬吃：每 N 回合反彈一次「這段期間累積的承受傷害 × 倍率」
+    if (_endureBurst && pHp > 0 && round % _endureBurst.everyRounds === 0 && _endureTakenSinceBurst > 0) {
+      const _burst = Math.round(_endureTakenSinceBurst * _endureBurst.mult);
       mHp -= _burst;
       totalDamage += _burst;
-      log.push(`💥【沒苦硬吃】扛過 ${_endureBurst.round} 回合的痛，全數奉還！造成 **${_burst}** 爆發傷害（承受總傷 ${_totalDmgTaken} × ${_endureBurst.mult}）`);
+      log.push(`💥【沒苦硬吃】第 ${round} 回合反擊！這 ${_endureBurst.everyRounds} 回合承受的痛全數奉還——造成 **${_burst}** 傷害（期間承傷 ${_endureTakenSinceBurst} × ${_endureBurst.mult}）`);
+      _endureTakenSinceBurst = 0;
     }
     if (options.tickCardCooldowns !== false) {
       for (const bucket of Object.values(cardCooldowns)) {
@@ -1296,6 +1583,22 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       jobSkillCooldowns[key] = Math.max(0, Number(jobSkillCooldowns[key] || 0) - 1);
     }
     jobSkillUsedThisRound = false;
+    // ── 連擊氣條：決定本回合的固定連擊 ──
+    if (shadowCfg) {
+      _shadowForcedHits = 0;
+      _shadowChargeThisRound = true;
+      if (round === 1 && Number(options.shadowRushHits) > 0) {
+        // 影襲：第一回合固定 7 連擊（會累氣）
+        _shadowForcedHits = Math.min(7, Math.floor(Number(options.shadowRushHits)));
+        log.push(`🌀 **影襲**！斬碎 ${shadowCfg.RUSH_COMBO_COST} 點連段化作殘影——本回合固定 **${_shadowForcedHits} 連擊**！`);
+      } else if (_shadowBurstNext) {
+        // 殘影亂舞：滿氣消耗後的固定 5 連擊（不累氣）
+        _shadowBurstNext = false;
+        _shadowForcedHits = shadowCfg.BURST_HITS;
+        _shadowChargeThisRound = false;
+        log.push(`🌀 **殘影亂舞**！氣條盡數釋放——本回合固定 **${_shadowForcedHits} 連擊**！`);
+      }
+    }
     // ── 血祭（狂戰士）：開場真的砍自己一刀 ──
     // 以前用 options.startPlayerHp 讓戰鬥「從 70% 開始」，但前端血條是從滿血播的、
     // 伺服器也沒發出扣血事件 → 玩家看不到扣血、數字還對不上。改成第 1 回合實際扣，
@@ -1310,6 +1613,36 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
     if (round === 1 && jobProfile.jobName) {
       log.push(`✨ ${jobProfile.jobName} ${rand(jobFlavor.intro)}`);
+    }
+    // 演奏加成宣告（吟遊詩人：上一場的演奏結果）
+    if (round === 1 && options.bardPerformNote) {
+      log.push(String(options.bardPerformNote));
+    }
+    // 海嘯（島島龜王）：詠唱完成後 60 秒內出戰＝開場即死——真即死，無視結界/聖域/免死（使用者定案）
+    if (round === 1 && options.tsunamiDeath) {
+      log.push(`🌊🌊🌊 **海嘯吞沒了一切！**`);
+      log.push(`💀 你在滔天巨浪前沒有任何抵抗的餘地……（海嘯期間出戰＝即死，等浪退了再上）`);
+      pHp = 0;
+      outcome = "lose";
+      roundLogs.push(log.join("\n"));
+      break;
+    }
+    // 龜甲庇護（島島龜王卡）：開場宣告
+    if (round === 1 && _tshellCfg) {
+      log.push(`🐢 **龜甲庇護**展開！（殼 ${_tshellHp}）殼在期間受到傷害 −${_tshellCfg.drPct}%`);
+    }
+    // 符文結界／聖域護佑：開場宣告（前端結界條靠「結界值 N」這行初始化，格式勿改）
+    if (round === 1 && sanctumCfg) {
+      log.push(`🔷 **符文結界展開**！（結界值 ${_sanctumBarrier}）`);
+    }
+    if (round === 1 && (_sanctuaryCutPct > 0 || _sanctuaryHealPct > 0)) {
+      log.push(`🏛️ **聖域護佑中**——本場受到傷害 -${_sanctuaryCutPct}%、每回合回復 ${_sanctuaryHealPct}% HP！`);
+    }
+    // 日之精靈登場宣告（格式固定：前端精靈血條靠這行與代承/治療行逐回合更新）
+    if (round === 1 && sunSpiritCfg) {
+      log.push(_spiritHp > 0
+        ? `☀️ **日之精靈**應召而來，守護在你身前！（精靈 ${_spiritHp} / ${_spiritMaxHp}）`
+        : `💫 日之精靈尚未甦醒，本場由你獨自作戰。`);
     }
 
     const monsterIsSilenced = Array.isArray(monsterActiveEffects) && monsterActiveEffects.some(e => {
@@ -1368,8 +1701,28 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       : 0;
     const wbDotMult = 1 - wbEffDef / 100;
 
+    // ── 炎圈（元素師）：怪物每回合受到 MATK×matkPct% 火傷——開場就燒、整場持續 ──
+    //    走 DOT 同一套修正（等級壓制／世界王防%／部位弱點）；世界王的「其他部位」
+    //    由呼叫端用 combatStats.fireCircleDamage 在戰後鏡射結算。
+    if (fireCircleCfg && outcome === null && mHp > 0) {
+      let _fcDmg = Math.max(1, Math.round((pStats.atk || 1) * (Number(fireCircleCfg.matkPct) || 10) / 100));
+      _fcDmg = Math.max(1, Math.round(_fcDmg * playerAttackLevelMult * wbDotMult));
+      if (_noPlayerAtk) _fcDmg = 0;
+      _fcDmg = applyBossVuln(_fcDmg);
+      if (_fcDmg > 0) {
+        mHp -= _fcDmg;
+        totalDamage += _fcDmg;
+        combatStats.fireCircleDamage = (combatStats.fireCircleDamage || 0) + _fcDmg;
+        combatStats.fireCircleTicks = (combatStats.fireCircleTicks || 0) + 1;
+        combatStats.burnTriggerCount += 1; // 炎圈也算燃燒觸發（焰獄審判等任務指標）
+        log.push(`🔥 **炎圈**灼燒！${mName} 受到 **${_fcDmg}** 點火焰傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+        if (mHp <= 0) { outcome = "win"; roundLogs.push(log.join("\n")); break; }
+      }
+    }
+
     // ── 應用怪物的 DOT 效果（燒傷/freeze/麻痺） ──
     let monsterFrozenThisRound = false;
+    const _dotM = []; // 戰報重整：怪物身上的 DOT 各自照算，顯示彙總成一行（[標籤, 傷害]）
     if (Array.isArray(monsterRoundEffects)) {
       for (const mEff of monsterRoundEffects) {
         if (!mEff || !mEff.key) continue;
@@ -1395,7 +1748,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           mHp -= burnDmg;
           totalDamage += burnDmg;
           combatStats.burnTriggerCount += 1; // 焰獄審判任務:玩家施加給怪的燃燒每跳一次算「觸發燃燒」1 次
-          log.push(`🔥 燒傷持續！${mName} 受到 **${burnDmg}** 點灼燒傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          _dotM.push(["燒", burnDmg]);
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -1411,7 +1764,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (_noPlayerAtk) poisonDmg = 0; poisonDmg = applyBossVuln(poisonDmg); // 世界王部位弱點倍率(牙狼)
           mHp -= poisonDmg;
           totalDamage += poisonDmg;
-          log.push(`☠️ 中毒持續！${mName} 受到 **${poisonDmg}** 點毒素傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          _dotM.push(["毒", poisonDmg]);
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -1446,7 +1799,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (_noPlayerAtk) bleedDmg = 0; bleedDmg = applyBossVuln(bleedDmg); // 世界王部位弱點倍率(牙狼)
           mHp -= bleedDmg;
           totalDamage += bleedDmg;
-          log.push(`🩸 流血持續！${mName} 受到 **${bleedDmg}** 點流血傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          _dotM.push(["血", bleedDmg]);
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -1461,7 +1814,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (_noPlayerAtk) shockDmg = 0; shockDmg = applyBossVuln(shockDmg); // 世界王部位弱點倍率(牙狼)
           mHp -= shockDmg;
           totalDamage += shockDmg;
-          log.push(`⚡ 感電持續！${mName} 受到 **${shockDmg}** 點電擊傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          _dotM.push(["電", shockDmg]);
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -1475,7 +1828,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           curseDmg = Math.max(1, Math.round(curseDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= curseDmg;
           totalDamage += curseDmg;
-          log.push(`🕯️ 詛咒持續！${mName} 受到 **${curseDmg}** 點暗影傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          _dotM.push(["影", curseDmg]);
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -1490,7 +1843,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           lightDmg = Math.max(1, Math.round(lightDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= lightDmg;
           totalDamage += lightDmg;
-          log.push(`⚡ 閃電持續！${mName} 受到 **${lightDmg}** 點雷電傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          _dotM.push(["雷", lightDmg]);
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -1506,7 +1859,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (_noPlayerAtk) shockDmg = 0; shockDmg = applyBossVuln(shockDmg); // 世界王部位弱點倍率(牙狼)
           mHp -= shockDmg;
           totalDamage += shockDmg;
-          log.push(`⚡ 震盪持續！${mName} 受到 **${shockDmg}** 點震盪傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          _dotM.push(["震", shockDmg]);
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -1521,10 +1874,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           curseDmg = Math.max(1, Math.round(curseDmg * playerAttackLevelMult * wbDotMult)); // DOT 也吃等級壓制(世界王再吃 def%)
           mHp -= curseDmg;
           totalDamage += curseDmg;
-          log.push(`🌑 詛咒持續！${mName} 受到 **${curseDmg}** 點詛咒傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          _dotM.push(["詛", curseDmg]);
           if (mHp <= 0) { outcome = "win"; break; }
         }
       }
+    }
+    // 戰報重整：DOT 彙總一行（左敘事右數字；細項｜剩餘 HP）
+    if (_dotM.length) {
+      const _dt = _dotM.reduce((s, x) => s + x[1], 0);
+      log.push(`☠️ 持續傷害侵蝕著 ${mName} —— **${_dt}**（${_dotM.map((x) => `${x[0]} ${x[1]}`).join("＋")}｜怪物剩 ${Math.max(0, mHp)} HP）`);
     }
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
 
@@ -1552,6 +1910,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // 與普攻同一條 applyDefense 管線 → 堆防禦對技能也有效，不再無視防禦秒人。
     // DOT 也走玩家防禦管線；末端再套屬性防具減免（各處都是 mitigateDot 後才 log，故戰報數字正確）
     const mitigateDot = (dmg) => _applyElementDR(applyDefense(dmg, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1));
+    const _dotP = []; // 戰報重整：玩家承受的 DOT 彙總顯示（[標籤, 傷害]）
     if (Array.isArray(options.playerActiveEffects)) {
       for (const dotEffect of options.playerActiveEffects) {
         if (!dotEffect || !dotEffect.key) continue;
@@ -1582,7 +1941,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (Number.isFinite(Number(dotParams.maxDamage))) dotDmg = Math.min(dotDmg, Number(dotParams.maxDamage));
           dotDmg = mitigateDot(dotDmg);
           _hurt(dotDmg);
-          log.push(`☠️ 中毒傷害！造成 **${dotDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          _dotP.push(["毒", dotDmg]);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
         // 流血 DOT（怪物施加給玩家）
@@ -1595,7 +1954,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (Number.isFinite(Number(dotParams.maxDamage))) bleedDmg = Math.min(bleedDmg, Number(dotParams.maxDamage));
           bleedDmg = mitigateDot(bleedDmg);
           _hurt(bleedDmg);
-          log.push(`🩸 流血持續！你受到 **${bleedDmg}** 點流血傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          _dotP.push(["血", bleedDmg]);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
         // 燒傷 DOT（怪物施加給玩家）
@@ -1608,7 +1967,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (Number.isFinite(Number(dotParams.maxDamage))) burnDmg = Math.min(burnDmg, Number(dotParams.maxDamage));
           burnDmg = mitigateDot(burnDmg);
           _hurt(burnDmg);
-          log.push(`🔥 燒傷持續！你受到 **${burnDmg}** 點灼燒傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          _dotP.push(["燒", burnDmg]);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
         // 閃電 DOT（怪物施加給玩家）
@@ -1621,7 +1980,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (Number.isFinite(Number(dotParams.maxDamage))) lightDmg = Math.min(lightDmg, Number(dotParams.maxDamage));
           lightDmg = mitigateDot(lightDmg);
           _hurt(lightDmg);
-          log.push(`⚡ 閃電傷害！你受到 **${lightDmg}** 點雷電傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          _dotP.push(["雷", lightDmg]);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
 
@@ -1635,7 +1994,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (Number.isFinite(Number(dotParams.maxDamage))) shockDmg = Math.min(shockDmg, Number(dotParams.maxDamage));
           shockDmg = mitigateDot(shockDmg);
           _hurt(shockDmg);
-          log.push(`⚡ 震盪傷害！你受到 **${shockDmg}** 點震盪傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          _dotP.push(["震", shockDmg]);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
 
@@ -1649,12 +2008,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (Number.isFinite(Number(dotParams.maxDamage))) curseDmg = Math.min(curseDmg, Number(dotParams.maxDamage));
           curseDmg = mitigateDot(curseDmg);
           _hurt(curseDmg);
-          log.push(`🌑 詛咒傷害！你受到 **${curseDmg}** 點詛咒傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          _dotP.push(["詛", curseDmg]);
           if (pHp <= 0) { outcome = "lose"; break; }
         }
       }
     }
 
+    // 戰報重整：玩家承受的 DOT 彙總一行
+    if (_dotP.length) {
+      const _dt = _dotP.reduce((s, x) => s + x[1], 0);
+      log.push(`🩸 傷勢與毒火啃噬著你 —— **${_dt}**（${_dotP.map((x) => `${x[0]} ${x[1]}`).join("＋")}｜你剩 ${Math.max(0, pHp)} HP）`);
+    }
     // 玩家被 DOT（中毒/流血/燒傷等）打死時，立刻結束本回合，避免之後的治療光環/世界王技能在死亡訊息後又被寫進戰報
     if (outcome === "lose") { roundLogs.push(log.join("\n")); break; }
 
@@ -1688,9 +2052,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
       for (const pe of partyEffects) {
         if (!pe || !pe.key) continue;
-        const sourceName = pe.sourceName || "未知";
+        const providerName = pe.sourceName || "未知";
+        // 分組鍵＝提供者＋來源標籤：同一玩家的「職業光環」與「裝備光環（錨點等）」分開列，
+        // 括號標籤才不會張冠李戴（例：錨點光環曾被標成「盜賊徽章」）
+        const sourceName = `${providerName}｜${pe.sourceJobName || ""}`;
         if (!auraDetails.has(sourceName)) {
           auraDetails.set(sourceName, {
+            providerName,
             jobName: pe.sourceJobName || null,
             heal: 0,
             dmgBoost: 0,
@@ -1704,7 +2072,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             critReduction: 0,
             agiBoost: 0,
             comboBoost: 0,
-            critRateBoost: 0
+            critRateBoost: 0,
+            supportShot: 0
           });
         }
 
@@ -1724,10 +2093,34 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (_healToDamage > 0) {
               // 聖者：自己的治療化為傷害 → 戰報明講（避免玩家看到「回復」誤會）
               const _dealt = _mBefore - mHp;
-              if (_dealt > 0) log.push(`🩸 **聖者・回血化刃**！${sourceName} 的治療 **${heal}** 化為 **${_dealt}** 傷害（×${_healToDamage}）！（怪物剩 ${Math.max(0, mHp)} HP）`);
+              if (_dealt > 0) log.push(`🩸 **聖者・回血化刃**！${providerName} 的治療 **${heal}** 化為 **${_dealt}** 傷害（×${_healToDamage}）！（怪物剩 ${Math.max(0, mHp)} HP）`);
               detail.healToDmg = (detail.healToDmg || 0) + Math.max(0, _dealt);
             } else {
               detail.heal = heal;
+            }
+          }
+        }
+        // 掩護射擊（神射手）：區內神射手每回合替你補一箭——傷害型「光環」，
+        // 吃提供者的 ATK/爆擊（出戰當下快照）、目標防禦與部位/屬性倍率；世界王結算時歸戶給提供者
+        if (pe.key === 'support_shot') {
+          const _ssPct = Number(pe.params?.value ?? 0);
+          const _ssAtk = Math.max(0, Number(pe.params?.casterAtk) || 0);
+          // 自己出戰時不吃自己的掩護（人在前線就沒人在高處放箭）
+          if (pe.isSelfAura !== true && _ssPct > 0 && _ssAtk > 0 && outcome === null && mHp > 0) {
+            let ssDmg = Math.max(1, Math.round(_ssAtk * _ssPct / 100));
+            ssDmg = Math.max(1, Math.round(applyDefense(ssDmg, adjustedMCalc.flatDef || 0, Math.max(0, Math.min(95, adjustedMCalc.def || 0)), _ssAtk)));
+            const ssCrit = Math.random() * 100 < Math.max(0, Number(pe.params?.casterCrit) || 0);
+            if (ssCrit) ssDmg = Math.max(1, Math.round(ssDmg * 2));
+            ssDmg = applyBossVuln(ssDmg);
+            if (ssDmg > 0) {
+              mHp -= ssDmg;
+              totalDamage += ssDmg;
+              const _srcKey = String(pe.sourceDiscordId || pe.sourceName || "掩護");
+              combatStats.supportShotBySource[_srcKey] = (combatStats.supportShotBySource[_srcKey] || 0) + ssDmg;
+              log.push(`🏹 ${ssCrit ? "✨**會心**！" : ""}**${providerName}** 的掩護射擊！對 ${mName} 造成 **${ssDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+              const detail = auraDetails.get(sourceName);
+              if (detail) detail.supportShot = _ssPct;
+              if (mHp <= 0) { outcome = "win"; }
             }
           }
         }
@@ -1833,7 +2226,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       // 第 1 回合宣告全部光環加持（整理成單一區塊，每位提供者一行；後續回合略過）
       if (round === 1) {
         const auraLines = [];
-        for (const [sourceName, detail] of auraDetails) {
+        for (const [, detail] of auraDetails) {
           const parts = [];
           if (detail.dmgBoost !== 0) parts.push(`傷害提升 ${detail.dmgBoost}%`);
           if (detail.bossDmgBoost !== 0) parts.push(`Boss 傷害提升 ${detail.bossDmgBoost}%`);
@@ -1848,10 +2241,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (detail.comboBoost > 0) parts.push(`連擊率 +${detail.comboBoost}%`);
           if (detail.critRateBoost > 0) parts.push(`爆擊率 +${detail.critRateBoost}%`);
           if (detail.heal > 0) parts.push(`每回合回復 ${detail.heal} HP`);
+          if (detail.supportShot > 0) parts.push(`掩護射擊（每回合一箭・ATK ${detail.supportShot}%）`);
           if (detail.healToDmg > 0) parts.push(`🩸 聖者：回血化為傷害（本回合 ${detail.healToDmg}）`);
           if (parts.length === 0) continue;
           const jobTag = detail.jobName ? `（${detail.jobName}）` : "";
-          const who = (sourceName && sourceName !== "未知") ? `${sourceName}${jobTag}` : (detail.jobName || "光環");
+          const who = (detail.providerName && detail.providerName !== "未知") ? `${detail.providerName}${jobTag}` : (detail.jobName || "光環");
           auraLines.push(`　• ${who}：${parts.join("、")}`);
         }
         if (auraLines.length > 0) {
@@ -1860,6 +2254,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
       }
     } catch (e) {}
+    // 掩護射擊可能在光環階段就終結怪物（低血量雜魚）→ 直接收場
+    if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+
+    // ── 破釜沉舟（兵聖）：區間內全部玩家傷害 ×mult（乘進 roundDmgMultiplier，主擊/反擊全吃）──
+    const _sageAllInNow = Boolean(sageCfg) && round >= _sageAllInFrom && _sageAllInFrom > 0 && round <= _sageAllInUntil;
+    if (_sageAllInNow) {
+      roundDmgMultiplier *= Number(sageCfg.allin?.mult) || 3;
+      log.push(`🚩 **破釜沉舟**生效中——本回合傷害 ×${Number(sageCfg.allin?.mult) || 3}！`);
+    }
 
     const monsterIsStunned = stunRoundsLeft > 0;
     const getRoundTargetDamageMultiplier = () => {
@@ -1919,7 +2322,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             ownerMaxHp: mHpInit || mHp || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
             targetLabel: '你',
-            applyTargetDamage: (damage) => { _hurt(damage); return pHp; },
+            // 日之精靈：怪物技能傷害也先由精靈承受（代承是「所有攻擊」，不是只有普攻）
+            applyTargetDamage: (damage) => { if (!_spiritAbsorb(damage)) _hurt(damage); return pHp; },
             applyOwnerHeal: (heal) => { mHp = Math.min(mHpInit, mHp + reduceMonsterHeal(heal)); return mHp; },
           buffKeys: MONSTER_BUFF_KEYS,
           debuffKeys: MONSTER_DEBUFF_KEYS,
@@ -1965,8 +2369,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             targetLabel: '你',
             sourceAtk: adjustedMCalc.atk || mCalc.atk || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
-            applyTargetDamage: (damage) => { _hurt(damage); },
-            mitigate: (d) => applyDefense(d, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1), // 即時技能也吃玩家防禦
+            applyTargetDamage: (damage) => { if (!_spiritAbsorb(damage)) _hurt(damage); }, // 日之精靈代承技能傷害
+            // 即時技能也吃玩家防禦＋屬性層（剋制減免/七屬性抗性）——王技能＝屬性攻擊，這就是「魔防」
+            mitigate: (d) => _applyElementDR(applyDefense(d, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1)),
+            // G6：巨額技能單發拆段（門檻與普攻同一常數；格擋率用姿態/面板基礎值——
+            // 本回合的臨時格擋加成在玩家回合才計算，技能先手時尚不存在）
+            g6: {
+              threshold: G6_SEG_REF,
+              maxSegs: G6_MAX_SEGS,
+              blockChance: Math.min(95, Number.isFinite(Number(battleStance?.blockChance))
+                ? Number(battleStance.blockChance)
+                : (pStats.blockChance || 0)),
+            },
             log
           })) {
             appliedAnyNormalProc = true;
@@ -2047,7 +2461,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 玩家攻擊 ──
-    log.push(`──── ⚔️ 你的回合 ────`);
+    // （戰報重整 2026-08-02：回合分隔線移除——行首圖示已能分辨敵我，每回合省 2 行）
     const attackCount = pStats.isDualWield ? 2 : 1;
     // 雙持副手那一擊的傷害倍率。原本副手是「完整第二次攻擊」(等於傷害 ×2)，
     // 實測輸出是單手劍+盾的 1.55 倍，遠勝雙手大劍的 1.10 倍 → 副手打折。
@@ -2373,14 +2787,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (Number.isFinite(Number(c.targetHpBelowPct)) && monsterHpPct >= Number(c.targetHpBelowPct)) return false;
           // 姿態專屬技能：只有在對應姿態下才進入隨機池（沒選姿態 → 這類技能一律不可用）
           if (c.stance && c.stance !== battleStance?.key) return false;
+          // 武器綁定技能（賭徒綁骰子等）：武器不符 → 不進池
+          if (c.weaponType && c.weaponType !== pStats.weaponType) return false;
           // 暈眩專屬技能（矮人戰士長「餘震」）：目標暈眩中才進池；兩種暈眩都算
           if (c.targetStunned === true && !_targetStunnedNow(round)) return false;
+          // 成本（cost: combo/hp）付不起 → 不進池
+          if (!_canAffordSkill(sk)) return false;
           return true;
         });
         if (available.length > 0) {
           const chosen = available[Math.floor(Math.random() * available.length)];
           jobSkillUsedThisRound = true;
           if (Number(chosen.cooldownTurns) > 0) jobSkillCooldowns[chosen.key] = Number(chosen.cooldownTurns);
+          const _costNote = _paySkillCost(chosen);
+          if (_costNote) log.push(`💠 【${chosen.name}】${_costNote}`);
           const JOB_SKILL_OFFENSIVE = new Set([
             'atk_down', 'def_down', 'hit_down', 'agi_down', 'stun', 'silence',
             'poison', 'bleed', 'burn', 'lightning', 'freeze', 'charm', 'dark_curse'
@@ -2424,16 +2844,25 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 自訂觸發：round_start_chance（回合開始擲自己的機率，不吃 35% 閘門）──
     //    目前用於賭徒「千術」：讓敵方本回合攻擊必定大失敗（自傷並跳過該次攻擊）。
     forceMonsterCritFail = false;
+    _greatChanceBonusRound = 0;
     if (!playerIsStunned && !playerIsFrozen && outcome === null) {
       const _customSkills = (Array.isArray(options.equipped?.job_eq?.jobSkills)
         ? options.equipped.job_eq.jobSkills : []).filter((sk) => sk?.trigger === 'round_start_chance');
       for (const sk of _customSkills) {
         if (!sk.key || (jobSkillCooldowns[sk.key] || 0) > 0) continue;
+        // 武器綁定（賭徒技能綁骰子等）：condition.weaponType 不符 → 不發動
+        if (sk.condition?.weaponType && sk.condition.weaponType !== pStats.weaponType) continue;
         const ch = Number.isFinite(Number(sk.chance)) ? Number(sk.chance) : 100;
         if (Math.random() * 100 >= ch) continue;
+        if (!_canAffordSkill(sk)) continue;   // 成本付不起 → 不觸發
         if (Number(sk.cooldownTurns) > 0) jobSkillCooldowns[sk.key] = Number(sk.cooldownTurns);
+        const _costNote = _paySkillCost(sk);
         if ((sk.procEffects || []).some((pe) => pe?.key === 'force_crit_fail')) forceMonsterCritFail = true;
-        log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${sk.name}】！${sk.description || ''}`);
+        // 盜靈「探囊」：本回合大成功機率提升（不是必定大成功）
+        for (const pe of (Array.isArray(sk.procEffects) ? sk.procEffects : [])) {
+          if (pe?.key === 'great_chance_up') _greatChanceBonusRound = Math.max(_greatChanceBonusRound, Number(pe.params?.value) || 0);
+        }
+        log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${sk.name}】！${sk.description || ''}${_costNote}`);
       }
     }
 
@@ -2481,23 +2910,39 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // 否則「LUK+15」之類的技能只會改面板數字、對 ATK 與爆擊率毫無作用。
     const playerStatBonus = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
     let playerCritDamageMultiplier = 1;
-    let playerLifestealPct = 0;
+    let playerLifestealPct = 0;          // 走總量上限（裝備效果／怪物卡／錨點）
+    let playerLifestealEnchantPct = 0;   // 附魔來源，不吃上限
     let playerLifestealStrongPct = 0;
-    // 吸血結算（主擊／副手／三元／武器多段／連擊共用）。
-    // 錨點「對鮮血的渴望」寫的是「造成傷害的 20% 回血」，但舊版只結算主擊那一下的 dmg，
-    // 三元補打／骰子多段／連擊全部漏掉（玩家回報「只會算第一下」）。改成各段結算完一起吸，
-    // 每個來源合併成一行戰報（避免 7 連擊洗出 7 行）。
-    const _applyLifesteal = (dealt, srcLabel = "") => {
-      if (!(dealt > 0)) return;
-      if (playerLifestealPct > 0) {
-        const healAmt = Math.max(1, Math.round(dealt * (playerLifestealPct / 100)));
+    // ── 吸血（2026-08-04 改制）──────────────────────────────────────
+    // 舊制：每一段傷害（主擊/副手/三元/多段/連擊）各自結算一次。
+    //   問題：吸血變成「傷害 × 攻擊次數」的乘法——盜賊一場打 25 下就吸 25 次，
+    //   而攻擊次數本身已經是它的優勢，等於雙重加成。
+    // 新制：**一回合只結算一次**，用該回合造成的總傷害算；且**總吸血%有上限**。
+    //   → 攻擊次數不再放大吸血；多段武器與單擊武器在同樣輸出下吸得一樣多。
+    let _lifestealDealtThisRound = 0;
+    const _applyLifesteal = (dealt) => {
+      if (dealt > 0) _lifestealDealtThisRound += dealt;   // 只累積，回合結束才吸
+    };
+    const _settleLifestealForRound = () => {
+      const dealt = _lifestealDealtThisRound;
+      _lifestealDealtThisRound = 0;
+      if (!(dealt > 0) || pHp <= 0) return;
+      // 上限只作用在「裝備效果」那份；附魔那份直接加在後面
+      const cappedPct = Math.min(LIFESTEAL_CAP_PCT, playerLifestealPct);
+      const strongPct = Math.min(Math.max(0, LIFESTEAL_CAP_PCT - cappedPct), playerLifestealStrongPct);
+      const pct = cappedPct + playerLifestealEnchantPct;
+      if (pct > 0) {
+        const healAmt = Math.max(1, Math.round(dealt * (pct / 100)));
         pHp = _healPlayer(healAmt, { lifesteal: true });
-        log.push(`💚 吸取生命力${srcLabel}！恢復 **${healAmt}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+        const _note = playerLifestealEnchantPct > 0
+          ? `${cappedPct}%＋附魔 ${Math.round(playerLifestealEnchantPct * 10) / 10}%`
+          : `${cappedPct}%`;
+        log.push(`💚 吸取生命力！恢復 **${healAmt}** HP（本回合造成 ${dealt} × ${_note}｜你剩 ${pHp} / ${pStats.maxHp}）`);
       }
-      if (playerLifestealStrongPct > 0) {
-        const sHeal = Math.max(1, Math.round(dealt * (playerLifestealStrongPct / 100)));
+      if (strongPct > 0) {
+        const sHeal = Math.max(1, Math.round(dealt * (strongPct / 100)));
         pHp = _healPlayer(sHeal, { lifesteal: true });
-        log.push(`💜 強力吸血${srcLabel}！恢復 **${sHeal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
+        log.push(`💜 強力吸血！恢復 **${sHeal}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
       }
     };
     let playerDefBonusPct = 0;
@@ -2602,8 +3047,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         } else if (eff.key === 'crit_damage_up') {
           playerCritDamageMultiplier *= (1 + Math.abs(effValue) / 100);
         } else if (eff.key === 'lifesteal') {
-          // 玩家吸血（來自玩家卡片技能）
-          playerLifestealPct += effValue;
+          // 玩家吸血。**附魔來源不吃總量上限**（2026-08-04 定案）——
+          // 附魔是隨機滾出來的、每條 1~7%，屬於「裝備養成」的收益；
+          // 上限只用來擋「專門吸血裝備疊出來」的極端（戒指＋錨點＋怪物卡）。
+          if (eff.source === 'enchant') playerLifestealEnchantPct += effValue;
+          else playerLifestealPct += effValue;
         } else if (eff.key === 'life_steal_strong') {
           // 強力吸血：傷害的 value% 回復為 HP（來自玩家卡片技能）
           playerLifestealStrongPct += effValue;
@@ -2722,8 +3170,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (effValue > playerEchoPct) playerEchoPct = effValue;
         } else if (eff.key === 'triple_strike') {
           // 三元牌：固定每回合攻擊 N 段、每段傷害為原本的 1/N（走連擊系統，算連擊數）
+          // 嵐暴（元素師）不吃三元牌——姿態自帶固定 3 段，特殊武器/卡片多段全部無效
           const n = Math.max(2, Math.round(Number(effValue) || Number(effParams.hits) || 3));
-          if (n > playerTripleStrike) playerTripleStrike = n;
+          if (!stormVolleyCfg && n > playerTripleStrike) playerTripleStrike = n;
         } else if (eff.key === 'guaranteed_combo') {
           // 狼牙王卡：連擊首 N 段必定連上（不看連擊率、必中），之後回到自身連擊率
           const n = Math.max(0, Math.round(Number(effValue) || Number(effParams.hits) || 0));
@@ -2787,6 +3236,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         (pStats.dex || 0) + (playerStatBonus.dex || 0),
         (pStats.luk || 0) + (playerStatBonus.luk || 0)
       );
+      // 盜靈「探囊」：本回合大成功機率 +N（從「成功」那一段挪過來，總和維持 100）
+      if (_greatChanceBonusRound > 0) {
+        const _mv = Math.min(_greatChanceBonusRound, atkTierProbs.success);
+        atkTierProbs.success -= _mv;
+        atkTierProbs.great += _mv;
+      }
       const atkTier = rollAttackTier(atkTierProbs);
 
       // 大失敗：自殘 30%，跳過本次攻擊
@@ -2853,14 +3308,48 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         } else {
           log.push(`🎲 擲出 ${_pips}`);
         }
+
+        // ── 賭神：手氣正旺（兩顆傷害骰平均 >3 疊層、<3 歸零、=3 維持；跨場沿用）──
+        if (diceGodCfg && diceRolls.length >= 2) {
+          const _avg = (diceRolls[0] + diceRolls[1]) / 2;
+          if (_avg > 3) {
+            if (_diceLuck < _diceLuckCap) {
+              _diceLuck = Math.min(_diceLuckCap, _diceLuck + 1);
+              log.push(`🀄 手氣正旺！（${_diceLuck} 層，傷害 +${_diceLuck * _diceLuckPct}%）`);
+            }
+          } else if (_avg < 3 && _diceLuck > 0) {
+            _diceLuck = 0;
+            log.push(`🀄 手氣轉冷……傷害回到基礎。`);
+          }
+        }
+
+        // ── 賭神：命運骰（集滿 ${_diceGaugeMax} 格的那回合改丟 3 顆）──
+        //    第三顆骰出 N ＝ 本回合 N 連擊，每一擊都是前面兩顆骰子的傷害
+        //    （骰面沿用循環、各擊獨立擲爆擊）；放完歸零重集。
+        if (diceGodCfg && outcome === null && mHp > 0) {
+          _diceGrids = Math.min(_diceGaugeMax, _diceGrids + 1);
+          if (_diceGrids >= _diceGaugeMax) {
+            _diceGrids = 0;
+            const _fate = 1 + Math.floor(Math.random() * faces);
+            log.push(`🎰 **命運骰**擲出 ${DICE_PIPS[_fate - 1] || _fate}　——　本回合 **${_fate} 連擊**！每一擊都是 ${_pips} 的傷害！`);
+            if (_fate > 1) {
+              const _base2 = diceRolls.slice(0, _segCount);
+              diceRolls = Array.from({ length: _segCount * _fate }, (_, i) => _base2[i % _segCount]);
+            }
+          } else {
+            // 每次累積都要有戰報行：前端命運值格靠這行逐回合亮格（格式勿改）
+            log.push(`⚡ 命運值 +1（${_diceGrids}/${_diceGaugeMax}）`);
+          }
+        }
       }
-      // 取第 n 段（0-indexed）的骰面倍率
+      // 取第 n 段（0-indexed）的骰面倍率；賭神再乘手氣正旺（每層 +2%）
       const diceMultFor = (idx) => {
         if (!diceRolls || !Array.isArray(_faceMults)) return 1;
-        if (diceOverride != null) return diceOverride;
+        const _luckMult = diceGodCfg ? (1 + _diceLuck * _diceLuckPct / 100) : 1;
+        if (diceOverride != null) return diceOverride * _luckMult;
         const face = diceRolls[idx];
         if (!face) return 1;
-        return Number(_faceMults[face - 1]) || 1;
+        return (Number(_faceMults[face - 1]) || 1) * _luckMult;
       };
 
       // ── on_attack 觸發：武器附加狀態類職業 proc（揮擊即判定，閃避也算；揮空 critFail/fail 已跳過）──
@@ -3003,7 +3492,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       // 大成功 / 完美：跳過 HIT/DODGE 必中
       const forceHit = (atkTier === 'great' || atkTier === 'perfect');
 
-      if (monsterIsStunned || forceHit || Math.random() * 100 < hitChance) {
+      if (monsterIsStunned || forceHit || options.forcePlayerHit || (sageCfg && _sageMistRound === round) || Math.random() * 100 < hitChance) {
         // 破防判定（斧）
         const isBreak = Math.random() * 100 < pStats.armorBreakChance;
         const effectiveDef = isBreak ? 0 : Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
@@ -3019,7 +3508,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         let conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
         // 怪物圖鑑加成：對該怪累積擊殺愈多,傷害愈高（最高 +25%；由呼叫端依玩家進度計算後傳入）
-        const _bestiaryBonusPct = Math.max(0, Math.min(25, Number(options.bestiaryBonusPct) || 0));
+        // 上限預設＝圖鑑基準（shared/bestiary MAX_BONUS_PCT，2026-08-04 起 15）；
+        // 兵聖「知彼」由呼叫端傳放大後的 bestiaryBonusCapPct
+        const _bestiaryDefaultCap = (() => {
+          try { return require("./bestiary").MAX_BONUS_PCT; } catch (_) { return 15; }
+        })();
+        const _bestiaryCap = Number(options.bestiaryBonusCapPct) > 0 ? Number(options.bestiaryBonusCapPct) : _bestiaryDefaultCap;
+        const _bestiaryBonusPct = Math.max(0, Math.min(_bestiaryCap, Number(options.bestiaryBonusPct) || 0));
         if (_bestiaryBonusPct > 0) {
           conditionalBonusMultiplier *= (1 + _bestiaryBonusPct / 100);
         }
@@ -3065,6 +3560,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         if (playerBonusFirstHitPct > 0 && round === 1 && combatStats.attackCount === 0) {
           conditionalBonusMultiplier *= (1 + playerBonusFirstHitPct / 100);
+        }
+        // 龜甲庇護・破殼而出：殼破後剩餘戰鬥傷害提升
+        if (_tshellBroken && _tshellCfg && _tshellCfg.breakDmgPct > 0) {
+          conditionalBonusMultiplier *= (1 + _tshellCfg.breakDmgPct / 100);
         }
         // ── 守護右：擁有護盾時增傷 ──
         if (playerBonusWhileShieldedPct > 0 && Array.isArray(options.playerActiveEffects)) {
@@ -3112,13 +3611,24 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             }
           }
         }
-        // 劍鬼「斬」：消耗全部連段，第 1 回合的第一擊打出 comboBurstMult 倍。
-        // 一場只發動一次（用 _burstUsed 記），之後回合恢復正常。
+        // ── 盜靈「巧手」：大成功以上（含完美）本擊額外變痛 ──
+        //    乘進條件乘數 → attackBase 與爆擊路徑都自然繼承（爆擊會從 attackBase 重算，
+        //    直接改階級倍率會被丟掉；同血怒的作法）。
+        if (spiritThiefCfg?.deftHands && (atkTier === 'great' || atkTier === 'perfect')) {
+          const _deft = Number(spiritThiefCfg.deftHands.aboveGreatMult) || 1;
+          if (_deft > 1) conditionalBonusMultiplier *= _deft;
+        }
+        // 劍鬼「斬」（2026-07-22 改版）：氣力 3 格滿 → 本回合第一擊自動施放。
+        // 舊的手動路徑（comboBurstMult）保留給舊客戶端相容，但按鈕已移除。
         let _burstMult = 1;
         if (!_burstUsed && Number(options.comboBurstMult) > 1 && round === 1 && a === 0) {
           _burstMult = Number(options.comboBurstMult);
           _burstUsed = true;
           log.push(`🗡️ **斬**！連段盡數傾瀉於這一擊——傷害 **×${_burstMult.toFixed(1)}**！`);
+        } else if (oniCfg && _oniBurstNext && a === 0) {
+          _oniBurstNext = false;
+          _burstMult = Math.max(1, _oniMult);
+          log.push(`🗡️ **斬**！氣力滿溢、一刀既出——傷害 **×${_burstMult.toFixed(1)}**（無視防禦與等級差）！`);
         }
         // 一刀流：斬不吃等級壓制（下面另外也跳過防禦計算）
         const _lvMultForHit = _burstMult > 1 ? 1 : playerAttackLevelMult;
@@ -3134,6 +3644,43 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const atkTierMult = ATTACK_TIER_MULT[atkTier] ?? 1.0;
         if (atkTier !== 'perfect' && atkTierMult !== 1.0) {
           dmg = Math.max(1, Math.round(dmg * atkTierMult));
+        }
+
+        // ── 盜靈「得手」：大成功以上判定盜取；每隻怪只能偷一次（含世界王整隻）──
+        //    成功 → 這一擊額外變痛 + 標記 stealTriggered（呼叫端負責發物品與狀態落地）
+        if (atkTier === 'great' || atkTier === 'perfect') {
+          combatStats.greatHitCount += 1;
+          const _stealCfg = spiritThiefCfg?.steal;
+          if (_stealCfg && !_stealUsed) {
+            const _lukNow = (pStats.luk || 0) + (playerStatBonus.luk || 0);
+            const _chance = Math.max(0, Math.min(100,
+              (Number(_stealCfg.baseChancePct) || 0) + _lukNow * (Number(_stealCfg.lukPerPoint) || 0)
+            ));
+            if (Math.random() * 100 < _chance) {
+              _stealUsed = true;
+              combatStats.stealTriggered = true;
+              const _mult = Number(_stealCfg.hitDamageMult) || 1;
+              if (_mult > 1) dmg = Math.max(1, Math.round(dmg * _mult));
+              log.push(`🗝️ **盜靈的手法**——趁隙探入，從 ${mName} 身上得手了！那一擊格外刁鑽！`);
+              // 「順手牽羊」：得手順帶的增益（非技能、無成本），走效果清單才吃得到 duration
+              const _rb = _stealCfg.riderBuff;
+              if (_rb && Array.isArray(options.playerActiveEffects)) {
+                const _turns = Math.max(1, Number(_rb.turns) || 1);
+                const _push = (key, value) => {
+                  if (!(Number(value) > 0)) return;
+                  options.playerActiveEffects.push({
+                    key, target: "self", trigger: "passive",
+                    params: { value: Number(value), duration: { mode: "turns", value: _turns } },
+                    appliedAt: round,
+                    sourceType: "job_passive", sourceId: "spiritthief:rider",
+                  });
+                };
+                _push("luk_up", _rb.lukUp);
+                _push("crit_rate_up", _rb.critRateUp);
+                log.push(`✨ **順手牽羊**——得手的餘勢讓手感順了起來（LUK +${_rb.lukUp}、爆擊 +${_rb.critRateUp}，${_turns} 回合）`);
+              }
+            }
+          }
         }
 
 
@@ -3158,6 +3705,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         // 先記住「未爆擊」的傷害，格擋穿防時會回退到這個值
         const nonCritDamageBase = dmg;
+        if (a === 0) _lastMainBase = nonCritDamageBase; // 追加打擊（神射手/兵聖）的等值基準
 
         // 爆擊判定：完美攻擊階級 = 必爆擊；否則照原本爆擊率
         const effectiveCrit = Math.min(100, (pStats.crit || 0) + playerCritRateBonus + extraHighHpCrit + roundPartyCritRateBoostPct + roundCritStatBonus);
@@ -3235,6 +3783,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         // 三元牌：主擊改為 1/N 並吃連擊增傷（連擊戒/龍鱗）→ 分成 N 段（算連擊；補打段見下方各自獨立擲爆擊）
         if (playerTripleStrike >= 2) dmg = Math.max(1, Math.round(dmg / playerTripleStrike * (pStats.comboDamageMultiplier || 1)));
+        // 嵐暴（元素師）：主手攻擊改為 3 段法術彈的第 1 段（每段＝pctPerHit%；副手追擊不縮放、維持單追擊）
+        if (stormVolleyCfg && a === 0) dmg = Math.max(1, Math.round(dmg * (Number(stormVolleyCfg.pctPerHit) || 70) / 100));
 
         if (_noPlayerAtk) dmg = 0; // 沒苦硬吃：一般攻擊(＋衍生連擊/三元補打)最終傷害歸零
         mHp -= dmg;
@@ -3272,6 +3822,30 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         log.push(`⚔️ ${atkTierNote}${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害${defTierNote ? `（${defTierNote.replace(/[!！]$/, "")}）` : ""}！（怪物剩 ${Math.max(0, mHp)} HP）`);
 
+        // ── 嵐暴（元素師）：固定補打 2 段法術彈（每段＝pctPerHit%、各段獨立擲爆擊）──
+        //    不吃連擊增傷、不算連擊；只作用主手（a===0），副手追擊維持原樣單追擊。
+        if (stormVolleyCfg && a === 0 && mHp > 0) {
+          let _svLifestealDmg = 0;
+          const _svPct = (Number(stormVolleyCfg.pctPerHit) || 70) / 100;
+          const _svBase = Math.max(1, Math.round(nonCritDamageBase * _svPct * (equipZoneFinalDmgMult * roundScaleMult(round))));
+          const _svHits = Math.max(1, Math.floor(Number(stormVolleyCfg.hits) || 3));
+          for (let _sv = 1; _sv < _svHits && mHp > 0; _sv++) {
+            let svDmg = _svBase;
+            const svCrit = (Math.random() * 100 < effectiveCrit);
+            if (svCrit) svDmg = Math.max(1, Math.round(svDmg * 2 * playerCritDamageMultiplier * tierCritDamageMultiplier));
+            if (weaponMainBonus > 0) svDmg += weaponMainBonus;
+            if (_noPlayerAtk) svDmg = 0;
+            svDmg = applyBossVuln(svDmg);
+            mHp -= svDmg;
+            totalDamage += svDmg;
+            _svLifestealDmg += svDmg;
+            const _svCritNote = svCrit ? `✨**${rand(critPhrases)}**！` : "";
+            log.push(`🌩️ ${_svCritNote}**嵐暴・第 ${_sv + 1} 彈**！再造成 **${svDmg}** 點法術傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          }
+          _applyLifesteal(_svLifestealDmg);
+          if (mHp <= 0) { outcome = "win"; break; }
+        }
+
         // ── 三元牌：固定補打 N-1 段（每段獨立擲爆擊、吃連擊增傷、吃地圖特攻；算連擊、可致命）──
         if (playerTripleStrike >= 2 && mHp > 0) {
           let _tsLifestealDmg = 0; // 三元補打累計傷害 → 迴圈結束一起吸血
@@ -3292,7 +3866,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const _tsCritNote = tsCrit ? `✨**${rand(critPhrases)}**！` : "";
             log.push(`🀄 ${_tsCritNote}**三元・${_pai}**！再造成 **${tsDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
           }
-          _applyLifesteal(_tsLifestealDmg, "（三元）");
+          _applyLifesteal(_tsLifestealDmg);
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -3300,7 +3874,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         //    與三元牌的差異：倍率已在 WEAPON_CONFIG 對半，所以這裡「不再除以段數」，
         //    而且**不計入連擊**（不加 comboCount、不吃連擊增傷、不受連擊率影響）。
         //    每段各自擲攻擊階級與爆擊，並各自吃一次武器主屬性追加傷害。
-        const _weaponSegments = Math.max(1, Number(pStats.attackSegments) || 1);
+        // 嵐暴（元素師）：武器固定多段（骰子等）不生效——姿態自帶固定 3 段
+        // 賭神命運骰回合：diceRolls 已展開成 2×N 段（骰面循環），段數以它為準
+        const _weaponSegments = stormVolleyCfg ? 1 : Math.max(1, (Array.isArray(diceRolls) && diceRolls.length > 0) ? diceRolls.length : (Number(pStats.attackSegments) || 1));
         if (_weaponSegments >= 2 && mHp > 0) {
           let _segLifestealDmg = 0; // 武器多段(骰子)累計傷害 → 迴圈結束一起吸血
           for (let _seg = 1; _seg < _weaponSegments && mHp > 0; _seg++) {
@@ -3338,7 +3914,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const segPip = diceRolls ? `${DICE_PIPS[diceRolls[_seg] - 1] || ""}` : "";
             log.push(`🎲 ${segPip}${segTierNote}${segCritNote}**第 ${_seg + 1} 擲**！再造成 **${segDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
           }
-          _applyLifesteal(_segLifestealDmg, "（多段）");
+          _applyLifesteal(_segLifestealDmg);
           if (mHp <= 0) { outcome = "win"; break; }
         }
 
@@ -3629,12 +4205,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         comboChance = Math.min(_comboRateCap, Math.max(0, comboChance));
 
         const MAX_COMBO_PER_ROUND = 7;
+        // 影舞者固定連擊（殘影亂舞 5 段／影襲 7 段）：只作用在本回合第一次攻擊（雙持副手不重複吃）
+        // 連環之計（兵聖）：這回合固定 N 連擊，與影舞者殘影亂舞走同一條保證連擊通道
+        const _sageForcedHits = (sageCfg && _sageChainRound === round) ? (Number(sageCfg.chain?.hits) || 3) : 0;
+        const _roundGuaranteed = (a === 0 && (_shadowForcedHits > 0 || _sageForcedHits > 0))
+          ? Math.max(playerGuaranteedCombo, _shadowForcedHits, _sageForcedHits)
+          : playerGuaranteedCombo;
         let comboHitsThisAttack = 0;
         let comboKilled = false;
         let _comboLifestealDmg = 0; // 連擊累計傷害 → 連段結束一起吸血（玩家回報「連擊不吸血」）
-        while (comboHitsThisAttack < MAX_COMBO_PER_ROUND && (comboHitsThisAttack < playerGuaranteedCombo || Math.random() * 100 < comboChance)) {
+        // 嵐暴（元素師）：連擊系統整個不生效（固定 3 段法術取代；含保證連擊）
+        while (!stormVolleyCfg && comboHitsThisAttack < MAX_COMBO_PER_ROUND && (comboHitsThisAttack < _roundGuaranteed || Math.random() * 100 < comboChance)) {
           // 連擊逐段命中判定：被迴避/未命中 → 立即中斷連段（怪被暈時無法閃避、必中；不吃主擊的大成功/完美必中）
-          const comboConnects = comboHitsThisAttack < playerGuaranteedCombo || monsterIsStunned || Math.random() * 100 < hitChance;
+          const comboConnects = comboHitsThisAttack < _roundGuaranteed || monsterIsStunned || Math.random() * 100 < hitChance;
           if (!comboConnects) {
             log.push(`💨 ${mName} ${rand(jobFlavor.dodge)}，連擊被閃開，連段中斷！`);
             break;
@@ -3681,7 +4264,21 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           comboChance = comboChance / 2;
         }
 
-        _applyLifesteal(_comboLifestealDmg, "（連擊）");
+        _applyLifesteal(_comboLifestealDmg);
+        // ── 連擊氣條累氣：本回合有出現連擊 → +1 格，每回合最多 1 格
+        //    （2026-07-22 使用者定案，與劍鬼氣力同節奏）；殘影亂舞的回合不累 ──
+        if (shadowCfg && _shadowChargeThisRound && comboHitsThisAttack >= 1 && _shadowChargeRoundMark !== round) {
+          _shadowChargeRoundMark = round;
+          _shadowGrids = Math.min(shadowCfg.GAUGE_MAX, _shadowGrids + 1);
+          if (_shadowGrids >= shadowCfg.GAUGE_MAX) {
+            _shadowBurstNext = true;
+            _shadowGrids = 0; // 五格全滿 → 全部消耗
+            log.push(`🌀 連擊氣條全滿（5/5）——下回合**殘影亂舞**！`);
+          } else {
+            // 每次累氣都要有戰報行：前端氣條靠這行逐回合亮格（格式勿改）
+            log.push(`⚡ 連擊氣 +1（${_shadowGrids}/${shadowCfg.GAUGE_MAX}）`);
+          }
+        }
         if (comboKilled) { outcome = "win"; break; }
       } else {
         log.push(`💨 ${mName} ${rand(jobFlavor.dodge)}，你的攻擊落空了！`);
@@ -3690,18 +4287,161 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
 
+    // ── 氣力格累積（劍鬼）：本回合有攻擊到對手 → +1 格（每回合最多 1 格）──
+    if (oniCfg && outcome === null && _attackRoundMark === round) {
+      _oniGrids = Math.min(oniCfg.ONI_GAUGE_MAX, _oniGrids + 1);
+      if (_oniGrids >= oniCfg.ONI_GAUGE_MAX) {
+        _oniGrids = 0;
+        _oniBurstNext = true;
+        log.push(`⚔️ 氣力全滿（3/3）——下回合**斬**！`);
+      } else {
+        // 每次累氣都要有戰報行：前端氣力格靠這行逐回合亮格（格式勿改）
+        log.push(`⚡ 氣力 +1（${_oniGrids}/${oniCfg.ONI_GAUGE_MAX}）`);
+      }
+    }
+
+    // ── 追加打擊（神射手箭矢／兵聖計策共用）：等值於「一次真實攻擊 ×pct%」──
+    //    以最近一次主擊的未爆擊基底為準（含武器/徽章/最終傷害等整條倍率鏈；與三元/嵐暴補打同法），
+    //    各發獨立擲爆擊（×2×爆傷倍率）＋武器主屬性追加，再吃部位/屬性倍率。
+    const _sniperArrow = (pct, tag, icon = "🏹") => {
+      if (outcome !== null || mHp <= 0) return;
+      const _p = (Number(pct) || 100) / 100;
+      let _aDmg;
+      if (_lastMainBase > 0) {
+        _aDmg = Math.max(1, Math.round(_lastMainBase * _p * (equipZoneFinalDmgMult * roundScaleMult(round))));
+      } else {
+        _aDmg = rollDmg(applyDefense(Math.max(1, Math.round((pStats.atk || 1) * _p)), adjustedMCalc.flatDef || 0, Math.max(0, Math.min(95, adjustedMCalc.def || 0)), pStats.atk));
+        _aDmg = Math.max(1, Math.round(_aDmg * playerAttackLevelMult));
+      }
+      const _aCrit = Math.random() * 100 < (pStats.crit || 0);
+      if (_aCrit) _aDmg = Math.max(1, Math.round(_aDmg * 2 * playerCritDamageMultiplier));
+      if (weaponMainBonus > 0) _aDmg += weaponMainBonus;
+      if (_noPlayerAtk) _aDmg = 0;
+      _aDmg = applyBossVuln(_aDmg);
+      if (_aDmg <= 0) return;
+      mHp -= _aDmg;
+      totalDamage += _aDmg;
+      log.push(`${icon} ${_aCrit ? "✨**會心**！" : ""}**${tag}**！對 ${mName} 追加 **${_aDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+      if (mHp <= 0) outcome = "win";
+    };
+
+    // ── 震盪值累積（神射手）：本回合有攻擊到 → +1 格；滿 4 → 立刻震盪射擊＋推遠 ──
+    if (sniperCfg && outcome === null && _attackRoundMark === round) {
+      _sniperGrids = Math.min(4, _sniperGrids + 1);
+      if (_sniperGrids >= 4) {
+        _sniperGrids = 0;
+        log.push(`🌀 震盪值全滿（4/4）——**震盪射擊**！`);
+        _sniperArrow(sniperCfg.shockShotPct || 100, "震盪射擊");
+        if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+        _monsterKnockbackRound = round + 1; // 下回合對手構不到你
+        log.push(`🌪️ ${mName} 被震得踉蹌後退——下回合構不到你！`);
+      } else {
+        // 每次累積都要有戰報行：前端震盪格靠這行逐回合亮格（格式勿改）
+        log.push(`⚡ 震盪值 +1（${_sniperGrids}/4）`);
+      }
+    }
+
+    // ── 完美和弦（吟遊詩人）：上一場完美演奏 → 本場開場追擊 ──
+    if (Number(options.bardChordPct) > 0 && round === 1 && outcome === null && mHp > 0) {
+      log.push(`🎼 **完美和弦**餘音未散——音波化作利刃！`);
+      _sniperArrow(Number(options.bardChordPct), "完美和弦", "🎼");
+      if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+    }
+
+    // ── 計謀值累積（兵聖）：每回合 +1 格（**不論命中**——綁命中回合會在短戰/高閃怪面前
+    //    整套計謀開不出來，實測施計 0.1 次/場＝機制形同不存在，與凍霜同型教訓）；滿 3 → 隨機施展一計 ──
+    if (sageCfg && outcome === null) {
+      _sageGrids = Math.min(3, _sageGrids + 1);
+      if (_sageGrids >= 3) {
+        _sageGrids = 0;
+        const _plans = ["fire", "rock", "mist", "chain", "allin"];
+        const _plan = _plans[Math.floor(Math.random() * _plans.length)];
+        if (_plan === "fire") {
+          log.push(`📜 **兵聖施計——【火攻之計】**！放火燒山！`);
+          _sniperArrow(Number(sageCfg.fire?.hitPct) || 150, "火攻之計", "🔥");
+          if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+          monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+            key: "burn",
+            params: { value: Number(sageCfg.fire?.burnPct) || 30, mode: "caster_atk_pct", casterAtk: Math.round(pStats.atk || 1), duration: { mode: "turns", value: Number(sageCfg.fire?.burnTurns) || 3 } },
+            appliedAt: round, sourceType: "job_proc", sourceId: "sage:fire",
+          });
+          log.push(`🔥 山火蔓延——${mName} 陷入灼燒（${Number(sageCfg.fire?.burnTurns) || 3} 回合）！`);
+        } else if (_plan === "rock") {
+          log.push(`📜 **兵聖施計——【落石之計】**！滾石落下！`);
+          _sniperArrow(Number(sageCfg.rock?.hitPct) || 120, "落石之計", "🪨");
+          if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+          if (applyMonsterStun(1, round)) {
+            log.push(`😵 ${mName} 被巨石砸得眼冒金星——暈眩 1 回合！`);
+          } else if (monsterIsBossUnit) {
+            log.push(`🛡️ ${mName} 的巨軀擋下落石的衝擊，未被擊暈。`);
+          }
+        } else if (_plan === "mist") {
+          _sageMistRound = round + 1;
+          log.push(`📜 **兵聖施計——【瞞天過海】**！虛實難辨——下回合 ${mName} 必定打空、你的攻擊必中！`);
+        } else if (_plan === "chain") {
+          _sageChainRound = round + 1;
+          log.push(`📜 **兵聖施計——【連環之計】**！環環相扣——下回合固定 ${Number(sageCfg.chain?.hits) || 3} 連擊！`);
+        } else {
+          _sageAllInFrom = round + 1;
+          _sageAllInUntil = round + (Number(sageCfg.allin?.rounds) || 2);
+          log.push(`📜 **兵聖施計——【破釜沉舟】**！置之死地而後生——接下來 ${Number(sageCfg.allin?.rounds) || 2} 回合傷害 **×${Number(sageCfg.allin?.mult) || 3}**，但無法迴避格擋、受傷 +50%！`);
+        }
+      } else {
+        // 每次累積都要有戰報行：前端計謀格靠這行逐回合亮格（格式勿改）
+        log.push(`⚡ 計謀值 +1（${_sageGrids}/3）`);
+      }
+    }
+
+    // ── 日之精靈協攻（聖靈師）：每回合一擊，ATK＝主人×ratio%、日屬性；單發不爆擊不連擊 ──
+    if (sunSpiritCfg && _spiritHp > 0 && outcome === null && mHp > 0) {
+      const _spBase = Math.max(1, Math.round((pStats.atk || 1) * (Number(sunSpiritCfg.atkRatio) || 33) / 100));
+      let _spDmg = rollDmg(applyDefense(_spBase, adjustedMCalc.flatDef || 0, Math.max(0, Math.min(95, adjustedMCalc.def || 0)), pStats.atk));
+      _spDmg = Math.max(1, Math.round(_spDmg * playerAttackLevelMult));
+      const _spElMult = getElementMultiplier(sunSpiritCfg.element || "sun", monsterElement, sunSpiritCfg.elementLevel || 3);
+      if (_spElMult !== 1) _spDmg = Math.max(1, Math.round(_spDmg * _spElMult));
+      if (_noPlayerAtk) _spDmg = 0;
+      _spDmg = applyBossVuln(_spDmg);
+      if (_spDmg > 0) {
+        mHp -= _spDmg;
+        totalDamage += _spDmg;
+        log.push(`☀️ **日之精靈**揮灑聖光，對 ${mName} 造成 **${_spDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+        if (mHp <= 0) { outcome = "win"; roundLogs.push(log.join("\n")); break; }
+      }
+    }
+
+    // ── 大治療術（聖靈師）：每 N 個有出手的回合施放；精靈在場先回精靈、否則回自己 ──
+    if (sunSpiritCfg && outcome === null && _attackRoundMark === round
+        && combatStats.attackRounds > 0 && combatStats.attackRounds % Math.max(1, Number(sunSpiritCfg.healEveryRounds) || 5) === 0) {
+      const _bigHeal = Math.max(1, Math.round((pStats.maxHp || 1) * (Number(sunSpiritCfg.healPct) || 30) / 100));
+      if (_spiritHp > 0) {
+        _spiritHp = Math.min(_spiritMaxHp, _spiritHp + _bigHeal);
+        log.push(`💚 **大治療術**！聖光注入日之精靈，回復 **${_bigHeal}**！（精靈剩 ${_spiritHp} / ${_spiritMaxHp}）`);
+      } else if (pHp > 0 && pHp < (pStats.maxHp || 1)) {
+        const _before = pHp;
+        pHp = _healPlayer(_bigHeal);
+        log.push(`💚 **大治療術**！回復 **${Math.max(0, pHp - _before)}** HP！（你剩 ${Math.max(0, pHp)} HP）`);
+      }
+    }
+
     // ── 怪物攻擊 ──
-    log.push(`──── 🛡️ ${mName} 的回合 ────`);
+    // （戰報重整：怪物回合分隔線移除）
     // AGI 優勢判定：第1回合先手，或偶數回合才反擊
     let monsterAttackCount = 0;
     let monsterDmgThisRound = 0; // 怪物本回合總傷害（甲蟹反擊用）
     let skipMonsterAttackReason = null;
+    let _g6Segs = 1; // G6 拆段數（>1 時每段傷害 ÷ 段數）
 
     if (stunRoundsLeft > 0) {
       stunRoundsLeft--;
       skipMonsterAttackReason = "stun";
     } else if (monsterFrozenThisRound) {
       skipMonsterAttackReason = "freeze";
+    } else if (_monsterKnockbackRound === round) {
+      // 震盪射擊（神射手）：上回合被推遠，這回合構不到你
+      skipMonsterAttackReason = "knockback";
+    } else if (sageCfg && _sageMistRound === round) {
+      // 瞞天過海（兵聖）：這回合怪物必定打空
+      skipMonsterAttackReason = "mist";
     } else if (hasAgiFirstStrike && round === 1) {
       skipMonsterAttackReason = "agi_first_strike";
     } else if (hasAgiSlowedMonster && round % 2 !== 0) {
@@ -3714,16 +4454,32 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         let hits = 2;
         if (Math.random() < 0.55) { hits++; if (Math.random() < 0.30) { hits++; if (Math.random() < 0.12) hits++; } }
         monsterAttackCount = hits;
+      } else if (monsterIsBossUnit) {
+        // G6（V0.5 生存地基）：BOSS 普攻名目單發（含終傷倍率與等級壓制）超過 25% 標準血池
+        // 就拆成 2~3 段，沿用既有 ma 迴圈 → 各段天然獨立擲攻擊階級/命中/格擋/防禦階級/爆擊。
+        // 連牙亂舞本來就是多段小刀，不重複拆。
+        const _g6Nominal = (adjustedMCalc.atk || 1) * (adjustedMCalc.finalDamageMultiplier || 1) * monsterAttackLevelMult;
+        if (_g6Nominal > G6_SEG_REF) {
+          _g6Segs = Math.min(G6_MAX_SEGS, Math.ceil(_g6Nominal / G6_SEG_REF));
+          monsterAttackCount *= _g6Segs;
+          // （戰報重整：拆段預告行移除——段數直接顯示在合併後的攻擊行上）
+        }
       }
     }
 
     if (skipMonsterAttackReason === "stun") {
       // 團隊暈眩（巨神震擊）用專屬敘述，讓玩家知道這場的免傷是誰換來的
       log.push(_teamStunRounds > 0
-        ? `⛰️ **巨神震擊**餘威未散——${mName} 癱倒在地，動彈不得！`
+        ? (String(options.teamStunStyle || "") === "freeze"
+          ? `🧊 **區域冰封**——${mName} 被凍成冰雕，無法動彈！`
+          : `⛰️ **巨神震擊**餘威未散——${mName} 癱倒在地，動彈不得！`)
         : `😵 ${mName} 仍處於擊暈狀態，無法攻擊！`);
     } else if (skipMonsterAttackReason === "freeze") {
       log.push(`🧊 ${mName} 被冰凍住，此回合無法攻擊！`);
+    } else if (skipMonsterAttackReason === "knockback") {
+      log.push(`🌪️ ${mName} 被**震盪射擊**推遠，構不到你！`);
+    } else if (skipMonsterAttackReason === "mist") {
+      log.push(`🌫️ **瞞天過海**奏效——${mName} 的攻擊撲了個空！`);
     } else if (skipMonsterAttackReason === "agi_first_strike") {
       log.push(`⚡ ${mName} ${rand(agiFirstStrikePhrases)}，無法反擊！`);
     } else if (skipMonsterAttackReason === "agi_slowed") {
@@ -3732,6 +4488,24 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     let blockedThisRound = false;
     let lastMonsterDmg = 0;  // 給連擊用
+    // 戰報重整：G6 拆段的各段結果緩衝，迴圈後合併成一行「N 段連襲共 T（132＋🛡️41＋閃避）」。
+    // ⚠️ 各段的 rand() 全數照抽（敘事語庫照樣消耗亂數）→ 亂數流位元不變，黃金快照可直接驗證數值零改動。
+    const _g6Buf = [];
+    let _g6Phrase = null, _g6AnyCrit = false, _g6AnyGreat = false, _g6SpiritSeen = false;
+    const _g6FlushLine = () => {
+      if (_g6Segs <= 1 || _g6Buf.length === 0) return;
+      const total = _g6Buf.reduce((s, x) => s + (x.dmg || 0), 0);
+      const parts = _g6Buf.map((x) =>
+        x.kind === "block" ? `🛡️${x.dmg}` :
+        x.kind === "spirit" ? `☀️${x.dmg}` :
+        x.kind === "dodge" ? "閃避" :
+        x.kind === "fail" ? "揮空" :
+        (x.shield > 0 ? `${x.dmg}(盾${x.shield})` : String(x.dmg)));
+      const note = `${_g6AnyGreat ? "⚡" : ""}${_g6AnyCrit ? "✨**會心**！" : ""}`;
+      const tail = _g6SpiritSeen ? `｜精靈剩 ${Math.max(0, _spiritHp)}` : `｜你剩 ${Math.max(0, pHp)} HP`;
+      log.push(`💥 ${note}${mName} ${_g6Phrase || "連番攻勢襲來"}——${_g6Buf.length} 段連襲共 **${total}**（${parts.join("＋")}${tail}）`);
+      _g6Buf.length = 0;
+    };
     for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
       const monsterHitChance = playerIsStunned
         ? 100
@@ -3750,7 +4524,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
       // 大失敗：怪自殘 30%，跳過本次怪攻(狼王保底段不會失誤)
       if (mAtkTier === 'critFail' && !hellfangGuaranteedSeg) {
-        const mSelfBase = Math.max(1, Math.round((adjustedMCalc.atk || 1) * monsterAttackLevelMult));
+        const mSelfBase = Math.max(1, Math.round((adjustedMCalc.atk || 1) * monsterAttackLevelMult / _g6Segs));
         const mSelfDmg = Math.max(1, Math.round(mSelfBase * 0.3 * (0.7 + Math.random() * 0.3)));
         mHp -= mSelfDmg;
         totalDamage += mSelfDmg;
@@ -3761,19 +4535,23 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
       // 失敗：強制 miss(狼王保底段不會失誤)
       if (mAtkTier === 'fail' && !hellfangGuaranteedSeg) {
-        log.push(`❌ **${mName} 失敗**！揮空了！`);
+        if (_g6Segs > 1) _g6Buf.push({ kind: "fail" });
+        else log.push(`❌ **${mName} 失敗**！揮空了！`);
         if (_hellfangCombo) break; // 🐺 第3段起自己揮空也打斷連段
         continue;
       }
-      const mForceHit = (mAtkTier === 'great' || mAtkTier === 'perfect');
+      // G3（V0.5 生存地基）：大成功/完美**不再無視玩家迴避**（原本 31% 的攻擊必中＝閃避原型死刑）。
+      // 階級只保證怪自己不失誤（critFail/fail 已在上面擋掉），命中與否交還給命中/迴避判定。
+      const mForceHit = false;
 
-      if (playerIsStunned || mForceHit || hellfangGuaranteedSeg || Math.random() * 100 < monsterHitChance) {
+      if (playerIsStunned || mForceHit || hellfangGuaranteedSeg || _sageAllInNow || Math.random() * 100 < monsterHitChance) {
         // 盾格擋判定（含主動技能臨時格擋加成，例如劍士「舉步若堅」+25%，上限 95% 與被動一致）
         // 姿態有指定格擋率時以姿態為準（技能/裝備的臨時加成仍疊上去）
         const _stanceBlock = Number(battleStance?.blockChance);
-        const _blockPct = Number.isFinite(_stanceBlock)
+        // 破釜沉舟：無法格擋（沒有退路）
+        const _blockPct = _sageAllInNow ? 0 : (Number.isFinite(_stanceBlock)
           ? Math.min(95, _stanceBlock + playerBlockBonus)
-          : Math.min(95, (pStats.blockChance || 0) + playerBlockBonus);
+          : Math.min(95, (pStats.blockChance || 0) + playerBlockBonus));
         if (Math.random() * 100 < _blockPct) {
           blockedThisRound = true;
           combatStats.blockCount += 1;
@@ -3781,27 +4559,41 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             // BOSS 攻勢沉重：格擋不再降至 1，改為卸去 70% 傷害（用未爆擊的基礎傷害計算）
             const bMonsterDefIgnorePct = Math.min(100, Math.max(0, Number(adjustedMCalc.defIgnorePct || 0)));
             const bEffectivePlayerDef = Math.min(95, Math.max(0, ((pStats.def * (1 + playerDefBonusPct / 100) * (1 - playerDefDownPct / 100)) + playerDefFlatBonus) * (1 - bMonsterDefIgnorePct / 100)));
-            const bMonsterBaseAtk = Math.max(1, Math.round(adjustedMCalc.atk * (adjustedMCalc.finalDamageMultiplier || 1) * monsterAttackLevelMult));
+            const bMonsterBaseAtk = Math.max(1, Math.round(adjustedMCalc.atk * (adjustedMCalc.finalDamageMultiplier || 1) * monsterAttackLevelMult / _g6Segs));
             const bBaseDmg = playerInvincible ? 0 : rollMDmg(applyDefense(bMonsterBaseAtk, pStats.flatDef || 0, bEffectivePlayerDef, adjustedMCalc.atk));
             const blockedDmg = Math.max(1, Math.round(bBaseDmg * 0.3));
-            log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻勢沉重，格擋卸去 70% 傷害，仍受到 **${blockedDmg}** 點！`);
-            _hurt(blockedDmg);
+            const _blockPhrase = rand(jobFlavor.block); // rand 照抽保留亂數流
+            if (sunSpiritCfg && _spiritHp > 0) {
+              _spiritAbsorb(blockedDmg);
+              if (_g6Segs > 1) { _g6Buf.push({ kind: "spirit", dmg: blockedDmg }); _g6SpiritSeen = true; }
+              else log.push(`🛡️ ${_blockPhrase}！攻勢沉重，☀️ 日之精靈代承 **${blockedDmg}** 點！（精靈剩 ${Math.max(0, _spiritHp)} / ${_spiritMaxHp}）`);
+            } else {
+              if (_g6Segs > 1) _g6Buf.push({ kind: "block", dmg: blockedDmg });
+              else log.push(`🛡️ ${_blockPhrase}！${mName} 的攻勢沉重，格擋卸去 70% 傷害，仍受到 **${blockedDmg}** 點！`);
+              _hurt(blockedDmg);
+            }
           } else {
-            log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻擊被格擋，傷害降至 **1**！`);
-            pHp -= 1;
+            if (sunSpiritCfg && _spiritHp > 0) {
+              _spiritAbsorb(1);
+              log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻擊被格擋，日之精靈輕鬆接下 **1** 點！`);
+            } else {
+              log.push(`🛡️ ${rand(jobFlavor.block)}！${mName} 的攻擊被格擋，傷害降至 **1**！`);
+              pHp -= 1;
+            }
           }
           if (pHp <= 0) { outcome = "lose"; break; }
         } else {
           const monsterDefIgnorePct = Math.min(100, Math.max(0, Number(adjustedMCalc.defIgnorePct || 0)));
           const effectivePlayerDef = Math.min(95, Math.max(0, ((pStats.def * (1 + playerDefBonusPct / 100) * (1 - playerDefDownPct / 100)) + playerDefFlatBonus) * (1 - monsterDefIgnorePct / 100)));
           // 新公式 B：flatDef 在 ATK 階段壓制（傳 adjustedMCalc.atk 作為 rawAtk）
-          const monsterBaseAtk = Math.max(1, Math.round(adjustedMCalc.atk * (adjustedMCalc.finalDamageMultiplier || 1) * monsterAttackLevelMult));
+          const monsterBaseAtk = Math.max(1, Math.round(adjustedMCalc.atk * (adjustedMCalc.finalDamageMultiplier || 1) * monsterAttackLevelMult / _g6Segs));
           let dmg = playerInvincible
             ? 0
             : rollMDmg(applyDefense(monsterBaseAtk, pStats.flatDef || 0, effectivePlayerDef, adjustedMCalc.atk));
 
           // ── 套怪攻擊階級乘數（成功 ×1.0 / 大成功 ×1.3；完美走爆擊另算）──
-          const mAtkTierMult = ATTACK_TIER_MULT[mAtkTier] ?? 1.0;
+          // G3（V0.5）：怪的大成功 ×1.3 → ×1.15（玩家側大成功維持 1.3 不動）
+          const mAtkTierMult = mAtkTier === 'great' ? 1.15 : (ATTACK_TIER_MULT[mAtkTier] ?? 1.0);
           if (mAtkTier !== 'perfect' && mAtkTierMult !== 1.0) {
             dmg = Math.max(1, Math.round(dmg * mAtkTierMult));
           }
@@ -3846,8 +4638,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
           if (mAtkTier === 'perfect' || (monsterCritRate > 0 && Math.random() * 100 < monsterCritRate)) {
             hasMonsterCrit = true;
-            // 爆擊倍率 ×2（與玩家對齊）
-            dmg = Math.round(dmg * (2 * (adjustedMCalc.critDamageMultiplier || 1)));
+            // G2（V0.5 生存地基）：怪物爆擊 ×2 → ×1.5——
+            // 舊制爆擊單發 650 > 血池 575＝字面秒殺；玩家爆擊 ×2 不動
+            dmg = Math.round(dmg * (1.5 * (adjustedMCalc.critDamageMultiplier || 1)));
             if (!playerInvincible && roundPartyCritDamageReductionPct > 0) {
               dmg = Math.max(1, Math.round(dmg * (1 - Math.min(95, roundPartyCritDamageReductionPct) / 100)));
             }
@@ -3858,6 +4651,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           // 屬性防具減免（我方防具屬性剋制該怪時，每級 -10%）：與其他減傷同層，
           // 且在寫進戰報之前套用 → 戰報數字＝實際扣血。
           if (!playerInvincible) dmg = _applyElementDR(dmg);
+          // 破釜沉舟（兵聖）：區間內受到傷害 ×takenMult（寫進戰報前套用＝戰報數字真實）
+          if (_sageAllInNow && !playerInvincible && dmg > 0) {
+            dmg = Math.max(1, Math.round(dmg * (Number(sageCfg.allin?.takenMult) || 1.5)));
+          }
 
           // 構建傷害敘述
           let mAtkNote = "";
@@ -3868,9 +4665,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           else if (pDefTier === 'reduce') mAtkNote += "🛡️減傷！";
           else if (pDefTier === 'graze') mAtkNote += "🌬️擦傷！";
 
+          // ── 日之精靈代承（聖靈師）：精靈在場 → 這一擊整發由精靈吃下 ──
+          //    主人的護盾/受傷回血/免死/反傷/反彈皆不觸發（怪物根本沒打到主人）
+          const _spiritTook = Boolean(sunSpiritCfg) && _spiritHp > 0 && !playerInvincible && dmg > 0;
           // ── 護盾吸收（shield / barrier）──
           let shieldAbsorbed = 0;
-          if (!playerInvincible && dmg > 0 && Array.isArray(options.playerActiveEffects)) {
+          if (!_spiritTook && !playerInvincible && dmg > 0 && Array.isArray(options.playerActiveEffects)) {
             for (const sEff of options.playerActiveEffects) {
               if (!sEff || (sEff.key !== 'shield' && sEff.key !== 'barrier')) continue;
               if (!effectIsActive(sEff, round)) continue;
@@ -3888,17 +4688,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
           // ── 傷害轉治療 / 受傷回血（damage_to_heal）──
           let damageToHealAmount = 0;
-          if (!playerInvincible && playerDamageToHealPct > 0 && dmg > 0) {
+          if (!_spiritTook && !playerInvincible && playerDamageToHealPct > 0 && dmg > 0) {
             damageToHealAmount = Math.max(1, Math.round(dmg * (playerDamageToHealPct / 100)));
           }
           // ── 免死一次（death_prevent_once）──
-          if (!deathPreventUsed && pHp - dmg <= 0 && Array.isArray(options.playerActiveEffects)
+          if (!_spiritTook && !deathPreventUsed && pHp - dmg <= 0 && Array.isArray(options.playerActiveEffects)
               && options.playerActiveEffects.some(e => e && e.key === 'death_prevent_once' && effectIsActive(e, round))) {
             dmg = Math.max(0, pHp - 1);
             deathPreventUsed = true;
             log.push(`✨ **死亡迴避**！你保留了最後 1 HP！`);
           }
-          _hurt(dmg);
+          if (_spiritTook) _spiritAbsorb(dmg);
+          else _hurt(dmg);
           if (damageToHealAmount > 0) {
             pHp = _healPlayer(damageToHealAmount);
             log.push(`💗 受傷反饋！回復 **${damageToHealAmount}** HP！（你剩 ${Math.max(0, pHp)} HP）`);
@@ -3911,17 +4712,30 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           monsterDmgThisRound += dmg;
           lastMonsterDmg = dmg;
           const invincibleText = playerInvincible ? "（免疫傷害）" : (shieldAbsorbed > 0 ? `（護盾吸收 ${shieldAbsorbed}）` : "");
-          log.push(`💥 ${mAtkNote}${mName} ${rand(mAtkPhrases)}，造成 **${dmg}** 點傷害${invincibleText}！（你剩 ${Math.max(0, pHp)} HP）`);
-          // ── 反傷（thorns）──
-          if (playerThornsPct > 0 && dmg > 0) {
+          const _hitPhrase = rand(mAtkPhrases); // rand 照抽保留亂數流
+          if (_g6Segs > 1) {
+            if (!_g6Phrase) _g6Phrase = _hitPhrase;
+            if (hasMonsterCrit) _g6AnyCrit = true;
+            if (mAtkTier === 'great') _g6AnyGreat = true;
+            if (_spiritTook) { _g6Buf.push({ kind: "spirit", dmg }); _g6SpiritSeen = true; }
+            else _g6Buf.push({ kind: "hit", dmg, shield: shieldAbsorbed });
+            if (_spiritTook && _spiritHp <= 0) log.push(`💫 日之精靈力竭消散——接下來的攻擊將由你承受！`);
+          } else if (_spiritTook) {
+            log.push(`💥 ${mAtkNote}${mName} ${_hitPhrase}，☀️ **日之精靈**挺身代承 **${dmg}** 點傷害！（精靈剩 ${Math.max(0, _spiritHp)} / ${_spiritMaxHp}）`);
+            if (_spiritHp <= 0) log.push(`💫 日之精靈力竭消散——接下來的攻擊將由你承受！`);
+          } else {
+            log.push(`💥 ${mAtkNote}${mName} ${_hitPhrase}，造成 **${dmg}** 點傷害${invincibleText}！（你剩 ${Math.max(0, pHp)} HP）`);
+          }
+          // ── 反傷（thorns）──（精靈代承時主人沒被打到 → 不觸發）
+          if (!_spiritTook && playerThornsPct > 0 && dmg > 0) {
             const thornsDmg = Math.max(1, Math.round(dmg * (playerThornsPct / 100)));
             mHp -= thornsDmg;
             totalDamage += thornsDmg;
             log.push(`🌵 **反傷**！${mName} 受到 **${thornsDmg}** 點反彈傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
             if (mHp <= 0) { outcome = "win"; }
           }
-          // ── 玩家反彈（reflect_damage / 鏡映系戒指 / 龍蜥武士卡）──
-          if (outcome === null && dmg > 0 && Array.isArray(options.playerActiveEffects)) {
+          // ── 玩家反彈（reflect_damage / 鏡映系戒指 / 龍蜥武士卡）──（精靈代承時不觸發）
+          if (!_spiritTook && outcome === null && dmg > 0 && Array.isArray(options.playerActiveEffects)) {
             for (const rEff of options.playerActiveEffects) {
               if (!rEff || rEff.key !== 'reflect_damage') continue;
               const reflectPct = Math.max(0, Number(rEff.params?.value ?? 0));
@@ -3964,7 +4778,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
       } else {
         combatStats.dodgeCount += 1;
-        log.push(`🛡️ ${mName} 猛撲而來，你${rand(jobFlavor.dodge)}，躲過了攻擊！`);
+        const _dodgePhrase = rand(jobFlavor.dodge); // rand 照抽保留亂數流
+        if (_g6Segs > 1) _g6Buf.push({ kind: "dodge" });
+        else log.push(`🛡️ ${mName} 猛撲而來，你${_dodgePhrase}，躲過了攻擊！`);
 
         // ── 卡片「閃避後觸發」（trigger: on_dodge，如魅影潛襲者【暗影急襲】迴避後爆擊率提升）──
         if (!playerIsSilenced && outcome === null) {
@@ -4027,6 +4843,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (_hellfangCombo && ma >= 2) break;
       }
     }
+    _g6FlushLine(); // 戰報重整：G6 拆段合併行（含中途死亡的殘段）
 
     // ── 怪物連擊（AGI 驅動）── 簡化：觸發後同一次傷害再扣一次（× 2 效果）
     const monsterComboChance = adjustedMCalc.comboChance || 0;
@@ -4034,10 +4851,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (monsterComboChance > 0 && !skipMonsterAttackReason && outcome === null && lastMonsterDmg > 0 && !_hellfangCombo) {
       if (Math.random() * 100 < monsterComboChance) {
         const comboDmg = lastMonsterDmg;
-        _hurt(comboDmg);
-        monsterDmgThisRound += comboDmg;
-        log.push(`⚡ **${mName} 連擊**！再造成 **${comboDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
-        if (pHp <= 0) { outcome = "lose"; }
+        if (sunSpiritCfg && _spiritHp > 0) {
+          _spiritAbsorb(comboDmg);
+          monsterDmgThisRound += comboDmg;
+          log.push(`⚡ **${mName} 連擊**！☀️ 日之精靈代承 **${comboDmg}** 點傷害！（精靈剩 ${Math.max(0, _spiritHp)} / ${_spiritMaxHp}）`);
+          if (_spiritHp <= 0) log.push(`💫 日之精靈力竭消散——接下來的攻擊將由你承受！`);
+        } else {
+          _hurt(comboDmg);
+          monsterDmgThisRound += comboDmg;
+          log.push(`⚡ **${mName} 連擊**！再造成 **${comboDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
+          if (pHp <= 0) { outcome = "lose"; }
+        }
       }
     }
 
@@ -4081,6 +4905,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+
+    // ── 神速反擊（神射手）：這回合對手沒打到你 → 多一箭 ──
+    //    涵蓋：揮空/被閃/來不及出手（先手・慢半拍）/被暈眩/被冰封/被震退（使用者定案：硬控也算）
+    if (sniperCfg && outcome === null && mHp > 0 && monsterDmgThisRound === 0) {
+      _sniperArrow(sniperCfg.counterShotPct || 100, "神速反擊");
+      if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+    }
 
     // ── 盾格擋反擊（單手劍+盾，必中）── 走獨立階級擲骰
     // 防禦姿態：格擋成功 → 追加盾擊（ATK 的 shieldBashPct%），與原本的格擋反擊並存
@@ -4163,6 +4994,64 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
     }
 
+    // ── 聖域護佑：每回合回血（區域聖域窗口，任何職業都吃）──
+    if (_sanctuaryHealPct > 0 && outcome === null && pHp > 0 && pHp < (pStats.maxHp || 1)) {
+      const _shHeal = Math.max(1, Math.round((pStats.maxHp || 1) * _sanctuaryHealPct / 100));
+      const _shBefore = pHp;
+      pHp = _healPlayer(_shHeal);
+      if (pHp > _shBefore) log.push(`🏛️ 聖域護佑：回復 **${pHp - _shBefore}** HP！（你剩 ${Math.max(0, pHp)} HP）`);
+    }
+
+    // ── 符文結界（聖域師）：回合尾結算——吸收戰報行＋三時機共鳴反爆 ──
+    // 反爆＝累積吸收×detonateMult，無視防禦（不擲爆擊＝完全確定，提前引爆才能精準預知）；
+    // 走 applyBossVuln（部位/屬性/演奏等終傷層倍率一致吃到）。一場只爆一次，爆後殘餘結界續擋傷但不再引爆。
+    if (sanctumCfg && !_sanctumDetonated) {
+      if (_sanctumRoundAbsorb > 0) {
+        log.push(`🔷 符文結界吸收 ${_sanctumRoundAbsorb}（結界剩 ${Math.max(0, _sanctumBarrier)}/${_sanctumMax}）`);
+        _sanctumRoundAbsorb = 0;
+      }
+      // 倍率隨回合成長：×(滿場倍率 × 引爆回合/全場回合)——撐到最後一回合才吃滿倍率（使用者定案）。
+      // 早被打爆＝吸收滿但倍率低；撐好撐滿＝吸收與倍率雙滿 → 「撐盾」永遠是對的
+      const _detonateRaw = () => {
+        const _timeMult = (Number(sanctumCfg.detonateMult) || 2) * (round / Math.max(1, endRound));
+        let d = Math.max(1, Math.round(_sanctumAcc * _timeMult));
+        d = applyBossVuln(d);
+        if (_noPlayerAtk) d = 0;
+        return d;
+      };
+      const _fire = (label) => {
+        const d = _detonateRaw();
+        if (_sanctumAcc <= 0 || d <= 0) return;
+        _sanctumDetonated = true;
+        mHp -= d;
+        totalDamage += d;
+        const _tm = Math.round((Number(sanctumCfg.detonateMult) || 2) * (round / Math.max(1, endRound)) * 100) / 100;
+        log.push(`🔷 **結界過載——共鳴反爆**${label}！吸收 ${_sanctumAcc} ×${_tm.toFixed(2)}（第 ${round} 回合）——無視防禦轟出 **${d}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+        if (mHp <= 0) outcome = "win";
+      };
+      if (outcome === null && mHp > 0 && _sanctumAcc > 0) {
+        if (_sanctumBroke) {
+          log.push(`💥 符文結界破碎！`);
+          _sanctumBroke = false;
+          _fire("（破碎引爆）");
+        } else if (_detonateRaw() >= mHp) {
+          _fire("（預知引爆）"); // 伺服器整場先算：這一爆剛好收頭 → 提前引爆
+        } else if (round >= endRound) {
+          _fire("（終幕引爆）"); // 撐滿全場 → 最後一回合滿額爆
+        }
+      }
+    }
+
+    // 龜甲破碎宣告（破殼而出）
+    if (_tshellBrokeThisRound) {
+      _tshellBrokeThisRound = false;
+      log.push(`💥 龜甲碎裂——**破殼而出**！剩餘戰鬥傷害 +${_tshellCfg.breakDmgPct}%！`);
+    }
+
+    // 吸血：一回合結算一次（累積本回合各段傷害後統一吸，並吃總量上限）
+    // 放在戰報 push 之前 → 吸血訊息屬於本回合；放在勝負判定之前 → 打死怪的那回合也吸得到。
+    _settleLifestealForRound();
+
     roundLogs.push(log.join("\n"));
     if (outcome !== null) break;
 
@@ -4195,6 +5084,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (actual > 0) roundLogs.push(`💖 **戰後回血**！回復 **${actual}** HP！（你剩 ${pHp} HP）`);
   }
 
+  // 🏁 結尾統計列（戰報重整：總輸出/承傷/最痛一擊——與未來 KDA 貢獻榜同款數字，先讓玩家看習慣）
+  {
+    const _oTxt = outcome === "win" ? "🏆 勝利" : (outcome === "lose" ? "💀 敗北" : `⏱ 撐滿 ${Math.max(1, round - 1)} 回合`);
+    roundLogs.push(`🏁 **戰鬥結束**｜${_oTxt}｜總輸出 **${Math.round(totalDamage || 0).toLocaleString()}**｜承傷 **${Math.round(_totalDmgTaken || 0).toLocaleString()}**｜最痛一擊 **${Math.round(_maxHitTaken || 0)}**`);
+  }
+
   return {
     outcome,
     roundLogs,
@@ -4207,7 +5102,34 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     cardCooldowns,
     nextRound: round,
     damageTaken: _totalDmgTaken,  // 沒苦硬吃任務指標
-    healDone: _totalHealDone       // 聖人任務指標
+    healDone: _totalHealDone,      // 聖人任務指標
+    // 連擊氣條（影舞者）：戰後氣量；滿氣觸發了但戰鬥先結束 → 還原成滿格帶去下一場
+    shadowGauge: shadowCfg ? (_shadowBurstNext ? shadowCfg.GAUGE_MAX : _shadowGrids) : null,
+    // 職業技能成本（cost.type === "combo"）本場總消耗量 → 呼叫端要從 zoneCombo 扣掉並落地
+    jobSkillComboSpent: _jobSkillComboSpent,
+    maxHitTaken: _maxHitTaken, // 本場最大單發承傷（爆發條件驗收用）
+    // 氣力格（劍鬼）：同一規則——滿了但還沒斬出去 → 滿格帶去下一場
+    oniGauge: oniCfg ? (_oniBurstNext ? oniCfg.ONI_GAUGE_MAX : _oniGrids) : null,
+    // 震盪值（神射手）：戰後格數（跨場沿用由呼叫端持久化）
+    sniperGauge: sniperCfg ? _sniperGrids : null,
+    // 計謀值（兵聖）：戰後格數
+    sageGauge: sageCfg ? _sageGrids : null,
+    // 命運骰（賭神）：戰後格數＋手氣層數（跨場沿用由呼叫端持久化）
+    diceGauge: diceGodCfg ? _diceGrids : null,
+    diceLuck: diceGodCfg ? _diceLuck : null,
+    // 符文結界（聖域師）：戰後狀態（結界每場重新展開，不跨場；此欄供顯示/驗證）
+    sanctum: sanctumCfg ? {
+      barrier: Math.max(0, _sanctumBarrier),
+      max: _sanctumMax,
+      absorbed: _sanctumAcc,
+      detonated: _sanctumDetonated,
+    } : null,
+    // 日之精靈（聖靈師）：戰後血量 %（倒下＝0，下一場由呼叫端依重召規則給 50%）
+    sunSpirit: sunSpiritCfg ? {
+      hp: Math.max(0, _spiritHp),
+      maxHp: _spiritMaxHp,
+      hpPct: Math.max(0, Math.round((_spiritHp / Math.max(1, _spiritMaxHp)) * 1000) / 10)
+    } : null
   };
 }
 

@@ -1,6 +1,7 @@
 const express = require("express");
 const path = require("path");
 const cors = require("cors");
+const compression = require("compression");
 
 const { isAppError } = require("../shared/errors");
 const { fail } = require("../shared/response");
@@ -16,6 +17,8 @@ const { createAdminCreatorAuthRoutes } = require("./routes/adminCreatorAuthRoute
 const { createAdminCombatCalculatorRoutes } = require("./routes/adminCombatCalculatorRoutes");
 const { createAdminStreamRecordsRoutes } = require("./routes/adminStreamRecordsRoutes");
 const { createAdminEnchantRoutes } = require("./routes/adminEnchantRoutes");
+const { createAdminWheelRoutes } = require("./routes/adminWheelRoutes");
+const { createStreamOverlayRoutes } = require("./routes/streamOverlayRoutes");
 const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const { createPlayerCollectionRoutes } = require("./routes/playerCollectionRoutes");
@@ -72,6 +75,17 @@ function createApiServer(discordClient) {
 
   const serviceContext = sharedServiceContext;
 
+  // 全站 gzip 壓縮：手機端輪詢的 JSON 流量大減（省電、省流量）。
+  // SSE(text/event-stream) 必須排除：compression 會緩衝輸出，壓縮會讓事件流卡住不即時送達。
+  app.use(compression({
+    filter: (req, res) => {
+      const contentType = String(res.getHeader("Content-Type") || "");
+      if (contentType.includes("text/event-stream")) return false;
+      if (/stream$/.test(req.path)) return false; // 保險：SSE 端點路徑都以 stream 結尾
+      return compression.filter(req, res);
+    }
+  }));
+
   // 全站速率限制(per-IP 固定視窗):擋腳本高頻灌爆 API/DB。
   // SSE 長連線端點(/...stream)略過(單一長連線、本身另有連線數上限)。
   const { createRateLimiter } = require("./netGuards");
@@ -127,6 +141,9 @@ function createApiServer(discordClient) {
   app.use(createAdminCombatCalculatorRoutes(serviceContext));
   app.use(createAdminStreamRecordsRoutes(serviceContext, discordClient));
   app.use(createAdminEnchantRoutes());
+  app.use(createAdminWheelRoutes());
+  app.use(createStreamOverlayRoutes());
+  app.use(require("./routes/adminLiveRoutes").createAdminLiveRoutes(serviceContext));
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
   app.use(createPlayerCollectionRoutes(serviceContext));
   app.use(createPlayerForgeRoutes(serviceContext));

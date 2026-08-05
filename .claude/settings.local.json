@@ -188,7 +188,9 @@
       "Bash(node --check src/adapters/mongo/createMongoRepositories.js)",
       "Bash(node --check src/bot/handlers/pkArenaHandlers.js)",
       "Bash(node --check /Users/riuchen/Documents/otonashiKoi_game/src/shared/pkCombat.js)",
-      "Bash(rm /Users/riuchen/Documents/otonashiKoi_game/.git/index.lock && git add src/ scripts/ && git log --oneline -3)"
+      "Bash(rm /Users/riuchen/Documents/otonashiKoi_game/.git/index.lock && git add src/ scripts/ && git log --oneline -3)",
+      "Bash(node \"/private/tmp/claude-501/-Users-riuchen-Documents-otonashiKoi-game/ca2dfc05-7055-4916-bf08-ad0e2e376dd3/scratchpad/rewrite-summer-story.js\")",
+      "Bash(NODE_PATH=/Users/riuchen/Documents/otonashiKoi_game/node_modules node \"/private/tmp/claude-501/-Users-riuchen-Documents-otonashiKoi-game/ca2dfc05-7055-4916-bf08-ad0e2e376dd3/scratchpad/rewrite-summer-story.js\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\appsk\\Documents\\Github\\CHAT\\src\\adapters",

@@ -72,7 +72,11 @@
       const kind = sel.dataset.lazy, i = Number(sel.dataset.node), n = editing && editing.nodes && editing.nodes[i];
       const build = _lazyBuilders[kind]; if (!build) return;
       const cur = sel.value;
-      sel.innerHTML = kind === "npc" ? build(n && n.npcId) : kind === "mon" ? build(n && n.monsterId) : kind === "item" ? build(n && n.grantItemId) : "";
+      sel.innerHTML = kind === "npc" ? build(n && n.npcId)
+        : kind === "mon" ? build(n && n.monsterId)
+          : kind === "item" ? build(n && n.grantItemId)
+            : kind === "badge" ? build(n && n.t2BadgeId)   // ⚔️ 轉職節點的二轉徽章
+              : "";
       sel.value = cur; sel.dataset.ready = "1";
     });
   }
@@ -396,6 +400,10 @@
         if (n.type === "dialogue" && !n.npcId && !n.nameOverride) warns.push(`#${i + 1} 對話沒有選 NPC 也沒有名字覆寫（會顯示 ???）`);
       }
       if (n.grantItemId && !items.find((it) => it.id === n.grantItemId)) errors.push(`#${i + 1} 🎁 指定的道具已不存在`);
+      if (n.type === "transfer") {
+        if (!n.t2BadgeId) errors.push(`#${i + 1} ⚔️ 轉職節點未指定要換發的二轉徽章`);
+        else if (!items.find((it) => it.id === n.t2BadgeId)) errors.push(`#${i + 1} ⚔️ 指定的二轉徽章已不存在`);
+      }
     });
     return { errors, warns };
   }
@@ -609,7 +617,12 @@
     const typeBtn = (i, t, cur, label) => `<button type="button" class="button ${cur ? "primary" : ""}" data-node-settype="${i}" data-settype="${t}" style="padding:3px 10px;">${label}</button>`;
 
     // ── 重下拉「延遲建立」：初始只放目前那顆(顯示正確標籤)，聚焦才由 focusin 灌全部 ──
-    _lazyBuilders = { npc: npcOpts, mon: monsterOpts, item: itemOpts };
+    const badgeOpts = (cur) => {
+      const list = items.filter((it) => it.itemType === "job_badge" || it.equipSlot === "job_eq");
+      return `<option value="">（選二轉徽章）</option>` + list.map((it) => `<option value="${it.id}"${it.id === cur ? " selected" : ""}>${esc(it.name)}</option>`).join("");
+    };
+    const badgeLabelOf = (v) => !v ? "（選二轉徽章）" : (items.find((it) => it.id === v)?.name || "?");
+    _lazyBuilders = { npc: npcOpts, mon: monsterOpts, item: itemOpts, badge: badgeOpts };
     const npcNameById = Object.fromEntries(npcs.map((x) => [x.id, x.name]));
     const npcLabelOf = (v) => !v ? "（選 NPC / 怪物）" : v === "player" ? "🧑 玩家（主角）" : isMonRef(v) ? ("👹 " + (monOf(v)?.name || "怪物")) : (npcNameById[v] || "?");
     const monLabelOf = (v) => (monsters.find((m) => m.id === v)?.name) || "（選怪物）";
@@ -632,7 +645,7 @@
       .concat((items || []).filter((it) => it.equipSlot === "title_eq").map((it) => `<option value="${esc(it.name)}" ${sel === it.name ? "selected" : ""}>👑 ${esc(it.name)}</option>`)).join("");
 
     const nodeRows = (editing.nodes || []).map((n, i) => {
-      const isBattle = n.type === "battle", isDlg = n.type === "dialogue", isCG = n.type === "cg", isChoice = n.type === "choice";
+      const isBattle = n.type === "battle", isDlg = n.type === "dialogue", isCG = n.type === "cg", isChoice = n.type === "choice", isTransfer = n.type === "transfer";
       const isNarr = !isBattle && !isDlg && !isCG && !isChoice; // 旁白：可用「立繪擺台(不當說話者)」
 
       const showFx = fxOpen.has(n._uid);
@@ -698,6 +711,7 @@
             <select class="st-sel" data-node="${i}" data-field="exitSide" title="讓某個位置的立繪退場(移除)；換人時舊角色不會自動消失，用這個把他移掉">${optionsHtml(EXIT_OPTS, n.exitSide || "")}</select>
             <label style="font-size:12px;" title="進場前清掉台上其他立繪(換場/獨白用)"><input type="checkbox" data-node="${i}" data-field="clearStage" ${n.clearStage ? "checked" : ""}> 🧹 清空其他立繪</label>
             <label style="font-size:12px;" title="讀到此節點自動發指定道具給玩家(每人只發一次)">🎁 給道具 ${lazySel(`class="st-sel" data-node="${i}" data-field="grantItemId"`, "item", n.grantItemId, itemLabelOf(n.grantItemId))}</label>
+            ${isTransfer ? `<label style="font-size:12px;color:#ffd166;" title="轉職：消耗對應的一轉徽章＋金幣，換發這個二轉徽章(Lv1 重練)。一轉徽章由分支自動反查，不用另外指定。">⚔️ 換發二轉徽章 ${lazySel(`class="st-sel" data-node="${i}" data-field="t2BadgeId"`, "badge", n.t2BadgeId, badgeLabelOf(n.t2BadgeId))}</label>` : ""}
           </div>
           <div style="${ROW}margin:8px 0 0;">
             <label style="font-size:12px;" title="分支標籤：讓別的節點/選項可以 ⤳ 跳到這裡">🏷 <input type="text" data-node="${i}" data-field="label" value="${esc(n.label || "")}" placeholder="標籤(跳轉目標)" style="width:110px;"></label>
@@ -727,6 +741,7 @@
           ${typeBtn(i, "battle", n.type === "battle", "⚔️ 戰鬥")}
           ${typeBtn(i, "cg", n.type === "cg", "🖼 CG")}
           ${typeBtn(i, "choice", isChoice, "❓ 選項")}
+          ${typeBtn(i, "transfer", isTransfer, "⚔️ 轉職")}
           ${(!isBattle && !isChoice) ? `<select data-node="${i}" data-field="textSize" title="文字大小(玩家端台詞字體)" style="width:84px;flex:0 0 auto;padding:2px 6px;font-size:12px;">${optionsHtml(TEXTSIZE_OPTS, n.textSize || "")}</select>` : ""}
           ${labelBadge}${jumpBadge}
           <span style="flex:1;"></span>
@@ -763,6 +778,7 @@
             const marks = [];
             if (n.label) marks.push(`<b style="color:${esc(labelColor(n.label))};">🏷${esc(n.label)}</b>`);
             if (n.type === "choice") marks.push(`<b style="color:#ffd166;">❓${(n.options || []).length}選項</b>`);
+            if (n.type === "transfer") marks.push(`<b style="color:#ffd166;">⚔️轉職</b>`);
             if (n.type === "battle") marks.push("⚔️" + esc((monsters.find((m) => m.id === n.monsterId) || {}).name || "?") + (n.forcedOutcome ? (n.forcedOutcome === "lose" ? "(必敗)" : "(必勝)") : ""));
             if (n.type === "cg") marks.push("🖼CG");
             if (n.backgroundUrl) marks.push("🏞換景");
@@ -1013,6 +1029,7 @@
       if (t === "battle") { if (n.monsterId === undefined || n.monsterId === null) n.monsterId = monsters[0]?.id || null; if (n.mustWin === undefined) n.mustWin = true; }
       if (t === "cg" && n.cgUrl === undefined) n.cgUrl = null;
       if (t === "choice" && !Array.isArray(n.options)) n.options = [{ text: "", jumpTo: "" }, { text: "", jumpTo: "" }];
+      if (t === "transfer" && n.t2BadgeId === undefined) n.t2BadgeId = null;
       render();
       keepCardInPlace(i, beforeTop);
     }));
@@ -1126,7 +1143,7 @@
     // 排序/刪除
     root.querySelectorAll("[data-node-del]").forEach((b) => b.addEventListener("click", () => {
       const i = Number(b.dataset.nodeDel), n = editing.nodes[i];
-      const brief = (n?.text || (n?.type === "battle" ? "戰鬥節點" : n?.type === "choice" ? "選項節點" : "")).slice(0, 20);
+      const brief = (n?.text || (n?.type === "battle" ? "戰鬥節點" : n?.type === "choice" ? "選項節點" : n?.type === "transfer" ? "轉職節點" : "")).slice(0, 20);
       if (!confirm(`刪除 #${i + 1}${brief ? "「" + brief + "…」" : ""}？（可用 ↩️ 復原）`)) return;
       syncEditingFromDom(); pushUndo(); editing.nodes.splice(i, 1); render();
     }));

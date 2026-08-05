@@ -8,7 +8,7 @@ const config = require("../config");
 const { createCode } = require("./bindingStore");
 const { renderEquipmentCard, LEFT_SLOTS: EQ_LEFT_SLOTS, RIGHT_SLOTS: EQ_RIGHT_SLOTS, COL3_SLOTS: EQ_COL3_SLOTS, SLOT_LABELS: EQ_SLOT_LABELS } = require("./equipmentCardRenderer");
 const { calcPlayerStats, getWeaponConfig } = require("../shared/combatStats");
-const { isGemEntry: isGemEntryForSell, DISMANTLE_YIELD } = require("../services/shop/shopService");
+const { isGemEntry: isGemEntryForSell, DISMANTLE_YIELD, DISMANTLE_SUCCESS_RATE, getElementStoneRate } = require("../services/shop/shopService");
 const { pushBonusWeaponToInventory, pushRewardItemsToInventory } = require("../shared/jobBadgeBonus");
 const { TIER_SET_SLOTS, getTierSetInfo } = require("../shared/equipmentTierSetBonuses");
 const { getEquippedSetInfo } = require("../shared/equipmentSetBonuses");
@@ -2141,7 +2141,13 @@ async function handleBackpackAction(interaction, action, uuid, tab = "item", pag
     const _dY = DISMANTLE_YIELD[tierU];
     const canDismantle = isEquip && !!_dY;
     const yieldLine = canDismantle
-      ? `\n\n🔨 有 **50%** 機率分解出：**${_dY.count} 顆 ${_dY.tier} 階寶石**（失敗則無產物，裝備一樣消失）`
+      ? `\n\n🔨 有 **${Math.round(DISMANTLE_SUCCESS_RATE * 100)}%** 機率分解出：**${_dY.count} 顆 ${_dY.tier} 階寶石**（失敗則無產物，裝備一樣消失）`
+      : "";
+    // 屬性石預告（只有帶屬性的裝備才有；機率依階級而異，獨立於上面的寶石判定）
+    const _stoneRatePct = Math.round(getElementStoneRate(tierU) * 100);
+    const _elLabel = entry.element ? (getElementLabel(entry.element) || entry.element) : "";
+    const stoneLine = (canDismantle && entry.element && _stoneRatePct > 0)
+      ? `\n💠 另有 **${_stoneRatePct}%** 機率分解出：**${Math.max(1, Number(entry.elementLevel) || 1)} 顆 ${_elLabel}屬性石**（${tierU} 階；與寶石分開判定）`
       : "";
     const verb = canDismantle ? "分解" : "丟棄";
     const row = new ActionRowBuilder().addComponents(
@@ -2155,7 +2161,7 @@ async function handleBackpackAction(interaction, action, uuid, tab = "item", pag
         .setStyle(ButtonStyle.Secondary),
     );
     await safeEditReply(interaction, {
-      content: `⚠️ 確定要${verb} **${entry.itemName}${enh}${stack}** 嗎？此操作**無法復原**！${yieldLine}${warnLine}`,
+      content: `⚠️ 確定要${verb} **${entry.itemName}${enh}${stack}** 嗎？此操作**無法復原**！${yieldLine}${stoneLine}${warnLine}`,
       components: [row],
       embeds: [],
       files: [],
@@ -2228,10 +2234,21 @@ async function handleBackpackDiscardBulk(interaction, uuid, tab = "item", page =
     await safeEditReply(interaction, { content: "❌ 沒有可批量分解的同款未強化裝備。", components: [], embeds: [], files: [] });
     return;
   }
-  const DISMANTLE_PREVIEW = { S: "1 顆 A 階寶石", A: "2 顆 B 階寶石", B: "2 顆 C 階寶石", C: "2 顆 D 階寶石", D: "1 顆 D 階寶石" };
+  // 產物一律以 shopService.DISMANTLE_YIELD 為準（同階 D→D/C→C/B→B/A→A/S→S，各 1 顆），
+  // 跟單件分解預告走同一份來源。**不要在這裡另寫一張表**——舊版寫死成 S→A/A→B 2 顆…
+  // 與實際產物完全不符，玩家看到的預覽是錯的。
   const tierU = String(ref.tier || "").toUpperCase();
-  const yieldLine = DISMANTLE_PREVIEW[tierU]
-    ? `\n🔨 每件有 **50%** 機率分解出：**${DISMANTLE_PREVIEW[tierU]}**（失敗則無產物）`
+  const _dY = DISMANTLE_YIELD[tierU];
+  const _ratePct = Math.round(DISMANTLE_SUCCESS_RATE * 100);
+  const yieldLine = _dY
+    ? `\n🔨 每件有 **${_ratePct}%** 機率分解出：**${_dY.count} 顆 ${_dY.tier} 階寶石**（失敗則無產物）`
+    : "";
+  // 屬性石預告：屬性是逐件實例的（同款可能只有幾件帶屬性），所以要數這批裡實際帶屬性的件數
+  const _stoneRatePct = Math.round(getElementStoneRate(tierU) * 100);
+  const _withElement = matching.filter((e) => !e.locked && e.element);
+  const _elSummary = [...new Set(_withElement.map((e) => `${getElementLabel(e.element) || e.element}${Math.max(1, Number(e.elementLevel) || 1)}`))].join("、");
+  const stoneLine = (_withElement.length > 0 && _stoneRatePct > 0)
+    ? `\n💠 其中 **${_withElement.length} 件帶屬性**（${_elSummary}），每件另有 **${_stoneRatePct}%** 機率分解出屬性石（顆數＝屬性濃度）`
     : "";
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -2244,7 +2261,7 @@ async function handleBackpackDiscardBulk(interaction, uuid, tab = "item", page =
       .setStyle(ButtonStyle.Secondary),
   );
   await safeEditReply(interaction, {
-    content: `⚠️ 確定要把 **${ref.itemName}** 的 **${count} 件（未強化、未鎖定）** 一起分解嗎？此操作**無法復原**！${lockedCount ? `\n🛡️ 已排除 **${lockedCount} 件鎖定裝備**，不會分解。` : ""}${yieldLine}`,
+    content: `⚠️ 確定要把 **${ref.itemName}** 的 **${count} 件（未強化、未鎖定）** 一起分解嗎？此操作**無法復原**！${lockedCount ? `\n🛡️ 已排除 **${lockedCount} 件鎖定裝備**，不會分解。` : ""}${yieldLine}${stoneLine}`,
     components: [row], embeds: [], files: [],
   });
 }

@@ -301,11 +301,12 @@ class EnhanceService {
   }
 
   /**
-   * 查詢一件武器/副手的屬性洞現況（給前端畫面用：目前洞位、每種屬性的下一步花費/成功率）。
-   * @returns {object|null} 非武器側裝備回傳 null
+   * 查詢一件裝備的屬性洞現況（給前端畫面用：目前洞位、每種屬性的下一步花費/成功率）。
+   * 武器側（武器/副手）＝攻擊屬性；防具側（頭/鎧/披風/鞋/飾品）＝抗性與相剋減免。
+   * @returns {object|null} 不支援屬性洞的槽位（卡片/稱號/職業徽章/錨點）回傳 null
    */
   async getElementSocketInfo(discordId, inventoryUuid) {
-    const { ELEMENTS, getElementSocketCapacity, resolveElementsMap, WEAPON_SLOTS } = require("../../shared/elementSystem");
+    const { ELEMENTS, getElementSocketCapacity, resolveElementsMap, ELEMENT_SOCKET_SLOTS } = require("../../shared/elementSystem");
     const { getElementSocketCost } = require("../../shared/enhanceConfig");
 
     const progress = await this.progressRepository.findByPlayerId(discordId);
@@ -318,7 +319,7 @@ class EnhanceService {
         if (slotItem && slotItem.uuid === inventoryUuid) { equipment = slotItem; break; }
       }
     }
-    if (!equipment || !WEAPON_SLOTS.includes(String(equipment.equipSlot || ""))) return null;
+    if (!equipment || !ELEMENT_SOCKET_SLOTS.includes(String(equipment.equipSlot || ""))) return null;
 
     const tier = String(equipment.tier || "").toUpperCase();
     const capacity = getElementSocketCapacity(tier);
@@ -351,7 +352,7 @@ class EnhanceService {
   }
 
   async _fillElementSocketImpl(discordId, inventoryUuid, element) {
-    const { normalizeElement, getElementLabel, getElementSocketCapacity, resolveElementsMap, WEAPON_SLOTS } = require("../../shared/elementSystem");
+    const { normalizeElement, getElementLabel, getElementSocketCapacity, resolveElementsMap, ELEMENT_SOCKET_SLOTS } = require("../../shared/elementSystem");
     const { getElementSocketCost } = require("../../shared/enhanceConfig");
 
     const el = normalizeElement(element);
@@ -374,9 +375,11 @@ class EnhanceService {
     }
     if (!equipment) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "未找到該裝備", 404);
 
-    // 屬性洞只開放武器側（武器＋副手），跟戰鬥引擎「打出去看武器側」的定義一致
-    if (!WEAPON_SLOTS.includes(String(equipment.equipSlot || ""))) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "屬性洞只能用在武器/副手上", 400);
+    // 屬性洞開放武器側（武器/副手＝打出去的屬性）與防具側（頭/鎧/披風/鞋/飾品＝抗性與相剋減免），
+    // 與戰鬥引擎讀取的槽位一致（見 elementSystem 的 WEAPON_SLOTS / ARMOR_SLOTS）。
+    // 卡片/稱號/職業徽章/錨點等特殊槽不參與屬性系統，仍然擋下。
+    if (!ELEMENT_SOCKET_SLOTS.includes(String(equipment.equipSlot || ""))) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此槽位不支援屬性洞（只有武器/副手與防具可以鑲嵌）", 400);
     }
 
     const tier = String(equipment.tier || "").toUpperCase();

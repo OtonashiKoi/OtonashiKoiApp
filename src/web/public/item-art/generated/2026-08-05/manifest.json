@@ -1,0 +1,28 @@
+{
+  "generatedAt": "2026-08-05",
+  "generator": "built-in imagegen",
+  "styleReference": "../2026-08-01/_contact-sheet.png",
+  "stylePrompt": "High-detail retro pixel art RPG inventory icon; one complete item centered on a dark near-black navy square; crisp pixel clusters; cool rim light; restrained water-magic glow; no border, text, character, UI, or watermark.",
+  "items": {
+    "beach-sword-1h": "beach-sword-1h.png",
+    "beach-sword-2h": "beach-sword-2h.png",
+    "beach-axe-1h": "beach-axe-1h.png",
+    "beach-axe-2h": "beach-axe-2h.png",
+    "beach-dagger": "beach-dagger.png",
+    "beach-dice": "beach-dice.png",
+    "beach-mace-1h": "beach-mace-1h.png",
+    "beach-mace-2h": "beach-mace-2h.png",
+    "beach-staff-1h": "beach-staff-1h.png",
+    "beach-staff-2h": "beach-staff-2h.png",
+    "beach-bow": "beach-bow.png",
+    "beach-offhand-sword": "beach-offhand-sword.png",
+    "beach-offhand-dagger": "beach-offhand-dagger.png",
+    "beach-shield": "beach-shield.png",
+    "beach-armor": "beach-armor.png",
+    "beach-garment": "beach-garment.png",
+    "beach-shoes": "beach-shoes.png",
+    "beach-s-sword": "beach-s-sword.png",
+    "beach-s-mace": "beach-s-mace.png",
+    "beach-s-staff": "beach-s-staff.png"
+  }
+}

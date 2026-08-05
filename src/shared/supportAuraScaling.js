@@ -155,9 +155,24 @@ function scaleSupportPartyEffects(effects = [], options = {}) {
   return (Array.isArray(effects) ? effects : []).map((effect) => scaleSupportPartyEffect(effect, options));
 }
 
+// ── 光環在場判定 ──
+// activeHealerAuras 的登記項帶 lastAt（提供者每次出戰刷新）；超過 3 分鐘沒出戰＝已離場，
+// 讀取/寫入時一律先過濾，讓「人走了光環還留在戰報」不再發生。
+// 窗口與戰鬥氣泡(services/realtime/battlePresence)一致；無 lastAt 的舊格式登記一律視為過期。
+const AURA_PRESENCE_WINDOW_MS = 3 * 60 * 1000;
+
+function filterActiveAuras(auras, now = Date.now()) {
+  if (!Array.isArray(auras)) return [];
+  return auras.filter((a) =>
+    a && a.discordId && Number(a.lastAt) > 0 && now - Number(a.lastAt) <= AURA_PRESENCE_WINDOW_MS
+  );
+}
+
 module.exports = {
   calcScaledAuraValue,
   getSupportJobKey,
   scaleSupportPartyEffect,
-  scaleSupportPartyEffects
+  scaleSupportPartyEffects,
+  AURA_PRESENCE_WINDOW_MS,
+  filterActiveAuras
 };

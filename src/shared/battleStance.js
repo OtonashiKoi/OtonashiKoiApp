@@ -8,7 +8,7 @@
  *   - 姿態要求帶盾但玩家沒帶 → **直接拒絕**（丟錯，不靜默退回）
  *   - 不認得的 stance 值 → 直接拒絕
  */
-const { getStances } = require("./jobAdvancement");
+const { getStances, getDefaultStance } = require("./jobAdvancement");
 
 const OFFHAND_WEAPON_TYPES = new Set(["offhand_sword", "offhand_dagger", "offhand_mace"]);
 
@@ -30,7 +30,7 @@ function resolveRequestedStance(equipped, requested) {
   const stances = getStances(equipped?.job_eq);
   if (!stances) return null;                       // 沒有姿態系統 → 忽略
 
-  const key = String(requested || "attack");
+  const key = String(requested || getDefaultStance(equipped?.job_eq));
   const def = stances[key];
   if (!def) {
     const err = new Error(`未知的戰鬥姿態：${key}`);

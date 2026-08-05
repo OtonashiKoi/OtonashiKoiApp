@@ -11,6 +11,10 @@ const globalBuff = require("./globalBuffService");
 const viewerService = require("./viewerService");
 const announceTownChat = require("../../shared/announceTownChat");
 
+const GO_LIVE_CHANNEL_ID = String(
+  process.env.STREAM_GO_LIVE_CHANNEL_ID || "1292448104905441331"
+).trim();
+
 function pctParts(t) {
   const p = [];
   if (Number(t?.dropPct) > 0) p.push(`掉寶 +${t.dropPct}%`);
@@ -42,6 +46,95 @@ function buildMessage(cur, tierObj, tiers, mode, cfg) {
   return msg;
 }
 
+function selectLiveBroadcast(state, cfg) {
+  const active = (Array.isArray(state?.services) ? state.services : [])
+    .filter((s) => s?.isLive && !s?.stale && !s?.board && !s?.upcoming)
+    .sort((a, b) => {
+      // 同時多開時優先 YouTube，其次依穩定 id 排序，避免輪詢順序改變造成重複公告。
+      const platformRank = (s) => s?.platform === "youtube" ? 0 : s?.platform === "twitch" ? 1 : 2;
+      return platformRank(a) - platformRank(b)
+        || String(a?.id || a?.service || "").localeCompare(String(b?.id || b?.service || ""));
+    });
+  const primary = active[0];
+  if (!primary) return null;
+
+  const url = String(primary.url || cfg?.streamUrl || "").trim();
+  const title = String(primary.title || "").trim();
+  const platform = String(primary.platform || primary.service || "").trim();
+  // 場次識別只用「平台+網址」：標題不納入，否則主播直播中途改標題會被當成新的一場、重發公告。
+  // Twitch URL 固定不變 → 由 viewerService 的時間冷卻負責區分「下一場」，不需要靠標題。
+  const fingerprint = [platform, url].join("|").slice(0, 700);
+  return { url, title, platform, fingerprint };
+}
+
+// 去抖：OneComme 的 isLive 會忽真忽假（預約枠、連線抖動），單一輪輪詢不足以判定開台或關台。
+// 2026-08-02 事故：一輪 live → 公告，下一輪 offline → 釋放鎖，再下一輪 live → 又公告，20 秒一則。
+const LIVE_CONFIRM_ROUNDS = 3;    // 連續 3 輪（約 60 秒）都是同一場直播才公告
+const OFFLINE_CONFIRM_ROUNDS = 6; // 連續 6 輪（約 120 秒）都沒直播才視為關台、釋放公告鎖
+let _liveStreak = 0;
+let _offlineStreak = 0;
+let _streakFingerprint = "";
+
+function buildGoLiveMessage(url) {
+  return `📺 **開始直播摟～**\n${url}`;
+}
+
+async function evaluateGoLiveAnnouncement(state, cfg) {
+  const live = state?.live === true;
+  const broadcast = live ? selectLiveBroadcast(state, cfg) : null;
+
+  if (!broadcast?.url || !broadcast.fingerprint) {
+    _liveStreak = 0;
+    _streakFingerprint = "";
+    _offlineStreak += 1;
+    // 連續多輪都沒直播才真的當關台；只抖一下不釋放鎖，避免「釋放→重新搶佔→重發公告」的迴圈
+    if (_offlineStreak >= OFFLINE_CONFIRM_ROUNDS) await viewerService.markLiveOffline();
+    return { sent: false, reason: live ? "missing-live-url" : "offline" };
+  }
+
+  _offlineStreak = 0;
+  if (_streakFingerprint !== broadcast.fingerprint) {
+    _streakFingerprint = broadcast.fingerprint;
+    _liveStreak = 0;
+  }
+  _liveStreak += 1;
+  if (_liveStreak < LIVE_CONFIRM_ROUNDS) {
+    console.log(`[viewerEvents] 開台偵測確認中 ${_liveStreak}/${LIVE_CONFIRM_ROUNDS} url=${broadcast.url}`);
+    return { sent: false, reason: "confirming" };
+  }
+
+  const claimed = await viewerService.claimGoLiveAnnouncement({
+    ...broadcast,
+    channelId: GO_LIVE_CHANNEL_ID,
+  });
+  if (!claimed) return { sent: false, reason: "already-announced" };
+
+  try {
+    const { getBotClient } = require("../../bot/runtimeContext");
+    const client = getBotClient();
+    if (!client?.isReady?.()) throw new Error("Discord bot 尚未就緒");
+    const channel = await client.channels.fetch(GO_LIVE_CHANNEL_ID);
+    if (!channel?.isTextBased?.() || typeof channel.send !== "function") {
+      throw new Error(`頻道 ${GO_LIVE_CHANNEL_ID} 不是可發送的文字頻道`);
+    }
+    await channel.send({
+      content: buildGoLiveMessage(broadcast.url),
+      allowedMentions: { parse: [] },
+    });
+    await viewerService.completeGoLiveAnnouncement(broadcast.fingerprint, true);
+    console.log(`[viewerEvents] 已發送開台公告 channel=${GO_LIVE_CHANNEL_ID} url=${broadcast.url}`);
+    return { sent: true, channelId: GO_LIVE_CHANNEL_ID, url: broadcast.url };
+  } catch (err) {
+    await viewerService.completeGoLiveAnnouncement(
+      broadcast.fingerprint,
+      false,
+      err?.message || String(err)
+    );
+    console.warn("[viewerEvents] 開台公告發送失敗：", err?.message || err);
+    return { sent: false, reason: "send-failed" };
+  }
+}
+
 let _evaluating = false; // 並發鎖：避免重疊執行造成重複套用/廣播
 
 /**
@@ -52,10 +145,12 @@ async function evaluate() {
   _evaluating = true;
   try {
     const cfg = (await getConfig()).viewerTiers;
+    const state = await viewerService.getPublicState();
+    // 開台公告與 30 人 Buff 門檻分離：只要偵測到真的開台就發，不必等到 30 人。
+    await evaluateGoLiveAnnouncement(state, cfg);
+
     if (!cfg || !cfg.enabled) return { triggered: false, reason: "disabled" };
     const graceMs = Math.max(1, Number(cfg.graceMinutes) || 60) * 60_000;
-
-    const state = await viewerService.getPublicState();
     const cur = Math.max(0, Math.round(Number(state.current) || 0));
     const live = state.live === true || cur > 0;
     const session = globalBuff.getViewerSession();
@@ -135,4 +230,10 @@ async function announceCurrent() {
   }
 }
 
-module.exports = { evaluate, announceCurrent };
+module.exports = {
+  evaluate,
+  announceCurrent,
+  selectLiveBroadcast,
+  buildGoLiveMessage,
+  evaluateGoLiveAnnouncement,
+};

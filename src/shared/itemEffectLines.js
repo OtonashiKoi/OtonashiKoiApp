@@ -105,27 +105,57 @@ function buildT2MechanicLines(lib) {
 
   const out = [`🔱 二轉專屬（${branch.name}）：`];
 
-  // 戰鬥姿態（聖劍士）
+  // 戰鬥姿態（聖劍士／大元素師…）
   if (branch.stances) {
-    out.push(`・開打前選擇姿態，整場適用（戰鬥畫面兩顆按鈕）`);
+    const btnCount = Array.isArray(branch.battleActions) ? branch.battleActions.length : Object.keys(branch.stances).length;
+    out.push(`・開打前選擇姿態，整場適用（戰鬥畫面 ${btnCount} 顆按鈕）`);
     for (const [key, st] of Object.entries(branch.stances)) {
       const bits = [];
       if (Number.isFinite(Number(st.blockChance))) bits.push(`格擋率 ${st.blockChance}%`);
-      if (st.guaranteedElement) bits.push(`保證取得屬性相剋優勢`);
+      if (st.guaranteedElement) {
+        const ge = st.guaranteedElement;
+        bits.push(`保證站在屬性相剋優勢方（武器屬性 ≥${ge.upgradeFromWeaponLevel ?? 2} 級→以 ${ge.upgradedLevel ?? 4} 級相剋出手 +${(ge.upgradedLevel ?? 4) * 10}%，否則 ${ge.baseLevel ?? 2} 級 +${(ge.baseLevel ?? 2) * 10}%；怪物無屬性不生效）`);
+      }
       if (Number(st.shieldBashPct) > 0) bits.push(`格擋成功追加盾擊（ATK ${st.shieldBashPct}%）`);
       if (st.requiresShield) bits.push(`需裝備盾牌`);
-      out.push(`　◦ ${st.label || key}：${bits.join("、")}`);
+      // 元素師三姿態
+      if (st.fireCircle) bits.push(`怪物每回合受到你攻擊力 ${st.fireCircle.matkPct}% 的火傷（開場就燒；世界王所有部位一起燒）`);
+      if (st.stormVolley) bits.push(`每回合固定 ${st.stormVolley.hits} 段法術彈（每段 ${st.stormVolley.pctPerHit}%、各段獨立爆擊；無視連擊／三元牌／骰子多段，雙持追擊保留單追擊）`);
+      if (st.freezeCharge) {
+        try {
+          const zf = require("./zoneFreezeGauge");
+          bits.push(`出戰累積該區域冰凍值（量＝戰鬥回合數）；滿 ${zf.DEFAULT_THRESHOLD} → 區域冰封 ${Math.round(zf.FREEZE_WINDOW_MS / 1000)} 秒內出戰全程免傷，之後免疫 ${Math.round(zf.IMMUNE_MS / 60000)} 分鐘`);
+        } catch (_) { bits.push(`出戰累積該區域冰凍值，凍滿全區冰封`); }
+      }
+      if (st.stanceElement) {
+        const _elZh = { earth: "土", fire: "火", water: "水", wood: "木", metal: "金", sun: "日", moon: "月" };
+        bits.push(`攻擊帶${_elZh[st.stanceElement.element] || st.stanceElement.element}屬性 ${st.stanceElement.level} 級（與武器同屬性→等級相加封頂 4、不同屬性→取最高）`);
+      }
+      out.push(`　◦ ${st.label || key}：${bits.length ? bits.join("、") : "無附加效果（一般攻擊）"}`);
     }
   }
 
-  // 區域連段（劍鬼）
+  // 區域連段＋氣力格（劍鬼）
   if (branch.combo) {
     try {
       const zc = require("./zoneCombo");
-      out.push(`・區域連段（COMBO）：同一區每打完一場 +1，換區／陣亡／10 分鐘沒打歸零`);
+      out.push(`・區域連段（COMBO・被動）：同一區每打完一場 +1；只有換區／10 分鐘沒打會歸零`);
+      out.push(`　◦ 死鬥：陣亡也照樣 +1、連段不歸零——被王打死是修羅的修行`);
       out.push(`　◦ 階梯加成（${zc.COMBO_BUFF_MAX_AT} 段吃滿）：${zc.COMBO_TIERS.map((t) => `${t.at}→${t.label}`).join("、")}`);
-      out.push(`　◦ 斬：連段 ≥${zc.BURST_MIN_COMBO} 時戰鬥畫面出現按鈕，消耗全部連段，第 1 回合打出無視防禦與等級差的一擊（仍可爆擊）`);
-      out.push(`　◦ 不屈：第一次陣亡連段減半，連續第二次才歸零`);
+      out.push(`・斬（自動施放）：氣力 3 格——每回合有攻擊到對手 +1 格（每回合最多 1），滿 3 格下回合自動施放`);
+      out.push(`　◦ 斬的倍率＝1＋0.1×min(連段,${zc.COMBO_BUFF_MAX_AT})（連段 ${zc.COMBO_BUFF_MAX_AT} 時 ×${(1 + 0.1 * zc.COMBO_BUFF_MAX_AT).toFixed(0)}）；無視防禦與等級差、可爆擊`);
+      out.push(`　◦ 氣力同一場域跨場沿用（換區／10 分鐘沒打歸零）；滿格時戰鬥先結束 → 帶去下一場開場就斬`);
+    } catch (_) { /* 模組讀不到就略過 */ }
+  }
+
+  // 連擊氣條＋影襲（影舞者）
+  if (branch.shadowGauge) {
+    try {
+      const sg = require("./shadowGauge");
+      out.push(`・連擊氣條（被動）：${sg.GAUGE_MAX} 格——本回合有出現連擊 +1 格（每回合最多 1）`);
+      out.push(`　◦ 滿 ${sg.GAUGE_MAX} 格全部消耗 → 下一回合固定 ${sg.BURST_HITS} 連擊（殘影亂舞；該回合不累氣）`);
+      out.push(`　◦ 氣條同一場域跨場沿用（換區／10 分鐘沒打歸零）；滿格時戰鬥先結束 → 帶去下一場開場施放`);
+      out.push(`・影襲（戰鬥畫面按鈕）：消耗 ${sg.RUSH_COMBO_COST} 點區域連段 → 第一回合固定 ${sg.RUSH_HITS} 連擊（這些連擊會累氣）；連段不足 ${sg.RUSH_COMBO_COST} 時按鈕不會出現`);
     } catch (_) { /* 模組讀不到就略過 */ }
   }
 
@@ -138,6 +168,70 @@ function buildT2MechanicLines(lib) {
   }
   if (branch.gauge) {
     out.push(`・戰意集氣（被動）：每打完一場 +1 格，集滿 ${branch.gauge.max} 格的下一戰爆擊率 +${branch.gauge.critRateBonus}，之後歸零重集`);
+  }
+
+  // 日之精靈（聖靈師）
+  if (branch.sunSpirit) {
+    const sp = branch.sunSpirit;
+    out.push(`・日之精靈（被動・召喚）：開場自動召喚，怪物的攻擊**先由精靈承受**（精靈倒下後你才會受傷）`);
+    out.push(`　◦ 精靈血量＝你的最大 HP、防禦＝你的 DEF（不繼承閃避與格擋）；血量同區跨場沿用，倒下 → 下一場以 50% 血量重召`);
+    out.push(`　◦ 協攻：每回合追加一擊，攻擊力＝你的 ${sp.atkRatio}%、自帶日屬性 ${sp.elementLevel} 級（單發、不爆擊）`);
+    out.push(`　◦ 精靈在場時：你給隊伍的光環效果 ×${sp.auraMult}`);
+    out.push(`・大治療術（被動）：每 ${sp.healEveryRounds} 個有出手的回合施放，回復最大 HP 的 ${sp.healPct}%——精靈在場先回精靈，否則回自己`);
+  }
+
+  // 兵聖三件套
+  if (branch.sage) {
+    const sg = branch.sage;
+    out.push(`・三十六計（被動・計謀值 3 格）：每個有攻擊的回合 +1 格，滿 3 → 隨機施展一計（跨場沿用）`);
+    out.push(`　◦ 🔥 火攻之計：一擊 ATK ${sg.fire?.hitPct ?? 150}%＋灼燒 ${sg.fire?.burnTurns ?? 3} 回合`);
+    out.push(`　◦ 🪨 落石之計：一擊 ATK ${sg.rock?.hitPct ?? 120}%＋暈眩 1 回合（世界王吃既有上限/免疫規則）`);
+    out.push(`　◦ 🌫️ 瞞天過海：下回合對手必定打空、你的攻擊必中`);
+    out.push(`　◦ ⛓️ 連環之計：下回合固定 ${sg.chain?.hits ?? 3} 連擊`);
+    out.push(`　◦ 🚩 破釜沉舟：接下來 ${sg.allin?.rounds ?? 2} 回合傷害 ×${sg.allin?.mult ?? 3}，期間無法迴避格擋、受傷 +50%`);
+    out.push(`・知彼（被動）：怪物圖鑑的傷害加成效果 ×${sg.knowledgeMult ?? 2}（上限 25% → ${25 * (sg.knowledgeMult ?? 2)}%）`);
+  }
+
+  // 吟遊詩人（演奏判定）
+  if (branch.bardSong) {
+    try {
+      const bs = require("./bardSong");
+      const lv = bs.LEVELS; // [簡單, 普通, 困難]
+      out.push(`・演奏判定（動作玩法）：戰後待命時畫面出現方向箭頭（${lv.map((t) => `${t.name}${t.len}鍵`).join("／")}），${Math.round(bs.TIME_LIMIT_MS / 1000)} 秒內輸入（鍵盤方向鍵／手機滑動）；完成即自動排隊下一場`);
+      out.push(`　◦ 每按對 1 鍵：下一場傷害 +${lv[0].perHitPct}~${lv[lv.length - 1].perHitPct}%（依難度），按錯扣同值；倍率範圍 ×0.7~×2.0`);
+      out.push(`　◦ 完美演奏：完美連奏 +1（上限 ${bs.STREAK_MAX} 層，每層再 +${bs.STREAK_PCT}%）；另觸發「完美和弦」開場追擊 ×(${lv[0].chordBasePct}~${lv[lv.length - 1].chordBasePct}% + 連奏×${bs.CHORD_PER_STREAK_PCT}%)`);
+      out.push(`　◦ 難度升降：連奏 ${lv[1].minStreak} 升普通、${lv[2].minStreak} 升困難；沒全對降一級；陣亡／換區／閒置 10 分回簡單`);
+      out.push(`　◦ 演奏加持：隊伍光環 ×(1 + 連奏×${bs.AURA_PER_STREAK_PCT}%)——滿連奏光環兩倍（斷奏自然回落）`);
+      out.push(`　◦ 連奏同區跨場沿用；沒演奏＝不加不減但連奏中斷；DC 出戰無演奏`);
+    } catch (_) { /* noop */ }
+  }
+
+  // 聖域師（符文結界／聖域展開）
+  if (branch.sanctum) {
+    const sc = branch.sanctum;
+    out.push(`・符文結界：開場展開護盾（最大 HP ${sc.barrierBasePct}% ＋ INT×${sc.barrierPerInt}），受傷先扣結界再扣血`);
+    out.push(`　◦ 共鳴反爆：結界吸收的傷害累積，引爆時轟出 **吸收量 ×${sc.detonateMult} ×(引爆回合/全場回合)** 的無視防禦傷害`);
+    out.push(`　◦ 三個引爆時機：提前引爆（這一爆剛好收頭）／結界被打爆（當回合爆、倍率打折）／撐到最後一回合（滿倍率最痛）`);
+    out.push(`・聖域展開：出戰累積區域聖域值（每場 +1，滿 4 格）→ 區域聖域 20 秒：任何人出戰受傷 -${sc.sanctumDamageCutPct}%、每回合回復 ${sc.sanctumHealPct}% HP`);
+    out.push(`　◦ 聖域期間自己的隊伍光環 ×${sc.auraMult}；聖域結束後免疫 2 分鐘再重新累積`);
+  }
+
+  // 賭神三件套
+  if (branch.diceGod) {
+    const dg = branch.diceGod;
+    out.push(`・魔法骰：骰子傷害視為魔法——常駐無視 25% DEF（與雙手法杖同級）`);
+    out.push(`・命運骰：${dg.gaugeMax} 格集氣（有攻擊的回合 +1），滿的那回合改丟 **3 顆骰子**——第三顆骰出幾點＝當回合幾連擊，每一擊都是前兩顆骰子的傷害`);
+    out.push(`・手氣正旺：每回合兩顆傷害骰平均 >3 → 手氣 +1 層（每層傷害 +${dg.luckPerStackPct}%、上限 ${dg.luckMaxStacks} 層＝+${dg.luckPerStackPct * dg.luckMaxStacks}%）；平均 <3 → 歸零；跨場沿用（只有手氣轉冷會掉）`);
+    out.push(`・賭徒技能（將大局逆轉吧／千術）綁定骰子武器——沒拿骰子不發動`);
+  }
+
+  // 神射手三件套
+  if (branch.sniper) {
+    const sn = branch.sniper;
+    out.push(`・掩護射擊（被動・團隊）：你在區域內時，區內其他玩家出戰，每回合替他們補一箭（你 ATK 的 ${sn.supportShotPct}%、吃你的爆擊）；世界王時箭傷計入你的貢獻排名`);
+    out.push(`・神速反擊（被動）：這回合對手沒打到你——揮空／被你閃過／來不及出手／被暈眩／被冰封——就追加一箭（ATK ${sn.counterShotPct}%）`);
+    out.push(`・震盪射擊（被動・震盪值 4 格）：每個有攻擊的回合 +1 格，滿 4 → 立刻一箭（ATK ${sn.shockShotPct}%）並震退對手——下回合對手構不到你（又觸發神速反擊）`);
+    out.push(`　◦ 震盪值同一場域跨場沿用（換區／10 分鐘沒打歸零）`);
   }
 
   // 暈眩專精（矮人戰士長）

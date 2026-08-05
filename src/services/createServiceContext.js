@@ -46,10 +46,17 @@ function createServiceContext() {
   const playerTierService = new PlayerTierService(repositories.playerTierRepository);
   const monsterService = new MonsterService(repositories.monsterRepository, repositories.itemRepository);
   const monsterEventService = new MonsterEventService(repositories.monsterEventRepository);
+  // 職業徽章熟練度＋轉職（二轉任務要用它檢查資格與執行轉職）
+  const { JobBadgeService } = require("./job/jobBadgeService");
+  const jobBadgeService = new JobBadgeService(
+    repositories.progressRepository, repositories.itemRepository,
+    repositories.walletRepository, rewardService
+  );
   const questService = new WeeklyQuestService(repositories.weeklyQuestRepository, playerService, {
     streamAccountBindingRepository: repositories.streamAccountBindingRepository,
     checkinRepository: repositories.checkinRepository,
-    itemRepository: repositories.itemRepository
+    itemRepository: repositories.itemRepository,
+    jobBadgeService
   });
   const weeklyQuestService = questService; // backward-compatible alias
   const battleConfigService = new BattleConfigService(repositories.battleConfigRepository);
@@ -91,12 +98,18 @@ function createServiceContext() {
     unlockRequiresBossKey: "dragon_king",
     unlockServiceGetter: (key) => (key === "dragon_king" ? dragonKingBossService : null),
   });
+  // 島島龜王：期間限定活動世界王。**不設前置王**（活動內容自成一條線，
+  // 不要求玩家先打完大史王→古龍王那串終局鏈），難度全由潮汐/海嘯機制承擔。
+  const islandTurtleBossService = new WorldBossService(repositories.worldBossRepository, {
+    bossKey: "island_turtle",
+  });
   // zone → 對應世界王 service（handler 用 zoneKey 取得正確 boss）
   const { bossKeyForZone } = require("./worldBoss/worldBossService");
   function worldBossServiceFor(zoneKey) {
     const bk = bossKeyForZone(zoneKey);
     if (bk === "hellfang_king") return hellfangKingBossService;
     if (bk === "dragon_king") return dragonKingBossService;
+    if (bk === "island_turtle") return islandTurtleBossService;
     if (bk === "default") return worldBossService;
     return null;
   }
@@ -167,7 +180,10 @@ function createServiceContext() {
     itemRepository: repositories.itemRepository,
   });
   const { StoryService } = require("./story/storyService");
-  const storyService = new StoryService(repositories.storyRepository, repositories.progressRepository, monsterService, repositories.itemRepository);
+  const storyService = new StoryService(
+    repositories.storyRepository, repositories.progressRepository, monsterService, repositories.itemRepository,
+    repositories.walletRepository, rewardService   // ⚔️ 轉職節點要扣金幣（走台帳留紀錄）
+  );
   const adminConsoleService = new AdminConsoleService(
     repositories.channelLayoutRepository,
     repositories.playerRepository,
@@ -211,7 +227,8 @@ function createServiceContext() {
     casinoService,
     petService,
     passService,
-    storyService
+    storyService,
+    jobBadgeService
   };
 }
 

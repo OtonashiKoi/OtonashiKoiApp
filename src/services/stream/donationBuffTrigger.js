@@ -6,7 +6,7 @@
 //   ③ 啟動門檻：沒有生效中 session 時，第一筆需 ≥ NT$100 才會啟動。
 //   ④ 時效歸零 → 本輪結束、累積歸零，下輪要再從 NT$100 起算。
 // 各類型（掉寶/金幣/經驗）同一個 %。以單一「donation-session」buff 覆寫式儲存。
-const { getDonationSession, setDonationSessionBuff } = require("./globalBuffService");
+const { getDonationSession, setDonationSessionBuff, refresh: refreshBuffCache } = require("./globalBuffService");
 const { getConfig } = require("./streamEventConfig");
 
 // 累積模型常數
@@ -34,6 +34,10 @@ async function maybeTriggerDonationBuff(donation, meta, serviceContext) {
     const twd = Math.max(0, Math.round(Number(donation?.twdAmount) || 0));
     if (twd <= 0) return { triggered: false, reason: "no-amount" };
 
+    // ⚠️ 判定前必先從 DB 重載快取：補發腳本等「非伺服器程序」的快取是空的，
+    // 直接讀會誤判「無進行中 session」→ 開新 session 把舊的大 buff 整筆蓋掉
+    // （2026-07-25 事故：4665 分鐘 buff 被補發腳本砍成 68 分鐘）
+    await refreshBuffCache().catch(() => {});
     const nowMs = Date.now();
     const session = getDonationSession();
     const active = !!session;

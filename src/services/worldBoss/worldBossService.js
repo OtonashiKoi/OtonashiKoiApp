@@ -245,11 +245,15 @@ class WorldBossService {
       ? normalizePhaseList(configOrPhaseList)
       : normalizePhaseList(configOrPhaseList?.phaseConfig || []);
     const pct = Math.max(0, Math.min(100, Number(hpPercent || 0)));
-    let chosen = phaseList[phaseList.length - 1] || { phase: 1, hpBelowPercent: 0, atkMultiplier: 1, defMultiplier: 1 };
+    // 區間對映（2026-07-23 修正）：hpBelowPercent＝該階段的「下緣」。
+    // phaseList 已依 hpBelowPercent 由大到小排序 → 第一個「下緣 ≤ 當前血量%」的就是所屬階段。
+    //   例：70/40/0 → [70,100]=第一階段、[40,70)=第二階段（逆鱗）、[0,40)=第三階段（龍王之怒）。
+    // 舊版 bug：`pct <= hpBelowPercent` 全都不匹配時掉進預設「最後一個階段」——
+    // **滿血王（100%~71%）一直在吃最終狂怒 ×1.6，打到 69% 反而變回 ×1.0，40% 以下只有 ×1.3**，
+    // 三個階段全部接錯，上線以來的世界王都是這樣跑的。
+    let chosen = phaseList[0] || { phase: 1, hpBelowPercent: 0, atkMultiplier: 1, defMultiplier: 1 };
     for (const phase of phaseList) {
-      if (pct <= phase.hpBelowPercent) {
-        chosen = phase;
-      }
+      if (pct >= phase.hpBelowPercent) { chosen = phase; break; }
     }
     return chosen;
   }
@@ -260,6 +264,7 @@ const WORLD_BOSS_ZONES = {
   elite: "default",            // 大史王
   dragon_king_lair: "dragon_king", // 龍王(B)
   hellfire_depths: "hellfang_king", // 地獄狼牙王（終局）
+  event_boss: "island_turtle", // 島島龜王（期間限定活動；潮汐/海嘯機制在 shared/turtleTide.js）
 };
 function isWorldBossZone(zoneKey) {
   return Object.prototype.hasOwnProperty.call(WORLD_BOSS_ZONES, zoneKey);

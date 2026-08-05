@@ -7,7 +7,9 @@
  *     body { uuids: [uuid, ...] }       多件逐一分解（每件獨立判定，單件失敗不中斷其他）
  *
  * 產物規則完全由 shopService.DISMANTLE_YIELD 決定（50% 機率產出強化寶石；
- * S→1 顆 S 階、A→2 顆 B 階、B→2 顆 C 階、C→2 顆 D 階、D→1 顆 D 階；怪物卡不可分解）。
+ * 同階 1 顆：S→S、A→A、B→B、C→C、D→D；怪物卡不可分解）。
+ * 屬性石是另一條獨立判定（只有帶 element 的實例才有），機率依階級查
+ * shopService.ELEMENT_STONE_RATE_BY_TIER：D 25% / C 35% / B 50% / A 65% / S 85%。
  */
 
 const { Router } = require("express");
@@ -17,9 +19,29 @@ const { requireAuth } = require("./requireAuth");
 const { getElementLabel } = require("../../shared/elementSystem");
 
 const MAX_UUIDS_PER_REQUEST = 50;
+const MAX_BATCH_UUIDS = 2000; // /batch 端點單次上限（背包容量最高 1500，留餘裕）
 
 function createPlayerForgeRoutes(serviceContext) {
   const router = Router();
+
+  // 批次處理背包（網頁「🧹 整理」多選）：一次收整包 uuids，伺服器單次讀寫處理完。
+  //   body { action: "sell"|"discard"|"dismantle", uuids: [uuid, ...] }（上限 2000 件/次）
+  // 守門規則同單件端點；單件不合規只略過並回報原因，不中斷整批。
+  router.post("/api/me/inventory/batch", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const body = req.body || {};
+      const action = String(body.action || "").trim();
+      const uuids = Array.isArray(body.uuids)
+        ? body.uuids.map((u) => String(u || "").trim()).filter(Boolean).slice(0, MAX_BATCH_UUIDS)
+        : [];
+      const r = await serviceContext.shopService.processInventoryBatch(discordId, action, uuids);
+      const verb = action === "sell" ? "出售" : action === "discard" ? "丟棄" : "分解";
+      return res.json(ok(r, `批次${verb}完成：成功 ${r.okCount} 件${r.failCount ? `、略過 ${r.failCount} 件` : ""}`));
+    } catch (err) {
+      next(err);
+    }
+  });
 
   router.post("/api/me/inventory/dismantle", requireAuth, async (req, res, next) => {
     try {

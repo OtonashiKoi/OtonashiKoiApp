@@ -21,7 +21,7 @@
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 
-const NODE_TYPES = new Set(["narration", "dialogue", "battle", "cg", "choice"]);
+const NODE_TYPES = new Set(["narration", "dialogue", "battle", "cg", "choice", "transfer"]);
 const TEXT_SPEEDS = new Set(["slow", "normal", "fast"]);
 const SCREEN_FX = new Set(["", "shake", "flash", "fadeblack"]);
 const EXIT_SIDES = new Set(["left", "center", "right", "all"]); // 立繪退場位置
@@ -92,11 +92,14 @@ function fillPlayerName(text, name) {
 }
 
 class StoryService {
-  constructor(storyRepository, progressRepository, monsterService = null, itemRepository = null) {
+  constructor(storyRepository, progressRepository, monsterService = null, itemRepository = null,
+    walletRepository = null, rewardService = null) {
     this.storyRepository = storyRepository;
     this.progressRepository = progressRepository;
     this.monsterService = monsterService; // 供戰鬥節點載入指定怪 + 補怪物名稱/圖
     this.itemRepository = itemRepository;  // 供 🎁 發道具節點解析道具
+    this.walletRepository = walletRepository; // ⚔️ 轉職節點扣金幣
+    this.rewardService = rewardService;       // 有的話走台帳（扣款會留交易紀錄）
   }
 
   // ── 內部工具 ──
@@ -288,6 +291,7 @@ class StoryService {
           bgm: n.bgm || null,
           sfx: n.sfx || null,
           grantItemId: n.grantItemId || null,
+          t2BadgeId: n.t2BadgeId || null,
           ...flow
         };
       }
@@ -326,6 +330,7 @@ class StoryService {
         bgm: n.bgm || null,
         sfx: n.sfx || null,
         grantItemId: n.grantItemId || null, // 🎁 發道具(讀到即給，前端呼叫 /grant)
+        t2BadgeId: n.t2BadgeId || null,     // ⚔️ 轉職節點要換發的二轉徽章
         voiceUrl: n.voiceUrl || null,       // 🎤 配音
         holdSec: Number(n.holdSec) > 0 ? Number(n.holdSec) : null, // ⏱進場停頓秒
         ...flow
@@ -524,6 +529,151 @@ class StoryService {
     return { granted: true, item: brief };
   }
 
+  /**
+   * ⚔️ 轉職節點：消耗「一轉徽章 ＋ 金幣」→ 換發二轉徽章（Lv1 重練）。
+   *
+   * 規則（見 docs/JOB_BADGE_SYSTEM_DESIGN.md）：
+   *   ‧ 一轉徽章必須練滿 Lv20（jobBadgeLevel.TRANSFER_LEVEL）
+   *   ‧ 費用依「目前已持有幾個二轉徽章」遞增：25 萬 / 100 萬 / 300 萬（之後都 300 萬）
+   *   ‧ 一轉徽章**直接消耗掉**（連同練出來的熟練度），且該職業的一轉試煉不會再給第二個
+   *   ‧ 冪等：同一個 chapter:node 只會成功一次（存 storyProgress.transfers）
+   */
+  async transferJobAtNode(discordId, chapterId, nodeIndex) {
+    const jobAdvancement = require("../../shared/jobAdvancement");
+    const jobBadgeLevel = require("../../shared/jobBadgeLevel");
+    const { withPlayerProgressLock } = require("../progress/progressLocks");
+
+    const chapters = await this._enabledChapters();
+    const chapter = chapters.find((c) => c.id === chapterId);
+    if (!chapter) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該章節", 404);
+    const node = (chapter.nodes || [])[nodeIndex];
+    if (!node || node.type !== "transfer") {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此節點不是轉職節點", 400);
+    }
+    const t2BadgeId = node.t2BadgeId ? String(node.t2BadgeId) : null;
+    if (!t2BadgeId) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "轉職節點未設定二轉徽章", 400);
+
+    // 二轉徽章 → 它的一轉職業 → 該吃掉哪個一轉徽章
+    const branch = jobAdvancement.getT2Branch(t2BadgeId);
+    const baseKey = branch?.baseKey || null;
+    const t1BadgeId = baseKey ? jobAdvancement.BASE_JOBS?.[baseKey]?.badgeId : null;
+    if (!t1BadgeId) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "找不到對應的一轉職業", 400);
+
+    const t2Item = this.itemRepository ? await this.itemRepository.findById(t2BadgeId).catch(() => null) : null;
+    if (!t2Item) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "二轉徽章道具不存在", 400);
+
+    return withPlayerProgressLock(discordId, async () => {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到玩家進度", 404);
+
+      const sp = progress.storyProgress || {};
+      const transfers = { ...(sp.transfers && typeof sp.transfers === "object" ? sp.transfers : {}) };
+      const key = `${chapterId}:${nodeIndex}`;
+      if (transfers[key]) return { transferred: false, alreadyDone: true };
+
+      // ① 找一轉徽章（身上優先，其次背包）並確認練滿
+      const equipment = progress.equipment || {};
+      const inventory = Array.isArray(progress.inventory) ? progress.inventory : (progress.inventory = []);
+      const equippedIsT1 = String(equipment.job_eq?.itemId || "") === t1BadgeId;
+      const invIdx = inventory.findIndex((e) => e && String(e.itemId || "") === t1BadgeId);
+      const t1Entry = equippedIsT1 ? equipment.job_eq : (invIdx !== -1 ? inventory[invIdx] : null);
+      if (!t1Entry) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "你身上沒有這個職業的一轉徽章", 400);
+      }
+      const t1Progress = jobBadgeLevel.readBadgeProgress(t1Entry);
+      if (!t1Progress.canTransfer) {
+        throw new AppError(
+          ERROR_CODES.INVALID_ARGUMENT,
+          `徽章熟練度不足（目前 Lv.${t1Progress.level}／需 Lv.${jobBadgeLevel.TRANSFER_LEVEL}）`,
+          400
+        );
+      }
+
+      // ② 費用：依目前已持有的二轉徽章數遞增
+      const ownedIds = [
+        ...inventory.map((e) => String(e?.itemId || "")),
+        ...Object.values(equipment).map((e) => String(e?.itemId || "")),
+      ].filter(Boolean);
+      const ownedT2 = jobAdvancement.countOwnedT2(ownedIds);
+      const cost = jobAdvancement.transferCostFor(ownedT2);
+
+      const wallet = this.walletRepository
+        ? await this.walletRepository.findByPlayerId(discordId).catch(() => null)
+        : null;
+      const gold = Math.max(0, Number(wallet?.gold) || 0);
+      if (gold < cost) {
+        throw new AppError(
+          ERROR_CODES.INVALID_ARGUMENT,
+          `金幣不足：轉職需要 ${cost.toLocaleString()} 金，目前 ${gold.toLocaleString()} 金`,
+          400
+        );
+      }
+
+      // ③ 扣款（有 rewardService 就走台帳，留交易紀錄）
+      const displayName = progress.displayName || progress.playerName || discordId;
+      if (this.rewardService?.grantCurrency) {
+        await this.rewardService.grantCurrency({
+          discordId, displayName, currencyType: "gold",
+          amount: -Math.abs(cost), source: "job_transfer", operator: "story:job-transfer",
+        });
+      } else if (this.walletRepository) {
+        await this.walletRepository.save({ ...wallet, playerId: discordId, gold: gold - cost });
+      } else {
+        throw new AppError(ERROR_CODES.INTERNAL_ERROR, "缺少金幣扣款服務", 500);
+      }
+
+      // ④ 消耗一轉徽章（連同練出來的熟練度一起交出去）
+      if (equippedIsT1) delete equipment.job_eq;
+      else inventory.splice(invIdx, 1);
+
+      // ⑤ 換發二轉徽章：Lv1 重練，並直接裝上（玩家不會有一瞬間沒有職業）
+      const crypto = require("crypto");
+      const t2Entry = {
+        uuid: crypto.randomUUID(),
+        itemId: String(t2Item.id),
+        itemName: t2Item.name,
+        itemType: t2Item.itemType || "job_badge",
+        equipSlot: t2Item.equipSlot || "job_eq",
+        itemEffect: t2Item.effect || { type: "none", value: 0 },
+        useEffects: t2Item.useEffects || [],
+        passiveEffects: t2Item.passiveEffects || [],
+        procEffects: t2Item.procEffects || [],
+        combatEffects: t2Item.combatEffects || [],
+        imageUrl: t2Item.imageUrl || null,
+        imageThumbnailUrl: t2Item.imageThumbnailUrl || null,
+        tier: t2Item.tier || null,
+        equipStats: t2Item.equipStats || null,
+        enhanceLevel: 0,
+        jobExp: 0,                       // ← Lv1 重練
+        source: "job_transfer",
+        sourceRef: chapterId,
+        purchasedAt: new Date().toISOString(),
+      };
+      progress.equipment = { ...equipment, job_eq: t2Entry };
+
+      transfers[key] = { at: new Date().toISOString(), from: t1BadgeId, to: t2BadgeId, cost };
+      progress.storyProgress = { ...sp, transfers };
+      progress.updatedAt = new Date().toISOString();
+      await this.progressRepository.save(progress);
+
+      // ⑥ 全服廣播（轉職是大事，一輩子一次）
+      try {
+        const tc = require("../../shared/announceTownChat");
+        const name = await tc.resolveDiscordName(discordId).catch(() => null);
+        const who = name ? `**${name}**` : "有位冒險者";
+        await tc.announceTownChat(`⚔️ ${who} 完成了二轉，成為 **${t2Item.name.replace(/徽章$/, "")}**！`);
+      } catch (_) { /* 廣播失敗不影響轉職 */ }
+
+      return {
+        transferred: true,
+        from: { itemId: t1BadgeId, name: t1Entry.itemName || t1BadgeId, level: t1Progress.level },
+        to: { itemId: t2BadgeId, name: t2Item.name, level: 1 },
+        cost,
+        goldLeft: gold - cost,
+      };
+    });
+  }
+
   // ── 後台（Admin）──
 
   async adminListChapters() {
@@ -567,6 +717,7 @@ class StoryService {
         bgm: n?.bgm ? String(n.bgm) : null,
         sfx: n?.sfx ? String(n.sfx) : null,
         grantItemId: n?.grantItemId ? String(n.grantItemId) : null, // 🎁 讀到此節點發指定道具(一次)
+        t2BadgeId: n?.t2BadgeId ? String(n.t2BadgeId) : null,       // ⚔️ 轉職節點：換發的二轉徽章 id
         voiceUrl: n?.voiceUrl ? String(n.voiceUrl) : null,          // 🎤 配音(顯示此節點時播放)
         stageNpcId: n?.stageNpcId ? String(n.stageNpcId).slice(0, 60) : null, // 🧍立繪擺台(不當說話者)：任何節點可放一個角色立繪上台(id=player/npc/mon:<id>)
         holdSec: (() => { const s = Number(n?.holdSec); return Number.isFinite(s) && s > 0 ? Math.min(10, Math.round(s * 10) / 10) : null; })(), // ⏱進場停頓秒(0~10)：擋點擊等音樂/演出進來
@@ -593,7 +744,7 @@ class StoryService {
           forcedOutcome, // 劇情殺：win=一定贏 / lose=一定輸(劇情照走) / null=正常
           maxRounds,     // 戰鬥回合上限(讓劇情戰鬥更快)
           backgroundUrl: common.backgroundUrl, bgm: common.bgm, sfx: common.sfx,
-          grantItemId: common.grantItemId, cond: common.cond, ...reserved
+          grantItemId: common.grantItemId, t2BadgeId: common.t2BadgeId, cond: common.cond, ...reserved
         };
       }
       if (type === "cg") {

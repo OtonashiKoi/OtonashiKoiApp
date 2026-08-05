@@ -45,19 +45,23 @@ function canRollElement(entry) {
  * @param {number} [opts.chancePct] 附上機率，預設 30
  * @param {number} [opts.minLevel]  等級下限，預設 1
  * @param {string} [opts.zone]      掉落來源 zone——**非活動區一律不附**（火焰區標 fire 只為了被剋，不掉火裝）
+ * @param {object} [opts.override]  道具自帶的 elementDrop 設定（活動限定裝），格式同上述參數。
+ *   有 override 時**以道具為準並跳過 zone 閘門**——限定裝本身就是活動限定，
+ *   而且它也可能從世界王寶箱產出（開箱時沒有 zone 上下文）。
  * @returns {object} entry
  */
-function rollElementForEntry(entry, { element, maxLevel, chancePct = DEFAULT_CHANCE_PCT, minLevel = 1, zone = null } = {}) {
-  if (!isEventZone(zone)) return entry;          // 只有活動區掉屬性裝
-  const el = normalizeElement(element);
-  const maxLv = normalizeElementLevel(maxLevel);
+function rollElementForEntry(entry, { element, maxLevel, chancePct = DEFAULT_CHANCE_PCT, minLevel = 1, zone = null, override = null } = {}) {
+  const cfg = (override && typeof override === "object") ? override : null;
+  if (!cfg && !isEventZone(zone)) return entry;  // 沒有道具自帶設定時：只有活動區掉屬性裝
+  const el = normalizeElement(cfg?.element ?? element);
+  const maxLv = normalizeElementLevel(cfg?.maxLevel ?? maxLevel);
   if (!el || maxLv <= 0) return entry;
   if (!canRollElement(entry)) return entry;
 
-  const chance = Math.min(100, Math.max(0, Number(chancePct) || 0));
+  const chance = Math.min(100, Math.max(0, Number(cfg?.chancePct ?? chancePct) || 0));
   if (Math.random() * 100 >= chance) return entry;
 
-  const lo = Math.max(1, normalizeElementLevel(minLevel) || 1);
+  const lo = Math.max(1, normalizeElementLevel(cfg?.minLevel ?? minLevel) || 1);
   const hi = Math.max(lo, maxLv);
   const level = lo === hi ? lo : lo + Math.floor(Math.random() * (hi - lo + 1));
 

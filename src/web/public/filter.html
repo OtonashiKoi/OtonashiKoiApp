@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>直播柔光濾鏡</title>
+<style>
+  /* ── 直播疊層濾鏡：柔光光斑 + 星芒 + 角落光暈 ──
+     透明背景，OBS 瀏覽器來源疊在畫面最上層當「濾鏡」。
+     效能：全部只動 transform/opacity；光斑用 radial-gradient 預烘焙，不用 filter:blur。 */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; pointer-events: none; }
+  body.testbg { background: #1a1626; } /* ?bg=1 測試用深底 */
+  body.testbg2 { /* ?bg=2 彩色測試底：模擬真實直播畫面的明暗混雜 */
+    background:
+      radial-gradient(circle at 30% 40%, #e8b86a 0%, transparent 40%),
+      radial-gradient(circle at 75% 60%, #6ab0e8 0%, transparent 45%),
+      linear-gradient(135deg, #f0e6d8 0%, #7a94c8 50%, #3a4668 100%);
+  }
+  body.addmode { background: #000; } /* ?mode=add：黑底，OBS 混合模式選「濾色/加法」→ 真發光疊加 */
+
+  /* ── 柔光光斑（bokeh）：緩慢飄浮 ── */
+  .bokeh {
+    position: absolute;
+    border-radius: 50%;
+    will-change: transform, opacity;
+    animation: drift ease-in-out infinite alternate, glowpulse ease-in-out infinite;
+  }
+  @keyframes drift {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(var(--dx), var(--dy)) scale(var(--ds)); }
+  }
+  @keyframes glowpulse {
+    0%, 100% { opacity: var(--o1); }
+    50%      { opacity: var(--o2); }
+  }
+
+  /* ── 星芒閃爍 ✦ ── */
+  .spark {
+    position: absolute;
+    color: #fff;
+    will-change: transform, opacity;
+    animation: sparkle linear infinite;
+    text-shadow: 0 0 6px currentColor, 0 0 14px currentColor;
+  }
+  @keyframes sparkle {
+    0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+    12%      { opacity: 1; transform: scale(1.15) rotate(18deg); }
+    22%      { opacity: 0.75; transform: scale(0.9) rotate(30deg); }
+    34%      { opacity: 0; transform: scale(0.35) rotate(45deg); }
+  }
+
+  /* ── 角落柔光（呼吸光暈）── */
+  .corner-glow {
+    position: absolute;
+    width: 60vmax; height: 60vmax;
+    border-radius: 50%;
+    will-change: opacity;
+    animation: breathe 9s ease-in-out infinite;
+  }
+  .corner-glow.tl { top: -32vmax; left: -32vmax; }
+  .corner-glow.br { bottom: -34vmax; right: -34vmax; animation-delay: 4.5s; }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 1; }
+  }
+
+  /* ── 斜向光束（極淡，緩慢掃動）── */
+  .ray {
+    position: absolute;
+    top: -20%; height: 140%;
+    width: 14vw;
+    transform-origin: top center;
+    will-change: transform, opacity;
+    animation: raysway 14s ease-in-out infinite alternate;
+  }
+  @keyframes raysway {
+    from { transform: rotate(16deg) translateX(0);    opacity: 0.5; }
+    to   { transform: rotate(22deg) translateX(6vw);  opacity: 0.95; }
+  }
+</style>
+</head>
+<body>
+<script>
+(function () {
+  // 參數：
+  //   ?level=1|2|3   強度（光斑/星芒數量與亮度），預設 2
+  //   ?tone=mix|gold|lavender|blue  色調，預設 mix（金+薰衣草+淡藍，配角色色系）
+  //   ?rays=0        關閉斜向光束
+  //   ?corners=0     關閉角落光暈
+  //   ?bg=1          測試用深底（正式使用不要帶）
+  const qs = new URLSearchParams(location.search);
+  if (qs.get("bg") === "1") document.body.classList.add("testbg");
+  if (qs.get("bg") === "2") document.body.classList.add("testbg2");
+  // add 模式：黑底 + 光效全亮度輸出，OBS 來源「混合模式」選【濾色(Screen)】或【加法(Add)】，
+  // 黑色消失、光真正疊加在畫面上 → 有背景也清楚（推薦用法）
+  const addMode = (qs.get("mode") || "").toLowerCase() === "add";
+  if (addMode) document.body.classList.add("addmode");
+  const level = Math.max(1, Math.min(3, Number(qs.get("level")) || 2));
+  const tone = (qs.get("tone") || "mix").toLowerCase();
+
+  const TONES = {
+    gold:     ["255, 226, 160", "245, 208, 96", "255, 240, 200"],
+    lavender: ["201, 195, 234", "157, 147, 216", "230, 227, 245"],
+    blue:     ["126, 195, 232", "180, 225, 250", "220, 240, 255"],
+  };
+  const palette = tone === "mix"
+    ? [...TONES.gold, ...TONES.lavender, ...TONES.blue]
+    : (TONES[tone] || TONES.lavender);
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // add 模式走全亮度（反正黑會被濾掉）；alpha 模式也整體再加亮一級，蓋在真實畫面上才看得見
+  const baseAlpha = (addMode ? [0.85, 1, 1] : [0.65, 0.9, 1])[level - 1];
+  const coreBoost = addMode ? 1.35 : 1.15;
+
+  // ── 光斑：數量依強度 ──
+  const bokehCount = [10, 16, 24][level - 1];
+  for (let i = 0; i < bokehCount; i++) {
+    const b = document.createElement("div");
+    b.className = "bokeh";
+    const rgb = pick(palette);
+    const size = 3 + Math.random() * 12; // vmin
+    const soft = Math.random() < 0.6;    // 60% 大柔斑、40% 小亮點
+    const a = Math.min(1, (soft ? 0.38 : 0.7) * baseAlpha * (0.75 + Math.random() * 0.5));
+    b.style.width = b.style.height = size * (soft ? 1.6 : 0.5) + "vmin";
+    b.style.left = Math.random() * 100 + "vw";
+    b.style.top = Math.random() * 100 + "vh";
+    // 白熱核心 → 色彩中段 → 透明邊緣：亮起來才有「光」的感覺
+    b.style.background = `radial-gradient(circle, rgba(255,255,255, ${Math.min(1, a * coreBoost)}) 0%, rgba(${rgb}, ${a}) 22%, rgba(${rgb}, ${a * 0.4}) 52%, rgba(${rgb}, 0) 72%)`;
+    b.style.setProperty("--dx", (Math.random() * 12 - 6) + "vw");
+    b.style.setProperty("--dy", (Math.random() * 10 - 5) + "vh");
+    b.style.setProperty("--ds", (0.85 + Math.random() * 0.4).toFixed(2));
+    b.style.setProperty("--o1", (0.55 + Math.random() * 0.2).toFixed(2));
+    b.style.setProperty("--o2", (0.9 + Math.random() * 0.1).toFixed(2));
+    const dur = 10 + Math.random() * 14;
+    b.style.animationDuration = `${dur}s, ${5 + Math.random() * 6}s`;
+    b.style.animationDelay = `${-Math.random() * dur}s, ${-Math.random() * 6}s`;
+    document.body.appendChild(b);
+  }
+
+  // ── 星芒 ✦：錯開週期輪流閃 ──
+  const sparkCount = [6, 10, 15][level - 1];
+  for (let i = 0; i < sparkCount; i++) {
+    const s = document.createElement("div");
+    s.className = "spark";
+    s.textContent = Math.random() < 0.3 ? "✧" : "✦";
+    const rgb = pick(palette);
+    s.style.color = `rgba(${rgb}, ${Math.min(1, 1.1 * baseAlpha)})`;
+    s.style.fontSize = 12 + Math.random() * 20 + "px";
+    s.style.left = Math.random() * 96 + 2 + "vw";
+    s.style.top = Math.random() * 92 + 3 + "vh";
+    const dur = 4 + Math.random() * 5;
+    s.style.animationDuration = dur + "s";
+    s.style.animationDelay = -Math.random() * dur + "s";
+    document.body.appendChild(s);
+  }
+
+  // ── 角落柔光 ──
+  if (qs.get("corners") !== "0") {
+    for (const pos of ["tl", "br"]) {
+      const g = document.createElement("div");
+      g.className = "corner-glow " + pos;
+      const rgb = pos === "tl" ? pick(palette) : pick(palette);
+      g.style.background = `radial-gradient(circle, rgba(${rgb}, ${0.24 * baseAlpha}) 0%, rgba(${rgb}, ${0.1 * baseAlpha}) 40%, rgba(${rgb}, 0) 65%)`;
+      document.body.appendChild(g);
+    }
+  }
+
+  // ── 斜向光束（左上灑落）──
+  if (qs.get("rays") !== "0") {
+    for (let i = 0; i < 2; i++) {
+      const r = document.createElement("div");
+      r.className = "ray";
+      const rgb = TONES.gold[2];
+      r.style.left = (6 + i * 13) + "vw";
+      r.style.background = `linear-gradient(180deg, rgba(${rgb}, ${0.2 * baseAlpha}) 0%, rgba(${rgb}, ${0.07 * baseAlpha}) 55%, rgba(${rgb}, 0) 85%)`;
+      r.style.animationDelay = -i * 5 + "s";
+      r.style.animationDuration = 14 + i * 4 + "s";
+      document.body.appendChild(r);
+    }
+  }
+})();
+</script>
+</body>
+</html>
