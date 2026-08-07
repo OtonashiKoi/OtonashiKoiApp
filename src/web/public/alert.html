@@ -168,7 +168,7 @@
   //   ?minamount=0            斗內金額門檻（低於不彈）
   //   ?demo=1                 示範模式：輪播假事件看樣式
   //   ?bg=1                   測試深底
-  //   ?sound=0                關閉通知音效｜?vol=0.7 音量(0~1，預設 0.8)
+  //   ?sound=1                開啟通知音效（2026-08-02 起預設關閉，使用者要求先移除 OBS 通知音）｜?vol=0.7 音量(0~1，預設 0.8)
   const qs = new URLSearchParams(location.search);
   if (qs.get("bg") === "1") document.body.classList.add("testbg");
   const types = new Set(String(qs.get("types") || "donation,member,sub,raid,milestone").split(",").map((s) => s.trim()).filter(Boolean));
@@ -186,7 +186,8 @@
   let showing = false;
 
   // 通知音效（使用者提供的 OGG；OBS 瀏覽器來源允許自動播放）
-  const soundOn = qs.get("sound") !== "0";
+  // 2026-08-02 使用者要求先移除 OBS 通知音 → 預設關閉；要開回來在網址加 ?sound=1
+  const soundOn = qs.get("sound") === "1";
   const soundVol = Math.max(0, Math.min(1, Number(qs.get("vol")) || 0.8));
   function playNotify() {
     if (!soundOn) return;

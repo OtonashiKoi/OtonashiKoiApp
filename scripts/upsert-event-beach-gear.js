@@ -24,7 +24,8 @@ const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
 
 const APPLY = process.argv.includes("--apply");
 const WIRE_DROPS = process.argv.includes("--wire-drops");
-const IMAGE_BASE = "https://otonashikoi.org/item-art/event-beach";
+// 專案內的可部署備援圖；已上傳到 Cloudinary 的既有圖片會在更新時保留。
+const IMAGE_BASE = "https://otonashikoi.org/item-art/generated/2026-08-05";
 
 // 限定裝掉落時必定帶水屬性（濃度區間依階級）
 const EL_A = { element: "water", chancePct: 100, minLevel: 1, maxLevel: 2 };
@@ -124,7 +125,21 @@ const BOSS_DROP_RATE = 100 / 3; // 龜王掉落表＝寶箱獎池，三件等機
     if (existing) updated++; else created++;
     if (APPLY) {
       const { createdAt, ...rest } = doc;
-      if (existing) await items.updateOne({ id: doc.id }, { $set: rest });
+      if (existing) {
+        // 後台／圖像落地流程上傳的圖片優先，避免重跑本腳本時覆蓋回靜態備援網址。
+        const hasUploadedImage = typeof existing.imageUrl === "string"
+          && existing.imageUrl.length > 0
+          && !existing.imageUrl.includes("/item-art/event-beach/")
+          && !existing.imageUrl.includes("/item-art/generated/2026-08-05/");
+        const next = hasUploadedImage
+          ? {
+              ...rest,
+              imageUrl: existing.imageUrl,
+              imageThumbnailUrl: existing.imageThumbnailUrl || existing.imageUrl,
+            }
+          : rest;
+        await items.updateOne({ id: doc.id }, { $set: next });
+      }
       else await items.insertOne(doc);
     }
   }

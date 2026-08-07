@@ -52,7 +52,6 @@ const T2_VARIANTS = {
   job_dwarf_warrior_v1: [["二轉 矮人戰士長", "job_dwarflord_t2_v1", {}]],
   job_rogue_v1: [
     ["二轉 影舞者", "job_shadowdancer_t2_v1", {}],
-    ["二轉 影舞者(影襲)", "job_shadowdancer_t2_v1", { shadowRushHits: 7 }],
   ],
 };
 

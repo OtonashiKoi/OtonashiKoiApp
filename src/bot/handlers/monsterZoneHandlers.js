@@ -20,6 +20,7 @@ const { isWebBattleActive } = require("../../services/progress/battleLock");
 const { getDropBoostPct } = require("../../shared/pkArenaConfig");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
 const { clearCurrentCache } = require("../../adapters/mongo/requestCache");
+const { NpcOptionEffectError, processNpcOptionEffects } = require("./npcOptionEffects");
 const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
 const config = require("../../config");
 const {
@@ -1914,7 +1915,7 @@ function pickTaunt(kind, monsterName) {
 // 關鍵等級里程碑：對齊實際遊戲門檻（轉職 / 組隊爬塔 / 世界王 / 終局世界王）
 const LEVEL_MILESTONE_MSG = {
   10: (m, n) => `🎉 恭喜 ${m} **${n}** 升上 **Lv.10**！已達**轉職門檻**——快去完成職業試煉、選定你的職業吧！⚔️`,
-  30: (m, n) => `🗼 恭喜 ${m} **${n}** 升上 **Lv.30**！**組隊爬塔**開放——揪隊挑戰六人攻塔！🤝`,
+  30: (m, n) => `🗼 恭喜 ${m} **${n}** 升上 **Lv.30**！爬塔目前暫停開放，重新開放時會另行公告。`,
   40: (m, n) => `👑 恭喜 ${m} **${n}** 升上 **Lv.40**！三條路線開放，挑戰**大史王**吧！🔥`,
   50: (m, n) => `🐉 恭喜 ${m} **${n}** 升上 **Lv.50**！踏入終局——挑戰世界王 **古龍王 / 地獄狼牙王**！⚔️`,
 };
@@ -3197,7 +3198,7 @@ async function handleEnterBattle(interaction) {
       const gaugeBefore = _gaugeCfg ? _bg.read(currentProg, _gaugeCfg) : 0;
       const gaugeFull = Boolean(_gaugeCfg && _bg.isFull(gaugeBefore, _gaugeCfg));
       const berserkEffects = gaugeFull ? _bg.buffs(_gaugeCfg) : [];
-      // ── 連擊氣條（影舞者）── 與網頁共用同一份狀態；DC 沒有影襲按鈕，氣條照累、滿格照觸發
+      // ── 連擊氣條（影舞者）── 與網頁共用同一份狀態，氣條照累、滿格照觸發
       const _sg = require("../../shared/shadowGauge");
       const shadowOn = _sg.hasGauge(currentEquipped?.job_eq);
       const shadowGridsBefore = shadowOn ? _sg.read(currentProg, zoneKey) : 0;
@@ -5251,56 +5252,22 @@ async function handleNpcDialog(interaction) {
     const reply = option.npcReply || "...";
     let responseMsg = `🎤 **${npc.name}**：${reply}`;
 
-    // 處理效果（與怪物事件相同 schema：{ type, payload }），只回報實際發生的結果
+    // 處理效果（與怪物事件相同 schema：{ type, payload }），先完整驗證再執行。
     if (Array.isArray(option.effects) && option.effects.length > 0) {
       const dispName = interaction.member?.displayName || interaction.user.username || discordId;
-      const effectResults = [];
-      for (const eff of option.effects) {
-        try {
-          if (eff.type === "grant_currency") {
-            const amount = Number(eff.payload?.amount || 0);
-            const currencyType = eff.payload?.currencyType || "gold";
-            if (Number.isInteger(amount) && amount !== 0) {
-              await sc.rewardService.grantCurrency({
-                discordId, displayName: dispName, currencyType, amount,
-                source: CURRENCY_SOURCES.SHOP_PURCHASE, operator: "npc_dialog"
-              });
-              effectResults.push(`${currencyType === "diamond" ? "💎" : "🪙"} ${amount > 0 ? "+" : ""}${amount}`);
-            }
-          } else if (eff.type === "grant_item" || eff.type === "grant_equipment") {
-            const itemId = eff.payload?.itemId;
-            const item = itemId ? await sc.itemService.getItemById(itemId).catch(() => null) : null;
-            if (!item) { effectResults.push(`道具 ${itemId || "?"} 不存在`); continue; }
-            await sc.playerService.ensurePlayer(discordId, dispName).catch(() => {});
-            const prog = await sc.progressRepository.findByPlayerId(discordId).catch(() => null);
-            if (prog) {
-              if (!Array.isArray(prog.inventory)) prog.inventory = [];
-              prog.inventory.push({
-                uuid: require("crypto").randomUUID(),
-                itemId: item.id, itemName: item.name,
-                itemEffect: item.effect || { type: "none", value: 0 },
-                useEffects: item.useEffects || [], passiveEffects: item.passiveEffects || [],
-                procEffects: item.procEffects || [], combatEffects: item.combatEffects || [],
-                itemType: item.itemType || "consumable",
-                imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
-                equipSlot: item.equipSlot || null, equipStats: item.equipStats || null,
-                weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
-                atkStat: item.atkStat || null, tier: item.tier || null,
-                enhanceLevel: Number(eff.payload?.enhanceLevel || 0),
-                purchasedAt: new Date().toISOString()
-              });
-              prog.updatedAt = new Date().toISOString();
-              await sc.progressRepository.save(prog);
-              effectResults.push(`獲得 ${item.name}`);
-            }
-          } else {
-            console.warn(`[NPC Dialog] 未實作的效果類型：${eff.type}`);
-            effectResults.push(`效果 ${eff.type || "unknown"} 未實作`);
-          }
-        } catch (e) {
-          console.error(`[NPC Dialog] 效果處理失敗 (${eff.type}):`, e?.message || e);
-          effectResults.push(`效果 ${eff.type || "unknown"} 處理失敗`);
-        }
+      let effectResults;
+      try {
+        effectResults = await processNpcOptionEffects({
+          serviceContext: sc,
+          discordId,
+          displayName: dispName,
+          option,
+          formatBuffMessage,
+        });
+      } catch (effectError) {
+        if (!(effectError instanceof NpcOptionEffectError)) throw effectError;
+        await interaction.followUp({ content: `❌ ${effectError.userMessage}`, ephemeral: true }).catch(() => {});
+        return;
       }
       if (effectResults.length) responseMsg += `\n✨ ${effectResults.join("，")}`;
     }

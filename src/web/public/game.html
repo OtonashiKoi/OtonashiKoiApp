@@ -468,7 +468,7 @@ async function login(code, redirectUri){
 }
 
 /* ============================================================
-   導航定義（= DC 全功能；標 phase 的尚未實作）
+   導航定義（= DC 全功能）
    ============================================================ */
 const NAV = [
   { group:"大廳", items:[
@@ -501,7 +501,7 @@ const NAV = [
   { group:"社交", items:[
     { id:"chat",    ic:"💬", label:"聊天直播" },
     { id:"invite",  ic:"🎟️", label:"邀請碼" },
-    { id:"bind",    ic:"🔗", label:"綁定直播", phase:"P5" },
+    { id:"bind",    ic:"🔗", label:"綁定直播" },
   ]},
 ];
 const SEC_NAME = {}; NAV.forEach(g=>g.items.forEach(i=>SEC_NAME[i.id]=i.label));

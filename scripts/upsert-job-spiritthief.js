@@ -38,7 +38,7 @@ const DOC = {
   tier: null,
   enhanceLevel: 0,
   // ⚠️ 徽章效果與影舞者「完全相同」（含 condition / duration / stackMode 等全部欄位）。
-  //    平衡驗證全部是在這個前提下跑的：唯一變因＝分支機制（巧手/得手/探囊 vs 連擊氣條/影襲）。
+  //    平衡驗證全部是在這個前提下跑的：唯一變因＝分支機制（巧手/得手/探囊 vs 連擊氣條）。
   //    ⚠️⚠️ 特別是 procEffects 的 proc_poison —— 第一版建徽章時漏掉它，
   //    實測從 0.90x 直接掉到 0.40x（毒傷對數十萬血的世界王部位佔盜賊輸出約六成）。
   passiveEffects: [

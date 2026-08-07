@@ -148,14 +148,13 @@ function buildT2MechanicLines(lib) {
     } catch (_) { /* 模組讀不到就略過 */ }
   }
 
-  // 連擊氣條＋影襲（影舞者）
+  // 連擊氣條（影舞者）
   if (branch.shadowGauge) {
     try {
       const sg = require("./shadowGauge");
       out.push(`・連擊氣條（被動）：${sg.GAUGE_MAX} 格——本回合有出現連擊 +1 格（每回合最多 1）`);
       out.push(`　◦ 滿 ${sg.GAUGE_MAX} 格全部消耗 → 下一回合固定 ${sg.BURST_HITS} 連擊（殘影亂舞；該回合不累氣）`);
       out.push(`　◦ 氣條同一場域跨場沿用（換區／10 分鐘沒打歸零）；滿格時戰鬥先結束 → 帶去下一場開場施放`);
-      out.push(`・影襲（戰鬥畫面按鈕）：消耗 ${sg.RUSH_COMBO_COST} 點區域連段 → 第一回合固定 ${sg.RUSH_HITS} 連擊（這些連擊會累氣）；連段不足 ${sg.RUSH_COMBO_COST} 時按鈕不會出現`);
     } catch (_) { /* 模組讀不到就略過 */ }
   }
 

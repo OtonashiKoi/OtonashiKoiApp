@@ -3211,8 +3211,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         berserkEffects.push(..._bg.sacrificeBuffs(sacrificeCfg));
       }
 
-      // ── 連擊氣條＋影襲（影舞者）──
-      // 氣條累氣/滿格觸發都在 combatLoop 內；這裡負責跨場持久化與影襲驗證。
+      // ── 連擊氣條（影舞者）──
+      // 氣條累氣/滿格觸發都在 combatLoop 內；這裡只負責跨場持久化。
       const _sg = require("../../shared/shadowGauge");
       const shadowOn = _sg.hasGauge(equipped?.job_eq);
       const shadowGridsBefore = shadowOn ? _sg.read(progress, zoneKey) : 0;
@@ -3239,17 +3239,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const bardResult = bardOn
         ? _bs.scorePerformance(progress?.bardScore || null, req.body?.bardInput || null, _bs.readStreak(progress, zoneKey))
         : null;
-      let shadowRushOn = false;
-      if (req.body?.shadowRush === true) {
-        if (!shadowOn) {
-          return res.status(400).json({ status: "error", message: "此職業無法使用「影襲」" });
-        }
-        if (comboBefore < _sg.RUSH_COMBO_COST) {
-          return res.status(400).json({ status: "error", message: `「影襲」需要連段達 ${_sg.RUSH_COMBO_COST}（目前 ${comboBefore}）` });
-        }
-        shadowRushOn = true;
-      }
-
       // ── 世界王暈眩條（矮人戰士長・巨神震擊）──
       // 出戰瞬間看時鐘：還在 20 秒窗口內 → 這場怪物整場不出手（全程免傷）。
       // 只有世界王區才有暈眩條；一般區域完全不受影響。
@@ -3281,9 +3270,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           sacrificeHpCostPct: sacrificeOn ? sacrificeCfg.hpCostPct : 0,
           sacrificeAtkUpPct: sacrificeOn ? sacrificeCfg.atkUpPct : 0,
           warGaugeCritBonus: gaugeFull ? gaugeCfg.critRateBonus : 0,
-          // 連擊氣條（影舞者）：帶入跨場氣量；影襲＝第一回合固定 7 連擊
+          // 連擊氣條（影舞者）：帶入跨場氣量
           shadowGaugeGrids: shadowGridsBefore,
-          shadowRushHits: shadowRushOn ? _sg.RUSH_HITS : 0,
           // 氣力格（劍鬼）：帶入跨場氣量（帶滿格＝第 1 回合自動斬）
           oniGaugeGrids: oniGridsBefore,
           // 日之精靈（聖靈師）：帶入跨場血量 %（倒下重召 50% 由 sunSpirit.read 處理）
@@ -3576,8 +3564,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             hasDeathGuard: comboBenefits,
             diedOnce: _zc.readDiedOnce(progress, zoneKey),
             consumed: comboConsumed,
-            // 影襲固定扣 5 點；職業技能的 cost:{type:"combo"} 由戰鬥核心回報實際消耗量
-            spend: (shadowRushOn ? _sg.RUSH_COMBO_COST : 0) + (Number(combatResult?.jobSkillComboSpent) || 0),
+            // 職業技能的 cost:{type:"combo"} 由戰鬥核心回報實際消耗量
+            spend: Number(combatResult?.jobSkillComboSpent) || 0,
           })
         };
         progress.zoneCombo = _fields.zoneCombo;
@@ -3878,8 +3866,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         },
         // 戰意集氣（狂戰士）：戰後最新氣量；本場是否戰意全開／血祭（前端集氣條＋演出用）
         berserkGauge: gaugeCfg ? { ..._bg.view(progress, gaugeCfg), unleashed: gaugeFull, sacrificed: sacrificeOn } : null,
-        // 連擊氣條（影舞者）：戰後氣量＋本場是否用了影襲
-        shadowGauge: shadowOn ? { ..._sg.view(combatResult?.shadowGauge ?? shadowGridsBefore), rushUsed: shadowRushOn } : null,
+        // 連擊氣條（影舞者）：戰後氣量
+        shadowGauge: shadowOn ? _sg.view(combatResult?.shadowGauge ?? shadowGridsBefore) : null,
         // 氣力格（劍鬼）：戰後氣量（前端金色氣力條）
         oniGauge: oniOn ? _og.view(combatResult?.oniGauge ?? oniGridsBefore) : null,
         // 日之精靈（聖靈師）：戰後精靈血量（前端精靈血條）

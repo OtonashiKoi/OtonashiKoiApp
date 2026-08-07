@@ -17,6 +17,7 @@
  */
 const { runCombatLoop } = require("../../src/shared/combatLoop");
 const { calcPlayerStats } = require("../../src/shared/combatStats");
+const jbo = require("./jobBattleOptions");
 
 /**
  * 建立一個綁定某隻世界王的模擬器。
@@ -98,6 +99,13 @@ async function createWorldBossSim(sc, db, zoneKey, part = null, opts = {}) {
         if (w?.monsterEquipped) mEquipped = w.monsterEquipped;
       }
 
+      // 職業完整戰鬥參數（自我光環＋所有身分技氣條）——單一來源 jobBattleOptions，
+      // 不在這裡手拼。呼叫端顯式傳的 extraOptions 仍然優先（覆寫在下方展開順序）。
+      const jobOpts = jbo.buildBattleOptions({
+        equipped: eq, pStats, inventory: progress.inventory || [],
+        ctx: extraOptions?._ctx || null, stance: extraOptions?.stance || null,
+      });
+
       const acc = { dmg: 0, poison: 0, dotTotal: 0, deaths: 0, rounds: 0, hits: 0, taken: 0, wins: 0, maxHit: 0, maxHitSum: 0 };
       let lastRaw = null;
       for (let i = 0; i < runs; i++) {
@@ -112,6 +120,7 @@ async function createWorldBossSim(sc, db, zoneKey, part = null, opts = {}) {
           zone: zoneKey,                  // ← 裝備的區域條件特效
           monsterElement: boss.element || null,
           playerActiveEffects: [],
+          ...jobOpts,
           ...extraOptions,
         });
         acc.dmg += r.totalDamage || 0;

@@ -27,7 +27,7 @@ function startLocaltunnel(port = 5566, timeoutMs = 15000) {
     proc.stdout.on('data', (b) => {
       const s = b.toString();
       // localtunnel typically prints a line with the url
-      const m = s.match(/https?:\\/\\/[^\s]+/);
+      const m = s.match(/https?:\/\/[^\s]+/);
       if (m && m[0]) {
         resolved = true;
         clearTimeout(to);

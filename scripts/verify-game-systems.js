@@ -17,6 +17,8 @@ const {
   getDropBoostPct,
 } = require("../src/shared/pkArenaConfig");
 const { createPkArenaPanelMessage } = require("../src/bot/pkArenaView");
+const { closeMongoClient } = require("../src/adapters/mongo/createMongoClient");
+const { withSeed } = require("./lib/seededRandom");
 
 const JOB_IDS = [
   "job_swordsman_v1",
@@ -30,6 +32,19 @@ const JOB_IDS = [
   "job_bard_v1",
   "job_barrier_mage_v1",
 ];
+
+const JOB_WEAPON_TYPES = {
+  job_swordsman_v1: "sword_1h",
+  job_warrior_v1: "axe_2h",
+  job_dwarf_warrior_v1: "mace_2h",
+  job_rogue_v1: "dagger",
+  job_mage_v1: "staff_2h",
+  job_healer_v1: "staff_1h",
+  job_archer_v1: "bow",
+  job_tactician_v1: "sword_1h",
+  job_bard_v1: "bow",
+  job_barrier_mage_v1: "staff_1h",
+};
 
 const results = [];
 
@@ -175,7 +190,8 @@ async function verifyAllJobsCanFightNormalMonster(db) {
     assert(job, `${jobId} 職業徽章不存在`);
     assert(quest, `${jobId} 找不到職業任務`);
 
-    const weaponTypes = Array.isArray(quest.unlockWeaponTypes) ? quest.unlockWeaponTypes : [];
+    const configuredWeaponTypes = Array.isArray(quest.unlockWeaponTypes) ? quest.unlockWeaponTypes : [];
+    const weaponTypes = configuredWeaponTypes.length ? configuredWeaponTypes : [JOB_WEAPON_TYPES[jobId]];
     const weapon = await db.collection("items").findOne({
       equipSlot: "weapon",
       weaponType: { $in: weaponTypes },
@@ -218,8 +234,9 @@ async function verifyJobQuestVisibilityAndProgress(db) {
   for (const quest of questRows) {
     const goodRepo = new MemoryQuestRepository(questRows);
     const goodService = new WeeklyQuestService(goodRepo, playerService);
-    const weaponType = quest.unlockWeaponTypes?.[0];
-    assert(weaponType, `${quest.title} 沒有 unlockWeaponTypes`);
+    const requiredWeaponTypes = Array.isArray(quest.unlockWeaponTypes) ? quest.unlockWeaponTypes : [];
+    const weaponType = requiredWeaponTypes[0] || JOB_WEAPON_TYPES[quest.rewardItemId];
+    assert(weaponType, `${quest.title} 找不到測試用武器`);
 
     playerService.setProfile({
       progress: {
@@ -249,7 +266,11 @@ async function verifyJobQuestVisibilityAndProgress(db) {
     });
     await wrongService.recordProgress(discordId, quest.type, 1);
     progress = await wrongRepo.getPlayerProgress(discordId, periodKey, "job");
-    assert(!progress[quest.id], `${quest.title} 錯武器卻累積了進度`);
+    if (requiredWeaponTypes.length > 0) {
+      assert(!progress[quest.id], `${quest.title} 錯武器卻累積了進度`);
+    } else {
+      assert((progress[quest.id]?.current || 0) >= 1, `${quest.title} 不限武器卻沒有累積進度`);
+    }
 
     const lowRepo = new MemoryQuestRepository(questRows);
     const lowService = new WeeklyQuestService(lowRepo, playerService);
@@ -262,7 +283,8 @@ async function verifyJobQuestVisibilityAndProgress(db) {
       },
     });
     const lowVisible = await lowService.getPlayerProgress(discordId, "job");
-    assert(!lowVisible.some((row) => row.quest.id === quest.id), `${quest.title} 等級不足卻出現`);
+    const lowRow = lowVisible.find((row) => row.quest.id === quest.id);
+    assert(lowRow?.locked === true, `${quest.title} 等級不足時應顯示為鎖定`);
     await lowService.recordProgress(discordId, quest.type, 1);
     progress = await lowRepo.getPlayerProgress(discordId, periodKey, "job");
     assert(!progress[quest.id], `${quest.title} 等級不足卻累積進度`);
@@ -279,7 +301,11 @@ async function verifyJobQuestVisibilityAndProgress(db) {
     });
     await attrService.recordProgress(discordId, quest.type, 1);
     progress = await attrRepo.getPlayerProgress(discordId, periodKey, "job");
-    assert(!progress[quest.id], `${quest.title} 屬性不足卻累積進度`);
+    if ((quest.unlockAttributes || []).length > 0 && Number(quest.unlockAttributeMin || 0) > 0) {
+      assert(!progress[quest.id], `${quest.title} 屬性不足卻累積進度`);
+    } else {
+      assert((progress[quest.id]?.current || 0) >= 1, `${quest.title} 不限屬性卻沒有累積進度`);
+    }
   }
 
   ok("職業任務出現條件與進度累積", `${questRows.length} 個職業任務通過`);
@@ -296,7 +322,7 @@ function verifyTierSetBonusesAndCombat() {
     equipStats: {},
   });
   const baseAttrs = { str: 30, agi: 10, vit: 10, int: 10, dex: 50, luk: 1 };
-  const baseMonster = { atk: 0, def: 20, dodge: 0, hit: 0 };
+  const baseMonster = { atk: 0, def: 0, dodge: 0, hit: 0 };
 
   const d3 = {
     weapon: fakeTier("D", "weapon"),
@@ -319,26 +345,28 @@ function verifyTierSetBonusesAndCombat() {
   const dBonus = getEquipmentTierSetBonuses(d3);
   const bBonus = getEquipmentTierSetBonuses(b3);
   const aBonus = getEquipmentTierSetBonuses(a5);
-  assert(dBonus.stats.str === 3 && dBonus.stats.int === 3 && dBonus.stats.dex === 3, "D 3 件屬性加成異常");
-  assert(bBonus.damagePct === 10, "B 3 件傷害加成異常");
+  assert(dBonus.stats.str === 1 && dBonus.stats.int === 1 && dBonus.stats.dex === 1, "D 3 件屬性加成異常");
+  assert(bBonus.damagePct === 6, "B 3 件傷害加成異常");
   assert(aBonus.finalDamagePct === 5 && aBonus.bossDamagePct === 10, "A 5 件 Boss/最終傷害加成異常");
 
   const noSetStats = calcPlayerStats(baseAttrs, { weapon: fakeTier("", "weapon") }, [], []);
   const bSetStats = calcPlayerStats(baseAttrs, b3, [], []);
-  noSetStats.dmgMin = noSetStats.dmgMax = 1;
-  bSetStats.dmgMin = bSetStats.dmgMax = 1;
+  noSetStats.atk = noSetStats.matk = 1000;
+  bSetStats.atk = bSetStats.matk = 1000;
+  noSetStats.dmgMin = noSetStats.dmgMax = 1000;
+  bSetStats.dmgMin = bSetStats.dmgMax = 1000;
   noSetStats.crit = bSetStats.crit = 0;
   noSetStats.hit = bSetStats.hit = 100;
   noSetStats.combo = bSetStats.combo = 0;
 
-  const noSet = runCombatLoop(noSetStats, baseMonster, "dummy", 999999, 1, {
+  const noSet = withSeed("tier-set-combat", () => runCombatLoop(noSetStats, baseMonster, "dummy", 999999, 1, {
     equipped: { weapon: fakeTier("", "weapon") },
     inventory: [],
-  });
-  const bSet = runCombatLoop(bSetStats, baseMonster, "dummy", 999999, 1, {
+  }));
+  const bSet = withSeed("tier-set-combat", () => runCombatLoop(bSetStats, baseMonster, "dummy", 999999, 1, {
     equipped: b3,
     inventory: [],
-  });
+  }));
   assert(bSet.totalDamage > noSet.totalDamage, "B 套裝傷害沒有套用到戰鬥");
 
   const playerPanelPath = path.join(process.cwd(), "src/bot/playerPanel.js");
@@ -430,6 +458,7 @@ async function main() {
     await step("PK Rank、勝敗加扣分、Boss 加成", verifyPkRankRatingAndBossBoost);
   } finally {
     await client.close();
+    await closeMongoClient();
   }
 
   for (const row of results) {

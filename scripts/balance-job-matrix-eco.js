@@ -11,7 +11,7 @@
  *      —— 附魔、套裝、卡片都是遊戲裡真實存在的組合
  *   ② 每個職業穿最適合自己的：每職業試穿 8 套模板 × 3 種配點原型（攻/閃/坦）快篩取最佳
  *   ③ 跨場機制吃得到：連打序列 —— COMBO 隨勝敗累積（劍鬼吃得到連段與斬）、
- *      氣條/集氣跨場沿用、影襲/斬/血祭依策略自動施放
+ *      氣條/集氣跨場沿用、斬/血祭依策略自動施放
  *   ④ 多場景並列：世界王連打／中怪連打（勝率）／巨神震擊窗口
  *
  * 用法：node scripts/balance-job-matrix-eco.js [zoneKey]
@@ -23,7 +23,6 @@ const { createWorldBossSim } = require("./lib/simWorldBoss");
 const { runCombatLoop } = require("../src/shared/combatLoop");
 const { calcPlayerStats } = require("../src/shared/combatStats");
 const zc = require("../src/shared/zoneCombo");
-const sgm = require("../src/shared/shadowGauge");
 const bgm = require("../src/shared/berserkGauge");
 const ja = require("../src/shared/jobAdvancement");
 const { collectEquipmentEffects } = require("../src/shared/effectEngine");
@@ -50,7 +49,6 @@ const ROWS = [
   ["二轉 矮人戰士長",   "job_dwarflord_t2_v1",    "mace_2h",  "str", { t1: "job_dwarf_warrior_v1" }],
   ["一轉 盜賊",        "job_rogue_v1",           "dagger",   "agi", { dual: true }],
   ["二轉 影舞者",      "job_shadowdancer_t2_v1", "dagger",   "agi", { dual: true, shadow: true, t1: "job_rogue_v1" }],
-  ["二轉 影舞者(影襲)", "job_shadowdancer_t2_v1", "dagger",   "agi", { dual: true, shadow: true, rushAt: 5, t1: "job_rogue_v1" }],
   ["一轉 法師",        "job_mage_v1",            "staff_2h", "int", {}],
   ["二轉 元素師(嵐暴)", "job_elementalist_t2_v1", "staff_2h", "int", { stance: "storm", t1: "job_mage_v1" }],
   ["二轉 元素師(炎圈)", "job_elementalist_t2_v1", "staff_2h", "int", { stance: "fire",  t1: "job_mage_v1" }],
@@ -162,11 +160,7 @@ async function main() {
       ctx._selfAura = _raw.length ? scaleSupportPartyEffects(_raw, { providerStats: _ps0, equipped: eq }) : null;
     }
     if (ctx._selfAura) extras.partyEffects = ctx._selfAura;
-    let consumed = false, spend = 0;
-    if (flags.rushAt && ctx.combo >= flags.rushAt) {
-      extras.shadowRushHits = sgm.RUSH_HITS;
-      spend = sgm.RUSH_COMBO_COST;
-    }
+    let consumed = false;
     if (flags.shadow) extras.shadowGaugeGrids = ctx.grids;
     if (flags.berserk) {
       const full = ctx.gauge >= 5;
@@ -213,7 +207,7 @@ async function main() {
     // 跨場狀態更新
     const outcome = r.outcome;
     const nx = zc.nextCombo(ctx.combo, "eco", outcome, Date.now(), {
-      hasDeathGuard: benefits, diedOnce: ctx.diedOnce, consumed, spend,
+      hasDeathGuard: benefits, diedOnce: ctx.diedOnce, consumed,
     });
     ctx.combo = nx.count; ctx.diedOnce = nx.diedOnce;
     if (flags.shadow) ctx.grids = Number(r.shadowGauge) || 0;

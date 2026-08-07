@@ -27,6 +27,8 @@ const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
 const jobAdvancement = require("../src/shared/jobAdvancement");
 const jobBadgeLevel = require("../src/shared/jobBadgeLevel");
 
+const jbo = require("./lib/jobBattleOptions");
+
 const RUNS = Math.max(20, Number(process.argv[2]) || 60);
 const TIER = (process.argv[3] || "A").toUpperCase();   // 真實玩家 14 人裡 11 人拿 A 階
 const LEVEL = 35;
@@ -113,13 +115,45 @@ async function buildEquipment(I, badgeId, wType, extra) {
   }
   console.log();
 
-  const rows = [];
+  // 職業清單＝每個一轉 ＋ 它底下所有二轉分支（分支表由 jobAdvancement 提供，不手動維護）。
+  // 二轉沿用其一轉的武器/配點（分支不換武器線），聖劍士另外兩種姿態各測一次。
+  const entries = [];
   for (const [key, info] of Object.entries(jobAdvancement.BASE_JOBS)) {
     const [wType, mainStat, extra = {}] = JOBS[key] || [];
     if (!wType) continue;
+    entries.push({ label: `一轉 ${info.name}`, badgeId: info.badgeId, wType, extra });
+    let branches = [];
+    try {
+      const br = jobAdvancement.getBranchesForBase(key);
+      branches = Array.isArray(br) ? br : (br && typeof br === "object" ? Object.values(br) : []);
+    } catch (_) { branches = []; }
+    for (const b of branches) {
+      const badgeId = b?.badgeId || b?.id;
+      if (!badgeId) continue;
+      const badgeDoc = await I.findOne({ id: badgeId });
+      const t2Name = String(badgeDoc?.name || badgeId).replace(/徽章$/, "");
+      const stances = (() => { try { return jobAdvancement.getStances(badgeDoc); } catch (_) { return null; } })();
+      if (stances && Object.keys(stances).length > 1) {
+        for (const [sk, sv] of Object.entries(stances)) {
+          entries.push({
+            label: `二轉 ${t2Name}(${sv.label || sk})`, badgeId, wType,
+            extra: { ...extra, ...(sv.requiresShield ? { shield: true } : {}) }, stance: sk,
+          });
+        }
+      } else {
+        entries.push({ label: `二轉 ${t2Name}`, badgeId, wType, extra });
+      }
+    }
+  }
+
+  const rows = [];
+  for (const info of entries) {
+    const { wType, extra = {} } = info;
     const eq = await buildEquipment(I, info.badgeId, wType, extra);
-    if (!eq) { console.log(`${info.name} 缺裝備，跳過`); continue; }
+    if (!eq) { console.log(`${info.label} 缺裝備，跳過`); continue; }
     const pStats = calcPlayerStats(buildAttrs(), eq, [], [], {});
+    // 職業完整戰鬥參數（自我光環＋所有身分技氣條）——單一來源 jobBattleOptions
+    const jobOpts = jbo.buildBattleOptions({ equipped: eq, pStats, stance: info.stance || null });
 
     const perZone = {};
     for (const z of ZONES) {
@@ -130,6 +164,7 @@ async function buildEquipment(I, badgeId, wType, extra) {
             playerLevel: LEVEL, equipped: eq, inventory: [],
             monsterEquipped: m.equipment || {}, monsterIsBoss: false,
             zone: z, monsterElement: m.element || null,
+            ...jobOpts,
           });
           total++;
           dmg += r.totalDamage || 0;
@@ -139,7 +174,7 @@ async function buildEquipment(I, badgeId, wType, extra) {
       }
       perZone[z] = { dmg: dmg / total, deathPct: (deaths / total) * 100, taken: taken / total };
     }
-    rows.push({ name: info.name, perZone });
+    rows.push({ name: info.label, perZone });
   }
 
   const label = { mid: "陽光草原", ancient_city: "古城", ancient_city_deep: "古城深處" };

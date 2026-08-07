@@ -50,9 +50,8 @@ const JOBS = [
     playerActiveEffects: [{ key: "atk_up", target: "self", trigger: "passive", chance: 100,
       params: { value: 25 }, duration: { mode: "battle", value: 1 }, appliedAt: 1, sourceType: "sim" }] }],
   ["二轉 矮人戰士長", "job_dwarflord_t2_v1",  "mace_2h",  "str"],
-  // 影舞者：連擊氣條（單場從 0 累氣,滿格→下回合固定5連擊）；影襲=每場開場7連擊(理想化:每場都有5連段可耗)
+  // 影舞者：連擊氣條（單場從 0 累氣,滿格→下回合固定5連擊）
   ["二轉 影舞者",     "job_shadowdancer_t2_v1", "dagger",  "agi", { _dualDagger: true }],
-  ["二轉 影舞者(影襲)", "job_shadowdancer_t2_v1", "dagger", "agi", { _dualDagger: true, shadowRushHits: 7 }],
 ];
 
 // 巨神震擊是**給全隊的免傷窗口**，不是矮人專屬 buff。

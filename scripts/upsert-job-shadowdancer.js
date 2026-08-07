@@ -5,7 +5,6 @@
 //   被動 · 連擊氣條：5 格；本回合有連擊 → +1 格（每回合最多 1）；
 //                    滿 5 格 → 全部消耗 → 下一回合固定 5 連擊（殘影亂舞，該回合不累氣）；
 //                    同場域跨場沿用（換區/10 分鐘沒打歸零）
-//   主動 · 影襲    ：消耗 5 點區域連段（COMBO）→ 第一回合固定 7 連擊（會累氣）
 //
 // 被動與技能**沿用盜賊徽章**（匕首×1.2/毒 proc/連擊率+5/背刺/煙霧彈）——
 // 技能綁在徽章道具上，換徽章等於歸零，不沿用會比一轉弱。
@@ -46,7 +45,7 @@ async function main() {
     passiveEffects: JSON.parse(JSON.stringify(base.passiveEffects || [])),
     procEffects: JSON.parse(JSON.stringify(base.procEffects || [])),
     combatEffects: JSON.parse(JSON.stringify(base.combatEffects || [])),
-    // 沿用盜賊的兩個技能（背刺/煙霧彈）；氣條與影襲不走 jobSkills
+    // 沿用盜賊的兩個技能（背刺/煙霧彈）；連擊氣條不走 jobSkills
     jobSkills: JSON.parse(JSON.stringify(base.jobSkills || [])),
   };
 
@@ -64,7 +63,7 @@ async function main() {
   console.log(`  屬性：${JSON.stringify(doc.equipStats)}（總和 12）`);
   console.log(`  沿用盜賊被動 ${doc.passiveEffects.length} 條 / proc ${doc.procEffects.length} 條 / combat ${doc.combatEffects.length} 條`);
   console.log(`  技能 ${doc.jobSkills.length} 個：${doc.jobSkills.map((s) => s.name).join(" / ")}`);
-  console.log("  連擊氣條／影襲由 shadowGauge + combatLoop 提供，不在 jobSkills 內");
+  console.log("  連擊氣條由 shadowGauge + combatLoop 提供，不在 jobSkills 內");
   console.log("提醒：本季不開放，試煉任務為 enabled:false，玩家無法取得。");
   await client.close();
 }

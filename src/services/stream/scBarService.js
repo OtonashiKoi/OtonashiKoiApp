@@ -1,7 +1,7 @@
 // SC 累積條 SC Accumulation Bar（模組 B）
 // ------------------------------------------------
 // 全服共同的斗內累積計數：斗內進來就 +金額，跨里程碑就解鎖對應獎勵(全服 buff)。
-// 「累積後給什麼」「怎麼清除」都做成可設定/可手動操作，數值與清除策略之後再定。
+// 里程碑獎勵由 streamEventConfig 設定；清除由後台手動重置並保留歷史。
 //
 // 狀態：collection scAccumulator，單一 doc _id:"current"
 //   { total, startedAt, periodLabel, claimedMilestoneIds:[], updatedAt }

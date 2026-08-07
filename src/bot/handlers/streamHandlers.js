@@ -14,8 +14,7 @@ const { recordDonationEvent } = require("../../services/stream/streamRecordsServ
 
 // 可自訂偵測的指令關鍵字
 const STREAM_COMMANDS = {
-  CHECKIN: ["打卡", "簽到", "+1", "check-in", "checkin"],
-  QUERY:   ["查詢", "我的資料", "我的錢包"]
+  CHECKIN: ["打卡", "簽到", "+1", "check-in", "checkin"]
 };
 
 /**
@@ -802,14 +801,6 @@ async function handleDonation(comment) {
 }
 
 /**
- * 處理資料查詢指令（留言間接觸發）
- * @param {{ name: string, text: string, service: string }} comment
- */
-async function handleQuery(comment) {
-  // TODO: 未來可結合 Discord 用戶對應機制，返回玩家資料到 OBS 或 Discord
-}
-
-/**
  * 主要留言處理入口，由 commentFetcher 呼叫
  * @param {{ name: string, text: string, service: string, raw: object }} comment
  */
@@ -882,11 +873,6 @@ async function handleStreamComment(comment) {
     return;
   }
 
-  if (matchCommand(stripped, STREAM_COMMANDS.QUERY)) {
-    await handleQuery(comment).catch((err) =>
-      console.error("[Stream] 查詢處理失敗：", err.message)
-    );
-  }
 }
 
 module.exports = {

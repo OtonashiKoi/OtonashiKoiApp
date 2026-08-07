@@ -198,7 +198,6 @@ function createSoloBossRoutes(serviceContext) {
       }
 
       // 連擊氣條（影舞者）：單人王＝世界王簡化版,氣條照累、滿格照觸發；
-      // 影襲不開放（它消耗「區域連段」,單人王沒有連段計數）
       const _sg = require("../../shared/shadowGauge");
       const shadowOn = _sg.hasGauge(equipped?.job_eq);
       const shadowGridsBefore = shadowOn ? _sg.read(progress, boss.zone) : 0;

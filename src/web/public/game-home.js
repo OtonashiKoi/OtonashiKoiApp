@@ -320,23 +320,19 @@ function attachEventListeners() {
   });
 
   document.getElementById('btnInventory').addEventListener('click', () => {
-    // TODO: 導向背包頁面
-    alert('背包功能開發中');
+    window.location.href = '/inventory';
   });
 
   document.getElementById('btnShop').addEventListener('click', () => {
-    // TODO: 導向商城頁面
-    alert('商城功能開發中');
+    window.location.href = '/shop';
   });
 
   document.getElementById('btnQuest').addEventListener('click', () => {
-    // TODO: 導向任務頁面
-    alert('任務功能開發中');
+    window.location.href = '/quests';
   });
 
   document.getElementById('btnSettings').addEventListener('click', () => {
-    // TODO: 導向設置頁面
-    alert('設置功能開發中');
+    window.location.href = '/settings';
   });
 }
 

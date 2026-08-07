@@ -1,5 +1,5 @@
 "use strict";
-// 影舞者連擊氣條回歸測試：累氣規則/滿格觸發/影襲/跨場沿用/換區歸零
+// 影舞者連擊氣條回歸測試：累氣規則/滿格觸發/跨場沿用/換區歸零/舊參數失效
 require("dotenv").config();
 const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
 const { createServiceContext } = require("../src/services/createServiceContext");
@@ -70,21 +70,14 @@ async function main() {
     ck("第一回合出現殘影亂舞", /殘影亂舞/.test(firstRound), firstRound.slice(0, 80));
   }
 
-  console.log("④ 影襲：第一回合固定 7 連擊且會累氣");
+  console.log("④ 已移除的影襲參數不可再觸發");
   {
-    let saw7 = 0, chargedAfterRush = 0;
-    for (let i = 0; i < 30; i++) {
-      const r = runCombatLoop(ps, wolf.calc, wolf.name, wolf.calc.maxHp, 15, {
-        playerLevel: 50, equipped: eq, inventory: prog.inventory || [],
-        monsterIsBoss: true, monsterEquipped: wolf.equipment || {},
-        shadowGaugeGrids: 0, shadowRushHits: 7,
-      });
-      const r1 = String(r.roundLogs[0] || "") + String(r.roundLogs[1] || "");
-      if (/影襲/.test(r1) && /7 連擊/.test(r1)) saw7++;
-      if ((Number(r.shadowGauge) || 0) > 0 || /殘影亂舞|氣條全滿/.test(JSON.stringify(r.roundLogs))) chargedAfterRush++;
-    }
-    ck("影襲宣告＋7 連擊出現", saw7 > 25, String(saw7));
-    ck("影襲的連擊有累氣", chargedAfterRush > 25, String(chargedAfterRush));
+    const r = runCombatLoop(ps, wolf.calc, wolf.name, wolf.calc.maxHp, 15, {
+      playerLevel: 50, equipped: eq, inventory: prog.inventory || [],
+      monsterIsBoss: true, monsterEquipped: wolf.equipment || {},
+      shadowGaugeGrids: 0, shadowRushHits: 7,
+    });
+    ck("硬塞 shadowRushHits 也不觸發", !/影襲/.test(JSON.stringify(r.roundLogs)));
   }
 
   console.log("⑤ 非影舞者完全不受影響");
@@ -96,7 +89,7 @@ async function main() {
     const r = runCombatLoop(ps2, wolf.calc, wolf.name, wolf.calc.maxHp, 15, {
       playerLevel: 50, equipped: eq2, inventory: prog.inventory || [],
       monsterIsBoss: true, monsterEquipped: wolf.equipment || {},
-      shadowGaugeGrids: 5, shadowRushHits: 7, // 就算硬塞參數也不該生效
+      shadowGaugeGrids: 5, shadowRushHits: 7, // 舊客戶端硬塞參數也不該生效
     });
     const t = JSON.stringify(r.roundLogs);
     ck("一轉盜賊塞參數也不觸發", !/殘影亂舞|影襲/.test(t));

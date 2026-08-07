@@ -17,6 +17,24 @@ const { calcHitChance } = require("./hitChance");
 // 吸血總量上限（2026-08-04）：吸血來源可疊加（A階吸血戒 15＋錨點 15＋怪物卡…），
 // 舊制無上限時理論可疊到 75%＝造成傷害的四分之三變回血。
 const LIFESTEAL_CAP_PCT = 25;
+
+// ── 回復型／護盾型原型：治療與護盾吃 INT 斜率（2026-08-05）──
+// 問題：治療量與護盾吸收原本全掛在 `maxHp × 百分比` 上 → 玩家堆 INT、換法杖、升徽章，
+// 生存力一點都不會變強，只有堆血量有用（那是重甲型的玩法）。這是下季四原型只有
+// 重甲與閃避成立、回復型與護盾型 0 職業可行的直接原因。
+// 作法：沿用既有聖域（二轉）的公式形狀 `maxHp×基礎% + INT×每點係數`，
+//       採「加算」而非取代——既有道具的 %maxHp 底值原封不動，INT 斜率疊加在上面
+//       （拉底不壓頂，且不需要為現有道具寫遷移）。
+// 係數出處：docs/SEASON_NEXT_SURVIVAL_15R_DESIGN.md 四原型反推表
+//   回復型需 ~180/回合（≈17% maxHp）、護盾型需每 3 回合 ~1000 吸收。
+const HEAL_INT_SCALE = 2.5;    // 每 1 點 INT → 每回合額外治療量
+const SHIELD_INT_SCALE = 12;   // 每 1 點 INT → 每次展盾額外吸收量
+function intHealBonus(pStats) {
+  return Math.max(0, Math.round((Number(pStats?.int) || 0) * HEAL_INT_SCALE));
+}
+function intShieldBonus(pStats) {
+  return Math.max(0, Math.round((Number(pStats?.int) || 0) * SHIELD_INT_SCALE));
+}
 const {
   normalizeElement, normalizeElementLevel, getElementMultiplier, describeElementMatchup,
   resolveWeaponElement, resolveArmorElement, getElementDamageReduction,
@@ -1278,7 +1296,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // ── 職業技能「成本」通用機制（2026-07-28 新增，所有職業共用）──
   //   技能可帶 cost: { type: "combo" | "hp", value: N }
   //     combo — 消耗區域連段（跨場資源、陣亡歸零）；戰鬥內只累計消耗量，
-  //             由呼叫端拿 result.jobSkillComboSpent 扣除並落地（同影襲 RUSH_COMBO_COST 的作法）
+  //             由呼叫端拿 result.jobSkillComboSpent 扣除並落地
   //     hp    — 消耗當前 HP 的 N%（場內資源，立即扣）
   //   不夠付 → 技能不進池／不觸發（不會欠帳）。
   let _jobSkillComboSpent = 0;
@@ -1317,7 +1335,6 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // ── 連擊氣條（影舞者・盜賊二轉）────────────────────────────────────
   // 設定走 jobAdvancement 表；沒有徽章 → null → 行為完全同現況。
   //   累氣：本回合有出現連擊 → +1 格（每回合最多 1）；滿 5 格 → 下一回合固定 5 連擊（該回合不累氣）
-  //   影襲（options.shadowRushHits）：第一回合固定 7 連擊、會累氣
   //   氣量跨場沿用由呼叫端持久化（options.shadowGaugeGrids 進、result.shadowGauge 出）
   let shadowCfg = null;
   try {
@@ -1480,7 +1497,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if ((ep.key === "shield" || ep.key === "barrier") && epParams.mode !== "flat") {
             const pct = Math.abs(Number(epParams.value) || 0);
             if (pct > 0 && epParams.amount == null) {
-              const amt = Math.max(1, Math.round((pStats.maxHp || 0) * pct / 100));
+              // %maxHp 底值 + INT 斜率（護盾型原型的成長曲線）
+              const amt = Math.max(1, Math.round((pStats.maxHp || 0) * pct / 100) + intShieldBonus(pStats));
               epParams.amount = amt;
               epParams.value = amt;
             }
@@ -1587,11 +1605,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (shadowCfg) {
       _shadowForcedHits = 0;
       _shadowChargeThisRound = true;
-      if (round === 1 && Number(options.shadowRushHits) > 0) {
-        // 影襲：第一回合固定 7 連擊（會累氣）
-        _shadowForcedHits = Math.min(7, Math.floor(Number(options.shadowRushHits)));
-        log.push(`🌀 **影襲**！斬碎 ${shadowCfg.RUSH_COMBO_COST} 點連段化作殘影——本回合固定 **${_shadowForcedHits} 連擊**！`);
-      } else if (_shadowBurstNext) {
+      if (_shadowBurstNext) {
         // 殘影亂舞：滿氣消耗後的固定 5 連擊（不累氣）
         _shadowBurstNext = false;
         _shadowForcedHits = shadowCfg.BURST_HITS;
@@ -2082,6 +2096,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const mode = String(pe.params?.mode || '').toLowerCase();
           const val = Number(pe.params?.value ?? pe.value ?? 0);
           if (!Number.isFinite(val) || val === 0) continue;
+          // 註：這條是「隊友支援光環」路徑，supportAuraScaling 本來就會依提供者 INT 縮放，
+          //     不可以在這裡再加一次 INT 斜率（會變雙重縮放）。自己的 HOT 走回合末 playerHotPct。
           const heal = mode === 'pct' ? Math.max(0, Math.round((pStats.maxHp || 0) * (val / 100))) : Math.max(0, Math.round(val));
           if (heal > 0) {
             // 聖者（heal_to_damage）：外部隊友的治療光環直接「取消」（不回血也不轉傷害）；
@@ -3444,10 +3460,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               break;
             }
           } else if (pe.key === 'proc_heal') {
-            const healAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 5) / 100)));
+            const healAmt = Math.max(1,
+              Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 5) / 100)) + intHealBonus(pStats));
             _healLogged(healAmt, (actual) => `💚 戰鬥回復！恢復 **${actual}** HP！（你剩 ${pHp}）`);
           } else if (pe.key === 'proc_shield') {
-            const shieldAmt = Math.max(1, Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 10) / 100)));
+            const shieldAmt = Math.max(1,
+              Math.round((pStats.maxHp || 100) * (Number(pp.value ?? 10) / 100)) + intShieldBonus(pStats));
             options.playerActiveEffects = options.playerActiveEffects || [];
             options.playerActiveEffects = upsertActiveEffectBySource(options.playerActiveEffects, {
               key: 'shield', params: { value: shieldAmt, amount: shieldAmt, duration: dur },
@@ -3833,7 +3851,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             let svDmg = _svBase;
             const svCrit = (Math.random() * 100 < effectiveCrit);
             if (svCrit) svDmg = Math.max(1, Math.round(svDmg * 2 * playerCritDamageMultiplier * tierCritDamageMultiplier));
-            if (weaponMainBonus > 0) svDmg += weaponMainBonus;
+            // 2026-08-05 使用者定案：補打段**不吃武器主屬性加成**。
+            // weaponMainBonus 是「終傷後追加主屬性×1.5 的固定傷害」，設計上一次攻擊加一次；
+            // 原本每段都加＝一回合加三次，且加在減傷之後，怪物防禦完全擋不住（嵐暴超模主因之一）。
             if (_noPlayerAtk) svDmg = 0;
             svDmg = applyBossVuln(svDmg);
             mHp -= svDmg;
@@ -4205,7 +4225,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         comboChance = Math.min(_comboRateCap, Math.max(0, comboChance));
 
         const MAX_COMBO_PER_ROUND = 7;
-        // 影舞者固定連擊（殘影亂舞 5 段／影襲 7 段）：只作用在本回合第一次攻擊（雙持副手不重複吃）
+        // 影舞者固定連擊（殘影亂舞 5 段）：只作用在本回合第一次攻擊（雙持副手不重複吃）
         // 連環之計（兵聖）：這回合固定 N 連擊，與影舞者殘影亂舞走同一條保證連擊通道
         const _sageForcedHits = (sageCfg && _sageChainRound === round) ? (Number(sageCfg.chain?.hits) || 3) : 0;
         const _roundGuaranteed = (a === 0 && (_shadowForcedHits > 0 || _sageForcedHits > 0))
@@ -4412,7 +4432,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 大治療術（聖靈師）：每 N 個有出手的回合施放；精靈在場先回精靈、否則回自己 ──
     if (sunSpiritCfg && outcome === null && _attackRoundMark === round
         && combatStats.attackRounds > 0 && combatStats.attackRounds % Math.max(1, Number(sunSpiritCfg.healEveryRounds) || 5) === 0) {
-      const _bigHeal = Math.max(1, Math.round((pStats.maxHp || 1) * (Number(sunSpiritCfg.healPct) || 30) / 100));
+      // 大治療術是「攢好幾回合放一次」→ INT 斜率按間隔回合數等比給，與逐回合治療的總量一致
+      const _bigHealInterval = Math.max(1, Number(sunSpiritCfg.healEveryRounds) || 5);
+      const _bigHeal = Math.max(1,
+        Math.round((pStats.maxHp || 1) * (Number(sunSpiritCfg.healPct) || 30) / 100)
+        + intHealBonus(pStats) * _bigHealInterval);
       if (_spiritHp > 0) {
         _spiritHp = Math.min(_spiritMaxHp, _spiritHp + _bigHeal);
         log.push(`💚 **大治療術**！聖光注入日之精靈，回復 **${_bigHeal}**！（精靈剩 ${_spiritHp} / ${_spiritMaxHp}）`);
@@ -4985,6 +5009,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       let totalHot = 0;
       if (playerHotPct > 0) totalHot += Math.round(pStats.maxHp * (playerHotPct / 100));
       if (playerHotFlat > 0) totalHot += Math.round(playerHotFlat);
+      // INT 斜率（回復型原型的成長曲線）：只有「本來就有治療來源」的 build 才吃得到，
+      // 否則等於全職業白送每回合回血，回復型就不再是一種需要投資的選擇。
+      if (playerHotPct > 0 || playerHotFlat > 0) totalHot += intHealBonus(pStats);
       // 各來源各自看自己的 interval：黃金幼龍卡只在第 3/6/9… 回合爆發，火髓魔蟲卡每回合都回
       for (const lr of playerLifeRegens) {
         if (round % lr.interval === 0) totalHot += Math.round((pStats.maxHp || 0) * (lr.pct / 100));

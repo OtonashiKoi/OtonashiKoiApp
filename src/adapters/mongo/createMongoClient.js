@@ -164,6 +164,16 @@ async function getMongoDb() {
   return cachedDb;
 }
 
+async function closeMongoClient() {
+  const client = cachedClient;
+  cachedClient = null;
+  cachedDb = null;
+  indexReady = false;
+  streamBindingSyncReady = false;
+  if (client) await client.close();
+}
+
 module.exports = {
-  getMongoDb
+  getMongoDb,
+  closeMongoClient,
 };

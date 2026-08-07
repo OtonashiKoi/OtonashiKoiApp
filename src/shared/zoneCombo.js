@@ -89,7 +89,7 @@ function readCombo(progress, zone, now = Date.now()) {
 function nextCombo(current, zone, outcome, now = Date.now(), opts = {}) {
   const { hasDeathGuard = false, diedOnce = false, consumed = false, spend = 0 } = opts;
   const died = String(outcome || "") === "lose";
-  // spend：固定扣點（影舞者「影襲」耗 5 點；與劍鬼「斬」的 consumed=全部消耗 不同）
+  // spend：固定扣點（職業技能的 combo cost；與劍鬼「斬」的 consumed=全部消耗不同）
   const cur = Math.max(0, (Number(current) || 0) - Math.max(0, Number(spend) || 0));
 
   // 「斬」已消耗掉全部連段 → 這場結束直接歸零（沒死的話下一場從 0 重新累）
