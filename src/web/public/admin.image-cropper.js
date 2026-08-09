@@ -23,7 +23,8 @@
 
   function shouldSkipCropper(input) {
     if (!input) return true;
-    const skipIds = new Set(['items-img-input', 'items-csv-input']);
+    // items-img-input 原本也在排除名單 → 道具庫永遠不出現裁切視窗；2026-08-09 解除（CSV 匯入仍跳過）
+    const skipIds = new Set(['items-csv-input']);
     return skipIds.has(input.id) || input.dataset.noCropper === '1';
   }
 
@@ -44,6 +45,8 @@
     const modal = document.getElementById('image-cropper-modal');
     modal.style.display = 'none';
     if (cropper) { cropper.destroy(); cropper = null; }
+    // 清空選檔：取消後再選同一張圖 change 才會再觸發（裁切完成路徑此時檔案已送出，清掉無妨）
+    try { if (currentInput) currentInput.value = ''; } catch (_) { /* noop */ }
     currentInput = null;
   }
 
