@@ -1,17 +1,24 @@
-# 全職業主動技能一覽（現況 + 賭徒提案）
+# 全職業主動技能一覽（一轉）
 
-> 觸發規則（`combatLoop.js:2168`）：每回合 **35% 機率**觸發，每回合**最多一個**技能，依 `cooldownTurns` 冷卻，可帶 HP 條件。
-> 目標判定（`combatLoop.js:2188`）：`JOB_SKILL_OFFENSIVE` 白名單（`atk_down` `def_down` `hit_down` `agi_down` `stun` `silence` `poison` `bleed` `burn` `lightning` `freeze` `charm` `dark_curse`）內的效果掛敵方，其餘掛自身。
+> ⚠️ **範圍註記（2026-08-07）**：本檔僅涵蓋**一轉**職業技能。二轉徽章各有自己的技能組
+>（如矮人戰士長 4 技含 `on_target_stunned` 崩山、聖劍士 4 技），定義見 `src/shared/jobAdvancement.js`
+> 各分支註解與 DB `items.jobSkills`，本檔不重複。
+>
+> 觸發規則（`combatLoop.js:2833`）：每回合 **35% 機率**觸發，每回合**最多一個**技能，依 `cooldownTurns` 冷卻，可帶 HP 條件；
+> 帶自訂 `trigger` 的技能（賭徒骰子系、崩山等）走自己的觸發點，**不吃 35% 閘門、也不佔隨機池**（`combatLoop.js:2835`、`:2904`、`:2929`）。
+> 目標判定（`combatLoop.js:2882`）：procEffect 自帶 `target: "enemy"`，**或** key 在 `JOB_SKILL_OFFENSIVE` 白名單
+>（`atk_down` `def_down` `hit_down` `agi_down` `stun` `silence` `poison` `bleed` `burn` `lightning` `freeze` `charm` `dark_curse`）內 → 掛敵方，其餘掛自身。
+> 白名單優先於 target 欄位——所以白名單內的 key 仍做不成「掛自身的減益」。
 
 ---
 
-## 現有 10 職業
+## 一轉 11 職業（前 10 個如下；第 11 個賭徒為自訂 trigger 體系，見文末專節）
 
 ### 劍士 `job_swordsman_v1`
 
 | 技能 | CD | 條件 | 效果 |
 |---|---|---|---|
-| 盾擊 | 3 | — | 自身 格擋+25%、DEF+12（flat），2 回合 |
+| 舉步若堅（舊名「盾擊」，DB 已改名） | 3 | — | 自身 格擋+25%、DEF+12（flat），2 回合 |
 | 碎甲斬 | 3 | — | 敵方 DEF−10，3 回合，可疊加至 −30 |
 
 ### 戰士 `job_warrior_v1`
@@ -97,67 +104,21 @@
 
 ---
 
-## 賭徒 `job_gambler_v1` 提案（修正版）
+## 賭徒 `job_gambler_v1`（✅ 已實裝——自訂 trigger 版）
 
-### 為什麼要改掉 v2 的版本
+⛔ 早期兩版提案（v2「豪賭 爆率+30/爆傷+50」、修正版「豪賭 爆傷+30/ATK+15＋千術 命中−20/迴避−30」）
+**皆未採用**。實裝版改走**自訂 `trigger`**，不吃 35% 隨機閘門
+（定義：DB `items.jobSkills` 與 [write_job_skills.js:258](../scripts/write_job_skills.js#L258)；
+詳細設計見 [JOB_GAMBLER_DESIGN.md](JOB_GAMBLER_DESIGN.md) 第四節）：
 
-v2 我提的是「豪賭：爆率+30%、爆傷+50%」。對照上表，**爆率上限是 +20、爆傷上限是 +30，我一次超標兩項**。
-
-而且方向本來就錯：賭徒的爆擊率天生就靠 LUK 堆很高（Lv50 專精 build 已有 49.5%），再給爆率增益是**打在已經飽和的乘區上**。正確的做法是堆**爆傷**——那才是賭徒真正缺的乘區。
-
-### 修正後的兩個技能
-
-| 技能 | CD | 條件 | 效果 |
+| 技能 | trigger | CD | 效果 |
 |---|---|---|---|
-| **豪賭** | 4 | — | 自身 爆傷+30%、ATK+15%，2 回合 |
-| **千術** | 4 | — | 敵方 命中−20、迴避−30，3 回合 |
+| **將大局逆轉吧** | `on_dice_one`（骰出【1】必定發動，[combatLoop.js:3332](../src/shared/combatLoop.js#L3332)） | 2 | 重骰該顆【1】＋自身 LUK+15，1 回合 |
+| **千術** | `round_start_chance` 50%（[combatLoop.js:2904](../src/shared/combatLoop.js#L2904)） | 3 | 敵方本回合攻擊必定大失敗（`force_crit_fail`：自傷 30% 並跳過攻擊） |
 
-```js
-gambler: [
-  {
-    key: "gambler_all_in",
-    name: "豪賭",
-    description: "自身爆擊傷害+30%、ATK+15%，持續2回合。",
-    cooldownTurns: 4,
-    condition: {},
-    procEffects: [
-      { key: "crit_damage_up", target: "self", params: { value: 30, duration: { mode: "turns", value: 2 } } },
-      { key: "atk_up",         target: "self", params: { value: 15, duration: { mode: "turns", value: 2 } } }
-    ]
-  },
-  {
-    key: "gambler_loaded_dice",
-    name: "千術",
-    description: "敵方命中-20、迴避-30，持續3回合。",
-    cooldownTurns: 4,
-    condition: {},
-    procEffects: [
-      { key: "hit_down",   target: "enemy", params: { value: 20, duration: { mode: "turns", value: 3 } } },
-      { key: "dodge_down", target: "enemy", params: { value: 30, duration: { mode: "turns", value: 3 } } }
-    ]
-  }
-]
-```
+### 做不出來的東西（實作限制，至今仍成立）
 
-### 落在 band 的哪裡
-
-| 項目 | 賭徒 | 既有上限 | 判定 |
-|---|---|---|---|
-| 爆傷+30% | 30 | 30（盜賊） | 齊平 ✅ |
-| ATK+15% | 15 | 25（戰士） | 偏保守 ✅ |
-| 命中−20 | 20 | 30（結界師） | 中間 ✅ |
-| 迴避−30 | 30 | 50（結界師） | 保守 ✅ |
-| CD 4 / 4 | — | 3～5 | 中間 ✅ |
-
-刻意壓在 band 中下緣，因為賭徒的被動（持骰子爆率+10、爆傷+20）與 LUK 的四重加成已經給了足夠強度。
-
-### 與其他職業的差異化
-
-- 盜賊背刺堆**爆率**，賭徒豪賭堆**爆傷** → 同樣是爆擊職但補的乘區不同
-- 千術的「命中−20 + 迴避−30」是結界師束縛之陣的弱化版，但賭徒是**輸出職**、結界師是**輔助職**，定位不衝突
-
-### 做不出來的東西（實作限制）
-
-想做「自身 ATK+40% 但 DEF−20%」這種真・豪賭風險機制**目前做不到**：`def_down` 在 `JOB_SKILL_OFFENSIVE` 白名單內，一定會被判成掛敵方，變成幫玩家削敵方防禦（等於純增益）。
-
-要做到需要改 `combatLoop.js:2188` 的目標判定——例如改成讀 procEffect 自帶的 `target` 欄位，而不是用 key 白名單推斷。這是既有 10 個職業都會受影響的改動，建議另案評估。
+想做「自身 ATK+40% 但 DEF−20%」這種真・豪賭風險機制**目前做不到**：`def_down` 在 `JOB_SKILL_OFFENSIVE`
+白名單內，白名單優先於 procEffect 的 `target` 欄位（`combatLoop.js:2882` 為
+`pe.target === 'enemy' || JOB_SKILL_OFFENSIVE.has(pe.key)`），一定會被判成掛敵方。
+要做到需要讓 `target: "self"` 能覆蓋白名單——這是所有一轉職業都會受影響的改動，另案評估。

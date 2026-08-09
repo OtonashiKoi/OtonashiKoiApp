@@ -417,6 +417,25 @@ function createSoloBossRoutes(serviceContext) {
       const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
       const db = await getMongoDb();
 
+      // KDA（附錄C v3）：單人世界王也是世界王場次——K/D 計入賽季累積（單人無隊友，助攻自然為空）
+      try {
+        let _resistPct = 0;
+        try {
+          _resistPct = require("../../shared/elementSystem")
+            .getSameElementResist(equipped || {}, monster?.element || null).pct || 0;
+        } catch (_) { /* 抗性算不出來就當 0 */ }
+        require("../../services/kda/kdaService").recordBattle({
+          discordId, displayName,
+          damage: Math.max(0, Math.round(Number(r.totalDamage) || 0)),
+          died: r?.outcome === "lose",
+          quest: {
+            questService: serviceContext.questService || serviceContext.weeklyQuestService,
+            rounds: (r?.nextRound || 2) - 1,
+            resistPct: _resistPct,
+          },
+        }).catch(() => {});
+      } catch (_) { /* KDA 記錄失敗不影響結算 */ }
+
       // 圖鑑進度：每場依「本場傷害/部位血量」累積（同現行世界王，記在同一隻大史王圖鑑）
       try {
         const partMax = Math.max(1, Number(st.worldBossPartsMaxHp[part] || partHpNow));

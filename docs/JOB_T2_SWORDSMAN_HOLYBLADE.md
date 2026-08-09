@@ -1,8 +1,12 @@
 # 聖劍士（劍士二轉・A 分支）設計規格 v2
 
-> 狀態：**設計定案，等實作**
-> 上位職：劍士 `job_swordsman_v1`　／　姊妹分支：B 分支「大劍」（尚未設計）
-> 二轉通則見 [SEASON_V0.4.5_PLAN.md](SEASON_V0.4.5_PLAN.md)
+> 狀態：**✅ 已實裝上線**——姿態定義 [jobAdvancement.js:108](../src/shared/jobAdvancement.js#L108)（`stances`）；
+> 戰鬥接點 [combatLoop.js:1181](../src/shared/combatLoop.js#L1181)（`battleStance`，經 `shared/battleStance.js` 解析）；
+> API 姿態驗證 [playerAppRoutes.js:3216](../src/api/routes/playerAppRoutes.js#L3216)；
+> 徽章 `job_holyblade_t2_v1` 已入 DB（str5/vit5/dex2，另帶 4 個主動技能：舉步若堅／碎甲斬／破魔一閃／聖盾壁壘——本文未載，以 DB 為準）。
+> 上位職：劍士 `job_swordsman_v1`　／　姊妹分支：B 分支「**劍鬼**」（✅ 已實裝，本季 `seasonLocked:true` 封印，
+> [jobAdvancement.js:129](../src/shared/jobAdvancement.js#L129)；早期規劃的「大劍」分支已由劍鬼取代）
+> 二轉通則見 [JOB_BADGE_SYSTEM_DESIGN.md](JOB_BADGE_SYSTEM_DESIGN.md)
 >
 > **v2 全面改寫**：v1（格擋率+10、反擊×1.6、疊層）建立在錯誤的戰鬥模型上，
 > 實測後發現「強化格擋反擊當輸出」根本不成立（盾反只佔總傷 7～8%），且純數值強化**沒有二轉感**。
@@ -58,9 +62,12 @@
 - **打得死的屬性怪** → 攻擊姿態把勝率從 67% 拉到 **90%**
 - **打不死的王** → 防禦姿態傷害多 **43%**（格擋 70% 換來 28.3 次格擋反擊，攻擊姿態只有 7.9 次）
 
-### ⚠️ 已知限制：屬性覆蓋率
+### ⚠️ 已知限制：屬性覆蓋率（2026-07 設計當時的快照）
 
-| | 現況 |
+> ⚠️ 下表為設計當時（2026-07）的快照；其後屬性石掉落鏈與水系活動區已上線
+>（`src/shared/elementSystem.js` 運作中），「0 件屬性道具」已非現況。
+
+| | 當時快照 |
 |---|---|
 | 啟用怪物有屬性的 | **12 / 69（17%）**，全是火屬性 |
 | 有 `elements` 欄位的道具 | **0 件**（屬性石尚未發放） |
@@ -174,18 +181,17 @@ swordsman: [
 
 ---
 
-## 六、二轉試煉
+## 六、二轉取得方式（✅ 新制已實裝）
 
-| 欄位 | 值 |
-|---|---|
-| cadence | `job`（resetPolicy `once`） |
-| type | `battle_as_swordsman` |
-| target | **350**（第 2／3 個二轉自動變 700／1000） |
-| unlockLevel | 35 |
-| unlockRequireItemIds | `["job_swordsman_v1"]` |
-| isT2Trial | `true` ← 標了就自動套用五道閘門 |
-| **enabled** | **`false`** ← 未開放內容一律預設關閉，要開是使用者的決定 |
-| rewardItemId | `job_holyblade_t2_v1` |
+⛔ 舊制「試煉任務 `battle_as_swordsman` 出戰 350 場」已作廢
+（DB 中該任務仍存在但 `enabled:false`，僅存檔）。
+
+現行流程（全職業通用，見 [JOB_BADGE_SYSTEM_DESIGN.md](JOB_BADGE_SYSTEM_DESIGN.md)）：
+劍士徽章練到 **Lv20**（228 場）→ 解鎖轉職劇情 → 劇情 choice＝選聖劍士或劍鬼分支 →
+transfer 節點**消耗劍士徽章＋金幣**換發二轉徽章
+（✅ `storyService.transferJobAtNode`，`src/services/story/storyService.js:541`）。
+DB 已建「聖劍士試煉」`type: t2_transfer`（**`enabled:false`**，未開放內容一律預設關閉，要開是使用者的決定）。
+❌ 劍士的轉職劇本尚未入庫（storyChapters 現僅 3 章；原稿見 [JOB_STORY_SCRIPTS.md](JOB_STORY_SCRIPTS.md)）。
 
 ---
 

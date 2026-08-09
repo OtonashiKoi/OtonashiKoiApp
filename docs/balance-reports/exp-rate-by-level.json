@@ -1,351 +1,351 @@
 {
-  "party": 1,
-  "partyMult": 1,
-  "enhance": 3,
-  "probe": 16,
+  "party": 8,
+  "partyMult": 3.1,
+  "enhance": 5,
+  "probe": 12,
   "rows": [
     {
       "level": 1,
       "tier": "D",
       "zone": "beginner",
       "zoneLabel": "新手村外的草叢",
-      "expPerHour": 27201
+      "expPerHour": 82269
     },
     {
       "level": 2,
       "tier": "D",
       "zone": "beginner",
       "zoneLabel": "新手村外的草叢",
-      "expPerHour": 27197
+      "expPerHour": 87136
     },
     {
       "level": 3,
       "tier": "D",
       "zone": "beginner",
       "zoneLabel": "新手村外的草叢",
-      "expPerHour": 27842
+      "expPerHour": 86753
     },
     {
       "level": 4,
       "tier": "D",
-      "zone": "beginner",
-      "zoneLabel": "新手村外的草叢",
-      "expPerHour": 27832
+      "zone": "normal",
+      "zoneLabel": "起始的草原",
+      "expPerHour": 90967
     },
     {
       "level": 5,
       "tier": "D",
       "zone": "normal",
       "zoneLabel": "起始的草原",
-      "expPerHour": 32849
+      "expPerHour": 93337
     },
     {
       "level": 6,
       "tier": "D",
       "zone": "normal",
       "zoneLabel": "起始的草原",
-      "expPerHour": 30427
+      "expPerHour": 118513
     },
     {
       "level": 7,
       "tier": "D",
       "zone": "normal",
       "zoneLabel": "起始的草原",
-      "expPerHour": 34151
+      "expPerHour": 119825
     },
     {
       "level": 8,
       "tier": "D",
       "zone": "normal",
       "zoneLabel": "起始的草原",
-      "expPerHour": 33853
+      "expPerHour": 125117
     },
     {
       "level": 9,
       "tier": "D",
       "zone": "normal",
       "zoneLabel": "起始的草原",
-      "expPerHour": 36220
+      "expPerHour": 156376
     },
     {
       "level": 10,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 128176
+      "expPerHour": 432314
     },
     {
       "level": 11,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 131471
+      "expPerHour": 524874
     },
     {
       "level": 12,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 144367
+      "expPerHour": 491732
     },
     {
       "level": 13,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 145278
+      "expPerHour": 542092
     },
     {
       "level": 14,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 147913
+      "expPerHour": 505646
     },
     {
       "level": 15,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 151534
+      "expPerHour": 597387
     },
     {
       "level": 16,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 175339
+      "expPerHour": 604905
     },
     {
       "level": 17,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 160015
+      "expPerHour": 651638
     },
     {
       "level": 18,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 186123
+      "expPerHour": 696044
     },
     {
       "level": 19,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 179786
+      "expPerHour": 707317
     },
     {
       "level": 20,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 189091
+      "expPerHour": 681341
     },
     {
       "level": 21,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 195133
+      "expPerHour": 794576
     },
     {
       "level": 22,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 198006
+      "expPerHour": 810414
     },
     {
       "level": 23,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 218478
+      "expPerHour": 845873
     },
     {
       "level": 24,
       "tier": "B",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 209183
+      "expPerHour": 849761
     },
     {
       "level": 25,
       "tier": "A",
       "zone": "mid",
       "zoneLabel": "陽光草原",
-      "expPerHour": 318166
+      "expPerHour": 1254104
     },
     {
       "level": 26,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 287538
+      "expPerHour": 1102448
     },
     {
       "level": 27,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 312640
+      "expPerHour": 1226917
     },
     {
       "level": 28,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 311929
+      "expPerHour": 1312223
     },
     {
       "level": 29,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 312410
+      "expPerHour": 1381761
     },
     {
       "level": 30,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 351354
+      "expPerHour": 1329559
     },
     {
       "level": 31,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 327513
+      "expPerHour": 1594180
     },
     {
       "level": 32,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 332469
+      "expPerHour": 1502947
     },
     {
       "level": 33,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 359359
+      "expPerHour": 1679008
     },
     {
       "level": 34,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 363694
+      "expPerHour": 1662146
     },
     {
       "level": 35,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 378890
+      "expPerHour": 1550117
     },
     {
       "level": 36,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 364631
+      "expPerHour": 1706209
     },
     {
       "level": 37,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 398675
+      "expPerHour": 1786254
     },
     {
       "level": 38,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 423089
+      "expPerHour": 1670316
     },
     {
       "level": 39,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 436453
+      "expPerHour": 1835776
     },
     {
       "level": 40,
       "tier": "A",
       "zone": "ancient_city",
       "zoneLabel": "古城",
-      "expPerHour": 431798
+      "expPerHour": 1965760
     },
     {
       "level": 41,
       "tier": "A",
       "zone": "ancient_city_deep",
       "zoneLabel": "古城深處",
-      "expPerHour": 273977
+      "expPerHour": 1254132
     },
     {
       "level": 42,
       "tier": "A",
       "zone": "ancient_city_deep",
       "zoneLabel": "古城深處",
-      "expPerHour": 285728
+      "expPerHour": 1437181
     },
     {
       "level": 43,
       "tier": "A",
       "zone": "ancient_city_deep",
       "zoneLabel": "古城深處",
-      "expPerHour": 275915
+      "expPerHour": 1351440
     },
     {
       "level": 44,
       "tier": "A",
       "zone": "ancient_city_deep",
       "zoneLabel": "古城深處",
-      "expPerHour": 294657
+      "expPerHour": 1475415
     },
     {
       "level": 45,
       "tier": "A",
       "zone": "ancient_city_deep",
       "zoneLabel": "古城深處",
-      "expPerHour": 295362
+      "expPerHour": 1517791
     },
     {
       "level": 46,
       "tier": "A",
       "zone": "ancient_city_deep",
       "zoneLabel": "古城深處",
-      "expPerHour": 314580
+      "expPerHour": 1633198
     },
     {
       "level": 47,
       "tier": "A",
       "zone": "ancient_city_deep",
       "zoneLabel": "古城深處",
-      "expPerHour": 331081
+      "expPerHour": 1624607
     },
     {
       "level": 48,
       "tier": "A",
       "zone": "ancient_city_deep",
       "zoneLabel": "古城深處",
-      "expPerHour": 337256
+      "expPerHour": 1775539
     },
     {
       "level": 49,
       "tier": "A",
       "zone": "ancient_city_deep",
       "zoneLabel": "古城深處",
-      "expPerHour": 341619
+      "expPerHour": 1831586
     }
   ]
 }

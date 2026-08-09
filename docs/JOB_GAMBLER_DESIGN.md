@@ -89,6 +89,9 @@ dice: {
   faceMultipliers: [0.5, 0.75, 1.0, 1.0, 1.25, 1.5],
   allMinMult: 0.5,
   allMaxMult: 2.5,
+  // 魔法傷害判定（使用者定案 2026-07-24，晚於本文 v3）：骰子傷害視為魔法——
+  // 常駐無視 25% DEF，與雙手法杖同級。✅ combatStats.js:58
+  bypassDefPct: 25,
 },
 ```
 
@@ -101,6 +104,7 @@ dice: {
 | `attackSegments` | **2** | 每回合固定兩擊，**不計入連擊**（不加 comboCount、不吃連擊增傷、不受連擊率影響） |
 | `faceMultipliers` | 見下 | 每段各擲一顆 d6，骰面決定該段傷害倍率，純運氣、不看屬性 |
 | `allMinMult` / `allMaxMult` | 0.5 / 2.5 | 全 1 / 全 6（各 1/36）時，每段倍率改寫成此值 |
+| `bypassDefPct` | **25**（後補定案） | 骰子傷害視為魔法，常駐無視 25% DEF（與 staff_2h 同級）；2026-07-24 使用者定案，✅ [combatStats.js:58](../src/shared/combatStats.js#L58) |
 
 ### 骰面倍率
 
@@ -325,37 +329,26 @@ procEffects: [
 
 ---
 
-## 六、職業試煉任務
+## 六、職業試煉任務（✅ 實裝版＝`battle_with_dice`）
+
+實裝版與其他 10 個職業格式一致（seed：[weeklyQuestService.js:937](../src/services/weeklyQuest/weeklyQuestService.js#L937)，DB 同）：
 
 | 欄位 | 值 |
 |---|---|
-| cadence | `job`（resetPolicy `once`、periodKey `job-v1`） |
-| type | **`casino_spend`（新 metric）** |
-| target | **5,000,000 金幣累積下注** |
-| unlockLevel | 10 |
-| unlockWeaponTypes | **無**（唯一以行為而非武器解鎖的職業） |
-| rewardItemId | `job_gambler_v1` |
-| 附送 C 階武器 | 鐵製骰子（`jobBadgeBonus.js` 的 `BADGE_TO_WEAPON_NAME`） |
+| cadence | `job`（resetPolicy `once`） |
+| type | **`battle_with_dice`**（metric 定義在 `weeklyQuestService.js:14`） |
+| target | **使用骰子出戰 10 次** |
+| unlockLevel | 10、基礎 LUK + AGI > 10、`unlockWeaponTypes: ["dice"]` |
+| rewardItemId | `job_gambler_v1`（＋500 金幣） |
+| 附送 C 階武器 | 鐵製骰子（`jobBadgeBonus.js:32` 的 `BADGE_TO_WEAPON_NAME`） |
+| enabled | `false`（骰子外洩事件後關閉；開放口徑待與使用者確認） |
 
-### 數值依據（實查 `casinoBets` 21,396 局 / 6,289 筆下注）
+### ⛔ 作廢：`casino_spend`（賭場累積下注 500 萬）方案
 
-| 指標 | 值 |
-|---|---|
-| 平均單注 | 147,516 金幣 |
-| 500 萬 ≈ | **34 次下注** |
-| 玩家累積下注中位數 | 877,436 |
-| 第 25 名 | 3,035,718 |
-| 前 10 名 | 1,700 萬 ～ 3,500 萬 |
-
-對常玩賭場的人是幾天的量，對沒碰過賭場的人是明確的新目標，投入量級與其他職業「專武擊殺 300 隻」相當。
-
-⚠️ **累積從任務上線後才起算，不回溯歷史下注**，否則前 10 名一上線直接完成，完全失去引導意義。
-
-### 新 metric 登記點
-
-- `weeklyQuestService.js:6` — metric 定義（label「賭場下注」、unit「金幣」）
-- `casinoService.js` 下注成功處 — **新的進度回報點**（既有武器任務都掛在擊殺流程，賭場完全沒有這條線）
-- `admin.weekly.js:5` / `:33` — 後台下拉的 label 與 unit
+原提案「以賭場累積下注 500 萬解鎖」**未採用為一轉試煉**，保留作**二轉備案**
+（實際上 DB 的「賭神試煉」現為 `type: t2_transfer`，`casino_spend` metric 至今未實作）。
+原方案的數值依據（casinoBets 實查：平均單注 147,516、500 萬 ≈ 34 次下注、累積不回溯）
+與登記點清單（weeklyQuestService／casinoService／admin.weekly.js）僅存檔，不再是待辦。
 
 ---
 
@@ -372,7 +365,7 @@ procEffects: [
 
 ---
 
-## 八、改動清單
+## 八、改動清單（✅ 已全部實作完成——2026-07-20 上線，CHANGELOG #176/#177；以下留作對照）
 
 ### 必改（不改會壞）
 
@@ -421,20 +414,22 @@ procEffects: [
 
 ---
 
-## 九、順帶發現的既有 bug
+## 九、順帶發現的既有 bug（✅ 均已修，2026-08-07 覆核）
 
-| 位置 | 問題 | 影響 |
+| 位置 | 問題 | 現況 |
 |---|---|---|
-| `enhanceService.js:12` vs `itemService.js:13` | `dagger` 主屬性一個是 `agi`、一個是 `str` | 匕首強化加的屬性跟道具設定不一致 |
-| `admin.combat-calculator.js:19` vs `combatStats.js:27` | `dagger.mult` 一個是 2、一個是 3 | **後台戰力計算機算匕首的數字是錯的** |
+| `enhanceService.js` vs `itemService.js` | `dagger` 主屬性兩處不一致 | ✅ 已修——兩處皆為 `agi`（`enhanceService.js:13`、`itemService.js:14`） |
+| `admin.combat-calculator.js:19` | `dagger.mult` 曾為 2 | ✅ 已修為 3 |
 
-兩者都不影響賭徒上線，但既然要動同一批檔案，建議一併修。
+⚠️ 覆核時發現計算機端**新的**漂移（未修，僅記錄）：`admin.combat-calculator.js` 的
+`dagger.combo` 仍是 20（`WEAPON_CONFIG` 已降為 10，combatStats.js:34）、
+axe 仍帶 `armorBreak: 15`（斧破防已於 2026-08-07 整個移除，combatStats.js:26）。
 
 ---
 
-## 十、待確認事項
+## 十、待確認事項（歷史紀錄——均已有結論）
 
-1. `mult 3` / 不給 `critBonus` 這組數值可以嗎？（試算 1.06x 最強職業、早期 0.91x，成長曲線健康）
-2. 賭場試煉 500 萬累積下注的門檻可以嗎？
-3. 主動技能因 `JOB_SKILL_OFFENSIVE` 白名單限制做不出「自身增益＋自身代價」的真・豪賭。接受目前的純爆發版本，還是要順便改 combatLoop 的目標判定？
-4. 上面兩個既有 bug 要不要一併修？
+1. ~~`mult 3` / 不給 `critBonus` 可以嗎？~~ → v3 定案改雙擲 `mult 1.5×2`（見第三節），後補魔法判定 `bypassDefPct 25`
+2. ~~賭場試煉 500 萬門檻？~~ → ⛔ 未採用，一轉改 `battle_with_dice`（見第六節）
+3. 「自身增益＋自身代價」的真・豪賭仍做不出來（白名單優先於 target，`combatLoop.js:2882`）——另案評估中
+4. ~~兩個既有 bug 要不要修？~~ → ✅ 已修（見第九節）

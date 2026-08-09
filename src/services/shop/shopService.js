@@ -100,16 +100,18 @@ class ShopService {
     return { type: effect.type, value: Math.max(0, Number(effect.value) || 0) };
   }
 
-  _rollRandomAttributeDrops(attributes, amount = 2) {
+  _rollRandomAttributeDrops(attributes, amount = 2, allocatedFloor = {}) {
     const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
     const next = { ...(attributes || {}) };
     for (const key of ATTR_KEYS) {
       next[key] = Math.max(1, Number(next[key]) || 1);
     }
 
+    // 2+1 制：隨機扣點的地板 = 基礎 1 + 玩家已自主分配量（隨機收回不吃自選的點）
+    const floorOf = (key) => 1 + Math.max(0, Number(allocatedFloor?.[key]) || 0);
     const dropped = [];
     for (let i = 0; i < amount; i++) {
-      const available = ATTR_KEYS.filter((key) => next[key] > 1);
+      const available = ATTR_KEYS.filter((key) => next[key] > floorOf(key));
       if (!available.length) break;
       const key = available[Math.floor(Math.random() * available.length)];
       next[key] -= 1;
@@ -742,6 +744,7 @@ class ShopService {
       const next = {
         ...progress,
         attributes: { ...(progress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 }) },
+        allocatedAttrs: { ...(progress.allocatedAttrs || {}) }, // 2+1 制：自主分配紀錄（藥水要用）
         inventory: (progress.inventory || []).map(e => ({ ...e })),
         flags: { ...(progress.flags || {}) },
         activeEffects: [...(progress.activeEffects || [])]
@@ -766,30 +769,48 @@ class ShopService {
         next.flags.checkinMultiplier = effect.value || 2;
         effectDesc = `🎯 下次打卡 ×${effect.value} 倍`;
       } else if (effect.type === "reroll_attributes") {
-        // 用「目前實際持有的總點數」當預算，保留藥水等額外獲得的點數
+        // 2+1 制改版（2026-08-07）：只重骰「隨機成長」的部分——
+        // 玩家自主分配的點（allocatedAttrs）原位保留、尚未分配的自主點（statusPoints）不動。
+        const alloc = next.allocatedAttrs || {};
+        const allocSum = ATTR_KEYS.reduce((s, k) => s + (Number(alloc[k]) || 0), 0);
         const currentAttrTotal = ATTR_KEYS.reduce((sum, k) => sum + (Number(next.attributes?.[k]) || 0), 0);
-        const currentStatusPoints = next.statusPoints || 0;
-        const totalPoints = currentAttrTotal + currentStatusPoints;
-        const pointsToDistribute = Math.max(0, totalPoints - 6);
+        const pointsToDistribute = Math.max(0, currentAttrTotal - 6 - allocSum);
         const newAttrs = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+        for (const k of ATTR_KEYS) newAttrs[k] += Math.max(0, Number(alloc[k]) || 0);
         for (let i = 0; i < pointsToDistribute; i++) {
           const key = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
           newAttrs[key]++;
         }
         next.attributes = newAttrs;
-        next.statusPoints = 0;
         const attrLine = ATTR_KEYS.map(k => `${k.toUpperCase()}:${newAttrs[k]}`).join(" ");
-        effectDesc = `🔮 屬性已重製！新屬性：${attrLine}`;
+        effectDesc = `🔮 隨機屬性已重製（自主配點保留）！新屬性：${attrLine}`;
       } else if (effect.type === "level_down_random_attributes") {
         const currentLevel = Math.max(1, Number(next.level) || 1);
-        const { nextAttributes, dropped } = this._rollRandomAttributeDrops(next.attributes, 2);
+        // 2+1 制改版（2026-08-07）：降 1 級＝收回該級所發的「隨機 2 點＋自主 1 點」。
+        // 隨機扣點地板 = 1 + 已自主分配量（隨機扣不吃玩家自選的點）
+        const alloc = next.allocatedAttrs || {};
+        const { nextAttributes, dropped } = this._rollRandomAttributeDrops(next.attributes, 2, alloc);
         next.level = currentLevel - 1;
         next.exp = 0;
         next.attributes = nextAttributes;
+        let freeNote = "";
+        if ((next.statusPoints || 0) > 0) {
+          next.statusPoints -= 1;
+          freeNote = "、自主點 -1";
+        } else {
+          // 自主點已花光 → 隨機收回一點「已分配」的屬性（同步扣 allocatedAttrs 紀錄）
+          const spent = ATTR_KEYS.filter((k) => (Number(alloc[k]) || 0) > 0 && (Number(next.attributes[k]) || 1) > 1);
+          if (spent.length) {
+            const k = spent[Math.floor(Math.random() * spent.length)];
+            next.attributes[k] -= 1;
+            next.allocatedAttrs = { ...alloc, [k]: (Number(alloc[k]) || 0) - 1 };
+            freeNote = `、${k.toUpperCase()}-1（自主配點）`;
+          }
+        }
         const droppedText = dropped.length
           ? dropped.map(({ key, amount }) => `${key.toUpperCase()}-${amount}`).join("、")
           : "沒有可再下降的屬性";
-        effectDesc = `☯️ 等級下降至 Lv.${next.level}，並隨機失去 ${droppedText}。`;
+        effectDesc = `☯️ 等級下降至 Lv.${next.level}，並隨機失去 ${droppedText}${freeNote}。`;
       } else if (effect.type === "open_world_boss_chest") {
         // 世界王寶箱：依該世界王掉落率比重，隨機獲得一份掉落物（與該王即時掉落表同步）
         if (chestRolledEntry === undefined) {

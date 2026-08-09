@@ -23,6 +23,7 @@
     "test:golden": "node scripts/golden-combat-test.js",
     "test:shadow": "node scripts/test-shadow-gauge.js",
     "test:npc-effects": "node scripts/test-npc-option-effects.js",
+    "test:stream-notifications": "node scripts/test-stream-notifications.js",
     "test:tower-party": "node scripts/test-tower-party.js",
     "pm2:start": "npx pm2 start ecosystem.config.cjs",
     "pm2:restart": "npx pm2 restart equipmentGAME --update-env",

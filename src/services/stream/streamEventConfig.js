@@ -41,6 +41,7 @@ const DEFAULTS = {
     announce: true,
     streamUrl: "", // 廣播時附上的直播連結（每場可換；建議用 頻道/live 永久轉址）
     graceMinutes: 60, // 直播中持續有效；直播結束後再維持幾分鐘才消失
+    announceCooldownMinutes: 60, // 遊戲區觀看人數提示的最短間隔（同場同階仍只發一次）
     tiers: [
       { minViewers: 30, label: "觀看熱度 I", goldPct: 5, dropPct: 5, expPct: 5, durationMinutes: 30 },
       { minViewers: 50, label: "觀看熱度 II", goldPct: 10, dropPct: 10, expPct: 10, durationMinutes: 30 },
@@ -128,6 +129,7 @@ function mergeViewerTiers(raw) {
   base.announce = base.announce !== false;
   base.streamUrl = String(base.streamUrl || "").trim().slice(0, 300);
   base.graceMinutes = Math.max(1, num(base.graceMinutes, 60));
+  base.announceCooldownMinutes = Math.min(1440, Math.max(5, num(base.announceCooldownMinutes, 60)));
   base.tiers = raw && raw.tiers !== undefined ? sanitizeViewerTiers(raw.tiers) : DEFAULTS.viewerTiers.tiers.map((t) => ({ ...t }));
   return base;
 }

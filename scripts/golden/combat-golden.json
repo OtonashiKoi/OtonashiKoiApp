@@ -325,39 +325,39 @@
    "seed": "golden:shadowdancer:0",
    "outcome": "lose",
    "rounds": 1,
-   "totalDamage": 988,
-   "damageTaken": 1327,
+   "totalDamage": 2455,
+   "damageTaken": 1418,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:1",
    "outcome": "lose",
-   "rounds": 3,
-   "totalDamage": 2751,
-   "damageTaken": 1482,
+   "rounds": 6,
+   "totalDamage": 5378,
+   "damageTaken": 2533,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:2",
    "outcome": "lose",
    "rounds": 2,
-   "totalDamage": 2308,
-   "damageTaken": 1051,
+   "totalDamage": 3374,
+   "damageTaken": 1275,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:3",
    "outcome": "lose",
    "rounds": 3,
-   "totalDamage": 2013,
-   "damageTaken": 1787,
+   "totalDamage": 4464,
+   "damageTaken": 2047,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:4",
    "outcome": "lose",
    "rounds": 0,
-   "totalDamage": 1101,
+   "totalDamage": 1683,
    "damageTaken": 927,
    "maxHitTaken": 265
   },
@@ -373,23 +373,23 @@
    "seed": "golden:shadowdancer:6",
    "outcome": "lose",
    "rounds": 2,
-   "totalDamage": 2389,
-   "damageTaken": 1542,
+   "totalDamage": 3541,
+   "damageTaken": 1737,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:7",
    "outcome": "lose",
-   "rounds": 4,
-   "totalDamage": 2900,
-   "damageTaken": 1972,
+   "rounds": 5,
+   "totalDamage": 4333,
+   "damageTaken": 2593,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:8",
    "outcome": "lose",
    "rounds": 1,
-   "totalDamage": 1360,
+   "totalDamage": 2415,
    "damageTaken": 1214,
    "maxHitTaken": 265
   },
@@ -397,31 +397,31 @@
    "seed": "golden:shadowdancer:9",
    "outcome": "lose",
    "rounds": 1,
-   "totalDamage": 1631,
+   "totalDamage": 2455,
    "damageTaken": 933,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:10",
    "outcome": "lose",
-   "rounds": 3,
-   "totalDamage": 2653,
-   "damageTaken": 1454,
+   "rounds": 5,
+   "totalDamage": 4722,
+   "damageTaken": 2151,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:11",
    "outcome": "lose",
    "rounds": 3,
-   "totalDamage": 1722,
-   "damageTaken": 1580,
+   "totalDamage": 3213,
+   "damageTaken": 1710,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:12",
    "outcome": "lose",
    "rounds": 1,
-   "totalDamage": 1280,
+   "totalDamage": 1489,
    "damageTaken": 1064,
    "maxHitTaken": 265
   },
@@ -429,7 +429,7 @@
    "seed": "golden:shadowdancer:13",
    "outcome": "lose",
    "rounds": 1,
-   "totalDamage": 1067,
+   "totalDamage": 1377,
    "damageTaken": 1033,
    "maxHitTaken": 265
   },
@@ -437,7 +437,7 @@
    "seed": "golden:shadowdancer:14",
    "outcome": "lose",
    "rounds": 0,
-   "totalDamage": 988,
+   "totalDamage": 1570,
    "damageTaken": 810,
    "maxHitTaken": 265
   },
@@ -445,7 +445,7 @@
    "seed": "golden:shadowdancer:15",
    "outcome": "lose",
    "rounds": 1,
-   "totalDamage": 1660,
+   "totalDamage": 2715,
    "damageTaken": 923,
    "maxHitTaken": 265
   },
@@ -453,7 +453,7 @@
    "seed": "golden:shadowdancer:16",
    "outcome": "lose",
    "rounds": 2,
-   "totalDamage": 1753,
+   "totalDamage": 2382,
    "damageTaken": 1255,
    "maxHitTaken": 265
   },
@@ -468,16 +468,16 @@
   {
    "seed": "golden:shadowdancer:18",
    "outcome": "lose",
-   "rounds": 1,
-   "totalDamage": 1102,
-   "damageTaken": 1087,
+   "rounds": 4,
+   "totalDamage": 3281,
+   "damageTaken": 1974,
    "maxHitTaken": 265
   },
   {
    "seed": "golden:shadowdancer:19",
    "outcome": "lose",
    "rounds": 3,
-   "totalDamage": 2951,
+   "totalDamage": 4259,
    "damageTaken": 1649,
    "maxHitTaken": 265
   }

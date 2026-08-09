@@ -664,6 +664,13 @@ class StoryService {
         await tc.announceTownChat(`⚔️ ${who} 完成了二轉，成為 **${t2Item.name.replace(/徽章$/, "")}**！`);
       } catch (_) { /* 廣播失敗不影響轉職 */ }
 
+      // ⑦ 賽季任務指標：完成二轉（「第二個身分」等任務；失敗不影響轉職）
+      try {
+        const sc = require("../createServiceContext").createServiceContext?.();
+        const qs = sc?.questService || sc?.weeklyQuestService;
+        if (qs?.recordProgress) await qs.recordProgress(discordId, "t2_transfer_done", 1);
+      } catch (_) { /* 任務進度失敗不影響轉職 */ }
+
       return {
         transferred: true,
         from: { itemId: t1BadgeId, name: t1Entry.itemName || t1BadgeId, level: t1Progress.level },

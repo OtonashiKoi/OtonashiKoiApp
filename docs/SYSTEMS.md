@@ -24,6 +24,11 @@
 - 前端：`routes/worldboss.tsx`、`hooks/useWorldBoss.ts`、`useWorldBossAlarm.ts`
 - Collections：`worldBossConfig`、`worldBossState`、`worldBossChestGrants`（發箱稽核）
 
+### 🗿 單人世界王 Solo Boss ＋ KDA 貢獻
+- 單人世界王（世界王簡化版，血少）：API `routes/soloBossRoutes.js`；世界王新機制一律三個入口（網頁世界王/DC/單人王）都做
+- KDA 貢獻結算：`services/kda/kdaService.js`；戰鬥內助攻帳本 `shared/combatLoop.js` `assistLedger`（約 :5272）
+- 矮人戰士長「巨神震擊」暈眩條：`shared/dwarfStunGauge.js`（collection `worldBossStunGauge`，原子 $inc＋CAS）
+
 ### 🗼 試煉之塔 Tower（單人無盡 + 組隊）
 - 後端：`services/tower/`（`towerPartyRooms.js`）；API 在 `playerAppRoutes.js`（`/api/tower/*`、`/api/tower/party/*`）
 - DC：`bot/handlers/towerHandlers.js`、`bot/towerView.js`
@@ -91,6 +96,12 @@
 - 前端：`routes/quests.tsx`、`hooks/useQuests.ts`（Tab 含 season）
 - DC：`bot/weeklyQuestView.js`；Collections：`weeklyQuests`(定義)、`weeklyQuestProgress`(進度，`{discordId,cadence,periodKey}` unique)
 - **賽季稱號**：建 cadence=season 任務、獎勵選稱號 → 玩家任務頁自領（已驗證可行，達成紀錄自帶 discordId）
+
+### 🥇 職業徽章 / 二轉 Job Advancement
+- 單一來源：`shared/jobAdvancement.js`（`T2_BRANCHES` 13 分支、`seasonLocked`、費用/門檻常數、`resolveJobKey` 職業判定唯一入口）
+- 徽章等級/熟練度：`shared/jobBadgeLevel.js`（屬性值 50/100/150%，效果不縮放）；累積入口 `services/job/jobBadgeService.js`
+- 轉職遞交：劇情 transfer 節點 `services/story/storyService.js`（`transferJobAtNode`：消耗一轉徽章＋金幣、冪等）；試煉任務 type `t2_transfer`（`isT2Trial` 閘門在 `weeklyQuestService`）
+- 職業機制檔：`shared/dwarfStunGauge.js`、`shared/shadowGauge.js`、`shared/zoneCombo.js`、`shared/battleStance.js`（聖劍士姿態）、`shared/sunSpirit.js` 等；設計文件 `docs/JOB_BADGE_SYSTEM_DESIGN.md`
 
 ### 🎭 主線劇情 Story（文字冒險）— 2026-07 新建
 - 見獨立記憶 [[story-system]]。後端 `services/story/storyService.js` + `routes/storyRoutes.js`；reader `equipmentGAME-app/routes/story.tsx`；後台 `admin.story.js`（admin.html「🎬 主線劇情」）

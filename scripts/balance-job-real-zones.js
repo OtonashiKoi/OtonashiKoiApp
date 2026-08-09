@@ -122,9 +122,11 @@ async function buildEquipment(I, badgeId, wType, extra) {
     const [wType, mainStat, extra = {}] = JOBS[key] || [];
     if (!wType) continue;
     entries.push({ label: `一轉 ${info.name}`, badgeId: info.badgeId, wType, extra });
+    // 平衡量測要看得到全部分支（含本季不開放的），否則調完數值下季開放時等於沒測過。
+    // 玩家看得到的清單走 getBranchesForBase() 預設值（會排除 seasonLocked）。
     let branches = [];
     try {
-      const br = jobAdvancement.getBranchesForBase(key);
+      const br = jobAdvancement.getBranchesForBase(key, { includeLocked: true });
       branches = Array.isArray(br) ? br : (br && typeof br === "object" ? Object.values(br) : []);
     } catch (_) { branches = []; }
     for (const b of branches) {
@@ -136,12 +138,12 @@ async function buildEquipment(I, badgeId, wType, extra) {
       if (stances && Object.keys(stances).length > 1) {
         for (const [sk, sv] of Object.entries(stances)) {
           entries.push({
-            label: `二轉 ${t2Name}(${sv.label || sk})`, badgeId, wType,
+            label: `二轉 ${t2Name}(${sv.label || sk})${b.seasonLocked ? "🔒" : ""}`, badgeId, wType,
             extra: { ...extra, ...(sv.requiresShield ? { shield: true } : {}) }, stance: sk,
           });
         }
       } else {
-        entries.push({ label: `二轉 ${t2Name}`, badgeId, wType, extra });
+        entries.push({ label: `二轉 ${t2Name}${b.seasonLocked ? "🔒" : ""}`, badgeId, wType, extra });
       }
     }
   }

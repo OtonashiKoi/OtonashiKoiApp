@@ -6,17 +6,19 @@
  *   四原型＝重甲 / 閃避 / 回復 / 護盾；這裡另加「輸出基準」當分母
  *   （驗收條件：生存 build 的輸出 ≥ 同職業輸出 build 的 40%）。
  *
- * 配點模型：總點 104（Lv50 真實水準）＝ 六維各 10（60）＋ 44 自由點。
- * 每個原型只描述「44 自由點怎麼放」；main 代表該職業主屬性。
+ * 配點模型（2026-08-07 二度更新，對應「2+1 制」實裝）：每級隨機 2 點＋自主 1 點
+ * （progressService 升級迴圈 + statusPoints 池 + allocateAttribute）。
+ * Lv50 期望 ＝ 隨機 98 點平均分六維 ＋ 自主 49 點依原型分配（preset.alloc，總和須 = 49）。
+ * armorTo 仍決定防具集中屬性（裝備面差異）。
  *
  * 防具中和：沿用 balance-job-matrix 的做法（防具攻擊向屬性歸零、VIT 保留、
- * 集中 +55 到一個屬性），但 +55 放到哪由原型的 armorTo 決定——
+ * 集中 +55 到一個屬性），+55 放到哪由原型的 armorTo 決定——
  * 這讓「重甲原型」等價於在測「一條 VIT 向防具線」的效果，
  * 不用先把新防具做進 DB 就能回答「做了值不值得」。
  */
 
 /** 職業 → [顯示名, 徽章id, S階武器類型, 主屬性, 額外戰鬥選項] */
-const JOBS = [
+const ALL_JOBS = [
   ["一轉 劍士",       "job_swordsman_v1",       "sword_2h", "str"],
   ["一轉 戰士",       "job_warrior_v1",         "axe_2h",   "str"],
   ["一轉 矮人戰士",   "job_dwarf_warrior_v1",   "mace_2h",  "str"],
@@ -24,7 +26,9 @@ const JOBS = [
   ["一轉 法師",       "job_mage_v1",            "staff_2h", "int"],
   ["一轉 治療師",     "job_healer_v1",          "staff_1h", "int"],
   ["一轉 弓箭手",     "job_archer_v1",          "bow",      "dex"],
-  ["一轉 軍師",       "job_tactician_v1",       "sword_1h", "int"],
+  // 軍師系配法杖：遊戲無職業武器限制，INT 配點的理性選擇是杖（吃 INT、mult 3）——
+  // 舊表塞單手劍（吃 STR）害他 ATK 145 被誤判為輸出殘廢
+  ["一轉 軍師",       "job_tactician_v1",       "staff_1h", "int"],
   ["一轉 詩人",       "job_bard_v1",            "bow",      "dex"],
   ["一轉 結界師",     "job_barrier_mage_v1",    "staff_1h", "int"],
   ["一轉 賭徒",       "job_gambler_v1",         "dice",     "luk"],
@@ -34,28 +38,45 @@ const JOBS = [
   ["二轉 狂戰士",     "job_berserker_t2_v1",    "axe_2h",   "str"],
   ["二轉 矮人戰士長", "job_dwarflord_t2_v1",    "mace_2h",  "str"],
   ["二轉 影舞者",     "job_shadowdancer_t2_v1", "dagger",   "agi", { _dualDagger: true }],
+  ["二轉 元素師",     "job_elementalist_t2_v1", "staff_2h", "int"],
+  ["二轉 聖靈師",     "job_spiritmaster_t2_v1", "staff_1h", "int"],
+  ["二轉 神射手",     "job_sniper_t2_v1",       "bow",      "dex"],
+  ["二轉 兵聖",       "job_sage_t2_v1",         "staff_1h", "int"],
+  ["二轉 吟遊詩人",   "job_minstrel_t2_v1",     "bow",      "dex"],
+  ["二轉 聖域師",     "job_sanctum_t2_v1",      "staff_1h", "int"],
+  ["二轉 賭神",       "job_dicegod_t2_v1",      "dice",     "luk"],
 ];
+
+// 本季封印的二轉（jobAdvancement.seasonLocked）自動剔除——模擬只量「玩家實際會遇到的世界」。
+// 要連封印職業一起量（做下季內容時）：SIM_INCLUDE_LOCKED=1。
+const JOBS = ALL_JOBS.filter(([, badgeId]) => {
+  if (process.env.SIM_INCLUDE_LOCKED === "1") return true;
+  try { return !require("../../src/shared/jobAdvancement").isSeasonLockedT2(badgeId); }
+  catch (_) { return true; }
+});
 
 /**
  * 原型 → 44 自由點的分配 ＋ 防具集中屬性。
  * alloc 的 key：main（主屬性）或六維名；值加總必須 = 44。
  */
+// alloc ＝ 49 點自主點的分配方向（2+1 制玩家真的可以這樣選）
 const PRESETS = [
-  { key: "output", label: "輸出基準", alloc: { main: 30, vit: 14 }, armorTo: "main" },
-  { key: "heavy",  label: "重甲坦",   alloc: { vit: 44 },            armorTo: "vit"  },
-  { key: "dodge",  label: "閃避",     alloc: { agi: 30, vit: 14 },   armorTo: "agi"  },
-  { key: "regen",  label: "回復",     alloc: { int: 30, vit: 14 },   armorTo: "int"  },
-  { key: "hybrid", label: "混合",     alloc: { main: 15, vit: 15, agi: 14 }, armorTo: "vit" },
+  { key: "output", label: "輸出基準", alloc: { main: 49 },           armorTo: "main" },
+  { key: "heavy",  label: "重甲坦",   alloc: { vit: 49 },            armorTo: "vit"  },
+  { key: "dodge",  label: "閃避",     alloc: { agi: 49 },            armorTo: "agi"  },
+  { key: "regen",  label: "回復",     alloc: { int: 49 },            armorTo: "int"  },
+  { key: "hybrid", label: "混合",     alloc: { main: 25, vit: 24 },  armorTo: "vit" },
 ];
 
-/** 依原型產生六維配點（不足 104 的零頭補 LUK，與 job-matrix 同規則） */
+/** 六維配點（2+1 制期望模型，對應 progressService 實裝）：
+ *  隨機部分 98 點平均分六維（16×6=96，餘 2 給 vit/luk）＋ 自主 49 點依 preset.alloc。
+ *  ⚠️ 隨機部分永遠平均、不准手選（使用者鐵則）；自主部分才能依原型傾斜。
+ */
 function buildAttrs(mainStat, preset) {
-  const a = { str: 10, agi: 10, vit: 10, int: 10, dex: 10, luk: 10 };
-  for (const [k, v] of Object.entries(preset.alloc)) {
+  const a = { str: 16, agi: 16, vit: 17, int: 16, dex: 16, luk: 17 }; // 隨機 98 點期望
+  for (const [k, v] of Object.entries(preset?.alloc || {})) {
     a[k === "main" ? mainStat : k] += v;
   }
-  const total = Object.values(a).reduce((s, v) => s + v, 0);
-  a.luk += 104 - total;
   return a;
 }
 

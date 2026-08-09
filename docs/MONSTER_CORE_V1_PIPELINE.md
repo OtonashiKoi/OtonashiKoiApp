@@ -1,5 +1,9 @@
 # Monster Core v1 Pipeline
 
+> ⛔ **歷史文件（2026-08-07 審計標記）**：本文件描述的是舊 Windows 機（`C:\Users\appsk\...`）上的
+> Aseprite/Godot 素材 pipeline，現行環境為 macOS，路徑與 pwsh 腳本皆不可用。僅存檔備查，
+> 若 Godot 線重啟需整份重寫。
+
 Last updated: 2026-04-19
 
 > ⚠️ **過時提示（2026-05-21）**：本文件未涵蓋：

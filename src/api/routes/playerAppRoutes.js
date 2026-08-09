@@ -1603,6 +1603,42 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 3.3d KDA 貢獻榜（附錄C v3）：四個舞台 ＋ 個人 K/A/D
+  router.get("/api/kda/boards", requireAuth, async (req, res, next) => {
+    try {
+      const kda = require("../../services/kda/kdaService");
+      const boards = await kda.getBoards({ limit: Math.max(1, Math.min(50, Number(req.query.limit) || 10)) });
+      res.json(ok(boards));
+    } catch (err) {
+      next(err);
+    }
+  });
+  router.get("/api/kda/me", requireAuth, async (req, res, next) => {
+    try {
+      const kda = require("../../services/kda/kdaService");
+      res.json(ok(await kda.getPlayerStats(req.playerRecord.discordId)));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 3.3c 分配自主屬性點（2+1 制：每級 +1 點入 statusPoints 池，玩家自選六維）
+  router.post("/api/me/attributes/allocate", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const attribute = String(req.body?.attribute || "").toLowerCase();
+      const amount = Math.max(1, Math.min(999, Math.floor(Number(req.body?.amount) || 1)));
+      const result = await serviceContext.progressService.allocateAttribute({ discordId, attribute, amount });
+      res.json(ok({
+        attributes: result.attributes,
+        statusPoints: result.statusPoints || 0,
+        allocatedAttrs: result.allocatedAttrs || {},
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // 3.4 Discard Item
   router.post("/api/me/inventory/discard/:uuid", requireAuth, async (req, res, next) => {
     try {
@@ -2896,26 +2932,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               sourceName: isSelf ? displayName : (aura.displayName || null),
               // 光環標籤：優先標「來源道具」（例：繫絆・共鳴之鏈），沒有才標職業徽章
               sourceJobName: e.srcItem || (isSelf ? selfJobName : (aura.jobName || null)),
-              isSelfAura: isSelf
+              isSelfAura: isSelf,
+              sourceDiscordId: isSelf ? discordId : (aura.discordId || null), // KDA・A 值歸戶對象
             })),
             { providerStats: auraProviderStats, equipped: auraProviderEquipped }
           );
           allCollected.push(...scaled);
         }
-        // 同一 effect key 不疊加：只取數值最高的那個提供者版本
-        // （例外：support_shot 是傷害型光環，每位神射手各自一箭 → 依提供者分開保留）
-        const byKey = new Map();
-        for (const eff of allCollected) {
-          if (!eff?.key) continue;
-          const dedupKey = eff.key === "support_shot"
-            ? `support_shot:${eff.sourceDiscordId || eff.sourceName || ""}`
-            : eff.key;
-          const val = Number(eff?.params?.value ?? eff.value ?? 0);
-          const prev = byKey.get(dedupKey);
-          const prevVal = prev ? Number(prev?.params?.value ?? prev.value ?? 0) : -Infinity;
-          if (val > prevVal) byKey.set(dedupKey, eff);
-        }
-        partyEffects = Array.from(byKey.values());
+        // 改傳完整清單（2026-08-07 B 案）：combatLoop 內部本來就會做「同 key 取最高」（與 DC 端同一條路），
+        // 這裡預先去重反而把被蓋掉的提供者丟掉 → KDA 分帳（按數值比例）就看不到他們。
+        partyEffects = allCollected;
       }
 
       // ── 為怪物自動裝備自己的技能卡 ──
@@ -3414,6 +3440,46 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               _mzHellfang.hellfangPlayerSchool(pStats.weaponType), wbDamage, Date.now()
             );
           }
+
+          // ── KDA（附錄C v3）：本場 K/D 賽季累積＋助攻歸戶＋寶箱排名用的 spawn 助攻（與 DC 端同規則）──
+          try {
+            const _al = combatResult?.assistLedger || {};
+            let _stunSrc = null;
+            if ((_al.stunSkippedRounds || 0) > 0) {
+              try {
+                const _sgK = require("../../shared/dwarfStunGauge");
+                _stunSrc = (await _sgK.readRaw(_sgK.gaugeKeyForZone(zoneKey)))?.lastTriggerById || null;
+              } catch (_) { /* 取不到就不歸戶 */ }
+            }
+            const _creditSpawnAssist = (srcId, amt) => {
+              const v = Math.max(0, Math.round(Number(amt) || 0));
+              const id = String(srcId || "");
+              if (!id || v <= 0 || id === discordId) return;
+              const cur = nextState.damageMap[id] || { name: prevDmg[id]?.name || id, level: prevDmg[id]?.level || 1, damage: 0, taken: 0, spent: 0 };
+              nextState.damageMap = { ...nextState.damageMap, [id]: { ...cur, assist: (Number(cur.assist) || 0) + v } };
+            };
+            for (const [_sid, _amt] of Object.entries(_al.bySource || {})) _creditSpawnAssist(_sid, _amt);
+            if (_stunSrc) _creditSpawnAssist(_stunSrc, _al.stunPreventedDmg);
+            let _resistPct = 0;
+            try {
+              _resistPct = require("../../shared/elementSystem")
+                .getSameElementResist(equipped || {}, monster?.element || null).pct || 0;
+            } catch (_) { /* 抗性算不出來就當 0 */ }
+            require("../../services/kda/kdaService").recordBattle({
+              discordId, displayName,
+              damage: wbDamage,
+              died: combatResult?.outcome === "lose",
+              assistBySource: _al.bySource || null,
+              stunPreventedDmg: _al.stunPreventedDmg || 0,
+              stunSourceId: _stunSrc,
+              quest: {
+                questService: serviceContext.questService || serviceContext.weeklyQuestService,
+                rounds: (combatResult?.nextRound || 2) - 1,
+                resistPct: _resistPct,
+              },
+            }).catch(() => {});
+          } catch (_) { /* KDA 記錄失敗不影響結算 */ }
+
           await serviceContext.monsterService.saveState(nextState, zoneKey);
           stateForCombat = nextState;
           worldBossSettled = true;
@@ -3635,7 +3701,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let stunKnock = null;
       if (stunGaugeKey && _dsg.canKnock(equipped?.job_eq)) {
         stunKnock = await _dsg
-          .knock(stunGaugeKey, zoneKey, combatResult?.combatStats?.attackRounds || 0, displayName)
+          .knock(stunGaugeKey, zoneKey, combatResult?.combatStats?.attackRounds || 0, displayName, Date.now(), discordId)
           .catch(() => null);
         if (stunKnock?.triggered) {
           _dsg.announceStun({ byName: displayName, monsterName: monster.name });

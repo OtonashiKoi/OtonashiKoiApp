@@ -3,10 +3,10 @@
  * 卡片圖鑑收集（怪物卡 依區域分組 + 主線 NPC 卡專區）。
  * - 登錄鍵：卡片 itemId，曾擁有就永久登錄（存 progress.cardDex = { [itemId]: ISO 時間 }）。
  * - 收集判定 Dex 式：賣掉/交易掉不掉進度。以「當前背包中的卡片」lazy-sync 補登。
- * - 獎勵（progress.cardDexClaims 記已領）：
- *     單區集滿 → 鑽石(該區卡數 × DIAMOND_PER_CARD)
- *     總進度里程碑 → 鑽石 / 記憶錨定卡包
- *     NPC 卡全集 → 稱號 + 鑽石
+ * - 獎勵（progress.cardDexClaims 記已領；⚠️ 不發鑽石）：
+ *     單區集滿 → 金幣(該區卡數 × ZONE_GOLD_PER_CARD)
+ *     總進度里程碑 → 金幣＋道具(卡包/藥水/背包擴充券)，全集另給稱號
+ *     NPC 卡全集 → 稱號＋金幣＋藥水
  * 需搭配 itemRepository（讀卡片定義）與 monsters（補區域）。
  */
 const zones = require("./zones");
@@ -21,20 +21,21 @@ const ITEM = {
   resetEnchant: { itemId: "enchant_reroll_potion", name: "附魔重骰藥水" },
   bagExpand:    { itemId: "ticket-bag-expand", name: "背包擴充券（消耗品·本季+20格）" },
 };
-const ZONE_GOLD_PER_CARD = 600; // 單區集滿：該區卡數 × 600 金幣
+const ZONE_GOLD_PER_CARD = 1000; // 單區集滿：該區卡數 × 1,000 金幣（2026-08-07 上調，原 600）
 
-// 總進度里程碑（達到收集張數解鎖，一次性領取）
+// 總進度里程碑（達到收集張數解鎖，一次性領取；每階金幣＋道具都給）
 const MILESTONES = [
-  { key: "m10", n: 10, gold: 5000, label: "收集 10 張" },
-  { key: "m20", n: 20, items: [{ ...ITEM.bagExpand, qty: 1 }], label: "收集 20 張" },
-  { key: "m25", n: 25, items: [{ ...ITEM.pack, qty: 1 }], label: "收集 25 張" },
-  { key: "m40", n: 40, items: [{ ...ITEM.resetAttr, qty: 1 }, { ...ITEM.bagExpand, qty: 1 }], label: "收集 40 張" },
-  { key: "m60", n: 60, items: [{ ...ITEM.resetEnchant, qty: 3 }, { ...ITEM.pack, qty: 1 }], label: "收集 60 張" },
+  { key: "m10", n: 10, gold: 8000, label: "收集 10 張" },
+  { key: "m20", n: 20, gold: 8000, items: [{ ...ITEM.bagExpand, qty: 1 }], label: "收集 20 張" },
+  { key: "m25", n: 25, gold: 10000, items: [{ ...ITEM.pack, qty: 1 }], label: "收集 25 張" },
+  { key: "m40", n: 40, gold: 15000, items: [{ ...ITEM.resetAttr, qty: 1 }, { ...ITEM.bagExpand, qty: 1 }], label: "收集 40 張" },
+  { key: "m60", n: 60, gold: 20000, items: [{ ...ITEM.resetEnchant, qty: 3 }, { ...ITEM.pack, qty: 2 }], label: "收集 60 張" },
+  { key: "m70", n: 70, gold: 25000, items: [{ ...ITEM.resetAttr, qty: 1 }, { ...ITEM.resetEnchant, qty: 2 }], label: "收集 70 張" },
 ];
-// 全圖鑑集滿：終極成就 → 金幣 + 稱號 + 背包擴充券 ×2
-const COMPLETE_ALL = { key: "all", gold: 30000, title: "title-carddex-master", items: [{ ...ITEM.bagExpand, qty: 2 }], label: "圖鑑全集" };
-// NPC 卡全集 → 稱號 + 屬性重製 + 附魔重骰
-const NPC_SET = { key: "npc", title: "title-memory-collector", items: [{ ...ITEM.resetAttr, qty: 1 }, { ...ITEM.resetEnchant, qty: 3 }], label: "主線 NPC 全集" };
+// 全圖鑑集滿：終極成就 → 金幣 + 稱號 + 背包擴充券 ×2 + 卡包 ×3
+const COMPLETE_ALL = { key: "all", gold: 50000, title: "title-carddex-master", items: [{ ...ITEM.bagExpand, qty: 2 }, { ...ITEM.pack, qty: 3 }], label: "圖鑑全集" };
+// NPC 卡全集 → 稱號 + 金幣 + 屬性重製 + 附魔重骰
+const NPC_SET = { key: "npc", gold: 10000, title: "title-memory-collector", items: [{ ...ITEM.resetAttr, qty: 1 }, { ...ITEM.resetEnchant, qty: 3 }], label: "主線 NPC 全集" };
 
 function zoneLabel(key) {
   const d = ZONE_DEFS[key] || (zones.ZONE_BY_KEY && zones.ZONE_BY_KEY[key]) || {};
@@ -59,7 +60,7 @@ async function getCardRegistry(db, { force = false } = {}) {
   const zoneById = {}, zoneByName = {};
   for (const m of mAll) { zoneById[m.id] = m.zone; zoneByName[m.name] = m.zone; }
 
-  const STAT_LABEL = { str: "力量", agi: "敏捷", vit: "體質", int: "智力", dex: "技巧", luk: "幸運" };
+  const STAT_LABEL = { str: "力量", agi: "敏捷", vit: "體質", int: "智力", dex: "靈巧", luk: "幸運" };
   const view = (c) => {
     const stats = c.equipStats && typeof c.equipStats === "object"
       ? Object.entries(c.equipStats).filter(([, v]) => Number(v)).map(([k, v]) => ({ key: k, label: STAT_LABEL[k] || k.toUpperCase(), value: Number(v) }))
@@ -130,7 +131,7 @@ function computeCardDexState(cardDex, claims, registry) {
   const npcComplete = npcCollected === npc.cards.length && npc.cards.length > 0;
   const npcSection = {
     key: "npc", label: npc.label, total: npc.cards.length, collected: npcCollected, complete: npcComplete,
-    reward: { title: NPC_SET.title, items: NPC_SET.items },
+    reward: { gold: NPC_SET.gold || 0, title: NPC_SET.title, items: NPC_SET.items },
     claimKey: `set:npc`, claimable: npcComplete && !claimed("set:npc"), claimed: claimed("set:npc"),
     cards: npc.cards.map((c) => ({ ...c, owned: owned(c.id) })),
   };

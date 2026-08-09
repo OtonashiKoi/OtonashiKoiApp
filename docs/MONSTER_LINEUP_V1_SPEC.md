@@ -6,6 +6,11 @@ This spec locks the current 10-monster lineup (the selected concept board versio
 
 ## 1) DB Mapping (Core 10)
 
+> ⛔ **本表已作廢（2026-08-07 對照 DB 實查）**：十隻怪的 zone／等級／入場費／EXP／金幣皆與現況不符
+>（例：小史(小) 現為 beginner Lv1／EXP 100／金 14；甲蟹 現為 mid Lv14／EXP 2800／金 166；入場費現一律 0）。
+> 現況一律以 `docs/CURRENT_GAME_STATUS.md`（`npm run status:update` 產生）為準。以下僅存檔。
+> §2 之後的美術/動畫/命名規範不涉數值，仍可參考。
+
 | Slot | Monster Name | Monster ID | Zone | Level | Entry Fee | EXP | Gold |
 |---|---|---|---|---:|---:|---:|---:|
 | 01 | 小史(小) | `c39bdddd-a33d-4e34-8019-d17020a8083b` | normal | 3 | 5 | 200 | 800 |

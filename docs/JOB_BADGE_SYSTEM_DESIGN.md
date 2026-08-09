@@ -34,36 +34,36 @@
 | 軍師的門檻 | **只看等級**——不綁武器、不設屬性門檻（已實裝：type 改 `battle_count`、清空 `unlockAttribute`/`unlockWeaponTypes`） |
 | 分支互斥 | 不用寫判定，**徽章被消耗後自動成立** |
 
-## 三、數值（已定案並實裝）
+## 三、數值（✅ 已實裝——注意：與早期提案不同，以下為程式現值）
 
 **升級曲線＝遞增**：每級所需熟練度 `2 + 目前等級`
 （Lv1→2 需 3 場、Lv10→11 需 12 場、Lv19→20 需 21 場；**練滿 Lv20 共 228 場**）
 前 5 級只要 25 場就升完 → 新手很快有回饋；後期變慢。
+✅ [jobBadgeLevel.js:22](../src/shared/jobBadgeLevel.js#L22)（`expToNextLevel`）
 
-**效果縮放＝分段**（不是線性，讓里程碑有「變強了」的瞬間）：
+**縮放對象＝徽章屬性值（equipStats）；效果百分比全程 100%、不隨等級縮放**：
 
-| 等級 | 效果強度 |
+| 等級 | 屬性值強度 |
 |---|---|
-| Lv1~9 | **30%** |
-| Lv10~19 | **60%** |
-| Lv20 | **100%**（＝道具庫上的完整值） |
+| Lv1~9 | **50%** |
+| Lv10~19 | **100%**（＝道具庫寫的數字） |
+| Lv20 | **150%**（**超越**帳面值） |
 
-縮放只動「量」不動「性質」：`params.value` 有數字就照比例縮；沒有 value 的二元效果
-（freeze / proc_stun）改縮 `chance`；`mode`/`thresholdPct`/`bossImmune` 等描述性參數不動。
+✅ [jobBadgeLevel.js:51](../src/shared/jobBadgeLevel.js#L51)（`statScaleForLevel`）；
+套用點在 [combatStats.js:91](../src/shared/combatStats.js#L91)（裝備迴圈以 `effectiveStatsForEntry` 換算屬性）。
 
-實測（戰士徽章，攻擊 +50%／暈眩 20%）：
-| 熟練度 | 等級 | 攻擊 | 暈眩 |
-|---|---|---|---|
-| 0 場 | Lv1 (30%) | +15% | 6% |
-| 75 場 | Lv11 (60%) | +30% | 12% |
-| 228 場 | Lv20 (100%) | +50% | 20% |
+⛔ **早期提案「效果縮放 30%／60%／100%（縮 `params.value`／`chance`）」已作廢、未實裝**——
+效果（攻擊加成、暈眩、格擋…）從 Lv1 起就完整生效；成長感來自屬性值分段與 Lv20 的 150% 超越。
+舊提案的實測表（戰士徽章 +15%→+30%→+50%）在現制下不成立，已移除。
 
-## 四、連鎖後果（設計上已接受）
+## 四、連鎖後果（依實裝現制更新）
 
-- **轉職當下戰力驟降**：Lv20 滿加成 → Lv1 零加成，要再練 228 場補回。
+- **轉職當下屬性回落**：一轉 Lv20（屬性 150%）→ 二轉 Lv1（屬性 50%），要再練 228 場補回；
+  效果本身不縮放，所以落差只在屬性值，不是「歸零」。
   ⚠️ **二轉徽章的滿級數值必須明顯強過一轉滿級**，否則轉職純虧、沒人要轉。
-- **剛拿到一轉徽章時沒有提升**：延遲滿足設計，要注意新手體感。
-- **`T2_MAX_OWNED = 3` 的意義變了**：稀缺性已由「你練了幾個一轉徽章」自然控制，這個上限是否保留待決。
+- **剛拿到一轉徽章**：效果即刻全額生效、屬性值半額——比早期「效果 30%」提案的新手體感好。
+- **持有上限已定案取消**：`T2_MAX_OWNED = Infinity`（✅ [jobAdvancement.js:31](../src/shared/jobAdvancement.js#L31)，
+  2026-08-03 定案）。稀缺性改由「一轉徽章被消耗且永久不可再取得＋費用遞增」控制。
 
 ## 五、經濟參考（定價依據）
 
@@ -88,8 +88,11 @@
 | 後台劇本工具 | ✅ 現成 |
 | 一轉試煉（屬性＋武器門檻 → 出戰 10 場） | ✅ 現成（軍師已改） |
 | 徽章等級/熟練度模型（存在背包 entry 上） | ✅ `shared/jobBadgeLevel.js` |
-| 徽章效果隨等級縮放 | ✅ 掛在 `effectEngine.collectEffectRefsFromEntry`（所有效果的唯一漏斗） |
+| 徽章**屬性值**隨等級縮放（50/100/150%；效果不縮放） | ✅ `combatStats.js:91`＋`jobBadgeLevel.js:51` |
 | 熟練度累積（DC＋網頁兩個入口） | ✅ `services/job/jobBadgeService.js` |
 | 達標廣播 | ✅ 走 `shared/announceTownChat`（網頁聊天大廳＋DC 城鎮頻道一次發） |
-| 遞交（消耗徽章＋金幣 → 換發二轉徽章） | ⚠️ 新建 |
-| 11 段轉職劇本 ＋ 師傅戰 | ⚠️ 內容工作 |
+| 遞交（消耗一轉徽章＋金幣 → 換發二轉徽章，Lv1 重練） | ✅ `storyService.transferJobAtNode`（`src/services/story/storyService.js:541`，含冪等與 `transferCostFor` 扣費）；DB 已建 13 條 `type:"t2_transfer"` 試煉任務（`enabled:false`，開放時機由使用者決定） |
+| 11 段轉職劇本 ＋ 師傅戰 | ⚠️ 內容工作（原稿在 [JOB_STORY_SCRIPTS.md](JOB_STORY_SCRIPTS.md)，**尚未入庫**——storyChapters 現僅 3 章） |
+
+⚠️ 程式面備註：軍師門檻「只看等級」在 **DB 已改**（type `battle_count`、unlock 欄清空），
+但 `weeklyQuestService.js:908` 的 seed 仍是舊值（battle_with_sword＋屬性門檻）——重建 DB 時會倒退，待修。

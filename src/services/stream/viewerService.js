@@ -4,6 +4,7 @@
 // 職責：維護「目前各直播枠觀看數 / 加總 / 本季尖峰」，供顯示與（後續）觀看數里程碑 buff 使用。
 // 純記錄＋讀取；不主動發 buff（buff 由之後的 viewerEventsService 依此數值判斷）。
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+const notificationState = require("./streamNotificationState");
 
 const DOC_ID = "default";
 const STALE_MS = 90_000; // 某直播枠超過 90 秒沒更新 → 視為已結束，不計入目前人數
@@ -123,129 +124,6 @@ async function getPublicState() {
   };
 }
 
-// 同一場直播（同 fingerprint）重發公告的冷卻：即使因抖動被誤判成關台，6 小時內也不再公告一次。
-const SAME_STREAM_COOLDOWN_MS = 6 * 60 * 60 * 1000;
-// 任意兩則開台公告之間的硬性最小間隔：多枠交替搶主枠時的最後一道防洗版保險。
-const ANY_ANNOUNCE_COOLDOWN_MS = 10 * 60 * 1000;
-
-/**
- * 原子搶佔一場直播的 Discord 開台公告。
- * viewerState 已存在且以 _id:"default" 管理；擴充同一文件可避免新增 collection / index。
- * 搶佔成功的條件（三者同時成立）：
- *   1) 這場直播不是「正在公告中」的同一場
- *   2) 同一場距離上次公告已超過 SAME_STREAM_COOLDOWN_MS
- *   3) 距離上一則任何開台公告已超過 ANY_ANNOUNCE_COOLDOWN_MS
- */
-async function claimGoLiveAnnouncement({ fingerprint, url, title, platform, channelId }) {
-  const fp = String(fingerprint || "").trim();
-  if (!fp) return false;
-  try {
-    const db = await getMongoDb();
-    const now = Date.now();
-    const nowIso = new Date(now).toISOString();
-    const sameCutoff = new Date(now - SAME_STREAM_COOLDOWN_MS).toISOString();
-    const anyCutoff = new Date(now - ANY_ANNOUNCE_COOLDOWN_MS).toISOString();
-    await db.collection("viewerState").updateOne(
-      { _id: DOC_ID },
-      { $setOnInsert: { startedAt: nowIso } },
-      { upsert: true }
-    );
-    const previous = await db.collection("viewerState").findOneAndUpdate(
-      {
-        _id: DOC_ID,
-        $and: [
-          {
-            $or: [
-              // 換一場直播才允許再公告；同一場要「已非進行中」且過了冷卻
-              { "goLiveAnnouncement.fingerprint": { $ne: fp } },
-              {
-                $and: [
-                  { "goLiveAnnouncement.active": { $ne: true } },
-                  {
-                    $or: [
-                      { "goLiveAnnouncement.sentAt": { $exists: false } },
-                      { "goLiveAnnouncement.sentAt": { $lt: sameCutoff } },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            $or: [
-              { goLiveLastSentAt: { $exists: false } },
-              { goLiveLastSentAt: { $lt: anyCutoff } },
-            ],
-          },
-        ],
-      },
-      {
-        $set: {
-          goLiveAnnouncement: {
-            active: true,
-            fingerprint: fp,
-            url: String(url || "").trim(),
-            title: String(title || "").slice(0, 200),
-            platform: String(platform || ""),
-            channelId: String(channelId || ""),
-            status: "claimed",
-            detectedAt: nowIso,
-          },
-        },
-      },
-      { returnDocument: "before" }
-    );
-    return previous != null;
-  } catch (err) {
-    console.warn("[viewerService] 搶佔開台公告失敗：", err?.message || err);
-    return false;
-  }
-}
-
-async function completeGoLiveAnnouncement(fingerprint, sent, errorMessage = "") {
-  const fp = String(fingerprint || "").trim();
-  if (!fp) return;
-  try {
-    const nowIso = new Date().toISOString();
-    const set = sent
-      ? {
-          "goLiveAnnouncement.status": "sent",
-          "goLiveAnnouncement.sentAt": nowIso,
-          "goLiveAnnouncement.error": "",
-          goLiveLastSentAt: nowIso, // 全域最小間隔用（不分場次）
-        }
-      : {
-          // 發送失敗就釋放 active，下一輪（20 秒後）可以重試。
-          "goLiveAnnouncement.active": false,
-          "goLiveAnnouncement.status": "failed",
-          "goLiveAnnouncement.failedAt": nowIso,
-          "goLiveAnnouncement.error": String(errorMessage || "").slice(0, 300),
-        };
-    await (await getMongoDb()).collection("viewerState").updateOne(
-      { _id: DOC_ID, "goLiveAnnouncement.fingerprint": fp },
-      { $set: set }
-    );
-  } catch (err) {
-    console.warn("[viewerService] 更新開台公告結果失敗：", err?.message || err);
-  }
-}
-
-async function markLiveOffline() {
-  try {
-    await (await getMongoDb()).collection("viewerState").updateOne(
-      { _id: DOC_ID, "goLiveAnnouncement.active": true },
-      {
-        $set: {
-          "goLiveAnnouncement.active": false,
-          "goLiveAnnouncement.offlineAt": new Date().toISOString(),
-        },
-      }
-    );
-  } catch (err) {
-    console.warn("[viewerService] 標記直播結束失敗：", err?.message || err);
-  }
-}
-
 /** 換季重置：清尖峰（目前即時人數由 OneComme 自然更新，不需清） */
 async function resetSeason() {
   peak = 0;
@@ -266,7 +144,5 @@ module.exports = {
   update,
   getPublicState,
   resetSeason,
-  claimGoLiveAnnouncement,
-  completeGoLiveAnnouncement,
-  markLiveOffline,
+  ...notificationState,
 };

@@ -125,6 +125,7 @@ async function main() {
   L.push("");
   L.push(`- 對象：${sim.info}`);
   L.push(`- 規模：${JOBS.length} 職業 × ${PRESETS.length} 原型 × ${RUNS} 場（種子化，可重現）`);
+  L.push(`- 抗性世界：RESIST=${RESIST_MODE}${RESIST_MODE === "none" ? "（沒插石，承傷 +15%）" : "（防具插滿同屬性石，滿抗 −35%）"}——跨報告比較務必對齊此欄！`);
   L.push(`- 產生：\`node scripts/balance-survival-matrix.js ${ZONE}\`（RUNS=${RUNS}）`);
   L.push("");
 

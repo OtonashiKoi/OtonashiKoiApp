@@ -145,12 +145,13 @@ async function rememberActiveReply(interaction) {
   } catch (_) {}
 }
 
-async function replyAndAutoDelete(interaction, content) {
+async function replyAndAutoDelete(interaction, content, components = null) {
   // 支援「已 defer」的情況：先 deferReply 過的 handler 走 editReply，否則才 reply
+  const payload = components ? { content, components } : { content, components: [] };
   if (interaction.deferred || interaction.replied) {
-    await interaction.editReply({ content });
+    await interaction.editReply(payload);
   } else {
-    await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+    await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
   }
 }
 
@@ -665,6 +666,14 @@ async function handleProfile(interaction) {
   const displayName = result?.player?.displayName || interaction.user.displayName || interaction.user.username;
   const wallet = result?.wallet || { gold: 0, diamond: 0 };
 
+  // 2+1 制：有未分配的自主點 → 顯示提示行＋分配入口按鈕
+  const _freePts = Math.max(0, Number(p.statusPoints) || 0);
+  const _allocComponents = _freePts > 0
+    ? [new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("attr_allocate_open").setLabel(`📊 分配自主屬性點（剩 ${_freePts} 點）`).setStyle(ButtonStyle.Primary)
+      )]
+    : null;
+
   await replyAndAutoDelete(interaction,
     `🧧 **${displayName} 的冒險者履歷**${fallbackUsed ? "（資料已降級顯示）" : ""}\n` +
     `==============\n` +
@@ -673,6 +682,7 @@ async function handleProfile(interaction) {
     `【基本素質】\n` +
     `STR: ${fmt(attrs.str,"str")} | AGI: ${fmt(attrs.agi,"agi")} | VIT: ${fmt(attrs.vit,"vit")}\n` +
     `INT: ${fmt(attrs.int,"int")} | DEX: ${fmt(attrs.dex,"dex")} | LUK: ${fmt(attrs.luk,"luk")}\n` +
+    (_freePts > 0 ? `🎯 可分配自主點：**${_freePts}**（每級升等獲得 1 點，按下方按鈕分配）\n` : "") +
     `※ 數字後 (+N) 為裝備加成。STR/INT→攻擊力、DEX→命中、AGI→迴避＆連擊、LUK→暴擊、VIT→減傷（只計基礎值，裝備 VIT 不加減傷）\n` +
     `==============\n` +
     `【戰鬥能力】\n` +
@@ -695,8 +705,57 @@ async function handleProfile(interaction) {
     `${npcBuffSection}` +
     `【資產】\n` +
     `💰 金幣: ${Number(wallet.gold || 0)}\n` +
-    `💎 鑽石: ${Number(wallet.diamond || 0)}`
+    `💎 鑽石: ${Number(wallet.diamond || 0)}`,
+    _allocComponents
   );
+}
+
+// ────────────────────────────────────────────────
+// 自主屬性點分配（2+1 制：每級隨機 2 點＋自主 1 點）
+// ────────────────────────────────────────────────
+const ATTR_ALLOC_OPTIONS = [
+  { label: "STR 力量 +1（攻擊力）",       value: "str", emoji: "⚔️" },
+  { label: "AGI 敏捷 +1（迴避＆連擊）",   value: "agi", emoji: "💨" },
+  { label: "VIT 體力 +1（血量＆減傷）",   value: "vit", emoji: "❤️" },
+  { label: "INT 智力 +1（法系攻擊力）",   value: "int", emoji: "🔮" },
+  { label: "DEX 靈巧 +1（命中）",         value: "dex", emoji: "🎯" },
+  { label: "LUK 幸運 +1（暴擊）",         value: "luk", emoji: "🍀" },
+];
+
+async function renderAttrAllocate(interaction, note = "") {
+  const sc = getServiceContext();
+  const progress = await sc.progressRepository.findByPlayerId(interaction.user.id).catch(() => null);
+  const pts = Math.max(0, Number(progress?.statusPoints) || 0);
+  const a = progress?.attributes || {};
+  const alloc = progress?.allocatedAttrs || {};
+  const line = ["str", "agi", "vit", "int", "dex", "luk"]
+    .map((k) => `${k.toUpperCase()} ${Number(a[k]) || 1}${(Number(alloc[k]) || 0) > 0 ? `（自主${alloc[k]}）` : ""}`)
+    .join(" | ");
+  const content =
+    `📊 **自主屬性點分配**${note ? `\n${note}` : ""}\n` +
+    `==============\n${line}\n==============\n` +
+    (pts > 0
+      ? `🎯 可分配：**${pts} 點**　從下方選單挑一項 +1（可連續分配）`
+      : `🎯 自主點已全部分配完畢！（每升 1 級獲得 1 點）`);
+  const components = pts > 0
+    ? [new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder().setCustomId("attr_allocate_pick").setPlaceholder("選擇要 +1 的屬性").addOptions(ATTR_ALLOC_OPTIONS)
+      )]
+    : [];
+  await safeEditReply(interaction, { content, components });
+}
+
+async function handleAttrAllocatePick(interaction) {
+  await interaction.deferUpdate();
+  const attribute = String(interaction.values?.[0] || "");
+  try {
+    const sc = getServiceContext();
+    const result = await sc.progressService.allocateAttribute({ discordId: interaction.user.id, attribute, amount: 1 });
+    const label = (ATTR_ALLOC_OPTIONS.find((o) => o.value === attribute)?.label || attribute).split("（")[0];
+    await renderAttrAllocate(interaction, `✅ ${label}！目前 ${attribute.toUpperCase()} ＝ ${result.attributes?.[attribute]}`);
+  } catch (err) {
+    await renderAttrAllocate(interaction, `❌ 分配失敗：${err?.message || "請稍後再試"}`);
+  }
 }
 
 // ────────────────────────────────────────────────
@@ -2077,8 +2136,8 @@ async function handleBackpackAction(interaction, action, uuid, tab = "item", pag
       );
       await safeEditReply(interaction, {
         content: isLevelDown
-          ? `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n使用後會**降低 1 級**，並**隨機下降 2 點屬性**（屬性最低不會低於 1），此操作不可逆！`
-          : `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n你目前所有的升等屬性點將會**完全重新隨機分配**，此操作不可逆！`,
+          ? `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n使用後會**降低 1 級**，並收回該級所發的點數：**隨機下降 2 點屬性＋自主點 -1**（隨機下降不會吃到你自主分配的點），此操作不可逆！`
+          : `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n你的**隨機成長屬性**將會**完全重新隨機分配**（你自主分配的點與未使用的自主點都會保留），此操作不可逆！`,
         components: [row]
       });
       return;
@@ -3369,6 +3428,15 @@ async function handleButton(interaction) {
   }
   if (id === BUTTON_IDS.enhance) {
     await handleEnhanceEntry(interaction);
+    return;
+  }
+  if (id === "attr_allocate_open") {
+    await interaction.deferUpdate();
+    await renderAttrAllocate(interaction);
+    return;
+  }
+  if (id === "attr_allocate_pick") {
+    await handleAttrAllocatePick(interaction);
     return;
   }
   if (id.startsWith("reroll_confirm:")) {

@@ -1,5 +1,16 @@
 # 龍族之領怪物卡重設計 V5
 
+## 實裝現況（2026-08-07 對照 DB）
+
+| 項目 | 狀態 | 位置 |
+|---|---|---|
+| 10 張卡改為 passiveEffects（本文全部設計） | ✅ 已實裝 | `scripts/apply-dragon-realm-cards-v5.js`；DB 實查 10 張卡 `procEffects` 已清空、passive key 與本文一致 |
+| 戰鬥引擎支援各 passive key | ✅ | `src/shared/effectDefinitions.js:153-166`、`src/shared/combatLoop.js:3148-3216`（bonus_vs_burning／bonus_first_hit／execute_under_hp_pct／stack_on_hit_offense 等） |
+| 實作順序步驟 5：更新 CARD_EFFECTS_EDIT.md | ✅ 已標 ⛔ 指向本檔（2026-08-07） |
+| 實作順序步驟 5：更新 `docs/tsv/monster_card_effects_zh.tsv` | ❌ 未更新 |
+
+註：DB 內王卡名為「**龍王(B)卡**」（本文寫「古龍王(B)卡」）。
+
 ## 設計目標
 
 龍族之領是 Lv40-50 的終盤區域，卡片應該從「機率觸發的數值增幅」升級成「能改變配裝與打法的流派核心」。前面區域多半已經涵蓋攻擊命中、燃燒、中毒、吸血、降防、沉默等 proc 卡；龍區若只是提高倍率，玩家會感覺像舊卡的 A 階版本。
@@ -128,7 +139,7 @@ V5 建議改為「常駐被動 + 少量條件觸發」的設計。每張卡都�
 - 古龍王(B)卡應該在長戰鬥強，但短戰鬥不一定贏飛龍幼崽或雷霆飛龍，這樣各卡才有用途分層。
 - 黑曜龍騎卡的 BOSS 特攻與破甲特攻都寫在 `combatEffects`，方便後台戰鬥特效區檢視。
 
-## 建議實作順序
+## 實作順序（✅ 已執行，見文首「實裝現況」；步驟 5 的 tsv 尚未更新）
 
 1. 先確認目前 combatLoop 已支援的 passive key。
 2. 將已支援的 9 張先改成 passiveEffects。

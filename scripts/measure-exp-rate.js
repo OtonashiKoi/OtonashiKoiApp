@@ -42,9 +42,9 @@ function zoneOpen(z, lv) {
   if (d.maxLevel != null && lv > d.maxLevel) return false;
   return true;
 }
-// 屬性：升級 +2 隨機 → 期望值是平均分配
+// 屬性：2+1 制（每級 2 隨機＋1 自主）→ 基準量測全部取期望值平均分配
 function attrsFor(level) {
-  const free = (level - 1) * 2;
+  const free = (level - 1) * 3;
   const per = free / 6;
   return { str: 1 + per, agi: 1 + per, vit: 1 + per, int: 1 + per, dex: 1 + per, luk: 1 + per };
 }

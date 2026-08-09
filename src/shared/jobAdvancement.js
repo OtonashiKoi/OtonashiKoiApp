@@ -123,6 +123,10 @@ const T2_BRANCHES = {
     {
       id: "job_swordoni_t2_v1",
       key: "swordoni",
+      // 本季不開放（2026-08-05 使用者定案）。與「試煉任務的 enabled」是**兩道獨立的閘門**：
+      // 之後整批開放二轉時，任務開關會一起打開，這一道才是真正擋住劍鬼的那道。
+      // 只擋新轉職，不影響已持有徽章的玩家（目前僅測試帳號音無恋各持有一枚）。
+      seasonLocked: true,
       name: "劍鬼",
       theme: "區域連段（COMBO）",
       towerAura: { key: "party_damage_up", value: 6, notes: "爬塔：隊伍傷害 +6%" },
@@ -206,6 +210,8 @@ const T2_BRANCHES = {
     {
       id: "job_spiritthief_t2_v1",
       key: "spiritthief",
+      // 本季不開放（2026-08-05 使用者定案）。理由同劍鬼，見該分支註解。
+      seasonLocked: true,
       name: "盜靈",
       theme: "大成功即出手（巧手／得手）— 打的同時把東西摸走",
       towerAura: { key: "party_drop_up", value: 5, notes: "爬塔：隊伍掉落 +5%" },
@@ -456,8 +462,20 @@ function getT2Branch(itemId) {
 }
 
 /** 取得某一轉職業的全部二轉分支 */
-function getBranchesForBase(baseKey) {
-  return T2_BRANCHES[baseKey] ? [...T2_BRANCHES[baseKey]] : [];
+/**
+ * 某個一轉底下的二轉分支。
+ * 預設**排除本季不開放（seasonLocked）的分支** —— 玩家看得到、選得到的一律走這裡。
+ * 平衡量測/後台需要看全部時傳 { includeLocked: true }。
+ */
+function getBranchesForBase(baseKey, { includeLocked = false } = {}) {
+  const all = T2_BRANCHES[baseKey] ? [...T2_BRANCHES[baseKey]] : [];
+  return includeLocked ? all : all.filter((b) => b && b.seasonLocked !== true);
+}
+
+/** 這個二轉徽章是否本季不開放 */
+function isSeasonLockedT2(badgeId) {
+  const br = getT2Branch(String(badgeId || ""));
+  return Boolean(br && br.seasonLocked === true);
 }
 
 /** 一轉徽章 itemId → baseKey（找不到回 null） */
@@ -693,6 +711,7 @@ module.exports = {
   isT2BadgeId,
   getT2Branch,
   getBranchesForBase,
+  isSeasonLockedT2,
   getBaseKeyByBadgeId,
   countOwnedT2,
   ownedT2BaseKeys,

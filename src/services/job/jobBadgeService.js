@@ -75,6 +75,12 @@ class JobBadgeService {
     const baseKey = branch?.baseKey || null;
     const t1BadgeId = baseKey ? jobAdvancement.BASE_JOBS?.[baseKey]?.badgeId : null;
     if (!t1BadgeId) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "找不到對應的一轉職業", 400);
+    // 本季不開放的分支：這是最後一道硬閘門。兩條轉職路徑（職業任務 weeklyQuestService、
+    // 劇情節點 storyService.transferJobAtNode）都收斂到這個方法，擋在這裡就不會有漏網入口。
+    if (jobAdvancement.isSeasonLockedT2(t2BadgeId)) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT,
+        `${branch?.name || "這個職業"}本季尚未開放，敬請期待。`, 400);
+    }
 
     const t2Item = this.itemRepository ? await this.itemRepository.findById(t2BadgeId).catch(() => null) : null;
     if (!t2Item) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "二轉徽章道具不存在", 400);

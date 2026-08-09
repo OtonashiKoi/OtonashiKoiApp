@@ -35,6 +35,13 @@ const QUEST_TYPES = {
   block_count:       { label: "成功格擋次數",     unit: "次" },
   stun_count:        { label: "成功擊暈次數",     unit: "次" },
   death_count:       { label: "角色死亡次數",     unit: "次" },
+  // 賽季任務指標（KDA/抗性線，2026-08-07；由 kdaService.recordBattle 的 quest 參數餵入）
+  wb_damage_total:   { label: "世界王累計傷害",   unit: "點" },
+  wb_assist_total:   { label: "世界王累計助攻當量", unit: "點" },
+  wb_survive_full:   { label: "世界王撐滿15回合",  unit: "場" },
+  wb_resist_ready:   { label: "帶30%以上抗性出戰世界王", unit: "場" },
+  wb_fullresist:     { label: "帶滿抗出戰世界王",  unit: "場" },
+  t2_transfer_done:  { label: "完成二轉",         unit: "次" },
   burn_trigger_count:{ label: "成功觸發燃燒次數", unit: "次" },
   onboarding_complete_count: { label: "完成全部新手任務", unit: "項" },
   weekly_complete_count: { label: "完成全部每週任務", unit: "項" },
@@ -130,6 +137,22 @@ function resolvePeriodKey(cadence) {
 
 function isJobBadgeItemId(itemId) {
   return String(itemId || "").toLowerCase().startsWith("job_");
+}
+
+/**
+ * 這條任務的獎勵是不是「本季不開放」的二轉徽章。
+ * 閘門有三道，這是第二道（顯示層）：
+ *   ① jobAdvancement.T2_BRANCHES 的 seasonLocked（分支表，唯一事實來源）
+ *   ② 這裡：任務不顯示、進度不累積
+ *   ③ jobBadgeService.transferJob 硬擋（最後一道）
+ * 2026-08-09：只做 ①③ 的時候，任務照樣列在玩家的職業任務清單裡（使用者實測回報），
+ * 玩家看得到卻領不了 → 補上這一道。
+ */
+function isSeasonLockedQuest(quest) {
+  const rewardId = String(quest?.rewardItemId || "");
+  if (!rewardId) return false;
+  try { return require("../../shared/jobAdvancement").isSeasonLockedT2(rewardId); }
+  catch (_) { return false; }
 }
 
 class WeeklyQuestService {
@@ -574,11 +597,13 @@ class WeeklyQuestService {
     const allDefs = await this.listDefinitions(c);
     const context = await this._getPlayerQuestContext(discordId);
     const playerLevel = context.level;
-    // 職業任務:未達解鎖條件也保留(前端顯示為鎖定灰色),其餘 cadence 維持原本「未解鎖就隱藏」
+    // 未達解鎖條件一律隱藏（含職業任務）。
+    // 2026-08-09 使用者定案：原本職業任務會以「🔒 Lv.10 解鎖」的鎖定樣式顯示出來，
+    // 改成沒解鎖就完全不出現，等條件到了才長出來。
     const defs = allDefs.filter((q) => {
       if (!q?.enabled) return false;
-      if (this._isQuestVisibleForPlayer(q, context)) return true;
-      return c === "job";
+      if (isSeasonLockedQuest(q)) return false;   // 本季不開放的二轉：連任務都不該出現
+      return this._isQuestVisibleForPlayer(q, context);
     });
     const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, c);
     const completionByType = {};
@@ -669,7 +694,13 @@ class WeeklyQuestService {
         unlockLevel: Number(quest.unlockLevel || 0),
         unlockHint
       };
-    });
+    })
+      // 2026-08-09 使用者定案：沒解鎖就完全不顯示（原本會以「🔒 Lv.10 解鎖」灰色卡片列出來）。
+      // 隱藏任務（unlockProgressAtLeast / 斗內 / 連續打卡）同一規則，條件到了才長出來。
+      // 過濾放在 map 之後而不是 defs：completionByType 那類「完成 N 個任務」的分母仍以
+      // 完整清單計算，不會因為玩家等級低就縮水。
+      // 例外：已領取的仍保留，讓玩家看得到自己完成過什麼。
+      .filter((q) => !q.locked || q.claimed);
   }
 
   async getPlayerProgress(discordId, cadence = "weekly") {
@@ -694,6 +725,7 @@ class WeeklyQuestService {
       const allDefs = await this.listDefinitions(cadence);
       const defs = allDefs.filter((q) => (
         q.enabled &&
+        !isSeasonLockedQuest(q) &&               // 本季不開放的二轉：也不累積進度
         q.type === type &&
         this._canAccrueProgress(q, context)
       ));
@@ -805,6 +837,12 @@ class WeeklyQuestService {
         });
         reward.rewardItemId = null;          // 不重複發徽章
         reward.jobTransfer = r;              // 給前端顯示「消耗了什麼、花了多少」
+        // 賽季任務「第二個身分」(t2_transfer_done)：原本只有劇情轉職路徑會記
+        // （storyService.transferJobAtNode），任務轉職這條漏了 → 走任務轉職的玩家
+        // 那個賽季任務永遠停在 0/1。2026-08-09 補上。
+        if (r && r.transferred !== false) {
+          try { await this.recordProgress(discordId, "t2_transfer_done", 1); } catch (_) { /* 不影響轉職本身 */ }
+        }
       }
 
       // 先發獎（仍在鎖內、標記 claimed 之前）：發獎失敗就不標記，玩家可重新領取，避免領了卻沒拿到獎勵
@@ -905,34 +943,15 @@ class WeeklyQuestService {
       { cadence: "job", title: "法師試煉", description: "出現條件：Lv.10，基礎 INT + AGI > 10。進度武器：雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與法師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_mage_v1", sortOrder: 50, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_2h"], unlockAttributes: ["int", "agi"], unlockAttributeMin: 10, hideIfRewardOwned: true },
       { cadence: "job", title: "治療師試煉", description: "出現條件：Lv.10，基礎 INT + VIT > 10。進度武器：單手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與治療師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_healer_v1", sortOrder: 60, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_1h"], unlockAttributes: ["int", "vit"], unlockAttributeMin: 10, hideIfRewardOwned: true },
       { cadence: "job", title: "弓箭手試煉", description: "出現條件：Lv.10，基礎 DEX + AGI > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與弓箭手徽章。", type: "battle_with_bow", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_archer_v1", sortOrder: 70, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["bow"], unlockAttributes: ["dex", "agi"], unlockAttributeMin: 10, hideIfRewardOwned: true },
-      { cadence: "job", title: "軍師試煉", description: "出現條件：Lv.10，基礎 AGI + INT + DEX > 10。進度武器：單手劍；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與軍師徽章。", type: "battle_with_sword", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_tactician_v1", sortOrder: 80, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["sword_1h"], unlockAttributes: ["agi", "int", "dex"], unlockAttributeMin: 10, hideIfRewardOwned: true },
+      // 軍師改「只看等級」（使用者定案，DB 已如此；seed 同步以免重建 DB 倒退回舊武器/屬性門檻）
+      { cadence: "job", title: "軍師試煉", description: "出現條件：Lv.10。出戰 10 次即可完成。獎勵：500 金幣與軍師徽章。", type: "battle_count", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_tactician_v1", sortOrder: 80, groupKey: "job_seed_v1", unlockLevel: 10, hideIfRewardOwned: true },
       { cadence: "job", title: "詩人試煉", description: "出現條件：Lv.10，基礎 DEX + AGI + LUK > 10。進度武器：弓；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與詩人徽章。", type: "battle_with_bow", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_bard_v1", sortOrder: 90, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["bow"], unlockAttributes: ["dex", "agi", "luk"], unlockAttributeMin: 10, hideIfRewardOwned: true },
       { cadence: "job", title: "結界師試煉", description: "出現條件：Lv.10，基礎 INT + VIT + DEX > 10。進度武器：單手法杖或雙手法杖；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與結界師徽章。", type: "battle_with_staff", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_barrier_mage_v1", sortOrder: 100, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["staff_1h", "staff_2h"], unlockAttributes: ["int", "vit", "dex"], unlockAttributeMin: 10, hideIfRewardOwned: true },
-      // ── 二轉試煉（isT2Trial:true → 自動套用 Lv35/前置徽章/上限3個/同時1條/難度350-700-1000 五道閘門）──
-      // ⚠️ 未開放內容一律 enabled:false，要開放是使用者的決定
-      { cadence: "job", title: "聖劍士試煉", description: "劍士二轉．攻守之道。出現條件：Lv.35 且持有劍士徽章。以劍士出戰累積場次即可完成。獎勵：聖劍士徽章。", type: "battle_as_swordsman", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_holyblade_t2_v1", sortOrder: 210, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_swordsman_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "劍鬼試煉", description: "劍士二轉．連段之道。出現條件：Lv.35 且持有劍士徽章。以劍士出戰累積場次即可完成。獎勵：劍鬼徽章。", type: "battle_as_swordsman", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_swordoni_t2_v1", sortOrder: 211, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_swordsman_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "狂戰士試煉", description: "戰士二轉．血之道。出現條件：Lv.35 且持有戰士徽章。以戰士出戰累積場次即可完成。獎勵：狂戰士徽章。", type: "battle_as_warrior", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_berserker_t2_v1", sortOrder: 212, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_warrior_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "矮人戰士長試煉", description: "矮人戰士二轉．巨神之道。出現條件：Lv.35 且持有矮人戰士徽章。以矮人戰士出戰累積場次即可完成。獎勵：矮人戰士長徽章。", type: "battle_as_dwarf_warrior", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_dwarflord_t2_v1", sortOrder: 213, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_dwarf_warrior_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "影舞者試煉", description: "盜賊二轉．殘影之道。出現條件：Lv.35 且持有盜賊徽章。以盜賊出戰累積場次即可完成。獎勵：影舞者徽章。", type: "battle_as_rogue", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_shadowdancer_t2_v1", sortOrder: 214, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_rogue_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "元素師試煉", description: "法師二轉．元素之道。出現條件：Lv.35 且持有法師徽章。以法師出戰累積場次即可完成。獎勵：元素師徽章。", type: "battle_as_mage", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_elementalist_t2_v1", sortOrder: 215, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_mage_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "聖靈師試煉", description: "治療師二轉．聖靈之道。出現條件：Lv.35 且持有治療師徽章。以治療師出戰累積場次即可完成。獎勵：聖靈師徽章。", type: "battle_as_healer", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_spiritmaster_t2_v1", sortOrder: 216, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_healer_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "神射手試煉", description: "弓箭手二轉．神射之道。出現條件：Lv.35 且持有弓箭手徽章。以弓箭手出戰累積場次即可完成。獎勵：神射手徽章。", type: "battle_as_archer", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_sniper_t2_v1", sortOrder: 217, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_archer_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "兵聖試煉", description: "軍師二轉．兵法之道。出現條件：Lv.35 且持有軍師徽章。以軍師出戰累積場次即可完成。獎勵：兵聖徽章。", type: "battle_as_tactician", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_sage_t2_v1", sortOrder: 218, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_tactician_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "吟遊詩人試煉", description: "詩人二轉．琴弦之道。出現條件：Lv.35 且持有詩人徽章。以詩人出戰累積場次即可完成。獎勵：吟遊詩人徽章。", type: "battle_as_bard", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_minstrel_t2_v1", sortOrder: 219, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_bard_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "聖域師試煉", description: "結界師二轉．聖域之道。出現條件：Lv.35 且持有結界師徽章。以結界師出戰累積場次即可完成。獎勵：聖域師徽章。", type: "battle_as_barrier_mage", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_sanctum_t2_v1", sortOrder: 220, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_barrier_mage_v1"], hideIfRewardOwned: true },
-
-      { cadence: "job", title: "賭神試煉", description: "賭徒二轉．賭神之道。出現條件：Lv.35 且持有賭徒徽章。以賭徒出戰累積場次即可完成。獎勵：賭神徽章。", type: "battle_as_gambler", target: 350, rewardGold: 3000, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_dicegod_t2_v1", sortOrder: 221, groupKey: "job_t2_v1", enabled: false, isT2Trial: true, unlockLevel: 35, unlockRequireItemIds: ["job_gambler_v1"], hideIfRewardOwned: true },
+      // ⛔ 350 場計數式二轉試煉（battle_as_*）已於 2026-08-09 移除（使用者定案）。
+      //    與 t2_transfer 並存造成兩套機制重疊：那套不走 jobBadgeService.transferJob，
+      //    因此不檢查一轉徽章是否練滿、不消耗一轉徽章、不扣轉職費，也繞過 seasonLocked 閘門。
+      //    現行二轉唯一路徑＝ t2_transfer（徽章 Lv20 → 消耗一轉＋扣金幣 → 換二轉）。
+      //    移除前的資料備份在 weeklyQuestBackups。
 
       { cadence: "job", title: "賭徒試煉", description: "出現條件：Lv.10，基礎 LUK + AGI > 10。進度武器：骰子；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與賭徒徽章。", type: "battle_with_dice", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_gambler_v1", sortOrder: 110, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["dice"], unlockAttributes: ["luk", "agi"], unlockAttributeMin: 10, hideIfRewardOwned: true, enabled: false }, // ⚠️本季不開放：下一季開服再改 enabled:true（骰子外洩事件後關閉，見 SEASON_V0.4.5_PLAN）
 

@@ -132,7 +132,7 @@
     const dt = (cfgWrap && cfgWrap.donationTiers) || { enabled: false, announce: true, tiers: [] };
     const scCfg = (cfgWrap && cfgWrap.scBar) || { enabled: false, milestones: [] };
     const me = (cfgWrap && cfgWrap.memberEvents) || { enabled: false, announce: true, shortBuff: {}, milestones: [] };
-    const vt = (cfgWrap && cfgWrap.viewerTiers) || { enabled: false, announce: true, streamUrl: "", tiers: [] };
+    const vt = (cfgWrap && cfgWrap.viewerTiers) || { enabled: false, announce: true, announceCooldownMinutes: 60, streamUrl: "", tiers: [] };
     const capPct = (cfgWrap && cfgWrap.shortTermCapPct) || 30;
     const scbarPub = await fetch("/api/stream/sc-bar").then((r) => r.json()).then((d) => d.data || {}).catch(() => ({}));
     const mep = scbarPub.memberProgress || { count: scbarPub.memberCount || 0 };
@@ -226,10 +226,10 @@
     return `
       <div class="card" style="margin-top:14px;">
         <h3 style="margin:0 0 4px;">📺 觀看人數即時加成（直播中持續）</h3>
-        <p class="hint" style="margin:0 0 10px;">同時觀看總人數(YT+Twitch) → 挑「達到的最高一級」→ 全服加成。<b>單一覆寫升級</b>：爬到更高階換成高階、<b>不疊加</b>；人數暫掉不降階。<b>直播中持續有效</b>，直播結束後再維持「保留分鐘」才消失。<b>勾「啟用」才會觸發</b>。</p>
+        <p class="hint" style="margin:0 0 10px;">同時觀看總人數(YT+Twitch) → 挑「達到的最高一級」→ 全服加成。<b>單一覆寫升級、不降階</b>；同場同階只提示一次，升階提示也必須滿足「提示間隔」，冷卻中跨多階只會在時間到且仍達標時提示目前最高階。直播結束後再維持「保留分鐘」才消失。<b>勾「啟用」才會觸發</b>。</p>
         <label style="display:inline-flex;align-items:center;font-size:13px;margin:0 14px 8px 0;font-weight:700;"><input id="vt-enabled" type="checkbox" ${cfg.enabled ? "checked" : ""} style="margin-right:6px;">啟用觀看人數觸發</label>
         <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;"><input id="vt-announce" type="checkbox" ${cfg.announce !== false ? "checked" : ""} style="margin-right:4px;">全服廣播</label>
-        <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;">直播結束後保留<input id="vt-grace" type="number" value="${esc(cfg.graceMinutes || 60)}" style="width:56px;margin:0 4px;">分鐘</label>
+        <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;">直播結束後保留<input id="vt-grace" type="number" value="${esc(cfg.graceMinutes || 60)}" style="width:56px;margin:0 4px;">分鐘</label><label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;">提示最短間隔<input id="vt-announce-cooldown" type="number" min="5" max="1440" value="${esc(cfg.announceCooldownMinutes || 60)}" style="width:56px;margin:0 4px;">分鐘</label>
         <div style="margin:6px 0;">
           <label style="display:inline-flex;flex-direction:column;font-size:12px;">直播連結（廣播會附上，每場可換；建議用 頻道/live 永久轉址）
             <input id="vt-url" value="${esc(cfg.streamUrl || "")}" placeholder="https://www.youtube.com/@頻道/live" style="width:100%;max-width:520px;padding:5px 8px;margin-top:3px;"></label>
@@ -242,7 +242,7 @@
         </div>
         <button class="button" id="vt-add" style="margin-top:6px;">➕ 新增分級</button>
         <button class="button primary" id="vt-save" style="margin-top:6px;">💾 儲存觀看人數設定</button>
-        <button class="button" id="vt-announce" style="margin-top:6px;margin-left:8px;">📣 立即宣傳目前人數</button>
+        <button class="button" id="vt-announce-now" style="margin-top:6px;margin-left:8px;">📣 立即宣傳目前人數</button>
       </div>`;
   }
 
@@ -462,7 +462,7 @@
   async function saveViewerTiers() {
     try {
       await postJSON("/admin/stream-events/config", {
-        viewerTiers: { enabled: chk("vt-enabled"), announce: chk("vt-announce"), streamUrl: val("vt-url") || "", graceMinutes: Number(val("vt-grace")) || 60, tiers: collectViewerTiers() }
+        viewerTiers: { enabled: chk("vt-enabled"), announce: chk("vt-announce"), announceCooldownMinutes: Number(val("vt-announce-cooldown")) || 60, streamUrl: val("vt-url") || "", graceMinutes: Number(val("vt-grace")) || 60, tiers: collectViewerTiers() }
       });
       alert("✅ 觀看人數即時加成已儲存" + (chk("vt-enabled") ? "（已啟用）" : "（未啟用）")); render();
     } catch (e) { alert("儲存失敗：" + e.message); }
@@ -536,7 +536,7 @@
     if (e.target.closest?.("#dt-save")) { saveDonationTiers(); return; }
     if (e.target.closest?.("#vt-add")) { addViewerTierRow(); return; }
     if (e.target.closest?.("#vt-save")) { saveViewerTiers(); return; }
-    if (e.target.closest?.("#vt-announce")) { announceViewerNow(); return; }
+    if (e.target.closest?.("#vt-announce-now")) { announceViewerNow(); return; }
     if (e.target.closest?.("#sc-add")) { addMilestoneRow(); return; }
     if (e.target.closest?.("#sc-save")) { saveScBar(); return; }
     if (e.target.closest?.("#sc-reset")) { resetScBar(); return; }

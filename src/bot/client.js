@@ -833,8 +833,8 @@ function createBotClient() {
     startViewerPoller((info) => { try { viewerService.update(info).catch(() => {}); } catch (_) {} }, 20_000);
     // 觀看熱度 buff 評估：獨立每 20 秒跑「一次」（與直播枠數量脫鉤，避免每枠各觸發一次造成重複廣播）
     const viewerEventsService = require("../services/stream/viewerEventsService");
-    const viewerEvalTimer = setInterval(() => { viewerEventsService.evaluate().catch(() => {}); }, 20_000);
-    viewerEvalTimer.unref?.();
+    require("../services/stream/youtubeUpcomingService").startYoutubeUpcomingPoller(serviceContext);
+    const viewerEvalTimer = setInterval(() => { viewerEventsService.evaluate().catch(() => {}); }, 20_000); viewerEvalTimer.unref?.();
     // YT 訂閱數里程碑輪詢（alert.html 用；每 5 分鐘，門檻步距見 streamAlertService.YT_SUBS_STEP）
     try { require("../services/stream/streamAlertService").startYtSubscriberPoller(serviceContext); } catch (e) { console.warn("[StreamAlert] 啟動失敗:", e?.message || e); }
     // 啟動閒置自動換怪計時器（可透過 DISABLE_AUTO_ROTATE=1 暫時停用）

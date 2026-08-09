@@ -106,7 +106,7 @@ async function createWorldBossSim(sc, db, zoneKey, part = null, opts = {}) {
         ctx: extraOptions?._ctx || null, stance: extraOptions?.stance || null,
       });
 
-      const acc = { dmg: 0, poison: 0, dotTotal: 0, deaths: 0, rounds: 0, hits: 0, taken: 0, wins: 0, maxHit: 0, maxHitSum: 0 };
+      const acc = { dmg: 0, poison: 0, dotTotal: 0, deaths: 0, rounds: 0, hits: 0, taken: 0, wins: 0, maxHit: 0, maxHitSum: 0, assistBySource: {} };
       let lastRaw = null;
       for (let i = 0; i < runs; i++) {
         const r = runCombatLoop(pStats, mStats, boss.name, partHp, undefined, {
@@ -132,6 +132,10 @@ async function createWorldBossSim(sc, db, zoneKey, part = null, opts = {}) {
         const mh = Number(r.maxHitTaken) || 0;
         acc.maxHitSum += mh;
         if (mh > acc.maxHit) acc.maxHit = mh;
+        // KDA 助攻歸戶累加（combatLoop 原生 assistLedger＝與正式計分同源）
+        for (const [sid, amt] of Object.entries(r.assistLedger?.bySource || {})) {
+          acc.assistBySource[sid] = (acc.assistBySource[sid] || 0) + (Number(amt) || 0);
+        }
         const t = JSON.stringify(r.roundLogs);
         for (const m of (t.match(/受到 \*\*(\d+)\*\* 點毒素/g) || [])) acc.poison += Number(m.match(/(\d+)/)[1]);
         lastRaw = r;
@@ -147,6 +151,8 @@ async function createWorldBossSim(sc, db, zoneKey, part = null, opts = {}) {
         avgTaken: acc.taken / runs,
         maxHit: acc.maxHit,               // 全部場次中最痛的一擊（爆發條件驗收用）
         avgMaxHit: acc.maxHitSum / runs,  // 每場最痛一擊的平均
+        // 場均助攻歸戶（提供者 → 當量/場）：與正式 KDA 計分同源（combatLoop assistLedger）
+        avgAssistBySource: Object.fromEntries(Object.entries(acc.assistBySource).map(([k, v]) => [k, v / runs])),
       };
     },
   };

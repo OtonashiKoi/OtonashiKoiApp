@@ -80,6 +80,12 @@ function phaseOf(doc, now = Date.now()) {
  * 讀目前狀態（給面板/前端顯示，也給出戰時判定免傷）。
  * @returns {{ gauge, threshold, phase, stunnedRemainMs, immuneRemainMs, stunned }}
  */
+/** 原始文件（KDA 歸戶要 lastTriggerById 等欄位；read() 只回摘要不夠用） */
+async function readRaw(gaugeKey) {
+  const c = await coll();
+  return c.findOne({ _id: String(gaugeKey) });
+}
+
 async function read(gaugeKey, zoneKey, now = Date.now()) {
   const threshold = thresholdFor(zoneKey);
   let doc = null;
@@ -108,7 +114,7 @@ async function read(gaugeKey, zoneKey, now = Date.now()) {
  * @param {string} byName      觸發者顯示名（給公告用）
  * @returns {{ knocked:number, gauge:number, threshold:number, triggered:boolean, stunnedUntil:number|null }}
  */
-async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now()) {
+async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now(), byId = "") {
   const threshold = thresholdFor(zoneKey);
   const add = Math.max(0, Math.floor(Number(amount) || 0));
   const id = String(gaugeKey);
@@ -155,6 +161,7 @@ async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now()) {
         stunnedUntil,
         immuneUntil: stunnedUntil + IMMUNE_MS,
         lastTriggerBy: String(byName || ""),
+        lastTriggerById: String(byId || ""), // KDA：巨神震擊窗口的助攻歸戶對象
         lastTriggerAt: new Date(now).toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -219,6 +226,7 @@ function announceStun({ byName = "", monsterName = "世界王", solo = false } =
 
 module.exports = {
   announceStun,
+  readRaw,
   COLLECTION,
   STUN_WINDOW_MS,
   IMMUNE_MS,

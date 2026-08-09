@@ -1026,8 +1026,25 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     _endureTakenSinceBurst += x;   // 沒苦硬吃：累積到下次反彈
     // 最大單發承傷（爆發條件「單發 ≤ 40% maxHp」的量測欄；含自傷成本，量測時自行留意）
     if (x > _maxHitTaken) _maxHitTaken = x;
+    // KDA 影子血量：假設沒有「外部治療」的血量軌跡（救命加成用，見附錄C 第四節）
+    if (_shadowHp != null) {
+      _shadowHp -= x;
+      if (_shadowHp <= 0 && _shadowDeadRound == null) _shadowDeadRound = _curRound;
+    }
   };
   let _maxHitTaken = 0;
+
+  // ── KDA・A 值歸戶（附錄C v3 定案）────────────────────────────────
+  // 他人光環對本場的傷害當量：增傷類＝結算時 總傷害×v/(100+v)；治療＝有效量×1.0＋救命加成；
+  // 減傷＝實際擋下量。不可自益（isSelfAura===false 才計）；同 key 呼叫端已取最高＝來源唯一。
+  const _kdaHealBySource = new Map();      // sourceDiscordId → 有效治療量
+  const _kdaPreventedBySource = new Map(); // sourceDiscordId → 減傷光環實際擋下量
+  let _kdaDrSourceId = null;               // party_damage_reduction 提供者
+  let _kdaCritDrSourceId = null;           // party_crit_damage_reduction 提供者
+  let _shadowHp = null;                    // 進入回合迴圈前初始化＝pHp
+  let _shadowDeadRound = null;
+  let _kdaStunSkippedRounds = 0;           // 團隊暈眩（巨神震擊/冰封）擋下的敵方回合數
+  let _curRound = 1;
 
   // ── 日之精靈（聖靈師二轉）────────────────────────────────────────────
   // 代承怪物攻勢（主人的護盾/免死/反傷/受傷回血在精靈代承時不觸發）；
@@ -1092,7 +1109,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const _healPlayer = (h, opts) => {
     const amt = Math.max(0, Number(h) || 0);
     if (amt <= 0) return pHp;
-    if (opts && opts.lifesteal) { _totalHealDone += amt; pHp = Math.min(pStats.maxHp, pHp + amt); return pHp; } // 吸血是自身機制，不受治療攔截影響
+    // KDA 影子血量：外部隊友治療不計入影子軌跡（＝量出「沒有這口奶會怎樣」）；自身回復照加
+    const _shadowAdd = (gain) => {
+      if (_shadowHp != null && !(opts && opts.externalAura) && gain > 0) {
+        _shadowHp = Math.min(pStats.maxHp, _shadowHp + gain);
+      }
+    };
+    if (opts && opts.lifesteal) { _totalHealDone += amt; const _b = pHp; pHp = Math.min(pStats.maxHp, pHp + amt); _shadowAdd(pHp - _b); return pHp; } // 吸血是自身機制，不受治療攔截影響
     if (_healImmune) return pHp;                          // 對鮮血的渴望：外部治療一律無效
     if (_healToDamage > 0) {
       // 怪已經死了才觸發的回血(擊殺回血/戰後回血)：轉傷害只會灌 totalDamage、汙染世界王傷害榜，
@@ -1101,7 +1124,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const dmg = Math.round(amt * _healToDamage); mHp -= dmg; totalDamage += dmg; return pHp; // 聖人：回血轉為對敵傷害、不回血
     }
     _totalHealDone += amt;
-    pHp = Math.min(pStats.maxHp, pHp + amt); return pHp;
+    { const _b = pHp; pHp = Math.min(pStats.maxHp, pHp + amt); _shadowAdd(pHp - _b); }
+    return pHp;
   };
   // 回血 + 戰報（統一出口）。直接寫「回復 N HP」會騙人：聖人(_healToDamage)會把治療轉成傷害、
   // 對鮮血的渴望(_healImmune)會整個吃掉、滿血時也回不進去。這裡一律用「實際回了多少」來決定怎麼寫。
@@ -1123,6 +1147,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
     // 其餘(滿血/治療免疫)：不印，避免洗出一堆「恢復 0 HP」
     return 0;
+  };
+  // 戰報重整批次二：技能說明只印「本場第一次」——同一技能重複觸發只印【名稱】＋數字，
+  // 不再每回合重貼整段規則說明（實測一場 15 回合光說明就吃掉 ~25 行）。
+  const _skillDescShown = new Set();
+  const _descOnce = (name, desc) => {
+    const key = String(name || "");
+    if (!key || !desc) return desc || "";
+    if (_skillDescShown.has(key)) return "";
+    _skillDescShown.add(key);
+    return desc;
   };
   let outcome = null;
   let totalDamage = 0;
@@ -1558,9 +1592,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 時間管理大師：回合上限改為指定值（例 30）
   if (_extendRounds > 0) endRound = round + Math.max(1, Math.floor(_extendRounds)) - 1;
 
+  _shadowHp = pHp; // KDA 影子血量起點（與實際血量同步出發，之後只吃「非外部治療」的變化）
   while (round <= endRound && outcome === null) {
     const log = [`**【第 ${round} 回合】**`];
     _curLog = log;   // 讓 _healLogged 能把回血/回血化刃寫進「當回合」的戰報
+    _curRound = round; // KDA：影子血歸零回合的記錄基準
     // 屬性相剋提示：只在第一回合印一次（每回合印會洗版）
     // 開場狀態列（戰報重整：相剋/護甲/抗性壓成一行；「無抗性」警告因具教學作用保留獨立一行）
     if (round === (Number(options.startRound) || 1)) {
@@ -2104,7 +2140,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             // 自己的治療光環則照走 _healPlayer → 在聖者下轉成 ×7 傷害。
             if (_healToDamage > 0 && pe.isSelfAura === false) continue;
             const _mBefore = mHp;
-            pHp = _healPlayer(heal);
+            const _pBeforeHeal = pHp;
+            pHp = _healPlayer(heal, { externalAura: pe.isSelfAura === false });
+            // KDA：外部治療光環的「有效量」歸戶給提供者（附錄C：有效量原則，滿血溢出不計）
+            if (pe.isSelfAura === false && pe.sourceDiscordId && _healToDamage <= 0) {
+              const _gain = Math.max(0, pHp - _pBeforeHeal);
+              if (_gain > 0) _kdaHealBySource.set(pe.sourceDiscordId, (_kdaHealBySource.get(pe.sourceDiscordId) || 0) + _gain);
+            }
             const detail = auraDetails.get(sourceName);
             if (_healToDamage > 0) {
               // 聖者：自己的治療化為傷害 → 戰報明講（避免玩家看到「回復」誤會）
@@ -2201,6 +2243,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const val = Math.abs(Number(pe.params?.value ?? pe.value ?? 0));
           if (Number.isFinite(val) && val !== 0) {
             roundPartyDamageReductionPct += val;
+            if (pe.isSelfAura === false && pe.sourceDiscordId) _kdaDrSourceId = pe.sourceDiscordId; // KDA：減傷歸戶對象
             const detail = auraDetails.get(sourceName);
             detail.damageReduction = val;
           }
@@ -2209,6 +2252,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           const val = Math.abs(Number(pe.params?.value ?? pe.value ?? 0));
           if (Number.isFinite(val) && val !== 0) {
             roundPartyCritDamageReductionPct += val;
+            if (pe.isSelfAura === false && pe.sourceDiscordId) _kdaCritDrSourceId = pe.sourceDiscordId; // KDA：爆傷減免歸戶對象
             const detail = auraDetails.get(sourceName);
             detail.critReduction = val;
           }
@@ -2327,7 +2371,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           sourceType: 'monster_skill',
           cardName,
           skillName: skill.name || cardName,
-          skillDescription: skill.description || '',
+          skillDescription: _descOnce(skill.name, skill.description || ''),
           cooldownBucket: cardCooldowns.monster,
           cooldownKey,
           cooldownTurns: Number(skill.cooldownTurns) || 0,
@@ -2381,7 +2425,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             procEffect,
             ownerLabel: mName,
             skillName: skill.name || cardName,
-            skillDescription: skill.description || '',
+            skillDescription: _descOnce(skill.name, skill.description || ''),
             targetLabel: '你',
             sourceAtk: adjustedMCalc.atk || mCalc.atk || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
@@ -2417,7 +2461,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             procEffect,
             ownerLabel: mName,
             skillName: skill.name || cardName,
-            skillDescription: skill.description || '',
+            skillDescription: _descOnce(skill.name, skill.description || ''),
             targetLabel: mName,
             sourceAtk: adjustedMCalc.atk || mCalc.atk || 1,
             targetMaxHp: mHpInit || mHp || 1,
@@ -2442,7 +2486,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
         }
         if (appliedAnyNormalProc && !loggedImmediateNormalProc) {
-          log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
+          log.push(`🎴 **${mName}** 發動【${skill.name || cardName}】！${_descOnce(skill.name || cardName, skill.description || '')}`);
         }
       }
     }
@@ -2599,7 +2643,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             sourceType: 'player_card',
             cardName,
             skillName: skill.name || cardName,
-            skillDescription: skill.description || '',
+            skillDescription: _descOnce(skill.name, skill.description || ''),
             cooldownBucket: cardCooldowns.player,
             cooldownKey,
             cooldownTurns: Number(skill.cooldownTurns) || 0,
@@ -2730,7 +2774,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             procEffect,
             ownerLabel: playerBattleName,
             skillName: skill.name || cardName,
-            skillDescription: skill.description || '',
+            skillDescription: _descOnce(skill.name, skill.description || ''),
             targetLabel: mName,
             sourceAtk: pStats.atk || 1,
             targetMaxHp: mHpInit || mHp || 1,
@@ -2754,7 +2798,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             procEffect,
             ownerLabel: playerBattleName,
             skillName: skill.name || cardName,
-            skillDescription: skill.description || '',
+            skillDescription: _descOnce(skill.name, skill.description || ''),
             targetLabel: playerBattleName,
             sourceAtk: pStats.atk || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
@@ -2780,7 +2824,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
         }
         if (shouldShowGenericSkillLine && appliedAnyNormalProc && !hpGatedAppliedThisRound) {
-          log.push(`🎴 **${playerBattleName}** 發動【${skill.name || cardName}】！${skill.description ? skill.description : ''}`);
+          log.push(`🎴 **${playerBattleName}** 發動【${skill.name || cardName}】！${_descOnce(skill.name || cardName, skill.description || '')}`);
         }
       }
     }
@@ -2850,7 +2894,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (skillApplied) {
             const hasImmedHeal = (chosen.procEffects || []).some(pe => IMMEDIATE_HEAL_EFFECT_KEYS.has(pe?.key));
             if (!hasImmedHeal) {
-              log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${chosen.name}】！${chosen.description || ''}`);
+              log.push(`✨ **(${jobProfile.jobName || '職業技能'})** 發動【${chosen.name}】！${_descOnce(chosen.name, chosen.description || '')}`);
             }
           }
         }
@@ -4234,11 +4278,24 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         let comboHitsThisAttack = 0;
         let comboKilled = false;
         let _comboLifestealDmg = 0; // 連擊累計傷害 → 連段結束一起吸血（玩家回報「連擊不吸血」）
+        // 戰報重整批次二：連擊各段緩衝、連段結束合併一行「N 連擊：433＋🛡️1＋433 ＝ 867」
+        // （rand 敘事照抽保留亂數流；戰意/斬殺等大事件仍獨立成行）
+        const _comboSegs = [];
+        let _comboPhrase = null;
+        const _flushCombo = () => {
+          if (!_comboSegs.length) return;
+          const _cSum = _comboSegs.reduce((s, x) => s + x.dmg, 0);
+          const _cParts = _comboSegs.map((x) => (x.blocked ? "🛡️1" : String(x.dmg))).join("＋");
+          const _cLabel = _comboSegs.length >= 2 ? `${_comboSegs.length} 連擊` : "連擊";
+          log.push(`⚡ **${_comboPhrase || "連擊"}** ${_cLabel}：${_cParts} ＝ **${_cSum}**（怪物剩 ${Math.max(0, mHp)} HP）`);
+          _comboSegs.length = 0;
+        };
         // 嵐暴（元素師）：連擊系統整個不生效（固定 3 段法術取代；含保證連擊）
         while (!stormVolleyCfg && comboHitsThisAttack < MAX_COMBO_PER_ROUND && (comboHitsThisAttack < _roundGuaranteed || Math.random() * 100 < comboChance)) {
           // 連擊逐段命中判定：被迴避/未命中 → 立即中斷連段（怪被暈時無法閃避、必中；不吃主擊的大成功/完美必中）
           const comboConnects = comboHitsThisAttack < _roundGuaranteed || monsterIsStunned || Math.random() * 100 < hitChance;
           if (!comboConnects) {
+            _flushCombo(); // 先把已成立的連段印出來，中斷行才不會排在合併行前面
             log.push(`💨 ${mName} ${rand(jobFlavor.dodge)}，連擊被閃開，連段中斷！`);
             break;
           }
@@ -4260,8 +4317,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           mHp -= cdmg;
           totalDamage += cdmg;
           _comboLifestealDmg += cdmg;
-          const comboLabel = comboHitsThisAttack >= 2 ? `${comboHitsThisAttack} 連擊` : "連擊";
-          log.push(`⚡ **${rand(jobFlavor.combo)}** ${comboLabel}！再造成 **${cdmg}** 點傷害${comboBlockNote}！（怪物剩 ${Math.max(0, mHp)} HP）`);
+          {
+            const _cPhrase = rand(jobFlavor.combo); // rand 照抽保留亂數流
+            if (!_comboPhrase) _comboPhrase = _cPhrase;
+            _comboSegs.push({ dmg: cdmg, blocked: comboBlockNote !== "" });
+          }
 
           // 這一段連擊也算一次出手 → 往上疊加攻擊層數，讓下一段連擊更痛（上限同 stackOnHitCap）
           if (stackOnHitValue > 0 && stackOnHitStacks < stackOnHitCap) {
@@ -4284,6 +4344,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           comboChance = comboChance / 2;
         }
 
+        _flushCombo(); // 連段自然結束（含斬殺/擊殺提前跳出）→ 合併行在此落地
         _applyLifesteal(_comboLifestealDmg);
         // ── 連擊氣條累氣：本回合有出現連擊 → +1 格，每回合最多 1 格
         //    （2026-07-22 使用者定案，與劍鬼氣力同節奏）；殘影亂舞的回合不累 ──
@@ -4301,7 +4362,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         if (comboKilled) { outcome = "win"; break; }
       } else {
-        log.push(`💨 ${mName} ${rand(jobFlavor.dodge)}，你的攻擊落空了！`);
+        // 斧命中低（V0.5 武器身分）：揮空時點名巨斧，玩家才學得會「這是斧的代價、可以用 DEX/命中裝繞過」
+        const _missAxe = String(options.equipped?.weapon?.weaponType || "").startsWith("axe");
+        const _missPhrase = rand(jobFlavor.dodge);
+        log.push(_missAxe
+          ? `💨 巨斧沉重、收勢不及——${mName} ${_missPhrase}，你的攻擊落空了！`
+          : `💨 ${mName} ${_missPhrase}，你的攻擊落空了！`);
       }
     }
 
@@ -4492,6 +4558,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     if (skipMonsterAttackReason === "stun") {
+      if (_teamStunRounds > 0) _kdaStunSkippedRounds++; // KDA：團隊暈眩擋下的敵方回合數（歸戶由呼叫端做給敲滿條的人）
       // 團隊暈眩（巨神震擊）用專屬敘述，讓玩家知道這場的免傷是誰換來的
       log.push(_teamStunRounds > 0
         ? (String(options.teamStunStyle || "") === "freeze"
@@ -4666,11 +4733,17 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             // 舊制爆擊單發 650 > 血池 575＝字面秒殺；玩家爆擊 ×2 不動
             dmg = Math.round(dmg * (1.5 * (adjustedMCalc.critDamageMultiplier || 1)));
             if (!playerInvincible && roundPartyCritDamageReductionPct > 0) {
+              const _preCritDr = dmg;
               dmg = Math.max(1, Math.round(dmg * (1 - Math.min(95, roundPartyCritDamageReductionPct) / 100)));
+              // KDA：爆傷減免光環實際擋下的量歸戶給提供者
+              if (_kdaCritDrSourceId) _kdaPreventedBySource.set(_kdaCritDrSourceId, (_kdaPreventedBySource.get(_kdaCritDrSourceId) || 0) + Math.max(0, _preCritDr - dmg));
             }
           }
           if (!playerInvincible && roundPartyDamageReductionPct > 0) {
+            const _preDr = dmg;
             dmg = Math.max(1, Math.round(dmg * (1 - Math.min(95, roundPartyDamageReductionPct) / 100)));
+            // KDA：減傷光環實際擋下的量歸戶給提供者
+            if (_kdaDrSourceId) _kdaPreventedBySource.set(_kdaDrSourceId, (_kdaPreventedBySource.get(_kdaDrSourceId) || 0) + Math.max(0, _preDr - dmg));
           }
           // 屬性防具減免（我方防具屬性剋制該怪時，每級 -10%）：與其他減傷同層，
           // 且在寫進戰報之前套用 → 戰報數字＝實際扣血。
@@ -4823,7 +4896,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               targetHpPct: mHpInit > 0 ? (mHp / mHpInit) * 100 : 100,
               round, sourceType: 'player_card',
               cardName: dItem.itemName || dItem.name || '卡片',
-              skillName: dSkill.name || '', skillDescription: dSkill.description || '',
+              skillName: dSkill.name || '', skillDescription: _descOnce(dSkill.name, dSkill.description || ''),
               cooldownBucket: cardCooldowns.player, cooldownKey: dItem.itemId || dItem.id || dSlot,
               cooldownTurns: Number(dSkill.cooldownTurns) || 0,
               ownerActiveEffects: options.playerActiveEffects || [],
@@ -5111,6 +5184,65 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (actual > 0) roundLogs.push(`💖 **戰後回血**！回復 **${actual}** HP！（你剩 ${pHp} HP）`);
   }
 
+  // ── KDA・A 值歸戶結算（附錄C v3）──────────────────────────────
+  const _assistBySource = {};
+  const _addA = (id, amt) => {
+    const key = String(id || "");
+    if (!key || !(amt > 0)) return;
+    _assistBySource[key] = (_assistBySource[key] || 0) + Math.round(amt);
+  };
+  try {
+    const _fought = Math.max(1, round - 1);
+    // ── B 案（使用者定案 2026-08-07）：玩法維持「同 key 取最高」，但**計分按各提供者數值比例分帳**——
+    //    被蓋掉的同系輔助不再拿 0 分。pot＝最高外部光環的實際效果量，依 v 比例分給所有外部提供者。
+    const _rawPE = Array.isArray(options.partyEffects) ? options.partyEffects : [];
+    const _vOf = (pe) => Math.abs(Number(pe?.params?.value ?? pe?.value ?? 0));
+    const _extByKey = new Map(); // key → 外部提供者候選（不可自益）
+    for (const pe of _rawPE) {
+      if (!pe || pe.isSelfAura !== false || !pe.sourceDiscordId || !(_vOf(pe) > 0)) continue;
+      const k = String(pe.key || "");
+      if (!_extByKey.has(k)) _extByKey.set(k, []);
+      _extByKey.get(k).push(pe);
+    }
+    const _distribute = (pot, cands, credit = _addA) => {
+      const sum = cands.reduce((s, pe) => s + _vOf(pe), 0);
+      if (!(pot > 0) || !(sum > 0)) return;
+      for (const pe of cands) credit(pe.sourceDiscordId, pot * _vOf(pe) / sum);
+    };
+    // 增傷類光環
+    const _isDmgKey = (k) =>
+      k === "party_damage_up" || k === "party_crit_rate_up" || k === "party_agi_up" ||
+      k === "party_high_hp_damage_up" || k === "party_stunned_damage_up" ||
+      (k === "party_boss_damage_up" && options.monsterIsBoss) ||
+      (k === "party_elite_damage_up" && options.monsterIsElite && !options.monsterIsBoss);
+    for (const [k, cands] of _extByKey) {
+      if (!_isDmgKey(k)) continue;
+      const vMax = Math.max(...cands.map(_vOf));
+      _distribute((totalDamage || 0) * vMax / (100 + vMax), cands);
+    }
+    // 治療：實際生效總量（fold 只套用最高者）→ 按治療光環提供者數值分帳；救命加成記給分帳後最大者
+    const _healCands = [...(_extByKey.get("party_heal") || []), ...(_extByKey.get("heal_over_time") || [])];
+    let _healTotal = 0;
+    for (const [, h] of _kdaHealBySource) _healTotal += h;
+    const _healShare = new Map();
+    const _creditHeal = (id, amt) => { _addA(id, amt); _healShare.set(id, (_healShare.get(id) || 0) + amt); };
+    if (_healTotal > 0 && _healCands.length > 0) _distribute(_healTotal, _healCands, _creditHeal);
+    else for (const [id, h] of _kdaHealBySource) _creditHeal(id, h);
+    if (_shadowDeadRound != null && outcome !== "lose" && _healShare.size > 0) {
+      const _extra = Math.max(0, _fought - _shadowDeadRound + 1);
+      if (_extra > 0) {
+        const _top = [..._healShare.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        _addA(_top, _extra * ((totalDamage || 0) / _fought));
+      }
+    }
+    // 減傷/爆傷減免：實際擋下總量 → 按對應 key 提供者分帳
+    let _prevTotal = 0;
+    for (const [, p] of _kdaPreventedBySource) _prevTotal += p;
+    const _drCands = [...(_extByKey.get("party_damage_reduction") || []), ...(_extByKey.get("party_crit_damage_reduction") || [])];
+    if (_prevTotal > 0 && _drCands.length > 0) _distribute(_prevTotal, _drCands);
+    else for (const [id, p] of _kdaPreventedBySource) _addA(id, p);
+  } catch (_) { /* 歸戶失敗不影響戰鬥結果 */ }
+
   // 🏁 結尾統計列（戰報重整：總輸出/承傷/最痛一擊——與未來 KDA 貢獻榜同款數字，先讓玩家看習慣）
   {
     const _oTxt = outcome === "win" ? "🏆 勝利" : (outcome === "lose" ? "💀 敗北" : `⏱ 撐滿 ${Math.max(1, round - 1)} 回合`);
@@ -5135,6 +5267,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // 職業技能成本（cost.type === "combo"）本場總消耗量 → 呼叫端要從 zoneCombo 扣掉並落地
     jobSkillComboSpent: _jobSkillComboSpent,
     maxHitTaken: _maxHitTaken, // 本場最大單發承傷（爆發條件驗收用）
+    // KDA・A 值歸戶（附錄C v3）：bySource＝{提供者discordId: 本場傷害當量}；
+    // stunPreventedDmg＝團隊暈眩擋下的傷害當量（歸戶對象＝敲滿條的人，呼叫端從 dwarfStunGauge 取）
+    assistLedger: {
+      bySource: _assistBySource,
+      stunSkippedRounds: _kdaStunSkippedRounds,
+      stunPreventedDmg: _kdaStunSkippedRounds > 0
+        ? Math.round(_kdaStunSkippedRounds * (_totalDmgTaken / Math.max(1, (round - 1) - _kdaStunSkippedRounds)))
+        : 0,
+    },
     // 氣力格（劍鬼）：同一規則——滿了但還沒斬出去 → 滿格帶去下一場
     oniGauge: oniCfg ? (_oniBurstNext ? oniCfg.ONI_GAUGE_MAX : _oniGrids) : null,
     // 震盪值（神射手）：戰後格數（跨場沿用由呼叫端持久化）

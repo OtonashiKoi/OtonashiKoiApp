@@ -22,13 +22,16 @@ const WEAPON_CONFIG = {
   sword_2h: { mult: 5, isTwoHanded: true },
   mace_1h:  { mult: 3, stunChance: 10, stunDuration: 3 },
   mace_2h:  { mult: 4, isTwoHanded: true, stunChance: 8, stunDuration: 3 },
-  axe_1h:   { mult: 3, armorBreak: 15, critBonus: 10 },
-  axe_2h:   { mult: 5, isTwoHanded: true, armorBreak: 15, critBonus: 20 },
+  // 斧（V0.5 武器身分）：高傷爆擊、代價是命中低（可用 DEX 配點/命中裝繞過）。
+  // 破防(armorBreak)已依使用者定案整個拿掉（2026-08-07 實裝）——斧的身分只剩「重擊與揮空」。
+  axe_1h:   { mult: 3, critBonus: 10, hitPenalty: 10 },
+  axe_2h:   { mult: 5, isTwoHanded: true, critBonus: 20, hitPenalty: 20 },
   // 匕首（2026-08-03 下季平衡，兩刀）：
-  //   mult 3→2：壓低單擊，價值集中到連擊身分。
+  //   mult 3→2→3：2026-08-07 使用者定案改回 3——B37 影舞者下修（毒/影襲移除）疊上 mult 2
+  //   把匕首系砍到頂輸出的 50%（影舞者 17,358、盜賊 14,946，同世界頂點 34,375），矯枉過正。
   //   comboBonus 20→10：真實玩家條件（隨機配點、AGI~20）下，這個不吃屬性的固定加成
   //   是盜賊輸出 173% 的單一最大來源——攻擊次數是乘法結構，+20% 次數放大所有其他加成。
-  dagger:   { mult: 2, baseStat: "agi", comboBonus: 10 },
+  dagger:   { mult: 3, baseStat: "agi", comboBonus: 10 },
   staff_1h: { mult: 3, baseStat: "int", bypassDefPct: 15 },
   staff_2h: { mult: 4, baseStat: "int", isTwoHanded: true, bypassDefPct: 25 },
   bow:      { mult: 4, baseStat: "dex", isTwoHanded: true, dodgeBonus: 20 },
@@ -51,7 +54,7 @@ const WEAPON_CONFIG = {
     allMinMult: 0.5,
     allMaxMult: 2.5,
     // 魔法傷害判定（使用者定案 2026-07-24）：骰子傷害視為魔法——常駐無視 25% DEF，
-    // 與雙手法杖同級（賭徒線本季封存中，此改動無現役玩家受影響）
+    // 與雙手法杖同級（賭徒線 2026-08-07 使用者定案下季開放：試煉已 enabled、骰子已入各階掉落表）
     bypassDefPct: 25,
   },
 };
@@ -225,7 +228,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     baseVit,
     equipVit,
     dodge:    Math.min(50, A * 0.5) + (cfg.dodgeBonus ?? 0) + tierSetBonuses.dodgePct,
-    hit:      Math.min(100, 70 + D) + tierSetBonuses.hitPct, // 命中基礎維持 70+DEX；命中曲線改由 hitChance 常數(75→62)+各區迴避帶驅動，避免前期被砍過頭
+    hit:      Math.min(100, 70 + D) - (cfg.hitPenalty ?? 0) + tierSetBonuses.hitPct, // 命中基礎維持 70+DEX；斧扣 hitPenalty(V0.5 武器身分)；命中曲線改由 hitChance 常數(75→62)+各區迴避帶驅動
     crit:     Math.min(100, L * 0.5 + (cfg.critBonus ?? 0)) + tierSetBonuses.critRatePct, // LUK 每點爆擊 0.3→0.5(V0.4 平衡:LUK 補值)
     // 連擊率上限：全職業統一封頂 100%（2026-08-03）。
     // 舊制是「非盜賊 80%、盜賊不設上限」——不設上限讓盜賊的攻擊次數隨 AGI 無限成長，

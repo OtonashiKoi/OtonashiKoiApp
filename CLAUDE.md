@@ -8,6 +8,12 @@
 - 不要讀取、搜尋、分析、修改或引用 `archive/**`，除非使用者明確要求。
 - 工作前可看 `git status --short`，但不要還原不是自己造成的變更。
 
+## 平衡模擬：配點照「2+1 制」期望模型（硬規則）
+- 屬性制＝**每級隨機 2 點＋自主 1 點**（2026-08-07 實裝，progressService 升級迴圈＋statusPoints 池）。
+- 模擬配點：**隨機部分一律平均**（Lv50＝98 點平均分六維，不准手選）；
+  自主部分（49 點）才可依原型傾斜（survivalPresets.PRESETS.alloc，總和必須＝49）。
+- 裝備面差異（武器、防具屬性集中、屬性石）照常另算。
+
 ## 平衡模擬：不准手拼 options（硬規則）
 - 所有平衡/模擬腳本一律用 `scripts/lib/jobBattleOptions.js` 組戰鬥參數，**不准自己手拼 options**。
 - 新增職業機制時，同時要在該檔的 `MECHANIC_MAP` 加一列（或 `EQUIPPED_DERIVED`，若是從裝備推導）。
@@ -56,7 +62,7 @@ npm run status:update
 - Runtime：Node.js 20+
 - Bot：Discord.js
 - Web/Admin：Express + `src/web/public`
-- DB：MongoDB `equipment_game`
+- DB：MongoDB `equipmentGame`（⚠️ 不是 `equipment_game`——那是只有 20 個 collections 的舊庫）
 - Mongo 連線：`src/adapters/mongo/createMongoClient.js`
 - Zone 單一來源：`src/shared/zones.js`
 - 戰鬥核心：`src/shared/combatLoop.js`、`src/shared/combatStats.js`、`src/shared/effectEngine.js`

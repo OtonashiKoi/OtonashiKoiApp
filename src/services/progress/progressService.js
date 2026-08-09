@@ -80,10 +80,14 @@ class ProgressService {
           next.attributes[randKey] = (next.attributes[randKey] || 1) + 1;
           gainedAttrs.push(randKey);
         }
+        // 2+1 制（2026-08-07 使用者定案）：每級另發 1 點自主屬性點，
+        // 玩家自行分配（走既有 statusPoints 池 → allocateAttribute）
+        next.statusPoints = (next.statusPoints || 0) + 1;
         levelUpDetails.push({
           level: next.level,
           attrs: gainedAttrs,
-          attrsZh: gainedAttrs.map((key) => ATTR_LABEL_ZH[key] || key.toUpperCase())
+          attrsZh: gainedAttrs.map((key) => ATTR_LABEL_ZH[key] || key.toUpperCase()),
+          freePoints: 1
         });
       }
       // 滿等：溢出經驗不再丟掉，改成 ÷10 轉金幣（存檔成功後才實際發放，避免 CAS 重試重複發）
@@ -118,6 +122,8 @@ class ProgressService {
                 newLevel: next.level,
                 levelUps,
                 attributes: { ...next.attributes },
+                freePointsGained: levelUps,                 // 2+1 制：本次升級獲得的自主點
+                statusPoints: next.statusPoints || 0,       // 目前可分配的自主點總數
                 gained,
                 gainedZh: Object.entries(gained).map(([key, n]) => ({
                   key,
@@ -180,9 +186,15 @@ class ProgressService {
         }
 
         const prevUpdatedAt = progress.updatedAt;
-        const next = { ...progress, attributes: { ...progress.attributes } };
+        const next = {
+          ...progress,
+          attributes: { ...progress.attributes },
+          // 自主分配紀錄：與隨機成長分開記，屬性重製藥水只重骰隨機部分時要靠這份保留自主配點
+          allocatedAttrs: { ...(progress.allocatedAttrs || {}) }
+        };
         next.statusPoints = (next.statusPoints || 0) - amount;
         next.attributes[attribute] = (next.attributes[attribute] || 1) + amount;
+        next.allocatedAttrs[attribute] = (next.allocatedAttrs[attribute] || 0) + amount;
         next.updatedAt = new Date().toISOString();
 
         const saved = await this._saveProgressWithFallback(next, prevUpdatedAt);

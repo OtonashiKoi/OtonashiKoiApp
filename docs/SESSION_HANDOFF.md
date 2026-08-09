@@ -1,5 +1,9 @@
 # equipmentGAME — Web 客戶端工作交接文件
 
+> ⛔ **歷史文件（2026-08-07 審計標記）**：本文件是 `game.html` 單檔客戶端時期（Windows 舊機）的交接紀錄。
+> 現行玩家前端是 React app（repo `~/Documents/equipmentGAME-app`，build 進 `src/web/public/app`，共 23 個路由頁），
+> `game.html` 檔案仍在但已非主力。路徑、待辦、UX 描述皆以當時為準，僅存檔備查。現況請看 [SYSTEMS.md](SYSTEMS.md)。
+
 > 給「桌面版 / claude.ai」接手用。把這份文件貼上或附加到新對話，就有完整脈絡可以接著做。
 > 產生時間：本次 Claude Code session 結束時。專案根目錄：`C:\Users\appsk\Documents\Github\equipmentGAME`
 

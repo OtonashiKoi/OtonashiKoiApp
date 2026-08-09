@@ -67,7 +67,7 @@ Success response example:
     },
     "progress": {
       "level": 12,
-      "maxLevel": 100,
+      "maxLevel": 50,
       "jobLevel": 3,
       "job": "Novice",
       "exp": 340,
@@ -280,6 +280,9 @@ Success response example:
 ```
 
 Common errors: `INVALID_ARGUMENT`, enhancement rule failures from `enhanceService`.
+
+Additive since v1: `GET/POST /api/me/enhance/:itemUuid/element`（屬性洞查詢／補洞，與寶石強化分流；
+`playerAppRoutes.js:5272` / `:5283`）。
 
 ## Diff Workflow (What to Check Every Time)
 

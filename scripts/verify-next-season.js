@@ -146,7 +146,14 @@ const wr = (name, detail = "") => warn.push(`${name}${detail ? "　" + detail : 
   allFx(dwarflord).some((e) => e.key === "stun_chance_up") ? ok("矮人戰士長漏建已補") : no("矮人戰士長仍缺 stun_chance_up");
 
   const csSrc = require("fs").readFileSync(require("path").join(__dirname, "..", "src/shared/combatStats.js"), "utf8");
-  /dagger:\s*\{\s*mult:\s*2[^}]*comboBonus:\s*10/.test(csSrc) ? ok("匕首 mult2／comboBonus10") : no("匕首數值");
+  // 匕首 mult 3→2→3：2026-08-07 使用者定案改回 3（理由見 combatStats.js 該行註解——
+  // B37 影舞者下修疊上 mult 2 會把匕首系砍到頂輸出的 50%，矯枉過正）。comboBonus 維持 10。
+  /dagger:\s*\{\s*mult:\s*3[^}]*comboBonus:\s*10/.test(csSrc) ? ok("匕首 mult3／comboBonus10") : no("匕首數值");
+  // 斧＝命中低（附錄A 唯一定案列）：破防已整個移除，只剩重擊與揮空
+  /axe_1h:\s*\{[^}]*hitPenalty:\s*10/.test(csSrc) && !/axe_1h:\s*\{[^}]*armorBreak/.test(csSrc)
+    ? ok("單手斧 命中−10／破防已移除") : no("單手斧數值");
+  /axe_2h:\s*\{[^}]*hitPenalty:\s*20/.test(csSrc) && !/axe_2h:\s*\{[^}]*armorBreak/.test(csSrc)
+    ? ok("雙手斧 命中−20／破防已移除") : no("雙手斧數值");
   /combo:\s*Math\.min\(100,/.test(csSrc) ? ok("連擊全職業封頂 100%") : no("連擊上限");
 
   // 單屬性裝備

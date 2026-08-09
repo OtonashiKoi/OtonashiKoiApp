@@ -14,9 +14,10 @@
     sword_2h: { label: "雙手劍", mult: 5, main: "str", block: 10 },
     mace_1h: { label: "單手槌", mult: 3, main: "str", stun: 10, stunDuration: 3 },
     mace_2h: { label: "雙手槌", mult: 4, main: "str", stun: 8, stunDuration: 3, block: 0 },
-    axe_1h: { label: "單手斧", mult: 3, main: "str", armorBreak: 15, crit: 10 },
-    axe_2h: { label: "雙手斧", mult: 5, main: "str", armorBreak: 15, crit: 20 },
-    dagger: { label: "匕首", mult: 3, main: "agi", combo: 20 },
+    // 與 src/shared/combatStats.js WEAPON_CONFIG 同步（2026-08-07：破防移除、斧命中低、匕首連擊 10）
+    axe_1h: { label: "單手斧", mult: 3, main: "str", crit: 10, hitPenalty: 10 },
+    axe_2h: { label: "雙手斧", mult: 5, main: "str", crit: 20, hitPenalty: 20 },
+    dagger: { label: "匕首", mult: 3, main: "agi", combo: 10 },
     staff_1h: { label: "單手杖", mult: 3, main: "int", bypass: 15 },
     staff_2h: { label: "雙手杖", mult: 4, main: "int", bypass: 25 },
     bow: { label: "弓", mult: 4, main: "dex", dodge: 20 },

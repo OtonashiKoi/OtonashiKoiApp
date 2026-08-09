@@ -3010,7 +3010,7 @@ async function handleEnterBattle(interaction) {
                 equipped: participant.equipped || {}
               });
               // 光環標籤：優先標「來源道具」，沒有才標職業徽章（與網頁一致）
-              partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: r.srcItem || pidJobName, isSelfAura: pid === discordId });
+              partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: r.srcItem || pidJobName, isSelfAura: pid === discordId, sourceDiscordId: pid });
             }
           }
         } catch (e) {}
@@ -3390,6 +3390,48 @@ async function handleEnterBattle(interaction) {
             if (hellfangEventDC) { try { roundLogs.push(hellfangFlipLines(hellfangEventDC).join("\n")); } catch (_) { /* 戰報追加失敗不影響結算 */ } }
           }
           allPartsDefeated = isWorldBossAllPartsDefeated(nextPartsHp);
+
+          // ── KDA（附錄C v3）：本場 K/D 賽季累積＋助攻歸戶＋寶箱排名用的 spawn 助攻 ──
+          try {
+            const _al = combatResult?.assistLedger || {};
+            // 巨神震擊窗口的歸戶對象＝敲滿條的人（暈眩條文件 lastTriggerById）
+            let _stunSrc = null;
+            if ((_al.stunSkippedRounds || 0) > 0) {
+              try {
+                const _sgK = require("../../shared/dwarfStunGauge");
+                _stunSrc = (await _sgK.readRaw(_sgK.gaugeKeyForZone(zoneKey)))?.lastTriggerById || null;
+              } catch (_) { /* 取不到就不歸戶 */ }
+            }
+            // spawn 級助攻 → damageMap[src].assist（寶箱 C 排名用；與 damage 同一份結算路徑）
+            const _creditSpawnAssist = (srcId, amt) => {
+              const v = Math.max(0, Math.round(Number(amt) || 0));
+              const id = String(srcId || "");
+              if (!id || v <= 0 || id === discordId) return;
+              const cur = nextState.damageMap[id] || { name: prev[id]?.name || id, level: prev[id]?.level || 1, damage: 0, taken: 0, spent: 0 };
+              nextState.damageMap = { ...nextState.damageMap, [id]: { ...cur, assist: (Number(cur.assist) || 0) + v } };
+            };
+            for (const [_sid, _amt] of Object.entries(_al.bySource || {})) _creditSpawnAssist(_sid, _amt);
+            if (_stunSrc) _creditSpawnAssist(_stunSrc, _al.stunPreventedDmg);
+            // 賽季累積（非同步，失敗不影響結算）；quest＝賽季任務指標（撐滿15回合/抗性/傷害/助攻）
+            let _resistPct = 0;
+            try {
+              _resistPct = require("../../shared/elementSystem")
+                .getSameElementResist(currentEquipped || {}, battleMonster?.element || null).pct || 0;
+            } catch (_) { /* 抗性算不出來就當 0 */ }
+            require("../../services/kda/kdaService").recordBattle({
+              discordId, displayName,
+              damage: wbDamage,
+              died: outcome === "lose",
+              assistBySource: _al.bySource || null,
+              stunPreventedDmg: _al.stunPreventedDmg || 0,
+              stunSourceId: _stunSrc,
+              quest: {
+                questService: sc?.questService || sc?.weeklyQuestService,
+                rounds: (combatResult?.nextRound || 2) - 1,
+                resistPct: _resistPct,
+              },
+            }).catch(() => {});
+          } catch (_) { /* KDA 記錄失敗不影響結算 */ }
         }
         await sc.monsterService.saveState(nextState, zoneKey);
         battleStateForSettlement = nextState;
@@ -3587,7 +3629,7 @@ async function handleEnterBattle(interaction) {
       // ── 敲世界王暈眩條（只有矮人戰士長敲得動）── 與網頁同一條、同規則
       if (stunGaugeKey && _dsg.canKnock(currentEquipped?.job_eq)) {
         const _knock = await _dsg
-          .knock(stunGaugeKey, zoneKey, combatResult?.combatStats?.attackRounds || 0, displayName)
+          .knock(stunGaugeKey, zoneKey, combatResult?.combatStats?.attackRounds || 0, displayName, Date.now(), discordId)
           .catch(() => null);
         if (_knock?.triggered) {
           _dsg.announceStun({ byName: displayName, monsterName: session.monsterName });
@@ -3802,13 +3844,17 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
     const chestItem = await sc.itemRepository.findById(chestId).catch(() => null);
     if (!chestItem) { console.warn(`[WorldBossChest] chest item ${chestId} not found`); return; }
 
+    // KDA（附錄C 八）：傷害名次換成「貢獻分 C」名次——C = 傷害 + 0.7×助攻（damageMap.assist，
+    // 由各入口結算時從 assistLedger 累進）。輔助職靠光環/治療也分得到王箱。
+    const { A_WEIGHT } = require("../../services/kda/kdaService");
     const entries = Object.entries(damageMap || {}).map(([pid, d]) => ({
-      pid, name: d?.name || pid, damage: Number(d?.damage) || 0, spent: Number(d?.spent) || 0,
-    })).filter((e) => e.damage > 0 || e.spent > 0);
+      pid, name: d?.name || pid, damage: Number(d?.damage) || 0, assist: Number(d?.assist) || 0, spent: Number(d?.spent) || 0,
+    })).map((e) => ({ ...e, cScore: e.damage + A_WEIGHT * e.assist }))
+      .filter((e) => e.cScore > 0 || e.spent > 0);
     if (entries.length === 0) return;
 
-    // 名次越小分數越好：分別依傷害/花費由高到低排，取陣列位置(0-based)+1 當名次
-    const byDamage = [...entries].sort((a, b) => b.damage - a.damage);
+    // 名次越小分數越好：分別依貢獻分C/花費由高到低排，取陣列位置(0-based)+1 當名次
+    const byDamage = [...entries].sort((a, b) => b.cScore - a.cScore);
     const bySpent = [...entries].sort((a, b) => b.spent - a.spent);
     const dmgRankOf = new Map(byDamage.map((e, i) => [e.pid, i + 1]));
     const spentRankOf = new Map(bySpent.map((e, i) => [e.pid, i + 1]));
@@ -3843,7 +3889,7 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
         else console.error(`[WorldBossChest] grant FAILED pid=${w.pid} name=${w.name} chest=${chestItem.id}`);
       }
       auditRows.push({
-        pid: w.pid, name: w.name, rank, damage: w.damage, spent: w.spent,
+        pid: w.pid, name: w.name, rank, damage: w.damage, assist: w.assist || 0, cScore: Math.round(w.cScore || 0), spent: w.spent,
         blendScore: Math.round(w.blendScore * 100) / 100, boxCount, successCount,
       });
       if (successCount > 0) { granted.push({ name: w.name, count: successCount }); mark(w.pid); }

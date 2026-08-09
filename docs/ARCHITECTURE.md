@@ -1,5 +1,10 @@
 # equipmentGAME 全系統架構圖
 
+> ⚠️ **快照文件（2026-08-07 審計標記）**：本文件為 2026-05-23 快照。架構原則（§4/§7/§9）仍成立，
+> 但**現況數字與功能矩陣大量過時**：collections 現為 70（非 23）、zone 現為 15 個（非 5）、
+> Web 前端已上線 23 個路由頁（§5 矩陣中「Web 缺」的任務/強化/道具操作與「完全未實裝」的寵物/商品兌換等多已完成）、
+> route 檔新增約 10 支（soloBoss/story/forge/enchant/merch/ecpay 等）、§10 路線圖已被超越。
+> 現役索引請看 [SYSTEMS.md](SYSTEMS.md)。
 > 最後更新：2026-05-23
 > 本文件涵蓋 Discord Bot、Web API、Web 前端、MongoDB、OAuth 整合的完整關係。
 
@@ -17,7 +22,7 @@
                 │                        │                        │
        ┌────────▼────────┐      ┌────────▼────────┐      ┌────────▼────────┐
        │  Discord Bot    │      │   Express API   │      │  Admin Console  │
-       │  (discord.js)   │      │   :3000         │      │   (HTML/JS)     │
+       │  (discord.js)   │      │   :5566         │      │   (HTML/JS)     │
        │                 │      │                 │      │                 │
        │  - Commands     │      │ /api/me/*       │      │ /admin/console  │
        │  - Buttons      │      │ /api/combat/*   │      │ /admin/monsters │
@@ -335,7 +340,7 @@ PK 競技場 / 爬塔 / 拍賣行 / 邀請碼 / 交易紀錄 / 怪物事件 / �
 | 模組 | 路徑 | 用途 |
 |---|---|---|
 | `combatStats.calcPlayerStats` | `src/shared/combatStats.js` | ⭐ 戰鬥能力公式 |
-| `combatLoop.runBattle` | `src/shared/combatLoop.js` | 一回合戰鬥模擬 |
+| `combatLoop.runCombatLoop` | `src/shared/combatLoop.js` | 一場戰鬥模擬（一次算完整場） |
 | `effectEngine` | `src/shared/effectEngine.js` | Buff/Debuff 計算 + 裝備 effects 收集 |
 | `zones.ZONE_KEYS` | `src/shared/zones.js` | Zone 單一來源（不可 hardcode） |
 | `progression.expToNextLevel` | `src/shared/progression.js` | 等級 EXP 曲線 |

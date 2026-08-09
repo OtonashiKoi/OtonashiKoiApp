@@ -1,5 +1,9 @@
 # Phase 0 執行藍圖 — Godot 4 + 像素風垂直切片
 
+> ⚠️ **未啟動（2026-08-07 審計標記）**：截至本日 Phase 0 從未動工——後端無任何
+> `battleScript` / `collectEvents` 實作（combatLoop / playerAppRoutes 皆查無），任務看板全數維持「待開工」。
+> 文中行號參照已漂移（quick-battle 現在 `playerAppRoutes.js:2695`）。
+
 > 母文件：[NATIVE_GAME_ROADMAP.md](NATIVE_GAME_ROADMAP.md)
 > 引擎：**Godot 4**　美術：**像素風**　目標級距：**1～2 週**
 > 撰寫時點：2026-05-30

@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-08-07",
+  "generator": "built-in imagegen",
+  "styleReference": "../../../item-art/generated/2026-08-01/monster-card-island-turtle.png",
+  "stylePrompt": "High-detail fantasy pixel art matching the Island Turtle King: chunky readable silhouette, weathered sea-creature anatomy, shell armor, antique-gold ornament, coral and island vegetation accents, electric aqua water aura, and a dark navy square backdrop.",
+  "monsters": {
+    "1667de96-3f09-46bc-902b-45d134da2737": "event-hermit-crab.png",
+    "8c68ab06-b7fc-462b-9598-28fc073e0ade": "event-sand-crab.png",
+    "792eef9d-1bfb-4008-bac4-66c85c762d21": "event-shrimp-swordsman.png",
+    "f0462e67-9fe3-4dc2-9a42-d80eaf1901bf": "event-ink-octopus.png",
+    "c95ef463-5c6e-41f5-ab1d-158827106037": "event-coconut-crab.png",
+    "4403de28-e43d-4785-b4c4-028083c65ecd": "event-pufferfish.png",
+    "a9d4ae95-d9fb-49e0-a720-adf8296296b3": "event-turtle-general.png"
+  }
+}

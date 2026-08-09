@@ -1,5 +1,8 @@
 # Web Game Blueprint
 
+> ⛔ **歷史文件（2026-08-07 審計標記）**：本文批評的「tabbed utility shell」前端已被
+> React 深色奇幻改版取代（repo `~/Documents/equipmentGAME-app`），文中多數問題已解決。僅存檔備查。
+
 ## Goal
 
 Turn the current `player-web` app from a feature-complete companion UI into a game-like front end that gives players a strong first-minute fantasy, a clear next action, and visible progression.

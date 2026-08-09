@@ -5,10 +5,11 @@
 //   ・不降階：已在高階時，人數暫時掉到低階門檻不會被降級。
 //   ・持續化：直播中每輪把到期時間續到「現在 + graceMinutes(預設60分)」，所以直播中永不過期。
 //     直播一結束(無 live 枠)就不再續 → buff 會在「最後一次 live 輪詢 + graceMinutes」自然消失。
-//   ・觸發/升級時全服廣播(附直播連結 + 宣傳下一階目標)；純延命不重發。
+//   ・同場同階只廣播一次；升階可補發，但任意兩次提示仍受最短間隔限制。
 const { getConfig } = require("./streamEventConfig");
 const globalBuff = require("./globalBuffService");
 const viewerService = require("./viewerService");
+const youtubeUpcoming = require("./youtubeUpcomingService");
 const announceTownChat = require("../../shared/announceTownChat");
 
 const GO_LIVE_CHANNEL_ID = String(
@@ -135,6 +136,23 @@ async function evaluateGoLiveAnnouncement(state, cfg) {
   }
 }
 
+async function maybeAnnounceViewerTier({ state, cfg, cur, tierObj, tiers, targetTier }) {
+  if (!cfg?.announce) return { sent: false, reason: "disabled" };
+  if (cur < targetTier) return { sent: false, reason: "tier-no-longer-reached" };
+  const broadcast = selectLiveBroadcast(state, cfg);
+  if (!broadcast?.fingerprint) return { sent: false, reason: "missing-live-fingerprint" };
+  const claim = await viewerService.claimViewerTierAnnouncement({
+    fingerprint: broadcast.fingerprint,
+    tierMin: targetTier,
+    cooldownMinutes: cfg.announceCooldownMinutes,
+  });
+  if (!claim.claimed) return { sent: false, reason: "cooldown-or-duplicate" };
+  const sameStream = claim.previousFingerprint === broadcast.fingerprint;
+  const mode = sameStream && claim.previousTier > 0 ? "upgrade" : "new";
+  await announceTownChat.announceTownChat(buildMessage(cur, tierObj, tiers, mode, cfg));
+  return { sent: true, mode };
+}
+
 let _evaluating = false; // 並發鎖：避免重疊執行造成重複套用/廣播
 
 /**
@@ -146,6 +164,8 @@ async function evaluate() {
   try {
     const cfg = (await getConfig()).viewerTiers;
     const state = await viewerService.getPublicState();
+    // OneComme 若比官方 API 更早看見待機室，也走同一個 broadcastId 去重後立即預告。
+    await youtubeUpcoming.announceFromViewerState(state);
     // 開台公告與 30 人 Buff 門檻分離：只要偵測到真的開台就發，不必等到 30 人。
     await evaluateGoLiveAnnouncement(state, cfg);
 
@@ -170,24 +190,24 @@ async function evaluate() {
     const isNew = !session;
     const isUpgrade = !!session && newTier > activeTier;
 
-    // 延命節流：同階且剩餘時間仍充足 → 不重寫 DB（避免每 20 秒寫入）
+    // 延命節流：同階且剩餘時間仍充足 → 不重寫 DB；但仍評估公告冷卻，才能在時間到後補發最高階。
+    let kept = false;
     if (session && !isUpgrade) {
       const remain = Date.parse(session.endsAt) - Date.now();
-      if (remain > graceMs - 120_000) return { triggered: false, reason: "kept" };
+      kept = remain > graceMs - 120_000;
     }
 
-    const r = await globalBuff.setViewerSessionBuff({
-      dropPct: tierObj.dropPct, goldPct: tierObj.goldPct, expPct: tierObj.expPct,
-      endsAtMs: Date.now() + graceMs,
-      tierMin: targetTier,
-      label: `${tierObj.label || "觀看熱度"}（觀看 ${cur} 人）`,
-    });
-    if (!r.applied) return { triggered: false, reason: r.reason };
-
-    if (cfg.announce && (isNew || isUpgrade)) {
-      try { announceTownChat.announceTownChat(buildMessage(cur, tierObj, tiers, isUpgrade ? "upgrade" : "new", cfg)); } catch (_) {}
+    if (!kept) {
+      const r = await globalBuff.setViewerSessionBuff({
+        dropPct: tierObj.dropPct, goldPct: tierObj.goldPct, expPct: tierObj.expPct,
+        endsAtMs: Date.now() + graceMs,
+        tierMin: targetTier,
+        label: `${tierObj.label || "觀看熱度"}（觀看 ${cur} 人）`,
+      });
+      if (!r.applied) return { triggered: false, reason: r.reason };
     }
-    return { triggered: isNew || isUpgrade, kept: !(isNew || isUpgrade), tierMin: targetTier };
+    const announcement = await maybeAnnounceViewerTier({ state, cfg, cur, tierObj, tiers, targetTier });
+    return { triggered: isNew || isUpgrade, kept, announced: announcement.sent, tierMin: targetTier };
   } catch (err) {
     console.warn("[viewerEvents] evaluate 失敗：", err?.message || err);
     return { triggered: false, reason: "error" };
@@ -236,4 +256,5 @@ module.exports = {
   selectLiveBroadcast,
   buildGoLiveMessage,
   evaluateGoLiveAnnouncement,
+  maybeAnnounceViewerTier,
 };

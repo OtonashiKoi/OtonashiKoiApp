@@ -382,6 +382,11 @@
 
 ## 🐉 龍族之領（dragon_realm，Lv40-50）　共 10 張
 
+> ⛔ **本節已作廢（2026-08-07）**：龍族之領 10 張卡已依
+> [DRAGON_REALM_CARD_REDESIGN_V5.md](DRAGON_REALM_CARD_REDESIGN_V5.md) 全面改為**常駐被動（passiveEffects）**，
+> DB 實查 `procEffects` 已清空（實裝腳本 `scripts/apply-dragon-realm-cards-v5.js`）。
+> 以下舊 proc 版內容僅存檔；現行效果以 V5 檔與 DB 為準（DB 內「古龍王(B)卡」現名「龍王(B)卡」）。
+
 ### 1. 飛龍幼崽卡　[A]
 - id：`monster-card-249a4c73-01fd-44a4-9a81-abfc26a2b93e`
 - 來源怪物：飛龍幼崽
