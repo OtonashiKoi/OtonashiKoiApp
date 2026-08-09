@@ -23,20 +23,32 @@ const GEM = { D: "72fde92d-e33f-42fb-8d86-2e811d03f84d", C: "556db9e1-b084-4b22-
 const REROLL = "enchant_reroll_potion";
 const RESPEC = "87b281be-b175-40a0-8044-0accc88a0ee0";
 const GOLDBAG_L = "1854a2b1-a569-4604-802d-9171f480a9ae";
-const STONE_WATER = "element-stone-water"; // 屬性石刻意稀缺（分解唯一主來源），通行證只給「一點點」
+// 屬性石刻意稀缺（分解唯一主來源），通行證只給「一點點」：付費軌水/火（雙王主題）、免費軌其餘五屬輪替
+const STONE_WATER = "element-stone-water";
 const STONE_FIRE = "element-stone-fire";
+const STONE_WOOD = "element-stone-wood";
+const STONE_EARTH = "element-stone-earth";
+const STONE_METAL = "element-stone-metal";
+const STONE_SUN = "element-stone-sun";
+const STONE_MOON = "element-stone-moon";
+const A_WEAPON_CHEST = "chest-a-weapon-select"; // A階武器抽選箱（開箱隨機一把 A 階武器）
 
 // 產生 30 級雙軌獎勵表（V0.5：金幣＋強化石＋少量屬性石＋藥水；回 3 鑽）
 function buildLevels() {
   const levels = [];
   for (let L = 1; L <= MAX_LEVEL; L++) {
-    const free = { gold: 3000 + L * 400, items: [] };
+    const free = { gold: 2000 + L * 300, items: [] };
     const paid = { gold: 4000 + L * 600, items: [] };
 
-    // ── 免費軌：早期 D 石、每 2 級 C 石、每 5 級 B 石、每 10 級大金袋、20/30 送重骰藥水 ──
-    if (L <= 6 && L % 2 === 1) free.items.push({ itemId: GEM.D, qty: 3 });
-    if (L % 2 === 0) free.items.push({ itemId: GEM.C, qty: 2 });
-    if (L % 5 === 0) free.items.push({ itemId: GEM.B, qty: 3 });
+    // ── 免費軌：早期 D 石、每 2 級 C 石、每 5 級 B 石、每 6 級屬性石輪替、每 10 級大金袋、20/30 送重骰 ──
+    if (L <= 6 && L % 2 === 1) free.items.push({ itemId: GEM.D, qty: 2 });
+    if (L % 2 === 0) free.items.push({ itemId: GEM.C, qty: 1 });
+    if (L % 5 === 0) free.items.push({ itemId: GEM.B, qty: 2 });
+    if (L === 6) free.items.push({ itemId: STONE_WOOD, qty: 1 });
+    if (L === 12) free.items.push({ itemId: STONE_EARTH, qty: 1 });
+    if (L === 18) free.items.push({ itemId: STONE_METAL, qty: 1 });
+    if (L === 24) free.items.push({ itemId: STONE_SUN, qty: 1 });
+    if (L === 30) free.items.push({ itemId: STONE_MOON, qty: 1 });
     if (L % 10 === 0) free.items.push({ itemId: GOLDBAG_L, qty: 1 });
     if (L === 20 || L === 30) free.items.push({ itemId: REROLL, qty: 1 });
 
@@ -45,6 +57,7 @@ function buildLevels() {
     if (L === 5) paid.items.push({ itemId: GOLDBAG_L, qty: 1 });
     if (L === 10) paid.diamond = 1;                                   // 回鑽 1/3
     if (L === 12) paid.items.push({ itemId: STONE_WATER, qty: 1 });   // 屬性石（本季主題水）
+    if (L === 15) paid.items.push({ itemId: A_WEAPON_CHEST, qty: 1 }); // A階武器抽選箱（中程大獎）
     if (L === 18) paid.items.push({ itemId: REROLL, qty: 1 });        // 附魔重骰
     if (L === 20) paid.diamond = 1;                                   // 回鑽 2/3
     if (L === 22) paid.items.push({ itemId: RESPEC, qty: 1 });        // 屬性重製
