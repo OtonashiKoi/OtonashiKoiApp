@@ -1494,10 +1494,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const results = await Promise.all(ids.map((id) => repo.findById(id).catch(() => null)));
         const libMap = {};
         ids.forEach((id, i) => { if (results[i]) libMap[id] = results[i]; });
+        const jbl = require("../../shared/jobBadgeLevel");
         inventory = inventory.map((it) => {
           const lib = it?.itemId ? libMap[it.itemId] : null;
-          if (!lib) return it;
-          return {
+          const merged = !lib ? { ...it } : {
             ...it,
             imageUrl: lib.imageUrl || it.imageUrl || null,
             imageThumbnailUrl: lib.imageThumbnailUrl || it.imageThumbnailUrl || null,
@@ -1506,10 +1506,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             // 詳細資料面板的「特效說明」列（卡片技能 + 裝備效果，後端組好直接顯示）
             effectLines: buildItemEffectLines(lib),
           };
+          // 職業徽章：附上熟練度概況（等級/場次進度/屬性縮放%）——從實例的 jobExp 算，
+          // 不是道具庫（每顆徽章各自練）。前端 modal 顯示用。
+          if (jbl.isJobBadgeEntry(merged)) merged.badgeProgress = jbl.readBadgeProgress(it);
+          return merged;
         });
         equipped = await mergeEquippedFromLibrary(equipped, repo);
         for (const [slot, entry] of Object.entries(equipped)) {
-          if (entry) equipped[slot] = { ...entry, effectLines: buildItemEffectLines(entry) };
+          if (entry) {
+            equipped[slot] = { ...entry, effectLines: buildItemEffectLines(entry) };
+            if (jbl.isJobBadgeEntry(entry)) equipped[slot].badgeProgress = jbl.readBadgeProgress(entry);
+          }
         }
       } catch (_) { /* 合併失敗時回原始快照，不擋背包 */ }
 

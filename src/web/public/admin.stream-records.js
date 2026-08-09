@@ -27,6 +27,7 @@
   };
 
   let tab = "donations"; // donations | memberships | status
+  let donationPhase = "new"; // ""=全部 | "old"=8/9 20:00 前 | "new"=8/9 20:00 起（預設看新一輪）
 
   function tabBar() {
     const btn = (key, label) =>
@@ -42,8 +43,12 @@
   }
 
   async function renderDonations() {
-    const { events, summary } = await fetchJSON("/admin/stream-records/donations?limit=200");
+    const { events, summary } = await fetchJSON(`/admin/stream-records/donations?limit=200&phase=${donationPhase}`);
     const s = summary || {};
+    const ph = s.phases || {};
+    const pNew = ph.new || {}, pOld = ph.old || {};
+    const phaseBtn = (key, label) =>
+      `<button class="button ${donationPhase === key ? "primary" : ""}" data-sr-phase="${key}" style="margin-right:6px;">${label}</button>`;
     const rows = (events || []).map((e) => `
       <tr>
         <td style="white-space:nowrap;">${esc(fmtTime(e.createdAt))}</td>
@@ -55,16 +60,23 @@
         <td class="hint" style="font-size:11px;">${esc(e.platform)} · ${esc(e.note || "")}</td>
       </tr>`).join("");
     return `
+      <div style="margin-bottom:10px;">
+        ${phaseBtn("new", "🆕 新一輪（8/9 20:00 起）")}
+        ${phaseBtn("old", "🗂 舊紀錄（8/9 20:00 前）")}
+        ${phaseBtn("", "全部")}
+      </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-        ${statCard("總事件數", s.totalEvents || 0)}
-        ${statCard("已綁定事件", s.boundEvents || 0)}
-        ${statCard("累計金額", "NT$" + (s.totalTwd || 0))}
-        ${statCard("累計發鑽", "💎" + (s.totalDiamonds || 0))}
+        ${statCard("🆕 新一輪金額", "NT$" + (pNew.totalTwd || 0))}
+        ${statCard("🆕 新一輪發鑽", "💎" + (pNew.totalDiamonds || 0))}
+        ${statCard("🆕 新一輪事件", pNew.totalEvents || 0)}
+        ${statCard("🗂 舊累計金額", "NT$" + (pOld.totalTwd || 0))}
+        ${statCard("🗂 舊累計發鑽", "💎" + (pOld.totalDiamonds || 0))}
+        ${statCard("全部事件數", s.totalEvents || 0)}
       </div>
       <div style="overflow:auto;">
       <table class="admin-table" style="width:100%;font-size:13px;">
         <thead><tr><th>時間</th><th>觀眾</th><th style="text-align:right;">金額</th><th style="text-align:right;">發鑽</th><th style="text-align:right;">零頭</th><th>綁定</th><th>來源/備註</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="7" class="hint">尚無斗內記錄。等下一筆 SC 進來就會出現在這裡。</td></tr>'}</tbody>
+        <tbody>${rows || '<tr><td colspan="7" class="hint">此分段尚無斗內記錄。</td></tr>'}</tbody>
       </table>
       </div>`;
   }
@@ -528,6 +540,8 @@
   document.addEventListener("click", (e) => {
     const tabBtn = e.target.closest?.("[data-sr-tab]");
     if (tabBtn) { tab = tabBtn.dataset.srTab; render(); return; }
+    const phaseBtn = e.target.closest?.("[data-sr-phase]");
+    if (phaseBtn) { donationPhase = phaseBtn.dataset.srPhase; render(); return; }
     if (e.target.closest?.("#sr-refresh")) { render(); return; }
     if (e.target.closest?.("#sr-sync")) { syncNow(); return; }
     if (e.target.closest?.("#mb-send")) { sendManualBuff(); return; }

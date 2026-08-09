@@ -16,10 +16,14 @@ const crypto = require("crypto");
 
 // .NET HttpUtility.UrlEncode 風格。lower=true 時整串轉小寫（僅供 CheckMacValue 雜湊，
 // 切勿用於 Data 本體編碼，否則會把 JSON 大小寫弄壞）。
+// ⚠️ 保留字對齊 .NET：`! * ( )` 不編碼、`'`→%27、`~`→%7e。
+//   舊版把 !()* 也編碼 → 只要斗內留言帶驚嘆號等符號 CheckMacValue 必炸
+//   （2026-08-09 真實案例：留言「聖人 啟動!」→ mac_failed 沒發鑽）。
 function urlEncodeDotNet(str, lower) {
   const s = encodeURIComponent(String(str))
     .replace(/%20/g, "+")
-    .replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16));
+    .replace(/'/g, "%27")
+    .replace(/~/g, "%7e");
   return lower ? s.toLowerCase() : s;
 }
 

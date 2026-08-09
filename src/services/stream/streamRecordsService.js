@@ -208,10 +208,16 @@ async function touchMemberConfirmed({ discordId, displayName, tier, label }) {
 // 查詢（給後台看記錄用）
 // ---------------------------------------------------------------------------
 
-async function listDonationEvents({ limit = 100, boundOnly = false } = {}) {
+// 斗內記錄分段點（使用者 2026-08-09 指示）：台北 8/9 晚上 8 點起算「新一輪」，
+// 之前的歸「舊紀錄」。後台列表可依此篩選、彙總卡分兩段各算各的。
+const DONATION_PHASE2_START = "2026-08-09T12:00:00.000Z"; // = 台北 2026-08-09 20:00
+
+async function listDonationEvents({ limit = 100, boundOnly = false, phase = "" } = {}) {
   const db = await getMongoDb().catch(() => null);
   if (!db) return [];
   const q = boundOnly ? { bound: true } : {};
+  if (phase === "old") q.createdAt = { $lt: DONATION_PHASE2_START };
+  else if (phase === "new") q.createdAt = { $gte: DONATION_PHASE2_START };
   return db.collection("donationEvents")
     .find(q, { projection: { createdAtDate: 0 } })
     .sort({ createdAt: -1 })
@@ -221,25 +227,36 @@ async function listDonationEvents({ limit = 100, boundOnly = false } = {}) {
 
 async function getDonationSummary() {
   const db = await getMongoDb().catch(() => null);
-  if (!db) return { totalEvents: 0, boundEvents: 0, totalTwd: 0, totalDiamonds: 0 };
+  const empty = { totalEvents: 0, boundEvents: 0, totalTwd: 0, totalDiamonds: 0 };
+  if (!db) return { ...empty, phases: { cutoff: DONATION_PHASE2_START, old: empty, new: empty } };
+  const groupSpec = {
+    _id: null,
+    totalEvents: { $sum: 1 },
+    boundEvents: { $sum: { $cond: ["$bound", 1, 0] } },
+    totalTwd: { $sum: "$twdAmount" },
+    totalDiamonds: { $sum: "$diamondsGranted" }
+  };
+  const pick = (rows) => {
+    const r = (rows && rows[0]) || {};
+    return {
+      totalEvents: r.totalEvents || 0,
+      boundEvents: r.boundEvents || 0,
+      totalTwd: r.totalTwd || 0,
+      totalDiamonds: r.totalDiamonds || 0
+    };
+  };
   const rows = await db.collection("donationEvents").aggregate([
     {
-      $group: {
-        _id: null,
-        totalEvents: { $sum: 1 },
-        boundEvents: { $sum: { $cond: ["$bound", 1, 0] } },
-        totalTwd: { $sum: "$twdAmount" },
-        totalDiamonds: { $sum: "$diamondsGranted" }
+      $facet: {
+        all: [{ $group: groupSpec }],
+        old: [{ $match: { createdAt: { $lt: DONATION_PHASE2_START } } }, { $group: groupSpec }],
+        new: [{ $match: { createdAt: { $gte: DONATION_PHASE2_START } } }, { $group: groupSpec }]
       }
     }
   ]).toArray();
-  const r = rows[0] || {};
-  return {
-    totalEvents: r.totalEvents || 0,
-    boundEvents: r.boundEvents || 0,
-    totalTwd: r.totalTwd || 0,
-    totalDiamonds: r.totalDiamonds || 0
-  };
+  const f = rows[0] || {};
+  // 頂層維持舊欄位（全部合計）不破壞既有呼叫端；分段放 phases
+  return { ...pick(f.all), phases: { cutoff: DONATION_PHASE2_START, old: pick(f.old), new: pick(f.new) } };
 }
 
 async function listMembershipEvents({ limit = 100 } = {}) {
