@@ -769,21 +769,24 @@ class ShopService {
         next.flags.checkinMultiplier = effect.value || 2;
         effectDesc = `🎯 下次打卡 ×${effect.value} 倍`;
       } else if (effect.type === "reroll_attributes") {
-        // 2+1 制改版（2026-08-07）：只重骰「隨機成長」的部分——
-        // 玩家自主分配的點（allocatedAttrs）原位保留、尚未分配的自主點（statusPoints）不動。
+        // 全部重洗（2026-08-09 使用者定案，取代 8/7「自主配點原位保留」版）：
+        //   ・隨機成長的部分 → 整包重骰
+        //   ・已自主分配的點 → 從屬性上拆下、全數退回 statusPoints 池，玩家重新配置
+        //   ・池子裡原本沒花的自主點 → 不動（照舊累加）
         const alloc = next.allocatedAttrs || {};
         const allocSum = ATTR_KEYS.reduce((s, k) => s + (Number(alloc[k]) || 0), 0);
         const currentAttrTotal = ATTR_KEYS.reduce((sum, k) => sum + (Number(next.attributes?.[k]) || 0), 0);
         const pointsToDistribute = Math.max(0, currentAttrTotal - 6 - allocSum);
         const newAttrs = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-        for (const k of ATTR_KEYS) newAttrs[k] += Math.max(0, Number(alloc[k]) || 0);
         for (let i = 0; i < pointsToDistribute; i++) {
           const key = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
           newAttrs[key]++;
         }
         next.attributes = newAttrs;
+        next.statusPoints = (next.statusPoints || 0) + allocSum;
+        next.allocatedAttrs = {};
         const attrLine = ATTR_KEYS.map(k => `${k.toUpperCase()}:${newAttrs[k]}`).join(" ");
-        effectDesc = `🔮 隨機屬性已重製（自主配點保留）！新屬性：${attrLine}`;
+        effectDesc = `🔮 屬性全部重洗！隨機成長已重骰${allocSum > 0 ? `、自主配點 ${allocSum} 點已退回可重新分配` : ""}。新屬性：${attrLine}`;
       } else if (effect.type === "level_down_random_attributes") {
         const currentLevel = Math.max(1, Number(next.level) || 1);
         // 2+1 制改版（2026-08-07）：降 1 級＝收回該級所發的「隨機 2 點＋自主 1 點」。
