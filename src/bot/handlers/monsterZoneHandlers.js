@@ -4359,7 +4359,8 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
                 require("../../shared/elementDropRoll").rollElementForEntry(droppedEntry, {
                   element: monster?.element,
                   maxLevel: monster?.elementLevel || 1,
-                  zone: zoneKey,        // 只有活動區會實際附上（限定裝的 override 不受此限）
+                  zone: zoneKey,                    // 活動區固定 30%
+                  monsterLevel: monster?.level,     // 一般區依怪物等級階梯（5~25%，2026-08-09 全區開放）
                   override: item.elementDrop || null,
                 });
               }
