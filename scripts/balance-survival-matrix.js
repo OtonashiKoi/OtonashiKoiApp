@@ -42,7 +42,28 @@ async function main() {
   const sc = createServiceContext();
   const items = db.collection("items");
   const sim = await createWorldBossSim(sc, db, ZONE, null, { fresh: true });
-  const base = await db.collection("progress").findOne({ playerId: BASE_PLAYER });
+  // ⚠️ 2026-08-09 教訓：原本直接借 BASE_PLAYER 的 live progress 當基準，
+  // 換季清檔把他重置成 Lv1/木劍/無防具後，整個矩陣全場輸出崩到 1k
+  // （唯獨元素師 11k——燒傷吃怪物最大血量、與等級無關，反而露餡）。
+  // 基準玩家改為**自建合成**：等級/防具固定，不再依賴任何 live 資料，清檔免疫、跨季可重現。
+  // 防具挑 S 階四件（buildEquipment 會做「防具中和」：攻擊向歸零、VIT 保留、+55 集中，
+  // 所以挑哪套只影響 VIT 底盤，固定 query 順序即可重現）。
+  const liveBase = await db.collection("progress").findOne({ playerId: BASE_PLAYER });
+  const synthArmor = {};
+  for (const slot of ["head_top", "armor", "garment", "shoes"]) {
+    const it = await items.findOne(
+      { equipSlot: slot, tier: "S", itemType: "equipment", weaponType: null },
+      { sort: { id: 1 } }
+    );
+    if (it) synthArmor[slot] = { ...it, itemId: it.id, itemName: it.name, uuid: `sim-${slot}`, enhanceLevel: 0 };
+  }
+  const base = {
+    ...(liveBase || {}),
+    playerId: BASE_PLAYER,
+    level: 50,
+    inventory: [],
+    equipment: synthArmor,
+  };
 
   console.log(`\n【生存驗收矩陣】${sim.info}`);
   console.log(`${JOBS.length} 職業 × ${PRESETS.length} 原型 × ${RUNS} 場（種子化，可重現）\n`);

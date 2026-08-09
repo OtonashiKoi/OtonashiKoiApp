@@ -134,8 +134,12 @@ async function main() {
     if (APPLY) {
       await progressCol.updateOne({ _id: p._id }, { $set: setFields, $unset: unsetFields });
       if (wallet) await walletsCol.updateOne({ playerId: pid }, { $set: { gold: 0, updatedAt: NOW } });
-      await wqpCol.deleteMany({ discordId: pid });
-      await checkinsCol.deleteMany({ playerId: pid });
+      // KEEP_LEDGER=1（2026-08-09 事故還原用）：保留任務進度與打卡——
+      // 那是玩家開服後的合法紀錄，也是「依交易紀錄回復」的依據，清掉會造成任務可重複領取。
+      if (process.env.KEEP_LEDGER !== "1") {
+        await wqpCol.deleteMany({ discordId: pid });
+        await checkinsCol.deleteMany({ playerId: pid });
+      }
     }
 
     // 掛機狀態整份清掉：避免「賽季前在高階區掛機的 session」殘留，重置後一結算爆一批高階經驗(等級瞬跳)。
