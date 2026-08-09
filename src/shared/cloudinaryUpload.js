@@ -25,9 +25,27 @@ function withAutoOptimize(url, opts = {}) {
  * @param {string} folder   - Cloudinary 資料夾，例如 "items" 或 "monsters"
  * @param {{trim?:boolean, noThumb?:boolean}} [opts] - trim=立繪去背裁邊置中；noThumb=不另存120px縮圖(劇情立繪/背景用不到，避免圖庫多一份小圖)
  */
+// Cloudinary 單檔上限 10MB（方案限制）；超過就先在本機壓縮再上傳，
+// 否則後台選大圖（AI 生圖 PNG 動輒 12MB+）會直接「File size too large」上傳失敗。
+const CLOUDINARY_MAX_BYTES = 10 * 1024 * 1024;
+
+async function _shrinkIfTooLarge(filePath) {
+  const stat = await fsp.stat(filePath).catch(() => null);
+  if (!stat || stat.size <= CLOUDINARY_MAX_BYTES * 0.95) return filePath;
+  // 保留透明度改存 webp；尺寸壓到 2048 內（道具/立繪顯示用不到更大）
+  const shrunkPath = `${filePath}.shrunk.webp`;
+  await sharp(filePath)
+    .resize({ width: 2048, height: 2048, fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 90 })
+    .toFile(shrunkPath);
+  return shrunkPath;
+}
+
 async function uploadImage(filePath, folder, opts = {}) {
+  // 超限自動壓縮（縮圖仍從原始檔產生，品質不受影響）
+  const uploadPath = await _shrinkIfTooLarge(filePath);
   // 上傳原圖
-  const result = await cloudinary.uploader.upload(filePath, {
+  const result = await cloudinary.uploader.upload(uploadPath, {
     folder: `equipment-game/${folder}`,
     resource_type: "image",
   });
@@ -49,8 +67,9 @@ async function uploadImage(filePath, folder, opts = {}) {
     thumbUrl = thumbResult.secure_url;
   }
 
-  // 清掉 multer 暫存檔
+  // 清掉 multer 暫存檔（含壓縮暫存）
   await fsp.unlink(filePath).catch(() => {});
+  if (uploadPath !== filePath) await fsp.unlink(uploadPath).catch(() => {});
 
   return {
     imageUrl: withAutoOptimize(result.secure_url, opts),
