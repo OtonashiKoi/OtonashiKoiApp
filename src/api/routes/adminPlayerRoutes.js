@@ -463,7 +463,7 @@ function createAdminPlayerRoutes(serviceContext) {
         return res.status(500).json(fail("BACKUP_FAILED", `備份失敗,已中止重製:${e.message}`));
       }
       const summary = await seasonResetPlayer(id, { dryRun: false });
-      res.json(ok(summary, "season reset done"));
+      res.json(ok({ ...summary, scope: "single_player_only", globalStateReset: false }, "single player season reset done"));
     } catch (error) { next(error); }
   });
 
@@ -472,7 +472,7 @@ function createAdminPlayerRoutes(serviceContext) {
     try {
       const { seasonResetPlayer } = require("../../services/admin/seasonResetService");
       const summary = await seasonResetPlayer(req.params.discordId, { dryRun: true });
-      res.json(ok(summary, "season reset preview"));
+      res.json(ok({ ...summary, scope: "single_player_only", globalStateReset: false }, "single player season reset preview"));
     } catch (error) { next(error); }
   });
 
@@ -480,32 +480,41 @@ function createAdminPlayerRoutes(serviceContext) {
   router.get("/admin/season-reset-all/preview", async (_req, res, next) => {
     try {
       const { seasonResetAllPlayers } = require("../../services/admin/seasonResetService");
+      const { preflight } = require("../../services/admin/seasonResetCoordinator");
       const summary = await seasonResetAllPlayers({ dryRun: true });
-      res.json(ok(summary, "season reset all preview"));
+      res.json(ok({ ...summary, scope: "all_players_and_global_state", preflight: await preflight() }, "season reset all preview"));
     } catch (error) { next(error); }
   });
 
-  // 全體回歸賽季重製(高破壞性):需在 body 帶 confirm:"RESET-ALL";先寫一份全體備份才執行
+  // 全體回歸賽季重製：建立背景工作後立即回 202，避免 HTTP timeout。
   router.post("/admin/season-reset-all", async (req, res, next) => {
     try {
       if (String(req.body?.confirm || "") !== "RESET-ALL") {
         return res.status(400).json(fail("CONFIRM_REQUIRED", '需要 confirm:"RESET-ALL" 才能執行全體重製'));
       }
-      const { seasonResetAllPlayers } = require("../../services/admin/seasonResetService");
-      const summary = await seasonResetAllPlayers({
-        dryRun: false,
-        monsterService: serviceContext.monsterService, passService: serviceContext.passService, seasonKey: req.body?.seasonKey || null,
-        onBackup: async (allBackups, globalBackup) => {
-          const fs = require("fs");
-          const path = require("path");
-          const dir = path.resolve(__dirname, "../../../backups");
-          fs.mkdirSync(dir, { recursive: true });
-          const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-          const payload = { kind: "season-reset-all-backup", at: new Date().toISOString(), count: allBackups.length, players: allBackups, globals: globalBackup };
-          fs.writeFileSync(path.join(dir, `season-reset-ALL-${stamp}.json`), JSON.stringify(payload));
-        }
-      });
-      res.json(ok(summary, "season reset all done"));
+      const { createRun } = require("../../services/admin/seasonResetCoordinator");
+      const run = await createRun({ seasonKey: req.body?.seasonKey || null, serviceContext });
+      res.status(202).json(ok({ ...run, scope: "all_players_and_global_state" }, "season reset queued"));
+    } catch (error) { next(error); }
+  });
+
+  router.get("/admin/season-reset-all/status/:runId", async (req, res, next) => {
+    try {
+      const { getRun } = require("../../services/admin/seasonResetCoordinator");
+      const run = await getRun(req.params.runId);
+      if (!run) return res.status(404).json(fail("NOT_FOUND", "找不到換季工作"));
+      res.json(ok(run, "season reset status"));
+    } catch (error) { next(error); }
+  });
+
+  router.post("/admin/season-reset-all/resume/:runId", async (req, res, next) => {
+    try {
+      if (String(req.body?.confirm || "") !== "RESUME-RESET") {
+        return res.status(400).json(fail("CONFIRM_REQUIRED", '需要 confirm:"RESUME-RESET" 才能續跑'));
+      }
+      const { resumeRun } = require("../../services/admin/seasonResetCoordinator");
+      const run = await resumeRun(req.params.runId, { serviceContext });
+      res.status(202).json(ok(run, "season reset resumed"));
     } catch (error) { next(error); }
   });
 

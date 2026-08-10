@@ -78,12 +78,7 @@ function createSoloBossRoutes(serviceContext) {
   }
 
   async function saveSoloState(discordId, boss, st) {
-    const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-    const db = await getMongoDb();
-    await db.collection("progress").updateOne(
-      { playerId: discordId },
-      { $set: { [`soloBoss.${boss.key}`]: st, updatedAt: new Date().toISOString() } }
-    );
+    await repo.updateFields(discordId, { [`soloBoss.${boss.key}`]: st });
   }
 
   router.get("/api/me/solo-boss/status", requireAuth, async (req, res, next) => {
@@ -444,7 +439,7 @@ function createSoloBossRoutes(serviceContext) {
         const bGain = bestiaryGainFromDamage(r.totalDamage, partMax);
         if (bGain > 0) {
           const monId = String(monster.id || boss.monsterId);
-          await db.collection("progress").updateOne({ playerId: discordId }, { $inc: { ["bestiary." + monId]: bGain } });
+          await repo.incrementFields(discordId, { ["bestiary." + monId]: bGain });
           rewardLines.push(`📖 圖鑑進度 +${Math.round(bGain * 100) / 100}`);
         }
       } catch (_) { /* noop */ }

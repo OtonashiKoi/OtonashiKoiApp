@@ -197,14 +197,21 @@ async function clearBySource(source) {
   return { cleared: r.deletedCount || 0 };
 }
 
-/** 換季重置：清掉所有「賽季永久」底盤 buff（短期的會自己過期）。SC累積/會員里程碑進度另由各自 service 重置。 */
-async function resetSeason() {
+/** 換季重置：預設連仍生效的短期直播加成都結束，讓新季從乾淨狀態開始。 */
+async function resetSeason({ clearShortTerm = true } = {}) {
   const db = await getMongoDb().catch(() => null);
   if (!db) return { cleared: 0 };
-  const r = await db.collection(COLLECTION).deleteMany({ seasonPermanent: true });
+  const nowIso = new Date().toISOString();
+  const permanent = await db.collection(COLLECTION).deleteMany({ seasonPermanent: true });
+  const shortTerm = clearShortTerm
+    ? await db.collection(COLLECTION).updateMany(
+      { seasonPermanent: { $ne: true }, endsAt: { $gt: nowIso } },
+      { $set: { endsAt: nowIso, endedReason: "season_reset" } }
+    )
+    : { modifiedCount: 0 };
   await refresh();
-  console.log(`[GlobalBuff] 換季重置：清除 ${r.deletedCount || 0} 個賽季永久底盤`);
-  return { cleared: r.deletedCount || 0 };
+  console.log(`[GlobalBuff] 換季重置：清除 ${permanent.deletedCount || 0} 個賽季永久底盤，結束 ${shortTerm.modifiedCount || 0} 個短期加成`);
+  return { clearedPermanent: permanent.deletedCount || 0, endedShortTerm: shortTerm.modifiedCount || 0 };
 }
 
 // ── 斗內累積 session buff（單一、覆寫式；不走 applyBuff 的疊加）──

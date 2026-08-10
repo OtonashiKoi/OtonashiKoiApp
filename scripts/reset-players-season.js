@@ -17,6 +17,7 @@ const {
   seasonResetAllPlayers,
   buildSeasonResetBackup,
 } = require("../src/services/admin/seasonResetService");
+const { createRun, getRun } = require("../src/services/admin/seasonResetCoordinator");
 
 const APPLY = process.env.APPLY === "1";
 const PLAYER_ID = String(process.env.PLAYER_ID || "").trim() || null;
@@ -47,20 +48,16 @@ async function resetOne() {
 
 async function resetAll() {
   if (!APPLY) return seasonResetAllPlayers({ dryRun: true, keepLedger: KEEP_LEDGER });
-  return seasonResetAllPlayers({
-    dryRun: false,
-    keepLedger: KEEP_LEDGER,
-    seasonKey: SEASON_KEY,
-    onBackup: async (players, globals) => {
-      writeBackup(backupPath("ALL"), {
-        kind: "season-reset-all-backup",
-        at: new Date().toISOString(),
-        count: players.length,
-        players,
-        globals,
-      });
-    },
-  });
+  const queued = await createRun({ seasonKey: SEASON_KEY, keepLedger: KEEP_LEDGER });
+  console.log(`✅ 已建立安全背景工作：${queued._id}`);
+  const terminal = new Set(["completed", "failed", "blocked"]);
+  let run = queued;
+  while (!terminal.has(run.status)) {
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    run = await getRun(queued._id);
+    console.log(`進度：${run.status} ${run.processed || 0}/${run.total || "?"}`);
+  }
+  return run;
 }
 
 async function main() {

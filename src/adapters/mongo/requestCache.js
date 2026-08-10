@@ -58,8 +58,14 @@ function withProgressCache(repo) {
       if (store) store.delete(`progress:${progress.playerId}`);
       return saved;
     },
-    async updateFields(playerId, fields) {
-      const result = await repo.updateFields(playerId, fields);
+    async updateFields(playerId, fields, options) {
+      const result = await repo.updateFields(playerId, fields, options);
+      const store = storage.getStore();
+      if (store) store.delete(`progress:${playerId}`);
+      return result;
+    },
+    async incrementFields(playerId, increments, options) {
+      const result = await repo.incrementFields(playerId, increments, options);
       const store = storage.getStore();
       if (store) store.delete(`progress:${playerId}`);
       return result;

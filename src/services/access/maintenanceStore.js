@@ -2,7 +2,7 @@
 /**
  * 全域維護模式（賽季結束）狀態。
  * - in-memory + Mongo 持久化（collection "maintenanceState" 文件 _id:"default"），
- *   每 15s 背景刷新，讓多實例 / 外部修改也能反映。
+ *   每 2s 背景刷新，讓多實例在全服換季鎖啟動後能於 drain window 內同步攔截。
  * - 生效判定：enabled === true，或 activateAt 已到（now >= activateAt）。
  *   → 用 activateAt 可預約「今晚 00:00 自動生效」，不需要有人手動翻開關。
  * - 白名單 discordId：維護期間仍可全功能使用（給開發者）。
@@ -14,11 +14,12 @@ const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 
 const COLLECTION = "maintenanceState";
 const DOC_ID = "default";
-const REFRESH_MS = 60 * 1000; // 背景刷新只為「後台改設定不用重啟就生效」；到點自動開/關服是即時現算，不靠這個
+const REFRESH_MS = 2 * 1000;
 
 // 預設值（DB 沒有文件時的後備）。實際值以 DB 文件為準。
 const DEFAULTS = {
   enabled: false,
+  strict: false,     // true 時連唯讀面板也停用（全服換季資料切換期間使用）
   openAt: null,     // ISO：此時間「之前」＝尚未開服(擋登入,顯示 openTitle/openMessage)。null=不限開服時間
   activateAt: null, // ISO：此時間「到了」＝賽季結束(擋登入)。用來排程關服。
   whitelist: ["865264891991425055", "1450019975031951370"], // 音無恋 / 音無醬
@@ -40,6 +41,7 @@ async function _loadFromDb() {
     if (doc) {
       state = {
         enabled: doc.enabled === true,
+        strict: doc.strict === true,
         openAt: doc.openAt || null,
         activateAt: doc.activateAt || null,
         whitelist: Array.isArray(doc.whitelist) ? doc.whitelist.map((x) => String(x)) : DEFAULTS.whitelist,
@@ -84,6 +86,10 @@ function isActive() {
   return state.enabled === true || _beforeOpen() || _afterClose();
 }
 
+function isStrict() {
+  return isActive() && state.strict === true;
+}
+
 /** 目前階段：pre_open(未開服) / open(開放中) / closed(手動維護或已關服)。 */
 function getPhase() {
   if (_beforeOpen()) return "pre_open";
@@ -102,6 +108,7 @@ function getPublicInfo() {
   const preOpen = _beforeOpen();
   return {
     active: isActive(),
+    strict: state.strict === true,
     phase: getPhase(),
     title: preOpen ? state.openTitle : state.title,
     message: preOpen ? state.openMessage : state.message,
@@ -118,6 +125,7 @@ function getRawState() {
 async function setState(patch) {
   const next = {
     enabled: patch.enabled !== undefined ? patch.enabled === true : state.enabled,
+    strict: patch.strict !== undefined ? patch.strict === true : state.strict,
     openAt: patch.openAt !== undefined ? (patch.openAt || null) : state.openAt,
     activateAt: patch.activateAt !== undefined ? (patch.activateAt || null) : state.activateAt,
     whitelist: Array.isArray(patch.whitelist) ? patch.whitelist.map((x) => String(x)) : state.whitelist,
@@ -138,4 +146,4 @@ async function setState(patch) {
   return getRawState();
 }
 
-module.exports = { isActive, isWhitelisted, getPublicInfo, getRawState, setState, ensureLoaded };
+module.exports = { isActive, isStrict, isWhitelisted, getPublicInfo, getRawState, setState, ensureLoaded, refresh: _loadFromDb };

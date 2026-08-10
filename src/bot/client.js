@@ -884,7 +884,8 @@ function createBotClient() {
         const maintenance = require("../services/access/maintenanceStore");
         if (maintenance.isActive() && !maintenance.isWhitelisted(interaction.user?.id)) {
           const MAINT_ALLOWED = new Set(["player-panel:profile", "player-panel:equipment"]);
-          const allowed = interaction.isButton() && MAINT_ALLOWED.has(interaction.customId);
+          const allowed = maintenance.getRawState().strict !== true
+            && interaction.isButton() && MAINT_ALLOWED.has(interaction.customId);
           if (!allowed) {
             const info = maintenance.getPublicInfo();
             const text = `🌙 **${info.title}**\n${info.message}\n${info.inviteUrl || ""}`;

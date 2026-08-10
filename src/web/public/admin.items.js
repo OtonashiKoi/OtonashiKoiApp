@@ -303,4 +303,43 @@ reroll_attributes:"🔮 屬性重製"
     await importCsv(file);
     this.value = '';
   });
+
+  // 跨季保留是資料欄位，不再把特定道具寫死在重置程式裡。表格每次重繪後，
+  // 在操作欄補上立即儲存的勾選項；一般「儲存」不帶此欄位，因此不會誤覆蓋。
+  const persistentObserver = new MutationObserver(() => {
+    const tbody = document.getElementById('items-tbody');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr[data-item-id]').forEach((tr) => {
+      const id = tr.dataset.itemId;
+      if (!id || id === '__new__' || tr.querySelector('[data-season-persistent]')) return;
+      const item = items.find((entry) => String(entry.id) === String(id));
+      const cell = tr.lastElementChild;
+      if (!item || !cell) return;
+      const label = document.createElement('label');
+      label.className = 'hint';
+      label.style.cssText = 'display:block;margin-bottom:5px;white-space:nowrap';
+      label.innerHTML = `<input type="checkbox" data-season-persistent ${item.seasonPersistent ? 'checked' : ''}> 跨季保留`;
+      const input = label.querySelector('input');
+      input.addEventListener('change', async () => {
+        input.disabled = true;
+        try {
+          const res = await fetch(`/admin/items/${encodeURIComponent(id)}`, {
+            method: 'PUT', headers: jsonHeaders(), body: JSON.stringify({ seasonPersistent: input.checked })
+          });
+          const json = await res.json();
+          if (json.status !== 'ok') throw new Error(json.message || '儲存失敗');
+          item.seasonPersistent = input.checked;
+          window.logActivity && window.logActivity(`✅ ${item.name}：${input.checked ? '設為跨季保留' : '取消跨季保留'}`);
+        } catch (error) {
+          input.checked = !input.checked;
+          window.logActivity && window.logActivity(`❌ 跨季設定失敗：${error.message}`);
+        } finally {
+          input.disabled = false;
+        }
+      });
+      cell.prepend(label);
+    });
+  });
+  const itemsTbody = document.getElementById('items-tbody');
+  if (itemsTbody) persistentObserver.observe(itemsTbody, { childList: true });
 })();

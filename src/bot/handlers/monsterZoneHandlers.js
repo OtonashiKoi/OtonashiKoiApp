@@ -3456,11 +3456,9 @@ async function handleEnterBattle(interaction) {
           const _bMaxHp = Math.max(1, Number(battleMonster?.calc?.maxHp || session.monsterStats?.maxHp || monsterHpBeforeBattle || 1));
           const _bGain = bestiaryGainFromDamage(totalDamage, _bMaxHp);
           if (_bGain > 0 && _bestiaryMonsterId) {
-            const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-            const _db = await getMongoDb();
-            await _db.collection("progress").updateOne(
-              { playerId: discordId },
-              { $inc: { ["bestiary." + _bestiaryMonsterId]: _bGain } }
+            await sc.progressRepository.incrementFields(
+              discordId,
+              { ["bestiary." + _bestiaryMonsterId]: _bGain }
             );
             const _bTotalAfter = _bestiaryKillsBefore + _bGain;
             session._bestiary = {

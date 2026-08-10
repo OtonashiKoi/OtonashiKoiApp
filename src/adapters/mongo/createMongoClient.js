@@ -3,8 +3,27 @@ const config = require("../../config");
 
 let cachedClient = null;
 let cachedDb = null;
+let connectionPromise = null;
 let indexReady = false;
 let streamBindingSyncReady = false;
+
+async function ensureStreamBindingDiscordPlatformUniqueIndex(db) {
+  const collection = db.collection("streamAccountBindings");
+  const indexName = "discordId_1_platform_1_unique";
+  const indexes = await collection.listIndexes().toArray().catch(() => []);
+  if (indexes.some((index) => index.name === indexName && index.unique === true)) return;
+  const duplicates = await collection.aggregate([
+    { $match: { discordId: { $type: "string", $gt: "" }, platform: { $type: "string", $gt: "" } } },
+    { $group: { _id: { discordId: "$discordId", platform: "$platform" }, count: { $sum: 1 } } },
+    { $match: { count: { $gt: 1 } } },
+    { $limit: 20 },
+  ]).toArray();
+  if (duplicates.length) {
+    console.info(`[MongoDB] streamAccountBindings unique index deferred: ${duplicates.length} duplicate key group(s) require review`);
+    return;
+  }
+  await collection.createIndex({ discordId: 1, platform: 1 }, { unique: true, name: indexName });
+}
 
 async function ensureIndexes(db) {
   if (indexReady) return;
@@ -15,7 +34,6 @@ async function ensureIndexes(db) {
       db.collection("players").createIndex({ discordId: 1 }, { unique: true }),
       db.collection("wallets").createIndex({ playerId: 1 }, { unique: true }),
       db.collection("streamAccountBindings").createIndex({ platform: 1, platformUserId: 1 }, { unique: true }),
-      db.collection("streamAccountBindings").createIndex({ discordId: 1, platform: 1 }, { unique: true }),
       db.collection("creatorTokens").createIndex({ provider: 1 }, { unique: true }),
 
       // 進度（頻繁更新，加快查詢和保存）
@@ -71,8 +89,16 @@ async function ensureIndexes(db) {
 
       // 商店和道具
       db.collection("shopItems").createIndex({ id: 1 }, { unique: true }),
-      db.collection("items").createIndex({ id: 1 }, { unique: true })
+      db.collection("items").createIndex({ id: 1 }, { unique: true }),
+      db.collection("seasonResetRuns").createIndex({ createdAt: -1 }),
+      db.collection("seasonResetRunPlayers").createIndex({ runId: 1, playerId: 1 }, { unique: true }),
+      db.collection("weeklyQuestProgressHistory").createIndex({ archiveKey: 1 }, { unique: true }),
+      db.collection("checkinHistory").createIndex({ archiveKey: 1 }, { unique: true })
     ]);
+
+    // 舊環境可能已有同 key pattern 的非 unique 索引。先查重；有重複只回報，
+    // 不自動刪玩家綁定。資料乾淨時才以新名稱補上 unique index。
+    await ensureStreamBindingDiscordPlatformUniqueIndex(db);
 
     indexReady = true;
   } catch (err) {
@@ -141,35 +167,51 @@ async function syncLegacyStreamBindings(db) {
 
 async function getMongoDb() {
   if (cachedDb) return cachedDb;
+  if (connectionPromise) return connectionPromise;
 
   if (!config.storage.mongoUri) {
     throw new Error("MONGODB_URI is required");
   }
 
-  cachedClient = new MongoClient(config.storage.mongoUri, {
-    serverSelectionTimeoutMS: 5000,
-    minPoolSize: 5,
-    maxPoolSize: 50,                    // 提高連接池以應對高頻更新
-    maxIdleTimeMS: 120000,
-    socketTimeoutMS: 45000,             // 避免長連接超時
-    retryWrites: true,                  // 自動重試寫入
-    writeConcern: { w: 'majority' },    // 確保寫入到多個副本（如果有）
-    directConnection: false             // 允許連接池優化
-  });
-
-  await cachedClient.connect();
-  cachedDb = cachedClient.db(config.storage.mongoDbName);
-  await ensureIndexes(cachedDb);
-  await syncLegacyStreamBindings(cachedDb);
-  return cachedDb;
+  connectionPromise = (async () => {
+    const client = new MongoClient(config.storage.mongoUri, {
+      serverSelectionTimeoutMS: 5000,
+      minPoolSize: 5,
+      maxPoolSize: 50,
+      maxIdleTimeMS: 120000,
+      socketTimeoutMS: 45000,
+      retryWrites: true,
+      writeConcern: { w: "majority" },
+      directConnection: false,
+    });
+    try {
+      await client.connect();
+      const db = client.db(config.storage.mongoDbName);
+      await ensureIndexes(db);
+      await syncLegacyStreamBindings(db);
+      cachedClient = client;
+      cachedDb = db;
+      return db;
+    } catch (error) {
+      await client.close().catch(() => {});
+      throw error;
+    }
+  })();
+  try {
+    return await connectionPromise;
+  } finally {
+    connectionPromise = null;
+  }
 }
 
 async function closeMongoClient() {
+  if (connectionPromise) await connectionPromise.catch(() => {});
   const client = cachedClient;
   cachedClient = null;
   cachedDb = null;
   indexReady = false;
   streamBindingSyncReady = false;
+  connectionPromise = null;
   if (client) await client.close();
 }
 

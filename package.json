@@ -28,6 +28,7 @@
     "test:npc-effects": "node scripts/test-npc-option-effects.js",
     "test:stream-notifications": "node scripts/test-stream-notifications.js",
     "test:tower-party": "node scripts/test-tower-party.js",
+    "test:season-reset": "node scripts/test-season-reset-policy.js && node scripts/test-season-reset-integration.js",
     "pm2:start": "npx pm2 start ecosystem.config.cjs",
     "pm2:restart": "npx pm2 restart equipmentGAME --update-env",
     "pm2:reset": "node scripts/pm2-reset.js",

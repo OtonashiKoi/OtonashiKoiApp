@@ -5,6 +5,8 @@ const { createStreamAccountBindingRepository } = require("../streamBindings/crea
 const { createCreatorTokenRepository } = require("../creatorTokens/createCreatorTokenRepository");
 const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
 const { slimProgressForStorage, slimInventoryEntry, slimInventoryArray } = require("../../shared/inventoryStorage");
+const seasonState = require("../../services/access/seasonStateStore");
+const maintenance = require("../../services/access/maintenanceStore");
 
 function emitRealtimeInvalidate(type, discordId) {
   if (!discordId) return;
@@ -26,6 +28,7 @@ function emitRealtimeInvalidate(type, discordId) {
 }
 
 function createMongoRepositories() {
+  seasonState.ensureLoaded().catch(() => {});
   const collection = async (name) => (await getMongoDb()).collection(name);
   const normalizeLowLevelJobBadge = (progress) => {
     if (!progress || typeof progress !== "object") return progress;
@@ -114,7 +117,7 @@ function createMongoRepositories() {
         scByUuid[u] = Math.max(1, Number(e.stackCount) || 1);
       }
       Object.defineProperty(doc, INV_BASELINE_KEY, {
-        value: { sig: JSON.stringify(slim), uuids, scByUuid },
+        value: { sig: JSON.stringify(slim), uuids, scByUuid, seasonKey: String(doc.seasonKey || "legacy") },
         enumerable: false,
         writable: true,
         configurable: true
@@ -256,6 +259,7 @@ function createMongoRepositories() {
         return (await collection("wallets")).findOne({ playerId });
       },
       async save(wallet) {
+        if (maintenance.isStrict()) throw new Error("SEASON_RESET_WRITE_LOCKED");
         await (await collection("wallets")).updateOne(
           { playerId: wallet.playerId },
           { $set: wallet },
@@ -269,6 +273,8 @@ function createMongoRepositories() {
       // 註：mongodb driver v6 的 findOneAndUpdate 直接回傳文件（或 null），不再包在 { value } 內。
       async incBalance(playerId, currencyType, amount) {
         const field = currencyType === "diamond" ? "diamond" : "gold";
+        // 鑽石是跨季資產，外部斗內仍可入帳；金幣屬賽季資產，嚴格維護時拒寫。
+        if (field === "gold" && maintenance.isStrict()) return null;
         const col = await collection("wallets");
         const filter = amount < 0
           ? { playerId, [field]: { $gte: -amount } }
@@ -285,6 +291,7 @@ function createMongoRepositories() {
       // 原子購買背包格：條件扣 diamondCost 顆鑽（$gte 守餘額）並加 slotsAdd 格永久背包格。
       // 鑽石不足 → 回傳 null（不會扣成負數，也不會加格）。
       async purchaseBackpackSlots(playerId, diamondCost, slotsAdd) {
+        if (maintenance.isStrict()) return null;
         const col = await collection("wallets");
         const updated = await col.findOneAndUpdate(
           { playerId, diamond: { $gte: diamondCost } },
@@ -297,6 +304,7 @@ function createMongoRepositories() {
       },
       // 純發放「賽季背包格」（不扣鑽，供消耗品/圖鑑獎勵用；換季會清零，與花鑽的永久格分開）
       async grantBackpackSlots(playerId, slotsAdd) {
+        if (maintenance.isStrict()) return null;
         const col = await collection("wallets");
         const updated = await col.findOneAndUpdate(
           { playerId },
@@ -314,6 +322,7 @@ function createMongoRepositories() {
       async findByPlayerId(playerId) {
         const progress = await (await collection("progress")).findOne({ playerId });
         if (!progress) return progress;
+        if (!progress.seasonKey) progress.seasonKey = seasonState.LEGACY_KEY;
         const normalized = normalizeProgressDocumentWithGemStacks(progress);
         if (normalized?.equipment) {
           // 永遠從 DB 讀取最新 effects，所有呼叫方自動拿到最新設計值
@@ -322,6 +331,11 @@ function createMongoRepositories() {
         return stampInventoryBaseline(normalized);
       },
       async save(progress) {
+        if (maintenance.isStrict()) {
+          const error = new Error("SEASON_RESET_WRITE_LOCKED");
+          error.code = "SEASON_RESET_WRITE_LOCKED";
+          throw error;
+        }
         // 🔬 臨時偵錯（jobExp 被洗掉事故，用完即拆）：抓「寫入的裝備徽章沒帶 jobExp」的呼叫堆疊
         try {
           if (String(progress?.playerId) === "1043389715577049138") {
@@ -334,6 +348,9 @@ function createMongoRepositories() {
         const baseline = progress ? progress[INV_BASELINE_KEY] : null;
         // 儲存前瘦身 inventory(去除可從道具庫還原的肥欄位),避免 progress 文件撐爆 16MB
         progress = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        const expectedSeasonKey = String(progress.seasonKey || baseline?.seasonKey || seasonState.getActiveKey());
+        progress.seasonKey = expectedSeasonKey;
+        const guarded = (extra = {}) => ({ ...seasonState.progressFilter(progress.playerId, expectedSeasonKey), ...extra });
         const outInv = Array.isArray(progress.inventory) ? progress.inventory : [];
         // 呼叫方這次到底有沒有動背包？（簽章比對讀取當下 vs 現在）
         const invUntouched = Boolean(baseline && typeof baseline.sig === "string"
@@ -352,7 +369,7 @@ function createMongoRepositories() {
               //    期間被原子塞進來的獎勵（世界王寶箱/掉落/拍賣到貨…）原封不動。
               const { inventory: _omit, ...rest } = progress;
               result = await coll.updateOne(
-                { playerId: progress.playerId },
+                guarded(),
                 { $set: { ...rest, updatedAt: now } },
                 { upsert: false }
               );
@@ -364,14 +381,14 @@ function createMongoRepositories() {
               let casMatched = false;
               for (let casTry = 0; casTry < 5; casTry++) {
                 const cur = await coll.findOne(
-                  { playerId: progress.playerId },
-                  { projection: { inventory: 1, updatedAt: 1 } }
+                  guarded(),
+                  { projection: { inventory: 1, updatedAt: 1, seasonKey: 1 } }
                 );
                 if (!cur) break; // 文件不見了 → 交給下方 fallback
                 casMatched = true;
                 const merged = mergeInventories(outInv, cur.inventory, baseline);
                 const cas = await coll.updateOne(
-                  { playerId: progress.playerId, updatedAt: cur.updatedAt },
+                  guarded({ updatedAt: cur.updatedAt }),
                   { $set: { ...rest, inventory: merged, updatedAt: now } },
                   { upsert: false }
                 );
@@ -381,12 +398,12 @@ function createMongoRepositories() {
                 // CAS 連續失敗（極高併發）→ 最後一次用剛讀到的最新狀態直接寫，
                 // 仍然是合併後的結果，不是呼叫方的整份舊資料
                 const cur = await coll.findOne(
-                  { playerId: progress.playerId },
+                  guarded(),
                   { projection: { inventory: 1 } }
                 );
                 const merged = mergeInventories(outInv, cur ? cur.inventory : [], baseline);
                 const forced = await coll.updateOne(
-                  { playerId: progress.playerId },
+                  guarded(),
                   { $set: { ...rest, inventory: merged, updatedAt: now } },
                   { upsert: false }
                 );
@@ -397,19 +414,17 @@ function createMongoRepositories() {
             } else {
               // ③ 沒有基準（新建文件、或經過序列化丟失戳記）→ 舊行為：整份覆寫
               result = await coll.updateOne(
-                { playerId: progress.playerId },
+                guarded(),
                 { $set: { ...progress, updatedAt: now } },
                 { upsert: true }
               );
             }
 
-            // 有基準但文件不見了（極罕見：期間被刪）→ 退回整份 upsert
+            // 有基準卻寫不到，通常代表換季已切換；禁止用 upsert 復活舊存檔。
             if (baseline && result.matchedCount === 0) {
-              result = await coll.updateOne(
-                { playerId: progress.playerId },
-                { $set: { ...progress, updatedAt: now } },
-                { upsert: true }
-              );
+              const error = new Error(`STALE_SEASON_WRITE:${progress.playerId}:${expectedSeasonKey}`);
+              error.code = "STALE_SEASON_WRITE";
+              throw error;
             }
 
             if (result.matchedCount === 0 && result.upsertedCount === 0) {
@@ -427,6 +442,7 @@ function createMongoRepositories() {
             const isLastAttempt = attempt === maxRetries;
             console.error(`[ProgressRepository] Save failed for ${progress.playerId} (attempt ${attempt}/${maxRetries}):`, err.message);
 
+            if (err?.code === "STALE_SEASON_WRITE") throw err;
             if (!isLastAttempt) {
               // 指數退避：10ms、20ms、40ms、80ms、160ms
               const delay = Math.pow(2, attempt) * 10;
@@ -449,11 +465,25 @@ function createMongoRepositories() {
        * 把它抹掉——這是獎勵憑空消失的主因。
        * 只改單一小欄位時一律用這個，不要用 save()。
        */
-      async updateFields(playerId, fields) {
+      async updateFields(playerId, fields, options = {}) {
+        if (maintenance.isStrict()) return false;
         if (!playerId || !fields || typeof fields !== "object") return false;
+        const expectedSeasonKey = String(options.expectedSeasonKey || seasonState.getActiveKey());
         const result = await (await collection("progress")).updateOne(
-          { playerId: String(playerId) },
+          seasonState.progressFilter(playerId, expectedSeasonKey),
           { $set: { ...fields, updatedAt: new Date().toISOString() } },
+          { upsert: false }
+        );
+        if (result.matchedCount > 0) emitRealtimeInvalidate("progress", String(playerId));
+        return result.matchedCount > 0;
+      },
+      async incrementFields(playerId, increments, options = {}) {
+        if (maintenance.isStrict()) return false;
+        if (!playerId || !increments || typeof increments !== "object") return false;
+        const expectedSeasonKey = String(options.expectedSeasonKey || seasonState.getActiveKey());
+        const result = await (await collection("progress")).updateOne(
+          seasonState.progressFilter(playerId, expectedSeasonKey),
+          { $inc: increments, $set: { updatedAt: new Date().toISOString() } },
           { upsert: false }
         );
         if (result.matchedCount > 0) emitRealtimeInvalidate("progress", String(playerId));
@@ -461,6 +491,11 @@ function createMongoRepositories() {
       },
       // CAS 寫入：只有 updatedAt 未被別人改過才成功，回傳是否成功
       async saveIfUnchanged(progress, prevUpdatedAt) {
+        if (maintenance.isStrict()) {
+          const error = new Error("SEASON_RESET_WRITE_LOCKED");
+          error.code = "SEASON_RESET_WRITE_LOCKED";
+          throw error;
+        }
         // 🔬 臨時偵錯（jobExp 被洗掉，用完即拆）
         try {
           if (String(progress?.playerId) === "1043389715577049138") {
@@ -470,10 +505,12 @@ function createMongoRepositories() {
           }
         } catch (_) {}
         progress = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        const expectedSeasonKey = String(progress.seasonKey || seasonState.getActiveKey());
+        progress.seasonKey = expectedSeasonKey;
         const now = new Date().toISOString();
         const filter = prevUpdatedAt
-          ? { playerId: progress.playerId, updatedAt: prevUpdatedAt }
-          : { playerId: progress.playerId };
+          ? { ...seasonState.progressFilter(progress.playerId, expectedSeasonKey), updatedAt: prevUpdatedAt }
+          : seasonState.progressFilter(progress.playerId, expectedSeasonKey);
         const result = await (await collection("progress")).updateOne(
           filter,
           { $set: { ...progress, updatedAt: now } },
@@ -486,9 +523,10 @@ function createMongoRepositories() {
       },
       // 只更新 PK 相關欄位，避免覆蓋玩家的 inventory/equipped 等資料
       async updatePkStats(playerId, { pkRating, pkWins, pkLosses }) {
+        if (maintenance.isStrict()) return false;
         const now = new Date().toISOString();
         await (await collection("progress")).updateOne(
-          { playerId },
+          seasonState.progressFilter(playerId),
           { $set: { pkRating, pkWins, pkLosses, updatedAt: now } },
           { upsert: false }
         );
@@ -498,7 +536,9 @@ function createMongoRepositories() {
       // 不走 read-modify-write 整包背包，避免與玩家自身高頻存檔(刷怪/結算)競態，
       // 杜絕 CAS 失敗造成的「靜默吞箱」。回傳 { ok, uuid, stacked }。
       async addOrStackInventoryItem(playerId, itemId, newEntry) {
+        if (maintenance.isStrict()) return { ok: false, uuid: null, stacked: false, reason: "season_reset_locked" };
         const coll = await collection("progress");
+        const baseFilter = seasonState.progressFilter(playerId);
         const slimEntry = slimInventoryEntry(newEntry);
 
         // 只有「真正可堆疊」的道具(消耗品/寵物蛋，含寶石與寶箱)才併進既有 entry。
@@ -516,7 +556,7 @@ function createMongoRepositories() {
         if (!_stackable) {
           // 裝備/卡片：一律新增獨立 entry（保住各自的附魔與 uuid）
           const push = await coll.updateOne(
-            { playerId },
+            baseFilter,
             { $push: { inventory: slimEntry }, $set: { updatedAt: new Date().toISOString() } },
             { upsert: false }
           );
@@ -532,7 +572,7 @@ function createMongoRepositories() {
           // 1) 已有同款 → 原子 +1。positional projection 不能搭 after，取 before 即可
           //    （堆疊不改 uuid，before 的 uuid 與 after 相同）
           const inc = await coll.findOneAndUpdate(
-            { playerId, "inventory.itemId": itemId },
+            { ...baseFilter, "inventory.itemId": itemId },
             { $inc: { "inventory.$.stackCount": 1 }, $set: { updatedAt: now } },
             { projection: { "inventory.$": 1 }, returnDocument: "before" }
           );
@@ -545,7 +585,7 @@ function createMongoRepositories() {
           //    必須顯式帶 stackCount，否則下次 $inc 在「沒有這個欄位」的 entry 上只會得到 1（0+1）
           //    → 第二個消耗品(例如世界王寶箱)會被吃掉。
           const push = await coll.updateOne(
-            { playerId, "inventory.itemId": { $ne: itemId } },
+            { ...baseFilter, "inventory.itemId": { $ne: itemId } },
             {
               $push: { inventory: { ...slimEntry, stackCount: Math.max(1, Number(newEntry?.stackCount) || 1) } },
               $set: { updatedAt: now }
@@ -557,7 +597,7 @@ function createMongoRepositories() {
             return { ok: true, uuid: newEntry.uuid, stacked: false };
           }
           // matched 0：玩家不存在 → 直接失敗；否則是併發剛插入同款 → 下一輪回到疊加分支
-          const exists = await coll.countDocuments({ playerId }, { limit: 1 });
+          const exists = await coll.countDocuments(baseFilter, { limit: 1 });
           if (!exists) return { ok: false, uuid: null, stacked: false };
         }
         return { ok: false, uuid: null, stacked: false };
@@ -900,6 +940,7 @@ function createMongoRepositories() {
         return row?.value || null;
       },
       async saveState(state, bossKey = "default") {
+        if (maintenance.isStrict()) throw Object.assign(new Error("SEASON_RESET_WRITE_LOCKED"), { code: "SEASON_RESET_WRITE_LOCKED" });
         await (await collection("worldBossState")).updateOne(
           { _id: bossKey },
           { $set: { value: state, updatedAt: new Date().toISOString() } },
@@ -914,6 +955,7 @@ function createMongoRepositories() {
         return row?.value || null;
       },
       async saveState(state) {
+        if (maintenance.isStrict()) throw Object.assign(new Error("SEASON_RESET_WRITE_LOCKED"), { code: "SEASON_RESET_WRITE_LOCKED" });
         await (await collection("pkArenaState")).updateOne(
           { _id: "default" },
           { $set: { value: state, updatedAt: new Date().toISOString() } },
@@ -1081,6 +1123,11 @@ function createMongoRepositories() {
         return row?.value || { activeMonsterSeq: 1, currentHp: null, killCount: {} };
       },
       async saveState(state, zoneKey = "normal") {
+        if (maintenance.isStrict()) {
+          const error = new Error("SEASON_RESET_WRITE_LOCKED");
+          error.code = "SEASON_RESET_WRITE_LOCKED";
+          throw error;
+        }
         const stateDocId = `monsterState:${zoneKey}`;
         // 同步寫入 monsters collection（作為合併模式）與 legacy monsterState collection（維持相容性）
         try {
@@ -1102,6 +1149,7 @@ function createMongoRepositories() {
       // 原子收付擊殺權：成功回 true，已被其他進程收付回 false
       // 若先前的 claim 超過 timeoutMs，允許重新 claim（回收無回應的鎖）
       async claimKill(zoneKey, monsterSeq, timeoutMs = 30 * 1000) {
+        if (maintenance.isStrict()) return false;
         // 為了保留原有的原子操作語意，claim 仍在 legacy monsterState collection 上執行
         const col = await collection("monsterState");
         const now = new Date();
@@ -1168,6 +1216,7 @@ function createMongoRepositories() {
     },
     towerSessionRepository: {
       async save(session) {
+        if (maintenance.isStrict()) throw Object.assign(new Error("SEASON_RESET_WRITE_LOCKED"), { code: "SEASON_RESET_WRITE_LOCKED" });
         await (await collection("towerSessions")).replaceOne(
           { threadId: session.threadId },
           session,

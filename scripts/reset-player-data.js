@@ -69,6 +69,9 @@ async function getPlayerTierByRoleQuery(memberRestManager, discordId, tierRoleTo
 }
 
 async function main() {
+  if (process.env.ALLOW_LEGACY_RESET !== "1") {
+    throw new Error("此為舊版資料重置工具，預設停用。賽季重置請使用 scripts/reset-players-season.js；若確定要執行舊規則，需另設 ALLOW_LEGACY_RESET=1。");
+  }
   let client;
   try {
     console.log("🔗 连接到 MongoDB...");

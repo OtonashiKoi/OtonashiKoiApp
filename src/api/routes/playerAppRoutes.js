@@ -1419,6 +1419,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     if (require("../../services/access/webBanStore").isBlocked(discordId)) {
       return res.status(403).json({ status: "error", code: "WEB_BLOCKED", message: "你的帳號已被管理員封鎖網頁使用權限。" });
     }
+    const maintenance = require("../../services/access/maintenanceStore");
+    if (maintenance.isActive() && !maintenance.isWhitelisted(discordId)) {
+      const info = maintenance.getPublicInfo();
+      return res.status(403).json({ status: "error", code: "SEASON_ENDED", message: info.message, title: info.title });
+    }
 
     const releaseSse = acquireSse(req); // SSE 連線數上限(防單一來源開大量連線耗盡記憶體)
     if (!releaseSse) return res.status(503).json({ status: "error", message: "連線數已滿,請稍後再試" });
@@ -3530,11 +3535,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const _bMaxHp = Math.max(1, Number(monster?.calc?.maxHp || monsterHpInitial || 1));
         const _bGain = bestiaryGainFromDamage(totalDamage, _bMaxHp);
         if (_bGain > 0 && _bestiaryMonsterId) {
-          const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-          const _db = await getMongoDb();
-          await _db.collection("progress").updateOne(
-            { playerId: discordId },
-            { $inc: { ["bestiary." + _bestiaryMonsterId]: _bGain } }
+          await serviceContext.progressRepository.incrementFields(
+            discordId,
+            { ["bestiary." + _bestiaryMonsterId]: _bGain }
           );
           const _bTotalAfter = _bestiaryKillsBefore + _bGain;
           bestiaryInfo = {

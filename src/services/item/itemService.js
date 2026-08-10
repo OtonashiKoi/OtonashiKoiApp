@@ -76,7 +76,7 @@ class ItemService {
     return VALID_TIERS.includes(t) ? t : null;
   }
 
-  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats, weaponType, tier, passiveEffects, procEffects, useEffects, combatEffects }) {
+  async createItem({ name, description, itemType, effect, imageUrl, imageThumbnailUrl, equipSlot, equipStats, weaponType, tier, passiveEffects, procEffects, useEffects, combatEffects, seasonPersistent }) {
     const normalizedType = this._normalizeItemType(itemType);
     const normalizedSlot = (normalizedType === "equipment" || normalizedType === "job_badge") ? (this._normalizeEquipSlot(equipSlot) || "head_top") : null;
     const resolvedWeaponType = (normalizedSlot === "weapon" || normalizedSlot === "shield") ? (this._normalizeWeaponType(weaponType, normalizedSlot) || null) : null;
@@ -99,6 +99,7 @@ class ItemService {
       isTwoHanded: resolvedWeaponType ? TWO_HANDED_WEAPON_TYPES.has(resolvedWeaponType) : false,
       atkStat: resolvedWeaponType ? (WEAPON_ATK_STAT[resolvedWeaponType] || "str") : null,
       tier: this._normalizeTier(tier),
+      seasonPersistent: seasonPersistent === true,
       enhanceLevel: 0,
       createdAt: new Date().toISOString()
     };
@@ -137,6 +138,7 @@ class ItemService {
       updated.atkStat = wt ? (WEAPON_ATK_STAT[wt] || "str") : null;
     }
     if (fields.tier !== undefined) updated.tier = this._normalizeTier(fields.tier);
+    if (fields.seasonPersistent !== undefined) updated.seasonPersistent = fields.seasonPersistent === true;
     // 若更改類型為非裝備或非職業徽章，清空裝備欄位
     if (updated.itemType !== "equipment" && updated.itemType !== "job_badge") { updated.equipSlot = null; updated.equipStats = null; updated.weaponType = null; updated.isTwoHanded = false; updated.atkStat = null; updated.tier = null; }
     if (!updated.name) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "道具名稱不可空白", 400);

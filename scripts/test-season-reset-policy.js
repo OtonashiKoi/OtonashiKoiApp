@@ -14,9 +14,13 @@ const storyAnchor = { uuid: "story-anchor", itemId: "s-legend-resonance", itemTy
 const seasonAnchor = { uuid: "season-anchor", itemId: "s-seasonal", itemType: "equipment", equipSlot: "anchor" };
 const egg = { uuid: "egg", itemId: "egg-1", itemType: "pet_egg" };
 const sword = { uuid: "sword", itemId: "sword-1", itemType: "equipment", equipSlot: "weapon" };
+const persistent = { uuid: "persistent", itemId: "event-keepsake", itemType: "equipment", equipSlot: "anchor", seasonPersistent: true };
 
-const kept = filterKeptInventory([title, collectible, storyAnchor, seasonAnchor, egg, sword]);
-assert.deepEqual(kept.map((item) => item.uuid), ["title", "collect", "story-anchor"]);
+const kept = filterKeptInventory([title, collectible, storyAnchor, seasonAnchor, egg, sword, persistent]);
+assert.deepEqual(kept.map((item) => item.uuid), ["title", "collect", "story-anchor", "persistent"]);
+
+const configuredKept = filterKeptInventory([seasonAnchor], new Set(["s-seasonal"]));
+assert.deepEqual(configuredKept.map((item) => item.uuid), ["season-anchor"]);
 
 const old = {
   playerId: "player-1",
@@ -37,6 +41,8 @@ assert.equal(update.$set.equipment.anchor.uuid, "story-anchor");
 assert.notEqual(update.$set.equipment.weapon.itemId, "sword-1");
 assert.equal(update.$unset.jobTransfers, "");
 assert.equal(update.$unset.soloBoss, "");
+const keyedUpdate = buildProgressResetUpdate(old, "2026-08-10T00:00:00.000Z", { seasonKey: "s-test" });
+assert.equal(keyedUpdate.$set.seasonKey, "s-test");
 for (const permanent of ["storyProgress", "petDex", "cardDex", "cardDexClaims", "playerTier", "idleRewardReversal"]) {
   assert.equal(Object.hasOwn(update.$set, permanent), false, `${permanent} must not be overwritten`);
   assert.equal(Object.hasOwn(update.$unset, permanent), false, `${permanent} must not be removed`);

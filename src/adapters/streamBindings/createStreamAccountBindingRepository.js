@@ -65,7 +65,9 @@ function createLocalStreamAccountBindingRepository({ collection }) {
       }
 
       await (await collection("streamAccountBindings")).updateOne(
-        { platform: doc.platform, platformUserId: doc.platformUserId, discordId: doc.discordId },
+        // 一個 Discord 在同平台只保留一個有效綁定；換綁時更新原紀錄，
+        // 不再因 platformUserId 改變而新增第二筆重複資料。
+        { platform: doc.platform, discordId: doc.discordId },
         { $set: doc },
         { upsert: true }
       );

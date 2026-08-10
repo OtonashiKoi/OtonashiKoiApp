@@ -616,14 +616,39 @@
     const box = document.getElementById("season-reset-all-result");
     const pv = await request("/admin/season-reset-all/preview").catch(() => ({ total: "?" }));
     const total = pv.total;
-    const ans = window.prompt(`☢️ 全體回歸賽季重製\n\n將對「全部 ${total} 位玩家」套用統一規則，並重置怪物、PK/KDA、直播賽季資料與通行證。\n永久收藏與交易稽核紀錄保留。此操作不可復原、影響全服，執行前會自動備份。\n\n確定請輸入：RESET-ALL`);
+    const online = Number(pv.preflight?.onlinePlayers) || 0;
+    const ans = window.prompt(`☢️ 全體回歸賽季重製\n\n將對「全部 ${total} 位玩家」套用統一規則；目前網頁在線 ${online} 人。\n系統會先進入嚴格維護、等待既有操作排空並完成串流備份，再重置怪物、PK/KDA、直播加成與通行證。\n永久收藏與交易稽核紀錄保留，任務/簽到/拍賣改為封存。驗證通過才重新開放。\n\n確定請輸入：RESET-ALL`);
     if (ans !== "RESET-ALL") { if (box) box.textContent = "已取消（確認字串不符）"; return; }
-    if (box) box.textContent = "執行中…（玩家多時需稍候）";
-    const sum = await request("/admin/season-reset-all", { method: "POST", body: JSON.stringify({ confirm: "RESET-ALL" }) });
-    const msg = `${sum.completed ? "✅ 全體重製完成" : "⚠️ 全體重製未完整結束"}：成功 ${sum.succeeded}/${sum.total}、失敗 ${sum.failed}；移除拍賣 ${sum.removedAuctions} 筆、背包 ${sum.removedInventoryItems} 件；保留交易 ${sum.keptTransactions} 筆；新通行證 ${sum.globalReset?.pass?.seasonKey || "-"}${sum.finalizationSkipped || sum.globalResetError ? `；${sum.finalizationSkipped || sum.globalResetError}` : ""}`;
+    if (box) box.textContent = "已建立背景工作，準備進入維護模式…";
+    const queued = await request("/admin/season-reset-all", { method: "POST", body: JSON.stringify({ confirm: "RESET-ALL" }) });
+    localStorage.setItem("seasonResetRunId", queued._id);
+    const terminal = new Set(["completed", "failed", "blocked"]);
+    let run = queued;
+    while (!terminal.has(run.status)) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      run = await request(`/admin/season-reset-all/status/${encodeURIComponent(queued._id)}`);
+      if (box) box.textContent = `換季階段：${run.status}；進度 ${run.processed || 0}/${run.total || "?"}${run.currentPlayerId ? `；玩家 ${run.currentPlayerId}` : ""}`;
+    }
+    const sum = run.summary || {};
+    const msg = run.status === "completed"
+      ? `✅ 全體重製與驗證完成：成功 ${sum.succeeded}/${sum.total}；封存拍賣 ${sum.removedAuctions || 0} 筆；保留交易 ${sum.keptTransactions || 0} 筆；新賽季 ${run.seasonKey}`
+      : `⚠️ 換季工作 ${run.status}：${run.error || "請檢查工作狀態後續跑"}（為安全起見維持維護模式）`;
     if (box) box.textContent = msg;
+    localStorage.removeItem("seasonResetRunId");
     log(msg);
   }
+
+  async function restoreSeasonResetStatus() {
+    const runId = localStorage.getItem("seasonResetRunId");
+    const box = document.getElementById("season-reset-all-result");
+    if (!runId || !box) return;
+    try {
+      const run = await request(`/admin/season-reset-all/status/${encodeURIComponent(runId)}`);
+      box.textContent = `上次換季工作：${run.status}；進度 ${run.processed || 0}/${run.total || "?"}${run.error ? `；${run.error}` : ""}`;
+      if (["completed", "failed", "blocked"].includes(run.status)) localStorage.removeItem("seasonResetRunId");
+    } catch (_) { /* 後台尚未連線時保留 runId，稍後可再查 */ }
+  }
+  setTimeout(() => { restoreSeasonResetStatus().catch(() => {}); }, 500);
 
   // 回歸賽季重置：保留項目與全體流程共用後端唯一規則。
   async function submitSeasonReset() {
