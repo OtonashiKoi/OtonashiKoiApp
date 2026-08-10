@@ -936,6 +936,8 @@ const ZONE_META={
 };
 const ZONE_LABEL={beginner:"新手區",normal:"一般區",mid:"中級區",ancient_city:"古城",ancient_city_deep:"古城深處",
   dragon_realm:"龍族之領",elite:"精英區",nightmare:"噩夢區",abyss:"深淵區",mythic:"神話區"};
+const ELEMENT_LABEL={wood:"木",earth:"土",water:"水",fire:"火",metal:"金",sun:"日",moon:"月"};
+function elementText(element){ const label=ELEMENT_LABEL[String(element||"").toLowerCase()]; return label?`${label}屬性`:"—"; }
 
 let ZONES_CACHE=[];
 async function renderZones(main){
@@ -1188,6 +1190,7 @@ async function renderWorldboss(main){
   main.innerHTML=`<div class="narrow"><div class="sec-head"><div class="desc">本週世界王狀態（跨玩家共鬥）</div></div>
     <div class="card"><h3>🐲 ${cfg.bossName||"世界王"}</h3>
       <div style="color:var(--ink-dim);font-size:12px;margin-bottom:8px">週期 ${status.weekKey||st.weekKey||"—"}</div>
+      <div class="stat-row"><span>屬性</span><span class="v">${elementText(cfg.element)}</span></div>
       ${cfg.bossMaxHp?`<div class="mhpbar" style="height:12px"><i style="width:${hpPct}%"></i></div>
         <div class="mrew">HP ${fmt(st.currentHp)} / ${fmt(cfg.bossMaxHp)}</div>`:`<div class="empty-note">本週尚未開啟血量</div>`}
       <div class="stat-row"><span>狀態</span><span class="v">${status.unlocked?(status.canChallenge?"可挑戰":"冷卻中"):"未解鎖"}</span></div>

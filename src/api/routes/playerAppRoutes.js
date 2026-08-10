@@ -13,6 +13,7 @@ const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { acquireSse } = require("../netGuards");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
 const { acquireWebBattle } = require("../../services/progress/battleLock");
+const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard } = require("../../shared/leaderboardEligibility");
 
 // 跨 DC/網頁/裝置「同時只能一場戰鬥」：檢查 DC 端是否正在戰鬥（怪物/PK/塔）
 function describeDcBattle(discordId) {
@@ -506,6 +507,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
   const buildCombatZonesSnapshot = async (discordId = null) => {
     const keys = ALL_ZONE_KEYS;
+    const excludedIds = await getLeaderboardExcludedPlayerIds();
     return Promise.all(keys.map(async (key) => {
       const [state, monsters] = await Promise.all([
         serviceContext.monsterService.getState(key),
@@ -514,7 +516,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);
       if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
 
-      const dmgMap = state.damageMap || {};
+      const dmgMap = filterDamageMapForLeaderboard(state.damageMap || {}, excludedIds);
       const damageLeaderboard = Object.values(dmgMap)
         .sort((a, b) => b.damage - a.damage)
         .slice(0, 10);
@@ -2525,6 +2527,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/combat/zones", requireAuth, async (req, res, next) => {
     try {
       const keys = ALL_ZONE_KEYS;
+      const excludedIds = await getLeaderboardExcludedPlayerIds();
       const results = await Promise.all(keys.map(async (key) => {
         const [state, monsters] = await Promise.all([
           serviceContext.monsterService.getState(key),
@@ -2534,7 +2537,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         let activeMonster = monsters.find(m => m.seq === state.activeMonsterSeq);
         if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
 
-        const dmgMap = state.damageMap || {};
+        const dmgMap = filterDamageMapForLeaderboard(state.damageMap || {}, excludedIds);
         const damageLeaderboard = Object.entries(dmgMap)
           .map(([pid, e]) => ({
             discordId: pid,
@@ -2613,6 +2616,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/viewer/snapshot", async (_req, res, next) => {
     try {
       const keys = ALL_ZONE_KEYS;
+      const excludedIds = await getLeaderboardExcludedPlayerIds();
       const zones = await Promise.all(keys.map(async (key) => {
         const [state, monsters] = await Promise.all([
           serviceContext.monsterService.getState(key),
@@ -2622,7 +2626,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         let activeMonster = monsters.find((m) => m.seq === state.activeMonsterSeq);
         if (!activeMonster && monsters.length > 0) activeMonster = monsters[0];
 
-        const dmgMap = state.damageMap || {};
+        const dmgMap = filterDamageMapForLeaderboard(state.damageMap || {}, excludedIds);
         const damageLeaderboard = await Promise.all(
           Object.entries(dmgMap)
             .sort(([, a], [, b]) => b.damage - a.damage)
@@ -3766,13 +3770,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       // Weekly quest progression is updated after each battle result.
       try {
+        if (String(discordId) === "1043389715577049138") console.log("[jobExpProbe] 進入任務區塊");
         const questService = serviceContext.questService || serviceContext.weeklyQuestService;
         await questService.recordProgress(discordId, "battle_count", 1);
         // battle_win is granted in handleMonsterKill to all participants on kill.
         await questService.recordProgress(discordId, "damage_total", totalDamage);
         // 錨點隱藏任務指標：承受傷害(沒苦硬吃)、回血量(聖人)
         if (Number(combatResult?.damageTaken) > 0) await questService.recordProgress(discordId, "damage_taken", Math.round(Number(combatResult.damageTaken)));
-        if (Number(combatResult?.healDone) > 0) await questService.recordProgress(discordId, "heal_done", Math.round(Number(combatResult.healDone)));
+        if (Number(combatResult?.healDone) > 0) await questService.recordProgress(discordId, "heal_done", Math.round(Number(combatResult.healDone))); if (Number(combatResult?.lifestealDone) > 0) await questService.recordProgress(discordId, "lifesteal_done", Math.round(Number(combatResult.lifestealDone)));
         // 職業任務：依「出戰所持武器類型」累加（與 DC 端 recordQuestBattleProgress 對齊）
         const _wt = String(equipped?.weapon?.weaponType || "");
         const _weaponMetric =
@@ -3807,8 +3812,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } catch (_) { /* noop */ }
         // 職業徽章熟練度 +1。練滿 Lv20 不廣播（只是解鎖職業任務）；轉職成功才廣播。
         try {
-          await serviceContext.jobBadgeService?.grantBattleProficiency(discordId, 1);
-        } catch (_) { /* 熟練度失敗不影響戰鬥結算 */ }
+          // 🔬 臨時偵錯（jobExp 卡死，用完即拆）
+          if (String(discordId) === "1043389715577049138") {
+            console.log("[jobExpProbe] 到達熟練度呼叫點 svc=" + !!serviceContext.jobBadgeService);
+          }
+          const _bpR = await serviceContext.jobBadgeService?.grantBattleProficiency(discordId, 1);
+          if (String(discordId) === "1043389715577049138") {
+            console.log("[jobExpProbe] 熟練度結果=" + JSON.stringify(_bpR ? { from: _bpR.from, to: _bpR.to, exp: _bpR.progress?.exp } : null));
+          }
+        } catch (_e2) {
+          if (String(discordId) === "1043389715577049138") console.log("[jobExpProbe] 熟練度拋錯: " + (_e2?.message || _e2));
+          /* 熟練度失敗不影響戰鬥結算 */
+        }
         if (outcome === "lose") {
           await questService.recordProgress(discordId, "death_count", 1);
         }
@@ -3886,7 +3901,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       try {
         const latestState = await serviceContext.monsterService.getState(zoneKey);
         // 排行榜用「本場剛打那隻怪」的貢獻表(含本場傷害);若無則 fallback 現場狀態。
-        const dmgMap = (boardDamageMap && Object.keys(boardDamageMap).length) ? boardDamageMap : (latestState.damageMap || {});
+        const excludedIds = await getLeaderboardExcludedPlayerIds();
+        const rawDmgMap = (boardDamageMap && Object.keys(boardDamageMap).length) ? boardDamageMap : (latestState.damageMap || {});
+        const dmgMap = filterDamageMapForLeaderboard(rawDmgMap, excludedIds);
         postBattleLeaderboard = Object.entries(dmgMap)
           .map(([pid, e]) => ({
             discordId: pid, name: e?.name || pid,
@@ -4073,6 +4090,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       const PART_LABELS = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
       const DRAGON_KING_ZONE = "dragon_king_lair";
+      const excludedIds = await getLeaderboardExcludedPlayerIds();
 
       // 各世界王部位增減益說明（給前端顯示）
       const PART_EFFECTS = {
@@ -4181,7 +4199,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           return s;
         };
         // 目前這輪有人打就用現況；還沒人打(冷卻中/剛重生)則顯示「上一隻」的排行，直到下一隻被打才換新
-        const _rankSrc = (st?.damageMap && Object.keys(st.damageMap).length > 0) ? st.damageMap : (st?.lastDamageMap || {});
+        const _rankSrcRaw = (st?.damageMap && Object.keys(st.damageMap).length > 0) ? st.damageMap : (st?.lastDamageMap || {});
+        const _rankSrc = filterDamageMapForLeaderboard(_rankSrcRaw, excludedIds);
         const ranking = Object.entries(_rankSrc)
           .map(([pid, d]) => ({ name: _wbPretty(d?.name, pid), damage: Math.max(0, Math.round(Number(d?.damage) || 0)) }))
           .filter((d) => d.damage > 0)
@@ -4192,6 +4211,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           zoneKey,
           bossKey: bossKeyForZone(zoneKey),
           bossName,
+          element: bossMonster?.element || null,
           imageUrl,
           bossMaxHp,
           currentHp,
@@ -4223,6 +4243,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         enabled: legacy ? legacy.enabled : false,
         config: legacy ? {
           bossName: legacy.bossName,
+          element: legacy.element,
           bossMaxHp: legacy.bossMaxHp,
           respawnCooldownMinutes: legacy.respawnCooldownMinutes,
           battleTimeLimitMinutes: legacy.battleTimeLimitMinutes,

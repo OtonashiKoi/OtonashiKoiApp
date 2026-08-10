@@ -183,7 +183,6 @@ Generated at: 2026-08-09T12:47:00.564Z
 | 9b8ef677-eda3-42bc-82d7-63c202b49cd2 | 【圖片】音無樂園限定CB圖 | collectible |  |  |  |  | none |
 | a0b83358-572b-45c0-997b-3fa93dff7a32 | 【圖片】龍族紀元-收藏用 | collectible |  |  |  |  | none |
 | chest-a-weapon-select | A階武器抽選箱 | consumable |  |  |  |  | open_random_weapon |
-| 9b8ad195-9ec1-401b-9b7f-2c1033628cba | 【 我命由我不由天 】藥水 | consumable |  |  |  |  | level_down_random_attributes |
 | 4a3b928f-c86a-4f3e-b1be-8ca2828072ae | 【鯉市長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
 | 9d3f8e8a-3de6-40c4-a2a5-06793e83c7d5 | 【鯉民】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
 | 14ee61e8-e9f0-44e4-9a32-f8dd0060cbe2 | 【鯉長】的每月俸祿 | consumable |  |  |  |  | grant_diamond |
@@ -815,4 +814,3 @@ Generated at: 2026-08-09T12:47:00.564Z
 | job_gambler_v1 | 賭徒徽章 |  | 賭徒試煉 | 啟用 | 10 | dice | LUK + AGI > 10 | AGI+2 DEX+1 LUK+5 |
 | job_dicegod_t2_v1 | 賭神徽章 |  | 賭神試煉 | 啟用 | 35 |  |  | AGI+4 DEX+3 LUK+5 |
 | job_tactician_v1 | 軍師徽章 |  | 軍師試煉 | 啟用 | 10 |  |  | AGI+4 INT+2 DEX+2 |
-

@@ -100,6 +100,7 @@ function createSoloBossRoutes(serviceContext) {
         // 回傳「世界王 WorldBossEntry」形狀 → 前端直接重用現行世界王面板/部位攻擊
         bosses.push({
           zoneKey: `solo:${boss.key}`, bossKey: boss.key, bossName: `${boss.monsterName}（單人）`,
+          element: m?.element || null,
           imageUrl: m?.imageUrl || null,
           bossMaxHp: boss.maxHp, currentHp: parts.reduce((s, p) => s + p.currentHp, 0),
           respawnCooldownMinutes: 0, cooldownRemainingMs: 0, cooldownRemainingMinutes: 0,

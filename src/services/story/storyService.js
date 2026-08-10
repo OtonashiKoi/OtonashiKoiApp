@@ -614,7 +614,7 @@ class StoryService {
       if (this.rewardService?.grantCurrency) {
         await this.rewardService.grantCurrency({
           discordId, displayName, currencyType: "gold",
-          amount: -Math.abs(cost), source: "job_transfer", operator: "story:job-transfer",
+          amount: -Math.abs(cost), source: require("../../shared/sources").CURRENCY_SOURCES.JOB_TRANSFER, sourceRef: `${discordId}:story:${chapterId}:${nodeIndex}`, operator: "story:job-transfer",
         });
       } else if (this.walletRepository) {
         await this.walletRepository.save({ ...wallet, playerId: discordId, gold: gold - cost });

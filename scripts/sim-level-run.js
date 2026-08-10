@@ -4,13 +4,13 @@
  *
  * 不用統計回推，就是照遊戲規則一場一場打：
  *   ‧ 每場走 runCombatLoop（真的戰鬥，含徽章技能/裝備效果）
- *   ‧ 經驗 ＝ expReward ×(這場傷害 ÷ 怪物血量) × 組隊倍率   ← monsterZoneHandlers.js:4113
- *   ‧ 升級 +2 隨機屬性點（玩家不能自己配）
+ *   ‧ 經驗 ＝ expReward ×(這場傷害 ÷ 怪物血量) × 組隊倍率 × 全服滿加成
+ *   ‧ 升級採 2+1 制：+2 隨機屬性點、+1 自主點投入劍士主屬性 STR
  *   ‧ 裝備跟著「目前打得到的區域」升階（掉落決定階級）
  *   ‧ 區域受 minLevel / maxLevel 限制，每級重選「經驗/秒」最高的區
  *   ‧ 每場耗時 ＝ 15 回合 × tickDelay(agi)；陣亡再 +10 秒
  *
- * ⚠️ 升級是 +2 隨機屬性，AGI 抽多抽少會直接改變每場秒數，單一次跑的變異很大。
+ * ⚠️ 隨機 +2 的 AGI 抽多抽少會直接改變每場秒數，單一次跑的變異很大。
  *    要拿來校準曲線一定要跑多種子取平均（第 3 個參數）。
  *
  * 用法：node scripts/sim-level-run.js [同區人數] [強化等級] [跑幾輪]
@@ -24,6 +24,7 @@ const { runCombatLoop } = require("../src/shared/combatLoop");
 const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
 const { ZONES, ZONE_BY_KEY } = require("../src/shared/zones");
 const { expToNextLevel, MAX_LEVEL } = require("../src/shared/progression");
+const { getConfig, getMaxServerExpBuff } = require("../src/services/stream/streamEventConfig");
 const jobBadgeLevel = require("../src/shared/jobBadgeLevel");
 
 const PARTY = Math.max(1, Number(process.argv[2]) || 1);
@@ -53,10 +54,11 @@ function zoneOpen(zoneKey, level) {
   return true;
 }
 
-// 升級：+2 隨機屬性點
+// 升級：+2 隨機屬性點；自主 +1 以最快練等視角投入劍士主屬性 STR。
 function levelUpAttrs(attrs, rng) {
   const keys = ["str", "agi", "vit", "int", "dex", "luk"];
   for (let i = 0; i < 2; i++) attrs[keys[Math.floor(rng() * keys.length)]] += 1;
+  attrs.str += 1;
 }
 
 function mulberry32(a) {
@@ -86,6 +88,8 @@ const TIER_RANK = { D: 1, C: 2, B: 3, A: 4, S: 5 };
 (async () => {
   const db = await getMongoDb();
   const I = db.collection("items");
+  const serverExpBuff = getMaxServerExpBuff(await getConfig());
+  const serverExpMult = serverExpBuff.multiplier;
   const { createServiceContext } = require("../src/services/createServiceContext");
   const sc = createServiceContext();
 
@@ -130,6 +134,14 @@ const TIER_RANK = { D: 1, C: 2, B: 3, A: 4, S: 5 };
     return out;
   }
 
+  // 對齊線上結算順序：組隊池取整 → 傷害占比取整 → 全服 EXP 加成取整。
+  function battleExpReward(monster, damageRatio) {
+    const effectivePool = Math.round((Number(monster?.expReward) || 0) * PARTY_MULT);
+    if (effectivePool <= 0) return 0;
+    const baseShare = Math.max(1, Math.round(effectivePool * Math.min(1, Math.max(0, damageRatio))));
+    return Math.max(1, Math.round(baseShare * serverExpMult));
+  }
+
   // ── 開跑 ──
   async function runOnce(seed) {
   const rng = mulberry32(seed);
@@ -163,7 +175,7 @@ const TIER_RANK = { D: 1, C: 2, B: 3, A: 4, S: 5 };
           zone: z, monsterElement: m.element || null,
         });
         const share = Math.min(1, (r.totalDamage || 0) / m.calc.maxHp);
-        expSum += share * (m.expReward || 0) * PARTY_MULT;
+        expSum += battleExpReward(m, share);
         secSum += (tickDelayMs(curStats.agi || 1) / 1000) * ROUNDS + (r.outcome === "lose" ? DEATH_EXTRA_SEC : 0);
       }
       const rate = secSum > 0 ? expSum / secSum : 0;
@@ -191,7 +203,7 @@ const TIER_RANK = { D: 1, C: 2, B: 3, A: 4, S: 5 };
     seconds += (tickDelayMs(curStats.agi || 1) / 1000) * ROUNDS + (died ? DEATH_EXTRA_SEC : 0);
 
     const share = Math.min(1, (r.totalDamage || 0) / m.calc.maxHp);
-    exp += Math.max(1, Math.round(share * (m.expReward || 0) * PARTY_MULT));
+    exp += battleExpReward(m, share);
 
     let leveled = false;
     while (level < MAX_LEVEL && exp >= expToNextLevel(level)) {
@@ -241,7 +253,8 @@ const TIER_RANK = { D: 1, C: 2, B: 3, A: 4, S: 5 };
   const { log, battles, seconds, deaths } = results[0];
 
   console.log(`═══ Lv1 → Lv${MAX_LEVEL} 實跑模擬 ═══`);
-  console.log(`職業：劍士　同區 ${PARTY} 人（組隊倍率 ×${PARTY_MULT}）　裝備強化 +${ENH}\n`);
+  console.log(`職業：劍士（自主點全 STR）　同區 ${PARTY} 人（組隊倍率 ×${PARTY_MULT}）　裝備強化 +${ENH}`);
+  console.log(`全服 EXP 滿加成：+${serverExpBuff.totalPct}%（永久 +${serverExpBuff.permanentPct}%／斗內短期 +${serverExpBuff.shortTermPct}%／觀看 +${serverExpBuff.viewerPct}%）×${serverExpMult.toFixed(2)}\n`);
   console.log("等級區間      farm 區域        裝備   場次      時數");
   console.log("─".repeat(58));
   for (const s of log) {

@@ -19,6 +19,7 @@ const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = 
 const { isWebBattleActive } = require("../../services/progress/battleLock");
 const { getDropBoostPct } = require("../../shared/pkArenaConfig");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
+const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard } = require("../../shared/leaderboardEligibility");
 const { clearCurrentCache } = require("../../adapters/mongo/requestCache");
 const { NpcOptionEffectError, processNpcOptionEffects } = require("./npcOptionEffects");
 const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
@@ -237,7 +238,7 @@ const DISCORD_REPLY_TIMEOUT_MS = 8_000;
 const DISPLAYING_SESSION_CLEANUP_GRACE_MS = 15_000;
 const MONSTER_TRANSITION_MS = 500;   // 怪物轉場空窗：0.5 秒
 const BATTLE_QUEUE_POLL_MS = 500;    // 排隊等待輪詢：0.5 秒
-const DEATH_EXTRA_COOLDOWN_MS = 10 * 1000; // 死亡額外冷卻：在 15 回合基準時間外再加 10 秒
+const DEATH_COOLDOWN_MS = 30 * 1000; // 死亡後固定冷卻 30 秒，不受 AGI／裝備影響
 // 世界王冷卻若超過此秒數，就不要把玩家鎖在佇列裡空等（避免「被王關起來」長達一小時無法戰鬥）；
 // 改為直接釋放並提示稍後再來。低於此值才維持短暫自動排隊（王即將重生，值得等）。
 const WORLD_BOSS_QUEUE_RELEASE_MS = 90 * 1000;
@@ -828,9 +829,10 @@ const ENHANCE_GEM_IDS = {
 const ZONE_PARTICIPATION_GEM_TIER = {
   beginner: 'D', normal: 'D', mid: 'C', hard: 'B', elite: 'A',
   ancient_city: 'B',
-  // A 階三區(40開放)統一給 A 石：秘銀(深處)/龍鱗(龍族)/焚獄(火焰)
+  // A 階區域統一給 A 石：秘銀(深處)/龍鱗(龍族)/焚獄(火焰)/期間活動
   ancient_city_deep: 'A', dragon_realm: 'A', hellfire: 'A',
-  dragon_king_lair: 'A', hellfire_depths: 'A'
+  dragon_king_lair: 'A', hellfire_depths: 'A',
+  event_1: 'A', event_boss: 'A'
 };
 // 參與獎勵寶石掉落率（依品階）。S 石不進參與制，只由世界王/世界王寶箱產出。
 const GEM_PARTICIPATION_RATE = { D: 0.20, C: 0.20, B: 0.12, A: 0.06 };
@@ -1034,7 +1036,7 @@ function isSupportJobBadge(jobEq) {
   } catch (_) { return false; }
 }
 
-async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null, jobEq = null, damageTaken = 0, healDone = 0) {
+async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null, jobEq = null, damageTaken = 0, healDone = 0, lifestealDone = 0) {
   // 通行證點數：打怪(非落敗)依地圖階級加點
   if (outcome !== "lose" && sc?.passService?.addPointsForKill) {
     const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", dragon_king_lair: "S", hellfire_depths: "S" };
@@ -1047,7 +1049,7 @@ async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, co
   await questService.recordProgress(discordId, "damage_total", totalDamage);
   // 錨點隱藏任務指標：承受傷害(沒苦硬吃)、回血量(聖人)
   if (Number(damageTaken) > 0) await questService.recordProgress(discordId, "damage_taken", Math.round(Number(damageTaken)));
-  if (Number(healDone) > 0) await questService.recordProgress(discordId, "heal_done", Math.round(Number(healDone)));
+  if (Number(healDone) > 0) await questService.recordProgress(discordId, "heal_done", Math.round(Number(healDone))); if (Number(lifestealDone) > 0) await questService.recordProgress(discordId, "lifesteal_done", Math.round(Number(lifestealDone)));
   const weaponMetric = resolveWeaponQuestMetric(weaponType);
   if (weaponMetric) {
     await questService.recordProgress(discordId, weaponMetric, 1);
@@ -1064,8 +1066,11 @@ async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, co
   // 職業徽章熟練度 +1（裝備中的徽章才累積）。
   // 練滿 Lv20 **不廣播**——它只是讓職業任務亮起來；真正值得全服知道的是「轉職成功」。
   try {
-    await serviceContext.jobBadgeService?.grantBattleProficiency(discordId, 1);
-  } catch (_) { /* 熟練度失敗不影響戰鬥結算 */ }
+    await sc?.jobBadgeService?.grantBattleProficiency(discordId, 1);
+  } catch (error) {
+    console.error(`[JobBadge] Discord battle proficiency failed | player=${discordId} | err=${error?.message || error}`);
+    /* 熟練度失敗不影響戰鬥結算 */
+  }
   if (outcome === "lose") {
     await questService.recordProgress(discordId, "death_count", 1);
   }
@@ -2095,6 +2100,8 @@ async function _republishPanelWithRankingDebounce(sc, zoneKey, monster, monsterH
 }
 
 async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount, damageMap = {}, activeEvent = null, worldBossPartsHp = null, options = {}) {
+  const excludedIds = await getLeaderboardExcludedPlayerIds().catch(() => new Set());
+  damageMap = filterDamageMapForLeaderboard(damageMap, excludedIds);
   // 添加冷卻時間信息到 damageMap
   const damageMapWithCooldown = {};
   for (const [key, entry] of Object.entries(damageMap)) {
@@ -2303,9 +2310,7 @@ async function displaySettledBattleResult({
   embedTitle,
   embedColor,
   pendingDeathCooldown = false,
-  battleStartedAt = Date.now(),
-  playerAgi = 1,
-  deathCooldownMult = 1
+  playerAgi = 1
 }) {
   const delay = (ms) => new Promise((r) => setTimeout(r, ms));
   const MAX_DESC = 3800;
@@ -2324,9 +2329,7 @@ async function displaySettledBattleResult({
   }
 
   if (pendingDeathCooldown) {
-    // 時間管理大師：死亡延長時間 ×deathCooldownMult（例 3 倍）
-    const _deathDur = (getBattleBaselineDurationMs(playerAgi ?? 1) + DEATH_EXTRA_COOLDOWN_MS) * Math.max(1, Number(deathCooldownMult) || 1);
-    const availableAt = Number(battleStartedAt || Date.now()) + _deathDur;
+    const availableAt = Date.now() + DEATH_COOLDOWN_MS;
     recordDeathCooldown(discordId, availableAt);
     const remainingCooldown = getRemainingCooldown(discordId);
     rewardLines = rewardLines.map((line) => (
@@ -3650,14 +3653,12 @@ async function handleEnterBattle(interaction) {
         }
       }
       try {
-        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null, zoneKey, currentProg?.equipment?.job_eq || null, combatResult?.damageTaken || 0, combatResult?.healDone || 0);
+        await recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats, session.playerStats?.weaponType || null, zoneKey, currentProg?.equipment?.job_eq || null, combatResult?.damageTaken || 0, combatResult?.healDone || 0, combatResult?.lifestealDone || 0);
       } catch (e) {
         console.error("[Quest] recordProgress error:", e.message);
       }
       participantCache.clear();
       partyEffects.length = 0;
-      // 時間管理大師：死亡延長時間 ×3（需在清空 equipment 前先擷取）
-      const _deathCdMult = (currentProg?.equipment?.anchor?.itemId === "s-legend-timelord") ? 3 : 1;
       if (currentProg) {
         currentProg.inventory = [];
         currentProg.equipment = {};
@@ -3672,7 +3673,6 @@ async function handleEnterBattle(interaction) {
       const displayDelayMs = getBattleDisplayDurationMs(session.playerStats?.agi ?? 1, Math.max(1, displayRoundLogs.length));
       const displayStartedAt = Date.now();
       const displayEndsAt = displayStartedAt + displayDelayMs;
-      const battleStartedAtForDisplay = Number(session.battleStartedAt || displayStartedAt);
       const playerAgiForDisplay = session.playerStats?.agi ?? 1;
       if (activeSessions.has(discordId)) {
         const activeSession = activeSessions.get(discordId);
@@ -3705,9 +3705,7 @@ async function handleEnterBattle(interaction) {
         embedTitle,
         embedColor,
         pendingDeathCooldown,
-        battleStartedAt: battleStartedAtForDisplay,
-        playerAgi: playerAgiForDisplay,
-        deathCooldownMult: _deathCdMult
+        playerAgi: playerAgiForDisplay
       });
       deleteMonsterSession(discordId);  // 顯示完畢才解除鎖定，允許下一場出戰
     } catch (err) {
@@ -3847,7 +3845,9 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
     // KDA（附錄C 八）：傷害名次換成「貢獻分 C」名次——C = 傷害 + 0.7×助攻（damageMap.assist，
     // 由各入口結算時從 assistLedger 累進）。輔助職靠光環/治療也分得到王箱。
     const { A_WEIGHT } = require("../../services/kda/kdaService");
-    const entries = Object.entries(damageMap || {}).map(([pid, d]) => ({
+    const excludedIds = await getLeaderboardExcludedPlayerIds();
+    const eligibleDamageMap = filterDamageMapForLeaderboard(damageMap || {}, excludedIds);
+    const entries = Object.entries(eligibleDamageMap).map(([pid, d]) => ({
       pid, name: d?.name || pid, damage: Number(d?.damage) || 0, assist: Number(d?.assist) || 0, spent: Number(d?.spent) || 0,
     })).map((e) => ({ ...e, cScore: e.damage + A_WEIGHT * e.assist }))
       .filter((e) => e.cScore > 0 || e.spent > 0);
@@ -5703,6 +5703,7 @@ module.exports = {
   _doIdleRotate,
   activeSessions,
   getMonsterZoneDiagnostics,
+  _recordQuestBattleProgress: recordQuestBattleProgress,
   _resolveExpiredMonsterTransition,
   hellfangPlayerSchool, hellfangDamageMult, hellfangPartAccrue, hellfangFlipLines, hellfangPartCurrentWeak, getHellfangFlipRemainingMs, getWorldBossPartWeakness, hellfangBossPhaseMods, hellfangAlivePartCount,
   startIdleRotateTimer,

@@ -96,6 +96,22 @@ function tierUp(tier) {
   const i = TIER_ORDER.indexOf(tier);
   return i >= 0 && i < TIER_ORDER.length - 1 ? TIER_ORDER[i + 1] : tier;
 }
+
+// 降等藥水已移除；舊史萊姆資料裡的 curse 5% 改為金幣袋，
+// 保留原本 100% 採集總機率，也避免舊實例產出已移除道具。
+function normalizeGatherLootTable(rawTable) {
+  if (!Array.isArray(rawTable) || rawTable.length === 0) return null;
+  const weights = new Map();
+  for (const raw of rawTable) {
+    const rawKind = String(raw?.kind || "");
+    const kind = rawKind === "curse" ? "gold" : rawKind;
+    const weight = Math.max(0, Number(raw?.weight) || 0);
+    if (!kind || weight <= 0) continue;
+    weights.set(kind, (weights.get(kind) || 0) + weight);
+  }
+  const normalized = [...weights.entries()].map(([kind, weight]) => ({ kind, weight }));
+  return normalized.length ? normalized : null;
+}
 // 預設 modifier（孵化前/無種類資料時）
 const DEFAULT_GATHER_MOD = { intervalMult: 1.0, gemBias: GEM_DROP_RATE, qualityUpChance: 0 };
 
@@ -106,8 +122,6 @@ const GOLD_POUCH_BY_TIER = {
   B: "1854a2b1-a569-4604-802d-9171f480a9ae", // 金幣袋子(大)
   A: "1854a2b1-a569-4604-802d-9171f480a9ae", // 金幣袋子(大)
 };
-const CURSE_POTION_ID = "9b8ad195-9ec1-401b-9b7f-2c1033628cba"; // 【 我命由我不由天 】藥水（史萊姆撿到的詛咒垃圾）
-
 function nowMs() { return Date.now(); }
 function isoNow() { return new Date().toISOString(); }
 
@@ -274,7 +288,7 @@ class PetService {
     const room = Math.max(0, cap - pet.accruedItems.length);
     const toAdd = Math.min(newItems, room);
     // lootTable 模式（史萊姆/狼系）：[{kind, weight}] 加權抽；無 lootTable 走舊 gemBias（龍系）
-    const lootTable = Array.isArray(mod.lootTable) && mod.lootTable.length ? mod.lootTable : null;
+    const lootTable = normalizeGatherLootTable(mod.lootTable);
     const gemBias = Number.isFinite(Number(mod.gemBias)) ? Number(mod.gemBias) : GEM_DROP_RATE;
     for (let i = 0; i < toAdd; i++) {
       let kind;
@@ -381,10 +395,11 @@ class PetService {
       if (c) out.push({ icon: "💥", label: "戰鬥被動", value: c });
     }
     // 採集偏好
-    const KIND = { gold: "金幣", gem: "強化石", equipment: "裝備", curse: "詛咒藥水" };
-    if (Array.isArray(mod.lootTable) && mod.lootTable.length) {
-      const total = mod.lootTable.reduce((s, e) => s + Math.max(0, Number(e.weight) || 0), 0) || 1;
-      const parts = mod.lootTable.map((e) => `${KIND[e.kind] || e.kind} ${Math.round((Number(e.weight) || 0) / total * 100)}%`);
+    const KIND = { gold: "金幣", gem: "強化石", equipment: "裝備" };
+    const lootTable = normalizeGatherLootTable(mod.lootTable);
+    if (lootTable) {
+      const total = lootTable.reduce((s, e) => s + Math.max(0, Number(e.weight) || 0), 0) || 1;
+      const parts = lootTable.map((e) => `${KIND[e.kind] || e.kind} ${Math.round((Number(e.weight) || 0) / total * 100)}%`);
       out.push({ icon: "🎁", label: "採集偏好", value: parts.join(" / ") });
     } else if (Number.isFinite(Number(mod.gemBias))) {
       const gem = Math.round(Number(mod.gemBias) * 100);
@@ -730,15 +745,12 @@ class PetService {
           const gemId = GEM_ID_BY_TIER[tier] || GEM_ID_BY_TIER.D;
           const gem = allItems.find((it) => it.id === gemId);
           if (gem) entry = this._buildInventoryEntry(gem);
-        } else if (acc.kind === "gold") {
+        } else if (acc.kind === "gold" || acc.kind === "curse") {
           // 金幣袋（按寵物階級 小/中/大）
+          // acc.kind=curse 是移除降等藥水前已累積的舊資料，改領同階金幣袋。
           const pouchId = GOLD_POUCH_BY_TIER[tier] || GOLD_POUCH_BY_TIER.D;
           const pouch = allItems.find((it) => it.id === pouchId);
           if (pouch) entry = this._buildInventoryEntry(pouch);
-        } else if (acc.kind === "curse") {
-          // 詛咒彩蛋：我命由我不由天（史萊姆亂撿東西）
-          const curse = allItems.find((it) => it.id === CURSE_POTION_ID);
-          if (curse) entry = this._buildInventoryEntry(curse);
         } else {
           // 隨機該階「一般裝備」：排除 noPetGather（世界王卡等）、所有卡片（monsterCardSkill/monsterCardOf）、
           // 特殊槽位（special/稱號/職業徽章/錨點）— 寵物只撿得到普通裝備
@@ -755,7 +767,7 @@ class PetService {
           // 跟一般怪物掉落一致：採集到的「一般裝備」也骰附魔（金幣袋/寶石/詛咒藥非裝備 → rollForEntry 自動 no-op）
           try { require("../enchant/enchantService").rollForEntry(entry); } catch (_) { /* 附魔服務未就緒不影響領取 */ }
           progress.inventory.push(entry);
-          granted.push({ itemName: entry.itemName, tier, kind: acc.kind });
+          granted.push({ itemName: entry.itemName, tier, kind: acc.kind === "curse" ? "gold" : acc.kind });
         }
       }
       active.accruedItems = [];

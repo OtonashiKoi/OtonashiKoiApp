@@ -81,7 +81,8 @@ function newExpToNext(level) {
 
 // ⑤ 驗證
 console.log("═══ 新升等曲線 ═══");
-console.log(`量測基準：同區 ${data.party} 人 ×${data.partyMult}　強化 +${data.enhance}\n`);
+console.log(`量測基準：同區 ${data.party} 人 ×${data.partyMult}　強化 +${data.enhance}　全服 EXP +${data.serverExpBuff?.totalPct || 0}%`);
+console.log(`配點基準：${data.allocation || "舊量測資料未記錄"}\n`);
 console.log("等級      該級所需經驗        經驗/小時      該級時數   累計時數");
 console.log("─".repeat(66));
 let cum = 0, total = 0;

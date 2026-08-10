@@ -18,6 +18,7 @@ const { runCombatLoop } = require("../src/shared/combatLoop");
 const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
 const { ZONE_BY_KEY } = require("../src/shared/zones");
 const { MAX_LEVEL } = require("../src/shared/progression");
+const { getConfig, getMaxServerExpBuff } = require("../src/services/stream/streamEventConfig");
 const jobBadgeLevel = require("../src/shared/jobBadgeLevel");
 
 const PARTY = Math.max(1, Number(process.argv[2]) || 8);
@@ -42,16 +43,24 @@ function zoneOpen(z, lv) {
   if (d.maxLevel != null && lv > d.maxLevel) return false;
   return true;
 }
-// 屬性：2+1 制（每級 2 隨機＋1 自主）→ 基準量測全部取期望值平均分配
+// 屬性：2+1 制。隨機 +2 取期望值，自主 +1 以最快練等視角投入劍士主屬性 STR。
 function attrsFor(level) {
-  const free = (level - 1) * 3;
-  const per = free / 6;
-  return { str: 1 + per, agi: 1 + per, vit: 1 + per, int: 1 + per, dex: 1 + per, luk: 1 + per };
+  const randomPer = ((level - 1) * 2) / 6;
+  const manualMain = level - 1;
+  return {
+    str: 1 + randomPer + manualMain,
+    agi: 1 + randomPer,
+    vit: 1 + randomPer,
+    int: 1 + randomPer,
+    dex: 1 + randomPer,
+    luk: 1 + randomPer,
+  };
 }
 
 (async () => {
   const db = await getMongoDb();
   const I = db.collection("items");
+  const serverExpBuff = getMaxServerExpBuff(await getConfig());
   const { createServiceContext } = require("../src/services/createServiceContext");
   const sc = createServiceContext();
 
@@ -112,7 +121,12 @@ function attrsFor(level) {
           monsterEquipped: m.equipment || {}, monsterIsBoss: false,
           zone: z, monsterElement: m.element || null,
         });
-        expSum += Math.min(1, (r.totalDamage || 0) / m.calc.maxHp) * (m.expReward || 0) * PARTY_MULT;
+        const ratio = Math.min(1, (r.totalDamage || 0) / m.calc.maxHp);
+        const effectivePool = Math.round((m.expReward || 0) * PARTY_MULT);
+        if (effectivePool > 0) {
+          const baseShare = Math.max(1, Math.round(effectivePool * ratio));
+          expSum += Math.max(1, Math.round(baseShare * serverExpBuff.multiplier));
+        }
         secSum += (tickDelayMs(stats.agi || 1) / 1000) * ROUNDS + (r.outcome === "lose" ? DEATH_EXTRA_SEC : 0);
       }
       const perHour = secSum > 0 ? (expSum / secSum) * 3600 : 0;
@@ -121,7 +135,7 @@ function attrsFor(level) {
     rows.push({ level: lv, tier, zone: best.zone, zoneLabel: ZONE_BY_KEY[best.zone]?.label || best.zone, expPerHour: Math.round(best.perHour) });
   }
 
-  console.log(`═══ 經驗/小時（同區 ${PARTY} 人 ×${PARTY_MULT}　強化 +${ENH}）═══\n`);
+  console.log(`═══ 經驗/小時（同區 ${PARTY} 人 ×${PARTY_MULT}　強化 +${ENH}　全服 EXP +${serverExpBuff.totalPct}%）═══\n`);
   console.log("等級  區域          裝備   經驗/小時");
   for (const r of rows) {
     if (r.level % 2 === 1 || r.level >= 40) {
@@ -130,7 +144,15 @@ function attrsFor(level) {
   }
   const out = path.join(__dirname, "..", "docs", "balance-reports", "exp-rate-by-level.json");
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  fs.writeFileSync(out, JSON.stringify({ party: PARTY, partyMult: PARTY_MULT, enhance: ENH, probe: PROBE, rows }, null, 2));
+  fs.writeFileSync(out, JSON.stringify({
+    party: PARTY,
+    partyMult: PARTY_MULT,
+    enhance: ENH,
+    probe: PROBE,
+    serverExpBuff,
+    allocation: "2 random + 1 STR per level",
+    rows,
+  }, null, 2));
   console.log(`\n已寫出 ${path.relative(process.cwd(), out)}`);
   process.exit(0);
 })().catch((e) => { console.error("失敗：", e); process.exit(1); });

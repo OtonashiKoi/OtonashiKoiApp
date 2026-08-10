@@ -11,7 +11,6 @@ function isEnhanceGemItemId(itemId) {
 // 藥水無 per-instance 狀態(不可強化/鎖定/裝備)，合併安全。新增藥水記得加進來。
 const STACKABLE_CONSUMABLE_IDS = new Set([
   "87b281be-b175-40a0-8044-0accc88a0ee0", // 屬性重製藥水
-  "9b8ad195-9ec1-401b-9b7f-2c1033628cba", // 【我命由我不由天】藥水
   "f56aefd0-faa8-45b5-8451-fbbae5810c74", // 回復藥水（小）
   "97fbd546-e207-4130-b130-2fadd799703a", // 回復藥水（中）
   "3eb1d302-3d04-40a5-8335-1f9ed844dc27", // 回復藥水（大）

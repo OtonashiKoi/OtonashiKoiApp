@@ -270,7 +270,6 @@ function itemEffectStr(effect) {
     case "tower_heal_pct": return `塔內回復 ${v}% HP`;
     case "tower_revive_pct": return `塔內復活並回復 ${v}% HP`;
     case "reroll_attributes": return "重置屬性點";
-    case "level_down_random_attributes": return `隨機降低 ${v} 點屬性`;
     default: return `${effect.type}=${v}`;
   }
 }
@@ -570,7 +569,6 @@ async function main() {
         + `C${r}="tower_heal_pct","塔內回復 "&D${r}&"% HP",`
         + `C${r}="tower_revive_pct","塔內復活並回復 "&D${r}&"% HP",`
         + `C${r}="reroll_attributes","重置屬性點",`
-        + `C${r}="level_down_random_attributes","隨機降低 "&D${r}&" 點屬性",`
         + `C${r}="none","無使用效果",`
         + `C${r}="","無使用效果",`
         + `TRUE,C${r}&"="&D${r})`;
@@ -789,7 +787,7 @@ async function main() {
     headers: ["ID", "名稱", "幣別", "價格", "庫存", "上架", "特價", "月限購", "效果類型", "效果數值", "白話說明"],
     rows: shopRows.map((s, idx) => {
       const r = idx + 2;
-      const formula = `=TEXTJOIN("，",TRUE,B${r}&"（"&D${r}&" "&C${r}&"）",IF(F${r}="否","下架",""),IF(G${r}="是","特價中",""),IF(E${r}=-1,"無限庫存","庫存 "&E${r}),IF(H${r}=0,"","月限購 "&H${r}),IFS(I${r}="grant_diamond","使用後獲得 "&J${r}&" 鑽石",I${r}="grant_gold","使用後獲得 "&J${r}&" 金幣",I${r}="reroll_attributes","重置屬性點",I${r}="tower_heal_flat","塔內回復 "&J${r}&" HP",I${r}="tower_heal_pct","塔內回復 "&J${r}&"% HP",I${r}="tower_revive_pct","塔內復活並回復 "&J${r}&"% HP",I${r}="level_down_random_attributes","隨機降低 "&J${r}&" 點屬性",I${r}="","",TRUE,I${r}&"="&J${r}))`;
+      const formula = `=TEXTJOIN("，",TRUE,B${r}&"（"&D${r}&" "&C${r}&"）",IF(F${r}="否","下架",""),IF(G${r}="是","特價中",""),IF(E${r}=-1,"無限庫存","庫存 "&E${r}),IF(H${r}=0,"","月限購 "&H${r}),IFS(I${r}="grant_diamond","使用後獲得 "&J${r}&" 鑽石",I${r}="grant_gold","使用後獲得 "&J${r}&" 金幣",I${r}="reroll_attributes","重置屬性點",I${r}="tower_heal_flat","塔內回復 "&J${r}&" HP",I${r}="tower_heal_pct","塔內回復 "&J${r}&"% HP",I${r}="tower_revive_pct","塔內復活並回復 "&J${r}&"% HP",I${r}="","",TRUE,I${r}&"="&J${r}))`;
       return [
         s.id || "",
         s.name || "",

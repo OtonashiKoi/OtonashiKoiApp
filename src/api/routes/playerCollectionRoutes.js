@@ -13,6 +13,7 @@ const { ALL_ZONE_KEYS, ZONE_BY_KEY } = require("../../shared/zones");
 const { bestiaryRequirement, bestiaryBonusPct, MAX_BONUS_PCT } = require("../../shared/bestiary");
 const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
 const { GATHER_INTERVAL_MIN } = require("../../services/pet/petService");
+const { isLeaderboardExcluded } = require("../../shared/leaderboardEligibility");
 
 // 怪物圖鑑累積 key（與 playerPanel._bestiaryKey 同規則）
 function bestiaryKey(m) {
@@ -198,6 +199,7 @@ function createPlayerCollectionRoutes(serviceContext) {
 
       const rows = players
         .filter((p) => p.status !== "disabled")
+        .filter((p) => !isLeaderboardExcluded(progressMap[p.discordId]))
         .map((p) => {
           const prog = progressMap[p.discordId] || {};
           return {
@@ -218,9 +220,18 @@ function createPlayerCollectionRoutes(serviceContext) {
 
       const list = rows.slice(0, limit).map((r, i) => ({ rank: i + 1, ...r }));
       const myIdx = rows.findIndex((r) => r.discordId === discordId);
+      const myProgress = progressMap[discordId] || {};
       const me = myIdx >= 0
         ? { rank: myIdx + 1, ...rows[myIdx] }
-        : { rank: null, discordId, name: prettyName(req.playerRecord.displayName, discordId), level: 1, exp: 0, levelReachedAt: null, jobName: "" };
+        : {
+            rank: null,
+            discordId,
+            name: prettyName(req.playerRecord.displayName, discordId),
+            level: myProgress.level ?? 1,
+            exp: myProgress.exp ?? 0,
+            levelReachedAt: myProgress.levelReachedAt || null,
+            jobName: myProgress.equipment?.job_eq?.itemName || myProgress.equipment?.job_eq?.name || ""
+          };
 
       res.json(ok({ list, me, totalPlayers: rows.length }));
     } catch (err) {

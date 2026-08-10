@@ -962,7 +962,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let _healImmune = false;  // 對鮮血的渴望：無法被治療(自身吸血除外)
   let _extendRounds = 0;    // 時間管理大師：回合上限改為此值(0=不變)
   let _noPlayerAtk = false; // 沒苦硬吃：無法造成一般攻擊傷害(只靠 endure_burst 反彈)
-  let _totalHealDone = 0;   // 聖人任務指標 heal_done：實際回血量累計
+  let _totalHealDone = 0, _totalLifestealDone = 0; // 任務指標：實際治療／實際吸血（滿血溢補不算）
   // ── 聖域師（結界師二轉）────────────────────────────────────────────
   // 符文結界：開場展開，厚度＝maxHp×basePct% + INT×perInt；所有受傷先扣結界（_hurt 內）。
   // 吸收累積 → 共鳴反爆（回合尾三時機引爆，見回合結尾區塊）。
@@ -1115,7 +1115,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         _shadowHp = Math.min(pStats.maxHp, _shadowHp + gain);
       }
     };
-    if (opts && opts.lifesteal) { _totalHealDone += amt; const _b = pHp; pHp = Math.min(pStats.maxHp, pHp + amt); _shadowAdd(pHp - _b); return pHp; } // 吸血是自身機制，不受治療攔截影響
+    if (opts && opts.lifesteal) { const _b = pHp; pHp = Math.min(pStats.maxHp, pHp + amt); const _actual = pHp - _b; _totalLifestealDone += _actual; _shadowAdd(_actual); return pHp; } // 吸血是自身機制，不受治療攔截影響
     if (_healImmune) return pHp;                          // 對鮮血的渴望：外部治療一律無效
     if (_healToDamage > 0) {
       // 怪已經死了才觸發的回血(擊殺回血/戰後回血)：轉傷害只會灌 totalDamage、汙染世界王傷害榜，
@@ -1123,8 +1123,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (opts && opts.postMortem) return pHp;
       const dmg = Math.round(amt * _healToDamage); mHp -= dmg; totalDamage += dmg; return pHp; // 聖人：回血轉為對敵傷害、不回血
     }
-    _totalHealDone += amt;
-    { const _b = pHp; pHp = Math.min(pStats.maxHp, pHp + amt); _shadowAdd(pHp - _b); }
+    { const _b = pHp; pHp = Math.min(pStats.maxHp, pHp + amt); const _actual = pHp - _b; _totalHealDone += _actual; _shadowAdd(_actual); }
     return pHp;
   };
   // 回血 + 戰報（統一出口）。直接寫「回復 N HP」會騙人：聖人(_healToDamage)會把治療轉成傷害、
@@ -2098,8 +2097,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (v > pv) _bestEffByKey.set(pe.key, pe);
       }
       const partyEffects = Array.from(_bestEffByKey.values());
-      const auraDetails = new Map(); // 依 sourceName 分組光環效果
-
+      const auraDetails = new Map(), auraTickLines = []; // 宣告與每回合實際結算分開，避免前端把說明當回血
       for (const pe of partyEffects) {
         if (!pe || !pe.key) continue;
         const providerName = pe.sourceName || "未知";
@@ -2141,11 +2139,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (_healToDamage > 0 && pe.isSelfAura === false) continue;
             const _mBefore = mHp;
             const _pBeforeHeal = pHp;
-            pHp = _healPlayer(heal, { externalAura: pe.isSelfAura === false });
-            // KDA：外部治療光環的「有效量」歸戶給提供者（附錄C：有效量原則，滿血溢出不計）
+            pHp = _healPlayer(heal, { externalAura: pe.isSelfAura === false }); const _actualHeal = Math.max(0, pHp - _pBeforeHeal);
+            // KDA：外部治療光環只歸戶有效量（滿血溢出不計）
             if (pe.isSelfAura === false && pe.sourceDiscordId && _healToDamage <= 0) {
-              const _gain = Math.max(0, pHp - _pBeforeHeal);
-              if (_gain > 0) _kdaHealBySource.set(pe.sourceDiscordId, (_kdaHealBySource.get(pe.sourceDiscordId) || 0) + _gain);
+              if (_actualHeal > 0) _kdaHealBySource.set(pe.sourceDiscordId, (_kdaHealBySource.get(pe.sourceDiscordId) || 0) + _actualHeal);
             }
             const detail = auraDetails.get(sourceName);
             if (_healToDamage > 0) {
@@ -2155,6 +2152,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               detail.healToDmg = (detail.healToDmg || 0) + Math.max(0, _dealt);
             } else {
               detail.heal = heal;
+              if (_actualHeal > 0) auraTickLines.push(`💚 **回合開始・${providerName}的治療光環**！回復 **${_actualHeal}** HP！（你剩 ${pHp} / ${pStats.maxHp}）`);
             }
           }
         }
@@ -2300,7 +2298,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (detail.agiBoost > 0) parts.push(`AGI +${detail.agiBoost}%（連擊/閃避提升）`);
           if (detail.comboBoost > 0) parts.push(`連擊率 +${detail.comboBoost}%`);
           if (detail.critRateBoost > 0) parts.push(`爆擊率 +${detail.critRateBoost}%`);
-          if (detail.heal > 0) parts.push(`每回合回復 ${detail.heal} HP`);
+          if (detail.heal > 0) parts.push(`治療光環：回合開始時治療 ${detail.heal} HP`); // 「回復 N HP」只給當下的實際數值事件
           if (detail.supportShot > 0) parts.push(`掩護射擊（每回合一箭・ATK ${detail.supportShot}%）`);
           if (detail.healToDmg > 0) parts.push(`🩸 聖者：回血化為傷害（本回合 ${detail.healToDmg}）`);
           if (parts.length === 0) continue;
@@ -2313,6 +2311,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           for (const line of auraLines) log.push(line);
         }
       }
+      for (const line of auraTickLines) log.push(line);
     } catch (e) {}
     // 掩護射擊可能在光環階段就終結怪物（低血量雜魚）→ 直接收場
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
@@ -5261,7 +5260,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     cardCooldowns,
     nextRound: round,
     damageTaken: _totalDmgTaken,  // 沒苦硬吃任務指標
-    healDone: _totalHealDone,      // 聖人任務指標
+    healDone: _totalHealDone, lifestealDone: _totalLifestealDone, // 聖人／鮮血任務指標
     // 連擊氣條（影舞者）：戰後氣量；滿氣觸發了但戰鬥先結束 → 還原成滿格帶去下一場
     shadowGauge: shadowCfg ? (_shadowBurstNext ? shadowCfg.GAUGE_MAX : _shadowGrids) : null,
     // 職業技能成本（cost.type === "combo"）本場總消耗量 → 呼叫端要從 zoneCombo 扣掉並落地

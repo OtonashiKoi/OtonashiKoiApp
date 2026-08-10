@@ -322,6 +322,14 @@ function createMongoRepositories() {
         return stampInventoryBaseline(normalized);
       },
       async save(progress) {
+        // 🔬 臨時偵錯（jobExp 被洗掉事故，用完即拆）：抓「寫入的裝備徽章沒帶 jobExp」的呼叫堆疊
+        try {
+          if (String(progress?.playerId) === "1043389715577049138") {
+            const _je = progress?.equipment?.job_eq;
+            console.log("[jobExpProbe] save playerId=…9138 jobExp=" + (_je ? (_je.jobExp ?? "∅") : "無徽章")
+              + " stack=" + new Error().stack.split("\n").slice(2, 6).map(l => l.trim()).join(" ← "));
+          }
+        } catch (_) {}
         // 讀取當下的背包基準（findByPlayerId 蓋的戳記）；沒有就走舊路徑
         const baseline = progress ? progress[INV_BASELINE_KEY] : null;
         // 儲存前瘦身 inventory(去除可從道具庫還原的肥欄位),避免 progress 文件撐爆 16MB
@@ -453,6 +461,14 @@ function createMongoRepositories() {
       },
       // CAS 寫入：只有 updatedAt 未被別人改過才成功，回傳是否成功
       async saveIfUnchanged(progress, prevUpdatedAt) {
+        // 🔬 臨時偵錯（jobExp 被洗掉，用完即拆）
+        try {
+          if (String(progress?.playerId) === "1043389715577049138") {
+            const _je = progress?.equipment?.job_eq;
+            console.log("[jobExpProbe] saveIfUnchanged jobExp=" + (_je ? (_je.jobExp ?? "∅") : "無徽章")
+              + " stack=" + new Error().stack.split("\n").slice(2, 6).map(l => l.trim()).join(" ← "));
+          }
+        } catch (_) {}
         progress = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
         const now = new Date().toISOString();
         const filter = prevUpdatedAt
@@ -551,7 +567,12 @@ function createMongoRepositories() {
       },
       async findTopByPkRating(limit = 10) {
         return (await collection("progress")).aggregate([
-          { $match: { level: { $gte: 30 }, $or: [{ pkWins: { $gt: 0 } }, { pkLosses: { $gt: 0 } }] } },
+          { $match: {
+            level: { $gte: 30 },
+            excludeFromLeaderboards: { $ne: true },
+            isTestAccount: { $ne: true },
+            $or: [{ pkWins: { $gt: 0 } }, { pkLosses: { $gt: 0 } }]
+          } },
           { $sort: { pkRating: -1 } },
           { $limit: limit },
           { $lookup: { from: "players", localField: "playerId", foreignField: "discordId", as: "_player" } },
@@ -570,7 +591,11 @@ function createMongoRepositories() {
       },
       async findTopByTowerRecord(limit = 10) {
         return (await collection("progress"))
-          .find({ "towerRecord.bestFloor": { $exists: true, $gt: 0 } })
+          .find({
+            "towerRecord.bestFloor": { $exists: true, $gt: 0 },
+            excludeFromLeaderboards: { $ne: true },
+            isTestAccount: { $ne: true }
+          })
           .sort({
             "towerRecord.bestFloor": -1,
             "towerRecord.bestProgressDamagePct": -1,

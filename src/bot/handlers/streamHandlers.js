@@ -185,23 +185,17 @@ const TWD_PER_UNIT = {
  *    當美金會 ×30 爆炸（2026-07-25 的 $30/$75 實證就是台幣）。要當美金必須明寫 USD/US$。
  */
 function sniffDonationCurrency(rawCurrency, text) {
+  // ⚠️ 2026-08-09 使用者定案：**只判台幣與日幣**，其餘一律當台幣。
+  //   當晚 NT$300 SC 被誤判 USD ×30 → 9000，多發 87 鑽＋全服加成灌爆 4 天。
+  //   觀眾以台灣為主，寧可外幣低估（當台幣）也不要 ×30 爆炸；日幣觀眾實際存在故保留 /5。
   const c = String(rawCurrency || "").toUpperCase().trim();
-  if (["TWD", "NTD", "NT$", "TWD$", "$"].includes(c)) return "TWD";
-  if (TWD_PER_UNIT[c]) return c;
-  if (c === "¥" || c === "￥") return "JPY";
-  if (c === "₩") return "KRW";
-  if (c === "€") return "EUR";
-  if (c === "£") return "GBP";
+  if (c === "JPY" || c === "¥" || c === "￥") return "JPY";
+  if (c && c !== "TWD" && c !== "NTD" && c !== "NT$" && c !== "TWD$" && c !== "$") {
+    console.warn(`[StreamDonation] 非台/日幣別「${c}」一律以台幣計（原文: ${String(text || "").slice(0, 60)}）`);
+  }
   const t = String(text || "").toUpperCase();
   if (/NT\$|TWD|NTD|新台幣|台幣/.test(t)) return "TWD";
   if (/JPY|[¥￥円]/.test(t)) return "JPY";
-  if (/US\$|USD/.test(t)) return "USD";
-  if (/MYR|(^|\s)RM\d/.test(t)) return "MYR";
-  if (/HK\$|HKD/.test(t)) return "HKD";
-  if (/KRW|₩/.test(t)) return "KRW";
-  if (/EUR|€/.test(t)) return "EUR";
-  if (/GBP|£/.test(t)) return "GBP";
-  if (/SG\$|SGD/.test(t)) return "SGD";
   return "TWD";
 }
 
@@ -210,6 +204,15 @@ function inferDonationReward(comment) {
   const platform = normalizePlatform(comment?.service, comment?.userId || raw.userId || "");
   if (platform !== "youtube") return null; // 目前先只做 YouTube 斗內
   if (raw.isTest === true || raw.test === true) return null;
+
+  // ⚠️ YouTube「寶石」禮物（Jewels）不是現金斗內，不發鑽不進台帳（使用者定案 2026-08-09）。
+  //   OneComme 特徵：giftType:"jewel"、jewels:<數量>、paidText:"💎100"、price 帶寶石數——
+  //   price 會被下面的 amountCandidates 撿走，當晚 💎100 被當 NT$100 發了 1 鑽。
+  if (String(raw.giftType || "").toLowerCase() === "jewel" || Number(raw.jewels) > 0
+    || /^💎/.test(String(raw.paidText || ""))) {
+    console.log(`[Donation] 略過 YouTube 寶石禮物（非現金）：${raw.name || "?"} ${raw.paidText || ""}`);
+    return null;
+  }
 
   const rawType = String(raw.type || raw.payload?.type || "").toLowerCase();
   const amountCandidates = [

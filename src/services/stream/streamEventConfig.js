@@ -7,8 +7,11 @@
 //   3) memberEvents  — 會員短期慶祝 + 賽季永久里程碑
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 
+// donationBuffTrigger 的累積 session 上限；平衡模擬也共用這個值，避免線上與驗收分叉。
+const DONATION_SESSION_MAX_PCT = 30;
+
 const DEFAULTS = {
-  shortTermCapPct: 30, // 短期斗內尖峰每類型加成上限（賽季永久底盤不受此限）
+  shortTermCapPct: DONATION_SESSION_MAX_PCT, // 短期斗內尖峰每類型加成上限（賽季永久底盤不受此限）
 
   // 1) 斗內即時分級 buff（短期）：挑「minTwd 不超過金額」的最高一級觸發
   donationTiers: {
@@ -184,4 +187,46 @@ async function syncRuntimeConfig(cfg) {
   } catch (_) { /* noop */ }
 }
 
-module.exports = { getConfig, saveConfig, syncRuntimeConfig, DEFAULTS };
+/**
+ * 依目前後台設定計算「全服 EXP 滿加成」情境。
+ * 三個桶與 globalBuffService.getActiveModifiers() 完全一致：
+ * 賽季永久里程碑 + 斗內短期桶 + 觀看熱度桶。
+ */
+function getMaxServerExpBuff(config) {
+  const cfg = config || {};
+  const capPct = Math.max(0, num(cfg.shortTermCapPct, DEFAULTS.shortTermCapPct));
+  const sumExp = (list) => (Array.isArray(list) ? list : [])
+    .reduce((sum, row) => sum + Math.max(0, num(row?.expPct, 0)), 0);
+
+  const scPermanentPct = cfg.scBar?.enabled ? sumExp(cfg.scBar.milestones) : 0;
+  const memberPermanentPct = cfg.memberEvents?.enabled ? sumExp(cfg.memberEvents.milestones) : 0;
+  const permanentPct = scPermanentPct + memberPermanentPct;
+
+  let shortTermRawPct = 0;
+  if (cfg.donationTiers?.enabled) shortTermRawPct += DONATION_SESSION_MAX_PCT;
+  if (cfg.memberEvents?.enabled) shortTermRawPct += Math.max(0, num(cfg.memberEvents.shortBuff?.expPct, 0));
+  const shortTermPct = Math.min(capPct, shortTermRawPct);
+
+  const viewerRawPct = cfg.viewerTiers?.enabled
+    ? Math.max(0, ...(cfg.viewerTiers.tiers || []).map((row) => Math.max(0, num(row?.expPct, 0))))
+    : 0;
+  const viewerPct = Math.min(capPct, viewerRawPct);
+  const totalPct = permanentPct + shortTermPct + viewerPct;
+
+  return {
+    permanentPct,
+    shortTermPct,
+    viewerPct,
+    totalPct,
+    multiplier: 1 + totalPct / 100,
+  };
+}
+
+module.exports = {
+  getConfig,
+  saveConfig,
+  syncRuntimeConfig,
+  getMaxServerExpBuff,
+  DONATION_SESSION_MAX_PCT,
+  DEFAULTS,
+};

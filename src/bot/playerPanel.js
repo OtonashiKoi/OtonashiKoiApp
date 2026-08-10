@@ -2121,13 +2121,12 @@ async function handleBackpackAction(interaction, action, uuid, tab = "item", pag
   if (action === "use") {
     const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
     const entry = (progress?.inventory || []).find(e => e.uuid === uuid);
-    if (entry?.itemEffect?.type === "reroll_attributes" || entry?.itemEffect?.type === "level_down_random_attributes") {
-      const isLevelDown = entry?.itemEffect?.type === "level_down_random_attributes";
+    if (entry?.itemEffect?.type === "reroll_attributes") {
       await interaction.deferUpdate();
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`reroll_confirm:${uuid}`)
-          .setLabel(isLevelDown ? "確認使用降等藥水" : "確認重製屬性")
+          .setLabel("確認重製屬性")
           .setStyle(ButtonStyle.Danger),
         new ButtonBuilder()
           .setCustomId(`reroll_cancel`)
@@ -2135,9 +2134,7 @@ async function handleBackpackAction(interaction, action, uuid, tab = "item", pag
           .setStyle(ButtonStyle.Secondary)
       );
       await safeEditReply(interaction, {
-        content: isLevelDown
-          ? `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n使用後會**降低 1 級**，並收回該級所發的點數：**隨機下降 2 點屬性＋自主點 -1**（隨機下降不會吃到你自主分配的點），此操作不可逆！`
-          : `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n你的**隨機成長屬性**將會**完全重新隨機分配**（你自主分配的點與未使用的自主點都會保留），此操作不可逆！`,
+        content: `⚠️ 確定要使用 **${entry.itemName}** 嗎？\n你的**隨機成長屬性**將會**完全重新隨機分配**（你自主分配的點與未使用的自主點都會保留），此操作不可逆！`,
         components: [row]
       });
       return;

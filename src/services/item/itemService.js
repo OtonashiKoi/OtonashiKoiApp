@@ -1,7 +1,7 @@
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { normalizeEffectList } = require("../../shared/effectPayloads");
 
-const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes", "level_down_random_attributes"];
+const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes"];
 const VALID_TIERS = ["D", "C", "B", "A", "S"];
 
 // 武器種類與對應的攻擊屬性

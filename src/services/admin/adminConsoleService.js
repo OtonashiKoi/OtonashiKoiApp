@@ -3,6 +3,7 @@ const { createPlayerPanelMessage } = require("../../bot/playerPanelView");
 const config = require("../../config");
 const { featureKeyToZone, zoneToFeatureKey } = require("../../shared/zones");
 const { isWorldBossZone } = require("../worldBoss/worldBossService");
+const { isLeaderboardExcluded } = require("../../shared/leaderboardEligibility");
 
 const AVAILABLE_FEATURES = [
   // ─── 系統面板 ────────────────────────────────
@@ -352,6 +353,7 @@ class AdminConsoleService {
 
     const rows = players
       .filter((p) => p.status !== "disabled")
+      .filter((p) => !isLeaderboardExcluded(progressMap[p.discordId]))
       .map((p) => ({
         discordId: p.discordId,
         displayName: p.displayName,

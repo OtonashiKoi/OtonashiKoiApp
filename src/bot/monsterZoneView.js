@@ -2,6 +2,7 @@
 const fs = require("fs");
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, AttachmentBuilder } = require("discord.js");
 const { getZoneTheme, ZONE_BY_KEY, getZoneDefaultEntryFee } = require("../shared/zones");
+const { getElementLabel } = require("../shared/elementSystem");
 const { isWorldBossZone } = require("../services/worldBoss/worldBossService");
 
 const BUTTON_IDS = {
@@ -83,6 +84,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
   const hpBar = maxHp > 0 ? buildHpBar(hp, maxHp) : "";
 
   const monsterName = monster?.name ?? "尚未設定怪物";
+  const monsterElementLabel = getElementLabel(monster?.element);
   const entryFee = monster?.entryFee ?? getZoneDefaultEntryFee(zoneKey);
   const expReward = monster?.expReward ?? 0;
   const goldReward = monster?.goldReward ?? 0;
@@ -227,9 +229,15 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
       { name: "目前狀態", value: waitingStatusLine, inline: false },
       { name: "挑戰限制", value: "開戰後 30 分鐘內未擊殺視為失敗", inline: true }
     ];
+    if (isWorldBossZone(zoneKey) && monsterElementLabel) {
+      statusFields.push({ name: "屬性", value: `${monsterElementLabel}屬性`, inline: true });
+    }
     fields.push(...statusFields);
   } else {
     fields.push({ name: "HP", value: hpLine, inline: false });
+    if (isWorldBossZone(zoneKey) && monsterElementLabel) {
+      fields.push({ name: "屬性", value: `${monsterElementLabel}屬性`, inline: true });
+    }
     // 巨神震擊（矮人戰士長）：暈眩條三態，由 handler 讀 dwarfStunGauge 後傳進來
     const bs = options.bossStun || null;
     if (bs && bs.phase) {

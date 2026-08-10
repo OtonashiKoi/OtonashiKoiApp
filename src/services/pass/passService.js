@@ -116,11 +116,13 @@ class PassService {
       if (!discordId) return;
       const pts = pointsForKillTier(tier) * Math.max(1, Number(count) || 1);
       const db = await getMongoDb();
-      const season = await this._seasonKey();
+      // ⚠️ 必須先走 _getRaw：seasonKey 不同時它會整份重置。
+      //   舊版在這裡直接 $set seasonKey ＝ 把上季幾十萬點原封帶進新季 → 開服瞬間滿級全領
+      //   （2026-08-09 開服事故：3 人帶 12~29 萬舊點直接領完 30 級）。
+      await this._getRaw(discordId);
       await db.collection(COLLECTION).updateOne(
         { _id: discordId },
-        { $inc: { points: pts }, $set: { seasonKey: season, updatedAt: new Date().toISOString() }, $setOnInsert: { unlocked: false, claimedFree: [], claimedPaid: [] } },
-        { upsert: true }
+        { $inc: { points: pts }, $set: { updatedAt: new Date().toISOString() } }
       );
     } catch (_) { /* noop */ }
   }

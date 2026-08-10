@@ -7,12 +7,12 @@
 //   ④ 時效歸零 → 本輪結束、累積歸零，下輪要再從 NT$100 起算。
 // 各類型（掉寶/金幣/經驗）同一個 %。以單一「donation-session」buff 覆寫式儲存。
 const { getDonationSession, setDonationSessionBuff, refresh: refreshBuffCache } = require("./globalBuffService");
-const { getConfig } = require("./streamEventConfig");
+const { getConfig, DONATION_SESSION_MAX_PCT } = require("./streamEventConfig");
 
 // 累積模型常數
 const STEP_TWD = 100;          // 每 100 元
 const STEP_PCT = 5;            // +5%
-const MAX_PCT = 30;            // 封頂 30%
+const MAX_PCT = DONATION_SESSION_MAX_PCT; // 封頂 30%，與模擬器共用單一來源
 const CAP_TWD = 600;           // 達 600 = 30% 封頂
 const BASE_MINUTES = 60;       // 爬升期 / 剛封頂的基礎時效
 const EXTEND_MIN_PER_100 = 60; // 封頂後每 100 元 +60 分

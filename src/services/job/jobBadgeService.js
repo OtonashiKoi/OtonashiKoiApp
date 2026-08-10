@@ -124,7 +124,7 @@ class JobBadgeService {
       if (this.rewardService?.grantCurrency) {
         await this.rewardService.grantCurrency({
           discordId, displayName, currencyType: "gold",
-          amount: -Math.abs(cost), source: "job_transfer", operator: "quest:job-transfer",
+          amount: -Math.abs(cost), source: require("../../shared/sources").CURRENCY_SOURCES.JOB_TRANSFER, sourceRef: key ? `${discordId}:${key}` : "", operator: "quest:job-transfer",
         });
       } else if (this.walletRepository) {
         await this.walletRepository.save({ ...wallet, playerId: discordId, gold: gold - cost });
@@ -133,8 +133,18 @@ class JobBadgeService {
       }
 
       // ④ 消耗一轉徽章（連同熟練度）
-      if (equippedIsT1) delete equipment.job_eq;
-      else inventory.splice(invIdx, 1);
+      if (equippedIsT1) {
+        delete equipment.job_eq;
+      } else {
+        inventory.splice(invIdx, 1);
+
+        // 一轉徽章也可以從背包遞交。若玩家此時正裝著另一個職業徽章，
+        // 換上二轉徽章前必須先把原徽章退回背包，否則 job_eq 被覆蓋後整件會消失。
+        if (equipment.job_eq) {
+          inventory.push(equipment.job_eq);
+          delete equipment.job_eq;
+        }
+      }
 
       // ⑤ 換發二轉徽章：Lv1 重練，直接裝上
       const crypto = require("crypto");

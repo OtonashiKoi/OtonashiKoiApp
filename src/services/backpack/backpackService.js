@@ -87,6 +87,11 @@ async function resolveCapacity(discordId) {
   // 2) 遊戲記錄的會員位階
   try {
     const prog = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
+    if (prog?.isTestAccount) {
+      const out = { tier: "TEST", cap: MAX_CAPACITY, label: "測試帳號" };
+      _cache.set(discordId, { ...out, at: now });
+      return out;
+    }
     if (prog?.playerTier) tiers.push(prog.playerTier);
   } catch (_) { /* 略過 */ }
 

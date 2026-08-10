@@ -22,6 +22,7 @@ function solvePower(x1, v1, x2, v2) {
 const SEG1 = solvePower(1, 500, 10, 5278);          // 1-10   新手期
 const SEG2 = solvePower(11, 5542, 35, 407371);      // 11-35  推進期
 const SEG3 = solvePower(36, 427740, 49, 1300089);   // 36-50  耕作期
+const LATE_LEVEL_MULTIPLIER = 1.3;                   // 40-50 後段練等時間小幅拉長
 
 function expToNextLevel(level) {
   if (level <= 10) {
@@ -30,7 +31,8 @@ function expToNextLevel(level) {
   if (level <= 35) {
     return Math.round(SEG2.A * Math.pow(level, SEG2.p));
   }
-  return Math.round(SEG3.A * Math.pow(level, SEG3.p));
+  const baseExp = Math.round(SEG3.A * Math.pow(level, SEG3.p));
+  return level >= 40 ? Math.round(baseExp * LATE_LEVEL_MULTIPLIER) : baseExp;
 }
 
 module.exports = {

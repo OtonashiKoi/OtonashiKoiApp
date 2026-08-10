@@ -77,7 +77,9 @@ const STAT_LABEL_ZH = {
   luk: "幸運 LUK"
 };
 
-const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes", "level_down_random_attributes"];
+const VALID_EFFECT_TYPES = ["none", "grant_gold", "grant_diamond", "grant_exp", "grant_status_points", "checkin_multiplier", "reroll_attributes"];
+const REMOVED_LEVEL_DOWN_POTION_ID = "9b8ad195-9ec1-401b-9b7f-2c1033628cba";
+const REMOVED_LEVEL_DOWN_EFFECT = "level_down_random_attributes";
 const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow", "dice"]);
 const VALID_CLAIM_LIMITS = new Set(["none", "once_per_player"]);
 
@@ -98,29 +100,6 @@ class ShopService {
   _normalizeEffect(effect) {
     if (!effect || !VALID_EFFECT_TYPES.includes(effect.type)) return { type: "none", value: 0 };
     return { type: effect.type, value: Math.max(0, Number(effect.value) || 0) };
-  }
-
-  _rollRandomAttributeDrops(attributes, amount = 2, allocatedFloor = {}) {
-    const ATTR_KEYS = ["str", "agi", "vit", "int", "dex", "luk"];
-    const next = { ...(attributes || {}) };
-    for (const key of ATTR_KEYS) {
-      next[key] = Math.max(1, Number(next[key]) || 1);
-    }
-
-    // 2+1 制：隨機扣點的地板 = 基礎 1 + 玩家已自主分配量（隨機收回不吃自選的點）
-    const floorOf = (key) => 1 + Math.max(0, Number(allocatedFloor?.[key]) || 0);
-    const dropped = [];
-    for (let i = 0; i < amount; i++) {
-      const available = ATTR_KEYS.filter((key) => next[key] > floorOf(key));
-      if (!available.length) break;
-      const key = available[Math.floor(Math.random() * available.length)];
-      next[key] -= 1;
-      const existing = dropped.find((entry) => entry.key === key);
-      if (existing) existing.amount += 1;
-      else dropped.push({ key, amount: 1 });
-    }
-
-    return { nextAttributes: next, dropped };
   }
 
   _autoUnequipJobBadgeIfNeeded(progress) {
@@ -721,6 +700,13 @@ class ShopService {
       const entry = progress.inventory[idx];
       const itemType = entry.itemType || "consumable";
 
+      // 降等藥水已於 2026-08-09 正式移除。即使舊實例被備份、同步或快取重新帶回背包，
+      // 也必須在任何消耗／寫入發生前硬封鎖，不能再改動玩家等級。
+      if (String(entry.itemId || "") === REMOVED_LEVEL_DOWN_POTION_ID
+        || String(entry.itemEffect?.type || "") === REMOVED_LEVEL_DOWN_EFFECT) {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "降等藥水已移除，無法使用。", 400);
+      }
+
       if (ENHANCE_GEM_IDS.has(entry.itemId)) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石只能用於強化裝備，無法直接使用", 400);
       }
@@ -731,14 +717,6 @@ class ShopService {
 
       const effect = entry.itemEffect || { type: "none", value: 0 };
       const useEffects = Array.isArray(entry.useEffects) ? entry.useEffects : [];
-
-      // 預先驗證（不依賴狀態）
-      if (effect.type === "level_down_random_attributes") {
-        const currentLevel = Math.max(1, Number(progress.level) || 1);
-        if (currentLevel <= 1) {
-          throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "等級已是 1，無法再降低。", 400);
-        }
-      }
 
       // 深拷貝避免污染 request cache（同 grantExp 的修法）
       const next = {
@@ -787,33 +765,6 @@ class ShopService {
         next.allocatedAttrs = {};
         const attrLine = ATTR_KEYS.map(k => `${k.toUpperCase()}:${newAttrs[k]}`).join(" ");
         effectDesc = `🔮 屬性全部重洗！隨機成長已重骰${allocSum > 0 ? `、自主配點 ${allocSum} 點已退回可重新分配` : ""}。新屬性：${attrLine}`;
-      } else if (effect.type === "level_down_random_attributes") {
-        const currentLevel = Math.max(1, Number(next.level) || 1);
-        // 2+1 制改版（2026-08-07）：降 1 級＝收回該級所發的「隨機 2 點＋自主 1 點」。
-        // 隨機扣點地板 = 1 + 已自主分配量（隨機扣不吃玩家自選的點）
-        const alloc = next.allocatedAttrs || {};
-        const { nextAttributes, dropped } = this._rollRandomAttributeDrops(next.attributes, 2, alloc);
-        next.level = currentLevel - 1;
-        next.exp = 0;
-        next.attributes = nextAttributes;
-        let freeNote = "";
-        if ((next.statusPoints || 0) > 0) {
-          next.statusPoints -= 1;
-          freeNote = "、自主點 -1";
-        } else {
-          // 自主點已花光 → 隨機收回一點「已分配」的屬性（同步扣 allocatedAttrs 紀錄）
-          const spent = ATTR_KEYS.filter((k) => (Number(alloc[k]) || 0) > 0 && (Number(next.attributes[k]) || 1) > 1);
-          if (spent.length) {
-            const k = spent[Math.floor(Math.random() * spent.length)];
-            next.attributes[k] -= 1;
-            next.allocatedAttrs = { ...alloc, [k]: (Number(alloc[k]) || 0) - 1 };
-            freeNote = `、${k.toUpperCase()}-1（自主配點）`;
-          }
-        }
-        const droppedText = dropped.length
-          ? dropped.map(({ key, amount }) => `${key.toUpperCase()}-${amount}`).join("、")
-          : "沒有可再下降的屬性";
-        effectDesc = `☯️ 等級下降至 Lv.${next.level}，並隨機失去 ${droppedText}${freeNote}。`;
       } else if (effect.type === "open_world_boss_chest") {
         // 世界王寶箱：依該世界王掉落率比重，隨機獲得一份掉落物（與該王即時掉落表同步）
         if (chestRolledEntry === undefined) {
@@ -925,8 +876,8 @@ class ShopService {
         savedUseEffects = useEffects;
         savedEffectDesc = effectDesc;
         savedChestReward = chestRewardInfo;
-        // 屬性重製 / 等級下降 → 記錄前後快照,稍後推播給網頁彈窗
-        if (effect.type === "reroll_attributes" || effect.type === "level_down_random_attributes") {
+        // 屬性重製 → 記錄前後快照,稍後推播給網頁彈窗
+        if (effect.type === "reroll_attributes") {
           savedStatChange = {
             kind: effect.type,
             prevLevel: Math.max(1, Number(progress.level) || 1),
@@ -1008,7 +959,7 @@ class ShopService {
       savedEffectDesc = savedEffectDesc ? `${savedEffectDesc} / ${statusLine}` : statusLine;
     }
 
-    // 屬性重製 / 等級下降 → 推播給網頁,彈出「數值變化」視窗(與升級視窗同款)
+    // 屬性重製 → 推播給網頁,彈出「數值變化」視窗(與升級視窗同款)
     if (savedStatChange) {
       try {
         const { playerEventBus } = require("../realtime/playerEventBus");
@@ -1023,13 +974,12 @@ class ShopService {
           const value = Number(sc.newAttributes[key]) || 0;
           return { key, label: ATTR_LABEL_ZH[key] || key.toUpperCase(), prev, value, delta: value - prev };
         });
-        const isReroll = sc.kind === "reroll_attributes";
         playerEventBus.emit(String(discordId), {
           type: "stat_change",
           data: {
             kind: sc.kind,
-            title: isReroll ? "屬性重製" : "等級下降",
-            icon: isReroll ? "🔮" : "☯️",
+            title: "屬性重製",
+            icon: "🔮",
             itemName: savedEntry.itemName,
             prevLevel: sc.prevLevel,
             newLevel: sc.newLevel,
@@ -1067,8 +1017,10 @@ class ShopService {
         if (matched.length === 0) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到這些物品", 404);
         const first = matched[0];
         const effType = String(first.itemEffect?.type || "");
-        const LEVEL_DOWN = "level_down_random_attributes"; // 我命由我：批量＝連續降 N 級(逐次套用)
-        if ((first.itemType || "consumable") !== "consumable" || !(BULK_SAFE.has(effType) || effType === LEVEL_DOWN)) {
+        if (String(first.itemId || "") === REMOVED_LEVEL_DOWN_POTION_ID || effType === REMOVED_LEVEL_DOWN_EFFECT) {
+          throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "降等藥水已移除，無法使用。", 400);
+        }
+        if ((first.itemType || "consumable") !== "consumable" || !BULK_SAFE.has(effType)) {
           throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不支援一鍵批量使用", 400);
         }
         if (!matched.every((e) => e.itemId === first.itemId && String(e.itemEffect?.type || "") === effType)) {
@@ -1088,23 +1040,6 @@ class ShopService {
           useCount = Math.max(0, Math.min(availCount, Math.ceil(room / per)));
           if (useCount <= 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `背包已達上限 ${bp.MAX_CAPACITY} 格，無法再擴充`, 400);
         }
-        // 我命由我(降級)：最多只能降到 Lv.1，故消耗量 = min(持有, 目前等級-1)；逐次套用累計掉屬性
-        let levelDownFields = null, levelDownInfo = null;
-        if (effType === LEVEL_DOWN) {
-          const curLv = Math.max(1, Number(progress.level) || 1);
-          useCount = Math.min(availCount, curLv - 1);
-          if (useCount <= 0) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "等級已是 1，無法再降低。", 400);
-          let attrs = { ...(progress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 }) };
-          const totalDropped = {};
-          for (let i = 0; i < useCount; i++) {
-            const rolled = this._rollRandomAttributeDrops(attrs, 2);
-            attrs = rolled.nextAttributes;
-            for (const d of (rolled.dropped || [])) totalDropped[d.key] = (totalDropped[d.key] || 0) + d.amount;
-          }
-          levelDownFields = { level: Math.max(1, curLv - useCount), exp: 0, attributes: attrs };
-          levelDownInfo = { newLevel: levelDownFields.level, dropped: totalDropped };
-        }
-
         // 依 useCount 從 matched 逐件累加 stackCount，選出要移除/部分扣減的 entry
         const toRemove = new Set();
         let partialUuid = null, partialKeep = 0, acc = 0;
@@ -1122,10 +1057,10 @@ class ShopService {
           if (u === partialUuid) { nextInv.push({ ...e, stackCount: partialKeep }); continue; }
           nextInv.push({ ...e });
         }
-        const next = { ...progress, ...(levelDownFields || {}), inventory: nextInv, updatedAt: new Date().toISOString() };
+        const next = { ...progress, inventory: nextInv, updatedAt: new Date().toISOString() };
         const saved = await this._saveProgressWithFallback(next, progress.updatedAt);
         if (saved) {
-          out = { itemId: first.itemId, itemName: first.itemName || first.name || "道具", effType, useCount, perValue, levelDown: levelDownInfo };
+          out = { itemId: first.itemId, itemName: first.itemName || first.name || "道具", effType, useCount, perValue };
           casSuccess = true;
           break;
         }
@@ -1150,11 +1085,6 @@ class ShopService {
       const bp = require("../backpack/backpackService");
       const r = await bp.grantSlots(discordId, totalValue).catch(() => null);
       effectDesc = r ? `🎒 本季背包 +${r.added} 格（目前上限 ${r.capacity}）` : "🎒 背包擴充";
-    } else if (out.effType === "level_down_random_attributes") {
-      const dropText = (out.levelDown?.dropped && Object.keys(out.levelDown.dropped).length)
-        ? Object.entries(out.levelDown.dropped).map(([k, v]) => `${k.toUpperCase()}-${v}`).join("、")
-        : "無";
-      effectDesc = `☯️ 連續下降 ${out.useCount} 級 → Lv.${out.levelDown?.newLevel}，隨機失去 ${dropText}`;
     }
     return { itemName: out.itemName, count: out.useCount, totalValue, effectType: out.effType, effectDesc };
   }

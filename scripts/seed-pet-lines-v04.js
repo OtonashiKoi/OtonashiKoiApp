@@ -19,23 +19,23 @@ const NOW = new Date().toISOString();
 const pv = (key, value, notes) => ({ key, target: "self", trigger: "passive", chance: 100, sourcePhase: "passive", params: { value }, notes });
 
 // ── 物種模板 ──
-// gather.lootTable: [{kind, weight}] kind ∈ gold(金幣袋按階級)/gem(強化石按階級)/equipment(≤自身階級一般裝備)/curse(我命由我不由天)
+// gather.lootTable: [{kind, weight}] kind ∈ gold(金幣袋按階級)/gem(強化石按階級)/equipment(≤自身階級一般裝備)
 const SPECIES = [
-  // 史萊姆線（後勤：金幣為主，偶爾撿到詛咒垃圾）
+  // 史萊姆線（後勤：金幣為主）
   { seq: 11, eggType: "slime", name: "綠史萊姆", species: "slime_green", rarity: "D", hatchWeight: 39,
-    gather: { intervalMult: 1.0, lootTable: [{ kind: "gold", weight: 45 }, { kind: "gem", weight: 25 }, { kind: "equipment", weight: 25 }, { kind: "curse", weight: 5 }] },
+    gather: { intervalMult: 1.0, lootTable: [{ kind: "gold", weight: 50 }, { kind: "gem", weight: 25 }, { kind: "equipment", weight: 25 }] },
     desc: "最常見的史萊姆，喜歡撿亮晶晶的金幣，偶爾撿回奇怪的東西。" },
   { seq: 12, eggType: "slime", name: "藍史萊姆", species: "slime_blue", rarity: "C", hatchWeight: 30,
-    gather: { intervalMult: 1.0, lootTable: [{ kind: "gold", weight: 40 }, { kind: "gem", weight: 30 }, { kind: "equipment", weight: 25 }, { kind: "curse", weight: 5 }] },
+    gather: { intervalMult: 1.0, lootTable: [{ kind: "gold", weight: 45 }, { kind: "gem", weight: 30 }, { kind: "equipment", weight: 25 }] },
     desc: "水靈靈的史萊姆，強化石與金幣均衡採集。" },
   { seq: 13, eggType: "slime", name: "星史萊姆", species: "slime_star", rarity: "B", hatchWeight: 20,
-    gather: { intervalMult: 0.7, lootTable: [{ kind: "gold", weight: 45 }, { kind: "gem", weight: 25 }, { kind: "equipment", weight: 25 }, { kind: "curse", weight: 5 }] },
+    gather: { intervalMult: 0.7, lootTable: [{ kind: "gold", weight: 50 }, { kind: "gem", weight: 25 }, { kind: "equipment", weight: 25 }] },
     desc: "身上閃著星光的史萊姆，手腳特別快（採集速度 +30%）。" },
   { seq: 14, eggType: "slime", name: "王史萊姆", species: "slime_king", rarity: "B", hatchWeight: 10,
-    gather: { intervalMult: 1.0, qualityUpChance: 0.15, lootTable: [{ kind: "gold", weight: 40 }, { kind: "gem", weight: 25 }, { kind: "equipment", weight: 30 }, { kind: "curse", weight: 5 }] },
+    gather: { intervalMult: 1.0, qualityUpChance: 0.15, lootTable: [{ kind: "gold", weight: 45 }, { kind: "gem", weight: 25 }, { kind: "equipment", weight: 30 }] },
     desc: "戴著小皇冠的史萊姆，眼光很好，15% 機率撿到高一階的東西。" },
   { seq: 15, eggType: "slime", name: "虹史萊姆", species: "slime_rainbow", rarity: "A", hatchWeight: 1,
-    gather: { intervalMult: 1.3, qualityUpChance: 0.3, lootTable: [{ kind: "gold", weight: 45 }, { kind: "gem", weight: 20 }, { kind: "equipment", weight: 30 }, { kind: "curse", weight: 5 }] },
+    gather: { intervalMult: 1.3, qualityUpChance: 0.3, lootTable: [{ kind: "gold", weight: 50 }, { kind: "gem", weight: 20 }, { kind: "equipment", weight: 30 }] },
     desc: "傳說中的七彩史萊姆，動作慢但眼光極佳（30% 高一階，質精量少）。" },
   // 狼牙線（戰鬥夥伴：出戰時給戰鬥加成；獵人不擅採集,速度減半、偏撿裝備）
   { seq: 21, eggType: "wolf", name: "灰紋幼狼", species: "wolf_gray", rarity: "D", hatchWeight: 39,

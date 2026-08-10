@@ -14,6 +14,7 @@
  *   KDA 值   = (K + A) ÷ max(1, D)      ← 聊天室爽度數字，排名不用它
  */
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+const { getLeaderboardExcludedPlayerIds } = require("../../shared/leaderboardEligibility");
 
 const EXEMPT_DEATH_RATE = 0.10; // 免責門檻（附錄C 十：待真實賽季數據校準）
 const A_WEIGHT = 0.7;
@@ -119,7 +120,9 @@ async function getPlayerStats(discordId) {
 /** 四個舞台（附錄C 六）：輸出王 K／助攻王 A／不倒王 最低死亡率（需最低場次）／MVP C */
 async function getBoards({ limit = 10, minBattlesForIron = 10 } = {}) {
   const db = await getMongoDb();
-  const rows = await db.collection(COL).find({}).toArray();
+  const excludedIds = await getLeaderboardExcludedPlayerIds();
+  const rows = (await db.collection(COL).find({}).toArray())
+    .filter((row) => !excludedIds.has(String(row.playerId || "")));
   const enrich = (r) => ({
     playerId: r.playerId, name: r.name || r.playerId,
     k: Number(r.k) || 0, a: Number(r.a) || 0, d: Number(r.d) || 0, wbBattles: Number(r.wbBattles) || 0,
