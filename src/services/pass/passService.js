@@ -238,13 +238,25 @@ class PassService {
     return this.getState(discordId);
   }
 
-  /** 換季：把 seasonKey 換掉（玩家下次讀取時自動重置） */
+  /** 換季：切換 seasonKey，並立即歸零現有玩家；lazy reset 只作漏網資料的第二層保險。 */
   async resetSeason(newSeasonKey) {
     const db = await getMongoDb();
+    const seasonKey = String(newSeasonKey || `s${Date.now()}`);
+    const nowIso = new Date().toISOString();
     await db.collection("serverEventConfig").updateOne(
-      { _id: "default" }, { $set: { passSeasonKey: String(newSeasonKey || `s${Date.now()}`) } }, { upsert: true }
+      { _id: "default" }, { $set: { passSeasonKey: seasonKey } }, { upsert: true }
     );
-    return { seasonKey: newSeasonKey };
+    const result = await db.collection(COLLECTION).updateMany({}, {
+      $set: {
+        seasonKey,
+        points: 0,
+        unlocked: false,
+        claimedFree: [],
+        claimedPaid: [],
+        updatedAt: nowIso,
+      },
+    });
+    return { seasonKey, resetPlayers: result.modifiedCount || 0 };
   }
 }
 

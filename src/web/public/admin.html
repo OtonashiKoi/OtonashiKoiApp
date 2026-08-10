@@ -451,13 +451,13 @@
 
               <article class="detail-card">
                 <h4>♻️ 回歸賽季重製（固定方案）</h4>
-                <p class="hint" style="margin-top:0;">把選定玩家重置成全新賽季：<b>只保留鑽石、稱號、收藏圖片</b>；金幣歸 0、等級歸 1、屬性/裝備/背包/寵物/圖鑑/任務/拍賣上架/交易全部清空。執行前會自動備份到 backups/。<b style="color:#f87171;">此操作不可復原！</b></p>
+                <p class="hint" style="margin-top:0;">把選定玩家重置成全新賽季：保留<b>鑽石、永久背包格、會員階級、稱號、收藏、劇情／寵物／卡片圖鑑及主線錨點</b>；等級、職業、配點、戰鬥裝備、金幣、實際寵物、任務、PK/KDA、掛機與一般賽季錨點歸零。交易稽核紀錄不刪。執行前會自動備份到 backups/。<b style="color:#f87171;">此操作不可復原！</b></p>
                 <button id="season-reset-btn" type="button" class="button" style="margin-top:6px;background:#7f1d1d;border-color:#b91c1c;color:#fff;">♻️ 執行回歸賽季重製</button>
               </article>
 
               <article class="detail-card" style="border-color:#b91c1c;">
                 <h4>☢️ 全體回歸賽季重製（所有帳號）</h4>
-                <p class="hint" style="margin-top:0;"><b style="color:#f87171;">對「全部玩家」</b>套用同一套重製規則（保留鑽石/稱號/收藏，其餘全清，含拍賣與交易）。執行前會把所有人備份成一份檔案到 backups/。<b style="color:#f87171;">此操作不可復原，且影響全服！</b>需輸入確認字串才會執行。</p>
+                <p class="hint" style="margin-top:0;"><b style="color:#f87171;">對「全部玩家」</b>套用同一套規則，並同步重置怪物／世界王、PK/KDA、直播賽季加成及通行證。交易稽核紀錄與永久收藏資料保留。執行前會把玩家與全服狀態一起備份到 backups/。<b style="color:#f87171;">此操作不可復原，且影響全服！</b>需輸入確認字串才會執行。</p>
                 <button id="season-reset-all-btn" type="button" class="button" style="margin-top:6px;background:#450a0a;border-color:#dc2626;color:#fff;font-weight:900;">☢️ 全體回歸賽季重製</button>
                 <div id="season-reset-all-result" class="hint" style="margin-top:6px;"></div>
               </article>
@@ -1206,7 +1206,7 @@
     <script src="/static/admin.effects.js?v=1"></script>
     <script src="/static/admin.effect-modules.js?v=2"></script>
     <script src="/static/admin.bindings.js?v=8"></script>
-    <script src="/static/admin.players.js?v=6"></script>
+    <script src="/static/admin.players.js?v=7"></script>
     <script src="/static/admin.players.init.js?v=8"></script>
     <script src="/static/admin.nav-search.js?v=1"></script>
     <script src="/static/admin.tiers.js?v=6"></script>
@@ -1224,7 +1224,7 @@
     <script src="/static/admin.auction.js?v=3"></script>
     <script src="/static/admin.casino.js?v=1"></script>
     <script src="/static/admin.story.js?v=76"></script>
-    <script src="/static/admin.stream-records.js?v=5"></script>
+    <script src="/static/admin.stream-records.js?v=6"></script>
     <script src="/static/admin.wheel.js?v=1"></script>
     <script src="/static/admin.enchant.js?v=1"></script>
     <script src="/static/admin.maintenance.js?v=1"></script>

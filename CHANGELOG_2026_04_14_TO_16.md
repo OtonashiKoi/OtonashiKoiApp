@@ -1,6 +1,9 @@
 # 🎮 equipmentGAME 更新說明
 ## 2026年4月14日 ~ 4月16日
 
+> 📚 **歷史版本紀錄**：本文只記錄 2026-04-14～16 當時的功能，不是現行功能清單。
+> 現況請看 [PROJECT_FEATURES.md](PROJECT_FEATURES.md) 與 [docs/CURRENT_GAME_STATUS.md](docs/CURRENT_GAME_STATUS.md)。
+
 ---
 
 ## 📋 概述

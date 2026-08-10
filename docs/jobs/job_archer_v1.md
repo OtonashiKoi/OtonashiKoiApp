@@ -1,5 +1,7 @@
 # 弓箭手（Archer）
 
+> 類型：一轉玩法摘要；精確數值以 MongoDB 徽章、`combatStats.js` 與 `combatLoop.js` 為準，`scripts/upsert-*` 只是一份資料工具。
+
 定位：遠距爆發與機動性結合，擅長弱點打擊與迴避後反擊。
 
 玩法重點：

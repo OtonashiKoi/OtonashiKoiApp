@@ -1,394 +1,180 @@
-# equipmentGAME 全系統架構圖
+# equipmentGAME 現行架構
 
-> ⚠️ **快照文件（2026-08-07 審計標記）**：本文件為 2026-05-23 快照。架構原則（§4/§7/§9）仍成立，
-> 但**現況數字與功能矩陣大量過時**：collections 現為 70（非 23）、zone 現為 15 個（非 5）、
-> Web 前端已上線 23 個路由頁（§5 矩陣中「Web 缺」的任務/強化/道具操作與「完全未實裝」的寵物/商品兌換等多已完成）、
-> route 檔新增約 10 支（soloBoss/story/forge/enchant/merch/ecpay 等）、§10 路線圖已被超越。
-> 現役索引請看 [SYSTEMS.md](SYSTEMS.md)。
-> 最後更新：2026-05-23
-> 本文件涵蓋 Discord Bot、Web API、Web 前端、MongoDB、OAuth 整合的完整關係。
+> 狀態：現行架構文件。最後以程式碼核對：2026-08-10。
+>
+> 功能清單看 [PROJECT_FEATURES.md](../PROJECT_FEATURES.md)，檔案定位看 [SYSTEMS.md](SYSTEMS.md)，DB 內容看 [CURRENT_GAME_STATUS.md](CURRENT_GAME_STATUS.md)。
 
----
+## 系統形態
 
-## 1. 高層架構
+同一個 Node.js process 預設同時承載：
 
-```
-                       ┌─────────────────────────────────────┐
-                       │           MongoDB (本地)             │
-                       │   equipment_game (23 Collections)   │
-                       └─────────────────┬───────────────────┘
-                                         │
-                ┌────────────────────────┼────────────────────────┐
-                │                        │                        │
-       ┌────────▼────────┐      ┌────────▼────────┐      ┌────────▼────────┐
-       │  Discord Bot    │      │   Express API   │      │  Admin Console  │
-       │  (discord.js)   │      │   :5566         │      │   (HTML/JS)     │
-       │                 │      │                 │      │                 │
-       │  - Commands     │      │ /api/me/*       │      │ /admin/console  │
-       │  - Buttons      │      │ /api/combat/*   │      │ /admin/monsters │
-       │  - Modals       │      │ /api/shop/*     │      │ /admin/quests   │
-       │  - Embeds       │      │ /api/idle/*     │      │ /admin/items    │
-       │  - Voice / SSE  │      │ /api/quests/*   │      │ /admin/world-boss│
-       └────────┬────────┘      │ /api/mahjong/*  │      └─────────────────┘
-                │               │ /api/me/bindings│
-                │               └────┬────────────┘
-                │                    │
-                │                    │  Discord OAuth
-                │                    │  + JWT
-                │                    │
-                │                    ▼
-                │           ┌────────────────────┐
-                │           │  Web 前端 (Vite)   │  ← equipmentGAME-app
-                │           │  React 19 + TS     │
-                │           │  TanStack Router   │
-                │           │  TanStack Query    │
-                │           │  Zustand (auth)    │
-                │           │  Tailwind v4       │
-                │           │  Framer Motion     │
-                │           └────────────────────┘
-                │
-                │  Twitch / YouTube
-                ▼  Membership API
-       ┌─────────────────┐
-       │  Stream Auth    │
-       │  (OAuth)        │
-       └─────────────────┘
+1. Discord.js Bot：斜線指令、按鈕、選單、頻道面板、事件監聽。
+2. Express API：玩家、後台、OAuth、SSE、金流與靜態網站。
+3. 背景排程：直播觀看／待機室、會員同步、世界王、面板維護、記憶體監控等。
+4. 共用 service context：Discord 與 API 使用同一組服務及 Mongo repositories。
+
+`API_ONLY=1` 可略過 Discord command registration 與 gateway login，但 API 仍會啟動。
+
+## 主要資料流
+
+```text
+Discord interaction ─┐
+                     ├─> handler / Express route
+Player Web App ──────┘          │
+                                v
+                         serviceContext
+                                │
+                ┌───────────────┼────────────────┐
+                v               v                v
+          shared combat     domain services   realtime/SSE
+                │               │
+                └───────┬───────┘
+                        v
+                Mongo repositories
+                        v
+                     MongoDB
 ```
 
----
+戰鬥結果不由 Discord 或 React 自行計算。主要入口把玩家、裝備、效果與怪物資料交給 `src/shared/combatLoop.js`，再由 service／repository 結算任務、獎勵與持久化。
 
-## 2. Repo 結構
+## 目錄責任
 
-### `equipmentGAME/`（後端 + DC Bot 主 repo）
-
-```
-equipmentGAME/
-├── src/
-│   ├── bot/                    # Discord Bot
-│   │   ├── client.js           # Bot 啟動
-│   │   ├── commands.js         # 斜杠命令定義
-│   │   ├── playerPanel.js      # 我的資料、背包、裝備、強化
-│   │   ├── playerPanelView.js  # 玩家面板 BUTTON_IDS
-│   │   ├── monsterZoneView.js  # 怪物區 UI
-│   │   ├── towerView.js        # 爬塔 UI
-│   │   ├── playerPanel.js      # handleProfile/Backpack/...
-│   │   └── handlers/           # 互動 handlers
-│   │       ├── monsterZoneHandlers.js
-│   │       ├── pkArenaHandlers.js
-│   │       ├── towerHandlers.js
-│   │       ├── auctionHandlers.js
-│   │       └── publishHandlers.js
-│   │
-│   ├── api/                    # Express API
-│   │   ├── server.js           # API 主程式
-│   │   └── routes/
-│   │       ├── playerAppRoutes.js     # /api/me/* + /api/combat/* + /api/shop/*
-│   │       ├── playerIdleRoutes.js    # /api/idle/*
-│   │       ├── adminWeeklyQuestRoutes.js  # /api/quests + /api/weekly-quests
-│   │       ├── mahjongRoutes.js       # /api/mahjong/*
-│   │       ├── adminConsoleRoutes.js  # 後台
-│   │       ├── adminMonsterRoutes.js
-│   │       ├── adminCreatorAuthRoutes.js
-│   │       └── healthRoutes.js
-│   │
-│   ├── services/               # 業務邏輯層
-│   │   ├── playerService.js
-│   │   ├── walletService.js
-│   │   ├── shopService.js
-│   │   ├── monsterService.js
-│   │   ├── idleService.js
-│   │   ├── weeklyQuestService.js
-│   │   ├── creatorTokenService.js
-│   │   └── ...
-│   │
-│   ├── adapters/mongo/         # DB Repository 層
-│   │   ├── createMongoClient.js
-│   │   ├── createMongoRepositories.js
-│   │   ├── playerRepository.js
-│   │   ├── progressRepository.js
-│   │   ├── walletRepository.js
-│   │   ├── itemRepository.js
-│   │   ├── monsterRepository.js
-│   │   └── ...
-│   │
-│   ├── shared/                 # DC + API 共用
-│   │   ├── combatStats.js      # ⭐ 戰鬥能力公式（DC/Web 同一份）
-│   │   ├── combatLoop.js       # 戰鬥循環
-│   │   ├── effectEngine.js     # Buff/Debuff/Skill 引擎
-│   │   ├── zones.js            # Zone 定義（單一來源）
-│   │   ├── progression.js      # 等級 / EXP 公式
-│   │   └── response.js         # ok/fail 包裝
-│   │
-│   └── web/public/             # Admin Console 前端
-│
-├── scripts/                    # 維護腳本
-│   ├── pm2-reset.js
-│   ├── status-update.js        # → docs/CURRENT_GAME_STATUS.md
-│   └── ...
-│
-├── docs/
-│   ├── CURRENT_GAME_STATUS.md  # 由 MongoDB 自動生成（npm run status:update）
-│   ├── ARCHITECTURE.md         # ← 本文件
-│   └── OAUTH_SETUP_GUIDE.md
-│
-├── ecosystem.config.cjs        # PM2 設定
-└── package.json
+```text
+src/
+  index.js                         啟動、初始化與 HTTP listen
+  config.js                        環境設定與正式環境安全檢查
+  api/
+    server.js                      Express middleware、路由掛載、SPA
+    routes/                        玩家、管理、故事、金流、直播等路由
+    middleware/                    JWT／管理權限
+  bot/
+    client.js                      Discord client、事件、背景排程
+    commands.js                    斜線指令定義
+    handlers/                      玩家互動與 Discord 結算入口
+  services/                        領域服務與交易流程
+  shared/                          戰鬥、屬性、效果、區域、職業等共用規則
+  repositories/                    repository factory
+  adapters/mongo/                  Mongo 實作、連線、索引、request cache
+  web/public/                      後台、overlay、靜態頁、玩家 SPA build
+scripts/                           種子、遷移、修復、模擬、驗證與維運
+docs/                              現行文件、提案與歷史快照
+design-system/                     後台視覺規範
 ```
 
-### `equipmentGAME-app/`（Web 前端獨立 repo）
+## 儲存層
 
-```
-equipmentGAME-app/
-├── src/
-│   ├── routes/                 # TanStack Router 路由
-│   │   ├── rootRoute.tsx       # 根路由
-│   │   ├── index.tsx           # / 首頁（玩家儀表板）
-│   │   ├── login.tsx           # /login Discord OAuth
-│   │   ├── battle.tsx          # /battle (練功/掛機/PVP/爬塔)
-│   │   ├── inventory.tsx       # /inventory (15 槽 + 6 分頁)
-│   │   ├── shop.tsx            # /shop
-│   │   └── settings.tsx        # /settings (綁定)
-│   │
-│   ├── components/
-│   │   ├── PageShell.tsx       # 共用殼層 (背景 + TopBar + BottomNav)
-│   │   ├── PageBanner.tsx      # 頁面標題 banner
-│   │   ├── Tabs.tsx            # 分頁切換器 + Placeholder
-│   │   ├── Placeholder.tsx     # 空狀態佔位
-│   │   ├── RouteTransition.tsx # 路由過場動畫
-│   │   └── TopBar.tsx (legacy)
-│   │
-│   ├── hooks/                  # TanStack Query hooks
-│   │   ├── useProfile.ts       # /api/me/profile
-│   │   ├── useInventory.ts     # /api/me/inventory + equip/unequip/use/discard/sell
-│   │   ├── useBindings.ts      # /api/me/bindings
-│   │   ├── useBattle.ts        # /api/combat/zones + quick-battle
-│   │   ├── useShop.ts          # /api/shop/*
-│   │   ├── useIdle.ts          # /api/idle/*
-│   │   └── useRealtimeSync.ts  # SSE 即時同步
-│   │
-│   ├── lib/
-│   │   ├── api.ts              # axios + JWT 攔截器
-│   │   └── auth.ts             # Zustand auth store
-│   │
-│   ├── home/                   # 早期 Pixi.js 嘗試（已 deprecated）
-│   ├── index.css               # Tailwind v4 + HSR 配色變數
-│   └── main.tsx
-│
-├── public/
-│   ├── assets/                 # AI 生成素材（已不主用）
-│   ├── atoms/clean/            # chroma-key 後的乾淨素材
-│   └── bg/                     # 場景背景圖
-│
-└── scripts/                    # 影像處理
-    ├── chroma-key.mjs
-    └── extract-panels.mjs
+目前 runtime 為 **MongoDB-only**：
+
+```text
+createServiceContext()
+  -> createRepositories()
+  -> createMongoRepositories()
+  -> getMongoDb()
 ```
 
----
+沒有依 `STORAGE_DRIVER` 選 JSON adapter 的執行分支。repo 內的 JSON 主要用途是資料來源、匯出、備份、模擬 fixture 或歷史遺留，不能用來判定線上現況。
 
-## 3. 玩家認證流程
+Mongo 啟動時建立玩家、進度、交易、任務、怪物、直播事件與故事等索引；部分高頻資料使用 TTL，唯一發放／交易使用 unique index 或原子條件避免重複。
 
-```
-┌────────────┐                                              ┌────────────┐
-│  瀏覽器     │                                              │  Discord   │
-└─────┬──────┘                                              └─────┬──────┘
-      │                                                            │
-      │  1. GET /login → 點「用 Discord 登入」                        │
-      │                                                            │
-      │  2. redirect → Discord OAuth (client_id, redirect_uri)     │
-      ├───────────────────────────────────────────────────────────►│
-      │                                                            │
-      │  3. Discord callback ?code=xxx                             │
-      │◄───────────────────────────────────────────────────────────┤
-      │                                                            │
-      │                                ┌──────────────┐            │
-      │  4. POST /api/auth/discord     │ Express API  │            │
-      ├────────────────────────────────►              │            │
-      │     { code }                   │              │            │
-      │                                │ ▼ 換 token   │            │
-      │                                │ ▼ 找 user    │            │
-      │                                │ ▼ 簽 JWT     │            │
-      │  5. { jwt, player }            │              │            │
-      │◄───────────────────────────────┤              │            │
-      │                                └──────────────┘            │
-      │  6. Zustand 儲存 jwt 到 localStorage                         │
-      │                                                            │
-      │  7. 之後所有 API 帶 Authorization: Bearer <jwt>              │
-      │                                                            │
-```
+## 介面層
 
-JWT payload：`{ discordId, displayName, exp }`，密鑰 `JWT_SECRET`，TTL 7 天。
+### Discord
 
----
+- 斜線指令只負責發布面板、管理操作與診斷；主要玩家流程走按鈕／選單。
+- 互動入口集中在 `src/bot/client.js` 分流到 `src/bot/handlers/`。
+- 長操作先 acknowledge，再 edit／follow-up；權限與 ephemeral 回覆由 handler 控制。
+- 頻道版位由 MongoDB `channelLayout` 映射 feature key，不應把所有頻道 ID 寫死在 view。
 
-## 4. 戰鬥數值計算流（單一來源原則）
+### Express
 
-```
-                  MongoDB.progress
-                  ┌─────────────────┐
-                  │  attributes     │ STR/AGI/VIT/INT/DEX/LUK
-                  │  equipment      │ 15 槽裝備物件
-                  │  activeEffects  │ Buff/Debuff
-                  │  inventory      │ 持有道具
-                  └────────┬────────┘
-                           │
-                           ▼
-                ┌──────────────────────┐
-                │ shared/combatStats   │  ← ⭐ DC 與 Web 共用同一支
-                │ calcPlayerStats()    │
-                │                      │
-                │  → maxHp, atk, def   │
-                │  → hit, dodge, block │
-                │  → crit, combo       │
-                │  → weaponType        │
-                │  → tierSetBonuses    │
-                └──────┬───────────────┘
-                       │
-            ┌──────────┴──────────┐
-            │                     │
-            ▼                     ▼
-   ┌────────────────┐    ┌────────────────┐
-   │ DC handleProfile│    │ /api/me/profile│
-   │ 顯示 embed     │    │ JSON 回前端     │
-   └────────────────┘    └────────┬───────┘
-                                  │
-                                  ▼
-                         ┌────────────────┐
-                         │ Web 首頁面板    │
-                         │ 戰鬥能力 grid   │
-                         └────────────────┘
+`src/api/server.js` 依序掛載 health、管理、直播、玩家、故事、麻將、綠界與周邊商城路由；實際 endpoint 以 `src/api/routes/*.js` 為準。
+
+全域 middleware 包含：
+
+- production CORS allow list
+- gzip（排除 SSE）
+- `/api` rate limit（排除 SSE 與金流 callback）
+- 8 MB JSON body limit
+- API contract headers
+- request-scoped Mongo read cache
+- 統一錯誤回應
+
+### 玩家 Web
+
+React 原始碼在獨立 workspace `~/Documents/equipmentGAME-app`，建置後部署到 `src/web/public/app/`。Express 對 hash assets 使用長快取、對 `index.html` 使用 no-store，並提供 SPA fallback。
+
+本 repository 也保留 `src/web/public/game.html` 等舊／測試靜態頁，但正式根路由優先服務已部署的 SPA。`/test` 會為 `game.html` 注入測試主題，不是第二套正式前端。
+
+### 管理後台
+
+管理後台是 `src/web/public/admin.html` 與 `admin.*.js`，直接呼叫 `/admin/*`。它涵蓋玩家、權限、版位、怪物、道具、商店、任務、故事、直播活動、效果、戰鬥設定、附魔、商城與維運操作。
+
+## 共用戰鬥邊界
+
+- `combatStats.js`：屬性、武器、裝備與被動轉成戰鬥數值。
+- `effectEngine.js`：效果定義、套用與堆疊。
+- `combatLoop.js`：回合時序、傷害、治療、吸血、狀態、戰報與統計。
+- 呼叫端：準備玩家／怪物、選項與 party effects；結束後寫入進度、任務、獎勵與 KDA。
+
+每回合生命變動在該回合的觸發點處理。`healDone` 與 `lifestealDone` 是 combat loop 回傳的實際量，不應由戰報文字或效果描述反推。
+
+## 功能開關與資料設定
+
+開關不全在同一層，判定時要分清楚：
+
+| 類型 | 例子 | 來源 |
+| --- | --- | --- |
+| 程式硬開關 | 爬塔暫停 | `towerHandlers.js: TOWER_ENABLED` |
+| 程式分支鎖 | 二轉劍鬼、盜靈 | `jobAdvancement.js: seasonLocked` |
+| DB 功能設定 | 觀看熱度、斗內、SC、會員、賭場 | 對應 Mongo config collection |
+| DB 內容啟用 | 怪物、任務、故事章節 | 文件的 `enabled/isActive` |
+| 環境開關 | API_ONLY、auto rotate、startup lock | `.env`／`config.js`／啟動碼 |
+
+因此「程式有這個 service」不代表玩家現在能使用；權威文件會同時標示能力與啟用狀態。
+
+目前二轉表有 11 個一轉、13 條二轉，2 條分支鎖定；每個一轉至少仍有一條可用。爬塔目前暫停開放，雖然路由、服務與 UI code 仍存在。
+
+## 直播事件架構
+
+```text
+OneComme WS/REST ──> commentFetcher ──> streamHandlers / viewerService
+YouTube OAuth API ─> youtubeUpcomingService
+viewerService ─────> viewerEventsService ──> Discord 開台通知
+                                     └────> 全服觀看 Buff / town chat 提示
+donation/member events ──────────────> stream records / SC / global Buff
 ```
 
-**保證**：DC 顯示的 HP/ATK/DEF 與 Web 顯示永遠相同。
+- 待機室以 YouTube broadcastId 去重，成功預告後同 ID 不再預告。
+- 正式開台以平台＋URL 指紋識別，經連續三輪確認後公告。
+- 看板、打卡枠、未來待機室與 stale 枠不算正式直播。
+- 通知 claim 存在 MongoDB `viewerState`，避免重啟或多入口重複發送。
+- 觀看門檻、冷卻與效果以 DB `serverEventConfig.viewerTiers` 為準。
 
----
+## 啟動順序
 
-## 5. 完整功能矩陣
+1. 載入 `.env` 並檢查正式環境密鑰。
+2. 選擇性啟動 dev mirror，必要時改寫 Mongo URI。
+3. 建立 service context 與 repositories。
+4. 同步效果預設與任務種子。
+5. 註冊 Discord 指令並登入（非 `API_ONLY`）。
+6. 初始化全服 Buff、清理殘留觀看 session、同步直播活動設定。
+7. 初始化附魔快取。
+8. 建立 Express，開始 listen。
+9. Discord ready 後啟動 OneComme、觀看評估、YouTube 待機室、會員與其他排程。
 
-### 🟢 Web 已實作（8）
-| 功能 | API | Web 路徑 |
-|---|---|---|
-| 我的資料 | GET `/api/me/profile` | `/` |
-| 背包 + 15 槽裝備 | GET `/api/me/inventory` + equip/unequip | `/inventory` |
-| 練功（5 zones） | GET `/api/combat/zones` + POST `/api/combat/quick-battle` | `/battle` 練功 |
-| 掛機 | `/api/idle/{status,zones,start,claim,cancel}` | `/battle` 掛機 |
-| 商店 | GET `/api/shop/items` + POST `/api/shop/buy/:id` | `/shop` |
-| 直播綁定 | GET `/api/me/bindings` + OAuth | `/settings` |
-| 等級 / EXP / 資產 | profile 內含 | TopBar |
+## 部署
 
-### 🟡 Web 缺，後端 API 已有（5）
-| # | 功能 | API |
-|---|---|---|
-| 9 | **任務系統** | GET `/api/quests` + POST `/api/quests/:id/claim` + GET `/api/weekly-quests` + claim |
-| 10 | 裝備強化 | GET `/api/me/enhance/:uuid` + POST `/api/me/inventory/enhance` |
-| 11 | 麻將 | GET `/api/mahjong/state` + SSE `/api/mahjong/stream` + POST join/move/reorder |
-| 12 | 道具使用/丟棄/出售 | POST `/api/me/inventory/{use,discard,sell}/:uuid` |
-| 13 | 打卡狀態 | 經 transactions 推算 |
+- 預設 API port：5566，可由 `API_PORT` 覆蓋。
+- PM2 process：`equipmentGAME`，指令見根目錄 README。
+- 玩家與後台由同一 Express origin 提供；正式 domain 經 Cloudflare tunnel 導入。
+- 前端 build 與後端 restart 是不同步驟；只改 React 原始碼但未 deploy，後端不會自動取得新版。
+- 啟動時自動重發面板被硬關閉，避免 Discord rate limit 與孤兒面板；需在後台手動發布。
 
-### 🟠 DC-only，需開後端 API（8）
-PK 競技場 / 爬塔 / 拍賣行 / 邀請碼 / 交易紀錄 / 怪物事件 / 幣商兌換 / 世界王玩家面
+## 文件與驗證
 
-### ⚪ 完全未實裝（10）
-寵物 / 公會（樂團？）/ 釣魚採集 / 製作 / 信箱 / 商品兌換 / 隱私設定頁 / 稱號職業切換 UI / 頭像自訂 / 組隊系統
+- `npm run status:update`：從程式與 MongoDB 生成資料現況。
+- `npm run check:docs`：核對 MongoDB-only、爬塔與二轉硬事實。
+- `npm run check`：語法、行數與文件一致性。
+- 相關功能另跑 `test:features`、`test:systems`、`test:golden`、任務與直播通知測試。
 
----
-
-## 6. MongoDB Collections（23）
-
-### 玩家資料
-- `players` — Discord 玩家主檔
-- `progress` — 等級、屬性、裝備、徽章
-- `wallets` — 金幣、鑽石
-- `transactions` — 交易紀錄
-- `checkins` — 打卡紀錄
-
-### 道具
-- `items` — 道具總表（系統定義）
-- `inventory` — 玩家持有（已併入 progress.inventory）
-- `equipment` — 玩家裝備（已併入 progress.equipment）
-- `shopItems` — 商店商品池
-- `shopClaims` — 商店認領紀錄
-
-### 戰鬥
-- `monsters` — 怪物定義
-- `monsterState` — 各 zone 怪物當前 HP
-- `monsterEvents` — 怪物事件觸發紀錄
-- `worldBossConfig` / `worldBossState`
-- `pkArenaState` — PK 競技場狀態
-- `towerSessions` — 爬塔會話
-
-### 任務
-- `weeklyQuests` — 任務定義（含 onboarding/job/daily/weekly）
-- `weeklyQuestProgress` — 玩家任務進度
-
-### 掛機 / 麻將
-- `idleZones` / `idlePlayerStates`
-
-### 系統
-- `inviteCodes` — 邀請碼
-- `battleConfig` — 戰鬥設定
-- `effectDefinitions` — Buff/Debuff 定義
-- `playerTiers` — E~SS 階級設定
-- `channelLayout` — 頻道綁定
-- `accessControl` / `adminActionLogs`
-- `creatorTokens` / `streamAccountBindings` — 直播 OAuth
-
----
-
-## 7. 共享業務邏輯（DC + Web 必共用）
-
-| 模組 | 路徑 | 用途 |
-|---|---|---|
-| `combatStats.calcPlayerStats` | `src/shared/combatStats.js` | ⭐ 戰鬥能力公式 |
-| `combatLoop.runCombatLoop` | `src/shared/combatLoop.js` | 一場戰鬥模擬（一次算完整場） |
-| `effectEngine` | `src/shared/effectEngine.js` | Buff/Debuff 計算 + 裝備 effects 收集 |
-| `zones.ZONE_KEYS` | `src/shared/zones.js` | Zone 單一來源（不可 hardcode） |
-| `progression.expToNextLevel` | `src/shared/progression.js` | 等級 EXP 曲線 |
-
-**⚠️ 紀律**：所有玩家可見數值計算都必須走 shared，不可在 DC 或 Web 任一端獨立實作。
-
----
-
-## 8. 部署 & 環境
-
-| 服務 | 跑哪 | 啟動 |
-|---|---|---|
-| Discord Bot + API | PM2 process `equipmentGAME` | `npm run pm2:reset` |
-| MongoDB | 本地 `mongod`（wiredTiger 固定 dbPath） | 開機自動 |
-| Web 前端 dev | Vite :5180 | `npm run dev` |
-| Web 前端 prod | （規劃中：Cloudflare Pages 或 static host） | `npm run build` |
-| Cloudflared tunnel | `otonashikoi.org` | named tunnel |
-
-**環境變數**：
-- `MONGODB_URI` — DB 連線
-- `JWT_SECRET` — JWT 簽章
-- `DISCORD_BOT_TOKEN` / `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET`
-- `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET`
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
-
----
-
-## 9. 開發紀律
-
-1. **資料源真相**：MongoDB 是 SoT，DC / Web 都只是顯示層。
-2. **戰鬥計算**：任何屬性公式只能改 `src/shared/combatStats.js`，DC + Web 自動同步。
-3. **Zone 單一來源**：用 `src/shared/zones.js`，不要 hardcode zone key。
-4. **任務系統**：統一在 `weeklyQuestService`，`cadence` 包含 onboarding/job/daily/weekly。
-5. **`item.id` vs `item._id`**：前者是業務 UUID，後者是 MongoDB ObjectId，不可混用。
-6. **資料庫變動後**：跑 `npm run status:update` 同步 docs/CURRENT_GAME_STATUS.md。
-7. **PM2 操作**：由 user 執行，AI 不主動重啟正式服務。
-8. **UI 改動**：自截圖確認後再回報。
-
----
-
-## 10. 路線圖（短期）
-
-```
-Phase 11 ✅ HSR 風格純 CSS 重塗 + 首頁仿 DC 我的資料
-Phase 12a ⏳ 任務頁 /quests（4 cadence 分頁 + 領獎）
-Phase 12b ⏳ 背包道具 use/discard/sell 接 API
-Phase 12c ⏳ 裝備強化頁
-Phase 12d ⏳ 交易紀錄頁（需新 API）
-Phase 13  ⏳ 後端開 PK / Tower / Auction API
-Phase 14  ⏳ Web 戰鬥即時動畫（SSE）
-```
+提案與歷史文件不納入執行架構；分類規則見 [docs/README.md](README.md)。

@@ -1,175 +1,97 @@
-# Equipment Game Platform
+# equipmentGAME
 
-Discord-first game platform skeleton with JSON development storage and planned MongoDB production storage.
+Discord Bot、玩家 Web App、Express API 與 Web 管理後台共用同一套遊戲服務的線上 RPG 專案。目前不是骨架或 Phase 1；正式執行層為 **MongoDB-only**，JSON 檔只可能是匯出、備份、種子或歷史資料，不是可切換的 runtime adapter。
 
-## Current Phase
+文件請從 [docs/README.md](docs/README.md) 開始。功能現況看 [PROJECT_FEATURES.md](PROJECT_FEATURES.md)，程式位置看 [docs/SYSTEMS.md](docs/SYSTEMS.md)，MongoDB 資料快照看 [docs/CURRENT_GAME_STATUS.md](docs/CURRENT_GAME_STATUS.md)。
 
-This repository is now in Phase 1:
-- Player profile bootstrap
-- Dual-currency wallet (`gold`, `diamond`)
-- Transaction log model
-- JSON storage adapter
-- Minimal admin API and Discord chat panel flow
-- 400-line file limit check
+## 目前關鍵狀態
 
-## Setup
+- 爬塔程式仍保留，但目前暫停開放；Discord 互動與 `/api/tower/*` 都有伺服器端守門。
+- 職業共有 11 個一轉、13 條二轉分支；每個一轉至少 1 條可用，另有 2 條分支鎖定（劍鬼、盜靈）。
+- 世界王服務目前接有大史王、古龍王、地獄狼牙王、活動島島龜王。
+- YouTube 待機室出現時會對同一 broadcastId 發 1 次直播預告；正式開播確認後可再發 1 次開台通知。
+- 觀看人數加成、斗內、SC 累積與會員活動由 MongoDB `serverEventConfig` 控制，不可只看程式預設值判斷是否啟用。
+- 聖人任務只累計實際非吸血治療；鮮血任務只累計實際吸血；滿血溢出不計。
 
-1. Copy `.env.example` to `.env`.
-2. Fill these values:
-   - `DISCORD_TOKEN`
-   - `DISCORD_CLIENT_ID`
-   - `DISCORD_GUILD_ID`
-   - `ADMIN_ROLE_IDS` (optional, comma-separated Discord role IDs)
-   - `ADMIN_USER_IDS` (optional, comma-separated Discord user IDs)
-   - `PLAYER_ROLE_IDS` (optional, comma-separated Discord role IDs)
-   - `PLAYER_USER_IDS` (optional, comma-separated Discord user IDs)
-   - `API_PORT`
-   - `STORAGE_DRIVER`
-   - `JSON_DATA_PATH`
-   - `ADMIN_API_KEY`
-   - `ADMIN_API_CALLER_IDS` (optional, comma-separated caller IDs)
-   - `MONGODB_URI` and `MONGODB_DB_NAME` for future Mongo mode
-3. Install dependencies:
-   - `npm install`
+## 執行架構
 
-## Run
+- 啟動入口：`src/index.js`
+- Discord：`src/bot/`
+- Express 與路由：`src/api/server.js`、`src/api/routes/`
+- 遊戲服務：`src/services/`
+- 共用戰鬥與規則：`src/shared/`
+- MongoDB repositories：`src/adapters/mongo/`、`src/repositories/createRepositories.js`
+- 管理後台與靜態頁：`src/web/public/`
+- 玩家 SPA 部署產物：`src/web/public/app/`
+- 維運、資料種子與驗證：`scripts/`
 
-1. Register slash commands:
-   - `npm run discord:register`
-2. Start bot + API:
-   - `npm start`
-3. Open admin console:
-   - `http://localhost:5566/admin`
-4. Run checks:
-   - `npm run check`
+玩家 React 原始碼在獨立工作區 `~/Documents/equipmentGAME-app`；本 repository 保存已部署的 build 產物與完整後端。若只拿到本 repository，能啟動後端與已建置前端，但不能在這裡直接修改 React 原始碼。
 
-## Run With PM2
+## 安裝與啟動
 
-Use PM2 when you want the bot/API to stay alive and be easy to restart after config/data changes.
+需求：Node.js、可連線的 MongoDB、Discord Bot／OAuth 必要憑證。
 
-1. First start with PM2:
-   - `npm run pm2:start`
-2. Restart with latest env/config:
-   - `npm run pm2:restart`
-3. Reset (delete + recreate process):
-   - `npm run pm2:reset`
-4. Check status:
-   - `npm run pm2:status`
-5. Check logs:
-   - `npm run pm2:logs`
-6. Stop process:
-   - `npm run pm2:stop`
-
-## Discord Commands
-
-- `/連線測試`: show bot response latency
-- `/help`: show current command list
-- `/發布玩家面板`: admin publishes a clickable player panel into the current channel
-- `/管理員加金幣`: admin grant gold to a target player
-- `/管理員加鑽石`: admin grant diamond to a target player
-- `/管理員扣金幣`: admin deduct gold from a target player (no negative balance)
-- `/管理員扣鑽石`: admin deduct diamond from a target player (no negative balance)
-- `/管理員加經驗`: admin grant exp to a target player
-
-## Discord Chat Panel
-
-Players do not use slash commands directly.
-
-Admin flow:
-- Run `/發布玩家面板` in the target channel.
-
-Player flow:
-- Click `建立玩家`
-- Click `我的資料`
-- Click `我的錢包`
-- Click `交易紀錄`
-- Click `測試獎勵`
-- Click `測試經驗`
-
-All player button results are returned as ephemeral replies.
-
-## Admin Console
-
-- `GET /admin`: 後台頁面入口
-- `GET /admin/console/bootstrap`: 載入 Discord 頻道、身分組、權限與版位設定
-- `PUT /admin/channel-layout`: 儲存 Discord 版位功能綁定
-- `POST /admin/channel-layout/publish-player-panel`: 直接把玩家面板發到指定頻道
-
-目前後台可做的事：
-- 指定哪個 Discord 頻道負責玩家操作面板
-- 預留設定管理通知與審計紀錄版位
-- 管理 Discord 管理員與玩家白名單
-- 直接從 Web 後台發布玩家面板
-
-## API
-
-- `GET /health`
-- `GET /admin/access-control`
-- `PUT /admin/access-control/discord-roles`
-- `PUT /admin/access-control/discord-users`
-- `PUT /admin/access-control/player-roles`
-- `PUT /admin/access-control/player-users`
-- `GET /admin/players/:discordId/profile`
-- `GET /admin/players/:discordId/wallet`
-- `GET /admin/players/:discordId/transactions?limit=10`
-- `POST /admin/players/:discordId/grant`
-- `POST /admin/players/:discordId/grant-exp`
-- `GET /admin/audit-logs?limit=20`
-
-Admin routes require header:
-- `x-admin-key: <ADMIN_API_KEY>`
-- `x-admin-id: <caller_id>` when `ADMIN_API_CALLER_IDS` is configured
-
-Discord admin command permission:
-- If `ADMIN_USER_IDS` includes your user ID, you are admin directly.
-- Otherwise `ADMIN_ROLE_IDS` or `ManageGuild` permission can still grant admin access.
-
-Discord player panel permission:
-- If no player whitelist is configured, player panel buttons are open to everyone.
-- If `PLAYER_USER_IDS` or backend `playerUserIds` contains the user, that user can use player panel buttons.
-- If `PLAYER_ROLE_IDS` or backend `playerRoleIds` contains one of the member roles, that member can use player panel buttons.
-- Admins always bypass player whitelist.
-
-Example admin grant payload:
-
-```json
-{
-   "displayName": "target-user",
-   "currencyType": "gold",
-   "amount": 250,
-   "reason": "event reward",
-   "adminId": "discord-admin-id"
-}
+```bash
+npm install
+cp .env.example .env
+npm run discord:register
+npm start
 ```
 
-Example access control payloads:
+主要必要設定依環境而異，至少確認：
 
-```json
-{
-   "adminRoleIds": ["123456789012345678", "987654321098765432"]
-}
+- `MONGODB_URI`、`MONGODB_DB_NAME`
+- `DISCORD_TOKEN`、`DISCORD_CLIENT_ID`、`DISCORD_GUILD_ID`
+- `JWT_SECRET`、`ADMIN_PASSWORD`
+- `API_PORT`、`PUBLIC_BASE_URL`、`ALLOWED_ORIGINS`
+
+正式環境若 `JWT_SECRET` 或 `ADMIN_PASSWORD` 未設定／仍為弱預設值，啟動會直接失敗。其餘 Discord 頻道、OAuth、直播與金流設定請依 [部署指南](docs/DEPLOYMENT_GUIDE.md) 與 [OAuth 指南](docs/OAUTH_SETUP_GUIDE.md) 檢查。
+
+## 常用指令
+
+```bash
+npm run check                 # 語法、行數與文件一致性
+npm run check:docs            # 文件硬事實防漂移
+npm run test:features         # 核心功能與資料檢查
+npm run test:systems          # 系統驗證
+npm run test:golden           # 戰鬥黃金快照
+npm run test:anchor-quest-metrics
+npm run test:stream-notifications
+npm run status:update         # 由程式碼 + MongoDB 重建現況快照
 ```
 
-```json
-{
-   "adminUserIds": ["111111111111111111", "222222222222222222"]
-}
+PM2：
+
+```bash
+npm run pm2:start
+npm run pm2:restart
+npm run pm2:status
+npm run pm2:logs
+npm run pm2:stop
 ```
 
-```json
-{
-   "playerRoleIds": ["333333333333333333", "444444444444444444"]
-}
-```
+## 主要入口
 
-```json
-{
-   "playerUserIds": ["555555555555555555", "666666666666666666"]
-}
-```
+- 玩家網站：`/`
+- 管理後台：`/admin`
+- 健康檢查：`/health`
+- UI 測試入口：`/test`
+- 玩家 API：`/api/*`
+- 管理 API：`/admin/*`
+- 靜態資源：`/static/*`、`/uploads/*`
 
-## Engineering Rules
+API 不只早期文件列出的幾條；實際掛載由 `src/api/server.js` 與 `src/api/routes/*.js` 決定。穩定回應格式與相容範圍看 [API Contract v1](docs/API_CONTRACT_V1.md)。
 
-- Business rules belong in `src/services`
-- Discord and API are only interface layers
-- Any file over 400 lines must be split
+## Discord 指令
+
+目前註冊：`/連線測試`、`/help`、`/發布玩家面板`、`/發布個人房間面板`、`/發布玩家查詢`、管理員加扣金幣／鑽石、管理員加經驗、`/發布拍賣場面板`、`/發布pk擂台`、`/發布爬塔面板`。
+
+`/發布爬塔面板` 仍存在是為了保留管理與未來復用，但玩家點擊時會收到爬塔暫停提示，不能繞過總開關開始戰鬥。
+
+## 文件同步規則
+
+1. 程式與目前 MongoDB 是執行事實。
+2. 功能改動要同步 `PROJECT_FEATURES.md` 或 `docs/SYSTEMS.md`；戰鬥規則同步 `COMBAT_FORMULA.md`。
+3. 資料／開關變動後跑 `npm run status:update`。
+4. 提案、handoff、changelog、benchmark 與日期報告不能當成現況文件。
+5. 提交前跑 `npm run check`；`check:docs` 會攔截 MongoDB-only、爬塔與二轉數量等常見漂移。

@@ -302,7 +302,7 @@ class EnhanceService {
 
   /**
    * 查詢一件裝備的屬性洞現況（給前端畫面用：目前洞位、每種屬性的下一步花費/成功率）。
-   * 武器側（武器/副手）＝攻擊屬性；防具側（頭/鎧/披風/鞋/飾品）＝抗性與相剋減免。
+   * 武器側（武器/副手）＝攻擊相剋；防具側（頭/鎧/披風/鞋/飾品）＝怪物同屬抗性，不走相剋環。
    * @returns {object|null} 不支援屬性洞的槽位（卡片/稱號/職業徽章/錨點）回傳 null
    */
   async getElementSocketInfo(discordId, inventoryUuid) {
@@ -340,7 +340,7 @@ class EnhanceService {
   }
 
   /**
-   * 屬性洞補洞（把屬性石打進武器/副手的屬性洞）。
+   * 屬性洞補洞（把屬性石打進武器、副手或防具的屬性洞）。
    * 洞數依裝備「階級」(D1/C2/B3/A4/S5)；難度看「這個屬性目前已疊幾顆」，跟第幾洞無關——
    * 混搭不同屬性彼此獨立不干擾，只有同屬性疊更多才變貴變難。失敗只吃素材，洞位維持空的。
    * @param {string} discordId
@@ -375,7 +375,8 @@ class EnhanceService {
     }
     if (!equipment) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "未找到該裝備", 404);
 
-    // 屬性洞開放武器側（武器/副手＝打出去的屬性）與防具側（頭/鎧/披風/鞋/飾品＝抗性與相剋減免），
+    // 屬性洞開放武器側（武器/副手＝打出去的攻擊相剋）與防具側
+    // （頭/鎧/披風/鞋/飾品＝怪物同屬抗性，不走相剋環），
     // 與戰鬥引擎讀取的槽位一致（見 elementSystem 的 WEAPON_SLOTS / ARMOR_SLOTS）。
     // 卡片/稱號/職業徽章/錨點等特殊槽不參與屬性系統，仍然擋下。
     if (!ELEMENT_SOCKET_SLOTS.includes(String(equipment.equipSlot || ""))) {
@@ -389,7 +390,7 @@ class EnhanceService {
     const elementsMap = resolveElementsMap(equipment);
     const totalFilled = Object.values(elementsMap).reduce((a, b) => a + b, 0);
     if (totalFilled >= capacity) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `此${tier}階裝備的屬性洞已全滿（共 ${capacity} 洞）`, 400);
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `此${tier}階裝備已達屬性洞上限（最多 ${capacity} 洞）`, 400);
     }
 
     const existingCountOfThisElement = elementsMap[el] || 0;
@@ -438,7 +439,7 @@ class EnhanceService {
       socketsTotal: capacity,
       itemName: equipment.itemName,
       message: isSuccess
-        ? `✅ 鑲嵌成功！消耗 ${cost.stones} 顆${elLabel}屬性石、${cost.gold} 金幣`
+        ? `✅ 鑲嵌成功！消耗 ${cost.stones} 顆${elLabel}屬性石、${cost.gold} 金幣（屬性洞 ${totalFilled + 1}/${capacity}${totalFilled + 1 >= capacity ? "，已達上限" : ""}）`
         : `❌ 鑲嵌失敗，消耗了 ${cost.stones} 顆${elLabel}屬性石、${cost.gold} 金幣（洞位仍是空的）`,
     };
   }

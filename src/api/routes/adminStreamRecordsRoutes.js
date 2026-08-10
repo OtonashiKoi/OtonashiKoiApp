@@ -123,14 +123,12 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
     } catch (err) { if (err?.message) return res.status(400).json(fail("PASS_POINTS_FAILED", err.message)); next(err); }
   });
 
-  // 換季重置：清賽季永久底盤 + SC累積 + 會員里程碑 claimed（維護/開新賽季用）
+  // 只重置直播側的賽季資料；完整換季請使用玩家後台的「全體賽季重置」。
+  // 實作仍共用完整換季會呼叫的同一個 helper，避免直播規則分岔。
   router.post("/admin/stream-events/reset-season", requireAdmin, async (_req, res, next) => {
     try {
-      const gb = require("../../services/stream/globalBuffService");
-      const r = await gb.resetSeason();
-      await scBar.reset({ archive: true }).catch(() => {});
-      await require("../../services/stream/memberEventsService").resetSeason().catch(() => {});
-      await require("../../services/stream/viewerService").resetSeason().catch(() => {});
+      const { resetStreamSeasonState } = require("../../services/admin/seasonResetService");
+      const r = await resetStreamSeasonState();
       res.json(ok(r, "season reset"));
     } catch (err) { next(err); }
   });

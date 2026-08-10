@@ -1,6 +1,6 @@
 # 矮人戰士 完整規格（一轉 + 二轉）
 
-> 狀態：**一轉線上運作中｜二轉「矮人戰士長」已實作上線，試煉任務 `enabled:false` 本季不開放**
+> 狀態：**一轉線上運作中｜二轉「矮人戰士長」已實作，DB 試煉任務 `enabled:true`**（2026-08-10 核對）
 > 一轉徽章：`job_dwarf_warrior_v1`　／　二轉 A：矮人戰士長 `job_dwarflord_t2_v1`
 > 二轉 B（符文守衛・反傷坦）：**尚未設計**
 > 二轉通則見 [SEASON_V0.4.5_PLAN.md](SEASON_V0.4.5_PLAN.md)
@@ -280,17 +280,16 @@ V0.5 把武器倍率整併回武器層後，**全部徽章的 `atk_multiplier_up
 
 ## 2-6 二轉取得方式（✅ 新制已實裝）
 
-⛔ 舊制「試煉任務 `battle_as_dwarf_warrior` 出戰 350 場」已作廢
-（DB 中該任務仍存在但 `enabled:false`，僅存檔）。
+⛔ 舊制「試煉任務 `battle_as_dwarf_warrior` 出戰 350 場」已作廢，已從 active DB 移除；備份只留在 `weeklyQuestBackups`。
 
 現行流程（全職業通用，見 [JOB_BADGE_SYSTEM_DESIGN.md](JOB_BADGE_SYSTEM_DESIGN.md)）：
 
 1. 徽章練到 **Lv20**（裝著出戰 228 場，`shared/jobBadgeLevel.js`）→ 解鎖轉職劇情
 2. 劇情 transfer 節點**消耗一轉徽章＋金幣**（25 萬／100 萬／300 萬遞增）→ 換發二轉徽章 Lv1 重練
    （✅ `storyService.transferJobAtNode`，`src/services/story/storyService.js:541`）
-3. DB 已建「矮人戰士長試煉」`type: t2_transfer`（**`enabled:false`，本季不開放**，開放時機由使用者決定）
+3. DB 已建「矮人戰士長試煉」`type: t2_transfer`（**`enabled:true`**）；符合條件後可直接從職業任務領取並執行轉職
 
-❌ 矮人的轉職劇本尚未入庫（storyChapters 現僅 3 章；原稿見 [JOB_STORY_SCRIPTS.md](JOB_STORY_SCRIPTS.md)）。
+⚠️ 矮人的完整轉職劇情尚未入庫（storyChapters 現僅 3 章；原稿見 [JOB_STORY_SCRIPTS.md](JOB_STORY_SCRIPTS.md)），但這不阻擋現行 `t2_transfer` 任務轉職。
 
 ---
 
@@ -301,7 +300,7 @@ V0.5 把武器倍率整併回武器層後，**全部徽章的 `atk_multiplier_up
 | 徽章美術（矮人戰士長） | **等使用者提供** |
 | 二轉 B 分支「符文守衛」（反傷坦） | **尚未設計** |
 | 各王暈眩門檻個別調整 | 先全用 300，日後看實戰再調 `THRESHOLD_BY_ZONE` |
-| 開放時機 | 試煉任務改 `enabled: true` 由使用者決定 |
+| 開放狀態 | **已開放**；若要關閉需改 DB 任務狀態 |
 
 ---
 

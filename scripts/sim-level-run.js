@@ -172,7 +172,7 @@ const TIER_RANK = { D: 1, C: 2, B: 3, A: 4, S: 5 };
         const r = runCombatLoop(curStats, m.calc, m.name, m.calc.maxHp, ROUNDS, {
           playerLevel: level, equipped: curEq, inventory: [],
           monsterEquipped: m.equipment || {}, monsterIsBoss: false,
-          zone: z, monsterElement: m.element || null,
+          zone: z, monsterElement: m.element || null, monsterElementLevel: m.element ? (m.elementLevel || 1) : 0,
         });
         const share = Math.min(1, (r.totalDamage || 0) / m.calc.maxHp);
         expSum += battleExpReward(m, share);
@@ -195,7 +195,7 @@ const TIER_RANK = { D: 1, C: 2, B: 3, A: 4, S: 5 };
     const r = runCombatLoop(curStats, m.calc, m.name, m.calc.maxHp, ROUNDS, {
       playerLevel: level, equipped: curEq, inventory: [],
       monsterEquipped: m.equipment || {}, monsterIsBoss: false,
-      zone: curZone, monsterElement: m.element || null,
+      zone: curZone, monsterElement: m.element || null, monsterElementLevel: m.element ? (m.elementLevel || 1) : 0,
     });
     battles++;
     const died = r.outcome === "lose";

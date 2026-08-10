@@ -446,7 +446,7 @@ function createAdminPlayerRoutes(serviceContext) {
     } catch (error) { next(error); }
   });
 
-  // 回歸賽季重製(固定工具):只留鑽石/稱號/收藏,其餘全部重置;會先寫一份備份到 backups/
+  // 單一玩家賽季重置：使用 seasonResetService 的全服共同規則；交易稽核資料永遠保留。
   router.post("/admin/players/:discordId/season-reset", async (req, res, next) => {
     try {
       const id = req.params.discordId;
@@ -494,15 +494,15 @@ function createAdminPlayerRoutes(serviceContext) {
       const { seasonResetAllPlayers } = require("../../services/admin/seasonResetService");
       const summary = await seasonResetAllPlayers({
         dryRun: false,
-        monsterService: serviceContext.monsterService,
-        onBackup: async (allBackups) => {
+        monsterService: serviceContext.monsterService, passService: serviceContext.passService, seasonKey: req.body?.seasonKey || null,
+        onBackup: async (allBackups, globalBackup) => {
           const fs = require("fs");
           const path = require("path");
           const dir = path.resolve(__dirname, "../../../backups");
           fs.mkdirSync(dir, { recursive: true });
           const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-          fs.writeFileSync(path.join(dir, `season-reset-ALL-${stamp}.json`),
-            JSON.stringify({ kind: "season-reset-all-backup", at: new Date().toISOString(), count: allBackups.length, players: allBackups }));
+          const payload = { kind: "season-reset-all-backup", at: new Date().toISOString(), count: allBackups.length, players: allBackups, globals: globalBackup };
+          fs.writeFileSync(path.join(dir, `season-reset-ALL-${stamp}.json`), JSON.stringify(payload));
         }
       });
       res.json(ok(summary, "season reset all done"));

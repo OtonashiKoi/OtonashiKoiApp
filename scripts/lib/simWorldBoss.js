@@ -119,6 +119,7 @@ async function createWorldBossSim(sc, db, zoneKey, part = null, opts = {}) {
           worldBossPhase: phase || null,
           zone: zoneKey,                  // ← 裝備的區域條件特效
           monsterElement: boss.element || null,
+          monsterElementLevel: boss.element ? (boss.elementLevel || 1) : 0,
           playerActiveEffects: [],
           ...jobOpts,
           ...extraOptions,

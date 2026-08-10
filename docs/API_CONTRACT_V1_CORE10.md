@@ -3,6 +3,8 @@
 Last updated: 2026-04-19  
 Contract: `equipmentGAME-public-api` / `v1`
 
+> ⚠️ 本檔只定義早期 Core 10 的相容契約，不是完整路由清單。新增端點與目前系統入口請看 [SYSTEMS](SYSTEMS.md) 及 `src/api/server.js`。
+
 ## Fixed Rules
 
 1. Response envelope for core endpoints:
@@ -302,4 +304,3 @@ Allowed now:
 
 Not allowed in `v1`:
 - Breaking existing frontend parsing of these Core 10 responses.
-

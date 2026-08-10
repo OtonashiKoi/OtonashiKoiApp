@@ -531,6 +531,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monsterImageUrl: activeMonster?.imageUrl || null,
         monsterLevel: activeMonster?.level || 0,
         monsterElement: activeMonster?.element || null, // 屬性徽章用；無屬性怪回 null，前端不顯示
+        monsterElementLevel: activeMonster?.element ? (activeMonster?.elementLevel || 1) : 0,
         expReward: activeMonster?.expReward || 0,
         goldReward: activeMonster?.goldReward || 0,
         drops: (activeMonster?.drops || []).map((d) => d.itemName),
@@ -1146,7 +1147,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           tierSetBonuses: cs.tierSetBonuses || null,
           sets: require("../../shared/equipmentSetBonuses").getEquippedSetInfo(mergedEquipment),
           tierSets: require("../../shared/equipmentTierSetBonuses").getTierSetInfo(mergedEquipment),
-          enchantTotals: require("../../shared/enchantEngine").summarizeEquippedEnchantments(mergedEquipment)
+          enchantTotals: require("../../shared/enchantEngine").summarizeEquippedEnchantments(mergedEquipment),
+          elementStats: require("../../shared/elementSystem").getElementCombatProfile(mergedEquipment)
         };
       } catch (err) {
         console.warn("[profile] combatStats calc failed:", err?.message || err);
@@ -2585,6 +2587,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           monsterImageUrl: activeMonster?.imageUrl || null,
           monsterLevel: activeMonster?.level || 0,
           monsterElement: activeMonster?.element || null, // 屬性徽章用；無屬性怪回 null，前端不顯示
+          monsterElementLevel: activeMonster?.element ? (activeMonster?.elementLevel || 1) : 0,
           expReward: activeMonster?.expReward || 0,
           goldReward: activeMonster?.goldReward || 0,
           drops: (activeMonster?.drops || []).map(d => d.itemName),
@@ -3339,7 +3342,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           bossVulnMult: webBossVulnMult, // 牙狼弱點/龜王潮汐倍率(每擊)；其餘世界王＝1 無影響
           tsunamiDeath: turtleTsunami,   // 海嘯（島島龜王）：出戰即死
           forcePlayerHit: turtleForceHit, // 退潮打龜首必中
-          monsterElement: monster?.element || null // 屬性相剋；怪物無 element 則不參與（現有怪皆是）
+          monsterElement: monster?.element || null,
+          monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0
         });
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
       // 與 DC 一致：戰力同步已停用（monsterZoneHandlers.js 也是寫死 false），
@@ -4021,6 +4025,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monsterName: monster.name,
         monsterImageUrl: monster.imageUrl || null, // 本場實際對戰怪物的圖,讓前端圖片永遠對得上名字(不受區域換怪延遲影響)
         monsterElement: monster?.element || null, // 屬性徽章用；戰鬥畫面(BattleLayer)要顯示需要前端也接住這個欄位
+        monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
         logs: roundLogs,
         rewardLines,
         rewardSummary: rewardLines._summary || null,
@@ -4560,6 +4565,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         equipped: s.equipped, inventory: s.inventory, monsterIsBoss: Boolean(monster.isBoss),
         startPlayerHp: s.playerHp,
         monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
+        monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
       });
       s.playerHp = Math.max(0, r.finalPlayerHp);
       const killed = (r.finalMonsterHp ?? 0) <= 0 && r.outcome === "win";

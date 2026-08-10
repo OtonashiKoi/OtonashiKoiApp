@@ -1,5 +1,7 @@
 # 矮人戰士（Dwarf Warrior）
 
+> 類型：一轉玩法摘要；精確數值以 MongoDB 徽章、`combatStats.js` 與 `combatLoop.js` 為準，完整現行規格見 [JOB_DWARF_WARRIOR.md](../JOB_DWARF_WARRIOR.md)。
+
 定位：耐久與控制兼具的近戰戰士，槌類武器專精，適合團隊前線。
 
 玩法重點：

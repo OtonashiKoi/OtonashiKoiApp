@@ -3288,6 +3288,7 @@ async function handleEnterBattle(interaction) {
           forcePlayerHit: session.turtleForceHit || false, // 退潮打龜首必中
           zone: zoneKey, // 讓裝備的 zone 條件特效生效(例：S 龍系武器在龍族之領/龍王巢穴 +20%)
           monsterElement: battleMonster?.element || null, // 屬性相剋；怪物無 element 則不參與(現有怪皆是)
+          monsterElementLevel: battleMonster?.element ? (battleMonster?.elementLevel || 1) : 0,
           // 聖域窗口（聖域師區域條滿）：本場受傷減免＋每回合回血（DC 玩家照吃、不公告）
           sanctuaryCutPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumDamageCutPct) || 50) : 0,
           sanctuaryHealPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumHealPct) || 3) : 0,

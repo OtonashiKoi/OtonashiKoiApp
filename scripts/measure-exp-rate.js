@@ -119,7 +119,7 @@ function attrsFor(level) {
         const r = runCombatLoop(stats, m.calc, m.name, m.calc.maxHp, ROUNDS, {
           playerLevel: lv, equipped: eq, inventory: [],
           monsterEquipped: m.equipment || {}, monsterIsBoss: false,
-          zone: z, monsterElement: m.element || null,
+          zone: z, monsterElement: m.element || null, monsterElementLevel: m.element ? (m.elementLevel || 1) : 0,
         });
         const ratio = Math.min(1, (r.totalDamage || 0) / m.calc.maxHp);
         const effectivePool = Math.round((m.expReward || 0) * PARTY_MULT);

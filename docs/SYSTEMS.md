@@ -1,175 +1,175 @@
 # 系統索引 SYSTEMS
 
-> 這份是「有哪些系統、程式在哪」的**索引地圖**，方便日後快速定位。遊戲資料（怪物/道具/任務現況）請看 `docs/CURRENT_GAME_STATUS.md`（`npm run status:update` 產生）。
+> 狀態：現行程式索引。最後核對：2026-08-10。
 >
-> 架構：後端 Node.js（Discord Bot + Express API）在 `otonashiKoi_game`（＝符號連結 `equipmentGAME`，PM2 跑這個）；玩家網頁前端 React app 在 `~/Documents/equipmentGAME-app`（build+deploy 到後端 `src/web/public/app`）。DB＝本機 MongoDB `equipmentGame`。
->
-> 共用核心：戰鬥 `src/shared/combatLoop.js`、`combatStats.js`、`effectEngine.js`；區域單一來源 `src/shared/zones.js`；服務組裝 `src/services/createServiceContext.js`；Mongo repo `src/adapters/mongo/createMongoRepositories.js`、索引 `createMongoClient.js`。
+> 執行事實以 `src/**` 與目前 MongoDB 為準。資料數量與 DB 開關請先執行 `npm run status:update`，再看 [CURRENT_GAME_STATUS.md](CURRENT_GAME_STATUS.md)。
 
----
+## 核心入口
 
-## 玩法系統
+| 責任 | 程式入口 |
+| --- | --- |
+| 啟動與 runtime 初始化 | `src/index.js` |
+| Discord client、互動與排程 | `src/bot/client.js`、`src/bot/commands.js`、`src/bot/handlers/` |
+| Express、middleware、SPA | `src/api/server.js`、`src/api/routes/` |
+| 服務組裝 | `src/services/createServiceContext.js` |
+| 儲存層 | `src/repositories/createRepositories.js` → `src/adapters/mongo/createMongoRepositories.js` |
+| Mongo 連線與索引 | `src/adapters/mongo/createMongoClient.js` |
+| 戰鬥 | `src/shared/combatLoop.js`、`combatStats.js`、`effectEngine.js` |
+| 區域 | `src/shared/zones.js` |
+| 二轉 | `src/shared/jobAdvancement.js` |
 
-### ⚔️ 怪物 / 區域 / 戰鬥
-- 後端：`services/monster/monsterService.js`；戰鬥核心 `shared/combatLoop.js`；區域 `shared/zones.js`
-- API：`routes/playerAppRoutes.js`（`/api/combat/quick-battle`、zones）
-- 後台：怪物資料庫 `admin.monsters.js`、傷害測試 `admin.combat-calculator.js`
-- DC：`bot/handlers/monsterZoneHandlers.js`、`bot/monsterZoneView.js`
-- 前端：`routes/battle.tsx`、`hooks/useBattle.ts`
-- Collections：`monsters`、`monsterState`（`_id: monsterState:<zone>`，含 `worldBossPartsHp`）
+目前是 **MongoDB-only**。`config.storage.jsonDataPath` 與 JSON 檔仍可能被資料腳本使用，但 `createRepositories()` 沒有 JSON runtime 分支。
 
-### 👑 世界王 World Boss（大史王 elite / 古龍王 dragon_king_lair）
-- 後端：`services/worldBoss/worldBossService.js`（大史王 default + 古龍王 dragon_king，`worldBossServiceFor(zone)`）
-- 部位戰鬥/寶箱：`bot/handlers/monsterZoneHandlers.js`；網頁部位戰在 `playerAppRoutes.js`（見 [[worldboss-chest-grant]] 記憶）
-- 前端：`routes/worldboss.tsx`、`hooks/useWorldBoss.ts`、`useWorldBossAlarm.ts`
-- Collections：`worldBossConfig`、`worldBossState`、`worldBossChestGrants`（發箱稽核）
+## 戰鬥與玩法
 
-### 🗿 單人世界王 Solo Boss ＋ KDA 貢獻
-- 單人世界王（世界王簡化版，血少）：API `routes/soloBossRoutes.js`；世界王新機制一律三個入口（網頁世界王/DC/單人王）都做
-- KDA 貢獻結算：`services/kda/kdaService.js`；戰鬥內助攻帳本 `shared/combatLoop.js` `assistLedger`（約 :5272）
-- 矮人戰士長「巨神震擊」暈眩條：`shared/dwarfStunGauge.js`（collection `worldBossStunGauge`，原子 $inc＋CAS）
+### 區域討伐
 
-### 🗼 試煉之塔 Tower（單人無盡 + 組隊）
-- 後端：`services/tower/`（`towerPartyRooms.js`）；API 在 `playerAppRoutes.js`（`/api/tower/*`、`/api/tower/party/*`）
-- DC：`bot/handlers/towerHandlers.js`、`bot/towerView.js`
-- 前端：`routes/battle.tsx`（TowerPanel/TowerPartyPanel）、`hooks/useTower.ts`、`useTowerParty.ts`
+- 服務：`src/services/monster/monsterService.js`
+- 共用戰鬥：`src/shared/combatLoop.js`；玩家衍生屬性：`combatStats.js`
+- Discord：`src/bot/handlers/monsterZoneHandlers.js`、`src/bot/monsterZoneView.js`
+- Web API：`src/api/routes/playerAppRoutes.js` 的 `/api/combat/*`
+- 後台：`adminMonsterRoutes.js`、`adminCombatCalculatorRoutes.js`
+- 資料：`monsters`、`monsterState`、`battleConfig`、`effectDefinitions`
 
-### 🤖 掛機 Idle
-- 後端：`services/idle/idleService.js`；API `routes/playerIdleRoutes.js`、後台 `adminIdleRoutes.js`
-- 後台：`admin.idle.js`；DC：`bot/handlers/idleZoneHandlers.js`、`bot/idleZoneView.js`
-- 前端：`routes/battle.tsx`(IdlePanel)、`hooks/useIdle.ts`
-- Collections：`idleZones`、`idlePlayerStates`
+### 世界王與 KDA
 
-### ⚔️ PK 競技場
-- 後端：`shared/pkCombat.js`；`repositories.pkArenaRepository`（collection `pkArenaState`）
-- DC：`bot/handlers/pkArenaHandlers.js`、`bot/pkArenaView.js`；前端 `hooks/usePk.ts`
+- 共用服務：`src/services/worldBoss/worldBossService.js`
+- 實例組裝：`createServiceContext.js`
+- 目前四個 boss key：`default`（大史王）、`dragon_king`（古龍王）、`hellfang_king`（地獄狼牙王）、`island_turtle`（島島龜王）
+- 常態前置鏈：大史王 → 古龍王 → 地獄狼牙王；島島龜王沒有前置王
+- 單人王：`src/api/routes/soloBossRoutes.js`
+- KDA：`src/services/kda/kdaService.js`；戰內歸戶在 `combatLoop.js` 的 `assistLedger`
+- 世界王暈眩條：`src/shared/dwarfStunGauge.js`
+- 資料：`worldBossConfig`、`worldBossState`、`worldBossChestGrants`、`kdaSeasonStats`、`worldBossStunGauge`
 
-### 🎰 命運轉盤 Casino
-- 後端：`services/casino/casinoService.js`；後台 `admin.casino.js`；DC `bot/handlers/casinoHandlers.js`、`bot/casinoView.js`
-- 前端：`routes/casino.tsx`、`hooks/useCasino.ts`；Collections：`casinoState`、`casinoRounds`(TTL 30天)
+### 爬塔
 
-### 🐾 寵物 Pet
-- 後端：`services/pet/petService.js`；DC `bot/handlers/petHandlers.js`、`bot/petPanelView.js`
-- 前端：`routes/pets.tsx`、`hooks/usePets.ts`；資料存 `progress.pets`
+- 現況：**爬塔暫停開放**；程式與資料保留，不等於刪除
+- 總開關：`src/bot/handlers/towerHandlers.js` 的 `TOWER_ENABLED = false`
+- Discord 點擊守門：`towerHandlers.js`
+- Web API 守門：`playerAppRoutes.js` 的 `router.use('/api/tower', ...)`
+- 規則：`src/shared/towerConfig.js`；組隊房：`src/services/tower/towerPartyRooms.js`
+- 重新開放時還需同步獨立 React 原始碼內的前端開關，不能只改後端
 
-### 🀄 麻將 Mahjong
-- 後端：`services/mahjong/`；API `routes/mahjongRoutes.js`
+### 其他玩法
 
----
+| 系統 | 核心程式 | 主要資料 |
+| --- | --- | --- |
+| 掛機 | `services/idle/idleService.js`、`playerIdleRoutes.js`、`adminIdleRoutes.js` | `idleZones`、`idlePlayerStates` |
+| PK | `shared/pkCombat.js`、`bot/handlers/pkArenaHandlers.js` | `pkArenaState` |
+| 賭場 | `services/casino/casinoService.js`、`bot/handlers/casinoHandlers.js` | `casinoState`、`casinoRounds` |
+| 寵物 | `services/pet/petService.js`、`bot/handlers/petHandlers.js` | `progress.pets`、`progress.petDex` |
+| 麻將 | `services/mahjong/`、`api/routes/mahjongRoutes.js` | runtime queue state |
+| 主線故事 | `services/story/storyService.js`、`api/routes/storyRoutes.js` | `storyChapters`、`storyNpcs`、`progress.storyProgress` |
 
-## 道具 / 經濟
+## 道具、經濟與成長
 
-### 🎒 道具 / 裝備 / 背包
-- 後端：`services/item/itemService.js`；換裝/卸裝/丟棄在 `services/shop/shopService.js`
-- 後台：道具庫 `admin.items.js`、怪物卡 `admin.monster-cards.js`
-- 前端：`routes/inventory.tsx`、`hooks/useInventory.ts`；Collections：`items`
-- 註：`item.id`=系統UUID，`item._id`=ObjectId；裝備槽含 title_eq(稱號)、job_eq(職業徽章)、anchor(錨點)、special_1~3(卡片)
+| 系統 | 程式 | 資料／備註 |
+| --- | --- | --- |
+| 背包與換裝 | `services/item/itemService.js`、`services/shop/shopService.js`、`playerAppRoutes.js` | `items`、`progress.inventory/equipment`；支援使用、丟棄、出售、鎖定與批次操作 |
+| 背包容量 | `services/backpack/backpackService.js` | 主要戰鬥入口會在背包滿時阻擋 |
+| 強化 | `services/enhance/enhanceService.js`、`playerForgeRoutes.js` | 材料／寶石、失敗保護與公告 |
+| 附魔 | `services/enchant/enchantService.js`、`playerEnchantRoutes.js`、`adminEnchantRoutes.js` | 設定快取於啟動初始化 |
+| 商店 | `services/shop/shopService.js` | `shopItems`、`shopClaims` |
+| 拍賣 | `services/auction/auctionService.js` | auction repository |
+| 錢包／發獎 | `walletService.js`、`rewardService.js`、`transactionService.js` | `wallets`、`transactions` |
+| 周邊商城 | `services/merch/merchService.js`、`api/routes/merchRoutes.js` | `merchItems`、`merchOrders`、綠界付款 |
+| 等級 | `services/progress/progressService.js`、`shared/progression.js` | Lv.50；溢出 EXP 轉金幣 |
+| 打卡 | `services/checkin/checkinService.js` | `checkins` |
+| 邀請碼 | `services/invite/inviteService.js` | `inviteCodes` |
+| 會員 tier | `services/playerTier/playerTierService.js` | `playerTiers` 與 Discord role |
 
-### ⚒️ 強化 Enhance
-- 後端：`services/enhance/enhanceService.js`；前端 `routes`(forge)、`hooks/useEnhance.ts`；API `playerForgeRoutes.js`
+## 任務與職業
 
-### 🛒 金幣商店 Shop
-- 後端：`services/shop/shopService.js`；後台 `admin.shop.js`；DC `bot/handlers/coinShopHandlers.js`、`bot/coinShopView.js`
-- 前端：`routes/shop.tsx`、`hooks/useShop.ts`；Collections：`shopItems`、`shopClaims`
+### 任務
 
-### 🏛️ 拍賣場 Auction
-- 後端：`services/auction/auctionService.js`；後台 `admin.auction.js`；DC `bot/handlers/auctionZoneHandlers.js`
-- 前端：`routes/auction.tsx`、`hooks/useAuction.ts`
+- 服務：`src/services/weeklyQuest/weeklyQuestService.js`
+- cadence：`onboarding`、`job`、`daily`、`weekly`、`season`
+- 玩家／後台 API：`src/api/routes/adminWeeklyQuestRoutes.js`
+- 資料：`weeklyQuests`、`weeklyQuestProgress`
+- 任務 type 的可接受清單與記錄行為在 `weeklyQuestService.js`；不要從舊文件手抄一份常數表
+- 戰鬥任務入口：Discord `monsterZoneHandlers.js`、Web `playerAppRoutes.js`
 
-### 💰 錢包 / 交易 / 發獎
-- 後端：`services/wallet/walletService.js`、`transaction/transactionService.js`、`reward/rewardService.js`
-- 前端：`routes/transactions.tsx`、`hooks/useTransactions.ts`；Collections：`wallets`、`transactions`(打怪紀錄掛TTL)
+治療相關現況：
 
-### ✨ 效果引擎 Effects
-- 後端：`shared/effectEngine.js`、`services/effect/effectDefinitionService.js`
-- 後台：`admin.effects.js`、`admin.effect-modules.js`；DC 動作模板 `admin.animation-studio.js`
-- Collections：`effectDefinitions`
+- `heal_done`：實際補回的非吸血 HP；滿血溢補、治療轉傷害、治療免疫不計
+- `lifesteal_done`：實際吸血補回的 HP；滿血溢出不計
+- 當回合治療在當回合開始／觸發點結算並寫戰報，不以開場效果說明冒充治療紀錄
 
----
+### 一轉與二轉
 
-## 任務 / 成長 / 主線
+- 單一來源：`src/shared/jobAdvancement.js`
+- 現有 11 個一轉、13 條二轉分支；每個一轉至少 1 條可用
+- 目前 2 條分支鎖定：劍鬼、盜靈；其餘 11 條可由任務／故事流程開放
+- 徽章熟練度：`src/shared/jobBadgeLevel.js`、`services/job/jobBadgeService.js`
+- 二轉費用、條件、同職分支互斥與 `seasonLocked` 都由 `jobAdvancement.js`／`weeklyQuestService.js` 判定
+- 故事轉職節點：`services/story/storyService.js`
+- 各職機制：`dwarfStunGauge.js`、`shadowGauge.js`、`zoneCombo.js`、`battleStance.js`、`sunSpirit.js`、`jobBattleOptions` 等
 
-### 📋 任務系統（新手/職業/每日/每週/**賽季**）
-- 後端：`services/weeklyQuest/weeklyQuestService.js`（cadence: onboarding/job/daily/weekly/**season**；type 見檔內 QUEST_TYPES）
-- API：`routes/adminWeeklyQuestRoutes.js`（後台 `/admin/quests/*` + 玩家 `/api/quests`、`/api/quests/:id/claim`；發獎 `grantQuestReward`）
-- 後台：`admin.weekly.js`（cadence 含「賽季成就」；獎勵可選任何道具含**稱號 title_eq**）
-- 前端：`routes/quests.tsx`、`hooks/useQuests.ts`（Tab 含 season）
-- DC：`bot/weeklyQuestView.js`；Collections：`weeklyQuests`(定義)、`weeklyQuestProgress`(進度，`{discordId,cadence,periodKey}` unique)
-- **賽季稱號**：建 cadence=season 任務、獎勵選稱號 → 玩家任務頁自領（已驗證可行，達成紀錄自帶 discordId）
+## 直播、聊天與全服事件
 
-### 🥇 職業徽章 / 二轉 Job Advancement
-- 單一來源：`shared/jobAdvancement.js`（`T2_BRANCHES` 13 分支、`seasonLocked`、費用/門檻常數、`resolveJobKey` 職業判定唯一入口）
-- 徽章等級/熟練度：`shared/jobBadgeLevel.js`（屬性值 50/100/150%，效果不縮放）；累積入口 `services/job/jobBadgeService.js`
-- 轉職遞交：劇情 transfer 節點 `services/story/storyService.js`（`transferJobAtNode`：消耗一轉徽章＋金幣、冪等）；試煉任務 type `t2_transfer`（`isT2Trial` 閘門在 `weeklyQuestService`）
-- 職業機制檔：`shared/dwarfStunGauge.js`、`shared/shadowGauge.js`、`shared/zoneCombo.js`、`shared/battleStance.js`（聖劍士姿態）、`shared/sunSpirit.js` 等；設計文件 `docs/JOB_BADGE_SYSTEM_DESIGN.md`
+### OneComme 與直播事件
 
-### 🎭 主線劇情 Story（文字冒險）— 2026-07 新建
-- 見獨立記憶 [[story-system]]。後端 `services/story/storyService.js` + `routes/storyRoutes.js`；reader `equipmentGAME-app/routes/story.tsx`；後台 `admin.story.js`（admin.html「🎬 主線劇情」）
-- Collections：`storyChapters`、`storyNpcs`；玩家進度 `progress.storyProgress`
+- 留言／meta 接收：`src/bot/commentFetcher.js`
+- 斗內與綁定處理：`src/bot/handlers/streamHandlers.js`
+- OneComme 接收仍是必要 runtime 管線；已移除的是不需要的「玩家查詢直播留言」產品功能，不是整個 listener
+- 直播資料記錄：`services/stream/streamRecordsService.js`
+- 會員同步：`services/stream/membershipTracker.js`
+- 斗內、會員、SC、觀看門檻設定：`services/stream/streamEventConfig.js` + MongoDB `serverEventConfig`
+- Buff：`services/stream/globalBuffService.js`
 
-### 📅 打卡 Checkin
-- 後端：`services/checkin/checkinService.js`；前端 `hooks/useCheckin.ts`；Collections：`checkins`
+### 待機室與開台通知
 
-### 🏅 玩家等級 / 會員 Tier
-- 後端：`services/playerTier/playerTierService.js`；後台 `admin.tiers.js`；Collections：`playerTiers`（對應 Discord 身分組）
+- YouTube 待機室：`services/stream/youtubeUpcomingService.js`
+  - OAuth API 預設每 2 分鐘查 upcoming；最短可設 1 分鐘
+  - OneComme 若先提供 upcoming meta，也會走同一個 broadcastId 去重
+  - public／unlisted 且有未來預定時間才公告；同 broadcastId 成功後不重發
+- 正式開台：`services/stream/viewerEventsService.js`
+  - 排除永久看板、打卡枠、未來待機室與 90 秒未更新的 stale 枠
+  - 連續 3 個 20 秒評估輪確認才公告；連續 6 輪離線才釋放鎖
+  - 同場 6 小時與全域 10 分鐘冷卻由 `streamNotificationState.js` 保護
+- 待機室預告與開台公告都使用 `STREAM_GO_LIVE_CHANNEL_ID`
 
-### 📖 圖鑑 Collection（怪物/寵物）
-- API：`routes/playerCollectionRoutes.js`；前端 `routes/collection.tsx`、`hooks/useCollection.ts`；資料 `progress.bestiary`、`progress.petDex`
+### 觀看熱度
 
----
+- 即時狀態：`services/stream/viewerService.js`
+- 規則與廣播：`viewerEventsService.js`
+- 目前 DB：30／40／50 人三階，掉寶／金幣／經驗分別 +5%／+8%／+10%
+- 同場同階只公告一次；更高階可補公告，但任何觀看提示仍至少間隔 60 分鐘
+- 直播中持續延長，離線後依 `graceMinutes` 自然過期；不降階、升階覆寫
+- 手動「立即宣傳」只發訊息，不改 Buff
 
-## 玩家 / 平台 / 管理
+### 聊天、公告與即時推送
 
-### 👤 玩家 / 進度
-- 後端：`services/player/playerService.js`、`progress/progressService.js`；Collections：`players`(discordId)、`progress`(playerId)
+- Web ↔ Discord 大廳：`services/chat/`、`playerAppRoutes.js` 的 chat API／SSE
+- 公告：`services/announcement/`
+- 玩家即時事件：`services/realtime/`、`webPresence`
+- 直播 overlay：`streamOverlayRoutes.js`、`chatOverlayHub.js`
 
-### 🔐 登入 / 權限 / 維護
-- 網頁登入：`playerAppRoutes.js`（`/api/auth/discord`，requireAuth.js）
-- 存取封鎖：`services/access/webBanStore.js`(webAccessControl)；**賽季維護** `services/access/maintenanceStore.js`（見 [[season-maintenance-mode]]）
-- 權限白名單：`services/admin/accessControlService.js`；後台「權限與白名單」
-- Collections：`accessControl`、`webAccessControl`、`maintenanceState`
+## 管理、登入與安全
 
-### 📺 直播綁定 / 抖內換鑽石
-- 後端：`services/stream/`、`services/creatorAuth/creatorTokenService.js`；OneComme 留言 `bot/commentFetcher.js`、`onecommeSender.js`
-- 綁定 ID 格式坑見 [[stream-binding-id-prefix]]；Collections：`streamAccountBindings`、`creatorTokens`
-- 斗內管線：OneComme→`bot/handlers/streamHandlers.js` `handleDonation()`（NT$/100 換鑽、零頭累積 `donationLedger`、`transactions` 冪等）
+- Discord OAuth／JWT：`playerAppRoutes.js`、`api/middleware/requireAuth.js`
+- 管理權限：`services/admin/accessControlService.js`
+- Web ban：`services/access/webBanStore.js`
+- 維護模式：`services/access/maintenanceStore.js`
+- 後台：`src/web/public/admin.html` 與 `admin.*.js`
+- API 防護：CORS 白名單、全站 `/api` rate limit、SSE 例外、正式環境弱密鑰 fail-fast
+- 審計：`adminActionLogs`
 
-### 📊 直播記錄層（直播連動事件的資料底層）— 2026-07 新建
-- 見記憶 [[stream-records-layer]]。後端 `services/stream/streamRecordsService.js`（記錄+查詢）、`services/stream/membershipTracker.js`（Discord tier 身分組 diff）
-- 掛點：斗內→`streamHandlers.js handleDonation`（每筆記 `donationEvents`，含未綁定/未滿百）；會員→`bot/client.js` GuildMemberUpdate→trackMembershipChange
-- 後台：`admin.stream-records.js`（admin.html「📺 直播記錄」，監控與紀錄群組）；API `routes/adminStreamRecordsRoutes.js`
-- Collections：`donationEvents`(逐筆斗內)、`membershipEvents`(會員變動流水)、`membershipStatus`(會員現況表)、`serverBuffs`、`serverEventConfig`
-- 會員到期＝快照比對 `membershipTracker.reconcileMembership`(每12h+後台「🔁立即同步」)，不改身分組；⚠️續約(renew)需後續接 YouTube 會員 API
+## Web 與部署邊界
 
-### 🎉 全服 Buff / 直播觸發（第二階段模組0+A，2026-07 上線）
-- 核心：`services/stream/globalBuffService.js`(記憶體快取全服掉寶/金幣/經驗%加成，index.js啟動init)
-- 注入 chokepoint：`buildRewardModifiers()`(monsterZoneHandlers ~1458，涵蓋Discord/網頁/世界王) + `idleService.js`掛機兩處
-- 斗內觸發：`donationBuffTrigger.js`掛 handleDonation；設定 `streamEventConfig.js`(預設關)；後台「🎉全服活動」分頁 + adminStreamRecordsRoutes `/admin/stream-events/*`
-- **SC累積條**：`scBarService.js`(collection `scAccumulator`+`scBarHistory`)，斗內累積跨里程碑解鎖全服buff；後台「🎉全服活動」進度條+里程碑編輯+重置；公開 `GET /api/stream/sc-bar`。玩家端進度條組件待做
-- 直播限定王尚未做
+- 玩家 React 原始碼位於獨立的 `~/Documents/equipmentGAME-app`
+- build 產物部署到本 repository 的 `src/web/public/app/`，由 Express 直接服務
+- `src/web/public/` 同時包含管理後台、overlay、測試頁與其他靜態資源
+- production domain 目前由 Cloudflare tunnel 指向 Express；細節見 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+- 重新建置玩家 UI 要在外部前端 workspace 修改、build、deploy；不要直接手改 hash bundle
 
-### 💬 聊天大廳 Chat（網頁 ↔ DC town_chat）
-- 後端：`services/chat/`；SSE + Discord 同步在 `playerAppRoutes.js`（`_announceTownChat`）
-- 前端：`routes/chat.tsx`、`hooks/useChat.ts`
+## 驗證
 
-### 📢 公告 / 通知 / 熱更新
-- 後端：`services/announcement/`；`playerAppRoutes.js`（`_broadcastForceReload`/`_broadcastMaintenance`）
-- 後台廣播端點：`adminPlayerRoutes.js`（`/admin/broadcast/maintenance`、`/admin/broadcast/announce-and-reload`）— 見 [[restart-maintenance-notice]]
-- 前端：`routes/notifications.tsx`、`hooks/useAnnouncements.ts`；即時 `services/realtime/`(playerEventBus/webPresence)
-
-### 🎟️ 邀請碼 Invite
-- 後端：`services/invite/inviteService.js`；前端 `hooks/useInvite.ts`；Collections：`inviteCodes`
-
-### 🎛️ 後台總控 / Discord 版位
-- 後端：`services/admin/adminConsoleService.js`、`adminService.js`；API `adminConsoleRoutes.js`、`adminPlayerRoutes.js`
-- 頻道綁定：`channelLayout`(collection `_id:default`，featureKey→channelId)；後台「功能版位設定」`admin.bindings.js`
-- 後台框架：`admin.html` + `adminLayout.js`/`admin.core.js`/`admin.nav-search.js`；操作紀錄 collection `adminActionLogs`
-
----
-
-## 部署 / 維運速查
-- 後端重啟：`npx pm2 restart equipmentGAME --update-env`（見 [[restart-backend]]）；重啟前發維護預告 [[restart-maintenance-notice]]
-- 前端 deploy：`cd ~/Documents/equipmentGAME-app && npm run build && npm run deploy`
-- 後台是後端直吐靜態頁（改 `admin.*.js` 後重啟即生效；`admin.html` 引用要 bump `?v=`，且瀏覽器會快取 admin.html→常需強制重整）
-- 對外：otonashikoi.org 走 Cloudflare tunnel→localhost:5566（見 [[domain-deploy-setup]]）；後台 otonashikoi.org/admin.html（管理員密碼）
-- 現況文件：`npm run status:update` → `docs/CURRENT_GAME_STATUS.md`
+- 全域：`npm run check`
+- 文件：`npm run check:docs`
+- 核心資料／功能：`npm run test:features`、`npm run test:systems`
+- 戰鬥：`npm run test:golden`
+- 職業／任務：`npm run test:job-transfer`、`npm run test:anchor-quest-metrics`
+- 直播通知：`npm run test:stream-notifications`
+- DB 快照：`npm run status:update`

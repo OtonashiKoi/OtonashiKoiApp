@@ -2,8 +2,11 @@ require("dotenv").config();
 
 const fs = require("fs");
 const path = require("path");
-const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
+const { MongoClient } = require("mongodb");
+const config = require("../src/config");
 const { ZONE_DEFS } = require("../src/shared/zones");
+const { BASE_JOBS, T2_BRANCHES } = require("../src/shared/jobAdvancement");
+const { TOWER_ENABLED } = require("../src/bot/handlers/towerHandlers");
 
 const OUT_PATH = path.resolve(__dirname, "../docs/CURRENT_GAME_STATUS.md");
 
@@ -52,8 +55,23 @@ function table(headers, rows) {
 }
 
 async function main() {
-  const db = await getMongoDb();
-  const [monsterDocs, items, quests, players, progressRows, worldBossConfigRows, worldBossStateRows] = await Promise.all([
+  if (!config.storage.mongoUri) {
+    throw new Error("MONGODB_URI is required to generate the current game status");
+  }
+
+  // 文件產生器只能讀取現況，不應建立索引、移轉資料或觸發 runtime 初始化。
+  const client = new MongoClient(config.storage.mongoUri, {
+    serverSelectionTimeoutMS: 5000,
+    maxPoolSize: 5,
+  });
+  await client.connect();
+  const db = client.db(config.storage.mongoDbName);
+
+  try {
+  const [
+    monsterDocs, items, quests, players, progressRows, worldBossConfigRows, worldBossStateRows,
+    storyChapters, storyNpcs, serverEventConfig, shopItems,
+  ] = await Promise.all([
     db.collection("monsters").find({}).sort({ zone: 1, seq: 1, level: 1, name: 1 }).toArray(),
     db.collection("items").find({}).sort({ itemType: 1, tier: 1, equipSlot: 1, name: 1 }).toArray(),
     db.collection("weeklyQuests").find({}).sort({ cadence: 1, sortOrder: 1, title: 1 }).toArray(),
@@ -61,6 +79,10 @@ async function main() {
     db.collection("progress").find({}).toArray(),
     db.collection("worldBossConfig").find({}).toArray(),
     db.collection("worldBossState").find({}).toArray().catch(() => []),
+    db.collection("storyChapters").find({}).sort({ order: 1 }).toArray(),
+    db.collection("storyNpcs").find({}).toArray(),
+    db.collection("serverEventConfig").findOne({ _id: "default" }),
+    db.collection("shopItems").find({}).toArray(),
   ]);
 
   const monsterStateRows = monsterDocs.filter((row) => String(row._id || "").startsWith("monsterState:"));
@@ -167,12 +189,72 @@ async function main() {
     ];
   });
 
+  const t2Rows = Object.entries(BASE_JOBS).map(([baseKey, base]) => {
+    const branches = Array.isArray(T2_BRANCHES[baseKey]) ? T2_BRANCHES[baseKey] : [];
+    const open = branches.filter((branch) => branch?.seasonLocked !== true);
+    const locked = branches.filter((branch) => branch?.seasonLocked === true);
+    return [
+      base.name,
+      base.badgeId,
+      branches.map((branch) => branch.name).join("、"),
+      open.map((branch) => branch.name).join("、") || "無",
+      locked.map((branch) => branch.name).join("、") || "無",
+    ];
+  });
+  const totalT2 = t2Rows.reduce((sum, row) => sum + String(row[2]).split("、").filter(Boolean).length, 0);
+  const lockedT2 = Object.values(T2_BRANCHES).flat().filter((branch) => branch?.seasonLocked === true).length;
+
+  const worldBossRows = worldBossConfigRows.map((row) => {
+    const value = row?.value && typeof row.value === "object" ? row.value : row;
+    return [
+      row._id,
+      value.enabled === false ? "停用" : "啟用",
+      value.targetZone || "",
+      value.eliteZoneKey || "",
+      value.battleTimeLimitMinutes ?? "",
+      value.respawnCooldownMinutes ?? "",
+    ];
+  });
+
+  const storyRows = storyChapters.map((chapter) => [
+    chapter.order ?? "",
+    chapter.id,
+    chapter.title,
+    chapter.zoneKey || "",
+    chapter.enabled === false ? "停用" : "啟用",
+    Array.isArray(chapter.nodes) ? chapter.nodes.length : 0,
+  ]);
+
+  const eventRows = ["donationTiers", "scBar", "memberEvents", "viewerTiers"].map((key) => {
+    const config = serverEventConfig?.[key] || {};
+    const detail = key === "viewerTiers"
+      ? (config.tiers || []).map((tier) => `${tier.minViewers}人:${tier.goldPct || 0}/${tier.dropPct || 0}/${tier.expPct || 0}%`).join("、")
+      : key === "donationTiers"
+        ? (config.tiers || []).map((tier) => `NT$${tier.minTwd}:${tier.goldPct || 0}/${tier.dropPct || 0}/${tier.expPct || 0}%`).join("、")
+        : `${(config.milestones || []).length} 個里程碑`;
+    return [key, config.enabled === true ? "啟用" : "停用", config.announce === false ? "不公告" : "公告", detail];
+  });
+
   const lines = [];
-  lines.push("# Current Game Status");
+  lines.push("<!-- GENERATED: CURRENT_GAME_STATUS -->");
+  lines.push("# 遊戲現況快照 Current Game Status");
   lines.push("");
-  lines.push(`Generated at: ${now}`);
+  lines.push(`生成時間：${now}`);
   lines.push("");
-  lines.push("> This file is generated from MongoDB. Run `npm run status:update` to refresh it.");
+  lines.push("> 本檔由程式碼與目前 MongoDB 自動產生，請勿手動修改。執行 `npm run status:update` 更新。功能說明與檔案位置請看 `docs/README.md`、`PROJECT_FEATURES.md`、`docs/SYSTEMS.md`。");
+  lines.push("");
+  lines.push("## Code Feature Gates");
+  lines.push("");
+  lines.push(table(
+    ["項目", "現況", "來源"],
+    [
+      ["Runtime repository", "MongoDB-only", "src/repositories/createRepositories.js"],
+      ["爬塔", TOWER_ENABLED ? "開放" : "暫停", "src/bot/handlers/towerHandlers.js"],
+      ["一轉", `${Object.keys(BASE_JOBS).length} 個`, "src/shared/jobAdvancement.js"],
+      ["二轉", `${totalT2} 條；鎖定 ${lockedT2} 條`, "src/shared/jobAdvancement.js"],
+      ["區域定義", `${ZONE_DEFS.length} 個`, "src/shared/zones.js"],
+    ]
+  ));
   lines.push("");
   lines.push("## Summary");
   lines.push("");
@@ -189,12 +271,19 @@ async function main() {
       ["職業任務", jobQuests.length],
       ["世界王設定", worldBossConfigRows.length],
       ["世界王狀態", worldBossStateRows.length],
+      ["故事章節", storyChapters.length],
+      ["故事 NPC", storyNpcs.length],
+      ["商店商品", shopItems.length],
     ]
   ));
   lines.push("");
   lines.push("## Zones");
   lines.push("");
   lines.push(table(["Zone", "名稱", "最低等級", "最高等級", "怪物", "啟用", "Boss"], zoneRows));
+  lines.push("");
+  lines.push("## World Bosses");
+  lines.push("");
+  lines.push(table(["Boss Key", "狀態", "前置區域", "Boss Zone", "戰鬥分鐘", "重生分鐘"], worldBossRows));
   lines.push("");
   lines.push("## Monsters");
   lines.push("");
@@ -220,15 +309,30 @@ async function main() {
   lines.push("");
   lines.push(table(["徽章ID", "職業徽章", "階級", "任務", "任務狀態", "解鎖等級", "武器條件", "基礎屬性條件", "徽章屬性"], jobRows));
   lines.push("");
+  lines.push("## Tier 2 Branches");
+  lines.push("");
+  lines.push(table(["一轉", "一轉徽章", "全部分支", "目前可用", "本季鎖定"], t2Rows));
+  lines.push("");
+  lines.push("## Story Chapters");
+  lines.push("");
+  lines.push(table(["順序", "ID", "章節", "Zone", "狀態", "節點"], storyRows));
+  lines.push("");
+  lines.push("## Live Event Configuration");
+  lines.push("");
+  lines.push("> 這裡顯示 DB 實際開關；程式內 DEFAULTS 只在 DB 沒設定時使用。");
+  lines.push("");
+  lines.push(table(["模組", "狀態", "公告", "門檻摘要（金幣/掉寶/經驗）"], eventRows));
 
   fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
   fs.writeFileSync(OUT_PATH, `${lines.join("\n")}\n`, "utf8");
   console.log(`Wrote ${OUT_PATH}`);
+  } finally {
+    await client.close();
+  }
 }
 
 main()
-  .then(() => process.exit(0))
   .catch((error) => {
     console.error(error);
-    process.exit(1);
+    process.exitCode = 1;
   });

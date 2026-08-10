@@ -707,6 +707,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       monsterIsBoss: Boolean(monster.isBoss),
       monsterIsElite: monster.zone === "elite",
       monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
+      monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
       monsterActiveEffects,
       stunRoundsLeft,
     };

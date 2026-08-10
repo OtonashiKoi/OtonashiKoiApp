@@ -1,191 +1,292 @@
 "use strict";
-/**
- * 回歸賽季重製方案(可重複使用的固定工具)。
- * 把指定玩家的資料重置成全新賽季,只保留:
- *   - 鑽石(wallet.diamond)
- *   - 稱號(equipSlot "title_eq" 或 itemType "title";含已裝備的稱號)
- *   - 收藏圖片(itemType "collectible" / "collection")
- * 其餘全部重置:金幣歸 0、等級歸 1、屬性/裝備/背包/寵物/圖鑑/任務/打卡/PK/會員位階…全部清空,
- * 以全新玩家(createGameProgress)為基準。
- */
 
+/**
+ * 賽季重置唯一入口。
+ * 後台、單人腳本、全體腳本都必須呼叫本 service，不得各自維護保留/清除清單。
+ */
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-const { createGameProgress } = require("../../domain/progress/createGameProgress");
-const { slimInventoryArray } = require("../../shared/inventoryStorage");
+const {
+  SEASON_RESET_RULES,
+  isTitle,
+  isCollectible,
+  isPersistentStoryItem,
+  filterKeptInventory,
+  buildProgressResetUpdate,
+  removableUniqueGrantFilter,
+  PERSISTENT_STORY_ITEM_IDS,
+} = require("./seasonResetPolicy");
 
-function isTitle(it) {
-  return String(it?.equipSlot) === "title_eq" || String(it?.itemType || "").toLowerCase() === "title";
-}
-function isCollectible(it) {
-  return ["collectible", "collection"].includes(String(it?.itemType || "").toLowerCase());
+const playerRef = (id) => ({ $or: [{ discordId: id }, { playerId: id }] });
+
+function makeSeasonKey(now = new Date()) {
+  return `s${now.toISOString().replace(/\D/g, "")}`;
 }
 
-/** 重置前的完整備份(progress / wallet / 任務 / 打卡 / 拍賣上架 / 交易),回傳物件供寫檔保存 */
+async function currentPassSeasonKey(db) {
+  const cfg = await db.collection("serverEventConfig").findOne({ _id: "default" });
+  return String(cfg?.passSeasonKey || "s1");
+}
+
 async function buildSeasonResetBackup(discordId) {
-  const id = String(discordId || "").trim();
-  const db = await getMongoDb();
-  const [progress, wallet, quests, checkins, auctions, transactions] = await Promise.all([
-    db.collection("progress").findOne({ playerId: id }),
-    db.collection("wallets").findOne({ playerId: id }),
-    db.collection("weeklyQuestProgress").find({ $or: [{ discordId: id }, { playerId: id }] }).toArray().catch(() => []),
-    db.collection("checkins").find({ $or: [{ discordId: id }, { playerId: id }] }).toArray().catch(() => []),
-    db.collection("auctions").find({ sellerId: id }).toArray().catch(() => []),
-    db.collection("transactions").find({ playerId: id }).toArray().catch(() => [])
-  ]);
-  return { kind: "season-reset-backup", discordId: id, at: new Date().toISOString(), progress, wallet, quests, checkins, auctions, transactions };
-}
-
-/**
- * 執行回歸賽季重製。
- * @param {string} discordId
- * @param {{ dryRun?: boolean }} options dryRun=true 只回傳將保留/移除的統計,不寫入。
- */
-async function seasonResetPlayer(discordId, { dryRun = false } = {}) {
   const id = String(discordId || "").trim();
   if (!id) throw new Error("discordId required");
   const db = await getMongoDb();
+  const [progress, wallet, quests, checkins, auctions, transactions, idleState, farmFatigue, uniqueGrants, passState, kda] = await Promise.all([
+    db.collection("progress").findOne({ playerId: id }),
+    db.collection("wallets").findOne({ playerId: id }),
+    db.collection("weeklyQuestProgress").find(playerRef(id)).toArray().catch(() => []),
+    db.collection("checkins").find(playerRef(id)).toArray().catch(() => []),
+    db.collection("auctions").find({ sellerId: id }).toArray().catch(() => []),
+    db.collection("transactions").find({ playerId: id }).toArray().catch(() => []),
+    db.collection("idlePlayerStates").findOne({ playerId: id }).catch(() => null),
+    db.collection("farmFatigue").find(playerRef(id)).toArray().catch(() => []),
+    db.collection("uniqueItemGrants").find({ discordId: id }).toArray().catch(() => []),
+    db.collection("passState").findOne({ _id: id }).catch(() => null),
+    db.collection("kdaSeasonStats").findOne({ playerId: id }).catch(() => null),
+  ]);
+  return {
+    kind: "season-reset-backup",
+    discordId: id,
+    at: new Date().toISOString(),
+    progress, wallet, quests, checkins, auctions, transactions,
+    idleState, farmFatigue, uniqueGrants, passState, kda,
+  };
+}
 
+async function buildPlayerSummary(db, old, wallet, dryRun) {
+  const id = String(old.playerId);
+  const inv = Array.isArray(old.inventory) ? old.inventory : [];
+  const keptInv = filterKeptInventory(inv);
+  const keptTitle = old.equipment?.title_eq && isTitle(old.equipment.title_eq) ? old.equipment.title_eq : null;
+  const keptAnchor = old.equipment?.anchor && isPersistentStoryItem(old.equipment.anchor) ? old.equipment.anchor : null;
+  const [auctionCount, transactionCount, removableGrants] = await Promise.all([
+    db.collection("auctions").countDocuments({ sellerId: id }).catch(() => 0),
+    db.collection("transactions").countDocuments({ playerId: id }).catch(() => 0),
+    db.collection("uniqueItemGrants").countDocuments(removableUniqueGrantFilter(id)).catch(() => 0),
+  ]);
+  return {
+    discordId: id,
+    keptDiamond: Number(wallet?.diamond) || 0,
+    keptPermanentBackpackSlots: Number(wallet?.bonusBackpackSlots) || 0,
+    keptPlayerTier: old.playerTier || null,
+    keptStoryProgress: Boolean(old.storyProgress),
+    keptPetDexEntries: Object.keys(old.petDex || {}).length,
+    keptCardDexEntries: Object.keys(old.cardDex || {}).length,
+    keptTitlesInBag: keptInv.filter(isTitle).length,
+    keptTitleEquipped: keptTitle ? 1 : 0,
+    keptCollectibles: keptInv.filter(isCollectible).length,
+    keptStoryAnchors: keptInv.filter(isPersistentStoryItem).length + (keptAnchor ? 1 : 0),
+    removedInventoryItems: inv.length - keptInv.length,
+    removedAuctions: auctionCount,
+    keptTransactions: transactionCount,
+    removedUniqueGrants: removableGrants,
+    goldBefore: Number(wallet?.gold) || 0,
+    levelBefore: Number(old.level) || 1,
+    dryRun,
+  };
+}
+
+async function resetPlayerPass(db, id, nowIso) {
+  const seasonKey = await currentPassSeasonKey(db);
+  const r = await db.collection("passState").updateOne(
+    { _id: id },
+    { $set: { seasonKey, points: 0, unlocked: false, claimedFree: [], claimedPaid: [], updatedAt: nowIso } }
+  );
+  return r.matchedCount || 0;
+}
+
+async function seasonResetPlayer(discordId, { dryRun = false, keepLedger = false, resetPass = true } = {}) {
+  const id = String(discordId || "").trim();
+  if (!id) throw new Error("discordId required");
+  const db = await getMongoDb();
   const old = await db.collection("progress").findOne({ playerId: id });
   if (!old) throw new Error("找不到該玩家的進度資料");
   const wallet = await db.collection("wallets").findOne({ playerId: id });
+  const summary = await buildPlayerSummary(db, old, wallet, dryRun);
+  if (dryRun) return { ...summary, rules: SEASON_RESET_RULES };
 
-  const inv = Array.isArray(old.inventory) ? old.inventory : [];
-  const keptInv = inv.filter((it) => isTitle(it) || isCollectible(it));
-  const keptTitleEq = old.equipment?.title_eq || null;
-
-  // 拍賣上架(以賣家計) + 交易紀錄,一併清掉(全新賽季)
-  const [auctionCount, transactionCount] = await Promise.all([
-    db.collection("auctions").countDocuments({ sellerId: id }).catch(() => 0),
-    db.collection("transactions").countDocuments({ playerId: id }).catch(() => 0)
+  const nowIso = new Date().toISOString();
+  await db.collection("progress").updateOne({ _id: old._id }, buildProgressResetUpdate(old, nowIso));
+  await db.collection("wallets").updateOne(
+    { playerId: id },
+    { $set: { gold: 0, seasonBackpackSlots: 0, updatedAt: nowIso } }
+  );
+  if (!keepLedger) {
+    await db.collection("weeklyQuestProgress").deleteMany(playerRef(id));
+    await db.collection("checkins").deleteMany(playerRef(id));
+  }
+  await Promise.all([
+    db.collection("idlePlayerStates").deleteMany({ playerId: id }),
+    db.collection("farmFatigue").deleteMany(playerRef(id)),
+    db.collection("uniqueItemGrants").deleteMany(removableUniqueGrantFilter(id)),
+    db.collection("kdaSeasonStats").deleteMany({ playerId: id }),
+    db.collection("auctions").deleteMany({ sellerId: id }),
+    resetPass ? resetPlayerPass(db, id, nowIso) : Promise.resolve(0),
   ]);
-
-  const summary = {
-    discordId: id,
-    keptDiamond: Number(wallet?.diamond) || 0,
-    keptTitlesInBag: keptInv.filter(isTitle).length,
-    keptTitleEquipped: keptTitleEq ? 1 : 0,
-    keptCollectibles: keptInv.filter(isCollectible).length,
-    removedInventoryItems: inv.length - keptInv.length,
-    removedAuctions: auctionCount,
-    removedTransactions: transactionCount,
-    goldBefore: Number(wallet?.gold) || 0,
-    levelBefore: Number(old.level) || 1,
-    dryRun
-  };
-  if (dryRun) return summary;
-
-  // 以全新玩家為基準,塞回保留項目
-  const fresh = createGameProgress(id);
-  fresh.inventory = slimInventoryArray(keptInv);
-  fresh.equipment.title_eq = keptTitleEq;
-  fresh.createdAt = old.createdAt || new Date().toISOString();
-  fresh.updatedAt = new Date().toISOString();
-
-  // replaceOne:整份取代,確保 pets/bestiary/pkWins/playerTier 等舊欄位一併消失
-  await db.collection("progress").replaceOne({ playerId: id }, fresh);
-  // 金幣歸 0、鑽石保留；賽季背包格(圖鑑券等)歸零，花鑽永久格(bonusBackpackSlots)保留
-  await db.collection("wallets").updateOne({ playerId: id }, { $set: { gold: 0, seasonBackpackSlots: 0, updatedAt: new Date().toISOString() } });
-  // 任務 / 打卡進度清空(全新賽季)
-  await db.collection("weeklyQuestProgress").deleteMany({ $or: [{ discordId: id }, { playerId: id }] });
-  await db.collection("checkins").deleteMany({ $or: [{ discordId: id }, { playerId: id }] });
-  // 拍賣上架(賣家) + 交易紀錄清空(避免殘留指向已清空道具的上架/舊交易)
-  await db.collection("auctions").deleteMany({ sellerId: id });
-  await db.collection("transactions").deleteMany({ playerId: id });
-
-  return summary;
+  return { ...summary, dryRun: false, keptLedger: keepLedger, rules: SEASON_RESET_RULES };
 }
 
-/** 列出所有有進度資料的玩家 id */
 async function listAllPlayerIds() {
   const db = await getMongoDb();
   const rows = await db.collection("progress").find({}, { projection: { playerId: 1 } }).toArray();
-  return rows.map((r) => String(r.playerId || "").trim()).filter(Boolean);
+  return rows.map((row) => String(row.playerId || "").trim()).filter(Boolean);
 }
 
-/**
- * 賽季重置：各區域怪物歸位到「第一隻」(該區最小 seq)、血量補滿(currentHp=null 即滿血),
- * 並清掉 killCount 與殘留的 transition/damageMap。寫入 monsters collection(_id: `monsterState:<zone>`)
- * 與 legacy monsterState collection(維持相容)。
- */
 async function resetAllZoneMonsters(monsterService = null) {
   const db = await getMongoDb();
-  // 取各區怪物(帶 calc.maxHp)：優先走 monsterService，取不到才退回直讀 collection。
-  let mons;
-  if (monsterService && typeof monsterService.listMonsters === "function") {
-    mons = await monsterService.listMonsters({ includeDisabled: false });
-  } else {
-    mons = await db.collection("monsters").find({ seq: { $exists: true } }).toArray();
-  }
-  // 每區挑「第一隻」= 最小 seq 的怪。
+  const monsters = monsterService?.listMonsters
+    ? await monsterService.listMonsters({ includeDisabled: false })
+    : await db.collection("monsters").find({ seq: { $exists: true }, enabled: true }).toArray();
   const firstByZone = {};
-  for (const m of mons) {
-    if (!m.zone || typeof m.seq !== "number") continue;
-    if (!firstByZone[m.zone] || m.seq < firstByZone[m.zone].seq) firstByZone[m.zone] = m;
+  for (const monster of monsters) {
+    if (!monster.zone || typeof monster.seq !== "number") continue;
+    if (!firstByZone[monster.zone] || monster.seq < firstByZone[monster.zone].seq) firstByZone[monster.zone] = monster;
   }
-  const now = new Date().toISOString();
+  const nowIso = new Date().toISOString();
   const zones = [];
-  for (const z of Object.keys(firstByZone)) {
-    const first = firstByZone[z];
-    // 純世界王巢穴(第一隻即 BOSS)交給 worldBossState 管，不在此重置。
-    if (first.isBoss || first.calc?.isBoss) continue;
+  for (const [zone, first] of Object.entries(firstByZone)) {
     const maxHp = first.calc?.maxHp ?? first.maxHp;
-    // ⚠️ currentHp 必須是滿血「正數」；設 null/0 會被面板判定成死怪 → 觸發自動換怪。
-    const clean = {
-      activeMonsterSeq: first.seq,
-      currentHp: (typeof maxHp === "number" && maxHp > 0) ? maxHp : 1,
-      killCount: {},
-    };
-    if (monsterService && typeof monsterService.saveState === "function") {
-      await monsterService.saveState(clean, z);
+    const clean = { activeMonsterSeq: first.seq, currentHp: Number(maxHp) > 0 ? Number(maxHp) : 1, killCount: {} };
+    if (monsterService?.saveState) {
+      await monsterService.saveState(clean, zone);
     } else {
       await db.collection("monsters").updateOne(
-        { _id: `monsterState:${z}` }, { $set: { value: clean, updatedAt: now } }, { upsert: true }
+        { _id: `monsterState:${zone}` }, { $set: { value: clean, updatedAt: nowIso } }, { upsert: true }
       );
       await db.collection("monsterState").updateOne(
-        { _id: z }, { $set: { value: clean, updatedAt: now } }, { upsert: true }
+        { _id: zone }, { $set: { value: clean, updatedAt: nowIso } }, { upsert: true }
       );
     }
-    zones.push(z);
+    zones.push(zone);
   }
-  return { zonesReset: zones.length };
+  return { zonesReset: zones.length, zones };
 }
 
-/**
- * 全體回歸賽季重製。逐一備份 + 重製每位玩家 + 各區怪物歸位第一隻滿血,回傳彙總統計。
- * @param {{ onBackup?: (allBackups:Array)=>Promise<void>, dryRun?: boolean }} options
- */
-async function seasonResetAllPlayers({ onBackup = null, dryRun = false, monsterService = null } = {}) {
-  const ids = await listAllPlayerIds();
-  if (dryRun) return { total: ids.length, dryRun: true };
+async function buildSeasonGlobalsBackup() {
+  const db = await getMongoDb();
+  const [serverBuffs, scAccumulator, memberEventsState, viewerState, eventConfig, worldBossState, monsterState, pkArenaState] = await Promise.all([
+    db.collection("serverBuffs").find({ seasonPermanent: true }).toArray(),
+    db.collection("scAccumulator").findOne({ _id: "current" }),
+    db.collection("memberEventsState").findOne({ _id: "default" }),
+    db.collection("viewerState").findOne({ _id: "default" }),
+    db.collection("serverEventConfig").findOne({ _id: "default" }),
+    db.collection("worldBossState").find({}).toArray(),
+    db.collection("monsterState").find({}).toArray(),
+    db.collection("pkArenaState").find({}).toArray(),
+  ]);
+  return { serverBuffs, scAccumulator, memberEventsState, viewerState, eventConfig, worldBossState, monsterState, pkArenaState };
+}
 
-  // 先把所有玩家備份收集起來交給呼叫端寫檔(失敗就中止,不動任何資料)
+async function resetStreamSeasonState() {
+  const globalBuff = require("../stream/globalBuffService");
+  const scBar = require("../stream/scBarService");
+  const memberEvents = require("../stream/memberEventsService");
+  const viewer = require("../stream/viewerService");
+  const results = {};
+  results.globalBuffs = await globalBuff.resetSeason();
+  results.scBar = await scBar.reset({ archive: true });
+  results.memberEvents = await memberEvents.resetSeason();
+  results.viewer = await viewer.resetSeason();
+  return results;
+}
+
+async function resetSeasonGlobals({ passService = null, seasonKey = null, resetStreams = true } = {}) {
+  const db = await getMongoDb();
+  const key = String(seasonKey || makeSeasonKey());
+  let pass;
+  if (passService?.resetSeason) {
+    pass = await passService.resetSeason(key);
+  } else {
+    await db.collection("serverEventConfig").updateOne(
+      { _id: "default" }, { $set: { passSeasonKey: key } }, { upsert: true }
+    );
+    const r = await db.collection("passState").updateMany({}, {
+      $set: { seasonKey: key, points: 0, unlocked: false, claimedFree: [], claimedPaid: [], updatedAt: new Date().toISOString() }
+    });
+    pass = { seasonKey: key, resetPlayers: r.modifiedCount || 0 };
+  }
+  const [kda, worldBoss, pkArena] = await Promise.all([
+    db.collection("kdaSeasonStats").deleteMany({}),
+    db.collection("worldBossState").deleteMany({}),
+    db.collection("pkArenaState").deleteMany({}),
+  ]);
+  const streams = resetStreams ? await resetStreamSeasonState() : null;
+  return {
+    pass,
+    kdaRowsCleared: kda.deletedCount || 0,
+    worldBossStatesCleared: worldBoss.deletedCount || 0,
+    pkArenaStatesCleared: pkArena.deletedCount || 0,
+    streams,
+  };
+}
+
+async function seasonResetAllPlayers({
+  onBackup = null,
+  dryRun = false,
+  keepLedger = false,
+  monsterService = null,
+  passService = null,
+  seasonKey = null,
+} = {}) {
+  const ids = await listAllPlayerIds();
+  if (dryRun) return { total: ids.length, dryRun: true, keepLedger, rules: SEASON_RESET_RULES };
+
   if (typeof onBackup === "function") {
     const backups = [];
     for (const id of ids) backups.push(await buildSeasonResetBackup(id));
-    await onBackup(backups);
+    await onBackup(backups, await buildSeasonGlobalsBackup());
   }
 
-  const agg = { total: ids.length, succeeded: 0, failed: 0, removedAuctions: 0, removedTransactions: 0, removedInventoryItems: 0, errors: [] };
+  const agg = {
+    total: ids.length, succeeded: 0, failed: 0,
+    removedAuctions: 0, removedInventoryItems: 0, keptTransactions: 0,
+    removedUniqueGrants: 0, errors: [], rules: SEASON_RESET_RULES,
+  };
   for (const id of ids) {
     try {
-      const s = await seasonResetPlayer(id, { dryRun: false });
+      const summary = await seasonResetPlayer(id, { dryRun: false, keepLedger, resetPass: false });
       agg.succeeded += 1;
-      agg.removedAuctions += Number(s.removedAuctions) || 0;
-      agg.removedTransactions += Number(s.removedTransactions) || 0;
-      agg.removedInventoryItems += Number(s.removedInventoryItems) || 0;
-    } catch (e) {
+      agg.removedAuctions += Number(summary.removedAuctions) || 0;
+      agg.removedInventoryItems += Number(summary.removedInventoryItems) || 0;
+      agg.keptTransactions += Number(summary.keptTransactions) || 0;
+      agg.removedUniqueGrants += Number(summary.removedUniqueGrants) || 0;
+    } catch (error) {
       agg.failed += 1;
-      if (agg.errors.length < 20) agg.errors.push({ id, message: e.message });
+      if (agg.errors.length < 20) agg.errors.push({ id, message: error.message });
     }
   }
-  // 各區域怪物歸位到第一隻＋滿血（全新賽季，全服共用狀態，只需做一次）
-  try {
-    const mz = await resetAllZoneMonsters(monsterService);
-    agg.zonesReset = mz.zonesReset;
-  } catch (e) {
-    agg.zonesResetError = e.message;
+  if (agg.failed > 0) {
+    agg.completed = false;
+    agg.finalizationSkipped = "有玩家重置失敗；怪物與全服狀態未切季，修正後可安全重跑";
+    return agg;
   }
+  try {
+    Object.assign(agg, await resetAllZoneMonsters(monsterService));
+  } catch (error) {
+    agg.zonesResetError = error.message;
+    agg.completed = false;
+    agg.finalizationSkipped = "怪物歸位失敗；全服狀態未切季，修正後可安全重跑";
+    return agg;
+  }
+  try {
+    agg.globalReset = await resetSeasonGlobals({ passService, seasonKey, resetStreams: true });
+  } catch (error) {
+    agg.globalResetError = error.message;
+  }
+  agg.completed = !agg.globalResetError;
   return agg;
 }
 
-module.exports = { seasonResetPlayer, buildSeasonResetBackup, listAllPlayerIds, seasonResetAllPlayers, resetAllZoneMonsters };
+module.exports = {
+  PERSISTENT_STORY_ITEM_IDS,
+  SEASON_RESET_RULES,
+  makeSeasonKey,
+  seasonResetPlayer,
+  buildSeasonResetBackup,
+  buildSeasonGlobalsBackup,
+  listAllPlayerIds,
+  seasonResetAllPlayers,
+  resetAllZoneMonsters,
+  resetStreamSeasonState,
+  resetSeasonGlobals,
+};

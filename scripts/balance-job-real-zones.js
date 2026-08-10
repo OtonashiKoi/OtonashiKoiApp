@@ -165,7 +165,7 @@ async function buildEquipment(I, badgeId, wType, extra) {
           const r = runCombatLoop(pStats, m.calc, m.name, m.calc.maxHp, ROUNDS, {
             playerLevel: LEVEL, equipped: eq, inventory: [],
             monsterEquipped: m.equipment || {}, monsterIsBoss: false,
-            zone: z, monsterElement: m.element || null,
+            zone: z, monsterElement: m.element || null, monsterElementLevel: m.element ? (m.elementLevel || 1) : 0,
             ...jobOpts,
           });
           total++;

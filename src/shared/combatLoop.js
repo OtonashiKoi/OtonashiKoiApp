@@ -36,8 +36,8 @@ function intShieldBonus(pStats) {
   return Math.max(0, Math.round((Number(pStats?.int) || 0) * SHIELD_INT_SCALE));
 }
 const {
-  normalizeElement, normalizeElementLevel, getElementMultiplier, describeElementMatchup,
-  resolveWeaponElement, resolveArmorElement, getElementDamageReduction,
+  normalizeElement, normalizeElementLevel, getElementMultiplier,
+  resolveWeaponElement,
   getSameElementResist, getElementLabel, getElementRelation,
 } = require("./elementSystem");
 const {
@@ -1093,16 +1093,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 追加打擊的基準：最近一次主擊的「未爆擊基底」（含武器/徽章/最終傷害等整條倍率鏈）。
   // 沒有這個基準時（開場還沒出手）退回裸 ATK 管線——修正前追加箭少乘半條鏈、只有真擊一半威力。
   let _lastMainBase = 0;
-  // 屬性防具減免：只在「我方防具屬性剋制該怪」時 >0。
-  // ⚠️ 必須在「算完傷害、印進戰報之前」就套用，不能藏在 _hurt 裡——
+  // 防具同屬抗性。必須在「算完傷害、印進戰報之前」就套用，不能藏在 _hurt 裡——
   //    各處都是 log.push(`造成 ${dmg} 點傷害`) 搭配 _hurt(dmg)，
   //    若在 _hurt 內偷偷打折，戰報數字會與實際扣血不符（＝騙人的戰報）。
   const _applyElementDR = (raw) => {
     const x = Math.max(0, Number(raw) || 0);
     if (x <= 0) return x;
-    let mult = 1;
-    if (elementDmgReduction > 0) mult *= (1 - elementDmgReduction);
-    if (sameElementResist.mult !== 1) mult *= sameElementResist.mult; // 七屬性抗性（雙向，無抗性 >1）
+    const mult = sameElementResist.mult;
     if (mult === 1) return x;
     return Math.max(1, Math.round(x * mult));
   };
@@ -1170,11 +1167,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 直接乘在玩家傷害上→戰報數字=真實傷害、部位血正常遞減、戰鬥在真的打死時才結束(不提早中止)。
   const bossVulnMult = (options.bossVulnMult != null && Number(options.bossVulnMult) >= 0) ? Number(options.bossVulnMult) : 1;
 
-  // ── 屬性相剋（土火水木金日月，濃度 1~4 級，每級 10%）──
-  // 攻擊側＝武器＋副手的屬性等級加總（封頂4）→ 決定打出去的相剋倍率
-  // 防禦側＝防具＋飾品的屬性等級加總（封頂4）→ 只在「我方屬性剋制該怪」時提供受傷減免
+  // ── 屬性系統（土火水木金日月；裝備單件依階級最多 1~5 洞）──
+  // 攻擊側＝武器＋副手，依怪物屬性動態選「剋制＞中性＞被剋」。
+  // 攻方剋守方看攻方濃度；守方剋攻方看守方（怪物）濃度。
+  // 防禦側＝防具與怪物同屬性才提供抗性；防具不走相剋環。
   // 任一方無屬性/等級 0 → 不生效；現有 69 隻怪與 487 件道具都沒有 element 欄位，既有內容零影響。
   const monsterElement = normalizeElement(options.monsterElement);
+  const monsterElementLevel = monsterElement
+    ? normalizeElementLevel(options.monsterElementLevel ?? 1)
+    : 0;
   // ── 戰鬥姿態（聖劍士／元素師等二轉）：提前到屬性計算之前解析——
   //    元素師的姿態自帶屬性（炎圈火2/凍霜水2），要參與下方的武器屬性疊加。
   //    options.stance 沒給 → battleStance = null → 行為完全同現況。
@@ -1182,41 +1183,21 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   try {
     battleStance = require("./jobAdvancement").resolveStance(options.equipped?.job_eq, options.stance);
   } catch (_) { battleStance = null; }
-  // 武器多屬性並存(水3火2...)：依「這場打的怪」動態挑出身上哪個屬性生效，見 elementSystem._pickAgainstDefender
-  const _weaponEl = resolveWeaponElement(options.equipped || {}, monsterElement);
+  // 武器多屬性並存(水3火2...)，姿態自帶屬性也一起進候選池；自動選最佳關係後才決定本場攻擊屬性。
+  const _stanceElements = battleStance?.stanceElement?.element
+    ? { [battleStance.stanceElement.element]: battleStance.stanceElement.level }
+    : null;
+  const _weaponEl = resolveWeaponElement(options.equipped || {}, monsterElement, _stanceElements);
   let playerElement = options.playerElement !== undefined
     ? normalizeElement(options.playerElement)
     : _weaponEl.element;
   let playerElementLevel = options.playerElementLevel !== undefined
     ? normalizeElementLevel(options.playerElementLevel)
     : _weaponEl.level;
-  // 姿態自帶屬性（元素師）：與武器屬性**同屬性 → 等級相加（封頂4）**、**不同屬性 → 取等級高的那邊**
-  if (battleStance?.stanceElement) {
-    const _se = battleStance.stanceElement;
-    const _seEl = normalizeElement(_se.element);
-    const _seLv = normalizeElementLevel(_se.level);
-    if (_seEl && _seLv > 0) {
-      if (!playerElement || playerElementLevel <= 0) {
-        playerElement = _seEl; playerElementLevel = _seLv;
-      } else if (playerElement === _seEl) {
-        playerElementLevel = normalizeElementLevel(playerElementLevel + _seLv);
-      } else if (_seLv > playerElementLevel) {
-        playerElement = _seEl; playerElementLevel = _seLv;
-      }
-    }
-  }
-  const elementMult = getElementMultiplier(playerElement, monsterElement, playerElementLevel);
-
-  // 防具側：受傷減免（0~0.4）
-  const _armorEl = resolveArmorElement(options.equipped || {}, monsterElement);
-  const armorElement = options.armorElement !== undefined ? normalizeElement(options.armorElement) : _armorEl.element;
-  const armorElementLevel = options.armorElementLevel !== undefined
-    ? normalizeElementLevel(options.armorElementLevel)
-    : _armorEl.level;
-  const elementDmgReduction = getElementDamageReduction(armorElement, monsterElement, armorElementLevel);
+  const elementMult = getElementMultiplier(playerElement, monsterElement, playerElementLevel, monsterElementLevel);
 
   // 七屬性抗性（V0.5 生存系統）：防具側「同屬性」濃度 vs 怪物屬性，雙向——
-  // 沒對應抗性承傷加重、有則減輕。與上面的剋制減免可並存（不同投資），同一個漏斗疊乘。
+  // 怪物是什麼屬性，防具就用相同屬性抵抗；其他防具屬性不影響這隻怪的傷害。
   const sameElementResist = getSameElementResist(options.equipped || {}, monsterElement);
 
   // 裝備/卡片的「對特定屬性怪物增傷」(bonus_vs_element)。
@@ -1596,25 +1577,37 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const log = [`**【第 ${round} 回合】**`];
     _curLog = log;   // 讓 _healLogged 能把回血/回血化刃寫進「當回合」的戰報
     _curRound = round; // KDA：影子血歸零回合的記錄基準
-    // 屬性相剋提示：只在第一回合印一次（每回合印會洗版）
-    // 開場狀態列（戰報重整：相剋/護甲/抗性壓成一行；「無抗性」警告因具教學作用保留獨立一行）
+    // 屬性判定只在第一回合印一次。攻擊與防禦刻意分行，避免玩家把
+    // 「武器/副手的輸出相剋」和「防具的同屬抗性」誤認成同一套規則。
     if (round === (Number(options.startRound) || 1)) {
-      const _openParts = [];
       const _rel = getElementRelation(playerElement, monsterElement);
       const _aL = getElementLabel(playerElement);
       const _dL = getElementLabel(monsterElement);
-      if (playerElementLevel > 0 && _rel === "advantage") {
-        _openParts.push(`攻：${_aL}${playerElementLevel}剋${_dL} +${Math.round(playerElementLevel * 10)}%`);
-      } else if (playerElementLevel > 0 && _rel === "disadvantage") {
-        _openParts.push(`攻：${_dL}剋${_aL}${playerElementLevel} −${Math.round(playerElementLevel * 10)}%`);
-      }
-      const _defBits = [];
-      if (elementDmgReduction > 0) _defBits.push(`剋制減免 ${Math.round(elementDmgReduction * 100)}%`);
-      if (sameElementResist.mult < 1) _defBits.push(`${_dL}抗 ${sameElementResist.pct}%（−${Math.round((1 - sameElementResist.mult) * 100)}%承傷）${sameElementResist.pct >= 100 ? "滿抗" : ""}`);
-      if (_defBits.length) _openParts.push(`防：${_defBits.join("・")}`);
-      if (_openParts.length) log.push(`⚜️ 開戰｜${_openParts.join("｜")}`);
-      if (sameElementResist.mult > 1) {
-        log.push(`⚠️ 你沒有 **${_dL}屬性抗性**——${mName} 的${_dL}屬性攻勢加重 **${Math.round((sameElementResist.mult - 1) * 100)}%**！（防具鑲嵌${_dL}屬性石可抵禦，每顆 +10% 抗性）`);
+      if (_dL) {
+        log.push(`⚜️ **屬性判定**｜敵人：${_dL}${monsterElementLevel}屬性`);
+
+        if (playerElementLevel > 0 && _rel === "advantage") {
+          log.push(`⚔️ **攻擊（武器＋副手）**｜${_aL}${playerElementLevel} 剋 ${_dL} → 對敵傷害 **+${Math.round(playerElementLevel * 10)}%**`);
+        } else if (playerElementLevel > 0 && _rel === "disadvantage") {
+          log.push(`⚔️ **攻擊（武器＋副手）**｜${_dL}${monsterElementLevel} 剋 ${_aL}${playerElementLevel} → 對敵傷害 **−${Math.round(monsterElementLevel * 10)}%**`);
+        } else if (playerElementLevel > 0 && _aL) {
+          log.push(`⚔️ **攻擊（武器＋副手）**｜自動選擇 ${_aL}${playerElementLevel}（中性） → 對敵傷害 **±0%**`);
+        } else {
+          log.push("⚔️ **攻擊（武器＋副手）**｜本場沒有相剋效果 → 對敵傷害 **±0%**");
+        }
+
+        const _sameDeltaPct = Math.round((sameElementResist.mult - 1) * 100);
+        const _sameDeltaText = _sameDeltaPct > 0
+          ? `+${_sameDeltaPct}%`
+          : _sameDeltaPct < 0 ? `${_sameDeltaPct}%` : "±0%";
+        log.push(
+          `🛡️ **防禦（同屬抗性）**｜防具 ${_dL}${sameElementResist.level}（${_dL}抗 ${sameElementResist.pct}%）` +
+          ` → 受到${_dL}屬性傷害 **${_sameDeltaText}**${sameElementResist.pct >= 100 ? "（滿抗）" : ""}`
+        );
+
+        if (sameElementResist.pct === 0) {
+          log.push(`💡 防具鑲嵌${_dL}屬性石可提高${_dL}抗；每顆顯示抗性 +10%，並使實際承傷降低 5%。`);
+        }
       }
     }
     // 沒苦硬吃：每 N 回合反彈一次「這段期間累積的承受傷害 × 倍率」
@@ -1957,7 +1950,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 應用玩家的 DOT 效果（如中毒） ──
     // 怪物技能/DoT(雷擊/灼燒/流血/毒/詛咒…)對玩家的傷害，改成走玩家防禦(flatDef + def%)，
     // 與普攻同一條 applyDefense 管線 → 堆防禦對技能也有效，不再無視防禦秒人。
-    // DOT 也走玩家防禦管線；末端再套屬性防具減免（各處都是 mitigateDot 後才 log，故戰報數字正確）
+    // DOT 也走玩家防禦管線；末端再套防具同屬抗性（各處都是 mitigateDot 後才 log，故戰報數字正確）
     const mitigateDot = (dmg) => _applyElementDR(applyDefense(dmg, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1));
     const _dotP = []; // 戰報重整：玩家承受的 DOT 彙總顯示（[標籤, 傷害]）
     if (Array.isArray(options.playerActiveEffects)) {
@@ -2429,7 +2422,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             sourceAtk: adjustedMCalc.atk || mCalc.atk || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
             applyTargetDamage: (damage) => { if (!_spiritAbsorb(damage)) _hurt(damage); }, // 日之精靈代承技能傷害
-            // 即時技能也吃玩家防禦＋屬性層（剋制減免/七屬性抗性）——王技能＝屬性攻擊，這就是「魔防」
+            // 即時技能也吃玩家防禦＋同屬抗性——王技能＝屬性攻擊，這就是「魔防」
             mitigate: (d) => _applyElementDR(applyDefense(d, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1)),
             // G6：巨額技能單發拆段（門檻與普攻同一常數；格擋率用姿態/面板基礎值——
             // 本回合的臨時格擋加成在玩家回合才計算，技能先手時尚不存在）
@@ -4482,7 +4475,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const _spBase = Math.max(1, Math.round((pStats.atk || 1) * (Number(sunSpiritCfg.atkRatio) || 33) / 100));
       let _spDmg = rollDmg(applyDefense(_spBase, adjustedMCalc.flatDef || 0, Math.max(0, Math.min(95, adjustedMCalc.def || 0)), pStats.atk));
       _spDmg = Math.max(1, Math.round(_spDmg * playerAttackLevelMult));
-      const _spElMult = getElementMultiplier(sunSpiritCfg.element || "sun", monsterElement, sunSpiritCfg.elementLevel || 3);
+      const _spElMult = getElementMultiplier(
+        sunSpiritCfg.element || "sun",
+        monsterElement,
+        sunSpiritCfg.elementLevel || 3,
+        monsterElementLevel
+      );
       if (_spElMult !== 1) _spDmg = Math.max(1, Math.round(_spDmg * _spElMult));
       if (_noPlayerAtk) _spDmg = 0;
       _spDmg = applyBossVuln(_spDmg);
@@ -4744,7 +4742,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             // KDA：減傷光環實際擋下的量歸戶給提供者
             if (_kdaDrSourceId) _kdaPreventedBySource.set(_kdaDrSourceId, (_kdaPreventedBySource.get(_kdaDrSourceId) || 0) + Math.max(0, _preDr - dmg));
           }
-          // 屬性防具減免（我方防具屬性剋制該怪時，每級 -10%）：與其他減傷同層，
+          // 防具同屬抗性：與其他減傷同層，
           // 且在寫進戰報之前套用 → 戰報數字＝實際扣血。
           if (!playerInvincible) dmg = _applyElementDR(dmg);
           // 破釜沉舟（兵聖）：區間內受到傷害 ×takenMult（寫進戰報前套用＝戰報數字真實）

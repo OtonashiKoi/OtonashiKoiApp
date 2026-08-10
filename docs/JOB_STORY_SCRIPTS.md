@@ -1,5 +1,7 @@
 # 二轉轉職劇情・全 11 段劇本
 
+> 類型：**可編輯劇本草稿／未完整入庫**。現行二轉由 `t2_transfer` 任務直接執行；本檔不代表玩家目前會看到的故事內容。
+>
 > 設定依據：[JOB_INSTRUCTOR_SETTING.md](JOB_INSTRUCTOR_SETTING.md)
 > **這份檔案是給使用者直接修改的。** 改完之後由我轉成 storyChapters 資料。
 

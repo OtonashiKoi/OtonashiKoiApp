@@ -309,7 +309,7 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
         nextStats.dodge = (Number(nextStats.dodge) || 0) + d.agi * 0.5;
         nextStats.combo = (Number(nextStats.combo) || 0) + d.agi * 0.5;
       }
-      if (d.vit !== 0) nextStats.maxHp = (Number(nextStats.maxHp) || 0) + d.vit * 15;
+      if (d.vit !== 0) nextStats.maxHp = (Number(nextStats.maxHp) || 0) + d.vit * 25;
       if (d.dex !== 0) nextStats.hit = (Number(nextStats.hit) || 0) + d.dex;
     }
   }

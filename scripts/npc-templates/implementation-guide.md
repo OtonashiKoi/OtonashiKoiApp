@@ -1,5 +1,8 @@
 # NPC 系統實裝整合指南
 
+> 📚 **種子工具說明**：這是 `scripts/npc-templates/` 批次資料的導入指南，不是線上 NPC 現況清單。
+> 執行任何寫入前應先比對 MongoDB `storyNpcs` 與怪物 `npcMappings`。
+
 ## 📋 文件清單
 
 已生成的檔案位於 `scripts/npc-templates/`：

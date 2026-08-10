@@ -17,7 +17,12 @@ const REQUIRED_MONSTER_FEATURES = [
   "monster_zone_beginner",
   "monster_zone",
   "monster_zone_mid",
-  "monster_zone_hard",
+  "monster_zone_ancient_city",
+  "monster_zone_ancient_city_deep",
+  "monster_zone_dragon_realm",
+  "monster_zone_dragon_king_lair",
+  "monster_zone_hellfire",
+  "monster_zone_hellfire_depths",
   "monster_zone_elite",
 ];
 
@@ -40,6 +45,7 @@ const REQUIRED_JOB_IDS = [
   "job_tactician_v1",
   "job_bard_v1",
   "job_barrier_mage_v1",
+  "job_gambler_v1",
 ];
 
 const JOB_WEAPON_TYPES = {
@@ -53,6 +59,7 @@ const JOB_WEAPON_TYPES = {
   job_tactician_v1: "sword_1h",
   job_bard_v1: "bow",
   job_barrier_mage_v1: "staff_1h",
+  job_gambler_v1: "dice",
 };
 
 const results = [];
@@ -123,12 +130,15 @@ async function testCoreData(db) {
   const monsters = db.collection("monsters");
   const quests = db.collection("weeklyQuests");
 
+  const monsterIds = await monsters.find({}, { projection: { _id: 1 } }).toArray();
+  const monsterStateCount = monsterIds.filter((row) => String(row._id || "").startsWith("monsterState:")).length;
   const counts = {
     players: await count(players),
     progress: await count(progress),
     wallets: await count(wallets),
     items: await count(items),
-    monsters: await count(monsters),
+    monsters: monsterIds.length - monsterStateCount,
+    monsterStates: monsterStateCount,
     quests: await count(quests),
   };
 
@@ -141,7 +151,7 @@ async function testCoreData(db) {
 
   pass(
     "core data counts",
-    `players=${counts.players}, items=${counts.items}, monsters=${counts.monsters}`,
+    `players=${counts.players}, items=${counts.items}, monsters=${counts.monsters}, monsterStates=${counts.monsterStates}`,
   );
 }
 

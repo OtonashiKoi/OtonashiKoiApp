@@ -953,7 +953,7 @@ class WeeklyQuestService {
       //    現行二轉唯一路徑＝ t2_transfer（徽章 Lv20 → 消耗一轉＋扣金幣 → 換二轉）。
       //    移除前的資料備份在 weeklyQuestBackups。
 
-      { cadence: "job", title: "賭徒試煉", description: "出現條件：Lv.10，基礎 LUK + AGI > 10。進度武器：骰子；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與賭徒徽章。", type: "battle_with_dice", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_gambler_v1", sortOrder: 110, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["dice"], unlockAttributes: ["luk", "agi"], unlockAttributeMin: 10, hideIfRewardOwned: true, enabled: false }, // ⚠️本季不開放：下一季開服再改 enabled:true（骰子外洩事件後關閉，見 SEASON_V0.4.5_PLAN）
+      { cadence: "job", title: "賭徒試煉", description: "出現條件：Lv.10，基礎 LUK + AGI > 10。進度武器：骰子；使用指定武器出戰 10 次才會累積。獎勵：500 金幣與賭徒徽章。", type: "battle_with_dice", target: 10, rewardGold: 500, rewardExp: 0, rewardDiamond: 0, rewardItemId: "job_gambler_v1", sortOrder: 110, groupKey: "job_seed_v1", unlockLevel: 10, unlockWeaponTypes: ["dice"], unlockAttributes: ["luk", "agi"], unlockAttributeMin: 10, hideIfRewardOwned: true, enabled: true },
 
       // daily (4)
       { cadence: "daily", title: "每日出戰 5 次", type: "battle_count", target: 5, rewardGold: 250, rewardExp: 120, rewardDiamond: 0, sortOrder: 10, groupKey: "seed_v1" },
@@ -987,7 +987,7 @@ class WeeklyQuestService {
       }
       const row = await this.createDefinition({
         ...def,
-        // ⚠️ 尊重種子的 enabled:false——未開放內容一律預設關閉（賭徒外洩事件教訓）。
+        // ⚠️ 尊重種子的 enabled:false——未開放內容一律預設關閉，避免鎖定任務外洩。
         //    以前這裡硬寫 enabled:true，會把種子上的關閉旗標蓋掉。
         enabled: def.enabled !== false,
         levelLimit: 0,

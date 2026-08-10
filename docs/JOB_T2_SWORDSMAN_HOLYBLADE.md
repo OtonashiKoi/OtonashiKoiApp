@@ -183,15 +183,14 @@ swordsman: [
 
 ## 六、二轉取得方式（✅ 新制已實裝）
 
-⛔ 舊制「試煉任務 `battle_as_swordsman` 出戰 350 場」已作廢
-（DB 中該任務仍存在但 `enabled:false`，僅存檔）。
+⛔ 舊制「試煉任務 `battle_as_swordsman` 出戰 350 場」已作廢，已從 active DB 移除；備份只留在 `weeklyQuestBackups`。
 
 現行流程（全職業通用，見 [JOB_BADGE_SYSTEM_DESIGN.md](JOB_BADGE_SYSTEM_DESIGN.md)）：
 劍士徽章練到 **Lv20**（228 場）→ 解鎖轉職劇情 → 劇情 choice＝選聖劍士或劍鬼分支 →
 transfer 節點**消耗劍士徽章＋金幣**換發二轉徽章
 （✅ `storyService.transferJobAtNode`，`src/services/story/storyService.js:541`）。
-DB 已建「聖劍士試煉」`type: t2_transfer`（**`enabled:false`**，未開放內容一律預設關閉，要開是使用者的決定）。
-❌ 劍士的轉職劇本尚未入庫（storyChapters 現僅 3 章；原稿見 [JOB_STORY_SCRIPTS.md](JOB_STORY_SCRIPTS.md)）。
+DB 已建「聖劍士試煉」`type: t2_transfer`（**`enabled:true`**，2026-08-10 核對）；符合條件後可從職業任務直接轉職。
+⚠️ 劍士的完整轉職劇本尚未入庫（storyChapters 現僅 3 章；原稿見 [JOB_STORY_SCRIPTS.md](JOB_STORY_SCRIPTS.md)），但這不阻擋現行 `t2_transfer` 任務轉職。劍鬼另受 `seasonLocked:true` 與 DB 任務停用雙重阻擋。
 
 ---
 
@@ -203,7 +202,7 @@ DB 已建「聖劍士試煉」`type: t2_transfer`（**`enabled:false`**，未開
 | 世界王 / 單人王 | **要能選姿態** |
 | 劇情戰鬥 | 固定攻擊姿態 |
 | DC 端 | 固定攻擊姿態，不做按鈕 |
-| 爬塔 | 下一季會先拿掉，不處理 |
+| 爬塔 | 程式保留但目前總開關暫停；姿態不作為重新開放前的驗收項目 |
 | 屬性覆蓋率 | 下一季會有更多怪帶屬性，攻擊姿態屆時就有普遍價值 |
 
 ---

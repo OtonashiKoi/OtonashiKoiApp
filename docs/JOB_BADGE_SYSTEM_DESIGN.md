@@ -1,5 +1,7 @@
-# 職業徽章 JOB 化 ＋ 二轉轉職劇情（下季設計）
+# 職業徽章 JOB 化 ＋ 二轉轉職（現行規格）
 
+> 狀態：核心機制已實裝；完整 11 段劇情仍是內容提案。2026-08-10 核對：DB 有 13 條 `t2_transfer`，11 條啟用、劍鬼與盜靈 2 條停用且 `seasonLocked:true`。
+>
 > 2026-08-03 定案討論。取代原本「出戰 350/700/1000 場 → 拿二轉徽章」的試煉制。
 > 原設計的問題：把「轉職」做成一場數值檢定 → 需要逐職業調門檻、輔助職業考不到自己的強項、
 > 出現「打贏但死 9 次」這種不自洽結果。病根是「轉職不該是檢定」，改成**事件**。
@@ -13,12 +15,14 @@
         ↓ 完成一轉試煉（出戰 10 場）
     獲得一轉徽章（Lv1，此時幾乎沒有加成）
         ↓ 裝著出戰，每場 +1 熟練度
-    徽章升級（上限 Lv20，效果隨等級長到 100%）
+    徽章升級（上限 Lv20；屬性值分段成長，效果百分比全程完整）
         ↓ Lv20 → 📢 全服廣播
-    解鎖該職業的「轉職劇情」
-        ↓ 師傅現身 → 對話 → **劇情中的 choice ＝二轉分支選擇** → 師傅戰（battle 節點 mustWin）
-    遞交：消耗「一轉徽章 ＋ 金幣」→ 換得二轉徽章（Lv1 重練）
+    `t2_transfer` 任務達成可領取
+        ↓
+    消耗「一轉徽章 ＋ 金幣」→ 換得二轉徽章（Lv1 重練）
 ```
+
+完整轉職劇情仍可作為同一轉職服務的敘事入口，但不是目前玩家完成二轉的必要前置。
 
 ## 二、已定案
 
@@ -91,8 +95,7 @@
 | 徽章**屬性值**隨等級縮放（50/100/150%；效果不縮放） | ✅ `combatStats.js:91`＋`jobBadgeLevel.js:51` |
 | 熟練度累積（DC＋網頁兩個入口） | ✅ `services/job/jobBadgeService.js` |
 | 達標廣播 | ✅ 走 `shared/announceTownChat`（網頁聊天大廳＋DC 城鎮頻道一次發） |
-| 遞交（消耗一轉徽章＋金幣 → 換發二轉徽章，Lv1 重練） | ✅ `storyService.transferJobAtNode`（`src/services/story/storyService.js:541`，含冪等與 `transferCostFor` 扣費）；DB 已建 13 條 `type:"t2_transfer"` 試煉任務（`enabled:false`，開放時機由使用者決定） |
+| 遞交（消耗一轉徽章＋金幣 → 換發二轉徽章，Lv1 重練） | ✅ 任務領取走 `jobBadgeService.transferJob`；劇情節點走 `storyService.transferJobAtNode`。兩者共用轉職規則。DB 13 條任務中 11 條啟用，劍鬼／盜靈 2 條停用且 season locked |
 | 11 段轉職劇本 ＋ 師傅戰 | ⚠️ 內容工作（原稿在 [JOB_STORY_SCRIPTS.md](JOB_STORY_SCRIPTS.md)，**尚未入庫**——storyChapters 現僅 3 章） |
 
-⚠️ 程式面備註：軍師門檻「只看等級」在 **DB 已改**（type `battle_count`、unlock 欄清空），
-但 `weeklyQuestService.js:908` 的 seed 仍是舊值（battle_with_sword＋屬性門檻）——重建 DB 時會倒退，待修。
+✅ 軍師門檻「只看等級」已同時寫入 DB 與 `weeklyQuestService` seed，重建資料不會再倒退成劍武器／屬性門檻。

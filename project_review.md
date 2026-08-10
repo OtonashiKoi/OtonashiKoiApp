@@ -1,6 +1,9 @@
 # 專案全面分析報告：Equipment Game Platform
 
 > 更新時間：2026-03-31
+>
+> ⛔ **歷史審查快照**：本文描述的是早期 JSON／MongoDB 雙儲存與第一期 MVP，已不代表現行程式。
+> 現在 runtime 僅使用 MongoDB，現況請由 [docs/README.md](docs/README.md) 進入；本文以下內容只保留作為歷史分析紀錄。
 
 ---
 

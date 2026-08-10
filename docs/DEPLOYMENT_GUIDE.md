@@ -127,7 +127,6 @@ JWT_SECRET=                     # 用 node -e "console.log(require('crypto').ran
 PUBLIC_BASE_URL=https://otonashikoi.org
 
 # MongoDB
-STORAGE_DRIVER=mongo
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB_NAME=equipment_game
 

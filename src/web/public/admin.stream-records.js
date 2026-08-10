@@ -188,9 +188,9 @@
       ${scBarCard(scp, scCfg)}
       ${memberEventsCard(mep, me)}
       <div class="card" style="margin-top:14px;border-color:#5a2b2b;">
-        <h3 style="margin:0 0 4px;">🌱 換季重置</h3>
-        <p class="hint" style="margin:0 0 10px;">開新賽季時按一次：清空<b>全服永久底盤</b>＋<b>SC 累積</b>＋<b>會員里程碑進度</b>＋<b>通行證全員</b>（設定/門檻不動）。短期 buff 會自己過期。</p>
-        <button class="button" id="ev-reset-season" style="border-color:#a04040;color:#ffb0b0;">🧹 一鍵換季重置</button>
+        <h3 style="margin:0 0 4px;">📺 直播賽季資料重置</h3>
+        <p class="hint" style="margin:0 0 10px;">只清空<b>直播全服永久底盤</b>＋<b>SC 累積</b>＋<b>會員里程碑</b>＋<b>觀看尖峰</b>（設定/門檻不動）。完整換季請到玩家後台執行「全體賽季重置」。</p>
+        <button class="button" id="ev-reset-season" style="border-color:#a04040;color:#ffb0b0;">🧹 重置直播賽季資料</button>
       </div>`;
   }
 
@@ -517,8 +517,8 @@
     } catch (e) { alert("儲存失敗：" + e.message); }
   }
   async function resetSeason() {
-    if (!confirm("確定一鍵換季重置？\n清空：全服永久底盤 + SC累積 + 會員里程碑 + 通行證全員。\n（設定門檻不動，此動作無法復原）")) return;
-    try { await postJSON("/admin/stream-events/reset-season", {}); alert("✅ 已換季重置"); render(); }
+    if (!confirm("確定重置直播賽季資料？\n清空：直播永久底盤 + SC累積 + 會員里程碑 + 觀看尖峰。\n不會重置玩家或通行證；完整換季請使用玩家後台。")) return;
+    try { await postJSON("/admin/stream-events/reset-season", {}); alert("✅ 直播賽季資料已重置"); render(); }
     catch (e) { alert("重置失敗：" + e.message); }
   }
   async function saveScBar() {

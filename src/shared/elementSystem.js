@@ -5,8 +5,7 @@
  * ── 設計原則 ──
  * 1. **無屬性(null)不參與相剋**：現有 69 隻怪與 487 件道具都沒有 element 欄位，
  *    一律視為無屬性 → 倍率恆為 1，既有平衡完全不受影響。新內容才逐步標。
- * 2. **只影響玩家造成的傷害**：剋制 ×1.3、被剋 ×0.7、其餘 ×1。
- *    不另外加成怪物打玩家的傷害——被剋已經是 ×0.7 的劣勢，兩邊都調會變成雙重懲罰。
+ * 2. **攻擊與防禦分流**：武器＋副手走相剋；防具只看怪物同屬抗性，不走相剋環。
  * 3. 相剋關係採經典五行環 + 日月對立，玩家不用背表就能直覺理解。
  *
  * ── 相剋環 ──
@@ -32,9 +31,9 @@ const COUNTERS = {
 };
 
 /** 相剋倍率（作用在玩家造成的傷害上）
- *  屬性有「濃度等級」1~4，每級 10%：
- *    剋制  → 傷害 ×(1 + 等級×0.10)   水1=1.10 / 水4=1.40
- *    被剋  → 傷害 ×(1 − 等級×0.10)   水1=0.90 / 水4=0.60
+ *  屬性有「濃度等級」1~5，每級 10%：
+ *    攻方剋守方 → 傷害 ×(1 + 攻方等級×0.10)
+ *    守方剋攻方 → 傷害 ×(1 − 守方等級×0.10)
  *  無屬性或等級 0 → ×1（現有內容不受影響）
  */
 const PCT_PER_LEVEL = 0.10;
@@ -74,7 +73,7 @@ function resolveElementsMap(entry) {
   return map;
 }
 
-/** 把等級正規化到 0~4 的整數（0＝沒有屬性強度） */
+/** 把攻擊屬性等級正規化到 0~5 的整數（0＝沒有屬性強度） */
 function normalizeElementLevel(value) {
   const n = Math.floor(Number(value));
   if (!Number.isFinite(n) || n <= 0) return 0;
@@ -108,15 +107,16 @@ function getElementRelation(attacker, defender) {
  * attacker 對 defender 的傷害倍率。
  * @param {string} attacker 攻方屬性
  * @param {string} defender 守方屬性
- * @param {number} level    攻方的屬性濃度等級 1~4（武器等級）；0/未給 → 不生效
+ * @param {number} attackerLevel 攻方屬性濃度；攻方發動克制時使用
+ * @param {number} defenderLevel 守方屬性濃度；守方發動克制時使用
  */
-function getElementMultiplier(attacker, defender, level = 0) {
-  const lv = normalizeElementLevel(level);
-  if (lv <= 0) return MULT_NEUTRAL;              // 沒有濃度 → 不參與相剋
-  const pct = lv * PCT_PER_LEVEL;
+function getElementMultiplier(attacker, defender, attackerLevel = 0, defenderLevel = 0) {
+  const attackLv = normalizeElementLevel(attackerLevel);
+  const defenseLv = normalizeElementLevel(defenderLevel);
   switch (getElementRelation(attacker, defender)) {
-    case "advantage": return 1 + pct;
-    case "disadvantage": return Math.max(0, 1 - pct);
+    // 誰發動克制，就使用誰的屬性濃度：攻方剋守方看攻方；守方剋攻方看守方。
+    case "advantage": return attackLv > 0 ? 1 + attackLv * PCT_PER_LEVEL : MULT_NEUTRAL;
+    case "disadvantage": return defenseLv > 0 ? Math.max(0, 1 - defenseLv * PCT_PER_LEVEL) : MULT_NEUTRAL;
     default: return MULT_NEUTRAL;
   }
 }
@@ -126,8 +126,7 @@ function getElementMultiplier(attacker, defender, level = 0) {
  *   ‧ 濃度 0（沒準備對應屬性裝）→ 承傷加重 penaltyPct
  *   ‧ 每級濃度 −perLevelPct，減免封頂 maxReducePct
  * 無屬性怪不觸發（±0，舊內容完全不受影響）。
- * 與「防具剋制減免」(getElementDamageReduction) 是兩套不同投資，可並存疊乘：
- *   打火王 → 水石走相剋環減免、火石走同屬性抗性。
+ * 防具不參與相剋環：打火怪只看火屬性防具，水屬性防具不提供額外減傷。
  * ⚠️ 數值是保守初版，實際疼痛度用 balance-survival-matrix 調（機制先上、數字後調）。
  */
 const SAME_ELEMENT_RESIST = {
@@ -159,20 +158,71 @@ function getSameElementResist(equipped = {}, monsterElement = null) {
 }
 
 /**
- * 防具屬性帶來的「受傷減免」比例（0~1，0.4 = 減傷 40%）。
- * 依定案：只有「我方防具屬性剋制該怪屬性」才減免（與攻擊相剋對稱），
- * 同屬性/無關屬性/無屬性一律不減免。
- * @param {string} armorElement 防具屬性
- * @param {string} monsterElement 怪物屬性
- * @param {number} armorLevel 防具屬性總等級（總和封頂 4）
+ * 首頁／玩家資料用的七屬性即時總覽。所有數值直接沿用戰鬥公式：
+ *   ‧ 攻擊＝武器＋副手，同屬性合計後封頂 Lv5；發動剋制時最高 +50%。
+ *   ‧ 防禦＝所有防具同屬性合計，0～10 顆＝抗性 0%～100%；承傷 115%～65%。
+ * 實際戰鬥仍會再與 DEF、技能、套裝等其他倍率共同計算；這裡只呈現屬性層本身。
  */
-function getElementDamageReduction(armorElement, monsterElement, armorLevel = 0) {
-  const lv = normalizeElementLevel(armorLevel);
-  if (lv <= 0) return 0;
-  return getElementRelation(armorElement, monsterElement) === "advantage" ? lv * PCT_PER_LEVEL : 0;
+function getElementCombatProfile(equipped = {}) {
+  const attackTotals = _aggregateElementsMap(equipped, WEAPON_SLOTS);
+  const armorTotals = _aggregateElementsMap(equipped, ARMOR_SLOTS);
+  const elements = ELEMENTS.map((element) => {
+    const attackRawLevel = Math.max(0, Math.floor(Number(attackTotals.get(element)) || 0));
+    const attackLevel = normalizeElementLevel(attackRawLevel);
+    const attackDeltaPct = Math.round(attackLevel * PCT_PER_LEVEL * 100);
+    const resistLevel = Math.min(
+      SAME_ELEMENT_RESIST.fullLevel,
+      Math.max(0, Math.floor(Number(armorTotals.get(element)) || 0))
+    );
+    const resistPct = Math.round((resistLevel / SAME_ELEMENT_RESIST.fullLevel) * 100);
+    const damageTakenMult = Math.round(Math.max(
+      1 - SAME_ELEMENT_RESIST.maxReducePct,
+      1 + SAME_ELEMENT_RESIST.penaltyPct - resistLevel * SAME_ELEMENT_RESIST.perLevelPct
+    ) * 10000) / 10000;
+    const damageTakenPct = Math.round(damageTakenMult * 100);
+    return {
+      element,
+      label: ELEMENT_LABELS[element],
+      attackLevel,
+      attackRawLevel,
+      attackMinDamagePct: 100 - attackDeltaPct,
+      attackMaxDamagePct: 100 + attackDeltaPct,
+      attackAdvantageBonusPct: attackDeltaPct,
+      attackAdvantageDamagePct: 100 + attackDeltaPct,
+      resistLevel,
+      resistPct,
+      damageTakenMult,
+      damageTakenPct,
+      damageTakenDeltaPct: damageTakenPct - 100,
+    };
+  });
+  return {
+    elements,
+    attackLimits: {
+      minLevel: 0,
+      maxLevel: MAX_ELEMENT_LEVEL,
+      neutralDamagePct: 100,
+      minDamagePct: Math.round((1 - MAX_ELEMENT_LEVEL * PCT_PER_LEVEL) * 100),
+      maxDamagePct: Math.round((1 + MAX_ELEMENT_LEVEL * PCT_PER_LEVEL) * 100),
+      perLevelPct: Math.round(PCT_PER_LEVEL * 100),
+      maxAdvantageBonusPct: Math.round(MAX_ELEMENT_LEVEL * PCT_PER_LEVEL * 100),
+      maxDisadvantagePenaltyPct: Math.round(MAX_ELEMENT_LEVEL * PCT_PER_LEVEL * 100),
+    },
+    resistLimits: {
+      minLevel: 0,
+      maxLevel: SAME_ELEMENT_RESIST.fullLevel,
+      minResistPct: 0,
+      maxResistPct: 100,
+      unpreparedDamageTakenPct: Math.round((1 + SAME_ELEMENT_RESIST.penaltyPct) * 100),
+      neutralDamageTakenPct: 100,
+      fullDamageTakenPct: Math.round((1 - SAME_ELEMENT_RESIST.maxReducePct) * 100),
+      breakEvenLevel: Math.round(SAME_ELEMENT_RESIST.penaltyPct / SAME_ELEMENT_RESIST.perLevelPct),
+      perLevelDamagePct: Math.round(SAME_ELEMENT_RESIST.perLevelPct * 100),
+    },
+  };
 }
 
-/** 裝備槽位分類：武器(攻擊相剋) vs 防具(受傷減免)。
+/** 裝備槽位分類：武器(攻擊相剋) vs 防具(同屬抗性)。
  *  副手(shield)歸武器側——它是戰鬥用裝備，跟主手一起決定你「打出去」的屬性。
  *  卡片/稱號/職業徽章/錨點等特殊槽不參與屬性濃度（那些走各自的效果系統）。
  */
@@ -200,45 +250,47 @@ function _aggregateElementsMap(equipped, slots) {
 }
 
 /**
- * 多屬性裝備「打這隻怪要看哪個屬性」的挑選邏輯（單一屬性剋制只會對到一個屬性，
- * 相剋環是一對一映射，不會有兩個屬性同時剋同一隻怪，所以不需要疊加不同屬性）：
- *   例：身上水3火2 → 打火屬性怪，水剋火 → 看水3；打金屬性怪，火剋金 → 看火2。
- * 優先找「我方剋怪」的那個屬性；沒有的話才退而求其次看「怪剋我方」的那個屬性（劣勢）；
- * 兩者都沒有 → 無相剋，回傳空。
+ * 多屬性裝備「打這隻怪要看哪個屬性」的挑選邏輯：
+ *   剋制 > 中性 > 被剋；同關係時取濃度較高者。
+ * 例：水5＋火5打水怪時，水為中性、火被剋，因此選水5，傷害維持 100%。
  */
 function _pickAgainstDefender(totals, defenderElement) {
   const defender = normalizeElement(defenderElement);
   if (!defender || totals.size === 0) return { element: null, level: 0 };
 
-  const advantageElement = ELEMENTS.find((el) => COUNTERS[el] === defender);
-  if (advantageElement && totals.get(advantageElement) > 0) {
-    return { element: advantageElement, level: normalizeElementLevel(totals.get(advantageElement)) };
-  }
-  const disadvantageElement = COUNTERS[defender];
-  if (disadvantageElement && totals.get(disadvantageElement) > 0) {
-    return { element: disadvantageElement, level: normalizeElementLevel(totals.get(disadvantageElement)) };
-  }
-  return { element: null, level: 0 };
+  const candidates = ELEMENTS
+    .map((element) => ({
+      element,
+      level: normalizeElementLevel(totals.get(element)),
+      relation: getElementRelation(element, defender),
+    }))
+    .filter((row) => row.level > 0);
+  const priority = { advantage: 0, neutral: 1, disadvantage: 2 };
+  candidates.sort((a, b) => {
+    const relationDiff = priority[a.relation] - priority[b.relation];
+    return relationDiff || b.level - a.level || ELEMENTS.indexOf(a.element) - ELEMENTS.indexOf(b.element);
+  });
+  return candidates[0] || { element: null, level: 0 };
 }
 
 /**
  * 玩家「攻擊側」屬性（武器＋副手）：依「這場打的怪」動態挑出身上哪個屬性生效。
  * @param {object} equipped 目前裝備
  * @param {string} defenderElement 這場戰鬥怪物的屬性；沒給就回傳無相剋（不生效）
- * @returns {{ element: string|null, level: number }}
+ * @param {object|null} extraElements 姿態等額外攻擊屬性（不屬於裝備洞）
+ * @returns {{ element: string|null, level: number, relation?: string }}
  */
-function resolveWeaponElement(equipped = {}, defenderElement = null) {
+function resolveWeaponElement(equipped = {}, defenderElement = null, extraElements = null) {
   if (!equipped || typeof equipped !== "object") return { element: null, level: 0 };
-  return _pickAgainstDefender(_aggregateElementsMap(equipped, WEAPON_SLOTS), defenderElement);
-}
-
-/**
- * 玩家「防禦側」屬性（防具＋飾品）：依「這場打的怪」動態挑出身上哪個屬性生效。
- * @returns {{ element: string|null, level: number }}
- */
-function resolveArmorElement(equipped = {}, defenderElement = null) {
-  if (!equipped || typeof equipped !== "object") return { element: null, level: 0 };
-  return _pickAgainstDefender(_aggregateElementsMap(equipped, ARMOR_SLOTS), defenderElement);
+  const totals = _aggregateElementsMap(equipped, WEAPON_SLOTS);
+  if (extraElements && typeof extraElements === "object") {
+    for (const [rawElement, rawLevel] of Object.entries(extraElements)) {
+      const element = normalizeElement(rawElement);
+      const level = Math.max(0, Math.floor(Number(rawLevel)) || 0);
+      if (element && level > 0) totals.set(element, (totals.get(element) || 0) + level);
+    }
+  }
+  return _pickAgainstDefender(totals, defenderElement);
 }
 
 /**
@@ -248,23 +300,21 @@ function resolvePlayerElement(equipped = {}) {
   return resolveWeaponElement(equipped).element;
 }
 
-/** 給戰報用的一行說明（無相剋時回 null，不洗版）
- * @param {number} level 攻擊側屬性等級（武器＋副手，1~4）
- * @param {number} drPct 防具減免比例（0~0.4），>0 時附帶說明
+/** 給戰報用的一行攻擊相剋說明（無相剋時回 null，不洗版）
+ * @param {number} attackerLevel 攻方屬性等級（武器＋副手，1~5）
+ * @param {number} defenderLevel 守方屬性等級（怪物，1~5）
  */
-function describeElementMatchup(attacker, defender, level = 0, drPct = 0) {
-  const lv = normalizeElementLevel(level);
+function describeElementMatchup(attacker, defender, attackerLevel = 0, defenderLevel = 0) {
+  const attackLv = normalizeElementLevel(attackerLevel);
+  const defenseLv = normalizeElementLevel(defenderLevel);
   const relation = getElementRelation(attacker, defender);
   const a = getElementLabel(attacker);
   const d = getElementLabel(defender);
   const lines = [];
-  if (lv > 0 && relation === "advantage") {
-    lines.push(`🌊 **屬性剋制**！${a}${lv} 剋 ${d}，你的傷害提升 ${Math.round(lv * PCT_PER_LEVEL * 100)}%！`);
-  } else if (lv > 0 && relation === "disadvantage") {
-    lines.push(`🛡️ **屬性劣勢**：${d} 剋 ${a}${lv}，你的傷害降低 ${Math.round(lv * PCT_PER_LEVEL * 100)}%。`);
-  }
-  if (drPct > 0) {
-    lines.push(`🐚 **屬性護甲**：防具剋制 ${getElementLabel(defender)}，受到的傷害減少 ${Math.round(drPct * 100)}%。`);
+  if (attackLv > 0 && relation === "advantage") {
+    lines.push(`🌊 **屬性剋制**！${a}${attackLv} 剋 ${d}，你的傷害提升 ${Math.round(attackLv * PCT_PER_LEVEL * 100)}%！`);
+  } else if (defenseLv > 0 && relation === "disadvantage") {
+    lines.push(`🛡️ **屬性劣勢**：${d}${defenseLv} 剋 ${a}${attackLv}，你的傷害降低 ${Math.round(defenseLv * PCT_PER_LEVEL * 100)}%。`);
   }
   return lines.length ? lines.join("\n") : null;
 }
@@ -275,10 +325,9 @@ module.exports = {
   MAX_ELEMENT_LEVEL,
   SAME_ELEMENT_RESIST,
   getSameElementResist,
+  getElementCombatProfile,
   normalizeElementLevel,
-  getElementDamageReduction,
   resolveWeaponElement,
-  resolveArmorElement,
   WEAPON_SLOTS,
   ARMOR_SLOTS,
   ELEMENT_SOCKET_SLOTS,

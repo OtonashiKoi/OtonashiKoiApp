@@ -1,23 +1,37 @@
-# Current Game Status
+<!-- GENERATED: CURRENT_GAME_STATUS -->
+# 遊戲現況快照 Current Game Status
 
-Generated at: 2026-08-09T12:47:00.564Z
+生成時間：2026-08-10T03:21:17.707Z
 
-> This file is generated from MongoDB. Run `npm run status:update` to refresh it.
+> 本檔由程式碼與目前 MongoDB 自動產生，請勿手動修改。執行 `npm run status:update` 更新。功能說明與檔案位置請看 `docs/README.md`、`PROJECT_FEATURES.md`、`docs/SYSTEMS.md`。
+
+## Code Feature Gates
+
+| 項目 | 現況 | 來源 |
+| --- | --- | --- |
+| Runtime repository | MongoDB-only | src/repositories/createRepositories.js |
+| 爬塔 | 暫停 | src/bot/handlers/towerHandlers.js |
+| 一轉 | 11 個 | src/shared/jobAdvancement.js |
+| 二轉 | 13 條；鎖定 2 條 | src/shared/jobAdvancement.js |
+| 區域定義 | 15 個 | src/shared/zones.js |
 
 ## Summary
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 423 |
-| 進度資料 | 433 |
+| 玩家 | 427 |
+| 進度資料 | 431 |
 | 怪物 | 88 |
 | 怪物狀態文件 | 13 |
-| 道具 | 538 |
-| 任務 | 69 |
+| 道具 | 537 |
+| 任務 | 71 |
 | 職業徽章 | 24 |
 | 職業任務 | 25 |
 | 世界王設定 | 4 |
 | 世界王狀態 | 3 |
+| 故事章節 | 3 |
+| 故事 NPC | 22 |
+| 商店商品 | 30 |
 
 ## Zones
 
@@ -39,6 +53,15 @@ Generated at: 2026-08-09T12:47:00.564Z
 | event_1 | 限定活動關卡 | 1 | 無上限 | 7 | 7 | 0 |
 | event_boss | 限定活動 世界王 | 1 | 無上限 | 1 | 1 | 1 |
 | 未分區 | 未定義 |  |  | 11 | 0 | 11 |
+
+## World Bosses
+
+| Boss Key | 狀態 | 前置區域 | Boss Zone | 戰鬥分鐘 | 重生分鐘 |
+| --- | --- | --- | --- | --- | --- |
+| default | 啟用 | ancient_city_deep | elite | 30 | 60 |
+| dragon_king | 啟用 | dragon_realm | dragon_king_lair | 30 | 60 |
+| hellfang_king | 啟用 | hellfire | hellfire_depths | 30 | 60 |
+| island_turtle | 啟用 | event_1 | event_boss | 120 | 60 |
 
 ## Monsters
 
@@ -138,7 +161,7 @@ Generated at: 2026-08-09T12:47:00.564Z
 | 分類 | 數量 |
 | --- | --- |
 | collectible | 8 |
-| consumable | 33 |
+| consumable | 32 |
 | equipment | 470 |
 | job_badge | 24 |
 | pet_egg | 3 |
@@ -150,7 +173,7 @@ Generated at: 2026-08-09T12:47:00.564Z
 | C | 73 |
 | D | 62 |
 | S | 47 |
-| 無階級 | 76 |
+| 無階級 | 75 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -168,7 +191,7 @@ Generated at: 2026-08-09T12:47:00.564Z
 | special | 78 |
 | title_eq | 13 |
 | weapon | 116 |
-| 無槽位 | 44 |
+| 無槽位 | 43 |
 
 ## Items
 
@@ -767,8 +790,10 @@ Generated at: 2026-08-09T12:47:00.564Z
 | season | 910 | 十五回合生還者 | wb_survive_full | 1 | 啟用 | 3000 金幣 | 在世界王戰鬥中撐滿 15 回合而不倒下（任一世界王／單人王皆可）。獎勵：3,000 金幣。 |
 | season | 910 | 🛡️ 沒苦硬吃・硬撐者的試煉 | damage_taken | 100000 | 啟用 | 沒苦硬吃 | 【隱藏賽季任務】累積承受傷害達 5 萬後現身；解鎖後再硬吃 5 萬點傷害，證明你扛得住。獎勵：傳說錨點【沒苦硬吃】。 |
 | season | 911 | 百戰不殆 | wb_survive_full | 30 | 啟用 | 15000 金幣 | 累計 30 場世界王戰鬥撐滿 15 回合。獎勵：15,000 金幣＋背包擴充券。 |
-| season | 911 | 🩸 對鮮血的渴望・嗜血者的試煉 | damage_total | 1000000 | 啟用 | 對鮮血的渴望 | 【隱藏賽季任務】累積造成傷害達 50 萬後現身；解鎖後再造成 50 萬傷害，浸透鮮血。獎勵：傳說錨點【對鮮血的渴望】。 |
-| season | 912 | ✝️ 聖人的試煉 | heal_done | 50000 | 啟用 | 聖人就是比拳頭大小 | 【隱藏賽季任務】本季斗內贊助過的人才會看見此試煉；累積回血量 5 萬點，以給予之心成聖。獎勵：傳說錨點【聖人就是比拳頭大小】。 |
+| season | 911 | 🩸 對鮮血的渴望・嗜血者的試煉 | damage_total | 1000000 | 停用 | 對鮮血的渴望 | 【隱藏賽季任務】累積造成傷害達 50 萬後現身；解鎖後再造成 50 萬傷害，浸透鮮血。獎勵：傳說錨點【對鮮血的渴望】。 |
+| season | 911 | 🩸 對鮮血的渴望・嗜血者的試煉 | lifesteal_done | 100000 | 啟用 | 對鮮血的渴望 | 【隱藏賽季任務】累積實際吸血 5 萬點後現身；解鎖後再實際吸血 5 萬點。滿血時的溢出吸血不列入。獎勵：傳說錨點【對鮮血的渴望】。 |
+| season | 912 | ✝️ 聖人的試煉 | heal_done | 50000 | 啟用 | 聖人就是比拳頭大小 | 【隱藏賽季任務】本季斗內贊助過的人才會看見；累積實際非吸血治療 5 萬點。滿血溢補、治療轉傷害與吸血不列入。獎勵：傳說錨點【聖人就是比拳頭大小】。 |
+| season | 912 | ✝️ 聖人的試煉 | heal_done | 50000 | 停用 | 聖人就是比拳頭大小 | 【隱藏賽季任務】本季斗內贊助過的人才會看見此試煉；累積回血量 5 萬點，以給予之心成聖。獎勵：傳說錨點【聖人就是比拳頭大小】。 |
 | season | 913 | ⏳ 時間管理大師的試煉 | checkin_streak | 7 | 啟用 | 時間管理大師 | 【隱藏賽季任務】連續簽到 3 天後現身；連續簽到滿 7 天，掌握時間者得之。獎勵：傳說錨點【時間管理大師】。 |
 | season | 920 | 屬性入門 | wb_resist_ready | 1 | 啟用 | 3000 金幣 | 防具鑲上對應屬性石、帶著 30% 以上抗性出戰世界王（抵銷無抗性懲罰）。獎勵：3,000 金幣。 |
 | season | 921 | 滿抗證明 | wb_fullresist | 1 | 啟用 | 8000 金幣 | 帶著 100% 滿抗（10 顆同屬性石）出戰世界王。獎勵：8,000 金幣＋附魔重骰藥水。 |
@@ -814,3 +839,38 @@ Generated at: 2026-08-09T12:47:00.564Z
 | job_gambler_v1 | 賭徒徽章 |  | 賭徒試煉 | 啟用 | 10 | dice | LUK + AGI > 10 | AGI+2 DEX+1 LUK+5 |
 | job_dicegod_t2_v1 | 賭神徽章 |  | 賭神試煉 | 啟用 | 35 |  |  | AGI+4 DEX+3 LUK+5 |
 | job_tactician_v1 | 軍師徽章 |  | 軍師試煉 | 啟用 | 10 |  |  | AGI+4 INT+2 DEX+2 |
+
+## Tier 2 Branches
+
+| 一轉 | 一轉徽章 | 全部分支 | 目前可用 | 本季鎖定 |
+| --- | --- | --- | --- | --- |
+| 劍士 | job_swordsman_v1 | 聖劍士、劍鬼 | 聖劍士 | 劍鬼 |
+| 戰士 | job_warrior_v1 | 狂戰士 | 狂戰士 | 無 |
+| 矮人戰士 | job_dwarf_warrior_v1 | 矮人戰士長 | 矮人戰士長 | 無 |
+| 盜賊 | job_rogue_v1 | 影舞者、盜靈 | 影舞者 | 盜靈 |
+| 法師 | job_mage_v1 | 元素師 | 元素師 | 無 |
+| 治療師 | job_healer_v1 | 聖靈師 | 聖靈師 | 無 |
+| 弓箭手 | job_archer_v1 | 神射手 | 神射手 | 無 |
+| 軍師 | job_tactician_v1 | 兵聖 | 兵聖 | 無 |
+| 詩人 | job_bard_v1 | 吟遊詩人 | 吟遊詩人 | 無 |
+| 結界師 | job_barrier_mage_v1 | 聖域師 | 聖域師 | 無 |
+| 賭徒 | job_gambler_v1 | 賭神 | 賭神 | 無 |
+
+## Story Chapters
+
+| 順序 | ID | 章節 | Zone | 狀態 | 節點 |
+| --- | --- | --- | --- | --- | --- |
+| 0 | chapter-prologue | 序章 |  | 啟用 | 75 |
+| 1 | chapter-1 | 第一章 | beginner | 啟用 | 243 |
+| 90 | 4443f787-a50a-41f5-8bb3-8fbf4f31456d | 夏日特別篇・海會記得 | event_1 | 停用 | 105 |
+
+## Live Event Configuration
+
+> 這裡顯示 DB 實際開關；程式內 DEFAULTS 只在 DB 沒設定時使用。
+
+| 模組 | 狀態 | 公告 | 門檻摘要（金幣/掉寶/經驗） |
+| --- | --- | --- | --- |
+| donationTiers | 啟用 | 公告 | NT$100:5/5/5% |
+| scBar | 啟用 | 公告 | 5 個里程碑 |
+| memberEvents | 啟用 | 公告 | 4 個里程碑 |
+| viewerTiers | 啟用 | 公告 | 30人:5/5/5%、40人:8/8/8%、50人:10/10/10% |

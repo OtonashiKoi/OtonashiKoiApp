@@ -1,0 +1,4610 @@
+[
+  {
+    "id": "c39bdddd-a33d-4e34-8019-d17020a8083b",
+    "name": "小史",
+    "drops": [
+      {
+        "itemId": "b78aed5f-8887-4a89-aa00-5d441ca6d63f",
+        "itemName": "智紋布帽",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "a91fab15-a786-490a-ae7f-6ecd536febb1",
+        "itemName": "布口罩",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "ca305d93-7609-4ed4-a00a-c748aedf8539",
+        "itemName": "鬥紋布盔",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "51f1e217-7668-4810-87af-1c523dbd8d14",
+        "itemName": "新手護目鏡",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "7a438607-fb9e-4f31-baf7-d3e0b0f2221c",
+        "itemName": "迅紋布帽",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "19e24aca-92f5-4f81-8ab9-cc4f8ba73a72",
+        "itemName": "銅戒指(左)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "e785d724-1988-435e-a705-345da963d5c4",
+        "itemName": "迅紋布披肩",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "48180673-7800-48c6-93df-a30fa03a957b",
+        "itemName": "迅紋布甲",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "monster-card-c39bdddd-a33d-4e34-8019-d17020a8083b",
+        "itemName": "小史卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "871bc362-1ea4-40e1-8617-b5ff03dd7e9e",
+        "itemName": "鬥紋銅戒指(左)",
+        "chance": 4
+      },
+      {
+        "itemId": "1fb1f325-7d73-43c7-a55f-3f51752870b0",
+        "itemName": "神秘史萊姆蛋",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "f00fd7b1-9f57-4532-9901-f4d4d74f132d",
+    "name": "哥布",
+    "drops": [
+      {
+        "itemId": "421196aa-83e4-4f2e-82f6-dc05077b115a",
+        "itemName": "木製匕首",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+        "itemName": "迅紋銅戒指(左)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "4885e098-3624-4c6c-9eb9-e4b27c2fb5ab",
+        "itemName": "木製單手斧",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "f7eb0824-d7f5-4f5d-9e92-4cf07ffacb4a",
+        "itemName": "迅紋銅戒指(右)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+        "itemName": "木製弓",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "a56bd609-cf0b-4924-b724-891f221fc0b9",
+        "itemName": "木製單手劍",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "19e24aca-92f5-4f81-8ab9-cc4f8ba73a72",
+        "itemName": "銅戒指(左)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "ce6f0608-2750-47b4-aa26-14d9c1aa0f4c",
+        "itemName": "木製雙手劍",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "871bc362-1ea4-40e1-8617-b5ff03dd7e9e",
+        "itemName": "鬥紋銅戒指(左)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "goblin-card",
+        "itemName": "哥布卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "be6f16fa-4e72-47ab-9a08-d580bd5490ef",
+        "itemName": "銅戒指(右)",
+        "chance": 4
+      },
+      {
+        "itemId": "feee43ab-4b22-44d6-b86b-0655da4acf57",
+        "itemName": "鬥紋銅戒指(右)",
+        "chance": 4
+      }
+    ]
+  },
+  {
+    "id": "a8ef443e-3a0d-4ccb-9290-d6394edaa59f",
+    "name": "小狼",
+    "drops": [
+      {
+        "itemId": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+        "itemName": "木製弓",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "f7eb0824-d7f5-4f5d-9e92-4cf07ffacb4a",
+        "itemName": "迅紋銅戒指(右)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+        "itemName": "迅紋銅戒指(左)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "7cf9a5d3-9287-4da6-b944-a5d616b5bdd7",
+        "itemName": "鬥紋布靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "912afa75-bfcc-4788-a42c-cf099dc209c3",
+        "itemName": "智紋布靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "9fc5e65a-269b-429c-9cd9-5fd9a00f977a",
+        "itemName": "智紋布披風",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "19e24aca-92f5-4f81-8ab9-cc4f8ba73a72",
+        "itemName": "銅戒指(左)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "be6f16fa-4e72-47ab-9a08-d580bd5490ef",
+        "itemName": "銅戒指(右)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "xiaolang-card",
+        "itemName": "小狼卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "a318a9e7-6b68-47da-b3b6-24488eaa05b7",
+        "itemName": "木製短匕(副手)",
+        "chance": 5.2
+      },
+      {
+        "itemId": "5608761a-e8cb-44bc-91d0-449efff03d1e",
+        "itemName": "迅紋布面罩",
+        "chance": 4
+      },
+      {
+        "itemId": "48180673-7800-48c6-93df-a30fa03a957b",
+        "itemName": "迅紋布甲",
+        "chance": 4
+      }
+    ]
+  },
+  {
+    "id": "2d226eea-934a-4787-8ff7-9f19d12ac590",
+    "name": "石頭",
+    "drops": [
+      {
+        "itemId": "7bdf0277-dcd5-4173-b3ff-d93ccaa9e293",
+        "itemName": "布帽",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "a91fab15-a786-490a-ae7f-6ecd536febb1",
+        "itemName": "布口罩",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "b8e74b56-2662-4e9d-9bfa-8a74009b7e86",
+        "itemName": "鬥紋布護目",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "51f1e217-7668-4810-87af-1c523dbd8d14",
+        "itemName": "新手護目鏡",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "e785d724-1988-435e-a705-345da963d5c4",
+        "itemName": "迅紋布披肩",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "6da9f4e6-aac1-4088-9000-7111fd4926b0",
+        "itemName": "木製單手槌",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "912125cb-6738-4694-9657-81e7f6a5c2da",
+        "itemName": "布披風",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "cd5175ba-66bd-4719-a316-b1de5540a677",
+        "itemName": "智紋布鏡片",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "stone-card",
+        "itemName": "石頭卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "0e2ede69-4bd1-4ce1-9ec8-fe4df6463dfa",
+        "itemName": "智紋銅戒指(左)",
+        "chance": 4
+      },
+      {
+        "itemId": "9fc5e65a-269b-429c-9cd9-5fd9a00f977a",
+        "itemName": "智紋布披風",
+        "chance": 4
+      }
+    ]
+  },
+  {
+    "id": "321a08e9-8fed-4a80-9526-b1f977fd9103",
+    "name": "大史(B)",
+    "drops": [
+      {
+        "itemId": "4f6436a1-fb7d-4348-8f45-067e7f9004d0",
+        "itemName": "迅紋皮護目",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "72d9fd72-01e0-4162-b0f3-aa7c9b2b4e38",
+        "itemName": "智紋皮帽",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "c48e3207-8f7f-4f6c-b4bd-d635f2d1e88b",
+        "itemName": "護目鏡",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "099d5496-e0d4-49e5-af89-ac6580262d5a",
+        "itemName": "皮口罩",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "dcb0ab95-aff6-4961-ae44-79bd49a2f0e8",
+        "itemName": "鐵盾",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "121b7336-eac0-44ed-a5f6-783d0dd6b538",
+        "itemName": "鬥紋皮盔",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "2f1400c6-17a7-4911-9fc2-6b3ca820dccf",
+        "itemName": "鬥紋皮面甲",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "4d72c88d-e632-492e-bb6c-7f7b6f93e624",
+        "itemName": "鬥紋皮甲",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "1ed26548-f724-45b2-8010-3355a89626f3",
+        "itemName": "智紋皮鏡片",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "bf1dc51e-84f1-4314-b95e-3446aa3d0df0",
+        "itemName": "迅紋皮靴",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "4a4e5575-c48c-4613-83df-7f0f30a906fe",
+        "itemName": "鐵戒指(右)",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "daishi-b-card",
+        "itemName": "大史(B)卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "2271e23c-9648-430e-944b-cea2107ee8ec",
+        "itemName": "木製雙手斧",
+        "chance": 3.5
+      },
+      {
+        "itemId": "1fb1f325-7d73-43c7-a55f-3f51752870b0",
+        "itemName": "神秘史萊姆蛋",
+        "chance": 2
+      }
+    ]
+  },
+  {
+    "id": "657afc88-c6db-4851-8c4c-50f225b18624",
+    "name": "甲蟹",
+    "drops": [
+      {
+        "itemId": "bb26be45-2910-4034-8db6-e02d9d473513",
+        "itemName": "皮披風",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "159e76d1-467a-4235-b364-5b7d85d9d79d",
+        "itemName": "鬥紋皮披肩",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "099d5496-e0d4-49e5-af89-ac6580262d5a",
+        "itemName": "皮口罩",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "23e96235-d1b0-42ab-92c9-5d0044acabcd",
+        "itemName": "迅紋皮帽",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "1e584c2e-d9f1-40c9-8490-ee615fedbf9f",
+        "itemName": "迅紋皮披肩",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "12cddc4e-58ef-433e-a50d-e8ca04b1041e",
+        "itemName": "皮帽",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "7e983a31-a7ea-452b-882d-4d0fcd92253a",
+        "itemName": "鐵製雙手法杖",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "9c809436-d8d5-4b21-bf15-e26e881cac9b",
+        "itemName": "鐵製單手劍",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "fbf8fdec-72a4-4d76-bcb5-117952352dec",
+        "itemName": "鐵製單手槌",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "770da6ff-a1d6-49a9-af30-3acbe3cd3cc3",
+        "itemName": "迅紋皮甲",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "crab-card",
+        "itemName": "甲蟹卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "dcb0ab95-aff6-4961-ae44-79bd49a2f0e8",
+        "itemName": "鐵盾",
+        "chance": 4
+      },
+      {
+        "itemId": "e1ba9e0c-3e3a-4ebe-97a0-6fa166651463",
+        "itemName": "鐵戒指(左)",
+        "chance": 4
+      },
+      {
+        "itemId": "4a4e5575-c48c-4613-83df-7f0f30a906fe",
+        "itemName": "鐵戒指(右)",
+        "chance": 4
+      },
+      {
+        "itemId": "2c611adf-2082-47c7-ab05-0b816338d112",
+        "itemName": "疾風右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "0e24cfe0-2119-4f6d-ba00-170cd3037ad4",
+        "itemName": "救護右之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "13f56b92-709e-42ff-87d2-e8f129ed9207",
+    "name": "牙牙狼",
+    "drops": [
+      {
+        "itemId": "efd48300-f4b6-40d6-a1c5-8c2014ae4b55",
+        "itemName": "鐵製弓",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "158004d3-d23a-4d65-b3e3-275cbcda8142",
+        "itemName": "迅紋鐵戒指(左)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "c8252c6f-0d78-447b-b082-ca0960dfb45d",
+        "itemName": "鬥紋皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "a5bf4a8c-2f89-4b35-9f23-8cb519bb0292",
+        "itemName": "鐵製匕首",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "8ba1dc5c-41df-4a9b-abd4-fa2c949b2d90",
+        "itemName": "智紋皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "bf1dc51e-84f1-4314-b95e-3446aa3d0df0",
+        "itemName": "迅紋皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "1ed26548-f724-45b2-8010-3355a89626f3",
+        "itemName": "智紋皮鏡片",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "0dc3cae8-d18a-4b0f-a0ea-6f6c81eb6535",
+        "itemName": "鬥紋皮護目",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "fang-wolf-card",
+        "itemName": "牙牙狼卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "43615e5a-176a-4286-bedc-ed17d98a661b",
+        "itemName": "鐵製短匕(副手)",
+        "chance": 5.2
+      },
+      {
+        "itemId": "770da6ff-a1d6-49a9-af30-3acbe3cd3cc3",
+        "itemName": "迅紋皮甲",
+        "chance": 4
+      },
+      {
+        "itemId": "2e6bbc0b-30cb-41e9-9356-087ff3c6272c",
+        "itemName": "獵手左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "7ca39776-1d7b-4641-aeb0-02d9566cbf6b",
+        "itemName": "重擊左之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "b9c226a8-ea33-41de-9c9b-be24824a9fb1",
+    "name": "巨巨",
+    "drops": [
+      {
+        "itemId": "0dc3cae8-d18a-4b0f-a0ea-6f6c81eb6535",
+        "itemName": "鬥紋皮護目",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "72d9fd72-01e0-4162-b0f3-aa7c9b2b4e38",
+        "itemName": "智紋皮帽",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "04c5a488-68e2-491a-ba1a-3d7e3518a9c5",
+        "itemName": "智紋皮披風",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "c48e3207-8f7f-4f6c-b4bd-d635f2d1e88b",
+        "itemName": "護目鏡",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "23e96235-d1b0-42ab-92c9-5d0044acabcd",
+        "itemName": "迅紋皮帽",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "2f1400c6-17a7-4911-9fc2-6b3ca820dccf",
+        "itemName": "鬥紋皮面甲",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "7e983a31-a7ea-452b-882d-4d0fcd92253a",
+        "itemName": "鐵製雙手法杖",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9",
+        "itemName": "皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "giant-card",
+        "itemName": "巨巨卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "4d72c88d-e632-492e-bb6c-7f7b6f93e624",
+        "itemName": "鬥紋皮甲",
+        "chance": 4
+      },
+      {
+        "itemId": "fbf8fdec-72a4-4d76-bcb5-117952352dec",
+        "itemName": "鐵製單手槌",
+        "chance": 4
+      },
+      {
+        "itemId": "baadc603-e28d-4721-9f4e-96a2a33c561c",
+        "itemName": "鬥紋鐵戒指(右)",
+        "chance": 4
+      },
+      {
+        "itemId": "5f427f1b-3159-42c5-859f-e71505217e1c",
+        "itemName": "獵手右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "73d828e6-9aed-4b35-8a72-645ddfc6abde",
+        "itemName": "重擊右之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "f4bed595-74f8-493b-8551-9158f4b5381d",
+    "name": "黑暗弓手",
+    "drops": [
+      {
+        "itemId": "c8252c6f-0d78-447b-b082-ca0960dfb45d",
+        "itemName": "鬥紋皮靴",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "efd48300-f4b6-40d6-a1c5-8c2014ae4b55",
+        "itemName": "鐵製弓",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "1a628982-694e-48ce-bcd6-fc0c16f39a17",
+        "itemName": "迅紋鐵戒指(右)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "bf1dc51e-84f1-4314-b95e-3446aa3d0df0",
+        "itemName": "迅紋皮靴",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9",
+        "itemName": "皮靴",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "158004d3-d23a-4d65-b3e3-275cbcda8142",
+        "itemName": "迅紋鐵戒指(左)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "0dbe1a4f-28a2-440e-b59b-fd02dbf7050f",
+        "itemName": "智紋鐵戒指(右)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "a5bf4a8c-2f89-4b35-9f23-8cb519bb0292",
+        "itemName": "鐵製匕首",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "bb4a624b-c5df-4ace-ae50-d5ec16248e6d",
+        "itemName": "立直棒",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "dark-archer-card",
+        "itemName": "黑暗弓手卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "43615e5a-176a-4286-bedc-ed17d98a661b",
+        "itemName": "鐵製短匕(副手)",
+        "chance": 4.6
+      },
+      {
+        "itemId": "14f732db-42e5-48c5-a7a5-67c7f28627bb",
+        "itemName": "狂血左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "175e57e1-d0fa-426f-adf6-f5b37cae7911",
+        "itemName": "守護左之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "517f9a27-f6f7-4251-8cf8-2140f02222c0",
+    "name": "米拉桑(B)",
+    "drops": [
+      {
+        "itemId": "e6e29ed7-ff4e-43b8-a6cd-5e168d6eea81",
+        "itemName": "鐵口罩",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "e3c0f284-42ef-4a94-aef5-45b4bb5be8ce",
+        "itemName": "迅紋鐵甲",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "d374cdb4-702d-4a3f-b5ba-34a3d3e5c8c3",
+        "itemName": "鋼製單手斧",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "184d4cc9-81cf-494d-809e-7704a1b73e59",
+        "itemName": "迅紋鐵靴",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "080fa80a-5487-457e-b4c0-a4b6e93b0380",
+        "itemName": "鬥紋鐵面甲",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "d6be2017-2f33-433c-8ac4-a32eab7960cc",
+        "itemName": "銀戒指(左)",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "4c4e5a9e-97e7-4b74-9be2-b32b8f2320f8",
+        "itemName": "鬥紋鐵盔",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "d9e16875-14cb-45b1-91eb-da46b6972698",
+        "itemName": "鐵靴",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "3824e2ac-5781-422e-a1d2-881e44ca7a28",
+        "itemName": "鋼盾",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "9807c319-abbd-43ad-808c-dcfb9313d7ba",
+        "itemName": "鋼製單手劍",
+        "chance": 4.2164
+      },
+      {
+        "itemId": "mira-b-card",
+        "itemName": "米拉桑(B)卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "c60d4d99-3eed-4ac9-811e-680b6d637648",
+        "itemName": "鋼製短匕(副手)",
+        "chance": 4.2
+      },
+      {
+        "itemId": "200de7aa-5d17-4f5a-ae5b-93d7630a9a2c",
+        "itemName": "疾風左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "2e6bbc0b-30cb-41e9-9356-087ff3c6272c",
+        "itemName": "獵手左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "14f732db-42e5-48c5-a7a5-67c7f28627bb",
+        "itemName": "狂血左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "8e662d64-161b-4489-9b33-569b1d24cdd4",
+        "itemName": "吸血左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "26bab9f5-52fe-47b4-8eda-a94004da002a",
+        "itemName": "鏡映左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "84440864-e009-46ea-9d4b-030bee5f4c7c",
+        "itemName": "救護左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "7ca39776-1d7b-4641-aeb0-02d9566cbf6b",
+        "itemName": "重擊左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "175e57e1-d0fa-426f-adf6-f5b37cae7911",
+        "itemName": "守護左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "2b1524d1-afef-4153-9752-28f743bffb8a",
+        "itemName": "戰意左之戒",
+        "chance": 3.5
+      }
+    ]
+  },
+  {
+    "id": "03c93103-eddb-4265-96ca-a8a76bb82a02",
+    "name": "小金(稀)",
+    "drops": [
+      {
+        "itemId": "1e584c2e-d9f1-40c9-8490-ee615fedbf9f",
+        "itemName": "迅紋皮披肩",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "7e983a31-a7ea-452b-882d-4d0fcd92253a",
+        "itemName": "鐵製雙手法杖",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "c8252c6f-0d78-447b-b082-ca0960dfb45d",
+        "itemName": "鬥紋皮靴",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "bb26be45-2910-4034-8db6-e02d9d473513",
+        "itemName": "皮披風",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "71f8cf22-9f9a-4f73-9eed-e4f23becd8a5",
+        "itemName": "迅紋皮面罩",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "d803fe81-5812-414a-a0c9-f7e011e75f5d",
+        "itemName": "鐵製單手法杖",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "c48e3207-8f7f-4f6c-b4bd-d635f2d1e88b",
+        "itemName": "護目鏡",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "0dbe1a4f-28a2-440e-b59b-fd02dbf7050f",
+        "itemName": "智紋鐵戒指(右)",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "7ec80ac4-bd34-44ac-a161-189ef41d113a",
+        "itemName": "鬥紋鐵戒指(左)",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "4f6436a1-fb7d-4348-8f45-067e7f9004d0",
+        "itemName": "迅紋皮護目",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "158004d3-d23a-4d65-b3e3-275cbcda8142",
+        "itemName": "迅紋鐵戒指(左)",
+        "chance": 3.8405
+      },
+      {
+        "itemId": "monster-card-03c93103-eddb-4265-96ca-a8a76bb82a02",
+        "itemName": "小金(稀)卡",
+        "chance": 0.1
+      }
+    ]
+  },
+  {
+    "id": "3065b7ca-8839-4be4-9d02-0821932cd408",
+    "name": "中金(稀)",
+    "drops": [
+      {
+        "itemId": "monster-card-3065b7ca-8839-4be4-9d02-0821932cd408",
+        "itemName": "中金(稀)卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "71aaa3a2-abb9-4b01-b024-16e553b08840",
+        "itemName": "金幣袋子(中)",
+        "chance": 100
+      },
+      {
+        "itemId": "2c611adf-2082-47c7-ab05-0b816338d112",
+        "itemName": "疾風右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "5f427f1b-3159-42c5-859f-e71505217e1c",
+        "itemName": "獵手右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "291a7ace-0e99-436d-9868-e2ce36d5152e",
+        "itemName": "狂血右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "5920714a-87a7-4dba-9001-3baa45ea6035",
+        "itemName": "吸血右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "4cbebe83-7149-4ee5-af30-f6e7ca2b0d88",
+        "itemName": "鏡映右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "0e24cfe0-2119-4f6d-ba00-170cd3037ad4",
+        "itemName": "救護右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "73d828e6-9aed-4b35-8a72-645ddfc6abde",
+        "itemName": "重擊右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "46ec9744-efbc-4118-a865-8ce677c70824",
+        "itemName": "守護右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "99d8195b-2446-4867-9598-66ea47544b68",
+        "itemName": "戰意右之戒",
+        "chance": 3.5
+      }
+    ]
+  },
+  {
+    "id": "6f321e26-e74e-4a05-a55a-6145da53373d",
+    "name": "青草地精",
+    "drops": [
+      {
+        "itemId": "421196aa-83e4-4f2e-82f6-dc05077b115a",
+        "itemName": "木製匕首",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "4885e098-3624-4c6c-9eb9-e4b27c2fb5ab",
+        "itemName": "木製單手斧",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+        "itemName": "木製弓",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "f7eb0824-d7f5-4f5d-9e92-4cf07ffacb4a",
+        "itemName": "迅紋銅戒指(右)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+        "itemName": "迅紋銅戒指(左)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "4a7c2dd6-1d33-4613-a5aa-913924d12eed",
+        "itemName": "木盾",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "ca305d93-7609-4ed4-a00a-c748aedf8539",
+        "itemName": "鬥紋布盔",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "2fcf7576-4e74-4280-b1e6-0d7da7b58dda",
+        "itemName": "木製雙手槌",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "2271e23c-9648-430e-944b-cea2107ee8ec",
+        "itemName": "木製雙手斧",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "grass-goblin-card",
+        "itemName": "青草地精卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "ce6f0608-2750-47b4-aa26-14d9c1aa0f4c",
+        "itemName": "木製雙手劍",
+        "chance": 4
+      },
+      {
+        "itemId": "e3794447-e19d-41a2-9b0a-c5050dcdd9ea",
+        "itemName": "木製雙手法杖",
+        "chance": 3.5
+      }
+    ]
+  },
+  {
+    "id": "a1ab762c-cd0b-4270-994b-74b68c242840",
+    "name": "綠野狼",
+    "drops": [
+      {
+        "itemId": "421196aa-83e4-4f2e-82f6-dc05077b115a",
+        "itemName": "木製匕首",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "f7eb0824-d7f5-4f5d-9e92-4cf07ffacb4a",
+        "itemName": "迅紋銅戒指(右)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+        "itemName": "迅紋銅戒指(左)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "7cf9a5d3-9287-4da6-b944-a5d616b5bdd7",
+        "itemName": "鬥紋布靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "f6ba24ae-c749-4daa-a6aa-bfed255f1807",
+        "itemName": "迅紋布靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "4885e098-3624-4c6c-9eb9-e4b27c2fb5ab",
+        "itemName": "木製單手斧",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "af191f1f-f4ed-4728-991f-60757f1eb041",
+        "itemName": "鬥紋布披肩",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "5608761a-e8cb-44bc-91d0-449efff03d1e",
+        "itemName": "迅紋布面罩",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "green-wolf-card",
+        "itemName": "綠野狼卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "a318a9e7-6b68-47da-b3b6-24488eaa05b7",
+        "itemName": "木製短匕(副手)",
+        "chance": 5.2
+      },
+      {
+        "itemId": "7a438607-fb9e-4f31-baf7-d3e0b0f2221c",
+        "itemName": "迅紋布帽",
+        "chance": 4
+      }
+    ]
+  },
+  {
+    "id": "343c18ce-9f87-4532-bbb4-618a64fe5559",
+    "name": "林地妖靈(樹樹)",
+    "drops": [
+      {
+        "itemId": "a0932b81-a2f3-454a-81e2-e0b21807c5fd",
+        "itemName": "智紋皮袍",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "7e983a31-a7ea-452b-882d-4d0fcd92253a",
+        "itemName": "鐵製雙手法杖",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "d803fe81-5812-414a-a0c9-f7e011e75f5d",
+        "itemName": "鐵製單手法杖",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "0dbe1a4f-28a2-440e-b59b-fd02dbf7050f",
+        "itemName": "智紋鐵戒指(右)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "60af8c07-331e-4b4e-80b4-ff66eaf84210",
+        "itemName": "智紋鐵戒指(左)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "e1ba9e0c-3e3a-4ebe-97a0-6fa166651463",
+        "itemName": "鐵戒指(左)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "bf1dc51e-84f1-4314-b95e-3446aa3d0df0",
+        "itemName": "迅紋皮靴",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "121b7336-eac0-44ed-a5f6-783d0dd6b538",
+        "itemName": "鬥紋皮盔",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "baadc603-e28d-4721-9f4e-96a2a33c561c",
+        "itemName": "鬥紋鐵戒指(右)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "forest-spirit-card",
+        "itemName": "林地妖靈卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "291a7ace-0e99-436d-9868-e2ce36d5152e",
+        "itemName": "狂血右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "46ec9744-efbc-4118-a865-8ce677c70824",
+        "itemName": "守護右之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "9f0c5372-7232-4c6f-8083-409a28b1b374",
+    "name": "森林古樹",
+    "drops": [
+      {
+        "itemId": "23e96235-d1b0-42ab-92c9-5d0044acabcd",
+        "itemName": "迅紋皮帽",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "bb26be45-2910-4034-8db6-e02d9d473513",
+        "itemName": "皮披風",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "72d9fd72-01e0-4162-b0f3-aa7c9b2b4e38",
+        "itemName": "智紋皮帽",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "c48e3207-8f7f-4f6c-b4bd-d635f2d1e88b",
+        "itemName": "護目鏡",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "73884cf9-67b5-47b4-af3c-b6d79a39ec57",
+        "itemName": "皮甲",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "1e584c2e-d9f1-40c9-8490-ee615fedbf9f",
+        "itemName": "迅紋皮披肩",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "7c5ac61b-5024-4fa5-8402-d4ebed7ebc9a",
+        "itemName": "智紋皮口飾",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "ab533d4a-3d07-4d41-8a40-511a8e6a455d",
+        "itemName": "鐵製雙手斧",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "1f04c0db-e5cb-4b84-9a43-e7150799eecb",
+        "itemName": "鐵製雙手槌",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "forest-tree-card",
+        "itemName": "森林古樹卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "7ec80ac4-bd34-44ac-a161-189ef41d113a",
+        "itemName": "鬥紋鐵戒指(左)",
+        "chance": 4.6
+      },
+      {
+        "itemId": "200de7aa-5d17-4f5a-ae5b-93d7630a9a2c",
+        "itemName": "疾風左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "84440864-e009-46ea-9d4b-030bee5f4c7c",
+        "itemName": "救護左之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "eb0322bc-a90a-4a89-ad57-8a9c5607e6b8",
+    "name": "暗夜獵豹",
+    "drops": [
+      {
+        "itemId": "c8252c6f-0d78-447b-b082-ca0960dfb45d",
+        "itemName": "鬥紋皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "158004d3-d23a-4d65-b3e3-275cbcda8142",
+        "itemName": "迅紋鐵戒指(左)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "a5bf4a8c-2f89-4b35-9f23-8cb519bb0292",
+        "itemName": "鐵製匕首",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "efd48300-f4b6-40d6-a1c5-8c2014ae4b55",
+        "itemName": "鐵製弓",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "8ba1dc5c-41df-4a9b-abd4-fa2c949b2d90",
+        "itemName": "智紋皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9",
+        "itemName": "皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "7c5ac61b-5024-4fa5-8402-d4ebed7ebc9a",
+        "itemName": "智紋皮口飾",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "73884cf9-67b5-47b4-af3c-b6d79a39ec57",
+        "itemName": "皮甲",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "night-leopard-card",
+        "itemName": "暗夜獵豹卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "71f8cf22-9f9a-4f73-9eed-e4f23becd8a5",
+        "itemName": "迅紋皮面罩",
+        "chance": 3.5
+      },
+      {
+        "itemId": "8e662d64-161b-4489-9b33-569b1d24cdd4",
+        "itemName": "吸血左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "2b1524d1-afef-4153-9752-28f743bffb8a",
+        "itemName": "戰意左之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "f6145411-1a2e-4919-9ee4-fe27b3a31c07",
+    "name": "森林巫師",
+    "drops": [
+      {
+        "itemId": "0dbe1a4f-28a2-440e-b59b-fd02dbf7050f",
+        "itemName": "智紋鐵戒指(右)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "60af8c07-331e-4b4e-80b4-ff66eaf84210",
+        "itemName": "智紋鐵戒指(左)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "7e983a31-a7ea-452b-882d-4d0fcd92253a",
+        "itemName": "鐵製雙手法杖",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "a0932b81-a2f3-454a-81e2-e0b21807c5fd",
+        "itemName": "智紋皮袍",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "d803fe81-5812-414a-a0c9-f7e011e75f5d",
+        "itemName": "鐵製單手法杖",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "73884cf9-67b5-47b4-af3c-b6d79a39ec57",
+        "itemName": "皮甲",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "2f1400c6-17a7-4911-9fc2-6b3ca820dccf",
+        "itemName": "鬥紋皮面甲",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "23e96235-d1b0-42ab-92c9-5d0044acabcd",
+        "itemName": "迅紋皮帽",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "forest-wizard-card",
+        "itemName": "森林巫師卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "5920714a-87a7-4dba-9001-3baa45ea6035",
+        "itemName": "吸血右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "99d8195b-2446-4867-9598-66ea47544b68",
+        "itemName": "戰意右之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "5247b1b0-6bc0-4db3-8ffd-aacb755c64fb",
+    "name": "森林盜賊",
+    "drops": [
+      {
+        "itemId": "a5bf4a8c-2f89-4b35-9f23-8cb519bb0292",
+        "itemName": "鐵製匕首",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "158004d3-d23a-4d65-b3e3-275cbcda8142",
+        "itemName": "迅紋鐵戒指(左)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "fcdbb6c1-bb21-45e1-9637-3aa58a76c79e",
+        "itemName": "鐵製單手斧",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "1a628982-694e-48ce-bcd6-fc0c16f39a17",
+        "itemName": "迅紋鐵戒指(右)",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "efd48300-f4b6-40d6-a1c5-8c2014ae4b55",
+        "itemName": "鐵製弓",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "c8252c6f-0d78-447b-b082-ca0960dfb45d",
+        "itemName": "鬥紋皮靴",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "04c5a488-68e2-491a-ba1a-3d7e3518a9c5",
+        "itemName": "智紋皮披風",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "12cddc4e-58ef-433e-a50d-e8ca04b1041e",
+        "itemName": "皮帽",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "24d71d06-5df8-446d-b2e5-f4cb49818e3f",
+        "itemName": "鐵製雙手劍",
+        "chance": 4.6737
+      },
+      {
+        "itemId": "forest-rogue-card",
+        "itemName": "森林盜賊卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "bb4a624b-c5df-4ace-ae50-d5ec16248e6d",
+        "itemName": "立直棒",
+        "chance": 4
+      },
+      {
+        "itemId": "26bab9f5-52fe-47b4-8eda-a94004da002a",
+        "itemName": "鏡映左之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "21fb614f-7f8b-4aad-b248-9418d8cbd8c0",
+    "name": "森林之獸",
+    "drops": [
+      {
+        "itemId": "34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9",
+        "itemName": "皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "c8252c6f-0d78-447b-b082-ca0960dfb45d",
+        "itemName": "鬥紋皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "1a628982-694e-48ce-bcd6-fc0c16f39a17",
+        "itemName": "迅紋鐵戒指(右)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "158004d3-d23a-4d65-b3e3-275cbcda8142",
+        "itemName": "迅紋鐵戒指(左)",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "8ba1dc5c-41df-4a9b-abd4-fa2c949b2d90",
+        "itemName": "智紋皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "bf1dc51e-84f1-4314-b95e-3446aa3d0df0",
+        "itemName": "迅紋皮靴",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "1ed26548-f724-45b2-8010-3355a89626f3",
+        "itemName": "智紋皮鏡片",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "bb26be45-2910-4034-8db6-e02d9d473513",
+        "itemName": "皮披風",
+        "chance": 5.2424
+      },
+      {
+        "itemId": "forest-beast-card",
+        "itemName": "森林之獸卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "159e76d1-467a-4235-b364-5b7d85d9d79d",
+        "itemName": "鬥紋皮披肩",
+        "chance": 3.5
+      },
+      {
+        "itemId": "4cbebe83-7149-4ee5-af30-f6e7ca2b0d88",
+        "itemName": "鏡映右之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "75fc9a55-3f1b-406d-92e7-3ec4fd787e44",
+    "name": "小史(小)",
+    "drops": [
+      {
+        "itemId": "3f8e801b-7d07-461f-bd4b-c1860f136c4a",
+        "itemName": "迅紋布護目",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "7c4446d5-7988-4d71-816e-a479545ba23a",
+        "itemName": "鬥紋布甲",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "af191f1f-f4ed-4728-991f-60757f1eb041",
+        "itemName": "鬥紋布披肩",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "b8e74b56-2662-4e9d-9bfa-8a74009b7e86",
+        "itemName": "鬥紋布護目",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "292b581b-f464-4a12-b9a4-8a199c3a580e",
+        "itemName": "鬥紋布面甲",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "7ae92560-2004-4e54-a162-2bf5bb530b62",
+        "itemName": "智紋銅戒指(右)",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "a56bd609-cf0b-4924-b724-891f221fc0b9",
+        "itemName": "木製單手劍",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "ee883bee-93c6-450d-b196-754d3e345d2a",
+        "itemName": "布衣",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "xiaoshi-small-card",
+        "itemName": "小史(小)卡",
+        "chance": 0.1,
+        "source": "monster_card"
+      },
+      {
+        "itemId": "a318a9e7-6b68-47da-b3b6-24488eaa05b7",
+        "itemName": "木製短匕(副手)",
+        "chance": 8.2
+      },
+      {
+        "itemId": "7bdf0277-dcd5-4173-b3ff-d93ccaa9e293",
+        "itemName": "布帽",
+        "chance": 4
+      },
+      {
+        "itemId": "d8c97439-b3f6-488b-8e69-97b4dacf3e2a",
+        "itemName": "布鞋",
+        "chance": 4
+      },
+      {
+        "itemId": "1fb1f325-7d73-43c7-a55f-3f51752870b0",
+        "itemName": "神秘史萊姆蛋",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "ac87e4b7-2c1c-4d6c-8fa8-c873fc26039f",
+    "name": "野兔",
+    "drops": [
+      {
+        "itemId": "912afa75-bfcc-4788-a42c-cf099dc209c3",
+        "itemName": "智紋布靴",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "f6ba24ae-c749-4daa-a6aa-bfed255f1807",
+        "itemName": "迅紋布靴",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+        "itemName": "迅紋銅戒指(左)",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "7cf9a5d3-9287-4da6-b944-a5d616b5bdd7",
+        "itemName": "鬥紋布靴",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+        "itemName": "木製弓",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "292b581b-f464-4a12-b9a4-8a199c3a580e",
+        "itemName": "鬥紋布面甲",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "a2c70ed8-90c5-44ad-89fa-314ebba2af65",
+        "itemName": "智紋布袍",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "d8c97439-b3f6-488b-8e69-97b4dacf3e2a",
+        "itemName": "布鞋",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "monster-card-ac87e4b7-2c1c-4d6c-8fa8-c873fc26039f",
+        "itemName": "野兔卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "a318a9e7-6b68-47da-b3b6-24488eaa05b7",
+        "itemName": "木製短匕(副手)",
+        "chance": 8.2
+      },
+      {
+        "itemId": "ee883bee-93c6-450d-b196-754d3e345d2a",
+        "itemName": "布衣",
+        "chance": 4
+      }
+    ]
+  },
+  {
+    "id": "5606a251-bea4-4d4c-bd37-d985a7d7a6d3",
+    "name": "蘑菇怪",
+    "drops": [
+      {
+        "itemId": "e986b09f-aad4-4a1a-8db8-1219ad238fa3",
+        "itemName": "木製單手法杖",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "0e2ede69-4bd1-4ce1-9ec8-fe4df6463dfa",
+        "itemName": "智紋銅戒指(左)",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "7ae92560-2004-4e54-a162-2bf5bb530b62",
+        "itemName": "智紋銅戒指(右)",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "a2c70ed8-90c5-44ad-89fa-314ebba2af65",
+        "itemName": "智紋布袍",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "e3794447-e19d-41a2-9b0a-c5050dcdd9ea",
+        "itemName": "木製雙手法杖",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "51f1e217-7668-4810-87af-1c523dbd8d14",
+        "itemName": "新手護目鏡",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "912125cb-6738-4694-9657-81e7f6a5c2da",
+        "itemName": "布披風",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "feee43ab-4b22-44d6-b86b-0655da4acf57",
+        "itemName": "鬥紋銅戒指(右)",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "monster-card-5606a251-bea4-4d4c-bd37-d985a7d7a6d3",
+        "itemName": "蘑菇怪卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "cd5175ba-66bd-4719-a316-b1de5540a677",
+        "itemName": "智紋布鏡片",
+        "chance": 4
+      },
+      {
+        "itemId": "ee223bf7-986d-44f3-be07-9cf7ea8b9cfa",
+        "itemName": "智紋布口飾",
+        "chance": 4
+      }
+    ]
+  },
+  {
+    "id": "92974d12-fd4d-4482-8ea7-171712ae894c",
+    "name": "小史(中)",
+    "drops": [
+      {
+        "itemId": "3f8e801b-7d07-461f-bd4b-c1860f136c4a",
+        "itemName": "迅紋布護目",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "b78aed5f-8887-4a89-aa00-5d441ca6d63f",
+        "itemName": "智紋布帽",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "7c4446d5-7988-4d71-816e-a479545ba23a",
+        "itemName": "鬥紋布甲",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "b8e74b56-2662-4e9d-9bfa-8a74009b7e86",
+        "itemName": "鬥紋布護目",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "a91fab15-a786-490a-ae7f-6ecd536febb1",
+        "itemName": "布口罩",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "6da9f4e6-aac1-4088-9000-7111fd4926b0",
+        "itemName": "木製單手槌",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+        "itemName": "迅紋銅戒指(左)",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "ee223bf7-986d-44f3-be07-9cf7ea8b9cfa",
+        "itemName": "智紋布口飾",
+        "chance": 8.2996
+      },
+      {
+        "itemId": "monster-card-92974d12-fd4d-4482-8ea7-171712ae894c",
+        "itemName": "小史(中)卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "4a7c2dd6-1d33-4613-a5aa-913924d12eed",
+        "itemName": "木盾",
+        "chance": 4
+      },
+      {
+        "itemId": "e986b09f-aad4-4a1a-8db8-1219ad238fa3",
+        "itemName": "木製單手法杖",
+        "chance": 4
+      },
+      {
+        "itemId": "1fb1f325-7d73-43c7-a55f-3f51752870b0",
+        "itemName": "神秘史萊姆蛋",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "19fecf53-1ee1-48bc-a097-42bccbe12227",
+    "name": "大野兔(B)",
+    "drops": [
+      {
+        "itemId": "bf1dc51e-84f1-4314-b95e-3446aa3d0df0",
+        "itemName": "迅紋皮靴",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "8ba1dc5c-41df-4a9b-abd4-fa2c949b2d90",
+        "itemName": "智紋皮靴",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "a5bf4a8c-2f89-4b35-9f23-8cb519bb0292",
+        "itemName": "鐵製匕首",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "efd48300-f4b6-40d6-a1c5-8c2014ae4b55",
+        "itemName": "鐵製弓",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "158004d3-d23a-4d65-b3e3-275cbcda8142",
+        "itemName": "迅紋鐵戒指(左)",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "34e4afa6-d9a9-44f1-8af6-8b3c1bd929a9",
+        "itemName": "皮靴",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "c8252c6f-0d78-447b-b082-ca0960dfb45d",
+        "itemName": "鬥紋皮靴",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "1a628982-694e-48ce-bcd6-fc0c16f39a17",
+        "itemName": "迅紋鐵戒指(右)",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "bb26be45-2910-4034-8db6-e02d9d473513",
+        "itemName": "皮披風",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "a0932b81-a2f3-454a-81e2-e0b21807c5fd",
+        "itemName": "智紋皮袍",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "1e584c2e-d9f1-40c9-8490-ee615fedbf9f",
+        "itemName": "迅紋皮披肩",
+        "chance": 6.1069
+      },
+      {
+        "itemId": "monster-card-19fecf53-1ee1-48bc-a097-42bccbe12227",
+        "itemName": "大野兔(B)卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "2fcf7576-4e74-4280-b1e6-0d7da7b58dda",
+        "itemName": "木製雙手槌",
+        "chance": 3.5
+      }
+    ]
+  },
+  {
+    "id": "5152b379-9bdd-404a-acb4-b80935664aba",
+    "name": "城牆衛兵",
+    "drops": [
+      {
+        "itemId": "e3c0f284-42ef-4a94-aef5-45b4bb5be8ce",
+        "itemName": "迅紋鐵甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "4c4e5a9e-97e7-4b74-9be2-b32b8f2320f8",
+        "itemName": "鬥紋鐵盔",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "16f1c744-f800-499a-b6ed-4156fa58877d",
+        "itemName": "迅紋鐵披肩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "080fa80a-5487-457e-b4c0-a4b6e93b0380",
+        "itemName": "鬥紋鐵面甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "cedc5e5d-90ed-464d-be86-c5f1de6f485a",
+        "itemName": "智紋鐵披風",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "b1a9fa70-95b8-46e9-ae14-ec72ecdd47ff",
+        "itemName": "智紋鐵帽",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "ba9ce57b-1b34-4f30-bd55-60ebfb639a32",
+        "itemName": "鬥紋鐵護目",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "82ca0d8e-740d-48f9-8801-7f543c152a6b",
+        "itemName": "迅紋鐵面罩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-5152b379-9bdd-404a-acb4-b80935664aba",
+        "itemName": "城牆衛兵卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "a8590411-05c3-4662-93b1-50205ac2aea7",
+        "itemName": "鬥紋銀戒指(右)",
+        "chance": 4.3
+      },
+      {
+        "itemId": "9c809436-d8d5-4b21-bf15-e26e881cac9b",
+        "itemName": "鐵製單手劍",
+        "chance": 4
+      },
+      {
+        "itemId": "8395ff54-a7f2-4a77-a4e8-fd08155aee98",
+        "itemName": "吸血右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "mithril-arm-armor",
+        "itemName": "秘銀鎧",
+        "chance": 1.8
+      },
+      {
+        "itemId": "mithril-arm-accessory_l",
+        "itemName": "秘銀戒指(左)",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "f24bfc8c-4eba-4c10-85a0-73e77e4f6448",
+    "name": "古城弓手",
+    "drops": [
+      {
+        "itemId": "184d4cc9-81cf-494d-809e-7704a1b73e59",
+        "itemName": "迅紋鐵靴",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "ad35c2cd-9436-4c3a-b154-3655804d17c6",
+        "itemName": "迅紋銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "9b112914-416f-42fd-91d9-861900e4287f",
+        "itemName": "迅紋鐵護目",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "d9e16875-14cb-45b1-91eb-da46b6972698",
+        "itemName": "鐵靴",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "8693f1d9-aa26-4c08-9d1f-9908a4b81281",
+        "itemName": "鬥紋鐵靴",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "511f7ea7-6647-45e8-b5c4-050b6bcc9866",
+        "itemName": "智紋鐵靴",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "864131cc-f27a-454f-af5c-eb53ef2eb143",
+        "itemName": "智紋鐵鏡片",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "9807c319-abbd-43ad-808c-dcfb9313d7ba",
+        "itemName": "鋼製單手劍",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-f24bfc8c-4eba-4c10-85a0-73e77e4f6448",
+        "itemName": "古城弓手卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "a8590411-05c3-4662-93b1-50205ac2aea7",
+        "itemName": "鬥紋銀戒指(右)",
+        "chance": 4.3
+      },
+      {
+        "itemId": "cfcbde64-96cb-4f8d-9aed-7011b9fe7e20",
+        "itemName": "立直棒-跳滿手",
+        "chance": 4.3
+      },
+      {
+        "itemId": "58ee366d-9c5f-486e-af76-0081fabc9cf3",
+        "itemName": "疾風左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "32991abe-42ef-433f-b90e-f1ed6c986467",
+        "itemName": "重擊左之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "814f097c-283e-4c35-98b5-7aaa8b08dd7c",
+    "name": "石像鬼",
+    "drops": [
+      {
+        "itemId": "e3c0f284-42ef-4a94-aef5-45b4bb5be8ce",
+        "itemName": "迅紋鐵甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "809fa6d3-6828-4e02-a6d3-6782929ac19d",
+        "itemName": "鬥紋鐵披肩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "f8db4676-21b0-4a49-bc87-e9914ab0ca47",
+        "itemName": "鐵護目鏡",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e6e29ed7-ff4e-43b8-a6cd-5e168d6eea81",
+        "itemName": "鐵口罩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "4c4e5a9e-97e7-4b74-9be2-b32b8f2320f8",
+        "itemName": "鬥紋鐵盔",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "16f1c744-f800-499a-b6ed-4156fa58877d",
+        "itemName": "迅紋鐵披肩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "cedc5e5d-90ed-464d-be86-c5f1de6f485a",
+        "itemName": "智紋鐵披風",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "3846effb-38c8-44b0-9f26-c9296b8adad6",
+        "itemName": "鬥紋鐵甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-814f097c-283e-4c35-98b5-7aaa8b08dd7c",
+        "itemName": "石像鬼卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "56312b04-b09f-4386-a18a-0c6bc9f3c37b",
+        "itemName": "疾風右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "9033ec44-b8d1-4312-ba96-34fd7171a7b7",
+        "itemName": "重擊右之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "2d0d3516-e7ef-4916-b966-b38145a18fd4",
+    "name": "古城法師",
+    "drops": [
+      {
+        "itemId": "45c816d2-f3b3-49cd-83ab-2860cf69c785",
+        "itemName": "智紋銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "3af17736-185f-4732-99e1-0513f4b48a56",
+        "itemName": "鋼製單手法杖",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "dc12e5e5-ced0-4e7b-923e-9897ddc9b7ce",
+        "itemName": "鋼製雙手法杖",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "2d6c95fa-f152-4848-aa4d-0ed0e14b12ed",
+        "itemName": "智紋銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "cabab778-85cc-4889-9a5f-c72c5fdaf0a1",
+        "itemName": "智紋鐵袍",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e7abb3f2-935f-4d0a-b467-ee1992496e35",
+        "itemName": "迅紋銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "7739f5c3-66b1-4be5-a726-81a41c93fa75",
+        "itemName": "迅紋鐵帽",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "0d162338-7c5b-4004-95ae-530e2ac0eec3",
+        "itemName": "鋼製雙手劍",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-2d0d3516-e7ef-4916-b966-b38145a18fd4",
+        "itemName": "古城法師卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "6cff4f87-354c-4fd7-9b2c-146ba6407f19",
+        "itemName": "智紋鐵口飾",
+        "chance": 4.3
+      },
+      {
+        "itemId": "864131cc-f27a-454f-af5c-eb53ef2eb143",
+        "itemName": "智紋鐵鏡片",
+        "chance": 3
+      },
+      {
+        "itemId": "7b612324-fa9c-402a-b9eb-034081fa2360",
+        "itemName": "獵手左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "05c2a16c-e504-44f3-839f-e72969a81a82",
+        "itemName": "守護左之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "388a118f-b839-4287-ba02-0c7a12cd0c06",
+    "name": "廢墟蠍兵",
+    "drops": [
+      {
+        "itemId": "82ca0d8e-740d-48f9-8801-7f543c152a6b",
+        "itemName": "迅紋鐵面罩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e7abb3f2-935f-4d0a-b467-ee1992496e35",
+        "itemName": "迅紋銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e0c56754-719a-4150-8942-e885c9af29d0",
+        "itemName": "鋼製弓",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "46df8bac-c8c1-4e31-8689-7a602bafd7b5",
+        "itemName": "鋼製匕首",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "ad35c2cd-9436-4c3a-b154-3655804d17c6",
+        "itemName": "迅紋銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "7739f5c3-66b1-4be5-a726-81a41c93fa75",
+        "itemName": "迅紋鐵帽",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e6e29ed7-ff4e-43b8-a6cd-5e168d6eea81",
+        "itemName": "鐵口罩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "809fa6d3-6828-4e02-a6d3-6782929ac19d",
+        "itemName": "鬥紋鐵披肩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-388a118f-b839-4287-ba02-0c7a12cd0c06",
+        "itemName": "廢墟蠍兵卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "4fdd8e82-aa72-4dea-91e5-ad7ead26169a",
+        "itemName": "獵手右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "4711e143-8c53-42cf-9dc3-5edf5bc300ee",
+        "itemName": "守護右之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "53fdc9ee-b719-4f8c-a93e-3ab5a0a3ce09",
+    "name": "冰封騎士",
+    "drops": [
+      {
+        "itemId": "310cffe4-8337-478b-9cce-2571f2159747",
+        "itemName": "鐵甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "16f1c744-f800-499a-b6ed-4156fa58877d",
+        "itemName": "迅紋鐵披肩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "080fa80a-5487-457e-b4c0-a4b6e93b0380",
+        "itemName": "鬥紋鐵面甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "ba9ce57b-1b34-4f30-bd55-60ebfb639a32",
+        "itemName": "鬥紋鐵護目",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "4c4e5a9e-97e7-4b74-9be2-b32b8f2320f8",
+        "itemName": "鬥紋鐵盔",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "3824e2ac-5781-422e-a1d2-881e44ca7a28",
+        "itemName": "鋼盾",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "7739f5c3-66b1-4be5-a726-81a41c93fa75",
+        "itemName": "迅紋鐵帽",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "9b112914-416f-42fd-91d9-861900e4287f",
+        "itemName": "迅紋鐵護目",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-53fdc9ee-b719-4f8c-a93e-3ab5a0a3ce09",
+        "itemName": "冰封騎士卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "a8590411-05c3-4662-93b1-50205ac2aea7",
+        "itemName": "鬥紋銀戒指(右)",
+        "chance": 4.3
+      },
+      {
+        "itemId": "fd9a1b20-d4d9-43c1-b5a7-fdf61e6d07bc",
+        "itemName": "鬥紋銀戒指(左)",
+        "chance": 4.3
+      },
+      {
+        "itemId": "57a0afe8-33e1-432d-9eaa-07cfd858d145",
+        "itemName": "鏡映左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "mithril-arm-head_top",
+        "itemName": "秘銀盔",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "9a0ac6a5-4f2e-4186-a66a-73a6de9cb5e2",
+    "name": "詛咒祭司",
+    "drops": [
+      {
+        "itemId": "cabab778-85cc-4889-9a5f-c72c5fdaf0a1",
+        "itemName": "智紋鐵袍",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "dc12e5e5-ced0-4e7b-923e-9897ddc9b7ce",
+        "itemName": "鋼製雙手法杖",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "45c816d2-f3b3-49cd-83ab-2860cf69c785",
+        "itemName": "智紋銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "2d6c95fa-f152-4848-aa4d-0ed0e14b12ed",
+        "itemName": "智紋銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "3af17736-185f-4732-99e1-0513f4b48a56",
+        "itemName": "鋼製單手法杖",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e3c0f284-42ef-4a94-aef5-45b4bb5be8ce",
+        "itemName": "迅紋鐵甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "4c4e5a9e-97e7-4b74-9be2-b32b8f2320f8",
+        "itemName": "鬥紋鐵盔",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e7d6970b-e44c-4262-ac14-3acdaa28f48f",
+        "itemName": "銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-9a0ac6a5-4f2e-4186-a66a-73a6de9cb5e2",
+        "itemName": "詛咒祭司卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "a86dda07-004b-4f45-b7bd-126b1132dffb",
+        "itemName": "狂血左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "27f2deaf-d1cc-45b6-bec7-66659ab10de6",
+        "itemName": "戰意左之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "8eea80b7-c836-413b-8912-7c3ce6a899a7",
+    "name": "鐵甲衛將",
+    "drops": [
+      {
+        "itemId": "080fa80a-5487-457e-b4c0-a4b6e93b0380",
+        "itemName": "鬥紋鐵面甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "809fa6d3-6828-4e02-a6d3-6782929ac19d",
+        "itemName": "鬥紋鐵披肩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "16f1c744-f800-499a-b6ed-4156fa58877d",
+        "itemName": "迅紋鐵披肩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "4c4e5a9e-97e7-4b74-9be2-b32b8f2320f8",
+        "itemName": "鬥紋鐵盔",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e3c0f284-42ef-4a94-aef5-45b4bb5be8ce",
+        "itemName": "迅紋鐵甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "f8db4676-21b0-4a49-bc87-e9914ab0ca47",
+        "itemName": "鐵護目鏡",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "7739f5c3-66b1-4be5-a726-81a41c93fa75",
+        "itemName": "迅紋鐵帽",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "dec0d571-15e7-405d-a2e6-03f06548f828",
+        "itemName": "鋼製單手槌",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-8eea80b7-c836-413b-8912-7c3ce6a899a7",
+        "itemName": "鐵甲衛將卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "c60d4d99-3eed-4ac9-811e-680b6d637648",
+        "itemName": "鋼製短匕(副手)",
+        "chance": 1.2
+      },
+      {
+        "itemId": "ab533d4a-3d07-4d41-8a40-511a8e6a455d",
+        "itemName": "鐵製雙手斧",
+        "chance": 3.5
+      },
+      {
+        "itemId": "fb9791b1-7165-47ab-9c34-dc7e919063b5",
+        "itemName": "鏡映右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "mithril-arm-shoes",
+        "itemName": "秘銀戰靴",
+        "chance": 1.8
+      },
+      {
+        "itemId": "585ad0b3-2c75-462a-ade6-882e5929831b",
+        "itemName": "秘銀盾甲",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "4a46dd14-b74c-4a5d-9cde-b7d0f270ce0f",
+    "name": "古城刺客",
+    "drops": [
+      {
+        "itemId": "46df8bac-c8c1-4e31-8689-7a602bafd7b5",
+        "itemName": "鋼製匕首",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e0c56754-719a-4150-8942-e885c9af29d0",
+        "itemName": "鋼製弓",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "ad35c2cd-9436-4c3a-b154-3655804d17c6",
+        "itemName": "迅紋銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "d374cdb4-702d-4a3f-b5ba-34a3d3e5c8c3",
+        "itemName": "鋼製單手斧",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e7abb3f2-935f-4d0a-b467-ee1992496e35",
+        "itemName": "迅紋銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "511f7ea7-6647-45e8-b5c4-050b6bcc9866",
+        "itemName": "智紋鐵靴",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "94ca2b06-b149-4527-ae09-0106904a7dff",
+        "itemName": "鋼製雙手斧",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "2d6c95fa-f152-4848-aa4d-0ed0e14b12ed",
+        "itemName": "智紋銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-4a46dd14-b74c-4a5d-9cde-b7d0f270ce0f",
+        "itemName": "古城刺客卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "c60d4d99-3eed-4ac9-811e-680b6d637648",
+        "itemName": "鋼製短匕(副手)",
+        "chance": 1.2
+      },
+      {
+        "itemId": "fcdbb6c1-bb21-45e1-9637-3aa58a76c79e",
+        "itemName": "鐵製單手斧",
+        "chance": 3.5
+      },
+      {
+        "itemId": "3647e55c-28be-4541-b5e3-83cbc0205830",
+        "itemName": "狂血右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "f83e3831-18be-4c92-93ad-4c02db483124",
+        "itemName": "戰意右之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "139df36b-f838-4875-b3f0-2d9003fc6f8f",
+    "name": "毒霧蜘蛛",
+    "drops": [
+      {
+        "itemId": "ad35c2cd-9436-4c3a-b154-3655804d17c6",
+        "itemName": "迅紋銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "46df8bac-c8c1-4e31-8689-7a602bafd7b5",
+        "itemName": "鋼製匕首",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e0c56754-719a-4150-8942-e885c9af29d0",
+        "itemName": "鋼製弓",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "82ca0d8e-740d-48f9-8801-7f543c152a6b",
+        "itemName": "迅紋鐵面罩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e7abb3f2-935f-4d0a-b467-ee1992496e35",
+        "itemName": "迅紋銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "fd9a1b20-d4d9-43c1-b5a7-fdf61e6d07bc",
+        "itemName": "鬥紋銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e7d6970b-e44c-4262-ac14-3acdaa28f48f",
+        "itemName": "銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "3846effb-38c8-44b0-9f26-c9296b8adad6",
+        "itemName": "鬥紋鐵甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-139df36b-f838-4875-b3f0-2d9003fc6f8f",
+        "itemName": "毒霧蜘蛛卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "eac8dea3-396b-4e9c-8ce3-8bfbd0989583",
+        "itemName": "吸血左之戒",
+        "chance": 1.2
+      }
+    ]
+  },
+  {
+    "id": "32a783be-798c-4640-bd2d-00af3e330313",
+    "name": "古城狂戰士",
+    "drops": [
+      {
+        "itemId": "080fa80a-5487-457e-b4c0-a4b6e93b0380",
+        "itemName": "鬥紋鐵面甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "0d162338-7c5b-4004-95ae-530e2ac0eec3",
+        "itemName": "鋼製雙手劍",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "8693f1d9-aa26-4c08-9d1f-9908a4b81281",
+        "itemName": "鬥紋鐵靴",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "809fa6d3-6828-4e02-a6d3-6782929ac19d",
+        "itemName": "鬥紋鐵披肩",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "4c4e5a9e-97e7-4b74-9be2-b32b8f2320f8",
+        "itemName": "鬥紋鐵盔",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "3846effb-38c8-44b0-9f26-c9296b8adad6",
+        "itemName": "鬥紋鐵甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "310cffe4-8337-478b-9cce-2571f2159747",
+        "itemName": "鐵甲",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "ad35c2cd-9436-4c3a-b154-3655804d17c6",
+        "itemName": "迅紋銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-32a783be-798c-4640-bd2d-00af3e330313",
+        "itemName": "古城狂戰士卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "24d71d06-5df8-446d-b2e5-f4cb49818e3f",
+        "itemName": "鐵製雙手劍",
+        "chance": 3.5
+      },
+      {
+        "itemId": "f2ce3ad7-5861-4660-8adf-448d983325a8",
+        "itemName": "救護左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "mithril-arm-garment",
+        "itemName": "秘銀披風",
+        "chance": 1.8
+      },
+      {
+        "itemId": "mithril-arm-head_mid",
+        "itemName": "秘銀護目",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "35ec8cc7-9f0c-4d61-8a40-343d8857be2f",
+    "name": "黑焰巫師",
+    "drops": [
+      {
+        "itemId": "cabab778-85cc-4889-9a5f-c72c5fdaf0a1",
+        "itemName": "智紋鐵袍",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "45c816d2-f3b3-49cd-83ab-2860cf69c785",
+        "itemName": "智紋銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "2d6c95fa-f152-4848-aa4d-0ed0e14b12ed",
+        "itemName": "智紋銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "3af17736-185f-4732-99e1-0513f4b48a56",
+        "itemName": "鋼製單手法杖",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "dc12e5e5-ced0-4e7b-923e-9897ddc9b7ce",
+        "itemName": "鋼製雙手法杖",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "d6be2017-2f33-433c-8ac4-a32eab7960cc",
+        "itemName": "銀戒指(左)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "9807c319-abbd-43ad-808c-dcfb9313d7ba",
+        "itemName": "鋼製單手劍",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "e7d6970b-e44c-4262-ac14-3acdaa28f48f",
+        "itemName": "銀戒指(右)",
+        "chance": 4.3605
+      },
+      {
+        "itemId": "monster-card-35ec8cc7-9f0c-4d61-8a40-343d8857be2f",
+        "itemName": "黑焰巫師卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "6cff4f87-354c-4fd7-9b2c-146ba6407f19",
+        "itemName": "智紋鐵口飾",
+        "chance": 3
+      },
+      {
+        "itemId": "3f6609c7-39e6-4801-8dcb-949f1d09ce52",
+        "itemName": "救護右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "mithril-arm-head_low",
+        "itemName": "秘銀護面",
+        "chance": 1.8
+      },
+      {
+        "itemId": "mithril-arm-accessory_r",
+        "itemName": "秘銀戒指(右)",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "5c20d4ba-5f38-4d6b-a724-369eb632ff1d",
+    "name": "城堡魔像(B)",
+    "drops": [
+      {
+        "itemId": "16f1c744-f800-499a-b6ed-4156fa58877d",
+        "itemName": "迅紋鐵披肩",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "cedc5e5d-90ed-464d-be86-c5f1de6f485a",
+        "itemName": "智紋鐵披風",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "f0a86964-551a-4d93-90b5-6c4ca5a96587",
+        "itemName": "鐵帽",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "f8db4676-21b0-4a49-bc87-e9914ab0ca47",
+        "itemName": "鐵護目鏡",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "3824e2ac-5781-422e-a1d2-881e44ca7a28",
+        "itemName": "鋼盾",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "8a6cc975-67fb-4cd9-9eb4-9511f7a12f8a",
+        "itemName": "鐵披風",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "3846effb-38c8-44b0-9f26-c9296b8adad6",
+        "itemName": "鬥紋鐵甲",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "184d4cc9-81cf-494d-809e-7704a1b73e59",
+        "itemName": "迅紋鐵靴",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "9807c319-abbd-43ad-808c-dcfb9313d7ba",
+        "itemName": "鋼製單手劍",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "0d162338-7c5b-4004-95ae-530e2ac0eec3",
+        "itemName": "鋼製雙手劍",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "monster-card-5c20d4ba-5f38-4d6b-a724-369eb632ff1d",
+        "itemName": "城堡魔像(B)卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "1f04c0db-e5cb-4b84-9a43-e7150799eecb",
+        "itemName": "鐵製雙手槌",
+        "chance": 3
+      },
+      {
+        "itemId": "dec0d571-15e7-405d-a2e6-03f06548f828",
+        "itemName": "鋼製單手槌",
+        "chance": 3
+      },
+      {
+        "itemId": "58ee366d-9c5f-486e-af76-0081fabc9cf3",
+        "itemName": "疾風左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "56312b04-b09f-4386-a18a-0c6bc9f3c37b",
+        "itemName": "疾風右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "7b612324-fa9c-402a-b9eb-034081fa2360",
+        "itemName": "獵手左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "4fdd8e82-aa72-4dea-91e5-ad7ead26169a",
+        "itemName": "獵手右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "a86dda07-004b-4f45-b7bd-126b1132dffb",
+        "itemName": "狂血左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "3647e55c-28be-4541-b5e3-83cbc0205830",
+        "itemName": "狂血右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "eac8dea3-396b-4e9c-8ce3-8bfbd0989583",
+        "itemName": "吸血左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "8395ff54-a7f2-4a77-a4e8-fd08155aee98",
+        "itemName": "吸血右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "57a0afe8-33e1-432d-9eaa-07cfd858d145",
+        "itemName": "鏡映左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "fb9791b1-7165-47ab-9c34-dc7e919063b5",
+        "itemName": "鏡映右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "f2ce3ad7-5861-4660-8adf-448d983325a8",
+        "itemName": "救護左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "3f6609c7-39e6-4801-8dcb-949f1d09ce52",
+        "itemName": "救護右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "32991abe-42ef-433f-b90e-f1ed6c986467",
+        "itemName": "重擊左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "9033ec44-b8d1-4312-ba96-34fd7171a7b7",
+        "itemName": "重擊右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "05c2a16c-e504-44f3-839f-e72969a81a82",
+        "itemName": "守護左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "4711e143-8c53-42cf-9dc3-5edf5bc300ee",
+        "itemName": "守護右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "27f2deaf-d1cc-45b6-bec7-66659ab10de6",
+        "itemName": "戰意左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "f83e3831-18be-4c92-93ad-4c02db483124",
+        "itemName": "戰意右之戒",
+        "chance": 3.5
+      }
+    ]
+  },
+  {
+    "id": "69459022-2457-48e3-9804-d6f9be346a25",
+    "name": "古城將軍(B)",
+    "drops": [
+      {
+        "itemId": "3846effb-38c8-44b0-9f26-c9296b8adad6",
+        "itemName": "鬥紋鐵甲",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "0d162338-7c5b-4004-95ae-530e2ac0eec3",
+        "itemName": "鋼製雙手劍",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "3b0d9f3f-dc9d-43d2-a3ec-c9a284ba1eb6",
+        "itemName": "鋼製雙手槌",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "809fa6d3-6828-4e02-a6d3-6782929ac19d",
+        "itemName": "鬥紋鐵披肩",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "ba9ce57b-1b34-4f30-bd55-60ebfb639a32",
+        "itemName": "鬥紋鐵護目",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "4c4e5a9e-97e7-4b74-9be2-b32b8f2320f8",
+        "itemName": "鬥紋鐵盔",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "8693f1d9-aa26-4c08-9d1f-9908a4b81281",
+        "itemName": "鬥紋鐵靴",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "080fa80a-5487-457e-b4c0-a4b6e93b0380",
+        "itemName": "鬥紋鐵面甲",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "bd515bca-77d7-4c6b-a5bc-54fd66ab61d5",
+        "itemName": "鬥紋鋼鐵披肩",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "c20f00f1-e114-4975-a0f9-88347d6e5e81",
+        "itemName": "鬥紋鋼鐵靴",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "8c1782df-9823-405c-ade8-423c854a467e",
+        "itemName": "秘銀雙手斧",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "0635861a-8bb0-4516-b16d-0351539ba5e7",
+        "itemName": "秘銀雙手槌",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "121cbe5e-5adf-4600-93bb-cb5cf68bd5e7",
+        "itemName": "鬥紋鋼鐵甲",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "22e3c6e5-fdee-45b7-a9ac-a362d8b2b3ae",
+        "itemName": "鬥紋鋼鐵護目",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "9d3a61d5-4e98-4ab1-ac47-42f049b6d54a",
+        "itemName": "鬥紋鋼鐵盔",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "99d23a47-89a6-4291-9b03-8f15e7356eec",
+        "itemName": "秘銀單手劍",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "46514870-8bb0-4cf1-a3a4-b13fe158eb29",
+        "itemName": "鬥紋金戒指(左)",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "monster-card-69459022-2457-48e3-9804-d6f9be346a25",
+        "itemName": "古城將軍(B)卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "afa8d955-ad56-4d49-9ee8-0b845f489997",
+        "itemName": "秘銀短匕(副手)",
+        "chance": 1.6
+      },
+      {
+        "itemId": "8a5db376-20fa-495f-a075-109aea276490",
+        "itemName": "疾風左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "ea424726-9958-44dd-8a71-8fa8db571200",
+        "itemName": "狂血左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "f1a34a79-223f-440e-b6ec-ca17aa49b224",
+        "itemName": "鏡映左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "e24a419d-dec7-4e9b-8438-8e9519f53c0e",
+        "itemName": "重擊左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "4d45bc35-4ee0-497b-b030-21c83a4a3a3c",
+        "itemName": "戰意左之戒",
+        "chance": 3.5
+      }
+    ]
+  },
+  {
+    "id": "0496ea5d-786e-4b07-ba65-30949c1afe31",
+    "name": "廢都魔王(B)",
+    "drops": [
+      {
+        "itemId": "3b0d9f3f-dc9d-43d2-a3ec-c9a284ba1eb6",
+        "itemName": "鋼製雙手槌",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "8693f1d9-aa26-4c08-9d1f-9908a4b81281",
+        "itemName": "鬥紋鐵靴",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "080fa80a-5487-457e-b4c0-a4b6e93b0380",
+        "itemName": "鬥紋鐵面甲",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "94ca2b06-b149-4527-ae09-0106904a7dff",
+        "itemName": "鋼製雙手斧",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "809fa6d3-6828-4e02-a6d3-6782929ac19d",
+        "itemName": "鬥紋鐵披肩",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "3846effb-38c8-44b0-9f26-c9296b8adad6",
+        "itemName": "鬥紋鐵甲",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "0d162338-7c5b-4004-95ae-530e2ac0eec3",
+        "itemName": "鋼製雙手劍",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "cabab778-85cc-4889-9a5f-c72c5fdaf0a1",
+        "itemName": "智紋鐵袍",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "cedc5e5d-90ed-464d-be86-c5f1de6f485a",
+        "itemName": "智紋鐵披風",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "dc12e5e5-ced0-4e7b-923e-9897ddc9b7ce",
+        "itemName": "鋼製雙手法杖",
+        "chance": 2.2067
+      },
+      {
+        "itemId": "8c1782df-9823-405c-ade8-423c854a467e",
+        "itemName": "秘銀雙手斧",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "acfebb62-91b8-4989-8aab-431256ffd202",
+        "itemName": "秘銀雙手劍",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "bd515bca-77d7-4c6b-a5bc-54fd66ab61d5",
+        "itemName": "鬥紋鋼鐵披肩",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "0635861a-8bb0-4516-b16d-0351539ba5e7",
+        "itemName": "秘銀雙手槌",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "6ef4eed9-d62f-4f3b-af22-9ca7488504e0",
+        "itemName": "鬥紋鋼鐵面甲",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "121cbe5e-5adf-4600-93bb-cb5cf68bd5e7",
+        "itemName": "鬥紋鋼鐵甲",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "22e3c6e5-fdee-45b7-a9ac-a362d8b2b3ae",
+        "itemName": "鬥紋鋼鐵護目",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "c46e57fe-2636-436c-9e5b-ffca8ee9f9b3",
+        "itemName": "迅紋金戒指(右)",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "3787b328-db67-4513-950e-0cfb8e503457",
+        "itemName": "秘銀單手槌",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "083da513-8b25-4b33-8932-7405ca9489fa",
+        "itemName": "迅紋鋼鐵護目",
+        "chance": 1.6121
+      },
+      {
+        "itemId": "monster-card-0496ea5d-786e-4b07-ba65-30949c1afe31",
+        "itemName": "廢都魔王(B)卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "afa8d955-ad56-4d49-9ee8-0b845f489997",
+        "itemName": "秘銀短匕(副手)",
+        "chance": 1.6
+      },
+      {
+        "itemId": "cfcbde64-96cb-4f8d-9aed-7011b9fe7e20",
+        "itemName": "立直棒-跳滿手",
+        "chance": 5
+      },
+      {
+        "itemId": "5b5414e3-6059-4080-b6b2-dcc8d20a2330",
+        "itemName": "疾風右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "e4d353b5-33ca-4d26-bfdb-d7e5eeb85e57",
+        "itemName": "狂血右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "e843b12f-e9fb-47c4-b5a8-c3e1fc1d84cc",
+        "itemName": "鏡映右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "85946efa-f325-4fd4-b60f-1df267bc8967",
+        "itemName": "重擊右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "41271fb1-8160-43ee-8f8a-68c45e2b0e35",
+        "itemName": "戰意右之戒",
+        "chance": 3.5
+      }
+    ]
+  },
+  {
+    "id": "elite-daishi-king",
+    "name": "大史王",
+    "drops": [
+      {
+        "itemId": "457fd983-b4f1-48c3-bca4-963bebe1fbb2",
+        "itemName": "迅紋鋼鐵披肩",
+        "chance": 1.385
+      },
+      {
+        "itemId": "121cbe5e-5adf-4600-93bb-cb5cf68bd5e7",
+        "itemName": "鬥紋鋼鐵甲",
+        "chance": 1.385
+      },
+      {
+        "itemId": "bd515bca-77d7-4c6b-a5bc-54fd66ab61d5",
+        "itemName": "鬥紋鋼鐵披肩",
+        "chance": 1.385
+      },
+      {
+        "itemId": "40116efc-f44e-48cd-ab0f-56f63ff838c9",
+        "itemName": "智紋鋼鐵披風",
+        "chance": 1.385
+      },
+      {
+        "itemId": "0cfdadac-6b8c-4f92-9621-cbc5b6e7281d",
+        "itemName": "迅紋鋼鐵甲",
+        "chance": 1.385
+      },
+      {
+        "itemId": "4359a991-d4ee-4783-b6f3-4aed0d9a1fc5",
+        "itemName": "鋼鐵披風",
+        "chance": 1.385
+      },
+      {
+        "itemId": "a192dd6c-8de2-4421-a8b3-04e0d60c5041",
+        "itemName": "鋼鐵甲",
+        "chance": 1.385
+      },
+      {
+        "itemId": "af331293-1ade-4da8-a53b-dc0bcdbcf645",
+        "itemName": "迅紋鋼鐵帽",
+        "chance": 1.385
+      },
+      {
+        "itemId": "371b770c-e03a-4eaf-b028-d9a5989bc3e5",
+        "itemName": "鋼鐵帽",
+        "chance": 1.385
+      },
+      {
+        "itemId": "9d3a61d5-4e98-4ab1-ac47-42f049b6d54a",
+        "itemName": "鬥紋鋼鐵盔",
+        "chance": 1.385
+      },
+      {
+        "itemId": "0139abbe-ea30-4213-9b5a-781b6136ac79",
+        "itemName": "智紋鋼鐵帽",
+        "chance": 1.385
+      },
+      {
+        "itemId": "0d9d737a-15af-4a3f-a62b-2417c44b41b2",
+        "itemName": "智紋鋼鐵袍",
+        "chance": 1.385
+      },
+      {
+        "itemId": "585ad0b3-2c75-462a-ade6-882e5929831b",
+        "itemName": "秘銀盾",
+        "chance": 1.385
+      },
+      {
+        "itemId": "083da513-8b25-4b33-8932-7405ca9489fa",
+        "itemName": "迅紋鋼鐵護目",
+        "chance": 1.385
+      },
+      {
+        "itemId": "82c89915-2b11-49bf-8557-e7cd544a86fd",
+        "itemName": "金戒指(左)",
+        "chance": 1.385
+      },
+      {
+        "itemId": "c46e57fe-2636-436c-9e5b-ffca8ee9f9b3",
+        "itemName": "迅紋金戒指(右)",
+        "chance": 1.385
+      },
+      {
+        "itemId": "afa8d955-ad56-4d49-9ee8-0b845f489997",
+        "itemName": "秘銀短匕(副手)",
+        "chance": 1.3
+      },
+      {
+        "itemId": "monster-card-e5a4a7e58fb2e78e8be58da1",
+        "itemName": "大史王卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "99d23a47-89a6-4291-9b03-8f15e7356eec",
+        "itemName": "秘銀單手劍",
+        "chance": 1.2
+      },
+      {
+        "itemId": "acfebb62-91b8-4989-8aab-431256ffd202",
+        "itemName": "秘銀雙手劍",
+        "chance": 1.2
+      },
+      {
+        "itemId": "3787b328-db67-4513-950e-0cfb8e503457",
+        "itemName": "秘銀單手槌",
+        "chance": 1.2
+      },
+      {
+        "itemId": "0635861a-8bb0-4516-b16d-0351539ba5e7",
+        "itemName": "秘銀雙手槌",
+        "chance": 1.2
+      },
+      {
+        "itemId": "b24ee5cd-c74b-409e-9326-14bd056d9af8",
+        "itemName": "秘銀單手斧",
+        "chance": 1.2
+      },
+      {
+        "itemId": "8c1782df-9823-405c-ade8-423c854a467e",
+        "itemName": "秘銀雙手斧",
+        "chance": 1.2
+      },
+      {
+        "itemId": "5da1f2b3-ad07-46b5-9d24-eb2d849d3381",
+        "itemName": "秘銀匕首",
+        "chance": 1.2
+      },
+      {
+        "itemId": "bc3d565e-6d15-4080-b79f-b7f0b76e9042",
+        "itemName": "秘銀弓",
+        "chance": 1.2
+      },
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 1.2
+      },
+      {
+        "itemId": "1cfe6151-f879-4e94-9fe0-611e15519a9f",
+        "itemName": "秘銀單手法杖",
+        "chance": 1.2
+      },
+      {
+        "itemId": "5947532d-7960-420c-99e7-5bdd02635a0a",
+        "itemName": "秘銀雙手法杖",
+        "chance": 1.2
+      },
+      {
+        "itemId": "22e3c6e5-fdee-45b7-a9ac-a362d8b2b3ae",
+        "itemName": "鬥紋鋼鐵護目",
+        "chance": 1.2
+      },
+      {
+        "itemId": "195d08bf-fd36-431f-88b7-4a3dbdceac0a",
+        "itemName": "智紋鋼鐵鏡片",
+        "chance": 1.2
+      },
+      {
+        "itemId": "cef73b6e-e86c-4c82-8df7-6831fc03cd11",
+        "itemName": "鋼鐵護目鏡",
+        "chance": 1.2
+      },
+      {
+        "itemId": "5c72b89a-f20c-4df1-b1ce-f6fb7d011eaf",
+        "itemName": "鋼鐵口罩",
+        "chance": 1.2
+      },
+      {
+        "itemId": "9c7b7e3f-bd2e-4056-9b38-4c3dd235670b",
+        "itemName": "迅紋鋼鐵面罩",
+        "chance": 1.2
+      },
+      {
+        "itemId": "6ef4eed9-d62f-4f3b-af22-9ca7488504e0",
+        "itemName": "鬥紋鋼鐵面甲",
+        "chance": 1.2
+      },
+      {
+        "itemId": "c1345f1a-8b68-4ec5-9f14-1b7d4cb39837",
+        "itemName": "智紋鋼鐵口飾",
+        "chance": 1.2
+      },
+      {
+        "itemId": "b4b5d9fa-6c55-466d-aa43-64b22837e8b3",
+        "itemName": "鋼鐵靴",
+        "chance": 1.2
+      },
+      {
+        "itemId": "dd86252c-57b8-49a2-91a3-158b179f59be",
+        "itemName": "迅紋鋼鐵靴",
+        "chance": 1.2
+      },
+      {
+        "itemId": "c20f00f1-e114-4975-a0f9-88347d6e5e81",
+        "itemName": "鬥紋鋼鐵靴",
+        "chance": 1.2
+      },
+      {
+        "itemId": "38f310e3-1959-4717-b031-bae1e390a8db",
+        "itemName": "智紋鋼鐵靴",
+        "chance": 1.2
+      },
+      {
+        "itemId": "ab7ae63e-f2c9-4d1d-9418-f332f80033ab",
+        "itemName": "迅紋金戒指(左)",
+        "chance": 1.2
+      },
+      {
+        "itemId": "46514870-8bb0-4cf1-a3a4-b13fe158eb29",
+        "itemName": "鬥紋金戒指(左)",
+        "chance": 1.2
+      },
+      {
+        "itemId": "f579720d-08da-446b-b86b-48020a4ccdd2",
+        "itemName": "智紋金戒指(左)",
+        "chance": 1.2
+      },
+      {
+        "itemId": "7be81010-a486-4c77-b912-7e811e94b9d7",
+        "itemName": "鬥紋金戒指(右)",
+        "chance": 1.2
+      },
+      {
+        "itemId": "6979ee0e-f7c2-4b11-805e-0d2fd05fb40f",
+        "itemName": "智紋金戒指(右)",
+        "chance": 1.2
+      },
+      {
+        "itemId": "6041efc9-f493-4e7d-9d78-df8aaa3763a9",
+        "itemName": "金戒指(右)",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-sword_1h",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "s-dragon-sword_2h",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "s-dragon-mace_1h",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "s-dragon-mace_2h",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "s-dragon-axe_1h",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "s-dragon-axe_2h",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "s-dragon-dagger",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "s-dragon-staff_1h",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "s-dragon-staff_2h",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "s-dragon-bow",
+        "chance": 0.6,
+        "source": "world_boss_s"
+      },
+      {
+        "itemId": "gem-s-tier",
+        "itemName": "S階寶石",
+        "chance": 15
+      },
+      {
+        "itemId": "1fb1f325-7d73-43c7-a55f-3f51752870b0",
+        "itemName": "神秘史萊姆蛋",
+        "chance": 3
+      },
+      {
+        "itemId": "chest-anchor-pack",
+        "itemName": "記憶錨定卡包",
+        "chance": 10
+      }
+    ]
+  },
+  {
+    "drops": []
+  },
+  {
+    "drops": []
+  },
+  {
+    "drops": []
+  },
+  {
+    "drops": []
+  },
+  {
+    "drops": []
+  },
+  {
+    "drops": []
+  },
+  {
+    "drops": []
+  },
+  {
+    "drops": []
+  },
+  {
+    "id": "74093d45-5637-4be8-8755-5ae4693b2974",
+    "name": "飛龍幼崽",
+    "drops": [
+      {
+        "itemId": "5da1f2b3-ad07-46b5-9d24-eb2d849d3381",
+        "itemName": "秘銀匕首",
+        "chance": 1.8
+      },
+      {
+        "itemId": "5947532d-7960-420c-99e7-5bdd02635a0a",
+        "itemName": "秘銀雙手法杖",
+        "chance": 1.8
+      },
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-249a4c73-01fd-44a4-9a81-abfc26a2b93e",
+        "itemName": "飛龍幼崽卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "8a5db376-20fa-495f-a075-109aea276490",
+        "itemName": "疾風左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "f1a34a79-223f-440e-b6ec-ca17aa49b224",
+        "itemName": "鏡映左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "4d45bc35-4ee0-497b-b030-21c83a4a3a3c",
+        "itemName": "戰意左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 1.5
+      },
+      {
+        "itemId": "dragonscale-arm-armor",
+        "itemName": "龍鱗鎧",
+        "chance": 1.8
+      },
+      {
+        "itemId": "dragonscale-arm-accessory_l",
+        "itemName": "龍紋戒指(左)",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "293d25c1-a2f9-42f6-8cb9-f94fb87f5d89",
+    "name": "龍蜥武士",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-739cdb0a-5d59-4e52-bf77-cce0e33c2666",
+        "itemName": "龍蜥武士卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "5b5414e3-6059-4080-b6b2-dcc8d20a2330",
+        "itemName": "疾風右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "e843b12f-e9fb-47c4-b5a8-c3e1fc1d84cc",
+        "itemName": "鏡映右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "41271fb1-8160-43ee-8f8a-68c45e2b0e35",
+        "itemName": "戰意右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 1.2
+      },
+      {
+        "itemId": "dragonscale-arm-head_top",
+        "itemName": "龍首盔",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "8a9d08be-3fe3-489a-833b-bc7d4d36492d",
+    "name": "火翼龍人",
+    "drops": [
+      {
+        "itemId": "ab7ae63e-f2c9-4d1d-9418-f332f80033ab",
+        "itemName": "迅紋金戒指(左)",
+        "chance": 1.8
+      },
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-29e2458c-8e7f-4c4f-a7bf-5f978a5067d4",
+        "itemName": "火翼龍人卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "ca025e02-370d-4a8f-b56f-f230da30966b",
+        "itemName": "獵手左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "057bd3b6-ab04-4449-b4e8-717bc855b7a1",
+        "itemName": "救護左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 1.2
+      },
+      {
+        "itemId": "dragonscale-arm-shoes",
+        "itemName": "龍爪戰靴",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "56755d32-7b31-4156-ad94-30121a3b5cd5",
+    "name": "冰鱗龍人",
+    "drops": [
+      {
+        "itemId": "46514870-8bb0-4cf1-a3a4-b13fe158eb29",
+        "itemName": "鬥紋金戒指(左)",
+        "chance": 1.8
+      },
+      {
+        "itemId": "c46e57fe-2636-436c-9e5b-ffca8ee9f9b3",
+        "itemName": "迅紋金戒指(右)",
+        "chance": 1.8
+      },
+      {
+        "itemId": "6041efc9-f493-4e7d-9d78-df8aaa3763a9",
+        "itemName": "金戒指(右)",
+        "chance": 1.8
+      },
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-6650c823-8f3d-4032-a38b-a5ecc76fb3a9",
+        "itemName": "冰鱗龍人卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "cc468629-2d79-4077-8b1e-5615cfaaea77",
+        "itemName": "獵手右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "9e2f286c-1ed6-42bb-bda8-c685c7e8970a",
+        "itemName": "救護右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 1.2
+      },
+      {
+        "itemId": "dragonscale-arm-shield",
+        "itemName": "龍鱗盾牌",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "8770c62c-7246-4745-873c-ccd0cb53b9f0",
+    "name": "雷霆飛龍",
+    "drops": [
+      {
+        "itemId": "f579720d-08da-446b-b86b-48020a4ccdd2",
+        "itemName": "智紋金戒指(左)",
+        "chance": 1.8
+      },
+      {
+        "itemId": "7be81010-a486-4c77-b912-7e811e94b9d7",
+        "itemName": "鬥紋金戒指(右)",
+        "chance": 1.8
+      },
+      {
+        "itemId": "585ad0b3-2c75-462a-ade6-882e5929831b",
+        "itemName": "秘銀盾",
+        "chance": 1.8
+      },
+      {
+        "itemId": "3787b328-db67-4513-950e-0cfb8e503457",
+        "itemName": "秘銀單手槌",
+        "chance": 1.8
+      },
+      {
+        "itemId": "8c1782df-9823-405c-ade8-423c854a467e",
+        "itemName": "秘銀雙手斧",
+        "chance": 1.8
+      },
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-895e616e-a218-4445-86d6-e52c74b68018",
+        "itemName": "雷霆飛龍卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "ea424726-9958-44dd-8a71-8fa8db571200",
+        "itemName": "狂血左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "e24a419d-dec7-4e9b-8438-8e9519f53c0e",
+        "itemName": "重擊左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 1
+      },
+      {
+        "itemId": "dragonscale-arm-garment",
+        "itemName": "龍翼披風",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "6da5e948-095e-4f0c-825d-b4cacbf558b9",
+    "name": "黑曜龍騎",
+    "drops": [
+      {
+        "itemId": "6979ee0e-f7c2-4b11-805e-0d2fd05fb40f",
+        "itemName": "智紋金戒指(右)",
+        "chance": 1.8
+      },
+      {
+        "itemId": "99d23a47-89a6-4291-9b03-8f15e7356eec",
+        "itemName": "秘銀單手劍",
+        "chance": 1.8
+      },
+      {
+        "itemId": "0635861a-8bb0-4516-b16d-0351539ba5e7",
+        "itemName": "秘銀雙手槌",
+        "chance": 1.8
+      },
+      {
+        "itemId": "5da1f2b3-ad07-46b5-9d24-eb2d849d3381",
+        "itemName": "秘銀匕首",
+        "chance": 1.8
+      },
+      {
+        "itemId": "5947532d-7960-420c-99e7-5bdd02635a0a",
+        "itemName": "秘銀雙手法杖",
+        "chance": 1.8
+      },
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-8e5ed991-335a-4b57-8c2d-29dcdb2d0429",
+        "itemName": "黑曜龍騎卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "e4d353b5-33ca-4d26-bfdb-d7e5eeb85e57",
+        "itemName": "狂血右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "85946efa-f325-4fd4-b60f-1df267bc8967",
+        "itemName": "重擊右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 1
+      },
+      {
+        "itemId": "dragonscale-arm-head_mid",
+        "itemName": "龍瞳護目",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "ba217b2d-d633-4d35-b777-f98b89ed823f",
+    "name": "黃金幼龍(稀)",
+    "drops": [
+      {
+        "itemId": "b24ee5cd-c74b-409e-9326-14bd056d9af8",
+        "itemName": "秘銀單手斧",
+        "chance": 3
+      },
+      {
+        "itemId": "bc3d565e-6d15-4080-b79f-b7f0b76e9042",
+        "itemName": "秘銀弓",
+        "chance": 3
+      },
+      {
+        "itemId": "afa8d955-ad56-4d49-9ee8-0b845f489997",
+        "itemName": "秘銀短匕(副手)",
+        "chance": 3
+      },
+      {
+        "itemId": "9d3a61d5-4e98-4ab1-ac47-42f049b6d54a",
+        "itemName": "鬥紋鋼鐵盔",
+        "chance": 3
+      },
+      {
+        "itemId": "22e3c6e5-fdee-45b7-a9ac-a362d8b2b3ae",
+        "itemName": "鬥紋鋼鐵護目",
+        "chance": 3
+      },
+      {
+        "itemId": "5c72b89a-f20c-4df1-b1ce-f6fb7d011eaf",
+        "itemName": "鋼鐵口罩",
+        "chance": 3
+      },
+      {
+        "itemId": "c1345f1a-8b68-4ec5-9f14-1b7d4cb39837",
+        "itemName": "智紋鋼鐵口飾",
+        "chance": 3
+      },
+      {
+        "itemId": "121cbe5e-5adf-4600-93bb-cb5cf68bd5e7",
+        "itemName": "鬥紋鋼鐵甲",
+        "chance": 3
+      },
+      {
+        "itemId": "457fd983-b4f1-48c3-bca4-963bebe1fbb2",
+        "itemName": "迅紋鋼鐵披肩",
+        "chance": 3
+      },
+      {
+        "itemId": "b4b5d9fa-6c55-466d-aa43-64b22837e8b3",
+        "itemName": "鋼鐵靴",
+        "chance": 3
+      },
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-a68402d9-d9cf-4927-9293-691164bcf1f1",
+        "itemName": "黃金幼龍(稀)卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "ca025e02-370d-4a8f-b56f-f230da30966b",
+        "itemName": "獵手左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "d03a42d6-a2cb-446b-be0c-135f28375136",
+        "itemName": "吸血左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "057bd3b6-ab04-4449-b4e8-717bc855b7a1",
+        "itemName": "救護左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "08f14a4f-c534-4289-8632-0313570f8a9a",
+        "itemName": "守護左之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 2.5
+      }
+    ]
+  },
+  {
+    "id": "e2bac66c-3513-4f02-8739-f13f8b5e01d3",
+    "name": "暗影龍將",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-e1c17a26-dd0e-4869-9ce8-7c4b12b8e2c2",
+        "itemName": "暗影龍將卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "d03a42d6-a2cb-446b-be0c-135f28375136",
+        "itemName": "吸血左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "08f14a4f-c534-4289-8632-0313570f8a9a",
+        "itemName": "守護左之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 1
+      },
+      {
+        "itemId": "dragonscale-arm-head_low",
+        "itemName": "龍頷護面",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "b1f231f4-6fa2-4f00-9528-f4893a726df1",
+    "name": "龍翼魔法師",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-aece2657-19aa-407c-acaa-0b23246c0dc7",
+        "itemName": "龍翼魔法師卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "e95e37ac-96a5-41ea-9a85-0d63bd8bdcaf",
+        "itemName": "吸血右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "dd770ac0-6b4d-4654-9bad-86ee2d917199",
+        "itemName": "守護右之戒",
+        "chance": 1.2
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 1
+      },
+      {
+        "itemId": "dragonscale-arm-accessory_r",
+        "itemName": "龍紋戒指(右)",
+        "chance": 1.8
+      }
+    ]
+  },
+  {
+    "id": "8016a32e-1870-44d8-a6da-2c27e2cbdcc3",
+    "name": "龍王(B)",
+    "drops": [
+      {
+        "itemId": "121cbe5e-5adf-4600-93bb-cb5cf68bd5e7",
+        "itemName": "鬥紋鋼鐵甲",
+        "chance": 4.5
+      },
+      {
+        "itemId": "457fd983-b4f1-48c3-bca4-963bebe1fbb2",
+        "itemName": "迅紋鋼鐵披肩",
+        "chance": 4.5
+      },
+      {
+        "itemId": "b4b5d9fa-6c55-466d-aa43-64b22837e8b3",
+        "itemName": "鋼鐵靴",
+        "chance": 4.5
+      },
+      {
+        "itemId": "38f310e3-1959-4717-b031-bae1e390a8db",
+        "itemName": "智紋鋼鐵靴",
+        "chance": 4.5
+      },
+      {
+        "itemId": "f579720d-08da-446b-b86b-48020a4ccdd2",
+        "itemName": "智紋金戒指(左)",
+        "chance": 4.5
+      },
+      {
+        "itemId": "7be81010-a486-4c77-b912-7e811e94b9d7",
+        "itemName": "鬥紋金戒指(右)",
+        "chance": 4.5
+      },
+      {
+        "itemId": "585ad0b3-2c75-462a-ade6-882e5929831b",
+        "itemName": "秘銀盾",
+        "chance": 4.5
+      },
+      {
+        "itemId": "3787b328-db67-4513-950e-0cfb8e503457",
+        "itemName": "秘銀單手槌",
+        "chance": 4.5
+      },
+      {
+        "itemId": "8c1782df-9823-405c-ade8-423c854a467e",
+        "itemName": "秘銀雙手斧",
+        "chance": 4.5
+      },
+      {
+        "itemId": "1cfe6151-f879-4e94-9fe0-611e15519a9f",
+        "itemName": "秘銀單手法杖",
+        "chance": 4.5
+      },
+      {
+        "itemId": "371b770c-e03a-4eaf-b028-d9a5989bc3e5",
+        "itemName": "鋼鐵帽",
+        "chance": 4.5
+      },
+      {
+        "itemId": "0139abbe-ea30-4213-9b5a-781b6136ac79",
+        "itemName": "智紋鋼鐵帽",
+        "chance": 4.5
+      },
+      {
+        "itemId": "195d08bf-fd36-431f-88b7-4a3dbdceac0a",
+        "itemName": "智紋鋼鐵鏡片",
+        "chance": 4.5
+      },
+      {
+        "itemId": "9c7b7e3f-bd2e-4056-9b38-4c3dd235670b",
+        "itemName": "迅紋鋼鐵面罩",
+        "chance": 4.5
+      },
+      {
+        "itemId": "a192dd6c-8de2-4421-a8b3-04e0d60c5041",
+        "itemName": "鋼鐵甲",
+        "chance": 4.5
+      },
+      {
+        "itemId": "0d9d737a-15af-4a3f-a62b-2417c44b41b2",
+        "itemName": "智紋鋼鐵袍",
+        "chance": 4.5
+      },
+      {
+        "itemId": "bd515bca-77d7-4c6b-a5bc-54fd66ab61d5",
+        "itemName": "鬥紋鋼鐵披肩",
+        "chance": 4.5
+      },
+      {
+        "itemId": "dd86252c-57b8-49a2-91a3-158b179f59be",
+        "itemName": "迅紋鋼鐵靴",
+        "chance": 4.5
+      },
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2
+      },
+      {
+        "itemId": "monster-card-90df79f6-ce40-4f31-be32-f8d4d8f31c99",
+        "itemName": "龍王(B)卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "cc468629-2d79-4077-8b1e-5615cfaaea77",
+        "itemName": "獵手右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "e95e37ac-96a5-41ea-9a85-0d63bd8bdcaf",
+        "itemName": "吸血右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "9e2f286c-1ed6-42bb-bda8-c685c7e8970a",
+        "itemName": "救護右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "dd770ac0-6b4d-4654-9bad-86ee2d917199",
+        "itemName": "守護右之戒",
+        "chance": 3.5
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 3.5
+      },
+      {
+        "itemId": "sanyuanpai-a-dagger",
+        "itemName": "三元牌",
+        "chance": 0.3
+      }
+    ]
+  },
+  {
+    "id": "dragon-king-boss",
+    "name": "古龍王(B)",
+    "drops": [
+      {
+        "itemId": "457fd983-b4f1-48c3-bca4-963bebe1fbb2",
+        "itemName": "迅紋鋼鐵披肩",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "121cbe5e-5adf-4600-93bb-cb5cf68bd5e7",
+        "itemName": "鬥紋鋼鐵甲",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "bd515bca-77d7-4c6b-a5bc-54fd66ab61d5",
+        "itemName": "鬥紋鋼鐵披肩",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "40116efc-f44e-48cd-ab0f-56f63ff838c9",
+        "itemName": "智紋鋼鐵披風",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "0cfdadac-6b8c-4f92-9621-cbc5b6e7281d",
+        "itemName": "迅紋鋼鐵甲",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "4359a991-d4ee-4783-b6f3-4aed0d9a1fc5",
+        "itemName": "鋼鐵披風",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "a192dd6c-8de2-4421-a8b3-04e0d60c5041",
+        "itemName": "鋼鐵甲",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "af331293-1ade-4da8-a53b-dc0bcdbcf645",
+        "itemName": "迅紋鋼鐵帽",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "371b770c-e03a-4eaf-b028-d9a5989bc3e5",
+        "itemName": "鋼鐵帽",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "9d3a61d5-4e98-4ab1-ac47-42f049b6d54a",
+        "itemName": "鬥紋鋼鐵盔",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "0139abbe-ea30-4213-9b5a-781b6136ac79",
+        "itemName": "智紋鋼鐵帽",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "0d9d737a-15af-4a3f-a62b-2417c44b41b2",
+        "itemName": "智紋鋼鐵袍",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "585ad0b3-2c75-462a-ade6-882e5929831b",
+        "itemName": "秘銀盾",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "083da513-8b25-4b33-8932-7405ca9489fa",
+        "itemName": "迅紋鋼鐵護目",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "82c89915-2b11-49bf-8557-e7cd544a86fd",
+        "itemName": "金戒指(左)",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "c46e57fe-2636-436c-9e5b-ffca8ee9f9b3",
+        "itemName": "迅紋金戒指(右)",
+        "chance": 1.8005
+      },
+      {
+        "itemId": "afa8d955-ad56-4d49-9ee8-0b845f489997",
+        "itemName": "秘銀短匕(副手)",
+        "chance": 1.69
+      },
+      {
+        "itemId": "monster-card-dragon-king",
+        "itemName": "古龍王(B)卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "99d23a47-89a6-4291-9b03-8f15e7356eec",
+        "itemName": "秘銀單手劍",
+        "chance": 1.56
+      },
+      {
+        "itemId": "acfebb62-91b8-4989-8aab-431256ffd202",
+        "itemName": "秘銀雙手劍",
+        "chance": 1.56
+      },
+      {
+        "itemId": "3787b328-db67-4513-950e-0cfb8e503457",
+        "itemName": "秘銀單手槌",
+        "chance": 1.56
+      },
+      {
+        "itemId": "0635861a-8bb0-4516-b16d-0351539ba5e7",
+        "itemName": "秘銀雙手槌",
+        "chance": 1.56
+      },
+      {
+        "itemId": "b24ee5cd-c74b-409e-9326-14bd056d9af8",
+        "itemName": "秘銀單手斧",
+        "chance": 1.56
+      },
+      {
+        "itemId": "8c1782df-9823-405c-ade8-423c854a467e",
+        "itemName": "秘銀雙手斧",
+        "chance": 1.56
+      },
+      {
+        "itemId": "5da1f2b3-ad07-46b5-9d24-eb2d849d3381",
+        "itemName": "秘銀匕首",
+        "chance": 1.56
+      },
+      {
+        "itemId": "bc3d565e-6d15-4080-b79f-b7f0b76e9042",
+        "itemName": "秘銀弓",
+        "chance": 1.56
+      },
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 1.56
+      },
+      {
+        "itemId": "1cfe6151-f879-4e94-9fe0-611e15519a9f",
+        "itemName": "秘銀單手法杖",
+        "chance": 1.56
+      },
+      {
+        "itemId": "5947532d-7960-420c-99e7-5bdd02635a0a",
+        "itemName": "秘銀雙手法杖",
+        "chance": 1.56
+      },
+      {
+        "itemId": "22e3c6e5-fdee-45b7-a9ac-a362d8b2b3ae",
+        "itemName": "鬥紋鋼鐵護目",
+        "chance": 1.56
+      },
+      {
+        "itemId": "195d08bf-fd36-431f-88b7-4a3dbdceac0a",
+        "itemName": "智紋鋼鐵鏡片",
+        "chance": 1.56
+      },
+      {
+        "itemId": "cef73b6e-e86c-4c82-8df7-6831fc03cd11",
+        "itemName": "鋼鐵護目鏡",
+        "chance": 1.56
+      },
+      {
+        "itemId": "5c72b89a-f20c-4df1-b1ce-f6fb7d011eaf",
+        "itemName": "鋼鐵口罩",
+        "chance": 1.56
+      },
+      {
+        "itemId": "9c7b7e3f-bd2e-4056-9b38-4c3dd235670b",
+        "itemName": "迅紋鋼鐵面罩",
+        "chance": 1.56
+      },
+      {
+        "itemId": "6ef4eed9-d62f-4f3b-af22-9ca7488504e0",
+        "itemName": "鬥紋鋼鐵面甲",
+        "chance": 1.56
+      },
+      {
+        "itemId": "c1345f1a-8b68-4ec5-9f14-1b7d4cb39837",
+        "itemName": "智紋鋼鐵口飾",
+        "chance": 1.56
+      },
+      {
+        "itemId": "b4b5d9fa-6c55-466d-aa43-64b22837e8b3",
+        "itemName": "鋼鐵靴",
+        "chance": 1.56
+      },
+      {
+        "itemId": "dd86252c-57b8-49a2-91a3-158b179f59be",
+        "itemName": "迅紋鋼鐵靴",
+        "chance": 1.56
+      },
+      {
+        "itemId": "c20f00f1-e114-4975-a0f9-88347d6e5e81",
+        "itemName": "鬥紋鋼鐵靴",
+        "chance": 1.56
+      },
+      {
+        "itemId": "38f310e3-1959-4717-b031-bae1e390a8db",
+        "itemName": "智紋鋼鐵靴",
+        "chance": 1.56
+      },
+      {
+        "itemId": "ab7ae63e-f2c9-4d1d-9418-f332f80033ab",
+        "itemName": "迅紋金戒指(左)",
+        "chance": 1.56
+      },
+      {
+        "itemId": "46514870-8bb0-4cf1-a3a4-b13fe158eb29",
+        "itemName": "鬥紋金戒指(左)",
+        "chance": 1.56
+      },
+      {
+        "itemId": "f579720d-08da-446b-b86b-48020a4ccdd2",
+        "itemName": "智紋金戒指(左)",
+        "chance": 1.56
+      },
+      {
+        "itemId": "7be81010-a486-4c77-b912-7e811e94b9d7",
+        "itemName": "鬥紋金戒指(右)",
+        "chance": 1.56
+      },
+      {
+        "itemId": "6979ee0e-f7c2-4b11-805e-0d2fd05fb40f",
+        "itemName": "智紋金戒指(右)",
+        "chance": 1.56
+      },
+      {
+        "itemId": "6041efc9-f493-4e7d-9d78-df8aaa3763a9",
+        "itemName": "金戒指(右)",
+        "chance": 1.56
+      },
+      {
+        "itemId": "14205225-0e0f-4d83-8908-5d24f781bd69",
+        "itemName": "神秘龍蛋",
+        "chance": 5
+      },
+      {
+        "itemId": "s-dragon-sword_1h",
+        "itemName": "幼龍牙劍",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-sword_2h",
+        "itemName": "龍脊巨劍",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-mace_1h",
+        "itemName": "龍顎戰錘",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-mace_2h",
+        "itemName": "龍骨碎天槌",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-axe_1h",
+        "itemName": "裂龍手斧",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-axe_2h",
+        "itemName": "屠龍巨斧",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-dagger",
+        "itemName": "龍鱗短刃",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-staff_1h",
+        "itemName": "龍語法杖",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-staff_2h",
+        "itemName": "龍脈長杖",
+        "chance": 1.2
+      },
+      {
+        "itemId": "s-dragon-bow",
+        "itemName": "龍筋獵弓",
+        "chance": 1.2
+      },
+      {
+        "itemId": "gem-s-tier",
+        "itemName": "S階寶石",
+        "chance": 15
+      },
+      {
+        "itemId": "chest-anchor-pack",
+        "itemName": "記憶錨定卡包",
+        "chance": 10
+      }
+    ]
+  },
+  {
+    "drops": []
+  },
+  {
+    "drops": []
+  },
+  {
+    "id": "4fd24a0d-2ef3-44be-8c8e-4b59ab8a2382",
+    "name": "焰爪幼狼",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-150109cb-0e5f-4bdd-97a8-aab294296a6e",
+        "itemName": "焰爪幼狼卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-dagger",
+        "itemName": "焰刃匕首",
+        "chance": 1.5
+      },
+      {
+        "itemId": "27c8b251-42c7-42cf-98a3-ee40408503db",
+        "itemName": "神秘狼牙蛋",
+        "chance": 1
+      }
+    ]
+  },
+  {
+    "id": "541d0b8d-337f-4fbc-85dd-79d3302fc6c6",
+    "name": "灰燼豺",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-ddae3f15-ee44-4bd1-993e-16dd43904315",
+        "itemName": "灰燼豺卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-axe_1h",
+        "itemName": "烈焰單手斧",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "f338aad4-26c2-4d9e-a30c-a2d02dd80777",
+    "name": "熔岩犬",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-74742135-a75d-46cc-9732-5cf60eab48fb",
+        "itemName": "熔岩犬卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-sword_1h",
+        "itemName": "焰紋單手劍",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "a03594b5-7106-4d0b-9ebe-6a8c47451eba",
+    "name": "硫火蝙蝠",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-8ee733e7-667d-4222-b1e1-4e867e99092d",
+        "itemName": "硫火蝙蝠卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-bow",
+        "itemName": "焰羽獵弓",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "855aaa86-bde8-4e6b-b0ff-2ca97f11af13",
+    "name": "焦炎蜥",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-15a8b4c8-9859-4fd9-8b48-28eadae73f10",
+        "itemName": "焦炎蜥卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-staff_2h",
+        "itemName": "焰心雙手法杖",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "7eebc04a-39de-4bd5-b539-34bf3935341a",
+    "name": "火髓魔蟲",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-18681a29-c89d-45e2-ab65-60869a45ec20",
+        "itemName": "火髓魔蟲卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-staff_1h",
+        "itemName": "焰心單手法杖",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "c6ab384b-5ed5-418a-b6eb-37d97033dfcf",
+    "name": "餘燼骷髏",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-34743b1d-b2c5-4610-b068-7d8191e3b181",
+        "itemName": "餘燼骷髏卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-sword_2h",
+        "itemName": "焰紋雙手劍",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "fe51b35c-b377-49f5-a2f5-610d702569cd",
+    "name": "炙炎鴉",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-edc29959-6809-4ce3-a349-fc800bb063aa",
+        "itemName": "炙炎鴉卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-mace_1h",
+        "itemName": "熔火單手槌",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "7a2411ce-a97e-4d83-81f7-dc0339c9386f",
+    "name": "岩漿巨蟲",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-702f6cd9-28ed-4944-a605-fbb6d6a3c300",
+        "itemName": "岩漿巨蟲卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-axe_2h",
+        "itemName": "烈焰雙手斧",
+        "chance": 1.5
+      }
+    ]
+  },
+  {
+    "id": "e43a5ff3-969a-474f-95b6-3a2fbe333e9e",
+    "name": "烈焰狼",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 2.5
+      },
+      {
+        "itemId": "monster-card-77f6600a-87b3-4e38-b960-152c5b61c519",
+        "itemName": "烈焰狼卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-wpn-mace_2h",
+        "itemName": "熔火雙手槌",
+        "chance": 1.5
+      },
+      {
+        "itemId": "27c8b251-42c7-42cf-98a3-ee40408503db",
+        "itemName": "神秘狼牙蛋",
+        "chance": 1
+      }
+    ]
+  },
+  {
+    "id": "73a99838-5be4-4f80-a2c0-cb9e278e107c",
+    "name": "煉獄烈焰狼王",
+    "drops": [
+      {
+        "itemId": "a6ae293d-52fc-4af5-8770-891ddf842e35",
+        "itemName": "A階寶石",
+        "chance": 4
+      },
+      {
+        "itemId": "monster-card-b6525c8f-304c-4cdb-ba0e-df0350d0b19d",
+        "itemName": "煉獄烈焰狼王卡",
+        "chance": 0.1
+      },
+      {
+        "itemId": "fire-a-arm-shield",
+        "itemName": "焰鱗盾",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-a-arm-armor",
+        "itemName": "焰鱗甲",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-a-arm-head_top",
+        "itemName": "焰鱗盔",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-a-arm-garment",
+        "itemName": "焰鱗披風",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-a-arm-shoes",
+        "itemName": "焰鱗戰靴",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-a-arm-head_mid",
+        "itemName": "焰鱗護目",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-a-arm-head_low",
+        "itemName": "焰鱗口罩",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-a-arm-accessory_l",
+        "itemName": "焰紋戒指(左)",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-a-arm-accessory_r",
+        "itemName": "焰紋戒指(右)",
+        "chance": 2
+      },
+      {
+        "itemId": "enchant_reroll_potion",
+        "itemName": "附魔重骰藥水",
+        "chance": 4
+      },
+      {
+        "itemId": "27c8b251-42c7-42cf-98a3-ee40408503db",
+        "itemName": "神秘狼牙蛋",
+        "chance": 2
+      }
+    ]
+  },
+  {
+    "id": "0393acee-9851-4bcb-a8f5-fdb60a9968f1",
+    "name": "地獄狼牙王",
+    "drops": [
+      {
+        "itemId": "monster-card-hellfang-king",
+        "chance": 0.1,
+        "itemName": "狼牙王卡"
+      },
+      {
+        "itemId": "fire-s-wpn-sword_1h",
+        "itemName": "獄焰・狼牙劍",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-s-wpn-sword_2h",
+        "itemName": "獄焰・裂天巨劍",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-s-wpn-mace_1h",
+        "itemName": "獄焰・碎顱槌",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-s-wpn-mace_2h",
+        "itemName": "獄焰・崩地槌",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-s-wpn-axe_1h",
+        "itemName": "獄焰・撕裂手斧",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-s-wpn-axe_2h",
+        "itemName": "獄焰・焚天巨斧",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-s-wpn-dagger",
+        "itemName": "獄焰・狼牙短刃",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-s-wpn-staff_1h",
+        "itemName": "獄焰・魂焚法杖",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-s-wpn-staff_2h",
+        "itemName": "獄焰・煉獄長杖",
+        "chance": 2
+      },
+      {
+        "itemId": "fire-s-wpn-bow",
+        "itemName": "獄焰・炎狼獵弓",
+        "chance": 2
+      },
+      {
+        "itemId": "enchant_reroll_potion",
+        "itemName": "附魔重骰藥水",
+        "chance": 2
+      },
+      {
+        "itemId": "gem-s-tier",
+        "itemName": "S階寶石",
+        "chance": 15
+      },
+      {
+        "itemId": "27c8b251-42c7-42cf-98a3-ee40408503db",
+        "itemName": "神秘狼牙蛋",
+        "chance": 3
+      },
+      {
+        "itemId": "chest-anchor-pack",
+        "itemName": "記憶錨定卡包",
+        "chance": 10
+      }
+    ]
+  },
+  {
+    "drops": []
+  },
+  {
+    "drops": []
+  }
+]

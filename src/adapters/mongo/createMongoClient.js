@@ -143,7 +143,7 @@ async function getMongoDb() {
   if (cachedDb) return cachedDb;
 
   if (!config.storage.mongoUri) {
-    throw new Error("MONGODB_URI is required when STORAGE_DRIVER=mongo");
+    throw new Error("MONGODB_URI is required");
   }
 
   cachedClient = new MongoClient(config.storage.mongoUri, {

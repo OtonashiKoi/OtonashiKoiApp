@@ -275,6 +275,7 @@ function createSoloBossRoutes(serviceContext) {
         equipped, inventory: progress.inventory || [],
         playerActiveEffects: [...(progress.activeEffects || []), ...berserkEffects],
         monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
+        monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
         sacrificeHpCostPct: sacrificeOn ? sacrificeCfg.hpCostPct : 0,
         sacrificeAtkUpPct: sacrificeOn ? sacrificeCfg.atkUpPct : 0,
         warGaugeCritBonus: gaugeFull ? gaugeCfg.critRateBonus : 0,
@@ -540,6 +541,7 @@ function createSoloBossRoutes(serviceContext) {
         outcome: allDefeated ? "win" : r.outcome,
         monsterName: monster.name, monsterImageUrl: monster.imageUrl || null,
         monsterElement: monster?.element || null,
+        monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
         logs: r.roundLogs || [], rewardLines, drops,
         totalDamage: r.totalDamage, finalPlayerHp: Math.max(0, r.finalPlayerHp || 0),
         playerMaxHp: Math.max(1, Math.round(Number(pStats.maxHp) || 0)),

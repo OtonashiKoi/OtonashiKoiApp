@@ -1,5 +1,8 @@
 # 🏠 終極懶人開服系統：操作手冊 (v2.0)
 
+> ⛔ **舊 Windows／localtunnel 操作紀錄**：本文的路徑、外部 App repo 與自動推送流程不是目前標準部署方式，
+> 請勿照本文操作正式環境。現行啟動方式看 [README.md](README.md)，搬機與正式部署看 [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)。
+
 恭喜！您的開服系統已進化成「**全自動連鎖模式**」。您現在只需執行一個指令，剩下的事情系統會自己幫您搞定。
 
 ## 🤖 懶人啟動指令

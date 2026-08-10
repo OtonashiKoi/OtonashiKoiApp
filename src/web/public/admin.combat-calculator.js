@@ -236,7 +236,7 @@
 
     return {
       ...totalStats,
-      maxHp: Math.max(1, Math.round(totalStats.vit * 15 + 50 + numberValue("combat-custom-extra-hp"))),
+      maxHp: Math.max(1, Math.round(totalStats.vit * 25 + 200 + numberValue("combat-custom-extra-hp"))),
       atk,
       def: clamp(equipVit / 2 + numberValue("combat-custom-extra-def"), 0, 85),
       flatDef: Math.max(0, baseStats.vit + numberValue("combat-custom-extra-flat-def")),

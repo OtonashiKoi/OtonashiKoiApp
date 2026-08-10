@@ -105,7 +105,7 @@ async function buildEquipment(I, band) {
           const r = runCombatLoop(pStats, m.calc, m.name, m.calc.maxHp, ROUNDS, {
             playerLevel: band.lv, equipped: eq, inventory: [],
             monsterEquipped: m.equipment || {}, monsterIsBoss: false,
-            zone: z, monsterElement: m.element || null,
+            zone: z, monsterElement: m.element || null, monsterElementLevel: m.element ? (m.elementLevel || 1) : 0,
           });
           expAccum += Math.min(1, (r.totalDamage || 0) / m.calc.maxHp) * (m.expReward || 0);
           if (r.outcome === "lose") deaths++;

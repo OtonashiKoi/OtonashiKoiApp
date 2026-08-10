@@ -31,6 +31,7 @@ const JOB_IDS = [
   "job_tactician_v1",
   "job_bard_v1",
   "job_barrier_mage_v1",
+  "job_gambler_v1",
 ];
 
 const JOB_WEAPON_TYPES = {
@@ -44,6 +45,7 @@ const JOB_WEAPON_TYPES = {
   job_tactician_v1: "sword_1h",
   job_bard_v1: "bow",
   job_barrier_mage_v1: "staff_1h",
+  job_gambler_v1: "dice",
 };
 
 const results = [];
@@ -78,8 +80,8 @@ function makeMonsterCalc(monster) {
     atk: Math.round(Number(monster.str || 1) * 3),
     def: Number(monster.def || 0),
     dodge: Math.min(50, Number(monster.agi || 1) * 0.5),
-    hit: Math.min(100, 80 + Number(monster.dex || 1)),
-    crit: Math.min(100, Number(monster.luk || 0) * 0.3),
+    hit: Math.min(100, 85 + Number(monster.dex || 1)),
+    critRate: Math.min(100, Number(monster.luk || 0) * 0.3),
     comboChance: Math.min(80, 3 + Number(monster.agi || 1) * 0.5),
   };
 }
@@ -284,7 +286,7 @@ async function verifyJobQuestVisibilityAndProgress(db) {
     });
     const lowVisible = await lowService.getPlayerProgress(discordId, "job");
     const lowRow = lowVisible.find((row) => row.quest.id === quest.id);
-    assert(lowRow?.locked === true, `${quest.title} 等級不足時應顯示為鎖定`);
+    assert(!lowRow, `${quest.title} 等級不足時應依現行隱藏規則不回傳`);
     await lowService.recordProgress(discordId, quest.type, 1);
     progress = await lowRepo.getPlayerProgress(discordId, periodKey, "job");
     assert(!progress[quest.id], `${quest.title} 等級不足卻累積進度`);

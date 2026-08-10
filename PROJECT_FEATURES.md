@@ -1,87 +1,74 @@
-## 專案功能總覽
+# 專案功能現況
 
-簡短描述：Discord-first 的輕量遊戲平台，提供管理後台、Discord Bot 互動、戰鬥系統與可切換的儲存後端（JSON / MongoDB）。
+> 狀態：現行功能矩陣。最後以程式碼與 MongoDB 核對：2026-08-10。
+>
+> 這裡只回答「現在有什麼、能不能用」。程式位置看 [docs/SYSTEMS.md](docs/SYSTEMS.md)，即時資料量看 [docs/CURRENT_GAME_STATUS.md](docs/CURRENT_GAME_STATUS.md)。
 
-**核心功能**
-- **戰鬥系統**：玩家可在 Discord 頻道出戰→開始戰鬥（回合制模擬）→結算。依傷害佔比分配金幣、EXP、掉落，道具掉落會放入玩家背包，包含加碼幸運獎機制。
-- **參戰管理**：記錄參與者名單與傷害（damageMap），擊殺後推進下一隻怪物並清空參戰資料。
+本系統是 Discord 與玩家 Web 共用後端的線上 RPG。runtime 為 **MongoDB-only**；JSON 檔不是線上儲存後端。
 
-**管理後台（Web）**
-- `src/web/public/admin.monsters.js`：怪物管理介面，可新增/編輯怪物、設定掉落、上傳圖片、切換上場怪物。
-- 道具選擇：新增分類式 modal（可設定掉落%）並保留原有搜尋 combobox，裝備呈現數值摘要與次分類過濾。
+## 玩家功能
 
-**Discord Bot（互動與通知）**
-- 支援按鈕互動（出戰、開始戰鬥、刪除紀錄、玩家面板等）。
-- 擊殺與掉落會 DM 給玩家並在頻道廣播（含 BOSS 通知與 group bonus）。
-- 已修正 interaction 處理：採用 `deferReply()` + `editReply()` 避免超時。
+| 系統 | 現況 | 入口／限制 |
+| --- | --- | --- |
+| 玩家登入、個人資料、屬性、等級 | 開放 | Discord OAuth；最高 Lv.50，滿等溢出 EXP 轉金幣 |
+| 背包、換裝、使用、丟棄、出售、鎖定、批次整理 | 開放 | Web；背包滿時會阻擋主要戰鬥入口 |
+| 強化、附魔、分解 | 開放 | Web 與後台設定共用服務 |
+| 一般區域討伐 | 開放 | Discord 與 Web 共用 `combatLoop` |
+| 世界王 | 開放 | 大史王 → 古龍王 → 地獄狼牙王為前置鏈；島島龜王是獨立活動線 |
+| 單人世界王 | 開放 | 簡化世界王入口；共用主要戰鬥機制 |
+| KDA 貢獻排行 | 開放 | 傷害、承傷、治療／輔助歸戶與榜單 API |
+| 掛機 | 開放 | Discord 與 Web；區域資料可由後台維護 |
+| PK 擂台 | 開放 | Discord 與 Web 共用擂台狀態 |
+| 爬塔 | **暫停開放** | 單人與組隊程式保留；Discord 和 `/api/tower/*` 皆被總開關擋住 |
+| 賭場命運轉盤 | 開放 | Discord 與 Web；實際 enabled 狀態仍看 casino 設定 |
+| 寵物 | 開放 | 孵化、餵食、採集、出戰、圖鑑 |
+| 麻將排隊 | 開放 | API／SSE 與管理操作 |
+| 商店、拍賣場 | 開放 | 金幣商品、玩家拍賣、交易台帳 |
+| 周邊商城 | 開放 | 商品、鑽石／綠界訂單、訪客查單、後台訂單與 CSV |
+| 主線故事 | 開放 | 目前 DB 有序章、第一章；活動章節可獨立停用 |
+| 任務 | 開放 | onboarding、job、daily、weekly、season |
+| 打卡、邀請碼、通知、聊天大廳 | 開放 | Web 與 Discord／SSE 整合 |
+| 圖鑑 | 開放 | 怪物、卡片、寵物、記憶錨點 |
 
-**後端與 API**
-- Express REST 路由包含 admin 與 player 相關 API（`src/api/routes/`）。
-- 管理面板與玩家前端透過 `/admin/items`, `/admin/monsters` 等 API 讀寫資料。
+## 職業
 
-**儲存層（Adapters）**
-- 支援 `json`（本機檔案）與 `mongo`（MongoDB）兩種 adapter，可透過 `.env` 的 `STORAGE_DRIVER` 切換。
-- JSON 實作：`src/adapters/json/jsonStore.js`；Mongo 實作：`src/adapters/mongo/createMongoRepositories.js`。
+- 目前有 11 個一轉、13 條二轉分支。
+- 每個一轉職業至少有 1 條可用二轉，因此「所有一轉都有二轉」成立。
+- 其中 2 條額外分支鎖定：劍鬼、盜靈；鎖定只阻擋新轉職，不代表程式機制不存在。
+- 玩家實際能否接任務還會受任務 `enabled/isActive`、等級、持有徽章、費用與同職分支互斥等條件影響。
+- 單一來源為 `src/shared/jobAdvancement.js`；DB 徽章與任務狀態由 `npm run status:update` 列出。
 
-**工具與腳本**
-- 匯出 / 遷移 / 修補腳本位於 `scripts/`，例如：
-  - `scripts/export-monster-participants.js`（匯出參戰者）
-  - `scripts/export-all-players.js`（匯出全部玩家）
-  - `scripts/migrate-to-mongo.js`（遷移到 MongoDB）
+## 戰鬥與任務判定
 
-**部署與注意事項**
-- 若使用 Discord 交互涉及長時間 DB 查詢，確保 interaction 先 `deferReply()`，並在作業完成後 `editReply()`。
-- 在多 process（PM2）環境，`claimKill` 與 `monsterState` 使用原子操作來避免雙重結算。
-- 更新 bot/server 需重新啟動運行中的程序才會生效（例如 `npm run pm2:restart`）。
+- Discord、Web 一般討伐、世界王與多數模擬共用 `src/shared/combatLoop.js`。
+- 每回合會改變 HP 的效果在該回合實際結算；戰報只報告真正發生的數字，不把開場效果說明當成治療紀錄。
+- `healDone` 只累計實際非吸血治療；`lifestealDone` 只累計實際吸血。
+- 滿血溢補、滿血溢出吸血、治療轉傷害與被治療免疫阻擋的數字都不算任務進度。
+- 「聖人的試煉」使用 `heal_done`；「對鮮血的渴望」使用 `lifesteal_done`。舊錯誤版本任務留在 DB 但已停用。
 
-**驗證建議**
-- 後端：啟動服務後用 Postman 或瀏覽器驗證 `/admin/monsters`、`/admin/items`。
-- 前端：開啟 admin 面板測試新增怪物、上傳圖片、用 modal 選取掉落並儲存。
-- Bot：在 Discord 測試出戰→開始戰鬥，檢查是否有超時、是否正確分配獎勵與廣播。
+## 直播整合
 
-如果需要，我可以把這個檔案放到 `docs/` 並匯出為 PDF，或把內容擴充為「部署步驟 / 測試清單 / 權限設定」。
+| 功能 | 現況 |
+| --- | --- |
+| OneComme 接收 | 保留；用於斗內、綁定、會員／觀看 meta、聊天室 overlay 等即時事件，不是玩家可操作的「留言查詢」功能 |
+| YouTube 待機室預告 | 新的 public／unlisted upcoming broadcastId 只發 1 次；OAuth API 每 2 分鐘輪詢，OneComme 若先看到也可觸發 |
+| 正式開台公告 | 同一直播連續 3 輪確認（約 60 秒）後發送；連續 6 輪離線（約 120 秒）才釋放場次鎖 |
+| 去重／冷卻 | 同場開台 6 小時內不重發；任意開台公告至少間隔 10 分鐘；待機室依 broadcastId 永久去重記錄 |
+| 觀看熱度 | DB 目前啟用 30／40／50 人三階；同場同階只提示一次，升階可再提示，任意兩次仍受 60 分鐘最短間隔 |
+| 全服 Buff | 直播中續期，收台後維持設定的寬限時間；不降階，升階覆寫，不與同一觀看桶疊加；可與斗內桶疊加 |
+| 斗內／SC／會員 | DB 目前均啟用；實際門檻與效果以 `serverEventConfig` 為準 |
 
----
+待機室預告與正式開台公告都發到 `STREAM_GO_LIVE_CHANNEL_ID` 指定的直播通知區；訊息不自動 mention 任何人。
 
-## Web 戰棋（自動站位）第一階段規格（MVP v1）
+## 管理與維運
 
-目標：先做出一場可完整結算的 5v5 自動戰鬥，前端為方格戰場，資料全部由目前後台雲端提供。
+- Web 後台管理玩家、權限、頻道版位、怪物、世界王、道具、商店、拍賣、任務、故事、效果、戰鬥設定、附魔、轉盤、直播記錄／活動、周邊訂單等。
+- API 有 CORS 白名單、全域速率限制、JWT／管理權限與正式環境弱密鑰阻擋。
+- MongoDB 使用唯一索引、TTL 與原子操作保護玩家進度、交易、世界王與高頻紀錄。
+- PM2 啟動／重啟指令、Cloudflare 與新機器設定見 [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)。
 
-### 1) 資料來源規則（強制）
-- 所有遊戲資料必須來自後台雲端 API：角色、武器、怪物、技能、圖片、地形。
-- 不使用本地假資料、不硬編碼數值、不在前端寫死圖片路徑。
-- 前端只負責渲染與互動，戰鬥所需資料透過 API 載入。
+## 未實作或不應誤認為現況
 
-### 2) 戰場與隊伍
-- 地圖：方格地圖（預設 8x6，可由後台設定）。
-- 隊伍：我方 5 人、敵方 5 人。
-- 站位：開戰前可在己方部署區放置；開戰後全自動。
-
-### 3) 自動戰鬥流程
-- 開始戰鬥後，依 SPD 決定行動順序。
-- 每個單位回合：
-  1. 選擇目標（預設：可攻擊範圍內血量最低，若無則最近目標）
-  2. 移動（若需要）
-  3. 施放普攻或技能
-  4. 結算傷害/狀態
-- 勝負條件：一方全滅即結束。
-
-### 4) 必要數值欄位（由雲端提供）
-- 單位：id、name、hp、atk、def、spd、moveRange、attackRange、critRate、critDamage。
-- 技能：id、name、type、power、range、cooldown、targetRule、aoe。
-- 裝備：id、name、statModifiers、skillOverrides（可選）。
-- 圖片：unitSpriteUrl、skillIconUrl、weaponIconUrl。
-
-### 5) 前端畫面最小需求
-- 戰場方格、單位立繪/圖示、血條、回合順序列。
-- 播放基本攻擊/受擊動畫（可先用簡單位移與閃爍）。
-- 顯示戰鬥 log（誰打誰、傷害、暴擊、擊殺）。
-
-### 6) 驗收標準（這版算完成）
-- 能成功從雲端 API 取得隊伍資料與圖片。
-- 能進行一場 5v5 自動戰鬥直到結算。
-- 前端戰鬥過程可視化，且不依賴本地假資料。
-
-### 7) 下一步（你說 OK 再做）
-- 建立 Battle Engine 的資料介面（TypeScript types + API 對接層）。
-- 接上 Phaser 戰場場景，先完成「讀雲端資料 -> 生成單位 -> 自動回合結算」。
+- 舊版文件中的「5v5 方格戰棋／Phaser 自動站位」是未採用提案，現行戰鬥不是該架構。
+- Godot 原生化、直播限定王、公會／固定隊伍等仍屬提案或未完成項目。
+- 日期型報告、交接文件、舊架構圖與 changelog 描述的是當時狀態，不能覆蓋本文件與程式現況。

@@ -1,5 +1,7 @@
 # 劍士（Swordsman）
 
+> 類型：一轉玩法摘要；精確數值以 MongoDB 徽章、`combatStats.js` 與 `combatLoop.js` 為準。
+
 定位：前排近戰戰士，擅長單手劍與雙手劍，穩定與爆發兼具。
 
 玩法重點：

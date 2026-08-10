@@ -114,7 +114,8 @@ function createStoryRoutes(serviceContext, discordClient) {
         inventory: progress?.inventory || [],
         monsterEquipped: monster.equipped || {},
         monsterIsBoss: Boolean(monster?.isBoss),
-        monsterElement: monster?.element || null // 屬性相剋；無 element 則不參與
+        monsterElement: monster?.element || null,
+        monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0
       });
 
       // 劇情殺：不管實際結果，強制指定結局（動畫仍播真實回合日誌，最終血量/勝負覆寫）
