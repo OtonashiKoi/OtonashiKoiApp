@@ -151,6 +151,10 @@ function normalizeCustomStats(input = {}) {
     stunChance: clamp(toNumber(input.stunChance), 0, 100),
     stunDuration: Math.max(1, Math.round(toNumber(input.stunDuration, 3))),
     monsterAttackCount: Math.max(1, Math.round(toNumber(input.monsterAttackCount, 1))),
+    attackSegments: Math.max(1, Math.round(toNumber(input.attackSegments, 1))),
+    faceMultipliers: Array.isArray(input.faceMultipliers)
+      ? input.faceMultipliers.map((value) => Math.max(0.1, toNumber(value, 1)))
+      : null,
     tierDamageMultiplier: Math.max(0.1, toNumber(input.tierDamageMultiplier, 1)),
     tierFinalDamageMultiplier: Math.max(0.1, toNumber(input.tierFinalDamageMultiplier, 1)),
     tierBossDamageMultiplier: Math.max(0.1, toNumber(input.tierBossDamageMultiplier, 1)),

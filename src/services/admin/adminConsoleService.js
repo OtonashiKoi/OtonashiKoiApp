@@ -4,6 +4,7 @@ const config = require("../../config");
 const { featureKeyToZone, zoneToFeatureKey } = require("../../shared/zones");
 const { isWorldBossZone } = require("../worldBoss/worldBossService");
 const { isLeaderboardExcluded } = require("../../shared/leaderboardEligibility");
+const { summarizeCharacterLevels } = require("../../shared/characterLevelSummary");
 
 const AVAILABLE_FEATURES = [
   // ─── 系統面板 ────────────────────────────────
@@ -354,19 +355,27 @@ class AdminConsoleService {
     const rows = players
       .filter((p) => p.status !== "disabled")
       .filter((p) => !isLeaderboardExcluded(progressMap[p.discordId]))
-      .map((p) => ({
-        discordId: p.discordId,
-        displayName: p.displayName,
-        gold: walletMap[p.discordId]?.gold ?? 0,
-        diamond: walletMap[p.discordId]?.diamond ?? 0,
-        level: progressMap[p.discordId]?.level ?? 1,
-        exp: progressMap[p.discordId]?.exp ?? 0,
-        checkinCount: checkinCounts[p.discordId] ?? 0
-      }));
+      .map((p) => {
+        const levels = summarizeCharacterLevels(progressMap[p.discordId] || {});
+        return {
+          discordId: p.discordId,
+          displayName: p.displayName,
+          gold: walletMap[p.discordId]?.gold ?? 0,
+          diamond: walletMap[p.discordId]?.diamond ?? 0,
+          level: levels.highestLevel,
+          exp: levels.highestExp,
+          totalLevel: levels.totalLevel,
+          totalExp: levels.totalExp,
+          characterCount: levels.characterCount,
+          characterLevels: levels.characterLevels.map((character) => character.level).join(" + "),
+          checkinCount: checkinCounts[p.discordId] ?? 0
+        };
+      });
 
     return {
       gold: [...rows].sort((a, b) => b.gold - a.gold).slice(0, safeLimit),
       level: [...rows].sort((a, b) => b.level - a.level || b.exp - a.exp).slice(0, safeLimit),
+      accountLevel: [...rows].sort((a, b) => b.totalLevel - a.totalLevel || b.totalExp - a.totalExp).slice(0, safeLimit),
       checkin: [...rows].sort((a, b) => b.checkinCount - a.checkinCount).slice(0, safeLimit)
     };
   }

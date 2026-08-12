@@ -1,5 +1,8 @@
 "use strict";
 
+const { collectEquipmentEffects } = require("./effectEngine");
+const { getElementCombatProfile, normalizeElement } = require("./elementSystem");
+
 function getStat(stats = {}, key) {
   return Math.max(0, Number(stats?.[key] || 0));
 }
@@ -11,6 +14,34 @@ function floorStep(stat, step, gain) {
 function clampAuraValue(value, max) {
   const clamped = Math.min(max, Math.max(0, Number(value) || 0));
   return Math.round(clamped * 10) / 10;
+}
+
+function snapshotSupportShotParams(effect, providerStats = {}, equipped = {}, inventory = [], zone = null) {
+  const elements = {};
+  for (const row of getElementCombatProfile(equipped).elements || []) {
+    if (row.attackLevel > 0) elements[row.element] = row.attackLevel;
+  }
+
+  const bonusVsElement = {};
+  const context = { equipped, inventory: Array.isArray(inventory) ? inventory : [], zone };
+  for (const ref of collectEquipmentEffects(equipped, "passive", context)) {
+    if (ref?.key !== "bonus_vs_element") continue;
+    const element = normalizeElement(ref.params?.element);
+    const value = Math.abs(Number(ref.params?.value) || 0);
+    if (element && value > 0) bonusVsElement[element] = (bonusVsElement[element] || 0) + value;
+  }
+
+  return {
+    ...(effect.params || {}),
+    casterAtk: Math.max(0, Math.round(Number(providerStats.atk) || 0)),
+    casterCrit: Math.max(0, Number(providerStats.crit) || 0),
+    casterFinalDamageMult: Math.max(0.01,
+      (Number(providerStats.finalDamageMultiplier) || 1)
+      * (Number(providerStats.tierFinalDamageMultiplier) || 1)
+    ),
+    casterElements: elements,
+    casterBonusVsElement: bonusVsElement,
+  };
 }
 
 function getSupportJobKey({ jobKey = null, jobName = null, equipped = {} } = {}) {
@@ -128,11 +159,17 @@ function scaleSupportPartyEffect(effect, {
   providerStats = {},
   jobKey = null,
   jobName = null,
-  equipped = {}
+  equipped = {},
+  inventory = [],
+  zone = null,
 } = {}) {
   if (!effect || effect.target !== "party" || !effect.key) return effect;
   const resolvedJobKey = getSupportJobKey({ jobKey, jobName, equipped });
   if (!resolvedJobKey) return effect;
+
+  if (effect.key === "support_shot") {
+    return { ...effect, params: snapshotSupportShotParams(effect, providerStats, equipped, inventory, zone) };
+  }
 
   const currentValue = Number(effect?.params?.value ?? effect.value ?? 0);
   const scaled = calcScaledAuraValue(resolvedJobKey, effect.key, providerStats, currentValue);
@@ -171,6 +208,7 @@ function filterActiveAuras(auras, now = Date.now()) {
 module.exports = {
   calcScaledAuraValue,
   getSupportJobKey,
+  snapshotSupportShotParams,
   scaleSupportPartyEffect,
   scaleSupportPartyEffects,
   AURA_PRESENCE_WINDOW_MS,

@@ -70,7 +70,7 @@ async function check(serviceContext) {
       if (!claim.modifiedCount && !claim.upsertedCount) continue; // 別人搶到了
       if (m.dropPct > 0 || m.goldPct > 0 || m.expPct > 0) {
         await applyBuff({
-          label: `賽季永久 · 會員達 ${m.count} 人：${m.label || ""}`,
+          label: `本季 · 會員達 ${m.count} 人：${m.label || ""}`,
           source: "member_milestone",
           sourceRef: `memms:season:${m.id}`, // 每階唯一、可共存疊加
           dropPct: m.dropPct, goldPct: m.goldPct, expPct: m.expPct,
@@ -83,7 +83,7 @@ async function check(serviceContext) {
         if (m.dropPct > 0) parts.push(`掉寶 +${m.dropPct}%`);
         if (m.goldPct > 0) parts.push(`金幣 +${m.goldPct}%`);
         if (m.expPct > 0) parts.push(`經驗 +${m.expPct}%`);
-        announce(`🔓 綁定會員達 ${m.count} 人！本賽季永久保留 全服 ${parts.join("、")}！`);
+        announce(`🔓 綁定會員達 ${m.count} 人！本季保留 全服 ${parts.join("、")}！`);
       }
     }
 

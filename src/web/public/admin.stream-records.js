@@ -274,7 +274,7 @@
     return `
       <div class="card" style="margin-top:14px;">
         <h3 style="margin:0 0 4px;">👥 會員事件（目前 ${esc(cur)} 位綁定會員）</h3>
-        <p class="hint" style="margin:0 0 10px;">綁定會員數：每突破 N 的倍數→<b>短期慶祝</b>；達門檻→<b>賽季永久</b>底盤（疊加，換季清）。里程碑數值＝該階「新增」多少。</p>
+        <p class="hint" style="margin:0 0 10px;">綁定會員數：每突破 N 的倍數→<b>短期慶祝</b>；達門檻→<b>本季保留</b>底盤（疊加，換季清）。里程碑數值＝該階「新增」多少。</p>
         <label style="display:inline-flex;align-items:center;font-size:13px;margin:0 14px 8px 0;font-weight:700;"><input id="me-enabled" type="checkbox" ${cfg.enabled ? "checked" : ""} style="margin-right:6px;">啟用會員事件</label>
         <label style="display:inline-flex;align-items:center;font-size:12px;margin:0 10px 8px 0;"><input id="me-announce" type="checkbox" ${cfg.announce !== false ? "checked" : ""} style="margin-right:4px;">全服廣播</label>
         <div style="margin:6px 0;padding:8px;background:#171b2c;border-radius:8px;">
@@ -315,8 +315,8 @@
       </tr>`).join("");
     return `
       <div class="card" style="margin-top:14px;">
-        <h3 style="margin:0 0 4px;">📊 SC 累積里程碑（賽季永久・疊加）</h3>
-        <p class="hint" style="margin:0 0 10px;">全服斗內累積跨門檻→解鎖<b>賽季永久</b>底盤（疊加保留，換季清）。數值＝該階「新增」多少。<b>勾「啟用」才發獎</b>。</p>
+        <h3 style="margin:0 0 4px;">📊 SC 累積里程碑（本季保留・疊加）</h3>
+        <p class="hint" style="margin:0 0 10px;">全服斗內累積跨門檻→解鎖<b>本季保留</b>底盤（各階疊加，換季清）。數值＝該階「新增」多少。<b>勾「啟用」才發獎</b>。</p>
         <div style="margin:6px 0 4px;font-weight:800;font-size:15px;">目前累積：NT$${esc(total)} ${maxT ? `<span class="hint" style="font-weight:400;">/ 最高 NT$${esc(maxT)}（${pct}%）</span>` : ""}</div>
         <div style="position:relative;height:14px;background:#20273c;border-radius:8px;margin:14px 0 10px;">
           <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:linear-gradient(90deg,#5b67ff,#a26bff);border-radius:8px;"></div>

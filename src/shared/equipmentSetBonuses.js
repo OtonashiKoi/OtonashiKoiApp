@@ -146,6 +146,23 @@ const SET_DEFS = {
       ] },
     ],
   },
+  island_turtle: {
+    name: "島島龜王套裝・潮生",
+    note: "所有海灘系列裝備皆可計件；S 烏龜武器每把算 1 件，無指定武器要求",
+    tiers: [
+      { count: 2, desc: "最大生命 +8%", effects: () => [passiveEff("max_hp_multiplier_up", 8)] },
+      { count: 3, desc: "每 3 回合回復 3% MaxHP", effects: () => [passiveEff("life_regen", 3, null, { interval: 3 })] },
+      {
+        count: 4,
+        desc: "潮汐輪轉：漲潮 2 回合受到傷害 -8%；退潮 2 回合最終傷害 +8%",
+        effects: () => [passiveEff("turtle_tide_cycle", 0, null, {
+          phaseRounds: 2,
+          highTideDamageReductionPct: 8,
+          ebbFinalDamagePct: 8,
+        })],
+      },
+    ],
+  },
   // ── 三元套：單件成套（三元牌一件即觸發；麻將三元 白發中）──
   sanyuan: {
     name: "三元套裝",

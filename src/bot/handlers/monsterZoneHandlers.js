@@ -23,6 +23,7 @@ const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard } = requi
 const { clearCurrentCache } = require("../../adapters/mongo/requestCache");
 const { NpcOptionEffectError, processNpcOptionEffects } = require("./npcOptionEffects");
 const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
+const { getWorldBossPartLabel } = require("../../shared/worldBossParts");
 const config = require("../../config");
 const {
   isDiscordRestProtected,
@@ -58,6 +59,25 @@ const damageRankingDebounce = new Map();
 const BOSS_SPAWN_BROADCAST_ENABLED = false;
 const COOLDOWN_MAP_PRUNE_INTERVAL_MS = 5 * 60 * 1000;
 let cooldownMapPruneTimer = null;
+
+// 任務計數不影響本場傷害、掉落或經驗；擊殺結算不可等它寫完才回戰報。
+// WeeklyQuestService 內部會依玩家序列化，這裡只負責把附帶進度移出核心結算鏈。
+function recordQuestForPlayersInBackground(questService, playerIds, type, amount = 1) {
+  if (!questService || typeof questService.recordProgress !== "function") return;
+  const ids = [...new Set((playerIds || []).map(String).filter(Boolean))];
+  setImmediate(() => {
+    void Promise.allSettled(ids.map((playerId) => (
+      typeof questService.recordProgressBatch === "function"
+        ? questService.recordProgressBatch(playerId, { [type]: amount })
+        : questService.recordProgress(playerId, type, amount)
+    ))).then((results) => {
+      const failed = results.filter((result) => result.status === "rejected");
+      if (failed.length > 0) {
+        console.error(`[Quest] background ${type} failed for ${failed.length}/${ids.length} player(s)`);
+      }
+    });
+  });
+}
 
 function pruneCooldownMap(map, now = Date.now()) {
   for (const [discordId, cooldown] of map.entries()) {
@@ -303,8 +323,7 @@ function parseWorldBossTargetPart(customId) {
 function getWorldBossTargetProfile(part, zoneKey = null) {
   // 島島龜王：難度全由潮汐/海嘯機制驅動（turtleTide.battleMods），部位本身不加料
   if (zoneKey === TURTLE_ZONE) {
-    const labels = { head: "龜首", body: "島背", wings: "左鰭", legs: "右鰭" };
-    return { label: labels[part] || "島背" };
+    return { label: getWorldBossPartLabel(zoneKey, part) };
   }
   // 古龍王:採破鱗削弱(破部位永久削弱),攻擊當下不另加難度,只回部位標籤
   if (zoneKey === DRAGON_KING_ZONE || part === "wings") {
@@ -612,7 +631,8 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
 
   activeMonsterTransitions.set(zoneKey, transitionState.activeTransition);
   await sc.monsterService.saveState(transitionState, zoneKey);
-  await _republishPanel(
+  // Discord 面板是戰後展示，不影響換怪狀態；不得讓 Discord API 延遲卡住 Web 戰報。
+  _republishPanel(
     sc,
     zoneKey,
     null,
@@ -1039,29 +1059,46 @@ function isSupportJobBadge(jobEq) {
 async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null, jobEq = null, damageTaken = 0, healDone = 0, lifestealDone = 0) {
   // 通行證點數：打怪(非落敗)依地圖階級加點
   if (outcome !== "lose" && sc?.passService?.addPointsForKill) {
-    const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", dragon_king_lair: "S", hellfire_depths: "S" };
+    const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", event_1: "A", dragon_king_lair: "S", hellfire_depths: "S" };
     sc.passService.addPointsForKill(discordId, PASS_TIER[zoneKey] || "D").catch(() => {});
   }
   const questService = sc?.questService || sc?.weeklyQuestService;
   if (!questService || typeof questService.recordProgress !== "function") return;
 
-  await questService.recordProgress(discordId, "battle_count", 1);
-  await questService.recordProgress(discordId, "damage_total", totalDamage);
+  const metrics = {};
+  const addMetric = (type, amount = 1) => {
+    const inc = Math.max(0, Number(amount) || 0);
+    if (type && inc) metrics[type] = Number(metrics[type] || 0) + inc;
+  };
+  addMetric("battle_count", 1);
+  addMetric("damage_total", totalDamage);
   // 錨點隱藏任務指標：承受傷害(沒苦硬吃)、回血量(聖人)
-  if (Number(damageTaken) > 0) await questService.recordProgress(discordId, "damage_taken", Math.round(Number(damageTaken)));
-  if (Number(healDone) > 0) await questService.recordProgress(discordId, "heal_done", Math.round(Number(healDone))); if (Number(lifestealDone) > 0) await questService.recordProgress(discordId, "lifesteal_done", Math.round(Number(lifestealDone)));
+  addMetric("damage_taken", Math.round(Number(damageTaken || 0)));
+  addMetric("heal_done", Math.round(Number(healDone || 0)));
+  addMetric("lifesteal_done", Math.round(Number(lifestealDone || 0)));
   const weaponMetric = resolveWeaponQuestMetric(weaponType);
-  if (weaponMetric) {
-    await questService.recordProgress(discordId, weaponMetric, 1);
-  }
+  addMetric(weaponMetric, 1);
   // 用輔助職業(徽章)出戰 → 記錄一場（供隱藏賽季任務「共鳴之鏈」用）
-  if (isSupportJobBadge(jobEq)) {
-    await questService.recordProgress(discordId, "battle_with_support_job", 1);
-  }
+  if (isSupportJobBadge(jobEq)) addMetric("battle_with_support_job", 1);
   // 二轉試煉：以該一轉職業出戰一場
   {
     const _jobMetric = resolveJobBattleMetric(jobEq);
-    if (_jobMetric) await questService.recordProgress(discordId, _jobMetric, 1);
+    addMetric(_jobMetric, 1);
+  }
+  if (outcome === "lose") addMetric("death_count", 1);
+  if (combatStats) {
+    addMetric("combo_count", combatStats.comboCount);
+    addMetric("dodge_count", combatStats.dodgeCount);
+    addMetric("block_count", combatStats.blockCount);
+    addMetric("stun_count", combatStats.stunCount);
+    addMetric("burn_trigger_count", combatStats.burnTriggerCount);
+  }
+  if (typeof questService.recordProgressBatch === "function") {
+    await questService.recordProgressBatch(discordId, metrics);
+  } else {
+    for (const [type, amount] of Object.entries(metrics)) {
+      await questService.recordProgress(discordId, type, amount);
+    }
   }
   // 職業徽章熟練度 +1（裝備中的徽章才累積）。
   // 練滿 Lv20 **不廣播**——它只是讓職業任務亮起來；真正值得全服知道的是「轉職成功」。
@@ -1071,16 +1108,6 @@ async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, co
     console.error(`[JobBadge] Discord battle proficiency failed | player=${discordId} | err=${error?.message || error}`);
     /* 熟練度失敗不影響戰鬥結算 */
   }
-  if (outcome === "lose") {
-    await questService.recordProgress(discordId, "death_count", 1);
-  }
-
-  if (!combatStats) return;
-  if (combatStats.comboCount > 0) await questService.recordProgress(discordId, "combo_count", combatStats.comboCount);
-  if (combatStats.dodgeCount > 0) await questService.recordProgress(discordId, "dodge_count", combatStats.dodgeCount);
-  if (combatStats.blockCount > 0) await questService.recordProgress(discordId, "block_count", combatStats.blockCount);
-  if (combatStats.stunCount > 0) await questService.recordProgress(discordId, "stun_count", combatStats.stunCount);
-  if (combatStats.burnTriggerCount > 0) await questService.recordProgress(discordId, "burn_trigger_count", combatStats.burnTriggerCount);
 }
 
 /**
@@ -1697,7 +1724,7 @@ function getJobNameFromEquipped(equipped = {}) {
   return jobEq?.itemName || jobEq?.name || null;
 }
 
-function createBattleParticipantCache(sc) {
+function createBattleParticipantCache(sc, zone = null) {
   const cache = new Map();
 
   return {
@@ -1715,6 +1742,7 @@ function createBattleParticipantCache(sc) {
           player: null,
           displayName: displayNameFallback || null,
           equipped: {},
+          inventory: [],
           refs: []
         };
       }
@@ -1742,13 +1770,14 @@ function createBattleParticipantCache(sc) {
           equipped,
           inventory
         });
-        const stats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], inventory, { pkRating: progress?.pkRating, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
+        const stats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], inventory, { pkRating: progress?.pkRating, zone, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
 
         return {
           progress,
           player,
           displayName,
           equipped,
+          inventory,
           stats,
           refs
         };
@@ -2704,7 +2733,7 @@ async function handleEnterBattle(interaction) {
         monster = queuedReady.monster;
       }
 
-      const ensured = ensureWorldBossPartState(state, monster.calc.maxHp);
+      const ensured = ensureWorldBossPartState(state, monster.calc.maxHp, zoneKey);
       if (ensured.changed) {
         state = { ...state, ...ensured };
         await sc.monsterService.saveState(state, zoneKey);
@@ -2729,12 +2758,13 @@ async function handleEnterBattle(interaction) {
       if (petEntry) equipped = { ...equipped, pet_companion: petEntry };
     } catch (_) { /* 寵物加成失敗不影響戰鬥 */ }
     const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, zone: zoneKey, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
-    const participantCache = createBattleParticipantCache(sc);
+    const participantCache = createBattleParticipantCache(sc, zoneKey);
     let currentSnapshot = {
       progress,
       player: null,
       displayName,
       equipped,
+      inventory: Array.isArray(progress?.inventory) ? progress.inventory : [],
       stats: pStats,
       refs: collectEquipmentEffects(equipped, null, {
         equipped,
@@ -2784,7 +2814,7 @@ async function handleEnterBattle(interaction) {
       if (boss && battleMonster?.id !== boss.id) {
         battleMonster = boss;
       }
-      const ensured = ensureWorldBossPartState(battleState, battleMonster.calc.maxHp);
+      const ensured = ensureWorldBossPartState(battleState, battleMonster.calc.maxHp, zoneKey);
       if (ensured.changed) {
         battleState = { ...battleState, ...ensured };
         await sc.monsterService.saveState(battleState, zoneKey);
@@ -2922,7 +2952,7 @@ async function handleEnterBattle(interaction) {
       }
 
       if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
-        const ensured = ensureWorldBossPartState(battleState, battleMonster.calc.maxHp);
+        const ensured = ensureWorldBossPartState(battleState, battleMonster.calc.maxHp, zoneKey);
         if (ensured.changed) {
           battleState = { ...battleState, ...ensured };
           await sc.monsterService.saveState(battleState, zoneKey);
@@ -2946,7 +2976,9 @@ async function handleEnterBattle(interaction) {
 
       if (isWorldBossZone(zoneKey) && battleMonster?.isBoss && sc.worldBossServiceFor(zoneKey)) {
         const wbCfg = await sc.worldBossServiceFor(zoneKey).getConfig();
-        const hpPct = session.monsterMaxHp > 0 ? (session.monsterHp / session.monsterMaxHp) * 100 : 100;
+        const totalCurrentHp = sumWorldBossPartHp(battleState.worldBossPartsHp);
+        const totalMaxHp = sumWorldBossPartHp(battleState.worldBossPartsMaxHp);
+        const hpPct = totalMaxHp > 0 ? (totalCurrentHp / totalMaxHp) * 100 : 100;
         const phase = sc.worldBossServiceFor(zoneKey).resolvePhase(wbCfg, hpPct);
         session.worldBossPhase = phase;
         session.monsterStats = applyWorldBossPhaseModifiers(battleMonster.calc, phase);
@@ -3000,7 +3032,7 @@ async function handleEnterBattle(interaction) {
             if (_snP) {
               refs = [...refs, {
                 key: "support_shot", target: "party", trigger: "passive", chance: 100,
-                params: { value: Number(_snP.supportShotPct) || 50, casterAtk: Math.round(participant.stats?.atk || 0), casterCrit: Math.round(participant.stats?.crit || 0) },
+                params: { value: Number(_snP.supportShotPct) || 70, casterAtk: Math.round(participant.stats?.atk || 0), casterCrit: Math.round(participant.stats?.crit || 0) },
                 srcItem: "神射手徽章", sourceDiscordId: pid,
               }];
             }
@@ -3010,7 +3042,9 @@ async function handleEnterBattle(interaction) {
               const scaled = scaleSupportPartyEffect(r, {
                 providerStats: participant.stats || {},
                 jobName: pidJobName,
-                equipped: participant.equipped || {}
+                equipped: participant.equipped || {},
+                inventory: participant.inventory || [],
+                zone: zoneKey,
               });
               // 光環標籤：優先標「來源道具」，沒有才標職業徽章（與網頁一致）
               partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: r.srcItem || pidJobName, isSelfAura: pid === discordId, sourceDiscordId: pid });
@@ -3054,7 +3088,7 @@ async function handleEnterBattle(interaction) {
           if (_snC) {
             selfRawParty = [...selfRawParty, {
               key: "support_shot", target: "party", trigger: "passive", chance: 100,
-              params: { value: Number(_snC.supportShotPct) || 50, casterAtk: Math.round(currentSnapshot.stats?.atk || 0), casterCrit: Math.round(currentSnapshot.stats?.crit || 0) },
+              params: { value: Number(_snC.supportShotPct) || 70, casterAtk: Math.round(currentSnapshot.stats?.atk || 0), casterCrit: Math.round(currentSnapshot.stats?.crit || 0) },
               srcItem: "神射手徽章", sourceDiscordId: discordId,
             }];
           }
@@ -3098,7 +3132,9 @@ async function handleEnterBattle(interaction) {
             const scaled = scaleSupportPartyEffect(r, {
               providerStats: provider.stats || {},
               jobName: auraJobName,
-              equipped: provider.equipped || {}
+              equipped: provider.equipped || {},
+              inventory: provider.inventory || [],
+              zone: zoneKey,
             });
             partyEffects.push({ ...scaled, sourceName: srcName, sourceJobName: r.srcItem || auraJobName });
           }
@@ -3150,6 +3186,8 @@ async function handleEnterBattle(interaction) {
       }
       // ── 島島龜王（活動）：潮汐/海嘯修正——推進詠唱狀態機後取本場修正 ──
       session.turtleTsunami = false;
+      session.turtleGaugeMult = 1;
+      session.turtleTsunamiRound = null;
       if (zoneKey === TURTLE_ZONE && battleMonster?.isBoss) {
         const _tt = require("../../shared/turtleTide");
         const _part = session.worldBossTargetPart || "body";
@@ -3158,9 +3196,10 @@ async function handleEnterBattle(interaction) {
         const _totMax = Object.values(_tpl).reduce((s, v) => s + v, 0);
         const _totCur = getWorldBossPartKeys(zoneKey).reduce((s, k) => s + Math.max(0, Number(_partsHp[k] ?? _tpl[k]) || 0), 0);
         const _pct = _totMax > 0 ? (_totCur / _totMax) * 100 : 100;
-        const _events = _tt.ensureCast(battleState, _pct, Date.now());
+        const _turtleNow = Date.now();
+        const _events = _tt.ensureCast(battleState, _pct, _turtleNow);
         if (_events.length) await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
-        const _mods = _tt.battleMods(battleState, _part, Date.now());
+        const _mods = _tt.battleMods(battleState, _part, _turtleNow);
         if (_mods.headBlocked) {
           deleteMonsterSession(discordId);
           await interaction.editReply({
@@ -3172,8 +3211,14 @@ async function handleEnterBattle(interaction) {
         session.turtleTsunami = _mods.tsunami;
         session.hellfangMult = session.hellfangMult * _mods.mult; // 共用終傷通道（其他王不受影響）
         session.turtleForceHit = _mods.forceHitHead;
+        session.turtleGaugeMult = Math.max(1, Number(_mods.gaugeMult) || 1);
+        session.turtleTsunamiRound = _tt.tsunamiRoundForBattle(
+          battleState,
+          calculateTickDelay(session.playerStats?.agi ?? 1),
+          _turtleNow
+        );
       }
-      // ── 怪物圖鑑：依玩家對「這隻怪」的累積擊殺,算出本場傷害加成(最高 +25%) ──
+      // ── 怪物圖鑑：依玩家對「這隻怪」的累積擊殺，算出本場傷害加成 ──
       const _bestiaryIsWorldBoss = isWorldBossZone(zoneKey);
       const _bestiaryMonsterId = String(battleMonster?.id || battleMonster?._id || session.monsterName || "");
       const _bestiaryReq = bestiaryRequirement(battleMonster, _bestiaryIsWorldBoss);
@@ -3186,7 +3231,7 @@ async function handleEnterBattle(interaction) {
         if (_sgK) {
           const _km = Number(_sgK.knowledgeMult) || 2;
           _bestiaryBonusPct *= _km;
-          _bestiaryCapPct = 25 * _km;
+          _bestiaryCapPct = require("../../shared/bestiary").MAX_BONUS_PCT * _km;
         }
       } catch (_) { /* noop */ }
       // ── 區域連段（Zone COMBO）── 與網頁共用同一份狀態，DC 出戰一樣累積
@@ -3269,11 +3314,6 @@ async function handleEnterBattle(interaction) {
           diceGaugeGrids: diceGridsBefore,     // 命運骰（賭神）
           diceLuckStacks: diceLuckBefore,      // 手氣正旺（賭神）
           zoneComboCount: comboBefore, // 劍鬼斬的倍率來源
-          // DC 端不做姿態按鈕 → 有姿態系統的職業一律視為攻擊姿態（無姿態系統的職業回 null，不受影響）
-          stance: (() => {
-            try { return require("../../shared/battleStance").resolveRequestedStance(currentEquipped, "attack"); }
-            catch (_) { return null; }
-          })(),
           equipped: currentEquipped,
           inventory: currentProg?.inventory || [],
           partyEffects,
@@ -3281,10 +3321,11 @@ async function handleEnterBattle(interaction) {
           monsterIsBoss: Boolean(battleMonster?.isBoss),
           worldBossPhase: session.worldBossPhase || null,
           bestiaryBonusPct: _bestiaryBonusPct,
-          bestiaryBonusCapPct: _bestiaryCapPct, // 知彼（兵聖）上限放大；一般職業 undefined＝25
+          bestiaryBonusCapPct: _bestiaryCapPct, // 知彼（兵聖）上限放大；一般職業使用圖鑑共用上限
           isWorldBoss: isWorldBossZone(zoneKey) && Boolean(battleMonster?.isBoss), // 世界王:玩家 DOT 也吃王 def%
           bossVulnMult: session.hellfangMult, // 牙狼弱點/龜王潮汐倍率:玩家每擊終傷×此值(其他戰鬥=1不影響)
           tsunamiDeath: session.turtleTsunami || false, // 海嘯（島島龜王）：出戰即死
+          tsunamiDeathRound: session.turtleTsunamiRound || null, // 詠唱在本場途中完成也會直接命中
           forcePlayerHit: session.turtleForceHit || false, // 退潮打龜首必中
           zone: zoneKey, // 讓裝備的 zone 條件特效生效(例：S 龍系武器在龍族之領/龍王巢穴 +20%)
           monsterElement: battleMonster?.element || null, // 屬性相剋；怪物無 element 則不參與(現有怪皆是)
@@ -3371,7 +3412,7 @@ async function handleEnterBattle(interaction) {
         let hellfangEventDC = null; // 牙狼適應性狀態變化(給DC戰報)
         if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
           const part = session.worldBossTargetPart || "body";
-          const prevParts = ensureWorldBossPartState(freshState, battleMonster.calc.maxHp);
+          const prevParts = ensureWorldBossPartState(freshState, battleMonster.calc.maxHp, zoneKey);
           const latestPartHp = Math.max(0, Number(prevParts.worldBossPartsHp?.[part] || 0));
           // 牙狼(hellfire_depths)：倍率已在戰鬥每擊終傷套用(bossVulnMult)→totalDamage 即有效傷害，結算不再重複乘。
           const wbDamage = totalDamage;
@@ -3392,6 +3433,17 @@ async function handleEnterBattle(interaction) {
             const _partMax = Number(prevParts.worldBossPartsMaxHp?.[part]) || Number(battleMonster.calc.maxHp) || 0;
             hellfangEventDC = hellfangPartAccrue(nextState, part, _partMax, hellfangPlayerSchool(session.playerStats?.weaponType), wbDamage, Date.now());
             if (hellfangEventDC) { try { roundLogs.push(hellfangFlipLines(hellfangEventDC).join("\n")); } catch (_) { /* 戰報追加失敗不影響結算 */ } }
+          }
+
+          // 龜王 70%／30% 固定詠唱：本場扣血跨線後立刻寫入共用狀態。
+          if (zoneKey === TURTLE_ZONE && nextState.currentHp > 0) {
+            const turtleTotalMax = Object.values(prevParts.worldBossPartsMaxHp || {})
+              .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+            require("../../shared/turtleTide").ensureCast(
+              nextState,
+              turtleTotalMax > 0 ? (nextState.currentHp / turtleTotalMax) * 100 : 100,
+              Date.now()
+            );
           }
           allPartsDefeated = isWorldBossAllPartsDefeated(nextPartsHp);
 
@@ -3630,8 +3682,9 @@ async function handleEnterBattle(interaction) {
 
       // ── 敲世界王暈眩條（只有矮人戰士長敲得動）── 與網頁同一條、同規則
       if (stunGaugeKey && _dsg.canKnock(currentEquipped?.job_eq)) {
+        const stunAmount = Math.floor((combatResult?.combatStats?.attackRounds || 0) * (Number(session.turtleGaugeMult) || 1));
         const _knock = await _dsg
-          .knock(stunGaugeKey, zoneKey, combatResult?.combatStats?.attackRounds || 0, displayName, Date.now(), discordId)
+          .knock(stunGaugeKey, zoneKey, stunAmount, displayName, Date.now(), discordId)
           .catch(() => null);
         if (_knock?.triggered) {
           _dsg.announceStun({ byName: displayName, monsterName: session.monsterName });
@@ -3985,54 +4038,44 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // 擊敗古龍王(B)（dragon_king_lair 世界王全破）→ 記錄屠龍任務進度
   // 有參與就算一隻：所有參戰者(含補刀者)各 +1，不是只記最後補刀的人
   if (zoneKey === "dragon_king_lair" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
-    try {
-      const qs = sc?.questService || sc?.weeklyQuestService;
-      if (qs?.recordProgress) {
-        // 參與者 = 對本王造成過傷害的人(damageMap) + 排隊參戰名單 + 補刀者
-        const slayers = [...new Set([
-          ...(state?.damageMap ? Object.keys(state.damageMap) : []),
-          ...(Array.isArray(state?.participants) ? state.participants : []),
-          discordId,
-        ].filter(Boolean))];
-        for (const pid of slayers) {
-          await qs.recordProgress(pid, "kill_dragon_king", 1);
-        }
-      }
-    } catch (e) { console.error("[Quest] kill_dragon_king record error:", e.message); }
+    // 參與者 = 對本王造成過傷害的人(damageMap) + 排隊參戰名單 + 補刀者
+    const slayers = [...new Set([
+      ...(state?.damageMap ? Object.keys(state.damageMap) : []),
+      ...(Array.isArray(state?.participants) ? state.participants : []),
+      discordId,
+    ].filter(Boolean))];
+    recordQuestForPlayersInBackground(sc?.questService || sc?.weeklyQuestService, slayers, "kill_dragon_king", 1);
   }
 
   // 擊敗大史王（elite 世界王全破）→ 記錄屠史任務進度（比照古龍王：所有參戰者各 +1）
   if (zoneKey === "elite" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
-    try {
-      const qs = sc?.questService || sc?.weeklyQuestService;
-      if (qs?.recordProgress) {
-        const slayers = [...new Set([
-          ...(state?.damageMap ? Object.keys(state.damageMap) : []),
-          ...(Array.isArray(state?.participants) ? state.participants : []),
-          discordId,
-        ].filter(Boolean))];
-        for (const pid of slayers) {
-          await qs.recordProgress(pid, "kill_slime_king", 1);
-        }
-      }
-    } catch (e) { console.error("[Quest] kill_slime_king record error:", e.message); }
+    const slayers = [...new Set([
+      ...(state?.damageMap ? Object.keys(state.damageMap) : []),
+      ...(Array.isArray(state?.participants) ? state.participants : []),
+      discordId,
+    ].filter(Boolean))];
+    recordQuestForPlayersInBackground(sc?.questService || sc?.weeklyQuestService, slayers, "kill_slime_king", 1);
   }
 
   // 擊敗地獄狼牙王（hellfire_depths 世界王全破）→ 記錄屠狼任務進度（比照古龍王：所有參戰者各 +1）
   if (zoneKey === "hellfire_depths" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
-    try {
-      const qs = sc?.questService || sc?.weeklyQuestService;
-      if (qs?.recordProgress) {
-        const slayers = [...new Set([
-          ...(state?.damageMap ? Object.keys(state.damageMap) : []),
-          ...(Array.isArray(state?.participants) ? state.participants : []),
-          discordId,
-        ].filter(Boolean))];
-        for (const pid of slayers) {
-          await qs.recordProgress(pid, "kill_hellfang_king", 1);
-        }
-      }
-    } catch (e) { console.error("[Quest] kill_hellfang_king record error:", e.message); }
+    const slayers = [...new Set([
+      ...(state?.damageMap ? Object.keys(state.damageMap) : []),
+      ...(Array.isArray(state?.participants) ? state.participants : []),
+      discordId,
+    ].filter(Boolean))];
+    recordQuestForPlayersInBackground(sc?.questService || sc?.weeklyQuestService, slayers, "kill_hellfang_king", 1);
+  }
+
+  // 擊敗島島龜王（event_boss 世界王全破）→ 記錄屠龜任務進度（比照古龍王：所有參戰者各 +1）
+  // ⚠️ 四隻世界王都要有掛鉤，否則「夏季四天王」那條複合任務永遠差一角。
+  if (zoneKey === "event_boss" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
+    const slayers = [...new Set([
+      ...(state?.damageMap ? Object.keys(state.damageMap) : []),
+      ...(Array.isArray(state?.participants) ? state.participants : []),
+      discordId,
+    ].filter(Boolean))];
+    recordQuestForPlayersInBackground(sc?.questService || sc?.weeklyQuestService, slayers, "kill_island_turtle", 1);
   }
 
   if (isWorldBossZone(zoneKey) && monster?.isBoss && !isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
@@ -4069,16 +4112,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   // 任務勝利判定：怪物被擊殺時，全參戰者都算 1 次勝利。
   // 這裡統一寫入，確保 Discord/Web 兩條戰鬥流程規則一致。
-  try {
-    const questService = sc.questService || sc.weeklyQuestService;
-    if (questService && typeof questService.recordProgress === "function") {
-      await Promise.allSettled(
-        participants.map((pid) => questService.recordProgress(pid, "battle_win", 1))
-      );
-    }
-  } catch (_) {
-    // ignore quest write failures; reward settlement must continue
-  }
+  recordQuestForPlayersInBackground(sc.questService || sc.weeklyQuestService, participants, "battle_win", 1);
 
   // ── 依傷害比例計算每人分配量 ──
   const rawDmgMap = state.damageMap || {};
@@ -4294,8 +4328,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         const { getBotClient } = require("../runtimeContext");
         const client = getBotClient();
         if (client?.isReady()) {
-          const user = await client.users.fetch(hpid);
-          await user.send(`💚 **治療師加成**（${monster.name}）：${parts.join("、")}`);
+          // 私訊屬於通知，不影響本場獎勵；Discord API 變慢時不可阻塞戰報。
+          void client.users.fetch(hpid)
+            .then((user) => user.send(`💚 **治療師加成**（${monster.name}）：${parts.join("、")}`))
+            .catch(() => {});
         }
       } catch (_) {}
     }
@@ -4789,7 +4825,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         }
       };
       await sc.monsterService.saveState(eventState, zoneKey);
-      await _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch((e) => console.error("[Panel] NPC event publish failed:", e?.message || e));
+      _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch((e) => console.error("[Panel] NPC event publish failed:", e?.message || e));
       _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
     } else {
       const pickedMonster = chosenMonster || nextMonster;
@@ -4818,7 +4854,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           activeTransition: null
         };
         await sc.monsterService.saveState(newState, zoneKey);
-        await _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch((e) => console.error("[Panel] empty state publish failed:", e?.message || e));
+        _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch((e) => console.error("[Panel] empty state publish failed:", e?.message || e));
       }
     }
   } else {
@@ -4850,7 +4886,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         }
       };
       await sc.monsterService.saveState(eventState, zoneKey);
-      await _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch((e) => console.error("[Panel] NPC event publish failed:", e?.message || e));
+      _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch((e) => console.error("[Panel] NPC event publish failed:", e?.message || e));
       _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
     } else {
       if (nextMonster) {
@@ -4876,7 +4912,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
           activeTransition: null
         };
         await sc.monsterService.saveState(newState, zoneKey);
-        await _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch((e) => console.error("[Panel] empty state publish failed:", e?.message || e));
+        _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch((e) => console.error("[Panel] empty state publish failed:", e?.message || e));
       }
     }
   }

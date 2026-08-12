@@ -49,8 +49,39 @@ const QUEST_TYPES = {
   kill_slime_king:   { label: "擊敗大史王 次數",     unit: "次" },
   kill_dragon_king:  { label: "擊敗古龍王(B) 次數", unit: "次" },
   kill_hellfang_king:{ label: "擊敗地獄狼牙王 次數", unit: "次" },
+  kill_island_turtle:{ label: "擊敗島島龜王 次數", unit: "次" },
   enhance_a5_count:  { label: "A 裝強化至 +5 累積", unit: "件" },
 };
+
+/**
+ * 複合任務的子條件正規化。
+ *
+ * 一般任務只有單一 type，進度就是那個 type 的累積。但像「四隻世界王各打贏 5 隻」
+ * 這種任務，光靠單一 type 做不到——只刷同一隻王就會把進度灌滿。
+ *
+ * subMetrics = [{ type, target }, ...]：
+ *   ‧ 每個子條件各自累積、各自封頂
+ *   ‧ 任務進度 current ＝ Σ min(子進度, 子目標)，target ＝ Σ 子目標
+ *     → UI 不用改就會顯示成百分比（例：12/20 ＝ 60%）
+ *   ‧ 子進度存在 playerPeriod[questId].subs，跟 current 一起存
+ */
+function normalizeSubMetrics(def = {}) {
+  const raw = Array.isArray(def?.subMetrics) ? def.subMetrics : [];
+  return raw
+    .map((s) => ({
+      type: String(s?.type || "").trim(),
+      target: Math.max(1, Number(s?.target || 1)),
+    }))
+    .filter((s) => s.type && QUEST_TYPES[s.type]);
+}
+
+// 依子進度重算任務總進度（每個子條件先各自封頂再加總）
+function sumSubProgress(subMetrics, subs = {}) {
+  return subMetrics.reduce((sum, s) => sum + Math.min(s.target, Number(subs?.[s.type] || 0)), 0);
+}
+function sumSubTarget(subMetrics) {
+  return subMetrics.reduce((sum, s) => sum + s.target, 0);
+}
 
 const CADENCE_ORDER = { onboarding: 1, job: 2, daily: 3, weekly: 4, season: 5 };
 const VALID_UNLOCK_ATTRS = ["str", "agi", "vit", "int", "dex", "luk"];
@@ -166,6 +197,7 @@ class WeeklyQuestService {
     this.jobBadgeService = options.jobBadgeService || null; // ⚔️ 二轉任務：資格檢查與轉職執行
     this._rewardItemNameCache = null;
     this.claimLocks = new Set();
+    this.progressUpdateQueues = new Map();
   }
 
   _sortDefinitions(list) {
@@ -190,8 +222,12 @@ class WeeklyQuestService {
     const unlockAttributes = normalizeUnlockAttributes(def);
     const unlockAttribute = unlockAttributes[0] || null;
     const unlockAttribute2 = unlockAttributes[1] || null;
+    // 複合任務：有 subMetrics 就由子條件決定 target（Σ 子目標），忽略 def.target
+    const subMetrics = normalizeSubMetrics(def);
     return {
       ...def,
+      subMetrics,
+      ...(subMetrics.length ? { target: sumSubTarget(subMetrics) } : {}),
       cadence,
       resetPolicy: def?.resetPolicy || resetPolicyByCadence(cadence),
       sortOrder: Number(def?.sortOrder || 0),
@@ -278,7 +314,9 @@ class WeeklyQuestService {
     return playerLevel;
   }
 
-  async _getPlayerQuestContext(discordId) {
+  async _getPlayerQuestContext(discordId, options = {}) {
+    const includeActivityGates = options.includeActivityGates !== false;
+    const includeT2Eligibility = options.includeT2Eligibility !== false;
     let level = 1;
     let attributes = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     let equipment = {};
@@ -298,13 +336,13 @@ class WeeklyQuestService {
     // 實際狀態:是否已綁定直播 / 是否曾打卡(讓對應新手任務反映真實狀態)
     let hasStreamBinding = false;
     let hasCheckin = false;
-    if (this.streamAccountBindingRepository?.listByDiscordId) {
+    if (includeActivityGates && this.streamAccountBindingRepository?.listByDiscordId) {
       try {
         const bindings = await this.streamAccountBindingRepository.listByDiscordId(discordId);
         hasStreamBinding = Array.isArray(bindings) && bindings.length > 0;
       } catch (_) { /* ignore */ }
     }
-    if (this.checkinRepository?.findLastByDiscordId) {
+    if (includeActivityGates && this.checkinRepository?.findLastByDiscordId) {
       try {
         const last = await this.checkinRepository.findLastByDiscordId(discordId);
         hasCheckin = Boolean(last);
@@ -314,13 +352,15 @@ class WeeklyQuestService {
     // 錨點任務 gate 資料：本季斗內(donationLedger 累積>0)、連續簽到天數(由近期簽到算)
     let hasSeasonDonation = false;
     let checkinStreak = 0;
-    try {
-      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-      const db = await getMongoDb();
-      const led = await db.collection("donationLedger").findOne({ discordId: String(discordId) }, { projection: { totalTwd: 1 } });
-      hasSeasonDonation = Number(led?.totalTwd || 0) > 0;
-    } catch (_) { /* ignore */ }
-    if (this.checkinRepository?.listRecentByDiscordId) {
+    if (includeActivityGates) {
+      try {
+        const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+        const db = await getMongoDb();
+        const led = await db.collection("donationLedger").findOne({ discordId: String(discordId) }, { projection: { totalTwd: 1 } });
+        hasSeasonDonation = Number(led?.totalTwd || 0) > 0;
+      } catch (_) { /* ignore */ }
+    }
+    if (includeActivityGates && this.checkinRepository?.listRecentByDiscordId) {
       try {
         const recent = await this.checkinRepository.listRecentByDiscordId(discordId, 60);
         const twDay = (t) => { const d = new Date(t); return Number.isNaN(d.getTime()) ? null : new Date(d.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10); };
@@ -343,14 +383,19 @@ class WeeklyQuestService {
 
       // ⚔️ 二轉任務：逐一算資格（徽章等級／費用／金幣），給清單顯示與領取判定共用
       const t2Eligibility = {};
-      if (this.jobBadgeService?.checkTransferEligibility) {
+      if (includeT2Eligibility && this.jobBadgeService?.checkTransferEligibility) {
         try {
-          const defs = await this.listDefinitions("job").catch(() => []);
+          const suppliedDefinitions = Array.isArray(options.definitions) ? options.definitions : null;
+          const defs = suppliedDefinitions
+            ? suppliedDefinitions.filter((q) => q.cadence === "job")
+            : await this.listDefinitions("job").catch(() => []);
           const badgeIds = [...new Set(defs.filter((q) => q.type === "t2_transfer" && q.rewardItemId)
             .map((q) => String(q.rewardItemId)))];
-          for (const bid of badgeIds) {
-            t2Eligibility[bid] = await this.jobBadgeService.checkTransferEligibility(discordId, bid).catch(() => null);
-          }
+          const eligibilityRows = await Promise.all(badgeIds.map(async (bid) => [
+            bid,
+            await this.jobBadgeService.checkTransferEligibility(discordId, bid).catch(() => null)
+          ]));
+          for (const [bid, eligibility] of eligibilityRows) t2Eligibility[bid] = eligibility;
         } catch (_) { /* 算不出來就當作沒資格，不影響其他任務 */ }
       }
 
@@ -591,11 +636,13 @@ class WeeklyQuestService {
     await this.deleteDefinition(id);
   }
 
-  async _getProgressByCadence(discordId, cadence) {
+  async _getProgressByCadence(discordId, cadence, shared = {}) {
     const c = normalizeCadence(cadence);
     const periodKey = resolvePeriodKey(c);
-    const allDefs = await this.listDefinitions(c);
-    const context = await this._getPlayerQuestContext(discordId);
+    const allDefs = Array.isArray(shared.definitions)
+      ? shared.definitions.filter((q) => q.cadence === c)
+      : await this.listDefinitions(c);
+    const context = shared.context || await this._getPlayerQuestContext(discordId, { definitions: allDefs });
     const playerLevel = context.level;
     // 未達解鎖條件一律隱藏（含職業任務）。
     // 2026-08-09 使用者定案：原本職業任務會以「🔒 Lv.10 解鎖」的鎖定樣式顯示出來，
@@ -692,7 +739,18 @@ class WeeklyQuestService {
         done: locked ? false : current >= target,
         locked,
         unlockLevel: Number(quest.unlockLevel || 0),
-        unlockHint
+        unlockHint,
+        // 複合任務：附上每個子條件的個別進度，讓任務頁能列出「大史王 3/5、古龍王 5/5…」
+        // 光看 12/20 玩家不知道還差哪一隻。
+        subProgress: (quest.subMetrics || []).length && !maskHidden
+          ? quest.subMetrics.map((s) => ({
+            type: s.type,
+            label: QUEST_TYPES[s.type]?.label || s.type,
+            unit: QUEST_TYPES[s.type]?.unit || "",
+            current: Math.min(s.target, Number(p.subs?.[s.type] || 0)),
+            target: s.target,
+          }))
+          : null
       };
     })
       // 2026-08-09 使用者定案：沒解鎖就完全不顯示（原本會以「🔒 Lv.10 解鎖」灰色卡片列出來）。
@@ -705,31 +763,51 @@ class WeeklyQuestService {
 
   async getPlayerProgress(discordId, cadence = "weekly") {
     if (cadence === "all") {
-      const all = [];
-      for (const c of QUEST_CADENCES) {
-        const rows = await this._getProgressByCadence(discordId, c);
-        all.push(...rows);
-      }
+      // 任務首頁一次顯示五種 cadence。定義、玩家裝備／綁定／簽到與二轉資格
+      // 全部共用同一份快照，再平行讀五個週期進度，避免把昂貴 context 重算五次。
+      const definitions = await this.listDefinitions("all");
+      const context = await this._getPlayerQuestContext(discordId, { definitions });
+      const rowsByCadence = await Promise.all(QUEST_CADENCES.map((c) =>
+        this._getProgressByCadence(discordId, c, { definitions, context })
+      ));
+      const all = rowsByCadence.flat();
       return this._sortDefinitions(all.map((r) => r.quest)).map((quest) => all.find((r) => r.quest.id === quest.id));
     }
     return this._getProgressByCadence(discordId, cadence);
   }
 
-  async recordProgress(discordId, type, amount = 1) {
-    const inc = Math.max(0, Number(amount) || 0);
-    if (!inc) return;
-    const context = await this._getPlayerQuestContext(discordId);
-    const playerLevel = context.level;
+  async _recordProgressBatch(discordId, metrics) {
+    const increments = new Map();
+    const entries = metrics instanceof Map
+      ? [...metrics.entries()]
+      : Array.isArray(metrics)
+        ? metrics.map((entry) => Array.isArray(entry) ? entry : [entry?.type, entry?.amount])
+        : Object.entries(metrics || {});
+    for (const [rawType, rawAmount] of entries) {
+      const type = String(rawType || "").trim();
+      const amount = Math.max(0, Number(rawAmount) || 0);
+      if (!type || !amount) continue;
+      increments.set(type, (increments.get(type) || 0) + amount);
+    }
+    if (increments.size === 0) return;
 
-    for (const cadence of QUEST_CADENCES) {
-      const allDefs = await this.listDefinitions(cadence);
+    // 戰鬥只需要等級／裝備／屬性 gate；直播、簽到、斗內與轉職資格只供任務頁顯示，
+    // 不該在每個戰鬥指標都重查。任務定義也只讀一次，再依 cadence 分組。
+    const [context, definitions] = await Promise.all([
+      this._getPlayerQuestContext(discordId, { includeActivityGates: false, includeT2Eligibility: false }),
+      this.listDefinitions("all")
+    ]);
+
+    await Promise.all(QUEST_CADENCES.map(async (cadence) => {
+      const allDefs = definitions.filter((q) => q.cadence === cadence);
       const defs = allDefs.filter((q) => (
         q.enabled &&
         !isSeasonLockedQuest(q) &&               // 本季不開放的二轉：也不累積進度
-        q.type === type &&
+        // 一般任務比對自己的 type；複合任務比對任一子條件的 type
+        (increments.has(q.type) || (q.subMetrics || []).some((s) => increments.has(s.type))) &&
         this._canAccrueProgress(q, context)
       ));
-      if (!defs.length) continue;
+      if (!defs.length) return;
 
       const periodKey = resolvePeriodKey(cadence);
       const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, cadence);
@@ -744,23 +822,62 @@ class WeeklyQuestService {
         }
         return null;
       })();
-      // 本次呼叫內也要鎖：第一次累積時兩條都還是 0 進度，若不鎖會同時開始跑。
+      // 本批次內也要鎖：第一次累積時兩條都還是 0 進度，若不鎖會同時開始跑。
       let t2Lock = t2InProgressId;
+      let changed = false;
       for (const q of defs) {
         // 已有別條二轉試煉在進行中 → 這條不累積（玩家要放棄那條才能改接）
         if (q.isT2Trial && t2Lock && t2Lock !== q.id) continue;
         if (q.isT2Trial && !t2Lock) t2Lock = q.id;
         if (!playerPeriod[q.id]) playerPeriod[q.id] = { current: 0, claimed: false };
         if (!playerPeriod[q.id].claimed && !playerPeriod[q.id].claimedOnce) {
-          // 二轉試煉的上限要用「依已持有數遞增後」的目標，不能用靜態 target
-          const cap = q.isT2Trial
-            ? (this._t2TargetFor(q, context) ?? Number(q.target || 1))
-            : Number(q.target || 1);
-          playerPeriod[q.id].current = Math.min(cap, Number(playerPeriod[q.id].current || 0) + inc);
+          if ((q.subMetrics || []).length) {
+            // 複合任務：每個子條件各自累積、各自封頂，總進度＝Σ min(子進度, 子目標)。
+            // 這樣只刷同一隻王不會把進度灌滿——那隻封頂後就不再貢獻。
+            const subs = { ...(playerPeriod[q.id].subs || {}) };
+            for (const s of q.subMetrics) {
+              const inc = increments.get(s.type);
+              if (!inc) continue;
+              subs[s.type] = Math.min(s.target, Number(subs[s.type] || 0) + inc);
+            }
+            const next = sumSubProgress(q.subMetrics, subs);
+            if (next !== Number(playerPeriod[q.id].current || 0)) {
+              playerPeriod[q.id].subs = subs;
+              playerPeriod[q.id].current = next;
+              changed = true;
+            }
+          } else {
+            // 二轉試煉的上限要用「依已持有數遞增後」的目標，不能用靜態 target
+            const cap = q.isT2Trial
+              ? (this._t2TargetFor(q, context) ?? Number(q.target || 1))
+              : Number(q.target || 1);
+            const current = Number(playerPeriod[q.id].current || 0);
+            const next = Math.min(cap, current + increments.get(q.type));
+            if (next !== current) {
+              playerPeriod[q.id].current = next;
+              changed = true;
+            }
+          }
         }
       }
-      await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, cadence);
+      if (changed) await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, cadence);
+    }));
+  }
+
+  async recordProgressBatch(discordId, metrics) {
+    const key = String(discordId);
+    const previous = this.progressUpdateQueues.get(key) || Promise.resolve();
+    const current = previous.catch(() => {}).then(() => this._recordProgressBatch(discordId, metrics));
+    this.progressUpdateQueues.set(key, current);
+    try {
+      return await current;
+    } finally {
+      if (this.progressUpdateQueues.get(key) === current) this.progressUpdateQueues.delete(key);
     }
+  }
+
+  async recordProgress(discordId, type, amount = 1) {
+    return this.recordProgressBatch(discordId, { [type]: amount });
   }
 
   async claimReward(discordId, questId, grantFn = null) {
@@ -768,7 +885,9 @@ class WeeklyQuestService {
     const quest = allDefs.find((q) => q.id === questId && q.enabled);
     if (!quest) throw new Error("任務不存在或未啟用");
 
-    const playerLevel = await this._getPlayerLevel(discordId);
+    // 領取檢查和任務頁使用同一份玩家快照，避免先查 level、進鎖後又完整查一次。
+    const context = await this._getPlayerQuestContext(discordId, { definitions: allDefs });
+    const playerLevel = context.level;
     if (quest.levelLimit && quest.levelLimit > playerLevel) throw new Error("等級不足");
 
     const periodKey = resolvePeriodKey(quest.cadence);
@@ -779,13 +898,12 @@ class WeeklyQuestService {
     try {
       const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, quest.cadence);
       const p = playerPeriod[questId] || { current: 0, claimed: false };
-      const context = await this._getPlayerQuestContext(discordId);
       // 錨點隱藏任務 gate：未解鎖(進度門檻/本季斗內/連續簽到) → 不可領取（防以 questId 直接領）
       const _rawForGate = this._resolveStaticQuestProgress(quest, context)?.current ?? Number(p.current || 0);
       if (!this._isQuestUnlocked(quest, _rawForGate, context)) throw new Error("任務尚未解鎖");
       if (quest.type === "onboarding_complete_count" || quest.type === "weekly_complete_count" || quest.type === "daily_complete_count") {
         const targetCadence = quest.cadence === "weekly" ? "weekly" : quest.cadence === "daily" ? "daily" : "onboarding";
-        const cadenceDefs = (await this.listDefinitions(targetCadence))
+        const cadenceDefs = allDefs.filter((q) => q.cadence === targetCadence)
           .filter((q) => this._isQuestVisibleForPlayer(q, context) || Boolean((playerPeriod[q.id] || {}).claimed));
         const completion = this._computeCompletionProgress(cadenceDefs, playerPeriod, quest.type);
         if (completion.current < completion.target) throw new Error("任務尚未完成");

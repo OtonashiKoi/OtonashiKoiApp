@@ -58,6 +58,12 @@ function withProgressCache(repo) {
       if (store) store.delete(`progress:${progress.playerId}`);
       return saved;
     },
+    async allocateAttributePoints(playerId, attribute, amount, options) {
+      const result = await repo.allocateAttributePoints(playerId, attribute, amount, options);
+      const store = storage.getStore();
+      if (store) store.delete(`progress:${playerId}`);
+      return result;
+    },
     async updateFields(playerId, fields, options) {
       const result = await repo.updateFields(playerId, fields, options);
       const store = storage.getStore();

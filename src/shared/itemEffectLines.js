@@ -2,6 +2,7 @@
 // 卡片 → monsterCardSkill 技能名＋描述（同 DC 已裝備卡片區格式）；
 // 裝備 → passive/combat/proc 效果的中文名＋數值（優先用 notes 文案）。
 const { EFFECT_NAME_ZH } = require("./effectDisplayNames");
+const { MAX_BONUS_PCT: BESTIARY_MAX_BONUS_PCT } = require("./bestiary");
 
 // 身上特效數值單位表 — 依 src/shared/combatLoop.js / effectEngine.js 引擎實際語意，
 // 只列「語意上明確是百分比」的 key（各種率、倍率、吸血、DOT、減傷）。
@@ -124,7 +125,7 @@ function buildT2MechanicLines(lib) {
       if (st.freezeCharge) {
         try {
           const zf = require("./zoneFreezeGauge");
-          bits.push(`出戰累積該區域冰凍值（量＝戰鬥回合數）；滿 ${zf.DEFAULT_THRESHOLD} → 區域冰封 ${Math.round(zf.FREEZE_WINDOW_MS / 1000)} 秒內出戰全程免傷，之後免疫 ${Math.round(zf.IMMUNE_MS / 60000)} 分鐘`);
+          bits.push(`出戰累積該區域冰凍值（量＝實際命中的攻擊回合數，同回合多段只算 1）；滿 ${zf.DEFAULT_THRESHOLD} → 區域冰封 ${Math.round(zf.FREEZE_WINDOW_MS / 1000)} 秒內出戰全程免傷，之後免疫 ${Math.round(zf.IMMUNE_MS / 60000)} 分鐘`);
         } catch (_) { bits.push(`出戰累積該區域冰凍值，凍滿全區冰封`); }
       }
       if (st.stanceElement) {
@@ -172,23 +173,28 @@ function buildT2MechanicLines(lib) {
   // 日之精靈（聖靈師）
   if (branch.sunSpirit) {
     const sp = branch.sunSpirit;
-    out.push(`・日之精靈（被動・召喚）：開場自動召喚，怪物的攻擊**先由精靈承受**（精靈倒下後你才會受傷）`);
-    out.push(`　◦ 精靈血量＝你的最大 HP、防禦＝你的 DEF（不繼承閃避與格擋）；血量同區跨場沿用，倒下 → 下一場以 50% 血量重召`);
+    out.push(`・日之精靈（被動・召喚）：開場自動召喚，怪物的一般攻擊優先由精靈承受；當次攻擊不會把溢出傷害轉給你，精靈倒下後的下一次攻擊才會打到你`);
+    out.push(`　◦ 精靈最大 HP＝你的最大 HP；它是純血量召喚物，不套用你的 DEF、閃避、格擋、防禦階級、減傷、護盾、抗性或免傷`);
+    out.push(`　◦ 血量同區跨場沿用；換區或 10 分鐘未戰鬥會滿血重召，倒下則在下一場以 50% 血量重召`);
     out.push(`　◦ 協攻：每回合追加一擊，攻擊力＝你的 ${sp.atkRatio}%、自帶日屬性 ${sp.elementLevel} 級（單發、不爆擊）`);
-    out.push(`　◦ 精靈在場時：你給隊伍的光環效果 ×${sp.auraMult}`);
-    out.push(`・大治療術（被動）：每 ${sp.healEveryRounds} 個有出手的回合施放，回復最大 HP 的 ${sp.healPct}%——精靈在場先回精靈，否則回自己`);
+    out.push(`　◦ 開戰時精靈在場：你的隊伍光環基礎值先 ×${sp.auraMult}，再套用屬性光環補正；倍率鎖定整場，精靈中途倒下不會取消`);
+    out.push(`・大治療術（被動）：每場每累積 ${sp.healEveryRounds} 個有出手的回合施放，治療量＝最大 HP ${sp.healPct}%＋INT 補正；精靈在場先回精靈，否則回自己`);
+    out.push(`　◦ 配戴「聖人就是比拳頭大小」時，大治療術不會治療你或精靈，整筆治療量會依錨點規則轉為傷害`);
   }
 
   // 兵聖三件套
   if (branch.sage) {
     const sg = branch.sage;
+    const knowledgeMult = Number(sg.knowledgeMult) || 2;
+    const knowledgeExtraPct = BESTIARY_MAX_BONUS_PCT * Math.max(0, knowledgeMult - 1);
+    const knowledgeTotalPct = BESTIARY_MAX_BONUS_PCT * knowledgeMult;
     out.push(`・三十六計（被動・計謀值 3 格）：每個有攻擊的回合 +1 格，滿 3 → 隨機施展一計（跨場沿用）`);
     out.push(`　◦ 🔥 火攻之計：一擊 ATK ${sg.fire?.hitPct ?? 150}%＋灼燒 ${sg.fire?.burnTurns ?? 3} 回合`);
     out.push(`　◦ 🪨 落石之計：一擊 ATK ${sg.rock?.hitPct ?? 120}%＋暈眩 1 回合（世界王吃既有上限/免疫規則）`);
     out.push(`　◦ 🌫️ 瞞天過海：下回合對手必定打空、你的攻擊必中`);
     out.push(`　◦ ⛓️ 連環之計：下回合固定 ${sg.chain?.hits ?? 3} 連擊`);
     out.push(`　◦ 🚩 破釜沉舟：接下來 ${sg.allin?.rounds ?? 2} 回合傷害 ×${sg.allin?.mult ?? 3}，期間無法迴避格擋、受傷 +50%`);
-    out.push(`・知彼（被動）：怪物圖鑑的傷害加成效果 ×${sg.knowledgeMult ?? 2}（上限 25% → ${25 * (sg.knowledgeMult ?? 2)}%）`);
+    out.push(`・知彼（被動）：怪物圖鑑的傷害加成效果 ×${knowledgeMult}（圖鑑最高 ${BESTIARY_MAX_BONUS_PCT}%＋知彼追加 ${knowledgeExtraPct}%，合計 ${knowledgeTotalPct}%）`);
   }
 
   // 吟遊詩人（演奏判定）
@@ -227,7 +233,7 @@ function buildT2MechanicLines(lib) {
   // 神射手三件套
   if (branch.sniper) {
     const sn = branch.sniper;
-    out.push(`・掩護射擊（被動・團隊）：你在區域內時，區內其他玩家出戰，每回合替他們補一箭（你 ATK 的 ${sn.supportShotPct}%、吃你的爆擊）；世界王時箭傷計入你的貢獻排名`);
+    out.push(`・掩護射擊（被動・團隊）：你在區域內時，區內其他玩家出戰，每名神射手每回合各補一箭（各自 ATK 的 ${sn.supportShotPct}%、吃各自爆擊／終傷／武器屬性）；世界王時箭傷分別計入提供者的貢獻排名`);
     out.push(`・神速反擊（被動）：這回合對手沒打到你——揮空／被你閃過／來不及出手／被暈眩／被冰封——就追加一箭（ATK ${sn.counterShotPct}%）`);
     out.push(`・震盪射擊（被動・震盪值 4 格）：每個有攻擊的回合 +1 格，滿 4 → 立刻一箭（ATK ${sn.shockShotPct}%）並震退對手——下回合對手構不到你（又觸發神速反擊）`);
     out.push(`　◦ 震盪值同一場域跨場沿用（換區／10 分鐘沒打歸零）`);
@@ -246,8 +252,6 @@ function buildT2MechanicLines(lib) {
     } catch (_) { /* noop */ }
   }
 
-  // 爬塔光環
-  if (branch.towerAura?.notes) out.push(`・${branch.towerAura.notes}`);
   return out.length > 1 ? out : [];
 }
 

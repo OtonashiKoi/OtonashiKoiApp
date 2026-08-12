@@ -4,6 +4,8 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { getEnhanceCost, ENHANCE_GEMS, MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 const { withPlayerProgressLock } = require("../progress/progressLocks");
+const { removeElementSocket } = require("./elementRemovalService");
+const { getElementSocketInfo } = require("./elementSocketInfoService");
 
 // 需與 src/shared/combatStats.js 的 WEAPON_CONFIG.baseStat 保持一致
 const WEAPON_MAIN_STAT_BY_TYPE = {
@@ -300,43 +302,8 @@ class EnhanceService {
     };
   }
 
-  /**
-   * 查詢一件裝備的屬性洞現況（給前端畫面用：目前洞位、每種屬性的下一步花費/成功率）。
-   * 武器側（武器/副手）＝攻擊相剋；防具側（頭/鎧/披風/鞋/飾品）＝怪物同屬抗性，不走相剋環。
-   * @returns {object|null} 不支援屬性洞的槽位（卡片/稱號/職業徽章/錨點）回傳 null
-   */
   async getElementSocketInfo(discordId, inventoryUuid) {
-    const { ELEMENTS, getElementSocketCapacity, resolveElementsMap, ELEMENT_SOCKET_SLOTS } = require("../../shared/elementSystem");
-    const { getElementSocketCost } = require("../../shared/enhanceConfig");
-
-    const progress = await this.progressRepository.findByPlayerId(discordId);
-    if (!progress) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "玩家未找到", 404);
-
-    const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
-    let equipment = inventory.find((item) => item.uuid === inventoryUuid);
-    if (!equipment) {
-      for (const slotItem of Object.values(progress.equipment || {})) {
-        if (slotItem && slotItem.uuid === inventoryUuid) { equipment = slotItem; break; }
-      }
-    }
-    if (!equipment || !ELEMENT_SOCKET_SLOTS.includes(String(equipment.equipSlot || ""))) return null;
-
-    const tier = String(equipment.tier || "").toUpperCase();
-    const capacity = getElementSocketCapacity(tier);
-    if (capacity <= 0) return null;
-
-    const elementsMap = resolveElementsMap(equipment);
-    const socketsFilled = Object.values(elementsMap).reduce((a, b) => a + b, 0);
-
-    const perElement = ELEMENTS.map((el) => {
-      const existingCount = elementsMap[el] || 0;
-      const owned = this._countGemsInInventory(inventory, `element-stone-${el}`);
-      const full = socketsFilled >= capacity;
-      const nextCost = full ? null : getElementSocketCost(existingCount);
-      return { element: el, existingCount, owned, nextCost };
-    });
-
-    return { itemName: equipment.itemName, tier, capacity, socketsFilled, elements: elementsMap, perElement };
+    return getElementSocketInfo(this, discordId, inventoryUuid);
   }
 
   /**
@@ -442,6 +409,10 @@ class EnhanceService {
         ? `✅ 鑲嵌成功！消耗 ${cost.stones} 顆${elLabel}屬性石、${cost.gold} 金幣（屬性洞 ${totalFilled + 1}/${capacity}${totalFilled + 1 >= capacity ? "，已達上限" : ""}）`
         : `❌ 鑲嵌失敗，消耗了 ${cost.stones} 顆${elLabel}屬性石、${cost.gold} 金幣（洞位仍是空的）`,
     };
+  }
+
+  async removeElementSocket(discordId, inventoryUuid, element) {
+    return removeElementSocket(this, discordId, inventoryUuid, element);
   }
 
   /**
@@ -616,7 +587,7 @@ class EnhanceService {
     };
   }
 
-  async _consumeGold(discordId, displayName, amount) {
+  async _consumeGold(discordId, displayName, amount, operator = "enhance:equipment") {
     if (!Number.isFinite(amount) || amount <= 0) return;
 
     if (this.rewardService?.grantCurrency) {
@@ -626,7 +597,7 @@ class EnhanceService {
         currencyType: "gold",
         amount: -Math.abs(Math.trunc(amount)),
         source: CURRENCY_SOURCES.ENHANCE,
-        operator: "enhance:equipment"
+        operator
       });
       return;
     }

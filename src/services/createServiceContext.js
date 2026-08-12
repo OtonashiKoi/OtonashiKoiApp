@@ -25,6 +25,7 @@ const { InviteService } = require("./invite/inviteService");
 const { CreatorTokenService } = require("./creatorAuth/creatorTokenService");
 const { CasinoService } = require("./casino/casinoService");
 const { PetService } = require("./pet/petService");
+const { CraftingService } = require("./crafting/craftingService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -172,6 +173,12 @@ function createServiceContext() {
     itemRepository: repositories.itemRepository,
     petRepository: repositories.petRepository,
   });
+  const craftingService = new CraftingService({
+    craftingRepository: repositories.craftingRepository,
+    progressRepository: repositories.progressRepository,
+    walletRepository: repositories.walletRepository,
+    itemRepository: repositories.itemRepository
+  });
   const { PassService } = require("./pass/passService");
   const passService = new PassService({
     progressRepository: repositories.progressRepository,
@@ -226,6 +233,7 @@ function createServiceContext() {
     creatorTokenService,
     casinoService,
     petService,
+    craftingService,
     passService,
     storyService,
     jobBadgeService

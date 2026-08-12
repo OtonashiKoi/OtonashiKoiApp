@@ -112,6 +112,7 @@ const EFFECT_DEFINITIONS = [
   defineEffect("lightning", "Lightning", "dot", ["monster_skill", "skill", "equipment"], "refresh", ["turns"], "Lightning damage over time."),
   defineEffect("curse_dot", "Curse", "dot", ["monster_skill", "skill"], "refresh", ["turns"], "Dark damage over time."),
   defineEffect("life_regen", "Life Regeneration", "dot", ["equipment", "passive"], "replace", ["battle", "permanent"], "Passive HP regeneration."),
+  defineEffect("turtle_tide_cycle", "Turtle Tide Cycle", "conditional", ["equipment", "passive"], "replace", ["battle", "permanent"], "Alternate every two rounds between incoming damage reduction and final outgoing damage."),
   defineEffect("mana_regen", "Mana Regeneration", "dot", ["equipment", "passive"], "replace", ["battle", "permanent"], "Passive MP/SP regeneration.", { reserved: true }),
   defineEffect("stun", "Stun", "control", ["monster_skill", "skill", "equipment"], "refresh", ["turns"], "Cannot act while stunned."),
   defineEffect("freeze", "Freeze", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Cannot act; often paired with bonus damage."),

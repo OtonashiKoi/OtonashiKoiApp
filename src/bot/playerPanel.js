@@ -15,6 +15,7 @@ const { getEquippedSetInfo } = require("../shared/equipmentSetBonuses");
 const { getElementLabel } = require("../shared/elementSystem");
 const { summarizeEquippedEnchantments } = require("../shared/enchantEngine");
 const { EFFECT_NAME_ZH } = require("../shared/effectDisplayNames");
+const { buildT2MechanicLines } = require("../shared/itemEffectLines");
 const { isEffectConditionMet, mergeEquippedFromLibrary } = require("../shared/effectEngine");
 const { calcScaledAuraValue, getSupportJobKey } = require("../shared/supportAuraScaling");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
@@ -552,7 +553,9 @@ async function handleProfile(interaction) {
     const skillLine = jobSkills.length > 0
       ? `\n主動技能：每回合約35%機率從可用技能中發動1個\n${jobSkills.map(formatJobSkillLine).join("\n")}`
       : "";
-    jobTraitAreaLine = `職業：${jobDisplayName}${jobStatLine}${passiveLine}${mechanicLine}${skillLine}${bonusLine}`;
+    const t2MechanicLines = buildT2MechanicLines(jobEq);
+    const t2MechanicLine = t2MechanicLines.length > 0 ? `\n${t2MechanicLines.join("\n")}` : "";
+    jobTraitAreaLine = `職業：${jobDisplayName}${jobStatLine}${passiveLine}${mechanicLine}${skillLine}${t2MechanicLine}${bonusLine}`;
   }
 
   // ── 卡片效果區（顯示已裝備卡片及其效果）──

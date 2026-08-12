@@ -111,7 +111,6 @@ swordsman: [
     key: "holyblade",
     name: "聖劍士",
     theme: "攻守姿態切換",
-    towerAura: { key: "party_damage_reduction", value: 8, notes: "爬塔：隊伍受到傷害 -8%" },
     stances: {
       attack:  { label: "攻擊", blockChance: 30, guaranteedElement: { baseLevel: 2, upgradedLevel: 4, upgradeFromWeaponLevel: 2 } },
       defense: { label: "防禦", blockChance: 70, shieldBashPct: 60, requiresShield: true },
@@ -171,13 +170,9 @@ swordsman: [
 
 ---
 
-## 五、爬塔光環
+## 五、爬塔光環（已移除）
 
-| | 一轉劍士 | 聖劍士 |
-|---|---|---|
-| 光環 | 隊伍受到傷害 −5% | 隊伍受到傷害 **−8%** |
-
-沿用既有 `party_damage_reduction`，只調數值，不需新 key。
+爬塔不再提供職業或二轉專屬光環。隊伍只沿用一般戰鬥區域既有光環，並依坦／補／輸出站位倍率縮放。
 
 ---
 
@@ -202,7 +197,7 @@ DB 已建「聖劍士試煉」`type: t2_transfer`（**`enabled:true`**，2026-08
 | 世界王 / 單人王 | **要能選姿態** |
 | 劇情戰鬥 | 固定攻擊姿態 |
 | DC 端 | 固定攻擊姿態，不做按鈕 |
-| 爬塔 | 程式保留但目前總開關暫停；姿態不作為重新開放前的驗收項目 |
+| 爬塔 | 公開入口暫停、白名單測試中；使用一般戰鬥機制與站位規則，不提供聖劍士塔專屬光環 |
 | 屬性覆蓋率 | 下一季會有更多怪帶屬性，攻擊姿態屆時就有普遍價值 |
 
 ---

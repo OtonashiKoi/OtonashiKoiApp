@@ -1,40 +1,81 @@
 "use strict";
 /**
- * 島島龜王（活動世界王）——潮汐＋海嘯詠唱，純函式＋區域狀態機。
+ * 島島龜王（活動世界王）——潮汐＋海嘯詠唱，共用區域狀態機。
  *
- * 設計（使用者定案 2026-07-29）：
- *   【潮汐】時間驅動、全服同步（不是打出來的，是海的節奏）：
- *     - 週期 15 分鐘＝漲潮 10 分（龜首縮殼打不到、其他部位受傷 ×0.7）
- *                 ＋退潮 5 分（全部位受傷 ×1.5、打龜首必中）
- *     - 由固定紀元推算，無需存狀態、三入口天然同步
- *   【海嘯詠唱】總血 ≤70%（甦醒期）後解鎖：
- *     - 每 8 分鐘在「漲潮期」發動詠唱 90 秒（全區紫紅詠唱條）
- *     - 詠唱完成 → 海嘯 60 秒：期間出戰的人「開場即死」（真即死：無視結界/聖域/免死）
- *     - 打斷唯二：巨神震擊（矮人暈眩條觸發）／區域冰封（元素師冰凍值觸發）
- *     - 打斷成功 → 破綻 30 秒：全部位受傷 ×1.3、龜首可打（蓋過漲潮懲罰）
- *     - 打斷/施放後計時重算（下一次詠唱＝now + 8 分鐘）
- *   狀態存放：區域 battleState.turtle = { nextCastAt, castingUntil, tsunamiUntil, breachUntil, lastInterruptBy }
- *   （與 hellfang* 欄位同一份 zone monsterState，呼叫端讀改存）
+ * 【潮汐】固定 15 分鐘週期：漲潮 10 分、退潮 5 分。
+ * 【海嘯】本輪討伐開始後每 3 分鐘檢查一次；總血首次降到 70%／30% 時各強制一次。
+ *   - 詠唱 3 分鐘：龜王承傷降為 1%，冰凍值／暈眩值累積 ×2。
+ *   - 詠唱被冰封或巨神震擊打斷：立即進入 30 秒破綻，承傷 ×1.3。
+ *   - 詠唱完成：海嘯 3 分鐘，期間出戰真即死；結束後同樣進入 30 秒破綻。
+ *   - 每 3 分鐘是發動檢查點；詠唱／海嘯／破綻中不重疊發動。
+ *
+ * 狀態存放：區域 monsterState.turtle。呼叫端必須把修改後的 monsterState 存回。
  */
 
 const ZONE = "event_boss";
+const RULES_VERSION = 2;
 
 // ── 潮汐（純時間函式）──
 const TIDE_EPOCH = Date.parse("2026-01-01T00:00:00+08:00");
-const RISE_MS = 10 * 60 * 1000;   // 漲潮
-const EBB_MS = 5 * 60 * 1000;     // 退潮
+const RISE_MS = 10 * 60 * 1000;
+const EBB_MS = 5 * 60 * 1000;
 const CYCLE_MS = RISE_MS + EBB_MS;
-
-const RISE_OTHER_MULT = 0.7;      // 漲潮：非龜首部位受傷 ×0.7
-const EBB_MULT = 1.5;             // 退潮：全部位 ×1.5
+const RISE_OTHER_MULT = 0.7;
+const EBB_MULT = 1.5;
 
 // ── 海嘯詠唱 ──
-const CAST_UNLOCK_HP_PCT = 70;    // 總血 ≤70% 解鎖
-const CAST_INTERVAL_MS = 8 * 60 * 1000;
-const CAST_MS = 90 * 1000;
-const TSUNAMI_MS = 60 * 1000;
+const PERIODIC_CAST_INTERVAL_MS = 3 * 60 * 1000;
+// 舊名稱保留給既有 UI／呼叫端；現在等同週期檢查間隔。
+const CAST_INTERVAL_MS = PERIODIC_CAST_INTERVAL_MS;
+const CAST_MS = 3 * 60 * 1000;
+const TSUNAMI_MS = 3 * 60 * 1000;
 const BREACH_MS = 30 * 1000;
 const BREACH_MULT = 1.3;
+const CAST_DAMAGE_MULT = 0.01;
+const CAST_GAUGE_MULT = 2;
+const FIXED_CAST_HP_PCTS = Object.freeze([70, 30]);
+const CAST_UNLOCK_HP_PCT = 70; // 舊匯出相容；不再代表週期海嘯的解鎖條件。
+const ENCOUNTER_STALE_MS = 2 * 60 * 60 * 1000;
+
+function parseMs(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function iso(ms) {
+  return new Date(ms).toISOString();
+}
+
+function clampHpPct(value) {
+  return Math.max(0, Math.min(100, Number(value) || 0));
+}
+
+function resetEncounter(turtle, now) {
+  for (const key of Object.keys(turtle)) delete turtle[key];
+  turtle.rulesVersion = RULES_VERSION;
+  turtle.encounterStartedAt = iso(now);
+  turtle.nextPeriodicAt = iso(now + PERIODIC_CAST_INTERVAL_MS);
+  turtle.castingUntil = null;
+  turtle.tsunamiUntil = null;
+  turtle.breachUntil = null;
+  turtle.pendingForcedCasts = [];
+  turtle.forced70Triggered = false;
+  turtle.forced30Triggered = false;
+  turtle.lastInterruptBy = null;
+  turtle.lastBreachReason = null;
+  turtle.lastCastReason = null;
+}
+
+function ensureEncounter(turtle, totalHpPct, now) {
+  const startedAt = parseMs(turtle.encounterStartedAt);
+  const lastHpPct = Number(turtle.lastHpPct);
+  const returnedToFullHp = totalHpPct >= 99.999 && Number.isFinite(lastHpPct) && lastHpPct < 99.999;
+  const stale = startedAt > 0 && now - startedAt >= ENCOUNTER_STALE_MS;
+  if (turtle.rulesVersion !== RULES_VERSION || !startedAt || returnedToFullHp || stale) {
+    resetEncounter(turtle, now);
+  }
+}
 
 /** 現在的潮汐：{ phase:'rise'|'ebb', remainMs, riseMs, ebbMs } */
 function tideAt(now = Date.now()) {
@@ -43,91 +84,200 @@ function tideAt(now = Date.now()) {
   return { phase: "ebb", remainMs: CYCLE_MS - t, riseMs: RISE_MS, ebbMs: EBB_MS };
 }
 
-/** 確保並推進詠唱狀態機（就地修改 state.turtle）。回傳事件列（可能為空）。 */
-function ensureCast(state, totalHpPct, now = Date.now()) {
-  if (!state) return [];
-  const t = (state.turtle && typeof state.turtle === "object") ? state.turtle : {};
-  state.turtle = t;
-  const events = [];
-  const num = (v) => { const n = Date.parse(v || ""); return Number.isFinite(n) ? n : 0; };
+/**
+ * 推進已存在的詠唱／海嘯／破綻。occupiedThrough 是這一輪特殊狀態原本占用到的時間，
+ * 用來略過期間內落下的週期檢查點，避免伺服器一段時間沒請求後補發重疊海嘯。
+ */
+function advanceActiveState(turtle, now, events) {
+  let occupiedThrough = 0;
+  const castUntil = parseMs(turtle.castingUntil);
+  const tsunamiUntilBefore = parseMs(turtle.tsunamiUntil);
+  const breachUntilBefore = parseMs(turtle.breachUntil);
+  if (castUntil > 0) occupiedThrough = castUntil + TSUNAMI_MS + BREACH_MS;
+  else if (tsunamiUntilBefore > 0) occupiedThrough = tsunamiUntilBefore + BREACH_MS;
+  else if (breachUntilBefore > 0) occupiedThrough = breachUntilBefore;
 
-  // 詠唱到期 → 海嘯降臨
-  if (num(t.castingUntil) > 0 && now >= num(t.castingUntil)) {
-    t.tsunamiUntil = new Date(num(t.castingUntil) + TSUNAMI_MS).toISOString();
-    t.castingUntil = null;
-    t.nextCastAt = new Date(now + CAST_INTERVAL_MS).toISOString();
-    events.push({ type: "tsunami" });
-  }
-  // 過期清理
-  if (num(t.tsunamiUntil) > 0 && now >= num(t.tsunamiUntil)) t.tsunamiUntil = null;
-  if (num(t.breachUntil) > 0 && now >= num(t.breachUntil)) t.breachUntil = null;
-
-  // 開始詠唱：甦醒期＋漲潮＋計時到＋沒在詠唱/海嘯中
-  if (!t.castingUntil && !t.tsunamiUntil && Number(totalHpPct) <= CAST_UNLOCK_HP_PCT) {
-    if (!t.nextCastAt) {
-      t.nextCastAt = new Date(now + CAST_INTERVAL_MS).toISOString(); // 首次進入甦醒期起算
-    } else if (now >= num(t.nextCastAt) && tideAt(now).phase === "rise") {
-      t.castingUntil = new Date(now + CAST_MS).toISOString();
-      events.push({ type: "castStart" });
+  if (castUntil > 0 && now >= castUntil) {
+    turtle.castingUntil = null;
+    const tsunamiUntil = castUntil + TSUNAMI_MS;
+    if (now < tsunamiUntil) {
+      turtle.tsunamiUntil = iso(tsunamiUntil);
+      events.push({ type: "tsunami" });
+    } else {
+      turtle.tsunamiUntil = null;
+      const breachUntil = tsunamiUntil + BREACH_MS;
+      if (now < breachUntil) {
+        turtle.breachUntil = iso(breachUntil);
+        turtle.lastBreachReason = "tsunami_end";
+        events.push({ type: "breachStart", reason: "tsunami_end" });
+      }
     }
   }
+
+  const tsunamiUntil = parseMs(turtle.tsunamiUntil);
+  if (tsunamiUntil > 0 && now >= tsunamiUntil) {
+    turtle.tsunamiUntil = null;
+    const breachUntil = tsunamiUntil + BREACH_MS;
+    if (now < breachUntil) {
+      turtle.breachUntil = iso(breachUntil);
+      turtle.lastBreachReason = "tsunami_end";
+      events.push({ type: "breachStart", reason: "tsunami_end" });
+    }
+  }
+
+  const breachUntil = parseMs(turtle.breachUntil);
+  if (breachUntil > 0 && now >= breachUntil) turtle.breachUntil = null;
+  return occupiedThrough;
+}
+
+function isBusy(turtle, now) {
+  return parseMs(turtle.castingUntil) > now || parseMs(turtle.tsunamiUntil) > now || parseMs(turtle.breachUntil) > now;
+}
+
+function startCast(turtle, reason, now, events) {
+  turtle.castingUntil = iso(now + CAST_MS);
+  turtle.tsunamiUntil = null;
+  turtle.breachUntil = null;
+  turtle.lastInterruptBy = null;
+  turtle.lastBreachReason = null;
+  turtle.lastCastReason = reason;
+  events.push({ type: "castStart", reason });
+}
+
+/** 確保並推進海嘯狀態機（就地修改 state.turtle），回傳本次狀態事件。 */
+function ensureCast(state, totalHpPct, now = Date.now()) {
+  if (!state) return [];
+  const turtle = state.turtle && typeof state.turtle === "object" ? state.turtle : {};
+  state.turtle = turtle;
+  const hpPct = clampHpPct(totalHpPct);
+  const events = [];
+
+  ensureEncounter(turtle, hpPct, now);
+  const occupiedThrough = advanceActiveState(turtle, now, events);
+
+  const pending = Array.isArray(turtle.pendingForcedCasts) ? turtle.pendingForcedCasts : [];
+  turtle.pendingForcedCasts = pending;
+  for (const threshold of FIXED_CAST_HP_PCTS) {
+    const flag = `forced${threshold}Triggered`;
+    if (hpPct <= threshold && !turtle[flag]) {
+      turtle[flag] = true;
+      if (!pending.includes(threshold)) pending.push(threshold);
+      events.push({ type: "fixedCastQueued", threshold });
+    }
+  }
+
+  let nextPeriodicAt = parseMs(turtle.nextPeriodicAt);
+  if (!nextPeriodicAt) nextPeriodicAt = parseMs(turtle.encounterStartedAt) + PERIODIC_CAST_INTERVAL_MS;
+
+  // 先跳過落在既有特殊狀態中的檢查點，再判斷目前是否有一個可發動的週期檢查點。
+  if (occupiedThrough > 0 && nextPeriodicAt <= Math.min(now, occupiedThrough)) {
+    nextPeriodicAt += (Math.floor((Math.min(now, occupiedThrough) - nextPeriodicAt) / PERIODIC_CAST_INTERVAL_MS) + 1) * PERIODIC_CAST_INTERVAL_MS;
+  }
+  const periodicDue = nextPeriodicAt <= now;
+  if (periodicDue) {
+    nextPeriodicAt += (Math.floor((now - nextPeriodicAt) / PERIODIC_CAST_INTERVAL_MS) + 1) * PERIODIC_CAST_INTERVAL_MS;
+  }
+  turtle.nextPeriodicAt = iso(nextPeriodicAt);
+
+  if (!isBusy(turtle, now)) {
+    if (pending.length > 0) {
+      const threshold = pending.shift();
+      startCast(turtle, `fixed_${threshold}`, now, events);
+    } else if (periodicDue) {
+      startCast(turtle, "periodic", now, events);
+    }
+  }
+
+  turtle.lastHpPct = hpPct;
   return events;
 }
 
-/** 打斷詠唱（巨神震擊/區域冰封觸發時呼叫）。詠唱中才有效，回傳是否成功。 */
+/** 打斷詠唱（巨神震擊／區域冰封觸發時呼叫）。 */
 function interrupt(state, byLabel, now = Date.now()) {
-  const t = state?.turtle;
-  if (!t) return false;
-  const until = Date.parse(t.castingUntil || "");
-  if (!Number.isFinite(until) || now >= until) return false;
-  t.castingUntil = null;
-  t.breachUntil = new Date(now + BREACH_MS).toISOString();
-  t.nextCastAt = new Date(now + CAST_INTERVAL_MS).toISOString();
-  t.lastInterruptBy = String(byLabel || "");
+  const turtle = state?.turtle;
+  if (!turtle || parseMs(turtle.castingUntil) <= now) return false;
+  turtle.castingUntil = null;
+  turtle.tsunamiUntil = null;
+  turtle.breachUntil = iso(now + BREACH_MS);
+  turtle.lastInterruptBy = String(byLabel || "");
+  turtle.lastBreachReason = "interrupt";
   return true;
 }
 
-/** 這一場的戰鬥修正：{ headBlocked, mult, forceHitHead, tsunami } */
-function battleMods(state, part, now = Date.now()) {
-  const t = state?.turtle || {};
-  const num = (v) => { const n = Date.parse(v || ""); return Number.isFinite(n) ? n : 0; };
-  if (num(t.tsunamiUntil) > now) {
-    return { headBlocked: false, mult: 1, forceHitHead: false, tsunami: true };
-  }
-  if (num(t.breachUntil) > now) {
-    // 破綻：蓋過漲潮懲罰——全部位可打 ×1.3
-    return { headBlocked: false, mult: BREACH_MULT, forceHitHead: false, tsunami: false };
-  }
-  const tide = tideAt(now);
-  if (tide.phase === "ebb") {
-    return { headBlocked: false, mult: EBB_MULT, forceHitHead: part === "head", tsunami: false };
-  }
-  return { headBlocked: part === "head", mult: part === "head" ? 1 : RISE_OTHER_MULT, forceHitHead: false, tsunami: false };
+/**
+ * 把「詠唱還剩多久」換算成這場戰鬥時間軸會被海嘯命中的回合。
+ * 回合 1 發生在 t=0；若海嘯在第一、二回合之間完成，會在回合 2 開頭命中。
+ * 沒在詠唱則回傳 null；回傳值大於本場最大回合代表本場結束後才會發動。
+ */
+function tsunamiRoundForBattle(state, roundMs, now = Date.now()) {
+  const castingUntil = parseMs(state?.turtle?.castingUntil);
+  if (castingUntil <= now) return null;
+  const tickMs = Math.max(1, Math.floor(Number(roundMs) || 1));
+  const remainMs = castingUntil - now;
+  return Math.max(1, Math.ceil(remainMs / tickMs) + 1);
 }
 
-/** 給前端／面板的顯示物件 */
+/** 這一場的戰鬥修正。 */
+function battleMods(state, part, now = Date.now()) {
+  const turtle = state?.turtle || {};
+  if (parseMs(turtle.tsunamiUntil) > now) {
+    return { headBlocked: false, mult: 1, forceHitHead: false, tsunami: true, casting: false, gaugeMult: 1 };
+  }
+  if (parseMs(turtle.breachUntil) > now) {
+    return { headBlocked: false, mult: BREACH_MULT, forceHitHead: false, tsunami: false, casting: false, gaugeMult: 1 };
+  }
+  const tide = tideAt(now);
+  if (parseMs(turtle.castingUntil) > now) {
+    return {
+      // 詠唱時整隻龜王進入同一層防護：所有部位都能打，但一律只承受 1% 傷害。
+      // 這段覆蓋漲潮的龜首封鎖，讓任何目標都能用來累積冰凍／暈眩破解詠唱。
+      headBlocked: false,
+      mult: CAST_DAMAGE_MULT,
+      forceHitHead: false,
+      tsunami: false,
+      casting: true,
+      gaugeMult: CAST_GAUGE_MULT,
+    };
+  }
+  if (tide.phase === "ebb") {
+    return { headBlocked: false, mult: EBB_MULT, forceHitHead: part === "head", tsunami: false, casting: false, gaugeMult: 1 };
+  }
+  return { headBlocked: part === "head", mult: part === "head" ? 1 : RISE_OTHER_MULT, forceHitHead: false, tsunami: false, casting: false, gaugeMult: 1 };
+}
+
+/** 給前端／面板的顯示物件。 */
 function view(state, totalHpPct, now = Date.now()) {
-  const t = state?.turtle || {};
-  const num = (v) => { const n = Date.parse(v || ""); return Number.isFinite(n) ? n : 0; };
+  const turtle = state?.turtle || {};
   const tide = tideAt(now);
   return {
     tide: { phase: tide.phase, remainMs: tide.remainMs, riseMs: RISE_MS, ebbMs: EBB_MS },
-    casting: num(t.castingUntil) > now,
-    castRemainMs: Math.max(0, num(t.castingUntil) - now),
+    casting: parseMs(turtle.castingUntil) > now,
+    castRemainMs: Math.max(0, parseMs(turtle.castingUntil) - now),
     castMs: CAST_MS,
-    tsunami: num(t.tsunamiUntil) > now,
-    tsunamiRemainMs: Math.max(0, num(t.tsunamiUntil) - now),
-    breach: num(t.breachUntil) > now,
-    breachRemainMs: Math.max(0, num(t.breachUntil) - now),
-    castUnlocked: Number(totalHpPct) <= CAST_UNLOCK_HP_PCT,
-    nextCastInMs: num(t.nextCastAt) > now ? num(t.nextCastAt) - now : 0,
-    lastInterruptBy: t.lastInterruptBy || null,
+    castDamageMult: CAST_DAMAGE_MULT,
+    castGaugeMult: CAST_GAUGE_MULT,
+    tsunami: parseMs(turtle.tsunamiUntil) > now,
+    tsunamiRemainMs: Math.max(0, parseMs(turtle.tsunamiUntil) - now),
+    tsunamiMs: TSUNAMI_MS,
+    breach: parseMs(turtle.breachUntil) > now,
+    breachRemainMs: Math.max(0, parseMs(turtle.breachUntil) - now),
+    breachReason: turtle.lastBreachReason || null,
+    castUnlocked: true,
+    nextCastInMs: Math.max(0, parseMs(turtle.nextPeriodicAt) - now),
+    lastInterruptBy: turtle.lastInterruptBy || null,
+    lastCastReason: turtle.lastCastReason || null,
+    pendingForcedCasts: Array.isArray(turtle.pendingForcedCasts) ? [...turtle.pendingForcedCasts] : [],
+    fixedCastHpPcts: [...FIXED_CAST_HP_PCTS],
+    totalHpPct: clampHpPct(totalHpPct),
   };
 }
 
 module.exports = {
   ZONE,
+  RULES_VERSION,
   RISE_MS, EBB_MS, CYCLE_MS, RISE_OTHER_MULT, EBB_MULT,
-  CAST_UNLOCK_HP_PCT, CAST_INTERVAL_MS, CAST_MS, TSUNAMI_MS, BREACH_MS, BREACH_MULT,
-  tideAt, ensureCast, interrupt, battleMods, view,
+  CAST_UNLOCK_HP_PCT, CAST_INTERVAL_MS, PERIODIC_CAST_INTERVAL_MS,
+  CAST_MS, TSUNAMI_MS, BREACH_MS, BREACH_MULT, CAST_DAMAGE_MULT, CAST_GAUGE_MULT,
+  FIXED_CAST_HP_PCTS,
+  tideAt, ensureCast, interrupt, tsunamiRoundForBattle, battleMods, view,
 };

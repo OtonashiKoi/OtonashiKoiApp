@@ -7,6 +7,7 @@
 const TW = require("../../shared/towerConfig");
 const { applyEffectInstances } = require("../../shared/effectEngine");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
+const { normalizeTowerRole, getTowerRole } = require("../../shared/towerRoles");
 
 function genRoomId() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去掉易混淆 I/O/0/1
@@ -39,10 +40,21 @@ function createTowerPartyRooms(serviceContext) {
       isLeader: viewerId === room.leaderId,
       hasPassword: Boolean(room.password),
       members: room.members.map((m) => ({
+        ...(getTowerRole(m.towerRole) ? {
+          towerRole: normalizeTowerRole(m.towerRole),
+          roleLabel: getTowerRole(m.towerRole).label,
+          roleEmoji: getTowerRole(m.towerRole).emoji,
+          roleModifiers: {
+            hp: getTowerRole(m.towerRole).hpMultiplier,
+            atk: getTowerRole(m.towerRole).atkMultiplier,
+            aura: getTowerRole(m.towerRole).auraMultiplier,
+          },
+        } : {}),
         discordId: m.discordId, name: m.name, level: m.level,
         job: m.job?.name || m.job || null, jobEmoji: m.job?.emoji || null,
         hp: Math.max(0, Math.round(m.currentHp || 0)), maxHp: Math.max(0, Math.round(m.maxHp || 0)),
         alive: (m.currentHp || 0) > 0,
+        isSelf: viewerId === m.discordId,
       })),
       monster: room._upcomingPreview || null,
       ...floorInfo(room.clearedFloor + 1),
@@ -55,7 +67,7 @@ function createTowerPartyRooms(serviceContext) {
   function floorInfo(floor) {
     const buff = TW.getTowerFloorBuff(floor);
     const bonus = TW.getCumulativePartyBonus(floor);
-    const BOSS = [10, 20, 30, 40, 50, 51, 52];
+    const BOSS = Object.keys(TW.TOWER_FLOOR_BOSS).map(Number).sort((a, b) => a - b);
     const nextBossFloor = BOSS.find((f) => f >= floor) || null;
     return {
       segmentLabel: buff?.label || null, segmentEmoji: buff?.emoji || null,
@@ -77,13 +89,16 @@ function createTowerPartyRooms(serviceContext) {
     } : null;
   }
 
-  async function buildMember(discordId, displayName) {
+  async function buildMember(discordId, displayName, towerRole) {
+    const role = normalizeTowerRole(towerRole);
+    if (!role) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "請選擇坦、補或輸出站位", 400);
     const p = await tower().loadMemberData(discordId);
     if (!p) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到玩家資料", 404);
     return {
       discordId, name: displayName || p.name || "冒險者", level: p.level,
       stats: p.stats, equipped: p.equipped, inventory: p.inventory,
       activeEffects: p.activeEffects, towerRecord: p.towerRecord, job: p.job,
+      towerRole: role,
       currentHp: 0, maxHp: 0,
     };
   }
@@ -97,9 +112,9 @@ function createTowerPartyRooms(serviceContext) {
   const normPw = (pw) => String(pw || "").trim().slice(0, 20);
 
   // ── 大廳 ───────────────────────────────────────────
-  async function createRoom(discordId, displayName, password) {
+  async function createRoom(discordId, displayName, password, towerRole) {
     if (playerRoom.has(discordId)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "你已在一個爬塔房內,請先離開", 400);
-    const member = await buildMember(discordId, displayName);
+    const member = await buildMember(discordId, displayName, towerRole);
     assertLevel(member);
     let roomId; do { roomId = genRoomId(); } while (rooms.has(roomId));
     const room = {
@@ -112,14 +127,14 @@ function createTowerPartyRooms(serviceContext) {
     return roomView(room, discordId);
   }
 
-  async function joinRoom(discordId, displayName, roomId, password) {
+  async function joinRoom(discordId, displayName, roomId, password, towerRole) {
     const room = rooms.get(String(roomId || "").toUpperCase().trim());
     if (!room) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該房間(房號是否正確?)", 404);
     if (room.status !== "lobby") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "該隊伍已經開始攻塔,無法加入", 400);
     if (room.password && room.password !== normPw(password)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "房間密碼錯誤", 403);
     if (room.members.length >= TW.TOWER_MAX_MEMBERS) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `隊伍已滿(最多 ${TW.TOWER_MAX_MEMBERS} 人)`, 400);
     if (playerRoom.has(discordId)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "你已在一個爬塔房內,請先離開", 400);
-    const member = await buildMember(discordId, displayName);
+    const member = await buildMember(discordId, displayName, towerRole);
     assertLevel(member);
     room.members.push(member); playerRoom.set(discordId, roomId);
     room.lastActiveAt = Date.now();
@@ -139,6 +154,7 @@ function createTowerPartyRooms(serviceContext) {
         memberCount: room.members.length,
         maxMembers: TW.TOWER_MAX_MEMBERS,
         jobs: room.members.map((m) => m.job?.emoji || "❔"),
+        roles: room.members.map((m) => getTowerRole(m.towerRole)?.emoji || "❔"),
       });
     }
     return out.sort((a, b) => b.memberCount - a.memberCount).slice(0, 30);
@@ -177,14 +193,32 @@ function createTowerPartyRooms(serviceContext) {
     return room ? roomView(room, discordId) : null;
   }
 
+  function setRole(discordId, towerRole) {
+    const roomId = playerRoom.get(discordId);
+    const room = roomId ? rooms.get(roomId) : null;
+    if (!room) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "你不在任何爬塔房內", 404);
+    if (room.status !== "lobby") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "攻塔開始後不能更換站位", 400);
+    const role = normalizeTowerRole(towerRole);
+    if (!role) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "請選擇坦、補或輸出站位", 400);
+    const member = room.members.find((entry) => entry.discordId === discordId);
+    if (!member) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "你不在這個隊伍中", 404);
+    member.towerRole = role;
+    room.lastActiveAt = Date.now();
+    emitRoom(room, "tower_room_update", roomView(room));
+    return roomView(room, discordId);
+  }
+
   async function startRoom(discordId) {
     const room = requireLeaderRoom(discordId);
     if (room.status !== "lobby") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "已經開始了", 400);
+    if (room.members.some((member) => !normalizeTowerRole(member.towerRole))) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "所有隊員都必須先選擇站位", 400);
+    }
     room.status = "climbing";
     room.clearedFloor = 0;
     // 設好每位成員第 1 層的 MaxHP/HP(重用 DC 邏輯)
-    tower().refreshTowerMemberMaxHp({ members: room.members }, 1);
-    for (const m of room.members) m.currentHp = m.maxHp;
+    for (const m of room.members) { m.currentHp = 1; m.maxHp = 1; }
+    tower().refreshTowerMemberMaxHp({ members: room.members }, 1, { initialize: true });
     await monsterPreview(room);
     room.lastActiveAt = Date.now();
     emitRoom(room, "tower_room_update", roomView(room));
@@ -374,7 +408,7 @@ function createTowerPartyRooms(serviceContext) {
     return room;
   }
 
-  return { createRoom, joinRoom, leaveRoom, getState, startRoom, advanceFloor, retreat, listOpenRooms, kickMember, listMyItems, usePartyItem, _rooms: rooms };
+  return { createRoom, joinRoom, leaveRoom, getState, setRole, startRoom, advanceFloor, retreat, listOpenRooms, kickMember, listMyItems, usePartyItem, _rooms: rooms };
 }
 
 module.exports = { createTowerPartyRooms };

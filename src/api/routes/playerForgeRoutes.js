@@ -115,6 +115,22 @@ function createPlayerForgeRoutes(serviceContext) {
     }
   });
 
+  // 破壞拆除一顆指定屬性石：成敗都扣金幣，成功才永久累計該件裝備的拆除次數。
+  router.post("/api/me/enhance/:itemUuid/element/remove", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const element = String(req.body?.element || "").trim();
+      const result = await serviceContext.enhanceService.removeElementSocket(
+        discordId,
+        req.params.itemUuid,
+        element
+      );
+      res.json(ok(result, result.message));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }
 

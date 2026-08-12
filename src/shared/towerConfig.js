@@ -2,15 +2,17 @@
 
 // ── 組隊爬塔系統設定 ─────────────────────────────────────────────────────────
 // 最多 6 人，隊長發起，開始後鎖定成員
-// 共 52 關：
+// 共 71 關：
 //   1~40 層 普通段（每 10 層段王）
 //   41~50 層 龍族之領（50 層段王＝龍王(B)）
 //   51 層 大史王（世界王）／52 層 古龍王(B)（終局世界王）
+//   53~69 層 地獄火焰／焰獄深處
+//   70~71 層 煉獄烈焰狼王(B)
 // ────────────────────────────────────────────────────────────────────────────
 
 const TOWER_MAX_MEMBERS = 6;
-const TOWER_TOTAL_FLOORS = 52; // 1~40 普通 + 41~50 龍族之領 + 51 大史王 + 52 古龍王
-const TOWER_BOSS_FLOOR = 52;   // 最終王（古龍王）
+const TOWER_TOTAL_FLOORS = 71;
+const TOWER_BOSS_FLOOR = 71;
 
 // ── 樓層 Buff 區段 ────────────────────────────────────────────────────────────
 // 玩家打到該區段就會取得對應 Buff，累加不替換
@@ -76,6 +78,46 @@ const TOWER_FLOOR_BUFFS = [
     monsterScalePct: 100,    // 世界王本身已巨大（大史王 177萬／古龍王 265萬），不再放大
     monsterAtkScalePct: 100,
   },
+  {
+    minFloor: 53,
+    maxFloor: 60,
+    label: "焰獄前線",
+    emoji: "🔥",
+    color: 0xff7a3d,
+    partyBonus: { atkPct: 65, hpPct: 130 },
+    monsterScalePct: 160,
+    monsterAtkScalePct: 120,
+  },
+  {
+    minFloor: 61,
+    maxFloor: 69,
+    label: "焰獄深處",
+    emoji: "🌋",
+    color: 0xd93636,
+    partyBonus: { atkPct: 75, hpPct: 150 },
+    monsterScalePct: 190,
+    monsterAtkScalePct: 140,
+  },
+  {
+    minFloor: 70,
+    maxFloor: 70,
+    label: "狼王試煉",
+    emoji: "🐺",
+    color: 0xb51f32,
+    partyBonus: { atkPct: 85, hpPct: 170 },
+    monsterScalePct: 100,
+    monsterAtkScalePct: 100,
+  },
+  {
+    minFloor: 71,
+    maxFloor: 71,
+    label: "狼王終戰",
+    emoji: "🐺",
+    color: 0x7a1024,
+    partyBonus: { atkPct: 90, hpPct: 180 },
+    monsterScalePct: 130,
+    monsterAtkScalePct: 120,
+  },
 ];
 
 // ── 固定王關（單一來源）────────────────────────────────────────────────────
@@ -89,6 +131,8 @@ const TOWER_FLOOR_BOSS = {
   50: "龍王(B)",      // 龍族之領 段王
   51: "大史王",        // 世界王
   52: "古龍王(B)",     // 終局世界王
+  70: "煉獄烈焰狼王(B)",
+  71: "煉獄烈焰狼王(B)",
 };
 function getTowerFloorBossName(floor) {
   return TOWER_FLOOR_BOSS[floor] || null;
@@ -105,6 +149,9 @@ const TOWER_MONSTER_ZONE_POOL = {
   "41-50": { zone: "dragon_realm", bossOnly: false }, // 龍族之領（50 層段王走 TOWER_FLOOR_BOSS）
   "51":    { zone: "elite",            bossOnly: true }, // 大史王
   "52":    { zone: "dragon_king_lair", bossOnly: true }, // 古龍王
+  "53-60": { zone: "hellfire", bossOnly: false },
+  "61-69": { zone: "hellfire", bossOnly: false },
+  "70-71": { zone: "hellfire", bossOnly: true },
 };
 
 // ── 隊伍行動軸規則 ──────────────────────────────────────────────────────────
@@ -212,6 +259,10 @@ const TOWER_FLOOR_REWARD = {
   50:  { goldMultiplier: 18.0, expMultiplier: 18.0, bonusMsg: "🐲 龍族之領鎮壓！龍王伏誅！" },
   51:  { goldMultiplier: 28.0, expMultiplier: 28.0, bonusMsg: "⚔️ 大史王討伐！" },
   52:  { goldMultiplier: 45.0, expMultiplier: 45.0, bonusMsg: "🎉 古龍王討伐！傳說等級！" },
+  60:  { goldMultiplier: 55.0, expMultiplier: 55.0, bonusMsg: "🔥 焰獄前線突破！" },
+  69:  { goldMultiplier: 70.0, expMultiplier: 70.0, bonusMsg: "🌋 焰獄深處制霸！" },
+  70:  { goldMultiplier: 85.0, expMultiplier: 85.0, bonusMsg: "🐺 狼王試煉突破！" },
+  71:  { goldMultiplier: 100.0, expMultiplier: 100.0, bonusMsg: "🏆 煉獄烈焰狼王討伐！全塔制霸！" },
 };
 
 // 基礎獎勵（每通過一層）
@@ -225,6 +276,9 @@ function getTowerFloorBuff(floor) {
 }
 
 function getTowerMonsterPool(floor) {
+  if (floor >= 70) return TOWER_MONSTER_ZONE_POOL["70-71"];
+  if (floor >= 61) return TOWER_MONSTER_ZONE_POOL["61-69"];
+  if (floor >= 53) return TOWER_MONSTER_ZONE_POOL["53-60"];
   if (floor >= 52) return TOWER_MONSTER_ZONE_POOL["52"];
   if (floor >= 51) return TOWER_MONSTER_ZONE_POOL["51"];
   if (floor >= 41) return TOWER_MONSTER_ZONE_POOL["41-50"];

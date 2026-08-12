@@ -53,10 +53,12 @@ const wr = (name, detail = "") => warn.push(`${name}${detail ? "　" + detail : 
   const beach = await I.countDocuments({ _eventBeach: true });
   const beachA = await I.countDocuments({ _eventBeach: true, tier: "A" });
   const beachS = await I.countDocuments({ _eventBeach: true, tier: "S" });
-  beach === 20 ? ok("海灘限定裝", `${beach} 件（A${beachA} S${beachS}）`) : no("海灘限定裝", `${beach} 件`);
+  beach === 28 && beachA === 17 && beachS === 11
+    ? ok("海灘限定裝", `${beach} 件（A${beachA} S${beachS}）`)
+    : no("海灘限定裝", `${beach} 件（A${beachA} S${beachS}）`);
 
   const withEl = await I.countDocuments({ _eventBeach: true, "elementDrop.chancePct": 100 });
-  withEl === 20 ? ok("限定裝自帶屬性", "20/20 必中") : no("限定裝自帶屬性", `${withEl}/20`);
+  withEl === 28 ? ok("限定裝自帶屬性", "28/28 必中") : no("限定裝自帶屬性", `${withEl}/28`);
 
   const { bossKeyForZone } = require("../src/services/worldBoss/worldBossService");
   bossKeyForZone("event_boss") === "island_turtle" ? ok("龜王 zone 註冊") : no("龜王 zone 註冊");
@@ -68,6 +70,11 @@ const wr = (name, detail = "") => warn.push(`${name}${detail ? "　" + detail : 
   mzh.getWorldBossPartKeys("event_boss").length === 4 ? ok("龜王四部位") : no("龜王四部位");
   const chest = await I.findOne({ id: "chest-island-turtle" });
   chest?.effect?.monsterId === "event-island-turtle" ? ok("島島寶箱接線") : no("島島寶箱接線");
+  const turtleCardDrop = (evBoss?.drops || []).find((d) => d.itemId === "monster-card-island-turtle");
+  const turtleWeaponDrops = (evBoss?.drops || []).filter((d) => String(d.itemId || "").startsWith("beach-s-"));
+  (turtleCardDrop?.chance === 1 && turtleWeaponDrops.length === 11 && turtleWeaponDrops.every((d) => d.chance === 9))
+    ? ok("龜王寶箱獎池", "龜王卡 1%｜11 把 S 武器各 9%")
+    : no("龜王寶箱獎池", `卡 ${turtleCardDrop?.chance ?? "無"}%｜武器 ${turtleWeaponDrops.length}/11`);
 
   // ── 3. 徽章 JOB 化 ─────────────────────
   console.log("【3】徽章 JOB 化");

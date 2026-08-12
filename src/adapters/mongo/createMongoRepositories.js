@@ -330,6 +330,61 @@ function createMongoRepositories() {
         }
         return stampInventoryBaseline(normalized);
       },
+      /**
+       * 原子分配自主屬性點，只讀寫六維、可用點數與自主配點紀錄。
+       * 避免為了加 1 點而載入、合併裝備並回寫整份大型 progress 文件。
+       */
+      async allocateAttributePoints(playerId, attribute, amount, options = {}) {
+        if (maintenance.isStrict()) {
+          const error = new Error("SEASON_RESET_WRITE_LOCKED");
+          error.code = "SEASON_RESET_WRITE_LOCKED";
+          throw error;
+        }
+
+        const key = String(attribute || "");
+        const points = Number(amount);
+        if (!/^[a-z]+$/.test(key) || !Number.isInteger(points) || points <= 0) {
+          return { ok: false, reason: "invalid_argument" };
+        }
+
+        const expectedSeasonKey = String(options.expectedSeasonKey || seasonState.getActiveKey());
+        const baseFilter = seasonState.progressFilter(playerId, expectedSeasonKey);
+        const coll = await collection("progress");
+        const now = new Date().toISOString();
+        const updated = await coll.findOneAndUpdate(
+          { ...baseFilter, statusPoints: { $gte: points } },
+          [{
+            $set: {
+              statusPoints: { $subtract: [{ $ifNull: ["$statusPoints", 0] }, points] },
+              [`attributes.${key}`]: { $add: [{ $ifNull: [`$attributes.${key}`, 1] }, points] },
+              [`allocatedAttrs.${key}`]: { $add: [{ $ifNull: [`$allocatedAttrs.${key}`, 0] }, points] },
+              updatedAt: now,
+            },
+          }],
+          {
+            returnDocument: "after",
+            projection: {
+              _id: 0,
+              playerId: 1,
+              seasonKey: 1,
+              attributes: 1,
+              allocatedAttrs: 1,
+              statusPoints: 1,
+              updatedAt: 1,
+            },
+          },
+        );
+
+        if (updated) {
+          emitRealtimeInvalidate("progress", String(playerId));
+          return { ok: true, progress: updated };
+        }
+
+        // 原子條件未命中時只做小欄位查詢，用來區分角色不存在與點數不足。
+        const state = await coll.findOne(baseFilter, { projection: { _id: 1, statusPoints: 1 } });
+        if (!state) return { ok: false, reason: "not_found" };
+        return { ok: false, reason: "insufficient", statusPoints: Number(state.statusPoints) || 0 };
+      },
       async save(progress) {
         if (maintenance.isStrict()) {
           const error = new Error("SEASON_RESET_WRITE_LOCKED");
@@ -840,6 +895,7 @@ function createMongoRepositories() {
         return (await collection("merchOrders")).find(q).sort({ createdAt: -1 }).limit(limit).toArray();
       }
     },
+    craftingRepository: require("./crafting/createCraftingRepository").createCraftingRepository({ emitRealtimeInvalidate }),
     itemRepository: {
       async findAll() {
         return (await collection("items")).find({}).toArray();

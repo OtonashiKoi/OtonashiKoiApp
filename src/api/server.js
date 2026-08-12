@@ -23,6 +23,8 @@ const { createHealthRoutes } = require("./routes/healthRoutes");
 const { createPlayerAppRoutes } = require("./routes/playerAppRoutes");
 const { createPlayerCollectionRoutes } = require("./routes/playerCollectionRoutes");
 const { createPlayerForgeRoutes } = require("./routes/playerForgeRoutes");
+const { createPlayerCraftingRoutes } = require("./routes/playerCraftingRoutes");
+const { createPlayerCharacterRoutes } = require("./routes/playerCharacterRoutes");
 const { createPlayerEnchantRoutes } = require("./routes/playerEnchantRoutes");
 const { createSoloBossRoutes } = require("./routes/soloBossRoutes");
 const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
@@ -35,6 +37,20 @@ const config = require("../config");
 
 function createApiServer(discordClient) {
   const app = express();
+
+  // 只記錄伺服器本身的慢請求，和瀏覽器/Cloudflare 往返時間分開判讀。
+  // 不記 query/body/playerId，避免效能紀錄帶入玩家資料。
+  app.use((req, res, next) => {
+    const startedAt = process.hrtime.bigint();
+    res.on("finish", () => {
+      if (!req.path.startsWith("/api")) return;
+      const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+      if (elapsedMs >= 500) {
+        console.warn(`[API SLOW] ${req.method} ${req.path} ${res.statusCode} ${elapsedMs.toFixed(1)}ms`);
+      }
+    });
+    next();
+  });
 
   // www → 裸網域 301 轉址:避免玩家黏在 www.otonashikoi.org(頁面開得起來但 API 被 CORS 擋)。
   // www 與裸網域都經 cloudflared 進到同一個 Express,在最前面攔 Host=www.* 的請求轉回裸網域 https。
@@ -145,8 +161,10 @@ function createApiServer(discordClient) {
   app.use(createStreamOverlayRoutes());
   app.use(require("./routes/adminLiveRoutes").createAdminLiveRoutes(serviceContext));
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
+  app.use(createPlayerCharacterRoutes(serviceContext));
   app.use(createPlayerCollectionRoutes(serviceContext));
   app.use(createPlayerForgeRoutes(serviceContext));
+  app.use(createPlayerCraftingRoutes(serviceContext));
   app.use(createPlayerEnchantRoutes(serviceContext));
   app.use(createSoloBossRoutes(serviceContext));
   app.use(createPlayerIdleRoutes(serviceContext));

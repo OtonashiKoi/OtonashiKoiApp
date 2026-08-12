@@ -1,7 +1,7 @@
 <!-- GENERATED: CURRENT_GAME_STATUS -->
 # 遊戲現況快照 Current Game Status
 
-生成時間：2026-08-10T03:21:17.707Z
+生成時間：2026-08-11T13:15:32.834Z
 
 > 本檔由程式碼與目前 MongoDB 自動產生，請勿手動修改。執行 `npm run status:update` 更新。功能說明與檔案位置請看 `docs/README.md`、`PROJECT_FEATURES.md`、`docs/SYSTEMS.md`。
 
@@ -19,16 +19,16 @@
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 427 |
-| 進度資料 | 431 |
+| 玩家 | 431 |
+| 進度資料 | 435 |
 | 怪物 | 88 |
-| 怪物狀態文件 | 13 |
-| 道具 | 537 |
-| 任務 | 71 |
+| 怪物狀態文件 | 14 |
+| 道具 | 553 |
+| 任務 | 72 |
 | 職業徽章 | 24 |
 | 職業任務 | 25 |
 | 世界王設定 | 4 |
-| 世界王狀態 | 3 |
+| 世界王狀態 | 4 |
 | 故事章節 | 3 |
 | 故事 NPC | 22 |
 | 商店商品 | 30 |
@@ -122,7 +122,7 @@
 | event_1 | 5 | 椰椰大蟹 | 44 | 26000 | 15430 | 432 | 0 | 否 | 9 |
 | event_1 | 6 | 鼓鼓河豚 | 42 | 21500 | 13490 | 378 | 0 | 否 | 7 |
 | event_1 | 7 | 龜龜大將 | 45 | 27000 | 16400 | 459 | 0 | 否 | 9 |
-| event_boss |  | 島島龜王 | 65 | 4000000 | 900 | 2600 | 3000 | 是 | 3 |
+| event_boss |  | 島島龜王 | 65 | 4000000 | 900 | 2600 | 3000 | 是 | 12 |
 | hellfire | 1 | 焰爪幼狼 | 42 | 40629 | 15000 | 700 | 0 | 否 | 12 |
 | hellfire | 2 | 灰燼豺 | 43 | 43338 | 16000 | 740 | 0 | 否 | 13 |
 | hellfire | 3 | 熔岩犬 | 43 | 47401 | 17500 | 800 | 0 | 否 | 13 |
@@ -162,18 +162,18 @@
 | --- | --- |
 | collectible | 8 |
 | consumable | 32 |
-| equipment | 470 |
+| equipment | 486 |
 | job_badge | 24 |
 | pet_egg | 3 |
 
 | 階級 | 數量 |
 | --- | --- |
-| A | 207 |
+| A | 214 |
 | B | 73 |
 | C | 73 |
 | D | 62 |
-| S | 47 |
-| 無階級 | 75 |
+| S | 55 |
+| 無階級 | 76 |
 
 | 槽位 | 數量 |
 | --- | --- |
@@ -188,9 +188,9 @@
 | job_eq | 24 |
 | shield | 21 |
 | shoes | 24 |
-| special | 78 |
-| title_eq | 13 |
-| weapon | 116 |
+| special | 85 |
+| title_eq | 14 |
+| weapon | 124 |
 | 無槽位 | 43 |
 
 ## Items
@@ -241,6 +241,7 @@
 | title-2026-pk-throne-third-string | PK王座・第三弦 | equipment |  | title_eq |  | VIT+1 DEX+2 LUK+2 | none |
 | title-2026-pk-throne-second-blade | PK王座・第二刃 | equipment |  | title_eq |  | STR+2 VIT+1 LUK+2 | none |
 | title-2026-first-gen-climber | 初代攀登者 | equipment |  | title_eq |  | LUK+3 | none |
+| title-summer-four-kings | 夏季四天王 | equipment |  | title_eq |  |  | none |
 | 0aa0f96b-2ada-482f-87b7-55ffedc0bc36 | 大史王的黏液球 | equipment |  | title_eq |  |  | none |
 | 65833876-d13e-4ca8-ac26-4eeb170726fc | 樂園CCB2勇者 | equipment |  | title_eq |  | LUK+3 | none |
 | e290d286-bd45-4a32-b848-d52184fc88a0 | 樂園CCB勇者 | equipment |  | title_eq |  | LUK+3 | none |
@@ -378,14 +379,17 @@
 | monster-card-dragon-king | 古龍王(B)卡 | equipment | A | special |  |  |  |
 | monster-card-5c20d4ba-5f38-4d6b-a724-369eb632ff1d | 城堡魔像(B)卡 | equipment | A | special |  |  | none |
 | monster-card-5152b379-9bdd-404a-acb4-b80935664aba | 城牆衛兵卡 | equipment | A | special |  |  | none |
+| monster-card-f0462e67-9fe3-4dc2-9a42-d80eaf1901bf | 墨墨章魚卡 | equipment | A | special |  |  | none |
 | monster-card-e5a4a7e58fb2e78e8be58da1 | 大史王卡 | equipment | A | special |  |  | none |
 | monster-card-702f6cd9-28ed-4944-a605-fbb6d6a3c300 | 岩漿巨蟲卡 | equipment | A | special |  |  | none |
 | monster-card-388a118f-b839-4287-ba02-0c7a12cd0c06 | 廢墟蠍兵卡 | equipment | A | special |  |  | none |
 | monster-card-0496ea5d-786e-4b07-ba65-30949c1afe31 | 廢都魔王(B)卡 | equipment | A | special |  |  | none |
 | monster-card-e1c17a26-dd0e-4869-9ce8-7c4b12b8e2c2 | 暗影龍將卡 | equipment | A | special |  |  | none |
 | monster-card-c2d4c2c8-824d-4880-b81a-7a3c6b97149b | 枯骨劍士卡 | equipment | A | special |  |  | none |
+| monster-card-c95ef463-5c6e-41f5-ab1d-158827106037 | 椰椰大蟹卡 | equipment | A | special |  |  | none |
 | monster-card-139df36b-f838-4875-b3f0-2d9003fc6f8f | 毒霧蜘蛛卡 | equipment | A | special |  |  | none |
 | npc-card-npc-ch1-examiner | 測驗教官卡 | equipment | A | special |  | STR+5 DEX+4 | none |
+| monster-card-8c68ab06-b7fc-462b-9598-28fc073e0ade | 溜溜沙蟹卡 | equipment | A | special |  |  | none |
 | monster-card-29e2458c-8e7f-4c4f-a7bf-5f978a5067d4 | 火翼龍人卡 | equipment | A | special |  |  | none |
 | monster-card-18681a29-c89d-45e2-ab65-60869a45ec20 | 火髓魔蟲卡 | equipment | A | special |  |  | none |
 | monster-card-ddae3f15-ee44-4bd1-993e-16dd43904315 | 灰燼豺卡 | equipment | A | special |  |  | none |
@@ -398,7 +402,9 @@
 | monster-card-hellfang-king | 狼牙王卡 | equipment | A | special |  |  |  |
 | monster-card-814f097c-283e-4c35-98b5-7aaa8b08dd7c | 石像鬼卡 | equipment | A | special |  |  | none |
 | monster-card-8ee733e7-667d-4222-b1e1-4e867e99092d | 硫火蝙蝠卡 | equipment | A | special |  |  | none |
+| monster-card-792eef9d-1bfb-4008-bac4-66c85c762d21 | 蝦蝦劍士卡 | equipment | A | special |  |  | none |
 | monster-card-9a0ac6a5-4f2e-4186-a66a-73a6de9cb5e2 | 詛咒祭司卡 | equipment | A | special |  |  | none |
+| monster-card-1667de96-3f09-46bc-902b-45d134da2737 | 貝貝寄居蟹卡 | equipment | A | special |  |  | none |
 | monster-card-e1fc9c60-119a-413e-a7e2-276fa05b693e | 鏽蝕巨斧兵卡 | equipment | A | special |  |  | none |
 | monster-card-8eea80b7-c836-413b-8912-7c3ce6a899a7 | 鐵甲衛將卡 | equipment | A | special |  |  | none |
 | monster-card-895e616e-a218-4445-86d6-e52c74b68018 | 雷霆飛龍卡 | equipment | A | special |  |  | none |
@@ -408,9 +414,11 @@
 | monster-card-a68402d9-d9cf-4927-9293-691164bcf1f1 | 黃金幼龍(稀)卡 | equipment | A | special |  |  | none |
 | monster-card-8e5ed991-335a-4b57-8c2d-29dcdb2d0429 | 黑曜龍騎卡 | equipment | A | special |  |  | none |
 | monster-card-35ec8cc7-9f0c-4d61-8a40-343d8857be2f | 黑焰巫師卡 | equipment | A | special |  |  | none |
+| monster-card-4403de28-e43d-4785-b4c4-028083c65ecd | 鼓鼓河豚卡 | equipment | A | special |  |  | none |
 | monster-card-90df79f6-ce40-4f31-be32-f8d4d8f31c99 | 龍王(B)卡 | equipment | A | special |  |  | none |
 | monster-card-aece2657-19aa-407c-acaa-0b23246c0dc7 | 龍翼魔法師卡 | equipment | A | special |  |  | none |
 | monster-card-739cdb0a-5d59-4e52-bf77-cce0e33c2666 | 龍蜥武士卡 | equipment | A | special |  |  | none |
+| monster-card-a9d4ae95-d9fb-49e0-a720-adf8296296b3 | 龜龜大將卡 | equipment | A | special |  |  | none |
 | sanyuanpai-a-dagger | 三元牌 | equipment | A | weapon | dagger | STR+12 AGI+7 VIT+2 LUK+-2 | none |
 | dragon-a-wpn-sword_2h | 亞龍巨劍 | equipment | A | weapon | sword_2h | STR+25 | none |
 | dragon-a-wpn-axe_2h | 亞龍巨斧 | equipment | A | weapon | axe_2h | STR+20 LUK+5 | none |
@@ -675,6 +683,9 @@
 | s-dragon-sword_1h | 幼龍牙劍 | equipment | S | weapon | sword_1h | STR+19 | none |
 | s-dragon-dice | 幼龍骨骰 | equipment | S | weapon | dice | AGI+4 LUK+19 | none |
 | beach-s-sword | 怒濤斬浪劍 | equipment | S | weapon | sword_1h | STR+14 AGI+3 LUK+2 | none |
+| beach-s-dagger | 深潮魚骨匕首 | equipment | S | weapon | dagger | STR+4 AGI+11 LUK+4 | none |
+| beach-s-staff-1h | 潮心珊瑚杖 | equipment | S | weapon | staff_1h | VIT+4 INT+11 DEX+4 | none |
+| beach-s-mace-1h | 潮核碎甲錘 | equipment | S | weapon | mace_1h | STR+12 VIT+5 DEX+2 | none |
 | fire-s-wpn-mace_2h | 獄焰・崩地槌 | equipment | S | weapon | mace_2h | STR+20 VIT+5 | none |
 | fire-s-wpn-axe_1h | 獄焰・撕裂手斧 | equipment | S | weapon | axe_1h | STR+14 LUK+5 | none |
 | fire-s-wpn-bow | 獄焰・炎狼獵弓 | equipment | S | weapon | bow | AGI+4 DEX+19 | none |
@@ -698,7 +709,11 @@
 | mithril-s-wpn-staff_2h | 真銀雙手法杖 | equipment | S | weapon | staff_2h | INT+19 DEX+4 | none |
 | mithril-s-wpn-dice | 真銀骰子 | equipment | S | weapon | dice | AGI+4 LUK+19 | none |
 | beach-s-mace | 碎島巨槌 | equipment | S | weapon | mace_2h | STR+17 AGI+3 VIT+5 | none |
+| beach-s-axe-1h | 礁甲破浪斧 | equipment | S | weapon | axe_1h | STR+13 VIT+2 LUK+4 | none |
+| beach-s-bow | 穿潮海天弓 | equipment | S | weapon | bow | AGI+5 DEX+15 LUK+3 | none |
 | s-dragon-axe_1h | 裂龍手斧 | equipment | S | weapon | axe_1h | STR+14 LUK+5 | none |
+| beach-s-sword-2h | 鎮潮斷海巨劍 | equipment | S | weapon | sword_2h | STR+18 AGI+3 VIT+4 | none |
+| beach-s-axe-2h | 開島裂海巨斧 | equipment | S | weapon | axe_2h | STR+18 VIT+3 LUK+4 | none |
 | s-dragon-bow | 龍筋獵弓 | equipment | S | weapon | bow | AGI+4 DEX+19 | none |
 | s-dragon-staff_2h | 龍脈長杖 | equipment | S | weapon | staff_2h | INT+19 DEX+4 | none |
 | s-dragon-sword_2h | 龍脊巨劍 | equipment | S | weapon | sword_2h | STR+25 | none |
@@ -706,6 +721,7 @@
 | s-dragon-mace_1h | 龍顎戰錘 | equipment | S | weapon | mace_1h | STR+14 VIT+5 | none |
 | s-dragon-mace_2h | 龍骨碎天槌 | equipment | S | weapon | mace_2h | STR+20 VIT+5 | none |
 | s-dragon-dagger | 龍鱗短刃 | equipment | S | weapon | dagger | STR+4 AGI+15 | none |
+| beach-s-dice | 龜島命運骰 | equipment | S | weapon | dice | AGI+4 DEX+4 LUK+15 | none |
 | beach-s-staff | 龜王燈籠杖 | equipment | S | weapon | staff_2h | VIT+4 INT+15 DEX+4 | none |
 | job_elementalist_t2_v1 | 元素師徽章 | job_badge |  | job_eq |  | VIT+3 INT+7 DEX+2 | none |
 | job_sage_t2_v1 | 兵聖徽章 | job_badge |  | job_eq |  | AGI+3 INT+5 DEX+4 | none |
@@ -786,14 +802,15 @@
 | onboarding | 140 | 達成 Lv.10 並獲得職業徽章 | level_10_job_badge | 1 | 啟用 | 300 金幣 + 150 EXP | 升到 Lv.10，並獲得任一職業徽章即可完成。 |
 | onboarding | 150 | 成功連擊20次 | combo_count | 20 | 啟用 | 500 金幣 + 220 EXP | 同樣建議用匕首，配合高 AGI 與持續輸出，較容易把連擊堆高。 |
 | onboarding | 160 | 完成全部新手任務 | onboarding_complete_count | 1 | 啟用 | 屬性重製藥水 | 完成前面所有新手任務後，再回來領取最終獎勵。 |
+| season | 10 | 夏季四天王 | kill_slime_king | 20 | 停用 | 夏季四天王 | 擊敗四方之王：大史王、古龍王、地獄狼牙王、島島龜王，各 5 隻。 |
 | season | 900 | 🔗 共鳴・輔助者的試煉 | battle_with_support_job | 1500 | 啟用 | 繫絆・共鳴之鏈 | 【隱藏賽季任務】唯有集齊全部輔助職業徽章（治療師／軍師／詩人／結界師）者，才會看見此試煉。裝著任一輔助職徽章出戰累積 2000 場，證明你與夥伴的羈絆。獎勵：傳說錨點【繫絆・共鳴之鏈】。 |
 | season | 910 | 十五回合生還者 | wb_survive_full | 1 | 啟用 | 3000 金幣 | 在世界王戰鬥中撐滿 15 回合而不倒下（任一世界王／單人王皆可）。獎勵：3,000 金幣。 |
 | season | 910 | 🛡️ 沒苦硬吃・硬撐者的試煉 | damage_taken | 100000 | 啟用 | 沒苦硬吃 | 【隱藏賽季任務】累積承受傷害達 5 萬後現身；解鎖後再硬吃 5 萬點傷害，證明你扛得住。獎勵：傳說錨點【沒苦硬吃】。 |
 | season | 911 | 百戰不殆 | wb_survive_full | 30 | 啟用 | 15000 金幣 | 累計 30 場世界王戰鬥撐滿 15 回合。獎勵：15,000 金幣＋背包擴充券。 |
 | season | 911 | 🩸 對鮮血的渴望・嗜血者的試煉 | damage_total | 1000000 | 停用 | 對鮮血的渴望 | 【隱藏賽季任務】累積造成傷害達 50 萬後現身；解鎖後再造成 50 萬傷害，浸透鮮血。獎勵：傳說錨點【對鮮血的渴望】。 |
 | season | 911 | 🩸 對鮮血的渴望・嗜血者的試煉 | lifesteal_done | 100000 | 啟用 | 對鮮血的渴望 | 【隱藏賽季任務】累積實際吸血 5 萬點後現身；解鎖後再實際吸血 5 萬點。滿血時的溢出吸血不列入。獎勵：傳說錨點【對鮮血的渴望】。 |
-| season | 912 | ✝️ 聖人的試煉 | heal_done | 50000 | 啟用 | 聖人就是比拳頭大小 | 【隱藏賽季任務】本季斗內贊助過的人才會看見；累積實際非吸血治療 5 萬點。滿血溢補、治療轉傷害與吸血不列入。獎勵：傳說錨點【聖人就是比拳頭大小】。 |
 | season | 912 | ✝️ 聖人的試煉 | heal_done | 50000 | 停用 | 聖人就是比拳頭大小 | 【隱藏賽季任務】本季斗內贊助過的人才會看見此試煉；累積回血量 5 萬點，以給予之心成聖。獎勵：傳說錨點【聖人就是比拳頭大小】。 |
+| season | 912 | ✝️ 聖人的試煉 | heal_done | 50000 | 啟用 | 聖人就是比拳頭大小 | 【隱藏賽季任務】本季斗內贊助過的人才會看見；累積實際非吸血治療 5 萬點。滿血溢補、治療轉傷害與吸血不列入。獎勵：傳說錨點【聖人就是比拳頭大小】。 |
 | season | 913 | ⏳ 時間管理大師的試煉 | checkin_streak | 7 | 啟用 | 時間管理大師 | 【隱藏賽季任務】連續簽到 3 天後現身；連續簽到滿 7 天，掌握時間者得之。獎勵：傳說錨點【時間管理大師】。 |
 | season | 920 | 屬性入門 | wb_resist_ready | 1 | 啟用 | 3000 金幣 | 防具鑲上對應屬性石、帶著 30% 以上抗性出戰世界王（抵銷無抗性懲罰）。獎勵：3,000 金幣。 |
 | season | 921 | 滿抗證明 | wb_fullresist | 1 | 啟用 | 8000 金幣 | 帶著 100% 滿抗（10 顆同屬性石）出戰世界王。獎勵：8,000 金幣＋附魔重骰藥水。 |

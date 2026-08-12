@@ -14,6 +14,8 @@ const { acquireSse } = require("../netGuards");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
 const { acquireWebBattle } = require("../../services/progress/battleLock");
 const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard } = require("../../shared/leaderboardEligibility");
+const { calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
+const { getWorldBossPartLabel } = require("../../shared/worldBossParts");
 
 // 跨 DC/網頁/裝置「同時只能一場戰鬥」：檢查 DC 端是否正在戰鬥（怪物/PK/塔）
 function describeDcBattle(discordId) {
@@ -33,9 +35,23 @@ function prettyLeaderboardName(displayName, discordId) {
   return dn;
 }
 
-// Track per-player battle cooldowns.
-// Cooldown duration matches battle animation time: round logs * 700ms + 2s buffer.
+// Track per-player battle cooldowns. Duration follows the animation timeline plus a short UI handoff.
 const playerBattleCooldowns = new Map();
+
+// 任務／職業熟練度等附帶進度不影響本場傷害、掉落與經驗，不能阻塞戰報回傳。
+// 同一玩家仍依序執行，避免短時間連戰造成 read-modify-write 互相覆蓋。
+const postBattleSettlementQueues = new Map();
+function enqueuePostBattleSettlement(discordId, task) {
+  const key = String(discordId);
+  const previous = postBattleSettlementQueues.get(key) || Promise.resolve();
+  const current = previous.catch(() => {}).then(task);
+  postBattleSettlementQueues.set(key, current);
+  void current
+    .catch((error) => console.error("[PostBattleSettlement] error:", error?.message || error))
+    .finally(() => {
+      if (postBattleSettlementQueues.get(key) === current) postBattleSettlementQueues.delete(key);
+    });
+}
 
 // 聊天圖片上傳：記憶體暫存、8MB 上限（轉發為 Discord 附件，不落地、不佔 Cloudinary）
 const multer = require("multer");
@@ -1216,6 +1232,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       } catch (_) { /* 疲勞查詢失敗不影響 profile */ }
 
       res.json(ok({
+        featureAccess: {
+          // 多角色已公開；角色 2／3 的建立資格由人物 API 依會員狀態判定。
+          characters: true,
+        },
         player: {
           ...profileResult.player,
           ...(avatarUrl ? { avatarUrl } : {}),
@@ -2714,6 +2734,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.post("/api/combat/quick-battle", requireAuth, async (req, res, next) => {
     let battleLock = null;   // 網頁戰鬥占用鎖
     let lockHeldForAnim = false; // 戰鬥成功 → 占用保留到動畫結束，不在 finally 立即釋放
+    const battlePerf = { startedAt: performance.now(), lastAt: performance.now(), parts: [] };
+    const markBattlePerf = (name) => {
+      const now = performance.now();
+      battlePerf.parts.push({ name, duration: Math.max(0, now - battlePerf.lastAt) });
+      battlePerf.lastAt = now;
+    };
     try {
       const { discordId, displayName } = req.playerRecord;
       const zoneKey = normalizeZone(req.body.zone);
@@ -2765,6 +2791,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const { _resolveExpiredMonsterTransition } = require("../../bot/handlers/monsterZoneHandlers");
         await _resolveExpiredMonsterTransition(serviceContext, zoneKey);
       } catch (_) { /* 自癒失敗不阻擋戰鬥 */ }
+      markBattlePerf("guards");
 
       const [stateRaw, monsters] = await Promise.all([
         serviceContext.monsterService.getState(zoneKey),
@@ -2828,6 +2855,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 閘門故障不鎖死玩法（fail-open），僅記錄
         console.warn("[Story] zone gate check failed:", e?.message || e);
       }
+      markBattlePerf("load");
 
       // Calc player stats（永遠從 DB 讀取最新 effects，不使用 snapshot 裡的舊值）
       const { calcPlayerStats } = require("../../shared/combatStats");
@@ -2885,12 +2913,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         if (_snCfg) {
           rawPartyEffs.push({
             key: "support_shot", target: "party", trigger: "passive", chance: 100,
-            params: { value: Number(_snCfg.supportShotPct) || 50, casterAtk: Math.round(pStats.atk || 0), casterCrit: Math.round(pStats.crit || 0) },
+            params: { value: Number(_snCfg.supportShotPct) || 70, casterAtk: Math.round(pStats.atk || 0), casterCrit: Math.round(pStats.crit || 0) },
             srcItem: "神射手徽章", sourceDiscordId: discordId,
           });
         }
       }
-      const partyEffs = scaleSupportPartyEffects(rawPartyEffs, { providerStats: pStats, equipped });
+      const partyEffs = scaleSupportPartyEffects(rawPartyEffs, { providerStats: pStats, equipped, inventory: progress?.inventory || [], zone: zoneKey });
       const hasPartyAura = partyEffs.length > 0;
 
       // 相容舊格式 activeHealerAura（單一物件）→ activeHealerAuras（陣列），支援多光環疊加
@@ -2933,17 +2961,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         for (const aura of newAuras) {
           if (!aura?.discordId) continue;
           const isSelf = aura.discordId === discordId;
-          let auraProviderStats, auraProviderEquipped;
+          let auraProviderStats, auraProviderEquipped, auraProviderInventory;
           if (isSelf) {
             // 自己：直接用本場已算好的 pStats / equipped，省一次 DB
             auraProviderStats = pStats;
             auraProviderEquipped = equipped;
+            auraProviderInventory = progress?.inventory || [];
           } else {
             const auraProgress = await serviceContext.progressRepository.findByPlayerId(aura.discordId).catch(() => null);
             if (!auraProgress) continue;
             auraProviderEquipped = await mergeEquippedFromLibrary(auraProgress.equipment || {}, serviceContext.itemRepository);
+            auraProviderInventory = auraProgress.inventory || [];
             const auraAttrs = auraProgress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-            auraProviderStats = calcPlayerStats(auraAttrs, auraProviderEquipped, auraProgress.activeEffects || [], auraProgress.inventory || [], { petStat: require("../../shared/petDex").statBonusOf(auraProgress?.petDex) });
+            auraProviderStats = calcPlayerStats(auraAttrs, auraProviderEquipped, auraProgress.activeEffects || [], auraProviderInventory, { zone: zoneKey, petStat: require("../../shared/petDex").statBonusOf(auraProgress?.petDex) });
           }
           const scaled = scaleSupportPartyEffects(
             (aura.effects || []).map(e => ({
@@ -2954,7 +2984,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               isSelfAura: isSelf,
               sourceDiscordId: isSelf ? discordId : (aura.discordId || null), // KDA・A 值歸戶對象
             })),
-            { providerStats: auraProviderStats, equipped: auraProviderEquipped }
+            { providerStats: auraProviderStats, equipped: auraProviderEquipped, inventory: auraProviderInventory, zone: zoneKey }
           );
           allCollected.push(...scaled);
         }
@@ -2962,6 +2992,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 這裡預先去重反而把被蓋掉的提供者丟掉 → KDA 分帳（按數值比例）就看不到他們。
         partyEffects = allCollected;
       }
+      markBattlePerf("auras");
 
       // ── 為怪物自動裝備自己的技能卡 ──
       // 優先用「怪物自己掛的技能卡」(monster.equipment.special_1，例如世界王/已實裝技能怪)；
@@ -2986,7 +3017,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 如果無法取得怪物卡片，繼續進行戰鬥
       }
 
-      // 與 DC 一致：圖鑑加成（依玩家對這隻怪的累積擊殺，最高 +25% 傷害）
+      // 與 DC 一致：圖鑑加成（依玩家對這隻怪的累積擊殺，使用圖鑑共用上限）
       const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
       const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
       const _bestiaryMonsterId = String(monster?.id || monster?._id || monster.name || "");
@@ -2994,7 +3025,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const _bestiaryReq = bestiaryRequirement(monster, isWorldBossZone(zoneKey));
       const _bestiaryKillsBefore = Number(progress?.bestiary?.[_bestiaryMonsterId]) || 0;
       let _bestiaryBonusPct = bestiaryBonusPct(_bestiaryKillsBefore, _bestiaryReq);
-      // 知彼（兵聖）：圖鑑傷害加成 ×knowledgeMult（上限同步放大 25%→50%）
+      // 知彼（兵聖）：圖鑑傷害加成 ×knowledgeMult（基準 15%，×2 後最高 30%）
       let _bestiaryCapPct;
       try {
         const _sgK = require("../../shared/jobAdvancement").getSage(equipped?.job_eq);
@@ -3011,6 +3042,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         applyWorldBossTargetToPlayerStats,
         applyWorldBossTargetToMonster,
         applyDragonKingBreakWeaken,
+        applyWorldBossPhaseModifiers,
         ensureWorldBossPartState: ensureWBPartState,
         sumWorldBossPartHp: sumWBPartHp,
         isWorldBossAllPartsDefeated: isWBAllDefeated,
@@ -3037,6 +3069,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let battlePStats = pStats;
       let battleMonsterStats = monster.calc;
       let battleMonsterEquipped = monsterEquipped;
+      let webWorldBossPhase = null;
 
       if (isWorldBoss) {
         // 確保 state 有部位血量；若沒有就先存回（與 DC 一致）
@@ -3086,7 +3119,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             return res.status(409).json({ status: "error", code: "world_boss_unavailable", message: "世界王已被擊敗或進入冷卻,無法繼續挑戰。" });
           }
           // 還有其他活著的部位 → 明確告知該部位已破,附上最新部位血量供前端刷新 + 重選
-          const PART_LABELS_BLOCK = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
           const maxMap = stateForCombat.worldBossPartsMaxHp || {};
           const { getWorldBossPartWeakness: _wbWeakB, getHellfangFlipRemainingMs: _wbFlipMsB } = require("../../bot/handlers/monsterZoneHandlers");
           const _wbNowB = Date.now();
@@ -3095,12 +3127,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             .map((k) => {
               const hp = Math.max(0, Number(_partsHp[k] || 0));
               const max = Math.max(1, Math.round(Number(maxMap[k] || 0) || hp || 1));
-              return { key: k, name: PART_LABELS_BLOCK[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: _wbWeakB(zoneKey, k, stateForCombat, _wbNowB), flipRemainMs: _wbFlipMsB(stateForCombat, k, _wbNowB) };
+              return { key: k, name: getWorldBossPartLabel(zoneKey, k), currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: _wbWeakB(zoneKey, k, stateForCombat, _wbNowB), flipRemainMs: _wbFlipMsB(stateForCombat, k, _wbNowB) };
             });
           return res.status(409).json({
             status: "error",
             code: "part_broken",
-            message: `${PART_LABELS_BLOCK[worldBossPart] || "該部位"}已被擊破,請重新選擇部位。`,
+            message: `${getWorldBossPartLabel(zoneKey, worldBossPart)}已被擊破,請重新選擇部位。`,
             part: worldBossPart,
             parts: partsForResp
           });
@@ -3128,6 +3160,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               finalDamageMultiplier: (Number(battleMonsterStats.finalDamageMultiplier) || 1) * ph.dmgMult
             };
           }
+        }
+
+        const wbSvc = serviceContext.worldBossServiceFor?.(zoneKey);
+        if (wbSvc) {
+          const wbCfg = await wbSvc.getConfig();
+          const totalCurrentHp = sumWBPartHp(stateForCombat.worldBossPartsHp);
+          const totalMaxHp = sumWBPartHp(stateForCombat.worldBossPartsMaxHp);
+          const hpPct = totalMaxHp > 0 ? (totalCurrentHp / totalMaxHp) * 100 : 100;
+          webWorldBossPhase = wbSvc.resolvePhase(wbCfg, hpPct);
+          battleMonsterStats = applyWorldBossPhaseModifiers(battleMonsterStats, webWorldBossPhase);
         }
 
         // 開戰公告:只由「真正把 battleStartedAt 從未設定→設定」的那一次發送(web/DC 共用同一旗標,避免重複)
@@ -3195,7 +3237,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } catch (_) { webBossVulnMult = 1; }
       }
       // ── 島島龜王（活動 event_boss）：潮汐/海嘯——推進詠唱狀態機、取本場修正 ──
-      let turtleTsunami = false, turtleForceHit = false;
+      let turtleTsunami = false, turtleForceHit = false, turtleGaugeMult = 1, turtleTsunamiRound = null;
       const _tt = require("../../shared/turtleTide");
       if (isWorldBoss && zoneKey === _tt.ZONE) {
         const _mzh = require("../../bot/handlers/monsterZoneHandlers");
@@ -3203,14 +3245,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const _totMax = Object.values(_tpl).reduce((s, v) => s + v, 0);
         const _partsHp = stateForCombat?.worldBossPartsHp || {};
         const _totCur = _mzh.getWorldBossPartKeys(zoneKey).reduce((s, k) => s + Math.max(0, Number(_partsHp[k] ?? _tpl[k]) || 0), 0);
-        const _events = _tt.ensureCast(stateForCombat, _totMax > 0 ? (_totCur / _totMax) * 100 : 100, Date.now());
+        const _turtleNow = Date.now();
+        const _events = _tt.ensureCast(stateForCombat, _totMax > 0 ? (_totCur / _totMax) * 100 : 100, _turtleNow);
         if (_events.length) await serviceContext.monsterService.saveState(stateForCombat, zoneKey).catch(() => {});
-        const _mods = _tt.battleMods(stateForCombat, worldBossPart, Date.now());
+        const _mods = _tt.battleMods(stateForCombat, worldBossPart, _turtleNow);
         if (_mods.headBlocked) {
           return res.status(400).json({ status: "error", message: "🌊 漲潮中——龜首縮回殼裡打不到！等退潮再攻頭部（其他部位照常）。" });
         }
         turtleTsunami = _mods.tsunami;
         turtleForceHit = _mods.forceHitHead;
+        turtleGaugeMult = Math.max(1, Number(_mods.gaugeMult) || 1);
+        turtleTsunamiRound = _tt.tsunamiRoundForBattle(stateForCombat, calculateTickDelay(pStats.agi || 1), _turtleNow);
         webBossVulnMult = webBossVulnMult * _mods.mult;
       }
 
@@ -3299,6 +3344,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const freezeGaugeKey = _zfg.gaugeKeyForZone(zoneKey);
       const freezeStateBefore = await _zfg.read(freezeGaugeKey, zoneKey).catch(() => null);
       const zoneFrozenOn = Boolean(freezeStateBefore?.frozen);
+      markBattlePerf("prepare");
 
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
@@ -3340,17 +3386,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           partyEffects,
           monsterEquipped: battleMonsterEquipped,
           monsterIsBoss: Boolean(monster?.isBoss),
+          worldBossPhase: webWorldBossPhase,
           bestiaryBonusPct: _bestiaryBonusPct, // 圖鑑傷害加成（同 DC）
           bestiaryBonusCapPct: _bestiaryCapPct, // 知彼（兵聖）上限放大；一般職業 undefined＝基準 15
           isWorldBoss, // 世界王：玩家 DOT 也吃王 def%（同 DC）
           zone: zoneKey, // 裝備的區域條件特效（同 DC）
           bossVulnMult: webBossVulnMult, // 牙狼弱點/龜王潮汐倍率(每擊)；其餘世界王＝1 無影響
           tsunamiDeath: turtleTsunami,   // 海嘯（島島龜王）：出戰即死
+          tsunamiDeathRound: turtleTsunamiRound, // 詠唱若在本場時間軸內完成，對應回合直接命中
           forcePlayerHit: turtleForceHit, // 退潮打龜首必中
           monsterElement: monster?.element || null,
           monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0
         });
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
+      markBattlePerf("combat");
       // 與 DC 一致：戰力同步已停用（monsterZoneHandlers.js 也是寫死 false），
       // 用原始傷害與真實 outcome，不再壓制低階區輸出
       const zoneDamageSyncApplied = false;
@@ -3461,6 +3510,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             );
           }
 
+          // 龜王 70%／30% 固定詠唱必須在本場扣血後立刻判定，不能等下一位玩家進場才啟動。
+          if (zoneKey === _tt.ZONE && nextCurrentHp > 0) {
+            const turtleTotalMax = Object.values(prevParts.worldBossPartsMaxHp || {})
+              .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+            _tt.ensureCast(nextState, turtleTotalMax > 0 ? (nextCurrentHp / turtleTotalMax) * 100 : 100, Date.now());
+          }
+
           // ── KDA（附錄C v3）：本場 K/D 賽季累積＋助攻歸戶＋寶箱排名用的 spawn 助攻（與 DC 端同規則）──
           try {
             const _al = combatResult?.assistLedger || {};
@@ -3505,7 +3561,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           worldBossSettled = true;
 
           // 部位血條（回傳給前端即時更新）
-          const PART_LABELS_RESP = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
           const { getWorldBossPartKeys: wbPartKeys, getWorldBossPartWeakness: _wbWeak, getHellfangFlipRemainingMs: _wbFlipMs } = require("../../bot/handlers/monsterZoneHandlers");
           const _wbNow = Date.now();
           worldBossPartsForResp = wbPartKeys(zoneKey)
@@ -3513,7 +3568,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             .map((k) => {
               const hp = Math.max(0, Number(nextPartsHp[k] || 0));
               const max = Math.max(1, Math.round(Number(prevParts.worldBossPartsMaxHp?.[k] || 0) || hp || 1));
-              return { key: k, name: PART_LABELS_RESP[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: _wbWeak(zoneKey, k, nextState, _wbNow), flipRemainMs: _wbFlipMs(nextState, k, _wbNow) };
+              return { key: k, name: getWorldBossPartLabel(zoneKey, k), currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: _wbWeak(zoneKey, k, nextState, _wbNow), flipRemainMs: _wbFlipMs(nextState, k, _wbNow) };
             });
 
           // outcome：全破 → win（真正擊殺）；部位破但王未全破 → win（該部位戰勝，但不擊殺整王）；
@@ -3572,7 +3627,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           // handleMonsterKill 內部對世界王會 markBossKilled() → 設 lastKilledAt → 進入冷卻
           rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state: stateWithMe, totalDamage, zoneKey });
         } else if (worldBossPartBroken) {
-          rewardLines = [`💥 已擊破 ${monster.name} 的${({ head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" })[worldBossPart] || "部位"}！繼續擊破其餘部位才能屠王。`];
+          rewardLines = [`💥 已擊破 ${monster.name} 的${getWorldBossPartLabel(zoneKey, worldBossPart)}！繼續擊破其餘部位才能屠王。`];
         } else if (outcome === "lose") {
           rewardLines = [`你被 ${monster.name} 擊敗了…`];
         } else {
@@ -3638,6 +3693,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (syncResult.notice) {
         rewardLines = [syncResult.notice, ...rewardLines];
       }
+      markBattlePerf("rewards");
 
       // 區域連段 + activeEffects：**只更新這兩個欄位**，不做整份覆寫。
       // 整份 save() 會把讀取當下的 inventory 寫回去，抹掉戰鬥期間原子塞進背包的
@@ -3718,8 +3774,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // 敲擊量＝這場實際有攻擊到的回合數；原子 $inc，多個矮人同時敲不會掉數字。
       let stunKnock = null;
       if (stunGaugeKey && _dsg.canKnock(equipped?.job_eq)) {
+        const stunAmount = Math.floor((combatResult?.combatStats?.attackRounds || 0) * turtleGaugeMult);
         stunKnock = await _dsg
-          .knock(stunGaugeKey, zoneKey, combatResult?.combatStats?.attackRounds || 0, displayName, Date.now(), discordId)
+          .knock(stunGaugeKey, zoneKey, stunAmount, displayName, Date.now(), discordId)
           .catch(() => null);
         if (stunKnock?.triggered) {
           _dsg.announceStun({ byName: displayName, monsterName: monster.name });
@@ -3742,12 +3799,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         rewardLines.push(`🔥 **炎圈**延燒全身——其他部位共受到 **${fcMirrorTotal.toLocaleString()}** 點灼燒！`);
       }
 
-      // ── 累積區域冰凍值（只有元素師・凍霜姿態）── 累積量＝有攻擊到的回合數；不廣播。
+      // ── 累積區域冰凍值（只有元素師・凍霜姿態）── 累積量＝實際命中的攻擊回合數；不廣播。
       let freezeKnock = null;
       if (_zfg.canKnock(equipped?.job_eq) && battleStanceKey === "frost") {
-        // 累積量＝戰鬥回合數（不論命中；法師命中率低，用命中回合會雙重懲罰）
+        // 與暈眩值同口徑：同一回合多段命中只算 1，未命中的回合不算。
+        const freezeAmount = Math.floor((combatResult?.combatStats?.attackRounds || 0) * turtleGaugeMult);
         freezeKnock = await _zfg
-          .knock(freezeGaugeKey, zoneKey, Math.max(0, (Number(combatResult?.nextRound) || 1) - 1), displayName)
+          .knock(freezeGaugeKey, zoneKey, freezeAmount, displayName)
           .catch(() => null);
         if (freezeKnock?.triggered) {
           rewardLines.push(`🧊 **區域冰封**！你把整片戰場凍結了——${Math.round(_zfg.FREEZE_WINDOW_MS / 1000)} 秒內出戰的人全程免傷！`);
@@ -3774,17 +3832,25 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           rewardLines.push(`✨ 聖域值 +${sanctumKnock.knocked}（${sanctumKnock.gauge} / ${sanctumKnock.threshold}）`);
         }
       }
+      markBattlePerf("persist");
 
-      // Weekly quest progression is updated after each battle result.
-      try {
+      // 任務／職業熟練度／通行證屬於附帶進度：核心戰鬥已落地後排入背景，
+      // 不再讓玩家等這些資料庫寫入才收到真實戰報。
+      enqueuePostBattleSettlement(discordId, async () => {
         if (String(discordId) === "1043389715577049138") console.log("[jobExpProbe] 進入任務區塊");
         const questService = serviceContext.questService || serviceContext.weeklyQuestService;
-        await questService.recordProgress(discordId, "battle_count", 1);
+        const questMetrics = {};
+        const addQuestMetric = (type, amount = 1) => {
+          const inc = Math.max(0, Number(amount) || 0);
+          if (type && inc) questMetrics[type] = Number(questMetrics[type] || 0) + inc;
+        };
+        addQuestMetric("battle_count", 1);
         // battle_win is granted in handleMonsterKill to all participants on kill.
-        await questService.recordProgress(discordId, "damage_total", totalDamage);
+        addQuestMetric("damage_total", totalDamage);
         // 錨點隱藏任務指標：承受傷害(沒苦硬吃)、回血量(聖人)
-        if (Number(combatResult?.damageTaken) > 0) await questService.recordProgress(discordId, "damage_taken", Math.round(Number(combatResult.damageTaken)));
-        if (Number(combatResult?.healDone) > 0) await questService.recordProgress(discordId, "heal_done", Math.round(Number(combatResult.healDone))); if (Number(combatResult?.lifestealDone) > 0) await questService.recordProgress(discordId, "lifesteal_done", Math.round(Number(combatResult.lifestealDone)));
+        addQuestMetric("damage_taken", Math.round(Number(combatResult?.damageTaken || 0)));
+        addQuestMetric("heal_done", Math.round(Number(combatResult?.healDone || 0)));
+        addQuestMetric("lifesteal_done", Math.round(Number(combatResult?.lifestealDone || 0)));
         // 職業任務：依「出戰所持武器類型」累加（與 DC 端 recordQuestBattleProgress 對齊）
         const _wt = String(equipped?.weapon?.weaponType || "");
         const _weaponMetric =
@@ -3796,7 +3862,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           : (_wt === "bow") ? "battle_with_bow"
           : (_wt === "dice") ? "battle_with_dice"
           : null;
-        if (_weaponMetric) await questService.recordProgress(discordId, _weaponMetric, 1);
+        addQuestMetric(_weaponMetric, 1);
         // 隱藏賽季任務「共鳴・輔助者」：用輔助職業(徽章)出戰記一場（與 DC 端 recordQuestBattleProgress 對齊；網頁端原本漏記）
         try {
           const _jobEq = equipped?.job_eq;
@@ -3804,7 +3870,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             const { getSupportJobKey } = require("../../shared/supportAuraScaling");
             const _jk = getSupportJobKey({ jobKey: _jobEq.itemId || _jobEq.id, jobName: _jobEq.itemName || _jobEq.name });
             if (["healer", "tactician", "bard", "barrier_mage"].includes(_jk)) {
-              await questService.recordProgress(discordId, "battle_with_support_job", 1);
+              addQuestMetric("battle_with_support_job", 1);
             }
           }
         } catch (_) { /* noop */ }
@@ -3814,9 +3880,25 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (_jobEq2) {
             const ja = require("../../shared/jobAdvancement");
             const _baseKey = ja.getBaseKeyByBadgeId(String(_jobEq2.itemId || _jobEq2.id || ""));
-            if (_baseKey) await questService.recordProgress(discordId, ja.battleMetricFor(_baseKey), 1);
+            if (_baseKey) addQuestMetric(ja.battleMetricFor(_baseKey), 1);
           }
         } catch (_) { /* noop */ }
+        if (outcome === "lose") addQuestMetric("death_count", 1);
+        if (combatStats) {
+          addQuestMetric("combo_count", combatStats.comboCount);
+          addQuestMetric("dodge_count", combatStats.dodgeCount);
+          addQuestMetric("block_count", combatStats.blockCount);
+          addQuestMetric("stun_count", combatStats.stunCount);
+          addQuestMetric("burn_trigger_count", combatStats.burnTriggerCount);
+        }
+        if (typeof questService.recordProgressBatch === "function") {
+          await questService.recordProgressBatch(discordId, questMetrics);
+        } else {
+          // 測試替身／舊實作相容；正式服務會走上方單次批次更新。
+          for (const [type, amount] of Object.entries(questMetrics)) {
+            await questService.recordProgress(discordId, type, amount);
+          }
+        }
         // 職業徽章熟練度 +1。練滿 Lv20 不廣播（只是解鎖職業任務）；轉職成功才廣播。
         try {
           // 🔬 臨時偵錯（jobExp 卡死，用完即拆）
@@ -3831,31 +3913,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (String(discordId) === "1043389715577049138") console.log("[jobExpProbe] 熟練度拋錯: " + (_e2?.message || _e2));
           /* 熟練度失敗不影響戰鬥結算 */
         }
-        if (outcome === "lose") {
-          await questService.recordProgress(discordId, "death_count", 1);
-        }
-        if (combatStats) {
-          if (combatStats.comboCount > 0) await questService.recordProgress(discordId, "combo_count", combatStats.comboCount);
-          if (combatStats.dodgeCount > 0) await questService.recordProgress(discordId, "dodge_count", combatStats.dodgeCount);
-          if (combatStats.blockCount > 0) await questService.recordProgress(discordId, "block_count", combatStats.blockCount);
-          if (combatStats.stunCount > 0) await questService.recordProgress(discordId, "stun_count", combatStats.stunCount);
-          if (combatStats.burnTriggerCount > 0) await questService.recordProgress(discordId, "burn_trigger_count", combatStats.burnTriggerCount);
-        }
         // 通行證點數：打怪(非落敗)依地圖階級加點
         if (outcome !== "lose") {
-          const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", dragon_king_lair: "S", hellfire_depths: "S" };
+          const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", event_1: "A", dragon_king_lair: "S", hellfire_depths: "S" };
           serviceContext.passService?.addPointsForKill?.(discordId, PASS_TIER[zoneKey] || "D").catch(() => {});
         }
-      } catch (e) {
-        console.error("[WeeklyQuest] recordProgress error:", e.message);
-      }
+      });
 
       // Cooldown duration matches the client-side animation timeline.
       // 回合節奏依玩家 AGI（同 DC），env ROUND_MS 仍可覆寫成固定值
       const perRoundMs = process.env.ROUND_MS ? ROUND_MS : calculateTickDelay(pStats.agi || 1);
-      // 死亡額外冷卻：與 DC 一致，戰鬥死亡(lose)在基準動畫時間外再加 10 秒懲罰
-      const DEATH_EXTRA_COOLDOWN_MS = 10 * 1000;
-      const animDurationMs = roundLogs.length * perRoundMs + 2000 + (outcome === "lose" ? DEATH_EXTRA_COOLDOWN_MS : 0);
+      const animDurationMs = calculateWebBattleCooldownMs({
+        roundCount: roundLogs.length,
+        perRoundMs,
+        lost: outcome === "lose",
+      });
       const nextBattleAt = Date.now() + animDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
       // 戰鬥已結算：把網頁占用鎖延續到動畫結束才自動失效，期間 DC/其他裝置都視為忙碌
@@ -3948,8 +4020,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           }
         }
       } catch (_) { /* 排行/換怪同步失敗不影響戰鬥結果 */ }
+      markBattlePerf("sync");
 
-      res.json(ok({
+      const responsePayload = {
         outcome,
         // 區域連段：戰後的最新值 + 這場開打時實際生效的段數（前端常駐顯示用）
         zoneCombo: {
@@ -4061,12 +4134,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         tickMs: calculateTickDelay(pStats.agi || 1),
         // ── 世界王部位戰鬥（前端戰報後即時更新部位血條）──
         targetPart: isWorldBoss ? worldBossPart : null,
-        partName: isWorldBoss ? (({ head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" })[worldBossPart] || null) : null,
+        partName: isWorldBoss ? getWorldBossPartLabel(zoneKey, worldBossPart) : null,
         partHp: isWorldBoss ? { current: Math.max(0, Math.round(worldBossPartHpCurrent)), max: worldBossPartHpMax } : null,
         allPartsDefeated: isWorldBoss ? worldBossAllPartsDefeated : false,
         partBroken: isWorldBoss ? worldBossPartBroken : false,
         parts: isWorldBoss ? worldBossPartsForResp : null,
-      }));
+      };
+      markBattlePerf("response");
+      const totalBattleMs = performance.now() - battlePerf.startedAt;
+      res.setHeader("Server-Timing", [
+        ...battlePerf.parts.map((part) => `${part.name};dur=${part.duration.toFixed(1)}`),
+        `total;dur=${totalBattleMs.toFixed(1)}`
+      ].join(", "));
+      res.json(ok(responsePayload));
 
     } catch (err) {
       next(err);
@@ -4096,7 +4176,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         sumWorldBossPartHp
       } = require("../../bot/handlers/monsterZoneHandlers");
 
-      const PART_LABELS = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
       const DRAGON_KING_ZONE = "dragon_king_lair";
       const excludedIds = await getLeaderboardExcludedPlayerIds();
 
@@ -4181,7 +4260,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         );
 
         // 部位血量：state 沒有則用模板補上預設（讓前端顯示滿血部位）
-        const partState = ensureWorldBossPartState(st || {}, bossMaxHp, zoneKey);
+        const partState = {
+          ...(st || {}),
+          ...ensureWorldBossPartState(st || {}, bossMaxHp, zoneKey)
+        };
         const hpMap = partState.worldBossPartsHp;
         const maxMap = partState.worldBossPartsMaxHp;
 
@@ -4193,11 +4275,66 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           .map((k) => {
             const hp = Math.max(0, Number(hpMap[k] || 0));
             const max = Math.max(1, Math.round(Number(maxMap[k] || 0) || hp || 1));
-            return { key: k, name: PART_LABELS[k] || k, currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: _wbWeakS(zoneKey, k, partState, _wbNowS), flipRemainMs: _wbFlipMsS(partState, k, _wbNowS) };
+            return { key: k, name: getWorldBossPartLabel(zoneKey, k), currentHp: Math.round(hp), maxHp: max, broken: hp <= 0, weak: _wbWeakS(zoneKey, k, partState, _wbNowS), flipRemainMs: _wbFlipMsS(partState, k, _wbNowS) };
           });
         partsByZone[zoneKey] = parts;
 
         const currentHp = sumWorldBossPartHp(hpMap);
+
+        // 世界王場外機制快照：讓玩家在選部位、尚未進場前就能看見詠唱／海嘯是否結束。
+        // phase 採共用形狀，之後其他世界王加入詠唱條時可直接沿用前端元件。
+        let mechanic = null;
+        const _ttStatus = require("../../shared/turtleTide");
+        if (zoneKey === _ttStatus.ZONE) {
+          const totalHpPct = bossMaxHp > 0 ? (currentHp / bossMaxHp) * 100 : 100;
+          const hasEncounter = Boolean(partState?.turtle?.encounterStartedAt) || currentHp < bossMaxHp;
+          if (hasEncounter) {
+            const encounterStartedBefore = partState?.turtle?.encounterStartedAt || null;
+            const turtleEvents = _ttStatus.ensureCast(partState, totalHpPct, _wbNowS);
+            const encounterStartedAfter = partState?.turtle?.encounterStartedAt || null;
+            // 只在首次建立狀態或真的跨階段時寫回；一般輪詢只讀，避免每位玩家每 5 秒覆寫整份王狀態。
+            if (encounterStartedBefore !== encounterStartedAfter || turtleEvents.length > 0) {
+              await serviceContext.monsterService.saveState(partState, zoneKey).catch(() => {});
+            }
+          }
+
+          const turtleView = _ttStatus.view(partState, totalHpPct, _wbNowS);
+          const phase = turtleView.tsunami
+            ? "tsunami"
+            : turtleView.casting
+            ? "casting"
+            : turtleView.breach
+            ? "breach"
+            : "safe";
+          const remainingMs = phase === "tsunami"
+            ? turtleView.tsunamiRemainMs
+            : phase === "casting"
+            ? turtleView.castRemainMs
+            : phase === "breach"
+            ? turtleView.breachRemainMs
+            : 0;
+          const durationMs = phase === "tsunami"
+            ? turtleView.tsunamiMs
+            : phase === "casting"
+            ? turtleView.castMs
+            : phase === "breach"
+            ? _ttStatus.BREACH_MS
+            : 0;
+
+          mechanic = {
+            key: "turtle_tsunami",
+            phase,
+            remainingMs,
+            durationMs,
+            nextCastInMs: hasEncounter ? turtleView.nextCastInMs : null,
+            tsunamiDurationMs: turtleView.tsunamiMs,
+            breachDurationMs: _ttStatus.BREACH_MS,
+            dangerOnEntry: phase === "tsunami",
+            castDamageMult: turtleView.castDamageMult,
+            castGaugeMult: turtleView.castGaugeMult,
+            breachDamageMult: _ttStatus.BREACH_MULT
+          };
+        }
 
         // 傷害排行(對這隻王的累積貢獻)：讓網頁世界王面板也看得到「誰打了多少」(同 DC 面板)
         const _wbPretty = (nm, id) => {
@@ -4224,6 +4361,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           bossMaxHp,
           currentHp,
           parts,
+          mechanic,
           ranking,
           entryFee: Math.max(0, Number(bossMonster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0),
           partEffects: PART_EFFECTS[zoneKey] || [],
@@ -4441,7 +4579,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   function towerFloorInfo(floor) {
     const buff = TW.getTowerFloorBuff(floor);
     const bonus = TW.getCumulativePartyBonus(floor);
-    const BOSS_FLOORS = [10, 20, 30, 40, 50, 51, 52];
+    const BOSS_FLOORS = Object.keys(TW.TOWER_FLOOR_BOSS).map(Number).sort((a, b) => a - b);
     const nextBossFloor = BOSS_FLOORS.find((f) => f >= floor) || null;
     const retreatReward = TW.calcTowerReward(Math.max(0, floor - 1)); // 現在撤退能拿的(已通關層)
     return {
@@ -4495,13 +4633,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     return s._reward;
   }
 
-  // 🗼 爬塔暫停開放：一道 middleware 擋掉所有 /api/tower/*（單人塔＋組隊房）。
-  //    前端分頁已隱藏，這裡再擋一層，避免舊分頁／直接打 API 還能開房。
-  //    要重新開放：把 towerHandlers.js 的 TOWER_ENABLED 改 true，這裡會跟著解除。
-  router.use("/api/tower", (req, res, next) => {
+  // 🗼 公開測試期間仍維持全域關閉，只讓白名單測試者使用單人塔與組隊房。
+  router.use("/api/tower", requireAuth, (req, res, next) => {
     let enabled = false;
     try { enabled = require("../../bot/handlers/towerHandlers").TOWER_ENABLED === true; } catch (_) { enabled = false; }
-    if (enabled) return next();
+    const { isTowerTester } = require("../../shared/towerAccess");
+    if (enabled || isTowerTester(req.playerRecord?.discordId)) return next();
     return res.status(403).json(fail("FEATURE_DISABLED", "爬塔目前暫停開放"));
   });
 
@@ -4621,10 +4758,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try { res.json(ok(towerParty.listOpenRooms())); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/create", requireAuth, async (req, res, next) => {
-    try { res.json(ok(await towerParty.createRoom(req.playerRecord.discordId, req.playerRecord.displayName, req.body?.password))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.createRoom(req.playerRecord.discordId, req.playerRecord.displayName, req.body?.password, req.body?.role))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/join", requireAuth, async (req, res, next) => {
-    try { res.json(ok(await towerParty.joinRoom(req.playerRecord.discordId, req.playerRecord.displayName, req.body?.roomId, req.body?.password))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.joinRoom(req.playerRecord.discordId, req.playerRecord.displayName, req.body?.roomId, req.body?.password, req.body?.role))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/role", requireAuth, async (req, res, next) => {
+    try { res.json(ok(towerParty.setRole(req.playerRecord.discordId, req.body?.role))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/kick", requireAuth, async (req, res, next) => {
     try { res.json(ok(towerParty.kickMember(req.playerRecord.discordId, req.body?.targetId))); } catch (err) { _tpErr(res, err, next); }
@@ -4935,7 +5075,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           // 屬性洞/屬性附魔：跟背包詳情頁同一套欄位，讓拍賣詳情視窗也能顯示屬性徽章
           element: a.item?.element || null,
           elementLevel: a.item?.elementLevel || null,
-          elements: a.item?.elements || null
+          elements: a.item?.elements || null,
+          elementRemovalCount: a.item?.elementRemovalCount || 0
         }))
       }));
     } catch (err) {
@@ -4973,7 +5114,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           combatBonus: a.item?.combatBonus || null,
           element: a.item?.element || null,
           elementLevel: a.item?.elementLevel || null,
-          elements: a.item?.elements || null
+          elements: a.item?.elements || null,
+          elementRemovalCount: a.item?.elementRemovalCount || 0
         })),
         eligible,
         maxListings,

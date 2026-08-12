@@ -3,8 +3,9 @@
 //
 // 機制（使用者定案 2026-07-29，實作在 shared/turtleTide.js＋三入口）：
 //   潮汐：漲潮10分（龜首縮殼、其他部位×0.7）/ 退潮5分（全部位×1.5、龜首必中），時間驅動全服同步
-//   海嘯詠唱：總血≤70% 後每 8 分鐘在漲潮期詠唱 90 秒 → 海嘯 60 秒（出戰即死・真即死）
-//   打斷唯二：巨神震擊 / 區域冰封 → 破綻 30 秒全員 ×1.3
+//   海嘯詠唱：開戰後每 3 分鐘檢查；總血首次降到 70% / 30% 各固定立刻詠唱一次
+//   詠唱 3 分鐘（承傷 1%、冰凍/暈眩累積 ×2）→ 海嘯 3 分鐘（出戰即死・真即死）
+//   打斷唯二：巨神震擊 / 區域冰封；打斷或海嘯自然結束 → 破綻 30 秒全員 ×1.3
 //   總血條：沉睡(>70% ×1.0) / 甦醒(70~40% ×1.25) / 怒濤(<40% ×1.5)——worldBossConfig phaseConfig
 //   部位：龜首25% / 島背40% / 左鰭17.5% / 右鰭17.5%
 //
@@ -70,7 +71,8 @@ async function main() {
   };
   const exist = await db.collection("monsters").findOne({ id: MONSTER_ID });
   if (exist) {
-    const { createdAt, imageUrl, imageThumbnailUrl, enabled, ...rest } = monster;
+    // 掉落表由 upsert-event-beach-gear.js 維護；重跑龜王本體腳本不可清空寶箱獎池。
+    const { createdAt, imageUrl, imageThumbnailUrl, enabled, drops, ...rest } = monster;
     await db.collection("monsters").updateOne({ id: MONSTER_ID }, { $set: { ...rest, updatedAt: new Date().toISOString() } });
     console.log("已更新 島島龜王（enabled/圖片維持現值）");
   } else {
@@ -104,7 +106,7 @@ async function main() {
   const chest = {
     id: "chest-island-turtle",
     name: "島島寶箱",
-    description: "從龜王背上的沙灘裡挖出來的藏寶箱，還帶著椰子的香氣。傷害前三與花費前三才配得上牠。",
+    description: "從龜王背上的沙灘裡挖出來的藏寶箱，還帶著椰子的香氣。\n【隨機內容・機率公開】開啟後獲得 1 項：島島龜王卡 1%｜S 階龜王武器 99%（11 種等機率，各 9%）。\n※本寶箱無保底機制。",
     itemType: "consumable",
     effect: { type: "open_world_boss_chest", monsterId: MONSTER_ID, bossName: "島島龜王" },
     useEffects: [],
@@ -122,7 +124,7 @@ async function main() {
     await db.collection("items").insertOne(chest);
     console.log("已新增 島島寶箱");
   }
-  console.log("提醒：①怪物 enabled:false ②獎池（海灘七卡＋活動裝備）於開放前填入 drops ③圖片由使用者補");
+  console.log("提醒：①怪物 enabled:false ②龜王獎池由 upsert-event-beach-gear.js 同步 ③圖片由使用者補");
   await client.close();
 }
 main().catch((err) => { console.error(err); process.exit(1); });

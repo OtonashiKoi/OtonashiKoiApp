@@ -106,70 +106,8 @@ function applyEnhance(item, enhStat, enhanceLevel = BENCH_ENHANCE) {
 }
 
 // ── party 光環 ─────────────────────────────────────────────────
-function towerAura(jobKey, key, value, sourceName, mode = "pct") {
-  return {
-    key,
-    target: "party",
-    trigger: "tower_aura",
-    params: { value, mode },
-    sourceName,
-    sourceJobName: JOB_NAME[jobKey] || jobKey,
-    sourceJobKey: jobKey,
-  };
-}
-
-function getTowerJobAuraEffects(member) {
-  switch (member.jobKey) {
-    case "swordsman":
-      return [towerAura(member.jobKey, "party_damage_reduction", 5, member.name)];
-    case "warrior":
-      return [towerAura(member.jobKey, "party_high_hp_damage_up", 5, member.name)];
-    case "dwarf_warrior":
-      return [
-        towerAura(member.jobKey, "party_stun_chance_up", 5, member.name),
-        towerAura(member.jobKey, "party_stunned_damage_up", 10, member.name),
-      ];
-    case "rogue":
-      return [towerAura(member.jobKey, "party_combo_up", 5, member.name)];
-    case "mage":
-      return [towerAura(member.jobKey, "party_def_ignore_up", 5, member.name)];
-    case "archer":
-      return [
-        towerAura(member.jobKey, "party_boss_damage_up", 5, member.name),
-        towerAura(member.jobKey, "party_elite_damage_up", 5, member.name),
-      ];
-    case "healer":
-      return [towerAura(member.jobKey, "party_heal", 3, member.name)];
-    case "tactician":
-      return [
-        towerAura(member.jobKey, "party_damage_up", 5, member.name),
-        towerAura(member.jobKey, "party_boss_damage_up", 5, member.name),
-      ];
-    case "bard":
-      return [
-        towerAura(member.jobKey, "party_agi_up", 15, member.name),
-        towerAura(member.jobKey, "party_combo_up", 5, member.name),
-      ];
-    case "barrier_mage":
-      return [
-        towerAura(member.jobKey, "party_damage_reduction", 10, member.name),
-        towerAura(member.jobKey, "party_max_hp_up", 8, member.name),
-      ];
-    default:
-      return [];
-  }
-}
-
-function isReplacedByTowerAura(jobKey, effectKey) {
-  const replaced = {
-    bard: new Set(["party_agi_up", "party_gold_gain_up"]),
-    barrier_mage: new Set(["party_damage_reduction", "party_crit_damage_reduction"]),
-    tactician: new Set(["party_monster_def_down"]),
-    healer: new Set(["heal_over_time", "party_heal"]),
-  };
-  return replaced[jobKey]?.has(effectKey) || false;
-}
-
+// 與正式爬塔一致：只沿用裝備／職業徽章本來就有的一般隊伍光環，
+// 不再注入或取代各職業的塔專屬光環。
 function buildPartyEffects(members) {
   const bestByJobAndKey = new Map();
   for (const m of members) {
@@ -178,17 +116,10 @@ function buildPartyEffects(members) {
     const refs = collectEquipmentEffects(m.equipped, null, ctx);
     for (const r of refs) {
       if (!r || r.target !== "party" || !isEffectConditionMet(r, ctx)) continue;
-      if (isReplacedByTowerAura(m.jobKey, r.key)) continue;
       const k = `${m.jobKey}:${r.key}`;
       const cur = bestByJobAndKey.get(k);
       if (!cur || Number(r.params?.value||0) > Number(cur.params?.value||0))
         bestByJobAndKey.set(k, { ...r, sourceName: m.name, sourceJobName: JOB_NAME[m.jobKey] || m.jobKey });
-    }
-    for (const effect of getTowerJobAuraEffects(m)) {
-      const k = `${m.jobKey}:${effect.key}`;
-      const cur = bestByJobAndKey.get(k);
-      if (!cur || Number(effect.params?.value||0) > Number(cur.params?.value||0))
-        bestByJobAndKey.set(k, effect);
     }
   }
   return [...bestByJobAndKey.values()];

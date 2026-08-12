@@ -155,7 +155,7 @@ class ItemService {
     const allProgress = await this.progressRepository.listAll();
     const SYNC_FIELDS = ["imageUrl", "imageThumbnailUrl", "equipSlot", "equipStats",
                          "weaponType", "isTwoHanded", "atkStat", "tier", "itemEffect", "itemType",
-                         "useEffects", "passiveEffects", "procEffects", "combatEffects"];
+                         "description", "useEffects", "passiveEffects", "procEffects", "combatEffects"];
 
     for (const progress of allProgress) {
       let dirty = false;
@@ -185,6 +185,7 @@ class ItemService {
           atkStat: libItem.atkStat ?? entry.atkStat,
           tier: libItem.tier ?? entry.tier,
           itemEffect: libItem.effect ?? entry.itemEffect,
+          description: libItem.description ?? entry.description,
           useEffects: libItem.useEffects ?? entry.useEffects,
           passiveEffects: libItem.passiveEffects ?? entry.passiveEffects,
           procEffects: libItem.procEffects ?? entry.procEffects,

@@ -99,6 +99,31 @@ function getElementSocketCost(existingCountOfElement = 0) {
 }
 
 /**
+ * 屬性石破壞拆除。
+ * 成功率只看操作前「這件裝備總共填了幾洞」；沒有保底，也不因失敗提高。
+ * 金幣費用＝目標屬性下一顆的鑲嵌金幣 ×3。成功後石頭不返還。
+ */
+const ELEMENT_REMOVAL_SUCCESS_BY_FILLED = {
+  1: 50,
+  2: 40,
+  3: 30,
+  4: 20,
+  5: 10,
+};
+const ELEMENT_REMOVAL_GOLD_MULTIPLIER = 3;
+const MAX_ELEMENT_REMOVALS_PER_ITEM = 3;
+
+function getElementRemovalCost(totalFilled = 0, existingCountOfElement = 0) {
+  const filled = Math.max(1, Math.min(5, Math.floor(Number(totalFilled) || 0)));
+  const socketCost = getElementSocketCost(existingCountOfElement);
+  if (!socketCost || existingCountOfElement <= 0) return null;
+  return {
+    gold: Math.max(0, Math.round(socketCost.gold * ELEMENT_REMOVAL_GOLD_MULTIPLIER)),
+    success: ELEMENT_REMOVAL_SUCCESS_BY_FILLED[filled],
+  };
+}
+
+/**
  * 獲取強化所需的寶石數量
  * @param {string} tier 裝備品階 (D/C/B/A)
  * @param {number} currentLevel 目前強化等級
@@ -206,4 +231,8 @@ module.exports = {
   validateEnhance,
   ELEMENT_SOCKET_STEPS,
   getElementSocketCost,
+  ELEMENT_REMOVAL_SUCCESS_BY_FILLED,
+  ELEMENT_REMOVAL_GOLD_MULTIPLIER,
+  MAX_ELEMENT_REMOVALS_PER_ITEM,
+  getElementRemovalCost,
 };

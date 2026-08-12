@@ -4,6 +4,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, AttachmentBu
 const { getZoneTheme, ZONE_BY_KEY, getZoneDefaultEntryFee } = require("../shared/zones");
 const { getElementLabel } = require("../shared/elementSystem");
 const { isWorldBossZone } = require("../services/worldBoss/worldBossService");
+const { getWorldBossPartLabel } = require("../shared/worldBossParts");
 
 const BUTTON_IDS = {
   enterBattle: "monster-zone:enter-battle",
@@ -23,6 +24,16 @@ const WORLD_BOSS_PART_META = {
   tail:       { hpLabel: "尾巴", btnLabel: "🐾 打尾巴", style: ButtonStyle.Secondary },
   legs:       { hpLabel: "下盤", btnLabel: "🦵 打下盤", style: ButtonStyle.Secondary },
 };
+const TURTLE_PART_META = {
+  head:  { hpLabel: "龜首", btnLabel: "🎯 打龜首", style: ButtonStyle.Danger },
+  body:  { hpLabel: "島背", btnLabel: "🏝️ 打島背", style: ButtonStyle.Primary },
+  wings: { hpLabel: "左鰭", btnLabel: "🌊 打左鰭", style: ButtonStyle.Success },
+  legs:  { hpLabel: "右鰭", btnLabel: "🌊 打右鰭", style: ButtonStyle.Secondary },
+};
+function worldBossPartMeta(zoneKey, partKey) {
+  if (zoneKey === "event_boss") return TURTLE_PART_META[partKey] || null;
+  return WORLD_BOSS_PART_META[partKey] || null;
+}
 // 牙狼(5) > 古龍王(4) > 一般(3)；worldBossPartKeysOf 只保留 partsHp 內實際存在的鍵
 const WORLD_BOSS_PART_ORDER = ["head", "upper_body", "lower_body", "body", "wings", "tail", "legs"];
 function worldBossPartKeysOf(partsHp) {
@@ -31,6 +42,7 @@ function worldBossPartKeysOf(partsHp) {
 // 未開戰(無 partsHp)時，依 zone 決定要顯示幾個部位鈕
 function defaultWorldBossPartKeys(zoneKey) {
   if (zoneKey === "hellfire_depths") return ["head", "upper_body", "lower_body", "tail", "legs"];
+  if (zoneKey === "event_boss") return ["head", "body", "wings", "legs"];
   if (zoneKey === "dragon_king_lair") return ["head", "body", "wings", "legs"];
   return ["head", "body", "legs"];
 }
@@ -112,7 +124,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
       return `（${info.weakZh}${flip}）`;
     };
     worldBossPartsLine = [
-      ...keys.map((k) => `${WORLD_BOSS_PART_META[k]?.hpLabel || k}${partSuffix(k)}：${Math.round(hpOf(k))}${hpOf(k) <= 0 ? " ✅" : ""}`),
+      ...keys.map((k) => `${getWorldBossPartLabel(zoneKey, k)}${partSuffix(k)}：${Math.round(hpOf(k))}${hpOf(k) <= 0 ? " ✅" : ""}`),
       `總計：${Math.round(totalHp)}（已擊破 ${doneCount}/${keys.length}）`
     ].join("\n");
   }
@@ -154,7 +166,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
       descLines.push("✅ 世界BOSS 可挑戰");
     }
     descLines.push("限制：開戰後 30 分鐘內未擊殺視為失敗");
-    const isDragonKing = zoneKey === "dragon_king_lair" || !!(worldBossPartsHp && Object.prototype.hasOwnProperty.call(worldBossPartsHp, "wings"));
+    const isDragonKing = zoneKey === "dragon_king_lair";
     const isHellfang = zoneKey === "hellfire_depths" || !!(worldBossPartsHp && Object.prototype.hasOwnProperty.call(worldBossPartsHp, "tail"));
     if (isDragonKing) {
       descLines.push(
@@ -267,7 +279,7 @@ async function createMonsterZonePanelMessage(monster, currentHp, participantCoun
     const keys = worldBossPartsHp ? worldBossPartKeysOf(worldBossPartsHp) : [];
     const partKeys = keys.length ? keys : defaultWorldBossPartKeys(zoneKey);
     const btns = partKeys.map((k) => {
-      const meta = WORLD_BOSS_PART_META[k] || { btnLabel: k, style: ButtonStyle.Secondary };
+      const meta = worldBossPartMeta(zoneKey, k) || { btnLabel: getWorldBossPartLabel(zoneKey, k), style: ButtonStyle.Secondary };
       const broken = Math.max(0, Number(worldBossPartsHp?.[k] || 0)) <= 0 && worldBossPartsHp;
       return new ButtonBuilder()
         .setCustomId(`${BUTTON_IDS.enterBattle}:${k}`)

@@ -1,10 +1,11 @@
 "use strict";
 
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } = require("discord.js");
 const {
   TOWER_MAX_MEMBERS, TOWER_TOTAL_FLOORS, MAX_ROUNDS_PER_MEMBER,
   getTowerFloorBuff, getCumulativePartyBonus, getTowerFloorBossName,
 } = require("../shared/towerConfig");
+const { getTowerRole } = require("../shared/towerRoles");
 
 // ── Button ID ─────────────────────────────────────────────────
 const TOWER_IDS = {
@@ -103,6 +104,8 @@ function createTowerHallMessage(topRanking = []) {
         "💀 **31–40 層** 滅世熔爐",
         "🐲 **41–50 層** 龍族之領（50 層 龍王）",
         "👑 **51 層** 大史王　**52 層** 古龍王",
+        "🔥 **53–69 層** 焰獄深處",
+        "🐺 **70–71 層** 狼王試煉（連續兩戰）",
         "",
         "**── 最高紀錄 ──**",
         ...rankLines,
@@ -131,7 +134,8 @@ function createTowerThreadLobbyMessage(session) {
 
   const memberLines = members.map((m) => {
     const crown = m.discordId === leaderId ? "👑 " : "";
-    return `${crown}**${m.name}** Lv.${m.level}`;
+    const role = getTowerRole(m.towerRole);
+    return `${crown}${role?.emoji || "❔"} **${m.name}** Lv.${m.level}｜${role?.label || "未選站位"}`;
   });
   const actionOrder = formatTowerActionOrder(members);
 
@@ -152,7 +156,7 @@ function createTowerThreadLobbyMessage(session) {
         "> ⏳ 逾 10 分鐘無人開始自動解散",
       ].join("\n")
     )
-    .setFooter({ text: `共 ${TOWER_TOTAL_FLOORS} 層 · 50 龍王 · 51 大史王 · 52 古龍王` });
+    .setFooter({ text: `共 ${TOWER_TOTAL_FLOORS} 層 · 70/71 層 煉獄烈焰狼王` });
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -181,19 +185,31 @@ function createTowerThreadLobbyMessage(session) {
       .setStyle(ButtonStyle.Danger),
   );
 
-  return { embeds: [embed], components: [row1, row2] };
+  const roleRow = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`tower:role_select:change:${session.threadId || "pending"}`)
+      .setPlaceholder("更換自己的站位")
+      .addOptions(
+        { label: "坦", value: "tank", emoji: "🛡️", description: "HP×1.3／ATK×0.7／光環×0.5" },
+        { label: "補", value: "support", emoji: "💚", description: "HP×0.7／ATK×0.7／光環×1.3" },
+        { label: "輸出", value: "dps", emoji: "⚔️", description: "HP×1／ATK×1.2／光環×0.5" },
+      )
+  );
+
+  return { embeds: [embed], components: [row1, row2, roleRow] };
 }
 
 // ── 成員資訊列（職業 + 等級 + 特性 + HP）────────────────────
 function buildMemberBlock(m, showHp = true) {
   const job     = m.job || { name: "冒險者", emoji: "🧑", traits: [] };
+  const role    = getTowerRole(m.towerRole);
   const crown   = m.isLeader ? "👑 " : "";
   const dead    = showHp && m.currentHp <= 0 ? " 💀" : "";
   const hpPart  = showHp
     ? `\n　${buildHpBar(m.currentHp, m.maxHp, 7)} ${m.currentHp}/${m.maxHp}`
     : "";
-  const traits  = job.traits.length > 0 ? `\n　特性：${job.traits.join("・")}` : "";
-  return `${crown}${job.emoji} **${m.name}**${dead} ${job.name} Lv.${m.level}${traits}${hpPart}`;
+  const traits  = Array.isArray(job.traits) && job.traits.length > 0 ? `\n　特性：${job.traits.join("・")}` : "";
+  return `${crown}${job.emoji} **${m.name}**${dead} ${job.name} Lv.${m.level}｜${role?.emoji || "❔"} ${role?.label || "未選站位"}${traits}${hpPart}`;
 }
 
 function formatTowerStatRanking(rows = [], unit = "") {
@@ -218,9 +234,10 @@ function summarizeTowerActionLog(logText) {
 function formatTowerMemberStatusLine(member) {
   const job = member?.job || {};
   const jobLabel = `${job.emoji ? `${job.emoji} ` : ""}${job.name || "冒險者"}`;
+  const role = getTowerRole(member?.towerRole);
   const hp = Math.max(0, Math.round(Number(member?.currentHp || 0)));
   const maxHp = Math.max(1, Math.round(Number(member?.maxHp || member?.stats?.maxHp || 1)));
-  return `• **${member?.name || "???"}**｜${jobLabel}｜HP ${hp.toLocaleString()} / ${maxHp.toLocaleString()}`;
+  return `• **${member?.name || "???"}**｜${jobLabel}｜${role?.emoji || "❔"} ${role?.label || "未選站位"}｜HP ${hp.toLocaleString()} / ${maxHp.toLocaleString()}`;
 }
 
 function appendTowerFloorSummary(lines, summary) {
@@ -247,7 +264,7 @@ function createTowerThreadBattleMessage(session) {
   const buff       = getTowerFloorBuff(dispFloor);
   const bonus      = getCumulativePartyBonus(nextFloor);
   const nextBossName = getTowerFloorBossName(nextFloor);     // 龍王/大史王/古龍王...（非王關為 null）
-  const isBossNext = nextFloor >= 50;                        // 50/51/52 為龍王與雙世界王（高潮王關）
+  const isBossNext = Boolean(nextBossName);
   const alreadyDone = clearedFloor >= TOWER_TOTAL_FLOORS;
   const isFighting  = state === "fighting";
 
@@ -268,7 +285,7 @@ function createTowerThreadBattleMessage(session) {
     battleSection.push("", "**── 行動摘要 ──**");
     for (const action of memberLogs.slice(0, 8)) {
       const hpText = action.type === "monster"
-        ? "全隊承受攻擊"
+        ? `攻擊 ${action.targetName || "隊員"}`
         : `怪物剩 ${Math.max(0, action.monsterHpAfter || 0)} HP`;
       battleSection.push(`• **${formatActorName(action)}** 行動（AGI ${action.agi ?? "?"}）｜${hpText}`);
       const lastLog = Array.isArray(action.logs) ? action.logs.at(-1) : null;
@@ -501,8 +518,8 @@ function buildHpBar(cur, max, len = 8) {
 }
 
 function buildFloorProgress(cleared, current) {
-  const segs   = [[1, 10, "🌿"], [11, 20, "🔥"], [21, 30, "⚡"], [31, 40, "💀"], [41, 50, "🐲"], [51, 52, "👑"]];
-  const labels = ["初境", "深淵", "混沌", "熔爐", "龍領", "雙王"];
+  const segs   = [[1, 10, "🌿"], [11, 20, "🔥"], [21, 30, "⚡"], [31, 40, "💀"], [41, 52, "🐲"], [53, 69, "🔥"], [70, 71, "🐺"]];
+  const labels = ["初境", "深淵", "混沌", "熔爐", "龍領", "焰獄", "狼王"];
   return "進度：" + segs.map(([lo, hi, em], i) => {
     if (cleared >= hi) return `${em}${labels[i]}✅`;
     if (current >= lo) return `${em}${labels[i]}⚔️`;

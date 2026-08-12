@@ -303,9 +303,9 @@ procEffects: [
 
 ⚠️ **已知互動**：玩家 AGI 比怪物高 5 以上時，怪物只會在偶數回合攻擊。千術若發動在怪物本來就不出手的回合就**白白浪費**。實測玩家 AGI 壓制時只有約 53% 的千術造成大失敗；怪物 AGI 拉高（每回合都攻擊）時為 100%。這是既有 AGI 機制的自然結果，非 bug。
 
-### 爬塔光環（`towerHandlers.js` 的 `JOB_TRAITS`）
+### 爬塔光環（已移除）
 
-**全隊爆擊率 +5%** — 與軍師（隊傷 +5%）、盜賊（連擊 +5%）、弓箭手（Boss 傷害 +5%）都區隔開。
+爬塔不再提供賭徒或其他職業的塔專屬光環；只沿用一般戰鬥區域既有光環並套用站位倍率。
 
 ---
 
@@ -393,7 +393,7 @@ procEffects: [
 
 15. `src/shared/jobBadgeBonus.js:21` — 徽章 → 鐵製骰子
 16. `src/shared/combatLoop.js:76` — archetype 比對 + `JOB_FLAVOR` 戰報文案
-17. `src/bot/handlers/towerHandlers.js:90` — `JOB_TRAITS` 爬塔光環
+17. ~~`towerHandlers.js` 賭徒塔專屬光環~~ — 已於爬塔站位重寫時移除
 18. `src/bot/playerPanel.js:466` — 職業特性顯示分支
 
 ### 顯示 / 體驗（不改不會壞）

@@ -20,6 +20,8 @@ const {
 } = require("../../bot/handlers/monsterZoneHandlers");
 const { bestiaryGainFromDamage } = require("../../shared/bestiary");
 const { buildItemEffectLines } = require("../../shared/itemEffectLines");
+const { calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
+const { readAccountState } = require("../../services/worldBoss/soloBossAccountState");
 
 const PART_LABELS = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
 
@@ -32,29 +34,11 @@ const SOLO_BOSSES = {
   },
 };
 
-function taipeiDateKey(now = Date.now()) { return new Date(now + 8 * 3600000).toISOString().slice(0, 10); }
-
 // 戰鬥每回合節奏（與 quick-battle 同公式，讓單人戰鬥速度一致）
 function calculateTickDelay(agi = 1) {
   const baseDelay = 1500, minDelay = 500, capAgi = 40;
   const capped = Math.min(Math.max(1, agi), capAgi);
   return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
-}
-
-// 讀個人狀態（含部位血），日界線重置；擊殺後重生也在此保底
-function readState(progress, boss) {
-  const all = (progress.soloBoss && typeof progress.soloBoss === "object") ? progress.soloBoss : {};
-  const cur = all[boss.key] || {};
-  const today = taipeiDateKey();
-  if (cur.dateKey !== today) {
-    const seed = ensureWorldBossPartState({}, boss.maxHp, boss.zone);
-    return { dateKey: today, killsToday: 0, worldBossPartsHp: seed.worldBossPartsHp, worldBossPartsMaxHp: seed.worldBossPartsMaxHp };
-  }
-  const ensured = ensureWorldBossPartState(
-    { worldBossPartsHp: cur.worldBossPartsHp, worldBossPartsMaxHp: cur.worldBossPartsMaxHp },
-    boss.maxHp, boss.zone
-  );
-  return { dateKey: today, killsToday: Math.max(0, Number(cur.killsToday) || 0), worldBossPartsHp: ensured.worldBossPartsHp, worldBossPartsMaxHp: ensured.worldBossPartsMaxHp };
 }
 
 function partsForResp(boss, partsHp, partsMaxHp) {
@@ -78,7 +62,7 @@ function createSoloBossRoutes(serviceContext) {
   }
 
   async function saveSoloState(discordId, boss, st) {
-    await repo.updateFields(discordId, { [`soloBoss.${boss.key}`]: st });
+    await repo.updateFields(discordId, { [`accountSoloBoss.${boss.key}`]: st });
   }
 
   router.get("/api/me/solo-boss/status", requireAuth, async (req, res, next) => {
@@ -88,7 +72,9 @@ function createSoloBossRoutes(serviceContext) {
       if (!progress) return res.status(404).json(fail("PLAYER_NOT_FOUND", "找不到玩家進度"));
       const bosses = [];
       for (const boss of Object.values(SOLO_BOSSES)) {
-        const st = readState(progress, boss);
+        const resolvedState = readAccountState(progress, boss);
+        const st = resolvedState.state;
+        if (resolvedState.needsSave) await saveSoloState(discordId, boss, st);
         const m = await resolveMonster(boss).catch(() => null);
         const parts = partsForResp(boss, st.worldBossPartsHp, st.worldBossPartsMaxHp);
         const killsLeft = Math.max(0, boss.killsPerDay - st.killsToday);
@@ -101,10 +87,10 @@ function createSoloBossRoutes(serviceContext) {
           respawnCooldownMinutes: 0, cooldownRemainingMs: 0, cooldownRemainingMinutes: 0,
           canChallenge: killsLeft > 0, lastKilledAt: null, battleTimeLimitMinutes: 15,
           parts, partEffects: [],
-          hints: { title: "單人挑戰（每人獨立一隻）", lines: [
+          hints: { title: "單人挑戰（每個帳號獨立）", lines: [
             `血量 ${boss.maxHp.toLocaleString()}、入場費 ${boss.entryFee.toLocaleString()} 🪙/場，不限場次累積磨。`,
             `破 3 部位＝擊殺一隻 → 掉落 ＋ ${boss.chestName} ×1。`,
-            `今日還可擊殺 ${killsLeft}/${boss.killsPerDay} 隻（隔日重置）。`,
+            `本帳號今日還可擊殺 ${killsLeft}/${boss.killsPerDay} 隻（人物共用，隔日重置）。`,
           ] },
           // 額外欄位（前端可選用）
           killsPerDay: boss.killsPerDay, killsToday: st.killsToday, killsLeft, entryFee: boss.entryFee,
@@ -116,6 +102,8 @@ function createSoloBossRoutes(serviceContext) {
 
   router.post("/api/me/solo-boss/battle", requireAuth, async (req, res, next) => {
     const { discordId, displayName } = req.playerRecord;
+    let chargedEntryFee = null;
+    let battleResolved = false;
     if (soloInFlight.has(discordId)) return res.status(409).json(fail("BUSY", "你已有一場單人王戰鬥進行中。"));
     soloInFlight.add(discordId);
     try {
@@ -145,9 +133,11 @@ function createSoloBossRoutes(serviceContext) {
         if (!gate.ok) return res.status(429).json(humanCheck.webPayload(gate));
       }
 
-      const st = readState(progress, boss);
+      const resolvedState = readAccountState(progress, boss);
+      const st = resolvedState.state;
+      if (resolvedState.needsSave) await saveSoloState(discordId, boss, st);
       if (st.killsToday >= boss.killsPerDay) {
-        return res.status(400).json(fail("NO_KILLS", `今日已擊敗 ${boss.killsPerDay} 隻${boss.monsterName}，明天再來！`));
+        return res.status(400).json(fail("NO_KILLS", `本帳號今日已擊敗 ${boss.killsPerDay} 隻${boss.monsterName}，明天再來！`));
       }
 
       const partHpNow = Math.max(0, Number(st.worldBossPartsHp[part] || 0));
@@ -164,19 +154,6 @@ function createSoloBossRoutes(serviceContext) {
       const equipped = await mergeEquippedFromLibrary(progress.equipment || {}, serviceContext.itemRepository);
       const petStat = require("../../shared/petDex").statBonusOf(progress.petDex);
       let pStats = calcPlayerStats(progress.attributes || {}, equipped, progress.activeEffects || [], progress.inventory || [], { pkRating: progress.pkRating, zone: boss.zone, petStat });
-
-      // 入場費（同現行；金幣不足擋下）
-      if (boss.entryFee > 0) {
-        const walletNow = await serviceContext.walletService.getWalletByDiscordId(discordId, displayName).catch(() => null);
-        const goldOwned = Math.max(0, Number(walletNow?.wallet?.gold ?? walletNow?.gold) || 0);
-        if (goldOwned < boss.entryFee) {
-          return res.status(400).json(fail("NO_GOLD", `挑戰 ${boss.monsterName} 需要 ${boss.entryFee.toLocaleString()} 金幣，你目前只有 ${goldOwned.toLocaleString()} 金幣。`));
-        }
-        await serviceContext.rewardService.grantCurrency({
-          discordId, displayName, currencyType: "gold", amount: -boss.entryFee,
-          source: require("../../shared/sources").CURRENCY_SOURCES.MONSTER_ENTRY_FEE, operator: "solo_boss:web_enter_battle",
-        });
-      }
 
       // 部位調整（同現行）
       pStats = applyWorldBossTargetToPlayerStats(pStats, part, boss.zone).stats || pStats;
@@ -261,12 +238,32 @@ function createSoloBossRoutes(serviceContext) {
       const zoneSanctumOn = Boolean(sanctumStateBefore?.sanctum);
       const _SANCTUM_DEF = require("../../shared/jobAdvancement").getSanctum({ itemId: "job_sanctum_t2_v1" });
 
+      // 所有會拒絕開戰的檢查完成後才收入場費。若戰鬥核心在產生結果前拋錯，catch 會自動退回。
+      if (boss.entryFee > 0) {
+        const walletNow = await serviceContext.walletService.getWalletByDiscordId(discordId, displayName).catch(() => null);
+        const goldOwned = Math.max(0, Number(walletNow?.wallet?.gold ?? walletNow?.gold) || 0);
+        if (goldOwned < boss.entryFee) {
+          return res.status(400).json(fail("NO_GOLD", `挑戰 ${boss.monsterName} 需要 ${boss.entryFee.toLocaleString()} 金幣，你目前只有 ${goldOwned.toLocaleString()} 金幣。`));
+        }
+        const sourceRef = `solo:${boss.key}:${discordId}:${crypto.randomUUID()}`;
+        await serviceContext.rewardService.grantCurrency({
+          discordId, displayName, currencyType: "gold", amount: -boss.entryFee,
+          source: require("../../shared/sources").CURRENCY_SOURCES.MONSTER_ENTRY_FEE,
+          sourceRef,
+          operator: "solo_boss:web_enter_battle",
+        });
+        chargedEntryFee = { amount: boss.entryFee, sourceRef: `${sourceRef}:refund` };
+      }
+
       const { runCombatLoop } = require("../../shared/combatLoop");
       const r = runCombatLoop(pStats, battleMonsterStats, monster.name, Math.max(1, partHpNow), undefined, {
         stance: battleStanceKey,
         teamStunRounds: (teamStunOn || zoneFrozenOn) ? 999 : 0,
         teamStunStyle: (!teamStunOn && zoneFrozenOn) ? "freeze" : undefined,
         monsterEquipped: battleMonsterEquipped, playerLevel: progress.level, monsterLevel: battleMonsterStats.level,
+        monsterIsBoss: Boolean(monster?.isBoss),
+        isWorldBoss: true,
+        zone: boss.zone,
         equipped, inventory: progress.inventory || [],
         playerActiveEffects: [...(progress.activeEffects || []), ...berserkEffects],
         monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
@@ -288,6 +285,7 @@ function createSoloBossRoutes(serviceContext) {
         sanctuaryCutPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumDamageCutPct) || 50) : 0,
         sanctuaryHealPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumHealPct) || 3) : 0,
       });
+      battleResolved = true;
       // 連擊氣條（影舞者）：戰後氣量落地
       if (shadowOn) {
         const _nextShadow = _sg.next(r?.shadowGauge ?? shadowGridsBefore, boss.zone);
@@ -390,7 +388,7 @@ function createSoloBossRoutes(serviceContext) {
       if (_zfg.canKnock(equipped?.job_eq) && battleStanceKey === "frost") {
         // 累積量＝戰鬥回合數（不論命中）
         freezeKnock = await _zfg
-          .knock(freezeGaugeKey, boss.zone, Math.max(0, (Number(r?.nextRound) || 1) - 1), displayName || "")
+          .knock(freezeGaugeKey, boss.zone, r?.combatStats?.attackRounds || 0, displayName || "")
           .catch(() => null);
         if (freezeKnock?.triggered) {
           rewardLines.push(`🧊 **區域冰封**！**${monster.name}** 被凍結——接下來 ${Math.round(_zfg.FREEZE_WINDOW_MS / 1000)} 秒出戰全程免傷！`);
@@ -528,9 +526,13 @@ function createSoloBossRoutes(serviceContext) {
       await saveSoloState(discordId, boss, { dateKey: st.dateKey, killsToday, worldBossPartsHp: nextPartsHp, worldBossPartsMaxHp: nextPartsMax });
 
       const respParts = partsForResp(boss, allDefeated && killsLeft > 0 ? nextPartsHp : partsHp, nextPartsMax);
-      // CD 與現行世界王完全同公式：回合數 × perRoundMs(依 AGI 的 tickMs) + 2000 + 敗北再加 10 秒
+      // CD 與一般網頁戰鬥同公式：動畫時間＋短畫面交接；敗北懲罰維持不變。
       const _perRoundMs = process.env.ROUND_MS ? (Number(process.env.ROUND_MS) || 900) : calculateTickDelay(pStats.agi || 1);
-      const animDurationMs = (r.roundLogs || []).length * _perRoundMs + 2000 + (r.outcome === "lose" ? 10000 : 0);
+      const animDurationMs = calculateWebBattleCooldownMs({
+        roundCount: (r.roundLogs || []).length,
+        perRoundMs: _perRoundMs,
+        lost: r.outcome === "lose",
+      });
 
       return res.json(ok({
         outcome: allDefeated ? "win" : r.outcome,
@@ -595,6 +597,18 @@ function createSoloBossRoutes(serviceContext) {
         },
       }));
     } catch (err) {
+      if (chargedEntryFee && !battleResolved) {
+        try {
+          await serviceContext.rewardService.grantCurrency({
+            discordId, displayName, currencyType: "gold", amount: chargedEntryFee.amount,
+            source: require("../../shared/sources").CURRENCY_SOURCES.MONSTER_ENTRY_FEE,
+            sourceRef: chargedEntryFee.sourceRef,
+            operator: "solo_boss:web_enter_battle_refund",
+          });
+        } catch (refundErr) {
+          console.error("[SoloBoss] entry fee refund failed:", discordId, refundErr?.message || refundErr);
+        }
+      }
       next(err);
     } finally {
       soloInFlight.delete(discordId);

@@ -13,6 +13,15 @@ const { calcPlayerStats } = require("../../shared/combatStats");
 const { mergeEquippedFromLibrary, applyEffectInstances, applyEffectsToStats, collectEquipmentEffects, isEffectConditionMet } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffect } = require("../../shared/supportAuraScaling");
 const { runCombatLoop } = require("../../shared/combatLoop");
+const { isTowerTester } = require("../../shared/towerAccess");
+const {
+  getTowerRole,
+  normalizeTowerRole,
+  scaleTowerAuraEffect,
+  scaleTowerRoleHp,
+  scaleTowerRoleAtk,
+  selectTowerMonsterTarget,
+} = require("../../shared/towerRoles");
 const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { setTowerPresence, isTowerBattleActive } = require("../../shared/battlePresence");
@@ -94,18 +103,18 @@ function genRoomId() {
 
 // ── 職業偵測（依 job_eq 徽章）────────────────────────────────
 const JOB_TRAITS = {
-  swordsman:    { key: "swordsman", name: "劍士",   emoji: "⚔️",  traits: ["爬塔光環：隊伍受到傷害-5%", "單手劍/雙手劍強化", "前線防守"] },
-  warrior:      { key: "warrior", name: "戰士",   emoji: "🪓",  traits: ["爬塔光環：高血怪傷害+5%", "斧系爆發", "火力檢定"] },
-  dwarf_warrior:{ key: "dwarf_warrior", name: "矮人戰士",emoji: "🔨", traits: ["爬塔光環：全隊擊暈+5%", "暈眩目標傷害+10%", "控場破口"] },
-  rogue:        { key: "rogue", name: "盜賊",   emoji: "🗡️",  traits: ["爬塔光環：隊伍連擊率+5%", "匕首連擊", "高速削血"] },
-  mage:         { key: "mage", name: "法師",   emoji: "🪄",  traits: ["爬塔光環：隊伍無視DEF+5%", "法杖穿防", "高防對策"] },
-  healer:       { key: "healer", name: "治療師", emoji: "💚",  traits: ["爬塔光環：每回合回復3% MaxHP", "跨層續航", "團隊支援"] },
-  archer:       { key: "archer", name: "弓箭手", emoji: "🏹",  traits: ["爬塔光環：Boss/精英傷害+5%", "命中要害", "高血量狙擊"] },
-  tactician:    { key: "tactician", name: "軍師",   emoji: "♟️",  traits: ["爬塔光環：隊伍傷害+5%", "Boss傷害+5%", "戰術指揮"] },
-  bard:         { key: "bard", name: "詩人",   emoji: "🎼",  traits: ["爬塔光環：隊伍AGI+15%", "連擊率+5%", "行動軸支援"] },
-  barrier_mage: { key: "barrier_mage", name: "結界師", emoji: "🛡️", traits: ["爬塔光環：隊伍減傷-10%", "MaxHP+8%", "防護結界"] },
-  gambler:      { key: "gambler", name: "賭徒",   emoji: "🎲",  traits: ["爬塔光環：隊伍爆擊率+5%", "骰子吃 LUK", "高方差爆發"] },
-  default:      { key: "default", name: "冒險者", emoji: "🧑",  traits: ["無職業加成"] },
+  swordsman:    { key: "swordsman", name: "劍士",   emoji: "⚔️", traits: [] },
+  warrior:      { key: "warrior", name: "戰士",   emoji: "🪓", traits: [] },
+  dwarf_warrior:{ key: "dwarf_warrior", name: "矮人戰士", emoji: "🔨", traits: [] },
+  rogue:        { key: "rogue", name: "盜賊",   emoji: "🗡️", traits: [] },
+  mage:         { key: "mage", name: "法師",   emoji: "🪄", traits: [] },
+  healer:       { key: "healer", name: "治療師", emoji: "💚", traits: [] },
+  archer:       { key: "archer", name: "弓箭手", emoji: "🏹", traits: [] },
+  tactician:    { key: "tactician", name: "軍師",   emoji: "♟️", traits: [] },
+  bard:         { key: "bard", name: "詩人",   emoji: "🎼", traits: [] },
+  barrier_mage: { key: "barrier_mage", name: "結界師", emoji: "🛡️", traits: [] },
+  gambler:      { key: "gambler", name: "賭徒",   emoji: "🎲", traits: [] },
+  default:      { key: "default", name: "冒險者", emoji: "🧑", traits: [] },
 };
 
 function detectJob(equipped = {}) {
@@ -126,78 +135,6 @@ function detectJob(equipped = {}) {
   if (has("rogue") || has("盜賊"))     return JOB_TRAITS.rogue;
   if (has("gambler") || has("賭徒"))   return JOB_TRAITS.gambler;
   return JOB_TRAITS.default;
-}
-
-function towerPartyEffect(member, key, value, notes, mode = "pct") {
-  return {
-    key,
-    trigger: "tower_aura",
-    target: "party",
-    chance: 100,
-    stacks: 1,
-    stackMode: "replace",
-    duration: { mode: "battle", value: 1 },
-    params: { value, mode },
-    sourceName: member?.name || null,
-    sourceJobName: member?.job?.name || null,
-    sourceJobKey: member?.job?.key || null,
-    notes,
-  };
-}
-
-function getTowerJobAuraEffects(member) {
-  const jobKey = member?.job?.key || "default";
-  switch (jobKey) {
-    case "swordsman":
-      return [towerPartyEffect(member, "party_damage_reduction", 5, "爬塔：隊伍受到傷害 -5%")];
-    case "warrior":
-      return [towerPartyEffect(member, "party_high_hp_damage_up", 5, "爬塔：隊伍對 HP 50%以上怪物傷害 +5%")];
-    case "dwarf_warrior":
-      return [
-        towerPartyEffect(member, "party_stun_chance_up", 8, "爬塔：全隊擊暈值 +8%"),
-        towerPartyEffect(member, "party_stunned_damage_up", 12, "爬塔：對暈眩中的怪物傷害 +12%"),
-      ];
-    case "rogue":
-      return [towerPartyEffect(member, "party_combo_up", 5, "爬塔：隊伍連擊率 +5%")];
-    case "mage":
-      return [towerPartyEffect(member, "party_def_ignore_up", 5, "爬塔：隊伍無視 DEF +5%")];
-    case "archer":
-      return [
-        towerPartyEffect(member, "party_boss_damage_up", 5, "爬塔：隊伍對 Boss 傷害 +5%"),
-        towerPartyEffect(member, "party_elite_damage_up", 5, "爬塔：隊伍對精英怪傷害 +5%"),
-      ];
-    case "healer":
-      return [towerPartyEffect(member, "party_heal", 3, "爬塔：隊伍每回合回復 3% MaxHP")];
-    case "tactician":
-      return [
-        towerPartyEffect(member, "party_damage_up", 5, "爬塔：隊伍傷害 +5%"),
-        towerPartyEffect(member, "party_boss_damage_up", 5, "爬塔：隊伍對 Boss 傷害 +5%"),
-      ];
-    case "bard":
-      return [
-        towerPartyEffect(member, "party_agi_up", 15, "爬塔：隊伍 AGI +15%"),
-        towerPartyEffect(member, "party_combo_up", 5, "爬塔：隊伍連擊率 +5%"),
-      ];
-    case "barrier_mage":
-      return [
-        towerPartyEffect(member, "party_damage_reduction", 10, "爬塔：隊伍受到傷害 -10%"),
-        towerPartyEffect(member, "party_max_hp_up", 8, "爬塔：隊伍 MaxHP +8%"),
-      ];
-    case "gambler":
-      return [towerPartyEffect(member, "party_crit_rate_up", 5, "爬塔：隊伍爆擊率 +5%")];
-    default:
-      return [];
-  }
-}
-
-function isReplacedByTowerAura(jobKey, effectKey) {
-  const replaced = {
-    bard: new Set(["party_agi_up", "party_gold_gain_up"]),
-    barrier_mage: new Set(["party_damage_reduction", "party_crit_damage_reduction"]),
-    tactician: new Set(["party_monster_def_down"]),
-    healer: new Set(["heal_over_time", "party_heal"]),
-  };
-  return replaced[jobKey]?.has(effectKey) || false;
 }
 
 // ── 讀取玩家資料（組隊時用，開始後不再讀 DB） ────────────────
@@ -270,7 +207,8 @@ const TOWER_FLOOR_ZONE = (floor) => {
   if (floor <= 30) return "mid";             // 21-29 用 mid
   if (floor <= 35) return "ancient_city";    // 31-35 古城
   if (floor <= 40) return "ancient_city_deep"; // 36-40 古城深處
-  return "dragon_realm";                     // 41-50 龍族之領（51 大史王／52 古龍王 走固定王關）
+  if (floor <= 52) return "dragon_realm";    // 41-52 龍族之領
+  return "hellfire";                         // 53-69 焰獄；70-71 固定狼王
 };
 
 // 排除不應出現在一般層的怪
@@ -321,26 +259,32 @@ async function pickFloorMonster(floor) {
 
 // ── 收集全隊 party 光環 effects ──────────────────────────────
 // 掃全員 equipped 的 target=party effects（與怪物區邏輯相同）
-function buildTowerPartyEffects(members) {
+function buildTowerPartyEffects(members, { zone = null } = {}) {
   const bestByJobAndKey = new Map();
   const freeStackEffects = [];
 
   for (const m of members) {
     if (!m.equipped || m.currentHp <= 0) continue;
-    const context = { equipped: m.equipped, inventory: m.inventory || [] };
+    const context = { equipped: m.equipped, inventory: m.inventory || [], zone };
     const refs = collectEquipmentEffects(m.equipped, null, context);
     const jobName = m.job?.name || null;
     const jobKey = m.job?.key || null;
     for (const r of refs) {
       if (r && r.target === "party" && isEffectConditionMet(r, context)) {
-        if (isReplacedByTowerAura(jobKey, r.key)) continue;
         const scaled = scaleSupportPartyEffect(r, {
           providerStats: m.stats || {},
           jobKey,
           jobName,
-          equipped: m.equipped || {}
+          equipped: m.equipped || {},
+          inventory: m.inventory || [],
+          zone,
         });
-        const effect = { ...scaled, sourceName: m.name, sourceJobName: jobName };
+        const effect = scaleTowerAuraEffect({
+          ...scaled,
+          sourceName: m.name,
+          sourceJobName: jobName,
+          sourceDiscordId: m.discordId,
+        }, m.towerRole);
         if (!jobName) {
           freeStackEffects.push(effect);
           continue;
@@ -353,19 +297,6 @@ function buildTowerPartyEffects(members) {
       }
     }
 
-    for (const rawEffect of getTowerJobAuraEffects(m)) {
-      const effect = scaleSupportPartyEffect(rawEffect, {
-        providerStats: m.stats || {},
-        jobKey,
-        jobName,
-        equipped: m.equipped || {}
-      });
-      const key = `${jobName || jobKey || m.name}:${effect.key}`;
-      const current = bestByJobAndKey.get(key);
-      const currentValue = Number(current?.params?.value || 0);
-      const nextValue = Number(effect?.params?.value || 0);
-      if (!current || nextValue > currentValue) bestByJobAndKey.set(key, effect);
-    }
   }
   return [...bestByJobAndKey.values(), ...freeStackEffects];
 }
@@ -380,11 +311,11 @@ function calcTowerMemberMaxHp(member, floor, partyEffects = []) {
   const bonus = getCumulativePartyBonus(floor);
   const partyMaxHpPct = sumPartyEffectValue(partyEffects, "party_max_hp_up");
   const baseMaxHp = Math.max(1, Number(member?.stats?.maxHp || 100));
-  return Math.max(1, Math.round(baseMaxHp * (1 + bonus.hpPct / 100) * (1 + partyMaxHpPct / 100)));
+  return Math.max(1, Math.round(scaleTowerRoleHp(baseMaxHp, member?.towerRole) * (1 + bonus.hpPct / 100) * (1 + partyMaxHpPct / 100)));
 }
 
 function refreshTowerMemberMaxHp(session, floor, { initialize = false } = {}) {
-  const partyEffects = buildTowerPartyEffects(session.members);
+  const partyEffects = buildTowerPartyEffects(session.members, { zone: TOWER_FLOOR_ZONE(floor) });
   for (const member of session.members) {
     const beforeMax = Math.max(0, Number(member.maxHp || 0));
     const beforeHp = Math.max(0, Number(member.currentHp || 0));
@@ -552,6 +483,8 @@ function compactTowerMemberLogs(memberLogs = [], limit = 8) {
     .map((entry) => ({
       type: entry?.type || "member",
       name: entry?.name || "???",
+      targetName: entry?.targetName || null,
+      targetRole: entry?.targetRole || null,
       agi: entry?.agi,
       logs: Array.isArray(entry?.logs)
         ? entry.logs.map((log) => {
@@ -636,7 +569,8 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
   let   stunRoundsLeft = 0;
   let   sharedRound = 1;
   let   totalActions = 0;
-  const openingPartyEffects = buildTowerPartyEffects(session.members);
+  const combatZone = monster?.zone || TOWER_FLOOR_ZONE(floor);
+  const openingPartyEffects = buildTowerPartyEffects(session.members, { zone: combatZone });
   const floorStats = createTowerFloorStats(session.members);
   const floorAuraLines = summarizeTowerAuras(openingPartyEffects);
   const initialActionOrder = buildTowerActionPreview(session.members, mCalc, openingPartyEffects).slice(0, 10);
@@ -646,7 +580,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
   const maxActionSlices = Math.max(50, Math.max(1, MAX_ROUNDS_PER_MEMBER) * Math.max(2, session.members.length + 1));
 
   while (monsterHp > 0 && aliveMembers().length > 0 && totalActions < maxActionSlices) {
-    const partyEffects = buildTowerPartyEffects(session.members);
+    const partyEffects = buildTowerPartyEffects(session.members, { zone: combatZone });
     const actors = [
       ...session.members
         .filter((m) => m.currentHp > 0)
@@ -664,9 +598,17 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
             index,
           };
         }),
+      {
+        type: "monster",
+        id: "monster",
+        name: monster.name,
+        stats: mCalc,
+        agi: Number(mCalc.agi || 0),
+        dex: Number(mCalc.dex || 0),
+        speed: 100 + Math.max(0, Number(mCalc.agi || 0)),
+        index: session.members.length,
+      },
     ];
-    // 王不再單獨佔一個行動格；改為在「每位成員出戰」時，由 runCombatLoop 正常回擊該成員，
-    // 這樣攻、防兩個方向都走同一套引擎（與世界王 / 一般 PvE 完全一致）。行動軸（誰先動）不變。
     if (actors.length === 0) break;
 
     const nextNeed = Math.min(...actors.map((actor) => (1000 - (gauges.get(actor.id) || 0)) / Math.max(1, actor.speed)));
@@ -679,6 +621,66 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     totalActions += 1;
     tickTowerCardCooldowns(session.members);
 
+    if (actor.type === "monster") {
+      const target = selectTowerMonsterTarget(session.members);
+      if (!target) break;
+      const targetStats = getEffectiveMemberStats(target, partyEffects);
+      const nonHealPartyEffects = partyEffects.filter((effect) => effect?.key !== "heal_over_time" && effect?.key !== "party_heal");
+      const options = {
+        startMonsterHp: monsterHp,
+        startPlayerHp: target.currentHp,
+        startRound: sharedRound,
+        playerName: target.name,
+        playerLevel: target.level || 1,
+        equipped: target.equipped,
+        inventory: target.inventory || [],
+        playerActiveEffects: Array.isArray(target.activeEffects) ? [...target.activeEffects] : [],
+        cardCooldowns: target.cardCooldowns || { player: {}, monster: {} },
+        tickCardCooldowns: false,
+        partyEffects: nonHealPartyEffects,
+        monsterEquipped: buildMonsterEquipped(monster),
+        monsterIsBoss: Boolean(monster.isBoss),
+        monsterIsElite: monster.zone === "elite",
+        monsterElement: monster?.element || null,
+        monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
+        monsterActiveEffects,
+        stunRoundsLeft,
+        skipPlayerAttack: true,
+      };
+      const beforeMonsterHp = monsterHp;
+      const beforePlayerHp = target.currentHp;
+      const result = runCombatLoop(
+        { ...targetStats, maxHp: target.maxHp },
+        mCalc,
+        monster.name,
+        scaledHp,
+        1,
+        options
+      );
+      monsterHp = result.finalMonsterHp;
+      target.currentHp = Math.max(0, Math.round(result.finalPlayerHp));
+      addTowerStat(floorStats, target.discordId, "damageDealt", Math.max(0, beforeMonsterHp - monsterHp));
+      addTowerStat(floorStats, target.discordId, "damageTaken", Math.max(0, beforePlayerHp - target.currentHp));
+      target.activeEffects = Array.isArray(options.playerActiveEffects) ? options.playerActiveEffects : [];
+      target.cardCooldowns = result.cardCooldowns || options.cardCooldowns || { player: {}, monster: {} };
+      monsterActiveEffects = Array.isArray(result.monsterActiveEffects) ? result.monsterActiveEffects : [];
+      stunRoundsLeft = Math.max(0, Number(result.stunRoundsLeft || 0));
+      sharedRound = Math.max(sharedRound + 1, Number(result.nextRound || sharedRound + 1));
+      memberLogs.push({
+        type: "monster",
+        name: monster.name,
+        targetName: target.name,
+        targetRole: normalizeTowerRole(target.towerRole),
+        agi: actor.agi,
+        logs: result.roundLogs || [],
+        outcome: result.outcome,
+        monsterHpAfter: monsterHp,
+        playerHpAfter: target.currentHp,
+        partyHpAfter: session.members.map((mb) => ({ name: mb.name, hp: mb.currentHp, maxHp: mb.maxHp })),
+      });
+      continue;
+    }
+
     const m = actor.member;
     const healed = applyTowerPartyHealing(session.members, partyEffects);
     for (const heal of healed) {
@@ -688,7 +690,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     const nonHealPartyEffects = partyEffects.filter((effect) => effect?.key !== "heal_over_time" && effect?.key !== "party_heal");
     const effStats = {
       ...actor.stats,
-      atk: Math.round((actor.stats.atk || 10) * (1 + bonus.atkPct / 100)),
+      atk: Math.round(scaleTowerRoleAtk(actor.stats.atk || 10, m.towerRole) * (1 + bonus.atkPct / 100)),
       maxHp: m.maxHp,
     };
     const options = {
@@ -710,10 +712,11 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
       monsterActiveEffects,
       stunRoundsLeft,
+      skipMonsterAttack: true,
     };
     const beforeMonsterHp = monsterHp;
     const beforePlayerHp = m.currentHp;
-    // 同一套攻防：本回合該成員打王、王也回擊該成員（王用完整真實數值，含等級壓制/flatDef/破防/格擋/階級骰）
+    // 玩家與怪物各自佔一個行動格；玩家行動只攻擊，怪物行動再依站位選擇目標。
     const result = runCombatLoop(
       effStats,
       mCalc,
@@ -1256,9 +1259,32 @@ function findSessionByStarter(messageId) {
 
 // ── Handlers ─────────────────────────────────────────────────
 
+function createTowerRoleSelect(customId, currentRole = null) {
+  const selected = normalizeTowerRole(currentRole);
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(customId)
+    .setPlaceholder("選擇爬塔站位")
+    .addOptions(
+      { label: "坦", value: "tank", emoji: "🛡️", description: "HP×1.3／ATK×0.7／光環×0.5", default: selected === "tank" },
+      { label: "補", value: "support", emoji: "💚", description: "HP×0.7／ATK×0.7／光環×1.3", default: selected === "support" },
+      { label: "輸出", value: "dps", emoji: "⚔️", description: "HP×1／ATK×1.2／光環×0.5", default: selected === "dps" },
+    );
+  return new ActionRowBuilder().addComponents(menu);
+}
+
 async function handleOpenLobby(interaction) {
+  await interaction.reply({
+    content: "請先選擇你在隊伍中的站位。開始攻塔前仍可更換。",
+    components: [createTowerRoleSelect("tower:role_select:create")],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleOpenLobbyWithRole(interaction, towerRole) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const discordId = interaction.user.id;
+  const role = normalizeTowerRole(towerRole);
+  if (!role) return interaction.editReply({ content: "❌ 請選擇有效的站位。", components: [] });
 
   if (playerThreadMap.has(discordId)) {
     const tid = playerThreadMap.get(discordId);
@@ -1310,6 +1336,7 @@ async function handleOpenLobby(interaction) {
     currentHp: 0, maxHp: 0,
     towerRecord: pData.towerRecord,
     job: pData.job,
+    towerRole: role,
   });
 
   const thread = await forum.threads.create({
@@ -1332,6 +1359,7 @@ async function handleOpenLobby(interaction) {
   playerThreadMap.set(discordId, thread.id);
   setTowerPresence([discordId], true);
   await persistSession(session);
+  await updateThreadPanel(session, createTowerThreadLobbyMessage(session));
 
   session.lobbyTimer = setTimeout(async () => {
     const s = activeSessions.get(thread.id);
@@ -1346,8 +1374,23 @@ async function handleOpenLobby(interaction) {
 }
 
 async function handleJoin(interaction) {
+  const session = findSessionByStarter(interaction.message?.id);
+  if (!session) {
+    await interaction.reply({ content: "❌ 找不到對應隊伍，可能已解散。", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await interaction.reply({
+    content: "請先選擇你在隊伍中的站位。開始攻塔前仍可更換。",
+    components: [createTowerRoleSelect(`tower:role_select:join:${session.threadId}`)],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleJoinWithRole(interaction, threadId, towerRole) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const discordId = interaction.user.id;
+  const role = normalizeTowerRole(towerRole);
+  if (!role) return interaction.editReply({ content: "❌ 請選擇有效的站位。", components: [] });
 
   if (playerThreadMap.has(discordId)) {
     const rid = activeSessions.get(playerThreadMap.get(discordId))?.roomId || "";
@@ -1355,13 +1398,17 @@ async function handleJoin(interaction) {
     return;
   }
 
-  const session = findSessionByStarter(interaction.message?.id);
+  const session = activeSessions.get(threadId);
   if (!session) {
     await interaction.editReply({ content: "❌ 找不到對應隊伍，可能已解散。" });
     return;
   }
   if (session.state !== "lobby") {
     await interaction.editReply({ content: "❌ 攻塔已開始，無法加入。" });
+    return;
+  }
+  if (session.members.some((member) => !normalizeTowerRole(member.towerRole))) {
+    await interaction.editReply({ content: "❌ 所有隊員都必須先選擇坦、補或輸出站位。" });
     return;
   }
   if (session.members.length >= TOWER_MAX_MEMBERS) {
@@ -1391,6 +1438,7 @@ async function handleJoin(interaction) {
     currentHp: 0, maxHp: 0, towerRecord: pData.towerRecord,
     cardCooldowns: { player: {}, monster: {} },
     job: pData.job,
+    towerRole: role,
   });
   playerThreadMap.set(discordId, session.threadId);
   setTowerPresence([discordId], true);
@@ -1472,11 +1520,15 @@ async function handleStart(interaction) {
     await interaction.editReply({ content: "⚠️ 攻塔已開始或結束。" });
     return;
   }
+  if (session.members.some((member) => !normalizeTowerRole(member.towerRole))) {
+    await interaction.editReply({ content: "❌ 所有隊員都必須先選擇坦、補或輸出站位。" });
+    return;
+  }
 
   if (session.lobbyTimer) { clearTimeout(session.lobbyTimer); session.lobbyTimer = null; }
 
   // ── 快照鎖定：此刻讀到的 stats 是最終戰鬥數值，之後不再讀 DB ──
-  // 先讓全員視為存活，才能把開場爬塔光環納入 MaxHP 計算。
+  // 先讓全員視為存活，才能把目前戰鬥區域的隊伍光環納入 MaxHP 計算。
   for (const m of session.members) {
     m.maxHp = 1;
     m.currentHp = 1;
@@ -1703,7 +1755,10 @@ async function restoreTowerSessions() {
         starterMessage,
         leaderId:        data.leaderId,
         state:           data.state === "fighting" ? "ready_to_fight" : data.state,
-        members:         data.members || [],
+        members:         (data.members || []).map((member) => ({
+          ...member,
+          towerRole: normalizeTowerRole(member?.towerRole) || "dps",
+        })),
         currentFloor:    data.currentFloor || 0,
         clearedFloor:    data.clearedFloor || 0,
         currentMonster:  data.currentMonster || null,
@@ -2016,7 +2071,7 @@ async function replyTowerClosed(interaction) {
 }
 
 async function handleTowerButton(interaction) {
-  if (!TOWER_ENABLED) return replyTowerClosed(interaction);
+  if (!TOWER_ENABLED && !isTowerTester(interaction.user?.id)) return replyTowerClosed(interaction);
   switch (interaction.customId) {
   case TOWER_IDS.openLobby:  return handleOpenLobby(interaction);
   case TOWER_IDS.join:       return handleJoin(interaction);
@@ -2032,13 +2087,36 @@ async function handleTowerButton(interaction) {
 
 function isTowerSelectMenu(customId) {
   return typeof customId === "string" && (
+    customId.startsWith("tower:role_select:") ||
     customId === "tower:use_item_pick_potion" ||
     customId === "tower:use_item_pick_target"
   );
 }
 
 async function handleTowerSelectMenu(interaction) {
-  if (!TOWER_ENABLED) return replyTowerClosed(interaction);
+  if (!TOWER_ENABLED && !isTowerTester(interaction.user?.id)) return replyTowerClosed(interaction);
+  if (interaction.customId === "tower:role_select:create") {
+    return handleOpenLobbyWithRole(interaction, interaction.values?.[0]);
+  }
+  if (interaction.customId.startsWith("tower:role_select:join:")) {
+    const threadId = interaction.customId.slice("tower:role_select:join:".length);
+    return handleJoinWithRole(interaction, threadId, interaction.values?.[0]);
+  }
+  if (interaction.customId.startsWith("tower:role_select:change:")) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const threadId = interaction.customId.slice("tower:role_select:change:".length);
+    const session = activeSessions.get(threadId);
+    const member = session?.members?.find((entry) => entry.discordId === interaction.user.id);
+    const role = normalizeTowerRole(interaction.values?.[0]);
+    if (!session || session.state !== "lobby" || !member) {
+      return interaction.editReply({ content: "❌ 目前無法更換站位。" });
+    }
+    if (!role) return interaction.editReply({ content: "❌ 站位無效。" });
+    member.towerRole = role;
+    await persistSession(session);
+    await updateThreadPanel(session, createTowerThreadLobbyMessage(session));
+    return interaction.editReply({ content: `✅ 站位已改為 ${getTowerRole(role).emoji} ${getTowerRole(role).label}。` });
+  }
   if (interaction.customId === "tower:use_item_pick_potion") return handlePickPotion(interaction);
   if (interaction.customId === "tower:use_item_pick_target") return handleApplyPotion(interaction);
 }

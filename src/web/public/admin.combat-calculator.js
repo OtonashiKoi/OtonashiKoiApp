@@ -21,14 +21,14 @@
     staff_1h: { label: "單手杖", mult: 3, main: "int", bypass: 15 },
     staff_2h: { label: "雙手杖", mult: 4, main: "int", bypass: 25 },
     bow: { label: "弓", mult: 4, main: "dex", dodge: 20 },
-    dice: { label: "骰子", mult: 1.5, main: "luk", segments: 2 },
+    dice: { label: "骰子", mult: 1.5, main: "luk", segments: 2, faceMultipliers: [0.5, 0.75, 1, 1, 1.25, 1.5] },
   };
 
   const tierOptions = {
     none: { label: "無套裝", stats: {}, hit: 0, dodge: 0, crit: 0, critDamage: 0, damage: 0, finalDamage: 0, bossDamage: 0 },
-    D: { label: "D", stats: { str: 3, int: 3, dex: 3 }, hit: 0, dodge: 0, crit: 0, critDamage: 0, damage: 0, finalDamage: 0, bossDamage: 0 },
-    C: { label: "C", stats: {}, hit: 15, dodge: 10, crit: 0, critDamage: 0, damage: 5, finalDamage: 0, bossDamage: 0 },
-    B: { label: "B", stats: {}, hit: 0, dodge: 0, crit: 5, critDamage: 10, damage: 10, finalDamage: 0, bossDamage: 0 },
+    D: { label: "D", stats: { str: 1, int: 1, dex: 1 }, hit: 0, dodge: 0, crit: 0, critDamage: 0, damage: 0, finalDamage: 0, bossDamage: 0 },
+    C: { label: "C", stats: {}, hit: 8, dodge: 8, crit: 0, critDamage: 0, damage: 6, finalDamage: 0, bossDamage: 0 },
+    B: { label: "B", stats: {}, hit: 0, dodge: 0, crit: 5, critDamage: 10, damage: 6, finalDamage: 0, bossDamage: 0 },
     A: { label: "A", stats: {}, hit: 0, dodge: 0, crit: 0, critDamage: 0, damage: 0, finalDamage: 5, bossDamage: 10 },
   };
 
@@ -147,9 +147,9 @@
     if (rank === "D") {
       if (pieces < 3) bonus.stats = {};
     } else if (rank === "C") {
-      bonus.dodge = pieces >= 3 ? source.dodge : 0;
-      bonus.damage = pieces >= 5 ? source.damage : 0;
-      bonus.hit = pieces >= 7 ? source.hit : 0;
+      bonus.hit = pieces >= 3 ? source.hit : 0;
+      bonus.dodge = pieces >= 5 ? source.dodge : 0;
+      bonus.damage = pieces >= 7 ? source.damage : 0;
     } else if (rank === "B") {
       bonus.damage = pieces >= 3 ? source.damage : 0;
       bonus.crit = pieces >= 5 ? source.crit : 0;
@@ -199,7 +199,7 @@
 
   function updateWorldBossVisibility() {
     const monster = selectedMonster();
-    const visible = Boolean(monster?.isBoss && ["elite", "dragon_king_lair", "hellfire_depths"].includes(monster.zone));
+    const visible = Boolean(monster?.isBoss && ["elite", "dragon_king_lair", "hellfire_depths", "event_boss"].includes(monster.zone));
     $("combat-calc-world-boss").hidden = !visible;
     const wings = $("combat-calc-wb-part")?.querySelector('option[value="wings"]');
     if (wings) wings.hidden = monster?.zone !== "dragon_king_lair";
@@ -255,6 +255,8 @@
       stunChance: clamp((weapon.stun || 0) + numberValue("combat-custom-stun-bonus"), 0, 100),
       stunDuration: weapon.stunDuration || 3,
       monsterAttackCount: 1,
+      attackSegments: Math.max(1, Number(weapon.segments) || 1),
+      faceMultipliers: Array.isArray(weapon.faceMultipliers) ? [...weapon.faceMultipliers] : null,
       tierDamageMultiplier: multiplierFromPct(tier.damage, numberValue("combat-custom-card-damage-pct"), numberValue("combat-custom-title-damage-pct")),
       tierFinalDamageMultiplier: multiplierFromPct(tier.finalDamage, numberValue("combat-custom-card-final-pct"), numberValue("combat-custom-title-final-pct")),
       tierBossDamageMultiplier: multiplierFromPct(tier.bossDamage, numberValue("combat-custom-card-boss-pct"), numberValue("combat-custom-title-boss-pct")),

@@ -6,6 +6,7 @@ let cachedDb = null;
 let connectionPromise = null;
 let indexReady = false;
 let streamBindingSyncReady = false;
+let transactionSupport = null;
 
 async function ensureStreamBindingDiscordPlatformUniqueIndex(db) {
   const collection = db.collection("streamAccountBindings");
@@ -90,6 +91,12 @@ async function ensureIndexes(db) {
       // 商店和道具
       db.collection("shopItems").createIndex({ id: 1 }, { unique: true }),
       db.collection("items").createIndex({ id: 1 }, { unique: true }),
+      db.collection("craftingRecipes").createIndex({ id: 1 }, { unique: true }),
+      db.collection("craftingRecipes").createIndex({ enabled: 1, accessMode: 1, sortOrder: 1 }),
+      db.collection("craftingTransactions").createIndex({ id: 1 }, { unique: true }),
+      db.collection("craftingTransactions").createIndex({ playerId: 1, createdAt: -1 }),
+      db.collection("craftingOperations").createIndex({ id: 1 }, { unique: true }),
+      db.collection("craftingOperations").createIndex({ playerId: 1, status: 1, createdAt: 1 }),
       db.collection("seasonResetRuns").createIndex({ createdAt: -1 }),
       db.collection("seasonResetRunPlayers").createIndex({ runId: 1, playerId: 1 }, { unique: true }),
       db.collection("weeklyQuestProgressHistory").createIndex({ archiveKey: 1 }, { unique: true }),
@@ -211,11 +218,48 @@ async function closeMongoClient() {
   cachedDb = null;
   indexReady = false;
   streamBindingSyncReady = false;
+  transactionSupport = null;
   connectionPromise = null;
   if (client) await client.close();
 }
 
+/**
+ * 在同一個 MongoDB transaction 內執行跨 collection 寫入。
+ * 合成等「扣素材 + 扣金幣 + 發成品 + 寫紀錄」流程必須走這裡，
+ * 任一步失敗都會整筆回滾，避免玩家資產只完成一半。
+ */
+async function withMongoTransaction(work) {
+  if (typeof work !== "function") throw new TypeError("withMongoTransaction requires a function");
+  const db = await getMongoDb();
+  if (!cachedClient) throw new Error("MongoDB client is not connected");
+
+  const session = cachedClient.startSession();
+  let result;
+  try {
+    await session.withTransaction(async () => {
+      result = await work(db, session);
+    }, {
+      readConcern: { level: "snapshot" },
+      writeConcern: { w: "majority" },
+      readPreference: "primary"
+    });
+    return result;
+  } finally {
+    await session.endSession();
+  }
+}
+
+async function supportsMongoTransactions() {
+  if (transactionSupport !== null) return transactionSupport;
+  const db = await getMongoDb();
+  const hello = await db.command({ hello: 1 });
+  transactionSupport = Boolean(hello?.setName || hello?.msg === "isdbgrid");
+  return transactionSupport;
+}
+
 module.exports = {
   getMongoDb,
+  withMongoTransaction,
+  supportsMongoTransactions,
   closeMongoClient,
 };

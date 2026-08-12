@@ -2,7 +2,7 @@
 (function () {
   const { request, log, escapeHtml } = window.adminCore;
 
-  let lbData = null;     // { gold: [], level: [], checkin: [] }
+  let lbData = null;     // { gold: [], level: [], accountLevel: [], checkin: [] }
   let activeTab = "gold";
 
   const MEDAL = ["🥇", "🥈", "🥉"];
@@ -49,6 +49,14 @@
         { key: "level", label: "⭐ 等級" },
         { key: "exp", label: "EXP" },
         { key: "gold", label: "💰 金幣" }
+      ]);
+    } else if (activeTab === "accountLevel") {
+      container.innerHTML = renderTable(lbData.accountLevel, [
+        { key: "__rank", label: "名次" },
+        { key: "displayName", label: "玩家名稱" },
+        { key: "totalLevel", label: "🌟 總養成" },
+        { key: "characterLevels", label: "人物等級" },
+        { key: "characterCount", label: "人物數" }
       ]);
     } else if (activeTab === "checkin") {
       container.innerHTML = renderTable(lbData.checkin, [

@@ -14,6 +14,7 @@ const { bestiaryRequirement, bestiaryBonusPct, MAX_BONUS_PCT } = require("../../
 const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
 const { GATHER_INTERVAL_MIN } = require("../../services/pet/petService");
 const { isLeaderboardExcluded } = require("../../shared/leaderboardEligibility");
+const { summarizeCharacterLevels, reachedMs } = require("../../shared/characterLevelSummary");
 
 // 怪物圖鑑累積 key（與 playerPanel._bestiaryKey 同規則）
 function bestiaryKey(m) {
@@ -165,13 +166,15 @@ function createPlayerCollectionRoutes(serviceContext) {
   });
 
   // ──────────────────────────────────────────────────
-  // 等級排行榜 TOP N + 自己名次
-  // 排序規則與 adminConsoleService.getLeaderboard 一致：level desc → exp desc
+  // 等級排行榜 TOP N + 自己名次。
+  // mode=highest（預設）：每個帳號取三個人物中的最高等級，維持一般玩家與會員公平。
+  // mode=total：三個已建立人物的等級加總，作為純養成榜，不連動賽季獎勵。
   // ──────────────────────────────────────────────────
   router.get("/api/leaderboard/level", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
       const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
+      const mode = req.query.mode === "total" ? "total" : "highest";
       const [players, progresses] = await Promise.all([
         serviceContext.playerRepository.listAll(),
         serviceContext.progressRepository.listAll()
@@ -189,51 +192,55 @@ function createPlayerCollectionRoutes(serviceContext) {
         return dn;
       };
 
-      // 達成時間排序用：有記錄→毫秒；沒有(此功能上線前就達成該級的老玩家)→視為「最早」(0),
-      // 因為他們確實比任何上線後才升到此級的人更早達成。
-      const reachedMs = (iso) => {
-        if (!iso) return 0;
-        const t = Date.parse(iso);
-        return Number.isFinite(t) ? t : 0;
-      };
-
       const rows = players
         .filter((p) => p.status !== "disabled")
         .filter((p) => !isLeaderboardExcluded(progressMap[p.discordId]))
         .map((p) => {
           const prog = progressMap[p.discordId] || {};
+          const levels = summarizeCharacterLevels(prog);
           return {
             discordId: p.discordId,
             name: prettyName(p.displayName, p.discordId),
-            level: prog.level ?? 1,
-            exp: prog.exp ?? 0,
-            levelReachedAt: prog.levelReachedAt || null,
-            jobName: prog.equipment?.job_eq?.itemName || prog.equipment?.job_eq?.name || ""
+            level: levels.highestLevel,
+            exp: levels.highestExp,
+            levelReachedAt: levels.highestLevelReachedAt,
+            jobName: levels.highestJobName,
+            highestSlot: levels.highestSlot,
+            totalLevel: levels.totalLevel,
+            totalExp: levels.totalExp,
+            characterCount: levels.characterCount,
+            characterLevels: levels.characterLevels,
           };
         })
-        // 等級高→前；同級「越早達成該級」→前；再平手才比經驗。
-        .sort((a, b) =>
-          b.level - a.level ||
-          reachedMs(a.levelReachedAt) - reachedMs(b.levelReachedAt) ||
-          b.exp - a.exp
+        .sort((a, b) => mode === "total"
+          ? b.totalLevel - a.totalLevel || b.totalExp - a.totalExp || b.level - a.level
+          : b.level - a.level
+            || reachedMs(a.levelReachedAt) - reachedMs(b.levelReachedAt)
+            || b.exp - a.exp
         );
 
       const list = rows.slice(0, limit).map((r, i) => ({ rank: i + 1, ...r }));
       const myIdx = rows.findIndex((r) => r.discordId === discordId);
       const myProgress = progressMap[discordId] || {};
+      const myLevels = summarizeCharacterLevels(myProgress);
       const me = myIdx >= 0
         ? { rank: myIdx + 1, ...rows[myIdx] }
         : {
             rank: null,
             discordId,
             name: prettyName(req.playerRecord.displayName, discordId),
-            level: myProgress.level ?? 1,
-            exp: myProgress.exp ?? 0,
-            levelReachedAt: myProgress.levelReachedAt || null,
-            jobName: myProgress.equipment?.job_eq?.itemName || myProgress.equipment?.job_eq?.name || ""
+            level: myLevels.highestLevel,
+            exp: myLevels.highestExp,
+            levelReachedAt: myLevels.highestLevelReachedAt,
+            jobName: myLevels.highestJobName,
+            highestSlot: myLevels.highestSlot,
+            totalLevel: myLevels.totalLevel,
+            totalExp: myLevels.totalExp,
+            characterCount: myLevels.characterCount,
+            characterLevels: myLevels.characterLevels,
           };
 
-      res.json(ok({ list, me, totalPlayers: rows.length }));
+      res.json(ok({ mode, list, me, totalPlayers: rows.length }));
     } catch (err) {
       next(err);
     }

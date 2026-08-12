@@ -30,6 +30,7 @@
     kill_slime_king: "擊敗大史王 次數",
     kill_dragon_king: "擊敗古龍王(B) 次數",
     kill_hellfang_king: "擊敗地獄狼牙王 次數",
+    kill_island_turtle: "擊敗島島龜王 次數",
     enhance_a5_count: "A 裝強化至 +5 累積",
   };
   const QUEST_TYPE_UNITS = {
@@ -59,6 +60,7 @@
     kill_slime_king: "次",
     kill_dragon_king: "次",
     kill_hellfang_king: "次",
+    kill_island_turtle: "次",
     enhance_a5_count: "件",
   };
   const CADENCE_LABELS = {

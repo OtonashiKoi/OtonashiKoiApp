@@ -168,9 +168,25 @@ class ProgressService {
     if (!ATTR_KEYS.includes(attribute)) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `invalid attribute: ${attribute}`, 400);
     }
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "attribute amount must be a positive integer", 400);
+    }
 
-    // CAS 重試：確保 statusPoints 扣除與屬性增加的原子性
     return withPlayerProgressLock(discordId, async () => {
+      // Mongo 正式儲存層走單次原子小欄位更新，不再載入／覆寫整份角色進度。
+      if (typeof this.progressRepository?.allocateAttributePoints === "function") {
+        const result = await this.progressRepository.allocateAttributePoints(discordId, attribute, amount);
+        if (result?.ok) return result.progress;
+        if (result?.reason === "not_found") {
+          throw new AppError(ERROR_CODES.NOT_FOUND, `progress not found for player: ${discordId}`, 404);
+        }
+        if (result?.reason === "insufficient") {
+          throw new AppError(ERROR_CODES.PRECONDITION_FAILED, "insufficient status points", 400);
+        }
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "invalid attribute allocation", 400);
+      }
+
+      // 測試／替代儲存層相容路徑：保留既有 CAS 行為。
       for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
         const progress = await this.progressRepository.findByPlayerId(discordId);
         if (!progress) {

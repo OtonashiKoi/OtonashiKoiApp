@@ -62,7 +62,7 @@ async function addDonation(twdAmount, meta, serviceContext) {
       // 疊加式：每階各自套一個「賽季永久」buff，全部相加、永久保留（換季 resetSeason 清）
       if (Number(m.dropPct) > 0 || Number(m.goldPct) > 0 || Number(m.expPct) > 0) {
         await applyBuff({
-          label: `賽季永久 · SC累積：${m.label || ("NT$" + m.threshold)}`,
+          label: `本季 · SC累積：${m.label || ("NT$" + m.threshold)}`,
           source: "sc_milestone",
           sourceRef: `scms:season:${m.id}`, // 每階唯一、可共存疊加
           dropPct: Number(m.dropPct) || 0, goldPct: Number(m.goldPct) || 0, expPct: Number(m.expPct) || 0,
@@ -75,7 +75,7 @@ async function addDonation(twdAmount, meta, serviceContext) {
         if (Number(m.dropPct) > 0) parts.push(`掉寶 +${m.dropPct}%`);
         if (Number(m.goldPct) > 0) parts.push(`金幣 +${m.goldPct}%`);
         if (Number(m.expPct) > 0) parts.push(`經驗 +${m.expPct}%`);
-        const eff = parts.length ? `全服 ${parts.join("、")}（本賽季永久保留）！` : "";
+        const eff = parts.length ? `全服 ${parts.join("、")}（本季保留）！` : "";
         try {
           serviceContext._announceTownChat(`🔓 全服 SC 累積達 NT$${m.threshold}！解鎖「${m.label || ""}」${eff}`);
         } catch (_) { /* noop */ }

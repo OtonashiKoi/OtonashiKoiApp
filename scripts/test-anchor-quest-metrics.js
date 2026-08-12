@@ -34,6 +34,19 @@ function equippedPassive(key, params) {
   return { title_eq: { itemId: `test-${key}`, passiveEffects: [{ key, trigger: "passive", target: "self", chance: 100, params }] } };
 }
 
+function spiritEquipment({ saint = false } = {}) {
+  const equipped = {
+    job_eq: { itemId: "job_spiritmaster_t2_v1", itemName: "聖靈師徽章", jobSkills: [] },
+  };
+  if (saint) {
+    equipped.anchor = {
+      itemId: "s-legend-saint",
+      passiveEffects: [{ key: "heal_to_damage", trigger: "passive", target: "self", chance: 100, params: { mult: 7 } }],
+    };
+  }
+  return equipped;
+}
+
 async function main() {
   const lifestealMissing = battle({
     startPlayerHp: 500,
@@ -78,6 +91,109 @@ async function main() {
     partyEffects: [{ key: "party_heal", params: { mode: "flat", value: 250 }, sourceName: "測試治療", isSelfAura: true }],
   });
   assert.strictEqual(convertedHealing.healDone, 0, "轉成傷害的治療不可累計為實際治療");
+
+  const saintFullHp = battle({
+    maxRounds: 3,
+    startPlayerHp: 1000,
+    equipped: equippedPassive("heal_to_damage", { mult: 7 }),
+    partyEffects: [{ key: "heal_over_time", params: { mode: "pct", value: 3 }, sourceName: "自己", isSelfAura: true }],
+  });
+  const saintFullHpLines = saintFullHp.roundLogs.flatMap((entry) => entry.split("\n")).filter((line) => line.includes("聖者・回血化刃"));
+  assert(saintFullHp.finalPlayerHp <= 1000, "滿血聖者不可因轉傷而增加自身 HP");
+  assert.strictEqual(saintFullHp.healDone, 0, "滿血聖者轉傷不可記為實際治療");
+  assert.strictEqual(saintFullHpLines.length, 3, "滿血聖者仍須每回合按名目治療量轉傷");
+  assert(saintFullHpLines.every((line) => line.includes("造成 **105** 點傷害")), "無防木樁上，滿血聖者應將名目治療量 ×7 後再減半");
+
+  // 治療 30 ×7＝210 原始傷害，正常扣 flat DEF 10、吃 50% DEF＝100，再減半＝50。
+  const originalRandomForDefense = Math.random;
+  Math.random = () => 0.5;
+  let defendedConversion;
+  try {
+    defendedConversion = runCombatLoop(
+      { ...PLAYER },
+      { ...MONSTER, maxHp: 10000, flatDef: 10, def: 50 },
+      "防禦測試木樁",
+      10000,
+      1,
+      {
+        equipped: equippedPassive("heal_to_damage", { mult: 7 }),
+        partyEffects: [{ key: "heal_over_time", params: { mode: "pct", value: 3 }, sourceName: "自己", isSelfAura: true }],
+      },
+    );
+  } finally {
+    Math.random = originalRandomForDefense;
+  }
+  const defendedLine = defendedConversion.roundLogs.flatMap((entry) => entry.split("\n"))
+    .find((line) => line.includes("聖者・回血化刃"));
+  assert(defendedLine?.includes("造成 **50** 點傷害"), "回血化刃必須正常吃怪物防禦後再將最終傷害減半");
+
+  const saintExternalOnly = battle({
+    maxRounds: 3,
+    startPlayerHp: 500,
+    equipped: equippedPassive("heal_to_damage", { mult: 7 }),
+    partyEffects: [{ key: "heal_over_time", params: { mode: "pct", value: 9 }, sourceName: "隊友", isSelfAura: false }],
+  });
+  assert(saintExternalOnly.finalPlayerHp <= 500, "聖者不可接受外部治療");
+  assert.strictEqual(saintExternalOnly.healDone, 0, "聖者拒絕的外部治療不可記為實際治療");
+  assert(!saintExternalOnly.roundLogs.some((entry) => entry.includes("聖者・回血化刃")), "外部治療不可替聖者轉傷");
+
+  const saintOwnAuraSurvivesExternal = battle({
+    maxRounds: 3,
+    startPlayerHp: 1000,
+    equipped: equippedPassive("heal_to_damage", { mult: 7 }),
+    partyEffects: [
+      { key: "heal_over_time", params: { mode: "pct", value: 9 }, sourceName: "隊友", isSelfAura: false },
+      { key: "heal_over_time", params: { mode: "pct", value: 3 }, sourceName: "自己", isSelfAura: true },
+    ],
+  });
+  const ownAuraLines = saintOwnAuraSurvivesExternal.roundLogs.flatMap((entry) => entry.split("\n")).filter((line) => line.includes("聖者・回血化刃"));
+  assert.strictEqual(ownAuraLines.length, 3, "外部治療不得在同 key 取最高時蓋掉聖者自己的治療光環");
+  assert(ownAuraLines.every((line) => line.includes("造成 **105** 點傷害")), "多人同場時只可轉換聖者自己的名目治療量並於防禦後減半");
+
+  const originalRandom = Math.random;
+  Math.random = () => 0.5;
+  try {
+    const pureHpSpirit = runCombatLoop(
+      { ...PLAYER, agi: 1, def: 95, flatDef: 999, dodge: 95, blockChance: 95 },
+      { ...MONSTER, atk: 100, hit: 0 },
+      "精靈承傷測試木樁",
+      100000,
+      1,
+      {
+        startPlayerHp: 1000,
+        skipPlayerAttack: true,
+        equipped: spiritEquipment(),
+        playerActiveEffects: [
+          { key: "damage_reduction", params: { value: 95 } },
+          { key: "physical_damage_reduction", params: { value: 95 } },
+          { key: "invincible_short", params: { duration: { mode: "turns", value: 1 } }, appliedAt: 1 },
+        ],
+      },
+    );
+    assert.strictEqual(pureHpSpirit.finalPlayerHp, 1000, "精靈在場時主人不可承受該次一般攻擊");
+    assert(pureHpSpirit.sunSpirit.hpPct < 95, "精靈承傷不可套用主人的 DEF、閃避、格擋、減傷或免傷");
+
+    const saintBigHeal = runCombatLoop(
+      { ...PLAYER, atk: 1, agi: 1 },
+      { ...MONSTER, maxHp: 1000000, atk: 1, hit: 0 },
+      "大治療轉化測試木樁",
+      1000000,
+      5,
+      {
+        startPlayerHp: 1000,
+        sunSpiritHpPct: 50,
+        skipMonsterAttack: true,
+        equipped: spiritEquipment({ saint: true }),
+      },
+    );
+    const bigHealConversion = saintBigHeal.roundLogs.flatMap((entry) => entry.split("\n"))
+      .find((line) => line.includes("聖者・回血化刃") && line.includes("【大治療術】"));
+    assert(bigHealConversion, "聖人錨點下的大治療術必須轉為傷害");
+    assert.strictEqual(saintBigHeal.sunSpirit.hpPct, 50, "聖人錨點下的大治療術不可治療精靈");
+    assert.strictEqual(saintBigHeal.healDone, 0, "聖人錨點下的大治療術不可回復主人");
+  } finally {
+    Math.random = originalRandom;
+  }
 
   const thirstEquipped = battle({
     startPlayerHp: 500,

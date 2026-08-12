@@ -44,6 +44,7 @@ const EFFECT_NAME_ZH = {
   shock_dot: "震擊",
   curse_dot: "詛咒",
   life_regen: "生命恢復",
+  turtle_tide_cycle: "潮汐輪轉",
   bonus_reduction_when_hp_low: "低血量時減傷",
   on_kill_heal: "擊殺回血",
   reflect_damage: "傷害反彈",

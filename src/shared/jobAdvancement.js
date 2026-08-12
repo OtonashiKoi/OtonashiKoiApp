@@ -86,7 +86,6 @@ function allBattleMetrics() {
  *     key:       "holyblade",
  *     name:      "聖劍士",
  *     theme:     "盾牌格擋反擊",              // 一句話定位，給後台/文件看
- *     towerAura: { key: "party_damage_reduction", value: 8, notes: "爬塔：隊伍受到傷害 -8%" },
  *     stances:   { ... }                      // 選配：戰鬥姿態（見聖劍士）
  *   }
  */
@@ -97,7 +96,6 @@ const T2_BRANCHES = {
       key: "holyblade",
       name: "聖劍士",
       theme: "攻守姿態切換",
-      towerAura: { key: "party_damage_reduction", value: 8, notes: "爬塔：隊伍受到傷害 -8%" },
       // 戰鬥姿態：開打前選一個，整場適用（戰鬥是一次跑完 15 回合，中途無法切換）。
       // combatLoop 只認這張表，不寫死職業判斷 → 之後別的二轉要做姿態照同格式填即可。
       // 戰鬥畫面的行動按鈕（最多 4 顆，槽位固定；不同職業只換名稱與行為）
@@ -129,7 +127,6 @@ const T2_BRANCHES = {
       seasonLocked: true,
       name: "劍鬼",
       theme: "區域連段（COMBO）",
-      towerAura: { key: "party_damage_up", value: 6, notes: "爬塔：隊伍傷害 +6%" },
       // 2026-07-22 改版：斬改為「氣力 3 格自動施放」→ 不再需要按鈕，只剩攻擊一顆
       battleActions: [
         { slot: 1, key: "attack", label: "攻擊", icon: "⚔️", tone: "gold", kind: "normal" },
@@ -148,7 +145,6 @@ const T2_BRANCHES = {
       key: "berserker",
       name: "狂戰士",
       theme: "血量是燃料（血怒／血祭／戰意集氣）",
-      towerAura: { key: "party_damage_up", value: 5, notes: "爬塔：隊伍傷害 +5%" },
       battleActions: [
         { slot: 1, key: "attack",    label: "攻擊", icon: "⚔️", tone: "gold",    kind: "normal" },
         { slot: 2, key: "sacrifice", label: "血祭", icon: "🩸", tone: "crimson", kind: "sacrifice" },
@@ -175,7 +171,6 @@ const T2_BRANCHES = {
       key: "dwarflord",
       name: "矮人戰士長",
       theme: "世界王暈眩條（巨神震擊）— 團隊開關",
-      towerAura: { key: "party_damage_reduction", value: 6, notes: "爬塔：隊伍受到傷害 -6%" },
       // 沒有第二顆按鈕：巨神震擊是被動累積，打就是敲，不用選
       battleActions: [
         { slot: 1, key: "attack", label: "攻擊", icon: "⚔️", tone: "gold", kind: "normal" },
@@ -198,7 +193,6 @@ const T2_BRANCHES = {
       key: "shadowdancer",
       name: "影舞者",
       theme: "連擊氣條（殘影亂舞）— 快到只剩殘影",
-      towerAura: { key: "party_damage_up", value: 5, notes: "爬塔：隊伍傷害 +5%" },
       battleActions: [
         { slot: 1, key: "attack",      label: "攻擊", icon: "⚔️", tone: "gold",    kind: "normal" },
       ],
@@ -214,7 +208,6 @@ const T2_BRANCHES = {
       seasonLocked: true,
       name: "盜靈",
       theme: "大成功即出手（巧手／得手）— 打的同時把東西摸走",
-      towerAura: { key: "party_drop_up", value: 5, notes: "爬塔：隊伍掉落 +5%" },
       battleActions: [
         { slot: 1, key: "attack", label: "攻擊", icon: "⚔️", tone: "gold", kind: "normal" },
       ],
@@ -257,7 +250,6 @@ const T2_BRANCHES = {
       key: "elementalist",
       name: "元素師",
       theme: "場地魔法（炎圈／凍霜／嵐暴）",
-      towerAura: { key: "party_damage_up", value: 6, notes: "爬塔：隊伍傷害 +6%" },
       // 進場就是三顆姿態鈕、沒有一般攻擊（嵐暴放中間＝預設）
       battleActions: [
         { slot: 1, key: "fire",  label: "炎圈", icon: "🔥", tone: "crimson", kind: "stance" },
@@ -303,15 +295,14 @@ const T2_BRANCHES = {
       key: "spiritmaster",
       name: "聖靈師",
       theme: "日之精靈（代承／光環×2／日屬性協攻）",
-      towerAura: { key: "party_damage_reduction", value: 8, notes: "爬塔：隊伍受到傷害 -8%" },
       battleActions: [
         { slot: 1, key: "attack", label: "攻擊", icon: "⚔️", tone: "gold", kind: "normal" },
       ],
       // 日之精靈：持久化規則在 sunSpirit.js、戰內邏輯在 combatLoop
-      //   代承：怪物攻擊先打精靈（精靈血量＝主人 maxHp、防禦＝主人 DEF；不繼承閃避/格擋）
+      //   代承：怪物攻擊先打精靈（精靈血量＝主人 maxHp；不套用主人任何防禦效果）
       //   協攻：每回合一擊，ATK＝主人×atkRatio%、日屬性 elementLevel 級（單發不爆擊不連擊）
       //   光環：精靈在場（出戰當下）→ 給隊伍的光環效果 ×auraMult（route 層快照套用）
-      //   大治療術：每 healEveryRounds 個有出手的回合回復 maxHp×healPct%（先精靈後自己）
+      //   大治療術：每 healEveryRounds 個有出手的回合回復 maxHp×healPct%＋INT 補正（先精靈後自己；聖人錨點下全數轉傷）
       sunSpirit: {
         atkRatio: 33,          // 主人 ATK 的 %（1/3）
         element: "sun",
@@ -328,16 +319,15 @@ const T2_BRANCHES = {
       key: "sniper",
       name: "神射手",
       theme: "掩護射擊（全區支援）／神速反擊／震盪射擊",
-      towerAura: { key: "party_boss_damage_up", value: 8, notes: "爬塔：隊伍 Boss 傷害 +8%" },
       battleActions: [
         { slot: 1, key: "attack", label: "攻擊", icon: "🏹", tone: "gold", kind: "normal" },
       ],
       // 神射手三件套（戰內邏輯在 combatLoop、掩護射擊在 route 層光環管線、震盪值在 sniperGauge.js）：
-      //   掩護射擊（團隊）：區內其他玩家出戰時，每回合補一箭＝你 ATK×supportShotPct%（吃你的爆擊；世界王計入你的貢獻）
+      //   掩護射擊（團隊）：區內其他玩家出戰時，每名神射手每回合各補一箭＝本人 ATK×supportShotPct%（吃本人的爆擊、終傷與武器屬性；世界王各自歸戶）
       //   神速反擊（被動）：這回合對手沒打到你（揮空/被閃/來不及出手/被暈眩/被冰封）→ 多一箭 ATK×counterShotPct%
       //   震盪射擊（氣條 4 格）：每個有攻擊的回合 +1，滿 4 → 立刻一箭 ATK×shockShotPct%＋推遠 → 下回合對手攻擊不到你
       sniper: {
-        supportShotPct: 50,
+        supportShotPct: 70,
         counterShotPct: 100,
         shockShotPct: 100,
       },
@@ -349,16 +339,15 @@ const T2_BRANCHES = {
       key: "sage",
       name: "兵聖",
       theme: "三十六計（計謀值施計）／知彼（圖鑑加成×2）",
-      towerAura: { key: "party_damage_up", value: 6, notes: "爬塔：隊伍傷害 +6%" },
       battleActions: [
         { slot: 1, key: "attack", label: "攻擊", icon: "📜", tone: "gold", kind: "normal" },
       ],
       // 兵聖三件套（戰內在 combatLoop、計謀值在 sageGauge、知彼/教學相長在 route 層）：
       //   施計：計謀值 3 格（有攻擊的回合 +1），滿 → 隨機施展一計（火攻/落石/瞞天過海/連環/破釜沉舟）
-      //   知彼：圖鑑傷害加成上限 25% → ×knowledgeMult（50%）——把既有 bestiary 加成翻倍
+      //   知彼：圖鑑傷害加成上限 15% → ×knowledgeMult（30%）——把既有 bestiary 加成翻倍
       //   （教學相長已依使用者指示移除：圖鑑累積不加速）
       sage: {
-        knowledgeMult: 2,   // 圖鑑加成倍率（25% → 50%）
+        knowledgeMult: 2,   // 圖鑑加成倍率（15% → 30%）
         // 五計數值：火攻(一擊% / 灼燒 每跳 casterAtk% × 回合)、落石(一擊% + 暈1)、
         // 連環(固定連擊段數)、破釜沉舟(施計後 rounds 回合傷害×mult、受傷×1.5、不可閃避格擋)
         fire: { hitPct: 150, burnPct: 30, burnTurns: 3 },
@@ -374,7 +363,6 @@ const T2_BRANCHES = {
       key: "minstrel",
       name: "吟遊詩人",
       theme: "演奏判定（方向輸入・連奏加成）",
-      towerAura: { key: "party_damage_up", value: 5, notes: "爬塔：隊伍傷害 +5%" },
       battleActions: [
         { slot: 1, key: "attack", label: "攻擊", icon: "🎸", tone: "gold", kind: "normal" },
       ],
@@ -389,7 +377,6 @@ const T2_BRANCHES = {
       key: "sanctum",
       name: "聖域師",
       theme: "符文結界（吸收→共鳴反爆）／聖域展開（區域護佑）",
-      towerAura: { key: "party_damage_reduction", value: 8, notes: "爬塔：隊伍受到傷害 -8%" },
       battleActions: [
         { slot: 1, key: "attack", label: "攻擊", icon: "🔷", tone: "gold", kind: "normal" },
       ],
@@ -420,7 +407,6 @@ const T2_BRANCHES = {
       key: "dicegod",
       name: "賭神",
       theme: "魔法骰（破防）／命運骰（第三骰連擊）／手氣正旺（跨場疊傷）",
-      towerAura: { key: "party_gold_gain_up", value: 8, notes: "爬塔：隊伍金幣 +8%" },
       battleActions: [
         { slot: 1, key: "attack", label: "攻擊", icon: "🎲", tone: "gold", kind: "normal" },
       ],

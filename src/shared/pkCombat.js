@@ -13,6 +13,11 @@ const {
 } = require("./effectEngine");
 const { calcHitChance } = require("./hitChance");
 const {
+  findTurtleTideConfig,
+  turtleTidePhase,
+  isTurtleTideTransitionRound,
+} = require("./turtleSet");
+const {
   calcAttackTierProbs,
   calcDefenseTierProbs,
   rollAttackTier,
@@ -20,6 +25,20 @@ const {
   ATTACK_TIER_MULT,
   DEFENSE_TIER_MULT,
 } = require("./combatStats");
+const { getElementCombatProfile, getSameElementResist } = require("./elementSystem");
+
+const PK_EFFECT_KEY_ALIASES = Object.freeze({
+  proc_stun: "stun",
+  proc_poison: "poison",
+  proc_def_down: "def_down",
+});
+
+function getPkAttackElement(equipped = {}) {
+  const profile = getElementCombatProfile(equipped);
+  return [...(profile?.elements || [])]
+    .filter((row) => Number(row.attackLevel) > 0)
+    .sort((a, b) => Number(b.attackLevel) - Number(a.attackLevel))[0] || null;
+}
 
 // ── 從 combatLoop 借用純工具函式 ─────────────────────────────
 // 直接 inline 以避免循環依賴（combatLoop 沒有 export 這些）
@@ -173,10 +192,22 @@ function dealImmediateSkillDamage({
   roundDamageState,
   rawDamage,
   damageLabel,
+  targetStats,
+  targetActive,
+  sourceAtk,
+  round = 1,
 }) {
+  const mitigatedDamage = applyPkIncomingDefense({
+    rawDamage,
+    targetStats,
+    targetActive,
+    targetHpRef,
+    round,
+    sourceAtk,
+  });
   const capResult = applyRoundDamageCap({
     targetKey,
-    rawDamage,
+    rawDamage: mitigatedDamage,
     roundDamageState,
   });
   const finalDamage = capResult.damage;
@@ -198,9 +229,11 @@ function dealImmediateSkillHeal({
 }) {
   if (!Number.isFinite(Number(rawHeal)) || Number(rawHeal) <= 0) return 0;
   const heal = Math.max(0, Math.round(Number(rawHeal)));
+  const before = targetHpRef.value;
   targetHpRef.value = Math.min(targetMaxHp, targetHpRef.value + heal);
-  log.push(`🎴 **${sourceName || targetName}** 發動【${skillName}】！${healLabel} **${heal}** HP！（${targetName} 剩 ${Math.max(0, targetHpRef.value)} HP）`);
-  return heal;
+  const actualHeal = Math.max(0, targetHpRef.value - before);
+  log.push(`🎴 **${sourceName || targetName}** 發動【${skillName}】！${healLabel} **${actualHeal}** HP！（${targetName} 剩 ${Math.max(0, targetHpRef.value)} HP）`);
+  return actualHeal;
 }
 
 function hasActiveInvincible(activeEffects = [], round = 1) {
@@ -209,6 +242,36 @@ function hasActiveInvincible(activeEffects = [], round = 1) {
 
 function applyInvincibleDamage(rawDamage, activeEffects = [], round = 1) {
   return hasActiveInvincible(activeEffects, round) ? 0 : rawDamage;
+}
+
+function applyPkIncomingDefense({ rawDamage, targetStats, targetActive, targetHpRef, round, sourceAtk = null }) {
+  let damage = Math.max(0, Math.round(Number(rawDamage) || 0));
+  if (damage <= 0) return 0;
+  damage = pkApplyDefense(damage, targetStats?.flatDef || 0, targetStats?.def || 0, sourceAtk);
+  const active = (targetActive || []).filter((effect) => effectIsActive(effect, round));
+  if (active.some((effect) => effect?.key === "invincible_short")) return 0;
+  const reductionPct = active.reduce((total, effect) => (
+    effect?.key === "damage_reduction"
+      ? total + Math.abs(Number(effect.params?.value) || 0)
+      : total
+  ), 0);
+  if (reductionPct > 0) damage = Math.max(1, Math.round(damage * (1 - Math.min(95, reductionPct) / 100)));
+  for (const effect of active) {
+    if (!effect || !["shield", "barrier"].includes(effect.key) || damage <= 0) continue;
+    const params = effect.params || {};
+    const amount = Math.max(0, Number(params.amount ?? params.value ?? 0));
+    const absorbed = Math.min(amount, damage);
+    params.amount = amount - absorbed;
+    params.value = params.amount;
+    effect.params = params;
+    damage -= absorbed;
+  }
+  const prevent = active.find((effect) => effect?.key === "death_prevent_once" && effect.params?.used !== true);
+  if (prevent && targetHpRef && targetHpRef.value - damage <= 0) {
+    damage = Math.max(0, targetHpRef.value - 1);
+    prevent.params = { ...(prevent.params || {}), used: true };
+  }
+  return damage;
 }
 
 function effectHasHpThreshold(effect = {}) {
@@ -248,12 +311,17 @@ function resolveGuaranteedStrike({
   verbPool = COUNTER_PHRASES,
   damageLabel = "傷害",
   allowBlock = false,
+  sourceTideConfig = null,
+  targetTideConfig = null,
 }) {
   let atkMultiplier = Math.max(0.1, Number(sourceStats.tierDamageMultiplier) || 1);
   let critRateBonus = 0;
   let critDmgMult = Math.max(0.1, Number(sourceStats.tierCritDamageMultiplier) || 1);
   let defIgnorePct = 0;
   let finalDmgMult = Math.max(0.1, Number(sourceStats.tierFinalDamageMultiplier) || 1);
+  if (sourceTideConfig && turtleTidePhase(round, sourceTideConfig) === "ebb_tide") {
+    finalDmgMult *= 1 + sourceTideConfig.ebbFinalDamagePct / 100;
+  }
 
   for (const eff of sourceActive) {
     if (!eff || !effectIsActive(eff, round)) continue;
@@ -274,6 +342,9 @@ function resolveGuaranteedStrike({
   let defDownPct = 0;
   let defFlatBonus = 0;
   let damageRedPct = 0;
+  if (targetTideConfig && turtleTidePhase(round, targetTideConfig) === "high_tide") {
+    damageRedPct += targetTideConfig.highTideDamageReductionPct;
+  }
 
   for (const eff of targetActive) {
     if (!eff || !effectIsActive(eff, round)) continue;
@@ -390,15 +461,16 @@ function applyPkHpGatedSelfCards({
     const targetHpPct = targetStats.maxHp > 0 ? (targetHpRef.value / targetStats.maxHp) * 100 : 100;
     const matched = procEffects.filter((effect) => hpThresholdApplies(effect, ownerHpPct, targetHpPct));
     if (matched.length === 0) continue;
-
-    if (Number(skill.cooldownTurns) > 0) {
-      actorOpts._cardCooldowns[cooldownKey] = Number(skill.cooldownTurns);
-    }
+    const triggerChance = Math.min(100, Math.max(0, Number(skill.chance ?? slotItem.cardProcChance ?? 5)));
+    if (Math.random() * 100 >= triggerChance) continue;
 
     let appliedAny = false;
-    for (const effect of matched) {
+    for (const rawEffect of matched) {
+      const effect = PK_EFFECT_KEY_ALIASES[rawEffect.key]
+        ? { ...rawEffect, key: PK_EFFECT_KEY_ALIASES[rawEffect.key] }
+        : rawEffect;
       const pp = effect.params || {};
-      const chance = Number.isFinite(Number(effect.chance)) ? Number(effect.chance) : 100;
+      const chance = Number.isFinite(Number(rawEffect.chance)) ? Number(rawEffect.chance) : 100;
       if (Math.random() * 100 >= chance) continue;
       if (shouldApplyAsImmediateHeal(effect)) {
         const healPct = Number.isFinite(Number(pp.value)) ? Math.abs(Number(pp.value)) : 5;
@@ -423,7 +495,7 @@ function applyPkHpGatedSelfCards({
         key: effect.key,
         params: duration && !pp.duration ? { ...pp, duration } : { ...pp },
         stackMode: effect.stackMode,
-        appliedAt: round,
+        appliedAt: round - 1,
         sourceType: "pvp_card",
         sourceId: `${slot}:${slotItem.uuid || slotItem.itemId || slotItem.id || skillName}`,
       };
@@ -433,6 +505,9 @@ function applyPkHpGatedSelfCards({
     }
     if (appliedAny && !matched.some((effect) => shouldSuppressImmediateLog(effect))) {
       log.push(`🎴 **${actorName}** 發動【${skillName}】！${skill.description || ""}`);
+    }
+    if (appliedAny && Number(skill.cooldownTurns) > 0) {
+      actorOpts._cardCooldowns[cooldownKey] = Number(skill.cooldownTurns);
     }
   }
 
@@ -521,8 +596,9 @@ function attackerTurn({
           const pp = pe.params || {};
           if (pe.key === 'heal_over_time' && pe.target === 'self') {
             const heal = Math.max(1, Math.round(atkStats.maxHp * Number(pp.value || 5) / 100));
+            const beforeHeal = atkHpRef.value;
             atkHpRef.value = Math.min(atkStats.maxHp, atkHpRef.value + heal);
-            log.push(`✨ **(${jobName})** 發動【${chosen.name}】！回復 **${heal}** HP（${atkName} 剩 ${atkHpRef.value} / ${atkStats.maxHp}）`);
+            log.push(`✨ **(${jobName})** 發動【${chosen.name}】！回復 **${Math.max(0, atkHpRef.value - beforeHeal)}** HP（${atkName} 剩 ${atkHpRef.value} / ${atkStats.maxHp}）`);
             skillApplied = true;
             continue;
           }
@@ -559,6 +635,10 @@ function attackerTurn({
   let dodgeBonus    = 0;   // 攻擊方閃避加成（格擋反擊時用）
   let hitBonus      = 0;
 
+  if (atkOpts?._turtleTide && turtleTidePhase(round, atkOpts._turtleTide) === "ebb_tide") {
+    finalDmgMult *= 1 + atkOpts._turtleTide.ebbFinalDamagePct / 100;
+  }
+
   for (const eff of atkActive) {
     if (!eff || !effectIsActive(eff, round)) continue;
     const v = Number(eff.params?.value ?? 0);
@@ -588,6 +668,10 @@ function attackerTurn({
   let damageRedPct = 0;
   let defDodgeBonus= 0;
   let defBlockBonus= 0;
+
+  if (defOpts?._turtleTide && turtleTidePhase(round, defOpts._turtleTide) === "high_tide") {
+    damageRedPct += defOpts._turtleTide.highTideDamageReductionPct;
+  }
 
   for (const eff of defActive) {
     if (!eff || !effectIsActive(eff, round)) continue;
@@ -674,6 +758,8 @@ function attackerTurn({
           verbPool: COUNTER_PHRASES,
           damageLabel: "傷害",
           allowBlock: true,
+          sourceTideConfig: defOpts?._turtleTide,
+          targetTideConfig: atkOpts?._turtleTide,
         });
         if (strike.killed) killed = true;
       }
@@ -754,6 +840,13 @@ function attackerTurn({
     // 防守方傷害減免（damage_reduction debuff）
     if (damageRedPct > 0) finalDamage = Math.max(1, Math.round(finalDamage * (1 - Math.min(95, damageRedPct) / 100)));
     finalDamage = applyInvincibleDamage(finalDamage, defActive, round);
+    if (finalDamage > 0) {
+      const attackElement = getPkAttackElement(atkOpts?.equipped || {});
+      if (attackElement?.element) {
+        const resist = getSameElementResist(defOpts?.equipped || {}, attackElement.element);
+        finalDamage = Math.max(1, Math.round(finalDamage * resist.mult));
+      }
+    }
 
     const capResult = applyRoundDamageCap({
       targetKey: defTargetKey,
@@ -780,22 +873,25 @@ function attackerTurn({
     // 吸血
     if (lifestealPct > 0) {
       const heal = Math.max(1, Math.round(finalDamage * lifestealPct / 100));
+      const beforeHeal = atkHpRef.value;
       atkHpRef.value = Math.min(atkStats.maxHp, atkHpRef.value + heal);
-      log.push(`💚 **${atkName}** 吸取生命力！恢復 **${heal}** HP`);
+      log.push(`💚 **${atkName}** 吸取生命力！恢復 **${Math.max(0, atkHpRef.value - beforeHeal)}** HP`);
     }
 
     // 命中 / 暴擊回血（裝備被動，傷害基準，與 PvE combatLoop 對齊；先前 PvP 未套用）
     const onHitHealPct = Number(atkOpts?._onHitHealPct || 0);
     if (onHitHealPct > 0 && finalDamage > 0) {
       const heal = Math.max(1, Math.round(finalDamage * onHitHealPct / 100));
+      const beforeHeal = atkHpRef.value;
       atkHpRef.value = Math.min(atkStats.maxHp, atkHpRef.value + heal);
-      log.push(`💚 **${atkName}** 命中回血，恢復 **${heal}** HP`);
+      log.push(`💚 **${atkName}** 命中回血，恢復 **${Math.max(0, atkHpRef.value - beforeHeal)}** HP`);
     }
     const onCritHealPct = Number(atkOpts?._onCritHealPct || 0);
     if (isCrit && onCritHealPct > 0 && finalDamage > 0) {
       const heal = Math.max(1, Math.round(finalDamage * onCritHealPct / 100));
+      const beforeHeal = atkHpRef.value;
       atkHpRef.value = Math.min(atkStats.maxHp, atkHpRef.value + heal);
-      log.push(`💚✨ **${atkName}** 暴擊回血，恢復 **${heal}** HP`);
+      log.push(`💚✨ **${atkName}** 暴擊回血，恢復 **${Math.max(0, atkHpRef.value - beforeHeal)}** HP`);
     }
 
     if (defHpRef.value <= 0) { killed = true; }
@@ -815,6 +911,8 @@ function attackerTurn({
         roundDamageState,
         verbPool: COUNTER_PHRASES,
         damageLabel: "傷害",
+        sourceTideConfig: defOpts?._turtleTide,
+        targetTideConfig: atkOpts?._turtleTide,
       });
       if (strike.killed) killed = true;
     }
@@ -962,18 +1060,16 @@ function attackerTurn({
           .filter((effect) => !effectHasHpThreshold(effect));
         if (procEffects.length === 0) continue;
 
-        if (Number(skill.cooldownTurns) > 0) {
-          if (!atkOpts._cardCooldowns) atkOpts._cardCooldowns = {};
-          atkOpts._cardCooldowns[cooldownKey] = Number(skill.cooldownTurns);
-        }
-
         const shouldShowGenericSkillLine = !procEffects.some((effect) => shouldSuppressImmediateLog(effect));
         let appliedAnyProc = false;
 
-        for (const pe of procEffects) {
-          if (!pe || !pe.key) continue;
+        for (const rawPe of procEffects) {
+          if (!rawPe || !rawPe.key) continue;
+          const pe = PK_EFFECT_KEY_ALIASES[rawPe.key]
+            ? { ...rawPe, key: PK_EFFECT_KEY_ALIASES[rawPe.key] }
+            : rawPe;
           const pp = pe.params || {};
-          const chance = Number.isFinite(Number(pe.chance)) ? Number(pe.chance) : 100;
+          const chance = Number.isFinite(Number(rawPe.chance)) ? Number(rawPe.chance) : 100;
         if (Math.random() * 100 >= chance) continue;
         // HP 門檻
         if (Number.isFinite(Number(pp.ownerHpAbovePct)) && atkHpPct <= Number(pp.ownerHpAbovePct)) continue;
@@ -987,7 +1083,7 @@ function attackerTurn({
           key: pe.key,
           params: duration && !pp.duration ? { ...pp, duration } : { ...pp },
           stackMode: pe.stackMode,
-          appliedAt: round,
+          appliedAt: pe.key === 'freeze' ? round + 1 : round,
           sourceType: 'pvp_card',
           sourceId: `${slot}:${slotItem.uuid || slotItem.itemId || cardName}`
         };
@@ -995,6 +1091,9 @@ function attackerTurn({
         // caster_atk_pct DOT 需要儲存施法者的實際 ATK，否則 tick 時 base=1
         if (!entry.params.casterAtk && entry.params.mode === 'caster_atk_pct') {
           entry.params.casterAtk = atkStats.atk;
+        }
+        if (!entry.params.sourceElement) {
+          entry.params.sourceElement = getPkAttackElement(atkOpts?.equipped || {})?.element || null;
         }
         if (shouldApplyAsImmediateHeal(pe)) {
           const healBase = pp.mode === 'flat'
@@ -1030,7 +1129,13 @@ function attackerTurn({
             pe.key === 'bleed' ? 0.1 :
             0.5
           ));
-          const immediateDamage = Math.max(1, Math.round(immediateBase * (pct / 100)));
+          let immediateDamage = Math.max(1, Math.round(immediateBase * (pct / 100)));
+          const attackElement = getPkAttackElement(atkOpts?.equipped || {});
+          if (attackElement?.element) {
+            immediateDamage = Math.max(1, Math.round(
+              immediateDamage * getSameElementResist(defOpts?.equipped || {}, attackElement.element).mult
+            ));
+          }
           const label = pe.key === 'burn' ? '灼燒'
             : pe.key === 'poison' ? '毒素'
             : pe.key === 'bleed' ? '流血'
@@ -1043,8 +1148,12 @@ function attackerTurn({
             targetHpRef: defHpRef,
             targetKey: defTargetKey,
             roundDamageState,
-            rawDamage: applyInvincibleDamage(immediateDamage, defActive, round),
+            rawDamage: immediateDamage,
             damageLabel: label,
+            targetStats: defStats,
+            targetActive: defActive,
+            sourceAtk: atkStats.atk,
+            round,
           });
           appliedAnyProc = true;
           if (defHpRef.value <= 0) {
@@ -1063,6 +1172,10 @@ function attackerTurn({
       }
         if (shouldShowGenericSkillLine && appliedAnyProc) {
           log.push(`🎴 **${atkName}** 發動【${skill.name || cardName}】！${skill.description || ""}`);
+        }
+        if (appliedAnyProc && Number(skill.cooldownTurns) > 0) {
+          if (!atkOpts._cardCooldowns) atkOpts._cardCooldowns = {};
+          atkOpts._cardCooldowns[cooldownKey] = Number(skill.cooldownTurns);
         }
     }
     }
@@ -1106,11 +1219,21 @@ function attackerTurn({
 
 // ── 目標受到 DOT 傷害 ────────────────────────────────────────
 // 在每個玩家「出招前」先處理自身身上的 DOT
-function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, targetKey, roundDamageState }) {
+function applyDotEffects({ name, hpRef, maxHp, stats, opts, activeEffects, round, log, targetKey, roundDamageState }) {
   let dead = false;
   let frozen = false;
   let silenced = false;
   let stunRoundsLeft = 0;
+  const mitigateDot = (damage, sourceAtk = null, sourceElement = null) => applyPkIncomingDefense({
+    rawDamage: sourceElement
+      ? Math.max(1, Math.round(damage * getSameElementResist(opts?.equipped || {}, sourceElement).mult))
+      : damage,
+    targetStats: stats,
+    targetActive: activeEffects,
+    targetHpRef: hpRef,
+    round,
+    sourceAtk,
+  });
 
   for (const eff of activeEffects) {
     if (!eff || !effectIsActive(eff, round)) continue;
@@ -1139,7 +1262,7 @@ function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, target
       const dmg = Math.max(1, Math.round(base * (Number(p.value ?? 0.5) / 100)));
       const capResult = applyRoundDamageCap({
         targetKey,
-        rawDamage: dmg,
+        rawDamage: mitigateDot(dmg, p.casterAtk, p.sourceElement),
         roundDamageState,
       });
       const finalDmg = capResult.damage;
@@ -1155,7 +1278,7 @@ function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, target
       const dmg = Math.max(1, Math.round(base * (Number(p.value ?? 0.5) / 100)));
       const capResult = applyRoundDamageCap({
         targetKey,
-        rawDamage: dmg,
+        rawDamage: mitigateDot(dmg, p.casterAtk, p.sourceElement),
         roundDamageState,
       });
       const finalDmg = capResult.damage;
@@ -1171,7 +1294,7 @@ function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, target
       const dmg = Math.max(1, Math.round(base * (Number(p.value ?? 0.1) / 100)));
       const capResult = applyRoundDamageCap({
         targetKey,
-        rawDamage: dmg,
+        rawDamage: mitigateDot(dmg, p.casterAtk, p.sourceElement),
         roundDamageState,
       });
       const finalDmg = capResult.damage;
@@ -1187,7 +1310,7 @@ function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, target
       const dmg = Math.max(1, Math.round(base * (Number(p.value ?? 0.2) / 100)));
       const capResult = applyRoundDamageCap({
         targetKey,
-        rawDamage: dmg,
+        rawDamage: mitigateDot(dmg, p.casterAtk, p.sourceElement),
         roundDamageState,
       });
       const finalDmg = capResult.damage;
@@ -1203,7 +1326,7 @@ function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, target
       const dmg = Math.max(1, Math.round(base * (Number(p.value ?? 20) / 100)));
       const capResult = applyRoundDamageCap({
         targetKey,
-        rawDamage: dmg,
+        rawDamage: mitigateDot(dmg, p.casterAtk, p.sourceElement),
         roundDamageState,
       });
       const finalDmg = capResult.damage;
@@ -1219,7 +1342,7 @@ function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, target
       const dmg = Math.max(1, Math.round(base * (Number(p.value ?? 20) / 100)));
       const capResult = applyRoundDamageCap({
         targetKey,
-        rawDamage: dmg,
+        rawDamage: mitigateDot(dmg, p.casterAtk, p.sourceElement),
         roundDamageState,
       });
       const finalDmg = capResult.damage;
@@ -1236,8 +1359,9 @@ function applyDotEffects({ name, hpRef, maxHp, activeEffects, round, log, target
         ? Math.max(0, Math.round(Number(p.value ?? 0)))
         : Math.max(0, Math.round(maxHp * (Number(p.value ?? 0) / 100)));
       if (heal > 0) {
+        const beforeHeal = hpRef.value;
         hpRef.value = Math.min(maxHp, hpRef.value + heal);
-        log.push(`💚 **${name}** 回復效果發動，恢復 **${heal}** HP（${name} 剩 ${hpRef.value}）`);
+        log.push(`💚 **${name}** 回復效果發動，恢復 **${Math.max(0, hpRef.value - beforeHeal)}** HP（${name} 剩 ${hpRef.value}）`);
       }
     }
 
@@ -1258,7 +1382,7 @@ const PK_PASSIVE_STAT_FOLDED = new Set([
   "execute_threshold_up","final_damage_up","final_damage_down","hit_up","dodge_up","agi_up"
 ]);
 function collectPkPassiveHeals(opts) {
-  const result = { lifeRegenPct: 0, lifeRegenInterval: 0, hotPct: 0, hotFlat: 0, onHitHealPct: 0, onCritHealPct: 0 };
+  const result = { lifeRegens: [], hotPct: 0, hotFlat: 0, onHitHealPct: 0, onCritHealPct: 0 };
   try {
     const equipped = opts?.equipped || {};
     const ctx = { equipped, inventory: opts?.inventory || [] };
@@ -1274,9 +1398,7 @@ function collectPkPassiveHeals(opts) {
       if (e.key === "on_hit_heal") result.onHitHealPct += v;
       else if (e.key === "on_crit_heal") result.onCritHealPct += v;
       else if (e.key === "life_regen") {
-        result.lifeRegenPct += v;
-        const iv = Math.max(1, Number(p.interval) || 1);
-        if (result.lifeRegenInterval === 0 || iv < result.lifeRegenInterval) result.lifeRegenInterval = iv;
+        if (v > 0) result.lifeRegens.push({ pct: v, interval: Math.max(1, Number(p.interval) || 1) });
       } else if (e.key === "heal_over_time") {
         if (p.mode === "flat") result.hotFlat += Math.abs(Number(p.value) || 0);
         else result.hotPct += v;
@@ -1293,8 +1415,8 @@ function applyPkPassiveRegen(hpRef, maxHp, heals, round, name, log) {
   let total = 0;
   if (heals.hotPct > 0) total += Math.round(maxHp * heals.hotPct / 100);
   if (heals.hotFlat > 0) total += Math.round(heals.hotFlat);
-  if (heals.lifeRegenPct > 0 && heals.lifeRegenInterval > 0 && (round % heals.lifeRegenInterval === 0)) {
-    total += Math.round(maxHp * heals.lifeRegenPct / 100);
+  for (const regen of (Array.isArray(heals.lifeRegens) ? heals.lifeRegens : [])) {
+    if (round % regen.interval === 0) total += Math.round(maxHp * regen.pct / 100);
   }
   if (total > 0) {
     const before = hpRef.value;
@@ -1334,6 +1456,15 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
   // 裝備被動回血（PvP 先前未套用）：擷取一次，命中/暴擊回血交給 attackerTurn，HOT/regen 於回合尾結算
   const aHeals = collectPkPassiveHeals(aOpts);
   const bHeals = collectPkPassiveHeals(bOpts);
+  const collectTide = (opts) => {
+    try {
+      const equipped = opts?.equipped || {};
+      const ctx = { equipped, inventory: opts?.inventory || [] };
+      return findTurtleTideConfig(collectEquipmentEffects(equipped, "passive", ctx));
+    } catch (_) { return null; }
+  };
+  aOpts._turtleTide = collectTide(aOpts);
+  bOpts._turtleTide = collectTide(bOpts);
   aOpts._onHitHealPct = aHeals.onHitHealPct;
   aOpts._onCritHealPct = aHeals.onCritHealPct;
   bOpts._onHitHealPct = bHeals.onHitHealPct;
@@ -1344,6 +1475,14 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
 
   for (let round = 1; round <= MAX_ROUNDS; round++) {
     const log = [`**【第 ${round} 回合】**`];
+    for (const [name, cfg] of [[aName, aOpts._turtleTide], [bName, bOpts._turtleTide]]) {
+      if (!cfg || !isTurtleTideTransitionRound(round, cfg)) continue;
+      if (turtleTidePhase(round, cfg) === "high_tide") {
+        log.push(`🌊 **${name}・漲潮**！龜王套裝展開潮甲，本階段受到傷害 **-${cfg.highTideDamageReductionPct}%**。`);
+      } else {
+        log.push(`🏝️ **${name}・退潮**！龜王套裝蓄勢反攻，本階段最終傷害 **+${cfg.ebbFinalDamagePct}%**。`);
+      }
+    }
     roundDamageState.A.taken = 0;
     roundDamageState.B.taken = 0;
     roundDamageState.A.noticeShown = false;
@@ -1360,12 +1499,15 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
     for (const k of Object.keys(bOpts._cardCooldowns)) bOpts._cardCooldowns[k] = Math.max(0, bOpts._cardCooldowns[k] - 1);
 
     // ── A 的 DOT / Buff / 眩暈 ─────────────────────────────
-    const aDot = applyDotEffects({ name: aName, hpRef: aHpRef, maxHp: aStats.maxHp, activeEffects: aActive, round, log, targetKey: "A", roundDamageState });
-    if (aDot.dead) { winner = "B"; roundLogs.push(log.join("\n")); break; }
+    const aDot = applyDotEffects({ name: aName, hpRef: aHpRef, maxHp: aStats.maxHp, stats: aStats, opts: aOpts, activeEffects: aActive, round, log, targetKey: "A", roundDamageState });
 
     // ── B 的 DOT / Buff / 眩暈 ─────────────────────────────
-    const bDot = applyDotEffects({ name: bName, hpRef: bHpRef, maxHp: bStats.maxHp, activeEffects: bActive, round, log, targetKey: "B", roundDamageState });
-    if (bDot.dead) { winner = "A"; roundLogs.push(log.join("\n")); break; }
+    const bDot = applyDotEffects({ name: bName, hpRef: bHpRef, maxHp: bStats.maxHp, stats: bStats, opts: bOpts, activeEffects: bActive, round, log, targetKey: "B", roundDamageState });
+    if (aDot.dead || bDot.dead) {
+      winner = aDot.dead && bDot.dead ? "draw" : (aDot.dead ? "B" : "A");
+      roundLogs.push(log.join("\n"));
+      break;
+    }
 
     // ── A 出招 ─────────────────────────────────────────────
     if (!aDot.frozen) {
@@ -1380,7 +1522,11 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
       });
       aActive = r.atkActive;
       bActive = r.defActive;
-      if (r.killed) { winner = "A"; roundLogs.push(log.join("\n")); break; }
+      if (aHpRef.value <= 0 || bHpRef.value <= 0 || r.killed) {
+        winner = aHpRef.value <= 0 && bHpRef.value <= 0 ? "draw" : (bHpRef.value <= 0 ? "A" : "B");
+        roundLogs.push(log.join("\n"));
+        break;
+      }
       // 副手反擊機制已移除（2026-05-26）
     } else {
       log.push(`⏸️ **${aName}** 無法行動！`);
@@ -1399,7 +1545,11 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
       });
       bActive = r.atkActive;
       aActive = r.defActive;
-      if (r.killed) { winner = "B"; roundLogs.push(log.join("\n")); break; }
+      if (aHpRef.value <= 0 || bHpRef.value <= 0 || r.killed) {
+        winner = aHpRef.value <= 0 && bHpRef.value <= 0 ? "draw" : (aHpRef.value <= 0 ? "B" : "A");
+        roundLogs.push(log.join("\n"));
+        break;
+      }
       // 副手反擊機制已移除（2026-05-26）
     } else {
       log.push(`⏸️ **${bName}** 無法行動！`);
@@ -1422,7 +1572,9 @@ function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15
   const hpPctB   = Math.round((finalHpB / bStats.maxHp) * 100);
 
   // 以最終剩餘 HP 再校正一次勝負，避免中途反擊 / 反彈造成的判定與最終結果不一致
-  if (finalHpA <= 0 && finalHpB > 0) {
+  if (finalHpA <= 0 && finalHpB <= 0) {
+    winner = "draw";
+  } else if (finalHpA <= 0 && finalHpB > 0) {
     winner = "B";
   } else if (finalHpB <= 0 && finalHpA > 0) {
     winner = "A";
