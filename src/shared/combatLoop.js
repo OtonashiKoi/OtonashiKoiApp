@@ -1041,6 +1041,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (Number(target.incomingDamageCap) > 0 && damage > Number(target.incomingDamageCap)) {
       damage = Number(target.incomingDamageCap);
     }
+    // 終傷層倍率（世界王部位弱點／屬性相剋／演奏加成／龜王詠唱等）：回血化刃是玩家輸出，
+    // 必須與主擊吃同一層，否則詠唱減傷等機制對它完全無效（2026-08-12 線上回報）。
+    // applyBossVuln 宣告在後面，但本函式只在回合迴圈內被呼叫，屆時已完成初始化。
+    damage = applyBossVuln(damage);
     return Math.max(1, Math.round(damage));
   };
   let _healImmune = false;  // 對鮮血的渴望：無法被治療(自身吸血除外)
@@ -1751,7 +1755,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
     // 沒苦硬吃：每 N 回合反彈一次「這段期間累積的承受傷害 × 倍率」
     if (_endureBurst && pHp > 0 && round % _endureBurst.everyRounds === 0 && _endureTakenSinceBurst > 0) {
-      const _burst = Math.round(_endureTakenSinceBurst * _endureBurst.mult);
+      // 終傷層倍率（部位弱點／屬性相剋／演奏／龜王詠唱）：反彈也是玩家輸出，要與主擊同一層。
+      // ⚠️ 這段在回合迴圈中的位置早於 applyMonsterIncomingGuards 的宣告（TDZ），
+      //    只能用宣告在迴圈之外的 applyBossVuln。
+      const _burst = applyBossVuln(Math.round(_endureTakenSinceBurst * _endureBurst.mult));
       mHp -= _burst;
       totalDamage += _burst;
       log.push(`💥【沒苦硬吃】第 ${round} 回合反擊！這 ${_endureBurst.everyRounds} 回合承受的痛全數奉還——造成 **${_burst}** 傷害（期間承傷 ${_endureTakenSinceBurst} × ${_endureBurst.mult}）`);
@@ -2877,7 +2884,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             ownerMaxHp: pStats.maxHp || pHp || 1,
             targetMaxHp: mHpInit || mHp || 1,
             targetLabel: mName,
-            applyTargetDamage: (damage) => { mHp -= damage; totalDamage += Math.max(0, Number(damage) || 0); return mHp; }, // 玩家卡即時傷害要計入總傷害(否則世界王落地會回彈)
+            // 玩家卡即時傷害要計入總傷害(否則世界王落地會回彈)，且必須與主擊走同一道檢傷：
+            // 部位弱點/屬性相剋/演奏加成(playerHitMult) 與怪物減傷/承傷/無敵/單擊上限都要吃到。
+            // ⚠️ 一定要回傳 { remainingHp, actualDamage }：呼叫端在拿到非物件時會退回用「檢傷前」的
+            //    原始值寫戰報（見 applyImmediateCardDamageEffect），扣血正確但玩家看到的數字是錯的。
+            applyTargetDamage: (damage) => {
+              const d = applyMonsterIncomingGuards(damage);
+              mHp -= d; totalDamage += Math.max(0, Number(d) || 0);
+              return { remainingHp: mHp, actualDamage: d };
+            },
             applyOwnerHeal: (heal) => {
               const before = pHp;
               pHp = _healPlayer(heal);
@@ -3024,7 +3039,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             targetLabel: mName,
             sourceAtk: pStats.atk || 1,
             targetMaxHp: mHpInit || mHp || 1,
-            applyTargetDamage: (damage) => { mHp -= damage; totalDamage += Math.max(0, Number(damage) || 0); }, // 同上:即時傷害計入總傷害
+            // 同上:即時傷害計入總傷害，並走同一道檢傷（回傳物件才會讓戰報顯示檢傷後的數字）
+            applyTargetDamage: (damage) => {
+              const d = applyMonsterIncomingGuards(damage);
+              mHp -= d; totalDamage += Math.max(0, Number(d) || 0);
+              return { remainingHp: mHp, actualDamage: d };
+            },
             log
           })) {
             appliedAnyNormalProc = true;
@@ -4575,7 +4595,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           // 龍王戰意：連擊傷害吃「目前已疊加、超出主攻擊基準」的攻擊層數（含主攻擊命中那一層），連擊愈多愈痛
           const comboStackEscalationPct = Math.max(0, stackOnHitStacks - attackStackPctBase);
           // 連擊:用「未含追加值」的傷害乘連擊倍率 ×龍王戰意疊加成長,再額外加一次武器主屬性追加(固定,不被倍率縮放)
-          let cdmg = Math.max(1, Math.round(Math.max(1, dmg - weaponMainBonus) * (pStats.comboDamageMultiplier || 1) * (1 + comboStackEscalationPct / 100)) + weaponMainBonus);
+          // ⚠️ 這裡的加減必須用「與 dmg 同一個縮放狀態」的追加值。
+          //    dmg 是 applyBossVuln 之後的值，且其中含的是 weaponMainBonusRound（見主擊 finalDamage += ...）。
+          //    舊版減去/加回未縮放的 weaponMainBonus → 減出負數被 max(1,..) 托住、再把未縮減的固定值加回，
+          //    導致連擊傷害幾乎等於該固定值、完全不受終傷倍率影響（龜王詠唱 1% 減傷從這條路整個漏光，
+          //    2026-08-12 線上回報）。
+          const _mainBonusScaled = applyBossVuln(weaponMainBonusRound);
+          let cdmg = Math.max(1, Math.round(Math.max(1, dmg - _mainBonusScaled) * (pStats.comboDamageMultiplier || 1) * (1 + comboStackEscalationPct / 100)) + _mainBonusScaled);
           // 連擊逐段格檔判定：被格檔不中斷連段，只把該段傷害壓到 1（連擊為非爆擊，不走爆擊破格）
           let comboBlockNote = "";
           if (adjustedMCalc.blockChance > 0 && Math.random() * 100 < adjustedMCalc.blockChance) {
@@ -4907,7 +4933,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       // 大失敗：怪自殘 30%，跳過本次怪攻(狼王保底段不會失誤)
       if (mAtkTier === 'critFail' && !hellfangGuaranteedSeg) {
         const mSelfBase = Math.max(1, Math.round((adjustedMCalc.atk || 1) * monsterAttackLevelMult / _g6Segs));
-        const mSelfDmg = Math.max(1, Math.round(mSelfBase * 0.3 * (0.7 + Math.random() * 0.3)));
+        // 自殘雖然是怪物自己造成的，但「承傷降為 N%」是掛在怪物身上的護盾，護盾要擋下所有來源，
+        // 否則龜王詠唱期間會從自殘這條路漏血（2026-08-12 線上回報）。
+        const mSelfDmg = applyMonsterIncomingGuards(Math.max(1, Math.round(mSelfBase * 0.3 * (0.7 + Math.random() * 0.3))));
         mHp -= mSelfDmg;
         totalDamage += mSelfDmg;
         log.push(`💥 **${mName} 大失敗**！自亂招式砸到自己，受到 **${mSelfDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -5130,7 +5158,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           }
           // ── 反傷（thorns）──（精靈代承時主人沒被打到 → 不觸發）
           if (!_spiritTook && playerThornsPct > 0 && dmg > 0) {
-            const thornsDmg = Math.max(1, Math.round(dmg * (playerThornsPct / 100)));
+            // 反傷是玩家輸出 → 與主擊走同一道檢傷（部位弱點／屬性／演奏／龜王詠唱）
+            const thornsDmg = applyMonsterIncomingGuards(Math.max(1, Math.round(dmg * (playerThornsPct / 100))));
             mHp -= thornsDmg;
             totalDamage += thornsDmg;
             log.push(`🌵 **反傷**！${mName} 受到 **${thornsDmg}** 點反彈傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -5142,7 +5171,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               if (!rEff || rEff.key !== 'reflect_damage') continue;
               const reflectPct = Math.max(0, Number(rEff.params?.value ?? 0));
               if (reflectPct <= 0) continue;
-              const reflectDmg = Math.max(1, Math.round(dmg * (reflectPct / 100)));
+              // 鏡映反彈同樣是玩家輸出 → 一併檢傷
+              const reflectDmg = applyMonsterIncomingGuards(Math.max(1, Math.round(dmg * (reflectPct / 100))));
               mHp -= reflectDmg;
               totalDamage += reflectDmg;
               log.push(`🪞 **反彈**！${mName} 受到 **${reflectDmg}** 點鏡映傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
@@ -5210,7 +5240,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               targetActiveEffects: monsterActiveEffects,
               ownerLabel: playerBattleName, sourceAtk: pStats.atk || 1,
               ownerMaxHp: pStats.maxHp || pHp || 1, targetMaxHp: mHpInit || mHp || 1, targetLabel: mName,
-              applyTargetDamage: (d) => { mHp -= d; totalDamage += Math.max(0, Number(d) || 0); return mHp; },
+              // 同上：閃避後觸發的卡片傷害一樣要走檢傷，並回傳物件讓戰報顯示檢傷後數字
+              applyTargetDamage: (raw) => {
+                const d = applyMonsterIncomingGuards(raw);
+                mHp -= d; totalDamage += Math.max(0, Number(d) || 0);
+                return { remainingHp: mHp, actualDamage: d };
+              },
               applyOwnerHeal: (h) => {
                 const before = pHp;
                 pHp = _healPlayer(h);
