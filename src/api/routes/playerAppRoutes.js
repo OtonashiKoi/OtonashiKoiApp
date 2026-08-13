@@ -1463,6 +1463,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     // 連線建立後送一個 hello 事件
     send({ type: "connected", data: { discordId, ts: new Date().toISOString() } });
 
+    // 全服強制更新的補送機制：背景／鎖屏分頁會暫停 SSE，回到前景重連時若仍是舊 build，
+    // 立即補送 force_reload。已載入目標 build 的分頁不再重整，避免刷新循環。
+    const pendingReload = require("../../services/realtime/forceReloadState")
+      .getPendingFor(String(req.query.build || ""));
+    if (pendingReload) {
+      send({
+        type: "force_reload",
+        data: {
+          reason: pendingReload.reason,
+          targetBuild: pendingReload.targetBuild,
+          activeUntil: new Date(pendingReload.activeUntil).toISOString(),
+        },
+      });
+    }
+
     // 訂閱該玩家的 bus
     const { playerEventBus } = require("../../services/realtime/playerEventBus");
     const unsubscribe = playerEventBus.subscribe(discordId, send);
@@ -2103,6 +2118,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     const webPresence = require("../../services/realtime/webPresence");
     const ids = webPresence.list().map(p => p.discordId);
     const type = mode === "prompt" ? "update_prompt" : "force_reload";
+    // force 模式除了即時 SSE，也保留 24 小時補送狀態；背景／鎖屏玩家回前景後仍會被更新。
+    if (mode === "force") require("../../services/realtime/forceReloadState").activate(reason);
     const noticeBody = message || "已更新，畫面將套用最新內容。";
     for (const id of ids) {
       try { playerEventBus.emit(id, { type, data: { reason, message: message || undefined, ts: new Date().toISOString() } }); } catch (_) {}
