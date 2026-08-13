@@ -197,6 +197,18 @@ async function clearBySource(source) {
   return { cleared: r.deletedCount || 0 };
 }
 
+/** 精準清除單一來源鍵的賽季永久加成，不影響同系統其他已達成階段。 */
+async function clearBySourceRef(sourceRef) {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return { cleared: 0 };
+  const r = await db.collection(COLLECTION).deleteMany({
+    sourceRef: String(sourceRef),
+    seasonPermanent: true,
+  });
+  await refresh();
+  return { cleared: r.deletedCount || 0 };
+}
+
 /** 換季重置：預設連仍生效的短期直播加成都結束，讓新季從乾淨狀態開始。 */
 async function resetSeason({ clearShortTerm = true } = {}) {
   const db = await getMongoDb().catch(() => null);
@@ -345,6 +357,7 @@ module.exports = {
   setViewerSessionBuff,
   setShortTermCapPct,
   clearBySource,
+  clearBySourceRef,
   resetSeason,
   listActive,
   listRecent,

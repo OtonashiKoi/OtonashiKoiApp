@@ -78,6 +78,20 @@ assert.strictEqual(monsterTurn.totalDamage, 0, "怪物行動不可觸發玩家�
 assert.strictEqual(playerTurn.finalPlayerHp, PLAYER.maxHp, "玩家行動不可觸發怪物卡片或怪物攻擊");
 assert(playerTurn.totalDamage > 0, "玩家行動仍須正常造成傷害");
 
+const stunnedWorldBoss = withFixedRandom(() => runCombatLoop(
+  { ...PLAYER }, { ...MONSTER, maxHp: 100000 }, "暗眩中世界王", 100000, 3,
+  {
+    forcePlayerHit: true,
+    monsterIsBoss: true,
+    isWorldBoss: true,
+    teamStunRounds: 999,
+    monsterEquipped: monsterCard,
+    worldBossPhase: { phase: 2, lightningHitChance: 100, lightningDamagePct: 25 },
+  }
+));
+assert.strictEqual(stunnedWorldBoss.damageTaken, 0, "巨神震擊期間世界王階段雷擊不可繞過暈眩造成傷害");
+assert(!stunnedWorldBoss.roundLogs.join("\n").includes("施放【雷擊術】"), "巨神震擊期間世界王不可施放階段雷擊");
+
 assert.strictEqual(dwarfStunGauge.DEFAULT_THRESHOLD, 300, "暈眩門檻應為 300");
 assert.strictEqual(zoneFreezeGauge.DEFAULT_THRESHOLD, 300, "冰凍門檻應為 300");
 
@@ -87,4 +101,4 @@ const hitRoundProbe = withFixedRandom(() => runCombatLoop(
 ));
 assert.strictEqual(hitRoundProbe.combatStats.attackRounds, 5, "命中回合應每回合只累積 1，不受段數影響");
 
-console.log("✅ 戰鬥邏輯回歸：卡片機率、效果鍵、爬塔隔離、雙控制條 300 與命中回合計數通過");
+console.log("✅ 戰鬥邏輯回歸：卡片機率、效果鍵、世界王暈眩行動封鎖、雙控制條 300 與命中回合計數通過");

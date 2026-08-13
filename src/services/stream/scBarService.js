@@ -119,9 +119,12 @@ async function getPublicProgress() {
       id: m.id, threshold: Number(m.threshold), label: m.label || "",
       dropPct: Number(m.dropPct) || 0, goldPct: Number(m.goldPct) || 0, expPct: Number(m.expPct) || 0,
       durationMinutes: Number(m.durationMinutes) || 0,
-      claimed: claimed.has(m.id) || total >= Number(m.threshold)
+      reached: total >= Number(m.threshold),
+      claimed: claimed.has(m.id) && total >= Number(m.threshold)
     }));
-  const next = milestones.find((m) => total < m.threshold) || null;
+  // 已經實際發過的里程碑必須跳過；門檻後來調高時，既有賽季獎勵仍保留，
+  // 不能同時顯示「已解鎖」又把同一階列為下一目標。
+  const next = milestones.find((m) => !m.claimed) || null;
   return {
     enabled: !!cfg.enabled,
     total,
@@ -133,4 +136,32 @@ async function getPublicProgress() {
   };
 }
 
-module.exports = { getState, addDonation, reset, getPublicProgress };
+/**
+ * 自癒不符合現行門檻的里程碑：收回該階 claimed 與對應永久 Buff。
+ * 每階以 sourceRef 精準處理，不會碰到較低階仍合法的獎勵。
+ */
+async function reconcileCurrentMilestones() {
+  const db = await getMongoDb().catch(() => null);
+  if (!db) return { revoked: [] };
+  const state = await getState();
+  const cfg = (await getConfig()).scBar;
+  const total = Number(state.total) || 0;
+  const claimedIds = Array.isArray(state.claimedMilestoneIds) ? state.claimedMilestoneIds.map(String) : [];
+  const byId = new Map((Array.isArray(cfg.milestones) ? cfg.milestones : []).map((m) => [String(m.id), m]));
+  const revoked = [];
+  for (const id of claimedIds) {
+    const milestone = byId.get(id);
+    const threshold = Number(milestone?.threshold) || 0;
+    if (milestone && total >= threshold) continue;
+    const filter = milestone
+      ? { _id: DOC_ID, total: { $lt: threshold }, claimedMilestoneIds: id }
+      : { _id: DOC_ID, claimedMilestoneIds: id };
+    const pulled = await db.collection("scAccumulator").updateOne(filter, { $pull: { claimedMilestoneIds: id } });
+    if (!pulled.modifiedCount) continue;
+    await globalBuff.clearBySourceRef(`scms:season:${id}`).catch(() => {});
+    revoked.push(id);
+  }
+  return { revoked, total };
+}
+
+module.exports = { getState, addDonation, reset, getPublicProgress, reconcileCurrentMilestones };

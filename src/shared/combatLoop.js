@@ -1528,6 +1528,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     stealTriggered: false,   // 盜靈「得手」：本場是否成功盜取（呼叫端據此發物品＋標記該怪已被偷）
     greatHitCount: 0,        // 大成功以上的攻擊次數（盜靈數值驗證用）
     attackCount: 0,
+    // 網頁第一人稱 HUD 顯示本場「實際」採用的屬性結果；不能讓前端自己猜裝備。
+    battleElement: {
+      playerElement,
+      playerElementLevel,
+      monsterElement,
+      monsterElementLevel,
+      relation: getElementRelation(playerElement, monsterElement),
+      multiplier: stanceElementMult ?? elementMult,
+    },
     // 「實際有攻擊到的回合數」（同一回合打幾下都只算 1）——
     // 矮人戰士長敲世界王暈眩條用；attackCount 是每一擊都 +1（雙持/骰子會 +2），不能拿來當回合數
     attackRounds: 0
@@ -2278,7 +2287,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           auraDetails.set(sourceName, {
             providerName,
             jobName: pe.sourceJobName || null,
-            heal: 0,
+            healAuras: [],
             dmgBoost: 0,
             bossDmgBoost: 0,
             eliteDmgBoost: 0,
@@ -2307,6 +2316,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             // 聖者（heal_to_damage）：外部治療已在同 key 取最高前排除；
             // 自己的治療光環照走 _healPlayer → 即使滿血也按錨點設定倍率轉成傷害。
             if (_healToDamage > 0 && pe.isSelfAura === false) continue;
+            const detail = auraDetails.get(sourceName);
+            const baseValueRaw = Number(pe.params?.supportAuraBaseValue);
+            const baseValue = Number.isFinite(baseValueRaw) ? baseValueRaw : val;
+            detail.healAuras.push({
+              mode,
+              value: val,
+              baseValue,
+              statKey: pe.params?.supportAuraStat || null,
+              nominalHp: heal,
+            });
             const _mBefore = mHp;
             const _pBeforeHeal = pHp;
             pHp = _healPlayer(heal, { externalAura: pe.isSelfAura === false }); const _actualHeal = Math.max(0, pHp - _pBeforeHeal);
@@ -2314,14 +2333,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (pe.isSelfAura === false && pe.sourceDiscordId && _healToDamage <= 0) {
               if (_actualHeal > 0) _kdaHealBySource.set(pe.sourceDiscordId, (_kdaHealBySource.get(pe.sourceDiscordId) || 0) + _actualHeal);
             }
-            const detail = auraDetails.get(sourceName);
             if (_healToDamage > 0) {
-              // 聖者：自己的治療化為傷害 → 戰報明講（避免玩家看到「回復」誤會）
+              // 聖者：自己的治療化為傷害 → 實際傷害獨立顯示；
+              // 開場光環區仍保留原始比例、INT 補正與名目治療量，避免兩種數字混在一起。
               const _dealt = _mBefore - mHp;
               if (_dealt > 0) log.push(`🩸 **聖者・回血化刃**！對 ${mName} 造成 **${_dealt}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
-              detail.healToDmg = (detail.healToDmg || 0) + Math.max(0, _dealt);
             } else {
-              detail.heal = heal;
               if (_actualHeal > 0) auraTickLines.push(`💚 **回合開始・${providerName}的治療光環**！回復 **${_actualHeal}** HP！（你剩 ${pHp} / ${pStats.maxHp}）`);
             }
           }
@@ -2475,9 +2492,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (detail.agiBoost > 0) parts.push(`AGI +${detail.agiBoost}%（連擊/閃避提升）`);
           if (detail.comboBoost > 0) parts.push(`連擊率 +${detail.comboBoost}%`);
           if (detail.critRateBoost > 0) parts.push(`爆擊率 +${detail.critRateBoost}%`);
-          if (detail.heal > 0) parts.push(`治療光環：回合開始時治療 ${detail.heal} HP`); // 「回復 N HP」只給當下的實際數值事件
+          for (const healAura of detail.healAuras || []) {
+            if (healAura.mode === "pct") {
+              const statLabel = healAura.statKey === "int" ? "INT" : (healAura.statKey ? String(healAura.statKey).toUpperCase() : "屬性");
+              const bonus = Math.max(0, Math.round((healAura.value - healAura.baseValue) * 10) / 10);
+              parts.push(`治療光環 ${healAura.value}%（基礎 ${healAura.baseValue}%＋${statLabel} 補正 ${bonus}%；每回合名目治療 ${healAura.nominalHp} HP）`);
+            } else {
+              parts.push(`治療光環：每回合名目治療 ${healAura.nominalHp} HP`);
+            }
+          }
           if (detail.supportShot > 0) parts.push(`掩護射擊（每回合一箭・ATK ${detail.supportShot}%）`);
-          if (detail.healToDmg > 0) parts.push(`🩸 聖者：回血化為傷害（本回合 ${detail.healToDmg}）`);
           if (parts.length === 0) continue;
           const jobTag = detail.jobName ? `（${detail.jobName}）` : "";
           const who = (detail.providerName && detail.providerName !== "未知") ? `${detail.providerName}${jobTag}` : (detail.jobName || "光環");
@@ -2718,7 +2742,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 世界王雷擊術（第二 / 第三階段）──
-    if (options.skipMonsterAttack !== true && worldBossHasLightning) {
+    // 世界王階段雷擊也是「怪物主動行動」，必須與普攻／怪物卡技能共用同一套行動封鎖。
+    // 先前這條獨立管線只看 skipMonsterAttack，導致巨神震擊中仍能放雷擊並造成傷害。
+    if (options.skipMonsterAttack !== true
+      && !monsterActionSuppressedByAgi
+      && !monsterIsStunned
+      && !monsterIsSilenced
+      && worldBossHasLightning) {
       if (Math.random() * 100 < worldBossLightningHitChance) {
         // 生命%傷：算完最大生命 × pct 後，也走玩家防禦(flatDef + def%)，不再無視防禦
         const lightningRaw = Math.max(1, Math.round(Math.max(1, pStats.maxHp || pHp) * (worldBossLightningHpPct / 100)));

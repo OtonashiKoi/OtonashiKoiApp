@@ -27,6 +27,7 @@
     "test:anchor-quest-metrics": "node scripts/test-anchor-quest-metrics.js",
     "test:sniper-support-shot": "node scripts/test-sniper-support-shot.js",
     "test:attribute-allocation-performance": "node scripts/test-attribute-allocation-performance.js",
+    "test:auto-equip": "node scripts/test-auto-equip.js",
     "test:quest-progress-batch": "node scripts/test-quest-progress-batch.js",
     "test:npc-effects": "node scripts/test-npc-option-effects.js",
     "test:stream-notifications": "node scripts/test-stream-notifications.js",

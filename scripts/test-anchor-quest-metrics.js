@@ -91,6 +91,25 @@ async function main() {
     partyEffects: [{ key: "party_heal", params: { mode: "flat", value: 250 }, sourceName: "測試治療", isSelfAura: true }],
   });
   assert.strictEqual(convertedHealing.healDone, 0, "轉成傷害的治療不可累計為實際治療");
+  const convertedHealingReport = convertedHealing.roundLogs.join("\n");
+  assert(convertedHealingReport.includes("治療光環：每回合名目治療 250 HP"), "聖者開場仍須顯示轉換前的名目治療量");
+  assert(!convertedHealingReport.includes("聖者：回血化為傷害（本回合"), "開場光環不可用轉換後傷害蓋掉原始治療資訊");
+
+  const scaledAuraDisplay = battle({
+    startPlayerHp: 1000,
+    equipped: equippedPassive("heal_to_damage", { mult: 7 }),
+    partyEffects: [{
+      key: "heal_over_time",
+      params: { mode: "pct", value: 8, supportAuraBaseValue: 6, supportAuraStat: "int" },
+      sourceName: "DKR（復健模式）",
+      sourceJobName: "聖靈師徽章",
+      isSelfAura: true,
+    }],
+  });
+  const scaledAuraReport = scaledAuraDisplay.roundLogs.join("\n");
+  assert(scaledAuraReport.includes("治療光環 8%（基礎 6%＋INT 補正 2%；每回合名目治療 80 HP）"), "光環說明須拆開基礎比例、INT 補正與轉換前治療量");
+  assert(scaledAuraReport.includes("聖者・回血化刃"), "轉換後的實際傷害仍須在獨立傷害事件顯示");
+  assert(!scaledAuraReport.includes("聖者：回血化為傷害（本回合"), "光環摘要不可重複顯示轉換後傷害");
 
   const saintFullHp = battle({
     maxRounds: 3,

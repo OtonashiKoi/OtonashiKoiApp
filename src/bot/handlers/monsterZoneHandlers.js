@@ -3689,14 +3689,14 @@ async function handleEnterBattle(interaction) {
         if (_knock?.triggered) {
           _dsg.announceStun({ byName: displayName, monsterName: session.monsterName });
           rewardLines.push(`⛰️ **巨神震擊**！你把 **${session.monsterName}** 敲暈了——全體 ${Math.round(_dsg.STUN_WINDOW_MS / 1000)} 秒免傷！`);
-          // 島島龜王：暈眩觸發＝打斷海嘯詠唱（唯二打斷手段之一）
+          // 島島龜王：巨神震擊把詠唱歸零，暈眩結束後從頭重跑，不開破綻。
           if (zoneKey === TURTLE_ZONE) {
             try {
               const _tt = require("../../shared/turtleTide");
               const _fs = await sc.monsterService.getState(zoneKey);
-              if (_tt.interrupt(_fs, `${displayName}（巨神震擊）`)) {
+              if (_tt.resetCastAfterStun(_fs, `${displayName}（巨神震擊）`, _knock.stunnedUntil)) {
                 await sc.monsterService.saveState(_fs, zoneKey).catch(() => {});
-                rewardLines.push(`⚡ **海洋的引力被斬斷了！** 海嘯詠唱被你打斷——${Math.round(_tt.BREACH_MS / 1000)} 秒破綻期，全員傷害 ×${_tt.BREACH_MULT}！`);
+                rewardLines.push(`⏪ **海嘯詠唱歸零！** 暈眩結束後，龜王會從 0 重新計算完整詠唱條。`);
               }
             } catch (_) { /* 打斷失敗不影響戰鬥結算 */ }
           }

@@ -2,10 +2,40 @@
 
 const assert = require("node:assert/strict");
 const turtle = require("../src/shared/turtleTide");
+const { STUN_WINDOW_MS } = require("../src/shared/dwarfStunGauge");
 const { runCombatLoop } = require("../src/shared/combatLoop");
 
 function hasEvent(events, type, predicate = () => true) {
   return events.some((event) => event.type === type && predicate(event));
+}
+
+// 巨神震擊：詠唱歸零，暈眩期間不詠唱，結束後重跑完整 3 分鐘，且不開破綻。
+{
+  const t0 = Date.parse("2026-08-11T00:30:00.000Z");
+  const state = {};
+  turtle.ensureCast(state, 100, t0);
+  turtle.ensureCast(state, 100, t0 + turtle.PERIODIC_CAST_INTERVAL_MS);
+
+  const stunnedAt = t0 + turtle.PERIODIC_CAST_INTERVAL_MS + 60 * 1000;
+  const stunnedUntil = stunnedAt + STUN_WINDOW_MS;
+  assert.equal(turtle.resetCastAfterStun(state, "測試巨神震擊", stunnedUntil, stunnedAt), true);
+
+  const duringStun = turtle.view(state, 100, stunnedAt);
+  assert.equal(duringStun.castPaused, true);
+  assert.equal(duringStun.casting, false);
+  assert.equal(duringStun.castRemainMs, 0, "暈眩期間詠唱條應顯示為歸零");
+  assert.equal(duringStun.breach, false, "巨神震擊不應開啟破綻");
+  assert.equal(turtle.battleMods(state, "body", stunnedAt).casting, false, "暈眩期間不應套用詠唱 1% 減傷");
+
+  const resumed = turtle.view(state, 100, stunnedUntil);
+  assert.equal(resumed.castPaused, false);
+  assert.equal(resumed.casting, true);
+  assert.equal(resumed.castRemainMs, turtle.CAST_MS, "暈眩結束後應從完整詠唱條重新計算");
+  assert.equal(turtle.battleMods(state, "body", stunnedUntil).mult, turtle.CAST_DAMAGE_MULT);
+
+  const castEnd = stunnedUntil + turtle.CAST_MS;
+  const events = turtle.ensureCast(state, 100, castEnd);
+  assert.ok(hasEvent(events, "tsunami"), "重新計算的詠唱完成後仍應發動海嘯");
 }
 
 // 週期流程：開戰 3 分鐘後詠唱 3 分鐘 → 海嘯 3 分鐘 → 破綻 30 秒。

@@ -1587,6 +1587,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   // 3.1 Equip Item
+  router.post("/api/me/inventory/auto-equip", requireAuth, async (req, res, next) => {
+    try {
+      const { discordId } = req.playerRecord;
+      const result = await serviceContext.shopService.autoEquipMaxAtk(discordId);
+      res.json(ok(result, `已完成一鍵穿裝，ATK ${Number(result.atk || 0).toLocaleString()}`));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 3.1b Equip Item
   router.post("/api/me/inventory/equip/:uuid", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
@@ -1837,11 +1848,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return res.status(429).json({ status: "error", message: "訊息太快了，請稍候再送。" });
       }
       chatTextCooldown.set(discordId, Date.now());
-      // 記錄「最近在聊天大廳發言」(供戰鬥畫面玩家氣泡顯示講話圖示)
-      try { require("../../services/realtime/chatPresence").markSpoke(discordId); } catch (_) { /* noop */ }
-
       // 內容長度上限,避免超長訊息(>2000 會讓 webhook.send 直接失敗)
       const safeMessage = String(message).slice(0, 500);
+      // 記錄「最近在聊天大廳發言」與前 6 字摘要，供戰鬥畫面吸引玩家回到聊天。
+      try { require("../../services/realtime/chatPresence").markSpoke(discordId, safeMessage); } catch (_) { /* noop */ }
 
       // 引用留言:只信任「伺服器記錄的原留言者」(webMsgAuthors),不信任前端傳來的 authorId;
       // 且只接受合法 Discord snowflake,避免被拿來亂 tag。
@@ -2239,12 +2249,34 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const player = await serviceContext.playerRepository.findByExternalId(platform, userId);
       if (!player) return res.json({ found: false });
 
-      const progress = await serviceContext.progressRepository.findByPlayerId(player.discordId);
+      const [progress, streamBindings] = await Promise.all([
+        serviceContext.progressRepository.findByPlayerId(player.discordId),
+        serviceContext.streamAccountBindingRepository
+          ?.listByDiscordId(player.discordId)
+          .catch(() => []) || [],
+      ]);
       if (!progress) return res.json({ found: false });
 
+      const normalizeExternalId = (value) => String(value || "")
+        .replace(/^(tw-|twitch-|yt-|youtube-)/i, "")
+        .trim()
+        .toLowerCase();
+      const streamBinding = streamBindings.find((binding) => (
+        binding?.platform === platform
+        && normalizeExternalId(binding.platformUserId) === normalizeExternalId(userId)
+      )) || null;
       const level = progress.level || 1;
       const titleEq = progress.equipment?.title_eq;
       const title = titleEq?.itemName || null;
+      const memberTiers = new Set(["C", "B", "A", "S", "SS"]);
+      const currentTier = String(progress.playerTier || "").trim().toUpperCase();
+      const linkedTier = String(streamBinding?.playerTierAtLink || "").trim().toUpperCase();
+      const tierRaw = memberTiers.has(currentTier) ? currentTier : linkedTier;
+      const membershipTier = memberTiers.has(tierRaw) ? tierRaw : null;
+      const membershipLabel = membershipTier
+        ? (config.streamMembership?.youtubeTiers?.[membershipTier] || `${membershipTier}級`)
+        : null;
+      const isMember = Boolean(membershipTier || streamBinding?.linkedSupportAtLink);
 
       // 聊天室 overlay 顯示「Discord 身分名稱」而非直播平台暱稱：
       // 公會暱稱優先 → Discord 全域名 → 帳號名 → 最後退回遊戲存檔暱稱。
@@ -2265,7 +2297,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       } catch (_) { /* 抓不到 Discord 名稱時退回遊戲暱稱 */ }
 
-      return res.json({ found: true, level, title, displayName, discordId: player.discordId });
+      return res.json({
+        found: true,
+        level,
+        title,
+        displayName,
+        discordId: player.discordId,
+        isMember,
+        membershipTier,
+        membershipLabel,
+      });
     } catch (_) {
       return res.json({ found: false });
     }
@@ -2588,6 +2629,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             level: Number(p.level) || 0,
             avatarUrl: _avatarCache.get(p.discordId),
             speaking: _chatPresence.isSpeaking(p.discordId),
+            chatPreview: _chatPresence.getPreview(p.discordId),
             hasAura: _auraLines.length > 0,
             auraLines: _auraLines,
             damage10m: Number(p.damage10m) || 0,
@@ -3781,12 +3823,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         if (stunKnock?.triggered) {
           _dsg.announceStun({ byName: displayName, monsterName: monster.name });
           rewardLines.push(`⛰️ **巨神震擊**！你把 **${monster.name}** 敲暈了——全體 ${Math.round(_dsg.STUN_WINDOW_MS / 1000)} 秒免傷！`);
-          // 島島龜王：暈眩觸發＝打斷海嘯詠唱（唯二打斷手段之一）
+          // 島島龜王：巨神震擊把詠唱歸零，暈眩結束後從頭重跑，不開破綻。
           if (zoneKey === _tt.ZONE) {
             const _fs = await serviceContext.monsterService.getState(zoneKey);
-            if (_tt.interrupt(_fs, `${displayName}（巨神震擊）`)) {
+            if (_tt.resetCastAfterStun(_fs, `${displayName}（巨神震擊）`, stunKnock.stunnedUntil)) {
               await serviceContext.monsterService.saveState(_fs, zoneKey).catch(() => {});
-              rewardLines.push(`⚡ **海洋的引力被斬斷了！** 海嘯詠唱被你打斷——${Math.round(_tt.BREACH_MS / 1000)} 秒破綻期，全員傷害 ×${_tt.BREACH_MULT}！`);
+              rewardLines.push(`⏪ **海嘯詠唱歸零！** 暈眩結束後，龜王會從 0 重新計算完整詠唱條。`);
             }
           }
         } else if (stunKnock?.knocked > 0) {
@@ -3809,7 +3851,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           .catch(() => null);
         if (freezeKnock?.triggered) {
           rewardLines.push(`🧊 **區域冰封**！你把整片戰場凍結了——${Math.round(_zfg.FREEZE_WINDOW_MS / 1000)} 秒內出戰的人全程免傷！`);
-          // 島島龜王：冰封觸發＝打斷海嘯詠唱（唯二打斷手段之二）
+          // 島島龜王：區域冰封仍會真正打斷詠唱並開啟破綻。
           if (zoneKey === _tt.ZONE) {
             const _fs = await serviceContext.monsterService.getState(zoneKey);
             if (_tt.interrupt(_fs, `${displayName}（區域冰封）`)) {
@@ -4000,6 +4042,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           return {
             discordId: p.discordId, name: p.name, level: Number(p.level) || 0,
             avatarUrl: _avatarCache2.get(p.discordId), speaking: _chatPresence2.isSpeaking(p.discordId),
+            chatPreview: _chatPresence2.getPreview(p.discordId),
             hasAura: _auraLines.length > 0, auraLines: _auraLines,
             damage10m: Number(p.damage10m) || 0
           };
@@ -4102,6 +4145,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monsterImageUrl: monster.imageUrl || null, // 本場實際對戰怪物的圖,讓前端圖片永遠對得上名字(不受區域換怪延遲影響)
         monsterElement: monster?.element || null, // 屬性徽章用；戰鬥畫面(BattleLayer)要顯示需要前端也接住這個欄位
         monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
+        battleElement: combatStats?.battleElement || null,
         logs: roundLogs,
         rewardLines,
         rewardSummary: rewardLines._summary || null,
@@ -4301,6 +4345,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const turtleView = _ttStatus.view(partState, totalHpPct, _wbNowS);
           const phase = turtleView.tsunami
             ? "tsunami"
+            : turtleView.castPaused
+            ? "reset_wait"
             : turtleView.casting
             ? "casting"
             : turtleView.breach
@@ -4308,6 +4354,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             : "safe";
           const remainingMs = phase === "tsunami"
             ? turtleView.tsunamiRemainMs
+            : phase === "reset_wait"
+            ? turtleView.castResumeInMs
             : phase === "casting"
             ? turtleView.castRemainMs
             : phase === "breach"
@@ -4315,6 +4363,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             : 0;
           const durationMs = phase === "tsunami"
             ? turtleView.tsunamiMs
+            : phase === "reset_wait"
+            ? turtleView.castResumeInMs
             : phase === "casting"
             ? turtleView.castMs
             : phase === "breach"
@@ -4327,12 +4377,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             remainingMs,
             durationMs,
             nextCastInMs: hasEncounter ? turtleView.nextCastInMs : null,
+            castDurationMs: turtleView.castMs,
             tsunamiDurationMs: turtleView.tsunamiMs,
             breachDurationMs: _ttStatus.BREACH_MS,
             dangerOnEntry: phase === "tsunami",
             castDamageMult: turtleView.castDamageMult,
             castGaugeMult: turtleView.castGaugeMult,
-            breachDamageMult: _ttStatus.BREACH_MULT
+            breachDamageMult: _ttStatus.BREACH_MULT,
+            tide: turtleView.tide
           };
         }
 
@@ -4351,6 +4403,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           .filter((d) => d.damage > 0)
           .sort((a, b) => b.damage - a.damage)
           .slice(0, 20);
+        const participantCount = Array.isArray(st?.participants) ? st.participants.length : 0;
+        const lastHitAt = st?.lastHitAt || null;
+        const lastHitMs = lastHitAt ? new Date(lastHitAt).getTime() : 0;
+        const isUnderAttack = participantCount > 0
+          && Number.isFinite(lastHitMs)
+          && Date.now() - lastHitMs < 90 * 1000;
 
         return {
           zoneKey,
@@ -4363,6 +4421,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           parts,
           mechanic,
           ranking,
+          participantCount,
+          lastHitAt,
+          isUnderAttack,
           entryFee: Math.max(0, Number(bossMonster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0),
           partEffects: PART_EFFECTS[zoneKey] || [],
           hints: PART_HINTS[zoneKey] || null,
@@ -4424,8 +4485,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { discordId } = req.playerRecord;
       const [round, recent] = await Promise.all([cs.getCurrentRound(), cs.getRecentRounds(12)]);
       const myBets = round ? await cs.getPlayerBetsInRound(round.roundId, discordId) : [];
-      const { COLOR_META, BET_MIN, BET_MAX } = require("../../services/casino/wheelConfig");
-      res.json(ok({ enabled: true, round, recent, myBets, colors: COLOR_META, betMin: BET_MIN, betMax: BET_MAX, now: Date.now() }));
+      const { COLOR_META, WHEEL_SLOTS, BET_MIN, BET_MAX } = require("../../services/casino/wheelConfig");
+      res.json(ok({ enabled: true, round, recent, myBets, colors: COLOR_META, wheelSlots: WHEEL_SLOTS, betMin: BET_MIN, betMax: BET_MAX, now: Date.now() }));
     } catch (err) {
       next(err);
     }

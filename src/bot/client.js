@@ -932,7 +932,7 @@ function createBotClient() {
       if (!message.author?.bot && message.author?.id) {
         const townId = await getTownChatChannelId();
         if (townId && message.channelId === townId) {
-          require("../services/realtime/chatPresence").markSpoke(message.author.id);
+          require("../services/realtime/chatPresence").markSpoke(message.author.id, message.content);
         }
       }
     } catch (_) { /* noop */ }

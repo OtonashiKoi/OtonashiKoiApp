@@ -678,7 +678,35 @@ function getBattleActions(jobEq) {
   const list = branch && Array.isArray(branch.battleActions) && branch.battleActions.length > 0
     ? branch.battleActions
     : DEFAULT_BATTLE_ACTIONS;
-  return list.slice(0, MAX_BATTLE_ACTIONS).map((a) => ({ ...a }));
+  const defaultKey = getDefaultStance(jobEq);
+  const helpByKind = {
+    normal: "使用目前裝備與職業被動進行戰鬥。",
+    sacrifice: "消耗目前生命 30%，本場攻擊力提高 25%。",
+    combo_burst: "消耗已累積的區域連段，施放本職業的爆發攻擊。",
+    shadow_rush: "消耗 5 連段，第一回合發動 7 連擊。",
+  };
+  const describeStance = (action) => {
+    const stance = branch?.stances?.[action.key];
+    if (!stance) return `${branch?.name || "職業"}姿態：${branch?.theme || action.label}`;
+    const bits = [];
+    if (stance.fireCircle) bits.push(`每回合造成 MATK ${Number(stance.fireCircle.matkPct) || 0}% 的火屬性傷害`);
+    if (stance.stormVolley) bits.push(`每回合固定 ${Number(stance.stormVolley.hits) || 0} 段，每段為普攻 ${Number(stance.stormVolley.pctPerHit) || 0}%`);
+    if (stance.freezeCharge) bits.push("命中時累積區域冰凍值");
+    if (stance.guaranteedElement) bits.push(`保證站在屬性優勢方，攻擊屬性最低 ${Number(stance.guaranteedElement.baseLevel) || 0} 級`);
+    if (Number.isFinite(Number(stance.blockChance))) bits.push(`格擋率 ${Number(stance.blockChance)}%`);
+    if (stance.shieldBashPct) bits.push(`格擋成功追加 ATK ${Number(stance.shieldBashPct)}% 盾擊`);
+    if (stance.stanceElement?.element) bits.push(`攻擊附帶 ${stance.stanceElement.level || 0} 級屬性`);
+    return bits.length ? bits.join("；") : `${branch?.name || "職業"}姿態：${branch?.theme || action.label}`;
+  };
+  return list.slice(0, MAX_BATTLE_ACTIONS).map((a) => ({
+    ...a,
+    description: a.description
+      || (a.kind === "stance" ? describeStance(a) : helpByKind[a.kind] || (branch ? `${branch.name}：${branch.theme}` : helpByKind.normal)),
+    element: branch?.stances?.[a.key]?.stanceElement?.element || null,
+    elementLevel: Number(branch?.stances?.[a.key]?.stanceElement?.level) || 0,
+    // 讓 Web 操作環知道哪一招應該先放在中央；伺服器仍會再次驗證實際送來的 stance。
+    default: a.kind === "stance" && a.key === defaultKey,
+  }));
 }
 
 module.exports = {

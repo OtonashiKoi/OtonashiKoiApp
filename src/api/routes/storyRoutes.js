@@ -3,6 +3,7 @@
  * 主線故事路由。
  * 玩家端（requireAuth JWT）：
  *   GET  /api/story/chapters           章節目錄（含 locked/available/completed 狀態）
+ *   GET  /api/story/hub-npcs           據點可出場 NPC（排除音無恋）
  *   GET  /api/story/chapters/:id       章節內容（nodes 附 NPC 名字/立繪）
  *   POST /api/story/chapters/:id/complete  完成章節（body.skipped=true 代表按 SKIP）
  * 後台（Bearer adminPassword，同其他 /admin 路由）：
@@ -17,6 +18,13 @@ const multer = require("multer");
 const { ok, fail } = require("../../shared/response");
 const { requireAuth } = require("./requireAuth");
 const config = require("../../config");
+const { listHubNpcs } = require("../../services/story/hubNpcService");
+
+// 與一般討伐／單人王相同的 AGI 回合節奏；劇情戰也必須把實際 tickMs 交給共用戰鬥畫面。
+function calculateBattleTickDelay(agi = 1) {
+  const capped = Math.min(Math.max(1, Number(agi) || 1), 40);
+  return Math.round(1500 - ((capped - 1) / 39) * 1000);
+}
 
 const upload = multer({
   dest: "/tmp/story-uploads/",
@@ -57,6 +65,12 @@ function createStoryRoutes(serviceContext, discordClient) {
   router.get("/api/story/preload", requireAuth, async (req, res, next) => {
     try {
       res.json(ok(await storyService.listPreloadAssets(), "story preload assets"));
+    } catch (error) { next(error); }
+  });
+
+  router.get("/api/story/hub-npcs", requireAuth, async (req, res, next) => {
+    try {
+      res.json(ok(await listHubNpcs(storyService), "hub npcs fetched"));
     } catch (error) { next(error); }
   });
 
@@ -144,7 +158,8 @@ function createStoryRoutes(serviceContext, discordClient) {
         // 動畫戰鬥場景用：玩家名/頭像/武器種類(打擊音效)
         playerName: req.playerRecord.displayName || "我",
         playerAvatarUrl: await playerAvatarUrl(discordId).catch(() => null),
-        weaponType: equipped?.weapon?.weaponType || null
+        weaponType: equipped?.weapon?.weaponType || null,
+        tickMs: calculateBattleTickDelay(pStats.agi || 1)
       }, "story battle resolved"));
     } catch (error) { next(error); }
   });

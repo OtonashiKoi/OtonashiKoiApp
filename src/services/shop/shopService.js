@@ -82,6 +82,24 @@ const REMOVED_LEVEL_DOWN_POTION_ID = "9b8ad195-9ec1-401b-9b7f-2c1033628cba";
 const REMOVED_LEVEL_DOWN_EFFECT = "level_down_random_attributes";
 const TWO_HANDED_WEAPON_TYPES = new Set(["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow", "dice"]);
 const VALID_CLAIM_LIMITS = new Set(["none", "once_per_player"]);
+const AUTO_EQUIP_SLOTS = [
+  "weapon", "shield", "armor", "garment", "shoes",
+  "head_top", "head_mid", "head_low", "accessory_l", "accessory_r",
+];
+const AUTO_EQUIP_SLOT_SET = new Set(AUTO_EQUIP_SLOTS);
+const JOB_WEAPON_TYPES = {
+  swordsman: ["sword_1h", "sword_2h"],
+  warrior: ["axe_1h", "axe_2h"],
+  dwarf_warrior: ["mace_1h", "mace_2h"],
+  rogue: ["dagger"],
+  mage: ["staff_2h"],
+  healer: ["staff_1h"],
+  archer: ["bow"],
+  tactician: ["sword_1h"],
+  bard: ["bow"],
+  barrier_mage: ["staff_1h", "staff_2h"],
+  gambler: ["dice"],
+};
 
 class ShopService {
   constructor(shopRepository, playerService, rewardService, progressRepository, progressService, itemRepository, playerTierService, questService = null, shopClaimRepository = null, streamAccountBindingRepository = null) {
@@ -1964,6 +1982,164 @@ class ShopService {
       equipment: progress.equipment,
       inventory: progress.inventory
     };
+  }
+
+  /**
+   * 依角色配點與目前職業，伺服器端挑選 ATK 最高的一組一般裝備。
+   * 職業徽章、稱號、卡片與錨點完全保留，不會被自動換下。
+   */
+  async autoEquipMaxAtk(discordId) {
+    return withPlayerProgressLock(discordId, async () => {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);
+
+      const inventory = Array.isArray(progress.inventory) ? progress.inventory : [];
+      const equipment = progress.equipment && typeof progress.equipment === "object" ? progress.equipment : {};
+      const records = inventory.map((entry, index) => ({ key: `inv:${index}`, entry }));
+      for (const slot of AUTO_EQUIP_SLOTS) {
+        if (equipment[slot]) records.push({ key: `eq:${slot}`, entry: equipment[slot] });
+      }
+
+      const itemIds = [...new Set(records.map((r) => r.entry?.itemId).filter(Boolean))];
+      const libraryRows = await Promise.all(
+        itemIds.map((itemId) => this.itemRepository?.findById(itemId).catch(() => null) || null)
+      );
+      const libraryById = new Map(itemIds.map((itemId, index) => [itemId, libraryRows[index]]));
+      const hydratedRecords = records.map((record) => {
+        const lib = record.entry?.itemId ? libraryById.get(record.entry.itemId) : null;
+        if (!lib) return record;
+        return {
+          ...record,
+          entry: {
+            ...record.entry,
+            itemName: lib.name || record.entry.itemName || record.entry.name,
+            name: lib.name || record.entry.name || record.entry.itemName,
+            itemType: lib.itemType === "monster_card" ? "monster_card" : (lib.itemType || record.entry.itemType),
+            equipSlot: lib.equipSlot || record.entry.equipSlot,
+            equipStats: record.entry.equipStats || lib.equipStats || null,
+            weaponType: lib.weaponType || record.entry.weaponType || null,
+            isTwoHanded: this._resolveIsTwoHanded({
+              weaponType: lib.weaponType || record.entry.weaponType,
+              isTwoHanded: lib.isTwoHanded ?? record.entry.isTwoHanded,
+            }),
+            passiveEffects: lib.passiveEffects || record.entry.passiveEffects || [],
+            combatEffects: lib.combatEffects || record.entry.combatEffects || [],
+            procEffects: lib.procEffects || record.entry.procEffects || [],
+            setKey: lib.setKey ?? record.entry.setKey ?? null,
+            setKeys: (Array.isArray(lib.setKeys) && lib.setKeys.length)
+              ? lib.setKeys
+              : (record.entry.setKeys || (lib.setKey ? [lib.setKey] : [])),
+          },
+        };
+      });
+
+      const candidates = hydratedRecords.filter(({ entry }) => (
+        entry
+        && entry.itemType === "equipment"
+        && AUTO_EQUIP_SLOT_SET.has(String(entry.equipSlot || ""))
+      ));
+      if (!candidates.some(({ entry }) => entry.equipSlot === "weapon")) {
+        throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包與身上沒有可用武器", 400);
+      }
+
+      const jobEq = equipment.job_eq || null;
+      const jobKey = jobEq ? require("../../shared/jobAdvancement").resolveJobKey(jobEq) : null;
+      const allowedWeaponTypes = jobKey ? (JOB_WEAPON_TYPES[jobKey] || null) : null;
+      let weaponCandidates = candidates.filter(({ entry }) => (
+        entry.equipSlot === "weapon"
+        && (!allowedWeaponTypes || allowedWeaponTypes.includes(String(entry.weaponType || "")))
+      ));
+      // 玩家有職業但沒有該職業武器時，不把原本武器硬卸掉；保留現況並照其主屬性配裝。
+      if (weaponCandidates.length === 0 && equipment.weapon) {
+        weaponCandidates = hydratedRecords.filter(({ key }) => key === "eq:weapon");
+      }
+      if (weaponCandidates.length === 0) {
+        throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "沒有符合目前職業的武器", 400);
+      }
+
+      const preservedEquipment = {};
+      for (const [slot, entry] of Object.entries(equipment)) {
+        if (!AUTO_EQUIP_SLOT_SET.has(slot)) preservedEquipment[slot] = entry;
+      }
+      const attrs = progress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
+      const { calcPlayerStats } = require("../../shared/combatStats");
+      const score = (chosen) => {
+        const trialEquipment = { ...preservedEquipment };
+        for (const [slot, record] of Object.entries(chosen)) {
+          if (record?.entry) trialEquipment[slot] = record.entry;
+        }
+        // 自動配裝只比較角色配點與實際穿上的裝備；背包持有物不應改變選擇，
+        // 同時避免大背包在每個候選組合中被反覆掃描。
+        const stats = calcPlayerStats(attrs, trialEquipment, [], []);
+        return {
+          atk: Number(stats.atk) || 0,
+          damage: (Number(stats.atk) || 0)
+            * (Number(stats.tierDamageMultiplier) || 1)
+            * (Number(stats.tierFinalDamageMultiplier) || 1),
+          equippedCount: Object.values(chosen).filter(Boolean).length,
+        };
+      };
+      const better = (left, right) => (
+        left.atk > right.atk
+        || (left.atk === right.atk && left.damage > right.damage)
+        || (left.atk === right.atk && left.damage === right.damage && left.equippedCount > right.equippedCount)
+      );
+
+      let bestChosen = null;
+      let bestScore = null;
+      for (const weaponRecord of weaponCandidates) {
+        const chosen = { weapon: weaponRecord };
+        const weaponIsTwoHanded = this._resolveIsTwoHanded(weaponRecord.entry);
+        const fillSlots = AUTO_EQUIP_SLOTS.filter((slot) => slot !== "weapon" && !(slot === "shield" && weaponIsTwoHanded));
+        // 多跑幾輪讓跨件套裝效果也能參與選擇，不只看單件屬性。
+        for (let pass = 0; pass < 3; pass += 1) {
+          for (const slot of fillSlots) {
+            const slotCandidates = [null, ...candidates.filter(({ entry }) => entry.equipSlot === slot)];
+            let slotBest = chosen[slot] || null;
+            let slotBestScore = score({ ...chosen, [slot]: slotBest });
+            for (const candidate of slotCandidates) {
+              const trialScore = score({ ...chosen, [slot]: candidate });
+              if (better(trialScore, slotBestScore)) {
+                slotBest = candidate;
+                slotBestScore = trialScore;
+              }
+            }
+            chosen[slot] = slotBest;
+          }
+        }
+        const chosenScore = score(chosen);
+        if (!bestScore || better(chosenScore, bestScore)) {
+          bestChosen = chosen;
+          bestScore = chosenScore;
+        }
+      }
+
+      const selectedKeys = new Set(Object.values(bestChosen || {}).filter(Boolean).map((r) => r.key));
+      const now = new Date().toISOString();
+      const nextEquipment = { ...preservedEquipment };
+      for (const slot of AUTO_EQUIP_SLOTS) {
+        const record = bestChosen?.[slot] || null;
+        nextEquipment[slot] = record ? { ...record.entry, equippedAt: now } : null;
+      }
+      const nextInventory = hydratedRecords
+        .filter((record) => !selectedKeys.has(record.key))
+        .map((record) => ({ ...record.entry, ...(record.key.startsWith("eq:") ? { unequippedAt: now } : {}) }));
+
+      progress.inventory = nextInventory;
+      progress.equipment = nextEquipment;
+      progress.updatedAt = now;
+      await this.progressRepository.save(progress);
+
+      return {
+        atk: bestScore?.atk || 0,
+        jobKey,
+        jobName: jobEq?.itemName || jobEq?.name || null,
+        weaponName: nextEquipment.weapon?.itemName || nextEquipment.weapon?.name || null,
+        weaponType: nextEquipment.weapon?.weaponType || null,
+        equipment: nextEquipment,
+        inventory: nextInventory,
+      };
+    });
   }
 
   async unequipItem(discordId, slot) {

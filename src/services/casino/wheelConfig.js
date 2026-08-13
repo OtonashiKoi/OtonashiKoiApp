@@ -7,13 +7,18 @@
 const ROUND_DURATION_MS = 60 * 1000;     // 60 秒一輪
 const LOCK_BEFORE_END_MS = 5 * 1000;     // 結算前 5 秒鎖盤
 
-// 25 格輪盤（依倍率：×2=12 / ×3=6 / ×5=4 / ×10=2 / ×15=1）
+// 25 格輪盤（依倍率：×2=12 / ×3=6 / ×5=4 / ×10=2 / ×15=1）。
+// 格位刻意交錯，讓網頁上的實體轉盤能逐格顯示；只改排列、不改各色機率。
 const WHEEL_SLOTS = [
-  ...Array(12).fill({ color: "yellow", mult: 2 }),
-  ...Array(6).fill({ color: "green",  mult: 3 }),
-  ...Array(4).fill({ color: "red",    mult: 5 }),
-  ...Array(2).fill({ color: "blue",   mult: 10 }),
-  ...Array(1).fill({ color: "purple", mult: 15 }),
+  { color: "purple", mult: 15 },
+  { color: "yellow", mult: 2 }, { color: "green", mult: 3 }, { color: "yellow", mult: 2 },
+  { color: "red", mult: 5 }, { color: "yellow", mult: 2 }, { color: "green", mult: 3 },
+  { color: "yellow", mult: 2 }, { color: "blue", mult: 10 }, { color: "yellow", mult: 2 },
+  { color: "red", mult: 5 }, { color: "yellow", mult: 2 }, { color: "green", mult: 3 },
+  { color: "yellow", mult: 2 }, { color: "red", mult: 5 }, { color: "yellow", mult: 2 },
+  { color: "green", mult: 3 }, { color: "yellow", mult: 2 }, { color: "blue", mult: 10 },
+  { color: "yellow", mult: 2 }, { color: "red", mult: 5 }, { color: "green", mult: 3 },
+  { color: "yellow", mult: 2 }, { color: "green", mult: 3 }, { color: "yellow", mult: 2 },
 ];
 
 const COLORS = ["yellow", "green", "red", "blue", "purple"];

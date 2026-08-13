@@ -5,7 +5,8 @@
  * 【潮汐】固定 15 分鐘週期：漲潮 10 分、退潮 5 分。
  * 【海嘯】本輪討伐開始後每 3 分鐘檢查一次；總血首次降到 70%／30% 時各強制一次。
  *   - 詠唱 3 分鐘：龜王承傷降為 1%，冰凍值／暈眩值累積 ×2。
- *   - 詠唱被冰封或巨神震擊打斷：立即進入 30 秒破綻，承傷 ×1.3。
+ *   - 巨神震擊命中：詠唱條歸零，暈眩結束後重新計算完整 3 分鐘詠唱，不進入破綻。
+ *   - 詠唱被區域冰封打斷：立即進入 30 秒破綻，承傷 ×1.3。
  *   - 詠唱完成：海嘯 3 分鐘，期間出戰真即死；結束後同樣進入 30 秒破綻。
  *   - 每 3 分鐘是發動檢查點；詠唱／海嘯／破綻中不重疊發動。
  *
@@ -57,6 +58,7 @@ function resetEncounter(turtle, now) {
   turtle.encounterStartedAt = iso(now);
   turtle.nextPeriodicAt = iso(now + PERIODIC_CAST_INTERVAL_MS);
   turtle.castingUntil = null;
+  turtle.castPausedUntil = null;
   turtle.tsunamiUntil = null;
   turtle.breachUntil = null;
   turtle.pendingForcedCasts = [];
@@ -99,6 +101,7 @@ function advanceActiveState(turtle, now, events) {
 
   if (castUntil > 0 && now >= castUntil) {
     turtle.castingUntil = null;
+    turtle.castPausedUntil = null;
     const tsunamiUntil = castUntil + TSUNAMI_MS;
     if (now < tsunamiUntil) {
       turtle.tsunamiUntil = iso(tsunamiUntil);
@@ -136,6 +139,7 @@ function isBusy(turtle, now) {
 
 function startCast(turtle, reason, now, events) {
   turtle.castingUntil = iso(now + CAST_MS);
+  turtle.castPausedUntil = null;
   turtle.tsunamiUntil = null;
   turtle.breachUntil = null;
   turtle.lastInterruptBy = null;
@@ -197,10 +201,30 @@ function interrupt(state, byLabel, now = Date.now()) {
   const turtle = state?.turtle;
   if (!turtle || parseMs(turtle.castingUntil) <= now) return false;
   turtle.castingUntil = null;
+  turtle.castPausedUntil = null;
   turtle.tsunamiUntil = null;
   turtle.breachUntil = iso(now + BREACH_MS);
   turtle.lastInterruptBy = String(byLabel || "");
   turtle.lastBreachReason = "interrupt";
+  return true;
+}
+
+/**
+ * 巨神震擊重置海嘯詠唱：暈眩期間不詠唱，暈眩結束後從 0 重跑完整詠唱條。
+ * 這不是「打斷」，因此不會開啟破綻期。
+ */
+function resetCastAfterStun(state, byLabel, stunnedUntil, now = Date.now()) {
+  const turtle = state?.turtle;
+  const castUntil = parseMs(turtle?.castingUntil);
+  if (!turtle || castUntil <= now) return false;
+
+  const resumeAt = Math.max(now, parseMs(stunnedUntil));
+  turtle.castPausedUntil = iso(resumeAt);
+  turtle.castingUntil = iso(resumeAt + CAST_MS);
+  turtle.tsunamiUntil = null;
+  turtle.breachUntil = null;
+  turtle.lastInterruptBy = String(byLabel || "");
+  turtle.lastBreachReason = null;
   return true;
 }
 
@@ -227,7 +251,8 @@ function battleMods(state, part, now = Date.now()) {
     return { headBlocked: false, mult: BREACH_MULT, forceHitHead: false, tsunami: false, casting: false, gaugeMult: 1 };
   }
   const tide = tideAt(now);
-  if (parseMs(turtle.castingUntil) > now) {
+  const casting = parseMs(turtle.castingUntil) > now && parseMs(turtle.castPausedUntil) <= now;
+  if (casting) {
     return {
       // 詠唱時整隻龜王進入同一層防護：所有部位都能打，但一律只承受 1% 傷害。
       // 這段覆蓋漲潮的龜首封鎖，讓任何目標都能用來累積冰凍／暈眩破解詠唱。
@@ -249,10 +274,16 @@ function battleMods(state, part, now = Date.now()) {
 function view(state, totalHpPct, now = Date.now()) {
   const turtle = state?.turtle || {};
   const tide = tideAt(now);
+  const castPausedUntil = parseMs(turtle.castPausedUntil);
+  const castingUntil = parseMs(turtle.castingUntil);
+  const castPaused = castPausedUntil > now && castingUntil > castPausedUntil;
+  const casting = !castPaused && castingUntil > now;
   return {
     tide: { phase: tide.phase, remainMs: tide.remainMs, riseMs: RISE_MS, ebbMs: EBB_MS },
-    casting: parseMs(turtle.castingUntil) > now,
-    castRemainMs: Math.max(0, parseMs(turtle.castingUntil) - now),
+    casting,
+    castPaused,
+    castResumeInMs: castPaused ? castPausedUntil - now : 0,
+    castRemainMs: casting ? Math.max(0, castingUntil - now) : 0,
     castMs: CAST_MS,
     castDamageMult: CAST_DAMAGE_MULT,
     castGaugeMult: CAST_GAUGE_MULT,
@@ -279,5 +310,5 @@ module.exports = {
   CAST_UNLOCK_HP_PCT, CAST_INTERVAL_MS, PERIODIC_CAST_INTERVAL_MS,
   CAST_MS, TSUNAMI_MS, BREACH_MS, BREACH_MULT, CAST_DAMAGE_MULT, CAST_GAUGE_MULT,
   FIXED_CAST_HP_PCTS,
-  tideAt, ensureCast, interrupt, tsunamiRoundForBattle, battleMods, view,
+  tideAt, ensureCast, interrupt, resetCastAfterStun, tsunamiRoundForBattle, battleMods, view,
 };

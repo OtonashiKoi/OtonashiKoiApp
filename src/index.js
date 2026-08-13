@@ -73,6 +73,8 @@ async function bootstrap() {
       // 清掉後 evaluate() 會依當下實際人數重新觸發，isNew=true 廣播正常。
       await require("./services/stream/globalBuffService").clearViewerSession();
       await require("./services/stream/streamEventConfig").syncRuntimeConfig(); // 注入短期 buff 上限
+      // SC 門檻可能經營運調整；目前累積未達現行門檻時，精準收回該階永久加成。
+      await require("./services/stream/scBarService").reconcileCurrentMilestones();
       // 會員里程碑檢查：每 3 分鐘看會員數有無創新高 → 短期慶祝 / 賽季永久里程碑
       const memberEvents = require("./services/stream/memberEventsService");
       memberEvents.check(serviceContext).catch(() => {});
