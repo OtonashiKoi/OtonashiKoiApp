@@ -1170,6 +1170,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         console.warn("[profile] combatStats calc failed:", err?.message || err);
       }
 
+      // 據點 NPC 與個人頁直接讀目前已裝備職業徽章的實例熟練度。
+      // 熟練度存在玩家實例 jobExp，不可用道具庫資料或舊的 progress.jobLevel 代替。
+      // 放在戰力計算 try/catch 外，即使其他顯示資料計算失敗也不會退回模糊占位文案。
+      if (mergedEquipment.job_eq) {
+        const jobBadgeLevel = require("../../shared/jobBadgeLevel");
+        if (jobBadgeLevel.isJobBadgeEntry(mergedEquipment.job_eq)) {
+          mergedEquipment.job_eq = {
+            ...mergedEquipment.job_eq,
+            badgeProgress: jobBadgeLevel.readBadgeProgress(mergedEquipment.job_eq),
+          };
+        }
+      }
+
       // 聚合「身上特效」：裝備/卡片/職業/稱號的被動·戰鬥·觸發效果（僅列條件成立者）+ 暫時 buff
       const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
       const BODY_SLOT_ZH = {
@@ -2119,10 +2132,22 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     const ids = webPresence.list().map(p => p.discordId);
     const type = mode === "prompt" ? "update_prompt" : "force_reload";
     // force 模式除了即時 SSE，也保留 24 小時補送狀態；背景／鎖屏玩家回前景後仍會被更新。
-    if (mode === "force") require("../../services/realtime/forceReloadState").activate(reason);
+    const reloadState = mode === "force"
+      ? require("../../services/realtime/forceReloadState").activate(reason)
+      : null;
     const noticeBody = message || "已更新，畫面將套用最新內容。";
     for (const id of ids) {
-      try { playerEventBus.emit(id, { type, data: { reason, message: message || undefined, ts: new Date().toISOString() } }); } catch (_) {}
+      try {
+        playerEventBus.emit(id, {
+          type,
+          data: {
+            reason,
+            message: message || undefined,
+            targetBuild: reloadState?.targetBuild || undefined,
+            ts: new Date().toISOString(),
+          },
+        });
+      } catch (_) {}
       // 同步發網頁通知（force 模式重整後也能在通知中心看到；用佇列保證重整後補抓得到）
       try {
         const notif = { type: "system", title: "🔄 熱更優化", message: noticeBody, kind: "info", ts: Date.now() };

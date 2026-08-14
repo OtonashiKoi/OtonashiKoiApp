@@ -6,8 +6,9 @@ const path = require("path");
 const APP_INDEX = path.resolve(__dirname, "../../web/public/app/index.html");
 const STATE_FILE = path.resolve(__dirname, "../../../backups/runtime-force-reload.json");
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
+const EMPTY_STATE = Object.freeze({ targetBuild: "", reason: "", activeUntil: 0 });
 
-let pending = { targetBuild: "", reason: "", activeUntil: 0 };
+let pending = { ...EMPTY_STATE };
 
 function readPersisted() {
   try {
@@ -48,12 +49,25 @@ function activate(reason = "admin_broadcast", ttlMs = DEFAULT_TTL_MS) {
   return { ...pending };
 }
 
+function deactivate() {
+  pending = { ...EMPTY_STATE };
+  persist(pending);
+}
+
 function getPendingFor(clientBuild = "") {
   if (!pending.activeUntil) pending = readPersisted();
   if (!pending.activeUntil || pending.activeUntil <= Date.now()) return null;
-  const targetBuild = pending.targetBuild || currentBuild();
+  const servedBuild = currentBuild();
+  const targetBuild = pending.targetBuild || servedBuild;
+
+  // 強制重整命令只能指向目前實際提供的 build。若命令建立後又部署了新版，
+  // 舊 target 不可能再被載入；繼續補送只會讓新版頁面無限重整。
+  if (targetBuild && servedBuild && targetBuild !== servedBuild) {
+    deactivate();
+    return null;
+  }
   if (targetBuild && String(clientBuild || "") === targetBuild) return null;
   return { ...pending, targetBuild };
 }
 
-module.exports = { activate, getPendingFor, currentBuild };
+module.exports = { activate, deactivate, getPendingFor, currentBuild };
