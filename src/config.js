@@ -55,7 +55,11 @@ const config = {
   // 工程參數（如程式碼行數警告）
   engineering: {
     lineWarning: 320, // 行數警告門檻
-    lineHardLimit: 400 // 行數硬限制
+    lineHardLimit: 400, // 新檔案硬限制
+    // 舊大型檔案採棘輪基準：允許小幅功能成長，但不能無限制膨脹。
+    // 實際額度取固定行數與百分比兩者較大值。
+    legacyLineGrowthAllowance: 50,
+    legacyLineGrowthPercent: 2
   }
   ,
   // Moderation / SpamGuard 設定（可由 .env 調整）

@@ -3,6 +3,7 @@
 require("dotenv").config();
 
 const { MongoClient } = require("mongodb");
+const { closeMongoClient } = require("../src/adapters/mongo/createMongoClient");
 const { calcPlayerStats } = require("../src/shared/combatStats");
 const { runCombatLoop } = require("../src/shared/combatLoop");
 const { runPkCombat } = require("../src/shared/pkCombat");
@@ -443,8 +444,11 @@ async function testQuestDefinitions(db) {
 
 async function main() {
   await testServerHealth();
-  const { client, db } = await getActiveDb();
+  let client = null;
   try {
+    const activeDb = await getActiveDb();
+    client = activeDb.client;
+    const { db } = activeDb;
     await run("core data counts", () => testCoreData(db));
     await run("player data integrity", () => testPlayerIntegrity(db));
     await run("channel bindings", () => testChannelBindings(db));
@@ -455,7 +459,11 @@ async function main() {
     await run("tower data", () => testTowerData(db));
     await run("quest definitions", () => testQuestDefinitions(db));
   } finally {
-    await client.close();
+    if (client) await client.close();
+    // towerHandlers -> runtimeContext -> createRepositories 會在載入時觸發
+    // seasonState.ensureLoaded()，它使用專案共用 Mongo client。測試自己的
+    // client 關閉後也必須收掉這條共用連線，否則 Mongo socket pool 會讓程序卡住。
+    await closeMongoClient();
   }
 
   const order = { FAIL: 0, WARN: 1, PASS: 2 };
@@ -472,10 +480,11 @@ async function main() {
   console.log(`Summary: ${failures.length} fail, ${warnings.length} warn, `
     + `${results.length - failures.length - warnings.length} pass`);
 
-  if (failures.length > 0) process.exit(1);
+  if (failures.length > 0) process.exitCode = 1;
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error(error);
-  process.exit(1);
+  await closeMongoClient().catch(() => {});
+  process.exitCode = 1;
 });
