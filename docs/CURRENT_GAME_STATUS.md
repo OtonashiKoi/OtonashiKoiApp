@@ -1,7 +1,7 @@
 <!-- GENERATED: CURRENT_GAME_STATUS -->
 # 遊戲現況快照 Current Game Status
 
-生成時間：2026-08-14T10:26:12.448Z
+生成時間：2026-08-14T10:43:30.712Z
 
 > 本檔由程式碼與目前 MongoDB 自動產生，請勿手動修改。執行 `npm run status:update` 更新。功能說明與檔案位置請看 `docs/README.md`、`PROJECT_FEATURES.md`、`docs/SYSTEMS.md`。
 
