@@ -8,7 +8,7 @@ const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/strea
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffects, filterActiveAuras } = require("../../shared/supportAuraScaling");
-const { ALL_ZONE_KEYS, normalizeZone, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme, getZoneGroup, ZONE_BY_KEY } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, normalizeZone, canPlayerAccessZone, getVisibleZoneKeys, getPublicZoneKeys, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme, getZoneGroup, ZONE_BY_KEY } = require("../../shared/zones");
 const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { acquireSse } = require("../netGuards");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
@@ -522,7 +522,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   };
 
   const buildCombatZonesSnapshot = async (discordId = null) => {
-    const keys = ALL_ZONE_KEYS;
+    const keys = discordId ? getVisibleZoneKeys(discordId) : getPublicZoneKeys();
     const excludedIds = await getLeaderboardExcludedPlayerIds();
     return Promise.all(keys.map(async (key) => {
       const [state, monsters] = await Promise.all([
@@ -2636,7 +2636,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // 10. Get Combat Zones Status
   router.get("/api/combat/zones", requireAuth, async (req, res, next) => {
     try {
-      const keys = ALL_ZONE_KEYS;
+      const keys = getVisibleZoneKeys(req.playerRecord.discordId);
       const excludedIds = await getLeaderboardExcludedPlayerIds();
       const results = await Promise.all(keys.map(async (key) => {
         const [state, monsters] = await Promise.all([
@@ -2727,7 +2727,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
   router.get("/api/viewer/snapshot", async (_req, res, next) => {
     try {
-      const keys = ALL_ZONE_KEYS;
+      const keys = getPublicZoneKeys();
       const excludedIds = await getLeaderboardExcludedPlayerIds();
       const zones = await Promise.all(keys.map(async (key) => {
         const [state, monsters] = await Promise.all([
@@ -2827,6 +2827,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     try {
       const { discordId, displayName } = req.playerRecord;
       const zoneKey = normalizeZone(req.body.zone);
+      if (!canPlayerAccessZone(zoneKey, discordId)) {
+        return res.status(404).json({ status: "error", code: "zone_not_found", message: "找不到這個戰鬥區域。" });
+      }
 
       // Reject requests while the previous battle animation cooldown is still active.
       const cd = playerBattleCooldowns.get(discordId);
@@ -2945,6 +2948,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
+      const _wd = require("../../shared/windDirection");
+      const windDirectionOn = _wd.hasEffect(equipped);
+      const windDirectionBefore = windDirectionOn ? _wd.read(progress) : 0;
       // 狼系寵物戰鬥夥伴：出戰寵物(有 combatPassives 且沒餓壞)以虛擬裝備注入,數值/咬擊走現成引擎
       try {
         const petEntry = serviceContext.petService?.buildPetCombatEntry?.(progress);
@@ -3154,6 +3160,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let battleMonsterStats = monster.calc;
       let battleMonsterEquipped = monsterEquipped;
       let webWorldBossPhase = null;
+      let hutaoEventSnapshot = null;
 
       if (isWorldBoss) {
         // 確保 state 有部位血量；若沒有就先存回（與 DC 一致）
@@ -3261,6 +3268,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const wbSvc = serviceContext.worldBossServiceFor?.(zoneKey);
           const startRes = wbSvc ? await wbSvc.startBossBattleIfNeeded().catch(() => null) : null;
           const justStarted = !!startRes?.justStarted;
+          if (zoneKey === "event_boss_hutao_preview" && serviceContext.hutaoEventService) {
+            hutaoEventSnapshot = justStarted
+              ? await serviceContext.hutaoEventService.resetRun(startRes?.state?.battleStartedAt)
+              : await serviceContext.hutaoEventService.ensureRun(startRes?.state?.battleStartedAt);
+            // 立直的 60 秒是全服暫停：這裡仍在入場費之前，按戰鬥不會扣錢。
+            if (hutaoEventSnapshot?.blocking) {
+              return res.status(409).json({
+                status: "error",
+                code: "hutao_riichi_active",
+                message: "胡桃立直中，請先完成答題並等待全服結算。",
+                data: { hutaoEvent: hutaoEventSnapshot },
+              });
+            }
+          }
           if (justStarted) {
             // 跨平台：通知所有在線網頁玩家「誰開始挑戰世界王」（DC 端由下方頻道公告涵蓋）
             try { serviceContext._broadcastWorldBossStart(monster.name, displayName, discordId); } catch (_) {}
@@ -3278,6 +3299,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           }
         } catch (e) {
           console.warn("[worldBoss/web] 開打公告失敗:", e?.message || e);
+        }
+
+        // 北風雀神・胡桃：場風全服同步；答題結果延續到下一次立直。
+        if (zoneKey === "event_boss_hutao_preview" && serviceContext.hutaoEventService) {
+          if (!hutaoEventSnapshot) hutaoEventSnapshot = await serviceContext.hutaoEventService.getSnapshot();
+          const wind = hutaoEventSnapshot.wind || {};
+          battleMonsterStats = { ...battleMonsterStats };
+          if (wind.bossDodgeZero) battleMonsterStats.dodge = 0;
+          else if (wind.bossDodgeBonus) {
+            battleMonsterStats.dodge = Math.min(95, (Number(battleMonsterStats.dodge) || 0) + Number(wind.bossDodgeBonus));
+          }
+          if (wind.bossDamageMultiplier) {
+            battleMonsterStats.finalDamageMultiplier = (Number(battleMonsterStats.finalDamageMultiplier) || 1) * Number(wind.bossDamageMultiplier);
+          }
         }
       }
 
@@ -3458,6 +3493,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           // 命運骰＋手氣（賭神）：帶入跨場格數與手氣層
           diceGaugeGrids: diceGridsBefore,
           diceLuckStacks: diceLuckBefore,
+          windDirectionStep: windDirectionBefore,
           // 演奏判定（吟遊詩人）：上一場演奏 → 本場傷害倍率／完美和弦／戰報宣告
           bardDamageMult: bardResult?.dmgMult,
           bardChordPct: bardResult?.chordPct,
@@ -3476,6 +3512,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           isWorldBoss, // 世界王：玩家 DOT 也吃王 def%（同 DC）
           zone: zoneKey, // 裝備的區域條件特效（同 DC）
           bossVulnMult: webBossVulnMult, // 牙狼弱點/龜王潮汐倍率(每擊)；其餘世界王＝1 無影響
+          eventPlayerFinalDamageMultiplier: zoneKey === "event_boss_hutao_preview"
+            ? (Number(hutaoEventSnapshot?.wind?.playerFinalDamageMultiplier) || 1)
+              * (Number(hutaoEventSnapshot?.effect?.playerFinalDamageMultiplier) || 1)
+            : 1,
+          eventPlayerCritDamageMultiplier: zoneKey === "event_boss_hutao_preview"
+            ? (Number(hutaoEventSnapshot?.wind?.playerCritDamageMultiplier) || 1)
+            : 1,
+          eventPlayerHitBonus: zoneKey === "event_boss_hutao_preview"
+            ? (Number(hutaoEventSnapshot?.effect?.playerHitBonus) || 0)
+            : 0,
           tsunamiDeath: turtleTsunami,   // 海嘯（島島龜王）：出戰即死
           tsunamiDeathRound: turtleTsunamiRound, // 詠唱若在本場時間軸內完成，對應回合直接命中
           forcePlayerHit: turtleForceHit, // 退潮打龜首必中
@@ -3504,7 +3550,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           notice: null
         };
       let outcome = syncResult.outcome;
-      const totalDamage = syncResult.damage;
+      let totalDamage = syncResult.damage;
       const totalTaken = Math.max(0, (pStats.maxHp || 0) - Math.max(0, finalPlayerHp));
 
       // ── 世界王部位戰鬥結算（還原 DC）：把本場傷害扣在被打的部位 ──
@@ -3518,6 +3564,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let worldBossPartBroken = false;
       let fcMirrorTotal = 0; // 炎圈鏡射到其他部位的總傷（rewardLines 在後面才宣告，這裡先存量）
       let hellfangEvent = null; // 牙狼適應性狀態變化(給戰報文案)
+      let hutaoTriggeredEvent = null;
       const _mzHellfang = require("../../bot/handlers/monsterZoneHandlers");
       if (isWorldBoss) {
         try {
@@ -3525,8 +3572,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           const prevParts = ensureWBPartState(freshState, monster.calc.maxHp, zoneKey);
           const latestPartHp = Math.max(0, Number(prevParts.worldBossPartsHp?.[worldBossPart] || 0));
           // 牙狼弱點倍率已在戰鬥迴圈 per-hit 乘進終傷(bossVulnMult)，此處不可再乘一次。
-          const wbDamage = totalDamage;
-          const nextPartHp = Math.max(0, latestPartHp - wbDamage);
+          let wbDamage = totalDamage;
+          let nextPartHp = Math.max(0, latestPartHp - wbDamage);
+          if (zoneKey === "event_boss_hutao_preview" && serviceContext.hutaoEventService) {
+            const { crossedRiichiMark, hpAtMark } = require("../../shared/hutaoEvent");
+            const maxBodyHp = Math.max(1, Number(prevParts.worldBossPartsMaxHp?.[worldBossPart]) || Number(monster.calc.maxHp) || 1);
+            const eventBefore = hutaoEventSnapshot || await serviceContext.hutaoEventService.getSnapshot();
+            const crossedMark = crossedRiichiMark(latestPartHp, nextPartHp, maxBodyHp, eventBefore?.resolvedMarks || []);
+            if (crossedMark) {
+              nextPartHp = hpAtMark(maxBodyHp, crossedMark);
+              wbDamage = Math.max(0, latestPartHp - nextPartHp);
+              totalDamage = wbDamage;
+              hutaoTriggeredEvent = await serviceContext.hutaoEventService.startQuiz(
+                crossedMark,
+                eventBefore?.runKey || null
+              );
+            }
+          }
           const nextPartsHp = { ...prevParts.worldBossPartsHp, [worldBossPart]: nextPartHp };
           // ── 炎圈（元素師）：世界王「所有部位一起受傷」──
           // 你打的部位在戰鬥內已吃過炎圈跳傷；其餘尚存部位在此鏡射同量灼燒，計入你的貢獻。
@@ -3824,6 +3886,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           _fields.diceLuck = _dgg.nextLuck(combatResult?.diceLuck ?? diceLuckBefore);
           progress.diceGauge = _fields.diceGauge;
           progress.diceLuck = _fields.diceLuck;
+        }
+        if (windDirectionOn && combatResult?.windDirectionStep != null) {
+          _fields.windDirectionStep = _wd.normalizeStep(combatResult.windDirectionStep);
+          progress.windDirectionStep = _fields.windDirectionStep;
         }
         // 演奏判定（吟遊詩人）：連奏落地＋出下一題（一次性 token，用過即換）
         if (bardOn) {
@@ -4225,6 +4291,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         allPartsDefeated: isWorldBoss ? worldBossAllPartsDefeated : false,
         partBroken: isWorldBoss ? worldBossPartBroken : false,
         parts: isWorldBoss ? worldBossPartsForResp : null,
+        noParts: zoneKey === "event_boss_hutao_preview",
+        hutaoEvent: zoneKey === "event_boss_hutao_preview"
+          ? (hutaoTriggeredEvent || hutaoEventSnapshot || await serviceContext.hutaoEventService?.getSnapshot?.())
+          : null,
       };
       markBattlePerf("response");
       const totalBattleMs = performance.now() - battlePerf.startedAt;
@@ -4245,6 +4315,39 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // ──────────────────────────────────────────────────
   // 世界王（player 端唯讀狀態）
   // ──────────────────────────────────────────────────
+  router.get("/api/worldboss/hutao/status", requireAuth, async (req, res, next) => {
+    try {
+      const zoneKey = "event_boss_hutao_preview";
+      if (!canPlayerAccessZone(zoneKey, req.playerRecord.discordId)) {
+        return res.status(404).json({ status: "error", code: "zone_not_found", message: "找不到這個戰鬥區域。" });
+      }
+      const data = await serviceContext.hutaoEventService.getSnapshot();
+      return res.json(ok(data));
+    } catch (err) { return next(err); }
+  });
+
+  router.post("/api/worldboss/hutao/answer", requireAuth, async (req, res, next) => {
+    try {
+      const zoneKey = "event_boss_hutao_preview";
+      if (!canPlayerAccessZone(zoneKey, req.playerRecord.discordId)) {
+        return res.status(404).json({ status: "error", code: "zone_not_found", message: "找不到這個戰鬥區域。" });
+      }
+      const { discordId, displayName } = req.playerRecord;
+      const data = await serviceContext.hutaoEventService.submitAnswer({
+        quizId: req.body?.quizId,
+        choiceId: String(req.body?.choiceId || ""),
+        discordId,
+        displayName,
+      });
+      return res.json(ok(data, "已送出答案，等待其他玩家。"));
+    } catch (err) {
+      if (String(err?.code || "").startsWith("HUTAO_")) {
+        return res.status(400).json(fail(err.code, err.message));
+      }
+      return next(err);
+    }
+  });
+
   router.get("/api/worldboss/status", requireAuth, async (req, res, next) => {
     try {
       const wb = serviceContext.worldBossService;
@@ -4317,11 +4420,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             "🖤 破到剩最後一要害：狼王收束心神全力應戰，迴避與攻勢回歸常態；此最終核心物法皆可傷、不再變化，然其已淬成鐵石。",
             "💭 火獄低語：「剛柔輪替、眾力交織，狼焰方化餘燼。」"
           ]
+        },
+        event_boss_hutao_preview: {
+          title: "場風輪轉・立直答題",
+          lines: [
+            "🀀 東場：胡桃迴避大幅上升；🀁 南場：胡桃攻擊提高 25%。",
+            "🀂 西場：玩家爆擊傷害降低 25%；不使用任何防禦或破防效果。",
+            "🀃 北場：胡桃迴避歸零、玩家傷害 +35%，但胡桃攻擊 +50%。",
+            "🎴 HP 降到 70% 與 40% 時宣告立直，全服暫停 60 秒並一起回答聽牌題。",
+            "👀 作答後可即時看見其他玩家的選擇；時間到才公開正解並結算放銃／自摸／流局。"
+          ]
         }
       };
 
       const partsByZone = {};
-      const bosses = await Promise.all(Object.keys(WORLD_BOSS_ZONES).map(async (zoneKey) => {
+      const visibleWorldBossZones = Object.keys(WORLD_BOSS_ZONES)
+        .filter((zoneKey) => canPlayerAccessZone(zoneKey, req.playerRecord.discordId));
+      const bosses = await Promise.all(visibleWorldBossZones.map(async (zoneKey) => {
         const svc = serviceContext.worldBossServiceFor(zoneKey);
         const [info, st, monsters] = await Promise.all([
           svc ? svc.getConfigWithStatus().catch(() => null) : Promise.resolve(null),
@@ -4370,6 +4485,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 世界王場外機制快照：讓玩家在選部位、尚未進場前就能看見詠唱／海嘯是否結束。
         // phase 採共用形狀，之後其他世界王加入詠唱條時可直接沿用前端元件。
         let mechanic = null;
+        let hutaoEvent = null;
         const _ttStatus = require("../../shared/turtleTide");
         if (zoneKey === _ttStatus.ZONE) {
           const totalHpPct = bossMaxHp > 0 ? (currentHp / bossMaxHp) * 100 : 100;
@@ -4429,6 +4545,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             tide: turtleView.tide
           };
         }
+        if (zoneKey === "event_boss_hutao_preview" && serviceContext.hutaoEventService) {
+          hutaoEvent = await serviceContext.hutaoEventService.getSnapshot(_wbNowS);
+          mechanic = {
+            key: "hutao_wind",
+            phase: hutaoEvent.wind?.key || "east",
+            remainingMs: Number(hutaoEvent.wind?.remainingMs || 0),
+            durationMs: Number(hutaoEvent.wind?.periodMs || 60000),
+            dangerOnEntry: hutaoEvent.wind?.key === "north",
+            wind: hutaoEvent.wind,
+            quizActive: Boolean(hutaoEvent.blocking),
+          };
+        }
 
         // 傷害排行(對這隻王的累積貢獻)：讓網頁世界王面板也看得到「誰打了多少」(同 DC 面板)
         const _wbPretty = (nm, id) => {
@@ -4461,7 +4589,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           bossMaxHp,
           currentHp,
           parts,
+          noParts: zoneKey === "event_boss_hutao_preview",
           mechanic,
+          hutaoEvent,
           ranking,
           participantCount,
           lastHitAt,
@@ -4767,8 +4897,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { calcPlayerStats } = require("../../shared/combatStats");
       const attrs = prog?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = await mergeEquippedFromLibrary(prog?.equipment || {}, serviceContext.itemRepository);
+      const _wd = require("../../shared/windDirection");
+      const windDirectionOn = _wd.hasEffect(equipped);
+      const windDirectionBefore = windDirectionOn ? _wd.read(prog) : 0;
       const ps = calcPlayerStats(attrs, equipped, prog?.activeEffects || [], prog?.inventory || [], { petStat: require("../../shared/petDex").statBonusOf(prog?.petDex) });
-      const s = { floor: 1, playerHp: 0, playerMaxHp: 0, baseAtk: ps.atk || 1, baseStats: ps, equipped, inventory: prog?.inventory || [], used: new Set(), alive: true, settled: false, startedAt: Date.now() };
+      const s = { floor: 1, playerHp: 0, playerMaxHp: 0, baseAtk: ps.atk || 1, baseStats: ps, equipped, inventory: prog?.inventory || [], windDirectionOn, windDirectionStep: windDirectionBefore, used: new Set(), alive: true, settled: false, startedAt: Date.now() };
       syncSoloTowerMaxHp(s, true); // 第 1 層 maxHp(含樓層 HP 加成)+ 滿血開局
       s.upcoming = await pickTowerMonster(1, s.used); // 預抽第 1 層怪物供面板顯示
       towerSessions.set(discordId, s);
@@ -4809,7 +4942,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         startPlayerHp: s.playerHp,
         monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
         monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
+        windDirectionStep: s.windDirectionStep,
       });
+      if (s.windDirectionOn && r?.windDirectionStep != null) {
+        s.windDirectionStep = require("../../shared/windDirection").normalizeStep(r.windDirectionStep);
+        await serviceContext.progressRepository.updateFields(discordId, { windDirectionStep: s.windDirectionStep }).catch(() => {});
+      }
       s.playerHp = Math.max(0, r.finalPlayerHp);
       const killed = (r.finalMonsterHp ?? 0) <= 0 && r.outcome === "win";
       const died = s.playerHp <= 0;

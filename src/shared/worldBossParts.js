@@ -20,6 +20,7 @@ const TURTLE_PART_LABELS = Object.freeze({
 function getWorldBossPartLabel(zoneKey, partKey) {
   const key = String(partKey || "");
   if (zoneKey === "event_boss") return TURTLE_PART_LABELS[key] || "島背";
+  if (zoneKey === "event_boss_hutao_preview") return "本體";
   return DEFAULT_PART_LABELS[key] || key || "部位";
 }
 

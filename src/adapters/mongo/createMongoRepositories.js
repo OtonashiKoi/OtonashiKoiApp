@@ -1005,6 +1005,38 @@ function createMongoRepositories() {
         return state;
       }
     },
+    worldBossEventRepository: {
+      async get(bossKey) {
+        const row = await (await collection("worldBossEventState")).findOne({ _id: String(bossKey) });
+        return row?.value || null;
+      },
+      async save(state, bossKey) {
+        if (maintenance.isStrict()) throw Object.assign(new Error("SEASON_RESET_WRITE_LOCKED"), { code: "SEASON_RESET_WRITE_LOCKED" });
+        await (await collection("worldBossEventState")).updateOne(
+          { _id: String(bossKey) },
+          { $set: { value: state, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+        return state;
+      },
+      async submitAnswer({ bossKey, quizId, discordId, answer, now = Date.now() }) {
+        if (maintenance.isStrict()) throw Object.assign(new Error("SEASON_RESET_WRITE_LOCKED"), { code: "SEASON_RESET_WRITE_LOCKED" });
+        const field = `value.quiz.answers.${String(discordId)}`;
+        const result = await (await collection("worldBossEventState")).updateOne(
+          {
+            _id: String(bossKey),
+            "value.quiz.id": String(quizId),
+            "value.quiz.status": "active",
+            "value.quiz.endsAt": { $gt: Number(now) },
+          },
+          { $set: { [field]: answer, updatedAt: new Date().toISOString() } }
+        );
+        if (!result.matchedCount) {
+          throw Object.assign(new Error("答題已結束。"), { code: "HUTAO_QUIZ_CLOSED" });
+        }
+        return true;
+      },
+    },
     pkArenaRepository: {
       async getState() {
         const row = await (await collection("pkArenaState")).findOne({ _id: "default" });

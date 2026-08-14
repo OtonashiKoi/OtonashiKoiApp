@@ -1,7 +1,7 @@
 <!-- GENERATED: CURRENT_GAME_STATUS -->
 # 遊戲現況快照 Current Game Status
 
-生成時間：2026-08-11T13:15:32.834Z
+生成時間：2026-08-14T08:17:29.235Z
 
 > 本檔由程式碼與目前 MongoDB 自動產生，請勿手動修改。執行 `npm run status:update` 更新。功能說明與檔案位置請看 `docs/README.md`、`PROJECT_FEATURES.md`、`docs/SYSTEMS.md`。
 
@@ -13,7 +13,7 @@
 | 爬塔 | 暫停 | src/bot/handlers/towerHandlers.js |
 | 一轉 | 11 個 | src/shared/jobAdvancement.js |
 | 二轉 | 13 條；鎖定 2 條 | src/shared/jobAdvancement.js |
-| 區域定義 | 15 個 | src/shared/zones.js |
+| 區域定義 | 16 個 | src/shared/zones.js |
 
 ## Summary
 
@@ -21,14 +21,14 @@
 | --- | --- |
 | 玩家 | 431 |
 | 進度資料 | 435 |
-| 怪物 | 88 |
+| 怪物 | 89 |
 | 怪物狀態文件 | 14 |
-| 道具 | 553 |
+| 道具 | 567 |
 | 任務 | 72 |
 | 職業徽章 | 24 |
 | 職業任務 | 25 |
-| 世界王設定 | 4 |
-| 世界王狀態 | 4 |
+| 世界王設定 | 5 |
+| 世界王狀態 | 5 |
 | 故事章節 | 3 |
 | 故事 NPC | 22 |
 | 商店商品 | 30 |
@@ -52,6 +52,7 @@
 | mythic | 神話區 | 60 | 無上限 | 0 | 0 | 0 |
 | event_1 | 限定活動關卡 | 1 | 無上限 | 7 | 7 | 0 |
 | event_boss | 限定活動 世界王 | 1 | 無上限 | 1 | 1 | 1 |
+| event_boss_hutao_preview | VTUBER的世界・胡桃私測 | 1 | 無上限 | 1 | 1 | 1 |
 | 未分區 | 未定義 |  |  | 11 | 0 | 11 |
 
 ## World Bosses
@@ -62,6 +63,7 @@
 | dragon_king | 啟用 | dragon_realm | dragon_king_lair | 30 | 60 |
 | hellfang_king | 啟用 | hellfire | hellfire_depths | 30 | 60 |
 | island_turtle | 啟用 | event_1 | event_boss | 120 | 60 |
+| northwind_hutao | 啟用 | event_boss_hutao_preview | event_boss_hutao_preview | 120 | 120 |
 
 ## Monsters
 
@@ -123,6 +125,7 @@
 | event_1 | 6 | 鼓鼓河豚 | 42 | 21500 | 13490 | 378 | 0 | 否 | 7 |
 | event_1 | 7 | 龜龜大將 | 45 | 27000 | 16400 | 459 | 0 | 否 | 9 |
 | event_boss |  | 島島龜王 | 65 | 4000000 | 900 | 2600 | 3000 | 是 | 12 |
+| event_boss_hutao_preview | 1 | 北風雀神・胡桃 | 65 | 12000000 | 3500 | 12000 | 5000 | 是 | 14 |
 | hellfire | 1 | 焰爪幼狼 | 42 | 40629 | 15000 | 700 | 0 | 否 | 12 |
 | hellfire | 2 | 灰燼豺 | 43 | 43338 | 16000 | 740 | 0 | 否 | 13 |
 | hellfire | 3 | 熔岩犬 | 43 | 47401 | 17500 | 800 | 0 | 否 | 13 |
@@ -162,7 +165,7 @@
 | --- | --- |
 | collectible | 8 |
 | consumable | 32 |
-| equipment | 486 |
+| equipment | 500 |
 | job_badge | 24 |
 | pet_egg | 3 |
 
@@ -172,7 +175,7 @@
 | B | 73 |
 | C | 73 |
 | D | 62 |
-| S | 55 |
+| S | 69 |
 | 無階級 | 76 |
 
 | 槽位 | 數量 |
@@ -186,11 +189,11 @@
 | head_mid | 23 |
 | head_top | 23 |
 | job_eq | 24 |
-| shield | 21 |
+| shield | 23 |
 | shoes | 24 |
-| special | 85 |
+| special | 86 |
 | title_eq | 14 |
-| weapon | 124 |
+| weapon | 135 |
 | 無槽位 | 43 |
 
 ## Items
@@ -678,11 +681,23 @@
 | s-legend-saint | 聖人就是比拳頭大小 | equipment | S | anchor |  |  | none |
 | s-legend-burst | 驟・先機之刃 | equipment | S | anchor |  |  | none |
 | s-legend-dice | 骰・命運之輪 | equipment | S | anchor |  |  | none |
+| hutao-wind-offhand-sword | 對子・雙風脇差 | equipment | S | shield | offhand_sword | STR+6 AGI+3 VIT+3 | none |
+| hutao-wind-offhand-dagger | 暗刻・羽切短刃 | equipment | S | shield | offhand_dagger | AGI+7 DEX+2 LUK+3 | none |
+| monster-card-northwind-hutao | 北風雀神・胡桃卡 | equipment | S | special |  |  | none |
 | monster-card-island-turtle | 島島龜王卡 | equipment | S | special |  | VIT+3 | none |
+| hutao-wind-mace-1h | 一發・雀音戰錘 | equipment | S | weapon | mace_1h | STR+12 VIT+5 DEX+2 | none |
+| hutao-wind-staff-2h | 北場・雀神長杖 | equipment | S | weapon | staff_2h | VIT+4 INT+15 DEX+4 | none |
+| hutao-wind-sword-2h | 四喜・北天巨劍 | equipment | S | weapon | sword_2h | STR+18 AGI+3 VIT+4 | none |
 | s-dragon-axe_2h | 屠龍巨斧 | equipment | S | weapon | axe_2h | STR+20 LUK+5 | none |
+| hutao-wind-axe-2h | 嶺上・裂空巨斧 | equipment | S | weapon | axe_2h | STR+18 VIT+3 LUK+4 | none |
 | s-dragon-sword_1h | 幼龍牙劍 | equipment | S | weapon | sword_1h | STR+19 | none |
 | s-dragon-dice | 幼龍骨骰 | equipment | S | weapon | dice | AGI+4 LUK+19 | none |
 | beach-s-sword | 怒濤斬浪劍 | equipment | S | weapon | sword_1h | STR+14 AGI+3 LUK+2 | none |
+| hutao-wind-dagger | 搶槓・燕返匕首 | equipment | S | weapon | dagger | STR+4 AGI+11 LUK+4 | none |
+| hutao-wind-axe-1h | 斷么・翠嵐手斧 | equipment | S | weapon | axe_1h | STR+13 VIT+2 LUK+4 | none |
+| hutao-wind-staff-1h | 東場・青龍法杖 | equipment | S | weapon | staff_1h | VIT+4 INT+11 DEX+4 | none |
+| hutao-wind-sword-1h | 東風・青龍雀劍 | equipment | S | weapon | sword_1h | STR+14 AGI+3 LUK+2 | none |
+| hutao-wind-mace-2h | 海底・北冥巨槌 | equipment | S | weapon | mace_2h | STR+17 AGI+3 VIT+5 | none |
 | beach-s-dagger | 深潮魚骨匕首 | equipment | S | weapon | dagger | STR+4 AGI+11 LUK+4 | none |
 | beach-s-staff-1h | 潮心珊瑚杖 | equipment | S | weapon | staff_1h | VIT+4 INT+11 DEX+4 | none |
 | beach-s-mace-1h | 潮核碎甲錘 | equipment | S | weapon | mace_1h | STR+12 VIT+5 DEX+2 | none |
@@ -711,6 +726,8 @@
 | beach-s-mace | 碎島巨槌 | equipment | S | weapon | mace_2h | STR+17 AGI+3 VIT+5 | none |
 | beach-s-axe-1h | 礁甲破浪斧 | equipment | S | weapon | axe_1h | STR+13 VIT+2 LUK+4 | none |
 | beach-s-bow | 穿潮海天弓 | equipment | S | weapon | bow | AGI+5 DEX+15 LUK+3 | none |
+| hutao-wind-bow | 立直・破風長弓 | equipment | S | weapon | bow | AGI+5 DEX+15 LUK+3 | none |
+| hutao-wind-dice | 自摸・四風骰 | equipment | S | weapon | dice | AGI+4 DEX+4 LUK+15 | none |
 | s-dragon-axe_1h | 裂龍手斧 | equipment | S | weapon | axe_1h | STR+14 LUK+5 | none |
 | beach-s-sword-2h | 鎮潮斷海巨劍 | equipment | S | weapon | sword_2h | STR+18 AGI+3 VIT+4 | none |
 | beach-s-axe-2h | 開島裂海巨斧 | equipment | S | weapon | axe_2h | STR+18 VIT+3 LUK+4 | none |

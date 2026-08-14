@@ -9,7 +9,7 @@
 const { Router } = require("express");
 const { ok } = require("../../shared/response");
 const { requireAuth } = require("./requireAuth");
-const { ALL_ZONE_KEYS, ZONE_BY_KEY } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, ZONE_BY_KEY, isZoneVisibleInBestiary } = require("../../shared/zones");
 const { bestiaryRequirement, bestiaryBonusPct, MAX_BONUS_PCT } = require("../../shared/bestiary");
 const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
 const { GATHER_INTERVAL_MIN } = require("../../services/pet/petService");
@@ -41,6 +41,7 @@ function createPlayerCollectionRoutes(serviceContext) {
       const byZone = new Map();
       for (const m of monsters) {
         const z = m.zone || "normal";
+        if (!isZoneVisibleInBestiary(z)) continue;
         if (!byZone.has(z)) byZone.set(z, []);
         byZone.get(z).push(m);
       }

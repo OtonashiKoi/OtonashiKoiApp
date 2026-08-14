@@ -178,6 +178,21 @@ const ZONE_DEFS = [
     group:        "event",
     worldBoss:    true,   // 活動世界王槽位（前端標示用；實際世界王接線於架設內容時再做）
   },
+  {
+    key:          "event_boss_hutao_preview",
+    featureKey:   "monster_zone_event_boss_hutao_preview",
+    label:        "VTUBER的世界・胡桃私測",
+    emoji:        "🀄",
+    tagline:      "北風雀神・胡桃限定武器私測。",
+    color:        0x65c9b8,
+    minLevel:     1,
+    maxLevel:     null,
+    defaultEntryFee: 5000,
+    group:        "event",
+    worldBoss:    true,
+    bestiaryVisible: false,
+    previewPlayerIds: Object.freeze(["865264891991425055"]),
+  },
 ];
 
 // ─── 快速查詢表 ───────────────────────────────────────────────────────────────
@@ -202,6 +217,33 @@ function zoneToFeatureKey(zoneKey) {
 /** 正規化 zone key，非法值 fallback "normal" */
 function normalizeZone(zone) {
   return ZONE_BY_KEY[zone] ? zone : "normal";
+}
+
+/** 玩家是否可看見／進入指定區域。previewPlayerIds 為空時代表公開。 */
+function canPlayerAccessZone(zoneKey, playerId) {
+  const def = ZONE_BY_KEY[zoneKey];
+  if (!def) return false;
+  const allowlist = Array.isArray(def.previewPlayerIds) ? def.previewPlayerIds : [];
+  if (allowlist.length === 0) return true;
+  return allowlist.includes(String(playerId || ""));
+}
+
+/** 已登入玩家可見的區域；私測區不會出現在其他玩家 API。 */
+function getVisibleZoneKeys(playerId) {
+  return ALL_ZONE_KEYS.filter((zoneKey) => canPlayerAccessZone(zoneKey, playerId));
+}
+
+/** 未登入 viewer 只能取得公開區域。 */
+function getPublicZoneKeys() {
+  return ALL_ZONE_KEYS.filter((zoneKey) => {
+    const ids = ZONE_BY_KEY[zoneKey]?.previewPlayerIds;
+    return !Array.isArray(ids) || ids.length === 0;
+  });
+}
+
+/** 是否列入玩家怪物圖鑑；私測／未公開區可保留戰鬥入口但不洩漏圖鑑分類。 */
+function isZoneVisibleInBestiary(zoneKey) {
+  return ZONE_BY_KEY[zoneKey]?.bestiaryVisible !== false;
 }
 
 /** 判斷是否為怪物區的 featureKey */
@@ -281,6 +323,10 @@ module.exports = {
   featureKeyToZone,
   zoneToFeatureKey,
   normalizeZone,
+  canPlayerAccessZone,
+  getVisibleZoneKeys,
+  getPublicZoneKeys,
+  isZoneVisibleInBestiary,
   isMonsterZoneFeatureKey,
   getZoneTheme,
   getZoneDefaultEntryFee,

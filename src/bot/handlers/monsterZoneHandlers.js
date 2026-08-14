@@ -3,7 +3,7 @@
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { buildItemEffectLines } = require("../../shared/itemEffectLines");
-const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, getZoneTheme, getZoneDefaultEntryFee, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, canPlayerAccessZone, getZoneTheme, getZoneDefaultEntryFee, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
 const { isWorldBossZone, WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
 
 // 這些效果的 params.value 代表百分比（percent），顯示時會特別格式化
@@ -294,6 +294,7 @@ const WORLD_BOSS_TARGET_PARTS = new Set(["head", "body", "legs", "wings", "upper
 // 古龍王巢穴採 4 部位(含龍翼)+ 破鱗削弱;其餘世界王維持 3 部位
 const DRAGON_KING_ZONE = "dragon_king_lair";
 const TURTLE_ZONE = "event_boss"; // 島島龜王（活動）：潮汐/海嘯在 shared/turtleTide.js
+const HUTAO_PREVIEW_ZONE = "event_boss_hutao_preview";
 // 地獄狼牙王(牙狼)：5 部位(3物2法) + 部位翻面機制
 const HELLFANG_ZONE = "hellfire_depths";
 // 牙狼五部位「原生弱點」(吃 100% 的流派)：法系(上軀幹/尾巴) vs 物理(頭/下軀幹/腿)
@@ -310,6 +311,7 @@ const HELLFANG_PART_LABELS = { head: "頭部", upper_body: "上軀幹", lower_bo
 function getWorldBossPartKeys(zoneKey) {
   if (zoneKey === HELLFANG_ZONE) return ["head", "upper_body", "lower_body", "tail", "legs"];
   if (zoneKey === TURTLE_ZONE) return ["head", "body", "wings", "legs"]; // 龜首/島背/左鰭/右鰭
+  if (zoneKey === HUTAO_PREVIEW_ZONE) return ["body"];
   return zoneKey === DRAGON_KING_ZONE ? ["head", "body", "wings", "legs"] : ["head", "body", "legs"];
 }
 
@@ -323,6 +325,9 @@ function parseWorldBossTargetPart(customId) {
 function getWorldBossTargetProfile(part, zoneKey = null) {
   // 島島龜王：難度全由潮汐/海嘯機制驅動（turtleTide.battleMods），部位本身不加料
   if (zoneKey === TURTLE_ZONE) {
+    return { label: getWorldBossPartLabel(zoneKey, part) };
+  }
+  if (zoneKey === HUTAO_PREVIEW_ZONE) {
     return { label: getWorldBossPartLabel(zoneKey, part) };
   }
   // 古龍王:採破鱗削弱(破部位永久削弱),攻擊當下不另加難度,只回部位標籤
@@ -398,6 +403,7 @@ function applyWorldBossTargetToMonster(monsterStats, monsterEquipped, part, zone
 
 function createWorldBossPartHpTemplate(totalMaxHp = 0, zoneKey = null) {
   const maxHp = Math.max(1, Math.round(Number(totalMaxHp) || 1));
+  if (zoneKey === HUTAO_PREVIEW_ZONE) return { body: maxHp };
   if (zoneKey === HELLFANG_ZONE) {
     // 牙狼 5 部位：頭 20% / 上軀幹 20% / 下軀幹 20% / 尾巴 15% / 腿 25%
     const head = Math.max(1, Math.round(maxHp * 0.20));
@@ -852,7 +858,7 @@ const ZONE_PARTICIPATION_GEM_TIER = {
   // A 階區域統一給 A 石：秘銀(深處)/龍鱗(龍族)/焚獄(火焰)/期間活動
   ancient_city_deep: 'A', dragon_realm: 'A', hellfire: 'A',
   dragon_king_lair: 'A', hellfire_depths: 'A',
-  event_1: 'A', event_boss: 'A'
+  event_1: 'A', event_boss: 'A', event_boss_hutao_preview: 'A'
 };
 // 參與獎勵寶石掉落率（依品階）。S 石不進參與制，只由世界王/世界王寶箱產出。
 const GEM_PARTICIPATION_RATE = { D: 0.20, C: 0.20, B: 0.12, A: 0.06 };
@@ -2609,6 +2615,10 @@ async function handleEnterBattle(interaction) {
       await interaction.editReply({ content: "❌ 此頻道未設定為放怪區。" });
       return;
     }
+    if (!canPlayerAccessZone(zoneKey, discordId)) {
+      await interaction.editReply({ content: "❌ 找不到這個戰鬥區域。" });
+      return;
+    }
     const startingSession = activeSessions.get(discordId);
     if (startingSession) {
       startingSession.zoneKey = zoneKey;
@@ -3144,6 +3154,9 @@ async function handleEnterBattle(interaction) {
       let currentProg = currentSnapshot.progress;
       // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
       let currentEquipped = currentSnapshot.equipped;
+      const _wd = require("../../shared/windDirection");
+      const windDirectionOn = _wd.hasEffect(currentEquipped);
+      const windDirectionBefore = windDirectionOn ? _wd.read(currentProg) : 0;
 
       let battlePlayerStats = session.playerStats;
       let battleMonsterStats = session.monsterStats;
@@ -3313,6 +3326,7 @@ async function handleEnterBattle(interaction) {
           sageGaugeGrids: sageGridsBefore,     // 計謀值（兵聖）
           diceGaugeGrids: diceGridsBefore,     // 命運骰（賭神）
           diceLuckStacks: diceLuckBefore,      // 手氣正旺（賭神）
+          windDirectionStep: windDirectionBefore,
           zoneComboCount: comboBefore, // 劍鬼斬的倍率來源
           equipped: currentEquipped,
           inventory: currentProg?.inventory || [],
@@ -3669,6 +3683,10 @@ async function handleEnterBattle(interaction) {
           _fields.diceLuck = _dgg.nextLuck(combatResult?.diceLuck ?? diceLuckBefore);
           currentProg.diceGauge = _fields.diceGauge;
           currentProg.diceLuck = _fields.diceLuck;
+        }
+        if (windDirectionOn && combatResult?.windDirectionStep != null) {
+          _fields.windDirectionStep = _wd.normalizeStep(combatResult.windDirectionStep);
+          currentProg.windDirectionStep = _fields.windDirectionStep;
         }
         if (Array.isArray(currentProg.activeEffects) && currentProg.activeEffects.length > 0) {
           const nextActiveEffects = decrementActiveEffects(currentProg.activeEffects, "battle", 1);

@@ -21,6 +21,7 @@ const { EnhanceService } = require("./enhance/enhanceService");
 const { AuctionService } = require("./auction/auctionService");
 const { IdleService } = require("./idle/idleService");
 const { WorldBossService } = require("./worldBoss/worldBossService");
+const { HutaoEventService } = require("./worldBoss/hutaoEventService");
 const { InviteService } = require("./invite/inviteService");
 const { CreatorTokenService } = require("./creatorAuth/creatorTokenService");
 const { CasinoService } = require("./casino/casinoService");
@@ -104,6 +105,10 @@ function createServiceContext() {
   const islandTurtleBossService = new WorldBossService(repositories.worldBossRepository, {
     bossKey: "island_turtle",
   });
+  const northwindHutaoBossService = new WorldBossService(repositories.worldBossRepository, {
+    bossKey: "northwind_hutao",
+  });
+  const hutaoEventService = new HutaoEventService(repositories.worldBossEventRepository);
   // zone → 對應世界王 service（handler 用 zoneKey 取得正確 boss）
   const { bossKeyForZone } = require("./worldBoss/worldBossService");
   function worldBossServiceFor(zoneKey) {
@@ -111,6 +116,7 @@ function createServiceContext() {
     if (bk === "hellfang_king") return hellfangKingBossService;
     if (bk === "dragon_king") return dragonKingBossService;
     if (bk === "island_turtle") return islandTurtleBossService;
+    if (bk === "northwind_hutao") return northwindHutaoBossService;
     if (bk === "default") return worldBossService;
     return null;
   }
@@ -229,6 +235,7 @@ function createServiceContext() {
     worldBossService,
     dragonKingBossService,
     worldBossServiceFor,
+    hutaoEventService,
     inviteService,
     creatorTokenService,
     casinoService,

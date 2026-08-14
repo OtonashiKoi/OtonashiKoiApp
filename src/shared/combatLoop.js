@@ -19,6 +19,12 @@ const {
   turtleTidePhase,
   isTurtleTideTransitionRound,
 } = require("./turtleSet");
+const {
+  EFFECT_KEY: WIND_DIRECTION_EFFECT_KEY,
+  normalizeStep: normalizeWindDirectionStep,
+  phaseAt: windDirectionPhaseAt,
+  normalizeConfig: normalizeWindDirectionConfig,
+} = require("./windDirection");
 
 // 吸血總量上限（2026-08-04）：吸血來源可疊加（A階吸血戒 15＋錨點 15＋怪物卡…），
 // 舊制無上限時理論可疊到 75%＝造成傷害的四分之三變回血。
@@ -1078,6 +1084,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let _tshellBroken = false;      // 破殼＝傷害加成開啟（打到就生效）
   let _tshellBrokeThisRound = false; // 回合尾宣告用
   let _turtleSetTideCfg = null;   // 龜王套裝 4 件：漲潮／退潮每 2 回合輪替
+  let _windDirectionCfg = null;   // 胡桃限定武器：東南西北逐回合輪轉
+  const _windDirectionStartStep = normalizeWindDirectionStep(options.windDirectionStep);
+  let _windDirectionRoundsProcessed = 0;
 
   // ── 賭神（賭徒二轉）────────────────────────────────────────────────
   // 命運骰：6 格（有攻擊的回合 +1），滿的那回合改丟 3 顆——第三顆骰出 N ＝ 當回合 N 連擊；
@@ -1609,6 +1618,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             _turtleSetTideCfg = normalizeTurtleTideConfig(ep);
             continue;
           }
+          if (ep.key === WIND_DIRECTION_EFFECT_KEY) {
+            // 主手與副手同時裝備胡桃武器也只啟用一套風向，不重複疊加。
+            if (!_windDirectionCfg) _windDirectionCfg = normalizeWindDirectionConfig(ep);
+            continue;
+          }
           // build 錨點四件（沒苦硬吃 / 聖人比拳頭 / 對鮮血的渴望 / 時間管理大師）
           if (ep.key === "endure_burst") {
             // 2026-08-04 改制：原本「撐到第 15 回合一次反彈 ×5」→ 改成「每 N 回合反彈一次」，
@@ -1720,6 +1734,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   _shadowHp = pHp; // KDA 影子血量起點（與實際血量同步出發，之後只吃「非外部治療」的變化）
   while (round <= endRound && outcome === null) {
     const log = [`**【第 ${round} 回合】**`];
+    const _windDirectionPhase = _windDirectionCfg
+      ? windDirectionPhaseAt(_windDirectionStartStep, _windDirectionRoundsProcessed)
+      : null;
+    if (_windDirectionPhase) {
+      const _windText = _windDirectionPhase.key === "east"
+        ? `命中 +${_windDirectionCfg.eastHit}`
+        : _windDirectionPhase.key === "south"
+          ? `最終傷害 +${_windDirectionCfg.southFinalDamagePct}%`
+          : _windDirectionPhase.key === "west"
+            ? `爆擊傷害 +${_windDirectionCfg.westCritDamagePct}%`
+            : `爆擊率 +${_windDirectionCfg.northCritRatePct}%`;
+      log.push(`${_windDirectionPhase.emoji} **風向・${_windDirectionPhase.label}**｜${_windText}`);
+      _windDirectionRoundsProcessed += 1;
+    }
     _curLog = log;   // 讓 _healLogged 能把回血/回血化刃寫進「當回合」的戰報
     _curRound = round; // KDA：影子血歸零回合的記錄基準
     if (_turtleSetTideCfg && isTurtleTideTransitionRound(round, _turtleSetTideCfg)) {
@@ -3325,6 +3353,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerBonusVsPoisonedPct = 0;
     let playerBonusVsDebuffedPct = 0;
     let playerHitBonus = 0;
+    playerFinalDamageMultiplier *= Math.max(0, Number(options.eventPlayerFinalDamageMultiplier) || 1);
+    playerCritDamageMultiplier *= Math.max(0, Number(options.eventPlayerCritDamageMultiplier) || 1);
+    playerHitBonus += Number(options.eventPlayerHitBonus) || 0;
     // ── 新效果：防禦層 ──
     let playerPhysDrPct = 0;
     let playerMagicDrPct = 0;
@@ -3374,6 +3405,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerEchoPct = 0;                     // 殘影追擊傷害＝該次傷害的 %
     let playerTripleStrike = 0;               // 三元牌：固定 N 段攻擊、每段 1/N 傷害（0=不啟用）
     let playerGuaranteedCombo = 0;            // 狼牙王卡：連擊「首 N 段必定連上」（不看連擊率、必中），之後回到自身連擊率
+    if (_windDirectionPhase?.key === "east") playerHitBonus += _windDirectionCfg.eastHit;
+    else if (_windDirectionPhase?.key === "south") playerFinalDamageMultiplier *= (1 + _windDirectionCfg.southFinalDamagePct / 100);
+    else if (_windDirectionPhase?.key === "west") playerCritDamageMultiplier *= (1 + _windDirectionCfg.westCritDamagePct / 100);
+    else if (_windDirectionPhase?.key === "north") playerCritRateBonus += _windDirectionCfg.northCritRatePct;
     if (Array.isArray(options.playerActiveEffects)) {
       for (const eff of options.playerActiveEffects) {
         if (!eff) continue;
@@ -5672,7 +5707,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       hp: Math.max(0, _spiritHp),
       maxHp: _spiritMaxHp,
       hpPct: Math.max(0, Math.round((_spiritHp / Math.max(1, _spiritMaxHp)) * 1000) / 10)
-    } : null
+    } : null,
+    windDirectionStep: _windDirectionCfg
+      ? normalizeWindDirectionStep(_windDirectionStartStep + _windDirectionRoundsProcessed)
+      : null,
+    windDirectionRoundsProcessed: _windDirectionCfg ? _windDirectionRoundsProcessed : 0,
   };
 }
 

@@ -265,6 +265,7 @@ const WORLD_BOSS_ZONES = {
   dragon_king_lair: "dragon_king", // 龍王(B)
   hellfire_depths: "hellfang_king", // 地獄狼牙王（終局）
   event_boss: "island_turtle", // 島島龜王（期間限定活動；潮汐/海嘯機制在 shared/turtleTide.js）
+  event_boss_hutao_preview: "northwind_hutao", // 北風雀神・胡桃（音無恋私測；獨立狀態，不覆寫龜王）
 };
 function isWorldBossZone(zoneKey) {
   return Object.prototype.hasOwnProperty.call(WORLD_BOSS_ZONES, zoneKey);
