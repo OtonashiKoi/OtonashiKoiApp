@@ -21,6 +21,8 @@ const MONSTER_ID = "event-northwind-hutao";
 const CARD_ID = "monster-card-northwind-hutao";
 const IMAGE_URL = "/uploads/monsters/northwind-hutao-v1.png";
 const WIND_EFFECT_KEY = "wind_direction_cycle";
+const PREVIEW_BOSS_HP = 100000;
+const FORMAL_RELEASE_TARGET_HP = 4500000;
 const DROP_CHANCE = Math.round((100 / 13) * 100) / 100;
 const S = (str = 0, agi = 0, vit = 0, int = 0, dex = 0, luk = 0) => ({ str, agi, vit, int, dex, luk });
 
@@ -132,7 +134,8 @@ function buildMonster(now, card) {
     name: "北風雀神・胡桃",
     zone: ZONE,
     level: 65,
-    maxHp: 12000000,
+    // 音無恋單人私測使用低血量；正式全服開放時預計調為 FORMAL_RELEASE_TARGET_HP。
+    maxHp: PREVIEW_BOSS_HP,
     str: 85,
     agi: 90,
     vit: 80,
@@ -174,7 +177,10 @@ async function main() {
   const items = [...WEAPONS.map((spec) => buildItem(spec, now)), card];
   const monster = buildMonster(now, card);
 
-  console.log(`北風雀神・胡桃私測：${WEAPONS.length} 種武器＋1 張王卡，每件武器掉落率 ${DROP_CHANCE}%`);
+  console.log(
+    `北風雀神・胡桃私測：HP ${PREVIEW_BOSS_HP.toLocaleString()}（正式目標 ${FORMAL_RELEASE_TARGET_HP.toLocaleString()}）` +
+    `，${WEAPONS.length} 種武器＋1 張王卡，每件武器掉落率 ${DROP_CHANCE}%`
+  );
   for (const item of items.filter((entry) => entry.weaponType)) {
     const sum = Object.values(item.equipStats).reduce((total, value) => total + Number(value || 0), 0);
     console.log(`- ${item.name} | ${item.weaponType} | ${item.equipSlot} | 屬性總和 ${sum}`);
