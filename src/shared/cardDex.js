@@ -53,9 +53,9 @@ async function getCardRegistry(db, { force = false } = {}) {
 
   const items = db.collection("items");
   const monsters = db.collection("monsters");
-  const cards = await items.find({
+  const cards = (await items.find({
     $or: [{ equipSlot: "special" }, { monsterCardOf: { $exists: true } }, { isNpcCard: true }],
-  }).toArray();
+  }).toArray()).filter((card) => card?.bestiaryVisible !== false);
   const mAll = await monsters.find({}).project({ id: 1, zone: 1, name: 1 }).toArray();
   const zoneById = {}, zoneByName = {};
   for (const m of mAll) { zoneById[m.id] = m.zone; zoneByName[m.name] = m.zone; }

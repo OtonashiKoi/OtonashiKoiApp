@@ -92,6 +92,7 @@ function buildCard(now) {
     monsterCardOf: MONSTER_ID,
     eventBossKey: BOSS_KEY,
     limitedEvent: true,
+    bestiaryVisible: false,
     imageUrl: IMAGE_URL,
     imageThumbnailUrl: IMAGE_URL,
     updatedAt: now,
