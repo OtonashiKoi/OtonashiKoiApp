@@ -113,7 +113,7 @@ const EFFECT_DEFINITIONS = [
   defineEffect("curse_dot", "Curse", "dot", ["monster_skill", "skill"], "refresh", ["turns"], "Dark damage over time."),
   defineEffect("life_regen", "Life Regeneration", "dot", ["equipment", "passive"], "replace", ["battle", "permanent"], "Passive HP regeneration."),
   defineEffect("turtle_tide_cycle", "Turtle Tide Cycle", "conditional", ["equipment", "passive"], "replace", ["battle", "permanent"], "Alternate every two rounds between incoming damage reduction and final outgoing damage."),
-  defineEffect("wind_direction_cycle", "Wind Direction Cycle", "conditional", ["equipment", "passive"], "replace", ["battle", "permanent"], "Cycle every round through East hit, South final damage, West critical damage, and North critical rate; the next direction persists across battles."),
+  defineEffect("wind_direction_cycle", "Wind Direction Cycle", "conditional", ["equipment", "passive"], "replace", ["battle", "permanent"], "Cycle through East hit, South final damage, West critical damage, and North critical rate. phaseRounds controls each direction's duration; weapon cycles persist across battles, while the full Hu Tao set starts each battle from East."),
   defineEffect("mana_regen", "Mana Regeneration", "dot", ["equipment", "passive"], "replace", ["battle", "permanent"], "Passive MP/SP regeneration.", { reserved: true }),
   defineEffect("stun", "Stun", "control", ["monster_skill", "skill", "equipment"], "refresh", ["turns"], "Cannot act while stunned."),
   defineEffect("freeze", "Freeze", "control", ["monster_skill", "skill"], "refresh", ["turns"], "Cannot act; often paired with bonus damage."),

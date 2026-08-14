@@ -1,7 +1,7 @@
 <!-- GENERATED: CURRENT_GAME_STATUS -->
 # 遊戲現況快照 Current Game Status
 
-生成時間：2026-08-14T09:51:38.728Z
+生成時間：2026-08-14T10:26:12.448Z
 
 > 本檔由程式碼與目前 MongoDB 自動產生，請勿手動修改。執行 `npm run status:update` 更新。功能說明與檔案位置請看 `docs/README.md`、`PROJECT_FEATURES.md`、`docs/SYSTEMS.md`。
 
@@ -22,8 +22,8 @@
 | 玩家 | 431 |
 | 進度資料 | 435 |
 | 怪物 | 89 |
-| 怪物狀態文件 | 14 |
-| 道具 | 567 |
+| 怪物狀態文件 | 15 |
+| 道具 | 575 |
 | 任務 | 72 |
 | 職業徽章 | 24 |
 | 職業任務 | 25 |
@@ -125,7 +125,7 @@
 | event_1 | 6 | 鼓鼓河豚 | 42 | 21500 | 13490 | 378 | 0 | 否 | 7 |
 | event_1 | 7 | 龜龜大將 | 45 | 27000 | 16400 | 459 | 0 | 否 | 9 |
 | event_boss |  | 島島龜王 | 65 | 4000000 | 900 | 2600 | 3000 | 是 | 12 |
-| event_boss_hutao_preview | 1 | 北風雀神・胡桃 | 65 | 100000 | 3500 | 12000 | 5000 | 是 | 14 |
+| event_boss_hutao_preview | 1 | 北風雀神・胡桃 | 65 | 100000 | 3500 | 12000 | 5000 | 是 | 22 |
 | hellfire | 1 | 焰爪幼狼 | 42 | 40629 | 15000 | 700 | 0 | 否 | 12 |
 | hellfire | 2 | 灰燼豺 | 43 | 43338 | 16000 | 740 | 0 | 否 | 13 |
 | hellfire | 3 | 熔岩犬 | 43 | 47401 | 17500 | 800 | 0 | 否 | 13 |
@@ -165,13 +165,13 @@
 | --- | --- |
 | collectible | 8 |
 | consumable | 32 |
-| equipment | 500 |
+| equipment | 508 |
 | job_badge | 24 |
 | pet_egg | 3 |
 
 | 階級 | 數量 |
 | --- | --- |
-| A | 214 |
+| A | 222 |
 | B | 73 |
 | C | 73 |
 | D | 62 |
@@ -180,17 +180,17 @@
 
 | 槽位 | 數量 |
 | --- | --- |
-| accessory_l | 46 |
-| accessory_r | 46 |
+| accessory_l | 47 |
+| accessory_r | 47 |
 | anchor | 9 |
-| armor | 24 |
-| garment | 24 |
-| head_low | 23 |
-| head_mid | 23 |
-| head_top | 23 |
+| armor | 25 |
+| garment | 25 |
+| head_low | 24 |
+| head_mid | 24 |
+| head_top | 24 |
 | job_eq | 24 |
 | shield | 23 |
-| shoes | 24 |
+| shoes | 25 |
 | special | 86 |
 | title_eq | 14 |
 | weapon | 135 |
@@ -265,12 +265,14 @@
 | 8a5db376-20fa-495f-a075-109aea276490 | 疾風左之戒 | equipment | A | accessory_l |  | AGI+3 VIT+1 DEX+1 | none |
 | mithril-arm-accessory_l | 秘銀戒指(左) | equipment | A | accessory_l |  | STR+3 LUK+2 | none |
 | ab7ae63e-f2c9-4d1d-9418-f332f80033ab | 迅紋金戒指(左) | equipment | A | accessory_l |  | DEX+5 LUK+2 | none |
+| hutao-set-ring-left | 連莊・東南風戒 | equipment | A | accessory_l |  | AGI+2 INT+2 DEX+2 LUK+1 | none |
 | e24a419d-dec7-4e9b-8438-8e9519f53c0e | 重擊左之戒 | equipment | A | accessory_l |  | STR+3 VIT+1 LUK+1 | none |
 | 82c89915-2b11-49bf-8557-e7cd544a86fd | 金戒指(左) | equipment | A | accessory_l |  | AGI+3 VIT+3 LUK+3 | none |
 | f1a34a79-223f-440e-b6ec-ca17aa49b224 | 鏡映左之戒 | equipment | A | accessory_l |  | VIT+1 INT+3 DEX+1 | none |
 | 46514870-8bb0-4cf1-a3a4-b13fe158eb29 | 鬥紋金戒指(左) | equipment | A | accessory_l |  | STR+5 LUK+2 | none |
 | dragonscale-arm-accessory_l | 龍紋戒指(左) | equipment | A | accessory_l |  | STR+3 LUK+2 | none |
 | e95e37ac-96a5-41ea-9a85-0d63bd8bdcaf | 吸血右之戒 | equipment | A | accessory_r |  | AGI+1 VIT+1 LUK+3 | none |
+| hutao-set-ring-right | 和了・西北風戒 | equipment | A | accessory_r |  | STR+2 AGI+2 DEX+1 LUK+2 | none |
 | dd770ac0-6b4d-4654-9bad-86ee2d917199 | 守護右之戒 | equipment | A | accessory_r |  | STR+1 VIT+3 DEX+1 | none |
 | 41271fb1-8160-43ee-8f8a-68c45e2b0e35 | 戰意右之戒 | equipment | A | accessory_r |  | AGI+1 DEX+3 LUK+1 | none |
 | 9e2f286c-1ed6-42bb-bda8-c685c7e8970a | 救護右之戒 | equipment | A | accessory_r |  | VIT+1 INT+3 DEX+1 | none |
@@ -286,6 +288,7 @@
 | e843b12f-e9fb-47c4-b5a8-c3e1fc1d84cc | 鏡映右之戒 | equipment | A | accessory_r |  | VIT+1 INT+3 DEX+1 | none |
 | 7be81010-a486-4c77-b912-7e811e94b9d7 | 鬥紋金戒指(右) | equipment | A | accessory_r |  | STR+5 LUK+2 | none |
 | dragonscale-arm-accessory_r | 龍紋戒指(右) | equipment | A | accessory_r |  | STR+3 VIT+2 | none |
+| hutao-set-armor | 北風・雀神羽衣 | equipment | A | armor |  | STR+3 AGI+3 VIT+5 INT+2 DEX+2 | none |
 | 0d9d737a-15af-4a3f-a62b-2417c44b41b2 | 智紋鋼鐵袍 | equipment | A | armor |  | VIT+5 INT+9 DEX+1 | none |
 | hellfire-mag-armor | 焰紋法袍 | equipment | A | armor |  | INT+11 LUK+4 | none |
 | fire-a-arm-armor | 焰鱗甲 | equipment | A | armor |  | STR+4 VIT+9 DEX+2 | none |
@@ -298,6 +301,7 @@
 | dragonscale-mag-armor | 龍紋法袍 | equipment | A | armor |  | AGI+3 INT+12 | none |
 | dragonscale-arm-armor | 龍鱗鎧 | equipment | A | armor |  | STR+4 VIT+9 DEX+2 | none |
 | beach-armor | 龜甲重鎧 | equipment | A | armor |  | STR+3 AGI+2 VIT+10 | none |
+| hutao-set-garment | 四喜・巡風披帛 | equipment | A | garment |  | AGI+4 VIT+3 INT+2 DEX+2 LUK+1 | none |
 | 40116efc-f44e-48cd-ab0f-56f63ff838c9 | 智紋鋼鐵披風 | equipment | A | garment |  | VIT+7 INT+5 | none |
 | beach-garment | 海藻披風 | equipment | A | garment |  | AGI+2 VIT+8 DEX+2 | none |
 | hellfire-mag-garment | 焰紋法披風 | equipment | A | garment |  | INT+8 LUK+4 | none |
@@ -315,12 +319,14 @@
 | fire-a-arm-head_low | 焰鱗口罩 | equipment | A | head_low |  | STR+2 VIT+9 | none |
 | mithril-mag-head_low | 秘銀法護面 | equipment | A | head_low |  | VIT+5 INT+6 | none |
 | mithril-arm-head_low | 秘銀護面 | equipment | A | head_low |  | STR+2 VIT+9 | none |
+| hutao-set-head-low | 西風・白牌面紗 | equipment | A | head_low |  | AGI+3 VIT+2 DEX+3 LUK+3 | none |
 | 9c7b7e3f-bd2e-4056-9b38-4c3dd235670b | 迅紋鋼鐵面罩 | equipment | A | head_low |  | VIT+7 DEX+4 LUK+3 | none |
 | 5c72b89a-f20c-4df1-b1ce-f6fb7d011eaf | 鋼鐵口罩 | equipment | A | head_low |  | STR+2 VIT+9 | none |
 | steel-mag-head_low | 鋼鐵法護面 | equipment | A | head_low |  | VIT+4 INT+7 | none |
 | 6ef4eed9-d62f-4f3b-af22-9ca7488504e0 | 鬥紋鋼鐵面甲 | equipment | A | head_low |  | STR+4 VIT+7 LUK+3 | none |
 | dragonscale-mag-head_low | 龍紋法護面 | equipment | A | head_low |  | AGI+4 INT+7 | none |
 | dragonscale-arm-head_low | 龍頷護面 | equipment | A | head_low |  | STR+2 VIT+9 | none |
+| hutao-set-head-mid | 南風・鳳目翠鏡 | equipment | A | head_mid |  | AGI+4 VIT+2 DEX+5 LUK+1 | none |
 | 195d08bf-fd36-431f-88b7-4a3dbdceac0a | 智紋鋼鐵鏡片 | equipment | A | head_mid |  | VIT+5 INT+5 DEX+3 | none |
 | hellfire-mag-head_mid | 焰紋法護目 | equipment | A | head_mid |  | INT+9 LUK+3 | none |
 | fire-a-arm-head_mid | 焰鱗護目 | equipment | A | head_mid |  | STR+3 VIT+9 | none |
@@ -333,6 +339,7 @@
 | dragonscale-arm-head_mid | 龍瞳護目 | equipment | A | head_mid |  | STR+3 VIT+9 | none |
 | dragonscale-mag-head_mid | 龍紋法護目 | equipment | A | head_mid |  | INT+8 DEX+4 | none |
 | 0139abbe-ea30-4213-9b5a-781b6136ac79 | 智紋鋼鐵帽 | equipment | A | head_top |  | VIT+5 INT+8 | none |
+| hutao-set-head-top | 東風・青羽雀冠 | equipment | A | head_top |  | AGI+5 VIT+2 DEX+4 LUK+2 | none |
 | hellfire-mag-head_top | 焰紋法冠 | equipment | A | head_top |  | INT+10 LUK+3 | none |
 | fire-a-arm-head_top | 焰鱗盔 | equipment | A | head_top |  | STR+3 VIT+8 DEX+2 | none |
 | mithril-mag-head_top | 秘銀法冠 | equipment | A | head_top |  | INT+9 DEX+4 | none |
@@ -358,6 +365,7 @@
 | dragonscale-mag-offhand | 龍鱗法典 | equipment | A | shield |  | INT+3 DEX+5 LUK+5 | none |
 | dragonscale-arm-shield | 龍鱗盾牌 | equipment | A | shield |  | STR+4 VIT+8 DEX+2 | none |
 | dragon-a-offhand-dagger | 龍鱗短匕(副手) | equipment | A | shield | offhand_dagger | AGI+9 LUK+3 | none |
+| hutao-set-shoes | 場風・踏雲履 | equipment | A | shoes |  | AGI+6 VIT+3 DEX+3 LUK+1 | none |
 | 38f310e3-1959-4717-b031-bae1e390a8db | 智紋鋼鐵靴 | equipment | A | shoes |  | VIT+7 INT+6 | none |
 | hellfire-mag-shoes | 焰紋法靴 | equipment | A | shoes |  | INT+9 LUK+4 | none |
 | fire-a-arm-shoes | 焰鱗戰靴 | equipment | A | shoes |  | AGI+5 VIT+8 | none |

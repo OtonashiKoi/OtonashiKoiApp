@@ -13,6 +13,7 @@ const DEFAULT_CONFIG = Object.freeze({
   southFinalDamagePct: 8,
   westCritDamagePct: 20,
   northCritRatePct: 15,
+  phaseRounds: 1,
 });
 
 function normalizeStep(value) {
@@ -28,8 +29,10 @@ function next(step) {
   return normalizeStep(normalizeStep(step) + 1);
 }
 
-function phaseAt(startStep, roundOffset = 0) {
-  return DIRECTIONS[normalizeStep(normalizeStep(startStep) + Math.max(0, Math.floor(Number(roundOffset) || 0)))];
+function phaseAt(startStep, roundOffset = 0, phaseRounds = 1) {
+  const rounds = Math.max(1, Math.floor(Number(phaseRounds) || 1));
+  const phaseOffset = Math.floor(Math.max(0, Math.floor(Number(roundOffset) || 0)) / rounds);
+  return DIRECTIONS[normalizeStep(normalizeStep(startStep) + phaseOffset)];
 }
 
 function normalizeConfig(effectOrParams = {}) {
@@ -39,10 +42,23 @@ function normalizeConfig(effectOrParams = {}) {
     southFinalDamagePct: Math.max(0, Number(p.southFinalDamagePct) || DEFAULT_CONFIG.southFinalDamagePct),
     westCritDamagePct: Math.max(0, Number(p.westCritDamagePct) || DEFAULT_CONFIG.westCritDamagePct),
     northCritRatePct: Math.max(0, Number(p.northCritRatePct) || DEFAULT_CONFIG.northCritRatePct),
+    phaseRounds: Math.max(1, Math.floor(Number(p.phaseRounds) || DEFAULT_CONFIG.phaseRounds)),
   };
 }
 
 function hasEffect(equipped = {}) {
+  const hasBattleLocalSetCycle = (() => {
+    try {
+      const { getSetEffects } = require("./equipmentSetBonuses");
+      return getSetEffects(equipped).some((effect) =>
+        effect?.key === EFFECT_KEY && normalizeConfig(effect).phaseRounds > 1
+      );
+    } catch (_) {
+      return false;
+    }
+  })();
+  // 大四喜完整套裝改成每場由東風起手的 3 回合場風，不沿用武器的跨場步進。
+  if (hasBattleLocalSetCycle) return false;
   return Object.values(equipped || {}).some((item) =>
     Array.isArray(item?.passiveEffects)
       && item.passiveEffects.some((effect) => effect?.key === EFFECT_KEY)

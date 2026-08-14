@@ -12,8 +12,10 @@ const {
   canPlayerAccessZone,
   getVisibleZoneKeys,
   getPublicZoneKeys,
+  shouldBroadcastZoneActivity,
   isZoneVisibleInBestiary,
 } = require("../src/shared/zones");
+const { SET_DEFS } = require("../src/shared/equipmentSetBonuses");
 
 const effect = {
   key: EFFECT_KEY,
@@ -30,7 +32,12 @@ assert.equal(hasEffect(equipped), true);
 assert.equal(phaseAt(0, 0).key, "east");
 assert.equal(phaseAt(0, 3).key, "north");
 assert.equal(phaseAt(3, 1).key, "east");
+assert.equal(phaseAt(0, 0, 3).key, "east");
+assert.equal(phaseAt(0, 2, 3).key, "east");
+assert.equal(phaseAt(0, 3, 3).key, "south");
+assert.equal(phaseAt(0, 9, 3).key, "north");
 assert.equal(normalizeStep(-1), 3);
+assert.equal(SET_DEFS.northwind_hutao.tiers.at(-1).count, 8);
 
 const previewId = "865264891991425055";
 assert.equal(canPlayerAccessZone("event_boss_hutao_preview", previewId), true);
@@ -39,6 +46,8 @@ assert.equal(getVisibleZoneKeys(previewId).includes("event_boss_hutao_preview"),
 assert.equal(getVisibleZoneKeys("123").includes("event_boss_hutao_preview"), false);
 assert.equal(getPublicZoneKeys().includes("event_boss_hutao_preview"), false);
 assert.equal(getPublicZoneKeys().includes("event_boss"), true);
+assert.equal(shouldBroadcastZoneActivity("event_boss_hutao_preview"), false);
+assert.equal(shouldBroadcastZoneActivity("event_boss"), true);
 assert.equal(isZoneVisibleInBestiary("event_boss_hutao_preview"), false);
 assert.equal(isZoneVisibleInBestiary("event_boss"), true);
 
@@ -110,4 +119,36 @@ for (const label of ["西風", "北風", "東風", "南風"]) {
 }
 assert.equal((report.match(/風向・/g) || []).length, 4, "主副手同時裝備不可重複觸發風向");
 
-console.log("胡桃武器風向輪轉、跨場步進與私測可見性驗證通過。");
+const fullSetEquipped = {
+  ...equipped,
+  head_top: { itemId: "hutao-set-head-top", setKey: "northwind_hutao" },
+  head_mid: { itemId: "hutao-set-head-mid", setKey: "northwind_hutao" },
+  head_low: { itemId: "hutao-set-head-low", setKey: "northwind_hutao" },
+  armor: { itemId: "hutao-set-armor", setKey: "northwind_hutao" },
+  garment: { itemId: "hutao-set-garment", setKey: "northwind_hutao" },
+  shoes: { itemId: "hutao-set-shoes", setKey: "northwind_hutao" },
+  accessory_l: { itemId: "hutao-set-ring-left", setKey: "northwind_hutao" },
+  accessory_r: { itemId: "hutao-set-ring-right", setKey: "northwind_hutao" },
+};
+assert.equal(hasEffect(fullSetEquipped), false, "完整套裝應採每場由東風起手，不寫入跨場風向步進");
+
+Math.random = () => 0.5;
+let setResult;
+try {
+  setResult = runCombatLoop(pStats, mCalc, "測試木樁", mCalc.maxHp, 7, {
+    equipped: fullSetEquipped,
+    inventory: [],
+    windDirectionStep: 2,
+    skipMonsterAttack: true,
+  });
+} finally {
+  Math.random = originalRandom;
+}
+assert.equal(setResult.windDirectionPhaseRounds, 3);
+const setReport = setResult.roundLogs.join("\n");
+assert.equal((setReport.match(/風向・東風/g) || []).length, 3);
+assert.equal((setReport.match(/風向・南風/g) || []).length, 3);
+assert.equal((setReport.match(/風向・西風/g) || []).length, 1);
+assert.equal((setReport.match(/風向・北風/g) || []).length, 0);
+
+console.log("胡桃武器跨場輪轉、大四喜套裝每 3 回合輪轉與私測可見性驗證通過。");

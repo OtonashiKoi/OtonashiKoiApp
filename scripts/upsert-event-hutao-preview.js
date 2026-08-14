@@ -20,11 +20,17 @@ const ZONE = "event_boss_hutao_preview";
 const MONSTER_ID = "event-northwind-hutao";
 const CARD_ID = "monster-card-northwind-hutao";
 const IMAGE_URL = "/uploads/monsters/northwind-hutao-v1.png";
+const ITEM_IMAGE_BASE = "/item-art/generated/2026-08-14/hutao";
 const WIND_EFFECT_KEY = "wind_direction_cycle";
+const SET_KEY = "northwind_hutao";
+const SET_NAME = "北風套裝・大四喜";
 const PREVIEW_BOSS_HP = 100000;
 const FORMAL_RELEASE_TARGET_HP = 4500000;
-const DROP_CHANCE = Math.round((100 / 13) * 100) / 100;
+const WEAPON_DROP_CHANCE = 5;
+const SET_GEAR_DROP_CHANCE = 4.25;
+const CARD_DROP_CHANCE = 1;
 const S = (str = 0, agi = 0, vit = 0, int = 0, dex = 0, luk = 0) => ({ str, agi, vit, int, dex, luk });
+const WOOD_2_TO_3 = Object.freeze({ element: "wood", chancePct: 100, minLevel: 2, maxLevel: 3 });
 
 const WIND_EFFECT = Object.freeze({
   key: WIND_EFFECT_KEY,
@@ -55,6 +61,17 @@ const WEAPONS = Object.freeze([
   { id: "hutao-wind-bow", name: "立直・破風長弓", slot: "weapon", type: "bow", twoH: true, atk: "dex", stats: S(0, 5, 0, 0, 15, 3), desc: "弦聲就是立直宣言，箭離弦後才聽見風被洞穿。" },
   { id: "hutao-wind-offhand-sword", name: "對子・雙風脇差", slot: "shield", type: "offhand_sword", twoH: false, atk: "str", stats: S(6, 3, 3, 0, 0, 0), desc: "與主手相應成對，兩道風痕如同牌中的對子。" },
   { id: "hutao-wind-offhand-dagger", name: "暗刻・羽切短刃", slot: "shield", type: "offhand_dagger", twoH: false, atk: "agi", stats: S(0, 7, 0, 0, 2, 3), desc: "三枚暗藏的刃影無聲聚合，直到命中才被看見。" },
+]);
+
+const SET_GEAR = Object.freeze([
+  { id: "hutao-set-head-top", name: "東風・青羽雀冠", slot: "head_top", base: 13, stats: S(0, 5, 2, 0, 4, 2), desc: "青羽隨東風高揚，冠心的白牌映出第一巡天光。" },
+  { id: "hutao-set-head-mid", name: "南風・鳳目翠鏡", slot: "head_mid", base: 12, stats: S(0, 4, 2, 0, 5, 1), desc: "翠鏡捕捉南風熱流，讓出手時機像牌桌讀牌般清晰。" },
+  { id: "hutao-set-head-low", name: "西風・白牌面紗", slot: "head_low", base: 11, stats: S(0, 3, 2, 0, 3, 3), desc: "白牌垂在薄紗中央，西風掠過時只留下無聲風痕。" },
+  { id: "hutao-set-armor", name: "北風・雀神羽衣", slot: "armor", base: 15, stats: S(3, 3, 5, 2, 2, 0), desc: "北風本命所披的羽衣，四方風牌沿腰封依序甦醒。" },
+  { id: "hutao-set-garment", name: "四喜・巡風披帛", slot: "garment", base: 12, stats: S(0, 4, 3, 2, 2, 1), desc: "四道披帛各承一方場風，巡行一周便成大四喜。" },
+  { id: "hutao-set-shoes", name: "場風・踏雲履", slot: "shoes", base: 13, stats: S(0, 6, 3, 0, 3, 1), desc: "鞋底不沾塵土，踏出的第三步總會喚來下一場風。" },
+  { id: "hutao-set-ring-left", name: "連莊・東南風戒", slot: "accessory_l", base: 7, stats: S(0, 2, 0, 2, 2, 1), desc: "左戒收納東南二風，連莊時青光繞指不散。" },
+  { id: "hutao-set-ring-right", name: "和了・西北風戒", slot: "accessory_r", base: 7, stats: S(2, 2, 0, 0, 1, 2), desc: "右戒封住西北二風，和了之刻與左戒合成四喜。" },
 ]);
 
 function buildCard(now) {
@@ -100,6 +117,7 @@ function buildCard(now) {
 }
 
 function buildItem(spec, now) {
+  const imageUrl = `${ITEM_IMAGE_BASE}/${spec.id}.png`;
   return {
     id: spec.id,
     name: spec.name,
@@ -120,8 +138,44 @@ function buildItem(spec, now) {
     setKey: null,
     setKeys: [],
     setName: null,
+    imageUrl,
+    imageThumbnailUrl: imageUrl,
     dropTheme: "event_hutao_northwind",
     elementDrop: { element: "wood", chancePct: 100, minLevel: 3, maxLevel: 4 },
+    eventBossKey: BOSS_KEY,
+    limitedEvent: true,
+    updatedAt: now,
+  };
+}
+
+function buildSetItem(spec, now) {
+  const sum = Object.values(spec.stats).reduce((total, value) => total + Number(value || 0), 0);
+  if (sum !== spec.base) throw new Error(`${spec.name} 屬性總和 ${sum} ≠ A 階基準 ${spec.base}`);
+  const imageUrl = `${ITEM_IMAGE_BASE}/${spec.id}.png`;
+  return {
+    id: spec.id,
+    name: spec.name,
+    description: `${spec.desc}\n【${SET_NAME}】2 件命中 +6%；4 件最終傷害 +4%；6 件爆擊傷害 +10%；8 件啟動場風輪轉，東南西北各維持 3 回合，每場由東風開始。`,
+    itemType: "equipment",
+    tier: "A",
+    equipSlot: spec.slot,
+    equipStats: spec.stats,
+    weaponType: null,
+    isTwoHanded: false,
+    atkStat: null,
+    effect: { type: "none", value: 0 },
+    enhanceLevel: 0,
+    useEffects: [],
+    passiveEffects: [],
+    procEffects: [],
+    combatEffects: [],
+    setKey: SET_KEY,
+    setKeys: [SET_KEY],
+    setName: SET_NAME,
+    imageUrl,
+    imageThumbnailUrl: imageUrl,
+    dropTheme: "event_hutao_northwind",
+    elementDrop: { ...WOOD_2_TO_3 },
     eventBossKey: BOSS_KEY,
     limitedEvent: true,
     updatedAt: now,
@@ -156,8 +210,9 @@ function buildMonster(now, card) {
     spawnRate: 100,
     dropTheme: "event_hutao_northwind",
     drops: [
-      ...WEAPONS.map((w) => ({ itemId: w.id, itemName: w.name, chance: DROP_CHANCE })),
-      { itemId: CARD_ID, itemName: card.name, chance: 1 },
+      ...WEAPONS.map((w) => ({ itemId: w.id, itemName: w.name, chance: WEAPON_DROP_CHANCE })),
+      ...SET_GEAR.map((g) => ({ itemId: g.id, itemName: g.name, chance: SET_GEAR_DROP_CHANCE })),
+      { itemId: CARD_ID, itemName: card.name, chance: CARD_DROP_CHANCE },
     ],
     equipment: { special_1: card },
     passiveEffects: [],
@@ -175,16 +230,24 @@ function buildMonster(now, card) {
 async function main() {
   const now = new Date().toISOString();
   const card = buildCard(now);
-  const items = [...WEAPONS.map((spec) => buildItem(spec, now)), card];
+  const items = [
+    ...WEAPONS.map((spec) => buildItem(spec, now)),
+    ...SET_GEAR.map((spec) => buildSetItem(spec, now)),
+    card,
+  ];
   const monster = buildMonster(now, card);
 
   console.log(
     `北風雀神・胡桃私測：HP ${PREVIEW_BOSS_HP.toLocaleString()}（正式目標 ${FORMAL_RELEASE_TARGET_HP.toLocaleString()}）` +
-    `，${WEAPONS.length} 種武器＋1 張王卡，每件武器掉落率 ${DROP_CHANCE}%`
+    `，${WEAPONS.length} 種 S 武器＋${SET_GEAR.length} 件 A 套裝＋1 張王卡`
   );
   for (const item of items.filter((entry) => entry.weaponType)) {
     const sum = Object.values(item.equipStats).reduce((total, value) => total + Number(value || 0), 0);
     console.log(`- ${item.name} | ${item.weaponType} | ${item.equipSlot} | 屬性總和 ${sum}`);
+  }
+  for (const item of items.filter((entry) => entry.setKey === SET_KEY)) {
+    const sum = Object.values(item.equipStats).reduce((total, value) => total + Number(value || 0), 0);
+    console.log(`- ${item.name} | A | ${item.equipSlot} | 屬性總和 ${sum} | 木 2~3`);
   }
   if (!APPLY) {
     console.log("試跑完成；未寫入 MongoDB。加 --apply 才會套用。");
@@ -242,7 +305,7 @@ async function main() {
     { upsert: true }
   );
 
-  console.log("已寫入 13 種胡桃限定武器、胡桃王卡、完整私測王、獨立世界王設定與狀態。");
+  console.log("已寫入 13 種胡桃限定武器、8 件大四喜 A 套裝、胡桃王卡、完整私測王、獨立世界王設定與狀態。");
   console.log("島島龜王與 event_boss 未修改。");
   await closeMongoClient();
 }

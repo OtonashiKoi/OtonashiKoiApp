@@ -163,6 +163,26 @@ const SET_DEFS = {
       },
     ],
   },
+  northwind_hutao: {
+    name: "北風套裝・大四喜",
+    note: "8 件 A 階胡桃防具套；完整套裝會把風向改為每個場風維持 3 回合，每場由東風起手",
+    tiers: [
+      { count: 2, desc: "命中 +6%", numeric: { hitPct: 6 } },
+      { count: 4, desc: "最終傷害 +4%", numeric: { finalDamagePct: 4 } },
+      { count: 6, desc: "爆擊傷害 +10%", numeric: { critDamagePct: 10 } },
+      {
+        count: 8,
+        desc: "場風輪轉：東南西北各維持 3 回合（東命中 +10／南最終傷害 +8%／西爆擊傷害 +20%／北爆擊率 +15%）",
+        effects: () => [passiveEff("wind_direction_cycle", 0, null, {
+          phaseRounds: 3,
+          eastHit: 10,
+          southFinalDamagePct: 8,
+          westCritDamagePct: 20,
+          northCritRatePct: 15,
+        })],
+      },
+    ],
+  },
   // ── 三元套：單件成套（三元牌一件即觸發；麻將三元 白發中）──
   sanyuan: {
     name: "三元套裝",

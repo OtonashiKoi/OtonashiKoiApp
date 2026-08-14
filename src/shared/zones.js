@@ -241,6 +241,12 @@ function getPublicZoneKeys() {
   });
 }
 
+/** 私測 allowlist 區的戰鬥、開王與掉落不得送到全服頻道。 */
+function shouldBroadcastZoneActivity(zoneKey) {
+  const ids = ZONE_BY_KEY[zoneKey]?.previewPlayerIds;
+  return !Array.isArray(ids) || ids.length === 0;
+}
+
 /** 是否列入玩家怪物圖鑑；私測／未公開區可保留戰鬥入口但不洩漏圖鑑分類。 */
 function isZoneVisibleInBestiary(zoneKey) {
   return ZONE_BY_KEY[zoneKey]?.bestiaryVisible !== false;
@@ -326,6 +332,7 @@ module.exports = {
   canPlayerAccessZone,
   getVisibleZoneKeys,
   getPublicZoneKeys,
+  shouldBroadcastZoneActivity,
   isZoneVisibleInBestiary,
   isMonsterZoneFeatureKey,
   getZoneTheme,

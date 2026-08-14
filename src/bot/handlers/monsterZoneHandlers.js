@@ -3,7 +3,7 @@
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { buildItemEffectLines } = require("../../shared/itemEffectLines");
-const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, canPlayerAccessZone, getZoneTheme, getZoneDefaultEntryFee, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, canPlayerAccessZone, shouldBroadcastZoneActivity, getZoneTheme, getZoneDefaultEntryFee, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
 const { isWorldBossZone, WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
 
 // 這些效果的 params.value 代表百分比（percent），顯示時會特別格式化
@@ -1991,8 +1991,9 @@ async function _announceLevelMilestone(sc, discordId, displayName, prevLevel, ne
   } catch (_) {}
 }
 
-async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, droppedItemObjects = [], kind = "fight", isWorldBossKill = false) {
+async function _announceDrops(sc, discordId, displayName, monsterName, droppedItems, droppedItemObjects = [], kind = "fight", isWorldBossKill = false, zoneKey = null) {
   try {
+    if (zoneKey && !shouldBroadcastZoneActivity(zoneKey)) return;
     const { getBotClient } = require("../runtimeContext");
     const client = getBotClient();
     if (!client?.isReady()) return;
@@ -2883,10 +2884,10 @@ async function handleEnterBattle(interaction) {
           const { getBotClient } = require("../runtimeContext");
           const botClient = getBotClient();
           // 跨平台：DC 開王時也通知所有在線網頁玩家「誰開始挑戰世界王」
-          if (startRes?.justStarted) {
+          if (startRes?.justStarted && shouldBroadcastZoneActivity(zoneKey)) {
             try { sc._broadcastWorldBossStart?.(battleMonster.name, displayName, discordId); } catch (_) {}
           }
-          if (startRes?.justStarted && botClient?.isReady()) {
+          if (startRes?.justStarted && shouldBroadcastZoneActivity(zoneKey) && botClient?.isReady()) {
             const chatChannel = await botClient.channels.fetch("1498608950671839263").catch(() => null);
             if (chatChannel?.isTextBased?.()) {
               const alarmRoleId = config.discord?.worldBossAlarmRoleId;
@@ -4480,9 +4481,9 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
               }
               // 結構化掉落（給網頁版漂浮道具氣泡 + 詳細視窗用）
               rewardLines._drops = [...(rewardLines._drops || []), ...allDroppedObjects.map(toWebDrop)];
-              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "kill", isWorldBossZone(zoneKey) && !!monster?.isBoss).catch(() => {});
+              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "kill", isWorldBossZone(zoneKey) && !!monster?.isBoss, zoneKey).catch(() => {});
             } else {
-              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "group", isWorldBossZone(zoneKey) && !!monster?.isBoss).catch(() => {});
+              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "group", isWorldBossZone(zoneKey) && !!monster?.isBoss, zoneKey).catch(() => {});
             }
           } else {
             console.warn(`[MonsterZone] skip drop DM for ${luckyPid} because EXP was not committed`);
@@ -4583,7 +4584,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
         if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...allBonusDropped];
         const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
         if (canSendRewardNotice(bonusPid)) {
-          _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, allBonusDroppedObjects, kind, isWorldBossZone(zoneKey) && !!monster?.isBoss).catch(() => {});
+          _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, allBonusDroppedObjects, kind, isWorldBossZone(zoneKey) && !!monster?.isBoss, zoneKey).catch(() => {});
         } else {
           console.warn(`[MonsterZone] skip bonus drop DM for ${bonusPid} because EXP was not committed`);
         }

@@ -8,7 +8,7 @@ const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/strea
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffects, filterActiveAuras } = require("../../shared/supportAuraScaling");
-const { ALL_ZONE_KEYS, normalizeZone, canPlayerAccessZone, getVisibleZoneKeys, getPublicZoneKeys, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme, getZoneGroup, ZONE_BY_KEY } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, normalizeZone, canPlayerAccessZone, getVisibleZoneKeys, getPublicZoneKeys, shouldBroadcastZoneActivity, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme, getZoneGroup, ZONE_BY_KEY } = require("../../shared/zones");
 const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { acquireSse } = require("../netGuards");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
@@ -3282,7 +3282,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               });
             }
           }
-          if (justStarted) {
+          if (justStarted && shouldBroadcastZoneActivity(zoneKey)) {
             // 跨平台：通知所有在線網頁玩家「誰開始挑戰世界王」（DC 端由下方頻道公告涵蓋）
             try { serviceContext._broadcastWorldBossStart(monster.name, displayName, discordId); } catch (_) {}
             if (discordClient?.isReady?.()) {

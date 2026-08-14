@@ -1084,7 +1084,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let _tshellBroken = false;      // 破殼＝傷害加成開啟（打到就生效）
   let _tshellBrokeThisRound = false; // 回合尾宣告用
   let _turtleSetTideCfg = null;   // 龜王套裝 4 件：漲潮／退潮每 2 回合輪替
-  let _windDirectionCfg = null;   // 胡桃限定武器：東南西北逐回合輪轉
+  let _windDirectionCfg = null;   // 胡桃限定武器／大四喜套裝：東南西北場風輪轉
   const _windDirectionStartStep = normalizeWindDirectionStep(options.windDirectionStep);
   let _windDirectionRoundsProcessed = 0;
 
@@ -1619,8 +1619,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             continue;
           }
           if (ep.key === WIND_DIRECTION_EFFECT_KEY) {
-            // 主手與副手同時裝備胡桃武器也只啟用一套風向，不重複疊加。
-            if (!_windDirectionCfg) _windDirectionCfg = normalizeWindDirectionConfig(ep);
+            // 主副手不重複疊加；完整大四喜套裝的 3 回合場風優先於武器每回合輪轉。
+            const nextWindCfg = normalizeWindDirectionConfig(ep);
+            if (!_windDirectionCfg || nextWindCfg.phaseRounds > _windDirectionCfg.phaseRounds) {
+              _windDirectionCfg = nextWindCfg;
+            }
             continue;
           }
           // build 錨點四件（沒苦硬吃 / 聖人比拳頭 / 對鮮血的渴望 / 時間管理大師）
@@ -1734,8 +1737,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   _shadowHp = pHp; // KDA 影子血量起點（與實際血量同步出發，之後只吃「非外部治療」的變化）
   while (round <= endRound && outcome === null) {
     const log = [`**【第 ${round} 回合】**`];
+    const _windDirectionBattleStartStep = _windDirectionCfg?.phaseRounds > 1 ? 0 : _windDirectionStartStep;
     const _windDirectionPhase = _windDirectionCfg
-      ? windDirectionPhaseAt(_windDirectionStartStep, _windDirectionRoundsProcessed)
+      ? windDirectionPhaseAt(_windDirectionBattleStartStep, _windDirectionRoundsProcessed, _windDirectionCfg.phaseRounds)
       : null;
     if (_windDirectionPhase) {
       const _windText = _windDirectionPhase.key === "east"
@@ -5709,9 +5713,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       hpPct: Math.max(0, Math.round((_spiritHp / Math.max(1, _spiritMaxHp)) * 1000) / 10)
     } : null,
     windDirectionStep: _windDirectionCfg
-      ? normalizeWindDirectionStep(_windDirectionStartStep + _windDirectionRoundsProcessed)
+      ? normalizeWindDirectionStep(
+        (_windDirectionCfg.phaseRounds > 1 ? 0 : _windDirectionStartStep)
+        + Math.floor(_windDirectionRoundsProcessed / _windDirectionCfg.phaseRounds)
+      )
       : null,
     windDirectionRoundsProcessed: _windDirectionCfg ? _windDirectionRoundsProcessed : 0,
+    windDirectionPhaseRounds: _windDirectionCfg ? _windDirectionCfg.phaseRounds : null,
   };
 }
 
