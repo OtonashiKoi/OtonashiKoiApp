@@ -1246,7 +1246,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       res.json(ok({
         featureAccess: {
-          // 多角色已公開；角色 2／3 的建立資格由人物 API 依會員狀態判定。
+          // 多角色已公開；五個欄位的可用數量由人物 API 依會員位階判定。
           characters: true,
         },
         player: {
@@ -5163,114 +5163,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     };
   }
 
-  // ===== 裝備方案 A/B/C（對齊 DC：progress.activePreset / progress.equipPresets）=====
-  // 會員才可使用 B/C；非會員只有 A。沿用 resolveAuctionMembership 的雙重判定。
-  const PRESET_KEYS = ["A", "B", "C"];
-
-  function summarizePresetSnapshot(snapshot) {
-    if (!snapshot || typeof snapshot !== "object") return { count: 0, names: [] };
-    const entries = Object.values(snapshot).filter((v) => v && (v.itemId || v.uuid));
-    return {
-      count: entries.length,
-      names: entries.map((v) => v.itemName).filter(Boolean).slice(0, 6)
-    };
-  }
-
-  router.get("/api/me/presets", requireAuth, async (req, res, next) => {
-    try {
-      const { discordId } = req.playerRecord;
-      const [progress, membership] = await Promise.all([
-        serviceContext.progressRepository.findByPlayerId(discordId),
-        resolveAuctionMembership(discordId)
-      ]);
-      const isMember = membership.isMember;
-      const activePreset = progress?.activePreset || "A";
-      const equipPresets = progress?.equipPresets || {};
-      const presetNames = progress?.equipPresetNames || {};
-      const presets = PRESET_KEYS.map((key) => {
-        // 目前使用中的方案：以身上裝備為準；其餘看快照
-        const snapshot = key === activePreset
-          ? progress?.equipment
-          : equipPresets[key];
-        const summary = summarizePresetSnapshot(snapshot);
-        return {
-          key,
-          name: presetNames[key] || null, // 會員自訂名稱
-          active: key === activePreset,
-          locked: key !== "A" && !isMember,
-          equipped: summary.count > 0,
-          itemCount: summary.count,
-          itemNames: summary.names
-        };
-      });
-      res.json(ok({ activePreset, presets, isMember }));
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  router.post("/api/me/presets/switch", requireAuth, async (req, res, next) => {
-    try {
-      const { discordId } = req.playerRecord;
-      const preset = String(req.body?.preset || "").toUpperCase();
-      if (!PRESET_KEYS.includes(preset)) {
-        return res.status(400).json(fail("INVALID_ARGUMENT", "無效分頁，請選擇 A / B / C"));
-      }
-      if (preset !== "A") {
-        const membership = await resolveAuctionMembership(discordId);
-        if (!membership.isMember) {
-          return res.status(403).json(fail("NOT_MEMBER", "裝備方案 B / C 限會員使用"));
-        }
-      }
-      const result = await serviceContext.shopService.switchEquipPreset(discordId, preset);
-      res.json(ok({ activePreset: result.activePreset, equipment: result.equipment }));
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  router.post("/api/me/presets/save", requireAuth, async (req, res, next) => {
-    try {
-      const { discordId } = req.playerRecord;
-      const preset = String(req.body?.preset || "").toUpperCase();
-      if (!PRESET_KEYS.includes(preset)) {
-        return res.status(400).json(fail("INVALID_ARGUMENT", "無效分頁，請選擇 A / B / C"));
-      }
-      if (preset !== "A") {
-        const membership = await resolveAuctionMembership(discordId);
-        if (!membership.isMember) {
-          return res.status(403).json(fail("NOT_MEMBER", "裝備方案 B / C 限會員使用"));
-        }
-      }
-      const result = await serviceContext.shopService.saveEquipPreset(discordId, preset);
-      res.json(ok({ preset: result.preset }));
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // 會員自訂裝備方案名稱(存 progress.equipPresetNames)
-  router.post("/api/me/presets/rename", requireAuth, async (req, res, next) => {
-    try {
-      const { discordId } = req.playerRecord;
-      const preset = String(req.body?.preset || "").toUpperCase();
-      const name = String(req.body?.name || "").trim().slice(0, 12);
-      if (!PRESET_KEYS.includes(preset)) {
-        return res.status(400).json(fail("INVALID_ARGUMENT", "無效分頁，請選擇 A / B / C"));
-      }
-      const membership = await resolveAuctionMembership(discordId);
-      if (!membership.isMember) {
-        return res.status(403).json(fail("NOT_MEMBER", "自訂方案名稱限會員使用"));
-      }
-      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
-      if (!progress) return res.status(404).json(fail("NOT_FOUND", "找不到角色資料"));
-      progress.equipPresetNames = { ...(progress.equipPresetNames || {}), [preset]: name || null };
-      await serviceContext.progressRepository.updateFields(progress.playerId, { equipPresetNames: progress.equipPresetNames });
-      res.json(ok({ preset, name: name || null }));
-    } catch (err) {
-      next(err);
-    }
-  });
+  require("./playerPresetRoutes").registerPlayerPresetRoutes(router, serviceContext);
 
   router.get("/api/auction/list", requireAuth, async (req, res, next) => {
     try {

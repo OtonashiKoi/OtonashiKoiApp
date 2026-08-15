@@ -6,15 +6,20 @@ const { ALL_ZONE_KEYS } = require("../../shared/zones");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
 const { isWebBattleActive } = require("../progress/battleLock");
 const { withPlayerProgressLock } = require("../progress/progressLocks");
-
-const CHARACTER_SLOTS = [1, 2, 3];
+const {
+  CHARACTER_SLOTS,
+  resolveMembershipEntitlements,
+  requiredTierForCharacterSlot,
+  membershipTierLabel,
+  characterSlotLockReason,
+} = require("../../shared/membershipEntitlements");
 
 // 只有角色養成與戰鬥狀態會隨人物切換。背包、圖鑑、寵物收藏、單人王每日限制、
 // 劇情／一次性旗標、會員位階等帳號資產留在 progress 頂層共用，避免分身重複取得。
 const CHARACTER_PROGRESS_KEYS = [
   "level", "levelReachedAt", "exp", "job", "jobLevel", "jobExp",
   "statusPoints", "attributes", "allocatedAttrs", "allocatedPoints",
-  "equipment", "activeEffects", "activePreset", "equipPresets",
+  "equipment", "activeEffects", "activePreset", "equipPresets", "equipPresetNames",
   "pkRating", "pkWins", "pkLosses", "towerRecord",
   "activePetUuid",
   "bardScore", "bardStreak", "berserkGauge", "oniGauge", "sageGauge",
@@ -75,14 +80,9 @@ class CharacterService {
     this.monsterService = monsterService;
   }
 
-  async _isMember(discordId, progress) {
-    if (progress?.playerTier != null && String(progress.playerTier).trim()) return true;
+  async _membershipEntitlements(discordId, progress) {
     const bindings = await this.streamAccountBindingRepository?.listByDiscordId?.(discordId).catch(() => []);
-    return (bindings || []).some((binding) => (
-      binding?.isMember === true
-      || binding?.linkedSupportAtLink === true
-      || Boolean(binding?.playerTierAtLink)
-    ));
+    return resolveMembershipEntitlements(progress, bindings || []);
   }
 
   async getState(discordId) {
@@ -92,15 +92,29 @@ class CharacterService {
     const stored = progress.characterSlots && typeof progress.characterSlots === "object"
       ? progress.characterSlots
       : {};
+    const entitlements = await this._membershipEntitlements(discordId, progress);
     const slots = CHARACTER_SLOTS.map((slot) => {
       const snapshot = slot === activeSlot ? takeCharacterSnapshot(progress) : stored[String(slot)];
-      return summarizeCharacter(slot, snapshot || null, slot === activeSlot);
+      const active = slot === activeSlot;
+      const requiredTier = requiredTierForCharacterSlot(slot);
+      const locked = !active && slot > entitlements.maxCharacterSlots;
+      return {
+        ...summarizeCharacter(slot, snapshot || null, active),
+        locked,
+        requiredTier,
+        requiredTierLabel: requiredTier ? membershipTierLabel(requiredTier) : null,
+        lockReason: locked ? characterSlotLockReason(slot) : null,
+      };
     });
     return {
       enabled: true,
       testOnly: false,
       activeSlot,
-      isMember: await this._isMember(discordId, progress),
+      isMember: entitlements.isMember,
+      membershipTier: entitlements.tier,
+      membershipLabel: entitlements.label,
+      maxCharacterSlots: entitlements.maxCharacterSlots,
+      maxPresetSlots: entitlements.maxPresetSlots,
       slots,
     };
   }
@@ -139,7 +153,7 @@ class CharacterService {
   async switchCharacter(discordId, requestedSlot) {
     const targetSlot = Number(requestedSlot);
     if (!CHARACTER_SLOTS.includes(targetSlot)) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "人物欄位必須是 1、2 或 3。", 400);
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "人物欄位必須是 1、2、3、4 或 5。", 400);
     }
     this._assertNotBattling(discordId);
 
@@ -149,6 +163,11 @@ class CharacterService {
       const currentSlot = activeSlotOf(progress);
       if (currentSlot === targetSlot) return { changed: false };
 
+      const entitlements = await this._membershipEntitlements(discordId, progress);
+      if (targetSlot > entitlements.maxCharacterSlots) {
+        throw new AppError(ERROR_CODES.FORBIDDEN, characterSlotLockReason(targetSlot), 403);
+      }
+
       const characterSlots = clone(progress.characterSlots || {});
       characterSlots[String(currentSlot)] = takeCharacterSnapshot(progress);
 
@@ -157,9 +176,6 @@ class CharacterService {
       if (!targetSnapshot) {
         if (targetSlot === 1) {
           throw new AppError(ERROR_CODES.NOT_FOUND, "角色 1 資料不存在，請聯絡管理員。", 404);
-        }
-        if (!(await this._isMember(discordId, progress))) {
-          throw new AppError(ERROR_CODES.FORBIDDEN, "只有會員可以建立角色 2／3。", 403);
         }
         targetSnapshot = newCharacterSnapshot(discordId);
         characterSlots[String(targetSlot)] = clone(targetSnapshot);
@@ -174,6 +190,10 @@ class CharacterService {
       for (const key of CHARACTER_PROGRESS_KEYS) {
         next[key] = targetSnapshot[key] !== undefined ? clone(targetSnapshot[key]) : null;
       }
+      // 舊人物快照可能建立於裝備方案功能之前；切入時補齊空結構，不改動既有 A～C 資料。
+      if (!next.activePreset) next.activePreset = "A";
+      if (!next.equipPresets || typeof next.equipPresets !== "object") next.equipPresets = {};
+      if (!next.equipPresetNames || typeof next.equipPresetNames !== "object") next.equipPresetNames = {};
       // 共用背包始終沿用切換前的帳號背包；任何角色身上的裝備只存在各自快照。
       next.inventory = progress.inventory;
       next.updatedAt = new Date().toISOString();

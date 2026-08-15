@@ -38,7 +38,7 @@
 - 實例組裝：`createServiceContext.js`
 - 目前四個 boss key：`default`（大史王）、`dragon_king`（古龍王）、`hellfang_king`（地獄狼牙王）、`island_turtle`（島島龜王）
 - 常態前置鏈：大史王 → 古龍王 → 地獄狼牙王；島島龜王沒有前置王
-- 單人王：`src/api/routes/soloBossRoutes.js`；`accountSoloBoss` 位於帳號頂層，人物 1／2／3 共用每日擊殺上限與部位進度；舊人物快照會在首次讀取時合併
+- 單人王：`src/api/routes/soloBossRoutes.js`；`accountSoloBoss` 位於帳號頂層，五個人物共用每日擊殺上限與部位進度；舊人物快照會在首次讀取時合併
 - KDA：`src/services/kda/kdaService.js`；戰內歸戶在 `combatLoop.js` 的 `assistLedger`
 - 世界王暈眩條：`src/shared/dwarfStunGauge.js`；巨神震擊窗口內開始的戰鬥會封鎖世界王整場的普攻、怪物卡技能與階段技能（包含雷擊術）；玩家自傷不屬於怪物傷害
 - Web 戰鬥 UI：獨立顯示世界王總血量／機制狀態，部位名牌與傷害數字不覆蓋機制面板；世界王與單人王的亮色選怪卡使用亮底專用深色文字，名稱、屬性、入場費、冷卻與部位標籤維持高對比；世界王選怪卡、進場前部位頁與尚未攻擊的龜王戰鬥畫面都透過 `/api/worldboss/status` 顯示龜王總血、潮汐、安全、詠唱、海嘯、破綻與逐秒倒數，海嘯中出擊鈕改為紅色「進場即死」警告但仍可點擊；`battleStore.buildTimeline()` 保留完整戰報並把每一條非回合內容轉為語意動畫事件，`BattleLayer` 依回合分組，主要攻擊、技能、暴擊、怪物反擊、治療、狀態、格擋與閃避全部照順序播放，不做重點刪減；連擊與怪物多段攻擊的每一段也完整保留；每回合固定使用後端依 AGI 回傳的 `tickMs` 時槽，並依該回合事件總數自動縮短播放間隔，確保所有動畫都在時間內觸發完，事件再多也不得延長回合或卡住續戰；戰鬥層沿用全站 9:16 外框，頂部玩家 HUD 與底部主導覽維持作戰區原尺寸，只有兩者之間的戰場內容使用固定 390×547.33 設計座標並依可用空間套用單一等比例倍率，內部元件不因高度斷點切換位置或被個別裁切；戰報預設展開、可收合成小列，選擇以瀏覽器 localStorage 保存
@@ -74,6 +74,7 @@
 | 系統 | 程式 | 資料／備註 |
 | --- | --- | --- |
 | 背包與換裝 | `services/item/itemService.js`、`services/shop/shopService.js`、`playerAppRoutes.js` | `items`、`progress.inventory/equipment`；支援使用、丟棄、出售、鎖定、批次操作與伺服器權威的一鍵最大 ATK 配裝；自動配裝依目前職業限制武器種類，並保留稱號、職業徽章、卡片與錨點 |
+| 多人物與裝備方案 | `services/character/characterService.js`、`shared/membershipEntitlements.js`、`services/shop/shopService.js`、`api/routes/playerPresetRoutes.js` | `progress.activeCharacterSlot/characterSlots/activePreset/equipPresets/equipPresetNames`；背包帳號共用，其餘角色養成與 A～E 方案隨人物切換；非會員 1×1、鯉民 3×3、鯉長 3×5、鯉市長以上 5×5 |
 | 背包容量 | `services/backpack/backpackService.js` | 主要戰鬥入口會在背包滿時阻擋 |
 | 強化與屬性洞 | `services/enhance/`、`api/routes/playerAppRoutes.js`、`api/routes/playerForgeRoutes.js` | 寶石強化；D1/C2/B3/A4/S5 屬性洞；屬性鑲嵌與破壞拆除。拆除次數永久保存在 `progress.inventory/equipment[].elementRemovalCount`，最多成功 3 次 |
 | 附魔 | `services/enchant/enchantService.js`、`playerEnchantRoutes.js`、`adminEnchantRoutes.js` | 設定快取於啟動初始化；Web 重骰在送出 API 前有消耗確認 |

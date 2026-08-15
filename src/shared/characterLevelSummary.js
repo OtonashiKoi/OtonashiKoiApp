@@ -1,6 +1,6 @@
 "use strict";
 
-const CHARACTER_SLOTS = [1, 2, 3];
+const { CHARACTER_SLOTS } = require("./membershipEntitlements");
 
 function activeCharacterSlot(progress) {
   const slot = Number(progress?.activeCharacterSlot);

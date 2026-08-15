@@ -168,8 +168,8 @@ function createPlayerCollectionRoutes(serviceContext) {
 
   // ──────────────────────────────────────────────────
   // 等級排行榜 TOP N + 自己名次。
-  // mode=highest（預設）：每個帳號取三個人物中的最高等級，維持一般玩家與會員公平。
-  // mode=total：三個已建立人物的等級加總，作為純養成榜，不連動賽季獎勵。
+  // mode=highest（預設）：每個帳號取五個人物中的最高等級，維持一般玩家與會員公平。
+  // mode=total：所有已建立人物的等級加總，作為純養成榜，不連動賽季獎勵。
   // ──────────────────────────────────────────────────
   router.get("/api/leaderboard/level", requireAuth, async (req, res, next) => {
     try {

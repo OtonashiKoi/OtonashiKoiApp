@@ -2164,9 +2164,9 @@ class ShopService {
   }
 
   async switchEquipPreset(discordId, targetPreset) {
-    const VALID_PRESETS = ["A", "B", "C"];
+    const { EQUIP_PRESET_KEYS: VALID_PRESETS } = require("../../shared/membershipEntitlements");
     if (!VALID_PRESETS.includes(targetPreset)) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "無效分頁，請選擇 A / B / C", 400);
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "無效分頁，請選擇 A / B / C / D / E", 400);
     }
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);
@@ -2224,9 +2224,9 @@ class ShopService {
 
   // 把目前身上的裝備存成指定分頁（不換裝、不動 inventory），純快照
   async saveEquipPreset(discordId, targetPreset) {
-    const VALID_PRESETS = ["A", "B", "C"];
+    const { EQUIP_PRESET_KEYS: VALID_PRESETS } = require("../../shared/membershipEntitlements");
     if (!VALID_PRESETS.includes(targetPreset)) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "無效分頁，請選擇 A / B / C", 400);
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "無效分頁，請選擇 A / B / C / D / E", 400);
     }
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到資料", 404);

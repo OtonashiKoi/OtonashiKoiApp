@@ -2,7 +2,13 @@
 
 const assert = require("node:assert/strict");
 const { CharacterService } = require("../src/services/character/characterService");
+const { ShopService } = require("../src/services/shop/shopService");
 const { summarizeCharacterLevels } = require("../src/shared/characterLevelSummary");
+const {
+  CHARACTER_SLOTS,
+  EQUIP_PRESET_KEYS,
+  resolveMembershipEntitlements,
+} = require("../src/shared/membershipEntitlements");
 
 const MEMBER_ID = "character-member-test";
 const PUBLIC_PLAYER_ID = "character-public-test";
@@ -55,6 +61,9 @@ async function main() {
   assert.equal(before.enabled, true);
   assert.equal(before.testOnly, false);
   assert.equal(before.activeSlot, 1);
+  assert.equal(before.maxCharacterSlots, 5);
+  assert.equal(before.maxPresetSlots, 5);
+  assert.deepEqual(before.slots.map((slot) => slot.slot), CHARACTER_SLOTS);
   assert.equal(before.slots[0].level, 50);
   assert.equal(before.slots[0].job, "兵聖徽章");
   assert.equal(before.slots[0].title, "測試稱號");
@@ -76,6 +85,9 @@ async function main() {
 
   stored.level = 8;
   stored.equipment.weapon = { uuid: "alt-weapon", itemName: "分身武器" };
+  stored.activePreset = "C";
+  stored.equipPresets = { A: { weapon: { uuid: "preset-a", itemName: "方案 A 武器" } } };
+  stored.equipPresetNames = { C: "分身採集裝" };
   await service.switchCharacter(MEMBER_ID, 1);
   const inactiveAltLevels = summarizeCharacterLevels(stored);
   assert.equal(inactiveAltLevels.highestLevel, 50);
@@ -83,17 +95,77 @@ async function main() {
   assert.equal(stored.level, 50);
   assert.equal(stored.equipment.weapon.uuid, "main-weapon");
   assert.equal(stored.inventory[0].uuid, "shared-item");
+  assert.equal(stored.characterSlots["2"].activePreset, "C", "裝備方案索引必須跟人物快照一起保存");
+  assert.equal(stored.characterSlots["2"].equipPresetNames.C, "分身採集裝", "方案名稱也必須是人物各自保存");
   await service.switchCharacter(MEMBER_ID, 2);
   assert.equal(stored.level, 8);
   assert.equal(stored.equipment.weapon.uuid, "alt-weapon");
+  assert.equal(stored.activePreset, "C");
+  assert.equal(stored.equipPresetNames.C, "分身採集裝");
+
+  stored.playerTier = "B";
+  const koiLeaderState = await service.getState(MEMBER_ID);
+  assert.equal(koiLeaderState.maxCharacterSlots, 3);
+  assert.equal(koiLeaderState.maxPresetSlots, 5);
+  assert.equal(koiLeaderState.slots[3].locked, true);
+  assert.match(koiLeaderState.slots[3].lockReason, /鯉市長/);
+  await assert.rejects(
+    () => service.switchCharacter(MEMBER_ID, 4),
+    (error) => error?.status === 403 && /鯉市長/.test(error.message),
+  );
+
+  stored.playerTier = "A";
+  const fourth = await service.switchCharacter(MEMBER_ID, 4);
+  assert.equal(fourth.created, true);
+  assert.equal(fourth.activeSlot, 4);
+  const fifth = await service.switchCharacter(MEMBER_ID, 5);
+  assert.equal(fifth.created, true);
+  assert.equal(fifth.activeSlot, 5);
+  assert.equal(summarizeCharacterLevels(stored).characterCount, 4);
 
   stored.playerTier = null;
   await assert.rejects(
     () => service.switchCharacter(PUBLIC_PLAYER_ID, 3),
-    (error) => error?.status === 403 && /只有會員/.test(error.message),
+    (error) => error?.status === 403 && /鯉民/.test(error.message),
   );
 
-  console.log("✅ 多角色系統：公開存取、角色 1 保留、會員角色 2 建立、背包共用、裝備獨立、光環清除、非會員限制皆通過");
+  assert.deepEqual(EQUIP_PRESET_KEYS, ["A", "B", "C", "D", "E"]);
+  assert.deepEqual(
+    resolveMembershipEntitlements({ playerTier: "C" }, []),
+    { tier: "C", label: "鯉民", isMember: true, maxCharacterSlots: 3, maxPresetSlots: 3 },
+  );
+  assert.deepEqual(
+    resolveMembershipEntitlements({ playerTier: "B" }, []),
+    { tier: "B", label: "鯉長", isMember: true, maxCharacterSlots: 3, maxPresetSlots: 5 },
+  );
+  assert.deepEqual(
+    resolveMembershipEntitlements({ playerTier: "A" }, []),
+    { tier: "A", label: "鯉市長", isMember: true, maxCharacterSlots: 5, maxPresetSlots: 5 },
+  );
+  assert.equal(
+    resolveMembershipEntitlements({ playerTier: null }, [{ linkedSupportAtLink: true }]).tier,
+    "C",
+    "只有會員快照但沒有明確位階時，至少視為鯉民",
+  );
+
+  let presetProgress = {
+    playerId: MEMBER_ID,
+    activePreset: "A",
+    equipPresets: {},
+    equipment: { weapon: { uuid: "preset-test", itemId: "sword", itemName: "測試劍", equipSlot: "weapon" } },
+    inventory: [],
+  };
+  const presetRepository = {
+    async findByPlayerId() { return presetProgress; },
+    async save(next) { presetProgress = next; return next; },
+  };
+  const shopService = new ShopService(null, null, null, presetRepository);
+  await shopService.saveEquipPreset(MEMBER_ID, "D");
+  assert.equal(presetProgress.equipPresets.D.weapon.uuid, "preset-test");
+  await shopService.switchEquipPreset(MEMBER_ID, "E");
+  assert.equal(presetProgress.activePreset, "E", "底層換裝服務必須接受新增的 D / E 方案");
+
+  console.log("✅ 多角色系統：五人物欄、會員分級、每人物五方案、背包共用、裝備獨立、光環清除與鎖定提示皆通過");
 }
 
 main().catch((error) => {

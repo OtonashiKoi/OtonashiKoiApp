@@ -23,6 +23,11 @@ const { MAX_ENHANCE_LEVEL, getEnhanceCost } = require("../shared/enhanceConfig")
 const { bestiaryRequirement, bestiaryBonusPct } = require("../shared/bestiary");
 const { ALL_ZONE_KEYS, ZONE_BY_KEY } = require("../shared/zones");
 const { isWorldBossZone } = require("../services/worldBoss/worldBossService");
+const {
+  EQUIP_PRESET_KEYS,
+  membershipEntitlements,
+  presetLockReason,
+} = require("../shared/membershipEntitlements");
 
 const ACTIVE_REPLY_BY_USER = new Map();
 
@@ -1824,11 +1829,12 @@ async function buildFreshEquipmentViewPayload(interaction, notice = "") {
 
 // ── 第一層：裝備方案總覽畫面 ──
 // 列1：下拉選單快速切換方案（套裝備）
-// 列2：A / B / C 按鈕（進去換裝）
+// 列2：A～E 按鈕（進去換裝）
 function buildPresetSelectPayload({ progress, imgBuffer }) {
   const equipped = progress?.equipment || {};
   const activePreset = progress?.activePreset || "A";
-  const PRESETS = ["A", "B", "C"];
+  const PRESETS = EQUIP_PRESET_KEYS;
+  const entitlements = membershipEntitlements(progress?.playerTier);
 
   // 下拉選單：快速切換目前生效的分頁
   const switchMenu = new StringSelectMenuBuilder()
@@ -1836,7 +1842,11 @@ function buildPresetSelectPayload({ progress, imgBuffer }) {
     .setPlaceholder(`目前方案：${activePreset}　▾ 快速切換裝備方案`)
     .addOptions(PRESETS.map(p => ({
       label: `裝備方案 ${p}`,
-      description: p === activePreset ? "目前使用中" : "切換並套用此方案的裝備記錄",
+      description: p === activePreset
+        ? "目前使用中"
+        : PRESETS.indexOf(p) >= entitlements.maxPresetSlots
+          ? presetLockReason(p)
+          : "切換並套用此方案的裝備記錄",
       value: p,
       default: p === activePreset
     })));
@@ -1872,11 +1882,13 @@ function buildPresetSelectPayload({ progress, imgBuffer }) {
 }
 
 function hasEquipPresetAccess(progress, targetPreset) {
-  if (targetPreset === "A") return true;
-  return !!progress?.playerTier;
+  const entitlements = membershipEntitlements(progress?.playerTier);
+  return EQUIP_PRESET_KEYS.indexOf(targetPreset) < entitlements.maxPresetSlots;
 }
 
-const PRESET_NO_ACCESS_MSG = { content: "🔒 **裝備方案 B / C** 限頻道付費會員使用。", components: [], files: [], flags: MessageFlags.Ephemeral };
+function presetNoAccessMessage(targetPreset) {
+  return { content: `🔒 ${presetLockReason(targetPreset)}`, components: [], files: [], flags: MessageFlags.Ephemeral };
+}
 
 async function handleEquipmentView(interaction) {
   const serviceContext = getServiceContext();
@@ -1909,7 +1921,7 @@ async function handlePresetSwitchSelect(interaction) {
 
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   if (!hasEquipPresetAccess(progress, targetPreset)) {
-    await safeEditReply(interaction, PRESET_NO_ACCESS_MSG);
+    await safeEditReply(interaction, presetNoAccessMessage(targetPreset));
     return;
   }
 
@@ -1943,7 +1955,7 @@ async function handleEquipPresetSwitch(interaction, targetPreset) {
 
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   if (!hasEquipPresetAccess(progress, targetPreset)) {
-    await safeEditReply(interaction, PRESET_NO_ACCESS_MSG);
+    await safeEditReply(interaction, presetNoAccessMessage(targetPreset));
     return;
   }
 

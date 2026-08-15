@@ -1,6 +1,7 @@
 "use strict";
 
 const { ensureWorldBossPartState } = require("../../bot/handlers/monsterZoneHandlers");
+const { CHARACTER_SLOTS } = require("../../shared/membershipEntitlements");
 
 function taipeiDateKey(now = Date.now()) {
   return new Date(now + 8 * 3600000).toISOString().slice(0, 10);
@@ -29,7 +30,7 @@ function normalizeState(cur, boss, today = taipeiDateKey()) {
   };
 }
 
-// 舊版把單人王存在人物快照。首次讀取時把三個人物今天的擊殺數合併，並取各部位
+// 舊版把單人王存在人物快照。首次讀取時把所有人物今天的擊殺數合併，並取各部位
 // 最低 HP；之後 accountSoloBoss 成為唯一來源，切人物不會重置每日次數或戰鬥進度。
 function readAccountState(progress, boss) {
   const today = taipeiDateKey();
@@ -44,13 +45,13 @@ function readAccountState(progress, boss) {
     };
   }
 
-  const activeSlot = [1, 2, 3].includes(Number(progress?.activeCharacterSlot))
+  const activeSlot = CHARACTER_SLOTS.includes(Number(progress?.activeCharacterSlot))
     ? Number(progress.activeCharacterSlot)
     : 1;
   const legacy = [];
   const activeRaw = progress?.soloBoss?.[boss.key];
   if (activeRaw?.dateKey === today) legacy.push(activeRaw);
-  for (const slot of [1, 2, 3]) {
+  for (const slot of CHARACTER_SLOTS) {
     if (slot === activeSlot) continue;
     const raw = progress?.characterSlots?.[String(slot)]?.soloBoss?.[boss.key];
     if (raw?.dateKey === today) legacy.push(raw);
