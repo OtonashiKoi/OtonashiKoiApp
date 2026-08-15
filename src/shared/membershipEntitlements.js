@@ -1,7 +1,7 @@
 "use strict";
 
-const CHARACTER_SLOTS = Object.freeze([1, 2, 3, 4, 5]);
-const EQUIP_PRESET_KEYS = Object.freeze(["A", "B", "C", "D", "E"]);
+const CHARACTER_SLOTS = Object.freeze([1, 2, 3]);
+const EQUIP_PRESET_KEYS = Object.freeze(["A", "B", "C", "D", "E", "F", "G"]);
 const TIER_ORDER = Object.freeze(["E", "D", "C", "B", "A", "S", "SS"]);
 const TIER_LABELS = Object.freeze({
   C: "鯉民",
@@ -55,7 +55,7 @@ function tierAtLeast(actualTier, requiredTier) {
 function membershipEntitlements(tierValue) {
   const tier = normalizeMembershipTier(tierValue);
   if (tierAtLeast(tier, "A")) {
-    return { tier, label: TIER_LABELS[tier] || tier, isMember: true, maxCharacterSlots: 5, maxPresetSlots: 5 };
+    return { tier, label: TIER_LABELS[tier] || tier, isMember: true, maxCharacterSlots: 3, maxPresetSlots: 7 };
   }
   if (tierAtLeast(tier, "B")) {
     return { tier, label: TIER_LABELS[tier] || tier, isMember: true, maxCharacterSlots: 3, maxPresetSlots: 5 };
@@ -81,7 +81,8 @@ function requiredTierForPreset(presetValue) {
   const preset = String(presetValue || "").trim().toUpperCase();
   if (preset === "A") return null;
   if (preset === "B" || preset === "C") return "C";
-  return "B";
+  if (preset === "D" || preset === "E") return "B";
+  return "A";
 }
 
 function membershipTierLabel(tier) {

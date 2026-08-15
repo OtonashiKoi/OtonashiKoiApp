@@ -38,7 +38,7 @@ function summarizePresetSnapshot(snapshot) {
 }
 
 function registerPlayerPresetRoutes(router, serviceContext) {
-  // 每人物各自保存 A～E；非會員 1 套、鯉民 3 套、鯉長以上 5 套。
+  // 每人物各自保存 A～G；非會員 1 套、鯉民 3 套、鯉長 5 套、鯉市長以上 7 套。
   router.get("/api/me/presets", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
@@ -85,7 +85,7 @@ function registerPlayerPresetRoutes(router, serviceContext) {
         const { discordId } = req.playerRecord;
         const preset = String(req.body?.preset || "").toUpperCase();
         if (!EQUIP_PRESET_KEYS.includes(preset)) {
-          return res.status(400).json(fail("INVALID_ARGUMENT", "無效分頁，請選擇 A / B / C / D / E"));
+          return res.status(400).json(fail("INVALID_ARGUMENT", "無效分頁，請選擇 A / B / C / D / E / F / G"));
         }
         const membership = await resolvePresetMembership(serviceContext, discordId);
         if (!canUsePreset(membership, preset)) {
@@ -109,7 +109,7 @@ function registerPlayerPresetRoutes(router, serviceContext) {
       const preset = String(req.body?.preset || "").toUpperCase();
       const name = String(req.body?.name || "").trim().slice(0, 12);
       if (!EQUIP_PRESET_KEYS.includes(preset)) {
-        return res.status(400).json(fail("INVALID_ARGUMENT", "無效分頁，請選擇 A / B / C / D / E"));
+        return res.status(400).json(fail("INVALID_ARGUMENT", "無效分頁，請選擇 A / B / C / D / E / F / G"));
       }
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
       if (!progress) return res.status(404).json(fail("NOT_FOUND", "找不到角色資料"));

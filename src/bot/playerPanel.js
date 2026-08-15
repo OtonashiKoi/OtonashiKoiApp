@@ -1830,7 +1830,7 @@ async function buildFreshEquipmentViewPayload(interaction, notice = "") {
 
 // ── 第一層：裝備方案總覽畫面 ──
 // 列1：下拉選單快速切換方案（套裝備）
-// 列2：A～E 按鈕（進去換裝）
+// 列2～3：A～G 按鈕（Discord 每列最多五顆，分兩列進去換裝）
 function buildPresetSelectPayload({ progress, imgBuffer }) {
   const equipped = progress?.equipment || {};
   const activePreset = progress?.activePreset || "A";
@@ -1853,18 +1853,21 @@ function buildPresetSelectPayload({ progress, imgBuffer }) {
     })));
 
   // 按鈕列：進入各方案換裝
-  const enterRow = new ActionRowBuilder().addComponents(
-    PRESETS.map(p =>
+  const enterRows = [];
+  for (let start = 0; start < PRESETS.length; start += 5) {
+    enterRows.push(new ActionRowBuilder().addComponents(
+      PRESETS.slice(start, start + 5).map(p =>
       new ButtonBuilder()
         .setCustomId(`eq_preset:${p}`)
         .setLabel(`方案 ${p} 換裝`)
         .setStyle(p === activePreset ? ButtonStyle.Primary : ButtonStyle.Secondary)
-    )
-  );
+      )
+    ));
+  }
 
   const components = [
     new ActionRowBuilder().addComponents(switchMenu),
-    enterRow
+    ...enterRows
   ];
 
   const payload = { components, flags: MessageFlags.Ephemeral };

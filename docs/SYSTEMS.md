@@ -42,7 +42,7 @@
 - 階段技能由各王 `worldBossConfig.phaseConfig` 的開關獨立控制；三階段只代表血量區間與階段倍率，不會自動授予雷擊術。相容尚未寫入 `lightningEnabled` 的既有資料時，僅大史王第二／第三階段保留原本雷擊，其他四王預設關閉
 - 常態前置鏈：大史王 → 古龍王 → 地獄狼牙王；島島龜王沒有前置王。胡桃使用獨立 `event_boss_hutao_preview` 區域與世界王狀態，目前只允許音無恋的 Discord ID 進入；正式開放前不列入 Web／Discord 怪物圖鑑；不覆蓋或移除 `event_boss` 島島龜王，供未來活動王輪替／混流
 - 胡桃私測第一階段只上線 13 種 S 階限定武器；共通被動「風向輪轉」跨戰鬥保存步進，依序提供東風命中、南風最終傷害、西風爆擊傷害、北風爆擊率，沒有防禦、破防或無視防禦類效果
-- 單人王：`src/api/routes/soloBossRoutes.js`；`accountSoloBoss` 位於帳號頂層，五個人物共用每日擊殺上限與部位進度；舊人物快照會在首次讀取時合併
+- 單人王：`src/api/routes/soloBossRoutes.js`；`accountSoloBoss` 位於帳號頂層，三個人物共用每日擊殺上限與部位進度；舊人物快照會在首次讀取時合併
 - KDA：`src/services/kda/kdaService.js`；戰內歸戶在 `combatLoop.js` 的 `assistLedger`，共用效果分類與防禦收益反推在 `src/shared/supportContribution.js`。賽季總計仍保留，新增 `jobStats.<jobId>` 按每場出戰職業記錄 K／D／場次，外部光環與區域窗口的 A 也按提供能力時的職業記錄；舊總計因沒有歷史職業快照不猜測回填
 - 助攻口徑：聖靈師／治療師的隊伍增傷與有效治療都計入；兵聖／軍師的 Boss 增傷與怪物破防分開換算；結界師／聖域師按實際擋傷，吟遊詩人／詩人 AGI 光環按傷害當量；神射手掩護箭作為提供者直接 K，不重複列 A 或算給受支援者，部位殘血截斷時所有直傷來源等比例縮放。自己的光環不可自益，EXP／金幣光環不算戰鬥助攻
 - 世界王寶箱只依本王戰鬥貢獻 `傷害 + 0.7 × 助攻當量` 排名前 6 名；入場費與累積花費不參與排名。寶箱數量仍依本王有效參與人數及最終名次決定；結算公告優先解析 Discord 顯示名，解析不到只顯示「某位勇者」，不顯示完整或部分 Discord ID
@@ -82,7 +82,7 @@
 | 系統 | 程式 | 資料／備註 |
 | --- | --- | --- |
 | 背包與換裝 | `services/item/itemService.js`、`services/shop/shopService.js`、`playerAppRoutes.js` | `items`、`progress.inventory/equipment`；支援使用、丟棄、出售、鎖定、批次操作與伺服器權威的一鍵最大 ATK 配裝；自動配裝依目前職業限制武器種類，並保留稱號、職業徽章、卡片與錨點 |
-| 多人物與裝備方案 | `services/character/characterService.js`、`shared/membershipEntitlements.js`、`services/shop/shopService.js`、`api/routes/playerPresetRoutes.js` | `progress.activeCharacterSlot/characterSlots/activePreset/equipPresets/equipPresetNames`；背包帳號共用，其餘角色養成與 A～E 方案隨人物切換；非會員 1×1、鯉民 3×3、鯉長 3×5、鯉市長以上 5×5 |
+| 多人物與裝備方案 | `services/character/characterService.js`、`shared/membershipEntitlements.js`、`services/shop/shopService.js`、`api/routes/playerPresetRoutes.js` | `progress.activeCharacterSlot/characterSlots/activePreset/equipPresets/equipPresetNames`；背包帳號共用，其餘角色養成與 A～G 方案隨人物切換；非會員 1×1、鯉民 3×3、鯉長 3×5、鯉市長以上 3×7 |
 | 背包容量 | `services/backpack/backpackService.js` | 主要戰鬥入口會在背包滿時阻擋 |
 | 強化與屬性洞 | `services/enhance/`、`api/routes/playerAppRoutes.js`、`api/routes/playerForgeRoutes.js` | 寶石強化；D1/C2/B3/A4/S5 屬性洞；屬性鑲嵌與破壞拆除。拆除次數永久保存在 `progress.inventory/equipment[].elementRemovalCount`，最多成功 3 次 |
 | 附魔 | `services/enchant/enchantService.js`、`playerEnchantRoutes.js`、`adminEnchantRoutes.js` | 設定快取於啟動初始化；Web 重骰在送出 API 前有消耗確認 |

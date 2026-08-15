@@ -17,7 +17,7 @@ function state(killsToday, hp = fresh.worldBossPartsHp) {
   };
 }
 
-// 角色 2 正在使用；頂層是角色 2，角色 1 與角色 4 的舊快照合計已打滿每日 3 隻。
+// 角色 2 正在使用；頂層是角色 2，角色 1 與角色 3 的舊快照合計已打滿每日 3 隻。
 const merged = readAccountState({
   activeCharacterSlot: 2,
   soloBoss: { daishi: state(0) },
@@ -25,7 +25,7 @@ const merged = readAccountState({
     1: { soloBoss: { daishi: state(1, { ...fresh.worldBossPartsHp, head: 0 }) } },
     // 目前人物的舊快照刻意也放 3；必須忽略，否則會與頂層重複計算。
     2: { soloBoss: { daishi: state(3) } },
-    4: { soloBoss: { daishi: state(2) } },
+    3: { soloBoss: { daishi: state(2) } },
   },
 }, boss);
 assert.equal(merged.needsSave, true);

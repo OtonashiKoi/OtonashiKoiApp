@@ -7,6 +7,7 @@ const { summarizeCharacterLevels } = require("../src/shared/characterLevelSummar
 const {
   CHARACTER_SLOTS,
   EQUIP_PRESET_KEYS,
+  requiredTierForPreset,
   resolveMembershipEntitlements,
 } = require("../src/shared/membershipEntitlements");
 
@@ -61,8 +62,8 @@ async function main() {
   assert.equal(before.enabled, true);
   assert.equal(before.testOnly, false);
   assert.equal(before.activeSlot, 1);
-  assert.equal(before.maxCharacterSlots, 5);
-  assert.equal(before.maxPresetSlots, 5);
+  assert.equal(before.maxCharacterSlots, 3);
+  assert.equal(before.maxPresetSlots, 7);
   assert.deepEqual(before.slots.map((slot) => slot.slot), CHARACTER_SLOTS);
   assert.equal(before.slots[0].level, 50);
   assert.equal(before.slots[0].job, "兵聖徽章");
@@ -107,29 +108,29 @@ async function main() {
   const koiLeaderState = await service.getState(MEMBER_ID);
   assert.equal(koiLeaderState.maxCharacterSlots, 3);
   assert.equal(koiLeaderState.maxPresetSlots, 5);
-  assert.equal(koiLeaderState.slots[3].locked, true);
-  assert.match(koiLeaderState.slots[3].lockReason, /鯉市長/);
+  assert.equal(koiLeaderState.slots.length, 3);
+  assert.equal(koiLeaderState.slots[2].locked, false);
+
+  const third = await service.switchCharacter(MEMBER_ID, 3);
+  assert.equal(third.created, true);
+  assert.equal(third.activeSlot, 3);
   await assert.rejects(
     () => service.switchCharacter(MEMBER_ID, 4),
-    (error) => error?.status === 403 && /鯉市長/.test(error.message),
+    (error) => error?.status === 400 && /1、2 或 3/.test(error.message),
   );
+  assert.equal(summarizeCharacterLevels(stored).characterCount, 3);
 
-  stored.playerTier = "A";
-  const fourth = await service.switchCharacter(MEMBER_ID, 4);
-  assert.equal(fourth.created, true);
-  assert.equal(fourth.activeSlot, 4);
-  const fifth = await service.switchCharacter(MEMBER_ID, 5);
-  assert.equal(fifth.created, true);
-  assert.equal(fifth.activeSlot, 5);
-  assert.equal(summarizeCharacterLevels(stored).characterCount, 4);
-
+  await service.switchCharacter(MEMBER_ID, 1);
   stored.playerTier = null;
   await assert.rejects(
     () => service.switchCharacter(PUBLIC_PLAYER_ID, 3),
     (error) => error?.status === 403 && /鯉民/.test(error.message),
   );
 
-  assert.deepEqual(EQUIP_PRESET_KEYS, ["A", "B", "C", "D", "E"]);
+  assert.deepEqual(EQUIP_PRESET_KEYS, ["A", "B", "C", "D", "E", "F", "G"]);
+  assert.equal(requiredTierForPreset("C"), "C");
+  assert.equal(requiredTierForPreset("E"), "B");
+  assert.equal(requiredTierForPreset("G"), "A");
   assert.deepEqual(
     resolveMembershipEntitlements({ playerTier: "C" }, []),
     { tier: "C", label: "鯉民", isMember: true, maxCharacterSlots: 3, maxPresetSlots: 3 },
@@ -140,7 +141,7 @@ async function main() {
   );
   assert.deepEqual(
     resolveMembershipEntitlements({ playerTier: "A" }, []),
-    { tier: "A", label: "鯉市長", isMember: true, maxCharacterSlots: 5, maxPresetSlots: 5 },
+    { tier: "A", label: "鯉市長", isMember: true, maxCharacterSlots: 3, maxPresetSlots: 7 },
   );
   assert.equal(
     resolveMembershipEntitlements({ playerTier: null }, [{ linkedSupportAtLink: true }]).tier,
@@ -160,12 +161,12 @@ async function main() {
     async save(next) { presetProgress = next; return next; },
   };
   const shopService = new ShopService(null, null, null, presetRepository);
-  await shopService.saveEquipPreset(MEMBER_ID, "D");
-  assert.equal(presetProgress.equipPresets.D.weapon.uuid, "preset-test");
-  await shopService.switchEquipPreset(MEMBER_ID, "E");
-  assert.equal(presetProgress.activePreset, "E", "底層換裝服務必須接受新增的 D / E 方案");
+  await shopService.saveEquipPreset(MEMBER_ID, "F");
+  assert.equal(presetProgress.equipPresets.F.weapon.uuid, "preset-test");
+  await shopService.switchEquipPreset(MEMBER_ID, "G");
+  assert.equal(presetProgress.activePreset, "G", "底層換裝服務必須接受新增的 F / G 方案");
 
-  console.log("✅ 多角色系統：五人物欄、會員分級、每人物五方案、背包共用、裝備獨立、光環清除與鎖定提示皆通過");
+  console.log("✅ 多角色系統：三人物欄、會員分級、每人物七方案、背包共用、裝備獨立、光環清除與鎖定提示皆通過");
 }
 
 main().catch((error) => {

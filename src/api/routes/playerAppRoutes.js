@@ -1324,7 +1324,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       res.json(ok({
         featureAccess: {
-          // 多角色已公開；五個欄位的可用數量由人物 API 依會員位階判定。
+          // 多人物已公開；固定三個欄位，可用數量由人物 API 依會員位階判定。
           characters: true,
         },
         player: {

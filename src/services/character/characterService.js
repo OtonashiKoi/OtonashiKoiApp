@@ -153,7 +153,7 @@ class CharacterService {
   async switchCharacter(discordId, requestedSlot) {
     const targetSlot = Number(requestedSlot);
     if (!CHARACTER_SLOTS.includes(targetSlot)) {
-      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "人物欄位必須是 1、2、3、4 或 5。", 400);
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "人物欄位必須是 1、2 或 3。", 400);
     }
     this._assertNotBattling(discordId);
 
