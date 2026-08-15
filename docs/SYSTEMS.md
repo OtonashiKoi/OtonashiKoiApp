@@ -82,7 +82,7 @@
 | 系統 | 程式 | 資料／備註 |
 | --- | --- | --- |
 | 背包與換裝 | `services/item/itemService.js`、`services/shop/shopService.js`、`playerAppRoutes.js` | `items`、`progress.inventory/equipment`；支援使用、丟棄、出售、鎖定、批次操作與伺服器權威的一鍵最大 ATK 配裝；自動配裝依目前職業限制武器種類，並保留稱號、職業徽章、卡片與錨點 |
-| 多人物與裝備方案 | `services/character/characterService.js`、`shared/membershipEntitlements.js`、`services/shop/shopService.js`、`api/routes/playerPresetRoutes.js` | `progress.activeCharacterSlot/characterSlots/activePreset/equipPresets/equipPresetNames`；背包帳號共用，其餘角色養成與 A～G 方案隨人物切換；非會員 1×1、鯉民 3×3、鯉長 3×5、鯉市長以上 3×7 |
+| 多人物與裝備方案 | `services/character/characterService.js`、`shared/membershipEntitlements.js`、`services/shop/shopService.js`、`api/routes/playerPresetRoutes.js` | `progress.activeCharacterSlot/characterSlots/activePreset/equipPresets/equipPresetNames`；背包帳號共用，其餘角色養成與 A～G 方案隨人物切換；非會員 1×1、鯉民 3×3、鯉長 3×5、鯉市長以上 3×7；Web 只渲染目前可用方案，完整規則由相鄰「＋」按鈕展開，API 仍對越級方案回 403 |
 | 背包容量 | `services/backpack/backpackService.js` | 主要戰鬥入口會在背包滿時阻擋 |
 | 強化與屬性洞 | `services/enhance/`、`api/routes/playerAppRoutes.js`、`api/routes/playerForgeRoutes.js` | 寶石強化；D1/C2/B3/A4/S5 屬性洞；屬性鑲嵌與破壞拆除。拆除次數永久保存在 `progress.inventory/equipment[].elementRemovalCount`，最多成功 3 次 |
 | 附魔 | `services/enchant/enchantService.js`、`playerEnchantRoutes.js`、`adminEnchantRoutes.js` | 設定快取於啟動初始化；Web 重骰在送出 API 前有消耗確認 |
