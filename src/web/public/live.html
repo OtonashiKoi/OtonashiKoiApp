@@ -179,8 +179,9 @@
 <script>
 (function () {
   const $ = (s) => document.querySelector(s);
-  const PW_KEY = "live.adminPassword";
-  let pw = localStorage.getItem(PW_KEY) || "";
+  // 舊控制台保留相容性，但密碼不再寫進 localStorage；登入後改用共用 HttpOnly Session。
+  localStorage.removeItem("live.adminPassword");
+  let pw = "";
 
   const toast = (msg) => {
     const t = $("#toast");
@@ -191,13 +192,14 @@
   };
 
   async function api(method, path, body = null) {
+    const auth = pw ? { Authorization: "Bearer " + pw } : {};
     const res = await fetch(path, {
       method,
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + pw },
+      headers: { "Content-Type": "application/json", ...auth },
       body: body ? JSON.stringify(body) : undefined
     });
     const json = await res.json().catch(() => null);
-    if (res.status === 401) { localStorage.removeItem(PW_KEY); throw new Error("密碼錯誤"); }
+    if (res.status === 401) throw new Error("登入已失效或密碼錯誤");
     if (!res.ok || (json && json.status && json.status !== "ok")) throw new Error(json?.message || `HTTP ${res.status}`);
     return json?.data ?? json;
   }
@@ -206,10 +208,14 @@
   // ── 登入 ──
   async function tryLogin() {
     try {
+      if (pw) {
+        await api("POST", "/api/admin/session/login", { password: pw });
+        pw = "";
+        $("#pw").value = "";
+      }
       await api("GET", "/admin/live/stats");
       $("#login").style.display = "none";
       $("#main").style.display = "block";
-      localStorage.setItem(PW_KEY, pw);
       startDashboard();
     } catch (e) {
       toast("❌ " + e.message);
@@ -217,7 +223,7 @@
   }
   $("#loginBtn").addEventListener("click", () => { pw = $("#pw").value.trim(); tryLogin(); });
   $("#pw").addEventListener("keydown", (e) => { if (e.key === "Enter") { pw = $("#pw").value.trim(); tryLogin(); } });
-  if (pw) tryLogin();
+  tryLogin();
 
   // ── 數據刷新 ──
   async function refreshStats() {

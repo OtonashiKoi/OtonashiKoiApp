@@ -22,6 +22,7 @@ const { bestiaryGainFromDamage } = require("../../shared/bestiary");
 const { buildItemEffectLines } = require("../../shared/itemEffectLines");
 const { calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
 const { readAccountState } = require("../../services/worldBoss/soloBossAccountState");
+const { mergeContributorMaps, mirrorDamageToOtherParts } = require("../../shared/supportContribution");
 
 const PART_LABELS = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
 
@@ -152,6 +153,11 @@ function createSoloBossRoutes(serviceContext) {
       const { calcPlayerStats } = require("../../shared/combatStats");
       const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
       const equipped = await mergeEquippedFromLibrary(progress.equipment || {}, serviceContext.itemRepository);
+      const battleJobId = String(equipped?.job_eq?.itemId || equipped?.job_eq?.id || "");
+      const battleJobName = equipped?.job_eq?.itemName || equipped?.job_eq?.name || "";
+      const _wd = require("../../shared/windDirection");
+      const windDirectionOn = _wd.hasEffect(equipped);
+      const windDirectionBefore = windDirectionOn ? _wd.read(progress) : 0;
       const petStat = require("../../shared/petDex").statBonusOf(progress.petDex);
       let pStats = calcPlayerStats(progress.attributes || {}, equipped, progress.activeEffects || [], progress.inventory || [], { pkRating: progress.pkRating, zone: boss.zone, petStat });
 
@@ -230,6 +236,10 @@ function createSoloBossRoutes(serviceContext) {
       const freezeGaugeKey = _zfg.gaugeKeyForSolo(discordId, boss.key);
       const freezeStateBefore = await _zfg.read(freezeGaugeKey, boss.zone).catch(() => null);
       const zoneFrozenOn = Boolean(freezeStateBefore?.frozen);
+      const teamControlContributors = mergeContributorMaps(
+        teamStunOn ? stunStateBefore?.windowContributors : null,
+        zoneFrozenOn ? freezeStateBefore?.windowContributors : null
+      );
 
       // ── 區域聖域值（聖域師）── 單人王每人自己一條；窗口內出戰受傷減半＋每回合回血
       const _scg = require("../../shared/sanctumGauge");
@@ -260,6 +270,7 @@ function createSoloBossRoutes(serviceContext) {
         stance: battleStanceKey,
         teamStunRounds: (teamStunOn || zoneFrozenOn) ? 999 : 0,
         teamStunStyle: (!teamStunOn && zoneFrozenOn) ? "freeze" : undefined,
+        teamControlContributors,
         monsterEquipped: battleMonsterEquipped, playerLevel: progress.level, monsterLevel: battleMonsterStats.level,
         monsterIsBoss: Boolean(monster?.isBoss),
         isWorldBoss: true,
@@ -278,14 +289,21 @@ function createSoloBossRoutes(serviceContext) {
         sageGaugeGrids: sageGridsBefore,     // 計謀值（兵聖）
         diceGaugeGrids: diceGridsBefore,     // 命運骰（賭神）
         diceLuckStacks: diceLuckBefore,      // 手氣正旺（賭神）
+        windDirectionStep: windDirectionBefore,
         bardDamageMult: bardResult?.dmgMult, // 演奏判定（吟遊詩人）
         bardChordPct: bardResult?.chordPct,
         bardPerformNote: bardResult?.note,
         // 聖域窗口（聖域師）：本場受傷減免＋每回合回血
         sanctuaryCutPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumDamageCutPct) || 50) : 0,
         sanctuaryHealPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumHealPct) || 3) : 0,
+        sanctuaryContributors: zoneSanctumOn ? sanctumStateBefore?.windowContributors : null,
       });
       battleResolved = true;
+      if (windDirectionOn && r?.windDirectionStep != null) {
+        const _nextWindDirection = _wd.normalizeStep(r.windDirectionStep);
+        progress.windDirectionStep = _nextWindDirection;
+        await serviceContext.progressRepository.updateFields(discordId, { windDirectionStep: _nextWindDirection }).catch(() => {});
+      }
       // 連擊氣條（影舞者）：戰後氣量落地
       if (shadowOn) {
         const _nextShadow = _sg.next(r?.shadowGauge ?? shadowGridsBefore, boss.zone);
@@ -346,22 +364,12 @@ function createSoloBossRoutes(serviceContext) {
         await serviceContext.progressRepository.updateFields(discordId, { berserkGauge: _nextGauge }).catch(() => {});
       }
       const newPartHp = Math.max(0, Number(r.finalMonsterHp) || 0);
+      const targetPartDamage = Math.max(0, Math.round(partHpNow - newPartHp));
       const partsHp = { ...st.worldBossPartsHp, [part]: newPartHp };
       // ── 炎圈（元素師）：單人王也是「所有部位一起受傷」── 其他尚存部位鏡射炎圈總傷
-      let fcMirrorTotal = 0;
-      {
-        const _fcDmg = Math.max(0, Math.round(Number(r?.combatStats?.fireCircleDamage) || 0));
-        if (_fcDmg > 0) {
-          for (const _pk of Object.keys(partsHp)) {
-            if (_pk === part) continue;
-            const _cur = Math.max(0, Number(partsHp[_pk] || 0));
-            if (_cur <= 0) continue;
-            const _dealt = Math.min(_cur, _fcDmg);
-            partsHp[_pk] = _cur - _dealt;
-            fcMirrorTotal += _dealt;
-          }
-        }
-      }
+      const mirror = mirrorDamageToOtherParts(partsHp, part, r?.combatStats?.fireCircleDamage);
+      Object.assign(partsHp, mirror.partsHp);
+      const fcMirrorTotal = mirror.total;
       const partBroken = newPartHp <= 0 && partHpNow > 0;
       const allDefeated = isWorldBossAllPartsDefeated(partsHp);
 
@@ -372,7 +380,7 @@ function createSoloBossRoutes(serviceContext) {
       let stunKnock = null;
       if (_dsg.canKnock(equipped?.job_eq)) {
         stunKnock = await _dsg
-          .knock(stunGaugeKey, boss.zone, r?.combatStats?.attackRounds || 0, displayName || "")
+          .knock(stunGaugeKey, boss.zone, r?.combatStats?.attackRounds || 0, displayName || "", Date.now(), discordId, battleJobId, battleJobName || "矮人戰士長")
           .catch(() => null);
         if (stunKnock?.triggered) {
           rewardLines.push(`⛰️ **巨神震擊**！**${monster.name}** 應聲倒地——接下來 ${Math.round(_dsg.STUN_WINDOW_MS / 1000)} 秒出戰全程免傷！`);
@@ -388,7 +396,7 @@ function createSoloBossRoutes(serviceContext) {
       if (_zfg.canKnock(equipped?.job_eq) && battleStanceKey === "frost") {
         // 累積量＝戰鬥回合數（不論命中）
         freezeKnock = await _zfg
-          .knock(freezeGaugeKey, boss.zone, r?.combatStats?.attackRounds || 0, displayName || "")
+          .knock(freezeGaugeKey, boss.zone, r?.combatStats?.attackRounds || 0, displayName || "", Date.now(), discordId, battleJobId, battleJobName || "元素師")
           .catch(() => null);
         if (freezeKnock?.triggered) {
           rewardLines.push(`🧊 **區域冰封**！**${monster.name}** 被凍結——接下來 ${Math.round(_zfg.FREEZE_WINDOW_MS / 1000)} 秒出戰全程免傷！`);
@@ -399,7 +407,7 @@ function createSoloBossRoutes(serviceContext) {
       // ── 累積區域聖域值（只有聖域師）── 每場 +1；不廣播
       let sanctumKnock = null;
       if (_scg.canKnock(equipped?.job_eq)) {
-        sanctumKnock = await _scg.knock(sanctumGaugeKey, boss.zone, 1, displayName || "").catch(() => null);
+        sanctumKnock = await _scg.knock(sanctumGaugeKey, boss.zone, 1, displayName || "", Date.now(), discordId, battleJobId, battleJobName || "聖域師").catch(() => null);
         if (sanctumKnock?.triggered) {
           rewardLines.push(`🏛️ **聖域展開**！聖光籠罩戰場——${Math.round(_scg.SANCTUM_WINDOW_MS / 1000)} 秒內出戰受傷減半、每回合回血！`);
         } else if (sanctumKnock?.knocked > 0) {
@@ -421,8 +429,12 @@ function createSoloBossRoutes(serviceContext) {
         } catch (_) { /* 抗性算不出來就當 0 */ }
         require("../../services/kda/kdaService").recordBattle({
           discordId, displayName,
-          damage: Math.max(0, Math.round(Number(r.totalDamage) || 0)),
+          damage: targetPartDamage + fcMirrorTotal,
           died: r?.outcome === "lose",
+          battleJobId,
+          battleJobName,
+          assistBySource: r?.assistLedger?.bySource || null,
+          assistBySourceJob: r?.assistLedger?.bySourceJob || null,
           quest: {
             questService: serviceContext.questService || serviceContext.weeklyQuestService,
             rounds: (r?.nextRound || 2) - 1,
@@ -526,7 +538,7 @@ function createSoloBossRoutes(serviceContext) {
       await saveSoloState(discordId, boss, { dateKey: st.dateKey, killsToday, worldBossPartsHp: nextPartsHp, worldBossPartsMaxHp: nextPartsMax });
 
       const respParts = partsForResp(boss, allDefeated && killsLeft > 0 ? nextPartsHp : partsHp, nextPartsMax);
-      // CD 與一般網頁戰鬥同公式：動畫時間＋短畫面交接；敗北懲罰維持不變。
+      // CD 與一般網頁戰鬥同公式：死亡時先完整播放戰鬥，再從死亡畫面起算 30 秒懲罰。
       const _perRoundMs = process.env.ROUND_MS ? (Number(process.env.ROUND_MS) || 900) : calculateTickDelay(pStats.agi || 1);
       const animDurationMs = calculateWebBattleCooldownMs({
         roundCount: (r.roundLogs || []).length,
@@ -539,7 +551,7 @@ function createSoloBossRoutes(serviceContext) {
         monsterName: monster.name, monsterImageUrl: monster.imageUrl || null,
         monsterElement: monster?.element || null,
         monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
-        logs: r.roundLogs || [], rewardLines, drops,
+        weaponType: pStats.weaponType || null, logs: r.roundLogs || [], diceEvents: r.diceEvents || [], rewardLines, drops,
         totalDamage: r.totalDamage, finalPlayerHp: Math.max(0, r.finalPlayerHp || 0),
         playerMaxHp: Math.max(1, Math.round(Number(pStats.maxHp) || 0)),
         // 血條顯示「本場所打部位」的血量（同現行世界王）

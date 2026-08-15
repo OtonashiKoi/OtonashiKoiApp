@@ -13,6 +13,7 @@
 5. [CURRENT_GAME_STATUS](CURRENT_GAME_STATUS.md)：由程式碼與 MongoDB 產生的資料快照。
 6. [COMBAT_FORMULA](../COMBAT_FORMULA.md)：目前共用戰鬥核心的基礎公式與結算時序。
 7. [DOCUMENT_SYNC_AUDIT](DOCUMENT_SYNC_AUDIT.md)：本次找到的落差、已修項目與刻意保留的技術債。
+8. [TODO](TODO.md)：目前工程執行順序、完成條件與需要核准的操作。
 
 如果上述文件彼此衝突，先執行 `npm run status:update` 與 `npm run check:docs`，再以對應的 `src/**` 程式和 MongoDB 設定為準。
 
@@ -36,7 +37,7 @@
 | 一轉／二轉 | 11 個一轉；13 條二轉資料；每個一轉至少 1 條可用；2 條分支鎖定（劍鬼、盜靈） | `src/shared/jobAdvancement.js` |
 | 待機室預告 | YouTube 新 broadcastId 預告一次，正式開播可再公告一次 | `src/services/stream/youtubeUpcomingService.js`、`viewerEventsService.js` |
 | 觀看人數提示 | 由 MongoDB `serverEventConfig.viewerTiers` 控制；同場同階一次、升階可再發、另受最短間隔限制 | `src/services/stream/streamEventConfig.js`、`streamNotificationState.js` |
-| 聖人／鮮血任務 | 實際非吸血治療與實際吸血分開計算；滿血溢出不計 | `src/shared/combatLoop.js`、`weeklyQuestService.js` |
+| 錨點任務 | 聖人只看 5 萬有效非吸血治療且不綁抖內；鮮血、承傷、簽到與輔助職任務依各自的顯示／完成門檻運作 | `src/shared/anchorQuestRules.js`、`weeklyQuestService.js` |
 
 ## 維護流程
 

@@ -103,17 +103,7 @@
       document.body.classList.add("admin-authed");
     });
 
-    elements.connectButton.addEventListener("click", async () => {
-      try {
-        if (window.adminBindings && typeof window.adminBindings.bootstrapConsole === 'function') {
-          await window.adminBindings.bootstrapConsole();
-        }
-        document.dispatchEvent(new Event("adminConnected"));
-      } catch (error) {
-        elements.connectionState.textContent = error.message;
-        log(`連線失敗：${error.message}`);
-      }
-    });
+    window.adminSession.wireLogin(elements, log);
 
     for (const link of elements.navLinks) {
       link.addEventListener("click", () => {

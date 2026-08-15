@@ -9,7 +9,7 @@
   function headers() {
     return {
       "Content-Type": "application/json",
-      Authorization: "Bearer " + (window.elements?.adminPassword?.value?.trim() || "")
+      Authorization: "Bearer " + (window.getAdminToken?.() || "")
     };
   }
   async function api(method, path, body = null) {
@@ -174,7 +174,10 @@
     }));
   }
 
-  // 切到本分頁時載入（沿用後台 nav 事件）；直接開頁也載一次
+  // 切到本分頁或登入完成時才載入，避免登入畫面尚未輸入密碼就先產生 401。
   document.querySelector('[data-target="section-wheel"]')?.addEventListener("click", load);
-  load();
+  document.addEventListener("adminConnected", () => {
+    if (document.getElementById("section-wheel")?.classList.contains("active")) load();
+  });
+  window.adminWheel = { load };
 })();

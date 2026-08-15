@@ -41,8 +41,8 @@
 
   async function refresh() {
     try {
-      const layoutRes = await fetchJSON("/admin/channel-layout", { headers: headers() });
-      const binding = (layoutRes?.data?.layout?.discord?.bindings || []).find((b) => b.featureKey === "casino_wheel");
+      const layoutRes = await fetchJSON("/admin/console/bootstrap", { headers: headers() });
+      const binding = (layoutRes?.data?.channelLayout?.discord?.bindings || []).find((b) => b.featureKey === "casino_wheel");
       currentEnabled = binding ? binding.enabled !== false : true;
       currentChannelId = binding?.channelId || "";
       currentMessageId = binding?.panelMessageId || "";

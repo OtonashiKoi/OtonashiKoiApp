@@ -87,7 +87,7 @@ Mongo 啟動時建立玩家、進度、交易、任務、怪物、直播事件�
 
 ### Express
 
-`src/api/server.js` 依序掛載 health、管理、直播、玩家、故事、麻將、綠界與周邊商城路由；實際 endpoint 以 `src/api/routes/*.js` 為準。
+`src/api/server.js` 依序掛載 health、管理 Session／Studio、管理、直播、玩家、故事、麻將、綠界與周邊商城路由；實際 endpoint 以 `src/api/routes/*.js` 為準。管理 Session 在既有 `/admin/*` 路由之前驗證並橋接舊 Bearer guard，管理異動也在同一層寫入稽核紀錄。
 
 全域 middleware 包含：
 
@@ -107,7 +107,9 @@ React 原始碼在獨立 workspace `~/Documents/equipmentGAME-app`，建置後�
 
 ### 管理後台
 
-管理後台是 `src/web/public/admin.html` 與 `admin.*.js`，直接呼叫 `/admin/*`。它涵蓋玩家、權限、版位、怪物、道具、商店、任務、故事、直播活動、效果、戰鬥設定、附魔、商城與維運操作。
+遊戲營運後台是 `src/web/public/admin.html` 與 `admin.*.js`，直接呼叫 `/admin/*`。它涵蓋玩家、帳務、權限、版位、怪物與 NPC 事件、道具、商店、任務、故事、效果、戰鬥設定、附魔、商城與維運操作。
+
+直播營運後台是 `/studio`（`studio.html`、`studio.css`、`studio.js`），集中真實直播／觀看數、活躍留言者、會員、斗內、全服 Buff、世界王、轉盤、OBS overlay 健康檢查與創作者授權。OBS 與場景區依各瀏覽器來源實際支援的 query 參數提供內嵌設定器，可直接產生正式網址、測試預覽並複製；密碼與 Overlay 金鑰不寫入 Studio 的 localStorage。轉盤編輯、斗內／觀看／會員門檻、SC 里程碑與永久加成都直接嵌入 Studio；只有玩家與怪物等遊戲本體資料會明確跨站到遊戲營運後台。Studio 與主 `/admin` 每次開啟或重整都固定先顯示密碼輸入，不以既有 Session 自動跳過登入；兩個後台仍共用同一個 HttpOnly 管理 Session，供手動登入後的 API 請求使用。Studio 各工作區使用 hash 保存位置；舊 `/static/live.html` 保留相容但不再持久化明碼密碼。
 
 ## 共用戰鬥邊界
 

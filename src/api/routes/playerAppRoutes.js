@@ -8,6 +8,7 @@ const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/strea
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffects, filterActiveAuras } = require("../../shared/supportAuraScaling");
+const { mergeContributorMaps, allocateDirectDamage, mirrorDamageToOtherParts } = require("../../shared/supportContribution");
 const { ALL_ZONE_KEYS, normalizeZone, canPlayerAccessZone, getVisibleZoneKeys, getPublicZoneKeys, shouldBroadcastZoneActivity, checkZoneLevelRequirementWithBinding, zoneToFeatureKey, getZoneDefaultEntryFee, getZoneTheme, getZoneGroup, ZONE_BY_KEY } = require("../../shared/zones");
 const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { acquireSse } = require("../netGuards");
@@ -16,6 +17,11 @@ const { acquireWebBattle } = require("../../services/progress/battleLock");
 const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard } = require("../../shared/leaderboardEligibility");
 const { calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
 const { getWorldBossPartLabel } = require("../../shared/worldBossParts");
+const { A_WEIGHT: WORLD_BOSS_ASSIST_WEIGHT } = require("../../services/kda/kdaService");
+const {
+  isYoutubeDirectBindTester,
+  buildYoutubeDirectBindAuthorizeUrl
+} = require("../../services/stream/youtubeDirectBindTest");
 
 // 跨 DC/網頁/裝置「同時只能一場戰鬥」：檢查 DC 端是否正在戰鬥（怪物/PK/塔）
 function describeDcBattle(discordId) {
@@ -33,6 +39,51 @@ function prettyLeaderboardName(displayName, discordId) {
     return id ? `玩家#${id.slice(-4)}` : "玩家";
   }
   return dn;
+}
+
+// 世界王頁同時提供兩種榜單：
+// - 傷害排行：只看實際對本王造成的傷害（預設顯示）
+// - 貢獻排行：與寶箱完全相同，C = 傷害 + 0.7 × 助攻當量
+// 保留完整數值供排序，回傳時再四捨五入，避免畫面名次與結算名次不一致。
+function buildWorldBossRankings(damageMap = {}) {
+  const entries = Object.entries(damageMap).map(([pid, row]) => {
+    const damage = Math.max(0, Number(row?.damage) || 0);
+    const assist = Math.max(0, Number(row?.assist) || 0);
+    return {
+      pid,
+      name: prettyLeaderboardName(row?.name, pid),
+      damage,
+      assist,
+      contribution: damage + WORLD_BOSS_ASSIST_WEIGHT * assist,
+    };
+  });
+
+  const toPublicEntry = ({ pid: _pid, ...entry }) => ({
+    ...entry,
+    damage: Math.round(entry.damage),
+    assist: Math.round(entry.assist),
+    contribution: Math.round(entry.contribution),
+  });
+
+  const damageRanking = entries
+    .filter((entry) => entry.damage > 0)
+    .sort((a, b) => b.damage - a.damage
+      || b.contribution - a.contribution
+      || b.assist - a.assist
+      || String(a.pid).localeCompare(String(b.pid)))
+    .slice(0, 20)
+    .map(toPublicEntry);
+
+  const contributionRanking = entries
+    .filter((entry) => entry.contribution > 0)
+    .sort((a, b) => b.contribution - a.contribution
+      || b.damage - a.damage
+      || b.assist - a.assist
+      || String(a.pid).localeCompare(String(b.pid)))
+    .slice(0, 20)
+    .map(toPublicEntry);
+
+  return { damageRanking, contributionRanking };
 }
 
 // Track per-player battle cooldowns. Duration follows the animation timeline plus a short UI handoff.
@@ -196,9 +247,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     return `http://localhost:${config.api?.port || 5566}`;
   }
 
-  function signStreamAuthState(discordId) {
+  function signStreamAuthState(discordId, provider = "") {
     return jwt.sign(
-      { discordId: String(discordId || "").trim() },
+      {
+        discordId: String(discordId || "").trim(),
+        ...(provider ? { provider: String(provider).trim().toLowerCase() } : {})
+      },
       config.streamAuth?.stateSecret || process.env.JWT_SECRET,
       { expiresIn: STREAM_AUTH_STATE_TTL }
     );
@@ -209,6 +263,19 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       String(token || ""),
       config.streamAuth?.stateSecret || process.env.JWT_SECRET
     );
+  }
+
+  function canUseYoutubeDirectBind(discordId) {
+    return isYoutubeDirectBindTester(
+      discordId,
+      config.streamAuth?.youtubeDirectBindTestDiscordIds || []
+    );
+  }
+
+  function assertYoutubeDirectBindTester(discordId) {
+    if (!canUseYoutubeDirectBind(discordId)) {
+      throw new Error("YouTube Google 登入目前僅開放指定測試帳號。");
+    }
   }
 
   function signDiscordAuthState(payload) {
@@ -574,6 +641,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return res.status(400).send(renderAuthResultPage("授權失敗", ["❌ 缺少或錯誤的 provider。"]));
       }
       const state = verifyStreamAuthState(stateToken);
+      if (state.provider && state.provider !== provider) {
+        throw new Error("授權平台與 state 不一致，請重新從設定頁開始。");
+      }
       const baseUrl = getPublicBaseUrl(req);
       const callbackUrl = `${baseUrl}/api/stream-auth/callback/${provider}`;
 
@@ -598,6 +668,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       const auth = config.streamAuth || {};
+      assertYoutubeDirectBindTester(state.discordId);
       if (!auth.youtubeClientId || !auth.youtubeClientSecret) {
         return res.status(500).send(renderAuthResultPage("授權失敗", [
           "❌ YouTube OAuth 尚未設定完成。",
@@ -607,21 +678,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // 註：broadcaster refresh token 在 creatorTokens collection（由 /admin/creator-auth 流程寫入），
       //     玩家綁定流程本身只需要 client_id/secret + 用戶 OAuth code，不需要 creator token
 
-      const authorizeUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-      authorizeUrl.search = new URLSearchParams({
-        client_id: auth.youtubeClientId,
-        redirect_uri: callbackUrl,
-        response_type: "code",
-        scope: [
-          "openid",
-          "email",
-          "profile",
-          "https://www.googleapis.com/auth/youtube.readonly"
-        ].join(" "),
-        access_type: "offline",
-        prompt: "consent",
+      const authorizeUrl = buildYoutubeDirectBindAuthorizeUrl({
+        clientId: auth.youtubeClientId,
+        redirectUri: callbackUrl,
         state: stateToken
-      }).toString();
+      });
       return res.redirect(authorizeUrl.toString());
     } catch (err) {
       return res.status(400).send(renderAuthResultPage("授權失敗", [
@@ -742,6 +803,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/stream-auth/callback/twitch", async (req, res) => {
     try {
       const state = verifyStreamAuthState(req.query.state);
+      if (state.provider && state.provider !== "twitch") {
+        throw new Error("授權平台與 state 不一致，請重新從設定頁開始。");
+      }
       const code = String(req.query.code || "").trim();
       if (!code) {
         return res.status(400).send(renderAuthResultPage("Twitch 授權失敗", ["❌ 缺少授權 code。"]));
@@ -809,6 +873,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/stream-auth/callback/youtube", async (req, res) => {
     try {
       const state = verifyStreamAuthState(req.query.state);
+      if (state.provider && state.provider !== "youtube") {
+        throw new Error("授權平台與 state 不一致，請重新從設定頁開始。");
+      }
+      assertYoutubeDirectBindTester(state.discordId);
       const code = String(req.query.code || "").trim();
       if (!code) {
         return res.status(400).send(renderAuthResultPage("YouTube 授權失敗", ["❌ 缺少授權 code。"]));
@@ -860,6 +928,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const newTier = pickHigherTier(mappedTier, currentTier) || currentTier || mappedTier || null;
       const linkedSupportBadgeLabelsAtLink = levelName ? [`會員等級:${levelName}`] : [];
 
+      // Google OAuth 只負責證明 YouTube channel ID。會員 API 暫時查不到時，
+      // 不得把聊天室先前辨識到的會員徽章／位階覆寫成未加入。
+      const existingBinding = await serviceContext.streamAccountBindingRepository
+        .findByDiscordAndPlatform(state.discordId, "youtube")
+        .catch(() => null);
+
       const binding = await upsertStreamBindingAndTier({
         discordId: state.discordId,
         provider: "youtube",
@@ -867,9 +941,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         displayName: profile.displayName,
         tier: newTier,
         memberRoleIdsAtLink: [],
-        linkedSupportAtLink: Boolean(levelName),
-        linkedSupportKindAtLink: levelName ? "member" : null,
-        linkedSupportBadgeLabelsAtLink
+        linkedSupportAtLink: levelName ? true : (existingBinding?.linkedSupportAtLink ?? null),
+        linkedSupportKindAtLink: levelName ? "member" : (existingBinding?.linkedSupportKindAtLink || null),
+        linkedSupportBadgeLabelsAtLink: levelName
+          ? linkedSupportBadgeLabelsAtLink
+          : (existingBinding?.linkedSupportBadgeLabelsAtLink || [])
       });
 
       const lines = [
@@ -904,7 +980,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           "請補齊 DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET。"
         ]));
       }
-      const returnTo = String(req.query.returnTo || "/game.html");
+      const returnTo = String(req.query.returnTo || "/auth/discord/callback");
       const redirectUri = `${getPublicBaseUrl(req)}${returnTo}`;
       const url = new URL("https://discord.com/api/oauth2/authorize");
       url.search = new URLSearchParams({
@@ -912,6 +988,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         redirect_uri: redirectUri,
         response_type: "code",
         scope: "identify",
+        // consent 會重新顯示目前授權身分；登入頁的「切換 DC 帳號」可由此改選帳號，
+        // 不會因 Discord 已授權過就靜默沿用上一個帳號。
         prompt: "consent"
       }).toString();
       return res.redirect(url.toString());
@@ -1350,7 +1428,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // 2.4 Issue stream-auth state token — 前端綁定流程的第一步
   router.post("/api/me/stream-auth/state", requireAuth, (req, res) => {
     const { discordId } = req.playerRecord;
-    const state = signStreamAuthState(discordId);
+    const provider = String(req.body?.provider || "").trim().toLowerCase();
+    if (provider && !["youtube", "twitch"].includes(provider)) {
+      return res.status(400).json(fail("INVALID_PROVIDER", "不支援的直播平台"));
+    }
+    if (provider === "youtube" && !canUseYoutubeDirectBind(discordId)) {
+      return res.status(403).json(fail("TEST_ACCESS_REQUIRED", "YouTube Google 登入目前僅開放指定測試帳號"));
+    }
+    const state = signStreamAuthState(discordId, provider);
     res.json(ok({ state, expiresIn: STREAM_AUTH_STATE_TTL }));
   });
 
@@ -1430,7 +1515,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       }));
 
-      res.json(ok({ bindings: enriched }));
+      res.json(ok({
+        bindings: enriched,
+        capabilities: {
+          youtubeDirectBindTest: canUseYoutubeDirectBind(discordId)
+        }
+      }));
     } catch (err) {
       next(err);
     }
@@ -2989,6 +3079,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         ? (Number(_SANCTUM_DEF?.auraMult) || 2)
         : 1;
       const _partyAuraMult = _spiritAuraMult * _bardAuraMult * _sanctumAuraMult; // 三機制互斥（不同職業），乘起來只是共用一條管線
+      const selfJobId = String(equipped?.job_eq?.itemId || equipped?.job_eq?.id || "");
+      const selfJobName = equipped?.job_eq?.itemName || equipped?.job_eq?.name || null;
       const rawPartyEffs = collectEquipmentEffects(equipped, "passive", { equipped, inventory: progress?.inventory || [] })
         .filter(e => e.target === "party")
         .map(e => _partyAuraMult === 1 ? e : ({
@@ -3005,6 +3097,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             key: "support_shot", target: "party", trigger: "passive", chance: 100,
             params: { value: Number(_snCfg.supportShotPct) || 70, casterAtk: Math.round(pStats.atk || 0), casterCrit: Math.round(pStats.crit || 0) },
             srcItem: "神射手徽章", sourceDiscordId: discordId,
+            sourceJobId: selfJobId, sourceJobName: selfJobName || "神射手徽章",
           });
         }
       }
@@ -3018,13 +3111,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // 過期剔除：提供者超過 3 分鐘沒在本區出戰＝離場，光環不再套用也順手從狀態清掉
       const prevAuras = filterActiveAuras(prevAurasRaw);
 
-      // 本玩家職業名（供戰報標註「提供者（職業）」用）
-      const selfJobName = equipped?.job_eq?.itemName || null;
-
       let newAuras = prevAuras;
       if (hasPartyAura) {
         // 光環職業：更新或新增本玩家的光環項目（自己也留在陣列裡，下面一起收）；lastAt 每次出戰刷新
-        newAuras = [...prevAuras.filter(a => a.discordId !== discordId), { discordId, displayName, effects: rawPartyEffs, jobName: selfJobName, lastAt: Date.now() }];
+        newAuras = [...prevAuras.filter(a => a.discordId !== discordId), { discordId, displayName, effects: rawPartyEffs, jobId: selfJobId, jobName: selfJobName, lastAt: Date.now() }];
         selfAuraLines = partyEffs.map(eff => {
           const effName = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
           const vt = formatEffectValueText(eff.key, eff?.params);
@@ -3071,6 +3161,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               sourceName: isSelf ? displayName : (aura.displayName || null),
               // 光環標籤：優先標「來源道具」（例：繫絆・共鳴之鏈），沒有才標職業徽章
               sourceJobName: e.srcItem || (isSelf ? selfJobName : (aura.jobName || null)),
+              sourceJobId: isSelf ? selfJobId : (aura.jobId || auraProviderEquipped?.job_eq?.itemId || auraProviderEquipped?.job_eq?.id || ""),
               isSelfAura: isSelf,
               sourceDiscordId: isSelf ? discordId : (aura.discordId || null), // KDA・A 值歸戶對象
             })),
@@ -3463,6 +3554,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const freezeGaugeKey = _zfg.gaugeKeyForZone(zoneKey);
       const freezeStateBefore = await _zfg.read(freezeGaugeKey, zoneKey).catch(() => null);
       const zoneFrozenOn = Boolean(freezeStateBefore?.frozen);
+      const teamControlContributors = mergeContributorMaps(
+        teamStunOn ? stunStateBefore?.windowContributors : null,
+        zoneFrozenOn ? freezeStateBefore?.windowContributors : null
+      );
       markBattlePerf("prepare");
 
       const { runCombatLoop } = require("../../shared/combatLoop");
@@ -3471,6 +3566,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           // 團隊暈眩／區域冰封：整場（給滿 999，實際會被戰鬥回合數自然截斷）
           teamStunRounds: (teamStunOn || zoneFrozenOn) ? 999 : 0,
           teamStunStyle: (!teamStunOn && zoneFrozenOn) ? "freeze" : undefined,
+          teamControlContributors,
           playerName: displayName,
           playerLevel: progress?.level || 1,
           stance: battleStanceKey,
@@ -3501,6 +3597,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           // 聖域窗口（聖域師區域條滿）：本場受傷減免＋每回合回血（任何職業都吃；DC 不公告只吃效果）
           sanctuaryCutPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumDamageCutPct) || 50) : 0,
           sanctuaryHealPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumHealPct) || 3) : 0,
+          sanctuaryContributors: zoneSanctumOn ? sanctumStateBefore?.windowContributors : null,
           equipped,
           inventory: progress?.inventory || [],
           partyEffects,
@@ -3593,19 +3690,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           // ── 炎圈（元素師）：世界王「所有部位一起受傷」──
           // 你打的部位在戰鬥內已吃過炎圈跳傷；其餘尚存部位在此鏡射同量灼燒，計入你的貢獻。
           // （戰報行在 rewardLines 宣告後才補——它在下方 3298 行才存在，這裡 push 會踩 TDZ）
-          {
-            const _fcDmg = Math.max(0, Math.round(Number(combatResult?.combatStats?.fireCircleDamage) || 0));
-            if (_fcDmg > 0) {
-              for (const _pk of Object.keys(nextPartsHp)) {
-                if (_pk === worldBossPart) continue;
-                const _cur = Math.max(0, Number(nextPartsHp[_pk] || 0));
-                if (_cur <= 0) continue;
-                const _dealt = Math.min(_cur, _fcDmg);
-                nextPartsHp[_pk] = _cur - _dealt;
-                fcMirrorTotal += _dealt;
-              }
-            }
-          }
+          const mirror = mirrorDamageToOtherParts(nextPartsHp, worldBossPart, combatResult?.combatStats?.fireCircleDamage);
+          Object.assign(nextPartsHp, mirror.partsHp);
+          fcMirrorTotal = mirror.total;
           const nextCurrentHp = sumWBPartHp(nextPartsHp);
           worldBossAllPartsDefeated = isWBAllDefeated(nextPartsHp);
           worldBossPartBroken = nextPartHp <= 0;
@@ -3614,18 +3701,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
           const prevDmg = freshState.damageMap || {};
           // 掩護射擊歸戶：箭傷從出戰者的貢獻拆出、記給提供箭的神射手
-          const _supportBySrc = combatResult?.combatStats?.supportShotBySource || {};
-          let _supportTotal = 0;
-          for (const _v of Object.values(_supportBySrc)) _supportTotal += Math.max(0, Math.round(Number(_v) || 0));
+          const _supportSplit = allocateDirectDamage(
+            wbDamage,
+            combatResult?.totalDamage,
+            combatResult?.combatStats?.supportShotBySource || {}
+          );
+          const _supportBySrc = _supportSplit.bySource;
+          const _supportDamageBySource = {};
           const updatedDamageMap = {
             ...prevDmg,
             [discordId]: {
               name: displayName,
               level: progress?.level || 1,
-              damage: (prevDmg[discordId]?.damage || 0) + Math.max(0, wbDamage - _supportTotal) + fcMirrorTotal,
+              damage: (prevDmg[discordId]?.damage || 0) + _supportSplit.selfDamage + fcMirrorTotal,
               taken: (prevDmg[discordId]?.taken || 0) + totalTaken,
-              // 世界王貢獻寶箱:累計入場費(花費排名依據),與 DC 共用同一份 damageMap → 貢獻合併計算
-              spent: (prevDmg[discordId]?.spent || 0) + (Number(worldBossEntryFee) || 0),
+              assist: Number(prevDmg[discordId]?.assist) || 0,
             }
           };
           for (const [_srcId, _amt] of Object.entries(_supportBySrc)) {
@@ -3635,7 +3725,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             const _auraName = (Array.isArray(freshState.activeHealerAuras)
               ? freshState.activeHealerAuras.find((a) => a && a.discordId === _srcId)?.displayName
               : null) || prevDmg[_srcId]?.name || "神射手";
-            const _prevEntry = updatedDamageMap[_srcId] || { name: _auraName, level: prevDmg[_srcId]?.level || 1, damage: 0, taken: 0, spent: 0 };
+            const _job = combatResult?.combatStats?.supportShotBySourceJob?.[_srcId] || {};
+            _supportDamageBySource[_srcId] = {
+              amount: _add,
+              jobId: _job.jobId || "job_sniper_t2_v1",
+              jobName: _job.jobName || "神射手",
+              displayName: _auraName,
+            };
+            const _prevEntry = updatedDamageMap[_srcId] || { name: _auraName, level: prevDmg[_srcId]?.level || 1, damage: 0, taken: 0 };
             updatedDamageMap[_srcId] = { ..._prevEntry, name: _prevEntry.name || _auraName, damage: (_prevEntry.damage || 0) + _add };
           }
           const updatedParticipants = [...new Set([...(Array.isArray(freshState.participants) ? freshState.participants : []), discordId])];
@@ -3666,22 +3763,14 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           // ── KDA（附錄C v3）：本場 K/D 賽季累積＋助攻歸戶＋寶箱排名用的 spawn 助攻（與 DC 端同規則）──
           try {
             const _al = combatResult?.assistLedger || {};
-            let _stunSrc = null;
-            if ((_al.stunSkippedRounds || 0) > 0) {
-              try {
-                const _sgK = require("../../shared/dwarfStunGauge");
-                _stunSrc = (await _sgK.readRaw(_sgK.gaugeKeyForZone(zoneKey)))?.lastTriggerById || null;
-              } catch (_) { /* 取不到就不歸戶 */ }
-            }
             const _creditSpawnAssist = (srcId, amt) => {
               const v = Math.max(0, Math.round(Number(amt) || 0));
               const id = String(srcId || "");
               if (!id || v <= 0 || id === discordId) return;
-              const cur = nextState.damageMap[id] || { name: prevDmg[id]?.name || id, level: prevDmg[id]?.level || 1, damage: 0, taken: 0, spent: 0 };
+              const cur = nextState.damageMap[id] || { name: prevDmg[id]?.name || id, level: prevDmg[id]?.level || 1, damage: 0, taken: 0 };
               nextState.damageMap = { ...nextState.damageMap, [id]: { ...cur, assist: (Number(cur.assist) || 0) + v } };
             };
             for (const [_sid, _amt] of Object.entries(_al.bySource || {})) _creditSpawnAssist(_sid, _amt);
-            if (_stunSrc) _creditSpawnAssist(_stunSrc, _al.stunPreventedDmg);
             let _resistPct = 0;
             try {
               _resistPct = require("../../shared/elementSystem")
@@ -3689,11 +3778,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             } catch (_) { /* 抗性算不出來就當 0 */ }
             require("../../services/kda/kdaService").recordBattle({
               discordId, displayName,
-              damage: wbDamage,
+              damage: _supportSplit.selfDamage + fcMirrorTotal,
               died: combatResult?.outcome === "lose",
+              battleJobId: selfJobId,
+              battleJobName: selfJobName,
+              damageBySource: _supportDamageBySource,
               assistBySource: _al.bySource || null,
-              stunPreventedDmg: _al.stunPreventedDmg || 0,
-              stunSourceId: _stunSrc,
+              assistBySourceJob: _al.bySourceJob || null,
               quest: {
                 questService: serviceContext.questService || serviceContext.weeklyQuestService,
                 rounds: (combatResult?.nextRound || 2) - 1,
@@ -3926,7 +4017,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (stunGaugeKey && _dsg.canKnock(equipped?.job_eq)) {
         const stunAmount = Math.floor((combatResult?.combatStats?.attackRounds || 0) * turtleGaugeMult);
         stunKnock = await _dsg
-          .knock(stunGaugeKey, zoneKey, stunAmount, displayName, Date.now(), discordId)
+          .knock(stunGaugeKey, zoneKey, stunAmount, displayName, Date.now(), discordId, selfJobId, selfJobName || "矮人戰士長")
           .catch(() => null);
         if (stunKnock?.triggered) {
           _dsg.announceStun({ byName: displayName, monsterName: monster.name });
@@ -3955,7 +4046,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 與暈眩值同口徑：同一回合多段命中只算 1，未命中的回合不算。
         const freezeAmount = Math.floor((combatResult?.combatStats?.attackRounds || 0) * turtleGaugeMult);
         freezeKnock = await _zfg
-          .knock(freezeGaugeKey, zoneKey, freezeAmount, displayName)
+          .knock(freezeGaugeKey, zoneKey, freezeAmount, displayName, Date.now(), discordId, selfJobId, selfJobName || "元素師")
           .catch(() => null);
         if (freezeKnock?.triggered) {
           rewardLines.push(`🧊 **區域冰封**！你把整片戰場凍結了——${Math.round(_zfg.FREEZE_WINDOW_MS / 1000)} 秒內出戰的人全程免傷！`);
@@ -3975,7 +4066,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // ── 累積區域聖域值（只有聖域師）── 每場 +1；不廣播（只顯示在網頁畫面，使用者定案）。
       let sanctumKnock = null;
       if (_scg.canKnock(equipped?.job_eq)) {
-        sanctumKnock = await _scg.knock(sanctumGaugeKey, zoneKey, 1, displayName).catch(() => null);
+        sanctumKnock = await _scg.knock(sanctumGaugeKey, zoneKey, 1, displayName, Date.now(), discordId, selfJobId, selfJobName || "聖域師").catch(() => null);
         if (sanctumKnock?.triggered) {
           rewardLines.push(`🏛️ **聖域展開**！聖光籠罩戰場——${Math.round(_scg.SANCTUM_WINDOW_MS / 1000)} 秒內出戰的人受傷減半、每回合回血！`);
         } else if (sanctumKnock?.knocked > 0) {
@@ -4070,23 +4161,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       });
 
-      // Cooldown duration matches the client-side animation timeline.
+      // 存活時冷卻只覆蓋動畫；死亡時再從死亡畫面之後追加完整 30 秒懲罰。
       // 回合節奏依玩家 AGI（同 DC），env ROUND_MS 仍可覆寫成固定值
       const perRoundMs = process.env.ROUND_MS ? ROUND_MS : calculateTickDelay(pStats.agi || 1);
-      const animDurationMs = calculateWebBattleCooldownMs({
+      const battleLockDurationMs = calculateWebBattleCooldownMs({
         roundCount: roundLogs.length,
         perRoundMs,
         lost: outcome === "lose",
       });
-      const nextBattleAt = Date.now() + animDurationMs;
+      const nextBattleAt = Date.now() + battleLockDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
       // 戰鬥已結算：把網頁占用鎖延續到動畫結束才自動失效，期間 DC/其他裝置都視為忙碌
-      if (battleLock) { battleLock.hold(animDurationMs); lockHeldForAnim = true; }
+      if (battleLock) { battleLock.hold(battleLockDurationMs); lockHeldForAnim = true; }
       // Clean up the cooldown map after the window has safely expired.
       setTimeout(() => {
         const entry = playerBattleCooldowns.get(discordId);
         if (entry && entry.nextBattleAt <= Date.now()) playerBattleCooldowns.delete(discordId);
-      }, animDurationMs + 5000);
+      }, battleLockDurationMs + 5000);
 
       // ── 共鬥光環回傳資料（供前端戰鬥畫面顯示光環效果）──
       // partyEffects 已由上方「共鬥光環系統」算好（不在此重算）；
@@ -4158,15 +4249,27 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 非世界王才回傳「目前實際怪物」(他人擊殺/補刀後可能已換);世界王不換怪
         if (!isWorldBoss) {
           const liveMonsters = await serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
-          const liveMon = liveMonsters.find((m) => m.seq === latestState.activeMonsterSeq) || liveMonsters[0] || null;
+          // 擊殺後的 0.5 秒轉場期間，activeMonsterSeq 仍可能指向剛死的怪；真正的下一隻
+          // 已經由 activeTransition.nextMonsterSeq 決定。直接把它回傳給 Web，畫面不必等
+          // timer 最終寫回 DB 才能換怪。NPC 事件不走此捷徑，仍保留事件畫面。
+          const transitionNextSeq = latestState?.activeTransition?.kind === "monster_switch"
+            ? Number(latestState.activeTransition.nextMonsterSeq)
+            : null;
+          const visibleMonsterSeq = Number.isFinite(transitionNextSeq)
+            ? transitionNextSeq
+            : latestState.activeMonsterSeq;
+          const liveMon = liveMonsters.find((m) => Number(m.seq) === Number(visibleMonsterSeq)) || liveMonsters[0] || null;
           if (liveMon) {
+            const transitionHp = Number(liveMon.calc?.maxHp) || 0;
             nextMonsterSync = {
               monsterId: liveMon.id || null,
               monsterName: liveMon.name || "怪物",
               monsterImageUrl: liveMon.imageUrl || null,
-              currentHp: latestState.currentHp != null ? latestState.currentHp : (liveMon.calc?.maxHp || 0),
+              currentHp: Number.isFinite(transitionNextSeq)
+                ? transitionHp
+                : (latestState.currentHp != null ? latestState.currentHp : transitionHp),
               maxHp: liveMon.calc?.maxHp || 0,
-              activeMonsterSeq: latestState.activeMonsterSeq
+              activeMonsterSeq: visibleMonsterSeq
             };
           }
         }
@@ -4254,7 +4357,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monsterElement: monster?.element || null, // 屬性徽章用；戰鬥畫面(BattleLayer)要顯示需要前端也接住這個欄位
         monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
         battleElement: combatStats?.battleElement || null,
+        weaponType: battlePStats?.weaponType || pStats?.weaponType || null,
         logs: roundLogs,
+        // 骰子武器：後端已結算的逐回合骰面，供前端播放旋轉／彈跳動畫；不可在前端重骰。
+        diceEvents: Array.isArray(combatResult?.diceEvents) ? combatResult.diceEvents : [],
         rewardLines,
         rewardSummary: rewardLines._summary || null,
         // 圖鑑本場進度（結構化，給前端顯示）
@@ -4276,7 +4382,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monsterMaxHp: isWorldBoss ? Math.max(1, Math.round(Number(worldBossPartHpMax))) : Math.max(1, Math.round(Number(monster.calc.maxHp))),
         nextBattleAt,
         // 剩餘冷卻毫秒(=本場動畫長度);前端用自己的時鐘換算,免受裝置時間不準影響
-        cooldownMs: animDurationMs,
+        cooldownMs: battleLockDurationMs,
         // 本場是否吃到共鬥光環，以及各光環效果的中文描述（前端顯示光環效果用）
         auraApplied,
         auraLines,
@@ -4558,21 +4664,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           };
         }
 
-        // 傷害排行(對這隻王的累積貢獻)：讓網頁世界王面板也看得到「誰打了多少」(同 DC 面板)
-        const _wbPretty = (nm, id) => {
-          const s = String(nm || "").trim();
-          const sid = String(id || "");
-          if (!s || s === sid || /^\d{15,}$/.test(s)) return sid ? `玩家#${sid.slice(-4)}` : "玩家";
-          return s;
-        };
-        // 目前這輪有人打就用現況；還沒人打(冷卻中/剛重生)則顯示「上一隻」的排行，直到下一隻被打才換新
+        // 目前這輪有人打就用現況；還沒人打(冷卻中/剛重生)則顯示「上一隻」的排行，直到下一隻被打才換新。
+        // 傷害榜預設顯示；貢獻榜與本王寶箱同公式，方便玩家直接理解結算名次。
         const _rankSrcRaw = (st?.damageMap && Object.keys(st.damageMap).length > 0) ? st.damageMap : (st?.lastDamageMap || {});
         const _rankSrc = filterDamageMapForLeaderboard(_rankSrcRaw, excludedIds);
-        const ranking = Object.entries(_rankSrc)
-          .map(([pid, d]) => ({ name: _wbPretty(d?.name, pid), damage: Math.max(0, Math.round(Number(d?.damage) || 0)) }))
-          .filter((d) => d.damage > 0)
-          .sort((a, b) => b.damage - a.damage)
-          .slice(0, 20);
+        const { damageRanking, contributionRanking } = buildWorldBossRankings(_rankSrc);
         const participantCount = Array.isArray(st?.participants) ? st.participants.length : 0;
         const lastHitAt = st?.lastHitAt || null;
         const lastHitMs = lastHitAt ? new Date(lastHitAt).getTime() : 0;
@@ -4592,7 +4688,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           noParts: zoneKey === "event_boss_hutao_preview",
           mechanic,
           hutaoEvent,
-          ranking,
+          ranking: damageRanking, // 舊前端相容：原 ranking 維持純傷害榜
+          damageRanking,
+          contributionRanking,
           participantCount,
           lastHitAt,
           isUnderAttack,
@@ -4969,7 +5067,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       res.json(ok({
         floor, cleared, towerOver, died,
         monsterName: monster.name, monsterImageUrl: monster.imageUrl || null,
-        enemyMaxHp: scaledHp, logs: r.roundLogs, outcome: r.outcome,
+        enemyMaxHp: scaledHp, weaponType: pStats.weaponType || null, logs: r.roundLogs, diceEvents: r.diceEvents || [], outcome: r.outcome,
         finalPlayerHp: s.playerHp, finalMonsterHp: Math.max(0, r.finalMonsterHp ?? 0),
         nextFloor: s.alive ? s.floor : null, playerMaxHp: s.playerMaxHp, reward,
       }));
@@ -5765,4 +5863,4 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   return router;
 }
 
-module.exports = { createPlayerAppRoutes };
+module.exports = { createPlayerAppRoutes, buildWorldBossRankings };

@@ -213,6 +213,8 @@ class WeeklyQuestService {
   }
 
   _normalizeDefinition(def) {
+    // 斗內解鎖條件已取消；即使舊資料仍殘留該欄位，也不要帶進執行物件或 API。
+    const { unlockRequireSeasonDonation: _removedDonationGate, ...definition } = def || {};
     const cadence = normalizeCadence(def?.cadence || "weekly");
     const unlockWeaponTypes = Array.isArray(def?.unlockWeaponTypes)
       ? def.unlockWeaponTypes.map((v) => String(v || "").trim()).filter(Boolean)
@@ -225,7 +227,7 @@ class WeeklyQuestService {
     // 複合任務：有 subMetrics 就由子條件決定 target（Σ 子目標），忽略 def.target
     const subMetrics = normalizeSubMetrics(def);
     return {
-      ...def,
+      ...definition,
       subMetrics,
       ...(subMetrics.length ? { target: sumSubTarget(subMetrics) } : {}),
       cadence,
@@ -247,9 +249,8 @@ class WeeklyQuestService {
       unlockRequireItemIds: Array.isArray(def?.unlockRequireItemIds)
         ? def.unlockRequireItemIds.map((v) => String(v || "").trim()).filter(Boolean)
         : [],
-      // 錨點隱藏任務 gate：累積進度達 N 才現身(解鎖後重數)、本季有斗內、連續簽到達 N 天
+      // 錨點隱藏任務 gate：累積進度達 N 才現身(解鎖後重數)、連續簽到達 N 天
       unlockProgressAtLeast: Math.max(0, Number(def?.unlockProgressAtLeast || 0)),
-      unlockRequireSeasonDonation: Boolean(def?.unlockRequireSeasonDonation),
       unlockCheckinStreak: Math.max(0, Number(def?.unlockCheckinStreak || 0)),
       hideIfRewardOwned: def?.hideIfRewardOwned !== false,
       claimOnce: Boolean(def?.claimOnce)
@@ -349,17 +350,8 @@ class WeeklyQuestService {
       } catch (_) { /* ignore */ }
     }
 
-    // 錨點任務 gate 資料：本季斗內(donationLedger 累積>0)、連續簽到天數(由近期簽到算)
-    let hasSeasonDonation = false;
+    // 錨點任務 gate 資料：連續簽到天數(由近期簽到算)
     let checkinStreak = 0;
-    if (includeActivityGates) {
-      try {
-        const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-        const db = await getMongoDb();
-        const led = await db.collection("donationLedger").findOne({ discordId: String(discordId) }, { projection: { totalTwd: 1 } });
-        hasSeasonDonation = Number(led?.totalTwd || 0) > 0;
-      } catch (_) { /* ignore */ }
-    }
     if (includeActivityGates && this.checkinRepository?.listRecentByDiscordId) {
       try {
         const recent = await this.checkinRepository.listRecentByDiscordId(discordId, 60);
@@ -407,8 +399,7 @@ class WeeklyQuestService {
         inventory,
         hasStreamBinding,
         hasCheckin,
-        hasSeasonDonation,
-        checkinStreak,
+      checkinStreak,
         weaponType: equipment?.weapon?.weaponType || null,
         inventoryItemIds: new Set(
           (Array.isArray(inventory) ? inventory : [])
@@ -468,11 +459,10 @@ class WeeklyQuestService {
     return true;
   }
 
-  // 錨點隱藏任務綜合解鎖判定：既有 gate(等級/屬性/道具) + 累積進度門檻 / 本季斗內 / 連續簽到
+  // 錨點隱藏任務綜合解鎖判定：既有 gate(等級/屬性/道具) + 累積進度門檻 / 連續簽到
   //   current = 該任務的「原始累積值」(未做解鎖後重數的偏移)
   _isQuestUnlocked(quest, current, context) {
     if (!this._isQuestVisibleForPlayer(quest, context)) return false;
-    if (quest.unlockRequireSeasonDonation && !context?.hasSeasonDonation) return false;
     if (Number(quest.unlockProgressAtLeast) > 0 && Number(current || 0) < Number(quest.unlockProgressAtLeast)) return false;
     if (Number(quest.unlockCheckinStreak) > 0 && Number(context?.checkinStreak || 0) < Number(quest.unlockCheckinStreak)) return false;
     return true;
@@ -698,11 +688,10 @@ class WeeklyQuestService {
       const thr = Number(quest.unlockProgressAtLeast || 0);
       const dispCurrent = thr > 0 ? Math.max(0, current - thr) : current;
       const dispTarget = thr > 0 ? Math.max(1, target - thr) : target;
-      // 隱藏任務(軟鎖:本季斗內/累積傷害/連續簽到)未解鎖：
+      // 隱藏任務(軟鎖:累積進度/連續簽到)未解鎖：
       //  - 保留任務名稱(title)；只遮「說明 + 獎勵 + 進度數字」(連 API 都不吐，防劇透/datamine)
       //  - 解鎖提示一律用通用文案「達成條件後現身」，不透露是斗內/簽到/傷害哪一種
       const isHiddenGated = Number(quest.unlockProgressAtLeast) > 0
-        || Boolean(quest.unlockRequireSeasonDonation)
         || Number(quest.unlockCheckinStreak) > 0;
       const maskHidden = locked && isHiddenGated;
 
@@ -754,7 +743,7 @@ class WeeklyQuestService {
       };
     })
       // 2026-08-09 使用者定案：沒解鎖就完全不顯示（原本會以「🔒 Lv.10 解鎖」灰色卡片列出來）。
-      // 隱藏任務（unlockProgressAtLeast / 斗內 / 連續打卡）同一規則，條件到了才長出來。
+      // 隱藏任務（unlockProgressAtLeast / 連續打卡）同一規則，條件到了才長出來。
       // 過濾放在 map 之後而不是 defs：completionByType 那類「完成 N 個任務」的分母仍以
       // 完整清單計算，不會因為玩家等級低就縮水。
       // 例外：已領取的仍保留，讓玩家看得到自己完成過什麼。

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090b18">
+  <title>音無恋 Live Studio</title>
+  <link rel="stylesheet" href="/static/studio.css?v=4">
+</head>
+<body>
+  <div class="studio-login" id="studio-login">
+    <div class="login-card">
+      <div class="brand-mark">音</div>
+      <p class="eyebrow">OTONASHI KOI OPERATIONS</p>
+      <h1>Live Studio</h1>
+      <p>直播、OBS、會員與遊戲連動的獨立控制台。</p>
+      <label>管理員密碼<input id="studio-password" type="password" autocomplete="current-password" placeholder="輸入管理員密碼"></label>
+      <button class="btn primary" id="studio-login-btn">進入直播控制台</button>
+      <p class="status" id="studio-login-status"></p>
+    </div>
+  </div>
+
+  <div class="studio-shell" id="studio-shell" hidden>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark small">音</span><div><strong>Live Studio</strong><small>音無恋直播營運</small></div></div>
+      <div class="top-status"><span class="status-dot" id="top-live-dot"></span><span id="top-live-text">讀取中</span><span id="studio-clock"></span></div>
+      <div class="top-actions"><a class="btn ghost" href="/admin">遊戲營運後台</a><button class="btn ghost" id="studio-refresh">重新整理</button><button class="btn danger ghost" id="studio-logout">登出</button></div>
+    </header>
+
+    <aside class="sidebar">
+      <p class="nav-label">直播營運</p>
+      <button class="nav active" data-view="dashboard">總覽</button>
+      <button class="nav" data-view="audience">觀眾與會員</button>
+      <button class="nav" data-view="revenue">斗內與里程碑</button>
+      <button class="nav" data-view="interaction">遊戲連動</button>
+      <button class="nav" data-view="worldboss">世界王監控</button>
+      <button class="nav" data-view="settings">直播規則</button>
+      <button class="nav" data-view="obs">OBS 與場景</button>
+      <button class="nav" data-view="integrations">串流整合</button>
+      <p class="nav-label">遊戲本體資料（跨站）</p>
+      <a class="nav link external" href="/admin#section-players">前往玩家資料 ↗</a>
+      <a class="nav link external" href="/admin#section-monsters">前往怪物資料庫 ↗</a>
+    </aside>
+
+    <main class="workspace">
+      <section class="view active" id="view-dashboard">
+        <div class="page-head"><div><p class="eyebrow">ON AIR COMMAND</p><h1>開台總控</h1><p>一眼確認直播、遊戲與互動服務是否正常。</p></div><button class="btn primary" id="dashboard-refresh">刷新狀態</button></div>
+        <div class="metric-grid" id="studio-metrics"></div>
+        <div class="two-col">
+          <article class="panel"><div class="panel-head"><h2>世界王即時監看</h2><button class="btn small ghost" data-view-jump="worldboss">展開監控</button></div><div id="studio-world-bosses" class="boss-list"></div></article>
+          <article class="panel"><div class="panel-head"><h2>目前全服加成</h2><button class="btn small ghost" data-view-jump="interaction">管理加成</button></div><div id="studio-active-buffs"></div></article>
+        </div>
+        <article class="panel"><div class="panel-head"><h2>快速操作</h2><span>操作前仍會要求確認</span></div><div class="quick-grid">
+          <button class="quick" data-alert="donation"><b>💎</b><span>測試斗內警報</span></button>
+          <button class="quick" data-alert="member"><b>👑</b><span>測試會員警報</span></button>
+          <button class="quick" data-alert="sub"><b>🔔</b><span>測試訂閱警報</span></button>
+          <button class="quick" data-alert="raid"><b>🛬</b><span>測試 Raid</span></button>
+          <button class="quick" data-alert="milestone"><b>🎉</b><span>測試里程碑</span></button>
+          <a class="quick" href="/static/thanks.html" target="_blank"><b>🙏</b><span>今日感謝名單</span></a>
+        </div></article>
+        <article class="panel"><div class="panel-head"><h2>跨平台公告</h2><span>發到遊戲聊天大廳與 Discord 城鎮頻道</span></div><div class="inline-form"><textarea id="studio-announcement" rows="2" placeholder="輸入公告內容"></textarea><button class="btn primary" id="studio-announce">發送公告</button></div></article>
+      </section>
+
+      <section class="view" id="view-audience">
+        <div class="page-head"><div><p class="eyebrow">AUDIENCE</p><h1>觀眾與會員</h1><p>分開顯示真實觀看數、活躍留言者與會員綁定。</p></div><button class="btn primary" id="studio-sync-members">同步會員名單</button></div>
+        <div class="metric-grid compact" id="audience-metrics"></div>
+        <article class="panel"><div class="panel-head"><h2>會員現況</h2><span id="membership-summary"></span></div><div class="table-wrap"><table><thead><tr><th>玩家</th><th>目前級別</th><th>來源</th><th>平台綁定</th><th>最後確認</th></tr></thead><tbody id="membership-table"></tbody></table></div></article>
+      </section>
+
+      <section class="view" id="view-revenue">
+        <div class="page-head"><div><p class="eyebrow">REVENUE</p><h1>斗內與里程碑</h1><p>查看款項、綁定狀態、SC 累積與會員里程碑。</p></div><button class="btn primary" data-view-jump="settings">完整規則設定</button></div>
+        <div class="metric-grid compact" id="revenue-metrics"></div>
+        <article class="panel"><div class="panel-head"><h2>最近斗內</h2><span>異常或未綁定款項會醒目標示</span></div><div class="table-wrap"><table><thead><tr><th>時間</th><th>名稱</th><th>金額</th><th>綁定</th><th>結算狀態</th></tr></thead><tbody id="donation-table"></tbody></table></div></article>
+      </section>
+
+      <section class="view" id="view-interaction">
+        <div class="page-head"><div><p class="eyebrow">GAME LINK</p><h1>遊戲連動</h1><p>管理直播觸發的全服加成與轉盤。</p></div><button class="btn ghost" data-view-jump="settings">門檻與永久加成設定</button></div>
+        <div class="two-col">
+          <article class="panel"><h2>手動全服加成</h2><div class="form-grid"><label>名稱<input id="buff-label" value="直播活動加成"></label><label>分鐘<input id="buff-duration" type="number" min="1" value="30"></label><label>經驗 %<input id="buff-exp" type="number" min="0" value="0"></label><label>金幣 %<input id="buff-gold" type="number" min="0" value="0"></label><label>掉寶 %<input id="buff-drop" type="number" min="0" value="0"></label><label class="check"><input id="buff-announce" type="checkbox" checked> 發送全服公告</label></div><button class="btn primary" id="buff-apply">套用加成</button></article>
+          <article class="panel"><div class="panel-head"><h2>目前加成與最近紀錄</h2><button class="btn danger ghost" id="buff-clear-all">結束全部短期加成</button></div><div id="interaction-buffs"></div></article>
+        </div>
+        <article class="panel"><div class="panel-head"><h2>直播轉盤</h2><span>直接在這裡新增、編輯、排序與取得 OBS 網址</span></div><div id="wheel-admin-root"></div></article>
+      </section>
+
+      <section class="view" id="view-worldboss">
+        <div class="page-head"><div><p class="eyebrow">WORLD BOSS LIVE</p><h1>世界王監控</h1><p>直播期間直接查看各世界王血量與存活狀態，不會離開控制台。</p></div><button class="btn primary" id="worldboss-refresh">刷新世界王</button></div>
+        <div class="boss-monitor-grid" id="worldboss-monitor"></div>
+        <article class="panel cross-system-note"><div><h2>需要修改怪物數值或輪替？</h2><p>這屬於遊戲本體資料，不是直播設定；只有這類內容才會前往遊戲營運後台。</p></div><a class="btn ghost" href="/admin#section-monsters">前往怪物資料庫 ↗</a></article>
+      </section>
+
+      <section class="view" id="view-settings">
+        <div class="page-head"><div><p class="eyebrow">LIVE RULES</p><h1>直播規則</h1><p>斗內、觀看、會員、SC 里程碑與永久加成都在這裡設定。</p></div></div>
+        <article class="panel embedded-admin"><div id="stream-records-root"></div></article>
+      </section>
+
+      <section class="view" id="view-obs">
+        <div class="page-head"><div><p class="eyebrow">OBS TOOLBOX</p><h1>OBS 與場景</h1><p>在同一處完成來源設定、測試預覽與網址複製。</p></div><button class="btn primary" id="obs-check-all">檢查全部頁面</button></div>
+        <article class="panel obs-source-editor" id="obs-source-editor" hidden>
+          <div class="panel-head obs-editor-head">
+            <div><span class="obs-editor-kicker">BROWSER SOURCE SETUP</span><h2 id="obs-editor-title">來源設定</h2><p id="obs-editor-summary"></p></div>
+            <button class="btn small ghost" id="obs-editor-close" type="button">關閉</button>
+          </div>
+          <div class="obs-editor-layout">
+            <div>
+              <div class="obs-setting-grid" id="obs-setting-grid"></div>
+              <p class="obs-security-note" id="obs-security-note" hidden>🔒 密碼與 Overlay 金鑰只用來產生本次網址，不會儲存在 Live Studio。</p>
+            </div>
+            <aside class="obs-output">
+              <div class="obs-size-row"><span>建議 OBS 尺寸</span><strong id="obs-editor-size">—</strong></div>
+              <label>目前來源網址<code class="overlay-url full" id="obs-configured-url"></code></label>
+              <div class="button-row">
+                <button class="btn primary" id="obs-copy-configured" type="button">複製目前網址</button>
+                <button class="btn ghost" id="obs-preview-configured" type="button">預覽目前設定</button>
+              </div>
+              <p class="obs-preview-hint" id="obs-preview-hint"></p>
+            </aside>
+          </div>
+        </article>
+        <div class="overlay-grid" id="overlay-grid"></div>
+      </section>
+
+      <section class="view" id="view-integrations">
+        <div class="page-head"><div><p class="eyebrow">INTEGRATIONS</p><h1>串流整合</h1><p>YouTube、Twitch、OneComme 與警報服務健康度。</p></div></div>
+        <div class="two-col">
+          <article class="panel"><div class="panel-head"><h2>創作者授權</h2><span>可直接在此重新授權</span></div><div id="creator-auth-status"></div><div class="button-row"><button class="btn primary" data-reauth="youtube">重新授權 YouTube</button><button class="btn ghost" data-reauth="twitch">重新授權 Twitch</button></div></article>
+          <article class="panel"><h2>資料來源說明</h2><ul class="source-list"><li><b>觀看人數</b><span>OneComme meta，即時直播枠總和</span></li><li><b>活躍留言者</b><span>最近五分鐘曾留言的不重複帳號</span></li><li><b>會員</b><span>Discord 身分組與直播帳號綁定合併</span></li><li><b>警報</b><span>共用 stream alert feed，測試不進真實帳務</span></li></ul></article>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="studio-toast"></div>
+  <script src="/static/admin.wheel.js?v=3"></script>
+  <script src="/static/admin.stream-records.js?v=8"></script>
+  <script src="/static/studio.js?v=6"></script>
+</body>
+</html>

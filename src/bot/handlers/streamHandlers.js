@@ -708,8 +708,9 @@ async function handleDonation(comment) {
     platformUserId: donation.platformUserId,
     displayName: donation.displayName,
     twdAmount: donation.twdAmount,
-    currency: donation.originalCurrency || String(raw.currency || "").toUpperCase() || null,
+    currency: String(raw.currency || "").toUpperCase() || donation.originalCurrency || null,
     originalAmount: donation.originalAmount ?? donation.twdAmount,   // 外幣原始金額（¥5000 之類）；台幣＝twdAmount
+    calculationCurrency: donation.originalCurrency || "TWD", donationLabel: donation.donationLabel || null,
     isMember: support.supportDetected,
     supportKind: support.supportKind || null
   };
@@ -880,5 +881,5 @@ async function handleStreamComment(comment) {
 
 module.exports = {
   handleStreamComment,
-  STREAM_COMMANDS
+  STREAM_COMMANDS, _test: { inferDonationReward, sniffDonationCurrency }
 };

@@ -32,19 +32,20 @@ async function main() {
 
   console.log("② 累積與觸發");
   const t0 = Date.now();
-  let r = await dsg.knock(KEY, ZONE, 15, "矮甲", t0);
+  let r = await dsg.knock(KEY, ZONE, 15, "矮甲", t0, "dwarf-a");
   check("敲 15 → gauge 15", r.gauge === 15 && r.knocked === 15, JSON.stringify(r));
-  r = await dsg.knock(KEY, ZONE, 15, "矮乙", t0);
+  r = await dsg.knock(KEY, ZONE, 15, "矮乙", t0, "dwarf-b");
   check("另一人再敲 15 → 累積 30（原子）", r.gauge === 30, String(r.gauge));
   // 一次補到 299
   await c.updateOne({ _id: KEY }, { $set: { gauge: 299 } });
-  r = await dsg.knock(KEY, ZONE, 1, "矮甲", t0);
+  r = await dsg.knock(KEY, ZONE, 1, "矮甲", t0, "dwarf-a");
   check("敲滿 300 → 觸發暈眩", r.triggered === true, JSON.stringify(r));
   check("觸發後 gauge 歸零", r.gauge === 0, String(r.gauge));
 
   console.log("③ 20 秒窗口內全體免傷");
   let st = await dsg.read(KEY, ZONE, t0 + 1000);
   check("1 秒後：暈眩中", st.stunned === true && st.phase === "stunned", st.phase);
+  check("窗口保留所有敲條者", Boolean(st.windowContributors["dwarf-a"] && st.windowContributors["dwarf-b"]), JSON.stringify(st.windowContributors));
   check("剩餘時間約 19 秒", Math.abs(st.stunnedRemainMs - 19000) < 100, String(st.stunnedRemainMs));
   st = await dsg.read(KEY, ZONE, t0 + 19999);
   check("19.9 秒：仍免傷", st.stunned === true);
@@ -53,22 +54,22 @@ async function main() {
 
   console.log("④ 暈眩結束 → 2 分鐘免疫，期間敲不動");
   check("進入免疫階段", st.phase === "immune", st.phase);
-  r = await dsg.knock(KEY, ZONE, 15, "矮甲", t0 + 30000);
+  r = await dsg.knock(KEY, ZONE, 15, "矮甲", t0 + 30000, "dwarf-a");
   check("免疫中敲不動（knocked 0）", r.knocked === 0 && r.phase === "immune", JSON.stringify(r));
   st = await dsg.read(KEY, ZONE, t0 + 20000 + 119000);
   check("免疫最後一秒仍免疫", st.phase === "immune");
   st = await dsg.read(KEY, ZONE, t0 + 20000 + 120001);
   check("2 分鐘後暈眩條回來", st.phase === "charging", st.phase);
-  r = await dsg.knock(KEY, ZONE, 10, "矮甲", t0 + 20000 + 120001);
+  r = await dsg.knock(KEY, ZONE, 10, "矮甲", t0 + 20000 + 120001, "dwarf-a");
   check("免疫後重新敲：從 0 起算", r.gauge === 10, String(r.gauge));
 
   console.log("⑤ 多人同時敲滿只觸發一次（CAS）");
-  await c.updateOne({ _id: KEY }, { $set: { gauge: 295, stunnedUntil: 0, immuneUntil: 0 } });
+  await c.updateOne({ _id: KEY }, { $set: { gauge: 295, stunnedUntil: 0, immuneUntil: 0, contributors: {}, windowContributors: {} } });
   const t1 = Date.now() + 1_000_000;
   const results = await Promise.all([
-    dsg.knock(KEY, ZONE, 5, "矮甲", t1),
-    dsg.knock(KEY, ZONE, 5, "矮乙", t1),
-    dsg.knock(KEY, ZONE, 5, "矮丙", t1),
+    dsg.knock(KEY, ZONE, 5, "矮甲", t1, "dwarf-a"),
+    dsg.knock(KEY, ZONE, 5, "矮乙", t1, "dwarf-b"),
+    dsg.knock(KEY, ZONE, 5, "矮丙", t1, "dwarf-c"),
   ]);
   const triggeredCount = results.filter((x) => x.triggered).length;
   check("三人同時敲滿 → 只有一人觸發", triggeredCount === 1, `triggered=${triggeredCount}`);
@@ -80,7 +81,7 @@ async function main() {
   const list = await sc.monsterService.listMonsters({ includeDisabled: false, zone: ZONE });
   const boss = list.find((m) => m.id === "dragon-king-boss");
   const runs = 30;
-  let normDeaths = 0, normTaken = 0, stunDeaths = 0, stunTaken = 0, normDmg = 0, stunDmg = 0, normRounds = 0, stunRounds = 0;
+  let normDeaths = 0, normTaken = 0, stunDeaths = 0, stunTaken = 0, normDmg = 0, stunDmg = 0, normRounds = 0, stunRounds = 0, stunAssist = 0;
   for (let i = 0; i < runs; i++) {
     const a = runCombatLoop(ps, boss.calc, boss.name, boss.calc.maxHp, 15, {
       playerLevel: prog.level, equipped: prog.equipment, inventory: prog.inventory || [],
@@ -93,10 +94,14 @@ async function main() {
       playerLevel: prog.level, equipped: prog.equipment, inventory: prog.inventory || [],
       monsterIsBoss: true, isWorldBoss: true, monsterEquipped: boss.equipment || {},
       teamStunRounds: 999,
+      teamControlContributors: {
+        "dwarf-a": { amount: 1, jobId: "job_dwarflord_t2_v1", jobName: "矮人戰士長" },
+      },
     });
     if (b.outcome === "lose") stunDeaths++;
     stunTaken += b.damageTaken || 0; stunDmg += b.totalDamage || 0;
     stunRounds += b.combatStats.attackRounds || 0;
+    stunAssist += b.assistLedger?.bySource?.["dwarf-a"] || 0;
   }
   console.log(`   一般：陣亡 ${normDeaths}/${runs}｜承受傷害 ${Math.round(normTaken / runs)}｜均傷 ${Math.round(normDmg / runs).toLocaleString()}｜攻擊回合 ${(normRounds / runs).toFixed(1)}`);
   console.log(`   暈眩：陣亡 ${stunDeaths}/${runs}｜承受傷害 ${Math.round(stunTaken / runs)}｜均傷 ${Math.round(stunDmg / runs).toLocaleString()}｜攻擊回合 ${(stunRounds / runs).toFixed(1)}`);
@@ -104,6 +109,7 @@ async function main() {
   check("暈眩場承受傷害大幅降低 >80%", stunTaken < normTaken * 0.20, `${stunTaken} vs ${normTaken}`);
   check("暈眩場零陣亡", stunDeaths === 0, String(stunDeaths));
   check("一般場確實會受傷（對照組有效）", normTaken > 0);
+  check("窗口被隊友實際使用後，矮人戰士長獲得 A", stunAssist > 0, String(stunAssist));
   console.log(`   → 承受傷害減免 ${(100 - stunTaken / normTaken * 100).toFixed(1)}%｜傷害倍率 ${(stunDmg / normDmg).toFixed(2)}x`);
 
   console.log("⑦ attackRounds 計數正確（同回合多擊只算 1）");

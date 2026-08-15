@@ -21,7 +21,7 @@ const { calcScaledAuraValue, getSupportJobKey } = require("../shared/supportAura
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../shared/sources");
 const { MAX_ENHANCE_LEVEL, getEnhanceCost } = require("../shared/enhanceConfig");
 const { bestiaryRequirement, bestiaryBonusPct } = require("../shared/bestiary");
-const { ALL_ZONE_KEYS, ZONE_BY_KEY } = require("../shared/zones");
+const { ALL_ZONE_KEYS, ZONE_BY_KEY, isZoneVisibleInBestiary } = require("../shared/zones");
 const { isWorldBossZone } = require("../services/worldBoss/worldBossService");
 const {
   EQUIP_PRESET_KEYS,
@@ -546,7 +546,7 @@ async function handleProfile(interaction) {
       mechanicLines.push(`・弓系機動：目前迴避 ${Math.ceil(cs.dodge || 0)}%`);
     }
     if (isGamblerJob && wt === "dice") {
-      mechanicLines.push(`・骰子賭運：ATK 吃 LUK（目前 ${cs.luk}）；目前爆擊 ${Math.ceil(cs.crit || 0)}%`);
+      mechanicLines.push(`・骰子賭運：雙手魔法武器，ATK 吃 LUK（目前 ${cs.luk}），無視怪物 DEF ${cs.bypassMonsterDefPct || 25}%；目前爆擊 ${Math.ceil(cs.crit || 0)}%`);
     }
     if (isMageJob && wt && wt.startsWith("staff") && Number(cs.bypassMonsterDefPct || 0) > 0) {
       mechanicLines.push(`・法杖魔法：無視怪物 DEF ${cs.bypassMonsterDefPct}%`);
@@ -786,6 +786,7 @@ async function _loadBestiaryData(interaction) {
   const byZone = new Map();
   for (const m of monsters) {
     const z = m.zone || "normal";
+    if (!isZoneVisibleInBestiary(z)) continue;
     if (!byZone.has(z)) byZone.set(z, []);
     byZone.get(z).push(m);
   }
@@ -1240,8 +1241,8 @@ function isArmorSlotItem(entry) {
 function weaponFamily(entry) {
   const wt = String(entry?.weaponType || "").toLowerCase();
   if (!wt) return "other";
-  if (wt.startsWith("staff")) return "magic";
-  if (wt === "bow" || wt === "dice") return "ranged";
+  if (wt.startsWith("staff") || wt === "dice") return "magic";
+  if (wt === "bow") return "ranged";
   if (wt === "dagger") return "melee1";
   if (wt.startsWith("sword_1h") || wt.startsWith("axe_1h") || wt.startsWith("mace_1h")) return "melee1";
   if (wt.startsWith("sword_2h") || wt.startsWith("axe_2h") || wt.startsWith("mace_2h")) return "melee2";

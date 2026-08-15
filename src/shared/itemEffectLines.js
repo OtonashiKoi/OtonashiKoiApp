@@ -38,6 +38,9 @@ function formatEffectValueText(key, params = {}) {
 
 function buildItemEffectLines(lib) {
   const lines = [];
+  if (String(lib?.weaponType || "").toLowerCase() === "dice") {
+    lines.push("🎲 雙手魔法武器｜主屬性：LUK｜常駐無視 25% DEF");
+  }
   const skill = lib?.monsterCardSkill;
   if (skill?.name) {
     lines.push(`🎴 ${skill.name}${skill.description ? `（${skill.description}）` : ""}`);

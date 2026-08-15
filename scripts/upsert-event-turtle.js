@@ -90,9 +90,9 @@ async function main() {
     respawnCooldownMinutes: 120,
     eliteZoneKey: "event_1",
     phaseConfig: [
-      { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0, defMultiplier: 1.0, agiBonus: 0, note: "沉睡期：牠還以為你在幫牠抓癢" },
-      { phase: 2, hpBelowPercent: 40, atkMultiplier: 1.25, defMultiplier: 1.0, agiBonus: 0, note: "甦醒期：海嘯詠唱解鎖" },
-      { phase: 3, hpBelowPercent: 0, atkMultiplier: 1.5, defMultiplier: 1.1, agiBonus: 10, note: "怒濤期：整座島都在憤怒" },
+      { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0, defMultiplier: 1.0, agiBonus: 0, lightningEnabled: false, note: "沉睡期：牠還以為你在幫牠抓癢" },
+      { phase: 2, hpBelowPercent: 40, atkMultiplier: 1.25, defMultiplier: 1.0, agiBonus: 0, lightningEnabled: false, note: "甦醒期：海嘯詠唱解鎖" },
+      { phase: 3, hpBelowPercent: 0, atkMultiplier: 1.5, defMultiplier: 1.1, agiBonus: 10, lightningEnabled: false, note: "怒濤期：整座島都在憤怒" },
     ],
   };
   await db.collection("worldBossConfig").updateOne(

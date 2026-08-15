@@ -106,6 +106,10 @@ const config = {
     twitchBroadcasterId: process.env.TWITCH_BROADCASTER_ID || "",
     youtubeClientId: process.env.YOUTUBE_CLIENT_ID || "",
     youtubeClientSecret: process.env.YOUTUBE_CLIENT_SECRET || "",
+    // YouTube Google OAuth 直連綁定先只對測試帳號顯示／放行；逗號分隔。
+    youtubeDirectBindTestDiscordIds: parseCsv(
+      process.env.YOUTUBE_DIRECT_BIND_TEST_DISCORD_IDS || "865264891991425055"
+    ),
     youtubeCreatorRefreshToken: process.env.STREAM_YOUTUBE_CREATOR_REFRESH_TOKEN || "",
     youtubeCreatorChannelId: process.env.STREAM_YOUTUBE_CREATOR_CHANNEL_ID || ""
   },

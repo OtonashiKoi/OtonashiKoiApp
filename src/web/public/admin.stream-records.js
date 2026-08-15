@@ -5,7 +5,7 @@
   if (!root) return;
 
   function headers() {
-    return { Authorization: "Bearer " + (window.elements?.adminPassword?.value?.trim() || "") };
+    return { Authorization: "Bearer " + (window.getAdminToken?.() || "") };
   }
   async function fetchJSON(url) {
     const res = await fetch(url, { headers: headers() });
@@ -53,7 +53,7 @@
       <tr>
         <td style="white-space:nowrap;">${esc(fmtTime(e.createdAt))}</td>
         <td>${esc(e.displayName)}${e.isMember ? ' <span style="color:#7ee0a0;">會員</span>' : ""}</td>
-        <td style="text-align:right;">NT$${esc(e.twdAmount)}</td>
+        <td style="text-align:right;">NT$${esc(e.twdAmount)}${e.originalAmount != null && (Number(e.originalAmount) !== Number(e.twdAmount) || (e.currency && !["TWD", "NTD", "NT$"].includes(String(e.currency).toUpperCase()))) ? `<div class="hint" style="font-size:10px;white-space:nowrap;">平台：${esc(e.currency || "?")} ${esc(e.originalAmount)}</div>` : ""}</td>
         <td style="text-align:right;">${e.diamondsGranted > 0 ? "💎" + esc(e.diamondsGranted) : "—"}</td>
         <td style="text-align:right;">${e.pendingAfter > 0 ? "NT$" + esc(e.pendingAfter) : "—"}</td>
         <td>${e.bound ? '<span style="color:#7ee0a0;">✔ 已綁定</span>' : '<span style="color:#ffb066;">未綁定</span>'}</td>
@@ -575,4 +575,5 @@
     obs.observe(sec, { attributes: true, attributeFilter: ["class"] });
     if (sec.classList.contains("active")) render();
   }
+  window.adminStreamRecords = { open(nextTab = "events") { tab = ["donations", "memberships", "status", "events"].includes(nextTab) ? nextTab : "events"; return render(); }, render };
 })();

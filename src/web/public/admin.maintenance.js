@@ -5,7 +5,7 @@
 
   function headers() {
     return {
-      Authorization: "Bearer " + (window.elements?.adminPassword?.value?.trim() || ""),
+      Authorization: "Bearer " + (window.getAdminToken?.() || ""),
       "Content-Type": "application/json",
     };
   }
@@ -72,5 +72,7 @@
   $("maint-reload").addEventListener("click", load);
   // 進到「權限與白名單」分頁時載入一次
   document.querySelector('[data-target="section-access"]')?.addEventListener("click", () => setTimeout(load, 50));
-  load();
+  document.addEventListener("adminConnected", () => {
+    if (document.getElementById("section-access")?.classList.contains("active")) load();
+  });
 })();

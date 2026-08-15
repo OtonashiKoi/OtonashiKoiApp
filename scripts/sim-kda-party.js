@@ -15,7 +15,7 @@
  * v2（2026-08-07 使用者指示補齊）：
  *   ‧ 吟遊詩人（詩人二轉）入列，隊伍光環吃連奏倍率 auraMult(streak=3)=×1.6（穩定中手假設）
  *   ‧ 矮人戰士長「巨神震擊」窗口攤提進 A：他場均 R 回合敲條、門檻 300 → 每場開窗機率 R/300，
- *     開窗時假設全隊各打 1 場整場免傷（20 秒窗口的樂觀上界）→ A += (R/300)×Σ(免傷輸出−平常輸出)
+ *     開窗時假設全隊各打 1 場，正式公式按受益玩家有效輸出的 10% 給控制助攻。
  *   ‧ 排名公式（使用者定案 2026-08-07）：C = (K + 0.7×A) × 存活係數；另出 K 榜／A 榜分榜
  *
  * 用法：RUNS=400 node scripts/sim-kda-party.js [zoneKey]
@@ -122,25 +122,19 @@ async function main() {
 
   // ── 巨神震擊窗口攤提（矮人戰士長的 A）──
   // 他場均 R 回合＝敲條 R 點，門檻 300 → 每場期望開窗 R/300 次；
-  // 開窗 20 秒假設全隊各打 1 場整場免傷（樂觀上界，實戰看手速）。
+  // 正式控制助攻池＝窗口內受益玩家有效輸出的 10%，不是用「少受多少傷」反推。
   const dl = roster.find((r) => r.label.includes("矮人戰士長"));
   if (dl) {
     const { thresholdFor } = require("../src/shared/dwarfStunGauge");
+    const { CONTROL_WINDOW_ASSIST_PCT } = require("../src/shared/supportContribution");
     const th = thresholdFor(ZONE);
     const dlRounds = full.get(dl.label).avgRounds || 0;
-    let stunGain = 0;
-    for (const r of roster) {
-      if (r.label === dl.label) continue;
-      const progress = { ...base, attributes: r.attrs, equipment: r.eq };
-      const res = withSeed(`kda:stun:${r.label}:${RUNS}`, () =>
-        sim.run(progress, { runs: Math.max(100, Math.round(RUNS / 2)), equipment: r.eq, extraOptions: { ...r.extraOptions, partyEffects: allAuras, teamStunRounds: 999 } })
-      );
-      stunGain += Math.max(0, (res.avgDmg || 0) - (full.get(r.label).avgDmg || 0));
-      process.stdout.write(".");
-    }
+    const fullWindowAssist = roster
+      .filter((r) => r.label !== dl.label)
+      .reduce((sum, r) => sum + (Number(full.get(r.label)?.avgDmg) || 0) * CONTROL_WINDOW_ASSIST_PCT / 100, 0);
     const perBattleWindows = dlRounds / th;
-    assist.set(dl.label, (assist.get(dl.label) || 0) + perBattleWindows * stunGain);
-    console.log(` （巨神震擊窗口：場均 ${dlRounds.toFixed(1)} 敲/門檻 ${th} ＝ 每場 ${(perBattleWindows * 100).toFixed(1)}% 開窗率｜滿窗增益 ${Math.round(stunGain).toLocaleString()}）`);
+    assist.set(dl.label, (assist.get(dl.label) || 0) + perBattleWindows * fullWindowAssist);
+    console.log(` （巨神震擊窗口：場均 ${dlRounds.toFixed(1)} 敲/門檻 ${th} ＝ 每場 ${(perBattleWindows * 100).toFixed(1)}% 開窗率｜滿窗 A ${Math.round(fullWindowAssist).toLocaleString()}）`);
   }
 
   // ── 組 KDA 榜（C = (K + 0.7A) × 存活係數，使用者定案 2026-08-07）──

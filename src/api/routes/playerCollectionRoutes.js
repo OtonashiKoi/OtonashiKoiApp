@@ -15,6 +15,7 @@ const { isWorldBossZone } = require("../../services/worldBoss/worldBossService")
 const { GATHER_INTERVAL_MIN } = require("../../services/pet/petService");
 const { isLeaderboardExcluded } = require("../../shared/leaderboardEligibility");
 const { summarizeCharacterLevels, reachedMs } = require("../../shared/characterLevelSummary");
+const { getAnchorAcquisitionHint } = require("../../shared/anchorAcquisition");
 
 // 怪物圖鑑累積 key（與 playerPanel._bestiaryKey 同規則）
 function bestiaryKey(m) {
@@ -154,6 +155,7 @@ function createPlayerCollectionRoutes(serviceContext) {
             // 未取得只回名稱與剪影提示，效果保密（保留探索感）；已取得回完整說明
             name: obtained ? it.name : "？？？",
             description: obtained ? (it.description || "") : "尚未取得——找到它的獲得管道來解鎖這件傳說錨點。",
+            acquisitionHint: getAnchorAcquisitionHint(it.id),
             tier: it.tier || "S",
             imageUrl: obtained ? (it.imageUrl || null) : null,
           };

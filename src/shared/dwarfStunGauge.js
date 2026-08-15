@@ -1,4 +1,5 @@
 "use strict";
+const { normalizeContributorMap } = require("./supportContribution");
 /**
  * 世界王暈眩條（矮人戰士長・巨神震擊）。
  *
@@ -101,6 +102,15 @@ async function read(gaugeKey, zoneKey, now = Date.now()) {
     stunnedRemainMs: phase === "stunned" ? Math.max(0, Number(doc.stunnedUntil) - now) : 0,
     immuneRemainMs: phase === "immune" ? Math.max(0, Number(doc.immuneUntil) - now) : 0,
     lastTriggerBy: doc?.lastTriggerBy || null,
+    windowContributors: phase === "stunned"
+      ? normalizeContributorMap(doc?.windowContributors, doc?.lastTriggerById ? {
+        id: doc.lastTriggerById,
+        amount: threshold,
+        displayName: doc.lastTriggerBy,
+        jobId: "job_dwarflord_t2_v1",
+        jobName: "矮人戰士長",
+      } : null)
+      : {},
   };
 }
 
@@ -114,7 +124,7 @@ async function read(gaugeKey, zoneKey, now = Date.now()) {
  * @param {string} byName      觸發者顯示名（給公告用）
  * @returns {{ knocked:number, gauge:number, threshold:number, triggered:boolean, stunnedUntil:number|null }}
  */
-async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now(), byId = "") {
+async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now(), byId = "", byJobId = "job_dwarflord_t2_v1", byJobName = "矮人戰士長") {
   const threshold = thresholdFor(zoneKey);
   const add = Math.max(0, Math.floor(Number(amount) || 0));
   const id = String(gaugeKey);
@@ -128,19 +138,45 @@ async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now(), b
   }
   // 免疫剛結束的第一次敲擊 → 順手把上一輪的殘值歸零
   if (cur && Number(cur.immuneUntil) > 0 && now >= Number(cur.immuneUntil)) {
-    await c.updateOne({ _id: id, immuneUntil: cur.immuneUntil }, { $set: { gauge: 0, immuneUntil: 0, stunnedUntil: 0 } });
+    await c.updateOne({ _id: id, immuneUntil: cur.immuneUntil }, { $set: { gauge: 0, immuneUntil: 0, stunnedUntil: 0, contributors: {}, windowContributors: {} } });
   }
   if (add <= 0) {
     const after = await read(id, zoneKey, now);
     return { knocked: 0, gauge: after.gauge, threshold, triggered: false, stunnedUntil: null, phase: "charging" };
   }
 
-  const inc = await c.findOneAndUpdate(
+  await c.updateOne(
     { _id: id },
-    { $inc: { gauge: add }, $set: { updatedAt: new Date().toISOString() } },
-    { upsert: true, returnDocument: "after" }
+    { $setOnInsert: { gauge: 0, stunnedUntil: 0, immuneUntil: 0, contributors: {}, windowContributors: {} } },
+    { upsert: true }
+  );
+  const contributorId = String(byId || "").trim();
+  const incUpdate = {
+    $inc: { gauge: add },
+    $set: { updatedAt: new Date().toISOString() },
+  };
+  if (contributorId) {
+    incUpdate.$inc[`contributors.${contributorId}.amount`] = add;
+    incUpdate.$set[`contributors.${contributorId}.displayName`] = String(byName || "");
+    incUpdate.$set[`contributors.${contributorId}.jobId`] = String(byJobId || "job_dwarflord_t2_v1");
+    incUpdate.$set[`contributors.${contributorId}.jobName`] = String(byJobName || "矮人戰士長");
+  }
+  const inc = await c.findOneAndUpdate(
+    {
+      _id: id,
+      $and: [
+        { $or: [{ stunnedUntil: { $lte: now } }, { stunnedUntil: { $exists: false } }, { stunnedUntil: null }] },
+        { $or: [{ immuneUntil: { $lte: now } }, { immuneUntil: { $exists: false } }, { immuneUntil: null }] },
+      ],
+    },
+    incUpdate,
+    { returnDocument: "after" }
   );
   const doc = inc && (inc.value !== undefined ? inc.value : inc);
+  if (!doc) {
+    const after = await read(id, zoneKey, now);
+    return { knocked: 0, gauge: after.gauge, threshold, triggered: false, stunnedUntil: null, phase: after.phase };
+  }
   const gauge = Math.max(0, Number(doc?.gauge) || 0);
 
   if (gauge < threshold) {
@@ -155,26 +191,29 @@ async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now(), b
       gauge: { $gte: threshold },
       $or: [{ stunnedUntil: { $lt: now } }, { stunnedUntil: { $exists: false } }, { stunnedUntil: null }],
     },
-    {
+    [{
       $set: {
         gauge: 0,
         stunnedUntil,
         immuneUntil: stunnedUntil + IMMUNE_MS,
         lastTriggerBy: String(byName || ""),
-        lastTriggerById: String(byId || ""), // KDA：巨神震擊窗口的助攻歸戶對象
+        lastTriggerById: contributorId, // 舊資料相容；正式分帳使用完整 windowContributors
+        windowContributors: "$contributors",
+        contributors: {},
         lastTriggerAt: new Date(now).toISOString(),
         updatedAt: new Date().toISOString(),
       },
-    }
+    }]
   );
   const triggered = res.modifiedCount > 0;
+  const after = triggered ? null : await read(id, zoneKey, now);
   return {
     knocked: add,
-    gauge: triggered ? 0 : gauge,
+    gauge: triggered ? 0 : after.gauge,
     threshold,
     triggered,
     stunnedUntil: triggered ? stunnedUntil : null,
-    phase: triggered ? "stunned" : "charging",
+    phase: triggered ? "stunned" : after.phase,
   };
 }
 
@@ -191,6 +230,7 @@ function view(state) {
     windowMs: STUN_WINDOW_MS,
     immuneMs: IMMUNE_MS,
     lastTriggerBy: state.lastTriggerBy || null,
+    windowContributors: normalizeContributorMap(state.windowContributors),
   };
 }
 

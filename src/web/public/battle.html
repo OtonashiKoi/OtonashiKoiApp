@@ -515,7 +515,7 @@ function weaponEmoji(wt){
 }
 function attackClass(wt){
   if(!wt) return 'attacking';
-  if(wt.startsWith('staff')) return 'magic-attack';
+  if(wt.startsWith('staff')||wt==='dice') return 'magic-attack';
   if(wt==='bow') return 'bow-attack';
   return 'attacking';
 }
@@ -615,7 +615,7 @@ const arena = document.getElementById('arena');
 
 function spawnDmgPopup(dmg, wt){
   const el=document.createElement('div');
-  el.className='dmg-popup'+(wt?.startsWith('staff')?' magic':'');
+  el.className='dmg-popup'+(wt?.startsWith('staff')||wt==='dice'?' magic':'');
   el.textContent=fmt(dmg);
   // 隨機位置在怪物附近
   el.style.right  = (50+Math.random()*40-20)+'px';
@@ -686,14 +686,14 @@ function playAttack(entry){
   // 依武器類型播放效果
   setTimeout(()=>{
     if(wt==='bow')          spawnArrow(fighterEl);
-    else if(wt.startsWith('staff')) spawnOrb(fighterEl);
+    else if(wt.startsWith('staff')||wt==='dice') spawnOrb(fighterEl);
   }, 80);
 
   setTimeout(()=>{
     spawnImpact();
     monsterHitAnim();
     spawnDmgPopup(entry.fakeDmg||0, wt);
-  }, wt==='bow'||wt.startsWith('staff') ? 420 : 320);
+  }, wt==='bow'||wt.startsWith('staff')||wt==='dice' ? 420 : 320);
 }
 
 // 動畫佇列執行 — 間隔跟 roundMs 同步

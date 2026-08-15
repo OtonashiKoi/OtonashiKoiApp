@@ -54,13 +54,13 @@ async function main() {
   );
   assert.strictEqual(
     calculateWebBattleCooldownMs({ roundCount: 15, perRoundMs: 500, lost: true }),
-    30000,
-    "敗北冷卻必須固定 30 秒，不可混入回合動畫時間",
+    38000,
+    "15 回合死亡應先保留 8 秒戰鬥播放，再從死亡畫面起算完整 30 秒",
   );
   assert.strictEqual(
     calculateWebBattleCooldownMs({ roundCount: 1, perRoundMs: 1500, lost: true }),
-    30000,
-    "不同 AGI 與回合數下，敗北冷卻仍必須是 30 秒",
+    32000,
+    "1 回合死亡應先保留 2 秒戰鬥播放，再從死亡畫面起算完整 30 秒",
   );
 
   // 以隔離的記憶體 Mongo 驗證正式 repository 的 update pipeline 與回傳投影。

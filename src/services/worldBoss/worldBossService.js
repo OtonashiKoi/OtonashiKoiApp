@@ -47,28 +47,40 @@ const DEFAULT_CONFIG = {
   respawnCooldownMinutes: 60,
   eliteZoneKey: "elite",
   phaseConfig: [
-    { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0, defMultiplier: 1.0, agiBonus: 0, note: "第一階段" },
-    { phase: 2, hpBelowPercent: 40, atkMultiplier: 1.2, defMultiplier: 1.1, agiBonus: 0, note: "第二階段" },
-    { phase: 3, hpBelowPercent: 0, atkMultiplier: 1.4, defMultiplier: 1.2, agiBonus: 35, note: "第三階段" }
+    { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0, defMultiplier: 1.0, agiBonus: 0, lightningEnabled: false, note: "第一階段" },
+    { phase: 2, hpBelowPercent: 40, atkMultiplier: 1.2, defMultiplier: 1.1, agiBonus: 0, lightningEnabled: true, lightningHitChance: 20, lightningDamagePct: 25, note: "第二階段" },
+    { phase: 3, hpBelowPercent: 0, atkMultiplier: 1.4, defMultiplier: 1.2, agiBonus: 35, lightningEnabled: true, lightningHitChance: 20, lightningDamagePct: 25, note: "第三階段" }
   ]
 };
 
-function normalizePhaseList(list) {
-  const source = Array.isArray(list) && list.length ? list : DEFAULT_CONFIG.phaseConfig;
+function normalizePhaseList(list, { bossKey = "default" } = {}) {
+  const hasConfiguredPhases = Array.isArray(list) && list.length > 0;
+  const source = hasConfiguredPhases ? list : DEFAULT_CONFIG.phaseConfig;
   const normalized = source
-    .map((p, idx) => ({
-      phase: Math.max(1, Math.floor(toNum(p?.phase, idx + 1))),
-      hpBelowPercent: Math.max(0, Math.min(100, toNum(p?.hpBelowPercent, idx === 0 ? 70 : idx === 1 ? 40 : 0))),
-      atkMultiplier: Math.max(0.1, toNum(p?.atkMultiplier, 1)),
-      defMultiplier: Math.max(0.1, toNum(p?.defMultiplier, 1)),
-      agiBonus: Math.max(0, Math.floor(toNum(p?.agiBonus, idx === 2 ? 35 : 0))),
-      note: String(p?.note || "").trim()
-    }))
+    .map((p, idx) => {
+      const phase = Math.max(1, Math.floor(toNum(p?.phase, idx + 1)));
+      // 舊資料沒有 lightningEnabled：只有大史王沿用原本的二／三階雷擊，
+      // 其餘世界王一律不再因「有三階段」就誤繼承同一招。
+      const legacyLightningDefault = bossKey === "default" && phase >= 2;
+      return {
+        phase,
+        hpBelowPercent: Math.max(0, Math.min(100, toNum(p?.hpBelowPercent, idx === 0 ? 70 : idx === 1 ? 40 : 0))),
+        atkMultiplier: Math.max(0.1, toNum(p?.atkMultiplier, 1)),
+        defMultiplier: Math.max(0.1, toNum(p?.defMultiplier, 1)),
+        agiBonus: Math.max(0, Math.floor(toNum(p?.agiBonus, idx === 2 ? 35 : 0))),
+        lightningEnabled: !hasConfiguredPhases || p?.lightningEnabled == null
+          ? legacyLightningDefault
+          : p.lightningEnabled === true,
+        lightningHitChance: Math.max(0, Math.min(100, toNum(p?.lightningHitChance, 20))),
+        lightningDamagePct: Math.max(0, toNum(p?.lightningDamagePct, 25)),
+        note: String(p?.note || "").trim()
+      };
+    })
     .sort((a, b) => b.hpBelowPercent - a.hpBelowPercent);
   return normalized.slice(0, 3);
 }
 
-function normalizeConfig(input = {}) {
+function normalizeConfig(input = {}, { bossKey = "default" } = {}) {
   return {
     enabled: input.enabled !== false,
     targetZone: String(input.targetZone || DEFAULT_CONFIG.targetZone),
@@ -76,7 +88,7 @@ function normalizeConfig(input = {}) {
     battleTimeLimitMinutes: Math.max(1, Math.floor(toNum(input.battleTimeLimitMinutes, DEFAULT_CONFIG.battleTimeLimitMinutes))),
     respawnCooldownMinutes: Math.max(0, Math.floor(toNum(input.respawnCooldownMinutes, DEFAULT_CONFIG.respawnCooldownMinutes))),
     eliteZoneKey: String(input.eliteZoneKey || DEFAULT_CONFIG.eliteZoneKey),
-    phaseConfig: normalizePhaseList(input.phaseConfig)
+    phaseConfig: normalizePhaseList(input.phaseConfig, { bossKey })
   };
 }
 
@@ -104,12 +116,12 @@ class WorldBossService {
 
   async getConfig() {
     const stored = await this.repo.getConfig(this.bossKey);
-    return normalizeConfig(stored || {});
+    return normalizeConfig(stored || {}, { bossKey: this.bossKey });
   }
 
   async saveConfig(payload = {}) {
     const current = await this.getConfig();
-    const merged = normalizeConfig({ ...current, ...(payload || {}) });
+    const merged = normalizeConfig({ ...current, ...(payload || {}) }, { bossKey: this.bossKey });
     await this.repo.saveConfig(merged, this.bossKey);
     return merged;
   }
@@ -242,8 +254,8 @@ class WorldBossService {
 
   resolvePhase(configOrPhaseList, hpPercent) {
     const phaseList = Array.isArray(configOrPhaseList)
-      ? normalizePhaseList(configOrPhaseList)
-      : normalizePhaseList(configOrPhaseList?.phaseConfig || []);
+      ? normalizePhaseList(configOrPhaseList, { bossKey: this.bossKey })
+      : normalizePhaseList(configOrPhaseList?.phaseConfig || [], { bossKey: this.bossKey });
     const pct = Math.max(0, Math.min(100, Number(hpPercent || 0)));
     // 區間對映（2026-07-23 修正）：hpBelowPercent＝該階段的「下緣」。
     // phaseList 已依 hpBelowPercent 由大到小排序 → 第一個「下緣 ≤ 當前血量%」的就是所屬階段。

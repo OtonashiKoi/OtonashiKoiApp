@@ -22,6 +22,8 @@ module.exports = {
       // 提高重啟容忍度:避免短時間內幾次崩潰就被 PM2 放棄(造成服務一直躺著)
       max_restarts: 50,
       min_uptime: "10s",
+      // 正常重啟先停止接新連線，最多保留 20 秒讓已進行中的戰鬥回應送完。
+      kill_timeout: 20000,
       cron_restart: "0 18 * * *",
       env_file: ".env",
       env: {

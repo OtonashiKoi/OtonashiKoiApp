@@ -2,7 +2,7 @@
 
 > 本文件記錄完整流程（含踩過的坑）。**首次重做 / 換 cloudflare URL / production 上架** 都應該翻這份。
 
-最後更新：2026-05-21
+最後更新：2026-08-15
 
 ---
 
@@ -10,12 +10,12 @@
 
 equipmentGAME 透過 OAuth 跟 Twitch / YouTube 互動，分**兩種角色**：
 
-| 角色 | 用途 | 持有 token |
+| 角色 | 用途 | 持久化資料 |
 | --- | --- | --- |
-| **玩家 (stream-auth)** | 每個玩家自己授權「證明身分」 | DB: `streamAccountBindings` |
-| **頻道主 (creator-auth)** | 你（音無恋）一次性授權，系統用此查任何玩家的會員狀態 | DB: `creatorTokens` |
+| **玩家 (stream-auth)** | 每個玩家自己授權「證明 YouTube channel ID」 | DB: `streamAccountBindings`；玩家 access token 用完即丟棄 |
+| **頻道主 (creator-auth)** | 你（音無恋）一次性授權，供可用的創作者 API 查詢 | DB: `creatorTokens`（加密 refresh token） |
 
-**核心觀念**：玩家綁定 = 證明身分；查會員狀態 = 用你頻道主 token 主動打 API。**兩件事互相獨立**。
+**核心觀念**：玩家綁定只證明「這個 Discord 玩家控制哪個 YouTube channel」；會員位階目前仍以直播聊天室徽章與 Discord 身分組為準。**綁定與會員判定是兩件獨立的事。**
 
 ---
 
@@ -33,6 +33,7 @@ TWITCH_BROADCASTER_ID=...     # 你的 Twitch user ID（純數字）
 # YouTube
 YOUTUBE_CLIENT_ID=...apps.googleusercontent.com
 YOUTUBE_CLIENT_SECRET=...
+YOUTUBE_DIRECT_BIND_TEST_DISCORD_IDS=865264891991425055
 # STREAM_YOUTUBE_CREATOR_REFRESH_TOKEN 不用設，由 broadcaster auth 流程寫進 DB
 
 # Admin 後台密碼
@@ -97,18 +98,17 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Client-Id: $CID" "https://api.twit
 
 1. 左選單「資料存取權」/ `/auth/scopes`
 2. 點「新增或移除範圍」
-3. **勾選**：
-   - `openid`
-   - `https://www.googleapis.com/auth/userinfo.email`
-   - `https://www.googleapis.com/auth/userinfo.profile`
-4. **手動新增範圍**（在側邊欄底部）— 貼上：
+3. 玩家直連綁定只需要以下最小 scope：
    ```
-   https://www.googleapis.com/auth/youtube.readonly,https://www.googleapis.com/auth/youtube.channel-memberships.creator
+   https://www.googleapis.com/auth/youtube.readonly
    ```
-   點「新增至資料表」
-5. 點「更新」
+4. 頻道主 `creator-auth` 若要呼叫會員 API，另需：
+   ```
+   https://www.googleapis.com/auth/youtube.channel-memberships.creator
+   ```
+5. 點「更新」；程式實際請求的 scope 必須與 Console 宣告一致。
 
-⚠️ `youtube.channel-memberships.creator` 是 sensitive scope，testing 模式不需要 verify，但 production 需要送 Google 審。
+⚠️ Google Cloud Console 會標示 scope 的敏感等級。Testing 可先用測試使用者試跑；對一般玩家公開前，若 scope 被列為 sensitive／restricted，需完成對應驗證。
 
 ### 3.4 加測試使用者（很容易忘）
 
@@ -129,6 +129,17 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Client-Id: $CID" "https://api.twit
    - `http://localhost:5566/api/stream-auth/callback/youtube`
 6. 「建立」
 7. 對話框會顯示 **Client ID** 跟 **Client Secret** → 複製到 `.env`
+
+### 3.6 玩家 YouTube 直連綁定測試
+
+目前不取代聊天室綁定碼，只對 `YOUTUBE_DIRECT_BIND_TEST_DISCORD_IDS` 開放。現行測試者：音無恋 `865264891991425055`。
+
+1. 在 Google Cloud「目標對象」把音無恋實際登入的 Google email 加進 Test users。
+2. 確認正式 redirect URI 已包含 `${PUBLIC_BASE_URL}/api/stream-auth/callback/youtube`。
+3. 用音無恋 Discord 登入遊戲 → 設定 → YouTube →「使用 Google 登入測試」。
+4. 選擇管理正確 YouTube 頻道的 Google／Brand Account 並同意唯讀權限。
+5. callback 以 `channels.list?mine=true` 取得 channel ID；若與現有綁定相同就更新原紀錄，若是另一個頻道則維持「不可自行換綁」規則並拒絕。
+6. 回設定頁確認顯示的頻道名稱與既有綁定一致。聊天室綁定碼按鈕在整個測試期間仍可使用。
 
 ---
 

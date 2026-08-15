@@ -144,9 +144,9 @@ const hellfangConfig = {
   respawnCooldownMinutes: 60,
   eliteZoneKey: ZONE,
   phaseConfig: [
-    { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0,  defMultiplier: 1.0,  agiBonus: 0,  note: "第一階段" },
-    { phase: 2, hpBelowPercent: 40, atkMultiplier: 1.35, defMultiplier: 1.15, agiBonus: 0,  note: "第二階段（狂焰）" },
-    { phase: 3, hpBelowPercent: 0,  atkMultiplier: 1.75, defMultiplier: 1.3,  agiBonus: 50, note: "第三階段（煉獄咆哮）" },
+    { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0,  defMultiplier: 1.0,  agiBonus: 0,  lightningEnabled: false, note: "第一階段" },
+    { phase: 2, hpBelowPercent: 40, atkMultiplier: 1.35, defMultiplier: 1.15, agiBonus: 0,  lightningEnabled: false, note: "第二階段（狂焰）" },
+    { phase: 3, hpBelowPercent: 0,  atkMultiplier: 1.75, defMultiplier: 1.3,  agiBonus: 50, lightningEnabled: false, note: "第三階段（煉獄咆哮）" },
   ],
 };
 

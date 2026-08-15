@@ -15,6 +15,10 @@ const processName = "equipmentGAME";
 // Ignore delete errors (e.g. process does not exist yet)
 run("pm2", ["delete", processName]);
 
+// PM2 已先用正常訊號關閉受管程序；這時才清理可能殘留、且不受 PM2 管理的舊程序。
+// 不可在 delete/restart 前 kill -9，否則進行中的戰鬥雖已寫入，HTTP 結算回應會被直接切斷。
+run("node", ["scripts/free-port.js"]);
+
 const startCode = run("pm2", ["start", "ecosystem.config.cjs", "--only", processName]);
 if (startCode !== 0) {
   process.exit(startCode);

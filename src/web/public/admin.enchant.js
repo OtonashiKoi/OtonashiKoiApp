@@ -26,7 +26,7 @@
       return;
     }
     root.innerHTML = '<p class="hint">載入中…</p>';
-    fetchJSON("/admin/enchant/config").then((c) => {
+    fetchJSON("/admin/enchant/config", { headers: headers() }).then((c) => {
       cfg = c;
       const bandsHtml = BAND_ORDER.map((bk) => {
         const band = cfg.bands[bk]; if (!band) return "";

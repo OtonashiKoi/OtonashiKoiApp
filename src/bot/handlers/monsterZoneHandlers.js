@@ -15,6 +15,7 @@ const { calcPlayerStats, isOnlyDTierEquipped } = require("../../shared/combatSta
 const { getEquipmentTierSetBonuses } = require("../../shared/equipmentTierSetBonuses");
 const { isEffectConditionMet, collectEquipmentEffects, mergeEquippedFromLibrary, applyEffectInstances, decrementActiveEffects } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffect, filterActiveAuras } = require("../../shared/supportAuraScaling");
+const { mergeContributorMaps, allocateDirectDamage, mirrorDamageToOtherParts } = require("../../shared/supportContribution");
 const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = require("../../shared/battlePresence");
 const { isWebBattleActive } = require("../../services/progress/battleLock");
 const { getDropBoostPct } = require("../../shared/pkArenaConfig");
@@ -436,9 +437,10 @@ function createWorldBossPartHpTemplate(totalMaxHp = 0, zoneKey = null) {
 }
 
 // ═══ 牙狼(地獄狼牙王) 適應性傷害機制 純函式 ═══
-// 玩家攻擊流派：法杖=法系，其餘(劍/斧/槌/匕/弓)=物理
+// 玩家攻擊流派：法杖與骰子=法系，其餘(劍/斧/槌/匕/弓)=物理
 function hellfangPlayerSchool(weaponType) {
-  return String(weaponType || "").startsWith("staff") ? "magic" : "physical";
+  const wt = String(weaponType || "").toLowerCase();
+  return wt.startsWith("staff") || wt === "dice" ? "magic" : "physical";
 }
 // 牙狼「存活部位數」(HP>0)：分階段機制的依據
 function hellfangAlivePartCount(state) {
@@ -3037,6 +3039,7 @@ async function handleEnterBattle(interaction) {
             pid
           );
           const pidJobName = getJobNameFromEquipped(participant.equipped);
+          const pidJobId = String(participant.equipped?.job_eq?.itemId || participant.equipped?.job_eq?.id || "");
           // 神射手參戰者：合成掩護射擊（吃該參戰者當下的 ATK/爆擊）
           try {
             const _snP = require("../../shared/jobAdvancement").getSniper(participant.equipped?.job_eq);
@@ -3045,6 +3048,7 @@ async function handleEnterBattle(interaction) {
                 key: "support_shot", target: "party", trigger: "passive", chance: 100,
                 params: { value: Number(_snP.supportShotPct) || 70, casterAtk: Math.round(participant.stats?.atk || 0), casterCrit: Math.round(participant.stats?.crit || 0) },
                 srcItem: "神射手徽章", sourceDiscordId: pid,
+                sourceJobId: pidJobId, sourceJobName: pidJobName || "神射手徽章",
               }];
             }
           } catch (_) { /* noop */ }
@@ -3058,7 +3062,7 @@ async function handleEnterBattle(interaction) {
                 zone: zoneKey,
               });
               // 光環標籤：優先標「來源道具」，沒有才標職業徽章（與網頁一致）
-              partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: r.srcItem || pidJobName, isSelfAura: pid === discordId, sourceDiscordId: pid });
+              partyEffects.push({ ...scaled, sourceName: pidName, sourceJobName: r.srcItem || pidJobName, sourceJobId: pidJobId, isSelfAura: pid === discordId, sourceDiscordId: pid });
             }
           }
         } catch (e) {}
@@ -3105,6 +3109,7 @@ async function handleEnterBattle(interaction) {
           }
         } catch (_) { /* noop */ }
         const selfJobName = getJobNameFromEquipped(currentSnapshot.equipped);
+        const selfJobId = String(currentSnapshot.equipped?.job_eq?.itemId || currentSnapshot.equipped?.job_eq?.id || "");
         const prevAurasRaw = Array.isArray(battleState.activeHealerAuras)
           ? battleState.activeHealerAuras
           : (battleState.activeHealerAura ? [{ ...battleState.activeHealerAura }] : []);
@@ -3112,7 +3117,7 @@ async function handleEnterBattle(interaction) {
         const prevAuras = filterActiveAuras(prevAurasRaw);
         let nextAuras;
         if (selfRawParty.length > 0) {
-          nextAuras = [...prevAuras.filter((a) => a && a.discordId !== discordId), { discordId, displayName, effects: selfRawParty, jobName: selfJobName || null, lastAt: Date.now() }];
+          nextAuras = [...prevAuras.filter((a) => a && a.discordId !== discordId), { discordId, displayName, effects: selfRawParty, jobId: selfJobId, jobName: selfJobName || null, lastAt: Date.now() }];
         } else {
           nextAuras = prevAuras.filter((a) => a && a.discordId !== discordId);
         }
@@ -3137,6 +3142,7 @@ async function handleEnterBattle(interaction) {
           if (aura.discordId === discordId || participants.includes(aura.discordId)) return;
           const provider = await participantCache.get(aura.discordId, aura.displayName || null);
           const auraJobName = aura.jobName || getJobNameFromEquipped(provider.equipped) || "輔助";
+          const auraJobId = String(aura.jobId || provider.equipped?.job_eq?.itemId || provider.equipped?.job_eq?.id || "");
           const srcName = resolveAuraSourceName(aura.displayName || provider.displayName, aura.discordId);
           for (const r of aura.effects) {
             if (!r || r.target !== "party") continue;
@@ -3147,7 +3153,14 @@ async function handleEnterBattle(interaction) {
               inventory: provider.inventory || [],
               zone: zoneKey,
             });
-            partyEffects.push({ ...scaled, sourceName: srcName, sourceJobName: r.srcItem || auraJobName });
+            partyEffects.push({
+              ...scaled,
+              sourceName: srcName,
+              sourceJobName: r.srcItem || auraJobName,
+              sourceJobId: auraJobId,
+              isSelfAura: false,
+              sourceDiscordId: aura.discordId,
+            });
           }
         } catch (e) {}
       }));
@@ -3155,6 +3168,8 @@ async function handleEnterBattle(interaction) {
       let currentProg = currentSnapshot.progress;
       // 永遠從 DB 讀取最新 effects（不使用 snapshot 裡的舊值）
       let currentEquipped = currentSnapshot.equipped;
+      const currentJobId = String(currentEquipped?.job_eq?.itemId || currentEquipped?.job_eq?.id || "");
+      const currentJobName = getJobNameFromEquipped(currentEquipped);
       const _wd = require("../../shared/windDirection");
       const windDirectionOn = _wd.hasEffect(currentEquipped);
       const windDirectionBefore = windDirectionOn ? _wd.read(currentProg) : 0;
@@ -3297,6 +3312,10 @@ async function handleEnterBattle(interaction) {
       const _zfg = require("../../shared/zoneFreezeGauge");
       const freezeStateBefore = await _zfg.read(_zfg.gaugeKeyForZone(zoneKey), zoneKey).catch(() => null);
       const zoneFrozenOn = Boolean(freezeStateBefore?.frozen);
+      const teamControlContributors = mergeContributorMaps(
+        teamStunOn ? stunStateBefore?.windowContributors : null,
+        zoneFrozenOn ? freezeStateBefore?.windowContributors : null
+      );
 
       // ── 區域聖域值（聖域師）── DC 玩家也吃聖域窗口（受傷減半＋回血）；聖域師在 DC 出戰也累積。
       //    使用者定案：DC 不發任何公告，效果照吃。
@@ -3317,6 +3336,7 @@ async function handleEnterBattle(interaction) {
           stance: dcStanceKey,
           teamStunRounds: (teamStunOn || zoneFrozenOn) ? 999 : 0,
           teamStunStyle: (!teamStunOn && zoneFrozenOn) ? "freeze" : undefined,
+          teamControlContributors,
           playerLevel: currentProg?.level || 1,
           playerActiveEffects: [...comboEffects, ...berserkEffects],
           warGaugeCritBonus: gaugeFull ? _gaugeCfg.critRateBonus : 0,
@@ -3348,10 +3368,11 @@ async function handleEnterBattle(interaction) {
           // 聖域窗口（聖域師區域條滿）：本場受傷減免＋每回合回血（DC 玩家照吃、不公告）
           sanctuaryCutPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumDamageCutPct) || 50) : 0,
           sanctuaryHealPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumHealPct) || 3) : 0,
+          sanctuaryContributors: zoneSanctumOn ? sanctumStateBefore?.windowContributors : null,
         });
       // 聖域師在 DC 出戰 → 累積聖域值（每場 +1；靜默，不公告）
       if (_scg.canKnock(currentEquipped?.job_eq)) {
-        await _scg.knock(_dcSanctumKey, zoneKey, 1, displayName).catch(() => null);
+        await _scg.knock(_dcSanctumKey, zoneKey, 1, displayName, Date.now(), discordId, currentJobId, currentJobName || "聖域師").catch(() => null);
       }
       const { roundLogs, finalPlayerHp } = combatResult;
       let combatStats = combatResult.combatStats;
@@ -3395,18 +3416,21 @@ async function handleEnterBattle(interaction) {
         try { require("../../services/realtime/battlePresence").touch(discordId, { name: displayName, level: currentProg?.level, zone: zoneKey, damage: totalDamage }); } catch (_) { /* noop */ }
         const prev = freshState.damageMap || {};
         // 掩護射擊歸戶：箭傷從出戰者的貢獻拆出、記給提供箭的神射手（與網頁同規則）
-        const _supportBySrc = combatResult?.combatStats?.supportShotBySource || {};
-        let _supportTotal = 0;
-        for (const _v of Object.values(_supportBySrc)) _supportTotal += Math.max(0, Math.round(Number(_v) || 0));
+        const _supportSplit = allocateDirectDamage(
+          totalDamage,
+          combatResult?.totalDamage,
+          combatResult?.combatStats?.supportShotBySource || {}
+        );
+        const _supportBySrc = _supportSplit.bySource;
+        const _supportDamageBySource = {};
         const updatedDamageMap = {
           ...prev,
           [discordId]: {
             name: displayName,
             level: currentProg?.level || 1,
-            damage: (prev[discordId]?.damage || 0) + Math.max(0, totalDamage - _supportTotal),
+            damage: (prev[discordId]?.damage || 0) + _supportSplit.selfDamage,
             taken: (prev[discordId]?.taken || 0) + totalTaken,
-            // 世界王貢獻寶箱：累計本王出戰花的入場費（花錢排名依據）
-            spent: (prev[discordId]?.spent || 0) + (Number(session.entryFee) || 0),
+            assist: Number(prev[discordId]?.assist) || 0,
           }
         };
         for (const [_srcId, _amt] of Object.entries(_supportBySrc)) {
@@ -3416,7 +3440,14 @@ async function handleEnterBattle(interaction) {
           const _auraName = (Array.isArray(freshState.activeHealerAuras)
             ? freshState.activeHealerAuras.find((a) => a && a.discordId === _srcId)?.displayName
             : null) || prev[_srcId]?.name || "神射手";
-          const _prevEntry = updatedDamageMap[_srcId] || { name: _auraName, level: prev[_srcId]?.level || 1, damage: 0, taken: 0, spent: 0 };
+          const _job = combatResult?.combatStats?.supportShotBySourceJob?.[_srcId] || {};
+          _supportDamageBySource[_srcId] = {
+            amount: _add,
+            jobId: _job.jobId || "job_sniper_t2_v1",
+            jobName: _job.jobName || "神射手",
+            displayName: _auraName,
+          };
+          const _prevEntry = updatedDamageMap[_srcId] || { name: _auraName, level: prev[_srcId]?.level || 1, damage: 0, taken: 0 };
           updatedDamageMap[_srcId] = { ..._prevEntry, name: _prevEntry.name || _auraName, damage: (_prevEntry.damage || 0) + _add };
         }
         const latestHp = Math.max(0, Number(freshState.currentHp ?? monsterHpBeforeBattle));
@@ -3435,15 +3466,27 @@ async function handleEnterBattle(interaction) {
           session.monsterHp = nextPartHp;
           if (nextPartHp <= 0) outcome = "win";
           const nextPartsHp = { ...prevParts.worldBossPartsHp, [part]: nextPartHp };
+          // 元素師炎圈：Discord 與 Web／單人王相同，對其他尚存部位鏡射本場炎圈傷害。
+          const mirror = mirrorDamageToOtherParts(nextPartsHp, part, combatResult?.combatStats?.fireCircleDamage);
+          Object.assign(nextPartsHp, mirror.partsHp);
+          const fcMirrorTotalDC = mirror.total;
           nextState = {
             ...nextState,
             worldBossPartsHp: nextPartsHp,
             worldBossPartsMaxHp: prevParts.worldBossPartsMaxHp,
             currentHp: sumWorldBossPartHp(nextPartsHp)
           };
+          if (fcMirrorTotalDC > 0) {
+            const selfEntry = nextState.damageMap[discordId];
+            nextState.damageMap = {
+              ...nextState.damageMap,
+              [discordId]: { ...selfEntry, damage: (Number(selfEntry?.damage) || 0) + fcMirrorTotalDC },
+            };
+            roundLogs.push(`🔥 **炎圈**延燒全身——其他部位共受到 **${fcMirrorTotalDC.toLocaleString()}** 點灼燒！`);
+          }
           if (zoneKey === HELLFANG_ZONE) {
             // 貢獻榜改用有效傷害(避免打錯流派的玻璃砲空刷排名)
-            nextState.damageMap = { ...nextState.damageMap, [discordId]: { ...nextState.damageMap[discordId], damage: (prev[discordId]?.damage || 0) + Math.max(0, wbDamage - _supportTotal) } };
+            nextState.damageMap = { ...nextState.damageMap, [discordId]: { ...nextState.damageMap[discordId], damage: (prev[discordId]?.damage || 0) + _supportSplit.selfDamage + fcMirrorTotalDC } };
             // 翻面累積：依玩家流派歸屬本場有效傷害；該部位達 1/3 HP 首次觸發翻面(抵禦你用比較多的那系,10分,一生一次)
             const _partMax = Number(prevParts.worldBossPartsMaxHp?.[part]) || Number(battleMonster.calc.maxHp) || 0;
             hellfangEventDC = hellfangPartAccrue(nextState, part, _partMax, hellfangPlayerSchool(session.playerStats?.weaponType), wbDamage, Date.now());
@@ -3465,24 +3508,15 @@ async function handleEnterBattle(interaction) {
           // ── KDA（附錄C v3）：本場 K/D 賽季累積＋助攻歸戶＋寶箱排名用的 spawn 助攻 ──
           try {
             const _al = combatResult?.assistLedger || {};
-            // 巨神震擊窗口的歸戶對象＝敲滿條的人（暈眩條文件 lastTriggerById）
-            let _stunSrc = null;
-            if ((_al.stunSkippedRounds || 0) > 0) {
-              try {
-                const _sgK = require("../../shared/dwarfStunGauge");
-                _stunSrc = (await _sgK.readRaw(_sgK.gaugeKeyForZone(zoneKey)))?.lastTriggerById || null;
-              } catch (_) { /* 取不到就不歸戶 */ }
-            }
             // spawn 級助攻 → damageMap[src].assist（寶箱 C 排名用；與 damage 同一份結算路徑）
             const _creditSpawnAssist = (srcId, amt) => {
               const v = Math.max(0, Math.round(Number(amt) || 0));
               const id = String(srcId || "");
               if (!id || v <= 0 || id === discordId) return;
-              const cur = nextState.damageMap[id] || { name: prev[id]?.name || id, level: prev[id]?.level || 1, damage: 0, taken: 0, spent: 0 };
+              const cur = nextState.damageMap[id] || { name: prev[id]?.name || id, level: prev[id]?.level || 1, damage: 0, taken: 0 };
               nextState.damageMap = { ...nextState.damageMap, [id]: { ...cur, assist: (Number(cur.assist) || 0) + v } };
             };
             for (const [_sid, _amt] of Object.entries(_al.bySource || {})) _creditSpawnAssist(_sid, _amt);
-            if (_stunSrc) _creditSpawnAssist(_stunSrc, _al.stunPreventedDmg);
             // 賽季累積（非同步，失敗不影響結算）；quest＝賽季任務指標（撐滿15回合/抗性/傷害/助攻）
             let _resistPct = 0;
             try {
@@ -3491,11 +3525,13 @@ async function handleEnterBattle(interaction) {
             } catch (_) { /* 抗性算不出來就當 0 */ }
             require("../../services/kda/kdaService").recordBattle({
               discordId, displayName,
-              damage: wbDamage,
+              damage: _supportSplit.selfDamage + fcMirrorTotalDC,
               died: outcome === "lose",
+              battleJobId: currentJobId,
+              battleJobName: currentJobName,
+              damageBySource: _supportDamageBySource,
               assistBySource: _al.bySource || null,
-              stunPreventedDmg: _al.stunPreventedDmg || 0,
-              stunSourceId: _stunSrc,
+              assistBySourceJob: _al.bySourceJob || null,
               quest: {
                 questService: sc?.questService || sc?.weeklyQuestService,
                 rounds: (combatResult?.nextRound || 2) - 1,
@@ -3703,7 +3739,7 @@ async function handleEnterBattle(interaction) {
       if (stunGaugeKey && _dsg.canKnock(currentEquipped?.job_eq)) {
         const stunAmount = Math.floor((combatResult?.combatStats?.attackRounds || 0) * (Number(session.turtleGaugeMult) || 1));
         const _knock = await _dsg
-          .knock(stunGaugeKey, zoneKey, stunAmount, displayName, Date.now(), discordId)
+          .knock(stunGaugeKey, zoneKey, stunAmount, displayName, Date.now(), discordId, currentJobId, currentJobName || "矮人戰士長")
           .catch(() => null);
         if (_knock?.triggered) {
           _dsg.announceStun({ byName: displayName, monsterName: session.monsterName });
@@ -3892,10 +3928,6 @@ async function _grantChestToPlayer(sc, pid, chestItem, sourceMonsterId) {
   }
   return { ok: false, uuid: null };
 }
-// 貢獻度混合排名：傷害名次 × 0.7 + 花費(入場費)名次 × 0.3，分數越小名次越前。
-// 取代舊版「傷害前3 + 花費前3遞補」的兩層邏輯——花費現在會影響 1~3 名內部排序，不再只是遞補 4~6 名的备胎名單。
-const CONTRIBUTION_RANK_WEIGHT = { damage: 0.7, spent: 0.3 };
-
 // 每個名次的寶箱數：1(保底) + ⌊(總參與人數 − (名次−1)) ÷ 3⌋，各名次分別封頂（1st→4箱/2nd→3箱/3rd→2箱），4~6名固定1箱。
 // 名次越前起漲人數越早：1st滿3人就開始漲、2nd滿4人、3rd滿5人；封頂依名次遞減，維持 1st≥2nd≥3rd≥1 不會被追平。
 function _worldBossChestCountForRank(rank, totalParticipants) {
@@ -3905,7 +3937,41 @@ function _worldBossChestCountForRank(rank, totalParticipants) {
   return 1 + bonus;
 }
 
-// 結算：貢獻度混合排名前 6 名，依名次領 1~4 箱不等（見 _worldBossChestCountForRank）
+// 寶箱排名只看本王戰鬥貢獻 C = 傷害 + 0.7×助攻；入場費不參與排名。
+// 同分時依實際傷害、助攻、玩家 ID 依序決勝，避免依物件寫入順序產生不透明結果。
+function _rankWorldBossChestContributors(entries) {
+  return [...entries]
+    .sort((a, b) => b.cScore - a.cScore
+      || b.damage - a.damage
+      || b.assist - a.assist
+      || String(a.pid).localeCompare(String(b.pid)))
+    .slice(0, 6);
+}
+
+// 世界王公告不得顯示 Discord ID。若名稱缺失、等於 ID、本身是長數字，
+// 或只能取得匿名的「玩家#末四碼」，一律顯示「某位勇者」。
+function _worldBossSafeDisplayName(displayName, pid) {
+  const name = String(displayName || "").trim();
+  const id = String(pid || "");
+  if (!name || name === id || /^\d{15,}$/.test(name) || /^玩家#\d+$/.test(name)) {
+    return "某位勇者";
+  }
+  return name;
+}
+
+async function _resolveWorldBossDisplayName(displayName, pid) {
+  const safeFallback = _worldBossSafeDisplayName(displayName, pid);
+  if (safeFallback !== "某位勇者") return safeFallback;
+  try {
+    const { resolveDiscordName } = require("../../shared/announceTownChat");
+    const discordName = await resolveDiscordName(pid);
+    return _worldBossSafeDisplayName(discordName, pid);
+  } catch (_) {
+    return safeFallback;
+  }
+}
+
+// 結算：本王戰鬥貢獻前 6 名，依名次領 1~4 箱不等（見 _worldBossChestCountForRank）
 async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap, perPidRewards) {
   try {
     const chestId = _resolveWorldBossChestId(monster, zoneKey);
@@ -3919,25 +3985,13 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
     const excludedIds = await getLeaderboardExcludedPlayerIds();
     const eligibleDamageMap = filterDamageMapForLeaderboard(damageMap || {}, excludedIds);
     const entries = Object.entries(eligibleDamageMap).map(([pid, d]) => ({
-      pid, name: d?.name || pid, damage: Number(d?.damage) || 0, assist: Number(d?.assist) || 0, spent: Number(d?.spent) || 0,
+      pid, name: d?.name || pid, damage: Number(d?.damage) || 0, assist: Number(d?.assist) || 0,
     })).map((e) => ({ ...e, cScore: e.damage + A_WEIGHT * e.assist }))
-      .filter((e) => e.cScore > 0 || e.spent > 0);
+      .filter((e) => e.cScore > 0);
     if (entries.length === 0) return;
 
-    // 名次越小分數越好：分別依貢獻分C/花費由高到低排，取陣列位置(0-based)+1 當名次
-    const byDamage = [...entries].sort((a, b) => b.cScore - a.cScore);
-    const bySpent = [...entries].sort((a, b) => b.spent - a.spent);
-    const dmgRankOf = new Map(byDamage.map((e, i) => [e.pid, i + 1]));
-    const spentRankOf = new Map(bySpent.map((e, i) => [e.pid, i + 1]));
-
     const totalParticipants = entries.length;
-    const blended = entries
-      .map((e) => ({
-        ...e,
-        blendScore: dmgRankOf.get(e.pid) * CONTRIBUTION_RANK_WEIGHT.damage + spentRankOf.get(e.pid) * CONTRIBUTION_RANK_WEIGHT.spent,
-      }))
-      .sort((a, b) => a.blendScore - b.blendScore)
-      .slice(0, 6);
+    const ranked = _rankWorldBossChestContributors(entries);
 
     const mark = (pid) => {
       if (perPidRewards && perPidRewards[pid]) {
@@ -3949,21 +4003,22 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
     const grantedWinners = []; // { pid, name, uuid }（推播用，每箱各一筆）
     const auditRows = [];      // 每位得主的發箱結果（成功/失敗，含應得箱數）
 
-    for (let i = 0; i < blended.length; i++) {
-      const w = blended[i];
+    for (let i = 0; i < ranked.length; i++) {
+      const w = ranked[i];
+      const displayName = await _resolveWorldBossDisplayName(w.name, w.pid);
       const rank = i + 1;
       const boxCount = _worldBossChestCountForRank(rank, totalParticipants);
       let successCount = 0;
       for (let n = 0; n < boxCount; n++) {
         const r = await _grantChestToPlayer(sc, w.pid, chestItem, monster?.id);
-        if (r.ok) { successCount++; grantedWinners.push({ pid: w.pid, name: w.name, uuid: r.uuid }); }
+        if (r.ok) { successCount++; grantedWinners.push({ pid: w.pid, name: displayName, uuid: r.uuid }); }
         else console.error(`[WorldBossChest] grant FAILED pid=${w.pid} name=${w.name} chest=${chestItem.id}`);
       }
       auditRows.push({
-        pid: w.pid, name: w.name, rank, damage: w.damage, assist: w.assist || 0, cScore: Math.round(w.cScore || 0), spent: w.spent,
-        blendScore: Math.round(w.blendScore * 100) / 100, boxCount, successCount,
+        pid: w.pid, name: displayName, rank, damage: w.damage, assist: w.assist || 0,
+        cScore: Math.round(w.cScore || 0), boxCount, successCount,
       });
-      if (successCount > 0) { granted.push({ name: w.name, count: successCount }); mark(w.pid); }
+      if (successCount > 0) { granted.push({ name: displayName, count: successCount }); mark(w.pid); }
     }
 
     // 持久化發箱稽核 log（成功/失敗都記）→ 日後「沒拿到箱子」爭議可直接查 worldBossChestGrants
@@ -4719,7 +4774,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     }
     _republishPanel(sc, zoneKey, monster, bossResetState.currentHp, 0, {}, null, bossResetState.worldBossPartsHp).catch(() => {});
 
-    // 世界王貢獻寶箱：傷害/花費混合排名前 6 名，依名次領 1~4 箱（見 _awardWorldBossContributionChests）
+    // 世界王貢獻寶箱：本王傷害 + 0.7×助攻排名前 6 名，依名次領 1~4 箱。
     await _awardWorldBossContributionChests(sc, zoneKey, monster, freshState.damageMap, perPidRewards);
 
     rewardLines.push(...buildPartyRewardSummary(perPidRewards, mergedDmg));
@@ -5759,6 +5814,9 @@ module.exports = {
   getMonsterZoneDiagnostics,
   _recordQuestBattleProgress: recordQuestBattleProgress,
   _resolveExpiredMonsterTransition,
+  _rankWorldBossChestContributors,
+  _worldBossChestCountForRank,
+  _worldBossSafeDisplayName,
   hellfangPlayerSchool, hellfangDamageMult, hellfangPartAccrue, hellfangFlipLines, hellfangPartCurrentWeak, getHellfangFlipRemainingMs, getWorldBossPartWeakness, hellfangBossPhaseMods, hellfangAlivePartCount,
   startIdleRotateTimer,
   refreshEliteWorldBossPanel,

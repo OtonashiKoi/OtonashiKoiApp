@@ -28,6 +28,8 @@ class CasinoService {
     playerService,
     getBotClient,
     channelLayoutRepository,
+    uniqueGrantService = uniqueGrant,
+    townChatAnnouncer = null,
   }) {
     this.casinoRepository = casinoRepository;
     this.itemRepository = itemRepository;
@@ -37,6 +39,8 @@ class CasinoService {
     this.playerService = playerService;
     this.getBotClient = getBotClient;
     this.channelLayoutRepository = channelLayoutRepository;
+    this.uniqueGrantService = uniqueGrantService;
+    this.townChatAnnouncer = townChatAnnouncer;
 
     this._tickTimer = null;
     this._listeners = new Set();    // 面板更新訂閱者
@@ -257,7 +261,7 @@ class CasinoService {
         });
         if (grantedName) grantedItems.push({ ...d, itemName: grantedName });
       }
-      // 命運之輪唯一大獎：每位有下注者（不論該輪輸贏）都擲 1% 機率
+      // 命運之輪唯一大獎：每位有下注者（不論該輪輸贏）都擲 3% 機率
       if (ps.totalBet > 0) {
         const jackpot = await this._tryGrantDiceJackpot(ps.discordId).catch(() => null);
         if (jackpot) {
@@ -410,13 +414,13 @@ class CasinoService {
   async _tryGrantDiceJackpot(discordId) {
     if (Math.random() >= DICE_JACKPOT_CHANCE) return null;
     // 原子搶佔：已領過 → claim 回 false → 不發（機率照樣消耗，符合「獲得過不能再獲得」）
-    const first = await uniqueGrant.claim(discordId, DICE_JACKPOT_ITEM_ID, "casino_jackpot").catch(() => false);
+    const first = await this.uniqueGrantService.claim(discordId, DICE_JACKPOT_ITEM_ID, "casino_jackpot").catch(() => false);
     if (!first) return null;
     try {
       const item = await this.itemRepository.findById(DICE_JACKPOT_ITEM_ID);
-      if (!item) { await uniqueGrant.release(discordId, DICE_JACKPOT_ITEM_ID); return null; }
+      if (!item) { await this.uniqueGrantService.release(discordId, DICE_JACKPOT_ITEM_ID); return null; }
       const progress = await this.progressRepository.findByPlayerId(discordId);
-      if (!progress) { await uniqueGrant.release(discordId, DICE_JACKPOT_ITEM_ID); return null; }
+      if (!progress) { await this.uniqueGrantService.release(discordId, DICE_JACKPOT_ITEM_ID); return null; }
       if (!Array.isArray(progress.inventory)) progress.inventory = [];
       progress.inventory.push({
         uuid: crypto.randomUUID(),
@@ -434,14 +438,14 @@ class CasinoService {
       progress.updatedAt = new Date().toISOString();
       await this.progressRepository.save(progress);
       console.log(`[casino] 🎉 命運之輪唯一大獎發放給 ${discordId}`);
-      const tc = require("../../shared/announceTownChat");
+      const tc = this.townChatAnnouncer || require("../../shared/announceTownChat");
       const who = await tc.resolveDiscordName(discordId).catch(() => "某位勇者");
       tc.announceTownChat(
         `🎰🎉 **${who}** 在命運轉盤抽中了傳說錨點【**${item.name}**】！命運眷顧之人！`
       ).catch(() => {});
       return { itemName: item.name, label: "傳說錨點·唯一", jackpot: true };
     } catch (e) {
-      await uniqueGrant.release(discordId, DICE_JACKPOT_ITEM_ID).catch(() => {});
+      await this.uniqueGrantService.release(discordId, DICE_JACKPOT_ITEM_ID).catch(() => {});
       console.warn("[casino] dice jackpot 發放失敗，已撤回搶佔:", e?.message || e);
       return null;
     }

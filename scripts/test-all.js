@@ -14,6 +14,7 @@ const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const suites = [
   { script: "check", label: "語法、行數、文件" },
   { script: "check:sim", label: "職業模擬覆蓋" },
+  { script: "test:job-contribution", label: "全職業貢獻覆蓋" },
   { script: "test:features", label: "核心資料與功能" },
   { script: "test:systems", label: "主要系統整合" },
   { script: "test:golden", label: "固定戰鬥快照" },

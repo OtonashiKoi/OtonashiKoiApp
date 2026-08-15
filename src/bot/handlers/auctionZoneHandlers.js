@@ -192,7 +192,7 @@ function buildSellSelectDescription(item) {
 function sellWeaponFamily(entry) {
   const wt = String(entry?.weaponType || "").toLowerCase();
   if (!wt) return "all";
-  if (wt.startsWith("staff")) return "magic";
+  if (wt.startsWith("staff") || wt === "dice") return "magic";
   if (wt.endsWith("_1h")) return "melee1";
   if (wt.endsWith("_2h")) return "melee2";
   if (wt === "bow") return "ranged";

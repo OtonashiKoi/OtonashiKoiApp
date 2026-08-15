@@ -6,11 +6,12 @@ const WEB_BATTLE_HANDOFF_MS = 500;
 const WEB_DEATH_COOLDOWN_MS = 30 * 1000;
 
 function calculateWebBattleCooldownMs({ roundCount, perRoundMs, lost = false }) {
-  // 死亡懲罰是獨立遊戲規則：固定 30 秒，不得混入 AGI、回合數或動畫交接時間。
-  if (lost) return WEB_DEATH_COOLDOWN_MS;
   const rounds = Math.max(0, Math.floor(Number(roundCount) || 0));
   const tickMs = Math.max(0, Math.floor(Number(perRoundMs) || 0));
-  return rounds * tickMs + WEB_BATTLE_HANDOFF_MS;
+  const playbackMs = rounds * tickMs + WEB_BATTLE_HANDOFF_MS;
+  // 伺服器在玩家按下出戰時就先算完整場戰鬥，但死亡懲罰的語意是「死亡後 30 秒」。
+  // 因此前端尚在播放戰報的時間只能用來保護戰鬥互斥，不能吃掉死亡懲罰。
+  return playbackMs + (lost ? WEB_DEATH_COOLDOWN_MS : 0);
 }
 
 module.exports = {

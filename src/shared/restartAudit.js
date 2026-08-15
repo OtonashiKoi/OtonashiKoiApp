@@ -129,7 +129,11 @@ function installRestartAudit() {
     process.once(signal, () => {
       appendAudit("process_signal", { reason: signal, uptimeMs: Date.now() - currentStart.startedAtMs });
       markState("graceful_shutdown", { reason: signal });
-      process.kill(process.pid, signal);
+      // 交給啟動入口停止接受新連線，並等待進行中的 HTTP 請求完成。
+      // 若入口沒有完成關閉，才在寬限期後重新送出原訊號強制退出。
+      const graceMs = Math.max(1_000, Number(process.env.SHUTDOWN_GRACE_MS) || 18_000);
+      const forceExit = setTimeout(() => process.kill(process.pid, signal), graceMs);
+      forceExit.unref?.();
     });
   }
 

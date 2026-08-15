@@ -6,8 +6,9 @@ const config = require("../../config");
 const { ok, fail } = require("../../shared/response");
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
+const { WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
 
-const WB_ZONES = ["elite", "dragon_king_lair", "hellfire_depths"];
+const WB_ZONES = Object.keys(WORLD_BOSS_ZONES);
 
 function taipeiStartOfToday() {
   const shifted = new Date(Date.now() + 8 * 3600e3);
@@ -31,12 +32,13 @@ function createAdminLiveRoutes(serviceContext) {
       const db = await getMongoDb();
       const sinceIso = taipeiStartOfToday().toISOString();
 
-      const [donations, memberCount, scBar, wbList] = await Promise.all([
+      const [donations, memberCount, scBar, viewerState, wbList] = await Promise.all([
         db.collection("donationEvents")
           .find({ createdAt: { $gte: sinceIso } }).project({ twdAmount: 1 }).toArray(),
         db.collection("membershipEvents")
           .countDocuments({ at: { $gte: sinceIso }, event: { $in: ["join", "rejoin", "upgrade"] } }),
         Promise.resolve().then(() => require("../../services/stream/scBarService").getPublicProgress()).catch(() => null),
+        Promise.resolve().then(() => require("../../services/stream/viewerService").getPublicState()).catch(() => ({ current: 0, live: false, services: [] })),
         Promise.all(WB_ZONES.map(async (zone) => {
           try {
             const [state, monsters] = await Promise.all([
@@ -65,10 +67,16 @@ function createAdminLiveRoutes(serviceContext) {
       res.json(ok({
         now: new Date().toISOString(),
         stream: {
-          isLive: presence.isLive === true,
-          viewerCount: Number(presence.viewerCount) || 0,
+          isLive: viewerState.live === true,
+          viewerCount: Number(viewerState.current) || 0,
+          viewerPeak: Number(viewerState.peak) || 0,
+          services: Array.isArray(viewerState.services) ? viewerState.services : [],
           lastCommentAt: presence.lastCommentAt || null,
           checkedInCount: Array.isArray(presence.actors) ? presence.actors.length : 0
+        },
+        chatActivity: {
+          activeChatters: Array.isArray(presence.actors) ? presence.actors.length : 0,
+          lastCommentAt: presence.lastCommentAt || null
         },
         today: {
           donationTotal: donations.reduce((s, d) => s + (Number(d.twdAmount) || 0), 0),

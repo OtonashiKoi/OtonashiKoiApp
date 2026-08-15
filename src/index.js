@@ -92,10 +92,41 @@ async function bootstrap() {
     }
 
     const app = createApiServer(client);
-    app.listen(config.api.port, () => {
+    const server = app.listen(config.api.port, () => {
       console.log(`[API] listening on port ${config.api.port}${apiOnly ? " (API_ONLY mode)" : ""}`);
       console.log(`[Admin] http://localhost:${config.api.port}/admin`);
     });
+
+    // PM2 restart 時先停收新請求，讓已進入結算的戰鬥把 HTTP 回應送完。
+    // restartAudit 會保留 18 秒保險上限，避免壞連線讓程序永遠關不掉。
+    let shuttingDown = false;
+    const shutdown = (signal) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      const getActiveWrites = () => Math.max(0, Number(app.locals.getActiveWriteRequestCount?.()) || 0);
+      console.log(`[Shutdown] ${signal}: draining ${getActiveWrites()} active write request(s)...`);
+      server.close((error) => {
+        if (error) console.error("[Shutdown] HTTP close failed:", error);
+        else console.log("[Shutdown] active HTTP requests drained.");
+        try { client.destroy(); } catch (_) { /* noop */ }
+        process.exit(error ? 1 : 0);
+      });
+      server.closeIdleConnections?.();
+
+      // server.close 會等待 SSE/OBS 長連線；資料寫入排空後主動切掉這些唯讀連線，
+      // 瀏覽器會自動重連，不必讓 PM2 每次都等到 kill_timeout。
+      let connectionsClosed = false;
+      const closeRemainingConnections = () => {
+        if (connectionsClosed) return;
+        connectionsClosed = true;
+        app.off("write-requests-drained", closeRemainingConnections);
+        server.closeAllConnections?.();
+      };
+      app.once("write-requests-drained", closeRemainingConnections);
+      if (getActiveWrites() === 0) closeRemainingConnections();
+    };
+    process.once("SIGINT", () => shutdown("SIGINT"));
+    process.once("SIGTERM", () => shutdown("SIGTERM"));
   } catch (error) {
     markBootstrapFailure(error);
     throw error;

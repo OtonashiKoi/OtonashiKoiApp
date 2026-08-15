@@ -40,6 +40,8 @@ function diffTier(oldRank, newRank) {
  * @param {string} evt.displayName
  * @param {number} evt.twdAmount
  * @param {string|null} [evt.currency]
+ * @param {number|null} [evt.originalAmount] 平台回報的原始數字
+ * @param {string|null} [evt.calculationCurrency] 採計規則使用的幣別
  * @param {string|null} [evt.discordId] 綁定玩家（未綁定為 null）
  * @param {boolean} evt.bound
  * @param {number} [evt.diamondsGranted]
@@ -59,6 +61,9 @@ async function recordDonationEvent(evt) {
     displayName: evt.displayName || null,
     twdAmount: Number(evt.twdAmount) || 0,
     currency: evt.currency || null,
+    originalAmount: Number.isFinite(Number(evt.originalAmount)) ? Number(evt.originalAmount) : null,
+    calculationCurrency: evt.calculationCurrency || "TWD",
+    donationLabel: evt.donationLabel || null,
     discordId: evt.discordId || null,
     bound: Boolean(evt.bound),
     diamondsGranted: Number(evt.diamondsGranted) || 0,

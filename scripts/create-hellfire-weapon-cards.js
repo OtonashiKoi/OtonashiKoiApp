@@ -63,8 +63,8 @@ const CARDS = [
   { monster: "烈焰狼", card: "烈焰狼卡", skill: "烈焰狂擊", wtLabel: "任一雙手武器（重武器）",
     desc: "[A階 / 重武器流] 常駐：攻擊+6%；持任一雙手武器時額外 攻擊+12%、爆擊傷害+18%。",
     effects: [ base("atk_multiplier_up", 6),
-      wpn("atk_multiplier_up", 12, ["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow"]),
-      wpn("crit_damage_up", 18, ["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow"]) ] },
+      wpn("atk_multiplier_up", 12, ["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow", "dice"]),
+      wpn("crit_damage_up", 18, ["sword_2h", "axe_2h", "mace_2h", "staff_2h", "bow", "dice"]) ] },
 
   { monster: "煉獄烈焰狼王", card: "煉獄烈焰狼王卡", skill: "煉獄君臨", wtLabel: "雙手槌（矮人戰士）· 菁英",
     desc: "[A階 / 雙手槌流·菁英] 常駐：每次出手 STR/DEX+3(最高+15)；持雙手槌時額外 暈眩率+10、對暈眩中目標傷害+25%。",
@@ -118,4 +118,8 @@ async function main() {
   console.log(`完成：${dryRun ? "預覽" : "寫入"} 卡 ${cardsUpserted} 張、新 drops ${dropsAdded}`);
   process.exit(0);
 }
-main().catch((e) => { console.error(e); process.exit(1); });
+if (require.main === module) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}
+
+module.exports = { CARDS, base, wpn };

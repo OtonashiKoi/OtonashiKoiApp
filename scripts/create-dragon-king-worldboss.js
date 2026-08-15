@@ -129,9 +129,9 @@ const dragonKingConfig = {
   respawnCooldownMinutes: 60,
   eliteZoneKey: ZONE,
   phaseConfig: [
-    { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0, defMultiplier: 1.0, agiBonus: 0,  note: "第一階段" },
-    { phase: 2, hpBelowPercent: 40, atkMultiplier: 1.3, defMultiplier: 1.15, agiBonus: 0, note: "第二階段（逆鱗）" },
-    { phase: 3, hpBelowPercent: 0,  atkMultiplier: 1.6, defMultiplier: 1.3, agiBonus: 45, note: "第三階段（龍王之怒）" },
+    { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0, defMultiplier: 1.0, agiBonus: 0, lightningEnabled: false, note: "第一階段" },
+    { phase: 2, hpBelowPercent: 40, atkMultiplier: 1.3, defMultiplier: 1.15, agiBonus: 0, lightningEnabled: false, note: "第二階段（逆鱗）" },
+    { phase: 3, hpBelowPercent: 0,  atkMultiplier: 1.6, defMultiplier: 1.3, agiBonus: 45, lightningEnabled: false, note: "第三階段（龍王之怒）" },
   ],
 };
 

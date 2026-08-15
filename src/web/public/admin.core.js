@@ -59,12 +59,11 @@ window.elements = {
   expSubmitButton: document.getElementById("exp-submit-button")
 };
 
-window.elements.topRefresh = document.getElementById("top-refresh");
-
-function getHeaders() {
+window.elements.topRefresh = document.getElementById("top-refresh"); function getHeaders() {
+  const token = window.elements.adminPassword.value.trim() || (window.adminSessionActive ? "session" : "");
   const headers = {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${window.elements.adminPassword.value.trim()}`
+    "Authorization": `Bearer ${token}`
   };
 
   return headers;
@@ -487,6 +486,7 @@ window.adminCore = {
   getHeaders,
   saveAuth,
   loadAuth,
+  ...window.adminSession,
   log,
   request,
   splitLines,
@@ -502,5 +502,5 @@ window.adminCore = {
   showSection
 };
 
-window.getAdminToken = () => window.elements.adminPassword.value.trim();
+window.getAdminToken = () => window.elements.adminPassword.value.trim() || (window.adminSessionActive ? "session" : "");
 window.logActivity = (msg) => log(msg);

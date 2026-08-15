@@ -34,6 +34,10 @@ for (const gear of BOSS_GEAR) {
   assert.equal(item.setKey, "island_turtle", `${gear.name} 應計入龜王套裝`);
   assert.deepEqual(item.setKeys, ["island_turtle"], `${gear.name} 套裝歸屬錯誤`);
   assert.match(item.imageUrl, /\/item-art\/generated\/2026-08-05\/.+\.png$/, `${gear.name} 應有可用圖片`);
+  if (item.weaponType === "dice") {
+    assert.equal(item.isTwoHanded, true, `${gear.name} 應為雙手武器`);
+    assert.equal(item.atkStat, "luk", `${gear.name} 應以 LUK 為主屬性`);
+  }
 }
 
 const drops = buildBossDrops([

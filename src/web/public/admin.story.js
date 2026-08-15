@@ -123,7 +123,7 @@
   const FX_ANIM = { pop: "stFxPop .4s", shake: "stFxShake .5s", bounce: "stFxBounce .6s", pulse: "stFxPulse .5s", dim: "stFxDefault .3s", "": "stFxDefault .3s" };
 
   function headers(json = true) {
-    const h = { Authorization: "Bearer " + (window.elements?.adminPassword?.value?.trim() || "") };
+    const h = { Authorization: "Bearer " + (window.getAdminToken?.() || "") };
     if (json) h["Content-Type"] = "application/json";
     return h;
   }

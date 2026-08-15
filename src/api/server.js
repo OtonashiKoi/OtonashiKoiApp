@@ -32,11 +32,34 @@ const { createStoryRoutes } = require("./routes/storyRoutes");
 const { createMahjongRoutes } = require("./routes/mahjongRoutes");
 const { createEcpayRoutes } = require("./routes/ecpayRoutes");
 const { createMerchRoutes } = require("./routes/merchRoutes");
+const { createAdminStudioRoutes } = require("./routes/adminStudioRoutes");
+const { createAdminSessionRoutes, adminSessionBridge, createAdminAuditMiddleware } = require("./adminSession");
 const { serviceContext: sharedServiceContext } = require("../bot/runtimeContext");
 const config = require("../config");
 
 function createApiServer(discordClient) {
   const app = express();
+
+  // 正常重啟只需要等待會改資料的 API 完成；SSE／OBS 等長連線應直接重連，
+  // 否則 server.close() 會一直等到 PM2 的強制關閉上限。
+  let activeWriteRequests = 0;
+  app.locals.getActiveWriteRequestCount = () => activeWriteRequests;
+  app.use((req, res, next) => {
+    const method = String(req.method || "GET").toUpperCase();
+    const isWrite = req.path.startsWith("/api") && !["GET", "HEAD", "OPTIONS"].includes(method);
+    if (!isWrite) return next();
+
+    activeWriteRequests += 1;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      activeWriteRequests = Math.max(0, activeWriteRequests - 1);
+      if (activeWriteRequests === 0) app.emit("write-requests-drained");
+    };
+    res.once("finish", finish);
+    next();
+  });
 
   // 只記錄伺服器本身的慢請求，和瀏覽器/Cloudflare 往返時間分開判讀。
   // 不記 query/body/playerId，避免效能紀錄帶入玩家資料。
@@ -147,6 +170,10 @@ function createApiServer(discordClient) {
     setHeaders(res) { res.setHeader("Cache-Control", "public, max-age=604800"); }
   }));
   app.use(createHealthRoutes());
+  app.use(createAdminSessionRoutes());
+  app.use(createAdminStudioRoutes());
+  app.use("/admin", adminSessionBridge);
+  app.use("/admin", createAdminAuditMiddleware(serviceContext));
   app.use(createAdminConsoleRoutes(serviceContext));
   app.use(createAdminPlayerRoutes(serviceContext));
   app.use(createAdminMonsterRoutes(serviceContext));

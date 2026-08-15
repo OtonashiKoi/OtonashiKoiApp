@@ -147,6 +147,7 @@ GOOGLE_CLIENT_SECRET=
 # 後台額外
 ADMIN_API_KEY=                  # 後台 admin API 內部呼叫用
 ADMIN_API_CALLER_IDS=
+ADMIN_SESSION_SECRET=           # /admin 與 /studio 共用 Session 簽章，建議獨立 32+ 字元亂數
 ```
 
 > 🔑 **JWT_SECRET 換到新機器後可以保留同一份**（這樣現有玩家的 JWT 還有效）；如要全部踢出重登，就重新產一個。

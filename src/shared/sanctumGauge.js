@@ -1,4 +1,5 @@
 "use strict";
+const { normalizeContributorMap } = require("./supportContribution");
 /**
  * 區域聖域值（聖域師・結界師二轉）。
  *
@@ -82,6 +83,7 @@ async function read(gaugeKey, zoneKey, now = Date.now()) {
     sanctumRemainMs: phase === "sanctum" ? Math.max(0, Number(doc.sanctumUntil) - now) : 0,
     immuneRemainMs: phase === "immune" ? Math.max(0, Number(doc.immuneUntil) - now) : 0,
     lastTriggerBy: doc?.lastTriggerBy || null,
+    windowContributors: phase === "sanctum" ? normalizeContributorMap(doc?.windowContributors) : {},
   };
 }
 
@@ -89,7 +91,7 @@ async function read(gaugeKey, zoneKey, now = Date.now()) {
  * 累積聖域值。只有 charging 階段會累積；滿條 CAS 翻聖域（多人同時只有一個觸發成功）。
  * @returns {{ knocked, gauge, threshold, triggered, sanctumUntil, phase }}
  */
-async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now()) {
+async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now(), byId = "", byJobId = "job_sanctum_t2_v1", byJobName = "聖域師") {
   const threshold = thresholdFor(zoneKey);
   const add = Math.max(0, Math.floor(Number(amount) || 0));
   const id = String(gaugeKey);
@@ -101,19 +103,45 @@ async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now()) {
     return { knocked: 0, gauge: 0, threshold, triggered: false, sanctumUntil: null, phase };
   }
   if (cur && Number(cur.immuneUntil) > 0 && now >= Number(cur.immuneUntil)) {
-    await c.updateOne({ _id: id, immuneUntil: cur.immuneUntil }, { $set: { gauge: 0, immuneUntil: 0, sanctumUntil: 0 } });
+    await c.updateOne({ _id: id, immuneUntil: cur.immuneUntil }, { $set: { gauge: 0, immuneUntil: 0, sanctumUntil: 0, contributors: {}, windowContributors: {} } });
   }
   if (add <= 0) {
     const after = await read(id, zoneKey, now);
     return { knocked: 0, gauge: after.gauge, threshold, triggered: false, sanctumUntil: null, phase: "charging" };
   }
 
-  const inc = await c.findOneAndUpdate(
+  await c.updateOne(
     { _id: id },
-    { $inc: { gauge: add }, $set: { updatedAt: new Date().toISOString() } },
-    { upsert: true, returnDocument: "after" }
+    { $setOnInsert: { gauge: 0, sanctumUntil: 0, immuneUntil: 0, contributors: {}, windowContributors: {} } },
+    { upsert: true }
+  );
+  const contributorId = String(byId || "").trim();
+  const incUpdate = {
+    $inc: { gauge: add },
+    $set: { updatedAt: new Date().toISOString() },
+  };
+  if (contributorId) {
+    incUpdate.$inc[`contributors.${contributorId}.amount`] = add;
+    incUpdate.$set[`contributors.${contributorId}.displayName`] = String(byName || "");
+    incUpdate.$set[`contributors.${contributorId}.jobId`] = String(byJobId || "job_sanctum_t2_v1");
+    incUpdate.$set[`contributors.${contributorId}.jobName`] = String(byJobName || "聖域師");
+  }
+  const inc = await c.findOneAndUpdate(
+    {
+      _id: id,
+      $and: [
+        { $or: [{ sanctumUntil: { $lte: now } }, { sanctumUntil: { $exists: false } }, { sanctumUntil: null }] },
+        { $or: [{ immuneUntil: { $lte: now } }, { immuneUntil: { $exists: false } }, { immuneUntil: null }] },
+      ],
+    },
+    incUpdate,
+    { returnDocument: "after" }
   );
   const doc = inc && (inc.value !== undefined ? inc.value : inc);
+  if (!doc) {
+    const after = await read(id, zoneKey, now);
+    return { knocked: 0, gauge: after.gauge, threshold, triggered: false, sanctumUntil: null, phase: after.phase };
+  }
   const gauge = Math.max(0, Number(doc?.gauge) || 0);
 
   if (gauge < threshold) {
@@ -127,25 +155,29 @@ async function knock(gaugeKey, zoneKey, amount, byName = "", now = Date.now()) {
       gauge: { $gte: threshold },
       $or: [{ sanctumUntil: { $lt: now } }, { sanctumUntil: { $exists: false } }, { sanctumUntil: null }],
     },
-    {
+    [{
       $set: {
         gauge: 0,
         sanctumUntil,
         immuneUntil: sanctumUntil + IMMUNE_MS,
         lastTriggerBy: String(byName || ""),
+        lastTriggerById: contributorId,
+        windowContributors: "$contributors",
+        contributors: {},
         lastTriggerAt: new Date(now).toISOString(),
         updatedAt: new Date().toISOString(),
       },
-    }
+    }]
   );
   const triggered = res.modifiedCount > 0;
+  const after = triggered ? null : await read(id, zoneKey, now);
   return {
     knocked: add,
-    gauge: triggered ? 0 : gauge,
+    gauge: triggered ? 0 : after.gauge,
     threshold,
     triggered,
     sanctumUntil: triggered ? sanctumUntil : null,
-    phase: triggered ? "sanctum" : "charging",
+    phase: triggered ? "sanctum" : after.phase,
   };
 }
 
@@ -162,6 +194,7 @@ function view(state) {
     windowMs: SANCTUM_WINDOW_MS,
     immuneMs: IMMUNE_MS,
     lastTriggerBy: state.lastTriggerBy || null,
+    windowContributors: normalizeContributorMap(state.windowContributors),
   };
 }
 

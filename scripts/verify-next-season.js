@@ -8,6 +8,7 @@
 
 require("dotenv").config();
 const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
+const { ANCHOR_QUEST_RULES } = require("../src/shared/anchorQuestRules");
 
 const pass = [], fail = [], warn = [];
 const ok = (name, detail = "") => pass.push(`${name}${detail ? "　" + detail : ""}`);
@@ -196,16 +197,26 @@ const wr = (name, detail = "") => warn.push(`${name}${detail ? "　" + detail : 
     .some((e) => e.key === "lifesteal" && Number(e.params?.value) > 15));
   over.length === 0 ? ok("單件吸血上限", "無超過 15% 的來源") : no("仍有高吸血", over.map((x) => x.name).join(","));
 
-  const hidden = await db.collection("weeklyQuests").find({ rewardItemId: /^s-legend-/ }).toArray();
+  const questRulesByItem = new Map(ANCHOR_QUEST_RULES.map((rule) => [rule.rewardItemId, rule.fields]));
+  const hidden = await db.collection("weeklyQuests").find({ rewardItemId: /^s-legend-/, enabled: true }).toArray();
   const badHidden = hidden.filter((q) => {
-    if (Number(q.unlockCheckinStreak) > 0) return Number(q.unlockCheckinStreak) !== Number(q.target);
-    return Number(q.unlockProgressAtLeast) !== Number(q.target);
+    const expected = questRulesByItem.get(q.rewardItemId);
+    if (!expected) return false;
+    return Object.entries(expected).some(([key, value]) => {
+      if (key === "description" || key === "unlockRequireItemIds") return false;
+      return q[key] !== value;
+    });
   });
-  badHidden.length === 0 ? ok("隱藏任務", `${hidden.length} 個都是「解完才出現、出現即可領」`)
-    : no("隱藏任務門檻不一致", badHidden.map((q) => q.title).join(","));
+  badHidden.length === 0 ? ok("錨點任務門檻", `${hidden.length} 個現行任務的出現／完成門檻正確`)
+    : no("錨點任務門檻不一致", badHidden.map((q) => q.title).join(","));
+  hidden.some((q) => q.unlockRequireSeasonDonation === true)
+    ? no("聖人試煉", "仍有抖內解鎖條件") : ok("聖人試煉", "不綁抖內，只看有效治療");
 
   const casino = require("fs").readFileSync(require("path").join(__dirname, "..", "src/services/casino/casinoService.js"), "utf8");
   /DICE_JACKPOT_CHANCE = 0\.03/.test(casino) ? ok("命運之輪轉盤", "3%") : no("轉盤機率");
+  const serviceContext = require("fs").readFileSync(require("path").join(__dirname, "..", "src/services/createServiceContext.js"), "utf8");
+  /findById:\s*\(id\)\s*=>\s*repositories\.itemRepository\.findById\(id\)/.test(serviceContext)
+    ? ok("命運之輪發放注入", "findById 已接通") : no("命運之輪發放注入", "缺少 findById");
 
   // ── 6. 外幣斗內 ────────────────────────
   console.log("【6】外幣斗內");

@@ -543,7 +543,7 @@
   addBtn?.addEventListener("click", createTemplate);
   filterEl?.addEventListener('change', () => renderCards());
 
-  window.addEventListener("load", () => {
-    if (window.getAdminToken?.()) load();
-  });
+  const loadWhenOpen = () => { if (window.getAdminToken?.() && document.getElementById("section-monster-events")?.classList.contains("active")) load(); };
+  document.addEventListener("adminConnected", loadWhenOpen);
+  document.querySelector('[data-target="section-monster-events"]')?.addEventListener("click", () => setTimeout(loadWhenOpen, 0));
 })();

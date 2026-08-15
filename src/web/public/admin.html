@@ -21,6 +21,7 @@
       <header class="window-top">
         <div class="window-title">Equipment Game <span style="color:var(--muted);font-weight:500;margin-left:8px;">Control Panel</span></div>
         <div class="window-controls">
+          <a class="control-btn" href="/studio" style="text-decoration:none;">Live Studio</a>
           <button class="control-btn" title="Refresh Panel" id="top-refresh">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-10.74l3.25 3.17"/></svg>
             <span style="margin-left:6px;">Reload</span>
@@ -48,51 +49,19 @@
 
             <div class="nav-group is-open" data-nav-group="foundation">
               <button class="nav-group-toggle" type="button" aria-expanded="true">
-                <span>基礎設定</span>
+                <span>營運總覽</span>
                 <span class="nav-group-caret">▾</span>
               </button>
               <div class="nav-group-links">
                 <button class="nav-link active" data-target="section-auth">登入連線</button>
-                <button class="nav-link" data-target="section-layout">功能版位設定</button>
-                <button class="nav-link" data-target="section-access">權限與白名單</button>
-              </div>
-            </div>
-
-            <div class="nav-group is-open" data-nav-group="content">
-              <button class="nav-group-toggle" type="button" aria-expanded="false">
-                <span>遊戲內容</span>
-                <span class="nav-group-caret">▾</span>
-              </button>
-              <div class="nav-group-links">
-                <button class="nav-link" data-target="section-items">道具庫管理</button>
-                <button class="nav-link" data-target="section-shop">金幣商店管理</button>
-                <button class="nav-link" data-target="section-merch">🛍️ 周邊商城</button>
-                <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
-                <button class="nav-link" data-target="section-combat-calculator">傷害測試工具</button>
-                <button class="nav-link" data-target="section-monster-cards">怪物卡片庫</button>
-                <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
-                <button class="nav-link" data-target="section-effect-modules">效果模組</button>
-                <button class="nav-link" data-target="section-enchant">🔮 附魔設定</button>
-                <button class="nav-link" data-target="section-weekly-quests">任務管理中心</button>
-                <button class="nav-link" data-target="section-weekly-summary">任務完成概況</button>
-                <button class="nav-link" data-target="section-idle-zones" hidden>放置掛機區</button>
-                <button class="nav-link" data-target="section-casino">命運轉盤</button>
-              </div>
-            </div>
-
-            <div class="nav-group is-open" data-nav-group="story">
-              <button class="nav-group-toggle" type="button" aria-expanded="true">
-                <span>🎬 主線劇情</span>
-                <span class="nav-group-caret">▾</span>
-              </button>
-              <div class="nav-group-links">
-                <button class="nav-link" data-target="section-story">📖 劇本編輯工具</button>
+                <button class="nav-link" data-target="section-ops">日常營運工具</button>
+                <a class="nav-link" href="/studio" style="text-decoration:none;">Live Studio ↗</a>
               </div>
             </div>
 
             <div class="nav-group is-open" data-nav-group="playerops">
               <button class="nav-group-toggle" type="button" aria-expanded="false">
-                <span>玩家營運</span>
+                <span>玩家與帳務</span>
                 <span class="nav-group-caret">▾</span>
               </button>
               <div class="nav-group-links">
@@ -103,22 +72,66 @@
               </div>
             </div>
 
-            <div class="nav-group is-open" data-nav-group="auction">
-              <button class="nav-group-toggle" type="button" aria-expanded="false">
-                <span>拍賣場</span>
+            <div class="nav-group is-open" data-nav-group="content">
+              <button class="nav-group-toggle" type="button" aria-expanded="true">
+                <span>遊戲內容</span>
                 <span class="nav-group-caret">▾</span>
               </button>
               <div class="nav-group-links">
+                <button class="nav-link" data-target="section-items">道具庫管理</button>
+                <button class="nav-link" data-target="section-monsters">怪物資料庫</button>
+                <button class="nav-link" data-target="section-monster-events">NPC／怪物事件</button>
+                <button class="nav-link" data-target="section-monster-cards">怪物卡片庫</button>
+                <button class="nav-link" data-target="section-effect-modules">效果模組</button>
+                <button class="nav-link" data-target="section-enchant">🔮 附魔設定</button>
+              </div>
+            </div>
+
+            <div class="nav-group is-open" data-nav-group="quests">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>任務與劇情</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-weekly-quests">任務管理中心</button>
+                <button class="nav-link" data-target="section-weekly-summary">任務完成概況</button>
+                <button class="nav-link" data-target="section-story">📖 劇本編輯工具</button>
+              </div>
+            </div>
+
+            <div class="nav-group is-open" data-nav-group="battle">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>戰鬥與活動</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-combat-calculator">傷害測試工具</button>
+                <button class="nav-link" data-target="section-animation-studio">動作模板工作台</button>
+                <button class="nav-link" data-target="section-casino">命運轉盤</button>
+                <button class="nav-link" data-target="section-idle-zones" hidden>放置掛機區</button>
+              </div>
+            </div>
+
+            <div class="nav-group is-open" data-nav-group="commerce">
+              <button class="nav-group-toggle" type="button" aria-expanded="false">
+                <span>商店與交易</span>
+                <span class="nav-group-caret">▾</span>
+              </button>
+              <div class="nav-group-links">
+                <button class="nav-link" data-target="section-shop">金幣商店管理</button>
+                <button class="nav-link" data-target="section-merch">🛍️ 周邊商城</button>
                 <button class="nav-link" data-target="section-auction">拍賣場管理</button>
               </div>
             </div>
 
-            <div class="nav-group is-open" data-nav-group="insights">
+            <div class="nav-group is-open" data-nav-group="system">
               <button class="nav-group-toggle" type="button" aria-expanded="false">
-                <span>監控與紀錄</span>
+                <span>系統、Discord 與紀錄</span>
                 <span class="nav-group-caret">▾</span>
               </button>
               <div class="nav-group-links">
+                <button class="nav-link" data-target="section-layout">Discord 功能版位</button>
+                <button class="nav-link" data-target="section-access">權限、白名單與維護</button>
                 <button class="nav-link" data-target="section-leaderboard">排行榜</button>
                 <button class="nav-link" data-target="section-stream-records">📺 直播記錄</button>
                 <button class="nav-link" data-target="section-wheel">🎡 直播轉盤</button>
@@ -146,6 +159,34 @@
               <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center;">
                 <p id="connection-state" class="hint" style="margin:0; font-weight:600;">尚未連線</p>
                 <button id="connect-button" class="button primary">連線驗證</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="section-ops" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">Daily Operations</p>
+                  <h2>日常營運工具</h2>
+                  <p class="hint">集中處理收單對帳與測試通行證點數。會改動玩家資料的操作都會再次確認並寫入稽核紀錄。</p>
+                </div>
+                <button id="ops-refresh" class="button">重新整理</button>
+              </div>
+              <div class="grid two-up" style="align-items:start;">
+                <div class="access-card" style="padding:16px;display:grid;gap:12px;">
+                  <div><h3 style="margin:0 0 4px;">綠界斗內對帳</h3><p class="hint" style="margin:0;">查看未配對、驗簽失敗與已發放收單；只有未發放項目可以人工指派。</p></div>
+                  <label><span>狀態</span><select id="ops-ecpay-status" class="sheet-input"><option value="">全部</option><option value="unbound">未配對</option><option value="mac_failed">驗簽失敗</option><option value="granted">已發放</option></select></label>
+                  <div id="ops-ecpay-list" style="display:grid;gap:8px;"><p class="hint">登入後載入。</p></div>
+                </div>
+                <div class="access-card" style="padding:16px;display:grid;gap:12px;">
+                  <div><h3 style="margin:0 0 4px;">通行證點數工具</h3><p class="hint" style="margin:0;">測試用途。預設為增加點數；勾選「直接設定」會覆蓋目前點數。</p></div>
+                  <label><span>Discord 玩家 ID</span><input id="ops-pass-player" class="sheet-input" inputmode="numeric" placeholder="例如 728605307109900319" /></label>
+                  <label><span>點數</span><input id="ops-pass-points" class="sheet-input" type="number" value="100" /></label>
+                  <label style="display:flex;gap:8px;align-items:center;"><input id="ops-pass-set" type="checkbox" /><span>直接設定為此數值</span></label>
+                  <button id="ops-pass-submit" class="button primary">更新通行證點數</button>
+                  <p id="ops-pass-status" class="hint" style="margin:0;"></p>
+                </div>
               </div>
             </div>
           </section>
@@ -626,6 +667,28 @@
               </div>
               <input type="file" id="monsters-img-input" accept="image/*" style="display:none;" />
               <div id="monsters-tbody" style="display:flex;flex-direction:column;gap:12px;"></div>
+            </div>
+          </section>
+
+          <section id="section-monster-events" class="panel-section">
+            <div class="card">
+              <div class="section-head">
+                <div>
+                  <p class="section-kicker">NPC Events</p>
+                  <h2>NPC／怪物事件編輯器</h2>
+                  <p class="hint">管理事件 NPC、台詞、玩家選項與對應效果。變更會直接成為目前事件模板。</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <select id="monster-events-filter" class="sheet-input" style="width:auto;">
+                    <option value="all">全部效果</option><option value="grant_buff">給予 Buff</option><option value="grant_currency">發放貨幣</option><option value="grant_item">發放道具</option><option value="grant_equipment">發放裝備</option><option value="take_item">交換／消耗</option><option value="grant_temporary_quest">限時任務</option>
+                  </select>
+                  <button id="monster-events-refresh-btn" class="button">重新整理</button>
+                  <button id="monster-events-reload-templates-btn" class="button">刷新模板</button>
+                  <button id="monster-events-add-btn" class="button primary">＋ 新增模板</button>
+                </div>
+              </div>
+              <input id="monster-events-npc-img-input" type="file" accept="image/*" style="display:none;" />
+              <div id="monster-events-list"><p class="hint">點選左側「NPC／怪物事件」載入。</p></div>
             </div>
           </section>
 
@@ -1163,6 +1226,9 @@
                   <h2>操作活動紀錄</h2>
                 </div>
               </div>
+              <div style="display:flex;justify-content:flex-end;margin-bottom:12px;"><button id="audit-refresh" class="button">讀取伺服器稽核紀錄</button></div>
+              <div id="audit-log-list" style="display:grid;gap:8px;margin-bottom:16px;"><p class="hint">登入後載入最近的伺服器操作。</p></div>
+              <h3>本次瀏覽器操作訊息</h3>
               <pre id="activity-log" class="activity-log">系統準備就緒。等待操作指令...</pre>
             </div>
           </section>
@@ -1199,21 +1265,23 @@
     </div>
 
     <script src="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.js"></script>
-    <script src="/static/adminUtils.js?v=6"></script>
+    <script src="/static/adminUtils.js?v=7"></script>
     <script src="/static/adminLayout.js?v=6"></script>
     <script>window.USE_IMAGE_CROPPER = true;</script>
     <script src="/static/adminPlayers.js?v=6"></script>
-    <script src="/static/admin.core.js?v=6"></script>
+    <script src="/static/admin.session.js?v=2"></script>
+    <script src="/static/admin.core.js?v=7"></script>
     <script src="/static/admin.effects.js?v=1"></script>
     <script src="/static/admin.effect-modules.js?v=2"></script>
     <script src="/static/admin.bindings.js?v=8"></script>
     <script src="/static/admin.players.js?v=7"></script>
-    <script src="/static/admin.players.init.js?v=8"></script>
+    <script src="/static/admin.players.init.js?v=9"></script>
     <script src="/static/admin.nav-search.js?v=1"></script>
     <script src="/static/admin.tiers.js?v=6"></script>
     <script src="/static/admin.shop.js?v=7"></script>
     <script src="/static/admin.merch.js?v=4"></script>
     <script src="/static/admin.monsters.js?v=6"></script>
+    <script src="/static/admin.monster-events.js?v=1"></script>
     <script src="/static/admin.combat-calculator.js?v=3"></script>
     <script src="/static/admin.monster-cards.js?v=1"></script>
     <script src="/static/admin.animation-studio.js?v=6"></script>
@@ -1223,12 +1291,13 @@
     <script src="/static/admin.leaderboard.js?v=6"></script>
     <script src="/static/admin.image-cropper.js?v=8"></script>
     <script src="/static/admin.auction.js?v=3"></script>
-    <script src="/static/admin.casino.js?v=1"></script>
-    <script src="/static/admin.story.js?v=76"></script>
-    <script src="/static/admin.stream-records.js?v=6"></script>
-    <script src="/static/admin.wheel.js?v=1"></script>
-    <script src="/static/admin.enchant.js?v=1"></script>
-    <script src="/static/admin.maintenance.js?v=1"></script>
+    <script src="/static/admin.casino.js?v=2"></script>
+    <script src="/static/admin.story.js?v=77"></script>
+    <script src="/static/admin.stream-records.js?v=7"></script>
+    <script src="/static/admin.wheel.js?v=2"></script>
+    <script src="/static/admin.enchant.js?v=2"></script>
+    <script src="/static/admin.maintenance.js?v=2"></script>
+    <script src="/static/admin.ops.js?v=1"></script>
     <script>
       // 深連結：/admin#section-wheel 之類的 hash 直接開對應分頁（直播控制台的管理捷徑用）
       (function () {
@@ -1239,8 +1308,11 @@
           if (btn) btn.click();
         }
         window.addEventListener("hashchange", openFromHash);
-        // 等各模組掛完事件再開
-        window.addEventListener("load", () => setTimeout(openFromHash, 50));
+        // 先等共用 Session 恢復，避免深連結分頁搶先打 API 而出現一次 401。
+        document.addEventListener("adminConnected", () => setTimeout(openFromHash, 0));
+        window.addEventListener("load", () => {
+          if (window.adminSessionActive) setTimeout(openFromHash, 50);
+        });
       })();
     </script>
   </body>

@@ -82,7 +82,7 @@ const crit = battle(supportEffect(100));
 assert.strictEqual(shotDamage(crit), 3326, "掩護箭爆擊應在神射手倍率上再 ×2");
 
 const multipleProviders = battleEffects([
-  { ...supportEffect(0, 1000), sourceName: "神射手甲", isSelfAura: false, sourceDiscordId: "sniper-a" },
+  { ...supportEffect(0, 1000), sourceName: "神射手甲", sourceJobId: "job_sniper_t2_v1", sourceJobName: "神射手", isSelfAura: false, sourceDiscordId: "sniper-a" },
   { ...supportEffect(0, 800), sourceName: "神射手乙", isSelfAura: false, sourceDiscordId: "sniper-b" },
 ]);
 assert.deepStrictEqual(
@@ -92,6 +92,11 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(multipleProviders.combatStats.supportShotBySource["sniper-a"], 1663, "甲的箭傷應歸戶給甲");
 assert.strictEqual(multipleProviders.combatStats.supportShotBySource["sniper-b"], 1331, "乙的箭傷應歸戶給乙");
+assert.deepStrictEqual(
+  multipleProviders.combatStats.supportShotBySourceJob["sniper-a"],
+  { jobId: "job_sniper_t2_v1", jobName: "神射手", displayName: "神射手甲" },
+  "掩護箭必須保留出箭時職業，供賽季 K 按職業歸戶"
+);
 
 const duplicateProvider = battleEffects([
   { ...supportEffect(0, 800), sourceName: "神射手甲", isSelfAura: false, sourceDiscordId: "sniper-a" },

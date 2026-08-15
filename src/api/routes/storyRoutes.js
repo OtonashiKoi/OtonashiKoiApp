@@ -114,6 +114,9 @@ function createStoryRoutes(serviceContext, discordClient) {
       const { runCombatLoop } = require("../../shared/combatLoop");
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
       const equipped = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
+      const _wd = require("../../shared/windDirection");
+      const windDirectionOn = _wd.hasEffect(equipped);
+      const windDirectionBefore = windDirectionOn ? _wd.read(progress) : 0;
       const pStats = calcPlayerStats(attrs, equipped, progress?.activeEffects || [], progress?.inventory || [], { pkRating: progress?.pkRating, petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
 
       const result = runCombatLoop(pStats, monster.calc, monster.name, monster.calc.maxHp, battleNode.maxRounds || undefined, {
@@ -129,8 +132,15 @@ function createStoryRoutes(serviceContext, discordClient) {
         monsterEquipped: monster.equipped || {},
         monsterIsBoss: Boolean(monster?.isBoss),
         monsterElement: monster?.element || null,
-        monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0
+        monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
+        windDirectionStep: windDirectionBefore,
       });
+
+      if (windDirectionOn && result?.windDirectionStep != null) {
+        await serviceContext.progressRepository.updateFields(discordId, {
+          windDirectionStep: _wd.normalizeStep(result.windDirectionStep)
+        }).catch(() => {});
+      }
 
       // 劇情殺：不管實際結果，強制指定結局（動畫仍播真實回合日誌，最終血量/勝負覆寫）
       const forced = battleNode.forcedOutcome; // "win" | "lose" | null
@@ -151,6 +161,7 @@ function createStoryRoutes(serviceContext, discordClient) {
         mustWin: battleNode.mustWin,
         forcedOutcome: forced,
         logs: result.roundLogs || [],
+        diceEvents: result.diceEvents || [],
         finalPlayerHp,
         playerMaxHp: pStats.maxHp,
         monster: { name: monster.name, imageUrl: monster.imageUrl || null, maxHp: monster.calc.maxHp, element: monster?.element || null },

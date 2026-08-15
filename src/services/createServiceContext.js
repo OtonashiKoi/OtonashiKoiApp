@@ -164,6 +164,7 @@ function createServiceContext() {
       // 適配既有 itemRepository（findAll → listAll 別名）
       listAll: () => repositories.itemRepository.findAll(),
       findAll: () => repositories.itemRepository.findAll(),
+      findById: (id) => repositories.itemRepository.findById(id),
     },
     walletRepository: repositories.walletRepository,
     progressRepository: repositories.progressRepository,

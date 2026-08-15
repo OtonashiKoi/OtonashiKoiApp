@@ -9,10 +9,16 @@
  * @param {string} mName    怪物名稱
  * @param {number} mHpInit  怪物起始 HP
  * @param {number} MAX_ROUNDS 最大回合數
- * @returns {{ outcome, roundLogs, totalDamage, finalMonsterHp, finalPlayerHp, combatStats }}
+ * @returns {{ outcome, roundLogs, diceEvents, totalDamage, finalMonsterHp, finalPlayerHp, combatStats }}
  */
 const { collectEquipmentEffects, isEffectConditionMet } = require("./effectEngine");
 const { calcHitChance } = require("./hitChance");
+const {
+  CONTROL_WINDOW_ASSIST_PCT,
+  normalizeContributorMap,
+  directDamageAssistPot,
+  defenseOffenseAssistPot,
+} = require("./supportContribution");
 const {
   TURTLE_TIDE_EFFECT_KEY,
   normalizeTurtleTideConfig,
@@ -981,7 +987,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
   // 世界王分階段技能（僅在 options.worldBossPhase 存在時啟用）
   const worldBossPhaseNo = Math.max(0, Math.floor(Number(options?.worldBossPhase?.phase || 0)));
-  const worldBossHasLightning = worldBossPhaseNo >= 2;
+  // 雷擊必須由該王的階段設定明確開啟，不能再把所有二／三階世界王視為會雷擊。
+  const worldBossHasLightning = worldBossPhaseNo >= 2 && options?.worldBossPhase?.lightningEnabled === true;
   const worldBossHasAgiSuppress = worldBossPhaseNo >= 3;
   const worldBossLightningHitChance = Math.max(0, Math.min(100, Number(options?.worldBossPhase?.lightningHitChance ?? 20)));
   const worldBossLightningHpPct = Math.max(0, Number(options?.worldBossPhase?.lightningDamagePct ?? 25));
@@ -1076,6 +1083,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let _sanctumDetonated = false;
   const _sanctuaryCutPct = Math.max(0, Math.min(90, Number(options.sanctuaryCutPct) || 0));
   const _sanctuaryHealPct = Math.max(0, Math.min(50, Number(options.sanctuaryHealPct) || 0));
+  const _sanctuaryContributors = normalizeContributorMap(options.sanctuaryContributors);
+  let _kdaSanctuaryPrevented = 0;
+  let _kdaSanctuaryHealed = 0;
 
   // ── 龜甲庇護（島島龜王卡・兩段式）────────────────────────────────
   // 殼在：受傷 −drPct%＋先扣殼；殼破：破殼而出，剩餘戰鬥傷害 +breakDmgPct%（使用者定案 2026-07-29）
@@ -1101,7 +1111,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const _hurt = (d) => {
     let x = Math.max(0, Number(d) || 0);
     // 聖域護佑：受傷減免（先減再給結界吃，兩者可疊）
-    if (_sanctuaryCutPct > 0 && x > 0) x = Math.max(0, Math.round(x * (1 - _sanctuaryCutPct / 100)));
+    if (_sanctuaryCutPct > 0 && x > 0) {
+      const beforeSanctuary = x;
+      x = Math.max(0, Math.round(x * (1 - _sanctuaryCutPct / 100)));
+      _kdaSanctuaryPrevented += Math.max(0, beforeSanctuary - x);
+    }
     // 龜甲庇護（最外層的殼）：殼在＝受傷減免＋先扣殼；殼破＝開啟破殼而出
     if (_tshellCfg && _tshellHp > 0 && x > 0) {
       x = Math.max(0, Math.round(x * (1 - _tshellCfg.drPct / 100)));
@@ -1135,7 +1149,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
   // ── KDA・A 值歸戶（附錄C v3 定案）────────────────────────────────
   // 他人光環對本場的傷害當量：增傷類＝結算時 總傷害×v/(100+v)；治療＝有效量×1.0＋救命加成；
-  // 減傷＝實際擋下量。不可自益（isSelfAura===false 才計）；同 key 呼叫端已取最高＝來源唯一。
+  // 減傷＝實際擋下量。不可自益（isSelfAura===false 才計）；玩法同 key 取最高，計分則按提供者數值比例分帳。
   const _kdaHealBySource = new Map();      // sourceDiscordId → 有效治療量
   const _kdaPreventedBySource = new Map(); // sourceDiscordId → 減傷光環實際擋下量
   let _kdaDrSourceId = null;               // party_damage_reduction 提供者
@@ -1534,6 +1548,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     stunCount: 0,
     burnTriggerCount: 0,
     supportShotBySource: {}, // 掩護射擊（神射手）：提供者 → 本場箭傷合計（世界王結算歸戶用）
+    supportShotBySourceJob: {}, // 提供者 → 出箭當時的職業；供賽季 K 按職業歸戶
     stealTriggered: false,   // 盜靈「得手」：本場是否成功盜取（呼叫端據此發物品＋標記該怪已被偷）
     greatHitCount: 0,        // 大成功以上的攻擊次數（盜靈數值驗證用）
     attackCount: 0,
@@ -1726,6 +1741,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   });
 
   const roundLogs = [];
+  // 骰子武器的結構化演出資料：點數仍由戰鬥核心唯一結算，前端只照結果播放擲骰動畫。
+  // 保留初骰／重骰／命運骰，避免前端解析戰報文字後自行猜測點數。
+  const diceEvents = [];
   const tierDamageMultiplier = Math.max(0.1, Number(pStats.tierDamageMultiplier) || 1);
   const tierFinalDamageMultiplier = Math.max(0.1, Number(pStats.tierFinalDamageMultiplier) || 1);
   const tierBossDamageMultiplier = options.monsterIsBoss ? Math.max(0.1, Number(pStats.tierBossDamageMultiplier) || 1) : 1;
@@ -2399,6 +2417,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               totalDamage += ssDmg;
               const _srcKey = String(pe.sourceDiscordId || pe.sourceName || "掩護");
               combatStats.supportShotBySource[_srcKey] = (combatStats.supportShotBySource[_srcKey] || 0) + ssDmg;
+              combatStats.supportShotBySourceJob[_srcKey] = { jobId: String(pe.sourceJobId || ""), jobName: String(pe.sourceJobName || "神射手"), displayName: String(pe.sourceName || providerName || "神射手") };
               log.push(`🏹 ${ssCrit ? "✨**會心**！" : ""}**${providerName}** 的掩護射擊！對 ${mName} 造成 **${ssDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
               const detail = auraDetails.get(sourceName);
               if (detail) detail.supportShot = _ssPct;
@@ -3679,6 +3698,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (Array.isArray(_faceMults) && _faceMults.length > 0) {
         const faces = _faceMults.length;
         diceRolls = Array.from({ length: _segCount }, () => 1 + Math.floor(Math.random() * faces));
+        const _initialDiceRolls = [...diceRolls];
+        const _rerolledIndices = [];
         // ── 自訂觸發：on_dice_one（賭徒「將大局逆轉吧」）──
         //    骰出 1 就必定發動（不吃 35% 閘門、不擲機率），只重骰那些 1，並套用技能的 procEffects。
         if (diceRolls.some((f) => f === 1)) {
@@ -3687,7 +3708,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (_reroll && _reroll.key && (jobSkillCooldowns[_reroll.key] || 0) <= 0) {
             const _beforePips = diceRolls.map((f) => DICE_PIPS[f - 1] || `【${f}】`).join("");
             for (let _i = 0; _i < diceRolls.length; _i++) {
-              if (diceRolls[_i] === 1) diceRolls[_i] = 1 + Math.floor(Math.random() * faces);
+              if (diceRolls[_i] === 1) {
+                _rerolledIndices.push(_i);
+                diceRolls[_i] = 1 + Math.floor(Math.random() * faces);
+              }
             }
             if (Number(_reroll.cooldownTurns) > 0) jobSkillCooldowns[_reroll.key] = Number(_reroll.cooldownTurns);
             // 重骰後才判定全 1 / 全 6
@@ -3737,11 +3761,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         // ── 賭神：命運骰（集滿 ${_diceGaugeMax} 格的那回合改丟 3 顆）──
         //    第三顆骰出 N ＝ 本回合 N 連擊，每一擊都是前面兩顆骰子的傷害
         //    （骰面沿用循環、各擊獨立擲爆擊）；放完歸零重集。
+        let _fateFace = null;
         if (diceGodCfg && outcome === null && mHp > 0) {
           _diceGrids = Math.min(_diceGaugeMax, _diceGrids + 1);
           if (_diceGrids >= _diceGaugeMax) {
             _diceGrids = 0;
             const _fate = 1 + Math.floor(Math.random() * faces);
+            _fateFace = _fate;
             log.push(`🎰 **命運骰**擲出 ${DICE_PIPS[_fate - 1] || _fate}　——　本回合 **${_fate} 連擊**！每一擊都是 ${_pips} 的傷害！`);
             if (_fate > 1) {
               const _base2 = diceRolls.slice(0, _segCount);
@@ -3752,6 +3778,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             log.push(`⚡ 命運值 +1（${_diceGrids}/${_diceGaugeMax}）`);
           }
         }
+        diceEvents.push({
+          round,
+          faces: diceRolls.slice(0, _segCount),
+          initialFaces: _rerolledIndices.length > 0 ? _initialDiceRolls : null,
+          rerolledIndices: _rerolledIndices,
+          fateFace: _fateFace,
+        });
       }
       // 取第 n 段（0-indexed）的骰面倍率；賭神再乘手氣正旺（每層 +2%）
       const diceMultFor = (idx) => {
@@ -5512,8 +5545,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (_sanctuaryHealPct > 0 && outcome === null && pHp > 0 && pHp < (pStats.maxHp || 1)) {
       const _shHeal = Math.max(1, Math.round((pStats.maxHp || 1) * _sanctuaryHealPct / 100));
       const _shBefore = pHp;
-      pHp = _healPlayer(_shHeal);
-      if (pHp > _shBefore) log.push(`🏛️ 聖域護佑：回復 **${pHp - _shBefore}** HP！（你剩 ${Math.max(0, pHp)} HP）`);
+      pHp = _healPlayer(_shHeal, Object.keys(_sanctuaryContributors).length > 0 ? { externalAura: true } : undefined);
+      if (pHp > _shBefore) {
+        const actualSanctuaryHeal = pHp - _shBefore;
+        _kdaSanctuaryHealed += actualSanctuaryHeal;
+        log.push(`🏛️ 聖域護佑：回復 **${actualSanctuaryHeal}** HP！（你剩 ${Math.max(0, pHp)} HP）`);
+      }
     }
 
     // ── 符文結界（聖域師）：回合尾結算——吸收戰報行＋三時機共鳴反爆 ──
@@ -5600,10 +5637,22 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
   // ── KDA・A 值歸戶結算（附錄C v3）──────────────────────────────
   const _assistBySource = {};
-  const _addA = (id, amt) => {
+  const _assistBySourceJob = {};
+  const _addA = (id, amt, jobId = "", jobName = "") => {
     const key = String(id || "");
     if (!key || !(amt > 0)) return;
-    _assistBySource[key] = (_assistBySource[key] || 0) + Math.round(amt);
+    const rounded = Math.round(amt);
+    if (!(rounded > 0)) return;
+    _assistBySource[key] = (_assistBySource[key] || 0) + rounded;
+    const sourceJobId = String(jobId || "").trim();
+    if (sourceJobId) {
+      if (!_assistBySourceJob[key]) _assistBySourceJob[key] = {};
+      const prev = _assistBySourceJob[key][sourceJobId] || { amount: 0, jobName: "" };
+      _assistBySourceJob[key][sourceJobId] = {
+        amount: prev.amount + rounded,
+        jobName: String(jobName || prev.jobName || ""),
+      };
+    }
   };
   try {
     const _fought = Math.max(1, round - 1);
@@ -5621,32 +5670,59 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const _distribute = (pot, cands, credit = _addA) => {
       const sum = cands.reduce((s, pe) => s + _vOf(pe), 0);
       if (!(pot > 0) || !(sum > 0)) return;
-      for (const pe of cands) credit(pe.sourceDiscordId, pot * _vOf(pe) / sum);
+      for (const pe of cands) {
+        credit(
+          pe.sourceDiscordId,
+          pot * _vOf(pe) / sum,
+          pe.sourceJobId || "",
+          pe.sourceJobName || ""
+        );
+      }
     };
-    // 增傷類光環
+    // 增傷／機率類光環。機率類先維持既有傷害當量口徑；目前線上職業只有詩人的 AGI 光環使用此類。
     const _isDmgKey = (k) =>
       k === "party_damage_up" || k === "party_crit_rate_up" || k === "party_agi_up" ||
+      k === "party_combo_up" ||
       k === "party_high_hp_damage_up" || k === "party_stunned_damage_up" ||
       (k === "party_boss_damage_up" && options.monsterIsBoss) ||
       (k === "party_elite_damage_up" && options.monsterIsElite && !options.monsterIsBoss);
     for (const [k, cands] of _extByKey) {
       if (!_isDmgKey(k)) continue;
       const vMax = Math.max(...cands.map(_vOf));
-      _distribute((totalDamage || 0) * vMax / (100 + vMax), cands);
+      _distribute(directDamageAssistPot(totalDamage, vMax), cands);
+    }
+    // 兵聖／軍師破防與法系隊伍穿防：依實際百分比防禦模型換算，不把 10% 破防誤算成 10% 終傷。
+    const _defDownCands = _extByKey.get("party_monster_def_down") || [];
+    const _defIgnoreCands = _extByKey.get("party_def_ignore_up") || [];
+    const _defOffenseCands = [..._defDownCands, ..._defIgnoreCands];
+    if (_defOffenseCands.length > 0) {
+      const defDownMax = _defDownCands.length ? Math.max(..._defDownCands.map(_vOf)) : 0;
+      const defIgnoreMax = _defIgnoreCands.length ? Math.max(..._defIgnoreCands.map(_vOf)) : 0;
+      _distribute(defenseOffenseAssistPot({
+        totalDamage,
+        monsterDefPct: mCalc?.def,
+        selfBypassPct: pStats.bypassMonsterDefPct,
+        partyDefDownPct: defDownMax,
+        partyDefIgnorePct: defIgnoreMax,
+      }), _defOffenseCands);
     }
     // 治療：實際生效總量（fold 只套用最高者）→ 按治療光環提供者數值分帳；救命加成記給分帳後最大者
     const _healCands = [...(_extByKey.get("party_heal") || []), ...(_extByKey.get("heal_over_time") || [])];
     let _healTotal = 0;
     for (const [, h] of _kdaHealBySource) _healTotal += h;
     const _healShare = new Map();
-    const _creditHeal = (id, amt) => { _addA(id, amt); _healShare.set(id, (_healShare.get(id) || 0) + amt); };
+    const _creditHeal = (id, amt, jobId = "", jobName = "") => {
+      _addA(id, amt, jobId, jobName);
+      const prev = _healShare.get(id) || { amount: 0, jobId: "", jobName: "" };
+      _healShare.set(id, { amount: prev.amount + amt, jobId: jobId || prev.jobId, jobName: jobName || prev.jobName });
+    };
     if (_healTotal > 0 && _healCands.length > 0) _distribute(_healTotal, _healCands, _creditHeal);
     else for (const [id, h] of _kdaHealBySource) _creditHeal(id, h);
     if (_shadowDeadRound != null && outcome !== "lose" && _healShare.size > 0) {
       const _extra = Math.max(0, _fought - _shadowDeadRound + 1);
       if (_extra > 0) {
-        const _top = [..._healShare.entries()].sort((a, b) => b[1] - a[1])[0][0];
-        _addA(_top, _extra * ((totalDamage || 0) / _fought));
+        const [_topId, _top] = [..._healShare.entries()].sort((a, b) => b[1].amount - a[1].amount)[0];
+        _addA(_topId, _extra * ((totalDamage || 0) / _fought), _top.jobId, _top.jobName);
       }
     }
     // 減傷/爆傷減免：實際擋下總量 → 按對應 key 提供者分帳
@@ -5655,6 +5731,30 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     const _drCands = [...(_extByKey.get("party_damage_reduction") || []), ...(_extByKey.get("party_crit_damage_reduction") || [])];
     if (_prevTotal > 0 && _drCands.length > 0) _distribute(_prevTotal, _drCands);
     else for (const [id, p] of _kdaPreventedBySource) _addA(id, p);
+
+    // 矮人戰士長巨神震擊／元素師區域冰封：實際有人在窗口內出戰才產生助攻，
+    // 助攻池＝受保護玩家有效輸出的 10%，再依本輪累積條的比例分給所有貢獻者。
+    const _controlMap = normalizeContributorMap(options.teamControlContributors);
+    const _controlCands = Object.entries(_controlMap).map(([sourceDiscordId, row]) => ({
+      sourceDiscordId,
+      sourceJobId: row.jobId,
+      sourceJobName: row.jobName,
+      params: { value: row.amount },
+    }));
+    if (_controlCands.length > 0 && _kdaStunSkippedRounds > 0) {
+      _distribute((Math.max(0, Number(totalDamage) || 0) * CONTROL_WINDOW_ASSIST_PCT) / 100, _controlCands);
+    }
+
+    // 聖域師區域護佑：只計本場真正擋下與補回的量，並按本輪聖域值貢獻比例分帳。
+    const _sanctuaryCands = Object.entries(_sanctuaryContributors).map(([sourceDiscordId, row]) => ({
+      sourceDiscordId,
+      sourceJobId: row.jobId,
+      sourceJobName: row.jobName,
+      params: { value: row.amount },
+    }));
+    if (_sanctuaryCands.length > 0) {
+      _distribute(_kdaSanctuaryPrevented + _kdaSanctuaryHealed, _sanctuaryCands);
+    }
   } catch (_) { /* 歸戶失敗不影響戰鬥結果 */ }
 
   // 🏁 結尾統計列（戰報重整：總輸出/承傷/最痛一擊——與未來 KDA 貢獻榜同款數字，先讓玩家看習慣）
@@ -5666,6 +5766,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   return {
     outcome,
     roundLogs,
+    diceEvents,
     totalDamage,
     finalMonsterHp: Math.max(0, mHp),
     finalPlayerHp:  Math.max(0, pHp),
@@ -5682,13 +5783,16 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     jobSkillComboSpent: _jobSkillComboSpent,
     maxHitTaken: _maxHitTaken, // 本場最大單發承傷（爆發條件驗收用）
     // KDA・A 值歸戶（附錄C v3）：bySource＝{提供者discordId: 本場傷害當量}；
-    // stunPreventedDmg＝團隊暈眩擋下的傷害當量（歸戶對象＝敲滿條的人，呼叫端從 dwarfStunGauge 取）
+    // 控制與聖域窗口已直接納入 bySource；stunPreventedDmg 只保留舊介面相容。
     assistLedger: {
       bySource: _assistBySource,
+      bySourceJob: _assistBySourceJob,
       stunSkippedRounds: _kdaStunSkippedRounds,
-      stunPreventedDmg: _kdaStunSkippedRounds > 0
-        ? Math.round(_kdaStunSkippedRounds * (_totalDmgTaken / Math.max(1, (round - 1) - _kdaStunSkippedRounds)))
-        : 0,
+      // 舊欄位保留相容；控制助攻已納入 bySource，不能再由呼叫端重複加一次。
+      stunPreventedDmg: 0,
+      teamControlAssistPct: CONTROL_WINDOW_ASSIST_PCT,
+      sanctuaryPreventedDmg: Math.round(_kdaSanctuaryPrevented),
+      sanctuaryHealDone: Math.round(_kdaSanctuaryHealed),
     },
     // 氣力格（劍鬼）：同一規則——滿了但還沒斬出去 → 滿格帶去下一場
     oniGauge: oniCfg ? (_oniBurstNext ? oniCfg.ONI_GAUGE_MAX : _oniGrids) : null,

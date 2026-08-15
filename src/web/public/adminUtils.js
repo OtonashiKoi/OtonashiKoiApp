@@ -3,9 +3,10 @@
 
 function getHeaders() {
   const adminPasswordEl = document.getElementById("admin-password");
+  const token = window.getAdminToken?.() || (adminPasswordEl ? adminPasswordEl.value.trim() : "") || (window.adminSessionActive ? "session" : "");
   return {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${adminPasswordEl ? adminPasswordEl.value.trim() : ""}`
+    "Authorization": `Bearer ${token}`
   };
 }
 
