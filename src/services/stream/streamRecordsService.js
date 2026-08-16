@@ -10,7 +10,6 @@
 
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 const {
-  DONATION_PHASE2_START,
   getDonationSummary,
   _test: donationSummaryTest
 } = require("./donationSummary");
@@ -218,14 +217,20 @@ async function touchMemberConfirmed({ discordId, displayName, tier, label }) {
 // 查詢（給後台看記錄用）
 // ---------------------------------------------------------------------------
 
-// 斗內記錄分段點（使用者 2026-08-09 指示）：台北 8/9 晚上 8 點起算「新一輪」，
-// 之前的歸「舊紀錄」。後台列表可依此篩選、彙總卡分兩段各算各的。
-async function listDonationEvents({ limit = 100, boundOnly = false, phase = "" } = {}) {
+// 後台流水預設依目前後台開／關服排程顯示本季度；start 含、end 不含。
+async function listDonationEvents({ limit = 100, boundOnly = false, scope = "", seasonRange = null } = {}) {
   const db = await getMongoDb().catch(() => null);
   if (!db) return [];
   const q = boundOnly ? { bound: true } : {};
-  if (phase === "old") q.createdAt = { $lt: DONATION_PHASE2_START };
-  else if (phase === "new") q.createdAt = { $gte: DONATION_PHASE2_START };
+  const start = seasonRange?.start || null;
+  const end = seasonRange?.end || null;
+  if (scope === "season") {
+    if (start || end) q.createdAt = {};
+    if (start) q.createdAt.$gte = start;
+    if (end) q.createdAt.$lt = end;
+  } else if (scope === "beforeSeason" && start) {
+    q.createdAt = { $lt: start };
+  }
   return db.collection("donationEvents")
     .find(q, { projection: { createdAtDate: 0 } })
     .sort({ createdAt: -1 })

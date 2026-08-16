@@ -1,6 +1,6 @@
 # 系統索引 SYSTEMS
 
-> 狀態：現行程式索引。最後核對：2026-08-15。
+> 狀態：現行程式索引。最後核對：2026-08-16。
 >
 > 執行事實以 `src/**` 與目前 MongoDB 為準。資料數量與 DB 開關請先執行 `npm run status:update`，再看 [CURRENT_GAME_STATUS.md](CURRENT_GAME_STATUS.md)。
 
@@ -136,7 +136,7 @@
 - OneComme 接收仍是必要 runtime 管線；已移除的是不需要的「玩家查詢直播留言」產品功能，不是整個 listener
 - SC 與會員里程碑的各階加成會疊加並保留到本季結束；換季時清除，玩家介面統一標示為「本季保留」
 - SC 里程碑的 `claimed` 同時要求伺服器曾發獎且目前累積仍達現行門檻；服務啟動時會自癒門檻調整造成的超前解鎖，精準收回該階 claimed 與 `scms:season:<id>` 永久 Buff，不影響仍達標的較低階獎勵
-- 直播資料記錄：`services/stream/streamRecordsService.js`；斗內事件同時保存平台原始金額／幣別與實際採計台幣金額，避免 OneComme 幣別標籤錯誤後無法追查；後台依台灣月份將 YouTube／綠界分開小計並另列全部合計，其他來源獨立歸類
+- 直播資料記錄：`services/stream/streamRecordsService.js`、`services/stream/donationSummary.js`；斗內事件同時保存平台原始金額／幣別與實際採計台幣金額，避免 OneComme 幣別標籤錯誤後無法追查。後台營收總算以 MongoDB `maintenanceState.openAt`／`activateAt` 的季度起訖為主，分列 YouTube、綠界、其他來源與全部合計；台灣月份只作輔助查帳，不改變季度總算
 - 會員同步：`services/stream/membershipTracker.js`
 - 斗內、會員、SC、觀看門檻設定：`services/stream/streamEventConfig.js` + MongoDB `serverEventConfig`
 - Buff：`services/stream/globalBuffService.js`

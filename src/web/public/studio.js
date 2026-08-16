@@ -111,15 +111,14 @@
   async function refreshRevenue() {
     const donations = await api("/admin/stream-records/donations?limit=100");
     const summary = donations.summary || {};
-    const monthly = summary.month || {};
-    const monthlySources = monthly.bySource || {};
-    const monthLabel = monthly.key ? monthly.key.replace("-", "/") : "本月";
-    const unboundCount = Math.max(0, Number(summary.totalEvents || 0) - Number(summary.boundEvents || 0));
+    const season = summary.season || {};
+    const seasonSources = season.bySource || {};
+    const unboundCount = Math.max(0, Number(season.totalEvents || 0) - Number(season.boundEvents || 0));
     $("#revenue-metrics").innerHTML = [
-      metric(`${monthLabel} YouTube`, `NT$ ${fmt(monthlySources.youtube?.totalTwd)}`, `${fmt(monthlySources.youtube?.totalEvents)} 筆`),
-      metric(`${monthLabel} 綠界`, `NT$ ${fmt(monthlySources.ecpay?.totalTwd)}`, `${fmt(monthlySources.ecpay?.totalEvents)} 筆`),
-      metric(`${monthLabel} 全部合計`, `NT$ ${fmt(monthly.totalTwd)}`, `${fmt(monthly.totalEvents)} 筆`, "good"),
-      metric("未綁定", fmt(unboundCount), "需要人工確認", unboundCount ? "warning" : "good")
+      metric("本季度 YouTube", `NT$ ${fmt(seasonSources.youtube?.totalTwd)}`, `${fmt(seasonSources.youtube?.totalEvents)} 筆`),
+      metric("本季度 綠界", `NT$ ${fmt(seasonSources.ecpay?.totalTwd)}`, `${fmt(seasonSources.ecpay?.totalEvents)} 筆`),
+      metric("本季度 全部合計", `NT$ ${fmt(season.totalTwd)}`, `${fmt(season.totalEvents)} 筆`, "good"),
+      metric("本季度未綁定", fmt(unboundCount), "需要人工確認", unboundCount ? "warning" : "good")
     ].join("");
     $("#donation-table").innerHTML = (donations.events || []).map((row) => {
       const raw = row.originalAmount != null && (Number(row.originalAmount) !== Number(row.twdAmount) || (row.currency && !["TWD", "NTD", "NT$"].includes(String(row.currency).toUpperCase())))

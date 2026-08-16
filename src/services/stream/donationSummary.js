@@ -2,7 +2,6 @@
 
 const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 
-const DONATION_PHASE2_START = "2026-08-09T12:00:00.000Z"; // 台北 2026-08-09 20:00
 const DONATION_TIME_ZONE = "Asia/Taipei";
 
 function classifyDonationSource(platform) {
@@ -34,6 +33,26 @@ function taipeiMonthRange(requestedMonth, now = new Date()) {
   return { key, timeZone: DONATION_TIME_ZONE, start, end };
 }
 
+function configuredSeasonRange(raw = {}) {
+  const parsedStart = raw.openAt ? new Date(raw.openAt) : null;
+  const parsedEnd = raw.activateAt ? new Date(raw.activateAt) : null;
+  const start = parsedStart && Number.isFinite(parsedStart.getTime()) ? parsedStart : null;
+  const endCandidate = parsedEnd && Number.isFinite(parsedEnd.getTime()) ? parsedEnd : null;
+  const end = endCandidate && (!start || endCandidate > start) ? endCandidate : null;
+  return {
+    configured: Boolean(start),
+    timeZone: DONATION_TIME_ZONE,
+    start,
+    end
+  };
+}
+
+async function loadConfiguredSeasonRange() {
+  const maintenanceStore = require("../access/maintenanceStore");
+  await maintenanceStore.ensureLoaded();
+  return configuredSeasonRange(maintenanceStore.getRawState());
+}
+
 function emptyDonationTotals() {
   return { totalEvents: 0, boundEvents: 0, totalTwd: 0, totalDiamonds: 0 };
 }
@@ -62,20 +81,28 @@ function addDonationGroup(scope, source, row) {
   }
 }
 
-function foldDonationGroups(rows, monthRange) {
+function foldDonationGroups(rows, monthRange, seasonRange) {
   const all = emptyDonationScope();
-  const old = emptyDonationScope();
-  const newer = emptyDonationScope();
+  const season = emptyDonationScope();
+  const beforeSeason = emptyDonationScope();
   const month = emptyDonationScope();
   for (const row of rows || []) {
     const source = classifyDonationSource(row?._id?.platform);
     addDonationGroup(all, source, row);
-    addDonationGroup(row?._id?.phase === "old" ? old : newer, source, row);
+    if (row?._id?.inSeason === true) addDonationGroup(season, source, row);
+    if (row?._id?.beforeSeason === true) addDonationGroup(beforeSeason, source, row);
     if (row?._id?.inMonth === true) addDonationGroup(month, source, row);
   }
   return {
     ...all,
-    phases: { cutoff: DONATION_PHASE2_START, old, new: newer },
+    season: {
+      configured: seasonRange.configured,
+      timeZone: seasonRange.timeZone,
+      start: seasonRange.start?.toISOString() || null,
+      end: seasonRange.end?.toISOString() || null,
+      ...season
+    },
+    beforeSeason,
     month: {
       key: monthRange.key,
       timeZone: monthRange.timeZone,
@@ -86,10 +113,21 @@ function foldDonationGroups(rows, monthRange) {
   };
 }
 
-async function getDonationSummary({ month = "" } = {}) {
+function buildSeasonCondition(eventExpression, seasonRange) {
+  const conditions = [];
+  if (seasonRange.start) conditions.push({ $gte: [eventExpression, seasonRange.start] });
+  if (seasonRange.end) conditions.push({ $lt: [eventExpression, seasonRange.end] });
+  return conditions.length > 0 ? { $and: conditions } : { $literal: true };
+}
+
+async function getDonationSummary({ month = "", seasonRange = null } = {}) {
   const monthRange = taipeiMonthRange(month);
+  const effectiveSeasonRange = seasonRange
+    ? configuredSeasonRange({ openAt: seasonRange.start || seasonRange.openAt, activateAt: seasonRange.end || seasonRange.activateAt })
+    : await loadConfiguredSeasonRange();
   const db = await getMongoDb().catch(() => null);
-  if (!db) return foldDonationGroups([], monthRange);
+  if (!db) return foldDonationGroups([], monthRange, effectiveSeasonRange);
+  const eventExpression = "$_eventAt";
   const rows = await db.collection("donationEvents").aggregate([
     {
       $set: {
@@ -104,11 +142,14 @@ async function getDonationSummary({ month = "" } = {}) {
     {
       $project: {
         platform: "$_platform",
-        phase: { $cond: [{ $lt: ["$_eventAt", new Date(DONATION_PHASE2_START)] }, "old", "new"] },
+        inSeason: buildSeasonCondition(eventExpression, effectiveSeasonRange),
+        beforeSeason: effectiveSeasonRange.start
+          ? { $lt: [eventExpression, effectiveSeasonRange.start] }
+          : { $literal: false },
         inMonth: {
           $and: [
-            { $gte: ["$_eventAt", monthRange.start] },
-            { $lt: ["$_eventAt", monthRange.end] }
+            { $gte: [eventExpression, monthRange.start] },
+            { $lt: [eventExpression, monthRange.end] }
           ]
         },
         bound: { $cond: ["$bound", 1, 0] },
@@ -118,7 +159,7 @@ async function getDonationSummary({ month = "" } = {}) {
     },
     {
       $group: {
-        _id: { platform: "$platform", phase: "$phase", inMonth: "$inMonth" },
+        _id: { platform: "$platform", inSeason: "$inSeason", beforeSeason: "$beforeSeason", inMonth: "$inMonth" },
         totalEvents: { $sum: 1 },
         boundEvents: { $sum: "$bound" },
         totalTwd: { $sum: "$twdAmount" },
@@ -126,11 +167,11 @@ async function getDonationSummary({ month = "" } = {}) {
       }
     }
   ]).toArray();
-  return foldDonationGroups(rows, monthRange);
+  return foldDonationGroups(rows, monthRange, effectiveSeasonRange);
 }
 
 module.exports = {
-  DONATION_PHASE2_START,
   getDonationSummary,
-  _test: { classifyDonationSource, currentTaipeiMonthKey, taipeiMonthRange, foldDonationGroups }
+  loadConfiguredSeasonRange,
+  _test: { classifyDonationSource, currentTaipeiMonthKey, taipeiMonthRange, configuredSeasonRange, foldDonationGroups }
 };

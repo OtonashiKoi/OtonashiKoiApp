@@ -27,7 +27,7 @@
   };
 
   let tab = "donations"; // donations | memberships | status
-  let donationPhase = "new"; // ""=全部 | "old"=8/9 20:00 前 | "new"=8/9 20:00 起（預設看新一輪）
+  let donationScope = "season"; // season=本季度 | beforeSeason=季度前 | all=全部
   let donationMonth = ""; // YYYY-MM；空白時由後端回傳台北當月
 
   const donationSourceLabel = (source) => ({ youtube: "YouTube", ecpay: "綠界", other: "其他" }[String(source || "").toLowerCase()] || source || "其他");
@@ -47,19 +47,23 @@
 
   async function renderDonations() {
     const monthQuery = donationMonth ? `&month=${encodeURIComponent(donationMonth)}` : "";
-    const { events, summary } = await fetchJSON(`/admin/stream-records/donations?limit=200&phase=${donationPhase}${monthQuery}`);
+    const { events, summary } = await fetchJSON(`/admin/stream-records/donations?limit=200&scope=${donationScope}${monthQuery}`);
     const s = summary || {};
-    const ph = s.phases || {};
-    const pNew = ph.new || {}, pOld = ph.old || {};
-    const active = donationPhase === "old" ? pOld : donationPhase === "new" ? pNew : s;
+    const season = s.season || {};
+    const beforeSeason = s.beforeSeason || {};
+    const active = donationScope === "beforeSeason" ? beforeSeason : donationScope === "season" ? season : s;
     const activeSources = active.bySource || {};
     const monthly = s.month || {};
     const monthlySources = monthly.bySource || {};
     donationMonth = monthly.key || donationMonth;
     const monthLabel = monthly.key ? `${monthly.key.replace("-", " 年 ")} 月` : "本月";
-    const phaseLabel = donationPhase === "old" ? "舊紀錄" : donationPhase === "new" ? "新一輪" : "全部紀錄";
-    const phaseBtn = (key, label) =>
-      `<button class="button ${donationPhase === key ? "primary" : ""}" data-sr-phase="${key}" style="margin-right:6px;">${label}</button>`;
+    const fmtRangePoint = (iso) => iso ? fmtTime(iso).replace(/:00$/, "") : "未設定";
+    const seasonRangeLabel = season.configured
+      ? `${fmtRangePoint(season.start)} ～ ${season.end ? fmtRangePoint(season.end) : "目前（尚未設定季度結束）"}`
+      : "尚未設定季度開始，暫以全部記錄計算";
+    const scopeLabel = donationScope === "beforeSeason" ? "季度開始前" : donationScope === "season" ? "本季度" : "全部歷史";
+    const scopeBtn = (key, label) =>
+      `<button class="button ${donationScope === key ? "primary" : ""}" data-sr-scope="${key}" style="margin-right:6px;">${label}</button>`;
     const rows = (events || []).map((e) => `
       <tr>
         <td style="white-space:nowrap;">${esc(fmtTime(e.createdAt))}</td>
@@ -73,28 +77,41 @@
     return `
       <div class="card" style="margin-bottom:12px;border-color:#3d537c;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-          <div><h3 style="margin:0;">📊 每月營收分流</h3><p class="hint" style="margin:3px 0 0;">YouTube 與綠界分開計算，再提供明確的全部合計。</p></div>
+          <div><h3 style="margin:0;">📊 本季度營收總算</h3><p class="hint" style="margin:3px 0 0;">以後台「開／關服排程」設定的季度起訖為準；YouTube、綠界與全部合計分開顯示。</p></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          ${statCard("本季度 YouTube 小計", "NT$" + (season.bySource?.youtube?.totalTwd || 0), (season.bySource?.youtube?.totalEvents || 0) + " 筆")}
+          ${statCard("本季度 綠界小計", "NT$" + (season.bySource?.ecpay?.totalTwd || 0), (season.bySource?.ecpay?.totalEvents || 0) + " 筆")}
+          ${(season.bySource?.other?.totalEvents || 0) > 0 ? statCard("本季度 其他來源", "NT$" + (season.bySource?.other?.totalTwd || 0), (season.bySource?.other?.totalEvents || 0) + " 筆") : ""}
+          ${statCard("本季度 全部合計", "NT$" + (season.totalTwd || 0), (season.totalEvents || 0) + " 筆")}
+        </div>
+        <p class="hint" style="margin:10px 0 0;">季度範圍：${esc(seasonRangeLabel)}</p>
+        <p class="hint" style="margin:5px 0 0;">YouTube 小計是系統收到的 SC 面額換算台幣；YouTube Studio 若顯示預估／實際收益，可能因平台分潤、匯率與四捨五入而不同。實際營收請用 YouTube Studio 數字加上這裡的綠界小計。</p>
+      </div>
+      <details class="card" style="margin-bottom:12px;">
+        <summary style="cursor:pointer;font-weight:800;">🧾 月份輔助查帳</summary>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:12px 0 10px;">
+          <p class="hint" style="margin:0;">月份只供對照 YouTube Studio，不影響上方季度總算。</p>
           <label style="font-size:12px;">月份（台灣時間） <input id="sr-donation-month" type="month" value="${esc(monthly.key || "")}" style="padding:5px 8px;"></label>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          ${statCard(`${monthLabel} YouTube 小計`, "NT$" + (monthlySources.youtube?.totalTwd || 0), (monthlySources.youtube?.totalEvents || 0) + " 筆")}
-          ${statCard(`${monthLabel} 綠界小計`, "NT$" + (monthlySources.ecpay?.totalTwd || 0), (monthlySources.ecpay?.totalEvents || 0) + " 筆")}
-          ${(monthlySources.other?.totalEvents || 0) > 0 ? statCard(`${monthLabel} 其他來源`, "NT$" + (monthlySources.other?.totalTwd || 0), (monthlySources.other?.totalEvents || 0) + " 筆") : ""}
-          ${statCard(`${monthLabel} 全部合計`, "NT$" + (monthly.totalTwd || 0), (monthly.totalEvents || 0) + " 筆")}
+          ${statCard(`${monthLabel} YouTube`, "NT$" + (monthlySources.youtube?.totalTwd || 0), (monthlySources.youtube?.totalEvents || 0) + " 筆")}
+          ${statCard(`${monthLabel} 綠界`, "NT$" + (monthlySources.ecpay?.totalTwd || 0), (monthlySources.ecpay?.totalEvents || 0) + " 筆")}
+          ${(monthlySources.other?.totalEvents || 0) > 0 ? statCard(`${monthLabel} 其他`, "NT$" + (monthlySources.other?.totalTwd || 0), (monthlySources.other?.totalEvents || 0) + " 筆") : ""}
+          ${statCard(`${monthLabel} 全部`, "NT$" + (monthly.totalTwd || 0), (monthly.totalEvents || 0) + " 筆")}
         </div>
-        <p class="hint" style="margin:10px 0 0;">YouTube 小計是系統收到的 SC 面額換算台幣；YouTube Studio 若顯示預估／實際收益，可能因平台分潤、匯率與四捨五入而不同。計算總營收時，請用 YouTube Studio 數字加上這裡的綠界小計。</p>
-      </div>
+      </details>
       <div style="margin-bottom:10px;">
-        ${phaseBtn("new", "🆕 新一輪（8/9 20:00 起）")}
-        ${phaseBtn("old", "🗂 舊紀錄（8/9 20:00 前）")}
-        ${phaseBtn("", "全部")}
+        ${scopeBtn("season", "📅 本季度")}
+        ${scopeBtn("beforeSeason", "🗂 季度開始前")}
+        ${scopeBtn("all", "全部歷史")}
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-        ${statCard(`${phaseLabel}・YouTube`, "NT$" + (activeSources.youtube?.totalTwd || 0), (activeSources.youtube?.totalEvents || 0) + " 筆")}
-        ${statCard(`${phaseLabel}・綠界`, "NT$" + (activeSources.ecpay?.totalTwd || 0), (activeSources.ecpay?.totalEvents || 0) + " 筆")}
-        ${(activeSources.other?.totalEvents || 0) > 0 ? statCard(`${phaseLabel}・其他`, "NT$" + (activeSources.other?.totalTwd || 0), (activeSources.other?.totalEvents || 0) + " 筆") : ""}
-        ${statCard(`${phaseLabel}・全部合計`, "NT$" + (active.totalTwd || 0), (active.totalEvents || 0) + " 筆")}
-        ${statCard(`${phaseLabel}・已發鑽`, "💎" + (active.totalDiamonds || 0))}
+        ${statCard(`${scopeLabel}・YouTube`, "NT$" + (activeSources.youtube?.totalTwd || 0), (activeSources.youtube?.totalEvents || 0) + " 筆")}
+        ${statCard(`${scopeLabel}・綠界`, "NT$" + (activeSources.ecpay?.totalTwd || 0), (activeSources.ecpay?.totalEvents || 0) + " 筆")}
+        ${(activeSources.other?.totalEvents || 0) > 0 ? statCard(`${scopeLabel}・其他`, "NT$" + (activeSources.other?.totalTwd || 0), (activeSources.other?.totalEvents || 0) + " 筆") : ""}
+        ${statCard(`${scopeLabel}・全部合計`, "NT$" + (active.totalTwd || 0), (active.totalEvents || 0) + " 筆")}
+        ${statCard(`${scopeLabel}・已發鑽`, "💎" + (active.totalDiamonds || 0))}
       </div>
       <div style="overflow:auto;">
       <table class="admin-table" style="width:100%;font-size:13px;">
@@ -564,8 +581,8 @@
   document.addEventListener("click", (e) => {
     const tabBtn = e.target.closest?.("[data-sr-tab]");
     if (tabBtn) { tab = tabBtn.dataset.srTab; render(); return; }
-    const phaseBtn = e.target.closest?.("[data-sr-phase]");
-    if (phaseBtn) { donationPhase = phaseBtn.dataset.srPhase; render(); return; }
+    const scopeBtn = e.target.closest?.("[data-sr-scope]");
+    if (scopeBtn) { donationScope = scopeBtn.dataset.srScope; render(); return; }
     if (e.target.closest?.("#sr-refresh")) { render(); return; }
     if (e.target.closest?.("#sr-sync")) { syncNow(); return; }
     if (e.target.closest?.("#mb-send")) { sendManualBuff(); return; }
