@@ -32,9 +32,10 @@ function createAdminStreamRecordsRoutes(serviceContext, discordClient) {
       const limit = Number(req.query.limit) || 100;
       const boundOnly = String(req.query.boundOnly || "") === "1";
       const phase = String(req.query.phase || ""); // ""=全部 | "old"=8/9 20:00 前 | "new"=8/9 20:00 起
+      const month = String(req.query.month || ""); // YYYY-MM；空白時以台北當月計算
       const [events, summary] = await Promise.all([
         listDonationEvents({ limit, boundOnly, phase }),
-        getDonationSummary()
+        getDonationSummary({ month })
       ]);
       res.json(ok({ events, summary }));
     } catch (err) {

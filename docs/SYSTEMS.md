@@ -136,7 +136,7 @@
 - OneComme 接收仍是必要 runtime 管線；已移除的是不需要的「玩家查詢直播留言」產品功能，不是整個 listener
 - SC 與會員里程碑的各階加成會疊加並保留到本季結束；換季時清除，玩家介面統一標示為「本季保留」
 - SC 里程碑的 `claimed` 同時要求伺服器曾發獎且目前累積仍達現行門檻；服務啟動時會自癒門檻調整造成的超前解鎖，精準收回該階 claimed 與 `scms:season:<id>` 永久 Buff，不影響仍達標的較低階獎勵
-- 直播資料記錄：`services/stream/streamRecordsService.js`；斗內事件同時保存平台原始金額／幣別與實際採計台幣金額，避免 OneComme 幣別標籤錯誤後無法追查
+- 直播資料記錄：`services/stream/streamRecordsService.js`；斗內事件同時保存平台原始金額／幣別與實際採計台幣金額，避免 OneComme 幣別標籤錯誤後無法追查；後台依台灣月份將 YouTube／綠界分開小計並另列全部合計，其他來源獨立歸類
 - 會員同步：`services/stream/membershipTracker.js`
 - 斗內、會員、SC、觀看門檻設定：`services/stream/streamEventConfig.js` + MongoDB `serverEventConfig`
 - Buff：`services/stream/globalBuffService.js`

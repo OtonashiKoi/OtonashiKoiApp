@@ -28,6 +28,9 @@
 
   let tab = "donations"; // donations | memberships | status
   let donationPhase = "new"; // ""=全部 | "old"=8/9 20:00 前 | "new"=8/9 20:00 起（預設看新一輪）
+  let donationMonth = ""; // YYYY-MM；空白時由後端回傳台北當月
+
+  const donationSourceLabel = (source) => ({ youtube: "YouTube", ecpay: "綠界", other: "其他" }[String(source || "").toLowerCase()] || source || "其他");
 
   function tabBar() {
     const btn = (key, label) =>
@@ -43,10 +46,18 @@
   }
 
   async function renderDonations() {
-    const { events, summary } = await fetchJSON(`/admin/stream-records/donations?limit=200&phase=${donationPhase}`);
+    const monthQuery = donationMonth ? `&month=${encodeURIComponent(donationMonth)}` : "";
+    const { events, summary } = await fetchJSON(`/admin/stream-records/donations?limit=200&phase=${donationPhase}${monthQuery}`);
     const s = summary || {};
     const ph = s.phases || {};
     const pNew = ph.new || {}, pOld = ph.old || {};
+    const active = donationPhase === "old" ? pOld : donationPhase === "new" ? pNew : s;
+    const activeSources = active.bySource || {};
+    const monthly = s.month || {};
+    const monthlySources = monthly.bySource || {};
+    donationMonth = monthly.key || donationMonth;
+    const monthLabel = monthly.key ? `${monthly.key.replace("-", " 年 ")} 月` : "本月";
+    const phaseLabel = donationPhase === "old" ? "舊紀錄" : donationPhase === "new" ? "新一輪" : "全部紀錄";
     const phaseBtn = (key, label) =>
       `<button class="button ${donationPhase === key ? "primary" : ""}" data-sr-phase="${key}" style="margin-right:6px;">${label}</button>`;
     const rows = (events || []).map((e) => `
@@ -57,21 +68,33 @@
         <td style="text-align:right;">${e.diamondsGranted > 0 ? "💎" + esc(e.diamondsGranted) : "—"}</td>
         <td style="text-align:right;">${e.pendingAfter > 0 ? "NT$" + esc(e.pendingAfter) : "—"}</td>
         <td>${e.bound ? '<span style="color:#7ee0a0;">✔ 已綁定</span>' : '<span style="color:#ffb066;">未綁定</span>'}</td>
-        <td class="hint" style="font-size:11px;">${esc(e.platform)} · ${esc(e.note || "")}</td>
+        <td class="hint" style="font-size:11px;">${esc(donationSourceLabel(e.platform))} · ${esc(e.note || "")}</td>
       </tr>`).join("");
     return `
+      <div class="card" style="margin-bottom:12px;border-color:#3d537c;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+          <div><h3 style="margin:0;">📊 每月營收分流</h3><p class="hint" style="margin:3px 0 0;">YouTube 與綠界分開計算，再提供明確的全部合計。</p></div>
+          <label style="font-size:12px;">月份（台灣時間） <input id="sr-donation-month" type="month" value="${esc(monthly.key || "")}" style="padding:5px 8px;"></label>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          ${statCard(`${monthLabel} YouTube 小計`, "NT$" + (monthlySources.youtube?.totalTwd || 0), (monthlySources.youtube?.totalEvents || 0) + " 筆")}
+          ${statCard(`${monthLabel} 綠界小計`, "NT$" + (monthlySources.ecpay?.totalTwd || 0), (monthlySources.ecpay?.totalEvents || 0) + " 筆")}
+          ${(monthlySources.other?.totalEvents || 0) > 0 ? statCard(`${monthLabel} 其他來源`, "NT$" + (monthlySources.other?.totalTwd || 0), (monthlySources.other?.totalEvents || 0) + " 筆") : ""}
+          ${statCard(`${monthLabel} 全部合計`, "NT$" + (monthly.totalTwd || 0), (monthly.totalEvents || 0) + " 筆")}
+        </div>
+        <p class="hint" style="margin:10px 0 0;">YouTube 小計是系統收到的 SC 面額換算台幣；YouTube Studio 若顯示預估／實際收益，可能因平台分潤、匯率與四捨五入而不同。計算總營收時，請用 YouTube Studio 數字加上這裡的綠界小計。</p>
+      </div>
       <div style="margin-bottom:10px;">
         ${phaseBtn("new", "🆕 新一輪（8/9 20:00 起）")}
         ${phaseBtn("old", "🗂 舊紀錄（8/9 20:00 前）")}
         ${phaseBtn("", "全部")}
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-        ${statCard("🆕 新一輪金額", "NT$" + (pNew.totalTwd || 0))}
-        ${statCard("🆕 新一輪發鑽", "💎" + (pNew.totalDiamonds || 0))}
-        ${statCard("🆕 新一輪事件", pNew.totalEvents || 0)}
-        ${statCard("🗂 舊累計金額", "NT$" + (pOld.totalTwd || 0))}
-        ${statCard("🗂 舊累計發鑽", "💎" + (pOld.totalDiamonds || 0))}
-        ${statCard("全部事件數", s.totalEvents || 0)}
+        ${statCard(`${phaseLabel}・YouTube`, "NT$" + (activeSources.youtube?.totalTwd || 0), (activeSources.youtube?.totalEvents || 0) + " 筆")}
+        ${statCard(`${phaseLabel}・綠界`, "NT$" + (activeSources.ecpay?.totalTwd || 0), (activeSources.ecpay?.totalEvents || 0) + " 筆")}
+        ${(activeSources.other?.totalEvents || 0) > 0 ? statCard(`${phaseLabel}・其他`, "NT$" + (activeSources.other?.totalTwd || 0), (activeSources.other?.totalEvents || 0) + " 筆") : ""}
+        ${statCard(`${phaseLabel}・全部合計`, "NT$" + (active.totalTwd || 0), (active.totalEvents || 0) + " 筆")}
+        ${statCard(`${phaseLabel}・已發鑽`, "💎" + (active.totalDiamonds || 0))}
       </div>
       <div style="overflow:auto;">
       <table class="admin-table" style="width:100%;font-size:13px;">
@@ -336,10 +359,11 @@
       </div>`;
   }
 
-  function statCard(label, value) {
+  function statCard(label, value, detail = "") {
     return `<div style="background:#171b2c;border:1px solid #2b3350;border-radius:12px;padding:10px 16px;min-width:110px;">
       <div class="hint" style="font-size:11px;">${esc(label)}</div>
       <div style="font-size:20px;font-weight:800;color:#f3ecff;">${esc(value)}</div>
+      ${detail ? `<div class="hint" style="font-size:10px;margin-top:2px;">${esc(detail)}</div>` : ""}
     </div>`;
   }
 
@@ -568,6 +592,12 @@
     const clr = e.target.closest?.("[data-buff-clear]");
     if (clr) { clearBuffs(clr.dataset.buffClear); return; }
     if (e.target.closest?.('[data-target="section-stream-records"]')) setTimeout(render, 60);
+  });
+  document.addEventListener("change", (e) => {
+    const monthInput = e.target.closest?.("#sr-donation-month");
+    if (!monthInput) return;
+    donationMonth = monthInput.value || "";
+    render();
   });
   const sec = document.getElementById("section-stream-records");
   if (sec) {

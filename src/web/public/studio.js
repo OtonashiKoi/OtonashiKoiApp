@@ -109,11 +109,18 @@
   }
 
   async function refreshRevenue() {
-    const [donations, sc] = await Promise.all([api("/admin/stream-records/donations?limit=100"), api("/admin/stream-events/sc-bar")]);
+    const donations = await api("/admin/stream-records/donations?limit=100");
     const summary = donations.summary || {};
+    const monthly = summary.month || {};
+    const monthlySources = monthly.bySource || {};
+    const monthLabel = monthly.key ? monthly.key.replace("-", "/") : "本月";
     const unboundCount = Math.max(0, Number(summary.totalEvents || 0) - Number(summary.boundEvents || 0));
-    const nextMilestone = sc.nextMilestone ? `${sc.nextMilestone.label || "下一階"}・NT$ ${fmt(sc.nextMilestone.threshold)}` : "本季里程碑已完成";
-    $("#revenue-metrics").innerHTML = [metric("累積斗內", `NT$ ${fmt(summary.totalTwd)}`, `${fmt(summary.totalEvents)} 筆`), metric("SC 累積", `NT$ ${fmt(sc.total)}`, nextMilestone), metric("已發鑽石", fmt(summary.totalDiamonds), `已綁定 ${fmt(summary.boundEvents)} 筆`), metric("未綁定", fmt(unboundCount), "需要人工確認", unboundCount ? "warning" : "good")].join("");
+    $("#revenue-metrics").innerHTML = [
+      metric(`${monthLabel} YouTube`, `NT$ ${fmt(monthlySources.youtube?.totalTwd)}`, `${fmt(monthlySources.youtube?.totalEvents)} 筆`),
+      metric(`${monthLabel} 綠界`, `NT$ ${fmt(monthlySources.ecpay?.totalTwd)}`, `${fmt(monthlySources.ecpay?.totalEvents)} 筆`),
+      metric(`${monthLabel} 全部合計`, `NT$ ${fmt(monthly.totalTwd)}`, `${fmt(monthly.totalEvents)} 筆`, "good"),
+      metric("未綁定", fmt(unboundCount), "需要人工確認", unboundCount ? "warning" : "good")
+    ].join("");
     $("#donation-table").innerHTML = (donations.events || []).map((row) => {
       const raw = row.originalAmount != null && (Number(row.originalAmount) !== Number(row.twdAmount) || (row.currency && !["TWD", "NTD", "NT$"].includes(String(row.currency).toUpperCase())))
         ? `<small class="donation-raw">平台：${esc(row.currency || "?")} ${fmt(row.originalAmount)}</small>` : "";
