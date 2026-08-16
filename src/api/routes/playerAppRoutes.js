@@ -18,6 +18,7 @@ const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard } = requi
 const { calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
 const { getWorldBossPartLabel } = require("../../shared/worldBossParts");
 const { A_WEIGHT: WORLD_BOSS_ASSIST_WEIGHT } = require("../../services/kda/kdaService");
+const { boundedMonsterCurrentHp, repairMonsterHpOverflow, settleActiveMonsterDamage } = require("../../services/monster/monsterStateRaceGuard");
 const {
   isYoutubeDirectBindTester,
   buildYoutubeDirectBindAuthorizeUrl
@@ -618,7 +619,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         expReward: activeMonster?.expReward || 0,
         goldReward: activeMonster?.goldReward || 0,
         drops: (activeMonster?.drops || []).map((d) => d.itemName),
-        currentHp: state.currentHp !== undefined ? state.currentHp : (activeMonster?.calc?.maxHp || 0),
+        currentHp: boundedMonsterCurrentHp(state, activeMonster),
         maxHp: activeMonster?.calc?.maxHp || 0,
         participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
         activeMonsterSeq: state.activeMonsterSeq,
@@ -2790,7 +2791,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           expReward: activeMonster?.expReward || 0,
           goldReward: activeMonster?.goldReward || 0,
           drops: (activeMonster?.drops || []).map(d => d.itemName),
-          currentHp: state.currentHp !== undefined ? state.currentHp : (activeMonster?.calc?.maxHp || 0),
+          currentHp: boundedMonsterCurrentHp(state, activeMonster),
           maxHp: activeMonster?.calc?.maxHp || 0,
           participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
           activeMonsterSeq: state.activeMonsterSeq,
@@ -2869,7 +2870,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           expReward: activeMonster?.expReward || 0,
           goldReward: activeMonster?.goldReward || 0,
           drops: (activeMonster?.drops || []).map((d) => d.itemName),
-          currentHp: state.currentHp !== undefined ? state.currentHp : (activeMonster?.calc?.maxHp || 0),
+          currentHp: boundedMonsterCurrentHp(state, activeMonster),
           maxHp: activeMonster?.calc?.maxHp || 0,
           participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
           activeMonsterSeq: state.activeMonsterSeq,
@@ -2988,6 +2989,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         state = { ...state, activeMonsterSeq: monster.seq, currentHp: initHp };
       }
 
+      // 防止舊戰鬥結果在換怪後回寫：任何一般怪的持久 HP 都不得超過目前模板上限。
+      // 這裡同時修復已存在的異常狀態（例如 7,335 / 35），條件式寫入可避免修復時又撞上換怪。
+      const hpRepair = await repairMonsterHpOverflow({ monsterService: serviceContext.monsterService, state, monster, zoneKey });
+      state = hpRepair.state;
+      if (!hpRepair.repaired) monster = monsters.find(m => Number(m.seq) === Number(state.activeMonsterSeq)) || monster;
+
       // 防「鞭屍」：非世界王的怪若已死(currentHp<=0)但還沒換下一隻(轉場/sweep 尚未收尾)，
       // 先立刻換成下一隻活怪再打，避免一直重複攻擊同一隻 0 血屍體。
       const _isWBZone = require("../../services/worldBoss/worldBossService").isWorldBossZone;
@@ -3003,7 +3010,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } catch (_) { /* 換怪失敗就照原狀，至少不崩 */ }
       }
 
-      const monsterHpInitial = state.currentHp != null ? state.currentHp : monster.calc.maxHp;
+      const monsterHpInitial = boundedMonsterCurrentHp(state, monster);
 
       // Check level — 優先讀 channel layout binding 的自訂限制，fallback 到靜態預設
       const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
@@ -3894,37 +3901,38 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee ?? getZoneDefaultEntryFee(zoneKey) };
         rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state: stateWithMe, totalDamage, zoneKey });
       } else {
-        mHp = Math.max(0, mHp);
-        let damageMap = {};
+        let damageMap = {}, savedState = null;
         try {
-          const freshState = await serviceContext.monsterService.getState(zoneKey);
-          const prev = freshState.damageMap || {};
-          damageMap = {
-            ...prev,
-            [discordId]: {
-              name: displayName,
-              level: progress?.level || 1,
-              damage: (prev[discordId]?.damage || 0) + totalDamage,
-              taken: (prev[discordId]?.taken || 0) + totalTaken,
-            }
-          };
-          // Refresh participants from the latest state to avoid clobbering concurrent joins.
-          const updatedParticipants = [...new Set([...(Array.isArray(freshState.participants) ? freshState.participants : []), discordId])];
-          await serviceContext.monsterService.saveState({ ...freshState, currentHp: mHp, damageMap, participants: updatedParticipants }, zoneKey);
-        } catch (e) {
-          await serviceContext.monsterService.saveState({ ...state, currentHp: mHp }, zoneKey);
-        }
-        boardDamageMap = damageMap;
+          const guarded = await settleActiveMonsterDamage({
+            monsterService: serviceContext.monsterService, zoneKey, monster, discordId, displayName,
+            playerLevel: progress?.level || 1, totalDamage, totalTaken
+          });
+          ({ savedState, damageMap } = guarded);
+          if (savedState) mHp = guarded.currentHp;
+        } catch (e) { console.error("[PlayerApp] guarded monster settlement failed:", e?.message || e); }
 
-        if (outcome === "lose") {
-          rewardLines = [`你被 ${monster.name} 擊敗了…`];
+        if (!savedState) {
+          const liveState = await serviceContext.monsterService.getState(zoneKey).catch(() => null);
+          mHp = boundedMonsterCurrentHp(liveState, monsters.find((m) => Number(m.seq) === Number(liveState?.activeMonsterSeq)) || null);
+          damageMap = liveState?.damageMap || {};
+          boardDamageMap = damageMap;
+          rewardLines = [`${monster.name} 已被其他玩家擊敗並完成換場，本場舊結果未寫入新怪。`];
         } else {
-          // timeout：撐完回合但沒打死（怪物血量跨場累積，其他玩家也會接力）
-          rewardLines = [`激戰 ${MAX_ROUNDS} 回合，怪物殘血撤退（剩 ${Math.max(0, Math.round(mHp))} HP），下次再來補刀！`];
+          boardDamageMap = damageMap;
+          if (mHp <= 0) {
+            outcome = "win";
+            const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee ?? getZoneDefaultEntryFee(zoneKey) };
+            rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster,
+              state: savedState, totalDamage, zoneKey });
+          } else if (outcome === "lose") {
+            rewardLines = [`你被 ${monster.name} 擊敗了…`];
+          } else {
+            // timeout：撐完回合但沒打死（怪物血量跨場累積，其他玩家也會接力）
+            rewardLines = [`激戰 ${MAX_ROUNDS} 回合，怪物殘血撤退（剩 ${Math.max(0, Math.round(mHp))} HP），下次再來補刀！`];
+          }
         }
 
-        // update panel（排行榜去重，最多 5 秒更新一次）
-        _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
+        if (savedState && mHp > 0) _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
       }
 
       if (syncResult.notice) {

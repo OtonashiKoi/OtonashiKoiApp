@@ -202,6 +202,11 @@ class MonsterService {
     return this.monsterRepository.saveState(state, zoneKey);
   }
 
+  async saveStateIfActiveMonster(state, zoneKey = "normal", expectedMonsterSeq, expectedCurrentHp = null) {
+    if (typeof this.monsterRepository.saveStateIfActiveMonster !== "function") return false;
+    return this.monsterRepository.saveStateIfActiveMonster(state, zoneKey, expectedMonsterSeq, expectedCurrentHp);
+  }
+
   async _resolveDrops(drops) {
     if (!Array.isArray(drops)) return [];
     const allItems = this.itemRepository ? await this.itemRepository.findAll() : [];

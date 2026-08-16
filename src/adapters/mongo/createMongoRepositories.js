@@ -7,6 +7,7 @@ const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
 const { slimProgressForStorage, slimInventoryEntry, slimInventoryArray } = require("../../shared/inventoryStorage");
 const seasonState = require("../../services/access/seasonStateStore");
 const maintenance = require("../../services/access/maintenanceStore");
+const { saveActiveMonsterState } = require("./saveActiveMonsterState");
 
 function emitRealtimeInvalidate(type, discordId) {
   if (!discordId) return;
@@ -1233,6 +1234,10 @@ function createMongoRepositories() {
           { upsert: true }
         );
         return state;
+      },
+      async saveStateIfActiveMonster(state, zoneKey = "normal", expectedMonsterSeq, expectedCurrentHp = null) {
+        if (maintenance.isStrict()) return false;
+        return saveActiveMonsterState({ collection, state, zoneKey, expectedMonsterSeq, expectedCurrentHp });
       },
       // 原子收付擊殺權：成功回 true，已被其他進程收付回 false
       // 若先前的 claim 超過 timeoutMs，允許重新 claim（回收無回應的鎖）
