@@ -22,10 +22,16 @@ Discord Bot、玩家 Web App、Express API 與 Web 管理後台共用同一套�
 - 共用戰鬥與規則：`src/shared/`
 - MongoDB repositories：`src/adapters/mongo/`、`src/repositories/createRepositories.js`
 - 管理後台與靜態頁：`src/web/public/`
-- 玩家 SPA 部署產物：`src/web/public/app/`
+- 玩家 SPA 部署產物：`src/web/public/app/`（生成內容，不在這裡手改）
 - 維運、資料種子與驗證：`scripts/`
 
-玩家 React 原始碼在獨立工作區 `~/Documents/equipmentGAME-app`；本 repository 保存已部署的 build 產物與完整後端。若只拿到本 repository，能啟動後端與已建置前端，但不能在這裡直接修改 React 原始碼。
+### 玩家 SPA 原始碼與部署產物
+
+玩家實際操作的 React／TypeScript 原始碼位於獨立 repository：[OtonashiKoi/equipmentGAME-app](https://github.com/OtonashiKoi/equipmentGAME-app)，本機工作區為 `~/Documents/equipmentGAME-app`。
+
+本 repository 的 `src/web/public/app/` 只是該 SPA 經 TypeScript／Vite 編譯後的部署成品。修改玩家介面時必須先改 `equipmentGAME-app`、完成測試與 build，再透過其 `npm run deploy` 複製成品；不要直接編輯 hash 命名的 bundle。
+
+因此一個完整發布會有兩個可追溯來源：SPA repository 的原始碼 commit，以及本 repository 收錄部署成品的 commit。正式部署不得從未提交或無法辨識來源的 SPA 工作樹產生。
 
 ## 安裝與啟動
 
@@ -51,6 +57,8 @@ npm start
 
 ```bash
 npm run check                 # 語法、行數與文件一致性
+npm run check:sensitive       # 阻止備份、BSON、會員／玩家資料進入 Git
+npm run test:ci               # 不依賴正式 MongoDB 的 GitHub Actions 品質門檻
 npm run check:docs            # 文件硬事實防漂移
 npm run test:features         # 核心功能與資料檢查
 npm run test:systems          # 系統驗證

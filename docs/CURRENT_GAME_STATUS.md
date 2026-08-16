@@ -1,7 +1,7 @@
 <!-- GENERATED: CURRENT_GAME_STATUS -->
 # 遊戲現況快照 Current Game Status
 
-生成時間：2026-08-15T09:37:02.393Z
+生成時間：2026-08-16T08:04:52.077Z
 
 > 本檔由程式碼與目前 MongoDB 自動產生，請勿手動修改。執行 `npm run status:update` 更新。功能說明與檔案位置請看 `docs/README.md`、`PROJECT_FEATURES.md`、`docs/SYSTEMS.md`。
 
@@ -19,8 +19,8 @@
 
 | 項目 | 數量 |
 | --- | --- |
-| 玩家 | 431 |
-| 進度資料 | 435 |
+| 玩家 | 432 |
+| 進度資料 | 436 |
 | 怪物 | 89 |
 | 怪物狀態文件 | 15 |
 | 道具 | 575 |

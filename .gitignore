@@ -29,6 +29,23 @@ exports/
 backups/
 scripts/_migrate_data_dump.json
 
+# Sensitive player/member data must never enter Git
+~/
+*.bson
+*.metadata.json
+*_deleted_backup.json
+**/*member*backup*.json
+**/*player*backup*.json
+**/*progress*backup*.json
+**/*wallet*backup*.json
+**/*transaction*backup*.json
+
+# Generated OS/tooling artifacts
+.DS_Store
+**/__pycache__/
+*.log
+temp_*
+
 # Env backups (含 secret，絕對不 commit)
 .env.bak
 .env.backup

@@ -1,6 +1,6 @@
 # 文件入口與權威順序
 
-> 狀態：現行文件治理規則。最後核對：2026-08-10。
+> 狀態：現行文件治理規則。最後核對：2026-08-16。
 
 本專案以「程式碼與目前 MongoDB 狀態」為唯一執行事實。文件的用途是讓人快速理解這個事實，不是另一套會自行漂移的規格。
 
@@ -12,8 +12,7 @@
 4. [ARCHITECTURE](ARCHITECTURE.md)：執行架構、資料流與部署邊界。
 5. [CURRENT_GAME_STATUS](CURRENT_GAME_STATUS.md)：由程式碼與 MongoDB 產生的資料快照。
 6. [COMBAT_FORMULA](../COMBAT_FORMULA.md)：目前共用戰鬥核心的基礎公式與結算時序。
-7. [DOCUMENT_SYNC_AUDIT](DOCUMENT_SYNC_AUDIT.md)：本次找到的落差、已修項目與刻意保留的技術債。
-8. [TODO](TODO.md)：目前工程執行順序、完成條件與需要核准的操作。
+7. [TODO](TODO.md)：目前工程執行順序、完成條件與需要核准的操作。
 
 如果上述文件彼此衝突，先執行 `npm run status:update` 與 `npm run check:docs`，再以對應的 `src/**` 程式和 MongoDB 設定為準。
 
@@ -25,7 +24,7 @@
 | 生成快照 | `docs/CURRENT_GAME_STATUS.md`、`docs/EXP_TABLE.md` | 可以；需先重跑生成指令 |
 | 現行細部規格 | API contract、職業與卡片規格、部署／OAuth／法務文件 | 只在標示範圍內有效；功能開關仍看現行索引與 DB |
 | 提案／下季設計 | `NATIVE_GAME_ROADMAP.md`、`PHASE0_GODOT_PIXEL.md`、`SEASON_*`、`web-game-blueprint.md` | 不可以；只有已被程式實作的段落才算現況 |
-| 歷史快照 | `CHANGELOG.md`、`SESSION_HANDOFF.md`、`project_review.md`、`benchmark*`、`reports/`、`balance-reports/` | 不可以；只用來追溯當時狀態 |
+| 歷史快照 | `DOCUMENT_SYNC_AUDIT.md`、`CHANGELOG.md`、`SESSION_HANDOFF.md`、`project_review.md`、`benchmark*`、`reports/`、`balance-reports/` | 不可以；只用來追溯當時狀態 |
 | 資料交換附件 | `docs/tsv/`、CSV、manifest JSON | 不一定；除非生成流程明確指定，線上資料仍以 MongoDB 為準 |
 
 ## 目前重要開關
@@ -41,11 +40,14 @@
 
 ## 維護流程
 
+玩家 React／TypeScript 原始碼在獨立 repository `OtonashiKoi/equipmentGAME-app`；本 repository 的 `src/web/public/app/` 只是部署成品。介面修改與測試必須在 SPA repository 完成，再部署並提交成品。
+
 功能改動完成時：
 
 1. 更新對應現行文件，不要把新現況補進歷史報告。
 2. 若變動涉及 DB 怪物、道具、任務、故事、世界王或直播活動設定，執行 `npm run status:update`。
 3. 執行 `npm run check:docs`；一般程式驗證仍執行 `npm run check` 與相關測試。
 4. 新規劃文件第一段必須標成「提案／未實作」；日期型報告第一段必須標成「歷史快照」。
+5. 玩家、會員、錢包、交易與直播綁定的匯出或備份只能放在 repository 外；提交前執行 `npm run check:sensitive`。
 
 `npm run check:docs` 會驗證幾個最容易再次漂移的硬事實：MongoDB-only、爬塔開關、一轉／二轉數量、鎖定分支，以及權威文件是否寫入相同狀態。
