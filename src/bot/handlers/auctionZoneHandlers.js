@@ -142,7 +142,9 @@ const SELL_WEAPON_SUBTABS = [
 ];
 const SELL_ARMOR_SUBTABS = [
   { subTab: "all", label: "📦 全部" },
-  { subTab: "head", label: "🪖 頭部" },
+  { subTab: "head_top", label: "🪖 頭部上" },
+  { subTab: "head_mid", label: "🎭 頭部中" },
+  { subTab: "head_low", label: "😷 頭部下" },
   { subTab: "core", label: "🥋 核心" },
   { subTab: "shield", label: "🛡️ 盾牌" },
   { subTab: "accessory", label: "💍 飾品" },
@@ -207,6 +209,8 @@ function matchSellWeaponSubTab(entry, subTab = "all") {
 function matchSellArmorSubTab(entry, subTab = "all") {
   if (subTab === "all") return true;
   const slot = String(entry?.equipSlot || "");
+  if (["head_top", "head_mid", "head_low"].includes(subTab)) return slot === subTab;
+  // 相容更新前已開啟的暫時面板。
   if (subTab === "head") return ["head_top", "head_mid", "head_low"].includes(slot);
   if (subTab === "core") return ["armor", "garment", "shoes"].includes(slot);
   if (subTab === "shield") return slot === "shield";
@@ -409,7 +413,13 @@ async function buildSellPanel(interaction, opts = {}) {
       tab === "gem" ? "強化石" : "可上架";
     return {
       content: `❌ 背包中沒有${emptyLabel}可上架（職業徽章/稱號不可上架）。`,
-      components: [buildSellMainTabRow(tab)],
+      components: [
+        buildSellMainTabRow(tab),
+        ...buildSellSubTabRows(tab, subTab, 0),
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(PFX.open).setLabel("← 取消").setStyle(ButtonStyle.Secondary)
+        ),
+      ],
     };
   }
 
@@ -452,15 +462,16 @@ async function buildSellPanel(interaction, opts = {}) {
           .setLabel("下一頁 ▶")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(safePage >= totalPages - 1),
+        new ButtonBuilder().setCustomId(PFX.open).setLabel("← 取消").setStyle(ButtonStyle.Secondary),
+      )
+    );
+  } else {
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(PFX.open).setLabel("← 取消").setStyle(ButtonStyle.Secondary)
       )
     );
   }
-
-  rows.push(
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(PFX.open).setLabel("← 取消").setStyle(ButtonStyle.Secondary)
-    )
-  );
 
   const tabLabel =
     tab === "weapon" ? `武器${subTab === "all" ? "" : ` / ${SELL_WEAPON_SUBTABS.find((d) => d.subTab === subTab)?.label || subTab}`}` :
