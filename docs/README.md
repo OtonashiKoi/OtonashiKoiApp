@@ -7,12 +7,13 @@
 ## 閱讀順序
 
 1. [README](../README.md)：怎麼啟動、驗證與找到主要入口。
-2. [PROJECT_FEATURES](../PROJECT_FEATURES.md)：玩家目前能用、暫停與未實作的功能矩陣。
-3. [SYSTEMS](SYSTEMS.md)：每個系統對應的程式入口與資料集合。
-4. [ARCHITECTURE](ARCHITECTURE.md)：執行架構、資料流與部署邊界。
-5. [CURRENT_GAME_STATUS](CURRENT_GAME_STATUS.md)：由程式碼與 MongoDB 產生的資料快照。
-6. [COMBAT_FORMULA](../COMBAT_FORMULA.md)：目前共用戰鬥核心的基礎公式與結算時序。
-7. [TODO](TODO.md)：目前工程執行順序、完成條件與需要核准的操作。
+2. [GAME_SPEC_LIVE_V1](GAME_SPEC_LIVE_V1.md)：本版完整規格快照（僅收錄現行已實作內容）。
+3. [PROJECT_FEATURES](../PROJECT_FEATURES.md)：玩家目前能用、暫停與未實作的功能矩陣。
+4. [SYSTEMS](SYSTEMS.md)：每個系統對應的程式入口與資料集合。
+5. [ARCHITECTURE](ARCHITECTURE.md)：執行架構、資料流與部署邊界。
+6. [CURRENT_GAME_STATUS](CURRENT_GAME_STATUS.md)：由程式碼與 MongoDB 產生的資料快照。
+7. [COMBAT_FORMULA](../COMBAT_FORMULA.md)：目前共用戰鬥核心的基礎公式與結算時序。
+8. [TODO](TODO.md)：目前工程執行順序、完成條件與需要核准的操作。
 
 如果上述文件彼此衝突，先執行 `npm run status:update` 與 `npm run check:docs`，再以對應的 `src/**` 程式和 MongoDB 設定為準。
 
