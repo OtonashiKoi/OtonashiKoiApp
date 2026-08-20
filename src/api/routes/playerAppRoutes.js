@@ -14,7 +14,7 @@ const { isOnlyDTierEquipped } = require("../../shared/combatStats");
 const { acquireSse } = require("../netGuards");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
 const { acquireWebBattle } = require("../../services/progress/battleLock");
-const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard } = require("../../shared/leaderboardEligibility");
+const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard, filterDamageMapForParticipants } = require("../../shared/leaderboardEligibility");
 const { calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
 const { getWorldBossPartLabel } = require("../../shared/worldBossParts");
 const { A_WEIGHT: WORLD_BOSS_ASSIST_WEIGHT } = require("../../services/kda/kdaService");
@@ -42,12 +42,10 @@ function prettyLeaderboardName(displayName, discordId) {
   return dn;
 }
 
-// 世界王頁同時提供兩種榜單：
-// - 傷害排行：只看實際對本王造成的傷害（預設顯示）
-// - 貢獻排行：與寶箱完全相同，C = 傷害 + 0.7 × 助攻當量
+// 世界王頁提供傷害排行（只看實傷）與貢獻排行（同寶箱公式 C = 傷害 + 0.7 × 助攻）。
 // 保留完整數值供排序，回傳時再四捨五入，避免畫面名次與結算名次不一致。
-function buildWorldBossRankings(damageMap = {}) {
-  const entries = Object.entries(damageMap).map(([pid, row]) => {
+function buildWorldBossRankings(damageMap = {}, participantIds = null) {
+  const entries = Object.entries(filterDamageMapForParticipants(damageMap, participantIds)).map(([pid, row]) => {
     const damage = Math.max(0, Number(row?.damage) || 0);
     const assist = Math.max(0, Number(row?.assist) || 0);
     return {
@@ -1650,6 +1648,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             imageUrl: lib.imageUrl || it.imageUrl || null,
             imageThumbnailUrl: lib.imageThumbnailUrl || it.imageThumbnailUrl || null,
             description: lib.description ?? it.description ?? null,
+            catalogCreatedAt: lib.createdAt || it.catalogCreatedAt || null, catalogSortOrder: lib.sortOrder != null && lib.sortOrder !== "" && Number.isFinite(Number(lib.sortOrder)) ? Number(lib.sortOrder) : null,
             monsterCardSkill: lib.monsterCardSkill || it.monsterCardSkill || null,
             // 詳細資料面板的「特效說明」列（卡片技能 + 裝備效果，後端組好直接顯示）
             effectLines: buildItemEffectLines(lib),
@@ -3370,7 +3369,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             hutaoEventSnapshot = justStarted
               ? await serviceContext.hutaoEventService.resetRun(startRes?.state?.battleStartedAt)
               : await serviceContext.hutaoEventService.ensureRun(startRes?.state?.battleStartedAt);
-            // 立直的 60 秒是全服暫停：這裡仍在入場費之前，按戰鬥不會扣錢。
+            // 立直的 30 秒是全服暫停：這裡仍在入場費之前，按戰鬥不會扣錢。
             if (hutaoEventSnapshot?.blocking) {
               return res.status(409).json({
                 status: "error",
@@ -3456,15 +3455,20 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // ── 島島龜王（活動 event_boss）：潮汐/海嘯——推進詠唱狀態機、取本場修正 ──
       let turtleTsunami = false, turtleForceHit = false, turtleGaugeMult = 1, turtleTsunamiRound = null;
       const _tt = require("../../shared/turtleTide");
+      const _dsg = require("../../shared/dwarfStunGauge");
+      const stunGaugeKey = isWorldBoss ? _dsg.gaugeKeyForZone(zoneKey) : null;
+      const _turtleNow = Date.now();
+      const _turtleStunSync = isWorldBoss && zoneKey === _tt.ZONE ? await require("../../shared/turtleStunSync").reconcileTurtleCastFromStunGauge(stateForCombat, zoneKey, _turtleNow) : null;
+      const stunStateBefore = _turtleStunSync?.stunState || (stunGaugeKey ? await _dsg.read(stunGaugeKey, zoneKey).catch(() => null) : null);
+      const teamStunOn = Boolean(stunStateBefore?.stunned);
       if (isWorldBoss && zoneKey === _tt.ZONE) {
         const _mzh = require("../../bot/handlers/monsterZoneHandlers");
         const _tpl = _mzh.createWorldBossPartHpTemplate(monster.calc.maxHp, zoneKey);
         const _totMax = Object.values(_tpl).reduce((s, v) => s + v, 0);
         const _partsHp = stateForCombat?.worldBossPartsHp || {};
         const _totCur = _mzh.getWorldBossPartKeys(zoneKey).reduce((s, k) => s + Math.max(0, Number(_partsHp[k] ?? _tpl[k]) || 0), 0);
-        const _turtleNow = Date.now();
         const _events = _tt.ensureCast(stateForCombat, _totMax > 0 ? (_totCur / _totMax) * 100 : 100, _turtleNow);
-        if (_events.length) await serviceContext.monsterService.saveState(stateForCombat, zoneKey).catch(() => {});
+        if (_turtleStunSync?.repaired || _events.length) await serviceContext.monsterService.saveState(stateForCombat, zoneKey).catch(() => {});
         const _mods = _tt.battleMods(stateForCombat, worldBossPart, _turtleNow);
         if (_mods.headBlocked) {
           return res.status(400).json({ status: "error", message: "🌊 漲潮中——龜首縮回殼裡打不到！等退潮再攻頭部（其他部位照常）。" });
@@ -3549,12 +3553,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // ── 世界王暈眩條（矮人戰士長・巨神震擊）──
       // 出戰瞬間看時鐘：還在 20 秒窗口內 → 這場怪物整場不出手（全程免傷）。
       // 只有世界王區才有暈眩條；一般區域完全不受影響。
-      const _dsg = require("../../shared/dwarfStunGauge");
-      const _stunZoneOn = isWorldBoss;
-      const stunGaugeKey = _stunZoneOn ? _dsg.gaugeKeyForZone(zoneKey) : null;
-      const stunStateBefore = stunGaugeKey ? await _dsg.read(stunGaugeKey, zoneKey).catch(() => null) : null;
-      const teamStunOn = Boolean(stunStateBefore?.stunned);
-
       // ── 區域冰凍值（元素師・凍霜）── 任何區域都有；與矮人暈眩條完全分開。
       // 出戰瞬間在冰封窗口內 → 這場怪物整場無法造成傷害（與巨神震擊同通道、不同文案）。
       const _zfg = require("../../shared/zoneFreezeGauge");
@@ -3760,7 +3758,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             );
           }
 
-          // 龜王 70%／30% 固定詠唱必須在本場扣血後立刻判定，不能等下一位玩家進場才啟動。
+          // 龜王 70%／40% 固定詠唱必須在本場扣血後立刻判定，不能等下一位玩家進場才啟動。
           if (zoneKey === _tt.ZONE && nextCurrentHp > 0) {
             const turtleTotalMax = Object.values(prevParts.worldBossPartsMaxHp || {})
               .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
@@ -4332,14 +4330,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (!isWorldBoss || zoneKey !== _tt.ZONE) return null;
           try {
             const _mzh2 = require("../../bot/handlers/monsterZoneHandlers");
-            const _fs2 = await serviceContext.monsterService.getState(zoneKey);
+            const _fs2 = await serviceContext.monsterService.getState(zoneKey), _now2 = Date.now();
+            await require("../../shared/turtleStunSync").reconcileTurtleCastFromStunGauge(_fs2, zoneKey, _now2);
             const _tpl2 = _mzh2.createWorldBossPartHpTemplate(monster.calc.maxHp, zoneKey);
             const _totMax2 = Object.values(_tpl2).reduce((s, v) => s + v, 0);
             const _hp2 = _fs2?.worldBossPartsHp || {};
             const _totCur2 = _mzh2.getWorldBossPartKeys(zoneKey).reduce((s, k) => s + Math.max(0, Number(_hp2[k] ?? _tpl2[k]) || 0), 0);
             const _pct2 = _totMax2 > 0 ? Math.round((_totCur2 / _totMax2) * 1000) / 10 : 100;
             return {
-              ..._tt.view(_fs2, _pct2),
+              ..._tt.view(_fs2, _pct2, _now2),
               total: { cur: _totCur2, max: _totMax2, pct: _pct2 },
               phaseMarks: [70, 40], // 沉睡→甦醒→怒濤 的刻度（與 worldBossConfig phaseConfig 對齊）
             };
@@ -4541,7 +4540,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             "🀀 東場：胡桃迴避大幅上升；🀁 南場：胡桃攻擊提高 25%。",
             "🀂 西場：玩家爆擊傷害降低 25%；不使用任何防禦或破防效果。",
             "🀃 北場：胡桃迴避歸零、玩家傷害 +35%，但胡桃攻擊 +50%。",
-            "🎴 HP 降到 70% 與 40% 時宣告立直，全服暫停 60 秒並一起回答聽牌題。",
+            "🎴 HP 降到 70% 與 40% 時宣告立直，全服暫停 30 秒並一起回答兩面／坎張聽牌題。",
             "👀 作答後可即時看見其他玩家的選擇；時間到才公開正解並結算放銃／自摸／流局。"
           ]
         }
@@ -4604,16 +4603,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         if (zoneKey === _ttStatus.ZONE) {
           const totalHpPct = bossMaxHp > 0 ? (currentHp / bossMaxHp) * 100 : 100;
           const hasEncounter = Boolean(partState?.turtle?.encounterStartedAt) || currentHp < bossMaxHp;
+          const turtleStunSync = hasEncounter ? await require("../../shared/turtleStunSync").reconcileTurtleCastFromStunGauge(partState, zoneKey, _wbNowS) : null;
           if (hasEncounter) {
             const encounterStartedBefore = partState?.turtle?.encounterStartedAt || null;
             const turtleEvents = _ttStatus.ensureCast(partState, totalHpPct, _wbNowS);
             const encounterStartedAfter = partState?.turtle?.encounterStartedAt || null;
             // 只在首次建立狀態或真的跨階段時寫回；一般輪詢只讀，避免每位玩家每 5 秒覆寫整份王狀態。
-            if (encounterStartedBefore !== encounterStartedAfter || turtleEvents.length > 0) {
+            if (turtleStunSync?.repaired || encounterStartedBefore !== encounterStartedAfter || turtleEvents.length > 0) {
               await serviceContext.monsterService.saveState(partState, zoneKey).catch(() => {});
             }
           }
-
           const turtleView = _ttStatus.view(partState, totalHpPct, _wbNowS);
           const phase = turtleView.tsunami
             ? "tsunami"
@@ -4672,11 +4671,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           };
         }
 
-        // 目前這輪有人打就用現況；還沒人打(冷卻中/剛重生)則顯示「上一隻」的排行，直到下一隻被打才換新。
-        // 傷害榜預設顯示；貢獻榜與本王寶箱同公式，方便玩家直接理解結算名次。
-        const _rankSrcRaw = (st?.damageMap && Object.keys(st.damageMap).length > 0) ? st.damageMap : (st?.lastDamageMap || {});
-        const _rankSrc = filterDamageMapForLeaderboard(_rankSrcRaw, excludedIds);
-        const { damageRanking, contributionRanking } = buildWorldBossRankings(_rankSrc);
+        // 目前輪有紀錄就用現況，否則冷卻中保留上一輪；貢獻榜與寶箱同公式、同參戰資格。
+        const _usingCurrentRound = Boolean(st?.damageMap && Object.keys(st.damageMap).length > 0),
+          _rankSrc = filterDamageMapForLeaderboard(_usingCurrentRound ? st.damageMap : (st?.lastDamageMap || {}), excludedIds),
+          _rankParticipants = _usingCurrentRound ? (Array.isArray(st?.participants) ? st.participants : null) : (Array.isArray(st?.lastParticipants) ? st.lastParticipants : null);
+        const { damageRanking, contributionRanking } = buildWorldBossRankings(_rankSrc, _rankParticipants);
         const participantCount = Array.isArray(st?.participants) ? st.participants.length : 0;
         const lastHitAt = st?.lastHitAt || null;
         const lastHitMs = lastHitAt ? new Date(lastHitAt).getTime() : 0;

@@ -29,6 +29,7 @@
 - Discord：`src/bot/handlers/monsterZoneHandlers.js`、`src/bot/monsterZoneView.js`
 - Web API：`src/api/routes/playerAppRoutes.js` 的 `/api/combat/*`
 - Web 一般怪結算以 `activeMonsterSeq + currentHp` 作 MongoDB 條件式更新；同怪並發扣血會重讀後重試，已死亡、轉場或已換怪的舊戰鬥結果直接丟棄，不能把上一隻怪的剩餘 HP 寫到下一隻。區域快照與開戰入口另將持久 HP 限制在目前怪物模板 `0..maxHp`，並自動修復既有超上限狀態
+- 區域怪物狀態以 `monsters` collection 的 `_id: monsterState:<zone>` 為 canonical；擊殺收付鎖與一般讀取使用同一份文件。`monsterState` collection 僅保留相容鏡像，兩者暫時不同步時不得用舊鏡像覆蓋或阻擋 canonical 的換怪結算
 - 玩家 SPA 的一般討伐換怪不等待下一場 API 回應才更新畫面：`BattleLayer` 先讀取上一場回應已寫入 `zonesQueryKey` 快取的下一隻怪，清掉上一場結算畫面並立即顯示新怪，背景伺服器權威結算回來後再以完整 `BattleData` 接續播放；請求失敗會恢復可操作狀態。全站 API 寫入提示不追蹤 `/api/combat/quick-battle` 與 `/api/me/solo-boss/battle`；戰鬥仍由 `inflightRef`、`battleStarting` 與排隊狀態防止重複送出，其他寫入操作仍使用全站提示
 - Web 死亡冷卻由 `src/shared/battleTiming.js` 統一計算為「本場前端播放時間＋30 秒死亡懲罰」；戰鬥層只在播放完成、玩家真正看到敗北時顯示倒數，因此當下仍為完整 30 秒。Discord 則在 `displaySettledBattleResult()` 播完逐回合戰報後才呼叫 `recordDeathCooldown()`，兩端語意一致
 - 後台：`adminMonsterRoutes.js`、`adminCombatCalculatorRoutes.js`
@@ -42,17 +43,18 @@
 - 目前五個 boss key：`default`（大史王）、`dragon_king`（古龍王）、`hellfang_king`（地獄狼牙王）、`island_turtle`（島島龜王）、`northwind_hutao`（北風雀神・胡桃私測）
 - 階段技能由各王 `worldBossConfig.phaseConfig` 的開關獨立控制；三階段只代表血量區間與階段倍率，不會自動授予雷擊術。相容尚未寫入 `lightningEnabled` 的既有資料時，僅大史王第二／第三階段保留原本雷擊，其他四王預設關閉
 - 常態前置鏈：大史王 → 古龍王 → 地獄狼牙王；島島龜王沒有前置王。胡桃使用獨立 `event_boss_hutao_preview` 區域與世界王狀態，目前只允許音無恋的 Discord ID 進入；正式開放前不列入 Web／Discord 怪物圖鑑；不覆蓋或移除 `event_boss` 島島龜王，供未來活動王輪替／混流
-- 胡桃私測第一階段只上線 13 種 S 階限定武器；共通被動「風向輪轉」跨戰鬥保存步進，依序提供東風命中、南風最終傷害、西風爆擊傷害、北風爆擊率，沒有防禦、破防或無視防禦類效果
+- 胡桃私測內容包含 13 種 S 階限定武器、8 件 A 階「北風套裝・大四喜」與胡桃王卡；武器共通被動「風向輪轉」跨戰鬥保存步進，依序提供東風命中、南風最終傷害、西風爆擊傷害、北風爆擊率，完整套裝則每個場風維持 3 回合。胡桃在 70%／40% 血量各開一次 30 秒全服立直，70% 從 6 題兩面題抽題、40% 從 6 題坎張題抽題；兩面題的兩張牌都算正解，玩家作答後不可改票
 - 單人王：`src/api/routes/soloBossRoutes.js`；`accountSoloBoss` 位於帳號頂層，三個人物共用每日擊殺上限與部位進度；舊人物快照會在首次讀取時合併
 - KDA：`src/services/kda/kdaService.js`；戰內歸戶在 `combatLoop.js` 的 `assistLedger`，共用效果分類與防禦收益反推在 `src/shared/supportContribution.js`。賽季總計仍保留，新增 `jobStats.<jobId>` 按每場出戰職業記錄 K／D／場次，外部光環與區域窗口的 A 也按提供能力時的職業記錄；舊總計因沒有歷史職業快照不猜測回填
 - 助攻口徑：聖靈師／治療師的隊伍增傷與有效治療都計入；兵聖／軍師的 Boss 增傷與怪物破防分開換算；結界師／聖域師按實際擋傷，吟遊詩人／詩人 AGI 光環按傷害當量；神射手掩護箭作為提供者直接 K，不重複列 A 或算給受支援者，部位殘血截斷時所有直傷來源等比例縮放。自己的光環不可自益，EXP／金幣光環不算戰鬥助攻
-- 世界王寶箱只依本王戰鬥貢獻 `傷害 + 0.7 × 助攻當量` 排名前 6 名；入場費與累積花費不參與排名。寶箱數量仍依本王有效參與人數及最終名次決定；結算公告優先解析 Discord 顯示名，解析不到只顯示「某位勇者」，不顯示完整或部分 Discord ID
+- 世界王寶箱只依本王戰鬥貢獻 `傷害 + 0.7 × 助攻當量` 排名前 6 名；入場費與累積花費不參與排名。只有本輪實際進入戰鬥的玩家具有排名資格，世界王擊殺或超時換輪時會清除跨場光環，避免上一輪提供者以 0 傷害助攻進入新一輪榜單；寶箱數量仍依本王有效參與人數及最終名次決定。結算公告優先解析 Discord 顯示名，解析不到只顯示「某位勇者」，不顯示完整或部分 Discord ID
+- 世界王怪物資料必須提供穩定的 `seq`；相容舊活動王缺少 `seq` 的狀態時，擊殺權會把缺值統一視為 `null`，不可因 `Number(undefined)` 變成 `NaN` 而漏結算。若四部位全破後結算遭重啟或例外中斷，背景檢查會保留本輪 `damageMap`／`participants` 並重跑正常擊殺結算；失敗時維持全破狀態等待下次重試，不得直接補滿血或清除寶箱資格
 - 世界王暈眩條：`src/shared/dwarfStunGauge.js`；巨神震擊窗口內開始的戰鬥會封鎖世界王整場的普攻、怪物卡技能與階段技能（包含雷擊術）；玩家自傷不屬於怪物傷害。矮人與元素控制條會原子保存本輪所有敲條者，窗口被玩家實際使用時，以受益玩家有效輸出的 10% 作助攻池並按敲條量分帳；聖域條同樣保存所有累積者，按窗口實際擋傷與有效治療分帳。Discord、Web 與單人王入口共用同一歸戶規則
 - 元素師炎圈對其餘存活部位的鏡射傷害在 Discord、Web 與單人王使用同一規則，會同步扣除各部位 HP 並計入元素師當場職業的 K
 - Web 戰鬥 UI：獨立顯示世界王總血量／機制狀態，部位名牌與傷害數字不覆蓋機制面板；世界王詳情的排行榜預設顯示純傷害，可切換成與寶箱相同公式的貢獻排行，貢獻列同時顯示傷害與助攻拆分；世界王與單人王的亮色選怪卡使用亮底專用深色文字，名稱、屬性、入場費、冷卻與部位標籤維持高對比；世界王選怪卡、進場前部位頁與尚未攻擊的龜王戰鬥畫面都透過 `/api/worldboss/status` 顯示龜王總血、潮汐、安全、詠唱、海嘯、破綻與逐秒倒數，海嘯中出擊鈕改為紅色「進場即死」警告但仍可點擊；`battleStore.buildTimeline()` 保留完整戰報並把每一條非回合內容轉為語意動畫事件，`BattleLayer` 依回合分組，主要攻擊、技能、暴擊、怪物反擊、治療、狀態、格擋與閃避全部照順序播放，不做重點刪減；連擊與怪物多段攻擊的每一段也完整保留；`weaponPresentation` 以後端回傳的 `weaponType` 將所有主手武器分成單／雙手劍、匕首、單／雙手錘、單／雙手斧、單／雙手法杖、弓、骰子與空手演出，`WeaponAttackFx` 負責斬擊、突刺、砸擊、劈砍、魔法、投射及屬性／暴擊演出，持續傷害、反傷與隊友支援不冒用自身武器動畫；同一次玩家攻擊只保留一個主要武器演出，不再疊加頭像環、爆裂底圖及全畫面閃光，合併多段攻擊只有第一段播放整套動畫；元件移除全層混色與大型 drop-shadow，錘擊碎片及常駐同時演出數量亦縮減；設定頁的戰鬥特效開關以 `okoi-battle-visuals` 保存於目前裝置，關閉後停止武器、骰子、職業提示與畫面光效，但 HP、傷害數字、骰點文字及完整戰報仍保留；戰場中央不再另外渲染逐事件短字幕；一般回合固定使用後端依 AGI 回傳的 `tickMs` 時槽並按事件數縮短間隔，骰子武器則以 `combatLoop.diceEvents` 的後端結算骰面保留 620ms 落地時間（重骰 900ms），兩顆傷害骰旋轉彈跳後才播放傷害，賭神命運值滿時另落下一顆金色命運骰；第三版戰鬥層只在觸控裝置以手機 `VisualViewport` 的實際可見寬高縮放完整 390×693.33 設計畫布，頂部玩家 HUD、龜王機制、怪物、操作盤、自身 HP 與底部主導覽共用同一倍率；桌機沿用全站 9:16 視窗框與中央戰場縮放，不會再被手機倍率二次縮小；內部元件不因高度斷點切換位置或被個別裁切；戰報預設展開、可收合成小列，選擇以瀏覽器 localStorage 保存
 - 島島龜王的 Web 戰鬥背景由 `uploads/zones/event_boss.webp` 提供，與夏日活動區維持同一套海島遺跡場景
 - 島島龜王沿用四部位 key 以相容世界王引擎，但顯示名稱固定為 `head=龜首`、`body=島背`、`wings=左鰭`、`legs=右鰭`；古龍王的 `wings` 才顯示龍翼
-- 島島龜王海嘯由 `src/shared/turtleTide.js` 統一驅動：開戰後每 3 分鐘檢查一次，總血 70%／30% 各強制一次；詠唱 3 分鐘期間全部位可攻擊但全身承傷僅 1%，冰凍與暈眩累積 ×2；巨神震擊命中時詠唱條歸零，暈眩結束後從 0 重跑完整詠唱，不開啟破綻；區域冰封仍會打斷詠唱並開啟 30 秒 ×1.3 破綻；詠唱完成時仍在戰鬥中的玩家會在對應回合被真海嘯命中，海嘯 3 分鐘內新進場者則開場即死；海嘯結束後有 30 秒 ×1.3 破綻
+- 島島龜王海嘯由 `src/shared/turtleTide.js` 統一驅動：只在本輪總血首次降到 70%／40% 時各強制一次，不做時間週期觸發；詠唱 3 分鐘期間全部位可攻擊但全身承傷僅 1%，冰凍與暈眩累積 ×2；巨神震擊命中時會完全中斷並隱藏詠唱條，暈眩結束後從 0% 重跑完整詠唱且不開啟破綻；詠唱狀態會用獨立原子暈眩文件自動校正，避免多人同時結算時被舊 `monsterState` 蓋回；區域冰封仍會打斷詠唱並開啟 30 秒 ×1.3 破綻；詠唱完成時仍在戰鬥中的玩家會在對應回合被真海嘯命中，海嘯 3 分鐘內新進場者則開場即死；海嘯結束後有 30 秒 ×1.3 破綻
 - 資料：`worldBossConfig`、`worldBossState`、`worldBossChestGrants`、`kdaSeasonStats`、`worldBossStunGauge`
 
 ### 爬塔
@@ -73,7 +75,7 @@
 | 掛機 | `services/idle/idleService.js`、`playerIdleRoutes.js`、`adminIdleRoutes.js` | `idleZones`、`idlePlayerStates` |
 | PK | `shared/pkCombat.js`、`bot/handlers/pkArenaHandlers.js` | `pkArenaState` |
 | 賭場 | `services/casino/casinoService.js`、`bot/handlers/casinoHandlers.js` | `casinoState`、`casinoRounds`；25 格輪盤由 `wheelConfig.WHEEL_SLOTS` 統一提供結算與 Web 動畫，格數固定黃12／綠6／紅4／藍2／紫1，伺服器結果含 `slotIdx`，前端只負責旋轉呈現、不自行開獎 |
-| 寵物 | `services/pet/petService.js`、`bot/handlers/petHandlers.js` | `progress.pets`、`progress.petDex` |
+| 寵物 | `services/pet/petService.js`、`bot/handlers/petHandlers.js` | `progress.pets`、`progress.petDex`；常駐採集池只會產出已啟用的一般裝備，排除私測、限定活動、`noPetGather` 專屬掉落、卡片與特殊槽位，避免繞過活動入口取得未開放道具 |
 | 麻將 | `services/mahjong/`、`api/routes/mahjongRoutes.js` | runtime queue state |
 | 主線故事／據點訪客 | `services/story/storyService.js`、`api/routes/storyRoutes.js` | `storyChapters`、`storyNpcs`、`progress.storyProgress`；登入玩家可由 `/api/story/hub-npcs` 取得有立繪且排除音無恋的據點訪客清單 |
 | 錨點圖鑑／試煉 | `shared/anchorAcquisition.js`、`shared/anchorQuestRules.js`、`api/routes/playerCollectionRoutes.js`、`services/weeklyQuest/weeklyQuestService.js` | 九件錨點皆有取得提示；聖人試煉不綁抖內，命運之輪為每輪有下注者不論輸贏 3% 且每人限一次 |
@@ -82,7 +84,7 @@
 
 | 系統 | 程式 | 資料／備註 |
 | --- | --- | --- |
-| 背包與換裝 | `services/item/itemService.js`、`services/shop/shopService.js`、`playerAppRoutes.js` | `items`、`progress.inventory/equipment`；支援使用、丟棄、出售、鎖定、批次操作與伺服器權威的一鍵最大 ATK 配裝；自動配裝依目前職業限制武器種類，並保留稱號、職業徽章、卡片與錨點；Web 防裝篩選把頭部上、中、下三個槽位分開顯示 |
+| 背包與換裝 | `services/item/itemService.js`、`services/shop/shopService.js`、`playerAppRoutes.js` | `items`、`progress.inventory/equipment`；支援使用、丟棄、出售、鎖定、批次操作與伺服器權威的一鍵最大 ATK 配裝；自動配裝依目前職業限制武器種類，並保留稱號、職業徽章、卡片與錨點。強化石、藥水與七種屬性石依 `itemId` 合併堆疊；收藏品預設依道具庫排序值／發布時間顯示版本先後；Web 防裝篩選把頭部上、中、下三個槽位分開顯示 |
 | 多人物與裝備方案 | `services/character/characterService.js`、`shared/membershipEntitlements.js`、`services/shop/shopService.js`、`api/routes/playerPresetRoutes.js` | `progress.activeCharacterSlot/characterSlots/activePreset/equipPresets/equipPresetNames`；背包帳號共用，其餘角色養成與 A～G 方案隨人物切換；非會員 1×1、鯉民 3×3、鯉長 3×5、鯉市長以上 3×7；Web 只渲染目前可用方案，完整規則由相鄰「＋」按鈕開啟說明視窗，API 仍對越級方案回 403 |
 | 背包容量 | `services/backpack/backpackService.js` | 主要戰鬥入口會在背包滿時阻擋 |
 | 強化與屬性洞 | `services/enhance/`、`api/routes/playerAppRoutes.js`、`api/routes/playerForgeRoutes.js` | 寶石強化；D1/C2/B3/A4/S5 屬性洞；屬性鑲嵌與破壞拆除。拆除次數永久保存在 `progress.inventory/equipment[].elementRemovalCount`，最多成功 3 次 |
@@ -178,7 +180,7 @@
 - 討伐關卡詳情在手機上只使用頁面外層縱向捲動，近十分鐘傷害排行不建立第二個捲動層、也不攔截觸控；怪物預覽縮為 112px，保留更多高度給排行與出擊按鈕。
 - 第三版戰鬥共鬥列：左側直向列包含自己，以窄版「共鬥」外框統一包住各玩家的圓形頭像與近十分鐘輸出，清楚表達組隊區概念但不繪製貫穿戰場的長底框；隊伍增加時依內容往下新增節點、超過安全高度時在框內捲動。共鬥列是獨立絕對定位覆蓋層，無論玩家數量、聊天泡泡或詳情開合，都不會推動怪物、中央操作盤、自身 HP／氣條或底部導覽。最近在網頁大廳或 Discord 城鎮頻道發言的玩家會顯示訊息前 6 字（超過才加省略號）的短摘要泡泡；泡泡可伸出共鬥外框且不被捲動框裁切，用來提示玩家前往聊天頁查看完整內容。領域快捷表情同樣從發送者頭像旁彈出，並與聊天泡泡一起渲染在共鬥捲動裁切層外，捲動時仍跟隨對應玩家且不會被外框切掉；展開的完整戰報與共鬥列位於同一層疊容器且固定高於共鬥框，左上收合按鈕與 COMBO、左側共鬥列、右側快捷表情各有獨立安全區，不互相覆蓋，也不壓住底部玩家 HUD。
 - 第三版戰鬥操作盤與受擊回饋：戰場會先保留固定尺寸的操作盤區域，單一攻擊、三種元素或未來最多五個快捷鍵都只能在該區域內排列與交換，技能數量和動畫不得推動自身 HUD。中央目前採用的主攻擊會以大圓顯示，該職業其餘可用姿態／技能依數量沿下半圓排列且不顯示空位；第一人稱模式點姿態小圓會立刻以該姿態出戰，同時用交換動畫把新姿態移入中央、原姿態縮回外圈，不需要再按一次中央。元素師以伺服器預設的嵐暴置中，炎圈與凍霜分列左右，送出戰鬥時仍由伺服器驗證姿態。自身 HP、BUFF 與職業氣條整組固定下移至底部導覽上方，快捷表情固定在 HUD 上方避免重疊；下方不常駐堆疊額外說明，保留給後續補品數量、自動使用門檻與回合 CD 等戰鬥快捷狀態。玩家受傷只播放不改變座標的光效，場景、玩家 HUD、頂欄、戰報、操作盤和底部導覽都保持固定；玩家受擊不再疊加兩層紅色全畫面閃光，改用低亮度紅色邊緣脈衝，格擋改為霧藍邊緣光，暴擊、處決與閃電的全畫面亮度同步降低；玩家回血與吸血只讓自身 HP 條播放一次綠色流光，不再讓整個戰場閃綠光，回血與傷害數字仍照常顯示；臨時狀態列預留固定高度，出現或消失不得重新排版。
-- 第三版戰鬥資訊層：怪物圖片以場景化邊緣與地面陰影融入地圖，依真實事件播放受擊、詠唱、暈眩與勝利退場；怪物名牌與自身 HUD 以圖示列濃縮顯示暈眩、冰封、聖域、海嘯、破綻、結界及隊友光環等已確認狀態。完整戰報保留在左上角並可收合；戰場中央不重複顯示逐事件短字幕，也不保留額外結算小窗。戰鬥核心會在結果回傳本場實際採用的攻擊屬性、濃度、相剋關係與倍率，操作盤顯示該真值；長按任一技能會開啟伺服器職業設定產生的說明。神射手的掩護射擊、神速反擊與震盪射擊直接由伺服器戰報事件驅動不同箭道、準星與來源提示；兵聖的五種計策同樣讀取伺服器事件，在戰場右上顯示不推動 HUD 的計策卡與對應場景色光，前端不重算傷害或自行決定計策。每招回合冷卻與補品快捷欄皆已預留結構化欄位，但只有伺服器提供真實資料時才渲染，不建立假冷卻或假道具數量。共鬥列的新成員由左側滑入，實際提供本場光環的隊友會以脈衝連線標示。
+- 第三版戰鬥資訊層：怪物圖片以場景化邊緣與地面陰影融入地圖，依真實事件播放受擊、詠唱、暈眩與勝利退場；圖片優先使用本場快照，進場競速缺圖時會由世界王或區域輪詢補回，短暫載入失敗亦會自動重試，島島龜王另有同站靜態圖備援，不會因一次失敗永久變成通用鬼面。怪物名牌與自身 HUD 以圖示列濃縮顯示暈眩、冰封、聖域、海嘯、破綻、結界及隊友光環等已確認狀態。完整戰報保留在左上角並可收合；戰場中央不重複顯示逐事件短字幕，也不保留額外結算小窗。戰鬥核心會在結果回傳本場實際採用的攻擊屬性、濃度、相剋關係與倍率，操作盤顯示該真值；長按任一技能會開啟伺服器職業設定產生的說明。神射手的掩護射擊、神速反擊與震盪射擊直接由伺服器戰報事件驅動不同箭道、準星與來源提示；兵聖的五種計策同樣讀取伺服器事件，在戰場右上顯示不推動 HUD 的計策卡與對應場景色光，前端不重算傷害或自行決定計策。每招回合冷卻與補品快捷欄皆已預留結構化欄位，但只有伺服器提供真實資料時才渲染，不建立假冷卻或假道具數量。共鬥列的新成員由左側滑入，實際提供本場光環的隊友會以脈衝連線標示。
 - 公告：`services/announcement/`
 - 玩家即時事件：`services/realtime/`、`webPresence`
 - 直播 overlay：`streamOverlayRoutes.js`、`chatOverlayHub.js`

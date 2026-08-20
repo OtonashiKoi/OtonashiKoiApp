@@ -5,6 +5,7 @@ const {
   RIICHI_DURATION_MS,
   windAt,
   questionForMark,
+  questionById,
   publicQuestion,
   resolveAnswerOutcome,
   outcomeEffect,
@@ -50,7 +51,7 @@ class HutaoEventService {
     if ((state.resolvedMarks || []).map(Number).includes(Number(mark))) return this._snapshot(state, now);
     if (state.quiz?.status === "active" && Number(state.quiz.endsAt) > now) return this._snapshot(state, now);
 
-    const question = questionForMark(mark);
+    const question = questionForMark(mark, state.runKey);
     state.quiz = {
       id: `${state.runKey || "run"}:${Number(mark)}:${Math.floor(now)}`,
       mark: Number(mark),
@@ -76,7 +77,7 @@ class HutaoEventService {
       await this._finalizeIfExpired(now);
       throw Object.assign(new Error("答題時間已結束。"), { code: "HUTAO_QUIZ_CLOSED" });
     }
-    const question = questionForMark(quiz.mark);
+    const question = questionById(quiz.questionId, quiz.mark, state.runKey);
     if (!question.choices.some((choice) => choice.id === choiceId)) {
       throw Object.assign(new Error("請選擇有效的麻將牌。"), { code: "HUTAO_INVALID_CHOICE" });
     }
@@ -98,8 +99,8 @@ class HutaoEventService {
     const state = await this._read();
     const quiz = state.quiz;
     if (!quiz || quiz.status !== "active" || Number(quiz.endsAt) > now) return state;
-    const question = questionForMark(quiz.mark);
-    const result = resolveAnswerOutcome(quiz.answers, question.correctChoiceId);
+    const question = questionById(quiz.questionId, quiz.mark, state.runKey);
+    const result = resolveAnswerOutcome(quiz.answers, question.correctChoiceIds);
     const effect = outcomeEffect(result.outcome);
     const next = {
       ...state,
@@ -135,7 +136,7 @@ class HutaoEventService {
 
   _snapshot(state, now = Date.now()) {
     const quiz = state.quiz;
-    const question = quiz ? questionForMark(quiz.mark) : null;
+    const question = quiz ? questionById(quiz.questionId, quiz.mark, state.runKey) : null;
     const resolved = quiz?.status === "resolved";
     const choiceById = Object.fromEntries((question?.choices || []).map((choice) => [choice.id, choice]));
     const answers = Object.entries(quiz?.answers || {}).map(([discordId, answer]) => ({
@@ -145,7 +146,7 @@ class HutaoEventService {
       choiceLabel: choiceById[answer.choiceId]?.label || answer.choiceId,
       choiceGlyph: choiceById[answer.choiceId]?.glyph || "🀫",
       answeredAt: Number(answer.answeredAt) || null,
-      ...(resolved ? { correct: answer.choiceId === question.correctChoiceId } : {}),
+      ...(resolved ? { correct: question.correctChoiceIds.includes(answer.choiceId) } : {}),
     }));
     return {
       key: "hutao_riichi",

@@ -7,6 +7,7 @@ const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
 const { slimProgressForStorage, slimInventoryEntry, slimInventoryArray } = require("../../shared/inventoryStorage");
 const seasonState = require("../../services/access/seasonStateStore");
 const maintenance = require("../../services/access/maintenanceStore");
+const { claimMonsterKill } = require("./claimMonsterKill");
 const { saveActiveMonsterState } = require("./saveActiveMonsterState");
 
 function emitRealtimeInvalidate(type, discordId) {
@@ -1029,11 +1030,12 @@ function createMongoRepositories() {
             "value.quiz.id": String(quizId),
             "value.quiz.status": "active",
             "value.quiz.endsAt": { $gt: Number(now) },
+            [field]: { $exists: false },
           },
           { $set: { [field]: answer, updatedAt: new Date().toISOString() } }
         );
         if (!result.matchedCount) {
-          throw Object.assign(new Error("答題已結束。"), { code: "HUTAO_QUIZ_CLOSED" });
+          throw Object.assign(new Error("答題已結束，或你已經完成作答。"), { code: "HUTAO_QUIZ_CLOSED" });
         }
         return true;
       },
@@ -1243,49 +1245,7 @@ function createMongoRepositories() {
       // 若先前的 claim 超過 timeoutMs，允許重新 claim（回收無回應的鎖）
       async claimKill(zoneKey, monsterSeq, timeoutMs = 30 * 1000) {
         if (maintenance.isStrict()) return false;
-        // 為了保留原有的原子操作語意，claim 仍在 legacy monsterState collection 上執行
-        const col = await collection("monsterState");
-        const now = new Date();
-        const cutoff = new Date(Date.now() - timeoutMs);
-
-        // 條件：同 zoneKey、activeMonsterSeq 相符，且 killClaimedSeq != monsterSeq
-        // 或 killClaimedAt 早於 cutoff（表示前一次 claim 超時），或 killClaimedAt 不存在
-        const q = {
-          _id: zoneKey,
-          "value.activeMonsterSeq": monsterSeq,
-          $and: [
-            {
-              $or: [
-                { "value.activeTransition": { $exists: false } },
-                { "value.activeTransition": null }
-              ]
-            },
-            {
-              $or: [
-                { "value.activeEvent": { $exists: false } },
-                { "value.activeEvent": null }
-              ]
-            }
-          ],
-          $or: [
-            { "value.killClaimedSeq": { $ne: monsterSeq } },
-            { "value.killClaimedAt": { $lt: cutoff } },
-            { "value.killClaimedAt": { $exists: false } }
-          ]
-        };
-
-        const update = {
-          $set: {
-            "value.killClaimedSeq": monsterSeq,
-            "value.killClaimedAt": now,
-            "value.killClaimedBy": process.pid,
-            updatedAt: now.toISOString()
-          }
-        };
-
-        const result = await col.findOneAndUpdate(q, update, { returnDocument: 'after' });
-        // 如果沒找到會回傳 { value: null }
-        return !!(result && result.value);
+        return claimMonsterKill({ collection, zoneKey, monsterSeq, timeoutMs });
       }
     },
     monsterEventRepository: {

@@ -1390,12 +1390,14 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 武器已有屬性濃度(>=upgradeFromWeaponLevel) → 直接用 upgradedLevel，否則 baseLevel。
   // 怪物沒有屬性時不生效（無從判斷誰剋誰），維持 ×1。
   let stanceElementMult = null;
+  let stanceGuaranteedLevel = 0; // 攻擊姿態實際採用的相剋等級（戰報顯示要用同一個數字）
   if (battleStance?.guaranteedElement && monsterElement) {
     const ge = battleStance.guaranteedElement;
     const lv = playerElementLevel >= Number(ge.upgradeFromWeaponLevel || 2)
       ? Number(ge.upgradedLevel || 4)
       : Number(ge.baseLevel || 2);
-    stanceElementMult = 1 + normalizeElementLevel(lv) * 0.10;
+    stanceGuaranteedLevel = normalizeElementLevel(lv);
+    stanceElementMult = 1 + stanceGuaranteedLevel * 0.10;
   }
 
   // 玩家每一擊的總倍率 = 世界王部位弱點 × 屬性相剋 × 對屬性增傷。
@@ -1788,7 +1790,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (_dL) {
         log.push(`⚜️ **屬性判定**｜敵人：${_dL}${monsterElementLevel}屬性`);
 
-        if (playerElementLevel > 0 && _rel === "advantage") {
+        if (stanceElementMult !== null) {
+          // 攻擊姿態（guaranteedElement）：實戰用 stanceElementMult，顯示必須用同一個等級，
+          // 不能沿用下面「武器等級×10%」——否則水2升4級時實戰+40%卻顯示+20%（討論串 1539644111429304400）。
+          const _stanceDesc = _aL && _rel === "advantage"
+            ? `${_aL}${playerElementLevel} 升為 ${stanceGuaranteedLevel} 級剋 ${_dL}`
+            : _aL
+              ? `${_aL}${playerElementLevel} 借姿態站上相剋優勢（${stanceGuaranteedLevel} 級）`
+              : `無屬性武器也借勢，以 ${stanceGuaranteedLevel} 級相剋出手`;
+          log.push(
+            `⚔️ **攻擊（${battleStance?.label || "攻擊"}姿態）**｜${_stanceDesc}` +
+            ` → 對敵傷害 **+${Math.round(stanceGuaranteedLevel * 10)}%**`
+          );
+        } else if (playerElementLevel > 0 && _rel === "advantage") {
           log.push(`⚔️ **攻擊（武器＋副手）**｜${_aL}${playerElementLevel} 剋 ${_dL} → 對敵傷害 **+${Math.round(playerElementLevel * 10)}%**`);
         } else if (playerElementLevel > 0 && _rel === "disadvantage") {
           log.push(`⚔️ **攻擊（武器＋副手）**｜${_dL}${monsterElementLevel} 剋 ${_aL}${playerElementLevel} → 對敵傷害 **−${Math.round(monsterElementLevel * 10)}%**`);

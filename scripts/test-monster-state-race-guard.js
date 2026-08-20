@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { MonsterService } = require("../src/services/monster/monsterService");
+const { runClaimAuthorityChecks } = require("./test-monster-kill-claim-authority");
 
 async function main() {
   let liveState = {
@@ -65,6 +66,7 @@ async function main() {
   assert.match(routeSource, /boundedMonsterCurrentHp\(state, activeMonster\)/, "區域快照必須限制顯示血量上限");
   assert.match(guardSource, /saveStateIfActiveMonster\([\s\S]*?freshState\.currentHp/, "網頁戰鬥結算必須使用血量版本 CAS");
 
+  await runClaimAuthorityChecks();
   console.log("monster state race guard: 7 checks passed");
 }
 

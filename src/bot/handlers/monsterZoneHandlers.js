@@ -20,7 +20,7 @@ const { isPkBattleActive, replaceMonsterBattlePresence, isTowerBattleActive } = 
 const { isWebBattleActive } = require("../../services/progress/battleLock");
 const { getDropBoostPct } = require("../../shared/pkArenaConfig");
 const { withPlayerProgressLock } = require("../../services/progress/progressLocks");
-const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard } = require("../../shared/leaderboardEligibility");
+const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard, filterDamageMapForParticipants } = require("../../shared/leaderboardEligibility");
 const { clearCurrentCache } = require("../../adapters/mongo/requestCache");
 const { NpcOptionEffectError, processNpcOptionEffects } = require("./npcOptionEffects");
 const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
@@ -962,7 +962,10 @@ async function maybeHandleEliteWorldBossTimeout(sc, zoneKey, state, monster) {
     damageMap: {},
     // 保留上一輪傷害排行(超時失敗也算一輪結束)
     lastDamageMap: (state.damageMap && Object.keys(state.damageMap).length > 0) ? state.damageMap : (state.lastDamageMap || {}),
+    lastParticipants: Array.isArray(state.participants) ? state.participants : [],
     lastHitAt: new Date().toISOString(),
+    activeHealerAura: null,
+    activeHealerAuras: [],
     activeEvent: null
   };
   await sc.monsterService.saveState(resetState, zoneKey);
@@ -3213,6 +3216,15 @@ async function handleEnterBattle(interaction) {
         const _part = session.worldBossTargetPart || "body";
         session.hellfangMult = hellfangDamageMult(battleState, _part, session.playerStats?.weaponType, Date.now()).mult;
       }
+      const _dsg = require("../../shared/dwarfStunGauge");
+      const _stunZoneOn = isWorldBossZone(zoneKey) && Boolean(battleMonster?.isBoss);
+      const stunGaugeKey = _stunZoneOn ? _dsg.gaugeKeyForZone(zoneKey) : null;
+      const _turtleNow = Date.now();
+      const _turtleStunSync = zoneKey === TURTLE_ZONE && battleMonster?.isBoss
+        ? await require("../../shared/turtleStunSync").reconcileTurtleCastFromStunGauge(battleState, zoneKey, _turtleNow)
+        : null;
+      const stunStateBefore = _turtleStunSync?.stunState || (stunGaugeKey ? await _dsg.read(stunGaugeKey, zoneKey).catch(() => null) : null);
+      const teamStunOn = Boolean(stunStateBefore?.stunned);
       // ── 島島龜王（活動）：潮汐/海嘯修正——推進詠唱狀態機後取本場修正 ──
       session.turtleTsunami = false;
       session.turtleGaugeMult = 1;
@@ -3225,9 +3237,8 @@ async function handleEnterBattle(interaction) {
         const _totMax = Object.values(_tpl).reduce((s, v) => s + v, 0);
         const _totCur = getWorldBossPartKeys(zoneKey).reduce((s, k) => s + Math.max(0, Number(_partsHp[k] ?? _tpl[k]) || 0), 0);
         const _pct = _totMax > 0 ? (_totCur / _totMax) * 100 : 100;
-        const _turtleNow = Date.now();
         const _events = _tt.ensureCast(battleState, _pct, _turtleNow);
-        if (_events.length) await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
+        if (_turtleStunSync?.repaired || _events.length) await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
         const _mods = _tt.battleMods(battleState, _part, _turtleNow);
         if (_mods.headBlocked) {
           deleteMonsterSession(discordId);
@@ -3302,12 +3313,6 @@ async function handleEnterBattle(interaction) {
       const sageGridsBefore = sageOn ? _sag.read(currentProg, zoneKey) : 0;
 
       // ── 世界王暈眩條（矮人戰士長・巨神震擊）── 與網頁共用同一條
-      const _dsg = require("../../shared/dwarfStunGauge");
-      const _stunZoneOn = isWorldBossZone(zoneKey) && Boolean(battleMonster?.isBoss);
-      const stunGaugeKey = _stunZoneOn ? _dsg.gaugeKeyForZone(zoneKey) : null;
-      const stunStateBefore = stunGaugeKey ? await _dsg.read(stunGaugeKey, zoneKey).catch(() => null) : null;
-      const teamStunOn = Boolean(stunStateBefore?.stunned);
-
       // ── 區域冰凍值（元素師・凍霜）── DC 玩家也吃冰封窗口（DC 沒姿態鈕、走預設嵐暴 → 不累積，只受惠）
       const _zfg = require("../../shared/zoneFreezeGauge");
       const freezeStateBefore = await _zfg.read(_zfg.gaugeKeyForZone(zoneKey), zoneKey).catch(() => null);
@@ -3493,7 +3498,7 @@ async function handleEnterBattle(interaction) {
             if (hellfangEventDC) { try { roundLogs.push(hellfangFlipLines(hellfangEventDC).join("\n")); } catch (_) { /* 戰報追加失敗不影響結算 */ } }
           }
 
-          // 龜王 70%／30% 固定詠唱：本場扣血跨線後立刻寫入共用狀態。
+          // 龜王 70%／40% 固定詠唱：本場扣血跨線後立刻寫入共用狀態。
           if (zoneKey === TURTLE_ZONE && nextState.currentHp > 0) {
             const turtleTotalMax = Object.values(prevParts.worldBossPartsMaxHp || {})
               .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
@@ -3972,7 +3977,7 @@ async function _resolveWorldBossDisplayName(displayName, pid) {
 }
 
 // 結算：本王戰鬥貢獻前 6 名，依名次領 1~4 箱不等（見 _worldBossChestCountForRank）
-async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap, perPidRewards) {
+async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap, perPidRewards, participantIds = null) {
   try {
     const chestId = _resolveWorldBossChestId(monster, zoneKey);
     if (!chestId) return;
@@ -3983,7 +3988,10 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
     // 由各入口結算時從 assistLedger 累進）。輔助職靠光環/治療也分得到王箱。
     const { A_WEIGHT } = require("../../services/kda/kdaService");
     const excludedIds = await getLeaderboardExcludedPlayerIds();
-    const eligibleDamageMap = filterDamageMapForLeaderboard(damageMap || {}, excludedIds);
+    const eligibleDamageMap = filterDamageMapForParticipants(
+      filterDamageMapForLeaderboard(damageMap || {}, excludedIds),
+      participantIds
+    );
     const entries = Object.entries(eligibleDamageMap).map(([pid, d]) => ({
       pid, name: d?.name || pid, damage: Number(d?.damage) || 0, assist: Number(d?.assist) || 0,
     })).map((e) => ({ ...e, cScore: e.damage + A_WEIGHT * e.assist }))
@@ -4755,10 +4763,12 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
       damageMap: {},
       // 保留「上一隻」的傷害排行：冷卻期間網頁/DC 仍顯示剛擊殺這隻王的排行，下一隻被打才換新
       lastDamageMap: (freshState.damageMap && Object.keys(freshState.damageMap).length > 0) ? freshState.damageMap : (freshState.lastDamageMap || {}),
+      lastParticipants: Array.isArray(freshState.participants) ? freshState.participants : [],
       killClaimedSeq: monster.seq,
       killClaimedAt: bossLockUntil,
       killClaimedBy: "elite-boss-cooldown",
       activeHealerAura: null,
+      activeHealerAuras: [],
       activeEvent: null
     };
     await sc.monsterService.saveState(bossResetState, zoneKey);
@@ -4775,7 +4785,10 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
     _republishPanel(sc, zoneKey, monster, bossResetState.currentHp, 0, {}, null, bossResetState.worldBossPartsHp).catch(() => {});
 
     // 世界王貢獻寶箱：本王傷害 + 0.7×助攻排名前 6 名，依名次領 1~4 箱。
-    await _awardWorldBossContributionChests(sc, zoneKey, monster, freshState.damageMap, perPidRewards);
+    await _awardWorldBossContributionChests(
+      sc, zoneKey, monster, freshState.damageMap, perPidRewards,
+      Array.isArray(freshState.participants) ? freshState.participants : []
+    );
 
     rewardLines.push(...buildPartyRewardSummary(perPidRewards, mergedDmg));
     _notifyKillRewards(monster.name, perPidRewards).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
@@ -5676,8 +5689,9 @@ async function worldBossRespawnTick() {
 
       // ── 自癒：偵測「部位全破但沒結算就卡死」──
       //   根因：擊殺時 saveState(部位全0) 與 handleMonsterKill(結算) 非原子；中間被打斷(重啟/崩潰/例外)
-      //   就會「已存全0卻沒結算」，且沒有任何機制會再回來收尾→boss 永遠 0 血、不重生、不進冷卻。
-      //   判定：部位全破 + 靜止 > 90 秒(避免擊殺瞬間誤觸) + 不在冷卻(正常擊殺會進冷卻)→ 視為卡死 → 重生滿血。
+      //   就會「已存全0卻沒結算」。舊版直接重生滿血，會把本輪參戰、傷害與寶箱資格全部吃掉。
+      //   新版保留原 state，改由最高貢獻者代表補做同一套 handleMonsterKill；若仍失敗就維持全破狀態重試，
+      //   絕不清空 damageMap/participants 或直接補滿血。
       try {
         const heal = await sc.monsterService.getState(zoneKey).catch(() => null);
         if (heal && isWorldBossAllPartsDefeated(heal.worldBossPartsHp)) {
@@ -5686,17 +5700,32 @@ async function worldBossRespawnTick() {
           if (staleMs > 90 * 1000 && !(Number(st.cooldownRemainingMs) > 0)) {
             const mons = await sc.monsterService.listMonsters({ includeDisabled: true, zone: zoneKey }).catch(() => []);
             const boss = mons.find((m) => m.seq === heal.activeMonsterSeq) || mons.find((m) => m.isBoss) || mons[0];
-            const maxHp = Number(boss?.calc?.maxHp) || 0;
-            if (maxHp > 0) {
-              const fullParts = createWorldBossPartHpTemplate(maxHp, zoneKey);
-              const fresh = { ...heal, currentHp: sumWorldBossPartHp(fullParts), worldBossPartsHp: fullParts, worldBossPartsMaxHp: fullParts, participants: [], damageMap: {} };
-              delete fresh.activeTransition;
-              await sc.monsterService.saveState(fresh, zoneKey);
-              worldBossPanelSig.delete(zoneKey);
-              console.warn(`[WorldBoss自癒] ${zoneKey} 偵測到「部位全破卻未結算」卡死(靜止 ${Math.round(staleMs / 1000)} 秒) → 已重生滿血`);
-              await refreshWorldBossPanelForZone(sc, zoneKey, { force: true }).catch(() => {});
-              continue; // 本輪已處理，跳過下面的常規刷新
+            const ranked = Object.entries(heal.damageMap || {})
+              .sort(([, a], [, b]) => (Number(b?.damage) || 0) - (Number(a?.damage) || 0));
+            const recoveryPid = ranked[0]?.[0] || (Array.isArray(heal.participants) ? heal.participants[0] : null);
+            const recoveryName = ranked[0]?.[1]?.name || recoveryPid || "世界王補結算";
+            if (boss && recoveryPid) {
+              console.warn(`[WorldBoss自癒] ${zoneKey} 偵測到全破未結算(靜止 ${Math.round(staleMs / 1000)} 秒) → 保留本輪資料並補做擊殺結算`);
+              await handleMonsterKill({
+                discordId: recoveryPid,
+                displayName: recoveryName,
+                session: { monsterName: boss.name, monsterMaxHp: boss.calc?.maxHp, entryFee: boss.entryFee ?? getZoneDefaultEntryFee(zoneKey) },
+                monster: boss,
+                state: heal,
+                totalDamage: 0,
+                zoneKey
+              });
+              const after = await svc.getConfigWithStatus().catch(() => null);
+              if (Number(after?.status?.cooldownRemainingMs) > 0) {
+                worldBossPanelSig.delete(zoneKey);
+                console.warn(`[WorldBoss自癒] ${zoneKey} 補結算完成，已進入冷卻且保留本輪獎勵資格`);
+              } else {
+                console.error(`[WorldBoss自癒] ${zoneKey} 補結算未取得擊殺權；保留全破狀態，下輪繼續重試`);
+              }
+            } else {
+              console.error(`[WorldBoss自癒] ${zoneKey} 全破但缺少可用的王或參戰者；保留原狀，不得重生清資料`);
             }
+            continue; // 不論補結算成敗，都不可落入舊的滿血重生或常規刷新
           }
         }
       } catch (e) { console.warn(`[WorldBoss自癒] ${zoneKey} 檢查失敗:`, e?.message || e); }

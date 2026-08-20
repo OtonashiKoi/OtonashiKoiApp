@@ -9,12 +9,14 @@
  * 用法：
  *   node scripts/upsert-event-hutao-preview.js
  *   node scripts/upsert-event-hutao-preview.js --apply
+ *   node scripts/upsert-event-hutao-preview.js --apply --reset-state  # 正式血量切換並重開胡桃獨立狀態
  */
 
 require("dotenv").config();
 const { getMongoDb, closeMongoClient } = require("../src/adapters/mongo/createMongoClient");
 
 const APPLY = process.argv.includes("--apply");
+const RESET_STATE = process.argv.includes("--reset-state");
 const BOSS_KEY = "northwind_hutao";
 const ZONE = "event_boss_hutao_preview";
 const MONSTER_ID = "event-northwind-hutao";
@@ -24,7 +26,6 @@ const ITEM_IMAGE_BASE = "/item-art/generated/2026-08-14/hutao";
 const WIND_EFFECT_KEY = "wind_direction_cycle";
 const SET_KEY = "northwind_hutao";
 const SET_NAME = "北風套裝・大四喜";
-const PREVIEW_BOSS_HP = 100000;
 const FORMAL_RELEASE_TARGET_HP = 4500000;
 const WEAPON_DROP_CHANCE = 5;
 const SET_GEAR_DROP_CHANCE = 4.25;
@@ -109,6 +110,8 @@ function buildCard(now) {
     monsterCardOf: MONSTER_ID,
     eventBossKey: BOSS_KEY,
     limitedEvent: true,
+    previewOnly: true,
+    noPetGather: true,
     bestiaryVisible: false,
     imageUrl: IMAGE_URL,
     imageThumbnailUrl: IMAGE_URL,
@@ -144,6 +147,8 @@ function buildItem(spec, now) {
     elementDrop: { element: "wood", chancePct: 100, minLevel: 3, maxLevel: 4 },
     eventBossKey: BOSS_KEY,
     limitedEvent: true,
+    previewOnly: true,
+    noPetGather: true,
     updatedAt: now,
   };
 }
@@ -178,6 +183,8 @@ function buildSetItem(spec, now) {
     elementDrop: { ...WOOD_2_TO_3 },
     eventBossKey: BOSS_KEY,
     limitedEvent: true,
+    previewOnly: true,
+    noPetGather: true,
     updatedAt: now,
   };
 }
@@ -189,8 +196,8 @@ function buildMonster(now, card) {
     name: "北風雀神・胡桃",
     zone: ZONE,
     level: 65,
-    // 音無恋單人私測使用低血量；正式全服開放時預計調為 FORMAL_RELEASE_TARGET_HP。
-    maxHp: PREVIEW_BOSS_HP,
+    // 已採正式活動血量；區域可見性仍由 zones.js 的音無恋私測 allowlist 控制。
+    maxHp: FORMAL_RELEASE_TARGET_HP,
     str: 85,
     agi: 90,
     vit: 80,
@@ -238,7 +245,7 @@ async function main() {
   const monster = buildMonster(now, card);
 
   console.log(
-    `北風雀神・胡桃私測：HP ${PREVIEW_BOSS_HP.toLocaleString()}（正式目標 ${FORMAL_RELEASE_TARGET_HP.toLocaleString()}）` +
+    `北風雀神・胡桃：正式血量 ${FORMAL_RELEASE_TARGET_HP.toLocaleString()}（目前仍維持音無恋私測入口）` +
     `，${WEAPONS.length} 種 S 武器＋${SET_GEAR.length} 件 A 套裝＋1 張王卡`
   );
   for (const item of items.filter((entry) => entry.weaponType)) {
@@ -304,6 +311,66 @@ async function main() {
     },
     { upsert: true }
   );
+
+  if (RESET_STATE) {
+    const freshMonsterState = {
+      activeMonsterSeq: 1,
+      currentHp: FORMAL_RELEASE_TARGET_HP,
+      killCount: {},
+      worldBossPartsHp: { body: FORMAL_RELEASE_TARGET_HP },
+      worldBossPartsMaxHp: { body: FORMAL_RELEASE_TARGET_HP },
+      damageMap: {},
+      participants: [],
+      lastDamageMap: {},
+      lastHitAt: null,
+      activeHealerAuras: [],
+      activeHealerAura: null,
+      hellfangFlipUntil: {},
+      hellfangFlipWeak: {},
+      hellfangFlipped: {},
+      hellfangDmgPhys: {},
+      hellfangDmgMagic: {},
+      killClaimedSeq: null,
+      killClaimedAt: null,
+      killClaimedBy: null,
+      activeEvent: null,
+    };
+    await Promise.all([
+      db.collection("monsterState").updateOne(
+        { _id: ZONE },
+        { $set: { value: freshMonsterState, updatedAt: now } },
+        { upsert: true }
+      ),
+      db.collection("monsters").updateOne(
+        { _id: `monsterState:${ZONE}` },
+        { $set: { value: freshMonsterState, updatedAt: now } },
+        { upsert: true }
+      ),
+      db.collection("worldBossState").updateOne(
+        { _id: BOSS_KEY },
+        {
+          $set: {
+            value: { weekKey: null, hardKills: 0, unlockedAt: null, lastKilledAt: null, battleStartedAt: null, lastFailedAt: null },
+            updatedAt: now,
+          },
+        },
+        { upsert: true }
+      ),
+      db.collection("worldBossEventState").updateOne(
+        { _id: BOSS_KEY },
+        {
+          $set: {
+            value: { runKey: null, resolvedMarks: [], quiz: null, effect: null },
+            updatedAt: now,
+          },
+        },
+        { upsert: true }
+      ),
+    ]);
+    console.log("已把胡桃獨立 monsterState／worldBossState／立直狀態重建為 4,500,000 滿血新一輪；龜王狀態未修改。");
+  } else {
+    console.log("未重建既有戰鬥狀態；正式切換時請加 --reset-state，避免沿用舊最大血量。");
+  }
 
   console.log("已寫入 13 種胡桃限定武器、8 件大四喜 A 套裝、胡桃王卡、完整私測王、獨立世界王設定與狀態。");
   console.log("島島龜王與 event_boss 未修改。");

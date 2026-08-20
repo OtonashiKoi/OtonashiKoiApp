@@ -3,18 +3,18 @@
  * 島島龜王（活動世界王）——潮汐＋海嘯詠唱，共用區域狀態機。
  *
  * 【潮汐】固定 15 分鐘週期：漲潮 10 分、退潮 5 分。
- * 【海嘯】本輪討伐開始後每 3 分鐘檢查一次；總血首次降到 70%／30% 時各強制一次。
+ * 【海嘯】本輪總血首次降到 70%／40% 時各詠唱一次，不做時間週期觸發。
  *   - 詠唱 3 分鐘：龜王承傷降為 1%，冰凍值／暈眩值累積 ×2。
  *   - 巨神震擊命中：詠唱條歸零，暈眩結束後重新計算完整 3 分鐘詠唱，不進入破綻。
  *   - 詠唱被區域冰封打斷：立即進入 30 秒破綻，承傷 ×1.3。
  *   - 詠唱完成：海嘯 3 分鐘，期間出戰真即死；結束後同樣進入 30 秒破綻。
- *   - 每 3 分鐘是發動檢查點；詠唱／海嘯／破綻中不重疊發動。
+ *   - 忙碌中跨過下一條血線時先排隊，前一輪海嘯／破綻結束後再開始詠唱。
  *
  * 狀態存放：區域 monsterState.turtle。呼叫端必須把修改後的 monsterState 存回。
  */
 
 const ZONE = "event_boss";
-const RULES_VERSION = 2;
+const RULES_VERSION = 3;
 
 // ── 潮汐（純時間函式）──
 const TIDE_EPOCH = Date.parse("2026-01-01T00:00:00+08:00");
@@ -25,18 +25,14 @@ const RISE_OTHER_MULT = 0.7;
 const EBB_MULT = 1.5;
 
 // ── 海嘯詠唱 ──
-const PERIODIC_CAST_INTERVAL_MS = 3 * 60 * 1000;
-// 舊名稱保留給既有 UI／呼叫端；現在等同週期檢查間隔。
-const CAST_INTERVAL_MS = PERIODIC_CAST_INTERVAL_MS;
 const CAST_MS = 3 * 60 * 1000;
 const TSUNAMI_MS = 3 * 60 * 1000;
 const BREACH_MS = 30 * 1000;
 const BREACH_MULT = 1.3;
 const CAST_DAMAGE_MULT = 0.01;
 const CAST_GAUGE_MULT = 2;
-const FIXED_CAST_HP_PCTS = Object.freeze([70, 30]);
-const CAST_UNLOCK_HP_PCT = 70; // 舊匯出相容；不再代表週期海嘯的解鎖條件。
-const ENCOUNTER_STALE_MS = 2 * 60 * 60 * 1000;
+const FIXED_CAST_HP_PCTS = Object.freeze([70, 40]);
+const CAST_UNLOCK_HP_PCT = 70;
 
 function parseMs(value) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -56,14 +52,13 @@ function resetEncounter(turtle, now) {
   for (const key of Object.keys(turtle)) delete turtle[key];
   turtle.rulesVersion = RULES_VERSION;
   turtle.encounterStartedAt = iso(now);
-  turtle.nextPeriodicAt = iso(now + PERIODIC_CAST_INTERVAL_MS);
   turtle.castingUntil = null;
   turtle.castPausedUntil = null;
   turtle.tsunamiUntil = null;
   turtle.breachUntil = null;
   turtle.pendingForcedCasts = [];
   turtle.forced70Triggered = false;
-  turtle.forced30Triggered = false;
+  turtle.forced40Triggered = false;
   turtle.lastInterruptBy = null;
   turtle.lastBreachReason = null;
   turtle.lastCastReason = null;
@@ -73,8 +68,7 @@ function ensureEncounter(turtle, totalHpPct, now) {
   const startedAt = parseMs(turtle.encounterStartedAt);
   const lastHpPct = Number(turtle.lastHpPct);
   const returnedToFullHp = totalHpPct >= 99.999 && Number.isFinite(lastHpPct) && lastHpPct < 99.999;
-  const stale = startedAt > 0 && now - startedAt >= ENCOUNTER_STALE_MS;
-  if (turtle.rulesVersion !== RULES_VERSION || !startedAt || returnedToFullHp || stale) {
+  if (turtle.rulesVersion !== RULES_VERSION || !startedAt || returnedToFullHp) {
     resetEncounter(turtle, now);
   }
 }
@@ -86,19 +80,9 @@ function tideAt(now = Date.now()) {
   return { phase: "ebb", remainMs: CYCLE_MS - t, riseMs: RISE_MS, ebbMs: EBB_MS };
 }
 
-/**
- * 推進已存在的詠唱／海嘯／破綻。occupiedThrough 是這一輪特殊狀態原本占用到的時間，
- * 用來略過期間內落下的週期檢查點，避免伺服器一段時間沒請求後補發重疊海嘯。
- */
+/** 推進已存在的詠唱／海嘯／破綻。 */
 function advanceActiveState(turtle, now, events) {
-  let occupiedThrough = 0;
   const castUntil = parseMs(turtle.castingUntil);
-  const tsunamiUntilBefore = parseMs(turtle.tsunamiUntil);
-  const breachUntilBefore = parseMs(turtle.breachUntil);
-  if (castUntil > 0) occupiedThrough = castUntil + TSUNAMI_MS + BREACH_MS;
-  else if (tsunamiUntilBefore > 0) occupiedThrough = tsunamiUntilBefore + BREACH_MS;
-  else if (breachUntilBefore > 0) occupiedThrough = breachUntilBefore;
-
   if (castUntil > 0 && now >= castUntil) {
     turtle.castingUntil = null;
     turtle.castPausedUntil = null;
@@ -130,7 +114,6 @@ function advanceActiveState(turtle, now, events) {
 
   const breachUntil = parseMs(turtle.breachUntil);
   if (breachUntil > 0 && now >= breachUntil) turtle.breachUntil = null;
-  return occupiedThrough;
 }
 
 function isBusy(turtle, now) {
@@ -157,7 +140,7 @@ function ensureCast(state, totalHpPct, now = Date.now()) {
   const events = [];
 
   ensureEncounter(turtle, hpPct, now);
-  const occupiedThrough = advanceActiveState(turtle, now, events);
+  advanceActiveState(turtle, now, events);
 
   const pending = Array.isArray(turtle.pendingForcedCasts) ? turtle.pendingForcedCasts : [];
   turtle.pendingForcedCasts = pending;
@@ -170,26 +153,9 @@ function ensureCast(state, totalHpPct, now = Date.now()) {
     }
   }
 
-  let nextPeriodicAt = parseMs(turtle.nextPeriodicAt);
-  if (!nextPeriodicAt) nextPeriodicAt = parseMs(turtle.encounterStartedAt) + PERIODIC_CAST_INTERVAL_MS;
-
-  // 先跳過落在既有特殊狀態中的檢查點，再判斷目前是否有一個可發動的週期檢查點。
-  if (occupiedThrough > 0 && nextPeriodicAt <= Math.min(now, occupiedThrough)) {
-    nextPeriodicAt += (Math.floor((Math.min(now, occupiedThrough) - nextPeriodicAt) / PERIODIC_CAST_INTERVAL_MS) + 1) * PERIODIC_CAST_INTERVAL_MS;
-  }
-  const periodicDue = nextPeriodicAt <= now;
-  if (periodicDue) {
-    nextPeriodicAt += (Math.floor((now - nextPeriodicAt) / PERIODIC_CAST_INTERVAL_MS) + 1) * PERIODIC_CAST_INTERVAL_MS;
-  }
-  turtle.nextPeriodicAt = iso(nextPeriodicAt);
-
-  if (!isBusy(turtle, now)) {
-    if (pending.length > 0) {
-      const threshold = pending.shift();
-      startCast(turtle, `fixed_${threshold}`, now, events);
-    } else if (periodicDue) {
-      startCast(turtle, "periodic", now, events);
-    }
+  if (!isBusy(turtle, now) && pending.length > 0) {
+    const threshold = pending.shift();
+    startCast(turtle, `fixed_${threshold}`, now, events);
   }
 
   turtle.lastHpPct = hpPct;
@@ -225,6 +191,47 @@ function resetCastAfterStun(state, byLabel, stunnedUntil, now = Date.now()) {
   turtle.breachUntil = null;
   turtle.lastInterruptBy = String(byLabel || "");
   turtle.lastBreachReason = null;
+  turtle.lastStunResetUntil = iso(resumeAt);
+  return true;
+}
+
+/**
+ * 用獨立的世界王暈眩文件修復龜王詠唱。
+ *
+ * monsterState 是多人戰鬥共用的整包狀態；某場較早讀取、較晚結算時，可能把巨神震擊
+ * 已寫入的詠唱重置蓋回舊值。暈眩條本身走原子文件，不會一起被蓋掉，因此每次讀取
+ * 龜王機制時都可用它校正一次。只處理「與該次暈眩時間重疊」的舊詠唱，不會重置
+ * 暈眩結束後才合法開始的新一輪詠唱。
+ */
+function reconcileCastAfterStun(state, byLabel, stunnedUntil, stunnedAt, now = Date.now()) {
+  const turtle = state?.turtle;
+  if (!turtle) return false;
+
+  const resetUntil = parseMs(stunnedUntil);
+  const resetAt = parseMs(stunnedAt);
+  if (resetUntil <= 0 || resetAt <= 0 || resetUntil <= resetAt) return false;
+  if (parseMs(turtle.lastStunResetUntil) >= resetUntil) return false;
+
+  const restartedCastUntil = resetUntil + CAST_MS;
+  if (restartedCastUntil <= now) return false;
+
+  const castUntil = parseMs(turtle.castingUntil);
+  const castStartedAt = castUntil > 0 ? castUntil - CAST_MS : 0;
+  const castOverlappedStun = castUntil > resetAt && castStartedAt < resetUntil;
+
+  // 舊詠唱可能剛好在暈眩期間跑完，並被另一場結算推進成海嘯；這也必須撤銷。
+  const tsunamiUntil = parseMs(turtle.tsunamiUntil);
+  const tsunamiStartedAt = tsunamiUntil > 0 ? tsunamiUntil - TSUNAMI_MS : 0;
+  const tsunamiStartedDuringStun = tsunamiStartedAt >= resetAt && tsunamiStartedAt < resetUntil;
+  if (!castOverlappedStun && !tsunamiStartedDuringStun) return false;
+
+  turtle.castPausedUntil = iso(resetUntil);
+  turtle.castingUntil = iso(restartedCastUntil);
+  turtle.tsunamiUntil = null;
+  turtle.breachUntil = null;
+  turtle.lastInterruptBy = String(byLabel || turtle.lastInterruptBy || "");
+  turtle.lastBreachReason = null;
+  turtle.lastStunResetUntil = iso(resetUntil);
   return true;
 }
 
@@ -293,8 +300,8 @@ function view(state, totalHpPct, now = Date.now()) {
     breach: parseMs(turtle.breachUntil) > now,
     breachRemainMs: Math.max(0, parseMs(turtle.breachUntil) - now),
     breachReason: turtle.lastBreachReason || null,
-    castUnlocked: true,
-    nextCastInMs: Math.max(0, parseMs(turtle.nextPeriodicAt) - now),
+    castUnlocked: clampHpPct(totalHpPct) <= CAST_UNLOCK_HP_PCT,
+    nextCastInMs: 0,
     lastInterruptBy: turtle.lastInterruptBy || null,
     lastCastReason: turtle.lastCastReason || null,
     pendingForcedCasts: Array.isArray(turtle.pendingForcedCasts) ? [...turtle.pendingForcedCasts] : [],
@@ -307,8 +314,8 @@ module.exports = {
   ZONE,
   RULES_VERSION,
   RISE_MS, EBB_MS, CYCLE_MS, RISE_OTHER_MULT, EBB_MULT,
-  CAST_UNLOCK_HP_PCT, CAST_INTERVAL_MS, PERIODIC_CAST_INTERVAL_MS,
+  CAST_UNLOCK_HP_PCT,
   CAST_MS, TSUNAMI_MS, BREACH_MS, BREACH_MULT, CAST_DAMAGE_MULT, CAST_GAUGE_MULT,
   FIXED_CAST_HP_PCTS,
-  tideAt, ensureCast, interrupt, resetCastAfterStun, tsunamiRoundForBattle, battleMods, view,
+  tideAt, ensureCast, interrupt, resetCastAfterStun, reconcileCastAfterStun, tsunamiRoundForBattle, battleMods, view,
 };

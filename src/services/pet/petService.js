@@ -46,6 +46,17 @@ function isHardBlocked(item) {
   const slot = String(item.equipSlot || "");
   return slot === "job_eq" || slot === "title_eq" || /^special/.test(slot);
 }
+
+// 寵物採集是常駐通用產出池，不得繞過活動／測試入口取得尚未公開或限定掉落裝備。
+function isPetGatherableEquipment(item) {
+  if (!item || item.itemType !== "equipment") return false;
+  if (item.enabled === false || item.previewOnly === true) return false;
+  if (item.noPetGather || item.limitedEvent) return false;
+  if (item.monsterCardSkill || item.monsterCardOf) return false;
+  const slot = String(item.equipSlot || "");
+  if (/^special/.test(slot)) return false;
+  return !["title_eq", "job_eq", "anchor"].includes(slot);
+}
 // 可「單件手動餵」：真裝備（含強化過/特效），但排除卡片/徽章/稱號、以及「鎖定」裝備
 function isSingleFeedable(item) {
   if (item?.locked) return false; // 鎖定裝備不可餵（與分解/丟棄/出售一致的保護）
@@ -752,15 +763,10 @@ class PetService {
           const pouch = allItems.find((it) => it.id === pouchId);
           if (pouch) entry = this._buildInventoryEntry(pouch);
         } else {
-          // 隨機該階「一般裝備」：排除 noPetGather（世界王卡等）、所有卡片（monsterCardSkill/monsterCardOf）、
-          // 特殊槽位（special/稱號/職業徽章/錨點）— 寵物只撿得到普通裝備
+          // 隨機該階「一般裝備」：私測、停用、限定活動與專屬掉落都不能從常駐寵物池外洩。
           const pool = allItems.filter((it) =>
-            it.itemType === "equipment" &&
             String(it.tier).toUpperCase() === tier &&
-            !it.noPetGather &&
-            !it.monsterCardSkill && !it.monsterCardOf &&
-            !/^special/.test(String(it.equipSlot || "")) &&
-            !["title_eq", "job_eq", "anchor"].includes(String(it.equipSlot || "")));
+            isPetGatherableEquipment(it));
           if (pool.length) entry = this._buildInventoryEntry(pool[crypto.randomInt(0, pool.length)]);
         }
         if (entry) {
@@ -983,4 +989,4 @@ class PetService {
   }
 }
 
-module.exports = { PetService, HATCH_THRESHOLD, MAX_LEVEL, MAX_PETS, BASE_FEED_EXP, GATHER_INTERVAL_MIN, GATHER_CAP, feedMultiplier, petTierOf };
+module.exports = { PetService, HATCH_THRESHOLD, MAX_LEVEL, MAX_PETS, BASE_FEED_EXP, GATHER_INTERVAL_MIN, GATHER_CAP, feedMultiplier, petTierOf, isPetGatherableEquipment };

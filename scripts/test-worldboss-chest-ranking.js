@@ -51,6 +51,16 @@ assert.deepStrictEqual(
   ["輔助", "純輸出", "純治療"],
   "世界王頁貢獻排行必須與寶箱公式一致，並納入純助攻玩家"
 );
+
+const participantBoards = buildWorldBossRankings({
+  attacker: { name: "本輪參戰者", damage: 500_000, assist: 0 },
+  staleAura: { name: "前一輪光環", damage: 0, assist: 900_000 },
+}, ["attacker"]);
+assert.deepStrictEqual(
+  participantBoards.contributionRanking.map((entry) => entry.name),
+  ["本輪參戰者"],
+  "世界王貢獻榜不得讓未進入本輪戰鬥的跨場光環提供者取得名次"
+);
 assert.strictEqual(
   boards.contributionRanking[0].contribution,
   840_000,

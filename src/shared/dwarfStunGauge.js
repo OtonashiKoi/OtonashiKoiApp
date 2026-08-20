@@ -99,6 +99,9 @@ async function read(gaugeKey, zoneKey, now = Date.now()) {
     threshold,
     phase,
     stunned: phase === "stunned",
+    // 即使已進入免疫期仍保留上一次暈眩截止點，讓龜王詠唱狀態可修復
+    // 被其他同時結算的舊 monsterState 覆蓋掉的「歸零後重跑」結果。
+    stunnedUntil: Math.max(0, Number(doc?.stunnedUntil) || 0),
     stunnedRemainMs: phase === "stunned" ? Math.max(0, Number(doc.stunnedUntil) - now) : 0,
     immuneRemainMs: phase === "immune" ? Math.max(0, Number(doc.immuneUntil) - now) : 0,
     lastTriggerBy: doc?.lastTriggerBy || null,
