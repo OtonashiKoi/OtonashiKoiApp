@@ -27,6 +27,7 @@ const { CreatorTokenService } = require("./creatorAuth/creatorTokenService");
 const { CasinoService } = require("./casino/casinoService");
 const { PetService } = require("./pet/petService");
 const { CraftingService } = require("./crafting/craftingService");
+const { MahjongPredictionService } = require("./mahjongPrediction/mahjongPredictionService");
 
 function createServiceContext() {
   const repositories = createRepositories();
@@ -175,6 +176,7 @@ function createServiceContext() {
     },
     channelLayoutRepository: repositories.channelLayoutRepository,
   });
+  const mahjongPredictionService = new MahjongPredictionService(repositories.mahjongPredictionRepository);
   const petService = new PetService({
     progressRepository: repositories.progressRepository,
     itemRepository: repositories.itemRepository,
@@ -240,6 +242,7 @@ function createServiceContext() {
     inviteService,
     creatorTokenService,
     casinoService,
+    mahjongPredictionService,
     petService,
     craftingService,
     passService,

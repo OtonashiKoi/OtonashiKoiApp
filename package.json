@@ -39,6 +39,7 @@
     "test:quest-progress-batch": "node scripts/test-quest-progress-batch.js",
     "test:npc-effects": "node scripts/test-npc-option-effects.js",
     "test:stream-notifications": "node scripts/test-stream-notifications.js",
+    "test:ecpay-checkmac": "node scripts/test-ecpay-checkmac.js",
     "test:youtube-direct-bind": "node scripts/test-youtube-direct-bind.js",
     "test:tower-party": "node scripts/test-tower-party.js",
     "test:tower-roles": "node scripts/test-tower-roles.js",

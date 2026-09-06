@@ -60,6 +60,14 @@ async function ensureIndexes(db) {
       db.collection("transactions").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 }),
       // TTL:賭場局紀錄(casinoRounds)掛 expireAt(30天),到期自動刪除,防膨脹。
       db.collection("casinoRounds").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 }),
+      // 戀雀券直播預測：錢包、台帳、盤口與每人每盤唯一投注。
+      db.collection("mahjongPredictionWallets").createIndex({ playerId: 1 }, { unique: true }),
+      db.collection("mahjongPredictionTransactions").createIndex({ sourceRef: 1 }, { unique: true }),
+      db.collection("mahjongPredictionTransactions").createIndex({ playerId: 1, createdAt: -1 }),
+      db.collection("mahjongPredictionMarkets").createIndex({ marketId: 1 }, { unique: true }),
+      db.collection("mahjongPredictionMarkets").createIndex({ status: 1, sequence: -1 }),
+      db.collection("mahjongPredictionBets").createIndex({ marketId: 1, playerId: 1 }, { unique: true }),
+      db.collection("mahjongPredictionBets").createIndex({ playerId: 1, placedAt: -1 }),
       db.collection("adminActionLogs").createIndex({ createdAt: -1 }),
       db.collection("checkins").createIndex({ discordId: 1, occurredAt: -1 }),
       db.collection("weeklyQuestProgress").createIndex({ discordId: 1, cadence: 1, periodKey: 1 }, { unique: true }),

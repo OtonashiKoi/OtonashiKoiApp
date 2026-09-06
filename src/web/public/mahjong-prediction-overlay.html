@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>戀雀預測 OBS</title>
+  <style>
+    :root { --ink:#211817; --paper:#fffaf0; --red:#b63c4b; --gold:#d5a841; --jade:#397a68; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:transparent; font-family:"Noto Sans TC","PingFang TC",system-ui,sans-serif; }
+    body.test-bg { background:#173d36; }
+    #wrap { width:min(760px,100vw); padding:14px; transition:opacity .25s ease, transform .25s ease; }
+    #wrap.hidden { opacity:0; transform:translateY(10px); }
+    .ticket { position:relative; overflow:hidden; color:var(--ink); background:linear-gradient(145deg,#fffdf7,#f4e8d0); border:2px solid #ead39c; border-radius:18px; box-shadow:0 14px 34px #0007, inset 0 0 0 1px #fff; }
+    .ticket::before { content:""; position:absolute; inset:7px; border:1px dashed #c9a45a88; border-radius:12px; pointer-events:none; }
+    .head { position:relative; z-index:1; display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:16px 20px 11px; border-bottom:1px solid #cba86066; }
+    .mark { width:46px; height:52px; display:grid; place-items:center; border-radius:7px; background:#fff; border:1px solid #ddc99c; box-shadow:0 4px 0 #b7975a,0 7px 12px #4b2f1f33; color:var(--red); font-size:27px; font-weight:900; }
+    .eyebrow { color:var(--red); font-size:10px; font-weight:900; letter-spacing:.2em; }
+    h1 { margin:2px 0 0; font-size:21px; line-height:1.25; }
+    .status { text-align:right; color:var(--jade); font-size:11px; font-weight:900; }
+    .status strong { display:block; color:var(--red); font-size:26px; font-variant-numeric:tabular-nums; }
+    .options { position:relative; z-index:1; display:grid; grid-template-columns:repeat(var(--option-count,2),minmax(0,1fr)); gap:8px; padding:12px 20px 17px; }
+    .option { min-width:0; padding:9px 11px; border:1px solid #cfb678; border-radius:9px; background:#fff9; }
+    .option.win { border-color:var(--red); box-shadow:inset 0 0 0 1px #b63c4b44; }
+    .option-top { display:flex; justify-content:space-between; gap:6px; font-size:13px; font-weight:900; }
+    .option-top b { color:var(--red); }
+    .bar { height:6px; margin-top:7px; overflow:hidden; border-radius:10px; background:#d9cfba; }
+    .bar i { display:block; height:100%; background:linear-gradient(90deg,var(--jade),#6aa98f); transition:width .4s ease; }
+    .meta { display:flex; justify-content:space-between; margin-top:5px; color:#705e53; font-size:9px; font-weight:800; }
+    .settled .status { color:var(--red); }
+    .compact .head { padding-top:11px; }
+    .compact .mark { width:38px; height:42px; font-size:22px; }
+    .compact .options { padding-top:8px; padding-bottom:12px; }
+  </style>
+</head>
+<body>
+  <main id="wrap" class="hidden"><section class="ticket"><div class="head"><div class="mark">戀</div><div><div class="eyebrow" id="eyebrow">KOI MAHJONG PREDICTION</div><h1 id="title">等待開盤</h1></div><div class="status" id="status">準備中<strong>—</strong></div></div><div class="options" id="options"></div></section></main>
+  <script>
+    (() => {
+      const qs = new URLSearchParams(location.search);
+      const wrap = document.querySelector("#wrap");
+      if (qs.get("compact") === "1") wrap.classList.add("compact");
+      if (qs.get("bg") === "1") document.body.classList.add("test-bg");
+      const demo = { now:Date.now(), currentMarket:{ sequence:18, handLabel:"南2局 1本場", title:"本局音無恋能和牌嗎？", status:"open", lockAtMs:Date.now()+18000, betCount:27, totalStaked:28400, options:[{id:"win",label:"能和牌",pool:17600,sharePct:62,estimatedOdds:1.55},{id:"no_win",label:"不能和牌",pool:10800,sharePct:38,estimatedOdds:2.47}] } };
+      const fmt = (v) => Number(v || 0).toLocaleString("zh-TW");
+      function render(data) {
+        const m = data?.currentMarket || data?.lastResult;
+        if (!m) { wrap.classList.add("hidden"); return; }
+        wrap.classList.remove("hidden");
+        wrap.querySelector(".ticket").classList.toggle("settled", ["settled","void"].includes(m.status));
+        document.querySelector("#eyebrow").textContent = `KOI TICKET · 第 ${fmt(m.sequence)} 盤 · ${m.handLabel || "本局"}`;
+        document.querySelector("#title").textContent = m.status === "void" ? "本盤作廢・全額退款" : m.title;
+        const remain = Math.max(0, Math.ceil((Number(m.lockAtMs) - Date.now()) / 1000));
+        const status = document.querySelector("#status");
+        if (m.status === "open") status.innerHTML = `投注中<strong>${remain}s</strong>`;
+        else if (m.status === "locked") status.innerHTML = `已封盤<strong>LOCK</strong>`;
+        else if (m.status === "void") status.innerHTML = `全額退款<strong>VOID</strong>`;
+        else status.innerHTML = `開獎結果<strong>${m.winningOptionLabel || "—"}</strong>`;
+        const options = document.querySelector("#options");
+        options.style.setProperty("--option-count", Math.max(2,(m.options || []).length));
+        options.innerHTML = (m.options || []).map((o) => `<div class="option ${m.winningOptionId === o.id ? "win" : ""}"><div class="option-top"><span>${o.label}</span><b>${o.estimatedOdds ? Number(o.estimatedOdds).toFixed(2)+"x" : "—"}</b></div><div class="bar"><i style="width:${Math.max(0,Math.min(100,Number(o.sharePct)||0))}%"></i></div><div class="meta"><span>${Number(o.sharePct||0).toFixed(1)}%</span><span>${fmt(o.pool)} 張</span></div></div>`).join("");
+      }
+      async function pull() {
+        if (qs.get("demo") === "1") return render(demo);
+        try { const payload = await (await fetch("/api/mahjong-prediction/overlay",{cache:"no-store"})).json(); render(payload.data || payload); }
+        catch (_) { /* 保留上一幀，下一輪重試 */ }
+      }
+      pull(); setInterval(pull,1000);
+    })();
+  </script>
+</body>
+</html>

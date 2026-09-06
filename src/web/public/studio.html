@@ -33,6 +33,7 @@
       <button class="nav" data-view="audience">觀眾與會員</button>
       <button class="nav" data-view="revenue">斗內與里程碑</button>
       <button class="nav" data-view="interaction">遊戲連動</button>
+      <button class="nav" data-view="koi">戀雀預測</button>
       <button class="nav" data-view="worldboss">世界王監控</button>
       <button class="nav" data-view="settings">直播規則</button>
       <button class="nav" data-view="obs">OBS 與場景</button>
@@ -57,6 +58,7 @@
           <button class="quick" data-alert="raid"><b>🛬</b><span>測試 Raid</span></button>
           <button class="quick" data-alert="milestone"><b>🎉</b><span>測試里程碑</span></button>
           <a class="quick" href="/static/thanks.html" target="_blank"><b>🙏</b><span>今日感謝名單</span></a>
+          <button class="quick" data-view-jump="koi"><b>🀄</b><span>開啟戀雀盤口</span></button>
         </div></article>
         <article class="panel"><div class="panel-head"><h2>跨平台公告</h2><span>發到遊戲聊天大廳與 Discord 城鎮頻道</span></div><div class="inline-form"><textarea id="studio-announcement" rows="2" placeholder="輸入公告內容"></textarea><button class="btn primary" id="studio-announce">發送公告</button></div></article>
       </section>
@@ -80,6 +82,29 @@
           <article class="panel"><div class="panel-head"><h2>目前加成與最近紀錄</h2><button class="btn danger ghost" id="buff-clear-all">結束全部短期加成</button></div><div id="interaction-buffs"></div></article>
         </div>
         <article class="panel"><div class="panel-head"><h2>直播轉盤</h2><span>直接在這裡新增、編輯、排序與取得 OBS 網址</span></div><div id="wheel-admin-root"></div></article>
+      </section>
+
+      <section class="view" id="view-koi">
+        <div class="page-head"><div><p class="eyebrow">KOI MAHJONG BOOK</p><h1>戀雀預測控制台</h1><p>手動開盤、封盤、結算與作廢退款；所有資產只使用獨立的戀雀券。</p></div><button class="btn primary" id="koi-refresh">刷新盤口</button></div>
+        <div class="metric-grid compact" id="koi-metrics"></div>
+        <div class="two-col koi-control-grid">
+          <article class="panel">
+            <div class="panel-head"><h2>目前盤口</h2><span>倒數結束會自動封盤</span></div>
+            <div id="koi-current-market"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h2>建立下一盤</h2><span>同時只允許一個未結算盤口</span></div>
+            <div class="form-grid">
+              <label>直播場次<input id="koi-session-label" value="雀魂直播" maxlength="40"></label>
+              <label>牌局標示<input id="koi-hand-label" value="東1局" maxlength="40"></label>
+              <label>盤口類型<select id="koi-market-type"><option value="win">本局能否和牌</option><option value="han">最終和牌級別</option></select></label>
+              <label>開放秒數<input id="koi-open-seconds" type="number" min="10" max="120" value="20"></label>
+              <label style="grid-column:1/-1">自訂題目（可留空）<input id="koi-market-title" maxlength="80" placeholder="使用盤口預設題目"></label>
+            </div>
+            <div class="button-row"><button class="btn primary" id="koi-create-market">開放投注</button><a class="btn ghost" href="/mahjong-live" target="_blank" rel="noopener">玩家頁預覽</a></div>
+          </article>
+        </div>
+        <article class="panel"><div class="panel-head"><h2>最近結算</h2><span>含派彩、回收與作廢紀錄</span></div><div id="koi-recent-markets" class="koi-recent-list"></div></article>
       </section>
 
       <section class="view" id="view-worldboss">
@@ -131,6 +156,7 @@
   <div class="toast" id="studio-toast"></div>
   <script src="/static/admin.wheel.js?v=3"></script>
   <script src="/static/admin.stream-records.js?v=10"></script>
-  <script src="/static/studio.js?v=8"></script>
+  <script src="/static/studio.mahjong-prediction.js?v=1"></script>
+  <script src="/static/studio.js?v=9"></script>
 </body>
 </html>

@@ -74,7 +74,7 @@ createServiceContext()
 
 沒有依 `STORAGE_DRIVER` 選 JSON adapter 的執行分支。repo 內的 JSON 主要用途是資料來源、匯出、備份、模擬 fixture 或歷史遺留，不能用來判定線上現況。
 
-Mongo 啟動時建立玩家、進度、交易、任務、怪物、直播事件與故事等索引；部分高頻資料使用 TTL，唯一發放／交易使用 unique index 或原子條件避免重複。
+Mongo 啟動時建立玩家、進度、交易、任務、怪物、直播事件、戀雀預測與故事等索引；部分高頻資料使用 TTL，唯一發放／交易使用 unique index 或原子條件避免重複。戀雀券錢包、投注單與台帳使用獨立 collections，下注、派彩及退款透過 MongoDB transaction 同步完成，不接觸 RPG 金幣或鑽石。
 
 ## 介面層
 
@@ -109,7 +109,7 @@ React 原始碼在獨立 workspace `~/Documents/equipmentGAME-app`，建置後�
 
 遊戲營運後台是 `src/web/public/admin.html` 與 `admin.*.js`，直接呼叫 `/admin/*`。它涵蓋玩家、帳務、權限、版位、怪物與 NPC 事件、道具、商店、任務、故事、效果、戰鬥設定、附魔、商城與維運操作。
 
-直播營運後台是 `/studio`（`studio.html`、`studio.css`、`studio.js`），集中真實直播／觀看數、活躍留言者、會員、斗內、全服 Buff、世界王、轉盤、OBS overlay 健康檢查與創作者授權。OBS 與場景區依各瀏覽器來源實際支援的 query 參數提供內嵌設定器，可直接產生正式網址、測試預覽並複製；密碼與 Overlay 金鑰不寫入 Studio 的 localStorage。轉盤編輯、斗內／觀看／會員門檻、SC 里程碑與永久加成都直接嵌入 Studio；只有玩家與怪物等遊戲本體資料會明確跨站到遊戲營運後台。Studio 與主 `/admin` 每次開啟或重整都固定先顯示密碼輸入，不以既有 Session 自動跳過登入；兩個後台仍共用同一個 HttpOnly 管理 Session，供手動登入後的 API 請求使用。Studio 各工作區使用 hash 保存位置；舊 `/static/live.html` 保留相容但不再持久化明碼密碼。
+直播營運後台是 `/studio`（`studio.html`、`studio.css`、`studio.js`），集中真實直播／觀看數、活躍留言者、會員、斗內、全服 Buff、世界王、轉盤、戀雀預測、OBS overlay 健康檢查與創作者授權。戀雀預測在獨立工作區手動開盤、封盤、結算與退款；玩家 `/mahjong-live` 由 root route 直接渲染，不掛載 RPG AppShell、角色閘門、戰鬥、通知或遊戲選單，並透過 `/api/mahjong-auth/*` 取得只允許戀雀 API 的專屬 token；OBS 使用獨立透明盤口。OBS 與場景區依各瀏覽器來源實際支援的 query 參數提供內嵌設定器，可直接產生正式網址、測試預覽並複製；密碼與 Overlay 金鑰不寫入 Studio 的 localStorage。轉盤編輯、斗內／觀看／會員門檻、SC 里程碑與永久加成都直接嵌入 Studio；只有玩家與怪物等遊戲本體資料會明確跨站到遊戲營運後台。Studio 與主 `/admin` 每次開啟或重整都固定先顯示密碼輸入，不以既有 Session 自動跳過登入；兩個後台仍共用同一個 HttpOnly 管理 Session，供手動登入後的 API 請求使用。Studio 各工作區使用 hash 保存位置；舊 `/static/live.html` 保留相容但不再持久化明碼密碼。
 
 ## 共用戰鬥邊界
 

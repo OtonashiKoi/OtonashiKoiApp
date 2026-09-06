@@ -5,11 +5,12 @@
   const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmt = (v) => Number(v || 0).toLocaleString("zh-TW");
   const when = (v) => v ? new Date(v).toLocaleString("zh-TW", { hour12: false }) : "—";
-  const VIEW_NAMES = new Set(["dashboard", "audience", "revenue", "interaction", "worldboss", "settings", "obs", "integrations"]);
+  const VIEW_NAMES = new Set(["dashboard", "audience", "revenue", "interaction", "koi", "worldboss", "settings", "obs", "integrations"]);
   const hashView = String(location.hash || "").replace(/^#/, "");
   let currentView = VIEW_NAMES.has(hashView) ? hashView : "dashboard";
   let lastStats = null;
   let refreshTimer = null;
+  let koiRefreshTimer = null;
 
   function toast(message, bad = false) {
     const node = $("#studio-toast");
@@ -29,6 +30,7 @@
     if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `HTTP ${response.status}`);
     return payload.data;
   }
+  const koiController = window.createStudioKoiController({ $, api, esc, fmt, metric, toast });
 
   async function login(password) {
     await api("/api/admin/session/login", { method: "POST", body: JSON.stringify({ password }) });
@@ -43,6 +45,10 @@
     await refreshAll();
     clearInterval(refreshTimer);
     refreshTimer = setInterval(() => refreshDashboard().catch(() => {}), 10_000);
+    clearInterval(koiRefreshTimer);
+    koiRefreshTimer = setInterval(() => {
+      if (currentView === "koi") koiController.refresh().catch(() => {});
+    }, 2_000);
   }
 
   function showView(name, { updateHash = true, load = true } = {}) {
@@ -60,6 +66,7 @@
       audience: refreshAudience,
       revenue: refreshRevenue,
       interaction: refreshInteraction,
+      koi: koiController.refresh,
       worldboss: refreshWorldBosses,
       settings: refreshSettings,
       obs: renderOverlays,
@@ -169,6 +176,11 @@
       id: "mahjong", name: "麻將排隊框", path: "mahjong.html", size: "420 × 900", summary: "直播麻將排隊名單；一般顯示不需密碼。",
       fields: [field("key", "主持操作密碼（選填）", "password", { sensitive: true, placeholder: "需要拖曳或移除名單時才填" })],
       previewHint: "不填密碼仍可正常顯示；只有主持操作需要密碼。"
+    },
+    {
+      id: "mahjong-prediction", name: "戀雀預測盤口", path: "mahjong-prediction-overlay.html", size: "760 × 280", summary: "顯示即時盤口、投注比例、預估倍率、封盤與結算結果。",
+      fields: [field("compact", "精簡模式", "checkbox", { default: false, trueValue: "1" })],
+      preview: { demo: "1", bg: "1" }, previewHint: "示範模式會顯示測試盤口；正式來源讀取目前戀雀盤口。"
     },
     {
       id: "sc-bar", name: "SC＋會員累積", path: "sc-bar-overlay.html", size: "720 × 340", summary: "顯示 SC、會員與直播觀看人數的累積進度。",
@@ -363,6 +375,7 @@
     $("#studio-refresh").addEventListener("click", () => refreshAll().then(() => toast("資料已更新")).catch((e) => toast(e.message, true)));
     $("#dashboard-refresh").addEventListener("click", () => refreshDashboard().then(() => toast("即時狀態已更新")).catch((e) => toast(e.message, true)));
     $("#worldboss-refresh").addEventListener("click", () => refreshWorldBosses().then(() => toast("世界王狀態已更新")).catch((e) => toast(e.message, true)));
+    koiController.bind();
     $("#studio-logout").addEventListener("click", async () => { await api("/api/admin/session", { method: "DELETE" }); location.reload(); });
     $$("[data-alert]").forEach((button) => button.addEventListener("click", async () => { try { await api("/admin/live/test-alert", { method: "POST", body: JSON.stringify({ type: button.dataset.alert }) }); toast(`已發送 ${button.textContent.trim()}`); } catch (e) { toast(e.message, true); } }));
     $("#studio-announce").addEventListener("click", async () => { const message = $("#studio-announcement").value.trim(); if (!message) return toast("請先輸入公告內容", true); if (!confirm(`確定發送公告？\n\n${message}`)) return; try { await api("/admin/broadcast/announce", { method: "POST", body: JSON.stringify({ message }) }); $("#studio-announcement").value = ""; toast("公告已送出"); } catch (e) { toast(e.message, true); } });

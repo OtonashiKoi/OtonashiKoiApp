@@ -77,6 +77,7 @@
 | 賭場 | `services/casino/casinoService.js`、`bot/handlers/casinoHandlers.js` | `casinoState`、`casinoRounds`；25 格輪盤由 `wheelConfig.WHEEL_SLOTS` 統一提供結算與 Web 動畫，格數固定黃12／綠6／紅4／藍2／紫1，伺服器結果含 `slotIdx`，前端只負責旋轉呈現、不自行開獎 |
 | 寵物 | `services/pet/petService.js`、`bot/handlers/petHandlers.js` | `progress.pets`、`progress.petDex`；常駐採集池只會產出已啟用的一般裝備，排除私測、限定活動、`noPetGather` 專屬掉落、卡片與特殊槽位，避免繞過活動入口取得未開放道具 |
 | 麻將 | `services/mahjong/`、`api/routes/mahjongRoutes.js` | runtime queue state |
+| 戀雀直播預測 | `services/mahjongPrediction/`、`api/routes/mahjongPredictionRoutes.js`、Live Studio、獨立 SPA 畫面 `/mahjong-live`、`mahjong-prediction-overlay.html` | 專屬 Discord OAuth token，不建立 RPG 角色；`mahjongPredictionWallets`、`mahjongPredictionTransactions`、`mahjongPredictionMarkets`、`mahjongPredictionBets`、`mahjongPredictionState` 與 RPG 完全分離 |
 | 主線故事／據點訪客 | `services/story/storyService.js`、`api/routes/storyRoutes.js` | `storyChapters`、`storyNpcs`、`progress.storyProgress`；登入玩家可由 `/api/story/hub-npcs` 取得有立繪且排除音無恋的據點訪客清單 |
 | 錨點圖鑑／試煉 | `shared/anchorAcquisition.js`、`shared/anchorQuestRules.js`、`api/routes/playerCollectionRoutes.js`、`services/weeklyQuest/weeklyQuestService.js` | 九件錨點皆有取得提示；聖人試煉不綁抖內，命運之輪為每輪有下注者不論輸贏 3% 且每人限一次 |
 
@@ -94,7 +95,7 @@
 | 錢包／發獎 | `walletService.js`、`rewardService.js`、`transactionService.js` | `wallets`、`transactions` |
 | 周邊商城 | `services/merch/merchService.js`、`api/routes/merchRoutes.js` | `merchItems`、`merchOrders`、綠界付款 |
 | 等級 | `services/progress/progressService.js`、`shared/progression.js` | Lv.50；溢出 EXP 轉金幣 |
-| 打卡 | `services/checkin/checkinService.js` | `checkins` |
+| 打卡 | `services/checkin/checkinService.js`、`config.streamMembership.bindYoutubeUrl`、`api/routes/playerAppRoutes.js`、`bot/playerPanel.js` | `checkins`；Web 打卡教學與 Discord 打卡狀態／綁定提示共用同一個 YouTube 打卡直播網址 |
 | 邀請碼 | `services/invite/inviteService.js` | `inviteCodes` |
 | 會員 tier | `services/playerTier/playerTierService.js` | `playerTiers` 與 Discord role |
 
@@ -139,10 +140,12 @@
 - SC 與會員里程碑的各階加成會疊加並保留到本季結束；換季時清除，玩家介面統一標示為「本季保留」
 - SC 里程碑的 `claimed` 同時要求伺服器曾發獎且目前累積仍達現行門檻；服務啟動時會自癒門檻調整造成的超前解鎖，精準收回該階 claimed 與 `scms:season:<id>` 永久 Buff，不影響仍達標的較低階獎勵
 - 直播資料記錄：`services/stream/streamRecordsService.js`、`services/stream/donationSummary.js`；斗內事件同時保存平台原始金額／幣別與實際採計台幣金額，避免 OneComme 幣別標籤錯誤後無法追查。後台營收總算以 MongoDB `maintenanceState.openAt`／`activateAt` 的季度起訖為主，分列 YouTube、綠界、其他來源與全部合計；台灣月份只作輔助查帳，不改變季度總算
+- 綠界直播主收款 ReturnURL 由 `services/payment/ecpayDonationService.js` 收單，`ecpayCrypto.verifyCheckMac()` 優先驗證新版 `Uri.EscapeDataString`，並在 2026-09-01 正式切換過渡期相容舊版 `HttpUtility.UrlEncode`；每筆通知保存 `macVariant` 供監控。周邊商城 AioCheckOut 是另一產品，繼續使用既有編碼規格，不跟著直播主收款全域切換
 - 會員同步：`services/stream/membershipTracker.js`
 - 斗內、會員、SC、觀看門檻設定：`services/stream/streamEventConfig.js` + MongoDB `serverEventConfig`
 - Buff：`services/stream/globalBuffService.js`
 - 直播營運控制台：`/studio`（`src/web/public/studio.html`、`studio.js`）；以 `adminLiveRoutes.js` 聚合 OneComme 真實直播狀態、觀看數、活躍留言者、今日斗內、會員、世界王與網頁在線人數，並與遊戲管理後台共用管理 Session。直播規則與轉盤直接在 Studio 編輯；OBS 與場景亦提供依來源實際參數產生網址的內嵌設定器，支援設定、測試預覽、複製與健康檢查，敏感金鑰不在 Studio 持久化。各工作區以 hash 保存；每次開啟或重整 Studio 及主 `/admin` 都要求手動輸入密碼，遊戲本體玩家／怪物資料才跨站
+- 戀雀直播預測：Live Studio 的「戀雀預測」工作區手動建立「本局能否和牌」或「最終和牌級別」盤口，可提前封盤、依客觀選項結算，或作廢並原子退還全部投注。玩家從獨立 `/mahjong-live` 介面以專屬 Discord OAuth token 登入，完成後仍停留在戀雀頁，不載入 RPG 主框架、不建立角色、不要求玩家身分組，也不讀寫金幣／鑽石。首次啟用 10,000 張、每日可領 1,000 張、單注 100～5,000 張；派彩為中獎者取回本金並按比例分配落選池 90%，其餘回收；OBS 使用 `/static/mahjong-prediction-overlay.html`
 - 舊 `/static/live.html` 僅保留相容入口；管理密碼不再寫入 localStorage
 
 ### 待機室與開台通知

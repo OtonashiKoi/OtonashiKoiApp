@@ -3,6 +3,7 @@ const { getMongoDb } = require("./createMongoClient");
 const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { createStreamAccountBindingRepository } = require("../streamBindings/createStreamAccountBindingRepository");
 const { createCreatorTokenRepository } = require("../creatorTokens/createCreatorTokenRepository");
+const { createMahjongPredictionRepository } = require("./createMahjongPredictionRepository");
 const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
 const { slimProgressForStorage, slimInventoryEntry, slimInventoryArray } = require("../../shared/inventoryStorage");
 const seasonState = require("../../services/access/seasonStateStore");
@@ -1301,6 +1302,7 @@ function createMongoRepositories() {
         );
       }
     },
+    mahjongPredictionRepository: createMahjongPredictionRepository({ collection }),
     casinoRepository: {
       async getState() {
         const row = await (await collection("casinoState")).findOne({ _id: "default" });

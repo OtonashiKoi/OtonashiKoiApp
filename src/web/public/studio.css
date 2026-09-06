@@ -448,6 +448,30 @@ tbody tr:hover {
   flex-wrap: wrap;
   margin-top: 15px;
 }
+.koi-market-head,
+.koi-option-row,
+.koi-recent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.koi-market-head { margin-bottom: 14px; }
+.koi-market-head span,
+.koi-option-row small,
+.koi-recent-row small { display: block; color: var(--muted); font-size: 11px; }
+.koi-market-head h3 { margin: 4px 0 0; font-size: 19px; }
+.koi-status { display: grid; justify-items: end; color: var(--gold); }
+.koi-status strong { font-size: 24px; }
+.koi-option-row { padding: 10px 0; border-top: 1px solid var(--line); }
+.koi-option-row > strong { color: var(--cyan); }
+.koi-actions { margin-top: 16px; }
+.koi-result { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.koi-recent-list { display: grid; gap: 8px; }
+.koi-recent-row { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #090d2088; }
+.koi-recent-row > div { min-width: 220px; }
+.koi-recent-row > span { color: var(--gold); font-weight: 800; }
+.koi-recent-row > em { color: var(--muted); font-size: 11px; font-style: normal; }
 .overlay-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

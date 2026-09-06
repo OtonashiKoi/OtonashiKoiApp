@@ -182,6 +182,11 @@ function formatStreamMembershipRules() {
   ];
 }
 
+function formatYoutubeCheckinLink() {
+  const url = String(config.streamMembership?.bindYoutubeUrl || "").trim();
+  return url ? `▶ **YouTube 打卡直播：** <${url}>` : "";
+}
+
 const DEPRECATED_JOB_PASSIVE_KEYS = new Set([
   "execute_chance_up",
   "execute_threshold_up",
@@ -1052,8 +1057,11 @@ async function handleCheckinStatus(interaction) {
     ? checkins.map((c) => `${taipeiDateKey(c.occurredAt) || "-"}  +${c.rewardDetail?.amount ?? 0} 金幣`).join("\n")
     : "尚無打卡紀錄";
 
+  const checkinLink = formatYoutubeCheckinLink();
+
   await replyAndAutoDelete(interaction,
     `📅 **打卡狀態**\n${statusLine}\n\n` +
+    (checkinLink ? `${checkinLink}\n\n` : "") +
     `🗓️ **最近 7 天紀錄**\n${historyLines}`
   );
 }
@@ -1723,6 +1731,7 @@ async function handleInviteCodeSubmit(interaction) {
 async function handleBind(interaction) {
   const { player, bindings, bindingLines } = await getBindingRows(interaction);
   const boundLines = [...bindingLines];
+  const checkinLink = formatYoutubeCheckinLink();
 
   if (boundLines.length === 0) {
     const externalIds = player?.externalIds || {};
@@ -1741,7 +1750,8 @@ async function handleBind(interaction) {
       `🔗 **直播帳號綁定狀態**\n\n` +
       `✅ 已綁定以下帳號：\n${boundLines.join("\n")}\n\n` +
       `如需重新綁定，請在直播聊天輸入以下指令：\n` +
-      `**!綁定 ${code}**（10 分鐘內有效）`
+      `**!綁定 ${code}**（10 分鐘內有效）` +
+      (checkinLink ? `\n\n${checkinLink}` : "")
     );
     return;
   }
@@ -1752,7 +1762,8 @@ async function handleBind(interaction) {
     `你的綁定碼是：\`\`\`${code}\`\`\`\n` +
     `請在 **10 分鐘內**到直播聊天室（YT / Twitch）輸入：\n` +
     `**!綁定 ${code}**\n\n` +
-    `綁定後，打卡就會自動識別你的直播帳號。`
+    `綁定後，打卡就會自動識別你的直播帳號。` +
+    (checkinLink ? `\n\n${checkinLink}` : "")
   );
 }
 

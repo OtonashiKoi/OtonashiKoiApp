@@ -22,6 +22,7 @@ const suites = [
   { script: "test:shadow", label: "影舞者氣條" },
   { script: "test:solo-boss-account-limit", label: "單人王帳號限制" },
   { script: "test:stream-notifications", label: "直播通知" },
+  { script: "test:ecpay-checkmac", label: "綠界雙版驗簽" },
 ];
 
 const results = [];

@@ -84,7 +84,7 @@ const config = {
     youtubeChannel: process.env.STREAM_YOUTUBE_CHANNEL || "www.youtube.com/@音無恋",
     twitchChannel: process.env.STREAM_TWITCH_CHANNEL || "https://www.twitch.tv/otonashikoi",
     // 綁定碼引導網址：玩家拿到綁定碼後要去這個直播聊天室輸入 `!綁定 碼`
-    bindYoutubeUrl: process.env.STREAM_BIND_YOUTUBE_URL || "https://www.youtube.com/watch?v=dwAGim_MnXw",
+    bindYoutubeUrl: process.env.STREAM_BIND_YOUTUBE_URL || "https://youtube.com/live/BWWk6sFT1xQ?feature=share",
     youtubeTiers: {
       C: "鯉民",
       B: "鯉長",

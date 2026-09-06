@@ -124,9 +124,12 @@ async function processLiveNotify(body, serviceContext) {
   // 1) 解密 Data
   let payload = null;
   let macOk = false;
+  let macVariant = null;
   try {
     const plaintext = decryptData(body.Data, cfg.hashKey, cfg.hashIV);
-    macOk = verifyCheckMac(plaintext, body.CheckMacValue, cfg.hashKey, cfg.hashIV).ok;
+    const macCheck = verifyCheckMac(plaintext, body.CheckMacValue, cfg.hashKey, cfg.hashIV);
+    macOk = macCheck.ok;
+    macVariant = macCheck.variant;
     payload = JSON.parse(plaintext);
   } catch (err) {
     if (db) await db.collection("ecpayDonations").insertOne({ ...rawDoc, status: "decrypt_failed", error: String(err?.message || err) }).catch(() => {});
@@ -158,7 +161,7 @@ async function processLiveNotify(body, serviceContext) {
     patronName, patronNote,
     donateUrl: payload.DonateURL || null,
     livestreamUrl: payload.LivestreamURL || null,
-    simulate, macOk
+    simulate, macOk, macVariant
   };
 
   // 冪等：同 TradeNo 已成功處理過 → 直接 ACK
@@ -212,7 +215,7 @@ async function processLiveNotify(body, serviceContext) {
     { upsert: true }
   ).catch(() => {});
 
-  console.log(`[ECPay] 收單 TradeNo=${tradeNo} NT$${twdAmount} status=${status} reason=${reason} 玩家=${player?.discordId || "-"} 發鑽=${granted}${simulate ? " (模擬)" : ""}`);
+  console.log(`[ECPay] 收單 TradeNo=${tradeNo} NT$${twdAmount} status=${status} reason=${reason} mac=${macVariant || "failed"} 玩家=${player?.discordId || "-"} 發鑽=${granted}${simulate ? " (模擬)" : ""}`);
 
   // DM 通知玩家（best-effort）
   if (status === "granted" && player?.discordId && serviceContext.notifyPlayer) {
