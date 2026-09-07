@@ -14,6 +14,8 @@ module.exports = {
     {
       name: "equipmentGAME",
       script: "src/index.js",
+      exec_mode: "fork",
+      instances: 1,
       cwd: ".",
       autorestart: true,
       watch: false,

@@ -4,6 +4,7 @@ const path = require("path");
 function walk(dir, results = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory() && entry.name === ".app-releases") continue;
     if (entry.isDirectory()) {
       walk(fullPath, results);
       continue;
@@ -27,7 +28,8 @@ const groups = [
 for (const group of groups) {
   if (!fs.existsSync(group.dir)) continue;
   for (const file of walk(group.dir)) {
-    if (group.module && file.endsWith(".js")) {
+    const deployedModule = file.startsWith(path.join(root, "src/web/public/app") + path.sep);
+    if ((group.module || deployedModule) && file.endsWith(".js")) {
       require("child_process").execFileSync(
         process.execPath,
         ["--input-type=module", "--check"],

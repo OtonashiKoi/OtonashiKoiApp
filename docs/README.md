@@ -39,6 +39,8 @@
 | 觀看人數提示 | 由 MongoDB `serverEventConfig.viewerTiers` 控制；同場同階一次、升階可再發、另受最短間隔限制 | `src/services/stream/streamEventConfig.js`、`streamNotificationState.js` |
 | 錨點任務 | 聖人只看 5 萬有效非吸血治療且不綁抖內；鮮血、承傷、簽到與輔助職任務依各自的顯示／完成門檻運作 | `src/shared/anchorQuestRules.js`、`weeklyQuestService.js` |
 
+現行共用結算、單一 runtime 所有權及發布／回復流程見 [SYSTEM_HARDENING](SYSTEM_HARDENING.md)。
+
 ## 維護流程
 
 玩家 React／TypeScript 原始碼在獨立 repository `OtonashiKoi/equipmentGAME-app`；本 repository 的 `src/web/public/app/` 只是部署成品。介面修改與測試必須在 SPA repository 完成，再部署並提交成品。

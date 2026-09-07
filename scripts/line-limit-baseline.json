@@ -7,7 +7,7 @@
   "src/bot/client.js": 981,
   "src/bot/equipmentCardRenderer.js": 446,
   "src/bot/handlers/auctionZoneHandlers.js": 1060,
-  "src/bot/handlers/monsterZoneHandlers.js": 5779,
+  "src/bot/handlers/monsterZoneHandlers.js": 3852,
   "src/bot/handlers/petHandlers.js": 442,
   "src/bot/handlers/pkArenaHandlers.js": 1706,
   "src/bot/handlers/streamHandlers.js": 886,

@@ -26,7 +26,7 @@ function createTransactionLog({
     createdAt: new Date().toISOString()
   };
   // 打怪相關紀錄掛 TTL 過期時間(Date 型別,TTL 索引才吃得到)
-  if (typeof source === "string" && source.startsWith(EPHEMERAL_SOURCE_PREFIX)) {
+  if (!sourceRef && typeof source === "string" && source.startsWith(EPHEMERAL_SOURCE_PREFIX)) {
     log.expireAt = new Date(Date.now() + EPHEMERAL_RETENTION_MS);
   }
   return log;

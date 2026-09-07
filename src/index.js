@@ -18,6 +18,24 @@ async function maybeStartDevMirror() {
 async function bootstrap() {
   await maybeStartDevMirror();
 
+  // Acquire exclusive ownership before importing runtimeContext or starting timers.
+  const { getMongoDb } = require("./adapters/mongo/createMongoClient");
+  const { acquireRuntimeLease } = require("./services/runtime/runtimeLease");
+  const leaseDb = await getMongoDb();
+  const leaseWaitUntil = Date.now() + 70000;
+  let runtimeLease;
+  while (!runtimeLease) {
+    try { runtimeLease = await acquireRuntimeLease(leaseDb); }
+    catch (error) {
+      if (!error.message.includes("GAME_RUNTIME_ALREADY_RUNNING") || Date.now() >= leaseWaitUntil) throw error;
+      console.warn("[RuntimeLease] waiting for previous runtime ownership to expire...");
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+  }
+  require("./services/runtime/runtimeOwnership").setRuntimeOwnership(runtimeLease);
+  const recoveredCurrency = await require("./adapters/mongo/currencySettlementRuntime").recoverPending();
+  console.log(`[CurrencySettlement] recovered ${recoveredCurrency} pending operation(s)`);
+
   // 注意：以下 require 必須在 maybeStartDevMirror 之後，因為 config 會讀 process.env.MONGODB_URI
   const { installRestartAudit, markBootstrapFailure } = require("./shared/restartAudit");
   const { registerCommands } = require("./bot/registerCommands");
@@ -92,6 +110,7 @@ async function bootstrap() {
     }
 
     const app = createApiServer(client);
+
     const server = app.listen(config.api.port, () => {
       console.log(`[API] listening on port ${config.api.port}${apiOnly ? " (API_ONLY mode)" : ""}`);
       console.log(`[Admin] http://localhost:${config.api.port}/admin`);

@@ -26,7 +26,7 @@
     "test:features": "node scripts/test-core-features.js",
     "test:systems": "node scripts/verify-game-systems.js",
     "test:all": "node scripts/test-all.js",
-    "test:ci": "npm run check && npm run test:golden && npm run test:combat-regressions && npm run test:solo-boss-account-limit && npm run test:stream-notifications && npm run test:web-battle-transition && npm run test:web-death-cooldown && node scripts/test-monster-state-race-guard.js",
+    "test:ci": "npm run check && npm run test:golden && npm run test:combat-regressions && npm run test:solo-boss-account-limit && npm run test:stream-notifications && npm run test:web-battle-transition && npm run test:web-death-cooldown && node scripts/test-monster-state-race-guard.js && npm run test:system-hardening",
     "test:golden": "node scripts/golden-combat-test.js",
     "test:shadow": "node scripts/test-shadow-gauge.js",
     "test:job-transfer": "node scripts/test-job-transfer.js",
@@ -75,7 +75,8 @@
     "db:sync": "node scripts/sync-db-to-cloud.js",
     "db:pull": "node scripts/sync-cloud-to-local.js",
     "db:sync:start": "node scripts/db-sync-scheduler.js",
-    "workflow:finalize": "node scripts/workflow-finalize.js"
+    "workflow:finalize": "node scripts/workflow-finalize.js",
+    "test:system-hardening": "node scripts/test-system-hardening.js && node scripts/test-standalone-currency-settlement.js && node scripts/test-shared-battle-service.js && node scripts/test-runtime-boot.js"
   },
   "engines": {
     "node": ">=20.0.0"

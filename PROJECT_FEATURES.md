@@ -1,6 +1,8 @@
 # 專案功能現況
 
-> 狀態：現行功能矩陣。最後以程式碼與 MongoDB 核對：2026-08-15。
+> 狀態：現行功能矩陣。最後以程式碼與 MongoDB 核對：2026-09-07。
+>
+> 營運狀態：本季度已結束，MongoDB `maintenanceState.activateAt` 已生效；一般玩家 Web 登入／API 與 Discord 遊戲互動入口目前關閉。下表描述重新開放時既有的功能內容，不代表入口現正開放。
 >
 > 這裡只回答「現在有什麼、能不能用」。程式位置看 [docs/SYSTEMS.md](docs/SYSTEMS.md)，即時資料量看 [docs/CURRENT_GAME_STATUS.md](docs/CURRENT_GAME_STATUS.md)。
 

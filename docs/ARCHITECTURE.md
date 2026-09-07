@@ -13,7 +13,7 @@
 3. 背景排程：直播觀看／待機室、會員同步、世界王、面板維護、記憶體監控等。
 4. 共用 service context：Discord 與 API 使用同一組服務及 Mongo repositories。
 
-`API_ONLY=1` 可略過 Discord command registration 與 gateway login，但 API 仍會啟動。
+`API_ONLY=1` 可略過 Discord command registration 與 gateway login，但 API 仍會啟動。所有 runtime 都必須先取得同一資料庫的 `runtimeLeases` 所有權；固定單程序，不可直接加 PM2 instances。租約與重啟等待見 [SYSTEM_HARDENING](SYSTEM_HARDENING.md)。
 
 ## 主要資料流
 
@@ -111,12 +111,20 @@ React 原始碼在獨立 workspace `~/Documents/equipmentGAME-app`，建置後�
 
 直播營運後台是 `/studio`（`studio.html`、`studio.css`、`studio.js`），集中真實直播／觀看數、活躍留言者、會員、斗內、全服 Buff、世界王、轉盤、戀雀預測、OBS overlay 健康檢查與創作者授權。戀雀預測在獨立工作區手動開盤、封盤、結算與退款；玩家 `/mahjong-live` 由 root route 直接渲染，不掛載 RPG AppShell、角色閘門、戰鬥、通知或遊戲選單，並透過 `/api/mahjong-auth/*` 取得只允許戀雀 API 的專屬 token；OBS 使用獨立透明盤口。OBS 與場景區依各瀏覽器來源實際支援的 query 參數提供內嵌設定器，可直接產生正式網址、測試預覽並複製；密碼與 Overlay 金鑰不寫入 Studio 的 localStorage。轉盤編輯、斗內／觀看／會員門檻、SC 里程碑與永久加成都直接嵌入 Studio；只有玩家與怪物等遊戲本體資料會明確跨站到遊戲營運後台。Studio 與主 `/admin` 每次開啟或重整都固定先顯示密碼輸入，不以既有 Session 自動跳過登入；兩個後台仍共用同一個 HttpOnly 管理 Session，供手動登入後的 API 請求使用。Studio 各工作區使用 hash 保存位置；舊 `/static/live.html` 保留相容但不再持久化明碼密碼。
 
+## 共用結算與發布邊界
+
+`RewardService` 的貨幣異動依 MongoDB 能力選擇 transaction 或 standalone 持久化日誌；重試依 `source + sourceRef` 識別，啟動時恢復未完成結算。完整範圍與限制見 [SYSTEM_HARDENING](SYSTEM_HARDENING.md)。
+
+前端發布改為先驗證 `.app-releases/<buildId>` 再切換 `app` 連結，保留舊版並支援 `--rollback`；第一次從實體目錄遷移有短暫切換窗口。前端建置時保存 commit 與 dirty 狀態，後端發布資訊另列。
+
 ## 共用戰鬥邊界
 
 - `combatStats.js`：屬性、武器、裝備與被動轉成戰鬥數值。
 - `effectEngine.js`：效果定義、套用與堆疊。
 - `combatLoop.js`：回合時序、傷害、治療、吸血、狀態、戰報與統計。
-- 呼叫端：準備玩家／怪物、選項與 party effects；結束後寫入進度、任務、獎勵與 KDA。
+- `services/battle/zoneBattleService.js`：共用世界王機制、擊殺獎勵、任務與轉場；Web 不再直接 require Discord handler。
+- `battlePresentation`：由 Discord 介面注入公告、面板與私訊回呼。
+- 呼叫端：準備玩家／怪物、選項與 party effects；KDA 與戰報組裝仍由原入口處理。
 
 每回合生命變動在該回合的觸發點處理。`healDone` 與 `lifestealDone` 是 combat loop 回傳的實際量，不應由戰報文字或效果描述反推。
 

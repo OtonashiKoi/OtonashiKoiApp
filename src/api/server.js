@@ -40,6 +40,10 @@ const config = require("../config");
 
 function createApiServer(discordClient) {
   const app = express();
+  app.use((req, res, next) => {
+    try { require("../services/runtime/runtimeOwnership").assertRuntimeOwnership(); next(); }
+    catch (_) { res.status(503).json({ status: "error", code: "GAME_RUNTIME_LEASE_LOST", message: "服務重新連線中，請稍後重試。" }); }
+  });
 
   // 正常重啟只需要等待會改資料的 API 完成；SSE／OBS 等長連線應直接重連，
   // 否則 server.close() 會一直等到 PM2 的強制關閉上限。

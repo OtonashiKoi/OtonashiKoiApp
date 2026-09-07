@@ -58,6 +58,8 @@ async function ensureIndexes(db) {
       // TTL:打怪相關高頻紀錄(掛 expireAt 的)到期自動刪除,避免 transactions 無限膨脹。
       // 只有帶 expireAt 欄位的文件會被清,其他交易(賭場/商店/拍賣…)不受影響、永久保留。
       db.collection("transactions").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 }),
+      db.collection("currencyOperations").createIndex({ status: 1, createdAt: 1 }),
+      db.collection("currencyOperations").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 }),
       // TTL:賭場局紀錄(casinoRounds)掛 expireAt(30天),到期自動刪除,防膨脹。
       db.collection("casinoRounds").createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 }),
       // 戀雀券直播預測：錢包、台帳、盤口與每人每盤唯一投注。

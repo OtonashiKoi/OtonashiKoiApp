@@ -1,5 +1,8 @@
 "use strict";
 
+const { handleMonsterKill, getServiceContext, isWorldBossAllPartsDefeated, recordQuestForPlayersInBackground, killInProgress, collectRewardEffectRefs, buildRewardModifiers, toPct, toMultiplier, getDynamicGoldPoolFloor, GOLD_POOL_RULE_BY_ZONE, buildMonsterDropPool, isMonsterCardItem, calculateFinalDropChance, RARE_TIERS, toWebDrop, getParticipationGemTiers, ZONE_PARTICIPATION_GEM_TIER, getNextEnhanceGemTier, GEM_TIER_ORDER, ENHANCE_GEM_IDS, GEM_PARTICIPATION_RATE, GEM_PARTICIPATION_DOUBLE_DROP_RATE, tryStackGem, ensureWorldBossPartState, createWorldBossPartHpTemplate, HUTAO_PREVIEW_ZONE, HELLFANG_ZONE, DRAGON_KING_ZONE, TURTLE_ZONE, sumWorldBossPartHp, freshHellfangFields, worldBossTimeoutTimers, _awardWorldBossContributionChests, _resolveWorldBossChestId, WORLD_BOSS_CHEST_BY_MONSTER, _rankWorldBossChestContributors, _resolveWorldBossDisplayName, _worldBossSafeDisplayName, _worldBossChestCountForRank, _grantChestToPlayer, _buildChestEntry, buildPartyRewardSummary, pickWeightedNextMonster, zoneLastChosen, _scheduleZoneEventFinalize, zoneEventTimers, _resolveZoneEventIfExpired, BOSS_SPAWN_BROADCAST_ENABLED, _startMonsterTransition, monsterTransitionTimers, MONSTER_TRANSITION_MS, activeMonsterTransitions, _resolveExpiredMonsterTransition, _doIdleRotate, recordQuestBattleProgress, resolveWeaponQuestMetric, isSupportJobBadge, SUPPORT_JOB_KEYS, resolveJobBattleMetric, MAX_ROUNDS, getWorldBossPartKeys, getWorldBossTargetProfile, applyWorldBossTargetToPlayerStats, applyWorldBossTargetToMonster, applyDragonKingBreakWeaken, parseWorldBossTargetPart, BTN, WORLD_BOSS_TARGET_PARTS, hellfangPlayerSchool, hellfangDamageMult, hellfangAlivePartCount, HELLFANG_CORE_PLAYER_MULT, hellfangPartCurrentWeak, HELLFANG_PART_WEAKNESS, HELLFANG_WRONG_TYPE_MULT, hellfangPartAccrue, HELLFANG_FLIP_FRACTION, HELLFANG_FLIP_DURATION_MS, hellfangFlipLines, HELLFANG_PART_LABELS, getHellfangFlipRemainingMs, getWorldBossPartWeakness, hellfangBossPhaseMods, HELLFANG_FRENZY_DODGE_BONUS, HELLFANG_FRENZY_DMG_MULT, applyWorldBossPhaseModifiers } = require("../../services/battle/zoneBattleService");
+
+
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { buildItemEffectLines } = require("../../shared/itemEffectLines");
@@ -45,40 +48,25 @@ const deathCooldowns = new Map();
 
 // 擊殺結算互斥鎖（防止兩名玩家同時打死同一隻怪造成雙重結算）
 // key: `${zoneKey}:${monsterSeq}`
-const killInProgress = new Set();
-const zoneEventTimers = new Map();
-const monsterTransitionTimers = new Map();
-const activeMonsterTransitions = new Map();
-const worldBossTimeoutTimers = new Map();
+
+
+
+
+
 // track last chosen candidate per zone to avoid immediate repeats
-const zoneLastChosen = new Map();
+
 const announcementWebhookCache = new Map();
 
 // 排行榜去重：key = zoneKey, value = { lastPublishTime, lastDamageMap, pendingTimer }
 // 防止戰鬥中頻繁編輯面板，最多 5 秒更新一次排行榜
 const damageRankingDebounce = new Map();
-const BOSS_SPAWN_BROADCAST_ENABLED = false;
+
 const COOLDOWN_MAP_PRUNE_INTERVAL_MS = 5 * 60 * 1000;
 let cooldownMapPruneTimer = null;
 
 // 任務計數不影響本場傷害、掉落或經驗；擊殺結算不可等它寫完才回戰報。
 // WeeklyQuestService 內部會依玩家序列化，這裡只負責把附帶進度移出核心結算鏈。
-function recordQuestForPlayersInBackground(questService, playerIds, type, amount = 1) {
-  if (!questService || typeof questService.recordProgress !== "function") return;
-  const ids = [...new Set((playerIds || []).map(String).filter(Boolean))];
-  setImmediate(() => {
-    void Promise.allSettled(ids.map((playerId) => (
-      typeof questService.recordProgressBatch === "function"
-        ? questService.recordProgressBatch(playerId, { [type]: amount })
-        : questService.recordProgress(playerId, type, amount)
-    ))).then((results) => {
-      const failed = results.filter((result) => result.status === "rejected");
-      if (failed.length > 0) {
-        console.error(`[Quest] background ${type} failed for ${failed.length}/${ids.length} player(s)`);
-      }
-    });
-  });
-}
+
 
 function pruneCooldownMap(map, now = Date.now()) {
   for (const [discordId, cooldown] of map.entries()) {
@@ -244,20 +232,15 @@ function clearQueuedEliteWorldBossSessions(reason = "世界BOSS 已結束，本�
   return cleared;
 }
 
-const BTN = {
-  enterBattle: "monster-zone:enter-battle",
-  enterBattlePrefix: "monster-zone:enter-battle:",
-  deleteLog:   "monster-zone:delete-log",
-  humanCheckPrefix: "monster-zone:human-check:" // <token>:<選項index>
-};
 
-const MAX_ROUNDS = 15;
+
+
 const BATTLE_TIMEOUT_MS = 60 * 1000; // 1 分鐘未按開始戰鬥 → 視為逃跑
 const ROUNDS_PER_TICK = 1;           // 每次更新顯示 1 回合，維持逐回合戰報節奏
 const DISCORD_REPLY_RETRY_DELAY_MS = 700;
 const DISCORD_REPLY_TIMEOUT_MS = 8_000;
 const DISPLAYING_SESSION_CLEANUP_GRACE_MS = 15_000;
-const MONSTER_TRANSITION_MS = 500;   // 怪物轉場空窗：0.5 秒
+   // 怪物轉場空窗：0.5 秒
 const BATTLE_QUEUE_POLL_MS = 500;    // 排隊等待輪詢：0.5 秒
 const DEATH_COOLDOWN_MS = 30 * 1000; // 死亡後固定冷卻 30 秒，不受 AGI／裝備影響
 // 世界王冷卻若超過此秒數，就不要把玩家鎖在佇列裡空等（避免「被王關起來」長達一小時無法戰鬥）；
@@ -266,13 +249,7 @@ const WORLD_BOSS_QUEUE_RELEASE_MS = 90 * 1000;
 
 // 金幣池採「怪物原始金幣」與「參戰人數保底」取高。
 // 這能保留傷害占比，同時避免多人共鬥時每個人分到的金幣太薄。
-const GOLD_POOL_RULE_BY_ZONE = {
-  beginner: { minPerPlayer: 80 },
-  normal: { minPerPlayer: 220 },
-  mid: { minPerPlayer: 650 },
-  hard: { minPerPlayer: 1200 },
-  elite: { minPerPlayer: 6000 }
-};
+
 
 // 低階區戰力同步：高階裝備仍可使用，但單次戰鬥有效輸出會被壓到該區合理範圍。
 const ZONE_DAMAGE_SYNC_RULES = {
@@ -290,286 +267,72 @@ const calculateTickDelay = (agi = 1) => {
   const capped = Math.min(Math.max(1, agi), capAgi);
   return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
 };
-const RARE_TIERS = new Set(["A", "S", "SS", "SSR", "UR"]);
-const WORLD_BOSS_TARGET_PARTS = new Set(["head", "body", "legs", "wings", "upper_body", "lower_body", "tail"]);
+
+
 // 古龍王巢穴採 4 部位(含龍翼)+ 破鱗削弱;其餘世界王維持 3 部位
-const DRAGON_KING_ZONE = "dragon_king_lair";
-const TURTLE_ZONE = "event_boss"; // 島島龜王（活動）：潮汐/海嘯在 shared/turtleTide.js
-const HUTAO_PREVIEW_ZONE = "event_boss_hutao_preview";
+
+ // 島島龜王（活動）：潮汐/海嘯在 shared/turtleTide.js
+
 // 地獄狼牙王(牙狼)：5 部位(3物2法) + 部位翻面機制
-const HELLFANG_ZONE = "hellfire_depths";
+
 // 牙狼五部位「原生弱點」(吃 100% 的流派)：法系(上軀幹/尾巴) vs 物理(頭/下軀幹/腿)
-const HELLFANG_PART_WEAKNESS = { head: "physical", upper_body: "magic", lower_body: "physical", tail: "magic", legs: "physical" };
-const HELLFANG_WRONG_TYPE_MULT = 0.3;   // 打錯流派 → 最多 30%
-const HELLFANG_FLIP_FRACTION = 1 / 3;   // 部位累積受創達 1/3 HP → 翻面(一生一次)
-const HELLFANG_FLIP_DURATION_MS = 10 * 60 * 1000; // 翻面持續 10 分鐘(=600秒/「600間隙」)後復原
+
+   // 打錯流派 → 最多 30%
+   // 部位累積受創達 1/3 HP → 翻面(一生一次)
+ // 翻面持續 10 分鐘(=600秒/「600間隙」)後復原
 // 分階段(依存活部位數)：
 //  剩 3~2 部位「狂亂閃避」→ 迴避大增 + 王攻擊減半；剩 1 部位「最終核心」→ 迴避/王攻回正常、物法皆可打但玩家傷害×0.7
-const HELLFANG_FRENZY_DODGE_BONUS = 40;  // 狂亂期迴避 +40(命中牠約 -24%)
-const HELLFANG_FRENZY_DMG_MULT = 0.5;    // 狂亂期王攻擊 ×0.5
-const HELLFANG_CORE_PLAYER_MULT = 0.7;   // 最終核心：玩家對它傷害 ×0.7(物法皆可、不再翻面)
-const HELLFANG_PART_LABELS = { head: "頭部", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴", legs: "腿部" };
-function getWorldBossPartKeys(zoneKey) {
-  if (zoneKey === HELLFANG_ZONE) return ["head", "upper_body", "lower_body", "tail", "legs"];
-  if (zoneKey === TURTLE_ZONE) return ["head", "body", "wings", "legs"]; // 龜首/島背/左鰭/右鰭
-  if (zoneKey === HUTAO_PREVIEW_ZONE) return ["body"];
-  return zoneKey === DRAGON_KING_ZONE ? ["head", "body", "wings", "legs"] : ["head", "body", "legs"];
-}
+  // 狂亂期迴避 +40(命中牠約 -24%)
+    // 狂亂期王攻擊 ×0.5
+   // 最終核心：玩家對它傷害 ×0.7(物法皆可、不再翻面)
 
-function parseWorldBossTargetPart(customId) {
-  const raw = String(customId || "");
-  if (!raw.startsWith(BTN.enterBattlePrefix)) return "body";
-  const part = raw.slice(BTN.enterBattlePrefix.length);
-  return WORLD_BOSS_TARGET_PARTS.has(part) ? part : "body";
-}
 
-function getWorldBossTargetProfile(part, zoneKey = null) {
-  // 島島龜王：難度全由潮汐/海嘯機制驅動（turtleTide.battleMods），部位本身不加料
-  if (zoneKey === TURTLE_ZONE) {
-    return { label: getWorldBossPartLabel(zoneKey, part) };
-  }
-  if (zoneKey === HUTAO_PREVIEW_ZONE) {
-    return { label: getWorldBossPartLabel(zoneKey, part) };
-  }
-  // 古龍王:採破鱗削弱(破部位永久削弱),攻擊當下不另加難度,只回部位標籤
-  if (zoneKey === DRAGON_KING_ZONE || part === "wings") {
-    const labels = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤" };
-    return { label: labels[part] || "軀幹" };
-  }
-  if (part === "head") {
-    // 頭部：怪物技能發動率提高（高風險，技能更常觸發）
-    return {
-      label: "頭部",
-      monsterSkillChanceBonus: 25,   // 怪物卡技能觸發率 +25%
-      note: "⚠️ 怪物技能發動率大幅提高（高風險）"
-    };
-  }
-  if (part === "legs") {
-    // 下盤/尾巴：怪物攻擊更兇，終傷 ×1.3
-    return {
-      label: "下盤",
-      monsterDamageMult: 1.3,        // 怪物終傷 ×1.3
-      note: "⚠️ 怪物攻擊更兇（你受到的傷害 ×1.3）"
-    };
-  }
-  // 軀幹：防禦更高，且你的傷害被削減
-  return {
-    label: "軀幹",
-    monsterFlatDefMult: 1.6,         // 固定防禦提高（不受 75% 上限限制）
-    playerAtkMultiplier: 0.8,        // 玩家傷害 -20%（實際透過 atk 折減，確實生效）
-    note: "🛡️ 防禦極高、你的傷害被削減"
-  };
-}
 
-function applyWorldBossTargetToPlayerStats(playerStats, part, zoneKey = null) {
-  const profile = getWorldBossTargetProfile(part, zoneKey);
-  const next = { ...(playerStats || {}) };
-  if (profile.playerAtkMultiplier != null) {
-    next.atk = Math.max(1, Math.round((next.atk || 0) * profile.playerAtkMultiplier));
-  }
-  if (profile.playerDexMultiplier != null) {
-    next.dex = Math.max(1, Math.round((next.dex || 1) * profile.playerDexMultiplier));
-  }
-  if (profile.playerAgiBonus != null) {
-    next.agi = Math.max(1, Math.round((next.agi || 1) + profile.playerAgiBonus));
-  }
-  return { stats: next, profile };
-}
+
+
+
+
+
 
 // 依目標部位調整「怪物」：頭部技能率↑ / 軀幹防禦↑ / 尾巴攻擊↑
 //   回傳調整後的 { monsterStats, monsterEquipped }（皆 clone，不動原物件）
-function applyWorldBossTargetToMonster(monsterStats, monsterEquipped, part, zoneKey = null) {
-  const profile = getWorldBossTargetProfile(part, zoneKey);
-  const mStats = { ...(monsterStats || {}) };
-  let mEquip = monsterEquipped || {};
 
-  if (profile.monsterFlatDefMult) {
-    mStats.flatDef = Math.max(0, Math.round((Number(mStats.flatDef) || 0) * profile.monsterFlatDefMult));
-  }
-  if (profile.monsterDamageMult) {
-    mStats.atk = Math.max(1, Math.round((Number(mStats.atk) || 1) * profile.monsterDamageMult));
-  }
-  if (profile.monsterSkillChanceBonus) {
-    // clone special_1 卡，提高 monsterCardSkill.chance
-    mEquip = { ...mEquip };
-    const card = mEquip.special_1;
-    if (card && card.monsterCardSkill) {
-      const skill = { ...card.monsterCardSkill };
-      skill.chance = Math.min(100, (Number(skill.chance) || 30) + profile.monsterSkillChanceBonus);
-      mEquip.special_1 = { ...card, monsterCardSkill: skill, cardProcChance: skill.chance };
-    }
-  }
-  return { monsterStats: mStats, monsterEquipped: mEquip, profile };
-}
 
-function createWorldBossPartHpTemplate(totalMaxHp = 0, zoneKey = null) {
-  const maxHp = Math.max(1, Math.round(Number(totalMaxHp) || 1));
-  if (zoneKey === HUTAO_PREVIEW_ZONE) return { body: maxHp };
-  if (zoneKey === HELLFANG_ZONE) {
-    // 牙狼 5 部位：頭 20% / 上軀幹 20% / 下軀幹 20% / 尾巴 15% / 腿 25%
-    const head = Math.max(1, Math.round(maxHp * 0.20));
-    const upper_body = Math.max(1, Math.round(maxHp * 0.20));
-    const lower_body = Math.max(1, Math.round(maxHp * 0.20));
-    const tail = Math.max(1, Math.round(maxHp * 0.15));
-    const legs = Math.max(1, maxHp - head - upper_body - lower_body - tail);
-    return { head, upper_body, lower_body, tail, legs };
-  }
-  if (zoneKey === DRAGON_KING_ZONE) {
-    // 古龍王 4 部位:頭 30% / 軀幹 30% / 龍翼 20% / 下盤 20%
-    const head = Math.max(1, Math.round(maxHp * 0.3));
-    const body = Math.max(1, Math.round(maxHp * 0.3));
-    const wings = Math.max(1, Math.round(maxHp * 0.2));
-    const legs = Math.max(1, maxHp - head - body - wings);
-    return { head, body, wings, legs };
-  }
-  if (zoneKey === TURTLE_ZONE) {
-    // 島島龜王 4 部位:龜首 25% / 島背 40%(就是一座島) / 左鰭 17.5% / 右鰭 17.5%
-    const head = Math.max(1, Math.round(maxHp * 0.25));
-    const body = Math.max(1, Math.round(maxHp * 0.4));
-    const wings = Math.max(1, Math.round(maxHp * 0.175));
-    const legs = Math.max(1, maxHp - head - body - wings);
-    return { head, body, wings, legs };
-  }
-  const head = Math.max(1, Math.round(maxHp * 0.3));
-  const body = Math.max(1, Math.round(maxHp * 0.4));
-  const legs = Math.max(1, maxHp - head - body);
-  return { head, body, legs };
-}
+
 
 // ═══ 牙狼(地獄狼牙王) 適應性傷害機制 純函式 ═══
 // 玩家攻擊流派：法杖與骰子=法系，其餘(劍/斧/槌/匕/弓)=物理
-function hellfangPlayerSchool(weaponType) {
-  const wt = String(weaponType || "").toLowerCase();
-  return wt.startsWith("staff") || wt === "dice" ? "magic" : "physical";
-}
+
 // 牙狼「存活部位數」(HP>0)：分階段機制的依據
-function hellfangAlivePartCount(state) {
-  const hp = state?.worldBossPartsHp;
-  if (!hp || typeof hp !== "object") return 5;
-  return getWorldBossPartKeys(HELLFANG_ZONE).filter((k) => Number(hp[k] || 0) > 0).length;
-}
+
 // 牙狼「王側」分階段修正(給戰鬥設定調 battleMonsterStats)：
 //  剩 3~2 部位 → 狂亂：迴避 +40、王攻擊 ×0.5；其餘(5~4 或最終 1) → 正常。回 {dodgeBonus, dmgMult, phase}
-function hellfangBossPhaseMods(state) {
-  const alive = hellfangAlivePartCount(state);
-  if (alive === 3 || alive === 2) return { dodgeBonus: HELLFANG_FRENZY_DODGE_BONUS, dmgMult: HELLFANG_FRENZY_DMG_MULT, phase: "frenzy", alive };
-  return { dodgeBonus: 0, dmgMult: 1, phase: alive <= 1 ? "core" : "normal", alive };
-}
+
 // 世界王部位「當前弱點」類型(給面板顯示)：牙狼翻面窗口內回翻面弱點、否則原生；最終核心(剩1)→null(物法皆可)；其餘世界王 null
-function getWorldBossPartWeakness(zoneKey, partKey, state = null, now = Date.now()) {
-  if (zoneKey !== HELLFANG_ZONE) return null;
-  if (hellfangAlivePartCount(state) <= 1) return null; // 最終核心：物法皆可，不標弱點
-  return hellfangPartCurrentWeak(state, partKey, now);
-}
+
 // 牙狼部位「翻面剩餘毫秒」(給面板倒數)：翻面中回剩餘 ms、否則 0
-function getHellfangFlipRemainingMs(state, partKey, now = Date.now()) {
-  const until = state?.hellfangFlipUntil?.[partKey] ? Date.parse(state.hellfangFlipUntil[partKey]) : 0;
-  return (Number.isFinite(until) && until > now) ? (until - now) : 0;
-}
+
 // 部位「當前弱點」(=吃 100% 的流派)：翻面窗口內→翻面弱點；否則→原生弱點
-function hellfangPartCurrentWeak(state, part, now = Date.now()) {
-  const until = state?.hellfangFlipUntil?.[part] ? Date.parse(state.hellfangFlipUntil[part]) : 0;
-  if (Number.isFinite(until) && until > 0 && now < until && state?.hellfangFlipWeak?.[part]) return state.hellfangFlipWeak[part];
-  return HELLFANG_PART_WEAKNESS[part] || "physical";
-}
+
 // 這場玩家對牙狼的傷害倍率：
 //  最終核心(剩1部位)→物法皆可、但玩家傷害 ×0.7；否則→同流派 100%、不同流派最多 30%
-function hellfangDamageMult(state, part, weaponType, now = Date.now()) {
-  const school = hellfangPlayerSchool(weaponType);
-  if (hellfangAlivePartCount(state) <= 1) return { school, weak: null, mult: HELLFANG_CORE_PLAYER_MULT };
-  const weak = hellfangPartCurrentWeak(state, part, now);
-  const mult = (school === weak) ? 1 : HELLFANG_WRONG_TYPE_MULT;
-  return { school, weak, mult };
-}
+
 // 戰後累積該部位受創(依玩家流派歸屬有效傷害)；達 1/3 HP 且尚未翻過 → 翻面：
 // 抵禦你用比較多的那系(弱點變成另一種)10 分鐘、一生一次。回傳翻面事件或 null。
-function hellfangPartAccrue(state, part, partMaxHp, school, effDamage, now = Date.now()) {
-  if (!state || !part) return null;
-  // ⚠️ 舊機制曾把 hellfangDmgPhys/Magic 存成「數字」(全王累積總傷)；新機制要當「每部位 map」。
-  // 若殘留舊值(number)直接用 `|| {}` 會保留數字→`number[part]=` 拋「Cannot create property on number」，
-  // settlement 整個失敗→傷害寫不進部位→玩家看到「打了沒傷害」。故一律強制轉物件。
-  const asObj = (v) => (v && typeof v === "object" && !Array.isArray(v)) ? v : {};
-  state.hellfangDmgPhys = asObj(state.hellfangDmgPhys);
-  state.hellfangDmgMagic = asObj(state.hellfangDmgMagic);
-  state.hellfangFlipUntil = asObj(state.hellfangFlipUntil);
-  state.hellfangFlipWeak = asObj(state.hellfangFlipWeak);
-  state.hellfangFlipped = asObj(state.hellfangFlipped);
-  const eff = Math.max(0, Number(effDamage) || 0);
-  if (school === "magic") state.hellfangDmgMagic[part] = (state.hellfangDmgMagic[part] || 0) + eff;
-  else state.hellfangDmgPhys[part] = (state.hellfangDmgPhys[part] || 0) + eff;
-  const phys = state.hellfangDmgPhys[part] || 0;
-  const magic = state.hellfangDmgMagic[part] || 0;
-  // 最終核心(剩1部位)：不再翻面(物法皆可、不再變化)
-  if (hellfangAlivePartCount(state) <= 1) return null;
-  if (!state.hellfangFlipped[part] && (phys + magic) >= (Number(partMaxHp) || 0) * HELLFANG_FLIP_FRACTION) {
-    const majority = phys >= magic ? "physical" : "magic";           // 你用比較多的那系
-    const newWeak = majority === "physical" ? "magic" : "physical";  // 翻成抵禦該系(弱點變另一種)
-    state.hellfangFlipWeak[part] = newWeak;
-    state.hellfangFlipUntil[part] = new Date(now + HELLFANG_FLIP_DURATION_MS).toISOString();
-    state.hellfangFlipped[part] = true;
-    return { part, majority, newWeak };
-  }
-  return null;
-}
+
 // 翻面事件的戰報文案
-function hellfangFlipLines(event) {
-  if (!event) return [];
-  const label = HELLFANG_PART_LABELS[event.part] || "部位";
-  const resistZh = event.majority === "magic" ? "法術" : "物理";
-  const newWeakZh = event.newWeak === "magic" ? "法術" : "物理";
-  return [`🔁 地獄狼牙王的【${label}】適應了攻勢——改為抵禦${resistZh}傷害！此部位弱點暫時轉為【${newWeakZh}】（10 分鐘後復原、之後不再變）`];
-}
+
 
 // 以下兩個改為「依 partsHp 實際部位」運作,自動支援 3 或 4 部位
-function sumWorldBossPartHp(partsHp) {
-  if (!partsHp || typeof partsHp !== "object") return 0;
-  return Object.keys(partsHp).reduce((sum, k) => sum + Math.max(0, Number(partsHp[k] || 0)), 0);
-}
 
-function isWorldBossAllPartsDefeated(partsHp) {
-  if (!partsHp || typeof partsHp !== "object") return false;
-  const keys = Object.keys(partsHp);
-  if (keys.length === 0) return false;
-  return keys.every((k) => Number(partsHp[k] || 0) <= 0);
-}
+
+
 
 // 古龍王破鱗削弱:依「已破壞部位」削弱 BOSS 攻擊面(不削防禦)。回傳 clone。
 //   下盤破→普攻−20% / 龍翼破→技能傷害−15% / 軀幹破→技能發動率→30% / 頭部破→無
-function applyDragonKingBreakWeaken(monsterStats, monsterEquipped, partsHp) {
-  const mStats = { ...(monsterStats || {}) };
-  let mEquip = monsterEquipped || {};
-  const broken = (k) => Number((partsHp || {})[k] ?? 1) <= 0;
 
-  if (broken("legs")) {
-    mStats.atk = Math.max(1, Math.round((Number(mStats.atk) || 1) * 0.8)); // 普攻 −20%
-  }
-  const card = mEquip.special_1;
-  if ((broken("wings") || broken("body")) && card && card.monsterCardSkill) {
-    mEquip = { ...mEquip };
-    const skill = { ...card.monsterCardSkill };
-    if (broken("body")) {
-      skill.chance = Math.min(Number(skill.chance) || 50, 30); // 發動率 → 30%
-    }
-    if (broken("wings") && Array.isArray(skill.procEffects)) {
-      // 技能傷害 −15%(雷擊 value × 0.85)
-      skill.procEffects = skill.procEffects.map((pe) =>
-        pe && pe.key === "lightning"
-          ? { ...pe, params: { ...(pe.params || {}), value: Math.max(1, Math.round((Number(pe.params?.value) || 0) * 0.85)) } }
-          : pe
-      );
-    }
-    mEquip.special_1 = { ...card, monsterCardSkill: skill, cardProcChance: skill.chance };
-  }
-  return { monsterStats: mStats, monsterEquipped: mEquip };
-}
 
-function getDynamicGoldPoolFloor(zoneKey, participantCount) {
-  const zoneRule = GOLD_POOL_RULE_BY_ZONE[zoneKey];
-  if (!zoneRule) return 0;
-  const minPerPlayer = Number(zoneRule.minPerPlayer || 0);
-  if (minPerPlayer <= 0) return 0;
-  return Math.round(Math.max(1, participantCount) * minPerPlayer);
-}
+
 
 function applyZoneDamageSync(zoneKey, startMonsterHp, monsterMaxHp, rawDamage, rawFinalMonsterHp, rawOutcome) {
   const raw = Math.max(0, Math.round(Number(rawDamage || 0)));
@@ -603,193 +366,9 @@ function applyZoneDamageSync(zoneKey, startMonsterHp, monsterMaxHp, rawDamage, r
   };
 }
 
-async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { sourceMonsterName = null, sourceMonsterSeq = null } = {}) {
-  if (!nextMonster) return null;
 
-  const prevTimer = monsterTransitionTimers.get(zoneKey);
-  if (prevTimer) clearTimeout(prevTimer);
 
-  const transitionId = require("crypto").randomUUID();
-  const diceRoll = Math.floor(Math.random() * 100) + 1;
-  const startedAt = new Date().toISOString();
-  const endsAt = new Date(Date.now() + MONSTER_TRANSITION_MS).toISOString();
 
-  const transitionState = {
-    ...freshState,
-    currentHp: 0,
-    activeMonsterSeq: freshState?.activeMonsterSeq ?? nextMonster.seq,
-    killCount: freshState?.killCount || {},
-    participants: [],
-    damageMap: {},
-    killClaimedSeq: sourceMonsterSeq ?? freshState?.activeMonsterSeq ?? nextMonster.seq,
-    killClaimedAt: new Date(),
-    activeHealerAura: null,
-    activeEvent: null,
-    activeTransition: {
-      id: transitionId,
-      kind: "monster_switch",
-      startedAt,
-      endsAt,
-      diceRoll,
-      nextMonsterSeq: nextMonster.seq,
-      nextMonsterName: nextMonster.name,
-      sourceMonsterName
-    }
-  };
-
-  activeMonsterTransitions.set(zoneKey, transitionState.activeTransition);
-  await sc.monsterService.saveState(transitionState, zoneKey);
-  // Discord 面板是戰後展示，不影響換怪狀態；不得讓 Discord API 延遲卡住 Web 戰報。
-  _republishPanel(
-    sc,
-    zoneKey,
-    null,
-    0,
-    0,
-    {},
-    null,
-    null,
-    { activeTransition: transitionState.activeTransition }
-  ).catch(() => {});
-
-  const timer = setTimeout(async () => {
-    try {
-      const latestState = await sc.monsterService.getState(zoneKey).catch(() => null);
-      if (latestState?.activeTransition?.id !== transitionId) return;
-
-      const nextState = {
-        ...latestState,
-        currentHp: nextMonster.calc.maxHp,
-        activeMonsterSeq: nextMonster.seq,
-        killCount: latestState?.killCount || transitionState.killCount || {},
-        participants: [],
-        damageMap: {},
-        killClaimedSeq: nextMonster.seq === (sourceMonsterSeq ?? latestState?.activeMonsterSeq) ? null : (latestState?.killClaimedSeq ?? sourceMonsterSeq ?? transitionState.killClaimedSeq ?? null),
-        killClaimedAt: nextMonster.seq === (sourceMonsterSeq ?? latestState?.activeMonsterSeq) ? null : (latestState?.killClaimedAt ?? transitionState.killClaimedAt ?? null),
-        activeHealerAura: null,
-        activeEvent: null,
-        activeTransition: null,
-        lastHitAt: new Date().toISOString()
-      };
-
-      let worldBossPartsHp = null;
-      if (isWorldBossZone(zoneKey) && nextMonster?.isBoss) {
-        const partState = ensureWorldBossPartState({}, nextMonster.calc.maxHp, zoneKey);
-        nextState.currentHp = partState.currentHp;
-        nextState.worldBossPartsHp = partState.worldBossPartsHp;
-        nextState.worldBossPartsMaxHp = partState.worldBossPartsMaxHp;
-        worldBossPartsHp = partState.worldBossPartsHp;
-        Object.assign(nextState, freshHellfangFields()); // 牙狼重生：清翻面/累積
-      }
-
-      await sc.monsterService.saveState(nextState, zoneKey);
-      await _republishPanel(
-        sc,
-        zoneKey,
-        nextMonster,
-        nextState.currentHp,
-        0,
-        {},
-        null,
-        worldBossPartsHp
-      ).catch(() => {});
-
-      if (nextMonster.isBoss && !isWorldBossZone(zoneKey) && BOSS_SPAWN_BROADCAST_ENABLED) {
-        _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
-      }
-      } catch (e) {
-        console.error(`[MonsterTransition] finalize failed zone=${zoneKey}:`, e?.message || e);
-      } finally {
-        const current = monsterTransitionTimers.get(zoneKey);
-        if (current) clearTimeout(current);
-        monsterTransitionTimers.delete(zoneKey);
-        const currentTransition = activeMonsterTransitions.get(zoneKey);
-        if (currentTransition?.id === transitionId) {
-          activeMonsterTransitions.delete(zoneKey);
-        }
-      }
-  }, MONSTER_TRANSITION_MS);
-
-  monsterTransitionTimers.set(zoneKey, timer);
-  return transitionState.activeTransition;
-}
-
-async function _resolveExpiredMonsterTransition(sc, zoneKey) {
-  const state = await sc.monsterService.getState(zoneKey).catch(() => null);
-  const transition = state?.activeTransition || null;
-  if (!transition && activeMonsterTransitions.has(zoneKey)) {
-    activeMonsterTransitions.delete(zoneKey);
-    const timer = monsterTransitionTimers.get(zoneKey);
-    if (timer) clearTimeout(timer);
-    monsterTransitionTimers.delete(zoneKey);
-  }
-  if (!transition || !transition.endsAt) return false;
-
-  const endAtMs = Date.parse(transition.endsAt);
-  if (!Number.isFinite(endAtMs) || endAtMs > Date.now()) return false;
-
-  const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey }).catch(() => []);
-  if (!allMonsters.length) {
-    const cleared = {
-      ...state,
-      currentHp: 0,
-      participants: [],
-      damageMap: {},
-      killClaimedSeq: null,
-      activeEvent: null,
-      activeTransition: null,
-      lastHitAt: new Date().toISOString()
-    };
-    await sc.monsterService.saveState(cleared, zoneKey);
-    return true;
-  }
-
-  let nextMonster = allMonsters.find((m) => Number(m.seq) === Number(transition.nextMonsterSeq));
-  if (!nextMonster) {
-    nextMonster = allMonsters.find((m) => Number(m.seq) === Number(state?.activeMonsterSeq)) || allMonsters[0];
-  }
-  if (!nextMonster) return false;
-
-  const nextState = {
-    ...state,
-    activeMonsterSeq: nextMonster.seq,
-    currentHp: nextMonster.calc.maxHp,
-    participants: [],
-    damageMap: {},
-    killClaimedSeq: null,
-    activeEvent: null,
-    activeTransition: null,
-    lastHitAt: new Date().toISOString()
-  };
-
-  let worldBossPartsHp = null;
-  if (isWorldBossZone(zoneKey) && nextMonster?.isBoss) {
-    const partState = ensureWorldBossPartState({}, nextMonster.calc.maxHp, zoneKey);
-    nextState.currentHp = partState.currentHp;
-    nextState.worldBossPartsHp = partState.worldBossPartsHp;
-    nextState.worldBossPartsMaxHp = partState.worldBossPartsMaxHp;
-    worldBossPartsHp = partState.worldBossPartsHp;
-    Object.assign(nextState, freshHellfangFields()); // 牙狼重生：清翻面/累積
-  }
-
-  await sc.monsterService.saveState(nextState, zoneKey);
-  await _republishPanel(
-    sc,
-    zoneKey,
-    nextMonster,
-    nextState.currentHp,
-    0,
-    {},
-    null,
-    worldBossPartsHp
-  ).catch(() => {});
-
-  if (nextMonster.isBoss && !isWorldBossZone(zoneKey) && BOSS_SPAWN_BROADCAST_ENABLED) {
-    _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
-  }
-
-  return true;
-}
 
 const _staleTransitionLogAt = new Map();
 const STALE_TRANSITION_LOG_THROTTLE_MS = 60_000;
@@ -818,85 +397,30 @@ function hasBlockingMonsterTransition(state, zoneKey) {
   return false;
 }
 
-function ensureWorldBossPartState(state, monsterMaxHp, zoneKey = null) {
-  const defaultMax = createWorldBossPartHpTemplate(monsterMaxHp, zoneKey);
-  const hasCurrentHp = !!(state && state.worldBossPartsHp && typeof state.worldBossPartsHp === "object" && Object.keys(state.worldBossPartsHp).length);
-  // 部位清單:沿用既有 state(自動支援 3 / 4 部位),否則用該區模板
-  const keys = hasCurrentHp ? Object.keys(state.worldBossPartsHp) : Object.keys(defaultMax);
-  const maxSrc = (state && state.worldBossPartsMaxHp && typeof state.worldBossPartsMaxHp === "object") ? state.worldBossPartsMaxHp : null;
-  const currentMax = Object.fromEntries(keys.map((k) => [k, Math.max(1, Number((maxSrc && maxSrc[k]) || defaultMax[k] || 1))]));
-  const currentHp = hasCurrentHp
-    ? Object.fromEntries(keys.map((k) => [k, Math.max(0, Number(state.worldBossPartsHp[k] || 0))]))
-    : { ...currentMax };
 
-  const totalHp = sumWorldBossPartHp(currentHp);
-  const changed = !hasCurrentHp || !state?.worldBossPartsMaxHp || Number(state?.currentHp) !== totalHp;
-  return {
-    worldBossPartsHp: currentHp,
-    worldBossPartsMaxHp: currentMax,
-    currentHp: totalHp,
-    changed
-  };
-}
 
 // 世界王重生/換王時，牙狼翻面與累積欄位必須清空。
 // 否則重生後滿血王會繼承上一輪的翻面狀態(hellfangFlipped=true 亦擋住重新翻面)，
 // 使面板弱點與原生相反、玩家照攻略打卻打成錯流派(30%)→「滿血卻好怪、物理打法系部位反而高」。
-function freshHellfangFields() {
-  return { hellfangFlipUntil: {}, hellfangFlipWeak: {}, hellfangFlipped: {}, hellfangDmgPhys: {}, hellfangDmgMagic: {} };
-}
+
 
 // 強化寶石 ID 對應表
-const ENHANCE_GEM_IDS = {
-  'D': '72fde92d-e33f-42fb-8d86-2e811d03f84d',
-  'C': '556db9e1-b084-4b22-bab5-a66c2b586184',
-  'B': '8fdfa7d9-f0fa-4e6a-a291-703b1e354072',
-  'A': 'a6ae293d-52fc-4af5-8770-891ddf842e35'
-};
+
 // 參與獎勵寶石：依區域決定品階
-const ZONE_PARTICIPATION_GEM_TIER = {
-  beginner: 'D', normal: 'D', mid: 'C', hard: 'B', elite: 'A',
-  ancient_city: 'B',
-  // A 階區域統一給 A 石：秘銀(深處)/龍鱗(龍族)/焚獄(火焰)/期間活動
-  ancient_city_deep: 'A', dragon_realm: 'A', hellfire: 'A',
-  dragon_king_lair: 'A', hellfire_depths: 'A',
-  event_1: 'A', event_boss: 'A', event_boss_hutao_preview: 'A'
-};
+
 // 參與獎勵寶石掉落率（依品階）。S 石不進參與制，只由世界王/世界王寶箱產出。
-const GEM_PARTICIPATION_RATE = { D: 0.20, C: 0.20, B: 0.12, A: 0.06 };
+
 // 先不啟用雙掉
-const GEM_PARTICIPATION_DOUBLE_DROP_RATE = {};
-const GEM_TIER_ORDER = ["D", "C", "B", "A"];
 
-function getNextEnhanceGemTier(tier) {
-  const normalized = String(tier || "").toUpperCase();
-  const idx = GEM_TIER_ORDER.indexOf(normalized);
-  if (idx < 0 || idx >= GEM_TIER_ORDER.length - 1) return null;
-  return GEM_TIER_ORDER[idx + 1];
-}
 
-function getParticipationGemTiers(zoneKey, monster) {
-  const baseTier = ZONE_PARTICIPATION_GEM_TIER[zoneKey] || "D";
-  const tiers = [baseTier];
-  if (monster?.isBoss) {
-    const nextTier = getNextEnhanceGemTier(baseTier);
-    if (nextTier) tiers.push(nextTier);
-  }
-  return tiers;
-}
 
-function getServiceContext() {
-  return require("../runtimeContext").serviceContext;
-}
 
-function applyWorldBossPhaseModifiers(monsterStats, phase) {
-  if (!monsterStats || !phase) return monsterStats;
-  return {
-    ...monsterStats,
-    atk: Math.max(1, Math.round((monsterStats.atk || 0) * Math.max(0.1, Number(phase.atkMultiplier || 1)))),
-    def: Math.max(0, Math.min(75, (monsterStats.def || 0) * Math.max(0.1, Number(phase.defMultiplier || 1))))
-  };
-}
+
+
+
+
+
+
 
 // 光環來源顯示名：玩家 displayName 在 DB 多半被存成 Discord ID（純數字），
 // 改用 <@id> mention，讓 Discord 在戰報 embed 內顯示真實暱稱（embed 內的 mention 不會發出通知/ping）。
@@ -1033,93 +557,16 @@ async function scheduleEliteWorldBossTimeout(sc, zoneKey, monster) {
   timer.unref?.();
 }
 
-function resolveWeaponQuestMetric(weaponType = "") {
-  const wt = String(weaponType || "");
-  if (wt === "sword_1h" || wt === "sword_2h") return "battle_with_sword";
-  if (wt === "axe_1h" || wt === "axe_2h") return "battle_with_axe";
-  if (wt === "mace_1h" || wt === "mace_2h") return "battle_with_mace";
-  if (wt === "dagger") return "battle_with_dagger";
-  if (wt === "staff_1h" || wt === "staff_2h") return "battle_with_staff";
-  if (wt === "bow") return "battle_with_bow";
-  if (wt === "dice") return "battle_with_dice";
-  return null;
-}
+
 
 // 二轉試煉：裝備某一轉徽章出戰時要累積的指標（找不到對應職業回 null）
-function resolveJobBattleMetric(jobEq) {
-  if (!jobEq) return null;
-  try {
-    const ja = require("../../shared/jobAdvancement");
-    const id = String(jobEq.itemId || jobEq.id || "");
-    const baseKey = ja.getBaseKeyByBadgeId(id);
-    return baseKey ? ja.battleMetricFor(baseKey) : null;
-  } catch (_) { return null; }
-}
+
 
 // 輔助職業(徽章)判定：治療師/軍師/詩人/結界師
-const SUPPORT_JOB_KEYS = new Set(["healer", "tactician", "bard", "barrier_mage"]);
-function isSupportJobBadge(jobEq) {
-  if (!jobEq) return false;
-  try {
-    const { getSupportJobKey } = require("../../shared/supportAuraScaling");
-    const key = getSupportJobKey({ jobKey: jobEq.itemId || jobEq.id, jobName: jobEq.itemName || jobEq.name });
-    return SUPPORT_JOB_KEYS.has(key);
-  } catch (_) { return false; }
-}
 
-async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null, jobEq = null, damageTaken = 0, healDone = 0, lifestealDone = 0) {
-  // 通行證點數：打怪(非落敗)依地圖階級加點
-  if (outcome !== "lose" && sc?.passService?.addPointsForKill) {
-    const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", event_1: "A", dragon_king_lair: "S", hellfire_depths: "S" };
-    sc.passService.addPointsForKill(discordId, PASS_TIER[zoneKey] || "D").catch(() => {});
-  }
-  const questService = sc?.questService || sc?.weeklyQuestService;
-  if (!questService || typeof questService.recordProgress !== "function") return;
 
-  const metrics = {};
-  const addMetric = (type, amount = 1) => {
-    const inc = Math.max(0, Number(amount) || 0);
-    if (type && inc) metrics[type] = Number(metrics[type] || 0) + inc;
-  };
-  addMetric("battle_count", 1);
-  addMetric("damage_total", totalDamage);
-  // 錨點隱藏任務指標：承受傷害(沒苦硬吃)、回血量(聖人)
-  addMetric("damage_taken", Math.round(Number(damageTaken || 0)));
-  addMetric("heal_done", Math.round(Number(healDone || 0)));
-  addMetric("lifesteal_done", Math.round(Number(lifestealDone || 0)));
-  const weaponMetric = resolveWeaponQuestMetric(weaponType);
-  addMetric(weaponMetric, 1);
-  // 用輔助職業(徽章)出戰 → 記錄一場（供隱藏賽季任務「共鳴之鏈」用）
-  if (isSupportJobBadge(jobEq)) addMetric("battle_with_support_job", 1);
-  // 二轉試煉：以該一轉職業出戰一場
-  {
-    const _jobMetric = resolveJobBattleMetric(jobEq);
-    addMetric(_jobMetric, 1);
-  }
-  if (outcome === "lose") addMetric("death_count", 1);
-  if (combatStats) {
-    addMetric("combo_count", combatStats.comboCount);
-    addMetric("dodge_count", combatStats.dodgeCount);
-    addMetric("block_count", combatStats.blockCount);
-    addMetric("stun_count", combatStats.stunCount);
-    addMetric("burn_trigger_count", combatStats.burnTriggerCount);
-  }
-  if (typeof questService.recordProgressBatch === "function") {
-    await questService.recordProgressBatch(discordId, metrics);
-  } else {
-    for (const [type, amount] of Object.entries(metrics)) {
-      await questService.recordProgress(discordId, type, amount);
-    }
-  }
-  // 職業徽章熟練度 +1（裝備中的徽章才累積）。
-  // 練滿 Lv20 **不廣播**——它只是讓職業任務亮起來；真正值得全服知道的是「轉職成功」。
-  try {
-    await sc?.jobBadgeService?.grantBattleProficiency(discordId, 1);
-  } catch (error) {
-    console.error(`[JobBadge] Discord battle proficiency failed | player=${discordId} | err=${error?.message || error}`);
-    /* 熟練度失敗不影響戰鬥結算 */
-  }
-}
+
+
 
 /**
  * 獲取玩家身上已有的所有裝備品階
@@ -1164,63 +611,15 @@ function playerAlreadyOwnsItem(progress, itemId) {
   return false;
 }
 
-function isMonsterCardItem(item) {
-  return !!(
-    item &&
-    (
-      item.equipSlot === "special" ||
-      item.slotType === "special_1" ||
-      item.monsterCardOf ||
-      item.monsterCardSkill
-    )
-  );
-}
 
-async function buildMonsterDropPool(sc, monster) {
-  const pool = Array.isArray(monster?.drops) ? [...monster.drops] : [];
-  const cardItemId = monster?.equipment?.special_1?.itemId || monster?.equipment?.special_1?.id || null;
-  if (!cardItemId) return pool;
 
-  const card = await sc.itemRepository.findById(cardItemId).catch(() => null);
-  if (!card || !isMonsterCardItem(card)) return pool;
 
-  const existingCardDropIndex = pool.findIndex((drop) => drop?.itemId === cardItemId);
-  if (existingCardDropIndex >= 0) {
-    // 卡片已列在掉落表 → 掉率統一寫死 1%（覆蓋 DB 值），補上來源標記
-    pool[existingCardDropIndex] = {
-      ...pool[existingCardDropIndex],
-      chance: 1,
-      source: pool[existingCardDropIndex].source || "monster_card"
-    };
-    return pool;
-  }
-
-  // 掉落表沒列到卡片 → 補一個 1% 保底，讓卡片可掉出
-  pool.push({
-    itemId: card.id,
-    chance: 1,
-    source: "monster_card"
-  });
-  return pool;
-}
 
 /**
  * 嘗試堆疊寶石到背包中的相同寶石上，如果成功回傳 true，否則回傳 false
  * @returns {boolean} 成功堆疊則回傳 true，否則 false
  */
-function tryStackGem(progress, gemItemId) {
-  if (!gemItemId || !Array.isArray(progress?.inventory)) return false;
 
-  // 查找背包中相同 itemId 的寶石
-  const existingGem = progress.inventory.find(i => i?.itemId === gemItemId);
-  if (existingGem) {
-    // 初始化 stackCount 如果還沒有
-    if (!existingGem.stackCount) existingGem.stackCount = 1;
-    existingGem.stackCount += 1;
-    return true;
-  }
-  return false;
-}
 
 function isMonsterZoneButton(customId) {
   return customId.startsWith("monster-zone:");
@@ -1562,15 +961,9 @@ function buildHpBar(hp, maxHp, fillEmoji = "🟥", emptyEmoji = "⬛", length = 
   return fillEmoji.repeat(Math.max(0, filled)) + emptyEmoji.repeat(Math.max(0, length - filled));
 }
 
-function toPct(value) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return 0;
-  return num;
-}
 
-function toMultiplier(percent) {
-  return Math.max(0, 1 + percent / 100);
-}
+
+
 
 /**
  * 格式化 Buff 消息為中文描述，包含數值與持續時間
@@ -1620,106 +1013,11 @@ function buildMonsterEquipped(monster) {
   };
 }
 
-function collectRewardEffectRefs(progress) {
-  const refs = [];
-  const equipped = progress?.equipment || {};
-  const effectContext = {
-    equipped,
-    inventory: Array.isArray(progress?.inventory) ? progress.inventory : []
-  };
-  for (const entry of Object.values(equipped)) {
-    if (!entry || typeof entry !== "object") continue;
-    if (Array.isArray(entry.passiveEffects)) refs.push(...entry.passiveEffects);
-    if (Array.isArray(entry.combatEffects)) refs.push(...entry.combatEffects);
-  }
-  if (Array.isArray(progress?.activeEffects)) refs.push(...progress.activeEffects);
-  return refs.filter((effect) => (
-    effect &&
-    typeof effect === "object" &&
-    effect.key &&
-    isEffectConditionMet(effect, effectContext)
-  ));
-}
 
-function buildRewardModifiers(progress, partyRefs = []) {
-  const refs = [
-    ...collectRewardEffectRefs(progress),
-    ...(Array.isArray(partyRefs) ? partyRefs : [])
-  ];
-  const tierSetBonuses = getEquipmentTierSetBonuses(progress?.equipment || {});
-  const luk = Number(progress?.attributes?.luk ?? 0);
-  let expPct = 0;
-  let goldPct = 0;
-  let dropPct = luk * 0.1;  // LUK 每點 +0.1% 掉落率
-  let rareDropPct = 0;
 
-  for (const effect of refs) {
-    const value = toPct(effect?.params?.value ?? effect?.value ?? 0);
-    switch (effect.key) {
-      case "exp_gain_up":
-        expPct += value;
-        break;
-      case "gold_gain_up":
-        goldPct += value;
-        break;
-      case "drop_rate_up":
-        dropPct += value;
-        break;
-      case "rare_drop_rate_up":
-        rareDropPct += value;
-        break;
-      case "monster_reward_up":
-        expPct += value;
-        goldPct += value;
-        dropPct += value;
-        break;
-      case "party_exp_gain_up":
-        expPct += value;
-        break;
-      case "party_gold_gain_up":
-        goldPct += value;
-        break;
-      default:
-        break;
-    }
-  }
 
-  expPct += tierSetBonuses.expPct;
-  goldPct += tierSetBonuses.goldPct;
-  dropPct += tierSetBonuses.dropPct;
-  dropPct += getDropBoostPct(Number(progress?.pkRating ?? 0));
 
-  // 全服 Buff（直播連動事件）：疊加到個人加成上。
-  // 此處是所有戰鬥獎勵的共用 chokepoint（Discord 打怪 / 網頁 quick-battle / 世界王都經過），
-  // 且回傳的 dropPct 會被 calculateFinalDropChance 使用，故金幣/經驗/掉寶一次覆蓋。
-  try {
-    const gb = require("../../services/stream/globalBuffService").getActiveModifiers();
-    expPct += gb.expPct;
-    goldPct += gb.goldPct;
-    dropPct += gb.dropPct;
-  } catch (_) { /* buff 服務未就緒不影響結算 */ }
 
-  return {
-    expPct,
-    goldPct,
-    dropPct,
-    rareDropPct,
-    expMultiplier: toMultiplier(expPct),
-    goldMultiplier: toMultiplier(goldPct),
-    dropMultiplier: toMultiplier(dropPct),
-    rareDropMultiplier: toMultiplier(rareDropPct)
-  };
-}
-
-function calculateFinalDropChance(baseChance, rewardMod = {}, item = null) {
-  const base = Math.min(100, Math.max(0, Number(baseChance) || 0));
-  if (base <= 0) return 0;
-
-  const tier = String(item?.tier || "").toUpperCase();
-  const isRare = RARE_TIERS.has(tier);
-  const bonusPct = (Number(rewardMod.dropPct) || 0) + (isRare ? (Number(rewardMod.rareDropPct) || 0) : 0);
-  return Math.min(100, Math.max(0, base * toMultiplier(bonusPct)));
-}
 
 function getJobNameFromEquipped(equipped = {}) {
   const jobEq = equipped?.job_eq;
@@ -1877,36 +1175,7 @@ async function _notifyKillRewards(monsterName, perPidRewards) {
   }
 }
 
-function buildPartyRewardSummary(perPidRewards = {}, damageMap = {}, options = {}) {
-  const limit = Math.max(1, Number(options.limit) || 12);
-  const entries = Object.entries(perPidRewards)
-    .filter(([, rewards]) => rewards && (rewards.gold > 0 || rewards.exp > 0 || rewards.drops?.length || rewards._expGrantFailed))
-    .sort((a, b) => {
-      const dmgA = Number(damageMap?.[a[0]]?.damage || 0);
-      const dmgB = Number(damageMap?.[b[0]]?.damage || 0);
-      return dmgB - dmgA;
-    });
 
-  if (!entries.length) return [];
-
-  const lines = entries.slice(0, limit).map(([pid, rewards]) => {
-    const name = damageMap?.[pid]?.name || pid;
-    const parts = [];
-    if (rewards.gold > 0) parts.push(`金幣 +${rewards.gold}`);
-    if (rewards._expGrantFailed) parts.push("EXP 未寫入");
-    else if (rewards.exp > 0) parts.push(`EXP +${rewards.exp}`);
-    if (rewards.levelUps > 0) parts.push(`升級到 Lv.${rewards.newLevel}`);
-    if (Array.isArray(rewards.drops) && rewards.drops.length > 0) {
-      parts.push(`道具 ${rewards.drops.join("、")}`);
-    }
-    return `・${name}：${parts.join("、") || "無獎勵"}`;
-  });
-
-  if (entries.length > limit) {
-    lines.push(`・其餘 ${entries.length - limit} 人略`);
-  }
-  return ["👥 **全體參戰獎勵**", ...lines];
-}
 
 const DROP_TAUNTS = {
   kill: [
@@ -2065,22 +1334,7 @@ async function getZoneFromChannel(sc, channelId) {
   return _featureKeyToZone(binding.featureKey);
 }
 
-function pickWeightedNextMonster(monsters, currentMonsterId = null) {
-  if (!Array.isArray(monsters) || monsters.length === 0) return null;
-  const pool = monsters.filter((m) => m.id !== currentMonsterId || monsters.length === 1);
-  if (!pool.length) return null;
-  const totalWeight = pool.reduce((s, m) => s + (m.spawnRate || 10), 0);
-  let r = Math.random() * Math.max(1, totalWeight);
-  let selected = pool[pool.length - 1];
-  for (const m of pool) {
-    r -= (m.spawnRate || 10);
-    if (r <= 0) {
-      selected = m;
-      break;
-    }
-  }
-  return selected || null;
-}
+
 
 // 排行榜去重：戰鬥中最多 5 秒更新一次面板
 // 邏輯：
@@ -2207,87 +1461,9 @@ async function _republishPanel(sc, zoneKey, monster, monsterHp, participantCount
   return null;
 }
 
-function _scheduleZoneEventFinalize(sc, zoneKey, endsAt) {
-  if (!endsAt) return;
-  const dueMs = Math.max(1000, Date.parse(endsAt) - Date.now() + 300);
-  const prev = zoneEventTimers.get(zoneKey);
-  if (prev) clearTimeout(prev);
-  const timer = setTimeout(() => {
-    _resolveZoneEventIfExpired(sc, zoneKey).catch((error) => {
-      console.error(`[MonsterZone] resolve event failed zone=${zoneKey}`, error);
-    });
-  }, dueMs);
-  zoneEventTimers.set(zoneKey, timer);
-}
 
-async function _resolveZoneEventIfExpired(sc, zoneKey) {
-  const state = await sc.monsterService.getState(zoneKey);
-  const activeEvent = state?.activeEvent;
-  if (!activeEvent) return false;
 
-  // 如果沒有 endsAt 或解析失敗，強制清除（防止事件卡住）
-  if (!activeEvent.endsAt) {
-    console.warn(`[NPC Event] Event has no endsAt, forcing cleanup: ${activeEvent.name || 'unknown'}`);
-    const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
-    if (allMonsters.length) {
-      const current = allMonsters.find((m) => m.seq === state.activeMonsterSeq) || allMonsters[0];
-      const nextMonster = pickWeightedNextMonster(allMonsters, current.id);
-      await sc.monsterService.saveState(
-        {
-          ...state,
-          activeMonsterSeq: nextMonster.seq,
-          currentHp: nextMonster.calc.maxHp,
-          participants: [],
-          damageMap: {},
-          killClaimedSeq: null,
-          activeEvent: null,
-          lastHitAt: new Date().toISOString()
-        },
-        zoneKey
-      );
-      _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}, null).catch(() => {});
-      zoneEventTimers.delete(zoneKey);
-      return true;
-    }
-    return false;
-  }
 
-  const endAtMs = Date.parse(activeEvent.endsAt);
-  if (!Number.isFinite(endAtMs)) {
-    console.error(`[NPC Event] Invalid endsAt format: ${activeEvent.endsAt}, forcing cleanup`);
-    // 時間格式無效，強制清除
-    await sc.monsterService.saveState({ ...state, activeEvent: null }, zoneKey);
-    zoneEventTimers.delete(zoneKey);
-    return true;
-  }
-  if (endAtMs > Date.now()) return false;
-
-  const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
-  if (!allMonsters.length) return false;
-
-  let nextMonster = allMonsters.find((m) => m.seq === Number(activeEvent.pendingMonsterSeq));
-  if (!nextMonster) {
-    const current = allMonsters.find((m) => m.seq === state.activeMonsterSeq) || null;
-    nextMonster = pickWeightedNextMonster(allMonsters, current?.id || null);
-  }
-  if (!nextMonster) return false;
-
-  const nextState = {
-    ...state,
-    activeMonsterSeq: nextMonster.seq,
-    currentHp: nextMonster.calc.maxHp,
-    participants: [],
-    damageMap: {},
-    killClaimedSeq: null,
-    lastHitAt: new Date().toISOString(),
-    activeEvent: null
-  };
-  await sc.monsterService.saveState(nextState, zoneKey);
-  _republishPanel(sc, zoneKey, nextMonster, nextMonster.calc.maxHp, 0, {}, null).catch(() => {});
-  if (nextMonster.isBoss && BOSS_SPAWN_BROADCAST_ENABLED) _broadcastBossSpawn(sc, zoneKey, nextMonster).catch(() => {});
-  zoneEventTimers.delete(zoneKey);
-  return true;
-}
 
 // BOSS 出場公告
 async function _broadcastBossSpawn(sc, zoneKey, monster) {
@@ -3869,1179 +3045,34 @@ async function handleDeleteLog(interaction) {
 // ──────────────────────────────────────────────
 // ── 世界王貢獻寶箱 ───────────────────────────────────────────
 // 怪物 → 對應寶箱 itemId
-const WORLD_BOSS_CHEST_BY_MONSTER = {
-  "elite-daishi-king": "chest-daishi-king",
-  "dragon-king-boss": "chest-dragon-king",
-  "0393acee-9851-4bcb-a8f5-fdb60a9968f1": "chest-hellfang-king", // 地獄狼牙王
-  "event-island-turtle": "chest-island-turtle",                  // 島島龜王（期間限定活動）
-};
-function _resolveWorldBossChestId(monster, zoneKey) {
-  return WORLD_BOSS_CHEST_BY_MONSTER[monster?.id]
-    || (zoneKey === "elite" ? "chest-daishi-king"
-      : zoneKey === "dragon_king_lair" ? "chest-dragon-king"
-      : zoneKey === "hellfire_depths" ? "chest-hellfang-king"
-      : zoneKey === "event_boss" ? "chest-island-turtle" : null);
-}
+
+
 // 建一個寶箱背包項目（同款會堆疊，故 uuid 僅在「新項目」時生效）
-function _buildChestEntry(chestItem, sourceMonsterId) {
-  return {
-    uuid: crypto.randomUUID(), itemId: chestItem.id, itemName: chestItem.name,
-    itemEffect: chestItem.effect || { type: "none", value: 0 },
-    useEffects: chestItem.useEffects || [], passiveEffects: [], procEffects: [], combatEffects: [],
-    itemType: chestItem.itemType || "consumable",
-    imageUrl: chestItem.imageUrl || null, imageThumbnailUrl: chestItem.imageThumbnailUrl || null,
-    equipSlot: null, equipStats: {}, weaponType: null, isTwoHanded: false, atkStat: null,
-    tier: chestItem.tier || null, monsterCardSkill: null, enhanceLevel: 0, stackCount: 1,
-    source: "world_boss_contribution", sourceRef: sourceMonsterId || null,
-    purchasedAt: new Date().toISOString(),
-  };
-}
+
 // 發一個寶箱給玩家 → 回傳 { ok, uuid, stacked }（uuid 供網頁開箱用）
 // 改用原子操作（$inc 疊加 / $push 新增），避免與玩家自身高頻存檔競態導致 CAS 失敗而「靜默吞箱」。
-async function _grantChestToPlayer(sc, pid, chestItem, sourceMonsterId) {
-  const entry = _buildChestEntry(chestItem, sourceMonsterId);
-  if (typeof sc.progressRepository.addOrStackInventoryItem === "function") {
-    return sc.progressRepository
-      .addOrStackInventoryItem(pid, chestItem.id, entry)
-      .catch((e) => {
-        console.error(`[WorldBossChest] atomic grant error pid=${pid}:`, e?.message || e);
-        return { ok: false, uuid: null, stacked: false };
-      });
-  }
-  // 後備：舊式 read-modify-write CAS（僅在 repository 未提供原子方法時走）
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
-    if (!prog) return { ok: false, uuid: null };
-    const inv = Array.isArray(prog.inventory) ? prog.inventory.map((e) => ({ ...e })) : [];
-    const existing = inv.find((e) => e.itemId === chestItem.id);
-    let chestUuid;
-    if (existing) {
-      existing.stackCount = Math.max(1, Number(existing.stackCount) || 1) + 1;
-      chestUuid = existing.uuid;
-    } else {
-      chestUuid = entry.uuid;
-      inv.push({ ...entry });
-    }
-    const next = { ...prog, inventory: inv, updatedAt: new Date().toISOString() };
-    let saved;
-    if (typeof sc.progressRepository.saveIfUnchanged === "function") {
-      saved = await sc.progressRepository.saveIfUnchanged(next, prog.updatedAt);
-    } else {
-      await sc.progressRepository.save(next); saved = true;
-    }
-    if (saved) return { ok: true, uuid: chestUuid };
-  }
-  return { ok: false, uuid: null };
-}
+
 // 每個名次的寶箱數：1(保底) + ⌊(總參與人數 − (名次−1)) ÷ 3⌋，各名次分別封頂（1st→4箱/2nd→3箱/3rd→2箱），4~6名固定1箱。
 // 名次越前起漲人數越早：1st滿3人就開始漲、2nd滿4人、3rd滿5人；封頂依名次遞減，維持 1st≥2nd≥3rd≥1 不會被追平。
-function _worldBossChestCountForRank(rank, totalParticipants) {
-  if (rank >= 4) return 1;
-  const bonusCap = 4 - rank; // rank1→3, rank2→2, rank3→1
-  const bonus = Math.max(0, Math.min(bonusCap, Math.floor((totalParticipants - (rank - 1)) / 3)));
-  return 1 + bonus;
-}
+
 
 // 寶箱排名只看本王戰鬥貢獻 C = 傷害 + 0.7×助攻；入場費不參與排名。
 // 同分時依實際傷害、助攻、玩家 ID 依序決勝，避免依物件寫入順序產生不透明結果。
-function _rankWorldBossChestContributors(entries) {
-  return [...entries]
-    .sort((a, b) => b.cScore - a.cScore
-      || b.damage - a.damage
-      || b.assist - a.assist
-      || String(a.pid).localeCompare(String(b.pid)))
-    .slice(0, 6);
-}
+
 
 // 世界王公告不得顯示 Discord ID。若名稱缺失、等於 ID、本身是長數字，
 // 或只能取得匿名的「玩家#末四碼」，一律顯示「某位勇者」。
-function _worldBossSafeDisplayName(displayName, pid) {
-  const name = String(displayName || "").trim();
-  const id = String(pid || "");
-  if (!name || name === id || /^\d{15,}$/.test(name) || /^玩家#\d+$/.test(name)) {
-    return "某位勇者";
-  }
-  return name;
-}
 
-async function _resolveWorldBossDisplayName(displayName, pid) {
-  const safeFallback = _worldBossSafeDisplayName(displayName, pid);
-  if (safeFallback !== "某位勇者") return safeFallback;
-  try {
-    const { resolveDiscordName } = require("../../shared/announceTownChat");
-    const discordName = await resolveDiscordName(pid);
-    return _worldBossSafeDisplayName(discordName, pid);
-  } catch (_) {
-    return safeFallback;
-  }
-}
+
+
 
 // 結算：本王戰鬥貢獻前 6 名，依名次領 1~4 箱不等（見 _worldBossChestCountForRank）
-async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap, perPidRewards, participantIds = null) {
-  try {
-    const chestId = _resolveWorldBossChestId(monster, zoneKey);
-    if (!chestId) return;
-    const chestItem = await sc.itemRepository.findById(chestId).catch(() => null);
-    if (!chestItem) { console.warn(`[WorldBossChest] chest item ${chestId} not found`); return; }
 
-    // KDA（附錄C 八）：傷害名次換成「貢獻分 C」名次——C = 傷害 + 0.7×助攻（damageMap.assist，
-    // 由各入口結算時從 assistLedger 累進）。輔助職靠光環/治療也分得到王箱。
-    const { A_WEIGHT } = require("../../services/kda/kdaService");
-    const excludedIds = await getLeaderboardExcludedPlayerIds();
-    const eligibleDamageMap = filterDamageMapForParticipants(
-      filterDamageMapForLeaderboard(damageMap || {}, excludedIds),
-      participantIds
-    );
-    const entries = Object.entries(eligibleDamageMap).map(([pid, d]) => ({
-      pid, name: d?.name || pid, damage: Number(d?.damage) || 0, assist: Number(d?.assist) || 0,
-    })).map((e) => ({ ...e, cScore: e.damage + A_WEIGHT * e.assist }))
-      .filter((e) => e.cScore > 0);
-    if (entries.length === 0) return;
-
-    const totalParticipants = entries.length;
-    const ranked = _rankWorldBossChestContributors(entries);
-
-    const mark = (pid) => {
-      if (perPidRewards && perPidRewards[pid]) {
-        perPidRewards[pid].chestAwarded = perPidRewards[pid].chestAwarded || [];
-        perPidRewards[pid].chestAwarded.push(chestItem.name);
-      }
-    };
-    const granted = [];       // { name, count }
-    const grantedWinners = []; // { pid, name, uuid }（推播用，每箱各一筆）
-    const auditRows = [];      // 每位得主的發箱結果（成功/失敗，含應得箱數）
-
-    for (let i = 0; i < ranked.length; i++) {
-      const w = ranked[i];
-      const displayName = await _resolveWorldBossDisplayName(w.name, w.pid);
-      const rank = i + 1;
-      const boxCount = _worldBossChestCountForRank(rank, totalParticipants);
-      let successCount = 0;
-      for (let n = 0; n < boxCount; n++) {
-        const r = await _grantChestToPlayer(sc, w.pid, chestItem, monster?.id);
-        if (r.ok) { successCount++; grantedWinners.push({ pid: w.pid, name: displayName, uuid: r.uuid }); }
-        else console.error(`[WorldBossChest] grant FAILED pid=${w.pid} name=${w.name} chest=${chestItem.id}`);
-      }
-      auditRows.push({
-        pid: w.pid, name: displayName, rank, damage: w.damage, assist: w.assist || 0,
-        cScore: Math.round(w.cScore || 0), boxCount, successCount,
-      });
-      if (successCount > 0) { granted.push({ name: displayName, count: successCount }); mark(w.pid); }
-    }
-
-    // 持久化發箱稽核 log（成功/失敗都記）→ 日後「沒拿到箱子」爭議可直接查 worldBossChestGrants
-    try {
-      const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
-      const db = await getMongoDb();
-      await db.collection("worldBossChestGrants").insertOne({
-        ts: new Date(), zoneKey, monsterId: monster?.id || null, monsterName: monster?.name || null,
-        chestId: chestItem.id, chestName: chestItem.name,
-        totalParticipants,
-        grantedCount: auditRows.reduce((s, a) => s + a.successCount, 0),
-        failedCount: auditRows.reduce((s, a) => s + (a.boxCount - a.successCount), 0),
-        winners: auditRows,
-      });
-    } catch (e) {
-      console.error("[WorldBossChest] audit log write failed:", e?.message || e);
-    }
-
-    if (!granted.length) return;
-
-    // 推播給每位獲箱者 → 網頁不論在哪都彈出「世界王寶箱」視窗（可當下開啟或先收進背包）
-    try {
-      const { playerEventBus } = require("../../services/realtime/playerEventBus");
-      for (const w of grantedWinners) {
-        playerEventBus.emit(String(w.pid), {
-          type: "world_boss_chest",
-          data: {
-            chestUuid: w.uuid,
-            chestItemId: chestItem.id,
-            chestName: chestItem.name,
-            chestImage: chestItem.imageUrl || chestItem.imageThumbnailUrl || null,
-            chestTier: chestItem.tier || null,
-            bossName: monster?.name || "世界王",
-            ts: new Date().toISOString()
-          }
-        });
-      }
-    } catch (_) { /* 推播失敗不影響發箱 */ }
-
-    const rankLine = granted.map((g, i) => `${i + 1}. ${g.name}${g.count > 1 ? ` ×${g.count}` : ""}`).join("　");
-    const lines = [
-      `🎁 **${monster.name}** 討伐結算！`,
-      `🏆 整體貢獻度前 ${granted.length} 名，各獲得 **${chestItem.name}**：`,
-      rankLine,
-    ];
-    try {
-      const { getBotClient } = require("../runtimeContext");
-      const client = getBotClient();
-      if (client?.isReady?.()) {
-        const channel = await client.channels.fetch("1498608950671839263").catch(() => null);
-        if (channel?.isTextBased?.()) await channel.send(lines.join("\n")).catch(() => {});
-      }
-    } catch (_) { /* 公告失敗不影響發箱 */ }
-  } catch (e) {
-    console.error("[WorldBossChest] award failed:", e?.message || e);
-  }
-}
 
 // 把掉落道具物件壓成網頁版需要的精簡欄位（漂浮氣泡 + 詳細視窗用）
-function toWebDrop(o) {
-  if (!o) return null;
-  return {
-    uuid: o.uuid,
-    itemId: o.itemId,
-    name: o.itemName,
-    image: o.imageThumbnailUrl || o.imageUrl || null,
-    imageUrl: o.imageUrl || null,
-    tier: o.tier || null,
-    itemType: o.itemType || null,
-    equipSlot: o.equipSlot || null,
-    equipStats: o.equipStats || {},
-    weaponType: o.weaponType || null,
-    isTwoHanded: !!o.isTwoHanded,
-    effect: o.itemEffect || null,
-    useEffects: o.useEffects || [],
-    passiveEffects: o.passiveEffects || [],
-    procEffects: o.procEffects || [],
-    combatEffects: o.combatEffects || [],
-    monsterCardSkill: o.monsterCardSkill || null,
-    // 卡片技能 + 裝備特效的中文說明列（給網頁掉落氣泡詳細視窗顯示，與背包同格式）
-    effectLines: buildItemEffectLines(o),
-    source: o.source || "monster_drop",
-    sourceRef: o.sourceRef || null,
-  };
-}
 
-async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal" }) {
-  const sc = getServiceContext();
-  const rewardLines = [];
 
-  // 擊敗古龍王(B)（dragon_king_lair 世界王全破）→ 記錄屠龍任務進度
-  // 有參與就算一隻：所有參戰者(含補刀者)各 +1，不是只記最後補刀的人
-  if (zoneKey === "dragon_king_lair" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
-    // 參與者 = 對本王造成過傷害的人(damageMap) + 排隊參戰名單 + 補刀者
-    const slayers = [...new Set([
-      ...(state?.damageMap ? Object.keys(state.damageMap) : []),
-      ...(Array.isArray(state?.participants) ? state.participants : []),
-      discordId,
-    ].filter(Boolean))];
-    recordQuestForPlayersInBackground(sc?.questService || sc?.weeklyQuestService, slayers, "kill_dragon_king", 1);
-  }
 
-  // 擊敗大史王（elite 世界王全破）→ 記錄屠史任務進度（比照古龍王：所有參戰者各 +1）
-  if (zoneKey === "elite" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
-    const slayers = [...new Set([
-      ...(state?.damageMap ? Object.keys(state.damageMap) : []),
-      ...(Array.isArray(state?.participants) ? state.participants : []),
-      discordId,
-    ].filter(Boolean))];
-    recordQuestForPlayersInBackground(sc?.questService || sc?.weeklyQuestService, slayers, "kill_slime_king", 1);
-  }
-
-  // 擊敗地獄狼牙王（hellfire_depths 世界王全破）→ 記錄屠狼任務進度（比照古龍王：所有參戰者各 +1）
-  if (zoneKey === "hellfire_depths" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
-    const slayers = [...new Set([
-      ...(state?.damageMap ? Object.keys(state.damageMap) : []),
-      ...(Array.isArray(state?.participants) ? state.participants : []),
-      discordId,
-    ].filter(Boolean))];
-    recordQuestForPlayersInBackground(sc?.questService || sc?.weeklyQuestService, slayers, "kill_hellfang_king", 1);
-  }
-
-  // 擊敗島島龜王（event_boss 世界王全破）→ 記錄屠龜任務進度（比照古龍王：所有參戰者各 +1）
-  // ⚠️ 四隻世界王都要有掛鉤，否則「夏季四天王」那條複合任務永遠差一角。
-  if (zoneKey === "event_boss" && monster?.isBoss && isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
-    const slayers = [...new Set([
-      ...(state?.damageMap ? Object.keys(state.damageMap) : []),
-      ...(Array.isArray(state?.participants) ? state.participants : []),
-      discordId,
-    ].filter(Boolean))];
-    recordQuestForPlayersInBackground(sc?.questService || sc?.weeklyQuestService, slayers, "kill_island_turtle", 1);
-  }
-
-  if (isWorldBossZone(zoneKey) && monster?.isBoss && !isWorldBossAllPartsDefeated(state?.worldBossPartsHp)) {
-    rewardLines.push("目前僅擊破單一部位，世界王需所有部位全破才會結算。");
-    return rewardLines;
-  }
-
-  // ── 並發雙殺防護：同一隻怪只允許一次結算 ──
-  const killKey = `${zoneKey}:${monster.seq}`;
-  try {
-    if (killInProgress.has(killKey)) {
-      // 另一位玩家已在結算中，此次擊殺視為無效，不重複發獎
-      return rewardLines;
-    }
-    killInProgress.add(killKey);
-  } catch (e) {
-    return rewardLines;
-  }
-
-  try {
-  // DB 層原子收付擊殺權（防止 PM2 雙進程重載期間雙重結算）
-  const claimed = await sc.monsterRepository.claimKill(zoneKey, monster.seq);
-  if (!claimed) {
-    return rewardLines;
-  }
-
-  // 參戰名單（含本次打到尾段的玩家）
-  const participants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
-
-  // 世界王解鎖累計：原 hard 區拆成古城/古城深處，兩區擊殺都算
-  if ((zoneKey === "ancient_city" || zoneKey === "ancient_city_deep") && !monster?.isBoss && sc.worldBossServiceFor(zoneKey)) {
-    await sc.worldBossServiceFor(zoneKey).recordHardZoneKill(1).catch(() => {});
-  }
-
-  // 任務勝利判定：怪物被擊殺時，全參戰者都算 1 次勝利。
-  // 這裡統一寫入，確保 Discord/Web 兩條戰鬥流程規則一致。
-  recordQuestForPlayersInBackground(sc.questService || sc.weeklyQuestService, participants, "battle_win", 1);
-
-  // ── 依傷害比例計算每人分配量 ──
-  const rawDmgMap = state.damageMap || {};
-  // 合入本次尾段傷害
-  const mergedDmg = { ...rawDmgMap, [discordId]: { name: displayName, damage: (rawDmgMap[discordId]?.damage || 0) + totalDamage } };
-  const battleHpBasis = Math.max(1, Number(monster?.calc?.maxHp || session.monsterMaxHp || 1));
-  const dmgRatio = (pid) => Math.min(1, Math.max(0, (mergedDmg[pid]?.damage || 0) / battleHpBasis));
-
-  // ── 不使用怪物等級做獎勵壓制 ──
-
-  // 每位參戰者的獎勵紀錄（用來最後 DM 通知）
-  const perPidRewards = {};
-  participants.forEach(pid => { perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [], healerGoldBonus: 0, healerExpBonus: 0, isHealer: false }; });
-  // 圖鑑：本次出手者(discordId)的「本場累積%」掛到他的獎勵紀錄,擊殺 DM 會顯示
-  if (session && session._bestiary && perPidRewards[discordId]) {
-    perPidRewards[discordId].bestiary = session._bestiary;
-  }
-  const canSendRewardNotice = (pid) => !perPidRewards[pid]?._expGrantFailed;
-
-  // 預載參戰者資料，用於個人化結算倍率（金幣 / EXP / 掉落）
-  const progressCache = {};
-  await Promise.all(participants.map(async (pid) => {
-    const prog = await sc.progressRepository.findByPlayerId(pid).catch(() => null);
-    if (prog) progressCache[pid] = prog;
-  }));
-  await Promise.all(participants.map(async (pid) => {
-    const prog = progressCache[pid];
-    if (prog) {
-      // 永遠從 DB 讀取最新 effects，確保光環與獎勵加成使用最新設計值
-      prog.equipment = await mergeEquippedFromLibrary(prog.equipment || {}, sc.itemRepository);
-    }
-  }));
-  const rewardModsByPid = {};
-  const partyRewardEffects = [];
-  for (const pid of participants) {
-    const prog = progressCache[pid];
-    if (!prog) continue;
-    for (const effect of collectRewardEffectRefs(prog)) {
-      if (effect?.target === "party") partyRewardEffects.push({ ...effect, sourcePlayerId: pid });
-    }
-  }
-  const activeAura = state?.activeHealerAura;
-  if (activeAura?.effects && !participants.includes(activeAura.discordId)) {
-    for (const effect of activeAura.effects) {
-      if (effect?.target === "party") partyRewardEffects.push({ ...effect, sourcePlayerId: activeAura.discordId });
-    }
-  }
-  await Promise.all(participants.map(async (pid) => {
-    const prog = progressCache[pid];
-    rewardModsByPid[pid] = buildRewardModifiers(prog, partyRewardEffects);
-  }));
-
-  // ── 光環職業（治療師/軍師/詩人/結界師）本人結算時額外 +10% 金幣、EXP、掉落率 +5% ──
-  const AURA_JOB_IDS = ["healer", "tactician", "bard", "barrier_mage"];
-  const AURA_JOB_NAMES = ["治療", "軍師", "詩人", "結界"];
-  const healerBonusPids = new Set();
-  for (const pid of participants) {
-    const prog = progressCache[pid];
-    if (!prog) continue;
-    const jobEq = prog.equipment?.job_eq;
-    if (!jobEq) continue;
-    const jobId = String(jobEq.itemId || jobEq.id || "").toLowerCase();
-    const jobName = String(jobEq.itemName || jobEq.name || "").toLowerCase();
-    const isAuraJob = AURA_JOB_IDS.some(k => jobId.includes(k)) || AURA_JOB_NAMES.some(k => jobName.includes(k));
-    if (isAuraJob) {
-      healerBonusPids.add(pid);
-      if (perPidRewards[pid]) perPidRewards[pid].isHealer = true;
-      const mod = rewardModsByPid[pid];
-      mod.goldPct    = (mod.goldPct    || 0) + 10;
-      mod.expPct     = (mod.expPct     || 0) + 10;
-      mod.dropPct    = (mod.dropPct    || 0) + 5;
-      mod.goldMultiplier = toMultiplier(mod.goldPct);
-      mod.expMultiplier  = toMultiplier(mod.expPct);
-      mod.dropMultiplier = toMultiplier(mod.dropPct);
-    }
-  }
-
-  // ── 耕作疲勞：一般區域連續打怪滿6h → 該玩家經驗/金幣 ×0.2（世界王不算）。每位參戰者各自算。
-  const _isWorldBossKill = isWorldBossZone(zoneKey) && Boolean(monster?.isBoss);
-  const fatigueMultByPid = {};
-  if (!_isWorldBossKill) {
-    const farmFatigue = require("../../services/farmFatigue/farmFatigueService");
-    const _now = Date.now();
-    for (const pid of participants) {
-      fatigueMultByPid[pid] = await farmFatigue.applyAndGetMultiplier(pid, _now).catch(() => 1);
-    }
-  }
-  const fatMul = (pid) => fatigueMultByPid[pid] ?? 1;
-  if (fatMul(discordId) < 1) rewardLines.push("🥱 連續耕作已滿 6 小時，經驗/金幣暫時 −80%（停打一般區域 30 分鐘即恢復）");
-
-  // ── 金幣依比例分配 ──
-  // 依玩家各自對「怪物完整血量」的傷害比例結算
-  const dynamicGoldPool = getDynamicGoldPoolFloor(zoneKey, participants.length);
-  const effectiveGoldReward = Math.max(monster.goldReward || 0, dynamicGoldPool);
-
-  let myBaseGoldShare = 0;
-  if (effectiveGoldReward > 0) {
-    for (const pid of participants) {
-      const baseShare = Math.max(1, Math.round(effectiveGoldReward * dmgRatio(pid)));
-      const mod = rewardModsByPid[pid] || { goldMultiplier: 1 };
-      const share = Math.max(1, Math.round(baseShare * mod.goldMultiplier * fatMul(pid)));
-      try {
-        await sc.rewardService.grantCurrency({
-          discordId: pid, displayName: pid === discordId ? displayName : pid,
-          currencyType: "gold", amount: share,
-          source: CURRENCY_SOURCES.MONSTER_KILL_REWARD, operator: "monster_zone",
-          // 不可用以 monster.seq 為基礎的 sourceRef：seq 會隨怪物輪替重複出現，
-          // 重複擊殺同一隻怪會被誤判為重複交易而「不發金幣」。
-          // 一次性結算已由 claimKill(DB 原子) + killInProgress 保證，無需 sourceRef。
-        });
-        if (perPidRewards[pid]) perPidRewards[pid].gold = share;
-      } catch (e) {
-        console.error(`[MonsterZone] grantCurrency(gold) failed for ${pid}`, e);
-        if (perPidRewards[pid]) perPidRewards[pid]._goldGrantFailed = true;
-      }
-    }
-
-    const myBaseShare = Math.max(1, Math.round(effectiveGoldReward * dmgRatio(discordId)));
-    myBaseGoldShare = myBaseShare;
-    const myMod = rewardModsByPid[discordId] || { goldMultiplier: 1, goldPct: 0 };
-    const myShare = Math.max(1, Math.round(myBaseShare * myMod.goldMultiplier * fatMul(discordId)));
-    const pct = `${Math.round(dmgRatio(discordId) * 100)}%`;
-    const poolNote = dynamicGoldPool > (monster.goldReward || 0) ? `（動態金幣池）` : "";
-    const modNote = myMod.goldPct > 0 ? `，個人加成 +${Math.round(myMod.goldPct)}%` : "";
-    rewardLines.push(`你造成了 **${totalDamage}** 點傷害。`);
-    rewardLines.push(`💰 金幣 +${myShare}（傷害佔比 ${pct}，共 ${effectiveGoldReward}${poolNote}${modNote}）`);
-  }
-
-  // ── EXP 依比例分配（含組隊倍率）──
-  // 組隊倍率：人多共鬥獎勵更多，封頂 ×3.5
-  // 組隊倍率公式：1~2人=×1.0，3人起平滑無上限增加
-  // mult = 1 + (n-2)^0.7 × 0.6，人越多總池越大但每人平均遞減，不會爆量
-  const n = participants.length;
-  const partyMult = n <= 2 ? 1.0 : +(1 + Math.pow(n - 2, 0.7) * 0.6).toFixed(2);
-  const effectiveExpReward = Math.round(monster.expReward * partyMult);
-
-  let myBaseExpShare = 0;
-  if (effectiveExpReward > 0) {
-    const myBaseShare = Math.max(1, Math.round(effectiveExpReward * dmgRatio(discordId)));
-    myBaseExpShare = myBaseShare;
-    const myMod = rewardModsByPid[discordId] || { expMultiplier: 1, expPct: 0 };
-    const myShare = Math.max(1, Math.round(myBaseShare * myMod.expMultiplier * fatMul(discordId)));
-    let killerLvLine = "";
-    let killerOverflowGold = 0; // 滿等溢出經驗轉的金幣（給戰報顯示）
-    for (const pid of participants) {
-      const baseShare = Math.max(1, Math.round(effectiveExpReward * dmgRatio(pid)));
-      const mod = rewardModsByPid[pid] || { expMultiplier: 1 };
-      const share = Math.max(1, Math.round(baseShare * mod.expMultiplier * fatMul(pid)));
-      try {
-        const expResult = await sc.progressService.grantExp({
-          discordId: pid, displayName: pid === discordId ? displayName : pid,
-          amount: share, source: EXP_SOURCES.MONSTER_KILL
-        });
-        if (perPidRewards[pid]) {
-          perPidRewards[pid].exp = share;
-          perPidRewards[pid].overflowGold = Number(expResult.overflowGold) || 0; // 滿等溢出→金幣(給網頁戰報)
-          if (expResult.levelUps > 0) {
-            perPidRewards[pid].levelUps = expResult.levelUps;
-            perPidRewards[pid].newLevel = expResult.progress?.level ?? 0;
-            perPidRewards[pid].levelUpDetails = expResult.levelUpDetails || [];
-          }
-        }
-        if (pid === discordId) killerOverflowGold = Number(expResult.overflowGold) || 0;
-        if (expResult.levelUps > 0) {
-          const prevLevel = (expResult.progress?.level ?? 0) - expResult.levelUps;
-          const pidName = pid === discordId ? displayName : (mergedDmg[pid]?.name || pid);
-          _announceLevelMilestone(sc, pid, pidName, prevLevel, expResult.progress.level).catch(() => {});
-        }
-        if (pid === discordId && expResult.levelUps > 0) {
-          const detailText = Array.isArray(expResult.levelUpDetails) && expResult.levelUpDetails.length
-            ? expResult.levelUpDetails.map((lv) => `Lv.${lv.level}：${Array.isArray(lv.attrsZh) ? lv.attrsZh.join("、") : ""}`).join("；")
-            : "";
-          killerLvLine = detailText
-            ? ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}\n   ${detailText}`
-            : ` ✨ 升級 ${expResult.levelUps} 次！Lv.${expResult.progress.level}`;
-        }
-      } catch (e) {
-        console.error(`[MonsterZone] grantExp failed for ${pid}`, e?.message || e);
-        // 記錄失敗原因，幫助診斷 DM 通知與實際經驗值不符的問題
-        if (!perPidRewards[pid]) perPidRewards[pid] = { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] };
-        perPidRewards[pid]._expGrantFailed = true;
-      }
-    }
-
-    const pct = `${Math.round(dmgRatio(discordId) * 100)}%`;
-    const partyNote = partyMult > 1 ? `　👥 ×${partyMult}（${participants.length}人）` : "";
-    const modNote = myMod.expPct > 0 ? `，個人加成 +${Math.round(myMod.expPct)}%` : "";
-    if (canSendRewardNotice(discordId)) {
-      rewardLines.push(`⭐ EXP +${myShare}（傷害佔比 ${pct}，共 ${effectiveExpReward}${partyMult > 1 ? ` 原${monster.expReward}` : ""}${modNote}）${partyNote}${killerLvLine}`);
-      if (killerOverflowGold > 0) {
-        rewardLines.push(`💰 已滿等，溢出經驗轉為 ${killerOverflowGold} 金幣`);
-      }
-    } else {
-      console.warn(`[MonsterZone] skip EXP line for ${discordId} because EXP was not committed`);
-    }
-  }
-
-  // ── 治療師徽章結算特別顯示 + 專屬 DM ──
-  // 用實際已發出的 gold/exp 反推加成數值（10% / 1.1 = 原始base × 0.1）
-  for (const hpid of healerBonusPids) {
-    const r = perPidRewards[hpid];
-    if (!r) continue;
-    // 實際發出的是 base * 1.1，所以加成 = 實際發出 / 1.1 * 0.1 = 實際發出 / 11
-    r.healerGoldBonus = r.gold > 0 ? Math.max(1, Math.round(r.gold / 11)) : 0;
-    r.healerExpBonus  = r.exp  > 0 ? Math.max(1, Math.round(r.exp  / 11)) : 0;
-
-    // 治療師專屬 DM（在這裡直接發，gold/exp 值都已確定）
-    const parts = [];
-    if (r.healerGoldBonus > 0) parts.push(`+${r.healerGoldBonus} 金幣`);
-    if (r.healerExpBonus  > 0) parts.push(`+${r.healerExpBonus} EXP`);
-    if (parts.length > 0) {
-      try {
-        const { getBotClient } = require("../runtimeContext");
-        const client = getBotClient();
-        if (client?.isReady()) {
-          // 私訊屬於通知，不影響本場獎勵；Discord API 變慢時不可阻塞戰報。
-          void client.users.fetch(hpid)
-            .then((user) => user.send(`💚 **治療師加成**（${monster.name}）：${parts.join("、")}`))
-            .catch(() => {});
-        }
-      } catch (_) {}
-    }
-  }
-  if (healerBonusPids.has(discordId)) {
-    const r = perPidRewards[discordId];
-    const parts = [];
-    if (r?.healerGoldBonus > 0) parts.push(`+${r.healerGoldBonus} 金幣`);
-    if (r?.healerExpBonus  > 0) parts.push(`+${r.healerExpBonus} EXP`);
-    if (parts.length > 0) {
-      rewardLines.push(`💚 **治療師加成**：${parts.join("、")}`);
-    }
-  }
-
-  const monsterDropPool = await buildMonsterDropPool(sc, monster);
-
-  // ── 道具掉落：從所有參戰者中抽一人，再骰各道具掉落率 ──
-  // 規則：1. 從 participants 隨機抽出一位幸運者
-  //        2. 幸運者對每個掉落項目各自骰 chance%
-  //        3. 骰中的道具進入幸運者背包
-  if (monsterDropPool.length > 0 && participants.length > 0) {
-    // 抽幸運者
-    const luckyIdx = Math.floor(Math.random() * participants.length);
-    const luckyPid = participants[luckyIdx];
-    const luckyMod = rewardModsByPid[luckyPid] || { dropMultiplier: 1, rareDropMultiplier: 1 };
-
-    if (luckyPid) {
-      const droppedItems = [];
-      const droppedItemObjects = [];
-
-      for (const drop of monsterDropPool) {
-        let item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
-        if (item) {
-          const finalChance = calculateFinalDropChance(drop.chance, luckyMod, item);
-          if (Math.random() * 100 < finalChance) {
-            const equipStats = item.equipStats ? { ...item.equipStats } : {};
-            droppedItems.push(item.name);
-            const droppedEntry = {
-              uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
-              itemEffect: item.effect || { type: "none", value: 0 },
-              useEffects: item.useEffects || [],
-              passiveEffects: item.passiveEffects || [],
-              procEffects: item.procEffects || [],
-              combatEffects: item.combatEffects || [],
-              itemType: item.itemType || "consumable",
-              imageUrl: item.imageUrl || null, imageThumbnailUrl: item.imageThumbnailUrl || null,
-              equipSlot: item.equipSlot || null, equipStats,
-              weaponType: item.weaponType || null, isTwoHanded: item.isTwoHanded || false,
-              atkStat: item.atkStat || null, tier: item.tier || null, monsterCardSkill: item.monsterCardSkill || null,
-              enhanceLevel: 0, source: "monster_drop", sourceRef: monster.name,
-              purchasedAt: new Date().toISOString()
-            };
-            // 獲得瞬間骰附魔（只骰一次，寫進 droppedItemObjects 後續 retry 不會重骰）
-            try { require("../../services/enchant/enchantService").rollForEntry(droppedEntry); } catch (_) { /* noop */ }
-            // 屬性附魔：由「掉落這件的怪」決定屬性，等級上限＝該怪的濃度（活動區小怪＝水1）。
-            // 不建新道具，只在這一件實例標 element/elementLevel；飾品與卡片不附（見 elementDropRoll）。
-            try {
-              // 活動限定裝自帶 item.elementDrop（100% 必中、濃度區間自訂）→ 蓋過怪物的 30% 骰
-              if (item.elementDrop || monster?.element) {
-                require("../../shared/elementDropRoll").rollElementForEntry(droppedEntry, {
-                  element: monster?.element,
-                  maxLevel: monster?.elementLevel || 1,
-                  zone: zoneKey,                    // 活動區固定 30%
-                  monsterLevel: monster?.level,     // 一般區依怪物等級階梯（5~25%，2026-08-09 全區開放）
-                  override: item.elementDrop || null,
-                });
-              }
-            } catch (_) { /* noop */ }
-            droppedItemObjects.push(droppedEntry);
-          }
-        }
-      }
-
-      if (droppedItems.length > 0) {
-        // 背包容量：裝備滿了就不再撿多出來的裝備（素材/寶石/蛋照收），依會員等級決定上限
-        let equipCap = Infinity;
-        try { equipCap = (await require("../../services/backpack/backpackService").resolveEffectiveCapacity(luckyPid)).cap; } catch (_) { /* 解析失敗不擋 */ }
-        const skippedByFullBag = [];
-        let savedDrop = false;
-        for (let attempt = 0; attempt < 3 && !savedDrop; attempt++) {
-          const latestLuckyProg = await sc.progressRepository.findByPlayerId(luckyPid);
-          if (!latestLuckyProg) break;
-
-          const nextLuckyProg = {
-            ...latestLuckyProg,
-            inventory: Array.isArray(latestLuckyProg.inventory)
-              ? latestLuckyProg.inventory.map((entry) => ({ ...entry }))
-              : []
-          };
-          // 依容量過濾：只有「主要穿戴裝備」佔格、超上限就跳過；卡片/錨點/徽章/稱號、素材/寶石/蛋不受限
-          const countsCap = require("../../services/backpack/backpackService").countsTowardCapacity;
-          let room = Math.max(0, equipCap - nextLuckyProg.inventory.filter(countsCap).length);
-          const toAdd = [];
-          for (const entry of droppedItemObjects) {
-            if (countsCap(entry)) {
-              if (room > 0) { toAdd.push(entry); room -= 1; }
-              else if (attempt === 0) skippedByFullBag.push(entry.itemName);
-            } else {
-              toAdd.push(entry); // 卡片/收藏/素材照收，不佔容量
-            }
-          }
-          nextLuckyProg.inventory.push(...toAdd.map((entry) => ({ ...entry })));
-          nextLuckyProg.updatedAt = new Date().toISOString();
-
-          if (typeof sc.progressRepository.saveIfUnchanged === "function") {
-            savedDrop = await sc.progressRepository.saveIfUnchanged(nextLuckyProg, latestLuckyProg.updatedAt);
-          } else if (typeof sc.progressRepository.save === "function") {
-            await sc.progressRepository.save(nextLuckyProg);
-            savedDrop = true;
-          }
-
-          if (!savedDrop && attempt < 2) {
-            await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
-          }
-        }
-
-        if (savedDrop) {
-          const allDropped = [...droppedItems];
-          const allDroppedObjects = [...droppedItemObjects];
-          if (perPidRewards[luckyPid]) perPidRewards[luckyPid].drops = [...allDropped];
-          const luckyName = luckyPid === discordId ? displayName : (mergedDmg[luckyPid]?.name || luckyPid);
-          const isKiller = luckyPid === discordId;
-          if (canSendRewardNotice(luckyPid)) {
-            if (isKiller) {
-              rewardLines.push(`🎁 道具掉落：${allDropped.join("、")}`);
-              if (skippedByFullBag.length > 0) {
-                rewardLines.push(`⚠️ 背包已滿，未拾取裝備：${skippedByFullBag.join("、")}（整理背包或升級會員可擴充上限）`);
-              }
-              // 結構化掉落（給網頁版漂浮道具氣泡 + 詳細視窗用）
-              rewardLines._drops = [...(rewardLines._drops || []), ...allDroppedObjects.map(toWebDrop)];
-              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "kill", isWorldBossZone(zoneKey) && !!monster?.isBoss, zoneKey).catch(() => {});
-            } else {
-              _announceDrops(sc, luckyPid, luckyName, monster.name, allDropped, allDroppedObjects, "group", isWorldBossZone(zoneKey) && !!monster?.isBoss, zoneKey).catch(() => {});
-            }
-          } else {
-            console.warn(`[MonsterZone] skip drop DM for ${luckyPid} because EXP was not committed`);
-          }
-        } else {
-          console.warn(`[MonsterZone] drop save failed for ${luckyPid}, item drop announcement skipped to avoid stale overwrite`);
-        }
-      }
-    }
-
-    // 人數加碼掉落：10/15/20 人各額外抽一位，台詞不同
-    const BONUS_MILESTONES = [
-      { threshold: 10, kind: "bonus_10" },
-      { threshold: 15, kind: "bonus_15" },
-      { threshold: 20, kind: "bonus_20" },
-    ];
-    const usedBonusPids = new Set([luckyPid]);
-    for (const { threshold, kind } of BONUS_MILESTONES) {
-      if (participants.length < threshold) break;
-      const bonusPool = participants.filter(pid => !usedBonusPids.has(pid));
-      const bonusPid = bonusPool.length > 0
-        ? bonusPool[Math.floor(Math.random() * bonusPool.length)]
-        : [...usedBonusPids][0];
-      usedBonusPids.add(bonusPid);
-      const bonusProg = progressCache[bonusPid];
-      const bonusMod = rewardModsByPid[bonusPid] || { dropMultiplier: 1, rareDropMultiplier: 1 };
-      if (!bonusProg) continue;
-      if (!Array.isArray(bonusProg.inventory)) bonusProg.inventory = [];
-      const bonusItems = [];
-      const bonusItemObjects = [];
-      for (const drop of monsterDropPool) {
-        let item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
-        if (item) {
-          const finalChance = calculateFinalDropChance(drop.chance, bonusMod, item);
-          if (Math.random() * 100 < finalChance) {
-            {
-              const equipStats = item.equipStats ? { ...item.equipStats } : {};
-              const dropEntry = {
-                uuid: crypto.randomUUID(),
-                itemId: item.id,
-                itemName: item.name,
-                itemEffect: item.effect || { type: "none", value: 0 },
-                useEffects: item.useEffects || [],
-                passiveEffects: item.passiveEffects || [],
-                procEffects: item.procEffects || [],
-                combatEffects: item.combatEffects || [],
-                itemType: item.itemType || "consumable",
-                imageUrl: item.imageUrl || null,
-                imageThumbnailUrl: item.imageThumbnailUrl || null,
-                equipSlot: item.equipSlot || null,
-                equipStats,
-                weaponType: item.weaponType || null,
-                isTwoHanded: item.isTwoHanded || false,
-                atkStat: item.atkStat || null,
-                tier: item.tier || null,
-                monsterCardSkill: item.monsterCardSkill || null,
-                enhanceLevel: 0,
-                source: "monster_drop_bonus",
-                sourceRef: monster.name,
-                purchasedAt: new Date().toISOString()
-              };
-
-              bonusProg.inventory.push({ ...dropEntry });
-              bonusItems.push(item.name);
-              bonusItemObjects.push(dropEntry);
-            }
-          }
-        }
-      }
-      if (bonusItems.length > 0) {
-        let savedBonus = false;
-        for (let attempt = 0; attempt < 3 && !savedBonus; attempt++) {
-          const latestBonusProg = await sc.progressRepository.findByPlayerId(bonusPid);
-          if (!latestBonusProg) break;
-          const nextBonusProg = {
-            ...latestBonusProg,
-            inventory: Array.isArray(latestBonusProg.inventory)
-              ? latestBonusProg.inventory.map((entry) => ({ ...entry }))
-              : []
-          };
-          nextBonusProg.inventory.push(...bonusItemObjects.map((entry) => ({ ...entry })));
-          nextBonusProg.updatedAt = new Date().toISOString();
-
-          if (typeof sc.progressRepository.saveIfUnchanged === "function") {
-            savedBonus = await sc.progressRepository.saveIfUnchanged(nextBonusProg, latestBonusProg.updatedAt);
-          } else if (typeof sc.progressRepository.save === "function") {
-            await sc.progressRepository.save(nextBonusProg);
-            savedBonus = true;
-          }
-
-          if (!savedBonus && attempt < 2) {
-            await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
-          }
-        }
-        if (!savedBonus) continue;
-        const allBonusDropped = [...bonusItems];
-        const allBonusDroppedObjects = [...bonusItemObjects];
-        if (perPidRewards[bonusPid]) perPidRewards[bonusPid].drops = [...(perPidRewards[bonusPid].drops || []), ...allBonusDropped];
-        const bonusName = bonusPid === discordId ? displayName : (mergedDmg[bonusPid]?.name || bonusPid);
-        if (canSendRewardNotice(bonusPid)) {
-          _announceDrops(sc, bonusPid, bonusName, monster.name, allBonusDropped, allBonusDroppedObjects, kind, isWorldBossZone(zoneKey) && !!monster?.isBoss, zoneKey).catch(() => {});
-        } else {
-          console.warn(`[MonsterZone] skip bonus drop DM for ${bonusPid} because EXP was not committed`);
-        }
-      }
-    }
-  }
-
-  // ── 參與獎勵：每位參戰者有機率獲得該區域強化石（DM 通知）──
-  {
-    const participationGemTiers = getParticipationGemTiers(zoneKey, monster);
-    const participationGemConfigs = participationGemTiers
-      .map((gemTier) => {
-        const participationGemId = ENHANCE_GEM_IDS[gemTier];
-        return participationGemId ? { gemTier, participationGemId } : null;
-      })
-      .filter(Boolean);
-
-    if (participationGemConfigs.length > 0) {
-      const participationGemItems = [];
-      for (const cfg of participationGemConfigs) {
-        const gemItem = await sc.itemRepository.findById(cfg.participationGemId).catch(() => null);
-        if (!gemItem) continue;
-        participationGemItems.push({
-          tier: cfg.gemTier,
-          item: gemItem,
-          participationRate: GEM_PARTICIPATION_RATE[cfg.gemTier] ?? 0.05,
-          doubleDropRate: GEM_PARTICIPATION_DOUBLE_DROP_RATE[cfg.gemTier] ?? 0
-        });
-      }
-
-      for (const pid of participants) {
-        const triggeredGemDrops = [];
-        const pidDropPct = rewardModsByPid[pid]?.dropPct ?? 0;
-        for (const cfg of participationGemItems) {
-          const effectiveRate = Math.min(1, cfg.participationRate + pidDropPct / 100);
-          if (Math.random() >= effectiveRate) continue;
-          const dropCount = Math.random() < cfg.doubleDropRate ? 2 : 1;
-          for (let i = 0; i < dropCount; i++) {
-            triggeredGemDrops.push(cfg.item);
-          }
-        }
-        if (triggeredGemDrops.length === 0) continue;
-
-        let savedGem = false;
-        for (let attempt = 0; attempt < 3 && !savedGem; attempt++) {
-          const latestProg = await sc.progressRepository.findByPlayerId(pid);
-          if (!latestProg) break;
-          const nextProg = {
-            ...latestProg,
-            inventory: Array.isArray(latestProg.inventory)
-              ? latestProg.inventory.map((entry) => ({ ...entry }))
-              : []
-          };
-          for (const gemItem of triggeredGemDrops) {
-            if (tryStackGem(nextProg, gemItem.id)) continue;
-            nextProg.inventory.push({
-              uuid: crypto.randomUUID(), itemId: gemItem.id, itemName: gemItem.name,
-              itemEffect: gemItem.effect || { type: "none", value: 0 },
-              useEffects: gemItem.useEffects || [],
-              passiveEffects: gemItem.passiveEffects || [],
-              procEffects: gemItem.procEffects || [],
-              combatEffects: gemItem.combatEffects || [],
-              itemType: gemItem.itemType || "consumable",
-              imageUrl: gemItem.imageUrl || null, imageThumbnailUrl: gemItem.imageThumbnailUrl || null,
-              equipSlot: gemItem.equipSlot || null, equipStats: gemItem.equipStats || null,
-              weaponType: gemItem.weaponType || null, isTwoHanded: gemItem.isTwoHanded || false,
-              atkStat: gemItem.atkStat || null, tier: gemItem.tier || null, enhanceLevel: 0,
-              stackCount: 1,
-              source: "monster_participation_gem", sourceRef: monster.name,
-              purchasedAt: new Date().toISOString()
-            });
-          }
-          nextProg.updatedAt = new Date().toISOString();
-          if (typeof sc.progressRepository.saveIfUnchanged === "function") {
-            savedGem = await sc.progressRepository.saveIfUnchanged(nextProg, latestProg.updatedAt);
-          } else if (typeof sc.progressRepository.save === "function") {
-            await sc.progressRepository.save(nextProg);
-            savedGem = true;
-          }
-          if (!savedGem && attempt < 2) {
-            await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
-          }
-        }
-        if (!savedGem) continue;
-        if (perPidRewards[pid]) {
-          perPidRewards[pid].drops = [...(perPidRewards[pid].drops || []), ...triggeredGemDrops.map((gemItem) => gemItem.name)];
-        }
-      }
-    }
-  }
-
-  // 擊殺數 + 推進下一隻怪物
-  const newKillCount = { ...(state.killCount || {}), [monster.id]: ((state.killCount?.[monster.id] || 0) + 1) };
-  // 取最新 state 以免多人並發時覆蓋其他人的 damageMap
-  const freshState = await sc.monsterService.getState(zoneKey);
-  const finalDamageMap = { ...(freshState.damageMap || {}), ...mergedDmg };
-
-  // 世界 BOSS（精英區）擊殺後：同一隻進入冷卻，不切下一隻
-  if (isWorldBossZone(zoneKey) && monster?.isBoss && sc.worldBossServiceFor(zoneKey)) {
-    const resetParts = ensureWorldBossPartState({}, monster.calc.maxHp, zoneKey);
-    const wbConfig = await sc.worldBossServiceFor(zoneKey).getConfig().catch(() => null);
-    const bossLockMs = Math.max(1, Number(wbConfig?.respawnCooldownMinutes || 60)) * 60 * 1000;
-    const bossLockUntil = new Date(Date.now() + bossLockMs + 15 * 1000);
-    const bossResetState = {
-      ...freshState,
-      ...freshHellfangFields(), // 牙狼重生：清翻面/累積
-      currentHp: resetParts.currentHp,
-      worldBossPartsHp: resetParts.worldBossPartsHp,
-      worldBossPartsMaxHp: resetParts.worldBossPartsMaxHp,
-      activeMonsterSeq: monster.seq,
-      killCount: newKillCount,
-      participants: [],
-      damageMap: {},
-      // 保留「上一隻」的傷害排行：冷卻期間網頁/DC 仍顯示剛擊殺這隻王的排行，下一隻被打才換新
-      lastDamageMap: (freshState.damageMap && Object.keys(freshState.damageMap).length > 0) ? freshState.damageMap : (freshState.lastDamageMap || {}),
-      lastParticipants: Array.isArray(freshState.participants) ? freshState.participants : [],
-      killClaimedSeq: monster.seq,
-      killClaimedAt: bossLockUntil,
-      killClaimedBy: "elite-boss-cooldown",
-      activeHealerAura: null,
-      activeHealerAuras: [],
-      activeEvent: null
-    };
-    await sc.monsterService.saveState(bossResetState, zoneKey);
-    await sc.worldBossServiceFor(zoneKey).markBossKilled().catch(() => {});
-    const clearedQueued = clearQueuedEliteWorldBossSessions();
-    if (clearedQueued > 0) {
-      console.log(`[WorldBoss] cleared queued elite sessions after kill: ${clearedQueued}`);
-    }
-    const timeoutTimer = worldBossTimeoutTimers.get(zoneKey);
-    if (timeoutTimer) {
-      clearTimeout(timeoutTimer);
-      worldBossTimeoutTimers.delete(zoneKey);
-    }
-    _republishPanel(sc, zoneKey, monster, bossResetState.currentHp, 0, {}, null, bossResetState.worldBossPartsHp).catch(() => {});
-
-    // 世界王貢獻寶箱：本王傷害 + 0.7×助攻排名前 6 名，依名次領 1~4 箱。
-    await _awardWorldBossContributionChests(
-      sc, zoneKey, monster, freshState.damageMap, perPidRewards,
-      Array.isArray(freshState.participants) ? freshState.participants : []
-    );
-
-    rewardLines.push(...buildPartyRewardSummary(perPidRewards, mergedDmg));
-    _notifyKillRewards(monster.name, perPidRewards).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
-
-    try {
-      const pushReward = sc._pushRewardToPlayer;
-      if (typeof pushReward === "function") {
-        for (const [pid, rewards] of Object.entries(perPidRewards)) {
-          if (!rewards.gold && !rewards.exp && !rewards.drops?.length) continue;
-          pushReward(pid, {
-            monsterName: monster.name,
-            gold: rewards.gold,
-            exp: rewards.exp,
-            levelUps: rewards.levelUps,
-            newLevel: rewards.newLevel,
-            drops: rewards.drops
-          });
-        }
-      }
-    } catch (_) {}
-
-    const myReward = perPidRewards[discordId] || { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] };
-    rewardLines._summary = {
-      gold: myReward.gold,
-      exp: myReward.exp,
-      levelUps: myReward.levelUps,
-      newLevel: myReward.newLevel,
-      drops: myReward.drops
-    };
-    return rewardLines;
-  }
-
-  const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
-  const nextMonster = pickWeightedNextMonster(allMonsters, monster.id);
-  const npcMappingsSource = Array.isArray(freshState.npcMappings) ? freshState.npcMappings : [];
-  const allEvents = npcMappingsSource.length
-    ? await sc.monsterEventService.listEvents({ zone: zoneKey, includeDisabled: true }).catch(() => [])
-    : [];
-  const mappingPool = [];
-  for (const [index, mp] of npcMappingsSource.entries()) {
-    if (mp.triggerMonsterSeq != null && Number(mp.triggerMonsterSeq) !== Number(monster.seq)) continue;
-    const tpl = allEvents.find((e) => e.id === mp.eventId) || null;
-    if (!tpl) continue;
-    mappingPool.push({
-      id: mp.eventId || null,
-      chance: Number(mp.chance) || 0,
-      order: Number.isFinite(Number(mp.order)) ? Number(mp.order) : index,
-      triggerMonsterSeq: mp.triggerMonsterSeq == null ? null : Number(mp.triggerMonsterSeq),
-      template: tpl
-    });
-  }
-
-  if (mappingPool.length > 0) {
-    const sortedNpcPool = mappingPool.sort((a, b) => a.order - b.order);
-    const lastChosen = zoneLastChosen.get(zoneKey) || null;
-    let monsterPool = allMonsters.filter((m) => m.id !== monster.id || allMonsters.length === 1);
-    let eventPool = sortedNpcPool;
-    const monsterWeights = monsterPool.map((m) => Number(m.spawnRate) || 10);
-    if (lastChosen) {
-      const lastType = lastChosen.type;
-      const lastId = lastChosen.id;
-      const filteredMonsterPool = monsterPool.filter((m) => !(lastType === "monster" && m.id === lastId));
-      const filteredEventPool = eventPool.filter((e) => !(lastType === "event" && e.id === lastId));
-      if (filteredMonsterPool.length || filteredEventPool.length) {
-        monsterPool = filteredMonsterPool.length ? filteredMonsterPool : monsterPool;
-        eventPool = filteredEventPool.length ? filteredEventPool : eventPool;
-      }
-    }
-    const eventWeights = eventPool.map((e) => Number(e.chance) || 0);
-    const totalMonsterWeight = monsterWeights.reduce((s, v) => s + v, 0);
-    const totalEventWeight = eventWeights.reduce((s, v) => s + v, 0);
-    const totalWeight = totalMonsterWeight + totalEventWeight;
-    let chosenEvent = null;
-    let chosenMonster = null;
-    if (totalWeight <= 0) {
-      chosenMonster = nextMonster;
-    } else {
-      let r = Math.random() * totalWeight;
-      for (let i = 0; i < monsterPool.length; i++) {
-        r -= monsterWeights[i] || 0;
-        if (r <= 0) {
-          chosenMonster = monsterPool[i];
-          break;
-        }
-      }
-      if (!chosenMonster) {
-        for (let j = 0; j < eventPool.length; j++) {
-          r -= eventWeights[j] || 0;
-          if (r <= 0) {
-            chosenEvent = eventPool[j];
-            break;
-          }
-        }
-      }
-    }
-
-    if (chosenEvent) {
-      zoneLastChosen.set(zoneKey, { type: "event", id: chosenEvent.id });
-      const pendingMonster = nextMonster;
-      const tpl = chosenEvent.template || null;
-      const startedAt = new Date().toISOString();
-      const endsAt = new Date(Date.now() + ((tpl && tpl.durationSec) || 12) * 1000).toISOString();
-      const eventState = {
-        ...freshState,
-        killCount: newKillCount,
-        participants: [],
-        damageMap: {},
-        killClaimedSeq: monster.seq,
-        killClaimedAt: new Date(),
-        currentHp: 0,
-        activeHealerAura: null,
-        activeEvent: {
-          id: chosenEvent.id,
-          name: tpl ? tpl.name : chosenEvent.id,
-          message: tpl ? tpl.message : null,
-          startedAt,
-          endsAt,
-          pendingMonsterSeq: pendingMonster ? pendingMonster.seq : null,
-          nodes: (tpl && tpl.nodes) || [],
-          npc: (tpl && tpl.npc) || null
-        }
-      };
-      await sc.monsterService.saveState(eventState, zoneKey);
-      _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch((e) => console.error("[Panel] NPC event publish failed:", e?.message || e));
-      _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
-    } else {
-      const pickedMonster = chosenMonster || nextMonster;
-      zoneLastChosen.set(zoneKey, { type: "monster", id: pickedMonster?.id || monster.id });
-      if (pickedMonster) {
-        const transitionState = {
-          ...freshState,
-          killCount: newKillCount
-        };
-        await _startMonsterTransition(sc, zoneKey, pickedMonster, transitionState, {
-          sourceMonsterName: monster.name,
-          sourceMonsterSeq: monster.seq
-        });
-      } else {
-        const newState = {
-          ...freshState,
-          currentHp: 0,
-          activeMonsterSeq: freshState.activeMonsterSeq,
-          killCount: newKillCount,
-          participants: [],
-          damageMap: {},
-          killClaimedSeq: monster.seq,
-          killClaimedAt: new Date(),
-          activeHealerAura: null,
-          activeEvent: null,
-          activeTransition: null
-        };
-        await sc.monsterService.saveState(newState, zoneKey);
-        _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch((e) => console.error("[Panel] empty state publish failed:", e?.message || e));
-      }
-    }
-  } else {
-    const matchedEvent = await sc.monsterEventService.pickEventForTransition({
-      zone: zoneKey,
-      defeatedMonsterSeq: monster.seq
-    }).catch(() => null);
-    if (matchedEvent && nextMonster) {
-      const startedAt = new Date().toISOString();
-      const endsAt = new Date(Date.now() + (matchedEvent.durationSec || 12) * 1000).toISOString();
-      const eventState = {
-        ...freshState,
-        killCount: newKillCount,
-        participants: [],
-        damageMap: {},
-        killClaimedSeq: monster.seq,
-        killClaimedAt: new Date(),
-        currentHp: 0,
-        activeEvent: {
-          id: matchedEvent.id,
-          name: matchedEvent.name,
-          message: matchedEvent.message,
-          startedAt,
-          endsAt,
-          pendingMonsterSeq: nextMonster.seq,
-          // 保留 nodes 與 npc 以便在面板與互動處理時使用
-          nodes: matchedEvent.nodes || [],
-          npc: matchedEvent.npc || null
-        }
-      };
-      await sc.monsterService.saveState(eventState, zoneKey);
-      _republishPanel(sc, zoneKey, null, 0, 0, {}, eventState.activeEvent).catch((e) => console.error("[Panel] NPC event publish failed:", e?.message || e));
-      _scheduleZoneEventFinalize(sc, zoneKey, endsAt);
-    } else {
-      if (nextMonster) {
-        const transitionState = {
-          ...freshState,
-          killCount: newKillCount
-        };
-        await _startMonsterTransition(sc, zoneKey, nextMonster, transitionState, {
-          sourceMonsterName: monster.name,
-          sourceMonsterSeq: monster.seq
-        });
-      } else {
-        const newState = {
-          ...freshState,
-          currentHp: 0,
-          activeMonsterSeq: freshState.activeMonsterSeq,
-          killCount: newKillCount,
-          participants: [],
-          damageMap: {},
-          killClaimedSeq: monster.seq,
-          killClaimedAt: new Date(),
-          activeEvent: null,
-          activeTransition: null
-        };
-        await sc.monsterService.saveState(newState, zoneKey);
-        _republishPanel(sc, zoneKey, null, 0, 0, finalDamageMap).catch((e) => console.error("[Panel] empty state publish failed:", e?.message || e));
-      }
-    }
-  }
-
-  // 通知參戰獎勵（DM）
-  rewardLines.push(...buildPartyRewardSummary(perPidRewards, mergedDmg));
-  _notifyKillRewards(monster.name, perPidRewards).catch((e) => console.error("[NotifyKill] top-level error:", e?.message || e));
-
-  // 推送 SSE reward 事件給所有參戰者（web 端通知紀錄）
-  try {
-    const pushReward = sc._pushRewardToPlayer;
-    if (typeof pushReward === "function") {
-      for (const [pid, rewards] of Object.entries(perPidRewards)) {
-        if (rewards?._expGrantFailed) continue;
-        if (!rewards.gold && !rewards.exp && !rewards.drops?.length) continue;
-        pushReward(pid, {
-          monsterName: monster.name,
-          gold:     rewards.gold,
-          exp:      rewards.exp,
-          levelUps: rewards.levelUps,
-          newLevel: rewards.newLevel,
-          drops:    rewards.drops,
-        });
-      }
-    }
-  } catch (_) {}
-
-  // 回傳結構化摘要供 web API 使用
-  const myReward = perPidRewards[discordId] || { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] };
-  rewardLines._summary = {
-    gold:     myReward.gold,
-    exp:      myReward.exp,
-    levelUps: myReward.levelUps,
-    newLevel: myReward.newLevel,
-    drops:    myReward.drops,
-  };
-
-  return rewardLines;
-  } finally {
-    killInProgress.delete(killKey);
-  }
-}
 
 // ──────────────────────────────────────────────
 // 主路由
@@ -5493,74 +3524,7 @@ const IDLE_TAUNTS = [
   (name) => `👻 ${name} 消失了⋯沒人知道牠去哪。`,
 ];
 
-async function _doIdleRotate(sc, zoneKey) {
-  try {
-    if (process.env.DISABLE_AUTO_ROTATE === '1') {
-      return;
-    }
-    let state = await sc.monsterService.getState(zoneKey);
-    await _resolveZoneEventIfExpired(sc, zoneKey).catch(() => {});
-    state = await sc.monsterService.getState(zoneKey);
-    if (state?.activeEvent?.endsAt && Date.parse(state.activeEvent.endsAt) > Date.now()) return;
-    const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
-    const monster = allMonsters.find((m) => m.seq === state.activeMonsterSeq);
-    if (!monster) return;
 
-    const next = pickWeightedNextMonster(allMonsters, monster.id);
-    if (!next) return;
-
-    const newState = {
-      ...state,
-      currentHp: next.calc.maxHp,
-      activeMonsterSeq: next.seq,
-      participants: [],
-      damageMap: {},
-      killClaimedSeq: null,
-      lastHitAt: new Date().toISOString(),
-      activeEvent: null,
-    };
-
-    // 精英區世界 Boss idle：重置三部位 HP
-    // 只有「有人開戰但超時」才重置解鎖進度，純閒置不重置
-    if (isWorldBossZone(zoneKey) && next.isBoss && sc.worldBossServiceFor(zoneKey)) {
-      const partMax = createWorldBossPartHpTemplate(next.calc.maxHp, zoneKey);
-      newState.worldBossPartsMaxHp = partMax;
-      newState.worldBossPartsHp = { ...partMax };
-      const wbState = await sc.worldBossServiceFor(zoneKey)._getStateEnsured().catch(() => null);
-      if (wbState?.battleStartedAt) {
-        // 有人曾開戰但沒打完，視為失敗，重置解鎖進度
-        await sc.worldBossServiceFor(zoneKey).markBossFailedTimeout().catch(() => {});
-      } else {
-        // 純閒置，只重置部位 HP，不動解鎖進度
-      }
-    }
-
-    await sc.monsterService.saveState(newState, zoneKey);
-    _republishPanel(sc, zoneKey, next, next.calc.maxHp, 0, {}).catch(() => {});
-    // 精英區 Boss 由解鎖流程觸發廣播，idle rotate 不廣播
-  if (next.isBoss && !isWorldBossZone(zoneKey) && BOSS_SPAWN_BROADCAST_ENABLED) _broadcastBossSpawn(sc, zoneKey, next).catch(() => {});
-
-    // 嗆聲廣播
-    const { getBotClient } = require("../runtimeContext");
-    const client = getBotClient();
-    if (!client?.isReady()) return;
-    const layout = await sc.channelLayoutRepository.get();
-    const bindings = layout?.discord?.bindings || [];
-    const townBinding = bindings.find((b) => b.featureKey === "town_chat");
-    const zoneFeature = zoneToFeatureKey(zoneKey);
-    const fallback = bindings.find((b) => b.featureKey === zoneFeature);
-    const channelId = townBinding?.channelId || fallback?.channelId;
-    if (!channelId) return;
-    const channel = await client.channels.fetch(channelId).catch(() => null);
-    if (!channel?.isTextBased?.()) return;
-    if (process.env.DISABLE_TAUNTS !== '1') {
-      const taunt = IDLE_TAUNTS[Math.floor(Math.random() * IDLE_TAUNTS.length)];
-      await channel.send(taunt(monster.name));
-    }
-  } catch (e) {
-    console.error(`[IdleRotate] zone=${zoneKey} error:`, e.message);
-  }
-}
 
 async function checkIdleRotate() {
   const sc = getServiceContext();
@@ -5863,3 +3827,25 @@ module.exports = {
   parseWorldBossTargetPart,
   DRAGON_KING_ZONE
 };
+
+function notifyHealerBonus(pid, monsterName, parts) {
+  const client = require("../runtimeContext").getBotClient();
+  if (client?.isReady()) void client.users.fetch(pid).then(user => user.send(`💚 **治療師加成**（${monsterName}）：${parts.join("、")}`)).catch(() => {});
+}
+async function announceChestRanking(lines) {
+  const client = require("../runtimeContext").getBotClient();
+  if (!client?.isReady?.()) return;
+  const channel = await client.channels.fetch("1498608950671839263").catch(() => null);
+  if (channel?.isTextBased?.()) await channel.send(lines.join("\n")).catch(() => {});
+}
+async function announceIdleRotate(sc, zoneKey, monster) {
+  const client = require("../runtimeContext").getBotClient();
+  if (!client?.isReady() || process.env.DISABLE_TAUNTS === '1') return;
+  const layout = await sc.channelLayoutRepository.get();
+  const bindings = layout?.discord?.bindings || [];
+  const channelId = (bindings.find(b => b.featureKey === "town_chat") || bindings.find(b => b.featureKey === zoneToFeatureKey(zoneKey)))?.channelId;
+  if (!channelId) return;
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (channel?.isTextBased?.()) await channel.send(IDLE_TAUNTS[Math.floor(Math.random() * IDLE_TAUNTS.length)](monster.name));
+}
+require("../../services/battle/battlePresentation").configureBattlePresentation({ _republishPanel, _republishPanelWithRankingDebounce, _announceLevelMilestone, _announceDrops, _notifyKillRewards, clearQueuedEliteWorldBossSessions, _broadcastBossSpawn, notifyHealerBonus, announceChestRanking, announceIdleRotate });

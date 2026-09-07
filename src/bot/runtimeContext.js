@@ -1,18 +1,2 @@
-const { createServiceContext } = require("../services/createServiceContext");
-
-const serviceContext = createServiceContext();
-let botClient = null;
-
-function setBotClient(client) {
-  botClient = client;
-}
-
-function getBotClient() {
-  return botClient;
-}
-
-module.exports = {
-  serviceContext,
-  setBotClient,
-  getBotClient
-};
+// Compatibility import; runtime ownership and service assembly belong to services.
+module.exports = require("../services/runtimeContext");

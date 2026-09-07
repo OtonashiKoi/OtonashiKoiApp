@@ -51,3 +51,7 @@ temp_*
 .env.backup
 .env.*
 !.env.example
+
+# Verified frontend release directories and deployment pointers
+src/web/public/.app-releases/
+src/web/public/app.next-*

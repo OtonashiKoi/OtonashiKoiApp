@@ -41,6 +41,17 @@ async function main() {
     },
   };
   const transactionRepository = {
+    // Test double for the atomic repository contract; fault/concurrency behavior
+    // is covered by the standalone and replica-set integration suites.
+    async grantCurrencyAtomic(input) {
+      const existing = transactions.find(t => t.source === input.source && t.sourceRef === input.sourceRef);
+      if (existing) return { wallet, transaction: existing, duplicated: true };
+      const next = await walletRepository.incBalance(input.playerId, input.currencyType, input.amount);
+      if (!next) throw new Error("Insufficient balance");
+      const transaction = { ...input, balanceAfter: next[input.currencyType] };
+      transactions.push(transaction);
+      return { wallet: next, transaction, duplicated: false };
+    },
     findBySourceAndRef: async (source, ref) => transactions.find((t) => t.source === source && t.sourceRef === ref) || null,
     append: async (transaction) => transactions.push(transaction),
   };

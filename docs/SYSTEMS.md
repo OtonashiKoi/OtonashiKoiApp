@@ -26,6 +26,7 @@
 
 - 服務：`src/services/monster/monsterService.js`
 - 共用戰鬥：`src/shared/combatLoop.js`；玩家衍生屬性：`combatStats.js`
+- 共用機制與擊殺結算：`src/services/battle/zoneBattleService.js`；貨幣原子性、runtime 所有權及發布回復的實作範圍見 [SYSTEM_HARDENING](SYSTEM_HARDENING.md)。
 - Discord：`src/bot/handlers/monsterZoneHandlers.js`、`src/bot/monsterZoneView.js`
 - Web API：`src/api/routes/playerAppRoutes.js` 的 `/api/combat/*`
 - Web 一般怪結算以 `activeMonsterSeq + currentHp` 作 MongoDB 條件式更新；同怪並發扣血會重讀後重試，已死亡、轉場或已換怪的舊戰鬥結果直接丟棄，不能把上一隻怪的剩餘 HP 寫到下一隻。區域快照與開戰入口另將持久 HP 限制在目前怪物模板 `0..maxHp`，並自動修復既有超上限狀態

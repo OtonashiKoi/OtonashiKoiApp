@@ -877,6 +877,8 @@ function createBotClient() {
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {
+    try { require("../services/runtime/runtimeOwnership").assertRuntimeOwnership(); }
+    catch (_) { return; }
     try {
       // ── 賽季結束維護閘門 ──
       // 維護生效時，非白名單玩家只保留「我的資料 / 裝備欄」兩顆按鈕，其餘互動一律擋下。

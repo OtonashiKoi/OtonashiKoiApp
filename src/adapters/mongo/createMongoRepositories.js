@@ -259,13 +259,15 @@ function createMongoRepositories() {
     creatorTokenRepository: createCreatorTokenRepository({ collection }),
     walletRepository: {
       async findByPlayerId(playerId) {
-        return (await collection("wallets")).findOne({ playerId });
+        return (await collection("wallets")).findOne({ playerId }, { projection: { _currencySettlement: 0 } });
       },
       async save(wallet) {
+        // Internal settlement gates must never be restored from a stale UI snapshot.
+        const { _currencySettlement, ...walletData } = wallet;
         if (maintenance.isStrict()) throw new Error("SEASON_RESET_WRITE_LOCKED");
         await (await collection("wallets")).updateOne(
           { playerId: wallet.playerId },
-          { $set: wallet },
+          { $set: walletData },
           { upsert: true }
         );
         emitRealtimeInvalidate("wallet", wallet.playerId);
@@ -724,6 +726,9 @@ function createMongoRepositories() {
       }
     },
     transactionRepository: {
+      async grantCurrencyAtomic(input) {
+        return require("./currencySettlementRuntime").grantCurrencyAtomic(input);
+      },
       async append(transaction) {
         await (await collection("transactions")).insertOne(transaction);
         return transaction;

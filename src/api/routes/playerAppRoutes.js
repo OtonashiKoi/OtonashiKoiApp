@@ -2965,7 +2965,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // 自癒：清掉「過期殘留的切換動畫」(例如切換途中重啟→DB transition 變孤兒、currentHp 停在前一隻殘血)，
       // 否則整個領域會卡住打不死。過期才會動作，未過期不影響正常切換。
       try {
-        const { _resolveExpiredMonsterTransition } = require("../../bot/handlers/monsterZoneHandlers");
+        const { _resolveExpiredMonsterTransition } = require("../../services/battle/zoneBattleService");
         await _resolveExpiredMonsterTransition(serviceContext, zoneKey);
       } catch (_) { /* 自癒失敗不阻擋戰鬥 */ }
       markBattlePerf("guards");
@@ -2999,7 +2999,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const _isWBZone = require("../../services/worldBoss/worldBossService").isWorldBossZone;
       if (!_isWBZone(zoneKey) && monster && Number(state.currentHp) <= 0) {
         try {
-          const { _doIdleRotate } = require("../../bot/handlers/monsterZoneHandlers");
+          const { _doIdleRotate } = require("../../services/battle/zoneBattleService");
           await _doIdleRotate(serviceContext, zoneKey);
           const rotated = await serviceContext.monsterService.getState(zoneKey);
           if (rotated && Number(rotated.currentHp) > 0) {
@@ -3234,10 +3234,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         sumWorldBossPartHp: sumWBPartHp,
         isWorldBossAllPartsDefeated: isWBAllDefeated,
         DRAGON_KING_ZONE: WB_DRAGON_KING_ZONE
-      } = require("../../bot/handlers/monsterZoneHandlers");
+      } = require("../../services/battle/zoneBattleService");
 
       // 部位依 zone 動態(牙狼5部位/古龍王4/其餘3)
-      const _wbPartKeys = require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartKeys(zoneKey) || ["head", "body", "legs"];
+      const _wbPartKeys = require("../../services/battle/zoneBattleService").getWorldBossPartKeys(zoneKey) || ["head", "body", "legs"];
       const WB_VALID_PARTS = new Set(_wbPartKeys);
       const _wbPartFallback = WB_VALID_PARTS.has("body") ? "body" : _wbPartKeys[0];
       const isWorldBoss = isWorldBossZone(zoneKey) && Boolean(monster?.isBoss);
@@ -3298,7 +3298,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const _partHpNow = Math.max(0, Number(_partsHp[worldBossPart] || 0));
         if (_partHpNow <= 0) {
           let _partKeys = [];
-          try { _partKeys = require("../../bot/handlers/monsterZoneHandlers").getWorldBossPartKeys(zoneKey) || []; } catch (_) {}
+          try { _partKeys = require("../../services/battle/zoneBattleService").getWorldBossPartKeys(zoneKey) || []; } catch (_) {}
           const _aliveKeys = _partKeys.filter((k) => Number(_partsHp[k] || 0) > 0);
           // 診斷:記錄每次「部位已破擋下」的當下伺服器狀態,日後若有 HP>0 卻被擋的反例可直接從 log 抓鐵證。
           console.warn(`[WorldBossPart] blocked: zone=${zoneKey} part=${worldBossPart} serverHp=${_partHpNow} aliveKeys=${JSON.stringify(_aliveKeys)} partsHp=${JSON.stringify(_partsHp)}`);
@@ -3308,7 +3308,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           }
           // 還有其他活著的部位 → 明確告知該部位已破,附上最新部位血量供前端刷新 + 重選
           const maxMap = stateForCombat.worldBossPartsMaxHp || {};
-          const { getWorldBossPartWeakness: _wbWeakB, getHellfangFlipRemainingMs: _wbFlipMsB } = require("../../bot/handlers/monsterZoneHandlers");
+          const { getWorldBossPartWeakness: _wbWeakB, getHellfangFlipRemainingMs: _wbFlipMsB } = require("../../services/battle/zoneBattleService");
           const _wbNowB = Date.now();
           const partsForResp = _partKeys
             .filter((k) => Object.prototype.hasOwnProperty.call(_partsHp, k))
@@ -3340,7 +3340,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
         // 牙狼分階段(王側)：剩 3~2 部位「狂亂」→ 迴避大增 + 王攻擊減半（同 DC）
         if (zoneKey === "hellfire_depths") {
-          const ph = require("../../bot/handlers/monsterZoneHandlers").hellfangBossPhaseMods(stateForCombat);
+          const ph = require("../../services/battle/zoneBattleService").hellfangBossPhaseMods(stateForCombat);
           if (ph.dodgeBonus || ph.dmgMult !== 1) {
             battleMonsterStats = {
               ...battleMonsterStats,
@@ -3448,7 +3448,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let webBossVulnMult = 1;
       if (isWorldBoss && zoneKey === "hellfire_depths") {
         try {
-          webBossVulnMult = require("../../bot/handlers/monsterZoneHandlers")
+          webBossVulnMult = require("../../services/battle/zoneBattleService")
             .hellfangDamageMult(stateForCombat, worldBossPart, pStats.weaponType, Date.now()).mult;
         } catch (_) { webBossVulnMult = 1; }
       }
@@ -3462,7 +3462,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const stunStateBefore = _turtleStunSync?.stunState || (stunGaugeKey ? await _dsg.read(stunGaugeKey, zoneKey).catch(() => null) : null);
       const teamStunOn = Boolean(stunStateBefore?.stunned);
       if (isWorldBoss && zoneKey === _tt.ZONE) {
-        const _mzh = require("../../bot/handlers/monsterZoneHandlers");
+        const _mzh = require("../../services/battle/zoneBattleService");
         const _tpl = _mzh.createWorldBossPartHpTemplate(monster.calc.maxHp, zoneKey);
         const _totMax = Object.values(_tpl).reduce((s, v) => s + v, 0);
         const _partsHp = stateForCombat?.worldBossPartsHp || {};
@@ -3667,7 +3667,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let fcMirrorTotal = 0; // 炎圈鏡射到其他部位的總傷（rewardLines 在後面才宣告，這裡先存量）
       let hellfangEvent = null; // 牙狼適應性狀態變化(給戰報文案)
       let hutaoTriggeredEvent = null;
-      const _mzHellfang = require("../../bot/handlers/monsterZoneHandlers");
+      const _mzHellfang = require("../../services/battle/zoneBattleService");
       if (isWorldBoss) {
         try {
           const freshState = await serviceContext.monsterService.getState(zoneKey);
@@ -3803,7 +3803,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           worldBossSettled = true;
 
           // 部位血條（回傳給前端即時更新）
-          const { getWorldBossPartKeys: wbPartKeys, getWorldBossPartWeakness: _wbWeak, getHellfangFlipRemainingMs: _wbFlipMs } = require("../../bot/handlers/monsterZoneHandlers");
+          const { getWorldBossPartKeys: wbPartKeys, getWorldBossPartWeakness: _wbWeak, getHellfangFlipRemainingMs: _wbFlipMs } = require("../../services/battle/zoneBattleService");
           const _wbNow = Date.now();
           worldBossPartsForResp = wbPartKeys(zoneKey)
             .filter((k) => Object.prototype.hasOwnProperty.call(nextPartsHp, k))
@@ -3851,7 +3851,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
 
       // 蝯?
-      const { handleMonsterKill, _republishPanel, _republishPanelWithRankingDebounce, MAX_ROUNDS } = require("../../bot/handlers/monsterZoneHandlers");
+      const { handleMonsterKill, _republishPanel, _republishPanelWithRankingDebounce, MAX_ROUNDS } = require("../../services/battle/zoneBattleService");
       let rewardLines = [];
       let mHp = syncResult.monsterHp;
       // 排行榜要顯示「本場剛打的這隻怪」最終貢獻(含本場傷害);擊殺後王/怪雖換成下一隻,
@@ -4329,7 +4329,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         zoneTurtle: await (async () => {
           if (!isWorldBoss || zoneKey !== _tt.ZONE) return null;
           try {
-            const _mzh2 = require("../../bot/handlers/monsterZoneHandlers");
+            const _mzh2 = require("../../services/battle/zoneBattleService");
             const _fs2 = await serviceContext.monsterService.getState(zoneKey), _now2 = Date.now();
             await require("../../shared/turtleStunSync").reconcileTurtleCastFromStunGauge(_fs2, zoneKey, _now2);
             const _tpl2 = _mzh2.createWorldBossPartHpTemplate(monster.calc.maxHp, zoneKey);
@@ -4476,7 +4476,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         ensureWorldBossPartState,
         getWorldBossPartKeys,
         sumWorldBossPartHp
-      } = require("../../bot/handlers/monsterZoneHandlers");
+      } = require("../../services/battle/zoneBattleService");
 
       const DRAGON_KING_ZONE = "dragon_king_lair";
       const excludedIds = await getLeaderboardExcludedPlayerIds();
@@ -4582,7 +4582,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const maxMap = partState.worldBossPartsMaxHp;
 
         const partKeys = getWorldBossPartKeys(zoneKey);
-        const { getWorldBossPartWeakness: _wbWeakS, getHellfangFlipRemainingMs: _wbFlipMsS } = require("../../bot/handlers/monsterZoneHandlers");
+        const { getWorldBossPartWeakness: _wbWeakS, getHellfangFlipRemainingMs: _wbFlipMsS } = require("../../services/battle/zoneBattleService");
         const _wbNowS = Date.now();
         const parts = partKeys
           .filter((k) => Object.prototype.hasOwnProperty.call(hpMap, k))

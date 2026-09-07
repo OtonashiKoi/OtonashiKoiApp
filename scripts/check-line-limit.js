@@ -18,6 +18,7 @@ const legacyGrowthPercent = Math.max(
 function walk(dir, results = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory() && entry.name === ".app-releases") continue;
     if (entry.isDirectory()) {
       walk(fullPath, results);
       continue;
