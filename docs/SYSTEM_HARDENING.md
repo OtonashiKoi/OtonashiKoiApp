@@ -55,9 +55,9 @@ npm run deploy:no-build
 
 建置時產生 `dist/source-build.json`，保存前端 commit、工作目錄是否有未提交變動與建置時間。`--skip-build` 若缺少來源資訊會拒絕發布。
 
-發布會在主 repository 的 `src/web/public/.app-releases/<buildId>/` 準備完整版本，驗證檔案雜湊與 index 引用資源，再切換 `app` 符號連結。舊版 hash assets 保留，避免尚未重整的頁面載入舊 lazy chunk 時失敗。`build-info.json` 同時記錄前端建置資訊、發布時後端 commit 與 dirty 狀態；它不是後端二進位快照，也不是已提交版本的保證。
+發布會在主 repository 的 `src/web/public/.app-releases/<buildId>/` 準備完整版本，驗證檔案雜湊與 index 引用資源，再切換 `.app-current` 符號連結。舊版 hash assets 保留，避免尚未重整的頁面載入舊 lazy chunk 時失敗。`build-info.json` 同時記錄前端建置資訊、發布時後端 commit 與 dirty 狀態；它不是後端二進位快照，也不是已提交版本的保證。
 
-第一次把既有實體 `app/` 轉為連結時，舊目錄移入 `legacy-*` 保存；這次目錄遷移不是單一步驟切換。之後版本之間使用原子連結替換。版本目錄不自動刪除。
+首次發布先把既有 `app/` 複製為可回復版本，原有 Git 追蹤檔案保持原位。API 優先服務 `.app-current`，尚未部署的 checkout 使用 `app/` 後備。版本之間使用原子連結替換；入口與版本目錄不提交 Git，也不自動刪除。
 
 回復指定版本：
 

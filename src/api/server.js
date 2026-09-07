@@ -224,12 +224,13 @@ function createApiServer(discordClient) {
   });
 
   // === Web 前端 SPA 靜態服務 ===
-  // equipmentGAME-app 經過 `npm run deploy` 後產出在 src/web/public/app/
+  // equipmentGAME-app 以 .app-current 指向已驗證版本；app/ 保留為 checkout 後備。
   // 提供：
   //   /privacy.html / /terms.html → 原本就有的靜態檔（serve 自 src/web/public/）
   //   /assets/* / /index.html / 等 → web app build 產物
   //   /(其他任何 SPA 路徑) → 回 index.html（HTML5 history 路由）
-  const webAppDir = path.resolve(__dirname, "../web/public/app");
+  const releasePointer = path.resolve(__dirname, "../web/public/.app-current");
+  const webAppDir = fs.existsSync(releasePointer) ? releasePointer : path.resolve(__dirname, "../web/public/app");
   if (fs.existsSync(webAppDir)) {
     // 靜態檔：assets / favicon 等
     app.use(express.static(webAppDir, {

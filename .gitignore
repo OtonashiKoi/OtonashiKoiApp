@@ -55,3 +55,6 @@ temp_*
 # Verified frontend release directories and deployment pointers
 src/web/public/.app-releases/
 src/web/public/app.next-*
+
+/src/web/public/.app-current
+/src/web/public/.app-current.next-*
