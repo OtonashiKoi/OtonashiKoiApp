@@ -657,7 +657,7 @@ class WeeklyQuestService {
       : await this.listDefinitions(c);
     const context = shared.context || await this._getPlayerQuestContext(discordId, { definitions: allDefs });
     const playerLevel = context.level;
-    // 未達解鎖條件一律隱藏（含職業任務）。
+    // 未達等級等解鎖條件仍隱藏；已達等級的一轉屬性不足保留差額提示。
     // 2026-08-09 使用者定案：原本職業任務會以「🔒 Lv.10 解鎖」的鎖定樣式顯示出來，
     // 改成沒解鎖就完全不出現，等條件到了才長出來。
     const defs = allDefs.filter((q) => {
@@ -772,7 +772,7 @@ class WeeklyQuestService {
       // 隱藏任務（unlockProgressAtLeast / 連續打卡）同一規則，條件到了才長出來。
       // 過濾放在 map 之後而不是 defs：completionByType 那類「完成 N 個任務」的分母仍以
       // 完整清單計算，不會因為玩家等級低就縮水。
-      // 例外：已領取的仍保留，讓玩家看得到自己完成過什麼。
+      // 例外：已領取及一轉屬性差額提示仍保留。
       .filter((q) => !q.locked || q.claimed || Boolean(q.jobRequirements));
   }
 
