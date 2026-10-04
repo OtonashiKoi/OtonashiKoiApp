@@ -464,8 +464,9 @@ class WeeklyQuestService {
   _isQuestVisibleForPlayer(quest, context) {
     if (!quest?.enabled) return false;
     const level = Number(context?.level || 1);
-    if (quest.levelLimit && quest.levelLimit > level) return false;
-    if (quest.unlockLevel && level < Number(quest.unlockLevel || 0)) return false;
+    const firstJob = firstJobRequirements(quest, context);
+    if (!firstJob && quest.levelLimit && quest.levelLimit > level) return false;
+    if (!firstJob && quest.unlockLevel && level < Number(quest.unlockLevel || 0)) return false;
     // 隱藏 gate：未集齊指定道具(如全部輔助職徽章) → 這任務完全不顯示
     if (!this._hasAllRequiredItems(quest, context)) return false;
     if (!this._passesT2Gate(quest, context)) return false;
@@ -482,7 +483,8 @@ class WeeklyQuestService {
   //   current = 該任務的「原始累積值」(未做解鎖後重數的偏移)
   _isQuestUnlocked(quest, current, context) {
     if (!this._isQuestVisibleForPlayer(quest, context)) return false;
-    if (firstJobRequirements(quest, context)?.missing > 0) return false;
+    const firstJob = firstJobRequirements(quest, context);
+    if (firstJob && (firstJob.missing > 0 || firstJob.level < firstJob.requiredLevel)) return false;
     if (Number(quest.unlockProgressAtLeast) > 0 && Number(current || 0) < Number(quest.unlockProgressAtLeast)) return false;
     if (Number(quest.unlockCheckinStreak) > 0 && Number(context?.checkinStreak || 0) < Number(quest.unlockCheckinStreak)) return false;
     return true;
@@ -657,7 +659,7 @@ class WeeklyQuestService {
       : await this.listDefinitions(c);
     const context = shared.context || await this._getPlayerQuestContext(discordId, { definitions: allDefs });
     const playerLevel = context.level;
-    // 未達等級等解鎖條件仍隱藏；已達等級的一轉屬性不足保留差額提示。
+    // 一轉未達等級或屬性門檻仍顯示條件；其他任務沿用隱藏規則。
     // 2026-08-09 使用者定案：原本職業任務會以「🔒 Lv.10 解鎖」的鎖定樣式顯示出來，
     // 改成沒解鎖就完全不出現，等條件到了才長出來。
     const defs = allDefs.filter((q) => {

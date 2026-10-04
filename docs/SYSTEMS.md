@@ -371,3 +371,5 @@ OneComme 雀魂自訂模板 `otonashi-mahjong-chat` 透過公開 viewer-profile 
 ### 圖鑑收集效果與獎勵展示
 
 Web 寵物與卡片圖鑑左頁在收集進度下常駐展示里程碑。寵物列出分數門檻、永久效果、称號及達成狀態，同類加成取最高值、不相加，資料來源為 `PetService.getDex` 的 milestones／bonus。卡片列出總收集門檻、各區及主線角色卡完整收藏獎勵，显示金幣、道具、稱號及可領／已領狀態，沿用現有圖鑑領獎API。
+
+對外雀魂聊天室使用 `/static/chat.html?theme=mahjong&key=聊天室金鑰`，透過既有伺服器 SSE 中繼接收留言，其他電腦不需啟動 OneComme。`preview=1` 可免金鑰預覽。使用 `chat-mahjong.css` 適配對外聊天室 DOM，與 RO 共用會員／已穿戴七稱號資料及楓葉整框判定；本機 OneComme 模板仍保留。

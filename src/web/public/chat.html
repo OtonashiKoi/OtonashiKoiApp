@@ -625,6 +625,14 @@
     }
   </style>
   <link rel="stylesheet" href="/static/chat-ro.css?v=20261004-maple-frame">
+  <script>
+    if (new URLSearchParams(location.search).get('theme') === 'mahjong') {
+      const skin = document.createElement('link');
+      skin.rel = 'stylesheet';
+      skin.href = '/static/chat-mahjong.css?v=20261004-public-v1';
+      document.head.appendChild(skin);
+    }
+  </script>
 </head>
 <body>
   <div id="ws-dot"></div>
