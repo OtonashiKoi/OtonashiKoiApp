@@ -29,6 +29,8 @@ function createGameProgress(playerId) {
   return {
     playerId,
     level: 1,
+    levelStartedAt: now,
+    levelUpHistory: [],
     exp: 0,
     job: "Novice",
     jobLevel: 1,

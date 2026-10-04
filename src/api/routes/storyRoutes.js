@@ -19,12 +19,10 @@ const { ok, fail } = require("../../shared/response");
 const { requireAuth } = require("./requireAuth");
 const config = require("../../config");
 const { listHubNpcs } = require("../../services/story/hubNpcService");
+const { calculateBattleTickMs } = require("../../shared/battleTiming");
 
 // 與一般討伐／單人王相同的 AGI 回合節奏；劇情戰也必須把實際 tickMs 交給共用戰鬥畫面。
-function calculateBattleTickDelay(agi = 1) {
-  const capped = Math.min(Math.max(1, Number(agi) || 1), 40);
-  return Math.round(1500 - ((capped - 1) / 39) * 1000);
-}
+const calculateBattleTickDelay = calculateBattleTickMs;
 
 const upload = multer({
   dest: "/tmp/story-uploads/",

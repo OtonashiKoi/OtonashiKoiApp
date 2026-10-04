@@ -71,7 +71,10 @@ const config = {
     spamAnnounceChannelId: process.env.SPAM_ANNOUNCE_CHANNEL_ID || "1292448143946027039",
     // attachments 檢查已取消（不新增 ATTACHMENT_LIMIT）
     mentionPerMsgLimit: Number(process.env.MENTION_PER_MSG_LIMIT || 5),
-    consecutiveMentionLimit: Number(process.env.CONSECUTIVE_MENTION_LIMIT || 4)
+    consecutiveMentionLimit: Number(process.env.CONSECUTIVE_MENTION_LIMIT || 4),
+    // 短時間跨多個頻道發文，視為帳號被盜或機器人式洗版。
+    crossChannelBurstLimit: Number(process.env.CROSS_CHANNEL_BURST_LIMIT || 4),
+    crossChannelBurstWindowMs: Number(process.env.CROSS_CHANNEL_BURST_WINDOW_MS || 30_000)
   },
   // 遊戲參數（可微調）
   game: {

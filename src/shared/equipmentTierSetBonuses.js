@@ -1,6 +1,7 @@
 "use strict";
+const { activeEquipment } = require("./anchorFeature");
 
-// 階級套裝（D/C/B/A）：按身上「同階裝備件數」給通用加成，與具名套裝(equipmentSetBonuses.js)「同時生效、疊加」。
+// 階級套裝（D/C/B/A/S）：按身上「同階裝備件數」給通用加成，與具名套裝(equipmentSetBonuses.js)「同時生效、疊加」。
 // 一件裝備會同時計入「它的階級套」與「它的具名套」——兩邊都吃到。
 
 const TIER_SET_SLOTS = [
@@ -38,6 +39,11 @@ const TIER_SET_TIERS = {
     { count: 3, desc: "最終傷害 +5%", finalDamagePct: 5 },
     { count: 5, desc: "對 Boss 傷害 +10%", bossDamagePct: 10 },
     { count: 7, desc: "掉落率 +10%", dropPct: 10 }
+  ],
+  S: [
+    { count: 3, desc: "最終傷害 +8%", finalDamagePct: 8 },
+    { count: 5, desc: "對 Boss 傷害 +12%", bossDamagePct: 12 },
+    { count: 7, desc: "爆擊傷害 +15%", critDamagePct: 15 }
   ]
 };
 
@@ -47,7 +53,7 @@ const NUMERIC_KEYS = [
 ];
 
 const EMPTY_BONUSES = Object.freeze({
-  tierCounts: Object.freeze({ D: 0, C: 0, B: 0, A: 0 }),
+  tierCounts: Object.freeze({ D: 0, C: 0, B: 0, A: 0, S: 0 }),
   stats: Object.freeze({ str: 0, int: 0, dex: 0 }),
   hitPct: 0,
   dodgePct: 0,
@@ -63,7 +69,8 @@ const EMPTY_BONUSES = Object.freeze({
 
 // 身上各階裝備件數。與具名套裝「同時計入」：不再排除帶 setKey 的件（一件同時算階級套與具名套）。
 function countEquippedTiers(equipped = {}) {
-  const counts = { D: 0, C: 0, B: 0, A: 0 };
+  equipped = activeEquipment(equipped);
+  const counts = { D: 0, C: 0, B: 0, A: 0, S: 0 };
   if (!equipped || typeof equipped !== "object") return counts;
 
   for (const slot of TIER_SET_SLOTS) {
@@ -106,8 +113,8 @@ function getEquipmentTierSetBonuses(equipped = {}) {
 function getTierSetInfo(equipped = {}) {
   const tierCounts = countEquippedTiers(equipped);
   const out = [];
-  const LABEL = { D: "D 階套裝", C: "C 階套裝", B: "B 階套裝", A: "A 階套裝" };
-  for (const tier of ["D", "C", "B", "A"]) {
+  const LABEL = { D: "D 階套裝", C: "C 階套裝", B: "B 階套裝", A: "A 階套裝", S: "S 階套裝" };
+  for (const tier of ["D", "C", "B", "A", "S"]) {
     const count = tierCounts[tier] || 0;
     if (count <= 0) continue;
     out.push({

@@ -171,7 +171,17 @@ class PetService {
       .slice()
       .sort((a, b) => (a.seq || 0) - (b.seq || 0))
       .map((sp) => {
-        const tiers = PET_TIERS.map((t) => ({ tier: t, collected: Boolean(petDex[`${sp.id}:${t}`]) }));
+        const tiers = PET_TIERS.map((t) => {
+          const collected = Boolean(petDex[`${sp.id}:${t}`]);
+          return {
+            tier: t, collected,
+            // Reuse the live pet summary; uncollected tiers keep their effects hidden.
+            traits: collected ? this._speciesTraits({
+              stage: "grown", rarity: t, eggType: sp.eggType || "dragon",
+              gatherMod: sp.gather, combatPassives: sp.combatPassives
+            }) : null
+          };
+        });
         const any = tiers.some((t) => t.collected);
         return {
           id: sp.id, seq: sp.seq || 0, eggType: sp.eggType || "dragon",

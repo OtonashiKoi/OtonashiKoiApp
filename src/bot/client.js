@@ -668,10 +668,10 @@ async function checkSpam(message) {
 
   const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
   if (!member) return;
-  if (await serviceContext.accessControlService.isDiscordPlayerWhitelisted(member)) return;
-  if (member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return;
+  if (await isAdminMember(member)) return;
 
-  // @everyone / @here 標註全體 → 直接禁言（管理員/白名單已於上方豁免）
+  // 一般玩家身分不豁免防洗版規則，避免被盜的既有玩家帳號繞過保護；只有管理員豁免。
+  // @everyone / @here 標註全體 → 直接禁言。
   if (message.mentions?.everyone) {
     await doMuteAndAnnounce(member, message, "亂用 @everyone／@here 標註全體", `${message.guild.id}:${message.author.id}`);
     return;
@@ -688,7 +688,15 @@ async function checkSpam(message) {
 
   let state = spamTracker.get(key);
   if (!state) {
-    state = { lastMsg: content, count: 1, timestamps: [now], lastMentionedId: null, consecutiveMentionCount: 0, lastSeenAt: now };
+    state = {
+      lastMsg: content,
+      count: 1,
+      timestamps: [now],
+      recentMessages: [],
+      lastMentionedId: null,
+      consecutiveMentionCount: 0,
+      lastSeenAt: now
+    };
     spamTracker.set(key, state);
   } else {
     state.lastSeenAt = now;
@@ -700,6 +708,20 @@ async function checkSpam(message) {
       state.count = 1;
       state.lastMsg = content;
     }
+  }
+
+  // 不限文字、圖片或帳號名稱：在設定時間內跨多個文字頻道發文即視為瞬間洗版。
+  const crossChannelWindowMs = Math.max(1_000, Number(moderation.crossChannelBurstWindowMs || 30_000));
+  const crossChannelLimit = Math.max(2, Number(moderation.crossChannelBurstLimit || 4));
+  state.recentMessages = (state.recentMessages || []).filter((entry) => now - entry.at < crossChannelWindowMs);
+  state.recentMessages.push({ at: now, channelId: message.channelId, message });
+  const recentChannelCount = new Set(state.recentMessages.map((entry) => entry.channelId)).size;
+  if (recentChannelCount >= crossChannelLimit) {
+    const messagesToDelete = state.recentMessages.map((entry) => entry.message);
+    await Promise.allSettled(messagesToDelete.map((recentMessage) => recentMessage.delete()));
+    const reason = `瞬間洗版：${Math.round(crossChannelWindowMs / 1000)} 秒內跨 ${recentChannelCount} 個文字頻道發言`;
+    await doMuteAndAnnounce(member, message, reason, key);
+    return;
   }
 
   // 單則訊息 mention 數量檢查（若超過設定則立即處理）

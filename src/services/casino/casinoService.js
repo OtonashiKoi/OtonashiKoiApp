@@ -1,6 +1,10 @@
+const { isUnavailableEquipment } = require("../../shared/equipmentAvailability");
+const { ANCHORS_ENABLED } = require("../../shared/anchorFeature");
 "use strict";
 
 const crypto = require("crypto");
+const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
+const { withPlayerProgressLock } = require("../progress/progressLocks");
 const {
   ROUND_DURATION_MS, LOCK_BEFORE_END_MS, WHEEL_SLOTS, COLORS, COLOR_META,
   BET_MIN, BET_MAX, PAYOUT_CAP, DROP_POOL, getBetTier, isBroadcastWorthy,
@@ -74,9 +78,7 @@ class CasinoService {
     if (state?.currentRound && state.currentRound.status !== "settled") {
       // PM2 重啟恢復：若已過 endAt 則先結算
       if (now >= state.currentRound.endAt) {
-        await this._settleRound(state.currentRound.roundId).catch((err) => {
-          console.warn("[casino] recover-settle failed:", err?.message);
-        });
+        await this._settleRound(state.currentRound.roundId);
         await this._openNextRound();
       }
       return;
@@ -109,7 +111,8 @@ class CasinoService {
     this._notify("round:open", { round });
   }
 
-  async _tick() {
+  async _tick() { return withPlayerProgressLock("casino:actions", () => this._tickImpl()); }
+  async _tickImpl() {
     const state = await this.casinoRepository.getState();
     const cur = state?.currentRound;
     if (!cur) return;
@@ -121,14 +124,12 @@ class CasinoService {
       if (locked) this._notify("round:lock", { roundId: cur.roundId });
       return;
     }
+    if (cur.status === "settling") { await this._settleRound(cur.roundId); await this._openNextRound(); return; }
     if ((cur.status === "open" || cur.status === "locked") && now >= cur.endAt) {
       const settling = await this.casinoRepository.transitionStatus(cur.roundId, cur.status, "settling");
       if (!settling) return;
-      try {
-        await this._settleRound(cur.roundId);
-      } finally {
-        await this._openNextRound();
-      }
+      await this._settleRound(cur.roundId);
+      await this._openNextRound();
     }
   }
 
@@ -146,10 +147,11 @@ class CasinoService {
     return this.casinoRepository.listBetsByRoundAndPlayer(roundId, discordId);
   }
 
-  async placeBet({ discordId, displayName, color, amount }) {
+  async placeBet(input) { return withPlayerProgressLock("casino:actions", () => this._placeBet(input)); }
+  async _placeBet({ discordId, displayName, color, amount }) {
     if (!COLORS.includes(color)) throw new Error("無效的下注顏色");
-    const intAmount = Math.floor(Number(amount));
-    if (!Number.isFinite(intAmount) || intAmount < BET_MIN) throw new Error(`下注金額需 ≥ ${BET_MIN}`);
+    const intAmount = Number(amount);
+    if (!Number.isSafeInteger(intAmount) || intAmount < BET_MIN) throw new Error(`下注金額需 ≥ ${BET_MIN}`);
     if (intAmount > BET_MAX) throw new Error(`下注金額需 ≤ ${BET_MAX}`);
 
     const round = await this.getCurrentRound();
@@ -162,40 +164,57 @@ class CasinoService {
       throw new Error("本輪你已經下注囉！下好離手、不能更改或加注，請等下一輪。");
     }
 
-    // 扣金幣（rewardService 已含 wallet 存量驗證）
-    await this.rewardService.grantCurrency({
-      discordId,
-      displayName,
-      currencyType: "gold",
-      amount: -intAmount,
-      source: CURRENCY_SOURCES.CASINO_BET,
-      // 帶 discordId 確保每人每輪唯一，避免去重把不同玩家的扣款誤判為重複
-      sourceRef: `round:${round.roundId}:${color}:${discordId}`,
-    });
-
-    // 寫下注紀錄、更新本輪統計
-    const betId = await this.casinoRepository.appendBet({
-      roundId: round.roundId,
-      discordId,
-      displayName: displayName || discordId,
-      color,
-      amount: intAmount,
-      placedAt: Date.now(),
-    });
-    await this.casinoRepository.incrementRoundTotals(round.roundId, color, intAmount);
-
+    const db = await getMongoDb(), opId = `casino:${round.roundId}:${discordId}`;
+    const operations = db.collection("casinoBetOperations");
+    await operations.updateOne({ _id: opId }, { $setOnInsert: { roundId: round.roundId, discordId, color, amount: intAmount, displayName: displayName || discordId, placedAt: Date.now(), debitRef: `casino-bet:${round.roundId}:${discordId}:${crypto.randomUUID()}` } }, { upsert: true });
+    await operations.updateOne({ _id: opId, rejected: true }, { $set: { rejected: false, color, amount: intAmount, displayName: displayName || discordId, debitRef: `casino-bet:${round.roundId}:${discordId}:${crypto.randomUUID()}`, placedAt: Date.now() } });
+    const op = await operations.findOne({ _id: opId });
+    if (op.color !== color || op.amount !== intAmount) throw new Error("本輪已有另一筆待完成下注，請重試原下注");
+    try {
+      await this.rewardService.grantCurrency({ discordId, displayName, currencyType: "gold", amount: -intAmount,
+        source: CURRENCY_SOURCES.CASINO_BET, sourceRef: op.debitRef });
+    } catch (error) {
+      if (error.code === "INSUFFICIENT_BALANCE") await operations.updateOne({ _id: opId }, { $set: { rejected: true } });
+      throw error;
+    }
+    const betId = opId;
+    await db.collection("casinoBets").updateOne({ _id: betId }, { $setOnInsert: { ...op, createdAt: new Date(op.placedAt).toISOString() } }, { upsert: true });
+    await db.collection("casinoState").updateOne({ _id: "default", "currentRound.roundId": round.roundId, "currentRound.betReceipts": { $ne: opId } },
+      { $inc: { [`currentRound.totals.${color}`]: intAmount, "currentRound.betCount": 1 }, $addToSet: { "currentRound.betReceipts": opId } });
     this._notify("bet:placed", { roundId: round.roundId, discordId, color, amount: intAmount });
     return { betId, roundId: round.roundId, color, amount: intAmount };
   }
 
   // ─── 結算 ─────────────────────────────────────────────────────────────
-  async _settleRound(roundId) {
-    const slotIdx = crypto.randomInt(0, WHEEL_SLOTS.length);
+  async _settleRound(roundId) { return withPlayerProgressLock(`casino:settle:${roundId}`, () => this._settleRoundImpl(roundId)); }
+  async _settleRoundImpl(roundId) {
+    const db = await getMongoDb();
+    const rounds = db.collection("casinoRounds");
+    let saved = await rounds.findOne({ roundId });
+    if (saved?.status === "settled" || (saved?.settledAt && !saved.status)) return saved;
+    if (!saved || !Number.isInteger(saved.slotIdx)) {
+      await rounds.updateOne({ roundId }, { $setOnInsert: { slotIdx: crypto.randomInt(0, WHEEL_SLOTS.length), status: "settling" } }, { upsert: true });
+      saved = await rounds.findOne({ roundId });
+    }
+    const slotIdx = saved.slotIdx;
     const slot = WHEEL_SLOTS[slotIdx];
     const resultColor = slot.color;
     const resultMult = slot.mult;
     const settledAt = Date.now();
 
+    // 補回「已扣款、下注紀錄尚未寫成」的中斷；輪替前完成原下注。
+    const intents = await db.collection("casinoBetOperations").find({ roundId, rejected: { $ne: true } }).toArray();
+    for (const op of intents) {
+      if (await db.collection("casinoBets").findOne({ _id: op._id })) continue;
+      try {
+        await this.rewardService.grantCurrency({ discordId: op.discordId, displayName: op.displayName, currencyType: "gold", amount: -op.amount,
+          source: CURRENCY_SOURCES.CASINO_BET, sourceRef: op.debitRef });
+      } catch (error) {
+        if (error.code === "INSUFFICIENT_BALANCE") { await db.collection("casinoBetOperations").updateOne({ _id: op._id }, { $set: { rejected: true } }); continue; }
+        throw error;
+      }
+      await db.collection("casinoBets").updateOne({ _id: op._id }, { $setOnInsert: { ...op, createdAt: new Date(op.placedAt).toISOString() } }, { upsert: true });
+    }
     const bets = await this.casinoRepository.listBetsByRound(roundId);
     let totalBet = 0, totalPayout = 0;
     const playerSummaries = new Map(); // discordId → {bets, totalBet, totalPay, hits, drops}
@@ -221,8 +240,9 @@ class CasinoService {
         ps.totalPay += payout;
         ps.hits.push({ color: bet.color, mult: resultMult, payout });
         // 抽掉落
-        drop = this._rollDrop(bet.amount);
-        if (drop) ps.drops.push({ ...drop, betAmount: bet.amount });
+        if (Object.prototype.hasOwnProperty.call(bet, "resolvedDrop")) drop = bet.resolvedDrop;
+        else { drop = this._rollDrop(bet.amount); await db.collection("casinoBets").updateOne({ _id: bet._id }, { $set: { resolvedDrop: drop } }); }
+        if (drop) ps.drops.push({ ...drop, betAmount: bet.amount, receipt: `casino-drop:${roundId}:${bet.discordId}:${bet._id}` });
       }
       totalPayout += payout;
 
@@ -248,17 +268,12 @@ class CasinoService {
           source: CURRENCY_SOURCES.CASINO_PAYOUT,
           // 帶 discordId 確保每人每輪唯一，避免去重把多名中獎者只發給第一位
           sourceRef: `round:${roundId}:${ps.discordId}`,
-        }).catch((err) => {
-          console.warn(`[casino] payout failed for ${ps.discordId}:`, err?.message);
         });
       }
       // 道具入帳
       const grantedItems = [];
       for (const d of ps.drops) {
-        const grantedName = await this._grantDropToPlayer(ps.discordId, d).catch((err) => {
-          console.warn(`[casino] grant drop failed:`, err?.message);
-          return null;
-        });
+        const grantedName = await this._grantDropToPlayer(ps.discordId, d);
         if (grantedName) grantedItems.push({ ...d, itemName: grantedName });
       }
       // 命運之輪唯一大獎：每位有下注者（不論該輪輸贏）都擲 3% 機率
@@ -330,7 +345,9 @@ class CasinoService {
     await this.casinoRepository.pushRecentResult({
       roundId, color: resultColor, mult: resultMult, at: settledAt,
     });
-    await this.casinoRepository.transitionStatus(roundId, "settling", "settled");
+    await rounds.updateOne({ roundId }, { $set: { status: "settled" } });
+    const state = await this.casinoRepository.getState();
+    if (state?.currentRound?.roundId === roundId) await this.casinoRepository.transitionStatus(roundId, state.currentRound.status, "settled");
 
     this._notify("round:settled", {
       roundId, resultColor, resultMult, totalBet, totalPayout,
@@ -353,6 +370,12 @@ class CasinoService {
   }
 
   async _grantDropToPlayer(discordId, drop) {
+    return withPlayerProgressLock(discordId, async () => {
+      for (let i = 0; i < 8; i++) { try { return await this._grantDropImpl(discordId, drop); } catch (e) { if (e.message !== "casino-backpack-conflict") throw e; } }
+      throw new Error("賭場背包儲存忙碌，等待重試結算");
+    });
+  }
+  async _grantDropImpl(discordId, drop) {
     // 找出符合條件的物品池
     const all = await this.itemRepository.listAll
       ? await this.itemRepository.listAll()
@@ -363,13 +386,19 @@ class CasinoService {
       candidates = all.filter((it) => it.itemType === "consumable" && it.tier === drop.tier && /寶石|強化石/.test(it.name || ""));
     } else if (drop.kind === "equipment") {
       candidates = all.filter((it) => it.itemType === "equipment" && it.tier === drop.tier
-        && it.equipSlot && !/^special_/.test(it.equipSlot) && it.equipSlot !== "job_eq");
+        && it.equipSlot && !/^special(?:_|$)/.test(it.equipSlot) && !it.monsterCardOf && !["job_eq", "title_eq", "anchor"].includes(it.equipSlot));
     } else if (drop.kind === "card") {
       candidates = all.filter((it) => it.tier === drop.tier
-        && it.equipSlot && /^special_/.test(it.equipSlot)
+        && (it.monsterCardOf || it.itemType === "monster_card") && !it.isNpcCard
         && !/boss|Boss|BOSS/.test(String(it.cardCategory || ""))
-        && !/王$|魔王/.test(it.name || ""));
+        && !/王.*卡|魔王/.test(it.name || ""));
     }
+    if (drop.kind === "card") {
+      const db = await getMongoDb(), bosses = await db.collection("monsters").find({ isBoss: true }).toArray();
+      const bossIds = new Set(bosses.flatMap(m => [m.id, m._id, m.name].filter(Boolean).map(String)));
+      candidates = candidates.filter(item => !bossIds.has(String(item.monsterCardOf)));
+    }
+    candidates = candidates.filter((item) => item.enabled !== false && !item.previewOnly && !item.limitedEvent && !isUnavailableEquipment(item));
     if (!candidates.length) {
       console.warn(`[casino] no candidates for drop ${drop.key}`);
       return null;
@@ -377,7 +406,9 @@ class CasinoService {
     const item = candidates[crypto.randomInt(0, candidates.length)];
 
     const progress = await this.progressRepository.findByPlayerId(discordId);
-    if (!progress) { console.warn(`[casino] no progress for ${discordId}`); return null; }
+    if (!progress) throw new Error(`找不到賭場玩家 ${discordId}`);
+    const prevUpdatedAt = progress.updatedAt;
+    if (drop.receipt && (progress.casinoDropReceipts || []).includes(drop.receipt)) return "已領取";
     if (!Array.isArray(progress.inventory)) progress.inventory = [];
 
     progress.inventory.push({
@@ -399,11 +430,13 @@ class CasinoService {
       tier: item.tier || null,
       // 帶上怪物卡技能欄位，否則賭盤掉到的卡片會被歸到「特殊」而非「卡片」分類
       monsterCardSkill: item.monsterCardSkill || null,
+      monsterCardOf: item.monsterCardOf || null,
       source: "casino_wheel",
       obtainedAt: new Date().toISOString(),
     });
-    progress.updatedAt = new Date().toISOString();
-    await this.progressRepository.save(progress);
+    if (drop.receipt) progress.casinoDropReceipts = [...(progress.casinoDropReceipts || []), drop.receipt];
+    progress.updatedAt = new Date(Math.max(Date.now(), (Date.parse(prevUpdatedAt) || 0) + 1)).toISOString();
+    if (!await this.progressRepository.saveIfUnchanged(progress, prevUpdatedAt)) throw new Error("casino-backpack-conflict");
     return item.name;
   }
 
@@ -412,6 +445,7 @@ class CasinoService {
    * @returns {Promise<{itemName:string,label:string,jackpot:true}|null>}
    */
   async _tryGrantDiceJackpot(discordId) {
+    if (!ANCHORS_ENABLED) return null;
     if (Math.random() >= DICE_JACKPOT_CHANCE) return null;
     // 原子搶佔：已領過 → claim 回 false → 不發（機率照樣消耗，符合「獲得過不能再獲得」）
     const first = await this.uniqueGrantService.claim(discordId, DICE_JACKPOT_ITEM_ID, "casino_jackpot").catch(() => false);

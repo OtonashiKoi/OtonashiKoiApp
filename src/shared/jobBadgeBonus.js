@@ -1,3 +1,4 @@
+const { isUnavailableEquipment } = require("./equipmentAvailability");
 "use strict";
 /**
  * 領取職業徽章時，附送對應職業的 C 階武器。
@@ -99,6 +100,7 @@ async function pushRewardItemsToInventory({ progress, itemRepository, rewardItem
     if (!itemId) continue;
     const item = await itemRepository.findById(itemId).catch(() => null);
     if (!item) { console.warn(`[questReward] 找不到獎勵道具 ${itemId}，跳過`); continue; }
+    if (isUnavailableEquipment(item)) continue;
     const rewardItemType = item.equipSlot === "job_eq" ? "job_badge" : (item.itemType || "consumable");
     const buildEntry = (stackCount = null) => ({
       uuid: crypto.randomUUID(),

@@ -2,13 +2,13 @@
 
 const { SUPPORT_JOB_KEYS } = require("./zoneBattleState");
 
-function recordQuestForPlayersInBackground(questService, playerIds, type, amount = 1) {
+function recordQuestForPlayersInBackground(questService, playerIds, type, amount = 1, optionsForPlayer = () => ({})) {
   if (!questService || typeof questService.recordProgress !== "function") return;
   const ids = [...new Set((playerIds || []).map(String).filter(Boolean))];
   setImmediate(() => {
     void Promise.allSettled(ids.map((playerId) => (
       typeof questService.recordProgressBatch === "function"
-        ? questService.recordProgressBatch(playerId, { [type]: amount })
+        ? questService.recordProgressBatch(playerId, { [type]: amount }, optionsForPlayer(playerId))
         : questService.recordProgress(playerId, type, amount)
     ))).then((results) => {
       const failed = results.filter((result) => result.status === "rejected");
@@ -22,7 +22,7 @@ function recordQuestForPlayersInBackground(questService, playerIds, type, amount
 async function recordQuestBattleProgress(sc, discordId, outcome, totalDamage, combatStats = null, weaponType = null, zoneKey = null, jobEq = null, damageTaken = 0, healDone = 0, lifestealDone = 0) {
   // 通行證點數：打怪(非落敗)依地圖階級加點
   if (outcome !== "lose" && sc?.passService?.addPointsForKill) {
-    const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", event_1: "A", dragon_king_lair: "S", hellfire_depths: "S" };
+    const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", mistwood: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", event_1: "A", dragon_king_lair: "S", hellfire_depths: "S" };
     sc.passService.addPointsForKill(discordId, PASS_TIER[zoneKey] || "D").catch(() => {});
   }
   const questService = sc?.questService || sc?.weeklyQuestService;

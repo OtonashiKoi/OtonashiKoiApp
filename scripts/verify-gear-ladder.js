@@ -1,0 +1,18 @@
+"use strict";
+require('dotenv').config();
+const fs=require('node:fs');const assert=require('node:assert/strict');const {MongoClient}=require('mongodb');
+const {loadBson,buildPlayer}=require('./verify-normal-progression');
+const {buildContent}=require('./lib/mistwood-content');const {SETTINGS,buildLadderPlan}=require('./lib/gear-ladder');
+const {MonsterService}=require('../src/services/monster/monsterService');const {calcPlayerStats}=require('../src/shared/combatStats');const {runCombatLoop}=require('../src/shared/combatLoop');const {buildBattleOptions}=require('./lib/jobBattleOptions');
+async function verify(monsters,items,runs=100){let seed=20260929;const original=Math.random;Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};try{const service=new MonsterService({findAll:async()=>monsters});const rows=[];
+for(const [zone,t] of Object.entries(SETTINGS)){const mobs=(await service.listMonsters({zone})).filter(m=>m.zone===zone&&!m.isBoss&&!m.allZones);assert.ok(mobs.length,zone);
+for(const [stage,tier] of t.tiers.entries())for(const job of ['swordsman','mage','archer']){const {equipped,attrs}=buildPlayer(items,t.level,tier,job);const stats=calcPlayerStats(attrs,equipped,[],[],{zone});let deaths=0,wins=0,total=0,damage=0,rounds=0;
+for(const m of mobs)for(let n=0;n<runs;n++){const r=runCombatLoop(structuredClone(stats),{...m.calc},m.name,m.maxHp,15,{...buildBattleOptions({equipped,pStats:stats}),playerLevel:t.level,equipped,inventory:[],monsterEquipped:m.equipment||{},monsterElement:m.element,monsterElementLevel:m.elementLevel});deaths+=r.outcome==='lose';wins+=r.finalMonsterHp<=0;total++;damage+=m.maxHp-r.finalMonsterHp;rounds+=Math.min(15,r.nextRound-1);}
+rows.push({zone,level:t.level,stage:['insufficient','entry','comfortable'][stage],tier,job,deathPct:+(100*deaths/total).toFixed(1),killPct:+(100*wins/total).toFixed(1),rounds:+(rounds/total).toFixed(1)});}}
+return rows;}finally{Math.random=original;}}
+async function main(){let items,monsters;const snap=process.argv.find(a=>a.startsWith('--snapshot='))?.slice(11);if(snap){items=loadBson(snap+'/items.bson');monsters=loadBson(snap+'/monsters.bson')}else{const c=await MongoClient.connect(process.env.MONGODB_URI);try{const d=c.db(process.env.MONGODB_DB_NAME);items=await d.collection('items').find({}).toArray();monsters=await d.collection('monsters').find({}).toArray();}finally{await c.close()}}
+if(process.argv.includes('--planned')){if(!monsters.some(m=>m.zone==='mistwood'))monsters.push(...buildContent(items,monsters).mobs);const changes=new Map(buildLadderPlan(monsters,items).map(p=>[p.id,p.values]));monsters=monsters.map(m=>({...m,...changes.get(m.id)}));}
+const rows=await verify(monsters,items);const output=process.argv.find(a=>a.startsWith('--output='))?.slice(9);if(output)fs.writeFileSync(output,JSON.stringify(rows,null,2));
+for(const zone of Object.keys(SETTINGS)){const avg=stage=>rows.filter(r=>r.zone===zone&&r.stage===stage).reduce((s,r)=>s+r.deathPct,0)/3;const result={zone,deathPct:['insufficient','entry','comfortable'].map(s=>+avg(s).toFixed(1))};console.log(JSON.stringify(result));if(process.argv.includes('--assert')){if(zone==='beginner')assert.ok(avg('entry')<=10);else {assert.ok(avg('insufficient')>=50,`${zone}: insufficient gear too safe`);assert.ok(avg('comfortable')<=15,`${zone}: current gear too dangerous`);assert.ok(avg('insufficient')-avg('comfortable')>=40,`${zone}: insufficient gear separation`);if(zone!=='normal')assert.ok(avg('entry')>avg('comfortable')+10&&avg('entry')<55,`${zone}: entry stage missing`);}}}
+}
+if(require.main===module)main().catch(e=>{console.error(e);process.exitCode=1});module.exports={verify};

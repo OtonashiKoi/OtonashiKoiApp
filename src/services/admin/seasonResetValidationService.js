@@ -9,7 +9,7 @@ async function validateSeasonReset({ seasonKey, keepLedger = false }) {
   const key = String(seasonKey || "");
   const persistentIds = await loadPersistentItemIds(db);
   const progressRows = await db.collection("progress").find({}, {
-    projection: { playerId: 1, seasonKey: 1, level: 1, exp: 1, job: 1, inventory: 1, pets: 1, activePetUuid: 1 }
+    projection: { playerId: 1, seasonKey: 1, level: 1, exp: 1, job: 1, inventory: 1, pets: 1, activePetUuid: 1, equipment: 1, characterSlots: 1, activeCharacterSlot: 1, jobExp: 1, accountWorldBossClears: 1, accountSoloBoss: 1 }
   }).toArray();
   const failures = [];
   const seen = new Set();
@@ -21,6 +21,16 @@ async function validateSeasonReset({ seasonKey, keepLedger = false }) {
     if (row.seasonKey !== key || Number(row.level) !== 1 || Number(row.exp) !== 0 || row.job !== "Novice") {
       failures.push({ check: "progress-reset", playerId: id, seasonKey: row.seasonKey, level: row.level, exp: row.exp, job: row.job });
     }
+    for (const [slot, character] of Object.entries(row.characterSlots || {})) {
+      if (Number(character.level) !== 1 || Number(character.exp) !== 0 || character.job !== "Novice" || Number(character.jobExp) !== 0) {
+        failures.push({ check: "character-reset", playerId: id, slot });
+      }
+      if (character.equipment?.job_eq || Object.keys(character.equipPresets || {}).length || (character.activeEffects || []).length) {
+        failures.push({ check: "character-equipment-reset", playerId: id, slot });
+      }
+    }
+    if (row.accountWorldBossClears) failures.push({ check: "account-world-boss-clears-reset", playerId: id });
+    if (row.accountSoloBoss) failures.push({ check: "account-solo-boss-reset", playerId: id });
     if ((row.pets || []).length || row.activePetUuid) failures.push({ check: "pets-reset", playerId: id });
     const invalid = (row.inventory || []).find((item) => !isTitle(item) && !isCollectible(item) && !isSeasonPersistentItem(item, persistentIds));
     if (invalid) failures.push({ check: "inventory-reset", playerId: id, itemId: invalid.itemId || invalid.id || null });

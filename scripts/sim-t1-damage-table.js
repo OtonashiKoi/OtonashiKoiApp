@@ -4,7 +4,7 @@
  *
  * （鏡影血量表不能拿來當傷害排名：每個職業打的是自己的鏡影，防禦/迴避都不同。）
  *
- * 標準玩家：Lv35／74 點（主 55% + VIT 30% + AGI 15%）／A 階整套 +5／該職業徽章
+ * 標準玩家：Lv35／74 點（隨機點六維均分；自主點主 55% + VIT 30% + AGI 15%）／A 階整套 +5／該職業徽章
  * 假人：固定 def/flatDef、血量無限（不會死也不還手 → 純測輸出上限）
  *   另跑一組「會還手」的版本，看陣亡對實際輸出的侵蝕。
  *
@@ -49,13 +49,14 @@ const DUMMY_BASE = {
 };
 
 function buildAttrs(mainStat) {
-  const a = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-  const free = TOTAL_POINTS - 6;
-  const toMain = Math.round(free * 0.55);
-  const toVit = Math.round(free * 0.30);
+  const levels = PLAYER_LEVEL - 1;
+  const randomMean = 1 + levels / 6;
+  const a = { str: randomMean, agi: randomMean, vit: randomMean, int: randomMean, dex: randomMean, luk: randomMean };
+  const toMain = Math.round(levels * 0.55);
+  const toVit = Math.round(levels * 0.30);
   a[mainStat] += toMain;
   a.vit += toVit;
-  a.agi += free - toMain - toVit;
+  a.agi += levels - toMain - toVit;
   return a;
 }
 

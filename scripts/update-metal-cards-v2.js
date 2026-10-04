@@ -1,0 +1,9 @@
+"use strict";
+require('dotenv').config({quiet:true});
+const fs=require('node:fs'),assert=require('node:assert/strict'),{MongoClient}=require('mongodb');
+const {loadBson}=require('./verify-normal-progression');const {buildMetalCards}=require('./lib/metal-cards');
+(async()=>{const backup=process.argv.find(a=>a.startsWith('--backup='))?.slice(9);assert.ok(backup);const old=loadBson(backup+'/items.bson'),monsters=loadBson(backup+'/monsters.bson');const cards=buildMetalCards(monsters);assert.equal(cards.length,8);const client=await MongoClient.connect(process.env.MONGODB_URI);
+try{const db=client.db(process.env.MONGODB_DB_NAME||'equipment_game');for(const card of cards){const before=old.find(i=>i.id===card.id);assert.ok(before);assert.deepEqual(await db.collection('items').findOne({_id:before._id}),before,'Concurrent item change');}
+if(!process.argv.includes('--apply')){console.log('Preflight passed: 8 existing cards');return;}
+for(const card of cards){const before=old.find(i=>i.id===card.id),patch={monsterCardSkill:card.monsterCardSkill,description:card.description,contentRevision:card.contentRevision};const r=await db.collection('items').updateOne(before,{$set:patch});assert.equal(r.matchedCount,1);assert.deepEqual(await db.collection('items').findOne({_id:before._id}),{...before,...patch});}
+assert.deepEqual(await db.collection('monsters').find({}).toArray(),monsters);assert.deepEqual(await db.collection('maintenanceState').find({}).toArray(),loadBson(backup+'/maintenanceState.bson'));fs.writeFileSync(backup+'/v2-readback.json',JSON.stringify({passed:true,cards:8,dropAndMonsterUnchanged:true,maintenanceUnchanged:true,ownedCardIdsPreserved:true},null,2));console.log('PASS: 8 cards updated, IDs/drops/monster stats/maintenance preserved');}finally{await client.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

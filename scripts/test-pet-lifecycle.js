@@ -15,6 +15,7 @@ function assert(cond, msg) {
 }
 
 async function main() {
+  if (process.env.ALLOW_LEGACY_PET_TEST !== "isolated-only") throw new Error("此舊版寵物測試已不適用；請改跑 scripts/test-side-systems.js（隔離資料庫）。");
   const db = await getMongoDb();
   const sc = createServiceContext();
   const pet = sc.petService;

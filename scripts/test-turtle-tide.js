@@ -127,10 +127,10 @@ function hasEvent(events, type, predicate = () => true) {
   assert.equal(turtle.view(state, 70, breachEnd).casting, false, "70% 同一輪只會觸發一次");
 }
 
-// 已在戰鬥中的玩家：若詠唱在本場時間軸內完成，對應回合會被真海嘯截斷。
+// 已在戰鬥中的玩家：若詠唱在本場時間軸內完成，對應回合被壓血後繼續戰鬥。
 {
   const player = {
-    maxHp: 1000, atk: 10, def: 10, flatDef: 0,
+    maxHp: 10000, atk: 10, def: 10, flatDef: 0,
     str: 1, agi: 20, vit: 1, int: 1, dex: 100, luk: 1,
     hit: 100, dodge: 0, crit: 0, combo: 0,
     comboDamageMultiplier: 1, dmgMin: 1, dmgMax: 1,
@@ -141,14 +141,21 @@ function hasEvent(events, type, predicate = () => true) {
     str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1,
     hit: 0, dodge: 0, critRate: 0, critDamage: 1.5,
   };
-  const result = runCombatLoop(player, monster, "島島龜王", monster.maxHp, 5, {
+  const result = runCombatLoop(player, monster, "島島龜王", monster.maxHp, 15, {
     equipped: {}, inventory: [], tsunamiDeathRound: 3,
   });
-  assert.equal(result.outcome, "lose");
-  assert.equal(result.finalPlayerHp, 0);
-  assert.equal(result.nextRound, 3, "海嘯應在第 3 回合截斷正在進行的戰鬥");
-  assert.match(result.roundLogs[2], /第 3 回合/);
-  assert.match(result.roundLogs[2], /戰鬥途中完成詠唱/);
+  assert.equal(result.outcome, "timeout");
+  assert.ok(result.finalPlayerHp > 0 && result.finalPlayerHp <= 100);
+  assert.equal(result.roundLogs.filter(l=>/第 \d+ 回合/.test(l)).length, 15, "海嘯後仍應打完15回合");
+  assert.equal(result.roundLogs.filter(l=>l.includes("🌊")).length,1,"中途海嘯只能壓血一次");
+  assert.ok(result.totalDamage > 0,"海嘯後仍能攻擊");
+  const lethal = runCombatLoop({...player,agi:1}, {...monster,atk:999999,agi:50,dex:999,hit:100}, "島島龜王", monster.maxHp, 15, {equipped:{},inventory:[],tsunamiDeath:true});
+  assert.equal(lethal.outcome,"lose");
+  assert.equal(lethal.finalPlayerHp,0);
+  assert.ok(lethal.roundLogs.length < 15,"途中死亡應提早結束並戰敗");
+  assert.match(result.roundLogs.find(l=>l.includes("🌊")), /第 3 回合/);
+  assert.match(result.roundLogs.find(l=>l.includes("🌊")), /你剩 100 \/ 10000/);
+  assert.ok(result.damageTaken >= 9900);
 }
 
 // 固定血線：70% 與 40% 各一次；忙碌中跨 40% 會排隊，破綻結束後優先發動。

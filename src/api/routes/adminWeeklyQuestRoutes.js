@@ -8,6 +8,7 @@ const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { pushBonusWeaponToInventory, pushRewardItemsToInventory } = require("../../shared/jobBadgeBonus");
 
 async function grantQuestReward(serviceContext, { discordId, displayName, reward, sourceTag = "quest" }) {
+  if (reward.autumn) return require("../../services/weeklyQuest/autumnQuestRewards").grantAutumnQuestReward(serviceContext, discordId, displayName, reward);
   if (reward.gold > 0) {
     await serviceContext.rewardService.grantCurrency({
       discordId,
@@ -219,18 +220,7 @@ function createAdminWeeklyQuestRoutes(serviceContext) {
   });
 
   // ── Player auth ────────────────────────────────────
-  router.use(["/api/weekly-quests", "/api/quests"], (req, res, next) => {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace("Bearer ", "");
-    if (!token) return res.status(401).json(fail("UNAUTHORIZED", "Missing token"));
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.playerRecord = decoded;
-      next();
-    } catch {
-      return res.status(401).json(fail("UNAUTHORIZED", "Invalid or expired token"));
-    }
-  });
+  router.use(["/api/weekly-quests", "/api/quests"], require("./requireAuth").requireAuth);
 
   // ── Player weekly (legacy) ─────────────────────────
   router.get("/api/weekly-quests", async (req, res, next) => {

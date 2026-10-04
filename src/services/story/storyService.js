@@ -1,3 +1,4 @@
+const { isUnavailableEquipment } = require("../../shared/equipmentAvailability");
 "use strict";
 /**
  * 主線故事系統（文字冒險）。
@@ -290,7 +291,7 @@ class StoryService {
           backgroundUrl: n.backgroundUrl || null,
           bgm: n.bgm || null,
           sfx: n.sfx || null,
-          grantItemId: n.grantItemId || null,
+          grantItemId: isUnavailableEquipment(n.grantItemId) ? null : (n.grantItemId || null),
           t2BadgeId: n.t2BadgeId || null,
           ...flow
         };
@@ -329,7 +330,7 @@ class StoryService {
         backgroundUrl: n.backgroundUrl || null,
         bgm: n.bgm || null,
         sfx: n.sfx || null,
-        grantItemId: n.grantItemId || null, // 🎁 發道具(讀到即給，前端呼叫 /grant)
+        grantItemId: isUnavailableEquipment(n.grantItemId) ? null : (n.grantItemId || null), // 🎁 發道具(讀到即給，前端呼叫 /grant)
         t2BadgeId: n.t2BadgeId || null,     // ⚔️ 轉職節點要換發的二轉徽章
         voiceUrl: n.voiceUrl || null,       // 🎤 配音
         holdSec: Number(n.holdSec) > 0 ? Number(n.holdSec) : null, // ⏱進場停頓秒
@@ -488,6 +489,7 @@ class StoryService {
     if (!wantId) return { granted: false, reason: "no_grant" };
     const libraryItem = this.itemRepository ? await this.itemRepository.findById(wantId).catch(() => null) : null;
     if (!libraryItem) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "指定道具不存在", 400);
+    if (isUnavailableEquipment(libraryItem)) return { granted: false, reason: "feature_disabled" };
     const progress = await this.progressRepository.findByPlayerId(discordId);
     if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到玩家進度", 404);
     const sp = progress.storyProgress || {};

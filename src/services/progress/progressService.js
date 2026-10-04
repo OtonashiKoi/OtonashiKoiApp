@@ -14,8 +14,8 @@ const ATTR_LABEL_ZH = {
 };
 const CAS_MAX_RETRIES = 8;
 
-// 滿等溢出經驗轉金幣：溢出 EXP ÷ 此除數 = 金幣（可調；20 = 1/20）。
-const MAX_LEVEL_EXP_TO_GOLD_DIVISOR = 20;
+// Shared economy conversion, separate from ordinary monster gold pools.
+const { MAX_LEVEL_EXP_TO_GOLD_DIVISOR } = require("../../shared/normalEconomy");
 
 class ProgressService {
   constructor(playerService, progressRepository, rewardService = null) {
@@ -38,7 +38,7 @@ class ProgressService {
     throw new AppError(ERROR_CODES.INTERNAL_ERROR, "progressRepository does not support save/saveIfUnchanged", 500);
   }
 
-  async grantExp({ discordId, displayName, amount, source }) {
+  async grantExp({ discordId, displayName, amount, source, operationId = null }) {
     if (!Number.isInteger(amount) || amount <= 0) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "exp amount must be a positive integer", 400);
     }
@@ -48,15 +48,16 @@ class ProgressService {
 
     // 使用玩家級別的鎖序列化操作，防止並發的 CAS 衝突
     return withPlayerProgressLock(discordId, async () => {
-      return await this._grantExpInternal({ discordId, displayName, amount, source });
+      return await this._grantExpInternal({ discordId, displayName, amount, source, operationId });
     });
   }
 
-  async _grantExpInternal({ discordId, displayName, amount, source }) {
+  async _grantExpInternal({ discordId, displayName, amount, source, operationId = null }) {
     // CAS 重試：讀取 → 計算 → 條件寫入（只在 updatedAt 未變時才寫）
     // 若被其他寫入搶先，重新讀取最新狀態再試，確保屬性絕對不會重複給
     for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
       const { player, progress } = await this.playerService.ensurePlayer(discordId, displayName);
+      if (operationId && (progress.expGrantReceipts || []).includes(operationId)) return { player, progress, levelUps: 0, levelUpDetails: [], duplicate: true };
       const prevUpdatedAt = progress.updatedAt;
 
       // ⚠️ 關鍵：必須深拷貝 attributes，否則 next.attributes[key]++ 會污染快取裡的原物件
@@ -65,6 +66,7 @@ class ProgressService {
         ...progress,
         attributes: { ...(progress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 }) }
       };
+      if (operationId) next.expGrantReceipts = [...(progress.expGrantReceipts || []), operationId];
       next.exp = (next.exp || 0) + amount;
 
       let levelUps = 0;
@@ -73,14 +75,10 @@ class ProgressService {
         next.exp -= expToNextLevel(next.level);
         next.level += 1;
         levelUps += 1;
-        const gainedAttrs = [];
-        // 升級自動隨機 +1 兩次（各自獨立抽屬性）
-        for (let i = 0; i < 2; i++) {
-          const randKey = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
-          next.attributes[randKey] = (next.attributes[randKey] || 1) + 1;
-          gainedAttrs.push(randKey);
-        }
-        // 2+1 制（2026-08-07 使用者定案）：每級另發 1 點自主屬性點，
+        // 1+1 制：每級隨機 1 點，自主 1 點。只影響此後的升等，不改已領點數。
+        const randKey = ATTR_KEYS[Math.floor(Math.random() * ATTR_KEYS.length)];
+        next.attributes[randKey] = (next.attributes[randKey] || 1) + 1;
+        const gainedAttrs = [randKey];
         // 玩家自行分配（走既有 statusPoints 池 → allocateAttribute）
         next.statusPoints = (next.statusPoints || 0) + 1;
         levelUpDetails.push({
@@ -90,7 +88,7 @@ class ProgressService {
           freePoints: 1
         });
       }
-      // 滿等：溢出經驗不再丟掉，改成 ÷10 轉金幣（存檔成功後才實際發放，避免 CAS 重試重複發）
+      // 滿等：溢出經驗不再丟掉，依共用經濟除數轉金幣（存檔成功後才實際發放，避免 CAS 重試重複發）
       let overflowExp = 0;
       let overflowGold = 0;
       if (next.level >= MAX_LEVEL) {
@@ -101,7 +99,31 @@ class ProgressService {
       next.updatedAt = new Date().toISOString();
       // 等級排行榜「達成時間」：只在本次真的升等時，記下抵達「目前等級」的時刻。
       // 同級比誰先達成 → 越早排越前。未升等(只加經驗)不動此欄，保留最初達成該級的時間。
-      if (levelUps > 0) next.levelReachedAt = next.updatedAt;
+      if (levelUps > 0) {
+        const history = Array.isArray(progress.levelUpHistory) ? [...progress.levelUpHistory] : [];
+        const start = progress.levelStartedAt || progress.levelReachedAt || null;
+        let previousAt = start && Number.isFinite(Date.parse(start)) ? start : null;
+        for (const detail of levelUpDetails) {
+          const elapsedMs = previousAt === null ? null : Math.max(0, Date.parse(next.updatedAt) - Date.parse(previousAt));
+          history.push({
+            fromLevel: detail.level - 1,
+            toLevel: detail.level,
+            startedAt: previousAt,
+            reachedAt: next.updatedAt,
+            elapsedMs,
+            source,
+            expGranted: amount,
+            timingBasis: previousAt === null ? "unknown_start" : previousAt === next.updatedAt ? "same_reward" : "wall_clock",
+          });
+          previousAt = next.updatedAt;
+        }
+        next.levelUpHistory = history;
+        next.levelReachedAt = next.updatedAt;
+        next.levelStartedAt = next.updatedAt;
+      } else if (!progress.levelStartedAt) {
+        // 舊角色沒有起點；從第一次觀測到的經驗獲得開始計時。
+        next.levelStartedAt = next.updatedAt;
+      }
 
       const saved = await this._saveProgressWithFallback(next, prevUpdatedAt);
       if (saved) {
@@ -122,7 +144,7 @@ class ProgressService {
                 newLevel: next.level,
                 levelUps,
                 attributes: { ...next.attributes },
-                freePointsGained: levelUps,                 // 2+1 制：本次升級獲得的自主點
+                freePointsGained: levelUps,                 // 1+1 制：本次升級獲得的自主點
                 statusPoints: next.statusPoints || 0,       // 目前可分配的自主點總數
                 gained,
                 gainedZh: Object.entries(gained).map(([key, n]) => ({

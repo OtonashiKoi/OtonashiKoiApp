@@ -30,6 +30,14 @@ async function main() {
     const progress = createGameProgress(playerId);
     Object.assign(progress, {
       seasonKey: "legacy",
+      playerTier: "C",
+      activeCharacterSlot: 1,
+      accountSoloBoss: { kills: 9 },
+      characterSlots: {
+        1: { level: 50, job: "Knight", equipment: { weapon: { itemId: "old-active" } } },
+        2: { level: 49, job: "Knight", jobExp: 999, equipment: { title_eq: { uuid: "alt-title", itemId: "title", itemType: "title", equipSlot: "title_eq" }, weapon: { itemId: "old-alt" } }, equipPresets: { A: { weapon: { itemId: "old-alt" } } } },
+        3: { level: 45, job: "Mage", jobExp: 888, equipment: {} },
+      },
       level: 48,
       exp: 999,
       job: "Knight",
@@ -91,6 +99,20 @@ async function main() {
 
     const validation = await validateSeasonReset({ seasonKey });
     assert.equal(validation.ok, true, JSON.stringify(validation.failures));
+    const { CharacterService } = require("../src/services/character/characterService");
+    const characterRepos = createMongoRepositories();
+    const characters = new CharacterService({ progressRepository: characterRepos.progressRepository });
+    characters._clearBattleAuras = async () => {};
+    for (const slot of [2, 3, 1]) {
+      await characters.switchCharacter(playerId, slot);
+      const switched = await db.collection("progress").findOne({ playerId });
+      assert.equal(switched.level, 1);
+      assert.equal(switched.job, "Novice");
+      assert.equal(switched.jobExp, 0);
+      assert.equal(switched.equipment.weapon.itemName, "木劍");
+      assert.equal(switched.accountSoloBoss, undefined);
+      if (slot === 2) assert.equal(switched.equipment.title_eq.uuid, "alt-title");
+    }
     const counts = await preflight();
     assert.equal(counts.players, 1);
     assert.equal(counts.onlinePlayers, 0);

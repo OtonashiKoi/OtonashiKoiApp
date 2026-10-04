@@ -1,28 +1,14 @@
 "use strict";
 
 const { Router } = require("express");
-const jwt = require("jsonwebtoken");
+const { requireAuth } = require("./requireAuth");
 const { ok, fail } = require("../../shared/response");
 
 function createPlayerIdleRoutes(serviceContext) {
   const router = Router();
   const idleService = serviceContext.idleService;
 
-  router.use("/api/idle", (req, res, next) => {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace("Bearer ", "");
-    if (!token) {
-      res.status(401).json(fail("UNAUTHORIZED", "Missing token"));
-      return;
-    }
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.playerRecord = decoded;
-      next();
-    } catch (_) {
-      res.status(401).json(fail("UNAUTHORIZED", "Invalid or expired token"));
-    }
-  });
+  router.use("/api/idle", requireAuth);
 
   // 與 DC 掛機同一套模型（getDiscordPanelStatus / *DiscordSession）：
   //   收益＝該區非 BOSS 平均×10%、前 5 分鐘無獎勵、單次最多 12 小時、
@@ -122,4 +108,3 @@ function createPlayerIdleRoutes(serviceContext) {
 module.exports = {
   createPlayerIdleRoutes
 };
-

@@ -1,3 +1,7 @@
+const { createMistwoodCards } = require("./mistwoodCards");
+const { createMetalCards } = require("./metalCards");
+const { activeEquipment } = require("./anchorFeature");
+const { effectiveOffensiveStat, offensiveStatGain } = require("./offensiveStatCurve");
 "use strict";
 
 /**
@@ -711,6 +715,8 @@ function makeCardEffectEntry(procEffect, round, sourceType, overrides = {}, sour
   return {
     key: procEffect.key,
     params,
+    removable: procEffect.removable, dispellable: procEffect.dispellable,
+    unremovable: procEffect.unremovable, mechanic: procEffect.mechanic,
     stackMode: procEffect.stackMode,
     appliedAt: round,
     source: sourceType,
@@ -752,6 +758,7 @@ function applyCardProcEffects({
   //   (魅影潛襲者卡【暗影急襲】crit_rate_up 因此完全不生效,實測 60 場 0 觸發)。
   // 加這個開關讓 on_dodge 能把一般效果也交給本函式處理；預設 true 保持既有呼叫端行為不變。
   requireHpGate = true,
+  interceptTargetEffect = null,
   log = []
 }) {
   let nextOwnerActiveEffects = Array.isArray(ownerActiveEffects) ? ownerActiveEffects : [];
@@ -857,6 +864,7 @@ function applyCardProcEffects({
       appliedAny = true;
     } else if (procEffect.target === 'enemy' || debuffKeys.has(procEffect.key)) {
       if (sourceType === 'monster_skill') effectEntry.appliedAt = round - 1;
+      if (interceptTargetEffect && interceptTargetEffect(effectEntry)) { appliedAny = true; continue; }
       nextTargetActiveEffects = addOrStackCardEffect(nextTargetActiveEffects, effectEntry);
       appliedAny = true;
     }
@@ -908,7 +916,36 @@ function upsertActiveEffectBySource(activeEffects = [], effectEntry = {}) {
   return next;
 }
 
+// A party action resumes the same combat instance. Keeping the instance alive preserves
+// every existing class/card flag and resource, rather than rebuilding a battle per hit.
+const actionSessions = new WeakMap();
 function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options = {}) {
+  if (!options.actionSession) return combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS, options).next().value;
+  let state = actionSessions.get(options.actionSession);
+  if (!state) {
+    const iterator = combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS, { ...options });
+    iterator.next(); // Initialise once; wait for the first action command.
+    state = { iterator, damage: 0, logs: 0, dice: 0, stats: {}, taken: 0, healed: 0, stolen: 0 };
+    actionSessions.set(options.actionSession, state);
+  }
+  const step = state.iterator.next(options);
+  const value = step.value;
+  if (!value) throw new Error("Combat session has already ended");
+  const result = { ...value, roundLogs: value.roundLogs.slice(state.logs), diceEvents: value.diceEvents.slice(state.dice),
+    totalDamage: value.totalDamage - state.damage, damageTaken: value.damageTaken - state.taken,
+    healDone: value.healDone - state.healed, jobSkillComboSpent: value.jobSkillComboSpent - state.stolen,
+    combatStats: { ...value.combatStats } };
+  for (const [key, n] of Object.entries(value.combatStats)) if (typeof n === "number") result.combatStats[key] = n - (state.stats[key] || 0);
+  result.combatStats.supportShotBySource = Object.fromEntries(Object.entries(value.combatStats.supportShotBySource || {}).map(([id, n]) => [id, n - (state.stats.supportShotBySource?.[id] || 0)]));
+  Object.assign(state, { damage: value.totalDamage, taken: value.damageTaken, healed: value.healDone,
+    stolen: value.jobSkillComboSpent, logs: value.roundLogs.length, dice: value.diceEvents.length, stats: structuredClone(value.combatStats) });
+  options.playerActiveEffects = value.playerActiveEffects;
+  if (step.done) actionSessions.delete(options.actionSession);
+  return result;
+}
+
+function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options = {}) {
+  options = { ...options, equipped: activeEquipment(options.equipped) };
   const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const playerBattleName = options.playerName || "你";
 
@@ -980,6 +1017,10 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const dodgePhrases = DODGE_PHRASES;
   const mDodgePhrases = MONSTER_DODGE_PHRASES;
   const mAtkPhrases = MONSTER_ATK_PHRASES;
+  const steelCrown = options.zone === "metal_throne" && options.monsterIsBoss === true
+    ? require("./steelCrownBoss") : null;
+  let steelCrownActions = 0;
+  const steelCrownEvents = [];
   const blockPhrases = BLOCK_PHRASES;
   const stunPhrases = STUN_PHRASES;
   const agiFirstStrikePhrases = AGI_FIRST_STRIKE_PHRASES;
@@ -1001,8 +1042,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const playerAgi = pStats.agi || 1;
   const monsterAgi = (mCalc.agi || 1) + worldBossAgiBonus;
   const agiDiff = playerAgi - monsterAgi;
-  const hasAgiFirstStrike = agiDiff > 2;   // 第1回合玩家先手，怪物無法反擊
-  const hasAgiSlowedMonster = agiDiff > 5; // 怪物只在偶數回合反擊
+  const hasAgiFirstStrike = !options.actionSession && agiDiff > 5;   // 第1回合玩家先手，怪物無法反擊
+  const hasAgiSlowedMonster = !options.actionSession && agiDiff > 15; // 怪物只在偶數回合反擊
   const bossAgiDiff = monsterAgi - playerAgi;
   const hasBossAgiFirstStrike = worldBossHasAgiSuppress && bossAgiDiff > 2;   // 第1回合怪物壓制，玩家無法行動
   const hasBossAgiTurnSuppress = worldBossHasAgiSuppress && bossAgiDiff > 5;  // 玩家奇數回合被壓制
@@ -1063,6 +1104,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let _healImmune = false;  // 對鮮血的渴望：無法被治療(自身吸血除外)
   let _extendRounds = 0;    // 時間管理大師：回合上限改為此值(0=不變)
   let _noPlayerAtk = options.skipPlayerAttack === true; // 外部回合軸可只結算怪物行動；沒苦硬吃也會沿用此旗標
+  let _partyWasHitSinceAttack = false;
   let _totalHealDone = 0, _totalLifestealDone = 0; // 任務指標：實際治療／實際吸血（滿血溢補不算）
   // ── 聖域師（結界師二轉）────────────────────────────────────────────
   // 符文結界：開場展開，厚度＝maxHp×basePct% + INT×perInt；所有受傷先扣結界（_hurt 內）。
@@ -1093,6 +1135,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   let _tshellMax = 0, _tshellHp = 0;
   let _tshellBroken = false;      // 破殼＝傷害加成開啟（打到就生效）
   let _tshellBrokeThisRound = false; // 回合尾宣告用
+  let _rabbitSetRageCfg = null;
   let _turtleSetTideCfg = null;   // 龜王套裝 4 件：漲潮／退潮每 2 回合輪替
   let _windDirectionCfg = null;   // 胡桃限定武器／大四喜套裝：東南西北場風輪轉
   const _windDirectionStartStep = normalizeWindDirectionStep(options.windDirectionStep);
@@ -1108,7 +1151,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const _diceLuckPct = diceGodCfg ? Math.max(0, Number(diceGodCfg.luckPerStackPct) || 2) : 2;
   let _diceGrids = diceGodCfg ? Math.max(0, Math.min(_diceGaugeMax, Math.floor(Number(options.diceGaugeGrids) || 0))) : 0;
   let _diceLuck = diceGodCfg ? Math.max(0, Math.min(_diceLuckCap, Math.floor(Number(options.diceLuckStacks) || 0))) : 0;
-  const _hurt = (d) => {
+  const mistCards = createMistwoodCards(options.equipped, pStats.maxHp);
+  const metalCards = createMetalCards(options.equipped, pStats.maxHp);
+  const _hurt = (d, cardEligible = true, physicalBasic = true, combo = false) => {
     let x = Math.max(0, Number(d) || 0);
     // 聖域護佑：受傷減免（先減再給結界吃，兩者可疊）
     if (_sanctuaryCutPct > 0 && x > 0) {
@@ -1133,7 +1178,13 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (_sanctumBarrier <= 0) _sanctumBroke = true;
       x -= eat;
     }
+    if (cardEligible && physicalBasic) x = metalCards.beforePhysical(x, _curRound, combo);
+    if (cardEligible && mistCards.enabled) x = mistCards.beforeDamage(x, _curRound);
+    const actualCardTaken = Math.min(Math.max(0, pHp), x);
     pHp = pHp - x;
+    if (cardEligible) metalCards.checkHealth();
+    if (cardEligible && mistCards.enabled) mistCards.onTaken(actualCardTaken, _curRound);
+    if (options.actionSession && options.skipPlayerAttack === true && x > 0) _partyWasHitSinceAttack = true;
     _totalDmgTaken += x;
     _endureTakenSinceBurst += x;   // 沒苦硬吃：累積到下次反彈
     // 最大單發承傷（爆發條件「單發 ≤ 40% maxHp」的量測欄；含自傷成本，量測時自行留意）
@@ -1216,6 +1267,21 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (mult === 1) return x;
     return Math.max(1, Math.round(x * mult));
   };
+  // Equipment ownership is checked directly: buffs/cards/auras cannot grant magnetic deflection.
+  let _reactionLog = null;
+  const _setProcChance = require("./equipmentSetBonuses").getRegionalSetProcChance;
+  const _magneticProcChance = Math.max(_setProcChance(options.equipped, "magnetic_p"), _setProcChance(options.equipped, "magnetic_m"));
+  const _dragonProcChance = Math.max(_setProcChance(options.equipped, "dragonscale_p"), _setProcChance(options.equipped, "dragonscale_m"));
+  const _hellfireProcChance = Math.max(_setProcChance(options.equipped, "hellfire_p"), _setProcChance(options.equipped, "hellfire_m"));
+  const _mithrilProcChance = Math.max(_setProcChance(options.equipped, "mithril_p"), _setProcChance(options.equipped, "mithril_m"));
+  const _tryHellfireEmber = () => _hellfireProcChance > 0 && Math.random() * 100 < _hellfireProcChance;
+  const _tryMithrilPrecision = () => _mithrilProcChance > 0 && Math.random() * 100 < _mithrilProcChance;
+  const _tryDragonReflection = () => _dragonProcChance > 0 && Math.random() * 100 < _dragonProcChance;
+  const _tryMagneticDeflection = () => {
+    if (_magneticProcChance <= 0 || Math.random() * 100 >= _magneticProcChance) return false;
+    _reactionLog?.push(`🧲 **磁力偏移**！物理攻擊偏離（閃避）！（你剩 ${Math.max(0, pHp)} HP）`);
+    return true;
+  };
   const _takePlayerIncomingDamage = (raw, currentRound, { damageType = "magic", useSpirit = true } = {}) => {
     let damage = Math.max(0, Math.round(Number(raw) || 0));
     if (damage <= 0) return 0;
@@ -1226,6 +1292,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     const active = (options.playerActiveEffects || []).filter((effect) => effectIsActive(effect, currentRound));
     if (active.some((effect) => effect?.key === "invincible_short")) return 0;
+
+    if (damageType === "physical" && useSpirit && _tryMagneticDeflection()) return 0;
 
     let reductionPct = 0;
     for (const effect of active) {
@@ -1254,7 +1322,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       damage = Math.max(0, pHp - 1);
       deathPreventUsed = true;
     }
-    return _hurt(damage);
+    return _hurt(damage, true, false);
   };
   const _healPlayer = (h, opts) => {
     const amt = Math.max(0, Number(h) || 0);
@@ -1405,7 +1473,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   //   （函式名沿用 applyBossVuln 以免動到既有呼叫點）。
   // 演奏加成（吟遊詩人）：上一場的演奏結果 → 本場全部輸出 ×0.7~1.8（乘進 playerHitMult＝主擊/連擊/DOT 全吃）
   const _bardMult = Math.max(0.1, Number(options.bardDamageMult) || 1);
-  const playerHitMult = bossVulnMult * (stanceElementMult ?? elementMult) * elementBonusMult * _bardMult;
+  const partyRoleDamageMultiplier = Number.isFinite(Number(options.partyRoleDamageMultiplier))
+    ? Math.max(0, Number(options.partyRoleDamageMultiplier)) : 1;
+  const playerHitMult = bossVulnMult * (stanceElementMult ?? elementMult) * elementBonusMult * _bardMult * partyRoleDamageMultiplier;
   const applyBossVuln = (raw) => (playerHitMult === 1 ? raw : Math.max(0, Math.round((Number(raw) || 0) * playerHitMult)));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
   let endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
@@ -1463,7 +1533,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     player: { ...(options.cardCooldowns?.player || {}) },
     monster: { ...(options.cardCooldowns?.monster || {}) },
   };
-  const jobSkillCooldowns = {}; // { [skillKey]: remainingTurns }
+  const jobSkillCooldowns = { ...(options.jobSkillCooldowns || {}) }; // { [skillKey]: remainingTurns }
   // ── 職業技能「成本」通用機制（2026-07-28 新增，所有職業共用）──
   //   技能可帶 cost: { type: "combo" | "hp", value: N }
   //     combo — 消耗區域連段（跨場資源、陣亡歸零）；戰鬥內只累計消耗量，
@@ -1472,7 +1542,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   //   不夠付 → 技能不進池／不觸發（不會欠帳）。
   let _jobSkillComboSpent = 0;
   //   另有通用欄位 oncePerBattle: true —— 一場只發動一次（消耗型技能用，避免一場吃掉數倍資源）
-  const _skillUsedThisBattle = new Set();
+  const _skillUsedThisBattle = new Set(options.jobSkillsUsedThisBattle || []);
   const _comboAvailable = () => Math.max(0, (Number(options.zoneComboCount) || 0) - _jobSkillComboSpent);
   /** 這個技能現在付得起嗎（不扣款） */
   const _canAffordSkill = (sk) => {
@@ -1494,7 +1564,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
     if (c.type === "hp") {
       const cost = Math.max(1, Math.round(pStats.maxHp * (Number(c.value) / 100)));
-      _hurt(cost);
+      _hurt(cost, false);
       return `（消耗 ${cost} HP）`;
     }
     return "";
@@ -1631,6 +1701,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             _tshellHp = _tshellMax;
             continue;
           }
+          if (ep.key === "rabbit_rage_cycle") { _rabbitSetRageCfg = normalizeTurtleTideConfig(ep); continue; }
           if (ep.key === TURTLE_TIDE_EFFECT_KEY) {
             _turtleSetTideCfg = normalizeTurtleTideConfig(ep);
             continue;
@@ -1738,7 +1809,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const playerHasDebuffImmunityActive = (round) => (options.playerActiveEffects || []).some((e) => {
     if (!e || e.key !== 'debuff_immunity') return false;
     const d = e.params?.duration || {};
-    if (d.mode === 'turns') return round <= (e.appliedAt || 1) + (d.value || 1);
+    if (d.mode === 'turns') return round <= (e._clockExact ? (e.appliedAt ?? 1) : (e.appliedAt || 1)) + (d.value || 1);
     return true;
   });
 
@@ -1754,9 +1825,52 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   // 時間管理大師：回合上限改為指定值（例 30）
   if (_extendRounds > 0) endRound = round + Math.max(1, Math.floor(_extendRounds)) - 1;
 
+  // Same core, resumable execution only for the multiplayer action clock.
+  const actionSnapshot = () => ({
+    outcome: outcome || "timeout", roundLogs, diceEvents, totalDamage, combatStats: { ...combatStats },
+    finalMonsterHp: Math.max(0, mHp), finalPlayerHp: Math.max(0, pHp),
+    playerActiveEffects: options.playerActiveEffects, monsterActiveEffects, stunRoundsLeft,
+    cardCooldowns, jobSkillCooldowns, jobSkillsUsedThisBattle: [..._skillUsedThisBattle],
+    nextRound: round, damageTaken: _totalDmgTaken, healDone: _totalHealDone,
+    lifestealDone: _totalLifestealDone, jobSkillComboSpent: _jobSkillComboSpent,
+    shadowGauge: shadowCfg ? (_shadowBurstNext ? shadowCfg.GAUGE_MAX : _shadowGrids) : null,
+    oniGauge: oniCfg ? (_oniBurstNext ? oniCfg.ONI_GAUGE_MAX : _oniGrids) : null,
+    sniperGauge: sniperCfg ? _sniperGrids : null, sageGauge: sageCfg ? _sageGrids : null,
+    diceGauge: diceGodCfg ? _diceGrids : null, diceLuck: diceGodCfg ? _diceLuck : null,
+    sanctum: sanctumCfg ? { barrier: _sanctumBarrier, max: _sanctumMax, absorbed: _sanctumAcc, detonated: _sanctumDetonated } : null,
+    sunSpirit: sunSpiritCfg ? { hp: _spiritHp, maxHp: _spiritMaxHp, hpPct: Math.round(_spiritHp / Math.max(1, _spiritMaxHp) * 1000) / 10 } : null,
+    ...(steelCrown ? { steelCrownEvents } : {}),
+    metalCardMetrics: { ...metalCards.metrics }, metalCardState: { ...metalCards.state },
+    mistwoodCardMetrics: { ...mistCards.metrics }, mistwoodCardState: { ...mistCards.state },
+    monsterStunImmuneUntil, monsterKnockbackPending: _monsterKnockbackRound > 0,
+    sageMistPending: _sageMistRound > 0, forceMonsterCritFailPending: forceMonsterCritFail,
+  });
+  const acceptAction = command => {
+    Object.assign(options, command);
+    options.equipped = activeEquipment(command.equipped);
+    options.skipPlayerAttack = command.skipPlayerAttack === true;
+    options.skipMonsterAttack = command.skipMonsterAttack === true;
+    options.tickJobSkillCooldowns = command.tickJobSkillCooldowns !== false;
+    _noPlayerAtk = options.skipPlayerAttack === true;
+    pHp = Math.max(0, Number(command.startPlayerHp) || 0);
+    mHp = Math.max(0, Number(command.startMonsterHp) || 0);
+    monsterActiveEffects = structuredClone(command.monsterActiveEffects || []);
+    stunRoundsLeft = Math.max(_teamStunRounds, Number(command.stunRoundsLeft) || 0);
+    monsterStunImmuneUntil = Number(command.monsterStunImmuneUntil) || 0;
+    cardCooldowns.monster = { ...(command.cardCooldowns?.monster || {}) };
+    _monsterKnockbackRound = command.monsterKnockbackPending ? round : 0;
+    _sageMistRound = command.sageMistPending ? round : 0;
+    if (_noPlayerAtk) forceMonsterCritFail = !!command.forceMonsterCritFailPending;
+  };
+  if (options.actionSession) {
+    // A one-action request is not the end of the battle (notably for sanctum).
+    endRound = Infinity;
+    acceptAction(yield null);
+  }
   _shadowHp = pHp; // KDA 影子血量起點（與實際血量同步出發，之後只吃「非外部治療」的變化）
   while (round <= endRound && outcome === null) {
     const log = [`**【第 ${round} 回合】**`];
+    _reactionLog = log;
     const _windDirectionBattleStartStep = _windDirectionCfg?.phaseRounds > 1 ? 0 : _windDirectionStartStep;
     const _windDirectionPhase = _windDirectionCfg
       ? windDirectionPhaseAt(_windDirectionBattleStartStep, _windDirectionRoundsProcessed, _windDirectionCfg.phaseRounds)
@@ -1770,7 +1884,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             ? `爆擊傷害 +${_windDirectionCfg.westCritDamagePct}%`
             : `爆擊率 +${_windDirectionCfg.northCritRatePct}%`;
       log.push(`${_windDirectionPhase.emoji} **風向・${_windDirectionPhase.label}**｜${_windText}`);
-      _windDirectionRoundsProcessed += 1;
+      if (!options.actionSession || !_noPlayerAtk) _windDirectionRoundsProcessed += 1;
     }
     _curLog = log;   // 讓 _healLogged 能把回血/回血化刃寫進「當回合」的戰報
     _curRound = round; // KDA：影子血歸零回合的記錄基準
@@ -1838,18 +1952,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       _endureTakenSinceBurst = 0;
     }
     if (options.tickCardCooldowns !== false) {
-      for (const bucket of Object.values(cardCooldowns)) {
+      for (const bucket of options.actionSession ? [options.skipPlayerAttack ? cardCooldowns.monster : cardCooldowns.player] : Object.values(cardCooldowns)) {
         for (const key of Object.keys(bucket)) {
           bucket[key] = Math.max(0, Number(bucket[key] || 0) - 1);
         }
       }
     }
-    for (const key of Object.keys(jobSkillCooldowns)) {
+    for (const key of options.tickJobSkillCooldowns === false ? [] : Object.keys(jobSkillCooldowns)) {
       jobSkillCooldowns[key] = Math.max(0, Number(jobSkillCooldowns[key] || 0) - 1);
     }
     jobSkillUsedThisRound = false;
     // ── 連擊氣條：決定本回合的固定連擊 ──
-    if (shadowCfg) {
+    if (shadowCfg && (!options.actionSession || !_noPlayerAtk)) {
       _shadowForcedHits = 0;
       _shadowChargeThisRound = true;
       if (_shadowBurstNext) {
@@ -1864,47 +1978,52 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // 以前用 options.startPlayerHp 讓戰鬥「從 70% 開始」，但前端血條是從滿血播的、
     // 伺服器也沒發出扣血事件 → 玩家看不到扣血、數字還對不上。改成第 1 回合實際扣，
     // 並用「你受到 N 點 …（你剩 X / Y）」這種前端時間軸解析得了的格式輸出。
-    if (round === 1 && Number(options.sacrificeHpCostPct) > 0 && pStats.maxHp > 0) {
+    if ((!options.actionSession || !_noPlayerAtk) && (round === 1 || (options.sacrificeActivationId && options.actionSession?.sacrificeActivationId !== options.sacrificeActivationId)) && Number(options.sacrificeHpCostPct) > 0 && pStats.maxHp > 0) {
+      if (options.actionSession) options.actionSession.sacrificeActivationId = options.sacrificeActivationId;
       const _cost = Math.max(1, Math.round(pStats.maxHp * (Number(options.sacrificeHpCostPct) / 100)));
       const _actual = Math.min(_cost, Math.max(0, pHp - 1)); // 保底留 1 滴血，不會因血祭直接死
       if (_actual > 0) {
-        _hurt(_actual);
+        _hurt(_actual, false);
         log.push(`🩸 **血祭**！你剖開自己獻上祭品——你受到 **${_actual}** 點自傷，整場攻擊力 **+${Math.round(Number(options.sacrificeAtkUpPct) || 0)}%**！（你剩 ${Math.max(0, pHp)} / ${pStats.maxHp}）`);
       }
     }
-    if (round === 1 && jobProfile.jobName) {
+    if ((!options.actionSession || !_noPlayerAtk) && round === 1 && jobProfile.jobName) {
       log.push(`✨ ${jobProfile.jobName} ${rand(jobFlavor.intro)}`);
     }
     // 演奏加成宣告（吟遊詩人：上一場的演奏結果）
-    if (round === 1 && options.bardPerformNote) {
+    if ((!options.actionSession || !_noPlayerAtk) && round === 1 && options.bardPerformNote) {
       log.push(String(options.bardPerformNote));
     }
-    // 海嘯（島島龜王）：海嘯期間進場＝第 1 回合即死；若詠唱在本場途中完成，
-    // 則在換算後的回合開頭直接命中。都是真即死，無視結界／聖域／免死。
-    const _tsunamiDeathRound = Math.max(0, Math.floor(Number(options.tsunamiDeathRound) || 0));
-    if ((round === 1 && options.tsunamiDeath) || (_tsunamiDeathRound > 0 && round >= _tsunamiDeathRound)) {
-      log.push(`🌊🌊🌊 **海嘯吞沒了一切！**`);
-      log.push(_tsunamiDeathRound > 1
-        ? `💀 海嘯在戰鬥途中完成詠唱，你被巨浪正面吞沒……（無視護盾、聖域與免死）`
-        : `💀 你在滔天巨浪前沒有任何抵抗的餘地……（海嘯期間出戰＝即死，等浪退了再上）`);
-      pHp = 0;
-      outcome = "lose";
-      roundLogs.push(log.join("\n"));
-      break;
+    // 活動王壓血一次；海嘯繼續正常戰鬥，其他王維持當次撤離。
+    // 沿用海嘯選項相容 Web/DC；壓血本身不經護盾或反擊。
+    const crushRound = Math.max(0, Math.floor(Number(options.eventHpCrushRound ?? options.tsunamiDeathRound) || 0));
+    if ((round === 1 && (options.eventHpCrush || options.tsunamiDeath)) || (crushRound > 0 && round === crushRound)) {
+      const before = Math.max(0, pHp);
+      pHp = require("./eventWorldBoss").crushHp(before, pStats.maxHp);
+      const taken = before - pHp;
+      _totalDmgTaken += taken;
+      _maxHitTaken = Math.max(_maxHitTaken, taken);
+      log.push(`🌊 **${options.eventHpCrushName || "海嘯"}**！你受到 **${taken}** 點傷害！（你剩 ${pHp} / ${pStats.maxHp}）`);
+      if (!options.tsunamiDeath && !(Number(options.tsunamiDeathRound) > 0)) {
+        log.push("🛡️ 大招結束，撤離等待恢復；本次不再追加攻擊。");
+        outcome = pHp > 0 ? "timeout" : "lose";
+        roundLogs.push(log.join("\n"));
+        break;
+      }
     }
     // 龜甲庇護（島島龜王卡）：開場宣告
-    if (round === 1 && _tshellCfg) {
+    if ((!options.actionSession || !_noPlayerAtk) && round === 1 && _tshellCfg) {
       log.push(`🐢 **龜甲庇護**展開！（殼 ${_tshellHp}）殼在期間受到傷害 −${_tshellCfg.drPct}%`);
     }
     // 符文結界／聖域護佑：開場宣告（前端結界條靠「結界值 N」這行初始化，格式勿改）
-    if (round === 1 && sanctumCfg) {
+    if ((!options.actionSession || !_noPlayerAtk) && round === 1 && sanctumCfg) {
       log.push(`🔷 **符文結界展開**！（結界值 ${_sanctumBarrier}）`);
     }
-    if (round === 1 && (_sanctuaryCutPct > 0 || _sanctuaryHealPct > 0)) {
+    if ((!options.actionSession || !_noPlayerAtk) && round === 1 && (_sanctuaryCutPct > 0 || _sanctuaryHealPct > 0)) {
       log.push(`🏛️ **聖域護佑中**——本場受到傷害 -${_sanctuaryCutPct}%、每回合回復 ${_sanctuaryHealPct}% HP！`);
     }
     // 日之精靈登場宣告（格式固定：前端精靈血條靠這行與代承/治療行逐回合更新）
-    if (round === 1 && sunSpiritCfg) {
+    if ((!options.actionSession || !_noPlayerAtk) && round === 1 && sunSpiritCfg) {
       log.push(_spiritHp > 0
         ? `☀️ **日之精靈**應召而來，守護在你身前！（精靈 ${_spiritHp} / ${_spiritMaxHp}）`
         : `💫 日之精靈尚未甦醒，本場由你獨自作戰。`);
@@ -1914,7 +2033,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (e?.key !== 'silence') return false;
       const dur = e.params?.duration || {};
       if (dur.mode === 'turns') {
-        const end = (e.appliedAt || 1) + (dur.value || 1);
+        const end = (e._clockExact ? (e.appliedAt ?? 1) : (e.appliedAt || 1)) + (dur.value || 1);
         return round <= end;
       }
       return true;
@@ -1925,6 +2044,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     // ── 應用怪物的 activeEffects（Buff/Debuff） ──
     const adjustedMCalc = applyMonsterEffects(mCalc, monsterRoundEffects, round);
+    if (steelCrown && steelCrown.phaseAt(mHp, mCalc.maxHp) === 3) {
+      adjustedMCalc.def = Math.max(0, adjustedMCalc.def - 10);
+    }
     const applyMonsterIncomingGuards = (rawDamage, {
       damageReduction = true,
       damageTaken = true,
@@ -1947,6 +2069,19 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       }
       return bossVulnerability ? applyBossVuln(damage) : damage;
     };
+    metalCards.setContext({ playerHp: () => pHp, silenced: () => (options.playerActiveEffects || []).some(e => e.key === 'silence' && effectIsActive(e, round)),
+      enemyHp: () => mHp, deployLog: () => log.push('🛰️ 發動【鋼冕浮游兵裝】！展開4枚浮游鋼刃。'),
+      bladeDamage: () => { const raw = applyDefense((pStats.atk || 1) * .7 * playerAttackLevelMult, adjustedMCalc.flatDef || 0, adjustedMCalc.def || 0, pStats.atk) * getElementMultiplier('metal', monsterElement, 1, monsterElementLevel); const d = applyMonsterIncomingGuards(raw); mHp -= d; totalDamage += d; if (mHp <= 0) outcome = 'win'; return d; },
+      bladeLog: (d, left) => { log.push(`🛰️ **鋼冕浮游兵裝**！鋼刃射出，對 ${mName} 造成 **${d}** 點金屬傷害！（怪物剩 ${Math.max(0,mHp)} HP）【鋼刃剩 ${left}/4】`); if (d > 0) mistCards.onCardDamage('metal_card_crown', d); },
+      heal: amount => { const before = pHp; pHp = _healPlayer(amount); const h = Math.max(0, pHp - before); if (h > 0) log.push(`💚 緊急焊補！回復 **${h}** HP！（你剩 ${pHp} HP）`); return h; } });
+    metalCards.checkHealth();
+    mistCards.setContext({ round, log, atk: pStats.atk || 1, playerName: playerBattleName, enemyName: mName,
+      boss: monsterIsBossUnit,
+      playerHp: () => pHp, enemyHp: () => mHp,
+      silenced: () => (options.playerActiveEffects || []).some(e => e.key === 'silence' && effectIsActive(e, round)),
+      damage: raw => { const dealt = applyMonsterIncomingGuards(raw); mHp -= dealt; totalDamage += dealt; if (mHp <= 0) outcome = 'win'; return dealt; },
+      heal: amount => { const before = pHp; pHp = _healPlayer(amount); return Math.max(0, pHp - before); },
+    });
     // 回合前段的回血化刃（隊伍光環）使用目前怪物狀態，並沿用上一回合已成立的
     // 隊伍扣防／玩家穿防；本回合裝備效果解析完成後會再刷新一次。
     _healDamageTargetStats = adjustedMCalc;
@@ -1955,7 +2090,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       (Number(pStats.bypassMonsterDefPct) || 0) + playerDefIgnoreCarry));
 
     // ── 應用怪物的恢復效果（heal_over_time） ──
-    if (Array.isArray(monsterRoundEffects)) {
+    if ((!options.actionSession || options.skipMonsterAttack !== true) && Array.isArray(monsterRoundEffects)) {
       for (const healEff of monsterRoundEffects) {
         if (!healEff || !healEff.key) continue;
         const healParams = healEff.params || {};
@@ -1963,7 +2098,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         // 檢查效果是否仍在持續
         if (healDuration.mode === 'turns') {
-          const appliedRound = healEff.appliedAt || 1;
+          const appliedRound = healEff._clockExact ? (healEff.appliedAt ?? 1) : (healEff.appliedAt || 1);
           const endRound = appliedRound + (healDuration.value || 1);
           if (round > endRound) continue;
         }
@@ -2020,11 +2155,12 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (Array.isArray(monsterRoundEffects)) {
       for (const mEff of monsterRoundEffects) {
         if (!mEff || !mEff.key) continue;
+        if (options.actionSession && mEff.sourceActorId && mEff.sourceActorId !== options.partyActorId) continue;
         const mParams = mEff.params || {};
         const mDur = mParams.duration || {};
 
         if (mDur.mode === 'turns') {
-          const appliedRound = mEff.appliedAt || 1;
+          const appliedRound = mEff._clockExact ? (mEff.appliedAt ?? 1) : (mEff.appliedAt || 1);
           const endRound = appliedRound + (mDur.value || 1);
           if (round > endRound) continue;
         }
@@ -2077,7 +2213,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (mEff.key === 'stun') {
           const stunTurns = Number(mParams.duration?.value ?? 1);
           // appliedAt 回合起持續 stunTurns 回合
-          const stunEnd = (mEff.appliedAt || 1) + stunTurns;
+          const stunEnd = (mEff._clockExact ? (mEff.appliedAt ?? 1) : (mEff.appliedAt || 1)) + stunTurns;
           if (round <= stunEnd && stunRoundsLeft < stunTurns) {
             applyMonsterStun(stunEnd - round + 1, round);
           }
@@ -2159,7 +2295,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
 
     // ── 龍翼魔法師卡：每回合清除自身負面狀態 ──
-    if (playerCleanseSelf && Array.isArray(options.playerActiveEffects)) {
+    if (playerCleanseSelf && (!options.actionSession || !_noPlayerAtk) && Array.isArray(options.playerActiveEffects)) {
       const beforeCleanse = options.playerActiveEffects.length;
       options.playerActiveEffects = options.playerActiveEffects.filter((e) => e && !PLAYER_DEBUFF_KEYS.includes(e.key));
       if (options.playerActiveEffects.length < beforeCleanse) {
@@ -2183,7 +2319,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // DOT 也走玩家防禦管線；末端再套防具同屬抗性（各處都是 mitigateDot 後才 log，故戰報數字正確）
     const mitigateDot = (dmg) => _applyElementDR(applyDefense(dmg, pStats.flatDef || 0, pStats.def || 0, mCalc.atk || 1));
     const _dotP = []; // 戰報重整：玩家承受的 DOT 彙總顯示（[標籤, 傷害]）
-    if (Array.isArray(options.playerActiveEffects)) {
+    if ((!options.actionSession || !_noPlayerAtk) && Array.isArray(options.playerActiveEffects)) {
       for (const dotEffect of options.playerActiveEffects) {
         if (!dotEffect || !dotEffect.key) continue;
         const dotParams = dotEffect.params || {};
@@ -2191,7 +2327,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
         // 檢查效果是否仍在持續（"turns" 模式）
         if (dotDuration.mode === 'turns') {
-          const appliedRound = dotEffect.appliedAt || 1;
+          const appliedRound = dotEffect._clockExact ? (dotEffect.appliedAt ?? 1) : (dotEffect.appliedAt || 1);
           const endRound = appliedRound + (dotDuration.value || 1);
           if (round > endRound) continue; // 效果已過期
         }
@@ -2409,7 +2545,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
         // 掩護射擊（神射手）：區內神射手每回合替你補一箭——傷害型「光環」，
         // 吃提供者的 ATK/爆擊（出戰當下快照）、目標防禦與部位/屬性倍率；世界王結算時歸戶給提供者
-        if (pe.key === 'support_shot') {
+        if ((!options.actionSession || !_noPlayerAtk) && pe.key === 'support_shot') {
           const _ssPct = Number(pe.params?.value ?? 0);
           const _ssAtk = Math.max(0, Number(pe.params?.casterAtk) || 0);
           // 自己出戰時不吃自己的掩護（人在前線就沒人在高處放箭）
@@ -2616,7 +2752,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
     if (options.skipMonsterAttack !== true && !monsterActionSuppressedByAgi && !monsterIsStunned && !monsterIsSilenced && monsterEquipped.special_1 && monsterEquipped.special_1.monsterCardSkill && monsterEquipped.special_1.monsterCardSkill.key) {
       const equippedCard = monsterEquipped.special_1;
-      const skill = equippedCard.monsterCardSkill;
+      const skill = equippedCard.monsterCardSkill.monsterSkill || equippedCard.monsterCardSkill;
       const cardName = equippedCard.itemName || equippedCard.name || '卡片';
       const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
       const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
@@ -2639,6 +2775,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           targetHpPct: playerHpPct,
           round,
           sourceType: 'monster_skill',
+          interceptTargetEffect: effect => mistCards.onDebuff(effect, round),
           cardName,
           skillName: skill.name || cardName,
           skillDescription: _descOnce(skill.name, skill.description || ''),
@@ -2789,7 +2926,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             effectEntry.appliedAt = round - 1;
             // 怪物DEBUFF → 施加給玩家（同 key 先清舊的，防止 DOT 疊加）
             if (!options.playerActiveEffects) options.playerActiveEffects = [];
-            options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, effectEntry);
+            if (!mistCards.onDebuff(effectEntry, round)) options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, effectEntry);
             appliedAnyNormalProc = true;
           }
         }
@@ -2863,7 +3000,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (!pEff || !pEff.key) continue;
         const pDur = pEff.params?.duration || {};
         if (pDur.mode === 'turns') {
-          const pEnd = (pEff.appliedAt || 1) + (pDur.value || 1);
+          const pEnd = (pEff._clockExact ? (pEff.appliedAt ?? 1) : (pEff.appliedAt || 1)) + (pDur.value || 1);
           if (round > pEnd) continue;
         }
         if (pEff.key === 'control_immunity') playerHasControlImmunity = true;
@@ -2873,7 +3010,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (!pEff || !pEff.key) continue;
         const pDur = pEff.params?.duration || {};
         if (pDur.mode === 'turns') {
-          const pEnd = (pEff.appliedAt || 1) + (pDur.value || 1);
+          const pEnd = (pEff._clockExact ? (pEff.appliedAt ?? 1) : (pEff.appliedAt || 1)) + (pDur.value || 1);
           if (round > pEnd) continue;
         }
         const isControl = ['stun','freeze','sleep','fear','root','blind','disarm','confuse','taunt','charm'].includes(pEff.key);
@@ -2945,7 +3082,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     for (const slot of specialSlots) {
       const slotItem = options.equipped?.[slot];
       if (!_noPlayerAtk && !playerIsStunned && !playerIsFrozen && !playerIsSilenced && slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key
-          && slotItem.monsterCardSkill.trigger !== 'on_dodge') { // on_dodge 卡改在「玩家閃避」時觸發，不在此回合觸發
+          && !['on_dodge', 'battle_event'].includes(slotItem.monsterCardSkill.trigger)) { // on_dodge 卡改在「玩家閃避」時觸發，不在此回合觸發
+        let cardDamageThisCast = 0;
         const skill = slotItem.monsterCardSkill;
         const cardName = slotItem.itemName || slotItem.name || '卡片';
         const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
@@ -2985,7 +3123,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             //    原始值寫戰報（見 applyImmediateCardDamageEffect），扣血正確但玩家看到的數字是錯的。
             applyTargetDamage: (damage) => {
               const d = applyMonsterIncomingGuards(damage);
-              mHp -= d; totalDamage += Math.max(0, Number(d) || 0);
+              mHp -= d; totalDamage += Math.max(0, Number(d) || 0); cardDamageThisCast += Math.max(0, Number(d) || 0);
               return { remainingHp: mHp, actualDamage: d };
             },
             applyOwnerHeal: (heal) => {
@@ -3004,7 +3142,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               for (let i = 0; i < hits && mHp > 0; i++) {
                 const damage = applyMonsterIncomingGuards(Math.max(1, Math.round((pStats.atk || 1) * pct)));
                 mHp -= damage;
-                totalDamage += damage;
+                totalDamage += damage; cardDamageThisCast += damage;
                 total += damage;
               }
               log.push(`✨ **${playerBattleName}** 發動【${skill.name || cardName}】${hits > 1 ? `連擊 ${hits} 次` : '追擊'}，共對 ${mName} 造成 **${total}** 點傷害！`);
@@ -3077,7 +3215,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const pct = Number(pp.damageMultiplier ?? pp.value ?? 0.5);
             const extraDmg = applyMonsterIncomingGuards(Math.max(1, Math.round((pStats.atk || 1) * pct)));
             mHp -= extraDmg;
-            totalDamage += extraDmg;
+            totalDamage += extraDmg; cardDamageThisCast += extraDmg;
             log.push(`✨ **${playerBattleName}** 發動【${skill.name || cardName}】追擊，對 ${mName} 造成 **${extraDmg}** 點傷害！（${mName} 剩 ${Math.max(0, mHp)} HP）`);
             appliedAnyNormalProc = true;
             if (mHp <= 0) outcome = "win";
@@ -3090,7 +3228,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               if (mHp <= 0) break;
               const chainDmg = applyMonsterIncomingGuards(Math.max(1, Math.round((pStats.atk || 1) * chainPct)));
               mHp -= chainDmg;
-              totalDamage += chainDmg;
+              totalDamage += chainDmg; cardDamageThisCast += chainDmg;
               log.push(`⛓️ **${playerBattleName}** 連鎖打擊！對 ${mName} 造成 **${chainDmg}** 點傷害！`);
               if (mHp <= 0) { outcome = "win"; break; }
             }
@@ -3102,7 +3240,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const monsterHpPctNow = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
             if (monsterHpPctNow <= execThr) {
               log.push(`💀 **${playerBattleName}** 發動【${skill.name || cardName}】斬殺！${mName} 直接被擊殺！`);
-              totalDamage += mHp;
+              totalDamage += mHp; cardDamageThisCast += mHp;
               mHp = 0;
               outcome = "win";
               appliedAnyNormalProc = true;
@@ -3137,7 +3275,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             // 同上:即時傷害計入總傷害，並走同一道檢傷（回傳物件才會讓戰報顯示檢傷後的數字）
             applyTargetDamage: (damage) => {
               const d = applyMonsterIncomingGuards(damage);
-              mHp -= d; totalDamage += Math.max(0, Number(d) || 0);
+              mHp -= d; totalDamage += Math.max(0, Number(d) || 0); cardDamageThisCast += Math.max(0, Number(d) || 0);
               return { remainingHp: mHp, actualDamage: d };
             },
             log
@@ -3193,6 +3331,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           log.push(`🎴 **${playerBattleName}** 發動【${skill.name || cardName}】！${_descOnce(skill.name || cardName, skill.description || '')}`);
         }
       }
+      mistCards.onSuccessfulHit(cardDamageThisCast);
+      mistCards.onCardDamage(skill.key, cardDamageThisCast);
     }
     }
 
@@ -3269,7 +3409,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     // ── 自訂觸發：round_start_chance（回合開始擲自己的機率，不吃 35% 閘門）──
     //    目前用於賭徒「千術」：讓敵方本回合攻擊必定大失敗（自傷並跳過該次攻擊）。
-    forceMonsterCritFail = false;
+    if (!options.actionSession || !_noPlayerAtk) forceMonsterCritFail = false;
     _greatChanceBonusRound = 0;
     if (!_noPlayerAtk && !playerIsStunned && !playerIsFrozen && outcome === null) {
       const _customSkills = (Array.isArray(options.equipped?.job_eq?.jobSkills)
@@ -3386,6 +3526,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     let playerFinalDamageMultiplier = _turtleSetTideCfg && turtleTidePhase(round, _turtleSetTideCfg) === "ebb_tide"
       ? 1 + _turtleSetTideCfg.ebbFinalDamagePct / 100
       : 1;
+    if (_rabbitSetRageCfg) {
+      if (turtleTidePhase(round, _rabbitSetRageCfg) === "high_tide") playerDamageReductionPct += _rabbitSetRageCfg.highTideDamageReductionPct;
+      else playerFinalDamageMultiplier *= 1 + _rabbitSetRageCfg.ebbFinalDamagePct / 100;
+      if (isTurtleTideTransitionRound(round, _rabbitSetRageCfg)) log.push(turtleTidePhase(round,_rabbitSetRageCfg)==="high_tide"?"🐰 **委屈**！鬱兔套裝減傷12%。":"💢 **爆走**！鬱兔套裝最終傷害+18%。");
+    }
     let playerInvincible = false;
     let playerBonusVsPoisonedPct = 0;
     let playerBonusVsDebuffedPct = 0;
@@ -3655,25 +3800,28 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       (Number(pStats.bypassMonsterDefPct) || 0) + playerDefIgnorePct + roundPartyDefIgnorePct));
 
     for (let a = 0; a < attackCount && outcome === null && !_noPlayerAtk && !playerIsStunned && !playerIsFrozen; a++) {
-      const hitChance = calcHitChance({
+      const metalAim = a === 0 && !_noPlayerAtk ? metalCards.aim() : { bonus: 0, forced: false };
+      const hitChance = Math.min(100, metalAim.bonus + calcHitChance({
         hit: (pStats.hit + playerHitBonus - playerHitPenalty),
         dodge: adjustedMCalc.dodge,
         min: 20,
-      });
+      }));
 
       // ── 基礎屬性 buff → 本回合衍生值（與 calcPlayerStats 的推導係數保持一致）──
-      //    ATK：武器主屬性增量 × 武器倍率；爆擊率：LUK×0.5；命中：DEX×1；
-      //    武器主屬性追加傷害：主屬性增量 ×1.5。（迴避已在效果鏈直接加進 playerDodgeBonus）
+      //    ATK／武器主屬性追加傷害：共用主屬性稀釋曲線；爆擊率：LUK×0.5；命中：DEX×1。
+      //    迴避已在效果鏈直接加進 playerDodgeBonus。
       const _mainStatKey = pStats.weaponMainStat || "str";
       const _dMain = playerStatBonus[_mainStatKey] || 0;
+      const _effectiveMainGain = offensiveStatGain(pStats[_mainStatKey] || 0, (pStats[_mainStatKey] || 0) + _dMain);
       const _wCfg = getWeaponConfig(pStats.weaponType) || {};
       const _wMult = pStats.weaponType ? (Number(_wCfg.mult) || 1) : 1;
-      const roundAtkFlatBonus = Math.round(_dMain * _wMult);
+      const _baseEffectiveMain = effectiveOffensiveStat(pStats[_mainStatKey] || 0);
+      const roundAtkFlatBonus = Math.round((_baseEffectiveMain + _effectiveMainGain) * _wMult) - Math.round(_baseEffectiveMain * _wMult);
       const roundCritStatBonus = (playerStatBonus.luk || 0) * 0.5;
       const roundHitStatBonus = playerStatBonus.dex || 0;
       // 副手那一擊：武器主屬性追加傷害也一起打折（否則固定加成不受倍率影響）
       const _offhandMultRound = (a >= 1 && pStats.isDualWield) ? OFFHAND_DAMAGE_MULT : 1;
-      const weaponMainBonusRound = Math.max(0, Math.round((weaponMainBonus + Math.round(_dMain * 1.5)) * _offhandMultRound));
+      const weaponMainBonusRound = Math.max(0, Math.round(((Number(pStats.weaponMainStatValue) || 0) + _effectiveMainGain) * 1.5 * _offhandMultRound));
 
       // ── 擲攻擊階級（5 階：大失敗/失敗/成功/大成功/完美）──
       const atkTierProbs = calcAttackTierProbs(
@@ -3686,19 +3834,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         atkTierProbs.success -= _mv;
         atkTierProbs.great += _mv;
       }
-      const atkTier = rollAttackTier(atkTierProbs);
+      const atkTier = metalAim.forced ? 'success' : rollAttackTier(atkTierProbs);
 
       // 大失敗：自殘 30%，跳過本次攻擊
       if (atkTier === 'critFail') {
         const selfBase = Math.max(1, Math.round((pStats.atk || 1) * playerAttackLevelMult));
         let selfDmg = Math.max(1, Math.round(selfBase * 0.3 * (0.7 + Math.random() * 0.3)));
-        selfDmg = _hurt(selfDmg);
+        selfDmg = _hurt(selfDmg, false);
         log.push(`💥 **大失敗**！你揮拳失手砸到自己，受到 **${selfDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
         if (pHp <= 0) { outcome = "lose"; break; }
         continue;
       }
       // 失敗：強制 miss（不看 HIT/DODGE）
       if (atkTier === 'fail') {
+        if (a === 0 && !_noPlayerAtk) metalCards.onMiss();
         log.push(`❌ **失敗**！你手滑揮空，沒打到 ${mName}！`);
         continue;
       }
@@ -3952,7 +4101,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       // 大成功 / 完美：跳過 HIT/DODGE 必中
       const forceHit = (atkTier === 'great' || atkTier === 'perfect');
 
-      if (monsterIsStunned || forceHit || options.forcePlayerHit || (sageCfg && _sageMistRound === round) || Math.random() * 100 < hitChance) {
+      if (monsterIsStunned || forceHit || metalAim.forced || options.forcePlayerHit || (sageCfg && _sageMistRound === round) || Math.random() * 100 < hitChance) {
         // 破防判定（斧）
         const isBreak = Math.random() * 100 < pStats.armorBreakChance;
         const effectiveDef = isBreak ? 0 : Math.max(0, adjustedMCalc.def * (1 - Math.min(95, roundMonsterDefDownPct) / 100));
@@ -3967,11 +4116,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         const finalDef = Math.max(0, effectiveDef * (1 - combinedBypassPct / 100));
 
         let conditionalBonusMultiplier = getRoundTargetDamageMultiplier();
-        // 怪物圖鑑加成：對該怪累積擊殺愈多，傷害愈高（共用上限目前 15%；由呼叫端依玩家進度計算後傳入）
-        // 上限預設＝圖鑑基準（shared/bestiary MAX_BONUS_PCT，2026-08-04 起 15）；
+        // 怪物圖鑑加成：對該怪累積擊殺愈多，傷害愈高（共用上限目前 10%；由呼叫端依玩家進度計算後傳入）
+        // 上限預設＝圖鑑基準（shared/bestiary MAX_BONUS_PCT）；
         // 兵聖「知彼」由呼叫端傳放大後的 bestiaryBonusCapPct
         const _bestiaryDefaultCap = (() => {
-          try { return require("./bestiary").MAX_BONUS_PCT; } catch (_) { return 15; }
+          try { return require("./bestiary").MAX_BONUS_PCT; } catch (_) { return 10; }
         })();
         const _bestiaryCap = Number(options.bestiaryBonusCapPct) > 0 ? Number(options.bestiaryBonusCapPct) : _bestiaryDefaultCap;
         const _bestiaryBonusPct = Math.max(0, Math.min(_bestiaryCap, Number(options.bestiaryBonusPct) || 0));
@@ -4224,6 +4373,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           if (_mainDiceMult !== 1 && finalDamage > 0) finalDamage = Math.max(1, Math.round(finalDamage * _mainDiceMult));
         }
 
+        // Precision boosts this ordinary main hit only, before the enemy's damage cap.
+        const regionalPrecisionHit = a === 0 && !_noPlayerAtk && finalDamage > 0 && _tryMithrilPrecision();
+        if (regionalPrecisionHit) finalDamage = Math.max(1, Math.round(finalDamage * 1.3));
+        if (a === 0 && !_noPlayerAtk && !stormVolleyCfg && _burstMult <= 1) finalDamage = metalCards.mainDamage(finalDamage, isCrit);
+
         // 每擊傷害上限（金錢袋怪等「必定格擋、每擊只扣N」）：所有加成/爆擊算完後硬性夾住上限
         if (adjustedMCalc.incomingDamageCap > 0 && finalDamage > adjustedMCalc.incomingDamageCap) {
           finalDamage = adjustedMCalc.incomingDamageCap;
@@ -4280,7 +4434,23 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         else if (defTier === 'reduce') defTierNote = "🛡️減傷！";
         else if (defTier === 'graze') defTierNote = "🌬️擦傷！";
 
-        log.push(`⚔️ ${atkTierNote}${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害${defTierNote ? `（${defTierNote.replace(/[!！]$/, "")}）` : ""}！（怪物剩 ${Math.max(0, mHp)} HP）`);
+        log.push(`⚔️ ${regionalPrecisionHit ? "🎯**精準重擊**！" : ""}${atkTierNote}${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害${defTierNote ? `（${defTierNote.replace(/[!！]$/, "")}）` : ""}！（怪物剩 ${Math.max(0, mHp)} HP）`);
+
+        if (a === 0 && dmg > 0 && mHp > 0 && _tryHellfireEmber()) {
+          monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
+            key: "burn", params: { value: 20, mode: "caster_atk_pct", casterAtk: Math.max(1, Number(pStats.atk) || 1), duration: { mode: "turns", value: 2 } },
+            appliedAt: round, sourceType: "set_bonus", sourceId: "set:hellfire_ember", sourceName: "焚獄餘燼",
+          });
+        }
+        if (a === 0 && !_noPlayerAtk && !stormVolleyCfg && _burstMult <= 1) metalCards.onHit(dmg, isCrit, wasBlocked);
+        mistCards.onSuccessfulHit(dmg);
+        if (!stormVolleyCfg && _burstMult <= 1) {
+          options.playerActiveEffects = options.playerActiveEffects || [];
+          if (mistCards.onBasicHit(dmg, round, monsterActiveEffects, options.playerActiveEffects)) {
+            Object.assign(adjustedMCalc, applyMonsterEffects(mCalc, monsterIsSilenced ? monsterActiveEffects.filter(e => e.sourceType !== 'monster_skill') : monsterActiveEffects, round));
+          }
+        }
+        if (mHp <= 0) { outcome = 'win'; break; }
 
         // ── 嵐暴（元素師）：固定補打 2 段法術彈（每段＝pctPerHit%、各段獨立擲爆擊）──
         //    不吃連擊增傷、不算連擊；只作用主手（a===0），副手追擊維持原樣單追擊。
@@ -4781,6 +4951,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (comboKilled) { outcome = "win"; break; }
       } else {
         // 斧命中低（V0.5 武器身分）：揮空時點名巨斧，玩家才學得會「這是斧的代價、可以用 DEX/命中裝繞過」
+        if (a === 0 && !_noPlayerAtk && !stormVolleyCfg) metalCards.onMiss();
         const _missAxe = String(options.equipped?.weapon?.weaponType || "").startsWith("axe");
         const _missPhrase = rand(jobFlavor.dodge);
         log.push(_missAxe
@@ -4846,7 +5017,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 完美和弦（吟遊詩人）：上一場完美演奏 → 本場開場追擊 ──
-    if (!_noPlayerAtk && Number(options.bardChordPct) > 0 && round === 1 && outcome === null && mHp > 0) {
+    if (!_noPlayerAtk && Number(options.bardChordPct) > 0 && (options.bardPerformanceId ? options.actionSession?.bardPerformanceId !== options.bardPerformanceId : round === 1) && outcome === null && mHp > 0) {
+      if (options.actionSession) options.actionSession.bardPerformanceId = options.bardPerformanceId;
       log.push(`🎼 **完美和弦**餘音未散——音波化作利刃！`);
       _sniperArrow(Number(options.bardChordPct), "完美和弦", "🎼");
       if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
@@ -4897,7 +5069,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 日之精靈協攻（聖靈師）：每回合一擊，ATK＝主人×ratio%、日屬性；單發不爆擊不連擊 ──
-    if (sunSpiritCfg && _spiritHp > 0 && outcome === null && mHp > 0) {
+    if ((!options.actionSession || !_noPlayerAtk) && sunSpiritCfg && _spiritHp > 0 && outcome === null && mHp > 0) {
       const _spBase = Math.max(1, Math.round((pStats.atk || 1) * (Number(sunSpiritCfg.atkRatio) || 33) / 100));
       let _spDmg = rollDmg(applyDefense(_spBase, adjustedMCalc.flatDef || 0, Math.max(0, Math.min(95, adjustedMCalc.def || 0)), pStats.atk));
       _spDmg = Math.max(1, Math.round(_spDmg * playerAttackLevelMult));
@@ -4919,7 +5091,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 大治療術（聖靈師）：每 N 個有出手的回合施放；精靈在場先回精靈、否則回自己 ──
-    if (sunSpiritCfg && outcome === null && _attackRoundMark === round
+    if ((!options.actionSession || !_noPlayerAtk) && sunSpiritCfg && outcome === null && _attackRoundMark === round
         && combatStats.attackRounds > 0 && combatStats.attackRounds % Math.max(1, Number(sunSpiritCfg.healEveryRounds) || 5) === 0) {
       // 大治療術是「攢好幾回合放一次」→ INT 斜率按間隔回合數等比給，與逐回合治療的總量一致
       const _bigHealInterval = Math.max(1, Number(sunSpiritCfg.healEveryRounds) || 5);
@@ -4964,7 +5136,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     } else if (hasAgiFirstStrike && round === 1) {
       skipMonsterAttackReason = "agi_first_strike";
     } else if (hasAgiSlowedMonster && round % 2 !== 0) {
-      // 如果 AGI 差 > 5，奇數回合怪物不攻擊
+      // 如果 AGI 差 > 15，奇數回合怪物不攻擊
       skipMonsterAttackReason = "agi_slowed";
     } else {
       monsterAttackCount = pStats.monsterAttackCount || 1;
@@ -5026,7 +5198,20 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       log.push(`💥 ${note}${mName} ${_g6Phrase || "連番攻勢襲來"}——${_g6Buf.length} 段連襲共 **${total}**（${parts.join("＋")}${tail}）`);
       _g6Buf.length = 0;
     };
+    const steelBaseAtk = adjustedMCalc.atk;
+    let steelSegments = null;
+    if (steelCrown && monsterAttackCount > 0 && outcome === null && mHp > 0) {
+      const phase = steelCrown.phaseAt(mHp, mCalc.maxHp);
+      steelCrownActions++;
+      const hits = steelCrown.attacks(phase, steelCrownActions);
+      steelSegments = steelCrown.splitAttacks(hits, steelBaseAtk,
+        adjustedMCalc.finalDamageMultiplier || 1, monsterAttackLevelMult, G6_SEG_REF, G6_MAX_SEGS);
+      monsterAttackCount = steelSegments.length;
+      _g6Segs = 1;
+      steelCrownEvents.push({ phase, action: steelCrownActions, hits, segments: steelSegments.length });
+    }
     for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
+      if (steelSegments) adjustedMCalc.atk = steelBaseAtk * steelSegments[ma].factor;
       // 精靈是純血量召喚物：在場時不借用主人的任何防禦判定，怪物只要自身沒有失敗就會命中。
       const spiritTargeted = Boolean(sunSpiritCfg) && _spiritHp > 0;
       const monsterHitChance = spiritTargeted
@@ -5071,6 +5256,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       const mForceHit = false;
 
       if ((!spiritTargeted && (playerIsStunned || _sageAllInNow)) || mForceHit || hellfangGuaranteedSeg || Math.random() * 100 < monsterHitChance) {
+        if (!spiritTargeted && !playerInvincible && _tryMagneticDeflection()) {
+          if (_g6Segs > 1) _g6Buf.push({ kind: "dodge" });
+          if (_hellfangCombo) break;
+          continue;
+        }
         // 盾格擋判定（含主動技能臨時格擋加成，例如劍士「舉步若堅」+25%，上限 95% 與被動一致）
         // 姿態有指定格擋率時以姿態為準（技能/裝備的臨時加成仍疊上去）
         const _stanceBlock = Number(battleStance?.blockChance);
@@ -5258,7 +5448,9 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           monsterDmgThisRound += dmg;
           lastMonsterDmg = dmg;
           const invincibleText = playerInvincible ? "（免疫傷害）" : (shieldAbsorbed > 0 ? `（護盾吸收 ${shieldAbsorbed}）` : "");
-          const _hitPhrase = rand(mAtkPhrases); // rand 照抽保留亂數流
+          const _randomHitPhrase = rand(mAtkPhrases); // rand 照抽保留亂數流
+          const _hitPhrase = steelSegments?.[ma]?.name
+            ? `施展 **${steelSegments[ma].name}**` : _randomHitPhrase;
           if (_g6Segs > 1) {
             if (!_g6Phrase) _g6Phrase = _hitPhrase;
             if (hasMonsterCrit) _g6AnyCrit = true;
@@ -5271,6 +5463,14 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             if (_spiritHp <= 0) log.push(`💫 日之精靈力竭消散——接下來的攻擊將由你承受！`);
           } else {
             log.push(`💥 ${mAtkNote}${mName} ${_hitPhrase}，造成 **${dmg}** 點傷害${invincibleText}！（你剩 ${Math.max(0, pHp)} HP）`);
+          }
+          // Regional dragon trait is equipment-owned and does not alter other thorns sources.
+          if (!_spiritTook && dmg > 0 && _tryDragonReflection()) {
+            const reflected = applyMonsterIncomingGuards(Math.max(1, Math.round(dmg * 0.12)));
+            mHp -= reflected;
+            totalDamage += reflected;
+            log.push(`🐉 **龍鱗反傷**！${mName} 受到 **${reflected}** 點反彈傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+            if (mHp <= 0) outcome = "win";
           }
           // ── 反傷（thorns）──（精靈代承時主人沒被打到 → 不觸發）
           if (!_spiritTook && playerThornsPct > 0 && dmg > 0) {
@@ -5327,6 +5527,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         }
       } else {
         combatStats.dodgeCount += 1;
+        mistCards.onDodge(round);
+        metalCards.onDodge();
         const _dodgePhrase = rand(jobFlavor.dodge); // rand 照抽保留亂數流
         if (_g6Segs > 1) _g6Buf.push({ kind: "dodge" });
         else log.push(`🛡️ ${mName} 猛撲而來，你${_dodgePhrase}，躲過了攻擊！`);
@@ -5337,6 +5539,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             const dItem = options.equipped?.[dSlot];
             const dSkill = dItem?.monsterCardSkill;
             if (!dSkill || !dSkill.key || dSkill.trigger !== 'on_dodge') continue;
+            let dodgeCardDamageThisCast = 0;
             const dChance = Math.min(100, Math.max(0, Number(dSkill.chance ?? 20)));
             if (Math.random() * 100 >= dChance) continue;
             const dRes = applyCardProcEffects({
@@ -5359,7 +5562,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
               // 同上：閃避後觸發的卡片傷害一樣要走檢傷，並回傳物件讓戰報顯示檢傷後數字
               applyTargetDamage: (raw) => {
                 const d = applyMonsterIncomingGuards(raw);
-                mHp -= d; totalDamage += Math.max(0, Number(d) || 0);
+                mHp -= d; totalDamage += Math.max(0, Number(d) || 0); dodgeCardDamageThisCast += Math.max(0, Number(d) || 0);
                 return { remainingHp: mHp, actualDamage: d };
               },
               applyOwnerHeal: (h) => {
@@ -5372,6 +5575,8 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
             });
             options.playerActiveEffects = dRes.ownerActiveEffects;
             monsterActiveEffects = dRes.targetActiveEffects;
+            mistCards.onSuccessfulHit(dodgeCardDamageThisCast);
+            mistCards.onCardDamage(dSkill.key, dodgeCardDamageThisCast);
           }
         }
 
@@ -5402,10 +5607,11 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         if (_hellfangCombo && ma >= 2) break;
       }
     }
+    if (steelSegments) adjustedMCalc.atk = steelBaseAtk;
     _g6FlushLine(); // 戰報重整：G6 拆段合併行（含中途死亡的殘段）
 
     // ── 怪物連擊（AGI 驅動）── 簡化：觸發後同一次傷害再扣一次（× 2 效果）
-    const monsterComboChance = adjustedMCalc.comboChance || 0;
+    const monsterComboChance = steelCrown ? 0 : adjustedMCalc.comboChance || 0;
     // 🐺 狼王：連擊由「連牙亂舞」段數機制負責(含迴避打斷)，關掉這套 AGI 額外連擊避免雙重連擊架空打斷
     if (monsterComboChance > 0 && !skipMonsterAttackReason && outcome === null && lastMonsterDmg > 0 && !_hellfangCombo) {
       if (Math.random() * 100 < monsterComboChance) {
@@ -5416,7 +5622,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
           log.push(`⚡ **${mName} 連擊**！☀️ 日之精靈代承 **${comboDmg}** 點傷害！（精靈剩 ${Math.max(0, _spiritHp)} / ${_spiritMaxHp}）`);
           if (_spiritHp <= 0) log.push(`💫 日之精靈力竭消散——接下來的攻擊將由你承受！`);
         } else {
-          comboDmg = _hurt(comboDmg);
+          comboDmg = _hurt(comboDmg, true, true, true);
           monsterDmgThisRound += comboDmg;
           log.push(`⚡ **${mName} 連擊**！再造成 **${comboDmg}** 點傷害！（你剩 ${Math.max(0, pHp)} HP）`);
           if (pHp <= 0) { outcome = "lose"; }
@@ -5467,7 +5673,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
 
     // ── 神速反擊（神射手）：這回合對手沒打到你 → 多一箭 ──
     //    涵蓋：揮空/被閃/來不及出手（先手・慢半拍）/被暈眩/被冰封/被震退（使用者定案：硬控也算）
-    if (sniperCfg && outcome === null && mHp > 0 && monsterDmgThisRound === 0) {
+    if (sniperCfg && outcome === null && mHp > 0 && monsterDmgThisRound === 0 && (!options.actionSession || !_partyWasHitSinceAttack)) {
       _sniperArrow(sniperCfg.counterShotPct || 100, "神速反擊");
       if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
     }
@@ -5492,7 +5698,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       if (counterAtkTier === 'critFail') {
         const selfBase = Math.max(1, Math.round((pStats.atk || 1) * playerAttackLevelMult));
         let selfDmg = Math.max(1, Math.round(selfBase * 0.3 * (0.7 + Math.random() * 0.3)));
-        selfDmg = _hurt(selfDmg);
+        selfDmg = _hurt(selfDmg, false);
         log.push(`💥 **盾反大失敗**！你揮空砸到自己，受到 **${selfDmg}** 點傷害！`);
         if (pHp <= 0) { outcome = "lose"; }
       } else if (counterAtkTier === 'fail') {
@@ -5539,7 +5745,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // ── 玩家 HOT/life_regen 結算（每回合結束）──
     // 滿血時本來就跳過(回不進去、也不用洗「恢復 0 HP」)；但聖人(回血化刃)會把治療轉成傷害，
     // 滿血反而正是要結算的時候——不放行的話滿血聖人等於整組 life_regen/HOT 裝備全廢(玩家實測回報)。
-    if (outcome === null && pHp > 0 && (pHp < pStats.maxHp || _healToDamage > 0)) {
+    if ((!options.actionSession || !_noPlayerAtk) && outcome === null && pHp > 0 && (pHp < pStats.maxHp || _healToDamage > 0)) {
       let totalHot = 0;
       if (playerHotPct > 0) totalHot += Math.round(pStats.maxHp * (playerHotPct / 100));
       if (playerHotFlat > 0) totalHot += Math.round(playerHotFlat);
@@ -5556,7 +5762,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     }
 
     // ── 聖域護佑：每回合回血（區域聖域窗口，任何職業都吃）──
-    if (_sanctuaryHealPct > 0 && outcome === null && pHp > 0 && pHp < (pStats.maxHp || 1)) {
+    if ((!options.actionSession || !_noPlayerAtk) && _sanctuaryHealPct > 0 && outcome === null && pHp > 0 && pHp < (pStats.maxHp || 1)) {
       const _shHeal = Math.max(1, Math.round((pStats.maxHp || 1) * _sanctuaryHealPct / 100));
       const _shBefore = pHp;
       pHp = _healPlayer(_shHeal, Object.keys(_sanctuaryContributors).length > 0 ? { externalAura: true } : undefined);
@@ -5578,7 +5784,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
       // 倍率隨回合成長：×(滿場倍率 × 引爆回合/全場回合)——撐到最後一回合才吃滿倍率（使用者定案）。
       // 早被打爆＝吸收滿但倍率低；撐好撐滿＝吸收與倍率雙滿 → 「撐盾」永遠是對的
       const _detonateRaw = () => {
-        const _timeMult = (Number(sanctumCfg.detonateMult) || 2) * (round / Math.max(1, endRound));
+        const _timeMult = (Number(sanctumCfg.detonateMult) || 2) * (Math.min(round, options.actionSession ? 15 : endRound) / Math.max(1, options.actionSession ? 15 : endRound));
         let d = Math.max(1, Math.round(_sanctumAcc * _timeMult));
         d = applyMonsterIncomingGuards(d);
         if (_noPlayerAtk) d = 0;
@@ -5590,18 +5796,18 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
         _sanctumDetonated = true;
         mHp -= d;
         totalDamage += d;
-        const _tm = Math.round((Number(sanctumCfg.detonateMult) || 2) * (round / Math.max(1, endRound)) * 100) / 100;
+        const _tm = Math.round((Number(sanctumCfg.detonateMult) || 2) * (Math.min(round, options.actionSession ? 15 : endRound) / Math.max(1, options.actionSession ? 15 : endRound)) * 100) / 100;
         log.push(`🔷 **結界過載——共鳴反爆**${label}！吸收 ${_sanctumAcc} ×${_tm.toFixed(2)}（第 ${round} 回合）——無視防禦轟出 **${d}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
         if (mHp <= 0) outcome = "win";
       };
       if (outcome === null && mHp > 0 && _sanctumAcc > 0) {
-        if (_sanctumBroke) {
+        if (_sanctumBroke && !_noPlayerAtk) {
           log.push(`💥 符文結界破碎！`);
           _sanctumBroke = false;
           _fire("（破碎引爆）");
         } else if (_detonateRaw() >= mHp) {
           _fire("（預知引爆）"); // 伺服器整場先算：這一爆剛好收頭 → 提前引爆
-        } else if (round >= endRound) {
+        } else if (round >= (options.actionSession ? 15 : endRound) && !options.skipPlayerAttack) {
           _fire("（終幕引爆）"); // 撐滿全場 → 最後一回合滿額爆
         }
       }
@@ -5617,18 +5823,24 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     // 放在戰報 push 之前 → 吸血訊息屬於本回合；放在勝負判定之前 → 打死怪的那回合也吸得到。
     _settleLifestealForRound();
 
+    if (options.actionSession) for (const effect of options.playerActiveEffects || []) effect._clockExact = true;
+    if (options.actionSession && !_noPlayerAtk) for (const effect of monsterActiveEffects) if (effect.sourceType !== "monster_skill" && !effect.sourceActorId) effect.sourceActorId = options.partyActorId;
     roundLogs.push(log.join("\n"));
     if (outcome !== null) break;
 
     // ── 清理過期的 activeEffects ──
-    monsterActiveEffects = cleanExpiredEffects(monsterActiveEffects, round);
-    if (options.playerActiveEffects) {
+    if (!options.actionSession || options.skipMonsterAttack !== true) monsterActiveEffects = cleanExpiredEffects(monsterActiveEffects, round);
+    if ((!options.actionSession || !_noPlayerAtk) && options.playerActiveEffects) {
       options.playerActiveEffects = cleanExpiredEffects(options.playerActiveEffects, round);
     }
 
     monsterDefDownCarry = roundMonsterDefDownPct; // 保留本回合扣防%,供下一回合玩家 DOT 使用
     playerDefIgnoreCarry = (playerDefIgnorePct || 0) + (roundPartyDefIgnorePct || 0); // 保留本回合無視防禦%,供下一回合 DOT 穿防
-    round++;
+    if (!options.actionSession || !_noPlayerAtk) { round++; _partyWasHitSinceAttack = false; }
+    if (options.actionSession) {
+      if (_noPlayerAtk) { _monsterKnockbackRound = 0; _sageMistRound = 0; forceMonsterCritFail = false; }
+      acceptAction(yield actionSnapshot());
+    }
   }
 
   if (outcome === null) outcome = "timeout";
@@ -5788,6 +6000,15 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
     monsterActiveEffects,
     stunRoundsLeft,
     cardCooldowns,
+    jobSkillCooldowns,
+    jobSkillsUsedThisBattle: [..._skillUsedThisBattle],
+    playerActiveEffects: options.playerActiveEffects,
+    monsterStunImmuneUntil, monsterKnockbackPending: _monsterKnockbackRound > 0, sageMistPending: _sageMistRound > 0, forceMonsterCritFailPending: forceMonsterCritFail,
+    ...(steelCrown ? { steelCrownEvents } : {}),
+    metalCardMetrics: { ...metalCards.metrics },
+    metalCardState: { ...metalCards.state },
+    mistwoodCardMetrics: { ...mistCards.metrics },
+    mistwoodCardState: { ...mistCards.state },
     nextRound: round,
     damageTaken: _totalDmgTaken,  // 沒苦硬吃任務指標
     healDone: _totalHealDone, lifestealDone: _totalLifestealDone, // 聖人／鮮血任務指標
@@ -5841,4 +6062,4 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   };
 }
 
-module.exports = { runCombatLoop };
+module.exports = { runCombatLoop, applyMonsterEffects };

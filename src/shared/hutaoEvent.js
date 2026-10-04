@@ -196,9 +196,11 @@ function outcomeEffect(outcome) {
     return {
       kind: "debuff",
       name: "胡桃自摸",
-      description: "玩家最終傷害 -15%、命中 -10，持續到下一次立直結算。",
-      playerFinalDamageMultiplier: 0.85,
-      playerHitBonus: -10,
+      description: "自摸大招將存活玩家壓至最大HP的1%，每人每次立直最多承受一次；隨後30秒王傷害降低40%。",
+      playerFinalDamageMultiplier: 1,
+      playerHitBonus: 0,
+      hpCrush: true,
+      recoveryMs: 30000,
     };
   }
   return {

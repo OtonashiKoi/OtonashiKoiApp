@@ -1,6 +1,7 @@
+const { assertEquipmentAvailable } = require("../../shared/equipmentAvailability");
 "use strict";
 
-const { randomUUID } = require("crypto");
+const { randomUUID, createHash } = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { isCraftingTester } = require("../../shared/craftingAccess");
 const { withPlayerProgressLock } = require("../progress/progressLocks");
@@ -102,15 +103,14 @@ class CraftingService {
   }
 
   _assertTester(discordId) {
-    if (!isCraftingTester(discordId)) {
-      throw new AppError(ERROR_CODES.CRAFTING_TEST_ONLY, "合成系統目前只開放指定測試帳號。", 403);
-    }
+    if (!String(discordId || "").trim()) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "找不到玩家身分。", 401);
   }
 
   _canAccessRecipe(discordId, recipe) {
     if (!recipe?.enabled) return false;
     if (recipe.accessMode === "public") return true;
     return recipe.accessMode === "owner_test"
+      && isCraftingTester(discordId)
       && Array.isArray(recipe.testerIds)
       && recipe.testerIds.map(String).includes(String(discordId));
   }
@@ -132,11 +132,12 @@ class CraftingService {
       this.progressRepository.findByPlayerId(discordId),
       this.walletRepository.findByPlayerId(discordId)
     ]);
+    const accessibleRecipes = recipes.filter((recipe) => this._canAccessRecipe(discordId, recipe));
     const inventory = Array.isArray(progress?.inventory) ? progress.inventory : [];
-    const itemMap = await this._loadItemMap(recipes);
+    const itemMap = await this._loadItemMap(accessibleRecipes);
     const gold = Math.max(0, Number(wallet?.gold) || 0);
 
-    const viewRecipes = recipes.map((recipe) => {
+    const viewRecipes = accessibleRecipes.map((recipe) => {
       const inputs = (recipe.inputs || []).map((input) => {
         const item = itemMap.get(String(input.itemId));
         const required = positiveInt(input.quantity);
@@ -192,21 +193,25 @@ class CraftingService {
     });
 
     return {
-      testMode: true,
+      testMode: false,
       testerId: String(discordId),
       gold,
       recipes: viewRecipes
     };
   }
 
-  async craft(discordId, recipeId, quantity = 1) {
+  async craft(discordId, recipeId, quantity = 1, requestId = null) {
     this._assertTester(discordId);
-    const qty = Math.trunc(Number(quantity));
-    if (!Number.isFinite(qty) || qty < 1 || qty > MAX_CRAFT_QUANTITY) {
+    const qty = Number(quantity);
+    if (!Number.isInteger(qty) || qty < 1 || qty > MAX_CRAFT_QUANTITY) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `合成數量必須是 1～${MAX_CRAFT_QUANTITY} 的整數。`, 400);
+    }
+    if (requestId !== null && (typeof requestId !== "string" || !/^[a-zA-Z0-9_-]{8,100}$/.test(requestId))) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "合成請求識別碼無效。", 400);
     }
 
     return withPlayerProgressLock(discordId, async () => {
+      await this.craftingRepository.recoverPlayerOperations?.(discordId);
       const recipe = await this.craftingRepository.findRecipeById(recipeId);
       if (!this._canAccessRecipe(discordId, recipe)) {
         throw new AppError(ERROR_CODES.CRAFTING_RECIPE_NOT_FOUND, "找不到可使用的合成配方。", 404);
@@ -221,6 +226,7 @@ class CraftingService {
 
       const itemMap = await this._loadItemMap([recipe]);
       for (const line of [...recipe.inputs, ...recipe.outputs]) {
+        assertEquipmentAvailable(itemMap.get(String(line.itemId)));
         if (!itemMap.has(String(line.itemId))) {
           throw new AppError(ERROR_CODES.CRAFTING_RECIPE_INVALID, "配方引用的道具不存在，已停止合成。", 409);
         }
@@ -232,6 +238,16 @@ class CraftingService {
           this.walletRepository.findByPlayerId(discordId)
         ]);
         if (!progress) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到玩家背包資料。", 404);
+        const transactionId = requestId
+          ? `craft_${createHash("sha256").update(`${discordId}\0${progress.seasonKey}\0${requestId}`).digest("hex")}`
+          : randomUUID();
+        const previous = await this.craftingRepository.findPlayerTransaction?.(discordId, transactionId);
+        if (previous) {
+          if (previous.recipeId !== recipe.id || previous.quantity !== qty) {
+            throw new AppError("CRAFTING_REQUEST_CONFLICT", "同一請求不能更換配方或數量。", 409);
+          }
+          return this._result(discordId, previous, itemMap, true);
+        }
         const inventory = Array.isArray(progress.inventory)
           ? progress.inventory.map((entry) => ({ ...entry }))
           : [];
@@ -257,7 +273,6 @@ class CraftingService {
           consumeItem(inventory, input.itemId, positiveInt(input.quantity) * qty);
         }
 
-        const transactionId = randomUUID();
         for (const output of recipe.outputs) {
           addOutput(
             inventory,
@@ -277,6 +292,7 @@ class CraftingService {
             goldCost,
             transaction: {
               id: transactionId,
+              seasonKey: progress.seasonKey,
               recipeId: recipe.id,
               recipeName: recipe.name || recipe.id,
               quantity: qty,
@@ -294,23 +310,25 @@ class CraftingService {
         if (!result?.ok && result?.reason === "progress_conflict") continue;
         if (!result?.ok) throw new Error("CRAFTING_TRANSACTION_FAILED");
 
-        const craftedOutputs = recipe.outputs.map((line) => {
-          const item = itemMap.get(String(line.itemId));
-          return { itemId: line.itemId, name: item?.name || "成品", quantity: positiveInt(line.quantity) * qty };
-        });
-        return {
-          transactionId,
-          recipeId: recipe.id,
-          recipeName: recipe.name || recipe.id,
-          quantity: qty,
-          goldSpent: goldCost,
-          outputs: craftedOutputs,
-          state: await this.getPlayerState(discordId)
-        };
+        return this._result(discordId, result.transaction || {
+          id: transactionId, recipeId: recipe.id, recipeName: recipe.name || recipe.id,
+          quantity: qty, goldCost,
+          outputs: recipe.outputs.map((line) => ({ itemId: line.itemId, quantity: positiveInt(line.quantity) * qty }))
+        }, itemMap, Boolean(result.replayed));
       }
 
       throw new AppError("CRAFTING_CONFLICT", "背包剛剛有其他變動，請再試一次。", 409);
     });
+  }
+
+  async _result(discordId, transaction, itemMap, replayed) {
+    return {
+      transactionId: transaction.id, recipeId: transaction.recipeId,
+      recipeName: transaction.recipeName, quantity: transaction.quantity,
+      goldSpent: transaction.goldCost, replayed,
+      outputs: transaction.outputs.map((line) => ({ ...line, name: itemMap.get(String(line.itemId))?.name || "成品" })),
+      state: await this.getPlayerState(discordId)
+    };
   }
 }
 

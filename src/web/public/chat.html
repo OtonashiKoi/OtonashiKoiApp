@@ -624,6 +624,7 @@
       .badge-title { max-width: 100%; }
     }
   </style>
+  <link rel="stylesheet" href="/static/chat-ro.css?v=20261004-maple-frame">
 </head>
 <body>
   <div id="ws-dot"></div>
@@ -847,6 +848,10 @@
       if (profile.found && profile.title) {
         const ttl = document.createElement('span');
         ttl.className = 'badge-title';
+        if (['初楓旅人', '楓紅百戰', '秋日常在', '紅葉煉成', '共登秋塔', '高塔摘楓', '楓紅漸漸'].includes(profile.title)) {
+          ttl.dataset.season = 'autumn';
+          el.dataset.season = 'autumn';
+        }
         ttl.textContent = profile.title;
         ttl.title = profile.title;
         header.appendChild(ttl);
@@ -986,14 +991,14 @@
       const fixtures = [
         {
           comment: { data: { id: 'preview-ss', service: 'youtube', userId: 'preview-ss', name: '音無恋', comment: '晚安，歡迎來到紫藤盛開的音無樂園。' } },
-          profile: { found: true, displayName: '音無恋', level: 50, title: '樂園的守望者', isMember: true, membershipTier: 'SS' }
+          profile: { found: true, displayName: '音無恋', level: 50, title: '楓紅漸漸', isMember: true, membershipTier: 'SS' }
         },
         {
-          comment: { data: { id: 'preview-a', service: 'twitch', userId: 'preview-a', name: '黎宇 Yukiri', comment: '新的名字牌跟對話窗分開後，長訊息也應該保有足夠的呼吸空間，並且自然往下延伸。' } },
-          profile: { found: true, displayName: '黎宇☗鯉魚☖Yukiri', level: 42, title: '紫藤花下的旅人', isMember: true, membershipTier: 'A' }
+          comment: { data: { id: 'preview-a', service: 'twitch', userId: 'preview-a', name: '黎宇 Yukiri', comment: '今天一起去冒險吧！這是長訊息預覽，文字會隨著聊天室寬度自然換行，不會跑出對話視窗。' } },
+          profile: { found: true, displayName: '黎宇☗鯉魚☖Yukiri', level: 42, title: '初楓旅人', isMember: true, membershipTier: 'A' }
         },
         {
-          comment: { data: { id: 'preview-b', service: 'youtube', userId: 'preview-b', name: '煞暮', comment: '紫藤花、月牙與恋的印記看起來很有音無恋自己的味道。' } },
+          comment: { data: { id: 'preview-b', service: 'youtube', userId: 'preview-b', name: '煞暮', comment: '銀藍色的視窗好懷念，準備出發囉！' } },
           profile: { found: true, displayName: '煞暮', level: 35, title: '月夜冒險者', isMember: true, membershipTier: 'B' }
         },
         {

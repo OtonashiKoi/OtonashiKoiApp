@@ -43,9 +43,9 @@ function zoneOpen(z, lv) {
   if (d.maxLevel != null && lv > d.maxLevel) return false;
   return true;
 }
-// 屬性：2+1 制。隨機 +2 取期望值，自主 +1 以最快練等視角投入劍士主屬性 STR。
+// 屬性：1+1 制。隨機 +1 取期望值，自主 +1 以最快練等視角投入劍士主屬性 STR。
 function attrsFor(level) {
-  const randomPer = ((level - 1) * 2) / 6;
+  const randomPer = (level - 1) / 6;
   const manualMain = level - 1;
   return {
     str: 1 + randomPer + manualMain,

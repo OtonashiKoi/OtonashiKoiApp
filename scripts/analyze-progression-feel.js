@@ -12,7 +12,7 @@
  *   (傷害÷血量) × expReward ÷ (每場秒數 + 陣亡?10秒)
  *
  * 玩家模型照真實情況：
- *   ‧ 配點平均分配（升級是隨機 +2，玩家無法集中）
+ *   ‧ 隨機點平均分配，自主點全投入劍士主屬性 STR
  *   ‧ 裝備階級依等級帶走（低等 D/C → 中段 B → 後段 A → 滿等 A+高強化）
  *   ‧ 徽章 Lv20 滿級（Lv10 以後才有徽章）
  *
@@ -48,12 +48,9 @@ const LEVEL_BANDS = [
 const ZONE_ORDER = ["beginner", "normal", "mid", "ancient_city", "ancient_city_deep", "dragon_realm", "hellfire"];
 
 function buildAttrs(level) {
-  const total = 6 + (level - 1) * 2;
-  const a = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-  const free = total - 6;
-  const per = Math.floor(free / 6);
-  for (const k of Object.keys(a)) a[k] += per;
-  a.vit += free - per * 6;
+  const randomMean = (level - 1) / 6;
+  const a = { str: 1 + randomMean, agi: 1 + randomMean, vit: 1 + randomMean, int: 1 + randomMean, dex: 1 + randomMean, luk: 1 + randomMean };
+  a.str += level - 1;
   return a;
 }
 

@@ -6,8 +6,10 @@ const { handleMonsterKill, getServiceContext, isWorldBossAllPartsDefeated, recor
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { buildItemEffectLines } = require("../../shared/itemEffectLines");
-const { ALL_ZONE_KEYS, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, canPlayerAccessZone, shouldBroadcastZoneActivity, getZoneTheme, getZoneDefaultEntryFee, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
+const { ALL_ZONE_KEYS, ZONE_BY_KEY, featureKeyToZone: _featureKeyToZone, zoneToFeatureKey, canPlayerAccessZone, shouldBroadcastZoneActivity, getZoneTheme, getZoneDefaultEntryFee, checkZoneLevelRequirementWithBinding } = require("../../shared/zones");
 const { isWorldBossZone, WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
+const { normalMaxHp, scaleNormalMonster } = require("../../services/monster/normalCoopScaling");
+const { settleActiveMonsterDamage } = require("../../services/monster/monsterStateRaceGuard");
 
 // 這些效果的 params.value 代表百分比（percent），顯示時會特別格式化
 const PERCENT_EFFECT_KEYS = new Set([
@@ -28,6 +30,7 @@ const { clearCurrentCache } = require("../../adapters/mongo/requestCache");
 const { NpcOptionEffectError, processNpcOptionEffects } = require("./npcOptionEffects");
 const { bestiaryRequirement, bestiaryBonusPct, bestiaryGainFromDamage } = require("../../shared/bestiary");
 const { getWorldBossPartLabel } = require("../../shared/worldBossParts");
+const { calculateBattleTickMs } = require("../../shared/battleTiming");
 const config = require("../../config");
 const {
   isDiscordRestProtected,
@@ -258,15 +261,7 @@ const ZONE_DAMAGE_SYNC_RULES = {
 };
 const DAMAGE_SYNC_NOTICE = "套用戰力同步：高階裝備與效果會暫時壓制到該區合理範圍。";
 
-// AGI 攻速機制：AGI 1→1500ms，AGI 40→500ms（上限），屬性上限 60
-// 公式：delay = 1500 - ((min(agi, 40) - 1) / 39) * 1000
-const calculateTickDelay = (agi = 1) => {
-  const baseDelay = 1500;
-  const minDelay  = 500;
-  const capAgi    = 40;
-  const capped = Math.min(Math.max(1, agi), capAgi);
-  return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
-};
+const calculateTickDelay = calculateBattleTickMs;
 
 
 // 古龍王巢穴採 4 部位(含龍翼)+ 破鱗削弱;其餘世界王維持 3 部位
@@ -1120,7 +1115,7 @@ async function _notifyKillRewards(monsterName, perPidRewards) {
         let expLine = `⭐ EXP **+${rewards.exp}**`;
         if (rewards.levelUps > 0) {
           const detailText = Array.isArray(rewards.levelUpDetails) && rewards.levelUpDetails.length
-            ? rewards.levelUpDetails.map((lv) => `Lv.${lv.level}：${Array.isArray(lv.attrsZh) ? lv.attrsZh.join("、") : ""}`).join("；")
+            ? rewards.levelUpDetails.map((lv) => `Lv.${lv.level}：隨機 ${Array.isArray(lv.attrsZh) ? lv.attrsZh.join("、") : ""} +1、自主點 +${lv.freePoints || 0}`).join("；")
             : "";
           expLine += detailText
             ? `　✨ 升級 ${rewards.levelUps} 次！**Lv.${rewards.newLevel}**\n   ${detailText}`
@@ -1914,7 +1909,11 @@ async function handleEnterBattle(interaction) {
         return;
       }
 
-      const wb = await sc.worldBossServiceFor(zoneKey).getConfigWithStatus();
+      const wb = await sc.worldBossServiceFor(zoneKey).getConfigWithStatus(discordId);
+      if (!wb.status.unlocked) {
+        await interaction.editReply({ content: wb.status.lockedReason });
+        return;
+      }
       if (!wb.config.enabled || wb.status.cooldownRemainingMs > 0) {
         const queuedReady = await waitForBattleReady(sc, { discordId, zoneKey, interaction, session: activeSessions.get(discordId) });
         if (!queuedReady?.monster || !queuedReady?.state) {
@@ -2018,7 +2017,7 @@ async function handleEnterBattle(interaction) {
     session.monsterId = battleMonster.id;
     session.monsterSeq = battleMonster.seq;
     session.monsterName = battleMonster.name;
-    session.monsterMaxHp = battleMonster.calc.maxHp;
+    session.monsterMaxHp = isWorldBossZone(zoneKey) ? battleMonster.calc.maxHp : normalMaxHp(battleState, battleMonster);
     session.monsterHp = (isWorldBossZone(zoneKey) && battleMonster?.isBoss)
       ? Math.max(0, Number(battleState?.worldBossPartsHp?.[selectedBossPart] || 0))
       : (battleState.currentHp != null ? battleState.currentHp : battleMonster.calc.maxHp);
@@ -2027,38 +2026,24 @@ async function handleEnterBattle(interaction) {
     session.battleStartedAt = Date.now();
     session.combatEndsAt = session.battleStartedAt + getBattleBaselineDurationMs(session.playerStats?.agi ?? 1);
 
-    const battleEntryFee = Math.max(0, Number(battleMonster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0);
-    session.entryFee = battleEntryFee;
-      if (battleEntryFee > 0) {
-        const wallet = await sc.walletRepository.findByPlayerId(discordId).catch(() => ({ gold: 0 }));
-        const goldOwned = Math.max(0, Number(wallet?.gold) || 0);
-        if (goldOwned < battleEntryFee) {
+    if (zoneKey === "event_boss_hutao_preview" && sc.hutaoEventService) {
+      const hs = await sc.hutaoEventService.getSnapshot();
+      if (hs.blocking) {
         deleteMonsterSession(discordId);
-        await interaction.editReply({
-          content: `❌ 進入 **${battleMonster.name}** 需要 **${battleEntryFee}** 金幣，但你目前只有 **${goldOwned}** 金幣。`,
-          embeds: [],
-          components: []
-        }).catch(() => {});
+        await interaction.editReply({ content: "🀄 立直答題中，請到網頁戰鬥領域作答；未扣入場費。", embeds: [], components: [] }).catch(() => {});
         return;
       }
-      await sc.rewardService.grantCurrency({
-        discordId,
-        displayName,
-        currencyType: "gold",
-        amount: -battleEntryFee,
-        source: CURRENCY_SOURCES.MONSTER_ENTRY_FEE,
-        operator: "monster_zone:enter_battle"
-      }).catch((err) => {
-        throw err;
-      });
     }
-
     // 加入參戰名單（去重）並更新面板
     const participants = Array.isArray(battleState.participants) ? battleState.participants : [];
     if (!participants.includes(discordId)) {
       const newParticipants = [...participants, discordId];
       if (isWorldBossZone(zoneKey) && battleMonster?.isBoss && participants.length === 0) {
         const startRes = await sc.worldBossServiceFor(zoneKey)?.startBossBattleIfNeeded().catch(() => null);
+        if (zoneKey === "event_boss_hutao_preview" && sc.hutaoEventService) {
+          if (startRes?.justStarted) await sc.hutaoEventService.resetRun(startRes.state.battleStartedAt);
+          else await sc.hutaoEventService.ensureRun(startRes?.state?.battleStartedAt);
+        }
         await scheduleEliteWorldBossTimeout(sc, zoneKey, battleMonster).catch(() => {});
         // 世界王開打公告:只由「真正開戰(justStarted)」那一次發送,避免 web/DC 重複公告
         try {
@@ -2434,6 +2419,27 @@ async function handleEnterBattle(interaction) {
           _turtleNow
         );
       }
+      const rabbit = require("../../shared/rabbitWorldBoss");
+      session.eventHpCrush = false;
+      if (zoneKey === rabbit.ZONE) {
+        rabbit.advance(battleState, battleState.currentHp ?? battleMonster.calc.maxHp, battleMonster.calc.maxHp, (battleState.participants || []).length || 1);
+        const rm = rabbit.view(battleState);
+        if (rm.phase !== "rage") { battleMonsterEquipped = { ...battleMonsterEquipped }; delete battleMonsterEquipped.special_1; }
+        battleMonsterStats = { ...battleMonsterStats, dodge: rm.dodgeBonus ? Math.min(85, (Number(battleMonsterStats.dodge)||0)+rm.dodgeBonus) : 0, finalDamageMultiplier: (battleMonsterStats.finalDamageMultiplier || 1) * rm.damageMult };
+        session.hellfangMult *= rm.incomingMult;
+        session.eventHpCrush = rabbit.crushPending(battleState, discordId);
+        session.eventHpCrushName = "蒸氣大爆發";
+      }
+      if (zoneKey === "event_boss_hutao_preview" && sc.hutaoEventService) {
+        const hs = await sc.hutaoEventService.getSnapshot();
+        session.hutaoSnapshot = hs;
+        session.eventHpCrush = !!(hs.effect?.hpCrush && battleState.hutaoCrushReceipts?.[discordId] !== hs.effect.pulseId);
+        session.eventHpCrushName = "胡桃自摸";
+        const wind = hs.wind || {};
+        battleMonsterStats = { ...battleMonsterStats,
+          dodge: wind.bossDodgeZero ? 0 : Math.min(95, (battleMonsterStats.dodge || 0) + (wind.bossDodgeBonus || 0)),
+          finalDamageMultiplier: (battleMonsterStats.finalDamageMultiplier || 1) * (wind.bossDamageMultiplier || 1) * (hs.effect?.hpCrush && Date.now() < Number(hs.effect.resolvedAt)+30000 ? .6 : 1) };
+      }
       // ── 怪物圖鑑：依玩家對「這隻怪」的累積擊殺，算出本場傷害加成 ──
       const _bestiaryIsWorldBoss = isWorldBossZone(zoneKey);
       const _bestiaryMonsterId = String(battleMonster?.id || battleMonster?._id || session.monsterName || "");
@@ -2511,6 +2517,33 @@ async function handleEnterBattle(interaction) {
       try { dcStanceKey = require("../../shared/battleStance").resolveRequestedStance(currentEquipped, undefined); } catch (_) { dcStanceKey = null; }
 
       const { runCombatLoop } = require("../../shared/combatLoop");
+    const battleEntryFee = Math.max(0, Number(battleMonster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0);
+    session.entryFee = battleEntryFee;
+      if (battleEntryFee > 0) {
+        const wallet = await sc.walletRepository.findByPlayerId(discordId).catch(() => ({ gold: 0 }));
+        const goldOwned = Math.max(0, Number(wallet?.gold) || 0);
+        if (goldOwned < battleEntryFee) {
+        deleteMonsterSession(discordId);
+        await interaction.editReply({
+          content: `❌ 進入 **${battleMonster.name}** 需要 **${battleEntryFee}** 金幣，但你目前只有 **${goldOwned}** 金幣。`,
+          embeds: [],
+          components: []
+        }).catch(() => {});
+        return;
+      }
+      await sc.rewardService.grantCurrency({
+        discordId,
+        displayName,
+        currencyType: "gold",
+        amount: -battleEntryFee,
+        source: CURRENCY_SOURCES.MONSTER_ENTRY_FEE,
+        operator: "monster_zone:enter_battle"
+      }).catch((err) => {
+        throw err;
+      });
+    }
+
+
       let combatResult =
         runCombatLoop(battlePlayerStats, battleMonsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
           playerName: displayName,
@@ -2540,7 +2573,12 @@ async function handleEnterBattle(interaction) {
           bestiaryBonusCapPct: _bestiaryCapPct, // 知彼（兵聖）上限放大；一般職業使用圖鑑共用上限
           isWorldBoss: isWorldBossZone(zoneKey) && Boolean(battleMonster?.isBoss), // 世界王:玩家 DOT 也吃王 def%
           bossVulnMult: session.hellfangMult, // 牙狼弱點/龜王潮汐倍率:玩家每擊終傷×此值(其他戰鬥=1不影響)
-          tsunamiDeath: session.turtleTsunami || false, // 海嘯（島島龜王）：出戰即死
+          eventHpCrush: session.eventHpCrush,
+          eventHpCrushName: session.eventHpCrushName,
+          eventPlayerFinalDamageMultiplier: (session.hutaoSnapshot?.wind?.playerFinalDamageMultiplier || 1) * (session.hutaoSnapshot?.effect?.playerFinalDamageMultiplier || 1),
+          eventPlayerCritDamageMultiplier: session.hutaoSnapshot?.wind?.playerCritDamageMultiplier || 1,
+          eventPlayerHitBonus: session.hutaoSnapshot?.effect?.playerHitBonus || 0,
+          tsunamiDeath: session.turtleTsunami || false, // 海嘯：壓血至1%後繼續15回合，正常死亡算戰敗
           tsunamiDeathRound: session.turtleTsunamiRound || null, // 詠唱在本場途中完成也會直接命中
           forcePlayerHit: session.turtleForceHit || false, // 退潮打龜首必中
           zone: zoneKey, // 讓裝備的 zone 條件特效生效(例：S 龍系武器在龍族之領/龍王巢穴 +20%)
@@ -2575,7 +2613,8 @@ async function handleEnterBattle(interaction) {
           notice: null
         };
       let outcome = syncResult.outcome;
-      const totalDamage = syncResult.damage;
+      let coopExtendedBattle = false;
+      let totalDamage = syncResult.damage;
       session.monsterHp = syncResult.monsterHp;
       session.playerHp  = finalPlayerHp;
       const totalTaken = Math.max(0, (session.playerMaxHp || 0) - Math.max(0, finalPlayerHp));
@@ -2583,8 +2622,13 @@ async function handleEnterBattle(interaction) {
       let allPartsDefeated = false;
       let worldBossClosedBeforeWrite = false;
       let staleBattleBeforeWrite = false;
+      let selfDamageForSettlement = totalDamage;
+      let directDamageBySourceForSettlement = {};
 
       // ── 戰鬥結果立刻更新排行榜（不等結算完成）──
+      const worldBossReleaseDC = isWorldBossZone(zoneKey)
+        ? await require("../../services/worldBoss/worldBossBattleLock").acquireWorldBossBattleLock(zoneKey)
+        : null;
       const currentParticipants = Array.isArray(battleState.participants) ? battleState.participants : [];
       try {
         const freshState = await sc.monsterService.getState(zoneKey);
@@ -2593,6 +2637,18 @@ async function handleEnterBattle(interaction) {
         if (staleBattleBeforeWrite || worldBossClosedBeforeWrite) {
           console.warn(`[MonsterZone] stale battle result skipped | player=${discordId} | zone=${zoneKey} | monster=${battleMonster?.name || "?"}`);
         } else {
+        // 與 Web 相同：跨過立直門檻時停在門檻，不可跳過答題直接擊殺。
+        if (zoneKey === "event_boss_hutao_preview" && session.hutaoSnapshot) {
+          const h = require("../../shared/hutaoEvent");
+          const parts = ensureWorldBossPartState(freshState, battleMonster.calc.maxHp, zoneKey);
+          const hp = Math.max(0, Number(parts.worldBossPartsHp.body) || 0);
+          const max = Math.max(1, Number(parts.worldBossPartsMaxHp.body) || battleMonster.calc.maxHp);
+          const mark = h.crossedRiichiMark(hp, Math.max(0, hp - totalDamage), max, session.hutaoSnapshot.resolvedMarks);
+          if (mark) {
+            totalDamage = Math.max(0, hp - h.hpAtMark(max, mark));
+            await sc.hutaoEventService.startQuiz(mark, session.hutaoSnapshot.runKey);
+          }
+        }
         // 記錄 DC 玩家「目前在此區域戰鬥」的存在感(供網頁戰鬥畫面玩家氣泡;含 DC 玩家)
         try { require("../../services/realtime/battlePresence").touch(discordId, { name: displayName, level: currentProg?.level, zone: zoneKey, damage: totalDamage }); } catch (_) { /* noop */ }
         const prev = freshState.damageMap || {};
@@ -2603,8 +2659,10 @@ async function handleEnterBattle(interaction) {
           combatResult?.combatStats?.supportShotBySource || {}
         );
         const _supportBySrc = _supportSplit.bySource;
+        selfDamageForSettlement = _supportSplit.selfDamage;
+        directDamageBySourceForSettlement = _supportBySrc;
         const _supportDamageBySource = {};
-        const updatedDamageMap = {
+        let updatedDamageMap = {
           ...prev,
           [discordId]: {
             name: displayName,
@@ -2631,11 +2689,24 @@ async function handleEnterBattle(interaction) {
           const _prevEntry = updatedDamageMap[_srcId] || { name: _auraName, level: prev[_srcId]?.level || 1, damage: 0, taken: 0 };
           updatedDamageMap[_srcId] = { ..._prevEntry, name: _prevEntry.name || _auraName, damage: (_prevEntry.damage || 0) + _add };
         }
-        const latestHp = Math.max(0, Number(freshState.currentHp ?? monsterHpBeforeBattle));
+        if (!isWorldBossZone(zoneKey)) {
+          for (const [sourceId, amount] of Object.entries(combatResult?.assistLedger?.bySource || {})) {
+            const assist = Math.max(0, Math.round(Number(amount) || 0));
+            if (!sourceId || sourceId === discordId || assist <= 0) continue;
+            const prior = updatedDamageMap[sourceId] || { name: sourceId, level: 1, damage: 0, taken: 0 };
+            updatedDamageMap[sourceId] = { ...prior, assist: (Number(prior.assist) || 0) + assist };
+          }
+        }
+        const scaledNormal = isWorldBossZone(zoneKey) ? null : scaleNormalMonster(freshState, battleMonster, updatedDamageMap);
+        const latestHp = scaledNormal ? scaledNormal.currentHp : Math.max(0, Number(freshState.currentHp ?? monsterHpBeforeBattle));
         const nextHp = Math.max(0, latestHp - totalDamage);
         session.monsterHp = nextHp;
-        if (nextHp <= 0) outcome = "win";
-        let nextState = { ...freshState, currentHp: nextHp, damageMap: updatedDamageMap, lastHitAt: new Date().toISOString() };
+        if (!isWorldBossZone(zoneKey)) {
+          session.monsterMaxHp = scaledNormal.coopMaxHp;
+          if (nextHp <= 0) outcome = "win";
+          else if (outcome === "win") { outcome = "timeout"; coopExtendedBattle = true; }
+        }
+        let nextState = { ...freshState, ...(scaledNormal || {}), currentHp: nextHp, damageMap: updatedDamageMap, lastHitAt: new Date().toISOString() };
         let hellfangEventDC = null; // 牙狼適應性狀態變化(給DC戰報)
         if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) {
           const part = session.worldBossTargetPart || "body";
@@ -2657,6 +2728,18 @@ async function handleEnterBattle(interaction) {
             worldBossPartsMaxHp: prevParts.worldBossPartsMaxHp,
             currentHp: sumWorldBossPartHp(nextPartsHp)
           };
+          if (zoneKey === rabbit.ZONE) {
+            nextState.rabbit = structuredClone(freshState.rabbit || battleState.rabbit);
+            if (session.eventHpCrush) rabbit.markCrushed(nextState, discordId);
+            rabbit.recordDamage(nextState, wbDamage);
+            rabbit.advance(nextState, nextState.currentHp, battleMonster.calc.maxHp, Object.keys(nextState.damageMap || {}).length);
+          }
+          if (zoneKey === "event_boss_hutao_preview" && session.hutaoSnapshot) {
+            if (session.eventHpCrush) nextState.hutaoCrushReceipts = { ...(freshState.hutaoCrushReceipts || {}), [discordId]: session.hutaoSnapshot.effect.pulseId };
+            const h = require("../../shared/hutaoEvent");
+            const mark = h.crossedRiichiMark(latestPartHp, nextPartHp, battleMonster.calc.maxHp, session.hutaoSnapshot.resolvedMarks);
+            if (mark) await sc.hutaoEventService.startQuiz(mark, session.hutaoSnapshot.runKey);
+          }
           if (fcMirrorTotalDC > 0) {
             const selfEntry = nextState.damageMap[discordId];
             nextState.damageMap = {
@@ -2721,12 +2804,34 @@ async function handleEnterBattle(interaction) {
             }).catch(() => {});
           } catch (_) { /* KDA 記錄失敗不影響結算 */ }
         }
-        await sc.monsterService.saveState(nextState, zoneKey);
+        if (isWorldBossZone(zoneKey)) {
+          await sc.monsterService.saveState(nextState, zoneKey);
+        } else {
+          const guarded = await settleActiveMonsterDamage({
+            monsterService: sc.monsterService, zoneKey, monster: battleMonster,
+            discordId, displayName, playerLevel: currentProg?.level || 1,
+            totalDamage, totalTaken, selfDamage: selfDamageForSettlement,
+            directDamageBySource: directDamageBySourceForSettlement,
+            supportAssistBySource: combatResult?.assistLedger?.bySource || {}
+          });
+          if (!guarded.savedState) {
+            staleBattleBeforeWrite = true;
+            throw new Error("concurrent monster settlement could not claim current state");
+          }
+          else {
+            nextState = guarded.savedState;
+            updatedDamageMap = guarded.damageMap;
+            session.monsterHp = guarded.currentHp;
+            session.monsterMaxHp = normalMaxHp(nextState, battleMonster);
+            if (guarded.currentHp <= 0) outcome = "win";
+            else if (outcome === "win") { outcome = "timeout"; coopExtendedBattle = true; }
+          }
+        }
         battleStateForSettlement = nextState;
-        await _republishPanel(
+        if (!staleBattleBeforeWrite) await _republishPanel(
           sc,
           zoneKey,
-          battleMonster,
+          isWorldBossZone(zoneKey) ? battleMonster : { ...battleMonster, calc: { ...battleMonster.calc, maxHp: normalMaxHp(nextState, battleMonster) } },
           nextState.currentHp,
           currentParticipants.length,
           updatedDamageMap,
@@ -2759,7 +2864,7 @@ async function handleEnterBattle(interaction) {
         }
       } catch (e) {
         console.error("[monsterZoneHandlers] 排行榜更新失敗:", e.message);
-      }
+      } finally { if (worldBossReleaseDC) worldBossReleaseDC(); }
 
       // ── 結算 ──
       let rewardLines = [];
@@ -2786,7 +2891,7 @@ async function handleEnterBattle(interaction) {
       } else if (outcome === "lose") {
         session.monsterHp = Math.max(0, session.monsterHp);
         // 排行榜已在戰鬥完成後立刻更新，此處只紀錄狀態
-        try {
+        if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) try {
           const freshState = await sc.monsterService.getState(zoneKey);
           await sc.monsterService.saveState({
             ...freshState,
@@ -2816,7 +2921,7 @@ async function handleEnterBattle(interaction) {
         pendingDeathCooldown = true;
       } else {
         // 排行榜已在戰鬥完成後立刻更新，此處只紀錄狀態
-        try {
+        if (isWorldBossZone(zoneKey) && battleMonster?.isBoss) try {
           const freshState = await sc.monsterService.getState(zoneKey);
           await sc.monsterService.saveState({
             ...freshState,
@@ -2836,7 +2941,9 @@ async function handleEnterBattle(interaction) {
         }
         embedTitle = "⏸️ 戰鬥超時";
         embedColor = 0x888888;
-        rewardLines = [`超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。\n你造成了 **${totalDamage}** 點傷害。`];
+        rewardLines = [coopExtendedBattle
+          ? `新隊友加入共鬥，怪物血量提高；本場傷害已保留（剩 ${Math.max(0, session.monsterHp)} HP）。\n你造成了 **${totalDamage}** 點傷害。`
+          : `超過 ${MAX_ROUNDS} 回合未分勝負，戰鬥中止。\n你造成了 **${totalDamage}** 點傷害。`];
       }
 
       // 圖鑑點數每場戰鬥都會累積;非擊殺(部位擊破/超時/失敗)也顯示本場圖鑑增益,避免「有時有通知有時沒有」
@@ -3116,6 +3223,11 @@ async function handleMonsterEventChoice(interaction) {
   }
   const zoneKey = _featureKeyToZone(binding?.featureKey);
 
+  if (!canPlayerAccessZone(zoneKey, interaction.user.id)) {
+    await interaction.editReply({ content: "這個活動本季暫停開放。" }).catch(() => {});
+    return;
+  }
+
   const state = await sc.monsterService.getState(zoneKey).catch(() => null);
   const ae = state?.activeEvent;
   if (!ae || ae.id !== eventId) {
@@ -3372,6 +3484,11 @@ async function handleMonsterEventPersonal(interaction) {
   }
   const zoneKey = _featureKeyToZone(binding?.featureKey);
 
+  if (!canPlayerAccessZone(zoneKey, interaction.user.id)) {
+    await interaction.editReply({ content: "這個活動本季暫停開放。" }).catch(() => {});
+    return;
+  }
+
   const state = await sc.monsterService.getState(zoneKey).catch(() => null);
   const ae = state?.activeEvent;
   if (!ae || ae.id !== eventId) {
@@ -3530,6 +3647,7 @@ async function checkIdleRotate() {
   const sc = getServiceContext();
   const now = Date.now();
   for (const zoneKey of ALL_ZONE_KEYS) {
+    if (ZONE_BY_KEY[zoneKey]?.enabled === false) continue;
     try {
       const state = await sc.monsterService.getState(zoneKey);
       if (state?.activeEvent?.endsAt) {
@@ -3610,6 +3728,7 @@ async function refreshMonsterZonePanels() {
     for (const binding of targetBindings) {
       try {
         const zoneKey = _featureKeyToZone(binding.featureKey);
+        if (ZONE_BY_KEY[zoneKey]?.enabled === false) continue;
         if (await _resolveExpiredMonsterTransition(sc, zoneKey)) continue;
         const state = await sc.monsterService.getState(zoneKey).catch(() => null);
         const hasDeadState = Number(state?.currentHp || 0) <= 0 && !state?.activeTransition && !state?.activeEvent;
@@ -3644,12 +3763,13 @@ async function worldBossRespawnTick() {
   const sc = getServiceContext();
   if (!sc) return;
   for (const zoneKey of Object.keys(WORLD_BOSS_ZONES)) {
+    if (ZONE_BY_KEY[zoneKey]?.enabled === false) continue;
     try {
       const svc = sc.worldBossServiceFor?.(zoneKey);
       if (!svc) continue;
       const info = await svc.getConfigWithStatus().catch(() => null);
       const st = info?.status;
-      if (!st) continue;
+      if (!st || info?.config?.enabled === false) continue;
 
       // ── 自癒：偵測「部位全破但沒結算就卡死」──
       //   根因：擊殺時 saveState(部位全0) 與 handleMonsterKill(結算) 非原子；中間被打斷(重啟/崩潰/例外)
@@ -3744,6 +3864,7 @@ async function sweepStuckMonsterPanels() {
   for (const binding of targets) {
     try {
       const zoneKey = _featureKeyToZone(binding.featureKey);
+      if (ZONE_BY_KEY[zoneKey]?.enabled === false) continue;
       if (isWorldBossZone(zoneKey)) continue; // 世界王有自己的 watcher
       // 1) 轉場過期沒收尾 → 收尾並換下一隻
       let changed = await _resolveExpiredMonsterTransition(sc, zoneKey).catch(() => false);

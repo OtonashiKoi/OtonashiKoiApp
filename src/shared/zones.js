@@ -35,7 +35,7 @@ const ZONE_DEFS = [
     tagline:      "危險上升，獵物更強。",
     color:        0x7c3aed,
     minLevel:     10,
-    maxLevel:     25,
+    maxLevel:     null,
     defaultEntryFee: 0,
   },
   {
@@ -45,8 +45,19 @@ const ZONE_DEFS = [
     emoji:        "🏰",
     tagline:      "千年城牆，邪物棲居。",
     color:        0xf97316,
-    minLevel:     25,
-    maxLevel:     40,
+    minLevel:     20,
+    maxLevel:     null,
+    defaultEntryFee: 0,
+  },
+  {
+    key:          "mistwood",
+    featureKey:   "monster_zone_mistwood",
+    label:        "霧隱林地",
+    emoji:        "🌲",
+    tagline:      "迷霧中的古城外林，磨練裝備後再挑戰深處。",
+    color:        0x287568,
+    minLevel:     30,
+    maxLevel:     null,
     defaultEntryFee: 0,
   },
   {
@@ -59,6 +70,18 @@ const ZONE_DEFS = [
     minLevel:     40,
     maxLevel:     null,
     defaultEntryFee: 0,
+  },
+  {
+    key: "metal_mine", featureKey: "monster_zone_metal_mine",
+    label: "鐵鳴礦城", emoji: "⚙️", color: 0x8c9eaa,
+    tagline: "磁鋼覆蓋的礦城，備妥武器與防具再深入。",
+    minLevel: 40, maxLevel: null, defaultEntryFee: 0,
+  },
+  {
+    key: "metal_throne", featureKey: "monster_zone_metal_throne",
+    label: "鋼冕王座", emoji: "👑", color: 0xb9a16c,
+    tagline: "鎧冕王・赫鋼的王座，金屬性常態世界王。",
+    minLevel: 50, maxLevel: null, defaultEntryFee: 10000, worldBoss: true,
   },
   {
     key:          "dragon_realm",
@@ -78,7 +101,7 @@ const ZONE_DEFS = [
     emoji:        "👑",
     tagline:      "群龍之主沉眠之地，唯擊敗大史王者方得入內。",
     color:        0x7f1d1d,
-    minLevel:     40,
+    minLevel:     50,
     maxLevel:     null,
     defaultEntryFee: 10000,
   },
@@ -100,7 +123,7 @@ const ZONE_DEFS = [
     emoji:        "🌋",
     tagline:      "烈焰最深處，狼牙王咆哮於火獄核心；唯屠本週古龍者，方可踏入。",
     color:        0x991b1b,
-    minLevel:     40,
+    minLevel:     50,
     maxLevel:     null,
     defaultEntryFee: 15000,
   },
@@ -111,7 +134,7 @@ const ZONE_DEFS = [
     emoji:        "💀",
     tagline:      "極限試煉，非凡之路。",
     color:        0xef4444,
-    minLevel:     20,
+    minLevel:     40,
     maxLevel:     null,
     defaultEntryFee: 5000,
   },
@@ -155,6 +178,7 @@ const ZONE_DEFS = [
   // 並另行架設活動世界王內容即可點亮。做法與常態區完全相同。
   {
     key:          "event_1",
+    enabled:      false, // 楓紅漸漸：舊夏日活動暫停，保留內容資料
     featureKey:   "monster_zone_event_1",
     label:        "限定活動關卡",
     emoji:        "⏳",
@@ -167,6 +191,7 @@ const ZONE_DEFS = [
   },
   {
     key:          "event_boss",
+    previewPlayerIds: Object.freeze(["865264891991425055"]), // 管理員私測，保持非公開
     featureKey:   "monster_zone_event_boss",
     label:        "限定活動 世界王",
     emoji:        "🎪",
@@ -191,6 +216,13 @@ const ZONE_DEFS = [
     group:        "event",
     worldBoss:    true,
     bestiaryVisible: false,
+    previewPlayerIds: Object.freeze(["865264891991425055"]),
+  },
+  {
+    key: "event_boss_rabbit_preview", featureKey: "monster_zone_event_boss_rabbit_preview",
+    label: "VTUBER的世界・饅頭兔私測", emoji: "🐰", tagline: "爆走饅頭兔：打斷蒸氣蓄力。",
+    color: 0xb69ee8, minLevel: 50, maxLevel: null, defaultEntryFee: 5000,
+    group: "event", worldBoss: true, bestiaryVisible: false,
     previewPlayerIds: Object.freeze(["865264891991425055"]),
   },
 ];
@@ -222,7 +254,8 @@ function normalizeZone(zone) {
 /** 玩家是否可看見／進入指定區域。previewPlayerIds 為空時代表公開。 */
 function canPlayerAccessZone(zoneKey, playerId) {
   const def = ZONE_BY_KEY[zoneKey];
-  if (!def) return false;
+  if (require("./worldBossAvailability").CLOSED_BOSS_KEYS.includes(require("../services/worldBoss/worldBossService").bossKeyForZone(zoneKey))) return false;
+  if (!def || def.enabled === false) return false;
   const allowlist = Array.isArray(def.previewPlayerIds) ? def.previewPlayerIds : [];
   if (allowlist.length === 0) return true;
   return allowlist.includes(String(playerId || ""));
@@ -236,6 +269,7 @@ function getVisibleZoneKeys(playerId) {
 /** 未登入 viewer 只能取得公開區域。 */
 function getPublicZoneKeys() {
   return ALL_ZONE_KEYS.filter((zoneKey) => {
+    if (ZONE_BY_KEY[zoneKey]?.enabled === false) return false;
     const ids = ZONE_BY_KEY[zoneKey]?.previewPlayerIds;
     return !Array.isArray(ids) || ids.length === 0;
   });
@@ -243,6 +277,7 @@ function getPublicZoneKeys() {
 
 /** 私測 allowlist 區的戰鬥、開王與掉落不得送到全服頻道。 */
 function shouldBroadcastZoneActivity(zoneKey) {
+  if (ZONE_BY_KEY[zoneKey]?.enabled === false) return false;
   const ids = ZONE_BY_KEY[zoneKey]?.previewPlayerIds;
   return !Array.isArray(ids) || ids.length === 0;
 }

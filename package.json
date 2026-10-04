@@ -26,8 +26,10 @@
     "test:features": "node scripts/test-core-features.js",
     "test:systems": "node scripts/verify-game-systems.js",
     "test:all": "node scripts/test-all.js",
-    "test:ci": "npm run check && npm run test:golden && npm run test:combat-regressions && npm run test:solo-boss-account-limit && npm run test:stream-notifications && npm run test:web-battle-transition && npm run test:web-death-cooldown && node scripts/test-monster-state-race-guard.js && npm run test:system-hardening",
+    "test:ci": "npm run check && npm run test:offensive-stat-curve && npm run test:battle-pacing && npm run test:golden && npm run test:combat-regressions && npm run test:solo-boss-account-limit && npm run test:stream-notifications && npm run test:web-battle-transition && npm run test:web-death-cooldown && node scripts/test-monster-state-race-guard.js && npm run test:system-hardening && npm run test:anchor-disabled && npm run test:season-reset",
     "test:golden": "node scripts/golden-combat-test.js",
+    "test:offensive-stat-curve": "node scripts/test-offensive-stat-curve.js",
+    "test:battle-pacing": "node scripts/test-battle-pacing.js",
     "test:shadow": "node scripts/test-shadow-gauge.js",
     "test:job-transfer": "node scripts/test-job-transfer.js",
     "test:anchor-quest-metrics": "node scripts/test-anchor-quest-metrics.js",
@@ -45,7 +47,7 @@
     "test:tower-roles": "node scripts/test-tower-roles.js",
     "test:combat-regressions": "node scripts/test-combat-logic-regressions.js",
     "test:season-reset": "node scripts/test-season-reset-policy.js && node scripts/test-season-reset-integration.js",
-    "test:crafting": "node scripts/test-crafting-system.js",
+    "test:crafting": "node scripts/test-crafting-system.js && node scripts/test-crafting-public-integration.js",
     "test:characters": "node scripts/test-character-system.js",
     "test:turtle-set": "node scripts/test-event-beach-gear.js && node scripts/test-island-turtle-set.js",
     "test:turtle-tide": "node scripts/test-turtle-tide.js",
@@ -76,7 +78,9 @@
     "db:pull": "node scripts/sync-cloud-to-local.js",
     "db:sync:start": "node scripts/db-sync-scheduler.js",
     "workflow:finalize": "node scripts/workflow-finalize.js",
-    "test:system-hardening": "node scripts/test-system-hardening.js && node scripts/test-standalone-currency-settlement.js && node scripts/test-shared-battle-service.js && node scripts/test-runtime-boot.js"
+    "test:system-hardening": "node scripts/test-system-hardening.js && node scripts/test-standalone-currency-settlement.js && node scripts/test-shared-battle-service.js && node scripts/test-normal-coop-rewards.js && node scripts/test-normal-coop-scaling.js && node scripts/test-runtime-boot.js",
+    "test:anchor-disabled": "node scripts/test-anchor-disabled.js",
+    "test:security-dependencies": "node scripts/test-security-dependency-compatibility.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -90,16 +94,30 @@
     "express": "^4.22.1",
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^6.21.0",
-    "multer": "^2.1.1",
+    "multer": "^2.4.0",
     "node-cron": "^4.2.1",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.5",
     "ws": "^8.20.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "localtunnel": "^2.0.2",
     "mongodb-memory-server": "^11.1.0",
-    "pm2": "^6.0.14"
+    "pm2": "^7.0.4"
+  },
+  "overrides": {
+    "undici": "^6.28.1",
+    "qs": "^6.15.4",
+    "ip-address": "^10.7.3",
+    "basic-ftp": "^6.2.2",
+    "js-yaml": "^4.3.2",
+    "localtunnel": {
+      "axios": "^0.34.0"
+    },
+    "pm2": {
+      "chokidar": "^4.0.3"
+    },
+    "body-parser": "^1.20.6"
   }
 }

@@ -17,6 +17,12 @@
 
 如果上述文件彼此衝突，先執行 `npm run status:update` 與 `npm run check:docs`，再以對應的 `src/**` 程式和 MongoDB 設定為準。
 
+## 10/1 開季準備
+
+[2026/10/1 新季度開季清單](SEASON_2026_10_LAUNCH_CHECKLIST.md)：9/21 盤點、阻擋項目、待決策事項、逐項驗收與建議時程；屬提案／執行清單，不是已開服證明。
+
+[本季玩法規格](SEASON_2026_10_GAMEPLAY_PLAN.md)：錨點暫停、一般區與舊王簡化、站位組隊區新怪與 BOSS；已定方向與待討論細節分列，尚未實裝。
+
 ## 文件分類
 
 | 類型 | 用途 | 是否可當現況依據 |
@@ -30,6 +36,8 @@
 
 ## 目前重要開關
 
+[一般區等級與收益](NORMAL_PROGRESSION.md)：現行 1–50 養成銜接、怪物 HP／EXP、入場門檻與戰鬥驗證基準。
+
 | 項目 | 現況 | 單一來源 |
 | --- | --- | --- |
 | 儲存層 | MongoDB only | `src/repositories/createRepositories.js` |
@@ -37,7 +45,7 @@
 | 一轉／二轉 | 11 個一轉；13 條二轉資料；每個一轉至少 1 條可用；2 條分支鎖定（劍鬼、盜靈） | `src/shared/jobAdvancement.js` |
 | 待機室預告 | YouTube 新 broadcastId 預告一次，正式開播可再公告一次 | `src/services/stream/youtubeUpcomingService.js`、`viewerEventsService.js` |
 | 觀看人數提示 | 由 MongoDB `serverEventConfig.viewerTiers` 控制；同場同階一次、升階可再發、另受最短間隔限制 | `src/services/stream/streamEventConfig.js`、`streamNotificationState.js` |
-| 錨點任務 | 聖人只看 5 萬有效非吸血治療且不綁抖內；鮮血、承傷、簽到與輔助職任務依各自的顯示／完成門檻運作 | `src/shared/anchorQuestRules.js`、`weeklyQuestService.js` |
+| 錨點任務 | 本季暫停取得、装備及效果；原試煉定義保留但不對玩家開放 | `src/shared/anchorFeature.js`、`src/shared/anchorQuestRules.js`、`weeklyQuestService.js` |
 
 現行共用結算、單一 runtime 所有權及發布／回復流程見 [SYSTEM_HARDENING](SYSTEM_HARDENING.md)。
 
@@ -54,3 +62,28 @@
 5. 玩家、會員、錢包、交易與直播綁定的匯出或備份只能放在 repository 外；提交前執行 `npm run check:sensitive`。
 
 `npm run check:docs` 會驗證幾個最容易再次漂移的硬事實：MongoDB-only、爬塔開關、一轉／二轉數量、鎖定分支，以及權威文件是否寫入相同狀態。
+
+[首發副本設計](SEASON_2026_10_DUNGEON_DESIGN.md)：站位、開打方式、五關新怪、個人獎勵及 D01–D09 清單；討論稿，尚未實作。
+
+[組隊副本企劃 V2](SEASON_2026_10_PARTY_PLAN_V2.md)：依使用者明確玩法重寫，含站位屬性、自動戰鬥、全滅分析、骰裝及構圖；目前討論主稿，未實作，取代舊失落鑄造所提案。
+
+
+## 雲端企劃與進度入口
+
+依使用者要求，企劃及 TODO 以指定 Drive 資料夾供確認與後續修改；修改前先讀雲端內容，保留使用者的調整，每次實際執行後更新狀態、下一步、日期與驗收證據。雲端不是背景自動同步，功能事實仍以程式與 DB 為準。
+
+- [音無樂園資料](https://drive.google.com/drive/folders/1REF5erRZzSf7V4H2CW5M9lYFSTh4I4-W)
+- [組隊企劃 V2](https://docs.google.com/document/d/1fVdLjT0x92gXCIk7i8k4XSOxsG5KcdwPTq5da3CZP7g/edit)
+- [10/1 開季 TODO](https://docs.google.com/spreadsheets/d/1kKGgzw8sRTvcLbfw5GIBIK9ySGtUkrGvcUKPED16WOg/edit)
+
+[一般區經濟與經驗模型](NORMAL_ECONOMY.md)：現行升級需求、金幣、強化／出售、掛機、疲勞與驗證基準。
+
+[合成工房](CRAFTING.md)：公開配方、Web 入口、消耗確認、請求防重與中斷恢復；全服登入維護鎖仍適用。
+
+[赫鋼世界王三階段](STEEL_CROWN_BOSS.md)：單一本體、HP 階段、浮游兵裝與爐心過載疊招，以及正式驗證範圍。
+
+[圖片引導介面](SCENIC_UI.md)：背包玩家頭像、商店／任務場景入口、合成素材引導、圖鑑圖片卡、寵物與世界王視覺。
+
+[活動世界王](EVENT_WORLD_BOSSES.md)：三王管理員預覽、非致死大招、宝箱及實際養成角色討伐驗收；公開日期與輪替排程另設。
+
+[秋季稱號與任務](AUTUMN_TITLES.md)：七個角色獨立賽季任務、領獎防重與「楓紅漸漸」裝備收益加成。

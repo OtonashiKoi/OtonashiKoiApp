@@ -1,3 +1,4 @@
+const { ANCHORS_ENABLED, ANCHOR_DISABLED_MESSAGE } = require("../../shared/anchorFeature");
 "use strict";
 /**
  * 玩家圖鑑／排行榜 API（網頁 App 用，對應 Discord 玩家面板既有功能）：
@@ -132,6 +133,7 @@ function createPlayerCollectionRoutes(serviceContext) {
   // ──────────────────────────────────────────────────
   router.get("/api/me/anchors", requireAuth, async (req, res, next) => {
     try {
+      if (!ANCHORS_ENABLED) return res.json(ok({ enabled: false, message: ANCHOR_DISABLED_MESSAGE, anchors: [], total: 0, collected: 0 }));
       const { discordId } = req.playerRecord;
       const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
       const db = await getMongoDb();

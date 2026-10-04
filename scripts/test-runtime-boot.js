@@ -10,7 +10,7 @@ async function main() {
   let output = '';
   const child = spawn(process.execPath, ['src/index.js'], { cwd: require('node:path').resolve(__dirname, '..'), env: {
     ...process.env, NODE_ENV: 'test', API_ONLY: '1', DEV_MIRROR: '0', API_PORT: String(port),
-    MONGODB_URI: mongo.getUri(), MONGODB_DB_NAME: 'isolated_runtime_boot', DISABLE_AUTO_ROTATE: '1'
+    JWT_SECRET: 'isolated-runtime-test-secret-only-01234567890123456789', MONGODB_URI: mongo.getUri(), MONGODB_DB_NAME: 'isolated_runtime_boot', DISABLE_AUTO_ROTATE: '1'
   }, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', data => { output += data; }); child.stderr.on('data', data => { output += data; });
   const exited = new Promise(resolve => child.on('exit', (code, signal) => resolve({ code, signal })));
@@ -29,6 +29,12 @@ async function main() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zone: 'normal' })
     });
     assert.equal(denied.status, 401);
+    const token = require("jsonwebtoken").sign({ discordId: "isolated-anchor-test" }, 'isolated-runtime-test-secret-only-01234567890123456789', { expiresIn: '1m' });
+    const anchors = await fetch(`http://127.0.0.1:${port}/api/me/anchors`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(anchors.status, 200);
+    const anchorData = (await anchors.json()).data;
+    assert.equal(anchorData.enabled, false);
+    assert.deepEqual(anchorData.anchors, []);
     child.kill('SIGTERM');
     const result = await exited;
     assert.equal(result.code, 0);

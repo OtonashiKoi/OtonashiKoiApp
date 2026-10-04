@@ -105,7 +105,7 @@ class HutaoEventService {
     const next = {
       ...state,
       resolvedMarks: [...new Set([...(state.resolvedMarks || []).map(Number), Number(quiz.mark)])],
-      effect,
+      effect: { ...effect, pulseId: quiz.id, resolvedAt: now },
       quiz: {
         ...quiz,
         status: "resolved",

@@ -7,7 +7,7 @@
  * 那些怪的 def / flatDef / dodge / atk 分佈才是真實戰鬥條件。
  *
  * 作法：
- *   ‧ 標準 Lv35 玩家：74 點**平均分配**（升級是隨機+2，無法集中）、A 階 +3（實測真實玩家配置）、徽章 Lv20
+ *   ‧ 標準 Lv35 玩家：74 點（隨機點均分、自主點主屬 55%／VIT 30%／AGI 15%）、A 階 +3、徽章 Lv20
  *   ‧ 每個職業對「該區所有啟用中的怪」各打 N 場，取整區平均
  *   ‧ **指標＝每場輸出，不是「打死沒」**——區域怪的血量是全服共享、跨場累積的
  *     （monsterState.currentHp，古城弓手 10,500 血、已被打 8,500 次），
@@ -55,16 +55,16 @@ const JOBS = {
   gambler: ["dice", "luk", {}],
 };
 
-// ⚠️ 升級是「隨機 +2」（progressService），玩家沒辦法集中配點。
-// 真實 Lv30~45 玩家的屬性是平的（例：S12 A13 V12 I11 D17 L9）——
-// 先前用「主屬 55%」的集中配點模擬，把主屬驅動的職業（尤其盜賊的 AGI→連擊）灌水了一倍以上。
-// 這裡改成平均分配＝隨機分配的期望值。
-function buildAttrs() {
-  const a = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-  const free = POINTS - 6;
-  const per = Math.floor(free / 6);
-  for (const k of Object.keys(a)) a[k] += per;
-  a.vit += free - per * 6;   // 零頭
+// 隨機 1 點取六維期望，自主 1 點按玩家原型分配；不能把全部兩點都手選。
+function buildAttrs(mainStat) {
+  const levels = LEVEL - 1;
+  const randomMean = 1 + levels / 6;
+  const a = { str: randomMean, agi: randomMean, vit: randomMean, int: randomMean, dex: randomMean, luk: randomMean };
+  const toMain = Math.round(levels * 0.55);
+  const toVit = Math.round(levels * 0.30);
+  a[mainStat] += toMain;
+  a.vit += toVit;
+  a.agi += levels - toMain - toVit;
   return a;
 }
 
@@ -121,7 +121,7 @@ async function buildEquipment(I, badgeId, wType, extra) {
   for (const [key, info] of Object.entries(jobAdvancement.BASE_JOBS)) {
     const [wType, mainStat, extra = {}] = JOBS[key] || [];
     if (!wType) continue;
-    entries.push({ label: `一轉 ${info.name}`, badgeId: info.badgeId, wType, extra });
+    entries.push({ label: `一轉 ${info.name}`, badgeId: info.badgeId, wType, mainStat, extra });
     // 平衡量測要看得到全部分支（含本季不開放的），否則調完數值下季開放時等於沒測過。
     // 玩家看得到的清單走 getBranchesForBase() 預設值（會排除 seasonLocked）。
     let branches = [];
@@ -138,12 +138,12 @@ async function buildEquipment(I, badgeId, wType, extra) {
       if (stances && Object.keys(stances).length > 1) {
         for (const [sk, sv] of Object.entries(stances)) {
           entries.push({
-            label: `二轉 ${t2Name}(${sv.label || sk})${b.seasonLocked ? "🔒" : ""}`, badgeId, wType,
+            label: `二轉 ${t2Name}(${sv.label || sk})${b.seasonLocked ? "🔒" : ""}`, badgeId, wType, mainStat,
             extra: { ...extra, ...(sv.requiresShield ? { shield: true } : {}) }, stance: sk,
           });
         }
       } else {
-        entries.push({ label: `二轉 ${t2Name}${b.seasonLocked ? "🔒" : ""}`, badgeId, wType, extra });
+        entries.push({ label: `二轉 ${t2Name}${b.seasonLocked ? "🔒" : ""}`, badgeId, wType, mainStat, extra });
       }
     }
   }
@@ -153,7 +153,7 @@ async function buildEquipment(I, badgeId, wType, extra) {
     const { wType, extra = {} } = info;
     const eq = await buildEquipment(I, info.badgeId, wType, extra);
     if (!eq) { console.log(`${info.label} 缺裝備，跳過`); continue; }
-    const pStats = calcPlayerStats(buildAttrs(), eq, [], [], {});
+    const pStats = calcPlayerStats(buildAttrs(info.mainStat), eq, [], [], {});
     // 職業完整戰鬥參數（自我光環＋所有身分技氣條）——單一來源 jobBattleOptions
     const jobOpts = jbo.buildBattleOptions({ equipped: eq, pStats, stance: info.stance || null });
 

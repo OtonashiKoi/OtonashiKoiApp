@@ -6,9 +6,9 @@
  *   四原型＝重甲 / 閃避 / 回復 / 護盾；這裡另加「輸出基準」當分母
  *   （驗收條件：生存 build 的輸出 ≥ 同職業輸出 build 的 40%）。
  *
- * 配點模型（2026-08-07 二度更新，對應「2+1 制」實裝）：每級隨機 2 點＋自主 1 點
+ * 配點模型（對應現行「1+1 制」）：每級隨機 1 點＋自主 1 點
  * （progressService 升級迴圈 + statusPoints 池 + allocateAttribute）。
- * Lv50 期望 ＝ 隨機 98 點平均分六維 ＋ 自主 49 點依原型分配（preset.alloc，總和須 = 49）。
+ * Lv50 期望 ＝ 隨機 49 點平均分六維 ＋ 自主 49 點依原型分配（preset.alloc，總和須 = 49）。
  * armorTo 仍決定防具集中屬性（裝備面差異）。
  *
  * 防具中和：沿用 balance-job-matrix 的做法（防具攻擊向屬性歸零、VIT 保留、
@@ -59,10 +59,10 @@ const JOBS = ALL_JOBS.filter(([, badgeId]) => {
 });
 
 /**
- * 原型 → 44 自由點的分配 ＋ 防具集中屬性。
+ * 原型 → 49 自由點的分配 ＋ 防具集中屬性。
  * alloc 的 key：main（主屬性）或六維名；值加總必須 = 44。
  */
-// alloc ＝ 49 點自主點的分配方向（2+1 制玩家真的可以這樣選）
+// alloc ＝ 49 點自主點的分配方向（1+1 制玩家真的可以這樣選）
 const PRESETS = [
   { key: "output", label: "輸出基準", alloc: { main: 49 },           armorTo: "main" },
   { key: "heavy",  label: "重甲坦",   alloc: { vit: 49 },            armorTo: "vit"  },
@@ -71,12 +71,13 @@ const PRESETS = [
   { key: "hybrid", label: "混合",     alloc: { main: 25, vit: 24 },  armorTo: "vit" },
 ];
 
-/** 六維配點（2+1 制期望模型，對應 progressService 實裝）：
- *  隨機部分 98 點平均分六維（16×6=96，餘 2 給 vit/luk）＋ 自主 49 點依 preset.alloc。
+/** 六維配點（1+1 制期望模型，對應 progressService 實裝）：
+ *  隨機部分 49 點平均分六維（每維 49/6）＋ 自主 49 點依 preset.alloc。
  *  ⚠️ 隨機部分永遠平均、不准手選（使用者鐵則）；自主部分才能依原型傾斜。
  */
 function buildAttrs(mainStat, preset) {
-  const a = { str: 16, agi: 16, vit: 17, int: 16, dex: 16, luk: 17 }; // 隨機 98 點期望
+  const perStat = 1 + 49 / 6;
+  const a = { str: perStat, agi: perStat, vit: perStat, int: perStat, dex: perStat, luk: perStat };
   for (const [k, v] of Object.entries(preset?.alloc || {})) {
     a[k === "main" ? mainStat : k] += v;
   }

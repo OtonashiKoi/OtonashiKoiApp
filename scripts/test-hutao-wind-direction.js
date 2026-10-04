@@ -45,9 +45,10 @@ assert.equal(canPlayerAccessZone("event_boss_hutao_preview", "123"), false);
 assert.equal(getVisibleZoneKeys(previewId).includes("event_boss_hutao_preview"), true);
 assert.equal(getVisibleZoneKeys("123").includes("event_boss_hutao_preview"), false);
 assert.equal(getPublicZoneKeys().includes("event_boss_hutao_preview"), false);
-assert.equal(getPublicZoneKeys().includes("event_boss"), true);
+// 舊夏日活動本季停用；不公開、不送全服公告。
+assert.equal(getPublicZoneKeys().includes("event_boss"), false);
 assert.equal(shouldBroadcastZoneActivity("event_boss_hutao_preview"), false);
-assert.equal(shouldBroadcastZoneActivity("event_boss"), true);
+assert.equal(shouldBroadcastZoneActivity("event_boss"), false);
 assert.equal(isZoneVisibleInBestiary("event_boss_hutao_preview"), false);
 assert.equal(isZoneVisibleInBestiary("event_boss"), true);
 

@@ -407,7 +407,10 @@ function createMongoRepositories() {
         // 讀取當下的背包基準（findByPlayerId 蓋的戳記）；沒有就走舊路徑
         const baseline = progress ? progress[INV_BASELINE_KEY] : null;
         // 儲存前瘦身 inventory(去除可從道具庫還原的肥欄位),避免 progress 文件撐爆 16MB
-        progress = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        // 通關記錄只透過原子欄位更新，舊戰鬥快照不得覆蓋其他並行結算。
+        // MongoDB owns _id; cloned BSON ObjectIds must never be written back as mutable fields.
+        const { _id: _mongoId, accountWorldBossClears: _accountClears, ...mutableProgress } = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        progress = mutableProgress;
         const expectedSeasonKey = String(progress.seasonKey || baseline?.seasonKey || seasonState.getActiveKey());
         progress.seasonKey = expectedSeasonKey;
         const guarded = (extra = {}) => ({ ...seasonState.progressFilter(progress.playerId, expectedSeasonKey), ...extra });
@@ -564,7 +567,10 @@ function createMongoRepositories() {
               + " stack=" + new Error().stack.split("\n").slice(2, 6).map(l => l.trim()).join(" ← "));
           }
         } catch (_) {}
-        progress = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        // 通關記錄只透過原子欄位更新，舊戰鬥快照不得覆蓋其他並行結算。
+        // MongoDB owns _id; preserve it even when a caller used structuredClone.
+        const { _id: _mongoId, accountWorldBossClears: _accountClears, ...mutableProgress } = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        progress = mutableProgress;
         const expectedSeasonKey = String(progress.seasonKey || seasonState.getActiveKey());
         progress.seasonKey = expectedSeasonKey;
         const now = new Date().toISOString();
@@ -1273,6 +1279,7 @@ function createMongoRepositories() {
         await (await collection("monsterEvents")).deleteOne({ id });
       }
     },
+    partyTowerRepository: require("./createPartyTowerRepository").createPartyTowerRepository({ collection }),
     towerSessionRepository: {
       async save(session) {
         if (maintenance.isStrict()) throw Object.assign(new Error("SEASON_RESET_WRITE_LOCKED"), { code: "SEASON_RESET_WRITE_LOCKED" });

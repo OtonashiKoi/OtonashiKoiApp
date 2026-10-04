@@ -1,3 +1,4 @@
+const { isUnavailableEquipment } = require("../../shared/equipmentAvailability");
 "use strict";
 /**
  * 世界王-單人 API（網頁版新分類）＝現行世界王的「每人獨立版」。
@@ -20,7 +21,7 @@ const {
 } = require("../../bot/handlers/monsterZoneHandlers");
 const { bestiaryGainFromDamage } = require("../../shared/bestiary");
 const { buildItemEffectLines } = require("../../shared/itemEffectLines");
-const { calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
+const { calculateBattleTickMs, calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
 const { readAccountState } = require("../../services/worldBoss/soloBossAccountState");
 const { mergeContributorMaps, mirrorDamageToOtherParts } = require("../../shared/supportContribution");
 
@@ -35,12 +36,7 @@ const SOLO_BOSSES = {
   },
 };
 
-// 戰鬥每回合節奏（與 quick-battle 同公式，讓單人戰鬥速度一致）
-function calculateTickDelay(agi = 1) {
-  const baseDelay = 1500, minDelay = 500, capAgi = 40;
-  const capped = Math.min(Math.max(1, agi), capAgi);
-  return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
-}
+const calculateTickDelay = calculateBattleTickMs;
 
 function partsForResp(boss, partsHp, partsMaxHp) {
   const keys = getWorldBossPartKeys(boss.zone) || Object.keys(partsHp);
@@ -459,6 +455,7 @@ function createSoloBossRoutes(serviceContext) {
       }
 
       if (allDefeated) {
+        await require("../../services/worldBoss/worldBossProgression").recordClears(repo, boss.zone, [discordId]);
         killsToday += 1;
         // 擊殺獎勵：經驗 + 金錢（同現行大史王）
         const expReward = Math.max(0, Number(monster.expReward) || 0);
@@ -475,7 +472,7 @@ function createSoloBossRoutes(serviceContext) {
           const chance = Math.max(0, Number(d.chance) || 0) + luk * 0.1;
           if (Math.random() * 100 < chance) {
             const item = await serviceContext.itemRepository.findById(d.itemId).catch(() => null);
-            if (!item) continue;
+            if (!item || isUnavailableEquipment(item)) continue;
             const entry = {
               uuid: crypto.randomUUID(), itemId: item.id, itemName: item.name,
               itemEffect: item.effect || { type: "none", value: 0 },
@@ -557,7 +554,7 @@ function createSoloBossRoutes(serviceContext) {
         // 血條顯示「本場所打部位」的血量（同現行世界王）
         finalMonsterHp: newPartHp, monsterStartHp: partHpNow, monsterMaxHp: Math.max(1, Number(st.worldBossPartsMaxHp[part] || partHpNow)),
         cooldownMs: animDurationMs,
-        tickMs: calculateTickDelay(pStats.agi || 1),
+        tickMs: _perRoundMs,
         // 部位資訊（前端刷新部位血條 + 是否破 + 全破）
         targetPart: part, partName: PART_LABELS[part] || part,
         partHp: { current: newPartHp, max: Math.max(1, Number(st.worldBossPartsMaxHp[part] || partHpNow)) },

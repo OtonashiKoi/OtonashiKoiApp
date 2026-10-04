@@ -136,7 +136,11 @@ async function executeStandaloneCraft({
     createdAt: now,
     updatedAt: now
   };
-  await db.collection("craftingOperations").insertOne(operation);
+  // 同一請求遇到背包 CAS 衝突後已完整退款，允許在持久鎖內重試同一 operation。
+  const restarted = await db.collection("craftingOperations").replaceOne(
+    { id: operation.id, playerId: String(playerId), status: "aborted" }, operation
+  );
+  if (!restarted.matchedCount) await db.collection("craftingOperations").insertOne(operation);
 
   try {
     let wallet = null;

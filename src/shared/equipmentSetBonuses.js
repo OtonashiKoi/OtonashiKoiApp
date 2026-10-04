@@ -1,4 +1,5 @@
 "use strict";
+const { activeEquipment } = require("./anchorFeature");
 
 /**
  * 具名套裝系統（named set bonuses）。
@@ -32,6 +33,35 @@ function passiveEff(key, value, condition, extraParams) {
 // ── 套裝登錄表 ───────────────────────────────────────────────
 // tiers：count 門檻由小到大；達到即累加（達 5 亦享 3 的加成）。
 const SET_DEFS = {
+  mantou_rabbit: {
+    name: "鬱兔套裝・爆走", tiers: [
+      { count: 3, desc: "最大生命 +8%", effects: () => [passiveEff("max_hp_multiplier_up", 8)] },
+      { count: 5, desc: "受到傷害 -8%", effects: () => [passiveEff("damage_reduction", 8)] },
+      { count: 7, desc: "爆走輪轉：委屈3回合減傷12%；爆走3回合最終傷害+18%", effects: () => [passiveEff("rabbit_rage_cycle", 0, null, {phaseRounds:3,highTideDamageReductionPct:12,ebbFinalDamagePct:18})] },
+    ],
+  },
+  magnetic_p: {
+    name: "磁鋼套裝·物",
+    tiers: [
+      { count: 3, desc: "傷害 +13%", numeric: { damagePct: 13 } },
+      { count: 5, desc: "磁力偏移：8% 機率使物理攻擊傷害歸零；主手裝備同系列 S 武器提高至 12%（僅自身套裝）", effects: (equipped, key) => [passiveEff("magnetic_deflection", getRegionalSetProcChance(equipped, key))] },
+      { count: 7, desc: "鐵鳴礦城／鋼冕王座 受傷 -15%", effects: () => [
+        passiveEff("physical_damage_reduction", 15, { zone: ["metal_mine", "metal_throne"] }),
+        passiveEff("magic_damage_reduction", 15, { zone: ["metal_mine", "metal_throne"] }),
+      ] },
+    ],
+  },
+  magnetic_m: {
+    name: "磁鋼套裝·法",
+    tiers: [
+      { count: 3, desc: "INT +10、最終傷害 +6%", numeric: { stats: { int: 10 }, finalDamagePct: 6 } },
+      { count: 5, desc: "磁力偏移：8% 機率使物理攻擊傷害歸零；主手裝備同系列 S 武器提高至 12%（僅自身套裝）", effects: (equipped, key) => [passiveEff("magnetic_deflection", getRegionalSetProcChance(equipped, key))] },
+      { count: 7, desc: "鐵鳴礦城／鋼冕王座 受傷 -15%", effects: () => [
+        passiveEff("physical_damage_reduction", 15, { zone: ["metal_mine", "metal_throne"] }),
+        passiveEff("magic_damage_reduction", 15, { zone: ["metal_mine", "metal_throne"] }),
+      ] },
+    ],
+  },
   // ═══ 基礎階級套（各期主力，接替舊 D/C/B/A 階級套裝）═══
   basic_d: {
     name: "新手套裝",
@@ -64,7 +94,7 @@ const SET_DEFS = {
     note: "定位：A 階物理輸出",
     tiers: [
       { count: 3, desc: "STR +8、傷害 +8%", numeric: { stats: { str: 8 }, damagePct: 8 } },
-      { count: 5, desc: "爆擊傷害 +15%", numeric: { critDamagePct: 15 } },
+      { count: 5, desc: "精準重擊：普攻主擊命中時 20% 機率使本次傷害提高 30%；主手裝備同系列 S 武器提高至 30%（不追加攻擊）", effects: (equipped, key) => [passiveEff("mithril_precision", 30, null, { procChance: getRegionalSetProcChance(equipped, key) })] },
       { count: 7, desc: "無視防禦 +12%、對 Boss 傷害 +8%", numeric: { bossDamagePct: 8 }, effects: () => [passiveEff("def_ignore", 12)] },
     ],
   },
@@ -73,7 +103,7 @@ const SET_DEFS = {
     note: "定位：A 階法師輸出",
     tiers: [
       { count: 3, desc: "INT +8、最終傷害 +5%", numeric: { stats: { int: 8 }, finalDamagePct: 5 } },
-      { count: 5, desc: "無視防禦(魔穿) +15%", effects: () => [passiveEff("def_ignore", 15)] },
+      { count: 5, desc: "精準重擊：普攻主擊命中時 20% 機率使本次傷害提高 30%；主手裝備同系列 S 武器提高至 30%（不追加攻擊）", effects: (equipped, key) => [passiveEff("mithril_precision", 30, null, { procChance: getRegionalSetProcChance(equipped, key) })] },
       { count: 7, desc: "INT +12、對 Boss 傷害 +8%", numeric: { stats: { int: 12 }, bossDamagePct: 8 } },
     ],
   },
@@ -83,7 +113,7 @@ const SET_DEFS = {
     note: "定位：A 階防禦肉盾（6 防具 + 鋼鐵盾）",
     tiers: [
       { count: 3, desc: "受到傷害 -6%", effects: () => [passiveEff("damage_reduction", 6)] },
-      { count: 5, desc: "最大生命 +10%", effects: () => [passiveEff("max_hp_multiplier_up", 10)] },
+      { count: 5, desc: "鋼鐵格擋：格擋率 +8%、最大生命 +10%", effects: () => [passiveEff("max_hp_multiplier_up", 10), passiveEff("block_chance_up", 8)] },
       { count: 7, desc: "受到傷害 -6%（疊加）", effects: () => [passiveEff("damage_reduction", 6)] },
     ],
   },
@@ -92,7 +122,7 @@ const SET_DEFS = {
     note: "定位：A 階法師肉盾（6 法袍 + 法典副手）",
     tiers: [
       { count: 3, desc: "INT +8、受到傷害 -5%", numeric: { stats: { int: 8 } }, effects: () => [passiveEff("damage_reduction", 5)] },
-      { count: 5, desc: "最大生命 +8%", effects: () => [passiveEff("max_hp_multiplier_up", 8)] },
+      { count: 5, desc: "鋼鐵格擋：格擋率 +8%、最大生命 +8%", effects: () => [passiveEff("max_hp_multiplier_up", 8), passiveEff("block_chance_up", 8)] },
       { count: 7, desc: "INT +10、受到傷害 -6%", numeric: { stats: { int: 10 } }, effects: () => [passiveEff("damage_reduction", 6)] },
     ],
   },
@@ -102,7 +132,7 @@ const SET_DEFS = {
     note: "定位：物理傷害 + 火焰區防禦",
     tiers: [
       { count: 3, desc: "傷害 +13%", numeric: { damagePct: 13 } },
-      { count: 5, desc: "爆擊傷害 +10%", numeric: { critDamagePct: 10 } },
+      { count: 5, desc: "焚獄餘燼：普攻主擊造成傷害時 20% 機率灼燒，接續 2 回合每回合造成自身 ATK 20% 傷害；主手裝備同系列 S 武器提高至 30%（僅刷新、不疊加）", effects: (equipped, key) => [passiveEff("hellfire_ember", 20, null, { procChance: getRegionalSetProcChance(equipped, key), turns: 2 })] },
       { count: 7, desc: "地獄火焰／焰獄深處 受傷 -15%", effects: () => [
         passiveEff("physical_damage_reduction", 15, { zone: HELLFIRE_ZONES }),
         passiveEff("magic_damage_reduction", 15, { zone: HELLFIRE_ZONES }),
@@ -114,7 +144,7 @@ const SET_DEFS = {
     note: "定位：法師傷害 + 火焰區防禦",
     tiers: [
       { count: 3, desc: "INT +10、最終傷害 +6%", numeric: { stats: { int: 10 }, finalDamagePct: 6 } },
-      { count: 5, desc: "無視防禦(魔穿) +12%", effects: () => [passiveEff("def_ignore", 12)] },
+      { count: 5, desc: "焚獄餘燼：普攻主擊造成傷害時 20% 機率灼燒，接續 2 回合每回合造成自身 ATK 20% 傷害；主手裝備同系列 S 武器提高至 30%（僅刷新、不疊加）", effects: (equipped, key) => [passiveEff("hellfire_ember", 20, null, { procChance: getRegionalSetProcChance(equipped, key), turns: 2 })] },
       { count: 7, desc: "地獄火焰／焰獄深處 受傷 -15%", effects: () => [
         passiveEff("physical_damage_reduction", 15, { zone: HELLFIRE_ZONES }),
         passiveEff("magic_damage_reduction", 15, { zone: HELLFIRE_ZONES }),
@@ -127,7 +157,7 @@ const SET_DEFS = {
     note: "定位：連擊 + 龍族區防禦",
     tiers: [
       { count: 3, desc: "連擊率 +8", effects: () => [passiveEff("combo_up", 8)] },
-      { count: 5, desc: "連擊傷害 +12%", effects: () => [passiveEff("combo_damage_up", 12)] },
+      { count: 5, desc: "龍鱗反傷：30% 機率反彈實際物理普攻承傷的 12%；主手裝備同系列 S 武器提高至 45%", effects: (equipped, key) => [passiveEff("dragon_reflection", 12, null, { procChance: getRegionalSetProcChance(equipped, key) })] },
       { count: 7, desc: "龍族之領／龍王巢穴 受傷 -15%", effects: () => [
         passiveEff("physical_damage_reduction", 15, { zone: DRAGON_ZONES }),
         passiveEff("magic_damage_reduction", 15, { zone: DRAGON_ZONES }),
@@ -139,7 +169,7 @@ const SET_DEFS = {
     note: "定位：法師 + 龍族區防禦（6 法袍 + 法典副手）",
     tiers: [
       { count: 3, desc: "INT +8、最終傷害 +5%", numeric: { stats: { int: 8 }, finalDamagePct: 5 } },
-      { count: 5, desc: "無視防禦(魔穿) +12%", effects: () => [passiveEff("def_ignore", 12)] },
+      { count: 5, desc: "龍鱗反傷：30% 機率反彈實際物理普攻承傷的 12%；主手裝備同系列 S 武器提高至 45%", effects: (equipped, key) => [passiveEff("dragon_reflection", 12, null, { procChance: getRegionalSetProcChance(equipped, key) })] },
       { count: 7, desc: "龍族之領／龍王巢穴 受傷 -15%", effects: () => [
         passiveEff("physical_damage_reduction", 15, { zone: DRAGON_ZONES }),
         passiveEff("magic_damage_reduction", 15, { zone: DRAGON_ZONES }),
@@ -247,6 +277,7 @@ function setKeysOf(item) {
 
 /** 統計身上各 setKey 件數（只算會被套裝計入的槽位；一件可同時計入多套）。 */
 function countEquippedSets(equipped = {}) {
+  equipped = activeEquipment(equipped);
   const counts = {};
   const pieces = {};
   if (!equipped || typeof equipped !== "object") return { counts, pieces };
@@ -259,6 +290,18 @@ function countEquippedSets(equipped = {}) {
     }
   }
   return { counts, pieces };
+}
+
+/** Five same-kind pieces activate the trait; a matching S main-hand weapon upgrades it once. */
+function getRegionalSetProcChance(equipped = {}, key) {
+  const counts = countEquippedSets(equipped).counts;
+  if ((counts[key] || 0) < 5) return 0;
+  const weapon = equipped?.weapon;
+  const upgraded = String(weapon?.tier || "").toUpperCase() === "S" && weapon?.equipSlot !== "shield" && setKeysOf(weapon).includes(key);
+  if (["magnetic_p", "magnetic_m"].includes(key)) return upgraded ? 12 : 8;
+  if (["dragonscale_p", "dragonscale_m"].includes(key)) return upgraded ? 45 : 30;
+  if (["hellfire_p", "hellfire_m", "mithril_p", "mithril_m"].includes(key)) return upgraded ? 30 : 20;
+  return 0;
 }
 
 /** 顯示用：回傳已裝備到的套裝進度（含每 tier 文字與是否達成）。 */
@@ -274,7 +317,7 @@ function getEquippedSetInfo(equipped = {}) {
       note: def.note || null,
       count,
       pieces: pieces[key] || [],
-      tiers: def.tiers.map((t) => ({ count: t.count, desc: t.desc, active: count >= t.count })),
+      tiers: def.tiers.map((t) => ({ count: t.count, desc: t.desc, active: count >= t.count, ...(t.count === 5 && getRegionalSetProcChance(equipped, key) ? { procChance: getRegionalSetProcChance(equipped, key) } : {}) })),
     });
   }
   return out;
@@ -312,7 +355,7 @@ function getSetEffects(equipped = {}) {
     if (!def) continue;
     for (const t of def.tiers) {
       if (count < t.count || typeof t.effects !== "function") continue;
-      effects.push(...t.effects());
+      effects.push(...t.effects(equipped, key));
     }
   }
   return effects;
@@ -320,5 +363,5 @@ function getSetEffects(equipped = {}) {
 
 module.exports = {
   SET_SLOTS, SET_DEFS, EMPTY_NUMERIC,
-  countEquippedSets, getEquippedSetInfo, getSetNumericBonuses, getSetEffects,
+  getRegionalSetProcChance, countEquippedSets, getEquippedSetInfo, getSetNumericBonuses, getSetEffects,
 };

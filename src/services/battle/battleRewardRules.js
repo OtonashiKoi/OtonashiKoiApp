@@ -1,3 +1,4 @@
+const { activeEquipment } = require("../../shared/anchorFeature");
 "use strict";
 
 const { GOLD_POOL_RULE_BY_ZONE } = require("./zoneBattleState");
@@ -101,7 +102,7 @@ function toMultiplier(percent) {
 
 function collectRewardEffectRefs(progress) {
   const refs = [];
-  const equipped = progress?.equipment || {};
+  const equipped = activeEquipment(progress?.equipment);
   const effectContext = {
     equipped,
     inventory: Array.isArray(progress?.inventory) ? progress.inventory : []

@@ -1,0 +1,30 @@
+{
+  "mistwood-monster-1": {
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/f_auto,q_auto/v1790677234/equipment-game/monsters/j4321dzjzoidvpascywn.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1790677235/equipment-game/monsters/odhctabtopnauxg4ugls.webp"
+  },
+  "mistwood-monster-2": {
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/f_auto,q_auto/v1790677237/equipment-game/monsters/thstltn0wcksohztlp0m.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1790677239/equipment-game/monsters/zlj388ph3q6ov53clvwo.webp"
+  },
+  "mistwood-monster-3": {
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/f_auto,q_auto/v1790677242/equipment-game/monsters/vmfomgqwijxhmywm3d3h.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1790677243/equipment-game/monsters/zjro7ctpcqneuurdwa1q.webp"
+  },
+  "mistwood-monster-4": {
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/f_auto,q_auto/v1790677244/equipment-game/monsters/i3emgkxdvyvwf83lz7zw.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1790677246/equipment-game/monsters/idp4qkdkbzzcrpcdsdvz.webp"
+  },
+  "mistwood-monster-5": {
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/f_auto,q_auto/v1790677247/equipment-game/monsters/v03iqhmtqafuwmaiocsb.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1790677248/equipment-game/monsters/c7vprxcujwafpvxrwkmj.webp"
+  },
+  "mistwood-monster-6": {
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/f_auto,q_auto/v1790677250/equipment-game/monsters/p83bkbqqvzfpdwdqvohf.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1790677250/equipment-game/monsters/bwwzrdxxnbxf5gi7zost.webp"
+  },
+  "mistwood-monster-7": {
+    "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/f_auto,q_auto/v1790677252/equipment-game/monsters/ygf57ygunqujhuxl8o8l.png",
+    "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1790677253/equipment-game/monsters/s66nkmwhjehzumsqjh43.webp"
+  }
+}

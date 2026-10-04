@@ -6,7 +6,8 @@
  * Assumptions:
  * - Solo player, full damage credit on each monster kill.
  * - Uses the same zone route as the level gates.
- * - Uses a swordsman-style baseline build and level-appropriate basic gear.
+ * - Uses a swordsman-style baseline build: random points averaged over six stats,
+ *   allocatable points distributed by the chosen ratio, and level-appropriate gear.
  * - Monster selection is weighted by spawnRate.
  * - EXP/gold/drops are granted on kill; persistent monster HP means a kill may take
  *   multiple battle sessions.
@@ -96,18 +97,8 @@ function zoneForLevel(level) {
 function scaleAttrs(ratio, total) {
   const sum = Object.values(ratio).reduce((a, b) => a + b, 0);
   const result = {};
-  let allocated = 0;
-  const keys = Object.keys(ratio);
-  for (let i = 0; i < keys.length; i++) {
-    const k = keys[i];
-    if (i === keys.length - 1) {
-      result[k] = Math.max(1, total - allocated);
-    } else {
-      const v = Math.max(1, Math.round((ratio[k] / sum) * total));
-      result[k] = v;
-      allocated += v;
-    }
-  }
+  const levels = Math.max(0, (total - 6) / 2);
+  for (const k of Object.keys(ratio)) result[k] = 1 + levels / 6 + levels * ratio[k] / sum;
   return result;
 }
 

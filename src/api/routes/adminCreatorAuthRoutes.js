@@ -1,9 +1,12 @@
 const { Router } = require("express");
 const jwt = require("jsonwebtoken");
+const { randomBytes } = require("crypto");
 const config = require("../../config");
 const { ok, fail } = require("../../shared/response");
 
 const STATE_TTL = "10m";
+const STATE_TTL_MS = 10 * 60 * 1000;
+const pendingOAuthStates = new Map();
 
 function getJwtSecret() {
   return config.streamAuth?.stateSecret || process.env.JWT_SECRET;
@@ -84,13 +87,19 @@ function createAdminCreatorAuthRoutes(serviceContext) {
       if (!["twitch", "youtube"].includes(provider)) {
         return res.status(400).json(fail("INVALID_PROVIDER", "provider 必須是 twitch 或 youtube"));
       }
+      const nonce = randomBytes(24).toString("base64url");
       const state = jwt.sign(
-        { provider, purpose: "admin-creator-oauth", adminPassword: config.api.adminPassword },
+        { provider, purpose: "admin-creator-oauth", nonce },
         getJwtSecret(),
         { expiresIn: STATE_TTL }
       );
       const redirectUri = buildCallbackUrl(req, provider);
       const url = creatorTokenService.buildAuthorizeUrl({ provider, redirectUri, state });
+      const now = Date.now();
+      for (const [key, createdAt] of pendingOAuthStates) {
+        if (now - createdAt > STATE_TTL_MS) pendingOAuthStates.delete(key);
+      }
+      pendingOAuthStates.set(nonce, now);
       res.json(ok({ url, redirectUri, provider }));
     } catch (err) {
       next(err);
@@ -152,9 +161,11 @@ function createAdminCreatorAuthRoutes(serviceContext) {
       if (state?.purpose !== "admin-creator-oauth" || state?.provider !== provider) {
         return res.status(400).send(renderResultPage(`${provider} 授權失敗`, ["❌ state token 用途不符"]));
       }
-      if (state?.adminPassword !== config.api.adminPassword) {
-        return res.status(403).send(renderResultPage(`${provider} 授權失敗`, ["❌ 管理員密碼已變更，請重新從後台發起授權"]));
+      const createdAt = pendingOAuthStates.get(state?.nonce);
+      if (!createdAt || Date.now() - createdAt > STATE_TTL_MS) {
+        return res.status(403).send(renderResultPage(`${provider} 授權失敗`, ["❌ 授權請求已失效，請重新從後台發起授權"]));
       }
+      pendingOAuthStates.delete(state.nonce);
 
       const redirectUri = buildCallbackUrl(req, provider);
       const tokenResponse = await creatorTokenService.exchangeCodeForToken({ provider, code, redirectUri });

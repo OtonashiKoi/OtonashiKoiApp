@@ -1,8 +1,11 @@
+const { activeEquipment } = require("./anchorFeature");
 "use strict";
 const { collectEquipmentEffects, applyEffectsToStats } = require("./effectEngine");
 const { getEquipmentTierSetBonuses, TIER_SET_SLOTS } = require("./equipmentTierSetBonuses");
 const { getSetNumericBonuses } = require("./equipmentSetBonuses");
 const { getBossBoostPct, PK_RATING_DEFAULT } = require("./pkArenaConfig");
+const { effectiveOffensiveStat, offensiveStatGain } = require("./offensiveStatCurve");
+const { weaponBaseAttack } = require("./weaponBaseAttack");
 
 // ─────────────────────────────────────────────
 // 武器設定表
@@ -69,6 +72,7 @@ const EQUIPPED_TIER_SLOTS = TIER_SET_SLOTS;
  * 依玩家基礎屬性與已裝備物品計算戰鬥數值。
  */
 function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk = 1 } = {}, equipped = {}, activeEffects = [], inventory = [], { pkRating, zone = null, petStat = 0 } = {}) {
+  equipped = activeEquipment(equipped);
   // 🐾寵物圖鑑收集里程碑：全屬性 +N（當作基礎屬性加成，驅動所有衍生數值）
   const _petStat = Math.max(0, Number(petStat) || 0);
   const tierSetBonuses = getEquipmentTierSetBonuses(equipped);
@@ -160,8 +164,11 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
   // 空手倍率 ×1
   const mult = wt ? cfg.mult : 1;
 
-  // ATK
-  const atk = Math.round(baseStat * mult);
+  // 武器主屬性只在攻擊收益上稀釋；原始屬性仍完整參與命中、爆擊等其他機制。
+  const effectiveMainStat = effectiveOffensiveStat(baseStat);
+  const attributeAtk = Math.round(effectiveMainStat * mult);
+  const baseWeaponAttack = weaponBaseAttack(weapon, mult);
+  const atk = attributeAtk + baseWeaponAttack;
 
   // 傷害浮動：0.7 ~ 1.0；INT 每點 +0.01 抬高下限（最多 INT=30 達 1.0 恆定不浮動）
   const dmgMin = Math.min(1.0, 0.7 + I * 0.01);
@@ -216,8 +223,9 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
     // 全設計反推見 docs/SEASON_NEXT_SURVIVAL_15R_DESIGN.md。
     maxHp:    V * 25 + 200,
     atk,
+    baseWeaponAttack,
     weaponMainStat: baseStatKey,       // 武器主屬性名稱(str/int/dex)
-    weaponMainStatValue: baseStat,     // 武器主屬性數值(用於終傷後追加固定傷害)
+    weaponMainStatValue: effectiveMainStat, // 有效武器主屬性（用於終傷後追加固定傷害）
     dmgMin,
     dmgMax,
     // ── DEF 新模型 ──
@@ -297,12 +305,13 @@ function calcPlayerStats({ str = 1, agi = 1, vit = 1, int: INT = 1, dex = 1, luk
       if (d[k] !== 0) changed = true;
     }
     if (changed) {
-      // ATK：武器主屬性的增量 × 武器倍率
+      // ATK 與終傷追加共用同一條收益曲線，避免 Buff 繞過後期稀釋。
       const dMain = d[baseStatKey] || 0;
       if (dMain !== 0) {
-        nextStats.atk = (Number(nextStats.atk) || 0) + Math.round(dMain * mult);
-        // 武器主屬性追加傷害（終傷後 +主屬性×1.5）也要跟著動
-        nextStats.weaponMainStatValue = Math.max(0, (Number(nextStats.weaponMainStatValue) || 0) + dMain);
+        const effectiveGain = offensiveStatGain(baseStat, baseStat + dMain);
+        nextStats.atk = (Number(nextStats.atk) || 0)
+          + Math.round(effectiveOffensiveStat(baseStat + dMain) * mult) - attributeAtk;
+        nextStats.weaponMainStatValue = Math.max(0, (Number(nextStats.weaponMainStatValue) || 0) + effectiveGain);
       }
       if (d.luk !== 0) nextStats.crit = (Number(nextStats.crit) || 0) + d.luk * 0.5;
       if (d.agi !== 0) {

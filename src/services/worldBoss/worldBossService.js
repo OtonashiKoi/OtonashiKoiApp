@@ -110,7 +110,8 @@ class WorldBossService {
   constructor(worldBossRepository, options = {}) {
     this.repo = worldBossRepository;
     this.bossKey = options.bossKey || "default";
-    this.unlockRequiresBossKey = options.unlockRequiresBossKey || null;
+    this.progressRepository = options.progressRepository || null;
+    this.unlockRequiresBossKey = require("./worldBossProgression").PREREQUISITES[this.bossKey] || null;
     this.unlockServiceGetter = typeof options.unlockServiceGetter === "function" ? options.unlockServiceGetter : null;
   }
 
@@ -140,17 +141,11 @@ class WorldBossService {
     };
   }
 
-  // 前置世界王是否「本週已被擊殺」→ 決定本 boss 是否解鎖
-  async _isPrerequisiteCleared() {
-    if (!this.unlockRequiresBossKey || !this.unlockServiceGetter) return true;
-    const prereq = this.unlockServiceGetter(this.unlockRequiresBossKey);
-    if (!prereq) return true;
-    try {
-      const state = await prereq._getStateEnsured();
-      return Boolean(state.lastKilledAt);   // 本週擊殺過前置 boss（state 每週重置）
-    } catch (_) {
-      return false;
-    }
+  async _isPrerequisiteCleared(playerId) {
+    if (!playerId || !this.unlockRequiresBossKey) return true;
+    if (!this.progressRepository) return false;
+    const progress = await this.progressRepository.findByPlayerId(playerId);
+    return Boolean(progress?.accountWorldBossClears?.[this.unlockRequiresBossKey]);
   }
 
   _buildStatus(config, state, now = Date.now(), unlocked = true) {
@@ -174,11 +169,7 @@ class WorldBossService {
       unlockTarget: 0,
       remainingUnlockKills: 0,
       unlocked,
-      lockedReason: unlocked ? null : (
-        this.unlockRequiresBossKey === "default" ? "需先擊敗本週的大史王，才能挑戰龍王"
-        : this.unlockRequiresBossKey === "dragon_king" ? "需先擊敗本週的古龍王，才能挑戰地獄狼牙王"
-        : "尚未解鎖"
-      ),
+      lockedReason: unlocked ? null : `需先親自擊敗${require("./worldBossProgression").BOSS_NAMES[this.unlockRequiresBossKey]}，才能挑戰此世界王`,
       cooldownRemainingMs,
       cooldownRemainingMinutes: Math.ceil(cooldownRemainingMs / 60000),
       battleStartedAt: state.battleStartedAt || null,
@@ -189,11 +180,16 @@ class WorldBossService {
     };
   }
 
-  async getConfigWithStatus() {
+  async getConfigWithStatus(playerId) {
+    const availability = require("../../shared/worldBossAvailability");
+    if (availability.CLOSED_BOSS_KEYS.includes(this.bossKey)) {
+      const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
+      return { config: { ...config, enabled: false }, state, status: { ...this._buildStatus(config, state), unlocked: false, canChallenge: false, lockedReason: availability.CLOSED_REASON } };
+    }
     const [config, state, unlocked] = await Promise.all([
       this.getConfig(),
       this._getStateEnsured(),
-      this._isPrerequisiteCleared()
+      this._isPrerequisiteCleared(playerId)
     ]);
     return {
       config,
@@ -273,6 +269,8 @@ class WorldBossService {
 
 // 世界王 zone 註冊表：zoneKey → bossKey（新增世界王只要在這裡加一條）
 const WORLD_BOSS_ZONES = {
+  event_boss_rabbit_preview: "mantou_rabbit",
+  metal_throne: "steel_crown",
   elite: "default",            // 大史王
   dragon_king_lair: "dragon_king", // 龍王(B)
   hellfire_depths: "hellfang_king", // 地獄狼牙王（終局）

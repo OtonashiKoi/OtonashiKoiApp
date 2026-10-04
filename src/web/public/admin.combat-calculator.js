@@ -31,7 +31,6 @@
     B: { label: "B", stats: {}, hit: 0, dodge: 0, crit: 5, critDamage: 10, damage: 6, finalDamage: 0, bossDamage: 0 },
     A: { label: "A", stats: {}, hit: 0, dodge: 0, crit: 0, critDamage: 0, damage: 0, finalDamage: 5, bossDamage: 10 },
   };
-
   const $ = (id) => document.getElementById(id);
   const numberValue = (id, fallback = 0) => {
     const value = Number($(id)?.value);
@@ -39,6 +38,10 @@
   };
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
   const round1 = (value) => Math.round(value * 10) / 10;
+  // 與 src/shared/offensiveStatCurve.js 同步；自訂模擬也要反映實際主屬性收益。
+  const effectiveOffensiveStat = (value) => {
+    const raw = Math.max(0, Number(value) || 0); return 1.25 * (raw <= 30 ? raw : 30 + 35 * Math.log1p((raw - 30) / 35));
+  };
   const esc = (value) => String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -53,15 +56,12 @@
     const equip = Number(equipRaw);
     return { base: Number.isFinite(base) ? base : 0, equip: Number.isFinite(equip) ? equip : 0 };
   }
-
   function statPairField(key, label, value) {
     return `<label><span>${label}</span><input id="combat-custom-${key}-pair" class="sheet-input combat-pair-input" value="${esc(value)}" inputmode="decimal" /></label>`;
   }
-
   function numberField(id, label, value, attrs = "") {
     return `<label><span>${label}</span><input id="${id}" class="sheet-input" type="number" step="any" value="${esc(value)}" ${attrs} /></label>`;
   }
-
   function bonusStatFields(prefix) {
     return statFields.map(([key, label]) => numberField(`combat-custom-${prefix}-${key}`, label, 0)).join("");
   }
@@ -99,6 +99,7 @@
         <label class="combat-wide"><span>玩家名稱</span><input id="combat-custom-player-name" class="sheet-input" value="自訂玩家" /></label>
         ${numberField("combat-custom-player-level", "玩家等級", 1, 'min="1"')}
         <label><span>武器</span><select id="combat-custom-weapon-type" class="sheet-input">${weaponOptions}</select></label>
+        <label><span>武器階級</span><select id="combat-custom-weapon-tier" class="sheet-input"><option value="D">D</option><option value="C">C</option><option value="B">B</option><option value="A">A</option><option value="S">S</option></select></label>
         ${statInputs}<label class="combat-check"><input id="combat-custom-has-shield" type="checkbox" />裝備盾牌</label>
       </div></div>`,
       `<div class="combat-custom-panel combat-wide" data-combat-custom-panel="tier" hidden><div class="combat-field-grid">
@@ -227,9 +228,11 @@
     const weaponType = $("combat-custom-weapon-type")?.value || "none";
     const weapon = weaponConfig[weaponType] || weaponConfig.none;
     // 主屬性為 0 時不可 fallback 到 STR（骰子吃 LUK、匕首吃 AGI 會被算錯）
-    const mainStatValue = Number(totalStats[weapon.main] ?? totalStats.str ?? 0) || 0;
+    const mainStatValue = effectiveOffensiveStat(totalStats[weapon.main] ?? totalStats.str ?? 0);
     const atkPct = numberValue("combat-custom-card-atk-pct") + numberValue("combat-custom-title-atk-pct");
-    const atk = Math.max(1, Math.round((mainStatValue * weapon.mult) * (1 + atkPct / 100) + numberValue("combat-custom-extra-atk")));
+    const weaponTier = $("combat-custom-weapon-tier")?.value || "D";
+    const weaponBase = weaponType === "none" ? 0 : Math.round(({D:0,C:20,B:55,A:110,S:180}[weaponTier] || 0) * weapon.mult / 4);
+    const atk = Math.max(1, Math.round((Math.round(mainStatValue * weapon.mult) + weaponBase) * (1 + atkPct / 100) + numberValue("combat-custom-extra-atk")));
     const equipVit = Math.max(0, equipStats.vit + cardStats.vit + titleStats.vit);
     const hasShield = Boolean($("combat-custom-has-shield")?.checked) && !["sword_2h", "mace_2h", "axe_2h", "staff_2h", "bow", "dice"].includes(weaponType);
     const blockBase = (hasShield ? 20 : 0) + (weapon.block || 0);
@@ -292,7 +295,7 @@
         `<span>ATK <b>${Math.round(stats.atk)}</b></span>`,
         `<span>DEF <b>${round1(stats.def)}%</b></span>`,
         `<span>固定防禦 <b>${round1(stats.flatDef)}</b></span>`,
-        `<span>武器主屬 <b>${round1(stats.weaponMainStatValue)}</b></span>`,
+        `<span>有效武器主屬 <b>${round1(stats.weaponMainStatValue)}</b></span>`,
         `<span>終傷後追加 <b>${Math.round(stats.weaponMainStatValue * 1.5)}</b></span>`,
         `<span>HIT <b>${round1(stats.hit)}</b></span>`,
         `<span>DODGE <b>${round1(stats.dodge)}</b></span>`,

@@ -90,6 +90,8 @@ async function getCardRegistry(db, { force = false } = {}) {
       || zoneByName[bare]
       || (c.monsterCardMeta && c.monsterCardMeta.zone)
       || "未分類";
+    // 保留舊卡登錄，但暫停區域的卡不再卡住本季全集／區域收集要求。
+    if (zones.ZONE_BY_KEY[z]?.enabled === false) continue;
     (zoneMap[z] = zoneMap[z] || []).push(view(c));
   }
 

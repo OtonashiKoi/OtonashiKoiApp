@@ -9,7 +9,8 @@ const PERSISTENT_STORY_ITEM_IDS = new Set(["s-legend-resonance"]);
 const RESET_UNSET_FIELDS = [
   "pkRating", "towerRecord", "bestiary", "jobTransfers", "levelReachedAt", "soloBoss", "zoneCombo",
   "bardScore", "bardStreak", "berserkGauge", "diceGauge", "diceLuck", "oniGauge", "sageGauge",
-  "shadowGauge", "sniperGauge", "sunSpirit",
+  "shadowGauge", "sniperGauge", "sunSpirit", "accountSoloBoss", "accountWorldBossClears", "equipPresetNames",
+  "partyPendingDrops", "partyItemReceipts", "partyPotionReceipts", "partyJobStateReceipt", "partyProgressReceipts",
 ];
 
 const SEASON_RESET_RULES = Object.freeze({
@@ -21,7 +22,7 @@ const SEASON_RESET_RULES = Object.freeze({
   reset: [
     "等級/經驗/職業/配點", "戰鬥裝備與一般背包", "金幣與賽季背包格", "實際寵物",
     "怪物圖鑑", "PK/爬塔/單人王/KDA", "任務/簽到/掛機/疲勞", "一般賽季錨點",
-    "拍賣上架", "怪物與世界王狀態", "直播賽季/短期加成與里程碑", "賽季通行證",
+    "副本待領裝備與結算收據", "拍賣上架", "怪物與世界王狀態", "直播賽季/短期加成與里程碑", "賽季通行證",
   ],
 });
 
@@ -69,9 +70,12 @@ function buildProgressResetUpdate(oldProgress, nowIso = new Date().toISOString()
 
   const set = {
     level: 1,
+    levelStartedAt: null,
+    levelUpHistory: [],
     exp: 0,
     job: "Novice",
     jobLevel: 1,
+    jobExp: 0,
     statusPoints: 0,
     allocatedPoints: 0,
     allocatedAttrs: {},
@@ -88,6 +92,34 @@ function buildProgressResetUpdate(oldProgress, nowIso = new Date().toISOString()
     flags: {},
     updatedAt: nowIso,
   };
+  // 跨季物可能穿在其他槽位；實體物保留，裝備方案只是引用，不從方案複製物品。
+  const keptEquipment = new Set(Object.values(set.equipment).filter(Boolean).map((item) => item.uuid).filter(Boolean));
+  const keptBag = new Set(set.inventory.map((item) => item.uuid).filter(Boolean));
+  for (const item of filterKeptInventory([...Object.values(old.equipment || {}).filter(Boolean), ...(old.partyPendingDrops || [])], persistentItemIds)) {
+    if (item.uuid && (keptEquipment.has(item.uuid) || keptBag.has(item.uuid))) continue;
+    set.inventory.push(item);
+    if (item.uuid) keptBag.add(item.uuid);
+  }
+  if (old.characterSlots && typeof old.characterSlots === "object") {
+    const activeSlot = [1, 2, 3].includes(Number(old.activeCharacterSlot)) ? Number(old.activeCharacterSlot) : 1;
+    const slots = {};
+    for (const [slot, snapshot] of Object.entries(old.characterSlots)) {
+      if (Number(slot) === activeSlot || !snapshot || typeof snapshot !== "object") continue;
+      const reset = buildProgressResetUpdate({ ...snapshot, playerId: old.playerId, characterSlots: null, inventory: [] }, nowIso, { seasonKey, persistentItemIds });
+      // 背包為帳號共用，快照只保存人物資料。
+      const { inventory: extraKept, characterSlots: _ignored, ...character } = reset.$set;
+      for (const item of extraKept) {
+        if (item.uuid && (keptEquipment.has(item.uuid) || keptBag.has(item.uuid))) continue;
+        set.inventory.push(item);
+        if (item.uuid) keptBag.add(item.uuid);
+      }
+      slots[slot] = character;
+    }
+    const { inventory: _bag, ...active } = set;
+    slots[String(activeSlot)] = structuredClone(active);
+    set.characterSlots = slots;
+    set.activeCharacterSlot = activeSlot;
+  }
   if (seasonKey) set.seasonKey = String(seasonKey);
   const unset = Object.fromEntries(RESET_UNSET_FIELDS.map((field) => [field, ""]));
   return { $set: set, $unset: unset };

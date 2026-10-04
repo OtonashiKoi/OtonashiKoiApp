@@ -29,7 +29,7 @@ const CURRENCY_SOURCES = {
   CASINO_PAYOUT: "casino:payout",                    // 賭場：結算中獎入帳
   PASS_UNLOCK: "pass:unlock",                        // 通行證：3 鑽開通付費軌
   PASS_REWARD: "pass:reward",                        // 通行證：領取獎勵（金幣/鑽石）
-  MAX_LEVEL_EXP_OVERFLOW: "level:exp-overflow",      // 滿等溢出經驗轉金幣（1/10）
+  MAX_LEVEL_EXP_OVERFLOW: "level:exp-overflow",      // 滿等溢出經驗轉金幣（除數見 normalEconomy）
   MERCH_PURCHASE: "merch:purchase"                   // 周邊（實體商品）：鑽石購買扣款
 };
 

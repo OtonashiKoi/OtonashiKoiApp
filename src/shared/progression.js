@@ -1,41 +1,15 @@
+"use strict";
 const MAX_LEVEL = 50;
-
-// 目標節奏（V0.5 重調）：1→50 約 45 小時實戰時間 ＝ 每天 6 小時、7.5 天滿等。
-//
-// ⚠️ 基準是「單人」——一個人自己打就要能 7.5 天滿等（單人 ×1、裝備強化 +3）。
-//    組隊倍率是玩家自己組出來的加速，屬於額外報酬，不列入曲線基準。
-//
-// 三段式，越後面越慢，段界連續（不能有「升上去反而變快」的斷崖）：
-//   1-10  新手期（0.75h）：一路衝，馬上感受成長。
-//   11-35 推進期（10.5h）：陽光草原→古城，輕鬆推進。
-//   36-50 耕作期（33.75h）：古城深處，全程 75% 的時間都在這裡。
-// 曲線由「錨點反解 power 函數」而來，錨點即設計意圖；改節奏改錨點即可。
-//
-// 錨點怎麼來的（要改節奏請照這個流程重跑，不要手調數字）：
-//   node scripts/measure-exp-rate.js 1 3 16   # 量每級實際經驗/小時（單人基準）
-//   node scripts/tune-exp-curve.js            # 反解錨點並驗收分段時數
-function solvePower(x1, v1, x2, v2) {
-  const p = Math.log(v2 / v1) / Math.log(x2 / x1);
-  return { p, A: v1 / Math.pow(x1, p) };
-}
-// 錨點：(等級, 該級→下一級所需經驗)
-const SEG1 = solvePower(1, 500, 10, 5278);          // 1-10   新手期
-const SEG2 = solvePower(11, 5542, 35, 407371);      // 11-35  推進期
-const SEG3 = solvePower(36, 427740, 49, 1300089);   // 36-50  耕作期
-const LATE_LEVEL_MULTIPLIER = 1.3;                   // 40-50 後段練等時間小幅拉長
-
+// Current ordinary-combat solo +3 median of sword/mage/archer: 45 active hours.
+// Stages 1→10 / 10→20 / 20→30 / 30→40 / 40→50: 1 / 4 / 8 / 12 / 20 h.
+// Calibration seed 20260930; held-out acceptance seed 937451. No acquisition time,
+// skills, cards, pets, aura, bestiary or external buffs in this reference.
+// Equipment stats are cloned per loadout; do not enhance the shared item library.
+const EXP_REQUIREMENTS = Object.freeze([1092, 2219, 3361, 4512, 5670, 6834, 8003, 9173, 10348, 32040, 33643, 46470, 62557, 82365, 106417, 135228, 169363, 209404, 255953, 282463, 338552, 402383, 474587, 555828, 646792, 748178, 860712, 985140, 1122232, 1122232, 1206497, 1357435, 1521726, 1700094, 1893274, 1987940, 2194369, 2415857, 2653068, 4294183, 4694058, 5120171, 5573570, 6055277, 6566383, 7107957, 7681089, 8286904, 8926504]);
 function expToNextLevel(level) {
-  if (level <= 10) {
-    return Math.round(SEG1.A * Math.pow(level, SEG1.p));
-  }
-  if (level <= 35) {
-    return Math.round(SEG2.A * Math.pow(level, SEG2.p));
-  }
-  const baseExp = Math.round(SEG3.A * Math.pow(level, SEG3.p));
-  return level >= 40 ? Math.round(baseExp * LATE_LEVEL_MULTIPLIER) : baseExp;
+  const value = Number(level);
+  const normalized = Number.isFinite(value) ? Math.floor(value) : 1;
+  if (normalized >= MAX_LEVEL) return 0;
+  return EXP_REQUIREMENTS[Math.max(1, normalized) - 1];
 }
-
-module.exports = {
-  MAX_LEVEL,
-  expToNextLevel
-};
+module.exports = { MAX_LEVEL, EXP_REQUIREMENTS, expToNextLevel };

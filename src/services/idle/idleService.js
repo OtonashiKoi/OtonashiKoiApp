@@ -1,3 +1,4 @@
+const { isUnavailableEquipment } = require("../../shared/equipmentAvailability");
 const crypto = require("crypto");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
@@ -45,7 +46,8 @@ function safeIso(input, fallback = null) {
 }
 
 // 掛機收益 = 手動收益的 10%
-const IDLE_REWARD_RATIO = 0.1;
+const { IDLE_REWARD_RATIO, NORMAL_ZONE_HOURLY_REWARDS, ECONOMY_VERSION } = require("../../shared/normalEconomy");
+const { normalZoneExpMultiplier } = require("../../shared/normalZoneExp");
 const NON_MEMBER_DAILY_IDLE_LIMIT_MINUTES = 6 * 60;
 
 class IdleService {
@@ -77,10 +79,10 @@ class IdleService {
     return bindings.filter((b) => b?.enabled && b.featureKey?.startsWith("monster_zone"));
   }
 
-  async _getMonsterZoneAverageReward(zoneKey) {
+  async _getMonsterZoneAverageReward(zoneKey, level = null) {
     const monsters = await this.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
     const nonBossMonsters = Array.isArray(monsters)
-      ? monsters.filter((m) => !m?.isBoss)
+      ? monsters.filter((m) => m.zone === zoneKey && !m?.isBoss && !m?.allZones && !m?.incomingDamageCap)
       : [];
     if (nonBossMonsters.length === 0) {
       return {
@@ -91,6 +93,16 @@ class IdleService {
       };
     }
 
+    const standard = NORMAL_ZONE_HOURLY_REWARDS[zoneKey];
+    if (standard) {
+      return {
+        zoneKey, monsterCount: nonBossMonsters.length,
+        avgGold: standard.goldPerHour * IDLE_REWARD_RATIO / 12,
+        avgExp: standard.expPerHour * IDLE_REWARD_RATIO / 12
+          * normalZoneExpMultiplier(zoneKey, level ?? standard.referenceLevel),
+        rewardModelVersion: ECONOMY_VERSION
+      };
+    }
     const totalGold = nonBossMonsters.reduce((sum, m) => sum + Math.max(0, Number(m.goldReward) || 0), 0);
     const totalExp = nonBossMonsters.reduce((sum, m) => sum + Math.max(0, Number(m.expReward) || 0), 0);
     return {
@@ -107,10 +119,10 @@ class IdleService {
     for (const binding of zoneBindings) {
       const zoneKey = featureKeyToZone(binding.featureKey);
       const zoneDef = ZONE_BY_KEY[zoneKey] || null;
-      if (!zoneDef) continue;
+      if (!zoneDef || zoneDef.enabled === false) continue;
       if (isWorldBossZone(zoneKey)) continue; // 世界王區不可掛機，只能掛一般怪物區
       const lockedReason = checkZoneLevelRequirementWithBinding(zoneKey, level, binding);
-      const reward = await this._getMonsterZoneAverageReward(zoneKey);
+      const reward = await this._getMonsterZoneAverageReward(zoneKey, level);
       options.push({
         zoneKey,
         featureKey: binding.featureKey,
@@ -120,6 +132,7 @@ class IdleService {
         maxLevel: binding.maxLevel !== undefined ? binding.maxLevel : zoneDef.maxLevel,
         avgGold: reward.avgGold,
         avgExp: reward.avgExp,
+        rewardModelVersion: reward.rewardModelVersion || null,
         monsterCount: reward.monsterCount,
         available: !lockedReason,
         lockedReason: lockedReason || null
@@ -307,6 +320,7 @@ class IdleService {
       startedLevel: level,
       avgGoldPerTick: zone.avgGold,
       avgExpPerTick: zone.avgExp,
+      rewardModelVersion: zone.rewardModelVersion,
       tickMinutes: 5,
       maxMinutes: 12 * 60
     };
@@ -345,11 +359,14 @@ class IdleService {
       nonMemberClaimedMinutes: dailyClaim.nonMemberClaimedMinutes
     });
     const reward = { gold: summary.totalGold, exp: summary.totalExp };
+    const titleBonus = require("../../shared/autumnTitleRules").idleBonuses(await this.progressRepository.findByPlayerId(discordId));
     // 全服 Buff（直播連動事件）：掛機金幣/經驗也吃全服加成
     try {
       const gb = require("../stream/globalBuffService").getActiveModifiers();
-      if (gb.goldPct > 0) reward.gold = Math.round(reward.gold * (1 + gb.goldPct / 100));
-      if (gb.expPct > 0) reward.exp = Math.round(reward.exp * (1 + gb.expPct / 100));
+      const goldPct = Number(gb.goldPct || 0) + titleBonus.goldPct;
+      const expPct = Number(gb.expPct || 0) + titleBonus.expPct;
+      if (goldPct > 0) reward.gold = Math.round(reward.gold * (1 + goldPct / 100));
+      if (expPct > 0) reward.exp = Math.round(reward.exp * (1 + expPct / 100));
     } catch (_) { /* buff 服務未就緒不影響結算 */ }
 
     if (reward.gold > 0) {
@@ -368,7 +385,8 @@ class IdleService {
         discordId,
         displayName,
         amount: reward.exp,
-        source: EXP_SOURCES.IDLE_REWARD_EXP
+        source: EXP_SOURCES.IDLE_REWARD_EXP,
+        operationId: `idle-exp:${discordId}:${session.sessionId || session.startedAt}`
       });
       reward.overflowGold = _r ? (Number(_r.overflowGold) || 0) : 0; // 滿等溢出→金幣(給掛機結算報告)
       if (reward.overflowGold > 0) {
@@ -759,11 +777,14 @@ class IdleService {
       exp: Math.max(0, Math.round(preview.effectiveMinutes * preview.rewardTier.expPerMinute)),
       items: []
     };
+    const titleBonus = require("../../shared/autumnTitleRules").idleBonuses(progress);
     // 全服 Buff（直播連動事件）：網頁掛機金幣/經驗也吃全服加成
     try {
       const gb = require("../stream/globalBuffService").getActiveModifiers();
-      if (gb.goldPct > 0) reward.gold = Math.round(reward.gold * (1 + gb.goldPct / 100));
-      if (gb.expPct > 0) reward.exp = Math.round(reward.exp * (1 + gb.expPct / 100));
+      const goldPct = Number(gb.goldPct || 0) + titleBonus.goldPct;
+      const expPct = Number(gb.expPct || 0) + titleBonus.expPct;
+      if (goldPct > 0) reward.gold = Math.round(reward.gold * (1 + goldPct / 100));
+      if (expPct > 0) reward.exp = Math.round(reward.exp * (1 + expPct / 100));
     } catch (_) { /* buff 服務未就緒不影響結算 */ }
 
     const droppedItems = await this._rollAndGrantDrops({
@@ -790,7 +811,8 @@ class IdleService {
         discordId,
         displayName,
         amount: reward.exp,
-        source: EXP_SOURCES.IDLE_REWARD_EXP
+        source: EXP_SOURCES.IDLE_REWARD_EXP,
+        operationId: `idle-exp:${discordId}:${state.activeSession.sessionId || state.activeSession.startedAt}`
       });
       reward.overflowGold = _r ? (Number(_r.overflowGold) || 0) : 0; // 滿等溢出→金幣(給掛機結算報告)
       if (reward.overflowGold > 0) {
@@ -949,7 +971,7 @@ class IdleService {
       if (hits <= 0) continue;
 
       const item = await this.itemRepository.findById(itemId);
-      if (!item) continue;
+      if (!item || isUnavailableEquipment(item)) continue;
 
       const take = Math.min(hits, maxCount);
       grantedByItemId[itemId] = (grantedByItemId[itemId] || 0) + take;
@@ -983,7 +1005,7 @@ class IdleService {
 
     for (const [itemId, count] of Object.entries(grantedByItemId)) {
       const item = await this.itemRepository.findById(itemId);
-      if (!item) continue;
+      if (!item || isUnavailableEquipment(item)) continue;
       granted.push({
         itemId,
         itemName: item.name,

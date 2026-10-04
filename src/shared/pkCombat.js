@@ -1,3 +1,4 @@
+const { activeEquipment } = require("./anchorFeature");
 "use strict";
 
 /**
@@ -1438,6 +1439,8 @@ function applyPkPassiveRegen(hpRef, maxHp, heals, round, name, log) {
  * @returns {{ winner, roundLogs, finalHpA, finalHpB, hpPctA, hpPctB }}
  */
 function runPkCombat(aStats, aOpts, aName, bStats, bOpts, bName, MAX_ROUNDS = 15) {
+  aOpts = { ...aOpts, equipped: activeEquipment(aOpts?.equipped) };
+  bOpts = { ...bOpts, equipped: activeEquipment(bOpts?.equipped) };
   // 注入等級給戰鬥內部使用（等級壓制）
   aStats = { ...aStats, level: Math.max(1, Number(aOpts?.level || aStats?.level || 1)) };
   bStats = { ...bStats, level: Math.max(1, Number(bOpts?.level || bStats?.level || 1)) };

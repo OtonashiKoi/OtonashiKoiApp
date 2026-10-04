@@ -5,7 +5,7 @@ const { MAX_LEVEL, expToNextLevel } = require('../src/shared/progression');
 let lines = [];
 lines.push('# 經驗值表（由 src/shared/progression.js 自動生成）');
 lines.push('');
-lines.push('- MAX_LEVEL = 50；Lv40→41 至 Lv49→50 的需求套用後段倍率 ×1.3');
+lines.push('- MAX_LEVEL = 50；單人 +3 普攻基準約45小時，分段目標1／4／8／12／20小時');
 lines.push('- 重產方式：`node scripts/generate-exp-table.js`');
 lines.push('');
 lines.push('| 等級 | 升下一級所需 EXP | 累計 EXP |');

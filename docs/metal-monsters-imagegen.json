@@ -1,0 +1,94 @@
+{
+  "generator": "Built-in imagegen",
+  "createdAt": "2026-09-30T10:55:21.782Z",
+  "assets": [
+    {
+      "n": 1,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-280c0fe5-b0f2-4397-b077-036a140ce306.png",
+      "prompt": "Use case: stylized-concept. Asset type: single transparent enemy sprite for a fantasy browser RPG. World: Iron-Ringing Mine City, ancient abandoned underground mining city reanimated by magnetic ore, medieval fantasy metallurgy rather than modern sci-fi. Subject: Iron-shaving mouse: small scavenger rodent with scrap iron plates, magnet whiskers, gear-shaped ears, iron filings clinging to its tail. Agile, low rank. Style: polished hand-painted 2D JRPG monster illustration, crisp dark contour, readable compact silhouette, restrained steel grey / rust brown / brass with cyan magnetic energy. Composition: exactly ONE whole-body character centered, facing slightly left three-quarter front view, entire weapon and feet visible, generous transparent margin, square canvas. Genuine transparent background, no environment, no floor, no shadow plane, no lettering, no UI, no watermark, no other characters. Match a cohesive eight-enemy bestiary.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-1-v2.png",
+      "sha256": "45363de4c5288bb1ee4ac1a44499be2aa8b96c11f77bcc0209043f97c9cd8704",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 2,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-0e84ed8f-4d02-464e-b05f-60de3b08a8b4.png",
+      "prompt": "Use case: stylized-concept. Asset type: single transparent enemy sprite for a fantasy browser RPG. World: Iron-Ringing Mine City, ancient abandoned underground mining city reanimated by magnetic ore, medieval fantasy metallurgy rather than modern sci-fi. Subject: Magnetic needle floating turret: levitating mining security machine, circular cyan magnetic core, several needle-barrel emitters pointing forward, rusty steel chassis. Clearly flying, no legs. Style: polished hand-painted 2D JRPG monster illustration, crisp dark contour, readable compact silhouette, restrained steel grey / rust brown / brass with cyan magnetic energy. Composition: exactly ONE whole-body character centered, facing slightly left three-quarter front view, entire weapon and feet visible, generous transparent margin, square canvas. Genuine transparent background, no environment, no floor, no shadow plane, no lettering, no UI, no watermark, no other characters. Match a cohesive eight-enemy bestiary.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-2-v2.png",
+      "sha256": "a1d31ed59026841e40feef9f52b21ecdf7fba0c92974bde7456c59fab5f9f9c5",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 3,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-8ba65676-f7ff-454d-be66-05add6af0f50.png",
+      "prompt": "Use case: stylized-concept. Asset type: single transparent enemy sprite for a fantasy browser RPG. World: Iron-Ringing Mine City, ancient abandoned underground mining city reanimated by magnetic ore, medieval fantasy metallurgy rather than modern sci-fi. Subject: Armored burrowing beast: low chunky armadillo-like mine beast, overlapping iron ore armor plates and digging claws, hardened steel back, visibly very defensive. Style: polished hand-painted 2D JRPG monster illustration, crisp dark contour, readable compact silhouette, restrained steel grey / rust brown / brass with cyan magnetic energy. Composition: exactly ONE whole-body character centered, facing slightly left three-quarter front view, entire weapon and feet visible, generous transparent margin, square canvas. Genuine transparent background, no environment, no floor, no shadow plane, no lettering, no UI, no watermark, no other characters. Match a cohesive eight-enemy bestiary.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-3-v2.png",
+      "sha256": "37bcba95120e651a00e049d259179dbecd54c7caf1f195b802c53b149b89370f",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 4,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-477b4c00-829f-42e8-9122-49b73cadfdef.png",
+      "prompt": "Use case: stylized-concept. Asset type: single transparent enemy sprite for a fantasy browser RPG. World: Iron-Ringing Mine City, ancient abandoned underground mining city reanimated by magnetic ore, medieval fantasy metallurgy rather than modern sci-fi. Subject: Rustblade scout: slim animated mining scout automaton with ragged rust-red cloth, short steel knife blades, agile lunging silhouette, narrow glowing cyan visor. Style: polished hand-painted 2D JRPG monster illustration, crisp dark contour, readable compact silhouette, restrained steel grey / rust brown / brass with cyan magnetic energy. Composition: exactly ONE whole-body character centered, facing slightly left three-quarter front view, entire weapon and feet visible, generous transparent margin, square canvas. Genuine transparent background, no environment, no floor, no shadow plane, no lettering, no UI, no watermark, no other characters. Match a cohesive eight-enemy bestiary.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-4-v2.png",
+      "sha256": "fcc4f268887af6f16a6bc2d8195ef3190c4e14b8892b1031c6d27293c8f8d46f",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 5,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-d739ec9f-6b05-4987-a81d-725d14e37217.png",
+      "prompt": "Use case: stylized-concept. Asset type: single transparent enemy sprite for a fantasy browser RPG. World: Iron-Ringing Mine City, ancient abandoned underground mining city reanimated by magnetic ore, medieval fantasy metallurgy rather than modern sci-fi. Subject: Gear maintenance worker: squat repair automaton with brass gears, wrench arm, tool bag, small magnetic crystal power cell, friendly-looking but hostile mine custodian. Style: polished hand-painted 2D JRPG monster illustration, crisp dark contour, readable compact silhouette, restrained steel grey / rust brown / brass with cyan magnetic energy. Composition: exactly ONE whole-body character centered, facing slightly left three-quarter front view, entire weapon and feet visible, generous transparent margin, square canvas. Genuine transparent background, no environment, no floor, no shadow plane, no lettering, no UI, no watermark, no other characters. Match a cohesive eight-enemy bestiary.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-5-v2.png",
+      "sha256": "58ff8faaa6035a7c501eb57c708b2dff75f568c10f7633f4be06b669850653fa",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 6,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-750486e6-d584-4326-ad68-8f1790266edb.png",
+      "prompt": "Use case: stylized-concept. Asset type: single transparent enemy sprite for a fantasy browser RPG. World: Iron-Ringing Mine City, ancient abandoned underground mining city reanimated by magnetic ore, medieval fantasy metallurgy rather than modern sci-fi. Subject: Magnetic heavy soldier: broad bulky steel guardian, huge rectangular tower shield, heavy hammer, thick angular plating, cyan electromagnet rings, imposing slow defensive silhouette. Style: polished hand-painted 2D JRPG monster illustration, crisp dark contour, readable compact silhouette, restrained steel grey / rust brown / brass with cyan magnetic energy. Composition: exactly ONE whole-body character centered, facing slightly left three-quarter front view, entire weapon and feet visible, generous transparent margin, square canvas. Genuine transparent background, no environment, no floor, no shadow plane, no lettering, no UI, no watermark, no other characters. Match a cohesive eight-enemy bestiary.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-6-v2.png",
+      "sha256": "42c192cbb99428da321e760783c3e5762e665bf09cf4938edbbfeba035b910cf",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 7,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-1a7522aa-455d-4025-bfc4-ce3f95e119bb.png",
+      "prompt": "Use case: stylized-concept. Asset type: single transparent enemy sprite for a fantasy browser RPG. World: Iron-Ringing Mine City, ancient abandoned underground mining city reanimated by magnetic ore, medieval fantasy metallurgy rather than modern sci-fi. Subject: Mine overseer regional boss: tall industrial foreman automaton, steel shoulder mantle, brass inspection goggles, large forge hammer, small crown-like mine supervisor crest, stronger than soldiers. Style: polished hand-painted 2D JRPG monster illustration, crisp dark contour, readable compact silhouette, restrained steel grey / rust brown / brass with cyan magnetic energy. Composition: exactly ONE whole-body character centered, facing slightly left three-quarter front view, entire weapon and feet visible, generous transparent margin, square canvas. Genuine transparent background, no environment, no floor, no shadow plane, no lettering, no UI, no watermark, no other characters. Match a cohesive eight-enemy bestiary.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-7-v2.png",
+      "sha256": "dc49ded9b3949e30fc6a56a4003aa08d17adb76736da39d7952c403e24690be2",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 8,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-8b2a6033-7b16-4bb2-8779-f7590d933ebb.png",
+      "prompt": "Use case: stylized-concept. Asset type: single transparent enemy sprite for a fantasy browser RPG. World: Iron-Ringing Mine City, ancient abandoned underground mining city reanimated by magnetic ore, medieval fantasy metallurgy rather than modern sci-fi. Subject: Steel Crown King Hegang, supreme metal-element world boss: massive regal armored golem, jagged steel crown, gold-trimmed black steel plate, radiant cyan magnetic heart, enormous ceremonial forge warhammer, dark-red worn mantle; powerful sovereign of an abandoned ore city. Style: polished hand-painted 2D JRPG monster illustration, crisp dark contour, readable compact silhouette, restrained steel grey / rust brown / brass with cyan magnetic energy. Composition: exactly ONE whole-body character centered, facing slightly left three-quarter front view, entire weapon and feet visible, generous transparent margin, square canvas. Genuine transparent background, no environment, no floor, no shadow plane, no lettering, no UI, no watermark, no other characters. Match a cohesive eight-enemy bestiary.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-8-v2.png",
+      "sha256": "7cff4b4aa51d061ea871692ecfd2e333ca2b23782f51e5e2390b51b42a6c3329",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    }
+  ]
+}

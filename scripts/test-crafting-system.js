@@ -65,13 +65,14 @@ async function main() {
   const logs = [];
 
   const craftingRepository = {
+    async findPlayerTransaction(_playerId, id) { return logs.find((log) => log.id === id) || null; },
     async listAccessible() { return [recipe]; },
     async findRecipeById(id) { return id === recipe.id ? recipe : null; },
     async executeCraftAtomic(payload) {
       assert.strictEqual(payload.expectedUpdatedAt, progress.updatedAt);
       progress = { ...progress, inventory: payload.nextInventory, updatedAt: `v${logs.length + 2}` };
       wallet = { ...wallet, gold: wallet.gold - payload.goldCost };
-      logs.push(payload.transaction);
+      logs.push({ ...payload.transaction, goldCost: payload.goldCost });
       return { ok: true, wallet };
     }
   };
@@ -82,16 +83,14 @@ async function main() {
     itemRepository: { async findById(id) { return defs.get(id) || null; } }
   });
 
-  await assert.rejects(
-    () => service.getPlayerState("not-owner"),
-    (error) => error?.code === "CRAFTING_TEST_ONLY" && error?.status === 403
-  );
+  assert.deepStrictEqual((await service.getPlayerState("not-owner")).recipes, [], "普通玩家不能看到私測配方");
+  await assert.rejects(() => service.craft("not-owner", recipe.id, 1), error => error.code === "CRAFTING_RECIPE_NOT_FOUND");
 
   const before = await service.getPlayerState(OWNER_TESTER_ID);
   assert.strictEqual(before.recipes[0].maxCraftable, 3, "鎖定的 100 顆水石不可算入可用素材");
   assert.strictEqual(before.recipes[0].canCraft, true);
 
-  const result = await service.craft(OWNER_TESTER_ID, recipe.id, 2);
+  const result = await service.craft(OWNER_TESTER_ID, recipe.id, 2, "retry-test-0001");
   assert.strictEqual(result.goldSpent, 200);
   assert.strictEqual(wallet.gold, 800);
   assert.strictEqual(logs.length, 1);
@@ -102,6 +101,21 @@ async function main() {
   assert.strictEqual(count(WATER, true), 100, "鎖定素材不可被合成消耗");
   assert.strictEqual(count(FIRE), 6, "應扣除 4 顆火石");
   assert.strictEqual(count(GEM_D), 4, "既有成品堆疊應從 2 增加到 4");
+  const repeat = await service.craft(OWNER_TESTER_ID, recipe.id, 2, "retry-test-0001");
+  assert.equal(repeat.transactionId, result.transactionId);
+  assert.equal(repeat.replayed, true);
+  assert.equal(logs.length, 1, "回應遺失重試不再次扣素材與金幣");
+  assert.equal(wallet.gold, 800);
+  await assert.rejects(() => service.craft(OWNER_TESTER_ID, recipe.id, 1, "retry-test-0001"), e => e.code === "CRAFTING_REQUEST_CONFLICT");
+  for (const quantity of [0, -1, 1.5, 100, NaN, Infinity]) {
+    await assert.rejects(() => service.craft(OWNER_TESTER_ID, recipe.id, quantity), e => e.code === "INVALID_ARGUMENT");
+  }
+  await assert.rejects(() => service.craft(OWNER_TESTER_ID, recipe.id, 1, "bad"), e => e.code === "INVALID_ARGUMENT");
+  recipe.accessMode = "public";
+  recipe.testOnly = false;
+  const publicState = await service.getPlayerState("other-player");
+  assert.equal(publicState.recipes.length, 1);
+  assert.equal(publicState.testMode, false);
 
   await assert.rejects(
     () => service.craft(OWNER_TESTER_ID, recipe.id, 2),
@@ -119,12 +133,13 @@ async function main() {
   let deniedStatus = 0;
   let deniedPayload = null;
   requireCraftingTester(
-    { playerRecord: { discordId: "other-player" } },
+    { playerRecord: {} },
     { status(code) { deniedStatus = code; return this; }, json(payload) { deniedPayload = payload; return payload; } },
     () => { throw new Error("非測試者不應通過"); }
   );
-  assert.strictEqual(deniedStatus, 403);
-  assert.strictEqual(deniedPayload.code, "CRAFTING_TEST_ONLY");
+  assert.strictEqual(deniedStatus, 401);
+  assert.strictEqual(deniedPayload.code, "UNAUTHORIZED");
+  requireCraftingTester({ playerRecord: { discordId: "other-player" } }, {}, () => {});
 
   console.log("crafting system tests: passed (system + 10 recipe rules)");
 }

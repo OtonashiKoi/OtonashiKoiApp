@@ -1,0 +1,96 @@
+{
+  "generator": "Built-in imagegen",
+  "styleReference": "src/web/public/uploads/monsters/gen-mon_firewing_dragonman.png",
+  "style": "Pixel RPG monster sprites; compact proportions; simplified metal materials",
+  "createdAt": "2026-09-30T16:23:06.885Z",
+  "assets": [
+    {
+      "n": 1,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-04517c42-5329-479a-9e14-6766a4615b20.png",
+      "prompt": "Use case: style-transfer. Create ONE transparent enemy battle sprite matching image 1's old-school pixel RPG game style. Image 1 is STYLE REFERENCE ONLY; image 2 is the monster to REDRAW completely in that pixel style. Image 2 is much too realistic; discard its realistic rendering, textures, anatomy proportions and complexity. STRICT authentic low-resolution pixel art as if drawn on a 96x96 pixel grid and enlarged with nearest-neighbor: visible square pixels, hard stepped pixel contours, flat limited-color pixel clusters, 2-3 shading tones per surface. Cute compact slightly chibi monster proportions, large expressive head or readable face, thick dark pixel outline. NO smooth hand-painted brushwork, no gradients, no anti-aliasing, no realistic fur, no detailed rust scratches, no PBR, no 3D, no concept art. Simple readable silhouette at tiny battle UI size. Keep iron mine fantasy theme, steel grey armor, small brass accents and a few cyan magnetic pixels. One full-body monster, 3/4 facing left, centered square with 10% transparent margins around every edge, all appendages visible. Genuine transparent background, no environment, no ground rectangle, no label, no text, no UI. Subject: Iron-shaving mouse: small cute grey rodent with oversized gear-shaped ears, two simple iron back plates, magnetic whiskers and a curled tail with tiny metal scraps.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-1-v3.png",
+      "sha256": "260a84c837d732e89ac0f3336418c33dee3e8674bf881c3c944291af1ac1c9a3",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 2,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-7b1982f1-467f-4542-a0bb-1aa206de6006.png",
+      "prompt": "Use case: style-transfer. Create ONE transparent enemy battle sprite matching image 1's old-school pixel RPG game style. Image 1 is STYLE REFERENCE ONLY; image 2 is the monster to REDRAW completely in that pixel style. Image 2 is much too realistic; discard its realistic rendering, textures, anatomy proportions and complexity. STRICT authentic low-resolution pixel art as if drawn on a 96x96 pixel grid and enlarged with nearest-neighbor: visible square pixels, hard stepped pixel contours, flat limited-color pixel clusters, 2-3 shading tones per surface. Cute compact slightly chibi monster proportions, large expressive head or readable face, thick dark pixel outline. NO smooth hand-painted brushwork, no gradients, no anti-aliasing, no realistic fur, no detailed rust scratches, no PBR, no 3D, no concept art. Simple readable silhouette at tiny battle UI size. Keep iron mine fantasy theme, steel grey armor, small brass accents and a few cyan magnetic pixels. One full-body monster, 3/4 facing left, centered square with 10% transparent margins around every edge, all appendages visible. Genuine transparent background, no environment, no ground rectangle, no label, no text, no UI. Subject: Magnetic needle floating turret: small round levitating iron mining sentry with a cyan central eye and three compact needle barrels; no legs.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-2-v3.png",
+      "sha256": "23e2685a7da5064e6c22192a377fb2b3c1a3138cb05013eba0c6af14adff7c21",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 3,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-5a4e511a-3299-4fd2-ba26-9546d5b5fc9e.png",
+      "prompt": "Use case: style-transfer. Create ONE transparent enemy battle sprite matching image 1's old-school pixel RPG game style. Image 1 is STYLE REFERENCE ONLY; image 2 is the monster to REDRAW completely in that pixel style. Image 2 is much too realistic; discard its realistic rendering, textures, anatomy proportions and complexity. STRICT authentic low-resolution pixel art as if drawn on a 96x96 pixel grid and enlarged with nearest-neighbor: visible square pixels, hard stepped pixel contours, flat limited-color pixel clusters, 2-3 shading tones per surface. Cute compact slightly chibi monster proportions, large expressive head or readable face, thick dark pixel outline. NO smooth hand-painted brushwork, no gradients, no anti-aliasing, no realistic fur, no detailed rust scratches, no PBR, no 3D, no concept art. Simple readable silhouette at tiny battle UI size. Keep iron mine fantasy theme, steel grey armor, small brass accents and a few cyan magnetic pixels. One full-body monster, 3/4 facing left, centered square with 10% transparent margins around every edge, all appendages visible. Genuine transparent background, no environment, no ground rectangle, no label, no text, no UI. Subject: Armored armadillo: squat cute burrowing beast with a few broad iron shell plates and short digging claws.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-3-v3.png",
+      "sha256": "59ed4c36b834857c3dd583b71a9b224954ad8e42c43000830ab8cacc4c4f20ea",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 4,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-110cb2ec-6482-4a18-a3cd-8bcc6b104b07.png",
+      "prompt": "Use case: style-transfer. Create ONE transparent enemy battle sprite matching image 1's old-school pixel RPG game style. Image 1 is STYLE REFERENCE ONLY; image 2 is the monster to REDRAW completely in that pixel style. Image 2 is much too realistic; discard its realistic rendering, textures, anatomy proportions and complexity. STRICT authentic low-resolution pixel art as if drawn on a 96x96 pixel grid and enlarged with nearest-neighbor: visible square pixels, hard stepped pixel contours, flat limited-color pixel clusters, 2-3 shading tones per surface. Cute compact slightly chibi monster proportions, large expressive head or readable face, thick dark pixel outline. NO smooth hand-painted brushwork, no gradients, no anti-aliasing, no realistic fur, no detailed rust scratches, no PBR, no 3D, no concept art. Simple readable silhouette at tiny battle UI size. Keep iron mine fantasy theme, steel grey armor, small brass accents and a few cyan magnetic pixels. One full-body monster, 3/4 facing left, centered square with 10% transparent margins around every edge, all appendages visible. Genuine transparent background, no environment, no ground rectangle, no label, no text, no UI. Subject: Rustblade scout: short chibi hooded iron automaton with two small daggers, cyan eye slits and ragged brown hood.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-4-v3.png",
+      "sha256": "cc66bb373acd61f2346bb6259c6d60abd57b9baccd06258986dd67931795ed2c",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 5,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-6b80abb5-2107-4723-913c-d34fa5a12106.png",
+      "prompt": "Use case: style-transfer. Create ONE transparent enemy battle sprite matching image 1's old-school pixel RPG game style. Image 1 is STYLE REFERENCE ONLY; image 2 is the monster to REDRAW completely in that pixel style. Image 2 is much too realistic; discard its realistic rendering, textures, anatomy proportions and complexity. STRICT authentic low-resolution pixel art as if drawn on a 96x96 pixel grid and enlarged with nearest-neighbor: visible square pixels, hard stepped pixel contours, flat limited-color pixel clusters, 2-3 shading tones per surface. Cute compact slightly chibi monster proportions, large expressive head or readable face, thick dark pixel outline. NO smooth hand-painted brushwork, no gradients, no anti-aliasing, no realistic fur, no detailed rust scratches, no PBR, no 3D, no concept art. Simple readable silhouette at tiny battle UI size. Keep iron mine fantasy theme, steel grey armor, small brass accents and a few cyan magnetic pixels. One full-body monster, 3/4 facing left, centered square with 10% transparent margins around every edge, all appendages visible. Genuine transparent background, no environment, no ground rectangle, no label, no text, no UI. Subject: Gear maintenance worker: short round friendly-looking worker robot with wrench, belt tool bag and one brass shoulder gear.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-5-v3.png",
+      "sha256": "3aa9c02506a3e10e521686fde120a43ed198fdf74f07d4ea87a47adda8cb7921",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 6,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-35b5c1d9-4cb9-4650-906b-f565f89e19e8.png",
+      "prompt": "Use case: style-transfer. Create ONE transparent enemy battle sprite matching image 1's old-school pixel RPG game style. Image 1 is STYLE REFERENCE ONLY; image 2 is the monster to REDRAW completely in that pixel style. Image 2 is much too realistic; discard its realistic rendering, textures, anatomy proportions and complexity. STRICT authentic low-resolution pixel art as if drawn on a 96x96 pixel grid and enlarged with nearest-neighbor: visible square pixels, hard stepped pixel contours, flat limited-color pixel clusters, 2-3 shading tones per surface. Cute compact slightly chibi monster proportions, large expressive head or readable face, thick dark pixel outline. NO smooth hand-painted brushwork, no gradients, no anti-aliasing, no realistic fur, no detailed rust scratches, no PBR, no 3D, no concept art. Simple readable silhouette at tiny battle UI size. Keep iron mine fantasy theme, steel grey armor, small brass accents and a few cyan magnetic pixels. One full-body monster, 3/4 facing left, centered square with 10% transparent margins around every edge, all appendages visible. Genuine transparent background, no environment, no ground rectangle, no label, no text, no UI. Subject: Magnetic heavy soldier: squat broad chibi armored golem with simple oversized rectangular shield, short hammer and cyan core.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-6-v3.png",
+      "sha256": "24a2b7a3c0ebd1bf4331f3e10445116c1a76f64318d5bcc7b159874f65ae8d0c",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 7,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-f9e40d8a-08c5-48de-a818-966c29662ca3.png",
+      "prompt": "Use case: style-transfer. Create ONE transparent enemy battle sprite matching image 1's old-school pixel RPG game style. Image 1 is STYLE REFERENCE ONLY; image 2 is the monster to REDRAW completely in that pixel style. Image 2 is much too realistic; discard its realistic rendering, textures, anatomy proportions and complexity. STRICT authentic low-resolution pixel art as if drawn on a 96x96 pixel grid and enlarged with nearest-neighbor: visible square pixels, hard stepped pixel contours, flat limited-color pixel clusters, 2-3 shading tones per surface. Cute compact slightly chibi monster proportions, large expressive head or readable face, thick dark pixel outline. NO smooth hand-painted brushwork, no gradients, no anti-aliasing, no realistic fur, no detailed rust scratches, no PBR, no 3D, no concept art. Simple readable silhouette at tiny battle UI size. Keep iron mine fantasy theme, steel grey armor, small brass accents and a few cyan magnetic pixels. One full-body monster, 3/4 facing left, centered square with 10% transparent margins around every edge, all appendages visible. Genuine transparent background, no environment, no ground rectangle, no label, no text, no UI. Subject: Mine overseer: chibi mine-foreman automaton, goggles, short shoulder cloak, broad forge hammer, boss silhouette clearly larger than worker.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-7-v3.png",
+      "sha256": "9b3ca41362e35207ad10ab2c7bd050623a15ab55cefe28eacbdd228d369d5086",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "n": 8,
+      "source": "/Users/riuchen/.codex/generated_images/01a0ec5d-5114-7c10-8c83-6d6c5c9e03d9/exec-aaa7c586-d69b-4494-88fa-980a3d801e71.png",
+      "prompt": "Use case: style-transfer. Create ONE transparent enemy battle sprite matching image 1's old-school pixel RPG game style. Image 1 is STYLE REFERENCE ONLY; image 2 is the monster to REDRAW completely in that pixel style. Image 2 is much too realistic; discard its realistic rendering, textures, anatomy proportions and complexity. STRICT authentic low-resolution pixel art as if drawn on a 96x96 pixel grid and enlarged with nearest-neighbor: visible square pixels, hard stepped pixel contours, flat limited-color pixel clusters, 2-3 shading tones per surface. Cute compact slightly chibi monster proportions, large expressive head or readable face, thick dark pixel outline. NO smooth hand-painted brushwork, no gradients, no anti-aliasing, no realistic fur, no detailed rust scratches, no PBR, no 3D, no concept art. Simple readable silhouette at tiny battle UI size. Keep iron mine fantasy theme, steel grey armor, small brass accents and a few cyan magnetic pixels. One full-body monster, 3/4 facing left, centered square with 10% transparent margins around every edge, all appendages visible. Genuine transparent background, no environment, no ground rectangle, no label, no text, no UI. Subject: Steel Crown King Hegang: imposing but CHIBI chunky crowned golem world boss, gold-trimmed iron armor, dark red short cape, giant ceremonial hammer, glowing cyan heart; head and torso huge, short sturdy limbs.",
+      "deployedPath": "src/web/public/uploads/monsters/metal-8-v3.png",
+      "sha256": "88b6371cb858ddbf43132153fc35d0dcd8ff769ec9e94abc63c31f7eeeecb983",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    }
+  ]
+}

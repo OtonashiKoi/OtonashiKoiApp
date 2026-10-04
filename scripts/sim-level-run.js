@@ -5,12 +5,12 @@
  * 不用統計回推，就是照遊戲規則一場一場打：
  *   ‧ 每場走 runCombatLoop（真的戰鬥，含徽章技能/裝備效果）
  *   ‧ 經驗 ＝ expReward ×(這場傷害 ÷ 怪物血量) × 組隊倍率 × 全服滿加成
- *   ‧ 升級採 2+1 制：+2 隨機屬性點、+1 自主點投入劍士主屬性 STR
+ *   ‧ 升級採 1+1 制：+1 隨機屬性點、+1 自主點投入劍士主屬性 STR
  *   ‧ 裝備跟著「目前打得到的區域」升階（掉落決定階級）
  *   ‧ 區域受 minLevel / maxLevel 限制，每級重選「經驗/秒」最高的區
  *   ‧ 每場耗時 ＝ 15 回合 × tickDelay(agi)；陣亡再 +10 秒
  *
- * ⚠️ 隨機 +2 的 AGI 抽多抽少會直接改變每場秒數，單一次跑的變異很大。
+ * ⚠️ 隨機 +1 的 AGI 抽多抽少會直接改變每場秒數，單一次跑的變異很大。
  *    要拿來校準曲線一定要跑多種子取平均（第 3 個參數）。
  *
  * 用法：node scripts/sim-level-run.js [同區人數] [強化等級] [跑幾輪]
@@ -54,10 +54,10 @@ function zoneOpen(zoneKey, level) {
   return true;
 }
 
-// 升級：+2 隨機屬性點；自主 +1 以最快練等視角投入劍士主屬性 STR。
+// 升級：+1 隨機屬性點；自主 +1 以最快練等視角投入劍士主屬性 STR。
 function levelUpAttrs(attrs, rng) {
   const keys = ["str", "agi", "vit", "int", "dex", "luk"];
-  for (let i = 0; i < 2; i++) attrs[keys[Math.floor(rng() * keys.length)]] += 1;
+  attrs[keys[Math.floor(rng() * keys.length)]] += 1;
   attrs.str += 1;
 }
 

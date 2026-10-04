@@ -111,6 +111,21 @@ async function bootstrap() {
 
     const app = createApiServer(client);
 
+    // OBS 網頁模式也需要留言來源；不要依賴 Discord ready 或執行遊戲留言指令。
+    if (apiOnly) {
+      const { startFetcher, startViewerPoller } = require("./bot/commentFetcher");
+      const { broadcastComment } = require("./services/chat/chatOverlayHub");
+      const viewerService = require("./services/stream/viewerService");
+      const updateViewer = (info) => {
+        try { Promise.resolve(viewerService.update(info)).catch(() => {}); } catch (_) {}
+      };
+      startFetcher((comment) => {
+        try { broadcastComment(comment); } catch (_) {}
+      }, updateViewer);
+      startViewerPoller(updateViewer, 20_000);
+      console.log("[OBS] API_ONLY mode: chat relay and viewer polling started; Discord game gateway disabled.");
+    }
+
     const server = app.listen(config.api.port, () => {
       console.log(`[API] listening on port ${config.api.port}${apiOnly ? " (API_ONLY mode)" : ""}`);
       console.log(`[Admin] http://localhost:${config.api.port}/admin`);

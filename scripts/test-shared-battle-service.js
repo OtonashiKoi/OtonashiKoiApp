@@ -30,13 +30,13 @@ async function main() {
   const f = fixture();
   const results = await Promise.all([service.handleMonsterKill(f.input), service.handleMonsterKill(f.input)]);
   assert.equal(f.grants.length, 1);
-  assert.equal(f.grants[0].amount, 220); // normal-zone one-player minimum pool
+  assert.equal(f.grants[0].amount, 100); // fixture reward exceeds the current normal-zone minimum pool
   assert.equal(f.experience.length, 1);
   assert.equal(f.experience[0].amount, 100);
   assert.equal(f.saved.length, 1);
   assert.equal(f.saved[0].killCount.m, 1);
   assert.equal(f.notices.length, 1);
-  assert.equal(results.find(r => r._summary)._summary.gold, 220);
+  assert.equal(results.find(r => r._summary)._summary.gold, 100);
   await service.handleMonsterKill(f.input);
   assert.equal(f.grants.length, 1, 'DB kill claim must reject a later duplicate');
 

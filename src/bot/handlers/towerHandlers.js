@@ -12,7 +12,8 @@ const { serviceContext, getBotClient } = require("../runtimeContext");
 const { calcPlayerStats } = require("../../shared/combatStats");
 const { mergeEquippedFromLibrary, applyEffectInstances, applyEffectsToStats, collectEquipmentEffects, isEffectConditionMet } = require("../../shared/effectEngine");
 const { scaleSupportPartyEffect } = require("../../shared/supportAuraScaling");
-const { runCombatLoop } = require("../../shared/combatLoop");
+const { runCombatLoop, applyMonsterEffects } = require("../../shared/combatLoop");
+const partyCombat = require("../../shared/partyCombatState");
 const { isTowerTester } = require("../../shared/towerAccess");
 const {
   getTowerRole,
@@ -267,6 +268,13 @@ function buildTowerPartyEffects(members, { zone = null } = {}) {
     if (!m.equipped || m.currentHp <= 0) continue;
     const context = { equipped: m.equipped, inventory: m.inventory || [], zone };
     const refs = collectEquipmentEffects(m.equipped, null, context);
+    const sniper = m.partyV2 && require("../../shared/jobAdvancement").getSniper(m.equipped.job_eq);
+    if (sniper) {
+      const effect = scaleSupportPartyEffect({ key: "support_shot", target: "party", trigger: "passive", params: { value: sniper.supportShotPct || 70 } }, { providerStats: m.stats, equipped: m.equipped, inventory: m.inventory || [], zone });
+      effect.params.casterFinalDamageMult = (effect.params.casterFinalDamageMult || 1) * require("../../shared/partyTowerRules").ROLES[m.towerRole].damage;
+      if (m.towerRole === "support") effect.params.value *= 1.25;
+      freeStackEffects.push({ ...effect, sourceDiscordId: m.discordId, sourceName: m.name, sourceJobName: m.job?.name || "神射手", sourceJobId: m.equipped.job_eq.itemId });
+    }
     const jobName = m.job?.name || null;
     const jobKey = m.job?.key || null;
     for (const r of refs) {
@@ -281,10 +289,16 @@ function buildTowerPartyEffects(members, { zone = null } = {}) {
         });
         const effect = scaleTowerAuraEffect({
           ...scaled,
+          // Role scaling is a snapshot; never write back into equipped/library effects.
+          params: { ...(scaled.params || {}) },
           sourceName: m.name,
           sourceJobName: jobName,
           sourceDiscordId: m.discordId,
-        }, m.towerRole);
+        }, m.partyV2 ? null : m.towerRole);
+        if (m.partyV2) effect.params.value = Number(effect.params.value || 0) * partyCombat.auraMultiplier(m);
+        if (m.partyV2 && m.towerRole === "support" && !["heal_over_time", "party_heal", "shield", "shield_flat", "shield_pct"].includes(effect.key)) {
+          effect.params.value = Number(effect.params.value || 0) * 1.25;
+        }
         if (!jobName) {
           freeStackEffects.push(effect);
           continue;
@@ -308,20 +322,22 @@ function sumPartyEffectValue(partyEffects = [], key) {
 }
 
 function calcTowerMemberMaxHp(member, floor, partyEffects = []) {
-  const bonus = getCumulativePartyBonus(floor);
+  const bonus = member?.partyV2 ? { hpPct: 0 } : getCumulativePartyBonus(floor);
   const partyMaxHpPct = sumPartyEffectValue(partyEffects, "party_max_hp_up");
   const baseMaxHp = Math.max(1, Number(member?.stats?.maxHp || 100));
-  return Math.max(1, Math.round(scaleTowerRoleHp(baseMaxHp, member?.towerRole) * (1 + bonus.hpPct / 100) * (1 + partyMaxHpPct / 100)));
+  return Math.max(1, Math.round((member?.partyV2 ? baseMaxHp * require("../../shared/partyTowerRules").ROLES[member.towerRole].hp : scaleTowerRoleHp(baseMaxHp, member?.towerRole)) * (1 + bonus.hpPct / 100) * (1 + partyMaxHpPct / 100)));
 }
 
-function refreshTowerMemberMaxHp(session, floor, { initialize = false } = {}) {
-  const partyEffects = buildTowerPartyEffects(session.members, { zone: TOWER_FLOOR_ZONE(floor) });
+function refreshTowerMemberMaxHp(session, floor, { initialize = false, zone = TOWER_FLOOR_ZONE(floor) } = {}) {
+  const partyEffects = buildTowerPartyEffects(session.members, { zone });
   for (const member of session.members) {
     const beforeMax = Math.max(0, Number(member.maxHp || 0));
     const beforeHp = Math.max(0, Number(member.currentHp || 0));
     const nextMax = calcTowerMemberMaxHp(member, floor, partyEffects);
     member.maxHp = nextMax;
-    if (initialize || beforeMax <= 0) {
+    if (member.partyV2 && beforeHp <= 0 && beforeMax > 0 && !initialize) {
+      member.currentHp = 0;
+    } else if (initialize || beforeMax <= 0) {
       member.currentHp = nextMax;
     } else if (nextMax > beforeMax) {
       member.currentHp = Math.min(nextMax, beforeHp + (nextMax - beforeMax));
@@ -346,7 +362,7 @@ function buildMonsterEquipped(monster) {
 
 function getEffectiveMemberStats(member, partyEffects = []) {
   const baseStats = member?.stats || {};
-  const activeEffects = Array.isArray(member?.activeEffects) ? member.activeEffects : [];
+  const activeEffects = Array.isArray(member?.activeEffects) ? member.activeEffects.filter(e => !member.partyV2 || !["berserk_gauge", "blood_sacrifice"].includes(e.sourceType)) : [];
   const effective = applyEffectsToStats(baseStats, activeEffects, {
     equipped: member?.equipped || {},
     inventory: member?.inventory || []
@@ -359,7 +375,7 @@ function getEffectiveMemberStats(member, partyEffects = []) {
   if (partyStunChance > 0) {
     effective.stunChance = Math.min(100, Math.max(0, Number(effective.stunChance || 0) + partyStunChance));
   }
-  return effective;
+  return member?.partyV2 ? require("../../shared/partyTowerRules").roleStats(effective, member.towerRole) : effective;
 }
 
 function buildTowerActionPreview(members = [], monsterCalc = null, partyEffects = []) {
@@ -428,7 +444,7 @@ function applyTowerPartyHealing(members = [], partyEffects = []) {
     const before = member.currentHp;
     member.currentHp = Math.min(member.maxHp, member.currentHp + heal);
     const actual = member.currentHp - before;
-    if (actual > 0) healed.push({ name: member.name, amount: actual, hp: member.currentHp, maxHp: member.maxHp });
+    if (actual > 0) healed.push({ discordId: member.discordId, name: member.name, amount: actual, hp: member.currentHp, maxHp: member.maxHp });
   }
   return healed;
 }
@@ -475,6 +491,12 @@ function addTowerStat(stats, discordId, key, amount) {
   const value = Math.max(0, Math.round(Number(amount || 0)));
   if (!row || value <= 0) return;
   row[key] = Math.max(0, Math.round(Number(row[key] || 0) + value));
+}
+
+function recordTowerQuestStats(stats, id, result) {
+  for (const key of ["comboCount", "dodgeCount", "blockCount", "stunCount", "burnTriggerCount"]) addTowerStat(stats, id, key, result.combatStats?.[key]);
+  addTowerStat(stats, id, "healDone", result.healDone);
+  addTowerStat(stats, id, "lifestealDone", result.lifestealDone);
 }
 
 function compactTowerMemberLogs(memberLogs = [], limit = 8) {
@@ -544,9 +566,9 @@ function buildTowerFloorSummary(stats, auraLines = []) {
 // ── 單層戰鬥結算（全職業完整邏輯） ──────────────────────────
 // 依 AGI 速度條輪流出手；高 AGI 會更快回到行動點。
 // 怪物殘血與怪物身上的 debuff / stun 會在全隊之間共享。
-async function fightFloor(session, monster, scaledHp, scaledAtk) {
+function* iterateFloor(session, monster, scaledHp, scaledAtk) {
   const floor  = session.currentFloor;
-  const bonus  = getCumulativePartyBonus(floor);
+  const bonus  = session.partyV2 ? { atkPct: 0, hpPct: 0 } : getCumulativePartyBonus(floor);
 
   // 完整帶入 monster.calc：level / flatDef / int / dmgMin/dmgMax / dodge / hit / critRate / defIgnorePct … 全部沿用真實值，
   // 只有 atk / maxHp 依樓層縮放。確保塔的攻防邏輯（等級壓制、固定減傷等）與世界王 / 一般 PvE 完全一致，
@@ -556,7 +578,7 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     ...calc,
     atk:          scaledAtk,
     maxHp:        scaledHp,
-    finalDamageMultiplier: 1,
+    finalDamageMultiplier: session.partyV2 ? (calc.finalDamageMultiplier || 1) : 1,
   };
 
   const aliveMembers = () => session.members.filter((m) => m.currentHp > 0);
@@ -568,8 +590,17 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
   let   monsterActiveEffects = [];
   let   stunRoundsLeft = 0;
   let   sharedRound = 1;
+  let monsterRound = 1, monsterImmuneUntil = 0;
+  let monsterCooldowns = {}, enemyPending = {};
+  const actionSessions = new Map(), ownerRounds = new Map();
   let   totalActions = 0;
   const combatZone = monster?.zone || TOWER_FLOOR_ZONE(floor);
+  if (session.partyV2) for (const member of session.members) {
+    partyCombat.beginFloor(member, monster);
+    actionSessions.set(member.discordId, {}); ownerRounds.set(member.discordId, 1);
+    member.jobSkillCooldowns = {};
+    member.jobSkillsUsedThisBattle = [];
+  }
   const openingPartyEffects = buildTowerPartyEffects(session.members, { zone: combatZone });
   const floorStats = createTowerFloorStats(session.members);
   const floorAuraLines = summarizeTowerAuras(openingPartyEffects);
@@ -577,10 +608,12 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
   const gauges = new Map();
   for (const member of session.members) gauges.set(member.discordId, 0);
   gauges.set("monster", 0);
-  const maxActionSlices = Math.max(50, Math.max(1, MAX_ROUNDS_PER_MEMBER) * Math.max(2, session.members.length + 1));
+  const maxActionSlices = session.partyV2 ? 5000 : Math.max(50, Math.max(1, MAX_ROUNDS_PER_MEMBER) * Math.max(2, session.members.length + 1));
 
   while (monsterHp > 0 && aliveMembers().length > 0 && totalActions < maxActionSlices) {
+    if (session.partyV2) for (const member of session.members) partyCombat.syncLiveStrategy(member);
     const partyEffects = buildTowerPartyEffects(session.members, { zone: combatZone });
+    const monsterStatsNow = applyMonsterEffects(mCalc, monsterActiveEffects, monsterRound);
     const actors = [
       ...session.members
         .filter((m) => m.currentHp > 0)
@@ -602,49 +635,57 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
         type: "monster",
         id: "monster",
         name: monster.name,
-        stats: mCalc,
-        agi: Number(mCalc.agi || 0),
-        dex: Number(mCalc.dex || 0),
-        speed: 100 + Math.max(0, Number(mCalc.agi || 0)),
+        stats: monsterStatsNow,
+        agi: Number(monsterStatsNow.agi || 0),
+        dex: Number(monsterStatsNow.dex || 0),
+        speed: 100 + Math.max(0, Number(monsterStatsNow.agi || 0)),
         index: session.members.length,
       },
     ];
     if (actors.length === 0) break;
 
+    const gaugeBefore = actors.map(a => ({ id: a.id, name: a.name, agi: a.agi, speed: a.speed, value: gauges.get(a.id) || 0 }));
     const nextNeed = Math.min(...actors.map((actor) => (1000 - (gauges.get(actor.id) || 0)) / Math.max(1, actor.speed)));
     for (const actor of actors) gauges.set(actor.id, (gauges.get(actor.id) || 0) + actor.speed * nextNeed);
     const ready = actors
       .filter((actor) => (gauges.get(actor.id) || 0) >= 999.999)
       .sort((a, b) => ((gauges.get(b.id) || 0) - (gauges.get(a.id) || 0)) || (b.agi - a.agi) || (b.dex - a.dex) || (a.index - b.index));
     const actor = ready[0];
+    const actionClock = { actorId: actor.id, before: gaugeBefore,
+      ready: actors.map(a => ({ id: a.id, name: a.name, agi: a.agi, speed: a.speed, value: Math.min(1000, gauges.get(a.id) || 0) })) };
     gauges.set(actor.id, (gauges.get(actor.id) || 0) - 1000);
+    actionClock.after = actors.map(a => ({ id: a.id, name: a.name, agi: a.agi, speed: a.speed, value: Math.max(0, gauges.get(a.id) || 0) }));
     totalActions += 1;
-    tickTowerCardCooldowns(session.members);
+    if (!session.partyV2) tickTowerCardCooldowns(session.members);
 
     if (actor.type === "monster") {
-      const target = selectTowerMonsterTarget(session.members);
+      const target = session.partyV2 ? require("../../shared/partyTowerRules").selectTarget(session.members, floorStats) : selectTowerMonsterTarget(session.members);
       if (!target) break;
       const targetStats = getEffectiveMemberStats(target, partyEffects);
       const nonHealPartyEffects = partyEffects.filter((effect) => effect?.key !== "heal_over_time" && effect?.key !== "party_heal");
       const options = {
         startMonsterHp: monsterHp,
         startPlayerHp: target.currentHp,
-        startRound: sharedRound,
+        startRound: session.partyV2 ? ownerRounds.get(target.discordId) : sharedRound,
         playerName: target.name,
         playerLevel: target.level || 1,
         equipped: target.equipped,
         inventory: target.inventory || [],
         playerActiveEffects: Array.isArray(target.activeEffects) ? [...target.activeEffects] : [],
-        cardCooldowns: target.cardCooldowns || { player: {}, monster: {} },
-        tickCardCooldowns: false,
-        partyEffects: nonHealPartyEffects,
+        cardCooldowns: session.partyV2 ? { player: target.cardCooldowns?.player || {}, monster: monsterCooldowns } : target.cardCooldowns || { player: {}, monster: {} },
+        tickCardCooldowns: session.partyV2,
+        ...(session.partyV2 ? { ...partyCombat.battleOptions(target), partyActorId: target.discordId, actionSession: actionSessions.get(target.discordId),
+          monsterStunImmuneUntil: monsterImmuneUntil + ownerRounds.get(target.discordId) - monsterRound, ...enemyPending,
+          jobSkillCooldowns: target.jobSkillCooldowns, jobSkillsUsedThisBattle: target.jobSkillsUsedThisBattle, tickJobSkillCooldowns: false } : {}),
+        partyEffects: nonHealPartyEffects.map(e => ({ ...e, isSelfAura: e.sourceDiscordId === target.discordId })),
         monsterEquipped: buildMonsterEquipped(monster),
         monsterIsBoss: Boolean(monster.isBoss),
         monsterIsElite: monster.zone === "elite",
         monsterElement: monster?.element || null,
         monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
-        monsterActiveEffects,
+        monsterActiveEffects: session.partyV2 ? partyCombat.projectEffects(monsterActiveEffects, monsterRound, ownerRounds.get(target.discordId)) : monsterActiveEffects,
         stunRoundsLeft,
+        partyRoleDamageMultiplier: session.partyV2 ? require("../../shared/partyTowerRules").ROLES[target.towerRole].damage : 1,
         skipPlayerAttack: true,
       };
       const beforeMonsterHp = monsterHp;
@@ -659,59 +700,83 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       );
       monsterHp = result.finalMonsterHp;
       target.currentHp = Math.max(0, Math.round(result.finalPlayerHp));
+      if (session.partyV2) recordTowerQuestStats(floorStats, target.discordId, result);
       addTowerStat(floorStats, target.discordId, "damageDealt", Math.max(0, beforeMonsterHp - monsterHp));
       addTowerStat(floorStats, target.discordId, "damageTaken", Math.max(0, beforePlayerHp - target.currentHp));
       target.activeEffects = Array.isArray(options.playerActiveEffects) ? options.playerActiveEffects : [];
       target.cardCooldowns = result.cardCooldowns || options.cardCooldowns || { player: {}, monster: {} };
-      monsterActiveEffects = Array.isArray(result.monsterActiveEffects) ? result.monsterActiveEffects : [];
+      if (session.partyV2) {
+        partyCombat.recordAction(target, result);
+        monsterCooldowns = result.cardCooldowns.monster;
+        monsterImmuneUntil = result.monsterStunImmuneUntil + monsterRound - ownerRounds.get(target.discordId);
+        enemyPending = {};
+        target.jobSkillCooldowns = result.jobSkillCooldowns;
+        target.jobSkillsUsedThisBattle = result.jobSkillsUsedThisBattle;
+      }
+      monsterActiveEffects = session.partyV2 ? partyCombat.projectEffects(result.monsterActiveEffects, ownerRounds.get(target.discordId), monsterRound) : result.monsterActiveEffects || [];
+      if (session.partyV2) monsterRound++;
       stunRoundsLeft = Math.max(0, Number(result.stunRoundsLeft || 0));
       sharedRound = Math.max(sharedRound + 1, Number(result.nextRound || sharedRound + 1));
       memberLogs.push({
+        actionClock,
+        partyAuras: session.partyV2 ? partyEffects.map(require("../../services/tower/partyTowerTelemetry").auraSnapshot) : [],
+        jobStateAfter: target.partyJobView,
         type: "monster",
         name: monster.name,
         targetName: target.name,
+        targetId: target.discordId,
         targetRole: normalizeTowerRole(target.towerRole),
         agi: actor.agi,
         logs: result.roundLogs || [],
         outcome: result.outcome,
         monsterHpAfter: monsterHp,
         playerHpAfter: target.currentHp,
-        partyHpAfter: session.members.map((mb) => ({ name: mb.name, hp: mb.currentHp, maxHp: mb.maxHp })),
+        partyHpAfter: session.members.map((mb) => ({ discordId: mb.discordId, name: mb.name, hp: mb.currentHp, maxHp: mb.maxHp })),
       });
+      yield structuredClone(memberLogs.at(-1));
       continue;
     }
 
     const m = actor.member;
-    const healed = applyTowerPartyHealing(session.members, partyEffects);
+    // V2 healing auras pulse only on their living provider's action, to all living allies.
+    // Keep aura strength/deduplication unchanged; other actors cannot trigger this heal.
+    const healingEffects = session.partyV2
+      ? partyEffects.filter((effect) => effect.sourceDiscordId === m.discordId)
+      : partyEffects;
+    const healed = applyTowerPartyHealing(session.members, healingEffects);
     for (const heal of healed) {
-      const target = session.members.find((member) => member.name === heal.name);
+      const target = session.members.find((member) => member.discordId === heal.discordId);
       if (target) addTowerStat(floorStats, target.discordId, "healingReceived", heal.amount);
     }
     const nonHealPartyEffects = partyEffects.filter((effect) => effect?.key !== "heal_over_time" && effect?.key !== "party_heal");
     const effStats = {
       ...actor.stats,
-      atk: Math.round(scaleTowerRoleAtk(actor.stats.atk || 10, m.towerRole) * (1 + bonus.atkPct / 100)),
+      atk: Math.round((session.partyV2 ? actor.stats.atk : scaleTowerRoleAtk(actor.stats.atk || 10, m.towerRole)) * (1 + bonus.atkPct / 100)),
       maxHp: m.maxHp,
     };
     const options = {
       startMonsterHp: monsterHp,
       startPlayerHp: m.currentHp,
-      startRound: sharedRound,
+      startRound: session.partyV2 ? ownerRounds.get(m.discordId) : sharedRound,
       playerName: m.name,
       playerLevel: m.level || 1,
       equipped: m.equipped,
       inventory: m.inventory || [],
       playerActiveEffects: Array.isArray(m.activeEffects) ? [...m.activeEffects] : [],
-      cardCooldowns: m.cardCooldowns || { player: {}, monster: {} },
-      tickCardCooldowns: false,
-      partyEffects: nonHealPartyEffects,
+      cardCooldowns: session.partyV2 ? { player: m.cardCooldowns?.player || {}, monster: monsterCooldowns } : m.cardCooldowns || { player: {}, monster: {} },
+      tickCardCooldowns: session.partyV2,
+      ...(session.partyV2 ? { ...partyCombat.battleOptions(m), partyActorId: m.discordId, actionSession: actionSessions.get(m.discordId),
+        monsterStunImmuneUntil: monsterImmuneUntil + ownerRounds.get(m.discordId) - monsterRound, ...enemyPending,
+        jobSkillCooldowns: m.jobSkillCooldowns, jobSkillsUsedThisBattle: m.jobSkillsUsedThisBattle } : {}),
+      partyEffects: nonHealPartyEffects.map(e => ({ ...e, isSelfAura: e.sourceDiscordId === m.discordId })),
       monsterEquipped: buildMonsterEquipped(monster),
       monsterIsBoss: Boolean(monster.isBoss),
       monsterIsElite: monster.zone === "elite",
       monsterElement: monster?.element || null, // 屬性相剋；無 element 則不參與
       monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
-      monsterActiveEffects,
+      monsterActiveEffects: session.partyV2 ? partyCombat.projectEffects(monsterActiveEffects, monsterRound, ownerRounds.get(m.discordId)) : monsterActiveEffects,
       stunRoundsLeft,
+      partyRoleDamageMultiplier: session.partyV2 ? require("../../shared/partyTowerRules").ROLES[m.towerRole].damage : 1,
       skipMonsterAttack: true,
     };
     const beforeMonsterHp = monsterHp;
@@ -728,7 +793,14 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
 
     monsterHp = result.finalMonsterHp;
     m.currentHp = Math.max(0, Math.round(result.finalPlayerHp));
-    addTowerStat(floorStats, m.discordId, "damageDealt", Math.max(0, beforeMonsterHp - monsterHp));
+    if (session.partyV2) recordTowerQuestStats(floorStats, m.discordId, result);
+    let ownedDamage = Math.max(0, beforeMonsterHp - monsterHp);
+    for (const [source, amount] of Object.entries(result.combatStats?.supportShotBySource || {})) {
+      if (!floorStats.has(source)) continue;
+      const share = Math.min(ownedDamage, Math.max(0, amount));
+      addTowerStat(floorStats, source, "damageDealt", share); ownedDamage -= share;
+    }
+    addTowerStat(floorStats, m.discordId, "damageDealt", ownedDamage);
     addTowerStat(floorStats, m.discordId, "damageTaken", Math.max(0, beforePlayerHp - m.currentHp));
     // 稽核採證：記錄該成員本層的有效攻擊力(含層段加成)與單次最大傷害,用來抓「傷害被異常放大」
     {
@@ -740,12 +812,27 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     }
     m.activeEffects = Array.isArray(options.playerActiveEffects) ? options.playerActiveEffects : [];
     m.cardCooldowns = result.cardCooldowns || options.cardCooldowns || { player: {}, monster: {} };
-    monsterActiveEffects = Array.isArray(result.monsterActiveEffects) ? result.monsterActiveEffects : [];
+    if (session.partyV2) {
+      partyCombat.recordAction(m, result);
+      monsterImmuneUntil = result.monsterStunImmuneUntil + monsterRound - ownerRounds.get(m.discordId);
+      enemyPending = { monsterKnockbackPending: result.monsterKnockbackPending || enemyPending.monsterKnockbackPending,
+        sageMistPending: result.sageMistPending || enemyPending.sageMistPending,
+        forceMonsterCritFailPending: result.forceMonsterCritFailPending || enemyPending.forceMonsterCritFailPending };
+      m.jobSkillCooldowns = result.jobSkillCooldowns;
+      m.jobSkillsUsedThisBattle = result.jobSkillsUsedThisBattle;
+    }
+    monsterActiveEffects = session.partyV2 ? partyCombat.projectEffects(result.monsterActiveEffects, ownerRounds.get(m.discordId), monsterRound) : result.monsterActiveEffects || [];
+    if (session.partyV2) ownerRounds.set(m.discordId, result.nextRound);
     stunRoundsLeft = Math.max(0, Number(result.stunRoundsLeft || 0));
     sharedRound = Math.max(sharedRound + 1, Number(result.nextRound || sharedRound + 1));
     memberLogs.push({
+      actionClock,
+      partyAuras: session.partyV2 ? partyEffects.map(require("../../services/tower/partyTowerTelemetry").auraSnapshot) : [],
+      partyHealing: healed,
+      jobStateAfter: m.partyJobView,
       type: "member",
       name: m.name,
+      actorId: m.discordId,
       agi: actor.agi,
       logs: [
         ...(healed.length ? [`💚 全隊回復：${healed.map((h) => `${h.name}+${h.amount}`).join("、")}`] : []),
@@ -754,14 +841,17 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
       outcome: result.outcome,
       monsterHpAfter: monsterHp,
       playerHpAfter: m.currentHp,
-      partyHpAfter: session.members.map((mb) => ({ name: mb.name, hp: mb.currentHp, maxHp: mb.maxHp })),
+      partyHpAfter: session.members.map((mb) => ({ discordId: mb.discordId, name: mb.name, hp: mb.currentHp, maxHp: mb.maxHp })),
     });
+    yield structuredClone(memberLogs.at(-1));
   }
 
+  if (session.partyV2) for (const member of session.members) partyCombat.endFloor(member, monsterHp <= 0);
   const killed   = monsterHp <= 0;
   const survived = aliveMembers().length > 0;
   return {
     survived,
+    interrupted: session.partyV2 && monsterHp > 0 && survived,
     memberLogs,
     totalRounds: totalActions,
     monsterKilled: killed,
@@ -769,8 +859,19 @@ async function fightFloor(session, monster, scaledHp, scaledAtk) {
     actionOrder: initialActionOrder,
     summary: buildTowerFloorSummary(floorStats, floorAuraLines),
     // 稽核用：每人原始輸出（含溢傷，不被怪剩血夾住），用來抓「單人傷害爆量」的異常
-    memberDamage: [...floorStats.values()].map((s) => ({ discordId: s.discordId, name: s.name, damageDealt: Math.round(s.damageDealt || 0), atk: Math.round(s.atk || 0), maxHit: Math.round(s.maxHit || 0) })),
+    memberDamage: [...floorStats.values()].map((s) => ({ ...(session.partyV2 ? { questStats: { ...s } } : {}), discordId: s.discordId, name: s.name, damageDealt: Math.round(s.damageDealt || 0), atk: Math.round(s.atk || 0), maxHit: Math.round(s.maxHit || 0) })),
   };
+}
+
+// Existing callers drain the same action iterator; web parties persist each action.
+async function fightFloor(...args) {
+  const iterator = iterateFloor(...args);
+  let step, count = 0;
+  do {
+    step = iterator.next();
+    if (!step.done && ++count % 50 === 0) await new Promise(resolve => setImmediate(resolve));
+  } while (!step.done);
+  return step.value;
 }
 
 // ── 全服爬塔最高紀錄廣播 ────────────────────────────────────
@@ -2157,12 +2258,12 @@ module.exports = {
   restoreTowerSessions,
   getTowerDiagnostics,
   // 測試用(模擬塔)：暫時導出內部函式
-  fightFloor,
+  fightFloor, iterateFloor,
   pickFloorMonster,
   // 網頁組隊爬塔重用：成員準備 / 每層前重算 MaxHP / 隊伍光環彙總 / 戰報壓縮 / 爬塔藥水表
   loadMemberData,
   refreshTowerMemberMaxHp,
-  buildTowerPartyEffects,
+  buildTowerPartyEffects, summarizeTowerAuras,
   compactTowerMemberLogs,
   TOWER_POTION_IDS,
 };

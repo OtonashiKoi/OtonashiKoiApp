@@ -1,3 +1,5 @@
+const { isUnavailableEquipment, assertEquipmentAvailable } = require("../../shared/equipmentAvailability");
+const { ANCHORS_ENABLED } = require("../../shared/anchorFeature");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { isBoundItemId } = require("../../shared/boundItems");
 const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
@@ -348,7 +350,7 @@ class ShopService {
 
   async listItems({ includeDisabled = false } = {}) {
     const items = await this.shopRepository.findAll();
-    return includeDisabled ? items : items.filter((i) => i.enabled);
+    return includeDisabled ? items : items.filter((i) => i.enabled && !isUnavailableEquipment(i));
   }
 
   async getItemById(id) {
@@ -483,10 +485,15 @@ class ShopService {
   }
 
   async purchase(discordId, displayName, itemId, memberRoleIds = [], quantity = 1) {
+    return withPlayerProgressLock(`shop-stock:${itemId}`, () => this._purchase(discordId, displayName, itemId, memberRoleIds, quantity));
+  }
+  async _purchase(discordId, displayName, itemId, memberRoleIds = [], quantity = 1) {
     // 驗證數量
-    quantity = Math.max(1, Math.min(999, parseInt(quantity) || 1));
+    quantity = Number(quantity);
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 999) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "購買數量必須是 1～999 的整數", 400);
 
     const item = await this.getItemById(itemId);
+    assertEquipmentAvailable(item);
     const { player } = await this.playerService.ensurePlayer(discordId, displayName);
     await this.assertLinkedStreamAccount(player, discordId);
     let libraryItem = null;
@@ -502,6 +509,7 @@ class ShopService {
     if (!libraryItem && item.itemLibraryId && this.itemRepository) {
       libraryItem = await this.itemRepository.findById(item.itemLibraryId).catch(() => null);
     }
+    assertEquipmentAvailable(libraryItem);
     if (!item.enabled) throw new AppError(ERROR_CODES.SHOP_ITEM_DISABLED, "此商品目前已下架", 400);
 
     const allowedTiers = item.allowedTiers || [];
@@ -716,6 +724,7 @@ class ShopService {
       if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此物品", 404);
 
       const entry = progress.inventory[idx];
+      assertEquipmentAvailable(entry);
       const itemType = entry.itemType || "consumable";
 
       // 降等藥水已於 2026-08-09 正式移除。即使舊實例被備份、同步或快取重新帶回背包，
@@ -740,7 +749,7 @@ class ShopService {
       const next = {
         ...progress,
         attributes: { ...(progress.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 }) },
-        allocatedAttrs: { ...(progress.allocatedAttrs || {}) }, // 2+1 制：自主分配紀錄（藥水要用）
+        allocatedAttrs: { ...(progress.allocatedAttrs || {}) }, // 自主分配紀錄（重洗藥水要用）
         inventory: (progress.inventory || []).map(e => ({ ...e })),
         flags: { ...(progress.flags || {}) },
         activeEffects: [...(progress.activeEffects || [])]
@@ -1113,6 +1122,7 @@ class ShopService {
    * 已擁有過的（uniqueGrant）不會再開出。每次開箱最多一件傳說。
    */
   async _tryRollDaishiLegendaryChest(discordId, displayName = null) {
+    if (!ANCHORS_ENABLED) return null;
     const uniqueGrant = require("../uniqueGrant/uniqueGrantService");
     const candidates = ["s-legend-burst", "s-legend-linger"];
     for (const itemId of candidates) {
@@ -1151,9 +1161,12 @@ class ShopService {
     const mon = await db.collection("monsters").findOne({ id: monsterId });
     // 寶箱獎池排除 S 階強化寶石（S 寶石只走世界王實戰掉落，維持稀有，不從寶箱大量產出）
     const CHEST_EXCLUDE_IDS = new Set(["gem-s-tier"]);
-    const drops = Array.isArray(mon?.drops)
-      ? mon.drops.filter((d) => d && d.itemId && (Number(d.chance) > 0) && !CHEST_EXCLUDE_IDS.has(d.itemId))
+    const chestPool = Array.isArray(mon?.chestDrops) ? mon.chestDrops : mon?.drops;
+    const rawDrops = Array.isArray(chestPool)
+      ? chestPool.filter((d) => d && d.itemId && (Number(d.chance) > 0) && !CHEST_EXCLUDE_IDS.has(d.itemId) && !isUnavailableEquipment(d.itemId))
       : [];
+    const candidates = await Promise.all(rawDrops.map(async (drop) => ({ drop, item: await this.itemRepository.findById(drop.itemId).catch(() => null) })));
+    const drops = candidates.filter(({ item }) => item && !isUnavailableEquipment(item)).map(({ drop }) => drop);
     if (!drops.length) return null;
 
     const total = drops.reduce((s, d) => s + (Number(d.chance) || 0), 0);
@@ -1165,6 +1178,7 @@ class ShopService {
     }
 
     const item = await this.itemRepository.findById(picked.itemId).catch(() => null);
+    if (isUnavailableEquipment(item)) return null;
     const equipStats = item?.equipStats ? { ...item.equipStats } : {};
     const entry = {
       uuid: crypto.randomUUID(),
@@ -1301,7 +1315,7 @@ class ShopService {
     const pool = await db.collection("items").find({
       itemType: "equipment",
       tier: pick.tier,
-      equipSlot: { $nin: ["special", "job_eq"] },
+      equipSlot: { $nin: ["special", "job_eq", ...(!ANCHORS_ENABLED ? ["anchor"] : [])] },
       isNpcCard: { $ne: true },
       monsterCardOf: { $exists: false },
     }).toArray();
@@ -1867,6 +1881,7 @@ class ShopService {
     const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此裝備", 404);
     let entry = progress.inventory[idx];
+    assertEquipmentAvailable(entry);
     if (entry.itemType !== "equipment" && entry.itemType !== "job_badge" && entry.itemType !== "monster_card") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不是裝備", 400);
     }
@@ -2035,6 +2050,7 @@ class ShopService {
 
       const candidates = hydratedRecords.filter(({ entry }) => (
         entry
+        && !isUnavailableEquipment(entry)
         && entry.itemType === "equipment"
         && AUTO_EQUIP_SLOT_SET.has(String(entry.equipSlot || ""))
       ));
@@ -2195,7 +2211,7 @@ class ShopService {
     // 套上目標分頁中仍在背包的裝備
     for (const slot of ALL_SLOTS) {
       const saved = savedPreset[slot];
-      if (!saved) continue;
+      if (!saved || (!ANCHORS_ENABLED && slot === "anchor") || isUnavailableEquipment(saved)) continue;
       // 以 uuid 或 itemId 找背包
       const invIdx = inventory.findIndex(e =>
         (saved.uuid && e.uuid === saved.uuid) ||

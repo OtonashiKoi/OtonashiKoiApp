@@ -15,10 +15,11 @@ const { acquireSse } = require("../netGuards");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
 const { acquireWebBattle } = require("../../services/progress/battleLock");
 const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard, filterDamageMapForParticipants } = require("../../shared/leaderboardEligibility");
-const { calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
+const { calculateBattleTickMs, calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
 const { getWorldBossPartLabel } = require("../../shared/worldBossParts");
 const { A_WEIGHT: WORLD_BOSS_ASSIST_WEIGHT } = require("../../services/kda/kdaService");
 const { boundedMonsterCurrentHp, repairMonsterHpOverflow, settleActiveMonsterDamage } = require("../../services/monster/monsterStateRaceGuard");
+const { normalMaxHp } = require("../../services/monster/normalCoopScaling");
 const {
   isYoutubeDirectBindTester,
   buildYoutubeDirectBindAuthorizeUrl
@@ -136,18 +137,10 @@ function rememberWebMsgAuthor(messageId, discordId) {
   if (webMsgAuthors.size > 1000) webMsgAuthors.delete(webMsgAuthors.keys().next().value);
 }
 
-// 每回合動畫長度（ms）。可用 env `ROUND_MS` 覆寫。預設為 700 * 0.8
-const ROUND_MS = Number(process.env.ROUND_MS || Math.round(700 * 0.8));
+// 未指定 AGI 時回傳新手回合長度；env `ROUND_MS` 可固定覆寫 Web 播放與冷卻。
+const ROUND_MS = Number(process.env.ROUND_MS || calculateBattleTickMs(1));
 
-// AGI 攻速：與 DC 戰鬥相同公式（src/bot/handlers/monsterZoneHandlers.js calculateTickDelay）
-// AGI 1→1500ms/回合，AGI 40+→500ms/回合；網頁端用它播放逐回合動畫，速度才會跟 DC 一致
-const calculateTickDelay = (agi = 1) => {
-  const baseDelay = 1500;
-  const minDelay = 500;
-  const capAgi = 40;
-  const capped = Math.min(Math.max(1, agi), capAgi);
-  return Math.round(baseDelay - ((capped - 1) / (capAgi - 1)) * (baseDelay - minDelay));
-};
+const calculateTickDelay = calculateBattleTickMs;
 
 // 特效數值格式化 + 道具特效說明列：抽到 shared/itemEffectLines.js，
 // 與戰鬥掉落氣泡（monsterZoneHandlers.toWebDrop）共用同一份格式。
@@ -618,7 +611,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         goldReward: activeMonster?.goldReward || 0,
         drops: (activeMonster?.drops || []).map((d) => d.itemName),
         currentHp: boundedMonsterCurrentHp(state, activeMonster),
-        maxHp: activeMonster?.calc?.maxHp || 0,
+        maxHp: activeMonster ? normalMaxHp(state, activeMonster) : 0,
         participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
         activeMonsterSeq: state.activeMonsterSeq,
         damageLeaderboard,
@@ -1787,7 +1780,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
-  // 3.3c 分配自主屬性點（2+1 制：每級 +1 點入 statusPoints 池，玩家自選六維）
+  // 3.3c 分配自主屬性點（1+1 制：每級 +1 點入 statusPoints 池，玩家自選六維）
   router.post("/api/me/attributes/allocate", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
@@ -2410,9 +2403,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         : null;
       const isMember = Boolean(membershipTier || streamBinding?.linkedSupportAtLink);
 
-      // 聊天室 overlay 顯示「Discord 身分名稱」而非直播平台暱稱：
-      // 公會暱稱優先 → Discord 全域名 → 帳號名 → 最後退回遊戲存檔暱稱。
-      let displayName = player.displayName;
+      // 有 Discord 名稱才覆蓋直播平台暱稱；找不到時由聊天室使用原始留言名稱。
+      // 公會暱稱優先 → Discord 全域名 → Discord 帳號名。
+      let displayName = null;
       try {
         if (discordClient && player.discordId) {
           const guildId = require("../../config").discord?.guildId;
@@ -2424,10 +2417,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             displayName = member.displayName;
           } else {
             const u = await discordClient.users.fetch(player.discordId).catch(() => null);
-            if (u) displayName = u.globalName || u.username || displayName;
+            if (u) displayName = u.globalName || u.username || null;
           }
         }
-      } catch (_) { /* 抓不到 Discord 名稱時退回遊戲暱稱 */ }
+      } catch (_) { /* 抓不到 Discord 名稱時由聊天室使用原始留言名稱 */ }
 
       return res.json({
         found: true,
@@ -2791,7 +2784,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           goldReward: activeMonster?.goldReward || 0,
           drops: (activeMonster?.drops || []).map(d => d.itemName),
           currentHp: boundedMonsterCurrentHp(state, activeMonster),
-          maxHp: activeMonster?.calc?.maxHp || 0,
+          maxHp: activeMonster ? normalMaxHp(state, activeMonster) : 0,
           participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
           activeMonsterSeq: state.activeMonsterSeq,
           damageLeaderboard,
@@ -2870,7 +2863,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           goldReward: activeMonster?.goldReward || 0,
           drops: (activeMonster?.drops || []).map((d) => d.itemName),
           currentHp: boundedMonsterCurrentHp(state, activeMonster),
-          maxHp: activeMonster?.calc?.maxHp || 0,
+          maxHp: activeMonster ? normalMaxHp(state, activeMonster) : 0,
           participantCount: Array.isArray(state.participants) ? state.participants.length : 0,
           activeMonsterSeq: state.activeMonsterSeq,
           damageLeaderboard,
@@ -2906,6 +2899,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
   // 11. Quick Battle
   router.post("/api/combat/quick-battle", requireAuth, async (req, res, next) => {
+    let worldBossRelease = null;
     let battleLock = null;   // 網頁戰鬥占用鎖
     let lockHeldForAnim = false; // 戰鬥成功 → 占用保留到動畫結束，不在 finally 立即釋放
     const battlePerf = { startedAt: performance.now(), lastAt: performance.now(), parts: [] };
@@ -2921,6 +2915,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return res.status(404).json({ status: "error", code: "zone_not_found", message: "找不到這個戰鬥區域。" });
       }
 
+      if (require("../../services/worldBoss/worldBossService").isWorldBossZone(zoneKey)) {
+        const gate = await serviceContext.worldBossServiceFor(zoneKey).getConfigWithStatus(discordId);
+        if (!gate.status.unlocked) return res.status(403).json(fail("WORLD_BOSS_LOCKED", gate.status.lockedReason));
+        worldBossRelease = await require("../../services/worldBoss/worldBossBattleLock").acquireWorldBossBattleLock(zoneKey);
+      }
       // Reject requests while the previous battle animation cooldown is still active.
       const cd = playerBattleCooldowns.get(discordId);
       if (cd && cd.nextBattleAt > Date.now()) {
@@ -2984,8 +2983,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (!monster) {
         monster = monsters[0];
         const initHp = monster.calc.maxHp;
-        await serviceContext.monsterService.saveState({ ...state, activeMonsterSeq: monster.seq, currentHp: initHp }, zoneKey);
-        state = { ...state, activeMonsterSeq: monster.seq, currentHp: initHp };
+        await serviceContext.monsterService.saveState({ ...state, activeMonsterSeq: monster.seq, currentHp: initHp, coopMaxHp: initHp, coopHpMonsterSeq: monster.seq }, zoneKey);
+        state = { ...state, activeMonsterSeq: monster.seq, currentHp: initHp, coopMaxHp: initHp, coopHpMonsterSeq: monster.seq };
       }
 
       // 防止舊戰鬥結果在換怪後回寫：任何一般怪的持久 HP 都不得超過目前模板上限。
@@ -3281,10 +3280,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         try {
           const wbSvc0 = serviceContext.worldBossServiceFor?.(zoneKey);
           if (wbSvc0?.getConfigWithStatus) {
-            const cs = await wbSvc0.getConfigWithStatus();
+            const cs = await wbSvc0.getConfigWithStatus(discordId);
             if (cs?.status && cs.status.canChallenge === false) wbUnavailable = true; // 冷卻中/未解鎖/停用
           }
-        } catch (_) {}
+        } catch (_) { wbUnavailable = true; }
         try { if (isWBAllDefeated(stateForCombat, zoneKey)) wbUnavailable = true; } catch (_) {} // 整王已全破
         if (wbUnavailable) {
           return res.status(409).json({ status: "error", code: "world_boss_unavailable", message: "世界王已被擊敗或進入冷卻,無法繼續挑戰。" });
@@ -3410,29 +3409,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (wind.bossDamageMultiplier) {
             battleMonsterStats.finalDamageMultiplier = (Number(battleMonsterStats.finalDamageMultiplier) || 1) * Number(wind.bossDamageMultiplier);
           }
-        }
-      }
-
-      // ── 世界王入場費(與 DC 一致):每次出戰(含排隊自動出擊)都收費,金幣不足擋下 ──
-      // 大史(elite)5000、龍王(dragon_king_lair)10000,以 zones.js 預設或怪物自訂為準。
-      let worldBossEntryFee = 0;
-      if (isWorldBoss) {
-        worldBossEntryFee = Math.max(0, Number(monster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0);
-        if (worldBossEntryFee > 0) {
-          const walletNow = await serviceContext.walletService.getWalletByDiscordId(discordId, displayName).catch(() => null);
-          const goldOwned = Math.max(0, Number(walletNow?.wallet?.gold ?? walletNow?.gold) || 0);
-          if (goldOwned < worldBossEntryFee) {
-            // 提早 return,鎖由下方 finally 釋放(lockHeldForAnim 仍為 false)
-            return res.status(400).json({
-              status: "error",
-              message: `挑戰 ${monster.name} 需要 ${worldBossEntryFee.toLocaleString()} 金幣，你目前只有 ${goldOwned.toLocaleString()} 金幣。`
-            });
-          }
-          await serviceContext.rewardService.grantCurrency({
-            discordId, displayName, currencyType: "gold", amount: -worldBossEntryFee,
-            source: require("../../shared/sources").CURRENCY_SOURCES.MONSTER_ENTRY_FEE,
-            operator: "monster_zone:web_enter_battle"
-          });
         }
       }
 
@@ -3563,8 +3539,45 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         teamStunOn ? stunStateBefore?.windowContributors : null,
         zoneFrozenOn ? freezeStateBefore?.windowContributors : null
       );
+      // ── 世界王入場費(與 DC 一致):每次出戰(含排隊自動出擊)都收費,金幣不足擋下 ──
+      // 大史(elite)5000、龍王(dragon_king_lair)10000,以 zones.js 預設或怪物自訂為準。
+      let worldBossEntryFee = 0;
+      if (isWorldBoss) {
+        worldBossEntryFee = Math.max(0, Number(monster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0);
+        if (worldBossEntryFee > 0) {
+          const walletNow = await serviceContext.walletService.getWalletByDiscordId(discordId, displayName).catch(() => null);
+          const goldOwned = Math.max(0, Number(walletNow?.wallet?.gold ?? walletNow?.gold) || 0);
+          if (goldOwned < worldBossEntryFee) {
+            // 提早 return,鎖由下方 finally 釋放(lockHeldForAnim 仍為 false)
+            return res.status(400).json({
+              status: "error",
+              message: `挑戰 ${monster.name} 需要 ${worldBossEntryFee.toLocaleString()} 金幣，你目前只有 ${goldOwned.toLocaleString()} 金幣。`
+            });
+          }
+          await serviceContext.rewardService.grantCurrency({
+            discordId, displayName, currencyType: "gold", amount: -worldBossEntryFee,
+            source: require("../../shared/sources").CURRENCY_SOURCES.MONSTER_ENTRY_FEE,
+            operator: "monster_zone:web_enter_battle"
+          });
+        }
+      }
+
       markBattlePerf("prepare");
 
+      const rabbit = require("../../shared/rabbitWorldBoss");
+      let rabbitCrush = false;
+      const hutaoCrush = zoneKey === "event_boss_hutao_preview" && hutaoEventSnapshot?.effect?.hpCrush && stateForCombat.hutaoCrushReceipts?.[discordId] !== hutaoEventSnapshot.effect.pulseId;
+      if (zoneKey === "event_boss_hutao_preview" && hutaoEventSnapshot?.effect?.hpCrush && Date.now() < Number(hutaoEventSnapshot.effect.resolvedAt) + 30000) {
+        battleMonsterStats = { ...battleMonsterStats, finalDamageMultiplier: (battleMonsterStats.finalDamageMultiplier || 1) * .6 };
+      }
+      if (zoneKey === rabbit.ZONE) {
+        rabbit.advance(stateForCombat, combatMonsterHp, monster.calc.maxHp, (stateForCombat.participants || []).length || 1);
+        const rm = rabbit.view(stateForCombat);
+        if (rm.phase !== "rage") { battleMonsterEquipped = { ...battleMonsterEquipped }; delete battleMonsterEquipped.special_1; }
+        battleMonsterStats = { ...battleMonsterStats, dodge: rm.dodgeBonus ? Math.min(85, (Number(battleMonsterStats.dodge)||0)+rm.dodgeBonus) : 0, finalDamageMultiplier: (battleMonsterStats.finalDamageMultiplier || 1) * rm.damageMult };
+        webBossVulnMult *= rm.incomingMult;
+        rabbitCrush = rabbit.crushPending(stateForCombat, discordId);
+      }
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
         runCombatLoop(battlePStats, battleMonsterStats, monster.name, combatMonsterHp, undefined, {
@@ -3624,7 +3637,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           eventPlayerHitBonus: zoneKey === "event_boss_hutao_preview"
             ? (Number(hutaoEventSnapshot?.effect?.playerHitBonus) || 0)
             : 0,
-          tsunamiDeath: turtleTsunami,   // 海嘯（島島龜王）：出戰即死
+          eventHpCrush: rabbitCrush || hutaoCrush,
+          eventHpCrushName: rabbitCrush ? "蒸氣大爆發" : hutaoCrush ? "胡桃自摸" : undefined,
+          tsunamiDeath: turtleTsunami,   // 海嘯：壓血至1%後繼續15回合，正常死亡算戰敗
           tsunamiDeathRound: turtleTsunamiRound, // 詠唱若在本場時間軸內完成，對應回合直接命中
           forcePlayerHit: turtleForceHit, // 退潮打龜首必中
           monsterElement: monster?.element || null,
@@ -3750,6 +3765,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             participants: updatedParticipants,
             lastHitAt: new Date().toISOString()
           };
+          if (hutaoCrush) nextState.hutaoCrushReceipts = { ...(freshState.hutaoCrushReceipts || {}), [discordId]: hutaoEventSnapshot.effect.pulseId };
+          if (zoneKey === rabbit.ZONE) {
+            nextState.rabbit = structuredClone(stateForCombat.rabbit);
+            if (rabbitCrush) rabbit.markCrushed(nextState, discordId);
+            rabbit.recordDamage(nextState, wbDamage);
+            rabbit.advance(nextState, nextCurrentHp, monster.calc.maxHp, updatedParticipants.length);
+          }
           // 牙狼：累積本部位受創，達 1/3 HP 首次翻面(抵禦你用比較多的那系,10分鐘,一生一次)；記在 nextState 一起存
           if (zoneKey === "hellfire_depths") {
             hellfangEvent = _mzHellfang.hellfangPartAccrue(
@@ -3858,6 +3880,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // 仍回傳剛打那隻的累積排行,避免剛打死時排行歸零空白。
       let boardDamageMap = null;
       const currentParticipants = Array.isArray(stateForCombat.participants) ? stateForCombat.participants : [];
+      const supportContribution = { ...(combatResult?.assistLedger?.bySource || {}) };
+      let normalSettledState = null;
+      let coopExtendedBattle = false;
+      for (const [sourceId, amount] of Object.entries(combatResult?.combatStats?.supportShotBySource || {})) {
+        supportContribution[sourceId] = (Number(supportContribution[sourceId]) || 0) + (Number(amount) || 0);
+      }
 
       if (isWorldBoss) {
         // ── 世界王：state 已由部位結算寫入；只有全部位破壞才呼叫 handleMonsterKill（觸發冷卻/發獎）──
@@ -3879,34 +3907,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         if (hellfangEvent) rewardLines = [...(Array.isArray(rewardLines) ? rewardLines : []), ..._mzHellfang.hellfangFlipLines(hellfangEvent)];
         // 部位戰報後即時更新面板（含部位血條）
         _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, stateForCombat.currentHp, currentParticipants.length + 1, stateForCombat.damageMap || {}).catch(() => {});
-      } else if (outcome === "win") {
-        mHp = 0;
-        // Ensure this player is included in participants and damage map before kill handling.
-        const stateWithMe = {
-          ...stateForCombat,
-          participants: [...new Set([...currentParticipants, discordId])],
-          damageMap: {
-            ...(stateForCombat.damageMap || {}),
-            [discordId]: {
-              name: displayName,
-              level: progress?.level || 1,
-              damage: (stateForCombat.damageMap?.[discordId]?.damage || 0) + totalDamage,
-              taken: (stateForCombat.damageMap?.[discordId]?.taken || 0) + totalTaken,
-            }
-          }
-        };
-        boardDamageMap = stateWithMe.damageMap;
-        const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee ?? getZoneDefaultEntryFee(zoneKey) };
-        rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster, state: stateWithMe, totalDamage, zoneKey });
       } else {
         let damageMap = {}, savedState = null;
         try {
           const guarded = await settleActiveMonsterDamage({
             monsterService: serviceContext.monsterService, zoneKey, monster, discordId, displayName,
-            playerLevel: progress?.level || 1, totalDamage, totalTaken
+            playerLevel: progress?.level || 1, totalDamage, totalTaken,
+            supportAssistBySource: supportContribution
           });
           ({ savedState, damageMap } = guarded);
-          if (savedState) mHp = guarded.currentHp;
+          normalSettledState = savedState;
+          if (savedState) {
+            mHp = guarded.currentHp;
+            if (outcome === "win" && mHp > 0) {
+              outcome = "timeout";
+              coopExtendedBattle = true;
+            }
+          }
         } catch (e) { console.error("[PlayerApp] guarded monster settlement failed:", e?.message || e); }
 
         if (!savedState) {
@@ -3926,11 +3943,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             rewardLines = [`你被 ${monster.name} 擊敗了…`];
           } else {
             // timeout：撐完回合但沒打死（怪物血量跨場累積，其他玩家也會接力）
-            rewardLines = [`激戰 ${MAX_ROUNDS} 回合，怪物殘血撤退（剩 ${Math.max(0, Math.round(mHp))} HP），下次再來補刀！`];
+            rewardLines = [coopExtendedBattle
+              ? `新隊友加入共鬥，怪物血量提高；本場傷害已保留（剩 ${Math.max(0, Math.round(mHp))} HP），繼續追擊！`
+              : `激戰 ${MAX_ROUNDS} 回合，怪物殘血撤退（剩 ${Math.max(0, Math.round(mHp))} HP），下次再來補刀！`];
           }
         }
 
-        if (savedState && mHp > 0) _republishPanelWithRankingDebounce(serviceContext, zoneKey, monster, mHp, currentParticipants.length + 1, damageMap).catch(() => {});
+        if (savedState && mHp > 0) _republishPanelWithRankingDebounce(serviceContext, zoneKey,
+          { ...monster, calc: { ...monster.calc, maxHp: normalMaxHp(savedState, monster) } },
+          mHp, currentParticipants.length + 1, damageMap).catch(() => {});
       }
 
       if (syncResult.notice) {
@@ -4162,7 +4183,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
         // 通行證點數：打怪(非落敗)依地圖階級加點
         if (outcome !== "lose") {
-          const PASS_TIER = { beginner: "D", normal: "D", mid: "C", ancient_city: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", event_1: "A", dragon_king_lair: "S", hellfire_depths: "S" };
+          const PASS_TIER = { metal_mine: "A", metal_throne: "S", beginner: "D", normal: "D", mid: "C", ancient_city: "B", mistwood: "B", ancient_city_deep: "A", dragon_realm: "A", hellfire: "A", elite: "A", event_1: "A", dragon_king_lair: "S", hellfire_depths: "S" };
           serviceContext.passService?.addPointsForKill?.(discordId, PASS_TIER[zoneKey] || "D").catch(() => {});
         }
       });
@@ -4386,7 +4407,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         finalMonsterHp: isWorldBoss ? Math.max(0, Math.round(worldBossPartHpCurrent)) : Math.max(0, mHp),
         // 進場瞬間怪物實際 HP 與滿血（共鬥怪可能非滿血，前端據此顯示血條）
         monsterStartHp: isWorldBoss ? Math.max(0, Math.round(Number(combatMonsterHp))) : Math.max(0, Math.round(Number(monsterHpInitial))),
-        monsterMaxHp: isWorldBoss ? Math.max(1, Math.round(Number(worldBossPartHpMax))) : Math.max(1, Math.round(Number(monster.calc.maxHp))),
+        monsterMaxHp: isWorldBoss ? Math.max(1, Math.round(Number(worldBossPartHpMax))) : normalMaxHp(normalSettledState || stateForCombat, monster),
         nextBattleAt,
         // 剩餘冷卻毫秒(=本場動畫長度);前端用自己的時鐘換算,免受裝置時間不準影響
         cooldownMs: battleLockDurationMs,
@@ -4396,7 +4417,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         auraProviderName,
         auraFromTeammate,
         // 每回合播放節奏（依玩家 AGI，與 DC 一致），前端逐回合動畫用
-        tickMs: calculateTickDelay(pStats.agi || 1),
+        tickMs: perRoundMs,
         // ── 世界王部位戰鬥（前端戰報後即時更新部位血條）──
         targetPart: isWorldBoss ? worldBossPart : null,
         partName: isWorldBoss ? getWorldBossPartLabel(zoneKey, worldBossPart) : null,
@@ -4404,7 +4425,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         allPartsDefeated: isWorldBoss ? worldBossAllPartsDefeated : false,
         partBroken: isWorldBoss ? worldBossPartBroken : false,
         parts: isWorldBoss ? worldBossPartsForResp : null,
-        noParts: zoneKey === "event_boss_hutao_preview",
+        noParts: ["event_boss_hutao_preview", "metal_throne", "event_boss_rabbit_preview"].includes(zoneKey),
         hutaoEvent: zoneKey === "event_boss_hutao_preview"
           ? (hutaoTriggeredEvent || hutaoEventSnapshot || await serviceContext.hutaoEventService?.getSnapshot?.())
           : null,
@@ -4422,6 +4443,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     } finally {
       // 戰鬥成功時鎖已 hold 到動畫結束；其餘情況（例外/提早 return）立即釋放占用
       if (battleLock && !lockHeldForAnim) battleLock.release();
+      if (worldBossRelease) worldBossRelease();
     }
   });
 
@@ -4459,6 +4481,27 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       }
       return next(err);
     }
+  });
+
+  router.post("/api/worldboss/rabbit/poke", requireAuth, async (req,res,next) => {
+    const rb=require("../../shared/rabbitWorldBoss");let release;
+    try {
+      const id=req.playerRecord.discordId;
+      if(!canPlayerAccessZone(rb.ZONE,id))return res.status(404).json(fail("zone_not_found","找不到這個戰鬥區域"));
+      const p=await serviceContext.progressRepository.findByPlayerId(id);
+      if(!p||p.level<50)return res.status(403).json(fail("LEVEL_REQUIRED","50等才能戳饅頭"));
+      release=await require("../../services/worldBoss/worldBossBattleLock").acquireWorldBossBattleLock(rb.ZONE);
+      const cs=await serviceContext.worldBossServiceFor(rb.ZONE).getConfigWithStatus(id);
+      if(!cs.status.canChallenge)return res.status(409).json(fail("BOSS_UNAVAILABLE","世界王目前不可挑戰"));
+      const state=await serviceContext.monsterService.getState(rb.ZONE);
+      if(!state?.damageMap?.[id])return res.status(403).json(fail("PARTICIPATION_REQUIRED","先參戰才能戳饅頭"));
+      const mon=await serviceContext.monsterService.getMonsterById("event-mantou-rabbit");
+      rb.advance(state,state.currentHp,mon.calc.maxHp,Object.keys(state.damageMap||{}).length);
+      const result=rb.poke(state,id,String(req.body.castId||""));
+      if(!result.ok)return res.status(409).json(fail("CAST_EXPIRED",result.reason));
+      await serviceContext.monsterService.saveState(state,rb.ZONE);
+      res.json(ok({...result,event:rb.view(state)}));
+    }catch(e){next(e);}finally{release?.();}
   });
 
   router.get("/api/worldboss/status", requireAuth, async (req, res, next) => {
@@ -4505,6 +4548,16 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       // 各世界王攻略提示
       const PART_HINTS = {
+        metal_throne: {
+          title: "鋼冕三階段（單一本體）",
+          lines: [
+            "HP 70%以上：每第3次實際行動以150%攻擊力重擊，取代普攻。",
+            "HP 30%～70%：每第3次實際行動發射兩道90%攻擊力的浮游兵裝，取代普攻。",
+            "HP低於30%：普攻120%、防禦降低10個百分點；每第2次行動改為250%爐心過載。",
+            "過載期間每第3次行動另追加兩道90%浮游兵裝；第6次可與過載同時發動。",
+            "依本體當前血量判定；每場戰鬥重新計數，AGI壓制或控制跳過的反擊不計次。"
+          ]
+        },
         elite: {
           title: "擊破要害",
           lines: [
@@ -4552,7 +4605,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const bosses = await Promise.all(visibleWorldBossZones.map(async (zoneKey) => {
         const svc = serviceContext.worldBossServiceFor(zoneKey);
         const [info, st, monsters] = await Promise.all([
-          svc ? svc.getConfigWithStatus().catch(() => null) : Promise.resolve(null),
+          svc ? svc.getConfigWithStatus(req.playerRecord.discordId).catch(() => null) : Promise.resolve(null),
           serviceContext.monsterService.getState(zoneKey).catch(() => null),
           serviceContext.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey }).catch(() => [])
         ]);
@@ -4599,6 +4652,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // phase 採共用形狀，之後其他世界王加入詠唱條時可直接沿用前端元件。
         let mechanic = null;
         let hutaoEvent = null;
+        let rabbitEvent = null;
         const _ttStatus = require("../../shared/turtleTide");
         if (zoneKey === _ttStatus.ZONE) {
           const totalHpPct = bossMaxHp > 0 ? (currentHp / bossMaxHp) * 100 : 100;
@@ -4658,6 +4712,12 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             tide: turtleView.tide
           };
         }
+        if (zoneKey === "event_boss_rabbit_preview") {
+          const rb = require("../../shared/rabbitWorldBoss");
+          const temp = structuredClone(st || {});
+          rb.advance(temp, temp.currentHp ?? bossMaxHp, bossMaxHp, (temp.participants || []).length || 1, _wbNowS);
+          rabbitEvent = rb.view(temp, _wbNowS);
+        }
         if (zoneKey === "event_boss_hutao_preview" && serviceContext.hutaoEventService) {
           hutaoEvent = await serviceContext.hutaoEventService.getSnapshot(_wbNowS);
           mechanic = {
@@ -4692,9 +4752,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           bossMaxHp,
           currentHp,
           parts,
-          noParts: zoneKey === "event_boss_hutao_preview",
+          noParts: ["event_boss_hutao_preview", "metal_throne", "event_boss_rabbit_preview"].includes(zoneKey),
           mechanic,
           hutaoEvent,
+          rabbitEvent,
           ranking: damageRanking, // 舊前端相容：原 ranking 維持純傷害榜
           damageRanking,
           contributionRanking,
@@ -4851,7 +4912,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // ──────────────────────────────────────────────────
   const towerSessions = new Map(); // discordId -> { floor, playerHp, playerMaxHp, baseAtk, equipped, used:Set, alive, settled, startedAt }
   // 網頁組隊爬塔房間服務(重用 DC towerHandlers 戰鬥核心 + SSE 同步)
-  const towerParty = require("../../services/tower/towerPartyRooms").createTowerPartyRooms(serviceContext);
+  const towerParty = require("../../services/tower/partyTowerRoomsV2").createPartyTowerRooms(serviceContext);
   // 清理閒置/殘留的爬塔 session(每筆含 equipped + inventory 快照,不清會吃記憶體)：
   // 結束的(alive=false)直接刪;超過 30 分鐘沒動作的中途離開 session 也刪。
   const TOWER_SESSION_TTL_MS = 30 * 60 * 1000;
@@ -4976,7 +5037,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     let enabled = false;
     try { enabled = require("../../bot/handlers/towerHandlers").TOWER_ENABLED === true; } catch (_) { enabled = false; }
     const { isTowerTester } = require("../../shared/towerAccess");
-    if (enabled || isTowerTester(req.playerRecord?.discordId)) return next();
+    if (req.path.startsWith("/party/") || enabled || isTowerTester(req.playerRecord?.discordId)) return next();
     return res.status(403).json(fail("FEATURE_DISABLED", "爬塔目前暫停開放"));
   });
 
@@ -5098,31 +5159,49 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   // ── 網頁組隊爬塔(房間/大廳/SSE 即時同步)──────────────────
   const _tpErr = (res, err, next) => { if (err?.message) return res.status(err.status || 400).json(fail("TOWER_PARTY", err.message)); next(err); };
   router.get("/api/tower/party/state", requireAuth, async (req, res, next) => {
-    try { res.json(ok(towerParty.getState(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.getState(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
   });
   router.get("/api/tower/party/list", requireAuth, async (req, res, next) => {
-    try { res.json(ok(towerParty.listOpenRooms())); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.listOpenRooms())); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/create", requireAuth, async (req, res, next) => {
-    try { res.json(ok(await towerParty.createRoom(req.playerRecord.discordId, req.playerRecord.displayName, req.body?.password, req.body?.role))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.createRoom(req.playerRecord.discordId, req.playerRecord.displayName, req.body?.password, req.body?.role, req.body?.difficulty))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/join", requireAuth, async (req, res, next) => {
     try { res.json(ok(await towerParty.joinRoom(req.playerRecord.discordId, req.playerRecord.displayName, req.body?.roomId, req.body?.password, req.body?.role))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/role", requireAuth, async (req, res, next) => {
-    try { res.json(ok(towerParty.setRole(req.playerRecord.discordId, req.body?.role))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.setRole(req.playerRecord.discordId, req.body?.role))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/kick", requireAuth, async (req, res, next) => {
-    try { res.json(ok(towerParty.kickMember(req.playerRecord.discordId, req.body?.targetId))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.kickMember(req.playerRecord.discordId, req.body?.targetId))); } catch (err) { _tpErr(res, err, next); }
   });
   router.get("/api/tower/party/items", requireAuth, async (req, res, next) => {
     try { res.json(ok(await towerParty.listMyItems(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/use-item", requireAuth, async (req, res, next) => {
-    try { res.json(ok(await towerParty.usePartyItem(req.playerRecord.discordId, req.body?.itemId, req.body?.targetId))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.usePartyItem(req.playerRecord.discordId, req.body?.itemId, req.body?.targetId, req.body || {}))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/potions", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.setPotions(req.playerRecord.discordId, req.body?.plan))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/leave", requireAuth, async (req, res, next) => {
-    try { res.json(ok(towerParty.leaveRoom(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+    try { res.json(ok(await towerParty.leaveRoom(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/claim-pending", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.claimPending(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/ready", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.setReady(req.playerRecord.discordId, req.body?.ready !== false))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/strategy", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.setStrategy(req.playerRecord.discordId, req.body))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/disband", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.disband(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
+  });
+  router.post("/api/tower/party/lobby", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await towerParty.returnLobby(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
   });
   router.post("/api/tower/party/start", requireAuth, async (req, res, next) => {
     try { res.json(ok(await towerParty.startRoom(req.playerRecord.discordId))); } catch (err) { _tpErr(res, err, next); }
@@ -5776,6 +5855,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       await serviceContext.rewardService.grantCurrency({
         discordId, displayName, currencyType: "gold", amount,
         source: require("../../shared/sources").CURRENCY_SOURCES.QUEST_REWARD,
+        // 帳號旗標跨人物共用；同季重試／重複請求必須沿用同一結算識別。
+        sourceRef: `onboarding:${JSON.stringify([String(discordId), String(progress.seasonKey || "legacy")])}`,
         operator: "onboarding:complete-reward"
       });
       // 重新讀取(grantCurrency 可能已改動進度),寫入已領取旗標

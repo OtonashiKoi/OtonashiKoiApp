@@ -103,3 +103,8 @@ API 不只早期文件列出的幾條；實際掛載由 `src/api/server.js` 與 
 3. 資料／開關變動後跑 `npm run status:update`。
 4. 提案、handoff、changelog、benchmark 與日期報告不能當成現況文件。
 5. 提交前跑 `npm run check`；`check:docs` 會攔截 MongoDB-only、爬塔與二轉數量等常見漂移。
+# 僅啟動 OBS 網頁工具
+
+需要聊天室、彈幕、跑馬燈與直播網頁，但不連線 Discord 遊戲機器人時，可使用 `API_ONLY=1` 啟動現有後端。此模式會啟動 OneComme 留言中繼與觀看人數輪詢，不執行 Discord ready 中的遊戲排程或留言遊戲指令。外網仍需要原有 cloudflared；OneComme 必須保持執行。
+
+`API_ONLY` 本身不封鎖網頁遊戲登入；停止開放遊戲時，還必須維持 MongoDB 的賽季結束／維護設定。可用 `/api/maintenance` 確認 `active: true`、`phase: closed`。既有維護白名單規則仍保留。

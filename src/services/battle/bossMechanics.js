@@ -16,6 +16,7 @@ const { HELLFANG_FLIP_DURATION_MS } = require("./zoneBattleState");
 const { HELLFANG_PART_LABELS } = require("./zoneBattleState");
 
 function getWorldBossPartKeys(zoneKey) {
+  if (["metal_throne", "event_boss_rabbit_preview"].includes(zoneKey)) return ["body"];
   if (zoneKey === HELLFANG_ZONE) return ["head", "upper_body", "lower_body", "tail", "legs"];
   if (zoneKey === TURTLE_ZONE) return ["head", "body", "wings", "legs"]; // 龜首/島背/左鰭/右鰭
   if (zoneKey === HUTAO_PREVIEW_ZONE) return ["body"];
@@ -30,6 +31,7 @@ function parseWorldBossTargetPart(customId) {
 }
 
 function getWorldBossTargetProfile(part, zoneKey = null) {
+  if (["metal_throne", "event_boss_rabbit_preview"].includes(zoneKey)) return { label: "本體" };
   // 島島龜王：難度全由潮汐/海嘯機制驅動（turtleTide.battleMods），部位本身不加料
   if (zoneKey === TURTLE_ZONE) {
     return { label: getWorldBossPartLabel(zoneKey, part) };
@@ -108,7 +110,7 @@ function applyWorldBossTargetToMonster(monsterStats, monsterEquipped, part, zone
 
 function createWorldBossPartHpTemplate(totalMaxHp = 0, zoneKey = null) {
   const maxHp = Math.max(1, Math.round(Number(totalMaxHp) || 1));
-  if (zoneKey === HUTAO_PREVIEW_ZONE) return { body: maxHp };
+  if (zoneKey === HUTAO_PREVIEW_ZONE || ["metal_throne", "event_boss_rabbit_preview"].includes(zoneKey)) return { body: maxHp };
   if (zoneKey === HELLFANG_ZONE) {
     // 牙狼 5 部位：頭 20% / 上軀幹 20% / 下軀幹 20% / 尾巴 15% / 腿 25%
     const head = Math.max(1, Math.round(maxHp * 0.20));

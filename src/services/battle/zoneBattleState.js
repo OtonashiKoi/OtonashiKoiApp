@@ -3,9 +3,9 @@
 const killInProgress = new Set();
 
 const GOLD_POOL_RULE_BY_ZONE = {
-  beginner: { minPerPlayer: 80 },
-  normal: { minPerPlayer: 220 },
-  mid: { minPerPlayer: 650 },
+  beginner: { minPerPlayer: 1 },
+  normal: { minPerPlayer: 1 },
+  mid: { minPerPlayer: 1 },
   hard: { minPerPlayer: 1200 },
   elite: { minPerPlayer: 6000 }
 };
@@ -14,9 +14,9 @@ const RARE_TIERS = new Set(["A", "S", "SS", "SSR", "UR"]);
 
 const ZONE_PARTICIPATION_GEM_TIER = {
   beginner: 'D', normal: 'D', mid: 'C', hard: 'B', elite: 'A',
-  ancient_city: 'B',
+  ancient_city: 'B', mistwood: 'B',
   // A 階區域統一給 A 石：秘銀(深處)/龍鱗(龍族)/焚獄(火焰)/期間活動
-  ancient_city_deep: 'A', dragon_realm: 'A', hellfire: 'A',
+  ancient_city_deep: 'A', dragon_realm: 'A', hellfire: 'A', metal_mine: 'A',
   dragon_king_lair: 'A', hellfire_depths: 'A',
   event_1: 'A', event_boss: 'A', event_boss_hutao_preview: 'A'
 };
@@ -45,6 +45,9 @@ const TURTLE_ZONE = "event_boss";
 const worldBossTimeoutTimers = new Map();
 
 const WORLD_BOSS_CHEST_BY_MONSTER = {
+  "event-northwind-hutao": "chest-northwind-hutao",
+  "event-mantou-rabbit": "chest-mantou-rabbit",
+  "metal-steel-crown": "chest-steel-crown", // 鎧冕王，沿用貢獻分發箱
   "elite-daishi-king": "chest-daishi-king",
   "dragon-king-boss": "chest-dragon-king",
   "0393acee-9851-4bcb-a8f5-fdb60a9968f1": "chest-hellfang-king", // 地獄狼牙王

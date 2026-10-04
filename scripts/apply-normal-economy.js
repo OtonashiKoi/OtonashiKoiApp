@@ -1,0 +1,12 @@
+'use strict';
+// Explicit plan + parse-verified BSON backup required. No player or season changes.
+const fs=require('node:fs'),assert=require('node:assert/strict');require('dotenv').config({quiet:true});
+const {MongoClient}=require('mongodb');
+const {loadBson}=require('./verify-normal-progression');
+async function main(){const arg=k=>process.argv.find(a=>a.startsWith(k+'='))?.slice(k.length+1);const file=arg('--plan'),snapshot=arg('--snapshot'),output=arg('--output');assert.ok(file&&snapshot&&output,'--plan --snapshot --output required');const plan=JSON.parse(fs.readFileSync(file));assert.equal(plan.version,'normal-economy-20261002-v1');
+const groups=[['monsters',plan.monsters],['shopItems',plan.shopItems]];
+for(const[name,rows]of groups){const backup=new Map(loadBson(snapshot+'/'+name+'.bson').map(r=>[r.id,r]));assert.equal(new Set(rows.map(r=>r.id)).size,rows.length);for(const row of rows){assert.deepEqual(Object.keys(row.values),name==='monsters'?['goldReward']:['price']);assert.equal(backup.get(row.id)?.[Object.keys(row.values)[0]],row.before[Object.keys(row.values)[0]]);if(name==='monsters')assert.ok(!backup.get(row.id).isBoss&&!backup.get(row.id).allZones);}}
+const c=await MongoClient.connect(process.env.MONGODB_URI);let result={version:plan.version,apply:process.argv.includes('--apply'),changes:[],passed:false};try{const db=c.db(process.env.MONGODB_DB_NAME||'equipment_game');for(const[name,rows]of groups)for(const row of rows){const live=await db.collection(name).findOne({id:row.id});assert.ok(live);for(const key of Object.keys(row.values))assert.ok(live[key]===row.before[key]||live[key]===row.values[key],`concurrent drift ${name} ${row.id} ${key}`);}
+for(const[name,rows]of groups)for(const row of rows){const col=db.collection(name),live=await col.findOne({id:row.id});const key=Object.keys(row.values)[0];if(result.apply&&live[key]!==row.values[key]){const updated=await col.updateOne({id:row.id,...row.before},{$set:row.values});assert.equal(updated.modifiedCount,1);}const after=await col.findOne({id:row.id});if(result.apply)assert.equal(after[key],row.values[key]);result.changes.push({collection:name,id:row.id,name:row.name,before:row.before,expected:row.values,actual:{[key]:after[key]}});}
+result.passed=true;}finally{fs.writeFileSync(output,JSON.stringify(result,null,2));await c.close();}console.log(JSON.stringify({apply:result.apply,changes:result.changes.length,passed:result.passed}));}
+if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1});

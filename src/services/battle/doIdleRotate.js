@@ -8,8 +8,10 @@ const _republishPanel = (...args) => require("./battlePresentation")._republishP
 const { BOSS_SPAWN_BROADCAST_ENABLED } = require("./zoneBattleState");
 const _broadcastBossSpawn = (...args) => require("./battlePresentation")._broadcastBossSpawn(...args);
 const announceIdleRotate = (...args) => require("./battlePresentation").announceIdleRotate(...args);
+const { ZONE_BY_KEY } = require("../../shared/zones");
 
 async function _doIdleRotate(sc, zoneKey) {
+  if (ZONE_BY_KEY[zoneKey]?.enabled === false) return;
   try {
     if (process.env.DISABLE_AUTO_ROTATE === '1') {
       return;
@@ -28,6 +30,8 @@ async function _doIdleRotate(sc, zoneKey) {
     const newState = {
       ...state,
       currentHp: next.calc.maxHp,
+      coopMaxHp: next.calc.maxHp,
+      coopHpMonsterSeq: next.seq,
       activeMonsterSeq: next.seq,
       participants: [],
       damageMap: {},

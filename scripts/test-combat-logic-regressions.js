@@ -26,6 +26,15 @@ function withFixedRandom(fn, value = 0.5) {
   try { return fn(); } finally { Math.random = original; }
 }
 
+// 以實際三回合反擊傷害驗證門檻，避免只比對條件文字。
+for (const [diff, damage] of [[5, 255], [6, 170], [15, 170], [16, 85]]) {
+  const result = withFixedRandom(() => runCombatLoop(
+    { ...PLAYER, agi: MONSTER.agi + diff }, { ...MONSTER }, "敏捷門檻木樁", MONSTER.maxHp, 3,
+    { skipPlayerAttack: true }
+  ));
+  assert.strictEqual(result.damageTaken, damage, `AGI 差 ${diff} 的反擊次數應符合 >5／>15 門檻`);
+}
+
 function hpGateCard(chance, effect = { key: "atk_up", target: "self", params: { value: 100, ownerHpAbovePct: 50, duration: { mode: "turns", value: 1 } } }) {
   return {
     special_1: {
@@ -67,6 +76,19 @@ const monsterCard = {
     },
   },
 };
+// AGI 跳過整個怪物主動行動：普攻及傷害技能需同步跳過，BOSS 共用規則。
+for (const isWorldBoss of [false, true]) {
+  for (const [diff, damage, activations] of [[5, 555, 3], [6, 370, 2], [15, 370, 2], [16, 185, 1]]) {
+    const result = withFixedRandom(() => runCombatLoop(
+      { ...PLAYER, agi: MONSTER.agi + diff }, { ...MONSTER }, "敏捷技能木樁", MONSTER.maxHp, 3,
+      { skipPlayerAttack: true, monsterEquipped: monsterCard, isWorldBoss, monsterIsBoss: isWorldBoss }
+    ));
+    assert.strictEqual(result.damageTaken, damage, `AGI 差 ${diff} 必須同步抑制普攻和主動技能`);
+    assert.strictEqual(result.roundLogs.filter(line => line.includes("測試雷擊")).length, activations,
+      `AGI 差 ${diff} 的技能發動次數`);
+  }
+}
+
 const monsterTurn = withFixedRandom(() => runCombatLoop(
   { ...PLAYER }, { ...MONSTER }, "木樁", MONSTER.maxHp, 1,
   { skipPlayerAttack: true, monsterEquipped: monsterCard }

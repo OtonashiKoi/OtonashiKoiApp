@@ -6,6 +6,7 @@ const { MongoClient } = require("mongodb");
 const config = require("../src/config");
 const { ZONE_DEFS } = require("../src/shared/zones");
 const { BASE_JOBS, T2_BRANCHES } = require("../src/shared/jobAdvancement");
+const { ANCHORS_ENABLED } = require("../src/shared/anchorFeature");
 const { TOWER_ENABLED } = require("../src/bot/handlers/towerHandlers");
 
 const OUT_PATH = path.resolve(__dirname, "../docs/CURRENT_GAME_STATUS.md");
@@ -249,6 +250,7 @@ async function main() {
     ["項目", "現況", "來源"],
     [
       ["Runtime repository", "MongoDB-only", "src/repositories/createRepositories.js"],
+      ["錨點", ANCHORS_ENABLED ? "開放" : "暫停取得、裝備與效果；永久收藏保留", "src/shared/anchorFeature.js"],
       ["爬塔", TOWER_ENABLED ? "開放" : "暫停", "src/bot/handlers/towerHandlers.js"],
       ["一轉", `${Object.keys(BASE_JOBS).length} 個`, "src/shared/jobAdvancement.js"],
       ["二轉", `${totalT2} 條；鎖定 ${lockedT2} 條`, "src/shared/jobAdvancement.js"],

@@ -1,3 +1,4 @@
+const { isUnavailableEquipment } = require("../../shared/equipmentAvailability");
 "use strict";
 
 const { isWorldBossZone, WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
@@ -46,14 +47,12 @@ async function grantKillDrops(context) {
 
   const monsterDropPool = await buildMonsterDropPool(sc, monster);
 
-  // ── 道具掉落：從所有參戰者中抽一人，再骰各道具掉落率 ──
-  // 規則：1. 從 participants 隨機抽出一位幸運者
-  //        2. 幸運者對每個掉落項目各自骰 chance%
-  //        3. 骰中的道具進入幸運者背包
+  // 一般區每位有效參戰者各自依原掉率骰一次；世界王保留抽一位幸運者的規則。
   if (monsterDropPool.length > 0 && participants.length > 0) {
-    // 抽幸運者
+    const worldBossReward = isWorldBossZone(zoneKey) && Boolean(monster?.isBoss);
     const luckyIdx = Math.floor(Math.random() * participants.length);
-    const luckyPid = participants[luckyIdx];
+    const luckyPids = worldBossReward ? [participants[luckyIdx]] : participants;
+    for (const luckyPid of luckyPids) {
     const luckyMod = rewardModsByPid[luckyPid] || { dropMultiplier: 1, rareDropMultiplier: 1 };
 
     if (luckyPid) {
@@ -62,7 +61,7 @@ async function grantKillDrops(context) {
 
       for (const drop of monsterDropPool) {
         let item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
-        if (item) {
+        if (item && !isUnavailableEquipment(item)) {
           const finalChance = calculateFinalDropChance(drop.chance, luckyMod, item);
           if (Math.random() * 100 < finalChance) {
             const equipStats = item.equipStats ? { ...item.equipStats } : {};
@@ -172,6 +171,7 @@ async function grantKillDrops(context) {
         }
       }
     }
+    }
 
     // 人數加碼掉落：10/15/20 人各額外抽一位，台詞不同
     const BONUS_MILESTONES = [
@@ -179,8 +179,9 @@ async function grantKillDrops(context) {
       { threshold: 15, kind: "bonus_15" },
       { threshold: 20, kind: "bonus_20" },
     ];
-    const usedBonusPids = new Set([luckyPid]);
+    const usedBonusPids = new Set(luckyPids);
     for (const { threshold, kind } of BONUS_MILESTONES) {
+      if (!worldBossReward) break;
       if (participants.length < threshold) break;
       const bonusPool = participants.filter(pid => !usedBonusPids.has(pid));
       const bonusPid = bonusPool.length > 0
@@ -195,7 +196,7 @@ async function grantKillDrops(context) {
       const bonusItemObjects = [];
       for (const drop of monsterDropPool) {
         let item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
-        if (item) {
+        if (item && !isUnavailableEquipment(item)) {
           const finalChance = calculateFinalDropChance(drop.chance, bonusMod, item);
           if (Math.random() * 100 < finalChance) {
             {

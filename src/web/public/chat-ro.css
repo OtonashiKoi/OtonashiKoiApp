@@ -1,0 +1,144 @@
+/* RO-inspired desktop dialogue skin. Existing message/data handling stays shared. */
+:root { --ro-edge: #748ba5; --ro-ink: #263951; }
+#chat-wrap {
+  gap: 15px;
+  padding: 16px 12px 32px;
+  -webkit-mask-image: linear-gradient(#000 0%, #000 96%, transparent);
+  mask-image: linear-gradient(#000 0%, #000 96%, transparent);
+}
+.msg {
+  padding: 0;
+  gap: 0;
+  filter: drop-shadow(0 3px 3px #101d3540);
+  animation: messageIn .25s ease-out both;
+}
+.msg::before, .msg::after, .msg-header::before,
+.msg-bubble::before, .msg-bubble::after { display: none; }
+.msg-header {
+  width: 100%;
+  max-width: 100%;
+  min-height: 35px;
+  margin: 0;
+  padding: 7px 34px 7px 11px;
+  gap: 5px 7px;
+  border: 1px solid var(--ro-edge);
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
+  background: repeating-linear-gradient(0deg, #ffffff00 0 2px, #ffffff55 2px 3px),
+    linear-gradient(#f5faff 0%, #dce8f5 45%, #c3d3e8 48%, #e4edf7 100%);
+  box-shadow: inset 0 1px 0 #fff, inset 1px 0 0 #fff, inset -1px 0 0 #ffffffb0;
+  clip-path: none;
+}
+.msg-header::after {
+  content: '−';
+  top: 9px;
+  right: 9px;
+  bottom: auto;
+  width: 15px;
+  height: 15px;
+  border: 1px solid #8093ae;
+  border-radius: 3px;
+  background: linear-gradient(#fff, #cbd9eb);
+  color: #536f91;
+  box-shadow: inset 0 0 0 1px #ffffffb3;
+  font: bold 12px/13px sans-serif;
+  text-shadow: none;
+  transform: none;
+}
+.author-name {
+  color: #284569;
+  font-size: 15px;
+  line-height: 1.4;
+  text-shadow: 0 1px #fff;
+}
+.badge-lv {
+  color: #3a5370;
+  background: #f8fbff;
+  border: 1px solid #a0b2c9;
+  border-radius: 3px;
+  box-shadow: inset 0 -1px 0 #d5dfeb;
+  font-size: 10px;
+  text-shadow: none;
+}
+.badge-title {
+  color: #50627c;
+  border: 0;
+  background: #ffffff7a;
+  border-radius: 3px;
+  text-shadow: none;
+  font-size: 10px;
+}
+.badge-title::before { content: '✦'; color: #587396; }
+.msg-bubble {
+  width: 100%;
+  min-height: 58px;
+  margin: 0;
+  padding: 13px 14px 15px;
+  border: 1px solid var(--ro-edge);
+  border-top-color: #99aac0;
+  border-radius: 0 0 7px 7px;
+  background: linear-gradient(110deg, #fffffff5, #f3f6fcf5);
+  box-shadow: inset 0 0 0 2px #fff, inset 0 -5px 0 #e4eaf3;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.msg-content {
+  color: var(--ro-ink);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.65;
+  text-shadow: none;
+}
+.msg.is-player .msg-bubble, .msg.is-member .msg-bubble,
+.msg.is-sub .msg-bubble {
+  border-left: 4px solid var(--accent);
+  padding-left: 11px;
+}
+.msg-images img { border-radius: 3px; border-color: #a1b3c8; box-shadow: none; }
+#status {
+  color: #284569;
+  border: 1px solid #8093ae;
+  border-radius: 5px;
+  background: #f3f7ff;
+  text-shadow: none;
+}
+#ws-dot { top: 3px; right: 4px; width: 5px; height: 5px; }
+@media (max-width: 360px) {
+  #chat-wrap { padding-left: 8px; padding-right: 8px; }
+  .msg { padding: 0; }
+  .msg-header { margin: 0; padding-right: 31px; }
+  .msg-bubble { width: 100%; padding: 12px; }
+  .badge-title { max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .msg { animation: none; } }
+
+/* 本季七稱號：楓葉名牌，保留會員外框及其他稱號的 RO 銀藍樣式。 */
+.badge-title[data-season="autumn"] {
+  color:#74351f;
+  border:1px solid #c77c41;
+  background:linear-gradient(180deg,#fff3d9,#f3c78f);
+  box-shadow:inset 0 1px 0 #fff9ed,0 1px 2px #76331b24;
+  padding:2px 6px;line-height:1.4;
+}
+.badge-title[data-season="autumn"]::before {
+  content:'🍁';color:#bd4c24;opacity:1;font-size:12px;
+  flex-shrink:0;
+}
+
+/* 七個本季稱號均套用整則訊息的秋季外框。 */
+.msg[data-season="autumn"] { --ro-edge:#b36b36;filter:drop-shadow(0 3px 3px #7c351c38); }
+.msg[data-season="autumn"] .msg-header {
+  border-color:#b36b36;
+  background:repeating-linear-gradient(0deg,#ffffff00 0 2px,#ffffff44 2px 3px),linear-gradient(#fff5de 0%,#f4d3a4 45%,#db9a61 48%,#f5d6a8 100%);
+}
+.msg[data-season="autumn"] .msg-header::after {
+  content:'🍁';border-color:#b36b36;background:linear-gradient(#fff7e3,#efc594);
+  color:#a44320;font-size:11px;
+}
+.msg[data-season="autumn"] .author-name { color:#71381f; }
+.msg[data-season="autumn"] .badge-lv { color:#74432b;border-color:#c58e62;background:#fff6e5;box-shadow:inset 0 -1px 0 #ecd2ae; }
+.msg[data-season="autumn"] .msg-bubble {
+  border-color:#b36b36;border-left-color:#c35c32;
+  background:linear-gradient(110deg,#fffaf0f7,#fff0dcf7);
+  box-shadow:inset 0 0 0 2px #fffaf0,inset 0 -5px 0 #f1d9bd;
+}

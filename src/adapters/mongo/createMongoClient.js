@@ -31,6 +31,8 @@ async function ensureIndexes(db) {
 
   try {
     await Promise.all([
+      db.collection("partyTowerRooms").createIndex({ activePlayers: 1 }, { unique: true, partialFilterExpression: { active: true } }),
+      db.collection("partyTowerRooms").createIndex({ active: 1, status: 1, nextAt: 1 }),
       // 玩家和錢包（保持不變）
       db.collection("players").createIndex({ discordId: 1 }, { unique: true }),
       db.collection("wallets").createIndex({ playerId: 1 }, { unique: true }),

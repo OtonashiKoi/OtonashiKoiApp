@@ -31,6 +31,8 @@ async function finishMonsterKill(context) {
     const bossLockUntil = new Date(Date.now() + bossLockMs + 15 * 1000);
     const bossResetState = {
       ...freshState,
+      rabbit: null,
+      hutaoCrushReceipts: {},
       ...freshHellfangFields(), // 牙狼重生：清翻面/累積
       currentHp: resetParts.currentHp,
       worldBossPartsHp: resetParts.worldBossPartsHp,

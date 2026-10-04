@@ -1,3 +1,5 @@
+const { activeEquipment } = require("./anchorFeature");
+const { isUnavailableEquipment } = require("./equipmentAvailability");
 const { randomUUID } = require("crypto");
 const { normalizeActiveEffect, normalizeActiveEffectList, isActiveEffectExpired } = require("./effectPayloads");
 
@@ -76,7 +78,7 @@ function isEffectConditionMet(effectRef, context = {}) {
   const condition = effectRef?.condition;
   if (!condition || typeof condition !== "object") return true;
 
-  const equipped = (context.equipped && typeof context.equipped === "object") ? context.equipped : {};
+  const equipped = activeEquipment(context.equipped);
   const inventory = Array.isArray(context.inventory) ? context.inventory : [];
   const equippedEntries = Object.entries(equipped).filter(([, entry]) => entry && typeof entry === "object");
   const equippedItemIds = new Set(equippedEntries.map(([, entry]) => entry.itemId).filter(Boolean));
@@ -126,7 +128,7 @@ function isEffectConditionMet(effectRef, context = {}) {
 }
 
 function collectEffectRefsFromEntry(entry, trigger = null, context = {}) {
-  if (!entry || typeof entry !== "object") return [];
+  if (!entry || typeof entry !== "object" || isUnavailableEquipment(entry)) return [];
   // 附魔的衍生詞條(有 effectKey 的)→ 視為裝備 passive 效果，一併進入效果管線
   // （基礎屬性詞條無 effectKey，不在此，另在 calcPlayerStats 直接加屬性）
   const enchantEffects = Array.isArray(entry.enchantments)
@@ -156,6 +158,8 @@ function collectEffectRefsFromEntry(entry, trigger = null, context = {}) {
 }
 
 function collectEquipmentEffects(equipped, trigger = null, context = {}) {
+  equipped = activeEquipment(equipped);
+  context = { ...context, equipped };
   const itemEffects = Object.values(equipped || {}).flatMap((entry) => collectEffectRefsFromEntry(entry, trigger, context));
   // 具名套裝效果（達門檻才產生；帶 condition，交由 isEffectConditionMet 判定 zone 等）
   let setEffects = [];

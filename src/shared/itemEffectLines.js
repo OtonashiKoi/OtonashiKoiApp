@@ -38,6 +38,22 @@ function formatEffectValueText(key, params = {}) {
 
 function buildItemEffectLines(lib) {
   const lines = [];
+  // 金屬區裝備的特性屬套裝：以戰鬥登錄表產生說明，避免道具文案另算一套。
+  if (String(lib?.id || lib?.itemId || "").startsWith("metal-")) {
+    const { SET_DEFS } = require("./equipmentSetBonuses");
+    const def = SET_DEFS[lib?.setKey];
+    if (def && ["magnetic_p", "magnetic_m"].includes(lib?.setKey)) {
+      lines.push(`🧲 ${def.name}（A／S 同類可混搭，達標效果累加）`);
+      for (const tier of def.tiers) lines.push(`${tier.count} 件：${tier.desc}`);
+      lines.push("金屬主題不自帶屬性攻擊／抗性，依鑲嵌屬性石生效。");
+    }
+  }
+  if (["dragonscale_p", "dragonscale_m", "mithril_p", "mithril_m", "hellfire_p", "hellfire_m", "steel_p", "steel_m"].includes(lib?.setKey)) {
+    const def = require("./equipmentSetBonuses").SET_DEFS[lib.setKey];
+    const icon = lib.setKey.startsWith("hellfire") ? "🔥" : lib.setKey.startsWith("mithril") ? "🎯" : lib.setKey.startsWith("steel") ? "🛡️" : "🐉";
+    lines.push(`${icon} ${def.name}（達標效果累加）`);
+    for (const tier of def.tiers) lines.push(`${tier.count} 件：${tier.desc}`);
+  }
   if (String(lib?.weaponType || "").toLowerCase() === "dice") {
     lines.push("🎲 雙手魔法武器｜主屬性：LUK｜常駐無視 25% DEF");
   }

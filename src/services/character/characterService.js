@@ -17,13 +17,13 @@ const {
 // 只有角色養成與戰鬥狀態會隨人物切換。背包、圖鑑、寵物收藏、單人王每日限制、
 // 劇情／一次性旗標、會員位階等帳號資產留在 progress 頂層共用，避免分身重複取得。
 const CHARACTER_PROGRESS_KEYS = [
-  "level", "levelReachedAt", "exp", "job", "jobLevel", "jobExp",
+  "level", "levelReachedAt", "levelStartedAt", "levelUpHistory", "exp", "job", "jobLevel", "jobExp",
   "statusPoints", "attributes", "allocatedAttrs", "allocatedPoints",
   "equipment", "activeEffects", "activePreset", "equipPresets", "equipPresetNames",
   "pkRating", "pkWins", "pkLosses", "towerRecord",
   "activePetUuid",
   "bardScore", "bardStreak", "berserkGauge", "oniGauge", "sageGauge",
-  "shadowGauge", "sniperGauge", "sunSpirit", "zoneCombo",
+  "shadowGauge", "sniperGauge", "sunSpirit", "zoneCombo", "diceGauge", "diceLuck",
 ];
 
 function clone(value) {

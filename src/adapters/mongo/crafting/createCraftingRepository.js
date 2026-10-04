@@ -13,6 +13,17 @@ const {
 
 function createCraftingRepository({ emitRealtimeInvalidate = () => {} } = {}) {
   return {
+    async recoverPlayerOperations(playerId) {
+      const db = await getMongoDb();
+      const token = await acquireCraftingLock(db, playerId);
+      if (!token) throw Object.assign(new Error("合成仍在處理，請稍後重試。"), { code: "CRAFTING_CONFLICT", status: 409 });
+      try { await recoverCraftingOperations(db, playerId); }
+      finally { await releaseCraftingLock(db, playerId, token); }
+    },
+    async findPlayerTransaction(playerId, id) {
+      const db = await getMongoDb();
+      return db.collection("craftingTransactions").findOne({ id, playerId: String(playerId) });
+    },
     async listAccessible(discordId) {
       const db = await getMongoDb();
       const id = String(discordId || "").trim();
@@ -72,6 +83,13 @@ function createCraftingRepository({ emitRealtimeInvalidate = () => {} } = {}) {
       let result;
       try {
         await recoverCraftingOperations(db, playerId);
+        const previous = await db.collection("craftingTransactions").findOne({ id: transaction.id, playerId: String(playerId) });
+        if (previous) {
+          if (previous.recipeId !== transaction.recipeId || previous.quantity !== transaction.quantity || previous.seasonKey !== expectedSeasonKey) {
+            throw Object.assign(new Error("同一合成請求的內容不一致。"), { code: "CRAFTING_REQUEST_CONFLICT", status: 409 });
+          }
+          return { ok: true, replayed: true, transaction: previous };
+        }
         if (await supportsMongoTransactions()) {
           const now = new Date().toISOString();
           result = await withMongoTransaction(async (txDb, session) => {

@@ -1,3 +1,6 @@
+const { withPlayerProgressLock } = require("../progress/progressLocks");
+const { activeEquipment } = require("../../shared/anchorFeature");
+const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 
 class CheckinService {
@@ -18,7 +21,12 @@ class CheckinService {
     return toTWDate(a) === toTWDate(b);
   }
 
-  async handleMessage({ discordId, displayName, channelId, messageId, content, occurredAt, platform = "", platformUserId = "" }) {
+  async handleMessage(input) {
+    const account = `${String(input.platform || "").toLowerCase()}:${String(input.platformUserId || "").trim()}`;
+    return withPlayerProgressLock(`checkin-account:${account || input.discordId}`, () => withPlayerProgressLock(input.discordId, () => this._handleMessage(input)));
+  }
+
+  async _handleMessage({ discordId, displayName, channelId, messageId, content, occurredAt, platform = "", platformUserId = "" }) {
     if (!discordId) {
       throw new Error("discordId required");
     }
@@ -43,19 +51,27 @@ class CheckinService {
     // grant 100 gold by default, check for checkin multiplier item
     let grantAmount = 100;
     let appliedMultiplier = 1;
+    const day = new Date(Date.parse(now) + 8 * 3600_000).toISOString().slice(0, 10);
+    let pending;
+    // 平台帳號先綁定當日領獎者；金幣已入帳但簽到紀錄尚未寫成時也不能換帳號領。
+    if (normalizedPlatform && normalizedPlatformUserId) {
+      const db = await getMongoDb(), key = `checkin:${day}:${normalizedPlatform}:${normalizedPlatformUserId}`;
+      await db.collection("checkinReservations").updateOne({ _id: key }, { $setOnInsert: { discordId, createdAt: now } }, { upsert: true });
+      const owner = await db.collection("checkinReservations").findOne({ _id: key });
+      if (owner.discordId !== discordId) return { ok: false, reason: "already_checked_in_platform" };
+    }
     if (this.progressRepository) {
       const progress = await this.progressRepository.findByPlayerId(discordId);
+      pending = progress?.flags?.checkinPending;
       const multiplier = progress?.flags?.checkinMultiplier;
       if (multiplier && multiplier > 1) {
         grantAmount = Math.round(grantAmount * multiplier);
         appliedMultiplier = multiplier;
-        progress.flags.checkinMultiplier = null;
-        // 只改 flags → 不整份覆寫
-        await this.progressRepository.updateFields(progress.playerId, { flags: progress.flags });
+
       }
       // checkin_bonus_up：裝備/Buff 提供的打卡加成
       try {
-        const equippedAll = progress?.equipment || {};
+        const equippedAll = activeEquipment(progress?.equipment);
         const allEffectRefs = [];
         for (const entry of Object.values(equippedAll)) {
           if (!entry || typeof entry !== "object") continue;
@@ -75,17 +91,30 @@ class CheckinService {
         }
       } catch (e) {}
     }
+    // 領獎內容先留下收據，扣掉倍率後中斷也可用相同金額重試。
+    const sourceRef = `checkin:${day}:${normalizedPlatform && normalizedPlatformUserId ? normalizedPlatform + ":" + normalizedPlatformUserId : discordId}`;
+    if (pending?.sourceRef === sourceRef) { grantAmount = pending.amount; appliedMultiplier = pending.multiplier; }
+    else if (this.progressRepository) {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (progress) {
+        progress.flags ||= {};
+        progress.flags.checkinPending = { sourceRef, amount: grantAmount, multiplier: appliedMultiplier };
+        if (appliedMultiplier > 1) progress.flags.checkinMultiplier = null;
+        await this.progressRepository.updateFields(discordId, { flags: progress.flags });
+      }
+    }
     const rewardResult = await this.rewardService.grantCurrency({
       discordId,
       displayName,
       currencyType: "gold",
       amount: grantAmount,
       source: CURRENCY_SOURCES.DISCORD_TEST_REWARD,
+      sourceRef,
       operator: "system:checkin"
     });
 
     const checkin = {
-      id: `${discordId}:${Date.now()}`,
+      id: sourceRef,
       playerId: discordId,
       discordId,
       channelId: channelId || "stream",
@@ -104,7 +133,19 @@ class CheckinService {
       createdAt: new Date().toISOString()
     };
 
+    if (this.progressRepository) {
+      const p = await this.progressRepository.findByPlayerId(discordId);
+      if (p && require("../../shared/autumnTitleRules").recordEvent(p, { type: "checkin", at: now }))
+        await this.progressRepository.updateFields(discordId, { autumnTitleProgress: p.autumnTitleProgress });
+    }
     await this.checkinRepository.save(checkin);
+    if (this.progressRepository) {
+      const progress = await this.progressRepository.findByPlayerId(discordId);
+      if (progress?.flags?.checkinPending?.sourceRef === sourceRef) {
+        progress.flags.checkinPending = null;
+        await this.progressRepository.updateFields(discordId, { flags: progress.flags });
+      }
+    }
 
     return { ok: true, checkin, transaction: rewardResult.transaction };
   }

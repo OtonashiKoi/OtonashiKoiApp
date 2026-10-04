@@ -1,0 +1,44 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {isUnavailableEquipment,assertEquipmentAvailable}=require('../src/shared/equipmentAvailability');
+const {calcPlayerStats}=require('../src/shared/combatStats');
+const {collectEffectRefsFromEntry,collectEquipmentEffects}=require('../src/shared/effectEngine');
+const {countEquippedSets,getRegionalSetProcChance}=require('../src/shared/equipmentSetBonuses');
+const {countEquippedTiers}=require('../src/shared/equipmentTierSetBonuses');
+const {ShopService}=require('../src/services/shop/shopService');
+const {StoryService}=require('../src/services/story/storyService');
+const {grantKillDrops}=require('../src/services/battle/grantKillDrops');
+const rows=[];
+(async()=>{
+ const originalRandom=Math.random;Math.random=()=>0.9;
+ let saves=0;
+ for(const slot of ['shield','head_top','head_mid','head_low','armor','garment','shoes','accessory_l','accessory_r']){
+  const item={uuid:'kept',id:'closed',itemId:'closed',tier:'S',itemType:'equipment',equipSlot:slot,setKey:'magnetic_p',equipStats:{str:999,vit:999},passiveEffects:[{key:'atk_multiplier_up',trigger:'passive',params:{value:100}}]};
+  const eq={[slot]:item},before=structuredClone(eq);
+  assert.equal(isUnavailableEquipment(item),true);assert.throws(()=>assertEquipmentAvailable(item),{code:'FEATURE_DISABLED'});
+  assert.deepEqual(calcPlayerStats({},eq),calcPlayerStats({},{}));assert.deepEqual(collectEffectRefsFromEntry(item),[]);assert.deepEqual(collectEquipmentEffects(eq),[]);assert.deepEqual(countEquippedSets(eq).counts,{});assert.equal(countEquippedTiers(eq).S,0);assert.deepEqual(eq,before);
+  const shop=Object.create(ShopService.prototype);shop.progressRepository={findByPlayerId:async()=>({inventory:[item]}),save:async()=>{saves++}};
+  await assert.rejects(()=>shop.equipItem('test','kept'),{code:'FEATURE_DISABLED'});
+  shop.getItemById=async()=>item;await assert.rejects(()=>shop.purchase('test','test','closed'),{code:'FEATURE_DISABLED'});
+  const story=Object.create(StoryService.prototype);story._enabledChapters=async()=>[{id:'c',nodes:[{grantItemId:'closed'}]}];story._chapterStatus=()=> 'available';story._completedMap=()=>({});story.progressRepository=shop.progressRepository;story.itemRepository={findById:async()=>item};
+  assert.deepEqual(await story.grantNodeItem('test','c',0),{granted:false,reason:'feature_disabled'});
+  const players=new Map([['test',{playerId:'test',inventory:[],equipment:{}}]]);
+  const sc={itemRepository:{findById:async()=>item},progressRepository:{findByPlayerId:async id=>structuredClone(players.get(id)),save:async p=>{players.set(p.playerId,p);saves++}},worldBossServiceFor:()=>null};
+  await grantKillDrops({healerBonusPids:new Set(),perPidRewards:{},monster:{name:'test',drops:[{itemId:'closed',chance:100}]},discordId:'test',rewardLines:[],sc,participants:['test'],rewardModsByPid:{test:{}},zoneKey:'normal',displayName:'test',mergedDmg:{},canSendRewardNotice:false,progressCache:Object.fromEntries(players)});
+  assert.equal(players.get('test').inventory.length,0);rows.push(slot);
+ }
+ assert.equal(saves,0,'Closed gear must not modify players');
+ const mongoPath=require.resolve('../src/adapters/mongo/createMongoClient');
+ const cached=require.cache[mongoPath];
+ const closed={id:'closed',tier:'S',equipSlot:'armor',itemType:'equipment'},open={id:'open',tier:'S',equipSlot:'weapon',itemType:'equipment'};
+ require.cache[mongoPath]={id:mongoPath,filename:mongoPath,loaded:true,exports:{getMongoDb:async()=>({collection:()=>({findOne:async()=>({drops:[{itemId:'closed',chance:100},{itemId:'open',chance:1}]})})})}};
+ const box=Object.create(ShopService.prototype);box.itemRepository={findById:async id=>id==='closed'?closed:open};
+ assert.equal((await box._rollWorldBossChest('mock')).entry.itemId,'open','Chest excludes closed gear before weighting');
+ if(cached)require.cache[mongoPath]=cached;else delete require.cache[mongoPath];
+ const weapon={tier:'S',equipSlot:'weapon',setKey:'magnetic_p'};assert.equal(isUnavailableEquipment(weapon),false);assertEquipmentAvailable(weapon);
+ assert.equal(isUnavailableEquipment({tier:'S',itemType:'monster_card',equipSlot:'special_1'}),false);
+ assert.equal(isUnavailableEquipment({tier:'A',equipSlot:'armor'}),false);
+ const gear={weapon,...Object.fromEntries(['head_top','head_mid','head_low','armor'].map(s=>[s,{tier:'A',equipSlot:s,setKey:'magnetic_p'}]))};assert.equal(getRegionalSetProcChance(gear,'magnetic_p'),12);
+ Math.random=originalRandom;
+ console.log(JSON.stringify({passed:true,closedSlots:rows,playerWrites:saves,mainhandAndCardsOpen:true}));
+})().catch(e=>{console.error(e);process.exitCode=1});

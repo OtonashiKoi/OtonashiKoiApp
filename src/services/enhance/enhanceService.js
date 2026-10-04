@@ -1,3 +1,4 @@
+const { activeEquipment } = require("../../shared/anchorFeature");
 "use strict";
 
 const { AppError, ERROR_CODES } = require("../../shared/errors");
@@ -194,7 +195,7 @@ class EnhanceService {
     // 計算強化成功率加成（enhance_success_up）
     let enhanceBonusPct = 0;
     try {
-      const equippedAll = progress?.equipment || {};
+      const equippedAll = activeEquipment(progress?.equipment);
       const allEffectRefs = [];
       for (const entry of Object.values(equippedAll)) {
         if (!entry || typeof entry !== "object") continue;
@@ -231,6 +232,9 @@ class EnhanceService {
       this._destroyEquipment(progress, inventoryUuid, equipmentSlotKey);
     }
 
+    if (isSuccess && tier === "A" && nextLevel === 5) require("../../shared/autumnTitleRules").recordEvent(progress, {
+      type: "enhance", tier, level: nextLevel, uuid: inventoryUuid
+    });
     // 保存進度
     progress.updatedAt = new Date().toISOString();
     await this.progressRepository.save(progress);

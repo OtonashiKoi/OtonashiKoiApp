@@ -1,9 +1,24 @@
+const { isUnavailableEquipment } = require("../../shared/equipmentAvailability");
 "use strict";
 
+const { withPlayerProgressLock } = require("../progress/progressLocks");
 const jobAdvancement = require("../../shared/jobAdvancement");
+
+function firstJobRequirements(quest, context) {
+  if (quest.cadence !== "job" || !Object.values(jobAdvancement.BASE_JOBS).some(j => j.badgeId === quest.rewardItemId)) return null;
+  const attributes = normalizeUnlockAttributes(quest).map(key => ({ key, current: Number(context.attributes?.[key] || 0) }));
+  const current = attributes.reduce((sum, a) => sum + a.current, 0);
+  const required = attributes.length ? Math.floor(Number(quest.unlockAttributeMin || 0)) + 1 : 0;
+  return { attributes, current, required, missing: Math.max(0, required - current), level: Number(context.level || 1), requiredLevel: Math.max(Number(quest.unlockLevel || 0), Number(quest.levelLimit || 0)) };
+}
 
 const QUEST_CADENCES = ["onboarding", "job", "daily", "weekly", "season"];
 const QUEST_TYPES = {
+  autumn_checkin_days: { label: "本季報到天數", unit: "天" },
+  autumn_unique_a5: { label: "親自強化 A 裝至 +5", unit: "件" },
+  autumn_challenge_clear: { label: "挑戰 50 樓通關", unit: "次" },
+  autumn_title_count: { label: "已領取秋季稱號", unit: "個" },
+  party_floor_clear: { label: "組隊副本通關樓層", unit: "樓" },
   battle_count:      { label: "出戰次數",        unit: "次" },
   battle_with_sword: { label: "使用劍系出戰次數", unit: "次" },
   battle_with_axe:   { label: "使用斧系出戰次數", unit: "次" },
@@ -198,6 +213,7 @@ class WeeklyQuestService {
     this._rewardItemNameCache = null;
     this.claimLocks = new Set();
     this.progressUpdateQueues = new Map();
+    this.autumnTitles = options.progressRepository ? new (require("./autumnTitleService").AutumnTitleService)(options) : null;
   }
 
   _sortDefinitions(list) {
@@ -322,10 +338,12 @@ class WeeklyQuestService {
     let attributes = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
     let equipment = {};
     let inventory = [];
+    let characterProgress = {};
 
     try {
       const profile = await this.playerService.getProfile(discordId, discordId);
       const progress = profile?.progress || {};
+      characterProgress = progress;
       level = Number(progress.level || 1);
       attributes = { ...attributes, ...(progress.attributes || {}) };
       equipment = progress.equipment || {};
@@ -393,6 +411,7 @@ class WeeklyQuestService {
 
       return {
         t2Eligibility,
+        progress: characterProgress,
         level,
         attributes,
         equipment,
@@ -453,7 +472,7 @@ class WeeklyQuestService {
 
     if ((quest.unlockAttributes && quest.unlockAttributes.length > 0) || quest.unlockAttribute) {
       const total = getUnlockAttributeTotal(quest, context?.attributes || {});
-      if (!(total > Number(quest.unlockAttributeMin || 0))) return false;
+      if (!(total > Number(quest.unlockAttributeMin || 0)) && !firstJobRequirements(quest, context)) return false;
     }
 
     return true;
@@ -463,6 +482,7 @@ class WeeklyQuestService {
   //   current = 該任務的「原始累積值」(未做解鎖後重數的偏移)
   _isQuestUnlocked(quest, current, context) {
     if (!this._isQuestVisibleForPlayer(quest, context)) return false;
+    if (firstJobRequirements(quest, context)?.missing > 0) return false;
     if (Number(quest.unlockProgressAtLeast) > 0 && Number(current || 0) < Number(quest.unlockProgressAtLeast)) return false;
     if (Number(quest.unlockCheckinStreak) > 0 && Number(context?.checkinStreak || 0) < Number(quest.unlockCheckinStreak)) return false;
     return true;
@@ -515,7 +535,7 @@ class WeeklyQuestService {
 
   // 解析獎勵道具 id → 名稱(快取一份 id→name,避免每次都掃全表)
   async _attachRewardItemNames(defs) {
-    const ids = [...new Set(defs.map((d) => d.rewardItemId).filter(Boolean).map(String))];
+    const ids = [...new Set(defs.flatMap(d => [d.rewardItemId, ...(d.rewardItems || []).map(r => r.itemId)]).filter(Boolean).map(String))];
     if (ids.length === 0 || !this.itemRepository?.findAll) return defs;
     if (!this._rewardItemNameCache) {
       try {
@@ -523,13 +543,16 @@ class WeeklyQuestService {
         this._rewardItemNameCache = new Map((all || []).map((it) => [String(it.id), it.name || it.itemName || null]));
       } catch (_) { this._rewardItemNameCache = new Map(); }
     }
-    return defs.map((d) => (d.rewardItemId
-      ? { ...d, rewardItemName: this._rewardItemNameCache.get(String(d.rewardItemId)) || null }
-      : d));
+    return defs.map(d => ({ ...d,
+      ...(d.rewardItemId ? { rewardItemName: this._rewardItemNameCache.get(String(d.rewardItemId)) || null } : {}),
+      ...(d.rewardItems?.length ? { rewards: { ...(d.rewards || {}), items: d.rewardItems.map(r => ({
+        ...r, itemName: this._rewardItemNameCache.get(String(r.itemId)) || r.itemId, count: r.qty
+      })) } } : {})
+    }));
   }
 
   async listDefinitions(cadence = "all") {
-    const all = (await this.repo.listQuests()).map((q) => this._normalizeDefinition(q));
+    const all = (await this.repo.listQuests()).filter((q) => !isUnavailableEquipment(q.rewardItemId)).map((q) => this._normalizeDefinition(q));
     const enriched = await this._attachRewardItemNames(all);
     if (cadence && cadence !== "all") {
       const c = normalizeCadence(cadence);
@@ -667,7 +690,7 @@ class WeeklyQuestService {
     })();
 
     return defs.map((quest) => {
-      const p = playerPeriod[quest.id] || { current: 0, claimed: false };
+      const p = this.autumnTitles?.view(quest, context.progress) || playerPeriod[quest.id] || { current: 0, claimed: false };
       const completion = completionByType[quest.type] || null;
       const staticProgress = this._resolveStaticQuestProgress(quest, context);
       const current = staticProgress
@@ -695,6 +718,7 @@ class WeeklyQuestService {
         || Number(quest.unlockCheckinStreak) > 0;
       const maskHidden = locked && isHiddenGated;
 
+      const jobRequirements = firstJobRequirements(quest, context);
       let unlockHint = null;
       if (locked) {
         if (maskHidden) unlockHint = "隱藏任務（達成條件後現身）"; // 通用，不洩漏解鎖條件
@@ -706,6 +730,7 @@ class WeeklyQuestService {
         })()) {
           unlockHint = "此職業已完成二轉（同職業分支只能選一個）";
         }
+        else if (jobRequirements?.missing > 0) unlockHint = `屬性還差 ${jobRequirements.missing} 點`;
         else if (quest.unlockLevel) unlockHint = `Lv.${quest.unlockLevel} 解鎖`;
         else unlockHint = "尚未解鎖";
       }
@@ -729,6 +754,7 @@ class WeeklyQuestService {
         locked,
         unlockLevel: Number(quest.unlockLevel || 0),
         unlockHint,
+        ...(jobRequirements ? { jobRequirements } : {}),
         // 複合任務：附上每個子條件的個別進度，讓任務頁能列出「大史王 3/5、古龍王 5/5…」
         // 光看 12/20 玩家不知道還差哪一隻。
         subProgress: (quest.subMetrics || []).length && !maskHidden
@@ -747,7 +773,7 @@ class WeeklyQuestService {
       // 過濾放在 map 之後而不是 defs：completionByType 那類「完成 N 個任務」的分母仍以
       // 完整清單計算，不會因為玩家等級低就縮水。
       // 例外：已領取的仍保留，讓玩家看得到自己完成過什麼。
-      .filter((q) => !q.locked || q.claimed);
+      .filter((q) => !q.locked || q.claimed || Boolean(q.jobRequirements));
   }
 
   async getPlayerProgress(discordId, cadence = "weekly") {
@@ -765,7 +791,7 @@ class WeeklyQuestService {
     return this._getProgressByCadence(discordId, cadence);
   }
 
-  async _recordProgressBatch(discordId, metrics) {
+  async _recordProgressBatch(discordId, metrics, options = {}) {
     const increments = new Map();
     const entries = metrics instanceof Map
       ? [...metrics.entries()]
@@ -790,7 +816,7 @@ class WeeklyQuestService {
     await Promise.all(QUEST_CADENCES.map(async (cadence) => {
       const allDefs = definitions.filter((q) => q.cadence === cadence);
       const defs = allDefs.filter((q) => (
-        q.enabled &&
+        q.enabled && !q.autumnTitleKey &&
         !isSeasonLockedQuest(q) &&               // 本季不開放的二轉：也不累積進度
         // 一般任務比對自己的 type；複合任務比對任一子條件的 type
         (increments.has(q.type) || (q.subMetrics || []).some((s) => increments.has(s.type))) &&
@@ -798,8 +824,9 @@ class WeeklyQuestService {
       ));
       if (!defs.length) return;
 
-      const periodKey = resolvePeriodKey(cadence);
+      const periodKey = options.periodKeys?.[cadence] || resolvePeriodKey(cadence);
       const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, cadence);
+      if (options.operationId && (playerPeriod._partyOperations || []).includes(options.operationId)) return;
       // 二轉「同時只能進行 1 條試煉」：用 allDefs 掃(不是 defs)，因為進行中的那條
       // 可能是別的職業、metric 不同，被上面的 type 過濾掉了。
       const t2InProgressId = (() => {
@@ -849,14 +876,19 @@ class WeeklyQuestService {
           }
         }
       }
+      if (options.operationId) {
+        playerPeriod._partyOperations = [...(playerPeriod._partyOperations || []), options.operationId];
+        changed = true;
+      }
       if (changed) await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, cadence);
     }));
   }
 
-  async recordProgressBatch(discordId, metrics) {
+  async recordProgressBatch(discordId, metrics, options = {}) {
+    await this.autumnTitles?.recordBatch(discordId, metrics, options);
     const key = String(discordId);
     const previous = this.progressUpdateQueues.get(key) || Promise.resolve();
-    const current = previous.catch(() => {}).then(() => this._recordProgressBatch(discordId, metrics));
+    const current = previous.catch(() => {}).then(() => withPlayerProgressLock(`quest-state:${discordId}`, () => this._recordProgressBatch(discordId, metrics, options)));
     this.progressUpdateQueues.set(key, current);
     try {
       return await current;
@@ -870,6 +902,14 @@ class WeeklyQuestService {
   }
 
   async claimReward(discordId, questId, grantFn = null) {
+    if (this.autumnTitles && require("../../shared/autumnTitleRules").TITLES.some(t => t.questId === questId)) {
+      const q = (await this.listDefinitions("season")).find(q => q.id === questId && q.enabled);
+      return this.autumnTitles.claim(discordId, q);
+    }
+    if (String(questId).startsWith("autumn-202610-")) return withPlayerProgressLock(`quest-state:${discordId}`, () => this._claimReward(discordId, questId, grantFn));
+    return this._claimReward(discordId, questId, grantFn);
+  }
+  async _claimReward(discordId, questId, grantFn = null) {
     const allDefs = await this.listDefinitions("all");
     const quest = allDefs.find((q) => q.id === questId && q.enabled);
     if (!quest) throw new Error("任務不存在或未啟用");
@@ -925,6 +965,8 @@ class WeeklyQuestService {
 
       const reward = {
         questTitle: quest.title,
+        autumn: quest.groupKey === "autumn_202610_v1",
+        receipt: `quest:${questId}:${quest.cadence}:${periodKey}:${discordId}`,
         gold: Number(quest.rewardGold || 0),
         exp: Number(quest.rewardExp || 0),
         diamond: 0,

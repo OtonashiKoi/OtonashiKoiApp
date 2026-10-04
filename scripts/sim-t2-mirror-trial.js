@@ -24,7 +24,7 @@ const { getMongoDb } = require("../src/adapters/mongo/createMongoClient");
 
 const SAMPLES = Math.max(50, Number(process.argv[2]) || 400);
 const PLAYER_LEVEL = 35;
-const TOTAL_POINTS = 6 + (PLAYER_LEVEL - 1) * 2;   // 每級自動 +2
+const TOTAL_POINTS = 6 + (PLAYER_LEVEL - 1) * 2;   // 每級隨機 1 點＋自主 1 點
 const BATTLES = 10;
 const ROUNDS_PER_BATTLE = 15;
 const TARGET_WIN = 0.60;         // 目標成功率：約 60% 的嘗試能在 10 場內打完
@@ -50,15 +50,16 @@ const T1_JOBS = [
   ["賭徒", "job_gambler_v1", "dice", "luk", {}],
 ];
 
-/** 標準配點：六維各 1 起跳，主屬性 55%、VIT 30%、其餘補 AGI */
+/** 標準配點：隨機點六維均分，自主點主屬性 55%、VIT 30%、其餘補 AGI */
 function buildAttrs(mainStat) {
-  const a = { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
-  const free = TOTAL_POINTS - 6;
-  const toMain = Math.round(free * 0.55);
-  const toVit = Math.round(free * 0.30);
+  const levels = PLAYER_LEVEL - 1;
+  const randomMean = 1 + levels / 6;
+  const a = { str: randomMean, agi: randomMean, vit: randomMean, int: randomMean, dex: randomMean, luk: randomMean };
+  const toMain = Math.round(levels * 0.55);
+  const toVit = Math.round(levels * 0.30);
   a[mainStat] += toMain;
   a.vit += toVit;
-  a.agi += free - toMain - toVit;
+  a.agi += levels - toMain - toVit;
   return a;
 }
 

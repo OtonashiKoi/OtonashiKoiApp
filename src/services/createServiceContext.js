@@ -59,6 +59,8 @@ function createServiceContext() {
     streamAccountBindingRepository: repositories.streamAccountBindingRepository,
     checkinRepository: repositories.checkinRepository,
     itemRepository: repositories.itemRepository,
+    progressRepository: repositories.progressRepository,
+    rewardService,
     jobBadgeService
   });
   const weeklyQuestService = questService; // backward-compatible alias
@@ -88,32 +90,37 @@ function createServiceContext() {
     channelLayoutRepository: repositories.channelLayoutRepository,
     monsterService
   });
-  const worldBossService = new WorldBossService(repositories.worldBossRepository); // 大史王 (default)
-  // 龍王(B)：終局世界王，需先擊敗本週大史王才解鎖
-  const dragonKingBossService = new WorldBossService(repositories.worldBossRepository, {
+  const worldBossService = new WorldBossService(repositories.worldBossRepository, { progressRepository: repositories.progressRepository }); // 大史王 (default)
+  // 龍王：玩家須先擊敗大史王。
+  const dragonKingBossService = new WorldBossService(repositories.worldBossRepository, { progressRepository: repositories.progressRepository,
     bossKey: "dragon_king",
     unlockRequiresBossKey: "default",
     unlockServiceGetter: (key) => (key === "default" ? worldBossService : null),
   });
-  // 地獄狼牙王：新終局世界王，需先擊敗本週古龍王才解鎖
-  const hellfangKingBossService = new WorldBossService(repositories.worldBossRepository, {
+  // 地獄狼牙王：玩家須先擊敗古龍王。
+  const hellfangKingBossService = new WorldBossService(repositories.worldBossRepository, { progressRepository: repositories.progressRepository,
     bossKey: "hellfang_king",
     unlockRequiresBossKey: "dragon_king",
     unlockServiceGetter: (key) => (key === "dragon_king" ? dragonKingBossService : null),
   });
-  // 島島龜王：期間限定活動世界王。**不設前置王**（活動內容自成一條線，
-  // 不要求玩家先打完大史王→古龍王那串終局鏈），難度全由潮汐/海嘯機制承擔。
-  const islandTurtleBossService = new WorldBossService(repositories.worldBossRepository, {
+  // 活動王前置與其他王共用 worldBossProgression，公開權限另由 zones 控制。
+  const islandTurtleBossService = new WorldBossService(repositories.worldBossRepository, { progressRepository: repositories.progressRepository,
     bossKey: "island_turtle",
   });
-  const northwindHutaoBossService = new WorldBossService(repositories.worldBossRepository, {
+  const northwindHutaoBossService = new WorldBossService(repositories.worldBossRepository, { progressRepository: repositories.progressRepository,
     bossKey: "northwind_hutao",
   });
+  const mantouRabbitBossService = new WorldBossService(repositories.worldBossRepository, { progressRepository: repositories.progressRepository, bossKey: "mantou_rabbit" });
   const hutaoEventService = new HutaoEventService(repositories.worldBossEventRepository);
+  const steelCrownBossService = new WorldBossService(repositories.worldBossRepository, { progressRepository: repositories.progressRepository,
+    bossKey: "steel_crown",
+  });
   // zone → 對應世界王 service（handler 用 zoneKey 取得正確 boss）
   const { bossKeyForZone } = require("./worldBoss/worldBossService");
   function worldBossServiceFor(zoneKey) {
     const bk = bossKeyForZone(zoneKey);
+    if (bk === "mantou_rabbit") return mantouRabbitBossService;
+    if (bk === "steel_crown") return steelCrownBossService;
     if (bk === "hellfang_king") return hellfangKingBossService;
     if (bk === "dragon_king") return dragonKingBossService;
     if (bk === "island_turtle") return islandTurtleBossService;

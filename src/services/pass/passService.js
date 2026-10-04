@@ -9,20 +9,28 @@ const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { pushRewardItemsToInventory } = require("../../shared/jobBadgeBonus");
 const { CURRENCY_SOURCES } = require("../../shared/sources");
 
+const { withPlayerProgressLock } = require("../progress/progressLocks");
+const passLocks = new Map();
+async function withPassLock(id, fn) {
+  const prior = passLocks.get(id) || Promise.resolve();
+  let release; const next = new Promise(r => { release = r; });
+  const chain = prior.then(() => next); passLocks.set(id, chain);
+  await prior;
+  try { return await fn(); } finally { release(); if (passLocks.get(id) === chain) passLocks.delete(id); }
+}
 const COLLECTION = "passState";
 const MAX_LEVEL = 30;
-// 每級所需點數（滿級 49,500 點）。V0.5 定調「滿級≈1 萬場戰鬥」：
-// 主力農區以 A 階計（5 點/場）→ 49,500 ÷ 5 = 9,900 場 ≈ 1 萬。
-const POINTS_PER_LEVEL = 1650;
+// 楓紅漸漸：每級1,000點，滿級30,000點；一般區按階級給點，副本逐層另計。
+const POINTS_PER_LEVEL = 1000;
 const UNLOCK_COST_DIAMOND = 5;
 // 打怪給點：依地圖階級（越後段越多，鼓勵打高階）
 const POINTS_BY_TIER = { D: 1, C: 2, B: 3, A: 5, S: 6 };
 
 // 獎勵道具 ID
-const GEM = { D: "72fde92d-e33f-42fb-8d86-2e811d03f84d", C: "556db9e1-b084-4b22-bab5-a66c2b586184", B: "8fdfa7d9-f0fa-4e6a-a291-703b1e354072", A: "a6ae293d-52fc-4af5-8770-891ddf842e35" };
+const GEM = { D: "72fde92d-e33f-42fb-8d86-2e811d03f84d", C: "556db9e1-b084-4b22-bab5-a66c2b586184", B: "8fdfa7d9-f0fa-4e6a-a291-703b1e354072", A: "a6ae293d-52fc-4af5-8770-891ddf842e35", S: "gem-s-tier" };
 const REROLL = "enchant_reroll_potion";
 const RESPEC = "87b281be-b175-40a0-8044-0accc88a0ee0";
-const GOLDBAG_L = "1854a2b1-a569-4604-802d-9171f480a9ae";
+const GOLDBAG_M = "71aaa3a2-abb9-4b01-b024-16e553b08840";
 // 屬性石刻意稀缺（分解唯一主來源），通行證只給「一點點」：付費軌水/火（雙王主題）、免費軌其餘五屬輪替
 const STONE_WATER = "element-stone-water";
 const STONE_FIRE = "element-stone-fire";
@@ -37,28 +45,30 @@ const A_WEAPON_CHEST = "chest-a-weapon-select"; // A階武器抽選箱（開箱�
 function buildLevels() {
   const levels = [];
   for (let L = 1; L <= MAX_LEVEL; L++) {
-    const free = { gold: 2000 + L * 300, items: [] };
-    const paid = { gold: 4000 + L * 600, items: [] };
+    const free = { gold: 1500 + L * 150, items: [] };
+    const paid = { gold: 3000 + L * 300, items: [] };
 
-    // ── 免費軌：早期 D 石、每 2 級 C 石、每 5 級 B 石、每 6 級屬性石輪替、每 10 級大金袋、20/30 送重骰 ──
-    if (L <= 6 && L % 2 === 1) free.items.push({ itemId: GEM.D, qty: 2 });
+    // ── 免費軌：早期 D 石、每 2 級 C 石、每 5 級 B 石、每 6 級屬性石輪替、每 10 級中金袋、20/30 送重骰 ──
+    if (L <= 6 && L % 2 === 1) free.items.push({ itemId: GEM.D, qty: 3 });
     if (L % 2 === 0) free.items.push({ itemId: GEM.C, qty: 1 });
     if (L % 5 === 0) free.items.push({ itemId: GEM.B, qty: 2 });
+    if (L === 25 || L === 30) free.items.push({ itemId: GEM.S, qty: 1 });
     if (L === 6) free.items.push({ itemId: STONE_WOOD, qty: 1 });
     if (L === 12) free.items.push({ itemId: STONE_EARTH, qty: 1 });
     if (L === 18) free.items.push({ itemId: STONE_METAL, qty: 1 });
     if (L === 24) free.items.push({ itemId: STONE_SUN, qty: 1 });
     if (L === 30) free.items.push({ itemId: STONE_MOON, qty: 1 });
-    if (L % 10 === 0) free.items.push({ itemId: GOLDBAG_L, qty: 1 });
+    if (L % 10 === 0) free.items.push({ itemId: GOLDBAG_M, qty: 1 });
     if (L === 20 || L === 30) free.items.push({ itemId: REROLL, qty: 1 });
 
     // ── 付費軌：每 3 級強化石(前段 B、L15 起 A)、回 3 鑽(10/20/30)、屬性石一點點(12/24/30)、藥水 ──
     if (L % 3 === 0) paid.items.push(L >= 15 ? { itemId: GEM.A, qty: 2 } : { itemId: GEM.B, qty: 3 });
-    if (L === 5) paid.items.push({ itemId: GOLDBAG_L, qty: 1 });
+    if (L === 5) paid.items.push({ itemId: GOLDBAG_M, qty: 1 });
     if (L === 10) paid.diamond = 1;                                   // 回鑽 1/3
     if (L === 12) paid.items.push({ itemId: STONE_WATER, qty: 1 });   // 屬性石（本季主題水）
-    if (L === 15) paid.items.push({ itemId: A_WEAPON_CHEST, qty: 1 }); // A階武器抽選箱（中程大獎）
+    if (L === 15) paid.items.push({ itemId: GEM.B, qty: 3 }); // 中段養成補給，不提前提供 A 武器
     if (L === 18) paid.items.push({ itemId: REROLL, qty: 1 });        // 附魔重骰
+    if (L === 20 || L === 25 || L === 30) paid.items.push({ itemId: GEM.S, qty: 1 });
     if (L === 20) paid.diamond = 1;                                   // 回鑽 2/3
     if (L === 22) paid.items.push({ itemId: RESPEC, qty: 1 });        // 屬性重製
     if (L === 24) paid.items.push({ itemId: STONE_FIRE, qty: 1 });    // 屬性石（狼牙王線火）
@@ -104,8 +114,13 @@ class PassService {
     let doc = await db.collection(COLLECTION).findOne({ _id: discordId });
     // 換季：seasonKey 不同 → 重置該玩家通行證
     if (!doc || doc.seasonKey !== season) {
-      doc = { _id: discordId, seasonKey: season, points: 0, unlocked: false, claimedFree: [], claimedPaid: [], updatedAt: new Date().toISOString() };
-      await db.collection(COLLECTION).updateOne({ _id: discordId }, { $set: doc }, { upsert: true });
+      const fresh = { seasonKey: season, points: 0, unlocked: false, claimedFree: [], claimedPaid: [], pointReceipts: [], unlockOperation: null, updatedAt: new Date().toISOString() };
+      if (!doc) {
+        await db.collection(COLLECTION).updateOne({ _id: discordId }, { $setOnInsert: fresh }, { upsert: true });
+      } else {
+        await db.collection(COLLECTION).updateOne({ _id: discordId, seasonKey: doc.seasonKey }, { $set: fresh });
+      }
+      doc = await db.collection(COLLECTION).findOne({ _id: discordId });
     }
     return doc;
   }
@@ -164,65 +179,70 @@ class PassService {
     };
   }
 
-  /** 開通付費軌（UNLOCK_COST_DIAMOND 鑽） */
+  /** 開通與領獎採固定收據；中斷後可安全重試。 */
   async unlock(discordId, displayName) {
-    const raw = await this._getRaw(discordId);
-    if (raw.unlocked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "本賽季通行證已開通", 400);
-    const wallet = await this.walletService.getWalletByDiscordId(discordId, displayName).catch(() => null);
-    const diamonds = Math.max(0, Number(wallet?.wallet?.diamond ?? wallet?.diamond) || 0);
-    if (diamonds < UNLOCK_COST_DIAMOND) throw new AppError(ERROR_CODES.INSUFFICIENT_FUNDS, `開通需 ${UNLOCK_COST_DIAMOND} 鑽石，你目前只有 ${diamonds}`, 400);
-    await this.rewardService.grantCurrency({
-      discordId, displayName, currencyType: "diamond", amount: -UNLOCK_COST_DIAMOND,
-      source: CURRENCY_SOURCES.PASS_UNLOCK || "pass_unlock", operator: "pass:unlock",
+    return withPassLock(discordId, async () => {
+      const raw = await this._getRaw(discordId);
+      if (raw.unlocked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "本賽季通行證已開通", 400);
+      const db = await getMongoDb();
+      const operation = raw.unlockOperation || `pass:${raw.seasonKey}:${discordId}:unlock:${require("crypto").randomUUID()}`;
+      await db.collection(COLLECTION).updateOne({ _id: discordId, seasonKey: raw.seasonKey }, { $set: { unlockOperation: operation } });
+      try {
+        await this.rewardService.grantCurrency({ discordId, displayName, currencyType: "diamond", amount: -UNLOCK_COST_DIAMOND,
+          source: CURRENCY_SOURCES.PASS_UNLOCK || "pass_unlock", sourceRef: operation, operator: "pass:unlock" });
+      } catch (error) {
+        if (error.code === "INSUFFICIENT_BALANCE") await db.collection(COLLECTION).updateOne({ _id: discordId, unlockOperation: operation }, { $set: { unlockOperation: null } });
+        throw error;
+      }
+      await db.collection(COLLECTION).updateOne({ _id: discordId, seasonKey: raw.seasonKey }, { $set: { unlocked: true, updatedAt: new Date().toISOString() } });
+      return { unlocked: true };
     });
-    const db = await getMongoDb();
-    await db.collection(COLLECTION).updateOne({ _id: discordId }, { $set: { unlocked: true, updatedAt: new Date().toISOString() } });
-    return { unlocked: true };
   }
 
-  /** 領取某級獎勵（track: "free" | "paid"） */
   async claim(discordId, displayName, level, track) {
-    const lv = Math.max(1, Math.min(MAX_LEVEL, Number(level) || 0));
-    const raw = await this._getRaw(discordId);
-    const curLevel = levelFromPoints(raw.points);
-    if (curLevel < lv) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `通行證等級不足（目前 Lv.${curLevel}，需 Lv.${lv}）`, 400);
-    const isPaid = track === "paid";
-    if (isPaid && !raw.unlocked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `付費軌需先花 ${UNLOCK_COST_DIAMOND} 鑽開通`, 400);
-    const claimedField = isPaid ? "claimedPaid" : "claimedFree";
-    const claimed = new Set(raw[claimedField] || []);
-    if (claimed.has(lv)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此獎勵已領取", 400);
-
-    const def = LEVELS.find((x) => x.level === lv);
-    const reward = isPaid ? def?.paid : def?.free;
-    if (!reward) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "找不到該獎勵", 404);
-
-    // 原子搶佔：先把 level 加進已領，成功才發（避免重複領）
-    const db = await getMongoDb();
-    const claim = await db.collection(COLLECTION).updateOne(
-      { _id: discordId, [claimedField]: { $ne: lv } },
-      { $addToSet: { [claimedField]: lv }, $set: { updatedAt: new Date().toISOString() } }
-    );
-    if (!claim.modifiedCount) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此獎勵已領取", 400);
-
-    const granted = [];
-    try {
-      if (reward.gold > 0) { await this.rewardService.grantCurrency({ discordId, displayName, currencyType: "gold", amount: reward.gold, source: CURRENCY_SOURCES.PASS_REWARD || "pass_reward", operator: "pass:claim" }); granted.push(`金幣 ${reward.gold}`); }
-      if (reward.diamond > 0) { await this.rewardService.grantCurrency({ discordId, displayName, currencyType: "diamond", amount: reward.diamond, source: CURRENCY_SOURCES.PASS_REWARD || "pass_reward", operator: "pass:claim" }); granted.push(`鑽石 ${reward.diamond}`); }
-      if (Array.isArray(reward.items) && reward.items.length) {
-        const prog = await this.progressRepository.findByPlayerId(discordId);
-        if (prog) {
-          const g = await pushRewardItemsToInventory({ progress: prog, itemRepository: this.itemRepository, rewardItems: reward.items, source: "pass_reward" });
-          prog.updatedAt = new Date().toISOString();
-          await this.progressRepository.save(prog);
-          g.forEach((x) => granted.push(`${x.name}×${x.qty}`));
-        }
-      }
-    } catch (err) {
-      // 發獎失敗 → 撤回已領標記，讓玩家可重領
-      await db.collection(COLLECTION).updateOne({ _id: discordId }, { $pull: { [claimedField]: lv } }).catch(() => {});
-      throw err;
+    if (!["free", "paid"].includes(track) || !Number.isInteger(Number(level)) || Number(level) < 1 || Number(level) > MAX_LEVEL) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "獎勵級數或軌道無效", 400);
     }
-    return { level: lv, track, granted };
+    return withPassLock(discordId, async () => {
+      const lv = Number(level), raw = await this._getRaw(discordId), paid = track === "paid";
+      if (levelFromPoints(raw.points) < lv) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "通行證等級不足", 400);
+      if (paid && !raw.unlocked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, `付費軌需先花 ${UNLOCK_COST_DIAMOND} 鑽開通`, 400);
+      const field = paid ? "claimedPaid" : "claimedFree";
+      if ((raw[field] || []).includes(lv)) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此獎勵已領取", 400);
+      const reward = LEVELS[lv - 1][track], ref = `pass:${raw.seasonKey}:${discordId}:${track}:${lv}`, granted = [];
+      for (const currencyType of ["gold", "diamond"]) if (reward[currencyType] > 0) {
+        await this.rewardService.grantCurrency({ discordId, displayName, currencyType, amount: reward[currencyType],
+          source: CURRENCY_SOURCES.PASS_REWARD || "pass_reward", sourceRef: `${ref}:${currencyType}`, operator: "pass:claim" });
+        granted.push(`${currencyType === "gold" ? "金幣" : "鑽石"} ${reward[currencyType]}`);
+      }
+      if (reward.items?.length) await withPlayerProgressLock(discordId, async () => {
+        for (let retry = 0; retry < 8; retry++) {
+          const prog = await this.progressRepository.findByPlayerId(discordId);
+          if (!prog) throw new AppError(ERROR_CODES.PLAYER_NOT_FOUND, "找不到人物資料", 404);
+          if ((prog.passRewardReceipts || []).includes(ref)) return;
+          const next = structuredClone(prog);
+          for (const entry of reward.items) if (!await this.itemRepository.findById(entry.itemId)) throw new Error(`通行證獎勵道具不存在：${entry.itemId}`);
+          const items = await pushRewardItemsToInventory({ progress: next, itemRepository: this.itemRepository, rewardItems: reward.items, source: "pass_reward" });
+          next.passRewardReceipts = [...(prog.passRewardReceipts || []), ref];
+          next.updatedAt = new Date(Math.max(Date.now(), (Date.parse(prog.updatedAt) || 0) + 1)).toISOString();
+          if (await this.progressRepository.saveIfUnchanged(next, prog.updatedAt)) {
+            items.forEach(x => granted.push(`${x.name}×${x.qty}`)); return;
+          }
+        }
+        throw new Error("通行證背包儲存忙碌，請重試");
+      });
+      const db = await getMongoDb();
+      await db.collection(COLLECTION).updateOne({ _id: discordId, seasonKey: raw.seasonKey }, { $addToSet: { [field]: lv }, $set: { updatedAt: new Date().toISOString() } });
+      return { level: lv, track, granted };
+    });
+  }
+
+  async addPointsOnce(discordId, points, operationId) {
+    if (!discordId || !Number.isSafeInteger(points) || points <= 0 || !operationId) throw new Error("通行證點數或收據無效");
+    const raw = await this._getRaw(discordId), db = await getMongoDb();
+    const result = await db.collection(COLLECTION).updateOne({ _id: discordId, seasonKey: raw.seasonKey, pointReceipts: { $ne: operationId } },
+      { $inc: { points }, $addToSet: { pointReceipts: operationId }, $set: { updatedAt: new Date().toISOString() } });
+    return result.modifiedCount > 0;
   }
 
   /** 後台：直接加/設點數（測試用） */
@@ -250,6 +270,8 @@ class PassService {
       $set: {
         seasonKey,
         points: 0,
+        pointReceipts: [],
+        unlockOperation: null,
         unlocked: false,
         claimedFree: [],
         claimedPaid: [],

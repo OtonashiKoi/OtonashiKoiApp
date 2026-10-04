@@ -20,7 +20,7 @@ const playerRef = (id) => ({ $or: [{ discordId: id }, { playerId: id }] });
 
 async function loadPersistentItemIds(db) {
   const rows = await db.collection("items")
-    .find({ seasonPersistent: true }, { projection: { id: 1 } })
+    .find({ $or: [{ seasonPersistent: true }, { equipSlot: "title_eq" }, { itemType: { $in: ["title", "collectible", "collection"] } }] }, { projection: { id: 1 } })
     .toArray();
   return new Set([...PERSISTENT_STORY_ITEM_IDS, ...rows.map((row) => String(row.id || "")).filter(Boolean)]);
 }

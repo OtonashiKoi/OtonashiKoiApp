@@ -1,3 +1,4 @@
+const { isUnavailableEquipment } = require("../shared/equipmentAvailability");
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder } = require("discord.js");
 const path = require("path");
 const fs = require("fs");
@@ -679,7 +680,7 @@ async function handleProfile(interaction) {
   const displayName = result?.player?.displayName || interaction.user.displayName || interaction.user.username;
   const wallet = result?.wallet || { gold: 0, diamond: 0 };
 
-  // 2+1 制：有未分配的自主點 → 顯示提示行＋分配入口按鈕
+  // 1+1 制：有未分配的自主點 → 顯示提示行＋分配入口按鈕
   const _freePts = Math.max(0, Number(p.statusPoints) || 0);
   const _allocComponents = _freePts > 0
     ? [new ActionRowBuilder().addComponents(
@@ -724,7 +725,7 @@ async function handleProfile(interaction) {
 }
 
 // ────────────────────────────────────────────────
-// 自主屬性點分配（2+1 制：每級隨機 2 點＋自主 1 點）
+// 自主屬性點分配（1+1 制：每級隨機 1 點＋自主 1 點）
 // ────────────────────────────────────────────────
 const ATTR_ALLOC_OPTIONS = [
   { label: "STR 力量 +1（攻擊力）",       value: "str", emoji: "⚔️" },
@@ -3049,6 +3050,7 @@ function buildQuestCenterMessage(progressList, cadence = "weekly", claimPage = 0
 }
 
 async function grantQuestRewardDiscord(serviceContext, discordId, displayName, reward) {
+  if (reward.autumn) return require("../services/weeklyQuest/autumnQuestRewards").grantAutumnQuestReward(serviceContext, discordId, displayName, reward);
   if (reward.gold > 0) {
     await serviceContext.rewardService.grantCurrency({
       discordId,
@@ -3621,7 +3623,7 @@ async function handleEquipSlotButton(interaction, slot, page = 0) {
   const progress = await serviceContext.progressRepository.findByPlayerId(interaction.user.id);
   const equipped = progress?.equipment || {};
   let inventory = (progress?.inventory || []).filter((e) => {
-    if (!e) return false;
+    if (!e || isUnavailableEquipment(e)) return false;
     if (e.itemType === "job_badge") return e.equipSlot === slot;
     if (e.itemType === "equipment") {
       if (e.equipSlot === slot) return true;
