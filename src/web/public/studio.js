@@ -160,16 +160,16 @@
   const OVERLAYS = [
     {
       id: "chat", name: "聊天室", path: "chat.html", size: "420 × 900", summary: "完整 OBS 聊天室，包含會員階級與遊戲綁定樣式。",
-      fields: [field("key", "聊天室 Overlay 金鑰", "password", { sensitive: true, placeholder: "輸入 CHAT_OVERLAY_PASSWORD" })],
-      preview: { preview: "1" }, previewHint: "預覽會使用示範留言，不需要輸入金鑰。"
+      fields: [],
+      preview: { preview: "1" }, previewHint: "預覽使用示範留言；正式來源同樣免金鑰。"
     },
     {
       id: "chat-danmaku", name: "聊天彈幕", path: "chat-danmaku.html", size: "1920 × 1080", summary: "由右向左飛過畫面的遊戲聊天室彈幕。",
-      fields: [field("key", "聊天室 Overlay 金鑰", "password", { sensitive: true, placeholder: "輸入 CHAT_OVERLAY_PASSWORD" })]
+      fields: []
     },
     {
       id: "chat-marquee", name: "聊天跑馬燈", path: "chat-marquee.html", size: "1920 × 140", summary: "每有新留言就向左推進一格的橫向留言列。",
-      fields: [field("key", "聊天室 Overlay 金鑰", "password", { sensitive: true, placeholder: "輸入 CHAT_OVERLAY_PASSWORD" })]
+      fields: []
     },
     { id: "danmaku", name: "彈幕強化版", path: "danmaku.html", size: "1920 × 1080", summary: "直接連接同一台電腦上的 OneComme，依會員身分替彈幕上色。", fixed: true, fixedNote: "此來源使用固定樣式，並需在 OBS 電腦上啟動 OneComme。" },
     {

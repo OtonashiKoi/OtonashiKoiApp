@@ -372,4 +372,10 @@ OneComme 雀魂自訂模板 `otonashi-mahjong-chat` 透過公開 viewer-profile 
 
 Web 寵物與卡片圖鑑左頁在收集進度下常駐展示里程碑。寵物列出分數門檻、永久效果、称號及達成狀態，同類加成取最高值、不相加，資料來源為 `PetService.getDex` 的 milestones／bonus。卡片列出總收集門檻、各區及主線角色卡完整收藏獎勵，显示金幣、道具、稱號及可領／已領狀態，沿用現有圖鑑領獎API。
 
-對外雀魂聊天室使用 `/static/chat.html?theme=mahjong&key=聊天室金鑰`，透過既有伺服器 SSE 中繼接收留言，其他電腦不需啟動 OneComme。`preview=1` 可免金鑰預覽。使用 `chat-mahjong.css` 適配對外聊天室 DOM，與 RO 共用會員／已穿戴七稱號資料及楓葉整框判定；本機 OneComme 模板仍保留。
+對外雀魂聊天室使用 `/static/chat.html?theme=mahjong`，透過既有伺服器 SSE 中繼接收留言，其他電腦不需啟動 OneComme。`preview=1` 可免金鑰預覽。使用 `chat-mahjong.css` 適配對外聊天室 DOM，與 RO 共用會員／已穿戴七稱號資料及楓葉整框判定；本機 OneComme 模板仍保留。
+
+對外 OBS 聊天室採免金鑰公開留言來源：RO、雀魂、聊天彈幕與聊天跑馬燈均直接連接 `/api/chat/overlay-stream`，不需要網址金鑰、登入或 localStorage 金鑰。原本帶 key 的網址仍可使用（參數忽略）。只有留言中繼改為公開，遊戲／管理員 API 授權保持既有規則；SSE 連線數上限與斷線清理仍啟用。後續聊天室樣式同樣使用免金鑰來源。
+
+管理者執行正式重啟前，`pre-pm2-restart-hotfix.js` 直接透過 Discord REST 發送至玩家聊天區 `1498608950671839263`，5 秒超時，需取得該頻道訊息ID才成功；公告失敗以非零狀態阻擋 npm 重啟。`npm run pm2:restart` 自動先執行；直接 PM2 操作同樣必須先公告。此規則涵蓋人工發布重啟，既有 PM2 自動故障恢復／定時重啟未改動。
+
+等級榜及帳號總養成榜只納入已獲得至少1 EXP的角色：Lv1且EXP0的角色不計入人物數／總等級；全帳號皆未練功者不列榜、自己的rank為null。Lv2以上即使目前EXP0仍保留（升級消耗EXP不會失去資格）。共用characterLevelSummary earnedOnly模式，Web及Discord／管理端等級榜同步。PK排行榜暫停入口及API（403 FEATURE_DISABLED），PK對戰與既有評分資料保留。

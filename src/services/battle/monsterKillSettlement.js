@@ -78,7 +78,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   }
 
   const { healerBonusPids, perPidRewards, participants, rewardModsByPid, mergedDmg, canSendRewardNotice, progressCache } = await require("./grantKillCurrencyAndExp").grantKillCurrencyAndExp({ state, discordId, zoneKey, monster, sc, displayName, totalDamage, session, rewardLines });
-  await require("./grantKillDrops").grantKillDrops({ healerBonusPids, perPidRewards, monster, discordId, rewardLines, sc, participants, rewardModsByPid, zoneKey, displayName, mergedDmg, canSendRewardNotice, progressCache });
+  await require("./grantKillDrops").grantKillDrops({ state, healerBonusPids, perPidRewards, monster, discordId, rewardLines, sc, participants, rewardModsByPid, zoneKey, displayName, mergedDmg, canSendRewardNotice, progressCache });
   if (isWorldBossZone(zoneKey) && monster?.isBoss) {
     await require("../worldBoss/worldBossProgression").recordClears(sc.progressRepository, zoneKey, participants);
   }

@@ -175,13 +175,16 @@ function createPartyTowerRooms(sc, options = {}) {
   async function chooseMonster(room) {
     const floor = room.clearedFloor + 1;
     const all = await sc.monsterService.listMonsters();
-    return require("../../shared/partyTowerEncounters").pickMonster(all, room.difficulty, floor);
+    const selected = require("../../shared/partyTowerEncounters").pickMonster(all, room.difficulty, floor);
+    return { ...selected, encounterCount: selected.isBoss ? 1 : require('../../shared/encounterGroup').randomCount(5, options.encounterRandom || Math.random) };
   }
   async function addRewards(room, monster) {
     const n = room.members.length;
-    const goldPool = Math.max(monster.goldReward || 0, rewardRules.getDynamicGoldPoolFloor(monster.zone, n));
-    const expPool = Math.round(Number(monster.expReward || 0) * normalExpMultiplier(n));
-    const dropPool = await rewardRules.buildMonsterDropPool(sc, monster);
+    const size = monster.isBoss ? 1 : require('../../shared/encounterGroup').count(monster.encounterCount);
+    const goldPool = Math.max(monster.goldReward || 0, rewardRules.getDynamicGoldPoolFloor(monster.zone, n)) * size;
+    const expPool = Math.round(Number(monster.expReward || 0) * normalExpMultiplier(n) * size);
+    const singleDropPool = await rewardRules.buildMonsterDropPool(sc, monster);
+    const dropPool = Array.from({ length: size }, () => singleDropPool).flat();
     const partyEffects = room.members.flatMap(m => rewardRules.collectRewardEffectRefs({ ...m.progressSnapshot, equipment: m.equipped }).filter(e => e.target === "party"));
     for (let i = 0; i < n; i++) {
       const m = room.members[i];
@@ -192,7 +195,8 @@ function createPartyTowerRooms(sc, options = {}) {
         mod.expMultiplier *= 1.1; mod.goldMultiplier *= 1.1; mod.dropPct += 5;
       }
       const r = room.rewards[m.discordId];
-      (r.progressKills ||= []).push(require("./partyTowerProgress").killRecord(room, m, monster, room.lastFloorResult, now()));
+      const record = require('./partyTowerProgress').killRecord(room, m, monster, room.lastFloorResult, now());
+      for (let k = 0; k < size; k++) (r.progressKills ||= []).push(k === 0 ? record : { ...record, metrics: { battle_win: 1 } });
       const share = pool => Math.floor(pool / n) + (i < pool % n ? 1 : 0);
       r.gold += Math.round(share(goldPool) * mod.goldMultiplier);
       r.exp += Math.round(share(expPool) * mod.expMultiplier * normalZoneExpMultiplier(monster.zone, m.level) * 1.5);
@@ -264,7 +268,12 @@ function createPartyTowerRooms(sc, options = {}) {
       members: room.members.map(m => ({ name: m.name, hp: m.currentHp, maxHp: m.maxHp, alive: m.currentHp > 0 })) };
     if (result.monsterKilled && result.survived) {
       room.clearedFloor = floor; await addRewards(room, monster);
-      room.lastFloorResult.metalRecovery = room.members.map(m => ({ discordId: m.discordId, name: m.name, healed: require('../../shared/metalCards').applyMetalPartyRecovery(m, `${room.runId}:${floor}`) })).filter(r => r.healed > 0);
+      room.lastFloorResult.metalRecovery = room.members.map(m => {
+        let healed = 0;
+        for (let k = 0; k < require("../../shared/encounterGroup").count(monster.encounterCount); k++)
+          healed += require("../../shared/metalCards").applyMetalPartyRecovery(m, `${room.runId}:${floor}:${k}`);
+        return { discordId: m.discordId, name: m.name, healed };
+      }).filter(r => r.healed > 0);
       room.lastFloorResult.systemRecovery = potions.systemRecovery(room.members, floor);
       room.lastFloorResult.members = room.members.map(m => ({ name: m.name, hp: m.currentHp, maxHp: m.maxHp, alive: m.currentHp > 0 }));
       require("../../shared/partyCombatState").knockEnvironment(room, monster.zone, now());
@@ -283,11 +292,12 @@ function createPartyTowerRooms(sc, options = {}) {
     if (room.terminal) { await finish(room, room.terminal === "win" ? null : room.terminal); return; }
     if (!room.liveCombat) {
       const floor = room.clearedFloor + 1, monster = await chooseMonster(room), scaled = rules.scaleMonster(monster, room.difficulty);
+      scaled.calc.maxHp *= monster.encounterCount;
       const environment = require("../../shared/partyCombatState").zoneEnvironment(room, monster.zone, now());
       for (const m of room.members) m.partyEnvironment = { freezeOn: environment.freezeOn, sanctumOn: environment.sanctumOn };
       require("../../bot/handlers/towerHandlers").refreshTowerMemberMaxHp({ members: room.members }, floor, { zone: monster.zone });
       const hpBefore = room.members.map(m => ({ discordId: m.discordId, name: m.name, hp: m.currentHp, maxHp: m.maxHp }));
-      room.monsterPreview = { name: monster.name, level: monster.level, imageUrl: monster.imageUrl || null, zone: monster.zone, element: monster.element || null, elementLevel: monster.elementLevel || 0, isBoss: Boolean(monster.isBoss), isFloorBoss: floor % 5 === 0, hp: scaled.calc.maxHp, atk: scaled.calc.atk };
+      room.monsterPreview = { encounterCount: monster.encounterCount, name: monster.name, level: monster.level, imageUrl: monster.imageUrl || null, zone: monster.zone, element: monster.element || null, elementLevel: monster.elementLevel || 0, isBoss: Boolean(monster.isBoss), isFloorBoss: floor % 5 === 0, hp: scaled.calc.maxHp, atk: scaled.calc.atk };
       telemetry.beginFloor(room, floor, now(), monster);
       room.playbackStartedAt = now();
       room.lastFloorResult = { floor, monsterName: monster.name, hpBefore, memberLogs: [], survived: true, monsterKilled: false, streaming: true, members: [] };

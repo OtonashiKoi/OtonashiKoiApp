@@ -3,7 +3,7 @@
 /**
  * 聊天室 overlay 即時留言中繼（純記憶體 SSE）。
  * 伺服器已連著 OneComme（commentFetcher），把每則留言廣播給訂閱的 overlay 客戶端，
- * 讓 chat.html 不必直連本機 OneComme，任何電腦帶正確密碼即可從 otonashikoi.org 讀取。
+ * 讓 chat.html 不必直連本機 OneComme，任何電腦免金鑰即可從 otonashikoi.org 讀取。
  */
 
 const subscribers = new Set();

@@ -18,7 +18,7 @@ const _startMonsterTransition = (...args) => require("./zoneTransitions")._start
 async function finishMonsterKill(context) {
   const { state, monster, sc, zoneKey, mergedDmg, perPidRewards, rewardLines, discordId } = context;
   // 擊殺數 + 推進下一隻怪物
-  const newKillCount = { ...(state.killCount || {}), [monster.id]: ((state.killCount?.[monster.id] || 0) + 1) };
+  const newKillCount = { ...(state.killCount || {}), [monster.id]: ((state.killCount?.[monster.id] || 0) + require('../../shared/encounterGroup').encounterCount(state, monster)) };
   // 取最新 state 以免多人並發時覆蓋其他人的 damageMap
   const freshState = await sc.monsterService.getState(zoneKey);
   const finalDamageMap = { ...(freshState.damageMap || {}), ...mergedDmg };

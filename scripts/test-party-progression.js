@@ -44,7 +44,7 @@ async function main() {
   const reset = buildProgressResetUpdate({ playerId: 'reset', inventory: [pendingTitle], partyPendingDrops: [pendingTitle, { uuid: 'weapon', itemType: 'equipment' }, { uuid: 'collect', itemType: 'collection' }] });
   assert.deepEqual(reset.$set.inventory.map(e => e.uuid), ['title', 'collect']);
   for (const key of ['partyPendingDrops','partyItemReceipts','partyPotionReceipts','partyJobStateReceipt','partyProgressReceipts']) assert.equal(reset.$unset[key], '');
-  const end = fixture(); end.sc.questService = qs;
+  const end = fixture(); end.sc.questService = qs; end.opts.encounterRandom = () => 0;
   const s = await setup(end); await s.startRoom('party-test-1');
   for (let i = 0; i < 12000; i++) { end.advance(); await s.tick(); if ((await s.getState('party-test-1'))?.settled) break; }
   const view = await s.getState('party-test-1'); assert.equal(view.settled, true); assert.equal([...end.rooms.values()][0].rewards["party-test-1"].progressKills.length, 30); assert.equal(view.reward.progressKills, undefined);

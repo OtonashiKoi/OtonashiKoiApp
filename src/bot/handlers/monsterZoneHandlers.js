@@ -2546,6 +2546,8 @@ async function handleEnterBattle(interaction) {
 
       let combatResult =
         runCombatLoop(battlePlayerStats, battleMonsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
+          encounterCount: require('../../shared/encounterGroup').encounterCount(battleState, battleMonster),
+          encounterUnitHp: session.monsterMaxHp / require('../../shared/encounterGroup').encounterCount(battleState, battleMonster),
           playerName: displayName,
           stance: dcStanceKey,
           teamStunRounds: (teamStunOn || zoneFrozenOn) ? 999 : 0,

@@ -90,13 +90,14 @@ async function main() {
   for (const difficulty of ["normal", "challenge"]) await check(`${difficulty}真實核心、自動完整30／50樓、重連續跑、獨立掉落與防重`, async () => {
     const f = fixture(); let s = await setup(f, difficulty, 3); await s.startRoom("party-test-1");
     await s.tick(); const first = await s.getState("party-test-1"); assert.equal(first.clearedFloor, 1); assert.ok(first.lastFloorResult.monsterKilled);
+    let totalEnemies = Number(first.monster?.encounterCount || 1), lastCleared = first.clearedFloor;
     s.close(); s = createPartyTowerRooms(f.sc, f.opts);
-    for (let i = 0; i < rules.difficulty(difficulty).totalFloors * 2 + 3; i++) { f.advance(); await s.tick(); }
+    for (let i = 0; i < rules.difficulty(difficulty).totalFloors * 2 + 3; i++) { f.advance(); await s.tick(); const observed = await s.getState("party-test-1"); if (observed.clearedFloor > lastCleared) { assert.equal(observed.clearedFloor, lastCleared + 1); const size = Number(observed.monster?.encounterCount || 1); assert(size >= 1 && size <= 5); if (observed.monster?.isBoss) assert.equal(size, 1); totalEnemies += size; lastCleared = observed.clearedFloor; } }
     const ended = await s.getState("party-test-1"); assert.equal(ended.status, "ended"); assert.equal(ended.failReason, null);
     assert.equal(ended.clearedFloor, rules.difficulty(difficulty).totalFloors); assert.equal(ended.settled, true);
     const before = clone([...f.players.values()]); const walletBefore = clone([...f.gold]); await s.tick();
     assert.deepEqual([...f.players.values()], before); assert.deepEqual([...f.gold], walletBefore);
-    for (let i = 1; i <= 3; i++) assert.equal(f.players.get(`party-test-${i}`).partyPendingDrops.length, ended.totalFloors);
+    for (let i = 1; i <= 3; i++) assert.equal(f.players.get(`party-test-${i}`).partyPendingDrops.length, totalEnemies);
     assert.notEqual(f.players.get("party-test-1").partyPendingDrops[0].uuid, f.players.get("party-test-2").partyPendingDrops[0].uuid);
     await s.returnLobby("party-test-2"); assert.equal((await s.getState("party-test-1")).status, "lobby"); await s.disband("party-test-1");
   });

@@ -357,7 +357,7 @@ class AdminConsoleService {
       .filter((p) => p.status !== "disabled")
       .filter((p) => !isLeaderboardExcluded(progressMap[p.discordId]))
       .map((p) => {
-        const levels = summarizeCharacterLevels(progressMap[p.discordId] || {});
+        const levels = summarizeCharacterLevels(progressMap[p.discordId] || {}, { earnedOnly: true });
         return {
           discordId: p.discordId,
           displayName: p.displayName,
@@ -375,8 +375,8 @@ class AdminConsoleService {
 
     return {
       gold: [...rows].sort((a, b) => b.gold - a.gold).slice(0, safeLimit),
-      level: [...rows].sort((a, b) => b.level - a.level || b.exp - a.exp).slice(0, safeLimit),
-      accountLevel: [...rows].sort((a, b) => b.totalLevel - a.totalLevel || b.totalExp - a.totalExp).slice(0, safeLimit),
+      level: rows.filter((row) => row.characterCount > 0).sort((a, b) => b.level - a.level || b.exp - a.exp).slice(0, safeLimit),
+      accountLevel: rows.filter((row) => row.characterCount > 0).sort((a, b) => b.totalLevel - a.totalLevel || b.totalExp - a.totalExp).slice(0, safeLimit),
       checkin: [...rows].sort((a, b) => b.checkinCount - a.checkinCount).slice(0, safeLimit)
     };
   }

@@ -45,7 +45,9 @@ async function grantKillDrops(context) {
     }
   }
 
-  const monsterDropPool = await buildMonsterDropPool(sc, monster);
+  const encounterSize = require('../../shared/encounterGroup').encounterCount(context.state, monster);
+  const singleDropPool = await buildMonsterDropPool(sc, monster);
+  const monsterDropPool = Array.from({ length: encounterSize }, () => singleDropPool).flat();
 
   // 一般區每位有效參戰者各自依原掉率骰一次；世界王保留抽一位幸運者的規則。
   if (monsterDropPool.length > 0 && participants.length > 0) {
@@ -298,7 +300,7 @@ async function grantKillDrops(context) {
       for (const pid of participants) {
         const triggeredGemDrops = [];
         const pidDropPct = rewardModsByPid[pid]?.dropPct ?? 0;
-        for (const cfg of participationGemItems) {
+        for (const cfg of Array.from({ length: encounterSize }, () => participationGemItems).flat()) {
           const effectiveRate = Math.min(1, cfg.participationRate + pidDropPct / 100);
           if (Math.random() >= effectiveRate) continue;
           const dropCount = Math.random() < cfg.doubleDropRate ? 2 : 1;

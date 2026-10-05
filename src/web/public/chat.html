@@ -641,12 +641,8 @@
 
   <script>
     // 同源（相對路徑）：任何電腦從 otonashikoi.org/chat.html 都能讀。
-    // 留言改走伺服器中繼的 SSE（不再直連本機 OneComme），需帶密碼。
+    // 留言改走伺服器中繼的 SSE（不再直連本機 OneComme），免金鑰。
     const API_BASE   = '';
-    // 密碼：優先取網址 ?key=，否則用上次記住的，再否則跳出輸入框。
-    const urlKey = new URLSearchParams(location.search).get('key');
-    let CHAT_KEY = urlKey || localStorage.getItem('chat_overlay_key') || '';
-    if (urlKey) localStorage.setItem('chat_overlay_key', urlKey);
     const MAX_MSGS   = 30;
     const STORE_KEY  = 'chat_history_v1';
     const CACHE_TTL  = 10 * 1000; // 10 秒內同一人不重複打 API
@@ -958,21 +954,15 @@
       else { statusEl.className = 'show'; statusEl.textContent = msg; }
     }
 
-    // ── 伺服器中繼留言 SSE（密碼保護）──
-    // OBS 無法跳出輸入框，密碼一律從網址 ?key= 帶入：
-    //   https://otonashikoi.org/chat.html?key=你的密碼
+    // ── 伺服器中繼留言 SSE（免金鑰）──
+    // 直接開啟網址即可接收公開留言。
     let es;
     let firstError = true;
     function connect() {
-      if (!CHAT_KEY) {
-        dot.className = 'off';
-        setStatus('⚠ 請在網址結尾加上 ?key=你的密碼（OBS 來源網址也要帶）');
-        return;
-      }
 
       dot.className = '';
       setStatus('● 連線中…');
-      es = new EventSource(`${API_BASE}/api/chat/overlay-stream?key=${encodeURIComponent(CHAT_KEY)}`);
+      es = new EventSource(`${API_BASE}/api/chat/overlay-stream`);
 
       es.onopen = () => { dot.className = 'on'; setStatus(''); firstError = true; };
       es.onmessage = (ev) => {
@@ -984,8 +974,8 @@
       };
       es.onerror = () => {
         dot.className = 'off';
-        // 連不上可能是密碼錯誤或網路；持續重試，並在畫面上顯示讓 OBS 也看得到
-        setStatus(firstError ? '✕ 連線失敗（密碼是否正確？），重試中…' : '✕ 連線中斷，重試中…');
+        // 連不上可能是網路中斷；持續重試，並在畫面上顯示讓 OBS 也看得到
+        setStatus(firstError ? '✕ 連線失敗，重試中…' : '✕ 連線中斷，重試中…');
         firstError = false;
         es.close();
         setTimeout(connect, 5000);

@@ -31,11 +31,13 @@ function characterJobName(snapshot) {
   );
 }
 
-function summarizeCharacterLevels(progress) {
+function summarizeCharacterLevels(progress, { earnedOnly = false } = {}) {
   const characters = CHARACTER_SLOTS
     .map((slot) => {
       const snapshot = snapshotForSlot(progress, slot);
       if (!snapshot) return null;
+      // EXP resets on level-up; level > 1 proves this character has earned EXP.
+      if (earnedOnly && !(Number(snapshot.level) > 1 || Number(snapshot.exp) >= 1)) return null;
       return {
         slot,
         level: Math.max(1, Number(snapshot.level) || 1),
@@ -47,7 +49,7 @@ function summarizeCharacterLevels(progress) {
     .filter(Boolean);
 
   // 舊玩家一定至少有頂層角色資料；這個 fallback 只防止異常空文件讓排行榜報錯。
-  if (characters.length === 0) {
+  if (characters.length === 0 && !earnedOnly) {
     characters.push({ slot: 1, level: 1, exp: 0, levelReachedAt: null, jobName: "" });
   }
 
@@ -56,7 +58,7 @@ function summarizeCharacterLevels(progress) {
     || reachedMs(a.levelReachedAt) - reachedMs(b.levelReachedAt)
     || b.exp - a.exp
     || a.slot - b.slot
-  ))[0];
+  ))[0] || { slot: 1, level: 1, exp: 0, levelReachedAt: null, jobName: "" };
 
   return {
     highestSlot: highest.slot,

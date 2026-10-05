@@ -585,6 +585,10 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
   if (aliveMembers().length === 0)
     return { survived: false, memberLogs: [], totalRounds: 0, monsterKilled: false, monsterHpFinal: scaledHp, actionOrder: [] };
 
+  const encounter = require('../../shared/encounterGroup');
+  const enemyCount = session.partyV2 && !monster.isBoss ? encounter.count(monster.encounterCount) : 1;
+  const unitHp = scaledHp / enemyCount;
+  const enemyActorId = i => enemyCount === 1 ? 'monster' : `monster:${i}`;
   let   monsterHp    = scaledHp;
   const memberLogs   = [];
   let   monsterActiveEffects = [];
@@ -607,7 +611,7 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
   const initialActionOrder = buildTowerActionPreview(session.members, mCalc, openingPartyEffects).slice(0, 10);
   const gauges = new Map();
   for (const member of session.members) gauges.set(member.discordId, 0);
-  gauges.set("monster", 0);
+  for (let i = 0; i < enemyCount; i++) gauges.set(enemyActorId(i), 0);
   const maxActionSlices = session.partyV2 ? 5000 : Math.max(50, Math.max(1, MAX_ROUNDS_PER_MEMBER) * Math.max(2, session.members.length + 1));
 
   while (monsterHp > 0 && aliveMembers().length > 0 && totalActions < maxActionSlices) {
@@ -631,16 +635,13 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
             index,
           };
         }),
-      {
-        type: "monster",
-        id: "monster",
-        name: monster.name,
-        stats: monsterStatsNow,
-        agi: Number(monsterStatsNow.agi || 0),
-        dex: Number(monsterStatsNow.dex || 0),
-        speed: 100 + Math.max(0, Number(monsterStatsNow.agi || 0)),
-        index: session.members.length,
-      },
+      ...Array.from({ length: encounter.remaining(monsterHp, unitHp, enemyCount) }, (_, aliveIndex) => {
+        const enemyIndex = enemyCount - encounter.remaining(monsterHp, unitHp, enemyCount) + aliveIndex;
+        return { type: "monster", id: enemyActorId(enemyIndex), enemyIndex,
+          name: enemyCount > 1 ? `${monster.name} ${enemyIndex + 1}` : monster.name,
+          stats: monsterStatsNow, agi: Number(monsterStatsNow.agi || 0), dex: Number(monsterStatsNow.dex || 0),
+          speed: 100 + Math.max(0, Number(monsterStatsNow.agi || 0)), index: session.members.length + enemyIndex };
+      }),
     ];
     if (actors.length === 0) break;
 
@@ -664,6 +665,7 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
       const targetStats = getEffectiveMemberStats(target, partyEffects);
       const nonHealPartyEffects = partyEffects.filter((effect) => effect?.key !== "heal_over_time" && effect?.key !== "party_heal");
       const options = {
+        encounterCount: enemyCount, encounterUnitHp: unitHp,
         startMonsterHp: monsterHp,
         startPlayerHp: target.currentHp,
         startRound: session.partyV2 ? ownerRounds.get(target.discordId) : sharedRound,
@@ -722,6 +724,8 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
         partyAuras: session.partyV2 ? partyEffects.map(require("../../services/tower/partyTowerTelemetry").auraSnapshot) : [],
         jobStateAfter: target.partyJobView,
         type: "monster",
+        enemyIndex: actor.enemyIndex,
+        actorId: actor.id,
         name: monster.name,
         targetName: target.name,
         targetId: target.discordId,
@@ -755,6 +759,7 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
       maxHp: m.maxHp,
     };
     const options = {
+      encounterCount: enemyCount, encounterUnitHp: unitHp,
       startMonsterHp: monsterHp,
       startPlayerHp: m.currentHp,
       startRound: session.partyV2 ? ownerRounds.get(m.discordId) : sharedRound,

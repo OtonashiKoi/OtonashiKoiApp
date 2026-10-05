@@ -79,9 +79,6 @@
 
   <script>
     const API_BASE = '';
-    const urlKey = new URLSearchParams(location.search).get('key');
-    let CHAT_KEY = urlKey || localStorage.getItem('chat_overlay_key') || '';
-    if (urlKey) localStorage.setItem('chat_overlay_key', urlKey);
 
     // 一格一格往前堆：每來一則訊息就「推一步」，新的從右邊接上、整排往左挪一格，
     // 沒新訊息時完全靜止（不是連續跑過去）。
@@ -187,19 +184,18 @@
       if (el) place(el);
     }
 
-    // ── SSE（密碼保護，與 chat.html 同來源）──
+    // ── SSE（免金鑰，與 chat.html 同來源）──
     let es, firstError = true;
     function connect(){
-      if (!CHAT_KEY){ dot.className='off'; setStatus('⚠ 請在網址結尾加上 ?key=你的密碼（OBS 來源網址也要帶）'); return; }
       dot.className=''; setStatus('● 連線中…');
-      es = new EventSource(`${API_BASE}/api/chat/overlay-stream?key=${encodeURIComponent(CHAT_KEY)}`);
+      es = new EventSource(`${API_BASE}/api/chat/overlay-stream`);
       es.onopen = () => { dot.className='on'; setStatus(''); firstError=true; };
       es.onmessage = (ev) => {
         try { const c = JSON.parse(ev.data); const d = c && c.data ? c.data : c; if (d) enqueue(d); } catch(_){}
       };
       es.onerror = () => {
         dot.className='off';
-        setStatus(firstError ? '✕ 連線失敗（密碼是否正確？），重試中…' : '✕ 連線中斷，重試中…');
+        setStatus(firstError ? '✕ 連線失敗，重試中…' : '✕ 連線中斷，重試中…');
         firstError=false; es.close(); setTimeout(connect, 5000);
       };
     }

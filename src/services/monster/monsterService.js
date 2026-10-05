@@ -195,10 +195,25 @@ class MonsterService {
   }
 
   async getState(zoneKey = "normal") {
-    return this.monsterRepository.getState(zoneKey);
+    const state = await this.monsterRepository.getState(zoneKey);
+    // 部署前已在場的單隻怪保留殘血，不在儲存戰鬥結果時重新生成。
+    if (state && state.encounterMonsterSeq == null && state.activeMonsterSeq != null) {
+      state.encounterMonsterSeq = state.activeMonsterSeq;
+      state.encounterCount = 1;
+    }
+    return state;
   }
 
   async saveState(state, zoneKey = "normal") {
+    // Roll once at spawn, persist it, and never re-roll on damage retries or reads.
+    if (!state.activeTransition && !state.activeEvent && Number(state.currentHp) > 0
+        && Number(state.encounterMonsterSeq) !== Number(state.activeMonsterSeq)) {
+      const monster = (await this.listMonsters({ zone: zoneKey })).find(m => Number(m.seq) === Number(state.activeMonsterSeq));
+      const group = require('../../shared/encounterGroup');
+      if (monster && group.NORMAL_ZONES.has(monster.zone) && !monster.isBoss) {
+        Object.assign(state, group.spawnState(state, monster));
+      }
+    }
     return this.monsterRepository.saveState(state, zoneKey);
   }
 

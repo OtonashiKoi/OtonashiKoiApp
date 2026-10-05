@@ -1052,6 +1052,13 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   let mHp = (options.startMonsterHp != null)
     ? Math.max(0, Math.min(mHpInit, Number(options.startMonsterHp) || 0))
     : mHpInit;
+  const group = require('./encounterGroup');
+  const enemyCount = options.monsterIsBoss || options.isWorldBoss ? 1 : group.count(options.encounterCount);
+  const enemyUnitHp = enemyCount > 1 ? Math.max(1, Number(options.encounterUnitHp) || mHpInit / enemyCount) : mHpInit;
+  const livingEnemies = () => enemyCount > 1 ? group.remaining(mHp, enemyUnitHp, enemyCount) : Number(mHp > 0);
+  const currentTargetHp = () => enemyCount > 1 ? group.targetHp(mHp, enemyUnitHp) : mHp;
+  const currentTargetMaxHp = enemyCount > 1 ? enemyUnitHp : mHpInit;
+  const targetHealCeiling = () => enemyCount > 1 ? livingEnemies() * enemyUnitHp : mHpInit;
   let pHp = options.startPlayerHp != null
     ? Math.max(0, Math.min(pStats.maxHp, Number(options.startPlayerHp) || 0))
     : pStats.maxHp;
@@ -1374,7 +1381,15 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     const key = String(name || "");
     if (!key || !desc) return desc || "";
     if (_skillDescShown.has(key)) return "";
-    _skillDescShown.add(key);
+    // 機率／冷卻檢查前就會索取說明，只有確實寫入戰報後才能標成已顯示。
+    // 否則未發動的第一次嘗試會吃掉說明，後續成功施放只剩技能名稱。
+    const declaration = `【${key}】`;
+    const emitted = [...roundLogs, ...(_curLog || [])].some(line =>
+      String(line).includes(declaration) && String(line).includes(desc));
+    if (emitted) {
+      _skillDescShown.add(key);
+      return "";
+    }
     return desc;
   };
   let outcome = null;
@@ -1828,6 +1843,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   // Same core, resumable execution only for the multiplayer action clock.
   const actionSnapshot = () => ({
     outcome: outcome || "timeout", roundLogs, diceEvents, totalDamage, combatStats: { ...combatStats },
+    encounterCount: enemyCount, remainingEnemies: livingEnemies(), encounterUnitHp: enemyUnitHp,
     finalMonsterHp: Math.max(0, mHp), finalPlayerHp: Math.max(0, pHp),
     playerActiveEffects: options.playerActiveEffects, monsterActiveEffects, stunRoundsLeft,
     cardCooldowns, jobSkillCooldowns, jobSkillsUsedThisBattle: [..._skillUsedThisBattle],
@@ -2108,10 +2124,10 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
           const mode = String(healParams.mode || 'pct').toLowerCase();
           const val = Number(healParams.value ?? 0);
           if (!Number.isFinite(val) || val === 0) continue;
-          const heal = reduceMonsterHeal(mode === 'pct' ? Math.max(0, Math.round(mHpInit * (val / 100))) : Math.max(0, Math.round(val)));
+          const heal = reduceMonsterHeal(mode === 'pct' ? Math.max(0, Math.round(currentTargetMaxHp * (val / 100))) : Math.max(0, Math.round(val)));
           if (heal > 0) {
             const beforeHeal = mHp;
-            mHp = Math.min(mHpInit, mHp + heal);
+            mHp = Math.min(targetHealCeiling(), mHp + heal);
             log.push(`💚 ${mName} 生命力逐漸恢復，回復 **${Math.max(0, mHp - beforeHeal)}** HP！（${mName} 剩 ${mHp} HP）`);
           }
         }
@@ -2728,7 +2744,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     const monsterIsStunned = stunRoundsLeft > 0;
     const getRoundTargetDamageMultiplier = () => {
       let multiplier = 1;
-      if (roundHighHpDmgBoostPct > 0 && mHp > mHpInit * 0.5) {
+      if (roundHighHpDmgBoostPct > 0 && currentTargetHp() > currentTargetMaxHp * 0.5) {
         multiplier *= (1 + roundHighHpDmgBoostPct / 100);
       }
       if (roundStunnedDmgBoostPct > 0 && _targetStunnedNow(round)) {
@@ -2754,7 +2770,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       const equippedCard = monsterEquipped.special_1;
       const skill = equippedCard.monsterCardSkill.monsterSkill || equippedCard.monsterCardSkill;
       const cardName = equippedCard.itemName || equippedCard.name || '卡片';
-      const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+      const monsterHpPct = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
       const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
 
       // 怪物增益效果（施加給怪物自己）
@@ -2787,7 +2803,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
             targetActiveEffects: options.playerActiveEffects || [],
             ownerLabel: mName,
             sourceAtk: adjustedMCalc.atk || mCalc.atk || 1,
-            ownerMaxHp: mHpInit || mHp || 1,
+            ownerMaxHp: currentTargetMaxHp || currentTargetHp() || 1,
             targetMaxHp: pStats.maxHp || pHp || 1,
             targetLabel: '你',
             // 日之精靈：怪物技能傷害也先由精靈承受（代承是「所有攻擊」，不是只有普攻）
@@ -2799,7 +2815,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
           },
           applyOwnerHeal: (heal) => {
             const before = mHp;
-            mHp = Math.min(mHpInit, mHp + reduceMonsterHeal(heal));
+            mHp = Math.min(targetHealCeiling(), mHp + reduceMonsterHeal(heal));
             return { remainingHp: mHp, actualHeal: Math.max(0, mHp - before) };
           },
           applySpecialEffect: (procEffect) => {
@@ -2839,7 +2855,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         for (const rawProcEffect of normalProcEffects) {
           if (!rawProcEffect || !rawProcEffect.key) continue;
           const procEffect = normalizeCardProcEffect(rawProcEffect);
-          const currentMonsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+          const currentMonsterHpPct = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
           const currentPlayerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
           if (!procEffectApplies(procEffect, currentMonsterHpPct, currentPlayerHpPct)) continue;
           const procChance = Number.isFinite(Number(procEffect.chance))
@@ -2904,10 +2920,10 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
             skillDescription: _descOnce(skill.name, skill.description || ''),
             targetLabel: mName,
             sourceAtk: adjustedMCalc.atk || mCalc.atk || 1,
-            targetMaxHp: mHpInit || mHp || 1,
+            targetMaxHp: currentTargetMaxHp || currentTargetHp() || 1,
             applyTargetHeal: (heal) => {
               const before = mHp;
-              mHp = Math.min(mHpInit, mHp + reduceMonsterHeal(heal));
+              mHp = Math.min(targetHealCeiling(), mHp + reduceMonsterHeal(heal));
               return { remainingHp: mHp, actualHeal: Math.max(0, mHp - before) };
             },
             log
@@ -3087,7 +3103,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         const skill = slotItem.monsterCardSkill;
         const cardName = slotItem.itemName || slotItem.name || '卡片';
         const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
-        const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+        const monsterHpPct = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
 
         const cooldownKey = slotItem.itemId || slotItem.id || `${slot}:${cardName}`;
         const triggerChance = Math.min(100, Math.max(0, Number(skill.chance ?? slotItem.cardProcChance ?? 5)));
@@ -3115,7 +3131,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
             ownerLabel: playerBattleName,
             sourceAtk: pStats.atk || 1,
             ownerMaxHp: pStats.maxHp || pHp || 1,
-            targetMaxHp: mHpInit || mHp || 1,
+            targetMaxHp: currentTargetMaxHp || currentTargetHp() || 1,
             targetLabel: mName,
             // 玩家卡即時傷害要計入總傷害(否則世界王落地會回彈)，且必須與主擊走同一道檢傷：
             // 部位弱點/屬性相剋/演奏加成(playerHitMult) 與怪物減傷/承傷/無敵/單擊上限都要吃到。
@@ -3175,7 +3191,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
           if (!rawProcEffect || !rawProcEffect.key) continue;
           const procEffect = normalizeCardProcEffect(rawProcEffect);
           const currentPlayerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
-          const currentMonsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+          const currentMonsterHpPct = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
           if (!procEffectApplies(procEffect, currentPlayerHpPct, currentMonsterHpPct)) continue;
           const procChance = Number.isFinite(Number(procEffect.chance))
             ? Math.min(100, Math.max(0, Number(procEffect.chance)))
@@ -3237,12 +3253,12 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
           }
           if (procEffect.key === 'proc_execute') {
             const execThr = Number(pp.thresholdPct ?? pp.value ?? 20);
-            const monsterHpPctNow = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+            const monsterHpPctNow = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
             if (monsterHpPctNow <= execThr) {
               log.push(`💀 **${playerBattleName}** 發動【${skill.name || cardName}】斬殺！${mName} 直接被擊殺！`);
-              totalDamage += mHp; cardDamageThisCast += mHp;
-              mHp = 0;
-              outcome = "win";
+              totalDamage += currentTargetHp(); cardDamageThisCast += currentTargetHp();
+              mHp = Math.max(0, mHp - currentTargetHp());
+              if (mHp <= 0) outcome = "win";
               appliedAnyNormalProc = true;
             }
             continue;
@@ -3271,7 +3287,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
             skillDescription: _descOnce(skill.name, skill.description || ''),
             targetLabel: mName,
             sourceAtk: pStats.atk || 1,
-            targetMaxHp: mHpInit || mHp || 1,
+            targetMaxHp: currentTargetMaxHp || currentTargetHp() || 1,
             // 同上:即時傷害計入總傷害，並走同一道檢傷（回傳物件才會讓戰報顯示檢傷後的數字）
             applyTargetDamage: (damage) => {
               const d = applyMonsterIncomingGuards(damage);
@@ -3343,7 +3359,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         ? options.equipped.job_eq.jobSkills : []).filter((sk) => !sk?.trigger);
       if (jobSkills.length > 0 && Math.random() < 0.35) {
         const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
-        const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+        const monsterHpPct = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
         const available = jobSkills.filter((sk) => {
           if (!sk || !sk.key) return false;
           if ((jobSkillCooldowns[sk.key] || 0) > 0) return false;
@@ -3964,7 +3980,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       //    需要 dmg 數值的 B 類（proc_extra_hit / proc_chain_hit）仍留在命中後處理。
       if (outcome === null && mHp > 0) {
         const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
-        const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+        const monsterHpPct = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
         for (const pe of jobProfile.activeJobEffects) {
           if (pe.trigger !== 'on_hit' && pe.trigger !== 'on_attack') continue;
           if (pe.key === 'proc_extra_hit' || pe.key === 'proc_chain_hit') continue; // B 類：需要 dmg，留待命中後
@@ -4042,12 +4058,12 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
             log.push(`⚔️💢 ${mName} 攻擊被削弱！ATK -${pp.value ?? 20}！`);
           } else if (pe.key === 'proc_execute') {
             const execThr = Number(pp.thresholdPct ?? 20);
-            const monsterHpPctNow = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+            const monsterHpPctNow = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
             if (monsterHpPctNow <= execThr) {
               log.push(`💀 **斬殺**！${mName} 被直接擊殺！`);
-              totalDamage += mHp;
-              mHp = 0;
-              outcome = "win";
+              totalDamage += currentTargetHp();
+              mHp = Math.max(0, mHp - currentTargetHp());
+              if (mHp <= 0) outcome = "win";
               break;
             }
           } else if (pe.key === 'proc_heal') {
@@ -4588,7 +4604,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         //    A 類（毒/暈/燒/冰/降命中/降攻防/護盾/治療等）已於攻擊發起時（on_attack）觸發，見上方。
         if (mHp > 0) {
           const playerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
-          const monsterHpPct = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+          const monsterHpPct = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
           for (const pe of jobProfile.activeJobEffects) {
             if (pe.trigger !== 'on_hit' && pe.trigger !== 'on_attack') continue;
             if (pe.key !== 'proc_extra_hit' && pe.key !== 'proc_chain_hit') continue; // A 類已在 on_attack 觸發
@@ -4697,12 +4713,12 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
 
             } else if (pe.key === 'proc_execute') {
               const execThr = Number(pp.thresholdPct ?? 20);
-              const monsterHpPctNow = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+              const monsterHpPctNow = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
               if (monsterHpPctNow <= execThr) {
                 log.push(`💀 **斬殺**！${mName} 被直接擊殺！`);
-                totalDamage += mHp;
-                mHp = 0;
-                outcome = "win";
+                totalDamage += currentTargetHp();
+                mHp = Math.max(0, mHp - currentTargetHp());
+                if (mHp <= 0) outcome = "win";
                 break;
               }
 
@@ -4766,12 +4782,12 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         }
         // ── 強制斬殺（execute_under_hp_pct）──
         if (mHp > 0 && playerExecuteUnderHpPct > 0) {
-          const monsterHpPctNow = mHpInit > 0 ? (mHp / mHpInit) * 100 : 100;
+          const monsterHpPctNow = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
           if (monsterHpPctNow <= playerExecuteUnderHpThreshold && Math.random() * 100 < playerExecuteUnderHpPct) {
             log.push(`💀 **斬殺**！${mName} 被直接擊殺！`);
-            totalDamage += mHp;
-            mHp = 0;
-            outcome = "win";
+            totalDamage += currentTargetHp();
+            mHp = Math.max(0, mHp - currentTargetHp());
+            if (mHp <= 0) outcome = "win";
           }
         }
         // 計數一次攻擊
@@ -4818,10 +4834,10 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         }
         // 斬殺判定（例：雙手劍職業被動）
         if (mHp > 0 && pStats.executeChance > 0 && pStats.executeThresholdPct > 0) {
-          const thresholdHp = Math.max(1, Math.floor(mHpInit * (pStats.executeThresholdPct / 100)));
-          if (mHp <= thresholdHp && Math.random() * 100 < pStats.executeChance) {
-            const executeDamage = mHp;
-            mHp = 0;
+          const thresholdHp = Math.max(1, Math.floor(currentTargetMaxHp * (pStats.executeThresholdPct / 100)));
+          if (currentTargetHp() <= thresholdHp && Math.random() * 100 < pStats.executeChance) {
+            const executeDamage = currentTargetHp();
+            mHp = Math.max(0, mHp - currentTargetHp());
             totalDamage += executeDamage;
             log.push(`🗡️ **斬殺觸發**！${mName} 生命低於 ${pStats.executeThresholdPct}% ，${rand(EXECUTE_PHRASES)}！`);
           }
@@ -4918,10 +4934,10 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
           }
 
           if (mHp > 0 && pStats.executeChance > 0 && pStats.executeThresholdPct > 0) {
-            const thresholdHp = Math.max(1, Math.floor(mHpInit * (pStats.executeThresholdPct / 100)));
-            if (mHp <= thresholdHp && Math.random() * 100 < pStats.executeChance) {
-              const executeDamage = mHp;
-              mHp = 0;
+            const thresholdHp = Math.max(1, Math.floor(currentTargetMaxHp * (pStats.executeThresholdPct / 100)));
+            if (currentTargetHp() <= thresholdHp && Math.random() * 100 < pStats.executeChance) {
+              const executeDamage = currentTargetHp();
+              mHp = Math.max(0, mHp - currentTargetHp());
               totalDamage += executeDamage;
               log.push(`🗡️ **斬殺觸發**！${mName} 生命低於 ${pStats.executeThresholdPct}% ，${rand(EXECUTE_PHRASES)}！`);
             }
@@ -5139,7 +5155,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       // 如果 AGI 差 > 15，奇數回合怪物不攻擊
       skipMonsterAttackReason = "agi_slowed";
     } else {
-      monsterAttackCount = pStats.monsterAttackCount || 1;
+      monsterAttackCount = (pStats.monsterAttackCount || 1) * (options.actionSession ? 1 : livingEnemies());
       // 🐺 連牙亂舞：保底 2 段 + 機率追加(第3段55%→第4段30%→第5段12%，依序遇失敗停)，最多 5 段
       if (_hellfangCombo) {
         let hits = 2;
@@ -5210,7 +5226,13 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       _g6Segs = 1;
       steelCrownEvents.push({ phase, action: steelCrownActions, hits, segments: steelSegments.length });
     }
+    const enemiesAtAttackStart = livingEnemies();
     for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
+      // 死亡的怪物不能繼續反擊；單體及組隊獨立行動維持原流程。
+      if (enemyCount > 1 && !options.actionSession) {
+        const attacksPerEnemy = monsterAttackCount / enemiesAtAttackStart;
+        if (Math.floor(ma / attacksPerEnemy) < enemiesAtAttackStart - livingEnemies()) continue;
+      }
       if (steelSegments) adjustedMCalc.atk = steelBaseAtk * steelSegments[ma].factor;
       // 精靈是純血量召喚物：在場時不借用主人的任何防禦判定，怪物只要自身沒有失敗就會命中。
       const spiritTargeted = Boolean(sunSpiritCfg) && _spiritHp > 0;
@@ -5517,7 +5539,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
                 const lifePercent = Number(lifeParams.value || 0);
                 const healAmount = Math.max(1, Math.round(dmg * (lifePercent / 100)));
                 const beforeHeal = mHp;
-                mHp = Math.min(mHpInit, mHp + reduceMonsterHeal(healAmount));
+                mHp = Math.min(targetHealCeiling(), mHp + reduceMonsterHeal(healAmount));
                 log.push(`💚 ${mName} 吸取生命力，恢復 **${Math.max(0, mHp - beforeHeal)}** HP！（${mName} 剩 ${mHp} HP）`);
               }
             }
@@ -5549,7 +5571,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
               requireHpGate: false,
               deferOwnerEffects: true,
               ownerHpPct: pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100,
-              targetHpPct: mHpInit > 0 ? (mHp / mHpInit) * 100 : 100,
+              targetHpPct: mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100,
               round, sourceType: 'player_card',
               cardName: dItem.itemName || dItem.name || '卡片',
               skillName: dSkill.name || '', skillDescription: _descOnce(dSkill.name, dSkill.description || ''),
@@ -5558,7 +5580,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
               ownerActiveEffects: options.playerActiveEffects || [],
               targetActiveEffects: monsterActiveEffects,
               ownerLabel: playerBattleName, sourceAtk: pStats.atk || 1,
-              ownerMaxHp: pStats.maxHp || pHp || 1, targetMaxHp: mHpInit || mHp || 1, targetLabel: mName,
+              ownerMaxHp: pStats.maxHp || pHp || 1, targetMaxHp: currentTargetMaxHp || currentTargetHp() || 1, targetLabel: mName,
               // 同上：閃避後觸發的卡片傷害一樣要走檢傷，並回傳物件讓戰報顯示檢傷後數字
               applyTargetDamage: (raw) => {
                 const d = applyMonsterIncomingGuards(raw);
@@ -5994,6 +6016,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     roundLogs,
     diceEvents,
     totalDamage,
+    encounterCount: enemyCount, remainingEnemies: livingEnemies(), encounterUnitHp: enemyUnitHp,
     finalMonsterHp: Math.max(0, mHp),
     finalPlayerHp:  Math.max(0, pHp),
     combatStats,

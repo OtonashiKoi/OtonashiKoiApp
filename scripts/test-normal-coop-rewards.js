@@ -82,6 +82,19 @@ async function main() {
   await grantKillCurrencyAndExp({ state: threeState, discordId: 'attacker', displayName: '攻擊者',
     zoneKey: 'mid', monster, sc, totalDamage: 40, session: { monsterMaxHp: 100 }, rewardLines: [] });
   assert.deepEqual(exp.map(e=>e.amount),[54,50,27], '低等跨區與高等回刷皆遞減');
+  gold.length = 0; exp.length = 0;
+  const groupMonster = { ...monster, zone: "normal", seq: 9 };
+  const groupState = { ...state, encounterCount: 3, encounterMonsterSeq: 9 };
+  const groupResult = await grantKillCurrencyAndExp({ state: groupState, discordId: "attacker", displayName: "攻擊者", zoneKey: "normal", monster: groupMonster, sc, totalDamage: 300, session: {}, rewardLines: [] });
+  assert.deepEqual(gold.map(e => e.amount), [330,330], "three original gold pools split once");
+  assert.deepEqual(exp.map(e => e.amount), [75,150], "three original EXP pools; existing cross-zone personal reduction retained");
+  const beforeItems = new Map([...players].map(([id,p])=>[id,p.inventory.filter(i=>i.itemId==='test-item').length]));
+  await grantKillDrops({ ...groupResult, state: groupState, monster: groupMonster, discordId: "attacker", displayName: "攻擊者", rewardLines: [], sc, zoneKey: "normal" });
+  for (const id of ['attacker','support']) assert.equal(players.get(id).inventory.filter(i=>i.itemId==='test-item').length-beforeItems.get(id),3, "each player has three independent original-rate rolls");
+  assert.equal(players.get('idle').inventory.length,0);
+  gold.length = 0; exp.length = 0;
+  await grantKillCurrencyAndExp({ state: groupState, discordId: "attacker", displayName: "攻擊者", zoneKey: "normal", monster: { ...groupMonster,isBoss:true }, sc, totalDamage: 100, session: {}, rewardLines: [] });
+  assert.deepEqual(gold.map(e=>e.amount),[110,110], "BOSS cannot inherit group reward multiplier");
   console.log("PASS: normal coop eligibility, EXP multiplier, unchanged gold pool, individual original-rate drops");
 }
 

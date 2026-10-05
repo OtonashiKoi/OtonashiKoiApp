@@ -604,7 +604,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monsterId: activeMonster?.id || null,
         monsterName: activeMonster?.name || "未設定",
         monsterImageUrl: activeMonster?.imageUrl || null,
-        monsterLevel: activeMonster?.level || 0,
+        encounterCount: require('../../shared/encounterGroup').encounterCount(state, activeMonster),
+          monsterLevel: activeMonster?.level || 0,
         monsterElement: activeMonster?.element || null, // 屬性徽章用；無屬性怪回 null，前端不顯示
         monsterElementLevel: activeMonster?.element ? (activeMonster?.elementLevel || 1) : 0,
         expReward: activeMonster?.expReward || 0,
@@ -2483,15 +2484,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     });
   });
 
-  // 聊天室 overlay 即時留言 SSE（密碼保護；給 chat.html 跨電腦讀取用）。
-  // 網址：/api/chat/overlay-stream?key=密碼。密碼錯誤回 401，不外洩留言。
+  // 聊天室 overlay 公開留言 SSE（免金鑰；給所有 OBS 樣式跨電腦讀取用）。
+  // 網址：/api/chat/overlay-stream。維持 SSE 連線數上限與關閉清理。
   router.get("/api/chat/overlay-stream", (req, res) => {
     const chatOverlayHub = require("../../services/chat/chatOverlayHub");
-    const expected = process.env.CHAT_OVERLAY_PASSWORD;
-    const key = String(req.query.key || "");
-    if (!expected || key !== expected) {
-      return res.status(401).json(fail("UNAUTHORIZED", "聊天室 overlay 密碼錯誤"));
-    }
     const releaseSse = acquireSse(req);
     if (!releaseSse) return res.status(503).json(fail("TOO_MANY", "連線數已滿,請稍後再試"));
     res.setHeader("Content-Type", "text/event-stream");
@@ -2777,6 +2773,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           monsterId: activeMonster?.id || null,
           monsterName: activeMonster?.name || "Unknown",
           monsterImageUrl: activeMonster?.imageUrl || null,
+          encounterCount: require('../../shared/encounterGroup').encounterCount(state, activeMonster),
           monsterLevel: activeMonster?.level || 0,
           monsterElement: activeMonster?.element || null, // 屬性徽章用；無屬性怪回 null，前端不顯示
           monsterElementLevel: activeMonster?.element ? (activeMonster?.elementLevel || 1) : 0,
@@ -2858,6 +2855,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           monsterId: activeMonster?.id || null,
           monsterName: activeMonster?.name || "??堊?",
           monsterImageUrl: activeMonster?.imageUrl || null,
+          encounterCount: require('../../shared/encounterGroup').encounterCount(state, activeMonster),
           monsterLevel: activeMonster?.level || 0,
           expReward: activeMonster?.expReward || 0,
           goldReward: activeMonster?.goldReward || 0,
@@ -2984,7 +2982,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         monster = monsters[0];
         const initHp = monster.calc.maxHp;
         await serviceContext.monsterService.saveState({ ...state, activeMonsterSeq: monster.seq, currentHp: initHp, coopMaxHp: initHp, coopHpMonsterSeq: monster.seq }, zoneKey);
-        state = { ...state, activeMonsterSeq: monster.seq, currentHp: initHp, coopMaxHp: initHp, coopHpMonsterSeq: monster.seq };
+        state = await serviceContext.monsterService.getState(zoneKey);
       }
 
       // 防止舊戰鬥結果在換怪後回寫：任何一般怪的持久 HP 都不得超過目前模板上限。
@@ -3581,6 +3579,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const { runCombatLoop } = require("../../shared/combatLoop");
       const combatResult =
         runCombatLoop(battlePStats, battleMonsterStats, monster.name, combatMonsterHp, undefined, {
+          encounterCount: require('../../shared/encounterGroup').encounterCount(stateForCombat, monster),
+          encounterUnitHp: normalMaxHp(stateForCombat, monster) / require('../../shared/encounterGroup').encounterCount(stateForCombat, monster),
           // 團隊暈眩／區域冰封：整場（給滿 999，實際會被戰鬥回合數自然截斷）
           teamStunRounds: (teamStunOn || zoneFrozenOn) ? 999 : 0,
           teamStunStyle: (!teamStunOn && zoneFrozenOn) ? "freeze" : undefined,
@@ -4295,7 +4295,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               currentHp: Number.isFinite(transitionNextSeq)
                 ? transitionHp
                 : (latestState.currentHp != null ? latestState.currentHp : transitionHp),
-              maxHp: liveMon.calc?.maxHp || 0,
+              maxHp: Number.isFinite(transitionNextSeq) ? transitionHp : (latestState.coopMaxHp || liveMon.calc?.maxHp || 0),
+              encounterCount: Number.isFinite(transitionNextSeq) ? 1 : require("../../shared/encounterGroup").encounterCount(latestState, liveMon),
               activeMonsterSeq: visibleMonsterSeq
             };
           }
@@ -4381,6 +4382,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           canKnock: _zfg.canKnock(equipped?.job_eq),
         },
         monsterName: monster.name,
+        // UI 說明直接取本場實際卡片設定，不依賴省略重複說明的戰報。
+        enemySkillDescriptions: Object.values(battleMonsterEquipped || {}).flatMap(item => {
+          const skill = item?.monsterCardSkill?.monsterSkill || item?.monsterCardSkill;
+          return skill?.name && skill?.description ? [{ name: skill.name, description: skill.description }] : [];
+        }),
         monsterImageUrl: monster.imageUrl || null, // 本場實際對戰怪物的圖,讓前端圖片永遠對得上名字(不受區域換怪延遲影響)
         monsterElement: monster?.element || null, // 屬性徽章用；戰鬥畫面(BattleLayer)要顯示需要前端也接住這個欄位
         monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0,
@@ -4406,6 +4412,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         // 世界王:血條顯示「當前所打部位」的血量(非整隻王總血量);一般怪維持整隻血量
         finalMonsterHp: isWorldBoss ? Math.max(0, Math.round(worldBossPartHpCurrent)) : Math.max(0, mHp),
         // 進場瞬間怪物實際 HP 與滿血（共鬥怪可能非滿血，前端據此顯示血條）
+        encounterCount: require('../../shared/encounterGroup').encounterCount(stateForCombat, monster),
         monsterStartHp: isWorldBoss ? Math.max(0, Math.round(Number(combatMonsterHp))) : Math.max(0, Math.round(Number(monsterHpInitial))),
         monsterMaxHp: isWorldBoss ? Math.max(1, Math.round(Number(worldBossPartHpMax))) : normalMaxHp(normalSettledState || stateForCombat, monster),
         nextBattleAt,
@@ -5268,6 +5275,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   router.get("/api/pk/leaderboard", requireAuth, async (req, res, next) => {
+    // PK leaderboard temporarily closed; retain ratings and implementation for reopening.
+    const pkLeaderboardEnabled = false;
+    if (!pkLeaderboardEnabled) return res.status(403).json(fail("FEATURE_DISABLED", "PK 排行榜暫停開放"));
     try {
       const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
       const rows = await serviceContext.progressRepository.findTopByPkRating(limit);

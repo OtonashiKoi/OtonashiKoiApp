@@ -17,6 +17,7 @@ async function grantKillCurrencyAndExp(context) {
   const { state, discordId, zoneKey, monster, sc, displayName, totalDamage, session, rewardLines } = context;
   // 參戰名單（含本次打到尾段的玩家）
   const worldBossReward = isWorldBossZone(zoneKey) && Boolean(monster?.isBoss);
+  const encounterSize = require('../../shared/encounterGroup').encounterCount(state, monster);
   const rawDmgMap = state.damageMap || {};
   const listedParticipants = [...new Set([...(Array.isArray(state.participants) ? state.participants : []), discordId])];
   // 一般區只有實際造成傷害或有效支援的人可領獎；世界王沿用原本名單。
@@ -25,7 +26,7 @@ async function grantKillCurrencyAndExp(context) {
 
   // 世界王解鎖累計：原 hard 區拆成古城/古城深處，兩區擊殺都算
   if ((zoneKey === "ancient_city" || zoneKey === "ancient_city_deep") && !monster?.isBoss && sc.worldBossServiceFor(zoneKey)) {
-    await sc.worldBossServiceFor(zoneKey).recordHardZoneKill(1).catch(() => {});
+    await sc.worldBossServiceFor(zoneKey).recordHardZoneKill(encounterSize).catch(() => {});
   }
 
   // 任務勝利判定：怪物被擊殺時，全參戰者都算 1 次勝利。
@@ -64,7 +65,7 @@ async function grantKillCurrencyAndExp(context) {
       prog.equipment = await mergeEquippedFromLibrary(prog.equipment || {}, sc.itemRepository);
     }
   }));
-  recordQuestForPlayersInBackground(sc.questService || sc.weeklyQuestService, participants, "battle_win", 1, pid => ({
+  recordQuestForPlayersInBackground(sc.questService || sc.weeklyQuestService, participants, "battle_win", encounterSize, pid => ({
     autumnEvent: { eligible: titleEligible, slot: progressCache[pid]?.activeCharacterSlot || 1, seasonKey: progressCache[pid]?.seasonKey }
   }));
   const rewardModsByPid = {};
@@ -128,7 +129,7 @@ async function grantKillCurrencyAndExp(context) {
   // ── 金幣依比例分配 ──
   // 依玩家各自對「怪物完整血量」的傷害比例結算
   const dynamicGoldPool = getDynamicGoldPoolFloor(zoneKey, worldBossReward ? participants.length : 1);
-  const effectiveGoldReward = Math.max(monster.goldReward || 0, dynamicGoldPool);
+  const effectiveGoldReward = Math.max(monster.goldReward || 0, dynamicGoldPool) * encounterSize;
 
   let myBaseGoldShare = 0;
   if (effectiveGoldReward > 0) {
@@ -169,7 +170,7 @@ async function grantKillCurrencyAndExp(context) {
   const partyMult = worldBossReward
     ? (n <= 2 ? 1.0 : +(1 + Math.pow(n - 2, 0.7) * 0.6).toFixed(2))
     : normalExpMultiplier(n);
-  const effectiveExpReward = Math.round(monster.expReward * partyMult);
+  const effectiveExpReward = Math.round(monster.expReward * partyMult * encounterSize);
   const zoneExpMult = (pid) => worldBossReward ? 1 : normalZoneExpMultiplier(zoneKey, progressCache[pid]?.level);
 
   let myBaseExpShare = 0;

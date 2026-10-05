@@ -17,3 +17,7 @@
 - `docs/CURRENT_GAME_STATUS.md` is generated from code plus MongoDB. Refresh it with `npm run status:update`; do not hand-edit generated facts.
 - After changing player-visible behavior, feature gates, routes, jobs, combat rules, or live-event rules, update the matching current document and run `npm run check:docs`.
 - Plans, handoff notes, changelogs, benchmarks, and dated reports are context only. Do not use them as proof of current behavior unless current code confirms the claim.
+
+## Player Restart Notice
+- Before any agent-initiated production restart, run `node scripts/pre-pm2-restart-hotfix.js` and verify successful delivery to Discord channel `1498608950671839263`. If delivery fails, do not restart.
+- Prefer `npm run pm2:restart`, which runs the notice prehook. Direct PM2 restarts require the same notice first. Static-file-only changes do not require a runtime restart.

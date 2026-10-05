@@ -1,65 +1,20 @@
+"use strict";
 require("dotenv").config();
+const TARGET_CHANNEL_ID = "1498608950671839263";
+const HOTFIX_MESSAGE = "📢 **遊戲伺服器即將重啟**\n請先完成目前操作，重啟期間會短暫斷線；恢復後請重新連線。";
 
-const { Client, GatewayIntentBits } = require("discord.js");
-const config = require("../src/config");
-const { createServiceContext } = require("../src/services/createServiceContext");
-
-const HOTFIX_MESSAGE =
-  "📢 **官方公告**\n音無樂園要 HOTFIX 啦，請注意會斷線，請先完成目前操作。";
-const DISCORD_OPERATION_TIMEOUT_MS = 5000;
-
-function withTimeout(promise, label, timeoutMs = DISCORD_OPERATION_TIMEOUT_MS) {
-  let timer = null;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+async function sendRestartNotice({ token = process.env.DISCORD_TOKEN, fetchImpl = fetch } = {}) {
+  if (!token) throw new Error("DISCORD_TOKEN 未設定；停止重啟，未發公告。");
+  const response = await fetchImpl(`https://discord.com/api/v10/channels/${TARGET_CHANNEL_ID}/messages`, {
+    method: "POST", headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ content: HOTFIX_MESSAGE, allowed_mentions: { parse: [] } }),
+    signal: AbortSignal.timeout(5000)
   });
-  return Promise.race([promise, timeout]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
+  if (!response.ok) throw new Error(`Discord 公告發送失敗 HTTP ${response.status}；停止重啟。`);
+  const message = await response.json();
+  if (!message.id || message.channel_id !== TARGET_CHANNEL_ID) throw new Error("Discord 公告回應無效；停止重啟。");
+  console.log(`[HotfixNotice] 已送達頻道 ${TARGET_CHANNEL_ID}，訊息 ${message.id}`);
+  return message.id;
 }
-
-async function pickHotfixChannelId(serviceContext) {
-  const layout = await serviceContext.adminConsoleService.getChannelLayout();
-  const bindings = Array.isArray(layout?.discord?.bindings) ? layout.discord.bindings : [];
-  // 對齊掉裝公告邏輯：優先 town_chat，沒有才 fallback 到 monster_zone
-  const binding = bindings.find(
-    (entry) => entry.featureKey === "town_chat" && entry.enabled && entry.channelId
-  );
-  return binding?.channelId || "";
-}
-
-async function main() {
-  if (!config.discord.token) {
-    console.warn("[HotfixNotice] DISCORD_TOKEN 未設定，略過重啟公告。");
-    return;
-  }
-
-  const serviceContext = createServiceContext();
-  const targetChannelId = await pickHotfixChannelId(serviceContext);
-  if (!targetChannelId) {
-    console.warn("[HotfixNotice] 找不到已啟用的聊天大街(town_chat)綁定，略過重啟公告。");
-    return;
-  }
-
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-  try {
-    await withTimeout(client.login(config.discord.token), "Discord login");
-    const channel = await withTimeout(client.channels.fetch(targetChannelId), "Discord channel fetch");
-    if (!channel?.isTextBased || !channel.isTextBased()) {
-      console.warn(`[HotfixNotice] 目標頻道不可發送訊息：${targetChannelId}`);
-      return;
-    }
-    await withTimeout(channel.send(HOTFIX_MESSAGE), "Discord hotfix notice send");
-    console.log(`[HotfixNotice] 已發送重啟公告到頻道 ${targetChannelId}`);
-  } finally {
-    try { client.destroy(); } catch (_) {}
-  }
-}
-
-main()
-  .catch((error) => {
-    console.warn("[HotfixNotice] 發送失敗，但會繼續執行重啟：", error?.message || error);
-  })
-  .finally(() => {
-    process.exit(0);
-  });
+if (require.main === module) sendRestartNotice().catch(error => { console.error("[HotfixNotice]", error.message); process.exitCode = 1; });
+module.exports = { sendRestartNotice, TARGET_CHANNEL_ID };

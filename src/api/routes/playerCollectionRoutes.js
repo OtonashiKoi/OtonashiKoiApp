@@ -202,7 +202,7 @@ function createPlayerCollectionRoutes(serviceContext) {
         .filter((p) => !isLeaderboardExcluded(progressMap[p.discordId]))
         .map((p) => {
           const prog = progressMap[p.discordId] || {};
-          const levels = summarizeCharacterLevels(prog);
+          const levels = summarizeCharacterLevels(prog, { earnedOnly: true });
           return {
             discordId: p.discordId,
             name: prettyName(p.displayName, p.discordId),
@@ -217,6 +217,7 @@ function createPlayerCollectionRoutes(serviceContext) {
             characterLevels: levels.characterLevels,
           };
         })
+        .filter((row) => row.characterCount > 0)
         .sort((a, b) => mode === "total"
           ? b.totalLevel - a.totalLevel || b.totalExp - a.totalExp || b.level - a.level
           : b.level - a.level
@@ -227,7 +228,7 @@ function createPlayerCollectionRoutes(serviceContext) {
       const list = rows.slice(0, limit).map((r, i) => ({ rank: i + 1, ...r }));
       const myIdx = rows.findIndex((r) => r.discordId === discordId);
       const myProgress = progressMap[discordId] || {};
-      const myLevels = summarizeCharacterLevels(myProgress);
+      const myLevels = summarizeCharacterLevels(myProgress, { earnedOnly: true });
       const me = myIdx >= 0
         ? { rank: myIdx + 1, ...rows[myIdx] }
         : {
