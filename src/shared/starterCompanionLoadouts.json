@@ -1,0 +1,4331 @@
+{
+  "beginner": [
+    {
+      "key": "swordsman",
+      "actorId": "starter-npc:beginner:swordsman",
+      "actorName": "白鷺",
+      "jobName": "劍士",
+      "role": "output",
+      "level": 2,
+      "tier": "D",
+      "attributes": {
+        "str": 3,
+        "agi": 1,
+        "vit": 1,
+        "int": 1,
+        "dex": 1,
+        "luk": 1
+      },
+      "equipped": {
+        "weapon": {
+          "id": "a56bd609-cf0b-4924-b724-891f221fc0b9",
+          "name": "木製單手劍",
+          "description": "D 級 武器",
+          "itemType": "equipment",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c377c6a6c05d12a9f9471bb0.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c377c6a6c05d12a9f9471bb0-thumb.png",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "weapon",
+          "equipStats": {
+            "str": 3,
+            "agi": 0,
+            "vit": 0,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "weaponType": "sword_1h",
+          "isTwoHanded": false,
+          "atkStat": "str",
+          "tier": "D",
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "itemId": "a56bd609-cf0b-4924-b724-891f221fc0b9",
+          "itemName": "木製單手劍",
+          "enhanceLevel": 0
+        },
+        "armor": {
+          "id": "7c4446d5-7988-4d71-816e-a479545ba23a",
+          "description": "鬥紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：傷害 +5%；5 件：爆擊率 +5%；7 件：傷害 +8%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/6140ae776ef8c12e34350926.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/6140ae776ef8c12e34350926-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鬥紋布甲",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "armor",
+          "weaponType": null,
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "might",
+          "setKeys": [
+            "might"
+          ],
+          "setName": "鬥紋套裝",
+          "itemId": "7c4446d5-7988-4d71-816e-a479545ba23a",
+          "itemName": "鬥紋布甲",
+          "enhanceLevel": 0
+        },
+        "garment": {
+          "id": "af191f1f-f4ed-4728-991f-60757f1eb041",
+          "description": "鬥紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：傷害 +5%；5 件：爆擊率 +5%；7 件：傷害 +8%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c9961f201ad4a909ae6d477f.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c9961f201ad4a909ae6d477f-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鬥紋布披肩",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "garment",
+          "weaponType": null,
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "might",
+          "setKeys": [
+            "might"
+          ],
+          "setName": "鬥紋套裝",
+          "itemId": "af191f1f-f4ed-4728-991f-60757f1eb041",
+          "itemName": "鬥紋布披肩",
+          "enhanceLevel": 0
+        },
+        "shoes": {
+          "id": "7cf9a5d3-9287-4da6-b944-a5d616b5bdd7",
+          "description": "鬥紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：傷害 +5%；5 件：爆擊率 +5%；7 件：傷害 +8%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cded86b53818c5cb3f00e95c.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cded86b53818c5cb3f00e95c-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鬥紋布靴",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "shoes",
+          "weaponType": null,
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "might",
+          "setKeys": [
+            "might"
+          ],
+          "setName": "鬥紋套裝",
+          "itemId": "7cf9a5d3-9287-4da6-b944-a5d616b5bdd7",
+          "itemName": "鬥紋布靴",
+          "enhanceLevel": 0
+        },
+        "head_top": {
+          "id": "7bdf0277-dcd5-4173-b3ff-d93ccaa9e293",
+          "name": "布帽",
+          "description": "D 級 裝備",
+          "itemType": "equipment",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/48b5d5a75b67de9622819b2e.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/48b5d5a75b67de9622819b2e-thumb.png",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "head_top",
+          "equipStats": {
+            "str": 0,
+            "agi": 1,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "tier": "D",
+          "atkStat": null,
+          "isTwoHanded": false,
+          "weaponType": null,
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "itemId": "7bdf0277-dcd5-4173-b3ff-d93ccaa9e293",
+          "itemName": "布帽",
+          "enhanceLevel": 0
+        },
+        "head_mid": {
+          "id": "b8e74b56-2662-4e9d-9bfa-8a74009b7e86",
+          "description": "鬥紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：傷害 +5%；5 件：爆擊率 +5%；7 件：傷害 +8%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c103a984a728a483b496a9fb.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c103a984a728a483b496a9fb-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鬥紋布護目",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_mid",
+          "weaponType": null,
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 0,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "might",
+          "setKeys": [
+            "might"
+          ],
+          "setName": "鬥紋套裝",
+          "itemId": "b8e74b56-2662-4e9d-9bfa-8a74009b7e86",
+          "itemName": "鬥紋布護目",
+          "enhanceLevel": 0
+        },
+        "head_low": {
+          "id": "292b581b-f464-4a12-b9a4-8a199c3a580e",
+          "description": "鬥紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：傷害 +5%；5 件：爆擊率 +5%；7 件：傷害 +8%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/7bb6694e1495ffb583052ccf.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/7bb6694e1495ffb583052ccf-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鬥紋布面甲",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_low",
+          "weaponType": null,
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "might",
+          "setKeys": [
+            "might"
+          ],
+          "setName": "鬥紋套裝",
+          "itemId": "292b581b-f464-4a12-b9a4-8a199c3a580e",
+          "itemName": "鬥紋布面甲",
+          "enhanceLevel": 0
+        },
+        "accessory_l": {
+          "id": "0e2ede69-4bd1-4ce1-9ec8-fe4df6463dfa",
+          "combatEffects": [],
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_l",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 1,
+            "dex": 0,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/def30db8a2fa0f1dc4b4e36a-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/def30db8a2fa0f1dc4b4e36a.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "智紋銅戒指(左)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "tier": "D",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "0e2ede69-4bd1-4ce1-9ec8-fe4df6463dfa",
+          "itemName": "智紋銅戒指(左)",
+          "enhanceLevel": 0
+        },
+        "accessory_r": {
+          "id": "feee43ab-4b22-44d6-b86b-0655da4acf57",
+          "combatEffects": [],
+          "description": "鬥紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：傷害 +5%；5 件：爆擊率 +5%；7 件：傷害 +8%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_r",
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 0,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/576851f3b0e4a863e2d0dc6f-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/576851f3b0e4a863e2d0dc6f.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "鬥紋銅戒指(右)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "might",
+          "setKeys": [
+            "might"
+          ],
+          "setName": "鬥紋套裝",
+          "tier": "D",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "feee43ab-4b22-44d6-b86b-0655da4acf57",
+          "itemName": "鬥紋銅戒指(右)",
+          "enhanceLevel": 0
+        },
+        "shield": {
+          "id": "4a7c2dd6-1d33-4613-a5aa-913924d12eed",
+          "name": "木盾",
+          "description": "D 級 盾牌",
+          "itemType": "equipment",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/d2529ade6fbbd9f67c51e9b4.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/d2529ade6fbbd9f67c51e9b4-thumb.png",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "shield",
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "tier": "D",
+          "atkStat": null,
+          "isTwoHanded": false,
+          "weaponType": null,
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "combatEffects": [],
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "itemId": "4a7c2dd6-1d33-4613-a5aa-913924d12eed",
+          "itemName": "木盾",
+          "enhanceLevel": 0
+        }
+      },
+      "stats": {
+        "str": 16,
+        "agi": 2,
+        "vit": 7,
+        "int": 5,
+        "dex": 5,
+        "luk": 1,
+        "maxHp": 375,
+        "atk": 80,
+        "baseWeaponAttack": 0,
+        "weaponMainStat": "str",
+        "weaponMainStatValue": 20,
+        "dmgMin": 0.75,
+        "dmgMax": 1,
+        "def": 3,
+        "flatDef": 1,
+        "baseVit": 1,
+        "equipVit": 6,
+        "dodge": 1,
+        "hit": 75,
+        "crit": 5.5,
+        "combo": 4,
+        "comboDamageMultiplier": 1,
+        "tierSetBonuses": {
+          "tierCounts": {
+            "D": 10,
+            "C": 0,
+            "B": 0,
+            "A": 0,
+            "S": 0
+          },
+          "stats": {
+            "str": 3,
+            "int": 3,
+            "dex": 3
+          },
+          "hitPct": 0,
+          "dodgePct": 0,
+          "critRatePct": 5,
+          "critDamagePct": 0,
+          "damagePct": 5,
+          "finalDamagePct": 0,
+          "bossDamagePct": 0,
+          "goldPct": 8,
+          "expPct": 8,
+          "dropPct": 0
+        },
+        "tierDamageMultiplier": 1.05,
+        "tierFinalDamageMultiplier": 1,
+        "tierBossDamageMultiplier": 1,
+        "tierCritDamageMultiplier": 1,
+        "executeChance": 0,
+        "executeThresholdPct": 0,
+        "weaponType": "sword_1h",
+        "isTwoHanded": false,
+        "isDualWield": false,
+        "bypassMonsterDefPct": 0,
+        "monsterAttackCount": 1,
+        "attackSegments": 1,
+        "faceMultipliers": null,
+        "allMinMult": null,
+        "allMaxMult": null,
+        "stunChance": 0,
+        "stunDuration": 3,
+        "armorBreakChance": 0,
+        "blockChance": 20,
+        "blockCounter": true,
+        "counterChance": 0,
+        "counterInheritStun": false,
+        "counterInheritBreak": false,
+        "hasRogueBadge": false,
+        "hasDwarfWarriorBadge": false,
+        "dwarfWarriorHighHpStunBoost": 0,
+        "dwarfWarriorBonusVsStunnedPct": 0,
+        "critDamage": 2.5,
+        "finalDamageMultiplier": 1,
+        "speed": 100
+      },
+      "skill": null,
+      "outputShare": 0.4,
+      "tick": 1474,
+      "avatarUrl": "/reception/starter-companions/swordsman-v2.webp",
+      "revision": "starter-companions-20261006-v3"
+    },
+    {
+      "key": "healer",
+      "actorId": "starter-npc:beginner:healer",
+      "actorName": "無傷",
+      "jobName": "治癒師",
+      "role": "support",
+      "level": 2,
+      "tier": "D",
+      "attributes": {
+        "str": 2,
+        "agi": 1,
+        "vit": 1,
+        "int": 2,
+        "dex": 1,
+        "luk": 1
+      },
+      "equipped": {
+        "weapon": {
+          "id": "e986b09f-aad4-4a1a-8db8-1219ad238fa3",
+          "description": "",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/02b7cbb0b65e43e6d1da9288.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/02b7cbb0b65e43e6d1da9288-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "木製單手法杖",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "weapon",
+          "weaponType": "staff_1h",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 2,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "itemId": "e986b09f-aad4-4a1a-8db8-1219ad238fa3",
+          "itemName": "木製單手法杖",
+          "enhanceLevel": 0
+        },
+        "armor": {
+          "id": "a2c70ed8-90c5-44ad-89fa-314ebba2af65",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/6140ae776ef8c12e34350926.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/6140ae776ef8c12e34350926-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋布袍",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "armor",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 1,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "a2c70ed8-90c5-44ad-89fa-314ebba2af65",
+          "itemName": "智紋布袍",
+          "enhanceLevel": 0
+        },
+        "garment": {
+          "id": "912125cb-6738-4694-9657-81e7f6a5c2da",
+          "name": "布披風",
+          "description": "D 級 裝備",
+          "itemType": "equipment",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c9961f201ad4a909ae6d477f.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c9961f201ad4a909ae6d477f-thumb.png",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "garment",
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "tier": "D",
+          "atkStat": null,
+          "isTwoHanded": false,
+          "weaponType": null,
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "itemId": "912125cb-6738-4694-9657-81e7f6a5c2da",
+          "itemName": "布披風",
+          "enhanceLevel": 0
+        },
+        "shoes": {
+          "id": "912afa75-bfcc-4788-a42c-cf099dc209c3",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cded86b53818c5cb3f00e95c.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cded86b53818c5cb3f00e95c-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋布靴",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "shoes",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 1,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "912afa75-bfcc-4788-a42c-cf099dc209c3",
+          "itemName": "智紋布靴",
+          "enhanceLevel": 0
+        },
+        "head_top": {
+          "id": "b78aed5f-8887-4a89-aa00-5d441ca6d63f",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/48b5d5a75b67de9622819b2e.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/48b5d5a75b67de9622819b2e-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋布帽",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_top",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 1,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "b78aed5f-8887-4a89-aa00-5d441ca6d63f",
+          "itemName": "智紋布帽",
+          "enhanceLevel": 0
+        },
+        "head_mid": {
+          "id": "cd5175ba-66bd-4719-a316-b1de5540a677",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c103a984a728a483b496a9fb.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c103a984a728a483b496a9fb-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋布鏡片",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_mid",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 1,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "cd5175ba-66bd-4719-a316-b1de5540a677",
+          "itemName": "智紋布鏡片",
+          "enhanceLevel": 0
+        },
+        "head_low": {
+          "id": "ee223bf7-986d-44f3-be07-9cf7ea8b9cfa",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/7bb6694e1495ffb583052ccf.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/7bb6694e1495ffb583052ccf-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋布口飾",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_low",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 1,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "ee223bf7-986d-44f3-be07-9cf7ea8b9cfa",
+          "itemName": "智紋布口飾",
+          "enhanceLevel": 0
+        },
+        "accessory_l": {
+          "id": "0e2ede69-4bd1-4ce1-9ec8-fe4df6463dfa",
+          "combatEffects": [],
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_l",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 1,
+            "dex": 0,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/def30db8a2fa0f1dc4b4e36a-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/def30db8a2fa0f1dc4b4e36a.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "智紋銅戒指(左)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "tier": "D",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "0e2ede69-4bd1-4ce1-9ec8-fe4df6463dfa",
+          "itemName": "智紋銅戒指(左)",
+          "enhanceLevel": 0
+        },
+        "accessory_r": {
+          "id": "7ae92560-2004-4e54-a162-2bf5bb530b62",
+          "combatEffects": [],
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_r",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 1,
+            "dex": 0,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/576851f3b0e4a863e2d0dc6f-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/576851f3b0e4a863e2d0dc6f.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "智紋銅戒指(右)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "tier": "D",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "7ae92560-2004-4e54-a162-2bf5bb530b62",
+          "itemName": "智紋銅戒指(右)",
+          "enhanceLevel": 0
+        },
+        "shield": {
+          "id": "4a7c2dd6-1d33-4613-a5aa-913924d12eed",
+          "name": "木盾",
+          "description": "D 級 盾牌",
+          "itemType": "equipment",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/d2529ade6fbbd9f67c51e9b4.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/d2529ade6fbbd9f67c51e9b4-thumb.png",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "shield",
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "tier": "D",
+          "atkStat": null,
+          "isTwoHanded": false,
+          "weaponType": null,
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "combatEffects": [],
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "itemId": "4a7c2dd6-1d33-4613-a5aa-913924d12eed",
+          "itemName": "木盾",
+          "enhanceLevel": 0
+        }
+      },
+      "stats": {
+        "str": 7,
+        "agi": 1,
+        "vit": 7,
+        "int": 14,
+        "dex": 6,
+        "luk": 1,
+        "maxHp": 375,
+        "atk": 53,
+        "baseWeaponAttack": 0,
+        "weaponMainStat": "int",
+        "weaponMainStatValue": 17.5,
+        "dmgMin": 0.84,
+        "dmgMax": 1,
+        "def": 3,
+        "flatDef": 1,
+        "baseVit": 1,
+        "equipVit": 6,
+        "dodge": 0.5,
+        "hit": 86,
+        "crit": 0.5,
+        "combo": 3.5,
+        "comboDamageMultiplier": 1,
+        "tierSetBonuses": {
+          "tierCounts": {
+            "D": 10,
+            "C": 0,
+            "B": 0,
+            "A": 0,
+            "S": 0
+          },
+          "stats": {
+            "str": 3,
+            "int": 3,
+            "dex": 3
+          },
+          "hitPct": 10,
+          "dodgePct": 0,
+          "critRatePct": 0,
+          "critDamagePct": 0,
+          "damagePct": 0,
+          "finalDamagePct": 10,
+          "bossDamagePct": 0,
+          "goldPct": 8,
+          "expPct": 8,
+          "dropPct": 0
+        },
+        "tierDamageMultiplier": 1,
+        "tierFinalDamageMultiplier": 1.1,
+        "tierBossDamageMultiplier": 1,
+        "tierCritDamageMultiplier": 1,
+        "executeChance": 0,
+        "executeThresholdPct": 0,
+        "weaponType": "staff_1h",
+        "isTwoHanded": false,
+        "isDualWield": false,
+        "bypassMonsterDefPct": 15,
+        "monsterAttackCount": 1,
+        "attackSegments": 1,
+        "faceMultipliers": null,
+        "allMinMult": null,
+        "allMaxMult": null,
+        "stunChance": 0,
+        "stunDuration": 3,
+        "armorBreakChance": 0,
+        "blockChance": 20,
+        "blockCounter": false,
+        "counterChance": 0,
+        "counterInheritStun": false,
+        "counterInheritBreak": false,
+        "hasRogueBadge": false,
+        "hasDwarfWarriorBadge": false,
+        "dwarfWarriorHighHpStunBoost": 0,
+        "dwarfWarriorBonusVsStunnedPct": 0,
+        "critDamage": 2.5,
+        "finalDamageMultiplier": 1,
+        "speed": 100
+      },
+      "skill": {
+        "key": "party_heal",
+        "value": 5
+      },
+      "outputShare": 0.12,
+      "tick": 1500,
+      "avatarUrl": "/reception/starter-companions/healer-v2.webp",
+      "revision": "starter-companions-20261006-v3"
+    }
+  ],
+  "normal": [
+    {
+      "key": "archer",
+      "actorId": "starter-npc:normal:archer",
+      "actorName": "遠山",
+      "jobName": "弓箭手",
+      "role": "output",
+      "level": 6,
+      "tier": "D",
+      "attributes": {
+        "str": 2,
+        "agi": 3,
+        "vit": 3,
+        "int": 2,
+        "dex": 5,
+        "luk": 1
+      },
+      "equipped": {
+        "weapon": {
+          "id": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+          "name": "木製弓",
+          "description": "D 級 武器",
+          "itemType": "equipment",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/bd709a1e2c2bc2da0bd90305.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/bd709a1e2c2bc2da0bd90305-thumb.png",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "weapon",
+          "equipStats": {
+            "str": 0,
+            "agi": 1,
+            "vit": 0,
+            "int": 0,
+            "dex": 2,
+            "luk": 0
+          },
+          "weaponType": "bow",
+          "isTwoHanded": true,
+          "atkStat": "dex",
+          "tier": "D",
+          "combatEffects": [],
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "itemId": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+          "itemName": "木製弓",
+          "enhanceLevel": 0
+        },
+        "armor": {
+          "id": "48180673-7800-48c6-93df-a30fa03a957b",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/6140ae776ef8c12e34350926.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/6140ae776ef8c12e34350926-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布甲",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "armor",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "48180673-7800-48c6-93df-a30fa03a957b",
+          "itemName": "迅紋布甲",
+          "enhanceLevel": 0
+        },
+        "garment": {
+          "id": "e785d724-1988-435e-a705-345da963d5c4",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c9961f201ad4a909ae6d477f.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c9961f201ad4a909ae6d477f-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布披肩",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "garment",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "e785d724-1988-435e-a705-345da963d5c4",
+          "itemName": "迅紋布披肩",
+          "enhanceLevel": 0
+        },
+        "shoes": {
+          "id": "f6ba24ae-c749-4daa-a6aa-bfed255f1807",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cded86b53818c5cb3f00e95c.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cded86b53818c5cb3f00e95c-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布靴",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "shoes",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "f6ba24ae-c749-4daa-a6aa-bfed255f1807",
+          "itemName": "迅紋布靴",
+          "enhanceLevel": 0
+        },
+        "head_top": {
+          "id": "7a438607-fb9e-4f31-baf7-d3e0b0f2221c",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/48b5d5a75b67de9622819b2e.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/48b5d5a75b67de9622819b2e-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布帽",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_top",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 1,
+            "vit": 0,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "7a438607-fb9e-4f31-baf7-d3e0b0f2221c",
+          "itemName": "迅紋布帽",
+          "enhanceLevel": 0
+        },
+        "head_mid": {
+          "id": "51f1e217-7668-4810-87af-1c523dbd8d14",
+          "description": "",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c103a984a728a483b496a9fb.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c103a984a728a483b496a9fb-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "新手護目鏡",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_mid",
+          "weaponType": null,
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "itemId": "51f1e217-7668-4810-87af-1c523dbd8d14",
+          "itemName": "新手護目鏡",
+          "enhanceLevel": 0
+        },
+        "head_low": {
+          "id": "5608761a-e8cb-44bc-91d0-449efff03d1e",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/7bb6694e1495ffb583052ccf.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/7bb6694e1495ffb583052ccf-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布面罩",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_low",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "5608761a-e8cb-44bc-91d0-449efff03d1e",
+          "itemName": "迅紋布面罩",
+          "enhanceLevel": 0
+        },
+        "accessory_l": {
+          "id": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+          "combatEffects": [],
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_l",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/def30db8a2fa0f1dc4b4e36a-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/def30db8a2fa0f1dc4b4e36a.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "迅紋銅戒指(左)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "tier": "D",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+          "itemName": "迅紋銅戒指(左)",
+          "enhanceLevel": 0
+        },
+        "accessory_r": {
+          "id": "f7eb0824-d7f5-4f5d-9e92-4cf07ffacb4a",
+          "combatEffects": [],
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_r",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/576851f3b0e4a863e2d0dc6f-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/576851f3b0e4a863e2d0dc6f.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "迅紋銅戒指(右)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "tier": "D",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "f7eb0824-d7f5-4f5d-9e92-4cf07ffacb4a",
+          "itemName": "迅紋銅戒指(右)",
+          "enhanceLevel": 0
+        }
+      },
+      "stats": {
+        "str": 4,
+        "agi": 5,
+        "vit": 8,
+        "int": 3,
+        "dex": 15,
+        "luk": 1,
+        "maxHp": 400,
+        "atk": 75,
+        "baseWeaponAttack": 0,
+        "weaponMainStat": "dex",
+        "weaponMainStatValue": 18.75,
+        "dmgMin": 0.73,
+        "dmgMax": 1,
+        "def": 2.5,
+        "flatDef": 3,
+        "baseVit": 3,
+        "equipVit": 5,
+        "dodge": 65.5,
+        "hit": 85,
+        "crit": 0.5,
+        "combo": 11.5,
+        "comboDamageMultiplier": 1,
+        "tierSetBonuses": {
+          "tierCounts": {
+            "D": 9,
+            "C": 0,
+            "B": 0,
+            "A": 0,
+            "S": 0
+          },
+          "stats": {
+            "str": 1,
+            "int": 1,
+            "dex": 1
+          },
+          "hitPct": 0,
+          "dodgePct": 13,
+          "critRatePct": 0,
+          "critDamagePct": 0,
+          "damagePct": 0,
+          "finalDamagePct": 0,
+          "bossDamagePct": 0,
+          "goldPct": 8,
+          "expPct": 8,
+          "dropPct": 0
+        },
+        "tierDamageMultiplier": 1,
+        "tierFinalDamageMultiplier": 1,
+        "tierBossDamageMultiplier": 1,
+        "tierCritDamageMultiplier": 1,
+        "executeChance": 0,
+        "executeThresholdPct": 0,
+        "weaponType": "bow",
+        "isTwoHanded": true,
+        "isDualWield": false,
+        "bypassMonsterDefPct": 0,
+        "monsterAttackCount": 1,
+        "attackSegments": 1,
+        "faceMultipliers": null,
+        "allMinMult": null,
+        "allMaxMult": null,
+        "stunChance": 0,
+        "stunDuration": 3,
+        "armorBreakChance": 0,
+        "blockChance": 0,
+        "blockCounter": false,
+        "counterChance": 0,
+        "counterInheritStun": false,
+        "counterInheritBreak": false,
+        "hasRogueBadge": false,
+        "hasDwarfWarriorBadge": false,
+        "dwarfWarriorHighHpStunBoost": 0,
+        "dwarfWarriorBonusVsStunnedPct": 0,
+        "critDamage": 2.5,
+        "finalDamageMultiplier": 1,
+        "speed": 100
+      },
+      "skill": null,
+      "outputShare": 0.4,
+      "tick": 1397,
+      "avatarUrl": "/reception/starter-companions/archer-v2.webp",
+      "revision": "starter-companions-20261006-v3"
+    },
+    {
+      "key": "bard",
+      "actorId": "starter-npc:normal:bard",
+      "actorName": "斷弦",
+      "jobName": "吟遊詩人",
+      "role": "support",
+      "level": 6,
+      "tier": "D",
+      "attributes": {
+        "str": 2,
+        "agi": 3,
+        "vit": 3,
+        "int": 2,
+        "dex": 5,
+        "luk": 1
+      },
+      "equipped": {
+        "weapon": {
+          "id": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+          "name": "木製弓",
+          "description": "D 級 武器",
+          "itemType": "equipment",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/bd709a1e2c2bc2da0bd90305.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/bd709a1e2c2bc2da0bd90305-thumb.png",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "weapon",
+          "equipStats": {
+            "str": 0,
+            "agi": 1,
+            "vit": 0,
+            "int": 0,
+            "dex": 2,
+            "luk": 0
+          },
+          "weaponType": "bow",
+          "isTwoHanded": true,
+          "atkStat": "dex",
+          "tier": "D",
+          "combatEffects": [],
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "itemId": "d95a76a8-79ab-4dc7-ab07-82a39dbb5912",
+          "itemName": "木製弓",
+          "enhanceLevel": 0
+        },
+        "armor": {
+          "id": "48180673-7800-48c6-93df-a30fa03a957b",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/6140ae776ef8c12e34350926.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/6140ae776ef8c12e34350926-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布甲",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "armor",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "48180673-7800-48c6-93df-a30fa03a957b",
+          "itemName": "迅紋布甲",
+          "enhanceLevel": 0
+        },
+        "garment": {
+          "id": "e785d724-1988-435e-a705-345da963d5c4",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c9961f201ad4a909ae6d477f.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c9961f201ad4a909ae6d477f-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布披肩",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "garment",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "e785d724-1988-435e-a705-345da963d5c4",
+          "itemName": "迅紋布披肩",
+          "enhanceLevel": 0
+        },
+        "shoes": {
+          "id": "f6ba24ae-c749-4daa-a6aa-bfed255f1807",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cded86b53818c5cb3f00e95c.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cded86b53818c5cb3f00e95c-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布靴",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "shoes",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "f6ba24ae-c749-4daa-a6aa-bfed255f1807",
+          "itemName": "迅紋布靴",
+          "enhanceLevel": 0
+        },
+        "head_top": {
+          "id": "7a438607-fb9e-4f31-baf7-d3e0b0f2221c",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/48b5d5a75b67de9622819b2e.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/48b5d5a75b67de9622819b2e-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布帽",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_top",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 1,
+            "vit": 0,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "7a438607-fb9e-4f31-baf7-d3e0b0f2221c",
+          "itemName": "迅紋布帽",
+          "enhanceLevel": 0
+        },
+        "head_mid": {
+          "id": "51f1e217-7668-4810-87af-1c523dbd8d14",
+          "description": "",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c103a984a728a483b496a9fb.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c103a984a728a483b496a9fb-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "新手護目鏡",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_mid",
+          "weaponType": null,
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "basic_d",
+          "setKeys": [
+            "basic_d"
+          ],
+          "setName": "新手套裝",
+          "itemId": "51f1e217-7668-4810-87af-1c523dbd8d14",
+          "itemName": "新手護目鏡",
+          "enhanceLevel": 0
+        },
+        "head_low": {
+          "id": "5608761a-e8cb-44bc-91d0-449efff03d1e",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/7bb6694e1495ffb583052ccf.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/7bb6694e1495ffb583052ccf-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋布面罩",
+          "itemType": "equipment",
+          "tier": "D",
+          "equipSlot": "head_low",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "5608761a-e8cb-44bc-91d0-449efff03d1e",
+          "itemName": "迅紋布面罩",
+          "enhanceLevel": 0
+        },
+        "accessory_l": {
+          "id": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+          "combatEffects": [],
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_l",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/def30db8a2fa0f1dc4b4e36a-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/def30db8a2fa0f1dc4b4e36a.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "迅紋銅戒指(左)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "tier": "D",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "5a29d084-2e5c-42d6-8613-3cef6bc294e9",
+          "itemName": "迅紋銅戒指(左)",
+          "enhanceLevel": 0
+        },
+        "accessory_r": {
+          "id": "f7eb0824-d7f5-4f5d-9e92-4cf07ffacb4a",
+          "combatEffects": [],
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_r",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/576851f3b0e4a863e2d0dc6f-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/576851f3b0e4a863e2d0dc6f.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "迅紋銅戒指(右)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "tier": "D",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "f7eb0824-d7f5-4f5d-9e92-4cf07ffacb4a",
+          "itemName": "迅紋銅戒指(右)",
+          "enhanceLevel": 0
+        }
+      },
+      "stats": {
+        "str": 4,
+        "agi": 5,
+        "vit": 8,
+        "int": 3,
+        "dex": 15,
+        "luk": 1,
+        "maxHp": 400,
+        "atk": 75,
+        "baseWeaponAttack": 0,
+        "weaponMainStat": "dex",
+        "weaponMainStatValue": 18.75,
+        "dmgMin": 0.73,
+        "dmgMax": 1,
+        "def": 2.5,
+        "flatDef": 3,
+        "baseVit": 3,
+        "equipVit": 5,
+        "dodge": 65.5,
+        "hit": 85,
+        "crit": 0.5,
+        "combo": 11.5,
+        "comboDamageMultiplier": 1,
+        "tierSetBonuses": {
+          "tierCounts": {
+            "D": 9,
+            "C": 0,
+            "B": 0,
+            "A": 0,
+            "S": 0
+          },
+          "stats": {
+            "str": 1,
+            "int": 1,
+            "dex": 1
+          },
+          "hitPct": 0,
+          "dodgePct": 13,
+          "critRatePct": 0,
+          "critDamagePct": 0,
+          "damagePct": 0,
+          "finalDamagePct": 0,
+          "bossDamagePct": 0,
+          "goldPct": 8,
+          "expPct": 8,
+          "dropPct": 0
+        },
+        "tierDamageMultiplier": 1,
+        "tierFinalDamageMultiplier": 1,
+        "tierBossDamageMultiplier": 1,
+        "tierCritDamageMultiplier": 1,
+        "executeChance": 0,
+        "executeThresholdPct": 0,
+        "weaponType": "bow",
+        "isTwoHanded": true,
+        "isDualWield": false,
+        "bypassMonsterDefPct": 0,
+        "monsterAttackCount": 1,
+        "attackSegments": 1,
+        "faceMultipliers": null,
+        "allMinMult": null,
+        "allMaxMult": null,
+        "stunChance": 0,
+        "stunDuration": 3,
+        "armorBreakChance": 0,
+        "blockChance": 0,
+        "blockCounter": false,
+        "counterChance": 0,
+        "counterInheritStun": false,
+        "counterInheritBreak": false,
+        "hasRogueBadge": false,
+        "hasDwarfWarriorBadge": false,
+        "dwarfWarriorHighHpStunBoost": 0,
+        "dwarfWarriorBonusVsStunnedPct": 0,
+        "critDamage": 2.5,
+        "finalDamageMultiplier": 1,
+        "speed": 100
+      },
+      "skill": {
+        "key": "party_damage_up",
+        "value": 6
+      },
+      "outputShare": 0.12,
+      "tick": 1397,
+      "avatarUrl": "/reception/starter-companions/bard-v2.webp",
+      "revision": "starter-companions-20261006-v3"
+    }
+  ],
+  "mid": [
+    {
+      "key": "mage",
+      "actorId": "starter-npc:mid:mage",
+      "actorName": "灰燼夫人",
+      "jobName": "法師",
+      "role": "output",
+      "level": 15,
+      "tier": "C",
+      "attributes": {
+        "str": 4,
+        "agi": 5,
+        "vit": 6,
+        "int": 12,
+        "dex": 4,
+        "luk": 3
+      },
+      "equipped": {
+        "weapon": {
+          "id": "7e983a31-a7ea-452b-882d-4d0fcd92253a",
+          "description": "",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/3a51b00d8a0bf47880090178.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/3a51b00d8a0bf47880090178-thumb.png",
+          "isTwoHanded": true,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鐵製雙手法杖",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "weapon",
+          "weaponType": "staff_2h",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 8,
+            "dex": 0,
+            "luk": 1
+          },
+          "setKey": "basic_c",
+          "setKeys": [
+            "basic_c"
+          ],
+          "setName": "皮鐵套裝",
+          "itemId": "7e983a31-a7ea-452b-882d-4d0fcd92253a",
+          "itemName": "鐵製雙手法杖",
+          "enhanceLevel": 0
+        },
+        "armor": {
+          "id": "a0932b81-a2f3-454a-81e2-e0b21807c5fd",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cd59b333356a0ed8950d4447.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cd59b333356a0ed8950d4447-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮袍",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "armor",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 2,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "a0932b81-a2f3-454a-81e2-e0b21807c5fd",
+          "itemName": "智紋皮袍",
+          "enhanceLevel": 0
+        },
+        "garment": {
+          "id": "04c5a488-68e2-491a-ba1a-3d7e3518a9c5",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/8cf9965aba1675b2279b8a3b.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/8cf9965aba1675b2279b8a3b-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮披風",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "garment",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 3,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "04c5a488-68e2-491a-ba1a-3d7e3518a9c5",
+          "itemName": "智紋皮披風",
+          "enhanceLevel": 0
+        },
+        "shoes": {
+          "id": "8ba1dc5c-41df-4a9b-abd4-fa2c949b2d90",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/54cdb4633f07b894e90cb01b.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/54cdb4633f07b894e90cb01b-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮靴",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "shoes",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 2,
+            "dex": 2,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "8ba1dc5c-41df-4a9b-abd4-fa2c949b2d90",
+          "itemName": "智紋皮靴",
+          "enhanceLevel": 0
+        },
+        "head_top": {
+          "id": "72d9fd72-01e0-4162-b0f3-aa7c9b2b4e38",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/5ad00ba264fc2190506eb368.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/5ad00ba264fc2190506eb368-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮帽",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "head_top",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 2,
+            "int": 2,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "72d9fd72-01e0-4162-b0f3-aa7c9b2b4e38",
+          "itemName": "智紋皮帽",
+          "enhanceLevel": 0
+        },
+        "head_mid": {
+          "id": "1ed26548-f724-45b2-8010-3355a89626f3",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/fa9adc049f2dc3747f3162f0.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/fa9adc049f2dc3747f3162f0-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮鏡片",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "head_mid",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 3,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "1ed26548-f724-45b2-8010-3355a89626f3",
+          "itemName": "智紋皮鏡片",
+          "enhanceLevel": 0
+        },
+        "head_low": {
+          "id": "7c5ac61b-5024-4fa5-8402-d4ebed7ebc9a",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cd531bef74868eb1c8306a5c.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cd531bef74868eb1c8306a5c-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮口飾",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "head_low",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 3,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "7c5ac61b-5024-4fa5-8402-d4ebed7ebc9a",
+          "itemName": "智紋皮口飾",
+          "enhanceLevel": 0
+        },
+        "accessory_l": {
+          "id": "60af8c07-331e-4b4e-80b4-ff66eaf84210",
+          "combatEffects": [],
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_l",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 2,
+            "dex": 1,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/a6e80ea371a7b964425d5e2c-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/a6e80ea371a7b964425d5e2c.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "智紋鐵戒指(左)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "tier": "C",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "60af8c07-331e-4b4e-80b4-ff66eaf84210",
+          "itemName": "智紋鐵戒指(左)",
+          "enhanceLevel": 0
+        },
+        "accessory_r": {
+          "id": "0dbe1a4f-28a2-440e-b59b-fd02dbf7050f",
+          "combatEffects": [],
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_r",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 2,
+            "dex": 1,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/b7f94c82784b0ec4a2c0d2fd-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/b7f94c82784b0ec4a2c0d2fd.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "智紋鐵戒指(右)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "tier": "C",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "0dbe1a4f-28a2-440e-b59b-fd02dbf7050f",
+          "itemName": "智紋鐵戒指(右)",
+          "enhanceLevel": 0
+        },
+        "job_eq": {
+          "id": "job_mage_v1",
+          "atkStat": null,
+          "combatEffects": [
+            {
+              "key": "def_ignore",
+              "category": "stat",
+              "trigger": "passive",
+              "target": "self",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "value": 35,
+                "mode": "pct"
+              },
+              "condition": {
+                "weaponType": "staff_2h"
+              },
+              "notes": "雙手法杖：無視怪物 DEF +35%",
+              "definitionName": "def_ignore"
+            }
+          ],
+          "description": "操控元素的施法者，杖術與元素效果為核心。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "enhanceLevel": 0,
+          "equipSlot": "job_eq",
+          "equipStats": {
+            "int": 5,
+            "vit": 1,
+            "luk": 2
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/77664db18bdada8c98ea3892-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/77664db18bdada8c98ea3892.png",
+          "isTwoHanded": false,
+          "itemType": "job_badge",
+          "name": "法師徽章",
+          "passiveEffects": [
+            {
+              "key": "block_chance_up",
+              "category": "stat",
+              "trigger": "passive",
+              "target": "self",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "value": 20
+              },
+              "condition": {
+                "all": [
+                  {
+                    "weaponType": "staff_1h"
+                  },
+                  {
+                    "equippedSlot": "shield"
+                  }
+                ]
+              },
+              "notes": "單手法杖 + 盾牌：格擋 +20%",
+              "definitionName": "block_chance_up"
+            }
+          ],
+          "procEffects": [
+            {
+              "key": "hit_down",
+              "category": "stat",
+              "trigger": "on_hit",
+              "target": "enemy",
+              "chance": 8,
+              "stacks": 1,
+              "stackMode": "refresh",
+              "duration": {
+                "mode": "turns",
+                "value": 3
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "value": 15
+              },
+              "condition": {
+                "weaponType": "staff_1h"
+              },
+              "notes": "單手法杖：命中時有機率降低敵方命中",
+              "definitionName": "hit_down"
+            },
+            {
+              "key": "freeze",
+              "category": "control",
+              "trigger": "on_hit",
+              "target": "enemy",
+              "chance": 8,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "turns",
+                "value": 1
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "bossImmune": true
+              },
+              "condition": {
+                "weaponType": "staff_1h"
+              },
+              "notes": "單手法杖：命中時有機率冰凍",
+              "definitionName": "freeze"
+            },
+            {
+              "key": "hit_down",
+              "category": "stat",
+              "trigger": "on_hit",
+              "target": "enemy",
+              "chance": 12,
+              "stacks": 1,
+              "stackMode": "refresh",
+              "duration": {
+                "mode": "turns",
+                "value": 3
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "value": 15
+              },
+              "condition": {
+                "weaponType": "staff_2h"
+              },
+              "notes": "雙手法杖：命中時有機率降低敵方命中",
+              "definitionName": "hit_down"
+            },
+            {
+              "key": "freeze",
+              "category": "control",
+              "trigger": "on_hit",
+              "target": "enemy",
+              "chance": 12,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "turns",
+                "value": 1
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "bossImmune": true
+              },
+              "condition": {
+                "weaponType": "staff_2h"
+              },
+              "notes": "雙手法杖：命中時有機率冰凍",
+              "definitionName": "freeze"
+            }
+          ],
+          "tier": null,
+          "useEffects": [],
+          "weaponType": null,
+          "jobSkills": [
+            {
+              "key": "mage_mana_burst",
+              "name": "魔力爆炎",
+              "description": "自身ATK+40%並無視防禦+50%，持續1回合。",
+              "cooldownTurns": 3,
+              "condition": {},
+              "procEffects": [
+                {
+                  "key": "atk_up",
+                  "target": "self",
+                  "params": {
+                    "value": 40,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 1
+                    }
+                  }
+                },
+                {
+                  "key": "def_ignore",
+                  "target": "self",
+                  "params": {
+                    "value": 50,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 1
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "key": "mage_mana_drain",
+              "name": "魔力衰減",
+              "description": "敵方最終傷害-25%、DEF-10，持續3回合。",
+              "cooldownTurns": 4,
+              "condition": {},
+              "procEffects": [
+                {
+                  "key": "final_damage_down",
+                  "target": "enemy",
+                  "params": {
+                    "value": 25,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 3
+                    }
+                  }
+                },
+                {
+                  "key": "def_down",
+                  "target": "enemy",
+                  "params": {
+                    "value": 10,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "monsterCardSkill": null,
+          "itemId": "job_mage_v1",
+          "itemName": "法師徽章",
+          "jobExp": 0
+        }
+      },
+      "stats": {
+        "str": 4,
+        "agi": 5,
+        "vit": 13,
+        "int": 42,
+        "dex": 9,
+        "luk": 5,
+        "maxHp": 525,
+        "atk": 222,
+        "baseWeaponAttack": 20,
+        "weaponMainStat": "int",
+        "weaponMainStatValue": 50.397479884653215,
+        "dmgMin": 1,
+        "dmgMax": 1,
+        "def": 3.5,
+        "flatDef": 6,
+        "baseVit": 6,
+        "equipVit": 7,
+        "dodge": 10.5,
+        "hit": 97,
+        "crit": 2.5,
+        "combo": 5.5,
+        "comboDamageMultiplier": 1,
+        "tierSetBonuses": {
+          "tierCounts": {
+            "D": 0,
+            "C": 9,
+            "B": 0,
+            "A": 0,
+            "S": 0
+          },
+          "stats": {
+            "str": 0,
+            "int": 0,
+            "dex": 0
+          },
+          "hitPct": 18,
+          "dodgePct": 8,
+          "critRatePct": 0,
+          "critDamagePct": 0,
+          "damagePct": 6,
+          "finalDamagePct": 10,
+          "bossDamagePct": 0,
+          "goldPct": 0,
+          "expPct": 0,
+          "dropPct": 0
+        },
+        "tierDamageMultiplier": 1.06,
+        "tierFinalDamageMultiplier": 1.1,
+        "tierBossDamageMultiplier": 1,
+        "tierCritDamageMultiplier": 1,
+        "executeChance": 0,
+        "executeThresholdPct": 0,
+        "weaponType": "staff_2h",
+        "isTwoHanded": true,
+        "isDualWield": false,
+        "bypassMonsterDefPct": 25,
+        "monsterAttackCount": 1,
+        "attackSegments": 1,
+        "faceMultipliers": null,
+        "allMinMult": null,
+        "allMaxMult": null,
+        "stunChance": 0,
+        "stunDuration": 3,
+        "armorBreakChance": 0,
+        "blockChance": 0,
+        "blockCounter": false,
+        "counterChance": 0,
+        "counterInheritStun": false,
+        "counterInheritBreak": false,
+        "hasRogueBadge": false,
+        "hasDwarfWarriorBadge": false,
+        "dwarfWarriorHighHpStunBoost": 0,
+        "dwarfWarriorBonusVsStunnedPct": 0,
+        "critDamage": 2.5,
+        "finalDamageMultiplier": 1,
+        "speed": 100
+      },
+      "skill": null,
+      "outputShare": 0.4,
+      "tick": 1397,
+      "avatarUrl": "/reception/starter-companions/mage-v2.webp",
+      "revision": "starter-companions-20261006-v3"
+    },
+    {
+      "key": "tactician",
+      "actorId": "starter-npc:mid:tactician",
+      "actorName": "枯棋",
+      "jobName": "戰術師",
+      "role": "support",
+      "level": 15,
+      "tier": "C",
+      "attributes": {
+        "str": 4,
+        "agi": 5,
+        "vit": 6,
+        "int": 12,
+        "dex": 4,
+        "luk": 3
+      },
+      "equipped": {
+        "weapon": {
+          "id": "d803fe81-5812-414a-a0c9-f7e011e75f5d",
+          "description": "",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/1ce01d86b9b2f6a7f9e45d25.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/1ce01d86b9b2f6a7f9e45d25-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鐵製單手法杖",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "weapon",
+          "weaponType": "staff_1h",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 5,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "basic_c",
+          "setKeys": [
+            "basic_c"
+          ],
+          "setName": "皮鐵套裝",
+          "itemId": "d803fe81-5812-414a-a0c9-f7e011e75f5d",
+          "itemName": "鐵製單手法杖",
+          "enhanceLevel": 0
+        },
+        "armor": {
+          "id": "a0932b81-a2f3-454a-81e2-e0b21807c5fd",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cd59b333356a0ed8950d4447.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cd59b333356a0ed8950d4447-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮袍",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "armor",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 2,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "a0932b81-a2f3-454a-81e2-e0b21807c5fd",
+          "itemName": "智紋皮袍",
+          "enhanceLevel": 0
+        },
+        "garment": {
+          "id": "04c5a488-68e2-491a-ba1a-3d7e3518a9c5",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/8cf9965aba1675b2279b8a3b.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/8cf9965aba1675b2279b8a3b-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮披風",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "garment",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 3,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "04c5a488-68e2-491a-ba1a-3d7e3518a9c5",
+          "itemName": "智紋皮披風",
+          "enhanceLevel": 0
+        },
+        "shoes": {
+          "id": "8ba1dc5c-41df-4a9b-abd4-fa2c949b2d90",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/54cdb4633f07b894e90cb01b.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/54cdb4633f07b894e90cb01b-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮靴",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "shoes",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 2,
+            "dex": 2,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "8ba1dc5c-41df-4a9b-abd4-fa2c949b2d90",
+          "itemName": "智紋皮靴",
+          "enhanceLevel": 0
+        },
+        "head_top": {
+          "id": "72d9fd72-01e0-4162-b0f3-aa7c9b2b4e38",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/5ad00ba264fc2190506eb368.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/5ad00ba264fc2190506eb368-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮帽",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "head_top",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 2,
+            "int": 2,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "72d9fd72-01e0-4162-b0f3-aa7c9b2b4e38",
+          "itemName": "智紋皮帽",
+          "enhanceLevel": 0
+        },
+        "head_mid": {
+          "id": "1ed26548-f724-45b2-8010-3355a89626f3",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/fa9adc049f2dc3747f3162f0.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/fa9adc049f2dc3747f3162f0-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮鏡片",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "head_mid",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 3,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "1ed26548-f724-45b2-8010-3355a89626f3",
+          "itemName": "智紋皮鏡片",
+          "enhanceLevel": 0
+        },
+        "head_low": {
+          "id": "7c5ac61b-5024-4fa5-8402-d4ebed7ebc9a",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cd531bef74868eb1c8306a5c.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/cd531bef74868eb1c8306a5c-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋皮口飾",
+          "itemType": "equipment",
+          "tier": "C",
+          "equipSlot": "head_low",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 1,
+            "int": 3,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "7c5ac61b-5024-4fa5-8402-d4ebed7ebc9a",
+          "itemName": "智紋皮口飾",
+          "enhanceLevel": 0
+        },
+        "accessory_l": {
+          "id": "60af8c07-331e-4b4e-80b4-ff66eaf84210",
+          "combatEffects": [],
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_l",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 2,
+            "dex": 1,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/a6e80ea371a7b964425d5e2c-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/a6e80ea371a7b964425d5e2c.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "智紋鐵戒指(左)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "tier": "C",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "60af8c07-331e-4b4e-80b4-ff66eaf84210",
+          "itemName": "智紋鐵戒指(左)",
+          "enhanceLevel": 0
+        },
+        "accessory_r": {
+          "id": "0dbe1a4f-28a2-440e-b59b-fd02dbf7050f",
+          "combatEffects": [],
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_r",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 2,
+            "dex": 1,
+            "luk": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/b7f94c82784b0ec4a2c0d2fd-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/b7f94c82784b0ec4a2c0d2fd.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "智紋鐵戒指(右)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "tier": "C",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "0dbe1a4f-28a2-440e-b59b-fd02dbf7050f",
+          "itemName": "智紋鐵戒指(右)",
+          "enhanceLevel": 0
+        },
+        "shield": {
+          "id": "dcb0ab95-aff6-4961-ae44-79bd49a2f0e8",
+          "name": "鐵盾",
+          "description": "C 級 盾牌",
+          "itemType": "equipment",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/ee966fc6648942c6228db79f.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/ee966fc6648942c6228db79f-thumb.png",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "shield",
+          "equipStats": {
+            "str": 1,
+            "agi": 0,
+            "vit": 3,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "tier": "C",
+          "atkStat": null,
+          "isTwoHanded": false,
+          "weaponType": null,
+          "setKey": "basic_c",
+          "setKeys": [
+            "basic_c"
+          ],
+          "setName": "皮鐵套裝",
+          "itemId": "dcb0ab95-aff6-4961-ae44-79bd49a2f0e8",
+          "itemName": "鐵盾",
+          "enhanceLevel": 0
+        },
+        "job_eq": {
+          "id": "job_tactician_v1",
+          "combatEffects": [],
+          "description": "以單手劍指揮戰線的共鬥光環職業，提升隊伍對 Boss 的輸出並削弱怪物防禦。",
+          "enhanceLevel": 0,
+          "equipSlot": "job_eq",
+          "equipStats": {
+            "agi": 4,
+            "int": 2,
+            "dex": 2
+          },
+          "itemType": "job_badge",
+          "name": "軍師徽章",
+          "passiveEffects": [
+            {
+              "key": "party_boss_damage_up",
+              "category": "conditional",
+              "trigger": "passive",
+              "target": "party",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "value": 5,
+                "mode": "pct"
+              },
+              "notes": "隊伍 Boss 傷害 +5%",
+              "definitionName": "party_boss_damage_up"
+            },
+            {
+              "key": "party_monster_def_down",
+              "category": "conditional",
+              "trigger": "passive",
+              "target": "party",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "value": 5,
+                "mode": "pct"
+              },
+              "notes": "隊伍攻擊視為怪物防禦降低 5%",
+              "definitionName": "party_monster_def_down"
+            }
+          ],
+          "procEffects": [],
+          "useEffects": [],
+          "jobSkills": [
+            {
+              "key": "tactician_analysis",
+              "name": "戰術分析",
+              "description": "敵方DEF-15、ATK-10，持續3回合。",
+              "cooldownTurns": 4,
+              "condition": {},
+              "procEffects": [
+                {
+                  "key": "def_down",
+                  "target": "enemy",
+                  "params": {
+                    "value": 15,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 3
+                    }
+                  }
+                },
+                {
+                  "key": "atk_down",
+                  "target": "enemy",
+                  "params": {
+                    "value": 10,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "key": "tactician_formation_break",
+              "name": "兵法破陣",
+              "description": "無視敵方防禦+35%、自身ATK+10%，持續2回合。",
+              "cooldownTurns": 5,
+              "condition": {},
+              "procEffects": [
+                {
+                  "key": "def_ignore",
+                  "target": "self",
+                  "params": {
+                    "value": 35,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 2
+                    }
+                  }
+                },
+                {
+                  "key": "atk_up",
+                  "target": "self",
+                  "params": {
+                    "value": 10,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 2
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "atkStat": null,
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/fbaf5b233c2ee748733ecf9d-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/fbaf5b233c2ee748733ecf9d.png",
+          "isTwoHanded": false,
+          "tier": null,
+          "weaponType": null,
+          "monsterCardSkill": null,
+          "itemId": "job_tactician_v1",
+          "itemName": "軍師徽章",
+          "jobExp": 0
+        }
+      },
+      "stats": {
+        "str": 5,
+        "agi": 7,
+        "vit": 15,
+        "int": 37,
+        "dex": 12,
+        "luk": 3,
+        "maxHp": 575,
+        "atk": 151,
+        "baseWeaponAttack": 15,
+        "weaponMainStat": "int",
+        "weaponMainStatValue": 45.47656810973551,
+        "dmgMin": 1,
+        "dmgMax": 1,
+        "def": 4.5,
+        "flatDef": 6,
+        "baseVit": 6,
+        "equipVit": 9,
+        "dodge": 11.5,
+        "hit": 100,
+        "crit": 1.5,
+        "combo": 6.5,
+        "comboDamageMultiplier": 1,
+        "tierSetBonuses": {
+          "tierCounts": {
+            "D": 0,
+            "C": 10,
+            "B": 0,
+            "A": 0,
+            "S": 0
+          },
+          "stats": {
+            "str": 0,
+            "int": 0,
+            "dex": 0
+          },
+          "hitPct": 18,
+          "dodgePct": 8,
+          "critRatePct": 0,
+          "critDamagePct": 0,
+          "damagePct": 6,
+          "finalDamagePct": 10,
+          "bossDamagePct": 0,
+          "goldPct": 0,
+          "expPct": 0,
+          "dropPct": 0
+        },
+        "tierDamageMultiplier": 1.06,
+        "tierFinalDamageMultiplier": 1.1,
+        "tierBossDamageMultiplier": 1,
+        "tierCritDamageMultiplier": 1,
+        "executeChance": 0,
+        "executeThresholdPct": 0,
+        "weaponType": "staff_1h",
+        "isTwoHanded": false,
+        "isDualWield": false,
+        "bypassMonsterDefPct": 15,
+        "monsterAttackCount": 1,
+        "attackSegments": 1,
+        "faceMultipliers": null,
+        "allMinMult": null,
+        "allMaxMult": null,
+        "stunChance": 0,
+        "stunDuration": 3,
+        "armorBreakChance": 0,
+        "blockChance": 20,
+        "blockCounter": false,
+        "counterChance": 0,
+        "counterInheritStun": false,
+        "counterInheritBreak": false,
+        "hasRogueBadge": false,
+        "hasDwarfWarriorBadge": false,
+        "dwarfWarriorHighHpStunBoost": 0,
+        "dwarfWarriorBonusVsStunnedPct": 0,
+        "critDamage": 2.5,
+        "finalDamageMultiplier": 1,
+        "speed": 100
+      },
+      "skill": {
+        "key": "party_damage_up",
+        "value": 8
+      },
+      "outputShare": 0.12,
+      "tick": 1346,
+      "avatarUrl": "/reception/starter-companions/tactician-v2.webp",
+      "revision": "starter-companions-20261006-v3"
+    }
+  ],
+  "ancient_city": [
+    {
+      "key": "rogue",
+      "actorId": "starter-npc:ancient_city:rogue",
+      "actorName": "影七",
+      "jobName": "盜賊",
+      "role": "output",
+      "level": 25,
+      "tier": "B",
+      "attributes": {
+        "str": 5,
+        "agi": 22,
+        "vit": 10,
+        "int": 5,
+        "dex": 7,
+        "luk": 5
+      },
+      "equipped": {
+        "weapon": {
+          "id": "46df8bac-c8c1-4e31-8689-7a602bafd7b5",
+          "description": "",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/ad07ee60b9bdea6d69001b67.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/ad07ee60b9bdea6d69001b67-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鋼製匕首",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "weapon",
+          "weaponType": "dagger",
+          "equipStats": {
+            "str": 4,
+            "agi": 7,
+            "vit": 0,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "basic_b",
+          "setKeys": [
+            "basic_b"
+          ],
+          "setName": "鋼製套裝",
+          "itemId": "46df8bac-c8c1-4e31-8689-7a602bafd7b5",
+          "itemName": "鋼製匕首",
+          "enhanceLevel": 0
+        },
+        "armor": {
+          "id": "e3c0f284-42ef-4a94-aef5-45b4bb5be8ce",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174413/equipment-game/items/vzsozai2yz8gir5faeaa.png",
+          "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174414/equipment-game/items/zfislllsxo72jzpsfnks.webp",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋鐵甲",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "armor",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 1,
+            "vit": 6,
+            "int": 0,
+            "dex": 3,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "e3c0f284-42ef-4a94-aef5-45b4bb5be8ce",
+          "itemName": "迅紋鐵甲",
+          "enhanceLevel": 0
+        },
+        "garment": {
+          "id": "16f1c744-f800-499a-b6ed-4156fa58877d",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/d2bde7045c856f1e19e535db.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/d2bde7045c856f1e19e535db-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋鐵披肩",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "garment",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 2,
+            "vit": 3,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "16f1c744-f800-499a-b6ed-4156fa58877d",
+          "itemName": "迅紋鐵披肩",
+          "enhanceLevel": 0
+        },
+        "shoes": {
+          "id": "184d4cc9-81cf-494d-809e-7704a1b73e59",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/e91ea9ff1ead8e0be7ffd027.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/e91ea9ff1ead8e0be7ffd027-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋鐵靴",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "shoes",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 3,
+            "int": 0,
+            "dex": 4,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "184d4cc9-81cf-494d-809e-7704a1b73e59",
+          "itemName": "迅紋鐵靴",
+          "enhanceLevel": 0
+        },
+        "head_top": {
+          "id": "7739f5c3-66b1-4be5-a726-81a41c93fa75",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174502/equipment-game/items/eooun54xvrjge2ta5mgj.png",
+          "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174503/equipment-game/items/p5zr0thfg0obindaud23.webp",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋鐵帽",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "head_top",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 4,
+            "int": 0,
+            "dex": 3,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "7739f5c3-66b1-4be5-a726-81a41c93fa75",
+          "itemName": "迅紋鐵帽",
+          "enhanceLevel": 0
+        },
+        "head_mid": {
+          "id": "9b112914-416f-42fd-91d9-861900e4287f",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/f52780246294b51d07eb2357.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/f52780246294b51d07eb2357-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋鐵護目",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "head_mid",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 4,
+            "int": 0,
+            "dex": 3,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "9b112914-416f-42fd-91d9-861900e4287f",
+          "itemName": "迅紋鐵護目",
+          "enhanceLevel": 0
+        },
+        "head_low": {
+          "id": "82ca0d8e-740d-48f9-8801-7f543c152a6b",
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/2af0b4f6b666a8a472c6d6c5.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/2af0b4f6b666a8a472c6d6c5-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "迅紋鐵面罩",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "head_low",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 4,
+            "int": 0,
+            "dex": 3,
+            "luk": 0
+          },
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "itemId": "82ca0d8e-740d-48f9-8801-7f543c152a6b",
+          "itemName": "迅紋鐵面罩",
+          "enhanceLevel": 0
+        },
+        "accessory_l": {
+          "id": "ad35c2cd-9436-4c3a-b154-3655804d17c6",
+          "combatEffects": [],
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_l",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 0,
+            "dex": 4,
+            "luk": 1
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/168dc2bae64d8c9a7df70b75-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/168dc2bae64d8c9a7df70b75.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "迅紋銀戒指(左)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "tier": "B",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "ad35c2cd-9436-4c3a-b154-3655804d17c6",
+          "itemName": "迅紋銀戒指(左)",
+          "enhanceLevel": 0
+        },
+        "accessory_r": {
+          "id": "e7abb3f2-935f-4d0a-b467-ee1992496e35",
+          "combatEffects": [],
+          "description": "迅紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：迴避 +5%；5 件：連擊率 +6；7 件：迴避 +8%、速度 +10（＝迴避 +30）。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_r",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 0,
+            "dex": 4,
+            "luk": 1
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/2d733be21c8b3573ae3cb185-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/2d733be21c8b3573ae3cb185.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "迅紋銀戒指(右)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "swift",
+          "setKeys": [
+            "swift"
+          ],
+          "setName": "迅紋套裝",
+          "tier": "B",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "e7abb3f2-935f-4d0a-b467-ee1992496e35",
+          "itemName": "迅紋銀戒指(右)",
+          "enhanceLevel": 0
+        },
+        "shield": {
+          "id": "c60d4d99-3eed-4ac9-811e-680b6d637648",
+          "atkStat": "str",
+          "combatEffects": [],
+          "description": "鋼製短匕(副手)",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "enhanceLevel": 0,
+          "equipSlot": "shield",
+          "equipStats": {
+            "agi": 5,
+            "luk": 2
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/81348fd0e2b425d75450bfcb-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/81348fd0e2b425d75450bfcb.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "鋼製短匕(副手)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "tier": "B",
+          "useEffects": [],
+          "weaponType": "offhand_dagger",
+          "setKey": "basic_b",
+          "setKeys": [
+            "basic_b"
+          ],
+          "setName": "鋼製套裝",
+          "itemId": "c60d4d99-3eed-4ac9-811e-680b6d637648",
+          "itemName": "鋼製短匕(副手)"
+        },
+        "job_eq": {
+          "id": "job_rogue_v1",
+          "atkStat": null,
+          "combatEffects": [
+            {
+              "key": "dodge_up",
+              "trigger": "on_high_hp",
+              "target": "self",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "params": {
+                "value": 5,
+                "thresholdPct": 80
+              },
+              "condition": {
+                "all": [
+                  {
+                    "weaponType": "dagger"
+                  },
+                  {
+                    "any": [
+                      {
+                        "weaponType": "offhand_dagger"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "notes": "主匕首 + 副手武器且血量 >80% 時迴避率 +5%"
+            }
+          ],
+          "description": "以匕首速攻與敏捷迴避為主的職業徽章。裝備匕首時，武器攻擊力改由「敏捷(AGI)×3」計算（不再看力量）。 連擊率可突破 100%（其他職業連擊率上限 100%）。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "enhanceLevel": 0,
+          "equipSlot": "job_eq",
+          "equipStats": {
+            "agi": 4,
+            "luk": 2,
+            "dex": 2
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/64c68c6434a8525455a78858-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/64c68c6434a8525455a78858.png",
+          "isTwoHanded": false,
+          "itemType": "job_badge",
+          "name": "盜賊徽章",
+          "passiveEffects": [
+            {
+              "key": "block_chance_up",
+              "trigger": "passive",
+              "target": "self",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "params": {
+                "value": 10
+              },
+              "condition": {
+                "all": [
+                  {
+                    "weaponType": "dagger"
+                  },
+                  {
+                    "equippedSlot": "shield"
+                  }
+                ]
+              },
+              "notes": "主武匕首 + 盾：格擋 +10%"
+            },
+            {
+              "key": "combo_up",
+              "trigger": "passive",
+              "target": "self",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "params": {
+                "value": 5
+              },
+              "condition": {
+                "all": [
+                  {
+                    "weaponType": "dagger"
+                  },
+                  {
+                    "any": [
+                      {
+                        "weaponType": "offhand_dagger"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "notes": "主武匕首 + 副手武器：連擊率 +5%"
+            }
+          ],
+          "procEffects": [],
+          "tier": null,
+          "useEffects": [],
+          "weaponType": null,
+          "jobSkills": [
+            {
+              "key": "rogue_backstab",
+              "name": "背刺",
+              "description": "自身爆擊率+20%、爆擊傷害+30%，持續2回合。",
+              "cooldownTurns": 3,
+              "condition": {},
+              "procEffects": [
+                {
+                  "key": "crit_rate_up",
+                  "target": "self",
+                  "params": {
+                    "value": 20,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 2
+                    }
+                  }
+                },
+                {
+                  "key": "crit_damage_up",
+                  "target": "self",
+                  "params": {
+                    "value": 30,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 2
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "key": "rogue_smoke_bomb",
+              "name": "煙霧彈",
+              "description": "敵方命中-20、自身迴避+12，持續2回合。",
+              "cooldownTurns": 4,
+              "condition": {},
+              "procEffects": [
+                {
+                  "key": "hit_down",
+                  "target": "enemy",
+                  "params": {
+                    "value": 20,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 2
+                    }
+                  }
+                },
+                {
+                  "key": "dodge_up",
+                  "target": "self",
+                  "params": {
+                    "value": 12,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 2
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "monsterCardSkill": null,
+          "itemId": "job_rogue_v1",
+          "itemName": "盜賊徽章",
+          "jobExp": 0
+        }
+      },
+      "stats": {
+        "str": 9,
+        "agi": 39,
+        "vit": 34,
+        "int": 5,
+        "dex": 32,
+        "luk": 10,
+        "maxHp": 1050,
+        "atk": 184,
+        "baseWeaponAttack": 41,
+        "weaponMainStat": "agi",
+        "weaponMainStatValue": 47.511818793762075,
+        "dmgMin": 0.75,
+        "dmgMax": 1,
+        "def": 12,
+        "flatDef": 10,
+        "baseVit": 10,
+        "equipVit": 24,
+        "dodge": 62.5,
+        "hit": 100,
+        "crit": 10,
+        "combo": 43.5,
+        "comboDamageMultiplier": 1,
+        "tierSetBonuses": {
+          "tierCounts": {
+            "D": 0,
+            "C": 0,
+            "B": 10,
+            "A": 0,
+            "S": 0
+          },
+          "stats": {
+            "str": 0,
+            "int": 0,
+            "dex": 0
+          },
+          "hitPct": 0,
+          "dodgePct": 13,
+          "critRatePct": 5,
+          "critDamagePct": 10,
+          "damagePct": 6,
+          "finalDamagePct": 0,
+          "bossDamagePct": 0,
+          "goldPct": 0,
+          "expPct": 0,
+          "dropPct": 0
+        },
+        "tierDamageMultiplier": 1.06,
+        "tierFinalDamageMultiplier": 1,
+        "tierBossDamageMultiplier": 1,
+        "tierCritDamageMultiplier": 1.1,
+        "executeChance": 0,
+        "executeThresholdPct": 0,
+        "weaponType": "dagger",
+        "isTwoHanded": false,
+        "isDualWield": true,
+        "bypassMonsterDefPct": 0,
+        "monsterAttackCount": 1,
+        "attackSegments": 1,
+        "faceMultipliers": null,
+        "allMinMult": null,
+        "allMaxMult": null,
+        "stunChance": 0,
+        "stunDuration": 3,
+        "armorBreakChance": 0,
+        "blockChance": 10,
+        "blockCounter": false,
+        "counterChance": 0,
+        "counterInheritStun": false,
+        "counterInheritBreak": false,
+        "hasRogueBadge": true,
+        "hasDwarfWarriorBadge": false,
+        "dwarfWarriorHighHpStunBoost": 0,
+        "dwarfWarriorBonusVsStunnedPct": 0,
+        "critDamage": 2.5,
+        "finalDamageMultiplier": 1,
+        "speed": 100
+      },
+      "skill": null,
+      "outputShare": 0.4,
+      "tick": 526,
+      "avatarUrl": "/reception/starter-companions/rogue-v2.webp",
+      "revision": "starter-companions-20261006-v3"
+    },
+    {
+      "key": "barrier-mage",
+      "actorId": "starter-npc:ancient_city:barrier-mage",
+      "actorName": "壁",
+      "jobName": "結界師",
+      "role": "support",
+      "level": 25,
+      "tier": "B",
+      "attributes": {
+        "str": 5,
+        "agi": 7,
+        "vit": 10,
+        "int": 20,
+        "dex": 7,
+        "luk": 5
+      },
+      "equipped": {
+        "weapon": {
+          "id": "3af17736-185f-4732-99e1-0513f4b48a56",
+          "description": "",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/4bfa11671a77fa971f5028c2.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/4bfa11671a77fa971f5028c2-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鋼製單手法杖",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "weapon",
+          "weaponType": "staff_1h",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 8,
+            "dex": 3,
+            "luk": 0
+          },
+          "setKey": "basic_b",
+          "setKeys": [
+            "basic_b"
+          ],
+          "setName": "鋼製套裝",
+          "itemId": "3af17736-185f-4732-99e1-0513f4b48a56",
+          "itemName": "鋼製單手法杖",
+          "enhanceLevel": 0
+        },
+        "armor": {
+          "id": "cabab778-85cc-4889-9a5f-c72c5fdaf0a1",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174413/equipment-game/items/vzsozai2yz8gir5faeaa.png",
+          "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174414/equipment-game/items/zfislllsxo72jzpsfnks.webp",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋鐵袍",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "armor",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 5,
+            "int": 4,
+            "dex": 0,
+            "luk": 1
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "cabab778-85cc-4889-9a5f-c72c5fdaf0a1",
+          "itemName": "智紋鐵袍",
+          "enhanceLevel": 0
+        },
+        "garment": {
+          "id": "cedc5e5d-90ed-464d-be86-c5f1de6f485a",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/d2bde7045c856f1e19e535db.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/d2bde7045c856f1e19e535db-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋鐵披風",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "garment",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 3,
+            "int": 2,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "cedc5e5d-90ed-464d-be86-c5f1de6f485a",
+          "itemName": "智紋鐵披風",
+          "enhanceLevel": 0
+        },
+        "shoes": {
+          "id": "511f7ea7-6647-45e8-b5c4-050b6bcc9866",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/e91ea9ff1ead8e0be7ffd027.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/e91ea9ff1ead8e0be7ffd027-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋鐵靴",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "shoes",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 4,
+            "int": 3,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "511f7ea7-6647-45e8-b5c4-050b6bcc9866",
+          "itemName": "智紋鐵靴",
+          "enhanceLevel": 0
+        },
+        "head_top": {
+          "id": "f0a86964-551a-4d93-90b5-6c4ca5a96587",
+          "description": "",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174502/equipment-game/items/eooun54xvrjge2ta5mgj.png",
+          "imageThumbnailUrl": "https://res.cloudinary.com/dxcbxpqmj/image/upload/v1776174503/equipment-game/items/p5zr0thfg0obindaud23.webp",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鐵帽",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "head_top",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 2,
+            "vit": 6,
+            "int": 0,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "basic_b",
+          "setKeys": [
+            "basic_b"
+          ],
+          "setName": "鋼製套裝",
+          "itemId": "f0a86964-551a-4d93-90b5-6c4ca5a96587",
+          "itemName": "鐵帽",
+          "enhanceLevel": 0
+        },
+        "head_mid": {
+          "id": "864131cc-f27a-454f-af5c-eb53ef2eb143",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/f52780246294b51d07eb2357.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/f52780246294b51d07eb2357-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋鐵鏡片",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "head_mid",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 3,
+            "int": 4,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "864131cc-f27a-454f-af5c-eb53ef2eb143",
+          "itemName": "智紋鐵鏡片",
+          "enhanceLevel": 0
+        },
+        "head_low": {
+          "id": "6cff4f87-354c-4fd7-9b2c-146ba6407f19",
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/2af0b4f6b666a8a472c6d6c5.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/2af0b4f6b666a8a472c6d6c5-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "智紋鐵口飾",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "head_low",
+          "weaponType": null,
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 4,
+            "int": 3,
+            "dex": 0,
+            "luk": 0
+          },
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "itemId": "6cff4f87-354c-4fd7-9b2c-146ba6407f19",
+          "itemName": "智紋鐵口飾",
+          "enhanceLevel": 0
+        },
+        "accessory_l": {
+          "id": "45c816d2-f3b3-49cd-83ab-2860cf69c785",
+          "combatEffects": [],
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_l",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 4,
+            "dex": 0,
+            "luk": 1
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/168dc2bae64d8c9a7df70b75-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/168dc2bae64d8c9a7df70b75.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "智紋銀戒指(左)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "tier": "B",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "45c816d2-f3b3-49cd-83ab-2860cf69c785",
+          "itemName": "智紋銀戒指(左)",
+          "enhanceLevel": 0
+        },
+        "accessory_r": {
+          "id": "2d6c95fa-f152-4848-aa4d-0ed0e14b12ed",
+          "combatEffects": [],
+          "description": "智紋套裝（D～A 同系列可混搭；達標效果累加）。3 件：最終傷害 +4%；5 件：命中 +10%；7 件：最終傷害 +6%、無視防禦 +10%。同時計入所屬階級套裝。",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "equipSlot": "accessory_r",
+          "equipStats": {
+            "str": 0,
+            "agi": 0,
+            "vit": 0,
+            "int": 4,
+            "dex": 0,
+            "luk": 1
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/2d733be21c8b3573ae3cb185-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/2d733be21c8b3573ae3cb185.png",
+          "isTwoHanded": false,
+          "itemType": "equipment",
+          "name": "智紋銀戒指(右)",
+          "passiveEffects": [],
+          "procEffects": [],
+          "setKey": "sage",
+          "setKeys": [
+            "sage"
+          ],
+          "setName": "智紋套裝",
+          "tier": "B",
+          "useEffects": [],
+          "weaponType": null,
+          "itemId": "2d6c95fa-f152-4848-aa4d-0ed0e14b12ed",
+          "itemName": "智紋銀戒指(右)",
+          "enhanceLevel": 0
+        },
+        "shield": {
+          "id": "3824e2ac-5781-422e-a1d2-881e44ca7a28",
+          "description": "",
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/e45a5942d0966acff74a0aba.png",
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/e45a5942d0966acff74a0aba-thumb.png",
+          "isTwoHanded": false,
+          "passiveEffects": [],
+          "procEffects": [],
+          "useEffects": [],
+          "combatEffects": [],
+          "name": "鋼盾",
+          "itemType": "equipment",
+          "tier": "B",
+          "equipSlot": "shield",
+          "weaponType": null,
+          "equipStats": {
+            "str": 2,
+            "agi": 0,
+            "vit": 4,
+            "int": 0,
+            "dex": 1,
+            "luk": 0
+          },
+          "setKey": "basic_b",
+          "setKeys": [
+            "basic_b"
+          ],
+          "setName": "鋼製套裝",
+          "itemId": "3824e2ac-5781-422e-a1d2-881e44ca7a28",
+          "itemName": "鋼盾",
+          "enhanceLevel": 0
+        },
+        "job_eq": {
+          "id": "job_barrier_mage_v1",
+          "combatEffects": [],
+          "description": "以法杖展開防護結界的共鬥光環職業，降低隊伍承受傷害與被暴擊傷害。",
+          "enhanceLevel": 0,
+          "equipSlot": "job_eq",
+          "equipStats": {
+            "int": 3,
+            "vit": 3,
+            "dex": 2
+          },
+          "itemType": "job_badge",
+          "name": "結界師徽章",
+          "passiveEffects": [
+            {
+              "key": "def_up",
+              "category": "stat",
+              "trigger": "passive",
+              "target": "self",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "value": 5,
+                "mode": "pct"
+              },
+              "condition": {
+                "any": [
+                  {
+                    "weaponType": "staff_1h"
+                  },
+                  {
+                    "weaponType": "staff_2h"
+                  }
+                ]
+              },
+              "notes": "法杖：自身 DEF +5%",
+              "definitionName": "def_up"
+            },
+            {
+              "key": "party_damage_reduction",
+              "category": "defense",
+              "trigger": "passive",
+              "target": "party",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "value": 15,
+                "mode": "pct"
+              },
+              "condition": {
+                "any": [
+                  {
+                    "weaponType": "staff_1h"
+                  },
+                  {
+                    "weaponType": "staff_2h"
+                  }
+                ]
+              },
+              "notes": "隊伍受到傷害 -15%",
+              "definitionName": "party_damage_reduction"
+            },
+            {
+              "key": "party_crit_damage_reduction",
+              "category": "defense",
+              "trigger": "passive",
+              "target": "party",
+              "chance": 100,
+              "stacks": 1,
+              "stackMode": "replace",
+              "duration": {
+                "mode": "battle",
+                "value": 1
+              },
+              "sourcePhase": "passive",
+              "params": {
+                "value": 10,
+                "mode": "pct"
+              },
+              "condition": {
+                "any": [
+                  {
+                    "weaponType": "staff_1h"
+                  },
+                  {
+                    "weaponType": "staff_2h"
+                  }
+                ]
+              },
+              "notes": "隊伍被暴擊傷害 -10%",
+              "definitionName": "party_crit_damage_reduction"
+            }
+          ],
+          "procEffects": [],
+          "useEffects": [],
+          "jobSkills": [
+            {
+              "key": "barrier_mage_barrier",
+              "name": "八門盾甲",
+              "description": "敵方受到傷害增加20%，持續2回合。",
+              "cooldownTurns": 3,
+              "condition": {},
+              "procEffects": [
+                {
+                  "key": "damage_taken_up",
+                  "target": "enemy",
+                  "params": {
+                    "value": 20,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 2
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "key": "barrier_mage_reflect",
+              "name": "束縛之陣",
+              "description": "敵方迴避-50%、命中-30%，持續3回合。",
+              "cooldownTurns": 5,
+              "condition": {},
+              "procEffects": [
+                {
+                  "key": "dodge_down",
+                  "target": "enemy",
+                  "params": {
+                    "value": 50,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 3
+                    }
+                  }
+                },
+                {
+                  "key": "hit_down",
+                  "target": "enemy",
+                  "params": {
+                    "value": 30,
+                    "duration": {
+                      "mode": "turns",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "atkStat": null,
+          "effect": {
+            "type": "none",
+            "value": 0
+          },
+          "imageThumbnailUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c5465c7b19354367a76ee7a3-thumb.png",
+          "imageUrl": "https://otonashikoi.org/uploads/items/redrawn-v1/c5465c7b19354367a76ee7a3.png",
+          "isTwoHanded": false,
+          "tier": null,
+          "weaponType": null,
+          "itemId": "job_barrier_mage_v1",
+          "itemName": "結界師徽章",
+          "jobExp": 0
+        }
+      },
+      "stats": {
+        "str": 7,
+        "agi": 9,
+        "vit": 41,
+        "int": 54,
+        "dex": 12,
+        "luk": 8,
+        "maxHp": 1225,
+        "atk": 222,
+        "baseWeaponAttack": 41,
+        "weaponMainStat": "int",
+        "weaponMainStatValue": 60.345785480713374,
+        "dmgMin": 1,
+        "dmgMax": 1,
+        "def": 20.5,
+        "flatDef": 10,
+        "baseVit": 10,
+        "equipVit": 31,
+        "dodge": 4.5,
+        "hit": 92,
+        "crit": 9,
+        "combo": 7.5,
+        "comboDamageMultiplier": 1,
+        "tierSetBonuses": {
+          "tierCounts": {
+            "D": 0,
+            "C": 0,
+            "B": 10,
+            "A": 0,
+            "S": 0
+          },
+          "stats": {
+            "str": 0,
+            "int": 0,
+            "dex": 0
+          },
+          "hitPct": 10,
+          "dodgePct": 0,
+          "critRatePct": 5,
+          "critDamagePct": 10,
+          "damagePct": 14,
+          "finalDamagePct": 10,
+          "bossDamagePct": 0,
+          "goldPct": 0,
+          "expPct": 0,
+          "dropPct": 0
+        },
+        "tierDamageMultiplier": 1.1400000000000001,
+        "tierFinalDamageMultiplier": 1.1,
+        "tierBossDamageMultiplier": 1,
+        "tierCritDamageMultiplier": 1.1,
+        "executeChance": 0,
+        "executeThresholdPct": 0,
+        "weaponType": "staff_1h",
+        "isTwoHanded": false,
+        "isDualWield": false,
+        "bypassMonsterDefPct": 15,
+        "monsterAttackCount": 1,
+        "attackSegments": 1,
+        "faceMultipliers": null,
+        "allMinMult": null,
+        "allMaxMult": null,
+        "stunChance": 0,
+        "stunDuration": 3,
+        "armorBreakChance": 0,
+        "blockChance": 20,
+        "blockCounter": false,
+        "counterChance": 0,
+        "counterInheritStun": false,
+        "counterInheritBreak": false,
+        "hasRogueBadge": false,
+        "hasDwarfWarriorBadge": false,
+        "dwarfWarriorHighHpStunBoost": 0,
+        "dwarfWarriorBonusVsStunnedPct": 0,
+        "critDamage": 2.5,
+        "finalDamageMultiplier": 1,
+        "speed": 100
+      },
+      "skill": {
+        "key": "party_damage_reduction",
+        "value": 10
+      },
+      "outputShare": 0.12,
+      "tick": 1295,
+      "avatarUrl": "/reception/starter-companions/barrier-mage-v2.webp",
+      "revision": "starter-companions-20261006-v3"
+    }
+  ]
+}

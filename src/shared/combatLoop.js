@@ -1,5 +1,6 @@
 const { createMistwoodCards } = require("./mistwoodCards");
 const { createMetalCards } = require("./metalCards");
+const { cardDefensiveModifiers } = require("./cardDefensiveModifiers");
 const { activeEquipment } = require("./anchorFeature");
 const { effectiveOffensiveStat, offensiveStatGain } = require("./offensiveStatCurve");
 "use strict";
@@ -737,6 +738,8 @@ function applyCardProcEffects({
   cooldownBucket = null,
   cooldownKey = null,
   cooldownTurns = 0,
+  triggerCountBucket = null,
+  healingPctByTrigger = [],
   ownerActiveEffects = [],
   targetActiveEffects = [],
   ownerEquipped = {},
@@ -805,13 +808,20 @@ function applyCardProcEffects({
 
   let appliedAny = false;
   let loggedImmediate = false;
+  const previousTriggers = Math.max(0, Math.floor(Number(triggerCountBucket?.[cooldownKey]) || 0));
+  let countedHeal = false;
   for (const rawProcEffect of matchedEffects) {
     if (!rawProcEffect || !rawProcEffect.key) continue;
     const procChance = Number.isFinite(Number(rawProcEffect.chance))
       ? Math.min(100, Math.max(0, Number(rawProcEffect.chance)))
       : 100;
     if (Math.random() * 100 >= procChance) continue;
-    const procEffect = normalizeCardProcEffect(rawProcEffect);
+    let procEffect = normalizeCardProcEffect(rawProcEffect);
+    if (procEffect.target === 'self' && procEffect.key === 'heal_over_time'
+        && healingPctByTrigger.length > 0) {
+      const pct = Number(healingPctByTrigger[Math.min(previousTriggers, healingPctByTrigger.length - 1)]);
+      if (Number.isFinite(pct) && pct > 0) procEffect = { ...procEffect, params: { ...procEffect.params, value: pct } };
+    }
 
     if (typeof applySpecialEffect === "function" && applySpecialEffect(procEffect) === true) {
       appliedAny = true;
@@ -831,6 +841,7 @@ function applyCardProcEffects({
     })) {
       appliedAny = true;
       loggedImmediate = true;
+      countedHeal = true;
       continue;
     }
 
@@ -872,6 +883,9 @@ function applyCardProcEffects({
 
   if (appliedAny && Number(cooldownTurns) > 0 && cooldownBucket && cooldownKey != null) {
     cooldownBucket[cooldownKey] = Number(cooldownTurns);
+  }
+  if (countedHeal && healingPctByTrigger.length > 0 && triggerCountBucket && cooldownKey != null) {
+    triggerCountBucket[cooldownKey] = previousTriggers + 1;
   }
 
   if (appliedAny && !loggedImmediate) {
@@ -934,7 +948,7 @@ function runCombatLoop(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options =
   const result = { ...value, roundLogs: value.roundLogs.slice(state.logs), diceEvents: value.diceEvents.slice(state.dice),
     totalDamage: value.totalDamage - state.damage, damageTaken: value.damageTaken - state.taken,
     healDone: value.healDone - state.healed, jobSkillComboSpent: value.jobSkillComboSpent - state.stolen,
-    combatStats: { ...value.combatStats } };
+    combatStats: { ...value.combatStats }, actionComplete: step.done, cumulative: value };
   for (const [key, n] of Object.entries(value.combatStats)) if (typeof n === "number") result.combatStats[key] = n - (state.stats[key] || 0);
   result.combatStats.supportShotBySource = Object.fromEntries(Object.entries(value.combatStats.supportShotBySource || {}).map(([id, n]) => [id, n - (state.stats.supportShotBySource?.[id] || 0)]));
   Object.assign(state, { damage: value.totalDamage, taken: value.damageTaken, healed: value.healDone,
@@ -1042,8 +1056,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   const playerAgi = pStats.agi || 1;
   const monsterAgi = (mCalc.agi || 1) + worldBossAgiBonus;
   const agiDiff = playerAgi - monsterAgi;
-  const hasAgiFirstStrike = !options.actionSession && agiDiff > 5;   // 第1回合玩家先手，怪物無法反擊
-  const hasAgiSlowedMonster = !options.actionSession && agiDiff > 15; // 怪物只在偶數回合反擊
+  const hasAgiFirstStrike = (!options.actionSession || options.liveNormalCombat) && agiDiff > 5;   // 第1回合玩家先手，怪物無法反擊
+  const hasAgiSlowedMonster = (!options.actionSession || options.liveNormalCombat) && agiDiff > 15; // 怪物只在偶數回合反擊
   const bossAgiDiff = monsterAgi - playerAgi;
   const hasBossAgiFirstStrike = worldBossHasAgiSuppress && bossAgiDiff > 2;   // 第1回合怪物壓制，玩家無法行動
   const hasBossAgiTurnSuppress = worldBossHasAgiSuppress && bossAgiDiff > 5;  // 玩家奇數回合被壓制
@@ -1054,7 +1068,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     : mHpInit;
   const group = require('./encounterGroup');
   const enemyCount = options.monsterIsBoss || options.isWorldBoss ? 1 : group.count(options.encounterCount);
-  const enemyUnitHp = enemyCount > 1 ? Math.max(1, Number(options.encounterUnitHp) || mHpInit / enemyCount) : mHpInit;
+  let enemyUnitHp = enemyCount > 1 ? Math.max(1, Number(options.encounterUnitHp) || mHpInit / enemyCount) : mHpInit;
   const livingEnemies = () => enemyCount > 1 ? group.remaining(mHp, enemyUnitHp, enemyCount) : Number(mHp > 0);
   const currentTargetHp = () => enemyCount > 1 ? group.targetHp(mHp, enemyUnitHp) : mHp;
   const currentTargetMaxHp = enemyCount > 1 ? enemyUnitHp : mHpInit;
@@ -1062,12 +1076,13 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   let pHp = options.startPlayerHp != null
     ? Math.max(0, Math.min(pStats.maxHp, Number(options.startPlayerHp) || 0))
     : pStats.maxHp;
+  const liveBaseMaxHp = pStats.maxHp;
   // 隊伍光環 party_max_hp_up（如錨點「共鳴之鏈」）：戰鬥開始一次性提高本人 MaxHP 與當前 HP（不逐回合疊加）
   try {
     const _pmh = (Array.isArray(options.partyEffects) ? options.partyEffects : [])
       .filter((pe) => pe && pe.key === "party_max_hp_up")
       .reduce((mx, pe) => Math.max(mx, Number(pe.params?.value ?? pe.value ?? 0) || 0), 0);
-    if (_pmh > 0 && pStats.maxHp > 0) {
+    if (!options.liveNormalCombat && _pmh > 0 && pStats.maxHp > 0) {
       const _mult = 1 + _pmh / 100;
       pStats.maxHp = Math.round(pStats.maxHp * _mult);
       pHp = Math.round(pHp * _mult);
@@ -1162,6 +1177,11 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   const metalCards = createMetalCards(options.equipped, pStats.maxHp);
   const _hurt = (d, cardEligible = true, physicalBasic = true, combo = false) => {
     let x = Math.max(0, Number(d) || 0);
+    if (cardEligible && x > 0) {
+      const takenPct = (options.playerActiveEffects || []).filter(e => e?.key === 'damage_taken_up' && effectIsActive(e, _curRound))
+        .reduce((sum, e) => sum + Math.abs(Number(e.params?.value) || 0), 0);
+      if (takenPct > 0) x = Math.round(x * (1 + takenPct / 100));
+    }
     // 聖域護佑：受傷減免（先減再給結界吃，兩者可疊）
     if (_sanctuaryCutPct > 0 && x > 0) {
       const beforeSanctuary = x;
@@ -1208,6 +1228,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   // ── KDA・A 值歸戶（附錄C v3 定案）────────────────────────────────
   // 他人光環對本場的傷害當量：增傷類＝結算時 總傷害×v/(100+v)；治療＝有效量×1.0＋救命加成；
   // 減傷＝實際擋下量。不可自益（isSelfAura===false 才計）；玩法同 key 取最高，計分則按提供者數值比例分帳。
+  const _liveAuraAssist = { bySource: {}, bySourceJob: {} };
   const _kdaHealBySource = new Map();      // sourceDiscordId → 有效治療量
   const _kdaPreventedBySource = new Map(); // sourceDiscordId → 減傷光環實際擋下量
   let _kdaDrSourceId = null;               // party_damage_reduction 提供者
@@ -1398,6 +1419,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   // 因為玩家 DOT 在回合最前面結算(早於本回合扣防計算)。
   const isWorldBossFight = Boolean(options.isWorldBoss);
   let monsterDefDownCarry = 0;
+  let livePartyDefIgnoreCarry = 0;
   let playerDefIgnoreCarry = 0; // 上一回合玩家無視防禦%(法師徽章/魔力爆炎等),供 DOT 穿防
   // 武器主屬性追加傷害:終傷後 +(主屬性 × 1.5)固定點數。主攻擊/連擊/反擊各加一次。
   const weaponMainBonus = Math.max(0, Math.round((pStats.weaponMainStatValue || 0) * 1.5));
@@ -1547,6 +1569,10 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   const cardCooldowns = {
     player: { ...(options.cardCooldowns?.player || {}) },
     monster: { ...(options.cardCooldowns?.monster || {}) },
+  };
+  const cardTriggerCounts = {
+    player: { ...(options.cardTriggerCounts?.player || {}) },
+    monster: { ...(options.cardTriggerCounts?.monster || {}) },
   };
   const jobSkillCooldowns = { ...(options.jobSkillCooldowns || {}) }; // { [skillKey]: remainingTurns }
   // ── 職業技能「成本」通用機制（2026-07-28 新增，所有職業共用）──
@@ -1843,10 +1869,11 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   // Same core, resumable execution only for the multiplayer action clock.
   const actionSnapshot = () => ({
     outcome: outcome || "timeout", roundLogs, diceEvents, totalDamage, combatStats: { ...combatStats },
+    ...(options.liveNormalCombat ? { assistLedger: structuredClone(_liveAuraAssist) } : {}),
     encounterCount: enemyCount, remainingEnemies: livingEnemies(), encounterUnitHp: enemyUnitHp,
-    finalMonsterHp: Math.max(0, mHp), finalPlayerHp: Math.max(0, pHp),
+    finalMonsterHp: Math.max(0, mHp), finalPlayerHp: Math.max(0, pHp), playerMaxHp: pStats.maxHp,
     playerActiveEffects: options.playerActiveEffects, monsterActiveEffects, stunRoundsLeft,
-    cardCooldowns, jobSkillCooldowns, jobSkillsUsedThisBattle: [..._skillUsedThisBattle],
+    cardCooldowns, cardTriggerCounts, jobSkillCooldowns, jobSkillsUsedThisBattle: [..._skillUsedThisBattle],
     nextRound: round, damageTaken: _totalDmgTaken, healDone: _totalHealDone,
     lifestealDone: _totalLifestealDone, jobSkillComboSpent: _jobSkillComboSpent,
     shadowGauge: shadowCfg ? (_shadowBurstNext ? shadowCfg.GAUGE_MAX : _shadowGrids) : null,
@@ -1862,18 +1889,36 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     sageMistPending: _sageMistRound > 0, forceMonsterCritFailPending: forceMonsterCritFail,
   });
   const acceptAction = command => {
+    // The resumed core owns effect state, including injected equipment passives.
+    // A caller's empty/older list must not erase it on the first or later action.
+    const playerActiveEffects = options.playerActiveEffects;
     Object.assign(options, command);
+    options.playerActiveEffects = playerActiveEffects;
     options.equipped = activeEquipment(command.equipped);
     options.skipPlayerAttack = command.skipPlayerAttack === true;
     options.skipMonsterAttack = command.skipMonsterAttack === true;
     options.tickJobSkillCooldowns = command.tickJobSkillCooldowns !== false;
     _noPlayerAtk = options.skipPlayerAttack === true;
     pHp = Math.max(0, Number(command.startPlayerHp) || 0);
+    if (options.liveNormalCombat) {
+      const pct = Math.max(0, ...(options.partyEffects || []).filter(e => e?.key === "party_max_hp_up")
+        .map(e => Number(e.params?.value ?? e.value) || 0));
+      const nextMax = Math.max(1, Math.round(liveBaseMaxHp * (1 + pct / 100)));
+      if (nextMax !== pStats.maxHp) pHp = Math.min(nextMax, Math.ceil(pHp * nextMax / Math.max(1, pStats.maxHp)));
+      pStats.maxHp = nextMax;
+      const auraMax = key => Math.max(0, ...(options.partyEffects || []).filter(e => e?.key === key)
+        .map(e => Number(e.params?.value ?? e.value) || 0));
+      monsterDefDownCarry = auraMax("party_monster_def_down");
+      playerDefIgnoreCarry = Math.max(0, playerDefIgnoreCarry - livePartyDefIgnoreCarry) + auraMax("party_def_ignore_up");
+      livePartyDefIgnoreCarry = auraMax("party_def_ignore_up");
+    }
     mHp = Math.max(0, Number(command.startMonsterHp) || 0);
+    if (command.liveNormalCombat && command.encounterUnitHp) enemyUnitHp = Math.max(1, Number(command.encounterUnitHp));
     monsterActiveEffects = structuredClone(command.monsterActiveEffects || []);
     stunRoundsLeft = Math.max(_teamStunRounds, Number(command.stunRoundsLeft) || 0);
     monsterStunImmuneUntil = Number(command.monsterStunImmuneUntil) || 0;
     cardCooldowns.monster = { ...(command.cardCooldowns?.monster || {}) };
+    cardTriggerCounts.monster = { ...(command.cardTriggerCounts?.monster || {}) };
     _monsterKnockbackRound = command.monsterKnockbackPending ? round : 0;
     _sageMistRound = command.sageMistPending ? round : 0;
     if (_noPlayerAtk) forceMonsterCritFail = !!command.forceMonsterCritFailPending;
@@ -1885,6 +1930,10 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   }
   _shadowHp = pHp; // KDA 影子血量起點（與實際血量同步出發，之後只吃「非外部治療」的變化）
   while (round <= endRound && outcome === null) {
+    const liveAssistBefore = options.liveNormalCombat ? {
+      damage: totalDamage, heal: new Map(_kdaHealBySource), prevented: new Map(_kdaPreventedBySource),
+      highHp: currentTargetHp() > currentTargetMaxHp * 0.5, stunned: _targetStunnedNow(round),
+    } : null;
     const log = [`**【第 ${round} 回合】**`];
     _reactionLog = log;
     const _windDirectionBattleStartStep = _windDirectionCfg?.phaseRounds > 1 ? 0 : _windDirectionStartStep;
@@ -2755,8 +2804,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
 
     // 敏捷壓制代表怪物該回合跟不上玩家的行動節奏，不只不能普攻反擊，
     // 也不能在回合開頭繞過壓制先施放主動卡片技能。
-    const monsterActionSuppressedByAgi = (hasAgiFirstStrike && round === 1)
-      || (hasAgiSlowedMonster && round % 2 !== 0);
+    const monsterActionSuppressedByAgi = (hasAgiFirstStrike && (options.monsterActionRound || round) === 1)
+      || (hasAgiSlowedMonster && (options.monsterActionRound || round) % 2 !== 0);
 
     // 怪物自身的卡片技能
     const monsterEquipped = options.monsterEquipped || {};
@@ -2796,6 +2845,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
           skillName: skill.name || cardName,
           skillDescription: _descOnce(skill.name, skill.description || ''),
           cooldownBucket: cardCooldowns.monster,
+          triggerCountBucket: cardTriggerCounts.monster,
+          healingPctByTrigger: skill.healingPctByTrigger || [],
           cooldownKey,
           cooldownTurns: Number(skill.cooldownTurns) || 0,
           triggerChance,
@@ -3095,10 +3146,16 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       'heal_over_time', 'life_regen', 'counter', 'counter_attack',
     ]);
     const specialSlots = ['special_1', 'special_2', 'special_3'];
+    let playerCardHitTriggered = false;
+    const triggerPlayerCards = (hitConfirmed = false) => {
+    if (hitConfirmed && playerCardHitTriggered) return;
+    if (hitConfirmed) playerCardHitTriggered = true;
+    const defenseBefore = hitConfirmed ? cardDefensiveModifiers(options.playerActiveEffects || [], round) : null;
     for (const slot of specialSlots) {
       const slotItem = options.equipped?.[slot];
       if (!_noPlayerAtk && !playerIsStunned && !playerIsFrozen && !playerIsSilenced && slotItem && slotItem.monsterCardSkill && slotItem.monsterCardSkill.key
-          && !['on_dodge', 'battle_event'].includes(slotItem.monsterCardSkill.trigger)) { // on_dodge 卡改在「玩家閃避」時觸發，不在此回合觸發
+          && !['on_dodge', 'battle_event', 'passive'].includes(slotItem.monsterCardSkill.trigger)
+          && hitConfirmed === (slotItem.monsterCardSkill.trigger === 'on_hit' && slotItem.monsterCardSkill.key !== 'castle_golem_petrify')) {
         let cardDamageThisCast = 0;
         const skill = slotItem.monsterCardSkill;
         const cardName = slotItem.itemName || slotItem.name || '卡片';
@@ -3108,7 +3165,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         const cooldownKey = slotItem.itemId || slotItem.id || `${slot}:${cardName}`;
         const triggerChance = Math.min(100, Math.max(0, Number(skill.chance ?? slotItem.cardProcChance ?? 5)));
         const procEffects = Array.isArray(skill.procEffects) ? skill.procEffects : [];
-        const hpGatedEffects = procEffects.filter(effectHasHpThreshold);
+        // Golem regeneration remains a survival check on the owner's action.
+        const hpGatedEffects = hitConfirmed ? [] : procEffects.filter(effectHasHpThreshold);
         const normalProcEffects = hpGatedEffects.length > 0 ? procEffects.filter((effect) => !effectHasHpThreshold(effect)) : procEffects;
 
         let hpGatedAppliedThisRound = false;
@@ -3123,6 +3181,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
             skillName: skill.name || cardName,
             skillDescription: _descOnce(skill.name, skill.description || ''),
             cooldownBucket: cardCooldowns.player,
+            triggerCountBucket: cardTriggerCounts.player,
+            healingPctByTrigger: skill.healingPctByTrigger || [],
             cooldownKey,
             cooldownTurns: Number(skill.cooldownTurns) || 0,
             triggerChance,
@@ -3183,7 +3243,6 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         }
 
       if (normalProcEffects.length > 0 && (cardCooldowns.player[cooldownKey] || 0) <= 0 && Math.random() * 100 < triggerChance) {
-        if (Number(skill.cooldownTurns) > 0) cardCooldowns.player[cooldownKey] = Number(skill.cooldownTurns);
         const shouldShowGenericSkillLine = !normalProcEffects.some((effect) => shouldSuppressImmediateLog(effect));
         let appliedAnyNormalProc = false;
 
@@ -3193,6 +3252,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
           const currentPlayerHpPct = pStats.maxHp > 0 ? (pHp / pStats.maxHp) * 100 : 100;
           const currentMonsterHpPct = mHpInit > 0 ? (currentTargetHp() / currentTargetMaxHp) * 100 : 100;
           if (!procEffectApplies(procEffect, currentPlayerHpPct, currentMonsterHpPct)) continue;
+          if (currentTargetHp() <= 0 && (procEffect.target === 'enemy'
+            || ['proc_extra_hit', 'proc_chain_hit', 'proc_execute'].includes(procEffect.key))) continue;
           const procChance = Number.isFinite(Number(procEffect.chance))
             ? Math.min(100, Math.max(0, Number(procEffect.chance)))
             : 100;
@@ -3270,7 +3331,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
             continue;
           }
 
-          const targetHadDebuff = (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key))
+          const targetHadDebuff = (procEffect.target === 'enemy' || (!procEffect.target && PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key)))
             ? hasAnyDebuff(monsterActiveEffects, round)
               : hasAnyDebuff(options.playerActiveEffects || [], round);
           const bonusValue = Number(pp.bonusIfTargetDebuffed);
@@ -3329,7 +3390,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
           }
           if (effectEntry.params.mode === 'caster_atk_pct') effectEntry.params.casterAtk = pStats.atk || 1;
           // 攻擊型效果 → 施加給怪物；增益型效果 → 施加給玩家
-          if (procEffect.target === 'enemy' || PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key)) {
+          if (procEffect.target === 'enemy' || (!procEffect.target && PLAYER_CARD_OFFENSIVE_KEYS.has(procEffect.key))) {
             monsterActiveEffects = addOrStackCardEffect(monsterActiveEffects, effectEntry);
             appliedAnyNormalProc = true;
             if (effectEntry.key === 'stun') {
@@ -3337,7 +3398,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
               applyMonsterStun(stunDur, round);
             }
           } else {
-            effectEntry.appliedAt = round - 1;
+            effectEntry.appliedAt = hitConfirmed ? round : round - 1;
             if (!options.playerActiveEffects) options.playerActiveEffects = [];
             options.playerActiveEffects = addOrStackCardEffect(options.playerActiveEffects, effectEntry);
             appliedAnyNormalProc = true;
@@ -3346,11 +3407,26 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         if (shouldShowGenericSkillLine && appliedAnyNormalProc && !hpGatedAppliedThisRound) {
           log.push(`🎴 **${playerBattleName}** 發動【${skill.name || cardName}】！${_descOnce(skill.name || cardName, skill.description || '')}`);
         }
+        if (appliedAnyNormalProc && Number(skill.cooldownTurns) > 0) cardCooldowns.player[cooldownKey] = Number(skill.cooldownTurns);
       }
       mistCards.onSuccessfulHit(cardDamageThisCast);
       mistCards.onCardDamage(skill.key, cardDamageThisCast);
     }
     }
+    if (hitConfirmed) {
+      const after = cardDefensiveModifiers(options.playerActiveEffects || [], round);
+      playerDefBonusPct += after.defPct - defenseBefore.defPct;
+      playerDefFlatBonus += after.defFlat - defenseBefore.defFlat;
+      playerDefDownPct += after.defDown - defenseBefore.defDown;
+      playerDamageReductionPct += after.reduction - defenseBefore.reduction;
+      playerPhysDrPct += after.physical - defenseBefore.physical;
+      playerMagicDrPct += after.magic - defenseBefore.magic;
+      playerDodgeBonus += after.dodge - defenseBefore.dodge;
+      playerBlockBonus += after.block - defenseBefore.block;
+      playerInvincible ||= after.invincible;
+    }
+    };
+    triggerPlayerCards();
 
     // ── 職業技能觸發（35% 機率，每回合限一次，回合開頭讀取 HP 條件後發動）──
     if (!_noPlayerAtk && !jobSkillUsedThisRound && !playerIsStunned && !playerIsFrozen && outcome === null) {
@@ -3528,6 +3604,11 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         pHp = _healPlayer(sHeal, { lifesteal: true });
         log.push(`💜 強力吸血！恢復 **${Math.max(0, pHp - beforeHeal)}** HP（你剩 ${pHp} / ${pStats.maxHp}）`);
       }
+    };
+    // Every exit after attacking settles lifesteal before freezing the round log.
+    const _pushRoundLog = () => {
+      _settleLifestealForRound();
+      roundLogs.push(log.join("\n"));
     };
     let playerDefBonusPct = 0;
     let playerDefDownPct = 0;
@@ -4419,6 +4500,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         if (_noPlayerAtk) dmg = 0; // 沒苦硬吃：一般攻擊(＋衍生連擊/三元補打)最終傷害歸零
         mHp -= dmg;
         totalDamage += dmg;
+        // Include the main hit before lethal hits or follow-up segments can end the action.
+        _applyLifesteal(dmg);
         // ── 戰意左：每次出手累積 stack（命中算一次）──
         if (stackOnHitValue > 0 && stackOnHitStacks < stackOnHitCap) {
           stackOnHitStacks = Math.min(stackOnHitCap, stackOnHitStacks + stackOnHitValue);
@@ -4451,6 +4534,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         else if (defTier === 'graze') defTierNote = "🌬️擦傷！";
 
         log.push(`⚔️ ${regionalPrecisionHit ? "🎯**精準重擊**！" : ""}${atkTierNote}${critNote}${breakNote}${rand(jobFlavor.hit)}，${rand(atkVerbs)}，對 ${mName} 造成 **${dmg}** 點傷害${defTierNote ? `（${defTierNote.replace(/[!！]$/, "")}）` : ""}！（怪物剩 ${Math.max(0, mHp)} HP）`);
+        triggerPlayerCards(true);
 
         if (a === 0 && dmg > 0 && mHp > 0 && _tryHellfireEmber()) {
           monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
@@ -4795,9 +4879,6 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         // 這一回合有打到 → 回合數 +1（同回合多擊只算一次）
         if (_attackRoundMark !== round) { _attackRoundMark = round; combatStats.attackRounds += 1; }
 
-        // ── 玩家吸血效果（主擊／副手；卡片技能與鮮血錨點共用）──
-        _applyLifesteal(dmg);
-
         // ── 檢查怪物反彈傷害效果 ──
         if (Array.isArray(monsterActiveEffects)) {
           for (const reflectEff of monsterActiveEffects) {
@@ -4976,7 +5057,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       }
     }
 
-    if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+    if (outcome === "win") { _pushRoundLog(); break; }
 
     // ── 氣力格累積（劍鬼）：本回合有攻擊到對手 → +1 格（每回合最多 1 格）──
     if (oniCfg && outcome === null && _attackRoundMark === round) {
@@ -5023,7 +5104,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         _sniperGrids = 0;
         log.push(`🌀 震盪值全滿（4/4）——**震盪射擊**！`);
         _sniperArrow(sniperCfg.shockShotPct || 100, "震盪射擊");
-        if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+        if (outcome === "win") { _pushRoundLog(); break; }
         _monsterKnockbackRound = round + 1; // 下回合對手構不到你
         log.push(`🌪️ ${mName} 被震得踉蹌後退——下回合構不到你！`);
       } else {
@@ -5037,7 +5118,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       if (options.actionSession) options.actionSession.bardPerformanceId = options.bardPerformanceId;
       log.push(`🎼 **完美和弦**餘音未散——音波化作利刃！`);
       _sniperArrow(Number(options.bardChordPct), "完美和弦", "🎼");
-      if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+      if (outcome === "win") { _pushRoundLog(); break; }
     }
 
     // ── 計謀值累積（兵聖）：每回合 +1 格（**不論命中**——綁命中回合會在短戰/高閃怪面前
@@ -5051,7 +5132,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         if (_plan === "fire") {
           log.push(`📜 **兵聖施計——【火攻之計】**！放火燒山！`);
           _sniperArrow(Number(sageCfg.fire?.hitPct) || 150, "火攻之計", "🔥");
-          if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+          if (outcome === "win") { _pushRoundLog(); break; }
           monsterActiveEffects = upsertActiveEffectBySource(monsterActiveEffects, {
             key: "burn",
             params: { value: Number(sageCfg.fire?.burnPct) || 30, mode: "caster_atk_pct", casterAtk: Math.round(pStats.atk || 1), duration: { mode: "turns", value: Number(sageCfg.fire?.burnTurns) || 3 } },
@@ -5061,7 +5142,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         } else if (_plan === "rock") {
           log.push(`📜 **兵聖施計——【落石之計】**！滾石落下！`);
           _sniperArrow(Number(sageCfg.rock?.hitPct) || 120, "落石之計", "🪨");
-          if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+          if (outcome === "win") { _pushRoundLog(); break; }
           if (applyMonsterStun(1, round)) {
             log.push(`😵 ${mName} 被巨石砸得眼冒金星——暈眩 1 回合！`);
           } else if (monsterIsBossUnit) {
@@ -5102,7 +5183,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         mHp -= _spDmg;
         totalDamage += _spDmg;
         log.push(`☀️ **日之精靈**揮灑聖光，對 ${mName} 造成 **${_spDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
-        if (mHp <= 0) { outcome = "win"; roundLogs.push(log.join("\n")); break; }
+        if (mHp <= 0) { outcome = "win"; _pushRoundLog(); break; }
       }
     }
 
@@ -5149,13 +5230,13 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     } else if (sageCfg && _sageMistRound === round) {
       // 瞞天過海（兵聖）：這回合怪物必定打空
       skipMonsterAttackReason = "mist";
-    } else if (hasAgiFirstStrike && round === 1) {
+    } else if (hasAgiFirstStrike && (options.monsterActionRound || round) === 1) {
       skipMonsterAttackReason = "agi_first_strike";
-    } else if (hasAgiSlowedMonster && round % 2 !== 0) {
+    } else if (hasAgiSlowedMonster && (options.monsterActionRound || round) % 2 !== 0) {
       // 如果 AGI 差 > 15，奇數回合怪物不攻擊
       skipMonsterAttackReason = "agi_slowed";
     } else {
-      monsterAttackCount = (pStats.monsterAttackCount || 1) * (options.actionSession ? 1 : livingEnemies());
+      monsterAttackCount = (pStats.monsterAttackCount || 1) * (options.actionSession && !options.liveNormalCombat ? 1 : livingEnemies());
       // 🐺 連牙亂舞：保底 2 段 + 機率追加(第3段55%→第4段30%→第5段12%，依序遇失敗停)，最多 5 段
       if (_hellfangCombo) {
         let hits = 2;
@@ -5652,7 +5733,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       }
     }
 
-    if (outcome === "lose") { roundLogs.push(log.join("\n")); break; }
+    if (outcome === "lose") { _pushRoundLog(); break; }
 
     // ── 甲蟹卡反擊（怪物攻擊後，30% 觸發，傷害為怪物本回合傷害的 20%）──
     if (monsterAttackCount > 0 && outcome === null) {
@@ -5691,13 +5772,13 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       }
     }
 
-    if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+    if (outcome === "win") { _pushRoundLog(); break; }
 
     // ── 神速反擊（神射手）：這回合對手沒打到你 → 多一箭 ──
     //    涵蓋：揮空/被閃/來不及出手（先手・慢半拍）/被暈眩/被冰封/被震退（使用者定案：硬控也算）
     if (sniperCfg && outcome === null && mHp > 0 && monsterDmgThisRound === 0 && (!options.actionSession || !_partyWasHitSinceAttack)) {
       _sniperArrow(sniperCfg.counterShotPct || 100, "神速反擊");
-      if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+      if (outcome === "win") { _pushRoundLog(); break; }
     }
 
     // ── 盾格擋反擊（單手劍+盾，必中）── 走獨立階級擲骰
@@ -5760,7 +5841,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       }
     }
 
-    if (outcome === "win") { roundLogs.push(log.join("\n")); break; }
+    if (outcome === "win") { _pushRoundLog(); break; }
 
     // 副手追擊機制已移除（2026-05-26）
 
@@ -5841,13 +5922,17 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       log.push(`💥 龜甲碎裂——**破殼而出**！剩餘戰鬥傷害 +${_tshellCfg.breakDmgPct}%！`);
     }
 
-    // 吸血：一回合結算一次（累積本回合各段傷害後統一吸，並吃總量上限）
-    // 放在戰報 push 之前 → 吸血訊息屬於本回合；放在勝負判定之前 → 打死怪的那回合也吸得到。
-    _settleLifestealForRound();
-
     if (options.actionSession) for (const effect of options.playerActiveEffects || []) effect._clockExact = true;
     if (options.actionSession && !_noPlayerAtk) for (const effect of monsterActiveEffects) if (effect.sourceType !== "monster_skill" && !effect.sourceActorId) effect.sourceActorId = options.partyActorId;
-    roundLogs.push(log.join("\n"));
+    _pushRoundLog();
+    if (liveAssistBefore) require("./liveAuraContribution").creditLiveAuraAction(_liveAuraAssist, {
+      effects: options.partyEffects, damage: totalDamage - liveAssistBefore.damage,
+      heal: [..._kdaHealBySource].reduce((sum, [id, n]) => sum + n - (liveAssistBefore.heal.get(id) || 0), 0),
+      prevented: [..._kdaPreventedBySource].reduce((sum, [id, n]) => sum + n - (liveAssistBefore.prevented.get(id) || 0), 0),
+      monsterDefPct: mCalc.def, selfBypassPct: pStats.bypassMonsterDefPct,
+      boss: options.monsterIsBoss, elite: options.monsterIsElite,
+      highHp: liveAssistBefore.highHp, stunned: liveAssistBefore.stunned,
+    });
     if (outcome !== null) break;
 
     // ── 清理過期的 activeEffects ──
@@ -5857,6 +5942,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     }
 
     monsterDefDownCarry = roundMonsterDefDownPct; // 保留本回合扣防%,供下一回合玩家 DOT 使用
+    livePartyDefIgnoreCarry = roundPartyDefIgnorePct || 0;
     playerDefIgnoreCarry = (playerDefIgnorePct || 0) + (roundPartyDefIgnorePct || 0); // 保留本回合無視防禦%,供下一回合 DOT 穿防
     if (!options.actionSession || !_noPlayerAtk) { round++; _partyWasHitSinceAttack = false; }
     if (options.actionSession) {
@@ -5884,8 +5970,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   }
 
   // ── KDA・A 值歸戶結算（附錄C v3）──────────────────────────────
-  const _assistBySource = {};
-  const _assistBySourceJob = {};
+  const _assistBySource = options.liveNormalCombat ? _liveAuraAssist.bySource : {};
+  const _assistBySourceJob = options.liveNormalCombat ? _liveAuraAssist.bySourceJob : {};
   const _addA = (id, amt, jobId = "", jobName = "") => {
     const key = String(id || "");
     if (!key || !(amt > 0)) return;
@@ -5903,6 +5989,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     }
   };
   try {
+    if (!options.liveNormalCombat) {
     const _fought = Math.max(1, round - 1);
     // ── B 案（使用者定案 2026-08-07）：玩法維持「同 key 取最高」，但**計分按各提供者數值比例分帳**——
     //    被蓋掉的同系輔助不再拿 0 分。pot＝最高外部光環的實際效果量，依 v 比例分給所有外部提供者。
@@ -6003,6 +6090,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     if (_sanctuaryCands.length > 0) {
       _distribute(_kdaSanctuaryPrevented + _kdaSanctuaryHealed, _sanctuaryCands);
     }
+    }
   } catch (_) { /* 歸戶失敗不影響戰鬥結果 */ }
 
   // 🏁 結尾統計列（戰報重整：總輸出/承傷/最痛一擊——與未來 KDA 貢獻榜同款數字，先讓玩家看習慣）
@@ -6019,10 +6107,12 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     encounterCount: enemyCount, remainingEnemies: livingEnemies(), encounterUnitHp: enemyUnitHp,
     finalMonsterHp: Math.max(0, mHp),
     finalPlayerHp:  Math.max(0, pHp),
+    playerMaxHp: pStats.maxHp,
     combatStats,
     monsterActiveEffects,
     stunRoundsLeft,
     cardCooldowns,
+    cardTriggerCounts,
     jobSkillCooldowns,
     jobSkillsUsedThisBattle: [..._skillUsedThisBattle],
     playerActiveEffects: options.playerActiveEffects,

@@ -200,13 +200,16 @@ async function grantSlots(discordId, slots = SLOTS_PER_PURCHASE) {
  * @returns {Promise<null | { count:number, cap:number, message:string }>} null＝未滿可出戰。
  */
 async function checkBackpackFullForBattle(discordId, inventory = null) {
-  const eff = await resolveEffectiveCapacity(discordId);
   let inv = inventory;
   if (!Array.isArray(inv)) {
     const prog = await serviceContext.progressRepository.findByPlayerId(discordId).catch(() => null);
     inv = prog?.inventory || [];
   }
   const count = countEquipment(inv);
+  // Every player has at least this many slots. Membership/Discord lookups
+  // cannot change an under-base-capacity result and must not delay starting.
+  if (count < NON_MEMBER_CAP) return null;
+  const eff = await resolveEffectiveCapacity(discordId);
   if (count < eff.cap) return null;
   return {
     count,

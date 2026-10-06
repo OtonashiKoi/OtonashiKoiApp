@@ -595,7 +595,7 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
   let   stunRoundsLeft = 0;
   let   sharedRound = 1;
   let monsterRound = 1, monsterImmuneUntil = 0;
-  let monsterCooldowns = {}, enemyPending = {};
+  let monsterCooldowns = {}, monsterTriggerCounts = {}, enemyPending = {};
   const actionSessions = new Map(), ownerRounds = new Map();
   let   totalActions = 0;
   const combatZone = monster?.zone || TOWER_FLOOR_ZONE(floor);
@@ -675,6 +675,7 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
         inventory: target.inventory || [],
         playerActiveEffects: Array.isArray(target.activeEffects) ? [...target.activeEffects] : [],
         cardCooldowns: session.partyV2 ? { player: target.cardCooldowns?.player || {}, monster: monsterCooldowns } : target.cardCooldowns || { player: {}, monster: {} },
+        cardTriggerCounts: { player: {}, monster: monsterTriggerCounts },
         tickCardCooldowns: session.partyV2,
         ...(session.partyV2 ? { ...partyCombat.battleOptions(target), partyActorId: target.discordId, actionSession: actionSessions.get(target.discordId),
           monsterStunImmuneUntil: monsterImmuneUntil + ownerRounds.get(target.discordId) - monsterRound, ...enemyPending,
@@ -707,6 +708,7 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
       addTowerStat(floorStats, target.discordId, "damageTaken", Math.max(0, beforePlayerHp - target.currentHp));
       target.activeEffects = Array.isArray(options.playerActiveEffects) ? options.playerActiveEffects : [];
       target.cardCooldowns = result.cardCooldowns || options.cardCooldowns || { player: {}, monster: {} };
+      monsterTriggerCounts = result.cardTriggerCounts?.monster || monsterTriggerCounts;
       if (session.partyV2) {
         partyCombat.recordAction(target, result);
         monsterCooldowns = result.cardCooldowns.monster;
@@ -769,6 +771,7 @@ function* iterateFloor(session, monster, scaledHp, scaledAtk) {
       inventory: m.inventory || [],
       playerActiveEffects: Array.isArray(m.activeEffects) ? [...m.activeEffects] : [],
       cardCooldowns: session.partyV2 ? { player: m.cardCooldowns?.player || {}, monster: monsterCooldowns } : m.cardCooldowns || { player: {}, monster: {} },
+      cardTriggerCounts: { player: {}, monster: monsterTriggerCounts },
       tickCardCooldowns: session.partyV2,
       ...(session.partyV2 ? { ...partyCombat.battleOptions(m), partyActorId: m.discordId, actionSession: actionSessions.get(m.discordId),
         monsterStunImmuneUntil: monsterImmuneUntil + ownerRounds.get(m.discordId) - monsterRound, ...enemyPending,

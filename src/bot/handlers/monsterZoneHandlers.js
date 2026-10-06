@@ -1220,11 +1220,11 @@ function pickTaunt(kind, monsterName) {
   return pool[Math.floor(Math.random() * pool.length)](monsterName);
 }
 
-// 等級里程碑廣播（10 / 15 等）
+// 等級里程碑廣播（10 / 30 / 40 / 50 等）
 // 關鍵等級里程碑：對齊實際遊戲門檻（轉職 / 組隊爬塔 / 世界王 / 終局世界王）
 const LEVEL_MILESTONE_MSG = {
   10: (m, n) => `🎉 恭喜 ${m} **${n}** 升上 **Lv.10**！已達**轉職門檻**——快去完成職業試煉、選定你的職業吧！⚔️`,
-  30: (m, n) => `🗼 恭喜 ${m} **${n}** 升上 **Lv.30**！爬塔目前暫停開放，重新開放時會另行公告。`,
+  30: (m, n) => `🗼 恭喜 ${m} **${n}** 升上 **Lv.30**！已解鎖**一般組隊爬塔**，到網頁「戰鬥 → 組隊」湊齊 2～5 人挑戰 30 層！每週「組隊探索」累積通關 20 樓可領 **12,000 金幣、B 階寶石 ×5、A 階寶石 ×2**，首次領取另獲永久稱號 **「同心登塔」**！`,
   40: (m, n) => `👑 恭喜 ${m} **${n}** 升上 **Lv.40**！三條路線開放，挑戰**大史王**吧！🔥`,
   50: (m, n) => `🐉 恭喜 ${m} **${n}** 升上 **Lv.50**！踏入終局——挑戰世界王 **古龍王 / 地獄狼牙王**！⚔️`,
 };
@@ -2544,8 +2544,8 @@ async function handleEnterBattle(interaction) {
     }
 
 
-      let combatResult =
-        runCombatLoop(battlePlayerStats, battleMonsterStats, session.monsterName, monsterHpBeforeBattle, MAX_ROUNDS, {
+      if(require("../../services/realtime/normalLiveCombat").normalLiveCombat.supports(zoneKey))await require("../../services/realtime/normalLiveCombat").normalLiveCombat.ready(sc);
+      const dcCombatOptions = {
           encounterCount: require('../../shared/encounterGroup').encounterCount(battleState, battleMonster),
           encounterUnitHp: session.monsterMaxHp / require('../../shared/encounterGroup').encounterCount(battleState, battleMonster),
           playerName: displayName,
@@ -2590,7 +2590,11 @@ async function handleEnterBattle(interaction) {
           sanctuaryCutPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumDamageCutPct) || 50) : 0,
           sanctuaryHealPct: zoneSanctumOn ? (Number(_SANCTUM_DEF?.sanctumHealPct) || 3) : 0,
           sanctuaryContributors: zoneSanctumOn ? sanctumStateBefore?.windowContributors : null,
-        });
+        };
+      const dcLiveCombat=require("../../services/realtime/normalLiveCombat").normalLiveCombat;
+      let combatResult = dcLiveCombat.supports(zoneKey)
+        ? await dcLiveCombat.join({sc,zone:zoneKey,monster:battleMonster,state:battleState,actorId:discordId,actorName:displayName,stats:battlePlayerStats,monsterStats:battleMonsterStats,options:{...dcCombatOptions,liveRecovery:{comboBefore,comboBenefits,diedOnce:_zc.readDiedOnce(currentProg,zoneKey),berserkGauge:_gaugeCfg?_bg.next(gaugeBefore,_gaugeCfg,{consumed:gaugeFull}):null}}})
+        : runCombatLoop(battlePlayerStats,battleMonsterStats,session.monsterName,monsterHpBeforeBattle,MAX_ROUNDS,dcCombatOptions);
       // 聖域師在 DC 出戰 → 累積聖域值（每場 +1；靜默，不公告）
       if (_scg.canKnock(currentEquipped?.job_eq)) {
         await _scg.knock(_dcSanctumKey, zoneKey, 1, displayName, Date.now(), discordId, currentJobId, currentJobName || "聖域師").catch(() => null);
@@ -2633,9 +2637,9 @@ async function handleEnterBattle(interaction) {
         : null;
       const currentParticipants = Array.isArray(battleState.participants) ? battleState.participants : [];
       try {
-        const freshState = await sc.monsterService.getState(zoneKey);
-        staleBattleBeforeWrite = isStaleMonsterBattleState(zoneKey, battleMonster, freshState);
-        worldBossClosedBeforeWrite = await isWorldBossClosedForWrite(sc, zoneKey, battleMonster, freshState);
+        const freshState = combatResult.liveSettledState || await sc.monsterService.getState(zoneKey);
+        staleBattleBeforeWrite = !combatResult.liveBattleId && isStaleMonsterBattleState(zoneKey, battleMonster, freshState);
+        worldBossClosedBeforeWrite = !combatResult.liveBattleId && await isWorldBossClosedForWrite(sc, zoneKey, battleMonster, freshState);
         if (staleBattleBeforeWrite || worldBossClosedBeforeWrite) {
           console.warn(`[MonsterZone] stale battle result skipped | player=${discordId} | zone=${zoneKey} | monster=${battleMonster?.name || "?"}`);
         } else {
@@ -2809,12 +2813,16 @@ async function handleEnterBattle(interaction) {
         if (isWorldBossZone(zoneKey)) {
           await sc.monsterService.saveState(nextState, zoneKey);
         } else {
-          const guarded = await settleActiveMonsterDamage({
+          const guarded = combatResult.liveBattleId ? {savedState:combatResult.liveSettledState,damageMap:combatResult.liveSettledState.damageMap,currentHp:combatResult.finalMonsterHp} : await settleActiveMonsterDamage({
             monsterService: sc.monsterService, zoneKey, monster: battleMonster,
             discordId, displayName, playerLevel: currentProg?.level || 1,
             totalDamage, totalTaken, selfDamage: selfDamageForSettlement,
             directDamageBySource: directDamageBySourceForSettlement,
-            supportAssistBySource: combatResult?.assistLedger?.bySource || {}
+            supportAssistBySource: combatResult?.assistLedger?.bySource || {},
+            presentation: { logs: roundLogs, diceEvents: combatResult?.diceEvents,
+              maxPlayerHp: battlePlayerStats.maxHp, finalPlayerHp: combatResult.finalPlayerHp,
+              tickMs: require("../../shared/battleTiming").calculateBattleTickMs(battlePlayerStats.agi || 1),
+              weaponType: battlePlayerStats.weaponType }
           });
           if (!guarded.savedState) {
             staleBattleBeforeWrite = true;
@@ -2886,7 +2894,7 @@ async function handleEnterBattle(interaction) {
           rewardLines = ["目前僅擊破一個部位，需所有部位全破才會結算世界王擊殺獎勵。"];
         } else {
           session.monsterHp = 0;
-          rewardLines = await handleMonsterKill({ discordId, displayName, session, monster, state: battleStateForSettlement, totalDamage, zoneKey });
+          rewardLines = combatResult.liveRewards || await handleMonsterKill({ discordId, displayName, session, monster, state: battleStateForSettlement, totalDamage, zoneKey });
           embedTitle = "🏆 勝利！";
           embedColor = 0xf1c40f;
         }
@@ -3022,7 +3030,8 @@ async function handleEnterBattle(interaction) {
             _fields.activeEffects = nextActiveEffects;
           }
         }
-        await sc.progressRepository.updateFields(currentProg.playerId, _fields).catch(() => {});
+        if(combatResult.liveBattleId)_fields.normalLiveSessionReceipts=[...(currentProg.normalLiveSessionReceipts||[]),combatResult.liveBattleId];
+        await sc.progressRepository.updateFields(currentProg.playerId, _fields).catch(e=>{if(combatResult.liveBattleId)throw e;});
       }
 
       // ── 敲世界王暈眩條（只有矮人戰士長敲得動）── 與網頁同一條、同規則
@@ -3064,7 +3073,7 @@ async function handleEnterBattle(interaction) {
       // 戰鬥已結算，但先保留 session 至顯示完畢才刪除，避免期間重複出戰
       if (activeSessions.has(discordId)) activeSessions.get(discordId).state = "displaying";
 
-      const displayRoundLogs = compactAuraSourceNames(roundLogs);
+      const displayRoundLogs = combatResult.liveBattleId ? [] : compactAuraSourceNames(roundLogs);
       roundLogs.length = 0;
       // 用實際回合數而非 MAX_ROUNDS：快速戰鬥（1-3 回合）就不用等 22.5 秒
       const displayDelayMs = getBattleDisplayDurationMs(session.playerStats?.agi ?? 1, Math.max(1, displayRoundLogs.length));

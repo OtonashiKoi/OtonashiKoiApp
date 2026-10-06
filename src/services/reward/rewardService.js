@@ -8,7 +8,7 @@ class RewardService {
     this.transactionRepository = transactionRepository;
   }
 
-  async grantCurrency({ discordId, displayName, currencyType, amount, source, sourceRef = "", operator }) {
+  async grantCurrency({ discordId, displayName, currencyType, amount, source, sourceRef = "", operator, existingProgress = null }) {
     if (!Number.isSafeInteger(amount) || amount === 0) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "amount must be a non-zero integer", 400);
     }
@@ -22,7 +22,7 @@ class RewardService {
     }
 
     const normalizedSourceRef = String(sourceRef || "").trim();
-    const { player } = await this.playerService.ensurePlayer(discordId, displayName);
+    const { player } = await this.playerService.ensurePlayer(discordId, displayName, { existingProgress });
     if (typeof this.transactionRepository.grantCurrencyAtomic !== "function") {
       throw new Error("Currency settlement requires a transactional repository");
     }

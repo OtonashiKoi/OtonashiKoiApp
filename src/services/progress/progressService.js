@@ -38,7 +38,7 @@ class ProgressService {
     throw new AppError(ERROR_CODES.INTERNAL_ERROR, "progressRepository does not support save/saveIfUnchanged", 500);
   }
 
-  async grantExp({ discordId, displayName, amount, source, operationId = null }) {
+  async grantExp({ discordId, displayName, amount, source, operationId = null, rewardCharacter = null }) {
     if (!Number.isInteger(amount) || amount <= 0) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "exp amount must be a positive integer", 400);
     }
@@ -48,16 +48,28 @@ class ProgressService {
 
     // 使用玩家級別的鎖序列化操作，防止並發的 CAS 衝突
     return withPlayerProgressLock(discordId, async () => {
-      return await this._grantExpInternal({ discordId, displayName, amount, source, operationId });
+      return await this._grantExpInternal({ discordId, displayName, amount, source, operationId, rewardCharacter });
     });
   }
 
-  async _grantExpInternal({ discordId, displayName, amount, source, operationId = null }) {
+  async _grantExpInternal({ discordId, displayName, amount, source, operationId = null, rewardCharacter = null }) {
+    const compact=operationId?.startsWith("normal-live:")&&this.progressRepository.findExpRewardProgress&&this.progressRepository.saveExpRewardIfUnchanged&&this.playerService.playerRepository;
     // CAS 重試：讀取 → 計算 → 條件寫入（只在 updatedAt 未變時才寫）
     // 若被其他寫入搶先，重新讀取最新狀態再試，確保屬性絕對不會重複給
     for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
-      const { player, progress } = await this.playerService.ensurePlayer(discordId, displayName);
-      if (operationId && (progress.expGrantReceipts || []).includes(operationId)) return { player, progress, levelUps: 0, levelUpDetails: [], duplicate: true };
+      let profile;
+      if(compact){
+        const [player,progress]=await Promise.all([this.playerService.playerRepository.findByDiscordId(discordId),this.progressRepository.findExpRewardProgress(discordId,operationId)]);
+        if(!player||!progress)throw new AppError(ERROR_CODES.INTERNAL_ERROR,"Live EXP reward player or current-season progress missing",409);
+        profile={player,progress};
+      }
+      const { player, progress } = profile||await this.playerService.ensurePlayer(discordId, displayName);
+      if(rewardCharacter&&((rewardCharacter.seasonKey&&progress.seasonKey!==rewardCharacter.seasonKey)||(progress.activeCharacterSlot||1)!==rewardCharacter.slot))throw new AppError(ERROR_CODES.INTERNAL_ERROR,"Live EXP reward character changed",409);
+      if (operationId && (progress.expGrantReceipts || []).includes(operationId)) {
+        const receipt=(progress.normalLiveExpResults||[]).find(r=>r.id===operationId)||{};
+        if(receipt.overflowGold>0)await this.rewardService.grantCurrency({discordId,displayName,currencyType:"gold",amount:receipt.overflowGold,source:"level:exp-overflow",sourceRef:operationId+":overflow",...(compact?{existingProgress:progress}:{})});
+        return {player,progress,levelUps:receipt.levelUps||0,levelUpDetails:receipt.levelUpDetails||[],overflowGold:receipt.overflowGold||0,duplicate:true};
+      }
       const prevUpdatedAt = progress.updatedAt;
 
       // ⚠️ 關鍵：必須深拷貝 attributes，否則 next.attributes[key]++ 會污染快取裡的原物件
@@ -96,7 +108,7 @@ class ProgressService {
         overflowGold = Math.floor(overflowExp / MAX_LEVEL_EXP_TO_GOLD_DIVISOR);
         next.exp = 0;
       }
-      next.updatedAt = new Date().toISOString();
+      next.updatedAt = new Date(Math.max(Date.now(),(Date.parse(prevUpdatedAt)||0)+1)).toISOString();
       // 等級排行榜「達成時間」：只在本次真的升等時，記下抵達「目前等級」的時刻。
       // 同級比誰先達成 → 越早排越前。未升等(只加經驗)不動此欄，保留最初達成該級的時間。
       if (levelUps > 0) {
@@ -125,7 +137,10 @@ class ProgressService {
         next.levelStartedAt = next.updatedAt;
       }
 
-      const saved = await this._saveProgressWithFallback(next, prevUpdatedAt);
+      if(operationId?.startsWith("normal-live:"))next.normalLiveExpResults=[...(progress.normalLiveExpResults||[]),{id:operationId,levelUps,levelUpDetails,overflowGold}];
+      const saved = compact&&profile
+        ? await this.progressRepository.saveExpRewardIfUnchanged(next, prevUpdatedAt, operationId)
+        : await this._saveProgressWithFallback(next, prevUpdatedAt);
       if (saved) {
         // 升級 → 透過玩家事件 bus 推播,讓網頁不論在哪個畫面都能彈出升級視窗
         if (levelUps > 0) {
@@ -140,6 +155,9 @@ class ProgressService {
             playerEventBus.emit(String(discordId), {
               type: "level_up",
               data: {
+                eventId: operationId || require("node:crypto").randomUUID(),
+                characterSlot: next.activeCharacterSlot || 1,
+                seasonKey: next.seasonKey || null,
                 prevLevel,
                 newLevel: next.level,
                 levelUps,
@@ -167,9 +185,10 @@ class ProgressService {
         if (overflowGold > 0 && typeof this.rewardService?.grantCurrency === "function") {
           try {
             await this.rewardService.grantCurrency({
-              discordId, displayName, currencyType: "gold", amount: overflowGold, source: "level:exp-overflow"
+              discordId, displayName, currencyType: "gold", amount: overflowGold, source: "level:exp-overflow", ...(operationId?.startsWith("normal-live:")?{sourceRef:operationId+":overflow"}:{}),...(compact?{existingProgress:progress}:{})
             });
           } catch (err) {
+            if(operationId?.startsWith("normal-live:"))throw err;
             console.warn(`[grantExp] 滿等溢出轉金幣發放失敗 ${discordId}: ${err?.message || err}`);
           }
         }

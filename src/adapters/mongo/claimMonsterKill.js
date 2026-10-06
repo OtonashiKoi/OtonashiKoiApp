@@ -52,9 +52,15 @@ async function claimMonsterKill({ collection, zoneKey, monsterSeq, timeoutMs = 3
   const update = buildClaimUpdate(monsterSeq, now);
   const monstersCol = await collection("monsters");
 
+  const liveState=await monstersCol.findOne({_id:stateDocId},{projection:{"value.normalLive":1,"value.activeMonsterSeq":1,"value.killCount":1}});
+  const live=liveState?.value?.normalLive;
+  const liveClaim=live?.encounterKey===require("../../services/realtime/normalLiveJournal").encounterKey(zoneKey,monsterSeq,liveState?.value);
+  const filter=buildClaimFilter(stateDocId,monsterSeq,cutoff);
+  if(liveClaim){filter["value.normalLive.encounterKey"]=live.encounterKey;filter["value.normalLive.killReceipt"]={$ne:true};update.$set["value.normalLive.killReceipt"]=true;}
+
   // 玩家與掃描器都以 canonical state 為準，擊殺鎖也必須鎖在同一份文件。
   const canonicalClaim = await monstersCol.findOneAndUpdate(
-    buildClaimFilter(stateDocId, monsterSeq, cutoff),
+    filter,
     update,
     { returnDocument: "after" }
   );

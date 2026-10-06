@@ -214,7 +214,23 @@ class MonsterService {
         Object.assign(state, group.spawnState(state, monster));
       }
     }
-    return this.monsterRepository.saveState(state, zoneKey);
+    const previous = await this.getState(zoneKey);
+    const freshSpawn = !state.activeTransition && !state.activeEvent && Number(state.currentHp) > 0
+      && (Number(previous.activeMonsterSeq) !== Number(state.activeMonsterSeq) || Number(previous.currentHp) <= 0 || previous.activeTransition || previous.activeEvent);
+    if (freshSpawn && require("../../shared/encounterGroup").NORMAL_ZONES.has(zoneKey)) {
+      const deathAt = require("../realtime/zoneCombatScene").zoneCombatScene.scenes.get(zoneKey)?.deathAt;
+      state.normalLiveSpawnAt = deathAt
+        ? Math.max(Date.now(), deathAt + require("../../shared/battleTiming").WEB_MONSTER_TRANSITION_MS)
+        : Date.now() + 750;
+    }
+    const saved = await this.monsterRepository.saveState(state, zoneKey);
+    if (!state.activeTransition && !state.activeEvent && Number(state.currentHp) > 0
+        && (Number(previous.activeMonsterSeq) !== Number(state.activeMonsterSeq)
+          || Number(previous.currentHp) <= 0 || previous.activeTransition || previous.activeEvent)) {
+      const monster = (await this.listMonsters({ zone: zoneKey })).find(m => Number(m.seq) === Number(state.activeMonsterSeq));
+      require('../realtime/zoneCombatScene').zoneCombatScene.ensure(zoneKey, state, monster, { force:true });
+    }
+    return saved;
   }
 
   async saveStateIfActiveMonster(state, zoneKey = "normal", expectedMonsterSeq, expectedCurrentHp = null) {

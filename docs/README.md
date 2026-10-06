@@ -38,6 +38,8 @@
 
 [一般區等級與收益](NORMAL_PROGRESSION.md)：現行 1–50 養成銜接、怪物 HP／EXP、入場門檻與戰鬥驗證基準。
 
+[新手共鬥陪練](STARTER_COMPANIONS.md)：草叢至古城的八位 NPC、按等級計算的能力、缺人補位與真人獎勵隔離。
+
 | 項目 | 現況 | 單一來源 |
 | --- | --- | --- |
 | 儲存層 | MongoDB only | `src/repositories/createRepositories.js` |

@@ -109,6 +109,7 @@ async function bootstrap() {
       console.warn("[Enchant] init 失敗（不影響啟動）：", e?.message || e);
     }
 
+    await require("./services/realtime/normalLiveCombat").normalLiveCombat.ready(serviceContext);
     const app = createApiServer(client);
 
     // OBS 網頁模式也需要留言來源；不要依賴 Discord ready 或執行遊戲留言指令。

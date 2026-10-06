@@ -1,0 +1,16 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {NormalLiveCombat}=require('../src/services/realtime/normalLiveCombat');
+let now=1000;const packets=[];
+const engine=new NormalLiveCombat({now:()=>now,auto:false,starterNpcs:false,emit:(pid,packet)=>packets.push(packet)});
+engine.markReady('P',{zone:'normal',liveBattleId:'first',outcome:'win',nextBattleAt:3000,cooldownMs:2000});
+assert.equal(packets[0].type,'normal_live_ready');assert.equal(engine.status('P').livePending,false);
+now=2500;assert.equal(engine.status('P').cooldownMs,500,'reconnect never restarts the cooldown');
+engine.complete('P',{zone:'normal',liveBattleId:'first',reportOnly:true,livePending:false,rewardLines:['gold 111']});
+assert.equal(engine.status('P').liveReport.rewardLines[0],'gold 111');
+engine.players.set('P',{id:'second',initial:{liveBattleId:'second'},logs:[],logPackets:[],hp:100});
+engine.complete('P',{zone:'normal',liveBattleId:'first',reportOnly:true,rewardLines:['late duplicate']});
+assert.equal(engine.status('P').liveBattleId,'second');
+engine.players.delete('P');engine.markReady('P',{zone:'normal',liveBattleId:'second',nextBattleAt:3000});
+engine.complete('P',{zone:'normal',liveBattleId:'first',reportOnly:true});assert.equal(engine.status('P').liveBattleId,'second');
+console.log('PASS ready state and reconnect countdown are independent of report; late report cannot overwrite active or finished newer battle');

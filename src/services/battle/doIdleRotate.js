@@ -19,6 +19,7 @@ async function _doIdleRotate(sc, zoneKey) {
     let state = await sc.monsterService.getState(zoneKey);
     await _resolveZoneEventIfExpired(sc, zoneKey).catch(() => {});
     state = await sc.monsterService.getState(zoneKey);
+    if(Number(state?.currentHp)<=0 && state?.normalLive?.encounterKey && !state.normalLive.settlementComplete)return;
     if (state?.activeEvent?.endsAt && Date.parse(state.activeEvent.endsAt) > Date.now()) return;
     const allMonsters = await sc.monsterService.listMonsters({ includeDisabled: false, zone: zoneKey });
     const monster = allMonsters.find((m) => m.seq === state.activeMonsterSeq);

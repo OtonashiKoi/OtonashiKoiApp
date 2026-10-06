@@ -324,8 +324,13 @@ function createMongoRepositories() {
       }
     },
     progressRepository: {
-      async findByPlayerId(playerId) {
-        const progress = await (await collection("progress")).findOne({ playerId });
+      ...require("./normalLiveRewardInventory").createNormalLiveRewardInventory({collection,normalizeLowLevelJobBadge,emitRealtimeInvalidate}),
+      async findByPlayerId(playerId, { includeLiveRewardReceipts = false } = {}) {
+        // Historical reward payloads grow with every kill. Gameplay reads need
+        // current inventory/state, never megabytes of old awarded item copies.
+        // $set-based saves leave these omitted fields intact in MongoDB.
+        const progress = await (await collection("progress")).findOne({ playerId },
+          includeLiveRewardReceipts ? {} : {projection:{normalLiveDropReceipts:0,normalLiveExpResults:0}});
         if (!progress) return progress;
         if (!progress.seasonKey) progress.seasonKey = seasonState.LEGACY_KEY;
         const normalized = normalizeProgressDocumentWithGemStacks(progress);
@@ -911,6 +916,10 @@ function createMongoRepositories() {
     },
     craftingRepository: require("./crafting/createCraftingRepository").createCraftingRepository({ emitRealtimeInvalidate }),
     itemRepository: {
+      async findByIds(ids) {
+        if (!ids.length) return [];
+        return (await collection("items")).find({ id: { $in: [...new Set(ids)] } }).toArray();
+      },
       async findAll() {
         return (await collection("items")).find({}).toArray();
       },

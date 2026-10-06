@@ -21,6 +21,7 @@ async function finishMonsterKill(context) {
   const newKillCount = { ...(state.killCount || {}), [monster.id]: ((state.killCount?.[monster.id] || 0) + require('../../shared/encounterGroup').encounterCount(state, monster)) };
   // 取最新 state 以免多人並發時覆蓋其他人的 damageMap
   const freshState = await sc.monsterService.getState(zoneKey);
+  if(freshState.normalLive?.encounterKey)freshState.normalLive.settlementComplete=true;
   const finalDamageMap = { ...(freshState.damageMap || {}), ...mergedDmg };
 
   // 世界 BOSS（精英區）擊殺後：同一隻進入冷卻，不切下一隻
@@ -309,6 +310,7 @@ async function finishMonsterKill(context) {
 
   // 回傳結構化摘要供 web API 使用
   const myReward = perPidRewards[discordId] || { gold: 0, exp: 0, levelUps: 0, newLevel: 0, drops: [] };
+  rewardLines._perPidRewards = perPidRewards;
   rewardLines._summary = {
     gold:     myReward.gold,
     exp:      myReward.exp,

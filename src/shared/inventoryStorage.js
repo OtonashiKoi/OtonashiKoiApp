@@ -26,10 +26,52 @@ const REDUNDANT_INVENTORY_FIELDS = [
   "combatEffects"
 ];
 
+// Embedded library IDs are metadata, not a progress document's Mongo identity.
+// structuredClone loses BSON prototypes; storing the cloned Binary repeatedly
+// adds another .buffer wrapper. Keep the original 12 bytes as stable hex text.
+function normalizeInventoryEntryMongoId(entry) {
+  if (!entry || typeof entry !== "object" || !entry._id || typeof entry._id !== "object") return entry;
+  let value = entry._id;
+  const seen = new Set();
+  while (value && typeof value === "object" && !seen.has(value)) {
+    seen.add(value);
+    if (value._bsontype === "ObjectId" && typeof value.toHexString === "function") {
+      return { ...entry, _id: value.toHexString() };
+    }
+    if (value._bsontype === "Binary" && typeof value.value === "function") {
+      value = value.value();
+    } else if (ArrayBuffer.isView(value)) {
+      const bytes = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+      return bytes.length === 12 ? { ...entry, _id: bytes.toString("hex") } : entry;
+    } else if (Object.hasOwn(value, "buffer")) {
+      value = value.buffer;
+    } else {
+      return entry;
+    }
+  }
+  return entry;
+}
+
+function normalizeInventoryMongoIds(progress) {
+  if (!progress || typeof progress !== "object") return progress;
+  return {
+    ...progress,
+    ...(Array.isArray(progress.inventory) ? { inventory: progress.inventory.map(normalizeInventoryEntryMongoId) } : {}),
+    ...(Array.isArray(progress.normalLiveDropReceipts) ? {
+      normalLiveDropReceipts: progress.normalLiveDropReceipts.map(receipt => (
+        Array.isArray(receipt?.entries)
+          ? { ...receipt, entries: receipt.entries.map(normalizeInventoryEntryMongoId) }
+          : receipt
+      ))
+    } : {})
+  };
+}
+
 function slimInventoryEntry(entry) {
   if (!entry || typeof entry !== "object") return entry;
-  let touched = false;
-  const out = { ...entry };
+  const normalized = normalizeInventoryEntryMongoId(entry);
+  let touched = normalized !== entry;
+  const out = { ...normalized };
   for (const k of REDUNDANT_INVENTORY_FIELDS) {
     if (k in out) { delete out[k]; touched = true; }
   }
@@ -44,12 +86,17 @@ function slimInventoryArray(inventory) {
 
 /** 回傳 progress 文件的瘦身版本(只動 inventory,equipment 不動) */
 function slimProgressForStorage(progress) {
-  if (!progress || typeof progress !== "object" || !Array.isArray(progress.inventory)) return progress;
-  return { ...progress, inventory: slimInventoryArray(progress.inventory) };
+  if (!progress || typeof progress !== "object") return progress;
+  const normalized = normalizeInventoryMongoIds(progress);
+  return Array.isArray(normalized.inventory)
+    ? { ...normalized, inventory: slimInventoryArray(normalized.inventory) }
+    : normalized;
 }
 
 module.exports = {
   REDUNDANT_INVENTORY_FIELDS,
+  normalizeInventoryEntryMongoId,
+  normalizeInventoryMongoIds,
   slimInventoryEntry,
   slimInventoryArray,
   slimProgressForStorage

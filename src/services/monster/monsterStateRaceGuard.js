@@ -23,7 +23,7 @@ async function repairMonsterHpOverflow({ monsterService, state, monster, zoneKey
 
 async function settleActiveMonsterDamage({
   monsterService, zoneKey, monster, discordId, displayName, playerLevel, totalDamage, totalTaken,
-  selfDamage = totalDamage, directDamageBySource = {}, supportAssistBySource = {}, maxAttempts = 4
+  selfDamage = totalDamage, directDamageBySource = {}, supportAssistBySource = {}, presentation = null, maxAttempts = 4
 }) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const freshState = await monsterService.getState(zoneKey);
@@ -61,7 +61,16 @@ async function settleActiveMonsterDamage({
     const saved = await monsterService.saveStateIfActiveMonster(
       candidateState, zoneKey, monster.seq, freshState.currentHp
     );
-    if (saved) return { savedState: candidateState, currentHp, damageMap };
+    if (saved) {
+      let sharedPlayback = null;
+      if (presentation) {
+        try { sharedPlayback = require('../realtime/zoneCombatScene').zoneCombatScene.register({
+          ...presentation, zone: zoneKey, state: candidateState, monster, actorId: discordId,
+          actorName: displayName, beforeHp: scaled.currentHp, afterHp: currentHp
+        }); } catch (error) { console.error('[ZoneScene] presentation failed:', error.message); }
+      }
+      return { savedState: candidateState, currentHp, damageMap, sharedPlayback };
+    }
   }
   return { savedState: null, currentHp: null, damageMap: {} };
 }

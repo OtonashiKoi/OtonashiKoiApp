@@ -15,11 +15,15 @@ async function main() {
  }
  const saved=group.spawnState({activeMonsterSeq:7},monster,()=>.999);
  assert.equal(saved.encounterCount,3); assert.equal(saved.currentHp,300); assert.equal(monster.calc.maxHp,100);
+ for(const [encounterCount,bonus] of [[1,0],[2,10],[3,20],[5,20]]) assert.equal(group.expBonusPct({...saved,encounterCount},monster),bonus);
+ assert.equal(group.expBonusPct({...saved,encounterMonsterSeq:8},monster),0,'stale encounter does not receive bonus');
+ assert.equal(group.expBonusPct(saved,{...monster,isBoss:true}),0,'BOSS excluded');
+ assert.equal(group.expBonusPct(saved,{...monster,zone:'elite'}),0,'non-normal zone excluded');
  const damaged={...saved,currentHp:150,damageMap:{one:{damage:150}}};
  const scaled=scaleNormalMonster(damaged,monster,{one:{damage:150},two:{damage:1},three:{assist:1}});
- assert.equal(normalMaxHp({...damaged,...scaled},monster),600);
+ assert.equal(normalMaxHp({...damaged,...scaled},monster),300);
  assert.equal(group.remaining(scaled.currentHp,scaled.coopMaxHp/3,3),2,'joining players cannot revive the first defeated monster');
- let state; const svc=new MonsterService({findAll:async()=>[monster],saveState:async s=>state=structuredClone(s),getState:async()=>state});
+ let state={}; const svc=new MonsterService({findAll:async()=>[monster],saveState:async s=>state=structuredClone(s),getState:async()=>state});
  const random=Math.random; Math.random=()=>.999;
  try { await svc.saveState({activeMonsterSeq:7,currentHp:100},'mid'); } finally {Math.random=random;}
  assert.equal(state.currentHp,300);

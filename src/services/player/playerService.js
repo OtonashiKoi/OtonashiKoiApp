@@ -9,11 +9,11 @@ class PlayerService {
     this.progressRepository = progressRepository;
   }
 
-  async ensurePlayer(discordId, displayName) {
+  async ensurePlayer(discordId, displayName, { existingProgress = null } = {}) {
     let [player, wallet, progress] = await Promise.all([
       this.playerRepository.findByDiscordId(discordId),
       this.walletRepository.findByPlayerId(discordId),
-      this.progressRepository.findByPlayerId(discordId),
+      existingProgress?.playerId === discordId ? existingProgress : this.progressRepository.findByPlayerId(discordId),
     ]);
 
     const saves = [];

@@ -27,6 +27,11 @@ function isWebBattleActive(discordId) {
   return Boolean(_live(String(discordId || "")));
 }
 
+function refreshWebBattle(discordId) {
+  const entry = _live(String(discordId || ""));
+  if (entry) entry.expiresAt = Date.now() + HARD_TTL_MS;
+}
+
 function getWebBattle(discordId) {
   return _live(String(discordId || ""));
 }
@@ -57,6 +62,7 @@ function acquireWebBattle(discordId, surface = "web", ttlMs = HARD_TTL_MS) {
 
 module.exports = {
   acquireWebBattle,
+  refreshWebBattle,
   isWebBattleActive,
   getWebBattle,
 };

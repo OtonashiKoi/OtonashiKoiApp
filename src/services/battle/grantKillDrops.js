@@ -14,8 +14,11 @@ const { GEM_PARTICIPATION_RATE } = require("./zoneBattleState");
 const { GEM_PARTICIPATION_DOUBLE_DROP_RATE } = require("./zoneBattleState");
 const tryStackGem = (...args) => require("./battleRewardRules").tryStackGem(...args);
 
+
 async function grantKillDrops(context) {
   const { healerBonusPids, perPidRewards, monster, discordId, rewardLines, sc, participants, rewardModsByPid, zoneKey, displayName, mergedDmg, canSendRewardNotice, progressCache } = context;
+  const liveKey=context.state.normalLive?.encounterKey;
+  const journal=require("../realtime/normalLiveJournal");
   // ── 治療師徽章結算特別顯示 + 專屬 DM ──
   // 用實際已發出的 gold/exp 反推加成數值（10% / 1.1 = 原始base × 0.1）
   for (const hpid of healerBonusPids) {
@@ -47,7 +50,13 @@ async function grantKillDrops(context) {
 
   const encounterSize = require('../../shared/encounterGroup').encounterCount(context.state, monster);
   const singleDropPool = await buildMonsterDropPool(sc, monster);
+  if(liveKey)return require("./grantNormalLiveDrops").grantLiveDrops(context,singleDropPool,encounterSize);
   const monsterDropPool = Array.from({ length: encounterSize }, () => singleDropPool).flat();
+  const itemReads=new Map();
+  const getItem=id=>{
+    if(!itemReads.has(id))itemReads.set(id,sc.itemRepository.findById(id).catch(()=>null));
+    return itemReads.get(id);
+  };
 
   // 一般區每位有效參戰者各自依原掉率骰一次；世界王保留抽一位幸運者的規則。
   if (monsterDropPool.length > 0 && participants.length > 0) {
@@ -58,11 +67,12 @@ async function grantKillDrops(context) {
     const luckyMod = rewardModsByPid[luckyPid] || { dropMultiplier: 1, rareDropMultiplier: 1 };
 
     if (luckyPid) {
-      const droppedItems = [];
-      const droppedItemObjects = [];
+      let droppedItems = [];
+      let droppedItemObjects = [];
+      const rollDrops=async()=>{
 
       for (const drop of monsterDropPool) {
-        let item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
+        let item = await getItem(drop.itemId);
         if (item && !isUnavailableEquipment(item)) {
           const finalChance = calculateFinalDropChance(drop.chance, luckyMod, item);
           if (Math.random() * 100 < finalChance) {
@@ -104,13 +114,21 @@ async function grantKillDrops(context) {
         }
       }
 
+      return droppedItemObjects;
+      };
+      droppedItemObjects=liveKey?await journal.plan(sc,zoneKey,liveKey,luckyPid,"drops",rollDrops):await rollDrops();
+      droppedItems=droppedItemObjects.map(e=>e.itemName);
       if (droppedItems.length > 0) {
-        // 背包容量：裝備滿了就不再撿多出來的裝備（素材/寶石/蛋照收），依會員等級決定上限
-        let equipCap = Infinity;
-        try { equipCap = (await require("../../services/backpack/backpackService").resolveEffectiveCapacity(luckyPid)).cap; } catch (_) { /* 解析失敗不擋 */ }
+        // 本場已取得的掉落全部入袋；容量只在下一次出戰前檢查。
+        const equipCap=Infinity;
         const skippedByFullBag = [];
         let savedDrop = false;
-        for (let attempt = 0; attempt < 3 && !savedDrop; attempt++) {
+        if(liveKey){
+          const picked=await journal.grantInventory(sc,luckyPid,journal.rewardId(context.state,luckyPid,"drops"),droppedItemObjects,equipCap);
+          skippedByFullBag.push(...droppedItemObjects.filter(e=>!picked.some(p=>p.uuid===e.uuid)).map(e=>e.itemName));
+          droppedItemObjects=picked;droppedItems=picked.map(e=>e.itemName);savedDrop=true;
+        }
+        for (let attempt = 0; !liveKey && attempt < 3 && !savedDrop; attempt++) {
           const latestLuckyProg = await sc.progressRepository.findByPlayerId(luckyPid);
           if (!latestLuckyProg) break;
 
@@ -150,7 +168,7 @@ async function grantKillDrops(context) {
         if (savedDrop) {
           const allDropped = [...droppedItems];
           const allDroppedObjects = [...droppedItemObjects];
-          if (perPidRewards[luckyPid]) perPidRewards[luckyPid].drops = [...allDropped];
+          if (perPidRewards[luckyPid]) {perPidRewards[luckyPid].drops = [...allDropped];perPidRewards[luckyPid].dropEntries=allDroppedObjects.map(toWebDrop);}
           const luckyName = luckyPid === discordId ? displayName : (mergedDmg[luckyPid]?.name || luckyPid);
           const isKiller = luckyPid === discordId;
           if (canSendRewardNotice(luckyPid)) {
@@ -197,7 +215,7 @@ async function grantKillDrops(context) {
       const bonusItems = [];
       const bonusItemObjects = [];
       for (const drop of monsterDropPool) {
-        let item = await sc.itemRepository.findById(drop.itemId).catch(() => null);
+        let item = await getItem(drop.itemId);
         if (item && !isUnavailableEquipment(item)) {
           const finalChance = calculateFinalDropChance(drop.chance, bonusMod, item);
           if (Math.random() * 100 < finalChance) {
@@ -287,7 +305,7 @@ async function grantKillDrops(context) {
     if (participationGemConfigs.length > 0) {
       const participationGemItems = [];
       for (const cfg of participationGemConfigs) {
-        const gemItem = await sc.itemRepository.findById(cfg.participationGemId).catch(() => null);
+        const gemItem = await getItem(cfg.participationGemId);
         if (!gemItem) continue;
         participationGemItems.push({
           tier: cfg.gemTier,
@@ -298,7 +316,8 @@ async function grantKillDrops(context) {
       }
 
       for (const pid of participants) {
-        const triggeredGemDrops = [];
+        let triggeredGemDrops = [];
+        const rollGems=async()=>{
         const pidDropPct = rewardModsByPid[pid]?.dropPct ?? 0;
         for (const cfg of Array.from({ length: encounterSize }, () => participationGemItems).flat()) {
           const effectiveRate = Math.min(1, cfg.participationRate + pidDropPct / 100);
@@ -308,10 +327,19 @@ async function grantKillDrops(context) {
             triggeredGemDrops.push(cfg.item);
           }
         }
+        return triggeredGemDrops;
+        };
+        triggeredGemDrops=liveKey?await journal.plan(sc,zoneKey,liveKey,pid,"gems",rollGems):await rollGems();
         if (triggeredGemDrops.length === 0) continue;
 
         let savedGem = false;
-        for (let attempt = 0; attempt < 3 && !savedGem; attempt++) {
+        if(liveKey){
+          const entries=triggeredGemDrops.map(item=>({...item,itemId:item.id,itemName:item.name,uuid:crypto.randomUUID(),source:"monster_participation_gem",sourceRef:monster.name,stackCount:1,enhanceLevel:0,purchasedAt:new Date().toISOString()}));
+          const picked=await journal.grantInventory(sc,pid,journal.rewardId(context.state,pid,"gems"),entries,Infinity,true);
+          triggeredGemDrops=picked.map(e=>({...e,name:e.itemName}));savedGem=true;
+          if(perPidRewards[pid])perPidRewards[pid].dropEntries=[...(perPidRewards[pid].dropEntries||[]),...picked.map(toWebDrop)];
+        }
+        for (let attempt = 0; !liveKey && attempt < 3 && !savedGem; attempt++) {
           const latestProg = await sc.progressRepository.findByPlayerId(pid);
           if (!latestProg) break;
           const nextProg = {

@@ -15,7 +15,7 @@ const { acquireSse } = require("../netGuards");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
 const { acquireWebBattle } = require("../../services/progress/battleLock");
 const { getLeaderboardExcludedPlayerIds, filterDamageMapForLeaderboard, filterDamageMapForParticipants } = require("../../shared/leaderboardEligibility");
-const { calculateBattleTickMs, calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
+const { calculateBattleTickMs, calculateWebBattleCooldownMs, calculateLiveBattleCooldownMs, WEB_BATTLE_HANDOFF_MS, WEB_MONSTER_TRANSITION_MS } = require("../../shared/battleTiming");
 const { getWorldBossPartLabel } = require("../../shared/worldBossParts");
 const { A_WEIGHT: WORLD_BOSS_ASSIST_WEIGHT } = require("../../services/kda/kdaService");
 const { boundedMonsterCurrentHp, repairMonsterHpOverflow, settleActiveMonsterDamage } = require("../../services/monster/monsterStateRaceGuard");
@@ -597,7 +597,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         .slice(0, 10);
 
       const cooldown = discordId ? playerBattleCooldowns.get(discordId) : null;
-      const nextBattleAt = (cooldown && cooldown.nextBattleAt > Date.now()) ? cooldown.nextBattleAt : null;
+      const nextBattleAt = Math.max(cooldown?.nextBattleAt||0,require('../../services/realtime/normalLiveCombat').normalLiveCombat.recoveryUntil(discordId))||null;
 
       return {
         zone: key,
@@ -2712,6 +2712,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  require("./zoneCombatSceneRoutes").mountZoneCombatSceneRoutes(router, serviceContext);
+
   // 10. Get Combat Zones Status
   router.get("/api/combat/zones", requireAuth, async (req, res, next) => {
     try {
@@ -2758,7 +2760,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         });
 
         const cooldown = playerBattleCooldowns.get(req.playerRecord.discordId);
-        const nextBattleAt = (cooldown && cooldown.nextBattleAt > Date.now()) ? cooldown.nextBattleAt : null;
+        const nextBattleAt = Math.max(cooldown?.nextBattleAt||0,require('../../services/realtime/normalLiveCombat').normalLiveCombat.recoveryUntil(req.playerRecord.discordId))||null;
 
         const theme = getZoneTheme(key);
 
@@ -2913,13 +2915,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return res.status(404).json({ status: "error", code: "zone_not_found", message: "找不到這個戰鬥區域。" });
       }
 
+      if(require("../../services/realtime/normalLiveCombat").normalLiveCombat.supports(zoneKey))await require("../../services/realtime/normalLiveCombat").normalLiveCombat.ready(serviceContext);
       if (require("../../services/worldBoss/worldBossService").isWorldBossZone(zoneKey)) {
         const gate = await serviceContext.worldBossServiceFor(zoneKey).getConfigWithStatus(discordId);
         if (!gate.status.unlocked) return res.status(403).json(fail("WORLD_BOSS_LOCKED", gate.status.lockedReason));
         worldBossRelease = await require("../../services/worldBoss/worldBossBattleLock").acquireWorldBossBattleLock(zoneKey);
       }
+      if (require("../../services/realtime/zoneCombatScene").zoneCombatScene.supports(zoneKey)) {
+        const scene = require("../../services/realtime/zoneCombatScene").zoneCombatScene.scenes.get(zoneKey);
+        const transitionEnd=scene?.advanceAt?scene.advanceAt+WEB_BATTLE_HANDOFF_MS:(scene?.deathAt||0)+WEB_MONSTER_TRANSITION_MS;
+        if (scene?.deathAt && (scene.transitionPending||transitionEnd>Date.now())) {
+          return res.status(409).json({ status:"error", code:"scene_transition", retryAfterMs:scene.transitionPending?250:Math.ceil(transitionEnd-Date.now()), message:"怪物正在退場，下一批即將出現。" });
+        }
+      }
       // Reject requests while the previous battle animation cooldown is still active.
-      const cd = playerBattleCooldowns.get(discordId);
+      const cd = {nextBattleAt:Math.max(playerBattleCooldowns.get(discordId)?.nextBattleAt||0,require('../../services/realtime/normalLiveCombat').normalLiveCombat.recoveryUntil(discordId))};
       if (cd && cd.nextBattleAt > Date.now()) {
         const secsLeft = Math.ceil((cd.nextBattleAt - Date.now()) / 1000);
         return res.status(429).json({ status: "error", message: `battle cooldown active, retry in ${secsLeft}s` });
@@ -3577,8 +3587,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         rabbitCrush = rabbit.crushPending(stateForCombat, discordId);
       }
       const { runCombatLoop } = require("../../shared/combatLoop");
-      const combatResult =
-        runCombatLoop(battlePStats, battleMonsterStats, monster.name, combatMonsterHp, undefined, {
+      const combatOptions = {
           encounterCount: require('../../shared/encounterGroup').encounterCount(stateForCombat, monster),
           encounterUnitHp: normalMaxHp(stateForCombat, monster) / require('../../shared/encounterGroup').encounterCount(stateForCombat, monster),
           // 團隊暈眩／區域冰封：整場（給滿 999，實際會被戰鬥回合數自然截斷）
@@ -3644,7 +3653,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           forcePlayerHit: turtleForceHit, // 退潮打龜首必中
           monsterElement: monster?.element || null,
           monsterElementLevel: monster?.element ? (monster?.elementLevel || 1) : 0
-        });
+        };
+      const liveCombat = require("../../services/realtime/normalLiveCombat").normalLiveCombat;
+      const combatResult = liveCombat.supports(zoneKey)
+        ? await liveCombat.join({sc:serviceContext,zone:zoneKey,monster,state:stateForCombat,actorId:discordId,actorName:displayName,stats:battlePStats,monsterStats:battleMonsterStats,options:{...combatOptions,liveRecovery:{comboBefore,comboBenefits,comboConsumed,diedOnce:_zc.readDiedOnce(progress,zoneKey),berserkGauge:gaugeCfg?_bg.next(gaugeBefore,gaugeCfg,{consumed:gaugeFull}):null}},tickMs:calculateTickDelay(pStats.agi||1),onStart:initial=>{if(req.body?.liveStartOnly===true)res.json(ok(initial));}})
+        : runCombatLoop(battlePStats,battleMonsterStats,monster.name,combatMonsterHp,undefined,combatOptions);
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
       markBattlePerf("combat");
       // 與 DC 一致：戰力同步已停用（monsterZoneHandlers.js 也是寫死 false），
@@ -3882,6 +3895,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const currentParticipants = Array.isArray(stateForCombat.participants) ? stateForCombat.participants : [];
       const supportContribution = { ...(combatResult?.assistLedger?.bySource || {}) };
       let normalSettledState = null;
+      let sharedPlayback = null;
       let coopExtendedBattle = false;
       for (const [sourceId, amount] of Object.entries(combatResult?.combatStats?.supportShotBySource || {})) {
         supportContribution[sourceId] = (Number(supportContribution[sourceId]) || 0) + (Number(amount) || 0);
@@ -3910,13 +3924,18 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       } else {
         let damageMap = {}, savedState = null;
         try {
-          const guarded = await settleActiveMonsterDamage({
+          const guarded = combatResult.liveBattleId ? {savedState:combatResult.liveSettledState,damageMap:combatResult.liveSettledState.damageMap,currentHp:combatResult.finalMonsterHp} : await settleActiveMonsterDamage({
             monsterService: serviceContext.monsterService, zoneKey, monster, discordId, displayName,
             playerLevel: progress?.level || 1, totalDamage, totalTaken,
-            supportAssistBySource: supportContribution
+            supportAssistBySource: supportContribution,
+            presentation: { logs: roundLogs, diceEvents: combatResult?.diceEvents,
+              maxPlayerHp: battlePStats.maxHp, finalPlayerHp: combatResult.finalPlayerHp,
+              tickMs: process.env.ROUND_MS ? ROUND_MS : calculateTickDelay(pStats.agi || 1),
+              weaponType: battlePStats?.weaponType || pStats?.weaponType }
           });
           ({ savedState, damageMap } = guarded);
           normalSettledState = savedState;
+          sharedPlayback = guarded.sharedPlayback;
           if (savedState) {
             mHp = guarded.currentHp;
             if (outcome === "win" && mHp > 0) {
@@ -3937,13 +3956,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           if (mHp <= 0) {
             outcome = "win";
             const sessionPayload = { monsterName: monster.name, entryFee: monster.entryFee ?? getZoneDefaultEntryFee(zoneKey) };
-            rewardLines = await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster,
+            rewardLines = combatResult.liveRewards || await handleMonsterKill({ discordId, displayName, session: sessionPayload, monster,
               state: savedState, totalDamage, zoneKey });
           } else if (outcome === "lose") {
             rewardLines = [`你被 ${monster.name} 擊敗了…`];
           } else {
             // timeout：撐完回合但沒打死（怪物血量跨場累積，其他玩家也會接力）
-            rewardLines = [coopExtendedBattle
+            rewardLines = [combatResult.liveRetreated ? `已脫離戰鬥；已提交的傷害保留（剩 ${Math.max(0, Math.round(mHp))} HP）。` : coopExtendedBattle
               ? `新隊友加入共鬥，怪物血量提高；本場傷害已保留（剩 ${Math.max(0, Math.round(mHp))} HP），繼續追擊！`
               : `激戰 ${MAX_ROUNDS} 回合，怪物殘血撤退（剩 ${Math.max(0, Math.round(mHp))} HP），下次再來補刀！`];
           }
@@ -3972,7 +3991,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             spend: Number(combatResult?.jobSkillComboSpent) || 0,
           })
         };
-        progress.zoneCombo = _fields.zoneCombo;
+        if(combatResult.liveRetreated)_fields.zoneCombo.count=Math.max(0,_fields.zoneCombo.count-1); progress.zoneCombo = _fields.zoneCombo;
         // 連擊氣條（影舞者）：戰後氣量落地（同場域跨場沿用）
         if (shadowOn) {
           _fields.shadowGauge = _sg.next(combatResult?.shadowGauge ?? shadowGridsBefore, zoneKey);
@@ -4025,7 +4044,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
         // 戰意集氣（狂戰士）：每場 +1；滿氣開打的那場結束後清空重集
         if (gaugeCfg) {
-          _fields.berserkGauge = _bg.next(gaugeBefore, gaugeCfg, { consumed: gaugeFull });
+          _fields.berserkGauge = _bg.next(gaugeBefore, gaugeCfg, { consumed: gaugeFull }); if(combatResult.liveRetreated)_fields.berserkGauge.count=Math.max(0,_fields.berserkGauge.count-1);
           progress.berserkGauge = _fields.berserkGauge;
         }
         if (Array.isArray(progress.activeEffects) && progress.activeEffects.length > 0) {
@@ -4035,7 +4054,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
             _fields.activeEffects = nextActiveEffects;
           }
         }
-        await serviceContext.progressRepository.updateFields(progress.playerId, _fields).catch(() => {});
+        if(combatResult.liveBattleId)_fields.normalLiveSessionReceipts=[...(progress.normalLiveSessionReceipts||[]),combatResult.liveBattleId];
+        await serviceContext.progressRepository.updateFields(progress.playerId, _fields).catch(e => {if(combatResult.liveBattleId)throw e;});
       }
 
       // ── 敲世界王暈眩條（只有矮人戰士長敲得動）──
@@ -4092,7 +4112,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       // ── 累積區域聖域值（只有聖域師）── 每場 +1；不廣播（只顯示在網頁畫面，使用者定案）。
       let sanctumKnock = null;
-      if (_scg.canKnock(equipped?.job_eq)) {
+      if (!combatResult.liveRetreated && _scg.canKnock(equipped?.job_eq)) {
         sanctumKnock = await _scg.knock(sanctumGaugeKey, zoneKey, 1, displayName, Date.now(), discordId, selfJobId, selfJobName || "聖域師").catch(() => null);
         if (sanctumKnock?.triggered) {
           rewardLines.push(`🏛️ **聖域展開**！聖光籠罩戰場——${Math.round(_scg.SANCTUM_WINDOW_MS / 1000)} 秒內出戰的人受傷減半、每回合回血！`);
@@ -4104,7 +4124,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       // 任務／職業熟練度／通行證屬於附帶進度：核心戰鬥已落地後排入背景，
       // 不再讓玩家等這些資料庫寫入才收到真實戰報。
-      enqueuePostBattleSettlement(discordId, async () => {
+      if (!combatResult.liveRetreated) enqueuePostBattleSettlement(discordId, async () => {
         if (String(discordId) === "1043389715577049138") console.log("[jobExpProbe] 進入任務區塊");
         const questService = serviceContext.questService || serviceContext.weeklyQuestService;
         const questMetrics = {};
@@ -4188,14 +4208,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         }
       });
 
-      // 存活時冷卻只覆蓋動畫；死亡時再從死亡畫面之後追加完整 30 秒懲罰。
+      // 死亡或主動脫離沿用畫面交接後的 30 秒冷卻；脫離不改為死亡結算。
       // 回合節奏依玩家 AGI（同 DC），env ROUND_MS 仍可覆寫成固定值
       const perRoundMs = process.env.ROUND_MS ? ROUND_MS : calculateTickDelay(pStats.agi || 1);
-      const battleLockDurationMs = calculateWebBattleCooldownMs({
+      let battleLockDurationMs = combatResult.liveBattleId ? calculateLiveBattleCooldownMs({endedAt:combatResult.liveEndedAt,now:Date.now(),lost:outcome === "lose"||combatResult.liveRetreated,defeated:outcome === "win"}) : calculateWebBattleCooldownMs({
         roundCount: roundLogs.length,
         perRoundMs,
         lost: outcome === "lose",
+        defeated: outcome === "win",
       });
+      if (sharedPlayback) battleLockDurationMs = Math.max(battleLockDurationMs,
+        (sharedPlayback.deathAt ? sharedPlayback.deathAt + WEB_MONSTER_TRANSITION_MS : sharedPlayback.endsAt + WEB_BATTLE_HANDOFF_MS) - Date.now() + (outcome === "lose" ? 30000 : 0));
       const nextBattleAt = Date.now() + battleLockDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
       // 戰鬥已結算：把網頁占用鎖延續到動畫結束才自動失效，期間 DC/其他裝置都視為忙碌
@@ -4205,6 +4228,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const entry = playerBattleCooldowns.get(discordId);
         if (entry && entry.nextBattleAt <= Date.now()) playerBattleCooldowns.delete(discordId);
       }, battleLockDurationMs + 5000);
+
+      // Authoritative lifecycle ends after durable resources and the battle lock are committed.
+      // Report enrichment (rankings, catalogs, display metadata) is a separate consumer.
+      if(combatResult.liveBattleId) liveCombat.markReady(discordId,{
+        ...combatResult.liveInitial,zone:zoneKey,liveBattleId:combatResult.liveBattleId,
+        liveRetreated:Boolean(combatResult.liveRetreated),liveLogPackets:combatResult.liveLogPackets,outcome,
+        finalPlayerHp:Math.max(0,finalPlayerHp),finalMonsterHp:Math.max(0,mHp),totalDamage,
+        serverNow:Date.now(),nextBattleAt,cooldownMs:Math.max(0,nextBattleAt-Date.now()),
+        zoneCombo:{count:progress?.zoneCombo?.count??0,applied:comboBefore,benefits:comboBenefits,next:_zc.nextMilestone(progress?.zoneCombo?.count??0),burst:comboBenefits?_zc.burstInfo(progress?.zoneCombo?.count??0):null,burstUsed:comboConsumed},
+        berserkGauge:gaugeCfg?{..._bg.view(progress,gaugeCfg),unleashed:gaugeFull,sacrificed:sacrificeOn}:null,
+        shadowGauge:shadowOn ? _sg.view(combatResult?.shadowGauge ?? shadowGridsBefore) : null,oniGauge:oniOn ? _og.view(combatResult?.oniGauge ?? oniGridsBefore) : null,
+        sunSpirit:spiritOn?(combatResult?.sunSpirit||null):null,
+        sniperGauge:sniperOn?_sng.view(combatResult?.sniperGauge??sniperGridsBefore):null,
+        diceGauge:diceGodOn?_dgg.view(combatResult?.diceGauge??diceGridsBefore,combatResult?.diceLuck??diceLuckBefore):null,
+        sageGauge:sageOn?_sag.view(combatResult?.sageGauge??sageGridsBefore):null,
+        bardSong:bardOn?{..._bs.viewChallenge(progress.bardScore),streak:bardResult?.streak||0,last:bardResult?.played?{correct:bardResult.correct,wrong:bardResult.wrong,perfect:bardResult.perfect,mult:bardResult.dmgMult}:null}:null,
+      });
 
       // ── 共鬥光環回傳資料（供前端戰鬥畫面顯示光環效果）──
       // partyEffects 已由上方「共鬥光環系統」算好（不在此重算）；
@@ -4306,6 +4346,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       const responsePayload = {
         outcome,
+        sharedPlayback,
+        sharedScene: sharedPlayback ? require("../../services/realtime/zoneCombatScene").zoneCombatScene.publicSnapshot(require("../../services/realtime/zoneCombatScene").zoneCombatScene.scenes.get(zoneKey)) : null,
         // 區域連段：戰後的最新值 + 這場開打時實際生效的段數（前端常駐顯示用）
         zoneCombo: {
           count: progress?.zoneCombo?.count ?? 0,
@@ -4437,19 +4479,21 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           ? (hutaoTriggeredEvent || hutaoEventSnapshot || await serviceContext.hutaoEventService?.getSnapshot?.())
           : null,
       };
+      if(combatResult.liveBattleId) {responsePayload.liveBattleId=combatResult.liveBattleId;responsePayload.liveRetreated=Boolean(combatResult.liveRetreated);responsePayload.liveLogPackets=combatResult.liveLogPackets;responsePayload.livePending=false;responsePayload.liveReportPending=false;responsePayload.reportOnly=true;require("../../services/realtime/normalLiveCombat").normalLiveCombat.complete(discordId,{zone:zoneKey,...responsePayload});}
       markBattlePerf("response");
       const totalBattleMs = performance.now() - battlePerf.startedAt;
-      res.setHeader("Server-Timing", [
+      if (!res.headersSent) res.setHeader("Server-Timing", [
         ...battlePerf.parts.map((part) => `${part.name};dur=${part.duration.toFixed(1)}`),
         `total;dur=${totalBattleMs.toFixed(1)}`
       ].join(", "));
-      res.json(ok(responsePayload));
+      if (!res.headersSent) res.json(ok(responsePayload));
 
     } catch (err) {
-      next(err);
+      if(res.headersSent)console.error("[LiveBattle] background completion failed:",err.message);
+      else next(err);
     } finally {
       // 戰鬥成功時鎖已 hold 到動畫結束；其餘情況（例外/提早 return）立即釋放占用
-      if (battleLock && !lockHeldForAnim) battleLock.release();
+      if (battleLock && !lockHeldForAnim) {const remaining=require('../../services/realtime/normalLiveCombat').normalLiveCombat.recoveryUntil(req.playerRecord.discordId)-Date.now();if(remaining>0)battleLock.hold(remaining);else battleLock.release();}
       if (worldBossRelease) worldBossRelease();
     }
   });

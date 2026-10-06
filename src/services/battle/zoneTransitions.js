@@ -21,7 +21,12 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
   const transitionId = require("crypto").randomUUID();
   const diceRoll = Math.floor(Math.random() * 100) + 1;
   const startedAt = new Date().toISOString();
-  const endsAt = new Date(Date.now() + MONSTER_TRANSITION_MS).toISOString();
+  const sceneService=require("../realtime/zoneCombatScene").zoneCombatScene;
+  const timing=sceneService.transitionTimes(zoneKey,MONSTER_TRANSITION_MS);
+  const endsAt = new Date(timing.spawnAt).toISOString();
+  const group=require("../../shared/encounterGroup");
+  const preparedSpawn=group.NORMAL_ZONES.has(zoneKey)&&!nextMonster.isBoss
+    ? group.spawnState({},nextMonster):null;
 
   const transitionState = {
     ...freshState,
@@ -42,12 +47,14 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
       diceRoll,
       nextMonsterSeq: nextMonster.seq,
       nextMonsterName: nextMonster.name,
+      preparedSpawn,
       sourceMonsterName
     }
   };
 
   activeMonsterTransitions.set(zoneKey, transitionState.activeTransition);
   await sc.monsterService.saveState(transitionState, zoneKey);
+  sceneService.prepareNext(zoneKey,nextMonster,preparedSpawn||{currentHp:nextMonster.calc.maxHp,activeMonsterSeq:nextMonster.seq},timing);
   // Discord 面板是戰後展示，不影響換怪狀態；不得讓 Discord API 延遲卡住 Web 戰報。
   _republishPanel(
     sc,
@@ -82,6 +89,7 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
         activeTransition: null,
         lastHitAt: new Date().toISOString()
       };
+      if(latestState.activeTransition.preparedSpawn)Object.assign(nextState,latestState.activeTransition.preparedSpawn);
 
       let worldBossPartsHp = null;
       if (isWorldBossZone(zoneKey) && nextMonster?.isBoss) {
@@ -119,7 +127,7 @@ async function _startMonsterTransition(sc, zoneKey, nextMonster, freshState, { s
           activeMonsterTransitions.delete(zoneKey);
         }
       }
-  }, MONSTER_TRANSITION_MS);
+  }, Math.max(0,timing.spawnAt-Date.now()));
 
   monsterTransitionTimers.set(zoneKey, timer);
   return transitionState.activeTransition;
@@ -174,6 +182,7 @@ async function _resolveExpiredMonsterTransition(sc, zoneKey) {
     activeTransition: null,
     lastHitAt: new Date().toISOString()
   };
+  if(transition.preparedSpawn)Object.assign(nextState,transition.preparedSpawn);
 
   let worldBossPartsHp = null;
   if (isWorldBossZone(zoneKey) && nextMonster?.isBoss) {

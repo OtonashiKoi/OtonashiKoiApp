@@ -17,6 +17,7 @@ const enemy = { ...stats, critRate: 0 };
 const checks = [];
 async function check(name, fn) { try { await fn(); checks.push({ name, ok: true }); } catch (e) { checks.push({ name, ok: false, error: e.message }); } }
 async function main() {
+  const originalDefinition = structuredClone(card.monsterCardSkill);
   const old = Math.random; Math.random = () => .5;
   try {
     await check("live monster and player definition agree", () => assert.deepEqual(golem.equipment.special_1.monsterCardSkill, card.monsterCardSkill));
@@ -59,8 +60,30 @@ async function main() {
         }
         assert.deepEqual(triggered, [1, 6]);
       });
+      await check(`${owner}: healing decays by successful cast, survives restored sessions, floors at 10%, and resets in new battles`, () => {
+        let session = {}, cooldowns = { player: {}, monster: {} }, counts = { player: {}, monster: {} };
+        const healing = [], triggered = [];
+        for (let i = 1; i <= 36; i++) {
+          // Rebuild a session midway using only its durable counters/cooldowns.
+          if (i === 17) session = {};
+          const r = runCombatLoop(stats, enemy, "木樁", enemy.maxHp, 1,
+            { ...opts(2999), actionSession: session, partyActorId: "subject", cardCooldowns: cooldowns, cardTriggerCounts: counts });
+          cooldowns = r.cardCooldowns; counts = r.cardTriggerCounts;
+          if (r.roundLogs.some(l => l.includes("石化再生"))) {
+            triggered.push(i); healing.push((owner === "player" ? r.finalPlayerHp : r.finalMonsterHp) - 2999);
+          }
+        }
+        assert.deepEqual(triggered, [1, 6, 11, 16, 21, 26, 31, 36]);
+        assert.deepEqual(healing, [2500, 2000, 1500, 1250, 1000, 1000, 1000, 1000]);
+        assert.equal(counts[owner][card.id], 8);
+        const fresh = runCombatLoop(stats, enemy, "木樁", enemy.maxHp, 1, opts(2999));
+        assert.equal((owner === "player" ? fresh.finalPlayerHp : fresh.finalMonsterHp) - 2999, 2500);
+        const gated = runCombatLoop(stats, enemy, "木樁", enemy.maxHp, 1, opts(3000));
+        assert.deepEqual(gated.cardTriggerCounts[owner], {});
+      });
     }
   } finally { Math.random = old; }
+  await check("battle scaling never mutates the shared skill definition", () => assert.deepEqual(card.monsterCardSkill, originalDefinition));
   const hash = p => crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex");
   const report = { generatedAt: new Date().toISOString(), source: snapshot, checks, passed: checks.every(x => x.ok), hashes: Object.fromEntries(["src/shared/combatLoop.js", "scripts/test-castle-golem-card.js", `${snapshot}/items.bson`, `${snapshot}/monsters.bson`].map(p => [p, hash(p)])) };
   fs.writeFileSync(output, JSON.stringify(report, null, 2)); console.log(JSON.stringify(report.checks)); process.exitCode = report.passed ? 0 : 1;

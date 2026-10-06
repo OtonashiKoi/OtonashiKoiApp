@@ -6,7 +6,7 @@ const recordQuestForPlayersInBackground = (...args) => require("./battleQuestPro
 const { isWorldBossZone, WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
 const { killInProgress } = require("./zoneBattleState");
 
-async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal", serviceContext = null }) {
+async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal", serviceContext = null, resumeLiveSettlement = false, onRewardsReady = null }) {
   const sc = serviceContext || getServiceContext();
   const rewardLines = [];
 
@@ -72,13 +72,23 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   try {
   // DB 層原子收付擊殺權（防止 PM2 雙進程重載期間雙重結算）
-  const claimed = await sc.monsterRepository.claimKill(zoneKey, monster.seq);
+  const claimed = resumeLiveSettlement && state.normalLive?.killReceipt && Number(state.currentHp)<=0
+    ? true : await sc.monsterRepository.claimKill(zoneKey, monster.seq);
   if (!claimed) {
     return rewardLines;
   }
 
+  // Autonomous NPCs advance the encounter without inventing a player, reward,
+  // quest win or personal/world-boss unlock contribution.
+  if(state.normalLive?.encounterKey&&!Object.values(state.damageMap||{}).some(v=>Number(v?.damage)>0||Number(v?.assist)>0)){
+    onRewardsReady?.({});
+    return await require('./finishMonsterKill').finishMonsterKill({state,monster,sc,zoneKey,mergedDmg:{},perPidRewards:{},rewardLines,discordId:null});
+  }
+
   const { healerBonusPids, perPidRewards, participants, rewardModsByPid, mergedDmg, canSendRewardNotice, progressCache } = await require("./grantKillCurrencyAndExp").grantKillCurrencyAndExp({ state, discordId, zoneKey, monster, sc, displayName, totalDamage, session, rewardLines });
   await require("./grantKillDrops").grantKillDrops({ state, healerBonusPids, perPidRewards, monster, discordId, rewardLines, sc, participants, rewardModsByPid, zoneKey, displayName, mergedDmg, canSendRewardNotice, progressCache });
+  // 已入袋就推送掉落；命中與死亡已先公開，附帶通知不可再延後掉落。
+  onRewardsReady?.(perPidRewards);
   if (isWorldBossZone(zoneKey) && monster?.isBoss) {
     await require("../worldBoss/worldBossProgression").recordClears(sc.progressRepository, zoneKey, participants);
   }
