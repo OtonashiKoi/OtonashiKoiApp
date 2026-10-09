@@ -7,6 +7,7 @@ const { CURRENCY_SOURCES, EXP_SOURCES } = require("../../shared/sources");
 const { applyEffectInstances } = require("../../shared/effectEngine");
 const { MAX_ENHANCE_LEVEL } = require("../../shared/enhanceConfig");
 const { withPlayerProgressLock } = require("../progress/progressLocks");
+const { isChestCard, hasObtainedChestItem, recordChestItem } = require("../../shared/chestAnnouncement");
 const crypto = require("crypto");
 
 // 各 tier 裝備販售價格
@@ -816,6 +817,7 @@ class ShopService {
               rewardTier: legendary.entry.tier || "S",
               bossName: effect.bossName || "大史王",
               legendary: true,
+              isCard: isChestCard(legendary.entry),
             };
           } else {
             const rolled = await this._rollWorldBossChest(effect.monsterId);
@@ -830,6 +832,7 @@ class ShopService {
               rewardImage: rolled.entry.imageUrl || rolled.entry.imageThumbnailUrl || null,
               rewardTier: rolled.entry.tier || null,
               bossName: effect.bossName || "世界王",
+              isCard: isChestCard(rolled.entry),
             };
           }
         }
@@ -852,6 +855,7 @@ class ShopService {
             rewardItemId: rolled.entry.itemId || null,
             rewardImage: rolled.entry.imageUrl || rolled.entry.imageThumbnailUrl || null,
             rewardTier: rolled.entry.tier || null,
+            isCard: isChestCard(rolled.entry),
             // 不設 bossName → 前端顯示「📦 開啟寶箱」，但沿用同一套開箱特效
           };
         }
@@ -873,7 +877,7 @@ class ShopService {
             rewardItemId: rolled.entry.itemId || null,
             rewardImage: rolled.entry.imageUrl || rolled.entry.imageThumbnailUrl || null,
             rewardTier: rolled.entry.tier || null,
-            isCard: !!rolled.isCard,
+            isCard: isChestCard(rolled.entry),
           };
         }
         const chestEntryToAdd = { ...chestRolledEntry };
@@ -883,6 +887,12 @@ class ShopService {
         }
         next.inventory.push(chestEntryToAdd);
         effectDesc = `🎁 開啟 **${entry.itemName}**，獲得 **${chestRewardInfo.rewardItemName}**！`;
+      }
+
+      if (chestRewardInfo) {
+        chestRewardInfo.isFirstAcquisition = Boolean(chestRewardInfo.rewardItemId)
+          && !hasObtainedChestItem(progress, chestRewardInfo.rewardItemId);
+        recordChestItem(next, progress, chestRewardInfo.rewardItemId);
       }
 
       const autoRemovedJobBadge = this._autoUnequipJobBadgeIfNeeded(next);

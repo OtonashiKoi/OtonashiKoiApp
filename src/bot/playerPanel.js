@@ -2125,8 +2125,7 @@ async function handleBackpackEquip(interaction, uuid, tab = "item", page = 0, su
 }
 
 // 開箱/卡包公告：恭喜 X 使用 Y 開到了 Z（發到通知頻道）
-// 只公告 S 級以上：A/B 階在世界王寶箱裡佔絕大多數(大史王獎池 A 68 件 vs S 11 件)，
-// 每開必公告會把頻道洗掉，S 才有「稀有值得恭喜」的份量。D/C 階與無階級藥水本來就不公告。
+// 卡片每次公告；其他道具只在玩家首次取得 S/SS 級時公告。
 const _ANNOUNCE_TIERS = new Set(["S", "SS"]);
 async function _announceChestOpen(displayName, chestReward) {
   try {
@@ -2134,13 +2133,16 @@ async function _announceChestOpen(displayName, chestReward) {
     // 傳說錨點（大史王寶箱 3% 唯一）已有專屬廣播「📦✨…得來不易！」，不再發通用開箱公告，避免同一件洗頻。
     if (chestReward.legendary) return;
     const tier = String(chestReward.rewardTier || "").toUpperCase();
-    if (!_ANNOUNCE_TIERS.has(tier)) return; // 未達 B 級 → 不公告
+    if (!chestReward.isCard && (!_ANNOUNCE_TIERS.has(tier) || !chestReward.isFirstAcquisition)) return;
     const { getBotClient } = require("./runtimeContext");
     const client = getBotClient();
     if (!client?.isReady?.()) return;
     const channel = await client.channels.fetch("1498608950671839263").catch(() => null);
     if (channel?.isTextBased?.()) {
-      await channel.send(`🎉 恭喜 **${displayName}** 使用 **${chestReward.chestName}** 開到了 **${chestReward.rewardItemName}**！`).catch(() => {});
+      await channel.send({
+        content: `🎉 恭喜 **${displayName}** 使用 **${chestReward.chestName}** 開到了 **${chestReward.rewardItemName}**！`,
+        allowedMentions: { parse: [] },
+      }).catch(() => {});
     }
   } catch (_) { /* 公告失敗不影響開箱 */ }
 }

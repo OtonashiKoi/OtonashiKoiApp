@@ -1280,18 +1280,18 @@ async function _announceDrops(sc, discordId, displayName, monsterName, droppedIt
         const tauntSuffix = taunt ? `　${taunt}` : '';
         let content = "";
         if (kind === "bonus_10") {
-          content = `🎊 **10人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
+          content = `🎊 **10人加碼** ${displayName} 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
         } else if (kind === "bonus_15") {
-          content = `🔥 **15人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
+          content = `🔥 **15人加碼** ${displayName} 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
         } else if (kind === "bonus_20") {
-          content = `🌟 **20人加碼** ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
+          content = `🌟 **20人加碼** ${displayName} 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
         } else if (kind === "group") {
-          content = `🎁 ${displayName} (<@${discordId}>) 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
+          content = `🎁 ${displayName} 從 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
         } else {
-          content = `⚔️ ${displayName} (<@${discordId}>) 擊倒 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
+          content = `⚔️ ${displayName} 擊倒 **${monsterName}** 打到 **${itemList}**${tauntSuffix}`;
         }
         await sendAnnouncementWebhook(channel, content, {
-          allowedMentions: { users: [discordId] },
+          allowedMentions: { parse: [] },
           context: "drop announcement webhook"
         });
       }

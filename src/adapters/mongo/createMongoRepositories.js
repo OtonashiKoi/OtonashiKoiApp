@@ -426,7 +426,7 @@ function createMongoRepositories() {
         // 儲存前瘦身 inventory(去除可從道具庫還原的肥欄位),避免 progress 文件撐爆 16MB
         // 通關記錄只透過原子欄位更新，舊戰鬥快照不得覆蓋其他並行結算。
         // MongoDB owns _id; cloned BSON ObjectIds must never be written back as mutable fields.
-        const { _id: _mongoId, accountWorldBossClears: _accountClears, inventorySaveReceipts: _saveReceipts, ...mutableProgress } = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        const { _id: _mongoId, accountWorldBossClears: _accountClears, chestAnnouncementKnownItemIds: _chestAnnouncementKnownItemIds, inventorySaveReceipts: _saveReceipts, ...mutableProgress } = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
         progress = require("./progressReceiptLedger").omitReceipts(mutableProgress);
         const expectedSeasonKey = String(progress.seasonKey || baseline?.seasonKey || seasonState.getActiveKey());
         progress.seasonKey = expectedSeasonKey;
