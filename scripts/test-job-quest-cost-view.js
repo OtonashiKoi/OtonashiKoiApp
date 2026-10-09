@@ -20,6 +20,8 @@ async function main() {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].transferCost, cost);
     assert.equal(rows[0].transferBadgeName, "劍士徽章");
+    assert.deepEqual(rows[0].transferCostSchedule, [250000, 1000000, 3000000]);
+    assert.deepEqual(rows[0].transferTrialTargets, [350, 700, 1000]);
     assert.equal(rows[0].done, true);
   }
   console.log("✅ 二轉任務消耗顯示與後端逐次費用一致");

@@ -764,7 +764,9 @@ class WeeklyQuestService {
         unlockHint,
         ...(quest.type === "t2_transfer" ? {
           transferCost: jobAdvancement.transferCostFor(Number(context?.ownedT2Count || 0)),
-          transferBadgeName: transferBadgeName || "對應一轉徽章"
+          transferBadgeName: transferBadgeName || "對應一轉徽章",
+          transferCostSchedule: [...jobAdvancement.T2_TRANSFER_COSTS],
+          transferTrialTargets: [...jobAdvancement.T2_TRIAL_TARGETS]
         } : {}),
         ...(jobRequirements ? { jobRequirements } : {}),
         // 複合任務：附上每個子條件的個別進度，讓任務頁能列出「大史王 3/5、古龍王 5/5…」

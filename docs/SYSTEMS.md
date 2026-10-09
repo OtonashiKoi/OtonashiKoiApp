@@ -143,7 +143,7 @@ Web 背包道具詳情的底部右側固定為「關閉」；「丟棄」收在�
 - 目前 2 條分支鎖定：劍鬼、盜靈；其餘 11 條可由任務／故事流程開放
 - 徽章熟練度：`src/shared/jobBadgeLevel.js`、`services/job/jobBadgeService.js`
 - 二轉費用、條件、同職分支互斥與 `seasonLocked` 都由 `jobAdvancement.js`／`weeklyQuestService.js` 判定
-- Web 職業任務分為一轉、二轉小分頁；二轉任務清單回傳目前轉職金額與要消耗的一轉徽章名稱，領取按鈕同時顯示兩項消耗並在提交前再次確認。費用依目前持有二轉數計算，正式扣款時仍由 `jobBadgeService.transferJob()` 重新驗證；職業任務不包含在一鍵領取內。
+- Web 職業任務分為一轉、二轉小分頁；二轉 Lv.35 提示收成可展開說明，列出對應 Lv.20 一轉徽章 ×1、第一次 25 萬、第二次 100 萬、第三次起 300 萬金幣及對應試煉場次。二轉任務清單由 `jobAdvancement.js` 回傳費用級距、試煉門檻、目前轉職金額與要消耗的一轉徽章名稱；領取按鈕同時顯示兩項消耗並在提交前再次確認。費用依目前持有二轉數計算，正式扣款時仍由 `jobBadgeService.transferJob()` 重新驗證；職業任務不包含在一鍵領取內。
 - 任務二轉扣款編號包含帳號、賽季與任務；換季後重新付本季費用，舊季台帳不會擋住轉職或抵掉新費用。已扣款但徽章保存中斷時，重試沿用原付款，只補完徽章與完成旗標；取得本季徽章之前的舊編號交易不會被當作本次付款。
 - 故事轉職節點：`services/story/storyService.js`
 - 各職機制：`dwarfStunGauge.js`、`shadowGauge.js`、`zoneCombo.js`、`battleStance.js`、`sunSpirit.js`、`jobBattleOptions` 等
