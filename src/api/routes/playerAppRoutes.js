@@ -4270,6 +4270,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       });
       if (sharedPlayback) battleLockDurationMs = Math.max(battleLockDurationMs,
         (sharedPlayback.deathAt ? sharedPlayback.deathAt + WEB_MONSTER_TRANSITION_MS : sharedPlayback.endsAt + WEB_BATTLE_HANDOFF_MS) - Date.now() + (outcome === "lose" ? 30000 : 0));
+      if (combatResult.liveWiped) battleLockDurationMs = 0;
       const nextBattleAt = Date.now() + battleLockDurationMs;
       playerBattleCooldowns.set(discordId, { zone: zoneKey, nextBattleAt });
       // 戰鬥已結算：把網頁占用鎖延續到動畫結束才自動失效，期間 DC/其他裝置都視為忙碌
@@ -4284,7 +4285,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // Report enrichment (rankings, catalogs, display metadata) is a separate consumer.
       if(combatResult.liveBattleId) liveCombat.markReady(discordId,{
         ...combatResult.liveInitial,zone:zoneKey,liveBattleId:combatResult.liveBattleId,
-        liveRetreated:Boolean(combatResult.liveRetreated),liveLogPackets:combatResult.liveLogPackets,outcome,
+        liveRetreated:Boolean(combatResult.liveRetreated),liveWiped:Boolean(combatResult.liveWiped),liveLogPackets:combatResult.liveLogPackets,outcome,
         finalPlayerHp:Math.max(0,finalPlayerHp),finalMonsterHp:Math.max(0,mHp),totalDamage,
         serverNow:Date.now(),nextBattleAt,cooldownMs:Math.max(0,nextBattleAt-Date.now()),
         zoneCombo:{count:progress?.zoneCombo?.count??0,applied:comboBefore,benefits:comboBenefits,next:_zc.nextMilestone(progress?.zoneCombo?.count??0),burst:comboBenefits?_zc.burstInfo(progress?.zoneCombo?.count??0):null,burstUsed:comboConsumed},

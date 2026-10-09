@@ -236,6 +236,13 @@ class WorldBossService {
     };
   }
 
+  async markBossWiped() {
+    const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
+    state.battleStartedAt = null;
+    await this.repo.saveState(state, this.bossKey);
+    return { state, status: this._buildStatus(config, state, Date.now()) };
+  }
+
   async markBossFailedTimeout() {
     const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
     const nowIso = new Date().toISOString();

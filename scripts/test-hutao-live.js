@@ -8,9 +8,9 @@ const {runCombatLoop}=require('../src/shared/combatLoop');
 const zone=entry.ZONE,checks=[],oldRandom=Math.random;
 const stats={atk:100,maxHp:10000,str:0,agi:1,vit:0,int:0,dex:100,luk:0,level:65,hit:100,dodge:0,crit:0,combo:0,def:0,flatDef:0,dmgMin:1,dmgMax:1};
 function fixture(){
- let now=1000,state={activeMonsterSeq:1,normalLiveSpawnAt:1000,currentHp:1000000,damageMap:{},participants:[]},fail=false,failProgress=false,writeCount=0;
+ let now=1000,state={activeMonsterSeq:1,normalLiveSpawnAt:1000,currentHp:1000000,damageMap:{},participants:[]},fail=false,failProgress=false,writeCount=0,wipeCount=0;
  const progress=new Map(),gold=new Map(),operations=new Map(),monster={id:'hutao-fixture',seq:1,name:'胡桃',zone,calc:{...stats,atk:30,maxHp:1000000}};
- const sc={progressRepository:{findByPlayerId:async id=>structuredClone(progress.get(id)),updateFields:async(id,fields)=>{writeCount++;Object.assign(progress.get(id),structuredClone(fields));},saveIfUnchanged:async(next,expected)=>{if(failProgress||progress.get(next.playerId).updatedAt!==expected)return false;progress.set(next.playerId,structuredClone(next));return true;}},
+ const sc={worldBossServiceFor:()=>({markBossWiped:async()=>{wipeCount++;}}),progressRepository:{findByPlayerId:async id=>structuredClone(progress.get(id)),updateFields:async(id,fields)=>{writeCount++;Object.assign(progress.get(id),structuredClone(fields));},saveIfUnchanged:async(next,expected)=>{if(failProgress||progress.get(next.playerId).updatedAt!==expected)return false;progress.set(next.playerId,structuredClone(next));return true;}},
  monsterService:{getState:async()=>structuredClone(state),listMonsters:async()=>[monster],saveStateIfActiveMonster:async(next,z,seq,hp)=>{if(fail||state.activeMonsterSeq!==seq||state.currentHp!==hp)return false;state=structuredClone(next);return true;}},
  rewardService:{grantCurrency:async input=>{const previous=operations.get(input.sourceRef);if(previous){if(previous.error)throw previous.error;return previous;}
  if((gold.get(input.discordId)||0)+input.amount<0){const error=Object.assign(Error('gold insufficient'),{code:'INSUFFICIENT_BALANCE'});operations.set(input.sourceRef,{error});throw error;}
@@ -18,7 +18,7 @@ function fixture(){
  const scene=new ZoneCombatScene({now:()=>now,emit:()=>{}}),engine=new NormalLiveCombat({now:()=>now,auto:false,starterNpcs:false,scene,emit:()=>{}});
  function add(id,extra={}){progress.set(id,{playerId:id,activeCharacterSlot:1,seasonKey:'test',inventory:[],updatedAt:'0',...extra});gold.set(id,100000);}
  async function join(id,card=false,extra={}){const promise=engine.join({sc,zone,monster,actorId:id,actorName:id,stats:{...stats,...extra},monsterStats:monster.calc,options:{playerName:id,playerLevel:65,equipped:card?{special_1:{monsterCardSkill:{key:'hutao_riichi'}}}:{}}});promise.catch(()=>{});await engine.queues.get(zone);return {promise,actor:engine.players.get(id)};}
- return {sc,engine,scene,add,join,progress,gold,operations,state:()=>state,time:n=>now=n,now:()=>now,setState:s=>state=structuredClone(s),fail:v=>fail=v,failProgress:v=>failProgress=v,writes:()=>writeCount,close:()=>{const r=engine.zones.get(zone);if(r&&!r.closed)engine.failRoom(r,Error('fixture completed'));}};
+ return {sc,engine,scene,add,join,progress,gold,operations,state:()=>state,time:n=>now=n,now:()=>now,setState:s=>state=structuredClone(s),fail:v=>fail=v,failProgress:v=>failProgress=v,writes:()=>writeCount,wipes:()=>wipeCount,close:()=>{const r=engine.zones.get(zone);if(r&&!r.closed)engine.failRoom(r,Error('fixture completed'));}};
 }
 async function check(name,fn){try{await fn();checks.push({name,passed:true});console.log('PASS',name);}catch(e){checks.push({name,passed:false,error:e.stack});console.error('FAIL',name,e.stack);}}
 (async()=>{Math.random=()=>.49;
@@ -58,9 +58,9 @@ await check('resumed core uses current AGI/LUK/ATK and wind, restores expired st
  const second=runCombatLoop({...stats},{...stats},'胡桃',1000000,15,{...base,startMonsterHp:first.finalMonsterHp,riichiOnly:true,hutaoRiichiPulse:true,livePlayerStats:stats,liveMonsterStats:stats,bossVulnMult:1});assert.equal(second.totalDamage,120);assert.equal(second.combatStats.attackRounds,0);
 });
 await check('entry 50k once; duplicate join/cooldown reject without extra debit; insufficient funds clears pending',async()=>{
- const f=fixture();f.add('A');await f.join('A');assert.equal(f.gold.get('A'),50000);assert.equal(f.progress.get('A').hutaoChallengeUntil,3601000);
+ const f=fixture();f.add('A');await f.join('A');assert.equal(f.gold.get('A'),50000);assert.equal(f.progress.get('A').hutaoChallengeUntil,0);
  await assert.rejects(f.engine.join({sc:f.sc,zone,monster:f.engine.zones.get(zone).monster,actorId:'A'}),/即時戰鬥/);assert.equal(f.gold.get('A'),50000);
- f.close();await assert.rejects(entry.prepare(f.sc,'A','A','next-operation',2000),/每小時/);assert.equal(f.gold.get('A'),50000);
+ f.close();const next=await entry.prepare(f.sc,'A','A','next-operation',2000);assert.equal(f.gold.get('A'),0);await entry.abort(f.sc,'A','A',next);assert.equal(f.gold.get('A'),50000);
  f.add('poor');f.gold.set('poor',49999);await assert.rejects(entry.prepare(f.sc,'poor','poor','poor-operation',1000),/insufficient/);assert.equal(f.gold.get('poor'),49999);assert.equal(f.progress.get('poor').hutaoEntryPending,null);
  f.gold.set('poor',100000);await entry.prepare(f.sc,'poor','poor','funded-operation',1000);assert.equal(f.gold.get('poor'),50000);
 });
@@ -93,6 +93,34 @@ await check('downed remains in Hutao; revive another actor consumes one; duplica
  await potions.use(f.engine,room,'A',req);assert.equal(f.state().normalLive.actors.B.hp,1);assert.equal(f.progress.get('A').inventory[0].stackCount,2);assert.equal(f.state().normalLiveDeath.B,undefined);
  await potions.use(f.engine,room,'A',req);assert.equal(f.progress.get('A').inventory[0].stackCount,2);await assert.rejects(potions.use(f.engine,room,'A',{...req,targetId:'A'}),/不同用藥/);
  await assert.rejects(potions.use(f.engine,room,'A',{...req,operationId:'revive-operation-2'}),/尚未倒地/);assert.equal(f.progress.get('A').inventory[0].stackCount,2);f.close();
+});
+await check('downed actor cannot leave or re-enter while teammate lives, including after old cooldown',async()=>{
+ const f=fixture();f.add('A');f.add('B');await f.join('A');await f.join('B',false,{maxHp:1});f.time(2500);await f.engine.advance(zone);
+ const battleId=f.engine.players.get('B').id,fee=f.gold.get('B');f.time(35000);
+ await assert.rejects(f.engine.leave('B',battleId),/等待隊友使用復活藥/);
+ await assert.rejects(f.join('B'),/即時戰鬥/);
+ assert.equal(f.gold.get('B'),fee);assert.equal(f.engine.players.get('B').done,false);f.close();
+});
+await check('full party wipe resets Hutao HP, damage and encounter; everyone can pay to retry',async()=>{
+ const f=fixture();f.add('A');f.add('B');await f.join('A');await f.join('B');f.time(1300);await f.engine.advance(zone);
+ assert.ok(f.state().currentHp<1000000);const oldKey=f.state().normalLive.encounterKey;
+ const next=f.state();for(const id of ['A','B']){next.normalLive.actors[id].hp=1;f.engine.players.get(id).hp=1;}f.setState(next);
+ f.time(2500);await f.engine.advance(zone);
+ assert.equal(f.state().currentHp,1000000);assert.deepEqual(f.state().damageMap,{});assert.deepEqual(f.state().participants,[]);
+ assert.equal(f.state().normalLive.wipedAt,2500);assert.equal(f.state().normalLive.actors.A.recoverAt,0);assert.deepEqual(f.state().normalLiveDeath,{});
+ assert.equal(f.wipes(),1);
+ assert.equal(f.engine.players.size,0);assert.equal(f.engine.zones.get(zone).closed,true);
+ assert.equal(f.scene.scenes.get(zone).liveHp,1000000);
+ const a=await f.join('A');assert.notEqual(f.state().normalLive.encounterKey,oldKey);
+ assert.equal(f.gold.get('A'),0);assert.equal(a.actor.hp,a.actor.maxHp);f.close();
+});
+await check('last living teammate retreat releases stranded downed players into full HP retry',async()=>{
+ const f=fixture();f.add('A');f.add('B');await f.join('A');await f.join('B',false,{maxHp:1});f.time(2500);await f.engine.advance(zone);
+ assert.equal(f.state().normalLive.actors.B.hp,0);
+ const left=await f.engine.leave('A',f.engine.players.get('A').id);assert.equal(left.left,true);
+ assert.equal(f.state().currentHp,1000000);assert.equal(f.state().normalLive.wipedAt,2500);assert.equal(f.wipes(),1);
+ assert.equal(f.engine.players.has('B'),false);assert.equal(f.engine.vitals.get('B').recoverAt,0);
+ await f.join('B');assert.equal(f.gold.get('B'),0);f.close();
 });
 await check('heal preserves attack cadence; full/dead target and cooldown do not consume',async()=>{
  const f=fixture();f.add('A',{inventory:[{uuid:'heal-stack',itemId:'3eb1d302-3d04-40a5-8335-1f9ed844dc27',stackCount:3}],combatPotionPlan:{'3eb1d302-3d04-40a5-8335-1f9ed844dc27':3}});f.add('B');await f.join('A');await f.join('B');const room=f.engine.zones.get(zone),req={battleId:f.engine.players.get('A').id,operationId:'heal-operation-1',itemId:'3eb1d302-3d04-40a5-8335-1f9ed844dc27',targetId:'B'};

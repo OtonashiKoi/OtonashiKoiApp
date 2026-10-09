@@ -39,9 +39,10 @@ class NormalLiveCombat {
     return this.serial(zone,async()=>{
       const a=this.players.get(actorId),room=this.zones.get(zone);
       if(!a||a.id!==battleId||a.done||!room||room.closed)return {left:false,...this.leaveStatus(actorId,battleId)};
+      if(zone===hutaoEntry.ZONE&&a.hp<=0)throw Object.assign(new Error("已倒地，請等待隊友使用復活藥；全滅後可重新挑戰"),{status:409});
       for(let attempt=0;attempt<6;attempt++){
         const state=await room.sc.monsterService.getState(zone);
-        if(Number(state.activeMonsterSeq)!==room.seq||state.normalLive?.actors?.[actorId]?.id!==battleId||state.activeTransition||state.activeEvent||Number(state.currentHp)<=0)throw Object.assign(new Error("戰鬥狀態更新中，請重試脫離戰鬥"),{status:409});
+        if(Number(state.activeMonsterSeq)!==room.seq||state.normalLive?.actors?.[actorId]?.id!==battleId||state.pendingLivePotion||state.activeTransition||state.activeEvent||Number(state.currentHp)<=0)throw Object.assign(new Error("戰鬥狀態更新中，請重試脫離戰鬥"),{status:409});
         const candidate=structuredClone(state);
         const leftAt=this.now(),recoverAt=leftAt+calculateLiveBattleCooldownMs({endedAt:leftAt,now:leftAt,lost:true});
         candidate.normalLive.actors[actorId].active=false;
@@ -49,12 +50,21 @@ class NormalLiveCombat {
         candidate.normalLive.actors[actorId].recoverAt=recoverAt;
         syncCompanions(room,candidate,leftAt,new Map([...room.members].filter(([id])=>id!==actorId)));
         candidate.normalLiveDeath={...candidate.normalLiveDeath,[actorId]:{kind:"retreat",id:battleId,recoverAt,name:a.actorName,maxHp:a.maxHp,hp:a.hp}};
-        if(!await room.sc.monsterService.saveStateIfActiveMonster(candidate,zone,room.seq,state.currentHp))continue;
+        const abandoned=zone===hutaoEntry.ZONE&&[...room.members.values()].every(member=>member.actorId===actorId||member.done||member.hp<=0);
+        const committed=abandoned?this.wipeState(room,candidate,leftAt):candidate;
+        if(!await room.sc.monsterService.saveStateIfActiveMonster(committed,zone,room.seq,state.currentHp))continue;
         a.retreated=true;a.lastAt=leftAt;a.recoverAt=recoverAt;
         require("../progress/battleLock").acquireWebBattle(actorId,"web",Math.max(0,recoverAt-this.now()));
         this.results.delete(actorId);
         this.finishActor(room,a,candidate,"timeout");
         this.updateScene(room,candidate,[],[]);
+        if(abandoned){
+          room.wiped=true;
+          await room.sc.worldBossServiceFor?.(zone)?.markBossWiped?.().catch(error=>console.error('[HutaoWipe] battle timer reset pending',error));
+          this.finishRoom(room,candidate,"lose");
+          this.scene.ensure(zone,committed,room.monster,{force:true});
+          this.updateScene(room,committed,[],[]);
+        }
         if(!room.companions.length&&[...room.members.values()].every(member=>member.done))this.close(room);
         return {left:true,liveBattleId:battleId,...this.leaveStatus(actorId,battleId)};
       }
@@ -89,6 +99,9 @@ class NormalLiveCombat {
         this.zones.set(zone,room);
       }
       const previous=fresh.normalLiveDeath?.[actorId] || fresh.normalLive?.actors?.[actorId],v=this.vitals.get(actorId);
+      if(zone===hutaoEntry.ZONE&&fresh.normalLive?.actors?.[actorId]?.hp<=0
+        &&Object.entries(fresh.normalLive.actors).some(([id,member])=>id!==actorId&&member.active&&member.hp>0))
+        throw Object.assign(new Error("本輪已倒地，請等待隊友使用復活藥"),{code:"LIVE_AWAITING_REVIVE",status:409});
       if(Math.max(Number(previous?.recoverAt)||0,Number(v?.recoverAt)||0)>this.now())throw Object.assign(new Error(previous?.kind==="retreat"||v?.retreated?"脫離恢復中，請稍後再出戰":"死亡恢復中，請稍後再出戰"),{code:"LIVE_DEATH_COOLDOWN"});
       const id=randomUUID(),start=this.now()+300;
       const a={id,actorId,actorName,stats:structuredClone(stats),monsterStats:structuredClone(monsterStats),options:structuredClone(options),session:{},hp:stats.maxHp,maxHp:stats.maxHp,attackAt:start,tick:tickMs||calculateBattleTickMs(stats.agi||1),attacks:0,logs:[],logPackets:[],actionSeq:0,dice:[],result:null,done:false};
@@ -257,7 +270,10 @@ class NormalLiveCombat {
       // HP, damage credit and the recovery snapshot commit in the same CAS. No
       // public packet, reward or second attack precedes this successful write.
       if(candidate.currentHp<=0)for(const saved of Object.values(candidate.normalLive.actors))saved.active=false;
-      const saved=await room.sc.monsterService.saveStateIfActiveMonster(candidate,zone,room.seq,state.currentHp);
+      const wiped=zone===hutaoEntry.ZONE&&candidate.currentHp>0&&room.members.size>0
+        &&[...room.members.values()].every(a=>a.done||Number(candidate.normalLive.actors[a.actorId]?.hp)<=0);
+      const committed=wiped?this.wipeState(room,candidate,at):candidate;
+      const saved=await room.sc.monsterService.saveStateIfActiveMonster(committed,zone,room.seq,state.currentHp);
       if(!saved){this.failRoom(room,new Error("共鬥狀態已被更新，本次未提交出手已停止"));return;}
       await riichi.flush(room.sc, candidate);
       if (zone !== hutaoEntry.ZONE) riichi.apply(room, candidate, at);
@@ -276,9 +292,25 @@ class NormalLiveCombat {
         await this.settleKill(room,candidate);return;
       }
       if (zone !== hutaoEntry.ZONE) for(const{a}of steps)if(a.hp<=0)this.finishActor(room,a,candidate,"lose");
-      if (zone === hutaoEntry.ZONE && [...room.members.values()].every(a=>a.done||a.hp<=0)) this.finishRoom(room,candidate,"lose");
+      if(wiped){
+        room.wiped=true;
+        await room.sc.worldBossServiceFor?.(zone)?.markBossWiped?.().catch(error=>console.error('[HutaoWipe] battle timer reset pending',error));
+        for(const a of room.members.values())a.recoverAt=0;
+        this.finishRoom(room,candidate,"lose");
+        const freshScene=this.scene.ensure(zone,committed,room.monster,{force:true});
+        if(freshScene)this.updateScene(room,committed,[],[]);
+      }
       if(!room.companions.length&&[...room.members.values()].every(a=>a.done))this.close(room);
     });
+  }
+  wipeState(room,state,at) {
+    const maxHp=normalMaxHp(state,room.monster);
+    const actors=Object.fromEntries(Object.entries(state.normalLive?.actors||{}).map(([id,actor])=>
+      [id,{...actor,active:false,recoverAt:actor.hp<=0?0:actor.recoverAt}]));
+    return {...state,currentHp:maxHp,worldBossPartsHp:{body:maxHp},damageMap:{},participants:[],
+      normalLive:{...state.normalLive,actors,wipedAt:at},normalLiveDeath:{},normalLiveSpawnAt:at,
+      normalLiveAttempt:(Number(state.normalLiveAttempt)||0)+1,lastHitAt:null,
+      liveControlGauges:null,hutaoCrushReceipts:{},pendingLivePotion:null};
   }
   updateScene(room,state,contacts,health) {
     const s=this.scene.ensure(room.zone,state,room.monster);if(!s)return;
@@ -301,8 +333,8 @@ class NormalLiveCombat {
     s.revision=++this.scene.revision;this.scene.publish(s);
   }
   finishActor(room,a,state,outcome) {
-    if(a.done)return;a.done=true;this.players.delete(a.actorId);a.recoverAt=a.recoverAt||(a.hp<=0?this.now()+30000:0);const v=this.vitals.get(a.actorId);if(v){v.active=false;v.recoverAt=a.recoverAt;v.retreated=Boolean(a.retreated);}
-    const result={...(a.result||{}),outcome,roundLogs:a.logs,diceEvents:a.dice,finalPlayerHp:a.hp,finalMonsterHp:Number(state.currentHp)||0,liveBattleId:a.id,liveRetreated:Boolean(a.retreated),liveEndedAt:outcome==="win"?(room.deathAt||a.lastAt||this.now()):(a.lastAt||this.now()),liveInitial:a.initial,liveSettledState:state,liveRewards:a.rewards,liveLogPackets:a.logPackets,totalDamage:Number(a.result?.totalDamage)||0};
+    if(a.done)return;a.done=true;this.players.delete(a.actorId);a.recoverAt=room.wiped?0:a.recoverAt||(a.hp<=0?this.now()+30000:0);const v=this.vitals.get(a.actorId);if(v){v.active=false;v.recoverAt=a.recoverAt;v.retreated=Boolean(a.retreated);}
+    const result={...(a.result||{}),outcome,roundLogs:a.logs,diceEvents:a.dice,finalPlayerHp:a.hp,finalMonsterHp:Number(state.currentHp)||0,liveBattleId:a.id,liveRetreated:Boolean(a.retreated),liveWiped:Boolean(room.wiped),liveEndedAt:outcome==="win"?(room.deathAt||a.lastAt||this.now()):(a.lastAt||this.now()),liveInitial:a.initial,liveSettledState:state,liveRewards:a.rewards,liveLogPackets:a.logPackets,totalDamage:Number(a.result?.totalDamage)||0};
     a.resolve(result);
   }
   finishRoom(room,state,outcome) {for(const a of room.members.values())if(!a.done)this.finishActor(room,a,state,a.hp<=0?"lose":outcome);this.close(room);}

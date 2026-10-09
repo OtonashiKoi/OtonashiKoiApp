@@ -1,6 +1,6 @@
 "use strict";
 const {createHash}=require('crypto');
-function encounterKey(zone,seq,state){const count=state?.killCount;const total=count&&typeof count==='object'?Object.values(count).reduce((n,v)=>n+(Number(v)||0),0):Number(count)||0;return `${zone}:${Number(seq)}:${total}`;}
+function encounterKey(zone,seq,state){const count=state?.killCount;const total=count&&typeof count==='object'?Object.values(count).reduce((n,v)=>n+(Number(v)||0),0):Number(count)||0;const attempt=zone==='event_boss_hutao_preview'?Number(state?.normalLiveAttempt)||0:0;return attempt?`${zone}:${Number(seq)}:${total}:${attempt}`:`${zone}:${Number(seq)}:${total}`;}
 function rewardId(state,pid,kind){return 'normal-live:'+createHash('sha256').update(`${state.normalLive.encounterKey}:${pid}:${kind}`).digest('hex');}
 async function plan(sc,zone,key,pid,kind,make){
   const field=`${pid}_${kind}`;

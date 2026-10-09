@@ -51,10 +51,10 @@ async function check(name,work){try{const evidence=await work();report.checks.pu
  const p=await sc.progressRepository.findByPlayerId(chars[0].id);p.inventory.find(e=>e.uuid==='qa-heal-0').stackCount=3;await sc.progressRepository.save(p);
  const r=await request(0,'/api/me/combat-potions',{plan:{[revive]:5,[heal]:5}},'PUT');assert.equal(r.status,200);assert.equal(r.body.data.plan[heal],5);assert.equal(r.body.data.items.find(i=>i.itemId===heal).count,3);
  });
- await check('11 real Lv50 growth characters enter via live API; each debited exactly50000, hourly limit persisted',async()=>{
+ await check('11 real Lv50 growth characters enter via live API; each debited exactly50000, no personal hourly limit',async()=>{
  const before=await Promise.all(chars.map(c=>sc.walletRepository.findByPlayerId(c.id))),responses=[];
  for(let i=0;i<chars.length;i++){const r=await request(i,'/api/combat/quick-battle',{zone,liveStartOnly:true});responses.push(r);assert.equal(r.status,200,JSON.stringify(r));assert.equal(r.body.data.livePending,true);}
- for(let i=0;i<chars.length;i++){const after=await sc.walletRepository.findByPlayerId(chars[i].id);assert.equal(before[i].gold-after.gold,50000);assert.equal((await sc.progressRepository.findByPlayerId(chars[i].id)).hutaoChallengeUntil,clock+3600000);}
+ for(let i=0;i<chars.length;i++){const after=await sc.walletRepository.findByPlayerId(chars[i].id);assert.equal(before[i].gold-after.gold,50000);assert.equal((await sc.progressRepository.findByPlayerId(chars[i].id)).hutaoChallengeUntil,0);}
  assert.equal((await request(0,'/api/combat/quick-battle',{zone,liveStartOnly:true})).status,409);assert.equal((await request(0,'/api/me/combat-potions',{plan:{}},'PUT')).status,409);
  const pouch=await request(0,'/api/combat/potions');assert.equal(pouch.body.data.items.find(i=>i.itemId===heal).remaining,3);assert.equal(pouch.body.data.items.reduce((n,i)=>n+i.remaining,0),8);
  const saved=await sc.progressRepository.findByPlayerId(chars[0].id);assert.equal(saved.combatPotionPlan[heal],5);assert.equal(saved.inventory.find(e=>e.uuid==='qa-heal-0').stackCount,3);
@@ -101,7 +101,7 @@ async function check(name,work){try{const evidence=await work();report.checks.pu
  await check('entry cooldown cannot be bypassed after loss or reboot; restart does not debit again',async()=>{
  const before=await sc.walletRepository.findByPlayerId(chars[0].id);const r=await request(0,'/api/combat/quick-battle',{zone,liveStartOnly:true});assert.equal(r.status,409);assert.equal((await sc.walletRepository.findByPlayerId(chars[0].id)).gold,before.gold);
  const Engine=require('../src/services/realtime/normalLiveCombat').NormalLiveCombat,recovered=new Engine({now:()=>clock,auto:false,starterNpcs:false});await require('../src/services/realtime/normalLiveRecovery').recoverNormalLive(sc,recovered);assert.equal((await sc.walletRepository.findByPlayerId(chars[0].id)).gold,before.gold);
- assert.ok((await sc.progressRepository.findByPlayerId(chars[0].id)).hutaoChallengeUntil>clock);
+ assert.equal((await sc.progressRepository.findByPlayerId(chars[0].id)).hutaoChallengeUntil,0);
  });
  server.close();await closeMongoClient();fs.writeFileSync(output,JSON.stringify(report,null,2));process.exit(0);
 })().catch(async e=>{console.error(e);fs.writeFileSync(output,JSON.stringify({...report,error:e.stack},null,2));server?.close();await closeMongoClient();process.exit(1);});
