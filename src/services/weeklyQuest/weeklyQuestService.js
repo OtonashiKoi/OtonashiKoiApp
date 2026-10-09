@@ -723,6 +723,10 @@ class WeeklyQuestService {
       const maskHidden = locked && isHiddenGated;
 
       const jobRequirements = firstJobRequirements(quest, context);
+      const transferBranch = quest.type === "t2_transfer"
+        ? jobAdvancement.getT2Branch(String(quest.rewardItemId || "")) : null;
+      const transferBadgeName = transferBranch?.baseKey
+        ? `${jobAdvancement.BASE_JOBS[transferBranch.baseKey]?.name || "一轉職業"}徽章` : null;
       let unlockHint = null;
       if (locked) {
         if (maskHidden) unlockHint = "隱藏任務（達成條件後現身）"; // 通用，不洩漏解鎖條件
@@ -758,6 +762,10 @@ class WeeklyQuestService {
         locked,
         unlockLevel: Number(quest.unlockLevel || 0),
         unlockHint,
+        ...(quest.type === "t2_transfer" ? {
+          transferCost: jobAdvancement.transferCostFor(Number(context?.ownedT2Count || 0)),
+          transferBadgeName: transferBadgeName || "對應一轉徽章"
+        } : {}),
         ...(jobRequirements ? { jobRequirements } : {}),
         // 複合任務：附上每個子條件的個別進度，讓任務頁能列出「大史王 3/5、古龍王 5/5…」
         // 光看 12/20 玩家不知道還差哪一隻。
