@@ -51,6 +51,8 @@
 
 現行共用結算、單一 runtime 所有權、入口保留請求的重啟交接及發布／回復流程見 [SYSTEM_HARDENING](SYSTEM_HARDENING.md)。
 
+候選功能（尚未正式發布）：網頁聊天大廳的系統掉寶公告可點道具名稱查看唯讀資料。前端僅辨識音無醬／系統公告的開箱、世界王卡及掉落格式，再以完整道具名稱呼叫 `/api/chat/item-preview` 查正式道具庫；重名、已移除或停用的道具不猜測結果，也不提供裝備、使用或交易操作。
+
 ## 維護流程
 
 玩家 React／TypeScript 原始碼在獨立 repository `OtonashiKoi/equipmentGAME-app`；本 repository 的 `src/web/public/app/` 只是部署成品。介面修改與測試必須在 SPA repository 完成，再部署並提交成品。

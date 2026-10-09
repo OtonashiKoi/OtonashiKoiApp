@@ -107,6 +107,7 @@ async function ensureIndexes(db) {
       // 商店和道具
       db.collection("shopItems").createIndex({ id: 1 }, { unique: true }),
       db.collection("items").createIndex({ id: 1 }, { unique: true }),
+      db.collection("items").createIndex({ name: 1 }),
       db.collection("craftingRecipes").createIndex({ id: 1 }, { unique: true }),
       db.collection("craftingRecipes").createIndex({ enabled: 1, accessMode: 1, sortOrder: 1 }),
       db.collection("craftingTransactions").createIndex({ id: 1 }, { unique: true }),

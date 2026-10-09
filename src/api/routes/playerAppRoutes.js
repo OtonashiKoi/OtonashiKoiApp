@@ -2606,6 +2606,41 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 聊天公告的道具名稱可點開唯讀資料；僅接受完整名稱，重名時不猜測是哪一件。
+  router.get("/api/chat/item-preview", requireAuth, async (req, res, next) => {
+    try {
+      const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
+      if (!name || name.length > 100) return res.status(400).json(fail("INVALID_ITEM_NAME", "道具名稱無效"));
+      const matches = await serviceContext.itemRepository.findByExactName(name);
+      if (matches.length !== 1) return res.status(404).json(fail("ITEM_NOT_FOUND", "找不到可確認的道具資料"));
+      const lib = matches[0];
+      if (lib.enabled === false || lib.disabled === true) return res.status(404).json(fail("ITEM_NOT_FOUND", "找不到可確認的道具資料"));
+      res.json(ok({
+        uuid: `catalog:${lib.id}`,
+        itemId: lib.id,
+        itemName: lib.name,
+        name: lib.name,
+        itemType: lib.itemType,
+        tier: lib.tier,
+        equipSlot: lib.equipSlot,
+        weaponType: lib.weaponType,
+        isTwoHanded: lib.isTwoHanded,
+        equipStats: lib.equipStats,
+        effect: lib.effect,
+        description: lib.description,
+        imageUrl: lib.imageUrl,
+        imageThumbnailUrl: lib.imageThumbnailUrl,
+        monsterCardSkill: lib.monsterCardSkill,
+        setKey: lib.setKey,
+        setKeys: lib.setKeys,
+        setName: lib.setName,
+        effectLines: buildItemEffectLines(lib),
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // 7b. Get guild stickers & emojis for chat picker
   router.get("/api/chat/expressions", requireAuth, async (req, res, next) => {
     try {

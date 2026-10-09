@@ -993,6 +993,10 @@ function createMongoRepositories() {
       async findById(id) {
         return (await collection("items")).findOne({ id }) || null;
       },
+      async findByExactName(name) {
+        if (!name) return [];
+        return (await collection("items")).find({ name }).limit(2).toArray();
+      },
       async findByMonsterCardOf(monsterCardOf) {
         if (!monsterCardOf) return [];
         return (await collection("items")).find({ monsterCardOf }).toArray();
