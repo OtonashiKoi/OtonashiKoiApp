@@ -279,6 +279,7 @@ class AuctionService {
     const pIdx = pets.findIndex((p) => p && p.uuid === petUuid);
     if (pIdx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
     const pet = pets[pIdx];
+    if (pet.locked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "寵物已鎖定，請先解鎖再上架", 400);
     if (pet.stage !== "grown") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "蛋還沒孵化，不能上架（未孵化的蛋可從背包上架）", 400);
     // 出戰中的寵物上架：自動取消出戰（託管即離場），玩家不必先手動切換。
     if (progress.activePetUuid === petUuid) progress.activePetUuid = null;
@@ -331,6 +332,7 @@ class AuctionService {
       const list = pet ? (next.pets || []) : (next.inventory || []);
       const index = list.findIndex(x => x.uuid === auction.item.uuid);
       if (index < 0) throw new Error("找不到待託管道具，保留收據等待原人物恢復");
+      if (list[index].locked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "物品或寵物已鎖定，無法上架", 400);
       if (!pet && (auction.item.isGem || auction.item.itemType === "pet_egg")) {
         const amount = Number(auction.item.stackCount) || 1, owned = Number(list[index].stackCount) || 1;
         if (owned < amount) throw new Error("待託管數量不足");

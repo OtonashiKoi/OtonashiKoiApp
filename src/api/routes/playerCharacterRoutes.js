@@ -11,6 +11,7 @@ function createPlayerCharacterRoutes(serviceContext) {
     progressRepository: serviceContext.progressRepository,
     streamAccountBindingRepository: serviceContext.streamAccountBindingRepository,
     monsterService: serviceContext.monsterService,
+    itemRepository: serviceContext.itemRepository,
   });
 
   router.get("/api/me/characters", requireAuth, async (req, res, next) => {

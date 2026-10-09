@@ -1224,9 +1224,9 @@ function pickTaunt(kind, monsterName) {
 // 關鍵等級里程碑：對齊實際遊戲門檻（轉職 / 組隊爬塔 / 世界王 / 終局世界王）
 const LEVEL_MILESTONE_MSG = {
   10: (m, n) => `🎉 恭喜 ${m} **${n}** 升上 **Lv.10**！已達**轉職門檻**——快去完成職業試煉、選定你的職業吧！⚔️`,
-  30: (m, n) => `🗼 恭喜 ${m} **${n}** 升上 **Lv.30**！已解鎖**一般組隊爬塔**，到網頁「戰鬥 → 組隊」湊齊 2～5 人挑戰 30 層！每週「組隊探索」累積通關 20 樓可領 **12,000 金幣、B 階寶石 ×5、A 階寶石 ×2**，首次領取另獲永久稱號 **「同心登塔」**！`,
-  40: (m, n) => `👑 恭喜 ${m} **${n}** 升上 **Lv.40**！三條路線開放，挑戰**大史王**吧！🔥`,
-  50: (m, n) => `🐉 恭喜 ${m} **${n}** 升上 **Lv.50**！踏入終局——挑戰世界王 **古龍王 / 地獄狼牙王**！⚔️`,
+  30: (m, n) => `🗼 恭喜 ${m} **${n}** 升上 **Lv.30**！可挑戰**大史王**，也已解鎖**一般組隊爬塔**，到網頁「戰鬥 → 組隊」湊齊 2～5 人挑戰 30 層！每週「組隊探索」累積通關 20 樓可領 **12,000 金幣、B 階寶石 ×5、A 階寶石 ×2**，首次領取另獲永久稱號 **「同心登塔」**！`,
+  40: (m, n) => `👑 恭喜 ${m} **${n}** 升上 **Lv.40**！三條路線開放，已達 **古龍王 / 地獄狼牙王 / 赫鋼王** 的進場等級，依序通關挑戰吧！🔥`,
+  50: (m, n) => `🐉 恭喜 ${m} **${n}** 升上 **Lv.50**！滿級達成，繼續精進裝備、挑戰高塔與世界王吧！⚔️`,
 };
 const LEVEL_MILESTONES = new Set(Object.keys(LEVEL_MILESTONE_MSG).map(Number));
 async function _announceLevelMilestone(sc, discordId, displayName, prevLevel, newLevel) {
@@ -1796,6 +1796,11 @@ async function handleEnterBattle(interaction) {
       await interaction.editReply({ content: "❌ 找不到這個戰鬥區域。" });
       return;
     }
+    if (zoneKey === "event_boss_hutao_preview") {
+      deleteMonsterSession(discordId);
+      await interaction.editReply({ content: "胡桃改為網頁持續共鬥，請到 https://otonashikoi.org/app/ 挑戰並使用戰鬥藥水。" });
+      return;
+    }
     const startingSession = activeSessions.get(discordId);
     if (startingSession) {
       startingSession.zoneKey = zoneKey;
@@ -2287,8 +2292,9 @@ async function handleEnterBattle(interaction) {
         }
         // 與原始陣列比對：過期項被剔除時也要落地，狀態裡才不會殘留殭屍光環
         if (JSON.stringify(nextAuras) !== JSON.stringify(prevAurasRaw)) {
-          battleState = { ...battleState, activeHealerAuras: nextAuras, activeHealerAura: null };
-          await sc.monsterService.saveState(battleState, zoneKey).catch(() => {});
+          if (await sc.monsterService.saveBattleAuras(battleState, nextAuras, zoneKey)) {
+            battleState = { ...battleState, activeHealerAuras: nextAuras, activeHealerAura: null };
+          }
         }
       } catch (e) {}
 

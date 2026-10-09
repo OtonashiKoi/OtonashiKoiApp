@@ -49,7 +49,7 @@
 | 觀看人數提示 | 由 MongoDB `serverEventConfig.viewerTiers` 控制；同場同階一次、升階可再發、另受最短間隔限制 | `src/services/stream/streamEventConfig.js`、`streamNotificationState.js` |
 | 錨點任務 | 本季暫停取得、装備及效果；原試煉定義保留但不對玩家開放 | `src/shared/anchorFeature.js`、`src/shared/anchorQuestRules.js`、`weeklyQuestService.js` |
 
-現行共用結算、單一 runtime 所有權及發布／回復流程見 [SYSTEM_HARDENING](SYSTEM_HARDENING.md)。
+現行共用結算、單一 runtime 所有權、入口保留請求的重啟交接及發布／回復流程見 [SYSTEM_HARDENING](SYSTEM_HARDENING.md)。
 
 ## 維護流程
 
@@ -86,6 +86,6 @@
 
 [圖片引導介面](SCENIC_UI.md)：背包玩家頭像、商店／任務場景入口、合成素材引導、圖鑑圖片卡、寵物與世界王視覺。
 
-[活動世界王](EVENT_WORLD_BOSSES.md)：三王管理員預覽、非致死大招、宝箱及實際養成角色討伐驗收；公開日期與輪替排程另設。
+[活動世界王](EVENT_WORLD_BOSSES.md)：胡桃10/8–10/15限時開放、龜王與兔王關閉、持續共鬥／立直王卡／藥水快捷格、寶箱及實際養成角色討伐驗收。
 
 [秋季稱號與任務](AUTUMN_TITLES.md)：七個角色獨立賽季任務、領獎防重與「楓紅漸漸」裝備收益加成。

@@ -31,6 +31,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         STORAGE_DRIVER: "mongo",
+        GAME_GATEWAY_SOCKET: path.join(os.homedir(), ".otonashikoi-runtime", "gateway.sock"),
         ENABLE_STARTUP_PANEL_REPUBLISH: "0"
       }
     },

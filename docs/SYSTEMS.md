@@ -43,11 +43,11 @@
 
 - 共用服務：`src/services/worldBoss/worldBossService.js`
 - 實例組裝：`createServiceContext.js`
-- 目前六個 boss key（新增 `steel_crown` 鎧冕王・赫鋼）：`default`（大史王）、`dragon_king`（古龍王）、`hellfang_king`（地獄狼牙王）、`island_turtle`（島島龜王，本季暫停）、`northwind_hutao`（北風雀神・胡桃私測）
-- 楓紅漸漸停用舊夏日內容：`zones.js` 的 `event_1`／`event_boss` 不列入公開或管理員戰鬥入口，直接出戰與 Discord 舊事件按鈕同樣受阻；巡檢、重生與換怪跳過暫停區域。MongoDB 的 8 隻活動怪、龜王 `worldBossConfig.value.enabled`、龜王相關任務與 2 筆夏日收藏商品均關閉。舊道具、卡片登錄、稱號與世界王狀態保留；`cardDex.js` 不將暫停區的 8 張卡列入本季全集要求。胡桃私測及 3 隻常態世界王維持原設定。
+- 目前六個 boss key（新增 `steel_crown` 鎧冕王・赫鋼）：`default`（大史王）、`dragon_king`（古龍王）、`hellfang_king`（地獄狼牙王）、`island_turtle`（島島龜王，本季暫停）、`northwind_hutao`（北風雀神・胡桃，10/8–10/15限時公開）
+- 楓紅漸漸停用舊夏日內容：`zones.js` 的 `event_1`／`event_boss` 不列入公開或管理員戰鬥入口，直接出戰與 Discord 舊事件按鈕同樣受阻；巡檢、重生與換怪跳過暫停區域。MongoDB 的 8 隻活動怪、龜王 `worldBossConfig.value.enabled`、龜王相關任務與 2 筆夏日收藏商品均關閉。舊道具、卡片登錄、稱號與世界王狀態保留；`cardDex.js` 不將暫停區的 8 張卡列入本季全集要求。胡桃依 `hutaoActivity.js` 限時公開，常態世界王維持原設定。
 - 階段技能由各王 `worldBossConfig.phaseConfig` 的開關獨立控制；三階段只代表血量區間與階段倍率，不會自動授予雷擊術。相容尚未寫入 `lightningEnabled` 的既有資料時，僅大史王第二／第三階段保留原本雷擊，其他四王預設關閉
-- 常態前置鏈：大史王 → 古龍王 → 地獄狼牙王；島島龜王沒有前置王。胡桃使用獨立 `event_boss_hutao_preview` 區域與世界王狀態，目前只允許音無恋的 Discord ID 進入；正式開放前不列入 Web／Discord 怪物圖鑑；不覆蓋或移除 `event_boss` 島島龜王，供未來活動王輪替／混流
-- 胡桃私測內容包含 13 種 S 階限定武器、8 件 A 階「北風套裝・大四喜」與胡桃王卡；武器共通被動「風向輪轉」跨戰鬥保存步進，依序提供東風命中、南風最終傷害、西風爆擊傷害、北風爆擊率，完整套裝則每個場風維持 3 回合。胡桃在 70%／40% 血量各開一次 30 秒全服立直，70% 從 6 題兩面題抽題、40% 從 6 題坎張題抽題；兩面題的兩張牌都算正解，玩家作答後不可改票
+- 常態前置鏈：大史王 → 古龍王 → 地獄狼牙王；島島龜王沒有前置王。胡桃使用獨立 `event_boss_hutao_preview` 區域與世界王狀態，目前Lv.40起可由出戰→活動進入，10/15 16:25:13（台灣時間）停止新入場；仍不列入 Web／Discord 怪物圖鑑；不覆蓋或移除 `event_boss` 島島龜王，供未來活動王輪替／混流
+- 胡桃內容包含 13 種 S 階限定武器、8 件 A 階「北風套裝・大四喜」與胡桃王卡；武器共通被動「風向輪轉」跨戰鬥保存步進，依序提供東風命中、南風最終傷害、西風爆擊傷害、北風爆擊率，完整套裝則每個場風維持 3 回合。胡桃本身每60秒輪替場風、命中時12%四段各45%ATK連擊；舊70%／40%答題已退出流程。王卡每20秒立直（開場首次），50%自摸使共鬥者AGI+15持續15秒，持卡者四段各30%ATK；未自摸全體LUK+5持續15秒、持卡者扣當前HP10%。胡桃沿用一般即時共鬥，擊殺後30分鐘重生；元素師同場即時切招，冰凍／暈眩共享計量300觸發20秒控制、120秒免疫；詳見 `EVENT_WORLD_BOSSES.md`
 - 單人王：`src/api/routes/soloBossRoutes.js`；`accountSoloBoss` 位於帳號頂層，三個人物共用每日擊殺上限與部位進度；舊人物快照會在首次讀取時合併
 - KDA：`src/services/kda/kdaService.js`；戰內歸戶在 `combatLoop.js` 的 `assistLedger`，共用效果分類與防禦收益反推在 `src/shared/supportContribution.js`。賽季總計仍保留，新增 `jobStats.<jobId>` 按每場出戰職業記錄 K／D／場次，外部光環與區域窗口的 A 也按提供能力時的職業記錄；舊總計因沒有歷史職業快照不猜測回填
 - 助攻口徑：聖靈師／治療師的隊伍增傷與有效治療都計入；兵聖／軍師的 Boss 增傷與怪物破防分開換算；結界師／聖域師按實際擋傷，吟遊詩人／詩人 AGI 光環按傷害當量；神射手掩護箭作為提供者直接 K，不重複列 A 或算給受支援者，部位殘血截斷時所有直傷來源等比例縮放。自己的光環不可自益，EXP／金幣光環不算戰鬥助攻
@@ -84,7 +84,7 @@
 | 掛機 | `services/idle/idleService.js`、`playerIdleRoutes.js`、`adminIdleRoutes.js` | `idleZones`、`idlePlayerStates` |
 | PK | `shared/pkCombat.js`、`bot/handlers/pkArenaHandlers.js` | `pkArenaState` |
 | 賭場 | `services/casino/casinoService.js`、`bot/handlers/casinoHandlers.js` | `casinoState`、`casinoRounds`；25 格輪盤由 `wheelConfig.WHEEL_SLOTS` 統一提供結算與 Web 動畫，格數固定黃12／綠6／紅4／藍2／紫1，伺服器結果含 `slotIdx`，前端只負責旋轉呈現、不自行開獎 |
-| 寵物 | `services/pet/petService.js`、`bot/handlers/petHandlers.js` | `progress.pets`、`progress.petDex`；常駐採集池只會產出已啟用的一般裝備，排除私測、限定活動、`noPetGather` 專屬掉落、卡片與特殊槽位，避免繞過活動入口取得未開放道具 |
+| 寵物 | `services/pet/petService.js`、`bot/handlers/petHandlers.js` | `progress.pets`、`progress.petDex`；採集池排除停用、私測、標記 `limitedEvent` 或 `noPetGather` 的裝備、卡片與特殊槽位。既有海灘 A 裝只有 `dropTheme: event_beach`，未標記禁止採集，仍可由符合階級的寵物撿回；取得時保留套裝歸屬。 |
 | 麻將 | `services/mahjong/`、`api/routes/mahjongRoutes.js` | runtime queue state |
 | 戀雀直播預測 | `services/mahjongPrediction/`、`api/routes/mahjongPredictionRoutes.js`、Live Studio、獨立 SPA 畫面 `/mahjong-live`、`mahjong-prediction-overlay.html` | 專屬 Discord OAuth token，不建立 RPG 角色；`mahjongPredictionWallets`、`mahjongPredictionTransactions`、`mahjongPredictionMarkets`、`mahjongPredictionBets`、`mahjongPredictionState` 與 RPG 完全分離 |
 | 主線故事／據點訪客 | `services/story/storyService.js`、`api/routes/storyRoutes.js` | `storyChapters`、`storyNpcs`、`progress.storyProgress`；登入玩家可由 `/api/story/hub-npcs` 取得有立繪且排除音無恋的據點訪客清單 |
@@ -95,11 +95,12 @@
 | 系統 | 程式 | 資料／備註 |
 | --- | --- | --- |
 | 背包與換裝 | `services/item/itemService.js`、`services/shop/shopService.js`、`playerAppRoutes.js` | `items`、`progress.inventory/equipment`；支援使用、丟棄、出售、鎖定、批次操作與伺服器權威的一鍵最大 ATK 配裝；自動配裝依目前職業限制武器種類，並保留稱號、職業徽章、卡片與錨點。強化石、藥水與七種屬性石依 `itemId` 合併堆疊；收藏品預設依道具庫排序值／發布時間顯示版本先後；Web 防裝篩選把頭部上、中、下三個槽位分開顯示 |
+| 遊戲素材預先下載 | `services/assets/gameAssetManifest.js`、`api/routes/playerAssetRoutes.js`；SPA `gameDownloads.ts`、`GameDownloadPanel.tsx` | `GET /api/me/assets/manifest` 合併正式靜態圖片／BGM／音效與目前 MongoDB 素材，依 Cloudflare Static Assets 發布表提供雲端下載網址；排除收藏圖片及未開放職業大師。首次登入下載至裝置，設定只補缺檔／新版本，換頁不再等待图片；實際遊戲仍需連線。完整規則見 `SCENIC_UI.md` |
 | 多人物與裝備方案 | `services/character/characterService.js`、`shared/membershipEntitlements.js`、`services/shop/shopService.js`、`api/routes/playerPresetRoutes.js` | `progress.activeCharacterSlot/characterSlots/activePreset/equipPresets/equipPresetNames`；背包帳號共用，其餘角色養成與 A～G 方案隨人物切換；非會員 1×1、鯉民 3×3、鯉長 3×5、鯉市長以上 3×7；Web 只渲染目前可用方案，完整規則由相鄰「＋」按鈕開啟說明視窗，API 仍對越級方案回 403 |
 | 背包容量 | `services/backpack/backpackService.js` | 主要戰鬥入口會在背包滿時阻擋 |
 | 強化與屬性洞 | `services/enhance/`、`api/routes/playerAppRoutes.js`、`api/routes/playerForgeRoutes.js` | 寶石強化；D1/C2/B3/A4/S5 屬性洞；屬性鑲嵌與破壞拆除。拆除次數永久保存在 `progress.inventory/equipment[].elementRemovalCount`，最多成功 3 次 |
 | 附魔 | `services/enchant/enchantService.js`、`playerEnchantRoutes.js`、`adminEnchantRoutes.js` | 設定快取於啟動初始化；Web 重骰在送出 API 前有消耗確認 |
-| 商店 | `services/shop/shopService.js` | `shopItems`、`shopClaims` |
+| 商店 | `services/shop/shopService.js` | `shopItems`、`shopClaims`；五種組隊回復／復活藥水不限持有量，單筆仍為 1～999 個；其他有限持有量商品依 `stackCount` 累加實際數量。副本出發前另驗證每人最多攜帶 10 瓶、其中復活藥最多 2 瓶，途中不能補帶 |
 | 拍賣 | `services/auction/auctionService.js` | auction repository；Web 與 Discord 的上架選擇器皆可分別篩選頭部上、中、下三個槽位 |
 | 錢包／發獎 | `walletService.js`、`rewardService.js`、`transactionService.js` | `wallets`、`transactions` |
 | 周邊商城 | `services/merch/merchService.js`、`api/routes/merchRoutes.js` | `merchItems`、`merchOrders`、綠界付款 |
@@ -109,6 +110,8 @@
 | 會員 tier | `services/playerTier/playerTierService.js` | `playerTiers` 與 Discord role |
 
 Web 背包道具詳情的底部右側固定為「關閉」；「丟棄」收在需展開的其他操作中，點選後仍會顯示永久丟棄確認視窗，避免把關閉誤按成丟棄。
+
+背包差異存檔保留讀取時原始 UUID 基準；強化石、七種屬性石與可合併藥水依 `itemId` 總量計算本次增減，再套用到最新背包。同款未鎖定屬性石在讀取時合併顯示，下一次背包變動存檔時寫入合併堆疊；不同屬性及鎖定件分開保留。舊堆疊合併不算新增獎勵，並行掉落保留，並行消耗不會被舊快照補回；數量衝突拒絕寫入。同一物件重複存檔會刷新基準，存檔成功但回應中斷的重試透過同筆寫入的 `inventorySaveReceipts` 防止重扣（保留最近128筆，普通 progress 寫入不可覆蓋）。實作：`shared/inventoryStacking.js`、`adapters/mongo/progressInventoryStacks.js`；回歸：`scripts/test-enhance-stacks.js`、`scripts/test-element-stone-stacks.js`。
 
 ## 任務與職業
 
@@ -130,6 +133,7 @@ Web 背包道具詳情的底部右側固定為「關閉」；「丟棄」收在�
 
 - `heal_done`：實際補回的非吸血 HP；滿血溢補、治療轉傷害、治療免疫不計
 - `lifesteal_done`：實際吸血補回的 HP；滿血溢出不計
+- 吸血左之戒 C／B／A 階為 5%／10%／15%；普通攻擊、連擊及固定多段每回合合計結算一次，擊殺回合也結算。持續戰鬥保留核心已載入的裝備被動，回血與戰報、一般區 HP 儲存及 HUD 事件一致。驗證：`scripts/test-lifesteal-ring.js`
 - 當回合治療在當回合開始／觸發點結算並寫戰報，不以開場效果說明冒充治療紀錄
 
 ### 一轉與二轉
@@ -139,6 +143,7 @@ Web 背包道具詳情的底部右側固定為「關閉」；「丟棄」收在�
 - 目前 2 條分支鎖定：劍鬼、盜靈；其餘 11 條可由任務／故事流程開放
 - 徽章熟練度：`src/shared/jobBadgeLevel.js`、`services/job/jobBadgeService.js`
 - 二轉費用、條件、同職分支互斥與 `seasonLocked` 都由 `jobAdvancement.js`／`weeklyQuestService.js` 判定
+- 任務二轉扣款編號包含帳號、賽季與任務；換季後重新付本季費用，舊季台帳不會擋住轉職或抵掉新費用。已扣款但徽章保存中斷時，重試沿用原付款，只補完徽章與完成旗標；取得本季徽章之前的舊編號交易不會被當作本次付款。
 - 故事轉職節點：`services/story/storyService.js`
 - 各職機制：`dwarfStunGauge.js`、`shadowGauge.js`、`zoneCombo.js`、`battleStance.js`、`sunSpirit.js`、`jobBattleOptions` 等
 
@@ -200,7 +205,7 @@ OBS 內部聊天室的等級與稱號仍依直播帳號綁定的玩家資料顯�
 - 討伐關卡詳情在手機上只使用頁面外層縱向捲動，近十分鐘傷害排行不建立第二個捲動層、也不攔截觸控；怪物預覽縮為 112px，保留更多高度給排行與出擊按鈕。
 - 第三版戰鬥共鬥列：左側直向列包含自己，以窄版「共鬥」外框統一包住各玩家的圓形頭像與近十分鐘輸出，清楚表達組隊區概念但不繪製貫穿戰場的長底框；隊伍增加時依內容往下新增節點、超過安全高度時在框內捲動。共鬥列是獨立絕對定位覆蓋層，無論玩家數量、聊天泡泡或詳情開合，都不會推動怪物、中央操作盤、自身 HP／氣條或底部導覽。最近在網頁大廳或 Discord 城鎮頻道發言的玩家會顯示訊息前 6 字（超過才加省略號）的短摘要泡泡；泡泡可伸出共鬥外框且不被捲動框裁切，用來提示玩家前往聊天頁查看完整內容。領域快捷表情同樣從發送者頭像旁彈出，並與聊天泡泡一起渲染在共鬥捲動裁切層外，捲動時仍跟隨對應玩家且不會被外框切掉；展開的完整戰報與共鬥列位於同一層疊容器且固定高於共鬥框，左上收合按鈕與 COMBO、左側共鬥列、右側快捷表情各有獨立安全區，不互相覆蓋，也不壓住底部玩家 HUD。
 - 第三版戰鬥操作盤與受擊回饋：戰場會先保留固定尺寸的操作盤區域，單一攻擊、三種元素或未來最多五個快捷鍵都只能在該區域內排列與交換，技能數量和動畫不得推動自身 HUD。中央目前採用的主攻擊會以大圓顯示，該職業其餘可用姿態／技能依數量沿下半圓排列且不顯示空位；第一人稱模式點姿態小圓會立刻以該姿態出戰，同時用交換動畫把新姿態移入中央、原姿態縮回外圈，不需要再按一次中央。元素師以伺服器預設的嵐暴置中，炎圈與凍霜分列左右，送出戰鬥時仍由伺服器驗證姿態。自身 HP、BUFF 與職業氣條整組固定下移至底部導覽上方，快捷表情固定在 HUD 上方避免重疊；下方不常駐堆疊額外說明，保留給後續補品數量、自動使用門檻與回合 CD 等戰鬥快捷狀態。玩家受傷只播放不改變座標的光效，場景、玩家 HUD、頂欄、戰報、操作盤和底部導覽都保持固定；玩家受擊不再疊加兩層紅色全畫面閃光，改用低亮度紅色邊緣脈衝，格擋改為霧藍邊緣光，暴擊、處決與閃電的全畫面亮度同步降低；玩家回血與吸血只讓自身 HP 條播放一次綠色流光，不再讓整個戰場閃綠光，回血與傷害數字仍照常顯示；臨時狀態列預留固定高度，出現或消失不得重新排版。
-- 第三版戰鬥資訊層：怪物圖片以場景化邊緣與地面陰影融入地圖，依真實事件播放受擊、詠唱、暈眩與勝利退場；怪物血量歸零時立即啟動約 0.42 秒的淡出下沉，完成退場及本場戰報後才交接下一隻怪；圖片優先使用本場快照，進場競速缺圖時會由世界王或區域輪詢補回，短暫載入失敗亦會自動重試，島島龜王另有同站靜態圖備援，不會因一次失敗永久變成通用鬼面。怪物名牌與自身 HUD 以圖示列濃縮顯示暈眩、冰封、聖域、海嘯、破綻、結界及隊友光環等已確認狀態。 敵方狀態列的技能／增益圖示可點擊，於遊戲畫布內開啟技能說明小窗；內容使用本場戰報提供的描述，未提供時明示缺少詳細說明，切換下一場會關閉。戰報預設顯示關鍵過程與一次結算，可收合或切換完整戰報；完整原始行不因精簡顯示而刪除。戰場中央不重複顯示逐事件短字幕，也不保留額外結算小窗。開場說明、光環與無傷害技能宣告直接寫入完整戰報，不分走回合動畫時間；增益／減益以對應角色狀態列圖示提示，並依戰報所載回合數顯示。有實際傷害或落空的攻擊技能才把技能名貼在出手角色身上，與攻擊動作及受擊反應同時演出；只有真實受擊事件才播放受擊光圈與鏡頭反應。戰鬥核心會在結果回傳本場實際採用的攻擊屬性、濃度、相剋關係與倍率，操作盤顯示該真值；長按任一技能會開啟伺服器職業設定產生的說明。神射手的掩護射擊、神速反擊與震盪射擊直接由伺服器戰報事件驅動不同箭道、準星與來源提示；兵聖的五種計策同樣讀取伺服器事件，在戰場右上顯示不推動 HUD 的計策卡與對應場景色光，前端不重算傷害或自行決定計策。每招回合冷卻與補品快捷欄皆已預留結構化欄位，但只有伺服器提供真實資料時才渲染，不建立假冷卻或假道具數量。共鬥列的新成員由左側滑入，實際提供本場光環的隊友會以脈衝連線標示。
+- 第三版戰鬥資訊層：怪物圖片以場景化邊緣與地面陰影融入地圖，依真實事件播放受擊、詠唱、暈眩與勝利退場；怪物血量歸零時立即啟動約 0.65 秒的光粒分解，死亡退場階段結算並批次入袋；前進 1.5 秒後直接顯示預先準備的下一隻，不等待最後戰報封包；圖片優先使用本場快照，進場競速缺圖時會由世界王或區域輪詢補回，短暫載入失敗亦會自動重試，島島龜王另有同站靜態圖備援，不會因一次失敗永久變成通用鬼面。怪物名牌與自身 HUD 以圖示列濃縮顯示暈眩、冰封、聖域、海嘯、破綻、結界及隊友光環等已確認狀態。 敵方狀態列的技能／增益圖示可點擊，於遊戲畫布內開啟技能說明小窗；內容使用本場戰報提供的描述，未提供時明示缺少詳細說明，切換下一場會關閉。戰報預設顯示關鍵過程與一次結算，可收合或切換完整戰報；完整原始行不因精簡顯示而刪除。戰場中央不重複顯示逐事件短字幕，也不保留額外結算小窗。開場說明、光環與無傷害技能宣告直接寫入完整戰報，不分走回合動畫時間；增益／減益以對應角色狀態列圖示提示，並依戰報所載回合數顯示。有實際傷害或落空的攻擊技能才把技能名貼在出手角色身上，與攻擊動作及受擊反應同時演出；只有真實受擊事件才播放受擊光圈與鏡頭反應。戰鬥核心會在結果回傳本場實際採用的攻擊屬性、濃度、相剋關係與倍率，操作盤顯示該真值；長按任一技能會開啟伺服器職業設定產生的說明。神射手的掩護射擊、神速反擊與震盪射擊直接由伺服器戰報事件驅動不同箭道、準星與來源提示；兵聖的五種計策同樣讀取伺服器事件，在戰場右上顯示不推動 HUD 的計策卡與對應場景色光，前端不重算傷害或自行決定計策。每招回合冷卻與補品快捷欄皆已預留結構化欄位，但只有伺服器提供真實資料時才渲染，不建立假冷卻或假道具數量。共鬥列的新成員由左側滑入，實際提供本場光環的隊友會以脈衝連線標示。
 - 公告：`services/announcement/`
 - 玩家即時事件：`services/realtime/`、`webPresence`
 - 直播 overlay：`streamOverlayRoutes.js`、`chatOverlayHub.js`
@@ -262,18 +267,22 @@ OBS 內部聊天室的等級與稱號仍依直播帳號綁定的玩家資料顯�
 
 正式一般區怪物以 `basic-monster-gradient-20260930-agi-v2` 寫入；具體數值和校準驗收範圍見 `NORMAL_PROGRESSION.md`。`apply-normal-basic-gradient` 在寫入前解析驗證外部 BSON 備份、核對怪物來源、使用 CAS 保留現有戰鬥傷害與參戰者，不修改登入排程、道具、世界王或區域 BOSS 資料。
 
+一般共鬥 EXP（2026/10/6）：有效傷害／支援者每人按怪物單隻 EXP×遭遇隻數×人數比例向上取整；1／2／3／4／5／6+ 人為100%／80%／85%／90%／95%／100%。基礎分配後套用既有個人加成、跨區與疲勞，金幣／掉落及世界王／副本原規則保留。
+
 戰鬥流程查核：Web `playerAppRoutes`／Discord `monsterZoneHandlers` 讀取角色與合併最新裝備 → `calcPlayerStats` 計算屬性、階級套裝、武器、防禦與機率 → 讀取共享怪物血量、共鬥擴血及區域狀態 → `runCombatLoop` 執行回合（狀態／技能、玩家命中及普攻、連擊、怪物反擊、格擋／防禦、回合末效果）→ 同步傷害與剩餘血量 → 擊殺領取鎖 → 共用金幣／EXP／個人掉落結算 → 角色升級記錄與任務進度 → 戰報與下隻怪轉場。純普攻平衡測試刻意不啟用技能；正式技能流程保留。
 
 驗證流程使用個人技能 `otonashi-game-verification`；固定腳本保存每项退出碼及完整難度報告。`check-normal-basic-gradient` 可讀正式 BSON 快照（不加 plan）或候選計畫；報告包含來源 hash、種子、場數及所有失敗，失敗時寫完報告再回傳非零碼。
 
 ### 新手首戰與新手資金（2026/9/30）
 
-新手指引明確建議先打草叢，準備D裝後前往起始草原、10等準備C裝挑戰陽光草原；出戰步驟提示取得装備後回背包比較與穿戴。新手資金領取失敗時保留指引與重試入口，成功後才結束。`onboarding/complete-reward` 使用帳號＋seasonKey組成穩定sourceRef，透過共用貨幣結算阻止回應失敗後重試或並發重複領取；一次性旗標仍跨人物共用，領取額1000金幣不變。
+新手指引不再於新裝置登入時自動開啟；舊裝置尚未開始的自動歡迎提示也會收起，已主動開始的指引保留進度。玩家可由設定頁「重新觀看新手指引」手動開啟，任務頁的新手任務維持開放。新手指引明確建議先打草叢，準備D裝後前往起始草原、10等準備C裝挑戰陽光草原；出戰步驟提示取得装備後回背包比較與穿戴。新手資金領取失敗時保留指引與重試入口，成功後才結束。`onboarding/complete-reward` 使用帳號＋seasonKey組成穩定sourceRef，透過共用貨幣結算阻止回應失敗後重試或並發重複領取；一次性旗標仍跨人物共用，領取額1000金幣不變。
 
 
 ## 金屬主題地圖與裝備
 
-鐵鳴礦城（`metal_mine`）40 等入場，六隻普通怪與礦城監造者提供磁鋼 A 裝；鋼冕王座（`metal_throne`）50 等入場，鎧冕王・赫鋼提供鋼冕 S 裝。每階 30 件（11 主手、盾／副刃／法典、物理與法術各八個防具／飾品欄位），統一金屬主題；元素仍採原鑲嵌規則。具名磁鋼套裝物／法三、五、七件效果與同階區域套裝同預算，七件的 15% 減傷只在上述兩區生效。
+鐵鳴礦城（`metal_mine`）40 等入場，六隻普通怪與礦城監造者提供磁鋼 A 裝；鋼冕王座（`metal_throne`）40 等入場，鎧冕王・赫鋼提供鋼冕 S 裝。每階 30 件（11 主手、盾／副刃／法典、物理與法術各八個防具／飾品欄位），統一金屬主題；元素仍採原鑲嵌規則。具名磁鋼套裝物／法三、五、七件效果與同階區域套裝同預算，七件的 15% 減傷只在上述兩區生效。
+
+世界王進場等級：大史王（含單人版）30，其餘世界王40。Web／Discord 出戰驗證與 channel layout 綁定一致；世界王狀態回傳入場等級、等級不足原因並停用出戰。個人前置通關及活動王暫停設定繼續生效，等級不足在扣入場費前拒絕。
 
 新王僅有本體，HP 150 萬、Lv.60、金4、30 分鐘討伐／60 分鐘重生；HP 低於 30% 後攻擊 +15%，不提高 AGI、不追加雷擊或部位機制。前端狀態圖示可點開說明。新一般區沿用共鬥最高五人擴血、獨立道具骰取及等級區間 EXP 修正。八張金屬區卡片、掉落來源與收藏已製作；Discord兩個入口已綁定，與網頁共用既有等級門檻、戰鬥及結算。詳細卡片及完整流程驗收見下方。
 
@@ -293,7 +302,11 @@ OBS 內部聊天室的等級與稱號仍依直播帳號綁定的玩家資料顯�
 
 ### S 裝備開放範圍
 
-目前只開放 S 主手武器。S 防具、飾品與副手暫停取得及穿戴；既有收藏保留但不計屬性、被動或套裝件數。共用 `sEquipmentFeature.js`／`equipmentAvailability.js` 控制掉落（含世界王額外獎勵）、離線掉落、商店、寶箱、製作、拍賣與穿戴；五件同系列有效套裝搭配同系列 S 主手武器才提高磁鋼／龍鱗特性機率。
+A／S 一般穿戴裝備（主手、副手、六個防具槽與左右飾品）統一需要角色 Lv.30；D／C／B、卡片、稱號與職業徽章維持各自規則。`shared/equipmentLevel.js` 為門檻單一來源，手動穿戴、自動配裝及裝備方案切換都以道具庫最新階級檢查；29 等拒絕、30 等可穿戴。人物切換也檢查目標人物等級，將不合門檻的舊裝備完整退回共用背包並同步人物快照。背包 API 回傳 `equipRequiredLevel`／`equipLevelAllowed`，詳情顯示需求並停用不足等級的裝備按鈕。既有不足 30 等人物（包含非使用中的人物）的 A／S 裝備經備份後完整退回背包，保存實例、強化與附魔；不變更取得、交易或強化規則。
+
+目前開放 S 主手武器，以及胡桃的三件 S 副手：對子・雙風脇差（`hutao-wind-offhand-sword`）、暗刻・羽切短刃（`hutao-wind-offhand-dagger`）、北風・四喜雀盾（`hutao-wind-shield`）。三件副手可取得、穿戴並計入屬性與四風效果，沿用單手／雙手武器互斥規則；主副手四風不重複疊加。其他 S 副手、S 防具與飾品仍暫停取得及穿戴，既有收藏保留但不計屬性、被動或套裝件數。共用 `sEquipmentFeature.js`／`equipmentAvailability.js` 控制掉落（含世界王額外獎勵）、離線掉落、商店、寶箱、製作、拍賣與穿戴；五件同系列有效套裝搭配同系列 S 主手武器才提高磁鋼／龍鱗特性機率。胡桃在10/8–10/15限時活動中開放討伐。
+
+雙手主武器在所有具名套裝與 D／C／B／A／S 階級套裝均計2件；單手主武器、副手及其他槽位各計1件。跨過門檻時只啟動該門檻效果一次，武器自身被動不加倍。兩套計件共用 `shared/equipmentSetPieceWeight.js`，既有缺少 `isTwoHanded` 的道具快照也依武器種類辨識。
 
 ### 區域套裝特性同步
 
@@ -341,13 +354,17 @@ SPA 以 `SceneReception`、`FeatureScene` 與 `PageShell` 統一功能入口的�
 
 新任務不發EXP，不改逐級EXP需求、普通怪EXP或多人分配；副本不作每日完成前提。每日以台北日期重置、每週以現行台北週期重置，賽季任務使用現行賽季期間鍵。
 
-通行證30級、每級1,000點，滿級30,000；一般戰鬥D1／C2／B3／A5／S6，組隊副本每擊敗一樓加5點且同場結算重試不重複加點。付費軌5鑽，10／20／30級各回1鑽。
+通行證30級、每級250點，滿級7,500點；既有點數與已領紀錄保留，依新門檻重新換算等級；一般戰鬥D1／C2／B3／A5／S6，組隊副本每擊敗一樓加5點且同場結算重試不重複加點。普通獎勵不需鑽石開通，達到對應通行證等級即可領取；只有高級獎勵需5鑽解鎖，10／20／30級各回1鑽。
 
 免費軌金幣合計114,750，加中金袋3個（各10,000），總金幣價值144,750；D強化石9、C15、B12、木／土／金／日／月石各1、重骰2。付費軌另有金幣229,500＋中金袋1，總金幣價值239,500；B強化石15、A12、水／火石各2、重骰3、重製1及回鑽3。不提供A武器箱，避免跳過40級裝備銜接。
 
 領獎防呆：秋季任務Web／Discord共用持久收據；通行證開通與領獎序列化，貨幣固定sourceRef、道具與背包收據同筆CAS，發獎中斷後可重試。原有非秋季職業發獎路徑保留。
 
-進度儲存層的 `save`／`saveIfUnchanged` 排除 MongoDB 不可變 `_id`，避免通行證等功能以 `structuredClone` 複製背包後出現 code 66、道具領取失敗。已入帳貨幣沿用原收據，重新領取僅補完未完成的獎勵；玩家不用額外扣款。回歸入口：`node scripts/test-pass-mongo-claims.js --items-snapshot=/absolute/path/items.bson`，使用正式儲存實作及隔離 MongoDB 驗證兩軌60筆領獎、並行、發獎中斷重試與舊版本寫入拒絕。
+寵物頁提供鎖頭按鈕（`POST /api/me/pets/lock`），鎖定後 Web／Discord 放生及拍賣上架皆由後端拒絕，餵食、改名、出戰與採集不受影響。鎖定欄位以單獨原子更新保存；一般進度存檔保留較新的寵物清單與鎖定狀態，避免舊戰鬥快照刪除新寵物或復活已放生寵物。寵物飽食／採集的局部存檔以原始清單作條件更新，有競態時拒絕整筆操作。回歸：`node scripts/test-pet-lock-safety.js`，包含隔離 MongoDB 與具身分驗證的 HTTP 操作。
+
+進度存檔會按裝備 UUID 合併鎖定狀態：未操作的鎖定欄位保留資料庫較新值，涵蓋背包、穿戴裝備與非使用中人物。較舊的未鎖定快照若要刪除後來才鎖定的裝備，整筆存檔回傳 `INVENTORY_LOCK_CONFLICT`（409），道具移除與分解產物一起不寫入。玩家明確鎖定／解鎖仍可使用；網頁多選分解維持排除鎖定裝備，未鎖定的強化裝備仍依原規則可被選取分解。回歸：`node scripts/test-equipment-lock-race.js`，使用獨立暫存 MongoDB。
+
+進度儲存層的 `save`／`saveIfUnchanged` 排除 MongoDB 不可變 `_id`，避免通行證等功能以 `structuredClone` 複製背包後出現 code 66、道具領取失敗。已入帳貨幣沿用原收據，重新領取僅補完未完成的獎勵；玩家不用額外扣款。背包與一般區掉落收據內的道具庫 `_id` 以原始12位元組的24字元十六進位字串保存，避免 `structuredClone` 讓 BSON Binary 每次存檔再巢狀一層；角色文件頂層 `_id` 不變，收據、道具數量與已領貨幣不變。`node scripts/repair-embedded-mongo-ids.js` 預設預覽，`--apply --backup-dir=/repository外絕對路徑` 才套用，每筆先驗證 BSON 備份並以 `updatedAt` CAS 防止覆寫並行獎勵。回歸：`node scripts/test-embedded-mongo-ids.js`。回歸入口：`node scripts/test-pass-mongo-claims.js --items-snapshot=/absolute/path/items.bson`，使用正式儲存實作及隔離 MongoDB 驗證兩軌60筆領獎、並行、發獎中斷重試與舊版本寫入拒絕。
 
 本輪服務修正：拍賣先留待託管意圖，再以背包CAS移除道具、正式上架；原子貨幣扣款與入帳、持久發貨／領回收據，中斷保持待結算；普通裝備、寶石、蛋、寵物保留原交易限制。金幣稅10%、鑽石不抽稅。商店數量必須1～999整數，商品庫存按商品序列化。簽到以台北日期、平台帳號當日持久保留與固定貨幣收據，倍率先留待完成收據。賭場每人每輪一注、整數金額；開獎結果與掉落判定持久化，結算失敗保留原輪重試，不提前輪替；D/C/B/A普通卡片池依monsterCardOf／monster_card識別，排除NPC、世界王、限定與未開放卡。
 
@@ -378,4 +395,14 @@ Web 寵物與卡片圖鑑左頁在收集進度下常駐展示里程碑。寵物�
 
 管理者執行正式重啟前，`pre-pm2-restart-hotfix.js` 直接透過 Discord REST 發送至玩家聊天區 `1498608950671839263`，5 秒超時，需取得該頻道訊息ID才成功；公告失敗以非零狀態阻擋 npm 重啟。`npm run pm2:restart` 自動先執行；直接 PM2 操作同樣必須先公告。此規則涵蓋人工發布重啟，既有 PM2 自動故障恢復／定時重啟未改動。
 
+Web 等級排行的「最高角色」與「帳號總養成」皆顯示前50名，底部標示實際顯示名數與全服上榜人數；自己的名次仍獨立顯示。API `/api/leaderboard/level` 支援 `limit`（上限50；省略時預設10）。
+
 等級榜及帳號總養成榜只納入已獲得至少1 EXP的角色：Lv1且EXP0的角色不計入人物數／總等級；全帳號皆未練功者不列榜、自己的rank為null。Lv2以上即使目前EXP0仍保留（升級消耗EXP不會失去資格）。共用characterLevelSummary earnedOnly模式，Web及Discord／管理端等級榜同步。PK排行榜暫停入口及API（403 FEATURE_DISABLED），PK對戰與既有評分資料保留。
+
+## 世界王寶箱獎池
+
+世界王寶箱共用 `battleRewardRules.buildMonsterDropPool()` 的實戰掉落表，包含補入的王卡。以目前可掉落道具的 chance 作權重抽出一項；舊 `chestDrops` 不再限制獎池，也不另排除 S 強化寶石。停用裝備與實戰採相同的 `equipmentAvailability` 判定。胡桃現行為13件S武器（含2件副手）各5%、8件A套裝各4.25%、王卡1%，總權重100。抽選結果在存檔重試時沿用，寶箱消耗及獎勵一起保存。
+
+2026-10-08 赫鋼暫停新入場，待強度調整；正式 `worldBossConfig.steel_crown.value.enabled=false`，其他世界王開關不變。詳見 [赫鋼現行規則](STEEL_CROWN_BOSS.md)。
+
+2026-10-08 胡桃新增全場每15秒立直：50% AGI−30／15秒、25% 300%ATK全體重擊、25% 胡桃暴擊率＋50個百分點／15秒。規則見 [活動世界王](EVENT_WORLD_BOSSES.md)，共用判定由 `services/realtime/hutaoBossRiichi.js` 與即時戰鬥 CAS 提交。

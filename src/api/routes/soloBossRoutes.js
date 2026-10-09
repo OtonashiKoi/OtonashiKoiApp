@@ -24,6 +24,7 @@ const { buildItemEffectLines } = require("../../shared/itemEffectLines");
 const { calculateBattleTickMs, calculateWebBattleCooldownMs } = require("../../shared/battleTiming");
 const { readAccountState } = require("../../services/worldBoss/soloBossAccountState");
 const { mergeContributorMaps, mirrorDamageToOtherParts } = require("../../shared/supportContribution");
+const { checkZoneLevelRequirement, getZoneLevelLimits } = require("../../shared/zones");
 
 const PART_LABELS = { head: "頭部", body: "軀幹", wings: "龍翼", legs: "下盤", upper_body: "上軀幹", lower_body: "下軀幹", tail: "尾巴" };
 
@@ -75,6 +76,7 @@ function createSoloBossRoutes(serviceContext) {
         const m = await resolveMonster(boss).catch(() => null);
         const parts = partsForResp(boss, st.worldBossPartsHp, st.worldBossPartsMaxHp);
         const killsLeft = Math.max(0, boss.killsPerDay - st.killsToday);
+        const levelError = checkZoneLevelRequirement(boss.zone, progress.level ?? 1);
         // 回傳「世界王 WorldBossEntry」形狀 → 前端直接重用現行世界王面板/部位攻擊
         bosses.push({
           zoneKey: `solo:${boss.key}`, bossKey: boss.key, bossName: `${boss.monsterName}（單人）`,
@@ -82,9 +84,11 @@ function createSoloBossRoutes(serviceContext) {
           imageUrl: m?.imageUrl || null,
           bossMaxHp: boss.maxHp, currentHp: parts.reduce((s, p) => s + p.currentHp, 0),
           respawnCooldownMinutes: 0, cooldownRemainingMs: 0, cooldownRemainingMinutes: 0,
-          canChallenge: killsLeft > 0, lastKilledAt: null, battleTimeLimitMinutes: 15,
+          canChallenge: killsLeft > 0 && !levelError, lockedReason: levelError, minLevel: getZoneLevelLimits(boss.zone).minLevel,
+          lastKilledAt: null, battleTimeLimitMinutes: 15,
           parts, partEffects: [],
           hints: { title: "單人挑戰（每個帳號獨立）", lines: [
+            `入場等級：Lv.${getZoneLevelLimits(boss.zone).minLevel} 以上。`,
             `血量 ${boss.maxHp.toLocaleString()}、入場費 ${boss.entryFee.toLocaleString()} 🪙/場，不限場次累積磨。`,
             `破 3 部位＝擊殺一隻 → 掉落 ＋ ${boss.chestName} ×1。`,
             `本帳號今日還可擊殺 ${killsLeft}/${boss.killsPerDay} 隻（人物共用，隔日重置）。`,
@@ -113,6 +117,9 @@ function createSoloBossRoutes(serviceContext) {
 
       const progress = await repo.findByPlayerId(discordId);
       if (!progress) return res.status(404).json(fail("PLAYER_NOT_FOUND", "找不到玩家進度"));
+
+      const levelError = checkZoneLevelRequirement(boss.zone, progress.level ?? 1);
+      if (levelError) return res.status(400).json(fail("LEVEL_REQUIRED", levelError));
 
       // 背包已滿 → 不能出戰（在收入場費之前擋下）
       {

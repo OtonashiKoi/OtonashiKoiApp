@@ -6,6 +6,7 @@ const { ALL_ZONE_KEYS } = require("../../shared/zones");
 const { isMonsterBattleActive, isPkBattleActive, isTowerBattleActive } = require("../../shared/battlePresence");
 const { isWebBattleActive } = require("../progress/battleLock");
 const { withPlayerProgressLock } = require("../progress/progressLocks");
+const { GEAR_SLOTS, RARE_EQUIPMENT_MIN_LEVEL, restoreEquipmentForLevel } = require("../../shared/equipmentLevel");
 const {
   CHARACTER_SLOTS,
   resolveMembershipEntitlements,
@@ -23,7 +24,7 @@ const CHARACTER_PROGRESS_KEYS = [
   "pkRating", "pkWins", "pkLosses", "towerRecord",
   "activePetUuid",
   "bardScore", "bardStreak", "berserkGauge", "oniGauge", "sageGauge",
-  "shadowGauge", "sniperGauge", "sunSpirit", "zoneCombo", "diceGauge", "diceLuck",
+  "shadowGauge", "sniperGauge", "sunSpirit", "zoneCombo", "diceGauge", "diceLuck", "hutaoRiichi",
 ];
 
 function clone(value) {
@@ -74,10 +75,11 @@ function summarizeCharacter(slot, snapshot, active = false) {
 }
 
 class CharacterService {
-  constructor({ progressRepository, streamAccountBindingRepository, monsterService }) {
+  constructor({ progressRepository, streamAccountBindingRepository, monsterService, itemRepository }) {
     this.progressRepository = progressRepository;
     this.streamAccountBindingRepository = streamAccountBindingRepository;
     this.monsterService = monsterService;
+    this.itemRepository = itemRepository;
   }
 
   async _membershipEntitlements(discordId, progress) {
@@ -142,11 +144,7 @@ class CharacterService {
       const after = before.filter((aura) => String(aura?.discordId || "") !== String(discordId));
       const legacyMatched = String(state.activeHealerAura?.discordId || "") === String(discordId);
       if (after.length === before.length && !legacyMatched) continue;
-      await this.monsterService.saveState({
-        ...state,
-        activeHealerAuras: after,
-        activeHealerAura: null,
-      }, zoneKey).catch(() => {});
+      await this.monsterService.saveBattleAuras(state, after, zoneKey).catch(() => {});
     }
   }
 
@@ -196,6 +194,16 @@ class CharacterService {
       if (!next.equipPresetNames || typeof next.equipPresetNames !== "object") next.equipPresetNames = {};
       // 共用背包始終沿用切換前的帳號背包；任何角色身上的裝備只存在各自快照。
       next.inventory = progress.inventory;
+      if (Number(next.level) < RARE_EQUIPMENT_MIN_LEVEL) {
+        const libraryById = new Map();
+        for (const [slot, item] of Object.entries(next.equipment || {})) {
+          if (!item?.itemId || !GEAR_SLOTS.has(slot)) continue;
+          const lib = await this.itemRepository?.findById(item.itemId);
+          if (lib) libraryById.set(item.itemId, lib);
+        }
+        restoreEquipmentForLevel(next, next.inventory, libraryById);
+        next.characterSlots[String(targetSlot)] = takeCharacterSnapshot(next);
+      }
       next.updatedAt = new Date().toISOString();
       await this.progressRepository.save(next);
       return { changed: true, created, previousSlot: currentSlot };

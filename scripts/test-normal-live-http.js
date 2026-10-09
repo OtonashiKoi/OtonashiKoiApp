@@ -24,6 +24,29 @@ const {normalLiveCombat}=require('../src/services/realtime/normalLiveCombat');
  const tokens=ids.map(discordId=>jwt.sign({discordId,displayName:discordId},process.env.JWT_SECRET,{expiresIn:'5m'}));
  const headers=i=>({Authorization:'Bearer '+tokens[i],'Content-Type':'application/json'});
  assert.equal((await fetch(base+'/api/combat/scene?zone=normal')).status,401);
+ const profileResponse=await fetch(base+'/api/me/profile',{headers:headers(0)});assert.equal(profileResponse.status,200);const profileBody=await profileResponse.json();assert.equal(profileBody.data.player.discordId,ids[0]);assert.ok(Number.isFinite(profileBody.data.wallet.gold));assert.ok(Number.isFinite(profileBody.data.progress.level));
+ const inventoryResponse=await fetch(base+'/api/me/inventory',{headers:headers(0)});assert.equal(inventoryResponse.status,200);const inventoryBody=await inventoryResponse.json();assert.equal(inventoryBody.data.inventory.filter(e=>e.itemType==='equipment'&&e.equipSlot==='armor').length,149,'batch hydration preserves every owned item');
+ membershipLookups=0; // Inventory capacity display may query membership; measure combat from here.
+ // The enemy may change after route preparation but before durable admission.
+ const originalJoin=normalLiveCombat.join;
+ for(const [name,change,failCas] of [
+  ['sequence changed',s=>({...s,activeMonsterSeq:s.activeMonsterSeq+1}),false],
+  ['transition started',s=>({...s,activeTransition:{startedAt:Date.now()}}),false],
+  ['event started',s=>({...s,activeEvent:{id:'qa-event'}}),false],
+  ['enemy died',s=>({...s,currentHp:0}),false],
+  ['admission CAS rejected',s=>s,true],
+ ]) {
+  const before=await sc.monsterService.getState('normal'),wallet=await sc.walletRepository.findByPlayerId(ids[0]);
+  normalLiveCombat.join=function(args){return originalJoin.call(this,{...args,sc:{...args.sc,monsterService:{...args.sc.monsterService,getState:async z=>change(await args.sc.monsterService.getState(z)),...(failCas?{saveStateIfActiveMonster:async()=>false}:{})}}});};
+  let rejected;
+  try{rejected=await fetch(base+'/api/combat/quick-battle',{method:'POST',headers:headers(0),body:JSON.stringify({zone:'normal',liveStartOnly:true})});}
+  finally{normalLiveCombat.join=originalJoin;const room=normalLiveCombat.zones.get('normal');if(room)room.sc=sc;}
+  assert.equal(rejected.status,409,name);assert.equal((await rejected.json()).code,'scene_transition',name);
+  assert.equal(normalLiveCombat.players.has(ids[0]),false,'failed join must release actor reservation');
+  const after=await sc.monsterService.getState('normal');assert.deepEqual(after,before,'failed join must not persist participation or damage');
+  assert.deepEqual(await sc.walletRepository.findByPlayerId(ids[0]),wallet,'failed join must not debit or grant currency');
+  console.log('PASS admission race:',name);
+ }
  const packets=[[],[]],controllers=ids.map(()=>new AbortController());
  const streams=ids.map(async(id,i)=>{const r=await fetch(base+'/api/me/stream?token='+encodeURIComponent(tokens[i]),{signal:controllers[i].signal});assert.equal(r.status,200);let text='';for await(const chunk of r.body){text+=Buffer.from(chunk).toString();let cut;while((cut=text.indexOf('\n\n'))>=0){const message=text.slice(0,cut);text=text.slice(cut+2);for(const line of message.split('\n'))if(line.startsWith('data: ')){try{packets[i].push({...JSON.parse(line.slice(6)),receivedAt:Date.now()});}catch{}}}}});streams.forEach(p=>p.catch(()=>{}));
  const wait=ms=>new Promise(r=>setTimeout(r,ms));await wait(150);
@@ -35,7 +58,7 @@ const {normalLiveCombat}=require('../src/services/realtime/normalLiveCombat');
  const start=Date.now();const history=[];
  while(Date.now()-start<48000){const snapshots=await Promise.all(ids.map((id,i)=>fetch(base+'/api/combat/scene?zone=normal',{headers:headers(i)}).then(r=>r.json())));const a=snapshots[0].data,b=snapshots[1].data;assert.equal(a.encounterId,b.encounterId);history.push({at:Date.now(),hp:a.liveHp,revision:a.revision,actorCount:a.actors?.length});if(a.liveHp===0||a.previous)break;await wait(350);}
  const results=await Promise.all(requests);assert.ok(results.every(r=>r.status===200),JSON.stringify(results));assert.ok(history.some(s=>s.hp<600&&s.hp>0),'damage must happen over actual server time');assert.ok(history.some(s=>s.actorCount===2),'both participants should be visible');
- for(let spin=0;spin<30&&!packets[0].some(p=>p.type==='normal_live_result');spin++)await wait(100);
+ for(let spin=0;spin<100&&!packets.every(a=>a.some(p=>p.type==='normal_live_result')&&a.some(p=>p.type==='normal_live_drops'));spin++)await wait(100);
  for(let i=0;i<2;i++){assert.ok(packets[i].some(p=>p.type==='normal_live_start'));assert.ok(packets[i].some(p=>p.type==='normal_live_action'));assert.ok(packets[i].some(p=>p.type==='normal_live_result'));assert.ok(results[i].body.data.liveBattleId);const wallet=await sc.walletRepository.findByPlayerId(ids[i]);assert.ok(wallet.gold>0);}
  assert.equal(membershipLookups,0,'material and underfilled equipment bags never wait for Discord membership');
  const transitionEvidence=[];
@@ -45,22 +68,22 @@ const {normalLiveCombat}=require('../src/services/realtime/normalLiveCombat');
   const plan=packets[i].find(p=>p.type==='zone_combat_scene'&&p.data.next);
   assert.ok(death&&drop&&plan,'death, real drop and prepared successor must all be published');
   assert.ok(drop.data.drops.some(d=>d.name==='驗收防具'),'real equipment receipt must arrive');
-  assert.ok(drop.receivedAt<plan.data.advanceAt,'loot arrives during exit before walking starts');
-  assert.ok(plan.receivedAt<plan.data.advanceAt,'next enemy is already known before the walk');
+  assert.equal(drop.data.encounterId,death.data.encounterId,'late loot belongs to the defeated encounter');
+  assert.ok(plan.receivedAt<plan.data.next.spawnAt,'successor is ready before its scheduled arrival');
   assert.equal(plan.data.next.spawnAt-plan.data.advanceAt,1500,'walk is exactly 1.5 seconds');
-  assert.ok(drop.receivedAt-death.receivedAt<650,'ordinary drop has no post-death membership delay');
+  assert.equal(plan.data.next.spawnAt-death.data.deathAt,2150,'reward delivery cannot extend the death clock');
   transitionEvidence.push({deathAt:death.data.deathAt,dropAt:drop.receivedAt,advanceAt:plan.data.advanceAt,spawnAt:plan.data.next.spawnAt});
  }
  const planned=packets[0].find(p=>p.type==='zone_combat_scene'&&p.data.next).data.next;
  await wait(Math.max(0,planned.spawnAt-Date.now()+80));
  const arrived=(await(await fetch(base+'/api/combat/scene?zone=normal',{headers:headers(0)})).json()).data;
- assert.equal(arrived.encounterId,planned.encounterId,'actual successor uses the identity already sent before walking');
+ assert.equal(arrived.encounterId,planned.encounterId,'actual successor uses the identity already sent before walking '+JSON.stringify({planned,arrived,observedAt:Date.now()}));
  const fullBag=await sc.progressRepository.findByPlayerId(ids[0]);
  assert.equal(fullBag.inventory.filter(e=>e.itemType==='equipment'&&e.equipSlot==='armor').length,150,'the final earned equipment is received');
  const blocked=await fetch(base+'/api/combat/quick-battle',{method:'POST',headers:headers(0),body:JSON.stringify({zone:'normal'})});
  assert.equal(blocked.status,409);assert.equal((await blocked.json()).code,'bag_full','capacity blocks the next battle, not earned loot');
  assert.equal(arrived.maxHp,planned.maxHp,'group size does not reroll at arrival');
  const own=(await(await fetch(base+'/api/combat/live-session?discordId='+ids[1],{headers:headers(0)})).json()).data;assert.equal(own.liveBattleId,results[0].body.data.liveBattleId,'query cannot impersonate another player');
- const result={ok:true,testDb:db.databaseName,checks:['actual authenticated HTTP and SSE for 2 players','public snapshots refer to the same living/dead enemy','request forgery does not change damage or speed','duplicate battle rejected','other actor ID in status query ignored','real-time intermediate HP persisted before final response','gold committed and live result delivered','real loot before walk, prepared successor, exactly 1.5 seconds, no membership lookup below capacity'],elapsedMs:Date.now()-start,transitionEvidence,membershipLookups,history,resultIds:results.map(r=>r.body.data.liveBattleId),eventCounts:packets.map(a=>a.filter(p=>String(p.type).startsWith('normal_live')).length)};
+ const result={ok:true,testDb:db.databaseName,checks:['actual authenticated HTTP and SSE for 2 players','public snapshots refer to the same living/dead enemy','request forgery does not change damage or speed','duplicate battle rejected','other actor ID in status query ignored','real-time intermediate HP persisted before final response','gold committed and live result delivered','independent loot delivery, prepared successor, exactly 1.5 seconds, no membership lookup below capacity'],elapsedMs:Date.now()-start,transitionEvidence,membershipLookups,history,resultIds:results.map(r=>r.body.data.liveBattleId),eventCounts:packets.map(a=>a.filter(p=>String(p.type).startsWith('normal_live')).length)};
  if(process.argv[2])fs.writeFileSync(process.argv[2],JSON.stringify(result,null,2));console.log(JSON.stringify({ok:true,checks:result.checks,elapsedMs:result.elapsedMs}));controllers.forEach(c=>c.abort());server.close();process.exit(0);
 })().catch(e=>{console.error(e.stack);process.exit(1)});

@@ -1,5 +1,6 @@
 const { createMistwoodCards } = require("./mistwoodCards");
 const { createMetalCards } = require("./metalCards");
+const { isHutaoHitCard, createHutaoHitCast } = require("./hutaoMonsterCard");
 const { cardDefensiveModifiers } = require("./cardDefensiveModifiers");
 const { activeEquipment } = require("./anchorFeature");
 const { effectiveOffensiveStat, offensiveStatGain } = require("./offensiveStatCurve");
@@ -1053,14 +1054,14 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   let worldBossAgiAnnounced = false;
 
   // ── AGI 優勢判定 ──
-  const playerAgi = pStats.agi || 1;
-  const monsterAgi = (mCalc.agi || 1) + worldBossAgiBonus;
-  const agiDiff = playerAgi - monsterAgi;
-  const hasAgiFirstStrike = (!options.actionSession || options.liveNormalCombat) && agiDiff > 5;   // 第1回合玩家先手，怪物無法反擊
-  const hasAgiSlowedMonster = (!options.actionSession || options.liveNormalCombat) && agiDiff > 15; // 怪物只在偶數回合反擊
-  const bossAgiDiff = monsterAgi - playerAgi;
-  const hasBossAgiFirstStrike = worldBossHasAgiSuppress && bossAgiDiff > 2;   // 第1回合怪物壓制，玩家無法行動
-  const hasBossAgiTurnSuppress = worldBossHasAgiSuppress && bossAgiDiff > 5;  // 玩家奇數回合被壓制
+  let playerAgi = pStats.agi || 1;
+  let monsterAgi = (mCalc.agi || 1) + worldBossAgiBonus;
+  let agiDiff = playerAgi - monsterAgi;
+  let hasAgiFirstStrike = (!options.actionSession || options.liveNormalCombat) && agiDiff > 5;   // 第1回合玩家先手，怪物無法反擊
+  let hasAgiSlowedMonster = (!options.actionSession || options.liveNormalCombat) && agiDiff > 15; // 怪物只在偶數回合反擊
+  let bossAgiDiff = monsterAgi - playerAgi;
+  let hasBossAgiFirstStrike = worldBossHasAgiSuppress && bossAgiDiff > 2;   // 第1回合怪物壓制，玩家無法行動
+  let hasBossAgiTurnSuppress = worldBossHasAgiSuppress && bossAgiDiff > 5;  // 玩家奇數回合被壓制
 
   // options.startMonsterHp：攻塔多人輪流時，從上一位打完的殘血繼續
   let mHp = (options.startMonsterHp != null)
@@ -1422,10 +1423,10 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   let livePartyDefIgnoreCarry = 0;
   let playerDefIgnoreCarry = 0; // 上一回合玩家無視防禦%(法師徽章/魔力爆炎等),供 DOT 穿防
   // 武器主屬性追加傷害:終傷後 +(主屬性 × 1.5)固定點數。主攻擊/連擊/反擊各加一次。
-  const weaponMainBonus = Math.max(0, Math.round((pStats.weaponMainStatValue || 0) * 1.5));
+  let weaponMainBonus = Math.max(0, Math.round((pStats.weaponMainStatValue || 0) * 1.5));
   // 世界王部位弱點倍率：玩家對王「每一擊」的傷害倍率(牙狼:同流派×1、不同×0.3)。預設 1 不影響其他戰鬥。
   // 直接乘在玩家傷害上→戰報數字=真實傷害、部位血正常遞減、戰鬥在真的打死時才結束(不提早中止)。
-  const bossVulnMult = (options.bossVulnMult != null && Number(options.bossVulnMult) >= 0) ? Number(options.bossVulnMult) : 1;
+  let bossVulnMult = (options.bossVulnMult != null && Number(options.bossVulnMult) >= 0) ? Number(options.bossVulnMult) : 1;
 
   // ── 屬性系統（土火水木金日月；裝備單件依階級最多 1~5 洞）──
   // 攻擊側＝武器＋副手，依怪物屬性動態選「剋制＞中性＞被剋」。
@@ -1454,7 +1455,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   let playerElementLevel = options.playerElementLevel !== undefined
     ? normalizeElementLevel(options.playerElementLevel)
     : _weaponEl.level;
-  const elementMult = getElementMultiplier(playerElement, monsterElement, playerElementLevel, monsterElementLevel);
+  let elementMult = getElementMultiplier(playerElement, monsterElement, playerElementLevel, monsterElementLevel);
 
   // 七屬性抗性（V0.5 生存系統）：防具側「同屬性」濃度 vs 怪物屬性，雙向——
   // 怪物是什麼屬性，防具就用相同屬性抵抗；其他防具屬性不影響這隻怪的傷害。
@@ -1478,8 +1479,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
 
   // ── 戰鬥姿態的非屬性接點（battleStance 已在上方屬性區之前解析）──────
   // 元素師三姿態：炎圈（每回合 MATK% 火傷）／嵐暴（固定 3 段法術）／凍霜（區域冰凍值，累積在呼叫端）
-  const fireCircleCfg = battleStance?.fireCircle || null;    // { matkPct }
-  const stormVolleyCfg = battleStance?.stormVolley || null;  // { hits, pctPerHit }
+  let fireCircleCfg = battleStance?.fireCircle || null;    // { matkPct }
+  let stormVolleyCfg = battleStance?.stormVolley || null;  // { hits, pctPerHit }
 
   // ── 血怒（狂戰士二轉被動）────────────────────────────────────────────
   // 每缺 1% HP → 該回合 ATK +perMissPct%，封頂 capPct%。逐回合看「當下」HP，
@@ -1512,7 +1513,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   const _bardMult = Math.max(0.1, Number(options.bardDamageMult) || 1);
   const partyRoleDamageMultiplier = Number.isFinite(Number(options.partyRoleDamageMultiplier))
     ? Math.max(0, Number(options.partyRoleDamageMultiplier)) : 1;
-  const playerHitMult = bossVulnMult * (stanceElementMult ?? elementMult) * elementBonusMult * _bardMult * partyRoleDamageMultiplier;
+  let playerHitMult = bossVulnMult * (stanceElementMult ?? elementMult) * elementBonusMult * _bardMult * partyRoleDamageMultiplier;
   const applyBossVuln = (raw) => (playerHitMult === 1 ? raw : Math.max(0, Math.round((Number(raw) || 0) * playerHitMult)));
   let round = Math.max(1, Math.floor(Number(options.startRound || 1)));
   let endRound = round + Math.max(1, Math.floor(Number(MAX_ROUNDS) || 1)) - 1;
@@ -1541,7 +1542,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
   // 團隊暈眩（矮人戰士長・巨神震擊）：暈眩窗口內開打 → 怪物整場不出手。
   // 這條**不受上限與免疫管制**——是全服合力敲滿暈眩條換來的 20 秒窗口，
   // 且窗口外有 2 分鐘免疫，與單場戰鬥內的暈眩節奏是兩套獨立機制。
-  const _teamStunRounds = Math.max(0, Math.floor(Number(options.teamStunRounds || 0)));
+  const _teamStunRounds = options.liveControlActive !== undefined ? 0 : Math.max(0, Math.floor(Number(options.teamStunRounds || 0)));
   if (_teamStunRounds > 0) stunRoundsLeft = Math.max(stunRoundsLeft, _teamStunRounds);
 
   /**
@@ -1901,6 +1902,38 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     _noPlayerAtk = options.skipPlayerAttack === true;
     pHp = Math.max(0, Number(command.startPlayerHp) || 0);
     if (options.liveNormalCombat) {
+      if (command.livePlayerStats) {
+        const oldMaxHp = pStats.maxHp;
+        Object.assign(pStats, command.livePlayerStats, { maxHp: oldMaxHp });
+      }
+      if (command.liveMonsterStats) Object.assign(mCalc, command.liveMonsterStats);
+      // Resume the same session and ledgers; only the chosen stance changes.
+      if ((battleStance?.key || null) !== (options.stance || null)) {
+        battleStance = require("./jobAdvancement").resolveStance(options.equipped?.job_eq, options.stance);
+        fireCircleCfg = battleStance?.fireCircle || null;
+        stormVolleyCfg = battleStance?.stormVolley || null;
+        const elements = battleStance?.stanceElement?.element
+          ? { [battleStance.stanceElement.element]: battleStance.stanceElement.level } : null;
+        const weapon = resolveWeaponElement(options.equipped || {}, monsterElement, elements);
+        playerElement = options.playerElement !== undefined ? normalizeElement(options.playerElement) : weapon.element;
+        playerElementLevel = options.playerElementLevel !== undefined ? normalizeElementLevel(options.playerElementLevel) : weapon.level;
+        elementMult = getElementMultiplier(playerElement, monsterElement, playerElementLevel, monsterElementLevel);
+        stanceElementMult = null; stanceGuaranteedLevel = 0;
+        if (battleStance?.guaranteedElement && monsterElement) {
+          const ge = battleStance.guaranteedElement;
+          stanceGuaranteedLevel = normalizeElementLevel(playerElementLevel >= Number(ge.upgradeFromWeaponLevel || 2)
+            ? Number(ge.upgradedLevel || 4) : Number(ge.baseLevel || 2));
+          stanceElementMult = 1 + stanceGuaranteedLevel * 0.10;
+        }
+      }
+      playerAgi = pStats.agi || 1; monsterAgi = (mCalc.agi || 1) + worldBossAgiBonus;
+      agiDiff = playerAgi - monsterAgi; bossAgiDiff = -agiDiff;
+      hasAgiFirstStrike = agiDiff > 5; hasAgiSlowedMonster = agiDiff > 15;
+      hasBossAgiFirstStrike = worldBossHasAgiSuppress && bossAgiDiff > 2;
+      hasBossAgiTurnSuppress = worldBossHasAgiSuppress && bossAgiDiff > 5;
+      weaponMainBonus = Math.max(0, Math.round((pStats.weaponMainStatValue || 0) * 1.5));
+      bossVulnMult = Math.max(0, Number(command.bossVulnMult ?? 1));
+      playerHitMult = bossVulnMult * (stanceElementMult ?? elementMult) * elementBonusMult * _bardMult * partyRoleDamageMultiplier;
       const pct = Math.max(0, ...(options.partyEffects || []).filter(e => e?.key === "party_max_hp_up")
         .map(e => Number(e.params?.value ?? e.value) || 0));
       const nextMax = Math.max(1, Math.round(liveBaseMaxHp * (1 + pct / 100)));
@@ -1929,7 +1962,32 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     acceptAction(yield null);
   }
   _shadowHp = pHp; // KDA 影子血量起點（與實際血量同步出發，之後只吃「非外部治療」的變化）
+  while (true) {
   while (round <= endRound && outcome === null) {
+    if (options.hutaoRiichiPulse || options.riichiOnly) {
+      const pulseLog = [];
+      if (options.hutaoRiichiPulse) {
+        const defStats = applyMonsterEffects(mCalc, monsterActiveEffects, round);
+        const ignore = Math.min(95, Math.max(0, (pStats.bypassMonsterDefPct || 0) + playerDefIgnoreCarry));
+        const defense = Math.max(0, (defStats.def || 0) * (1 - monsterDefDownCarry / 100) * (1 - ignore / 100));
+        for (let hit = 0; hit < 4 && mHp > 0; hit++) {
+          let damage = applyDefense((pStats.atk || 1) * .3 * playerAttackLevelMult, defStats.flatDef || 0, defense, pStats.atk);
+          if (defStats.damageReductionPct > 0) damage = Math.max(1, Math.round(damage * (1 - Math.min(95, defStats.damageReductionPct) / 100)));
+          damage = applyBossVuln(Math.round(damage * Math.max(0, Number(defStats.damageTakenMultiplier ?? 1))));
+          if (monsterActiveEffects.some(e => e.key === 'invincible_short' && effectIsActive(e, round))) damage = 0;
+          if (defStats.incomingDamageCap > 0) damage = Math.min(damage, defStats.incomingDamageCap);
+          damage = Math.min(mHp, damage); mHp -= damage; totalDamage += damage;
+          pulseLog.push(`⛓️ **${playerBattleName}** 發動【四風連擊】連鎖打擊，造成 **${damage}** 點傷害！`);
+        }
+        if (mHp <= 0) outcome = 'win';
+      }
+      roundLogs.push(...pulseLog);
+      if (options.riichiOnly || outcome) {
+        if (outcome) break;
+        acceptAction(yield actionSnapshot());
+        continue;
+      }
+    }
     const liveAssistBefore = options.liveNormalCombat ? {
       damage: totalDamage, heal: new Map(_kdaHealBySource), prevented: new Map(_kdaPreventedBySource),
       highHp: currentTargetHp() > currentTargetMaxHp * 0.5, stunned: _targetStunnedNow(round),
@@ -2815,7 +2873,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     } else if (monsterIsSilenced && monsterHasCardSkill) {
       log.push(`🔇 ${mName} 陷入沉默，無法發動技能！`);
     }
-    if (options.skipMonsterAttack !== true && !monsterActionSuppressedByAgi && !monsterIsStunned && !monsterIsSilenced && monsterEquipped.special_1 && monsterEquipped.special_1.monsterCardSkill && monsterEquipped.special_1.monsterCardSkill.key) {
+    if (options.skipMonsterAttack !== true && !monsterActionSuppressedByAgi && !monsterIsStunned && !monsterIsSilenced && !isHutaoHitCard(monsterEquipped.special_1) && monsterEquipped.special_1 && monsterEquipped.special_1.monsterCardSkill && monsterEquipped.special_1.monsterCardSkill.key) {
       const equippedCard = monsterEquipped.special_1;
       const skill = equippedCard.monsterCardSkill.monsterSkill || equippedCard.monsterCardSkill;
       const cardName = equippedCard.itemName || equippedCard.name || '卡片';
@@ -3896,7 +3954,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     _healDamageDefIgnorePct = Math.min(100, Math.max(0,
       (Number(pStats.bypassMonsterDefPct) || 0) + playerDefIgnorePct + roundPartyDefIgnorePct));
 
-    for (let a = 0; a < attackCount && outcome === null && !_noPlayerAtk && !playerIsStunned && !playerIsFrozen; a++) {
+    for (let a = 0; a < attackCount && outcome === null && !_noPlayerAtk && !options.skipBasicPlayerAttack && !playerIsStunned && !playerIsFrozen; a++) {
       const metalAim = a === 0 && !_noPlayerAtk ? metalCards.aim() : { bonus: 0, forced: false };
       const hitChance = Math.min(100, metalAim.bonus + calcHitChance({
         hit: (pStats.hit + playerHitBonus - playerHitPenalty),
@@ -4877,7 +4935,10 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
         // 計數一次攻擊
         combatStats.attackCount += 1;
         // 這一回合有打到 → 回合數 +1（同回合多擊只算一次）
-        if (_attackRoundMark !== round) { _attackRoundMark = round; combatStats.attackRounds += 1; }
+        if (_attackRoundMark !== round) {
+          _attackRoundMark = round; combatStats.attackRounds += 1;
+          if (options.liveNormalCombat && battleStance?.freezeCharge) combatStats.frostAttackRounds = (combatStats.frostAttackRounds || 0) + 1;
+        }
 
         // ── 檢查怪物反彈傷害效果 ──
         if (Array.isArray(monsterActiveEffects)) {
@@ -5216,9 +5277,26 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     let monsterDmgThisRound = 0; // 怪物本回合總傷害（甲蟹反擊用）
     let skipMonsterAttackReason = null;
     let _g6Segs = 1; // G6 拆段數（>1 時每段傷害 ÷ 段數）
+    const castHutaoOnHit = createHutaoHitCast({
+      card: options.hutaoBossStrike ? null : monsterEquipped.special_1, cooldowns: cardCooldowns.monster,
+      sourceAtk: adjustedMCalc.atk || mCalc.atk || 1, silenced: monsterIsSilenced,
+      alive: () => pHp > 0 && mHp > 0 && outcome === null,
+      ownerLabel: mName, log,
+      applyDamage: (damage) => {
+        const ignore = Math.min(100, Math.max(0, Number(adjustedMCalc.defIgnorePct || 0)));
+        const defense = Math.min(95, Math.max(0, ((pStats.def * (1 + playerDefBonusPct / 100) * (1 - playerDefDownPct / 100)) + playerDefFlatBonus) * (1 - ignore / 100)));
+        const mitigated = _spiritHp > 0 ? damage : _applyElementDR(applyDefense(damage, pStats.flatDef || 0, defense, adjustedMCalc.atk || mCalc.atk || 1));
+        const actual = _takePlayerIncomingDamage(mitigated, round, { damageType: "physical" });
+        monsterDmgThisRound += actual;
+        if (pHp <= 0) outcome = "lose";
+        return actual;
+      },
+    });
 
     if (options.skipMonsterAttack === true) {
       skipMonsterAttackReason = "external_turn";
+    } else if (options.liveControlActive) {
+      skipMonsterAttackReason = "stun";
     } else if (stunRoundsLeft > 0) {
       stunRoundsLeft--;
       skipMonsterAttackReason = "stun";
@@ -5258,7 +5336,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     if (skipMonsterAttackReason === "stun") {
       if (_teamStunRounds > 0) _kdaStunSkippedRounds++; // KDA：團隊暈眩擋下的敵方回合數（歸戶由呼叫端做給敲滿條的人）
       // 團隊暈眩（巨神震擊）用專屬敘述，讓玩家知道這場的免傷是誰換來的
-      log.push(_teamStunRounds > 0
+      log.push(_teamStunRounds > 0 || options.liveControlActive
         ? (String(options.teamStunStyle || "") === "freeze"
           ? `🧊 **區域冰封**——${mName} 被凍成冰雕，無法動彈！`
           : `⛰️ **巨神震擊**餘威未散——${mName} 癱倒在地，動彈不得！`)
@@ -5306,6 +5384,11 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
       monsterAttackCount = steelSegments.length;
       _g6Segs = 1;
       steelCrownEvents.push({ phase, action: steelCrownActions, hits, segments: steelSegments.length });
+    }
+    if (options.hutaoBossStrike && monsterAttackCount > 0 && outcome === null && mHp > 0) {
+      steelSegments = [{ factor: require("../services/realtime/hutaoBossRiichi").STRIKE_MULTIPLIER, name: "立直重擊" }];
+      monsterAttackCount = steelSegments.length;
+      _g6Segs = 1;
     }
     const enemiesAtAttackStart = livingEnemies();
     for (let ma = 0; ma < monsterAttackCount && outcome === null; ma++) {
@@ -5628,6 +5711,8 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
 
           if (pHp <= 0) { outcome = "lose"; break; }
         }
+        castHutaoOnHit();
+        if (pHp <= 0) { outcome = "lose"; break; }
       } else {
         combatStats.dodgeCount += 1;
         mistCards.onDodge(round);
@@ -5714,7 +5799,7 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     _g6FlushLine(); // 戰報重整：G6 拆段合併行（含中途死亡的殘段）
 
     // ── 怪物連擊（AGI 驅動）── 簡化：觸發後同一次傷害再扣一次（× 2 效果）
-    const monsterComboChance = steelCrown ? 0 : adjustedMCalc.comboChance || 0;
+    const monsterComboChance = steelCrown || options.hutaoBossStrike ? 0 : adjustedMCalc.comboChance || 0;
     // 🐺 狼王：連擊由「連牙亂舞」段數機制負責(含迴避打斷)，關掉這套 AGI 額外連擊避免雙重連擊架空打斷
     if (monsterComboChance > 0 && !skipMonsterAttackReason && outcome === null && lastMonsterDmg > 0 && !_hellfangCombo) {
       if (Math.random() * 100 < monsterComboChance) {
@@ -5951,6 +6036,16 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
     }
   }
 
+  if (options.actionSession && options.allowCoopRevive && outcome === "lose") {
+    // Keep class gauges, card cooldowns and the cumulative ledger while downed.
+    // Only an authoritative positive-HP command from a teammate potion resumes it.
+    const downed = actionSnapshot();
+    acceptAction(yield downed);
+    outcome = null; round = Math.max(2, round);
+    continue;
+  }
+  break;
+  }
   if (outcome === null) outcome = "timeout";
 
   // ── 救護右：戰後回血（僅戰勝觸發） ──

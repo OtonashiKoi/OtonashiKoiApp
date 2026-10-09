@@ -103,6 +103,8 @@ Mongo 啟動時建立玩家、進度、交易、任務、怪物、直播事件�
 
 React 原始碼在獨立 workspace `~/Documents/equipmentGAME-app`，建置後部署到 `src/web/public/app/`。Express 對 hash assets 使用長快取、對 `index.html` 使用 no-store，並提供 SPA fallback。
 
+正式網域的 HTTP GET／HEAD 由 `src/api/canonicalOrigin.js` 在 CORS 前以 308 轉到 `PUBLIC_BASE_URL` 的 HTTPS origin，保留原路徑與 query，避免 HTTP 頁面的 module／CSS 因來源未允許而載入失敗。cloudflared 的 `X-Forwarded-Proto` 用來辨識外部 HTTPS，避免轉址循環；本機／其他 host 與寫入請求不套用此轉址。
+
 本 repository 也保留 `src/web/public/game.html` 等舊／測試靜態頁，但正式根路由優先服務已部署的 SPA。`/test` 會為 `game.html` 注入測試主題，不是第二套正式前端。
 
 ### 管理後台
@@ -177,6 +179,7 @@ donation/member events ──────────────> stream record
 - 預設 API port：5566，可由 `API_PORT` 覆蓋。
 - PM2 process：`equipmentGAME`，指令見根目錄 README。
 - 玩家與後台由同一 Express origin 提供；正式 domain 經 Cloudflare tunnel 導入。
+- 正式主機 `~/.cloudflared/config.yml` 的 `originRequest.keepAliveTimeout` 設為 `3s`，先於目前 Node HTTP server 的 5 秒 keep-alive 關閉閒置連線，降低重用連線時遭 reset 的風險。這是通道連線設定；只重啟 `cloudflared` 即可生效，不需要重啟遊戲 runtime。不能以單次健康檢查成功當作間歇性 502 已根治的證明。
 - 前端 build 與後端 restart 是不同步驟；只改 React 原始碼但未 deploy，後端不會自動取得新版。
 - 啟動時自動重發面板被硬關閉，避免 Discord rate limit 與孤兒面板；需在後台手動發布。
 
@@ -194,6 +197,8 @@ donation/member events ──────────────> stream record
 一般區 Web／Discord 由 `normalLiveCombat` 呼叫同一戰鬥核心逐次出手，在伺服器時間到達時才 CAS 扣除共享怪物 HP。玩家 AGI 決定自己的出手間隔；怪物依出現時間（normalLiveSpawnAt）與自身AGI維持共用攻擊時鐘，中途加入及無人後重新加入不重置頻率，對當時存活參戰者逐一判定承傷與迴避。一次出戰持續到怪物或玩家 HP 歸零，不設 15 回合上限；預約在本場結束後開始下一場。Web 以 liveStartOnly 立即取得開戰回應，後續由即時事件／快照接續，不以 HTTP 等待完整長戰鬥；占用鎖由伺服器戰鬥時鐘續期。前端不能提交傷害、HP 或攻速。同一帳號不能同時出戰兩區。世界王、故事與副本仍走各自原有流程。
 
 `zoneCombatScene` 发布相同 encounterId、傷害事件與時間戳，所有 Web 客戶端呈現同一怪物的血量、跳字、群體剩餘數量、死亡及刷新。`GET /api/combat/scene` 需登入，提供進場／重連快照與時鐘校準；每五秒補讀共享場景及自己的即時戰況，修復漏訊。實際網路延遲仍可能造成短暫畫面差異。
+
+出戰準備與即時入場之間若怪物已換批、死亡、進入轉場／事件，或入場 CAS 未成功，`quick-battle` 回 `409 scene_transition`，由 SPA 等待並保留預約重試；這些入場競態不回 `500`。失敗入場會釋放角色預留，不提交參戰資格、傷害或獎勵。
 
 一般區光環由即時房間內存活、尚未結束出戰的角色提供；歷史 `activeHealerAuras` 三分鐘登記不再作為一般區戰鬥資格。每次出手重新取同房間提供者，晚加入立即加入效果，死亡／停戰／換區不再提供；同一怪的有效治療、减傷及增傷支援逐次記入貢獻，來源退出不撤銷既得貢獻，下一隻怪重新計算。生命上限光環變動按現有HP比例調整，不復活或免費補滿。有效支援與傷害參戰者採相同的80～100%基礎經驗比例，沒有另開掛機經驗池；零有效支援與單純在線不具領獎資格。世界王與副本的既有光環流程不在本次修改範圍。
 

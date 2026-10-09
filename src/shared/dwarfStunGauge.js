@@ -97,6 +97,7 @@ async function read(gaugeKey, zoneKey, now = Date.now()) {
   return {
     gauge: phase === "charging" ? Math.max(0, Math.min(threshold, Number(doc?.gauge) || 0)) : 0,
     threshold,
+    contributors: phase === "charging" ? normalizeContributorMap(doc?.contributors) : {},
     phase,
     stunned: phase === "stunned",
     // 即使已進入免疫期仍保留上一次暈眩截止點，讓龜王詠唱狀態可修復

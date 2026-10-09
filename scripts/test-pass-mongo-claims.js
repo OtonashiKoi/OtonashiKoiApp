@@ -36,8 +36,47 @@ async function main() {
     };
     const countItem = (p, id) => p.inventory.filter(x => x.itemId === id).reduce((n, x) => n + (x.stackCount || x.quantity || 1), 0);
     const wallet = id => db.collection("wallets").findOne({ playerId: id });
+    const progressSnapshot = process.argv.find(x => x.startsWith("--progress-snapshot="))?.slice(20);
+    if (progressSnapshot) {
+      const sourceBytes = fs.readFileSync(progressSnapshot);
+      let seed = null;
+      for (let offset = 0; offset < sourceBytes.length;) {
+        const size = sourceBytes.readInt32LE(offset), doc = BSON.deserialize(sourceBytes.subarray(offset, offset + size));
+        offset += size;
+        if ((doc.normalLiveDropReceipts || []).some(r => r.entries?.some(e => e._id?.buffer?.buffer))) { seed = doc; break; }
+      }
+      assert(seed, "snapshot contains cloned embedded Mongo IDs");
+      const liveId = seed._id;
+      seed.playerId = "deep-receipt"; seed.seasonKey = "isolated-pass"; seed.passRewardReceipts = [];
+      await db.collection("progress").insertOne(seed);
+      await db.collection("wallets").insertOne({ playerId: seed.playerId, seasonKey: "isolated-pass", gold: 100000, diamond: 10 });
+      await pass.adminAddPoints(seed.playerId, 250, { set: true });
+      // The failed claim may already have committed currency before bag storage.
+      await currency.grantCurrencyAtomic({ playerId: seed.playerId, currencyType: "gold", amount: 1650,
+        source: "pass:reward", sourceRef: `pass:isolated-pass:${seed.playerId}:free:1:gold`, operator: "pass:claim" });
+      await pass.claim(seed.playerId, "Test", 1, "free");
+      const stored = await db.collection("progress").findOne({ playerId: seed.playerId });
+      assert.deepEqual(stored._id, liveId);
+      assert.equal(stored.normalLiveDropReceipts.length, seed.normalLiveDropReceipts.length);
+      for (let i = 0; i < seed.normalLiveDropReceipts.length; i++) {
+        assert.equal(stored.normalLiveDropReceipts[i].id, seed.normalLiveDropReceipts[i].id);
+        assert.equal(stored.normalLiveDropReceipts[i].entries.length, seed.normalLiveDropReceipts[i].entries.length);
+        const normalize = require("../src/shared/inventoryStorage").normalizeInventoryEntryMongoId;
+        assert.deepEqual(stored.normalLiveDropReceipts[i].entries, seed.normalLiveDropReceipts[i].entries.map(normalize));
+      }
+      assert.deepEqual((await pass.getState(seed.playerId)).claimedFree, [1]);
+      assert.equal((await wallet(seed.playerId)).gold, 101650);
+    }
     const id = await fresh("first-reward");
-    await pass.adminAddPoints("first-reward", 1219, { set: true });
+    await pass.adminAddPoints("first-reward", 249, { set: true });
+    assert.equal((await pass.getState("first-reward")).level, 0);
+    await assert.rejects(() => pass.claim("first-reward", "Test", 1, "free"), /通行證等級不足/);
+    await pass.adminAddPoints("first-reward", 1);
+    assert.equal((await pass.getState("first-reward")).level, 1);
+    assert.equal((await pass.getState("first-reward")).pointsPerLevel, 250);
+    assert.equal((await pass.getState("first-reward")).unlocked, false);
+    await assert.rejects(() => pass.claim("first-reward", "Test", 1, "paid"), /付費軌需先/);
+    assert.equal((await wallet("first-reward")).diamond, 10, "locked premium claim cannot spend diamonds");
     const claims = await Promise.allSettled(Array.from({ length: 10 }, () => pass.claim("first-reward", "Test", 1, "free")));
     assert.equal(claims.filter(x => x.status === "fulfilled").length, 1);
     const first = await progress.findByPlayerId("first-reward");
@@ -45,9 +84,14 @@ async function main() {
     assert.equal(countItem(first, "72fde92d-e33f-42fb-8d86-2e811d03f84d"), 3);
     assert.equal((await wallet("first-reward")).gold, 101650);
     assert.deepEqual((await pass.getState("first-reward")).claimedFree, [1]);
+    assert.equal((await pass.getState("first-reward")).unlocked, false, "free claim does not require premium unlock");
+    assert.equal((await wallet("first-reward")).diamond, 10, "free claim does not spend diamonds");
 
     const fullId = await fresh("all-rewards");
-    await pass.adminAddPoints("all-rewards", 30000, { set: true });
+    await pass.adminAddPoints("all-rewards", 7499, { set: true });
+    assert.equal((await pass.getState("all-rewards")).level, 29);
+    await pass.adminAddPoints("all-rewards", 1);
+    assert.equal((await pass.getState("all-rewards")).level, 30);
     await pass.unlock("all-rewards", "Test");
     for (let level = 1; level <= 30; level++) for (const track of ["free", "paid"]) await pass.claim("all-rewards", "Test", level, track);
     assert.equal((await wallet("all-rewards")).gold, 100000 + 114750 + 229500);

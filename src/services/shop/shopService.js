@@ -1,4 +1,5 @@
 const { isUnavailableEquipment, assertEquipmentAvailable } = require("../../shared/equipmentAvailability");
+const { isEquipmentLevelAllowed, assertEquipmentLevel } = require("../../shared/equipmentLevel");
 const { ANCHORS_ENABLED } = require("../../shared/anchorFeature");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
 const { isBoundItemId } = require("../../shared/boundItems");
@@ -573,11 +574,12 @@ class ShopService {
       }
     }
 
-    // 背包持有上限（maxOwn）：限定類消耗品（如爬塔藥水）每種最多持有 N 罐
+    // 背包持有上限（maxOwn）：依實際堆疊數量計算，0 表示不限持有量。
     const maxOwn = item.maxOwn || 0;
     if (maxOwn > 0 && progress) {
       const libId = item.itemLibraryId || item.id;
-      const owned = (progress.inventory || []).filter((e) => e.itemId === libId).length;
+      const owned = (progress.inventory || []).filter((e) => e.itemId === libId)
+        .reduce((total, e) => total + Math.max(1, Math.trunc(Number(e.stackCount) || 1)), 0);
       if (owned + quantity > maxOwn) {
         throw new AppError(ERROR_CODES.FORBIDDEN, `此商品最多持有 ${maxOwn} 個（目前背包已有 ${owned} 個）`, 403);
       }
@@ -736,6 +738,11 @@ class ShopService {
 
       if (ENHANCE_GEM_IDS.has(entry.itemId)) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "強化寶石只能用於強化裝備，無法直接使用", 400);
+      }
+      if (require("../../shared/partyTowerRewardRules").REWARDS.normal.boxId === entry.itemId
+        || require("../../shared/partyTowerRewardRules").REWARDS.challenge.boxId === entry.itemId
+        || entry.itemEffect?.type === "open_weapon_choice") {
+        throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "請在網頁背包開啟自選箱並先選擇武器；箱子尚未消耗", 400);
       }
       // 附魔重骰藥水不能直接使用(其效果需指定裝備目標；直接用會被當無效果消耗＝浪費)。請在「裝備」上重骰。
       if (entry.itemId === "enchant_reroll_potion" || String(entry.itemEffect?.type || "") === "reroll_enchant") {
@@ -1159,11 +1166,10 @@ class ShopService {
     const { getMongoDb } = require("../../adapters/mongo/createMongoClient");
     const db = await getMongoDb();
     const mon = await db.collection("monsters").findOne({ id: monsterId });
-    // 寶箱獎池排除 S 階強化寶石（S 寶石只走世界王實戰掉落，維持稀有，不從寶箱大量產出）
-    const CHEST_EXCLUDE_IDS = new Set(["gem-s-tier"]);
-    const chestPool = Array.isArray(mon?.chestDrops) ? mon.chestDrops : mon?.drops;
+    // 與實戰共用掉落表（含王卡）；舊 chestDrops 不再縮減寶箱獎池。
+    const chestPool = await require("../battle/battleRewardRules").buildMonsterDropPool(this, mon);
     const rawDrops = Array.isArray(chestPool)
-      ? chestPool.filter((d) => d && d.itemId && (Number(d.chance) > 0) && !CHEST_EXCLUDE_IDS.has(d.itemId) && !isUnavailableEquipment(d.itemId))
+      ? chestPool.filter((d) => d && d.itemId && (Number(d.chance) > 0) && !isUnavailableEquipment(d.itemId))
       : [];
     const candidates = await Promise.all(rawDrops.map(async (drop) => ({ drop, item: await this.itemRepository.findById(drop.itemId).catch(() => null) })));
     const drops = candidates.filter(({ item }) => item && !isUnavailableEquipment(item)).map(({ drop }) => drop);
@@ -1881,7 +1887,10 @@ class ShopService {
     const idx = (progress.inventory || []).findIndex((e) => this._matchesInventoryEntryRef(e, entryUuid));
     if (idx === -1) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "背包中找不到此裝備", 404);
     let entry = progress.inventory[idx];
+    const libItem = entry.itemId && this.itemRepository ? await this.itemRepository.findById(entry.itemId) : null;
+    if (libItem) entry = { ...entry, tier: libItem.tier ?? entry.tier, equipSlot: libItem.equipSlot || entry.equipSlot };
     assertEquipmentAvailable(entry);
+    assertEquipmentLevel(entry, progress.level);
     if (entry.itemType !== "equipment" && entry.itemType !== "job_badge" && entry.itemType !== "monster_card") {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "此物品不是裝備", 400);
     }
@@ -1956,7 +1965,6 @@ class ShopService {
     // 裝備時從道具庫同步最新 effects（確保修正後的 effects 立即生效）
     let freshEntry = entry;
     if (entry.itemId && this.itemRepository) {
-      const libItem = await this.itemRepository.findById(entry.itemId).catch(() => null);
       if (libItem) {
         freshEntry = {
           ...entry,
@@ -1971,6 +1979,11 @@ class ShopService {
           combatEffects: libItem.combatEffects || entry.combatEffects || [],
           procEffects: libItem.procEffects || entry.procEffects || [],
           useEffects: libItem.useEffects || entry.useEffects || [],
+          setKey: libItem.setKey ?? entry.setKey ?? null,
+          setKeys: (Array.isArray(libItem.setKeys) && libItem.setKeys.length)
+            ? [...libItem.setKeys]
+            : (libItem.setKey ? [libItem.setKey] : (entry.setKeys || [])),
+          setName: libItem.setName || entry.setName || null,
           // 不覆蓋 equipStats，保留強化後的數值
         };
         // 背包裡的 snapshot 也同步更新
@@ -2017,7 +2030,7 @@ class ShopService {
 
       const itemIds = [...new Set(records.map((r) => r.entry?.itemId).filter(Boolean))];
       const libraryRows = await Promise.all(
-        itemIds.map((itemId) => this.itemRepository?.findById(itemId).catch(() => null) || null)
+        itemIds.map((itemId) => this.itemRepository?.findById(itemId) || null)
       );
       const libraryById = new Map(itemIds.map((itemId, index) => [itemId, libraryRows[index]]));
       const hydratedRecords = records.map((record) => {
@@ -2029,6 +2042,7 @@ class ShopService {
             ...record.entry,
             itemName: lib.name || record.entry.itemName || record.entry.name,
             name: lib.name || record.entry.name || record.entry.itemName,
+            tier: lib.tier ?? record.entry.tier,
             itemType: lib.itemType === "monster_card" ? "monster_card" : (lib.itemType || record.entry.itemType),
             equipSlot: lib.equipSlot || record.entry.equipSlot,
             equipStats: record.entry.equipStats || lib.equipStats || null,
@@ -2051,6 +2065,7 @@ class ShopService {
       const candidates = hydratedRecords.filter(({ entry }) => (
         entry
         && !isUnavailableEquipment(entry)
+        && isEquipmentLevelAllowed(entry, progress.level)
         && entry.itemType === "equipment"
         && AUTO_EQUIP_SLOT_SET.has(String(entry.equipSlot || ""))
       ));
@@ -2067,7 +2082,7 @@ class ShopService {
       ));
       // 玩家有職業但沒有該職業武器時，不把原本武器硬卸掉；保留現況並照其主屬性配裝。
       if (weaponCandidates.length === 0 && equipment.weapon) {
-        weaponCandidates = hydratedRecords.filter(({ key }) => key === "eq:weapon");
+        weaponCandidates = candidates.filter(({ key }) => key === "eq:weapon");
       }
       if (weaponCandidates.length === 0) {
         throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "沒有符合目前職業的武器", 400);
@@ -2218,6 +2233,10 @@ class ShopService {
         (!saved.uuid && e.itemId === saved.itemId && e.equipSlot === slot)
       );
       if (invIdx === -1) continue; // 背包中已不存在，跳過
+      const candidate = inventory[invIdx];
+      const libItem = candidate.itemId && this.itemRepository ? await this.itemRepository.findById(candidate.itemId) : null;
+      const equipRules = libItem ? { ...candidate, tier: libItem.tier ?? candidate.tier, equipSlot: libItem.equipSlot || candidate.equipSlot } : candidate;
+      if (isUnavailableEquipment(equipRules, slot) || !isEquipmentLevelAllowed(equipRules, progress.level, slot)) continue;
       progress.equipment[slot] = inventory.splice(invIdx, 1)[0];
     }
 

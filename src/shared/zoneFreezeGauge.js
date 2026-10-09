@@ -78,6 +78,7 @@ async function read(gaugeKey, zoneKey, now = Date.now()) {
   return {
     gauge: phase === "charging" ? Math.max(0, Math.min(threshold, Number(doc?.gauge) || 0)) : 0,
     threshold,
+    contributors: phase === "charging" ? normalizeContributorMap(doc?.contributors) : {},
     phase,
     frozen: phase === "frozen",
     frozenRemainMs: phase === "frozen" ? Math.max(0, Number(doc.frozenUntil) - now) : 0,

@@ -1,5 +1,6 @@
 "use strict";
 const { activeEquipment } = require("./anchorFeature");
+const { equipmentSetPieceWeight } = require("./equipmentSetPieceWeight");
 
 // 階級套裝（D/C/B/A/S）：按身上「同階裝備件數」給通用加成，與具名套裝(equipmentSetBonuses.js)「同時生效、疊加」。
 // 一件裝備會同時計入「它的階級套」與「它的具名套」——兩邊都吃到。
@@ -67,7 +68,7 @@ const EMPTY_BONUSES = Object.freeze({
   dropPct: 0
 });
 
-// 身上各階裝備件數。與具名套裝「同時計入」：不再排除帶 setKey 的件（一件同時算階級套與具名套）。
+// 身上各階裝備件數。與具名套裝同時計入；雙手主武器在兩邊各計兩件。
 function countEquippedTiers(equipped = {}) {
   equipped = activeEquipment(equipped);
   const counts = { D: 0, C: 0, B: 0, A: 0, S: 0 };
@@ -76,7 +77,7 @@ function countEquippedTiers(equipped = {}) {
   for (const slot of TIER_SET_SLOTS) {
     const it = equipped?.[slot];
     const tier = String(it?.tier || "").toUpperCase();
-    if (tier in counts) counts[tier] += 1;
+    if (tier in counts) counts[tier] += equipmentSetPieceWeight(it, slot);
   }
   return counts;
 }

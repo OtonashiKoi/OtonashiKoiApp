@@ -6,7 +6,7 @@ const recordQuestForPlayersInBackground = (...args) => require("./battleQuestPro
 const { isWorldBossZone, WORLD_BOSS_ZONES } = require("../../services/worldBoss/worldBossService");
 const { killInProgress } = require("./zoneBattleState");
 
-async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal", serviceContext = null, resumeLiveSettlement = false, onRewardsReady = null }) {
+async function handleMonsterKill({ discordId, displayName, session, monster, state, totalDamage = 0, zoneKey = "normal", serviceContext = null, resumeLiveSettlement = false, onRewardsReady = null, detachedSettlement = false, preparedRewardCatalog = null }) {
   const sc = serviceContext || getServiceContext();
   const rewardLines = [];
 
@@ -59,7 +59,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   }
 
   // ── 並發雙殺防護：同一隻怪只允許一次結算 ──
-  const killKey = `${zoneKey}:${monster.seq}`;
+  const killKey = state.normalLive?.encounterKey || `${zoneKey}:${monster.seq}`;
   try {
     if (killInProgress.has(killKey)) {
       // 另一位玩家已在結算中，此次擊殺視為無效，不重複發獎
@@ -72,7 +72,7 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
 
   try {
   // DB 層原子收付擊殺權（防止 PM2 雙進程重載期間雙重結算）
-  const claimed = resumeLiveSettlement && state.normalLive?.killReceipt && Number(state.currentHp)<=0
+  const claimed = detachedSettlement || resumeLiveSettlement && state.normalLive?.killReceipt && Number(state.currentHp)<=0
     ? true : await sc.monsterRepository.claimKill(zoneKey, monster.seq);
   if (!claimed) {
     return rewardLines;
@@ -82,17 +82,17 @@ async function handleMonsterKill({ discordId, displayName, session, monster, sta
   // quest win or personal/world-boss unlock contribution.
   if(state.normalLive?.encounterKey&&!Object.values(state.damageMap||{}).some(v=>Number(v?.damage)>0||Number(v?.assist)>0)){
     onRewardsReady?.({});
-    return await require('./finishMonsterKill').finishMonsterKill({state,monster,sc,zoneKey,mergedDmg:{},perPidRewards:{},rewardLines,discordId:null});
+    return await require('./finishMonsterKill').finishMonsterKill({state,monster,sc,zoneKey,mergedDmg:{},perPidRewards:{},rewardLines,discordId:null,rewardsOnly:detachedSettlement});
   }
 
   const { healerBonusPids, perPidRewards, participants, rewardModsByPid, mergedDmg, canSendRewardNotice, progressCache } = await require("./grantKillCurrencyAndExp").grantKillCurrencyAndExp({ state, discordId, zoneKey, monster, sc, displayName, totalDamage, session, rewardLines });
-  await require("./grantKillDrops").grantKillDrops({ state, healerBonusPids, perPidRewards, monster, discordId, rewardLines, sc, participants, rewardModsByPid, zoneKey, displayName, mergedDmg, canSendRewardNotice, progressCache });
+  await require("./grantKillDrops").grantKillDrops({ state, healerBonusPids, perPidRewards, monster, discordId, rewardLines, sc, participants, rewardModsByPid, zoneKey, displayName, mergedDmg, canSendRewardNotice, progressCache, preparedRewardCatalog });
   // 已入袋就推送掉落；命中與死亡已先公開，附帶通知不可再延後掉落。
   onRewardsReady?.(perPidRewards);
   if (isWorldBossZone(zoneKey) && monster?.isBoss) {
     await require("../worldBoss/worldBossProgression").recordClears(sc.progressRepository, zoneKey, participants);
   }
-  return await require("./finishMonsterKill").finishMonsterKill({ state, monster, sc, zoneKey, mergedDmg, perPidRewards, rewardLines, discordId });
+  return await require("./finishMonsterKill").finishMonsterKill({ state, monster, sc, zoneKey, mergedDmg, perPidRewards, rewardLines, discordId, rewardsOnly:detachedSettlement });
   } finally {
     killInProgress.delete(killKey);
   }

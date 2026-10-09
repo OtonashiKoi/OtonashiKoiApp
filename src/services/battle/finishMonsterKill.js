@@ -17,6 +17,7 @@ const _startMonsterTransition = (...args) => require("./zoneTransitions")._start
 
 async function finishMonsterKill(context) {
   const { state, monster, sc, zoneKey, mergedDmg, perPidRewards, rewardLines, discordId } = context;
+  if (!context.rewardsOnly) {
   // 擊殺數 + 推進下一隻怪物
   const newKillCount = { ...(state.killCount || {}), [monster.id]: ((state.killCount?.[monster.id] || 0) + require('../../shared/encounterGroup').encounterCount(state, monster)) };
   // 取最新 state 以免多人並發時覆蓋其他人的 damageMap
@@ -284,6 +285,9 @@ async function finishMonsterKill(context) {
       }
     }
   }
+
+  }
+  if (context.transitionOnly) return rewardLines;
 
   // 通知參戰獎勵（DM）
   rewardLines.push(...buildPartyRewardSummary(perPidRewards, mergedDmg));

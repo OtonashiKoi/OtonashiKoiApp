@@ -16,6 +16,7 @@ async function maybeStartDevMirror() {
 }
 
 async function bootstrap() {
+  const bootStarted = performance.now();
   await maybeStartDevMirror();
 
   // Acquire exclusive ownership before importing runtimeContext or starting timers.
@@ -60,18 +61,20 @@ async function bootstrap() {
 
     const apiOnly = process.env.API_ONLY === "1";
 
-    if (!apiOnly) {
-      await registerCommands();
-    } else {
-      console.warn("[BOOT] API_ONLY=1 → 跳過 registerCommands（避免覆蓋線上 PC 的 slash command 設定）");
-    }
-
     const client = createBotClient();
-    if (!apiOnly) {
-      await loginBot(client);
-    } else {
-      console.warn("[BOOT] API_ONLY=1 → 跳過 loginBot，Discord client 不會連線 gateway（避免搶 token）");
-    }
+    if (apiOnly) console.warn("[BOOT] API_ONLY=1 → Discord login and registration skipped");
+    let shuttingDown = false;
+    let discordRetry;
+    const startDiscord = async () => {
+      if (apiOnly || shuttingDown) return;
+      try {
+        await registerCommands();
+        if (!shuttingDown) await loginBot(client);
+      } catch (error) {
+        console.error("[Discord] startup failed; web remains available:", error.message);
+        if (!shuttingDown) discordRetry = setTimeout(startDiscord, 30000);
+      }
+    };
 
     // 輕量記憶體監控:每 5 分鐘印 RSS / heap,方便觀察是否有洩漏(配合 PM2 max_memory_restart 防 OOM)
     const _memTimer = setInterval(() => {
@@ -130,14 +133,18 @@ async function bootstrap() {
     const server = app.listen(config.api.port, () => {
       console.log(`[API] listening on port ${config.api.port}${apiOnly ? " (API_ONLY mode)" : ""}`);
       console.log(`[Admin] http://localhost:${config.api.port}/admin`);
+      console.log(`[BootTiming] API ready in ${Math.round(performance.now() - bootStarted)}ms`);
+      require("./api/runtimeGatewayControl").notifyGateway("resume").catch(error => console.error("[RuntimeGateway] resume:", error.message));
+      startDiscord();
     });
 
     // PM2 restart 時先停收新請求，讓已進入結算的戰鬥把 HTTP 回應送完。
     // restartAudit 會保留 18 秒保險上限，避免壞連線讓程序永遠關不掉。
-    let shuttingDown = false;
-    const shutdown = (signal) => {
+    const shutdown = async (signal) => {
       if (shuttingDown) return;
       shuttingDown = true;
+      clearTimeout(discordRetry);
+      await require("./api/runtimeGatewayControl").notifyGateway("pause").catch(error => console.error("[RuntimeGateway] pause:", error.message));
       const getActiveWrites = () => Math.max(0, Number(app.locals.getActiveWriteRequestCount?.()) || 0);
       console.log(`[Shutdown] ${signal}: draining ${getActiveWrites()} active write request(s)...`);
       server.close((error) => {

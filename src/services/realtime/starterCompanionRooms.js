@@ -13,7 +13,11 @@ async function createLiveRoom(engine,sc,zone,monster,state,monsterStats=monster.
   const epoch=Number(state.normalLiveSpawnAt)||engine.scene.ensure(zone,state,monster)?.spawnAt||engine.now();
   const enemyTick=calculateBattleTickMs(monsterStats.agi||1);
   const companions=engine.starterNpcs?await loadCompanions(sc,zone):[];
-  return {sc,zone,monster,seq:Number(monster.seq),epoch,enemyAt:epoch+Math.max(1,Math.floor((engine.now()-epoch)/enemyTick)+1)*enemyTick,enemyTick,enemyTurn:0,members:new Map(),companions,closed:false};
+  const room={sc,zone,monster,seq:Number(monster.seq),epoch,enemyAt:epoch+Math.max(1,Math.floor((engine.now()-epoch)/enemyTick)+1)*enemyTick,enemyTick,enemyTurn:0,members:new Map(),companions,closed:false};
+  if(require("../../shared/encounterGroup").NORMAL_ZONES.has(zone)&&sc.liveSettlementRepository){
+    room.rewardCatalog=require("./normalLiveSettlement").prepareRewardCatalog(sc,monster,zone).then(catalog=>room.rewardCatalogReady=catalog).catch(error=>{console.error("[LiveRewardPrepare]",zone,error.message);return null;});
+  }
+  return room;
 }
 function startRoomClock(engine,room){
   if(engine.auto&&!room.timer){

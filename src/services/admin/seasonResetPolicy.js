@@ -11,6 +11,7 @@ const RESET_UNSET_FIELDS = [
   "bardScore", "bardStreak", "berserkGauge", "diceGauge", "diceLuck", "oniGauge", "sageGauge",
   "shadowGauge", "sniperGauge", "sunSpirit", "accountSoloBoss", "accountWorldBossClears", "equipPresetNames",
   "partyPendingDrops", "partyItemReceipts", "partyPotionReceipts", "partyJobStateReceipt", "partyProgressReceipts",
+  "weaponChoiceReceipts",
 ];
 
 const SEASON_RESET_RULES = Object.freeze({

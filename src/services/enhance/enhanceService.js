@@ -145,6 +145,9 @@ class EnhanceService {
     }
 
     const currentLevel = Math.max(0, Number(equipment.enhanceLevel) || 0);
+    if (!Number.isInteger(currentLevel) || currentLevel >= MAX_ENHANCE_LEVEL) {
+      throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "裝備已達強化上限或強化等級無效", 400);
+    }
     if (isGamble && currentLevel < GAMBLE_MIN_ENHANCE_LEVEL) {
       throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "賭鬼強化需裝備至少 +1 才能使用", 400);
     }

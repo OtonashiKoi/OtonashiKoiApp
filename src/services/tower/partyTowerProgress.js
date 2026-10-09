@@ -37,6 +37,10 @@ async function settleProgress(sc, room, member, reward, time) {
     for (const [key, group] of groups) await quests.recordProgressBatch(member.discordId, group.metrics,
       { periodKeys: group.periodKeys, operationId: `${receipt}:${key}`,
         autumnEvent: { eligible: group.titleEligible, slot: member.progressSnapshot?.activeCharacterSlot || 1, seasonKey: room.seasonKey } });
+    const clearRule = require("../../shared/partyTowerRewardRules").REWARDS[room.difficulty];
+    if (room.terminal === "win" && !room.failReason && clearRule && room.clearedFloor === clearRule.floors && kills.some(k => k.floor === clearRule.floors))
+      await quests.recordProgressBatch(member.discordId, { [clearRule.metric]: 1 },
+        { periodKeys: kills.at(-1).periodKeys, operationId: `tower-first-clear:${receipt}` });
     if (room.terminal === "win" && room.difficulty === "challenge" && room.clearedFloor === 50 && kills.at(-1)?.titleEligible === true)
       await quests.autumnTitles?.record(member.discordId, { type: "challenge", difficulty: "challenge", floor: 50, runId: room.runId,
         slot: member.progressSnapshot?.activeCharacterSlot || 1, seasonKey: room.seasonKey, id: `challenge:${receipt}` });

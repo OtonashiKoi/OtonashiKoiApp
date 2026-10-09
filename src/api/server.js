@@ -2,6 +2,9 @@ const express = require("express");
 const path = require("path");
 const cors = require("cors");
 const compression = require("compression");
+const { setGameMediaCacheHeaders } = require("./gameMediaCache");
+const { createCloudflareGameMediaRedirect } = require("./cloudflareGameMediaRedirect");
+const { createCanonicalOriginRedirect } = require("./canonicalOrigin");
 
 const { isAppError } = require("../shared/errors");
 const { fail } = require("../shared/response");
@@ -25,6 +28,7 @@ const { createPlayerCollectionRoutes } = require("./routes/playerCollectionRoute
 const { createPlayerForgeRoutes } = require("./routes/playerForgeRoutes");
 const { createPlayerCraftingRoutes } = require("./routes/playerCraftingRoutes");
 const { createPlayerCharacterRoutes } = require("./routes/playerCharacterRoutes");
+const { createPlayerAssetRoutes } = require("./routes/playerAssetRoutes");
 const { createPlayerEnchantRoutes } = require("./routes/playerEnchantRoutes");
 const { createSoloBossRoutes } = require("./routes/soloBossRoutes");
 const { createPlayerIdleRoutes } = require("./routes/playerIdleRoutes");
@@ -91,6 +95,9 @@ function createApiServer(discordClient) {
     next();
   });
 
+  // HTTP must reach HTTPS before crossorigin module/CSS loads encounter CORS.
+  app.use(createCanonicalOriginRedirect(config.api.publicBaseUrl));
+
   const allowedOrigins = config.api.allowedOrigins || [];
   // PUBLIC_BASE_URL 自動加入 allow list（後端自己對外的 URL）
   const publicBaseOrigin = (() => {
@@ -151,10 +158,11 @@ function createApiServer(discordClient) {
   // 每個 API 請求建立獨立的記憶體快取 context
   // 同一請求內對同一 playerId 的重複 DB 讀取直接從記憶體回傳
   app.use((_req, _res, next) => runWithCache(next));
+  app.use(createCloudflareGameMediaRedirect());
   app.use("/static", express.static(path.resolve(__dirname, "../web/public"), {
     etag: false,
     lastModified: false,
-    setHeaders(res) {
+    setHeaders(res, filePath) {
       const contentType = String(res.getHeader("Content-Type") || "");
       if (
         contentType &&
@@ -166,7 +174,7 @@ function createApiServer(discordClient) {
       ) {
         res.setHeader("Content-Type", `${contentType}; charset=utf-8`);
       }
-      res.setHeader("Cache-Control", "no-store");
+      if (!setGameMediaCacheHeaders(res, filePath)) res.setHeader("Cache-Control", "no-store");
     }
   }));
   // 上傳圖片長快取（ETag 仍會比對；內容變了 ETag 變、瀏覽器自然抓新圖；7 天內不重打）
@@ -194,6 +202,7 @@ function createApiServer(discordClient) {
   app.use(require("./routes/adminLiveRoutes").createAdminLiveRoutes(serviceContext));
   app.use(createPlayerAppRoutes(serviceContext, discordClient));
   app.use(createPlayerCharacterRoutes(serviceContext));
+  app.use(createPlayerAssetRoutes(serviceContext));
   app.use(createPlayerCollectionRoutes(serviceContext));
   app.use(createPlayerForgeRoutes(serviceContext));
   app.use(createPlayerCraftingRoutes(serviceContext));
@@ -239,6 +248,8 @@ function createApiServer(discordClient) {
         // index.html 永遠不快取（部署新版立即生效）
         if (filePath.endsWith("index.html")) {
           res.setHeader("Cache-Control", "no-store");
+        } else if (/\.(mp3|m4a|wav|ogg|aac)$/i.test(filePath)) {
+          setGameMediaCacheHeaders(res, filePath);
         } else if (/\.(js|css|woff2?|png|jpg|jpeg|webp|svg|ico)$/i.test(filePath)) {
           // 帶 hash 的 asset 長快取
           res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
@@ -248,8 +259,8 @@ function createApiServer(discordClient) {
     // 同時 serve src/web/public/ 根目錄的 privacy.html、terms.html
     app.use(express.static(path.resolve(__dirname, "../web/public"), {
       index: false,
-      setHeaders(res) {
-        res.setHeader("Cache-Control", "no-store");
+      setHeaders(res, filePath) {
+        if (!setGameMediaCacheHeaders(res, filePath)) res.setHeader("Cache-Control", "no-store");
       }
     }));
     // SPA fallback：任何不是 api / admin / static / uploads / health / *.html

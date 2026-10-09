@@ -49,7 +49,7 @@ async function grantKillDrops(context) {
   }
 
   const encounterSize = require('../../shared/encounterGroup').encounterCount(context.state, monster);
-  const singleDropPool = await buildMonsterDropPool(sc, monster);
+  const singleDropPool = context.preparedRewardCatalog?.pool || await buildMonsterDropPool(sc, monster);
   if(liveKey)return require("./grantNormalLiveDrops").grantLiveDrops(context,singleDropPool,encounterSize);
   const monsterDropPool = Array.from({ length: encounterSize }, () => singleDropPool).flat();
   const itemReads=new Map();

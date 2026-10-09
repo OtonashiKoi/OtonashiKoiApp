@@ -355,6 +355,7 @@ class PetService {
   // ── 對外：查詢寵物狀態（含懶結算） ──
   async getPetState(discordId) {
     const progress = await this._loadProgress(discordId);
+    const expectedPets = structuredClone(progress.pets);
     const active = this._getActivePet(progress);
     const dex = this._dexGatherParams(progress);
     let changed = false;
@@ -366,7 +367,7 @@ class PetService {
       changed = true;
     }
     // 只改 pets（採集/飽食結算）→ 不整份覆寫，避免抹掉同時段發放的道具
-    if (changed) await this.progressRepository.updateFields(progress.playerId, { pets: progress.pets });
+    if (changed) await this.progressRepository.updateFields(progress.playerId, { pets: progress.pets }, { expectedPets });
 
     const eggCount = progress.inventory.reduce((sum, item) => {
       if (!item || item.itemType !== "pet_egg") return sum;
@@ -450,6 +451,7 @@ class PetService {
     const gSpeed = Math.max(0.1, Number(dex?.speedMult) || 1);
     return {
       uuid: pet.uuid,
+      locked: Boolean(pet.locked),
       petId: pet.petId || null,
       eggType: String(pet.eggType || "dragon").toLowerCase(), // 蛋種：dragon/slime/wolf（決定 emoji）
       combatBonus: pet.stage === "grown" ? this._combatSummary(pet) : null, // 狼系戰鬥加成摘要
@@ -852,6 +854,9 @@ class PetService {
       isTwoHanded: item.isTwoHanded || false,
       atkStat: item.atkStat || null,
       tier: item.tier || null,
+      setKey: item.setKey || null,
+      setKeys: Array.isArray(item.setKeys) ? [...item.setKeys] : (item.setKey ? [item.setKey] : []),
+      setName: item.setName || null,
       // 帶上怪物卡技能欄位，否則寵物採集到的卡片會被歸到「特殊」而非「卡片」分類
       monsterCardSkill: item.monsterCardSkill || null,
       enhanceLevel: 0,
@@ -863,6 +868,7 @@ class PetService {
   // ── 設定出戰寵物（限 1） ──
   async setActivePet(discordId, petUuid) {
     const progress = await this._loadProgress(discordId);
+    const expectedPets = structuredClone(progress.pets);
     const pet = this._findPet(progress, petUuid);
     if (!pet) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
     const previousActive = this._getActivePet(progress);
@@ -875,13 +881,14 @@ class PetService {
     // 切上前台後才開始計採集時間；既有累積物不清空。
     if (!previousActive || previousActive.uuid !== petUuid) pet.lastSettleAt = nowMs();
     pet.lastSatietyAt = nowMs();
-    await this.progressRepository.updateFields(progress.playerId, { pets: progress.pets, activePetUuid: petUuid });
+    await this.progressRepository.updateFields(progress.playerId, { pets: progress.pets, activePetUuid: petUuid }, { expectedPets });
     return { activePetUuid: petUuid, pet: this._toView(pet, dex) };
   }
 
   // ── 取消出戰（變成沒有出戰寵物） ──
   async deactivatePet(discordId) {
     const progress = await this._loadProgress(discordId);
+    const expectedPets = structuredClone(progress.pets);
     const previousActive = this._getActivePet(progress);
     if (previousActive) {
       const dex = this._dexGatherParams(progress);
@@ -889,15 +896,29 @@ class PetService {
       this._applyHungerDecay(previousActive);
     }
     progress.activePetUuid = null;
-    await this.progressRepository.updateFields(progress.playerId, { pets: progress.pets, activePetUuid: null });
+    await this.progressRepository.updateFields(progress.playerId, { pets: progress.pets, activePetUuid: null }, { expectedPets });
     return { activePetUuid: null };
+  }
+
+  async setPetLocked(discordId, petUuid, locked) {
+    if (typeof locked !== "boolean") throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "請指定鎖定狀態", 400);
+    return withPlayerProgressLock(discordId, async () => {
+      const updated = await this.progressRepository.setPetLocked(discordId, petUuid, locked);
+      if (!updated) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
+      return { petUuid, locked };
+    });
   }
 
   // ── 放生（移除寵物，無任何回饋） ──
   async releasePet(discordId, petUuid) {
+    return withPlayerProgressLock(discordId, () => this._releasePet(discordId, petUuid));
+  }
+
+  async _releasePet(discordId, petUuid) {
     const progress = await this._loadProgress(discordId);
     const pet = this._findPet(progress, petUuid);
     if (!pet) throw new AppError(ERROR_CODES.ITEM_NOT_FOUND, "找不到該寵物", 404);
+    if (pet.locked) throw new AppError(ERROR_CODES.INVALID_ARGUMENT, "寵物已鎖定，請先解鎖", 400);
     const released = this._toView(pet, this._dexGatherParams(progress));
     progress.pets = progress.pets.filter((p) => p && p.uuid !== petUuid);
     if (progress.activePetUuid === petUuid) {

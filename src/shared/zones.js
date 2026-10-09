@@ -81,7 +81,7 @@ const ZONE_DEFS = [
     key: "metal_throne", featureKey: "monster_zone_metal_throne",
     label: "鋼冕王座", emoji: "👑", color: 0xb9a16c,
     tagline: "鎧冕王・赫鋼的王座，金屬性常態世界王。",
-    minLevel: 50, maxLevel: null, defaultEntryFee: 10000, worldBoss: true,
+    minLevel: 40, maxLevel: null, defaultEntryFee: 10000, worldBoss: true,
   },
   {
     key:          "dragon_realm",
@@ -101,7 +101,7 @@ const ZONE_DEFS = [
     emoji:        "👑",
     tagline:      "群龍之主沉眠之地，唯擊敗大史王者方得入內。",
     color:        0x7f1d1d,
-    minLevel:     50,
+    minLevel:     40,
     maxLevel:     null,
     defaultEntryFee: 10000,
   },
@@ -123,7 +123,7 @@ const ZONE_DEFS = [
     emoji:        "🌋",
     tagline:      "烈焰最深處，狼牙王咆哮於火獄核心；唯屠本週古龍者，方可踏入。",
     color:        0x991b1b,
-    minLevel:     50,
+    minLevel:     40,
     maxLevel:     null,
     defaultEntryFee: 15000,
   },
@@ -134,7 +134,7 @@ const ZONE_DEFS = [
     emoji:        "💀",
     tagline:      "極限試煉，非凡之路。",
     color:        0xef4444,
-    minLevel:     40,
+    minLevel:     30,
     maxLevel:     null,
     defaultEntryFee: 5000,
   },
@@ -197,7 +197,7 @@ const ZONE_DEFS = [
     emoji:        "🎪",
     tagline:      "期間限定世界王，內容準備中。",
     color:        0xffd166,
-    minLevel:     1,
+    minLevel:     40,
     maxLevel:     null,
     defaultEntryFee: 0,
     group:        "event",
@@ -206,22 +206,22 @@ const ZONE_DEFS = [
   {
     key:          "event_boss_hutao_preview",
     featureKey:   "monster_zone_event_boss_hutao_preview",
-    label:        "VTUBER的世界・胡桃私測",
+    label:        "北風雀神・胡桃",
     emoji:        "🀄",
-    tagline:      "北風雀神・胡桃限定武器私測。",
+    tagline:      "限時世界王・北風雀神。",
     color:        0x65c9b8,
-    minLevel:     1,
+    minLevel:     40,
     maxLevel:     null,
-    defaultEntryFee: 5000,
+    defaultEntryFee: 50000,
     group:        "event",
     worldBoss:    true,
     bestiaryVisible: false,
-    previewPlayerIds: Object.freeze(["865264891991425055"]),
+    previewPlayerIds: Object.freeze([]),
   },
   {
     key: "event_boss_rabbit_preview", featureKey: "monster_zone_event_boss_rabbit_preview",
     label: "VTUBER的世界・饅頭兔私測", emoji: "🐰", tagline: "爆走饅頭兔：打斷蒸氣蓄力。",
-    color: 0xb69ee8, minLevel: 50, maxLevel: null, defaultEntryFee: 5000,
+    color: 0xb69ee8, minLevel: 40, maxLevel: null, defaultEntryFee: 5000,
     group: "event", worldBoss: true, bestiaryVisible: false,
     previewPlayerIds: Object.freeze(["865264891991425055"]),
   },
@@ -254,7 +254,7 @@ function normalizeZone(zone) {
 /** 玩家是否可看見／進入指定區域。previewPlayerIds 為空時代表公開。 */
 function canPlayerAccessZone(zoneKey, playerId) {
   const def = ZONE_BY_KEY[zoneKey];
-  if (require("./worldBossAvailability").CLOSED_BOSS_KEYS.includes(require("../services/worldBoss/worldBossService").bossKeyForZone(zoneKey))) return false;
+  if (require("./worldBossAvailability").isBossClosed(require("../services/worldBoss/worldBossService").bossKeyForZone(zoneKey))) return false;
   if (!def || def.enabled === false) return false;
   const allowlist = Array.isArray(def.previewPlayerIds) ? def.previewPlayerIds : [];
   if (allowlist.length === 0) return true;
@@ -332,8 +332,7 @@ function checkZoneLevelRequirementWithBinding(zoneKey, playerLevel, binding) {
   const label = def.label || zoneKey;
 
   // binding 有明確設定（非 null）才覆蓋；null 表示「不限」，undefined 表示「未填，用預設」
-  const minLevel = (binding && binding.minLevel != null) ? binding.minLevel : (def.minLevel ?? 1);
-  const maxLevel = (binding && binding.maxLevel !== undefined) ? binding.maxLevel : (def.maxLevel ?? null);
+  const { minLevel, maxLevel } = getZoneLevelLimits(zoneKey, binding);
 
   if (minLevel > 1 && playerLevel < minLevel) {
     return `**${label}** 需要 **Lv.${minLevel}** 以上才能進入！（目前：Lv.${playerLevel}）`;
@@ -342,6 +341,14 @@ function checkZoneLevelRequirementWithBinding(zoneKey, playerLevel, binding) {
     return `**${label}** 僅限 **Lv.${maxLevel}** 以下的玩家進入！（目前：Lv.${playerLevel}）`;
   }
   return null;
+}
+
+function getZoneLevelLimits(zoneKey, binding = null) {
+  const def = ZONE_BY_KEY[zoneKey] || {};
+  return {
+    minLevel: binding?.minLevel != null ? binding.minLevel : (def.minLevel ?? 1),
+    maxLevel: binding?.maxLevel !== undefined ? binding.maxLevel : (def.maxLevel ?? null),
+  };
 }
 
 /** zone 分組：預設 "normal"（常態討伐/世界王），"event" = 期間限定活動。 */
@@ -376,4 +383,5 @@ module.exports = {
   isEventZone,
   checkZoneLevelRequirement,
   checkZoneLevelRequirementWithBinding,
+  getZoneLevelLimits,
 };

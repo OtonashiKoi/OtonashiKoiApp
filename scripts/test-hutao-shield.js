@@ -1,0 +1,39 @@
+"use strict";
+const assert = require("node:assert/strict");
+const { HUTAO_SHIELD, HUTAO_S_EQUIPMENT, buildItem } = require("./upsert-event-hutao-preview");
+const { isUnavailableEquipment } = require("../src/shared/equipmentAvailability");
+const { calcPlayerStats } = require("../src/shared/combatStats");
+const { countEquippedSets, getSetEffects } = require("../src/shared/equipmentSetBonuses");
+const { collectEquipmentEffects } = require("../src/shared/effectEngine");
+const { hasEffect: hasStandaloneWind } = require("../src/shared/windDirection");
+
+const shield = { ...buildItem(HUTAO_SHIELD, "2026-10-09T00:00:00.000Z"), itemId: HUTAO_SHIELD.id };
+const weapon = { ...buildItem(HUTAO_S_EQUIPMENT[0], "2026-10-09T00:00:00.000Z"), itemId: HUTAO_S_EQUIPMENT[0].id };
+const attrs = { str: 40, agi: 30, vit: 40, int: 10, dex: 30, luk: 20 };
+assert.equal(isUnavailableEquipment(shield), false);
+assert.equal(isUnavailableEquipment({ ...shield, id: "other-s-shield", itemId: "other-s-shield" }), true);
+assert.equal(shield.equipSlot, "shield");
+assert.equal(shield.weaponType, null);
+assert.equal(shield.setKey, "northwind_hutao");
+assert.deepEqual(shield.setKeys, ["northwind_hutao"]);
+assert.deepEqual(shield.equipStats, { str: 3, agi: 0, vit: 12, int: 0, dex: 3, luk: 0 });
+assert.equal(HUTAO_S_EQUIPMENT.length, 14);
+for (const spec of HUTAO_S_EQUIPMENT) {
+  const item = { ...buildItem(spec, "2026-10-09T00:00:00.000Z"), itemId: spec.id };
+  const expected = item.equipSlot === "weapon" && item.isTwoHanded ? 2 : 1;
+  assert.equal(countEquippedSets({ [item.equipSlot]: item }).counts.northwind_hutao, expected);
+  assert.equal(countEquippedSets({ [item.equipSlot]: { ...item, setKey: null, setKeys: [] } }).counts.northwind_hutao, expected, `${spec.id} 舊快照未計件`);
+}
+assert.equal(countEquippedSets({ weapon, shield }).counts.northwind_hutao, 2);
+const aSlots = ["head_top", "head_mid", "head_low", "armor", "garment", "shoes"];
+const aGear = Object.fromEntries(aSlots.map((slot) => [slot, { tier: "A", equipSlot: slot, setKey: "northwind_hutao" }]));
+assert.equal(countEquippedSets({ ...aGear, weapon, shield }).counts.northwind_hutao, 8);
+assert.equal(getSetEffects({ ...aGear, weapon, shield }).some((effect) => effect.key === "wind_direction_cycle"), true);
+assert.equal(hasStandaloneWind({ ...aGear, weapon, shield }), false, "八件套裝場風應取代單件風向");
+const base = calcPlayerStats(attrs, { weapon }, [], []);
+const withShield = calcPlayerStats(attrs, { weapon, shield }, [], []);
+assert.equal(withShield.blockChance - base.blockChance, 20);
+assert.equal(withShield.isDualWield, false);
+assert.equal(collectEquipmentEffects({ shield }).filter((effect) => effect.key === "wind_direction_cycle").length, 1);
+assert.equal(collectEquipmentEffects({ shield: { ...shield, itemId: "other-s-shield", id: "other-s-shield" } }).length, 0);
+console.log("胡桃盾牌：S 副手開放、20% 格擋、風向效果、14 件 S 裝與既有快照計入 A 套裝、其他 S 盾維持關閉。通過");

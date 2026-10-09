@@ -2,8 +2,9 @@
 const jwt = require("jsonwebtoken");
 const config = require("../../config");
 const { ok, fail } = require("../../shared/response");
-const { requireAuth } = require("./requireAuth");
+const { requireAuth } = require("./requireAuth"), { equipmentLevelView } = require("../../shared/equipmentLevel");
 const { AppError, ERROR_CODES } = require("../../shared/errors");
+const { hydrateAuctionImages } = require("../auctionImages");
 const { getSnapshot: getStreamPresenceSnapshot } = require("../../services/stream/streamPresence");
 const { EFFECT_NAME_ZH } = require("../../shared/effectDisplayNames");
 const { isEffectConditionMet, decrementActiveEffects, collectEquipmentEffects, mergeEquippedFromLibrary } = require("../../shared/effectEngine");
@@ -224,6 +225,7 @@ function classifyAuctionCategory(item) {
 
 function createPlayerAppRoutes(serviceContext, discordClient) {
   const router = Router();
+  require("./liveBattlePotionRoutes").register(router, serviceContext);
   // 頭像快取用同一個 discord client(玩家氣泡需要頭像)
   try { require("../../services/realtime/avatarCache").setClient(discordClient); } catch (_) { /* noop */ }
   const STREAM_AUTH_STATE_TTL = "15m";
@@ -1166,12 +1168,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         } catch (_) {}
       }
       
-      const [profileResult, walletResult] = await Promise.all([
-        serviceContext.playerService.getProfile(discordId, displayName),
-        serviceContext.walletService.getWalletByDiscordId(discordId, displayName)
-      ]);
+      const profileResult = await serviceContext.playerService.getProfile(discordId, displayName);
+      const walletResult = { wallet: profileResult.wallet };
 
-      const progress = await serviceContext.progressRepository.findByPlayerId(discordId);
+      const progress = profileResult.progress;
       const attrs = progress?.attributes || { str: 1, agi: 1, vit: 1, int: 1, dex: 1, luk: 1 };
 
       // 卡片圖鑑：曾擁有就永久登錄——在常被載入的 profile 補登，確保「拿到卡(掉落/開包/拍賣/交易)後就算」，
@@ -1202,7 +1202,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       let mergedEquipment = progress?.equipment || {};
       try {
         const { calcPlayerStats } = require("../../shared/combatStats");
-        mergedEquipment = await mergeEquippedFromLibrary(progress?.equipment || {}, serviceContext.itemRepository);
+        // getProfile already reads and hydrates current equipment once.
+        mergedEquipment = progress?.equipment || {};
         const cs = calcPlayerStats(attrs, mergedEquipment, progress?.activeEffects || [], progress?.inventory || [], { petStat: require("../../shared/petDex").statBonusOf(progress?.petDex) });
         // 計算裝備屬性加成
         for (const item of Object.values(mergedEquipment)) {
@@ -1264,6 +1265,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       };
       const bodyEffects = [];
       try {
+        const windDirection = require("../../shared/windDirection");
+        let windEffectShown = false;
         const effCtx = { equipped: mergedEquipment, inventory: progress?.inventory || [] };
         for (const [slot, item] of Object.entries(mergedEquipment || {})) {
           if (!item || typeof item !== "object") continue;
@@ -1271,13 +1274,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           for (const eff of arrs) {
             if (!eff || !eff.key) continue;
             if (!isEffectConditionMet(eff, effCtx)) continue;
+            // 戰鬥只採一份四風效果；主副手同時裝備時，身上特效也只列一項。
+            const isUniqueWind = eff.key === windDirection.EFFECT_KEY;
+            if (isUniqueWind && windEffectShown) continue;
+            if (isUniqueWind) windEffectShown = true;
             // 數值顯示依引擎語意（PCT_VALUE_EFFECT_KEYS）：百分比效果帶 %、開關型不顯示數字
             const valueText = formatEffectValueText(eff.key, eff?.params);
             bodyEffects.push({
               source: item.itemName || item.name || BODY_SLOT_ZH[slot] || slot,
               slot,
               name: EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key,
-              desc: eff.notes || "",
+              desc: isUniqueWind ? windDirection.describeUniquePassive(eff) : eff.notes || "",
               value: eff?.params?.value ?? null,
               valueText,
               chance: eff.chance ?? 100,
@@ -1631,31 +1638,35 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       try {
         const repo = serviceContext.itemRepository;
         const ids = [...new Set(inventory.map((it) => it?.itemId).filter(Boolean))];
-        const results = await Promise.all(ids.map((id) => repo.findById(id).catch(() => null)));
+        const results = repo.findByIds ? await repo.findByIds(ids) : await Promise.all(ids.map((id) => repo.findById(id).catch(() => null)));
         const libMap = {};
-        ids.forEach((id, i) => { if (results[i]) libMap[id] = results[i]; });
+        results.forEach((item, i) => { if (item) libMap[repo.findByIds ? item.id : ids[i]] = item; });
         const jbl = require("../../shared/jobBadgeLevel");
         inventory = inventory.map((it) => {
           const lib = it?.itemId ? libMap[it.itemId] : null;
           const merged = !lib ? { ...it } : {
-            ...it,
+            ...it, tier: lib.tier ?? it.tier,
             imageUrl: lib.imageUrl || it.imageUrl || null,
             imageThumbnailUrl: lib.imageThumbnailUrl || it.imageThumbnailUrl || null,
             description: lib.description ?? it.description ?? null,
             catalogCreatedAt: lib.createdAt || it.catalogCreatedAt || null, catalogSortOrder: lib.sortOrder != null && lib.sortOrder !== "" && Number.isFinite(Number(lib.sortOrder)) ? Number(lib.sortOrder) : null,
             monsterCardSkill: lib.monsterCardSkill || it.monsterCardSkill || null,
+            setKey: lib.setKey ?? it.setKey ?? null,
+            setKeys: (Array.isArray(lib.setKeys) && lib.setKeys.length)
+              ? lib.setKeys : (lib.setKey ? [lib.setKey] : (it.setKeys || [])),
+            setName: lib.setName || it.setName || null,
             // 詳細資料面板的「特效說明」列（卡片技能 + 裝備效果，後端組好直接顯示）
             effectLines: buildItemEffectLines(lib),
           };
           // 職業徽章：附上熟練度概況（等級/場次進度/屬性縮放%）——從實例的 jobExp 算，
           // 不是道具庫（每顆徽章各自練）。前端 modal 顯示用。
           if (jbl.isJobBadgeEntry(merged)) merged.badgeProgress = jbl.readBadgeProgress(it);
-          return merged;
+          return { ...merged, ...equipmentLevelView(lib || merged, progress?.level) };
         });
         equipped = await mergeEquippedFromLibrary(equipped, repo);
         for (const [slot, entry] of Object.entries(equipped)) {
           if (entry) {
-            equipped[slot] = { ...entry, effectLines: buildItemEffectLines(entry) };
+            equipped[slot] = { ...entry, effectLines: buildItemEffectLines(entry), ...equipmentLevelView(entry, progress?.level, slot) };
             if (jbl.isJobBadgeEntry(entry)) equipped[slot].badgeProgress = jbl.readBadgeProgress(entry);
           }
         }
@@ -1735,6 +1746,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   });
 
   // 3.3 Use Item (consumable effect)
+  require("./playerWeaponChoiceRoutes").registerWeaponChoiceRoutes(router, serviceContext, requireAuth);
   router.post("/api/me/inventory/use/:uuid", requireAuth, async (req, res, next) => {
     try {
       const { discordId, displayName } = req.playerRecord;
@@ -2919,6 +2931,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (require("../../services/worldBoss/worldBossService").isWorldBossZone(zoneKey)) {
         const gate = await serviceContext.worldBossServiceFor(zoneKey).getConfigWithStatus(discordId);
         if (!gate.status.unlocked) return res.status(403).json(fail("WORLD_BOSS_LOCKED", gate.status.lockedReason));
+        if (zoneKey === "event_boss_hutao_preview" && !gate.status.canChallenge) return res.status(409).json(fail("WORLD_BOSS_COOLDOWN", "胡桃尚未開放或仍在重生冷卻中"));
         worldBossRelease = await require("../../services/worldBoss/worldBossBattleLock").acquireWorldBossBattleLock(zoneKey);
       }
       if (require("../../services/realtime/zoneCombatScene").zoneCombatScene.supports(zoneKey)) {
@@ -3143,7 +3156,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const auraChanged = JSON.stringify(newAuras) !== JSON.stringify(prevAurasRaw);
       if (auraChanged) {
         const updatedState = { ...freshStateForAura, activeHealerAuras: newAuras, activeHealerAura: null };
-        await serviceContext.monsterService.saveState(updatedState, zoneKey);
+        if (!await serviceContext.monsterService.saveBattleAuras(freshStateForAura, newAuras, zoneKey)) {
+          throw new AppError("scene_transition", "共鬥狀態更新中，請稍後重試。", 409);
+        }
         stateForCombat = updatedState;
       }
 
@@ -3247,7 +3262,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const _wbPartKeys = require("../../services/battle/zoneBattleService").getWorldBossPartKeys(zoneKey) || ["head", "body", "legs"];
       const WB_VALID_PARTS = new Set(_wbPartKeys);
       const _wbPartFallback = WB_VALID_PARTS.has("body") ? "body" : _wbPartKeys[0];
-      const isWorldBoss = isWorldBossZone(zoneKey) && Boolean(monster?.isBoss);
+      const isWorldBoss = isWorldBossZone(zoneKey) && Boolean(monster?.isBoss) && zoneKey !== "event_boss_hutao_preview";
       // 部位：世界王一律要求明確帶 part。
       // 舊行為「沒帶/不合法就靜默 fallback 軀幹」會把前端漏帶 part 的 bug 隱形成
       // 「打著打著突然換部位」（例：429 重排隊漏帶 part）→ 改為硬擋，與單人王端點一致。
@@ -3597,6 +3612,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           playerName: displayName,
           playerLevel: progress?.level || 1,
           stance: battleStanceKey,
+          ...(zoneKey === "event_boss_hutao_preview" ? {liveControlSeed:{stun:stunStateBefore,freeze:freezeStateBefore}} : {}),
           playerActiveEffects: [...comboEffects, ...berserkEffects],
           comboBurstMult,
           zoneComboCount: comboBefore, // 劍鬼斬的倍率來源（其他職業無感）
@@ -3656,7 +3672,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         };
       const liveCombat = require("../../services/realtime/normalLiveCombat").normalLiveCombat;
       const combatResult = liveCombat.supports(zoneKey)
-        ? await liveCombat.join({sc:serviceContext,zone:zoneKey,monster,state:stateForCombat,actorId:discordId,actorName:displayName,stats:battlePStats,monsterStats:battleMonsterStats,options:{...combatOptions,liveRecovery:{comboBefore,comboBenefits,comboConsumed,diedOnce:_zc.readDiedOnce(progress,zoneKey),berserkGauge:gaugeCfg?_bg.next(gaugeBefore,gaugeCfg,{consumed:gaugeFull}):null}},tickMs:calculateTickDelay(pStats.agi||1),onStart:initial=>{if(req.body?.liveStartOnly===true)res.json(ok(initial));}})
+        ? await liveCombat.join({sc:serviceContext,zone:zoneKey,monster,state:stateForCombat,actorId:discordId,actorName:displayName,stats:battlePStats,monsterStats:battleMonsterStats,options:{...combatOptions,liveRecovery:{comboBefore,comboBenefits,comboConsumed,diedOnce:_zc.readDiedOnce(progress,zoneKey),berserkGauge:gaugeCfg?_bg.next(gaugeBefore,gaugeCfg,{consumed:gaugeFull}):null}},tickMs:calculateTickDelay(pStats.agi||1),onStart:initial=>{if(worldBossRelease){worldBossRelease();worldBossRelease=null;}if(req.body?.liveStartOnly===true)res.json(ok(initial));}})
         : runCombatLoop(battlePStats,battleMonsterStats,monster.name,combatMonsterHp,undefined,combatOptions);
       const { roundLogs, finalPlayerHp, combatStats } = combatResult;
       markBattlePerf("combat");
@@ -4061,7 +4077,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       // ── 敲世界王暈眩條（只有矮人戰士長敲得動）──
       // 敲擊量＝這場實際有攻擊到的回合數；原子 $inc，多個矮人同時敲不會掉數字。
       let stunKnock = null;
-      if (stunGaugeKey && _dsg.canKnock(equipped?.job_eq)) {
+      if (!(combatResult.liveBattleId && zoneKey === "event_boss_hutao_preview") && stunGaugeKey && _dsg.canKnock(equipped?.job_eq)) {
         const stunAmount = Math.floor((combatResult?.combatStats?.attackRounds || 0) * turtleGaugeMult);
         stunKnock = await _dsg
           .knock(stunGaugeKey, zoneKey, stunAmount, displayName, Date.now(), discordId, selfJobId, selfJobName || "矮人戰士長")
@@ -4089,9 +4105,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
 
       // ── 累積區域冰凍值（只有元素師・凍霜姿態）── 累積量＝實際命中的攻擊回合數；不廣播。
       let freezeKnock = null;
-      if (_zfg.canKnock(equipped?.job_eq) && battleStanceKey === "frost") {
+      if (!(combatResult.liveBattleId && zoneKey === "event_boss_hutao_preview") && _zfg.canKnock(equipped?.job_eq) && (combatResult?.liveBattleId ? Number(combatResult?.combatStats?.frostAttackRounds) > 0 : battleStanceKey === "frost")) {
         // 與暈眩值同口徑：同一回合多段命中只算 1，未命中的回合不算。
-        const freezeAmount = Math.floor((combatResult?.combatStats?.attackRounds || 0) * turtleGaugeMult);
+        const freezeAmount = Math.floor((combatResult?.liveBattleId ? combatResult?.combatStats?.frostAttackRounds || 0 : combatResult?.combatStats?.attackRounds || 0) * turtleGaugeMult);
         freezeKnock = await _zfg
           .knock(freezeGaugeKey, zoneKey, freezeAmount, displayName, Date.now(), discordId, selfJobId, selfJobName || "元素師")
           .catch(() => null);
@@ -4479,7 +4495,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           ? (hutaoTriggeredEvent || hutaoEventSnapshot || await serviceContext.hutaoEventService?.getSnapshot?.())
           : null,
       };
-      if(combatResult.liveBattleId) {responsePayload.liveBattleId=combatResult.liveBattleId;responsePayload.liveRetreated=Boolean(combatResult.liveRetreated);responsePayload.liveLogPackets=combatResult.liveLogPackets;responsePayload.livePending=false;responsePayload.liveReportPending=false;responsePayload.reportOnly=true;require("../../services/realtime/normalLiveCombat").normalLiveCombat.complete(discordId,{zone:zoneKey,...responsePayload});}
+      if(combatResult.liveBattleId) {responsePayload.liveRewardsPending=Boolean(combatResult.liveInitial?.liveRewardsPending);responsePayload.liveBattleId=combatResult.liveBattleId;responsePayload.liveRetreated=Boolean(combatResult.liveRetreated);responsePayload.liveLogPackets=combatResult.liveLogPackets;responsePayload.livePending=false;responsePayload.liveReportPending=false;responsePayload.reportOnly=true;require("../../services/realtime/normalLiveCombat").normalLiveCombat.complete(discordId,{zone:zoneKey,...responsePayload});}
       markBattlePerf("response");
       const totalBattleMs = performance.now() - battlePerf.startedAt;
       if (!res.headersSent) res.setHeader("Server-Timing", [
@@ -4507,13 +4523,15 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (!canPlayerAccessZone(zoneKey, req.playerRecord.discordId)) {
         return res.status(404).json({ status: "error", code: "zone_not_found", message: "找不到這個戰鬥區域。" });
       }
-      const data = await serviceContext.hutaoEventService.getSnapshot();
+      const data = { wind: require("../../shared/hutaoEvent").windAt(Date.now()), blocking: false, quiz: null, effect: null };
       return res.json(ok(data));
     } catch (err) { return next(err); }
   });
 
   router.post("/api/worldboss/hutao/answer", requireAuth, async (req, res, next) => {
     try {
+      return res.status(409).json(fail("HUTAO_QUIZ_RETIRED", "胡桃已改為場風與四風連擊，沒有答題階段。"));
+      /* Legacy quiz handler retained for historical state compatibility.
       const zoneKey = "event_boss_hutao_preview";
       if (!canPlayerAccessZone(zoneKey, req.playerRecord.discordId)) {
         return res.status(404).json({ status: "error", code: "zone_not_found", message: "找不到這個戰鬥區域。" });
@@ -4526,6 +4544,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         displayName,
       });
       return res.json(ok(data, "已送出答案，等待其他玩家。"));
+      */
     } catch (err) {
       if (String(err?.code || "").startsWith("HUTAO_")) {
         return res.status(400).json(fail(err.code, err.message));
@@ -4540,7 +4559,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const id=req.playerRecord.discordId;
       if(!canPlayerAccessZone(rb.ZONE,id))return res.status(404).json(fail("zone_not_found","找不到這個戰鬥區域"));
       const p=await serviceContext.progressRepository.findByPlayerId(id);
-      if(!p||p.level<50)return res.status(403).json(fail("LEVEL_REQUIRED","50等才能戳饅頭"));
+      const levelError=checkZoneLevelRequirementWithBinding(rb.ZONE,p?.level??1,null);
+      if(!p||levelError)return res.status(403).json(fail("LEVEL_REQUIRED",levelError||"找不到玩家進度"));
       release=await require("../../services/worldBoss/worldBossBattleLock").acquireWorldBossBattleLock(rb.ZONE);
       const cs=await serviceContext.worldBossServiceFor(rb.ZONE).getConfigWithStatus(id);
       if(!cs.status.canChallenge)return res.status(409).json(fail("BOSS_UNAVAILABLE","世界王目前不可挑戰"));
@@ -4639,18 +4659,23 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           ]
         },
         event_boss_hutao_preview: {
-          title: "場風輪轉・立直答題",
+          title: "場風輪轉・四風連擊",
           lines: [
             "🀀 東場：胡桃迴避大幅上升；🀁 南場：胡桃攻擊提高 25%。",
             "🀂 西場：玩家爆擊傷害降低 25%；不使用任何防禦或破防效果。",
             "🀃 北場：胡桃迴避歸零、玩家傷害 +35%，但胡桃攻擊 +50%。",
-            "🎴 HP 降到 70% 與 40% 時宣告立直，全服暫停 30 秒並一起回答兩面／坎張聽牌題。",
-            "👀 作答後可即時看見其他玩家的選擇；時間到才公開正解並結算放銃／自摸／流局。"
+            "⛓️ 命中時12%機率施放四風連擊，四段各45%自身攻擊力。",
+            "⚔️ 入場50,000金幣；持續共鬥至擊殺或全員倒地，擊殺後60分鐘重生。",
+            "🧪 背包装備區設定最多10罐藥水；存活者可使用復活藥救倒地隊友。"
           ]
         }
       };
 
       const partsByZone = {};
+      const [playerProgress, channelLayout] = await Promise.all([
+        serviceContext.progressRepository.findByPlayerId(req.playerRecord.discordId),
+        serviceContext.adminConsoleService.getChannelLayout(),
+      ]);
       const visibleWorldBossZones = Object.keys(WORLD_BOSS_ZONES)
         .filter((zoneKey) => canPlayerAccessZone(zoneKey, req.playerRecord.discordId));
       const bosses = await Promise.all(visibleWorldBossZones.map(async (zoneKey) => {
@@ -4662,6 +4687,9 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         ]);
         const cfg = info?.config || {};
         const status = info?.status || {};
+        const binding = (channelLayout?.discord?.bindings || []).find(b => b.enabled && b.featureKey === zoneToFeatureKey(zoneKey));
+        const { minLevel } = require("../../shared/zones").getZoneLevelLimits(zoneKey, binding);
+        const levelError = checkZoneLevelRequirementWithBinding(zoneKey, playerProgress?.level ?? 1, binding);
 
         // 該王怪物（取 boss；fallback 取當前 active / 第一隻）
         const bossMonster =
@@ -4770,7 +4798,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           rabbitEvent = rb.view(temp, _wbNowS);
         }
         if (zoneKey === "event_boss_hutao_preview" && serviceContext.hutaoEventService) {
-          hutaoEvent = await serviceContext.hutaoEventService.getSnapshot(_wbNowS);
+          hutaoEvent = { wind: require("../../shared/hutaoEvent").windAt(_wbNowS), blocking: false, quiz: null, effect: null };
           mechanic = {
             key: "hutao_wind",
             phase: hutaoEvent.wind?.key || "east",
@@ -4797,6 +4825,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         return {
           zoneKey,
           bossKey: bossKeyForZone(zoneKey),
+          activity: zoneKey === "event_boss_hutao_preview" ? require("../../shared/hutaoActivity").view() : null,
           bossName,
           element: bossMonster?.element || null,
           imageUrl,
@@ -4815,14 +4844,17 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           isUnderAttack,
           entryFee: Math.max(0, Number(bossMonster?.entryFee ?? getZoneDefaultEntryFee(zoneKey)) || 0),
           partEffects: PART_EFFECTS[zoneKey] || [],
-          hints: PART_HINTS[zoneKey] || null,
+          minLevel,
+          hints: { title: PART_HINTS[zoneKey]?.title || "挑戰條件", lines: [`入場等級：Lv.${minLevel} 以上。`, ...(PART_HINTS[zoneKey]?.lines || [])] },
+          personalCooldownUntil: Number(status.personalCooldownUntil || 0),
+          personalCooldownRemainingSeconds: Number(status.personalCooldownRemainingSeconds || 0),
           respawnCooldownMinutes: Number(cfg.respawnCooldownMinutes || 0),
-          battleTimeLimitMinutes: Number(cfg.battleTimeLimitMinutes || 60),
+          battleTimeLimitMinutes: zoneKey === "event_boss_hutao_preview" ? 0 : Number(cfg.battleTimeLimitMinutes || 60),
           cooldownRemainingMs: Number(status.cooldownRemainingMs || 0),
           cooldownRemainingMinutes: Number(status.cooldownRemainingMinutes || 0),
-          canChallenge: Boolean(status.canChallenge),
+          canChallenge: Boolean(status.canChallenge) && !levelError,
           unlocked: status.unlocked !== false,
-          lockedReason: status.lockedReason || null,
+          lockedReason: levelError || status.lockedReason || null,
           lastKilledAt: info?.state?.lastKilledAt || null,
           battleStartedAt: info?.state?.battleStartedAt || null,
           battleRemainingMs: Number(status.battleRemainingMs || 0),
@@ -4927,6 +4959,10 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.post("/api/me/pets/deactivate", requireAuth, async (req, res, next) => {
     try { const r = await serviceContext.petService.deactivatePet(req.playerRecord.discordId); res.json(ok(r, "已取消出戰")); }
     catch (err) { if (err?.message) return res.status(400).json(fail("PET_DEACTIVATE_FAILED", err.message)); next(err); }
+  });
+  router.post("/api/me/pets/lock", requireAuth, async (req, res, next) => {
+    try { res.json(ok(await serviceContext.petService.setPetLocked(req.playerRecord.discordId, req.body?.petUuid, req.body?.locked))); }
+    catch (err) { next(err); }
   });
   router.post("/api/me/pets/release", requireAuth, async (req, res, next) => {
     try { const r = await serviceContext.petService.releasePet(req.playerRecord.discordId, req.body?.petUuid); res.json(ok(r, "已放生")); }
@@ -5409,7 +5445,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       const filters = {};
       if (kind && typeof kind === "string") filters.kind = kind;
       if (currency && typeof currency === "string") filters.currency = currency;
-      const items = await serviceContext.auctionService.getActiveListings(filters);
+      const items = await hydrateAuctionImages(
+        await serviceContext.auctionService.getActiveListings(filters), serviceContext.itemRepository);
       const enabled = await serviceContext.auctionService.isEnabled();
       // 階級高的(S)排最前面,讓最高級裝備一開始就看得到;同階維持原順序(最新在前)
       const TIER_RANK = { SS: 7, S: 6, A: 5, B: 4, C: 3, D: 2, E: 1 };
@@ -5426,7 +5463,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           itemName: a.itemName || a.item?.itemName,
           itemType: a.itemType || a.item?.itemType,
           tier: a.tier || a.item?.tier,
-          imageUrl: a.item?.imageThumbnailUrl || a.item?.imageUrl || a.imageUrl || null,
+          imageUrl: a.imageUrl,
           quantity: a.quantity || a.item?.stackCount || 1,
           currency: a.currency,
           price: a.price,
@@ -5459,7 +5496,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/auction/my", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
-      const my = await serviceContext.auctionService.getMyListings(discordId);
+      const my = await hydrateAuctionImages(
+        await serviceContext.auctionService.getMyListings(discordId), serviceContext.itemRepository);
       const roleIds = await getMemberRoleIds(discordId);
       const maxListings = await serviceContext.auctionService.getMaxListings(roleIds);
       const eligible = await serviceContext.auctionService.checkSellerEligibility(roleIds);
@@ -5474,7 +5512,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           itemName: a.itemName || a.item?.itemName,
           itemType: a.itemType || a.item?.itemType,
           tier: a.tier || a.item?.tier,
-          imageUrl: a.item?.imageThumbnailUrl || a.item?.imageUrl || a.imageUrl || null,
+          imageUrl: a.imageUrl,
           quantity: a.quantity || a.item?.stackCount || 1,
           currency: a.currency,
           price: a.price,
@@ -5603,7 +5641,8 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   router.get("/api/auction/history", requireAuth, async (req, res, next) => {
     try {
       const { discordId } = req.playerRecord;
-      const history = await serviceContext.auctionService.getMyHistory(discordId);
+      const history = await hydrateAuctionImages(
+        await serviceContext.auctionService.getMyHistory(discordId), serviceContext.itemRepository);
       const sorted = [...(history || [])].sort((a, b) =>
         new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       res.json(ok({
@@ -5612,7 +5651,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           itemName: a.itemName || a.item?.itemName,
           itemType: a.itemType || a.item?.itemType,
           tier: a.tier || a.item?.tier,
-          imageUrl: a.item?.imageThumbnailUrl || a.item?.imageUrl || a.imageUrl || null,
+          imageUrl: a.imageUrl,
           quantity: a.quantity || a.item?.stackCount || 1,
           currency: a.currency,
           price: a.price,

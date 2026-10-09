@@ -24,7 +24,7 @@ const rows=[];
   assert.deepEqual(await story.grantNodeItem('test','c',0),{granted:false,reason:'feature_disabled'});
   const players=new Map([['test',{playerId:'test',inventory:[],equipment:{}}]]);
   const sc={itemRepository:{findById:async()=>item},progressRepository:{findByPlayerId:async id=>structuredClone(players.get(id)),save:async p=>{players.set(p.playerId,p);saves++}},worldBossServiceFor:()=>null};
-  await grantKillDrops({healerBonusPids:new Set(),perPidRewards:{},monster:{name:'test',drops:[{itemId:'closed',chance:100}]},discordId:'test',rewardLines:[],sc,participants:['test'],rewardModsByPid:{test:{}},zoneKey:'normal',displayName:'test',mergedDmg:{},canSendRewardNotice:false,progressCache:Object.fromEntries(players)});
+  await grantKillDrops({state:{},healerBonusPids:new Set(),perPidRewards:{},monster:{name:'test',drops:[{itemId:'closed',chance:100}]},discordId:'test',rewardLines:[],sc,participants:['test'],rewardModsByPid:{test:{}},zoneKey:'normal',displayName:'test',mergedDmg:{},canSendRewardNotice:false,progressCache:Object.fromEntries(players)});
   assert.equal(players.get('test').inventory.length,0);rows.push(slot);
  }
  assert.equal(saves,0,'Closed gear must not modify players');

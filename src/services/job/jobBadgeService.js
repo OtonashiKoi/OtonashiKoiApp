@@ -111,21 +111,45 @@ class JobBadgeService {
         ...inventory.map((e) => String(e?.itemId || "")),
         ...Object.values(equipment).map((e) => String(e?.itemId || "")),
       ].filter(Boolean);
-      const cost = jobAdvancement.transferCostFor(jobAdvancement.countOwnedT2(ownedIds));
+      let cost = jobAdvancement.transferCostFor(jobAdvancement.countOwnedT2(ownedIds));
+      // 任務與轉職旗標會換季重置，交易台帳則永久保留；扣款編號也必須帶賽季。
+      const source = require("../../shared/sources").CURRENCY_SOURCES.JOB_TRANSFER;
+      const season = String(progress.seasonKey || "legacy");
+      let sourceRef = `${discordId}:season:${season}:${key || `badge:${t1Entry.uuid || t1BadgeId}:to:${t2BadgeId}`}`;
+      const transactions = this.rewardService?.transactionRepository;
+      let paid = await transactions?.findBySourceAndRef?.(source, sourceRef);
+      // 相容修正前「已扣款、徽章尚未保存」的請求；舊季扣款早於本季徽章取得，不可沿用。
+      if (!paid && key) {
+        const legacy = await transactions?.findBySourceAndRef?.(source, `${discordId}:${key}`);
+        const badgeAt = Date.parse(t1Entry.obtainedAt || t1Entry.purchasedAt || "");
+        if (legacy && Number.isFinite(badgeAt) && Date.parse(legacy.createdAt) >= badgeAt) {
+          paid = legacy;
+          sourceRef = legacy.sourceRef;
+        }
+      }
+      if (paid) {
+        if (paid.playerId !== discordId || paid.currencyType !== "gold"
+          || !Number.isSafeInteger(paid.amount) || paid.amount >= 0) {
+          throw new AppError("IDEMPOTENCY_CONFLICT", "轉職扣款紀錄不符，請聯絡管理員。", 409);
+        }
+        cost = -paid.amount;
+      }
       const wallet = this.walletRepository ? await this.walletRepository.findByPlayerId(discordId).catch(() => null) : null;
       const gold = Math.max(0, Number(wallet?.gold) || 0);
-      if (gold < cost) {
+      if (!paid && gold < cost) {
         throw new AppError(ERROR_CODES.INVALID_ARGUMENT,
           `金幣不足：轉職需要 ${cost.toLocaleString()} 金，目前 ${gold.toLocaleString()} 金`, 400);
       }
 
       // ③ 扣款（有 rewardService 走台帳留紀錄）
       const displayName = progress.displayName || progress.playerName || discordId;
+      let goldLeft = gold - (paid ? 0 : cost);
       if (this.rewardService?.grantCurrency) {
-        await this.rewardService.grantCurrency({
+        const settlement = await this.rewardService.grantCurrency({
           discordId, displayName, currencyType: "gold",
-          amount: -Math.abs(cost), source: require("../../shared/sources").CURRENCY_SOURCES.JOB_TRANSFER, sourceRef: key ? `${discordId}:${key}` : "", operator: "quest:job-transfer",
+          amount: -Math.abs(cost), source, sourceRef, operator: "quest:job-transfer", existingProgress: progress,
         });
+        goldLeft = settlement.wallet?.gold ?? goldLeft;
       } else if (this.walletRepository) {
         await this.walletRepository.save({ ...wallet, playerId: discordId, gold: gold - cost });
       } else {
@@ -186,7 +210,7 @@ class JobBadgeService {
         transferred: true,
         from: { itemId: t1BadgeId, name: t1Entry.itemName || t1BadgeId, level: t1Progress.level },
         to: { itemId: t2BadgeId, name: t2Item.name, level: 1 },
-        cost, goldLeft: gold - cost,
+        cost, goldLeft,
       };
     });
   }

@@ -19,6 +19,8 @@ const QUEST_TYPES = {
   autumn_challenge_clear: { label: "挑戰 50 樓通關", unit: "次" },
   autumn_title_count: { label: "已領取秋季稱號", unit: "個" },
   party_floor_clear: { label: "組隊副本通關樓層", unit: "樓" },
+  party_tower_normal_clear: { label: "完整通關一般30樓", unit: "次" },
+  party_tower_challenge_clear: { label: "完整通關挑戰50樓", unit: "次" },
   battle_count:      { label: "出戰次數",        unit: "次" },
   battle_with_sword: { label: "使用劍系出戰次數", unit: "次" },
   battle_with_axe:   { label: "使用斧系出戰次數", unit: "次" },
@@ -827,7 +829,7 @@ class WeeklyQuestService {
       if (!defs.length) return;
 
       const periodKey = options.periodKeys?.[cadence] || resolvePeriodKey(cadence);
-      const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, cadence);
+      const playerPeriod = await this.repo.getPlayerProgress(discordId, periodKey, cadence, options);
       if (options.operationId && (playerPeriod._partyOperations || []).includes(options.operationId)) return;
       // 二轉「同時只能進行 1 條試煉」：用 allDefs 掃(不是 defs)，因為進行中的那條
       // 可能是別的職業、metric 不同，被上面的 type 過濾掉了。
@@ -882,7 +884,7 @@ class WeeklyQuestService {
         playerPeriod._partyOperations = [...(playerPeriod._partyOperations || []), options.operationId];
         changed = true;
       }
-      if (changed) await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, cadence);
+      if (changed) await this.repo.savePlayerProgress(discordId, periodKey, playerPeriod, cadence, options);
     }));
   }
 
@@ -968,7 +970,7 @@ class WeeklyQuestService {
       const reward = {
         questTitle: quest.title,
         autumn: quest.groupKey === "autumn_202610_v1",
-        receipt: `quest:${questId}:${quest.cadence}:${periodKey}:${discordId}`,
+        receipt: `quest:${questId}:${quest.cadence}:${periodKey}:${discordId}${["party_tower_normal_clear", "party_tower_challenge_clear"].includes(quest.type) ? `:${context.progress?.seasonKey || require("../access/seasonStateStore").getActiveKey()}` : ""}`,
         gold: Number(quest.rewardGold || 0),
         exp: Number(quest.rewardExp || 0),
         diamond: 0,

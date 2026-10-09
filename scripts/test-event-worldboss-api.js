@@ -59,6 +59,7 @@ async function main(){
     const hs=await sc.hutaoEventService.getSnapshot(clock);const h=require('../src/shared/hutaoEvent'),q=h.questionById(hs.quiz.question.id||hs.quiz.questionId,hs.quiz.mark,hs.runKey);
     // Exercise both a failed quiz (self-draw crush) and a correct quiz.
     const choice=quizCount===0?q.choices.find(x=>!q.correctChoiceIds.includes(x.id)).id:q.correctChoiceIds[0];
+    clock=Math.max(clock,hs.quiz.answerStartsAt ?? hs.quiz.startedAt);
     await sc.hutaoEventService.submitAnswer({quizId:hs.quiz.id,discordId:c.id,displayName:c.summary.route.t2Name,choiceId:choice},clock);
     clock=hs.quiz.endsAt+1;quizCount++;n--;continue;
    }

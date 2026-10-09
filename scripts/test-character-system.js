@@ -50,7 +50,7 @@ async function main() {
         ],
       };
     },
-    async saveState(state, zone) { savedStates.push({ zone, state: copy(state) }); },
+    async saveBattleAuras(state, auras, zone) { savedStates.push({ zone, state: copy({ ...state, activeHealerAuras: auras, activeHealerAura: null }) }); return true; },
   };
   const service = new CharacterService({
     progressRepository,

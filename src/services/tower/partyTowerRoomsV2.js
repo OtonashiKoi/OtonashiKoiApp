@@ -46,7 +46,7 @@ function createPartyTowerRooms(sc, options = {}) {
         hp: m.currentHp, maxHp: m.maxHp, alive: m.currentHp > 0, preview: rules.roleStats(m.stats, m.towerRole),
       })),
       monster: room.monsterPreview || null, lastFloorResult: room.lastFloorResult || null,
-      reward: room.rewards?.[viewer] ? Object.fromEntries(Object.entries(room.rewards[viewer]).filter(([key]) => key !== "progressKills")) : null, failReason: room.failReason || null,
+      reward: room.rewards?.[viewer] ? Object.fromEntries(Object.entries(room.rewards[viewer]).filter(([key]) => !["progressKills", "stoneCheckpoints"].includes(key))) : null, failReason: room.failReason || null,
       playbackStartedAt: room.playbackStartedAt || null, nextAt: room.nextAt || null,
       selectionEndsAt: room.selectionEndsAt || null, selectionId: room.selectionId || null,
       strategy: room.members.find(m => m.discordId === viewer)?.strategy || null,
@@ -217,6 +217,7 @@ function createPartyTowerRooms(sc, options = {}) {
         r.drops.push(require("../../shared/inventoryStorage").slimInventoryEntry(entry));
       }
     }
+    await require("./partyTowerBonusDrops").addCheckpointDrops(sc, room, now(), options.rewardRandom || Math.random);
   }
   async function settle(room) {
     if (room.settled) return;

@@ -325,10 +325,10 @@ const CARD_DESIGNS = [
     cardName: "城堡魔像(B)卡",
     tier: "A",
     boss: true,
-    skill: skill("castle_golem_petrify", "石化再生", "血量低於30%時受到傷害降低50%，持續1回合，並恢復自身最大HP的25%；冷卻5回合。", 100, [
+    skill: { ...skill("castle_golem_petrify", "石化再生", "血量低於30%時受到傷害降低50%，持續1回合；每場戰鬥第1～5次觸發分別恢復自身最大HP的25%、20%、15%、12.5%、10%，之後維持10%；冷卻5次自身出手，新戰鬥重置。", 100, [
       effect("damage_reduction", "self", 50, 1, { ownerHpBelowPct: 30 }),
       effect("heal_over_time", "self", 25, 1, { ownerHpBelowPct: 30 })
-    ], 5)
+    ], 5), healingPctByTrigger: [25, 20, 15, 12.5, 10] }
   },
   {
     monsterName: "城牆衛兵",

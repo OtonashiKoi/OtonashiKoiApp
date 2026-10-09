@@ -49,6 +49,10 @@ async function grantInventoryBatch(sc,grants){
 }
 module.exports={encounterKey,rewardId,plan,planMany,forPlayers,grantInventoryBatch};
 async function grantInventory(sc,pid,id,entries,cap=Infinity,stack=false){
+  if(cap===Infinity&&sc.progressRepository.grantInventoryRewardsBatch){
+    const receipts=await sc.progressRepository.grantInventoryRewardsBatch([{playerId:pid,id,entries}]);
+    return receipts[pid][id];
+  }
   const {countsTowardCapacity}=require('../backpack/backpackService');
   for(let i=0;i<6;i++){
     const progress=await sc.progressRepository.findByPlayerId(pid,{includeLiveRewardReceipts:true});

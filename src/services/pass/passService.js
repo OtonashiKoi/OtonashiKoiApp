@@ -20,8 +20,8 @@ async function withPassLock(id, fn) {
 }
 const COLLECTION = "passState";
 const MAX_LEVEL = 30;
-// 楓紅漸漸：每級1,000點，滿級30,000點；一般區按階級給點，副本逐層另計。
-const POINTS_PER_LEVEL = 1000;
+// 楓紅漸漸：每級250點，滿級7,500點；一般區按階級給點，副本逐層另計。
+const POINTS_PER_LEVEL = 250;
 const UNLOCK_COST_DIAMOND = 5;
 // 打怪給點：依地圖階級（越後段越多，鼓勵打高階）
 const POINTS_BY_TIER = { D: 1, C: 2, B: 3, A: 5, S: 6 };

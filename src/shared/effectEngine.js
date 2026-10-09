@@ -197,10 +197,10 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
   // 批量查詢（減少 DB round-trip）
   let libMap = {};
   try {
-    const results = await Promise.all(
-      itemIds.map(id => itemRepository.findById(id).catch(() => null))
-    );
-    itemIds.forEach((id, i) => { if (results[i]) libMap[id] = results[i]; });
+    const results = itemRepository.findByIds
+      ? await itemRepository.findByIds(itemIds)
+      : await Promise.all(itemIds.map(id => itemRepository.findById(id).catch(() => null)));
+    results.forEach((item,i) => { if (item) libMap[itemRepository.findByIds ? item.id : itemIds[i]] = item; });
   } catch (e) {
     // DB 查詢失敗時 fallback 用 snapshot，戰鬥不中斷
     return equipped;
@@ -220,6 +220,7 @@ async function mergeEquippedFromLibrary(equipped, itemRepository) {
 
     merged[slot] = {
       ...entry,
+      tier: lib.tier ?? entry.tier,
       passiveEffects: lib.passiveEffects || [],
       combatEffects:  lib.combatEffects  || [],
       procEffects:    lib.procEffects    || [],

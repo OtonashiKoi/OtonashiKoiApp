@@ -1,10 +1,13 @@
+const { reconcilePets } = require("./progressPets");
 const { randomUUID } = require("crypto");
+const { lockSnapshot, reconcileEquipmentLocks } = require("./progressEquipmentLocks");
 const { getMongoDb } = require("./createMongoClient");
 const { mergeEquippedFromLibrary } = require("../../shared/effectEngine");
 const { createStreamAccountBindingRepository } = require("../streamBindings/createStreamAccountBindingRepository");
 const { createCreatorTokenRepository } = require("../creatorTokens/createCreatorTokenRepository");
 const { createMahjongPredictionRepository } = require("./createMahjongPredictionRepository");
 const { normalizeEnhanceGemStacks } = require("../../shared/inventoryStacking");
+const { isMergeableEntry, stackCountsByItemId, reconcileStackableInventory, inventorySaveReceipt } = require("./progressInventoryStacks");
 const { slimProgressForStorage, slimInventoryEntry, slimInventoryArray } = require("../../shared/inventoryStorage");
 const seasonState = require("../../services/access/seasonStateStore");
 const maintenance = require("../../services/access/maintenanceStore");
@@ -33,6 +36,7 @@ function emitRealtimeInvalidate(type, discordId) {
 function createMongoRepositories() {
   seasonState.ensureLoaded().catch(() => {});
   const collection = async (name) => (await getMongoDb()).collection(name);
+  const receiptLedger=require("./progressReceiptLedger").createProgressReceiptLedger(collection);
   const normalizeLowLevelJobBadge = (progress) => {
     if (!progress || typeof progress !== "object") return progress;
     const level = Math.max(1, Number(progress.level) || 1);
@@ -107,20 +111,22 @@ function createMongoRepositories() {
    * 這是「獎勵憑空消失」的源頭修法——不再依賴每個呼叫點自律。
    */
   const INV_BASELINE_KEY = "__invBaseline";
-  const stampInventoryBaseline = (doc) => {
+  const stampInventoryBaseline = (doc, storedInventory = doc?.inventory) => {
     if (!doc || typeof doc !== "object") return doc;
     try {
       const slim = slimInventoryArray(Array.isArray(doc.inventory) ? doc.inventory : []);
       const uuids = [];
       const scByUuid = {}; // uuid → 讀取當下的堆疊數（消耗品競態合併用）
-      for (const e of slim) {
+      // The signature describes the caller's normalized view; UUIDs/counts
+      // describe the raw DB snapshot. Merged-away old stacks are not new drops.
+      for (const e of Array.isArray(storedInventory) ? storedInventory : []) {
         if (!e || !e.uuid) continue;
         const u = String(e.uuid);
         uuids.push(u);
         scByUuid[u] = Math.max(1, Number(e.stackCount) || 1);
       }
       Object.defineProperty(doc, INV_BASELINE_KEY, {
-        value: { sig: JSON.stringify(slim), uuids, scByUuid, seasonKey: String(doc.seasonKey || "legacy") },
+        value: { sig: JSON.stringify(slim), equipmentSig: JSON.stringify(slimProgressForStorage(doc).equipment), characterSlotsSig: JSON.stringify(doc.characterSlots), locks: lockSnapshot(doc), pets: JSON.parse(JSON.stringify(doc.pets || [])), activePetUuid: doc.activePetUuid, uuids, scByUuid, stackCountsByItemId: stackCountsByItemId(storedInventory), seasonKey: String(doc.seasonKey || "legacy") },
         enumerable: false,
         writable: true,
         configurable: true
@@ -140,6 +146,8 @@ function createMongoRepositories() {
    */
   const mergeInventories = (outInv, dbInv, baseline) => {
     const db = Array.isArray(dbInv) ? dbInv : [];
+    const reconciled = reconcileStackableInventory(outInv, db, baseline);
+    outInv = reconciled.inventory;
     const base = baseline && baseline.scByUuid ? baseline.scByUuid : {};
     const known = new Set(baseline && baseline.uuids ? baseline.uuids : []);
     const outUuids = new Set();
@@ -152,6 +160,7 @@ function createMongoRepositories() {
       if (!o || !o.uuid) return o;
       const u = String(o.uuid);
       const d = dbByUuid.get(u);
+      if (isMergeableEntry(o) && reconciled.managedItemIds.has(String(o.itemId))) return o;
       // 基準裡沒有 → 呼叫方自己新增的 entry，以呼叫方為準
       if (!d || !(u in base)) return o;
       const dSc = Math.max(1, Number(d.stackCount) || 1);
@@ -165,6 +174,7 @@ function createMongoRepositories() {
 
     for (const d of db) {
       if (!d || !d.uuid) continue; // 無 uuid 的舊資料視為已由呼叫方版本涵蓋
+      if (isMergeableEntry(d) && reconciled.managedItemIds.has(String(d.itemId))) continue;
       const u = String(d.uuid);
       if (outUuids.has(u)) continue;
       if (!known.has(u)) {
@@ -178,7 +188,7 @@ function createMongoRepositories() {
         merged.push({ ...d, stackCount: dSc - base[u] });
       }
     }
-    return merged;
+    return normalizeEnhanceGemStacks(merged);
   };
 
   const repos = {
@@ -330,7 +340,7 @@ function createMongoRepositories() {
         // current inventory/state, never megabytes of old awarded item copies.
         // $set-based saves leave these omitted fields intact in MongoDB.
         const progress = await (await collection("progress")).findOne({ playerId },
-          includeLiveRewardReceipts ? {} : {projection:{normalLiveDropReceipts:0,normalLiveExpResults:0}});
+          includeLiveRewardReceipts ? {} : {projection:{normalLiveDropReceipts:0,normalLiveExpResults:0,expGrantReceipts:0,normalLiveSessionReceipts:0,inventorySaveReceipts:0}});
         if (!progress) return progress;
         if (!progress.seasonKey) progress.seasonKey = seasonState.LEGACY_KEY;
         const normalized = normalizeProgressDocumentWithGemStacks(progress);
@@ -338,7 +348,7 @@ function createMongoRepositories() {
           // 永遠從 DB 讀取最新 effects，所有呼叫方自動拿到最新設計值
           normalized.equipment = await mergeEquippedFromLibrary(normalized.equipment, repos.itemRepository).catch(() => normalized.equipment);
         }
-        return stampInventoryBaseline(normalized);
+        return stampInventoryBaseline(normalized, progress.inventory);
       },
       /**
        * 原子分配自主屬性點，只讀寫六維、可用點數與自主配點紀錄。
@@ -409,13 +419,15 @@ function createMongoRepositories() {
               + " stack=" + new Error().stack.split("\n").slice(2, 6).map(l => l.trim()).join(" ← "));
           }
         } catch (_) {}
+        const callerProgress = progress;
+        const inventorySaveId = randomUUID();
         // 讀取當下的背包基準（findByPlayerId 蓋的戳記）；沒有就走舊路徑
         const baseline = progress ? progress[INV_BASELINE_KEY] : null;
         // 儲存前瘦身 inventory(去除可從道具庫還原的肥欄位),避免 progress 文件撐爆 16MB
         // 通關記錄只透過原子欄位更新，舊戰鬥快照不得覆蓋其他並行結算。
         // MongoDB owns _id; cloned BSON ObjectIds must never be written back as mutable fields.
-        const { _id: _mongoId, accountWorldBossClears: _accountClears, ...mutableProgress } = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
-        progress = mutableProgress;
+        const { _id: _mongoId, accountWorldBossClears: _accountClears, inventorySaveReceipts: _saveReceipts, ...mutableProgress } = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        progress = require("./progressReceiptLedger").omitReceipts(mutableProgress);
         const expectedSeasonKey = String(progress.seasonKey || baseline?.seasonKey || seasonState.getActiveKey());
         progress.seasonKey = expectedSeasonKey;
         const guarded = (extra = {}) => ({ ...seasonState.progressFilter(progress.playerId, expectedSeasonKey), ...extra });
@@ -430,62 +442,66 @@ function createMongoRepositories() {
           try {
             const coll = await collection("progress");
             const now = new Date().toISOString();
+            let savedAt = now;
             let result;
 
-            if (baseline && invUntouched) {
-              // ① 背包沒動 → 完全不寫 inventory 欄位。
-              //    期間被原子塞進來的獎勵（世界王寶箱/掉落/拍賣到貨…）原封不動。
-              const { inventory: _omit, ...rest } = progress;
-              result = await coll.updateOne(
-                guarded(),
-                { $set: { ...rest, updatedAt: now } },
-                { upsert: false }
-              );
-            } else if (baseline) {
-              // ② 背包有動 → 讀最新背包做差異合併，CAS 寫回（updatedAt 沒被
-              //    別人改過才成功）；失敗就重讀重合併，確保競態發放不被吃掉。
-              const { inventory: _omit, ...rest } = progress;
-              let casOk = false;
-              let casMatched = false;
-              for (let casTry = 0; casTry < 5; casTry++) {
-                const cur = await coll.findOne(
-                  guarded(),
-                  { projection: { inventory: 1, updatedAt: 1, seasonKey: 1 } }
-                );
-                if (!cur) break; // 文件不見了 → 交給下方 fallback
-                casMatched = true;
-                const merged = mergeInventories(outInv, cur.inventory, baseline);
-                const cas = await coll.updateOne(
-                  guarded({ updatedAt: cur.updatedAt }),
-                  { $set: { ...rest, inventory: merged, updatedAt: now } },
-                  { upsert: false }
-                );
-                if (cas.matchedCount > 0) { casOk = true; break; }
+            // Even an EXP-only save can contain stale equipment. Read the latest
+            // item locations/locks and CAS them together with the inventory merge.
+            const { inventory: _omit, ...rest } = progress;
+            if (!baseline || baseline.activePetUuid === progress.activePetUuid) delete rest.activePetUuid;
+            if (baseline?.equipmentSig === JSON.stringify(progress.equipment)) delete rest.equipment;
+            if (baseline?.characterSlotsSig === JSON.stringify(progress.characterSlots)) delete rest.characterSlots;
+            let casOk = false;
+            let casMatched = false;
+            for (let casTry = 0; casTry < 5; casTry++) {
+              const cur = await coll.findOne(guarded(), { projection: {
+                inventory: 1, equipment: 1, characterSlots: 1, activeCharacterSlot: 1,
+                pets: 1, activePetUuid: 1, updatedAt: 1, seasonKey: 1, inventorySaveReceipts: 1
+              } });
+              if (!cur) break;
+              casMatched = true;
+              if (cur.inventorySaveReceipts?.includes(inventorySaveId)) {
+                progress.inventory = cur.inventory; progress.equipment = cur.equipment;
+                progress.characterSlots = cur.characterSlots; progress.pets = cur.pets; progress.activePetUuid = cur.activePetUuid;
+                savedAt = cur.updatedAt; casOk = true; break;
               }
-              if (casMatched && !casOk) {
-                // CAS 連續失敗（極高併發）→ 最後一次用剛讀到的最新狀態直接寫，
-                // 仍然是合併後的結果，不是呼叫方的整份舊資料
-                const cur = await coll.findOne(
-                  guarded(),
-                  { projection: { inventory: 1 } }
-                );
-                const merged = mergeInventories(outInv, cur ? cur.inventory : [], baseline);
-                const forced = await coll.updateOne(
-                  guarded(),
-                  { $set: { ...rest, inventory: merged, updatedAt: now } },
-                  { upsert: false }
-                );
-                casOk = forced.matchedCount > 0;
-                console.warn(`[ProgressRepository] Inventory merge CAS exhausted for ${progress.playerId}, forced write`);
-              }
-              result = { matchedCount: casOk ? 1 : 0, upsertedCount: 0 };
-            } else {
-              // ③ 沒有基準（新建文件、或經過序列化丟失戳記）→ 舊行為：整份覆寫
-              result = await coll.updateOne(
-                guarded(),
-                { $set: { ...progress, updatedAt: now } },
-                { upsert: true }
+              const merged = baseline
+                ? (invUntouched ? cur.inventory : mergeInventories(outInv, cur.inventory, baseline))
+                : (Object.hasOwn(progress, "inventory") ? outInv : cur.inventory);
+              const next = reconcileEquipmentLocks({ ...cur, ...rest, inventory: merged }, cur, baseline?.locks);
+              next.pets = reconcilePets(progress.pets, cur.pets, baseline?.pets);
+              // Exact item-state guards also catch two writes within the same millisecond.
+              const itemGuard = Object.fromEntries(["inventory", "equipment", "characterSlots", "activeCharacterSlot", "pets", "activePetUuid"]
+                .map(key => [key, cur[key] === undefined ? { $exists: false } : cur[key]]));
+              const write = { ...rest, updatedAt: now };
+              if (!invUntouched) write.inventory = next.inventory;
+              if (Object.hasOwn(rest, "pets")) write.pets = next.pets;
+              if (Object.hasOwn(rest, "equipment")) write.equipment = next.equipment;
+              if (Object.hasOwn(rest, "characterSlots")) write.characterSlots = next.characterSlots;
+              const cas = await coll.updateOne(
+                guarded({ updatedAt: cur.updatedAt, ...itemGuard }),
+                { $set: write, ...inventorySaveReceipt(inventorySaveId) }, { upsert: false }
               );
+              if (cas.matchedCount > 0) {
+                progress.inventory = next.inventory; progress.equipment = next.equipment;
+                progress.characterSlots = next.characterSlots; progress.pets = next.pets; progress.activePetUuid = next.activePetUuid;
+                casOk = true; break;
+              }
+            }
+            if (casMatched && !casOk) {
+              const error = new Error(`INVENTORY_WRITE_CONFLICT:${progress.playerId}`);
+              error.code = "INVENTORY_WRITE_CONFLICT";
+              throw error;
+            }
+            result = { matchedCount: casOk ? 1 : 0, upsertedCount: 0 };
+            if (!casMatched && !baseline) {
+              // New documents only: never overwrite an existing player without CAS.
+              result = await coll.updateOne(guarded(), { $setOnInsert: { ...progress, updatedAt: now } }, { upsert: true });
+              if (!result.upsertedCount) {
+                const error = new Error(`INVENTORY_WRITE_CONFLICT:${progress.playerId}`);
+                error.code = "INVENTORY_WRITE_CONFLICT";
+                throw error;
+              }
             }
 
             // 有基準卻寫不到，通常代表換季已切換；禁止用 upsert 復活舊存檔。
@@ -504,13 +520,23 @@ function createMongoRepositories() {
             }
             emitRealtimeInvalidate("progress", progress.playerId);
             // 回傳物件蓋上新的基準：之後若再拿同一份來 save，比對基準是「這次存進去的版本」
+            progress.updatedAt = savedAt;
+            // Some services save the same object again without using the return value.
+            // Refresh that object's view/baseline too, or merged old stacks look like new rewards.
+            callerProgress.inventory = progress.inventory;
+            callerProgress.equipment = progress.equipment;
+            callerProgress.characterSlots = progress.characterSlots;
+            callerProgress.pets = progress.pets;
+            callerProgress.activePetUuid = progress.activePetUuid;
+            callerProgress.updatedAt = savedAt;
+            stampInventoryBaseline(callerProgress);
             return stampInventoryBaseline(progress);
           } catch (err) {
             lastError = err;
             const isLastAttempt = attempt === maxRetries;
             console.error(`[ProgressRepository] Save failed for ${progress.playerId} (attempt ${attempt}/${maxRetries}):`, err.message);
 
-            if (err?.code === "STALE_SEASON_WRITE") throw err;
+            if (["STALE_SEASON_WRITE", "INVENTORY_STACK_CONFLICT", "INVENTORY_LOCK_CONFLICT", "PET_WRITE_CONFLICT", "PET_LOCKED"].includes(err?.code)) throw err;
             if (!isLastAttempt) {
               // 指數退避：10ms、20ms、40ms、80ms、160ms
               const delay = Math.pow(2, attempt) * 10;
@@ -533,13 +559,43 @@ function createMongoRepositories() {
        * 把它抹掉——這是獎勵憑空消失的主因。
        * 只改單一小欄位時一律用這個，不要用 save()。
        */
+      async setPetLocked(playerId, petUuid, locked) {
+        if (maintenance.isStrict()) throw new Error("SEASON_RESET_WRITE_LOCKED");
+        const result = await (await collection("progress")).updateOne(
+          { ...seasonState.progressFilter(playerId), "pets.uuid": petUuid },
+          { $set: { "pets.$.locked": locked, updatedAt: new Date().toISOString() } }
+        );
+        if (result.matchedCount) emitRealtimeInvalidate("progress", playerId);
+        return result.matchedCount > 0;
+      },
+      async hasLiveSessionReceipt(playerId,id){return receiptLedger.sessionSeen(playerId,id);},
       async updateFields(playerId, fields, options = {}) {
         if (maintenance.isStrict()) return false;
         if (!playerId || !fields || typeof fields !== "object") return false;
         const expectedSeasonKey = String(options.expectedSeasonKey || seasonState.getActiveKey());
+        if (Object.hasOwn(fields, "pets")) {
+          if (!Array.isArray(options.expectedPets)) throw new Error("PET_BASELINE_REQUIRED");
+          const coll = await collection("progress");
+          const filter = seasonState.progressFilter(playerId, expectedSeasonKey);
+          const current = await coll.findOne(filter, { projection: { pets: 1 } });
+          if (!current) return false;
+          const pets = reconcilePets(fields.pets, current.pets, options.expectedPets);
+          const result = await coll.updateOne(
+            { ...filter, pets: current.pets === undefined ? { $exists: false } : current.pets },
+            { $set: { ...fields, pets, updatedAt: new Date().toISOString() } }
+          );
+          if (!result.matchedCount) throw new (require("../../shared/errors").AppError)("PET_WRITE_CONFLICT", "寵物資料已更新，請重試", 409);
+          emitRealtimeInvalidate("progress", playerId);
+          return true;
+        }
+        if(Array.isArray(fields.normalLiveSessionReceipts)&&fields.normalLiveSessionReceipts.length){
+          const saved=await receiptLedger.commitSession(playerId,fields.normalLiveSessionReceipts.at(-1),fields,expectedSeasonKey);
+          if(saved)emitRealtimeInvalidate("progress",String(playerId));
+          return saved;
+        }
         const result = await (await collection("progress")).updateOne(
           seasonState.progressFilter(playerId, expectedSeasonKey),
-          { $set: { ...fields, updatedAt: new Date().toISOString() } },
+          { $set: { ...require("./progressReceiptLedger").omitReceipts(fields), updatedAt: new Date().toISOString() } },
           { upsert: false }
         );
         if (result.matchedCount > 0) emitRealtimeInvalidate("progress", String(playerId));
@@ -572,16 +628,27 @@ function createMongoRepositories() {
               + " stack=" + new Error().stack.split("\n").slice(2, 6).map(l => l.trim()).join(" ← "));
           }
         } catch (_) {}
+        const lockBaseline = progress?.[INV_BASELINE_KEY]?.locks;
+        const petsBaseline = progress?.[INV_BASELINE_KEY]?.pets;
         // 通關記錄只透過原子欄位更新，舊戰鬥快照不得覆蓋其他並行結算。
         // MongoDB owns _id; preserve it even when a caller used structuredClone.
-        const { _id: _mongoId, accountWorldBossClears: _accountClears, ...mutableProgress } = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
-        progress = mutableProgress;
+        const { _id: _mongoId, accountWorldBossClears: _accountClears, inventorySaveReceipts: _saveReceipts, ...mutableProgress } = slimProgressForStorage(normalizeProgressDocumentWithGemStacks(progress));
+        progress = require("./progressReceiptLedger").omitReceipts(mutableProgress);
         const expectedSeasonKey = String(progress.seasonKey || seasonState.getActiveKey());
         progress.seasonKey = expectedSeasonKey;
         const now = new Date().toISOString();
         const filter = prevUpdatedAt
           ? { ...seasonState.progressFilter(progress.playerId, expectedSeasonKey), updatedAt: prevUpdatedAt }
           : seasonState.progressFilter(progress.playerId, expectedSeasonKey);
+        const coll = await collection("progress");
+        const current = await coll.findOne(filter, { projection: { inventory: 1, equipment: 1, characterSlots: 1, activeCharacterSlot: 1, pets: 1, activePetUuid: 1 } });
+        if (!current) return false;
+        const next = reconcileEquipmentLocks({ ...current, ...progress }, current, lockBaseline);
+        next.pets = reconcilePets(progress.pets ?? current.pets, current.pets, petsBaseline || current.pets || []);
+        for (const key of ["inventory", "equipment", "characterSlots", "activeCharacterSlot", "pets", "activePetUuid"]) {
+          filter[key] = current[key] === undefined ? { $exists: false } : current[key];
+          if (Object.hasOwn(progress, key)) progress[key] = next[key];
+        }
         const result = await (await collection("progress")).updateOne(
           filter,
           { $set: { ...progress, updatedAt: now } },
@@ -1051,6 +1118,7 @@ function createMongoRepositories() {
             "value.quiz.id": String(quizId),
             "value.quiz.status": "active",
             "value.quiz.endsAt": { $gt: Number(now) },
+            $or: [{ "value.quiz.answerStartsAt": { $exists: false } }, { "value.quiz.answerStartsAt": { $lte: Number(now) } }],
             [field]: { $exists: false },
           },
           { $set: { [field]: answer, updatedAt: new Date().toISOString() } }
@@ -1094,33 +1162,7 @@ function createMongoRepositories() {
       async deleteQuest(id) {
         await (await collection("weeklyQuests")).deleteOne({ id });
       },
-      async getPlayerProgress(discordId, periodKey, cadence = "weekly") {
-        // 新格式：discordId + cadence + periodKey
-        const modern = await (await collection("weeklyQuestProgress")).findOne({ discordId, cadence, periodKey });
-        if (modern?.progress) return modern.progress;
-
-        // 舊格式相容：weekly 使用 weekLabel
-        if (cadence === "weekly") {
-          const legacy = await (await collection("weeklyQuestProgress")).findOne({ discordId, weekLabel: periodKey });
-          if (legacy?.progress) return legacy.progress;
-        }
-        return {};
-      },
-      async savePlayerProgress(discordId, periodKey, progress, cadence = "weekly") {
-        await (await collection("weeklyQuestProgress")).updateOne(
-          { discordId, cadence, periodKey },
-          { $set: {
-            discordId,
-            cadence,
-            periodKey,
-            // 保留舊欄位以維持相容（weekly 才需要）
-            weekLabel: cadence === "weekly" ? periodKey : null,
-            progress,
-            updatedAt: new Date().toISOString()
-          } },
-          { upsert: true }
-        );
-      },
+      ...require("./questReceiptProgress").createQuestReceiptProgress(collection),
       async getAllProgressByPeriod(periodKey, cadence = "weekly") {
         const col = await collection("weeklyQuestProgress");
         const rows = await col.find({ cadence, periodKey }).toArray();
@@ -1199,6 +1241,7 @@ function createMongoRepositories() {
         await (await collection("pets")).deleteOne({ id });
       },
     },
+    liveSettlementRepository: require("./createLiveSettlementRepository").createLiveSettlementRepository(collection),
     monsterRepository: {
       async findAll() {
         // 只回傳實際的怪物文件（具有 id 欄位），state 文件使用 _id 儲存，不會被此查詢回傳
@@ -1257,6 +1300,10 @@ function createMongoRepositories() {
           { upsert: true }
         );
         return state;
+      },
+      async saveBattleAuras(state, auras, zoneKey = "normal") {
+        if (maintenance.isStrict()) return false;
+        return require("./saveMonsterAuras").saveMonsterAuras({ collection, state, auras, zoneKey });
       },
       async saveStateIfActiveMonster(state, zoneKey = "normal", expectedMonsterSeq, expectedCurrentHp = null) {
         if (maintenance.isStrict()) return false;

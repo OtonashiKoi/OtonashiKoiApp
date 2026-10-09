@@ -1,20 +1,27 @@
 "use strict";
 
 const { randomUUID } = require("node:crypto");
+const { localRuntimeHostId, isLocalProcessDead } = require("./runtimeHost");
 
 // One authoritative runtime per database. In-memory battle locks, SSE and rooms
 // remain safe only while this ownership is exclusive. This is not cluster mode.
 async function acquireRuntimeLease(db, { leaseMs = 60000, heartbeatMs = 10000,
-  owner = randomUUID(), onLost = () => process.exit(1) } = {}) {
+  owner = randomUUID(), hostId = localRuntimeHostId(), pid = process.pid, onLost = () => process.exit(1) } = {}) {
   const collection = db.collection("runtimeLeases");
   const key = "game-runtime";
   const expiry = () => ({ $add: ["$$NOW", leaseMs] });
   try {
     try { await collection.insertOne({ _id: key, expiresAt: new Date(0) }, { writeConcern: { w: "majority" } }); }
     catch (error) { if (error.code !== 11000) throw error; }
-    const acquired = await collection.findOneAndUpdate({
-      _id: key, $expr: { $lte: [{ $ifNull: ["$expiresAt", new Date(0)] }, "$$NOW"] }
-    }, [{ $set: { owner, expiresAt: expiry(), updatedAt: "$$NOW" } }], {
+    // Never release while the old runtime can still write. On this host only,
+    // the OS proves it has exited; CAS then fences competing replacement boots.
+    const previous = await collection.findOne({ _id: key });
+    const deadLocalOwner = hostId && previous?.hostId === hostId && isLocalProcessDead(previous.pid);
+    const filter = deadLocalOwner
+      ? { _id: key, owner: previous.owner, hostId, pid: previous.pid }
+      : { _id: key, $expr: { $lte: [{ $ifNull: ["$expiresAt", new Date(0)] }, "$$NOW"] } };
+    const acquired = await collection.findOneAndUpdate(filter,
+      [{ $set: { owner, hostId: { $literal: hostId }, pid, expiresAt: expiry(), updatedAt: "$$NOW" } }], {
       returnDocument: "after", writeConcern: { w: "majority" }, maxTimeMS: 5000
     });
     if (acquired?.owner !== owner) throw new Error("GAME_RUNTIME_ALREADY_RUNNING: 此資料庫已有遊戲程序，請先停止原程序。");

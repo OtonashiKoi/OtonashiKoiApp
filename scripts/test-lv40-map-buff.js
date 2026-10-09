@@ -1,0 +1,24 @@
+"use strict";
+const assert = require("node:assert/strict");
+const { buildPlan, selected, scaleState } = require("./buff-lv40-map-monsters");
+const m = { id: "sample", zone: "hellfire", level: 40, enabled: true, seq: 8, maxHp: 101, str: 154.8 };
+assert.equal(selected({ ...m, level: 39 }), false);
+assert.equal(selected({ ...m, zone: "hellfire_depths" }), false);
+assert.equal(selected({ ...m, zone: "event_1" }), false);
+assert.equal(selected({ ...m, allZones: true }), false);
+assert.equal(selected({ ...m, enabled: false }), false);
+assert.equal(selected({ ...m, isBoss: true }), true);
+const row = buildPlan([m])[0];
+assert.equal(row.values.maxHp, 202);
+assert.ok(Math.abs(row.values.str - 232.2) < 1e-8);
+assert.throws(() => buildPlan([{ ...m, ...row.values }]), /original baseline/);
+const state = { activeMonsterSeq: 8, encounterMonsterSeq: 8, encounterCount: 3, coopMaxHp: 303, currentHp: 202,
+  damageMap: { alice: { damage: 101, assist: 5 } }, killCount: { 8: 9 }, normalLive: { actors: { alice: { hp: 90 } } } };
+const after = scaleState(state, m, row.values);
+assert.equal(after.currentHp, 404); assert.equal(after.coopMaxHp, 606);
+assert.deepEqual(after.damageMap, state.damageMap); assert.deepEqual(after.normalLive, state.normalLive);
+assert.deepEqual(scaleState(after, m, row.values), after);
+assert.equal(scaleState({ ...state, currentHp: 0 }, m, row.values).currentHp, 0);
+assert.equal(scaleState({ ...state, encounterCount: 1, coopMaxHp: 101, currentHp: 13 }, m, row.values).currentHp, 26);
+assert.equal(state.currentHp, 202);
+console.log("PASS: Lv39/40 boundary, map bosses, world/event exclusions, fractional ATK, grouped/wounded/dead HP, contribution preservation and idempotency");

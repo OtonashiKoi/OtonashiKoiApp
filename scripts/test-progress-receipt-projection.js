@@ -17,7 +17,11 @@ const assert=require('node:assert/strict');
  const id='normal-live:new-exp',input={discordId:pid,displayName:pid,amount:1,source:require('../src/shared/sources').EXP_SOURCES.MONSTER_KILL,operationId:id};
  const projected=await sc.progressRepository.findExpRewardProgress(pid,id);assert.equal(projected.expGrantReceipts.length,0);assert.equal(projected.normalLiveExpResults.length,0);
  await sc.progressService.grantExp(input);await sc.progressService.grantExp(input);
- raw=await db.collection('progress').findOne({playerId:pid});assert.equal(raw.exp,1);assert.equal(raw.expGrantReceipts.length,4001);assert.equal(raw.normalLiveExpResults.length,4001);assert.equal(raw.normalLiveDropReceipts.length,4000);
+ raw=await db.collection('progress').findOne({playerId:pid});assert.equal(raw.exp,1);for(const [field,total] of [['expGrantReceipts',4001],['normalLiveExpResults',4001],['normalLiveDropReceipts',4000]]){
+   assert.ok(raw[field].length<=256);assert.equal(raw[field].length+await db.collection('progressReceipts').countDocuments({playerId:pid,field}),total);
+ }
+ const relocated=await db.collection('normalLiveRewardReceipts').find({playerId:pid}).toArray();assert.equal(relocated.length,4000);
+ for(const receipt of relocated)assert.deepEqual(receipt.entries,drops.find(r=>r.id===receipt.id).entries);
  const duplicate=await sc.progressRepository.findExpRewardProgress(pid,id);assert.deepEqual(duplicate.expGrantReceipts,[id]);assert.equal(duplicate.normalLiveExpResults.length,1);
  console.log('PASS 4000 historical receipts excluded from gameplay reads, preserved by saves, new EXP atomic append, duplicate reward exactly once');
  }finally{await closeMongoClient();await mongo.stop();}

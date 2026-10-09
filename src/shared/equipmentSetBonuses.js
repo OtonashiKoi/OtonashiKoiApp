@@ -1,5 +1,6 @@
 "use strict";
 const { activeEquipment } = require("./anchorFeature");
+const { equipmentSetPieceWeight } = require("./equipmentSetPieceWeight");
 
 /**
  * 具名套裝系統（named set bonuses）。
@@ -195,7 +196,7 @@ const SET_DEFS = {
   },
   northwind_hutao: {
     name: "北風套裝・大四喜",
-    note: "8 件 A 階胡桃防具套；完整套裝會把風向改為每個場風維持 3 回合，每場由東風起手",
+    note: "胡桃 S 主副手與 A 防具共同計件；8 件會把風向改為每個場風維持 3 回合，每場由東風起手",
     tiers: [
       { count: 2, desc: "命中 +6%", numeric: { hitPct: 6 } },
       { count: 4, desc: "最終傷害 +4%", numeric: { finalDamagePct: 4 } },
@@ -268,10 +269,19 @@ const EMPTY_NUMERIC = Object.freeze({
 });
 
 /** 取得一件裝備所屬的所有套裝 key（支援複合歸屬：setKeys 陣列 > 單一 setKey）。 */
+const HUTAO_S_SET_IDS = new Set([
+  "hutao-wind-sword-1h", "hutao-wind-sword-2h", "hutao-wind-axe-1h", "hutao-wind-axe-2h",
+  "hutao-wind-dagger", "hutao-wind-dice", "hutao-wind-mace-1h", "hutao-wind-mace-2h",
+  "hutao-wind-staff-1h", "hutao-wind-staff-2h", "hutao-wind-bow",
+  "hutao-wind-offhand-sword", "hutao-wind-offhand-dagger", "hutao-wind-shield",
+]);
 function setKeysOf(item) {
   if (!item) return [];
   if (Array.isArray(item.setKeys) && item.setKeys.length) return item.setKeys.map(String);
   if (item.setKey) return [String(item.setKey)];
+  // 已取得的 S 裝快照仍是舊版 setKey:null；不需寫動玩家進度即可生效。
+  if (String(item.tier || "").toUpperCase() === "S" && HUTAO_S_SET_IDS.has(String(item.itemId || item.id || "")))
+    return ["northwind_hutao"];
   return [];
 }
 
@@ -285,8 +295,10 @@ function countEquippedSets(equipped = {}) {
     const it = equipped[slot];
     for (const key of setKeysOf(it)) {
       if (!SET_DEFS[key]) continue;
-      counts[key] = (counts[key] || 0) + 1;
-      (pieces[key] = pieces[key] || []).push(it.itemName || it.name || slot);
+      const weight = equipmentSetPieceWeight(it, slot);
+      counts[key] = (counts[key] || 0) + weight;
+      const name = it.itemName || it.name || slot;
+      (pieces[key] = pieces[key] || []).push(weight === 2 ? `${name}（計2件）` : name);
     }
   }
   return { counts, pieces };

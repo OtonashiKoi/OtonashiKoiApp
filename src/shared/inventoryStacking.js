@@ -7,6 +7,12 @@ function isEnhanceGemItemId(itemId) {
   return ENHANCE_GEM_IDS.has(String(itemId || ""));
 }
 
+// 屬性石有怪物掉落、分解與合成等來源；同款沒有獨立實例狀態。
+const ELEMENT_STONE_IDS = new Set([
+  "element-stone-water", "element-stone-fire", "element-stone-wood",
+  "element-stone-earth", "element-stone-metal", "element-stone-sun", "element-stone-moon"
+]);
+
 // 可疊加消耗品（藥水）：同款自動合併成一堆(stackCount)，省背包格。
 // 藥水無 per-instance 狀態(不可強化/鎖定/裝備)，合併安全。新增藥水記得加進來。
 const STACKABLE_CONSUMABLE_IDS = new Set([
@@ -21,9 +27,9 @@ const STACKABLE_CONSUMABLE_IDS = new Set([
 function isStackableConsumableId(itemId) {
   return STACKABLE_CONSUMABLE_IDS.has(String(itemId || ""));
 }
-// 可疊加(合併)判斷：強化寶石 + 藥水
+// 可疊加(合併)判斷：強化寶石 + 七種屬性石 + 藥水
 function isStackMergeable(itemId) {
-  return isEnhanceGemItemId(itemId) || isStackableConsumableId(itemId);
+  return isEnhanceGemItemId(itemId) || ELEMENT_STONE_IDS.has(String(itemId || "")) || isStackableConsumableId(itemId);
 }
 
 function buildEnhanceGemEntry(item, quantity = 1, extraFields = {}) {
@@ -102,7 +108,7 @@ function normalizeEnhanceGemStacks(inventory) {
   const byItemId = new Map();
 
   for (const entry of inventory) {
-    // 強化寶石 + 藥水才合併；鎖定件保險起見不合併(藥水本不可鎖，防呆)
+    // 強化寶石、屬性石與藥水才合併；鎖定件保險起見不合併。
     if (!entry || typeof entry !== "object" || entry.locked || !isStackMergeable(entry.itemId)) {
       merged.push(entry);
       continue;

@@ -65,6 +65,14 @@ function hasEffect(equipped = {}) {
   );
 }
 
+function describeUniquePassive(effect) {
+  const c = normalizeConfig(effect);
+  const cycle = c.phaseRounds > 1
+    ? `每${c.phaseRounds}回合輪轉，每場由東風起手`
+    : "每回合輪轉，跨戰鬥延續";
+  return `唯一被動・風向輪轉（不疊加）：東風命中+${c.eastHit}／南風最終傷害+${c.southFinalDamagePct}%／西風爆擊傷害+${c.westCritDamagePct}%／北風爆擊率+${c.northCritRatePct}%；${cycle}。`;
+}
+
 module.exports = {
   EFFECT_KEY,
   DIRECTIONS,
@@ -75,4 +83,5 @@ module.exports = {
   phaseAt,
   normalizeConfig,
   hasEffect,
+  describeUniquePassive,
 };

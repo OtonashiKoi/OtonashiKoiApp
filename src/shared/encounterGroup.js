@@ -2,6 +2,7 @@
 
 // One species per scene; each segment is one original monster, not a stronger template.
 const NORMAL_ZONES = new Set(['beginner', 'normal', 'mid', 'ancient_city', 'mistwood', 'ancient_city_deep', 'dragon_realm', 'hellfire', 'metal_mine']);
+const LIVE_ZONES = new Set([...NORMAL_ZONES, 'event_boss_hutao_preview']);
 function count(value, max = 5) { return Math.min(max, Math.max(1, Math.floor(Number(value) || 1))); }
 function randomCount(max = 3, random = Math.random) { return 1 + Math.min(max - 1, Math.max(0, Math.floor(random() * max))); }
 function encounterCount(state, monster) {
@@ -17,4 +18,4 @@ function spawnState(state, monster, random = Math.random) {
   const maxHp = Math.max(1, Number(monster.calc.maxHp)) * n;
   return { ...state, encounterCount: n, encounterMonsterSeq: monster.seq, currentHp: maxHp, coopMaxHp: maxHp, coopHpMonsterSeq: monster.seq };
 }
-module.exports = { NORMAL_ZONES, count, randomCount, encounterCount, expBonusPct, remaining, targetHp, spawnState };
+module.exports = { NORMAL_ZONES, LIVE_ZONES, count, randomCount, encounterCount, expBonusPct, remaining, targetHp, spawnState };

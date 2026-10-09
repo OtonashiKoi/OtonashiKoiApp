@@ -31,6 +31,10 @@ async function ensureIndexes(db) {
 
   try {
     await Promise.all([
+      db.collection("normalLiveSettlements").createIndex({status:1,zone:1,createdAt:1}),
+      db.collection("normalLiveRewardReceipts").createIndex({playerId:1,seasonKey:1,id:1}),
+      db.collection("progressReceipts").createIndex({playerId:1,seasonKey:1,field:1}),
+      db.collection("questOperationReceipts").createIndex({discordId:1,cadence:1,periodKey:1}),
       db.collection("partyTowerRooms").createIndex({ activePlayers: 1 }, { unique: true, partialFilterExpression: { active: true } }),
       db.collection("partyTowerRooms").createIndex({ active: 1, status: 1, nextAt: 1 }),
       // 玩家和錢包（保持不變）

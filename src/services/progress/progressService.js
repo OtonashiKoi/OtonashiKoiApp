@@ -53,7 +53,7 @@ class ProgressService {
   }
 
   async _grantExpInternal({ discordId, displayName, amount, source, operationId = null, rewardCharacter = null }) {
-    const compact=operationId?.startsWith("normal-live:")&&this.progressRepository.findExpRewardProgress&&this.progressRepository.saveExpRewardIfUnchanged&&this.playerService.playerRepository;
+    const compact=operationId&&this.progressRepository.findExpRewardProgress&&this.progressRepository.saveExpRewardIfUnchanged&&this.playerService.playerRepository;
     // CAS 重試：讀取 → 計算 → 條件寫入（只在 updatedAt 未變時才寫）
     // 若被其他寫入搶先，重新讀取最新狀態再試，確保屬性絕對不會重複給
     for (let attempt = 0; attempt < CAS_MAX_RETRIES; attempt++) {
@@ -137,7 +137,7 @@ class ProgressService {
         next.levelStartedAt = next.updatedAt;
       }
 
-      if(operationId?.startsWith("normal-live:"))next.normalLiveExpResults=[...(progress.normalLiveExpResults||[]),{id:operationId,levelUps,levelUpDetails,overflowGold}];
+      if(operationId)next.normalLiveExpResults=[...(progress.normalLiveExpResults||[]),{id:operationId,levelUps,levelUpDetails,overflowGold}];
       const saved = compact&&profile
         ? await this.progressRepository.saveExpRewardIfUnchanged(next, prevUpdatedAt, operationId)
         : await this._saveProgressWithFallback(next, prevUpdatedAt);

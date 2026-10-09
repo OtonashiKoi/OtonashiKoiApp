@@ -40,9 +40,9 @@ assert.equal(normalizeStep(-1), 3);
 assert.equal(SET_DEFS.northwind_hutao.tiers.at(-1).count, 8);
 
 const previewId = "865264891991425055";
-assert.equal(canPlayerAccessZone("event_boss_hutao_preview", previewId), true);
+assert.equal(canPlayerAccessZone("event_boss_hutao_preview", previewId), false, "活動關閉時管理員也不可進入");
 assert.equal(canPlayerAccessZone("event_boss_hutao_preview", "123"), false);
-assert.equal(getVisibleZoneKeys(previewId).includes("event_boss_hutao_preview"), true);
+assert.equal(getVisibleZoneKeys(previewId).includes("event_boss_hutao_preview"), false);
 assert.equal(getVisibleZoneKeys("123").includes("event_boss_hutao_preview"), false);
 assert.equal(getPublicZoneKeys().includes("event_boss_hutao_preview"), false);
 // 舊夏日活動本季停用；不公開、不送全服公告。

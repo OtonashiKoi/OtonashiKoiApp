@@ -2,6 +2,7 @@
 
 const {
   BOSS_KEY,
+  RIICHI_INTRO_MS,
   RIICHI_DURATION_MS,
   windAt,
   questionForMark,
@@ -58,7 +59,8 @@ class HutaoEventService {
       questionId: question.id,
       status: "active",
       startedAt: now,
-      endsAt: now + RIICHI_DURATION_MS,
+      answerStartsAt: now + RIICHI_INTRO_MS,
+      endsAt: now + RIICHI_INTRO_MS + RIICHI_DURATION_MS,
       answers: {},
       result: null,
     };
@@ -76,6 +78,9 @@ class HutaoEventService {
     if (Number(quiz.endsAt) <= now) {
       await this._finalizeIfExpired(now);
       throw Object.assign(new Error("答題時間已結束。"), { code: "HUTAO_QUIZ_CLOSED" });
+    }
+    if (now < Number(quiz.answerStartsAt ?? quiz.startedAt)) {
+      throw Object.assign(new Error("大招演出尚未結束，請稍候再作答。"), { code: "HUTAO_QUIZ_NOT_OPEN" });
     }
     const question = questionById(quiz.questionId, quiz.mark, state.runKey);
     if (!question.choices.some((choice) => choice.id === choiceId)) {
@@ -160,6 +165,8 @@ class HutaoEventService {
         mark: quiz.mark,
         status: quiz.status,
         startedAt: quiz.startedAt,
+        answerStartsAt: quiz.answerStartsAt ?? quiz.startedAt,
+        answerDurationMs: Number(quiz.endsAt) - Number(quiz.answerStartsAt ?? quiz.startedAt),
         endsAt: quiz.endsAt,
         remainingMs: quiz.status === "active" ? Math.max(0, Number(quiz.endsAt) - now) : 0,
         question: publicQuestion(question, resolved),

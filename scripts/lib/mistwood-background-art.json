@@ -1,0 +1,10 @@
+{
+  "zone": "mistwood",
+  "label": "霧隱林地",
+  "asset": "/uploads/zones/mistwood.webp",
+  "generator": "built-in imagegen",
+  "createdAt": "2026-10-07",
+  "width": 1024,
+  "height": 1536,
+  "prompt": "Use case: stylized-concept. Asset type: a finished environment background for a vertical fantasy RPG battle scene, portrait 2:3 composition. Primary request: create the missing Mistwood / 霧隱林地 map background, an ancient forest outside a ruined medieval city concealed by mist. Style: hand-painted fantasy RPG environment concept art, rich painterly textures and detailed moss-covered twisted trees, matching classic dark fantasy game scenery. Scene: a quiet forest clearing and old stone footpath receding into layered pale teal mist, towering ancient trees framing the scene, moss, ferns and weathered stones, a barely visible ruined stone arch deep in the background. Lighting: mysterious soft silver-green light filtering through the canopy, atmospheric fog and deep forest shadows, readable midtones. Composition: immersive eye-level view, broad clear central and lower-middle space for battle monsters and player sprites, trees and roots concentrated near edges, subtle dark edges, fully painted opaque background. No characters, monsters, animals, text, labels, logos, UI, borders or watermark. Deliver one single illustration."
+}

@@ -233,6 +233,10 @@ class MonsterService {
     return saved;
   }
 
+  async saveBattleAuras(state, auras, zoneKey = "normal") {
+    return this.monsterRepository.saveBattleAuras(state, auras, zoneKey);
+  }
+
   async saveStateIfActiveMonster(state, zoneKey = "normal", expectedMonsterSeq, expectedCurrentHp = null) {
     if (typeof this.monsterRepository.saveStateIfActiveMonster !== "function") return false;
     return this.monsterRepository.saveStateIfActiveMonster(state, zoneKey, expectedMonsterSeq, expectedCurrentHp);

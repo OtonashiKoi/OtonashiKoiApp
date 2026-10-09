@@ -54,6 +54,11 @@ function buildItemEffectLines(lib) {
     lines.push(`${icon} ${def.name}（達標效果累加）`);
     for (const tier of def.tiers) lines.push(`${tier.count} 件：${tier.desc}`);
   }
+  if (lib?.setKey === "island_turtle") {
+    const def = require("./equipmentSetBonuses").SET_DEFS.island_turtle;
+    lines.push(`🌊 ${def.name}（海灘 A 裝與龜王 S 武器可混搭，達標效果累加）`);
+    for (const tier of def.tiers) lines.push(`${tier.count} 件：${tier.desc}`);
+  }
   if (String(lib?.weaponType || "").toLowerCase() === "dice") {
     lines.push("🎲 雙手魔法武器｜主屬性：LUK｜常駐無視 25% DEF");
   }
@@ -70,6 +75,10 @@ function buildItemEffectLines(lib) {
   for (const [trigger, arr] of groups) {
     for (const eff of arr || []) {
       if (!eff?.key) continue;
+      if (eff.key === "wind_direction_cycle") {
+        lines.push(`✦ ${require("./windDirection").describeUniquePassive(eff)}`);
+        continue;
+      }
       const name = EFFECT_NAME_ZH[eff.key] || eff.definitionName || eff.key;
       const valueText = formatEffectValueText(eff.key, eff?.params);
       const chance = Number(eff.chance ?? 100);

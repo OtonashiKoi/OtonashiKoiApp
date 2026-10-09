@@ -66,7 +66,7 @@ const LIBRARY_ITEMS = [
   },
 ];
 
-// 商店品項（每種限持有 3 罐，購買時由 shopService 檢查背包）
+// 商店不限制藥水持有量；每場攜帶上限由 partyTowerPotions 在出發前驗證。
 const SHOP_PRICES = {
   [ITEM_IDS.potion_hp_s]:  3000,
   [ITEM_IDS.potion_hp_m]:  8000,
@@ -109,8 +109,8 @@ async function main() {
         currency: "gold",
         price,
         stock: -1,           // 無限庫存
-        maxPerMonth: 0,       // 不用月限，改由背包持有量控制
-        maxOwn: 3,            // 購買時背包上限 3 罐
+        maxPerMonth: 0,       // 不限月購量
+        maxOwn: 0,            // 不限持有量；副本攜帶上限另行驗證
         enabled: true,
         isSale: false,
         allowedTiers: [],

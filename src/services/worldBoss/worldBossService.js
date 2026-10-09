@@ -54,6 +54,7 @@ const DEFAULT_CONFIG = {
 };
 
 function normalizePhaseList(list, { bossKey = "default" } = {}) {
+  if (bossKey === "northwind_hutao") return [];
   const hasConfiguredPhases = Array.isArray(list) && list.length > 0;
   const source = hasConfiguredPhases ? list : DEFAULT_CONFIG.phaseConfig;
   const normalized = source
@@ -182,7 +183,7 @@ class WorldBossService {
 
   async getConfigWithStatus(playerId) {
     const availability = require("../../shared/worldBossAvailability");
-    if (availability.CLOSED_BOSS_KEYS.includes(this.bossKey)) {
+    if (availability.isBossClosed(this.bossKey)) {
       const [config, state] = await Promise.all([this.getConfig(), this._getStateEnsured()]);
       return { config: { ...config, enabled: false }, state, status: { ...this._buildStatus(config, state), unlocked: false, canChallenge: false, lockedReason: availability.CLOSED_REASON } };
     }

@@ -1,0 +1,12 @@
+Tool: built-in image_gen
+Edit target: season-2026-autumn-cover-v1.png
+Authoritative character reference: src/web/public/app/brand/otonashi-main.png
+
+Use case: identity-preserve / precise-object-edit.
+Image 1 is the cover to edit. Image 2 is the authoritative original full-body character design.
+Edit only the heroine in Image 1 so her costume, accessories, hairstyle and identity faithfully match Image 2. The user specifically says the cover added too many invented decorations. Carefully copy the original design rather than creating an ornate fantasy costume.
+Preserve Image 1's horizontal dimensions, warm autumn castle and maple forest background, foliage, lighting, right-side character composition and left-side typography. All text must remain unchanged and clearly legible: 音無樂園, 楓紅漸漸, 2026.10.02 — 11.01.
+Character requirements from Image 2: silver-lavender bob with straight bangs and the two thin curved ahoge strands; original dark black, violet and blue hair bows and the single original purple-gold flower hair ornament; original blue-teal eyes and gentle youthful adult face. Reproduce the original simple black/navy high collar with narrow gold edging, its purple flower clasp and slender gold teardrop pendant. Original dark triangular shoulder/neck panels with gold borders and bare shoulders; original black-and-gold angular upper bodice; white detached sleeves with purple wisteria botanical prints, dark ribbon fasteners and the original sleeve bows/ornaments; the large purple-and-blue waist bow and its original central purple flower.
+Remove ALL costume additions invented in Image 1: extra layered neck necklaces, chains crossing the chest, jeweled corset lattice, surplus hanging purple crystals, clusters of white shoulder flowers, extra gold decorative filigree, new bracelets, and excess shiny jewel ornamentation. Keep only the accessories visible in Image 2, in the same placements and proportions. Do not remove the actual original flower hair clip, collar flower, sleeve ornaments or waist bow.
+Maintain a naturally proportioned bust and the original neckline from Image 2, with no emphasis or exaggerated redesign. Pose can retain the raised hand with the maple leaf, but the sleeve and wrist must be faithful to Image 2.
+Preserve the polished anime painted rendering and the autumn atmosphere. Do not introduce new props, ornaments, armor, chains, gems, logos, slogans, or text.

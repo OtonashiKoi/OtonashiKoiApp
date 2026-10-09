@@ -40,7 +40,7 @@ class ZoneCombatScene {
   constructor({ now=Date.now, emit=(id,data)=>playerEventBus.emit(id,{type:'zone_combat_scene',data}) }={}) {
     this.vitals=new (require("./zoneCombatVitals").ZoneCombatVitals)(now); this.now=now; this.emit=emit; this.scenes=new Map(); this.watchers=new Map(); this.revision=0; this.runtimeId=randomUUID();
   }
-  supports(zone) { return NORMAL_ZONES.has(zone); }
+  supports(zone) { return require("../../shared/encounterGroup").LIVE_ZONES.has(zone); }
   watch(id,zone) { this.watchers.set(String(id),{zone,at:this.now()}); }
   publicSnapshot(scene) {
     if (!scene) return null;
@@ -57,6 +57,10 @@ class ZoneCombatScene {
   ensure(zone,state,monster,{force=false}={}) {
     if(!this.supports(zone)||!monster) return null;
     let scene=this.scenes.get(zone);
+    // A GET may publish the saved spawn while saveState is awaiting its monster
+    // lookup. Re-publication of that same generation must preserve ID and hits.
+    if(scene&&force&&this.liveMode&&!scene.deathAt&&scene.seq===Number(state.activeMonsterSeq)
+      &&Number(state.normalLiveSpawnAt)>0&&scene.spawnAt===Number(state.normalLiveSpawnAt))return scene;
     if(scene && !force && scene.seq===Number(state.activeMonsterSeq)) return scene;
     // Never reveal the next monster while the shared death animation is pending.
     if(scene && !force && scene.deathAt && (scene.transitionPending || this.now()<(scene.advanceAt?scene.advanceAt+WEB_BATTLE_HANDOFF_MS:scene.deathAt+WEB_MONSTER_TRANSITION_MS))) return scene;

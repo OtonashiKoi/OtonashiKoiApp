@@ -100,7 +100,7 @@
 - `dragon_king`（古龍王）
 - `hellfang_king`（地獄狼牙王）
 - `island_turtle`（島島龜王）
-- `northwind_hutao`（北風雀神・胡桃私測；目前為 `event_boss_hutao_preview`）
+- `northwind_hutao`（北風雀神・胡桃；`event_boss_hutao_preview`，出戰→活動，10/8–10/15限時公開）
 
 ---
 

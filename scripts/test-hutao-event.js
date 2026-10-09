@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const { HutaoEventService } = require("../src/services/worldBoss/hutaoEventService");
 const {
   QUESTIONS,
+  RIICHI_INTRO_MS,
   RIICHI_DURATION_MS,
   crossedRiichiMark,
   hpAtMark,
@@ -94,7 +95,8 @@ async function main() {
   assert.equal(crossedRiichiMark(12_000_000, 8_000_000, 12_000_000, []), 70);
   assert.equal(hpAtMark(12_000_000, 70), 8_400_000);
   assert.equal(crossedRiichiMark(8_400_000, 4_000_000, 12_000_000, [70]), 40);
-  assert.equal(RIICHI_DURATION_MS, 30_000, "立直答題時間必須是 30 秒");
+  assert.equal(RIICHI_DURATION_MS, 10_000, "演出結束後必須保留完整 10 秒作答");
+  assert.equal(RIICHI_INTRO_MS, 3200);
   assert.equal(QUESTIONS.filter((question) => question.waitType === "ryanmen").length, 6);
   assert.equal(QUESTIONS.filter((question) => question.waitType === "kanchan").length, 6);
 
@@ -120,6 +122,14 @@ async function main() {
   assert.equal(active.blocking, true);
   assert.equal(active.quiz.question.correctChoiceIds, undefined, "結算前不可洩漏正解");
   assert.equal(active.quiz.question.id, questionForMark(70, "test-run").id, "同一 runKey 必須穩定選到同一題");
+  assert.equal(active.quiz.answerStartsAt, startAt + RIICHI_INTRO_MS);
+  assert.equal(active.quiz.answerDurationMs, 10_000);
+  assert.equal(active.quiz.endsAt, startAt + RIICHI_INTRO_MS + RIICHI_DURATION_MS);
+  const reopened = await service.startQuiz(70, "test-run", startAt + 2500);
+  assert.equal(reopened.quiz.answerStartsAt, active.quiz.answerStartsAt, "重連不重設演出截止");
+  assert.equal(reopened.quiz.endsAt, active.quiz.endsAt, "重連不延長答題");
+  await assert.rejects(() => service.submitAnswer({ quizId: active.quiz.id, discordId: "early", choiceId: active.quiz.question.choices[0].id }, active.quiz.answerStartsAt - 1), { code: "HUTAO_QUIZ_NOT_OPEN" });
+  assert.deepEqual((await repo.get()).quiz.answers, {}, "演出期間不儲存答案");
   const firstQuestion = questionForMark(70, "test-run");
   const firstCorrect = firstQuestion.correctChoiceIds[0];
   const firstWrong = firstQuestion.choices.find((choice) => !firstQuestion.correctChoiceIds.includes(choice.id)).id;
@@ -129,7 +139,7 @@ async function main() {
     discordId: "1",
     displayName: "音無恋",
     choiceId: firstCorrect,
-  }, startAt + 1_000);
+  }, active.quiz.answerStartsAt);
   assert.equal(afterCorrect.quiz.answers[0].choiceId, firstCorrect, "等待期間必須公開玩家選擇");
   assert.equal(afterCorrect.quiz.answers[0].correct, undefined, "等待期間不可公開答對與否");
   await assert.rejects(() => service.submitAnswer({
@@ -137,35 +147,45 @@ async function main() {
     discordId: "1",
     displayName: "音無恋",
     choiceId: firstWrong,
-  }, startAt + 1_500), { code: "HUTAO_QUIZ_CLOSED" });
+  }, active.quiz.answerStartsAt + 500), { code: "HUTAO_QUIZ_CLOSED" });
 
   await service.submitAnswer({
     quizId: active.quiz.id,
     discordId: "2",
     displayName: "測試玩家",
     choiceId: firstWrong,
-  }, startAt + 2_000);
-  const resolved = await service.getSnapshot(startAt + RIICHI_DURATION_MS + 1);
+  }, active.quiz.endsAt - 1);
+  assert.equal((await service.getSnapshot(active.quiz.endsAt - 1)).blocking, true);
+  await assert.rejects(() => service.submitAnswer({ quizId: active.quiz.id, discordId: "late", choiceId: firstCorrect }, active.quiz.endsAt), { code: "HUTAO_QUIZ_CLOSED" });
+  const resolved = await service.getSnapshot(active.quiz.endsAt);
   assert.equal(resolved.blocking, false);
   assert.equal(resolved.quiz.result.outcome, "draw");
   assert.deepEqual(resolved.quiz.question.correctChoiceIds, firstQuestion.correctChoiceIds);
   assert.deepEqual(resolved.resolvedMarks, [70]);
   assert.equal(resolved.effect.kind, "none");
 
-  const second = await service.startQuiz(40, "test-run", startAt + RIICHI_DURATION_MS + 2);
+  const second = await service.startQuiz(40, "test-run", active.quiz.endsAt + 2);
   const secondQuestion = questionForMark(40, "test-run");
   await service.submitAnswer({
     quizId: second.quiz.id,
     discordId: "1",
     displayName: "音無恋",
     choiceId: secondQuestion.correctChoiceIds[0],
-  }, startAt + RIICHI_DURATION_MS + 3);
-  const win = await service.getSnapshot(startAt + RIICHI_DURATION_MS * 2 + 3);
+  }, second.quiz.answerStartsAt);
+  const win = await service.getSnapshot(second.quiz.endsAt);
   assert.equal(win.quiz.result.outcome, "deal_in");
   assert.equal(win.effect.playerFinalDamageMultiplier, 1.2);
   assert.equal(win.effect.playerHitBonus, 10);
 
-  console.log("胡桃場風、12 題兩面／坎張題庫、70/40 門檻、30 秒立直、答案鎖定與結算效果驗證通過。");
+  // Existing persisted quizzes keep their original deadline during a rollout.
+  const legacy = await repo.get();
+  legacy.quiz = { ...legacy.quiz, id: "legacy", status: "active", startedAt: 2_000_000, endsAt: 2_030_000, answers: {}, result: null };
+  delete legacy.quiz.answerStartsAt;
+  await repo.save(legacy);
+  const legacySnapshot = await service.getSnapshot(2_000_000);
+  assert.equal(legacySnapshot.quiz.answerDurationMs, 30_000);
+  await service.submitAnswer({ quizId: "legacy", discordId: "legacy-player", choiceId: secondQuestion.correctChoiceIds[0] }, 2_000_001);
+  console.log("胡桃場風、12 題兩面／坎張題庫、70/40 門檻、3.2 秒演出＋10 秒答題、期限邊界／重連、答案鎖定與結算效果驗證通過。");
 }
 
 main().catch((error) => {

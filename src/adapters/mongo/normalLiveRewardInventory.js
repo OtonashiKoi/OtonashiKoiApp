@@ -5,14 +5,24 @@ const seasonState=require("../../services/access/seasonStateStore");
 const maintenance=require("../../services/access/maintenanceStore");
 
 function createNormalLiveRewardInventory({collection,normalizeLowLevelJobBadge,emitRealtimeInvalidate}) {
+  const {createProgressReceiptLedger,epochFilter,nextTime}=require("./progressReceiptLedger");
+  const ledger=createProgressReceiptLedger(collection);
+  const receiptStore=require("./liveDropReceiptStore").createLiveDropReceiptStore(collection);
   return {
       async findExpRewardProgress(playerId, operationId = null) {
+        await ledger.ensure(playerId);
         const doc=await (await collection("progress")).findOne(seasonState.progressFilter(playerId), {
-          projection: {playerId:1,seasonKey:1,activeCharacterSlot:1,updatedAt:1,level:1,exp:1,
+          projection: {playerId:1,seasonKey:1,activeCharacterSlot:1,updatedAt:1,receiptEpoch:1,level:1,exp:1,
             attributes:1,statusPoints:1,levelUpHistory:1,levelReachedAt:1,levelStartedAt:1,
             expGrantReceipts:operationId?{$filter:{input:{$ifNull:['$expGrantReceipts',[]]},as:'receipt',cond:{$eq:['$$receipt',{$literal:operationId}]}}}:1,
             normalLiveExpResults:operationId?{$filter:{input:{$ifNull:['$normalLiveExpResults',[]]},as:'receipt',cond:{$eq:['$$receipt.id',{$literal:operationId}]}}}:1}
         });
+        if(doc&&operationId){
+          const season=doc.seasonKey||seasonState.LEGACY_KEY;
+          const [receipts,results]=await Promise.all([ledger.lookup(playerId,season,'expGrantReceipts',[operationId]),ledger.lookup(playerId,season,'normalLiveExpResults',[operationId])]);
+          doc.expGrantReceipts=[...new Set([...(doc.expGrantReceipts||[]),...receipts])];
+          doc.normalLiveExpResults=[...(doc.normalLiveExpResults||[]),...results];
+        }
         return doc?{...doc,seasonKey:doc.seasonKey||seasonState.LEGACY_KEY}:null;
       },
       async saveExpRewardIfUnchanged(progress,prevUpdatedAt,operationId = null) {
@@ -26,6 +36,7 @@ function createNormalLiveRewardInventory({collection,normalizeLowLevelJobBadge,e
         // Even retries only write EXP-owned fields and keep the season/slot guard.
         const result=await (await collection("progress")).updateOne({
           ...seasonState.progressFilter(progress.playerId,progress.seasonKey),
+          ...epochFilter(progress),
           updatedAt:prevUpdatedAt===undefined?{$exists:false}:prevUpdatedAt,
           activeCharacterSlot:progress.activeCharacterSlot===undefined?{$exists:false}:progress.activeCharacterSlot,
           ...(operationId?{expGrantReceipts:{$ne:operationId}}:{})
@@ -50,34 +61,32 @@ function createNormalLiveRewardInventory({collection,normalizeLowLevelJobBadge,e
       async grantInventoryRewardsBatch(grants) {
         if (maintenance.isStrict()) throw new Error("SEASON_RESET_WRITE_LOCKED");
         if (!grants.length) return {};
-        const now = new Date().toISOString();
         const col = await collection("progress");
-        const operations = grants.map(({ playerId, id, entries, seasonKey }) => {
-          if (!playerId || !id || !Array.isArray(entries)) throw new Error("Invalid inventory reward");
-          const safeEntries = entries.map(normalizeInventoryEntryMongoId);
-          return { updateOne: {
-            filter: { ...seasonState.progressFilter(playerId, seasonKey || seasonState.getActiveKey()), "normalLiveDropReceipts.id": { $ne: id } },
-            update: { $push: {
-              inventory: { $each: slimInventoryArray(normalizeEnhanceGemStacks(safeEntries)) },
-              normalLiveDropReceipts: { id, entries: safeEntries }
-            }, $set: { updatedAt: now } }, upsert: false
-          } };
-        });
-        // Atomic append + receipt per player: a concurrent bag edit cannot be
-        // overwritten, and replaying a partially applied bulk cannot duplicate loot.
-        await col.bulkWrite(operations, { ordered: false });
+        const plannedGrants=await receiptStore.prepare(grants);
         const ids = [...new Set(grants.map(g => String(g.playerId)))];
-        const receiptIds = grants.map(g => g.id);
-        const docs = await col.aggregate([
-          { $match: { playerId: { $in: ids } } },
-          { $project: { playerId: 1, normalLiveDropReceipts: { $filter: {
-            input: { $ifNull: ["$normalLiveDropReceipts", []] }, as: "receipt",
-            cond: { $in: ["$$receipt.id", { $literal: receiptIds }] }
-          } } } }
-        ]).toArray();
-        const receipts = {};
+        for(const pid of ids)await ledger.ensure(pid,plannedGrants.find(g=>g.playerId===pid).seasonKey||seasonState.getActiveKey());
+        let docs,receipts;
+        for(let attempt=0;attempt<12;attempt++){
+          const states=await col.find({playerId:{$in:ids}},{projection:{playerId:1,seasonKey:1,receiptEpoch:1,updatedAt:1}}).toArray();
+          const operations=[];
+          for(const {playerId,id,entries,seasonKey} of plannedGrants){
+            if(!playerId||!id||!Array.isArray(entries))throw Error('Invalid inventory reward');
+            const season=seasonKey||seasonState.getActiveKey(),state=states.find(d=>d.playerId===playerId);
+            if(!state||(state.seasonKey||seasonState.LEGACY_KEY)!==season)throw Error('Inventory reward was not committed: character season changed');
+            if((await ledger.lookup(playerId,season,'normalLiveDropReceipts',[id])).length)continue;
+            operations.push({updateOne:{filter:{...seasonState.progressFilter(playerId,season),...epochFilter(state),'normalLiveDropReceipts.id':{$ne:id}},update:{$push:{inventory:{$each:slimInventoryArray(normalizeEnhanceGemStacks(entries.map(normalizeInventoryEntryMongoId)))},normalLiveDropReceipts:{id}},$set:{updatedAt:nextTime(state)}},upsert:false}});
+          }
+          try{if(operations.length)await col.bulkWrite(operations,{ordered:false});}
+          catch(error){
+            if(error.code!==17419&&!error.writeErrors?.some(e=>e.code===17419))throw error;
+            await receiptStore.compact(ids);
+          }
+          docs=await col.aggregate([{$match:{playerId:{$in:ids}}},{$project:{playerId:1,seasonKey:1,normalLiveDropReceipts:{$filter:{input:{$ifNull:['$normalLiveDropReceipts',[]]},as:'receipt',cond:{$in:['$$receipt.id',{$literal:grants.map(g=>g.id)}]}}}}}]).toArray();
+          for(const doc of docs)doc.normalLiveDropReceipts.push(...await ledger.lookup(doc.playerId,doc.seasonKey||seasonState.LEGACY_KEY,'normalLiveDropReceipts',grants.filter(g=>g.playerId===doc.playerId).map(g=>g.id)));
+          receipts=await receiptStore.read(docs);
+          if(grants.every(g=>Object.hasOwn(receipts[g.playerId]||{},g.id)))break;
+        }
         for (const doc of docs) {
-          receipts[doc.playerId] = Object.fromEntries(doc.normalLiveDropReceipts.map(r => [r.id, r.entries]));
           emitRealtimeInvalidate("progress", doc.playerId);
         }
         for (const grant of grants) {

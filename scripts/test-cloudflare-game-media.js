@@ -1,0 +1,30 @@
+"use strict";
+const assert = require("node:assert/strict");
+const { applyCloudManifest, attachCloudflareGameMedia } = require("../src/services/assets/cloudflareGameMedia");
+const revision = "a".repeat(64), originalRevision = "b".repeat(64);
+const asset = { url: "/bgm/test.mp3", revision: originalRevision, kind: "audio", integrity: false, bytes: 0 };
+const cloud = { origin: "https://otonashi-game-media.otonashikoi1228.workers.dev", excludedCollections: true,
+  assets: [{ ...asset, revision, originalRevision, bytes: 10, key: `media/${revision}.mp3` }] };
+(async () => {
+  const result = applyCloudManifest([asset], cloud);
+  assert.equal(result.assets[0].downloadUrl, `${cloud.origin}/media/${revision}.mp3`);
+  assert.equal(result.assets[0].integrity, true);
+  assert.equal(result.assets[0].revision, revision);
+  assert.equal(result.delivery, "cloudflare-static-assets");
+  const png = { url: "/handbook/test.png", revision: originalRevision, bytes: 100, kind: "image", integrity: true, source: "static" };
+  const imageCloud = { ...cloud, assets: [{ ...png, originalRevision, revision, bytes: 60, key: `media/${revision}.webp` }] };
+  const encoded = applyCloudManifest([png], imageCloud).assets[0];
+  assert.equal(encoded.sourceRevision, originalRevision);
+  assert.equal(encoded.revision, revision);
+  assert.equal(encoded.bytes, 60);
+  assert.equal(encoded.downloadUrl, `${cloud.origin}/media/${revision}.webp`);
+  assert.deepEqual(applyCloudManifest([encoded], imageCloud).assets, [encoded], "already mapped static assets retain their original source revision");
+  assert.deepEqual(applyCloudManifest([{ ...encoded, sourceRevision: "c".repeat(64) }], imageCloud).unavailable, [png.url]);
+  assert.deepEqual(applyCloudManifest([{ ...asset, revision: "c".repeat(64) }], cloud).unavailable, [asset.url]);
+  assert.equal(applyCloudManifest([], cloud).assets.length, 0, "release map cannot reintroduce excluded collection URLs");
+  assert.throws(() => applyCloudManifest([asset], { ...cloud, origin: "https://evil.test" }));
+  assert.throws(() => applyCloudManifest([asset], { ...cloud, excludedCollections: false }));
+  assert.throws(() => applyCloudManifest([asset], { ...cloud, assets: [{ ...cloud.assets[0], key: "media/../api/me.png" }] }));
+  assert.deepEqual((await attachCloudflareGameMedia([asset], "/tmp/otonashi-missing-cloud-map-test.json")).assets, [asset]);
+  console.log("PASS: verified Cloudflare URL/hash mapping, changed assets withheld, collection scope preserved, hostile map rejected, inactive migration compatibility");
+})().catch(error => { console.error(error); process.exitCode = 1; });

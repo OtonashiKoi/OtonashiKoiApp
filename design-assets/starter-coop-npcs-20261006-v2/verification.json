@@ -1,0 +1,114 @@
+[
+  {
+    "name": "白鷺",
+    "file": "swordsman-v2.png",
+    "size": [
+      1024,
+      1536
+    ],
+    "alphaRange": [
+      0,
+      254
+    ],
+    "bytes": 1959813,
+    "sha256": "c2a32328825b2cbfb05125e0aec74a61e7bb64b6c82725b5874e22dc608d97d8"
+  },
+  {
+    "name": "無傷",
+    "file": "healer-v2.png",
+    "size": [
+      1024,
+      1536
+    ],
+    "alphaRange": [
+      0,
+      254
+    ],
+    "bytes": 2207152,
+    "sha256": "01a9059f153ac05cfb579698db2549ba3d13374d3d1d92ab1f9359f5c8a1bebb"
+  },
+  {
+    "name": "遠山",
+    "file": "archer-v2.png",
+    "size": [
+      1024,
+      1536
+    ],
+    "alphaRange": [
+      0,
+      254
+    ],
+    "bytes": 1895718,
+    "sha256": "53ca149e5bcaf4a325c520df08cec29ef5c191d2b7ad4290f7a3c9f1ab655d2d"
+  },
+  {
+    "name": "斷弦",
+    "file": "bard-v2.png",
+    "size": [
+      1024,
+      1536
+    ],
+    "alphaRange": [
+      0,
+      254
+    ],
+    "bytes": 1962571,
+    "sha256": "edd500daf4140db5e77e49e20ce96f3d7447f295cef729a25a0fdd41d6bb8721"
+  },
+  {
+    "name": "灰燼夫人",
+    "file": "mage-v2.png",
+    "size": [
+      1024,
+      1536
+    ],
+    "alphaRange": [
+      0,
+      254
+    ],
+    "bytes": 2004527,
+    "sha256": "18052184fb9d5cd540ba4da10e69d79b2a310abdd83c1c349dd8455ba125a7d4"
+  },
+  {
+    "name": "枯棋",
+    "file": "tactician-v2.png",
+    "size": [
+      1024,
+      1536
+    ],
+    "alphaRange": [
+      0,
+      254
+    ],
+    "bytes": 1985670,
+    "sha256": "47d90ea523059bd030692ef6fc67af210da06cb63e49ca3962b42d014d9d79cc"
+  },
+  {
+    "name": "影七",
+    "file": "rogue-v2.png",
+    "size": [
+      1024,
+      1536
+    ],
+    "alphaRange": [
+      0,
+      254
+    ],
+    "bytes": 1890958,
+    "sha256": "e59576411dfbc26e6037b8ad81366099d64de1f11cc7f91ca7f93d344f51f3d3"
+  },
+  {
+    "name": "壁",
+    "file": "barrier-mage-v2.png",
+    "size": [
+      1024,
+      1536
+    ],
+    "alphaRange": [
+      0,
+      254
+    ],
+    "bytes": 1976476,
+    "sha256": "72d60b6709311e742de29120cab642809b0521610333ea66bcd72868cf91eb51"
+  }
+]

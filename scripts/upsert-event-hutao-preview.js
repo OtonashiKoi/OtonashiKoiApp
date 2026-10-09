@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * 北風雀神・胡桃：音無恋私測世界王＋13 種 S 階限定武器。
+ * 北風雀神・胡桃：音無恋私測世界王＋14 件 S 階主副手裝備。
  *
  * 預設只列出將要寫入的內容；加 --apply 才會更新 MongoDB。
  * 本腳本只管理 northwind_hutao / event_boss_hutao_preview，絕不修改島島龜王。
@@ -62,6 +62,7 @@ const WEAPONS = Object.freeze([
   { id: "hutao-wind-bow", name: "立直・破風長弓", slot: "weapon", type: "bow", twoH: true, atk: "dex", stats: S(0, 5, 0, 0, 15, 3), desc: "弦聲就是立直宣言，箭離弦後才聽見風被洞穿。" },
   { id: "hutao-wind-offhand-sword", name: "對子・雙風脇差", slot: "shield", type: "offhand_sword", twoH: false, atk: "str", stats: S(6, 3, 3, 0, 0, 0), desc: "與主手相應成對，兩道風痕如同牌中的對子。" },
   { id: "hutao-wind-offhand-dagger", name: "暗刻・羽切短刃", slot: "shield", type: "offhand_dagger", twoH: false, atk: "agi", stats: S(0, 7, 0, 0, 2, 3), desc: "三枚暗藏的刃影無聲聚合，直到命中才被看見。" },
+  { id: "hutao-wind-shield", name: "北風・四喜雀盾", slot: "shield", type: null, twoH: false, atk: null, stats: S(3, 0, 12, 0, 3, 0), desc: "四方風牌嵌在翠玉盾面，北風回旋時護住持盾者。" },
 ]);
 
 const SET_GEAR = Object.freeze([
@@ -76,22 +77,7 @@ const SET_GEAR = Object.freeze([
 ]);
 
 function buildCard(now) {
-  const monsterCardSkill = {
-    key: "hutao_four_winds",
-    name: "東南西北",
-    description: "攻擊命中時有 12% 機率召出東南西北四方風刃，各造成該次傷害 45%。",
-    chance: 12,
-    cooldownTurns: 0,
-    trigger: "on_hit",
-    procEffects: [{
-      key: "proc_chain_hit",
-      target: "enemy",
-      trigger: "on_hit",
-      chance: 100,
-      sourcePhase: "proc",
-      params: { chainCount: 4, damageMultiplier: 0.45 },
-    }],
-  };
+  const monsterCardSkill = require("./lib/hutao-live-content").skill();
   return {
     id: CARD_ID,
     name: "北風雀神・胡桃卡",
@@ -124,7 +110,7 @@ function buildItem(spec, now) {
   return {
     id: spec.id,
     name: spec.name,
-    description: `${spec.desc}\n【胡桃限定・風向】東風命中 +10／南風最終傷害 +8%／西風爆擊傷害 +20%／北風爆擊率 +15%。風向每回合輪轉，戰鬥結束後不重置。`,
+    description: `${spec.desc}\n【胡桃限定・風向】東風命中 +10／南風最終傷害 +8%／西風爆擊傷害 +20%／北風爆擊率 +15%。風向每回合輪轉，戰鬥結束後不重置。\n【${SET_NAME}】S 主副手與 A 防具共同計件：2 件命中 +6%；4 件最終傷害 +4%；6 件爆擊傷害 +10%；8 件場風各維持 3 回合，每場從東風開始。`,
     itemType: "equipment",
     tier: "S",
     equipSlot: spec.slot,
@@ -138,9 +124,9 @@ function buildItem(spec, now) {
     passiveEffects: [{ ...WIND_EFFECT, params: { ...WIND_EFFECT.params } }],
     procEffects: [],
     combatEffects: [],
-    setKey: null,
-    setKeys: [],
-    setName: null,
+    setKey: SET_KEY,
+    setKeys: [SET_KEY],
+    setName: SET_NAME,
     imageUrl,
     imageThumbnailUrl: imageUrl,
     dropTheme: "event_hutao_northwind",
@@ -211,7 +197,7 @@ function buildMonster(now, card) {
     elementLevel: 4,
     expReward: 3500,
     goldReward: 12000,
-    entryFee: 5000,
+    entryFee: 50000,
     isBoss: true,
     enabled: true,
     spawnRate: 100,
@@ -246,9 +232,9 @@ async function main() {
 
   console.log(
     `北風雀神・胡桃：正式血量 ${FORMAL_RELEASE_TARGET_HP.toLocaleString()}（目前仍維持音無恋私測入口）` +
-    `，${WEAPONS.length} 種 S 武器＋${SET_GEAR.length} 件 A 套裝＋1 張王卡`
+    `，${WEAPONS.length} 件 S 主副手裝備＋${SET_GEAR.length} 件 A 套裝＋1 張王卡`
   );
-  for (const item of items.filter((entry) => entry.weaponType)) {
+  for (const item of items.filter((entry) => entry.id.startsWith("hutao-wind-"))) {
     const sum = Object.values(item.equipStats).reduce((total, value) => total + Number(value || 0), 0);
     console.log(`- ${item.name} | ${item.weaponType} | ${item.equipSlot} | 屬性總和 ${sum}`);
   }
@@ -287,13 +273,9 @@ async function main() {
     targetZone: ZONE,
     weeklyUnlockKillTarget: 1,
     battleTimeLimitMinutes: 120,
-    respawnCooldownMinutes: 120,
+    respawnCooldownMinutes: 30,
     eliteZoneKey: ZONE,
-    phaseConfig: [
-      { phase: 1, hpBelowPercent: 70, atkMultiplier: 1.0, defMultiplier: 1.0, agiBonus: 0, lightningEnabled: false, note: "東風巡場" },
-      { phase: 2, hpBelowPercent: 40, atkMultiplier: 1.15, defMultiplier: 1.0, agiBonus: 0, lightningEnabled: false, note: "南西風交替" },
-      { phase: 3, hpBelowPercent: 0, atkMultiplier: 1.3, defMultiplier: 1.0, agiBonus: 0, lightningEnabled: false, note: "北風本命" },
-    ],
+    phaseConfig: [],
   };
   await db.collection("worldBossConfig").updateOne(
     { _id: BOSS_KEY },
@@ -372,13 +354,15 @@ async function main() {
     console.log("未重建既有戰鬥狀態；正式切換時請加 --reset-state，避免沿用舊最大血量。");
   }
 
-  console.log("已寫入 13 種胡桃限定武器、8 件大四喜 A 套裝、胡桃王卡、完整私測王、獨立世界王設定與狀態。");
+  console.log("已寫入 14 件胡桃限定主副手裝備、8 件大四喜 A 套裝、胡桃王卡、完整私測王、獨立世界王設定與狀態。");
   console.log("島島龜王與 event_boss 未修改。");
   await closeMongoClient();
 }
 
-main().catch((error) => {
+if (require.main === module) main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
   return closeMongoClient().catch(() => {});
 });
+
+module.exports = { HUTAO_SHIELD: WEAPONS.find((item) => item.id === "hutao-wind-shield"), HUTAO_S_EQUIPMENT: WEAPONS, buildItem };

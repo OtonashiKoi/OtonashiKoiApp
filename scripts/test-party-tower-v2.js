@@ -21,7 +21,9 @@ function fixture() {
     saveIfUnchanged: async (p, old) => { if (players.get(p.playerId)?.updatedAt !== old) return false; players.set(p.playerId, clone(p)); return true; },
   };
   const sc = {
-    progressRepository, itemRepository: { findById: async id => ({ id, name: "測試區域装", itemType: "equipment", equipSlot: "armor", equipStats: { vit: 1 }, tier: "B" }) },
+    progressRepository, itemRepository: { findById: async id => Object.values(require("../src/shared/enhanceConfig").ENHANCE_GEMS).includes(id)
+      ? { id, name: "測試強化石", itemType: "consumable", tier: id === "gem-s-tier" ? "S" : "A" }
+      : ({ id, name: "測試區域装", itemType: "equipment", equipSlot: "armor", equipStats: { vit: 1 }, tier: "B" }) },
     rewardService: { grantCurrency: async q => { if (!receipts.has(q.sourceRef)) { gold.set(q.discordId, (gold.get(q.discordId) || 0) + q.amount); receipts.add(q.sourceRef); } } },
     monsterService: { listMonsters: async () => ["ancient_city", "mistwood", "ancient_city_deep", "dragon_realm", "hellfire", "metal_mine"].flatMap(zone => Array.from({ length: 31 }, (_, i) => i + 20).flatMap(level => [false, true].map(isBoss => ({ id: `monster-${zone}-${level}-${isBoss}`, name: isBoss ? "測試王" : "測試怪", zone, level,
       isBoss, maxHp: 20, goldReward: 100, expReward: 100, drops: [{ itemId: "test-item", chance: 100 }],
@@ -97,7 +99,11 @@ async function main() {
     assert.equal(ended.clearedFloor, rules.difficulty(difficulty).totalFloors); assert.equal(ended.settled, true);
     const before = clone([...f.players.values()]); const walletBefore = clone([...f.gold]); await s.tick();
     assert.deepEqual([...f.players.values()], before); assert.deepEqual([...f.gold], walletBefore);
-    for (let i = 1; i <= 3; i++) assert.equal(f.players.get(`party-test-${i}`).partyPendingDrops.length, totalEnemies);
+    for (let i = 1; i <= 3; i++) {
+      const drops = f.players.get(`party-test-${i}`).partyPendingDrops;
+      assert.equal(drops.filter(e => e.itemId === "test-item").length, totalEnemies);
+      assert.equal(drops.filter(e => e.source === "party_tower_checkpoint").length, difficulty === "normal" ? 1 : 2);
+    }
     assert.notEqual(f.players.get("party-test-1").partyPendingDrops[0].uuid, f.players.get("party-test-2").partyPendingDrops[0].uuid);
     await s.returnLobby("party-test-2"); assert.equal((await s.getState("party-test-1")).status, "lobby"); await s.disband("party-test-1");
   });
@@ -240,7 +246,8 @@ async function main() {
     const database = `party_verification_${Date.now()}`;
     const db = client.db(database);
     try {
-      const f = fixture(); const season = require("../src/services/access/seasonStateStore"); await season.ensureLoaded();
+      const f = fixture(); f.opts.encounterRandom = () => 0;
+      const season = require("../src/services/access/seasonStateStore"); await season.ensureLoaded();
       await db.collection("progress").insertMany([...f.players.values()].map(p => ({ ...p, seasonKey: season.getActiveKey() })));
       await db.collection("partyTowerRooms").createIndex({ activePlayers: 1 }, { unique: true, partialFilterExpression: { active: true } });
       f.sc.partyTowerRepository = require("../src/adapters/mongo/createPartyTowerRepository").createPartyTowerRepository({ collection: async name => db.collection(name) });
@@ -255,13 +262,13 @@ async function main() {
       await s.startRoom("party-test-1"); await s.tick(); s.close(); s = createPartyTowerRooms(f.sc, f.opts);
       for (let i = 0; i < 64; i++) { f.advance(); await s.tick(); }
       assert.equal((await s.getState("party-test-1")).settled, true);
-      let p = await f.sc.progressRepository.findByPlayerId("party-test-1"); assert.equal(p.partyPendingDrops.length, 30);
+      let p = await f.sc.progressRepository.findByPlayerId("party-test-1"); assert.equal(p.partyPendingDrops.length, 31);
       await f.sc.partyTowerRepository.grantItems(p.playerId, [{ itemId: "wrong", uuid: "duplicate" }], p.partyItemReceipts[0], true);
-      assert.equal((await f.sc.progressRepository.findByPlayerId(p.playerId)).partyPendingDrops.length, 30);
+      assert.equal((await f.sc.progressRepository.findByPlayerId(p.playerId)).partyPendingDrops.length, 31);
       f.opts.capacity = async () => 7; s.close(); s = createPartyTowerRooms(f.sc, f.opts);
-      assert.deepEqual(await s.claimPending(p.playerId), { claimed: 7, pending: 23 });
+      assert.deepEqual(await s.claimPending(p.playerId), { claimed: 8, pending: 23 });
       assert.deepEqual(await s.claimPending(p.playerId), { claimed: 0, pending: 23 });
-      p = await f.sc.progressRepository.findByPlayerId(p.playerId); assert.equal(p.inventory.length, 7);
+      p = await f.sc.progressRepository.findByPlayerId(p.playerId); assert.equal(p.inventory.length, 8);
       await s.disband("party-test-1"); checks.push({ name: "隔離資料庫保留供追查", ok: true, database });
     } finally { await client.close(); }
   });

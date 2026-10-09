@@ -6,7 +6,8 @@ const BOSS_ID = "event-northwind-hutao";
 const PREVIEW_PLAYER_IDS = Object.freeze(["865264891991425055"]);
 
 const WIND_PERIOD_MS = 60 * 1000;
-const RIICHI_DURATION_MS = 30 * 1000;
+const RIICHI_INTRO_MS = 3200;
+const RIICHI_DURATION_MS = 10 * 1000;
 const RIICHI_MARKS = Object.freeze([70, 40]);
 
 const WINDS = Object.freeze([
@@ -230,6 +231,7 @@ module.exports = {
   BOSS_ID,
   PREVIEW_PLAYER_IDS,
   WIND_PERIOD_MS,
+  RIICHI_INTRO_MS,
   RIICHI_DURATION_MS,
   RIICHI_MARKS,
   WINDS,
