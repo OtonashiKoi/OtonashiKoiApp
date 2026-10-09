@@ -19,6 +19,7 @@ const { isPkArenaButton, isPkArenaSelectMenu, handlePkArenaButton, handlePkArena
 const { isTowerButton, handleTowerButton, isTowerSelectMenu, handleTowerSelectMenu, publishTowerHallPanel } = require("./handlers/towerHandlers");
 const { isCasinoButton, isCasinoModal, handleCasinoButton, handleCasinoModal } = require("./handlers/casinoHandlers");
 const { isPetButton, isPetSelect, isPetModal, handlePetButton, handlePetSelect, handlePetModal } = require("./handlers/petHandlers");
+const { isAnnouncementButton, handleAnnouncementButton } = require("./announcementInteractions");
 
 const definitions = [
   new SlashCommandBuilder()
@@ -161,6 +162,10 @@ async function handleCommand(interaction) {
 }
 
 async function handleButton(interaction) {
+  if (isAnnouncementButton(interaction.customId)) {
+    await handleAnnouncementButton(interaction);
+    return;
+  }
   if (isCasinoButton(interaction.customId)) {
     await handleCasinoButton(interaction);
     return;

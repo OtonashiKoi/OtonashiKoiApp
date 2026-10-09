@@ -2065,6 +2065,7 @@ async function handleEnterBattle(interaction) {
               const alarmTag = alarmRoleId ? `\n<@&${alarmRoleId}> 世界王鬧鐘響囉！` : "";
               await chatChannel.send({
                 content: `⚔️ **世界BOSS 挑戰開始！**\n**${displayName}** 率先向 **${battleMonster.name}** 發起挑戰！\n前往高級區加入戰鬥，30 分鐘內未擊殺視為失敗。${alarmTag}`,
+                components: require("../announcementInteractions").hutaoNoticeComponents(battleMonster.name),
                 allowedMentions: alarmRoleId ? { roles: [alarmRoleId] } : { parse: [] }
               });
             }
@@ -3974,7 +3975,10 @@ async function announceChestRanking(lines) {
   const client = require("../runtimeContext").getBotClient();
   if (!client?.isReady?.()) return;
   const channel = await client.channels.fetch("1498608950671839263").catch(() => null);
-  if (channel?.isTextBased?.()) await channel.send(lines.join("\n")).catch(() => {});
+  if (channel?.isTextBased?.()) await channel.send({
+    content: lines.join("\n"),
+    components: require("../announcementInteractions").hutaoNoticeComponents(/^🎁 \*\*([^*]+)\*\*/.exec(lines[0] || "")?.[1])
+  }).catch(() => {});
 }
 async function announceIdleRotate(sc, zoneKey, monster) {
   const client = require("../runtimeContext").getBotClient();

@@ -26,6 +26,7 @@ async function deliver(sc, announcement, {
   const alarmTag = alarmRoleId ? `\n<@&${alarmRoleId}> 世界王鬧鐘響囉！` : "";
   await channel.send({
     content: `⚔️ **世界BOSS 挑戰開始！**\n**${starterName || "有玩家"}** 率先向 **${monsterName}** 發起挑戰！\n前往期間限定活動加入戰鬥！${alarmTag}`,
+    components: require("../../bot/announcementInteractions").hutaoNoticeComponents(monsterName),
     allowedMentions: alarmRoleId ? { roles: [alarmRoleId] } : { parse: [] },
   });
 }

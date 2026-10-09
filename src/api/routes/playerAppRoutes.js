@@ -2282,7 +2282,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
   };
 
   // 發送系統公告到聊天大廳（Discord town_chat + SSE 直推）
-  serviceContext._announceTownChat = async (message) => {
+  serviceContext._announceTownChat = async (message, options = {}) => {
     // 1. 直接推到所有 SSE chat 客戶端（立即顯示，不等 Discord echo）
     const sysPayload = {
       id: `sys_${Date.now()}`,
@@ -2305,7 +2305,11 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         const townChatBinding = (layout?.discord?.bindings || []).find(b => b.featureKey === "town_chat" && b.enabled);
         if (townChatBinding?.channelId) {
           const channel = discordClient.channels.cache.get(townChatBinding.channelId);
-          if (channel) await channel.send({ content: `📢 **系統公告**：${message}`, allowedMentions: { parse: [] } });
+          if (channel) await channel.send({
+            content: `📢 **系統公告**：${message}`,
+            components: options.jobBadgeId ? require("../../bot/announcementInteractions").jobNoticeComponents(options.jobBadgeId) : [],
+            allowedMentions: { parse: [] }
+          });
         }
       } catch (_) {}
     }
@@ -3446,6 +3450,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
               if (ch?.isTextBased?.()) {
                 await ch.send({
                   content: `⚔️ **世界BOSS 挑戰開始！**\n**${displayName}** 率先向 **${monster.name}** 發起挑戰！\n前往挑戰加入戰鬥，30 分鐘內未擊殺視為失敗。${alarmTag}`,
+                  components: require("../../bot/announcementInteractions").hutaoNoticeComponents(monster.name),
                   allowedMentions: alarmRoleId ? { roles: [alarmRoleId] } : { parse: [] }
                 }).catch(() => {});
               }

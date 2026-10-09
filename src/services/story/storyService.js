@@ -663,7 +663,7 @@ class StoryService {
         const tc = require("../../shared/announceTownChat");
         const name = await tc.resolveDiscordName(discordId).catch(() => null);
         const who = name ? `**${name}**` : "有位冒險者";
-        await tc.announceTownChat(`⚔️ ${who} 完成了二轉，成為 **${t2Item.name.replace(/徽章$/, "")}**！`);
+        await tc.announceTownChat(`⚔️ ${who} 完成了二轉，成為 **${t2Item.name.replace(/徽章$/, "")}**！`, { jobBadgeId: t2BadgeId });
       } catch (_) { /* 廣播失敗不影響轉職 */ }
 
       // ⑦ 賽季任務指標：完成二轉（「第二個身分」等任務；失敗不影響轉職）

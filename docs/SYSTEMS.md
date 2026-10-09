@@ -194,6 +194,7 @@ Web 背包道具詳情的底部右側固定為「關閉」；「丟棄」收在�
 OBS 內部聊天室的等級與稱號仍依直播帳號綁定的玩家資料顯示；名稱優先取即時 Discord 公會暱稱、全域名稱、帳號名稱。Discord 名稱無法取得或觀眾未綁定時，顯示該則留言在直播聊天室的原始名稱，不使用遊戲存檔暱稱代替。
 
 - Web ↔ Discord 大廳：`services/chat/`、`playerAppRoutes.js` 的 chat API／SSE。新版遊戲聊天頁會把玩家分享的圖片顯示為可點擊縮圖，點擊後在遊戲內開啟大圖預覽，可用關閉鈕、背景點擊或 Esc 關閉；按下留言「引用」會直接聚焦輸入框，無需再點一次。
+- Discord BOT 新發布的二轉通知附「查看職業資料」按鈕，以正式徽章資料與共用效果說明顯示私密卡片；胡桃開戰與討伐結算通知附「查看胡桃說明」，讀取當下世界王可挑戰狀態與場風規則，私密卡片再提供前往網頁胡桃戰鬥詳情的連結。查看說明本身不觸發進場或費用，實際挑戰仍由現有入口檢查。
 - Discord 掉落公告：`monsterZoneHandlers.js` 的 `_announceDrops()` 發到 `broadcast` 綁定頻道；玩家只顯示名稱，訊息禁止標註通知。
 - 寶箱與卡包公告：Discord 與 Web 開箱共用 `shopService.useItem()` 的結果與 `playerPanel._announceChestOpen()`；卡片每次公告，其他道具只有首次取得 S／SS 級才公告。首次判定依帳號現有背包、各角色裝備及成功開箱時與獎勵一同保存的 `chestAnnouncementKnownItemIds`；舊時已售出且沒有留在存檔的道具無法回溯。個人開箱結果與通知仍每次保留。
 - OBS 主聊天室：`src/web/public/chat.html`；由 `/api/chat/overlay-stream` 接收 OneComme 留言，並透過 `/api/chat/viewer-profile` 顯示已綁定玩家的等級、Discord 名稱、稱號與會員位階；Discord 名稱無法取得時使用直播聊天室名稱。每則留言以獨立名牌＋對話窗呈現並維持透明直播背景，視覺由 `chat-ro.css` 提供 RO 風格的銀藍標題列、立體細邊框與白底對話窗；C／B／A（以及預留的 S／SS）會員位階使用不同外框識別色，只有會員身分、尚未取得位階時使用一般會員色。長名稱、長訊息與圖片會在窄版直播來源中自動換行／縮放，網址加上 `?preview=1` 可顯示不連線的版面預覽。

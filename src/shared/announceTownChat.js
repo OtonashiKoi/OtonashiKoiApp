@@ -4,12 +4,12 @@
  * 底層是 serviceContext._announceTownChat（在 playerAppRoutes 掛上）。
  * 惰性 require 避免與 runtimeContext 形成循環相依；任何失敗都靜默（廣播不影響主流程）。
  */
-async function announceTownChat(message) {
+async function announceTownChat(message, options = {}) {
   if (!message) return;
   try {
     const { serviceContext } = require("../bot/runtimeContext");
     if (typeof serviceContext?._announceTownChat === "function") {
-      await serviceContext._announceTownChat(message);
+      await serviceContext._announceTownChat(message, options);
     }
   } catch (_) { /* 廣播失敗不影響發放 */ }
 }
