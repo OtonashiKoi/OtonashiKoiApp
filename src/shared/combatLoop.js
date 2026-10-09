@@ -4643,7 +4643,9 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
           // 每段基底＝未爆擊 1/N ×（地圖特攻/最終傷害%）→ 避免疊到主擊爆擊；再逐段各自吃連擊增傷+獨立爆擊
           const _tsCleanBase = Math.max(1, Math.round(nonCritDamageBase / playerTripleStrike * (equipZoneFinalDmgMult * roundScaleMult(round))));
           for (let _ts = 1; _ts < playerTripleStrike && mHp > 0; _ts++) {
-            let tsDmg = Math.max(1, Math.round(_tsCleanBase * (pStats.comboDamageMultiplier || 1)));
+            // 主擊後與每段三元命中後的戰意，從下一段起增加傷害；固定武器追加傷害不放大。
+            const tsStackEscalationPct = Math.max(0, stackOnHitStacks - attackStackPctBase);
+            let tsDmg = Math.max(1, Math.round(_tsCleanBase * (pStats.comboDamageMultiplier || 1) * (1 + tsStackEscalationPct / 100)));
             const tsCrit = (Math.random() * 100 < effectiveCrit);
             if (tsCrit) tsDmg = Math.max(1, Math.round(tsDmg * 2 * playerCritDamageMultiplier * tierCritDamageMultiplier));
             if (weaponMainBonus > 0) tsDmg += weaponMainBonus;
@@ -4656,6 +4658,10 @@ function* combatSequence(pStats, mCalc, mName, mHpInit, MAX_ROUNDS = 15, options
             const _pai = _sanyuan[_ts % _sanyuan.length];
             const _tsCritNote = tsCrit ? `✨**${rand(critPhrases)}**！` : "";
             log.push(`🀄 ${_tsCritNote}**三元・${_pai}**！再造成 **${tsDmg}** 點傷害！（怪物剩 ${Math.max(0, mHp)} HP）`);
+            if (stackOnHitValue > 0 && stackOnHitStacks < stackOnHitCap) {
+              stackOnHitStacks = Math.min(stackOnHitCap, stackOnHitStacks + stackOnHitValue);
+              log.push(`🐉 **龍王戰意**：三元連擊疊加！攻擊 **+${stackOnHitStacks}%**（最高 +${stackOnHitCap}%）`);
+            }
           }
           _applyLifesteal(_tsLifestealDmg);
           if (mHp <= 0) { outcome = "win"; break; }

@@ -26,6 +26,32 @@ function withFixedRandom(fn, value = 0.5) {
   try { return fn(); } finally { Math.random = original; }
 }
 
+// 三元牌的固定補打也算命中連擊：龍王戰意逐段疊層，後段傷害吃到先前層數。
+const dragonTripleEffects = [
+  { key: "triple_strike", params: { value: 3 } },
+  { key: "stack_on_hit_offense", params: { value: 3, cap: 15 } },
+];
+const dragonTriple = withFixedRandom(() => runCombatLoop(
+  { ...PLAYER, atk: 900, combo: 0 }, { ...MONSTER, maxHp: 100000, atk: 0 }, "三元木樁", 100000, 2,
+  { forcePlayerHit: true, skipMonsterAttack: true, playerActiveEffects: dragonTripleEffects }
+));
+for (const roundLog of dragonTriple.roundLogs.slice(0, 2)) {
+  assert.deepStrictEqual(
+    [...roundLog.matchAll(/龍王戰意[^\n]*攻擊 \*\*\+(\d+)%/g)].map((match) => Number(match[1])),
+    [3, 6, 9], "每回合主擊與兩段三元補打應各疊一次，且下一回合重新累積"
+  );
+  const tripleDamage = [...roundLog.matchAll(/三元・[發中][^\n]*再造成 \*\*(\d+)\*\*/g)]
+    .map((match) => Number(match[1]));
+  assert.strictEqual(tripleDamage.length, 2, "三元牌應補打兩段");
+  assert(tripleDamage[1] > tripleDamage[0], "後一段三元傷害應吃到新增的戰意層數");
+}
+const dragonTripleCombo = withFixedRandom(() => runCombatLoop(
+  { ...PLAYER, atk: 900, combo: 100 }, { ...MONSTER, maxHp: 100000, atk: 0 }, "連擊木樁", 100000, 1,
+  { forcePlayerHit: true, skipMonsterAttack: true, playerActiveEffects: dragonTripleEffects }
+));
+assert(dragonTripleCombo.roundLogs[0].includes("連擊疊加！攻擊 **+12%**"),
+  "三元補打後的一般連擊應從已累積的戰意層數繼續增加");
+
 // 以實際三回合反擊傷害驗證門檻，避免只比對條件文字。
 for (const [diff, damage] of [[5, 255], [6, 170], [15, 170], [16, 85]]) {
   const result = withFixedRandom(() => runCombatLoop(
