@@ -110,7 +110,7 @@ function buildItem(spec, now) {
   return {
     id: spec.id,
     name: spec.name,
-    description: `${spec.desc}\n【胡桃限定・風向】東風命中 +10／南風最終傷害 +8%／西風爆擊傷害 +20%／北風爆擊率 +15%。風向每回合輪轉，戰鬥結束後不重置。\n【${SET_NAME}】S 主副手與 A 防具共同計件：2 件命中 +6%；4 件最終傷害 +4%；6 件爆擊傷害 +10%；8 件場風各維持 3 回合，每場從東風開始。`,
+    description: `${spec.desc}\n【胡桃限定・風向】東風命中 +10／南風最終傷害 +8%／西風爆擊傷害 +20%／北風爆擊率 +15%。風向每回合輪轉，戰鬥結束後不重置。\n【${SET_NAME}】胡桃 S 主副手與 A 防具、飾品共用；雙手主武器計 2 件，其他各計 1 件，達標效果各生效一次：2 件命中 +6%；4 件最終傷害 +4%；6 件爆擊傷害 +10%；8 件場風各維持 3 回合，每場從東風開始。`,
     itemType: "equipment",
     tier: "S",
     equipSlot: spec.slot,
@@ -146,7 +146,7 @@ function buildSetItem(spec, now) {
   return {
     id: spec.id,
     name: spec.name,
-    description: `${spec.desc}\n【${SET_NAME}】2 件命中 +6%；4 件最終傷害 +4%；6 件爆擊傷害 +10%；8 件啟動場風輪轉，東南西北各維持 3 回合，每場由東風開始。`,
+    description: `${spec.desc}\n【${SET_NAME}】胡桃 S 主副手與 A 防具、飾品共用；雙手主武器計 2 件，其他各計 1 件，達標效果各生效一次：2 件命中 +6%；4 件最終傷害 +4%；6 件爆擊傷害 +10%；8 件啟動場風輪轉，東南西北各維持 3 回合，每場由東風開始。`,
     itemType: "equipment",
     tier: "A",
     equipSlot: spec.slot,

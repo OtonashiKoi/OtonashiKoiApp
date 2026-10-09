@@ -6,6 +6,7 @@ const { calcPlayerStats } = require("../src/shared/combatStats");
 const { countEquippedSets, getSetEffects } = require("../src/shared/equipmentSetBonuses");
 const { collectEquipmentEffects } = require("../src/shared/effectEngine");
 const { hasEffect: hasStandaloneWind } = require("../src/shared/windDirection");
+const { buildItemEffectLines } = require("../src/shared/itemEffectLines");
 
 const shield = { ...buildItem(HUTAO_SHIELD, "2026-10-09T00:00:00.000Z"), itemId: HUTAO_SHIELD.id };
 const weapon = { ...buildItem(HUTAO_S_EQUIPMENT[0], "2026-10-09T00:00:00.000Z"), itemId: HUTAO_S_EQUIPMENT[0].id };
@@ -23,6 +24,12 @@ for (const spec of HUTAO_S_EQUIPMENT) {
   const expected = item.equipSlot === "weapon" && item.isTwoHanded ? 2 : 1;
   assert.equal(countEquippedSets({ [item.equipSlot]: item }).counts.northwind_hutao, expected);
   assert.equal(countEquippedSets({ [item.equipSlot]: { ...item, setKey: null, setKeys: [] } }).counts.northwind_hutao, expected, `${spec.id} 舊快照未計件`);
+  assert.match(item.description, /雙手主武器計 2 件/);
+  const lines = buildItemEffectLines(item);
+  assert(lines.some((line) => line.includes("雙手主武器計 2 件")), `${spec.id} 缺少套裝計件說明`);
+  assert([2, 4, 6, 8].every((count) => lines.some((line) => line.startsWith(`${count} 件：`))), `${spec.id} 缺少套裝門檻`);
+  assert(lines.some((line) => line.includes("風向輪轉")), `${spec.id} 缺少武器被動`);
+  assert(buildItemEffectLines({ ...item, setKey: null, setKeys: [] }).some((line) => line.includes("北風套裝")), `${spec.id} 舊快照缺少套裝說明`);
 }
 assert.equal(countEquippedSets({ weapon, shield }).counts.northwind_hutao, 2);
 const aSlots = ["head_top", "head_mid", "head_low", "armor", "garment", "shoes"];

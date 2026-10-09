@@ -59,6 +59,15 @@ function buildItemEffectLines(lib) {
     lines.push(`🌊 ${def.name}（海灘 A 裝與龜王 S 武器可混搭，達標效果累加）`);
     for (const tier of def.tiers) lines.push(`${tier.count} 件：${tier.desc}`);
   }
+  const itemId = String(lib?.id || lib?.itemId || "");
+  const hutaoSetMember = lib?.setKey === "northwind_hutao"
+    || (Array.isArray(lib?.setKeys) && lib.setKeys.includes("northwind_hutao"))
+    || (String(lib?.tier || "").toUpperCase() === "S" && itemId.startsWith("hutao-wind-"));
+  if (hutaoSetMember) {
+    const def = require("./equipmentSetBonuses").SET_DEFS.northwind_hutao;
+    lines.push(`🀄 ${def.name}（胡桃 S 主副手與 A 防具、飾品共用；雙手主武器計 2 件，其他各計 1 件；達標效果各生效一次）`);
+    for (const tier of def.tiers) lines.push(`${tier.count} 件：${tier.desc}`);
+  }
   if (String(lib?.weaponType || "").toLowerCase() === "dice") {
     lines.push("🎲 雙手魔法武器｜主屬性：LUK｜常駐無視 25% DEF");
   }
