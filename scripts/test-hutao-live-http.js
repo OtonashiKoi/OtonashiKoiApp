@@ -66,8 +66,8 @@ async function check(name,work){try{const evidence=await work();report.checks.pu
  assert.equal(r.status,200);assert.ok(r.body.data.events.some(e=>e.fx==='tsumo'));assert.equal(state.normalLive.actors[chars[1].id].riichi.agiUntil,clock+15000);
  assert.equal(Object.keys(state.damageMap).length,1);assert.equal(engine.players.get(chars[0].id).attacks,0);return {openingDamage:state.damageMap[chars[0].id].damage};
  });
- await check('retired quiz API cannot start or submit an obsolete phase',async()=>{
- const r=await request(0,'/api/worldboss/hutao/answer',{choiceId:'m2'});assert.equal(r.status,409);assert.equal(r.body.code,'HUTAO_QUIZ_RETIRED');const status=await request(0,'/api/worldboss/hutao/status');assert.equal(status.body.data.quiz,null);assert.equal(status.body.data.blocking,false);
+ await check('quiz API is available and cannot accept an answer before the HP mark',async()=>{
+ const r=await request(0,'/api/worldboss/hutao/answer',{choiceId:'m2'});assert.equal(r.status,400);assert.equal(r.body.code,'HUTAO_QUIZ_CLOSED');const status=await request(0,'/api/worldboss/hutao/status');assert.equal(status.body.data.quiz,null);assert.equal(status.body.data.blocking,false);
  });
  await check('HTTP revive consumes one real stacked potion; same operation replay consumes none; persisted inventory readback',async()=>{
  const room=engine.zones.get(zone),target=chars[1].id,s=await sc.monsterService.getState(zone);s.normalLive.actors[target].hp=0;s.normalLive.actors[target].active=false;s.normalLiveDeath={[target]:{recoverAt:clock+30000}};
@@ -77,16 +77,30 @@ async function check(name,work){try{const evidence=await work();report.checks.pu
  const p=await sc.progressRepository.findByPlayerId(chars[0].id);assert.equal(p.inventory.find(e=>e.uuid==='qa-revive-0').stackCount,4);assert.equal(p.livePotionReceipts.length,1);
  const inventory=await request(0,'/api/me/inventory');assert.equal(inventory.status,200);return {remaining:4,revivedHp:(await sc.monsterService.getState(zone)).normalLive.actors[target].hp};
  });
- await check('real continuous fight advances over15 attacks and120s; no quiz or automatic timeout; persists defeat/kill',async()=>{
- const history=[];let beyond15=false,beyond120=false;let seed=2026100801;const random=Math.random;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+ await check('continuous fight pauses for both Mahjong questions and resumes alongside 15s boss riichi',async()=>{
+ const history=[];let beyond15=false,beyond120=false,buffSeen=false;let seed=2026100801;const marks=new Set(),answered=new Set();let pausedHp=null,pausedAttacks=null;
+ const random=Math.random,realNow=Date.now;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);Date.now=()=>clock;
  try{for(let step=0;step<3000&&!engine.zones.get(zone).closed;step++){
- clock+=250;await engine.advance(zone);if(step%40===0){const state=await sc.monsterService.getState(zone);history.push({at:clock,hp:state.currentHp,alive:[...engine.players.values()].filter(a=>a.hp>0).length});}
+ clock+=250;await engine.advance(zone);
+ const event=await sc.hutaoEventService.getSnapshot(clock);
+ if(event.blocking){
+   marks.add(event.quiz.mark);
+   const state=await sc.monsterService.getState(zone),attacks=[...engine.players.values()].reduce((sum,a)=>sum+a.attacks,0);
+   if(pausedHp!==null){assert.equal(state.currentHp,pausedHp,'boss HP must freeze during quiz');assert.equal(attacks,pausedAttacks,'player attacks must freeze during quiz');}
+   pausedHp=state.currentHp;pausedAttacks=attacks;
+   if(clock>=event.quiz.answerStartsAt&&!answered.has(event.quiz.id)){
+     const question=require('../src/shared/hutaoEvent').questionForMark(event.quiz.mark,event.runKey);
+     const result=await request(0,'/api/worldboss/hutao/answer',{quizId:event.quiz.id,choiceId:question.correctChoiceIds[0]});
+     assert.equal(result.status,200,JSON.stringify(result));answered.add(event.quiz.id);
+   }
+ }else{pausedHp=null;pausedAttacks=null;if(event.effect?.kind==='buff')buffSeen=true;}
+ if(step%40===0){const state=await sc.monsterService.getState(zone);history.push({at:clock,hp:state.currentHp,alive:[...engine.players.values()].filter(a=>a.hp>0).length});}
  if([...engine.players.values()].some(a=>a.attacks>15))beyond15=true;if(step>480&&engine.players.size)beyond120=true;
- }}finally{Math.random=random;}
- const state=await sc.monsterService.getState(zone);assert.equal(engine.zones.get(zone).closed,true,'must reach terminal HP within fixture bound');assert.equal(beyond15,true);assert.equal(beyond120,true);
+ }}finally{Math.random=random;Date.now=realNow;}
+ const state=await sc.monsterService.getState(zone);assert.equal(engine.zones.get(zone).closed,true,'must reach terminal HP within fixture bound');assert.equal(beyond15,true);assert.equal(beyond120,true);assert.deepEqual([...marks].sort(),[40,70]);assert.equal(buffSeen,true);
  for(let wait=0;wait<100&&chars.some(c=>!engine.status(c.id)?.outcome);wait++)await new Promise(r=>setTimeout(r,50));
  const statuses=chars.map(c=>{const s=engine.status(c.id);return s?.liveReport||s;});assert.ok(statuses.every(s=>s&&!s.livePending&&['win','lose'].includes(s.outcome)),JSON.stringify(statuses.map(s=>({outcome:s?.outcome,live:s?.livePending}))));
- assert.equal(state.hutaoQuiz,undefined);return {history,outcomes:statuses.map(s=>({name:s.playerName,outcome:s.outcome,hp:s.finalPlayerHp,damage:s.totalDamage})),monsterHp:state.currentHp};
+ assert.equal(state.hutaoQuiz,undefined);return {history,marks:[...marks],outcomes:statuses.map(s=>({name:s.playerName,outcome:s.outcome,hp:s.finalPlayerHp,damage:s.totalDamage})),monsterHp:state.currentHp};
  });
  await check('kill awards six contribution chests; real open API consumes one and persists reward',async()=>{
  const chestId=require('../src/services/battle/worldBossChestRewards')._resolveWorldBossChestId(monster,zone),winners=[];

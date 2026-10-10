@@ -10,7 +10,7 @@ const stats={atk:100,maxHp:10000,str:0,agi:1,vit:0,int:0,dex:100,luk:0,level:65,
 function fixture(){
  let now=1000,state={activeMonsterSeq:1,normalLiveSpawnAt:1000,currentHp:1000000,damageMap:{},participants:[]},fail=false,failProgress=false,writeCount=0;
  const progress=new Map(),gold=new Map(),operations=new Map(),monster={id:'hutao-fixture',seq:1,name:'胡桃',zone,calc:{...stats,atk:30,maxHp:1000000}};
- const sc={progressRepository:{findByPlayerId:async id=>structuredClone(progress.get(id)),updateFields:async(id,fields)=>{writeCount++;Object.assign(progress.get(id),structuredClone(fields));},saveIfUnchanged:async(next,expected)=>{if(failProgress||progress.get(next.playerId).updatedAt!==expected)return false;progress.set(next.playerId,structuredClone(next));return true;}},
+ const sc={hutaoEventService:{ensureRun:async()=>({resolvedMarks:[],blocking:false,effect:null}),startQuiz:async()=>({resolvedMarks:[],blocking:true,quiz:{endsAt:now+13200}})},progressRepository:{findByPlayerId:async id=>structuredClone(progress.get(id)),updateFields:async(id,fields)=>{writeCount++;Object.assign(progress.get(id),structuredClone(fields));},saveIfUnchanged:async(next,expected)=>{if(failProgress||progress.get(next.playerId).updatedAt!==expected)return false;progress.set(next.playerId,structuredClone(next));return true;}},
  monsterService:{getState:async()=>structuredClone(state),listMonsters:async()=>[monster],saveStateIfActiveMonster:async(next,z,seq,hp)=>{if(fail||state.activeMonsterSeq!==seq||state.currentHp!==hp)return false;state=structuredClone(next);return true;}},
  rewardService:{grantCurrency:async input=>{const previous=operations.get(input.sourceRef);if(previous){if(previous.error)throw previous.error;return previous;}
  if((gold.get(input.discordId)||0)+input.amount<0){const error=Object.assign(Error('gold insufficient'),{code:'INSUFFICIENT_BALANCE'});operations.set(input.sourceRef,{error});throw error;}
@@ -65,6 +65,15 @@ await check('actual core heavy attack is one300% hit, next action returns normal
  const next=runCombatLoop(p,{...m,comboChance:0},'胡桃',1000000,15,{...options,startPlayerHp:r.finalPlayerHp,hutaoBossStrike:false,liveMonsterStats:{...m,comboChance:0}});
  assert.equal(next.damageTaken,100,JSON.stringify(next.roundLogs));
  const controlled=runCombatLoop(p,m,'胡桃',1000000,15,{...options,actionSession:{},hutaoBossStrike:true,liveControlActive:true});assert.equal(controlled.damageTaken,0);
+});
+await check('resolved Mahjong tsumo crushes living players once in durable live state',async()=>{
+ const f=fixture();f.add('A');f.add('B');await f.join('A');await f.join('B');
+ const pulse={pulseId:'quiz-70',hpCrush:true,resolvedAt:1000,recoveryMs:30000,playerFinalDamageMultiplier:1};
+ f.sc.hutaoEventService.ensureRun=async()=>({resolvedMarks:[70],blocking:false,effect:pulse});
+ f.time(1300);await f.engine.advance(zone);
+ const saved=f.state();assert.equal(saved.normalLive.hutaoCrushPulseId,pulse.pulseId);
+ assert.equal(saved.normalLive.actors.A.hp,100);assert.equal(saved.normalLive.actors.B.hp,100);
+ assert.equal(f.engine.players.get('A').hp,100);f.close();
 });
 await check('real shared room rolls once for all alive players and publishes after CAS',async()=>{
  const f=fixture();f.add('A');f.add('B');await f.join('A',false,{agi:80});await f.join('B',false,{agi:80});

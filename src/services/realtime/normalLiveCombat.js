@@ -11,6 +11,7 @@ const hutaoEntry = require("./hutaoLiveEntry"), livePotions = require("./liveBat
 const worldBossAnnouncement = require("./liveWorldBossAnnouncement");
 const controls = require("./liveControlGauges");
 const bossRiichi = require("./hutaoBossRiichi");
+const hutaoRules = require("../../shared/hutaoEvent");
 const { zoneCombatScene } = require("./zoneCombatScene");
 const { playerEventBus } = require("./playerEventBus");
 const { beginMonsterAction, monsterCardOptions, recordMonsterAction, saveMonsterClock, applyMonsterHp } = require("./monsterActionClock");
@@ -128,6 +129,10 @@ class NormalLiveCombat {
         await hutaoEntry.abort(sc, actorId, actorName, entry);
         throw new AppError("scene_transition","共鬥狀態更新中，請稍後重試。",409);
       }
+      if (zone === hutaoEntry.ZONE) {
+        try { await sc.hutaoEventService.ensureRun(candidate.normalLive.encounterKey); }
+        catch (error) { console.error('[HutaoQuiz] run initialization pending',error); }
+      }
       if (entry) await hutaoEntry.commit(sc, actorId, entry).catch(error => console.error("[HutaoEntry] durable admission pending", error.message));
       room.members.set(actorId,a);this.players.set(actorId,a);
       const scene=this.scene.ensure(zone,candidate,monster);
@@ -176,12 +181,16 @@ class NormalLiveCombat {
     command.tickJobSkillCooldowns = !enemy && !command.riichiOnly;
     let monsterStats = a.monsterStats;
     if (room.zone === hutaoEntry.ZONE) {
-      const wind = require("../../shared/hutaoEvent").windAt(this.now());
+      const wind = hutaoRules.windAt(this.now());
+      const effect = room.hutaoEvent?.effect;
       monsterStats = { ...room.monster.calc, dodge: wind.bossDodgeZero ? 0 : Math.min(95, (room.monster.calc.dodge || 0) + (wind.bossDodgeBonus || 0)),
         finalDamageMultiplier: (room.monster.calc.finalDamageMultiplier || 1) * (wind.bossDamageMultiplier || 1) };
+      if (effect?.hpCrush && this.now() < Number(effect.resolvedAt) + Number(effect.recoveryMs || 0))
+        monsterStats.finalDamageMultiplier *= .6;
       monsterStats = bossRiichi.monsterStats(monsterStats, state, this.now());
       command.eventPlayerCritDamageMultiplier = wind.playerCritDamageMultiplier || 1;
-      command.bossVulnMult = (command.bossVulnMult || 1) * (wind.playerFinalDamageMultiplier || 1);
+      command.eventPlayerHitBonus = (command.eventPlayerHitBonus || 0) + (Number(effect?.playerHitBonus) || 0);
+      command.bossVulnMult = (command.bossVulnMult || 1) * (wind.playerFinalDamageMultiplier || 1) * (Number(effect?.playerFinalDamageMultiplier) || 1);
     }
     command.livePlayerStats = stats; command.liveMonsterStats = monsterStats;
     const result=runCombatLoop(stats,monsterStats,room.monster.name,normalMaxHp(state,room.monster),15,command);
@@ -201,6 +210,30 @@ class NormalLiveCombat {
       if (state.pendingLivePotion) state = await livePotions.recover(room, this, state);
       if(Number(state.activeMonsterSeq)!==room.seq||state.activeTransition||state.activeEvent||Number(state.currentHp)<=0) {
         this.failRoom(room,new Error("共鬥怪物已換場，本場停止；已提交傷害保留"));return;
+      }
+      if (zone === hutaoEntry.ZONE) {
+        const eventService = room.sc.hutaoEventService;
+        let event = await eventService.ensureRun(state.normalLive?.encounterKey);
+        const mark = Number(state.normalLive?.hutaoQuizMark);
+        if (hutaoRules.RIICHI_MARKS.includes(mark) && !event.resolvedMarks.includes(mark) && !event.blocking)
+          event = await eventService.startQuiz(mark, state.normalLive.encounterKey, this.now());
+        room.hutaoEvent = event;
+        room.quizBlockingUntil = event.blocking ? Number(event.quiz.endsAt) : 0;
+        if (event.blocking) return;
+        if (event.effect?.hpCrush && state.normalLive?.hutaoCrushPulseId !== event.effect.pulseId) {
+          const candidate = structuredClone(state);
+          for (const actor of Object.values(candidate.normalLive.actors || {})) {
+            if (Number(actor.hp) > 0) actor.hp = Math.min(actor.hp, Math.max(1, Math.floor(Number(actor.maxHp || 1) * .01)));
+          }
+          candidate.normalLive.hutaoCrushPulseId = event.effect.pulseId;
+          if (!await room.sc.monsterService.saveStateIfActiveMonster(candidate,zone,room.seq,state.currentHp)) return;
+          for (const a of room.members.values()) {
+            const saved = candidate.normalLive.actors[a.actorId];
+            if (saved) a.hp = saved.hp;
+          }
+          this.updateScene(room,candidate,[],[]);
+          return;
+        }
       }
       const at=this.now(),enemy=at>=room.enemyAt,clock=beginMonsterAction(room,state,at,enemy);
       const companionsChanged=syncCompanions(room,state,at);
@@ -223,6 +256,9 @@ class NormalLiveCombat {
       if(!targets.length&&!npcDue&&!companionsChanged) {if(enemy)room.enemyAt=room.epoch+(Math.floor((at-room.epoch)/room.enemyTick)+1)*room.enemyTick;return;}
       const contacts=[],health=[],steps=[];
       let candidate=structuredClone(state);
+      const quizMark = zone === hutaoEntry.ZONE
+        ? hutaoRules.RIICHI_MARKS.find(mark => !room.hutaoEvent.resolvedMarks.includes(mark)) : null;
+      const quizHp = quizMark ? hutaoRules.hpAtMark(normalMaxHp(state,room.monster),quizMark) : 0;
       if (zone === hutaoEntry.ZONE) clock.hutaoBossRiichi = bossRiichi.claim(candidate, at, enemy, controls.active(candidate, at).active);
       room.riichiPulses = enemy ? new Map() : riichi.prepare(room, candidate, at);
       for(const a of targets) {
@@ -235,7 +271,8 @@ class NormalLiveCombat {
         recordMonsterAction(clock,result,input.currentHp);
         const map={...candidate.damageMap},prior=map[a.actorId]||{};
         const dealt=Math.max(0,Math.round(Number(result.totalDamage)||0));
-        const actual=Math.min(enemy?candidate.currentHp:prospective.currentHp,dealt);
+        const actual=Math.min(enemy?candidate.currentHp:prospective.currentHp,
+          !enemy && quizMark ? Math.max(0,candidate.currentHp-quizHp) : dealt,dealt);
         map[a.actorId]={...prior,name:a.actorName,level:a.options.playerLevel||1,damage:(Number(prior.damage)||0)+actual,taken:(Number(prior.taken)||0)+Math.max(0,Number(result.damageTaken)||0)};
         if (zone === controls.ZONE && !enemy) controls.credit({ ...candidate, damageMap: map }, a.actorId, actual, at);
         const assist=result.combatStats?.supportShotBySource||{};
@@ -243,9 +280,9 @@ class NormalLiveCombat {
         for(const[id,value]of Object.entries(assist))if(id!==a.actorId&&Number(value)>0){const entry=map[id]||{};map[id]={...entry,damage:(Number(entry.damage)||0)+Number(value)};map[a.actorId].damage=Math.max(Number(prior.damage)||0,map[a.actorId].damage-Number(value));}
         const scaled=scaleNormalMonster(candidate,room.monster,map);
         const monsterHealed=Math.max(0,result.finalMonsterHp-(enemy?input.currentHp:prospective.currentHp)+dealt);
-        candidate={...candidate,...scaled,currentHp:Math.max(0,Math.min(normalMaxHp({...candidate,...scaled},room.monster),scaled.currentHp-dealt+(enemy?0:monsterHealed))),damageMap:map,participants:[...new Set([...(candidate.participants||[]),a.actorId])],lastHitAt:new Date(at).toISOString()};
+        candidate={...candidate,...scaled,currentHp:Math.max(0,Math.min(normalMaxHp({...candidate,...scaled},room.monster),scaled.currentHp-actual+(enemy?0:monsterHealed))),damageMap:map,participants:[...new Set([...(candidate.participants||[]),a.actorId])],lastHitAt:new Date(at).toISOString()};
         const timeline=buildTimeline(result.roundLogs,a.actorName,room.monster.name,result.diceEvents);
-        let budget=Math.min(scaled.currentHp,dealt),segment=0;
+        let budget=Math.min(scaled.currentHp,actual),segment=0;
         for(const e of timeline){
           if(e.target==='enemy'&&['hit','miss'].includes(e.type)){
             const damage=e.type==='hit'?Math.min(budget,Math.max(0,Number(e.value)||0)):0;budget-=damage;
@@ -259,10 +296,16 @@ class NormalLiveCombat {
         if(result.finalPlayerHp<=0)candidate.normalLiveDeath={...candidate.normalLiveDeath,[a.actorId]:{recoverAt:at+30000,name:a.actorName,maxHp:a.maxHp}};
         if (zone === controls.ZONE && !enemy) controls.add(candidate, a, result, at);
         steps.push({a,result,beforeHp});
+        if (!enemy && quizMark && candidate.currentHp <= quizHp) {
+          candidate.currentHp = quizHp;
+          candidate.normalLive.hutaoQuizMark = quizMark;
+          break;
+        }
       }
       applyMonsterHp(candidate,room,clock);
       if (zone === hutaoEntry.ZONE) candidate.worldBossPartsHp = { body: candidate.currentHp };
-      const npcChanged=advanceCompanions(room,candidate,{at,enemy,enemyHp:state.currentHp,contacts,health,clock});
+      const npcChanged=candidate.normalLive?.hutaoQuizMark === quizMark
+        ? false : advanceCompanions(room,candidate,{at,enemy,enemyHp:state.currentHp,contacts,health,clock});
       if(!steps.length&&!npcChanged&&!companionsChanged){if(enemy)room.enemyAt=room.epoch+(Math.floor((at-room.epoch)/room.enemyTick)+1)*room.enemyTick;return;}
       applyMonsterHp(candidate,room,clock);
       for(const {a,result} of steps)candidate.normalLive.actors[a.actorId].active=result.finalPlayerHp>0&&candidate.currentHp>0;
@@ -275,6 +318,15 @@ class NormalLiveCombat {
       const committed=wiped?this.wipeState(room,candidate,at):candidate;
       const saved=await room.sc.monsterService.saveStateIfActiveMonster(committed,zone,room.seq,state.currentHp);
       if(!saved){this.failRoom(room,new Error("共鬥狀態已被更新，本次未提交出手已停止"));return;}
+      if (zone === hutaoEntry.ZONE && candidate.normalLive?.hutaoQuizMark === quizMark) {
+        try {
+          room.hutaoEvent = await room.sc.hutaoEventService.startQuiz(quizMark,candidate.normalLive.encounterKey,at);
+          room.quizBlockingUntil = Number(room.hutaoEvent.quiz?.endsAt) || 0;
+        } catch (error) {
+          // The HP/mark CAS already committed; the next clock retries this marker.
+          console.error('[HutaoQuiz] start pending',error);
+        }
+      }
       await riichi.flush(room.sc, candidate);
       if (zone !== hutaoEntry.ZONE) riichi.apply(room, candidate, at);
       if (zone === hutaoEntry.ZONE) {

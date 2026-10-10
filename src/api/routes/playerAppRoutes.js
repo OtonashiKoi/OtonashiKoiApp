@@ -4590,15 +4590,13 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
       if (!canPlayerAccessZone(zoneKey, req.playerRecord.discordId)) {
         return res.status(404).json({ status: "error", code: "zone_not_found", message: "找不到這個戰鬥區域。" });
       }
-      const data = { wind: require("../../shared/hutaoEvent").windAt(Date.now()), blocking: false, quiz: null, effect: null };
+      const data = await serviceContext.hutaoEventService.getSnapshot();
       return res.json(ok(data));
     } catch (err) { return next(err); }
   });
 
   router.post("/api/worldboss/hutao/answer", requireAuth, async (req, res, next) => {
     try {
-      return res.status(409).json(fail("HUTAO_QUIZ_RETIRED", "胡桃已改為場風與四風連擊，沒有答題階段。"));
-      /* Legacy quiz handler retained for historical state compatibility.
       const zoneKey = "event_boss_hutao_preview";
       if (!canPlayerAccessZone(zoneKey, req.playerRecord.discordId)) {
         return res.status(404).json({ status: "error", code: "zone_not_found", message: "找不到這個戰鬥區域。" });
@@ -4611,7 +4609,6 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
         displayName,
       });
       return res.json(ok(data, "已送出答案，等待其他玩家。"));
-      */
     } catch (err) {
       if (String(err?.code || "").startsWith("HUTAO_")) {
         return res.status(400).json(fail(err.code, err.message));
@@ -4865,7 +4862,7 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
           rabbitEvent = rb.view(temp, _wbNowS);
         }
         if (zoneKey === "event_boss_hutao_preview" && serviceContext.hutaoEventService) {
-          hutaoEvent = { wind: require("../../shared/hutaoEvent").windAt(_wbNowS), blocking: false, quiz: null, effect: null };
+          hutaoEvent = await serviceContext.hutaoEventService.getSnapshot(_wbNowS);
           mechanic = {
             key: "hutao_wind",
             phase: hutaoEvent.wind?.key || "east",

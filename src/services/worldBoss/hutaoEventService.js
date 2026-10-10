@@ -101,25 +101,27 @@ class HutaoEventService {
   }
 
   async _finalizeIfExpired(now = Date.now()) {
-    const state = await this._read();
-    const quiz = state.quiz;
-    if (!quiz || quiz.status !== "active" || Number(quiz.endsAt) > now) return state;
-    const question = questionById(quiz.questionId, quiz.mark, state.runKey);
-    const result = resolveAnswerOutcome(quiz.answers, question.correctChoiceIds);
-    const effect = outcomeEffect(result.outcome);
-    const next = {
-      ...state,
-      resolvedMarks: [...new Set([...(state.resolvedMarks || []).map(Number), Number(quiz.mark)])],
-      effect: { ...effect, pulseId: quiz.id, resolvedAt: now },
-      quiz: {
-        ...quiz,
-        status: "resolved",
-        resolvedAt: now,
-        result,
-      },
-    };
-    await this.repo.save(next, BOSS_KEY);
-    return next;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const state = await this._read();
+      const quiz = state.quiz;
+      if (!quiz || quiz.status !== "active" || Number(quiz.endsAt) > now) return state;
+      const question = questionById(quiz.questionId, quiz.mark, state.runKey);
+      const result = resolveAnswerOutcome(quiz.answers, question.correctChoiceIds);
+      const effect = outcomeEffect(result.outcome);
+      const next = {
+        ...state,
+        resolvedMarks: [...new Set([...(state.resolvedMarks || []).map(Number), Number(quiz.mark)])],
+        effect: { ...effect, pulseId: quiz.id, resolvedAt: now },
+        quiz: { ...quiz, status: "resolved", resolvedAt: now, result },
+      };
+      if (this.repo.finalizeQuiz) {
+        if (await this.repo.finalizeQuiz({ bossKey: BOSS_KEY, previous: state, next, now })) return next;
+      } else {
+        await this.repo.save(next, BOSS_KEY);
+        return next;
+      }
+    }
+    throw new Error("胡桃答題結算繁忙，請重試。");
   }
 
   async getSnapshot(now = Date.now()) {

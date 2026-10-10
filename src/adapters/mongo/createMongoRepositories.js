@@ -1113,6 +1113,26 @@ function createMongoRepositories() {
         );
         return state;
       },
+      async finalizeQuiz({ bossKey, previous, next, now = Date.now() }) {
+        if (maintenance.isStrict()) throw Object.assign(new Error("SEASON_RESET_WRITE_LOCKED"), { code: "SEASON_RESET_WRITE_LOCKED" });
+        const result = await (await collection("worldBossEventState")).updateOne(
+          {
+            _id: String(bossKey),
+            "value.runKey": previous.runKey,
+            "value.quiz.id": previous.quiz.id,
+            "value.quiz.status": "active",
+            "value.quiz.endsAt": { $lte: Number(now) },
+            "value.quiz.answers": previous.quiz.answers,
+          },
+          { $set: {
+            "value.quiz": next.quiz,
+            "value.effect": next.effect,
+            "value.resolvedMarks": next.resolvedMarks,
+            updatedAt: new Date().toISOString(),
+          } }
+        );
+        return Boolean(result.matchedCount);
+      },
       async submitAnswer({ bossKey, quizId, discordId, answer, now = Date.now() }) {
         if (maintenance.isStrict()) throw Object.assign(new Error("SEASON_RESET_WRITE_LOCKED"), { code: "SEASON_RESET_WRITE_LOCKED" });
         const field = `value.quiz.answers.${String(discordId)}`;
