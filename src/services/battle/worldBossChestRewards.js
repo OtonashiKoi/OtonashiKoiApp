@@ -197,6 +197,13 @@ async function _awardWorldBossContributionChests(sc, zoneKey, monster, damageMap
     try {
       await announceChestRanking(lines);
     } catch (_) { /* 公告失敗不影響發箱 */ }
+    if (zoneKey === "event_boss_hutao_preview" && auditRows[0]) {
+      try {
+        const { announceTownChat } = require("../../shared/announceTownChat");
+        const mvpName = auditRows[0].name.replace(/[\r\n*]/g, "");
+        await announceTownChat(`🏆 **${monster.name}** MVP：**${mvpName}**！貢獻榜前 ${granted.length} 名已獲得 **${chestItem.name}**。`);
+      } catch (_) { /* 聊天公告失敗不影響發箱 */ }
+    }
   } catch (e) {
     console.error("[WorldBossChest] award failed:", e?.message || e);
   }
