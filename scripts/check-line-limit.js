@@ -42,12 +42,14 @@ const rows = files.map((file) => ({
 if (updateBaseline) {
   const nextBaseline = {};
   for (const row of rows.sort((a, b) => a.relative.localeCompare(b.relative))) {
-    if (row.lines > config.engineering.lineHardLimit) {
-      nextBaseline[row.relative] = row.lines;
-    }
+    const previous = Number(baseline[row.relative]) || 0;
+    // The update command may tighten accepted debt, never bless a new
+    // oversized file or growth in an existing one.
+    if (previous > config.engineering.lineHardLimit && row.lines > config.engineering.lineHardLimit)
+      nextBaseline[row.relative] = Math.min(previous, row.lines);
   }
   fs.writeFileSync(baselinePath, `${JSON.stringify(nextBaseline, null, 2)}\n`);
-  console.log(`[LineLimit] baseline updated: ${Object.keys(nextBaseline).length} legacy oversized file(s).`);
+  console.log(`[LineLimit] baseline tightened: ${Object.keys(nextBaseline).length} legacy oversized file(s); growth is never accepted automatically.`);
   process.exit(0);
 }
 
@@ -84,7 +86,7 @@ for (const row of rows) {
 
 for (const row of warningFiles) {
   const threshold = row.legacyBaseline
-    ? `legacy baseline ${row.legacyBaseline}; temporary ceiling ${row.legacyCeiling}`
+    ? `legacy baseline ${row.legacyBaseline}; ceiling ${row.legacyCeiling}`
     : `warning ${config.engineering.lineWarning}`;
   console.warn(`[LineLimit] warning: ${row.file} has ${row.lines} lines (${threshold})`);
 }
@@ -109,5 +111,5 @@ if (oversized.length > 0) {
 
 console.log(
   `[LineLimit] pass: new files <= ${config.engineering.lineHardLimit}; `
-  + `legacy files stayed within ${legacyGrowthAllowance} lines or ${legacyGrowthPercent}% growth.`,
+  + `legacy files did not exceed their recorded ceiling.`,
 );

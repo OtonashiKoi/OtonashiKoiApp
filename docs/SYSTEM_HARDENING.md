@@ -83,6 +83,7 @@ node scripts/deploy-to-main.mjs --rollback=<發布輸出的版本目錄名稱>
 
 ## 驗證
 
+- `npm run check` 包含行數檢查：新 `src/**/*.js` 檔案最多 400 行；既有超長檔案以 `scripts/line-limit-baseline.json` 記錄的行數為上限，不能再增加。新增功能應抽出小模組；基準更新只用於核對既有超長檔案與接受已縮短的行數，不用來放寬本次新增程式。
 - `npm run test:system-hardening`：replica set 原子性、standalone 並發與三個中斷點恢復、runtime 所有權、共用擊殺流程。
 - `npm run test:job-transfer`：轉職扣款與重複操作相容性。
 - `npm run test:golden`、`test:combat-regressions`、`test:worldboss-chests`、`test:web-battle-transition`、`test:web-death-cooldown`：原有戰鬥行為。
