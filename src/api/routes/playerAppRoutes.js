@@ -2645,6 +2645,32 @@ function createPlayerAppRoutes(serviceContext, discordClient) {
     }
   });
 
+  // 官方聊天公告中的 MVP 名稱：只查已登錄世界王，完整名稱唯一才顯示唯讀資料。
+  // 使用怪物庫而非世界王即時狀態，讓已關閉活動的舊公告仍可查看。
+  router.get("/api/chat/boss-preview", requireAuth, async (req, res, next) => {
+    try {
+      const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
+      if (!name || name.length > 100) return res.status(400).json(fail("INVALID_BOSS_NAME", "世界王名稱無效"));
+      const { isWorldBossZone } = require("../../services/worldBoss/worldBossService");
+      const matches = (await serviceContext.monsterService.listMonsters({ includeDisabled: false }))
+        .filter((monster) => monster.isBoss && isWorldBossZone(monster.zone) && monster.name === name);
+      if (matches.length !== 1) return res.status(404).json(fail("BOSS_NOT_FOUND", "找不到可確認的世界王資料"));
+      const monster = matches[0];
+      res.json(ok({
+        id: monster.id,
+        name: monster.name,
+        zoneKey: monster.zone,
+        level: monster.level,
+        element: monster.element || null,
+        imageUrl: monster.imageUrl || monster.imageThumbnailUrl || null,
+        maxHp: monster.calc?.maxHp || monster.maxHp || 0,
+        entryFee: Math.max(0, Number(monster.entryFee ?? getZoneDefaultEntryFee(monster.zone)) || 0),
+      }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // 7b. Get guild stickers & emojis for chat picker
   router.get("/api/chat/expressions", requireAuth, async (req, res, next) => {
     try {
